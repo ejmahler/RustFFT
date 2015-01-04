@@ -1,0 +1,5 @@
+[package]
+
+name = "RustFFT"
+version = "0.0.1"
+authors = ["Allen Welkie <>"]
