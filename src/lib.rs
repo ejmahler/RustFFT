@@ -1,11 +1,14 @@
+#![feature(associated_types)]
+
 extern crate num;
 
 use num::{Complex, Zero};
-use std::iter::{repeat, range_step_inclusive};
+use std::iter::{repeat, range_step_inclusive, range_step};
 use std::f32;
-use iter_util::stride;
+use std::ops::{Index, IndexMut};
+use stride::{Stride, StrideMut};
 
-mod iter_util;
+mod stride;
 
 pub struct FFT {
     scratch: Vec<Complex<f32>>,
@@ -20,23 +23,45 @@ impl FFT {
         }
     }
 
-    pub fn process<'a, 'b, I, O>(&mut self, signal: I, spectrum: O)
-    where I: ExactSizeIterator<&'a Complex<f32>> + Clone, O: Iterator<&'b mut Complex<f32>> {
-        cooley_tukey(signal, spectrum, self.scratch.iter_mut(), self.factors.as_slice())
-    }
+    //pub fn process<I, IM>(&self, signal: &I, spectrum: &mut IM)
+        //where I: Index<uint, Output=Complex<f32>> + Clone,
+              //IM: IndexMut<uint, Output=Complex<f32>> + Clone {
+        //cooley_tukey(Stride::stride_trivial(signal, self.scratch.len()),
+                     //StrideMut::stride_trivial(spectrum, self.scratch.len()),
+                     //StrideMut::stride_trivial(self.scratch, self.scratch.len()),
+                     //self.factors.as_slice());
+    //}
+
 }
 
-fn cooley_tukey<'a, 'b, 'c, I, O, S>(signal: I, spectrum: O, scratch: S, factors: &[uint])
-where I: ExactSizeIterator<&'a Complex<f32>> + Clone,
-      O: Iterator<&'b mut Complex<f32>>,
-      S: Iterator<&'c mut Complex<f32>> {
+fn cooley_tukey<I, IM1, IM2>(signal: Stride<I>, spectrum: StrideMut<IM1>,
+                       scratch: StrideMut<IM2>, factors: &[uint])
+where I: Index<uint, Output=Complex<f32>> + Clone,
+      IM1: IndexMut<uint, Output=Complex<f32>> + Clone,
+      IM2: IndexMut<uint, Output=Complex<f32>> + Clone {
     match factors {
         [1] | [] => dft(signal, spectrum),
-        [n1, other_factors..] => (), //TODO add recursive calls
+        [n1, other_factors..] => {
+            let n2 = signal.len() / n1;
+            for i in range(0, n1)
+            {
+                cooley_tukey(signal.skip_some(i).stride(n1),
+                             spectrum.skip_some(i).stride(n1),
+                             scratch.skip_some(i).stride(n1),
+                             other_factors);
+            }
+
+            multiply_by_twiddles(scratch.clone(), n1, n2);
+
+            for (i, offset) in range_step(0u, scratch.len(), n1).enumerate() {
+                let row = scratch.skip_some(offset).take_some(n1);
+                dft_mut(row, spectrum.skip_some(i));
+            }
+        }
     }
 }
 
-fn multiply_by_twiddles<'a, I: Iterator<&'a mut Complex<f32>>>(xs: I, n1: uint, n2: uint)
+fn multiply_by_twiddles<'a, I>(xs: I, n1: uint, n2: uint) where I: Iterator<Item=&'a mut Complex<f32>>
 {
     for (i, elt) in xs.enumerate() {
         let k2 = i / n1;
@@ -49,7 +74,30 @@ fn multiply_by_twiddles<'a, I: Iterator<&'a mut Complex<f32>>>(xs: I, n1: uint, 
 
 //TODO this suffers from accumulation of error in calcualtion of `angle`
 pub fn dft<'a, 'b, I, O>(signal: I, spectrum: O)
-where I: ExactSizeIterator<&'a Complex<f32>> + Clone, O: Iterator<&'b mut Complex<f32>>
+where I: Iterator<Item=&'a Complex<f32>> + ExactSizeIterator + Clone,
+      O: Iterator<Item=&'b mut Complex<f32>>
+{
+    for (k, spec_bin) in spectrum.enumerate()
+    {
+        let mut signal_iter = signal.clone();
+        let mut sum: Complex<f32> = Zero::zero();
+        let mut angle = 0f32;
+        let rad_per_sample = (k as f32) * f32::consts::PI_2 / (signal.len() as f32);
+        for &x in signal_iter
+        {
+            let twiddle: Complex<f32> = Complex::from_polar(&1f32, &angle);
+            sum = sum + twiddle * x;
+            angle = angle - rad_per_sample;
+        }
+        *spec_bin = sum;
+    }
+}
+
+//TODO this suffers from accumulation of error in calcualtion of `angle`
+//TODO how can we avoid this duplication?
+pub fn dft_mut<'a, 'b, I, O>(signal: I, spectrum: O)
+where I: Iterator<Item=&'a mut Complex<f32>> + ExactSizeIterator + Clone,
+      O: Iterator<Item=&'b mut Complex<f32>>
 {
     for (k, spec_bin) in spectrum.enumerate()
     {
