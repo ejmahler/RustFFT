@@ -74,13 +74,10 @@ where I: Iterator<Item=&'a Complex<f32>> + ExactSizeIterator + Clone,
     {
         let mut signal_iter = signal.clone();
         let mut sum: Complex<f32> = Zero::zero();
-        let mut angle = 0f32;
-        let rad_per_sample = (k as f32) * f32::consts::PI_2 / (signal.len() as f32);
-        for &x in signal_iter
-        {
+        for (i, &x) in signal_iter.enumerate() {
+            let angle = -1. * ((i * k) as f32) * f32::consts::PI_2 / (signal.len() as f32);
             let twiddle: Complex<f32> = Complex::from_polar(&1f32, &angle);
             sum = sum + twiddle * x;
-            angle = angle - rad_per_sample;
         }
         *spec_bin = sum;
     }
@@ -96,13 +93,10 @@ where I: Iterator<Item=&'a mut Complex<f32>> + ExactSizeIterator + Clone,
     {
         let mut signal_iter = signal.clone();
         let mut sum: Complex<f32> = Zero::zero();
-        let mut angle = 0f32;
-        let rad_per_sample = (k as f32) * f32::consts::PI_2 / (signal.len() as f32);
-        for &mut x in signal_iter
-        {
+        for (i, &mut x) in signal_iter.enumerate() {
+            let angle = -1. * ((i * k) as f32) * f32::consts::PI_2 / (signal.len() as f32);
             let twiddle: Complex<f32> = Complex::from_polar(&1f32, &angle);
             sum = sum + twiddle * x;
-            angle = angle - rad_per_sample;
         }
         *spec_bin = sum;
     }
