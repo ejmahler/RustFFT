@@ -74,33 +74,33 @@ fn dft_test()
 
 }
 
-//fn ct_matches_dft(signal: &[Complex<f32>]) -> bool
-//{
-    //let mut spectrum_dft = signal.to_vec();
-    //let mut spectrum_ct = signal.to_vec();
-    //dft(signal, spectrum_dft.as_mut_slice());
-    //cooley_tukey(signal, spectrum_ct.as_mut_slice());
-    //return compare_vectors(spectrum_dft.as_slice(), spectrum_ct.as_slice());
-//}
+fn ct_matches_dft(signal: &[Complex<f32>]) -> bool
+{
+    let mut spectrum_dft = signal.to_vec();
+    let mut spectrum_ct = signal.to_vec();
+    dft(signal.iter(), spectrum_dft.iter_mut());
+    test_dft_correct(signal, spectrum_dft.as_slice())
+}
 
-//fn random_signal(length: usize) -> Vec<Complex<f32>>
-//{
-    //let mut sig = Vec::with_capacity(length);
-    //let normal_dist = Normal::new(0.0, 10.0);
-    //for _ in range(0, length)
-    //{
-        //sig.push(Complex{re: (normal_dist.ind_sample(&mut rand::task_rng()) as f32),
-                         //im: (normal_dist.ind_sample(&mut rand::task_rng()) as f32)});
-    //}
-    //return sig;
-//}
+fn random_signal(length: usize) -> Vec<Complex<f32>>
+{
+    let mut sig = Vec::with_capacity(length);
+    let normal_dist = Normal::new(0.0, 10.0);
+    let mut rng = rand::thread_rng();
+    for _ in range(0, length)
+    {
+        sig.push(Complex{re: (normal_dist.ind_sample(&mut rng) as f32),
+                         im: (normal_dist.ind_sample(&mut rng) as f32)});
+    }
+    return sig;
+}
 
-//#[test]
-//fn test_cooley_tukey()
-//{
-    //for len in range(2us, 100)
-    //{
-        //let signal = random_signal(len);
-        //assert!(ct_matches_dft(signal.as_slice()), "length = {}", len);
-    //}
-//}
+#[test]
+fn test_cooley_tukey()
+{
+    for len in range(2us, 100)
+    {
+        let signal = random_signal(len);
+        assert!(ct_matches_dft(signal.as_slice()), "length = {}", len);
+    }
+}

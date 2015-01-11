@@ -34,7 +34,7 @@ impl<'a, A> Stride<'a, A> {
 
     pub fn take_some(&self, num: usize) -> Stride<'a, A> {
         Stride {
-            items: self.items.slice_to((num + 1) * self.stride - 1),
+            items: self.items.slice_to((num - 1) * self.stride + 1),
             current_idx: self.current_idx,
             stride: self.stride,
         }
@@ -121,7 +121,7 @@ impl<'a, A> StrideMut<'a, A> {
     pub fn take_some(&self, num: usize) -> StrideMut<'a, A> {
         let items_copy: &'a mut [A] = unsafe{ mem::transmute_copy(&self.items) };
         StrideMut {
-            items: items_copy.slice_to_mut((num + 1) * self.stride - 1),
+            items: items_copy.slice_to_mut((num - 1) * self.stride + 1),
             current_idx: self.current_idx,
             stride: self.stride,
         }
