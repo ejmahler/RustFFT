@@ -26,8 +26,8 @@ impl<'a, A> Stride<'a, A> {
 
     pub fn skip_some(&self, len: usize) -> Stride<'a, A> {
         Stride {
-            items: self.items,
-            current_idx: self.current_idx + len * self.stride,
+            items: self.items.slice_from(len * self.stride),
+            current_idx: self.current_idx,
             stride: self.stride,
         }
     }
@@ -110,10 +110,10 @@ impl<'a, A> StrideMut<'a, A> {
     }
 
     pub fn skip_some(&self, len: usize) -> StrideMut<'a, A> {
-        let items_copy = unsafe{ mem::transmute_copy(&self.items) };
+        let items_copy: &'a mut [A] = unsafe{ mem::transmute_copy(&self.items) };
         StrideMut {
-            items: items_copy,
-            current_idx: self.current_idx + len * self.stride,
+            items: items_copy.slice_from_mut(len * self.stride),
+            current_idx: self.current_idx,
             stride: self.stride,
         }
     }

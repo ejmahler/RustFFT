@@ -28,8 +28,10 @@ impl FFT {
     }
 }
 
-fn cooley_tukey<'a>(signal: Stride<'a, Complex<f32>>, spectrum: StrideMut<'a, Complex<f32>>,
-                    scratch: StrideMut<'a, Complex<f32>>, factors: &[usize]) {
+fn cooley_tukey<'a>(signal: Stride<'a, Complex<f32>>,
+                    spectrum: StrideMut<'a, Complex<f32>>,
+                    scratch: StrideMut<'a, Complex<f32>>,
+                    factors: &[usize]) {
     match factors {
         [_] | [] => dft(signal, spectrum),
         [n1, other_factors..] => {
@@ -37,8 +39,8 @@ fn cooley_tukey<'a>(signal: Stride<'a, Complex<f32>>, spectrum: StrideMut<'a, Co
             for i in range(0, n1)
             {
                 cooley_tukey(signal.skip_some(i).stride(n1),
-                             spectrum.skip_some(i).stride(n1),
                              scratch.skip_some(i).stride(n1),
+                             spectrum.skip_some(i).stride(n1),
                              other_factors);
             }
 
@@ -46,7 +48,7 @@ fn cooley_tukey<'a>(signal: Stride<'a, Complex<f32>>, spectrum: StrideMut<'a, Co
 
             for (i, offset) in range_step(0us, scratch.len(), n1).enumerate() {
                 let row = scratch.skip_some(offset).take_some(n1);
-                dft_mut(row, spectrum.skip_some(i));
+                dft_mut(row, spectrum.skip_some(i).stride(n2));
             }
         }
     }
