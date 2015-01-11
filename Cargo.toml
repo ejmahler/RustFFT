@@ -1,8 +1,11 @@
 [package]
 
-name = "RustFFT"
+name = "rustfft"
 version = "0.0.1"
 authors = ["Allen Welkie <allen.welkie at gmail>"]
 
 [dependencies]
 num = "*"
+
+[dependencies.kissfft]
+git = "https://github.com/m13253/rust-kissfft"
