@@ -1,10 +1,10 @@
 extern crate num;
-extern crate RustFFT;
+extern crate rustfft;
 
 use num::complex::Complex;
 use std::rand;
 use std::rand::distributions::{Normal, IndependentSample};
-use RustFFT::{FFT, dft};
+use rustfft::{FFT, dft};
 
 fn compare_vectors(vec1: &[Complex<f32>], vec2: &[Complex<f32>]) -> bool
 {

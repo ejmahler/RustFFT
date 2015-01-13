@@ -10,6 +10,7 @@ mod stride;
 pub struct FFT {
     scratch: Vec<Complex<f32>>,
     factors: Vec<usize>,
+    twiddles: TwiddlePowerTable,
 }
 
 impl FFT {
@@ -17,6 +18,7 @@ impl FFT {
         FFT {
             scratch: repeat(Zero::zero()).take(len).collect(),
             factors: factor(len),
+            twiddles: TwiddlePowerTable::new(len),
         }
     }
 
@@ -24,6 +26,7 @@ impl FFT {
         cooley_tukey(Stride::from_slice(signal),
                      StrideMut::from_slice(spectrum),
                      StrideMut::from_slice(self.scratch.as_mut_slice()),
+                     &self.twiddles,
                      self.factors.as_slice());
     }
 }
@@ -31,9 +34,10 @@ impl FFT {
 fn cooley_tukey<'a>(signal: Stride<'a, Complex<f32>>,
                     spectrum: StrideMut<'a, Complex<f32>>,
                     scratch: StrideMut<'a, Complex<f32>>,
+                    twiddles: &TwiddlePowerTable,
                     factors: &[usize]) {
     match factors {
-        [_] | [] => dft(signal, spectrum),
+        [_] | [] => dft_precalc_twiddles(signal, spectrum, twiddles),
         [n1, other_factors..] => {
             let n2 = signal.len() / n1;
             for i in range(0, n1)
@@ -41,31 +45,51 @@ fn cooley_tukey<'a>(signal: Stride<'a, Complex<f32>>,
                 cooley_tukey(signal.skip_some(i).stride(n1),
                              scratch.skip_some(i).stride(n1),
                              spectrum.skip_some(i).stride(n1),
+                             twiddles,
                              other_factors);
             }
 
-            multiply_by_twiddles(scratch.clone(), n1, n2);
+            butterfly(scratch, spectrum, twiddles, n1, n2);
+        }
+    }
+}
 
-            for (i, offset) in range_step(0us, scratch.len(), n1).enumerate() {
-                let row = scratch.skip_some(offset).take_some(n1);
-                dft_mut(row, spectrum.skip_some(i).stride(n2));
+fn butterfly<'a>(input: StrideMut<'a, Complex<f32>>,
+                 output: StrideMut<'a, Complex<f32>>,
+                 twiddles: &TwiddlePowerTable,
+                 num_cols: usize,
+                 num_rows: usize) {
+    for (i, offset) in range_step(0us, input.len(), num_cols).enumerate() {
+        let in_row = input.skip_some(offset).take_some(num_cols);
+        let out_col = output.skip_some(i).stride(num_rows);
+        for (j, spec_bin) in out_col.enumerate() {
+            *spec_bin = Zero::zero();
+            let in_row_copy = in_row.clone();
+            for (k, sig_bin) in in_row_copy.enumerate() {
+                let twiddle_power = i * k + j * k * num_rows;
+                let twiddle = twiddles.get_twiddle(twiddle_power, num_rows * num_cols);
+                *spec_bin = *spec_bin + twiddle * *sig_bin;
             }
         }
     }
 }
 
-fn multiply_by_twiddles<'a, I>(xs: I, n1: usize, n2: usize) where I: Iterator<Item=&'a mut Complex<f32>>
+fn dft_precalc_twiddles<'a, 'b, I, O>(signal: I, spectrum: O, twiddles: &TwiddlePowerTable)
+where I: Iterator<Item=&'a Complex<f32>> + ExactSizeIterator + Clone,
+      O: Iterator<Item=&'b mut Complex<f32>>
 {
-    for (i, elt) in xs.enumerate() {
-        let k2 = i / n1;
-        let k1 = i % n1;
-        let angle: f32 = (-1is as f32) * ((k2 * k1) as f32) * f32::consts::PI_2 / ((n1 * n2) as f32);
-        let twiddle: Complex<f32> = Complex::from_polar(&1f32, &angle);
-        *elt = *elt * twiddle;
+    let n = signal.len();
+    for (k, spec_bin) in spectrum.enumerate()
+    {
+        let mut signal_iter = signal.clone();
+        *spec_bin = Zero::zero();
+        for (i, &x) in signal_iter.enumerate() {
+            let twiddle = twiddles.get_twiddle(i * k, n);
+            *spec_bin = *spec_bin + twiddle * x;
+        }
     }
 }
 
-//TODO this suffers from accumulation of error in calcualtion of `angle`
 pub fn dft<'a, 'b, I, O>(signal: I, spectrum: O)
 where I: Iterator<Item=&'a Complex<f32>> + ExactSizeIterator + Clone,
       O: Iterator<Item=&'b mut Complex<f32>>
@@ -75,25 +99,6 @@ where I: Iterator<Item=&'a Complex<f32>> + ExactSizeIterator + Clone,
         let mut signal_iter = signal.clone();
         let mut sum: Complex<f32> = Zero::zero();
         for (i, &x) in signal_iter.enumerate() {
-            let angle = -1. * ((i * k) as f32) * f32::consts::PI_2 / (signal.len() as f32);
-            let twiddle: Complex<f32> = Complex::from_polar(&1f32, &angle);
-            sum = sum + twiddle * x;
-        }
-        *spec_bin = sum;
-    }
-}
-
-//TODO this suffers from accumulation of error in calcualtion of `angle`
-//TODO how can we avoid this duplication?
-pub fn dft_mut<'a, 'b, I, O>(signal: I, spectrum: O)
-where I: Iterator<Item=&'a mut Complex<f32>> + ExactSizeIterator + Clone,
-      O: Iterator<Item=&'b mut Complex<f32>>
-{
-    for (k, spec_bin) in spectrum.enumerate()
-    {
-        let mut signal_iter = signal.clone();
-        let mut sum: Complex<f32> = Zero::zero();
-        for (i, &mut x) in signal_iter.enumerate() {
             let angle = -1. * ((i * k) as f32) * f32::consts::PI_2 / (signal.len() as f32);
             let twiddle: Complex<f32> = Complex::from_polar(&1f32, &angle);
             sum = sum + twiddle * x;
@@ -119,4 +124,33 @@ fn factor(n: usize) -> Vec<usize>
         }
     }
     return factors;
+}
+
+/// Holds the powers of the `n`th root of unity
+struct TwiddlePowerTable {
+    n: usize,
+    twiddles: Vec<Complex<f32>>,
+}
+
+impl TwiddlePowerTable {
+    /// Calculates the powers of the `n`th root of unity
+    fn new(n: usize) -> Self {
+        TwiddlePowerTable {
+            n: n,
+            twiddles: range(0, n)
+                      .map(|i| -1. * (i as f32) * f32::consts::PI_2 / (n as f32))
+                      .map(|phase| Complex::from_polar(&1., &phase))
+                      .collect(),
+        }
+    }
+
+    /// Returns the `base`th root of unity raised to `power`.
+    ///
+    /// `base` must be a divisor of the value of `n` for which the table was calculated.
+    #[inline]
+    fn get_twiddle(&self, power: usize, base: usize) -> &Complex<f32> {
+        unsafe {
+            self.twiddles.get_unchecked((power * self.n / base) % self.n)
+        }
+    }
 }
