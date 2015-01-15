@@ -71,23 +71,27 @@ fn butterfly(input: &[Complex<f32>],
              num_cols: usize,
              num_rows: usize) {
     // for each row in input
+    let mut twiddle_idx_increase_1 = 0;
     for (i, in_row) in input.chunks(num_cols * input_stride).enumerate() {
         let out_col = output.slice_from_mut(i * output_stride);
         let out_col_stride = output_stride * num_rows;
-        for (j, spec_bin_idx) in range_step(0, out_col.len(), out_col_stride).enumerate() {
+        let mut twiddle_idx_increase_2 = 0;
+        for spec_bin_idx in range_step(0, out_col.len(), out_col_stride) {
             let spec_bin = unsafe { out_col.get_unchecked_mut(spec_bin_idx) };
             *spec_bin = Zero::zero();
-            for (k, sig_bin_idx) in range_step(0, in_row.len(), input_stride).enumerate() {
+            let mut twiddle_idx = 0;
+            for sig_bin_idx in range_step(0, in_row.len(), input_stride) {
                 let sig_bin = unsafe { in_row.get_unchecked(sig_bin_idx) };
-                let twiddle_power = i * k + j * k * num_rows;
-                let n = twiddles.len();
                 let twiddle = unsafe {
-                    twiddles.get_unchecked(((twiddle_power * n ) /
-                                           (num_cols * num_rows)) % n)
+                    twiddles.get_unchecked(twiddle_idx)
                 };
                 *spec_bin = *spec_bin + *twiddle * *sig_bin;
+                twiddle_idx += twiddle_idx_increase_1 + twiddle_idx_increase_2;
+                if twiddle_idx > twiddles.len() { twiddle_idx -= twiddles.len() }
             }
+            twiddle_idx_increase_2 += input_stride * num_rows;
         }
+        twiddle_idx_increase_1 += input_stride;
     }
 }
 
@@ -96,16 +100,19 @@ pub fn dft_slice(signal: &[Complex<f32>],
                  spectrum: &mut [Complex<f32>],
                  spectrum_stride: usize,
                  twiddles: &[Complex<f32>]) {
-    for (k, spec_bin_idx) in range_step(0, spectrum.len(), spectrum_stride).enumerate() {
+    let mut twiddle_idx_increase = 0;
+    for spec_bin_idx in range_step(0, spectrum.len(), spectrum_stride) {
         let spec_bin = unsafe { spectrum.get_unchecked_mut(spec_bin_idx) };
         *spec_bin = Zero::zero();
-        for (i, signal_bin_idx) in range_step(0, signal.len(), signal_stride).enumerate() {
+        let mut twiddle_idx = 0;
+        for signal_bin_idx in range_step(0, signal.len(), signal_stride) {
             let signal_bin = unsafe { signal.get_unchecked(signal_bin_idx) };
-            let twiddle = unsafe {
-                //SPEED we can add and subtract by twiddles.len, instead of modulo
-                twiddles.get_unchecked((i * k * signal_stride) % twiddles.len()) };
+            let twiddle = unsafe { twiddles.get_unchecked(twiddle_idx) };
             *spec_bin = *spec_bin + twiddle * *signal_bin;
+            twiddle_idx += twiddle_idx_increase;
+            if twiddle_idx > twiddles.len() {twiddle_idx -= twiddles.len()}
         }
+        twiddle_idx_increase += signal_stride;
     }
 }
 
