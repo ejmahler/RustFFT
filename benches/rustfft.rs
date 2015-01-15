@@ -16,6 +16,11 @@ fn bench_fft(b: &mut Bencher, len: usize) {
 }
 
 #[bench]
+fn rust_fft_16807_fft(b: &mut Bencher) {
+    bench_fft(b, 16807);
+}
+
+#[bench]
 fn rust_fft_2401_fft(b: &mut Bencher) {
     bench_fft(b, 2401);
 }
