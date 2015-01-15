@@ -7,7 +7,7 @@ use std::f32;
 
 pub struct FFT {
     scratch: Vec<Complex<f32>>,
-    factors: Vec<usize>,
+    factors: Vec<(usize, usize)>,
     twiddles: Vec<Complex<f32>>,
 }
 
@@ -40,15 +40,12 @@ fn cooley_tukey(signal: &[Complex<f32>],
                 scratch: &mut [Complex<f32>],
                 scratch_stride: usize,
                 twiddles: &[Complex<f32>],
-                factors: &[usize]) {
+                factors: &[(usize, usize)]) {
     match factors {
         [_] | [] => dft_slice(signal, signal_stride,
                               spectrum, spectrum_stride,
                               twiddles),
-        [n1, other_factors..] => {
-            //SPEED precalculate n1 AND n2
-            let n2 = signal.len() / (n1 * signal_stride) +
-                if signal.len() % (n1 * signal_stride) > 0 {1} else {0};
+        [(n1, n2), other_factors..] => {
             for i in range(0, n1)
             {
                 // perform the smaller FFTs from the signal buffer into
@@ -129,9 +126,9 @@ where I: Iterator<Item=&'a Complex<f32>> + ExactSizeIterator + Clone,
     }
 }
 
-fn factor(n: usize) -> Vec<usize>
+fn factor(n: usize) -> Vec<(usize, usize)>
 {
-    let mut factors: Vec<usize> = Vec::new();
+    let mut factors = Vec::new();
     let mut next = n;
     while next > 1
     {
@@ -140,7 +137,7 @@ fn factor(n: usize) -> Vec<usize>
             if next % div == 0
             {
                 next = next / div;
-                factors.push(div);
+                factors.push((div, next));
                 break;
             }
         }
