@@ -15,17 +15,26 @@ fn bench_fft(b: &mut Bencher, len: usize) {
     b.iter(|&mut:| {fft.process(signal.as_slice(), spectrum.as_mut_slice());} );
 }
 
+// Powers of 7
 #[bench]
-fn rust_fft_16807_fft(b: &mut Bencher) {
-    bench_fft(b, 16807);
-}
+fn rust_fft_7pow3_fft(b: &mut Bencher) { bench_fft(b, 343); }
+#[bench]
+fn rust_fft_7pow4_fft(b: &mut Bencher) { bench_fft(b, 2401); }
+#[bench]
+fn rust_fft_7pow5_fft(b: &mut Bencher) { bench_fft(b, 16807); }
 
+// Powers of 2
 #[bench]
-fn rust_fft_2401_fft(b: &mut Bencher) {
-    bench_fft(b, 2401);
-}
+fn rust_fft_2pow8_fft(b: &mut Bencher) { bench_fft(b, 256); }
+#[bench]
+fn rust_fft_2pow10_fft(b: &mut Bencher) { bench_fft(b, 1024); }
+#[bench]
+fn rust_fft_2pow12_fft(b: &mut Bencher) { bench_fft(b, 4096); }
+#[bench]
+fn rust_fft_2pow14_fft(b: &mut Bencher) { bench_fft(b, 16384); }
 
+// Mixed powers of 2, 3, and 5
 #[bench]
-fn rust_fft_343_fft(b: &mut Bencher) {
-    bench_fft(b, 343);
-}
+fn rust_fft_goodmix222_fft(b: &mut Bencher) { bench_fft(b, 900); }
+#[bench]
+fn rust_fft_goodmix332_fft(b: &mut Bencher) { bench_fft(b, 5400); }
