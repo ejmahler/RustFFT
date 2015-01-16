@@ -1,3 +1,9 @@
+//! To test the accuracy of our FFT algorithm, we first test that our
+//! naive DFT function is correct by comparing its output against several
+//! known signal/spectrum relationships. Then, we generate random signals
+//! for a variety of lengths, and test that our FFT algorithm matches our
+//! DFT calculation for those signals.
+
 #![allow(unstable)]
 extern crate num;
 extern crate rustfft;
@@ -12,7 +18,10 @@ use rustfft::{FFT, dft};
 /// tests
 const RNG_SEED: [usize; 5] = [1910, 11431, 4984, 14828, 12226];
 
+/// Returns true if the mean difference in the elements of the two vectors
+/// is small
 fn compare_vectors(vec1: &[Complex<f32>], vec2: &[Complex<f32>]) -> bool {
+    assert_eq!(vec1.len(), vec2.len());
     let mut sse = 0f32;
     for (&a, &b) in vec1.iter().zip(vec2.iter()) {
         sse = sse + (a - b).norm();
@@ -20,58 +29,62 @@ fn compare_vectors(vec1: &[Complex<f32>], vec2: &[Complex<f32>]) -> bool {
     return (sse / vec1.len() as f32) < 0.1f32;
 }
 
+/// Returns true if our `dft` function calculates the given spectrum from the
+/// given signal
 fn test_dft_correct(signal: &[Complex<f32>], spectrum: &[Complex<f32>]) -> bool {
     assert_eq!(signal.len(), spectrum.len());
-    let mut fft = FFT::new(signal.len());
     let mut test_spectrum = signal.to_vec();
-    fft.process(signal, test_spectrum.as_mut_slice());
-    println!("our spectrum: {:?}", test_spectrum);
-    println!("yes spectrum: {:?}", spectrum);
+    dft(signal.iter(), test_spectrum.iter_mut());
     return compare_vectors(spectrum, test_spectrum.as_slice());
 }
 
-/*
-    Tests against some known signal <-> spectrum relationships.
-*/
 #[test]
-fn dft_test() {
-
-    let signal = vec![Complex{re: 1f32, im: 0f32},
-                      Complex{re:-1f32, im: 0f32}];
-    let spectrum = vec![Complex{re: 0f32, im: 0f32},
-                        Complex{re: 2f32, im: 0f32}];
+fn test_dft_known_len_2() {
+    let signal = [Complex{re: 1f32, im: 0f32},
+                  Complex{re:-1f32, im: 0f32}];
+    let spectrum = [Complex{re: 0f32, im: 0f32},
+                    Complex{re: 2f32, im: 0f32}];
     assert!(test_dft_correct(signal.as_slice(), spectrum.as_slice()));
+}
 
-    let signal = vec![Complex{re: 1f32, im: 1f32},
-                      Complex{re: 2f32, im:-3f32},
+#[test]
+fn test_dft_known_len_3() {
+    let signal = [Complex{re: 1f32, im: 1f32},
+                  Complex{re: 2f32, im:-3f32},
                       Complex{re:-1f32, im: 4f32}];
-    let spectrum = vec![Complex{re: 2f32, im: 2f32},
-                        Complex{re: -5.562177f32, im: -2.098076f32},
-                        Complex{re: 6.562178f32, im: 3.09807f32}];
+    let spectrum = [Complex{re: 2f32, im: 2f32},
+                    Complex{re: -5.562177f32, im: -2.098076f32},
+                    Complex{re: 6.562178f32, im: 3.09807f32}];
     assert!(test_dft_correct(signal.as_slice(), spectrum.as_slice()));
+}
 
-    let signal = vec![Complex{re: 1f32, im: 1f32},
-                      Complex{re: 2f32, im: 2f32},
-                      Complex{re: 3f32, im: 3f32},
-                      Complex{re: 4f32, im: 4f32},
-                      Complex{re: 5f32, im: 5f32},
-                      Complex{re: 6f32, im: 6f32}];
-    let spectrum = vec![Complex{re: 21f32, im: 21f32},
-                        Complex{re: -8.16f32, im: 2.16f32},
-                        Complex{re: -4.76f32, im: -1.24f32},
-                        Complex{re: -3f32, im: -3f32},
-                        Complex{re: -1.24f32, im: -4.76f32},
-                        Complex{re: 2.16f32, im: -8.16f32}];
+#[test]
+fn test_dft_known_len_4() {
+    let signal = [Complex{re: 0f32, im: 1f32},
+                  Complex{re: 2.5f32, im:-3f32},
+                  Complex{re:-1f32, im: -1f32},
+                  Complex{re: 4f32, im: 0f32}];
+    let spectrum = [Complex{re: 5.5f32, im: -3f32},
+                    Complex{re: -2f32, im: 3.5f32},
+                    Complex{re: -7.5f32, im: 3f32},
+                    Complex{re: 4f32, im: 0.5f32}];
     assert!(test_dft_correct(signal.as_slice(), spectrum.as_slice()));
+}
 
-    let signal = vec![Complex{re: 0f32, im: 1f32},
-                      Complex{re: 2.5f32, im:-3f32},
-                      Complex{re:-1f32, im: -1f32},
-                      Complex{re: 4f32, im: 0f32}];
-    let spectrum = vec![Complex{re: 5.5f32, im: -3f32},
-                        Complex{re: -2f32, im: 3.5f32},
-                        Complex{re: -7.5f32, im: 3f32},
-                        Complex{re: 4f32, im: 0.5f32}];
+#[test]
+fn test_dft_known_len_6() {
+    let signal = [Complex{re: 1f32, im: 1f32},
+                  Complex{re: 2f32, im: 2f32},
+                  Complex{re: 3f32, im: 3f32},
+                  Complex{re: 4f32, im: 4f32},
+                  Complex{re: 5f32, im: 5f32},
+                  Complex{re: 6f32, im: 6f32}];
+    let spectrum = [Complex{re: 21f32, im: 21f32},
+                    Complex{re: -8.16f32, im: 2.16f32},
+                    Complex{re: -4.76f32, im: -1.24f32},
+                    Complex{re: -3f32, im: -3f32},
+                    Complex{re: -1.24f32, im: -4.76f32},
+                    Complex{re: 2.16f32, im: -8.16f32}];
     assert!(test_dft_correct(signal.as_slice(), spectrum.as_slice()));
 
 }
@@ -79,8 +92,10 @@ fn dft_test() {
 fn ct_matches_dft(signal: &[Complex<f32>]) -> bool {
     let mut spectrum_dft = signal.to_vec();
     let mut spectrum_ct = signal.to_vec();
+    let mut fft = FFT::new(signal.len());
+    fft.process(signal, spectrum_ct.as_mut_slice());
     dft(signal.iter(), spectrum_dft.iter_mut());
-    test_dft_correct(signal, spectrum_dft.as_slice())
+    return compare_vectors(spectrum_dft.as_slice(), spectrum_ct.as_slice());
 }
 
 fn random_signal(length: usize) -> Vec<Complex<f32>> {
@@ -94,6 +109,8 @@ fn random_signal(length: usize) -> Vec<Complex<f32>> {
     return sig;
 }
 
+/// Tests that our FFT algorithm matches the direct DFT calculation
+/// for random signals.
 #[test]
 fn test_cooley_tukey() {
     for len in range(2us, 100) {
