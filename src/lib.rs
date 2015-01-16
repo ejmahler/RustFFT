@@ -46,8 +46,7 @@ fn cooley_tukey(signal: &[Complex<f32>],
                               spectrum, spectrum_stride,
                               twiddles),
         [(n1, n2), other_factors..] => {
-            for i in range(0, n1)
-            {
+            for i in range(0, n1) {
                 // perform the smaller FFTs from the signal buffer into
                 // the scratch buffer, using the spectrum buffer as scratch space
                 cooley_tukey(signal.slice_from(i * signal_stride), signal_stride * n1,
@@ -83,9 +82,7 @@ fn butterfly(input: &[Complex<f32>],
             let twiddle_idx_increase = twiddle_idx_increase_1 + twiddle_idx_increase_2;
             for sig_bin_idx in range_step(0, in_row.len(), input_stride) {
                 let sig_bin = unsafe { in_row.get_unchecked(sig_bin_idx) };
-                let twiddle = unsafe {
-                    twiddles.get_unchecked(twiddle_idx)
-                };
+                let twiddle = unsafe { twiddles.get_unchecked(twiddle_idx) };
                 *spec_bin = *spec_bin + *twiddle * *sig_bin;
                 twiddle_idx += twiddle_idx_increase;
                 if twiddle_idx > twiddles.len() { twiddle_idx -= twiddles.len() }
@@ -138,12 +135,9 @@ fn factor(n: usize) -> Vec<(usize, usize)>
 {
     let mut factors = Vec::new();
     let mut next = n;
-    while next > 1
-    {
-        for div in Some(2us).into_iter().chain(range_step_inclusive(3us, next, 2))
-        {
-            if next % div == 0
-            {
+    while next > 1 {
+        for div in Some(2us).into_iter().chain(range_step_inclusive(3us, next, 2)) {
+            if next % div == 0 {
                 next = next / div;
                 factors.push((div, next));
                 break;
