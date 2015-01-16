@@ -3,9 +3,14 @@ extern crate num;
 extern crate rustfft;
 
 use num::complex::Complex;
-use std::rand;
+use std::rand::{StdRng, SeedableRng};
 use std::rand::distributions::{Normal, IndependentSample};
 use rustfft::{FFT, dft};
+
+/// The seed for the random number generator used to generate
+/// random signals. It's defined here so that we have deterministic
+/// tests
+const RNG_SEED: [usize; 5] = [1910, 11431, 4984, 14828, 12226];
 
 fn compare_vectors(vec1: &[Complex<f32>], vec2: &[Complex<f32>]) -> bool {
     let mut sse = 0f32;
@@ -81,9 +86,8 @@ fn ct_matches_dft(signal: &[Complex<f32>]) -> bool {
 fn random_signal(length: usize) -> Vec<Complex<f32>> {
     let mut sig = Vec::with_capacity(length);
     let normal_dist = Normal::new(0.0, 10.0);
-    let mut rng = rand::thread_rng();
-    for _ in range(0, length)
-    {
+    let mut rng: StdRng = SeedableRng::from_seed(RNG_SEED.as_slice());
+    for _ in range(0, length) {
         sig.push(Complex{re: (normal_dist.ind_sample(&mut rng) as f32),
                          im: (normal_dist.ind_sample(&mut rng) as f32)});
     }
