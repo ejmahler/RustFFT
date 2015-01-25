@@ -4,8 +4,12 @@ name = "rustfft"
 version = "0.0.1"
 authors = ["Allen Welkie <allen.welkie at gmail>"]
 
+description = "A mixed-radix FFT library written in pure Rust"
+keywords = ["fft", "dft", "fourier", "signal"]
+license = "MIT"
+
 [dependencies]
 num = "*"
 
-[dependencies.kissfft]
-git = "https://github.com/m13253/rust-kissfft"
+[dev-dependencies]
+kissfft = "0.0.6"
