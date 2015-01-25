@@ -5,6 +5,7 @@ version = "0.0.1"
 authors = ["Allen Welkie <allen.welkie at gmail>"]
 
 description = "A mixed-radix FFT library written in pure Rust"
+repository = "https://github.com/awelkie/RustFFT"
 keywords = ["fft", "dft", "fourier", "signal"]
 license = "MIT"
 
