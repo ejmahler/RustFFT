@@ -49,9 +49,9 @@ fn cooley_tukey(signal: &[Complex<f32>],
             for i in range(0, n1) {
                 // perform the smaller FFTs from the signal buffer into
                 // the scratch buffer, using the spectrum buffer as scratch space
-                cooley_tukey(signal.slice_from(i * signal_stride), signal_stride * n1,
-                             scratch.slice_from_mut(i * scratch_stride), scratch_stride * n1,
-                             spectrum.slice_from_mut(i * spectrum_stride), spectrum_stride * n1,
+                cooley_tukey(&signal[i * signal_stride..], signal_stride * n1,
+                             &mut scratch[i * scratch_stride..], scratch_stride * n1,
+                             &mut spectrum[i * spectrum_stride..], spectrum_stride * n1,
                              twiddles, other_factors);
             }
 
@@ -72,7 +72,7 @@ fn butterfly(input: &[Complex<f32>],
     // for each row in input
     let mut twiddle_idx_increase_1 = 0;
     for (i, in_row) in input.chunks(num_cols * input_stride).enumerate() {
-        let out_col = output.slice_from_mut(i * output_stride);
+        let out_col = &mut output[i * output_stride..];
         let out_col_stride = output_stride * num_rows;
         let mut twiddle_idx_increase_2 = 0;
         for spec_bin_idx in range_step(0, out_col.len(), out_col_stride) {
