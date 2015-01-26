@@ -1,9 +1,13 @@
 #![allow(unstable)]
 extern crate num;
 
+mod hardcoded_butterflies;
+
 use num::{Complex, Zero};
 use std::iter::{repeat, range_step_inclusive, range_step};
 use std::f32;
+
+use hardcoded_butterflies::butterfly_2;
 
 pub struct FFT {
     scratch: Vec<Complex<f32>>,
@@ -55,9 +59,14 @@ fn cooley_tukey(signal: &[Complex<f32>],
                              twiddles, other_factors);
             }
 
-            butterfly(scratch, scratch_stride,
-                      spectrum, spectrum_stride,
-                      twiddles, n1, n2);
+            match n1 {
+                2 => butterfly_2(scratch, scratch_stride,
+                                 spectrum, spectrum_stride,
+                                 twiddles, n2),
+                _ => butterfly(scratch, scratch_stride,
+                               spectrum, spectrum_stride,
+                               twiddles, n1, n2),
+            }
         }
     }
 }
