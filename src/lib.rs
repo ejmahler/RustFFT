@@ -45,11 +45,14 @@ fn cooley_tukey(signal: &[Complex<f32>],
                 scratch_stride: usize,
                 twiddles: &[Complex<f32>],
                 factors: &[(usize, usize)]) {
-    match factors {
-        [_] | [] => dft_slice(signal, signal_stride,
-                              spectrum, spectrum_stride,
-                              twiddles),
-        [(n1, n2), other_factors..] => {
+    if let [(n1, n2), other_factors..] = factors {
+        if n2 == 1 {
+            for i in range_step(0, scratch.len(), scratch_stride) {
+                unsafe {
+                    *scratch.get_unchecked_mut(i) = *signal.get_unchecked(i);
+                }
+            }
+        } else {
             for i in range(0, n1) {
                 // perform the smaller FFTs from the signal buffer into
                 // the scratch buffer, using the spectrum buffer as scratch space
@@ -58,15 +61,15 @@ fn cooley_tukey(signal: &[Complex<f32>],
                              &mut spectrum[i * spectrum_stride..], spectrum_stride * n1,
                              twiddles, other_factors);
             }
+        }
 
-            match n1 {
-                2 => butterfly_2(scratch, scratch_stride,
-                                 spectrum, spectrum_stride,
-                                 twiddles, n2),
-                _ => butterfly(scratch, scratch_stride,
-                               spectrum, spectrum_stride,
-                               twiddles, n1, n2),
-            }
+        match n1 {
+            2 => butterfly_2(scratch, scratch_stride,
+                             spectrum, spectrum_stride,
+                             twiddles, n2),
+            _ => butterfly(scratch, scratch_stride,
+                           spectrum, spectrum_stride,
+                           twiddles, n1, n2),
         }
     }
 }
