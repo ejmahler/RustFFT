@@ -20,7 +20,7 @@ impl FFT {
         FFT {
             scratch: repeat(Zero::zero()).take(len).collect(),
             factors: factor(len),
-            twiddles: range(0, len)
+            twiddles: (0..len)
                       .map(|i| -1. * (i as f32) * f32::consts::PI_2 / (len as f32))
                       .map(|phase| Complex::from_polar(&1., &phase))
                       .collect(),
@@ -28,101 +28,68 @@ impl FFT {
     }
 
     pub fn process(&mut self, signal: &[Complex<f32>], spectrum: &mut [Complex<f32>]) {
-        cooley_tukey(signal, 1,
-                     spectrum, 1,
-                     self.scratch.as_mut_slice(), 1,
-                     self.twiddles.as_slice(),
-                     self.factors.as_slice());
+        cooley_tukey(signal, spectrum, 1, self.twiddles.as_slice(), self.factors.as_slice());
     }
 }
 
-//TODO can we collapse all these strides into one stride value?
 fn cooley_tukey(signal: &[Complex<f32>],
-                signal_stride: usize,
                 spectrum: &mut [Complex<f32>],
-                spectrum_stride: usize,
-                scratch: &mut [Complex<f32>],
-                scratch_stride: usize,
+                stride: usize,
                 twiddles: &[Complex<f32>],
                 factors: &[(usize, usize)]) {
     if let [(n1, n2), other_factors..] = factors {
         if n2 == 1 {
-            for i in range_step(0, scratch.len(), scratch_stride) {
-                unsafe {
-                    *scratch.get_unchecked_mut(i) = *signal.get_unchecked(i);
-                }
+            // An FFT of length 1 is just the identity operator
+            let mut spectrum_idx = 0us;
+            for i in range_step(0, signal.len(), stride) {
+                unsafe { *spectrum.get_unchecked_mut(spectrum_idx) = *signal.get_unchecked(i); }
+                spectrum_idx += 1;
             }
         } else {
+            // Recursive call to perform n1 ffts of length n2
             for i in range(0, n1) {
-                // perform the smaller FFTs from the signal buffer into
-                // the scratch buffer, using the spectrum buffer as scratch space
-                cooley_tukey(&signal[i * signal_stride..], signal_stride * n1,
-                             &mut scratch[i * scratch_stride..], scratch_stride * n1,
-                             &mut spectrum[i * spectrum_stride..], spectrum_stride * n1,
-                             twiddles, other_factors);
+                cooley_tukey(&signal[i * stride..],
+                             &mut spectrum[i * n2..],
+                             stride * n1, twiddles, other_factors);
             }
         }
 
         match n1 {
-            2 => butterfly_2(scratch, scratch_stride,
-                             spectrum, spectrum_stride,
-                             twiddles, n2),
-            _ => butterfly(scratch, scratch_stride,
-                           spectrum, spectrum_stride,
-                           twiddles, n1, n2),
+            2 => butterfly_2(spectrum, stride, twiddles, n2),
+            _ => butterfly(spectrum, stride, twiddles, n2, n1),
         }
     }
 }
 
-fn butterfly(input: &[Complex<f32>],
-             input_stride: usize,
-             output: &mut [Complex<f32>],
-             output_stride: usize,
-             twiddles: &[Complex<f32>],
-             num_cols: usize,
-             num_rows: usize) {
-    // for each row in input
-    let mut twiddle_idx_increase_1 = 0;
-    for (i, in_row) in input.chunks(num_cols * input_stride).enumerate() {
-        let out_col = &mut output[i * output_stride..];
-        let out_col_stride = output_stride * num_rows;
-        let mut twiddle_idx_increase_2 = 0;
-        for spec_bin_idx in range_step(0, out_col.len(), out_col_stride) {
-            let spec_bin = unsafe { out_col.get_unchecked_mut(spec_bin_idx) };
-            *spec_bin = Zero::zero();
-            let mut twiddle_idx = 0;
-            let twiddle_idx_increase = twiddle_idx_increase_1 + twiddle_idx_increase_2;
-            for sig_bin_idx in range_step(0, in_row.len(), input_stride) {
-                let sig_bin = unsafe { in_row.get_unchecked(sig_bin_idx) };
+fn butterfly(data: &mut [Complex<f32>], stride: usize,
+             twiddles: &[Complex<f32>], num_ffts: usize, fft_len: usize) {
+
+    // TODO pre-allocate this space at FFT initialization
+    let mut scratch: Vec<Complex<f32>> = repeat(Zero::zero()).take(fft_len).collect();
+
+    // for each fft we have to perform...
+    for fft_idx in range(0us, num_ffts) {
+
+        // copy over data into scratch space
+        let mut data_idx = fft_idx;
+        for s in scratch.iter_mut() {
+            *s = unsafe { *data.get_unchecked(data_idx) };
+            data_idx += num_ffts;
+        }
+
+        // perfom the butterfly from the scratch space into the original buffer
+        for data_idx in range_step(fft_idx, fft_len * num_ffts, num_ffts) {
+            let out_sample = unsafe { data.get_unchecked_mut(data_idx) };
+            *out_sample = Zero::zero();
+            let mut twiddle_idx = 0us;
+            for in_sample in scratch.iter() {
                 let twiddle = unsafe { twiddles.get_unchecked(twiddle_idx) };
-                *spec_bin = *spec_bin + *twiddle * *sig_bin;
-                twiddle_idx += twiddle_idx_increase;
-                if twiddle_idx > twiddles.len() { twiddle_idx -= twiddles.len() }
+                *out_sample = *out_sample + in_sample * twiddle;
+                twiddle_idx += stride * data_idx;
+                if twiddle_idx >= twiddles.len() { twiddle_idx -= twiddles.len() }
             }
-            twiddle_idx_increase_2 += num_rows * input_stride;
         }
-        twiddle_idx_increase_1 += input_stride;
-    }
-}
 
-pub fn dft_slice(signal: &[Complex<f32>],
-                 signal_stride: usize,
-                 spectrum: &mut [Complex<f32>],
-                 spectrum_stride: usize,
-                 twiddles: &[Complex<f32>]) {
-    let mut twiddle_idx_increase = 0;
-    for spec_bin_idx in range_step(0, spectrum.len(), spectrum_stride) {
-        let spec_bin = unsafe { spectrum.get_unchecked_mut(spec_bin_idx) };
-        *spec_bin = Zero::zero();
-        let mut twiddle_idx = 0;
-        for signal_bin_idx in range_step(0, signal.len(), signal_stride) {
-            let signal_bin = unsafe { signal.get_unchecked(signal_bin_idx) };
-            let twiddle = unsafe { twiddles.get_unchecked(twiddle_idx) };
-            *spec_bin = *spec_bin + twiddle * *signal_bin;
-            twiddle_idx += twiddle_idx_increase;
-            if twiddle_idx > twiddles.len() {twiddle_idx -= twiddles.len()}
-        }
-        twiddle_idx_increase += signal_stride;
     }
 }
 

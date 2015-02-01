@@ -1,28 +1,20 @@
 use num::Complex;
 
-pub fn butterfly_2(input: &[Complex<f32>],
-               input_stride: usize,
-               output: &mut [Complex<f32>],
-               output_stride: usize,
-               twiddles: &[Complex<f32>],
-               num_rows: usize) {
-    let mut out_idx_1 = 0us;
-    let mut out_idx_2 = num_rows * output_stride;
+pub fn butterfly_2(data: &mut [Complex<f32>], stride: usize,
+                   twiddles: &[Complex<f32>], num_ffts: usize) {
+    let mut idx_1 = 0us;
+    let mut idx_2 = num_ffts;
     let mut twiddle_idx = 0us;
-    let mut row = input.as_ptr();
-    let input_stride = input_stride as isize;
-    for _ in range(0, num_rows) {
+    // TODO speed: use pointers instead of pointer offsets?
+    for _ in 0..num_ffts {
         unsafe {
             let twiddle = twiddles.get_unchecked(twiddle_idx);
-            let prod = *row.offset(input_stride) * twiddle;
-            *output.get_unchecked_mut(out_idx_1) =
-                *row.offset(0) + prod;
-            *output.get_unchecked_mut(out_idx_2) =
-                *row.offset(0) - prod;
+            let temp = data.get_unchecked(idx_2) * twiddle;
+            *data.get_unchecked_mut(idx_2) = data.get_unchecked(idx_1) - temp;
+            *data.get_unchecked_mut(idx_1) = data.get_unchecked(idx_1) + temp;
         }
-        out_idx_1 += output_stride;
-        out_idx_2 += output_stride;
-        twiddle_idx += input_stride as usize;
-        row = unsafe { row.offset(2 * input_stride) };
+        twiddle_idx += stride;
+        idx_1 += 1;
+        idx_2 += 1;
     }
 }
