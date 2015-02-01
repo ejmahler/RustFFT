@@ -14,10 +14,11 @@ pub fn butterfly_2(input: &[Complex<f32>],
     for _ in range(0, num_rows) {
         unsafe {
             let twiddle = twiddles.get_unchecked(twiddle_idx);
-            *output.get_unchecked_mut(out_idx_1) = 
-                *row.offset(0) + *row.offset(input_stride) * twiddle;
-            *output.get_unchecked_mut(out_idx_2) = 
-                *row.offset(0) - *row.offset(input_stride) * twiddle;
+            let prod = *row.offset(input_stride) * twiddle;
+            *output.get_unchecked_mut(out_idx_1) =
+                *row.offset(0) + prod;
+            *output.get_unchecked_mut(out_idx_2) =
+                *row.offset(0) - prod;
         }
         out_idx_1 += output_stride;
         out_idx_2 += output_stride;
