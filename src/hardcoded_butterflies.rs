@@ -1,4 +1,7 @@
-use num::Complex;
+use num::{Complex, Zero};
+use test::Bencher;
+use std::f32;
+use std::iter::repeat;
 
 pub fn butterfly_2(data: &mut [Complex<f32>], stride: usize,
                    twiddles: &[Complex<f32>], num_ffts: usize) {
@@ -17,4 +20,20 @@ pub fn butterfly_2(data: &mut [Complex<f32>], stride: usize,
         idx_1 += 1;
         idx_2 += 1;
     }
+}
+
+#[bench]
+fn bench_butterfly_2(b: &mut Bencher) {
+    let stride = 4us;
+    let num_ffts = 1000us;
+
+    let len = 2 * stride * num_ffts;
+    let twiddles: Vec<Complex<f32>> = (0..len)
+        .map(|i| -1. * (i as f32) * f32::consts::PI_2 / (len as f32))
+        .map(|phase| Complex::from_polar(&1., &phase))
+        .collect();
+
+    let mut data: Vec<Complex<f32>> = repeat(Zero::zero()).take(len).collect();
+
+    b.iter(|| butterfly_2(&mut data, stride, &twiddles, num_ffts));
 }

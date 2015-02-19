@@ -1,5 +1,6 @@
 #![allow(unstable)]
 extern crate num;
+extern crate test;
 
 mod hardcoded_butterflies;
 

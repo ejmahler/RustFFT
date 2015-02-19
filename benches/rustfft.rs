@@ -12,7 +12,7 @@ fn bench_fft(b: &mut Bencher, len: usize) {
     let mut fft = rustfft::FFT::new(len);
     let signal: Vec<Complex<f32>> = repeat(Complex{re:0.,im:0.}).take(len).collect();
     let mut spectrum: Vec<Complex<f32>> = repeat(Complex{re:0.,im:0.}).take(len).collect();
-    b.iter(|&mut:| {fft.process(signal.as_slice(), spectrum.as_mut_slice());} );
+    b.iter(|| {fft.process(signal.as_slice(), spectrum.as_mut_slice());} );
 }
 
 // Powers of 7

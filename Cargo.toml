@@ -13,4 +13,4 @@ license = "MIT"
 num = "*"
 
 [dev-dependencies]
-kissfft = "0.0.6"
+kissfft = "*"
