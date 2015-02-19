@@ -12,5 +12,5 @@ license = "MIT"
 [dependencies]
 num = "*"
 
-[dev-dependencies]
-kissfft = "*"
+[dev-dependencies.kissfft]
+path = "rust-kissfft"

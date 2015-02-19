@@ -1,0 +1,3 @@
+[submodule "rust-kissfft"]
+	path = rust-kissfft
+	url = https://github.com/m13253/rust-kissfft
