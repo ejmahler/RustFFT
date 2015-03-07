@@ -22,6 +22,44 @@ pub fn butterfly_2(data: &mut [Complex<f32>], stride: usize,
     }
 }
 
+pub fn butterfly_3(data: &mut [Complex<f32>], stride: usize,
+                   twiddles: &[Complex<f32>], num_ffts: usize) {
+    let mut idx = 0us;
+    let mut tw_idx_1 = 0us;
+    let mut tw_idx_2 = 0us;
+    let mut scratch: [Complex<f32>; 5] = [Zero::zero(); 5];
+    for _ in 0..num_ffts {
+        unsafe {
+            scratch[1] = data.get_unchecked(idx + 1 * num_ffts) * twiddles[tw_idx_1];
+            scratch[2] = data.get_unchecked(idx + 2 * num_ffts) * twiddles[tw_idx_2];
+            scratch[3] = scratch[1] + scratch[2];
+            scratch[0] = scratch[1] - scratch[2];
+
+            data.get_unchecked_mut(idx + num_ffts).re = data.get_unchecked(idx).re
+                                                        - scratch[3].re / 2.0;
+            data.get_unchecked_mut(idx + num_ffts).im = data.get_unchecked(idx).im
+                                                        - scratch[3].im / 2.0;
+
+            scratch[0].re = scratch[0].re * twiddles[stride * num_ffts].im;
+            scratch[0].im = scratch[0].im * twiddles[stride * num_ffts].im;
+
+            *data.get_unchecked_mut(idx) = data.get_unchecked(idx) + scratch[3];
+            data.get_unchecked_mut(idx + 2 * num_ffts).re = data.get_unchecked(idx + num_ffts).re
+                                                            + scratch[0].im;
+            data.get_unchecked_mut(idx + 2 * num_ffts).im = data.get_unchecked(idx + num_ffts).im
+                                                            - scratch[0].re;
+            data.get_unchecked_mut(idx + num_ffts).re = data.get_unchecked(idx + num_ffts).re
+                                                        - scratch[0].im;
+            data.get_unchecked_mut(idx + num_ffts).im = data.get_unchecked(idx + num_ffts).im
+                                                        + scratch[0].re;
+
+            tw_idx_1 += 1 * stride;
+            tw_idx_2 += 2 * stride;
+            idx += 1;
+        }
+    }
+}
+
 pub fn butterfly_4(data: &mut [Complex<f32>], stride: usize,
                    twiddles: &[Complex<f32>], num_ffts: usize) {
     let mut idx = 0us;
