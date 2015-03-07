@@ -8,7 +8,7 @@ use num::{Complex, Zero};
 use std::iter::{repeat, range_step_inclusive, range_step};
 use std::f32;
 
-use hardcoded_butterflies::butterfly_2;
+use hardcoded_butterflies::{butterfly_2, butterfly_4};
 
 pub struct FFT {
     scratch: Vec<Complex<f32>>,
@@ -56,6 +56,7 @@ fn cooley_tukey(signal: &[Complex<f32>],
         }
 
         match n1 {
+            4 => butterfly_4(spectrum, stride, twiddles, n2),
             2 => butterfly_2(spectrum, stride, twiddles, n2),
             _ => butterfly(spectrum, stride, twiddles, n2, n1),
         }

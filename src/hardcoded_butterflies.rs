@@ -22,6 +22,38 @@ pub fn butterfly_2(data: &mut [Complex<f32>], stride: usize,
     }
 }
 
+pub fn butterfly_4(data: &mut [Complex<f32>], stride: usize,
+                   twiddles: &[Complex<f32>], num_ffts: usize) {
+    let mut idx = 0us;
+    let mut tw_idx_1 = 0us;
+    let mut tw_idx_2 = 0us;
+    let mut tw_idx_3 = 0us;
+    let mut scratch: [Complex<f32>; 6] = [Zero::zero(); 6];
+    //TODO does using get_unchecked on scratch help with speed?
+    for _ in 0..num_ffts {
+        unsafe {
+            scratch[0] = data.get_unchecked(idx + 1 * num_ffts) * twiddles[tw_idx_1];
+            scratch[1] = data.get_unchecked(idx + 2 * num_ffts) * twiddles[tw_idx_2];
+            scratch[2] = data.get_unchecked(idx + 3 * num_ffts) * twiddles[tw_idx_3];
+            scratch[5] = data.get_unchecked(idx) - scratch[1];
+            *data.get_unchecked_mut(idx) = data.get_unchecked(idx) + scratch[1];
+            scratch[3] = scratch[0] + scratch[2];
+            scratch[4] = scratch[0] - scratch[2];
+            *data.get_unchecked_mut(idx + 2 * num_ffts) = data.get_unchecked(idx) - scratch[3];
+            *data.get_unchecked_mut(idx) = data.get_unchecked(idx) + scratch[3];
+            data.get_unchecked_mut(idx + num_ffts).re = scratch[5].re + scratch[4].im;
+            data.get_unchecked_mut(idx + num_ffts).im = scratch[5].im - scratch[4].re;
+            data.get_unchecked_mut(idx + 3 * num_ffts).re = scratch[5].re - scratch[4].im;
+            data.get_unchecked_mut(idx + 3 * num_ffts).im = scratch[5].im + scratch[4].re;
+
+            tw_idx_1 += 1 * stride;
+            tw_idx_2 += 2 * stride;
+            tw_idx_3 += 3 * stride;
+            idx += 1;
+        }
+    }
+}
+
 #[bench]
 fn bench_butterfly_2(b: &mut Bencher) {
     let stride = 4us;
