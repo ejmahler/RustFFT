@@ -92,6 +92,58 @@ pub fn butterfly_4(data: &mut [Complex<f32>], stride: usize,
     }
 }
 
+pub fn butterfly_5(data: &mut [Complex<f32>], stride: usize,
+                   twiddles: &[Complex<f32>], num_ffts: usize) {
+    let mut idx_0 = 0 * num_ffts;
+    let mut idx_1 = 1 * num_ffts;
+    let mut idx_2 = 2 * num_ffts;
+    let mut idx_3 = 3 * num_ffts;
+    let mut idx_4 = 4 * num_ffts;
+    let mut scratch: [Complex<f32>; 13] = [Zero::zero(); 13];
+    let ya = twiddles[stride * num_ffts];
+    let yb = twiddles[stride * 2 * num_ffts];
+    for i in 0..num_ffts {
+        unsafe {
+            scratch[0] = *data.get_unchecked(idx_0);
+            scratch[1] = data.get_unchecked(idx_1) * twiddles[1 * i * stride];
+            scratch[2] = data.get_unchecked(idx_2) * twiddles[2 * i * stride];
+            scratch[3] = data.get_unchecked(idx_3) * twiddles[3 * i * stride];
+            scratch[4] = data.get_unchecked(idx_4) * twiddles[4 * i * stride];
+
+            scratch[7] = scratch[1] + scratch[4];
+            scratch[10] = scratch[1] - scratch[4];
+            scratch[8] = scratch[2] + scratch[3];
+            scratch[9] = scratch[2] - scratch[3];
+
+            data.get_unchecked_mut(idx_0).re += scratch[7].re + scratch[8].re;
+            data.get_unchecked_mut(idx_0).im += scratch[7].im + scratch[8].im;
+
+            scratch[5].re = scratch[0].re + scratch[7].re * ya.re + scratch[8].re * yb.re;
+            scratch[5].im = scratch[0].im + scratch[7].im * ya.re + scratch[8].im * yb.re;
+
+            scratch[6].re = scratch[10].im * ya.im + scratch[9].im * yb.im;
+            scratch[6].im = -1.0 * scratch[10].re * ya.im - scratch[9].re * yb.im;
+
+            *data.get_unchecked_mut(idx_1) = scratch[5] - scratch[6];
+            *data.get_unchecked_mut(idx_4) = scratch[5] + scratch[6];
+
+            scratch[11].re = scratch[0].re + scratch[7].re * yb.re + scratch[8].re * ya.re;
+            scratch[11].im = scratch[0].im + scratch[7].im * yb.re + scratch[8].im * ya.re;
+            scratch[12].re = -1.0 * scratch[10].im * yb.im + scratch[9].im * ya.im;
+            scratch[12].im = scratch[10].re * yb.im - scratch[9].re * ya.im;
+
+            *data.get_unchecked_mut(idx_2) = scratch[11] + scratch[12];
+            *data.get_unchecked_mut(idx_3) = scratch[11] - scratch[12];
+
+            idx_0 += 1;
+            idx_1 += 1;
+            idx_2 += 1;
+            idx_3 += 1;
+            idx_4 += 1;
+        }
+    }
+}
+
 #[bench]
 fn bench_butterfly_2(b: &mut Bencher) {
     let stride = 4us;
