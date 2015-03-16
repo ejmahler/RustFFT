@@ -1,3 +1,6 @@
+//! These are the unrolled butterflies for specific FFT lengths. They are mostly
+//! translations of the butterfly functions from KissFFT, copyright Mark Borgerding.
+
 use num::{Complex, Zero};
 use test::Bencher;
 use std::f32;
