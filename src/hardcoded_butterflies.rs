@@ -147,18 +147,49 @@ pub fn butterfly_5(data: &mut [Complex<f32>], stride: usize,
     }
 }
 
-#[bench]
-fn bench_butterfly_2(b: &mut Bencher) {
-    let stride = 4us;
-    let num_ffts = 1000us;
-
-    let len = 2 * stride * num_ffts;
+fn set_up_bench(butterfly_len: usize, stride: usize, num_ffts: usize) -> (Vec<Complex<f32>>, Vec<Complex<f32>>) {
+    let len = butterfly_len * stride * num_ffts;
     let twiddles: Vec<Complex<f32>> = (0..len)
         .map(|i| -1. * (i as f32) * f32::consts::PI_2 / (len as f32))
         .map(|phase| Complex::from_polar(&1., &phase))
         .collect();
 
-    let mut data: Vec<Complex<f32>> = repeat(Zero::zero()).take(len).collect();
+    let data: Vec<Complex<f32>> = repeat(Zero::zero()).take(len).collect();
+    (data, twiddles)
+}
+
+#[bench]
+fn bench_butterfly_2(b: &mut Bencher) {
+    let stride = 4us;
+    let num_ffts = 1000us;
+    let (mut data, twiddles) = set_up_bench(2, stride, num_ffts);
 
     b.iter(|| butterfly_2(&mut data, stride, &twiddles, num_ffts));
+}
+
+#[bench]
+fn bench_butterfly_3(b: &mut Bencher) {
+    let stride = 4us;
+    let num_ffts = 1000us;
+    let (mut data, twiddles) = set_up_bench(3, stride, num_ffts);
+
+    b.iter(|| butterfly_3(&mut data, stride, &twiddles, num_ffts));
+}
+
+#[bench]
+fn bench_butterfly_4(b: &mut Bencher) {
+    let stride = 4us;
+    let num_ffts = 1000us;
+    let (mut data, twiddles) = set_up_bench(4, stride, num_ffts);
+
+    b.iter(|| butterfly_4(&mut data, stride, &twiddles, num_ffts));
+}
+
+#[bench]
+fn bench_butterfly_5(b: &mut Bencher) {
+    let stride = 4us;
+    let num_ffts = 1000us;
+    let (mut data, twiddles) = set_up_bench(5, stride, num_ffts);
+
+    b.iter(|| butterfly_5(&mut data, stride, &twiddles, num_ffts));
 }

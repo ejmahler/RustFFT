@@ -5,6 +5,7 @@ extern crate libc;
 use test::Bencher;
 use std::iter::repeat;
 use kissfft::Complex;
+use kissfft::binding::{kiss_fft_cfg, kf_bfly2, kf_bfly3, kf_bfly4, kf_bfly5};
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
@@ -39,21 +40,68 @@ fn kiss_fft_goodmix222_fft(b: &mut Bencher) { bench_fft(b, 900); }
 #[bench]
 fn kiss_fft_goodmix332_fft(b: &mut Bencher) { bench_fft(b, 5400); }
 
+fn set_up_bench(butterfly_len: usize, stride: usize, num_ffts: usize) -> (Vec<Complex>, kiss_fft_cfg) {
+    let len = butterfly_len * stride * num_ffts;
+
+    let cfg = unsafe {
+        kissfft::binding::kiss_fft_alloc(len as libc::c_int,
+                                         0 as libc::c_int,
+                                         std::ptr::null_mut(),
+                                         std::ptr::null_mut())
+    };
+
+    let data: Vec<Complex> = repeat(Complex{r:0.,i:0.}).take(len).collect();
+    (data, cfg)
+}
+
 #[bench]
 fn kiss_fft_butterfly_2(b: &mut Bencher) {
     let stride = 4us;
     let num_ffts = 1000us;
-    let len = 2 * stride * num_ffts;
-
-    let cfg = unsafe {
-        kissfft::binding::kiss_fft_alloc(len as libc::c_int, 0 as libc::c_int, std::ptr::null_mut(), std::ptr::null_mut())
-    };
-
-    let mut data: Vec<Complex> = repeat(Complex{r:0.,i:0.}).take(len).collect();
+    let (mut data, cfg) = set_up_bench(2, stride, num_ffts);
 
     b.iter(||
-    unsafe {
-        kissfft::binding::kf_bfly2(data.as_mut_ptr(), stride as libc::size_t, cfg, num_ffts as libc::c_int)
-    }
+        unsafe {
+            kf_bfly2(data.as_mut_ptr(), stride as libc::size_t, cfg, num_ffts as libc::c_int)
+        }
+    );
+}
+
+#[bench]
+fn kiss_fft_butterfly_3(b: &mut Bencher) {
+    let stride = 4us;
+    let num_ffts = 1000us;
+    let (mut data, cfg) = set_up_bench(3, stride, num_ffts);
+
+    b.iter(||
+        unsafe {
+            kf_bfly3(data.as_mut_ptr(), stride as libc::size_t, cfg, num_ffts as libc::c_int)
+        }
+    );
+}
+
+#[bench]
+fn kiss_fft_butterfly_4(b: &mut Bencher) {
+    let stride = 4us;
+    let num_ffts = 1000us;
+    let (mut data, cfg) = set_up_bench(4, stride, num_ffts);
+
+    b.iter(||
+        unsafe {
+            kf_bfly4(data.as_mut_ptr(), stride as libc::size_t, cfg, num_ffts as libc::c_int)
+        }
+    );
+}
+
+#[bench]
+fn kiss_fft_butterfly_5(b: &mut Bencher) {
+    let stride = 4us;
+    let num_ffts = 1000us;
+    let (mut data, cfg) = set_up_bench(5, stride, num_ffts);
+
+    b.iter(||
+        unsafe {
+            kf_bfly5(data.as_mut_ptr(), stride as libc::size_t, cfg, num_ffts as libc::c_int)
+        }
     );
 }
