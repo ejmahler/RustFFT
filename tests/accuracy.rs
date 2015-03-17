@@ -4,13 +4,13 @@
 //! for a variety of lengths, and test that our FFT algorithm matches our
 //! DFT calculation for those signals.
 
-#![allow(unstable)]
 extern crate num;
 extern crate rustfft;
+extern crate rand;
 
 use num::complex::Complex;
-use std::rand::{StdRng, SeedableRng};
-use std::rand::distributions::{Normal, IndependentSample};
+use rand::{StdRng, SeedableRng};
+use rand::distributions::{Normal, IndependentSample};
 use rustfft::{FFT, dft};
 
 /// The seed for the random number generator used to generate
@@ -35,7 +35,7 @@ fn test_dft_correct(signal: &[Complex<f32>], spectrum: &[Complex<f32>]) -> bool 
     assert_eq!(signal.len(), spectrum.len());
     let mut test_spectrum = signal.to_vec();
     dft(signal.iter(), test_spectrum.iter_mut());
-    return compare_vectors(spectrum, test_spectrum.as_slice());
+    return compare_vectors(spectrum, &test_spectrum[..]);
 }
 
 #[test]
@@ -44,7 +44,7 @@ fn test_dft_known_len_2() {
                   Complex{re:-1f32, im: 0f32}];
     let spectrum = [Complex{re: 0f32, im: 0f32},
                     Complex{re: 2f32, im: 0f32}];
-    assert!(test_dft_correct(signal.as_slice(), spectrum.as_slice()));
+    assert!(test_dft_correct(&signal[..], &spectrum[..]));
 }
 
 #[test]
@@ -55,7 +55,7 @@ fn test_dft_known_len_3() {
     let spectrum = [Complex{re: 2f32, im: 2f32},
                     Complex{re: -5.562177f32, im: -2.098076f32},
                     Complex{re: 6.562178f32, im: 3.09807f32}];
-    assert!(test_dft_correct(signal.as_slice(), spectrum.as_slice()));
+    assert!(test_dft_correct(&signal[..], &spectrum[..]));
 }
 
 #[test]
@@ -68,7 +68,7 @@ fn test_dft_known_len_4() {
                     Complex{re: -2f32, im: 3.5f32},
                     Complex{re: -7.5f32, im: 3f32},
                     Complex{re: 4f32, im: 0.5f32}];
-    assert!(test_dft_correct(signal.as_slice(), spectrum.as_slice()));
+    assert!(test_dft_correct(&signal[..], &spectrum[..]));
 }
 
 #[test]
@@ -85,7 +85,7 @@ fn test_dft_known_len_6() {
                     Complex{re: -3f32, im: -3f32},
                     Complex{re: -1.24f32, im: -4.76f32},
                     Complex{re: 2.16f32, im: -8.16f32}];
-    assert!(test_dft_correct(signal.as_slice(), spectrum.as_slice()));
+    assert!(test_dft_correct(&signal[..], &spectrum[..]));
 
 }
 
@@ -95,14 +95,14 @@ fn ct_matches_dft(signal: &[Complex<f32>]) -> bool {
     let mut fft = FFT::new(signal.len());
     fft.process(signal, spectrum_ct.as_mut_slice());
     dft(signal.iter(), spectrum_dft.iter_mut());
-    return compare_vectors(spectrum_dft.as_slice(), spectrum_ct.as_slice());
+    return compare_vectors(&spectrum_dft[..], &spectrum_ct[..]);
 }
 
 fn random_signal(length: usize) -> Vec<Complex<f32>> {
     let mut sig = Vec::with_capacity(length);
     let normal_dist = Normal::new(0.0, 10.0);
-    let mut rng: StdRng = SeedableRng::from_seed(RNG_SEED.as_slice());
-    for _ in range(0, length) {
+    let mut rng: StdRng = SeedableRng::from_seed(&RNG_SEED[..]);
+    for _ in 0..length {
         sig.push(Complex{re: (normal_dist.ind_sample(&mut rng) as f32),
                          im: (normal_dist.ind_sample(&mut rng) as f32)});
     }
@@ -113,8 +113,8 @@ fn random_signal(length: usize) -> Vec<Complex<f32>> {
 /// for random signals.
 #[test]
 fn test_cooley_tukey() {
-    for len in range(2us, 100) {
+    for len in 2..100 {
         let signal = random_signal(len);
-        assert!(ct_matches_dft(signal.as_slice()), "length = {}", len);
+        assert!(ct_matches_dft(&signal[..]), "length = {}", len);
     }
 }

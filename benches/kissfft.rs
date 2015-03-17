@@ -1,3 +1,4 @@
+#![feature(test, libc)]
 extern crate test;
 extern crate kissfft;
 extern crate libc;
@@ -13,7 +14,7 @@ fn bench_fft(b: &mut Bencher, len: usize) {
     let mut kiss_fft = kissfft::KissFFT::new(len, false);
     let signal: Vec<Complex> = repeat(Complex{r:0.,i:0.}).take(len).collect();
     let mut spectrum: Vec<Complex> = repeat(Complex{r:0.,i:0.}).take(len).collect();
-    b.iter(|| {kiss_fft.transform(signal.as_slice(), spectrum.as_mut_slice());} );
+    b.iter(|| {kiss_fft.transform(&signal[..], &mut spectrum[..]);} );
 }
 
 // Powers of 7
@@ -56,8 +57,8 @@ fn set_up_bench(butterfly_len: usize, stride: usize, num_ffts: usize) -> (Vec<Co
 
 #[bench]
 fn kiss_fft_butterfly_2(b: &mut Bencher) {
-    let stride = 4us;
-    let num_ffts = 1000us;
+    let stride = 4usize;
+    let num_ffts = 1000usize;
     let (mut data, cfg) = set_up_bench(2, stride, num_ffts);
 
     b.iter(||
@@ -69,8 +70,8 @@ fn kiss_fft_butterfly_2(b: &mut Bencher) {
 
 #[bench]
 fn kiss_fft_butterfly_3(b: &mut Bencher) {
-    let stride = 4us;
-    let num_ffts = 1000us;
+    let stride = 4usize;
+    let num_ffts = 1000usize;
     let (mut data, cfg) = set_up_bench(3, stride, num_ffts);
 
     b.iter(||
@@ -82,8 +83,8 @@ fn kiss_fft_butterfly_3(b: &mut Bencher) {
 
 #[bench]
 fn kiss_fft_butterfly_4(b: &mut Bencher) {
-    let stride = 4us;
-    let num_ffts = 1000us;
+    let stride = 4usize;
+    let num_ffts = 1000usize;
     let (mut data, cfg) = set_up_bench(4, stride, num_ffts);
 
     b.iter(||
@@ -95,8 +96,8 @@ fn kiss_fft_butterfly_4(b: &mut Bencher) {
 
 #[bench]
 fn kiss_fft_butterfly_5(b: &mut Bencher) {
-    let stride = 4us;
-    let num_ffts = 1000us;
+    let stride = 4usize;
+    let num_ffts = 1000usize;
     let (mut data, cfg) = set_up_bench(5, stride, num_ffts);
 
     b.iter(||

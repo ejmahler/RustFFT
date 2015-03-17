@@ -1,4 +1,4 @@
-#![allow(unstable)]
+#![feature(test, core)]
 extern crate num;
 extern crate test;
 
@@ -11,7 +11,6 @@ use std::f32;
 use hardcoded_butterflies::{butterfly_2, butterfly_3, butterfly_4, butterfly_5};
 
 pub struct FFT {
-    scratch: Vec<Complex<f32>>,
     factors: Vec<(usize, usize)>,
     twiddles: Vec<Complex<f32>>,
 }
@@ -19,7 +18,6 @@ pub struct FFT {
 impl FFT {
     pub fn new(len: usize) -> Self {
         FFT {
-            scratch: repeat(Zero::zero()).take(len).collect(),
             factors: factor(len),
             twiddles: (0..len)
                       .map(|i| -1. * (i as f32) * f32::consts::PI_2 / (len as f32))
@@ -29,7 +27,7 @@ impl FFT {
     }
 
     pub fn process(&mut self, signal: &[Complex<f32>], spectrum: &mut [Complex<f32>]) {
-        cooley_tukey(signal, spectrum, 1, self.twiddles.as_slice(), self.factors.as_slice());
+        cooley_tukey(signal, spectrum, 1, &self.twiddles[..], &self.factors[..]);
     }
 }
 
@@ -41,7 +39,7 @@ fn cooley_tukey(signal: &[Complex<f32>],
     if let [(n1, n2), other_factors..] = factors {
         if n2 == 1 {
             // An FFT of length 1 is just the identity operator
-            let mut spectrum_idx = 0us;
+            let mut spectrum_idx = 0usize;
             for i in range_step(0, signal.len(), stride) {
                 unsafe { *spectrum.get_unchecked_mut(spectrum_idx) = *signal.get_unchecked(i); }
                 spectrum_idx += 1;
@@ -72,7 +70,7 @@ fn butterfly(data: &mut [Complex<f32>], stride: usize,
     let mut scratch: Vec<Complex<f32>> = repeat(Zero::zero()).take(fft_len).collect();
 
     // for each fft we have to perform...
-    for fft_idx in range(0us, num_ffts) {
+    for fft_idx in range(0usize, num_ffts) {
 
         // copy over data into scratch space
         let mut data_idx = fft_idx;
@@ -85,7 +83,7 @@ fn butterfly(data: &mut [Complex<f32>], stride: usize,
         for data_idx in range_step(fft_idx, fft_len * num_ffts, num_ffts) {
             let out_sample = unsafe { data.get_unchecked_mut(data_idx) };
             *out_sample = Zero::zero();
-            let mut twiddle_idx = 0us;
+            let mut twiddle_idx = 0usize;
             for in_sample in scratch.iter() {
                 let twiddle = unsafe { twiddles.get_unchecked(twiddle_idx) };
                 *out_sample = *out_sample + in_sample * twiddle;
@@ -119,7 +117,7 @@ fn factor(n: usize) -> Vec<(usize, usize)>
     let mut factors = Vec::new();
     let mut next = n;
     while next > 1 {
-        for div in Some(2us).into_iter().chain(range_step_inclusive(3us, next, 2)) {
+        for div in Some(2usize).into_iter().chain(range_step_inclusive(3usize, next, 2)) {
             if next % div == 0 {
                 next = next / div;
                 factors.push((div, next));
