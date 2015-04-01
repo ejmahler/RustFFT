@@ -13,7 +13,7 @@ license = "MIT"
 num = "*"
 
 [dev-dependencies]
-rand = "0.2.0"
+rand = "0.3.4"
 
 [dev-dependencies.kissfft]
 path = "rust-kissfft"

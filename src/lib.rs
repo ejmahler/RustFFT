@@ -1,11 +1,11 @@
-#![feature(test, core)]
+#![feature(test, core, slice_patterns, step_by)]
 extern crate num;
 extern crate test;
 
 mod hardcoded_butterflies;
 
 use num::{Complex, Zero};
-use std::iter::{repeat, range_step_inclusive, range_step};
+use std::iter::{repeat, range_step_inclusive};
 use std::f32;
 
 use hardcoded_butterflies::{butterfly_2, butterfly_3, butterfly_4, butterfly_5};
@@ -40,13 +40,13 @@ fn cooley_tukey(signal: &[Complex<f32>],
         if n2 == 1 {
             // An FFT of length 1 is just the identity operator
             let mut spectrum_idx = 0usize;
-            for i in range_step(0, signal.len(), stride) {
+            for i in (0..signal.len()).step_by(stride) {
                 unsafe { *spectrum.get_unchecked_mut(spectrum_idx) = *signal.get_unchecked(i); }
                 spectrum_idx += 1;
             }
         } else {
             // Recursive call to perform n1 ffts of length n2
-            for i in range(0, n1) {
+            for i in (0..n1) {
                 cooley_tukey(&signal[i * stride..],
                              &mut spectrum[i * n2..],
                              stride * n1, twiddles, other_factors);
@@ -70,7 +70,7 @@ fn butterfly(data: &mut [Complex<f32>], stride: usize,
     let mut scratch: Vec<Complex<f32>> = repeat(Zero::zero()).take(fft_len).collect();
 
     // for each fft we have to perform...
-    for fft_idx in range(0usize, num_ffts) {
+    for fft_idx in (0..num_ffts) {
 
         // copy over data into scratch space
         let mut data_idx = fft_idx;
@@ -80,7 +80,7 @@ fn butterfly(data: &mut [Complex<f32>], stride: usize,
         }
 
         // perfom the butterfly from the scratch space into the original buffer
-        for data_idx in range_step(fft_idx, fft_len * num_ffts, num_ffts) {
+        for data_idx in (fft_idx..fft_len * num_ffts).step_by(num_ffts) {
             let out_sample = unsafe { data.get_unchecked_mut(data_idx) };
             *out_sample = Zero::zero();
             let mut twiddle_idx = 0usize;

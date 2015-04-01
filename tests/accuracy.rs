@@ -93,7 +93,7 @@ fn ct_matches_dft(signal: &[Complex<f32>]) -> bool {
     let mut spectrum_dft = signal.to_vec();
     let mut spectrum_ct = signal.to_vec();
     let mut fft = FFT::new(signal.len());
-    fft.process(signal, spectrum_ct.as_mut_slice());
+    fft.process(signal, &mut spectrum_ct[..]);
     dft(signal.iter(), spectrum_dft.iter_mut());
     return compare_vectors(&spectrum_dft[..], &spectrum_ct[..]);
 }
