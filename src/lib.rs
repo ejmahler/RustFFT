@@ -1,11 +1,9 @@
-#![feature(test, core, slice_patterns, step_by)]
 extern crate num;
-extern crate test;
 
 mod hardcoded_butterflies;
 
 use num::{Complex, Zero};
-use std::iter::{repeat, range_step_inclusive};
+use std::iter::repeat;
 use std::f32;
 
 use hardcoded_butterflies::{butterfly_2, butterfly_3, butterfly_4, butterfly_5};
@@ -20,7 +18,7 @@ impl FFT {
         FFT {
             factors: factor(len),
             twiddles: (0..len)
-                      .map(|i| -1. * (i as f32) * f32::consts::PI_2 / (len as f32))
+                      .map(|i| -1. * (i as f32) * 2.0 * f32::consts::PI / (len as f32))
                       .map(|phase| Complex::from_polar(&1., &phase))
                       .collect(),
         }
@@ -36,12 +34,13 @@ fn cooley_tukey(signal: &[Complex<f32>],
                 stride: usize,
                 twiddles: &[Complex<f32>],
                 factors: &[(usize, usize)]) {
-    if let [(n1, n2), other_factors..] = factors {
+    if let Some(&(n1, n2)) = factors.first() {
         if n2 == 1 {
             // An FFT of length 1 is just the identity operator
             let mut spectrum_idx = 0usize;
-            for i in (0..signal.len()).step_by(stride) {
-                unsafe { *spectrum.get_unchecked_mut(spectrum_idx) = *signal.get_unchecked(i); }
+            for i in (0..signal.len() / stride) {
+                unsafe { *spectrum.get_unchecked_mut(spectrum_idx) =
+                    *signal.get_unchecked(i * stride); }
                 spectrum_idx += 1;
             }
         } else {
@@ -49,7 +48,7 @@ fn cooley_tukey(signal: &[Complex<f32>],
             for i in (0..n1) {
                 cooley_tukey(&signal[i * stride..],
                              &mut spectrum[i * n2..],
-                             stride * n1, twiddles, other_factors);
+                             stride * n1, twiddles, &factors[1..]);
             }
         }
 
@@ -80,7 +79,8 @@ fn butterfly(data: &mut [Complex<f32>], stride: usize,
         }
 
         // perfom the butterfly from the scratch space into the original buffer
-        for data_idx in (fft_idx..fft_len * num_ffts).step_by(num_ffts) {
+        for i in (fft_idx..fft_len) {
+            let data_idx = i * num_ffts;
             let out_sample = unsafe { data.get_unchecked_mut(data_idx) };
             *out_sample = Zero::zero();
             let mut twiddle_idx = 0usize;
@@ -104,7 +104,7 @@ where I: Iterator<Item=&'a Complex<f32>> + ExactSizeIterator + Clone,
         let signal_iter = signal.clone();
         let mut sum: Complex<f32> = Zero::zero();
         for (i, &x) in signal_iter.enumerate() {
-            let angle = -1. * ((i * k) as f32) * f32::consts::PI_2 / (signal.len() as f32);
+            let angle = -1. * ((i * k) as f32) * 2.0 * f32::consts::PI / (signal.len() as f32);
             let twiddle: Complex<f32> = Complex::from_polar(&1f32, &angle);
             sum = sum + twiddle * x;
         }
@@ -117,7 +117,7 @@ fn factor(n: usize) -> Vec<(usize, usize)>
     let mut factors = Vec::new();
     let mut next = n;
     while next > 1 {
-        for div in Some(2usize).into_iter().chain(range_step_inclusive(3usize, next, 2)) {
+        for div in (2..next) {
             if next % div == 0 {
                 next = next / div;
                 factors.push((div, next));

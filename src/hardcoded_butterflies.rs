@@ -146,9 +146,11 @@ pub fn butterfly_5(data: &mut [Complex<f32>], stride: usize,
 
 #[cfg(test)]
 mod benches {
+    extern crate test;
+
     use std::f32;
     use std::iter::repeat;
-    use test::Bencher;
+    use self::test::Bencher;
     use num::{Complex, Zero};
     use super::{butterfly_2, butterfly_3, butterfly_4, butterfly_5};
 
