@@ -38,10 +38,12 @@ fn cooley_tukey(signal: &[Complex<f32>],
         if n2 == 1 {
             // An FFT of length 1 is just the identity operator
             let mut spectrum_idx = 0usize;
-            for i in (0..signal.len() / stride) {
+            let mut signal_idx = 0usize;
+            while signal_idx < signal.len() {
                 unsafe { *spectrum.get_unchecked_mut(spectrum_idx) =
-                    *signal.get_unchecked(i * stride); }
+                    *signal.get_unchecked(signal_idx); }
                 spectrum_idx += 1;
+                signal_idx += stride;
             }
         } else {
             // Recursive call to perform n1 ffts of length n2
@@ -79,8 +81,8 @@ fn butterfly(data: &mut [Complex<f32>], stride: usize,
         }
 
         // perfom the butterfly from the scratch space into the original buffer
-        for i in (fft_idx..fft_len) {
-            let data_idx = i * num_ffts;
+        let mut data_idx = fft_idx;
+        while data_idx < fft_len * num_ffts {
             let out_sample = unsafe { data.get_unchecked_mut(data_idx) };
             *out_sample = Zero::zero();
             let mut twiddle_idx = 0usize;
@@ -90,6 +92,7 @@ fn butterfly(data: &mut [Complex<f32>], stride: usize,
                 twiddle_idx += stride * data_idx;
                 if twiddle_idx >= twiddles.len() { twiddle_idx -= twiddles.len() }
             }
+            data_idx += num_ffts;
         }
 
     }
@@ -117,7 +120,7 @@ fn factor(n: usize) -> Vec<(usize, usize)>
     let mut factors = Vec::new();
     let mut next = n;
     while next > 1 {
-        for div in (2..next) {
+        for div in (2..next + 1) {
             if next % div == 0 {
                 next = next / div;
                 factors.push((div, next));
