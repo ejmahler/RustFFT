@@ -144,7 +144,7 @@ pub fn butterfly_5(data: &mut [Complex<f32>], stride: usize,
     }
 }
 
-#[cfg(test)]
+#[cfg(bench)]
 mod benches {
     extern crate test;
 
