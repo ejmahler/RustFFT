@@ -1,12 +1,12 @@
 extern crate num;
 
-mod hardcoded_butterflies;
+mod butterflies;
 
 use num::{Complex, Zero};
 use std::iter::repeat;
 use std::f32;
 
-use hardcoded_butterflies::{butterfly_2, butterfly_3, butterfly_4, butterfly_5};
+use butterflies::{butterfly_2, butterfly_3, butterfly_4, butterfly_5};
 
 pub struct FFT {
     factors: Vec<(usize, usize)>,
