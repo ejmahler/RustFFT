@@ -28,6 +28,8 @@ impl FFT {
     }
 
     pub fn process(&mut self, signal: &[Complex<f32>], spectrum: &mut [Complex<f32>]) {
+        debug_assert!(signal.len() == spectrum.len());
+        debug_assert!(signal.len() == self.twiddles.len());
         cooley_tukey(signal, spectrum, 1, &self.twiddles[..], &self.factors[..], self.inverse);
     }
 }
