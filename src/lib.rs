@@ -60,10 +60,10 @@ fn cooley_tukey(signal: &[Complex<f32>],
         }
 
         match n1 {
-            5 => butterfly_5(spectrum, stride, twiddles, n2),
-            4 => butterfly_4(spectrum, stride, twiddles, n2, inverse),
-            3 => butterfly_3(spectrum, stride, twiddles, n2),
-            2 => butterfly_2(spectrum, stride, twiddles, n2),
+            5 => unsafe { butterfly_5(spectrum, stride, twiddles, n2) },
+            4 => unsafe { butterfly_4(spectrum, stride, twiddles, n2, inverse) },
+            3 => unsafe { butterfly_3(spectrum, stride, twiddles, n2) },
+            2 => unsafe { butterfly_2(spectrum, stride, twiddles, n2) },
             _ => butterfly(spectrum, stride, twiddles, n2, n1),
         }
     }
