@@ -34,7 +34,7 @@ fn compare_vectors(vec1: &[Complex<f32>], vec2: &[Complex<f32>]) -> bool {
 fn test_dft_correct(signal: &[Complex<f32>], spectrum: &[Complex<f32>]) -> bool {
     assert_eq!(signal.len(), spectrum.len());
     let mut test_spectrum = signal.to_vec();
-    dft(signal.iter(), test_spectrum.iter_mut());
+    dft(signal, &mut test_spectrum[..]);
     return compare_vectors(spectrum, &test_spectrum[..]);
 }
 
@@ -98,10 +98,10 @@ fn ct_matches_dft(signal: Vec<Complex<f32>>, inverse: bool) -> bool {
 
     if inverse {
         let signal_conj: Vec<Complex<f32>> = signal.iter().map(|x| x.conj()).collect();
-        dft(signal_conj.iter(), spectrum_dft.iter_mut());
+        dft(&signal_conj[..], &mut spectrum_dft[..]);
         spectrum_dft = spectrum_dft.iter().map(|x| x.conj()).collect();
     } else {
-        dft(signal.iter(), spectrum_dft.iter_mut());
+        dft(&signal[..], &mut spectrum_dft[..]);
     };
 
     return compare_vectors(&spectrum_dft[..], &spectrum_ct[..]);

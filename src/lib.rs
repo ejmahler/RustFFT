@@ -110,17 +110,16 @@ fn butterfly<T: Float>(data: &mut [Complex<T>], stride: usize,
     }
 }
 
-pub fn dft<'a, 'b, I, O>(signal: I, spectrum: O)
-where I: Iterator<Item=&'a Complex<f32>> + ExactSizeIterator + Clone,
-      O: Iterator<Item=&'b mut Complex<f32>>
+pub fn dft<T: Float>(signal: &[Complex<T>], spectrum: &mut [Complex<T>])
 {
-    for (k, spec_bin) in spectrum.enumerate()
+    for (k, spec_bin) in spectrum.iter_mut().enumerate()
     {
-        let signal_iter = signal.clone();
-        let mut sum: Complex<f32> = Zero::zero();
-        for (i, &x) in signal_iter.enumerate() {
-            let angle = -1. * ((i * k) as f32) * 2.0 * f32::consts::PI / (signal.len() as f32);
-            let twiddle: Complex<f32> = Complex::from_polar(&1f32, &angle);
+        let mut sum = Zero::zero();
+        for (i, &x) in signal.iter().enumerate() {
+            let angle = cast::<_, T>(-1 * (i * k) as isize).unwrap()
+                * cast(2.0 * f32::consts::PI).unwrap()
+                / cast(signal.len()).unwrap();
+            let twiddle = Complex::from_polar(&cast(1).unwrap(), &angle);
             sum = sum + twiddle * x;
         }
         *spec_bin = sum;

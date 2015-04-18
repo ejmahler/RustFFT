@@ -3,6 +3,7 @@
 
 use num::{Complex, Zero, Float};
 use num::traits::cast;
+use std::ops::Neg;
 
 pub unsafe fn butterfly_2<T: Float>(data: &mut [Complex<T>], stride: usize,
                                     twiddles: &[Complex<T>], num_ffts: usize) {
@@ -123,14 +124,14 @@ pub unsafe fn butterfly_5<T: Float>(data: &mut [Complex<T>], stride: usize,
         scratch[5].im = scratch[0].im + scratch[7].im * ya.re + scratch[8].im * yb.re;
 
         scratch[6].re = scratch[10].im * ya.im + scratch[9].im * yb.im;
-        scratch[6].im = cast::<_, T>(-1.0).unwrap() * scratch[10].re * ya.im - scratch[9].re * yb.im;
+        scratch[6].im = scratch[10].re.neg() * ya.im - scratch[9].re * yb.im;
 
         *data.get_unchecked_mut(idx_1) = scratch[5] - scratch[6];
         *data.get_unchecked_mut(idx_4) = scratch[5] + scratch[6];
 
         scratch[11].re = scratch[0].re + scratch[7].re * yb.re + scratch[8].re * ya.re;
         scratch[11].im = scratch[0].im + scratch[7].im * yb.re + scratch[8].im * ya.re;
-        scratch[12].re = cast::<_, T>(-1.0).unwrap() * scratch[10].im * yb.im + scratch[9].im * ya.im;
+        scratch[12].re = scratch[10].im.neg() * yb.im + scratch[9].im * ya.im;
         scratch[12].im = scratch[10].re * yb.im - scratch[9].re * ya.im;
 
         *data.get_unchecked_mut(idx_2) = scratch[11] + scratch[12];
