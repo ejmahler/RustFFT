@@ -61,7 +61,7 @@ pub fn butterfly_3(data: &mut [Complex<f32>], stride: usize,
 }
 
 pub fn butterfly_4(data: &mut [Complex<f32>], stride: usize,
-                   twiddles: &[Complex<f32>], num_ffts: usize) {
+                   twiddles: &[Complex<f32>], num_ffts: usize, inverse: bool) {
     let mut idx = 0usize;
     let mut tw_idx_1 = 0usize;
     let mut tw_idx_2 = 0usize;
@@ -79,10 +79,17 @@ pub fn butterfly_4(data: &mut [Complex<f32>], stride: usize,
             scratch[4] = scratch[0] - scratch[2];
             *data.get_unchecked_mut(idx + 2 * num_ffts) = data.get_unchecked(idx) - scratch[3];
             *data.get_unchecked_mut(idx) = data.get_unchecked(idx) + scratch[3];
-            data.get_unchecked_mut(idx + num_ffts).re = scratch[5].re + scratch[4].im;
-            data.get_unchecked_mut(idx + num_ffts).im = scratch[5].im - scratch[4].re;
-            data.get_unchecked_mut(idx + 3 * num_ffts).re = scratch[5].re - scratch[4].im;
-            data.get_unchecked_mut(idx + 3 * num_ffts).im = scratch[5].im + scratch[4].re;
+            if inverse {
+                data.get_unchecked_mut(idx + num_ffts).re = scratch[5].re - scratch[4].im;
+                data.get_unchecked_mut(idx + num_ffts).im = scratch[5].im + scratch[4].re;
+                data.get_unchecked_mut(idx + 3 * num_ffts).re = scratch[5].re + scratch[4].im;
+                data.get_unchecked_mut(idx + 3 * num_ffts).im = scratch[5].im - scratch[4].re;
+            } else {
+                data.get_unchecked_mut(idx + num_ffts).re = scratch[5].re + scratch[4].im;
+                data.get_unchecked_mut(idx + num_ffts).im = scratch[5].im - scratch[4].re;
+                data.get_unchecked_mut(idx + 3 * num_ffts).re = scratch[5].re - scratch[4].im;
+                data.get_unchecked_mut(idx + 3 * num_ffts).im = scratch[5].im + scratch[4].re;
+            }
 
             tw_idx_1 += 1 * stride;
             tw_idx_2 += 2 * stride;
@@ -157,7 +164,7 @@ mod benches {
     fn set_up_bench(butterfly_len: usize, stride: usize, num_ffts: usize) -> (Vec<Complex<f32>>, Vec<Complex<f32>>) {
         let len = butterfly_len * stride * num_ffts;
         let twiddles: Vec<Complex<f32>> = (0..len)
-            .map(|i| -1. * (i as f32) * f32::consts::PI_2 / (len as f32))
+            .map(|i| -1. * (i as f32) * 2.0 * f32::consts::PI / (len as f32))
             .map(|phase| Complex::from_polar(&1., &phase))
             .collect();
 
@@ -189,7 +196,7 @@ mod benches {
         let num_ffts = 1000usize;
         let (mut data, twiddles) = set_up_bench(4, stride, num_ffts);
 
-        b.iter(|| butterfly_4(&mut data, stride, &twiddles, num_ffts));
+        b.iter(|| butterfly_4(&mut data, stride, &twiddles, num_ffts, false));
     }
 
     #[bench]

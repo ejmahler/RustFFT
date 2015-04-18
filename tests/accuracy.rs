@@ -89,12 +89,21 @@ fn test_dft_known_len_6() {
 
 }
 
-fn ct_matches_dft(signal: &[Complex<f32>]) -> bool {
-    let mut spectrum_dft = signal.to_vec();
-    let mut spectrum_ct = signal.to_vec();
-    let mut fft = FFT::new(signal.len());
-    fft.process(signal, &mut spectrum_ct[..]);
-    dft(signal.iter(), spectrum_dft.iter_mut());
+fn ct_matches_dft(signal: Vec<Complex<f32>>, inverse: bool) -> bool {
+    let mut spectrum_dft = signal.clone();
+    let mut spectrum_ct = signal.clone();
+
+    let mut fft = FFT::new(signal.len(), inverse);
+    fft.process(&signal[..], &mut spectrum_ct[..]);
+
+    if inverse {
+        let signal_conj: Vec<Complex<f32>> = signal.iter().map(|x| x.conj()).collect();
+        dft(signal_conj.iter(), spectrum_dft.iter_mut());
+        spectrum_dft = spectrum_dft.iter().map(|x| x.conj()).collect();
+    } else {
+        dft(signal.iter(), spectrum_dft.iter_mut());
+    };
+
     return compare_vectors(&spectrum_dft[..], &spectrum_ct[..]);
 }
 
@@ -115,6 +124,14 @@ fn random_signal(length: usize) -> Vec<Complex<f32>> {
 fn test_cooley_tukey() {
     for len in 2..100 {
         let signal = random_signal(len);
-        assert!(ct_matches_dft(&signal[..]), "length = {}", len);
+        assert!(ct_matches_dft(signal, false), "length = {}", len);
+    }
+}
+
+#[test]
+fn test_cooley_tukey_inverse() {
+    for len in 1..100 {
+        let signal = random_signal(len);
+        assert!(ct_matches_dft(signal, true), "length = {}", len);
     }
 }

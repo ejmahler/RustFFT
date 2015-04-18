@@ -11,21 +11,24 @@ use butterflies::{butterfly_2, butterfly_3, butterfly_4, butterfly_5};
 pub struct FFT {
     factors: Vec<(usize, usize)>,
     twiddles: Vec<Complex<f32>>,
+    inverse: bool,
 }
 
 impl FFT {
-    pub fn new(len: usize) -> Self {
+    pub fn new(len: usize, inverse: bool) -> Self {
+        let dir = if inverse { 1. } else { -1. };
         FFT {
             factors: factor(len),
             twiddles: (0..len)
-                      .map(|i| -1. * (i as f32) * 2.0 * f32::consts::PI / (len as f32))
+                      .map(|i| dir * (i as f32) * 2.0 * f32::consts::PI / (len as f32))
                       .map(|phase| Complex::from_polar(&1., &phase))
                       .collect(),
+            inverse: inverse,
         }
     }
 
     pub fn process(&mut self, signal: &[Complex<f32>], spectrum: &mut [Complex<f32>]) {
-        cooley_tukey(signal, spectrum, 1, &self.twiddles[..], &self.factors[..]);
+        cooley_tukey(signal, spectrum, 1, &self.twiddles[..], &self.factors[..], self.inverse);
     }
 }
 
@@ -33,7 +36,8 @@ fn cooley_tukey(signal: &[Complex<f32>],
                 spectrum: &mut [Complex<f32>],
                 stride: usize,
                 twiddles: &[Complex<f32>],
-                factors: &[(usize, usize)]) {
+                factors: &[(usize, usize)],
+                inverse: bool) {
     if let Some(&(n1, n2)) = factors.first() {
         if n2 == 1 {
             // An FFT of length 1 is just the identity operator
@@ -50,13 +54,14 @@ fn cooley_tukey(signal: &[Complex<f32>],
             for i in (0..n1) {
                 cooley_tukey(&signal[i * stride..],
                              &mut spectrum[i * n2..],
-                             stride * n1, twiddles, &factors[1..]);
+                             stride * n1, twiddles, &factors[1..],
+                             inverse);
             }
         }
 
         match n1 {
             5 => butterfly_5(spectrum, stride, twiddles, n2),
-            4 => butterfly_4(spectrum, stride, twiddles, n2),
+            4 => butterfly_4(spectrum, stride, twiddles, n2, inverse),
             3 => butterfly_3(spectrum, stride, twiddles, n2),
             2 => butterfly_2(spectrum, stride, twiddles, n2),
             _ => butterfly(spectrum, stride, twiddles, n2, n1),
