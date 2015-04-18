@@ -4,44 +4,47 @@ extern crate num;
 
 mod butterflies;
 
-use num::{Complex, Zero};
+use num::{Complex, Zero, Float};
+use num::traits::cast;
 use std::iter::repeat;
 use std::f32;
 
 use butterflies::{butterfly_2, butterfly_3, butterfly_4, butterfly_5};
 
-pub struct FFT {
+pub struct FFT<T> {
     factors: Vec<(usize, usize)>,
-    twiddles: Vec<Complex<f32>>,
+    twiddles: Vec<Complex<T>>,
     inverse: bool,
 }
 
-impl FFT {
+impl<T: Float> FFT<T> {
     pub fn new(len: usize, inverse: bool) -> Self {
-        let dir = if inverse { 1. } else { -1. };
-        FFT {
+        let dir = if inverse { 1 } else { -1 };
+        FFT::<T> {
             factors: factor(len),
             twiddles: (0..len)
-                      .map(|i| dir * (i as f32) * 2.0 * f32::consts::PI / (len as f32))
-                      .map(|phase| Complex::from_polar(&1., &phase))
+                      .map(|i| cast::<_, T>(dir * i as isize).unwrap()
+                               * cast(2.0 * f32::consts::PI).unwrap()
+                               / cast(len).unwrap())
+                      .map(|phase| Complex::<T>::from_polar(&cast(1).unwrap(), &phase))
                       .collect(),
             inverse: inverse,
         }
     }
 
-    pub fn process(&mut self, signal: &[Complex<f32>], spectrum: &mut [Complex<f32>]) {
+    pub fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         debug_assert!(signal.len() == spectrum.len());
         debug_assert!(signal.len() == self.twiddles.len());
         cooley_tukey(signal, spectrum, 1, &self.twiddles[..], &self.factors[..], self.inverse);
     }
 }
 
-fn cooley_tukey(signal: &[Complex<f32>],
-                spectrum: &mut [Complex<f32>],
-                stride: usize,
-                twiddles: &[Complex<f32>],
-                factors: &[(usize, usize)],
-                inverse: bool) {
+fn cooley_tukey<T: Float>(signal: &[Complex<T>],
+                          spectrum: &mut [Complex<T>],
+                          stride: usize,
+                          twiddles: &[Complex<T>],
+                          factors: &[(usize, usize)],
+                          inverse: bool) {
     if let Some(&(n1, n2)) = factors.first() {
         if n2 == 1 {
             // An FFT of length 1 is just the identity operator
@@ -73,11 +76,11 @@ fn cooley_tukey(signal: &[Complex<f32>],
     }
 }
 
-fn butterfly(data: &mut [Complex<f32>], stride: usize,
-             twiddles: &[Complex<f32>], num_ffts: usize, fft_len: usize) {
+fn butterfly<T: Float>(data: &mut [Complex<T>], stride: usize,
+                       twiddles: &[Complex<T>], num_ffts: usize, fft_len: usize) {
 
     // TODO pre-allocate this space at FFT initialization
-    let mut scratch: Vec<Complex<f32>> = repeat(Zero::zero()).take(fft_len).collect();
+    let mut scratch: Vec<Complex<T>> = repeat(Zero::zero()).take(fft_len).collect();
 
     // for each fft we have to perform...
     for fft_idx in (0..num_ffts) {
