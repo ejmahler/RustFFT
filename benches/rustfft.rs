@@ -10,7 +10,7 @@ use std::iter::repeat;
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
 fn bench_fft(b: &mut Bencher, len: usize) {
-    let mut fft = rustfft::FFT::new(len);
+    let mut fft = rustfft::FFT::new(len, false);
     let signal: Vec<Complex<f32>> = repeat(Complex{re:0.,im:0.}).take(len).collect();
     let mut spectrum: Vec<Complex<f32>> = repeat(Complex{re:0.,im:0.}).take(len).collect();
     b.iter(|| {fft.process(&signal[..], &mut spectrum[..]);} );
