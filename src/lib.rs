@@ -4,7 +4,7 @@ extern crate num;
 
 mod butterflies;
 
-use num::{Complex, Zero, Float};
+use num::{Complex, Zero, One, Float};
 use num::traits::cast;
 use std::iter::repeat;
 use std::f32;
@@ -26,7 +26,7 @@ impl<T: Float> FFT<T> {
                       .map(|i| cast::<_, T>(dir * i as isize).unwrap()
                                * cast(2.0 * f32::consts::PI).unwrap()
                                / cast(len).unwrap())
-                      .map(|phase| Complex::<T>::from_polar(&cast(1).unwrap(), &phase))
+                      .map(|phase| Complex::<T>::from_polar(&One::one(), &phase))
                       .collect(),
             inverse: inverse,
         }
@@ -110,24 +110,21 @@ fn butterfly<T: Float>(data: &mut [Complex<T>], stride: usize,
     }
 }
 
-pub fn dft<T: Float>(signal: &[Complex<T>], spectrum: &mut [Complex<T>])
-{
-    for (k, spec_bin) in spectrum.iter_mut().enumerate()
-    {
+pub fn dft<T: Float>(signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
+    for (k, spec_bin) in spectrum.iter_mut().enumerate() {
         let mut sum = Zero::zero();
         for (i, &x) in signal.iter().enumerate() {
             let angle = cast::<_, T>(-1 * (i * k) as isize).unwrap()
                 * cast(2.0 * f32::consts::PI).unwrap()
                 / cast(signal.len()).unwrap();
-            let twiddle = Complex::from_polar(&cast(1).unwrap(), &angle);
+            let twiddle = Complex::from_polar(&One::one(), &angle);
             sum = sum + twiddle * x;
         }
         *spec_bin = sum;
     }
 }
 
-fn factor(n: usize) -> Vec<(usize, usize)>
-{
+fn factor(n: usize) -> Vec<(usize, usize)> {
     let mut factors = Vec::new();
     let mut next = n;
     while next > 1 {
