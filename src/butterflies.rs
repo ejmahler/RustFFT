@@ -1,12 +1,12 @@
 //! These are the unrolled butterflies for specific FFT lengths. They are mostly
 //! translations of the butterfly functions from KissFFT, copyright Mark Borgerding.
 
-use num::{Complex, Zero, Float};
-use num::traits::cast;
+use num::{Complex, Zero, Num, FromPrimitive, Signed};
 use std::ops::Neg;
 
-pub unsafe fn butterfly_2<T: Float>(data: &mut [Complex<T>], stride: usize,
-                                    twiddles: &[Complex<T>], num_ffts: usize) {
+pub unsafe fn butterfly_2<T>(data: &mut [Complex<T>], stride: usize,
+                             twiddles: &[Complex<T>], num_ffts: usize)
+                             where T: Num + Copy {
     let mut idx_1 = 0usize;
     let mut idx_2 = num_ffts;
     let mut twiddle_idx = 0usize;
@@ -21,8 +21,9 @@ pub unsafe fn butterfly_2<T: Float>(data: &mut [Complex<T>], stride: usize,
     }
 }
 
-pub unsafe fn butterfly_3<T: Float>(data: &mut [Complex<T>], stride: usize,
-                   twiddles: &[Complex<T>], num_ffts: usize) {
+pub unsafe fn butterfly_3<T>(data: &mut [Complex<T>], stride: usize,
+                             twiddles: &[Complex<T>], num_ffts: usize)
+                             where T: Num + Copy + FromPrimitive {
     let mut idx = 0usize;
     let mut tw_idx_1 = 0usize;
     let mut tw_idx_2 = 0usize;
@@ -34,9 +35,11 @@ pub unsafe fn butterfly_3<T: Float>(data: &mut [Complex<T>], stride: usize,
         scratch[0] = scratch[1] - scratch[2];
 
         data.get_unchecked_mut(idx + num_ffts).re = data.get_unchecked(idx).re
-                                                    - scratch[3].re / cast(2.0).unwrap();
+                                                    - scratch[3].re
+                                                    / FromPrimitive::from_f32(2.0).unwrap();
         data.get_unchecked_mut(idx + num_ffts).im = data.get_unchecked(idx).im
-                                                    - scratch[3].im / cast(2.0).unwrap();
+                                                    - scratch[3].im
+                                                    / FromPrimitive::from_f32(2.0).unwrap();
 
         scratch[0].re = scratch[0].re * twiddles[stride * num_ffts].im;
         scratch[0].im = scratch[0].im * twiddles[stride * num_ffts].im;
@@ -57,8 +60,9 @@ pub unsafe fn butterfly_3<T: Float>(data: &mut [Complex<T>], stride: usize,
     }
 }
 
-pub unsafe fn butterfly_4<T: Float>(data: &mut [Complex<T>], stride: usize,
-                   twiddles: &[Complex<T>], num_ffts: usize, inverse: bool) {
+pub unsafe fn butterfly_4<T>(data: &mut [Complex<T>], stride: usize,
+                             twiddles: &[Complex<T>], num_ffts: usize, inverse: bool)
+                             where T: Num + Copy {
     let mut idx = 0usize;
     let mut tw_idx_1 = 0usize;
     let mut tw_idx_2 = 0usize;
@@ -93,8 +97,9 @@ pub unsafe fn butterfly_4<T: Float>(data: &mut [Complex<T>], stride: usize,
     }
 }
 
-pub unsafe fn butterfly_5<T: Float>(data: &mut [Complex<T>], stride: usize,
-                   twiddles: &[Complex<T>], num_ffts: usize) {
+pub unsafe fn butterfly_5<T>(data: &mut [Complex<T>], stride: usize,
+                             twiddles: &[Complex<T>], num_ffts: usize)
+                             where T: Signed + Copy {
     let mut idx_0 = 0 * num_ffts;
     let mut idx_1 = 1 * num_ffts;
     let mut idx_2 = 2 * num_ffts;
