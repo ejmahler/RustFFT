@@ -13,8 +13,10 @@ pub unsafe fn butterfly_2<T>(data: &mut [Complex<T>], stride: usize,
     for _ in 0..num_ffts {
         let twiddle = twiddles.get_unchecked(twiddle_idx);
         let temp = data.get_unchecked(idx_2) * twiddle;
-        *data.get_unchecked_mut(idx_2) = data.get_unchecked(idx_1) - temp;
-        *data.get_unchecked_mut(idx_1) = data.get_unchecked(idx_1) + temp;
+        data.get_unchecked_mut(idx_2).re = data.get_unchecked(idx_1).re - temp.re;
+        data.get_unchecked_mut(idx_2).im = data.get_unchecked(idx_1).im - temp.im;
+        data.get_unchecked_mut(idx_1).re = data.get_unchecked(idx_1).re + temp.re;
+        data.get_unchecked_mut(idx_1).im = data.get_unchecked(idx_1).im + temp.im;
         twiddle_idx += stride;
         idx_1 += 1;
         idx_2 += 1;
