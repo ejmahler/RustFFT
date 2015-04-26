@@ -6,7 +6,6 @@ mod butterflies;
 
 use num::{Complex, Zero, One, Float, Num, FromPrimitive, Signed};
 use num::traits::cast;
-use std::iter::repeat;
 use std::f32;
 
 use butterflies::{butterfly_2, butterfly_3, butterfly_4, butterfly_5};
@@ -14,13 +13,20 @@ use butterflies::{butterfly_2, butterfly_3, butterfly_4, butterfly_5};
 pub struct FFT<T> {
     factors: Vec<(usize, usize)>,
     twiddles: Vec<Complex<T>>,
+    scratch: Vec<Complex<T>>,
     inverse: bool,
 }
 
 impl<T> FFT<T> where T: Signed + FromPrimitive + Copy {
     pub fn new(len: usize, inverse: bool) -> Self {
         let dir = if inverse { 1 } else { -1 };
-        FFT::<T> {
+        let factors = factor(len);
+        let max_fft_len = factors.iter().map(|&(a, _)| a).max();
+        let scratch = match max_fft_len {
+            None | Some(0...5) => vec![Zero::zero(); 0],
+            Some(l) => vec![Zero::zero(); l],
+        };
+        FFT {
             factors: factor(len),
             twiddles: (0..len)
                       .map(|i| dir as f32 * i as f32 * 2.0 * f32::consts::PI / len as f32)
@@ -28,6 +34,7 @@ impl<T> FFT<T> where T: Signed + FromPrimitive + Copy {
                       .map(|c| Complex {re: FromPrimitive::from_f32(c.re).unwrap(),
                                         im: FromPrimitive::from_f32(c.im).unwrap()})
                       .collect(),
+            scratch: scratch,
             inverse: inverse,
         }
     }
@@ -35,7 +42,8 @@ impl<T> FFT<T> where T: Signed + FromPrimitive + Copy {
     pub fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         debug_assert!(signal.len() == spectrum.len());
         debug_assert!(signal.len() == self.twiddles.len());
-        cooley_tukey(signal, spectrum, 1, &self.twiddles[..], &self.factors[..], self.inverse);
+        cooley_tukey(signal, spectrum, 1, &self.twiddles[..], &self.factors[..],
+                     &mut self.scratch, self.inverse);
     }
 }
 
@@ -44,6 +52,7 @@ fn cooley_tukey<T>(signal: &[Complex<T>],
                    stride: usize,
                    twiddles: &[Complex<T>],
                    factors: &[(usize, usize)],
+                   scratch: &mut [Complex<T>],
                    inverse: bool) where T: Signed + FromPrimitive + Copy {
     if let Some(&(n1, n2)) = factors.first() {
         if n2 == 1 {
@@ -62,7 +71,7 @@ fn cooley_tukey<T>(signal: &[Complex<T>],
                 cooley_tukey(&signal[i * stride..],
                              &mut spectrum[i * n2..],
                              stride * n1, twiddles, &factors[1..],
-                             inverse);
+                             scratch, inverse);
             }
         }
 
@@ -71,17 +80,14 @@ fn cooley_tukey<T>(signal: &[Complex<T>],
             4 => unsafe { butterfly_4(spectrum, stride, twiddles, n2, inverse) },
             3 => unsafe { butterfly_3(spectrum, stride, twiddles, n2) },
             2 => unsafe { butterfly_2(spectrum, stride, twiddles, n2) },
-            _ => butterfly(spectrum, stride, twiddles, n2, n1),
+            _ => butterfly(spectrum, stride, twiddles, n2, n1, &mut scratch[..n1]),
         }
     }
 }
 
 fn butterfly<T: Num + Copy>(data: &mut [Complex<T>], stride: usize,
-                            twiddles: &[Complex<T>], num_ffts: usize, fft_len: usize) {
-
-    // TODO pre-allocate this space at FFT initialization
-    let mut scratch: Vec<Complex<T>> = repeat(Zero::zero()).take(fft_len).collect();
-
+                            twiddles: &[Complex<T>], num_ffts: usize,
+                            fft_len: usize, scratch: &mut [Complex<T>]) {
     // for each fft we have to perform...
     for fft_idx in (0..num_ffts) {
 
