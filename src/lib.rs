@@ -18,6 +18,11 @@ pub struct FFT<T> {
 }
 
 impl<T> FFT<T> where T: Signed + FromPrimitive + Copy {
+    /// Creates a new FFT context that will process signal of length
+    /// `len`. If `inverse` is `true`, then this struct will run inverse
+    /// FFTs. This implementation of the FFT doesn't do any scaling on both
+    /// the forward and backward transforms, so doing a forward then backward
+    /// FFT on a signal will scale the signal by its length.
     pub fn new(len: usize, inverse: bool) -> Self {
         let dir = if inverse { 1 } else { -1 };
         let factors = factor(len);
@@ -39,9 +44,15 @@ impl<T> FFT<T> where T: Signed + FromPrimitive + Copy {
         }
     }
 
+    /// Runs the FFT on the input `signal` buffer, and places the output in the
+    /// `spectrum` buffer.
+    ///
+    /// # Panics
+    /// This method will panic if `signal` and `spectrum` are not the length
+    /// specified in the struct's constructor.
     pub fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        debug_assert!(signal.len() == spectrum.len());
-        debug_assert!(signal.len() == self.twiddles.len());
+        assert!(signal.len() == spectrum.len());
+        assert!(signal.len() == self.twiddles.len());
         cooley_tukey(signal, spectrum, 1, &self.twiddles[..], &self.factors[..],
                      &mut self.scratch, self.inverse);
     }
@@ -130,6 +141,7 @@ pub fn dft<T: Float>(signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
     }
 }
 
+/// Factors an integer into its prime factors.
 fn factor(n: usize) -> Vec<(usize, usize)> {
     let mut factors = Vec::new();
     let mut next = n;
