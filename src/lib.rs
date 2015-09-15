@@ -1,4 +1,4 @@
-#![cfg_attr(test, feature(test))]
+#![cfg_attr(all(feature = "bench", test), feature(test))]
 
 extern crate num;
 

@@ -9,6 +9,10 @@ repository = "https://github.com/awelkie/RustFFT"
 keywords = ["fft", "dft", "fourier", "signal"]
 license = "MIT"
 
+[features]
+# Enable to run benchmarks (requires nightly rust).
+bench = []
+
 [dependencies]
 num = "*"
 

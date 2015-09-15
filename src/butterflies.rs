@@ -153,6 +153,7 @@ pub unsafe fn butterfly_5<T>(data: &mut [Complex<T>], stride: usize,
 }
 
 #[cfg(test)]
+#[cfg(feature = "bench")]
 mod benches {
     extern crate test;
 
