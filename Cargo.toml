@@ -1,10 +1,10 @@
 [package]
 
 name = "rustfft"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Allen Welkie <allen.welkie at gmail>"]
 
-description = "A mixed-radix FFT library written in pure Rust"
+description = "A mixed-radix FFT library."
 repository = "https://github.com/awelkie/RustFFT"
 keywords = ["fft", "dft", "fourier", "signal"]
 license = "MIT"
@@ -17,7 +17,7 @@ bench = []
 num = "*"
 
 [dev-dependencies]
-rand = "0.3.4"
+rand = "*"
 
 [dev-dependencies.kissfft]
 path = "rust-kissfft"
