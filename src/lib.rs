@@ -78,7 +78,7 @@ fn cooley_tukey<T>(signal: &[Complex<T>],
             }
         } else {
             // Recursive call to perform n1 ffts of length n2
-            for i in (0..n1) {
+            for i in 0..n1 {
                 cooley_tukey(&signal[i * stride..],
                              &mut spectrum[i * n2..],
                              stride * n1, twiddles, &factors[1..],
@@ -100,7 +100,7 @@ fn butterfly<T: Num + Copy>(data: &mut [Complex<T>], stride: usize,
                             twiddles: &[Complex<T>], num_ffts: usize,
                             fft_len: usize, scratch: &mut [Complex<T>]) {
     // for each fft we have to perform...
-    for fft_idx in (0..num_ffts) {
+    for fft_idx in 0..num_ffts {
 
         // copy over data into scratch space
         let mut data_idx = fft_idx;
@@ -146,7 +146,7 @@ fn factor(n: usize) -> Vec<(usize, usize)> {
     let mut factors = Vec::new();
     let mut next = n;
     while next > 1 {
-        for div in (2..next + 1) {
+        for div in 2..next + 1 {
             if next % div == 0 {
                 next = next / div;
                 factors.push((div, next));
