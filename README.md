@@ -4,10 +4,19 @@
 [![](https://img.shields.io/crates/v/rustfft.svg)](https://crates.io/crates/rustfft)
 [![](https://img.shields.io/crates/l/rustfft.svg)](https://crates.io/crates/rustfft)
 
-RustFFT is a mixed-radix FFT implementation written in Rust. It aims to be about as fast as [KissFFT](http://kissfft.sourceforge.net/).
+RustFFT is a mixed-radix FFT implementation written in Rust.
 
-## Testing
-To run tests with benchmarks (requires nightly rust), use the `bench` feature:
-``` sh
-cargo test --features bench
+## Example
+```rust
+extern crate rustfft;
+extern crate num;
+
+// This library can handle arbitrary FFT lengths, but
+// lengths that are highly composite run much faster.
+let fft_len = 1234;
+
+let mut fft = rustfft::FFT::new(fft_len, false);
+let signal = vec![num::Complex{re: 0.0, im: 0.0}; fft_len];
+let mut spectrum = signal.clone();
+fft.process(&signal, &mut spectrum);
 ```
