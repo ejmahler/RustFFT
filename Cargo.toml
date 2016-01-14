@@ -7,7 +7,7 @@ authors = ["Allen Welkie <allen.welkie at gmail>"]
 description = "A mixed-radix FFT library."
 repository = "https://github.com/awelkie/RustFFT"
 keywords = ["fft", "dft", "fourier", "signal"]
-license = "MIT"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 num = "*"
