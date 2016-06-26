@@ -2,7 +2,6 @@
 //! translations of the butterfly functions from KissFFT, copyright Mark Borgerding.
 
 use num::{Complex, Zero, Num, FromPrimitive, Signed};
-use std::ops::Neg;
 
 pub unsafe fn butterfly_2<T>(data: &mut [Complex<T>], stride: usize,
                              twiddles: &[Complex<T>], num_ffts: usize)
@@ -149,6 +148,40 @@ pub unsafe fn butterfly_5<T>(data: &mut [Complex<T>], stride: usize,
         idx_2 += 1;
         idx_3 += 1;
         idx_4 += 1;
+    }
+}
+
+pub fn butterfly<T: Num + Copy>(data: &mut [Complex<T>],
+                            stride: usize,
+                            twiddles: &[Complex<T>],
+                            num_ffts: usize,
+                            fft_len: usize,
+                            scratch: &mut [Complex<T>]) {
+    // for each fft we have to perform...
+    for fft_idx in 0..num_ffts {
+
+        // copy over data into scratch space
+        let mut data_idx = fft_idx;
+        for s in scratch.iter_mut() {
+            *s = unsafe { *data.get_unchecked(data_idx) };
+            data_idx += num_ffts;
+        }
+
+        // perfom the butterfly from the scratch space into the original buffer
+        let mut data_idx = fft_idx;
+        while data_idx < fft_len * num_ffts {
+            let out_sample = unsafe { data.get_unchecked_mut(data_idx) };
+            *out_sample = Zero::zero();
+            let mut twiddle_idx = 0usize;
+            for in_sample in scratch.iter() {
+                let twiddle = unsafe { twiddles.get_unchecked(twiddle_idx) };
+                *out_sample = *out_sample + in_sample * twiddle;
+                twiddle_idx += stride * data_idx;
+                if twiddle_idx >= twiddles.len() { twiddle_idx -= twiddles.len() }
+            }
+            data_idx += num_ffts;
+        }
+
     }
 }
 
