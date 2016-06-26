@@ -45,15 +45,19 @@ impl<T> FFT<T> where T: Signed + FromPrimitive + Copy {
 
             Algorithm::MixedRadix(factors, scratch)
         };
-        
+
         FFT {
             algorithm: algorithm,
             twiddles: (0..len)
-                      .map(|i| dir as f32 * i as f32 * 2.0 * f32::consts::PI / len as f32)
-                      .map(|phase| Complex::from_polar(&1.0, &phase))
-                      .map(|c| Complex {re: FromPrimitive::from_f32(c.re).unwrap(),
-                                        im: FromPrimitive::from_f32(c.im).unwrap()})
-                      .collect(),
+                .map(|i| dir as f32 * i as f32 * 2.0 * f32::consts::PI / len as f32)
+                .map(|phase| Complex::from_polar(&1.0, &phase))
+                .map(|c| {
+                    Complex {
+                        re: FromPrimitive::from_f32(c.re).unwrap(),
+                        im: FromPrimitive::from_f32(c.im).unwrap(),
+                    }
+                })
+                .collect(),
             inverse: inverse,
         }
     }
@@ -69,9 +73,23 @@ impl<T> FFT<T> where T: Signed + FromPrimitive + Copy {
         assert!(signal.len() == self.twiddles.len());
 
         match self.algorithm {
-            Algorithm::Radix4 => radix_4(signal.len(), signal, spectrum, 1, &self.twiddles[..], self.inverse),
-            Algorithm::MixedRadix(ref factors, ref mut scratch) =>
-                cooley_tukey(signal, spectrum, 1, &self.twiddles[..], factors, scratch, self.inverse),
+            Algorithm::Radix4 => {
+                copy_data_for_radix4(signal.len(), signal, spectrum, 1, 0, 0);
+                radix_4(signal.len(),
+                        spectrum,
+                        1,
+                        &self.twiddles[..],
+                        self.inverse);
+            }
+            Algorithm::MixedRadix(ref factors, ref mut scratch) => {
+                cooley_tukey(signal,
+                             spectrum,
+                             1,
+                             &self.twiddles[..],
+                             factors,
+                             scratch,
+                             self.inverse)
+            }
             Algorithm::Noop => copy_data(signal, spectrum, 1),
         }
     }
@@ -109,38 +127,33 @@ fn cooley_tukey<T>(signal: &[Complex<T>],
     }
 }
 
-fn radix_4<T>(  size: usize,
-                signal: &[Complex<T>],
-                spectrum: &mut [Complex<T>],
-                stride: usize,
-                twiddles: &[Complex<T>],
-                inverse: bool) where T: Signed + FromPrimitive + Copy {
+fn radix_4<T>(size: usize,
+              spectrum: &mut [Complex<T>],
+              stride: usize,
+              twiddles: &[Complex<T>],
+              inverse: bool) where T: Signed + FromPrimitive + Copy {
     match size {
-        4 => unsafe {
-            copy_data_4(signal, spectrum, stride);
-            butterfly_4(spectrum, stride, twiddles, 1, inverse)
-        },
-        2 => unsafe {
-            copy_data_2(signal, spectrum, stride);
-            butterfly_2(spectrum, stride, twiddles, 1)
-        },
+        4 => unsafe { butterfly_4(spectrum, stride, twiddles, 1, inverse) },
+        2 => unsafe { butterfly_2(spectrum, stride, twiddles, 1) },
         _ => {
             for i in 0..4 {
-                radix_4(
-                    size / 4,
-                    &signal[i * stride..],
-                    &mut spectrum[i * (size / 4)..],
-                    stride * 4, twiddles, inverse
-                    );
+                radix_4(size / 4,
+                        &mut spectrum[i * (size / 4)..],
+                        stride * 4,
+                        twiddles,
+                        inverse);
             }
-            unsafe { butterfly_4(spectrum, stride, twiddles, size/4, inverse) };
+            unsafe { butterfly_4(spectrum, stride, twiddles, size / 4, inverse) };
         }
     }
 }
 
-fn butterfly<T: Num + Copy>(data: &mut [Complex<T>], stride: usize,
-                            twiddles: &[Complex<T>], num_ffts: usize,
-                            fft_len: usize, scratch: &mut [Complex<T>]) {
+fn butterfly<T: Num + Copy>(data: &mut [Complex<T>],
+                            stride: usize,
+                            twiddles: &[Complex<T>],
+                            num_ffts: usize,
+                            fft_len: usize,
+                            scratch: &mut [Complex<T>]) {
     // for each fft we have to perform...
     for fft_idx in 0..num_ffts {
 
@@ -169,33 +182,51 @@ fn butterfly<T: Num + Copy>(data: &mut [Complex<T>], stride: usize,
     }
 }
 
-fn copy_data<T>(signal: &[Complex<T>],
-                spectrum: &mut [Complex<T>],
-                stride: usize) where T: Copy  {
+fn copy_data<T: Copy>(signal: &[Complex<T>], spectrum: &mut [Complex<T>], stride: usize)
+{
     let mut spectrum_idx = 0usize;
     let mut signal_idx = 0usize;
     while signal_idx < signal.len() {
-        unsafe { *spectrum.get_unchecked_mut(spectrum_idx) =
-            *signal.get_unchecked(signal_idx); }
+        unsafe {
+            *spectrum.get_unchecked_mut(spectrum_idx) = *signal.get_unchecked(signal_idx);
+        }
         spectrum_idx += 1;
         signal_idx += stride;
     }
 }
 
-fn copy_data_2<T>(signal: &[Complex<T>],
-                spectrum: &mut [Complex<T>],
-                stride: usize) where T: Copy  {
-    unsafe {
-        *spectrum.get_unchecked_mut(0) = *signal.get_unchecked(0);
-        *spectrum.get_unchecked_mut(1) = *signal.get_unchecked(stride);
-    }
-}
-fn copy_data_4<T>(signal: &[Complex<T>],
-                spectrum: &mut [Complex<T>],
-                stride: usize) where T: Signed + FromPrimitive + Copy  {
-    unsafe {
-        for i in 0..4 {
-            *spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i*stride);
+// TODO: we should be able to do this in a simple loop, rather than recursively, using bit reversal
+// the algorithm will be a little more complicated though due
+// to us potentially using radix 2 for one of the teps
+fn copy_data_for_radix4<T: Copy>(size: usize,
+                           signal: &[Complex<T>],
+                           spectrum: &mut [Complex<T>],
+                           stride: usize,
+                           signal_offset: usize,
+                           spectrum_offset: usize)
+{
+    match size {
+        4 => unsafe {
+            for i in 0..4 {
+                *spectrum.get_unchecked_mut(spectrum_offset + i) =
+                    *signal.get_unchecked(signal_offset + i * stride);
+            }
+        },
+        2 => unsafe {
+            for i in 0..2 {
+                *spectrum.get_unchecked_mut(spectrum_offset + i) =
+                    *signal.get_unchecked(signal_offset + i * stride);
+            }
+        },
+        _ => {
+            for i in 0..4 {
+                copy_data_for_radix4(size / 4,
+                                     signal,
+                                     spectrum,
+                                     stride * 4,
+                                     signal_offset + i * stride,
+                                     spectrum_offset + i * (size / 4));
+            }
         }
     }
 }
@@ -230,7 +261,7 @@ fn factor(n: usize) -> Vec<(usize, usize)> {
     return factors;
 }
 
-//returns true if n is a power of 2, false otherwise
+// returns true if n is a power of 2, false otherwise
 fn is_power_of_two(n: usize) -> bool {
     return n & n - 1 == 0;
 }
