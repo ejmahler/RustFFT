@@ -10,10 +10,15 @@ use std::f32;
 
 use butterflies::{butterfly_2, butterfly_3, butterfly_4, butterfly_5};
 
+enum Algorithm<T> {
+    MixedRadix(Vec<(usize, usize)>, Vec<Complex<T>>),
+    Radix4,
+    Noop,
+}
+
 pub struct FFT<T> {
-    factors: Vec<(usize, usize)>,
+    algorithm: Algorithm<T>,
     twiddles: Vec<Complex<T>>,
-    scratch: Vec<Complex<T>>,
     inverse: bool,
 }
 
@@ -25,21 +30,30 @@ impl<T> FFT<T> where T: Signed + FromPrimitive + Copy {
     /// FFT on a signal will scale the signal by its length.
     pub fn new(len: usize, inverse: bool) -> Self {
         let dir = if inverse { 1 } else { -1 };
-        let factors = factor(len);
-        let max_fft_len = factors.iter().map(|&(a, _)| a).max();
-        let scratch = match max_fft_len {
-            None | Some(0...5) => vec![Zero::zero(); 0],
-            Some(l) => vec![Zero::zero(); l],
+
+        let algorithm = if len < 2 {
+            Algorithm::Noop
+        } else if is_power_of_two(len) {
+            Algorithm::Radix4
+        } else {
+            let factors = factor(len);
+            let max_fft_len = factors.iter().map(|&(a, _)| a).max();
+            let scratch = match max_fft_len {
+                None | Some(0...5) => vec![Zero::zero(); 0],
+                Some(l) => vec![Zero::zero(); l],
+            };
+
+            Algorithm::MixedRadix(factors, scratch)
         };
+        
         FFT {
-            factors: factor(len),
+            algorithm: algorithm,
             twiddles: (0..len)
                       .map(|i| dir as f32 * i as f32 * 2.0 * f32::consts::PI / len as f32)
                       .map(|phase| Complex::from_polar(&1.0, &phase))
                       .map(|c| Complex {re: FromPrimitive::from_f32(c.re).unwrap(),
                                         im: FromPrimitive::from_f32(c.im).unwrap()})
                       .collect(),
-            scratch: scratch,
             inverse: inverse,
         }
     }
@@ -53,8 +67,13 @@ impl<T> FFT<T> where T: Signed + FromPrimitive + Copy {
     pub fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         assert!(signal.len() == spectrum.len());
         assert!(signal.len() == self.twiddles.len());
-        cooley_tukey(signal, spectrum, 1, &self.twiddles[..], &self.factors[..],
-                     &mut self.scratch, self.inverse);
+
+        match self.algorithm {
+            Algorithm::Radix4 => radix_4(signal.len(), signal, spectrum, 1, &self.twiddles[..], self.inverse),
+            Algorithm::MixedRadix(ref factors, ref mut scratch) =>
+                cooley_tukey(signal, spectrum, 1, &self.twiddles[..], factors, scratch, self.inverse),
+            Algorithm::Noop => copy_data(signal, spectrum, 1),
+        }
     }
 }
 
@@ -67,15 +86,9 @@ fn cooley_tukey<T>(signal: &[Complex<T>],
                    inverse: bool) where T: Signed + FromPrimitive + Copy {
     if let Some(&(n1, n2)) = factors.first() {
         if n2 == 1 {
-            // An FFT of length 1 is just the identity operator
-            let mut spectrum_idx = 0usize;
-            let mut signal_idx = 0usize;
-            while signal_idx < signal.len() {
-                unsafe { *spectrum.get_unchecked_mut(spectrum_idx) =
-                    *signal.get_unchecked(signal_idx); }
-                spectrum_idx += 1;
-                signal_idx += stride;
-            }
+            // we theoretically need to compute n1 ffts of size n2
+            // but n2 is 1, and a fft of size 1 is just a copy
+            copy_data(signal, spectrum, stride);
         } else {
             // Recursive call to perform n1 ffts of length n2
             for i in 0..n1 {
@@ -92,6 +105,35 @@ fn cooley_tukey<T>(signal: &[Complex<T>],
             3 => unsafe { butterfly_3(spectrum, stride, twiddles, n2) },
             2 => unsafe { butterfly_2(spectrum, stride, twiddles, n2) },
             _ => butterfly(spectrum, stride, twiddles, n2, n1, &mut scratch[..n1]),
+        }
+    }
+}
+
+fn radix_4<T>(  size: usize,
+                signal: &[Complex<T>],
+                spectrum: &mut [Complex<T>],
+                stride: usize,
+                twiddles: &[Complex<T>],
+                inverse: bool) where T: Signed + FromPrimitive + Copy {
+    match size {
+        4 => unsafe {
+            copy_data_4(signal, spectrum, stride);
+            butterfly_4(spectrum, stride, twiddles, 1, inverse)
+        },
+        2 => unsafe {
+            copy_data_2(signal, spectrum, stride);
+            butterfly_2(spectrum, stride, twiddles, 1)
+        },
+        _ => {
+            for i in 0..4 {
+                radix_4(
+                    size / 4,
+                    &signal[i * stride..],
+                    &mut spectrum[i * (size / 4)..],
+                    stride * 4, twiddles, inverse
+                    );
+            }
+            unsafe { butterfly_4(spectrum, stride, twiddles, size/4, inverse) };
         }
     }
 }
@@ -127,6 +169,37 @@ fn butterfly<T: Num + Copy>(data: &mut [Complex<T>], stride: usize,
     }
 }
 
+fn copy_data<T>(signal: &[Complex<T>],
+                spectrum: &mut [Complex<T>],
+                stride: usize) where T: Copy  {
+    let mut spectrum_idx = 0usize;
+    let mut signal_idx = 0usize;
+    while signal_idx < signal.len() {
+        unsafe { *spectrum.get_unchecked_mut(spectrum_idx) =
+            *signal.get_unchecked(signal_idx); }
+        spectrum_idx += 1;
+        signal_idx += stride;
+    }
+}
+
+fn copy_data_2<T>(signal: &[Complex<T>],
+                spectrum: &mut [Complex<T>],
+                stride: usize) where T: Copy  {
+    unsafe {
+        *spectrum.get_unchecked_mut(0) = *signal.get_unchecked(0);
+        *spectrum.get_unchecked_mut(1) = *signal.get_unchecked(stride);
+    }
+}
+fn copy_data_4<T>(signal: &[Complex<T>],
+                spectrum: &mut [Complex<T>],
+                stride: usize) where T: Signed + FromPrimitive + Copy  {
+    unsafe {
+        for i in 0..4 {
+            *spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i*stride);
+        }
+    }
+}
+
 pub fn dft<T: Float>(signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
     for (k, spec_bin) in spectrum.iter_mut().enumerate() {
         let mut sum = Zero::zero();
@@ -155,4 +228,9 @@ fn factor(n: usize) -> Vec<(usize, usize)> {
         }
     }
     return factors;
+}
+
+//returns true if n is a power of 2, false otherwise
+fn is_power_of_two(n: usize) -> bool {
+    return n & n - 1 == 0;
 }
