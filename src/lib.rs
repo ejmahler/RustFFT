@@ -11,7 +11,7 @@ use num::traits::cast;
 use std::f32;
 
 use mixed_radix::cooley_tukey;
-use radix4::{execute_radix4, prepare_radix4};
+use radix4::process_radix4;
 
 enum Algorithm<T> {
     MixedRadix(Vec<(usize, usize)>, Vec<Complex<T>>),
@@ -77,8 +77,8 @@ impl<T> FFT<T> where T: Signed + FromPrimitive + Copy {
 
         match self.algorithm {
             Algorithm::Radix4 => {
-                prepare_radix4(signal.len(), signal, spectrum, 1, 0, 0);
-                execute_radix4(signal.len(),
+                process_radix4(signal.len(),
+                        signal,
                         spectrum,
                         1,
                         &self.twiddles[..],

@@ -22,6 +22,18 @@ pub unsafe fn butterfly_2<T>(data: &mut [Complex<T>], stride: usize,
     }
 }
 
+pub unsafe fn butterfly_2_single<T>(data: &mut [Complex<T>], stride: usize)
+                             where T: Num + Copy {
+    let idx_1 = 0usize;
+    let idx_2 = stride;
+
+    let temp = *data.get_unchecked(idx_2);
+    data.get_unchecked_mut(idx_2).re = data.get_unchecked(idx_1).re - temp.re;
+    data.get_unchecked_mut(idx_2).im = data.get_unchecked(idx_1).im - temp.im;
+    data.get_unchecked_mut(idx_1).re = data.get_unchecked(idx_1).re + temp.re;
+    data.get_unchecked_mut(idx_1).im = data.get_unchecked(idx_1).im + temp.im;
+}
+
 pub unsafe fn butterfly_3<T>(data: &mut [Complex<T>], stride: usize,
                              twiddles: &[Complex<T>], num_ffts: usize)
                              where T: Num + Copy + FromPrimitive {
@@ -95,6 +107,32 @@ pub unsafe fn butterfly_4<T>(data: &mut [Complex<T>], stride: usize,
         tw_idx_2 += 2 * stride;
         tw_idx_3 += 3 * stride;
         idx += 1;
+    }
+}
+
+pub unsafe fn butterfly_4_single<T>(data: &mut [Complex<T>], stride: usize, inverse: bool)
+                             where T: Num + Copy {
+    let mut scratch: [Complex<T>; 6] = [Zero::zero(); 6];
+
+    scratch[0] = *data.get_unchecked(stride);
+    scratch[1] = *data.get_unchecked(2 * stride);
+    scratch[2] = *data.get_unchecked(3 * stride);
+    scratch[5] = *data.get_unchecked(0) - scratch[1];
+    *data.get_unchecked_mut(0) = data.get_unchecked(0) + scratch[1];
+    scratch[3] = scratch[0] + scratch[2];
+    scratch[4] = scratch[0] - scratch[2];
+    *data.get_unchecked_mut(2 * stride) = data.get_unchecked(0) - scratch[3];
+    *data.get_unchecked_mut(0) = data.get_unchecked(0) + scratch[3];
+    if inverse {
+        data.get_unchecked_mut(stride).re = scratch[5].re - scratch[4].im;
+        data.get_unchecked_mut(stride).im = scratch[5].im + scratch[4].re;
+        data.get_unchecked_mut(3 * stride).re = scratch[5].re + scratch[4].im;
+        data.get_unchecked_mut(3 * stride).im = scratch[5].im - scratch[4].re;
+    } else {
+        data.get_unchecked_mut(stride).re = scratch[5].re + scratch[4].im;
+        data.get_unchecked_mut(stride).im = scratch[5].im - scratch[4].re;
+        data.get_unchecked_mut(3 * stride).re = scratch[5].re - scratch[4].im;
+        data.get_unchecked_mut(3 * stride).im = scratch[5].im + scratch[4].re;
     }
 }
 
