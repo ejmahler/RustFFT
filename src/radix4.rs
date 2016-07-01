@@ -1,6 +1,6 @@
 use num::{Complex, FromPrimitive, Signed};
 
-use butterflies::{butterfly_2_single, butterfly_4_single, butterfly_4};
+use butterflies::{butterfly_2_single, butterfly_4_single, butterfly_2, butterfly_4};
 
 pub fn process_radix4<T>(size: usize,
                          signal: &[Complex<T>],
@@ -74,5 +74,36 @@ fn prepare_radix4<T: Copy>(size: usize,
                                stride * 4);
             }
         }
+    }
+}
+
+
+pub fn execute_radix2<T>(size: usize,
+                         spectrum: &mut [Complex<T>],
+                         stride: usize,
+                         twiddles: &[Complex<T>])
+    where T: Signed + FromPrimitive + Copy
+{
+    // first, perform the butterflies, with a stride of size / 2
+    for chunk in spectrum.chunks_mut(2 * stride) {
+        unsafe { butterfly_2_single(chunk, stride) }
+    }
+
+    // for the cross-ffts we want to to start off with a size of 4 (2 * 2)
+    let mut current_size = 4;
+
+    // now, perform all the cross-FFTs, one "layer" at a time
+    while current_size <= size {
+        let group_stride = size / current_size;
+
+        for i in 0..group_stride {
+            unsafe {
+                butterfly_2(&mut spectrum[i * current_size..],
+                            group_stride,
+                            twiddles,
+                            current_size / 2)
+            }
+        }
+        current_size *= 2;
     }
 }
