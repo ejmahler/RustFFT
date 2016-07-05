@@ -7,7 +7,6 @@ pub fn primitive_root(prime: u64) -> Option<u64> {
 		.iter()
 		.map(|factor| (prime - 1) / factor)
 		.collect();
-
 	'next: for potential_root in 2..prime {
 		//for each distinct factor, if potential_root^(p-1)/factor mod p is 1, reject it
 		for exp in &test_exponents {
@@ -79,26 +78,29 @@ pub fn distinct_prime_factors(mut n: u64) -> Vec<u64> {
 		}
 		result.push(2);
 	}
+	if n > 1 {
+		let mut divisor = 3;
+		let mut limit = (n as f32).sqrt() as u64 + 1;
+		while divisor < limit {
+			if n % divisor == 0 {
 
-	let mut divisor = 3;
-	let mut limit = (n as f32).sqrt() as u64 + 1;
-	while divisor < limit {
-		if n % divisor == 0 {
+				//remove as many factors as possible from n
+				while n % divisor == 0 {
+					n /= divisor;
+				}
+				result.push(divisor);
 
-			//remove as many factors as possible from n
-			while n % divisor == 0 {
-				n /= divisor;
+				//recalculate the limit to reduce the amount of work we need to do
+				limit = (n as f32).sqrt() as u64 + 1;
 			}
-			result.push(divisor);
 
-			//recalculate the limit to reduce the amount of work we need to do
-			limit = (n as f32).sqrt() as u64 + 1;
+			divisor += 2;
 		}
 
-		divisor += 2;
+		if n > 1 {
+			result.push(n);
+		}
 	}
-
-	result.push(n);
 
 	result
 }
@@ -152,6 +154,7 @@ mod test {
 			];
 		
 		for (input, expected) in test_list {
+			println!("testing {}", input);
 			let root = primitive_root(input).unwrap();
 
 			assert_eq!(root, expected);
@@ -163,6 +166,9 @@ mod test {
 		println!("beginning of test");
 		let test_list = vec![
 			(46, vec![2,23]),
+			(2, vec![2]),
+			(3, vec![3]),
+			(162, vec![2, 3]),
 			];
 		
 		for (input, expected) in test_list {
