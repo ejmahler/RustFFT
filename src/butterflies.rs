@@ -2,7 +2,6 @@
 //! translations of the butterfly functions from KissFFT, copyright Mark Borgerding.
 
 use num::{Complex, Zero, Num, FromPrimitive, Signed};
-use std::ops::Neg;
 
 pub unsafe fn butterfly_2<T>(data: &mut [Complex<T>], stride: usize,
                              twiddles: &[Complex<T>], num_ffts: usize)
@@ -21,6 +20,18 @@ pub unsafe fn butterfly_2<T>(data: &mut [Complex<T>], stride: usize,
         idx_1 += 1;
         idx_2 += 1;
     }
+}
+
+pub unsafe fn butterfly_2_single<T>(data: &mut [Complex<T>], stride: usize)
+                             where T: Num + Copy {
+    let idx_1 = 0usize;
+    let idx_2 = stride;
+
+    let temp = *data.get_unchecked(idx_2);
+    data.get_unchecked_mut(idx_2).re = data.get_unchecked(idx_1).re - temp.re;
+    data.get_unchecked_mut(idx_2).im = data.get_unchecked(idx_1).im - temp.im;
+    data.get_unchecked_mut(idx_1).re = data.get_unchecked(idx_1).re + temp.re;
+    data.get_unchecked_mut(idx_1).im = data.get_unchecked(idx_1).im + temp.im;
 }
 
 pub unsafe fn butterfly_3<T>(data: &mut [Complex<T>], stride: usize,
@@ -99,6 +110,32 @@ pub unsafe fn butterfly_4<T>(data: &mut [Complex<T>], stride: usize,
     }
 }
 
+pub unsafe fn butterfly_4_single<T>(data: &mut [Complex<T>], stride: usize, inverse: bool)
+                             where T: Num + Copy {
+    let mut scratch: [Complex<T>; 6] = [Zero::zero(); 6];
+
+    scratch[0] = *data.get_unchecked(stride);
+    scratch[1] = *data.get_unchecked(2 * stride);
+    scratch[2] = *data.get_unchecked(3 * stride);
+    scratch[5] = *data.get_unchecked(0) - scratch[1];
+    *data.get_unchecked_mut(0) = data.get_unchecked(0) + scratch[1];
+    scratch[3] = scratch[0] + scratch[2];
+    scratch[4] = scratch[0] - scratch[2];
+    *data.get_unchecked_mut(2 * stride) = data.get_unchecked(0) - scratch[3];
+    *data.get_unchecked_mut(0) = data.get_unchecked(0) + scratch[3];
+    if inverse {
+        data.get_unchecked_mut(stride).re = scratch[5].re - scratch[4].im;
+        data.get_unchecked_mut(stride).im = scratch[5].im + scratch[4].re;
+        data.get_unchecked_mut(3 * stride).re = scratch[5].re + scratch[4].im;
+        data.get_unchecked_mut(3 * stride).im = scratch[5].im - scratch[4].re;
+    } else {
+        data.get_unchecked_mut(stride).re = scratch[5].re + scratch[4].im;
+        data.get_unchecked_mut(stride).im = scratch[5].im - scratch[4].re;
+        data.get_unchecked_mut(3 * stride).re = scratch[5].re - scratch[4].im;
+        data.get_unchecked_mut(3 * stride).im = scratch[5].im + scratch[4].re;
+    }
+}
+
 pub unsafe fn butterfly_5<T>(data: &mut [Complex<T>], stride: usize,
                              twiddles: &[Complex<T>], num_ffts: usize)
                              where T: Signed + Copy {
@@ -149,6 +186,40 @@ pub unsafe fn butterfly_5<T>(data: &mut [Complex<T>], stride: usize,
         idx_2 += 1;
         idx_3 += 1;
         idx_4 += 1;
+    }
+}
+
+pub fn butterfly<T: Num + Copy>(data: &mut [Complex<T>],
+                            stride: usize,
+                            twiddles: &[Complex<T>],
+                            num_ffts: usize,
+                            fft_len: usize,
+                            scratch: &mut [Complex<T>]) {
+    // for each fft we have to perform...
+    for fft_idx in 0..num_ffts {
+
+        // copy over data into scratch space
+        let mut data_idx = fft_idx;
+        for s in scratch.iter_mut() {
+            *s = unsafe { *data.get_unchecked(data_idx) };
+            data_idx += num_ffts;
+        }
+
+        // perfom the butterfly from the scratch space into the original buffer
+        let mut data_idx = fft_idx;
+        while data_idx < fft_len * num_ffts {
+            let out_sample = unsafe { data.get_unchecked_mut(data_idx) };
+            *out_sample = Zero::zero();
+            let mut twiddle_idx = 0usize;
+            for in_sample in scratch.iter() {
+                let twiddle = unsafe { twiddles.get_unchecked(twiddle_idx) };
+                *out_sample = *out_sample + in_sample * twiddle;
+                twiddle_idx += stride * data_idx;
+                if twiddle_idx >= twiddles.len() { twiddle_idx -= twiddles.len() }
+            }
+            data_idx += num_ffts;
+        }
+
     }
 }
 
