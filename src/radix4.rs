@@ -77,14 +77,24 @@ fn prepare_radix4<T: Copy>(size: usize,
     }
 }
 
-
-pub fn execute_radix2<T>(size: usize,
+pub fn process_radix2_inplace<T>(size: usize,
                          spectrum: &mut [Complex<T>],
                          stride: usize,
                          twiddles: &[Complex<T>])
     where T: Signed + FromPrimitive + Copy
 {
-    // first, perform the butterflies, with a stride of size / 2
+    // perform the bit reversal swap
+    let num_bits = size.trailing_zeros();
+
+    for i in 0..size {
+        let swap_index = reverse_bits(i, num_bits);
+
+        if swap_index > i {
+            spectrum.swap(i * stride, swap_index * stride);
+        }
+    }
+
+    // perform the butterflies, with a stride of size / 2
     for chunk in spectrum.chunks_mut(2 * stride) {
         unsafe { butterfly_2_single(chunk, stride) }
     }
@@ -106,4 +116,14 @@ pub fn execute_radix2<T>(size: usize,
         }
         current_size *= 2;
     }
+}
+
+fn reverse_bits(mut n: usize, num_bits: u32) -> usize {
+    let mut result = 0;
+    for _ in 0..num_bits {
+        result <<= 1;
+        result |= n & 1;
+        n >>= 1;
+    }
+    result
 }

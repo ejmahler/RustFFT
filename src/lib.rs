@@ -42,17 +42,23 @@ impl<T> FFT<T> where T: Signed + FromPrimitive + Copy {
             Algorithm::Noop
         } else if is_power_of_two(len) {
             Algorithm::Radix4
-        } else if false {
-            Algorithm::Raders(RadersAlgorithm::new(len, inverse))
         } else {
             let factors = factor(len);
-            let max_fft_len = factors.iter().map(|&(a, _)| a).max();
-            let scratch = match max_fft_len {
-                None | Some(0...5) => vec![Zero::zero(); 0],
-                Some(l) => vec![Zero::zero(); l],
-            };
 
-            Algorithm::MixedRadix(factors, scratch)
+            // benchmarking shows that raders algorithm isn't faster than the
+            // naive o(n^2) algorithm below around 200
+            if factors.len() == 1 && len > 200 {
+                //there is only one factor, meaning the input has a prime size
+                Algorithm::Raders(RadersAlgorithm::new(len, inverse))
+            } else {
+                let max_fft_len = factors.iter().map(|&(a, _)| a).max();
+                let scratch = match max_fft_len {
+                    None | Some(0...5) => vec![Zero::zero(); 0],
+                    Some(l) => vec![Zero::zero(); l],
+                };
+
+                Algorithm::MixedRadix(factors, scratch)
+            }
         };
 
         FFT {
