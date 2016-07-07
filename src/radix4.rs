@@ -1,6 +1,6 @@
 use num::{Complex, FromPrimitive, Signed};
 
-use butterflies::{butterfly_2_single, butterfly_4_single, butterfly_2, butterfly_4};
+use butterflies::{butterfly_2_single, butterfly_4_single, butterfly_4};
 
 pub fn process_radix4<T>(size: usize,
                          signal: &[Complex<T>],
@@ -75,55 +75,4 @@ fn prepare_radix4<T: Copy>(size: usize,
             }
         }
     }
-}
-
-pub fn process_radix2_inplace<T>(size: usize,
-                         spectrum: &mut [Complex<T>],
-                         stride: usize,
-                         twiddles: &[Complex<T>])
-    where T: Signed + FromPrimitive + Copy
-{
-    // perform the bit reversal swap
-    let num_bits = size.trailing_zeros();
-
-    for i in 0..size {
-        let swap_index = reverse_bits(i, num_bits);
-
-        if swap_index > i {
-            spectrum.swap(i * stride, swap_index * stride);
-        }
-    }
-
-    // perform the butterflies, with a stride of size / 2
-    for chunk in spectrum.chunks_mut(2 * stride) {
-        unsafe { butterfly_2_single(chunk, stride) }
-    }
-
-    // for the cross-ffts we want to to start off with a size of 4 (2 * 2)
-    let mut current_size = 4;
-
-    // now, perform all the cross-FFTs, one "layer" at a time
-    while current_size <= size {
-        let group_stride = size / current_size;
-
-        for i in 0..group_stride {
-            unsafe {
-                butterfly_2(&mut spectrum[i * current_size..],
-                            group_stride,
-                            twiddles,
-                            current_size / 2)
-            }
-        }
-        current_size *= 2;
-    }
-}
-
-fn reverse_bits(mut n: usize, num_bits: u32) -> usize {
-    let mut result = 0;
-    for _ in 0..num_bits {
-        result <<= 1;
-        result |= n & 1;
-        n >>= 1;
-    }
-    result
 }

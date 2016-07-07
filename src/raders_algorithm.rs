@@ -2,7 +2,7 @@
 use num::{Complex, Zero, FromPrimitive, Signed, Num};
 use std::f32;
 
-use radix4::process_radix2_inplace;
+use butterflies::butterfly_2_single;
 use math_utils;
 
 pub struct RadersAlgorithm<T> {
@@ -11,9 +11,10 @@ pub struct RadersAlgorithm<T> {
 	primitive_root: u64,
     root_inverse: u64,
 
-	twiddles: Vec<Complex<T>>,
 	unity_fft_result: Vec<Complex<T>>,
 	scratch: Vec<Complex<T>>,
+
+    inner_fft: InnerFFT<T>,
 }
 
 impl<T> RadersAlgorithm<T> where T: Signed + FromPrimitive + Copy {
@@ -29,32 +30,17 @@ impl<T> RadersAlgorithm<T> where T: Signed + FromPrimitive + Copy {
         	(2 * len - 3).next_power_of_two()
         };
 
-        let dir = if inverse { 1 } else { -1 };
-
         //compute the primitive root and its inverse for this size
         let primitive_root = math_utils::primitive_root(len as u64).unwrap();
         let root_inverse = math_utils::multiplicative_inverse(primitive_root, len as u64);
 
-        //compute the twiddles for the inner fft
-        let inner_twiddles: Vec<Complex<T>> = (0..inner_fft_size)
-            .map(|i| dir as f32 * i as f32 * 2.0 * f32::consts::PI / inner_fft_size as f32)
-            .map(|phase| Complex::from_polar(&1.0, &phase))
-            .map(|c| {
-                Complex {
-                    re: FromPrimitive::from_f32(c.re).unwrap(),
-                    im: FromPrimitive::from_f32(c.im).unwrap(),
-                }
-            })
-            .collect();
-
-        let size_float: f32 = FromPrimitive::from_usize(inner_fft_size).unwrap();
-        let length_scale = 1f32 / size_float;
-
         //precompute the coefficients to use inside the process method
+        let unity_scale = 1f32 / inner_fft_size as f32;
+        let dir = if inverse { 1 } else { -1 };
         let mut unity_fft_data: Vec<Complex<T>> = (0..len - 1)
             .map(|i| math_utils::modular_exponent(root_inverse, i as u64, len as u64))
             .map(|i| { dir as f32 * i as f32 * 2.0 * f32::consts::PI / len as f32})
-            .map(|phase| Complex::from_polar(&length_scale, &phase))
+            .map(|phase| Complex::from_polar(&unity_scale, &phase))
             .map(|c| {
                 Complex {
                     re: FromPrimitive::from_f32(c.re).unwrap(),
@@ -72,16 +58,16 @@ impl<T> RadersAlgorithm<T> where T: Signed + FromPrimitive + Copy {
             index += 1;
         }
 
-        //FFT the unity fft data
-        process_radix2_inplace(inner_fft_size, unity_fft_data.as_mut_slice(), 1, inner_twiddles.as_slice());
+        let inner_fft = InnerFFT::new(inner_fft_size, inverse);
+        inner_fft.process(unity_fft_data.as_mut_slice());
 
         RadersAlgorithm {
         	len: len,
         	primitive_root: primitive_root,
             root_inverse: root_inverse,
             unity_fft_result: unity_fft_data,
-            twiddles: inner_twiddles,
             scratch: vec![Zero::zero(); inner_fft_size],
+            inner_fft: inner_fft,
         }
     }
 
@@ -92,21 +78,15 @@ impl<T> RadersAlgorithm<T> where T: Signed + FromPrimitive + Copy {
         self.setup_inner_fft(input, stride);
 
     	//use radix 2 to run a FFT on the data now in the scratch space
-    	process_radix2_inplace(self.scratch.len(), self.scratch.as_mut_slice(), 1, self.twiddles.as_slice());
+    	self.inner_fft.process(self.scratch.as_mut_slice());
 
     	//multiply the result pointwise with the cached unity FFT
     	for (scratch_item, unity) in self.scratch.iter_mut().zip(self.unity_fft_result.iter()) {
     		*scratch_item = *scratch_item * unity;
     	}
 
-    	//prepare for the inverse FFT by conjugating all our twiddle factors
-    	self.conjugate_twiddles();
-
     	//execute the inverse FFT
-    	process_radix2_inplace(self.scratch.len(), self.scratch.as_mut_slice(), 1, self.twiddles.as_slice());
-
-    	//make sure we'll be ready for the next call by undoing the twiddle conjugation
-    	self.conjugate_twiddles();
+    	self.inner_fft.process_inverse(self.scratch.as_mut_slice());
 
         // the first output element is equal to the sum of the others. but we need the first input element, so store it before computing the output
         let first_input = unsafe { *input.get_unchecked(0) };
@@ -153,16 +133,196 @@ impl<T> RadersAlgorithm<T> where T: Signed + FromPrimitive + Copy {
             }
         }
     }
-
-    fn conjugate_twiddles(&mut self) {
-    	for item in &mut self.twiddles {
-    		*item = item.conj();
-    	}
-    }
 }
 
 fn zero_fill<T: Num + Clone>(input: &mut [Complex<T>]) {
 	for element in input.iter_mut() {
 		*element = Zero::zero();
 	}
+}
+
+
+
+/// This ineer FFT is designed to be used in situations where you need to perform a forward FFT
+/// followed by some processing, immediately followed by an inverse FFT on the same data
+///
+/// In these cases, it speeds up the process by skipping the reordering step on the FFT output
+/// and skipping the reordering step on the inverse FFT input
+///
+/// So the in-between data will be in bit-reversed order.
+/// This is acceptable for raders algorithm because all we're doing is multiplying pointwise
+/// with another FFT'ed array. the output is the same if both are in natural order
+/// vs both being in bit reversed order.
+///
+/// so this inner FFT class enables skipping the unnecessary work of reordering
+struct InnerFFT<T> {
+    twiddles: Vec<Complex<T>>,
+}
+
+impl<T> InnerFFT<T> where T: Signed + FromPrimitive + Copy {
+
+    pub fn new(len: usize, inverse: bool) -> Self {
+        let dir = if inverse { 1 } else { -1 };
+
+        InnerFFT {
+            twiddles: (0..len)
+                .map(|i| dir as f32 * i as f32 * 2.0 * f32::consts::PI / len as f32)
+                .map(|phase| Complex::from_polar(&1.0, &phase))
+                .map(|c| {
+                    Complex {
+                        re: FromPrimitive::from_f32(c.re).unwrap(),
+                        im: FromPrimitive::from_f32(c.im).unwrap(),
+                    }
+                })
+                .collect(),
+        }
+    }
+
+    /// Performs a DIF radix 2 FFT in the provided sequence
+    /// The DIF formula takes natural order input and outputs bit-reversed
+    pub fn process(&self, spectrum: &mut [Complex<T>]) {
+
+        // perform all the cross-FFTs, one "layer" at a time
+        // the innermost for loop is basically the "butterfly_2" function, except
+        // butterfly_2 is designed for a DIT FFT, and we need DIF
+        let num_layers = spectrum.len().trailing_zeros() as usize;
+        for layer in 0..num_layers-1 {
+            let num_groups = 1 << layer;
+            let group_size = spectrum.len() / num_groups;
+            let distance = group_size / 2;
+
+            for chunk in spectrum.chunks_mut(group_size) {
+                for i in 0..distance {
+                    let twiddle = unsafe { *self.twiddles.get_unchecked(i * num_groups) };
+
+                    let second_entry = unsafe { *chunk.get_unchecked(i + distance) };
+                    unsafe { *chunk.get_unchecked_mut(i + distance) = (*chunk.get_unchecked(i) - second_entry) * twiddle };
+                    unsafe { *chunk.get_unchecked_mut(i) = *chunk.get_unchecked(i) + second_entry };
+                }
+            }
+        }
+
+        // perform the butterflies, with a stride of size / 2
+        for chunk in spectrum.chunks_mut(2) {
+            unsafe { butterfly_2_single(chunk, 1) }
+        }
+    }
+
+    /// Performs a DIT radix 2 FFT in the provided sequence
+    /// The DIT formula takes bit-reversed input and outputs in natural order
+    /// Also makes this an actual inverse fft by conjugating the twiddle factors
+    pub fn process_inverse(&self, spectrum: &mut [Complex<T>]) {
+        // perform the butterflies, with a stride of size / 2
+        for chunk in spectrum.chunks_mut(2) {
+            unsafe { butterfly_2_single(chunk, 1) }
+        }
+
+        // now, perform all the cross-FFTs, one "layer" at a time
+        // the innermost for loop is basically the "butterfly_2" step, except
+        // we're calling ".conj()" on each twiddle factor before using it
+        let num_layers = spectrum.len().trailing_zeros() as usize;
+        for layer in (0..num_layers-1).rev() {
+            let num_groups = 1 << layer;
+            let group_size = spectrum.len() / num_groups;
+            let distance = group_size / 2;
+
+            for chunk in spectrum.chunks_mut(group_size) {
+                for i in 0..distance {
+                    let twiddle = unsafe { self.twiddles.get_unchecked(i * num_groups) };
+
+                    let twiddled = twiddle.conj() * unsafe { chunk.get_unchecked(i + distance) };
+                    unsafe { *chunk.get_unchecked_mut(i + distance) = *chunk.get_unchecked(i) - twiddled };
+                    unsafe { *chunk.get_unchecked_mut(i) = *chunk.get_unchecked(i) + twiddled };
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::InnerFFT;
+
+    use super::super::FFT;
+
+    use num::Complex;
+
+    #[test]
+    fn test_inner_fft_forward() {
+        let len = 8;
+        let input: Vec<Complex<f32>> = (0..len).map(|i| Complex::from(i as f32)).collect();
+
+        let fft = InnerFFT::new(len, false);
+        let mut correct_fft = FFT::new(len, false);
+
+        let mut midpoint_expected = input.clone();
+        correct_fft.process(input.as_slice(), midpoint_expected.as_mut_slice());
+
+        let mut midpoint_actual = input.clone();
+        fft.process(midpoint_actual.as_mut_slice());
+
+        reorder(midpoint_actual.as_mut_slice());
+        assert!(compare_vectors(midpoint_expected.as_slice(), midpoint_actual.as_slice()));
+    }
+
+    #[test]
+    fn test_inner_fft_backward() {
+        let len = 4;
+        let input: Vec<Complex<f32>> = (0..len).map(|i| Complex::from(i as f32)).collect();
+
+        let fft = InnerFFT::new(len, false);
+        let mut correct_fft = FFT::new(len, false);
+
+        let mut result = input.clone();
+
+        //to set up for the inverse FFT, use the correct FFT to get the midpoint, then reorder it
+        correct_fft.process(input.as_slice(), result.as_mut_slice());
+        reorder(result.as_mut_slice());
+
+        fft.process_inverse(result.as_mut_slice());
+
+        //we have to scale by 1/n to get back to the input vector
+        let result_scale = 1f32 / len as f32;
+        for element in result.iter_mut() {
+            *element = *element * result_scale;
+        }
+
+        println!("actual: {:?}", result);
+        println!("expected: {:?}", input);
+
+        assert!(compare_vectors(input.as_slice(), result.as_slice()));
+    }
+
+    fn reorder<T: Copy>(input: &mut [T]) {
+        let num_bits = input.len().trailing_zeros();
+
+        for i in 0..input.len() {
+            let swap_index = reverse_bits(i, num_bits);
+
+            if swap_index > i {
+                input.swap(i, swap_index);
+            }
+        }
+    }
+
+    fn reverse_bits(mut n: usize, num_bits: u32) -> usize {
+        let mut result = 0;
+        for _ in 0..num_bits {
+            result <<= 1;
+            result |= n & 1;
+            n >>= 1;
+        }
+        result
+    }
+
+    /// Returns true if the mean difference in the elements of the two vectors
+    /// is small
+    fn compare_vectors(vec1: &[Complex<f32>], vec2: &[Complex<f32>]) -> bool {
+        assert_eq!(vec1.len(), vec2.len());
+        let mut sse = 0f32;
+        for (&a, &b) in vec1.iter().zip(vec2.iter()) {
+            sse = sse + (a - b).norm();
+        }
+        return (sse / vec1.len() as f32) < 0.1f32;
+    }
 }

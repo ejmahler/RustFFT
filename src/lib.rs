@@ -46,8 +46,8 @@ impl<T> FFT<T> where T: Signed + FromPrimitive + Copy {
             let factors = factor(len);
 
             // benchmarking shows that raders algorithm isn't faster than the
-            // naive o(n^2) algorithm below around 200
-            if factors.len() == 1 && len > 200 {
+            // naive o(n^2) algorithm below around 100
+            if factors.len() == 1 && len > 100 {
                 //there is only one factor, meaning the input has a prime size
                 Algorithm::Raders(RadersAlgorithm::new(len, inverse))
             } else {
