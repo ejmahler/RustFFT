@@ -4,7 +4,7 @@ use std::f32;
 
 use butterflies::{butterfly_2_single, butterfly_2_inverse, butterfly_2_dif};
 use math_utils;
-use algorithm::FFTAlgorithm;
+use super::FFTAlgorithm;
 
 pub struct RadersAlgorithm<T> {
     len: usize,
@@ -258,7 +258,7 @@ impl<T> InnerFFT<T>
 mod test {
     use super::InnerFFT;
 
-    use super::super::FFT;
+    use ::FFT;
 
     use num::Complex;
 

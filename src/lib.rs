@@ -4,19 +4,13 @@ extern crate num;
 
 mod algorithm;
 mod butterflies;
-mod mixed_radix;
-mod radix4;
-mod raders_algorithm;
 mod math_utils;
 
 use num::{Complex, Zero, One, Float, FromPrimitive, Signed};
 use num::traits::cast;
 use std::f32;
 
-use algorithm::FFTAlgorithm;
-use mixed_radix::CooleyTukey;
-use radix4::Radix4;
-use raders_algorithm::RadersAlgorithm;
+use algorithm::{FFTAlgorithm, CooleyTukey, Radix4, RadersAlgorithm};
 
 pub struct FFT<T> {
     len: usize,

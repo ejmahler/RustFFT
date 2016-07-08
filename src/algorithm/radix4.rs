@@ -3,7 +3,7 @@ use std::f32;
 use num::{Complex, FromPrimitive, Signed};
 
 use butterflies::{butterfly_2_single, butterfly_4_single, butterfly_4};
-use algorithm::FFTAlgorithm;
+use super::FFTAlgorithm;
 
 pub struct Radix4<T> {
     twiddles: Vec<Complex<T>>,
