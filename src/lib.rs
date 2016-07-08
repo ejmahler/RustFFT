@@ -107,7 +107,7 @@ impl<T> FFT<T> where T: Signed + FromPrimitive + Copy {
             }
             Algorithm::Raders(ref mut algorithm) => {
                 spectrum.copy_from_slice(signal);
-                algorithm.process(spectrum, 1);
+                algorithm.process(spectrum);
             }
             Algorithm::Noop => {
                 spectrum.copy_from_slice(signal);

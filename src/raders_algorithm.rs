@@ -22,7 +22,7 @@ impl<T> RadersAlgorithm<T> where T: Signed + FromPrimitive + Copy {
 	pub fn new(len: usize, inverse: bool) -> Self {
 
 		// we can theoretically just always do n - 1 as the inner FFT size
-		// BUT the code will be much simpler if we can just always call radix 4 -- because it doesn't need any extra scratch space
+		// BUT the code will be much simpler if we can just always call radix 2
 		// so we only use n - 1 if it's a power of two. otherwise we'll pad it out to the next power of two
         let inner_fft_size = if (len - 1).is_power_of_two() {
         	len - 1
@@ -72,10 +72,10 @@ impl<T> RadersAlgorithm<T> where T: Signed + FromPrimitive + Copy {
     }
 
     /// Runs the FFT on the input `input` buffer, replacing it with the FFT result
-    pub fn process(&mut self, input: &mut [Complex<T>], stride: usize) {
+    pub fn process(&mut self, input: &mut [Complex<T>]) {
     	assert!(input.len() == self.len);
 
-        self.setup_inner_fft(input, stride);
+        self.setup_inner_fft(input);
 
     	//use radix 2 to run a FFT on the data now in the scratch space
     	self.inner_fft.process(self.scratch.as_mut_slice());
@@ -88,49 +88,50 @@ impl<T> RadersAlgorithm<T> where T: Signed + FromPrimitive + Copy {
     	//execute the inverse FFT
     	self.inner_fft.process_inverse(self.scratch.as_mut_slice());
 
-        // the first output element is equal to the sum of the others. but we need the first input element, so store it before computing the output
+        // the first output element is equal to the sum of the whole array.
+        //but we need the first input element, so store it before computing the output
         let first_input = unsafe { *input.get_unchecked(0) };
-        for i in 1..self.len {
-            unsafe { *input.get_unchecked_mut(0) = input.get_unchecked(0) + input.get_unchecked(i * stride); }
-        }
+        *unsafe { input.get_unchecked_mut(0) } = input.iter().fold(Zero::zero(), |acc, &x| acc + x);;
 
-        //copy the data back into the input vector, but again it's not just a straight copy
-    	for scratch_index in 0..self.len-1 {
-            let output_index = math_utils::modular_exponent(self.root_inverse, scratch_index as u64, self.len as u64) as usize;
-
-            unsafe {
-                *input.get_unchecked_mut (stride * output_index) = 
-                first_input + *self.scratch.get_unchecked_mut(scratch_index);
-            }
-        }
+        //copy the rest of the output from the scratch space
+        self.copy_to_output(input, first_input);
     }
 
-    fn setup_inner_fft(&mut self, input: &[Complex<T>], stride: usize) {
+    fn setup_inner_fft(&mut self, input: &[Complex<T>]) {
         //it's not just a straight copy from the input to the scratch, we have
         //to compute the input index based on the scratch index and primitive root
         let get_input_val = |base: u64, exponent: u64, modulo: u64| {
             let input_index = math_utils::modular_exponent(base, exponent, modulo) as usize;
-            unsafe { *input.get_unchecked(stride * input_index) }
+            unsafe { *input.get_unchecked(input_index) }
         };
 
         // copy the input into the scratch space
         if self.len - 1 == self.scratch.len() {
-            for scratch_index in 0..self.scratch.len() {
-                unsafe { *self.scratch.get_unchecked_mut(scratch_index) = get_input_val(self.primitive_root, scratch_index as u64, self.len as u64) };
+            for (scratch_index, scratch_element) in self.scratch.iter_mut().enumerate() {
+                *scratch_element =  get_input_val(self.primitive_root, scratch_index as u64, self.len as u64);
             }
         } else {
-            //we have to zero-pad the input in a very specific way. input[1] goes at the beginning of the scratch, and the rest is packed at the end
+            //we have to zero-pad the input in a very specific way. input[1]
+            //goes at the beginning of the scratch, and the rest is packed at the end
             //the rest is zeroes
-            unsafe { *self.scratch.get_unchecked_mut(0) = *input.get_unchecked(stride); };
+            unsafe { *self.scratch.get_unchecked_mut(0) = *input.get_unchecked(1); };
 
             //zero fill the middle
             let zero_end = self.scratch.len() - (self.len - 2);
             zero_fill(&mut self.scratch[1..zero_end]);
 
-            for scratch_index in 1..self.len-1 {
-                unsafe { *self.scratch.get_unchecked_mut(scratch_index + zero_end - 1)
-                    = get_input_val(self.primitive_root, scratch_index as u64, self.len as u64) };
+            for (scratch_index, scratch_element) in self.scratch[zero_end..].iter_mut().enumerate() {
+                *scratch_element = get_input_val(self.primitive_root, (scratch_index + 1) as u64, self.len as u64);
             }
+        }
+    }
+
+    fn copy_to_output(&mut self, output: &mut [Complex<T>], first_element: Complex<T>) {
+        //copy the data back into the input vector, but again it's not just a straight copy
+        for (scratch_index, scratch_element) in self.scratch[..self.len-1].iter().enumerate() {
+            let output_index = math_utils::modular_exponent(self.root_inverse, scratch_index as u64, self.len as u64) as usize;
+
+            *unsafe{ output.get_unchecked_mut(output_index) } = first_element + *scratch_element;
         }
     }
 }
