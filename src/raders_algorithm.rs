@@ -4,6 +4,7 @@ use std::f32;
 
 use butterflies::{butterfly_2_single, butterfly_2_inverse, butterfly_2_dif};
 use math_utils;
+use algorithm::FFTAlgorithm;
 
 pub struct RadersAlgorithm<T> {
     len: usize,
@@ -77,34 +78,6 @@ impl<T> RadersAlgorithm<T>
         }
     }
 
-    /// Runs the FFT on the input `input` buffer, replacing it with the FFT result
-    pub fn process(&mut self, input: &mut [Complex<T>]) {
-        assert!(input.len() == self.len);
-
-        self.setup_inner_fft(input);
-
-        // use radix 2 to run a FFT on the data now in the scratch space
-        self.inner_fft.process(self.scratch.as_mut_slice());
-
-        // multiply the result pointwise with the cached unity FFT
-        for (scratch_item, unity) in self.scratch.iter_mut().zip(self.unity_fft_result.iter()) {
-            *scratch_item = *scratch_item * unity;
-        }
-
-        // execute the inverse FFT
-        self.inner_fft.process_inverse(self.scratch.as_mut_slice());
-
-        // the first output element is equal to the sum of the whole array.
-        // but we need the first input element, so store it before computing the output
-        let first_input = unsafe { *input.get_unchecked(0) };
-
-        let sum = input.iter().fold(Zero::zero(), |acc, &x| acc + x);
-        *unsafe { input.get_unchecked_mut(0) } = sum;
-
-        // copy the rest of the output from the scratch space
-        self.copy_to_output(input, first_input);
-    }
-
     fn setup_inner_fft(&mut self, input: &[Complex<T>]) {
         // it's not just a straight copy from the input to the scratch, we have
         // to compute the input index based on the scratch index and primitive root
@@ -151,6 +124,34 @@ impl<T> RadersAlgorithm<T>
 
             *unsafe { output.get_unchecked_mut(output_index) } = first_element + *scratch_element;
         }
+    }
+}
+
+impl<T> FFTAlgorithm<T> for RadersAlgorithm<T>
+    where T: Signed + FromPrimitive + Copy
+{
+    /// Runs the FFT on the input `signal` array, placing the output in the 'spectrum' array
+    fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
+        self.setup_inner_fft(signal);
+
+        // use radix 2 to run a FFT on the data now in the scratch space
+        self.inner_fft.process(self.scratch.as_mut_slice());
+
+        // multiply the result pointwise with the cached unity FFT
+        for (scratch_item, unity) in self.scratch.iter_mut().zip(self.unity_fft_result.iter()) {
+            *scratch_item = *scratch_item * unity;
+        }
+
+        // execute the inverse FFT
+        self.inner_fft.process_inverse(self.scratch.as_mut_slice());
+
+        // the first output element is equal to the sum of the whole input array
+        let sum = signal.iter().fold(Zero::zero(), |acc, &x| acc + x);
+        unsafe { *spectrum.get_unchecked_mut(0) = sum };
+
+        // copy the rest of the output from the scratch space
+        let first_input = unsafe { *signal.get_unchecked(0) };
+        self.copy_to_output(spectrum, first_input);
     }
 }
 
@@ -215,7 +216,9 @@ impl<T> InnerFFT<T>
             let group_size = spectrum.len() / num_groups;
 
             for chunk in spectrum.chunks_mut(group_size) {
-                unsafe { butterfly_2_dif(chunk, num_groups, self.twiddles.as_slice(), group_size / 2) }
+                unsafe {
+                    butterfly_2_dif(chunk, num_groups, self.twiddles.as_slice(), group_size / 2)
+                }
             }
         }
 
@@ -243,7 +246,9 @@ impl<T> InnerFFT<T>
             let group_size = spectrum.len() / num_groups;
 
             for chunk in spectrum.chunks_mut(group_size) {
-                unsafe { butterfly_2_inverse(chunk, num_groups, self.twiddles.as_slice(), group_size / 2) }
+                unsafe {
+                    butterfly_2_inverse(chunk, num_groups, self.twiddles.as_slice(), group_size / 2)
+                }
             }
         }
     }
