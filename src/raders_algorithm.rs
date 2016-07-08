@@ -2,7 +2,7 @@
 use num::{Complex, Zero, FromPrimitive, Signed, Num};
 use std::f32;
 
-use butterflies::butterfly_2_single;
+use butterflies::{butterfly_2_single, butterfly_2_inverse, butterfly_2_dif};
 use math_utils;
 
 pub struct RadersAlgorithm<T> {
@@ -213,19 +213,9 @@ impl<T> InnerFFT<T>
         for layer in 0..num_layers - 1 {
             let num_groups = 1 << layer;
             let group_size = spectrum.len() / num_groups;
-            let distance = group_size / 2;
 
             for chunk in spectrum.chunks_mut(group_size) {
-                for i in 0..distance {
-                    let twiddle = unsafe { *self.twiddles.get_unchecked(i * num_groups) };
-
-                    let second_entry = unsafe { *chunk.get_unchecked(i + distance) };
-                    unsafe {
-                        *chunk.get_unchecked_mut(i + distance) =
-                            (*chunk.get_unchecked(i) - second_entry) * twiddle
-                    };
-                    unsafe { *chunk.get_unchecked_mut(i) = *chunk.get_unchecked(i) + second_entry };
-                }
+                unsafe { butterfly_2_dif(chunk, num_groups, self.twiddles.as_slice(), group_size / 2) }
             }
         }
 
@@ -251,18 +241,9 @@ impl<T> InnerFFT<T>
         for layer in (0..num_layers - 1).rev() {
             let num_groups = 1 << layer;
             let group_size = spectrum.len() / num_groups;
-            let distance = group_size / 2;
 
             for chunk in spectrum.chunks_mut(group_size) {
-                for i in 0..distance {
-                    let twiddle = unsafe { self.twiddles.get_unchecked(i * num_groups) };
-
-                    let twiddled = twiddle.conj() * unsafe { chunk.get_unchecked(i + distance) };
-                    unsafe {
-                        *chunk.get_unchecked_mut(i + distance) = *chunk.get_unchecked(i) - twiddled
-                    };
-                    unsafe { *chunk.get_unchecked_mut(i) = *chunk.get_unchecked(i) + twiddled };
-                }
+                unsafe { butterfly_2_inverse(chunk, num_groups, self.twiddles.as_slice(), group_size / 2) }
             }
         }
     }
