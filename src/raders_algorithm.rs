@@ -6,40 +6,46 @@ use butterflies::butterfly_2_single;
 use math_utils;
 
 pub struct RadersAlgorithm<T> {
-	len: usize,
+    len: usize,
 
-	primitive_root: u64,
+    primitive_root: u64,
     root_inverse: u64,
 
-	unity_fft_result: Vec<Complex<T>>,
-	scratch: Vec<Complex<T>>,
+    unity_fft_result: Vec<Complex<T>>,
+    scratch: Vec<Complex<T>>,
 
     inner_fft: InnerFFT<T>,
 }
 
-impl<T> RadersAlgorithm<T> where T: Signed + FromPrimitive + Copy {
+impl<T> RadersAlgorithm<T>
+    where T: Signed + FromPrimitive + Copy
+{
+    pub fn new(len: usize, inverse: bool) -> Self {
 
-	pub fn new(len: usize, inverse: bool) -> Self {
-
-		// we can theoretically just always do n - 1 as the inner FFT size
-		// BUT the code will be much simpler if we can just always call radix 2
-		// so we only use n - 1 if it's a power of two. otherwise we'll pad it out to the next power of two
+        // we can theoretically just always do n - 1 as the inner FFT size
+        // BUT the code will be much simpler if we can just always call radix 2
+        // so we only use n - 1 if it's a power of two
+        // otherwise we'll pad it out to the next power of two
         let inner_fft_size = if (len - 1).is_power_of_two() {
-        	len - 1
+            len - 1
         } else {
-        	(2 * len - 3).next_power_of_two()
+            (2 * len - 3).next_power_of_two()
         };
 
-        //compute the primitive root and its inverse for this size
+        // compute the primitive root and its inverse for this size
         let primitive_root = math_utils::primitive_root(len as u64).unwrap();
         let root_inverse = math_utils::multiplicative_inverse(primitive_root, len as u64);
 
-        //precompute the coefficients to use inside the process method
+        // precompute the coefficients to use inside the process method
         let unity_scale = 1f32 / inner_fft_size as f32;
-        let dir = if inverse { 1 } else { -1 };
+        let dir = if inverse {
+            1
+        } else {
+            -1
+        };
         let mut unity_fft_data: Vec<Complex<T>> = (0..len - 1)
             .map(|i| math_utils::modular_exponent(root_inverse, i as u64, len as u64))
-            .map(|i| { dir as f32 * i as f32 * 2.0 * f32::consts::PI / len as f32})
+            .map(|i| dir as f32 * i as f32 * 2.0 * f32::consts::PI / len as f32)
             .map(|phase| Complex::from_polar(&unity_scale, &phase))
             .map(|c| {
                 Complex {
@@ -49,7 +55,7 @@ impl<T> RadersAlgorithm<T> where T: Signed + FromPrimitive + Copy {
             })
             .collect();
 
-        //pad out the fft input if necessary by repeating the values
+        // pad out the fft input if necessary by repeating the values
         unity_fft_data.reserve(inner_fft_size);
         let mut index = 0;
         while unity_fft_data.len() < inner_fft_size {
@@ -62,8 +68,8 @@ impl<T> RadersAlgorithm<T> where T: Signed + FromPrimitive + Copy {
         inner_fft.process(unity_fft_data.as_mut_slice());
 
         RadersAlgorithm {
-        	len: len,
-        	primitive_root: primitive_root,
+            len: len,
+            primitive_root: primitive_root,
             root_inverse: root_inverse,
             unity_fft_result: unity_fft_data,
             scratch: vec![Zero::zero(); inner_fft_size],
@@ -73,33 +79,35 @@ impl<T> RadersAlgorithm<T> where T: Signed + FromPrimitive + Copy {
 
     /// Runs the FFT on the input `input` buffer, replacing it with the FFT result
     pub fn process(&mut self, input: &mut [Complex<T>]) {
-    	assert!(input.len() == self.len);
+        assert!(input.len() == self.len);
 
         self.setup_inner_fft(input);
 
-    	//use radix 2 to run a FFT on the data now in the scratch space
-    	self.inner_fft.process(self.scratch.as_mut_slice());
+        // use radix 2 to run a FFT on the data now in the scratch space
+        self.inner_fft.process(self.scratch.as_mut_slice());
 
-    	//multiply the result pointwise with the cached unity FFT
-    	for (scratch_item, unity) in self.scratch.iter_mut().zip(self.unity_fft_result.iter()) {
-    		*scratch_item = *scratch_item * unity;
-    	}
+        // multiply the result pointwise with the cached unity FFT
+        for (scratch_item, unity) in self.scratch.iter_mut().zip(self.unity_fft_result.iter()) {
+            *scratch_item = *scratch_item * unity;
+        }
 
-    	//execute the inverse FFT
-    	self.inner_fft.process_inverse(self.scratch.as_mut_slice());
+        // execute the inverse FFT
+        self.inner_fft.process_inverse(self.scratch.as_mut_slice());
 
         // the first output element is equal to the sum of the whole array.
-        //but we need the first input element, so store it before computing the output
+        // but we need the first input element, so store it before computing the output
         let first_input = unsafe { *input.get_unchecked(0) };
-        *unsafe { input.get_unchecked_mut(0) } = input.iter().fold(Zero::zero(), |acc, &x| acc + x);;
 
-        //copy the rest of the output from the scratch space
+        let sum = input.iter().fold(Zero::zero(), |acc, &x| acc + x);
+        *unsafe { input.get_unchecked_mut(0) } = sum;
+
+        // copy the rest of the output from the scratch space
         self.copy_to_output(input, first_input);
     }
 
     fn setup_inner_fft(&mut self, input: &[Complex<T>]) {
-        //it's not just a straight copy from the input to the scratch, we have
-        //to compute the input index based on the scratch index and primitive root
+        // it's not just a straight copy from the input to the scratch, we have
+        // to compute the input index based on the scratch index and primitive root
         let get_input_val = |base: u64, exponent: u64, modulo: u64| {
             let input_index = math_utils::modular_exponent(base, exponent, modulo) as usize;
             unsafe { *input.get_unchecked(input_index) }
@@ -108,38 +116,48 @@ impl<T> RadersAlgorithm<T> where T: Signed + FromPrimitive + Copy {
         // copy the input into the scratch space
         if self.len - 1 == self.scratch.len() {
             for (scratch_index, scratch_element) in self.scratch.iter_mut().enumerate() {
-                *scratch_element =  get_input_val(self.primitive_root, scratch_index as u64, self.len as u64);
+                *scratch_element =
+                    get_input_val(self.primitive_root, scratch_index as u64, self.len as u64);
             }
         } else {
-            //we have to zero-pad the input in a very specific way. input[1]
-            //goes at the beginning of the scratch, and the rest is packed at the end
-            //the rest is zeroes
-            unsafe { *self.scratch.get_unchecked_mut(0) = *input.get_unchecked(1); };
+            // we have to zero-pad the input in a very specific way. input[1]
+            // goes at the beginning of the scratch, and the rest is packed at the end
+            // the rest is zeroes
+            unsafe {
+                *self.scratch.get_unchecked_mut(0) = *input.get_unchecked(1);
+            };
 
-            //zero fill the middle
+            // zero fill the middle
             let zero_end = self.scratch.len() - (self.len - 2);
             zero_fill(&mut self.scratch[1..zero_end]);
 
-            for (scratch_index, scratch_element) in self.scratch[zero_end..].iter_mut().enumerate() {
-                *scratch_element = get_input_val(self.primitive_root, (scratch_index + 1) as u64, self.len as u64);
+            for (scratch_index, scratch_element) in self.scratch[zero_end..]
+                .iter_mut()
+                .enumerate() {
+                *scratch_element = get_input_val(self.primitive_root,
+                                                 (scratch_index + 1) as u64,
+                                                 self.len as u64);
             }
         }
     }
 
     fn copy_to_output(&mut self, output: &mut [Complex<T>], first_element: Complex<T>) {
-        //copy the data back into the input vector, but again it's not just a straight copy
-        for (scratch_index, scratch_element) in self.scratch[..self.len-1].iter().enumerate() {
-            let output_index = math_utils::modular_exponent(self.root_inverse, scratch_index as u64, self.len as u64) as usize;
+        // copy the data back into the input vector, but again it's not just a straight copy
+        for (scratch_index, scratch_element) in self.scratch[..self.len - 1].iter().enumerate() {
+            let output_index =
+                math_utils::modular_exponent(self.root_inverse,
+                                             scratch_index as u64,
+                                             self.len as u64) as usize;
 
-            *unsafe{ output.get_unchecked_mut(output_index) } = first_element + *scratch_element;
+            *unsafe { output.get_unchecked_mut(output_index) } = first_element + *scratch_element;
         }
     }
 }
 
 fn zero_fill<T: Num + Clone>(input: &mut [Complex<T>]) {
-	for element in input.iter_mut() {
-		*element = Zero::zero();
-	}
+    for element in input.iter_mut() {
+        *element = Zero::zero();
+    }
 }
 
 
@@ -160,10 +178,15 @@ struct InnerFFT<T> {
     twiddles: Vec<Complex<T>>,
 }
 
-impl<T> InnerFFT<T> where T: Signed + FromPrimitive + Copy {
-
+impl<T> InnerFFT<T>
+    where T: Signed + FromPrimitive + Copy
+{
     pub fn new(len: usize, inverse: bool) -> Self {
-        let dir = if inverse { 1 } else { -1 };
+        let dir = if inverse {
+            1
+        } else {
+            -1
+        };
 
         InnerFFT {
             twiddles: (0..len)
@@ -187,7 +210,7 @@ impl<T> InnerFFT<T> where T: Signed + FromPrimitive + Copy {
         // the innermost for loop is basically the "butterfly_2" function, except
         // butterfly_2 is designed for a DIT FFT, and we need DIF
         let num_layers = spectrum.len().trailing_zeros() as usize;
-        for layer in 0..num_layers-1 {
+        for layer in 0..num_layers - 1 {
             let num_groups = 1 << layer;
             let group_size = spectrum.len() / num_groups;
             let distance = group_size / 2;
@@ -197,7 +220,10 @@ impl<T> InnerFFT<T> where T: Signed + FromPrimitive + Copy {
                     let twiddle = unsafe { *self.twiddles.get_unchecked(i * num_groups) };
 
                     let second_entry = unsafe { *chunk.get_unchecked(i + distance) };
-                    unsafe { *chunk.get_unchecked_mut(i + distance) = (*chunk.get_unchecked(i) - second_entry) * twiddle };
+                    unsafe {
+                        *chunk.get_unchecked_mut(i + distance) =
+                            (*chunk.get_unchecked(i) - second_entry) * twiddle
+                    };
                     unsafe { *chunk.get_unchecked_mut(i) = *chunk.get_unchecked(i) + second_entry };
                 }
             }
@@ -222,7 +248,7 @@ impl<T> InnerFFT<T> where T: Signed + FromPrimitive + Copy {
         // the innermost for loop is basically the "butterfly_2" step, except
         // we're calling ".conj()" on each twiddle factor before using it
         let num_layers = spectrum.len().trailing_zeros() as usize;
-        for layer in (0..num_layers-1).rev() {
+        for layer in (0..num_layers - 1).rev() {
             let num_groups = 1 << layer;
             let group_size = spectrum.len() / num_groups;
             let distance = group_size / 2;
@@ -232,7 +258,9 @@ impl<T> InnerFFT<T> where T: Signed + FromPrimitive + Copy {
                     let twiddle = unsafe { self.twiddles.get_unchecked(i * num_groups) };
 
                     let twiddled = twiddle.conj() * unsafe { chunk.get_unchecked(i + distance) };
-                    unsafe { *chunk.get_unchecked_mut(i + distance) = *chunk.get_unchecked(i) - twiddled };
+                    unsafe {
+                        *chunk.get_unchecked_mut(i + distance) = *chunk.get_unchecked(i) - twiddled
+                    };
                     unsafe { *chunk.get_unchecked_mut(i) = *chunk.get_unchecked(i) + twiddled };
                 }
             }
@@ -276,13 +304,13 @@ mod test {
 
         let mut result = input.clone();
 
-        //to set up for the inverse FFT, use the correct FFT to get the midpoint, then reorder it
+        // to set up for the inverse FFT, use the correct FFT to get the midpoint, then reorder it
         correct_fft.process(input.as_slice(), result.as_mut_slice());
         reorder(result.as_mut_slice());
 
         fft.process_inverse(result.as_mut_slice());
 
-        //we have to scale by 1/n to get back to the input vector
+        // we have to scale by 1/n to get back to the input vector
         let result_scale = 1f32 / len as f32;
         for element in result.iter_mut() {
             *element = *element * result_scale;
