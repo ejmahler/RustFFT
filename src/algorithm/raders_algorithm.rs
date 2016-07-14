@@ -258,7 +258,7 @@ impl<T> InnerFFT<T>
 mod test {
     use super::InnerFFT;
 
-    use ::FFT;
+    use ::dft;
 
     use num::Complex;
 
@@ -268,10 +268,9 @@ mod test {
         let input: Vec<Complex<f32>> = (0..len).map(|i| Complex::from(i as f32)).collect();
 
         let fft = InnerFFT::new(len, false);
-        let mut correct_fft = FFT::new(len, false);
 
         let mut midpoint_expected = input.clone();
-        correct_fft.process(input.as_slice(), midpoint_expected.as_mut_slice());
+        dft(input.as_slice(), midpoint_expected.as_mut_slice());
 
         let mut midpoint_actual = input.clone();
         fft.process(midpoint_actual.as_mut_slice());
@@ -286,12 +285,10 @@ mod test {
         let input: Vec<Complex<f32>> = (0..len).map(|i| Complex::from(i as f32)).collect();
 
         let fft = InnerFFT::new(len, false);
-        let mut correct_fft = FFT::new(len, false);
-
-        let mut result = input.clone();
 
         // to set up for the inverse FFT, use the correct FFT to get the midpoint, then reorder it
-        correct_fft.process(input.as_slice(), result.as_mut_slice());
+        let mut result = input.clone();
+        dft(input.as_slice(), result.as_mut_slice());
         reorder(result.as_mut_slice());
 
         fft.process_inverse(result.as_mut_slice());
@@ -301,9 +298,6 @@ mod test {
         for element in result.iter_mut() {
             *element = *element * result_scale;
         }
-
-        println!("actual: {:?}", result);
-        println!("expected: {:?}", input);
 
         assert!(compare_vectors(input.as_slice(), result.as_slice()));
     }

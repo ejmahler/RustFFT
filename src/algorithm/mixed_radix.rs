@@ -7,7 +7,7 @@ use butterflies::{butterfly_2, butterfly_3, butterfly_4, butterfly_5, butterfly}
 
 pub struct CooleyTukey<T> {
     twiddles: Vec<Complex<T>>,
-    factors: Vec<(usize, usize)>,
+    factors: Vec<usize>,
     scratch: Vec<Complex<T>>,
     inverse: bool,
 }
@@ -15,7 +15,7 @@ pub struct CooleyTukey<T> {
 impl<T> CooleyTukey<T>
     where T: Signed + FromPrimitive + Copy
 {
-    pub fn new(len: usize, factors: Vec<(usize, usize)>, inverse: bool) -> Self {
+    pub fn new(len: usize, factors: &[(usize, usize)], inverse: bool) -> Self {
         let dir = if inverse {
             1
         } else {
@@ -38,10 +38,23 @@ impl<T> CooleyTukey<T>
                     }
                 })
                 .collect(),
-            factors: factors,
+            factors: CooleyTukey::<T>::expand_factors(factors),
             scratch: scratch,
             inverse: inverse,
         }
+    }
+
+    fn expand_factors(factors: &[(usize, usize)]) -> Vec<usize> {
+        let count = factors.iter().map(|&(_, count)| count).sum();
+
+        let mut expanded_factors = Vec::with_capacity(count);
+        for &(factor, count) in factors {
+            for _ in 0..count {
+                expanded_factors.push(factor);
+            }
+        }
+
+        expanded_factors
     }
 }
 
@@ -50,7 +63,7 @@ impl<T> FFTAlgorithm<T> for CooleyTukey<T>
 {
     /// Runs the FFT on the input `signal` array, placing the output in the 'spectrum' array
     fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        cooley_tukey(signal,
+        cooley_tukey(signal.len(), signal,
                      spectrum,
                      1,
                      self.twiddles.as_slice(),
@@ -60,16 +73,18 @@ impl<T> FFTAlgorithm<T> for CooleyTukey<T>
     }
 }
 
-fn cooley_tukey<T>(signal: &[Complex<T>],
+fn cooley_tukey<T>(size: usize,
+                   signal: &[Complex<T>],
                    spectrum: &mut [Complex<T>],
                    stride: usize,
                    twiddles: &[Complex<T>],
-                   factors: &[(usize, usize)],
+                   factors: &[usize],
                    scratch: &mut [Complex<T>],
                    inverse: bool)
     where T: Signed + FromPrimitive + Copy
 {
-    if let Some(&(n1, n2)) = factors.first() {
+    if let Some(&n1) = factors.first() {
+        let n2 = size / n1;
         if n2 == 1 {
             // we theoretically need to compute n1 ffts of size n2
             // but n2 is 1, and a fft of size 1 is just a copy
@@ -77,7 +92,8 @@ fn cooley_tukey<T>(signal: &[Complex<T>],
         } else {
             // Recursive call to perform n1 ffts of length n2
             for i in 0..n1 {
-                cooley_tukey(&signal[i * stride..],
+                cooley_tukey(n2,
+                             &signal[i * stride..],
                              &mut spectrum[i * n2..],
                              stride * n1,
                              twiddles,

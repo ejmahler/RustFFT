@@ -1,5 +1,5 @@
 
-use num::{Zero, One, FromPrimitive, Integer, PrimInt};
+use num::{Zero, One, FromPrimitive, Integer, PrimInt, Signed};
 use std::mem::swap;
 
 pub fn primitive_root(prime: u64) -> Option<u64> {
@@ -67,6 +67,32 @@ pub fn multiplicative_inverse<T: PrimInt + Integer + FromPrimitive>(a: T, n: T) 
     t
 }
 
+pub fn extended_euclidean_algorithm<T: PrimInt + Integer + Signed + FromPrimitive>(a: T, b: T) -> (T,T,T) {
+    let mut s = Zero::zero();
+    let mut s_old = One::one();
+
+    let mut t = One::one();
+    let mut t_old = Zero::zero();
+
+    let mut r = b;
+    let mut r_old = a;
+
+    while r > Zero::zero() {
+        let quotient = r_old / r;
+
+        r_old = r_old - quotient * r;
+        swap(&mut r_old, &mut r);
+
+        s_old = s_old - quotient * s;
+        swap(&mut s_old, &mut s);
+
+        t_old = t_old - quotient * t;
+        swap(&mut t_old, &mut t);
+    }
+
+    (r_old, s_old, t_old)
+}
+
 /// return all of the prime factors of n, but omit duplicate prime factors
 pub fn distinct_prime_factors(mut n: u64) -> Vec<u64> {
     let mut result = Vec::new();
@@ -99,6 +125,49 @@ pub fn distinct_prime_factors(mut n: u64) -> Vec<u64> {
 
         if n > 1 {
             result.push(n);
+        }
+    }
+
+    result
+}
+
+/// Factors an integer into its prime factors.
+/// Each pair in the return is a (prime, power of prime) pair
+pub fn prime_factors(mut n: usize) -> Vec<(usize, usize)> {
+    let mut result = Vec::new();
+
+    // handle 2 separately so we dont have to worry about adding 2 vs 1
+    if n % 2 == 0 {
+        let mut divisor_count = 0;
+        while n % 2 == 0 {
+            n /= 2;
+            divisor_count += 1;
+        }
+        result.push((2, divisor_count));
+    }
+    if n > 1 {
+        let mut divisor = 3;
+        let mut limit = (n as f32).sqrt() as usize + 1;
+        while divisor < limit {
+            if n % divisor == 0 {
+
+                // remove as many factors as possible from n
+                let mut divisor_count = 0;
+                while n % divisor == 0 {
+                    n /= divisor;
+                    divisor_count += 1;
+                }
+                result.push((divisor, divisor_count));
+
+                // recalculate the limit to reduce the amount of work we need to do
+                limit = (n as f32).sqrt() as usize + 1;
+            }
+
+            divisor += 2;
+        }
+
+        if n > 1 {
+            result.push((n, 1));
         }
     }
 
@@ -138,6 +207,37 @@ mod test {
                 let inverse = multiplicative_inverse(i, modulo);
 
                 assert_eq!(i * inverse % modulo, 1);
+            }
+        }
+    }
+
+    #[test]
+    fn test_extended_euclidean() {
+        let test_list = vec![
+            ((3,5), (1, 2, -1)),
+            ((15,12), (3, 1, -1)),
+            ((16,21), (1, 4, -3)),
+        ];
+
+        for (input, expected) in test_list {
+            let (a,b) = input;
+
+            let result = extended_euclidean_algorithm(a,b);
+            assert_eq!(expected, result);
+
+            let (gcd, mut a_inverse, mut b_inverse) = result;
+
+            //sanity check: if gcd=1, then a*a_inverse mod b should equal 1 and vice versa
+            if gcd == 1 {
+                if a_inverse < 0 {
+                    a_inverse += b;
+                }
+                if b_inverse < 0 {
+                    b_inverse += a;
+                }
+
+                assert_eq!(1, a * a_inverse % b);
+                assert_eq!(1, b * b_inverse % a);
             }
         }
     }
