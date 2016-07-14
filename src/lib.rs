@@ -29,7 +29,7 @@ impl<T> FFT<T>
     /// the forward and backward transforms, so doing a forward then backward
     /// FFT on a signal will scale the signal by its length.
     pub fn new(len: usize, inverse: bool) -> Self {
-        
+
         FFT {
             len: len,
             algorithm: plan::plan_fft(len, inverse),

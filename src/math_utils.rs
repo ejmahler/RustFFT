@@ -67,7 +67,9 @@ pub fn multiplicative_inverse<T: PrimInt + Integer + FromPrimitive>(a: T, n: T) 
     t
 }
 
-pub fn extended_euclidean_algorithm<T: PrimInt + Integer + Signed + FromPrimitive>(a: T, b: T) -> (T,T,T) {
+pub fn extended_euclidean_algorithm<T: PrimInt + Integer + Signed + FromPrimitive>(a: T,
+                                                                                   b: T)
+                                                                                   -> (T, T, T) {
     let mut s = Zero::zero();
     let mut s_old = One::one();
 
@@ -220,14 +222,14 @@ mod test {
         ];
 
         for (input, expected) in test_list {
-            let (a,b) = input;
+            let (a, b) = input;
 
-            let result = extended_euclidean_algorithm(a,b);
+            let result = extended_euclidean_algorithm(a, b);
             assert_eq!(expected, result);
 
             let (gcd, mut a_inverse, mut b_inverse) = result;
 
-            //sanity check: if gcd=1, then a*a_inverse mod b should equal 1 and vice versa
+            // sanity check: if gcd=1, then a*a_inverse mod b should equal 1 and vice versa
             if gcd == 1 {
                 if a_inverse < 0 {
                     a_inverse += b;
