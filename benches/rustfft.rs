@@ -34,9 +34,14 @@ fn bench_fft(b: &mut Bencher, len: usize) {
 #[bench] fn complex_p7_02401(b: &mut Bencher) { bench_fft(b,  2401); }
 #[bench] fn complex_p7_16807(b: &mut Bencher) { bench_fft(b, 16807); }
 
-// some other random lengths
-#[bench] fn complex_0100(b: &mut Bencher) { bench_fft(b,  100); }
-#[bench] fn complex_0900(b: &mut Bencher) { bench_fft(b,  900); }
-#[bench] fn complex_1000(b: &mut Bencher) { bench_fft(b, 1000); }
-#[bench] fn complex_1009(b: &mut Bencher) { bench_fft(b, 1009); }
-#[bench] fn complex_1260(b: &mut Bencher) { bench_fft(b, 1260); }
+// composite lengths
+#[bench] fn complex_composite_0100(b: &mut Bencher) { bench_fft(b,  100); }
+#[bench] fn complex_composite_0900(b: &mut Bencher) { bench_fft(b,  900); }
+#[bench] fn complex_composite_1000(b: &mut Bencher) { bench_fft(b, 1000); }
+#[bench] fn complex_composite_1260(b: &mut Bencher) { bench_fft(b, 1260); }
+
+// Prime lengths
+#[bench] fn complex_prime_0097(b: &mut Bencher) { bench_fft(b, 97); }
+#[bench] fn complex_prime_0151(b: &mut Bencher) { bench_fft(b, 151); }
+#[bench] fn complex_prime_1009(b: &mut Bencher) { bench_fft(b, 1009); }
+#[bench] fn complex_prime_2017(b: &mut Bencher) { bench_fft(b, 2017); }

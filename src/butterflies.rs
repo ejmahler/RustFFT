@@ -22,6 +22,46 @@ pub unsafe fn butterfly_2<T>(data: &mut [Complex<T>], stride: usize,
     }
 }
 
+/// This is like the the butterfly 2 above, but it conjugates each twiddle factor
+/// before using it, making it effectively compute the inverse of each sub-FFT
+pub unsafe fn butterfly_2_inverse<T>(data: &mut [Complex<T>], stride: usize,
+                             twiddles: &[Complex<T>], num_ffts: usize)
+                             where T: Signed + Copy {
+    let mut idx_1 = 0usize;
+    let mut idx_2 = num_ffts;
+    let mut twiddle_idx = 0usize;
+    for _ in 0..num_ffts {
+        let twiddle = twiddles.get_unchecked(twiddle_idx);
+        let temp = data.get_unchecked(idx_2) * twiddle.conj();
+        data.get_unchecked_mut(idx_2).re = data.get_unchecked(idx_1).re - temp.re;
+        data.get_unchecked_mut(idx_2).im = data.get_unchecked(idx_1).im - temp.im;
+        data.get_unchecked_mut(idx_1).re = data.get_unchecked(idx_1).re + temp.re;
+        data.get_unchecked_mut(idx_1).im = data.get_unchecked(idx_1).im + temp.im;
+        twiddle_idx += stride;
+        idx_1 += 1;
+        idx_2 += 1;
+    }
+}
+
+/// This is like the the butterfly 2 above, but the above is for DIT algorithms
+/// and this one is for DIF algorithms
+pub unsafe fn butterfly_2_dif<T>(data: &mut [Complex<T>], stride: usize,
+                             twiddles: &[Complex<T>], num_ffts: usize)
+                             where T: Num + Copy {
+    let mut idx_1 = 0usize;
+    let mut idx_2 = num_ffts;
+    let mut twiddle_idx = 0usize;
+    for _ in 0..num_ffts {
+        let twiddle = twiddles.get_unchecked(twiddle_idx);
+        let temp = *data.get_unchecked(idx_2);
+        *data.get_unchecked_mut(idx_2) = (data.get_unchecked(idx_1) - temp) * twiddle;
+        *data.get_unchecked_mut(idx_1) = data.get_unchecked(idx_1) + temp;
+        twiddle_idx += stride;
+        idx_1 += 1;
+        idx_2 += 1;
+    }
+}
+
 pub unsafe fn butterfly_2_single<T>(data: &mut [Complex<T>], stride: usize)
                              where T: Num + Copy {
     let idx_1 = 0usize;

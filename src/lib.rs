@@ -5,6 +5,8 @@ extern crate num;
 mod butterflies;
 mod mixed_radix;
 mod radix4;
+mod raders_algorithm;
+mod math_utils;
 
 use num::{Complex, Zero, One, Float, FromPrimitive, Signed};
 use num::traits::cast;
@@ -12,10 +14,12 @@ use std::f32;
 
 use mixed_radix::cooley_tukey;
 use radix4::process_radix4;
+use raders_algorithm::RadersAlgorithm;
 
 enum Algorithm<T> {
     MixedRadix(Vec<(usize, usize)>, Vec<Complex<T>>),
     Radix4,
+    Raders(RadersAlgorithm<T>),
     Noop,
 }
 
@@ -40,13 +44,21 @@ impl<T> FFT<T> where T: Signed + FromPrimitive + Copy {
             Algorithm::Radix4
         } else {
             let factors = factor(len);
-            let max_fft_len = factors.iter().map(|&(a, _)| a).max();
-            let scratch = match max_fft_len {
-                None | Some(0...5) => vec![Zero::zero(); 0],
-                Some(l) => vec![Zero::zero(); l],
-            };
 
-            Algorithm::MixedRadix(factors, scratch)
+            // benchmarking shows that raders algorithm isn't faster than the
+            // naive o(n^2) algorithm below around 100
+            if factors.len() == 1 && len > 100 {
+                //there is only one factor, meaning the input has a prime size
+                Algorithm::Raders(RadersAlgorithm::new(len, inverse))
+            } else {
+                let max_fft_len = factors.iter().map(|&(a, _)| a).max();
+                let scratch = match max_fft_len {
+                    None | Some(0...5) => vec![Zero::zero(); 0],
+                    Some(l) => vec![Zero::zero(); l],
+                };
+
+                Algorithm::MixedRadix(factors, scratch)
+            }
         };
 
         FFT {
@@ -93,10 +105,12 @@ impl<T> FFT<T> where T: Signed + FromPrimitive + Copy {
                              scratch,
                              self.inverse)
             }
+            Algorithm::Raders(ref mut algorithm) => {
+                spectrum.copy_from_slice(signal);
+                algorithm.process(spectrum);
+            }
             Algorithm::Noop => {
-                for (source, destination) in signal.iter().zip(spectrum.iter_mut()) {
-                    *destination = *source;
-                }
+                spectrum.copy_from_slice(signal);
             },
         }
     }
