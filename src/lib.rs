@@ -11,7 +11,6 @@ mod plan;
 use num::{Complex, Zero, One, Float, FromPrimitive, Signed};
 use num::traits::cast;
 use std::f32;
-use std::fmt::Debug;
 
 use algorithm::FFTAlgorithm;
 
@@ -21,7 +20,7 @@ pub struct FFT<T> {
 }
 
 impl<T> FFT<T>
-    where T: Signed + FromPrimitive + Copy + Debug + 'static
+    where T: Signed + FromPrimitive + Copy + 'static
 {
     /// Creates a new FFT context that will process signal of length
     /// `len`. If `inverse` is `true`, then this struct will run inverse

@@ -1,4 +1,3 @@
-use std::fmt::Debug;
 
 use num::{FromPrimitive, Signed};
 
@@ -9,7 +8,7 @@ use math_utils;
 const MIN_RADERS_SIZE: usize = 10;
 
 pub fn plan_fft<T>(len: usize, inverse: bool) -> Box<FFTAlgorithm<T>>
-    where T: Signed + FromPrimitive + Copy + Debug + 'static
+    where T: Signed + FromPrimitive + Copy + 'static
 {
     if len < 2 {
         Box::new(NoopAlgorithm {}) as Box<FFTAlgorithm<T>>
@@ -44,7 +43,7 @@ fn plan_fft_with_factors<T>(len: usize,
                             factors: &[(usize, usize)],
                             inverse: bool)
                             -> Box<FFTAlgorithm<T>>
-    where T: Signed + FromPrimitive + Copy + Debug + 'static
+    where T: Signed + FromPrimitive + Copy + 'static
 {
     if factors.len() == 1 {
         // we have only one factor -- it's either a prime number

@@ -1,6 +1,4 @@
 
-use std::fmt::Debug;
-
 use num::{Complex, FromPrimitive, Signed, Zero};
 
 use math_utils;
@@ -24,7 +22,7 @@ pub struct GoodThomasAlgorithm<T> {
 }
 
 impl<T> GoodThomasAlgorithm<T>
-    where T: Signed + FromPrimitive + Copy + Debug
+    where T: Signed + FromPrimitive + Copy
 {
     pub fn new(n1: usize,
                n1_fft: Box<FFTAlgorithm<T>>,
@@ -91,7 +89,7 @@ impl<T> GoodThomasAlgorithm<T>
 }
 
 impl<T> FFTAlgorithm<T> for GoodThomasAlgorithm<T>
-    where T: Signed + FromPrimitive + Copy + Debug
+    where T: Signed + FromPrimitive + Copy
 {
     /// Runs the FFT on the input `signal` array, placing the output in the 'spectrum' array
     fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
