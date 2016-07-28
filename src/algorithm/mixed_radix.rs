@@ -45,7 +45,7 @@ impl<T> CooleyTukey<T>
     }
 
     fn expand_factors(factors: &[(usize, usize)]) -> Vec<usize> {
-        let count = factors.iter().map(|&(_, count)| count).sum();
+        let count = factors.iter().map(|&(_, count)| count).fold(0, |acc, x| acc + x);
 
         let mut expanded_factors = Vec::with_capacity(count);
         for &(factor, count) in factors {
