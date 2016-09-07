@@ -3,9 +3,12 @@
 
 use num::{Complex, Zero, Num, FromPrimitive, Signed};
 
-pub unsafe fn butterfly_2<T>(data: &mut [Complex<T>], stride: usize,
-                             twiddles: &[Complex<T>], num_ffts: usize)
-                             where T: Num + Copy {
+pub unsafe fn butterfly_2<T>(data: &mut [Complex<T>],
+                             stride: usize,
+                             twiddles: &[Complex<T>],
+                             num_ffts: usize)
+    where T: Num + Copy
+{
     let mut idx_1 = 0usize;
     let mut idx_2 = num_ffts;
     let mut twiddle_idx = 0usize;
@@ -24,9 +27,12 @@ pub unsafe fn butterfly_2<T>(data: &mut [Complex<T>], stride: usize,
 
 /// This is like the the butterfly 2 above, but it conjugates each twiddle factor
 /// before using it, making it effectively compute the inverse of each sub-FFT
-pub unsafe fn butterfly_2_inverse<T>(data: &mut [Complex<T>], stride: usize,
-                             twiddles: &[Complex<T>], num_ffts: usize)
-                             where T: Signed + Copy {
+pub unsafe fn butterfly_2_inverse<T>(data: &mut [Complex<T>],
+                                     stride: usize,
+                                     twiddles: &[Complex<T>],
+                                     num_ffts: usize)
+    where T: Signed + Copy
+{
     let mut idx_1 = 0usize;
     let mut idx_2 = num_ffts;
     let mut twiddle_idx = 0usize;
@@ -45,9 +51,12 @@ pub unsafe fn butterfly_2_inverse<T>(data: &mut [Complex<T>], stride: usize,
 
 /// This is like the the butterfly 2 above, but the above is for DIT algorithms
 /// and this one is for DIF algorithms
-pub unsafe fn butterfly_2_dif<T>(data: &mut [Complex<T>], stride: usize,
-                             twiddles: &[Complex<T>], num_ffts: usize)
-                             where T: Num + Copy {
+pub unsafe fn butterfly_2_dif<T>(data: &mut [Complex<T>],
+                                 stride: usize,
+                                 twiddles: &[Complex<T>],
+                                 num_ffts: usize)
+    where T: Num + Copy
+{
     let mut idx_1 = 0usize;
     let mut idx_2 = num_ffts;
     let mut twiddle_idx = 0usize;
@@ -63,7 +72,8 @@ pub unsafe fn butterfly_2_dif<T>(data: &mut [Complex<T>], stride: usize,
 }
 
 pub unsafe fn butterfly_2_single<T>(data: &mut [Complex<T>], stride: usize)
-                             where T: Num + Copy {
+    where T: Num + Copy
+{
     let idx_1 = 0usize;
     let idx_2 = stride;
 
@@ -74,9 +84,12 @@ pub unsafe fn butterfly_2_single<T>(data: &mut [Complex<T>], stride: usize)
     data.get_unchecked_mut(idx_1).im = data.get_unchecked(idx_1).im + temp.im;
 }
 
-pub unsafe fn butterfly_3<T>(data: &mut [Complex<T>], stride: usize,
-                             twiddles: &[Complex<T>], num_ffts: usize)
-                             where T: Num + Copy + FromPrimitive {
+pub unsafe fn butterfly_3<T>(data: &mut [Complex<T>],
+                             stride: usize,
+                             twiddles: &[Complex<T>],
+                             num_ffts: usize)
+    where T: Num + Copy + FromPrimitive
+{
     let mut idx = 0usize;
     let mut tw_idx_1 = 0usize;
     let mut tw_idx_2 = 0usize;
@@ -87,25 +100,23 @@ pub unsafe fn butterfly_3<T>(data: &mut [Complex<T>], stride: usize,
         scratch[3] = scratch[1] + scratch[2];
         scratch[0] = scratch[1] - scratch[2];
 
-        data.get_unchecked_mut(idx + num_ffts).re = data.get_unchecked(idx).re
-                                                    - scratch[3].re
-                                                    / FromPrimitive::from_f32(2.0).unwrap();
-        data.get_unchecked_mut(idx + num_ffts).im = data.get_unchecked(idx).im
-                                                    - scratch[3].im
-                                                    / FromPrimitive::from_f32(2.0).unwrap();
+        data.get_unchecked_mut(idx + num_ffts).re =
+            data.get_unchecked(idx).re - scratch[3].re / FromPrimitive::from_f32(2.0).unwrap();
+        data.get_unchecked_mut(idx + num_ffts).im =
+            data.get_unchecked(idx).im - scratch[3].im / FromPrimitive::from_f32(2.0).unwrap();
 
         scratch[0].re = scratch[0].re * twiddles[stride * num_ffts].im;
         scratch[0].im = scratch[0].im * twiddles[stride * num_ffts].im;
 
         *data.get_unchecked_mut(idx) = data.get_unchecked(idx) + scratch[3];
-        data.get_unchecked_mut(idx + 2 * num_ffts).re = data.get_unchecked(idx + num_ffts).re
-                                                        + scratch[0].im;
-        data.get_unchecked_mut(idx + 2 * num_ffts).im = data.get_unchecked(idx + num_ffts).im
-                                                        - scratch[0].re;
-        data.get_unchecked_mut(idx + num_ffts).re = data.get_unchecked(idx + num_ffts).re
-                                                    - scratch[0].im;
-        data.get_unchecked_mut(idx + num_ffts).im = data.get_unchecked(idx + num_ffts).im
-                                                    + scratch[0].re;
+        data.get_unchecked_mut(idx + 2 * num_ffts).re = data.get_unchecked(idx + num_ffts).re +
+                                                        scratch[0].im;
+        data.get_unchecked_mut(idx + 2 * num_ffts).im = data.get_unchecked(idx + num_ffts).im -
+                                                        scratch[0].re;
+        data.get_unchecked_mut(idx + num_ffts).re = data.get_unchecked(idx + num_ffts).re -
+                                                    scratch[0].im;
+        data.get_unchecked_mut(idx + num_ffts).im = data.get_unchecked(idx + num_ffts).im +
+                                                    scratch[0].re;
 
         tw_idx_1 += 1 * stride;
         tw_idx_2 += 2 * stride;
@@ -113,9 +124,13 @@ pub unsafe fn butterfly_3<T>(data: &mut [Complex<T>], stride: usize,
     }
 }
 
-pub unsafe fn butterfly_4<T>(data: &mut [Complex<T>], stride: usize,
-                             twiddles: &[Complex<T>], num_ffts: usize, inverse: bool)
-                             where T: Num + Copy {
+pub unsafe fn butterfly_4<T>(data: &mut [Complex<T>],
+                             stride: usize,
+                             twiddles: &[Complex<T>],
+                             num_ffts: usize,
+                             inverse: bool)
+    where T: Num + Copy
+{
     let mut idx = 0usize;
     let mut tw_idx_1 = 0usize;
     let mut tw_idx_2 = 0usize;
@@ -151,7 +166,8 @@ pub unsafe fn butterfly_4<T>(data: &mut [Complex<T>], stride: usize,
 }
 
 pub unsafe fn butterfly_4_single<T>(data: &mut [Complex<T>], stride: usize, inverse: bool)
-                             where T: Num + Copy {
+    where T: Num + Copy
+{
     let mut scratch: [Complex<T>; 6] = [Zero::zero(); 6];
 
     scratch[0] = *data.get_unchecked(stride);
@@ -176,9 +192,12 @@ pub unsafe fn butterfly_4_single<T>(data: &mut [Complex<T>], stride: usize, inve
     }
 }
 
-pub unsafe fn butterfly_5<T>(data: &mut [Complex<T>], stride: usize,
-                             twiddles: &[Complex<T>], num_ffts: usize)
-                             where T: Signed + Copy {
+pub unsafe fn butterfly_5<T>(data: &mut [Complex<T>],
+                             stride: usize,
+                             twiddles: &[Complex<T>],
+                             num_ffts: usize)
+    where T: Signed + Copy
+{
     let mut idx_0 = 0 * num_ffts;
     let mut idx_1 = 1 * num_ffts;
     let mut idx_2 = 2 * num_ffts;
@@ -199,10 +218,10 @@ pub unsafe fn butterfly_5<T>(data: &mut [Complex<T>], stride: usize,
         scratch[8] = scratch[2] + scratch[3];
         scratch[9] = scratch[2] - scratch[3];
 
-        data.get_unchecked_mut(idx_0).re = data.get_unchecked_mut(idx_0).re
-            + scratch[7].re + scratch[8].re;
-        data.get_unchecked_mut(idx_0).im = data.get_unchecked_mut(idx_0).im
-            + scratch[7].im + scratch[8].im;
+        data.get_unchecked_mut(idx_0).re = data.get_unchecked_mut(idx_0).re + scratch[7].re +
+                                           scratch[8].re;
+        data.get_unchecked_mut(idx_0).im = data.get_unchecked_mut(idx_0).im + scratch[7].im +
+                                           scratch[8].im;
 
         scratch[5].re = scratch[0].re + scratch[7].re * ya.re + scratch[8].re * yb.re;
         scratch[5].im = scratch[0].im + scratch[7].im * ya.re + scratch[8].im * yb.re;
@@ -230,11 +249,11 @@ pub unsafe fn butterfly_5<T>(data: &mut [Complex<T>], stride: usize,
 }
 
 pub fn butterfly<T: Num + Copy>(data: &mut [Complex<T>],
-                            stride: usize,
-                            twiddles: &[Complex<T>],
-                            num_ffts: usize,
-                            fft_len: usize,
-                            scratch: &mut [Complex<T>]) {
+                                stride: usize,
+                                twiddles: &[Complex<T>],
+                                num_ffts: usize,
+                                fft_len: usize,
+                                scratch: &mut [Complex<T>]) {
     // for each fft we have to perform...
     for fft_idx in 0..num_ffts {
 
@@ -255,7 +274,9 @@ pub fn butterfly<T: Num + Copy>(data: &mut [Complex<T>],
                 let twiddle = unsafe { twiddles.get_unchecked(twiddle_idx) };
                 *out_sample = *out_sample + in_sample * twiddle;
                 twiddle_idx += stride * data_idx;
-                if twiddle_idx >= twiddles.len() { twiddle_idx -= twiddles.len() }
+                if twiddle_idx >= twiddles.len() {
+                    twiddle_idx -= twiddles.len()
+                }
             }
             data_idx += num_ffts;
         }
@@ -274,7 +295,10 @@ mod benches {
     use num::{Complex, Zero};
     use super::{butterfly_2, butterfly_3, butterfly_4, butterfly_5};
 
-    fn set_up_bench(butterfly_len: usize, stride: usize, num_ffts: usize) -> (Vec<Complex<f32>>, Vec<Complex<f32>>) {
+    fn set_up_bench(butterfly_len: usize,
+                    stride: usize,
+                    num_ffts: usize)
+                    -> (Vec<Complex<f32>>, Vec<Complex<f32>>) {
         let len = butterfly_len * stride * num_ffts;
         let twiddles: Vec<Complex<f32>> = (0..len)
             .map(|i| -1. * (i as f32) * 2.0 * f32::consts::PI / (len as f32))
@@ -291,9 +315,7 @@ mod benches {
         let num_ffts = 1000usize;
         let (mut data, twiddles) = set_up_bench(2, stride, num_ffts);
 
-        b.iter(|| unsafe {
-            butterfly_2(&mut data, stride, &twiddles, num_ffts)
-        });
+        b.iter(|| unsafe { butterfly_2(&mut data, stride, &twiddles, num_ffts) });
     }
 
     #[bench]
@@ -302,9 +324,7 @@ mod benches {
         let num_ffts = 1000usize;
         let (mut data, twiddles) = set_up_bench(3, stride, num_ffts);
 
-        b.iter(|| unsafe {
-            butterfly_3(&mut data, stride, &twiddles, num_ffts)
-        });
+        b.iter(|| unsafe { butterfly_3(&mut data, stride, &twiddles, num_ffts) });
     }
 
     #[bench]
@@ -313,9 +333,7 @@ mod benches {
         let num_ffts = 1000usize;
         let (mut data, twiddles) = set_up_bench(4, stride, num_ffts);
 
-        b.iter(|| unsafe {
-            butterfly_4(&mut data, stride, &twiddles, num_ffts, false)
-        });
+        b.iter(|| unsafe { butterfly_4(&mut data, stride, &twiddles, num_ffts, false) });
     }
 
     #[bench]
@@ -324,8 +342,6 @@ mod benches {
         let num_ffts = 1000usize;
         let (mut data, twiddles) = set_up_bench(5, stride, num_ffts);
 
-        b.iter(|| unsafe {
-            butterfly_5(&mut data, stride, &twiddles, num_ffts)
-        });
+        b.iter(|| unsafe { butterfly_5(&mut data, stride, &twiddles, num_ffts) });
     }
 }

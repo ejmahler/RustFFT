@@ -2,78 +2,36 @@
 
 extern crate num;
 
+mod algorithm;
 mod butterflies;
-mod mixed_radix;
-mod radix4;
-mod raders_algorithm;
 mod math_utils;
+mod array_utils;
+mod plan;
 
 use num::{Complex, Zero, One, Float, FromPrimitive, Signed};
 use num::traits::cast;
 use std::f32;
 
-use mixed_radix::cooley_tukey;
-use radix4::process_radix4;
-use raders_algorithm::RadersAlgorithm;
-
-enum Algorithm<T> {
-    MixedRadix(Vec<(usize, usize)>, Vec<Complex<T>>),
-    Radix4,
-    Raders(RadersAlgorithm<T>),
-    Noop,
-}
+use algorithm::FFTAlgorithm;
 
 pub struct FFT<T> {
-    algorithm: Algorithm<T>,
-    twiddles: Vec<Complex<T>>,
-    inverse: bool,
+    len: usize,
+    algorithm: Box<FFTAlgorithm<T>>,
 }
 
-impl<T> FFT<T> where T: Signed + FromPrimitive + Copy {
+impl<T> FFT<T>
+    where T: Signed + FromPrimitive + Copy + 'static
+{
     /// Creates a new FFT context that will process signal of length
     /// `len`. If `inverse` is `true`, then this struct will run inverse
     /// FFTs. This implementation of the FFT doesn't do any scaling on both
     /// the forward and backward transforms, so doing a forward then backward
     /// FFT on a signal will scale the signal by its length.
     pub fn new(len: usize, inverse: bool) -> Self {
-        let dir = if inverse { 1 } else { -1 };
-
-        let algorithm = if len < 2 {
-            Algorithm::Noop
-        } else if is_power_of_two(len) {
-            Algorithm::Radix4
-        } else {
-            let factors = factor(len);
-
-            // benchmarking shows that raders algorithm isn't faster than the
-            // naive o(n^2) algorithm below around 100
-            if factors.len() == 1 && len > 100 {
-                //there is only one factor, meaning the input has a prime size
-                Algorithm::Raders(RadersAlgorithm::new(len, inverse))
-            } else {
-                let max_fft_len = factors.iter().map(|&(a, _)| a).max();
-                let scratch = match max_fft_len {
-                    None | Some(0...5) => vec![Zero::zero(); 0],
-                    Some(l) => vec![Zero::zero(); l],
-                };
-
-                Algorithm::MixedRadix(factors, scratch)
-            }
-        };
 
         FFT {
-            algorithm: algorithm,
-            twiddles: (0..len)
-                .map(|i| dir as f32 * i as f32 * 2.0 * f32::consts::PI / len as f32)
-                .map(|phase| Complex::from_polar(&1.0, &phase))
-                .map(|c| {
-                    Complex {
-                        re: FromPrimitive::from_f32(c.re).unwrap(),
-                        im: FromPrimitive::from_f32(c.im).unwrap(),
-                    }
-                })
-                .collect(),
-            inverse: inverse,
+            len: len,
+            algorithm: plan::plan_fft(len, inverse),
         }
     }
 
@@ -85,34 +43,9 @@ impl<T> FFT<T> where T: Signed + FromPrimitive + Copy {
     /// specified in the struct's constructor.
     pub fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         assert!(signal.len() == spectrum.len());
-        assert!(signal.len() == self.twiddles.len());
+        assert!(signal.len() == self.len);
 
-        match self.algorithm {
-            Algorithm::Radix4 => {
-                process_radix4(signal.len(),
-                        signal,
-                        spectrum,
-                        1,
-                        &self.twiddles[..],
-                        self.inverse);
-            }
-            Algorithm::MixedRadix(ref factors, ref mut scratch) => {
-                cooley_tukey(signal,
-                             spectrum,
-                             1,
-                             &self.twiddles[..],
-                             factors,
-                             scratch,
-                             self.inverse)
-            }
-            Algorithm::Raders(ref mut algorithm) => {
-                spectrum.copy_from_slice(signal);
-                algorithm.process(spectrum);
-            }
-            Algorithm::Noop => {
-                spectrum.copy_from_slice(signal);
-            },
-        }
+        self.algorithm.process(signal, spectrum);
     }
 }
 
@@ -120,33 +53,12 @@ pub fn dft<T: Float>(signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
     for (k, spec_bin) in spectrum.iter_mut().enumerate() {
         let mut sum = Zero::zero();
         for (i, &x) in signal.iter().enumerate() {
-            let angle = cast::<_, T>(-1 * (i * k) as isize).unwrap()
-                * cast(2.0 * f32::consts::PI).unwrap()
-                / cast(signal.len()).unwrap();
+            let angle = cast::<_, T>(-1 * (i * k) as isize).unwrap() *
+                        cast(2.0 * f32::consts::PI).unwrap() /
+                        cast(signal.len()).unwrap();
             let twiddle = Complex::from_polar(&One::one(), &angle);
             sum = sum + twiddle * x;
         }
         *spec_bin = sum;
     }
-}
-
-/// Factors an integer into its prime factors.
-fn factor(n: usize) -> Vec<(usize, usize)> {
-    let mut factors = Vec::new();
-    let mut next = n;
-    while next > 1 {
-        for div in 2..next + 1 {
-            if next % div == 0 {
-                next = next / div;
-                factors.push((div, next));
-                break;
-            }
-        }
-    }
-    return factors;
-}
-
-// returns true if n is a power of 2, false otherwise
-fn is_power_of_two(n: usize) -> bool {
-    return n & n - 1 == 0;
 }

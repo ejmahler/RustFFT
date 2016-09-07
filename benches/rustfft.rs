@@ -10,7 +10,7 @@ use num::Complex;
 /// for a given length
 fn bench_fft(b: &mut Bencher, len: usize) {
     let mut fft = rustfft::FFT::new(len, false);
-    let signal = vec![Complex{re: 0.0, im: 0.0}; len];
+    let signal = vec![Complex{re: 0_f32, im: 0_f32}; len];
     let mut spectrum = signal.clone();
     b.iter(|| {fft.process(&signal[..], &mut spectrum[..]);} );
 }
@@ -34,14 +34,19 @@ fn bench_fft(b: &mut Bencher, len: usize) {
 #[bench] fn complex_p7_02401(b: &mut Bencher) { bench_fft(b,  2401); }
 #[bench] fn complex_p7_16807(b: &mut Bencher) { bench_fft(b, 16807); }
 
-// composite lengths
-#[bench] fn complex_composite_0100(b: &mut Bencher) { bench_fft(b,  100); }
-#[bench] fn complex_composite_0900(b: &mut Bencher) { bench_fft(b,  900); }
-#[bench] fn complex_composite_1000(b: &mut Bencher) { bench_fft(b, 1000); }
-#[bench] fn complex_composite_1260(b: &mut Bencher) { bench_fft(b, 1260); }
-
 // Prime lengths
 #[bench] fn complex_prime_0097(b: &mut Bencher) { bench_fft(b, 97); }
 #[bench] fn complex_prime_0151(b: &mut Bencher) { bench_fft(b, 151); }
 #[bench] fn complex_prime_1009(b: &mut Bencher) { bench_fft(b, 1009); }
 #[bench] fn complex_prime_2017(b: &mut Bencher) { bench_fft(b, 2017); }
+
+// numbers times powers of two
+#[bench] fn complex_composite_24576(b: &mut Bencher) { bench_fft(b,  24576); }
+#[bench] fn complex_composite_20736(b: &mut Bencher) { bench_fft(b,  20736); }
+
+// power of 2 times large prime
+#[bench] fn complex_composite_32192(b: &mut Bencher) { bench_fft(b,  32192); }
+#[bench] fn complex_composite_24028(b: &mut Bencher) { bench_fft(b,  24028); }
+
+// small mixed composites times a large prime
+#[bench] fn complex_composite_30270(b: &mut Bencher) { bench_fft(b,  30270); }
