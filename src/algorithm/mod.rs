@@ -5,6 +5,7 @@ mod mixed_radix_terminal;
 mod mixed_radix_single;
 mod raders_algorithm;
 mod radix4;
+mod dft;
 
 pub trait FFTAlgorithm<T: Signed + FromPrimitive + Copy> {
     fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]);
@@ -24,3 +25,4 @@ pub use self::mixed_radix_single::MixedRadixSingle;
 pub use self::raders_algorithm::RadersAlgorithm;
 pub use self::radix4::Radix4;
 pub use self::good_thomas_algorithm::GoodThomasAlgorithm;
+pub use self::dft::DFTAlgorithm;
