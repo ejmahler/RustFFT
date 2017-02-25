@@ -1,9 +1,8 @@
-use std::f32;
-
 use num::{Complex, FromPrimitive, Signed, Zero};
 
 use algorithm::FFTAlgorithm;
 use butterflies::{butterfly_2, butterfly_3, butterfly_4, butterfly_5, butterfly};
+use twiddles;
 
 pub struct MixedRadixTerminal<T> {
     twiddles: Vec<Complex<T>>,
@@ -16,11 +15,7 @@ impl<T> MixedRadixTerminal<T>
     where T: Signed + FromPrimitive + Copy
 {
     pub fn new(len: usize, factors: &[(usize, usize)], inverse: bool) -> Self {
-        let dir = if inverse {
-            1
-        } else {
-            -1
-        };
+
         let max_fft_len = factors.iter().map(|&(a, _)| a).max();
         let scratch = match max_fft_len {
             None | Some(0...5) => vec![Zero::zero(); 0],
@@ -28,16 +23,7 @@ impl<T> MixedRadixTerminal<T>
         };
 
         MixedRadixTerminal {
-            twiddles: (0..len)
-                .map(|i| dir as f32 * i as f32 * 2.0 * f32::consts::PI / len as f32)
-                .map(|phase| Complex::from_polar(&1.0, &phase))
-                .map(|c| {
-                    Complex {
-                        re: FromPrimitive::from_f32(c.re).unwrap(),
-                        im: FromPrimitive::from_f32(c.im).unwrap(),
-                    }
-                })
-                .collect(),
+            twiddles: twiddles::generate_twiddle_factors(len, inverse),
             factors: MixedRadixTerminal::<T>::expand_factors(factors),
             scratch: scratch,
             inverse: inverse,

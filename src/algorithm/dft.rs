@@ -1,8 +1,7 @@
-use std::f32;
-
 use num::{Complex, FromPrimitive, Signed, Zero};
 
 use algorithm::FFTAlgorithm;
+use twiddles;
 
 pub struct DFTAlgorithm<T> {
     twiddles: Vec<Complex<T>>,
@@ -12,18 +11,8 @@ impl<T> DFTAlgorithm<T>
     where T: Signed + FromPrimitive + Copy
 {
     pub fn new(len: usize) -> Self {
-
         Self {
-            twiddles: (0..len)
-                .map(|i| -2f32 * i as f32 * f32::consts::PI / len as f32)
-                .map(|phase| Complex::from_polar(&1.0, &phase))
-                .map(|c| {
-                    Complex {
-                        re: FromPrimitive::from_f32(c.re).unwrap(),
-                        im: FromPrimitive::from_f32(c.im).unwrap(),
-                    }
-                })
-                .collect(),
+            twiddles: twiddles::generate_twiddle_factors(len, false),
         }
     }
 }

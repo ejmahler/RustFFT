@@ -7,6 +7,7 @@ mod butterflies;
 mod math_utils;
 mod array_utils;
 mod plan;
+mod twiddles;
 
 use num::{Complex, FromPrimitive, Signed, Zero};
 use std::f32;

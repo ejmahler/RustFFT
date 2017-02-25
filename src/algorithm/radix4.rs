@@ -1,8 +1,7 @@
-use std::f32;
-
 use num::{Complex, FromPrimitive, Signed};
 
 use butterflies::{butterfly_2_single, butterfly_4_single, butterfly_4};
+use twiddles;
 use super::FFTAlgorithm;
 
 pub struct Radix4<T> {
@@ -14,23 +13,8 @@ impl<T> Radix4<T>
     where T: Signed + FromPrimitive + Copy
 {
     pub fn new(len: usize, inverse: bool) -> Self {
-        let dir = if inverse {
-            1
-        } else {
-            -1
-        };
-
         Radix4 {
-            twiddles: (0..len)
-                .map(|i| dir as f32 * i as f32 * 2.0 * f32::consts::PI / len as f32)
-                .map(|phase| Complex::from_polar(&1.0, &phase))
-                .map(|c| {
-                    Complex {
-                        re: FromPrimitive::from_f32(c.re).unwrap(),
-                        im: FromPrimitive::from_f32(c.im).unwrap(),
-                    }
-                })
-                .collect(),
+            twiddles: twiddles::generate_twiddle_factors(len, inverse),
             inverse: inverse,
         }
     }
