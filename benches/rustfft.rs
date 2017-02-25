@@ -40,6 +40,10 @@ fn bench_fft(b: &mut Bencher, len: usize) {
 #[bench] fn complex_prime_1009(b: &mut Bencher) { bench_fft(b, 1009); }
 #[bench] fn complex_prime_2017(b: &mut Bencher) { bench_fft(b, 2017); }
 
+//primes raised to a power
+#[bench] fn complex_primepower_44521(b: &mut Bencher) { bench_fft(b, 44521); } // 211^2
+#[bench] fn complex_primepower_160801(b: &mut Bencher) { bench_fft(b, 160801); } // 401^2
+
 // numbers times powers of two
 #[bench] fn complex_composite_24576(b: &mut Bencher) { bench_fft(b,  24576); }
 #[bench] fn complex_composite_20736(b: &mut Bencher) { bench_fft(b,  20736); }

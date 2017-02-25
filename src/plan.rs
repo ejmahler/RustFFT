@@ -46,17 +46,35 @@ fn plan_fft_with_factors<T>(len: usize,
     where T: Signed + FromPrimitive + Copy + 'static
 {
     if factors.len() == 1 {
+
+        let (factor, count) = factors[0];
+        
         // we have only one factor -- it's either a prime number
         // or a prime number raised to a power
-        if factors[0].0 > MIN_RADERS_SIZE {
+        if factor > MIN_RADERS_SIZE {
             // our prime is large enough that it's worth trying to run rader's algorithm on it
-            if factors[0].1 == 1 {
+            if count == 1 {
                 Box::new(RadersAlgorithm::new(len, inverse)) as Box<FFTAlgorithm<T>>
             } else {
-                // we have a large prime raised to a power. this is one case we can't handle well
-                // all we can do for the time being is fall back to cooley tukey
-                // TODO: find a better way to handle this case
-                Box::new(MixedRadixTerminal::new(len, factors, inverse)) as Box<FFTAlgorithm<T>>
+                // we have a large prime raised to a power. we're going to recursively cut the count in half,
+                // sending half of them in one direction and half in the other
+                // we're doing this because the cooley tukey algorithm works better when both sizes are roughly equal
+                let left_count = count/2;
+
+                let left_factors = [(factor, left_count)];
+                let left_len = (0..left_count).fold(1, |product, _| product * factor);
+                
+
+                let right_factors = [(factor, count - left_count)];
+                let right_len = len / left_len;
+
+
+                let left_fft = plan_fft_with_factors(left_len, &left_factors, inverse);
+                let right_fft = plan_fft_with_factors(right_len, &right_factors, inverse);
+
+                
+
+                Box::new(MixedRadixSingle::new(left_len, left_fft, right_len, right_fft, inverse)) as Box<FFTAlgorithm<T>>
             }
 
         } else {
