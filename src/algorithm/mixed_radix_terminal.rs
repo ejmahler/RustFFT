@@ -5,14 +5,14 @@ use num::{Complex, FromPrimitive, Signed, Zero};
 use algorithm::FFTAlgorithm;
 use butterflies::{butterfly_2, butterfly_3, butterfly_4, butterfly_5, butterfly};
 
-pub struct CooleyTukey<T> {
+pub struct MixedRadixTerminal<T> {
     twiddles: Vec<Complex<T>>,
     factors: Vec<usize>,
     scratch: Vec<Complex<T>>,
     inverse: bool,
 }
 
-impl<T> CooleyTukey<T>
+impl<T> MixedRadixTerminal<T>
     where T: Signed + FromPrimitive + Copy
 {
     pub fn new(len: usize, factors: &[(usize, usize)], inverse: bool) -> Self {
@@ -27,7 +27,7 @@ impl<T> CooleyTukey<T>
             Some(l) => vec![Zero::zero(); l],
         };
 
-        CooleyTukey {
+        MixedRadixTerminal {
             twiddles: (0..len)
                 .map(|i| dir as f32 * i as f32 * 2.0 * f32::consts::PI / len as f32)
                 .map(|phase| Complex::from_polar(&1.0, &phase))
@@ -38,7 +38,7 @@ impl<T> CooleyTukey<T>
                     }
                 })
                 .collect(),
-            factors: CooleyTukey::<T>::expand_factors(factors),
+            factors: MixedRadixTerminal::<T>::expand_factors(factors),
             scratch: scratch,
             inverse: inverse,
         }
@@ -58,12 +58,12 @@ impl<T> CooleyTukey<T>
     }
 }
 
-impl<T> FFTAlgorithm<T> for CooleyTukey<T>
+impl<T> FFTAlgorithm<T> for MixedRadixTerminal<T>
     where T: Signed + FromPrimitive + Copy
 {
     /// Runs the FFT on the input `signal` array, placing the output in the 'spectrum' array
     fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        cooley_tukey(signal.len(), signal,
+        mixed_radix_terminal(signal.len(), signal,
                      spectrum,
                      1,
                      self.twiddles.as_slice(),
@@ -73,7 +73,7 @@ impl<T> FFTAlgorithm<T> for CooleyTukey<T>
     }
 }
 
-fn cooley_tukey<T>(size: usize,
+fn mixed_radix_terminal<T>(size: usize,
                    signal: &[Complex<T>],
                    spectrum: &mut [Complex<T>],
                    stride: usize,
@@ -92,7 +92,7 @@ fn cooley_tukey<T>(size: usize,
         } else {
             // Recursive call to perform n1 ffts of length n2
             for i in 0..n1 {
-                cooley_tukey(n2,
+                mixed_radix_terminal(n2,
                              &signal[i * stride..],
                              &mut spectrum[i * n2..],
                              stride * n1,

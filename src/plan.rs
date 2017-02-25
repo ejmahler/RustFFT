@@ -1,11 +1,10 @@
 
 use num::{FromPrimitive, Signed};
 
-use algorithm::{FFTAlgorithm, CooleyTukey, Radix4, RadersAlgorithm, GoodThomasAlgorithm,
-                NoopAlgorithm};
+use algorithm::{FFTAlgorithm, MixedRadixTerminal, MixedRadixSingle, Radix4, RadersAlgorithm, GoodThomasAlgorithm, NoopAlgorithm};
 use math_utils;
 
-const MIN_RADERS_SIZE: usize = 10;
+const MIN_RADERS_SIZE: usize = 100;
 
 pub fn plan_fft<T>(len: usize, inverse: bool) -> Box<FFTAlgorithm<T>>
     where T: Signed + FromPrimitive + Copy + 'static
@@ -29,10 +28,11 @@ pub fn plan_fft<T>(len: usize, inverse: bool) -> Box<FFTAlgorithm<T>>
                 Box::new(Radix4::new(1 << smallest_count, inverse)) as Box<FFTAlgorithm<T>>;
             let other_fft = plan_fft_with_factors(len >> smallest_count, &factors[1..], inverse);
 
-            Box::new(GoodThomasAlgorithm::new(1 << smallest_count,
+            Box::new(MixedRadixSingle::new(1 << smallest_count,
                                               p2_fft,
                                               len >> smallest_count,
-                                              other_fft)) as Box<FFTAlgorithm<T>>
+                                              other_fft,
+                                              inverse)) as Box<FFTAlgorithm<T>>
         } else {
             plan_fft_with_factors(len, factors.as_slice(), inverse)
         }
@@ -56,19 +56,20 @@ fn plan_fft_with_factors<T>(len: usize,
                 // we have a large prime raised to a power. this is one case we can't handle well
                 // all we can do for the time being is fall back to cooley tukey
                 // TODO: find a better way to handle this case
-                Box::new(CooleyTukey::new(len, factors, inverse)) as Box<FFTAlgorithm<T>>
+                Box::new(MixedRadixTerminal::new(len, factors, inverse)) as Box<FFTAlgorithm<T>>
             }
 
         } else {
             // the prime is small enough that we won't gain anything by splitting it up
             // so just cooley tukey it
-            Box::new(CooleyTukey::new(len, factors, inverse)) as Box<FFTAlgorithm<T>>
+            Box::new(MixedRadixTerminal::new(len, factors, inverse)) as Box<FFTAlgorithm<T>>
         }
     } else {
         // we have multiple factors. if any of them are large enough to run rader's on,
         // pull them out via the good thomas algorithm
         let (largest_factor, largest_count) = factors[factors.len() - 1];
         if largest_factor > MIN_RADERS_SIZE {
+
             let factor_size = largest_factor.pow(largest_count as u32);
             let factor_fft =
                 plan_fft_with_factors(factor_size, &factors[factors.len() - 1..], inverse);
@@ -76,13 +77,15 @@ fn plan_fft_with_factors<T>(len: usize,
             let other_fft =
                 plan_fft_with_factors(other_size, &factors[..factors.len() - 1], inverse);
 
-            Box::new(GoodThomasAlgorithm::new(factor_size,
+            Box::new(MixedRadixSingle::new(factor_size,
                                               factor_fft,
                                               other_size,
-                                              other_fft)) as Box<FFTAlgorithm<T>>
+                                              other_fft,
+                                              inverse)) as Box<FFTAlgorithm<T>>
+
         } else {
             // the only thing left is small mixed factors, which is ideal for cooley tukey
-            Box::new(CooleyTukey::new(len, factors, inverse)) as Box<FFTAlgorithm<T>>
+            Box::new(MixedRadixTerminal::new(len, factors, inverse)) as Box<FFTAlgorithm<T>>
         }
     }
 }

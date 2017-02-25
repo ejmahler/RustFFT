@@ -1,7 +1,8 @@
 use num::{Complex, Signed, FromPrimitive};
 
 mod good_thomas_algorithm;
-mod mixed_radix;
+mod mixed_radix_terminal;
+mod mixed_radix_single;
 mod raders_algorithm;
 mod radix4;
 
@@ -18,7 +19,8 @@ impl<T> FFTAlgorithm<T> for NoopAlgorithm
     }
 }
 
-pub use self::mixed_radix::CooleyTukey;
+pub use self::mixed_radix_terminal::MixedRadixTerminal;
+pub use self::mixed_radix_single::MixedRadixSingle;
 pub use self::raders_algorithm::RadersAlgorithm;
 pub use self::radix4::Radix4;
 pub use self::good_thomas_algorithm::GoodThomasAlgorithm;

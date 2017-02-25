@@ -8,8 +8,7 @@ mod math_utils;
 mod array_utils;
 mod plan;
 
-use num::{Complex, Zero, One, Float, FromPrimitive, Signed};
-use num::traits::cast;
+use num::{Complex, FromPrimitive, Signed, Zero};
 use std::f32;
 
 use algorithm::FFTAlgorithm;
@@ -49,16 +48,25 @@ impl<T> FFT<T>
     }
 }
 
-pub fn dft<T: Float>(signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
+pub fn dft<T>(signal: &[Complex<T>], spectrum: &mut [Complex<T>]) where T: Signed + FromPrimitive + Copy {
     for (k, spec_bin) in spectrum.iter_mut().enumerate() {
         let mut sum = Zero::zero();
         for (i, &x) in signal.iter().enumerate() {
-            let angle = cast::<_, T>(-1 * (i * k) as isize).unwrap() *
-                        cast(2.0 * f32::consts::PI).unwrap() /
-                        cast(signal.len()).unwrap();
-            let twiddle = Complex::from_polar(&One::one(), &angle);
+            let angle = -1f32 * (i * k) as f32 * 2f32 * f32::consts::PI / signal.len() as f32;
+            let c = Complex::from_polar(&1f32, &angle);
+
+            let twiddle = Complex {
+                re: FromPrimitive::from_f32(c.re).unwrap(),
+                im: FromPrimitive::from_f32(c.im).unwrap(),
+            };
+
             sum = sum + twiddle * x;
         }
         *spec_bin = sum;
     }
 }
+
+#[cfg(test)]
+extern crate rand;
+#[cfg(test)]
+mod test;
