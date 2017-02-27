@@ -15,12 +15,8 @@ impl<T> DFTAlgorithm<T>
             twiddles: twiddles::generate_twiddle_factors(len, inverse),
         }
     }
-}
 
-impl<T> FFTAlgorithm<T> for DFTAlgorithm<T>
-    where T: Signed + FromPrimitive + Copy
-{
-    fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
+    fn perform_fft(&self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         for (k, output_cell) in spectrum.iter_mut().enumerate() {
             let mut sum = Zero::zero();
             for (i, &input_cell) in signal.iter().enumerate() {
@@ -28,6 +24,19 @@ impl<T> FFTAlgorithm<T> for DFTAlgorithm<T>
                 sum = sum + twiddle * input_cell;
             }
             *output_cell = sum;
+        }
+    }
+}
+
+impl<T> FFTAlgorithm<T> for DFTAlgorithm<T>
+    where T: Signed + FromPrimitive + Copy
+{
+    fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
+        self.perform_fft(signal, spectrum);
+    }
+    fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
+        for (input, output) in signal.chunks(self.twiddles.len()).zip(spectrum.chunks_mut(self.twiddles.len())) {
+            self.perform_fft(input, output);
         }
     }
 }

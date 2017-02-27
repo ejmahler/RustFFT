@@ -134,42 +134,29 @@ pub fn distinct_prime_factors(mut n: u64) -> Vec<u64> {
 }
 
 /// Factors an integer into its prime factors.
-/// Each pair in the return is a (prime, power of prime) pair
-pub fn prime_factors(mut n: usize) -> Vec<(usize, usize)> {
+pub fn prime_factors(mut n: usize) -> Vec<usize> {
     let mut result = Vec::new();
 
-    // handle 2 separately so we dont have to worry about adding 2 vs 1
-    if n % 2 == 0 {
-        let mut divisor_count = 0;
-        while n % 2 == 0 {
-            n /= 2;
-            divisor_count += 1;
-        }
-        result.push((2, divisor_count));
+    while n % 2 == 0 {
+        n /= 2;
+        result.push(2);
     }
     if n > 1 {
         let mut divisor = 3;
         let mut limit = (n as f32).sqrt() as usize + 1;
         while divisor < limit {
-            if n % divisor == 0 {
-
-                // remove as many factors as possible from n
-                let mut divisor_count = 0;
-                while n % divisor == 0 {
-                    n /= divisor;
-                    divisor_count += 1;
-                }
-                result.push((divisor, divisor_count));
-
-                // recalculate the limit to reduce the amount of work we need to do
-                limit = (n as f32).sqrt() as usize + 1;
+            while n % divisor == 0 {
+                n /= divisor;
+                result.push(divisor);
             }
 
+            // recalculate the limit to reduce the amount of other factors we need to check
+            limit = (n as f32).sqrt() as usize + 1;
             divisor += 2;
         }
 
         if n > 1 {
-            result.push((n, 1));
+            result.push(n);
         }
     }
 

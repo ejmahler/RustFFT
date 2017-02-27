@@ -18,13 +18,8 @@ impl<T> Radix4<T>
             inverse: inverse,
         }
     }
-}
 
-impl<T> FFTAlgorithm<T> for Radix4<T>
-    where T: Signed + FromPrimitive + Copy
-{
-    /// Runs the FFT on the input `signal` array, placing the output in the 'spectrum' array
-    fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
+    fn perform_fft(&self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         // copy the data into the spectrum vector
         prepare_radix4(signal.len(), signal, spectrum, 1);
 
@@ -62,6 +57,19 @@ impl<T> FFTAlgorithm<T> for Radix4<T>
                 }
             }
             current_size *= 4;
+        }
+    }
+}
+
+impl<T> FFTAlgorithm<T> for Radix4<T>
+    where T: Signed + FromPrimitive + Copy
+{
+    fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
+        self.perform_fft(signal, spectrum);
+    }
+    fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
+        for (input, output) in signal.chunks(self.twiddles.len()).zip(spectrum.chunks_mut(self.twiddles.len())) {
+            self.perform_fft(input, output);
         }
     }
 }

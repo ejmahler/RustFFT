@@ -1,8 +1,7 @@
 use num::{Complex, Signed, FromPrimitive};
 
 mod good_thomas_algorithm;
-mod mixed_radix_terminal;
-mod mixed_radix_single;
+mod mixed_radix;
 mod raders_algorithm;
 mod radix4;
 mod dft;
@@ -11,10 +10,35 @@ pub mod butterflies;
 
 pub trait FFTAlgorithm<T: Signed + FromPrimitive + Copy> {
     fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]);
+    fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]);
 }
+
+
 pub trait FFTButterfly<T: Signed + FromPrimitive + Copy> {
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]);
+    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]);
 }
+pub enum ButterflyEnum<T> {
+	Butterfly2(butterflies::Butterfly2),
+	Butterfly3(butterflies::Butterfly3<T>),
+	Butterfly4(butterflies::Butterfly4),
+	Butterfly5(butterflies::Butterfly5<T>),
+	Butterfly6(butterflies::Butterfly6<T>)
+}
+
+impl<T> ButterflyEnum<T> where T: Signed + FromPrimitive + Copy {
+	#[inline(always)]
+	pub unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
+		use self::ButterflyEnum::*;
+		match *self {
+			Butterfly2(ref fft) => fft.process_multi_inplace(buffer),
+			Butterfly3(ref fft) => fft.process_multi_inplace(buffer),
+			Butterfly4(ref fft) => fft.process_multi_inplace(buffer),
+			Butterfly5(ref fft) => fft.process_multi_inplace(buffer),
+			Butterfly6(ref fft) => fft.process_multi_inplace(buffer),
+		}
+	}
+}
+
 
 pub struct NoopAlgorithm;
 impl<T> FFTAlgorithm<T> for NoopAlgorithm
@@ -23,10 +47,12 @@ impl<T> FFTAlgorithm<T> for NoopAlgorithm
     fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         spectrum.copy_from_slice(signal);
     }
+    fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
+        spectrum.copy_from_slice(signal);
+    }
 }
 
-pub use self::mixed_radix_terminal::MixedRadixTerminal;
-pub use self::mixed_radix_single::MixedRadixSingle;
+pub use self::mixed_radix::{MixedRadix, MixedRadixSingleButterfly, MixedRadixDoubleButterfly};
 pub use self::raders_algorithm::RadersAlgorithm;
 pub use self::radix4::Radix4;
 pub use self::good_thomas_algorithm::GoodThomasAlgorithm;

@@ -24,6 +24,7 @@ pub struct GoodThomasAlgorithm<T> {
 impl<T> GoodThomasAlgorithm<T>
     where T: Signed + FromPrimitive + Copy
 {
+    #[allow(dead_code)]
     pub fn new(n1: usize,
                n1_fft: Box<FFTAlgorithm<T>>,
                n2: usize,
@@ -86,13 +87,9 @@ impl<T> GoodThomasAlgorithm<T>
             unsafe { *output.get_unchecked_mut(*output_index) = *scratch_element };
         }
     }
-}
 
-impl<T> FFTAlgorithm<T> for GoodThomasAlgorithm<T>
-    where T: Signed + FromPrimitive + Copy
-{
     /// Runs the FFT on the input `signal` array, placing the output in the 'spectrum' array
-    fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
+    fn perform_fft(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         // copy the input into the spectrum
         self.copy_from_input(signal, spectrum);
 
@@ -113,5 +110,18 @@ impl<T> FFTAlgorithm<T> for GoodThomasAlgorithm<T>
 
         // we're done, copy to the output
         self.copy_transposed_scratch_to_output(spectrum);
+    }
+}
+
+impl<T> FFTAlgorithm<T> for GoodThomasAlgorithm<T>
+    where T: Signed + FromPrimitive + Copy
+{
+    fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
+        self.perform_fft(signal, spectrum);
+    }
+    fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
+        for (input, output) in signal.chunks(self.scratch.len()).zip(spectrum.chunks_mut(self.scratch.len())) {
+            self.perform_fft(input, output);
+        }
     }
 }

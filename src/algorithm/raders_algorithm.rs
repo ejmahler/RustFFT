@@ -1,5 +1,5 @@
 
-use num::{Complex, Zero, FromPrimitive, Signed, Num};
+use num::{Complex, Zero, FromPrimitive, Signed};
 use std::f32;
 
 use butterflies::{butterfly_2_single, butterfly_2_inverse, butterfly_2_dif};
@@ -103,7 +103,7 @@ impl<T> RadersAlgorithm<T>
 
             // zero fill the middle
             let zero_end = self.scratch.len() - (self.len - 2);
-            zero_fill(&mut self.scratch[1..zero_end]);
+            Self::zero_fill(&mut self.scratch[1..zero_end]);
 
             for (scratch_index, scratch_element) in self.scratch[zero_end..]
                 .iter_mut()
@@ -126,13 +126,14 @@ impl<T> RadersAlgorithm<T>
             *unsafe { output.get_unchecked_mut(output_index) } = first_element + *scratch_element;
         }
     }
-}
 
-impl<T> FFTAlgorithm<T> for RadersAlgorithm<T>
-    where T: Signed + FromPrimitive + Copy
-{
-    /// Runs the FFT on the input `signal` array, placing the output in the 'spectrum' array
-    fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
+    fn zero_fill(input: &mut [Complex<T>]) {
+        for element in input.iter_mut() {
+            *element = Zero::zero();
+        }
+    }
+
+    fn perform_fft(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         self.setup_inner_fft(signal);
 
         // use radix 2 to run a FFT on the data now in the scratch space
@@ -156,9 +157,16 @@ impl<T> FFTAlgorithm<T> for RadersAlgorithm<T>
     }
 }
 
-fn zero_fill<T: Num + Clone>(input: &mut [Complex<T>]) {
-    for element in input.iter_mut() {
-        *element = Zero::zero();
+impl<T> FFTAlgorithm<T> for RadersAlgorithm<T>
+    where T: Signed + FromPrimitive + Copy
+{
+    fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
+        self.perform_fft(signal, spectrum);
+    }
+    fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
+        for (input, output) in signal.chunks(self.len).zip(spectrum.chunks_mut(self.len)) {
+            self.perform_fft(input, output);
+        }
     }
 }
 
