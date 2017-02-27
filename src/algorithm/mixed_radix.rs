@@ -18,11 +18,10 @@ pub struct MixedRadix<T> {
 }
 
 impl<T: FFTnum> MixedRadix<T> {
-    pub fn new(width: usize,
-               width_fft: Box<FFTAlgorithm<T>>,
-               height: usize,
-               height_fft: Box<FFTAlgorithm<T>>,
-               inverse: bool) -> Self {
+    pub fn new(width_fft: Box<FFTAlgorithm<T>>, height_fft: Box<FFTAlgorithm<T>>, inverse: bool) -> Self {
+
+        let width = width_fft.len();
+        let height = height_fft.len();
 
         let len = width * height;
 
@@ -75,9 +74,12 @@ impl<T: FFTnum> FFTAlgorithm<T> for MixedRadix<T> {
         self.perform_fft(signal, spectrum);
     }
     fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        for (input, output) in signal.chunks(self.twiddles.len()).zip(spectrum.chunks_mut(self.twiddles.len())) {
+        for (input, output) in signal.chunks(self.len()).zip(spectrum.chunks_mut(self.len())) {
             self.perform_fft(input, output);
         }
+    }
+    fn len(&self) -> usize {
+        return self.twiddles.len();
     }
 }
 
@@ -100,11 +102,10 @@ pub struct MixedRadixSingleButterfly<T> {
 }
 
 impl<T: FFTnum> MixedRadixSingleButterfly<T> {
-    pub fn new(inner_fft_len: usize,
-               inner_fft: Box<FFTAlgorithm<T>>,
-               butterfly_len: usize,
-               butterfly_fft: ButterflyEnum<T>,
-               inverse: bool) -> Self {
+    pub fn new(inner_fft: Box<FFTAlgorithm<T>>, butterfly_fft: ButterflyEnum<T>, inverse: bool) -> Self {
+
+        let inner_fft_len = inner_fft.len();
+        let butterfly_len = butterfly_fft.len();
 
         let len = inner_fft_len * butterfly_len;
 
@@ -158,9 +159,12 @@ impl<T: FFTnum> FFTAlgorithm<T> for MixedRadixSingleButterfly<T> {
         self.perform_fft(signal, spectrum);
     }
     fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        for (input, output) in signal.chunks(self.twiddles.len()).zip(spectrum.chunks_mut(self.twiddles.len())) {
+        for (input, output) in signal.chunks(self.len()).zip(spectrum.chunks_mut(self.len())) {
             self.perform_fft(input, output);
         }
+    }
+    fn len(&self) -> usize {
+        return self.twiddles.len();
     }
 }
 
@@ -180,11 +184,9 @@ pub struct MixedRadixDoubleButterfly<T> {
 }
 
 impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
-    pub fn new(width: usize,
-               width_fft: ButterflyEnum<T>,
-               height: usize,
-               height_fft: ButterflyEnum<T>,
-               inverse: bool) -> Self {
+    pub fn new(width_fft: ButterflyEnum<T>, height_fft: ButterflyEnum<T>, inverse: bool) -> Self {
+        let width = width_fft.len();
+        let height = height_fft.len();
 
         let len = width * height;
 
@@ -238,9 +240,12 @@ impl<T: FFTnum> FFTAlgorithm<T> for MixedRadixDoubleButterfly<T> {
         self.perform_fft(signal, spectrum);
     }
     fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        for (input, output) in signal.chunks(self.twiddles.len()).zip(spectrum.chunks_mut(self.twiddles.len())) {
+        for (input, output) in signal.chunks(self.len()).zip(spectrum.chunks_mut(self.len())) {
             self.perform_fft(input, output);
         }
+    }
+    fn len(&self) -> usize {
+        return self.twiddles.len();
     }
 }
 
@@ -260,7 +265,7 @@ mod unit_tests {
                 let width_fft = Box::new(DFTAlgorithm::new(width, false)) as Box<FFTAlgorithm<f32>>;
                 let height_fft = Box::new(DFTAlgorithm::new(height, false)) as Box<FFTAlgorithm<f32>>;
 
-                let mut mixed_radix_fft = MixedRadix::new(width, width_fft, height, height_fft, false);
+                let mut mixed_radix_fft = MixedRadix::new(width_fft, height_fft, false);
 
                 let input = random_signal(width * height);
 
@@ -291,11 +296,11 @@ mod unit_tests {
             for &height in &[2,3,4,5,6] {
                 let width_fft = Box::new(DFTAlgorithm::new(width, false)) as Box<FFTAlgorithm<f32>>;
                 let height_fft = Box::new(DFTAlgorithm::new(height, false)) as Box<FFTAlgorithm<f32>>;
-                let mut control_fft = MixedRadix::new(width, width_fft, height, height_fft, false);
+                let mut control_fft = MixedRadix::new(width_fft, height_fft, false);
 
                 let inner_fft = Box::new(DFTAlgorithm::new(width, false)) as Box<FFTAlgorithm<f32>>;
                 let butterfly_fft = make_butterfly(height, false);
-                let mut test_fft = MixedRadixSingleButterfly::new(width, inner_fft, height, butterfly_fft, false);
+                let mut test_fft = MixedRadixSingleButterfly::new(inner_fft, butterfly_fft, false);
 
                 let input = random_signal(width * height);
 
@@ -326,11 +331,11 @@ mod unit_tests {
             for &height in &[2,3,4,5,6] {
                 let width_fft = Box::new(DFTAlgorithm::new(width, false)) as Box<FFTAlgorithm<f32>>;
                 let height_fft = Box::new(DFTAlgorithm::new(height, false)) as Box<FFTAlgorithm<f32>>;
-                let mut control_fft = MixedRadix::new(width, width_fft, height, height_fft, false);
+                let mut control_fft = MixedRadix::new(width_fft, height_fft, false);
 
                 let width_butterfly = make_butterfly(width, false);
                 let height_butterfly = make_butterfly(height, false);
-                let mut test_fft = MixedRadixDoubleButterfly::new(width, width_butterfly, height, height_butterfly, false);
+                let mut test_fft = MixedRadixDoubleButterfly::new(width_butterfly, height_butterfly, false);
 
                 let input = random_signal(width * height);
 

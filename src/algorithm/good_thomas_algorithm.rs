@@ -24,11 +24,10 @@ pub struct GoodThomasAlgorithm<T> {
 
 impl<T: FFTnum> GoodThomasAlgorithm<T> {
     #[allow(dead_code)]
-    pub fn new(n1: usize,
-               n1_fft: Box<FFTAlgorithm<T>>,
-               n2: usize,
-               n2_fft: Box<FFTAlgorithm<T>>)
-               -> Self {
+    pub fn new(n1_fft: Box<FFTAlgorithm<T>>, n2_fft: Box<FFTAlgorithm<T>>) -> Self {
+
+        let n1 = n1_fft.len();
+        let n2 = n2_fft.len();
 
         // compute the nultiplicative inverse of n1 mod n2 and vice versa
         let (gcd, mut n1_inverse, mut n2_inverse) =
@@ -117,8 +116,11 @@ impl<T: FFTnum> FFTAlgorithm<T> for GoodThomasAlgorithm<T> {
         self.perform_fft(signal, spectrum);
     }
     fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        for (input, output) in signal.chunks(self.scratch.len()).zip(spectrum.chunks_mut(self.scratch.len())) {
+        for (input, output) in signal.chunks(self.len()).zip(spectrum.chunks_mut(self.len())) {
             self.perform_fft(input, output);
         }
+    }
+    fn len(&self) -> usize {
+        return self.scratch.len();
     }
 }

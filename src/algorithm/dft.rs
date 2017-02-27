@@ -32,9 +32,12 @@ impl<T: FFTnum> FFTAlgorithm<T> for DFTAlgorithm<T> {
         self.perform_fft(signal, spectrum);
     }
     fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        for (input, output) in signal.chunks(self.twiddles.len()).zip(spectrum.chunks_mut(self.twiddles.len())) {
+        for (input, output) in signal.chunks(self.len()).zip(spectrum.chunks_mut(self.len())) {
             self.perform_fft(input, output);
         }
+    }
+    fn len(&self) -> usize {
+        return self.twiddles.len();
     }
 }
 

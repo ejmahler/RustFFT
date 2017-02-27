@@ -5,7 +5,7 @@ use math_utils;
 
 pub fn plan_fft<T: FFTnum>(len: usize, inverse: bool) -> Box<FFTAlgorithm<T>> {
     if len < 2 {
-        Box::new(NoopAlgorithm {}) as Box<FFTAlgorithm<T>>
+        Box::new(NoopAlgorithm {len: len}) as Box<FFTAlgorithm<T>>
     } else if len.is_power_of_two() {
         Box::new(Radix4::new(len, inverse)) as Box<FFTAlgorithm<T>>
     } else {
@@ -71,13 +71,13 @@ fn plan_mixed_radix<T: FFTnum>(left_len: usize, left_factors: &[usize], right_le
         let left_fft = plan_butterfly(left_len, inverse);
         let right_fft = plan_butterfly(right_len, inverse);
 
-        Box::new(MixedRadixDoubleButterfly::new(left_len, left_fft, right_len, right_fft, inverse)) as Box<FFTAlgorithm<T>>
+        Box::new(MixedRadixDoubleButterfly::new(left_fft, right_fft, inverse)) as Box<FFTAlgorithm<T>>
     } else if !left_is_butterfly && ! right_is_butterfly {
         //neither size is a butterfly, so go with the normal algorithm
         let left_fft = plan_fft_with_factors(left_len, left_factors, inverse);
         let right_fft = plan_fft_with_factors(right_len, right_factors, inverse);
 
-        Box::new(MixedRadix::new(left_len, left_fft, right_len, right_fft, inverse)) as Box<FFTAlgorithm<T>>
+        Box::new(MixedRadix::new(left_fft, right_fft, inverse)) as Box<FFTAlgorithm<T>>
     } else if left_is_butterfly {
         //the left is a butterfly, but not the right
         let butterfly_len = left_len;
@@ -87,7 +87,7 @@ fn plan_mixed_radix<T: FFTnum>(left_len: usize, left_factors: &[usize], right_le
         let butterfly_fft = plan_butterfly(butterfly_len, inverse);
         let inner_fft = plan_fft_with_factors(inner_len, inner_factors, inverse);
 
-        Box::new(MixedRadixSingleButterfly::new(inner_len, inner_fft, butterfly_len, butterfly_fft, inverse)) as Box<FFTAlgorithm<T>>
+        Box::new(MixedRadixSingleButterfly::new(inner_fft, butterfly_fft, inverse)) as Box<FFTAlgorithm<T>>
     } else {
         //the right is a butterfly, but not the left
         let butterfly_len = right_len;
@@ -97,14 +97,14 @@ fn plan_mixed_radix<T: FFTnum>(left_len: usize, left_factors: &[usize], right_le
         let butterfly_fft = plan_butterfly(butterfly_len, inverse);
         let inner_fft = plan_fft_with_factors(inner_len, inner_factors, inverse);
 
-        Box::new(MixedRadixSingleButterfly::new(inner_len, inner_fft, butterfly_len, butterfly_fft, inverse)) as Box<FFTAlgorithm<T>>
+        Box::new(MixedRadixSingleButterfly::new(inner_fft, butterfly_fft, inverse)) as Box<FFTAlgorithm<T>>
     }
 }
 
 fn plan_fft_single_factor<T: FFTnum>(len: usize, inverse: bool) -> Box<FFTAlgorithm<T>> {
     match len {
-        0 => Box::new(NoopAlgorithm {}) as Box<FFTAlgorithm<T>>,
-        1 => Box::new(NoopAlgorithm {}) as Box<FFTAlgorithm<T>>,
+        0 => Box::new(NoopAlgorithm {len: 0}) as Box<FFTAlgorithm<T>>,
+        1 => Box::new(NoopAlgorithm {len: 1}) as Box<FFTAlgorithm<T>>,
         2 => Box::new(butterflies::Butterfly2 {}) as Box<FFTAlgorithm<T>>,
         3 => Box::new(butterflies::Butterfly3::new(inverse)) as Box<FFTAlgorithm<T>>,
         4 => Box::new(butterflies::Butterfly4::new(inverse)) as Box<FFTAlgorithm<T>>,

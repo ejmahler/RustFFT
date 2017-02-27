@@ -54,6 +54,9 @@ impl<T: FFTnum> FFTAlgorithm<T> for Butterfly2 {
 
         unsafe { self.process_multi_inplace(spectrum) };
     }
+    fn len(&self) -> usize {
+        return 2;
+    }
 }
 
 
@@ -111,6 +114,9 @@ impl<T: FFTnum> FFTAlgorithm<T> for Butterfly3<T> {
         spectrum.copy_from_slice(signal);
 
         unsafe { self.process_multi_inplace(spectrum) };
+    }
+    fn len(&self) -> usize {
+        return 3;
     }
 }
 
@@ -180,6 +186,9 @@ impl<T: FFTnum> FFTAlgorithm<T> for Butterfly4 {
         spectrum.copy_from_slice(signal);
 
         unsafe { self.process_multi_inplace(spectrum) };
+    }
+    fn len(&self) -> usize {
+        return 4;
     }
 }
 
@@ -260,6 +269,9 @@ impl<T: FFTnum> FFTAlgorithm<T> for Butterfly5<T> {
         spectrum.copy_from_slice(signal);
 
         unsafe { self.process_multi_inplace(spectrum) };
+    }
+    fn len(&self) -> usize {
+        return 5;
     }
 }
 
@@ -347,6 +359,9 @@ impl<T: FFTnum> FFTAlgorithm<T> for Butterfly6<T> {
         spectrum.copy_from_slice(signal);
 
         unsafe { self.process_multi_inplace(spectrum) };
+    }
+    fn len(&self) -> usize {
+        return 6;
     }
 }
 
