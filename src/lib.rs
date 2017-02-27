@@ -8,19 +8,21 @@ mod math_utils;
 mod array_utils;
 mod plan;
 mod twiddles;
+mod common;
 
-use num::{Complex, FromPrimitive, Signed, Zero};
+use num::{Complex, FromPrimitive, Zero};
 use std::f32;
 
 use algorithm::FFTAlgorithm;
+
+pub use common::FFTnum;
 
 pub struct FFT<T> {
     len: usize,
     algorithm: Box<FFTAlgorithm<T>>,
 }
 
-impl<T> FFT<T>
-    where T: Signed + FromPrimitive + Copy + 'static
+impl<T: common::FFTnum> FFT<T>
 {
     /// Creates a new FFT context that will process signal of length
     /// `len`. If `inverse` is `true`, then this struct will run inverse
@@ -49,7 +51,7 @@ impl<T> FFT<T>
     }
 }
 
-pub fn dft<T>(signal: &[Complex<T>], spectrum: &mut [Complex<T>]) where T: Signed + FromPrimitive + Copy {
+pub fn dft<T: common::FFTnum>(signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
     for (k, spec_bin) in spectrum.iter_mut().enumerate() {
         let mut sum = Zero::zero();
         for (i, &x) in signal.iter().enumerate() {

@@ -1,4 +1,6 @@
-use num::{Complex, FromPrimitive, Signed, Zero};
+use num::{Complex, Zero};
+
+use common::FFTnum;
 
 use algorithm::{FFTAlgorithm, ButterflyEnum};
 use array_utils;
@@ -15,9 +17,7 @@ pub struct MixedRadix<T> {
     scratch: Vec<Complex<T>>,
 }
 
-impl<T> MixedRadix<T>
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> MixedRadix<T> {
     pub fn new(width: usize,
                width_fft: Box<FFTAlgorithm<T>>,
                height: usize,
@@ -70,9 +70,7 @@ impl<T> MixedRadix<T>
         array_utils::transpose(self.width, self.height, self.scratch.as_slice(), spectrum);
     }
 }
-impl<T> FFTAlgorithm<T> for MixedRadix<T>
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> FFTAlgorithm<T> for MixedRadix<T> {
     fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         self.perform_fft(signal, spectrum);
     }
@@ -101,9 +99,7 @@ pub struct MixedRadixSingleButterfly<T> {
     scratch: Vec<Complex<T>>,
 }
 
-impl<T> MixedRadixSingleButterfly<T>
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> MixedRadixSingleButterfly<T> {
     pub fn new(inner_fft_len: usize,
                inner_fft: Box<FFTAlgorithm<T>>,
                butterfly_len: usize,
@@ -157,9 +153,7 @@ impl<T> MixedRadixSingleButterfly<T>
     }
 }
 
-impl<T> FFTAlgorithm<T> for MixedRadixSingleButterfly<T>
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> FFTAlgorithm<T> for MixedRadixSingleButterfly<T> {
     fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         self.perform_fft(signal, spectrum);
     }
@@ -185,9 +179,7 @@ pub struct MixedRadixDoubleButterfly<T> {
     scratch: Vec<Complex<T>>,
 }
 
-impl<T> MixedRadixDoubleButterfly<T>
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
     pub fn new(width: usize,
                width_fft: ButterflyEnum<T>,
                height: usize,
@@ -241,9 +233,7 @@ impl<T> MixedRadixDoubleButterfly<T>
     }
 }
 
-impl<T> FFTAlgorithm<T> for MixedRadixDoubleButterfly<T>
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> FFTAlgorithm<T> for MixedRadixDoubleButterfly<T> {
     fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         self.perform_fft(signal, spectrum);
     }
@@ -364,9 +354,7 @@ mod test {
             }
         }
     }
-    fn make_butterfly<T>(len: usize, inverse: bool) -> ButterflyEnum<T>
-        where T: Signed + FromPrimitive + Copy + 'static
-    {
+    fn make_butterfly<T: FFTnum>(len: usize, inverse: bool) -> ButterflyEnum<T> {
         match len {
             2 => ButterflyEnum::Butterfly2(butterflies::Butterfly2{}),
             3 => ButterflyEnum::Butterfly3(butterflies::Butterfly3::new(inverse)),

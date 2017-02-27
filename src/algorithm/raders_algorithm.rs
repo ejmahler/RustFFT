@@ -1,6 +1,7 @@
 
-use num::{Complex, Zero, FromPrimitive, Signed};
+use num::{Complex, Zero, FromPrimitive};
 use std::f32;
+use common::FFTnum;
 
 use butterflies::{butterfly_2_single, butterfly_2_inverse, butterfly_2_dif};
 use math_utils;
@@ -19,9 +20,7 @@ pub struct RadersAlgorithm<T> {
     inner_fft: InnerFFT<T>,
 }
 
-impl<T> RadersAlgorithm<T>
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> RadersAlgorithm<T> {
     pub fn new(len: usize, inverse: bool) -> Self {
 
         // we can theoretically just always do n - 1 as the inner FFT size
@@ -157,9 +156,7 @@ impl<T> RadersAlgorithm<T>
     }
 }
 
-impl<T> FFTAlgorithm<T> for RadersAlgorithm<T>
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> FFTAlgorithm<T> for RadersAlgorithm<T> {
     fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         self.perform_fft(signal, spectrum);
     }
@@ -188,9 +185,7 @@ struct InnerFFT<T> {
     twiddles: Vec<Complex<T>>,
 }
 
-impl<T> InnerFFT<T>
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> InnerFFT<T> {
     pub fn new(len: usize, inverse: bool) -> Self {
         InnerFFT {
             twiddles: twiddles::generate_twiddle_factors(len, inverse),

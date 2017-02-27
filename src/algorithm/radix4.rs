@@ -1,4 +1,5 @@
-use num::{Complex, FromPrimitive, Signed};
+use num::Complex;
+use common::FFTnum;
 
 use butterflies::{butterfly_2_single, butterfly_4_single, butterfly_4};
 use twiddles;
@@ -9,9 +10,7 @@ pub struct Radix4<T> {
     inverse: bool,
 }
 
-impl<T> Radix4<T>
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> Radix4<T> {
     pub fn new(len: usize, inverse: bool) -> Self {
         Radix4 {
             twiddles: twiddles::generate_twiddle_factors(len, inverse),
@@ -61,9 +60,7 @@ impl<T> Radix4<T>
     }
 }
 
-impl<T> FFTAlgorithm<T> for Radix4<T>
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> FFTAlgorithm<T> for Radix4<T> {
     fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         self.perform_fft(signal, spectrum);
     }
@@ -76,7 +73,7 @@ impl<T> FFTAlgorithm<T> for Radix4<T>
 
 // after testing an iterative bit reversal algorithm, this recursive algorithm
 // was almost an order of magnitude faster at setting up
-fn prepare_radix4<T: Copy>(size: usize,
+fn prepare_radix4<T: FFTnum>(size: usize,
                            signal: &[Complex<T>],
                            spectrum: &mut [Complex<T>],
                            stride: usize) {

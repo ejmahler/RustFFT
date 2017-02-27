@@ -1,4 +1,5 @@
-use num::{Complex, FromPrimitive, Signed, Zero};
+use num::{Complex, FromPrimitive, Zero};
+use common::FFTnum;
 
 use twiddles;
 use super::{FFTAlgorithm, FFTButterfly};
@@ -26,16 +27,14 @@ fn verify_size<T>(signal: &[T], spectrum: &[T], expected: usize) {
 pub struct Butterfly2;
 impl Butterfly2 {
     #[inline(always)]
-    unsafe fn perform_fft<T>(&self, buffer: &mut [Complex<T>]) where T: Signed + FromPrimitive + Copy {
+    unsafe fn perform_fft<T: FFTnum>(&self, buffer: &mut [Complex<T>]) {
     	let temp = *buffer.get_unchecked(0) + *buffer.get_unchecked(1);
         
         *buffer.get_unchecked_mut(1) = *buffer.get_unchecked(0) - *buffer.get_unchecked(1);
         *buffer.get_unchecked_mut(0) = temp;
     }
 }
-impl<T> FFTButterfly<T> for Butterfly2
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> FFTButterfly<T> for Butterfly2 {
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
     	for chunk in buffer.chunks_mut(2) {
@@ -43,9 +42,7 @@ impl<T> FFTButterfly<T> for Butterfly2
     	}
     }
 }
-impl<T> FFTAlgorithm<T> for Butterfly2
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> FFTAlgorithm<T> for Butterfly2 {
     fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         verify_size(signal, spectrum, 2);
         spectrum.copy_from_slice(signal);
@@ -64,9 +61,7 @@ impl<T> FFTAlgorithm<T> for Butterfly2
 pub struct Butterfly3<T> {
 	pub twiddle: Complex<T>,
 }
-impl<T> Butterfly3<T>
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> Butterfly3<T> {
 	#[inline(always)]
     pub fn new(inverse: bool) -> Self {
         Self {
@@ -75,7 +70,7 @@ impl<T> Butterfly3<T>
     }
 
     #[inline(always)]
-    pub fn inverse_of(fft: Butterfly3<T>) -> Self {
+    pub fn inverse_of(fft: &Butterfly3<T>) -> Self {
         Self {
             twiddle: fft.twiddle.conj()
         }
@@ -97,9 +92,7 @@ impl<T> Butterfly3<T>
     }
 }
 
-impl<T> FFTButterfly<T> for Butterfly3<T>
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> FFTButterfly<T> for Butterfly3<T> {
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
         for chunk in buffer.chunks_mut(3) {
@@ -107,9 +100,7 @@ impl<T> FFTButterfly<T> for Butterfly3<T>
         }
     }
 }
-impl<T> FFTAlgorithm<T> for Butterfly3<T>
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> FFTAlgorithm<T> for Butterfly3<T> {
     fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         verify_size(signal, spectrum, 3);
         spectrum.copy_from_slice(signal);
@@ -137,7 +128,7 @@ impl Butterfly4
     }
 
 	#[inline(always)]
-    pub unsafe fn perform_fft<T>(&self, buffer: &mut [Complex<T>]) where T: Signed + FromPrimitive + Copy {
+    pub unsafe fn perform_fft<T: FFTnum>(&self, buffer: &mut [Complex<T>]) {
     	let butterfly2 = Butterfly2{};
 
 		//we're going to hardcode a step of mixed radix
@@ -170,9 +161,7 @@ impl Butterfly4
     	swap_unchecked(buffer, 1, 2);
     }
 }
-impl<T> FFTButterfly<T> for Butterfly4
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> FFTButterfly<T> for Butterfly4 {
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
         for chunk in buffer.chunks_mut(4) {
@@ -180,9 +169,7 @@ impl<T> FFTButterfly<T> for Butterfly4
         }
     }
 }
-impl<T> FFTAlgorithm<T> for Butterfly4
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> FFTAlgorithm<T> for Butterfly4 {
     fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         verify_size(signal, spectrum, 4);
         spectrum.copy_from_slice(signal);
@@ -203,9 +190,7 @@ pub struct Butterfly5<T> {
 	inner_fft_multiply: Box<[Complex<T>; 4]>,
 	inverse: bool,
 }
-impl<T> Butterfly5<T>
-	where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> Butterfly5<T> {
     pub fn new(inverse: bool) -> Self {
 
     	//we're going to hardcode a raders algorithm of size 5 and an inner FFT of size 4
@@ -256,9 +241,7 @@ impl<T> Butterfly5<T>
     	*buffer.get_unchecked_mut(2) = scratch[3] + first_input;
     }
 }
-impl<T> FFTButterfly<T> for Butterfly5<T>
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> FFTButterfly<T> for Butterfly5<T> {
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
         for chunk in buffer.chunks_mut(5) {
@@ -266,9 +249,7 @@ impl<T> FFTButterfly<T> for Butterfly5<T>
         }
     }
 }
-impl<T> FFTAlgorithm<T> for Butterfly5<T>
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> FFTAlgorithm<T> for Butterfly5<T> {
     fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         verify_size(signal, spectrum, 5);
         spectrum.copy_from_slice(signal);
@@ -289,13 +270,13 @@ impl<T> FFTAlgorithm<T> for Butterfly5<T>
 pub struct Butterfly6<T> {
 	butterfly3: Butterfly3<T>,
 }
-impl<T> Butterfly6<T> where T: Signed + FromPrimitive + Copy {
+impl<T: FFTnum> Butterfly6<T> {
 
     pub fn new(inverse: bool) -> Self {
         Self { butterfly3: Butterfly3::new(inverse) }
     }
-    pub fn inverse_of(fft: Butterfly6<T>) -> Self {
-        Self { butterfly3: Butterfly3::inverse_of(fft.butterfly3) }
+    pub fn inverse_of(fft: &Butterfly6<T>) -> Self {
+        Self { butterfly3: Butterfly3::inverse_of(&fft.butterfly3) }
     }
 
     #[inline(always)]
@@ -347,9 +328,7 @@ impl<T> Butterfly6<T> where T: Signed + FromPrimitive + Copy {
     	*buffer.get_unchecked_mut(5) = scratch[5];
     }
 }
-impl<T> FFTButterfly<T> for Butterfly6<T>
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> FFTButterfly<T> for Butterfly6<T> {
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
         for chunk in buffer.chunks_mut(6) {
@@ -357,9 +336,7 @@ impl<T> FFTButterfly<T> for Butterfly6<T>
         }
     }
 }
-impl<T> FFTAlgorithm<T> for Butterfly6<T>
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> FFTAlgorithm<T> for Butterfly6<T> {
     fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         verify_size(signal, spectrum, 6);
         spectrum.copy_from_slice(signal);

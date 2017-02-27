@@ -1,4 +1,5 @@
-use num::{Complex, FromPrimitive, Signed, Zero};
+use num::{Complex, Zero};
+use common::FFTnum;
 
 use algorithm::FFTAlgorithm;
 use twiddles;
@@ -7,9 +8,7 @@ pub struct DFTAlgorithm<T> {
     twiddles: Vec<Complex<T>>,
 }
 
-impl<T> DFTAlgorithm<T>
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> DFTAlgorithm<T> {
     pub fn new(len: usize, inverse: bool) -> Self {
         Self {
             twiddles: twiddles::generate_twiddle_factors(len, inverse),
@@ -28,9 +27,7 @@ impl<T> DFTAlgorithm<T>
     }
 }
 
-impl<T> FFTAlgorithm<T> for DFTAlgorithm<T>
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> FFTAlgorithm<T> for DFTAlgorithm<T> {
     fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         self.perform_fft(signal, spectrum);
     }

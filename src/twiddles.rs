@@ -1,15 +1,14 @@
 
 use std::f64;
-use num::{Complex, FromPrimitive, Signed, One};
+use num::{Complex, FromPrimitive, One};
+use common::FFTnum;
 
-pub fn generate_twiddle_factors<T>(fft_len: usize, inverse: bool) -> Vec<Complex<T>> where T: Signed + FromPrimitive + Copy
-{
+pub fn generate_twiddle_factors<T: FFTnum>(fft_len: usize, inverse: bool) -> Vec<Complex<T>> {
     (0..fft_len).map(|i| single_twiddle(i, fft_len, inverse)).collect()
 }
 
 #[inline(always)]
-pub fn single_twiddle<T>(i: usize, fft_len: usize, inverse: bool) -> Complex<T> where T: Signed + FromPrimitive + Copy
-{
+pub fn single_twiddle<T: FFTnum>(i: usize, fft_len: usize, inverse: bool) -> Complex<T> {
     let constant = if inverse {
         2f64 * f64::consts::PI
     } else {

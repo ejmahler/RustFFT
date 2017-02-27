@@ -1,11 +1,9 @@
-use num::{FromPrimitive, Signed};
+use common::FFTnum;
 
 use algorithm::*;
 use math_utils;
 
-pub fn plan_fft<T>(len: usize, inverse: bool) -> Box<FFTAlgorithm<T>>
-    where T: Signed + FromPrimitive + Copy + 'static
-{
+pub fn plan_fft<T: FFTnum>(len: usize, inverse: bool) -> Box<FFTAlgorithm<T>> {
     if len < 2 {
         Box::new(NoopAlgorithm {}) as Box<FFTAlgorithm<T>>
     } else if len.is_power_of_two() {
@@ -21,9 +19,7 @@ const MIN_RADERS_SIZE: usize = 100;
 const BUTTERFLIES: [usize; 5] = [2, 3, 4, 5, 6];
 const COMPOSITE_BUTTERFLIES: [usize; 2] = [4, 6];
 
-fn plan_fft_with_factors<T>(len: usize, factors: &[usize], inverse: bool) -> Box<FFTAlgorithm<T>>
-    where T: Signed + FromPrimitive + Copy + 'static
-{
+fn plan_fft_with_factors<T: FFTnum>(len: usize, factors: &[usize], inverse: bool) -> Box<FFTAlgorithm<T>> {
     if factors.len() == 1 || COMPOSITE_BUTTERFLIES.contains(&len) {
         plan_fft_single_factor(len, inverse)
     } else {
@@ -66,9 +62,7 @@ fn plan_fft_with_factors<T>(len: usize, factors: &[usize], inverse: bool) -> Box
     }
 }
 
-fn plan_mixed_radix<T>(left_len: usize, left_factors: &[usize], right_len: usize, right_factors: &[usize], inverse: bool) -> Box<FFTAlgorithm<T>>
-    where T: Signed + FromPrimitive + Copy + 'static
-{
+fn plan_mixed_radix<T: FFTnum>(left_len: usize, left_factors: &[usize], right_len: usize, right_factors: &[usize], inverse: bool) -> Box<FFTAlgorithm<T>> {
     let left_is_butterfly = BUTTERFLIES.contains(&left_len);
     let right_is_butterfly = BUTTERFLIES.contains(&right_len);
 
@@ -107,9 +101,7 @@ fn plan_mixed_radix<T>(left_len: usize, left_factors: &[usize], right_len: usize
     }
 }
 
-fn plan_fft_single_factor<T>(len: usize, inverse: bool) -> Box<FFTAlgorithm<T>>
-    where T: Signed + FromPrimitive + Copy + 'static
-{
+fn plan_fft_single_factor<T: FFTnum>(len: usize, inverse: bool) -> Box<FFTAlgorithm<T>> {
     match len {
         0 => Box::new(NoopAlgorithm {}) as Box<FFTAlgorithm<T>>,
         1 => Box::new(NoopAlgorithm {}) as Box<FFTAlgorithm<T>>,
@@ -127,9 +119,7 @@ fn plan_fft_single_factor<T>(len: usize, inverse: bool) -> Box<FFTAlgorithm<T>>
     }
 }
 
-fn plan_butterfly<T>(len: usize, inverse: bool) -> ButterflyEnum<T>
-    where T: Signed + FromPrimitive + Copy + 'static
-{
+fn plan_butterfly<T: FFTnum>(len: usize, inverse: bool) -> ButterflyEnum<T> {
     match len {
             2 => ButterflyEnum::Butterfly2(butterflies::Butterfly2{}),
             3 => ButterflyEnum::Butterfly3(butterflies::Butterfly3::new(inverse)),

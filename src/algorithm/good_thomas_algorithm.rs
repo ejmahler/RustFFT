@@ -1,5 +1,6 @@
 
-use num::{Complex, FromPrimitive, Signed, Zero};
+use num::{Complex, Zero};
+use common::FFTnum;
 
 use math_utils;
 use array_utils;
@@ -21,9 +22,7 @@ pub struct GoodThomasAlgorithm<T> {
     scratch: Vec<Complex<T>>,
 }
 
-impl<T> GoodThomasAlgorithm<T>
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> GoodThomasAlgorithm<T> {
     #[allow(dead_code)]
     pub fn new(n1: usize,
                n1_fft: Box<FFTAlgorithm<T>>,
@@ -113,9 +112,7 @@ impl<T> GoodThomasAlgorithm<T>
     }
 }
 
-impl<T> FFTAlgorithm<T> for GoodThomasAlgorithm<T>
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> FFTAlgorithm<T> for GoodThomasAlgorithm<T> {
     fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         self.perform_fft(signal, spectrum);
     }

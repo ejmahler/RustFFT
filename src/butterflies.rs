@@ -1,14 +1,14 @@
 //! These are the unrolled butterflies for specific FFT lengths. They are mostly
 //! translations of the butterfly functions from KissFFT, copyright Mark Borgerding.
 
-use num::{Complex, Zero, Num, Signed};
+use num::{Complex, Zero};
+use common::FFTnum;
 
 /// Inverse butterfly size 2
-pub unsafe fn butterfly_2_inverse<T>(data: &mut [Complex<T>],
+pub unsafe fn butterfly_2_inverse<T: FFTnum>(data: &mut [Complex<T>],
                                      stride: usize,
                                      twiddles: &[Complex<T>],
                                      num_ffts: usize)
-    where T: Signed + Copy
 {
     let mut idx_1 = 0usize;
     let mut idx_2 = num_ffts;
@@ -27,11 +27,10 @@ pub unsafe fn butterfly_2_inverse<T>(data: &mut [Complex<T>],
 }
 
 /// Butterly size 2 for decimation-in-time algorithms
-pub unsafe fn butterfly_2_dif<T>(data: &mut [Complex<T>],
+pub unsafe fn butterfly_2_dif<T: FFTnum>(data: &mut [Complex<T>],
                                  stride: usize,
                                  twiddles: &[Complex<T>],
                                  num_ffts: usize)
-    where T: Num + Copy
 {
     let mut idx_1 = 0usize;
     let mut idx_2 = num_ffts;
@@ -47,8 +46,7 @@ pub unsafe fn butterfly_2_dif<T>(data: &mut [Complex<T>],
     }
 }
 
-pub unsafe fn butterfly_2_single<T>(data: &mut [Complex<T>], stride: usize)
-    where T: Num + Copy
+pub unsafe fn butterfly_2_single<T: FFTnum>(data: &mut [Complex<T>], stride: usize)
 {
     let idx_1 = 0usize;
     let idx_2 = stride;
@@ -60,12 +58,11 @@ pub unsafe fn butterfly_2_single<T>(data: &mut [Complex<T>], stride: usize)
     data.get_unchecked_mut(idx_1).im = data.get_unchecked(idx_1).im + temp.im;
 }
 
-pub unsafe fn butterfly_4<T>(data: &mut [Complex<T>],
+pub unsafe fn butterfly_4<T: FFTnum>(data: &mut [Complex<T>],
                              stride: usize,
                              twiddles: &[Complex<T>],
                              num_ffts: usize,
                              inverse: bool)
-    where T: Num + Copy
 {
     let mut idx = 0usize;
     let mut tw_idx_1 = 0usize;
@@ -101,9 +98,7 @@ pub unsafe fn butterfly_4<T>(data: &mut [Complex<T>],
     }
 }
 
-pub unsafe fn butterfly_4_single<T>(data: &mut [Complex<T>], stride: usize, inverse: bool)
-    where T: Num + Copy
-{
+pub unsafe fn butterfly_4_single<T: FFTnum>(data: &mut [Complex<T>], stride: usize, inverse: bool) {
     let mut scratch: [Complex<T>; 6] = [Zero::zero(); 6];
 
     scratch[0] = *data.get_unchecked(stride);

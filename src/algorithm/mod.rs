@@ -1,4 +1,5 @@
-use num::{Complex, Signed, FromPrimitive};
+use num::Complex;
+use common::FFTnum;
 
 mod good_thomas_algorithm;
 mod mixed_radix;
@@ -8,13 +9,13 @@ mod dft;
 pub mod butterflies;
 
 
-pub trait FFTAlgorithm<T: Signed + FromPrimitive + Copy> {
+pub trait FFTAlgorithm<T: FFTnum> {
     fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]);
     fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]);
 }
 
 
-pub trait FFTButterfly<T: Signed + FromPrimitive + Copy> {
+pub trait FFTButterfly<T: FFTnum> {
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]);
 }
 pub enum ButterflyEnum<T> {
@@ -25,7 +26,7 @@ pub enum ButterflyEnum<T> {
 	Butterfly6(butterflies::Butterfly6<T>)
 }
 
-impl<T> ButterflyEnum<T> where T: Signed + FromPrimitive + Copy {
+impl<T: FFTnum> ButterflyEnum<T> {
 	#[inline(always)]
 	pub unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
 		use self::ButterflyEnum::*;
@@ -41,9 +42,7 @@ impl<T> ButterflyEnum<T> where T: Signed + FromPrimitive + Copy {
 
 
 pub struct NoopAlgorithm;
-impl<T> FFTAlgorithm<T> for NoopAlgorithm
-    where T: Signed + FromPrimitive + Copy
-{
+impl<T: FFTnum> FFTAlgorithm<T> for NoopAlgorithm {
     fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         spectrum.copy_from_slice(signal);
     }
