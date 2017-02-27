@@ -1,6 +1,4 @@
-use ::dft;
-use ::algorithm::FFTAlgorithm;
-use num::{Complex, FromPrimitive, Signed};
+use num::Complex;
 
 use rand::{StdRng, SeedableRng};
 use rand::distributions::{Normal, IndependentSample};

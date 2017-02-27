@@ -20,7 +20,7 @@ pub fn transpose<T>(width: usize, height: usize, input: &[T], output: &mut [T])
 
 
 #[cfg(test)]
-mod test {
+mod unit_tests {
     use super::*;
 
     #[test]

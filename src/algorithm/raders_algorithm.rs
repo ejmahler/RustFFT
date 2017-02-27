@@ -244,7 +244,7 @@ impl<T: FFTnum> InnerFFT<T> {
 }
 
 #[cfg(test)]
-mod test {
+mod unit_tests {
     use super::InnerFFT;
 
     use ::dft;

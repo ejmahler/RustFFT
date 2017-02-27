@@ -72,4 +72,4 @@ pub fn dft<T: common::FFTnum>(signal: &[Complex<T>], spectrum: &mut [Complex<T>]
 #[cfg(test)]
 extern crate rand;
 #[cfg(test)]
-mod test;
+mod test_utils;

@@ -24,10 +24,10 @@ pub fn single_twiddle<T: FFTnum>(i: usize, fft_len: usize, inverse: bool) -> Com
 }
 
 #[cfg(test)]
-mod test {
+mod unit_tests {
 	use super::*;
 	use std::f32;
-    use ::test::{compare_vectors};
+    use test_utils::{compare_vectors};
 
     #[test]
     fn test_generate() {

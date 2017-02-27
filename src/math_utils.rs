@@ -164,7 +164,7 @@ pub fn prime_factors(mut n: usize) -> Vec<usize> {
 }
 
 #[cfg(test)]
-mod test {
+mod unit_tests {
     use super::*;
 
     #[test]

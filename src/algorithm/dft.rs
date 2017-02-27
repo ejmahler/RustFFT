@@ -39,10 +39,10 @@ impl<T: FFTnum> FFTAlgorithm<T> for DFTAlgorithm<T> {
 }
 
 #[cfg(test)]
-mod test {
+mod unit_tests {
     use super::*;
-    use ::test::{random_signal, compare_vectors};
-    use ::dft;
+    use test_utils::{random_signal, compare_vectors};
+    use dft;
 
     #[test]
     fn test_matches_dft() {

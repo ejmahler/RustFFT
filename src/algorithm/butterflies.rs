@@ -356,7 +356,7 @@ impl<T: FFTnum> FFTAlgorithm<T> for Butterfly6<T> {
 #[cfg(test)]
 mod unit_tests {
 	use super::*;
-	use test::{random_signal, compare_vectors};
+	use test_utils::{random_signal, compare_vectors};
 	use algorithm::DFTAlgorithm;
 	use num::Zero;
 
