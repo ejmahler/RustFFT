@@ -6,9 +6,14 @@ mod mixed_radix_single;
 mod raders_algorithm;
 mod radix4;
 mod dft;
+pub mod butterflies;
+
 
 pub trait FFTAlgorithm<T: Signed + FromPrimitive + Copy> {
     fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]);
+}
+pub trait FFTButterfly<T: Signed + FromPrimitive + Copy> {
+    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]);
 }
 
 pub struct NoopAlgorithm;

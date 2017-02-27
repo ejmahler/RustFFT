@@ -10,9 +10,9 @@ pub struct DFTAlgorithm<T> {
 impl<T> DFTAlgorithm<T>
     where T: Signed + FromPrimitive + Copy
 {
-    pub fn new(len: usize) -> Self {
+    pub fn new(len: usize, inverse: bool) -> Self {
         Self {
-            twiddles: twiddles::generate_twiddle_factors(len, false),
+            twiddles: twiddles::generate_twiddle_factors(len, inverse),
         }
     }
 }
@@ -47,7 +47,7 @@ mod test {
             dft(&input, &mut expected);
 
             let mut actual = input.clone();
-            let mut wrapper = DFTAlgorithm::new(len);
+            let mut wrapper = DFTAlgorithm::new(len, false);
             wrapper.process(&input, &mut actual);
 
             assert!(compare_vectors(&expected, &actual), "length = {}", len);
