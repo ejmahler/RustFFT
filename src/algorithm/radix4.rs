@@ -61,16 +61,16 @@ impl<T: FFTnum> Radix4<T> {
 }
 
 impl<T: FFTnum> FFTAlgorithm<T> for Radix4<T> {
-    fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        self.perform_fft(signal, spectrum);
+    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        self.perform_fft(input, output);
     }
-    fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        for (input, output) in signal.chunks(self.len()).zip(spectrum.chunks_mut(self.len())) {
-            self.perform_fft(input, output);
+    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
+            self.perform_fft(in_chunk, out_chunk);
         }
     }
     fn len(&self) -> usize {
-        return self.twiddles.len();
+        self.twiddles.len()
     }
 }
 

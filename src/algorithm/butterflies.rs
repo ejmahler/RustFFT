@@ -43,19 +43,20 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly2 {
     }
 }
 impl<T: FFTnum> FFTAlgorithm<T> for Butterfly2 {
-    fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        verify_size(signal, spectrum, 2);
-        spectrum.copy_from_slice(signal);
+    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_size(input, output, 2);
+        output.copy_from_slice(input);
 
-        unsafe { self.perform_fft(spectrum) };
+        unsafe { self.perform_fft(output) };
     }
-    fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        spectrum.copy_from_slice(signal);
+    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        output.copy_from_slice(input);
 
-        unsafe { self.process_multi_inplace(spectrum) };
+        unsafe { self.process_multi_inplace(output) };
     }
+    #[inline(always)]
     fn len(&self) -> usize {
-        return 2;
+        2
     }
 }
 
@@ -94,29 +95,29 @@ impl<T: FFTnum> Butterfly3<T> {
     	butterfly2.perform_fft(&mut buffer[1..]);
     }
 }
-
 impl<T: FFTnum> FFTButterfly<T> for Butterfly3<T> {
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(3) {
+        for chunk in buffer.chunks_mut(self.len()) {
             self.perform_fft(chunk);
         }
     }
 }
 impl<T: FFTnum> FFTAlgorithm<T> for Butterfly3<T> {
-    fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        verify_size(signal, spectrum, 3);
-        spectrum.copy_from_slice(signal);
+    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_size(input, output, self.len());
+        output.copy_from_slice(input);
 
-        unsafe { self.perform_fft(spectrum) };
+        unsafe { self.perform_fft(output) };
     }
-    fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        spectrum.copy_from_slice(signal);
+    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        output.copy_from_slice(input);
 
-        unsafe { self.process_multi_inplace(spectrum) };
+        unsafe { self.process_multi_inplace(output) };
     }
+    #[inline(always)]
     fn len(&self) -> usize {
-        return 3;
+        3
     }
 }
 
@@ -176,19 +177,20 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly4 {
     }
 }
 impl<T: FFTnum> FFTAlgorithm<T> for Butterfly4 {
-    fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        verify_size(signal, spectrum, 4);
-        spectrum.copy_from_slice(signal);
+    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_size(input, output, 4);
+        output.copy_from_slice(input);
 
-        unsafe { self.perform_fft(spectrum) };
+        unsafe { self.perform_fft(output) };
     }
-    fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        spectrum.copy_from_slice(signal);
+    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        output.copy_from_slice(input);
 
-        unsafe { self.process_multi_inplace(spectrum) };
+        unsafe { self.process_multi_inplace(output) };
     }
+    #[inline(always)]
     fn len(&self) -> usize {
-        return 4;
+        4
     }
 }
 
@@ -253,25 +255,26 @@ impl<T: FFTnum> Butterfly5<T> {
 impl<T: FFTnum> FFTButterfly<T> for Butterfly5<T> {
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(5) {
+        for chunk in buffer.chunks_mut(self.len()) {
             self.perform_fft(chunk);
         }
     }
 }
 impl<T: FFTnum> FFTAlgorithm<T> for Butterfly5<T> {
-    fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        verify_size(signal, spectrum, 5);
-        spectrum.copy_from_slice(signal);
+    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_size(input, output, self.len());
+        output.copy_from_slice(input);
 
-        unsafe { self.perform_fft(spectrum) };
+        unsafe { self.perform_fft(output) };
     }
-    fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        spectrum.copy_from_slice(signal);
+    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        output.copy_from_slice(input);
 
-        unsafe { self.process_multi_inplace(spectrum) };
+        unsafe { self.process_multi_inplace(output) };
     }
+    #[inline(always)]
     fn len(&self) -> usize {
-        return 5;
+        5
     }
 }
 
@@ -343,25 +346,26 @@ impl<T: FFTnum> Butterfly6<T> {
 impl<T: FFTnum> FFTButterfly<T> for Butterfly6<T> {
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(6) {
+        for chunk in buffer.chunks_mut(self.len()) {
             self.perform_fft(chunk);
         }
     }
 }
 impl<T: FFTnum> FFTAlgorithm<T> for Butterfly6<T> {
-    fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        verify_size(signal, spectrum, 6);
-        spectrum.copy_from_slice(signal);
+    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_size(input, output, self.len());
+        output.copy_from_slice(input);
 
-        unsafe { self.perform_fft(spectrum) };
+        unsafe { self.perform_fft(output) };
     }
-    fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        spectrum.copy_from_slice(signal);
+    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        output.copy_from_slice(input);
 
-        unsafe { self.process_multi_inplace(spectrum) };
+        unsafe { self.process_multi_inplace(output) };
     }
+    #[inline(always)]
     fn len(&self) -> usize {
-        return 6;
+        6
     }
 }
 
@@ -380,28 +384,35 @@ mod unit_tests {
 		let n = 5;
 		const SIZE: usize = 2;
 
-		let mut butterfly2 = Butterfly2{};
-		let mut dft = DFTAlgorithm::new(SIZE, false);
-		let mut dft_inverse = DFTAlgorithm::new(SIZE, true);
+		let butterfly2 = Butterfly2{};
+		let dft = DFTAlgorithm::new(SIZE, false);
+		let dft_inverse = DFTAlgorithm::new(SIZE, true);
 
 		let input_data = random_signal(n * SIZE);
 
-		for input in input_data.chunks(SIZE) {
+		for (i, input) in input_data.chunks(SIZE).enumerate() {
+            //compute expected values
+            let mut expected_input = input.to_vec();
+            let mut expected = [Zero::zero(); SIZE];
+            dft.process(&mut expected_input, &mut expected);
 
-			//test the forward direction and inverse simultaneously, because it should be the same in both directions
-			let mut actual = [Zero::zero(); SIZE];
-			let mut expected = [Zero::zero(); SIZE];
-			let mut expected_inverse = [Zero::zero(); SIZE];
-			let mut inplace = input.to_vec();
+            let mut expected_inverse_input = input.to_vec();
+            let mut expected_inverse = [Zero::zero(); SIZE];
+            dft_inverse.process(&mut expected_inverse_input, &mut expected_inverse);
 
-			butterfly2.process(input, &mut actual);
+            //test process method
+            let mut process_input = input.to_vec();
+            let mut actual = [Zero::zero(); SIZE];
+			butterfly2.process(&mut process_input, &mut actual);
+
+            assert!(compare_vectors(&actual, &expected), "forward, i = {}", i);
+            assert!(compare_vectors(&actual, &expected_inverse), "inverse, i = {}", i);
+
+            //test perform_fft method
+            let mut inplace = input.to_vec();
 			unsafe { butterfly2.perform_fft(&mut inplace) };
-			dft.process(input, &mut expected);
-			dft_inverse.process(input, &mut expected_inverse);
-
-			assert!(compare_vectors(&expected, &actual));
-			assert!(compare_vectors(&expected, &expected_inverse));
-			assert!(compare_vectors(&expected, &inplace));
+			
+			assert!(compare_vectors(&expected, &inplace), "forward inplace, i = {}", i);
 		}
 	}
 
@@ -417,37 +428,49 @@ mod unit_tests {
 				let input_data = random_signal(n * SIZE);
 
 				//test the forward direction
-				let mut dft = DFTAlgorithm::new(SIZE, false);
-				let mut fft = $struct_name::new(false);
+				let dft = DFTAlgorithm::new(SIZE, false);
+				let fft = $struct_name::new(false);
 				for (i, input) in input_data.chunks(SIZE).enumerate() {
-					let mut actual = [Zero::zero(); SIZE];
-					let mut expected = [Zero::zero(); SIZE];
-					let mut inplace = input.to_vec();
+					//compute expected values
+                    let mut expected_input = input.to_vec();
+                    let mut expected = [Zero::zero(); SIZE];
+                    dft.process(&mut expected_input, &mut expected);
 
-					fft.process(input, &mut actual);
-					dft.process(input, &mut expected);
+                    //test process method
+                    let mut process_input = input.to_vec();
+                    let mut actual = [Zero::zero(); SIZE];
+                    fft.process(&mut process_input, &mut actual);
 
-					assert!(compare_vectors(&expected, &actual), "forward, i = {}", i);
+                    assert!(compare_vectors(&expected, &actual), "forward, i = {}", i);
 
-					unsafe { fft.perform_fft(&mut inplace) };
-					assert!(compare_vectors(&expected, &inplace), "forward inplace, i = {}", i);
+                    //test perform_fft method
+                    let mut inplace = input.to_vec();
+                    unsafe { fft.perform_fft(&mut inplace) };
+                    
+                    assert!(compare_vectors(&expected, &inplace), "forward inplace, i = {}", i);
 				}
 
 				//make sure the inverse works too
-				let mut dft_inverse = DFTAlgorithm::new(SIZE, true);
-				let mut fft_inverse = $struct_name::new(true);
+				let dft_inverse = DFTAlgorithm::new(SIZE, true);
+				let fft_inverse = $struct_name::new(true);
 				for (i, input) in input_data.chunks(SIZE).enumerate() {	
-					let mut actual_inverse = [Zero::zero(); SIZE];
-					let mut expected_inverse = [Zero::zero(); SIZE];
-					let mut inplace_inverse = input.to_vec();
+					//compute expected values
+                    let mut expected_inverse_input = input.to_vec();
+                    let mut expected_inverse = [Zero::zero(); SIZE];
+                    dft_inverse.process(&mut expected_inverse_input, &mut expected_inverse);
 
-					fft_inverse.process(input, &mut actual_inverse);
-					dft_inverse.process(input, &mut expected_inverse);
+                    //test process method
+                    let mut process_input = input.to_vec();
+                    let mut actual = [Zero::zero(); SIZE];
+                    fft_inverse.process(&mut process_input, &mut actual);
 
-					assert!(compare_vectors(&expected_inverse, &actual_inverse), "inverse, i = {}", i);
+                    assert!(compare_vectors(&expected_inverse, &actual), "inverse, i = {}", i);
 
-					unsafe { fft_inverse.perform_fft(&mut inplace_inverse) };
-					assert!(compare_vectors(&expected_inverse, &inplace_inverse), "inverse inplace, i = {}", i);
+                    //test perform_fft method
+                    let mut inplace = input.to_vec();
+                    unsafe { fft_inverse.perform_fft(&mut inplace) };
+                    
+                    assert!(compare_vectors(&expected_inverse, &inplace), "inverse inplace, i = {}", i);
 				}
 			}
 		)

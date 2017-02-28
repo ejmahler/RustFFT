@@ -101,6 +101,7 @@ fn plan_mixed_radix<T: FFTnum>(left_len: usize, left_factors: &[usize], right_le
     }
 }
 
+
 fn plan_fft_single_factor<T: FFTnum>(len: usize, inverse: bool) -> Box<FFTAlgorithm<T>> {
     match len {
         0 => Box::new(NoopAlgorithm {len: 0}) as Box<FFTAlgorithm<T>>,
@@ -111,12 +112,21 @@ fn plan_fft_single_factor<T: FFTnum>(len: usize, inverse: bool) -> Box<FFTAlgori
         5 => Box::new(butterflies::Butterfly5::new(inverse)) as Box<FFTAlgorithm<T>>,
         6 => Box::new(butterflies::Butterfly6::new(inverse)) as Box<FFTAlgorithm<T>>,
         _ => if len >= MIN_RADERS_SIZE {
-                Box::new(RadersAlgorithm::new(len, inverse)) as Box<FFTAlgorithm<T>>
+                plan_prime(len, inverse)
             } else {
                 //we have a prime factor, but it's not large enough for raders algorithm to be worth it
                 Box::new(DFTAlgorithm::new(len, inverse)) as Box<FFTAlgorithm<T>>
             },
     }
+}
+
+fn plan_prime<T: FFTnum>(len: usize, inverse: bool)  -> Box<FFTAlgorithm<T>> {
+    let inner_fft_len = len - 1;
+    let factors = math_utils::prime_factors(inner_fft_len);
+
+    let inner_fft = plan_fft_with_factors(inner_fft_len, &factors, inverse);
+
+    Box::new(RadersAlgorithm::new(len, inner_fft, inverse)) as Box<FFTAlgorithm<T>>
 }
 
 fn plan_butterfly<T: FFTnum>(len: usize, inverse: bool) -> ButterflyEnum<T> {

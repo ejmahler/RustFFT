@@ -10,8 +10,15 @@ pub mod butterflies;
 
 
 pub trait FFTAlgorithm<T: FFTnum> {
-    fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]);
-    fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]);
+	/// Performs an FFT on the `input` buffer, places the result in the `output` bufer
+	/// Uses the `input` buffer as scratch space
+    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]);
+
+    /// Divides the `input` and `output` buffers into self.len() chunks, then runs an FFT
+    /// on each chunk. Uses the `input` buffer as scratch space
+    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]);
+
+    // The FFT size that this algorithm can process
     fn len(&self) -> usize;
 }
 
@@ -58,14 +65,10 @@ pub struct NoopAlgorithm {
 	pub len: usize
 }
 impl<T: FFTnum> FFTAlgorithm<T> for NoopAlgorithm {
-    fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        spectrum.copy_from_slice(signal);
-    }
-    fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        spectrum.copy_from_slice(signal);
-    }
+    fn process(&self, _: &mut [Complex<T>], _: &mut [Complex<T>]) { }
+    fn process_multi(&self, _: &mut [Complex<T>], _: &mut [Complex<T>]) { }
     fn len(&self) -> usize {
-        return self.len;
+        self.len
     }
 }
 

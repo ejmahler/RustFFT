@@ -20,6 +20,7 @@ pub use common::FFTnum;
 pub struct FFT<T> {
     len: usize,
     algorithm: Box<FFTAlgorithm<T>>,
+    scratch: Vec<Complex<T>>
 }
 
 impl<T: common::FFTnum> FFT<T>
@@ -34,6 +35,7 @@ impl<T: common::FFTnum> FFT<T>
         FFT {
             len: len,
             algorithm: plan::plan_fft(len, inverse),
+            scratch: vec![Zero::zero(); len]
         }
     }
 
@@ -47,7 +49,9 @@ impl<T: common::FFTnum> FFT<T>
         assert!(signal.len() == spectrum.len());
         assert!(signal.len() == self.len);
 
-        self.algorithm.process(signal, spectrum);
+        self.scratch.copy_from_slice(signal);
+
+        self.algorithm.process(&mut self.scratch, spectrum);
     }
 }
 

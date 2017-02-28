@@ -1,5 +1,5 @@
 
-use num::{Complex, Zero};
+use num::Complex;
 use common::FFTnum;
 
 use math_utils;
@@ -18,8 +18,6 @@ pub struct GoodThomasAlgorithm<T> {
 
     input_map: Vec<usize>,
     output_map: Vec<usize>,
-
-    scratch: Vec<Complex<T>>,
 }
 
 impl<T: FFTnum> GoodThomasAlgorithm<T> {
@@ -69,58 +67,51 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
                     (x * n2 * n2_inverse as usize + y * n1 * n1_inverse as usize) % (n1 * n2)
                 })
                 .collect(),
-
-            scratch: vec![Zero::zero(); n1 * n2],
         }
     }
 
-    fn copy_from_input(&mut self, input: &[Complex<T>], output: &mut [Complex<T>]) {
+    fn copy_from_input(&self, input: &[Complex<T>], output: &mut [Complex<T>]) {
         for (output_element, input_index) in output.iter_mut().zip(self.input_map.iter()) {
             *output_element = unsafe { *input.get_unchecked(*input_index) };
         }
     }
 
-    fn copy_transposed_scratch_to_output(&self, output: &mut [Complex<T>]) {
-        for (scratch_element, output_index) in self.scratch.iter().zip(self.output_map.iter()) {
-            unsafe { *output.get_unchecked_mut(*output_index) = *scratch_element };
+    fn copy_to_output(&self, input: &[Complex<T>], output: &mut [Complex<T>]) {
+        for (input_element, output_index) in input.iter().zip(self.output_map.iter()) {
+            unsafe { *output.get_unchecked_mut(*output_index) = *input_element };
         }
     }
 
-    /// Runs the FFT on the input `signal` array, placing the output in the 'spectrum' array
-    fn perform_fft(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        // copy the input into the spectrum
-        self.copy_from_input(signal, spectrum);
 
-        // run 'height' FFTs of size 'width' from the spectrum into scratch
-        for (input, output) in spectrum.chunks(self.width)
-            .zip(self.scratch.chunks_mut(self.width)) {
-            self.width_size_fft.process(input, output);
-        }
+    fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
 
-        // transpose the scratch back into the spectrum to prepare for the next round of FFT
-        array_utils::transpose(self.width, self.height, self.scratch.as_slice(), spectrum);
+        // copy the input using our reordering algorithm
+        self.copy_from_input(input, output);
+
+        // run FFTs of size `width`
+        self.width_size_fft.process_multi(output, input);
+
+        // transpose
+        array_utils::transpose(self.width, self.height, input, output);
 
         // run 'width' FFTs of size 'height' from the spectrum back into scratch
-        for (input, output) in spectrum.chunks(self.height)
-            .zip(self.scratch.chunks_mut(self.height)) {
-            self.height_size_fft.process(input, output);
-        }
+        self.width_size_fft.process_multi(output, input);
 
         // we're done, copy to the output
-        self.copy_transposed_scratch_to_output(spectrum);
+        self.copy_to_output(input, output);
     }
 }
 
 impl<T: FFTnum> FFTAlgorithm<T> for GoodThomasAlgorithm<T> {
-    fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        self.perform_fft(signal, spectrum);
+    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        self.perform_fft(input, output);
     }
-    fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        for (input, output) in signal.chunks(self.len()).zip(spectrum.chunks_mut(self.len())) {
-            self.perform_fft(input, output);
+    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
+            self.perform_fft(in_chunk, out_chunk);
         }
     }
     fn len(&self) -> usize {
-        return self.scratch.len();
+        self.input_map.len()
     }
 }

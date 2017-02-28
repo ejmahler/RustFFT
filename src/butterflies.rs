@@ -4,48 +4,6 @@
 use num::{Complex, Zero};
 use common::FFTnum;
 
-/// Inverse butterfly size 2
-pub unsafe fn butterfly_2_inverse<T: FFTnum>(data: &mut [Complex<T>],
-                                     stride: usize,
-                                     twiddles: &[Complex<T>],
-                                     num_ffts: usize)
-{
-    let mut idx_1 = 0usize;
-    let mut idx_2 = num_ffts;
-    let mut twiddle_idx = 0usize;
-    for _ in 0..num_ffts {
-        let twiddle = twiddles.get_unchecked(twiddle_idx);
-        let temp = data.get_unchecked(idx_2) * twiddle.conj();
-        data.get_unchecked_mut(idx_2).re = data.get_unchecked(idx_1).re - temp.re;
-        data.get_unchecked_mut(idx_2).im = data.get_unchecked(idx_1).im - temp.im;
-        data.get_unchecked_mut(idx_1).re = data.get_unchecked(idx_1).re + temp.re;
-        data.get_unchecked_mut(idx_1).im = data.get_unchecked(idx_1).im + temp.im;
-        twiddle_idx += stride;
-        idx_1 += 1;
-        idx_2 += 1;
-    }
-}
-
-/// Butterly size 2 for decimation-in-time algorithms
-pub unsafe fn butterfly_2_dif<T: FFTnum>(data: &mut [Complex<T>],
-                                 stride: usize,
-                                 twiddles: &[Complex<T>],
-                                 num_ffts: usize)
-{
-    let mut idx_1 = 0usize;
-    let mut idx_2 = num_ffts;
-    let mut twiddle_idx = 0usize;
-    for _ in 0..num_ffts {
-        let twiddle = twiddles.get_unchecked(twiddle_idx);
-        let temp = *data.get_unchecked(idx_2);
-        *data.get_unchecked_mut(idx_2) = (data.get_unchecked(idx_1) - temp) * twiddle;
-        *data.get_unchecked_mut(idx_1) = data.get_unchecked(idx_1) + temp;
-        twiddle_idx += stride;
-        idx_1 += 1;
-        idx_2 += 1;
-    }
-}
-
 pub unsafe fn butterfly_2_single<T: FFTnum>(data: &mut [Complex<T>], stride: usize)
 {
     let idx_1 = 0usize;

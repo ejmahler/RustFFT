@@ -1,4 +1,4 @@
-use num::{Complex, Zero};
+use num::Complex;
 
 use common::FFTnum;
 
@@ -14,7 +14,6 @@ pub struct MixedRadix<T> {
     height_size_fft: Box<FFTAlgorithm<T>>,
 
     twiddles: Vec<Complex<T>>,
-    scratch: Vec<Complex<T>>,
 }
 
 impl<T: FFTnum> MixedRadix<T> {
@@ -33,23 +32,22 @@ impl<T: FFTnum> MixedRadix<T> {
             height_size_fft: height_fft,
 
             twiddles: twiddles::generate_twiddle_factors(len, inverse),
-            scratch: vec![Zero::zero(); len],
         }
     }
 
-    /// Runs the FFT on the input `signal` array, placing the output in the 'spectrum' array
-    fn perform_fft(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
+
+    fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         // SIX STEP FFT:
 
         // STEP 1: transpose
-        array_utils::transpose(self.width, self.height, signal, spectrum);
+        array_utils::transpose(self.width, self.height, input, output);
 
-        // STEP 2: perform FFTs of size 'height'
-        self.height_size_fft.process_multi(spectrum, &mut self.scratch);
+        // STEP 2: perform FFTs of size `height`
+        self.height_size_fft.process_multi(output, input);
 
         // STEP 3: Apply twiddle factors. we skip row 0 and column 0 because the
         // twiddle factor for row/column 0 is always the identity
-        for (row, chunk) in self.scratch.chunks_mut(self.height).enumerate().skip(1)
+        for (row, chunk) in input.chunks_mut(self.height).enumerate().skip(1)
         {
             for (column, cell) in chunk.iter_mut().enumerate().skip(1)
             {
@@ -60,26 +58,26 @@ impl<T: FFTnum> MixedRadix<T> {
         }
 
         // STEP 4: transpose again
-        array_utils::transpose(self.height, self.width, self.scratch.as_slice(), spectrum);
+        array_utils::transpose(self.height, self.width, input, output);
 
-        // STEP 5: perform FFTs of size 'width'
-        self.width_size_fft.process_multi(spectrum, &mut self.scratch);
+        // STEP 5: perform FFTs of size `width`
+        self.width_size_fft.process_multi(output, input);
 
         // STEP 6: transpose again
-        array_utils::transpose(self.width, self.height, self.scratch.as_slice(), spectrum);
+        array_utils::transpose(self.width, self.height, input, output);
     }
 }
 impl<T: FFTnum> FFTAlgorithm<T> for MixedRadix<T> {
-    fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        self.perform_fft(signal, spectrum);
+    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        self.perform_fft(input, output);
     }
-    fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        for (input, output) in signal.chunks(self.len()).zip(spectrum.chunks_mut(self.len())) {
-            self.perform_fft(input, output);
+    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
+            self.perform_fft(in_chunk, out_chunk);
         }
     }
     fn len(&self) -> usize {
-        return self.twiddles.len();
+        self.twiddles.len()
     }
 }
 
@@ -98,7 +96,6 @@ pub struct MixedRadixSingleButterfly<T> {
     butterfly_fft: ButterflyEnum<T>,
 
     twiddles: Vec<Complex<T>>,
-    scratch: Vec<Complex<T>>,
 }
 
 impl<T: FFTnum> MixedRadixSingleButterfly<T> {
@@ -117,23 +114,25 @@ impl<T: FFTnum> MixedRadixSingleButterfly<T> {
             butterfly_fft: butterfly_fft,
 
             twiddles: twiddles::generate_twiddle_factors(len, inverse),
-            scratch: vec![Zero::zero(); len],
         }
     }
 
-    /// Runs the FFT on the input `signal` array, placing the output in the 'spectrum' array
-    fn perform_fft(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
+
+    fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         // SIX STEP FFT:
 
+        // (step 0: copy input to output)
+        output.copy_from_slice(input);
+
         // STEP 1: transpose
-        array_utils::transpose(self.inner_fft_len, self.butterfly_len, signal, &mut self.scratch);
+        array_utils::transpose(self.inner_fft_len, self.butterfly_len, output, input);
 
         // STEP 2: perform the butterfly FFTs
-        unsafe { self.butterfly_fft.process_multi_inplace(&mut self.scratch) };
+        unsafe { self.butterfly_fft.process_multi_inplace(input) };
 
         // STEP 3: Apply twiddle factors. we skip row 0 and column 0 because the
         // twiddle factor for row/column 0 is always the identity
-        for (row, chunk) in self.scratch.chunks_mut(self.butterfly_len).enumerate().skip(1)
+        for (row, chunk) in input.chunks_mut(self.butterfly_len).enumerate().skip(1)
         {
             for (column, cell) in chunk.iter_mut().enumerate().skip(1)
             {
@@ -144,27 +143,27 @@ impl<T: FFTnum> MixedRadixSingleButterfly<T> {
         }
 
         // STEP 4: transpose again
-        array_utils::transpose(self.butterfly_len, self.inner_fft_len, &self.scratch, spectrum);
+        array_utils::transpose(self.butterfly_len, self.inner_fft_len, input, output);
 
-        // STEP 5: perform the intter FFTs
-        self.inner_fft.process_multi(spectrum, &mut self.scratch);
+        // STEP 5: perform the inner FFTs
+        self.inner_fft.process_multi(output, input);
 
         // STEP 6: transpose again
-        array_utils::transpose(self.inner_fft_len, self.butterfly_len, &self.scratch, spectrum);
+        array_utils::transpose(self.inner_fft_len, self.butterfly_len, input, output);
     }
 }
 
 impl<T: FFTnum> FFTAlgorithm<T> for MixedRadixSingleButterfly<T> {
-    fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        self.perform_fft(signal, spectrum);
+    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        self.perform_fft(input, output);
     }
-    fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        for (input, output) in signal.chunks(self.len()).zip(spectrum.chunks_mut(self.len())) {
-            self.perform_fft(input, output);
+    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
+            self.perform_fft(in_chunk, out_chunk);
         }
     }
     fn len(&self) -> usize {
-        return self.twiddles.len();
+        self.twiddles.len()
     }
 }
 
@@ -180,7 +179,6 @@ pub struct MixedRadixDoubleButterfly<T> {
     height_size_fft: ButterflyEnum<T>,
 
     twiddles: Vec<Complex<T>>,
-    scratch: Vec<Complex<T>>,
 }
 
 impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
@@ -198,23 +196,22 @@ impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
             height_size_fft: height_fft,
 
             twiddles: twiddles::generate_twiddle_factors(len, inverse),
-            scratch: vec![Zero::zero(); len],
         }
     }
 
-    /// Runs the FFT on the input `signal` array, placing the output in the 'spectrum' array
-    fn perform_fft(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
+
+    fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         // SIX STEP FFT:
 
         // STEP 1: transpose
-        array_utils::transpose(self.width, self.height, signal, spectrum);
+        array_utils::transpose(self.width, self.height, input, output);
 
         // STEP 2: perform FFTs of size 'height'
-        unsafe { self.height_size_fft.process_multi_inplace(spectrum) };
+        unsafe { self.height_size_fft.process_multi_inplace(output) };
 
         // STEP 3: Apply twiddle factors. we skip row 0 and column 0 because the
         // twiddle factor for row/column 0 is always the identity
-        for (row, chunk) in spectrum.chunks_mut(self.height).enumerate().skip(1)
+        for (row, chunk) in output.chunks_mut(self.height).enumerate().skip(1)
         {
             for (column, cell) in chunk.iter_mut().enumerate().skip(1)
             {
@@ -225,27 +222,27 @@ impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
         }
 
         // STEP 4: transpose again
-        array_utils::transpose(self.height, self.width, spectrum, &mut self.scratch);
+        array_utils::transpose(self.height, self.width, output, input);
 
         // STEP 5: perform FFTs of size 'width'
-        unsafe { self.width_size_fft.process_multi_inplace(&mut self.scratch) };
+        unsafe { self.width_size_fft.process_multi_inplace(input) };
 
         // STEP 6: transpose again
-        array_utils::transpose(self.width, self.height, self.scratch.as_slice(), spectrum);
+        array_utils::transpose(self.width, self.height, input, output);
     }
 }
 
 impl<T: FFTnum> FFTAlgorithm<T> for MixedRadixDoubleButterfly<T> {
-    fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        self.perform_fft(signal, spectrum);
+    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        self.perform_fft(input, output);
     }
-    fn process_multi(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        for (input, output) in signal.chunks(self.len()).zip(spectrum.chunks_mut(self.len())) {
-            self.perform_fft(input, output);
+    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
+            self.perform_fft(in_chunk, out_chunk);
         }
     }
     fn len(&self) -> usize {
-        return self.twiddles.len();
+        self.twiddles.len()
     }
 }
 
@@ -265,15 +262,15 @@ mod unit_tests {
                 let width_fft = Box::new(DFTAlgorithm::new(width, false)) as Box<FFTAlgorithm<f32>>;
                 let height_fft = Box::new(DFTAlgorithm::new(height, false)) as Box<FFTAlgorithm<f32>>;
 
-                let mut mixed_radix_fft = MixedRadix::new(width_fft, height_fft, false);
+                let mixed_radix_fft = MixedRadix::new(width_fft, height_fft, false);
 
-                let input = random_signal(width * height);
+                let mut input = random_signal(width * height);
 
                 let mut expected = input.clone();
                 dft(&input, &mut expected);
 
                 let mut actual = input.clone();
-                mixed_radix_fft.process(&input, &mut actual);
+                mixed_radix_fft.process(&mut input, &mut actual);
 
                 println!("expected:");
                 for expected_chunk in expected.chunks(width) {
@@ -296,19 +293,20 @@ mod unit_tests {
             for &height in &[2,3,4,5,6] {
                 let width_fft = Box::new(DFTAlgorithm::new(width, false)) as Box<FFTAlgorithm<f32>>;
                 let height_fft = Box::new(DFTAlgorithm::new(height, false)) as Box<FFTAlgorithm<f32>>;
-                let mut control_fft = MixedRadix::new(width_fft, height_fft, false);
+                let control_fft = MixedRadix::new(width_fft, height_fft, false);
 
                 let inner_fft = Box::new(DFTAlgorithm::new(width, false)) as Box<FFTAlgorithm<f32>>;
                 let butterfly_fft = make_butterfly(height, false);
-                let mut test_fft = MixedRadixSingleButterfly::new(inner_fft, butterfly_fft, false);
+                let test_fft = MixedRadixSingleButterfly::new(inner_fft, butterfly_fft, false);
 
-                let input = random_signal(width * height);
+                let mut control_input = random_signal(width * height);
+                let mut test_input = control_input.clone();
 
-                let mut expected = input.clone();
-                control_fft.process(&input, &mut expected);
+                let mut expected = control_input.clone();
+                control_fft.process(&mut control_input, &mut expected);
 
-                let mut actual = input.clone();
-                test_fft.process(&input, &mut actual);
+                let mut actual = test_input.clone();
+                test_fft.process(&mut test_input, &mut actual);
 
                 println!("expected:");
                 for expected_chunk in expected.chunks(width) {
@@ -331,19 +329,20 @@ mod unit_tests {
             for &height in &[2,3,4,5,6] {
                 let width_fft = Box::new(DFTAlgorithm::new(width, false)) as Box<FFTAlgorithm<f32>>;
                 let height_fft = Box::new(DFTAlgorithm::new(height, false)) as Box<FFTAlgorithm<f32>>;
-                let mut control_fft = MixedRadix::new(width_fft, height_fft, false);
+                let control_fft = MixedRadix::new(width_fft, height_fft, false);
 
                 let width_butterfly = make_butterfly(width, false);
                 let height_butterfly = make_butterfly(height, false);
-                let mut test_fft = MixedRadixDoubleButterfly::new(width_butterfly, height_butterfly, false);
+                let test_fft = MixedRadixDoubleButterfly::new(width_butterfly, height_butterfly, false);
 
-                let input = random_signal(width * height);
+                let mut control_input = random_signal(width * height);
+                let mut test_input = control_input.clone();
 
-                let mut expected = input.clone();
-                control_fft.process(&input, &mut expected);
+                let mut expected = control_input.clone();
+                control_fft.process(&mut control_input, &mut expected);
 
-                let mut actual = input.clone();
-                test_fft.process(&input, &mut actual);
+                let mut actual = test_input.clone();
+                test_fft.process(&mut test_input, &mut actual);
 
                 println!("expected:");
                 for expected_chunk in expected.chunks(width) {
