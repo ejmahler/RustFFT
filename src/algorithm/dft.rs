@@ -15,14 +15,23 @@ impl<T: FFTnum> DFTAlgorithm<T> {
         }
     }
 
+    #[inline(always)]
     fn perform_fft(&self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        for (k, output_cell) in spectrum.iter_mut().enumerate() {
-            let mut sum = Zero::zero();
-            for (i, &input_cell) in signal.iter().enumerate() {
-                let twiddle = unsafe { *self.twiddles.get_unchecked((k * i) % self.twiddles.len()) };
-                sum = sum + twiddle * input_cell;
+        for k in 0..spectrum.len() {
+            let output_cell = unsafe { spectrum.get_unchecked_mut(k) };
+
+            *output_cell = Zero::zero();
+            let mut twiddle_index = 0;
+
+            for input_cell in signal {
+                let twiddle = unsafe { *self.twiddles.get_unchecked(twiddle_index) };
+                *output_cell = *output_cell + twiddle * input_cell;
+
+                twiddle_index += k;
+                if twiddle_index >= self.twiddles.len() {
+                    twiddle_index -= self.twiddles.len();
+                }
             }
-            *output_cell = sum;
         }
     }
 }
