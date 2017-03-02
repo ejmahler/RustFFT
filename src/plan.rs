@@ -72,32 +72,12 @@ fn plan_mixed_radix<T: FFTnum>(left_len: usize, left_factors: &[usize], right_le
         let right_fft = plan_butterfly(right_len, inverse);
 
         Box::new(MixedRadixDoubleButterfly::new(left_fft, right_fft, inverse)) as Box<FFTAlgorithm<T>>
-    } else if !left_is_butterfly && ! right_is_butterfly {
+    } else {
         //neither size is a butterfly, so go with the normal algorithm
         let left_fft = plan_fft_with_factors(left_len, left_factors, inverse);
         let right_fft = plan_fft_with_factors(right_len, right_factors, inverse);
 
         Box::new(MixedRadix::new(left_fft, right_fft, inverse)) as Box<FFTAlgorithm<T>>
-    } else if left_is_butterfly {
-        //the left is a butterfly, but not the right
-        let butterfly_len = left_len;
-        let inner_len = right_len;
-        let inner_factors = right_factors;
-
-        let butterfly_fft = plan_butterfly(butterfly_len, inverse);
-        let inner_fft = plan_fft_with_factors(inner_len, inner_factors, inverse);
-
-        Box::new(MixedRadixSingleButterfly::new(inner_fft, butterfly_fft, inverse)) as Box<FFTAlgorithm<T>>
-    } else {
-        //the right is a butterfly, but not the left
-        let butterfly_len = right_len;
-        let inner_len = left_len;
-        let inner_factors = left_factors;
-
-        let butterfly_fft = plan_butterfly(butterfly_len, inverse);
-        let inner_fft = plan_fft_with_factors(inner_len, inner_factors, inverse);
-
-        Box::new(MixedRadixSingleButterfly::new(inner_fft, butterfly_fft, inverse)) as Box<FFTAlgorithm<T>>
     }
 }
 
