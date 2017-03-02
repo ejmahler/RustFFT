@@ -125,7 +125,7 @@ impl<T: FFTnum> MixedRadixSingleButterfly<T> {
         output.copy_from_slice(input);
 
         // STEP 1: transpose
-        array_utils::transpose(self.inner_fft_len, self.butterfly_len, output, input);
+        array_utils::transpose_small(self.inner_fft_len, self.butterfly_len, output, input);
 
         // STEP 2: perform the butterfly FFTs
         unsafe { self.butterfly_fft.process_multi_inplace(input) };
@@ -143,13 +143,13 @@ impl<T: FFTnum> MixedRadixSingleButterfly<T> {
         }
 
         // STEP 4: transpose again
-        array_utils::transpose(self.butterfly_len, self.inner_fft_len, input, output);
+        array_utils::transpose_small(self.butterfly_len, self.inner_fft_len, input, output);
 
         // STEP 5: perform the inner FFTs
         self.inner_fft.process_multi(output, input);
 
         // STEP 6: transpose again
-        array_utils::transpose(self.inner_fft_len, self.butterfly_len, input, output);
+        array_utils::transpose_small(self.inner_fft_len, self.butterfly_len, input, output);
     }
 }
 
@@ -204,7 +204,7 @@ impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
         // SIX STEP FFT:
 
         // STEP 1: transpose
-        array_utils::transpose(self.width, self.height, input, output);
+        array_utils::transpose_small(self.width, self.height, input, output);
 
         // STEP 2: perform FFTs of size 'height'
         unsafe { self.height_size_fft.process_multi_inplace(output) };
@@ -222,13 +222,13 @@ impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
         }
 
         // STEP 4: transpose again
-        array_utils::transpose(self.height, self.width, output, input);
+        array_utils::transpose_small(self.height, self.width, output, input);
 
         // STEP 5: perform FFTs of size 'width'
         unsafe { self.width_size_fft.process_multi_inplace(input) };
 
         // STEP 6: transpose again
-        array_utils::transpose(self.width, self.height, input, output);
+        array_utils::transpose_small(self.width, self.height, input, output);
     }
 }
 
