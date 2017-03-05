@@ -1,3 +1,4 @@
+use std::rc::Rc;
 
 use num::Complex;
 use common::FFTnum;
@@ -10,11 +11,11 @@ use algorithm::FFTAlgorithm;
 pub struct GoodThomasAlgorithm<T> {
     width: usize,
     // width_inverse: usize,
-    width_size_fft: Box<FFTAlgorithm<T>>,
+    width_size_fft: Rc<FFTAlgorithm<T>>,
 
     height: usize,
     // height_inverse: usize,
-    height_size_fft: Box<FFTAlgorithm<T>>,
+    height_size_fft: Rc<FFTAlgorithm<T>>,
 
     input_map: Vec<usize>,
     output_map: Vec<usize>,
@@ -22,7 +23,7 @@ pub struct GoodThomasAlgorithm<T> {
 
 impl<T: FFTnum> GoodThomasAlgorithm<T> {
     #[allow(dead_code)]
-    pub fn new(n1_fft: Box<FFTAlgorithm<T>>, n2_fft: Box<FFTAlgorithm<T>>) -> Self {
+    pub fn new(n1_fft: Rc<FFTAlgorithm<T>>, n2_fft: Rc<FFTAlgorithm<T>>) -> Self {
 
         let n1 = n1_fft.len();
         let n2 = n2_fft.len();
@@ -95,7 +96,7 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
         array_utils::transpose(self.width, self.height, input, output);
 
         // run 'width' FFTs of size 'height' from the spectrum back into scratch
-        self.width_size_fft.process_multi(output, input);
+        self.height_size_fft.process_multi(output, input);
 
         // we're done, copy to the output
         self.copy_to_output(input, output);
@@ -107,7 +108,8 @@ impl<T: FFTnum> FFTAlgorithm<T> for GoodThomasAlgorithm<T> {
         self.perform_fft(input, output);
     }
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
+        for (in_chunk, out_chunk) in
+            input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
             self.perform_fft(in_chunk, out_chunk);
         }
     }

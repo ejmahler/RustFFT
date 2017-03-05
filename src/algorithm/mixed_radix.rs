@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use num::Complex;
 
 use common::FFTnum;
@@ -8,16 +10,16 @@ use twiddles;
 
 pub struct MixedRadix<T> {
     width: usize,
-    width_size_fft: Box<FFTAlgorithm<T>>,
+    width_size_fft: Rc<FFTAlgorithm<T>>,
 
     height: usize,
-    height_size_fft: Box<FFTAlgorithm<T>>,
+    height_size_fft: Rc<FFTAlgorithm<T>>,
 
     twiddles: Vec<Complex<T>>,
 }
 
 impl<T: FFTnum> MixedRadix<T> {
-    pub fn new(width_fft: Box<FFTAlgorithm<T>>, height_fft: Box<FFTAlgorithm<T>>, inverse: bool) -> Self {
+    pub fn new(width_fft: Rc<FFTAlgorithm<T>>, height_fft: Rc<FFTAlgorithm<T>>, inverse: bool) -> Self {
 
         let width = width_fft.len();
         let height = height_fft.len();
@@ -165,6 +167,7 @@ impl<T: FFTnum> FFTAlgorithm<T> for MixedRadixDoubleButterfly<T> {
 #[cfg(test)]
 mod unit_tests {
     use super::*;
+    use std::rc::Rc;
     use test_utils::{random_signal, compare_vectors};
     use dft;
     use algorithm::{butterflies, DFTAlgorithm};
@@ -173,8 +176,8 @@ mod unit_tests {
     fn test_mixed_radix() {
         for width in 2..11 {
             for height in 2..11 {
-                let width_fft = Box::new(DFTAlgorithm::new(width, false)) as Box<FFTAlgorithm<f32>>;
-                let height_fft = Box::new(DFTAlgorithm::new(height, false)) as Box<FFTAlgorithm<f32>>;
+                let width_fft = Rc::new(DFTAlgorithm::new(width, false)) as Rc<FFTAlgorithm<f32>>;
+                let height_fft = Rc::new(DFTAlgorithm::new(height, false)) as Rc<FFTAlgorithm<f32>>;
 
                 let mixed_radix_fft = MixedRadix::new(width_fft, height_fft, false);
 
@@ -205,8 +208,8 @@ mod unit_tests {
     fn test_mixed_radix_double_butterfly() {
         for &width in &[2,3,4,5,6] {
             for &height in &[2,3,4,5,6] {
-                let width_fft = Box::new(DFTAlgorithm::new(width, false)) as Box<FFTAlgorithm<f32>>;
-                let height_fft = Box::new(DFTAlgorithm::new(height, false)) as Box<FFTAlgorithm<f32>>;
+                let width_fft = Rc::new(DFTAlgorithm::new(width, false)) as Rc<FFTAlgorithm<f32>>;
+                let height_fft = Rc::new(DFTAlgorithm::new(height, false)) as Rc<FFTAlgorithm<f32>>;
                 let control_fft = MixedRadix::new(width_fft, height_fft, false);
 
                 let width_butterfly = make_butterfly(width, false);

@@ -1,3 +1,4 @@
+use std::rc::Rc;
 
 use num::{Complex, Zero, FromPrimitive};
 use common::FFTnum;
@@ -13,11 +14,11 @@ pub struct RadersAlgorithm<T> {
     root_inverse: u64,
 
     inner_fft_data: Vec<Complex<T>>,
-    inner_fft: Box<FFTAlgorithm<T>>,
+    inner_fft: Rc<FFTAlgorithm<T>>,
 }
 
 impl<T: FFTnum> RadersAlgorithm<T> {
-    pub fn new(len: usize, inner_fft: Box<FFTAlgorithm<T>>, inverse: bool) -> Self {
+    pub fn new(len: usize, inner_fft: Rc<FFTAlgorithm<T>>, inverse: bool) -> Self {
         assert_eq!(len - 1, inner_fft.len(), "For raders algorithm, inner_fft.len() must be self.len() - 1. Expected {}, got {}", len - 1, inner_fft.len());
 
         let inner_fft_len = len - 1;
@@ -52,7 +53,7 @@ impl<T: FFTnum> RadersAlgorithm<T> {
         // it's not just a straight copy from the input to the scratch, we have
         // to compute the input index based on the scratch index and primitive root
         for (index, output_element) in output.iter_mut().enumerate() {
-            let input_index = math_utils::modular_exponent(self.primitive_root, index as u64 + 1, self.len as u64) as usize;
+            let input_index = math_utils::modular_exponent(self.primitive_root, index as u64 + 1, self.len as u64) as usize - 1;
             
             *output_element = *input.get_unchecked(input_index);
         }
@@ -63,7 +64,7 @@ impl<T: FFTnum> RadersAlgorithm<T> {
         for (index, &input_element) in input.iter().enumerate() {
             let output_index = math_utils::modular_exponent(
                 self.root_inverse,
-                index as u64,
+                index as u64 + 1,
                 self.len as u64) as usize - 1;
 
             *output.get_unchecked_mut(output_index) = input_element;
@@ -126,4 +127,34 @@ impl<T: FFTnum> FFTAlgorithm<T> for RadersAlgorithm<T> {
 
 #[cfg(test)]
 mod unit_tests {
+    use super::*;
+    use std::rc::Rc;
+    use num::Zero;
+    use test_utils::{random_signal, compare_vectors};
+    use dft;
+    use algorithm::{butterflies, DFTAlgorithm};
+
+    #[test]
+    fn test_raders() {
+        for &len in &[3,5,7,11,13] {
+            let dft = DFTAlgorithm::new(len, false);
+            let inner_fft = Rc::new(DFTAlgorithm::new(len - 1, false));
+
+            let raders_fft = RadersAlgorithm::new(len, inner_fft, false);
+
+            let mut dft_input = random_signal(len);
+            let mut raders_input = dft_input.clone();
+
+            let mut expected = vec![Zero::zero(); len];
+            dft.process(&mut dft_input, &mut expected);
+
+            let mut actual = vec![Zero::zero(); len];
+            raders_fft.process(&mut raders_input, &mut actual);
+
+            println!("Expected: {:?}", expected);
+            println!("Actual:   {:?}", actual);
+
+            assert!(compare_vectors(&actual, &expected), "len = {}", len);
+        }
+    }
 }

@@ -12,19 +12,20 @@ mod common;
 
 use num::{Complex, FromPrimitive, Zero};
 use std::f32;
+use std::rc::Rc;
 
 use algorithm::FFTAlgorithm;
+use plan::Planner;
 
 pub use common::FFTnum;
 
 pub struct FFT<T> {
     len: usize,
-    algorithm: Box<FFTAlgorithm<T>>,
-    scratch: Vec<Complex<T>>
+    algorithm: Rc<FFTAlgorithm<T>>,
+    scratch: Vec<Complex<T>>,
 }
 
-impl<T: common::FFTnum> FFT<T>
-{
+impl<T: common::FFTnum> FFT<T> {
     /// Creates a new FFT context that will process signal of length
     /// `len`. If `inverse` is `true`, then this struct will run inverse
     /// FFTs. This implementation of the FFT doesn't do any scaling on both
@@ -32,10 +33,12 @@ impl<T: common::FFTnum> FFT<T>
     /// FFT on a signal will scale the signal by its length.
     pub fn new(len: usize, inverse: bool) -> Self {
 
+        let mut planner = Planner::new(inverse);
+
         FFT {
             len: len,
-            algorithm: plan::plan_fft(len, inverse),
-            scratch: vec![Zero::zero(); len]
+            algorithm: planner.plan_fft(len),
+            scratch: vec![Zero::zero(); len],
         }
     }
 
