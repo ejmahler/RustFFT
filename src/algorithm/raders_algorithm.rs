@@ -131,8 +131,7 @@ mod unit_tests {
     use std::rc::Rc;
     use num::Zero;
     use test_utils::{random_signal, compare_vectors};
-    use dft;
-    use algorithm::{butterflies, DFTAlgorithm};
+    use algorithm::DFTAlgorithm;
 
     #[test]
     fn test_raders() {
