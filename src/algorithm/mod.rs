@@ -31,7 +31,8 @@ pub enum ButterflyEnum<T> {
 	Butterfly3(butterflies::Butterfly3<T>),
 	Butterfly4(butterflies::Butterfly4),
 	Butterfly5(butterflies::Butterfly5<T>),
-	Butterfly6(butterflies::Butterfly6<T>)
+	Butterfly6(butterflies::Butterfly6<T>),
+	Butterfly7(butterflies::Butterfly7<T>),
 }
 
 impl<T: FFTnum> ButterflyEnum<T> {
@@ -44,6 +45,7 @@ impl<T: FFTnum> ButterflyEnum<T> {
 			Butterfly4(ref fft) => fft.process_multi_inplace(buffer),
 			Butterfly5(ref fft) => fft.process_multi_inplace(buffer),
 			Butterfly6(ref fft) => fft.process_multi_inplace(buffer),
+			Butterfly7(ref fft) => fft.process_multi_inplace(buffer),
 		}
 	}
 
@@ -56,6 +58,7 @@ impl<T: FFTnum> ButterflyEnum<T> {
 			Butterfly4(_) => 4,
 			Butterfly5(_) => 5,
 			Butterfly6(_) => 6,
+			Butterfly7(_) => 7,
 		}
 	}
 }

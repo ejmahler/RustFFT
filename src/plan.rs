@@ -8,7 +8,7 @@ use math_utils;
 
 
 const MIN_RADERS_SIZE: usize = 100;
-const BUTTERFLIES: [usize; 5] = [2, 3, 4, 5, 6];
+const BUTTERFLIES: [usize; 6] = [2, 3, 4, 5, 6, 7];
 const COMPOSITE_BUTTERFLIES: [usize; 2] = [4, 6];
 
 pub struct Planner<T> {
@@ -118,6 +118,7 @@ impl<T: FFTnum> Planner<T> {
             4 => Rc::new(butterflies::Butterfly4::new(self.inverse)) as Rc<FFTAlgorithm<T>>,
             5 => Rc::new(butterflies::Butterfly5::new(self.inverse)) as Rc<FFTAlgorithm<T>>,
             6 => Rc::new(butterflies::Butterfly6::new(self.inverse)) as Rc<FFTAlgorithm<T>>,
+            7 => Rc::new(butterflies::Butterfly7::new(self.inverse)) as Rc<FFTAlgorithm<T>>,
             _ => {
                 if len >= MIN_RADERS_SIZE {
                     self.plan_prime(len)
@@ -145,6 +146,7 @@ impl<T: FFTnum> Planner<T> {
             4 => ButterflyEnum::Butterfly4(butterflies::Butterfly4::new(self.inverse)),
             5 => ButterflyEnum::Butterfly5(butterflies::Butterfly5::new(self.inverse)),
             6 => ButterflyEnum::Butterfly6(butterflies::Butterfly6::new(self.inverse)),
+            7 => ButterflyEnum::Butterfly7(butterflies::Butterfly7::new(self.inverse)),
             _ => panic!("Invalid butterfly size: {}", len),
         }
     }
