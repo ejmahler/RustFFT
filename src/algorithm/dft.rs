@@ -18,13 +18,13 @@ impl<T: FFTnum> DFTAlgorithm<T> {
     #[inline(always)]
     fn perform_fft(&self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         for k in 0..spectrum.len() {
-            let output_cell = unsafe { spectrum.get_unchecked_mut(k) };
+            let output_cell = spectrum.get_mut(k).unwrap();
 
             *output_cell = Zero::zero();
             let mut twiddle_index = 0;
 
             for input_cell in signal {
-                let twiddle = unsafe { *self.twiddles.get_unchecked(twiddle_index) };
+                let twiddle = self.twiddles[twiddle_index];
                 *output_cell = *output_cell + twiddle * input_cell;
 
                 twiddle_index += k;

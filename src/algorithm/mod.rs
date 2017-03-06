@@ -5,8 +5,9 @@ mod good_thomas_algorithm;
 mod mixed_radix;
 mod raders_algorithm;
 mod radix4;
-mod dft;
 pub mod butterflies;
+
+
 
 
 pub trait FFTAlgorithm<T: FFTnum> {
@@ -85,4 +86,9 @@ pub use self::mixed_radix::{MixedRadix, MixedRadixDoubleButterfly};
 pub use self::raders_algorithm::RadersAlgorithm;
 pub use self::radix4::Radix4;
 pub use self::good_thomas_algorithm::GoodThomasAlgorithm;
+
+
+#[cfg(test)]
+mod dft;
+#[cfg(test)]
 pub use self::dft::DFTAlgorithm;
