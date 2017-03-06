@@ -7,7 +7,6 @@ use algorithm::*;
 use math_utils;
 
 
-const MIN_RADERS_SIZE: usize = 100;
 const BUTTERFLIES: [usize; 8] = [2, 3, 4, 5, 6, 7, 8, 16];
 const COMPOSITE_BUTTERFLIES: [usize; 4] = [4, 6, 8, 16];
 
@@ -121,14 +120,7 @@ impl<T: FFTnum> Planner<T> {
             7 => Rc::new(butterflies::Butterfly7::new(self.inverse)) as Rc<FFTAlgorithm<T>>,
             8 => Rc::new(butterflies::Butterfly8::new(self.inverse)) as Rc<FFTAlgorithm<T>>,
             16 => Rc::new(butterflies::Butterfly16::new(self.inverse)) as Rc<FFTAlgorithm<T>>,
-            _ => {
-                if len >= MIN_RADERS_SIZE {
-                    self.plan_prime(len)
-                } else {
-                    //we have a prime factor, but it's not large enough for raders algorithm to be worth it
-                    Rc::new(DFTAlgorithm::new(len, self.inverse)) as Rc<FFTAlgorithm<T>>
-                }
-            }
+            _ => self.plan_prime(len),
         }
     }
 

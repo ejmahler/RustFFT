@@ -8,13 +8,11 @@ use twiddles;
 use super::FFTAlgorithm;
 
 pub struct RadersAlgorithm<T> {
-    len: usize,
-
-    primitive_root: u64,
-    root_inverse: u64,
-
-    inner_fft_data: Vec<Complex<T>>,
     inner_fft: Rc<FFTAlgorithm<T>>,
+    inner_fft_data: Box<[Complex<T>]>,
+
+    input_map: Box<[usize]>,
+    output_map: Box<[usize]>,
 }
 
 impl<T: FFTnum> RadersAlgorithm<T> {
@@ -39,35 +37,16 @@ impl<T: FFTnum> RadersAlgorithm<T> {
         let mut inner_fft_output = vec![Zero::zero(); inner_fft_len];
         inner_fft.process(&mut inner_fft_input, &mut inner_fft_output);
 
+        //precompute the indexes we'll used to reorder the input and output
+        let input_map: Vec<usize> = (0..len-1).map(|i| math_utils::modular_exponent(primitive_root, (i + 1) as u64, len as u64) as usize - 1).collect();
+        let output_map: Vec<usize> = (0..len-1).map(|i| math_utils::modular_exponent(root_inverse, (i + 1) as u64, len as u64) as usize - 1).collect();
+
         Self {
-            len: len,
-            primitive_root: primitive_root,
-            root_inverse: root_inverse,
-
-            inner_fft_data: inner_fft_output,
             inner_fft: inner_fft,
-        }
-    }
+            inner_fft_data: inner_fft_output.into_boxed_slice(),
 
-    unsafe fn copy_from_input(&self, input: &[Complex<T>], output: &mut [Complex<T>]) {
-        // it's not just a straight copy from the input to the scratch, we have
-        // to compute the input index based on the scratch index and primitive root
-        for (index, output_element) in output.iter_mut().enumerate() {
-            let input_index = math_utils::modular_exponent(self.primitive_root, index as u64 + 1, self.len as u64) as usize - 1;
-            
-            *output_element = *input.get_unchecked(input_index);
-        }
-    }
-
-    unsafe fn copy_to_output(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        // copy the data back into the input vector, but again it's not just a straight copy
-        for (index, &input_element) in input.iter().enumerate() {
-            let output_index = math_utils::modular_exponent(
-                self.root_inverse,
-                index as u64 + 1,
-                self.len as u64) as usize - 1;
-
-            *output.get_unchecked_mut(output_index) = input_element;
+            input_map: input_map.into_boxed_slice(),
+            output_map: output_map.into_boxed_slice(),
         }
     }
 
@@ -85,9 +64,11 @@ impl<T: FFTnum> RadersAlgorithm<T> {
         *first_output = first_input_val + input_sum;
 
 
-
-        // redorder the input as we copy it to the output buffer
-        unsafe { self.copy_from_input(input, output) };
+        // prepare the inner FFT by reordering the input buffer into the output buffer
+        // we could compute the indexes here on the fly, but benchmarking shows it's faster to precompute and store them
+        for (&input_index, output_element) in self.input_map.iter().zip(output.iter_mut()) {
+            *output_element = input[input_index];
+        }
 
         // perform the first of two inner FFTs
         self.inner_fft.process(output, input);
@@ -107,7 +88,11 @@ impl<T: FFTnum> RadersAlgorithm<T> {
             *element = element.conj() + first_input_val;
         }
 
-        unsafe { self.copy_to_output(input, output) };
+        // copy the input buffer to the output buffer, reordering the elements as we go
+        // we could compute the indexes here on the fly, but benchmarking shows it's faster to precompute and store them
+        for (&output_index, input_element) in self.output_map.iter().zip(input.iter()) {
+            output[output_index] = *input_element;
+        }
     }
 }
 
@@ -121,7 +106,7 @@ impl<T: FFTnum> FFTAlgorithm<T> for RadersAlgorithm<T> {
         }
     }
     fn len(&self) -> usize {
-        self.len
+        self.inner_fft.len() + 1
     }
 }
 
