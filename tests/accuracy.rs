@@ -126,11 +126,23 @@ fn test_cooley_tukey() {
         let signal = random_signal(len);
         assert!(ct_matches_dft(signal, false), "length = {}", len);
     }
+
+    //test some specific lengths > 100
+    for &len in &[256, 768] {
+        let signal = random_signal(len);
+        assert!(ct_matches_dft(signal, false), "length = {}", len);
+    }
 }
 
 #[test]
 fn test_cooley_tukey_inverse() {
-    for len in 1..100 {
+    for len in 2..100 {
+        let signal = random_signal(len);
+        assert!(ct_matches_dft(signal, true), "length = {}", len);
+    }
+
+    //test some specific lengths > 100
+    for &len in &[256, 768] {
         let signal = random_signal(len);
         assert!(ct_matches_dft(signal, true), "length = {}", len);
     }

@@ -7,6 +7,7 @@ use algorithm::*;
 use math_utils;
 
 
+const MIN_RADIX4_BITS: u32 = 8; // minimum size to consider radix 4 an option is 2^8 = 256
 const BUTTERFLIES: [usize; 8] = [2, 3, 4, 5, 6, 7, 8, 16];
 const COMPOSITE_BUTTERFLIES: [usize; 4] = [4, 6, 8, 16];
 
@@ -38,6 +39,22 @@ impl<T: FFTnum> Planner<T> {
         } else {
             let result = if factors.len() == 1 || COMPOSITE_BUTTERFLIES.contains(&len) {
                 self.plan_fft_single_factor(len)
+
+            } else if len.trailing_zeros() >= MIN_RADIX4_BITS {
+                //the number of trailing zeroes in len is the number of `2` factors
+                //ie if len = 2048 * n, len.trailing_zeros() will equal 11 because 2^11 == 2048
+
+                if len.is_power_of_two() {
+                    Rc::new(Radix4::new(len, self.inverse))
+                } else {
+                    let left_len = 1 << len.trailing_zeros();
+                    let right_len = len / left_len;
+
+                    let (left_factors, right_factors) = factors.split_at(len.trailing_zeros() as usize);
+
+                    self.plan_mixed_radix(left_len, left_factors, right_len, right_factors)
+                }
+
             } else {
                 let sqrt = (len as f32).sqrt() as usize;
                 if sqrt * sqrt == len {

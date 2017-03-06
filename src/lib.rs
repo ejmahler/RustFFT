@@ -3,7 +3,6 @@
 extern crate num;
 
 mod algorithm;
-mod butterflies;
 mod math_utils;
 mod array_utils;
 mod plan;
