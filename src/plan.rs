@@ -8,8 +8,8 @@ use math_utils;
 
 
 const MIN_RADERS_SIZE: usize = 100;
-const BUTTERFLIES: [usize; 6] = [2, 3, 4, 5, 6, 7];
-const COMPOSITE_BUTTERFLIES: [usize; 2] = [4, 6];
+const BUTTERFLIES: [usize; 8] = [2, 3, 4, 5, 6, 7, 8, 16];
+const COMPOSITE_BUTTERFLIES: [usize; 4] = [4, 6, 8, 16];
 
 pub struct Planner<T> {
     inverse: bool,
@@ -119,6 +119,8 @@ impl<T: FFTnum> Planner<T> {
             5 => Rc::new(butterflies::Butterfly5::new(self.inverse)) as Rc<FFTAlgorithm<T>>,
             6 => Rc::new(butterflies::Butterfly6::new(self.inverse)) as Rc<FFTAlgorithm<T>>,
             7 => Rc::new(butterflies::Butterfly7::new(self.inverse)) as Rc<FFTAlgorithm<T>>,
+            8 => Rc::new(butterflies::Butterfly8::new(self.inverse)) as Rc<FFTAlgorithm<T>>,
+            16 => Rc::new(butterflies::Butterfly16::new(self.inverse)) as Rc<FFTAlgorithm<T>>,
             _ => {
                 if len >= MIN_RADERS_SIZE {
                     self.plan_prime(len)
@@ -147,6 +149,8 @@ impl<T: FFTnum> Planner<T> {
             5 => ButterflyEnum::Butterfly5(butterflies::Butterfly5::new(self.inverse)),
             6 => ButterflyEnum::Butterfly6(butterflies::Butterfly6::new(self.inverse)),
             7 => ButterflyEnum::Butterfly7(butterflies::Butterfly7::new(self.inverse)),
+            8 => ButterflyEnum::Butterfly8(butterflies::Butterfly8::new(self.inverse)),
+            16 => ButterflyEnum::Butterfly16(butterflies::Butterfly16::new(self.inverse)),
             _ => panic!("Invalid butterfly size: {}", len),
         }
     }

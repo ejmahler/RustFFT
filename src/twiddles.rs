@@ -23,6 +23,15 @@ pub fn single_twiddle<T: FFTnum>(i: usize, fft_len: usize, inverse: bool) -> Com
     }
 }
 
+pub fn rotate_90<T: FFTnum>(value: Complex<T>, inverse:bool) -> Complex<T>
+{
+    if inverse {
+        Complex{re:-value.im, im: value.re}
+    } else {
+        Complex{re: value.im, im:-value.re}
+    }
+}
+
 #[cfg(test)]
 mod unit_tests {
 	use super::*;

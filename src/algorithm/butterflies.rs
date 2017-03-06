@@ -28,10 +28,18 @@ pub struct Butterfly2;
 impl Butterfly2 {
     #[inline(always)]
     unsafe fn perform_fft<T: FFTnum>(&self, buffer: &mut [Complex<T>]) {
-    	let temp = *buffer.get_unchecked(0) + *buffer.get_unchecked(1);
+        let temp = *buffer.get_unchecked(0) + *buffer.get_unchecked(1);
         
         *buffer.get_unchecked_mut(1) = *buffer.get_unchecked(0) - *buffer.get_unchecked(1);
         *buffer.get_unchecked_mut(0) = temp;
+    }
+
+    #[inline(always)]
+    unsafe fn perform_fft_direct<T: FFTnum>(&self, left: &mut Complex<T>, right: &mut Complex<T>) {
+        let temp = *left + *right;
+        
+        *right = *left - *right;
+        *left = temp;
     }
 }
 impl<T: FFTnum> FFTButterfly<T> for Butterfly2 {
@@ -125,47 +133,42 @@ impl<T: FFTnum> FFTAlgorithm<T> for Butterfly3<T> {
 
 
 pub struct Butterfly4 {
-	inverse: bool,
+    inverse: bool,
 }
 impl Butterfly4
 {
-	#[inline(always)]
+    #[inline(always)]
     pub fn new(inverse: bool) -> Self {
         Self { inverse:inverse }
     }
 
-	#[inline(always)]
+    #[inline(always)]
     pub unsafe fn perform_fft<T: FFTnum>(&self, buffer: &mut [Complex<T>]) {
-    	let butterfly2 = Butterfly2{};
+        let butterfly2 = Butterfly2{};
 
-		//we're going to hardcode a step of mixed radix
-    	//aka we're going to do the six step algorithm
+        //we're going to hardcode a step of mixed radix
+        //aka we're going to do the six step algorithm
 
-    	// step 1: transpose, which in this case just means swapping 2 elements
-    	swap_unchecked(buffer, 1, 2);
+        // step 1: transpose, which we're skipping because we're just going to perform non-contiguous FFTs
 
-    	// step 2: column FFTs
-    	butterfly2.perform_fft(&mut buffer[..2]);
-    	butterfly2.perform_fft(&mut buffer[2..]);
+        // step 2: column FFTs
+        {
+            let (a, b) = buffer.split_at_mut(2);
+            butterfly2.perform_fft_direct(a.get_unchecked_mut(0), b.get_unchecked_mut(0));
+            butterfly2.perform_fft_direct(a.get_unchecked_mut(1), b.get_unchecked_mut(1));
 
-    	// step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-    	let final_value = *buffer.get_unchecked(3);
+            // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
+            *b.get_unchecked_mut(1) = twiddles::rotate_90(*b.get_unchecked(1), self.inverse);
 
-    	*buffer.get_unchecked_mut(3) = if self.inverse {
-        	Complex{re:-final_value.im, im: final_value.re}
-        } else {
-        	Complex{re: final_value.im, im:-final_value.re}
-        };
+            // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
-        // step 4: transpose, which in this case just means swapping 2 elements
-    	swap_unchecked(buffer, 1, 2);
+            // step 5: row FFTs
+            butterfly2.perform_fft(a);
+            butterfly2.perform_fft(b);
+        }
 
-        // step 5: row FFTs
-        butterfly2.perform_fft(&mut buffer[..2]);
-    	butterfly2.perform_fft(&mut buffer[2..]);
-
-    	// step 6: transpose, which in this case just means swapping 2 elements
-    	swap_unchecked(buffer, 1, 2);
+        // step 6: transpose
+        swap_unchecked(buffer, 1, 2);
     }
 }
 impl<T: FFTnum> FFTButterfly<T> for Butterfly4 {
@@ -294,53 +297,47 @@ impl<T: FFTnum> Butterfly6<T> {
         Self { butterfly3: Butterfly3::inverse_of(&fft.butterfly3) }
     }
 
-    #[inline(always)]
-    unsafe fn transpose_3x2_to_2x3(buffer: &mut [Complex<T>]) {
-    	let temp = *buffer.get_unchecked(3);
-		*buffer.get_unchecked_mut(3) = *buffer.get_unchecked(4);
-		*buffer.get_unchecked_mut(4) = *buffer.get_unchecked(2);
-		*buffer.get_unchecked_mut(2) = *buffer.get_unchecked(1);
-		*buffer.get_unchecked_mut(1) = temp;
-    }
-
 	#[inline(always)]
     pub unsafe fn perform_fft(&self, buffer: &mut [Complex<T>]) {
 		//since GCD(2,3) == 1 we're going to hardcode a step of the Good-Thomas algorithm to avoid twiddle factors
 
 		// step 1: reorder the input directly into the scratch. normally there's a whole thing to compute this ordering
 		//but thankfully we can just precompute it and hardcode it
-		let mut scratch = [
-			*buffer.get_unchecked(0),
-			*buffer.get_unchecked(2),
-			*buffer.get_unchecked(4),
-			*buffer.get_unchecked(3),
-			*buffer.get_unchecked(5),
-			*buffer.get_unchecked(1),
-		];
+		let mut scratch_a = [
+            *buffer.get_unchecked(0),
+            *buffer.get_unchecked(2),
+            *buffer.get_unchecked(4),
+        ];
+
+        let mut scratch_b = [
+            *buffer.get_unchecked(3),
+            *buffer.get_unchecked(5),
+            *buffer.get_unchecked(1),
+        ];
 
     	// step 2: column FFTs
-    	self.butterfly3.perform_fft(&mut scratch[..3]);
-    	self.butterfly3.perform_fft(&mut scratch[3..]);
+    	self.butterfly3.perform_fft(&mut scratch_a);
+    	self.butterfly3.perform_fft(&mut scratch_b);
 
     	// step 3: apply twiddle factors -- SKIPPED because good-thomas doesn't have twiddle factors :)
 
-        // step 4: transpose
-    	Self::transpose_3x2_to_2x3(&mut scratch);
+        // step 4: SKIPPED because the next FFTs will be non-contiguous
 
         // step 5: row FFTs
         let butterfly2 = Butterfly2{};
-        butterfly2.perform_fft(&mut scratch[..2]);
-        butterfly2.perform_fft(&mut scratch[2..4]);
-        butterfly2.perform_fft(&mut scratch[4..]);
+        butterfly2.perform_fft_direct(&mut scratch_a[0], &mut scratch_b[0]);
+        butterfly2.perform_fft_direct(&mut scratch_a[1], &mut scratch_b[1]);
+        butterfly2.perform_fft_direct(&mut scratch_a[2], &mut scratch_b[2]);
 
     	// step 6: reorder the result back into the buffer. again we would normally have to do an expensive computation
     	// but instead we can precompute and hardcode the ordering
-    	*buffer.get_unchecked_mut(0) = scratch[0];
-    	*buffer.get_unchecked_mut(3) = scratch[1];
-    	*buffer.get_unchecked_mut(4) = scratch[2];
-    	*buffer.get_unchecked_mut(1) = scratch[3];
-    	*buffer.get_unchecked_mut(2) = scratch[4];
-    	*buffer.get_unchecked_mut(5) = scratch[5];
+        // note that we're also rolling a transpose step into this reorder
+    	*buffer.get_unchecked_mut(0) = scratch_a[0];
+    	*buffer.get_unchecked_mut(3) = scratch_b[0];
+    	*buffer.get_unchecked_mut(4) = scratch_a[1];
+    	*buffer.get_unchecked_mut(1) = scratch_b[1];
+    	*buffer.get_unchecked_mut(2) = scratch_a[2];
+    	*buffer.get_unchecked_mut(5) = scratch_b[2];
     }
 }
 impl<T: FFTnum> FFTButterfly<T> for Butterfly6<T> {
@@ -465,13 +462,227 @@ impl<T: FFTnum> FFTAlgorithm<T> for Butterfly7<T> {
 
 
 
+pub struct Butterfly8<T> {
+    twiddle: Complex<T>,
+    inverse: bool,
+}
+impl<T: FFTnum> Butterfly8<T>
+{
+    #[inline(always)]
+    pub fn new(inverse: bool) -> Self {
+        Self {
+            inverse: inverse,
+            twiddle: twiddles::single_twiddle(1, 8, inverse)
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn transpose_4x2_to_2x4(buffer: &mut [Complex<T>; 8]) {
+        let temp1 = buffer[1];
+        buffer[1] = buffer[4];
+        buffer[4] = buffer[2];
+        buffer[2] = temp1;
+
+        let temp6 = buffer[6];
+        buffer[6] = buffer[3];
+        buffer[3] = buffer[5];
+        buffer[5] = temp6;
+    }
+
+    #[inline(always)]
+    pub unsafe fn perform_fft(&self, buffer: &mut [Complex<T>]) {
+        let butterfly2 = Butterfly2{};
+        let butterfly4 = Butterfly4::new(self.inverse);
+
+        //we're going to hardcode a step of mixed radix
+        //aka we're going to do the six step algorithm
+
+        // step 1: transpose the input into the scratch
+        let mut scratch = [
+            *buffer.get_unchecked(0),
+            *buffer.get_unchecked(2),
+            *buffer.get_unchecked(4),
+            *buffer.get_unchecked(6),
+            *buffer.get_unchecked(1),
+            *buffer.get_unchecked(3),
+            *buffer.get_unchecked(5),
+            *buffer.get_unchecked(7),
+        ];
+
+        // step 2: column FFTs
+        butterfly4.perform_fft(&mut scratch[..4]);
+        butterfly4.perform_fft(&mut scratch[4..]);
+
+        // step 3: apply twiddle factors
+        let twiddle1 = self.twiddle;
+        let twiddle3 = Complex{ re: -twiddle1.re, im: twiddle1.im };
+
+        *scratch.get_unchecked_mut(5) = scratch.get_unchecked(5) * twiddle1;
+        *scratch.get_unchecked_mut(6) = twiddles::rotate_90(*scratch.get_unchecked(6), self.inverse);
+        *scratch.get_unchecked_mut(7) = scratch.get_unchecked(7) * twiddle3;
+
+        // step 4: transpose
+        Self::transpose_4x2_to_2x4(&mut scratch);
+
+        // step 5: row FFTs
+        butterfly2.perform_fft(&mut scratch[..2]);
+        butterfly2.perform_fft(&mut scratch[2..4]);
+        butterfly2.perform_fft(&mut scratch[4..6]);
+        butterfly2.perform_fft(&mut scratch[6..]);
+
+        // step 6: transpose the scratch into the buffer
+        *buffer.get_unchecked_mut(0) = scratch[0];
+        *buffer.get_unchecked_mut(1) = scratch[2];
+        *buffer.get_unchecked_mut(2) = scratch[4];
+        *buffer.get_unchecked_mut(3) = scratch[6];
+        *buffer.get_unchecked_mut(4) = scratch[1];
+        *buffer.get_unchecked_mut(5) = scratch[3];
+        *buffer.get_unchecked_mut(6) = scratch[5];
+        *buffer.get_unchecked_mut(7) = scratch[7];
+    }
+}
+impl<T: FFTnum> FFTButterfly<T> for Butterfly8<T> {
+    #[inline(always)]
+    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
+        for chunk in buffer.chunks_mut(8) {
+            self.perform_fft(chunk);
+        }
+    }
+}
+impl<T: FFTnum> FFTAlgorithm<T> for Butterfly8<T> {
+    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_size(input, output, 8);
+        output.copy_from_slice(input);
+
+        unsafe { self.perform_fft(output) };
+    }
+    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        output.copy_from_slice(input);
+
+        unsafe { self.process_multi_inplace(output) };
+    }
+    #[inline(always)]
+    fn len(&self) -> usize {
+        8
+    }
+}
+
+
+
+pub struct Butterfly16<T> {
+    twiddle1: Complex<T>,
+    twiddle2: Complex<T>,
+    inverse: bool,
+}
+impl<T: FFTnum> Butterfly16<T>
+{
+    #[inline(always)]
+    pub fn new(inverse: bool) -> Self {
+        Self {
+            inverse: inverse,
+            twiddle1: twiddles::single_twiddle(1, 16, inverse),
+            twiddle2: twiddles::single_twiddle(2, 16, inverse),
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn transpose_square(buffer: &mut [Complex<T>]) {
+        swap_unchecked(buffer, 1, 4);
+        swap_unchecked(buffer, 2, 8);
+        swap_unchecked(buffer, 3, 12);
+
+        swap_unchecked(buffer, 6, 9);
+        swap_unchecked(buffer, 7, 13);
+
+        swap_unchecked(buffer, 11, 14);
+    }
+
+    #[inline(always)]
+    pub unsafe fn perform_fft(&self, buffer: &mut [Complex<T>]) {
+        let butterfly4 = Butterfly4::new(self.inverse);
+
+        //we're going to hardcode a step of mixed radix
+        //aka we're going to do the six step algorithm
+
+        // step 1: transpose the input into the scratch
+        Self::transpose_square(buffer);
+
+        // step 2: column FFTs
+        butterfly4.perform_fft(&mut buffer[..4]);
+        butterfly4.perform_fft(&mut buffer[4..8]);
+        butterfly4.perform_fft(&mut buffer[8..12]);
+        butterfly4.perform_fft(&mut buffer[12..]);
+
+        // step 3: apply twiddle factors
+        let twiddle1 = self.twiddle1;
+        let twiddle2 = self.twiddle2;
+        let twiddle3 = if self.inverse {
+            Complex{ re: twiddle1.im, im: twiddle1.re }
+        } else {
+            Complex{ re: -twiddle1.im, im: -twiddle1.re }
+        };
+        let twiddle6 = Complex{ re: -twiddle2.re, im: twiddle2.im };
+        let twiddle9 = -twiddle1;
+
+        *buffer.get_unchecked_mut(5) = buffer.get_unchecked(5) * twiddle1;
+        *buffer.get_unchecked_mut(6) = buffer.get_unchecked(6) * twiddle2;
+        *buffer.get_unchecked_mut(7) = buffer.get_unchecked(7) * twiddle3;
+
+        *buffer.get_unchecked_mut(9) = buffer.get_unchecked(9) * twiddle2;
+        *buffer.get_unchecked_mut(10) = twiddles::rotate_90(*buffer.get_unchecked(10), self.inverse);
+        *buffer.get_unchecked_mut(11) = buffer.get_unchecked(11) * twiddle6;
+
+        *buffer.get_unchecked_mut(13) = buffer.get_unchecked(13) * twiddle3;
+        *buffer.get_unchecked_mut(14) = buffer.get_unchecked(14) * twiddle6;
+        *buffer.get_unchecked_mut(15) = buffer.get_unchecked(15) * twiddle9;
+
+        // step 4: transpose
+        Self::transpose_square(buffer);
+
+        // step 5: row FFTs
+        butterfly4.perform_fft(&mut buffer[..4]);
+        butterfly4.perform_fft(&mut buffer[4..8]);
+        butterfly4.perform_fft(&mut buffer[8..12]);
+        butterfly4.perform_fft(&mut buffer[12..]);
+
+        // step 6: transpose
+        Self::transpose_square(buffer);
+    }
+}
+impl<T: FFTnum> FFTButterfly<T> for Butterfly16<T> {
+    #[inline(always)]
+    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
+        for chunk in buffer.chunks_mut(16) {
+            self.perform_fft(chunk);
+        }
+    }
+}
+impl<T: FFTnum> FFTAlgorithm<T> for Butterfly16<T> {
+    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_size(input, output, 16);
+        output.copy_from_slice(input);
+
+        unsafe { self.perform_fft(output) };
+    }
+    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        output.copy_from_slice(input);
+
+        unsafe { self.process_multi_inplace(output) };
+    }
+    #[inline(always)]
+    fn len(&self) -> usize {
+        16
+    }
+}
+
+
+
 
 #[cfg(test)]
 mod unit_tests {
-    use std::rc::Rc;
 	use super::*;
 	use test_utils::{random_signal, compare_vectors};
-	use algorithm::{DFTAlgorithm, RadersAlgorithm};
+	use algorithm::DFTAlgorithm;
 	use num::Zero;
 
 	#[test]
@@ -531,28 +742,22 @@ mod unit_tests {
                     let mut expected = [Zero::zero(); SIZE];
                     dft.process(&mut expected_input, &mut expected);
 
-                    
-
                     //test process method
                     let mut process_input = input.to_vec();
                     let mut actual = [Zero::zero(); SIZE];
                     fft.process(&mut process_input, &mut actual);
 
-                    if SIZE == 7 {
-
-                        let inner_fft = Rc::new(DFTAlgorithm::new(SIZE-1, false));
-                        let raders = RadersAlgorithm::new(SIZE, inner_fft, false);
-                        let mut raders_input = input.to_vec();
-                        let mut raders_output = [Zero::zero(); SIZE];
-
-                        raders.process(&mut raders_input, &mut raders_output);
-
-                        println!("raders output: {:?}", raders_output);
+                    if SIZE == 16 {
+                        println!("actual:");
+                        for chunk in actual.chunks(4) {
+                            println!("{:?}", chunk);
+                        }
+                        println!("");
+                        println!("expected:");
+                        for chunk in expected.chunks(4) {
+                            println!("{:?}", chunk);
+                        }
                     }
-
-                    println!("actual output: {:?}", actual);
-
-                    println!("expect output: {:?}", expected);
 
                     assert!(compare_vectors(&expected, &actual), "forward, i = {}", i);
 
@@ -593,4 +798,6 @@ mod unit_tests {
 	test_butterfly_func!(test_butterfly5, Butterfly5, 5);
 	test_butterfly_func!(test_butterfly6, Butterfly6, 6);
     test_butterfly_func!(test_butterfly7, Butterfly7, 7);
+    test_butterfly_func!(test_butterfly8, Butterfly8, 8);
+    test_butterfly_func!(test_butterfly16, Butterfly16, 16);
 }
