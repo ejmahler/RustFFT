@@ -15,7 +15,7 @@ pub struct MixedRadix<T> {
     height: usize,
     height_size_fft: Rc<FFTAlgorithm<T>>,
 
-    twiddles: Vec<Complex<T>>,
+    twiddles: Box<[Complex<T>]>,
 }
 
 impl<T: FFTnum> MixedRadix<T> {
@@ -26,6 +26,13 @@ impl<T: FFTnum> MixedRadix<T> {
 
         let len = width * height;
 
+        let mut twiddles = Vec::with_capacity(len);
+        for x in 0..width {
+            for y in 0..height {
+                twiddles.push(twiddles::single_twiddle(x * y, len, inverse));
+            }
+        }
+
         Self {
             width: width,
             width_size_fft: width_fft,
@@ -33,7 +40,7 @@ impl<T: FFTnum> MixedRadix<T> {
             height: height,
             height_size_fft: height_fft,
 
-            twiddles: twiddles::generate_twiddle_factors(len, inverse),
+            twiddles: twiddles.into_boxed_slice(),
         }
     }
 
@@ -47,16 +54,9 @@ impl<T: FFTnum> MixedRadix<T> {
         // STEP 2: perform FFTs of size `height`
         self.height_size_fft.process_multi(output, input);
 
-        // STEP 3: Apply twiddle factors. we skip row 0 and column 0 because the
-        // twiddle factor for row/column 0 is always the identity
-        for (row, chunk) in input.chunks_mut(self.height).enumerate().skip(1)
-        {
-            for (column, cell) in chunk.iter_mut().enumerate().skip(1)
-            {
-
-                let twiddle = unsafe { *self.twiddles.get_unchecked(row * column) };
-                *cell = *cell * twiddle;
-            }
+        // STEP 3: Apply twiddle factors
+        for (element, &twiddle) in input.iter_mut().zip(self.twiddles.iter()) {
+            *element = *element * twiddle;
         }
 
         // STEP 4: transpose again
@@ -94,7 +94,7 @@ pub struct MixedRadixDoubleButterfly<T> {
     height: usize,
     height_size_fft: ButterflyEnum<T>,
 
-    twiddles: Vec<Complex<T>>,
+    twiddles: Box<[Complex<T>]>,
 }
 
 impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
@@ -104,6 +104,13 @@ impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
 
         let len = width * height;
 
+        let mut twiddles = Vec::with_capacity(len);
+        for x in 0..width {
+            for y in 0..height {
+                twiddles.push(twiddles::single_twiddle(x * y, len, inverse));
+            }
+        }
+
         Self {
             width: width,
             width_size_fft: width_fft,
@@ -111,7 +118,7 @@ impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
             height: height,
             height_size_fft: height_fft,
 
-            twiddles: twiddles::generate_twiddle_factors(len, inverse),
+            twiddles: twiddles.into_boxed_slice(),
         }
     }
 
@@ -125,16 +132,9 @@ impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
         // STEP 2: perform FFTs of size 'height'
         unsafe { self.height_size_fft.process_multi_inplace(output) };
 
-        // STEP 3: Apply twiddle factors. we skip row 0 and column 0 because the
-        // twiddle factor for row/column 0 is always the identity
-        for (row, chunk) in output.chunks_mut(self.height).enumerate().skip(1)
-        {
-            for (column, cell) in chunk.iter_mut().enumerate().skip(1)
-            {
-
-                let twiddle = unsafe { *self.twiddles.get_unchecked(row * column) };
-                *cell = *cell * twiddle;
-            }
+        // STEP 3: Apply twiddle factors
+        for (element, &twiddle) in output.iter_mut().zip(self.twiddles.iter()) {
+            *element = *element * twiddle;
         }
 
         // STEP 4: transpose again
