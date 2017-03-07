@@ -41,7 +41,7 @@ impl<T: FFTnum> RadersAlgorithm<T> {
         let input_map: Vec<usize> = (0..len-1).map(|i| math_utils::modular_exponent(primitive_root, (i + 1) as u64, len as u64) as usize - 1).collect();
         let output_map: Vec<usize> = (0..len-1).map(|i| math_utils::modular_exponent(root_inverse, (i + 1) as u64, len as u64) as usize - 1).collect();
 
-        Self {
+        RadersAlgorithm {
             inner_fft: inner_fft,
             inner_fft_data: inner_fft_output.into_boxed_slice(),
 

@@ -71,14 +71,14 @@ pub struct Butterfly3<T> {
 impl<T: FFTnum> Butterfly3<T> {
 	#[inline(always)]
     pub fn new(inverse: bool) -> Self {
-        Self {
+        Butterfly3 {
             twiddle: twiddles::single_twiddle(1, 3, inverse)
         }
     }
 
     #[inline(always)]
     pub fn inverse_of(fft: &Butterfly3<T>) -> Self {
-        Self {
+        Butterfly3 {
             twiddle: fft.twiddle.conj()
         }
     }
@@ -135,7 +135,7 @@ impl Butterfly4
 {
     #[inline(always)]
     pub fn new(inverse: bool) -> Self {
-        Self { inverse:inverse }
+        Butterfly4 { inverse:inverse }
     }
 
     #[inline(always)]
@@ -215,7 +215,7 @@ impl<T: FFTnum> Butterfly5<T> {
     	let butterfly = Butterfly4::new(inverse);
     	unsafe { butterfly.perform_fft(&mut fft_data) };
 
-        Self { 
+        Butterfly5 { 
         	inner_fft_multiply: Box::new(fft_data),
         	inverse: inverse,
         }
@@ -289,10 +289,10 @@ pub struct Butterfly6<T> {
 impl<T: FFTnum> Butterfly6<T> {
 
     pub fn new(inverse: bool) -> Self {
-        Self { butterfly3: Butterfly3::new(inverse) }
+        Butterfly6 { butterfly3: Butterfly3::new(inverse) }
     }
     pub fn inverse_of(fft: &Butterfly6<T>) -> Self {
-        Self { butterfly3: Butterfly3::inverse_of(&fft.butterfly3) }
+        Butterfly6 { butterfly3: Butterfly3::inverse_of(&fft.butterfly3) }
     }
 
 	#[inline(always)]
@@ -385,7 +385,7 @@ impl<T: FFTnum> Butterfly7<T> {
         let butterfly = Butterfly6::new(inverse);
         unsafe { butterfly.perform_fft(&mut fft_data) };
 
-        Self { 
+        Butterfly7 { 
             inner_fft: butterfly,
             inner_fft_multiply: fft_data,
         }
@@ -470,7 +470,7 @@ impl<T: FFTnum> Butterfly8<T>
 {
     #[inline(always)]
     pub fn new(inverse: bool) -> Self {
-        Self {
+        Butterfly8 {
             inverse: inverse,
             twiddle: twiddles::single_twiddle(1, 8, inverse)
         }
@@ -579,7 +579,7 @@ impl<T: FFTnum> Butterfly16<T>
 {
     #[inline(always)]
     pub fn new(inverse: bool) -> Self {
-        Self {
+        Butterfly16 {
             inverse: inverse,
             twiddle1: twiddles::single_twiddle(1, 16, inverse),
             twiddle2: twiddles::single_twiddle(2, 16, inverse),

@@ -18,7 +18,7 @@ pub struct Planner<T> {
 
 impl<T: FFTnum> Planner<T> {
     pub fn new(inverse: bool) -> Self {
-        Self {
+        Planner {
             inverse: inverse,
             algorithm_cache: HashMap::new(),
         }

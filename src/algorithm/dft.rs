@@ -10,7 +10,7 @@ pub struct DFTAlgorithm<T> {
 
 impl<T: FFTnum> DFTAlgorithm<T> {
     pub fn new(len: usize, inverse: bool) -> Self {
-        Self {
+        DFTAlgorithm {
             twiddles: twiddles::generate_twiddle_factors(len, inverse),
         }
     }

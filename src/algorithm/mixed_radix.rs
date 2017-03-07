@@ -33,7 +33,7 @@ impl<T: FFTnum> MixedRadix<T> {
             }
         }
 
-        Self {
+        MixedRadix {
             width: width,
             width_size_fft: width_fft,
 
@@ -115,7 +115,7 @@ impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
             }
         }
 
-        Self {
+        MixedRadixDoubleButterfly {
             width: width,
             width_size_fft: width_fft,
 
