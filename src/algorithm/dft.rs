@@ -1,5 +1,5 @@
 use num::{Complex, Zero};
-use common::FFTnum;
+use common::{FFTnum, verify_length, verify_length_divisible};
 
 use algorithm::FFTAlgorithm;
 use twiddles;
@@ -38,9 +38,13 @@ impl<T: FFTnum> DFTAlgorithm<T> {
 
 impl<T: FFTnum> FFTAlgorithm<T> for DFTAlgorithm<T> {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_length(input, output, self.len());
+
         self.perform_fft(input, output);
     }
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_length_divisible(input, output, self.len());
+
         for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
             self.perform_fft(in_chunk, out_chunk);
         }

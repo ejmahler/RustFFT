@@ -1,5 +1,7 @@
 const BLOCK_SIZE: usize = 16;
 
+use common::verify_length;
+
 #[inline(always)]
 unsafe fn transpose_block<T: Copy>(input: &[T], output: &mut [T], width: usize, height: usize, block_x: usize, block_y: usize) {
     for inner_x in 0..BLOCK_SIZE {
@@ -34,8 +36,7 @@ unsafe fn transpose_endcap_block<T: Copy>(input: &[T], output: &mut [T], width: 
 /// transpose the rows and columns of that 2D array into the output
 // Use "Loop tiling" to improve cache-friendliness
 pub fn transpose<T: Copy>(width: usize, height: usize, input: &[T], output: &mut [T]) {
-    assert_eq!(width * height, input.len());
-    assert_eq!(input.len(), output.len());
+    verify_length(input, output, width * height);
 
     let x_block_count = width / BLOCK_SIZE;
     let y_block_count = height / BLOCK_SIZE;
@@ -94,15 +95,13 @@ pub fn transpose<T: Copy>(width: usize, height: usize, input: &[T], output: &mut
 /// Given an array of size width * height, representing a flattened 2D array,
 /// transpose the rows and columns of that 2D array into the output
 /// benchmarking shows that loop tiling isn't effective for small arrays (in the range of 50x50 or smaller)
-pub fn transpose_small<T: Copy>(width: usize, height: usize, input: &[T], output: &mut [T]) {
+pub unsafe fn transpose_small<T: Copy>(width: usize, height: usize, input: &[T], output: &mut [T]) {
     for x in 0..width {
         for y in 0..height {
             let input_index = x + y * width;
             let output_index = y + x * height;
 
-            unsafe {
-                *output.get_unchecked_mut(output_index) = *input.get_unchecked(input_index);
-            }
+            *output.get_unchecked_mut(output_index) = *input.get_unchecked(input_index);
         }
     }
 }

@@ -48,8 +48,7 @@ impl<T: common::FFTnum> FFT<T> {
     /// This method will panic if `signal` and `spectrum` are not the length
     /// specified in the struct's constructor.
     pub fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        assert!(signal.len() == spectrum.len());
-        assert!(signal.len() == self.len);
+        common::verify_length(signal, spectrum, self.len);
 
         self.scratch.copy_from_slice(signal);
 

@@ -1,5 +1,5 @@
 use num::{Complex, FromPrimitive, Zero};
-use common::FFTnum;
+use common::{FFTnum, verify_length, verify_length_divisible};
 
 use twiddles;
 use super::{FFTAlgorithm, FFTButterfly};
@@ -12,12 +12,6 @@ unsafe fn swap_unchecked<T: Copy>(buffer: &mut [T], a: usize, b: usize) {
 	let temp = *buffer.get_unchecked(a);
 	*buffer.get_unchecked_mut(a) = *buffer.get_unchecked(b);
 	*buffer.get_unchecked_mut(b) = temp;
-}
-
-#[inline(always)]
-fn verify_size<T>(signal: &[T], spectrum: &[T], expected: usize) {
-	assert_eq!(signal.len(), expected, "Signal is the wrong length. Expected {}, got {}", expected, signal.len());
-	assert_eq!(spectrum.len(), expected, "Spectrum is the wrong length. Expected {}, got {}", expected, spectrum.len());
 }
 
 
@@ -52,12 +46,13 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly2 {
 }
 impl<T: FFTnum> FFTAlgorithm<T> for Butterfly2 {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_size(input, output, 2);
+        verify_length(input, output, 2);
         output.copy_from_slice(input);
 
         unsafe { self.perform_fft(output) };
     }
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_length_divisible(input, output, 2);
         output.copy_from_slice(input);
 
         unsafe { self.process_multi_inplace(output) };
@@ -113,12 +108,13 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly3<T> {
 }
 impl<T: FFTnum> FFTAlgorithm<T> for Butterfly3<T> {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_size(input, output, self.len());
+        verify_length(input, output, self.len());
         output.copy_from_slice(input);
 
         unsafe { self.perform_fft(output) };
     }
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_length_divisible(input, output, 3);
         output.copy_from_slice(input);
 
         unsafe { self.process_multi_inplace(output) };
@@ -181,12 +177,13 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly4 {
 }
 impl<T: FFTnum> FFTAlgorithm<T> for Butterfly4 {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_size(input, output, 4);
+        verify_length(input, output, 4);
         output.copy_from_slice(input);
 
         unsafe { self.perform_fft(output) };
     }
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_length_divisible(input, output, 4);
         output.copy_from_slice(input);
 
         unsafe { self.process_multi_inplace(output) };
@@ -265,12 +262,13 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly5<T> {
 }
 impl<T: FFTnum> FFTAlgorithm<T> for Butterfly5<T> {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_size(input, output, self.len());
+        verify_length(input, output, self.len());
         output.copy_from_slice(input);
 
         unsafe { self.perform_fft(output) };
     }
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_length_divisible(input, output, 5);
         output.copy_from_slice(input);
 
         unsafe { self.process_multi_inplace(output) };
@@ -350,12 +348,13 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly6<T> {
 }
 impl<T: FFTnum> FFTAlgorithm<T> for Butterfly6<T> {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_size(input, output, self.len());
+        verify_length(input, output, self.len());
         output.copy_from_slice(input);
 
         unsafe { self.perform_fft(output) };
     }
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_length_divisible(input, output, 6);
         output.copy_from_slice(input);
 
         unsafe { self.process_multi_inplace(output) };
@@ -444,12 +443,13 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly7<T> {
 }
 impl<T: FFTnum> FFTAlgorithm<T> for Butterfly7<T> {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_size(input, output, self.len());
+        verify_length(input, output, self.len());
         output.copy_from_slice(input);
 
         unsafe { self.perform_fft(output) };
     }
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_length_divisible(input, output, 7);
         output.copy_from_slice(input);
 
         unsafe { self.process_multi_inplace(output) };
@@ -551,12 +551,13 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly8<T> {
 }
 impl<T: FFTnum> FFTAlgorithm<T> for Butterfly8<T> {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_size(input, output, 8);
+        verify_length(input, output, 8);
         output.copy_from_slice(input);
 
         unsafe { self.perform_fft(output) };
     }
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_length_divisible(input, output, 8);
         output.copy_from_slice(input);
 
         unsafe { self.process_multi_inplace(output) };
@@ -659,12 +660,13 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly16<T> {
 }
 impl<T: FFTnum> FFTAlgorithm<T> for Butterfly16<T> {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_size(input, output, 16);
+        verify_length(input, output, 16);
         output.copy_from_slice(input);
 
         unsafe { self.perform_fft(output) };
     }
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_length_divisible(input, output, 16);
         output.copy_from_slice(input);
 
         unsafe { self.process_multi_inplace(output) };

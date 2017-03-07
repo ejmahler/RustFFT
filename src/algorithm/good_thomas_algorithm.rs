@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use num::Complex;
-use common::FFTnum;
+use common::{FFTnum, verify_length, verify_length_divisible};
 
 use math_utils;
 use array_utils;
@@ -105,11 +105,14 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
 
 impl<T: FFTnum> FFTAlgorithm<T> for GoodThomasAlgorithm<T> {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_length(input, output, self.len());
+
         self.perform_fft(input, output);
     }
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        for (in_chunk, out_chunk) in
-            input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
+        verify_length_divisible(input, output, self.len());
+
+        for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
             self.perform_fft(in_chunk, out_chunk);
         }
     }

@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use num::Complex;
 
-use common::FFTnum;
+use common::{FFTnum, verify_length, verify_length_divisible};
 
 use algorithm::{FFTAlgorithm, ButterflyEnum};
 use array_utils;
@@ -71,9 +71,13 @@ impl<T: FFTnum> MixedRadix<T> {
 }
 impl<T: FFTnum> FFTAlgorithm<T> for MixedRadix<T> {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_length(input, output, self.len());
+
         self.perform_fft(input, output);
     }
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_length_divisible(input, output, self.len());
+
         for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
             self.perform_fft(in_chunk, out_chunk);
         }
@@ -123,14 +127,14 @@ impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
     }
 
 
-    fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+    unsafe fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         // SIX STEP FFT:
 
         // STEP 1: transpose
         array_utils::transpose_small(self.width, self.height, input, output);
 
         // STEP 2: perform FFTs of size 'height'
-        unsafe { self.height_size_fft.process_multi_inplace(output) };
+        self.height_size_fft.process_multi_inplace(output);
 
         // STEP 3: Apply twiddle factors
         for (element, &twiddle) in output.iter_mut().zip(self.twiddles.iter()) {
@@ -141,7 +145,7 @@ impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
         array_utils::transpose_small(self.height, self.width, output, input);
 
         // STEP 5: perform FFTs of size 'width'
-        unsafe { self.width_size_fft.process_multi_inplace(input) };
+        self.width_size_fft.process_multi_inplace(input);
 
         // STEP 6: transpose again
         array_utils::transpose_small(self.width, self.height, input, output);
@@ -150,11 +154,15 @@ impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
 
 impl<T: FFTnum> FFTAlgorithm<T> for MixedRadixDoubleButterfly<T> {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        self.perform_fft(input, output);
+        verify_length(input, output, self.len());
+
+        unsafe { self.perform_fft(input, output) };
     }
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_length_divisible(input, output, self.len());
+
         for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
-            self.perform_fft(in_chunk, out_chunk);
+            unsafe { self.perform_fft(in_chunk, out_chunk) };
         }
     }
     fn len(&self) -> usize {
