@@ -132,7 +132,7 @@ mod unit_tests {
                     }
                 }
 
-                transpose_small(width, height, &input, &mut output);
+                unsafe { transpose_small(width, height, &input, &mut output) };
 
                 for x in 0..width {
                     for y in 0..height {
