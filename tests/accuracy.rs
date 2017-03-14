@@ -118,11 +118,11 @@ fn random_signal(length: usize) -> Vec<Complex<f32>> {
     return sig;
 }
 
-/// Tests that our FFT algorithm matches the direct DFT calculation
+/// Integration tests that verify our FFT output matches the direct DFT calculation
 /// for random signals.
 #[test]
-fn test_cooley_tukey() {
-    for len in 2..100 {
+fn test_fft() {
+    for len in 1..100 {
         let signal = random_signal(len);
         assert!(ct_matches_dft(signal, false), "length = {}", len);
     }
@@ -135,8 +135,8 @@ fn test_cooley_tukey() {
 }
 
 #[test]
-fn test_cooley_tukey_inverse() {
-    for len in 2..100 {
+fn test_fft_inverse() {
+    for len in 1..100 {
         let signal = random_signal(len);
         assert!(ct_matches_dft(signal, true), "length = {}", len);
     }
