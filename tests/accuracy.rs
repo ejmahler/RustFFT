@@ -8,7 +8,7 @@ extern crate num;
 extern crate rustfft;
 extern crate rand;
 
-use num::complex::Complex;
+use num::{Complex, Zero};
 use rand::{StdRng, SeedableRng};
 use rand::distributions::{Normal, IndependentSample};
 use rustfft::{FFT, dft};
@@ -90,8 +90,8 @@ fn test_dft_known_len_6() {
 }
 
 fn ct_matches_dft(signal: Vec<Complex<f32>>, inverse: bool) -> bool {
-    let mut spectrum_dft = signal.clone();
-    let mut spectrum_ct = signal.clone();
+    let mut spectrum_dft = vec![Zero::zero(); signal.len()];
+    let mut spectrum_ct = vec![Zero::zero(); signal.len()];
 
     let mut fft = FFT::new(signal.len(), inverse);
     fft.process(&signal[..], &mut spectrum_ct[..]);

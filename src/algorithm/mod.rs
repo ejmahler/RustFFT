@@ -75,11 +75,15 @@ pub struct NoopAlgorithm {
 	pub len: usize
 }
 impl<T: FFTnum> FFTAlgorithm<T> for NoopAlgorithm {
-    fn process(&self, _: &mut [Complex<T>], _: &mut [Complex<T>]) { }
-    fn process_multi(&self, _: &mut [Complex<T>], _: &mut [Complex<T>]) { }
-    fn len(&self) -> usize {
-        self.len
-    }
+	fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+		output.copy_from_slice(input);
+	}
+	fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+		output.copy_from_slice(input);
+	}
+	fn len(&self) -> usize {
+		self.len
+	}
 }
 
 pub use self::mixed_radix::{MixedRadix, MixedRadixDoubleButterfly};
