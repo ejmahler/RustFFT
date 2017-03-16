@@ -35,10 +35,14 @@ fn bench_fft(b: &mut Bencher, len: usize) {
 #[bench] fn complex_p7_16807(b: &mut Bencher) { bench_fft(b, 16807); }
 
 // Prime lengths
-#[bench] fn complex_prime_0097(b: &mut Bencher) { bench_fft(b, 97); }
+#[bench] fn complex_prime_0019(b: &mut Bencher) { bench_fft(b, 19); }
 #[bench] fn complex_prime_0151(b: &mut Bencher) { bench_fft(b, 151); }
 #[bench] fn complex_prime_1009(b: &mut Bencher) { bench_fft(b, 1009); }
 #[bench] fn complex_prime_2017(b: &mut Bencher) { bench_fft(b, 2017); }
+
+//primes raised to a power
+#[bench] fn complex_primepower_44521(b: &mut Bencher) { bench_fft(b, 44521); } // 211^2
+#[bench] fn complex_primepower_160801(b: &mut Bencher) { bench_fft(b, 160801); } // 401^2
 
 // numbers times powers of two
 #[bench] fn complex_composite_24576(b: &mut Bencher) { bench_fft(b,  24576); }

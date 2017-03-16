@@ -8,7 +8,7 @@ extern crate num;
 extern crate rustfft;
 extern crate rand;
 
-use num::complex::Complex;
+use num::{Complex, Zero};
 use rand::{StdRng, SeedableRng};
 use rand::distributions::{Normal, IndependentSample};
 use rustfft::{FFT, dft};
@@ -90,8 +90,8 @@ fn test_dft_known_len_6() {
 }
 
 fn ct_matches_dft(signal: Vec<Complex<f32>>, inverse: bool) -> bool {
-    let mut spectrum_dft = signal.clone();
-    let mut spectrum_ct = signal.clone();
+    let mut spectrum_dft = vec![Zero::zero(); signal.len()];
+    let mut spectrum_ct = vec![Zero::zero(); signal.len()];
 
     let mut fft = FFT::new(signal.len(), inverse);
     fft.process(&signal[..], &mut spectrum_ct[..]);
@@ -118,19 +118,31 @@ fn random_signal(length: usize) -> Vec<Complex<f32>> {
     return sig;
 }
 
-/// Tests that our FFT algorithm matches the direct DFT calculation
+/// Integration tests that verify our FFT output matches the direct DFT calculation
 /// for random signals.
 #[test]
-fn test_cooley_tukey() {
-    for len in 2..100 {
+fn test_fft() {
+    for len in 1..100 {
+        let signal = random_signal(len);
+        assert!(ct_matches_dft(signal, false), "length = {}", len);
+    }
+
+    //test some specific lengths > 100
+    for &len in &[256, 768] {
         let signal = random_signal(len);
         assert!(ct_matches_dft(signal, false), "length = {}", len);
     }
 }
 
 #[test]
-fn test_cooley_tukey_inverse() {
+fn test_fft_inverse() {
     for len in 1..100 {
+        let signal = random_signal(len);
+        assert!(ct_matches_dft(signal, true), "length = {}", len);
+    }
+
+    //test some specific lengths > 100
+    for &len in &[256, 768] {
         let signal = random_signal(len);
         assert!(ct_matches_dft(signal, true), "length = {}", len);
     }

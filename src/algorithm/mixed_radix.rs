@@ -1,126 +1,260 @@
-use std::f32;
+use std::rc::Rc;
 
-use num::{Complex, FromPrimitive, Signed, Zero};
+use num::Complex;
 
-use algorithm::FFTAlgorithm;
-use butterflies::{butterfly_2, butterfly_3, butterfly_4, butterfly_5, butterfly};
+use common::{FFTnum, verify_length, verify_length_divisible};
 
-pub struct CooleyTukey<T> {
-    twiddles: Vec<Complex<T>>,
-    factors: Vec<usize>,
-    scratch: Vec<Complex<T>>,
-    inverse: bool,
+use algorithm::{FFTAlgorithm, ButterflyEnum};
+use array_utils;
+use twiddles;
+
+pub struct MixedRadix<T> {
+    width: usize,
+    width_size_fft: Rc<FFTAlgorithm<T>>,
+
+    height: usize,
+    height_size_fft: Rc<FFTAlgorithm<T>>,
+
+    twiddles: Box<[Complex<T>]>,
 }
 
-impl<T> CooleyTukey<T>
-    where T: Signed + FromPrimitive + Copy
-{
-    pub fn new(len: usize, factors: &[(usize, usize)], inverse: bool) -> Self {
-        let dir = if inverse {
-            1
-        } else {
-            -1
-        };
-        let max_fft_len = factors.iter().map(|&(a, _)| a).max();
-        let scratch = match max_fft_len {
-            None | Some(0...5) => vec![Zero::zero(); 0],
-            Some(l) => vec![Zero::zero(); l],
-        };
+impl<T: FFTnum> MixedRadix<T> {
+    pub fn new(width_fft: Rc<FFTAlgorithm<T>>, height_fft: Rc<FFTAlgorithm<T>>, inverse: bool) -> Self {
 
-        CooleyTukey {
-            twiddles: (0..len)
-                .map(|i| dir as f32 * i as f32 * 2.0 * f32::consts::PI / len as f32)
-                .map(|phase| Complex::from_polar(&1.0, &phase))
-                .map(|c| {
-                    Complex {
-                        re: FromPrimitive::from_f32(c.re).unwrap(),
-                        im: FromPrimitive::from_f32(c.im).unwrap(),
-                    }
-                })
-                .collect(),
-            factors: CooleyTukey::<T>::expand_factors(factors),
-            scratch: scratch,
-            inverse: inverse,
-        }
-    }
+        let width = width_fft.len();
+        let height = height_fft.len();
 
-    fn expand_factors(factors: &[(usize, usize)]) -> Vec<usize> {
-        let count = factors.iter().map(|&(_, count)| count).fold(0, |acc, x| acc + x);
+        let len = width * height;
 
-        let mut expanded_factors = Vec::with_capacity(count);
-        for &(factor, count) in factors {
-            for _ in 0..count {
-                expanded_factors.push(factor);
+        let mut twiddles = Vec::with_capacity(len);
+        for x in 0..width {
+            for y in 0..height {
+                twiddles.push(twiddles::single_twiddle(x * y, len, inverse));
             }
         }
 
-        expanded_factors
+        MixedRadix {
+            width: width,
+            width_size_fft: width_fft,
+
+            height: height,
+            height_size_fft: height_fft,
+
+            twiddles: twiddles.into_boxed_slice(),
+        }
+    }
+
+
+    fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        // SIX STEP FFT:
+
+        // STEP 1: transpose
+        array_utils::transpose(self.width, self.height, input, output);
+
+        // STEP 2: perform FFTs of size `height`
+        self.height_size_fft.process_multi(output, input);
+
+        // STEP 3: Apply twiddle factors
+        for (element, &twiddle) in input.iter_mut().zip(self.twiddles.iter()) {
+            *element = *element * twiddle;
+        }
+
+        // STEP 4: transpose again
+        array_utils::transpose(self.height, self.width, input, output);
+
+        // STEP 5: perform FFTs of size `width`
+        self.width_size_fft.process_multi(output, input);
+
+        // STEP 6: transpose again
+        array_utils::transpose(self.width, self.height, input, output);
+    }
+}
+impl<T: FFTnum> FFTAlgorithm<T> for MixedRadix<T> {
+    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_length(input, output, self.len());
+
+        self.perform_fft(input, output);
+    }
+    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_length_divisible(input, output, self.len());
+
+        for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
+            self.perform_fft(in_chunk, out_chunk);
+        }
+    }
+    fn len(&self) -> usize {
+        self.twiddles.len()
     }
 }
 
-impl<T> FFTAlgorithm<T> for CooleyTukey<T>
-    where T: Signed + FromPrimitive + Copy
-{
-    /// Runs the FFT on the input `signal` array, placing the output in the 'spectrum' array
-    fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        cooley_tukey(signal.len(), signal,
-                     spectrum,
-                     1,
-                     self.twiddles.as_slice(),
-                     self.factors.as_slice(),
-                     self.scratch.as_mut_slice(),
-                     self.inverse);
-    }
+
+
+
+/// This struct is the same as MixedRadixSingle, except it's specialized for the case where both inner FFTs are butterflies
+pub struct MixedRadixDoubleButterfly<T> {
+    width: usize,
+    width_size_fft: ButterflyEnum<T>,
+
+    height: usize,
+    height_size_fft: ButterflyEnum<T>,
+
+    twiddles: Box<[Complex<T>]>,
 }
 
-fn cooley_tukey<T>(size: usize,
-                   signal: &[Complex<T>],
-                   spectrum: &mut [Complex<T>],
-                   stride: usize,
-                   twiddles: &[Complex<T>],
-                   factors: &[usize],
-                   scratch: &mut [Complex<T>],
-                   inverse: bool)
-    where T: Signed + FromPrimitive + Copy
-{
-    if let Some(&n1) = factors.first() {
-        let n2 = size / n1;
-        if n2 == 1 {
-            // we theoretically need to compute n1 ffts of size n2
-            // but n2 is 1, and a fft of size 1 is just a copy
-            copy_data(signal, spectrum, stride);
-        } else {
-            // Recursive call to perform n1 ffts of length n2
-            for i in 0..n1 {
-                cooley_tukey(n2,
-                             &signal[i * stride..],
-                             &mut spectrum[i * n2..],
-                             stride * n1,
-                             twiddles,
-                             &factors[1..],
-                             scratch,
-                             inverse);
+impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
+    pub fn new(width_fft: ButterflyEnum<T>, height_fft: ButterflyEnum<T>, inverse: bool) -> Self {
+        let width = width_fft.len();
+        let height = height_fft.len();
+
+        let len = width * height;
+
+        let mut twiddles = Vec::with_capacity(len);
+        for x in 0..width {
+            for y in 0..height {
+                twiddles.push(twiddles::single_twiddle(x * y, len, inverse));
             }
         }
 
-        match n1 {
-            5 => unsafe { butterfly_5(spectrum, stride, twiddles, n2) },
-            4 => unsafe { butterfly_4(spectrum, stride, twiddles, n2, inverse) },
-            3 => unsafe { butterfly_3(spectrum, stride, twiddles, n2) },
-            2 => unsafe { butterfly_2(spectrum, stride, twiddles, n2) },
-            _ => butterfly(spectrum, stride, twiddles, n2, n1, &mut scratch[..n1]),
+        MixedRadixDoubleButterfly {
+            width: width,
+            width_size_fft: width_fft,
+
+            height: height,
+            height_size_fft: height_fft,
+
+            twiddles: twiddles.into_boxed_slice(),
         }
+    }
+
+
+    unsafe fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        // SIX STEP FFT:
+
+        // STEP 1: transpose
+        array_utils::transpose_small(self.width, self.height, input, output);
+
+        // STEP 2: perform FFTs of size 'height'
+        self.height_size_fft.process_multi_inplace(output);
+
+        // STEP 3: Apply twiddle factors
+        for (element, &twiddle) in output.iter_mut().zip(self.twiddles.iter()) {
+            *element = *element * twiddle;
+        }
+
+        // STEP 4: transpose again
+        array_utils::transpose_small(self.height, self.width, output, input);
+
+        // STEP 5: perform FFTs of size 'width'
+        self.width_size_fft.process_multi_inplace(input);
+
+        // STEP 6: transpose again
+        array_utils::transpose_small(self.width, self.height, input, output);
     }
 }
 
-fn copy_data<T: Copy>(signal: &[Complex<T>], spectrum: &mut [Complex<T>], stride: usize) {
-    let mut spectrum_idx = 0usize;
-    let mut signal_idx = 0usize;
-    while signal_idx < signal.len() {
-        unsafe {
-            *spectrum.get_unchecked_mut(spectrum_idx) = *signal.get_unchecked(signal_idx);
+impl<T: FFTnum> FFTAlgorithm<T> for MixedRadixDoubleButterfly<T> {
+    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_length(input, output, self.len());
+
+        unsafe { self.perform_fft(input, output) };
+    }
+    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_length_divisible(input, output, self.len());
+
+        for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
+            unsafe { self.perform_fft(in_chunk, out_chunk) };
         }
-        spectrum_idx += 1;
-        signal_idx += stride;
+    }
+    fn len(&self) -> usize {
+        self.twiddles.len()
+    }
+}
+
+
+
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+    use std::rc::Rc;
+    use test_utils::{random_signal, compare_vectors};
+    use dft;
+    use algorithm::{butterflies, DFTAlgorithm};
+
+    #[test]
+    fn test_mixed_radix() {
+        for width in 2..11 {
+            for height in 2..11 {
+                let width_fft = Rc::new(DFTAlgorithm::new(width, false)) as Rc<FFTAlgorithm<f32>>;
+                let height_fft = Rc::new(DFTAlgorithm::new(height, false)) as Rc<FFTAlgorithm<f32>>;
+
+                let mixed_radix_fft = MixedRadix::new(width_fft, height_fft, false);
+
+                let mut input = random_signal(width * height);
+
+                let mut expected = input.clone();
+                dft(&input, &mut expected);
+
+                let mut actual = input.clone();
+                mixed_radix_fft.process(&mut input, &mut actual);
+
+                println!("expected:");
+                for expected_chunk in expected.chunks(width) {
+                    println!("{:?}", expected_chunk);
+                }
+                println!("");
+                println!("actual:");
+                for actual_chunk in actual.chunks(width) {
+                    println!("{:?}", actual_chunk);
+                }
+
+                assert!(compare_vectors(&actual, &expected), "width = {}, height = {}", width, height);
+            }
+        }
+    }
+
+    #[test]
+    fn test_mixed_radix_double_butterfly() {
+        for &width in &[2,3,4,5,6] {
+            for &height in &[2,3,4,5,6] {
+                let width_fft = Rc::new(DFTAlgorithm::new(width, false)) as Rc<FFTAlgorithm<f32>>;
+                let height_fft = Rc::new(DFTAlgorithm::new(height, false)) as Rc<FFTAlgorithm<f32>>;
+                let control_fft = MixedRadix::new(width_fft, height_fft, false);
+
+                let width_butterfly = make_butterfly(width, false);
+                let height_butterfly = make_butterfly(height, false);
+                let test_fft = MixedRadixDoubleButterfly::new(width_butterfly, height_butterfly, false);
+
+                let mut control_input = random_signal(width * height);
+                let mut test_input = control_input.clone();
+
+                let mut expected = control_input.clone();
+                control_fft.process(&mut control_input, &mut expected);
+
+                let mut actual = test_input.clone();
+                test_fft.process(&mut test_input, &mut actual);
+
+                println!("expected:");
+                for expected_chunk in expected.chunks(width) {
+                    println!("{:?}", expected_chunk);
+                }
+                println!("");
+                println!("actual:");
+                for actual_chunk in actual.chunks(width) {
+                    println!("{:?}", actual_chunk);
+                }
+
+                assert!(compare_vectors(&actual, &expected), "width = {}, height = {}", width, height);
+            }
+        }
+    }
+    fn make_butterfly<T: FFTnum>(len: usize, inverse: bool) -> ButterflyEnum<T> {
+        match len {
+            2 => ButterflyEnum::Butterfly2(butterflies::Butterfly2{}),
+            3 => ButterflyEnum::Butterfly3(butterflies::Butterfly3::new(inverse)),
+            4 => ButterflyEnum::Butterfly4(butterflies::Butterfly4::new(inverse)),
+            5 => ButterflyEnum::Butterfly5(butterflies::Butterfly5::new(inverse)),
+            6 => ButterflyEnum::Butterfly6(butterflies::Butterfly6::new(inverse)),
+            _ => panic!("Invalid butterfly size: {}", len)
+        }
     }
 }
