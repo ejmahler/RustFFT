@@ -9,14 +9,14 @@ mod plan;
 mod twiddles;
 mod common;
 
-use num::{Complex, FromPrimitive, Zero};
-use std::f32;
+use num::{Complex, Zero};
 use std::rc::Rc;
 
-use algorithm::FFTAlgorithm;
+pub use algorithm::FFTAlgorithm;
 use plan::Planner;
 
 pub use common::FFTnum;
+pub use algorithm::DFT;
 
 pub struct FFT<T> {
     len: usize,
@@ -53,24 +53,6 @@ impl<T: common::FFTnum> FFT<T> {
         self.scratch.copy_from_slice(signal);
 
         self.algorithm.process(&mut self.scratch, spectrum);
-    }
-}
-
-pub fn dft<T: common::FFTnum>(signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-    for (k, spec_bin) in spectrum.iter_mut().enumerate() {
-        let mut sum = Zero::zero();
-        for (i, &x) in signal.iter().enumerate() {
-            let angle = -1f32 * (i * k) as f32 * 2f32 * f32::consts::PI / signal.len() as f32;
-            let c = Complex::from_polar(&1f32, &angle);
-
-            let twiddle = Complex {
-                re: FromPrimitive::from_f32(c.re).unwrap(),
-                im: FromPrimitive::from_f32(c.im).unwrap(),
-            };
-
-            sum = sum + twiddle * x;
-        }
-        *spec_bin = sum;
     }
 }
 

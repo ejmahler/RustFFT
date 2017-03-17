@@ -8,10 +8,12 @@ extern crate num;
 extern crate rustfft;
 extern crate rand;
 
+use std::f32;
+
 use num::{Complex, Zero};
 use rand::{StdRng, SeedableRng};
 use rand::distributions::{Normal, IndependentSample};
-use rustfft::{FFT, dft};
+use rustfft::{FFT, DFT, FFTAlgorithm};
 
 /// The seed for the random number generator used to generate
 /// random signals. It's defined here so that we have deterministic
@@ -29,82 +31,21 @@ fn compare_vectors(vec1: &[Complex<f32>], vec2: &[Complex<f32>]) -> bool {
     return (sse / vec1.len() as f32) < 0.1f32;
 }
 
-/// Returns true if our `dft` function calculates the given spectrum from the
-/// given signal
-fn test_dft_correct(signal: &[Complex<f32>], spectrum: &[Complex<f32>]) -> bool {
-    assert_eq!(signal.len(), spectrum.len());
-    let mut test_spectrum = signal.to_vec();
-    dft(signal, &mut test_spectrum[..]);
-    return compare_vectors(spectrum, &test_spectrum[..]);
-}
 
-#[test]
-fn test_dft_known_len_2() {
-    let signal = [Complex{re: 1f32, im: 0f32},
-                  Complex{re:-1f32, im: 0f32}];
-    let spectrum = [Complex{re: 0f32, im: 0f32},
-                    Complex{re: 2f32, im: 0f32}];
-    assert!(test_dft_correct(&signal[..], &spectrum[..]));
-}
+fn fft_matches_dft(signal: Vec<Complex<f32>>, inverse: bool) -> bool {
+    let mut signal_dft = signal.clone();
+    let signal_fft = signal.clone();
 
-#[test]
-fn test_dft_known_len_3() {
-    let signal = [Complex{re: 1f32, im: 1f32},
-                  Complex{re: 2f32, im:-3f32},
-                      Complex{re:-1f32, im: 4f32}];
-    let spectrum = [Complex{re: 2f32, im: 2f32},
-                    Complex{re: -5.562177f32, im: -2.098076f32},
-                    Complex{re: 6.562178f32, im: 3.09807f32}];
-    assert!(test_dft_correct(&signal[..], &spectrum[..]));
-}
-
-#[test]
-fn test_dft_known_len_4() {
-    let signal = [Complex{re: 0f32, im: 1f32},
-                  Complex{re: 2.5f32, im:-3f32},
-                  Complex{re:-1f32, im: -1f32},
-                  Complex{re: 4f32, im: 0f32}];
-    let spectrum = [Complex{re: 5.5f32, im: -3f32},
-                    Complex{re: -2f32, im: 3.5f32},
-                    Complex{re: -7.5f32, im: 3f32},
-                    Complex{re: 4f32, im: 0.5f32}];
-    assert!(test_dft_correct(&signal[..], &spectrum[..]));
-}
-
-#[test]
-fn test_dft_known_len_6() {
-    let signal = [Complex{re: 1f32, im: 1f32},
-                  Complex{re: 2f32, im: 2f32},
-                  Complex{re: 3f32, im: 3f32},
-                  Complex{re: 4f32, im: 4f32},
-                  Complex{re: 5f32, im: 5f32},
-                  Complex{re: 6f32, im: 6f32}];
-    let spectrum = [Complex{re: 21f32, im: 21f32},
-                    Complex{re: -8.16f32, im: 2.16f32},
-                    Complex{re: -4.76f32, im: -1.24f32},
-                    Complex{re: -3f32, im: -3f32},
-                    Complex{re: -1.24f32, im: -4.76f32},
-                    Complex{re: 2.16f32, im: -8.16f32}];
-    assert!(test_dft_correct(&signal[..], &spectrum[..]));
-
-}
-
-fn ct_matches_dft(signal: Vec<Complex<f32>>, inverse: bool) -> bool {
     let mut spectrum_dft = vec![Zero::zero(); signal.len()];
-    let mut spectrum_ct = vec![Zero::zero(); signal.len()];
+    let mut spectrum_fft = vec![Zero::zero(); signal.len()];
 
     let mut fft = FFT::new(signal.len(), inverse);
-    fft.process(&signal[..], &mut spectrum_ct[..]);
+    fft.process(&signal_fft, &mut spectrum_fft);
 
-    if inverse {
-        let signal_conj: Vec<Complex<f32>> = signal.iter().map(|x| x.conj()).collect();
-        dft(&signal_conj[..], &mut spectrum_dft[..]);
-        spectrum_dft = spectrum_dft.iter().map(|x| x.conj()).collect();
-    } else {
-        dft(&signal[..], &mut spectrum_dft[..]);
-    };
+    let dft = DFT::new(signal.len(), inverse);
+    dft.process(&mut signal_dft, &mut spectrum_dft);
 
-    return compare_vectors(&spectrum_dft[..], &spectrum_ct[..]);
+    return compare_vectors(&spectrum_dft[..], &spectrum_fft[..]);
 }
 
 fn random_signal(length: usize) -> Vec<Complex<f32>> {
@@ -124,13 +65,13 @@ fn random_signal(length: usize) -> Vec<Complex<f32>> {
 fn test_fft() {
     for len in 1..100 {
         let signal = random_signal(len);
-        assert!(ct_matches_dft(signal, false), "length = {}", len);
+        assert!(fft_matches_dft(signal, false), "length = {}", len);
     }
 
     //test some specific lengths > 100
     for &len in &[256, 768] {
         let signal = random_signal(len);
-        assert!(ct_matches_dft(signal, false), "length = {}", len);
+        assert!(fft_matches_dft(signal, false), "length = {}", len);
     }
 }
 
@@ -138,12 +79,12 @@ fn test_fft() {
 fn test_fft_inverse() {
     for len in 1..100 {
         let signal = random_signal(len);
-        assert!(ct_matches_dft(signal, true), "length = {}", len);
+        assert!(fft_matches_dft(signal, true), "length = {}", len);
     }
 
     //test some specific lengths > 100
     for &len in &[256, 768] {
         let signal = random_signal(len);
-        assert!(ct_matches_dft(signal, true), "length = {}", len);
+        assert!(fft_matches_dft(signal, true), "length = {}", len);
     }
 }

@@ -177,8 +177,8 @@ mod unit_tests {
     use super::*;
     use std::rc::Rc;
     use test_utils::{random_signal, compare_vectors};
-    use dft;
     use algorithm::{butterflies, DFT};
+    use num::Zero;
 
     #[test]
     fn test_mixed_radix() {
@@ -189,25 +189,18 @@ mod unit_tests {
 
                 let mixed_radix_fft = MixedRadix::new(width_fft, height_fft, false);
 
-                let mut input = random_signal(width * height);
+                let mut expected_input = random_signal(width * height);
+                let mut actual_input = expected_input.clone();
 
-                let mut expected = input.clone();
-                dft(&input, &mut expected);
+                let mut expected_output = vec![Zero::zero(); width * height];
+                let mut actual_output = vec![Zero::zero(); width * height];
 
-                let mut actual = input.clone();
-                mixed_radix_fft.process(&mut input, &mut actual);
+                let dft = DFT::new(width * height, false);
+                dft.process(&mut expected_input, &mut expected_output);
 
-                println!("expected:");
-                for expected_chunk in expected.chunks(width) {
-                    println!("{:?}", expected_chunk);
-                }
-                println!("");
-                println!("actual:");
-                for actual_chunk in actual.chunks(width) {
-                    println!("{:?}", actual_chunk);
-                }
+                mixed_radix_fft.process(&mut actual_input, &mut actual_output);
 
-                assert!(compare_vectors(&actual, &expected), "width = {}, height = {}", width, height);
+                assert!(compare_vectors(&actual_output, &expected_output), "width = {}, height = {}", width, height);
             }
         }
     }
@@ -232,16 +225,6 @@ mod unit_tests {
 
                 let mut actual = test_input.clone();
                 test_fft.process(&mut test_input, &mut actual);
-
-                println!("expected:");
-                for expected_chunk in expected.chunks(width) {
-                    println!("{:?}", expected_chunk);
-                }
-                println!("");
-                println!("actual:");
-                for actual_chunk in actual.chunks(width) {
-                    println!("{:?}", actual_chunk);
-                }
 
                 assert!(compare_vectors(&actual, &expected), "width = {}, height = {}", width, height);
             }
