@@ -26,7 +26,7 @@ impl<T: FFTnum> Planner<T> {
 
     pub fn plan_fft(&mut self, len: usize) -> Rc<FFTAlgorithm<T>> {
         if len < 2 {
-            Rc::new(NoopAlgorithm { len: len }) as Rc<FFTAlgorithm<T>>
+            Rc::new(DFT::new(len, self.inverse)) as Rc<FFTAlgorithm<T>>
         } else {
             let factors = math_utils::prime_factors(len);
             self.plan_fft_with_factors(len, &factors)
@@ -127,8 +127,7 @@ impl<T: FFTnum> Planner<T> {
 
     fn plan_fft_single_factor(&mut self, len: usize) -> Rc<FFTAlgorithm<T>> {
         match len {
-            0 => Rc::new(NoopAlgorithm { len: 0 }) as Rc<FFTAlgorithm<T>>,
-            1 => Rc::new(NoopAlgorithm { len: 1 }) as Rc<FFTAlgorithm<T>>,
+            0...1 => Rc::new(DFT::new(len, self.inverse)) as Rc<FFTAlgorithm<T>>,
             2 => Rc::new(butterflies::Butterfly2 {}) as Rc<FFTAlgorithm<T>>,
             3 => Rc::new(butterflies::Butterfly3::new(self.inverse)) as Rc<FFTAlgorithm<T>>,
             4 => Rc::new(butterflies::Butterfly4::new(self.inverse)) as Rc<FFTAlgorithm<T>>,

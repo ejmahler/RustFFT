@@ -684,7 +684,7 @@ impl<T: FFTnum> FFTAlgorithm<T> for Butterfly16<T> {
 mod unit_tests {
 	use super::*;
 	use test_utils::{random_signal, compare_vectors};
-	use algorithm::DFTAlgorithm;
+	use algorithm::DFT;
 	use num::Zero;
 
 	#[test]
@@ -693,8 +693,8 @@ mod unit_tests {
 		const SIZE: usize = 2;
 
 		let butterfly2 = Butterfly2{};
-		let dft = DFTAlgorithm::new(SIZE, false);
-		let dft_inverse = DFTAlgorithm::new(SIZE, true);
+		let dft = DFT::new(SIZE, false);
+		let dft_inverse = DFT::new(SIZE, true);
 
 		let input_data = random_signal(n * SIZE);
 
@@ -736,7 +736,7 @@ mod unit_tests {
 				let input_data = random_signal(n * SIZE);
 
 				//test the forward direction
-				let dft = DFTAlgorithm::new(SIZE, false);
+				let dft = DFT::new(SIZE, false);
 				let fft = $struct_name::new(false);
 				for (i, input) in input_data.chunks(SIZE).enumerate() {
 					//compute expected values
@@ -771,7 +771,7 @@ mod unit_tests {
 				}
 
 				//make sure the inverse works too
-				let dft_inverse = DFTAlgorithm::new(SIZE, true);
+				let dft_inverse = DFT::new(SIZE, true);
 				let fft_inverse = $struct_name::new(true);
 				for (i, input) in input_data.chunks(SIZE).enumerate() {	
 					//compute expected values

@@ -120,13 +120,13 @@ mod unit_tests {
     use std::rc::Rc;
     use num::Zero;
     use test_utils::{random_signal, compare_vectors};
-    use algorithm::DFTAlgorithm;
+    use algorithm::DFT;
 
     #[test]
     fn test_raders() {
         for &len in &[3,5,7,11,13] {
-            let dft = DFTAlgorithm::new(len, false);
-            let inner_fft = Rc::new(DFTAlgorithm::new(len - 1, false));
+            let dft = DFT::new(len, false);
+            let inner_fft = Rc::new(DFT::new(len - 1, false));
 
             let raders_fft = RadersAlgorithm::new(len, inner_fft, false);
 

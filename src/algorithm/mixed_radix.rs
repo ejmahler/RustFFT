@@ -178,14 +178,14 @@ mod unit_tests {
     use std::rc::Rc;
     use test_utils::{random_signal, compare_vectors};
     use dft;
-    use algorithm::{butterflies, DFTAlgorithm};
+    use algorithm::{butterflies, DFT};
 
     #[test]
     fn test_mixed_radix() {
         for width in 2..11 {
             for height in 2..11 {
-                let width_fft = Rc::new(DFTAlgorithm::new(width, false)) as Rc<FFTAlgorithm<f32>>;
-                let height_fft = Rc::new(DFTAlgorithm::new(height, false)) as Rc<FFTAlgorithm<f32>>;
+                let width_fft = Rc::new(DFT::new(width, false)) as Rc<FFTAlgorithm<f32>>;
+                let height_fft = Rc::new(DFT::new(height, false)) as Rc<FFTAlgorithm<f32>>;
 
                 let mixed_radix_fft = MixedRadix::new(width_fft, height_fft, false);
 
@@ -216,8 +216,8 @@ mod unit_tests {
     fn test_mixed_radix_double_butterfly() {
         for &width in &[2,3,4,5,6] {
             for &height in &[2,3,4,5,6] {
-                let width_fft = Rc::new(DFTAlgorithm::new(width, false)) as Rc<FFTAlgorithm<f32>>;
-                let height_fft = Rc::new(DFTAlgorithm::new(height, false)) as Rc<FFTAlgorithm<f32>>;
+                let width_fft = Rc::new(DFT::new(width, false)) as Rc<FFTAlgorithm<f32>>;
+                let height_fft = Rc::new(DFT::new(height, false)) as Rc<FFTAlgorithm<f32>>;
                 let control_fft = MixedRadix::new(width_fft, height_fft, false);
 
                 let width_butterfly = make_butterfly(width, false);

@@ -5,6 +5,7 @@ mod good_thomas_algorithm;
 mod mixed_radix;
 mod raders_algorithm;
 mod radix4;
+mod dft;
 pub mod butterflies;
 
 
@@ -70,29 +71,8 @@ impl<T: FFTnum> ButterflyEnum<T> {
 	}
 }
 
-
-pub struct NoopAlgorithm {
-	pub len: usize
-}
-impl<T: FFTnum> FFTAlgorithm<T> for NoopAlgorithm {
-	fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-		output.copy_from_slice(input);
-	}
-	fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-		output.copy_from_slice(input);
-	}
-	fn len(&self) -> usize {
-		self.len
-	}
-}
-
 pub use self::mixed_radix::{MixedRadix, MixedRadixDoubleButterfly};
 pub use self::raders_algorithm::RadersAlgorithm;
 pub use self::radix4::Radix4;
 pub use self::good_thomas_algorithm::GoodThomasAlgorithm;
-
-
-#[cfg(test)]
-mod dft;
-#[cfg(test)]
-pub use self::dft::DFTAlgorithm;
+pub use self::dft::DFT;

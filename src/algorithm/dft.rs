@@ -4,13 +4,13 @@ use common::{FFTnum, verify_length, verify_length_divisible};
 use algorithm::FFTAlgorithm;
 use twiddles;
 
-pub struct DFTAlgorithm<T> {
+pub struct DFT<T> {
     twiddles: Vec<Complex<T>>,
 }
 
-impl<T: FFTnum> DFTAlgorithm<T> {
+impl<T: FFTnum> DFT<T> {
     pub fn new(len: usize, inverse: bool) -> Self {
-        DFTAlgorithm {
+        DFT {
             twiddles: twiddles::generate_twiddle_factors(len, inverse),
         }
     }
@@ -36,7 +36,7 @@ impl<T: FFTnum> DFTAlgorithm<T> {
     }
 }
 
-impl<T: FFTnum> FFTAlgorithm<T> for DFTAlgorithm<T> {
+impl<T: FFTnum> FFTAlgorithm<T> for DFT<T> {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         verify_length(input, output, self.len());
 
@@ -68,10 +68,17 @@ mod unit_tests {
             dft(&input, &mut expected);
 
             let mut actual = input.clone();
-            let wrapper = DFTAlgorithm::new(len, false);
+            let wrapper = DFT::new(len, false);
             wrapper.process(&mut input, &mut actual);
 
             assert!(compare_vectors(&expected, &actual), "length = {}", len);
         }
+
+        //verify that it doesn't crash if we have a length of 0
+        let zero_dft = DFT::new(0, false);
+        let mut zero_input: Vec<Complex<f32>> = Vec::new();
+        let mut zero_output: Vec<Complex<f32>> = Vec::new();
+
+        zero_dft.process(&mut zero_input, &mut zero_output);
     }
 }
