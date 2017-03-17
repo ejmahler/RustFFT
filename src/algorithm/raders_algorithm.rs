@@ -110,7 +110,7 @@ impl<T: FFTnum> FFTAlgorithm<T> for RadersAlgorithm<T> {
         }
     }
     fn len(&self) -> usize {
-        self.inner_fft.len() + 1
+        self.inner_fft_data.len() + 1
     }
 }
 

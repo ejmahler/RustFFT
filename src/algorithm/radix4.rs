@@ -13,6 +13,7 @@ pub struct Radix4<T> {
 
 impl<T: FFTnum> Radix4<T> {
     pub fn new(len: usize, inverse: bool) -> Self {
+        assert!(len.is_power_of_two(), "Radix4 algorithm requires a power-of-two input size. Input {} is not a power of two", len);
         Radix4 {
             twiddles: twiddles::generate_twiddle_factors(len, inverse),
             inverse: inverse,

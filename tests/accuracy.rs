@@ -13,7 +13,8 @@ use std::f32;
 use num::{Complex, Zero};
 use rand::{StdRng, SeedableRng};
 use rand::distributions::{Normal, IndependentSample};
-use rustfft::{FFT, DFT, FFTAlgorithm};
+use rustfft::FFT;
+use rustfft::algorithm::{DFT, FFTAlgorithm};
 
 /// The seed for the random number generator used to generate
 /// random signals. It's defined here so that we have deterministic

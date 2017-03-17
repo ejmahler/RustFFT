@@ -2,7 +2,7 @@
 
 extern crate num;
 
-mod algorithm;
+pub mod algorithm;
 mod math_utils;
 mod array_utils;
 mod plan;
@@ -12,15 +12,13 @@ mod common;
 use num::{Complex, Zero};
 use std::rc::Rc;
 
-pub use algorithm::FFTAlgorithm;
 use plan::Planner;
 
 pub use common::FFTnum;
-pub use algorithm::DFT;
 
 pub struct FFT<T> {
     len: usize,
-    algorithm: Rc<FFTAlgorithm<T>>,
+    algorithm: Rc<algorithm::FFTAlgorithm<T>>,
     scratch: Vec<Complex<T>>,
 }
 
