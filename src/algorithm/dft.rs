@@ -1,7 +1,7 @@
 use num::{Complex, Zero};
 use common::{FFTnum, verify_length, verify_length_divisible};
 
-use algorithm::FFTAlgorithm;
+use algorithm::{FFTAlgorithm, Length};
 use twiddles;
 
 pub struct DFT<T> {
@@ -49,6 +49,9 @@ impl<T: FFTnum> FFTAlgorithm<T> for DFT<T> {
             self.perform_fft(in_chunk, out_chunk);
         }
     }
+}
+impl<T> Length for DFT<T> {
+    #[inline(always)]
     fn len(&self) -> usize {
         self.twiddles.len()
     }

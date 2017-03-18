@@ -1,7 +1,10 @@
-use num::Complex;
+use num::{Complex, Zero};
 
 use rand::{StdRng, SeedableRng};
 use rand::distributions::{Normal, IndependentSample};
+
+use algorithm::{FFTAlgorithm, DFT};
+
 
 /// The seed for the random number generator used to generate
 /// random signals. It's defined here so that we have deterministic
@@ -26,4 +29,33 @@ pub fn compare_vectors(vec1: &[Complex<f32>], vec2: &[Complex<f32>]) -> bool {
         sse = sse + (a - b).norm();
     }
     return (sse / vec1.len() as f32) < 0.1f32;
+}
+
+pub fn check_fft_algorithm(fft: &FFTAlgorithm<f32>, size: usize, inverse: bool) {
+    assert_eq!(fft.len(), size, "Algorithm reported incorrect size");
+
+    let n = 5;
+
+    //test the forward direction
+    let dft = DFT::new(size, inverse);
+
+    // set up buffers
+    let mut expected_input = random_signal(size * n);
+    let mut actual_input = expected_input.clone();
+    let mut multi_input = expected_input.clone();
+
+    let mut expected_output = vec![Zero::zero(); size * n];
+    let mut actual_output = expected_output.clone();
+    let mut multi_output = expected_output.clone();
+
+    // perform the test
+    dft.process_multi(&mut expected_input, &mut expected_output);
+    fft.process_multi(&mut multi_input, &mut multi_output);
+
+    for (input_chunk, output_chunk) in actual_input.chunks_mut(size).zip(actual_output.chunks_mut(size)) {
+        fft.process(input_chunk, output_chunk);
+    }
+
+    assert!(compare_vectors(&expected_output, &actual_output), "process() failed, length = {}, inverse = {}", size, inverse);
+    assert!(compare_vectors(&expected_output, &multi_output), "process_multi() failed, length = {}, inverse = {}", size, inverse);
 }

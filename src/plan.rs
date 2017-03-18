@@ -110,8 +110,8 @@ impl<T: FFTnum> Planner<T> {
 
         //if both left_len and right_len are butterflies, use a mixed radix implementation specialized for butterfly sub-FFTs
         if left_is_butterfly && right_is_butterfly {
-            let left_fft = self.plan_butterfly(left_len);
-            let right_fft = self.plan_butterfly(right_len);
+            let left_fft = butterflies::ButterflyEnum::new(left_len, self.inverse);
+            let right_fft = butterflies::ButterflyEnum::new(right_len, self.inverse);
 
             Rc::new(MixedRadixDoubleButterfly::new(left_fft, right_fft, self.inverse)) as
             Rc<FFTAlgorithm<T>>
@@ -147,19 +147,5 @@ impl<T: FFTnum> Planner<T> {
         let inner_fft = self.plan_fft_with_factors(inner_fft_len, &factors);
 
         Rc::new(RadersAlgorithm::new(len, inner_fft, self.inverse)) as Rc<FFTAlgorithm<T>>
-    }
-
-    fn plan_butterfly(&self, len: usize) -> ButterflyEnum<T> {
-        match len {
-            2 => ButterflyEnum::Butterfly2(butterflies::Butterfly2 {}),
-            3 => ButterflyEnum::Butterfly3(butterflies::Butterfly3::new(self.inverse)),
-            4 => ButterflyEnum::Butterfly4(butterflies::Butterfly4::new(self.inverse)),
-            5 => ButterflyEnum::Butterfly5(Box::new(butterflies::Butterfly5::new(self.inverse))),
-            6 => ButterflyEnum::Butterfly6(butterflies::Butterfly6::new(self.inverse)),
-            7 => ButterflyEnum::Butterfly7(Box::new(butterflies::Butterfly7::new(self.inverse))),
-            8 => ButterflyEnum::Butterfly8(butterflies::Butterfly8::new(self.inverse)),
-            16 => ButterflyEnum::Butterfly16(butterflies::Butterfly16::new(self.inverse)),
-            _ => panic!("Invalid butterfly size: {}", len),
-        }
     }
 }

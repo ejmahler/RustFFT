@@ -6,7 +6,7 @@ use common::{FFTnum, verify_length, verify_length_divisible};
 use math_utils;
 use array_utils;
 
-use algorithm::FFTAlgorithm;
+use algorithm::{FFTAlgorithm, Length};
 
 pub struct GoodThomasAlgorithm<T> {
     width: usize,
@@ -110,18 +110,21 @@ impl<T: FFTnum> FFTAlgorithm<T> for GoodThomasAlgorithm<T> {
             self.perform_fft(in_chunk, out_chunk);
         }
     }
+}
+impl<T> Length for GoodThomasAlgorithm<T> {
+    #[inline(always)]
     fn len(&self) -> usize {
         self.input_map.len()
     }
 }
 
+
 #[cfg(test)]
 mod unit_tests {
     use super::*;
     use std::rc::Rc;
-    use test_utils::{random_signal, compare_vectors};
+    use test_utils::check_fft_algorithm;
     use algorithm::DFT;
-    use num::Zero;
 
     #[test]
     fn test_good_thomas() {
@@ -139,37 +142,11 @@ mod unit_tests {
     }
 
     fn test_good_thomas_with_lengths(width: usize, height: usize) {
-        let n = 4;
-        let len = width * height;
-
-        // set up algorithms
-        let dft = DFT::new(len, false);
-
         let width_fft = Rc::new(DFT::new(width, false)) as Rc<FFTAlgorithm<f32>>;
         let height_fft = Rc::new(DFT::new(height, false)) as Rc<FFTAlgorithm<f32>>;
 
-        let good_thomas_fft = GoodThomasAlgorithm::new(width_fft, height_fft);
+        let fft = GoodThomasAlgorithm::new(width_fft, height_fft);
 
-        assert_eq!(good_thomas_fft.len(), len, "Good thomas algorithm reported incorrect length");
-
-        // set up buffers
-        let mut expected_input = random_signal(len * n);
-        let mut actual_input = expected_input.clone();
-        let mut multi_input = expected_input.clone();
-
-        let mut expected_output = vec![Zero::zero(); len * n];
-        let mut actual_output = expected_output.clone();
-        let mut multi_output = expected_output.clone();
-
-        // perform the test
-        dft.process_multi(&mut expected_input, &mut expected_output);
-        good_thomas_fft.process_multi(&mut multi_input, &mut multi_output);
-
-        for (input_chunk, output_chunk) in actual_input.chunks_mut(len).zip(actual_output.chunks_mut(len)) {
-            good_thomas_fft.process(input_chunk, output_chunk);
-        }
-
-        assert!(compare_vectors(&expected_output, &actual_output), "process() failed, width = {}, height = {}", width, height);
-        assert!(compare_vectors(&expected_output, &multi_output), "process_multi() failed, width = {}, height = {}", width, height);
+        check_fft_algorithm(&fft, width * height, false);
     }
 }

@@ -1,10 +1,9 @@
 use num::{Complex, Zero};
 use common::{FFTnum, verify_length, verify_length_divisible};
 
-use algorithm::butterflies::{Butterfly2, Butterfly4};
-use algorithm::FFTButterfly;
+use algorithm::butterflies::{Butterfly2, Butterfly4, FFTButterfly};
 use twiddles;
-use super::FFTAlgorithm;
+use algorithm::{FFTAlgorithm, Length};
 
 pub struct Radix4<T> {
     twiddles: Box<[Complex<T>]>,
@@ -71,11 +70,13 @@ impl<T: FFTnum> FFTAlgorithm<T> for Radix4<T> {
             self.perform_fft(in_chunk, out_chunk);
         }
     }
+}
+impl<T> Length for Radix4<T> {
+    #[inline(always)]
     fn len(&self) -> usize {
         self.twiddles.len()
     }
 }
-
 // after testing an iterative bit reversal algorithm, this recursive algorithm
 // was almost an order of magnitude faster at setting up
 fn prepare_radix4<T: FFTnum>(size: usize,
@@ -147,9 +148,7 @@ unsafe fn butterfly_4<T: FFTnum>(data: &mut [Complex<T>],
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use test_utils::{random_signal, compare_vectors};
-    use algorithm::DFT;
-    use num::Zero;
+    use test_utils::check_fft_algorithm;
 
     #[test]
     fn test_radix4() {
@@ -161,33 +160,8 @@ mod unit_tests {
     }
 
     fn test_radix4_with_length(len: usize, inverse: bool) {
-        let n = 4;
+        let fft = Radix4::new(len, inverse);
 
-        // set up algorithms
-        let dft = DFT::new(len, inverse);
-
-        let radix4_fft = Radix4::new(len, inverse);
-
-        assert_eq!(radix4_fft.len(), len, "Radix4 algorithm reported incorrect length");
-
-        // set up buffers
-        let mut expected_input = random_signal(len * n);
-        let mut actual_input = expected_input.clone();
-        let mut multi_input = expected_input.clone();
-
-        let mut expected_output = vec![Zero::zero(); len * n];
-        let mut actual_output = expected_output.clone();
-        let mut multi_output = expected_output.clone();
-
-        // perform the test
-        dft.process_multi(&mut expected_input, &mut expected_output);
-        radix4_fft.process_multi(&mut multi_input, &mut multi_output);
-
-        for (input_chunk, output_chunk) in actual_input.chunks_mut(len).zip(actual_output.chunks_mut(len)) {
-            radix4_fft.process(input_chunk, output_chunk);
-        }
-
-        assert!(compare_vectors(&expected_output, &actual_output), "process() failed, length = {}", len);
-        assert!(compare_vectors(&expected_output, &multi_output), "process_multi() failed, length = {}", len);
+        check_fft_algorithm(&fft, len, inverse);
     }
 }

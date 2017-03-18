@@ -5,7 +5,7 @@ use common::{FFTnum, verify_length, verify_length_divisible};
 
 use math_utils;
 use twiddles;
-use super::FFTAlgorithm;
+use algorithm::{FFTAlgorithm, Length};
 
 pub struct RadersAlgorithm<T> {
     inner_fft: Rc<FFTAlgorithm<T>>,
@@ -109,6 +109,9 @@ impl<T: FFTnum> FFTAlgorithm<T> for RadersAlgorithm<T> {
             self.perform_fft(in_chunk, out_chunk);
         }
     }
+}
+impl<T> Length for RadersAlgorithm<T> {
+    #[inline(always)]
     fn len(&self) -> usize {
         self.inner_fft_data.len() + 1
     }
@@ -118,8 +121,7 @@ impl<T: FFTnum> FFTAlgorithm<T> for RadersAlgorithm<T> {
 mod unit_tests {
     use super::*;
     use std::rc::Rc;
-    use num::Zero;
-    use test_utils::{random_signal, compare_vectors};
+    use test_utils::check_fft_algorithm;
     use algorithm::DFT;
 
     #[test]
@@ -131,35 +133,9 @@ mod unit_tests {
     }
 
     fn test_raders_with_length(len: usize, inverse: bool) {
-        let n = 4;
-
-        // set up algorithms
-        let dft = DFT::new(len, inverse);
-
         let inner_fft = Rc::new(DFT::new(len - 1, inverse));
+        let fft = RadersAlgorithm::new(len, inner_fft, inverse);
 
-        let raders_fft = RadersAlgorithm::new(len, inner_fft, inverse);
-
-        assert_eq!(raders_fft.len(), len, "Raders algorithm reported incorrect length");
-
-        // set up buffers
-        let mut expected_input = random_signal(len * n);
-        let mut actual_input = expected_input.clone();
-        let mut multi_input = expected_input.clone();
-
-        let mut expected_output = vec![Zero::zero(); len * n];
-        let mut actual_output = expected_output.clone();
-        let mut multi_output = expected_output.clone();
-
-        // perform the test
-        dft.process_multi(&mut expected_input, &mut expected_output);
-        raders_fft.process_multi(&mut multi_input, &mut multi_output);
-
-        for (input_chunk, output_chunk) in actual_input.chunks_mut(len).zip(actual_output.chunks_mut(len)) {
-            raders_fft.process(input_chunk, output_chunk);
-        }
-
-        assert!(compare_vectors(&expected_output, &actual_output), "process() failed, length = {}, inverse = {}", len, inverse);
-        assert!(compare_vectors(&expected_output, &multi_output), "process_multi() failed, length = {}, inverse = {}", len, inverse);
+        check_fft_algorithm(&fft, len, inverse);
     }
 }
