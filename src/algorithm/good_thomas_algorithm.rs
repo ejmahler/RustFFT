@@ -17,8 +17,8 @@ pub struct GoodThomasAlgorithm<T> {
     // height_inverse: usize,
     height_size_fft: Rc<FFTAlgorithm<T>>,
 
-    input_map: Vec<usize>,
-    output_map: Vec<usize>,
+    input_map: Box<[usize]>,
+    output_map: Box<[usize]>,
 }
 
 impl<T: FFTnum> GoodThomasAlgorithm<T> {
@@ -45,49 +45,41 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
             n2_inverse += n1 as i64;
         }
 
-        GoodThomasAlgorithm {
-            width: n1,
-            // width_inverse: n1_inverse as usize,
-            width_size_fft: n1_fft,
-
-            height: n2,
-            // height_inverse: n2_inverse as usize,
-            height_size_fft: n2_fft,
-
-            // NOTE: we are precomputing the input and output mappings because
-            // benchmarking shows that it's 20-30% faster
-            // If we wanted to optimize for memory use or setup time instead of multiple-FFT speed,
-            // these can be computed at runtime
-            input_map: (0..n1 * n2)
+        // NOTE: we are precomputing the input and output reordering indexes
+        // benchmarking shows that it's 20-30% faster
+        // If we wanted to optimize for memory use or setup time instead of multiple-FFT speed,
+        // these can be computed at runtime
+        let input_map: Vec<usize> = 
+            (0..n1 * n2)
                 .map(|i| (i % n1, i / n1))
                 .map(|(x, y)| (x * n2 + y * n1) % (n1 * n2))
-                .collect(),
-            output_map: (0..n1 * n2)
+                .collect();
+        let output_map: Vec<usize> = 
+            (0..n1 * n2)
                 .map(|i| (i % n2, i / n2))
                 .map(|(y, x)| {
                     (x * n2 * n2_inverse as usize + y * n1 * n1_inverse as usize) % (n1 * n2)
                 })
-                .collect(),
+                .collect();
+
+        GoodThomasAlgorithm {
+            width: n1,
+            width_size_fft: n1_fft,
+
+            height: n2,
+            height_size_fft: n2_fft,
+            
+            input_map: input_map.into_boxed_slice(),
+            output_map: output_map.into_boxed_slice(),
         }
     }
-
-    fn copy_from_input(&self, input: &[Complex<T>], output: &mut [Complex<T>]) {
-        for (output_element, input_index) in output.iter_mut().zip(self.input_map.iter()) {
-            *output_element = unsafe { *input.get_unchecked(*input_index) };
-        }
-    }
-
-    fn copy_to_output(&self, input: &[Complex<T>], output: &mut [Complex<T>]) {
-        for (input_element, output_index) in input.iter().zip(self.output_map.iter()) {
-            unsafe { *output.get_unchecked_mut(*output_index) = *input_element };
-        }
-    }
-
 
     fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
 
-        // copy the input using our reordering algorithm
-        self.copy_from_input(input, output);
+        // copy the input using our reordering mapping
+        for (output_element, &input_index) in output.iter_mut().zip(self.input_map.iter()) {
+            *output_element = input[input_index];
+        }
 
         // run FFTs of size `width`
         self.width_size_fft.process_multi(output, input);
@@ -95,11 +87,13 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
         // transpose
         array_utils::transpose(self.width, self.height, input, output);
 
-        // run 'width' FFTs of size 'height' from the spectrum back into scratch
+        // run FFTs of size 'height'
         self.height_size_fft.process_multi(output, input);
 
-        // we're done, copy to the output
-        self.copy_to_output(input, output);
+        // copy to the output, using our output redordeing mapping
+        for (input_element, &output_index) in input.iter().zip(self.output_map.iter()) {
+            output[output_index] = *input_element;
+        }
     }
 }
 
@@ -118,5 +112,64 @@ impl<T: FFTnum> FFTAlgorithm<T> for GoodThomasAlgorithm<T> {
     }
     fn len(&self) -> usize {
         self.input_map.len()
+    }
+}
+
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+    use std::rc::Rc;
+    use test_utils::{random_signal, compare_vectors};
+    use algorithm::DFT;
+    use num::Zero;
+
+    #[test]
+    fn test_good_thomas() {
+
+        //gcd(n, n+1) is guaranteed to be 1, so we can generate some test sizes by just passing in n, n + 1
+        for width in 2..20 {
+            test_good_thomas_with_lengths(width, width - 1);
+            test_good_thomas_with_lengths(width, width + 1);
+        }
+
+        //verify that it works correctly when width and/or height are 1
+        test_good_thomas_with_lengths(1, 10);
+        test_good_thomas_with_lengths(10, 1);
+        test_good_thomas_with_lengths(1, 1);
+    }
+
+    fn test_good_thomas_with_lengths(width: usize, height: usize) {
+        let n = 4;
+        let len = width * height;
+
+        // set up algorithms
+        let dft = DFT::new(len, false);
+
+        let width_fft = Rc::new(DFT::new(width, false)) as Rc<FFTAlgorithm<f32>>;
+        let height_fft = Rc::new(DFT::new(height, false)) as Rc<FFTAlgorithm<f32>>;
+
+        let good_thomas_fft = GoodThomasAlgorithm::new(width_fft, height_fft);
+
+        assert_eq!(good_thomas_fft.len(), len, "Good thomas algorithm reported incorrect length");
+
+        // set up buffers
+        let mut expected_input = random_signal(len * n);
+        let mut actual_input = expected_input.clone();
+        let mut multi_input = expected_input.clone();
+
+        let mut expected_output = vec![Zero::zero(); len * n];
+        let mut actual_output = expected_output.clone();
+        let mut multi_output = expected_output.clone();
+
+        // perform the test
+        dft.process_multi(&mut expected_input, &mut expected_output);
+        good_thomas_fft.process_multi(&mut multi_input, &mut multi_output);
+
+        for (input_chunk, output_chunk) in actual_input.chunks_mut(len).zip(actual_output.chunks_mut(len)) {
+            good_thomas_fft.process(input_chunk, output_chunk);
+        }
+
+        assert!(compare_vectors(&expected_output, &actual_output), "width = {}, height = {}", width, height);
+        assert!(compare_vectors(&expected_output, &multi_output), "width = {}, height = {}", width, height);
     }
 }
