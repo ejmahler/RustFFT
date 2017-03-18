@@ -32,9 +32,9 @@ pub enum ButterflyEnum<T> {
 	Butterfly2(butterflies::Butterfly2),
 	Butterfly3(butterflies::Butterfly3<T>),
 	Butterfly4(butterflies::Butterfly4),
-	Butterfly5(butterflies::Butterfly5<T>),
+	Butterfly5(Box<butterflies::Butterfly5<T>>),
 	Butterfly6(butterflies::Butterfly6<T>),
-	Butterfly7(butterflies::Butterfly7<T>),
+	Butterfly7(Box<butterflies::Butterfly7<T>>),
 	Butterfly8(butterflies::Butterfly8<T>),
 	Butterfly16(butterflies::Butterfly16<T>),
 }

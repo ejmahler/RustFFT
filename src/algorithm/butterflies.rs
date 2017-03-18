@@ -198,7 +198,7 @@ impl<T: FFTnum> FFTAlgorithm<T> for Butterfly4 {
 
 
 pub struct Butterfly5<T> {
-	inner_fft_multiply: Box<[Complex<T>; 4]>,
+	inner_fft_multiply: [Complex<T>; 4],
 	inverse: bool,
 }
 impl<T: FFTnum> Butterfly5<T> {
@@ -216,7 +216,7 @@ impl<T: FFTnum> Butterfly5<T> {
     	unsafe { butterfly.perform_fft(&mut fft_data) };
 
         Butterfly5 { 
-        	inner_fft_multiply: Box::new(fft_data),
+        	inner_fft_multiply: fft_data,
         	inverse: inverse,
         }
     }

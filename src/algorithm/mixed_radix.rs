@@ -235,7 +235,7 @@ mod unit_tests {
             2 => ButterflyEnum::Butterfly2(butterflies::Butterfly2{}),
             3 => ButterflyEnum::Butterfly3(butterflies::Butterfly3::new(inverse)),
             4 => ButterflyEnum::Butterfly4(butterflies::Butterfly4::new(inverse)),
-            5 => ButterflyEnum::Butterfly5(butterflies::Butterfly5::new(inverse)),
+            5 => ButterflyEnum::Butterfly5(Box::new(butterflies::Butterfly5::new(inverse))),
             6 => ButterflyEnum::Butterfly6(butterflies::Butterfly6::new(inverse)),
             _ => panic!("Invalid butterfly size: {}", len)
         }
