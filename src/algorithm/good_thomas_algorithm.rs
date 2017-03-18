@@ -169,7 +169,7 @@ mod unit_tests {
             good_thomas_fft.process(input_chunk, output_chunk);
         }
 
-        assert!(compare_vectors(&expected_output, &actual_output), "width = {}, height = {}", width, height);
-        assert!(compare_vectors(&expected_output, &multi_output), "width = {}, height = {}", width, height);
+        assert!(compare_vectors(&expected_output, &actual_output), "process() failed, width = {}, height = {}", width, height);
+        assert!(compare_vectors(&expected_output, &multi_output), "process_multi() failed, width = {}, height = {}", width, height);
     }
 }

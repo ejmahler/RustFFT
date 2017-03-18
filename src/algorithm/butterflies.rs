@@ -690,116 +690,102 @@ mod unit_tests {
 	#[test]
 	fn test_butterfly2() {
 		let n = 5;
-		const SIZE: usize = 2;
+        const SIZE: usize = 2;
 
-		let butterfly2 = Butterfly2{};
-		let dft = DFT::new(SIZE, false);
-		let dft_inverse = DFT::new(SIZE, true);
+        let inverse = false;
 
-		let input_data = random_signal(n * SIZE);
+        //test the forward direction
+        let dft = DFT::new(SIZE, inverse);
+        let fft = Butterfly2{};
 
-		for (i, input) in input_data.chunks(SIZE).enumerate() {
-            //compute expected values
-            let mut expected_input = input.to_vec();
-            let mut expected = [Zero::zero(); SIZE];
-            dft.process(&mut expected_input, &mut expected);
+        // set up buffers
+        let mut expected_input = random_signal(SIZE * n);
+        let mut actual_input = expected_input.clone();
+        let mut multi_input = expected_input.clone();
 
-            let mut expected_inverse_input = input.to_vec();
-            let mut expected_inverse = [Zero::zero(); SIZE];
-            dft_inverse.process(&mut expected_inverse_input, &mut expected_inverse);
+        let mut inplace_buffer = expected_input.clone();
+        let mut inplace_multi_buffer = expected_input.clone();
 
-            //test process method
-            let mut process_input = input.to_vec();
-            let mut actual = [Zero::zero(); SIZE];
-			butterfly2.process(&mut process_input, &mut actual);
+        let mut expected_output = vec![Zero::zero(); SIZE * n];
+        let mut actual_output = expected_output.clone();
+        let mut multi_output = expected_output.clone();
 
-            assert!(compare_vectors(&actual, &expected), "forward, i = {}", i);
-            assert!(compare_vectors(&actual, &expected_inverse), "inverse, i = {}", i);
+        // perform the test
+        dft.process_multi(&mut expected_input, &mut expected_output);
+        fft.process_multi(&mut multi_input, &mut multi_output);
 
-            //test perform_fft method
-            let mut inplace = input.to_vec();
-			unsafe { butterfly2.perform_fft(&mut inplace) };
-			
-			assert!(compare_vectors(&expected, &inplace), "forward inplace, i = {}", i);
-		}
+        unsafe { fft.process_multi_inplace(&mut inplace_multi_buffer); }
+
+        for (input_chunk, output_chunk) in actual_input.chunks_mut(SIZE).zip(actual_output.chunks_mut(SIZE)) {
+            fft.process(input_chunk, output_chunk);
+        }
+
+        for chunk in inplace_buffer.chunks_mut(SIZE) {
+            unsafe { fft.perform_fft(chunk) };
+        }
+
+        assert!(compare_vectors(&expected_output, &actual_output), "process() failed, length = {}, inverse = {}", SIZE, inverse);
+        assert!(compare_vectors(&expected_output, &multi_output), "process_multi() failed, length = {}, inverse = {}", SIZE, inverse);
+        assert!(compare_vectors(&expected_output, &inplace_buffer), "perform_fft() failed, length = {}, inverse = {}", SIZE, inverse);
+        assert!(compare_vectors(&expected_output, &inplace_multi_buffer), "process_multi_inplace() failed, length = {}, inverse = {}", SIZE, inverse);
 	}
 
 	//the tests for all butterflies except 2 will be identical except for the identifiers used and size
 	//so it's ideal for a macro
 	//butterfly 2 is different because it's the only one that doesn't care about forwards vs inverse
 	macro_rules! test_butterfly_func {
-		($test_name:ident, $struct_name:ident, $size:expr) => (
+		($test_name:ident, $inner_fn_name:ident, $struct_name:ident, $size:expr) => (
 			#[test]
 			fn $test_name() {
+                $inner_fn_name(false);
+                $inner_fn_name(true);
+            }
+            fn $inner_fn_name(inverse: bool) {
 				let n = 5;
 				const SIZE: usize = $size;
-				let input_data = random_signal(n * SIZE);
 
 				//test the forward direction
-				let dft = DFT::new(SIZE, false);
-				let fft = $struct_name::new(false);
-				for (i, input) in input_data.chunks(SIZE).enumerate() {
-					//compute expected values
-                    let mut expected_input = input.to_vec();
-                    let mut expected = [Zero::zero(); SIZE];
-                    dft.process(&mut expected_input, &mut expected);
+				let dft = DFT::new(SIZE, inverse);
+				let fft = $struct_name::new(inverse);
 
-                    //test process method
-                    let mut process_input = input.to_vec();
-                    let mut actual = [Zero::zero(); SIZE];
-                    fft.process(&mut process_input, &mut actual);
+                // set up buffers
+                let mut expected_input = random_signal(SIZE * n);
+                let mut actual_input = expected_input.clone();
+                let mut multi_input = expected_input.clone();
 
-                    if SIZE == 16 {
-                        println!("actual:");
-                        for chunk in actual.chunks(4) {
-                            println!("{:?}", chunk);
-                        }
-                        println!("");
-                        println!("expected:");
-                        for chunk in expected.chunks(4) {
-                            println!("{:?}", chunk);
-                        }
-                    }
+                let mut inplace_buffer = expected_input.clone();
+                let mut inplace_multi_buffer = expected_input.clone();
 
-                    assert!(compare_vectors(&expected, &actual), "forward, i = {}", i);
+                let mut expected_output = vec![Zero::zero(); SIZE * n];
+                let mut actual_output = expected_output.clone();
+                let mut multi_output = expected_output.clone();
 
-                    //test perform_fft method
-                    let mut inplace = input.to_vec();
-                    unsafe { fft.perform_fft(&mut inplace) };
-                    
-                    assert!(compare_vectors(&expected, &inplace), "forward inplace, i = {}", i);
-				}
+                // perform the test
+                dft.process_multi(&mut expected_input, &mut expected_output);
+                fft.process_multi(&mut multi_input, &mut multi_output);
 
-				//make sure the inverse works too
-				let dft_inverse = DFT::new(SIZE, true);
-				let fft_inverse = $struct_name::new(true);
-				for (i, input) in input_data.chunks(SIZE).enumerate() {	
-					//compute expected values
-                    let mut expected_inverse_input = input.to_vec();
-                    let mut expected_inverse = [Zero::zero(); SIZE];
-                    dft_inverse.process(&mut expected_inverse_input, &mut expected_inverse);
+                unsafe { fft.process_multi_inplace(&mut inplace_multi_buffer); }
 
-                    //test process method
-                    let mut process_input = input.to_vec();
-                    let mut actual = [Zero::zero(); SIZE];
-                    fft_inverse.process(&mut process_input, &mut actual);
+                for (input_chunk, output_chunk) in actual_input.chunks_mut(SIZE).zip(actual_output.chunks_mut(SIZE)) {
+                    fft.process(input_chunk, output_chunk);
+                }
 
-                    assert!(compare_vectors(&expected_inverse, &actual), "inverse, i = {}", i);
+                for chunk in inplace_buffer.chunks_mut(SIZE) {
+                    unsafe { fft.perform_fft(chunk) };
+                }
 
-                    //test perform_fft method
-                    let mut inplace = input.to_vec();
-                    unsafe { fft_inverse.perform_fft(&mut inplace) };
-                    
-                    assert!(compare_vectors(&expected_inverse, &inplace), "inverse inplace, i = {}", i);
-				}
+                assert!(compare_vectors(&expected_output, &actual_output), "process() failed, length = {}, inverse = {}", SIZE, inverse);
+                assert!(compare_vectors(&expected_output, &multi_output), "process_multi() failed, length = {}, inverse = {}", SIZE, inverse);
+                assert!(compare_vectors(&expected_output, &inplace_buffer), "perform_fft() failed, length = {}, inverse = {}", SIZE, inverse);
+                assert!(compare_vectors(&expected_output, &inplace_multi_buffer), "process_multi_inplace() failed, length = {}, inverse = {}", SIZE, inverse);
 			}
 		)
 	}
-	test_butterfly_func!(test_butterfly3, Butterfly3, 3);
-	test_butterfly_func!(test_butterfly4, Butterfly4, 4);
-	test_butterfly_func!(test_butterfly5, Butterfly5, 5);
-	test_butterfly_func!(test_butterfly6, Butterfly6, 6);
-    test_butterfly_func!(test_butterfly7, Butterfly7, 7);
-    test_butterfly_func!(test_butterfly8, Butterfly8, 8);
-    test_butterfly_func!(test_butterfly16, Butterfly16, 16);
+	test_butterfly_func!(test_butterfly3, check_butterfly3_with_inverse, Butterfly3, 3);
+	test_butterfly_func!(test_butterfly4, check_butterfly4_with_inverse, Butterfly4, 4);
+	test_butterfly_func!(test_butterfly5, check_butterfly5_with_inverse, Butterfly5, 5);
+	test_butterfly_func!(test_butterfly6, check_butterfly6_with_inverse, Butterfly6, 6);
+    test_butterfly_func!(test_butterfly7, check_butterfly7_with_inverse, Butterfly7, 7);
+    test_butterfly_func!(test_butterfly8, check_butterfly8_with_inverse, Butterfly8, 8);
+    test_butterfly_func!(test_butterfly16, check_butterfly16_with_inverse, Butterfly16, 16);
 }

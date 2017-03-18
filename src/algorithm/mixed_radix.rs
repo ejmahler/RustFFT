@@ -182,54 +182,97 @@ mod unit_tests {
 
     #[test]
     fn test_mixed_radix() {
-        for width in 2..11 {
-            for height in 2..11 {
-                let width_fft = Rc::new(DFT::new(width, false)) as Rc<FFTAlgorithm<f32>>;
-                let height_fft = Rc::new(DFT::new(height, false)) as Rc<FFTAlgorithm<f32>>;
-
-                let mixed_radix_fft = MixedRadix::new(width_fft, height_fft, false);
-
-                let mut expected_input = random_signal(width * height);
-                let mut actual_input = expected_input.clone();
-
-                let mut expected_output = vec![Zero::zero(); width * height];
-                let mut actual_output = vec![Zero::zero(); width * height];
-
-                let dft = DFT::new(width * height, false);
-                dft.process(&mut expected_input, &mut expected_output);
-
-                mixed_radix_fft.process(&mut actual_input, &mut actual_output);
-
-                assert!(compare_vectors(&actual_output, &expected_output), "width = {}, height = {}", width, height);
+        for width in 1..7 {
+            for height in 1..7 {
+                test_mixed_radix_with_lengths(width, height, false);
+                test_mixed_radix_with_lengths(width, height, true);
             }
         }
     }
 
     #[test]
     fn test_mixed_radix_double_butterfly() {
-        for &width in &[2,3,4,5,6] {
-            for &height in &[2,3,4,5,6] {
-                let width_fft = Rc::new(DFT::new(width, false)) as Rc<FFTAlgorithm<f32>>;
-                let height_fft = Rc::new(DFT::new(height, false)) as Rc<FFTAlgorithm<f32>>;
-                let control_fft = MixedRadix::new(width_fft, height_fft, false);
-
-                let width_butterfly = make_butterfly(width, false);
-                let height_butterfly = make_butterfly(height, false);
-                let test_fft = MixedRadixDoubleButterfly::new(width_butterfly, height_butterfly, false);
-
-                let mut control_input = random_signal(width * height);
-                let mut test_input = control_input.clone();
-
-                let mut expected = control_input.clone();
-                control_fft.process(&mut control_input, &mut expected);
-
-                let mut actual = test_input.clone();
-                test_fft.process(&mut test_input, &mut actual);
-
-                assert!(compare_vectors(&actual, &expected), "width = {}, height = {}", width, height);
+        for width in 2..7 {
+            for height in 2..7 {
+                test_mixed_radix_butterfly_with_lengths(width, height, false);
+                test_mixed_radix_butterfly_with_lengths(width, height, true);
             }
         }
     }
+
+
+
+
+    fn test_mixed_radix_with_lengths(width: usize, height: usize, inverse: bool) {
+        let n = 4;
+        let len = width * height;
+
+        // set up algorithms
+        let dft = DFT::new(len, inverse);
+
+        let width_fft = Rc::new(DFT::new(width, inverse)) as Rc<FFTAlgorithm<f32>>;
+        let height_fft = Rc::new(DFT::new(height, inverse)) as Rc<FFTAlgorithm<f32>>;
+
+        let mixed_fft = MixedRadix::new(width_fft, height_fft, inverse);
+
+        assert_eq!(mixed_fft.len(), len, "Mixed radix algorithm reported incorrect length");
+
+        // set up buffers
+        let mut expected_input = random_signal(len * n);
+        let mut actual_input = expected_input.clone();
+        let mut multi_input = expected_input.clone();
+
+        let mut expected_output = vec![Zero::zero(); len * n];
+        let mut actual_output = expected_output.clone();
+        let mut multi_output = expected_output.clone();
+
+        // perform the test
+        dft.process_multi(&mut expected_input, &mut expected_output);
+        mixed_fft.process_multi(&mut multi_input, &mut multi_output);
+
+        for (input_chunk, output_chunk) in actual_input.chunks_mut(len).zip(actual_output.chunks_mut(len)) {
+            mixed_fft.process(input_chunk, output_chunk);
+        }
+
+        assert!(compare_vectors(&expected_output, &actual_output), "process() failed, width = {}, height = {}, inverse = {}", width, height, inverse);
+        assert!(compare_vectors(&expected_output, &multi_output), "process_multi() failed, width = {}, height = {}, inverse = {}", width, height, inverse);
+    }
+
+    fn test_mixed_radix_butterfly_with_lengths(width: usize, height: usize, inverse: bool) {
+        let n = 4;
+        let len = width * height;
+
+        // set up algorithms
+        let dft = DFT::new(len, inverse);
+
+        let width_fft = make_butterfly(width, inverse);
+        let height_fft = make_butterfly(height, inverse);
+
+        let mixed_fft = MixedRadixDoubleButterfly::new(width_fft, height_fft, inverse);
+
+        assert_eq!(mixed_fft.len(), len, "Mixed radix butterfly algorithm reported incorrect length");
+
+        // set up buffers
+        let mut expected_input = random_signal(len * n);
+        let mut actual_input = expected_input.clone();
+        let mut multi_input = expected_input.clone();
+
+        let mut expected_output = vec![Zero::zero(); len * n];
+        let mut actual_output = expected_output.clone();
+        let mut multi_output = expected_output.clone();
+
+        // perform the test
+        dft.process_multi(&mut expected_input, &mut expected_output);
+        mixed_fft.process_multi(&mut multi_input, &mut multi_output);
+
+        for (input_chunk, output_chunk) in actual_input.chunks_mut(len).zip(actual_output.chunks_mut(len)) {
+            mixed_fft.process(input_chunk, output_chunk);
+        }
+
+        assert!(compare_vectors(&expected_output, &actual_output), "process() failed, width = {}, height = {}, inverse = {}", width, height, inverse);
+        assert!(compare_vectors(&expected_output, &multi_output), "process_multi() failed, width = {}, height = {}, inverse = {}", width, height, inverse);
+    }
+
     fn make_butterfly<T: FFTnum>(len: usize, inverse: bool) -> ButterflyEnum<T> {
         match len {
             2 => ButterflyEnum::Butterfly2(butterflies::Butterfly2{}),

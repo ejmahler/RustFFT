@@ -7,15 +7,15 @@ use twiddles;
 use super::FFTAlgorithm;
 
 pub struct Radix4<T> {
-    twiddles: Vec<Complex<T>>,
+    twiddles: Box<[Complex<T>]>,
     inverse: bool,
 }
 
 impl<T: FFTnum> Radix4<T> {
     pub fn new(len: usize, inverse: bool) -> Self {
-        assert!(len.is_power_of_two(), "Radix4 algorithm requires a power-of-two input size. Input {} is not a power of two", len);
+        assert!(len.is_power_of_two() && len > 1, "Radix4 algorithm requires a power-of-two input size greater than one. Got {}", len);
         Radix4 {
-            twiddles: twiddles::generate_twiddle_factors(len, inverse),
+            twiddles: twiddles::generate_twiddle_factors(len, inverse).into_boxed_slice(),
             inverse: inverse,
         }
     }
@@ -48,7 +48,7 @@ impl<T: FFTnum> Radix4<T> {
                 unsafe {
                     butterfly_4(&mut spectrum[i * current_size..],
                                 group_stride,
-                                self.twiddles.as_slice(),
+                                &self.twiddles,
                                 current_size / 4,
                                 self.inverse)
                 }
@@ -141,5 +141,53 @@ unsafe fn butterfly_4<T: FFTnum>(data: &mut [Complex<T>],
         tw_idx_2 += 2 * stride;
         tw_idx_3 += 3 * stride;
         idx += 1;
+    }
+}
+
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+    use test_utils::{random_signal, compare_vectors};
+    use algorithm::DFT;
+    use num::Zero;
+
+    #[test]
+    fn test_radix4() {
+        for pow in 1..7 {
+            let len = 1 << pow;
+            test_radix4_with_length(len, false);
+            test_radix4_with_length(len, true);
+        }
+    }
+
+    fn test_radix4_with_length(len: usize, inverse: bool) {
+        let n = 4;
+
+        // set up algorithms
+        let dft = DFT::new(len, inverse);
+
+        let radix4_fft = Radix4::new(len, inverse);
+
+        assert_eq!(radix4_fft.len(), len, "Radix4 algorithm reported incorrect length");
+
+        // set up buffers
+        let mut expected_input = random_signal(len * n);
+        let mut actual_input = expected_input.clone();
+        let mut multi_input = expected_input.clone();
+
+        let mut expected_output = vec![Zero::zero(); len * n];
+        let mut actual_output = expected_output.clone();
+        let mut multi_output = expected_output.clone();
+
+        // perform the test
+        dft.process_multi(&mut expected_input, &mut expected_output);
+        radix4_fft.process_multi(&mut multi_input, &mut multi_output);
+
+        for (input_chunk, output_chunk) in actual_input.chunks_mut(len).zip(actual_output.chunks_mut(len)) {
+            radix4_fft.process(input_chunk, output_chunk);
+        }
+
+        assert!(compare_vectors(&expected_output, &actual_output), "process() failed, length = {}", len);
+        assert!(compare_vectors(&expected_output, &multi_output), "process_multi() failed, length = {}", len);
     }
 }

@@ -76,16 +76,33 @@ mod unit_tests {
 
     #[test]
     fn test_matches_dft() {
-        for len in 1..50 {
-            let mut input = random_signal(len);
-            let mut expected = input.clone();
-            dft(&input, &mut expected);
+        let n = 4;
 
-            let mut actual = input.clone();
+        for len in 1..20 {
             let dft_instance = DFT::new(len, false);
-            dft_instance.process(&mut input, &mut actual);
+            assert_eq!(dft_instance.len(), len, "DFT instance reported incorrect length");
 
-            assert!(compare_vectors(&expected, &actual), "length = {}", len);
+            let mut expected_input = random_signal(len * n);
+            let mut actual_input = expected_input.clone();
+            let mut multi_input = expected_input.clone();
+
+            let mut expected_output = vec![Zero::zero(); len * n];
+            let mut actual_output = expected_output.clone();
+            let mut multi_output = expected_output.clone();
+
+            // perform the test
+            dft_instance.process_multi(&mut multi_input, &mut multi_output);
+
+            for (input_chunk, output_chunk) in actual_input.chunks_mut(len).zip(actual_output.chunks_mut(len)) {
+                dft_instance.process(input_chunk, output_chunk);
+            }
+
+            for (input_chunk, output_chunk) in expected_input.chunks_mut(len).zip(expected_output.chunks_mut(len)) {
+                dft(input_chunk, output_chunk);
+            }
+
+            assert!(compare_vectors(&expected_output, &actual_output), "process() failed, length = {}", len);
+            assert!(compare_vectors(&expected_output, &multi_output), "process_multi() failed, length = {}", len);
         }
 
         //verify that it doesn't crash if we have a length of 0

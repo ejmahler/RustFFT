@@ -125,24 +125,41 @@ mod unit_tests {
     #[test]
     fn test_raders() {
         for &len in &[3,5,7,11,13] {
-            let dft = DFT::new(len, false);
-            let inner_fft = Rc::new(DFT::new(len - 1, false));
-
-            let raders_fft = RadersAlgorithm::new(len, inner_fft, false);
-
-            let mut dft_input = random_signal(len);
-            let mut raders_input = dft_input.clone();
-
-            let mut expected = vec![Zero::zero(); len];
-            dft.process(&mut dft_input, &mut expected);
-
-            let mut actual = vec![Zero::zero(); len];
-            raders_fft.process(&mut raders_input, &mut actual);
-
-            println!("Expected: {:?}", expected);
-            println!("Actual:   {:?}", actual);
-
-            assert!(compare_vectors(&actual, &expected), "len = {}", len);
+            test_raders_with_length(len, false);
+            test_raders_with_length(len, true);
         }
+    }
+
+    fn test_raders_with_length(len: usize, inverse: bool) {
+        let n = 4;
+
+        // set up algorithms
+        let dft = DFT::new(len, inverse);
+
+        let inner_fft = Rc::new(DFT::new(len - 1, inverse));
+
+        let raders_fft = RadersAlgorithm::new(len, inner_fft, inverse);
+
+        assert_eq!(raders_fft.len(), len, "Raders algorithm reported incorrect length");
+
+        // set up buffers
+        let mut expected_input = random_signal(len * n);
+        let mut actual_input = expected_input.clone();
+        let mut multi_input = expected_input.clone();
+
+        let mut expected_output = vec![Zero::zero(); len * n];
+        let mut actual_output = expected_output.clone();
+        let mut multi_output = expected_output.clone();
+
+        // perform the test
+        dft.process_multi(&mut expected_input, &mut expected_output);
+        raders_fft.process_multi(&mut multi_input, &mut multi_output);
+
+        for (input_chunk, output_chunk) in actual_input.chunks_mut(len).zip(actual_output.chunks_mut(len)) {
+            raders_fft.process(input_chunk, output_chunk);
+        }
+
+        assert!(compare_vectors(&expected_output, &actual_output), "process() failed, length = {}, inverse = {}", len, inverse);
+        assert!(compare_vectors(&expected_output, &multi_output), "process_multi() failed, length = {}, inverse = {}", len, inverse);
     }
 }
