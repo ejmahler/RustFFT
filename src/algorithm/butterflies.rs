@@ -9,82 +9,6 @@ pub trait FFTButterfly<T: FFTnum>: Length {
     unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]);
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]);
 }
-pub enum ButterflyEnum<T> {
-    B2(Butterfly2),
-    B3(Butterfly3<T>),
-    B4(Butterfly4),
-    B5(Box<Butterfly5<T>>),
-    B6(Butterfly6<T>),
-    B7(Box<Butterfly7<T>>),
-    B8(Butterfly8<T>),
-    B16(Butterfly16<T>),
-}
-
-impl<T: FFTnum> ButterflyEnum<T> {
-    #[inline(always)]
-    pub fn new(len: usize, inverse: bool) -> Self {
-        use self::ButterflyEnum::*;
-        match len {
-            2 => B2(self::Butterfly2 {}),
-            3 => B3(self::Butterfly3::new(inverse)),
-            4 => B4(Butterfly4::new(inverse)),
-            5 => B5(Box::new(Butterfly5::new(inverse))),
-            6 => B6(Butterfly6::new(inverse)),
-            7 => B7(Box::new(Butterfly7::new(inverse))),
-            8 => B8(Butterfly8::new(inverse)),
-            16 => B16(Butterfly16::new(inverse)),
-            _ => panic!("Invalid butterfly size: {}", len),
-        }
-    }
-}
-impl<T: FFTnum> FFTButterfly<T> for ButterflyEnum<T> {
-    #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
-        use self::ButterflyEnum::*;
-        match *self {
-            B2(ref fft) => fft.process_inplace(buffer),
-            B3(ref fft) => fft.process_inplace(buffer),
-            B4(ref fft) => fft.process_inplace(buffer),
-            B5(ref fft) => fft.process_inplace(buffer),
-            B6(ref fft) => fft.process_inplace(buffer),
-            B7(ref fft) => fft.process_inplace(buffer),
-            B8(ref fft) => fft.process_inplace(buffer),
-            B16(ref fft) => fft.process_inplace(buffer),
-        }
-    }
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        use self::ButterflyEnum::*;
-        match *self {
-            B2(ref fft) => fft.process_multi_inplace(buffer),
-            B3(ref fft) => fft.process_multi_inplace(buffer),
-            B4(ref fft) => fft.process_multi_inplace(buffer),
-            B5(ref fft) => fft.process_multi_inplace(buffer),
-            B6(ref fft) => fft.process_multi_inplace(buffer),
-            B7(ref fft) => fft.process_multi_inplace(buffer),
-            B8(ref fft) => fft.process_multi_inplace(buffer),
-            B16(ref fft) => fft.process_multi_inplace(buffer),
-        }
-    }
-}
-impl<T> Length for ButterflyEnum<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        use self::ButterflyEnum::*;
-        match *self {
-            B2(_) => 2,
-            B3(_) => 3,
-            B4(_) => 4,
-            B5(_) => 5,
-            B6(_) => 6,
-            B7(_) => 7,
-            B8(_) => 8,
-            B16(_) => 16,
-        }
-    }
-}
-
-
 
 
 #[inline(always)]
@@ -777,16 +701,12 @@ mod unit_tests {
 	#[test]
 	fn test_butterfly2() {
         let butterfly = Butterfly2{};
-        let butterfly_enum: ButterflyEnum<f32> = ButterflyEnum::new(2, false);
 
         check_fft_algorithm(&butterfly, 2, false);
         check_fft_algorithm(&butterfly, 2, true);
 
         check_butterfly(&butterfly, 2, false);
         check_butterfly(&butterfly, 2, true);
-
-        check_butterfly(&butterfly_enum, 2, false);
-        check_butterfly(&butterfly_enum, 2, true);
     }
 
 
@@ -798,18 +718,14 @@ mod unit_tests {
             #[test]
             fn $test_name() {
                 let butterfly = $struct_name::new(false);
-                let butterfly_enum = ButterflyEnum::new($size, false);
 
                 check_fft_algorithm(&butterfly, $size, false);
                 check_butterfly(&butterfly, $size, false);
-                check_butterfly(&butterfly_enum, $size, false);
 
                 let butterfly_inverse = $struct_name::new(true);
-                let butterfly_enum_inverse = ButterflyEnum::new($size, true);
 
                 check_fft_algorithm(&butterfly_inverse, $size, true);
                 check_butterfly(&butterfly_inverse, $size, true);
-                check_butterfly(&butterfly_enum_inverse, $size, true);
             }
         )
     }

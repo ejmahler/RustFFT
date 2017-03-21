@@ -5,7 +5,7 @@ use num::Complex;
 use common::{FFTnum, verify_length, verify_length_divisible};
 
 use algorithm::{FFTAlgorithm, Length};
-use algorithm::butterflies::{ButterflyEnum, FFTButterfly};
+use algorithm::butterflies::FFTButterfly;
 use array_utils;
 use twiddles;
 
@@ -97,16 +97,16 @@ impl<T> Length for MixedRadix<T> {
 /// This struct is the same as MixedRadixSingle, except it's specialized for the case where both inner FFTs are butterflies
 pub struct MixedRadixDoubleButterfly<T> {
     width: usize,
-    width_size_fft: ButterflyEnum<T>,
+    width_size_fft: Rc<FFTButterfly<T>>,
 
     height: usize,
-    height_size_fft: ButterflyEnum<T>,
+    height_size_fft: Rc<FFTButterfly<T>>,
 
     twiddles: Box<[Complex<T>]>,
 }
 
 impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
-    pub fn new(width_fft: ButterflyEnum<T>, height_fft: ButterflyEnum<T>, inverse: bool) -> Self {
+    pub fn new(width_fft: Rc<FFTButterfly<T>>, height_fft: Rc<FFTButterfly<T>>, inverse: bool) -> Self {
         let width = width_fft.len();
         let height = height_fft.len();
 
@@ -219,11 +219,25 @@ mod unit_tests {
     }
 
     fn test_mixed_radix_butterfly_with_lengths(width: usize, height: usize, inverse: bool) {
-        let width_fft = butterflies::ButterflyEnum::new(width, inverse);
-        let height_fft = butterflies::ButterflyEnum::new(height, inverse);
+        let width_fft = make_butterfly(width, inverse);
+        let height_fft = make_butterfly(height, inverse);
 
         let fft = MixedRadixDoubleButterfly::new(width_fft, height_fft, inverse);
 
         check_fft_algorithm(&fft, width * height, inverse);
+    }
+
+    fn make_butterfly(len: usize, inverse: bool) -> Rc<FFTButterfly<f32>> {
+        match len {
+            2 => Rc::new(butterflies::Butterfly2 {}),
+            3 => Rc::new(butterflies::Butterfly3::new(inverse)),
+            4 => Rc::new(butterflies::Butterfly4::new(inverse)),
+            5 => Rc::new(butterflies::Butterfly5::new(inverse)),
+            6 => Rc::new(butterflies::Butterfly6::new(inverse)),
+            7 => Rc::new(butterflies::Butterfly7::new(inverse)),
+            8 => Rc::new(butterflies::Butterfly8::new(inverse)),
+            16 => Rc::new(butterflies::Butterfly16::new(inverse)),
+            _ => panic!("Invalid butterfly size: {}", len),
+        }
     }
 }

@@ -4,6 +4,8 @@ use std::rc::Rc;
 use common::FFTnum;
 
 use algorithm::*;
+use algorithm::butterflies::*;
+
 use math_utils;
 
 
@@ -14,6 +16,7 @@ const COMPOSITE_BUTTERFLIES: [usize; 4] = [4, 6, 8, 16];
 pub struct Planner<T> {
     inverse: bool,
     algorithm_cache: HashMap<usize, Rc<FFTAlgorithm<T>>>,
+    butterfly_cache: HashMap<usize, Rc<FFTButterfly<T>>>,
 }
 
 impl<T: FFTnum> Planner<T> {
@@ -21,6 +24,7 @@ impl<T: FFTnum> Planner<T> {
         Planner {
             inverse: inverse,
             algorithm_cache: HashMap::new(),
+            butterfly_cache: HashMap::new(),
         }
     }
 
@@ -31,6 +35,23 @@ impl<T: FFTnum> Planner<T> {
             let factors = math_utils::prime_factors(len);
             self.plan_fft_with_factors(len, &factors)
         }
+    }
+
+    fn plan_butterfly(&mut self, len: usize) -> Rc<FFTButterfly<T>> {
+        let inverse = self.inverse;
+        self.butterfly_cache.entry(len).or_insert_with(|| 
+            match len {
+                2 => Rc::new(Butterfly2 {}),
+                3 => Rc::new(Butterfly3::new(inverse)),
+                4 => Rc::new(Butterfly4::new(inverse)),
+                5 => Rc::new(Butterfly5::new(inverse)),
+                6 => Rc::new(Butterfly6::new(inverse)),
+                7 => Rc::new(Butterfly7::new(inverse)),
+                8 => Rc::new(Butterfly8::new(inverse)),
+                16 => Rc::new(Butterfly16::new(inverse)),
+                _ => panic!("Invalid butterfly size: {}", len),
+            }
+        ).clone()
     }
 
     fn plan_fft_with_factors(&mut self, len: usize, factors: &[usize]) -> Rc<FFTAlgorithm<T>> {
@@ -110,8 +131,8 @@ impl<T: FFTnum> Planner<T> {
 
         //if both left_len and right_len are butterflies, use a mixed radix implementation specialized for butterfly sub-FFTs
         if left_is_butterfly && right_is_butterfly {
-            let left_fft = butterflies::ButterflyEnum::new(left_len, self.inverse);
-            let right_fft = butterflies::ButterflyEnum::new(right_len, self.inverse);
+            let left_fft = self.plan_butterfly(left_len);
+            let right_fft = self.plan_butterfly(right_len);
 
             Rc::new(MixedRadixDoubleButterfly::new(left_fft, right_fft, self.inverse)) as
             Rc<FFTAlgorithm<T>>
