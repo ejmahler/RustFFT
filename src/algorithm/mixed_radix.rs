@@ -4,23 +4,23 @@ use num::Complex;
 
 use common::{FFTnum, verify_length, verify_length_divisible};
 
-use algorithm::{FFTAlgorithm, Length};
+use ::{Length, FFT};
 use algorithm::butterflies::FFTButterfly;
 use array_utils;
 use twiddles;
 
 pub struct MixedRadix<T> {
     width: usize,
-    width_size_fft: Rc<FFTAlgorithm<T>>,
+    width_size_fft: Rc<FFT<T>>,
 
     height: usize,
-    height_size_fft: Rc<FFTAlgorithm<T>>,
+    height_size_fft: Rc<FFT<T>>,
 
     twiddles: Box<[Complex<T>]>,
 }
 
 impl<T: FFTnum> MixedRadix<T> {
-    pub fn new(width_fft: Rc<FFTAlgorithm<T>>, height_fft: Rc<FFTAlgorithm<T>>, inverse: bool) -> Self {
+    pub fn new(width_fft: Rc<FFT<T>>, height_fft: Rc<FFT<T>>, inverse: bool) -> Self {
 
         let width = width_fft.len();
         let height = height_fft.len();
@@ -70,7 +70,7 @@ impl<T: FFTnum> MixedRadix<T> {
         array_utils::transpose(self.width, self.height, input, output);
     }
 }
-impl<T: FFTnum> FFTAlgorithm<T> for MixedRadix<T> {
+impl<T: FFTnum> FFT<T> for MixedRadix<T> {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         verify_length(input, output, self.len());
 
@@ -156,7 +156,7 @@ impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
     }
 }
 
-impl<T: FFTnum> FFTAlgorithm<T> for MixedRadixDoubleButterfly<T> {
+impl<T: FFTnum> FFT<T> for MixedRadixDoubleButterfly<T> {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         verify_length(input, output, self.len());
 
@@ -210,8 +210,8 @@ mod unit_tests {
 
 
     fn test_mixed_radix_with_lengths(width: usize, height: usize, inverse: bool) {
-        let width_fft = Rc::new(DFT::new(width, inverse)) as Rc<FFTAlgorithm<f32>>;
-        let height_fft = Rc::new(DFT::new(height, inverse)) as Rc<FFTAlgorithm<f32>>;
+        let width_fft = Rc::new(DFT::new(width, inverse)) as Rc<FFT<f32>>;
+        let height_fft = Rc::new(DFT::new(height, inverse)) as Rc<FFT<f32>>;
 
         let fft = MixedRadix::new(width_fft, height_fft, inverse);
 

@@ -2,8 +2,8 @@ use num::{Complex, Zero};
 use common::{FFTnum, verify_length, verify_length_divisible};
 
 use algorithm::butterflies::{Butterfly2, Butterfly4, FFTButterfly};
+use ::{Length, FFT};
 use twiddles;
-use algorithm::{FFTAlgorithm, Length};
 
 pub struct Radix4<T> {
     twiddles: Box<[Complex<T>]>,
@@ -57,7 +57,7 @@ impl<T: FFTnum> Radix4<T> {
     }
 }
 
-impl<T: FFTnum> FFTAlgorithm<T> for Radix4<T> {
+impl<T: FFTnum> FFT<T> for Radix4<T> {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         verify_length(input, output, self.len());
 

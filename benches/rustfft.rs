@@ -9,10 +9,13 @@ use num::Complex;
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
 fn bench_fft(b: &mut Bencher, len: usize) {
-    let mut fft = rustfft::FFT::new(len, false);
-    let signal = vec![Complex{re: 0_f32, im: 0_f32}; len];
+
+    let mut planner = rustfft::Planner::new(false);
+    let fft = planner.plan_fft(len);
+
+    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; len];
     let mut spectrum = signal.clone();
-    b.iter(|| {fft.process(&signal[..], &mut spectrum[..]);} );
+    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
 }
 
 // Powers of 2

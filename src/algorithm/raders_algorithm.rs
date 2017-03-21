@@ -5,10 +5,10 @@ use common::{FFTnum, verify_length, verify_length_divisible};
 
 use math_utils;
 use twiddles;
-use algorithm::{FFTAlgorithm, Length};
+use ::{Length, FFT};
 
 pub struct RadersAlgorithm<T> {
-    inner_fft: Rc<FFTAlgorithm<T>>,
+    inner_fft: Rc<FFT<T>>,
     inner_fft_data: Box<[Complex<T>]>,
 
     input_map: Box<[usize]>,
@@ -16,7 +16,7 @@ pub struct RadersAlgorithm<T> {
 }
 
 impl<T: FFTnum> RadersAlgorithm<T> {
-    pub fn new(len: usize, inner_fft: Rc<FFTAlgorithm<T>>, inverse: bool) -> Self {
+    pub fn new(len: usize, inner_fft: Rc<FFT<T>>, inverse: bool) -> Self {
         assert_eq!(len - 1, inner_fft.len(), "For raders algorithm, inner_fft.len() must be self.len() - 1. Expected {}, got {}", len - 1, inner_fft.len());
 
         let inner_fft_len = len - 1;
@@ -96,7 +96,7 @@ impl<T: FFTnum> RadersAlgorithm<T> {
     }
 }
 
-impl<T: FFTnum> FFTAlgorithm<T> for RadersAlgorithm<T> {
+impl<T: FFTnum> FFT<T> for RadersAlgorithm<T> {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         verify_length(input, output, self.len());
 
