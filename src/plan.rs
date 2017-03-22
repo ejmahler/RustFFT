@@ -4,6 +4,8 @@ use std::rc::Rc;
 use common::FFTnum;
 
 use algorithm::*;
+use algorithm::butterflies::*;
+
 use math_utils;
 
 
@@ -14,6 +16,7 @@ const COMPOSITE_BUTTERFLIES: [usize; 4] = [4, 6, 8, 16];
 pub struct Planner<T> {
     inverse: bool,
     algorithm_cache: HashMap<usize, Rc<FFTAlgorithm<T>>>,
+    butterfly_cache: HashMap<usize, Rc<FFTButterfly<T>>>,
 }
 
 impl<T: FFTnum> Planner<T> {
@@ -21,16 +24,34 @@ impl<T: FFTnum> Planner<T> {
         Planner {
             inverse: inverse,
             algorithm_cache: HashMap::new(),
+            butterfly_cache: HashMap::new(),
         }
     }
 
     pub fn plan_fft(&mut self, len: usize) -> Rc<FFTAlgorithm<T>> {
         if len < 2 {
-            Rc::new(NoopAlgorithm { len: len }) as Rc<FFTAlgorithm<T>>
+            Rc::new(DFT::new(len, self.inverse)) as Rc<FFTAlgorithm<T>>
         } else {
             let factors = math_utils::prime_factors(len);
             self.plan_fft_with_factors(len, &factors)
         }
+    }
+
+    fn plan_butterfly(&mut self, len: usize) -> Rc<FFTButterfly<T>> {
+        let inverse = self.inverse;
+        self.butterfly_cache.entry(len).or_insert_with(|| 
+            match len {
+                2 => Rc::new(Butterfly2 {}),
+                3 => Rc::new(Butterfly3::new(inverse)),
+                4 => Rc::new(Butterfly4::new(inverse)),
+                5 => Rc::new(Butterfly5::new(inverse)),
+                6 => Rc::new(Butterfly6::new(inverse)),
+                7 => Rc::new(Butterfly7::new(inverse)),
+                8 => Rc::new(Butterfly8::new(inverse)),
+                16 => Rc::new(Butterfly16::new(inverse)),
+                _ => panic!("Invalid butterfly size: {}", len),
+            }
+        ).clone()
     }
 
     fn plan_fft_with_factors(&mut self, len: usize, factors: &[usize]) -> Rc<FFTAlgorithm<T>> {
@@ -127,8 +148,7 @@ impl<T: FFTnum> Planner<T> {
 
     fn plan_fft_single_factor(&mut self, len: usize) -> Rc<FFTAlgorithm<T>> {
         match len {
-            0 => Rc::new(NoopAlgorithm { len: 0 }) as Rc<FFTAlgorithm<T>>,
-            1 => Rc::new(NoopAlgorithm { len: 1 }) as Rc<FFTAlgorithm<T>>,
+            0...1 => Rc::new(DFT::new(len, self.inverse)) as Rc<FFTAlgorithm<T>>,
             2 => Rc::new(butterflies::Butterfly2 {}) as Rc<FFTAlgorithm<T>>,
             3 => Rc::new(butterflies::Butterfly3::new(self.inverse)) as Rc<FFTAlgorithm<T>>,
             4 => Rc::new(butterflies::Butterfly4::new(self.inverse)) as Rc<FFTAlgorithm<T>>,
@@ -148,19 +168,5 @@ impl<T: FFTnum> Planner<T> {
         let inner_fft = self.plan_fft_with_factors(inner_fft_len, &factors);
 
         Rc::new(RadersAlgorithm::new(len, inner_fft, self.inverse)) as Rc<FFTAlgorithm<T>>
-    }
-
-    fn plan_butterfly(&self, len: usize) -> ButterflyEnum<T> {
-        match len {
-            2 => ButterflyEnum::Butterfly2(butterflies::Butterfly2 {}),
-            3 => ButterflyEnum::Butterfly3(butterflies::Butterfly3::new(self.inverse)),
-            4 => ButterflyEnum::Butterfly4(butterflies::Butterfly4::new(self.inverse)),
-            5 => ButterflyEnum::Butterfly5(butterflies::Butterfly5::new(self.inverse)),
-            6 => ButterflyEnum::Butterfly6(butterflies::Butterfly6::new(self.inverse)),
-            7 => ButterflyEnum::Butterfly7(butterflies::Butterfly7::new(self.inverse)),
-            8 => ButterflyEnum::Butterfly8(butterflies::Butterfly8::new(self.inverse)),
-            16 => ButterflyEnum::Butterfly16(butterflies::Butterfly16::new(self.inverse)),
-            _ => panic!("Invalid butterfly size: {}", len),
-        }
     }
 }

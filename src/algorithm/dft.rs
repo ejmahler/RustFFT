@@ -1,16 +1,16 @@
 use num::{Complex, Zero};
 use common::{FFTnum, verify_length, verify_length_divisible};
 
-use algorithm::FFTAlgorithm;
+use algorithm::{FFTAlgorithm, Length};
 use twiddles;
 
-pub struct DFTAlgorithm<T> {
+pub struct DFT<T> {
     twiddles: Vec<Complex<T>>,
 }
 
-impl<T: FFTnum> DFTAlgorithm<T> {
+impl<T: FFTnum> DFT<T> {
     pub fn new(len: usize, inverse: bool) -> Self {
-        DFTAlgorithm {
+        DFT {
             twiddles: twiddles::generate_twiddle_factors(len, inverse),
         }
     }
@@ -36,7 +36,7 @@ impl<T: FFTnum> DFTAlgorithm<T> {
     }
 }
 
-impl<T: FFTnum> FFTAlgorithm<T> for DFTAlgorithm<T> {
+impl<T: FFTnum> FFTAlgorithm<T> for DFT<T> {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         verify_length(input, output, self.len());
 
@@ -49,6 +49,9 @@ impl<T: FFTnum> FFTAlgorithm<T> for DFTAlgorithm<T> {
             self.perform_fft(in_chunk, out_chunk);
         }
     }
+}
+impl<T> Length for DFT<T> {
+    #[inline(always)]
     fn len(&self) -> usize {
         self.twiddles.len()
     }
@@ -57,21 +60,128 @@ impl<T: FFTnum> FFTAlgorithm<T> for DFTAlgorithm<T> {
 #[cfg(test)]
 mod unit_tests {
     use super::*;
+    use std::f32;
     use test_utils::{random_signal, compare_vectors};
-    use dft;
+    use num::{Complex, Zero};
+
+    fn dft(signal: &[Complex<f32>], spectrum: &mut [Complex<f32>]) {
+        for (k, spec_bin) in spectrum.iter_mut().enumerate() {
+            let mut sum = Zero::zero();
+            for (i, &x) in signal.iter().enumerate() {
+                let angle = -1f32 * (i * k) as f32 * 2f32 * f32::consts::PI / signal.len() as f32;
+                let twiddle = Complex::from_polar(&1f32, &angle);
+
+                sum = sum + twiddle * x;
+            }
+            *spec_bin = sum;
+        }
+    }
 
     #[test]
     fn test_matches_dft() {
-        for len in 1..50 {
-            let mut input = random_signal(len);
-            let mut expected = input.clone();
-            dft(&input, &mut expected);
+        let n = 4;
 
-            let mut actual = input.clone();
-            let wrapper = DFTAlgorithm::new(len, false);
-            wrapper.process(&mut input, &mut actual);
+        for len in 1..20 {
+            let dft_instance = DFT::new(len, false);
+            assert_eq!(dft_instance.len(), len, "DFT instance reported incorrect length");
 
-            assert!(compare_vectors(&expected, &actual), "length = {}", len);
+            let mut expected_input = random_signal(len * n);
+            let mut actual_input = expected_input.clone();
+            let mut multi_input = expected_input.clone();
+
+            let mut expected_output = vec![Zero::zero(); len * n];
+            let mut actual_output = expected_output.clone();
+            let mut multi_output = expected_output.clone();
+
+            // perform the test
+            dft_instance.process_multi(&mut multi_input, &mut multi_output);
+
+            for (input_chunk, output_chunk) in actual_input.chunks_mut(len).zip(actual_output.chunks_mut(len)) {
+                dft_instance.process(input_chunk, output_chunk);
+            }
+
+            for (input_chunk, output_chunk) in expected_input.chunks_mut(len).zip(expected_output.chunks_mut(len)) {
+                dft(input_chunk, output_chunk);
+            }
+
+            assert!(compare_vectors(&expected_output, &actual_output), "process() failed, length = {}", len);
+            assert!(compare_vectors(&expected_output, &multi_output), "process_multi() failed, length = {}", len);
         }
+
+        //verify that it doesn't crash if we have a length of 0
+        let zero_dft = DFT::new(0, false);
+        let mut zero_input: Vec<Complex<f32>> = Vec::new();
+        let mut zero_output: Vec<Complex<f32>> = Vec::new();
+
+        zero_dft.process(&mut zero_input, &mut zero_output);
+    }
+
+    /// Returns true if our `dft` function calculates the given spectrum from the
+    /// given signal, and if rustfft's DFT struct does the same
+    fn test_dft_correct(signal: &[Complex<f32>], spectrum: &[Complex<f32>]) -> bool {
+        assert_eq!(signal.len(), spectrum.len());
+
+        let expected_signal = signal.to_vec();
+        let mut expected_spectrum = vec![Zero::zero(); spectrum.len()];
+
+        let mut actual_signal = signal.to_vec();
+        let mut actual_spectrum = vec![Zero::zero(); spectrum.len()];
+
+        dft(&expected_signal, &mut expected_spectrum);
+
+        let dft_instance = DFT::new(signal.len(), false);
+        dft_instance.process(&mut actual_signal, &mut actual_spectrum);
+
+        return compare_vectors(spectrum, &expected_spectrum) && compare_vectors(spectrum, &actual_spectrum);
+    }
+
+    #[test]
+    fn test_dft_known_len_2() {
+        let signal = [Complex{re: 1f32, im: 0f32},
+                      Complex{re:-1f32, im: 0f32}];
+        let spectrum = [Complex{re: 0f32, im: 0f32},
+                        Complex{re: 2f32, im: 0f32}];
+        assert!(test_dft_correct(&signal[..], &spectrum[..]));
+    }
+
+    #[test]
+    fn test_dft_known_len_3() {
+        let signal = [Complex{re: 1f32, im: 1f32},
+                      Complex{re: 2f32, im:-3f32},
+                          Complex{re:-1f32, im: 4f32}];
+        let spectrum = [Complex{re: 2f32, im: 2f32},
+                        Complex{re: -5.562177f32, im: -2.098076f32},
+                        Complex{re: 6.562178f32, im: 3.09807f32}];
+        assert!(test_dft_correct(&signal[..], &spectrum[..]));
+    }
+
+    #[test]
+    fn test_dft_known_len_4() {
+        let signal = [Complex{re: 0f32, im: 1f32},
+                      Complex{re: 2.5f32, im:-3f32},
+                      Complex{re:-1f32, im: -1f32},
+                      Complex{re: 4f32, im: 0f32}];
+        let spectrum = [Complex{re: 5.5f32, im: -3f32},
+                        Complex{re: -2f32, im: 3.5f32},
+                        Complex{re: -7.5f32, im: 3f32},
+                        Complex{re: 4f32, im: 0.5f32}];
+        assert!(test_dft_correct(&signal[..], &spectrum[..]));
+    }
+
+    #[test]
+    fn test_dft_known_len_6() {
+        let signal = [Complex{re: 1f32, im: 1f32},
+                      Complex{re: 2f32, im: 2f32},
+                      Complex{re: 3f32, im: 3f32},
+                      Complex{re: 4f32, im: 4f32},
+                      Complex{re: 5f32, im: 5f32},
+                      Complex{re: 6f32, im: 6f32}];
+        let spectrum = [Complex{re: 21f32, im: 21f32},
+                        Complex{re: -8.16f32, im: 2.16f32},
+                        Complex{re: -4.76f32, im: -1.24f32},
+                        Complex{re: -3f32, im: -3f32},
+                        Complex{re: -1.24f32, im: -4.76f32},
+                        Complex{re: 2.16f32, im: -8.16f32}];
+        assert!(test_dft_correct(&signal[..], &spectrum[..]));
     }
 }

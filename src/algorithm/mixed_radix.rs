@@ -4,7 +4,8 @@ use num::Complex;
 
 use common::{FFTnum, verify_length, verify_length_divisible};
 
-use algorithm::{FFTAlgorithm, ButterflyEnum};
+use algorithm::{FFTAlgorithm, Length};
+use algorithm::butterflies::FFTButterfly;
 use array_utils;
 use twiddles;
 
@@ -82,6 +83,9 @@ impl<T: FFTnum> FFTAlgorithm<T> for MixedRadix<T> {
             self.perform_fft(in_chunk, out_chunk);
         }
     }
+}
+impl<T> Length for MixedRadix<T> {
+    #[inline(always)]
     fn len(&self) -> usize {
         self.twiddles.len()
     }
@@ -93,16 +97,16 @@ impl<T: FFTnum> FFTAlgorithm<T> for MixedRadix<T> {
 /// This struct is the same as MixedRadixSingle, except it's specialized for the case where both inner FFTs are butterflies
 pub struct MixedRadixDoubleButterfly<T> {
     width: usize,
-    width_size_fft: ButterflyEnum<T>,
+    width_size_fft: Rc<FFTButterfly<T>>,
 
     height: usize,
-    height_size_fft: ButterflyEnum<T>,
+    height_size_fft: Rc<FFTButterfly<T>>,
 
     twiddles: Box<[Complex<T>]>,
 }
 
 impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
-    pub fn new(width_fft: ButterflyEnum<T>, height_fft: ButterflyEnum<T>, inverse: bool) -> Self {
+    pub fn new(width_fft: Rc<FFTButterfly<T>>, height_fft: Rc<FFTButterfly<T>>, inverse: bool) -> Self {
         let width = width_fft.len();
         let height = height_fft.len();
 
@@ -165,6 +169,9 @@ impl<T: FFTnum> FFTAlgorithm<T> for MixedRadixDoubleButterfly<T> {
             unsafe { self.perform_fft(in_chunk, out_chunk) };
         }
     }
+}
+impl<T> Length for MixedRadixDoubleButterfly<T> {
+    #[inline(always)]
     fn len(&self) -> usize {
         self.twiddles.len()
     }
@@ -176,85 +183,61 @@ impl<T: FFTnum> FFTAlgorithm<T> for MixedRadixDoubleButterfly<T> {
 mod unit_tests {
     use super::*;
     use std::rc::Rc;
-    use test_utils::{random_signal, compare_vectors};
-    use dft;
-    use algorithm::{butterflies, DFTAlgorithm};
+    use test_utils::check_fft_algorithm;
+    use algorithm::{butterflies, DFT};
 
     #[test]
     fn test_mixed_radix() {
-        for width in 2..11 {
-            for height in 2..11 {
-                let width_fft = Rc::new(DFTAlgorithm::new(width, false)) as Rc<FFTAlgorithm<f32>>;
-                let height_fft = Rc::new(DFTAlgorithm::new(height, false)) as Rc<FFTAlgorithm<f32>>;
-
-                let mixed_radix_fft = MixedRadix::new(width_fft, height_fft, false);
-
-                let mut input = random_signal(width * height);
-
-                let mut expected = input.clone();
-                dft(&input, &mut expected);
-
-                let mut actual = input.clone();
-                mixed_radix_fft.process(&mut input, &mut actual);
-
-                println!("expected:");
-                for expected_chunk in expected.chunks(width) {
-                    println!("{:?}", expected_chunk);
-                }
-                println!("");
-                println!("actual:");
-                for actual_chunk in actual.chunks(width) {
-                    println!("{:?}", actual_chunk);
-                }
-
-                assert!(compare_vectors(&actual, &expected), "width = {}, height = {}", width, height);
+        for width in 1..7 {
+            for height in 1..7 {
+                test_mixed_radix_with_lengths(width, height, false);
+                test_mixed_radix_with_lengths(width, height, true);
             }
         }
     }
 
     #[test]
     fn test_mixed_radix_double_butterfly() {
-        for &width in &[2,3,4,5,6] {
-            for &height in &[2,3,4,5,6] {
-                let width_fft = Rc::new(DFTAlgorithm::new(width, false)) as Rc<FFTAlgorithm<f32>>;
-                let height_fft = Rc::new(DFTAlgorithm::new(height, false)) as Rc<FFTAlgorithm<f32>>;
-                let control_fft = MixedRadix::new(width_fft, height_fft, false);
-
-                let width_butterfly = make_butterfly(width, false);
-                let height_butterfly = make_butterfly(height, false);
-                let test_fft = MixedRadixDoubleButterfly::new(width_butterfly, height_butterfly, false);
-
-                let mut control_input = random_signal(width * height);
-                let mut test_input = control_input.clone();
-
-                let mut expected = control_input.clone();
-                control_fft.process(&mut control_input, &mut expected);
-
-                let mut actual = test_input.clone();
-                test_fft.process(&mut test_input, &mut actual);
-
-                println!("expected:");
-                for expected_chunk in expected.chunks(width) {
-                    println!("{:?}", expected_chunk);
-                }
-                println!("");
-                println!("actual:");
-                for actual_chunk in actual.chunks(width) {
-                    println!("{:?}", actual_chunk);
-                }
-
-                assert!(compare_vectors(&actual, &expected), "width = {}, height = {}", width, height);
+        for width in 2..7 {
+            for height in 2..7 {
+                test_mixed_radix_butterfly_with_lengths(width, height, false);
+                test_mixed_radix_butterfly_with_lengths(width, height, true);
             }
         }
     }
-    fn make_butterfly<T: FFTnum>(len: usize, inverse: bool) -> ButterflyEnum<T> {
+
+
+
+
+    fn test_mixed_radix_with_lengths(width: usize, height: usize, inverse: bool) {
+        let width_fft = Rc::new(DFT::new(width, inverse)) as Rc<FFTAlgorithm<f32>>;
+        let height_fft = Rc::new(DFT::new(height, inverse)) as Rc<FFTAlgorithm<f32>>;
+
+        let fft = MixedRadix::new(width_fft, height_fft, inverse);
+
+        check_fft_algorithm(&fft, width * height, inverse);
+    }
+
+    fn test_mixed_radix_butterfly_with_lengths(width: usize, height: usize, inverse: bool) {
+        let width_fft = make_butterfly(width, inverse);
+        let height_fft = make_butterfly(height, inverse);
+
+        let fft = MixedRadixDoubleButterfly::new(width_fft, height_fft, inverse);
+
+        check_fft_algorithm(&fft, width * height, inverse);
+    }
+
+    fn make_butterfly(len: usize, inverse: bool) -> Rc<FFTButterfly<f32>> {
         match len {
-            2 => ButterflyEnum::Butterfly2(butterflies::Butterfly2{}),
-            3 => ButterflyEnum::Butterfly3(butterflies::Butterfly3::new(inverse)),
-            4 => ButterflyEnum::Butterfly4(butterflies::Butterfly4::new(inverse)),
-            5 => ButterflyEnum::Butterfly5(butterflies::Butterfly5::new(inverse)),
-            6 => ButterflyEnum::Butterfly6(butterflies::Butterfly6::new(inverse)),
-            _ => panic!("Invalid butterfly size: {}", len)
+            2 => Rc::new(butterflies::Butterfly2 {}),
+            3 => Rc::new(butterflies::Butterfly3::new(inverse)),
+            4 => Rc::new(butterflies::Butterfly4::new(inverse)),
+            5 => Rc::new(butterflies::Butterfly5::new(inverse)),
+            6 => Rc::new(butterflies::Butterfly6::new(inverse)),
+            7 => Rc::new(butterflies::Butterfly7::new(inverse)),
+            8 => Rc::new(butterflies::Butterfly8::new(inverse)),
+            16 => Rc::new(butterflies::Butterfly16::new(inverse)),
+            _ => panic!("Invalid butterfly size: {}", len),
         }
     }
 }

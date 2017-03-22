@@ -1,20 +1,20 @@
 use num::{Complex, Zero};
 use common::{FFTnum, verify_length, verify_length_divisible};
 
-use algorithm::butterflies::{Butterfly2, Butterfly4};
-use algorithm::FFTButterfly;
+use algorithm::butterflies::{Butterfly2, Butterfly4, FFTButterfly};
 use twiddles;
-use super::FFTAlgorithm;
+use algorithm::{FFTAlgorithm, Length};
 
 pub struct Radix4<T> {
-    twiddles: Vec<Complex<T>>,
+    twiddles: Box<[Complex<T>]>,
     inverse: bool,
 }
 
 impl<T: FFTnum> Radix4<T> {
     pub fn new(len: usize, inverse: bool) -> Self {
+        assert!(len.is_power_of_two() && len > 1, "Radix4 algorithm requires a power-of-two input size greater than one. Got {}", len);
         Radix4 {
-            twiddles: twiddles::generate_twiddle_factors(len, inverse),
+            twiddles: twiddles::generate_twiddle_factors(len, inverse).into_boxed_slice(),
             inverse: inverse,
         }
     }
@@ -47,7 +47,7 @@ impl<T: FFTnum> Radix4<T> {
                 unsafe {
                     butterfly_4(&mut spectrum[i * current_size..],
                                 group_stride,
-                                self.twiddles.as_slice(),
+                                &self.twiddles,
                                 current_size / 4,
                                 self.inverse)
                 }
@@ -70,11 +70,13 @@ impl<T: FFTnum> FFTAlgorithm<T> for Radix4<T> {
             self.perform_fft(in_chunk, out_chunk);
         }
     }
+}
+impl<T> Length for Radix4<T> {
+    #[inline(always)]
     fn len(&self) -> usize {
         self.twiddles.len()
     }
 }
-
 // after testing an iterative bit reversal algorithm, this recursive algorithm
 // was almost an order of magnitude faster at setting up
 fn prepare_radix4<T: FFTnum>(size: usize,
@@ -140,5 +142,26 @@ unsafe fn butterfly_4<T: FFTnum>(data: &mut [Complex<T>],
         tw_idx_2 += 2 * stride;
         tw_idx_3 += 3 * stride;
         idx += 1;
+    }
+}
+
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+    use test_utils::check_fft_algorithm;
+
+    #[test]
+    fn test_radix4() {
+        for pow in 1..7 {
+            let len = 1 << pow;
+            test_radix4_with_length(len, false);
+            test_radix4_with_length(len, true);
+        }
+    }
+
+    fn test_radix4_with_length(len: usize, inverse: bool) {
+        let fft = Radix4::new(len, inverse);
+
+        check_fft_algorithm(&fft, len, inverse);
     }
 }

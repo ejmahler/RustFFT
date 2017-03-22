@@ -5,7 +5,7 @@ use common::{FFTnum, verify_length, verify_length_divisible};
 
 use math_utils;
 use twiddles;
-use super::FFTAlgorithm;
+use algorithm::{FFTAlgorithm, Length};
 
 pub struct RadersAlgorithm<T> {
     inner_fft: Rc<FFTAlgorithm<T>>,
@@ -109,8 +109,11 @@ impl<T: FFTnum> FFTAlgorithm<T> for RadersAlgorithm<T> {
             self.perform_fft(in_chunk, out_chunk);
         }
     }
+}
+impl<T> Length for RadersAlgorithm<T> {
+    #[inline(always)]
     fn len(&self) -> usize {
-        self.inner_fft.len() + 1
+        self.inner_fft_data.len() + 1
     }
 }
 
@@ -118,31 +121,21 @@ impl<T: FFTnum> FFTAlgorithm<T> for RadersAlgorithm<T> {
 mod unit_tests {
     use super::*;
     use std::rc::Rc;
-    use num::Zero;
-    use test_utils::{random_signal, compare_vectors};
-    use algorithm::DFTAlgorithm;
+    use test_utils::check_fft_algorithm;
+    use algorithm::DFT;
 
     #[test]
     fn test_raders() {
         for &len in &[3,5,7,11,13] {
-            let dft = DFTAlgorithm::new(len, false);
-            let inner_fft = Rc::new(DFTAlgorithm::new(len - 1, false));
-
-            let raders_fft = RadersAlgorithm::new(len, inner_fft, false);
-
-            let mut dft_input = random_signal(len);
-            let mut raders_input = dft_input.clone();
-
-            let mut expected = vec![Zero::zero(); len];
-            dft.process(&mut dft_input, &mut expected);
-
-            let mut actual = vec![Zero::zero(); len];
-            raders_fft.process(&mut raders_input, &mut actual);
-
-            println!("Expected: {:?}", expected);
-            println!("Actual:   {:?}", actual);
-
-            assert!(compare_vectors(&actual, &expected), "len = {}", len);
+            test_raders_with_length(len, false);
+            test_raders_with_length(len, true);
         }
+    }
+
+    fn test_raders_with_length(len: usize, inverse: bool) {
+        let inner_fft = Rc::new(DFT::new(len - 1, inverse));
+        let fft = RadersAlgorithm::new(len, inner_fft, inverse);
+
+        check_fft_algorithm(&fft, len, inverse);
     }
 }
