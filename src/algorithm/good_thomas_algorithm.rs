@@ -6,16 +6,16 @@ use common::{FFTnum, verify_length, verify_length_divisible};
 use math_utils;
 use array_utils;
 
-use algorithm::{FFTAlgorithm, Length};
+use ::{Length, FFT};
 
 pub struct GoodThomasAlgorithm<T> {
     width: usize,
     // width_inverse: usize,
-    width_size_fft: Rc<FFTAlgorithm<T>>,
+    width_size_fft: Rc<FFT<T>>,
 
     height: usize,
     // height_inverse: usize,
-    height_size_fft: Rc<FFTAlgorithm<T>>,
+    height_size_fft: Rc<FFT<T>>,
 
     input_map: Box<[usize]>,
     output_map: Box<[usize]>,
@@ -23,7 +23,7 @@ pub struct GoodThomasAlgorithm<T> {
 
 impl<T: FFTnum> GoodThomasAlgorithm<T> {
     #[allow(dead_code)]
-    pub fn new(n1_fft: Rc<FFTAlgorithm<T>>, n2_fft: Rc<FFTAlgorithm<T>>) -> Self {
+    pub fn new(n1_fft: Rc<FFT<T>>, n2_fft: Rc<FFT<T>>) -> Self {
 
         let n1 = n1_fft.len();
         let n2 = n2_fft.len();
@@ -97,7 +97,7 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
     }
 }
 
-impl<T: FFTnum> FFTAlgorithm<T> for GoodThomasAlgorithm<T> {
+impl<T: FFTnum> FFT<T> for GoodThomasAlgorithm<T> {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         verify_length(input, output, self.len());
 
@@ -142,8 +142,8 @@ mod unit_tests {
     }
 
     fn test_good_thomas_with_lengths(width: usize, height: usize) {
-        let width_fft = Rc::new(DFT::new(width, false)) as Rc<FFTAlgorithm<f32>>;
-        let height_fft = Rc::new(DFT::new(height, false)) as Rc<FFTAlgorithm<f32>>;
+        let width_fft = Rc::new(DFT::new(width, false)) as Rc<FFT<f32>>;
+        let height_fft = Rc::new(DFT::new(height, false)) as Rc<FFT<f32>>;
 
         let fft = GoodThomasAlgorithm::new(width_fft, height_fft);
 

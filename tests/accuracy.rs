@@ -13,8 +13,8 @@ use std::f32;
 use num::{Complex, Zero};
 use rand::{StdRng, SeedableRng};
 use rand::distributions::{Normal, IndependentSample};
-use rustfft::FFT;
-use rustfft::algorithm::{DFT, FFTAlgorithm};
+use rustfft::{FFT, Planner};
+use rustfft::algorithm::DFT;
 
 /// The seed for the random number generator used to generate
 /// random signals. It's defined here so that we have deterministic
@@ -35,13 +35,16 @@ fn compare_vectors(vec1: &[Complex<f32>], vec2: &[Complex<f32>]) -> bool {
 
 fn fft_matches_dft(signal: Vec<Complex<f32>>, inverse: bool) -> bool {
     let mut signal_dft = signal.clone();
-    let signal_fft = signal.clone();
+    let mut signal_fft = signal.clone();
 
     let mut spectrum_dft = vec![Zero::zero(); signal.len()];
     let mut spectrum_fft = vec![Zero::zero(); signal.len()];
 
-    let mut fft = FFT::new(signal.len(), inverse);
-    fft.process(&signal_fft, &mut spectrum_fft);
+    let mut planner = Planner::new(inverse);
+    let fft = planner.plan_fft(signal.len());
+    assert_eq!(fft.len(), signal.len(), "Planner created FFT of wrong length");
+
+    fft.process(&mut signal_fft, &mut spectrum_fft);
 
     let dft = DFT::new(signal.len(), inverse);
     dft.process(&mut signal_dft, &mut spectrum_dft);

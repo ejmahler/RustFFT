@@ -3,6 +3,7 @@ use std::rc::Rc;
 
 use common::FFTnum;
 
+use FFT;
 use algorithm::*;
 use algorithm::butterflies::*;
 
@@ -15,7 +16,7 @@ const COMPOSITE_BUTTERFLIES: [usize; 4] = [4, 6, 8, 16];
 
 pub struct Planner<T> {
     inverse: bool,
-    algorithm_cache: HashMap<usize, Rc<FFTAlgorithm<T>>>,
+    algorithm_cache: HashMap<usize, Rc<FFT<T>>>,
     butterfly_cache: HashMap<usize, Rc<FFTButterfly<T>>>,
 }
 
@@ -28,9 +29,9 @@ impl<T: FFTnum> Planner<T> {
         }
     }
 
-    pub fn plan_fft(&mut self, len: usize) -> Rc<FFTAlgorithm<T>> {
+    pub fn plan_fft(&mut self, len: usize) -> Rc<FFT<T>> {
         if len < 2 {
-            Rc::new(DFT::new(len, self.inverse)) as Rc<FFTAlgorithm<T>>
+            Rc::new(DFT::new(len, self.inverse)) as Rc<FFT<T>>
         } else {
             let factors = math_utils::prime_factors(len);
             self.plan_fft_with_factors(len, &factors)
@@ -53,8 +54,8 @@ impl<T: FFTnum> Planner<T> {
             }
         ).clone()
     }
-
-    fn plan_fft_with_factors(&mut self, len: usize, factors: &[usize]) -> Rc<FFTAlgorithm<T>> {
+    
+    fn plan_fft_with_factors(&mut self, len: usize, factors: &[usize]) -> Rc<FFT<T>> {
         if self.algorithm_cache.contains_key(&len) {
             self.algorithm_cache.get(&len).unwrap().clone()
         } else {
@@ -124,7 +125,7 @@ impl<T: FFTnum> Planner<T> {
                         left_factors: &[usize],
                         right_len: usize,
                         right_factors: &[usize])
-                        -> Rc<FFTAlgorithm<T>> {
+                        -> Rc<FFT<T>> {
 
         let left_is_butterfly = BUTTERFLIES.contains(&left_len);
         let right_is_butterfly = BUTTERFLIES.contains(&right_len);
@@ -135,38 +136,38 @@ impl<T: FFTnum> Planner<T> {
             let right_fft = self.plan_butterfly(right_len);
 
             Rc::new(MixedRadixDoubleButterfly::new(left_fft, right_fft, self.inverse)) as
-            Rc<FFTAlgorithm<T>>
+            Rc<FFT<T>>
         } else {
             //neither size is a butterfly, so go with the normal algorithm
             let left_fft = self.plan_fft_with_factors(left_len, left_factors);
             let right_fft = self.plan_fft_with_factors(right_len, right_factors);
 
-            Rc::new(MixedRadix::new(left_fft, right_fft, self.inverse)) as Rc<FFTAlgorithm<T>>
+            Rc::new(MixedRadix::new(left_fft, right_fft, self.inverse)) as Rc<FFT<T>>
         }
     }
 
 
-    fn plan_fft_single_factor(&mut self, len: usize) -> Rc<FFTAlgorithm<T>> {
+    fn plan_fft_single_factor(&mut self, len: usize) -> Rc<FFT<T>> {
         match len {
-            0...1 => Rc::new(DFT::new(len, self.inverse)) as Rc<FFTAlgorithm<T>>,
-            2 => Rc::new(butterflies::Butterfly2 {}) as Rc<FFTAlgorithm<T>>,
-            3 => Rc::new(butterflies::Butterfly3::new(self.inverse)) as Rc<FFTAlgorithm<T>>,
-            4 => Rc::new(butterflies::Butterfly4::new(self.inverse)) as Rc<FFTAlgorithm<T>>,
-            5 => Rc::new(butterflies::Butterfly5::new(self.inverse)) as Rc<FFTAlgorithm<T>>,
-            6 => Rc::new(butterflies::Butterfly6::new(self.inverse)) as Rc<FFTAlgorithm<T>>,
-            7 => Rc::new(butterflies::Butterfly7::new(self.inverse)) as Rc<FFTAlgorithm<T>>,
-            8 => Rc::new(butterflies::Butterfly8::new(self.inverse)) as Rc<FFTAlgorithm<T>>,
-            16 => Rc::new(butterflies::Butterfly16::new(self.inverse)) as Rc<FFTAlgorithm<T>>,
+            0...1 => Rc::new(DFT::new(len, self.inverse)) as Rc<FFT<T>>,
+            2 => Rc::new(butterflies::Butterfly2 {}) as Rc<FFT<T>>,
+            3 => Rc::new(butterflies::Butterfly3::new(self.inverse)) as Rc<FFT<T>>,
+            4 => Rc::new(butterflies::Butterfly4::new(self.inverse)) as Rc<FFT<T>>,
+            5 => Rc::new(butterflies::Butterfly5::new(self.inverse)) as Rc<FFT<T>>,
+            6 => Rc::new(butterflies::Butterfly6::new(self.inverse)) as Rc<FFT<T>>,
+            7 => Rc::new(butterflies::Butterfly7::new(self.inverse)) as Rc<FFT<T>>,
+            8 => Rc::new(butterflies::Butterfly8::new(self.inverse)) as Rc<FFT<T>>,
+            16 => Rc::new(butterflies::Butterfly16::new(self.inverse)) as Rc<FFT<T>>,
             _ => self.plan_prime(len),
         }
     }
 
-    fn plan_prime(&mut self, len: usize) -> Rc<FFTAlgorithm<T>> {
+    fn plan_prime(&mut self, len: usize) -> Rc<FFT<T>> {
         let inner_fft_len = len - 1;
         let factors = math_utils::prime_factors(inner_fft_len);
 
         let inner_fft = self.plan_fft_with_factors(inner_fft_len, &factors);
 
-        Rc::new(RadersAlgorithm::new(len, inner_fft, self.inverse)) as Rc<FFTAlgorithm<T>>
+        Rc::new(RadersAlgorithm::new(len, inner_fft, self.inverse)) as Rc<FFT<T>>
     }
 }

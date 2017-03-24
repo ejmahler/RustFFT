@@ -9,49 +9,26 @@ mod plan;
 mod twiddles;
 mod common;
 
-use num::{Complex, Zero};
-use std::rc::Rc;
+use num::Complex;
 
-use plan::Planner;
-
+pub use plan::Planner;
 pub use common::FFTnum;
 
-pub struct FFT<T> {
-    len: usize,
-    algorithm: Rc<algorithm::FFTAlgorithm<T>>,
-    scratch: Vec<Complex<T>>,
+/// A trait that allows FFT algorithms to report their expected input/output size
+pub trait Length {
+    /// The FFT size that this algorithm can process
+    fn len(&self) -> usize;
 }
 
-impl<T: common::FFTnum> FFT<T> {
-    /// Creates a new FFT context that will process signal of length
-    /// `len`. If `inverse` is `true`, then this struct will run inverse
-    /// FFTs. This implementation of the FFT doesn't do any scaling on both
-    /// the forward and backward transforms, so doing a forward then backward
-    /// FFT on a signal will scale the signal by its length.
-    pub fn new(len: usize, inverse: bool) -> Self {
+/// An umbrella trait for all available FFT algorithms
+pub trait FFT<T: FFTnum>: Length {
+    /// Performs an FFT on the `input` buffer, places the result in the `output` buffer.
+    /// Uses the `input` buffer as scratch space
+    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]);
 
-        let mut planner = Planner::new(inverse);
-
-        FFT {
-            len: len,
-            algorithm: planner.plan_fft(len),
-            scratch: vec![Zero::zero(); len],
-        }
-    }
-
-    /// Runs the FFT on the input `signal` buffer, and places the output in the
-    /// `spectrum` buffer.
-    ///
-    /// # Panics
-    /// This method will panic if `signal` and `spectrum` are not the length
-    /// specified in the struct's constructor.
-    pub fn process(&mut self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
-        common::verify_length(signal, spectrum, self.len);
-
-        self.scratch.copy_from_slice(signal);
-
-        self.algorithm.process(&mut self.scratch, spectrum);
-    }
+    /// Divides the `input` and `output` buffers into self.len() chunks, then runs an FFT
+    /// on each chunk. Uses the `input` buffer as scratch space
+    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]);
 }
 
 #[cfg(test)]

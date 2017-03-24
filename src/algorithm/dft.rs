@@ -1,7 +1,7 @@
 use num::{Complex, Zero};
 use common::{FFTnum, verify_length, verify_length_divisible};
 
-use algorithm::{FFTAlgorithm, Length};
+use ::{Length, FFT};
 use twiddles;
 
 pub struct DFT<T> {
@@ -36,7 +36,7 @@ impl<T: FFTnum> DFT<T> {
     }
 }
 
-impl<T: FFTnum> FFTAlgorithm<T> for DFT<T> {
+impl<T: FFTnum> FFT<T> for DFT<T> {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         verify_length(input, output, self.len());
 

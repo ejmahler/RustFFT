@@ -3,7 +3,8 @@ use num::{Complex, Zero};
 use rand::{StdRng, SeedableRng};
 use rand::distributions::{Normal, IndependentSample};
 
-use algorithm::{FFTAlgorithm, DFT};
+use algorithm::DFT;
+use FFT;
 
 
 /// The seed for the random number generator used to generate
@@ -31,7 +32,7 @@ pub fn compare_vectors(vec1: &[Complex<f32>], vec2: &[Complex<f32>]) -> bool {
     return (sse / vec1.len() as f32) < 0.1f32;
 }
 
-pub fn check_fft_algorithm(fft: &FFTAlgorithm<f32>, size: usize, inverse: bool) {
+pub fn check_fft_algorithm(fft: &FFT<f32>, size: usize, inverse: bool) {
     assert_eq!(fft.len(), size, "Algorithm reported incorrect size");
 
     let n = 5;
