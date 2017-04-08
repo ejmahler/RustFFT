@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use num::Complex;
+use num_complex::Complex;
 
 use common::{FFTnum, verify_length, verify_length_divisible};
 

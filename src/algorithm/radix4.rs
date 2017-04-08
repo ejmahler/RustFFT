@@ -1,4 +1,6 @@
-use num::{Complex, Zero};
+use num_complex::Complex;
+use num_traits::Zero;
+
 use common::{FFTnum, verify_length, verify_length_divisible};
 
 use algorithm::butterflies::{Butterfly2, Butterfly4, FFTButterfly};

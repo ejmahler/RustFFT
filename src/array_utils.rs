@@ -111,7 +111,8 @@ pub unsafe fn transpose_small<T: Copy>(width: usize, height: usize, input: &[T],
 mod unit_tests {
     use super::*;
     use test_utils::random_signal;
-    use num::{Complex, Zero};
+    use num_complex::Complex;
+    use num_traits::Zero;
 
     #[test]
     fn test_transpose() {

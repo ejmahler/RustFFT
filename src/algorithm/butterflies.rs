@@ -1,4 +1,6 @@
-use num::{Complex, FromPrimitive, Zero};
+use num_complex::Complex;
+use num_traits::{FromPrimitive, Zero};
+
 use common::{FFTnum, verify_length, verify_length_divisible};
 
 use twiddles;
@@ -696,7 +698,7 @@ mod unit_tests {
 	use super::*;
 	use test_utils::{random_signal, compare_vectors, check_fft_algorithm};
 	use algorithm::DFT;
-	use num::Zero;
+	use num_traits::Zero;
 
 	#[test]
 	fn test_butterfly2() {

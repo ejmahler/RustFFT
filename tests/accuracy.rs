@@ -4,13 +4,15 @@
 //! for a variety of lengths, and test that our FFT algorithm matches our
 //! DFT calculation for those signals.
 
-extern crate num;
+
 extern crate rustfft;
 extern crate rand;
 
 use std::f32;
 
-use num::{Complex, Zero};
+use rustfft::num_complex::Complex;
+use rustfft::num_traits::Zero;
+
 use rand::{StdRng, SeedableRng};
 use rand::distributions::{Normal, IndependentSample};
 use rustfft::{FFT, Planner};

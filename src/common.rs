@@ -1,4 +1,4 @@
-use num::{FromPrimitive, Signed};
+use num_traits::{FromPrimitive, Signed};
 
 pub trait FFTnum: Copy + FromPrimitive + Signed + 'static {}
 

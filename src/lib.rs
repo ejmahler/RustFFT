@@ -1,6 +1,7 @@
 #![cfg_attr(all(feature = "bench", test), feature(test))]
 
-extern crate num;
+pub extern crate num_complex;
+pub extern crate num_traits;
 
 pub mod algorithm;
 mod math_utils;
@@ -9,7 +10,7 @@ mod plan;
 mod twiddles;
 mod common;
 
-use num::Complex;
+use num_complex::Complex;
 
 pub use plan::Planner;
 pub use common::FFTnum;

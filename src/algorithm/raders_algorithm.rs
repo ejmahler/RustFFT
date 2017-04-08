@@ -1,6 +1,8 @@
 use std::rc::Rc;
 
-use num::{Complex, Zero, FromPrimitive};
+use num_complex::Complex;
+use num_traits::{FromPrimitive, Zero};
+
 use common::{FFTnum, verify_length, verify_length_divisible};
 
 use math_utils;

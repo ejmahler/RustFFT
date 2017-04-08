@@ -1,6 +1,9 @@
 
 use std::f64;
-use num::{Complex, FromPrimitive, One};
+
+use num_complex::Complex;
+use num_traits::{FromPrimitive, One};
+
 use common::FFTnum;
 
 pub fn generate_twiddle_factors<T: FFTnum>(fft_len: usize, inverse: bool) -> Vec<Complex<T>> {

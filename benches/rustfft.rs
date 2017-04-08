@@ -1,10 +1,9 @@
 #![feature(test)]
 extern crate test;
-extern crate num;
 extern crate rustfft;
 
 use test::Bencher;
-use num::Complex;
+use rustfft::num_complex::Complex;
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length

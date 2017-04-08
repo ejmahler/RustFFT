@@ -1,4 +1,5 @@
-use num::{Complex, Zero};
+use num_complex::Complex;
+use num_traits::Zero;
 
 use rand::{StdRng, SeedableRng};
 use rand::distributions::{Normal, IndependentSample};
