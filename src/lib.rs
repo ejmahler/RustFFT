@@ -12,7 +12,7 @@ mod common;
 
 use num_complex::Complex;
 
-pub use plan::Planner;
+pub use plan::FFTplanner;
 pub use common::FFTnum;
 
 /// A trait that allows FFT algorithms to report their expected input/output size

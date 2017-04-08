@@ -14,15 +14,15 @@ const MIN_RADIX4_BITS: u32 = 8; // minimum size to consider radix 4 an option is
 const BUTTERFLIES: [usize; 8] = [2, 3, 4, 5, 6, 7, 8, 16];
 const COMPOSITE_BUTTERFLIES: [usize; 4] = [4, 6, 8, 16];
 
-pub struct Planner<T> {
+pub struct FFTplanner<T> {
     inverse: bool,
     algorithm_cache: HashMap<usize, Rc<FFT<T>>>,
     butterfly_cache: HashMap<usize, Rc<FFTButterfly<T>>>,
 }
 
-impl<T: FFTnum> Planner<T> {
+impl<T: FFTnum> FFTplanner<T> {
     pub fn new(inverse: bool) -> Self {
-        Planner {
+        FFTplanner {
             inverse: inverse,
             algorithm_cache: HashMap::new(),
             butterfly_cache: HashMap::new(),

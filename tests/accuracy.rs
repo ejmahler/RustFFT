@@ -15,7 +15,7 @@ use rustfft::num_traits::Zero;
 
 use rand::{StdRng, SeedableRng};
 use rand::distributions::{Normal, IndependentSample};
-use rustfft::{FFT, Planner};
+use rustfft::{FFT, FFTplanner};
 use rustfft::algorithm::DFT;
 
 /// The seed for the random number generator used to generate
@@ -42,9 +42,9 @@ fn fft_matches_dft(signal: Vec<Complex<f32>>, inverse: bool) -> bool {
     let mut spectrum_dft = vec![Zero::zero(); signal.len()];
     let mut spectrum_fft = vec![Zero::zero(); signal.len()];
 
-    let mut planner = Planner::new(inverse);
+    let mut planner = FFTplanner::new(inverse);
     let fft = planner.plan_fft(signal.len());
-    assert_eq!(fft.len(), signal.len(), "Planner created FFT of wrong length");
+    assert_eq!(fft.len(), signal.len(), "FFTplanner created FFT of wrong length");
 
     fft.process(&mut signal_fft, &mut spectrum_fft);
 

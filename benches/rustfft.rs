@@ -9,7 +9,7 @@ use rustfft::num_complex::Complex;
 /// for a given length
 fn bench_fft(b: &mut Bencher, len: usize) {
 
-    let mut planner = rustfft::Planner::new(false);
+    let mut planner = rustfft::FFTplanner::new(false);
     let fft = planner.plan_fft(len);
 
     let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; len];
