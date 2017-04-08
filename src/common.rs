@@ -1,6 +1,7 @@
 use num_traits::{FromPrimitive, Signed};
+use std::fmt::Debug;
 
-pub trait FFTnum: Copy + FromPrimitive + Signed + 'static {}
+pub trait FFTnum: Copy + FromPrimitive + Signed + Debug + 'static {}
 
 impl FFTnum for f32 {}
 impl FFTnum for f64 {}
