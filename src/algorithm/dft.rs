@@ -3,17 +3,19 @@ use num_traits::Zero;
 
 use common::{FFTnum, verify_length, verify_length_divisible};
 
-use ::{Length, FFT};
+use ::{Length, IsInverse, FFT};
 use twiddles;
 
 pub struct DFT<T> {
     twiddles: Vec<Complex<T>>,
+    inverse: bool,
 }
 
 impl<T: FFTnum> DFT<T> {
     pub fn new(len: usize, inverse: bool) -> Self {
         DFT {
             twiddles: twiddles::generate_twiddle_factors(len, inverse),
+            inverse: inverse
         }
     }
 
@@ -56,6 +58,12 @@ impl<T> Length for DFT<T> {
     #[inline(always)]
     fn len(&self) -> usize {
         self.twiddles.len()
+    }
+}
+impl<T> IsInverse for DFT<T> {
+    #[inline(always)]
+    fn is_inverse(&self) -> bool {
+        self.inverse
     }
 }
 

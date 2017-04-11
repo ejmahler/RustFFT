@@ -35,6 +35,7 @@ pub fn compare_vectors(vec1: &[Complex<f32>], vec2: &[Complex<f32>]) -> bool {
 
 pub fn check_fft_algorithm(fft: &FFT<f32>, size: usize, inverse: bool) {
     assert_eq!(fft.len(), size, "Algorithm reported incorrect size");
+    assert_eq!(fft.is_inverse(), inverse, "Algorithm reported incorrect inverse value");
 
     let n = 5;
 

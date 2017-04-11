@@ -4,7 +4,7 @@ use num_traits::Zero;
 use common::{FFTnum, verify_length, verify_length_divisible};
 
 use algorithm::butterflies::{Butterfly2, Butterfly4, FFTButterfly};
-use ::{Length, FFT};
+use ::{Length, IsInverse, FFT};
 use twiddles;
 
 pub struct Radix4<T> {
@@ -28,7 +28,7 @@ impl<T: FFTnum> Radix4<T> {
         // perform the butterflies. the butterfly size depends on the input size
         let num_bits = signal.len().trailing_zeros();
         let mut current_size = if num_bits % 2 > 0 {
-            let inner_fft = Butterfly2{};
+            let inner_fft = Butterfly2::new(self.inverse);
             unsafe { inner_fft.process_multi_inplace(spectrum) };
 
             // for the cross-ffts we want to to start off with a size of 8 (2 * 4)
@@ -79,6 +79,15 @@ impl<T> Length for Radix4<T> {
         self.twiddles.len()
     }
 }
+impl<T> IsInverse for Radix4<T> {
+    #[inline(always)]
+    fn is_inverse(&self) -> bool {
+        self.inverse
+    }
+}
+
+
+
 // after testing an iterative bit reversal algorithm, this recursive algorithm
 // was almost an order of magnitude faster at setting up
 fn prepare_radix4<T: FFTnum>(size: usize,

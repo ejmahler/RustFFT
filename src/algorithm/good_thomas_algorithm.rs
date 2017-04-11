@@ -6,7 +6,7 @@ use common::{FFTnum, verify_length, verify_length_divisible};
 use math_utils;
 use array_utils;
 
-use ::{Length, FFT};
+use ::{Length, IsInverse, FFT};
 
 pub struct GoodThomasAlgorithm<T> {
     width: usize,
@@ -19,11 +19,18 @@ pub struct GoodThomasAlgorithm<T> {
 
     input_map: Box<[usize]>,
     output_map: Box<[usize]>,
+
+    inverse: bool,
 }
 
 impl<T: FFTnum> GoodThomasAlgorithm<T> {
     #[allow(dead_code)]
     pub fn new(n1_fft: Rc<FFT<T>>, n2_fft: Rc<FFT<T>>) -> Self {
+
+        assert_eq!(
+            n1_fft.is_inverse(), n2_fft.is_inverse(), 
+            "n1_fft and n2_fft must both be inverse, or neither. got n1 inverse={}, n2 inverse={}",
+            n1_fft.is_inverse(), n2_fft.is_inverse());
 
         let n1 = n1_fft.len();
         let n2 = n2_fft.len();
@@ -63,6 +70,8 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
                 .collect();
 
         GoodThomasAlgorithm {
+            inverse: n1_fft.is_inverse(),
+
             width: n1,
             width_size_fft: n1_fft,
 
@@ -115,6 +124,12 @@ impl<T> Length for GoodThomasAlgorithm<T> {
     #[inline(always)]
     fn len(&self) -> usize {
         self.input_map.len()
+    }
+}
+impl<T> IsInverse for GoodThomasAlgorithm<T> {
+    #[inline(always)]
+    fn is_inverse(&self) -> bool {
+        self.inverse
     }
 }
 

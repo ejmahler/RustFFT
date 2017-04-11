@@ -45,6 +45,7 @@ fn fft_matches_dft(signal: Vec<Complex<f32>>, inverse: bool) -> bool {
     let mut planner = FFTplanner::new(inverse);
     let fft = planner.plan_fft(signal.len());
     assert_eq!(fft.len(), signal.len(), "FFTplanner created FFT of wrong length");
+    assert_eq!(fft.is_inverse(), inverse, "FFTplanner created FFT of wrong direction");
 
     fft.process(&mut signal_fft, &mut spectrum_fft);
 

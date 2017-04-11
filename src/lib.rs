@@ -21,8 +21,14 @@ pub trait Length {
     fn len(&self) -> usize;
 }
 
+/// A trait that allows FFT algorithms to report whether they compute forward FFTs or inverse FFTs
+pub trait IsInverse {
+    /// true if this instance computes inverse FFTs, false otherwise
+    fn is_inverse(&self) -> bool;
+}
+
 /// An umbrella trait for all available FFT algorithms
-pub trait FFT<T: FFTnum>: Length {
+pub trait FFT<T: FFTnum>: Length + IsInverse {
     /// Performs an FFT on the `input` buffer, places the result in the `output` buffer.
     /// Uses the `input` buffer as scratch space
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]);
