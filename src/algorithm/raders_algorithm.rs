@@ -1,11 +1,13 @@
 use std::rc::Rc;
 
-use num::{Complex, Zero, FromPrimitive};
+use num_complex::Complex;
+use num_traits::{FromPrimitive, Zero};
+
 use common::{FFTnum, verify_length, verify_length_divisible};
 
 use math_utils;
 use twiddles;
-use ::{Length, FFT};
+use ::{Length, IsInverse, FFT};
 
 pub struct RadersAlgorithm<T> {
     inner_fft: Rc<FFT<T>>,
@@ -16,7 +18,7 @@ pub struct RadersAlgorithm<T> {
 }
 
 impl<T: FFTnum> RadersAlgorithm<T> {
-    pub fn new(len: usize, inner_fft: Rc<FFT<T>>, inverse: bool) -> Self {
+    pub fn new(len: usize, inner_fft: Rc<FFT<T>>) -> Self {
         assert_eq!(len - 1, inner_fft.len(), "For raders algorithm, inner_fft.len() must be self.len() - 1. Expected {}, got {}", len - 1, inner_fft.len());
 
         let inner_fft_len = len - 1;
@@ -29,7 +31,7 @@ impl<T: FFTnum> RadersAlgorithm<T> {
         let unity_scale: T = FromPrimitive::from_f64(1f64 / inner_fft_len as f64).unwrap();
         let mut inner_fft_input: Vec<Complex<T>> = (0..inner_fft_len)
             .map(|i| math_utils::modular_exponent(root_inverse, i as u64, len as u64) as usize)
-            .map(|i| twiddles::single_twiddle(i, len, inverse))
+            .map(|i| twiddles::single_twiddle(i, len, inner_fft.is_inverse()))
             .map(|c| c * unity_scale)
             .collect();
 
@@ -116,6 +118,12 @@ impl<T> Length for RadersAlgorithm<T> {
         self.inner_fft_data.len() + 1
     }
 }
+impl<T> IsInverse for RadersAlgorithm<T> {
+    #[inline(always)]
+    fn is_inverse(&self) -> bool {
+        self.inner_fft.is_inverse()
+    }
+}
 
 #[cfg(test)]
 mod unit_tests {
@@ -134,7 +142,7 @@ mod unit_tests {
 
     fn test_raders_with_length(len: usize, inverse: bool) {
         let inner_fft = Rc::new(DFT::new(len - 1, inverse));
-        let fft = RadersAlgorithm::new(len, inner_fft, inverse);
+        let fft = RadersAlgorithm::new(len, inner_fft);
 
         check_fft_algorithm(&fft, len, inverse);
     }

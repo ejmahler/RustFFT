@@ -1,10 +1,10 @@
 use std::rc::Rc;
 
-use num::Complex;
+use num_complex::Complex;
 
 use common::{FFTnum, verify_length, verify_length_divisible};
 
-use ::{Length, FFT};
+use ::{Length, IsInverse, FFT};
 use algorithm::butterflies::FFTButterfly;
 use array_utils;
 use twiddles;
@@ -17,10 +17,17 @@ pub struct MixedRadix<T> {
     height_size_fft: Rc<FFT<T>>,
 
     twiddles: Box<[Complex<T>]>,
+    inverse: bool,
 }
 
 impl<T: FFTnum> MixedRadix<T> {
-    pub fn new(width_fft: Rc<FFT<T>>, height_fft: Rc<FFT<T>>, inverse: bool) -> Self {
+    pub fn new(width_fft: Rc<FFT<T>>, height_fft: Rc<FFT<T>>) -> Self {
+        assert_eq!(
+            width_fft.is_inverse(), height_fft.is_inverse(), 
+            "width_fft and height_fft must both be inverse, or neither. got width inverse={}, height inverse={}",
+            width_fft.is_inverse(), height_fft.is_inverse());
+
+        let inverse = width_fft.is_inverse();
 
         let width = width_fft.len();
         let height = height_fft.len();
@@ -42,6 +49,7 @@ impl<T: FFTnum> MixedRadix<T> {
             height_size_fft: height_fft,
 
             twiddles: twiddles.into_boxed_slice(),
+            inverse: inverse,
         }
     }
 
@@ -90,6 +98,13 @@ impl<T> Length for MixedRadix<T> {
         self.twiddles.len()
     }
 }
+impl<T> IsInverse for MixedRadix<T> {
+    #[inline(always)]
+    fn is_inverse(&self) -> bool {
+        self.inverse
+    }
+}
+
 
 
 
@@ -103,10 +118,18 @@ pub struct MixedRadixDoubleButterfly<T> {
     height_size_fft: Rc<FFTButterfly<T>>,
 
     twiddles: Box<[Complex<T>]>,
+    inverse: bool,
 }
 
 impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
-    pub fn new(width_fft: Rc<FFTButterfly<T>>, height_fft: Rc<FFTButterfly<T>>, inverse: bool) -> Self {
+    pub fn new(width_fft: Rc<FFTButterfly<T>>, height_fft: Rc<FFTButterfly<T>>) -> Self {
+        assert_eq!(
+            width_fft.is_inverse(), height_fft.is_inverse(), 
+            "width_fft and height_fft must both be inverse, or neither. got width inverse={}, height inverse={}",
+            width_fft.is_inverse(), height_fft.is_inverse());
+
+        let inverse = width_fft.is_inverse();
+
         let width = width_fft.len();
         let height = height_fft.len();
 
@@ -127,6 +150,7 @@ impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
             height_size_fft: height_fft,
 
             twiddles: twiddles.into_boxed_slice(),
+            inverse: inverse
         }
     }
 
@@ -176,6 +200,13 @@ impl<T> Length for MixedRadixDoubleButterfly<T> {
         self.twiddles.len()
     }
 }
+impl<T> IsInverse for MixedRadixDoubleButterfly<T> {
+    #[inline(always)]
+    fn is_inverse(&self) -> bool {
+        self.inverse
+    }
+}
+
 
 
 
@@ -213,7 +244,7 @@ mod unit_tests {
         let width_fft = Rc::new(DFT::new(width, inverse)) as Rc<FFT<f32>>;
         let height_fft = Rc::new(DFT::new(height, inverse)) as Rc<FFT<f32>>;
 
-        let fft = MixedRadix::new(width_fft, height_fft, inverse);
+        let fft = MixedRadix::new(width_fft, height_fft);
 
         check_fft_algorithm(&fft, width * height, inverse);
     }
@@ -222,14 +253,14 @@ mod unit_tests {
         let width_fft = make_butterfly(width, inverse);
         let height_fft = make_butterfly(height, inverse);
 
-        let fft = MixedRadixDoubleButterfly::new(width_fft, height_fft, inverse);
+        let fft = MixedRadixDoubleButterfly::new(width_fft, height_fft);
 
         check_fft_algorithm(&fft, width * height, inverse);
     }
 
     fn make_butterfly(len: usize, inverse: bool) -> Rc<FFTButterfly<f32>> {
         match len {
-            2 => Rc::new(butterflies::Butterfly2 {}),
+            2 => Rc::new(butterflies::Butterfly2::new(inverse)),
             3 => Rc::new(butterflies::Butterfly3::new(inverse)),
             4 => Rc::new(butterflies::Butterfly4::new(inverse)),
             5 => Rc::new(butterflies::Butterfly5::new(inverse)),

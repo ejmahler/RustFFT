@@ -1,17 +1,21 @@
-use num::{Complex, Zero};
+use num_complex::Complex;
+use num_traits::Zero;
+
 use common::{FFTnum, verify_length, verify_length_divisible};
 
-use ::{Length, FFT};
+use ::{Length, IsInverse, FFT};
 use twiddles;
 
 pub struct DFT<T> {
     twiddles: Vec<Complex<T>>,
+    inverse: bool,
 }
 
 impl<T: FFTnum> DFT<T> {
     pub fn new(len: usize, inverse: bool) -> Self {
         DFT {
             twiddles: twiddles::generate_twiddle_factors(len, inverse),
+            inverse: inverse
         }
     }
 
@@ -56,13 +60,20 @@ impl<T> Length for DFT<T> {
         self.twiddles.len()
     }
 }
+impl<T> IsInverse for DFT<T> {
+    #[inline(always)]
+    fn is_inverse(&self) -> bool {
+        self.inverse
+    }
+}
 
 #[cfg(test)]
 mod unit_tests {
     use super::*;
     use std::f32;
     use test_utils::{random_signal, compare_vectors};
-    use num::{Complex, Zero};
+    use num_complex::Complex;
+    use num_traits::Zero;
 
     fn dft(signal: &[Complex<f32>], spectrum: &mut [Complex<f32>]) {
         for (k, spec_bin) in spectrum.iter_mut().enumerate() {

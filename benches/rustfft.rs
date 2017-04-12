@@ -1,16 +1,15 @@
 #![feature(test)]
 extern crate test;
-extern crate num;
 extern crate rustfft;
 
 use test::Bencher;
-use num::Complex;
+use rustfft::num_complex::Complex;
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
 fn bench_fft(b: &mut Bencher, len: usize) {
 
-    let mut planner = rustfft::Planner::new(false);
+    let mut planner = rustfft::FFTplanner::new(false);
     let fft = planner.plan_fft(len);
 
     let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; len];

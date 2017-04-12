@@ -1,5 +1,5 @@
 
-use num::{Zero, One, FromPrimitive, Integer, PrimInt, Signed};
+use num_traits::{Zero, One, FromPrimitive, PrimInt, Signed};
 use std::mem::swap;
 
 pub fn primitive_root(prime: u64) -> Option<u64> {
@@ -22,11 +22,13 @@ pub fn primitive_root(prime: u64) -> Option<u64> {
 }
 
 /// computes base^exponent % modulo using the standard exponentiation by squaring algorithm
-pub fn modular_exponent<T: PrimInt + Integer>(mut base: T, mut exponent: T, modulo: T) -> T {
-    let mut result = One::one();
+pub fn modular_exponent<T: PrimInt>(mut base: T, mut exponent: T, modulo: T) -> T {
+    let one = T::one();
+
+    let mut result = one;
 
     while exponent > Zero::zero() {
-        if exponent.is_odd() {
+        if exponent & one == one {
             result = result * base % modulo;
         }
         exponent = exponent >> One::one();
@@ -36,7 +38,7 @@ pub fn modular_exponent<T: PrimInt + Integer>(mut base: T, mut exponent: T, modu
     result
 }
 
-pub fn multiplicative_inverse<T: PrimInt + Integer + FromPrimitive>(a: T, n: T) -> T {
+pub fn multiplicative_inverse<T: PrimInt + FromPrimitive>(a: T, n: T) -> T {
     // we're going to use a modified version extended euclidean algorithm
     // we only need half the output
 
@@ -67,7 +69,7 @@ pub fn multiplicative_inverse<T: PrimInt + Integer + FromPrimitive>(a: T, n: T) 
     t
 }
 
-pub fn extended_euclidean_algorithm<T: PrimInt + Integer + Signed + FromPrimitive>(a: T,
+pub fn extended_euclidean_algorithm<T: PrimInt + Signed + FromPrimitive>(a: T,
                                                                                    b: T)
                                                                                    -> (T, T, T) {
     let mut s = Zero::zero();

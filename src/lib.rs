@@ -1,6 +1,7 @@
 #![cfg_attr(all(feature = "bench", test), feature(test))]
 
-extern crate num;
+pub extern crate num_complex;
+pub extern crate num_traits;
 
 pub mod algorithm;
 mod math_utils;
@@ -9,9 +10,9 @@ mod plan;
 mod twiddles;
 mod common;
 
-use num::Complex;
+use num_complex::Complex;
 
-pub use plan::Planner;
+pub use plan::FFTplanner;
 pub use common::FFTnum;
 
 /// A trait that allows FFT algorithms to report their expected input/output size
@@ -20,8 +21,14 @@ pub trait Length {
     fn len(&self) -> usize;
 }
 
+/// A trait that allows FFT algorithms to report whether they compute forward FFTs or inverse FFTs
+pub trait IsInverse {
+    /// true if this instance computes inverse FFTs, false otherwise
+    fn is_inverse(&self) -> bool;
+}
+
 /// An umbrella trait for all available FFT algorithms
-pub trait FFT<T: FFTnum>: Length {
+pub trait FFT<T: FFTnum>: Length + IsInverse {
     /// Performs an FFT on the `input` buffer, places the result in the `output` buffer.
     /// Uses the `input` buffer as scratch space
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]);

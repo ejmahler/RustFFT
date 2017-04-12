@@ -10,7 +10,8 @@ keywords = ["fft", "dft", "fourier", "signal"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-num = "*"
+num-complex = "0.1.36"
+num-traits = "0.1.37"
 
 [dev-dependencies]
 rand = "*"

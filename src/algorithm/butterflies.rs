@@ -1,11 +1,13 @@
-use num::{Complex, FromPrimitive, Zero};
+use num_complex::Complex;
+use num_traits::{FromPrimitive, Zero};
+
 use common::{FFTnum, verify_length, verify_length_divisible};
 
 use twiddles;
-use ::{Length, FFT};
+use ::{Length, IsInverse, FFT};
 
 
-pub trait FFTButterfly<T: FFTnum>: Length {
+pub trait FFTButterfly<T: FFTnum>: Length + IsInverse {
     unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]);
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]);
 }
@@ -22,8 +24,17 @@ unsafe fn swap_unchecked<T: Copy>(buffer: &mut [T], a: usize, b: usize) {
 
 
 
-pub struct Butterfly2;
+pub struct Butterfly2 {
+    inverse: bool,
+}
 impl Butterfly2 {
+    #[inline(always)]
+    pub fn new(inverse: bool) -> Self {
+        Butterfly2 {
+            inverse: inverse,
+        }
+    }
+
     #[inline(always)]
     unsafe fn perform_fft_direct<T: FFTnum>(&self, left: &mut Complex<T>, right: &mut Complex<T>) {
         let temp = *left + *right;
@@ -67,31 +78,40 @@ impl Length for Butterfly2 {
         2
     }
 }
+impl IsInverse for Butterfly2 {
+    #[inline(always)]
+    fn is_inverse(&self) -> bool {
+        self.inverse
+    }
+}
 
 
 
 pub struct Butterfly3<T> {
 	pub twiddle: Complex<T>,
+    inverse: bool,
 }
 impl<T: FFTnum> Butterfly3<T> {
 	#[inline(always)]
     pub fn new(inverse: bool) -> Self {
         Butterfly3 {
-            twiddle: twiddles::single_twiddle(1, 3, inverse)
+            twiddle: twiddles::single_twiddle(1, 3, inverse),
+            inverse: inverse,
         }
     }
 
     #[inline(always)]
     pub fn inverse_of(fft: &Butterfly3<T>) -> Self {
         Butterfly3 {
-            twiddle: fft.twiddle.conj()
+            twiddle: fft.twiddle.conj(),
+            inverse: !fft.inverse,
         }
     }
 }
 impl<T: FFTnum> FFTButterfly<T> for Butterfly3<T> {
     #[inline(always)]
     unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
-        let butterfly2 = Butterfly2{};
+        let butterfly2 = Butterfly2::new(self.inverse);
 
         butterfly2.process_inplace(&mut buffer[1..]);
         let temp = *buffer.get_unchecked(0);
@@ -130,6 +150,13 @@ impl<T> Length for Butterfly3<T> {
         3
     }
 }
+impl<T> IsInverse for Butterfly3<T> {
+    #[inline(always)]
+    fn is_inverse(&self) -> bool {
+        self.inverse
+    }
+}
+
 
 
 
@@ -147,7 +174,7 @@ impl Butterfly4
 impl<T: FFTnum> FFTButterfly<T> for Butterfly4 {
     #[inline(always)]
     unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
-        let butterfly2 = Butterfly2{};
+        let butterfly2 = Butterfly2::new(self.inverse);
 
         //we're going to hardcode a step of mixed radix
         //aka we're going to do the six step algorithm
@@ -200,6 +227,13 @@ impl Length for Butterfly4 {
         4
     }
 }
+impl IsInverse for Butterfly4 {
+    #[inline(always)]
+    fn is_inverse(&self) -> bool {
+        self.inverse
+    }
+}
+
 
 
 
@@ -287,6 +321,12 @@ impl<T> Length for Butterfly5<T> {
         5
     }
 }
+impl<T> IsInverse for Butterfly5<T> {
+    #[inline(always)]
+    fn is_inverse(&self) -> bool {
+        self.inverse
+    }
+}
 
 
 
@@ -331,7 +371,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly6<T> {
         // step 4: SKIPPED because the next FFTs will be non-contiguous
 
         // step 5: row FFTs
-        let butterfly2 = Butterfly2{};
+        let butterfly2 = Butterfly2::new(self.butterfly3.is_inverse());
         butterfly2.perform_fft_direct(&mut scratch_a[0], &mut scratch_b[0]);
         butterfly2.perform_fft_direct(&mut scratch_a[1], &mut scratch_b[1]);
         butterfly2.perform_fft_direct(&mut scratch_a[2], &mut scratch_b[2]);
@@ -371,6 +411,12 @@ impl<T> Length for Butterfly6<T> {
     #[inline(always)]
     fn len(&self) -> usize {
         6
+    }
+}
+impl<T> IsInverse for Butterfly6<T> {
+    #[inline(always)]
+    fn is_inverse(&self) -> bool {
+        self.butterfly3.is_inverse()
     }
 }
 
@@ -469,6 +515,12 @@ impl<T> Length for Butterfly7<T> {
         7
     }
 }
+impl<T> IsInverse for Butterfly7<T> {
+    #[inline(always)]
+    fn is_inverse(&self) -> bool {
+        self.inner_fft.is_inverse()
+    }
+}
 
 
 
@@ -502,7 +554,7 @@ impl<T: FFTnum> Butterfly8<T>
 impl<T: FFTnum> FFTButterfly<T> for Butterfly8<T> {
     #[inline(always)]
     unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
-        let butterfly2 = Butterfly2{};
+        let butterfly2 = Butterfly2::new(self.inverse);
         let butterfly4 = Butterfly4::new(self.inverse);
 
         //we're going to hardcode a step of mixed radix
@@ -576,6 +628,12 @@ impl<T> Length for Butterfly8<T> {
     #[inline(always)]
     fn len(&self) -> usize {
         8
+    }
+}
+impl<T> IsInverse for Butterfly8<T> {
+    #[inline(always)]
+    fn is_inverse(&self) -> bool {
+        self.inverse
     }
 }
 
@@ -688,6 +746,12 @@ impl<T> Length for Butterfly16<T> {
         16
     }
 }
+impl<T> IsInverse for Butterfly16<T> {
+    #[inline(always)]
+    fn is_inverse(&self) -> bool {
+        self.inverse
+    }
+}
 
 
 
@@ -696,23 +760,10 @@ mod unit_tests {
 	use super::*;
 	use test_utils::{random_signal, compare_vectors, check_fft_algorithm};
 	use algorithm::DFT;
-	use num::Zero;
+	use num_traits::Zero;
 
-	#[test]
-	fn test_butterfly2() {
-        let butterfly = Butterfly2{};
-
-        check_fft_algorithm(&butterfly, 2, false);
-        check_fft_algorithm(&butterfly, 2, true);
-
-        check_butterfly(&butterfly, 2, false);
-        check_butterfly(&butterfly, 2, true);
-    }
-
-
-    //the tests for all butterflies except 2 will be identical except for the identifiers used and size
+    //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
-    //butterfly 2 is different because it's the only one that doesn't care about forwards vs inverse
     macro_rules! test_butterfly_func {
         ($test_name:ident, $struct_name:ident, $size:expr) => (
             #[test]
@@ -729,6 +780,7 @@ mod unit_tests {
             }
         )
     }
+    test_butterfly_func!(test_butterfly2, Butterfly2, 2);
     test_butterfly_func!(test_butterfly3, Butterfly3, 3);
     test_butterfly_func!(test_butterfly4, Butterfly4, 4);
     test_butterfly_func!(test_butterfly5, Butterfly5, 5);
@@ -740,6 +792,7 @@ mod unit_tests {
 
     fn check_butterfly(butterfly: &FFTButterfly<f32>, size: usize, inverse: bool) {
         assert_eq!(butterfly.len(), size, "Butterfly algorithm reported wrong size");
+        assert_eq!(butterfly.is_inverse(), inverse, "Butterfly algorithm reported wrong inverse value");
 
         let n = 5;
 
