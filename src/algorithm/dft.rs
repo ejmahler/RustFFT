@@ -6,12 +6,32 @@ use common::{FFTnum, verify_length, verify_length_divisible};
 use ::{Length, IsInverse, FFT};
 use twiddles;
 
+/// Naive O(n^2 ) Discrete Fourier Transform implementation
+///
+/// This implementation is primarily used to test other FFT algorithms. In a few rare cases, such as small
+/// [Cunningham Chain](https://en.wikipedia.org/wiki/Cunningham_chain) primes, this can be faster than the O(nlogn)
+/// algorithms
+///
+/// ~~~
+/// // Computes a naive DFT of size 1234
+/// use rustfft::algorithm::DFT;
+/// use rustfft::FFT;
+/// use rustfft::num_complex::Complex;
+/// use rustfft::num_traits::Zero;
+///
+/// let mut input:  Vec<Complex<f32>> = vec![Zero::zero(); 1234];
+/// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); 1234];
+///
+/// let dft = DFT::new(1234, false);
+/// dft.process(&mut input, &mut output);
+/// ~~~
 pub struct DFT<T> {
     twiddles: Vec<Complex<T>>,
     inverse: bool,
 }
 
 impl<T: FFTnum> DFT<T> {
+    /// Preallocates necessary arrays and precomputes necessary data to efficiently compute DFT
     pub fn new(len: usize, inverse: bool) -> Self {
         DFT {
             twiddles: twiddles::generate_twiddle_factors(len, inverse),

@@ -7,12 +7,29 @@ use algorithm::butterflies::{Butterfly2, Butterfly4, FFTButterfly};
 use ::{Length, IsInverse, FFT};
 use twiddles;
 
+/// FFT algorithm optimized for power-of-two sizes
+///
+/// ~~~
+/// // Computes a forward FFT of size 4096
+/// use rustfft::algorithm::Radix4;
+/// use rustfft::FFT;
+/// use rustfft::num_complex::Complex;
+/// use rustfft::num_traits::Zero;
+///
+/// let mut input:  Vec<Complex<f32>> = vec![Zero::zero(); 4096];
+/// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); 4096];
+///
+/// let fft = Radix4::new(4096, false);
+/// fft.process(&mut input, &mut output);
+/// ~~~
+
 pub struct Radix4<T> {
     twiddles: Box<[Complex<T>]>,
     inverse: bool,
 }
 
 impl<T: FFTnum> Radix4<T> {
+    /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the power-of-two FFT
     pub fn new(len: usize, inverse: bool) -> Self {
         assert!(len.is_power_of_two() && len > 1, "Radix4 algorithm requires a power-of-two input size greater than one. Got {}", len);
         Radix4 {

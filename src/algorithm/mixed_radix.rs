@@ -9,6 +9,30 @@ use algorithm::butterflies::FFTButterfly;
 use array_utils;
 use twiddles;
 
+/// Implementation of the Mixed-Radix FFT algorithm
+///
+/// This algorithm factors a size n FFT into n1 * n2
+///
+/// ~~~
+/// // Computes a forward FFT of size 1200, using the Mixed-Radix Algorithm
+/// use rustfft::algorithm::MixedRadix;
+/// use rustfft::{FFT, FFTplanner};
+/// use rustfft::num_complex::Complex;
+/// use rustfft::num_traits::Zero;
+///
+/// let mut input:  Vec<Complex<f32>> = vec![Zero::zero(); 1200];
+/// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); 1200];
+///
+/// // we need to find an n1 and n2 such that n1 * n2 == 1200
+/// // n1 = 30 and n2 = 40 satisfies this
+/// let mut planner = rustfft::FFTplanner::new(false);
+/// let inner_fft_n1 = planner.plan_fft(30);
+/// let inner_fft_n2 = planner.plan_fft(40);
+///
+/// let fft = MixedRadix::new(inner_fft_n1, inner_fft_n2);
+/// fft.process(&mut input, &mut output);
+/// ~~~
+
 pub struct MixedRadix<T> {
     width: usize,
     width_size_fft: Rc<FFT<T>>,
@@ -21,6 +45,7 @@ pub struct MixedRadix<T> {
 }
 
 impl<T: FFTnum> MixedRadix<T> {
+    /// Creates a FFT instance which will process inputs/outputs of size `n1_fft.len() * n2_fft.len()`
     pub fn new(width_fft: Rc<FFT<T>>, height_fft: Rc<FFT<T>>) -> Self {
         assert_eq!(
             width_fft.is_inverse(), height_fft.is_inverse(), 
@@ -109,7 +134,30 @@ impl<T> IsInverse for MixedRadix<T> {
 
 
 
-/// This struct is the same as MixedRadixSingle, except it's specialized for the case where both inner FFTs are butterflies
+/// Implementation of the Mixed-Radix FFT algorithm, specialized for the case where both inner FFTs are butterflies
+///
+/// This algorithm factors a size n FFT into n1 * n2
+///
+/// ~~~
+/// // Computes a forward FFT of size 56, using the Mixed-Radix Butterfly Algorithm
+/// use std::rc::Rc;
+/// use rustfft::algorithm::MixedRadixDoubleButterfly;
+/// use rustfft::algorithm::butterflies::{Butterfly7, Butterfly8};
+/// use rustfft::FFT;
+/// use rustfft::num_complex::Complex;
+/// use rustfft::num_traits::Zero;
+///
+/// let mut input:  Vec<Complex<f32>> = vec![Zero::zero(); 56];
+/// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); 56];
+///
+/// // we need to find an n1 and n2 such that n1 * n2 == 56
+/// // n1 = 7 and n2 = 8 satisfies this
+/// let inner_fft_n1 = Rc::new(Butterfly7::new(false));
+/// let inner_fft_n2 = Rc::new(Butterfly8::new(false));
+///
+/// let fft = MixedRadixDoubleButterfly::new(inner_fft_n1, inner_fft_n2);
+/// fft.process(&mut input, &mut output);
+/// ~~~
 pub struct MixedRadixDoubleButterfly<T> {
     width: usize,
     width_size_fft: Rc<FFTButterfly<T>>,
@@ -122,6 +170,7 @@ pub struct MixedRadixDoubleButterfly<T> {
 }
 
 impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
+    /// Creates a FFT instance which will process inputs/outputs of size `n1_fft.len() * n2_fft.len()`
     pub fn new(width_fft: Rc<FFTButterfly<T>>, height_fft: Rc<FFTButterfly<T>>) -> Self {
         assert_eq!(
             width_fft.is_inverse(), height_fft.is_inverse(), 
