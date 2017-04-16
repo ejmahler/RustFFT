@@ -16,14 +16,14 @@ const COMPOSITE_BUTTERFLIES: [usize; 4] = [4, 6, 8, 16];
 
 /// The FFT planner is used to make new FFT algorithm instances.
 ///
-/// RustFFT has several FFT algorithms available; For a
-/// given FFT size, the FFTplanner decides which of the available FFT algorithms to use and then initializes them.
+/// RustFFT has several FFT algorithms available; For a given FFT size, the FFTplanner decides which of the
+/// available FFT algorithms to use and then initializes them.
 ///
 /// ~~~
 /// // Perform a forward FFT of size 1234
-/// # use rustfft::FFTplanner;
-/// # use rustfft::num_complex::Complex;
-/// # use rustfft::num_traits::Zero;
+/// use rustfft::FFTplanner;
+/// use rustfft::num_complex::Complex;
+/// use rustfft::num_traits::Zero;
 ///
 /// let mut input:  Vec<Complex<f32>> = vec![Zero::zero(); 1234];
 /// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); 1234];
@@ -34,9 +34,9 @@ const COMPOSITE_BUTTERFLIES: [usize; 4] = [4, 6, 8, 16];
 /// ~~~
 ///
 /// If you plan on creating multiple FFT instances, it is recommnded to reuse the same planner for all of them. This
-/// is because the planner re-uses internal data wherever possible, saving memory and reducing setup time. FFT
-/// instances created with one planner will never re-use data and buffers with FFT instances created by a different
-/// planner.
+/// is because the planner re-uses internal data across FFT instances wherever possible, saving memory and reducing
+/// setup time. (FFT instances created with one planner will never re-use data and buffers with FFT instances created
+/// by a different planner)
 ///
 /// Each FFT instance owns `Rc`s to its internal data, rather than borrowing it from the planner, so it's perfectly
 /// safe to drop the planner after creating FFT instances.
@@ -47,8 +47,9 @@ pub struct FFTplanner<T> {
 }
 
 impl<T: FFTnum> FFTplanner<T> {
-    /// Creates a new FFT planner, which will plan forwarrd FFTs if `inverse` is false,
-    /// or inverse FFTs if `inverse` is true
+    /// Creates a new FFT planner.
+    ///
+    /// If `inverse` is false, this planner will plan forward FFTs. If `inverse` is true, it will plan inverse FFTs.
     pub fn new(inverse: bool) -> Self {
         FFTplanner {
             inverse: inverse,
@@ -57,8 +58,8 @@ impl<T: FFTnum> FFTplanner<T> {
         }
     }
 
-    /// Returns an instance of an FFT algorithm capable of processing signals of size `len`
-    /// Attempts to save time and memory by re-using data across multiple calls where possible.
+    /// Returns a FFT instance which processes signals of size `len`
+    /// If this is called multiple times, it will attempt to re-use internal data between instances
     pub fn plan_fft(&mut self, len: usize) -> Rc<FFT<T>> {
         if len < 2 {
             Rc::new(DFT::new(len, self.inverse)) as Rc<FFT<T>>
