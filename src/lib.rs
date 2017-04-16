@@ -3,6 +3,7 @@
 pub extern crate num_complex;
 pub extern crate num_traits;
 
+/// Individual FFT algorithms
 pub mod algorithm;
 mod math_utils;
 mod array_utils;
@@ -23,7 +24,7 @@ pub trait Length {
 
 /// A trait that allows FFT algorithms to report whether they compute forward FFTs or inverse FFTs
 pub trait IsInverse {
-    /// true if this instance computes inverse FFTs, false otherwise
+    /// Returns false if this instance computes forward FFTs, true for inverse FFTs
     fn is_inverse(&self) -> bool;
 }
 
