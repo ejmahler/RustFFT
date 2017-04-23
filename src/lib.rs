@@ -10,9 +10,10 @@
 //! // Perform a forward FFT of size 1234
 //! use rustfft::FFTplanner;
 //! use rustfft::num_complex::Complex;
+//! use rustfft::num_traits::Zero;
 //!
-//! let mut input:  Vec<Complex<f32>> = vec![0f32; 1234];
-//! let mut output: Vec<Complex<f32>> = vec![0f32; 1234];
+//! let mut input:  Vec<Complex<f32>> = vec![Complex::zero(); 1234];
+//! let mut output: Vec<Complex<f32>> = vec![Complex::zero(); 1234];
 //!
 //! let mut planner = FFTplanner::new(false);
 //! let fft = planner.plan_fft(1234);
@@ -29,9 +30,10 @@
 //! use rustfft::algorithm::Radix4;
 //! use rustfft::FFT;
 //! use rustfft::num_complex::Complex;
+//! use rustfft::num_traits::Zero;
 //!
-//! let mut input:  Vec<Complex<f32>> = vec![0f32; 4096];
-//! let mut output: Vec<Complex<f32>> = vec![0f32; 4096];
+//! let mut input:  Vec<Complex<f32>> = vec![Complex::zero(); 4096];
+//! let mut output: Vec<Complex<f32>> = vec![Complex::zero(); 4096];
 //!
 //! let fft = Radix4::new(4096, false);
 //! fft.process(&mut input, &mut output);
@@ -76,12 +78,16 @@ pub trait IsInverse {
 
 /// An umbrella trait for all available FFT algorithms
 pub trait FFT<T: FFTnum>: Length + IsInverse {
-    /// Performs an FFT on the `input` buffer, places the result in the `output` buffer.
-    /// Uses the `input` buffer as scratch space
+    /// Computes an FFT on the `input` buffer and places the result in the `output` buffer.
+    ///
+    /// This method uses the `input` buffer as scratch space, so the contents of `input` should be considered garbage
+    /// after calling
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]);
 
-    /// Divides the `input` and `output` buffers into self.len() chunks, then runs an FFT
-    /// on each chunk. Uses the `input` buffer as scratch space
+    /// Divides the `input` and `output` buffers into self.len() chunks, then computes an FFT on each chunk.
+    ///
+    /// This method uses the `input` buffer as scratch space, so the contents of `input` should be considered garbage
+    /// after calling
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]);
 }
 
