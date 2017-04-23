@@ -8,7 +8,16 @@ use ::{Length, IsInverse, FFT};
 
 
 pub trait FFTButterfly<T: FFTnum>: Length + IsInverse {
+    /// Computes the FFT in-place in the given buffer
+    ///
+    /// # Safety
+    /// This function performs unsafe reads/writes on `buffer`. Make sure `buffer.len()` is equal to `self.len()`
     unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]);
+
+    /// Divides the given buffer into chunks of length `self.len()` and computes an in-place FFT on each chunk
+    ///
+    /// # Safety
+    /// This function performs unsafe reads/writes on `buffer`. Make sure `buffer.len()` is a multiple of `self.len()`
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]);
 }
 

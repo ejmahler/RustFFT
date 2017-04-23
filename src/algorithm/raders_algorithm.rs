@@ -28,7 +28,7 @@ use ::{Length, IsInverse, FFT};
 /// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); 1201];
 ///
 /// // plan a FFT of size n - 1 = 1200
-/// let mut planner = rustfft::FFTplanner::new(false);
+/// let mut planner = FFTplanner::new(false);
 /// let inner_fft = planner.plan_fft(1200);
 ///
 /// let fft = RadersAlgorithm::new(1201, inner_fft);

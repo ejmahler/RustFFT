@@ -25,10 +25,11 @@ use twiddles;
 ///
 /// // we need to find an n1 and n2 such that n1 * n2 == 1200
 /// // n1 = 30 and n2 = 40 satisfies this
-/// let mut planner = rustfft::FFTplanner::new(false);
+/// let mut planner = FFTplanner::new(false);
 /// let inner_fft_n1 = planner.plan_fft(30);
 /// let inner_fft_n2 = planner.plan_fft(40);
 ///
+/// // the mixed radix FFT length will be inner_fft_n1.len() * inner_fft_n2.len() = 1200
 /// let fft = MixedRadix::new(inner_fft_n1, inner_fft_n2);
 /// fft.process(&mut input, &mut output);
 /// ~~~
@@ -155,6 +156,7 @@ impl<T> IsInverse for MixedRadix<T> {
 /// let inner_fft_n1 = Rc::new(Butterfly7::new(false));
 /// let inner_fft_n2 = Rc::new(Butterfly8::new(false));
 ///
+/// // the mixed radix FFT length will be inner_fft_n1.len() * inner_fft_n2.len() = 56
 /// let fft = MixedRadixDoubleButterfly::new(inner_fft_n1, inner_fft_n2);
 /// fft.process(&mut input, &mut output);
 /// ~~~

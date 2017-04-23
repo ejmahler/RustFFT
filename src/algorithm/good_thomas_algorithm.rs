@@ -27,10 +27,11 @@ use ::{Length, IsInverse, FFT};
 ///
 /// // we need to find an n1 and n2 such that n1 * n2 == 1200 and GCD(n1, n2) == 1
 /// // n1 = 48 and n2 = 25 satisfies this
-/// let mut planner = rustfft::FFTplanner::new(false);
+/// let mut planner = FFTplanner::new(false);
 /// let inner_fft_n1 = planner.plan_fft(48);
 /// let inner_fft_n2 = planner.plan_fft(25);
 ///
+/// // the good-thomas FFT length will be inner_fft_n1.len() * inner_fft_n2.len() = 1200
 /// let fft = GoodThomasAlgorithm::new(inner_fft_n1, inner_fft_n2);
 /// fft.process(&mut input, &mut output);
 /// ~~~
