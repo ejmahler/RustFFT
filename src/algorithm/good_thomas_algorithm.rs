@@ -8,6 +8,33 @@ use array_utils;
 
 use ::{Length, IsInverse, FFT};
 
+/// Implementation of the Good-Thomas Algorithm (AKA Prime Factor Algorithm)
+///
+/// This algorithm factors a size n FFT into n1 * n2, where GCD(n1, n2) == 1
+///
+/// Conceptually, this algorithm is very similar to the Mixed-Radix FFT, except because GCD(n1, n2) == 1 we can do some
+/// number theory trickery to avoid twiddle factors
+///
+/// ~~~
+/// // Computes a forward FFT of size 1200, using the Good-Thomas Algorithm
+/// use rustfft::algorithm::GoodThomasAlgorithm;
+/// use rustfft::{FFT, FFTplanner};
+/// use rustfft::num_complex::Complex;
+/// use rustfft::num_traits::Zero;
+///
+/// let mut input:  Vec<Complex<f32>> = vec![Zero::zero(); 1200];
+/// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); 1200];
+///
+/// // we need to find an n1 and n2 such that n1 * n2 == 1200 and GCD(n1, n2) == 1
+/// // n1 = 48 and n2 = 25 satisfies this
+/// let mut planner = FFTplanner::new(false);
+/// let inner_fft_n1 = planner.plan_fft(48);
+/// let inner_fft_n2 = planner.plan_fft(25);
+///
+/// // the good-thomas FFT length will be inner_fft_n1.len() * inner_fft_n2.len() = 1200
+/// let fft = GoodThomasAlgorithm::new(inner_fft_n1, inner_fft_n2);
+/// fft.process(&mut input, &mut output);
+/// ~~~
 pub struct GoodThomasAlgorithm<T> {
     width: usize,
     // width_inverse: usize,
@@ -24,9 +51,10 @@ pub struct GoodThomasAlgorithm<T> {
 }
 
 impl<T: FFTnum> GoodThomasAlgorithm<T> {
-    #[allow(dead_code)]
+    /// Creates a FFT instance which will process inputs/outputs of size `n1_fft.len() * n2_fft.len()`
+    ///
+    /// GCD(n1.len(), n2.len()) must be equal to 1
     pub fn new(n1_fft: Rc<FFT<T>>, n2_fft: Rc<FFT<T>>) -> Self {
-
         assert_eq!(
             n1_fft.is_inverse(), n2_fft.is_inverse(), 
             "n1_fft and n2_fft must both be inverse, or neither. got n1 inverse={}, n2 inverse={}",
@@ -39,8 +67,7 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
         let (gcd, mut n1_inverse, mut n2_inverse) =
             math_utils::extended_euclidean_algorithm(n1 as i64, n2 as i64);
         assert!(gcd == 1,
-                "Invalid input n1 and n2 to Good-Thomas Algorithm: ({},{}): Inputs must be \
-                 coprime",
+                "Invalid input n1 and n2 to Good-Thomas Algorithm: ({},{}): Inputs must be coprime",
                 n1,
                 n2);
 

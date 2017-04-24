@@ -9,6 +9,36 @@ use math_utils;
 use twiddles;
 use ::{Length, IsInverse, FFT};
 
+/// Implementation of Rader's Algorithm
+///
+/// This algorithm computes a prime-sized FFT in O(nlogn) time. It does this by converting this size n FFT into a
+/// size (n - 1) FFT, which is guaranteed to be composite.
+///
+/// The worst case for this algorithm is when (n - 1) is 2 * prime, resulting in a
+/// [Cunningham Chain](https://en.wikipedia.org/wiki/Cunningham_chain)
+///
+/// ~~~
+/// // Computes a forward FFT of size 1201 (prime number), using Rader's Algorithm
+/// use rustfft::algorithm::RadersAlgorithm;
+/// use rustfft::{FFT, FFTplanner};
+/// use rustfft::num_complex::Complex;
+/// use rustfft::num_traits::Zero;
+///
+/// let mut input:  Vec<Complex<f32>> = vec![Zero::zero(); 1201];
+/// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); 1201];
+///
+/// // plan a FFT of size n - 1 = 1200
+/// let mut planner = FFTplanner::new(false);
+/// let inner_fft = planner.plan_fft(1200);
+///
+/// let fft = RadersAlgorithm::new(1201, inner_fft);
+/// fft.process(&mut input, &mut output);
+/// ~~~
+///
+/// Rader's Algorithm is relatively expensive compared to other FFT algorithms. Benchmarking shows that it is up to
+/// an order of magnitude slower than similar composite sizes. In the example size above of 1201, benchmarking shows
+/// that it takes 2.5x more time to compute than a FFT of size 1200.
+
 pub struct RadersAlgorithm<T> {
     inner_fft: Rc<FFT<T>>,
     inner_fft_data: Box<[Complex<T>]>,
@@ -18,6 +48,13 @@ pub struct RadersAlgorithm<T> {
 }
 
 impl<T: FFTnum> RadersAlgorithm<T> {
+    /// Creates a FFT instance which will process inputs/outputs of size `len`. `inner_fft.len()` must be `len - 1`
+    ///
+    /// Note that this constructor is quite expensive to run; This algorithm must run a FFT of size n - 1 within the
+    /// constructor. This further underlines the fact that Rader's Algorithm is more expensive to run than other
+    /// FFT algorithms
+    ///
+    /// Note also that if `len` is not prime, this algorithm may silently produce garbage output
     pub fn new(len: usize, inner_fft: Rc<FFT<T>>) -> Self {
         assert_eq!(len - 1, inner_fft.len(), "For raders algorithm, inner_fft.len() must be self.len() - 1. Expected {}, got {}", len - 1, inner_fft.len());
 
