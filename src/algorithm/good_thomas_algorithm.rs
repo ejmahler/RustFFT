@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use num_complex::Complex;
 use common::{FFTnum, verify_length, verify_length_divisible};
@@ -8,12 +8,12 @@ use array_utils;
 
 use ::{Length, IsInverse, FFT};
 
-/// Implementation of the Good-Thomas Algorithm (AKA Prime Factor Algorithm)
+/// Implementation of the [Good-Thomas Algorithm (AKA Prime Factor Algorithm)](https://en.wikipedia.org/wiki/Prime-factor_FFT_algorithm)
 ///
 /// This algorithm factors a size n FFT into n1 * n2, where GCD(n1, n2) == 1
 ///
 /// Conceptually, this algorithm is very similar to the Mixed-Radix FFT, except because GCD(n1, n2) == 1 we can do some
-/// number theory trickery to avoid twiddle factors
+/// number theory trickery to reduce the number of floating-point multiplications and additions
 ///
 /// ~~~
 /// // Computes a forward FFT of size 1200, using the Good-Thomas Algorithm
@@ -38,11 +38,11 @@ use ::{Length, IsInverse, FFT};
 pub struct GoodThomasAlgorithm<T> {
     width: usize,
     // width_inverse: usize,
-    width_size_fft: Rc<FFT<T>>,
+    width_size_fft: Arc<FFT<T>>,
 
     height: usize,
     // height_inverse: usize,
-    height_size_fft: Rc<FFT<T>>,
+    height_size_fft: Arc<FFT<T>>,
 
     input_map: Box<[usize]>,
     output_map: Box<[usize]>,
@@ -54,7 +54,7 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `n1_fft.len() * n2_fft.len()`
     ///
     /// GCD(n1.len(), n2.len()) must be equal to 1
-    pub fn new(n1_fft: Rc<FFT<T>>, n2_fft: Rc<FFT<T>>) -> Self {
+    pub fn new(n1_fft: Arc<FFT<T>>, n2_fft: Arc<FFT<T>>) -> Self {
         assert_eq!(
             n1_fft.is_inverse(), n2_fft.is_inverse(), 
             "n1_fft and n2_fft must both be inverse, or neither. got n1 inverse={}, n2 inverse={}",
@@ -164,7 +164,7 @@ impl<T> IsInverse for GoodThomasAlgorithm<T> {
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use std::rc::Rc;
+    use std::sync::Arc;
     use test_utils::check_fft_algorithm;
     use algorithm::DFT;
 
@@ -184,8 +184,8 @@ mod unit_tests {
     }
 
     fn test_good_thomas_with_lengths(width: usize, height: usize) {
-        let width_fft = Rc::new(DFT::new(width, false)) as Rc<FFT<f32>>;
-        let height_fft = Rc::new(DFT::new(height, false)) as Rc<FFT<f32>>;
+        let width_fft = Arc::new(DFT::new(width, false)) as Arc<FFT<f32>>;
+        let height_fft = Arc::new(DFT::new(height, false)) as Arc<FFT<f32>>;
 
         let fft = GoodThomasAlgorithm::new(width_fft, height_fft);
 
