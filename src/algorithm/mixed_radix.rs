@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use num_complex::Complex;
 
@@ -36,10 +36,10 @@ use twiddles;
 
 pub struct MixedRadix<T> {
     width: usize,
-    width_size_fft: Rc<FFT<T>>,
+    width_size_fft: Arc<FFT<T>>,
 
     height: usize,
-    height_size_fft: Rc<FFT<T>>,
+    height_size_fft: Arc<FFT<T>>,
 
     twiddles: Box<[Complex<T>]>,
     inverse: bool,
@@ -47,7 +47,7 @@ pub struct MixedRadix<T> {
 
 impl<T: FFTnum> MixedRadix<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `n1_fft.len() * n2_fft.len()`
-    pub fn new(width_fft: Rc<FFT<T>>, height_fft: Rc<FFT<T>>) -> Self {
+    pub fn new(width_fft: Arc<FFT<T>>, height_fft: Arc<FFT<T>>) -> Self {
         assert_eq!(
             width_fft.is_inverse(), height_fft.is_inverse(), 
             "width_fft and height_fft must both be inverse, or neither. got width inverse={}, height inverse={}",
@@ -141,7 +141,7 @@ impl<T> IsInverse for MixedRadix<T> {
 ///
 /// ~~~
 /// // Computes a forward FFT of size 56, using the Mixed-Radix Butterfly Algorithm
-/// use std::rc::Rc;
+/// use std::sync::Arc;
 /// use rustfft::algorithm::MixedRadixDoubleButterfly;
 /// use rustfft::algorithm::butterflies::{Butterfly7, Butterfly8};
 /// use rustfft::FFT;
@@ -153,8 +153,8 @@ impl<T> IsInverse for MixedRadix<T> {
 ///
 /// // we need to find an n1 and n2 such that n1 * n2 == 56
 /// // n1 = 7 and n2 = 8 satisfies this
-/// let inner_fft_n1 = Rc::new(Butterfly7::new(false));
-/// let inner_fft_n2 = Rc::new(Butterfly8::new(false));
+/// let inner_fft_n1 = Arc::new(Butterfly7::new(false));
+/// let inner_fft_n2 = Arc::new(Butterfly8::new(false));
 ///
 /// // the mixed radix FFT length will be inner_fft_n1.len() * inner_fft_n2.len() = 56
 /// let fft = MixedRadixDoubleButterfly::new(inner_fft_n1, inner_fft_n2);
@@ -162,10 +162,10 @@ impl<T> IsInverse for MixedRadix<T> {
 /// ~~~
 pub struct MixedRadixDoubleButterfly<T> {
     width: usize,
-    width_size_fft: Rc<FFTButterfly<T>>,
+    width_size_fft: Arc<FFTButterfly<T>>,
 
     height: usize,
-    height_size_fft: Rc<FFTButterfly<T>>,
+    height_size_fft: Arc<FFTButterfly<T>>,
 
     twiddles: Box<[Complex<T>]>,
     inverse: bool,
@@ -173,7 +173,7 @@ pub struct MixedRadixDoubleButterfly<T> {
 
 impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `n1_fft.len() * n2_fft.len()`
-    pub fn new(width_fft: Rc<FFTButterfly<T>>, height_fft: Rc<FFTButterfly<T>>) -> Self {
+    pub fn new(width_fft: Arc<FFTButterfly<T>>, height_fft: Arc<FFTButterfly<T>>) -> Self {
         assert_eq!(
             width_fft.is_inverse(), height_fft.is_inverse(), 
             "width_fft and height_fft must both be inverse, or neither. got width inverse={}, height inverse={}",
@@ -264,7 +264,7 @@ impl<T> IsInverse for MixedRadixDoubleButterfly<T> {
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use std::rc::Rc;
+    use std::sync::Arc;
     use test_utils::check_fft_algorithm;
     use algorithm::{butterflies, DFT};
 
@@ -292,8 +292,8 @@ mod unit_tests {
 
 
     fn test_mixed_radix_with_lengths(width: usize, height: usize, inverse: bool) {
-        let width_fft = Rc::new(DFT::new(width, inverse)) as Rc<FFT<f32>>;
-        let height_fft = Rc::new(DFT::new(height, inverse)) as Rc<FFT<f32>>;
+        let width_fft = Arc::new(DFT::new(width, inverse)) as Arc<FFT<f32>>;
+        let height_fft = Arc::new(DFT::new(height, inverse)) as Arc<FFT<f32>>;
 
         let fft = MixedRadix::new(width_fft, height_fft);
 
@@ -309,16 +309,16 @@ mod unit_tests {
         check_fft_algorithm(&fft, width * height, inverse);
     }
 
-    fn make_butterfly(len: usize, inverse: bool) -> Rc<FFTButterfly<f32>> {
+    fn make_butterfly(len: usize, inverse: bool) -> Arc<FFTButterfly<f32>> {
         match len {
-            2 => Rc::new(butterflies::Butterfly2::new(inverse)),
-            3 => Rc::new(butterflies::Butterfly3::new(inverse)),
-            4 => Rc::new(butterflies::Butterfly4::new(inverse)),
-            5 => Rc::new(butterflies::Butterfly5::new(inverse)),
-            6 => Rc::new(butterflies::Butterfly6::new(inverse)),
-            7 => Rc::new(butterflies::Butterfly7::new(inverse)),
-            8 => Rc::new(butterflies::Butterfly8::new(inverse)),
-            16 => Rc::new(butterflies::Butterfly16::new(inverse)),
+            2 => Arc::new(butterflies::Butterfly2::new(inverse)),
+            3 => Arc::new(butterflies::Butterfly3::new(inverse)),
+            4 => Arc::new(butterflies::Butterfly4::new(inverse)),
+            5 => Arc::new(butterflies::Butterfly5::new(inverse)),
+            6 => Arc::new(butterflies::Butterfly6::new(inverse)),
+            7 => Arc::new(butterflies::Butterfly7::new(inverse)),
+            8 => Arc::new(butterflies::Butterfly8::new(inverse)),
+            16 => Arc::new(butterflies::Butterfly16::new(inverse)),
             _ => panic!("Invalid butterfly size: {}", len),
         }
     }
