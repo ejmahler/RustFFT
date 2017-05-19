@@ -2,8 +2,8 @@
 
 //! RustFFT allows users to compute arbitrary-sized FFTs in O(nlogn) time.
 //!
-//! The recommended way to use RustFFT is to create a [`FFTplanner`](struct.FFTplannet.html) instance. The
-//! [`FFTplanner`](struct.FFTplannet.html)'s `plan_fft` method will automatically choose which FFT algorithms are best
+//! The recommended way to use RustFFT is to create a [`FFTplanner`](struct.FFTplanner.html) instance. The
+//! [`FFTplanner`](struct.FFTplanner.html)'s `plan_fft` method will automatically choose which FFT algorithms are best
 //! for a given size and initialzie the required buffers and precomputed data.
 //!
 //! ```
@@ -39,9 +39,9 @@
 //! fft.process(&mut input, &mut output);
 //! ```
 //!
-//! For most applications, simply using the [`FFTplanner`](struct.FFTplannet.html) will be enough, but advanced users
+//! For most applications, simply using the [`FFTplanner`](struct.FFTplanner.html) will be enough, but advanced users
 //! may have better insight over which algorithms to use for a specific size than the
-//! [`FFTplanner`](struct.FFTplannet.html). See the [`algorithm`](algorithm/index.html) crate for a complete list of
+//! [`FFTplanner`](struct.FFTplanner.html). See the [`algorithm`](algorithm/index.html) crate for a complete list of
 //! algorithms used by RustFFT.
 
 pub extern crate num_complex;
