@@ -8,12 +8,12 @@ use array_utils;
 
 use ::{Length, IsInverse, FFT};
 
-/// Implementation of the Good-Thomas Algorithm (AKA Prime Factor Algorithm)
+/// Implementation of the [Good-Thomas Algorithm (AKA Prime Factor Algorithm)](https://en.wikipedia.org/wiki/Prime-factor_FFT_algorithm)
 ///
 /// This algorithm factors a size n FFT into n1 * n2, where GCD(n1, n2) == 1
 ///
 /// Conceptually, this algorithm is very similar to the Mixed-Radix FFT, except because GCD(n1, n2) == 1 we can do some
-/// number theory trickery to avoid twiddle factors
+/// number theory trickery to reduce the number of floating-point multiplications and additions
 ///
 /// ~~~
 /// // Computes a forward FFT of size 1200, using the Good-Thomas Algorithm

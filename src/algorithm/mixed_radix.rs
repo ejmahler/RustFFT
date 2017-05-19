@@ -11,7 +11,8 @@ use twiddles;
 
 /// Implementation of the Mixed-Radix FFT algorithm
 ///
-/// This algorithm factors a size n FFT into n1 * n2
+/// This algorithm factors a size n FFT into n1 * n2, computes several inner FFTs of size n1 and n2, then combines the 
+/// results to get the final answer
 ///
 /// ~~~
 /// // Computes a forward FFT of size 1200, using the Mixed-Radix Algorithm
