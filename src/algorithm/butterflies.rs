@@ -7,7 +7,7 @@ use twiddles;
 use ::{Length, IsInverse, FFT};
 
 
-pub trait FFTButterfly<T: FFTnum>: Length + IsInverse {
+pub trait FFTButterfly<T: FFTnum>: Length + IsInverse + Sync + Send {
     /// Computes the FFT in-place in the given buffer
     ///
     /// # Safety
