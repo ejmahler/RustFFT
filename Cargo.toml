@@ -14,4 +14,4 @@ num-complex = "0.1.36"
 num-traits = "0.1.37"
 
 [dev-dependencies]
-rand = "*"
+rand = "0.3.15"
