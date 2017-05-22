@@ -2,9 +2,9 @@
 
 //! RustFFT allows users to compute arbitrary-sized FFTs in O(nlogn) time.
 //!
-//! The recommended way to use RustFFT is to create a [`FFTplanner`](struct.FFTplannet.html) instance. The
-//! [`FFTplanner`](struct.FFTplannet.html)'s `plan_fft` method will automatically choose which FFT algorithms are best
-//! for a given size and initialzie the required buffers and precomputed data.
+//! The recommended way to use RustFFT is to create a [`FFTplanner`](struct.FFTplanner.html) instance and then call its
+//! `plan_fft` method. This method will automatically choose which FFT algorithms are best
+//! for a given size and initialize the required buffers and precomputed data.
 //!
 //! ```
 //! // Perform a forward FFT of size 1234
@@ -22,8 +22,8 @@
 //! The planner returns trait objects of the [`FFT`](trait.FFT.html) trait, allowing for FFT sizes that aren't known
 //! until runtime.
 //! 
-//! RustFFT also exposes individual FFT algorithms. If you know beforehand that you need a power-of-two FFT, it's
-//! possible to bypass the planner and trait object and directly create instances of the Radix4 algorithm:
+//! RustFFT also exposes individual FFT algorithms. If you know beforehand that you need a power-of-two FFT, you can
+//! avoid the overhead of the planner and trait object by directly creating instances of the Radix4 algorithm:
 //!
 //! ```
 //! // Computes a forward FFT of size 4096
@@ -39,10 +39,9 @@
 //! fft.process(&mut input, &mut output);
 //! ```
 //!
-//! For most applications, simply using the [`FFTplanner`](struct.FFTplannet.html) will be enough, but advanced users
-//! may have better insight over which algorithms to use for a specific size than the
-//! [`FFTplanner`](struct.FFTplannet.html). See the [`algorithm`](algorithm/index.html) crate for a complete list of
-//! algorithms used by RustFFT.
+//! For the vast majority of situations, simply using the [`FFTplanner`](struct.FFTplanner.html) will be enough, but
+//! advanced users may have better insight than the planner into which algorithms are best for a specific size. See the
+//! [`algorithm`](algorithm/index.html) module for a complete list of algorithms implemented by RustFFT.
 
 pub extern crate num_complex;
 pub extern crate num_traits;
@@ -77,7 +76,7 @@ pub trait IsInverse {
 }
 
 /// An umbrella trait for all available FFT algorithms
-pub trait FFT<T: FFTnum>: Length + IsInverse {
+pub trait FFT<T: FFTnum>: Length + IsInverse + Sync + Send {
     /// Computes an FFT on the `input` buffer and places the result in the `output` buffer.
     ///
     /// This method uses the `input` buffer as scratch space, so the contents of `input` should be considered garbage
