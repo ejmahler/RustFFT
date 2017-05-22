@@ -1,4 +1,4 @@
-//! Test that we can use an `FFT` object from multiple threads
+//! Show how to use an `FFT` object from multiple threads
 
 extern crate rustfft;
 
@@ -7,8 +7,7 @@ use std::thread;
 use rustfft::FFTplanner;
 use rustfft::num_complex::Complex32;
 
-#[test]
-fn two_threads() {
+fn main() {
     let inverse = false;
     let mut planner = FFTplanner::new(inverse);
     let fft = planner.plan_fft(100);
