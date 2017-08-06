@@ -19,19 +19,17 @@ fn bench_fft(b: &mut Bencher, len: usize) {
 
 
 // Powers of 4
-#[bench] fn complex_p2_000064(b: &mut Bencher) { bench_fft(b,   64); }
-#[bench] fn complex_p2_000128(b: &mut Bencher) { bench_fft(b,   128); }
-#[bench] fn complex_p2_000256(b: &mut Bencher) { bench_fft(b,   256); }
-#[bench] fn complex_p2_000512(b: &mut Bencher) { bench_fft(b,   512); }
-#[bench] fn complex_p2_001024(b: &mut Bencher) { bench_fft(b,   1024); }
-#[bench] fn complex_p2_002048(b: &mut Bencher) { bench_fft(b,   2048); }
-#[bench] fn complex_p2_004096(b: &mut Bencher) { bench_fft(b,   4096); }
-#[bench] fn complex_p2_008192(b: &mut Bencher) { bench_fft(b,   8192); }
-#[bench] fn complex_p2_016384(b: &mut Bencher) { bench_fft(b,   16384); }
-#[bench] fn complex_p2_032768(b: &mut Bencher) { bench_fft(b,   32768); }
-#[bench] fn complex_p2_065536(b: &mut Bencher) { bench_fft(b,   65536); }
-#[bench] fn complex_p2_1048576(b: &mut Bencher) { bench_fft(b, 1048576); }
-#[bench] fn complex_p2_2097152(b: &mut Bencher) { bench_fft(b, 2097152); }
+#[bench] fn complex_p2_00000032(b: &mut Bencher) { bench_fft(b,       32); }
+#[bench] fn complex_p2_00000064(b: &mut Bencher) { bench_fft(b,       64); }
+#[bench] fn complex_p2_00000256(b: &mut Bencher) { bench_fft(b,      256); }
+#[bench] fn complex_p2_00001024(b: &mut Bencher) { bench_fft(b,     1024); }
+#[bench] fn complex_p2_00004096(b: &mut Bencher) { bench_fft(b,     4096); }
+#[bench] fn complex_p2_00016384(b: &mut Bencher) { bench_fft(b,    16384); }
+#[bench] fn complex_p2_00065536(b: &mut Bencher) { bench_fft(b,    65536); }
+#[bench] fn complex_p2_01048576(b: &mut Bencher) { bench_fft(b,  1048576); }
+#[bench] fn complex_p2_08388608(b: &mut Bencher) { bench_fft(b,  8388608); }
+#[bench] fn complex_p2_16777216(b: &mut Bencher) { bench_fft(b, 16777216); }
+
 
 // Powers of 7
 #[bench] fn complex_p7_00343(b: &mut Bencher) { bench_fft(b,   343); }
