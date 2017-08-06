@@ -34,7 +34,7 @@ pub struct Radix4<T> {
 impl<T: FFTnum> Radix4<T> {
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the power-of-two FFT
     pub fn new(len: usize, inverse: bool) -> Self {
-        assert!(len.is_power_of_two() && len > 1, "Radix4 algorithm requires a power-of-two input size greater than one. Got {}", len);
+        assert!(len.is_power_of_two(), "Radix4 algorithm requires a power-of-two input size. Got {}", len);
 
         // precompute the twiddle factors this algorithm will use.
         // we're doing the same precomputation of twiddle factors as the mixed radix algorithm where width=4 and height=len/4
@@ -70,6 +70,7 @@ impl<T: FFTnum> Radix4<T> {
 
     fn perform_fft(&self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         match self.len() {
+            0...1 => spectrum.copy_from_slice(signal),
             2 => {
                 spectrum.copy_from_slice(signal);
                 unsafe { Butterfly2::new(self.inverse).process_inplace(spectrum) }
@@ -231,7 +232,7 @@ mod unit_tests {
 
     #[test]
     fn test_radix4() {
-        for pow in 1..8 {
+        for pow in 0..8 {
             let len = 1 << pow;
             test_radix4_with_length(len, false);
             test_radix4_with_length(len, true);
