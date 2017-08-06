@@ -19,7 +19,6 @@ fn bench_fft(b: &mut Bencher, len: usize) {
 
 
 // Powers of 4
-#[bench] fn complex_p2_00000032(b: &mut Bencher) { bench_fft(b,       32); }
 #[bench] fn complex_p2_00000064(b: &mut Bencher) { bench_fft(b,       64); }
 #[bench] fn complex_p2_00000256(b: &mut Bencher) { bench_fft(b,      256); }
 #[bench] fn complex_p2_00001024(b: &mut Bencher) { bench_fft(b,     1024); }
@@ -27,7 +26,6 @@ fn bench_fft(b: &mut Bencher, len: usize) {
 #[bench] fn complex_p2_00016384(b: &mut Bencher) { bench_fft(b,    16384); }
 #[bench] fn complex_p2_00065536(b: &mut Bencher) { bench_fft(b,    65536); }
 #[bench] fn complex_p2_01048576(b: &mut Bencher) { bench_fft(b,  1048576); }
-#[bench] fn complex_p2_08388608(b: &mut Bencher) { bench_fft(b,  8388608); }
 #[bench] fn complex_p2_16777216(b: &mut Bencher) { bench_fft(b, 16777216); }
 
 
