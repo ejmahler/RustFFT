@@ -45,7 +45,7 @@ impl Butterfly2 {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_direct<T: FFTnum>(&self, left: &mut Complex<T>, right: &mut Complex<T>) {
+    unsafe fn perform_fft_direct<T: FFTnum>(left: &mut Complex<T>, right: &mut Complex<T>) {
         let temp = *left + *right;
         
         *right = *left - *right;
@@ -193,8 +193,8 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly4 {
         // step 2: column FFTs
         {
             let (a, b) = buffer.split_at_mut(2);
-            butterfly2.perform_fft_direct(a.get_unchecked_mut(0), b.get_unchecked_mut(0));
-            butterfly2.perform_fft_direct(a.get_unchecked_mut(1), b.get_unchecked_mut(1));
+            Butterfly2::perform_fft_direct(a.get_unchecked_mut(0), b.get_unchecked_mut(0));
+            Butterfly2::perform_fft_direct(a.get_unchecked_mut(1), b.get_unchecked_mut(1));
 
             // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
             *b.get_unchecked_mut(1) = twiddles::rotate_90(*b.get_unchecked(1), self.inverse);
@@ -380,10 +380,9 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly6<T> {
         // step 4: SKIPPED because the next FFTs will be non-contiguous
 
         // step 5: row FFTs
-        let butterfly2 = Butterfly2::new(self.butterfly3.is_inverse());
-        butterfly2.perform_fft_direct(&mut scratch_a[0], &mut scratch_b[0]);
-        butterfly2.perform_fft_direct(&mut scratch_a[1], &mut scratch_b[1]);
-        butterfly2.perform_fft_direct(&mut scratch_a[2], &mut scratch_b[2]);
+        Butterfly2::perform_fft_direct(&mut scratch_a[0], &mut scratch_b[0]);
+        Butterfly2::perform_fft_direct(&mut scratch_a[1], &mut scratch_b[1]);
+        Butterfly2::perform_fft_direct(&mut scratch_a[2], &mut scratch_b[2]);
 
         // step 6: reorder the result back into the buffer. again we would normally have to do an expensive computation
         // but instead we can precompute and hardcode the ordering
@@ -649,8 +648,10 @@ impl<T> IsInverse for Butterfly8<T> {
 
 
 pub struct Butterfly16<T> {
+    butterfly8: Butterfly8<T>,
     twiddle1: Complex<T>,
     twiddle2: Complex<T>,
+    twiddle3: Complex<T>,
     inverse: bool,
 }
 impl<T: FFTnum> Butterfly16<T>
@@ -658,22 +659,12 @@ impl<T: FFTnum> Butterfly16<T>
     #[inline(always)]
     pub fn new(inverse: bool) -> Self {
         Butterfly16 {
-            inverse: inverse,
+            butterfly8: Butterfly8::new(inverse),
             twiddle1: twiddles::single_twiddle(1, 16, inverse),
             twiddle2: twiddles::single_twiddle(2, 16, inverse),
+            twiddle3: twiddles::single_twiddle(3, 16, inverse),
+            inverse: inverse,
         }
-    }
-
-    #[inline(always)]
-    unsafe fn transpose_square(buffer: &mut [Complex<T>]) {
-        swap_unchecked(buffer, 1, 4);
-        swap_unchecked(buffer, 2, 8);
-        swap_unchecked(buffer, 3, 12);
-
-        swap_unchecked(buffer, 6, 9);
-        swap_unchecked(buffer, 7, 13);
-
-        swap_unchecked(buffer, 11, 14);
     }
 }
 impl<T: FFTnum> FFTButterfly<T> for Butterfly16<T> {
@@ -681,52 +672,77 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly16<T> {
     unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
         let butterfly4 = Butterfly4::new(self.inverse);
 
-        //we're going to hardcode a step of mixed radix
-        //aka we're going to do the six step algorithm
+        // we're going to hardcode a step of split radix
+        // step 1: copy and reorder the  input into the scratch
+        let mut scratch_evens = [
+            *buffer.get_unchecked(0),
+            *buffer.get_unchecked(2),
+            *buffer.get_unchecked(4),
+            *buffer.get_unchecked(6),
+            *buffer.get_unchecked(8),
+            *buffer.get_unchecked(10),
+            *buffer.get_unchecked(12),
+            *buffer.get_unchecked(14),
+        ];
 
-        // step 1: transpose the input into the scratch
-        Self::transpose_square(buffer);
+        let mut scratch_odds_n1 = [
+            *buffer.get_unchecked(1),
+            *buffer.get_unchecked(5),
+            *buffer.get_unchecked(9),
+            *buffer.get_unchecked(13),
+        ];
+        let mut scratch_odds_n3 = [
+            *buffer.get_unchecked(15),
+            *buffer.get_unchecked(3),
+            *buffer.get_unchecked(7),
+            *buffer.get_unchecked(11),
+        ];
 
         // step 2: column FFTs
-        butterfly4.process_inplace(&mut buffer[..4]);
-        butterfly4.process_inplace(&mut buffer[4..8]);
-        butterfly4.process_inplace(&mut buffer[8..12]);
-        butterfly4.process_inplace(&mut buffer[12..]);
+        self.butterfly8.process_inplace(&mut scratch_evens);
+        butterfly4.process_inplace(&mut scratch_odds_n1);
+        butterfly4.process_inplace(&mut scratch_odds_n3);
 
         // step 3: apply twiddle factors
-        let twiddle1 = self.twiddle1;
-        let twiddle2 = self.twiddle2;
-        let twiddle3 = if self.inverse {
-            Complex{ re: twiddle1.im, im: twiddle1.re }
-        } else {
-            Complex{ re: -twiddle1.im, im: -twiddle1.re }
-        };
-        let twiddle6 = Complex{ re: -twiddle2.re, im: twiddle2.im };
-        let twiddle9 = -twiddle1;
+        scratch_odds_n1[1] = scratch_odds_n1[1] * self.twiddle1;
+        scratch_odds_n3[1] = scratch_odds_n3[1] * self.twiddle1.conj();
 
-        *buffer.get_unchecked_mut(5) = buffer.get_unchecked(5) * twiddle1;
-        *buffer.get_unchecked_mut(6) = buffer.get_unchecked(6) * twiddle2;
-        *buffer.get_unchecked_mut(7) = buffer.get_unchecked(7) * twiddle3;
+        scratch_odds_n1[2] = scratch_odds_n1[2] * self.twiddle2;
+        scratch_odds_n3[2] = scratch_odds_n3[2] * self.twiddle2.conj();
 
-        *buffer.get_unchecked_mut(9) = buffer.get_unchecked(9) * twiddle2;
-        *buffer.get_unchecked_mut(10) = twiddles::rotate_90(*buffer.get_unchecked(10), self.inverse);
-        *buffer.get_unchecked_mut(11) = buffer.get_unchecked(11) * twiddle6;
+        scratch_odds_n1[3] = scratch_odds_n1[3] * self.twiddle3;
+        scratch_odds_n3[3] = scratch_odds_n3[3] * self.twiddle3.conj();
 
-        *buffer.get_unchecked_mut(13) = buffer.get_unchecked(13) * twiddle3;
-        *buffer.get_unchecked_mut(14) = buffer.get_unchecked(14) * twiddle6;
-        *buffer.get_unchecked_mut(15) = buffer.get_unchecked(15) * twiddle9;
+        // step 4: cross FFTs
+        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[0], &mut scratch_odds_n3[0]);
+        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[1], &mut scratch_odds_n3[1]);
+        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[2], &mut scratch_odds_n3[2]);
+        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[3], &mut scratch_odds_n3[3]);
 
-        // step 4: transpose
-        Self::transpose_square(buffer);
+        // apply the butterfly 4 twiddle factor, which is just a rotation
+        scratch_odds_n3[0] = twiddles::rotate_90(scratch_odds_n3[0], self.inverse);
+        scratch_odds_n3[1] = twiddles::rotate_90(scratch_odds_n3[1], self.inverse);
+        scratch_odds_n3[2] = twiddles::rotate_90(scratch_odds_n3[2], self.inverse);
+        scratch_odds_n3[3] = twiddles::rotate_90(scratch_odds_n3[3], self.inverse);
 
-        // step 5: row FFTs
-        butterfly4.process_inplace(&mut buffer[..4]);
-        butterfly4.process_inplace(&mut buffer[4..8]);
-        butterfly4.process_inplace(&mut buffer[8..12]);
-        butterfly4.process_inplace(&mut buffer[12..]);
+        //step 5: copy/add/subtract data back to buffer
+        *buffer.get_unchecked_mut(0) =  scratch_evens[0] + scratch_odds_n1[0];
+        *buffer.get_unchecked_mut(1) =  scratch_evens[1] + scratch_odds_n1[1];
+        *buffer.get_unchecked_mut(2) =  scratch_evens[2] + scratch_odds_n1[2];
+        *buffer.get_unchecked_mut(3) =  scratch_evens[3] + scratch_odds_n1[3];
+        *buffer.get_unchecked_mut(4) =  scratch_evens[4] + scratch_odds_n3[0];
+        *buffer.get_unchecked_mut(5) =  scratch_evens[5] + scratch_odds_n3[1];
+        *buffer.get_unchecked_mut(6) =  scratch_evens[6] + scratch_odds_n3[2];
+        *buffer.get_unchecked_mut(7) =  scratch_evens[7] + scratch_odds_n3[3];
+        *buffer.get_unchecked_mut(8) =  scratch_evens[0] - scratch_odds_n1[0];
+        *buffer.get_unchecked_mut(9) =  scratch_evens[1] - scratch_odds_n1[1];
+        *buffer.get_unchecked_mut(10) = scratch_evens[2] - scratch_odds_n1[2];
+        *buffer.get_unchecked_mut(11) = scratch_evens[3] - scratch_odds_n1[3];
+        *buffer.get_unchecked_mut(12) = scratch_evens[4] - scratch_odds_n3[0];
+        *buffer.get_unchecked_mut(13) = scratch_evens[5] - scratch_odds_n3[1];
+        *buffer.get_unchecked_mut(14) = scratch_evens[6] - scratch_odds_n3[2];
+        *buffer.get_unchecked_mut(15) = scratch_evens[7] - scratch_odds_n3[3];
 
-        // step 6: transpose
-        Self::transpose_square(buffer);
     }
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
@@ -756,6 +772,195 @@ impl<T> Length for Butterfly16<T> {
     }
 }
 impl<T> IsInverse for Butterfly16<T> {
+    #[inline(always)]
+    fn is_inverse(&self) -> bool {
+        self.inverse
+    }
+}
+
+
+
+pub struct Butterfly32<T> {
+    butterfly16: Butterfly16<T>,
+    butterfly8: Butterfly8<T>,
+    twiddles: [Complex<T>; 7],
+    inverse: bool,
+}
+impl<T: FFTnum> Butterfly32<T>
+{
+    #[inline(always)]
+    pub fn new(inverse: bool) -> Self {
+        Butterfly32 {
+            butterfly16: Butterfly16::new(inverse),
+            butterfly8: Butterfly8::new(inverse),
+            twiddles: [
+                twiddles::single_twiddle(1, 32, inverse),
+                twiddles::single_twiddle(2, 32, inverse),
+                twiddles::single_twiddle(3, 32, inverse),
+                twiddles::single_twiddle(4, 32, inverse),
+                twiddles::single_twiddle(5, 32, inverse),
+                twiddles::single_twiddle(6, 32, inverse),
+                twiddles::single_twiddle(7, 32, inverse),
+            ],
+            inverse: inverse,
+        }
+    }
+}
+impl<T: FFTnum> FFTButterfly<T> for Butterfly32<T> {
+    #[inline(always)]
+    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+        // we're going to hardcode a step of split radix
+        // step 1: copy and reorder the  input into the scratch
+        let mut scratch_evens = [
+            *buffer.get_unchecked(0),
+            *buffer.get_unchecked(2),
+            *buffer.get_unchecked(4),
+            *buffer.get_unchecked(6),
+            *buffer.get_unchecked(8),
+            *buffer.get_unchecked(10),
+            *buffer.get_unchecked(12),
+            *buffer.get_unchecked(14),
+            *buffer.get_unchecked(16),
+            *buffer.get_unchecked(18),
+            *buffer.get_unchecked(20),
+            *buffer.get_unchecked(22),
+            *buffer.get_unchecked(24),
+            *buffer.get_unchecked(26),
+            *buffer.get_unchecked(28),
+            *buffer.get_unchecked(30),
+        ];
+
+        let mut scratch_odds_n1 = [
+            *buffer.get_unchecked(1),
+            *buffer.get_unchecked(5),
+            *buffer.get_unchecked(9),
+            *buffer.get_unchecked(13),
+            *buffer.get_unchecked(17),
+            *buffer.get_unchecked(21),
+            *buffer.get_unchecked(25),
+            *buffer.get_unchecked(29),
+        ];
+        let mut scratch_odds_n3 = [
+            *buffer.get_unchecked(31),
+            *buffer.get_unchecked(3),
+            *buffer.get_unchecked(7),
+            *buffer.get_unchecked(11),
+            *buffer.get_unchecked(15),
+            *buffer.get_unchecked(19),
+            *buffer.get_unchecked(23),
+            *buffer.get_unchecked(27),
+        ];
+
+        // step 2: column FFTs
+        self.butterfly16.process_inplace(&mut scratch_evens);
+        self.butterfly8.process_inplace(&mut scratch_odds_n1);
+        self.butterfly8.process_inplace(&mut scratch_odds_n3);
+
+        // step 3: apply twiddle factors
+        scratch_odds_n1[1] = scratch_odds_n1[1] * self.twiddles[0];
+        scratch_odds_n3[1] = scratch_odds_n3[1] * self.twiddles[0].conj();
+
+        scratch_odds_n1[2] = scratch_odds_n1[2] * self.twiddles[1];
+        scratch_odds_n3[2] = scratch_odds_n3[2] * self.twiddles[1].conj();
+
+        scratch_odds_n1[3] = scratch_odds_n1[3] * self.twiddles[2];
+        scratch_odds_n3[3] = scratch_odds_n3[3] * self.twiddles[2].conj();
+
+        scratch_odds_n1[4] = scratch_odds_n1[4] * self.twiddles[3];
+        scratch_odds_n3[4] = scratch_odds_n3[4] * self.twiddles[3].conj();
+
+        scratch_odds_n1[5] = scratch_odds_n1[5] * self.twiddles[4];
+        scratch_odds_n3[5] = scratch_odds_n3[5] * self.twiddles[4].conj();
+
+        scratch_odds_n1[6] = scratch_odds_n1[6] * self.twiddles[5];
+        scratch_odds_n3[6] = scratch_odds_n3[6] * self.twiddles[5].conj();
+
+        scratch_odds_n1[7] = scratch_odds_n1[7] * self.twiddles[6];
+        scratch_odds_n3[7] = scratch_odds_n3[7] * self.twiddles[6].conj();
+
+        // step 4: cross FFTs
+        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[0], &mut scratch_odds_n3[0]);
+        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[1], &mut scratch_odds_n3[1]);
+        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[2], &mut scratch_odds_n3[2]);
+        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[3], &mut scratch_odds_n3[3]);
+        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[4], &mut scratch_odds_n3[4]);
+        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[5], &mut scratch_odds_n3[5]);
+        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[6], &mut scratch_odds_n3[6]);
+        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[7], &mut scratch_odds_n3[7]);
+
+        // apply the butterfly 4 twiddle factor, which is just a rotation
+        scratch_odds_n3[0] = twiddles::rotate_90(scratch_odds_n3[0], self.inverse);
+        scratch_odds_n3[1] = twiddles::rotate_90(scratch_odds_n3[1], self.inverse);
+        scratch_odds_n3[2] = twiddles::rotate_90(scratch_odds_n3[2], self.inverse);
+        scratch_odds_n3[3] = twiddles::rotate_90(scratch_odds_n3[3], self.inverse);
+        scratch_odds_n3[4] = twiddles::rotate_90(scratch_odds_n3[4], self.inverse);
+        scratch_odds_n3[5] = twiddles::rotate_90(scratch_odds_n3[5], self.inverse);
+        scratch_odds_n3[6] = twiddles::rotate_90(scratch_odds_n3[6], self.inverse);
+        scratch_odds_n3[7] = twiddles::rotate_90(scratch_odds_n3[7], self.inverse);
+
+        //step 5: copy/add/subtract data back to buffer
+        *buffer.get_unchecked_mut(0) =  scratch_evens[0] +  scratch_odds_n1[0];
+        *buffer.get_unchecked_mut(1) =  scratch_evens[1] +  scratch_odds_n1[1];
+        *buffer.get_unchecked_mut(2) =  scratch_evens[2] +  scratch_odds_n1[2];
+        *buffer.get_unchecked_mut(3) =  scratch_evens[3] +  scratch_odds_n1[3];
+        *buffer.get_unchecked_mut(4) =  scratch_evens[4] +  scratch_odds_n1[4];
+        *buffer.get_unchecked_mut(5) =  scratch_evens[5] +  scratch_odds_n1[5];
+        *buffer.get_unchecked_mut(6) =  scratch_evens[6] +  scratch_odds_n1[6];
+        *buffer.get_unchecked_mut(7) =  scratch_evens[7] +  scratch_odds_n1[7];
+        *buffer.get_unchecked_mut(8) =  scratch_evens[8] +  scratch_odds_n3[0];
+        *buffer.get_unchecked_mut(9) =  scratch_evens[9] +  scratch_odds_n3[1];
+        *buffer.get_unchecked_mut(10) = scratch_evens[10] + scratch_odds_n3[2];
+        *buffer.get_unchecked_mut(11) = scratch_evens[11] + scratch_odds_n3[3];
+        *buffer.get_unchecked_mut(12) = scratch_evens[12] + scratch_odds_n3[4];
+        *buffer.get_unchecked_mut(13) = scratch_evens[13] + scratch_odds_n3[5];
+        *buffer.get_unchecked_mut(14) = scratch_evens[14] + scratch_odds_n3[6];
+        *buffer.get_unchecked_mut(15) = scratch_evens[15] + scratch_odds_n3[7];
+        *buffer.get_unchecked_mut(16) = scratch_evens[0] -  scratch_odds_n1[0];
+        *buffer.get_unchecked_mut(17) = scratch_evens[1] -  scratch_odds_n1[1];
+        *buffer.get_unchecked_mut(18) = scratch_evens[2] -  scratch_odds_n1[2];
+        *buffer.get_unchecked_mut(19) = scratch_evens[3] -  scratch_odds_n1[3];
+        *buffer.get_unchecked_mut(20) = scratch_evens[4] -  scratch_odds_n1[4];
+        *buffer.get_unchecked_mut(21) = scratch_evens[5] -  scratch_odds_n1[5];
+        *buffer.get_unchecked_mut(22) = scratch_evens[6] -  scratch_odds_n1[6];
+        *buffer.get_unchecked_mut(23) = scratch_evens[7] -  scratch_odds_n1[7];
+        *buffer.get_unchecked_mut(24) = scratch_evens[8] -  scratch_odds_n3[0];
+        *buffer.get_unchecked_mut(25) = scratch_evens[9] -  scratch_odds_n3[1];
+        *buffer.get_unchecked_mut(26) = scratch_evens[10] - scratch_odds_n3[2];
+        *buffer.get_unchecked_mut(27) = scratch_evens[11] - scratch_odds_n3[3];
+        *buffer.get_unchecked_mut(28) = scratch_evens[12] - scratch_odds_n3[4];
+        *buffer.get_unchecked_mut(29) = scratch_evens[13] - scratch_odds_n3[5];
+        *buffer.get_unchecked_mut(30) = scratch_evens[14] - scratch_odds_n3[6];
+        *buffer.get_unchecked_mut(31) = scratch_evens[15] - scratch_odds_n3[7];
+
+    }
+    #[inline(always)]
+    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
+        for chunk in buffer.chunks_mut(self.len()) {
+            self.process_inplace(chunk);
+        }
+    }
+}
+impl<T: FFTnum> FFT<T> for Butterfly32<T> {
+    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_length(input, output, self.len());
+        output.copy_from_slice(input);
+
+        unsafe { self.process_inplace(output) };
+    }
+    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        verify_length_divisible(input, output, self.len());
+        output.copy_from_slice(input);
+
+        unsafe { self.process_multi_inplace(output) };
+    }
+}
+impl<T> Length for Butterfly32<T> {
+    #[inline(always)]
+    fn len(&self) -> usize {
+        32
+    }
+}
+impl<T> IsInverse for Butterfly32<T> {
     #[inline(always)]
     fn is_inverse(&self) -> bool {
         self.inverse
@@ -797,6 +1002,7 @@ mod unit_tests {
     test_butterfly_func!(test_butterfly7, Butterfly7, 7);
     test_butterfly_func!(test_butterfly8, Butterfly8, 8);
     test_butterfly_func!(test_butterfly16, Butterfly16, 16);
+    test_butterfly_func!(test_butterfly32, Butterfly32, 32);
     
 
     fn check_butterfly(butterfly: &FFTButterfly<f32>, size: usize, inverse: bool) {
