@@ -83,7 +83,7 @@ pub trait FFT<T: FFTnum>: Length + IsInverse + Sync + Send {
     /// after calling
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]);
 
-    /// Divides the `input` and `output` buffers into self.len() chunks, then computes an FFT on each chunk.
+    /// Divides the `input` and `output` buffers into chunks of length self.len(), then computes an FFT on each chunk.
     ///
     /// This method uses the `input` buffer as scratch space, so the contents of `input` should be considered garbage
     /// after calling
