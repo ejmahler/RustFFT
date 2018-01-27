@@ -22,6 +22,7 @@ const COMPOSITE_BUTTERFLIES: [usize; 5] = [4, 6, 8, 16, 32];
 ///
 /// ~~~
 /// // Perform a forward FFT of size 1234
+/// use std::sync::Arc;
 /// use rustfft::FFTplanner;
 /// use rustfft::num_complex::Complex;
 /// use rustfft::num_traits::Zero;
@@ -32,6 +33,9 @@ const COMPOSITE_BUTTERFLIES: [usize; 5] = [4, 6, 8, 16, 32];
 /// let mut planner = FFTplanner::new(false);
 /// let fft = planner.plan_fft(1234);
 /// fft.process(&mut input, &mut output);
+/// 
+/// // The fft instance returned by the planner is stored behind an `Arc`, so it's cheap to clone
+/// let fft_clone = Arc::clone(&fft);
 /// ~~~
 ///
 /// If you plan on creating multiple FFT instances, it is recommnded to reuse the same planner for all of them. This
@@ -72,7 +76,7 @@ impl<T: FFTnum> FFTplanner<T> {
 
     fn plan_butterfly(&mut self, len: usize) -> Arc<FFTButterfly<T>> {
         let inverse = self.inverse;
-        self.butterfly_cache.entry(len).or_insert_with(|| 
+        let instance = self.butterfly_cache.entry(len).or_insert_with(|| 
             match len {
                 2 => Arc::new(Butterfly2::new(inverse)),
                 3 => Arc::new(Butterfly3::new(inverse)),
@@ -85,12 +89,13 @@ impl<T: FFTnum> FFTplanner<T> {
                 32 => Arc::new(Butterfly32::new(inverse)),
                 _ => panic!("Invalid butterfly size: {}", len),
             }
-        ).clone()
+        );
+        Arc::clone(instance)
     }
     
     fn plan_fft_with_factors(&mut self, len: usize, factors: &[usize]) -> Arc<FFT<T>> {
         if self.algorithm_cache.contains_key(&len) {
-            self.algorithm_cache.get(&len).unwrap().clone()
+            Arc::clone(self.algorithm_cache.get(&len).unwrap())
         } else {
             let result = if factors.len() == 1 || COMPOSITE_BUTTERFLIES.contains(&len) {
                 self.plan_fft_single_factor(len)
@@ -148,7 +153,7 @@ impl<T: FFTnum> FFTplanner<T> {
                     self.plan_mixed_radix(product, left_factors, len / product, right_factors)
                 }
             };
-            self.algorithm_cache.insert(len, result.clone());
+            self.algorithm_cache.insert(len, Arc::clone(&result));
             result
         }
     }
