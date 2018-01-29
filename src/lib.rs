@@ -8,6 +8,7 @@
 //!
 //! ```
 //! // Perform a forward FFT of size 1234
+//! use std::sync::Arc;
 //! use rustfft::FFTplanner;
 //! use rustfft::num_complex::Complex;
 //! use rustfft::num_traits::Zero;
@@ -18,6 +19,9 @@
 //! let mut planner = FFTplanner::new(false);
 //! let fft = planner.plan_fft(1234);
 //! fft.process(&mut input, &mut output);
+//! 
+//! // The fft instance returned by the planner is stored behind an `Arc`, so it's cheap to clone
+//! let fft_clone = Arc::clone(&fft);
 //! ```
 //! The planner returns trait objects of the [`FFT`](trait.FFT.html) trait, allowing for FFT sizes that aren't known
 //! until runtime.
