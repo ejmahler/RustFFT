@@ -2,11 +2,13 @@
 
 name = "rustfft"
 version = "2.0.0"
-authors = ["Allen Welkie <allen.welkie at gmail>"]
+authors = ["Allen Welkie <allen.welkie at gmail>", "Elliott Mahler <join.together at gmail>"]
 
-description = "A mixed-radix FFT library."
+description = "Compute FFTs of any size in O(nlogn) time, in pure Rust."
+documentation = "https://docs.rs/rustfft/"
 repository = "https://github.com/awelkie/RustFFT"
-keywords = ["fft", "dft", "fourier", "signal"]
+keywords = ["fft", "dft", "discrete", "fourier", "transform"]
+categories = ["algorithms", "compression", "multimedia::encoding", "science"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
