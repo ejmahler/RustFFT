@@ -12,6 +12,7 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 num-complex = "0.1.42"
 num-traits = "0.2"
+num-integer = "0.1"
 
 [dev-dependencies]
 rand = "0.4"

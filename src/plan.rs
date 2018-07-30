@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use num_integer::gcd;
 
 use common::FFTnum;
 
@@ -173,8 +174,12 @@ impl<T: FFTnum> FFTplanner<T> {
             let left_fft = self.plan_butterfly(left_len);
             let right_fft = self.plan_butterfly(right_len);
 
-            Arc::new(MixedRadixDoubleButterfly::new(left_fft, right_fft)) as
-            Arc<FFT<T>>
+            // for butterflies, if gcd is 1, we always want to use good-thomas
+            if gcd(left_len, right_len) == 1 {
+                Arc::new(GoodThomasAlgorithmDoubleButterfly::new(left_fft, right_fft)) as Arc<FFT<T>>
+            } else {
+                Arc::new(MixedRadixDoubleButterfly::new(left_fft, right_fft)) as Arc<FFT<T>>
+            }
         } else {
             //neither size is a butterfly, so go with the normal algorithm
             let left_fft = self.plan_fft_with_factors(left_len, left_factors);

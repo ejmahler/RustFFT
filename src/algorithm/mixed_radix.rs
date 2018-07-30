@@ -266,8 +266,8 @@ impl<T> IsInverse for MixedRadixDoubleButterfly<T> {
 mod unit_tests {
     use super::*;
     use std::sync::Arc;
-    use test_utils::check_fft_algorithm;
-    use algorithm::{butterflies, DFT};
+    use test_utils::{check_fft_algorithm, make_butterfly};
+    use algorithm::DFT;
 
     #[test]
     fn test_mixed_radix() {
@@ -308,19 +308,5 @@ mod unit_tests {
         let fft = MixedRadixDoubleButterfly::new(width_fft, height_fft);
 
         check_fft_algorithm(&fft, width * height, inverse);
-    }
-
-    fn make_butterfly(len: usize, inverse: bool) -> Arc<FFTButterfly<f32>> {
-        match len {
-            2 => Arc::new(butterflies::Butterfly2::new(inverse)),
-            3 => Arc::new(butterflies::Butterfly3::new(inverse)),
-            4 => Arc::new(butterflies::Butterfly4::new(inverse)),
-            5 => Arc::new(butterflies::Butterfly5::new(inverse)),
-            6 => Arc::new(butterflies::Butterfly6::new(inverse)),
-            7 => Arc::new(butterflies::Butterfly7::new(inverse)),
-            8 => Arc::new(butterflies::Butterfly8::new(inverse)),
-            16 => Arc::new(butterflies::Butterfly16::new(inverse)),
-            _ => panic!("Invalid butterfly size: {}", len),
-        }
     }
 }

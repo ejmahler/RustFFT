@@ -2,8 +2,12 @@
 extern crate test;
 extern crate rustfft;
 
+use std::sync::Arc;
 use test::Bencher;
+use rustfft::FFT;
 use rustfft::num_complex::Complex;
+use rustfft::algorithm::*;
+use rustfft::algorithm::butterflies::*;
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
@@ -54,3 +58,107 @@ fn bench_fft(b: &mut Bencher, len: usize) {
 
 // small mixed composites times a large prime
 #[bench] fn complex_composite_30270(b: &mut Bencher) { bench_fft(b,  30270); }
+
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to the Good-Thomas algorithm
+fn bench_good_thomas(b: &mut Bencher, width: usize, height: usize) {
+
+    let mut planner = rustfft::FFTplanner::new(false);
+    let width_fft = planner.plan_fft(width);
+    let height_fft = planner.plan_fft(height);
+
+    let fft : Arc<FFT<_>> = Arc::new(GoodThomasAlgorithm::new(width_fft, height_fft));
+
+    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; width * height];
+    let mut spectrum = signal.clone();
+    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
+}
+
+#[bench] fn good_thomas_0002_3(b: &mut Bencher) { bench_good_thomas(b,  2, 3); }
+#[bench] fn good_thomas_0003_4(b: &mut Bencher) { bench_good_thomas(b,  3, 4); }
+#[bench] fn good_thomas_0004_5(b: &mut Bencher) { bench_good_thomas(b,  4, 5); }
+#[bench] fn good_thomas_0007_32(b: &mut Bencher) { bench_good_thomas(b, 7, 32); }
+#[bench] fn good_thomas_0032_27(b: &mut Bencher) { bench_good_thomas(b,  32, 27); }
+#[bench] fn good_thomas_0256_243(b: &mut Bencher) { bench_good_thomas(b,  256, 243); }
+#[bench] fn good_thomas_2048_3(b: &mut Bencher) { bench_good_thomas(b,  2048, 3); }
+#[bench] fn good_thomas_2048_2187(b: &mut Bencher) { bench_good_thomas(b,  2048, 2187); }
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to the Mixed-Radix algorithm
+fn bench_mixed_radix(b: &mut Bencher, width: usize, height: usize) {
+
+    let mut planner = rustfft::FFTplanner::new(false);
+    let width_fft = planner.plan_fft(width);
+    let height_fft = planner.plan_fft(height);
+
+    let fft : Arc<FFT<_>> = Arc::new(MixedRadix::new(width_fft, height_fft));
+
+    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; width * height];
+    let mut spectrum = signal.clone();
+    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
+}
+
+#[bench] fn mixed_radix_0002_3(b: &mut Bencher) { bench_mixed_radix(b,  2, 3); }
+#[bench] fn mixed_radix_0003_4(b: &mut Bencher) { bench_mixed_radix(b,  3, 4); }
+#[bench] fn mixed_radix_0004_5(b: &mut Bencher) { bench_mixed_radix(b,  4, 5); }
+#[bench] fn mixed_radix_0007_32(b: &mut Bencher) { bench_mixed_radix(b, 7, 32); }
+#[bench] fn mixed_radix_0032_27(b: &mut Bencher) { bench_mixed_radix(b,  32, 27); }
+#[bench] fn mixed_radix_0256_243(b: &mut Bencher) { bench_mixed_radix(b,  256, 243); }
+#[bench] fn mixed_radix_2048_3(b: &mut Bencher) { bench_mixed_radix(b,  2048, 3); }
+#[bench] fn mixed_radix_2048_2187(b: &mut Bencher) { bench_mixed_radix(b,  2048, 2187); }
+
+
+
+fn plan_butterfly(len: usize) -> Arc<FFTButterfly<f32>> {
+        match len {
+            2 => Arc::new(Butterfly2::new(false)),
+            3 => Arc::new(Butterfly3::new(false)),
+            4 => Arc::new(Butterfly4::new(false)),
+            5 => Arc::new(Butterfly5::new(false)),
+            6 => Arc::new(Butterfly6::new(false)),
+            7 => Arc::new(Butterfly7::new(false)),
+            8 => Arc::new(Butterfly8::new(false)),
+            16 => Arc::new(Butterfly16::new(false)),
+            32 => Arc::new(Butterfly32::new(false)),
+            _ => panic!("Invalid butterfly size: {}", len),
+        }
+    }
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to the Mixed-Radix Double Butterfly algorithm
+fn bench_mixed_radix_butterfly(b: &mut Bencher, width: usize, height: usize) {
+
+    let width_fft = plan_butterfly(width);
+    let height_fft = plan_butterfly(height);
+
+    let fft : Arc<FFT<_>> = Arc::new(MixedRadixDoubleButterfly::new(width_fft, height_fft));
+
+    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; width * height];
+    let mut spectrum = signal.clone();
+    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
+}
+
+#[bench] fn mixed_radix_butterfly_0002_3(b: &mut Bencher) { bench_mixed_radix_butterfly(b,  2, 3); }
+#[bench] fn mixed_radix_butterfly_0003_4(b: &mut Bencher) { bench_mixed_radix_butterfly(b,  3, 4); }
+#[bench] fn mixed_radix_butterfly_0004_5(b: &mut Bencher) { bench_mixed_radix_butterfly(b,  4, 5); }
+#[bench] fn mixed_radix_butterfly_0007_32(b: &mut Bencher) { bench_mixed_radix_butterfly(b, 7, 32); }
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to the Mixed-Radix Double Butterfly algorithm
+fn bench_good_thomas_butterfly(b: &mut Bencher, width: usize, height: usize) {
+
+    let width_fft = plan_butterfly(width);
+    let height_fft = plan_butterfly(height);
+
+    let fft : Arc<FFT<_>> = Arc::new(GoodThomasAlgorithmDoubleButterfly::new(width_fft, height_fft));
+
+    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; width * height];
+    let mut spectrum = signal.clone();
+    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
+}
+
+#[bench] fn good_thomas_butterfly_0002_3(b: &mut Bencher) { bench_good_thomas_butterfly(b,  2, 3); }
+#[bench] fn good_thomas_butterfly_0003_4(b: &mut Bencher) { bench_good_thomas_butterfly(b,  3, 4); }
+#[bench] fn good_thomas_butterfly_0004_5(b: &mut Bencher) { bench_good_thomas_butterfly(b,  4, 5); }
+#[bench] fn good_thomas_butterfly_0007_32(b: &mut Bencher) { bench_good_thomas_butterfly(b, 7, 32); }
