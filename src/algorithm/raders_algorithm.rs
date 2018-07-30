@@ -43,8 +43,7 @@ pub struct RadersAlgorithm<T> {
     inner_fft: Arc<FFT<T>>,
     inner_fft_data: Box<[Complex<T>]>,
 
-    input_map: Box<[usize]>,
-    output_map: Box<[usize]>,
+    input_output_map: Box<[usize]>,
 }
 
 impl<T: FFTnum> RadersAlgorithm<T> {
@@ -77,36 +76,38 @@ impl<T: FFTnum> RadersAlgorithm<T> {
         inner_fft.process(&mut inner_fft_input, &mut inner_fft_output);
 
         //precompute the indexes we'll used to reorder the input and output
-        let input_map: Vec<usize> = (0..len-1).map(|i| math_utils::modular_exponent(primitive_root, (i + 1) as u64, len as u64) as usize - 1).collect();
-        let output_map: Vec<usize> = (0..len-1).map(|i| math_utils::modular_exponent(root_inverse, (i + 1) as u64, len as u64) as usize - 1).collect();
+        let len64 = len as u64;
+        let input_output_map: Vec<usize> = (1..len64-1).map(|i| math_utils::modular_exponent(primitive_root, i, len64) as usize - 1).collect();
 
         RadersAlgorithm {
             inner_fft: inner_fft,
             inner_fft_data: inner_fft_output.into_boxed_slice(),
 
-            input_map: input_map.into_boxed_slice(),
-            output_map: output_map.into_boxed_slice(),
+            input_output_map: input_output_map.into_boxed_slice(),
         }
     }
 
     fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
 
-        //the input and output buffers are one element too large, split off the first and do the processing for the first now
-        let (first_input, input) = input.split_first_mut().unwrap();
-        let first_input_val = *first_input;
-
+        // The first output element is just the sum of all the input elements
         let (first_output, output) = output.split_first_mut().unwrap();
-        
+        *first_output = input.iter().fold(Zero::zero(), |acc, &e| acc + e);
 
-        //the first element of the output will be the sum of all the inputs
-        let input_sum: Complex<T> = input.iter().fold(Zero::zero(), |acc, &e| acc + e);
-        *first_output = first_input_val + input_sum;
+        // Also split off the first input elements. After this, both input and output len will be n - 1
+        let (first_input, input) = input.split_first_mut().unwrap();
 
+        {
+            // prepare the inner FFT by reordering the input buffer into the output buffer
+            // Split off the last target element, because we're going to treat it separately
+            let (output_last, output) = output.split_last_mut().unwrap();
 
-        // prepare the inner FFT by reordering the input buffer into the output buffer
-        // we could compute the indexes here on the fly, but benchmarking shows it's faster to precompute and store them
-        for (&input_index, output_element) in self.input_map.iter().zip(output.iter_mut()) {
-            *output_element = input[input_index];
+            // we could compute the indexes here on the fly, but benchmarking shows it's faster to precompute and store them
+            for (input_index, output_element) in self.input_output_map.iter().zip(output.iter_mut()) {
+                *output_element = input[*input_index];
+            }
+
+            // the first element always gets copied to the last element
+            *output_last = input[0];
         }
 
         // perform the first of two inner FFTs
@@ -122,16 +123,18 @@ impl<T: FFTnum> RadersAlgorithm<T> {
         // execute the second FFT
         self.inner_fft.process(output, input);
 
-        // to finalize the inverse, compute the conjugate of every element
-        for element in input.iter_mut() {
-            *element = element.conj() + first_input_val;
+        // copy the input buffer to the output buffer, reordering the elements as we go.
+        // Split off the last input element, because we're going to treat it separately
+        let (input_last, input) = input.split_last_mut().unwrap();
+
+        // we could compute the indexes here on the fly, but benchmarking shows it's faster to precompute and store them
+        let first_input_val = *first_input;
+        for (&output_index, input_element) in self.input_output_map.iter().rev().zip(input.iter()) {
+            output[output_index] = input_element.conj() + first_input_val;
         }
 
-        // copy the input buffer to the output buffer, reordering the elements as we go
-        // we could compute the indexes here on the fly, but benchmarking shows it's faster to precompute and store them
-        for (&output_index, input_element) in self.output_map.iter().zip(input.iter()) {
-            output[output_index] = *input_element;
-        }
+        // the last element always gets copied to the first element
+        output[0] = input_last.conj() + first_input_val;
     }
 }
 
