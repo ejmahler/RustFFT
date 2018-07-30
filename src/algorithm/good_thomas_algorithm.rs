@@ -199,7 +199,7 @@ pub struct GoodThomasAlgorithmDoubleButterfly<T> {
 }
 
 impl<T: FFTnum> GoodThomasAlgorithmDoubleButterfly<T> {
-    /// Creates a FFT instance which will process inputs/outputs of size `n1_fft.len() * n2_fft.len()`
+    /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
     ///
     /// GCD(n1.len(), n2.len()) must be equal to 1
     pub fn new(width_fft: Arc<FFTButterfly<T>>, height_fft: Arc<FFTButterfly<T>>) -> Self {

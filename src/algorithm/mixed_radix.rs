@@ -47,7 +47,7 @@ pub struct MixedRadix<T> {
 }
 
 impl<T: FFTnum> MixedRadix<T> {
-    /// Creates a FFT instance which will process inputs/outputs of size `n1_fft.len() * n2_fft.len()`
+    /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
     pub fn new(width_fft: Arc<FFT<T>>, height_fft: Arc<FFT<T>>) -> Self {
         assert_eq!(
             width_fft.is_inverse(), height_fft.is_inverse(), 
@@ -173,7 +173,7 @@ pub struct MixedRadixDoubleButterfly<T> {
 }
 
 impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
-    /// Creates a FFT instance which will process inputs/outputs of size `n1_fft.len() * n2_fft.len()`
+    /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
     pub fn new(width_fft: Arc<FFTButterfly<T>>, height_fft: Arc<FFTButterfly<T>>) -> Self {
         assert_eq!(
             width_fft.is_inverse(), height_fft.is_inverse(), 
