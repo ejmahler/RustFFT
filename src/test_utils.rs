@@ -13,12 +13,13 @@ use FFT;
 /// The seed for the random number generator used to generate
 /// random signals. It's defined here so that we have deterministic
 /// tests
-const RNG_SEED: [usize; 5] = [1910, 11431, 4984, 14828, 12226];
+const RNG_SEED: [u8; 32] = [1, 9, 1, 0, 1, 1, 4, 3, 1, 4, 9, 8,
+    4, 1, 4, 8, 2, 8, 1, 2, 2, 2, 6, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 
 pub fn random_signal(length: usize) -> Vec<Complex<f32>> {
     let mut sig = Vec::with_capacity(length);
     let normal_dist = Normal::new(0.0, 10.0);
-    let mut rng: StdRng = SeedableRng::from_seed(&RNG_SEED[..]);
+    let mut rng: StdRng = SeedableRng::from_seed(RNG_SEED);
     for _ in 0..length {
         sig.push(Complex{re: (normal_dist.ind_sample(&mut rng) as f32),
                          im: (normal_dist.ind_sample(&mut rng) as f32)});
