@@ -315,19 +315,14 @@ mod unit_tests {
 
     #[test]
     fn test_good_thomas() {
-        for width in 2..20 {
-            for height in 2..20 {
+        for width in 1..12 {
+            for height in 1..12 {
                 if gcd(width, height) == 1 {
                     test_good_thomas_with_lengths(width, height, false);
                     test_good_thomas_with_lengths(width, height, true);
                 }
             }
         }
-
-        //verify that it works correctly when width and/or height are 1
-        test_good_thomas_with_lengths(1, 10, false);
-        test_good_thomas_with_lengths(10, 1, false);
-        test_good_thomas_with_lengths(1, 1, false);
     }
 
     #[test]
