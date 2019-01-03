@@ -14,7 +14,7 @@ use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 
 use rand::{StdRng, SeedableRng};
-use rand::distributions::{Normal, IndependentSample};
+use rand::distributions::{Normal, Distribution};
 use rustfft::{FFT, FFTplanner};
 use rustfft::algorithm::DFT;
 
@@ -61,8 +61,8 @@ fn random_signal(length: usize) -> Vec<Complex<f32>> {
     let normal_dist = Normal::new(0.0, 10.0);
     let mut rng: StdRng = SeedableRng::from_seed(RNG_SEED);
     for _ in 0..length {
-        sig.push(Complex{re: (normal_dist.ind_sample(&mut rng) as f32),
-                         im: (normal_dist.ind_sample(&mut rng) as f32)});
+        sig.push(Complex{re: (normal_dist.sample(&mut rng) as f32),
+                         im: (normal_dist.sample(&mut rng) as f32)});
     }
     return sig;
 }
