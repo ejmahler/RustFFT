@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use num_complex::Complex;
-use num_traits::{FromPrimitive, Zero};
+use num_traits::Zero;
+use strength_reduce::StrengthReducedUsize;
 
 use common::{FFTnum, verify_length, verify_length_divisible};
 
@@ -43,7 +44,10 @@ pub struct RadersAlgorithm<T> {
     inner_fft: Arc<FFT<T>>,
     inner_fft_data: Box<[Complex<T>]>,
 
-    input_output_map: Box<[usize]>,
+    primitive_root: usize,
+    primitive_root_inverse: usize,
+
+    len: StrengthReducedUsize,
 }
 
 impl<T: FFTnum> RadersAlgorithm<T> {
@@ -58,56 +62,53 @@ impl<T: FFTnum> RadersAlgorithm<T> {
         assert_eq!(len - 1, inner_fft.len(), "For raders algorithm, inner_fft.len() must be self.len() - 1. Expected {}, got {}", len - 1, inner_fft.len());
 
         let inner_fft_len = len - 1;
+        let reduced_len = StrengthReducedUsize::new(len);
 
         // compute the primitive root and its inverse for this size
-        let primitive_root = math_utils::primitive_root(len as u64).unwrap();
-        let root_inverse = math_utils::multiplicative_inverse(primitive_root, len as u64);
+        let primitive_root = math_utils::primitive_root(len as u64).unwrap() as usize;
+        let primitive_root_inverse = math_utils::multiplicative_inverse(primitive_root as usize, len);
 
         // precompute the coefficients to use inside the process method
-        let unity_scale: T = FromPrimitive::from_f64(1f64 / inner_fft_len as f64).unwrap();
-        let mut inner_fft_input: Vec<Complex<T>> = (0..inner_fft_len)
-            .map(|i| math_utils::modular_exponent(root_inverse, i as u64, len as u64) as usize)
-            .map(|i| twiddles::single_twiddle(i, len, inner_fft.is_inverse()))
-            .map(|c| c * unity_scale)
-            .collect();
+        let unity_scale = T::from_f64(1f64 / inner_fft_len as f64).unwrap();
+        let mut inner_fft_input = vec![Complex::zero(); inner_fft_len];
+        let mut twiddle_input = 1;
+        for input_cell in &mut inner_fft_input {
+            let twiddle = twiddles::single_twiddle(twiddle_input, len, inner_fft.is_inverse());
+            *input_cell = twiddle * unity_scale;
+
+            twiddle_input = (twiddle_input * primitive_root_inverse) % reduced_len;
+        }
 
         //precompute a FFT of our reordered twiddle factors
         let mut inner_fft_output = vec![Zero::zero(); inner_fft_len];
         inner_fft.process(&mut inner_fft_input, &mut inner_fft_output);
 
-        //precompute the indexes we'll used to reorder the input and output
-        let len64 = len as u64;
-        let input_output_map: Vec<usize> = (1..len64-1).map(|i| math_utils::modular_exponent(primitive_root, i, len64) as usize - 1).collect();
-
-        RadersAlgorithm {
+        Self {
             inner_fft: inner_fft,
             inner_fft_data: inner_fft_output.into_boxed_slice(),
 
-            input_output_map: input_output_map.into_boxed_slice(),
+            primitive_root,
+            primitive_root_inverse,
+
+            len: reduced_len,
         }
     }
 
     fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
 
         // The first output element is just the sum of all the input elements
-        let (first_output, output) = output.split_first_mut().unwrap();
-        *first_output = input.iter().fold(Zero::zero(), |acc, &e| acc + e);
+        output[0] = input.iter().sum();
+        let first_input_val = input[0];
 
-        // Also split off the first input elements. After this, both input and output len will be n - 1
-        let (first_input, input) = input.split_first_mut().unwrap();
+        // we're now done with the first input and output
+        let (_, output) = output.split_first_mut().unwrap();
+        let (_, input) = input.split_first_mut().unwrap();
 
-        {
-            // prepare the inner FFT by reordering the input buffer into the output buffer
-            // Split off the last target element, because we're going to treat it separately
-            let (output_last, output) = output.split_last_mut().unwrap();
-
-            // we could compute the indexes here on the fly, but benchmarking shows it's faster to precompute and store them
-            for (input_index, output_element) in self.input_output_map.iter().zip(output.iter_mut()) {
-                *output_element = input[*input_index];
-            }
-
-            // the first element always gets copied to the last element
-            *output_last = input[0];
+        // copy the input into the output, reordering as we go
+        let mut input_index = 1;
+        for output_element in output.iter_mut() {
+            input_index = (input_index * self.primitive_root) % self.len;
+            *output_element = input[input_index - 1];
         }
 
         // perform the first of two inner FFTs
@@ -123,18 +124,12 @@ impl<T: FFTnum> RadersAlgorithm<T> {
         // execute the second FFT
         self.inner_fft.process(output, input);
 
-        // copy the input buffer to the output buffer, reordering the elements as we go.
-        // Split off the last input element, because we're going to treat it separately
-        let (input_last, input) = input.split_last_mut().unwrap();
-
-        // we could compute the indexes here on the fly, but benchmarking shows it's faster to precompute and store them
-        let first_input_val = *first_input;
-        for (&output_index, input_element) in self.input_output_map.iter().rev().zip(input.iter()) {
-            output[output_index] = input_element.conj() + first_input_val;
+        // copy the final values into the output, reordering as we go
+        let mut output_index = 1;
+        for input_element in input {
+            output_index = (output_index * self.primitive_root_inverse) % self.len;
+            output[output_index - 1] = input_element.conj() + first_input_val;
         }
-
-        // the last element always gets copied to the first element
-        output[0] = input_last.conj() + first_input_val;
     }
 }
 
@@ -155,7 +150,7 @@ impl<T: FFTnum> FFT<T> for RadersAlgorithm<T> {
 impl<T> Length for RadersAlgorithm<T> {
     #[inline(always)]
     fn len(&self) -> usize {
-        self.inner_fft_data.len() + 1
+        self.len.get()
     }
 }
 impl<T> IsInverse for RadersAlgorithm<T> {

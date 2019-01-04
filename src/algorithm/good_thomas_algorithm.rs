@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
 use num_complex::Complex;
+use strength_reduce::StrengthReducedUsize;
+use transpose;
+
 use common::{FFTnum, verify_length, verify_length_divisible};
 
 use math_utils;
@@ -44,8 +47,10 @@ pub struct GoodThomasAlgorithm<T> {
     height: usize,
     height_size_fft: Arc<FFT<T>>,
 
-    input_output_map: Box<[usize]>,
+    input_x_stride: usize,
+    input_y_stride: usize,
 
+    len: StrengthReducedUsize,
     inverse: bool,
 }
 
@@ -61,7 +66,7 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
 
         let width = width_fft.len();
         let height = height_fft.len();
-        let len = width * height;
+        let is_inverse = width_fft.is_inverse();
 
         // compute the nultiplicative inverse of width mod height and vice versa
         let (gcd, mut width_inverse, mut height_inverse) =
@@ -79,50 +84,47 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
             height_inverse += width as i64;
         }
 
-        // NOTE: we are precomputing the input and output reordering indexes, because benchmarking shows that it's 10-20% faster
-        // If we wanted to optimize for memory use or setup time instead of multiple-FFT speed, we could compute these on the fly in the perform_fft() method
-        let input_iter = (0..len)
-                .map(|i| (i % width, i / width))
-                .map(|(x, y)| (x * height + y * width) % len);
-        let output_iter = (0..len)
-                .map(|i| (i % height, i / height))
-                .map(|(y, x)| (x * height * height_inverse as usize + y * width * width_inverse as usize) % len);
-
-        let input_output_map: Vec<usize> = input_iter.chain(output_iter).collect();
-
-        GoodThomasAlgorithm {
-            inverse: width_fft.is_inverse(),
-
+        Self {
             width: width,
             width_size_fft: width_fft,
 
             height: height,
             height_size_fft: height_fft,
-            
-            input_output_map: input_output_map.into_boxed_slice(),
+
+            input_x_stride: height_inverse as usize * height,
+            input_y_stride: width_inverse as usize * width,
+
+            len: StrengthReducedUsize::new(width * height),
+            inverse: is_inverse,
         }
     }
 
     fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        let (input_map, output_map) = self.input_output_map.split_at(self.len());
-
         // copy the input into the output buffer
-        for (output_element, &input_index) in output.iter_mut().zip(input_map.iter()) {
-            *output_element = input[input_index];
+        for (y, row) in output.chunks_mut(self.width).enumerate() {
+            let input_base = y * self.input_y_stride;
+            for (x, output_cell) in row.iter_mut().enumerate() {
+                let input_index = (input_base + x * self.input_x_stride) % self.len;
+                *output_cell = input[input_index];
+            }
         }
 
         // run FFTs of size `width`
         self.width_size_fft.process_multi(output, input);
 
         // transpose
-        array_utils::transpose(self.width, self.height, input, output);
+        transpose::transpose(input, output, self.width, self.height);
 
         // run FFTs of size 'height'
         self.height_size_fft.process_multi(output, input);
 
-        // copy to the output, using our output redordeing mapping
-        for (input_element, &output_index) in input.iter().zip(output_map.iter()) {
-            output[output_index] = *input_element;
+        // copy to the output, using our output redordering mapping
+        for (x, row) in input.chunks(self.height).enumerate() {
+            let output_base = x * self.height;
+            for (y, input_cell) in row.iter().enumerate() {
+                let output_index = (output_base + y * self.width) % self.len;
+                output[output_index] = *input_cell;
+            }
         }
     }
 }
@@ -315,19 +317,14 @@ mod unit_tests {
 
     #[test]
     fn test_good_thomas() {
-        for width in 2..20 {
-            for height in 2..20 {
+        for width in 1..12 {
+            for height in 1..12 {
                 if gcd(width, height) == 1 {
                     test_good_thomas_with_lengths(width, height, false);
                     test_good_thomas_with_lengths(width, height, true);
                 }
             }
         }
-
-        //verify that it works correctly when width and/or height are 1
-        test_good_thomas_with_lengths(1, 10, false);
-        test_good_thomas_with_lengths(10, 1, false);
-        test_good_thomas_with_lengths(1, 1, false);
     }
 
     #[test]

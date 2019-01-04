@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use num_complex::Complex;
+use transpose;
 
 use common::{FFTnum, verify_length, verify_length_divisible};
 
@@ -85,7 +86,7 @@ impl<T: FFTnum> MixedRadix<T> {
         // SIX STEP FFT:
 
         // STEP 1: transpose
-        array_utils::transpose(self.width, self.height, input, output);
+        transpose::transpose(input, output, self.width, self.height);
 
         // STEP 2: perform FFTs of size `height`
         self.height_size_fft.process_multi(output, input);
@@ -96,13 +97,13 @@ impl<T: FFTnum> MixedRadix<T> {
         }
 
         // STEP 4: transpose again
-        array_utils::transpose(self.height, self.width, input, output);
+        transpose::transpose(input, output, self.height, self.width);
 
         // STEP 5: perform FFTs of size `width`
         self.width_size_fft.process_multi(output, input);
 
         // STEP 6: transpose again
-        array_utils::transpose(self.width, self.height, input, output);
+        transpose::transpose(input, output, self.width, self.height);
     }
 }
 impl<T: FFTnum> FFT<T> for MixedRadix<T> {
