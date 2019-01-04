@@ -189,3 +189,49 @@ fn bench_good_thomas_butterfly(b: &mut Bencher, width: usize, height: usize) {
 #[bench] fn good_thomas_butterfly_0003_4(b: &mut Bencher) { bench_good_thomas_butterfly(b,  3, 4); }
 #[bench] fn good_thomas_butterfly_0004_5(b: &mut Bencher) { bench_good_thomas_butterfly(b,  4, 5); }
 #[bench] fn good_thomas_butterfly_0007_32(b: &mut Bencher) { bench_good_thomas_butterfly(b, 7, 32); }
+
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_raders(b: &mut Bencher, len: usize) {
+
+    let mut planner = rustfft::FFTplanner::new(false);
+    let inner_fft = planner.plan_fft(len - 1);
+
+    let fft : Arc<FFT<_>> = Arc::new(RadersAlgorithm::new(len, inner_fft));
+
+    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; len];
+    let mut spectrum = signal.clone();
+    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
+}
+
+#[bench] fn raders_0005(b: &mut Bencher) { bench_raders(b,  5); }
+#[bench] fn raders_0017(b: &mut Bencher) { bench_raders(b,  17); }
+#[bench] fn raders_0151(b: &mut Bencher) { bench_raders(b,  151); }
+#[bench] fn raders_0257(b: &mut Bencher) { bench_raders(b,  257); }
+#[bench] fn raders_1009(b: &mut Bencher) { bench_raders(b,  1009); }
+#[bench] fn raders_2017(b: &mut Bencher) { bench_raders(b,  2017); }
+#[bench] fn raders_65537(b: &mut Bencher) { bench_raders(b, 65537); }
+#[bench] fn raders_746497(b: &mut Bencher) { bench_raders(b,746497); }
+
+/// Times just the FFT setup (not execution)
+/// for a given length, specific to Rader's algorithm
+fn bench_raders_setup(b: &mut Bencher, len: usize) {
+
+    let mut planner = rustfft::FFTplanner::new(false);
+    let inner_fft = planner.plan_fft(len - 1);
+
+    b.iter(|| { 
+        let fft : Arc<FFT<f32>> = Arc::new(RadersAlgorithm::new(len, Arc::clone(&inner_fft)));
+        test::black_box(fft);
+    });
+}
+
+#[bench] fn raders_setup_0005(b: &mut Bencher) { bench_raders_setup(b,  5); }
+#[bench] fn raders_setup_0017(b: &mut Bencher) { bench_raders_setup(b,  17); }
+#[bench] fn raders_setup_0151(b: &mut Bencher) { bench_raders_setup(b,  151); }
+#[bench] fn raders_setup_0257(b: &mut Bencher) { bench_raders_setup(b,  257); }
+#[bench] fn raders_setup_1009(b: &mut Bencher) { bench_raders_setup(b,  1009); }
+#[bench] fn raders_setup_2017(b: &mut Bencher) { bench_raders_setup(b,  2017); }
+#[bench] fn raders_setup_65537(b: &mut Bencher) { bench_raders_setup(b, 65537); }
+#[bench] fn raders_setup_746497(b: &mut Bencher) { bench_raders_setup(b,746497); }

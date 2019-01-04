@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use num_complex::Complex;
-use num_traits::{FromPrimitive, Zero};
+use num_traits::Zero;
+use strength_reduce::StrengthReducedUsize;
 
 use common::{FFTnum, verify_length, verify_length_divisible};
 
@@ -58,26 +59,34 @@ impl<T: FFTnum> RadersAlgorithm<T> {
         assert_eq!(len - 1, inner_fft.len(), "For raders algorithm, inner_fft.len() must be self.len() - 1. Expected {}, got {}", len - 1, inner_fft.len());
 
         let inner_fft_len = len - 1;
+        let reduced_len = StrengthReducedUsize::new(len);
 
         // compute the primitive root and its inverse for this size
-        let primitive_root = math_utils::primitive_root(len as u64).unwrap();
-        let root_inverse = math_utils::multiplicative_inverse(primitive_root, len as u64);
+        let primitive_root = math_utils::primitive_root(len as u64).unwrap() as usize;
+        let root_inverse = math_utils::multiplicative_inverse(primitive_root as usize, len);
 
         // precompute the coefficients to use inside the process method
-        let unity_scale: T = FromPrimitive::from_f64(1f64 / inner_fft_len as f64).unwrap();
-        let mut inner_fft_input: Vec<Complex<T>> = (0..inner_fft_len)
-            .map(|i| math_utils::modular_exponent(root_inverse, i as u64, len as u64) as usize)
-            .map(|i| twiddles::single_twiddle(i, len, inner_fft.is_inverse()))
-            .map(|c| c * unity_scale)
-            .collect();
+        let unity_scale = T::from_f64(1f64 / inner_fft_len as f64).unwrap();
+        let mut inner_fft_input = vec![Complex::zero(); inner_fft_len];
+        let mut twiddle_input = 1;
+        for input_cell in &mut inner_fft_input {
+            let twiddle = twiddles::single_twiddle(twiddle_input, len, inner_fft.is_inverse());
+            *input_cell = twiddle * unity_scale;
+
+            twiddle_input = (twiddle_input * root_inverse) % reduced_len;
+        }
 
         //precompute a FFT of our reordered twiddle factors
         let mut inner_fft_output = vec![Zero::zero(); inner_fft_len];
         inner_fft.process(&mut inner_fft_input, &mut inner_fft_output);
 
         //precompute the indexes we'll used to reorder the input and output
-        let len64 = len as u64;
-        let input_output_map: Vec<usize> = (1..len64-1).map(|i| math_utils::modular_exponent(primitive_root, i, len64) as usize - 1).collect();
+        let mut input_output_map = vec![0; inner_fft_len - 1];
+        let mut map_index = 1usize;
+        for map_cell in &mut input_output_map {
+            map_index = (primitive_root * map_index) % reduced_len;
+            *map_cell = map_index - 1;
+        }
 
         RadersAlgorithm {
             inner_fft: inner_fft,
@@ -91,7 +100,7 @@ impl<T: FFTnum> RadersAlgorithm<T> {
 
         // The first output element is just the sum of all the input elements
         let (first_output, output) = output.split_first_mut().unwrap();
-        *first_output = input.iter().fold(Zero::zero(), |acc, &e| acc + e);
+        *first_output = input.iter().sum();
 
         // Also split off the first input elements. After this, both input and output len will be n - 1
         let (first_input, input) = input.split_first_mut().unwrap();
