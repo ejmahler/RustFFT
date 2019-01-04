@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use num_complex::Complex;
 use strength_reduce::StrengthReducedUsize;
+use transpose;
 
 use common::{FFTnum, verify_length, verify_length_divisible};
 
@@ -112,7 +113,7 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
         self.width_size_fft.process_multi(output, input);
 
         // transpose
-        array_utils::transpose(self.width, self.height, input, output);
+        transpose::transpose(input, output, self.width, self.height);
 
         // run FFTs of size 'height'
         self.height_size_fft.process_multi(output, input);

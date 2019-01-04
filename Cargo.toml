@@ -16,6 +16,7 @@ num-complex = "0.2"
 num-traits = "0.2"
 num-integer = "0.1"
 strength_reduce = "0.2"
+transpose = "0.1"
 
 [dev-dependencies]
 rand = "0.5"

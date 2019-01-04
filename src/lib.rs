@@ -51,6 +51,7 @@ pub extern crate num_complex;
 pub extern crate num_traits;
 extern crate num_integer;
 extern crate strength_reduce;
+extern crate transpose;
 
 
 
