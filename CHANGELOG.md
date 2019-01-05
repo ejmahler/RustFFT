@@ -1,3 +1,13 @@
+## [3.0.0]
+### Changed
+- Reduced the setup time and memory usage of GoodThomasAlgorithm
+- Reduced the setup time and memory usage of RadersAlgorithm
+
+### Breaking Changes
+- Documented the minimum rustsc version. Before, none was specified. now, it's 1.26. Further increases to minimum version will be a breaking change.
+- Increased the version of the num-complex dependency to 0.2. This is a breaking change because we have a public dependency on num-complex.
+See the [num-complex changelog](https://github.com/rust-num/num-complex/blob/master/RELEASES.md) for a list of breaking changes in num-complex 0.2
+
 ## [2.1.0]
 ### Added
 - Added a specialized implementation of Good Thomas Algorithm for when both inner FFTs are butterflies. (#33)
