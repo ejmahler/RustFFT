@@ -1,6 +1,6 @@
 use num_traits::{FromPrimitive, Signed};
 
-/// Generic floating point number, implemnted for f32 and f64
+/// Generic floating point number, implemented for f32 and f64
 pub trait FFTnum: Copy + FromPrimitive + Signed + Sync + Send + 'static {}
 
 impl FFTnum for f32 {}
