@@ -46,6 +46,16 @@
 //! For the vast majority of situations, simply using the [`FFTplanner`](struct.FFTplanner.html) will be enough, but
 //! advanced users may have better insight than the planner into which algorithms are best for a specific size. See the
 //! [`algorithm`](algorithm/index.html) module for a complete list of algorithms implemented by RustFFT.
+//!
+//! ### Normalization
+//!
+//! RustFFT does not normalize outputs. Callers must manually normalize the results by scaling each element by
+//! `1/len().sqrt()`. Multiple normalization steps can be merged into one via pairwise multiplication, so when
+//! doing a forward FFT followed by an inverse FFT, callers can normalize once by scaling each element by `1/len()`
+//!
+//! ### Output Order
+//!
+//! Elements in the output are ordered by ascending frequency, with the first element corresponding to frequency 0.
 
 pub extern crate num_complex;
 pub extern crate num_traits;
@@ -86,11 +96,19 @@ pub trait IsInverse {
 pub trait FFT<T: FFTnum>: Length + IsInverse + Sync + Send {
     /// Computes an FFT on the `input` buffer and places the result in the `output` buffer.
     ///
+    /// The output is not normalized. Callers must manually normalize the results by scaling each element by
+    /// `1/len().sqrt()`. Multiple normalization steps can be merged into one via pairwise multiplication, so when
+    /// doing a forward FFT followed by an inverse FFT, callers can normalize once by scaling each element by `1/len()`
+    ///
     /// This method uses the `input` buffer as scratch space, so the contents of `input` should be considered garbage
     /// after calling
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]);
 
     /// Divides the `input` and `output` buffers into chunks of length self.len(), then computes an FFT on each chunk.
+    ///
+    /// The output is not normalized. Callers must manually normalize the results by scaling each element by
+    /// `1/len().sqrt()`. Multiple normalization steps can be merged into one via pairwise multiplication, so when
+    /// doing a forward FFT followed by an inverse FFT, callers can normalize once by scaling each element by `1/len()`
     ///
     /// This method uses the `input` buffer as scratch space, so the contents of `input` should be considered garbage
     /// after calling
