@@ -70,7 +70,7 @@ impl<T: FFTnum> Radix4<T> {
 
     fn perform_fft(&self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         match self.len() {
-            0...1 => spectrum.copy_from_slice(signal),
+            0|1 => spectrum.copy_from_slice(signal),
             2 => {
                 spectrum.copy_from_slice(signal);
                 unsafe { Butterfly2::new(self.inverse).process_inplace(spectrum) }

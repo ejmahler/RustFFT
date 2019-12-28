@@ -192,7 +192,7 @@ impl<T: FFTnum> FFTplanner<T> {
 
     fn plan_fft_single_factor(&mut self, len: usize) -> Arc<FFT<T>> {
         match len {
-            0...1 => Arc::new(DFT::new(len, self.inverse)) as Arc<FFT<T>>,
+            0|1 => Arc::new(DFT::new(len, self.inverse)) as Arc<FFT<T>>,
             2 => Arc::new(butterflies::Butterfly2::new(self.inverse)) as Arc<FFT<T>>,
             3 => Arc::new(butterflies::Butterfly3::new(self.inverse)) as Arc<FFT<T>>,
             4 => Arc::new(butterflies::Butterfly4::new(self.inverse)) as Arc<FFT<T>>,
