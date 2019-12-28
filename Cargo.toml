@@ -1,7 +1,7 @@
 [package]
 
 name = "rustfft"
-version = "3.0.0"
+version = "3.0.1"
 authors = ["Allen Welkie <allen.welkie at gmail>", "Elliott Mahler <join.together at gmail>"]
 
 description = "Compute FFTs of any size in O(nlogn) time, in pure Rust."

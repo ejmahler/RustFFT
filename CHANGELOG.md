@@ -1,3 +1,8 @@
+## [3.0.1]
+### Fixed
+- Fixed warnings regarding "dyn trait", and warnings regarding inclusive ranges
+- Several documentation improvements
+
 ## [3.0.0]
 ### Changed
 - Reduced the setup time and memory usage of GoodThomasAlgorithm
