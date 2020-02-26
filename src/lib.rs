@@ -59,6 +59,7 @@
 
 #![allow(unknown_lints)] // The "bare trait objects" lint is unknown on rustc 1.26
 #![allow(bare_trait_objects)]
+#![feature(specialization)]
 
 pub extern crate num_complex;
 pub extern crate num_traits;

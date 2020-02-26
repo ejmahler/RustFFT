@@ -1,6 +1,9 @@
+#![allow(bare_trait_objects)]
+#![allow(non_snake_case)]
 #![feature(test)]
 extern crate test;
 extern crate rustfft;
+
 
 use std::sync::Arc;
 use test::Bencher;
@@ -8,6 +11,7 @@ use rustfft::FFT;
 use rustfft::num_complex::Complex;
 use rustfft::algorithm::*;
 use rustfft::algorithm::butterflies::*;
+use rustfft::algorithm::mixed_radix_cxn::*;
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
@@ -235,3 +239,127 @@ fn bench_raders_setup(b: &mut Bencher, len: usize) {
 #[bench] fn raders_setup_2017(b: &mut Bencher) { bench_raders_setup(b,  2017); }
 #[bench] fn raders_setup_65537(b: &mut Bencher) { bench_raders_setup(b, 65537); }
 #[bench] fn raders_setup_746497(b: &mut Bencher) { bench_raders_setup(b,746497); }
+
+fn make_4xn(len: usize) -> Arc<dyn FFT<f32>> {
+    if len == 16 {
+        Arc::new(Butterfly16::new(false))
+    } else if len == 8 {
+        Arc::new(Butterfly8::new(false))
+    } else {
+        Arc::new(MixedRadix4xN::new(make_4xn(len / 4)))
+    }
+}
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_mixed_4xn(b: &mut Bencher, len: usize) {
+    assert!(len % 2 == 0);
+    let fft = make_4xn(len);
+
+    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; len];
+    let mut spectrum = signal.clone();
+    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
+}
+
+#[bench] fn mixed_4xn_______64(b: &mut Bencher) { bench_mixed_4xn(b, 64); }
+#[bench] fn mixed_4xn______256(b: &mut Bencher) { bench_mixed_4xn(b, 256); }
+#[bench] fn mixed_4xn_____1024(b: &mut Bencher) { bench_mixed_4xn(b, 1024); }
+#[bench] fn mixed_4xn____65536(b: &mut Bencher) { bench_mixed_4xn(b, 65536); }
+#[bench] fn mixed_4xn__1048576(b: &mut Bencher) { bench_mixed_4xn(b, 1048576); }
+#[bench] fn mixed_4xn_16777216(b: &mut Bencher) { bench_mixed_4xn(b, 16777216); }
+
+fn make_4xn_avx(len: usize) -> Arc<dyn FFT<f32>> {
+    if len == 16 {
+        Arc::new(MixedRadix4x4Avx::new(false))
+    } else if len == 8 {
+        Arc::new(Butterfly8::new(false))
+    } else {
+        Arc::new(MixedRadix4xnAvx::new(make_4xn_avx(len / 4)))
+    }
+}
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_mixed_4xn_avx(b: &mut Bencher, len: usize) {
+    assert!(len % 2 == 0);
+    let fft = make_4xn_avx(len);
+
+    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; len];
+    let mut spectrum = signal.clone();
+    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
+}
+
+#[bench] fn mixed_4xn_avx_______64(b: &mut Bencher) { bench_mixed_4xn_avx(b, 64); }
+#[bench] fn mixed_4xn_avx______256(b: &mut Bencher) { bench_mixed_4xn_avx(b, 256); }
+#[bench] fn mixed_4xn_avx_____1024(b: &mut Bencher) { bench_mixed_4xn_avx(b, 1024); }
+#[bench] fn mixed_4xn_avx____65536(b: &mut Bencher) { bench_mixed_4xn_avx(b, 65536); }
+#[bench] fn mixed_4xn_avx__1048576(b: &mut Bencher) { bench_mixed_4xn_avx(b, 1048576); }
+#[bench] fn mixed_4xn_avx_16777216(b: &mut Bencher) { bench_mixed_4xn_avx(b, 16777216); }
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_radix4(b: &mut Bencher, len: usize) {
+    assert!(len % 4 == 0);
+
+    let fft = Radix4::new(len, false);
+
+    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; len];
+    let mut spectrum = signal.clone();
+    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
+}
+
+#[bench] fn radix4_______64(b: &mut Bencher) { bench_radix4(b, 64); }
+#[bench] fn radix4______256(b: &mut Bencher) { bench_radix4(b, 256); }
+#[bench] fn radix4_____1024(b: &mut Bencher) { bench_radix4(b, 1024); }
+#[bench] fn radix4____65536(b: &mut Bencher) { bench_radix4(b, 65536); }
+#[bench] fn radix4__1048576(b: &mut Bencher) { bench_radix4(b, 1048576); }
+#[bench] fn radix4_16777216(b: &mut Bencher) { bench_radix4(b, 16777216); }
+
+#[bench] 
+fn bench_butterfly16_naive(b: &mut Bencher) {
+    let fft = Butterfly16::new(false);
+
+    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; 16];
+    let mut spectrum = signal.clone();
+    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
+}
+
+#[bench] 
+fn bench_4x4_avx(b: &mut Bencher) {
+    let fft = MixedRadix4x4Avx::new(false);
+
+    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; 16];
+    let mut spectrum = signal.clone();
+    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
+}
+
+
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_splitradix(b: &mut Bencher, len: usize) {
+    assert!(len % 4 == 0);
+
+    let mut radishes = Vec::new();
+    radishes.push(Arc::new(Butterfly16::new(false)) as Arc<FFT<f32>>);
+    radishes.push(Arc::new(Butterfly32::new(false)) as Arc<FFT<f32>>);
+
+    while radishes.last().unwrap().len() < len {
+        let quarter = Arc::clone(&radishes[radishes.len() - 2]);
+        let half = Arc::clone(&radishes[radishes.len() - 1]);
+        radishes.push(Arc::new(SplitRadix::new(half, quarter)) as Arc<FFT<f32>>);
+    }
+
+    let fft = radishes.last().unwrap();
+
+    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; len];
+    let mut spectrum = signal.clone();
+    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
+}
+
+#[bench] fn splitradix_______64(b: &mut Bencher) { bench_splitradix(b, 64); }
+#[bench] fn splitradix______256(b: &mut Bencher) { bench_splitradix(b, 256); }
+#[bench] fn splitradix_____1024(b: &mut Bencher) { bench_splitradix(b, 1024); }
+#[bench] fn splitradix____65536(b: &mut Bencher) { bench_splitradix(b, 65536); }
+#[bench] fn splitradix__1048576(b: &mut Bencher) { bench_splitradix(b, 1048576); }
+#[bench] fn splitradix_16777216(b: &mut Bencher) { bench_splitradix(b, 16777216); }

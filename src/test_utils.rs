@@ -33,6 +33,7 @@ pub fn compare_vectors(vec1: &[Complex<f32>], vec2: &[Complex<f32>]) -> bool {
     for (&a, &b) in vec1.iter().zip(vec2.iter()) {
         sse = sse + (a - b).norm();
     }
+    dbg!(sse);
     return (sse / vec1.len() as f32) < 0.1f32;
 }
 
@@ -40,7 +41,7 @@ pub fn check_fft_algorithm(fft: &FFT<f32>, size: usize, inverse: bool) {
     assert_eq!(fft.len(), size, "Algorithm reported incorrect size");
     assert_eq!(fft.is_inverse(), inverse, "Algorithm reported incorrect inverse value");
 
-    let n = 5;
+    let n = 1;
 
     //test the forward direction
     let dft = DFT::new(size, inverse);
@@ -62,8 +63,14 @@ pub fn check_fft_algorithm(fft: &FFT<f32>, size: usize, inverse: bool) {
         fft.process(input_chunk, output_chunk);
     }
 
-    //assert!(compare_vectors(&expected_output, &actual_output), "process() failed, length = {}, inverse = {}", size, inverse);
+    dbg!(&expected_output);
+    dbg!(&actual_output);
+
+    let diff: Vec<_> = expected_output.iter().zip(actual_output.iter()).map(|(a,b)| a-b).collect();
+
+    dbg!(diff);
     assert!(compare_vectors(&expected_output, &multi_output), "process_multi() failed, length = {}, inverse = {}", size, inverse);
+    assert!(compare_vectors(&expected_output, &actual_output), "process() failed, length = {}, inverse = {}", size, inverse);
 }
 
 pub fn make_butterfly(len: usize, inverse: bool) -> Arc<butterflies::FFTButterfly<f32>> {
