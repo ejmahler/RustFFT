@@ -16,4 +16,4 @@ pub use self::raders_algorithm::RadersAlgorithm;
 pub use self::radix4::Radix4;
 pub use self::good_thomas_algorithm::{GoodThomasAlgorithm, GoodThomasAlgorithmDoubleButterfly};
 pub use self::dft::DFT;
-pub use self::split_radix::SplitRadix;
+pub use self::split_radix::{SplitRadix, SplitRadixAvx, SplitRadixAvxButterfly32};

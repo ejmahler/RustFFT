@@ -294,7 +294,7 @@ fn bench_mixed_4xn_avx(b: &mut Bencher, len: usize) {
 #[bench] fn mixed_4xn_avx_____1024(b: &mut Bencher) { bench_mixed_4xn_avx(b, 1024); }
 #[bench] fn mixed_4xn_avx____65536(b: &mut Bencher) { bench_mixed_4xn_avx(b, 65536); }
 #[bench] fn mixed_4xn_avx__1048576(b: &mut Bencher) { bench_mixed_4xn_avx(b, 1048576); }
-#[bench] fn mixed_4xn_avx_16777216(b: &mut Bencher) { bench_mixed_4xn_avx(b, 16777216); }
+//#[bench] fn mixed_4xn_avx_16777216(b: &mut Bencher) { bench_mixed_4xn_avx(b, 16777216); }
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to Rader's algorithm
@@ -313,7 +313,7 @@ fn bench_radix4(b: &mut Bencher, len: usize) {
 #[bench] fn radix4_____1024(b: &mut Bencher) { bench_radix4(b, 1024); }
 #[bench] fn radix4____65536(b: &mut Bencher) { bench_radix4(b, 65536); }
 #[bench] fn radix4__1048576(b: &mut Bencher) { bench_radix4(b, 1048576); }
-#[bench] fn radix4_16777216(b: &mut Bencher) { bench_radix4(b, 16777216); }
+//#[bench] fn radix4_16777216(b: &mut Bencher) { bench_radix4(b, 16777216); }
 
 #[bench] 
 fn bench_butterfly16_naive(b: &mut Bencher) {
@@ -337,7 +337,7 @@ fn bench_4x4_avx(b: &mut Bencher) {
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to Rader's algorithm
-fn bench_splitradix(b: &mut Bencher, len: usize) {
+fn bench_splitradix_scalar(b: &mut Bencher, len: usize) {
     assert!(len % 4 == 0);
 
     let mut radishes = Vec::new();
@@ -357,9 +357,40 @@ fn bench_splitradix(b: &mut Bencher, len: usize) {
     b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
 }
 
-#[bench] fn splitradix_______64(b: &mut Bencher) { bench_splitradix(b, 64); }
-#[bench] fn splitradix______256(b: &mut Bencher) { bench_splitradix(b, 256); }
-#[bench] fn splitradix_____1024(b: &mut Bencher) { bench_splitradix(b, 1024); }
-#[bench] fn splitradix____65536(b: &mut Bencher) { bench_splitradix(b, 65536); }
-#[bench] fn splitradix__1048576(b: &mut Bencher) { bench_splitradix(b, 1048576); }
-#[bench] fn splitradix_16777216(b: &mut Bencher) { bench_splitradix(b, 16777216); }
+#[bench] fn splitradix_scalar_______64(b: &mut Bencher) { bench_splitradix_scalar(b, 64); }
+#[bench] fn splitradix_scalar______256(b: &mut Bencher) { bench_splitradix_scalar(b, 256); }
+#[bench] fn splitradix_scalar_____1024(b: &mut Bencher) { bench_splitradix_scalar(b, 1024); }
+#[bench] fn splitradix_scalar____65536(b: &mut Bencher) { bench_splitradix_scalar(b, 65536); }
+#[bench] fn splitradix_scalar__1048576(b: &mut Bencher) { bench_splitradix_scalar(b, 1048576); }
+//#[bench] fn splitradix_scalar_16777216(b: &mut Bencher) { bench_splitradix_scalar(b, 16777216); }
+
+
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_splitradix_avx(b: &mut Bencher, len: usize) {
+    assert!(len % 4 == 0);
+
+    let mut radishes = Vec::new();
+    radishes.push(Arc::new(MixedRadix4x4Avx::new(false)) as Arc<FFT<f32>>);
+    radishes.push(Arc::new(SplitRadixAvxButterfly32::new(false)) as Arc<FFT<f32>>);
+
+    while radishes.last().unwrap().len() < len {
+        let quarter = Arc::clone(&radishes[radishes.len() - 2]);
+        let half = Arc::clone(&radishes[radishes.len() - 1]);
+        radishes.push(Arc::new(SplitRadixAvx::new(half, quarter)) as Arc<FFT<f32>>);
+    }
+
+    let fft = radishes.last().unwrap();
+
+    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; len];
+    let mut spectrum = signal.clone();
+    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
+}
+
+#[bench] fn splitradix_avx_______64(b: &mut Bencher) { bench_splitradix_avx(b, 64); }
+#[bench] fn splitradix_avx______256(b: &mut Bencher) { bench_splitradix_avx(b, 256); }
+#[bench] fn splitradix_avx_____1024(b: &mut Bencher) { bench_splitradix_avx(b, 1024); }
+#[bench] fn splitradix_avx____65536(b: &mut Bencher) { bench_splitradix_avx(b, 65536); }
+#[bench] fn splitradix_avx__1048576(b: &mut Bencher) { bench_splitradix_avx(b, 1048576); }
+//#[bench] fn splitradix_avx_16777216(b: &mut Bencher) { bench_splitradix_avx(b, 16777216); }
