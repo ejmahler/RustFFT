@@ -167,6 +167,8 @@ impl<T: FFTnum> SplitRadixAvx<T> {
         let quarter_len = fft_quarter.len();
         let len = quarter_len * 4;
 
+        assert_eq!(len % 16, 0, "SplitRadixAvx requires its FFT length to be a multiple of 16. Got {}", len);
+
         let twiddles : Vec<_> = (0..quarter_len).map(|i| twiddles::single_twiddle(i, len, inverse)).collect();
 
         Self {
