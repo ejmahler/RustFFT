@@ -266,7 +266,7 @@ fn bench_mixed_4xn(b: &mut Bencher, len: usize) {
 #[bench] fn mixed_4xn_____1024(b: &mut Bencher) { bench_mixed_4xn(b, 1024); }
 #[bench] fn mixed_4xn____65536(b: &mut Bencher) { bench_mixed_4xn(b, 65536); }
 #[bench] fn mixed_4xn__1048576(b: &mut Bencher) { bench_mixed_4xn(b, 1048576); }
-#[bench] fn mixed_4xn_16777216(b: &mut Bencher) { bench_mixed_4xn(b, 16777216); }
+//#[bench] fn mixed_4xn_16777216(b: &mut Bencher) { bench_mixed_4xn(b, 16777216); }
 
 fn make_4xn_avx(len: usize) -> Arc<dyn FFT<f32>> {
     if len == 16 {
@@ -333,6 +333,25 @@ fn bench_4x4_avx(b: &mut Bencher) {
     b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
 }
 
+fn get_splitradix_scalar(len: usize) -> Arc<FFT<f32>> {
+    match len {
+        8 => Arc::new(Butterfly8::new(false)),
+        16 => Arc::new(Butterfly16::new(false)),
+        32 => Arc::new(Butterfly32::new(false)),
+        _ => {
+             let mut radishes = Vec::new();
+            radishes.push(Arc::new(Butterfly16::new(false)) as Arc<FFT<f32>>);
+            radishes.push(Arc::new(Butterfly32::new(false)) as Arc<FFT<f32>>);
+
+            while radishes.last().unwrap().len() < len {
+                let quarter = Arc::clone(&radishes[radishes.len() - 2]);
+                let half = Arc::clone(&radishes[radishes.len() - 1]);
+                radishes.push(Arc::new(SplitRadix::new(half, quarter)) as Arc<FFT<f32>>);
+            }
+            Arc::clone(&radishes.last().unwrap())
+        }
+    }
+}
 
 
 /// Times just the FFT execution (not allocation and pre-calculation)
@@ -340,24 +359,18 @@ fn bench_4x4_avx(b: &mut Bencher) {
 fn bench_splitradix_scalar(b: &mut Bencher, len: usize) {
     assert!(len % 4 == 0);
 
-    let mut radishes = Vec::new();
-    radishes.push(Arc::new(Butterfly16::new(false)) as Arc<FFT<f32>>);
-    radishes.push(Arc::new(Butterfly32::new(false)) as Arc<FFT<f32>>);
-
-    while radishes.last().unwrap().len() < len {
-        let quarter = Arc::clone(&radishes[radishes.len() - 2]);
-        let half = Arc::clone(&radishes[radishes.len() - 1]);
-        radishes.push(Arc::new(SplitRadix::new(half, quarter)) as Arc<FFT<f32>>);
-    }
-
-    let fft = radishes.last().unwrap();
+    let fft = get_splitradix_scalar(len);
 
     let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; len];
     let mut spectrum = signal.clone();
     b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
 }
 
+#[bench] fn splitradix_scalar________8(b: &mut Bencher) { bench_splitradix_scalar(b, 8); }
+#[bench] fn splitradix_scalar_______16(b: &mut Bencher) { bench_splitradix_scalar(b, 16); }
+#[bench] fn splitradix_scalar_______32(b: &mut Bencher) { bench_splitradix_scalar(b, 32); }
 #[bench] fn splitradix_scalar_______64(b: &mut Bencher) { bench_splitradix_scalar(b, 64); }
+#[bench] fn splitradix_scalar______128(b: &mut Bencher) { bench_splitradix_scalar(b, 128); }
 #[bench] fn splitradix_scalar______256(b: &mut Bencher) { bench_splitradix_scalar(b, 256); }
 #[bench] fn splitradix_scalar_____1024(b: &mut Bencher) { bench_splitradix_scalar(b, 1024); }
 #[bench] fn splitradix_scalar____65536(b: &mut Bencher) { bench_splitradix_scalar(b, 65536); }
@@ -365,30 +378,44 @@ fn bench_splitradix_scalar(b: &mut Bencher, len: usize) {
 //#[bench] fn splitradix_scalar_16777216(b: &mut Bencher) { bench_splitradix_scalar(b, 16777216); }
 
 
+fn get_splitradix_avx(len: usize) -> Arc<FFT<f32>> {
+    match len {
+        8 => Arc::new(MixedRadixAvx4x2::new(false)),
+        16 => Arc::new(MixedRadixAvx4x4::new(false)),
+        32 => Arc::new(MixedRadixAvx4x8::new(false)),
+        64 => Arc::new(MixedRadixAvx8x8::new(false)),
+        _ => {
+             let mut radishes = Vec::new();
+            radishes.push(Arc::new(MixedRadixAvx4x8::new(false)) as Arc<FFT<f32>>);
+            radishes.push(Arc::new(MixedRadixAvx8x8::new(false)) as Arc<FFT<f32>>);
+
+            while radishes.last().unwrap().len() < len {
+                let quarter = Arc::clone(&radishes[radishes.len() - 2]);
+                let half = Arc::clone(&radishes[radishes.len() - 1]);
+                radishes.push(Arc::new(SplitRadixAvx::new(half, quarter)) as Arc<FFT<f32>>);
+            }
+            Arc::clone(&radishes.last().unwrap())
+        }
+    }
+}
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to Rader's algorithm
 fn bench_splitradix_avx(b: &mut Bencher, len: usize) {
     assert!(len % 4 == 0);
 
-    let mut radishes = Vec::new();
-    radishes.push(Arc::new(MixedRadix4x4Avx::new(false)) as Arc<FFT<f32>>);
-    radishes.push(Arc::new(SplitRadixAvxButterfly32::new(false)) as Arc<FFT<f32>>);
-
-    while radishes.last().unwrap().len() < len {
-        let quarter = Arc::clone(&radishes[radishes.len() - 2]);
-        let half = Arc::clone(&radishes[radishes.len() - 1]);
-        radishes.push(Arc::new(SplitRadixAvx::new(half, quarter)) as Arc<FFT<f32>>);
-    }
-
-    let fft = radishes.last().unwrap();
+    let fft = get_splitradix_avx(len);
 
     let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; len];
     let mut spectrum = signal.clone();
     b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
 }
 
+#[bench] fn splitradix_avx________8(b: &mut Bencher) { bench_splitradix_avx(b, 8); }
+#[bench] fn splitradix_avx_______16(b: &mut Bencher) { bench_splitradix_avx(b, 16); }
+#[bench] fn splitradix_avx_______32(b: &mut Bencher) { bench_splitradix_avx(b, 32); }
 #[bench] fn splitradix_avx_______64(b: &mut Bencher) { bench_splitradix_avx(b, 64); }
+#[bench] fn splitradix_avx______128(b: &mut Bencher) { bench_splitradix_avx(b, 128); }
 #[bench] fn splitradix_avx______256(b: &mut Bencher) { bench_splitradix_avx(b, 256); }
 #[bench] fn splitradix_avx_____1024(b: &mut Bencher) { bench_splitradix_avx(b, 1024); }
 #[bench] fn splitradix_avx____65536(b: &mut Bencher) { bench_splitradix_avx(b, 65536); }

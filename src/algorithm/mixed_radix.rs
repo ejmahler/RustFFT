@@ -69,7 +69,7 @@ impl<T: FFTnum> MixedRadix<T> {
             }
         }
 
-        MixedRadix {
+        Self {
             width: width,
             width_size_fft: width_fft,
 
@@ -84,6 +84,8 @@ impl<T: FFTnum> MixedRadix<T> {
 
     fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         // SIX STEP FFT:
+
+
 
         // STEP 1: transpose
         transpose::transpose(input, output, self.width, self.height);
@@ -227,7 +229,7 @@ impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
 
         // STEP 5: perform FFTs of size 'width'
         self.width_size_fft.process_multi_inplace(input);
-
+        
         // STEP 6: transpose again
         array_utils::transpose_small(self.width, self.height, input, output);
     }
