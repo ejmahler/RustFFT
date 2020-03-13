@@ -3,15 +3,14 @@ use std::sync::Arc;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use common::{FFTnum, verify_length, verify_length_divisible};
+use common::{FFTnum, verify_length, verify_length_divisible, verify_length_inline, verify_length_minimum};
 
-use ::{Length, IsInverse, FFT};
+use ::{Length, IsInverse, FFT, FftInline};
 use twiddles;
 
 use algorithm::butterflies::FFTButterfly;
 
 use std::marker::PhantomData;
-
 /// FFT algorithm optimized for power-of-two sizes
 ///
 /// ~~~
@@ -30,15 +29,15 @@ use std::marker::PhantomData;
 
 pub struct SplitRadix<T> {
     twiddles: Box<[Complex<T>]>,
-    fft_half: Arc<FFT<T>>,
-    fft_quarter: Arc<FFT<T>>,
+    fft_half: Arc<FftInline<T>>,
+    fft_quarter: Arc<FftInline<T>>,
     len: usize,
     inverse: bool,
 }
 
 impl<T: FFTnum> SplitRadix<T> {
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the power-of-two FFT
-    pub fn new(fft_half: Arc<FFT<T>>, fft_quarter: Arc<FFT<T>>) -> Self {
+    pub fn new(fft_half: Arc<FftInline<T>>, fft_quarter: Arc<FftInline<T>>) -> Self {
         assert_eq!(
             fft_half.is_inverse(), fft_quarter.is_inverse(), 
             "fft_half and fft_quarter must both be inverse, or neither. got fft_half inverse={}, fft_quarter inverse={}",
@@ -47,8 +46,8 @@ impl<T: FFTnum> SplitRadix<T> {
         assert_eq!(
             fft_half.len(), fft_quarter.len() * 2, 
             "fft_half must be 2x the len of fft_quarter. got fft_half len={}, fft_quarter len={}",
-            fft_half.len(), fft_quarter.len())
-;
+            fft_half.len(), fft_quarter.len());
+
         let inverse = fft_quarter.is_inverse();
         let quarter_len = fft_quarter.len();
         let len = quarter_len * 4;
@@ -64,68 +63,71 @@ impl<T: FFTnum> SplitRadix<T> {
         }
     }
 
-    unsafe fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        let half_len = self.len / 2;
-        let quarter_len = self.len / 4;
+    unsafe fn perform_fft(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        let half_len = self.len() / 2;
+        let quarter_len = self.len() / 4;
 
-        // Split the output into the buffers we'll use for the sub-FFT input
-        let (inner_half_input, inner_quarter_input) = output.split_at_mut(half_len);
-        let (inner_quarter1_input, inner_quarter3_input) = inner_quarter_input.split_at_mut(quarter_len);
+        // Split our scratch up into a section for our quarter1 FFT, and one for our quarter3 FFT
+        let (scratch_quarter1, scratch_quarter3) = scratch.split_at_mut(quarter_len);
 
-        *inner_half_input.get_unchecked_mut(0)     = *input.get_unchecked(0);
-        *inner_quarter1_input.get_unchecked_mut(0) = *input.get_unchecked(1);
-        *inner_half_input.get_unchecked_mut(1)     = *input.get_unchecked(2);
+        // consolidate the evens int othe first half of the input buffer, and divide the odds up into the scratch
+        *scratch_quarter1.get_unchecked_mut(0)  = *buffer.get_unchecked(1);
+        *buffer.get_unchecked_mut(1)            = *buffer.get_unchecked(2);
         for i in 1..quarter_len {
-            *inner_quarter3_input.get_unchecked_mut(i)     = *input.get_unchecked(i * 4 - 1);
-            *inner_half_input.get_unchecked_mut(i * 2)     = *input.get_unchecked(i * 4);
-            *inner_quarter1_input.get_unchecked_mut(i)     = *input.get_unchecked(i * 4 + 1);
-            *inner_half_input.get_unchecked_mut(i * 2 + 1) = *input.get_unchecked(i * 4 + 2);
+            *scratch_quarter3.get_unchecked_mut(i)  = *buffer.get_unchecked(i * 4 - 1);
+            *buffer.get_unchecked_mut(i * 2)        = *buffer.get_unchecked(i * 4);
+            *scratch_quarter1.get_unchecked_mut(i)  = *buffer.get_unchecked(i * 4 + 1);
+            *buffer.get_unchecked_mut(i * 2 + 1)    = *buffer.get_unchecked(i * 4 + 2);
         }
-        *inner_quarter3_input.get_unchecked_mut(0) = *input.get_unchecked(input.len() - 1);
+        *scratch_quarter3.get_unchecked_mut(0) = *buffer.get_unchecked(buffer.len() - 1);
 
-        // Split the input into the buffers we'll use for the sub-FFT output
-        let (inner_half_output, inner_quarter_output) = input.split_at_mut(half_len);
-        let (inner_quarter1_output, inner_quarter3_output) = inner_quarter_output.split_at_mut(quarter_len);
+        // The caller might have passed in more scratch than we need. if so, cap it off
+        let scratch_quarter3 = if scratch_quarter3.len() > quarter_len {
+            &mut scratch_quarter3[..quarter_len]
+        } else {
+            scratch_quarter3
+        };
+
+        // Split up the input buffer. The first half contains the even-sized inner FFT data, and the second half will contain scratch space for our inner FFTs
+        let (inner_buffer, inner_scratch) = buffer.split_at_mut(half_len);
 
         // Execute the inner FFTs
-        self.fft_half.process(inner_half_input, inner_half_output);
-        self.fft_quarter.process(inner_quarter1_input, inner_quarter1_output);
-        self.fft_quarter.process(inner_quarter3_input, inner_quarter3_output);
+        self.fft_half.process_inline(inner_buffer, inner_scratch);
+        self.fft_quarter.process_inline(scratch_quarter1, inner_scratch);
+        self.fft_quarter.process_inline(scratch_quarter3, inner_scratch);
 
         // Recombine into a single buffer
         for i in 0..quarter_len {
             let twiddle = *self.twiddles.get_unchecked(i);
 
-            let twiddled_quarter1 = twiddle * inner_quarter1_output[i];
-            let twiddled_quarter3 = twiddle.conj() * inner_quarter3_output[i];
+            let half0_result = *buffer.get_unchecked(i);
+            let half1_result = *buffer.get_unchecked(i + quarter_len);
+
+            let twiddled_quarter1 = twiddle * scratch_quarter1.get_unchecked(i);
+            let twiddled_quarter3 = twiddle.conj() * scratch_quarter3.get_unchecked(i);
+
             let quarter_sum  = twiddled_quarter1 + twiddled_quarter3;
             let quarter_diff = twiddled_quarter1 - twiddled_quarter3;
+            let rotated_quarter_diff = twiddles::rotate_90(quarter_diff, self.is_inverse());
 
-            *output.get_unchecked_mut(i)            = *inner_half_output.get_unchecked(i) + quarter_sum;
-            *output.get_unchecked_mut(i + half_len) = *inner_half_output.get_unchecked(i) - quarter_sum;
-            if self.is_inverse() {
-                *output.get_unchecked_mut(i + quarter_len)     = *inner_half_output.get_unchecked(i + quarter_len) + twiddles::rotate_90(quarter_diff, true);
-                *output.get_unchecked_mut(i + quarter_len * 3) = *inner_half_output.get_unchecked(i + quarter_len) + twiddles::rotate_90(quarter_diff, false);
-            } else {
-                *output.get_unchecked_mut(i + quarter_len)     = *inner_half_output.get_unchecked(i + quarter_len) + twiddles::rotate_90(quarter_diff, false);
-                *output.get_unchecked_mut(i + quarter_len * 3) = *inner_half_output.get_unchecked(i + quarter_len) + twiddles::rotate_90(quarter_diff, true);
-            }
+            *buffer.get_unchecked_mut(i)            = half0_result + quarter_sum;
+            *buffer.get_unchecked_mut(i + half_len) = half0_result - quarter_sum;
+
+            *buffer.get_unchecked_mut(i + quarter_len)     = half1_result + rotated_quarter_diff;
+            *buffer.get_unchecked_mut(i + quarter_len * 3) = half1_result - rotated_quarter_diff;
         }
     }
 }
 
-impl<T: FFTnum> FFT<T> for SplitRadix<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
+impl<T: FFTnum> FftInline<T> for SplitRadix<T> {
+    fn process_inline(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        verify_length_inline(buffer, self.len());
+        verify_length_minimum(scratch, self.get_required_scratch_len());
 
-         unsafe {self.perform_fft(input, output) };
+        unsafe {self.perform_fft(buffer, scratch) };
     }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-
-        for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
-            unsafe {self.perform_fft(in_chunk, out_chunk) };
-        }
+    fn get_required_scratch_len(&self) -> usize {
+        self.len / 2
     }
 }
 impl<T> Length for SplitRadix<T> {
@@ -181,26 +183,23 @@ impl<T: FFTnum> SplitRadixAvx<T> {
     }
 }
 
-
-fn to_float_ptr<T: FFTnum>(item: &Complex<T>) -> *const T {
-    unsafe { std::mem::transmute::<*const Complex<T>, *const T>(item as *const Complex<T>) }
-}
-
-fn to_float_mut_ptr<T: FFTnum>(item: &mut Complex<T>) -> *mut T {
-    unsafe { std::mem::transmute::<*mut Complex<T>, *mut T>(item as *mut Complex<T>) }
-}
-
 use std::arch::x86_64::*;
 
 macro_rules! load_avx_f32 {
     ($array: expr, $index: expr) => {{
-        _mm256_loadu_ps(to_float_ptr($array.get_unchecked($index)))
+        let complex_ref = $array.get_unchecked($index);
+        let float_ref : &f32 = &complex_ref.re;
+        let float_ptr = float_ref as *const f32;
+        _mm256_loadu_ps(float_ptr)
     }};
 }
 
 macro_rules! store_avx_f32 {
     ($array: expr, $index: expr, $source: expr) => {{
-        _mm256_storeu_ps(to_float_mut_ptr($array.get_unchecked_mut($index)), $source);
+        let complex_ref = $array.get_unchecked_mut($index);
+        let float_ref = &mut complex_ref.re;
+        let float_ptr = float_ref as *mut f32;
+        _mm256_storeu_ps(float_ptr, $source);
     }};
 }
 
@@ -550,7 +549,7 @@ impl SplitRadixAvx<f32> {
             let inner_quarter1_entry = load_avx_f32!(output, half_len + i * 4);
             let inner_quarter3_entry = load_avx_f32!(output, three_quarter_len + i * 4);
 
-            let twiddle = _mm256_loadu_ps(to_float_ptr(self.twiddles.get_unchecked(i * 4)));
+            let twiddle = load_avx_f32!(self.twiddles, i * 4);
 
             let twiddled_quarter1 = complex_multiply_f32!(twiddle, inner_quarter1_entry);
             let twiddled_quarter3 = complex_conj_multiply_f32!(twiddle, inner_quarter3_entry);
@@ -639,26 +638,26 @@ impl MixedRadixAvx4x2<f32> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn process_butterfly8_f32(&self, input: &[Complex<f32>], output: &mut [Complex<f32>]) {
 
-        let twiddle = _mm256_loadu_ps(to_float_ptr(self.twiddles.get_unchecked(0)));
-        let row0 = _mm256_loadu_ps(to_float_ptr(input.get_unchecked(0)));
-        let row1 = _mm256_loadu_ps(to_float_ptr(input.get_unchecked(4)));
+        let twiddle = load_avx_f32!(self.twiddles, 0);
+        let row0 = load_avx_f32!(input, 0);
+        let row1 = load_avx_f32!(input, 4);
 
         let (output0, output1) = butterfly8_avx_f32!(row0, row1, twiddle, self.inverse);
 
-        _mm256_storeu_ps(to_float_mut_ptr(output.get_unchecked_mut(0)), output0);
-        _mm256_storeu_ps(to_float_mut_ptr(output.get_unchecked_mut(4)), output1);
+        store_avx_f32!(output, 0, output0);
+        store_avx_f32!(output, 4, output1);
     }
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn process_butterfly8_f32_inplace(&self, buffer: &mut [Complex<f32>]) {
 
-        let twiddle = _mm256_loadu_ps(to_float_ptr(self.twiddles.get_unchecked(0)));
-        let row0 = _mm256_loadu_ps(to_float_ptr(buffer.get_unchecked(0)));
-        let row1 = _mm256_loadu_ps(to_float_ptr(buffer.get_unchecked(4)));
+        let twiddle = load_avx_f32!(self.twiddles, 0);
+        let row0 = load_avx_f32!(buffer, 0);
+        let row1 = load_avx_f32!(buffer, 4);
 
         let (output0, output1) = butterfly8_avx_f32!(row0, row1, twiddle, self.inverse);
 
-        _mm256_storeu_ps(to_float_mut_ptr(buffer.get_unchecked_mut(0)), output0);
-        _mm256_storeu_ps(to_float_mut_ptr(buffer.get_unchecked_mut(4)), output1);
+        store_avx_f32!(buffer, 0, output0);
+        store_avx_f32!(buffer, 4, output1);
     }
 }
 default impl<T: FFTnum> FFT<T> for MixedRadixAvx4x2<T> {
@@ -1486,12 +1485,12 @@ impl<T> IsInverse for MixedRadixAvx8x8<T> {
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use test_utils::check_fft_algorithm;
+    use test_utils::{check_fft_algorithm, check_inline_fft_algorithm};
     use std::sync::Arc;
     use algorithm::*;
 
     #[test]
-    fn test_splitradix() {
+    fn test_splitradix_scalar() {
         for pow in 3..8 {
             let len = 1 << pow;
             test_splitradix_with_length(len, false);
@@ -1504,7 +1503,7 @@ mod unit_tests {
         let half = Arc::new(DFT::new(len / 2, inverse));
         let fft = SplitRadix::new(half, quarter);
 
-        check_fft_algorithm(&fft, len, inverse);
+        check_inline_fft_algorithm(&fft, len, inverse);
     }
 
     #[test]
@@ -1562,12 +1561,6 @@ mod unit_tests {
 
     #[test]
     fn test_avx_splitradix_butterfly16() {
-        let dft_8 = Arc::new(DFT::new(8, false));
-        let dft_4 = Arc::new(DFT::new(4, false));
-        let control = SplitRadix::new(dft_8, dft_4);
-
-        check_fft_algorithm(&control, 16, false);
-
         let fft_forward = SplitRadixAvxButterfly16::new(false);
         check_fft_algorithm(&fft_forward, 16, false);
 

@@ -1,10 +1,10 @@
 use num_complex::Complex;
 use num_traits::{FromPrimitive, Zero};
 
-use common::{FFTnum, verify_length, verify_length_divisible};
+use common::{FFTnum, verify_length, verify_length_divisible, verify_length_inline};
 
 use twiddles;
-use ::{Length, IsInverse, FFT};
+use ::{Length, IsInverse, FFT, FftInline};
 
 
 pub trait FFTButterfly<T: FFTnum>: Length + IsInverse + Sync + Send {
@@ -632,6 +632,15 @@ impl<T: FFTnum> FFT<T> for Butterfly8<T> {
         unsafe { self.process_multi_inplace(output) };
     }
 }
+impl<T: FFTnum> FftInline<T> for Butterfly8<T> {
+    fn process_inline(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+        verify_length_inline(buffer, self.len());
+        unsafe { self.process_inplace(buffer) };
+    }
+    fn get_required_scratch_len(&self) -> usize {
+        0
+    }
+}
 impl<T> Length for Butterfly8<T> {
     #[inline(always)]
     fn len(&self) -> usize {
@@ -763,6 +772,15 @@ impl<T: FFTnum> FFT<T> for Butterfly16<T> {
         output.copy_from_slice(input);
 
         unsafe { self.process_multi_inplace(output) };
+    }
+}
+impl<T: FFTnum> FftInline<T> for Butterfly16<T> {
+    fn process_inline(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+        verify_length_inline(buffer, self.len());
+        unsafe { self.process_inplace(buffer) };
+    }
+    fn get_required_scratch_len(&self) -> usize {
+        0
     }
 }
 impl<T> Length for Butterfly16<T> {
@@ -952,6 +970,15 @@ impl<T: FFTnum> FFT<T> for Butterfly32<T> {
         output.copy_from_slice(input);
 
         unsafe { self.process_multi_inplace(output) };
+    }
+}
+impl<T: FFTnum> FftInline<T> for Butterfly32<T> {
+    fn process_inline(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+        verify_length_inline(buffer, self.len());
+        unsafe { self.process_inplace(buffer) };
+    }
+    fn get_required_scratch_len(&self) -> usize {
+        0
     }
 }
 impl<T> Length for Butterfly32<T> {

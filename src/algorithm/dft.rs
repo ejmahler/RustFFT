@@ -1,9 +1,9 @@
 use num_complex::Complex;
 use num_traits::Zero;
 
-use common::{FFTnum, verify_length, verify_length_divisible};
+use common::{FFTnum, verify_length, verify_length_divisible, verify_length_inline, verify_length_minimum};
 
-use ::{Length, IsInverse, FFT};
+use ::{Length, IsInverse, FFT, FftInline};
 use twiddles;
 
 /// Naive O(n^2 ) Discrete Fourier Transform implementation
@@ -74,6 +74,20 @@ impl<T: FFTnum> FFT<T> for DFT<T> {
         }
     }
 }
+impl<T: FFTnum> FftInline<T> for DFT<T> {
+    fn process_inline(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        verify_length_inline(buffer, self.len());
+        verify_length_minimum(scratch, self.get_required_scratch_len());
+
+        let scratch = &mut scratch[..self.len()];
+
+        self.perform_fft(buffer, scratch);
+        buffer.copy_from_slice(scratch);
+    }
+    fn get_required_scratch_len(&self) -> usize {
+        self.len()
+    }
+}
 impl<T> Length for DFT<T> {
     #[inline(always)]
     fn len(&self) -> usize {
@@ -119,16 +133,22 @@ mod unit_tests {
             let mut expected_input = random_signal(len * n);
             let mut actual_input = expected_input.clone();
             let mut multi_input = expected_input.clone();
+            let mut inline_buffer = expected_input.clone();
 
             let mut expected_output = vec![Zero::zero(); len * n];
             let mut actual_output = expected_output.clone();
             let mut multi_output = expected_output.clone();
+            let mut inline_scratch = vec![Zero::zero(); dft_instance.get_required_scratch_len()];
 
             // perform the test
             dft_instance.process_multi(&mut multi_input, &mut multi_output);
 
             for (input_chunk, output_chunk) in actual_input.chunks_mut(len).zip(actual_output.chunks_mut(len)) {
                 dft_instance.process(input_chunk, output_chunk);
+            }
+
+            for chunk in inline_buffer.chunks_mut(len) {
+                dft_instance.process_inline(chunk, &mut inline_scratch);
             }
 
             for (input_chunk, output_chunk) in expected_input.chunks_mut(len).zip(expected_output.chunks_mut(len)) {
@@ -143,8 +163,10 @@ mod unit_tests {
         let zero_dft = DFT::new(0, false);
         let mut zero_input: Vec<Complex<f32>> = Vec::new();
         let mut zero_output: Vec<Complex<f32>> = Vec::new();
+        let mut zero_scratch: Vec<Complex<f32>> = Vec::new();
 
         zero_dft.process(&mut zero_input, &mut zero_output);
+        zero_dft.process_inline(&mut zero_input, &mut zero_scratch);
     }
 
     /// Returns true if our `dft` function calculates the given spectrum from the

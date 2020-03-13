@@ -7,8 +7,9 @@ extern crate rustfft;
 
 use std::sync::Arc;
 use test::Bencher;
-use rustfft::FFT;
+use rustfft::{FFT, FftInline};
 use rustfft::num_complex::Complex;
+use rustfft::num_traits::Zero;
 use rustfft::algorithm::*;
 use rustfft::algorithm::butterflies::*;
 use rustfft::algorithm::mixed_radix_cxn::*;
@@ -333,20 +334,20 @@ fn bench_4x4_avx(b: &mut Bencher) {
     b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
 }
 
-fn get_splitradix_scalar(len: usize) -> Arc<FFT<f32>> {
+fn get_splitradix_scalar(len: usize) -> Arc<FftInline<f32>> {
     match len {
         8 => Arc::new(Butterfly8::new(false)),
         16 => Arc::new(Butterfly16::new(false)),
         32 => Arc::new(Butterfly32::new(false)),
         _ => {
              let mut radishes = Vec::new();
-            radishes.push(Arc::new(Butterfly16::new(false)) as Arc<FFT<f32>>);
-            radishes.push(Arc::new(Butterfly32::new(false)) as Arc<FFT<f32>>);
+            radishes.push(Arc::new(Butterfly16::new(false)) as Arc<FftInline<f32>>);
+            radishes.push(Arc::new(Butterfly32::new(false)) as Arc<FftInline<f32>>);
 
             while radishes.last().unwrap().len() < len {
                 let quarter = Arc::clone(&radishes[radishes.len() - 2]);
                 let half = Arc::clone(&radishes[radishes.len() - 1]);
-                radishes.push(Arc::new(SplitRadix::new(half, quarter)) as Arc<FFT<f32>>);
+                radishes.push(Arc::new(SplitRadix::new(half, quarter)) as Arc<FftInline<f32>>);
             }
             Arc::clone(&radishes.last().unwrap())
         }
@@ -361,9 +362,9 @@ fn bench_splitradix_scalar(b: &mut Bencher, len: usize) {
 
     let fft = get_splitradix_scalar(len);
 
-    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; len];
-    let mut spectrum = signal.clone();
-    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
+    let mut buffer = vec![Zero::zero(); len];
+    let mut scratch = vec![Zero::zero(); fft.get_required_scratch_len()];
+    b.iter(|| {fft.process_inline(&mut buffer, &mut scratch);} );
 }
 
 #[bench] fn splitradix_scalar________8(b: &mut Bencher) { bench_splitradix_scalar(b, 8); }

@@ -7,7 +7,7 @@ use rand::{StdRng, SeedableRng};
 use rand::distributions::{Normal, Distribution};
 
 use algorithm::{DFT, butterflies};
-use FFT;
+use {FFT, FftInline};
 
 
 /// The seed for the random number generator used to generate
@@ -62,14 +62,48 @@ pub fn check_fft_algorithm(fft: &FFT<f32>, size: usize, inverse: bool) {
         fft.process(input_chunk, output_chunk);
     }
 
-    dbg!(&expected_output);
-    dbg!(&actual_output);
+    // dbg!(&expected_output);
+    // dbg!(&actual_output);
 
-    let diff: Vec<_> = expected_output.iter().zip(actual_output.iter()).map(|(a,b)| a-b).collect();
+    // let diff: Vec<_> = expected_output.iter().zip(actual_output.iter()).map(|(a,b)| a-b).collect();
 
-    dbg!(diff);
+    // dbg!(diff);
     assert!(compare_vectors(&expected_output, &multi_output), "process_multi() failed, length = {}, inverse = {}", size, inverse);
     assert!(compare_vectors(&expected_output, &actual_output), "process() failed, length = {}, inverse = {}", size, inverse);
+}
+
+pub fn check_inline_fft_algorithm(fft: &FftInline<f32>, size: usize, inverse: bool) {
+    assert_eq!(fft.len(), size, "Algorithm reported incorrect size");
+    assert_eq!(fft.is_inverse(), inverse, "Algorithm reported incorrect inverse value");
+
+    let n = 1;
+
+    //test the forward direction
+    let dft = DFT::new(size, inverse);
+
+    // set up buffers
+    let mut expected_buffer = random_signal(size * n);
+    let mut actual_buffer = expected_buffer.clone();
+
+    let mut expected_scratch = vec![Zero::zero(); dft.get_required_scratch_len()];
+    let mut actual_scratch = vec![Zero::zero(); fft.get_required_scratch_len()];
+
+    // perform the test
+    
+    for chunk in actual_buffer.chunks_mut(size) {
+        fft.process_inline(chunk, &mut actual_scratch);
+    }
+    for chunk in expected_buffer.chunks_mut(size) {
+        dft.process_inline(chunk, &mut expected_scratch);
+    }
+
+    // dbg!(&expected_buffer);
+    // dbg!(&actual_buffer);
+
+    // let diff: Vec<_> = expected_buffer.iter().zip(actual_buffer.iter()).map(|(a,b)| a-b).collect();
+
+    // dbg!(diff);
+    assert!(compare_vectors(&expected_buffer, &actual_buffer), "process() failed, length = {}, inverse = {}", size, inverse);
 }
 
 pub fn make_butterfly(len: usize, inverse: bool) -> Arc<butterflies::FFTButterfly<f32>> {

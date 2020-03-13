@@ -118,6 +118,12 @@ pub trait FFT<T: FFTnum>: Length + IsInverse + Sync + Send {
     /// after calling
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]);
 }
+/// Trait for FFT algorithms that use the same buffer for input and output.
+pub trait FftInline<T: FFTnum>: Length + IsInverse + Sync + Send {
+    fn process_inline(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]);
+    fn get_required_scratch_len(&self) -> usize;
+}
+
 
 #[cfg(test)]
 extern crate rand;

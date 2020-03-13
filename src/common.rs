@@ -61,6 +61,16 @@ pub fn verify_length<T>(input: &[T], output: &[T], expected: usize) {
 	assert_eq!(output.len(), expected, "Output is the wrong length. Expected {}, got {}", expected, output.len());
 }
 
+#[inline(always)]
+pub fn verify_length_inline<T>(buffer: &[T], expected: usize) {
+	assert_eq!(buffer.len(), expected, "Buffer is the wrong length. Expected {}, got {}", expected, buffer.len());
+}
+
+#[inline(always)]
+pub fn verify_length_minimum<T>(buffer: &[T], minimum: usize) {
+	assert!(buffer.len() >= minimum, "Buffer is the wrong length. Expected {} or greater, got {}", minimum, buffer.len());
+}
+
 
 #[inline(always)]
 pub fn verify_length_divisible<T>(input: &[T], output: &[T], expected: usize) {
