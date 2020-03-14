@@ -4,6 +4,7 @@ mod raders_algorithm;
 mod radix4;
 mod dft;
 mod split_radix;
+mod simd;
 
 /// Hardcoded size-specfic FFT algorithms
 pub mod butterflies;

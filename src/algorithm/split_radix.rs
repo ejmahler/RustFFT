@@ -142,23 +142,10 @@ impl<T> IsInverse for SplitRadix<T> {
 
 use std::arch::x86_64::*;
 
-macro_rules! load_avx_f32 {
-    ($array: expr, $index: expr) => {{
-        let complex_ref = $array.get_unchecked($index);
-        let float_ref : &f32 = &complex_ref.re;
-        let float_ptr = float_ref as *const f32;
-        _mm256_loadu_ps(float_ptr)
-    }};
-}
+use algorithm::simd::avx_utils::AvxComplexArrayf32;
+use algorithm::simd::avx_utils;
 
-macro_rules! store_avx_f32 {
-    ($array: expr, $index: expr, $source: expr) => {{
-        let complex_ref = $array.get_unchecked_mut($index);
-        let float_ref = &mut complex_ref.re;
-        let float_ptr = float_ref as *mut f32;
-        _mm256_storeu_ps(float_ptr, $source);
-    }};
-}
+
 
 // Split the array into evens and odds. IE, do a 2xN -> Nx2 transpose
 macro_rules! split_evens_f32 {
@@ -479,7 +466,7 @@ impl SplitRadixAvx<f32> {
                 twiddles::single_twiddle(i*4+2, len, inverse),
                 twiddles::single_twiddle(i*4+3, len, inverse),
             ];
-            load_avx_f32!(twiddle_chunk, 0)
+            twiddle_chunk.load_complex_f32(0)
         }).collect();
 
         Self {
@@ -501,23 +488,23 @@ impl SplitRadixAvx<f32> {
         let (scratch_quarter1, scratch_quarter3) = scratch.split_at_mut(quarter_len);
 
         for i in 0..sixteenth_len {
-            let chunk0 = load_avx_f32!(buffer, i*16);
-            let chunk1 = load_avx_f32!(buffer, i*16 + 4);
+            let chunk0 = buffer.load_complex_f32(i*16);
+            let chunk1 = buffer.load_complex_f32(i*16 + 4);
             let (even0, odd0) = split_evens_f32!(chunk0, chunk1);
 
-            let chunk2 = load_avx_f32!(buffer, i*16 + 8);
-            let chunk3 = load_avx_f32!(buffer, i*16 + 12);
+            let chunk2 = buffer.load_complex_f32(i*16 + 8);
+            let chunk3 = buffer.load_complex_f32(i*16 + 12);
             let (even1, odd1) = split_evens_f32!(chunk2, chunk3);
 
             let (quarter1, quarter3) = split_evens_f32!(odd0, odd1);
 
-            store_avx_f32!(buffer, i*8, even0);
-            store_avx_f32!(buffer, i*8 + 4, even1);
-            store_avx_f32!(scratch_quarter1, i*4, quarter1);
+            buffer.store_complex_f32(i*8, even0);
+            buffer.store_complex_f32(i*8 + 4, even1);
+            scratch_quarter1.store_complex_f32(i*4, quarter1);
 
             // We need to rotate every entry in quarter3 downwards one, and wrap the last entry back to the first
             // We'll accomplish the shift here by adding 1 to the index, and complete the rotation after the loop
-            store_avx_f32!(scratch_quarter3, i*4+1, quarter3);
+           scratch_quarter3.store_complex_f32(i*4+1, quarter3);
         }
 
         // complete the rotate of scratch_quarter3 by copying the last element to the first. then, slice off the last element
@@ -534,10 +521,10 @@ impl SplitRadixAvx<f32> {
 
         // Recombine into a single buffer
         for i in 0..sixteenth_len {
-            let inner_even0_entry = load_avx_f32!(buffer, i * 4);
-            let inner_even1_entry = load_avx_f32!(buffer, quarter_len + i * 4);
-            let inner_quarter1_entry = load_avx_f32!(scratch_quarter1, i * 4);
-            let inner_quarter3_entry = load_avx_f32!(scratch_quarter3, i * 4);
+            let inner_even0_entry = buffer.load_complex_f32(i * 4);
+            let inner_even1_entry = buffer.load_complex_f32(quarter_len + i * 4);
+            let inner_quarter1_entry = scratch_quarter1.load_complex_f32(i * 4);
+            let inner_quarter3_entry = scratch_quarter3.load_complex_f32(i * 4);
 
             let twiddle = *self.twiddles.get_unchecked(i);
 
@@ -552,10 +539,10 @@ impl SplitRadixAvx<f32> {
 
             let (output_quarter1, output_quarter3) = column_butterfly2_avx_f32!(inner_even1_entry, quarter_diff_rotated);
 
-            store_avx_f32!(buffer, i * 4, output_i);
-            store_avx_f32!(buffer, i * 4 + quarter_len, output_quarter1);
-            store_avx_f32!(buffer, i * 4 + half_len, output_i_half);
-            store_avx_f32!(buffer, i * 4 + three_quarter_len, output_quarter3);
+            buffer.store_complex_f32(i * 4, output_i);
+            buffer.store_complex_f32(i * 4 + quarter_len, output_quarter1);
+            buffer.store_complex_f32(i * 4 + half_len, output_i_half);
+            buffer.store_complex_f32(i * 4 + three_quarter_len, output_quarter3);
         }
     }
 }
@@ -627,7 +614,7 @@ impl MixedRadixAvx4x2<f32> {
             twiddles::single_twiddle(3, 8, inverse),
         ];
         Self {
-            twiddles: load_avx_f32!(twiddle_array, 0),
+            twiddles: twiddle_array.load_complex_f32(0),
             inverse: inverse,
             _phantom: PhantomData,
         }
@@ -638,13 +625,13 @@ impl MixedRadixAvx4x2<f32> {
     #[target_feature(enable = "avx", enable = "fma")]
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn process_butterfly8_f32(&self, buffer: &mut [Complex<f32>]) {
-        let row0 = load_avx_f32!(buffer, 0);
-        let row1 = load_avx_f32!(buffer, 4);
+        let row0 = buffer.load_complex_f32(0);
+        let row1 = buffer.load_complex_f32(4);
 
         let (output0, output1) = butterfly8_avx_f32!(row0, row1, self.twiddles, self.inverse);
 
-        store_avx_f32!(buffer, 0, output0);
-        store_avx_f32!(buffer, 4, output1);
+        buffer.store_complex_f32(0, output0);
+        buffer.store_complex_f32(4, output1);
     }
 }
 default impl<T: FFTnum> FftInline<T> for MixedRadixAvx4x2<T> {
@@ -712,9 +699,9 @@ impl MixedRadixAvx4x4<f32> {
         ];
         Self {
             twiddles: [
-                load_avx_f32!(twiddles, 0),
-                load_avx_f32!(twiddles, 4),
-                load_avx_f32!(twiddles, 8),
+                twiddles.load_complex_f32(0),
+                twiddles.load_complex_f32(4),
+                twiddles.load_complex_f32(8),
             ],
             inverse: inverse,
             _phantom: PhantomData,
@@ -725,17 +712,17 @@ impl MixedRadixAvx4x4<f32> {
 impl MixedRadixAvx4x4<f32> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn process_butterfly16_f32(&self, buffer: &mut [Complex<f32>]) {
-        let input0 = load_avx_f32!(buffer, 0);
-        let input1 = load_avx_f32!(buffer, 1 * 4);
-        let input2 = load_avx_f32!(buffer, 2 * 4);
-        let input3 = load_avx_f32!(buffer, 3 * 4);
+        let input0 = buffer.load_complex_f32(0);
+        let input1 = buffer.load_complex_f32(1 * 4);
+        let input2 = buffer.load_complex_f32(2 * 4);
+        let input3 = buffer.load_complex_f32(3 * 4);
 
         let (output0, output1, output2, output3) = butterfly16_avx_f32!(input0, input1, input2, input3, self.twiddles, self.inverse);
 
-        store_avx_f32!(buffer, 0, output0);
-        store_avx_f32!(buffer, 1 * 4, output1);
-        store_avx_f32!(buffer, 2 * 4, output2);
-        store_avx_f32!(buffer, 3 * 4, output3);
+        buffer.store_complex_f32(0, output0);
+        buffer.store_complex_f32(1 * 4, output1);
+        buffer.store_complex_f32(2 * 4, output2);
+        buffer.store_complex_f32(3 * 4, output3);
     }
 }
 default impl<T: FFTnum> FftInline<T> for MixedRadixAvx4x4<T> {
@@ -817,17 +804,14 @@ impl<T: FFTnum> MixedRadixAvx4x8<T> {
 
         Self {
             twiddles: [
-                load_avx_f32!(twiddles, 0),
-                load_avx_f32!(twiddles, 4),
-                load_avx_f32!(twiddles, 8),
-                load_avx_f32!(twiddles, 12),
-                load_avx_f32!(twiddles, 16),
-                load_avx_f32!(twiddles, 20),
+                twiddles.load_complex_f32(0),
+                twiddles.load_complex_f32(4),
+                twiddles.load_complex_f32(8),
+                twiddles.load_complex_f32(12),
+                twiddles.load_complex_f32(16),
+                twiddles.load_complex_f32(20),
             ],
-            twiddles_butterfly8: { 
-                let twiddle = twiddles::single_twiddle(1, 8, inverse);
-                _mm256_set_ps(twiddle.im, twiddle.re, twiddle.im, twiddle.re, twiddle.im, twiddle.re, twiddle.im, twiddle.re)
-            },
+            twiddles_butterfly8: avx_utils::broadcast_complex_f32(twiddles::single_twiddle(1, 8, inverse)),
             inverse: inverse,
             _phantom: PhantomData,
         }
@@ -837,14 +821,14 @@ impl<T: FFTnum> MixedRadixAvx4x8<T> {
 impl MixedRadixAvx4x8<f32> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn process_butterfly32_f32(&self, buffer: &mut [Complex<f32>]) {
-        let input0 = load_avx_f32!(buffer, 0);
-        let input1 = load_avx_f32!(buffer, 1 * 4);
-        let input2 = load_avx_f32!(buffer, 2 * 4);
-        let input3 = load_avx_f32!(buffer, 3 * 4);
-        let input4 = load_avx_f32!(buffer, 4 * 4);
-        let input5 = load_avx_f32!(buffer, 5 * 4);
-        let input6 = load_avx_f32!(buffer, 6 * 4);
-        let input7 = load_avx_f32!(buffer, 7 * 4);
+        let input0 = buffer.load_complex_f32(0);
+        let input1 = buffer.load_complex_f32(1 * 4);
+        let input2 = buffer.load_complex_f32(2 * 4);
+        let input3 = buffer.load_complex_f32(3 * 4);
+        let input4 = buffer.load_complex_f32(4 * 4);
+        let input5 = buffer.load_complex_f32(5 * 4);
+        let input6 = buffer.load_complex_f32(6 * 4);
+        let input7 = buffer.load_complex_f32(7 * 4);
 
         // We're going to treat our input as a 8x4 2d array. First, do 8 butterfly 4's down the columns of that array.
         let (mid0, mid2, mid4, mid6) = column_butterfly4_avx_f32!(input0, input2, input4, input6, self.inverse);
@@ -858,21 +842,21 @@ impl MixedRadixAvx4x8<f32> {
         let mid6_twiddled = complex_multiply_f32!(mid6, self.twiddles[4]);
         let mid7_twiddled = complex_multiply_f32!(mid7, self.twiddles[5]);
 
-        // Transpose our 8x4 array to an 8x4 array. Thankfully we can just do 2 4x4 transposes, which are only 4 instructions each!
+        // Transpose our 8x4 array to an 8x4 array. Thankfully we can just do 2 4x4 transposes, which are only 8 instructions each!
         let (transposed0, transposed1, transposed2, transposed3) = transpose_4x4_f32!(mid0, mid2_twiddled, mid4_twiddled, mid6_twiddled);
         let (transposed4, transposed5, transposed6, transposed7) = transpose_4x4_f32!(mid1, mid3_twiddled, mid5_twiddled, mid7_twiddled);
 
         // Do 4 butterfly 8's down the columns of our transpsed array
         let (output0, output1, output2, output3, output4, output5, output6, output7) = column_butterfly8_avx_f32!(transposed0, transposed1, transposed2, transposed3, transposed4, transposed5, transposed6, transposed7, self.twiddles_butterfly8, self.inverse);
 
-        store_avx_f32!(buffer, 0, output0);
-        store_avx_f32!(buffer, 1 * 4, output1);
-        store_avx_f32!(buffer, 2 * 4, output2);
-        store_avx_f32!(buffer, 3 * 4, output3);
-        store_avx_f32!(buffer, 4 * 4, output4);
-        store_avx_f32!(buffer, 5 * 4, output5);
-        store_avx_f32!(buffer, 6 * 4, output6);
-        store_avx_f32!(buffer, 7 * 4, output7);
+        buffer.store_complex_f32(0, output0);
+        buffer.store_complex_f32(1 * 4, output1);
+        buffer.store_complex_f32(2 * 4, output2);
+        buffer.store_complex_f32(3 * 4, output3);
+        buffer.store_complex_f32(4 * 4, output4);
+        buffer.store_complex_f32(5 * 4, output5);
+        buffer.store_complex_f32(6 * 4, output6);
+        buffer.store_complex_f32(7 * 4, output7);
     }
 }
 default impl<T: FFTnum> FftInline<T> for MixedRadixAvx4x8<T> {
@@ -986,25 +970,22 @@ impl MixedRadixAvx8x8<f32> {
 
         Self {
             twiddles: [
-                load_avx_f32!(twiddles, 0),
-                load_avx_f32!(twiddles, 4),
-                load_avx_f32!(twiddles, 8),
-                load_avx_f32!(twiddles, 12),
-                load_avx_f32!(twiddles, 16),
-                load_avx_f32!(twiddles, 20),
-                load_avx_f32!(twiddles, 24),
-                load_avx_f32!(twiddles, 28),
-                load_avx_f32!(twiddles, 32),
-                load_avx_f32!(twiddles, 36),
-                load_avx_f32!(twiddles, 40),
-                load_avx_f32!(twiddles, 44),
-                load_avx_f32!(twiddles, 48),
-                load_avx_f32!(twiddles, 52),
+                twiddles.load_complex_f32(0),
+                twiddles.load_complex_f32(4),
+                twiddles.load_complex_f32(8),
+                twiddles.load_complex_f32(12),
+                twiddles.load_complex_f32(16),
+                twiddles.load_complex_f32(20),
+                twiddles.load_complex_f32(24),
+                twiddles.load_complex_f32(28),
+                twiddles.load_complex_f32(32),
+                twiddles.load_complex_f32(36),
+                twiddles.load_complex_f32(40),
+                twiddles.load_complex_f32(44),
+                twiddles.load_complex_f32(48),
+                twiddles.load_complex_f32(52),
             ],
-            twiddles_butterfly8: { 
-                let twiddle = twiddles::single_twiddle(1, 8, inverse);
-                _mm256_set_ps(twiddle.im, twiddle.re, twiddle.im, twiddle.re, twiddle.im, twiddle.re, twiddle.im, twiddle.re)
-            },
+            twiddles_butterfly8: avx_utils::broadcast_complex_f32(twiddles::single_twiddle(1, 8, inverse)),
             inverse: inverse,
             _phantom: PhantomData,
         }
@@ -1014,14 +995,14 @@ impl MixedRadixAvx8x8<f32> {
 impl MixedRadixAvx8x8<f32> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn process_butterfly64_f32(&self, buffer: &mut [Complex<f32>]) {
-        let input0 = load_avx_f32!(buffer, 0);
-        let input2 = load_avx_f32!(buffer, 2 * 4);
-        let input4 = load_avx_f32!(buffer, 4 * 4);
-        let input6 = load_avx_f32!(buffer, 6 * 4);
-        let input8 = load_avx_f32!(buffer, 8 * 4);
-        let input10 = load_avx_f32!(buffer, 10 * 4);
-        let input12 = load_avx_f32!(buffer, 12 * 4);
-        let input14 = load_avx_f32!(buffer, 14 * 4);
+        let input0 = buffer.load_complex_f32(0);
+        let input2 = buffer.load_complex_f32(2 * 4);
+        let input4 = buffer.load_complex_f32(4 * 4);
+        let input6 = buffer.load_complex_f32(6 * 4);
+        let input8 = buffer.load_complex_f32(8 * 4);
+        let input10 = buffer.load_complex_f32(10 * 4);
+        let input12 = buffer.load_complex_f32(12 * 4);
+        let input14 = buffer.load_complex_f32(14 * 4);
 
         // We're going to treat our input as a 8x8 2d array. First, do 8 butterfly 8's down the columns of that array.
         let (mid0, mid2, mid4, mid6, mid8, mid10, mid12, mid14) = column_butterfly8_avx_f32!(input0, input2, input4, input6, input8, input10, input12, input14, self.twiddles_butterfly8, self.inverse);
@@ -1040,14 +1021,14 @@ impl MixedRadixAvx8x8<f32> {
         let (transposed1, transposed3,  transposed5,  transposed7)  = transpose_4x4_f32!(mid8_twiddled, mid10_twiddled, mid12_twiddled, mid14_twiddled);
 
         // Now that the first half of our data has been transposed, the compiler is free to spill those registers to make room for the other half
-        let input1 = load_avx_f32!(buffer, 1 * 4);
-        let input3 = load_avx_f32!(buffer, 3 * 4);
-        let input5 = load_avx_f32!(buffer, 5 * 4);
-        let input7 = load_avx_f32!(buffer, 7 * 4);
-        let input9 = load_avx_f32!(buffer, 9 * 4);
-        let input11 = load_avx_f32!(buffer, 11 * 4);
-        let input13 = load_avx_f32!(buffer, 13 * 4);
-        let input15 = load_avx_f32!(buffer, 15 * 4);
+        let input1 = buffer.load_complex_f32(1 * 4);
+        let input3 = buffer.load_complex_f32(3 * 4);
+        let input5 = buffer.load_complex_f32(5 * 4);
+        let input7 = buffer.load_complex_f32(7 * 4);
+        let input9 = buffer.load_complex_f32(9 * 4);
+        let input11 = buffer.load_complex_f32(11 * 4);
+        let input13 = buffer.load_complex_f32(13 * 4);
+        let input15 = buffer.load_complex_f32(15 * 4);
         let (mid1, mid3, mid5, mid7, mid9, mid11, mid13, mid15) = column_butterfly8_avx_f32!(input1, input3, input5, input7, input9, input11, input13, input15, self.twiddles_butterfly8, self.inverse);
 
         // Apply twiddle factors to the second half of our data
@@ -1065,25 +1046,25 @@ impl MixedRadixAvx8x8<f32> {
 
         // Do 4 butterfly 8's down the columns of our transposed array, and store the results
         let (output0, output2, output4, output6, output8, output10, output12, output14) = column_butterfly8_avx_f32!(transposed0, transposed2, transposed4, transposed6, transposed8, transposed10, transposed12, transposed14, self.twiddles_butterfly8, self.inverse);
-        store_avx_f32!(buffer, 0, output0);
-        store_avx_f32!(buffer, 2 * 4, output2);
-        store_avx_f32!(buffer, 4 * 4, output4);
-        store_avx_f32!(buffer, 6 * 4, output6);
-        store_avx_f32!(buffer, 8 * 4, output8);
-        store_avx_f32!(buffer, 10 * 4, output10);
-        store_avx_f32!(buffer, 12 * 4, output12);
-        store_avx_f32!(buffer, 14 * 4, output14);
+        buffer.store_complex_f32(0, output0);
+        buffer.store_complex_f32(2 * 4, output2);
+        buffer.store_complex_f32(4 * 4, output4);
+        buffer.store_complex_f32(6 * 4, output6);
+        buffer.store_complex_f32(8 * 4, output8);
+        buffer.store_complex_f32(10 * 4, output10);
+        buffer.store_complex_f32(12 * 4, output12);
+        buffer.store_complex_f32(14 * 4, output14);
 
         // We freed up a bunch of registers, so we should easily have enough room to compute+store the other half of our butterfly 8s
         let (output1, output3, output5, output7, output9, output11, output13, output15) = column_butterfly8_avx_f32!(transposed1, transposed3, transposed5, transposed7, transposed9, transposed11, transposed13, transposed15, self.twiddles_butterfly8, self.inverse);
-        store_avx_f32!(buffer, 1 * 4, output1);
-        store_avx_f32!(buffer, 3 * 4, output3);
-        store_avx_f32!(buffer, 5 * 4, output5);
-        store_avx_f32!(buffer, 7 * 4, output7);
-        store_avx_f32!(buffer, 9 * 4, output9);
-        store_avx_f32!(buffer, 11 * 4, output11);
-        store_avx_f32!(buffer, 13 * 4, output13);
-        store_avx_f32!(buffer, 15 * 4, output15);
+        buffer.store_complex_f32(1 * 4, output1);
+        buffer.store_complex_f32(3 * 4, output3);
+        buffer.store_complex_f32(5 * 4, output5);
+        buffer.store_complex_f32(7 * 4, output7);
+        buffer.store_complex_f32(9 * 4, output9);
+        buffer.store_complex_f32(11 * 4, output11);
+        buffer.store_complex_f32(13 * 4, output13);
+        buffer.store_complex_f32(15 * 4, output15);
     }
 }
 default impl<T: FFTnum> FftInline<T> for MixedRadixAvx8x8<T> {
