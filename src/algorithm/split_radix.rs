@@ -433,17 +433,17 @@ macro_rules! butterfly16_avx_f32 {
 }
 
 pub struct SplitRadixAvx<T> {
-    twiddles: Box<[Complex<T>]>,
+    twiddles: Box<[__m256]>,
     fft_half: Arc<FftInline<T>>,
     fft_quarter: Arc<FftInline<T>>,
     len: usize,
     inverse: bool,
 }
 
-impl<T: FFTnum> SplitRadixAvx<T> {
+impl SplitRadixAvx<f32> {
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the power-of-two FFT
     #[inline]
-    pub fn new(fft_half: Arc<FftInline<T>>, fft_quarter: Arc<FftInline<T>>) -> Result<Self, ()> {
+    pub fn new(fft_half: Arc<FftInline<f32>>, fft_quarter: Arc<FftInline<f32>>) -> Result<Self, ()> {
         let has_avx = is_x86_feature_detected!("avx");
         let has_fma = is_x86_feature_detected!("fma");
         if has_avx && has_fma {
@@ -454,7 +454,7 @@ impl<T: FFTnum> SplitRadixAvx<T> {
         }
     }
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(fft_half: Arc<FftInline<T>>, fft_quarter: Arc<FftInline<T>>) -> Self {
+    unsafe fn new_with_avx(fft_half: Arc<FftInline<f32>>, fft_quarter: Arc<FftInline<f32>>) -> Self {
         assert_eq!(
             fft_half.is_inverse(), fft_quarter.is_inverse(), 
             "fft_half and fft_quarter must both be inverse, or neither. got fft_half inverse={}, fft_quarter inverse={}",
@@ -471,7 +471,16 @@ impl<T: FFTnum> SplitRadixAvx<T> {
 
         assert_eq!(len % 16, 0, "SplitRadixAvx requires its FFT length to be a multiple of 16. Got {}", len);
 
-        let twiddles : Vec<_> = (0..quarter_len).map(|i| twiddles::single_twiddle(i, len, inverse)).collect();
+        let sixteenth_len = quarter_len / 4;
+        let twiddles : Vec<_> = (0..sixteenth_len).map(|i| {
+            let twiddle_chunk = [
+                twiddles::single_twiddle(i*4, len, inverse),
+                twiddles::single_twiddle(i*4+1, len, inverse),
+                twiddles::single_twiddle(i*4+2, len, inverse),
+                twiddles::single_twiddle(i*4+3, len, inverse),
+            ];
+            load_avx_f32!(twiddle_chunk, 0)
+        }).collect();
 
         Self {
             twiddles: twiddles.into_boxed_slice(),
@@ -481,9 +490,7 @@ impl<T: FFTnum> SplitRadixAvx<T> {
             inverse,
         }
     }
-}
 
-impl SplitRadixAvx<f32> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_fft_f32(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
         let half_len = self.len / 2;
@@ -532,7 +539,7 @@ impl SplitRadixAvx<f32> {
             let inner_quarter1_entry = load_avx_f32!(scratch_quarter1, i * 4);
             let inner_quarter3_entry = load_avx_f32!(scratch_quarter3, i * 4);
 
-            let twiddle = load_avx_f32!(self.twiddles, i * 4);
+            let twiddle = *self.twiddles.get_unchecked(i);
 
             let twiddled_quarter1 = complex_multiply_f32!(twiddle, inner_quarter1_entry);
             let twiddled_quarter3 = complex_conj_multiply_f32!(twiddle, inner_quarter3_entry);
