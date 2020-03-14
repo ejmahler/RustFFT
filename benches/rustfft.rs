@@ -364,7 +364,7 @@ fn bench_splitradix_scalar(b: &mut Bencher, len: usize) {
 
     let mut buffer = vec![Zero::zero(); len];
     let mut scratch = vec![Zero::zero(); fft.get_required_scratch_len()];
-    b.iter(|| {fft.process_inline(&mut buffer, &mut scratch);} );
+    b.iter(|| { fft.process_inline(&mut buffer, &mut scratch);} );
 }
 
 #[bench] fn splitradix_scalar________8(b: &mut Bencher) { bench_splitradix_scalar(b, 8); }
@@ -376,24 +376,24 @@ fn bench_splitradix_scalar(b: &mut Bencher, len: usize) {
 #[bench] fn splitradix_scalar_____1024(b: &mut Bencher) { bench_splitradix_scalar(b, 1024); }
 #[bench] fn splitradix_scalar____65536(b: &mut Bencher) { bench_splitradix_scalar(b, 65536); }
 #[bench] fn splitradix_scalar__1048576(b: &mut Bencher) { bench_splitradix_scalar(b, 1048576); }
-//#[bench] fn splitradix_scalar_16777216(b: &mut Bencher) { bench_splitradix_scalar(b, 16777216); }
+#[bench] fn splitradix_scalar_16777216(b: &mut Bencher) { bench_splitradix_scalar(b, 16777216); }
 
 
-fn get_splitradix_avx(len: usize) -> Arc<FFT<f32>> {
+fn get_splitradix_avx(len: usize) -> Arc<FftInline<f32>> {
     match len {
-        8 => Arc::new(MixedRadixAvx4x2::new(false)),
-        16 => Arc::new(MixedRadixAvx4x4::new(false)),
-        32 => Arc::new(MixedRadixAvx4x8::new(false)),
-        64 => Arc::new(MixedRadixAvx8x8::new(false)),
+        8 => Arc::new(MixedRadixAvx4x2::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        16 => Arc::new(MixedRadixAvx4x4::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        32 => Arc::new(MixedRadixAvx4x8::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        64 => Arc::new(MixedRadixAvx8x8::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
         _ => {
              let mut radishes = Vec::new();
-            radishes.push(Arc::new(MixedRadixAvx4x8::new(false)) as Arc<FFT<f32>>);
-            radishes.push(Arc::new(MixedRadixAvx8x8::new(false)) as Arc<FFT<f32>>);
+            radishes.push(Arc::new(MixedRadixAvx4x8::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")) as Arc<FftInline<f32>>);
+            radishes.push(Arc::new(MixedRadixAvx8x8::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")) as Arc<FftInline<f32>>);
 
             while radishes.last().unwrap().len() < len {
                 let quarter = Arc::clone(&radishes[radishes.len() - 2]);
                 let half = Arc::clone(&radishes[radishes.len() - 1]);
-                radishes.push(Arc::new(SplitRadixAvx::new(half, quarter)) as Arc<FFT<f32>>);
+                radishes.push(Arc::new(SplitRadixAvx::new(half, quarter).expect("Can't run benchmark because this machine doesn't have the required instruction sets")) as Arc<FftInline<f32>>);
             }
             Arc::clone(&radishes.last().unwrap())
         }
@@ -407,9 +407,11 @@ fn bench_splitradix_avx(b: &mut Bencher, len: usize) {
 
     let fft = get_splitradix_avx(len);
 
-    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; len];
-    let mut spectrum = signal.clone();
-    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
+    let mut buffer = vec![Zero::zero(); len];
+    let mut scratch = vec![Zero::zero(); fft.get_required_scratch_len()];
+    b.iter(|| {
+        fft.process_inline(&mut buffer, &mut scratch);
+    });
 }
 
 #[bench] fn splitradix_avx________8(b: &mut Bencher) { bench_splitradix_avx(b, 8); }
@@ -421,4 +423,4 @@ fn bench_splitradix_avx(b: &mut Bencher, len: usize) {
 #[bench] fn splitradix_avx_____1024(b: &mut Bencher) { bench_splitradix_avx(b, 1024); }
 #[bench] fn splitradix_avx____65536(b: &mut Bencher) { bench_splitradix_avx(b, 65536); }
 #[bench] fn splitradix_avx__1048576(b: &mut Bencher) { bench_splitradix_avx(b, 1048576); }
-//#[bench] fn splitradix_avx_16777216(b: &mut Bencher) { bench_splitradix_avx(b, 16777216); }
+#[bench] fn splitradix_avx_16777216(b: &mut Bencher) { bench_splitradix_avx(b, 16777216); }
