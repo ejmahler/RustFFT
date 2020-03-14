@@ -145,280 +145,6 @@ use std::arch::x86_64::*;
 use algorithm::simd::avx_utils::AvxComplexArrayf32;
 use algorithm::simd::avx_utils;
 
-
-
-// Split the array into evens and odds. IE, do a 2xN -> Nx2 transpose
-macro_rules! split_evens_f32 {
-    ($row0: expr, $row1: expr) => {{
-        let permuted0 = _mm256_permute2f128_ps($row0, $row1, 0x20);
-        let permuted1 = _mm256_permute2f128_ps($row0, $row1, 0x31);
-        let unpacked1 = _mm256_unpackhi_ps(permuted0, permuted1);
-        let unpacked0 = _mm256_unpacklo_ps(permuted0, permuted1);
-        let output1 = _mm256_permute_ps(unpacked1, 0xD8);
-        let output0 = _mm256_permute_ps(unpacked0, 0xD8);
-
-        (output0, output1)
-    }};
-}
-
-
-
-macro_rules! complex_multiply_f32 {
-    ($left: expr, $right: expr) => {{
-        // Extract the real and imaginary components from $left into 2 separate registers, using duplicate instructions
-        let left_real = _mm256_moveldup_ps($left);
-        let left_imag = _mm256_movehdup_ps($left);
-
-        // create a shuffled version of $right where the imaginary values are swapped with the reals
-        let right_shuffled = _mm256_permute_ps($right, 0xB1);
-
-        // multiply our duplicated imaginary left vector by our shuffled right vector. that will give us the right side of the traditional complex multiplication formula
-        let output_right = _mm256_mul_ps(left_imag, right_shuffled);
-
-        // use a FMA instruction to multiply together left side of the complex multiplication formula, then  alternatingly add and subtract the left side fro mthe right
-        _mm256_fmaddsub_ps(left_real, $right, output_right)
-    }};
-}
-
-// This variant assumes that `left` should be conjugated before multiplying
-// Thankfully, it is straightforward to roll this into existing instructions. Namely, we can get away with replacing "fmaddsub" with "fmsubadd"
-macro_rules! complex_conj_multiply_f32 {
-    ($left: expr, $right: expr) => {{
-        // Extract the real and imaginary components from $left into 2 separate registers, using duplicate instructions
-        let left_real = _mm256_moveldup_ps($left);
-        let left_imag = _mm256_movehdup_ps($left);
-
-        // create a shuffled version of $right where the imaginary values are swapped with the reals
-        let right_shuffled = _mm256_permute_ps($right, 0xB1);
-
-        // multiply our duplicated imaginary left vector by our shuffled right vector. that will give us the right side of the traditional complex multiplication formula
-        let output_right = _mm256_mul_ps(left_imag, right_shuffled);
-
-        // use a FMA instruction to multiply together left side of the complex multiplication formula, then  alternatingly add and subtract the left side fro mthe right
-        _mm256_fmsubadd_ps(left_real, $right, output_right)
-    }};
-}
-
-
-// Compute 4 parallel *column* butterfly 2's using AVX instructions
-macro_rules! column_butterfly2_avx_f32 {
-    ($row0: expr, $row1: expr) => {{
-        let output0 = _mm256_add_ps($row0, $row1);
-        let output1 = _mm256_sub_ps($row0, $row1);
-
-        (output0, output1)
-    }};
-}
-
-// Compute 4 parallel *column* butterfly 2's using AVX instructions
-// This variant will flip the sign of $row1 before each operation
-macro_rules! column_butterfly2_negaterow1_avx_f32 {
-    ($row0: expr, $row1: expr) => {{
-        let output0 = _mm256_sub_ps($row0, $row1);
-        let output1 = _mm256_add_ps($row0, $row1);
-
-        (output0, output1)
-    }};
-}
-
-
-// Apply the butterfly 4's twiddle factor (IE, rotate 90 degrees) to an entire row of elements
-macro_rules! butterfly4_twiddle_avx_f32 {
-    ($elements: expr, $inverse: expr) => {{
-        // As usual, it's easiest to swap all the reals with imaginaries, create a negated copy, then blend in the specific values we want to negate
-        let elements_swapped = _mm256_permute_ps($elements, 0xB1);
-        let elements_negated = _mm256_xor_ps(elements_swapped, _mm256_set1_ps(-0.0));
-
-        // Which negative we blend in depends on whether we're forward or inverse
-        let result = if $inverse {
-            _mm256_blend_ps(elements_swapped, elements_negated, 0x55)
-        } else {
-            _mm256_blend_ps(elements_swapped, elements_negated, 0xAA)
-        };
-
-        result
-    }};
-}
-
-// Apply the butterfly 4's twiddle factor (IE, rotate 90 degrees) to the odd elements of a row
-macro_rules! butterfly4_twiddle_alternating_avx_f32 {
-    ($elements: expr, $inverse: expr) => {{
-        // As usual, it's easiest to swap all the reals with imaginaries, create a negated copy, then blend in the specific values we want to negate
-        let elements_swapped = _mm256_permute_ps($elements, 0xB4);
-        let elements_negated = _mm256_xor_ps(elements_swapped, _mm256_set1_ps(-0.0));
-
-        // Which negative we blend in depends on whether we're forward or inverse
-        let result = if $inverse {
-            _mm256_blend_ps(elements_swapped, elements_negated, 0x44)
-        } else {
-            _mm256_blend_ps(elements_swapped, elements_negated, 0x88)
-        };
-
-        result
-    }};
-}
-
-// Compute 2 butterfly 4's across the pair of rows
-#[allow(unused)]
-macro_rules! butterfly4_pair_avx_f32 {
-    ($row0: expr, $row1: expr, $inverse: expr) => {{
-        // Rearrange the data before we do our butterfly 4s. This swaps the last 2 elements of butterfly0 with the first two elements of butterfly1
-        // The result is that all elements will be in place for us to do the first butterfly-2
-        let permuted0 = _mm256_permute2f128_ps($row0, $row1, 0x20);
-        let permuted1 = _mm256_permute2f128_ps($row0, $row1, 0x31);
-
-        // Do the first set of butterfly 2's
-        let (postbutterfly0, postbutterfly1_pretwiddle) = column_butterfly2_avx_f32!(permuted0, permuted1);
-
-        // Which negative we blend in depends on whether we're forward or inverse
-        let postbutterfly1 = butterfly4_twiddle_alternating_avx_f32!(postbutterfly1_pretwiddle, $inverse);
-
-        // use unpack instructions. conveniently, this will put everything in place for our second butterfly 2
-        let unpacked0 = _mm256_unpacklo_ps(postbutterfly0, postbutterfly1);
-        let unpacked1 = _mm256_unpackhi_ps(postbutterfly0, postbutterfly1);
-        let swapped0 = _mm256_permute_ps(unpacked0, 0xD8);
-        let swapped1 = _mm256_permute_ps(unpacked1, 0xD8);
-
-        // last set of butterfly 2's
-        let (final0, final1) = column_butterfly2_avx_f32!(swapped0, swapped1);
-
-        // Undo the permute that we did initially. The previous permute, followed by the unpack, will end up putting everything in its correct output location.
-        let unpermuted0 = _mm256_permute2f128_ps(final0, final1, 0x20);
-        let unpermuted1 = _mm256_permute2f128_ps(final0, final1, 0x31);
-
-        (unpermuted0, unpermuted1)
-    }};
-}
-
-// Compute a single butterfly8 using AVX instructions, where $row0 is an AVX register containing the first 4 complex elements,
-// $row1 is an AVX register containing the last 4 elements, and $twiddles is an AVX register containing the twiddle factors for a 2x4 cooley tukey step
-// TODO: try a split radix version of this? Seems like it would be hard, because there would only be 2 twiddle factors.
-macro_rules! butterfly8_avx_f32 {
-    ($row0: expr, $row1: expr, $twiddles: expr, $inverse: expr) => {{
-
-        // Do our butterfly 2's down the columns
-        let (intermediate0, intermediate1_pretwiddle) = column_butterfly2_avx_f32!($row0, $row1);
-
-        // Apply the size-8 twiddle factors
-        let intermediate1 = complex_multiply_f32!(intermediate1_pretwiddle, $twiddles);
-
-        // Rearrange the data before we do our butterfly 4s. This swaps the last 2 elements of butterfly0 with the first two elements of butterfly1
-        // The result is that we can then do a 4x butterfly 2, apply twiddles, use unpack instructions to transpose to the final output, then do another 4x butterfly 2
-        let permuted0 = _mm256_permute2f128_ps(intermediate0, intermediate1, 0x20);
-        let permuted1 = _mm256_permute2f128_ps(intermediate0, intermediate1, 0x31);
-
-        // Do the first set of butterfly 2's
-        let (postbutterfly0, postbutterfly1_pretwiddle) = column_butterfly2_avx_f32!(permuted0, permuted1);
-
-        // Which negative we blend in depends on whether we're forward or inverse
-        let postbutterfly1 = butterfly4_twiddle_alternating_avx_f32!(postbutterfly1_pretwiddle, $inverse);
-
-        // use unpack instructions to transpose, and to prepare for the final butterfly 2's
-        let unpermuted0 = _mm256_permute2f128_ps(postbutterfly0, postbutterfly1, 0x20);
-        let unpermuted1 = _mm256_permute2f128_ps(postbutterfly0, postbutterfly1, 0x31);
-        let unpacked0 = _mm256_unpacklo_ps(unpermuted0, unpermuted1);
-        let unpacked1 = _mm256_unpackhi_ps(unpermuted0, unpermuted1);
-        let swapped0 = _mm256_permute_ps(unpacked0, 0xD8);
-        let swapped1 = _mm256_permute_ps(unpacked1, 0xD8);
-
-        let (output0, output1) = column_butterfly2_avx_f32!(swapped0, swapped1);
-
-        (output0, output1)
-    }};
-}
-
-// Compute 4 parallel butterfly 4's , with $row containing the first element of each butterfly 4, $row1 containignthe second element of each, etc
-macro_rules! column_butterfly4_avx_f32 {
-    ($row0: expr, $row1: expr, $row2: expr, $row3: expr, $inverse: expr) => {{
-        // Perform the first set of size-2 FFTs. Make sure to apply the twiddle factor to element 3.
-        let (mid0, mid2) = column_butterfly2_avx_f32!($row0, $row2);
-        let (mid1, mid3_pretwiddle) = column_butterfly2_avx_f32!($row1, $row3);
-
-        // Apply element 3 inner twiddle factor by swapping reals with imaginaries, then negating the imaginaries
-        let mid3 = butterfly4_twiddle_avx_f32!(mid3_pretwiddle, $inverse);
-
-        // Perform the second set of size-2 FFTs
-        let (output0, output1) = column_butterfly2_avx_f32!(mid0, mid1);
-        let (output2, output3) = column_butterfly2_avx_f32!(mid2, mid3);
-
-        // Swap outputs 1 and 2 in the output to do a square transpose
-        (output0, output2, output1, output3)
-    }};
-}
-
-// Compute 4 parallel butterfly 8's , with $row containing the first element of each butterfly 4, $row1 containignthe second element of each, etc
-macro_rules! column_butterfly8_avx_f32 {
-    ($row0: expr, $row1: expr, $row2: expr, $row3: expr, $row4: expr, $row5: expr, $row6: expr, $row7: expr, $twiddles: expr, $inverse: expr) => {{
-
-        // Treat our butterfly-8 as a 2x4 array. first, do butterfly 4's down the columns
-        let (mid0, mid2, mid4, mid6) = column_butterfly4_avx_f32!($row0, $row2, $row4, $row6, $inverse);
-        let (mid1, mid3, mid5, mid7) = column_butterfly4_avx_f32!($row1, $row3, $row5, $row7, $inverse);
-
-        // Apply twiddle factors
-        // We want to negate the reals of the twiddles when multiplying mid7, but it's easier to conjugate the twiddles (Ie negate the imaginaries)
-        // Negating the reals before amultiplication is equivalent to negating the imaginaries before the multiplication and then negatign the entire result
-        // And we can "negate the entire result" by rollign that operation into the subsequent butterfly 2's
-        let mid3_twiddled = complex_multiply_f32!($twiddles, mid3);
-        let mid5_twiddled = butterfly4_twiddle_avx_f32!(mid5, $inverse);
-        let mid7_twiddled_neg = complex_conj_multiply_f32!($twiddles, mid7);
-
-        // Up next is a transpose, but since everything is already in registers, we don't actually have to transpose anything!
-        // "transposE" and thne apply butterfly 2's across the columns of our 4x2 array
-        let (final0, final1) = column_butterfly2_avx_f32!(mid0, mid1);
-        let (final2, final3) = column_butterfly2_avx_f32!(mid2, mid3_twiddled);
-        let (final4, final5) = column_butterfly2_avx_f32!(mid4, mid5_twiddled);
-        let (final6, final7) = column_butterfly2_negaterow1_avx_f32!(mid6, mid7_twiddled_neg); // Finish applying the negation from our twiddles by calling a different butterfly 2 function
-
-        (final0, final2, final4, final6, final1, final3, final5, final7)
-    }};
-}
-
-
-macro_rules! transpose_4x4_f32 {
-    ($col0: expr, $col1: expr, $col2: expr, $col3: expr) => {{
-        let unpacked_0 = _mm256_unpacklo_ps($col0, $col1);
-        let unpacked_1 = _mm256_unpackhi_ps($col0, $col1);
-        let unpacked_2 = _mm256_unpacklo_ps($col2, $col3);
-        let unpacked_3 = _mm256_unpackhi_ps($col2, $col3);
-
-        let swapped_0 = _mm256_permute_ps(unpacked_0, 0xD8);
-        let swapped_1 = _mm256_permute_ps(unpacked_1, 0xD8);
-        let swapped_2 = _mm256_permute_ps(unpacked_2, 0xD8);
-        let swapped_3 = _mm256_permute_ps(unpacked_3, 0xD8);
-
-        let output_0 = _mm256_permute2f128_ps(swapped_0, swapped_2, 0x20);
-        let output_1 = _mm256_permute2f128_ps(swapped_1, swapped_3, 0x20);
-        let output_2 = _mm256_permute2f128_ps(swapped_0, swapped_2, 0x31);
-        let output_3 = _mm256_permute2f128_ps(swapped_1, swapped_3, 0x31);
-
-        (output_0, output_1, output_2, output_3)
-    }};
-}
-
-
-// Compute a single butterfly16 using AVX instructions, where $row0 is an AVX register containing the first 4 complex elements,
-// $row1 is an AVX register containing the last 4 elements, etc and $twiddles is an array of 3 AVX registers containing the twiddle factors for a 4x4 mixed radix step
-macro_rules! butterfly16_avx_f32 {
-    ($row0: expr, $row1: expr, $row2: expr, $row3: expr, $twiddles: expr, $inverse: expr) => {{
-
-        // We're going to treat our input as a 3x4 2d array. First, do 3 butterfly 4's down the columns of that array.
-        let (mid0, mid1, mid2, mid3) = column_butterfly4_avx_f32!($row0, $row1, $row2, $row3, $inverse);
-
-        // Multiply in our twiddle factors
-        let mid1_twiddled = complex_multiply_f32!(mid1, $twiddles[0]);
-        let mid2_twiddled = complex_multiply_f32!(mid2, $twiddles[1]);
-        let mid3_twiddled = complex_multiply_f32!(mid3, $twiddles[2]);
-
-        // Transpose out 4x4 array
-        let (transposed0, transposed1, transposed2, transposed3) = transpose_4x4_f32!(mid0, mid1_twiddled, mid2_twiddled, mid3_twiddled);
-
-        // Do 4 butterfly 8's down the columns of our transpsed array
-        let (output0, output1, output2, output3) = column_butterfly4_avx_f32!(transposed0, transposed1, transposed2, transposed3, $inverse);
-
-        (output0, output1, output2, output3)
-    }};
-}
-
 pub struct SplitRadixAvx<T> {
     twiddles: Box<[__m256]>,
     fft_half: Arc<FftInline<T>>,
@@ -490,13 +216,13 @@ impl SplitRadixAvx<f32> {
         for i in 0..sixteenth_len {
             let chunk0 = buffer.load_complex_f32(i*16);
             let chunk1 = buffer.load_complex_f32(i*16 + 4);
-            let (even0, odd0) = split_evens_f32!(chunk0, chunk1);
+            let (even0, odd0) = avx_utils::split_evens_odds_f32(chunk0, chunk1);
 
             let chunk2 = buffer.load_complex_f32(i*16 + 8);
             let chunk3 = buffer.load_complex_f32(i*16 + 12);
-            let (even1, odd1) = split_evens_f32!(chunk2, chunk3);
+            let (even1, odd1) = avx_utils::split_evens_odds_f32(chunk2, chunk3);
 
-            let (quarter1, quarter3) = split_evens_f32!(odd0, odd1);
+            let (quarter1, quarter3) = avx_utils::split_evens_odds_f32(odd0, odd1);
 
             buffer.store_complex_f32(i*8, even0);
             buffer.store_complex_f32(i*8 + 4, even1);
@@ -528,16 +254,16 @@ impl SplitRadixAvx<f32> {
 
             let twiddle = *self.twiddles.get_unchecked(i);
 
-            let twiddled_quarter1 = complex_multiply_f32!(twiddle, inner_quarter1_entry);
-            let twiddled_quarter3 = complex_conj_multiply_f32!(twiddle, inner_quarter3_entry);
-            let (quarter_sum, quarter_diff) = column_butterfly2_avx_f32!(twiddled_quarter1, twiddled_quarter3);
+            let twiddled_quarter1 = avx_utils::complex_multiply_fma_f32(twiddle, inner_quarter1_entry);
+            let twiddled_quarter3 = avx_utils::complex_conjugated_multiply_fma_f32(twiddle, inner_quarter3_entry);
+            let (quarter_sum, quarter_diff) = avx_utils::column_butterfly2_f32(twiddled_quarter1, twiddled_quarter3);
 
-            let (output_i, output_i_half) = column_butterfly2_avx_f32!(inner_even0_entry, quarter_sum);
+            let (output_i, output_i_half) = avx_utils::column_butterfly2_f32(inner_even0_entry, quarter_sum);
 
             // compute the twiddle for quarter diff by rotating it
-            let quarter_diff_rotated = butterfly4_twiddle_avx_f32!(quarter_diff, self.is_inverse());
+            let quarter_diff_rotated = avx_utils::rotate90_f32(quarter_diff, self.is_inverse());
 
-            let (output_quarter1, output_quarter3) = column_butterfly2_avx_f32!(inner_even1_entry, quarter_diff_rotated);
+            let (output_quarter1, output_quarter3) = avx_utils::column_butterfly2_f32(inner_even1_entry, quarter_diff_rotated);
 
             buffer.store_complex_f32(i * 4, output_i);
             buffer.store_complex_f32(i * 4 + quarter_len, output_quarter1);
@@ -628,7 +354,32 @@ impl MixedRadixAvx4x2<f32> {
         let row0 = buffer.load_complex_f32(0);
         let row1 = buffer.load_complex_f32(4);
 
-        let (output0, output1) = butterfly8_avx_f32!(row0, row1, self.twiddles, self.inverse);
+        // Do our butterfly 2's down the columns
+        let (intermediate0, intermediate1_pretwiddle) = avx_utils::column_butterfly2_f32(row0, row1);
+
+        // Apply the size-8 twiddle factors
+        let intermediate1 = avx_utils::complex_multiply_fma_f32(intermediate1_pretwiddle, self.twiddles);
+
+        // Rearrange the data before we do our butterfly 4s. This swaps the last 2 elements of butterfly0 with the first two elements of butterfly1
+        // The result is that we can then do a 4x butterfly 2, apply twiddles, use unpack instructions to transpose to the final output, then do another 4x butterfly 2
+        let permuted0 = _mm256_permute2f128_ps(intermediate0, intermediate1, 0x20);
+        let permuted1 = _mm256_permute2f128_ps(intermediate0, intermediate1, 0x31);
+
+        // Do the first set of butterfly 2's
+        let (postbutterfly0, postbutterfly1_pretwiddle) = avx_utils::column_butterfly2_f32(permuted0, permuted1);
+
+        // Which negative we blend in depends on whether we're forward or inverse
+        let postbutterfly1 = avx_utils::rotate90_oddelements_f32(postbutterfly1_pretwiddle, self.inverse);
+
+        // use unpack instructions to transpose, and to prepare for the final butterfly 2's
+        let unpermuted0 = _mm256_permute2f128_ps(postbutterfly0, postbutterfly1, 0x20);
+        let unpermuted1 = _mm256_permute2f128_ps(postbutterfly0, postbutterfly1, 0x31);
+        let unpacked0 = _mm256_unpacklo_ps(unpermuted0, unpermuted1);
+        let unpacked1 = _mm256_unpackhi_ps(unpermuted0, unpermuted1);
+        let swapped0 = _mm256_permute_ps(unpacked0, 0xD8);
+        let swapped1 = _mm256_permute_ps(unpacked1, 0xD8);
+
+        let (output0, output1) = avx_utils::column_butterfly2_f32(swapped0, swapped1);
 
         buffer.store_complex_f32(0, output0);
         buffer.store_complex_f32(4, output1);
@@ -717,7 +468,19 @@ impl MixedRadixAvx4x4<f32> {
         let input2 = buffer.load_complex_f32(2 * 4);
         let input3 = buffer.load_complex_f32(3 * 4);
 
-        let (output0, output1, output2, output3) = butterfly16_avx_f32!(input0, input1, input2, input3, self.twiddles, self.inverse);
+        // We're going to treat our input as a 3x4 2d array. First, do 3 butterfly 4's down the columns of that array.
+        let (mid0, mid1, mid2, mid3) = avx_utils::column_butterfly4_f32(input0, input1, input2, input3, self.inverse);
+
+        // Multiply in our twiddle factors
+        let mid1_twiddled = avx_utils::complex_multiply_fma_f32(mid1, self.twiddles[0]);
+        let mid2_twiddled = avx_utils::complex_multiply_fma_f32(mid2, self.twiddles[1]);
+        let mid3_twiddled = avx_utils::complex_multiply_fma_f32(mid3, self.twiddles[2]);
+
+        // Transpose out 4x4 array
+        let (transposed0, transposed1, transposed2, transposed3) = avx_utils::transpose_4x4_f32(mid0, mid1_twiddled, mid2_twiddled, mid3_twiddled);
+
+        // Do 4 butterfly 8's down the columns of our transpsed array
+        let (output0, output1, output2, output3) = avx_utils::column_butterfly4_f32(transposed0, transposed1, transposed2, transposed3, self.inverse);
 
         buffer.store_complex_f32(0, output0);
         buffer.store_complex_f32(1 * 4, output1);
@@ -831,23 +594,23 @@ impl MixedRadixAvx4x8<f32> {
         let input7 = buffer.load_complex_f32(7 * 4);
 
         // We're going to treat our input as a 8x4 2d array. First, do 8 butterfly 4's down the columns of that array.
-        let (mid0, mid2, mid4, mid6) = column_butterfly4_avx_f32!(input0, input2, input4, input6, self.inverse);
-        let (mid1, mid3, mid5, mid7) = column_butterfly4_avx_f32!(input1, input3, input5, input7, self.inverse);
+        let (mid0, mid2, mid4, mid6) = avx_utils::column_butterfly4_f32(input0, input2, input4, input6, self.inverse);
+        let (mid1, mid3, mid5, mid7) = avx_utils::column_butterfly4_f32(input1, input3, input5, input7, self.inverse);
 
         // Multiply in our twiddle factors
-        let mid2_twiddled = complex_multiply_f32!(mid2, self.twiddles[0]);
-        let mid3_twiddled = complex_multiply_f32!(mid3, self.twiddles[1]);
-        let mid4_twiddled = complex_multiply_f32!(mid4, self.twiddles[2]);
-        let mid5_twiddled = complex_multiply_f32!(mid5, self.twiddles[3]);
-        let mid6_twiddled = complex_multiply_f32!(mid6, self.twiddles[4]);
-        let mid7_twiddled = complex_multiply_f32!(mid7, self.twiddles[5]);
+        let mid2_twiddled = avx_utils::complex_multiply_fma_f32(mid2, self.twiddles[0]);
+        let mid3_twiddled = avx_utils::complex_multiply_fma_f32(mid3, self.twiddles[1]);
+        let mid4_twiddled = avx_utils::complex_multiply_fma_f32(mid4, self.twiddles[2]);
+        let mid5_twiddled = avx_utils::complex_multiply_fma_f32(mid5, self.twiddles[3]);
+        let mid6_twiddled = avx_utils::complex_multiply_fma_f32(mid6, self.twiddles[4]);
+        let mid7_twiddled = avx_utils::complex_multiply_fma_f32(mid7, self.twiddles[5]);
 
         // Transpose our 8x4 array to an 8x4 array. Thankfully we can just do 2 4x4 transposes, which are only 8 instructions each!
-        let (transposed0, transposed1, transposed2, transposed3) = transpose_4x4_f32!(mid0, mid2_twiddled, mid4_twiddled, mid6_twiddled);
-        let (transposed4, transposed5, transposed6, transposed7) = transpose_4x4_f32!(mid1, mid3_twiddled, mid5_twiddled, mid7_twiddled);
+        let (transposed0, transposed1, transposed2, transposed3) = avx_utils::transpose_4x4_f32(mid0, mid2_twiddled, mid4_twiddled, mid6_twiddled);
+        let (transposed4, transposed5, transposed6, transposed7) = avx_utils::transpose_4x4_f32(mid1, mid3_twiddled, mid5_twiddled, mid7_twiddled);
 
         // Do 4 butterfly 8's down the columns of our transpsed array
-        let (output0, output1, output2, output3, output4, output5, output6, output7) = column_butterfly8_avx_f32!(transposed0, transposed1, transposed2, transposed3, transposed4, transposed5, transposed6, transposed7, self.twiddles_butterfly8, self.inverse);
+        let (output0, output1, output2, output3, output4, output5, output6, output7) = avx_utils::column_butterfly8_fma_f32(transposed0, transposed1, transposed2, transposed3, transposed4, transposed5, transposed6, transposed7, self.twiddles_butterfly8, self.inverse);
 
         buffer.store_complex_f32(0, output0);
         buffer.store_complex_f32(1 * 4, output1);
@@ -1005,20 +768,20 @@ impl MixedRadixAvx8x8<f32> {
         let input14 = buffer.load_complex_f32(14 * 4);
 
         // We're going to treat our input as a 8x8 2d array. First, do 8 butterfly 8's down the columns of that array.
-        let (mid0, mid2, mid4, mid6, mid8, mid10, mid12, mid14) = column_butterfly8_avx_f32!(input0, input2, input4, input6, input8, input10, input12, input14, self.twiddles_butterfly8, self.inverse);
+        let (mid0, mid2, mid4, mid6, mid8, mid10, mid12, mid14) = avx_utils::column_butterfly8_fma_f32(input0, input2, input4, input6, input8, input10, input12, input14, self.twiddles_butterfly8, self.inverse);
 
         // Apply twiddle factors to the first half of our data
-        let mid2_twiddled =  complex_multiply_f32!(mid2,  self.twiddles[0]);
-        let mid4_twiddled =  complex_multiply_f32!(mid4,  self.twiddles[2]);
-        let mid6_twiddled =  complex_multiply_f32!(mid6,  self.twiddles[4]);
-        let mid8_twiddled =  complex_multiply_f32!(mid8,  self.twiddles[6]);
-        let mid10_twiddled = complex_multiply_f32!(mid10, self.twiddles[8]);
-        let mid12_twiddled = complex_multiply_f32!(mid12, self.twiddles[10]);
-        let mid14_twiddled = complex_multiply_f32!(mid14, self.twiddles[12]);
+        let mid2_twiddled =  avx_utils::complex_multiply_fma_f32(mid2,  self.twiddles[0]);
+        let mid4_twiddled =  avx_utils::complex_multiply_fma_f32(mid4,  self.twiddles[2]);
+        let mid6_twiddled =  avx_utils::complex_multiply_fma_f32(mid6,  self.twiddles[4]);
+        let mid8_twiddled =  avx_utils::complex_multiply_fma_f32(mid8,  self.twiddles[6]);
+        let mid10_twiddled = avx_utils::complex_multiply_fma_f32(mid10, self.twiddles[8]);
+        let mid12_twiddled = avx_utils::complex_multiply_fma_f32(mid12, self.twiddles[10]);
+        let mid14_twiddled = avx_utils::complex_multiply_fma_f32(mid14, self.twiddles[12]);
 
         // Transpose the first half of this. After this, the compiler can spill this stuff, because it won't be needed until after the loads+butterfly8s+twiddles below are done
-        let (transposed0, transposed2,  transposed4,  transposed6)  = transpose_4x4_f32!(mid0, mid2_twiddled, mid4_twiddled, mid6_twiddled);
-        let (transposed1, transposed3,  transposed5,  transposed7)  = transpose_4x4_f32!(mid8_twiddled, mid10_twiddled, mid12_twiddled, mid14_twiddled);
+        let (transposed0, transposed2,  transposed4,  transposed6)  = avx_utils::transpose_4x4_f32(mid0, mid2_twiddled, mid4_twiddled, mid6_twiddled);
+        let (transposed1, transposed3,  transposed5,  transposed7)  = avx_utils::transpose_4x4_f32(mid8_twiddled, mid10_twiddled, mid12_twiddled, mid14_twiddled);
 
         // Now that the first half of our data has been transposed, the compiler is free to spill those registers to make room for the other half
         let input1 = buffer.load_complex_f32(1 * 4);
@@ -1029,23 +792,23 @@ impl MixedRadixAvx8x8<f32> {
         let input11 = buffer.load_complex_f32(11 * 4);
         let input13 = buffer.load_complex_f32(13 * 4);
         let input15 = buffer.load_complex_f32(15 * 4);
-        let (mid1, mid3, mid5, mid7, mid9, mid11, mid13, mid15) = column_butterfly8_avx_f32!(input1, input3, input5, input7, input9, input11, input13, input15, self.twiddles_butterfly8, self.inverse);
+        let (mid1, mid3, mid5, mid7, mid9, mid11, mid13, mid15) = avx_utils::column_butterfly8_fma_f32(input1, input3, input5, input7, input9, input11, input13, input15, self.twiddles_butterfly8, self.inverse);
 
         // Apply twiddle factors to the second half of our data
-        let mid3_twiddled =  complex_multiply_f32!(mid3,  self.twiddles[1]);
-        let mid5_twiddled =  complex_multiply_f32!(mid5,  self.twiddles[3]);
-        let mid7_twiddled =  complex_multiply_f32!(mid7,  self.twiddles[5]);
-        let mid9_twiddled =  complex_multiply_f32!(mid9,  self.twiddles[7]);
-        let mid11_twiddled = complex_multiply_f32!(mid11, self.twiddles[9]);
-        let mid13_twiddled = complex_multiply_f32!(mid13, self.twiddles[11]);
-        let mid15_twiddled = complex_multiply_f32!(mid15, self.twiddles[13]);
+        let mid3_twiddled =  avx_utils::complex_multiply_fma_f32(mid3,  self.twiddles[1]);
+        let mid5_twiddled =  avx_utils::complex_multiply_fma_f32(mid5,  self.twiddles[3]);
+        let mid7_twiddled =  avx_utils::complex_multiply_fma_f32(mid7,  self.twiddles[5]);
+        let mid9_twiddled =  avx_utils::complex_multiply_fma_f32(mid9,  self.twiddles[7]);
+        let mid11_twiddled = avx_utils::complex_multiply_fma_f32(mid11, self.twiddles[9]);
+        let mid13_twiddled = avx_utils::complex_multiply_fma_f32(mid13, self.twiddles[11]);
+        let mid15_twiddled = avx_utils::complex_multiply_fma_f32(mid15, self.twiddles[13]);
 
         // Transpose the second half of our 8x8
-        let (transposed8, transposed10, transposed12, transposed14) = transpose_4x4_f32!(mid1, mid3_twiddled, mid5_twiddled, mid7_twiddled);
-        let (transposed9, transposed11, transposed13, transposed15) = transpose_4x4_f32!(mid9_twiddled, mid11_twiddled, mid13_twiddled, mid15_twiddled);
+        let (transposed8, transposed10, transposed12, transposed14) = avx_utils::transpose_4x4_f32(mid1, mid3_twiddled, mid5_twiddled, mid7_twiddled);
+        let (transposed9, transposed11, transposed13, transposed15) = avx_utils::transpose_4x4_f32(mid9_twiddled, mid11_twiddled, mid13_twiddled, mid15_twiddled);
 
         // Do 4 butterfly 8's down the columns of our transposed array, and store the results
-        let (output0, output2, output4, output6, output8, output10, output12, output14) = column_butterfly8_avx_f32!(transposed0, transposed2, transposed4, transposed6, transposed8, transposed10, transposed12, transposed14, self.twiddles_butterfly8, self.inverse);
+        let (output0, output2, output4, output6, output8, output10, output12, output14) = avx_utils::column_butterfly8_fma_f32(transposed0, transposed2, transposed4, transposed6, transposed8, transposed10, transposed12, transposed14, self.twiddles_butterfly8, self.inverse);
         buffer.store_complex_f32(0, output0);
         buffer.store_complex_f32(2 * 4, output2);
         buffer.store_complex_f32(4 * 4, output4);
@@ -1056,7 +819,7 @@ impl MixedRadixAvx8x8<f32> {
         buffer.store_complex_f32(14 * 4, output14);
 
         // We freed up a bunch of registers, so we should easily have enough room to compute+store the other half of our butterfly 8s
-        let (output1, output3, output5, output7, output9, output11, output13, output15) = column_butterfly8_avx_f32!(transposed1, transposed3, transposed5, transposed7, transposed9, transposed11, transposed13, transposed15, self.twiddles_butterfly8, self.inverse);
+        let (output1, output3, output5, output7, output9, output11, output13, output15) = avx_utils::column_butterfly8_fma_f32(transposed1, transposed3, transposed5, transposed7, transposed9, transposed11, transposed13, transposed15, self.twiddles_butterfly8, self.inverse);
         buffer.store_complex_f32(1 * 4, output1);
         buffer.store_complex_f32(3 * 4, output3);
         buffer.store_complex_f32(5 * 4, output5);
