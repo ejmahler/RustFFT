@@ -63,40 +63,53 @@ pub unsafe fn complex_conjugated_multiply_fma_f32(left: __m256, right: __m256) -
     _mm256_fmsubadd_ps(left_real, right, output_right)
 }
 
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct Rotate90Config(__m256);
+impl Rotate90Config {
+    #[inline(always)]
+    pub unsafe fn get_from_inverse(is_inverse: bool) -> Self {
+        if is_inverse { 
+            Self(broadcast_complex_f32(Complex::new(-0.0, 0.0)))
+        } else {
+            Self(broadcast_complex_f32(Complex::new(0.0, -0.0)))
+        }
+    }
+}
 
-// Apply a multiplication by (0, i) or (0, -i), based on the value of inverse. Much faster than an actual multiplication.
+// Apply a multiplication by (0, i) or (0, -i), based on the value of rotation_config. Much faster than an actual multiplication.
 #[inline(always)]
-pub unsafe fn rotate90_f32(elements: __m256, inverse: bool) -> __m256 {
+pub unsafe fn rotate90_f32(elements: __m256, rotation_config: Rotate90Config) -> __m256 {
     // Our goal is to swap the reals with the imaginaries, then negate either the reals or the imaginaries, based on whether we're an inverse or not
     let elements_swapped = _mm256_permute_ps(elements, 0xB1);
 
     // Negating only half the elements is really hard. Instead, we're going to create a register with them all negated, and blend in the ones we want
-    let elements_negated = _mm256_xor_ps(elements_swapped, _mm256_set1_ps(-0.0));
-    let result = if inverse {
-        _mm256_blend_ps(elements_swapped, elements_negated, 0x55)
-    } else {
-        _mm256_blend_ps(elements_swapped, elements_negated, 0xAA)
-    };
-
-    result
+    _mm256_xor_ps(elements_swapped, rotation_config.0)
 }
 
-// Apply a multiplication by (0, i) or (0, -i), based on the value of inverse. Much faster than an actual multiplication.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct Rotate90OddConfig(__m256);
+impl Rotate90OddConfig {
+    #[inline(always)]
+    pub unsafe fn get_from_inverse(is_inverse: bool) -> Self {
+        if is_inverse { 
+            Self([Complex::new(0.0, 0.0), Complex::new(-0.0, 0.0), Complex::new(0.0, 0.0), Complex::new(-0.0, 0.0)].load_complex_f32(0))
+        } else {
+            Self([Complex::new(0.0, 0.0), Complex::new(0.0, -0.0), Complex::new(0.0, 0.0), Complex::new(0.0, -0.0)].load_complex_f32(0))
+        }
+    }
+}
+
+// Apply a multiplication by (0, i) or (0, -i), based on the value of rotation_config. Much faster than an actual multiplication.
 // This variant only applies the rotation to elements 1 and 3, leaving the other two untouched
 #[inline(always)]
-pub unsafe fn rotate90_oddelements_f32(elements: __m256, inverse: bool) -> __m256 {
+pub unsafe fn rotate90_oddelements_f32(elements: __m256, rotation_config: Rotate90OddConfig) -> __m256 {
     // Our goal is to swap the reals with the imaginaries, then negate either the reals or the imaginaries, based on whether we're an inverse or not
     let elements_swapped = _mm256_permute_ps(elements, 0xB4);
 
-    // Negating only half the elements is really hard. Instead, we're going to create a register with them all negated, and blend in the ones we want
-    let elements_negated = _mm256_xor_ps(elements_swapped, _mm256_set1_ps(-0.0));
-    let result = if inverse {
-        _mm256_blend_ps(elements_swapped, elements_negated, 0x44)
-    } else {
-        _mm256_blend_ps(elements_swapped, elements_negated, 0x88)
-    };
-
-    result
+    // We can negate the elements we want by xoring the row with a pre-set vector
+    _mm256_xor_ps(elements_swapped, rotation_config.0)
 }
 
 // Compute 4 parallel butterfly 2's using AVX instructions
@@ -122,13 +135,13 @@ pub unsafe fn column_butterfly2_f32_negaterow1(row0: __m256, row1: __m256) -> (_
 // Compute 4 parallel butterfly 4's using AVX instructions
 // rowN contains the nth element of each parallel FFT
 #[inline(always)]
-pub unsafe fn column_butterfly4_f32(row0: __m256, row1: __m256, row2: __m256, row3: __m256, inverse: bool) -> (__m256, __m256, __m256, __m256) {
+pub unsafe fn column_butterfly4_f32(row0: __m256, row1: __m256, row2: __m256, row3: __m256, twiddle_config: Rotate90Config) -> (__m256, __m256, __m256, __m256) {
     // Perform the first set of size-2 FFTs. Make sure to apply the twiddle factor to element 3.
     let (mid0, mid2) = column_butterfly2_f32(row0, row2);
     let (mid1, mid3_pretwiddle) = column_butterfly2_f32(row1, row3);
 
-    // Apply element 3 inner twiddle factor by swapping reals with imaginaries, then negating the imaginaries
-    let mid3 = rotate90_f32(mid3_pretwiddle, inverse);
+    // Apply element 3 inner twiddle factor
+    let mid3 = rotate90_f32(mid3_pretwiddle, twiddle_config);
 
     // Perform the second set of size-2 FFTs
     let (output0, output1) = column_butterfly2_f32(mid0, mid1);
@@ -142,17 +155,17 @@ pub unsafe fn column_butterfly4_f32(row0: __m256, row1: __m256, row2: __m256, ro
 // Compute 4 parallel butterfly 8's using AVX and FMA instructions
 // rowN contains the nth element of each parallel FFT
 #[inline(always)]
-pub unsafe fn column_butterfly8_fma_f32(row0: __m256, row1: __m256, row2: __m256, row3: __m256, row4: __m256, row5: __m256, row6: __m256, row7: __m256, twiddles: __m256, inverse: bool)  -> (__m256, __m256, __m256, __m256, __m256, __m256, __m256, __m256) {
+pub unsafe fn column_butterfly8_fma_f32(row0: __m256, row1: __m256, row2: __m256, row3: __m256, row4: __m256, row5: __m256, row6: __m256, row7: __m256, twiddles: __m256, twiddle_config: Rotate90Config)  -> (__m256, __m256, __m256, __m256, __m256, __m256, __m256, __m256) {
     // Treat our butterfly-8 as a 2x4 array. first, do butterfly 4's down the columns
-    let (mid0, mid2, mid4, mid6) = column_butterfly4_f32(row0, row2, row4, row6, inverse);
-    let (mid1, mid3, mid5, mid7) = column_butterfly4_f32(row1, row3, row5, row7, inverse);
+    let (mid0, mid2, mid4, mid6) = column_butterfly4_f32(row0, row2, row4, row6, twiddle_config);
+    let (mid1, mid3, mid5, mid7) = column_butterfly4_f32(row1, row3, row5, row7, twiddle_config);
 
     // Apply twiddle factors
     // We want to negate the reals of the twiddles when multiplying mid7, but it's easier to conjugate the twiddles (Ie negate the imaginaries)
     // Negating the reals before amultiplication is equivalent to negating the imaginaries before the multiplication and then negatign the entire result
     // And we can "negate the entire result" by rollign that operation into the subsequent butterfly 2's
     let mid3_twiddled       = complex_multiply_fma_f32(twiddles, mid3);
-    let mid5_twiddled       = rotate90_f32(mid5, inverse);
+    let mid5_twiddled       = rotate90_f32(mid5, twiddle_config);
     let mid7_twiddled_neg   = complex_conjugated_multiply_fma_f32(twiddles, mid7);
 
     // Up next is a transpose, but since everything is already in registers, we don't actually have to transpose anything!
