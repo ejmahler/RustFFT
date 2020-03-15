@@ -11,8 +11,10 @@ use algorithm::butterflies::*;
 use math_utils;
 
 
-const BUTTERFLIES: [usize; 8] = [2, 3, 4, 5, 6, 7, 8, 16];
-const COMPOSITE_BUTTERFLIES: [usize; 4] = [4, 6, 8, 16];
+const MIN_RADIX4_BITS: u32 = 5; // smallest size to consider radix 4 an option is 2^5 = 32
+const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option is 2^16 = 65536
+const BUTTERFLIES: [usize; 9] = [2, 3, 4, 5, 6, 7, 8, 16, 32];
+const COMPOSITE_BUTTERFLIES: [usize; 5] = [4, 6, 8, 16, 32];
 
 /// The FFT planner is used to make new FFT algorithm instances.
 ///
@@ -84,7 +86,8 @@ impl<T: FFTnum> FFTplanner<T> {
                 6 => Arc::new(Butterfly6::new(inverse)),
                 7 => Arc::new(Butterfly7::new(inverse)),
                 8 => Arc::new(Butterfly8::new(inverse)),
-                16 => T::make_butterfly16_as_butterfly(inverse),
+                16 => Arc::new(Butterfly16::new(inverse)),
+                32 => Arc::new(Butterfly32::new(inverse)),
                 _ => panic!("Invalid butterfly size: {}", len),
             }
         );
@@ -98,9 +101,20 @@ impl<T: FFTnum> FFTplanner<T> {
             let result = if factors.len() == 1 || COMPOSITE_BUTTERFLIES.contains(&len) {
                 self.plan_fft_single_factor(len)
 
-            } else if len.trailing_zeros() >= 2 {
-                let inner_fft = self.plan_fft_with_factors(len / 4, &factors[2..]);
-                T::make_4xn(inner_fft)
+            } else if len.trailing_zeros() <= MAX_RADIX4_BITS && len.trailing_zeros() >= MIN_RADIX4_BITS {
+                //the number of trailing zeroes in len is the number of `2` factors
+                //ie if len = 2048 * n, len.trailing_zeros() will equal 11 because 2^11 == 2048
+
+                if len.is_power_of_two() {
+                    Arc::new(Radix4::new(len, self.inverse))
+                } else {
+                    let left_len = 1 << len.trailing_zeros();
+                    let right_len = len / left_len;
+
+                    let (left_factors, right_factors) = factors.split_at(len.trailing_zeros() as usize);
+
+                    self.plan_mixed_radix(left_len, left_factors, right_len, right_factors)
+                }
 
             } else {
                 let sqrt = (len as f32).sqrt() as usize;
@@ -186,7 +200,8 @@ impl<T: FFTnum> FFTplanner<T> {
             6 => Arc::new(butterflies::Butterfly6::new(self.inverse)) as Arc<FFT<T>>,
             7 => Arc::new(butterflies::Butterfly7::new(self.inverse)) as Arc<FFT<T>>,
             8 => Arc::new(butterflies::Butterfly8::new(self.inverse)) as Arc<FFT<T>>,
-            16 => T::make_butterfly16_as_fft(self.inverse),
+            16 => Arc::new(butterflies::Butterfly16::new(self.inverse)) as Arc<FFT<T>>,
+            32 => Arc::new(butterflies::Butterfly32::new(self.inverse)) as Arc<FFT<T>>,
             _ => self.plan_prime(len),
         }
     }
