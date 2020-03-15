@@ -12,7 +12,6 @@ use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 use rustfft::algorithm::*;
 use rustfft::algorithm::butterflies::*;
-use rustfft::algorithm::mixed_radix_cxn::*;
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
@@ -241,62 +240,6 @@ fn bench_raders_setup(b: &mut Bencher, len: usize) {
 #[bench] fn raders_setup_65537(b: &mut Bencher) { bench_raders_setup(b, 65537); }
 #[bench] fn raders_setup_746497(b: &mut Bencher) { bench_raders_setup(b,746497); }
 
-fn make_4xn(len: usize) -> Arc<dyn FFT<f32>> {
-    if len == 16 {
-        Arc::new(Butterfly16::new(false))
-    } else if len == 8 {
-        Arc::new(Butterfly8::new(false))
-    } else {
-        Arc::new(MixedRadix4xN::new(make_4xn(len / 4)))
-    }
-}
-
-/// Times just the FFT execution (not allocation and pre-calculation)
-/// for a given length, specific to Rader's algorithm
-fn bench_mixed_4xn(b: &mut Bencher, len: usize) {
-    assert!(len % 2 == 0);
-    let fft = make_4xn(len);
-
-    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; len];
-    let mut spectrum = signal.clone();
-    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
-}
-
-#[bench] fn mixed_4xn_______64(b: &mut Bencher) { bench_mixed_4xn(b, 64); }
-#[bench] fn mixed_4xn______256(b: &mut Bencher) { bench_mixed_4xn(b, 256); }
-#[bench] fn mixed_4xn_____1024(b: &mut Bencher) { bench_mixed_4xn(b, 1024); }
-#[bench] fn mixed_4xn____65536(b: &mut Bencher) { bench_mixed_4xn(b, 65536); }
-#[bench] fn mixed_4xn__1048576(b: &mut Bencher) { bench_mixed_4xn(b, 1048576); }
-//#[bench] fn mixed_4xn_16777216(b: &mut Bencher) { bench_mixed_4xn(b, 16777216); }
-
-fn make_4xn_avx(len: usize) -> Arc<dyn FFT<f32>> {
-    if len == 16 {
-        Arc::new(MixedRadix4x4Avx::new(false))
-    } else if len == 8 {
-        Arc::new(Butterfly8::new(false))
-    } else {
-        Arc::new(MixedRadix4xnAvx::new(make_4xn_avx(len / 4)))
-    }
-}
-
-/// Times just the FFT execution (not allocation and pre-calculation)
-/// for a given length, specific to Rader's algorithm
-fn bench_mixed_4xn_avx(b: &mut Bencher, len: usize) {
-    assert!(len % 2 == 0);
-    let fft = make_4xn_avx(len);
-
-    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; len];
-    let mut spectrum = signal.clone();
-    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
-}
-
-#[bench] fn mixed_4xn_avx_______64(b: &mut Bencher) { bench_mixed_4xn_avx(b, 64); }
-#[bench] fn mixed_4xn_avx______256(b: &mut Bencher) { bench_mixed_4xn_avx(b, 256); }
-#[bench] fn mixed_4xn_avx_____1024(b: &mut Bencher) { bench_mixed_4xn_avx(b, 1024); }
-#[bench] fn mixed_4xn_avx____65536(b: &mut Bencher) { bench_mixed_4xn_avx(b, 65536); }
-#[bench] fn mixed_4xn_avx__1048576(b: &mut Bencher) { bench_mixed_4xn_avx(b, 1048576); }
-//#[bench] fn mixed_4xn_avx_16777216(b: &mut Bencher) { bench_mixed_4xn_avx(b, 16777216); }
-
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to Rader's algorithm
 fn bench_radix4(b: &mut Bencher, len: usize) {
@@ -315,24 +258,6 @@ fn bench_radix4(b: &mut Bencher, len: usize) {
 #[bench] fn radix4____65536(b: &mut Bencher) { bench_radix4(b, 65536); }
 #[bench] fn radix4__1048576(b: &mut Bencher) { bench_radix4(b, 1048576); }
 //#[bench] fn radix4_16777216(b: &mut Bencher) { bench_radix4(b, 16777216); }
-
-#[bench] 
-fn bench_butterfly16_naive(b: &mut Bencher) {
-    let fft = Butterfly16::new(false);
-
-    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; 16];
-    let mut spectrum = signal.clone();
-    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
-}
-
-#[bench] 
-fn bench_4x4_avx(b: &mut Bencher) {
-    let fft = MixedRadix4x4Avx::new(false);
-
-    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; 16];
-    let mut spectrum = signal.clone();
-    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
-}
 
 fn get_splitradix_scalar(len: usize) -> Arc<FftInline<f32>> {
     match len {
@@ -367,10 +292,6 @@ fn bench_splitradix_scalar(b: &mut Bencher, len: usize) {
     b.iter(|| { fft.process_inline(&mut buffer, &mut scratch);} );
 }
 
-#[bench] fn splitradix_scalar________8(b: &mut Bencher) { bench_splitradix_scalar(b, 8); }
-#[bench] fn splitradix_scalar_______16(b: &mut Bencher) { bench_splitradix_scalar(b, 16); }
-#[bench] fn splitradix_scalar_______32(b: &mut Bencher) { bench_splitradix_scalar(b, 32); }
-#[bench] fn splitradix_scalar_______64(b: &mut Bencher) { bench_splitradix_scalar(b, 64); }
 #[bench] fn splitradix_scalar______128(b: &mut Bencher) { bench_splitradix_scalar(b, 128); }
 #[bench] fn splitradix_scalar______256(b: &mut Bencher) { bench_splitradix_scalar(b, 256); }
 #[bench] fn splitradix_scalar_____1024(b: &mut Bencher) { bench_splitradix_scalar(b, 1024); }
@@ -403,7 +324,7 @@ fn get_splitradix_avx(len: usize) -> Arc<FftInline<f32>> {
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to Rader's algorithm
 fn bench_splitradix_avx(b: &mut Bencher, len: usize) {
-    assert!(len % 4 == 0);
+    assert!(len % 16 == 0);
 
     let fft = get_splitradix_avx(len);
 
@@ -414,13 +335,94 @@ fn bench_splitradix_avx(b: &mut Bencher, len: usize) {
     });
 }
 
-#[bench] fn splitradix_avx________8(b: &mut Bencher) { bench_splitradix_avx(b, 8); }
-#[bench] fn splitradix_avx_______16(b: &mut Bencher) { bench_splitradix_avx(b, 16); }
-#[bench] fn splitradix_avx_______32(b: &mut Bencher) { bench_splitradix_avx(b, 32); }
-#[bench] fn splitradix_avx_______64(b: &mut Bencher) { bench_splitradix_avx(b, 64); }
+
 #[bench] fn splitradix_avx______128(b: &mut Bencher) { bench_splitradix_avx(b, 128); }
 #[bench] fn splitradix_avx______256(b: &mut Bencher) { bench_splitradix_avx(b, 256); }
+#[bench] fn splitradix_avx______512(b: &mut Bencher) { bench_splitradix_avx(b, 512); }
 #[bench] fn splitradix_avx_____1024(b: &mut Bencher) { bench_splitradix_avx(b, 1024); }
-#[bench] fn splitradix_avx____65536(b: &mut Bencher) { bench_splitradix_avx(b, 65536); }
+#[bench] fn splitradix_avx_____2048(b: &mut Bencher) { bench_splitradix_avx(b, 2048); }
+#[bench] fn splitradix_avx_____4096(b: &mut Bencher) { bench_splitradix_avx(b, 4096); }
+#[bench] fn splitradix_avx_____8192(b: &mut Bencher) { bench_splitradix_avx(b, 8192); }
+#[bench] fn splitradix_avx____16384(b: &mut Bencher) { bench_splitradix_avx(b, 16384); }
+#[bench] fn splitradix_avx____32768(b: &mut Bencher) { bench_splitradix_avx(b, 32768); }
+#[bench] fn splitradix_avx___262144(b: &mut Bencher) { bench_splitradix_avx(b, 262144); }
 #[bench] fn splitradix_avx__1048576(b: &mut Bencher) { bench_splitradix_avx(b, 1048576); }
-#[bench] fn splitradix_avx_16777216(b: &mut Bencher) { bench_splitradix_avx(b, 16777216); }
+//#[bench] fn splitradix_avx_16777216(b: &mut Bencher) { bench_splitradix_avx(b, 16777216); }
+
+fn get_8xn_avx(len: usize) -> Arc<dyn FftInline<f32>> {
+    match len {
+        8 => Arc::new(MixedRadixAvx4x2::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        16 => Arc::new(MixedRadixAvx4x4::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        32 => Arc::new(MixedRadixAvx4x8::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        64 => Arc::new(MixedRadixAvx8x8::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        _ => {
+            let inner = get_8xn_avx(len / 8);
+            Arc::new(MixedRadix8xnAvx::new(inner).expect("Can't run benchmark because this machine doesn't have the required instruction sets"))
+        }
+    }
+}
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_mixed_8xn_avx(b: &mut Bencher, len: usize) {
+    assert!(len % 32 == 0);
+    let fft = get_8xn_avx(len);
+
+    let mut buffer = vec![Zero::zero(); len];
+    let mut scratch = vec![Zero::zero(); fft.get_required_scratch_len()];
+    b.iter(|| {
+        fft.process_inline(&mut buffer, &mut scratch);
+    });
+}
+
+#[bench] fn mixed_8xn_avx______128(b: &mut Bencher) { bench_mixed_8xn_avx(b, 128); }
+#[bench] fn mixed_8xn_avx______256(b: &mut Bencher) { bench_mixed_8xn_avx(b, 256); }
+#[bench] fn mixed_8xn_avx______512(b: &mut Bencher) { bench_mixed_8xn_avx(b, 512); }
+#[bench] fn mixed_8xn_avx_____1024(b: &mut Bencher) { bench_mixed_8xn_avx(b, 1024); }
+#[bench] fn mixed_8xn_avx_____2048(b: &mut Bencher) { bench_mixed_8xn_avx(b, 2048); }
+#[bench] fn mixed_8xn_avx_____4096(b: &mut Bencher) { bench_mixed_8xn_avx(b, 4096); }
+#[bench] fn mixed_8xn_avx_____8192(b: &mut Bencher) { bench_mixed_8xn_avx(b, 8192); }
+#[bench] fn mixed_8xn_avx____16384(b: &mut Bencher) { bench_mixed_8xn_avx(b, 16384); }
+#[bench] fn mixed_8xn_avx____32768(b: &mut Bencher) { bench_mixed_8xn_avx(b, 32768); }
+#[bench] fn mixed_8xn_avx____65536(b: &mut Bencher) { bench_mixed_8xn_avx(b, 65536); }
+#[bench] fn mixed_8xn_avx__1048576(b: &mut Bencher) { bench_mixed_8xn_avx(b, 1048576); }
+
+fn get_16xn_avx(len: usize) -> Arc<dyn FftInline<f32>> {
+    match len {
+        8 => Arc::new(MixedRadixAvx4x2::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        16 => Arc::new(MixedRadixAvx4x4::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        32 => Arc::new(MixedRadixAvx4x8::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        64 => Arc::new(MixedRadixAvx8x8::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        _ => {
+            let inner = get_16xn_avx(len / 16);
+            Arc::new(MixedRadix16xnAvx::new(inner).expect("Can't run benchmark because this machine doesn't have the required instruction sets"))
+        }
+    }
+}
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_mixed_16xn_avx(b: &mut Bencher, len: usize) {
+    assert!(len % 64 == 0);
+    let fft = get_16xn_avx(len);
+
+    let mut buffer = vec![Zero::zero(); len];
+    let mut scratch = vec![Zero::zero(); fft.get_required_scratch_len()];
+    b.iter(|| {
+        fft.process_inline(&mut buffer, &mut scratch);
+    });
+}
+
+#[bench] fn mixed_16xn_avx______128(b: &mut Bencher) { bench_mixed_16xn_avx(b, 128); }
+#[bench] fn mixed_16xn_avx______256(b: &mut Bencher) { bench_mixed_16xn_avx(b, 256); }
+#[bench] fn mixed_16xn_avx______512(b: &mut Bencher) { bench_mixed_16xn_avx(b, 512); }
+#[bench] fn mixed_16xn_avx_____1024(b: &mut Bencher) { bench_mixed_16xn_avx(b, 1024); }
+#[bench] fn mixed_16xn_avx_____2048(b: &mut Bencher) { bench_mixed_16xn_avx(b, 2048); }
+#[bench] fn mixed_16xn_avx_____4096(b: &mut Bencher) { bench_mixed_16xn_avx(b, 4096); }
+#[bench] fn mixed_16xn_avx_____8192(b: &mut Bencher) { bench_mixed_16xn_avx(b, 8192); }
+#[bench] fn mixed_16xn_avx____16384(b: &mut Bencher) { bench_mixed_16xn_avx(b, 16384); }
+#[bench] fn mixed_16xn_avx____32768(b: &mut Bencher) { bench_mixed_16xn_avx(b, 32768); }
+#[bench] fn mixed_16xn_avx____65536(b: &mut Bencher) { bench_mixed_16xn_avx(b, 65536); }
+#[bench] fn mixed_16xn_avx___262144(b: &mut Bencher) { bench_mixed_16xn_avx(b, 262144); }
+#[bench] fn mixed_16xn_avx__1048576(b: &mut Bencher) { bench_mixed_16xn_avx(b, 1048576); }
+//#[bench] fn mixed_4xn_avx_16777216(b: &mut Bencher) { bench_mixed_4xn_avx(b, 16777216); }

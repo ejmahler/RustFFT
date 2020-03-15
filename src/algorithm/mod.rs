@@ -9,9 +9,6 @@ mod simd;
 /// Hardcoded size-specfic FFT algorithms
 pub mod butterflies;
 
-/// Specialized mixed radix implementations where one of the facors is a compile-time constant
-pub mod mixed_radix_cxn;
-
 pub use self::mixed_radix::{MixedRadix, MixedRadixDoubleButterfly};
 pub use self::raders_algorithm::RadersAlgorithm;
 pub use self::radix4::Radix4;
