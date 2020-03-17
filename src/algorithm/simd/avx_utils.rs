@@ -250,3 +250,17 @@ pub unsafe fn split_evens_odds_f32(row0: __m256, row1: __m256) -> (__m256, __m25
 
     (output0, output1)
 }
+
+// Split the array into evens and odds
+#[inline(always)]
+pub unsafe fn interleave_evens_odds_f32(row0: __m256, row1: __m256) -> (__m256, __m256) {
+    let unpacked0 = _mm256_unpacklo_ps(row0, row1);
+    let unpacked1 = _mm256_unpackhi_ps(row0, row1);
+    let permuted0 = _mm256_permute_ps(unpacked0, 0xD8);
+    let permuted1 = _mm256_permute_ps(unpacked1, 0xD8);
+    let output0 = _mm256_permute2f128_ps(permuted0, permuted1, 0x20);
+    let output1 = _mm256_permute2f128_ps(permuted0, permuted1, 0x31);
+    
+
+    (output0, output1)
+}

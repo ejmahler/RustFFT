@@ -336,18 +336,94 @@ fn bench_splitradix_avx(b: &mut Bencher, len: usize) {
 }
 
 
-#[bench] fn splitradix_avx______128(b: &mut Bencher) { bench_splitradix_avx(b, 128); }
-#[bench] fn splitradix_avx______256(b: &mut Bencher) { bench_splitradix_avx(b, 256); }
-#[bench] fn splitradix_avx______512(b: &mut Bencher) { bench_splitradix_avx(b, 512); }
-#[bench] fn splitradix_avx_____1024(b: &mut Bencher) { bench_splitradix_avx(b, 1024); }
-#[bench] fn splitradix_avx_____2048(b: &mut Bencher) { bench_splitradix_avx(b, 2048); }
-#[bench] fn splitradix_avx_____4096(b: &mut Bencher) { bench_splitradix_avx(b, 4096); }
-#[bench] fn splitradix_avx_____8192(b: &mut Bencher) { bench_splitradix_avx(b, 8192); }
-#[bench] fn splitradix_avx____16384(b: &mut Bencher) { bench_splitradix_avx(b, 16384); }
-#[bench] fn splitradix_avx____32768(b: &mut Bencher) { bench_splitradix_avx(b, 32768); }
-#[bench] fn splitradix_avx___262144(b: &mut Bencher) { bench_splitradix_avx(b, 262144); }
+#[bench] fn splitradix_avx__0000128(b: &mut Bencher) { bench_splitradix_avx(b, 128); }
+#[bench] fn splitradix_avx__0000256(b: &mut Bencher) { bench_splitradix_avx(b, 256); }
+#[bench] fn splitradix_avx__0000512(b: &mut Bencher) { bench_splitradix_avx(b, 512); }
+#[bench] fn splitradix_avx__0001024(b: &mut Bencher) { bench_splitradix_avx(b, 1024); }
+#[bench] fn splitradix_avx__0002048(b: &mut Bencher) { bench_splitradix_avx(b, 2048); }
+#[bench] fn splitradix_avx__0004096(b: &mut Bencher) { bench_splitradix_avx(b, 4096); }
+#[bench] fn splitradix_avx__0008192(b: &mut Bencher) { bench_splitradix_avx(b, 8192); }
+#[bench] fn splitradix_avx__0016384(b: &mut Bencher) { bench_splitradix_avx(b, 16384); }
+#[bench] fn splitradix_avx__0032768(b: &mut Bencher) { bench_splitradix_avx(b, 32768); }
+#[bench] fn splitradix_avx__0065536(b: &mut Bencher) { bench_splitradix_avx(b, 65536); }
 #[bench] fn splitradix_avx__1048576(b: &mut Bencher) { bench_splitradix_avx(b, 1048576); }
 //#[bench] fn splitradix_avx_16777216(b: &mut Bencher) { bench_splitradix_avx(b, 16777216); }
+
+fn get_2xn_avx(len: usize) -> Arc<dyn FftInline<f32>> {
+    match len {
+        8 => Arc::new(MixedRadixAvx4x2::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        16 => Arc::new(MixedRadixAvx4x4::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        32 => Arc::new(MixedRadixAvx4x8::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        64 => Arc::new(MixedRadixAvx8x8::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        _ => {
+            let inner = get_2xn_avx(len / 2);
+            Arc::new(MixedRadix2xnAvx::new(inner).expect("Can't run benchmark because this machine doesn't have the required instruction sets"))
+        }
+    }
+}
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_mixed_2xn_avx(b: &mut Bencher, len: usize) {
+    assert!(len % 32 == 0);
+    let fft = get_2xn_avx(len);
+
+    let mut buffer = vec![Zero::zero(); len];
+    let mut scratch = vec![Zero::zero(); fft.get_required_scratch_len()];
+    b.iter(|| {
+        fft.process_inline(&mut buffer, &mut scratch);
+    });
+}
+
+#[bench] fn mixed_2xn_avx__0000128(b: &mut Bencher) { bench_mixed_2xn_avx(b, 128); }
+#[bench] fn mixed_2xn_avx__0000256(b: &mut Bencher) { bench_mixed_2xn_avx(b, 256); }
+#[bench] fn mixed_2xn_avx__0000512(b: &mut Bencher) { bench_mixed_2xn_avx(b, 512); }
+#[bench] fn mixed_2xn_avx__0001024(b: &mut Bencher) { bench_mixed_2xn_avx(b, 1024); }
+#[bench] fn mixed_2xn_avx__0002048(b: &mut Bencher) { bench_mixed_2xn_avx(b, 2048); }
+#[bench] fn mixed_2xn_avx__0004096(b: &mut Bencher) { bench_mixed_2xn_avx(b, 4096); }
+#[bench] fn mixed_2xn_avx__0008192(b: &mut Bencher) { bench_mixed_2xn_avx(b, 8192); }
+#[bench] fn mixed_2xn_avx__0016384(b: &mut Bencher) { bench_mixed_2xn_avx(b, 16384); }
+#[bench] fn mixed_2xn_avx__0032768(b: &mut Bencher) { bench_mixed_2xn_avx(b, 32768); }
+#[bench] fn mixed_2xn_avx__0065536(b: &mut Bencher) { bench_mixed_2xn_avx(b, 65536); }
+#[bench] fn mixed_2xn_avx__1048576(b: &mut Bencher) { bench_mixed_2xn_avx(b, 1048576); }
+
+fn get_4xn_avx(len: usize) -> Arc<dyn FftInline<f32>> {
+    match len {
+        8 => Arc::new(MixedRadixAvx4x2::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        16 => Arc::new(MixedRadixAvx4x4::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        32 => Arc::new(MixedRadixAvx4x8::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        64 => Arc::new(MixedRadixAvx8x8::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        _ => {
+            let inner = get_4xn_avx(len / 4);
+            Arc::new(MixedRadix4xnAvx::new(inner).expect("Can't run benchmark because this machine doesn't have the required instruction sets"))
+        }
+    }
+}
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_mixed_4xn_avx(b: &mut Bencher, len: usize) {
+    assert!(len % 32 == 0);
+    let fft = get_4xn_avx(len);
+
+    let mut buffer = vec![Zero::zero(); len];
+    let mut scratch = vec![Zero::zero(); fft.get_required_scratch_len()];
+    b.iter(|| {
+        fft.process_inline(&mut buffer, &mut scratch);
+    });
+}
+
+#[bench] fn mixed_4xn_avx__0000128(b: &mut Bencher) { bench_mixed_4xn_avx(b, 128); }
+#[bench] fn mixed_4xn_avx__0000256(b: &mut Bencher) { bench_mixed_4xn_avx(b, 256); }
+#[bench] fn mixed_4xn_avx__0000512(b: &mut Bencher) { bench_mixed_4xn_avx(b, 512); }
+#[bench] fn mixed_4xn_avx__0001024(b: &mut Bencher) { bench_mixed_4xn_avx(b, 1024); }
+#[bench] fn mixed_4xn_avx__0002048(b: &mut Bencher) { bench_mixed_4xn_avx(b, 2048); }
+#[bench] fn mixed_4xn_avx__0004096(b: &mut Bencher) { bench_mixed_4xn_avx(b, 4096); }
+#[bench] fn mixed_4xn_avx__0008192(b: &mut Bencher) { bench_mixed_4xn_avx(b, 8192); }
+#[bench] fn mixed_4xn_avx__0016384(b: &mut Bencher) { bench_mixed_4xn_avx(b, 16384); }
+#[bench] fn mixed_4xn_avx__0032768(b: &mut Bencher) { bench_mixed_4xn_avx(b, 32768); }
+#[bench] fn mixed_4xn_avx__0065536(b: &mut Bencher) { bench_mixed_4xn_avx(b, 65536); }
+#[bench] fn mixed_4xn_avx__1048576(b: &mut Bencher) { bench_mixed_4xn_avx(b, 1048576); }
 
 fn get_8xn_avx(len: usize) -> Arc<dyn FftInline<f32>> {
     match len {
@@ -375,16 +451,16 @@ fn bench_mixed_8xn_avx(b: &mut Bencher, len: usize) {
     });
 }
 
-#[bench] fn mixed_8xn_avx______128(b: &mut Bencher) { bench_mixed_8xn_avx(b, 128); }
-#[bench] fn mixed_8xn_avx______256(b: &mut Bencher) { bench_mixed_8xn_avx(b, 256); }
-#[bench] fn mixed_8xn_avx______512(b: &mut Bencher) { bench_mixed_8xn_avx(b, 512); }
-#[bench] fn mixed_8xn_avx_____1024(b: &mut Bencher) { bench_mixed_8xn_avx(b, 1024); }
-#[bench] fn mixed_8xn_avx_____2048(b: &mut Bencher) { bench_mixed_8xn_avx(b, 2048); }
-#[bench] fn mixed_8xn_avx_____4096(b: &mut Bencher) { bench_mixed_8xn_avx(b, 4096); }
-#[bench] fn mixed_8xn_avx_____8192(b: &mut Bencher) { bench_mixed_8xn_avx(b, 8192); }
-#[bench] fn mixed_8xn_avx____16384(b: &mut Bencher) { bench_mixed_8xn_avx(b, 16384); }
-#[bench] fn mixed_8xn_avx____32768(b: &mut Bencher) { bench_mixed_8xn_avx(b, 32768); }
-#[bench] fn mixed_8xn_avx____65536(b: &mut Bencher) { bench_mixed_8xn_avx(b, 65536); }
+#[bench] fn mixed_8xn_avx__0000128(b: &mut Bencher) { bench_mixed_8xn_avx(b, 128); }
+#[bench] fn mixed_8xn_avx__0000256(b: &mut Bencher) { bench_mixed_8xn_avx(b, 256); }
+#[bench] fn mixed_8xn_avx__0000512(b: &mut Bencher) { bench_mixed_8xn_avx(b, 512); }
+#[bench] fn mixed_8xn_avx__0001024(b: &mut Bencher) { bench_mixed_8xn_avx(b, 1024); }
+#[bench] fn mixed_8xn_avx__0002048(b: &mut Bencher) { bench_mixed_8xn_avx(b, 2048); }
+#[bench] fn mixed_8xn_avx__0004096(b: &mut Bencher) { bench_mixed_8xn_avx(b, 4096); }
+#[bench] fn mixed_8xn_avx__0008192(b: &mut Bencher) { bench_mixed_8xn_avx(b, 8192); }
+#[bench] fn mixed_8xn_avx__0016384(b: &mut Bencher) { bench_mixed_8xn_avx(b, 16384); }
+#[bench] fn mixed_8xn_avx__0032768(b: &mut Bencher) { bench_mixed_8xn_avx(b, 32768); }
+#[bench] fn mixed_8xn_avx__0065536(b: &mut Bencher) { bench_mixed_8xn_avx(b, 65536); }
 #[bench] fn mixed_8xn_avx__1048576(b: &mut Bencher) { bench_mixed_8xn_avx(b, 1048576); }
 
 fn get_16xn_avx(len: usize) -> Arc<dyn FftInline<f32>> {
@@ -413,16 +489,16 @@ fn bench_mixed_16xn_avx(b: &mut Bencher, len: usize) {
     });
 }
 
-#[bench] fn mixed_16xn_avx______128(b: &mut Bencher) { bench_mixed_16xn_avx(b, 128); }
-#[bench] fn mixed_16xn_avx______256(b: &mut Bencher) { bench_mixed_16xn_avx(b, 256); }
-#[bench] fn mixed_16xn_avx______512(b: &mut Bencher) { bench_mixed_16xn_avx(b, 512); }
-#[bench] fn mixed_16xn_avx_____1024(b: &mut Bencher) { bench_mixed_16xn_avx(b, 1024); }
-#[bench] fn mixed_16xn_avx_____2048(b: &mut Bencher) { bench_mixed_16xn_avx(b, 2048); }
-#[bench] fn mixed_16xn_avx_____4096(b: &mut Bencher) { bench_mixed_16xn_avx(b, 4096); }
-#[bench] fn mixed_16xn_avx_____8192(b: &mut Bencher) { bench_mixed_16xn_avx(b, 8192); }
-#[bench] fn mixed_16xn_avx____16384(b: &mut Bencher) { bench_mixed_16xn_avx(b, 16384); }
-#[bench] fn mixed_16xn_avx____32768(b: &mut Bencher) { bench_mixed_16xn_avx(b, 32768); }
-#[bench] fn mixed_16xn_avx____65536(b: &mut Bencher) { bench_mixed_16xn_avx(b, 65536); }
-#[bench] fn mixed_16xn_avx___262144(b: &mut Bencher) { bench_mixed_16xn_avx(b, 262144); }
+#[bench] fn mixed_16xn_avx__0000128(b: &mut Bencher) { bench_mixed_16xn_avx(b, 128); }
+#[bench] fn mixed_16xn_avx__0000256(b: &mut Bencher) { bench_mixed_16xn_avx(b, 256); }
+#[bench] fn mixed_16xn_avx__0000512(b: &mut Bencher) { bench_mixed_16xn_avx(b, 512); }
+#[bench] fn mixed_16xn_avx__0001024(b: &mut Bencher) { bench_mixed_16xn_avx(b, 1024); }
+#[bench] fn mixed_16xn_avx__0002048(b: &mut Bencher) { bench_mixed_16xn_avx(b, 2048); }
+#[bench] fn mixed_16xn_avx__0004096(b: &mut Bencher) { bench_mixed_16xn_avx(b, 4096); }
+#[bench] fn mixed_16xn_avx__0008192(b: &mut Bencher) { bench_mixed_16xn_avx(b, 8192); }
+#[bench] fn mixed_16xn_avx__0016384(b: &mut Bencher) { bench_mixed_16xn_avx(b, 16384); }
+#[bench] fn mixed_16xn_avx__0032768(b: &mut Bencher) { bench_mixed_16xn_avx(b, 32768); }
+#[bench] fn mixed_16xn_avx__0065536(b: &mut Bencher) { bench_mixed_16xn_avx(b, 65536); }
+#[bench] fn mixed_16xn_avx__0262144(b: &mut Bencher) { bench_mixed_16xn_avx(b, 262144); }
 #[bench] fn mixed_16xn_avx__1048576(b: &mut Bencher) { bench_mixed_16xn_avx(b, 1048576); }
 //#[bench] fn mixed_4xn_avx_16777216(b: &mut Bencher) { bench_mixed_4xn_avx(b, 16777216); }

@@ -81,9 +81,20 @@ impl MixedRadix2xnAvx<f32> {
         }
 
         // transpose for the output. make sure to slice off any extra scratch first
-        let scratch = &mut scratch[..len];
-        transpose::transpose(buffer, scratch, half_len, 2);
-        buffer.copy_from_slice(scratch);
+        let scratch = &mut scratch[..half_len];
+        scratch.copy_from_slice(&buffer[..half_len]);
+
+        for i in 0..eigth_len {
+            let input0 = scratch.load_complex_f32(i * 4); 
+            let input1 = buffer.load_complex_f32(i * 4 + half_len);
+
+            // Transpose the 8x4 array and scatter them
+            let (transposed0, transposed1) = avx_utils::interleave_evens_odds_f32(input0, input1);
+
+            // store the first chunk directly back into 
+            buffer.store_complex_f32(i * 8, transposed0);
+            buffer.store_complex_f32(i * 8 + 4, transposed1);
+        }
     }
 }
 default impl<T: FFTnum> FftInline<T> for MixedRadix2xnAvx<T> {
@@ -203,9 +214,24 @@ impl MixedRadix4xnAvx<f32> {
         }
 
         // transpose for the output. make sure to slice off any extra scratch first
-        let scratch = &mut scratch[..len];
-        transpose::transpose(buffer, scratch, quarter_len, 4);
-        buffer.copy_from_slice(scratch);
+        let scratch = &mut scratch[..(len - quarter_len)];
+        scratch.copy_from_slice(&buffer[..(len-quarter_len)]);
+
+        for i in 0..sixteenth_len {
+            let input0 = scratch.load_complex_f32(i * 4); 
+            let input1 = scratch.load_complex_f32(i * 4 + quarter_len);
+            let input2 = scratch.load_complex_f32(i * 4 + quarter_len*2);
+            let input3 = buffer.load_complex_f32(i * 4 + quarter_len*3);
+
+            // Transpose the 8x4 array and scatter them
+            let (transposed0, transposed1, transposed2, transposed3) = avx_utils::transpose_4x4_f32(input0, input1, input2, input3);
+
+            // store the first chunk directly back into 
+            buffer.store_complex_f32(i * 16, transposed0);
+            buffer.store_complex_f32(i * 16 + 4, transposed1);
+            buffer.store_complex_f32(i * 16 + 4*2, transposed2);
+            buffer.store_complex_f32(i * 16 + 4*3, transposed3);
+        }
     }
 }
 default impl<T: FFTnum> FftInline<T> for MixedRadix4xnAvx<T> {
@@ -339,7 +365,31 @@ impl MixedRadix8xnAvx<f32> {
 
         // transpose for the output. make sure to slice off any extra scratch first
         let scratch = &mut scratch[..len];
-        transpose::transpose(buffer, scratch, eigth_len, 8);
+
+        for i in 0..thirtysecond_len {
+            let input0 = buffer.load_complex_f32(i * 4); 
+            let input1 = buffer.load_complex_f32(i * 4 + eigth_len);
+            let input2 = buffer.load_complex_f32(i * 4 + eigth_len*2);
+            let input3 = buffer.load_complex_f32(i * 4 + eigth_len*3);
+            let input4 = buffer.load_complex_f32(i * 4 + eigth_len*4);
+            let input5 = buffer.load_complex_f32(i * 4 + eigth_len*5);
+            let input6 = buffer.load_complex_f32(i * 4 + eigth_len*6);
+            let input7 = buffer.load_complex_f32(i * 4 + eigth_len*7);
+
+            // Transpose the 8x4 array and scatter them
+            let (transposed0, transposed1, transposed2, transposed3) = avx_utils::transpose_4x4_f32(input0, input1, input2, input3);
+            let (transposed4, transposed5, transposed6, transposed7) = avx_utils::transpose_4x4_f32(input4, input5, input6, input7);
+
+            // store the first chunk directly back into 
+            scratch.store_complex_f32(i * 32, transposed0);
+            scratch.store_complex_f32(i * 32 + 4, transposed4);
+            scratch.store_complex_f32(i * 32 + 4*2, transposed1);
+            scratch.store_complex_f32(i * 32 + 4*3, transposed5);
+            scratch.store_complex_f32(i * 32 + 4*4, transposed2);
+            scratch.store_complex_f32(i * 32 + 4*5, transposed6);
+            scratch.store_complex_f32(i * 32 + 4*6, transposed3);
+            scratch.store_complex_f32(i * 32 + 4*7, transposed7);
+        }
         buffer.copy_from_slice(scratch);
     }
 }
@@ -507,8 +557,51 @@ impl MixedRadix16xnAvx<f32> {
         }
 
         // transpose for the output. make sure to slice off any extra scratch first
+       // transpose for the output. make sure to slice off any extra scratch first
         let scratch = &mut scratch[..len];
-        transpose::transpose(buffer, scratch, sixteenth_len, 16);
+
+        for i in 0..sixtyfourth_len {
+            let input0  = buffer.load_complex_f32(i * 4); 
+            let input1  = buffer.load_complex_f32(i * 4 + sixteenth_len);
+            let input2  = buffer.load_complex_f32(i * 4 + sixteenth_len*2);
+            let input3  = buffer.load_complex_f32(i * 4 + sixteenth_len*3);
+            let input4  = buffer.load_complex_f32(i * 4 + sixteenth_len*4);
+            let input5  = buffer.load_complex_f32(i * 4 + sixteenth_len*5);
+            let input6  = buffer.load_complex_f32(i * 4 + sixteenth_len*6);
+            let input7  = buffer.load_complex_f32(i * 4 + sixteenth_len*7);
+            let input8  = buffer.load_complex_f32(i * 4 + sixteenth_len*8); 
+            let input9  = buffer.load_complex_f32(i * 4 + sixteenth_len*9);
+            let input10 = buffer.load_complex_f32(i * 4 + sixteenth_len*10);
+            let input11 = buffer.load_complex_f32(i * 4 + sixteenth_len*11);
+
+            // Transpose the 8x4 array and scatter them
+            let (transposed0,  transposed1,  transposed2,  transposed3)  = avx_utils::transpose_4x4_f32(input0, input1, input2, input3);
+            scratch.store_complex_f32(i * 64, transposed0);
+            let (transposed4,  transposed5,  transposed6,  transposed7)  = avx_utils::transpose_4x4_f32(input4, input5, input6, input7);
+            scratch.store_complex_f32(i * 64 + 4, transposed4);
+            let (transposed8,  transposed9,  transposed10, transposed11) = avx_utils::transpose_4x4_f32(input8, input9, input10, input11);
+            scratch.store_complex_f32(i * 64 + 4*2, transposed8);
+            let input12 = buffer.load_complex_f32(i * 4 + sixteenth_len*12);
+            let input13 = buffer.load_complex_f32(i * 4 + sixteenth_len*13);
+            let input14 = buffer.load_complex_f32(i * 4 + sixteenth_len*14);
+            let input15 = buffer.load_complex_f32(i * 4 + sixteenth_len*15);
+            let (transposed12, transposed13, transposed14, transposed15) = avx_utils::transpose_4x4_f32(input12, input13, input14, input15);
+
+            // store the first chunk directly back into 
+            scratch.store_complex_f32(i * 64 + 4*3, transposed12);
+            scratch.store_complex_f32(i * 64 + 4*4, transposed1);
+            scratch.store_complex_f32(i * 64 + 4*5, transposed5);
+            scratch.store_complex_f32(i * 64 + 4*6, transposed9);
+            scratch.store_complex_f32(i * 64 + 4*7, transposed13);
+            scratch.store_complex_f32(i * 64 + 4*8, transposed2);
+            scratch.store_complex_f32(i * 64 + 4*9, transposed6);
+            scratch.store_complex_f32(i * 64 + 4*10, transposed10);
+            scratch.store_complex_f32(i * 64 + 4*11, transposed14);
+            scratch.store_complex_f32(i * 64 + 4*12, transposed3);
+            scratch.store_complex_f32(i * 64 + 4*13, transposed7);
+            scratch.store_complex_f32(i * 64 + 4*14, transposed11);
+            scratch.store_complex_f32(i * 64 + 4*15, transposed15);
+        }
         buffer.copy_from_slice(scratch);
     }
 }
