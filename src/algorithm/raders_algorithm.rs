@@ -7,7 +7,6 @@ use strength_reduce::StrengthReducedUsize;
 use common::{FFTnum, verify_length, verify_length_divisible};
 
 use math_utils;
-use twiddles;
 use ::{Length, IsInverse, FFT};
 
 /// Implementation of Rader's Algorithm
@@ -73,7 +72,7 @@ impl<T: FFTnum> RadersAlgorithm<T> {
         let mut inner_fft_input = vec![Complex::zero(); inner_fft_len];
         let mut twiddle_input = 1;
         for input_cell in &mut inner_fft_input {
-            let twiddle = twiddles::single_twiddle(twiddle_input, len, inner_fft.is_inverse());
+            let twiddle = T::generate_twiddle_factor(twiddle_input, len, inner_fft.is_inverse());
             *input_cell = twiddle * unity_scale;
 
             twiddle_input = (twiddle_input * primitive_root_inverse) % reduced_len;

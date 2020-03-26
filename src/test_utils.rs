@@ -97,12 +97,12 @@ pub fn check_inline_fft_algorithm(fft: &FftInline<f32>, size: usize, inverse: bo
         dft.process_inline(chunk, &mut expected_scratch);
     }
 
-    dbg!(&expected_buffer);
-    dbg!(&actual_buffer);
+    // dbg!(&expected_buffer);
+    // dbg!(&actual_buffer);
 
-    let diff: Vec<_> = expected_buffer.iter().zip(actual_buffer.iter()).map(|(a,b)| a-b).collect();
+    // let diff: Vec<_> = expected_buffer.iter().zip(actual_buffer.iter()).map(|(a,b)| a-b).collect();
 
-    dbg!(diff);
+    // dbg!(diff);
     assert!(compare_vectors(&expected_buffer, &actual_buffer), "process() failed, length = {}, inverse = {}", size, inverse);
 }
 

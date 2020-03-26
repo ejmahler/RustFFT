@@ -209,14 +209,95 @@ fn bench_raders(b: &mut Bencher, len: usize) {
     b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
 }
 
-#[bench] fn raders_0005(b: &mut Bencher) { bench_raders(b,  5); }
-#[bench] fn raders_0017(b: &mut Bencher) { bench_raders(b,  17); }
-#[bench] fn raders_0151(b: &mut Bencher) { bench_raders(b,  151); }
-#[bench] fn raders_0257(b: &mut Bencher) { bench_raders(b,  257); }
-#[bench] fn raders_1009(b: &mut Bencher) { bench_raders(b,  1009); }
-#[bench] fn raders_2017(b: &mut Bencher) { bench_raders(b,  2017); }
-#[bench] fn raders_65537(b: &mut Bencher) { bench_raders(b, 65537); }
-#[bench] fn raders_746497(b: &mut Bencher) { bench_raders(b,746497); }
+#[bench] fn raders_prime_0005(b: &mut Bencher) { bench_raders(b,  5); }
+#[bench] fn raders_prime_0017(b: &mut Bencher) { bench_raders(b,  17); }
+#[bench] fn raders_prime_0149(b: &mut Bencher) { bench_raders(b,  149); }
+#[bench] fn raders_prime_0151(b: &mut Bencher) { bench_raders(b,  151); }
+#[bench] fn raders_prime_0251(b: &mut Bencher) { bench_raders(b,  251); }
+#[bench] fn raders_prime_0257(b: &mut Bencher) { bench_raders(b,  257); }
+#[bench] fn raders_prime_1009(b: &mut Bencher) { bench_raders(b,  1009); }
+#[bench] fn raders_prime_2017(b: &mut Bencher) { bench_raders(b,  2017); }
+#[bench] fn raders_prime_65521(b: &mut Bencher) { bench_raders(b, 65521); }
+#[bench] fn raders_prime_65537(b: &mut Bencher) { bench_raders(b, 65537); }
+#[bench] fn raders_prime_746483(b: &mut Bencher) { bench_raders(b,746483); }
+#[bench] fn raders_prime_746497(b: &mut Bencher) { bench_raders(b,746497); }
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Bluestein's Algorithm
+fn bench_bluesteins_scalar_prime(b: &mut Bencher, len: usize) {
+
+    let inner_fft = get_8xn_avx((len * 2 - 1).checked_next_power_of_two().unwrap());
+    let fft : Arc<FftInline<f32>> = Arc::new(BluesteinsAlgorithm::new(len, inner_fft));
+
+    let mut buffer = vec![Zero::zero(); len];
+    let mut scratch = vec![Zero::zero(); fft.get_required_scratch_len()];
+    b.iter(|| { fft.process_inline(&mut buffer, &mut scratch);} );
+}
+
+#[bench] fn bench_bluesteins_scalar_prime_0005(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  5); }
+#[bench] fn bench_bluesteins_scalar_prime_0017(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  17); }
+#[bench] fn bench_bluesteins_scalar_prime_0149(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  149); }
+#[bench] fn bench_bluesteins_scalar_prime_0151(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  151); }
+#[bench] fn bench_bluesteins_scalar_prime_0251(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  251); }
+#[bench] fn bench_bluesteins_scalar_prime_0257(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  257); }
+#[bench] fn bench_bluesteins_scalar_prime_1009(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  1009); }
+#[bench] fn bench_bluesteins_scalar_prime_2017(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  2017); }
+#[bench] fn bench_bluesteins_scalar_prime_32767(b: &mut Bencher) { bench_bluesteins_scalar_prime(b, 32767); }
+#[bench] fn bench_bluesteins_scalar_prime_65521(b: &mut Bencher) { bench_bluesteins_scalar_prime(b, 65521); }
+#[bench] fn bench_bluesteins_scalar_prime_65537(b: &mut Bencher) { bench_bluesteins_scalar_prime(b, 65537); }
+#[bench] fn bench_bluesteins_scalar_prime_746483(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,746483); }
+#[bench] fn bench_bluesteins_scalar_prime_746497(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,746497); }
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Bluestein's Algorithm
+fn bench_bluesteins_avx_prime(b: &mut Bencher, len: usize) {
+
+    let inner_fft = get_8xn_avx((len * 2 - 1).checked_next_power_of_two().unwrap());
+    let fft : Arc<FftInline<f32>> = Arc::new(BluesteinsAvx::new(len, inner_fft).expect("Can't run benchmark because this machine doesn't have the required instruction sets"));
+
+    let mut buffer = vec![Zero::zero(); len];
+    let mut scratch = vec![Zero::zero(); fft.get_required_scratch_len()];
+    b.iter(|| { fft.process_inline(&mut buffer, &mut scratch);} );
+}
+
+#[bench] fn bench_bluesteins_avx_prime_0005(b: &mut Bencher) { bench_bluesteins_avx_prime(b,  5); }
+#[bench] fn bench_bluesteins_avx_prime_0017(b: &mut Bencher) { bench_bluesteins_avx_prime(b,  17); }
+#[bench] fn bench_bluesteins_avx_prime_0149(b: &mut Bencher) { bench_bluesteins_avx_prime(b,  149); }
+#[bench] fn bench_bluesteins_avx_prime_0151(b: &mut Bencher) { bench_bluesteins_avx_prime(b,  151); }
+#[bench] fn bench_bluesteins_avx_prime_0251(b: &mut Bencher) { bench_bluesteins_avx_prime(b,  251); }
+#[bench] fn bench_bluesteins_avx_prime_0257(b: &mut Bencher) { bench_bluesteins_avx_prime(b,  257); }
+#[bench] fn bench_bluesteins_avx_prime_1009(b: &mut Bencher) { bench_bluesteins_avx_prime(b,  1009); }
+#[bench] fn bench_bluesteins_avx_prime_2017(b: &mut Bencher) { bench_bluesteins_avx_prime(b,  2017); }
+#[bench] fn bench_bluesteins_avx_prime_32767(b: &mut Bencher) { bench_bluesteins_avx_prime(b, 32767); }
+#[bench] fn bench_bluesteins_avx_prime_65521(b: &mut Bencher) { bench_bluesteins_avx_prime(b, 65521); }
+#[bench] fn bench_bluesteins_avx_prime_65536(b: &mut Bencher) { bench_bluesteins_avx_prime(b, 65536); }
+#[bench] fn bench_bluesteins_avx_prime_65537(b: &mut Bencher) { bench_bluesteins_avx_prime(b, 65537); }
+#[bench] fn bench_bluesteins_avx_prime_746483(b: &mut Bencher) { bench_bluesteins_avx_prime(b,746483); }
+#[bench] fn bench_bluesteins_avx_prime_746497(b: &mut Bencher) { bench_bluesteins_avx_prime(b,746497); }
+
+#[bench] fn bench_bluesteins_wrap_inner8xn_8x65521(b: &mut Bencher) {
+    let len: usize = 4 * 8 * 65521;
+    let inner_fft = get_8xn_avx((len * 2 - 1).checked_next_power_of_two().unwrap());
+    let fft : Arc<FftInline<f32>> = Arc::new(BluesteinsAvx::new(len, inner_fft).expect("Can't run benchmark because this machine doesn't have the required instruction sets"));
+
+    let mut buffer = vec![Zero::zero(); len];
+    let mut scratch = vec![Zero::zero(); fft.get_required_scratch_len()];
+    b.iter(|| { fft.process_inline(&mut buffer, &mut scratch);} );
+}
+
+#[bench] fn bench_bluesteins_wrap_outer8xn_8x65521(b: &mut Bencher) { 
+    let inner_len: usize = 8 * 65521;
+    let len = inner_len * 4;
+    let inner_power2 = get_8xn_avx((inner_len * 2 - 1).checked_next_power_of_two().unwrap());
+    let inner_bluesteins = Arc::new(BluesteinsAvx::new(inner_len, inner_power2).expect("Can't run benchmark because this machine doesn't have the required instruction sets"));
+    let fft : Arc<FftInline<f32>> = Arc::new(MixedRadix4xnAvx::new(inner_bluesteins).expect("Can't run benchmark because this machine doesn't have the required instruction sets"));
+
+    assert_eq!(fft.len(), len);
+
+    let mut buffer = vec![Zero::zero(); len];
+    let mut scratch = vec![Zero::zero(); fft.get_required_scratch_len()];
+    b.iter(|| { fft.process_inline(&mut buffer, &mut scratch);} );
+}
 
 /// Times just the FFT setup (not execution)
 /// for a given length, specific to Rader's algorithm
@@ -501,4 +582,73 @@ fn bench_mixed_16xn_avx(b: &mut Bencher, len: usize) {
 #[bench] fn mixed_16xn_avx__0065536(b: &mut Bencher) { bench_mixed_16xn_avx(b, 65536); }
 #[bench] fn mixed_16xn_avx__0262144(b: &mut Bencher) { bench_mixed_16xn_avx(b, 262144); }
 #[bench] fn mixed_16xn_avx__1048576(b: &mut Bencher) { bench_mixed_16xn_avx(b, 1048576); }
+//#[bench] fn mixed_4xn_avx_16777216(b: &mut Bencher) { bench_mixed_4xn_avx(b, 16777216); }
+
+fn get_mixed_radix_power2(len: usize) -> Arc<dyn FFT<f32>> {
+    match len {
+        8 => Arc::new(Butterfly8::new( false)),
+        16 => Arc::new(Butterfly16::new(false)),
+        32 => Arc::new(Butterfly32::new(false)),
+        _ => {
+            let zeroes = len.trailing_zeros();
+            assert!(zeroes % 2 == 0);
+            let half_zeroes = zeroes / 2;
+            let inner = get_mixed_radix_power2(1 << half_zeroes);
+            Arc::new(MixedRadix::new(Arc::clone(&inner), inner))
+        }
+    }
+}
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_mixed_radix_power2(b: &mut Bencher, len: usize) {
+    let fft = get_mixed_radix_power2(len);
+
+    let mut buffer = vec![Zero::zero(); len];
+    let mut scratch = vec![Zero::zero(); len];
+    b.iter(|| {
+        fft.process(&mut buffer, &mut scratch);
+    });
+}
+
+#[bench] fn mixed_radix_power2__0000256(b: &mut Bencher) { bench_mixed_radix_power2(b, 256); }
+#[bench] fn mixed_radix_power2__0001024(b: &mut Bencher) { bench_mixed_radix_power2(b, 1024); }
+#[bench] fn mixed_radix_power2__0004096(b: &mut Bencher) { bench_mixed_radix_power2(b, 4096); }
+#[bench] fn mixed_radix_power2__0065536(b: &mut Bencher) { bench_mixed_radix_power2(b, 65536); }
+#[bench] fn mixed_radix_power2__1048576(b: &mut Bencher) { bench_mixed_radix_power2(b, 1048576); }
+//#[bench] fn mixed_4xn_avx_16777216(b: &mut Bencher) { bench_mixed_4xn_avx(b, 16777216); }
+
+
+fn get_mixed_radix_inline_power2(len: usize) -> Arc<dyn FftInline<f32>> {
+    match len {
+        8 => Arc::new(Butterfly8::new( false)),
+        16 => Arc::new(Butterfly16::new(false)),
+        32 => Arc::new(Butterfly32::new(false)),
+        _ => {
+            let zeroes = len.trailing_zeros();
+            assert!(zeroes % 2 == 0);
+            let half_zeroes = zeroes / 2;
+            let inner = get_mixed_radix_inline_power2(1 << half_zeroes);
+            Arc::new(MixedRadixInline::new(Arc::clone(&inner), inner))
+        }
+    }
+}
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_mixed_radix_inline_power2(b: &mut Bencher, len: usize) {
+    let fft = get_mixed_radix_inline_power2(len);
+
+    let mut buffer = vec![Zero::zero(); len];
+    let mut scratch = vec![Zero::zero(); fft.get_required_scratch_len()];
+    b.iter(|| {
+        fft.process_inline(&mut buffer, &mut scratch);
+    });
+}
+
+#[bench] fn mixed_radix_power2_inline__0000256(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 256); }
+#[bench] fn mixed_radix_power2_inline__0001024(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 1024); }
+#[bench] fn mixed_radix_power2_inline__0004096(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 4096); }
+#[bench] fn mixed_radix_power2_inline__0065536(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 65536); }
+#[bench] fn mixed_radix_power2_inline__1048576(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 1048576); }
 //#[bench] fn mixed_4xn_avx_16777216(b: &mut Bencher) { bench_mixed_4xn_avx(b, 16777216); }

@@ -104,7 +104,7 @@ impl<T: FFTnum> Butterfly3<T> {
 	#[inline(always)]
     pub fn new(inverse: bool) -> Self {
         Butterfly3 {
-            twiddle: twiddles::single_twiddle(1, 3, inverse),
+            twiddle: T::generate_twiddle_factor(1, 3, inverse),
             inverse: inverse,
         }
     }
@@ -256,8 +256,8 @@ impl<T: FFTnum> Butterfly5<T> {
 
     	//we're going to hardcode a raders algorithm of size 5 and an inner FFT of size 4
     	let quarter: T = FromPrimitive::from_f32(0.25f32).unwrap();
-    	let twiddle1: Complex<T> = twiddles::single_twiddle(1, 5, inverse) * quarter;
-    	let twiddle2: Complex<T> = twiddles::single_twiddle(2, 5, inverse) * quarter;
+    	let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 5, inverse) * quarter;
+    	let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 5, inverse) * quarter;
 
     	//our primitive root will be 2, and our inverse will be 3. the powers of 3 mod 5 are 1.3.4.2, so we hardcode to use the twiddles in that order
     	let mut fft_data = [twiddle1, twiddle2.conj(), twiddle1.conj(), twiddle2];
@@ -438,9 +438,9 @@ impl<T: FFTnum> Butterfly7<T> {
 
         //we're going to hardcode a raders algorithm of size 5 and an inner FFT of size 4
         let sixth: T = FromPrimitive::from_f64(1f64/6f64).unwrap();
-        let twiddle1: Complex<T> = twiddles::single_twiddle(1, 7, inverse) * sixth;
-        let twiddle2: Complex<T> = twiddles::single_twiddle(2, 7, inverse) * sixth;
-        let twiddle3: Complex<T> = twiddles::single_twiddle(3, 7, inverse) * sixth;
+        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 7, inverse) * sixth;
+        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 7, inverse) * sixth;
+        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 7, inverse) * sixth;
 
         //our primitive root will be 3, and our inverse will be 5. the powers of 5 mod 7 are 1,5,4,6,2,3, so we hardcode to use the twiddles in that order
         let mut fft_data = [twiddle1, twiddle2.conj(), twiddle3.conj(), twiddle1.conj(), twiddle2, twiddle3];
@@ -542,7 +542,7 @@ impl<T: FFTnum> Butterfly8<T>
     pub fn new(inverse: bool) -> Self {
         Butterfly8 {
             inverse: inverse,
-            twiddle: twiddles::single_twiddle(1, 8, inverse)
+            twiddle: T::generate_twiddle_factor(1, 8, inverse)
         }
     }
 
@@ -669,9 +669,9 @@ impl<T: FFTnum> Butterfly16<T>
     pub fn new(inverse: bool) -> Self {
         Butterfly16 {
             butterfly8: Butterfly8::new(inverse),
-            twiddle1: twiddles::single_twiddle(1, 16, inverse),
-            twiddle2: twiddles::single_twiddle(2, 16, inverse),
-            twiddle3: twiddles::single_twiddle(3, 16, inverse),
+            twiddle1: T::generate_twiddle_factor(1, 16, inverse),
+            twiddle2: T::generate_twiddle_factor(2, 16, inverse),
+            twiddle3: T::generate_twiddle_factor(3, 16, inverse),
             inverse: inverse,
         }
     }
@@ -812,13 +812,13 @@ impl<T: FFTnum> Butterfly32<T>
             butterfly16: Butterfly16::new(inverse),
             butterfly8: Butterfly8::new(inverse),
             twiddles: [
-                twiddles::single_twiddle(1, 32, inverse),
-                twiddles::single_twiddle(2, 32, inverse),
-                twiddles::single_twiddle(3, 32, inverse),
-                twiddles::single_twiddle(4, 32, inverse),
-                twiddles::single_twiddle(5, 32, inverse),
-                twiddles::single_twiddle(6, 32, inverse),
-                twiddles::single_twiddle(7, 32, inverse),
+                T::generate_twiddle_factor(1, 32, inverse),
+                T::generate_twiddle_factor(2, 32, inverse),
+                T::generate_twiddle_factor(3, 32, inverse),
+                T::generate_twiddle_factor(4, 32, inverse),
+                T::generate_twiddle_factor(5, 32, inverse),
+                T::generate_twiddle_factor(6, 32, inverse),
+                T::generate_twiddle_factor(7, 32, inverse),
             ],
             inverse: inverse,
         }

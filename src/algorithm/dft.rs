@@ -130,10 +130,11 @@ mod unit_tests {
             let dft_instance = DFT::new(len, false);
             assert_eq!(dft_instance.len(), len, "DFT instance reported incorrect length");
 
-            let mut expected_input = random_signal(len * n);
-            let mut actual_input = expected_input.clone();
-            let mut multi_input = expected_input.clone();
-            let mut inline_buffer = expected_input.clone();
+            let input = random_signal(len * n);
+            let mut expected_input = input.clone();
+            let mut actual_input = input.clone();
+            let mut multi_input = input.clone();
+            let mut inline_buffer = input.clone();
 
             let mut expected_output = vec![Zero::zero(); len * n];
             let mut actual_output = expected_output.clone();
@@ -157,6 +158,18 @@ mod unit_tests {
 
             assert!(compare_vectors(&expected_output, &actual_output), "process() failed, length = {}", len);
             assert!(compare_vectors(&expected_output, &multi_output), "process_multi() failed, length = {}", len);
+            assert!(compare_vectors(&expected_output, &inline_buffer), "process_inline() failed, length = {}", len);
+
+            
+            // one more thing: make sure that the DFT algorithm even works with dirty scratch space
+            for item in inline_scratch.iter_mut() {
+                *item = Complex::new(100.0,100.0);
+            }
+            let mut inline_buffer = input.clone();
+            for chunk in inline_buffer.chunks_mut(len) {
+                dft_instance.process_inline(chunk, &mut inline_scratch);
+            }
+            assert!(compare_vectors(&expected_output, &inline_buffer), "process_inline() failed the 'dirty scratch' test for len = {}", len);
         }
 
         //verify that it doesn't crash if we have a length of 0
@@ -169,23 +182,34 @@ mod unit_tests {
         zero_dft.process_inline(&mut zero_input, &mut zero_scratch);
     }
 
-    /// Returns true if our `dft` function calculates the given spectrum from the
-    /// given signal, and if rustfft's DFT struct does the same
-    fn test_dft_correct(signal: &[Complex<f32>], spectrum: &[Complex<f32>]) -> bool {
-        assert_eq!(signal.len(), spectrum.len());
+    /// Returns true if our `dft` function calculates the given output from the
+    /// given input, and if rustfft's DFT struct does the same
+    fn test_dft_correct(input: &[Complex<f32>], output: &[Complex<f32>]) {
+        assert_eq!(input.len(), output.len());
+        let len = input.len();
 
-        let expected_signal = signal.to_vec();
-        let mut expected_spectrum = vec![Zero::zero(); spectrum.len()];
+        let mut reference_output = vec![Zero::zero(); len];
+        dft(&input, &mut reference_output);
+        assert!(compare_vectors(output, &reference_output), "Reference implementation failed for len={}", len);
 
-        let mut actual_signal = signal.to_vec();
-        let mut actual_spectrum = vec![Zero::zero(); spectrum.len()];
+        let dft_instance = DFT::new(len, false);
+        let mut actual_input = input.to_vec();
+        let mut actual_output = vec![Zero::zero(); len];
+        let mut inline_buffer = input.to_vec();
+        let mut inline_scratch = vec![Zero::zero(); dft_instance.get_required_scratch_len()];
 
-        dft(&expected_signal, &mut expected_spectrum);
+        dft_instance.process(&mut actual_input, &mut actual_output);
+        dft_instance.process_inline(&mut inline_buffer, &mut inline_scratch);
+        assert!(compare_vectors(output, &actual_output), "process() failed for len = {}", len);
+        assert!(compare_vectors(output, &inline_buffer), "process_inline() failed for len = {}", len);
 
-        let dft_instance = DFT::new(signal.len(), false);
-        dft_instance.process(&mut actual_signal, &mut actual_spectrum);
-
-        return compare_vectors(spectrum, &expected_spectrum) && compare_vectors(spectrum, &actual_spectrum);
+        // one more thing: make sure that the DFT algorithm even works with dirty scratch space
+        for item in inline_scratch.iter_mut() {
+            *item = Complex::new(100.0,100.0);
+        }
+        let mut inline_buffer = input.to_vec();
+        dft_instance.process_inline(&mut inline_buffer, &mut inline_scratch);
+        assert!(compare_vectors(output, &inline_buffer), "process_inline() failed the 'dirty scratch' test for len = {}", len);
     }
 
     #[test]
@@ -194,7 +218,7 @@ mod unit_tests {
                       Complex{re:-1f32, im: 0f32}];
         let spectrum = [Complex{re: 0f32, im: 0f32},
                         Complex{re: 2f32, im: 0f32}];
-        assert!(test_dft_correct(&signal[..], &spectrum[..]));
+        test_dft_correct(&signal[..], &spectrum[..]);
     }
 
     #[test]
@@ -205,7 +229,7 @@ mod unit_tests {
         let spectrum = [Complex{re: 2f32, im: 2f32},
                         Complex{re: -5.562177f32, im: -2.098076f32},
                         Complex{re: 6.562178f32, im: 3.09807f32}];
-        assert!(test_dft_correct(&signal[..], &spectrum[..]));
+        test_dft_correct(&signal[..], &spectrum[..]);
     }
 
     #[test]
@@ -218,7 +242,7 @@ mod unit_tests {
                         Complex{re: -2f32, im: 3.5f32},
                         Complex{re: -7.5f32, im: 3f32},
                         Complex{re: 4f32, im: 0.5f32}];
-        assert!(test_dft_correct(&signal[..], &spectrum[..]));
+        test_dft_correct(&signal[..], &spectrum[..]);
     }
 
     #[test]
@@ -235,6 +259,6 @@ mod unit_tests {
                         Complex{re: -3f32, im: -3f32},
                         Complex{re: -1.24f32, im: -4.76f32},
                         Complex{re: 2.16f32, im: -8.16f32}];
-        assert!(test_dft_correct(&signal[..], &spectrum[..]));
+        test_dft_correct(&signal[..], &spectrum[..]);
     }
 }

@@ -6,7 +6,6 @@ use num_complex::Complex;
 use common::{FFTnum, verify_length_inline, verify_length_minimum};
 
 use ::{Length, IsInverse, FftInline};
-use twiddles;
 
 use super::avx_utils::AvxComplexArrayf32;
 use super::avx_utils;
@@ -84,10 +83,10 @@ impl SplitRadixAvx<f32> {
         let sixteenth_len = quarter_len / 4;
         let twiddles : Vec<_> = (0..sixteenth_len).map(|i| {
             let twiddle_chunk = [
-                twiddles::single_twiddle(i*4, len, inverse),
-                twiddles::single_twiddle(i*4+1, len, inverse),
-                twiddles::single_twiddle(i*4+2, len, inverse),
-                twiddles::single_twiddle(i*4+3, len, inverse),
+                f32::generate_twiddle_factor(i*4, len, inverse),
+                f32::generate_twiddle_factor(i*4+1, len, inverse),
+                f32::generate_twiddle_factor(i*4+2, len, inverse),
+                f32::generate_twiddle_factor(i*4+3, len, inverse),
             ];
             twiddle_chunk.load_complex_f32(0)
         }).collect();

@@ -56,7 +56,7 @@ impl<T: FFTnum> SplitRadix<T> {
         let quarter_len = fft_quarter.len();
         let len = quarter_len * 4;
 
-        let twiddles : Vec<_> = (0..quarter_len).map(|i| twiddles::single_twiddle(i, len, inverse)).collect();
+        let twiddles : Vec<_> = (0..quarter_len).map(|i| T::generate_twiddle_factor(i, len, inverse)).collect();
 
         Self {
             twiddles: twiddles.into_boxed_slice(),

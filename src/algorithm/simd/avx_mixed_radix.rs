@@ -6,7 +6,6 @@ use num_complex::Complex;
 use common::{FFTnum, verify_length_inline, verify_length_minimum};
 
 use ::{Length, IsInverse, FftInline};
-use twiddles;
 
 use super::avx_utils::AvxComplexArrayf32;
 use super::avx_utils;
@@ -41,10 +40,10 @@ impl MixedRadix2xnAvx<f32> {
         let eigth_len = half_len / 4;
         let twiddles : Vec<_> = (0..eigth_len).map(|i| {
             let twiddle_chunk = [
-                twiddles::single_twiddle(i*4, len, inverse),
-                twiddles::single_twiddle(i*4+1, len, inverse),
-                twiddles::single_twiddle(i*4+2, len, inverse),
-                twiddles::single_twiddle(i*4+3, len, inverse),
+                f32::generate_twiddle_factor(i*4, len, inverse),
+                f32::generate_twiddle_factor(i*4+1, len, inverse),
+                f32::generate_twiddle_factor(i*4+2, len, inverse),
+                f32::generate_twiddle_factor(i*4+3, len, inverse),
             ];
             twiddle_chunk.load_complex_f32(0)
         }).collect();
@@ -164,10 +163,10 @@ impl MixedRadix4xnAvx<f32> {
         for x in 0..sixteenth_len {
         	for y in 1..4 {
         		let twiddle_chunk = [
-	                twiddles::single_twiddle(y*(x*4), len, inverse),
-	                twiddles::single_twiddle(y*(x*4+1), len, inverse),
-	                twiddles::single_twiddle(y*(x*4+2), len, inverse),
-	                twiddles::single_twiddle(y*(x*4+3), len, inverse),
+	                f32::generate_twiddle_factor(y*(x*4), len, inverse),
+	                f32::generate_twiddle_factor(y*(x*4+1), len, inverse),
+	                f32::generate_twiddle_factor(y*(x*4+2), len, inverse),
+	                f32::generate_twiddle_factor(y*(x*4+3), len, inverse),
 	            ];
 	            twiddles.push(twiddle_chunk.load_complex_f32(0));
         	}
@@ -302,10 +301,10 @@ impl MixedRadix8xnAvx<f32> {
         for x in 0..thirtysecond_len {
         	for y in 1..8 {
         		let twiddle_chunk = [
-	                twiddles::single_twiddle(y*(x*4), len, inverse),
-	                twiddles::single_twiddle(y*(x*4+1), len, inverse),
-	                twiddles::single_twiddle(y*(x*4+2), len, inverse),
-	                twiddles::single_twiddle(y*(x*4+3), len, inverse),
+	                f32::generate_twiddle_factor(y*(x*4), len, inverse),
+	                f32::generate_twiddle_factor(y*(x*4+1), len, inverse),
+	                f32::generate_twiddle_factor(y*(x*4+2), len, inverse),
+	                f32::generate_twiddle_factor(y*(x*4+3), len, inverse),
 	            ];
 	            twiddles.push(twiddle_chunk.load_complex_f32(0));
         	}
@@ -313,7 +312,7 @@ impl MixedRadix8xnAvx<f32> {
 
         Self {
         	twiddle_config: avx_utils::Rotate90Config::get_from_inverse(inverse),
-        	twiddles_butterfly8: avx_utils::broadcast_complex_f32(twiddles::single_twiddle(1, 8, inverse)),
+        	twiddles_butterfly8: avx_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 8, inverse)),
             twiddles: twiddles.into_boxed_slice(),
             inner_fft,
             inverse,
@@ -461,10 +460,10 @@ impl MixedRadix16xnAvx<f32> {
         for x in 0..sixtyfourth_len {
         	for y in 1..16 {
         		let twiddle_chunk = [
-	                twiddles::single_twiddle(y*(x*4), len, inverse),
-	                twiddles::single_twiddle(y*(x*4+1), len, inverse),
-	                twiddles::single_twiddle(y*(x*4+2), len, inverse),
-	                twiddles::single_twiddle(y*(x*4+3), len, inverse),
+	                f32::generate_twiddle_factor(y*(x*4), len, inverse),
+	                f32::generate_twiddle_factor(y*(x*4+1), len, inverse),
+	                f32::generate_twiddle_factor(y*(x*4+2), len, inverse),
+	                f32::generate_twiddle_factor(y*(x*4+3), len, inverse),
 	            ];
 	            twiddles.push(twiddle_chunk.load_complex_f32(0));
         	}
@@ -473,12 +472,12 @@ impl MixedRadix16xnAvx<f32> {
         Self {
         	twiddle_config: avx_utils::Rotate90Config::get_from_inverse(inverse),
         	twiddles_butterfly16: [
-                avx_utils::broadcast_complex_f32(twiddles::single_twiddle(1, 16, inverse)),
-                avx_utils::broadcast_complex_f32(twiddles::single_twiddle(2, 16, inverse)),
-                avx_utils::broadcast_complex_f32(twiddles::single_twiddle(3, 16, inverse)),
-                avx_utils::broadcast_complex_f32(twiddles::single_twiddle(4, 16, inverse)),
-                avx_utils::broadcast_complex_f32(twiddles::single_twiddle(6, 16, inverse)),
-                avx_utils::broadcast_complex_f32(twiddles::single_twiddle(9, 16, inverse)),
+                avx_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 16, inverse)),
+                avx_utils::broadcast_complex_f32(f32::generate_twiddle_factor(2, 16, inverse)),
+                avx_utils::broadcast_complex_f32(f32::generate_twiddle_factor(3, 16, inverse)),
+                avx_utils::broadcast_complex_f32(f32::generate_twiddle_factor(4, 16, inverse)),
+                avx_utils::broadcast_complex_f32(f32::generate_twiddle_factor(6, 16, inverse)),
+                avx_utils::broadcast_complex_f32(f32::generate_twiddle_factor(9, 16, inverse)),
             ],
             twiddles: twiddles.into_boxed_slice(),
             inner_fft,

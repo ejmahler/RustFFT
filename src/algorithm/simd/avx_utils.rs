@@ -3,7 +3,25 @@ use num_complex::Complex;
 
 pub trait AvxComplexArrayf32 {
     unsafe fn load_complex_f32(&self, index: usize) -> __m256;
+    unsafe fn load_complex_remainder_f32(&self, index: usize, remainder_mask: RemainderMask) -> __m256;
     unsafe fn store_complex_f32(&mut self, index: usize, data: __m256);
+    unsafe fn store_complex_remainder_f32(&mut self, index: usize, data: __m256, remainder_mask: RemainderMask);
+}
+
+// Struct that encapsulates the process of storing/loading "remainders" for FFT buffers that are not multiples of 4.
+// Use with load_remainder_complex_f32 and store_remainder_complex_f32 beloe
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct RemainderMask(__m256i);
+impl RemainderMask {
+    #[inline(always)]
+    pub unsafe fn new_f32(remainder: usize) -> Self {
+        let mut mask_array = [0u64; 4];
+        for i in 0..remainder {
+            mask_array[i] = std::u64::MAX;
+        }
+        Self(_mm256_lddqu_si256(std::mem::transmute::<*const u64, *const __m256i>(mask_array.as_ptr())))
+    }
 }
 
 impl AvxComplexArrayf32 for [Complex<f32>] {
@@ -15,11 +33,23 @@ impl AvxComplexArrayf32 for [Complex<f32>] {
         _mm256_loadu_ps(float_ptr)
     }
     #[inline(always)]
+    unsafe fn load_complex_remainder_f32(&self, index: usize, remainder_mask: RemainderMask) -> __m256 {
+        let complex_ref = self.get_unchecked(index);
+        let float_ptr  = (&complex_ref.re) as *const f32;
+        _mm256_maskload_ps(float_ptr, remainder_mask.0)
+    }
+    #[inline(always)]
     unsafe fn store_complex_f32(&mut self, index: usize, data: __m256) {
         debug_assert!(self.len() >= index + 4);
         let complex_ref = self.get_unchecked_mut(index);
         let float_ptr = (&mut complex_ref.re) as *mut f32;
         _mm256_storeu_ps(float_ptr, data);
+    }
+    #[inline(always)]
+    unsafe fn store_complex_remainder_f32(&mut self, index: usize, data: __m256, remainder_mask: RemainderMask) {
+        let complex_ref = self.get_unchecked_mut(index);
+        let float_ptr = (&mut complex_ref.re) as *mut f32;
+        _mm256_maskstore_ps(float_ptr, remainder_mask.0, data);
     }
 }
 
@@ -85,7 +115,7 @@ pub unsafe fn rotate90_f32(elements: __m256, rotation_config: Rotate90Config) ->
     // Our goal is to swap the reals with the imaginaries, then negate either the reals or the imaginaries, based on whether we're an inverse or not
     let elements_swapped = _mm256_permute_ps(elements, 0xB1);
 
-    // Negating only half the elements is really hard. Instead, we're going to create a register with them all negated, and blend in the ones we want
+    // We can negate the elements we want by xoring the row with a pre-set vector
     _mm256_xor_ps(elements_swapped, rotation_config.0)
 }
 

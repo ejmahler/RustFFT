@@ -1,11 +1,10 @@
 use num_complex::Complex;
 use num_traits::Zero;
 
-use common::{FFTnum, verify_length, verify_length_divisible};
+use common::{FFTnum, verify_length, verify_length_divisible, verify_length_inline, verify_length_minimum};
 
 use algorithm::butterflies::{Butterfly2, Butterfly4, Butterfly8, Butterfly16, FFTButterfly};
-use ::{Length, IsInverse, FFT};
-use twiddles;
+use ::{Length, IsInverse, FFT, FftInline};
 
 /// FFT algorithm optimized for power-of-two sizes
 ///
@@ -52,7 +51,7 @@ impl<T: FFTnum> Radix4<T> {
             let num_rows = len / (twiddle_stride * 4);
             for i in 0..num_rows {
                 for k in 1..4 {
-                    let twiddle = twiddles::single_twiddle(i * k * twiddle_stride, len, inverse);
+                    let twiddle = T::generate_twiddle_factor(i * k * twiddle_stride, len, inverse);
                     twiddle_factors.push(twiddle);
                 }
             }
@@ -135,6 +134,20 @@ impl<T: FFTnum> FFT<T> for Radix4<T> {
         for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
             self.perform_fft(in_chunk, out_chunk);
         }
+    }
+}
+impl<T: FFTnum> FftInline<T> for Radix4<T> {
+    fn process_inline(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        verify_length_inline(buffer, self.len());
+        verify_length_minimum(scratch, self.get_required_scratch_len());
+
+        let scratch = &mut scratch[..self.len()];
+
+        self.perform_fft(buffer, scratch);
+        buffer.copy_from_slice(scratch);
+    }
+    fn get_required_scratch_len(&self) -> usize {
+        self.len()
     }
 }
 impl<T> Length for Radix4<T> {
@@ -228,7 +241,7 @@ unsafe fn butterfly_4<T: FFTnum>(data: &mut [Complex<T>],
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use test_utils::check_fft_algorithm;
+    use test_utils::{ check_fft_algorithm, check_inline_fft_algorithm };
 
     #[test]
     fn test_radix4() {
@@ -243,5 +256,6 @@ mod unit_tests {
         let fft = Radix4::new(len, inverse);
 
         check_fft_algorithm(&fft, len, inverse);
+        check_inline_fft_algorithm(&fft, len, inverse);
     }
 }
