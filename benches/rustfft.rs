@@ -275,8 +275,8 @@ fn bench_bluesteins_avx_prime(b: &mut Bencher, len: usize) {
 #[bench] fn bench_bluesteins_avx_prime_746483(b: &mut Bencher) { bench_bluesteins_avx_prime(b,746483); }
 #[bench] fn bench_bluesteins_avx_prime_746497(b: &mut Bencher) { bench_bluesteins_avx_prime(b,746497); }
 
-#[bench] fn bench_bluesteins_wrap_inner8xn_8x65521(b: &mut Bencher) {
-    let len: usize = 4 * 8 * 65521;
+#[bench] fn bench_bluesteins_wrap_inner8xn_65521(b: &mut Bencher) {
+    let len: usize = 8 * 65521;
     let inner_fft = get_8xn_avx((len * 2 - 1).checked_next_power_of_two().unwrap());
     let fft : Arc<FftInline<f32>> = Arc::new(BluesteinsAvx::new(len, inner_fft).expect("Can't run benchmark because this machine doesn't have the required instruction sets"));
 
@@ -285,12 +285,12 @@ fn bench_bluesteins_avx_prime(b: &mut Bencher, len: usize) {
     b.iter(|| { fft.process_inline(&mut buffer, &mut scratch);} );
 }
 
-#[bench] fn bench_bluesteins_wrap_outer8xn_8x65521(b: &mut Bencher) { 
-    let inner_len: usize = 8 * 65521;
-    let len = inner_len * 4;
+#[bench] fn bench_bluesteins_wrap_outer8xn_65521(b: &mut Bencher) { 
+    let inner_len: usize = 65521;
+    let len = inner_len * 8;
     let inner_power2 = get_8xn_avx((inner_len * 2 - 1).checked_next_power_of_two().unwrap());
     let inner_bluesteins = Arc::new(BluesteinsAvx::new(inner_len, inner_power2).expect("Can't run benchmark because this machine doesn't have the required instruction sets"));
-    let fft : Arc<FftInline<f32>> = Arc::new(MixedRadix4xnAvx::new(inner_bluesteins).expect("Can't run benchmark because this machine doesn't have the required instruction sets"));
+    let fft : Arc<FftInline<f32>> = Arc::new(MixedRadix8xnAvx::new(inner_bluesteins).expect("Can't run benchmark because this machine doesn't have the required instruction sets"));
 
     assert_eq!(fft.len(), len);
 
@@ -582,7 +582,6 @@ fn bench_mixed_16xn_avx(b: &mut Bencher, len: usize) {
 #[bench] fn mixed_16xn_avx__0065536(b: &mut Bencher) { bench_mixed_16xn_avx(b, 65536); }
 #[bench] fn mixed_16xn_avx__0262144(b: &mut Bencher) { bench_mixed_16xn_avx(b, 262144); }
 #[bench] fn mixed_16xn_avx__1048576(b: &mut Bencher) { bench_mixed_16xn_avx(b, 1048576); }
-//#[bench] fn mixed_4xn_avx_16777216(b: &mut Bencher) { bench_mixed_4xn_avx(b, 16777216); }
 
 fn get_mixed_radix_power2(len: usize) -> Arc<dyn FFT<f32>> {
     match len {

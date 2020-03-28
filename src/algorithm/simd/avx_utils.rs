@@ -3,9 +3,9 @@ use num_complex::Complex;
 
 pub trait AvxComplexArrayf32 {
     unsafe fn load_complex_f32(&self, index: usize) -> __m256;
-    unsafe fn load_complex_remainder_f32(&self, index: usize, remainder_mask: RemainderMask) -> __m256;
+    unsafe fn load_complex_remainder_f32(&self, remainder_mask: RemainderMask, index: usize) -> __m256;
     unsafe fn store_complex_f32(&mut self, index: usize, data: __m256);
-    unsafe fn store_complex_remainder_f32(&mut self, index: usize, data: __m256, remainder_mask: RemainderMask);
+    unsafe fn store_complex_remainder_f32(&mut self, remainder_mask: RemainderMask,  data: __m256, index: usize);
 }
 
 // Struct that encapsulates the process of storing/loading "remainders" for FFT buffers that are not multiples of 4.
@@ -33,7 +33,7 @@ impl AvxComplexArrayf32 for [Complex<f32>] {
         _mm256_loadu_ps(float_ptr)
     }
     #[inline(always)]
-    unsafe fn load_complex_remainder_f32(&self, index: usize, remainder_mask: RemainderMask) -> __m256 {
+    unsafe fn load_complex_remainder_f32(&self, remainder_mask: RemainderMask, index: usize) -> __m256 {
         let complex_ref = self.get_unchecked(index);
         let float_ptr  = (&complex_ref.re) as *const f32;
         _mm256_maskload_ps(float_ptr, remainder_mask.0)
@@ -46,10 +46,25 @@ impl AvxComplexArrayf32 for [Complex<f32>] {
         _mm256_storeu_ps(float_ptr, data);
     }
     #[inline(always)]
-    unsafe fn store_complex_remainder_f32(&mut self, index: usize, data: __m256, remainder_mask: RemainderMask) {
+    unsafe fn store_complex_remainder_f32(&mut self, remainder_mask: RemainderMask, data: __m256, index: usize) {
         let complex_ref = self.get_unchecked_mut(index);
         let float_ptr = (&mut complex_ref.re) as *mut f32;
         _mm256_maskstore_ps(float_ptr, remainder_mask.0, data);
+    }
+}
+
+// given a number of elements (assumed to be complex<f32>), divides the elements into chunks that will fit in AVX registers, with a remainder that may not completely fill an AVX register
+// returns (num_chunks, remainder) with remainder being in the range [1,4] (if len is 0, num_chunks and remainder will both be 0)
+// the intention is that this is used to create a main loop, and then an unconditional remainder after the loop
+#[inline(always)]
+pub fn compute_chunk_count_complex_f32(len: usize) -> (usize, usize) {
+    let quotient = len / 4;
+    let naive_remainder = len % 4;
+
+    if quotient > 0 && naive_remainder == 0 {
+        (quotient - 1, naive_remainder + 4)
+    } else {
+        (quotient, naive_remainder)
     }
 }
 
@@ -281,7 +296,7 @@ pub unsafe fn split_evens_odds_f32(row0: __m256, row1: __m256) -> (__m256, __m25
     (output0, output1)
 }
 
-// Split the array into evens and odds
+// Interleave even elements and odd elements into a single array
 #[inline(always)]
 pub unsafe fn interleave_evens_odds_f32(row0: __m256, row1: __m256) -> (__m256, __m256) {
     let unpacked0 = _mm256_unpacklo_ps(row0, row1);
