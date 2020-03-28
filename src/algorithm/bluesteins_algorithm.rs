@@ -105,8 +105,7 @@ impl<T: FFTnum> BluesteinsAlgorithm<T> {
         }
     }
 
-    #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_bluestein_fft(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+    fn perform_bluestein_fft(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
         let (inner_input, inner_scratch) = scratch.split_at_mut(self.inner_fft_multiplier.len());
 
         // Copy the buffer into our inner FFT input. the buffer will only fill part of the FFT input, so zero fill the rest
@@ -140,7 +139,7 @@ impl<T: FFTnum> FftInline<T> for BluesteinsAlgorithm<T> {
         verify_length_inline(buffer, self.len());
         verify_length_minimum(scratch, self.get_required_scratch_len());
 
-        unsafe { self.perform_bluestein_fft(buffer, scratch); }
+        self.perform_bluestein_fft(buffer, scratch);
     }
     fn get_required_scratch_len(&self) -> usize {
         self.inner_fft_multiplier.len() + self.inner_fft.get_required_scratch_len()
