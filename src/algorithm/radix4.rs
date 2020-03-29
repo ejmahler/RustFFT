@@ -1,7 +1,7 @@
 use num_complex::Complex;
 use num_traits::Zero;
 
-use common::{FFTnum, verify_length, verify_length_divisible, verify_length_inline, verify_length_minimum};
+use common::FFTnum;
 
 use algorithm::butterflies::{Butterfly2, Butterfly4, Butterfly8, Butterfly16, FFTButterfly};
 use ::{Length, IsInverse, FFT, FftInline};
@@ -67,7 +67,7 @@ impl<T: FFTnum> Radix4<T> {
         }
     }
 
-    fn perform_fft(&self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
+    fn perform_fft_out_of_place(&self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         match self.len() {
             0|1 => spectrum.copy_from_slice(signal),
             2 => {
@@ -121,47 +121,7 @@ impl<T: FFTnum> Radix4<T> {
         }
     }
 }
-
-impl<T: FFTnum> FFT<T> for Radix4<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-
-        self.perform_fft(input, output);
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-
-        for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
-            self.perform_fft(in_chunk, out_chunk);
-        }
-    }
-}
-impl<T: FFTnum> FftInline<T> for Radix4<T> {
-    fn process_inline(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-        verify_length_inline(buffer, self.len());
-        verify_length_minimum(scratch, self.get_required_scratch_len());
-
-        let scratch = &mut scratch[..self.len()];
-
-        self.perform_fft(buffer, scratch);
-        buffer.copy_from_slice(scratch);
-    }
-    fn get_required_scratch_len(&self) -> usize {
-        self.len()
-    }
-}
-impl<T> Length for Radix4<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        self.len
-    }
-}
-impl<T> IsInverse for Radix4<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
+boilerplate_fft_oop!(Radix4, |this: &Radix4<_>| this.len);
 
 
 

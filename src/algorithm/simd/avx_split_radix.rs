@@ -3,7 +3,7 @@ use std::arch::x86_64::*;
 
 use num_complex::Complex;
 
-use common::{FFTnum, verify_length_inline, verify_length_minimum};
+use common::FFTnum;
 
 use ::{Length, IsInverse, FftInline};
 
@@ -102,7 +102,7 @@ impl SplitRadixAvx<f32> {
     }
 
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
+    unsafe fn perform_fft_inplace_f32(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
         let half_len = self.len / 2;
         let quarter_len = self.len / 4;
         let three_quarter_len = half_len + quarter_len;
@@ -169,38 +169,10 @@ impl SplitRadixAvx<f32> {
         }
     }
 }
-default impl<T: FFTnum> FftInline<T> for SplitRadixAvx<T> {
-    fn process_inline(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-        unimplemented!();
-    }
-    fn get_required_scratch_len(&self) -> usize {
-        unimplemented!();
-    }
-}
-impl FftInline<f32> for SplitRadixAvx<f32> {
-    fn process_inline(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
-        verify_length_inline(buffer, self.len());
-        verify_length_minimum(scratch, self.get_required_scratch_len());
-
-        unsafe { self.perform_fft_f32(buffer, scratch) };
-    }
-    fn get_required_scratch_len(&self) -> usize {
-        self.len / 2 + 1
-    }
-}
-
-impl<T> Length for SplitRadixAvx<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        self.len
-    }
-}
-impl<T> IsInverse for SplitRadixAvx<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
+boilerplate_fft_simd_unsafe!(SplitRadixAvx, 
+    |this:&SplitRadixAvx<_>| this.len,
+    |this:&SplitRadixAvx<_>| this.len / 2 + 1
+);
 
 #[cfg(test)]
 mod unit_tests {

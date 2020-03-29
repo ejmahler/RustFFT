@@ -5,7 +5,7 @@ use std::cmp::min;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use common::{FFTnum, verify_length_inline, verify_length_minimum};
+use common::FFTnum;
 
 use ::{Length, IsInverse, FftInline};
 
@@ -63,7 +63,7 @@ impl MixedRadix2xnAvx<f32> {
     }
 
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
+    unsafe fn perform_fft_inplace_f32(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
         let len = self.len();
         let half_len = len / 2;
         
@@ -137,39 +137,10 @@ impl MixedRadix2xnAvx<f32> {
         }
     }
 }
-default impl<T: FFTnum> FftInline<T> for MixedRadix2xnAvx<T> {
-    fn process_inline(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-        unimplemented!();
-    }
-    fn get_required_scratch_len(&self) -> usize {
-        unimplemented!();
-    }
-}
-impl FftInline<f32> for MixedRadix2xnAvx<f32> {
-    fn process_inline(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
-        verify_length_inline(buffer, self.len());
-        verify_length_minimum(scratch, self.get_required_scratch_len());
-
-        unsafe { self.perform_fft_f32(buffer, scratch) };
-    }
-    #[inline]
-    fn get_required_scratch_len(&self) -> usize {
-        self.len()
-    }
-}
-
-impl<T> Length for MixedRadix2xnAvx<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        self.len
-    }
-}
-impl<T> IsInverse for MixedRadix2xnAvx<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
+boilerplate_fft_simd_unsafe!(MixedRadix2xnAvx, 
+    |this:&MixedRadix2xnAvx<_>| this.len,
+    |this:&MixedRadix2xnAvx<_>| this.len
+);
 
 pub struct MixedRadix4xnAvx<T> {
     twiddle_config: avx_utils::Rotate90Config,
@@ -229,7 +200,7 @@ impl MixedRadix4xnAvx<f32> {
     }
 
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
+    unsafe fn perform_fft_inplace_f32(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
         let len = self.len();
         let quarter_len = len / 4;
 
@@ -324,39 +295,10 @@ impl MixedRadix4xnAvx<f32> {
         }
     }
 }
-default impl<T: FFTnum> FftInline<T> for MixedRadix4xnAvx<T> {
-    fn process_inline(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-        unimplemented!();
-    }
-    fn get_required_scratch_len(&self) -> usize {
-        unimplemented!();
-    }
-}
-impl FftInline<f32> for MixedRadix4xnAvx<f32> {
-    fn process_inline(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
-        verify_length_inline(buffer, self.len());
-        verify_length_minimum(scratch, self.get_required_scratch_len());
-
-        unsafe { self.perform_fft_f32(buffer, scratch) };
-    }
-    #[inline]
-    fn get_required_scratch_len(&self) -> usize {
-        self.len()
-    }
-}
-
-impl<T> Length for MixedRadix4xnAvx<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        self.len
-    }
-}
-impl<T> IsInverse for MixedRadix4xnAvx<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
+boilerplate_fft_simd_unsafe!(MixedRadix4xnAvx, 
+    |this:&MixedRadix4xnAvx<_>| this.len,
+    |this:&MixedRadix4xnAvx<_>| this.len
+);
 
 pub struct MixedRadix8xnAvx<T> {
     twiddle_config: avx_utils::Rotate90Config,
@@ -418,7 +360,7 @@ impl MixedRadix8xnAvx<f32> {
     }
 
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
+    unsafe fn perform_fft_inplace_f32(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
         let len = self.len();
         let eigth_len = len / 8;
 
@@ -556,39 +498,10 @@ impl MixedRadix8xnAvx<f32> {
         buffer.copy_from_slice(scratch);
     }
 }
-default impl<T: FFTnum> FftInline<T> for MixedRadix8xnAvx<T> {
-    fn process_inline(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-        unimplemented!();
-    }
-    fn get_required_scratch_len(&self) -> usize {
-        unimplemented!();
-    }
-}
-impl FftInline<f32> for MixedRadix8xnAvx<f32> {
-    fn process_inline(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
-        verify_length_inline(buffer, self.len());
-        verify_length_minimum(scratch, self.get_required_scratch_len());
-
-        unsafe { self.perform_fft_f32(buffer, scratch) };
-    }
-    #[inline]
-    fn get_required_scratch_len(&self) -> usize {
-        self.len()
-    }
-}
-
-impl<T> Length for MixedRadix8xnAvx<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        self.len
-    }
-}
-impl<T> IsInverse for MixedRadix8xnAvx<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
+boilerplate_fft_simd_unsafe!(MixedRadix8xnAvx, 
+    |this:&MixedRadix8xnAvx<_>| this.len,
+    |this:&MixedRadix8xnAvx<_>| this.len
+);
 
 pub struct MixedRadix16xnAvx<T> {
     twiddle_config: avx_utils::Rotate90Config,
@@ -657,7 +570,7 @@ impl MixedRadix16xnAvx<f32> {
     }
 
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
+    unsafe fn perform_fft_inplace_f32(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
         let len = self.len();
         let sixteenth_len = len / 16;
 
@@ -884,39 +797,10 @@ impl MixedRadix16xnAvx<f32> {
         buffer.copy_from_slice(scratch);
     }
 }
-default impl<T: FFTnum> FftInline<T> for MixedRadix16xnAvx<T> {
-    fn process_inline(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-        unimplemented!();
-    }
-    fn get_required_scratch_len(&self) -> usize {
-        unimplemented!();
-    }
-}
-impl FftInline<f32> for MixedRadix16xnAvx<f32> {
-    fn process_inline(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
-        verify_length_inline(buffer, self.len());
-        verify_length_minimum(scratch, self.get_required_scratch_len());
-
-        unsafe { self.perform_fft_f32(buffer, scratch) };
-    }
-    #[inline]
-    fn get_required_scratch_len(&self) -> usize {
-        self.len()
-    }
-}
-
-impl<T> Length for MixedRadix16xnAvx<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        self.len
-    }
-}
-impl<T> IsInverse for MixedRadix16xnAvx<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
+boilerplate_fft_simd_unsafe!(MixedRadix16xnAvx, 
+    |this:&MixedRadix16xnAvx<_>| this.len,
+    |this:&MixedRadix16xnAvx<_>| this.len
+);
 
 #[cfg(test)]
 mod unit_tests {

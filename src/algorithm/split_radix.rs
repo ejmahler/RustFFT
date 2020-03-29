@@ -130,6 +130,21 @@ impl<T: FFTnum> FftInline<T> for SplitRadix<T> {
 
         unsafe { self.perform_fft(buffer, scratch) };
     }
+    fn process_inline_multi(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        assert_eq!(buffer.len() % self.len(), 0, "Buffer is the wrong length. Expected multiple of {}, got {}", self.len(), buffer.len());
+        verify_length_minimum(scratch, self.get_required_scratch_len());
+
+        // The caller might have passed in more scratch than we need. if so, cap it off
+        let scratch = if scratch.len() > self.get_required_scratch_len() {
+            &mut scratch[..self.get_required_scratch_len()]
+        } else {
+            scratch
+        };
+
+        for chunk in buffer.chunks_exact_mut(self.len()) {
+            unsafe { self.perform_fft(chunk, scratch) };
+        }
+    }
     fn get_required_scratch_len(&self) -> usize {
         self.len / 2
     }

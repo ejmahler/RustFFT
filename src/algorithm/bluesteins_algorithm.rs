@@ -141,6 +141,14 @@ impl<T: FFTnum> FftInline<T> for BluesteinsAlgorithm<T> {
 
         self.perform_bluestein_fft(buffer, scratch);
     }
+    fn process_inline_multi(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        assert_eq!(buffer.len() % self.len(), 0, "Buffer is the wrong length. Expected multiple of {}, got {}", self.len(), buffer.len());
+        verify_length_minimum(scratch, self.get_required_scratch_len());
+
+        for chunk in buffer.chunks_exact_mut(self.len()) {
+            self.perform_bluestein_fft(chunk, scratch);
+        }
+    }
     fn get_required_scratch_len(&self) -> usize {
         self.inner_fft_multiplier.len() + self.inner_fft.get_required_scratch_len()
     }

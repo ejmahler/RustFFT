@@ -68,6 +68,8 @@ extern crate strength_reduce;
 extern crate transpose;
 
 
+#[macro_use]
+mod common;
 
 /// Individual FFT algorithms
 pub mod algorithm;
@@ -75,7 +77,6 @@ mod math_utils;
 mod array_utils;
 mod plan;
 mod twiddles;
-mod common;
 
 use num_complex::Complex;
 
@@ -121,9 +122,9 @@ pub trait FFT<T: FFTnum>: Length + IsInverse + Sync + Send {
 /// Trait for FFT algorithms that use the same buffer for input and output.
 pub trait FftInline<T: FFTnum>: Length + IsInverse + Sync + Send {
     fn process_inline(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]);
+    fn process_inline_multi(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]);
     fn get_required_scratch_len(&self) -> usize;
 }
-
 
 #[cfg(test)]
 extern crate rand;

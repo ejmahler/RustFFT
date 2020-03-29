@@ -9,7 +9,7 @@ use common::{FFTnum, verify_length, verify_length_divisible};
 use math_utils;
 use array_utils;
 
-use ::{Length, IsInverse, FFT};
+use ::{Length, IsInverse, FFT, FftInline};
 use algorithm::butterflies::FFTButterfly;
 
 /// Implementation of the [Good-Thomas Algorithm (AKA Prime Factor Algorithm)](https://en.wikipedia.org/wiki/Prime-factor_FFT_algorithm)
@@ -99,7 +99,7 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
         }
     }
 
-    fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+    fn perform_fft_out_of_place(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         // copy the input into the output buffer
         for (y, row) in output.chunks_mut(self.width).enumerate() {
             let input_base = y * self.input_y_stride;
@@ -128,36 +128,7 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
         }
     }
 }
-
-impl<T: FFTnum> FFT<T> for GoodThomasAlgorithm<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-
-        self.perform_fft(input, output);
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-
-        for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
-            self.perform_fft(in_chunk, out_chunk);
-        }
-    }
-}
-impl<T> Length for GoodThomasAlgorithm<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        self.width * self.height
-    }
-}
-impl<T> IsInverse for GoodThomasAlgorithm<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
-
-
-
+boilerplate_fft_oop!(GoodThomasAlgorithm, |this: &GoodThomasAlgorithm<_>| this.width * this.height);
 
 /// Implementation of the Good-Thomas Algorithm, specialized for the case where both inner FFTs are butterflies
 ///

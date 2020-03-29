@@ -4,10 +4,10 @@ use num_complex::Complex;
 use num_traits::Zero;
 use strength_reduce::StrengthReducedUsize;
 
-use common::{FFTnum, verify_length, verify_length_divisible};
+use common::FFTnum;
 
 use math_utils;
-use ::{Length, IsInverse, FFT};
+use ::{Length, IsInverse, FFT, FftInline};
 
 /// Implementation of Rader's Algorithm
 ///
@@ -47,6 +47,7 @@ pub struct RadersAlgorithm<T> {
     primitive_root_inverse: usize,
 
     len: StrengthReducedUsize,
+    inverse: bool,
 }
 
 impl<T: FFTnum> RadersAlgorithm<T> {
@@ -60,6 +61,7 @@ impl<T: FFTnum> RadersAlgorithm<T> {
     pub fn new(len: usize, inner_fft: Arc<FFT<T>>) -> Self {
         assert_eq!(len - 1, inner_fft.len(), "For raders algorithm, inner_fft.len() must be self.len() - 1. Expected {}, got {}", len - 1, inner_fft.len());
 
+        let inverse = inner_fft.is_inverse();
         let inner_fft_len = len - 1;
         let reduced_len = StrengthReducedUsize::new(len);
 
@@ -72,7 +74,7 @@ impl<T: FFTnum> RadersAlgorithm<T> {
         let mut inner_fft_input = vec![Complex::zero(); inner_fft_len];
         let mut twiddle_input = 1;
         for input_cell in &mut inner_fft_input {
-            let twiddle = T::generate_twiddle_factor(twiddle_input, len, inner_fft.is_inverse());
+            let twiddle = T::generate_twiddle_factor(twiddle_input, len, inverse);
             *input_cell = twiddle * unity_scale;
 
             twiddle_input = (twiddle_input * primitive_root_inverse) % reduced_len;
@@ -90,10 +92,11 @@ impl<T: FFTnum> RadersAlgorithm<T> {
             primitive_root_inverse,
 
             len: reduced_len,
+            inverse,
         }
     }
 
-    fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+    fn perform_fft_out_of_place(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
 
         // The first output element is just the sum of all the input elements
         output[0] = input.iter().sum();
@@ -131,33 +134,7 @@ impl<T: FFTnum> RadersAlgorithm<T> {
         }
     }
 }
-
-impl<T: FFTnum> FFT<T> for RadersAlgorithm<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-
-        self.perform_fft(input, output);
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-
-        for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
-            self.perform_fft(in_chunk, out_chunk);
-        }
-    }
-}
-impl<T> Length for RadersAlgorithm<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        self.len.get()
-    }
-}
-impl<T> IsInverse for RadersAlgorithm<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inner_fft.is_inverse()
-    }
-}
+boilerplate_fft_oop!(RadersAlgorithm, |this: &RadersAlgorithm<_>| this.len.get());
 
 #[cfg(test)]
 mod unit_tests {

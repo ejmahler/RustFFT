@@ -4,7 +4,7 @@ use std::arch::x86_64::*;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use common::{FFTnum, verify_length_inline, verify_length_minimum};
+use common::FFTnum;
 
 use ::{Length, IsInverse, FftInline};
 
@@ -48,6 +48,7 @@ pub struct BluesteinsAvx<T> {
 
     len: usize,
     remainder_count: usize,
+    inverse: bool,
 }
 
 impl BluesteinsAvx<f32> {
@@ -120,11 +121,12 @@ impl BluesteinsAvx<f32> {
 
             len,
             remainder_count: remainder,
+            inverse,
         }
     }
 
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
+    unsafe fn perform_fft_inplace_f32(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
         let (inner_input, inner_scratch) = scratch.split_at_mut(self.inner_fft_multiplier.len()*4);
         
         let (main_chunks, _remainder) = avx_utils::compute_chunk_count_complex_f32(self.len());
@@ -185,38 +187,10 @@ impl BluesteinsAvx<f32> {
         }
     }
 }
-
-default impl<T: FFTnum> FftInline<T> for BluesteinsAvx<T> {
-    fn process_inline(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-        unimplemented!();
-    }
-    fn get_required_scratch_len(&self) -> usize {
-        unimplemented!();
-    }
-}
-impl FftInline<f32> for BluesteinsAvx<f32> {
-    fn process_inline(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
-        verify_length_inline(buffer, self.len());
-        verify_length_minimum(scratch, self.get_required_scratch_len());
-
-        unsafe { self.perform_fft_f32(buffer, scratch) };
-    }
-    fn get_required_scratch_len(&self) -> usize {
-        self.inner_fft_multiplier.len()*4 + self.inner_fft.get_required_scratch_len()
-    }
-}
-impl<T> Length for BluesteinsAvx<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        self.len
-    }
-}
-impl<T> IsInverse for BluesteinsAvx<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inner_fft.is_inverse()
-    }
-}
+boilerplate_fft_simd_unsafe!(BluesteinsAvx, 
+    |this:&BluesteinsAvx<_>| this.len,
+    |this:&BluesteinsAvx<_>| this.inner_fft_multiplier.len()*4 + this.inner_fft.get_required_scratch_len()
+);
 
 #[cfg(test)]
 mod unit_tests {

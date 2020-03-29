@@ -637,6 +637,13 @@ impl<T: FFTnum> FftInline<T> for Butterfly8<T> {
         verify_length_inline(buffer, self.len());
         unsafe { self.process_inplace(buffer) };
     }
+    fn process_inline_multi(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+        assert_eq!(buffer.len() % self.len(), 0, "Buffer is the wrong length. Expected multiple of {}, got {}", self.len(), buffer.len());
+
+        for chunk in buffer.chunks_exact_mut(self.len()) {
+            unsafe { self.process_inplace(chunk) };
+        }
+    }
     fn get_required_scratch_len(&self) -> usize {
         0
     }
@@ -778,6 +785,13 @@ impl<T: FFTnum> FftInline<T> for Butterfly16<T> {
     fn process_inline(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
         verify_length_inline(buffer, self.len());
         unsafe { self.process_inplace(buffer) };
+    }
+    fn process_inline_multi(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+        assert_eq!(buffer.len() % self.len(), 0, "Buffer is the wrong length. Expected multiple of {}, got {}", self.len(), buffer.len());
+
+        for chunk in buffer.chunks_exact_mut(self.len()) {
+            unsafe { self.process_inplace(chunk) };
+        }
     }
     fn get_required_scratch_len(&self) -> usize {
         0
@@ -976,6 +990,13 @@ impl<T: FFTnum> FftInline<T> for Butterfly32<T> {
     fn process_inline(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
         verify_length_inline(buffer, self.len());
         unsafe { self.process_inplace(buffer) };
+    }
+    fn process_inline_multi(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+        assert_eq!(buffer.len() % self.len(), 0, "Buffer is the wrong length. Expected multiple of {}, got {}", self.len(), buffer.len());
+
+        for chunk in buffer.chunks_exact_mut(self.len()) {
+            unsafe { self.process_inplace(chunk) };
+        }
     }
     fn get_required_scratch_len(&self) -> usize {
         0

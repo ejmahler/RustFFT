@@ -76,26 +76,27 @@ pub fn check_inline_fft_algorithm(fft: &FftInline<f32>, size: usize, inverse: bo
     assert_eq!(fft.len(), size, "Algorithm reported incorrect size");
     assert_eq!(fft.is_inverse(), inverse, "Algorithm reported incorrect inverse value");
 
-    let n = 1;
+    let n = 3;
 
     //test the forward direction
     let dft = DFT::new(size, inverse);
 
     // set up buffers
-    let mut expected_buffer = random_signal(size * n);
-    let mut actual_buffer = expected_buffer.clone();
+    let input = random_signal(size * n);
+    let mut expected_buffer = input.clone();
+    let mut actual_buffer = input.clone();
+    let mut multi_buffer = input.clone();
 
     let mut expected_scratch = vec![Zero::zero(); dft.get_required_scratch_len()];
     let mut actual_scratch = vec![Zero::zero(); fft.get_required_scratch_len()];
+    let mut multi_scratch = vec![Zero::zero(); fft.get_required_scratch_len()];
 
     // perform the test
-    
     for chunk in actual_buffer.chunks_mut(size) {
         fft.process_inline(chunk, &mut actual_scratch);
     }
-    for chunk in expected_buffer.chunks_mut(size) {
-        dft.process_inline(chunk, &mut expected_scratch);
-    }
+    fft.process_inline_multi(&mut multi_buffer, &mut multi_scratch);
+    dft.process_inline_multi(&mut expected_buffer, &mut expected_scratch);
 
     // dbg!(&expected_buffer);
     // dbg!(&actual_buffer);
@@ -103,7 +104,25 @@ pub fn check_inline_fft_algorithm(fft: &FftInline<f32>, size: usize, inverse: bo
     // let diff: Vec<_> = expected_buffer.iter().zip(actual_buffer.iter()).map(|(a,b)| a-b).collect();
 
     // dbg!(diff);
-    assert!(compare_vectors(&expected_buffer, &actual_buffer), "process() failed, length = {}, inverse = {}", size, inverse);
+    assert!(compare_vectors(&expected_buffer, &actual_buffer), "process_inline() failed, length = {}, inverse = {}", size, inverse);
+    assert!(compare_vectors(&expected_buffer, &multi_buffer), "process_inline_multi() failed, length = {}, inverse = {}", size, inverse);
+
+    // one more thing: make sure that the FFT algorithm even works with dirty scratch space
+    for item in actual_scratch.iter_mut() {
+        *item = Complex::new(100.0,100.0);
+    }
+    let mut actual_buffer = input.clone();
+    for chunk in actual_buffer.chunks_mut(size) {
+        fft.process_inline(chunk, &mut actual_scratch);
+    }
+    assert!(compare_vectors(&expected_buffer, &actual_buffer), "process_inline() failed the 'dirty scratch' test, length = {}, inverse = {}", size, inverse);
+
+    for item in multi_scratch.iter_mut() {
+        *item = Complex::new(100.0,100.0);
+    }
+    let mut inline_multi_buffer = input.clone();
+    fft.process_inline_multi(&mut inline_multi_buffer, &mut multi_scratch);
+    assert!(compare_vectors(&expected_buffer, &inline_multi_buffer), "process_inline_multi() failed the 'dirty scratch' test, length = {}, inverse = {}", size, inverse);
 }
 
 pub fn make_butterfly(len: usize, inverse: bool) -> Arc<butterflies::FFTButterfly<f32>> {

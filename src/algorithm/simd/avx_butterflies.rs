@@ -3,7 +3,7 @@ use std::arch::x86_64::*;
 
 use num_complex::Complex;
 
-use common::{FFTnum, verify_length_inline};
+use common::FFTnum;
 
 use ::{Length, IsInverse, FftInline};
 
@@ -44,12 +44,9 @@ impl MixedRadixAvx4x2<f32> {
             _phantom: PhantomData,
         }
     }
-}
-
-impl MixedRadixAvx4x2<f32> {
+    
     #[target_feature(enable = "avx", enable = "fma")]
-    #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn process_butterfly8_f32(&self, buffer: &mut [Complex<f32>]) {
+    unsafe fn perform_fft_inplace_f32(&self, buffer: &mut [Complex<f32>], _scratch: &[Complex<f32>]) {
         let row0 = buffer.load_complex_f32(0);
         let row1 = buffer.load_complex_f32(4);
 
@@ -84,35 +81,10 @@ impl MixedRadixAvx4x2<f32> {
         buffer.store_complex_f32(4, output1);
     }
 }
-default impl<T: FFTnum> FftInline<T> for MixedRadixAvx4x2<T> {
-    fn process_inline(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-        unimplemented!();
-    }
-    fn get_required_scratch_len(&self) -> usize {
-        unimplemented!();
-    }
-}
-impl FftInline<f32> for MixedRadixAvx4x2<f32> {
-    fn process_inline(&self, buffer: &mut [Complex<f32>], _scratch: &mut [Complex<f32>]) {
-        verify_length_inline(buffer, self.len());
-        unsafe { self.process_butterfly8_f32(buffer) };
-    }
-    fn get_required_scratch_len(&self) -> usize {
-        0
-    }
-}
-impl<T> Length for MixedRadixAvx4x2<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        8
-    }
-}
-impl<T> IsInverse for MixedRadixAvx4x2<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
+boilerplate_fft_simd_unsafe!(MixedRadixAvx4x2, 
+    |_| 8,
+    |_| 0
+);
 
 pub struct MixedRadixAvx4x4<T> {
     twiddles: [__m256; 3],
@@ -159,11 +131,9 @@ impl MixedRadixAvx4x4<f32> {
             _phantom: PhantomData,
         }
     }
-}
 
-impl MixedRadixAvx4x4<f32> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn process_butterfly16_f32(&self, buffer: &mut [Complex<f32>]) {
+    unsafe fn perform_fft_inplace_f32(&self, buffer: &mut [Complex<f32>], _scratch: &[Complex<f32>]) {
         let input0 = buffer.load_complex_f32(0);
         let input1 = buffer.load_complex_f32(1 * 4);
         let input2 = buffer.load_complex_f32(2 * 4);
@@ -189,35 +159,10 @@ impl MixedRadixAvx4x4<f32> {
         buffer.store_complex_f32(3 * 4, output3);
     }
 }
-default impl<T: FFTnum> FftInline<T> for MixedRadixAvx4x4<T> {
-    fn process_inline(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-        unimplemented!();
-    }
-    fn get_required_scratch_len(&self) -> usize {
-        unimplemented!();
-    }
-}
-impl FftInline<f32> for MixedRadixAvx4x4<f32> {
-    fn process_inline(&self, buffer: &mut [Complex<f32>], _scratch: &mut [Complex<f32>]) {
-        verify_length_inline(buffer, self.len());
-        unsafe { self.process_butterfly16_f32(buffer) };
-    }
-    fn get_required_scratch_len(&self) -> usize {
-        0
-    }
-}
-impl<T> Length for MixedRadixAvx4x4<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        16
-    }
-}
-impl<T> IsInverse for MixedRadixAvx4x4<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
+boilerplate_fft_simd_unsafe!(MixedRadixAvx4x4, 
+    |_| 16,
+    |_| 0
+);
 
 pub struct MixedRadixAvx4x8<T> {
     twiddles: [__m256; 6],
@@ -282,11 +227,9 @@ impl<T: FFTnum> MixedRadixAvx4x8<T> {
             _phantom: PhantomData,
         }
     }
-}
 
-impl MixedRadixAvx4x8<f32> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn process_butterfly32_f32(&self, buffer: &mut [Complex<f32>]) {
+    unsafe fn perform_fft_inplace_f32(&self, buffer: &mut [Complex<f32>], _scratch: &[Complex<f32>]) {
         let input0 = buffer.load_complex_f32(0);
         let input1 = buffer.load_complex_f32(1 * 4);
         let input2 = buffer.load_complex_f32(2 * 4);
@@ -325,35 +268,10 @@ impl MixedRadixAvx4x8<f32> {
         buffer.store_complex_f32(7 * 4, output7);
     }
 }
-default impl<T: FFTnum> FftInline<T> for MixedRadixAvx4x8<T> {
-    fn process_inline(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-        unimplemented!();
-    }
-    fn get_required_scratch_len(&self) -> usize {
-        unimplemented!();
-    }
-}
-impl FftInline<f32> for MixedRadixAvx4x8<f32> {
-    fn process_inline(&self, buffer: &mut [Complex<f32>], _scratch: &mut [Complex<f32>]) {
-        verify_length_inline(buffer, self.len());
-        unsafe { self.process_butterfly32_f32(buffer) };
-    }
-    fn get_required_scratch_len(&self) -> usize {
-        0
-    }
-}
-impl<T> Length for MixedRadixAvx4x8<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        32
-    }
-}
-impl<T> IsInverse for MixedRadixAvx4x8<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
+boilerplate_fft_simd_unsafe!(MixedRadixAvx4x8, 
+    |_| 32,
+    |_| 0
+);
 
 pub struct MixedRadixAvx8x8<T> {
     twiddles: [__m256; 14],
@@ -462,7 +380,7 @@ impl MixedRadixAvx8x8<f32> {
 
 impl MixedRadixAvx8x8<f32> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn process_butterfly64_f32(&self, buffer: &mut [Complex<f32>]) {
+    unsafe fn perform_fft_inplace_f32(&self, buffer: &mut [Complex<f32>], _scratch: &[Complex<f32>]) {
         let input0 = buffer.load_complex_f32(0);
         let input2 = buffer.load_complex_f32(2 * 4);
         let input4 = buffer.load_complex_f32(4 * 4);
@@ -535,36 +453,10 @@ impl MixedRadixAvx8x8<f32> {
         buffer.store_complex_f32(15 * 4, output15);
     }
 }
-default impl<T: FFTnum> FftInline<T> for MixedRadixAvx8x8<T> {
-    fn process_inline(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-        unimplemented!();
-    }
-    fn get_required_scratch_len(&self) -> usize {
-        unimplemented!();
-    }
-}
-impl FftInline<f32> for MixedRadixAvx8x8<f32> {
-    fn process_inline(&self, buffer: &mut [Complex<f32>], _scratch: &mut [Complex<f32>]) {
-        verify_length_inline(buffer, self.len());
-        unsafe { self.process_butterfly64_f32(buffer) };
-    }
-    fn get_required_scratch_len(&self) -> usize {
-        0
-    }
-}
-impl<T> Length for MixedRadixAvx8x8<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        64
-    }
-}
-impl<T> IsInverse for MixedRadixAvx8x8<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
-
+boilerplate_fft_simd_unsafe!(MixedRadixAvx8x8, 
+    |_| 64,
+    |_| 0
+);
 
 #[cfg(test)]
 mod unit_tests {

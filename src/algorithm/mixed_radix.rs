@@ -81,10 +81,8 @@ impl<T: FFTnum> MixedRadix<T> {
     }
 
 
-    fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+    fn perform_fft_out_of_place(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         // SIX STEP FFT:
-
-
 
         // STEP 1: transpose
         transpose::transpose(input, output, self.width, self.height);
@@ -107,32 +105,7 @@ impl<T: FFTnum> MixedRadix<T> {
         transpose::transpose(input, output, self.width, self.height);
     }
 }
-impl<T: FFTnum> FFT<T> for MixedRadix<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-
-        self.perform_fft(input, output);
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-
-        for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
-            self.perform_fft(in_chunk, out_chunk);
-        }
-    }
-}
-impl<T> Length for MixedRadix<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        self.twiddles.len()
-    }
-}
-impl<T> IsInverse for MixedRadix<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
+boilerplate_fft_oop!(MixedRadix, |this: &MixedRadix<_>| this.twiddles.len());
 
 
 pub struct MixedRadixInline<T> {
@@ -185,12 +158,10 @@ impl<T: FFTnum> MixedRadixInline<T> {
         // SIX STEP FFT:
 
         // STEP 1: transpose
-        transpose::transpose(buffer, &mut scratch[..self.len()], self.width, self.height);
+        transpose::transpose(buffer, scratch, self.width, self.height);
 
         // STEP 2: perform FFTs of size `height`
-        for chunk in scratch.chunks_exact_mut(self.height).take(self.width) {
-            self.height_size_fft.process_inline(chunk, buffer);
-        }
+        self.height_size_fft.process_inline_multi(scratch, buffer);
 
         // STEP 3: Apply twiddle factors
         for (element, &twiddle) in scratch.iter_mut().zip(self.twiddles.iter()) {
@@ -198,16 +169,14 @@ impl<T: FFTnum> MixedRadixInline<T> {
         }
 
         // STEP 4: transpose again
-        transpose::transpose(&mut scratch[..self.len()], buffer, self.height, self.width);
+        transpose::transpose(scratch, buffer, self.height, self.width);
 
         // STEP 5: perform FFTs of size `width`
-        for chunk in buffer.chunks_exact_mut(self.width) {
-            self.width_size_fft.process_inline(chunk, scratch);
-        }
+        self.width_size_fft.process_inline_multi(buffer, scratch);
 
         // STEP 6: transpose again
-        transpose::transpose(buffer, &mut scratch[..self.len()], self.width, self.height);
-        buffer.copy_from_slice(&scratch[..self.len()]);
+        transpose::transpose(buffer, scratch, self.width, self.height);
+        buffer.copy_from_slice(scratch);
     }
 }
 impl<T: FFTnum> FftInline<T> for MixedRadixInline<T> {
@@ -215,7 +184,19 @@ impl<T: FFTnum> FftInline<T> for MixedRadixInline<T> {
         verify_length_inline(buffer, self.len());
         verify_length_minimum(scratch, self.get_required_scratch_len());
 
+        let scratch = &mut scratch[..self.len()];
+
         self.perform_fft(buffer, scratch);
+    }
+    fn process_inline_multi(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        assert_eq!(buffer.len() % self.len(), 0, "Buffer is the wrong length. Expected multiple of {}, got {}", self.len(), buffer.len());
+        verify_length_minimum(scratch, self.get_required_scratch_len());
+
+        let scratch = &mut scratch[..self.len()];
+
+        for chunk in buffer.chunks_exact_mut(self.len()) {
+            self.perform_fft(chunk, scratch);
+        }
     }
     #[inline]
     fn get_required_scratch_len(&self) -> usize {

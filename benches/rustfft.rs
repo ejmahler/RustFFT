@@ -610,12 +610,12 @@ fn bench_mixed_radix_power2(b: &mut Bencher, len: usize) {
     });
 }
 
-#[bench] fn mixed_radix_power2__0000256(b: &mut Bencher) { bench_mixed_radix_power2(b, 256); }
-#[bench] fn mixed_radix_power2__0001024(b: &mut Bencher) { bench_mixed_radix_power2(b, 1024); }
-#[bench] fn mixed_radix_power2__0004096(b: &mut Bencher) { bench_mixed_radix_power2(b, 4096); }
-#[bench] fn mixed_radix_power2__0065536(b: &mut Bencher) { bench_mixed_radix_power2(b, 65536); }
-#[bench] fn mixed_radix_power2__1048576(b: &mut Bencher) { bench_mixed_radix_power2(b, 1048576); }
-//#[bench] fn mixed_4xn_avx_16777216(b: &mut Bencher) { bench_mixed_4xn_avx(b, 16777216); }
+#[bench] fn mixed_radix_power2__00000256(b: &mut Bencher) { bench_mixed_radix_power2(b, 256); }
+#[bench] fn mixed_radix_power2__00001024(b: &mut Bencher) { bench_mixed_radix_power2(b, 1024); }
+#[bench] fn mixed_radix_power2__00004096(b: &mut Bencher) { bench_mixed_radix_power2(b, 4096); }
+#[bench] fn mixed_radix_power2__00065536(b: &mut Bencher) { bench_mixed_radix_power2(b, 65536); }
+#[bench] fn mixed_radix_power2__01048576(b: &mut Bencher) { bench_mixed_radix_power2(b, 1048576); }
+#[bench] fn mixed_radix_power2__16777216(b: &mut Bencher) { bench_mixed_radix_power2(b, 16777216); }
 
 
 fn get_mixed_radix_inline_power2(len: usize) -> Arc<dyn FftInline<f32>> {
@@ -645,9 +645,9 @@ fn bench_mixed_radix_inline_power2(b: &mut Bencher, len: usize) {
     });
 }
 
-#[bench] fn mixed_radix_power2_inline__0000256(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 256); }
-#[bench] fn mixed_radix_power2_inline__0001024(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 1024); }
-#[bench] fn mixed_radix_power2_inline__0004096(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 4096); }
-#[bench] fn mixed_radix_power2_inline__0065536(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 65536); }
-#[bench] fn mixed_radix_power2_inline__1048576(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 1048576); }
-//#[bench] fn mixed_4xn_avx_16777216(b: &mut Bencher) { bench_mixed_4xn_avx(b, 16777216); }
+#[bench] fn mixed_radix_power2_inline__00000256(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 256); }
+#[bench] fn mixed_radix_power2_inline__00001024(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 1024); }
+#[bench] fn mixed_radix_power2_inline__00004096(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 4096); }
+#[bench] fn mixed_radix_power2_inline__00065536(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 65536); }
+#[bench] fn mixed_radix_power2_inline__01048576(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 1048576); }
+#[bench] fn mixed_radix_power2_inline__16777216(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 16777216); }
