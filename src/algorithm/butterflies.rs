@@ -1,10 +1,78 @@
 use num_complex::Complex;
 use num_traits::{FromPrimitive, Zero};
 
-use common::{FFTnum, verify_length, verify_length_divisible, verify_length_inline};
+use common::FFTnum;
 
 use twiddles;
-use ::{Length, IsInverse, FFT, FftInline};
+use ::{Length, IsInverse, Fft};
+
+#[allow(unused)]
+macro_rules! boilerplate_fft_butterfly {
+    ($struct_name:ident, $len:expr, $inverse_fn:expr) => (
+		impl<T: FFTnum> Fft<T> for $struct_name<T> {
+			fn process_with_scratch(&self, input: &mut [Complex<T>], output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+				assert_eq!(input.len(), self.len(), "Input is the wrong length. Expected {}, got {}", self.len(), input.len());
+                assert_eq!(output.len(), self.len(), "Output is the wrong length. Expected {}, got {}", self.len(), output.len());
+                
+                output.copy_from_slice(input);
+				unsafe { self.perform_fft_inplace(output) };
+			}
+			fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+				assert!(input.len() % self.len() == 0, "Output is the wrong length. Expected multiple of {}, got {}", self.len(), input.len());
+				assert_eq!(input.len(), output.len(), "Output is the wrong length. input = {} output = {}", input.len(), output.len());
+        
+                output.copy_from_slice(input);
+				for out_chunk in output.chunks_exact_mut(self.len()) {
+					unsafe { self.perform_fft_inplace(out_chunk) };
+				}
+			}
+            fn process_inplace_with_scratch(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+                assert_eq!(buffer.len(), self.len(), "Buffer is the wrong length. Expected {}, got {}", self.len(), buffer.len());
+        
+                unsafe { self.perform_fft_inplace(buffer) };
+            }
+            fn process_inplace_multi(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+                assert_eq!(buffer.len() % self.len(), 0, "Buffer is the wrong length. Expected multiple of {}, got {}", self.len(), buffer.len());
+        
+                for chunk in buffer.chunks_exact_mut(self.len()) {
+                    unsafe { self.perform_fft_inplace(chunk) };
+                }
+            }
+            #[inline(always)]
+            fn get_inplace_scratch_len(&self) -> usize {
+                0
+            }
+            #[inline(always)]
+            fn get_out_of_place_scratch_len(&self) -> usize {
+                0
+            }
+        }
+        impl<T: FFTnum> FFTButterfly<T> for $struct_name<T> {
+            #[inline(always)]
+            unsafe fn process_butterfly_inplace(&self, buffer: &mut [Complex<T>]) {
+                self.perform_fft_inplace(buffer);
+            }
+            #[inline(always)]
+            unsafe fn process_butterfly_multi_inplace(&self, buffer: &mut [Complex<T>]) {
+                for chunk in buffer.chunks_exact_mut(self.len()) {
+                    self.perform_fft_inplace(chunk);
+                }
+            }
+        }
+        impl<T> Length for $struct_name<T> {
+            #[inline(always)]
+            fn len(&self) -> usize {
+                $len
+            }
+        }
+        impl<T> IsInverse for $struct_name<T> {
+            #[inline(always)]
+            fn is_inverse(&self) -> bool {
+                $inverse_fn(self)
+            }
+        }
+    )
+}
 
 
 pub trait FFTButterfly<T: FFTnum>: Length + IsInverse + Sync + Send {
@@ -12,13 +80,13 @@ pub trait FFTButterfly<T: FFTnum>: Length + IsInverse + Sync + Send {
     ///
     /// # Safety
     /// This method performs unsafe reads/writes on `buffer`. Make sure `buffer.len()` is equal to `self.len()`
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]);
+    unsafe fn process_butterfly_inplace(&self, buffer: &mut [Complex<T>]);
 
     /// Divides the given buffer into chunks of length `self.len()` and computes an in-place FFT on each chunk
     ///
     /// # Safety
     /// This method performs unsafe reads/writes on `buffer`. Make sure `buffer.len()` is a multiple of `self.len()`
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]);
+    unsafe fn process_butterfly_multi_inplace(&self, buffer: &mut [Complex<T>]);
 }
 
 
@@ -33,68 +101,31 @@ unsafe fn swap_unchecked<T: Copy>(buffer: &mut [T], a: usize, b: usize) {
 
 
 
-pub struct Butterfly2 {
+pub struct Butterfly2<T> {
     inverse: bool,
+    _phantom: std::marker::PhantomData<T>,
 }
-impl Butterfly2 {
+impl<T: FFTnum> Butterfly2<T> {
     #[inline(always)]
     pub fn new(inverse: bool) -> Self {
-        Butterfly2 {
-            inverse: inverse,
-        }
+        Self { inverse,  _phantom: std::marker::PhantomData }
     }
-
     #[inline(always)]
-    unsafe fn perform_fft_direct<T: FFTnum>(left: &mut Complex<T>, right: &mut Complex<T>) {
+    unsafe fn perform_fft_direct(left: &mut Complex<T>, right: &mut Complex<T>) {
         let temp = *left + *right;
         
         *right = *left - *right;
         *left = temp;
     }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly2 {
     #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+    unsafe fn perform_fft_inplace(&self, buffer: &mut [Complex<T>]) {
         let temp = *buffer.get_unchecked(0) + *buffer.get_unchecked(1);
         
         *buffer.get_unchecked_mut(1) = *buffer.get_unchecked(0) - *buffer.get_unchecked(1);
         *buffer.get_unchecked_mut(0) = temp;
     }
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-    	for chunk in buffer.chunks_mut(self.len()) {
-    		self.process_inplace(chunk);
-    	}
-    }
 }
-impl<T: FFTnum> FFT<T> for Butterfly2 {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl Length for Butterfly2 {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        2
-    }
-}
-impl IsInverse for Butterfly2 {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
-
-
+boilerplate_fft_butterfly!(Butterfly2, 2, |this: &Butterfly2<_>| this.inverse);
 
 pub struct Butterfly3<T> {
 	pub twiddle: Complex<T>,
@@ -103,26 +134,23 @@ pub struct Butterfly3<T> {
 impl<T: FFTnum> Butterfly3<T> {
 	#[inline(always)]
     pub fn new(inverse: bool) -> Self {
-        Butterfly3 {
+        Self {
             twiddle: T::generate_twiddle_factor(1, 3, inverse),
             inverse: inverse,
         }
     }
-
     #[inline(always)]
     pub fn inverse_of(fft: &Butterfly3<T>) -> Self {
-        Butterfly3 {
+        Self {
             twiddle: fft.twiddle.conj(),
             inverse: !fft.inverse,
         }
     }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly3<T> {
     #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+    unsafe fn perform_fft_inplace(&self, buffer: &mut [Complex<T>]) {
         let butterfly2 = Butterfly2::new(self.inverse);
 
-        butterfly2.process_inplace(&mut buffer[1..]);
+        butterfly2.perform_fft_inplace(&mut buffer[1..]);
         let temp = *buffer.get_unchecked(0);
 
         *buffer.get_unchecked_mut(0) = temp + *buffer.get_unchecked(1);
@@ -130,59 +158,22 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly3<T> {
         *buffer.get_unchecked_mut(1) = *buffer.get_unchecked(1) * self.twiddle.re + temp;
         *buffer.get_unchecked_mut(2) = *buffer.get_unchecked(2) * Complex{re: Zero::zero(), im: self.twiddle.im};
 
-        butterfly2.process_inplace(&mut buffer[1..]);
-    }
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
-            self.process_inplace(chunk);
-        }
+        butterfly2.perform_fft_inplace(&mut buffer[1..]);
     }
 }
-impl<T: FFTnum> FFT<T> for Butterfly3<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
+boilerplate_fft_butterfly!(Butterfly3, 3, |this: &Butterfly3<_>| this.inverse);
 
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl<T> Length for Butterfly3<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        3
-    }
-}
-impl<T> IsInverse for Butterfly3<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
-
-
-
-
-
-pub struct Butterfly4 {
+pub struct Butterfly4<T> {
     inverse: bool,
+    _phantom: std::marker::PhantomData<T>,
 }
-impl Butterfly4
-{
+impl<T: FFTnum> Butterfly4<T> {
     #[inline(always)]
     pub fn new(inverse: bool) -> Self {
-        Butterfly4 { inverse:inverse }
+        Self { inverse, _phantom: std::marker::PhantomData }
     }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly4 {
     #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+    unsafe fn perform_fft_inplace(&self, buffer: &mut [Complex<T>]) {
         let butterfly2 = Butterfly2::new(self.inverse);
 
         //we're going to hardcode a step of mixed radix
@@ -209,43 +200,8 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly4 {
         // step 6: transpose
         swap_unchecked(buffer, 1, 2);
     }
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
-            self.process_inplace(chunk);
-        }
-    }
 }
-impl<T: FFTnum> FFT<T> for Butterfly4 {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl Length for Butterfly4 {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        4
-    }
-}
-impl IsInverse for Butterfly4 {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
-
-
-
-
+boilerplate_fft_butterfly!(Butterfly4, 4, |this: &Butterfly4<_>| this.inverse);
 
 pub struct Butterfly5<T> {
 	inner_fft_multiply: [Complex<T>; 4],
@@ -253,7 +209,6 @@ pub struct Butterfly5<T> {
 }
 impl<T: FFTnum> Butterfly5<T> {
     pub fn new(inverse: bool) -> Self {
-
     	//we're going to hardcode a raders algorithm of size 5 and an inner FFT of size 4
     	let quarter: T = FromPrimitive::from_f32(0.25f32).unwrap();
     	let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 5, inverse) * quarter;
@@ -263,23 +218,21 @@ impl<T: FFTnum> Butterfly5<T> {
     	let mut fft_data = [twiddle1, twiddle2.conj(), twiddle1.conj(), twiddle2];
 
     	let butterfly = Butterfly4::new(inverse);
-    	unsafe { butterfly.process_inplace(&mut fft_data) };
+    	unsafe { butterfly.process_butterfly_inplace(&mut fft_data) };
 
-        Butterfly5 { 
+        Self { 
         	inner_fft_multiply: fft_data,
-        	inverse: inverse,
+        	inverse,
         }
     }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly5<T> {
-    #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+
+    unsafe fn perform_fft_inplace(&self, buffer: &mut [Complex<T>]) {
         //we're going to reorder the buffer directly into our scratch vec
         //our primitive root is 2. the powers of 2 mod 5 are 1, 2,4,3 so use that ordering
         let mut scratch = [*buffer.get_unchecked(1), *buffer.get_unchecked(2), *buffer.get_unchecked(4), *buffer.get_unchecked(3)];
 
         //perform the first inner FFT
-        Butterfly4::new(self.inverse).process_inplace(&mut scratch);
+        Butterfly4::new(self.inverse).perform_fft_inplace(&mut scratch);
 
         //multiply the fft result with our precomputed data
         for i in 0..4 {
@@ -287,7 +240,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly5<T> {
         }
 
         //perform the second inner FFT
-        Butterfly4::new(!self.inverse).process_inplace(&mut scratch);
+        Butterfly4::new(!self.inverse).perform_fft_inplace(&mut scratch);
 
         //the first element of the output is the sum of the rest
         let first_input = *buffer.get_unchecked_mut(0);
@@ -303,58 +256,23 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly5<T> {
         *buffer.get_unchecked_mut(4) = scratch[2] + first_input;
         *buffer.get_unchecked_mut(2) = scratch[3] + first_input;
     }
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
-            self.process_inplace(chunk);
-        }
-    }
 }
-impl<T: FFTnum> FFT<T> for Butterfly5<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl<T> Length for Butterfly5<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        5
-    }
-}
-impl<T> IsInverse for Butterfly5<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
-
-
-
+boilerplate_fft_butterfly!(Butterfly5, 5, |this: &Butterfly5<_>| this.inverse);
 
 pub struct Butterfly6<T> {
 	butterfly3: Butterfly3<T>,
 }
 impl<T: FFTnum> Butterfly6<T> {
-
-    pub fn new(inverse: bool) -> Self {
-        Butterfly6 { butterfly3: Butterfly3::new(inverse) }
-    }
-    pub fn inverse_of(fft: &Butterfly6<T>) -> Self {
-        Butterfly6 { butterfly3: Butterfly3::inverse_of(&fft.butterfly3) }
-    }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly6<T> {
     #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+    pub fn new(inverse: bool) -> Self {
+        Self { butterfly3: Butterfly3::new(inverse) }
+    }
+    #[inline(always)]
+    pub fn inverse_of(fft: &Butterfly6<T>) -> Self {
+        Self { butterfly3: Butterfly3::inverse_of(&fft.butterfly3) }
+    }
+    #[inline(always)]
+    unsafe fn perform_fft_inplace(&self, buffer: &mut [Complex<T>]) {
         //since GCD(2,3) == 1 we're going to hardcode a step of the Good-Thomas algorithm to avoid twiddle factors
 
         // step 1: reorder the input directly into the scratch. normally there's a whole thing to compute this ordering
@@ -372,8 +290,8 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly6<T> {
         ];
 
         // step 2: column FFTs
-        self.butterfly3.process_inplace(&mut scratch_a);
-        self.butterfly3.process_inplace(&mut scratch_b);
+        self.butterfly3.perform_fft_inplace(&mut scratch_a);
+        self.butterfly3.perform_fft_inplace(&mut scratch_b);
 
         // step 3: apply twiddle factors -- SKIPPED because good-thomas doesn't have twiddle factors :)
 
@@ -394,40 +312,8 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly6<T> {
         *buffer.get_unchecked_mut(2) = scratch_a[2];
         *buffer.get_unchecked_mut(5) = scratch_b[2];
     }
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
-            self.process_inplace(chunk);
-        }
-    }
 }
-impl<T: FFTnum> FFT<T> for Butterfly6<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl<T> Length for Butterfly6<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        6
-    }
-}
-impl<T> IsInverse for Butterfly6<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.butterfly3.is_inverse()
-    }
-}
-
+boilerplate_fft_butterfly!(Butterfly6, 6, |this: &Butterfly6<_>| this.butterfly3.is_inverse());
 
 pub struct Butterfly7<T> {
     inner_fft: Butterfly6<T>,
@@ -435,7 +321,6 @@ pub struct Butterfly7<T> {
 }
 impl<T: FFTnum> Butterfly7<T> {
     pub fn new(inverse: bool) -> Self {
-
         //we're going to hardcode a raders algorithm of size 5 and an inner FFT of size 4
         let sixth: T = FromPrimitive::from_f64(1f64/6f64).unwrap();
         let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 7, inverse) * sixth;
@@ -446,17 +331,14 @@ impl<T: FFTnum> Butterfly7<T> {
         let mut fft_data = [twiddle1, twiddle2.conj(), twiddle3.conj(), twiddle1.conj(), twiddle2, twiddle3];
 
         let butterfly = Butterfly6::new(inverse);
-        unsafe { butterfly.process_inplace(&mut fft_data) };
+        unsafe { butterfly.perform_fft_inplace(&mut fft_data) };
 
         Butterfly7 { 
             inner_fft: butterfly,
             inner_fft_multiply: fft_data,
         }
     }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly7<T> {
-    #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+    unsafe fn perform_fft_inplace(&self, buffer: &mut [Complex<T>]) {
         //we're going to reorder the buffer directly into our scratch vec
         //our primitive root is 3. use 3^n mod 7 to determine which index to copy from
         let mut scratch = [
@@ -469,7 +351,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly7<T> {
             ];
 
         //perform the first inner FFT
-        self.inner_fft.process_inplace(&mut scratch);
+        self.inner_fft.perform_fft_inplace(&mut scratch);
 
         //multiply the fft result with our precomputed data
         for i in 0..6 {
@@ -478,7 +360,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly7<T> {
 
         //perform the second inner FFT
         let inverse6 = Butterfly6::inverse_of(&self.inner_fft);
-        inverse6.process_inplace(&mut scratch);
+        inverse6.perform_fft_inplace(&mut scratch);
 
         //the first element of the output is the sum of the rest
         let first_input = *buffer.get_unchecked(0);
@@ -496,51 +378,17 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly7<T> {
         *buffer.get_unchecked_mut(3) = scratch[4] + first_input;
         *buffer.get_unchecked_mut(1) = scratch[5] + first_input;
     }
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
-            self.process_inplace(chunk);
-        }
-    }
 }
-impl<T: FFTnum> FFT<T> for Butterfly7<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl<T> Length for Butterfly7<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        7
-    }
-}
-impl<T> IsInverse for Butterfly7<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inner_fft.is_inverse()
-    }
-}
-
-
+boilerplate_fft_butterfly!(Butterfly7, 7, |this: &Butterfly7<_>| this.inner_fft.is_inverse());
 
 pub struct Butterfly8<T> {
     twiddle: Complex<T>,
     inverse: bool,
 }
-impl<T: FFTnum> Butterfly8<T>
-{
+impl<T: FFTnum> Butterfly8<T> {
     #[inline(always)]
     pub fn new(inverse: bool) -> Self {
-        Butterfly8 {
+        Self {
             inverse: inverse,
             twiddle: T::generate_twiddle_factor(1, 8, inverse)
         }
@@ -558,10 +406,8 @@ impl<T: FFTnum> Butterfly8<T>
         buffer[3] = buffer[5];
         buffer[5] = temp6;
     }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly8<T> {
-    #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+
+    unsafe fn perform_fft_inplace(&self, buffer: &mut [Complex<T>]) {
         let butterfly2 = Butterfly2::new(self.inverse);
         let butterfly4 = Butterfly4::new(self.inverse);
 
@@ -581,8 +427,8 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly8<T> {
         ];
 
         // step 2: column FFTs
-        butterfly4.process_inplace(&mut scratch[..4]);
-        butterfly4.process_inplace(&mut scratch[4..]);
+        butterfly4.perform_fft_inplace(&mut scratch[..4]);
+        butterfly4.perform_fft_inplace(&mut scratch[4..]);
 
         // step 3: apply twiddle factors
         let twiddle1 = self.twiddle;
@@ -596,10 +442,10 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly8<T> {
         Self::transpose_4x2_to_2x4(&mut scratch);
 
         // step 5: row FFTs
-        butterfly2.process_inplace(&mut scratch[..2]);
-        butterfly2.process_inplace(&mut scratch[2..4]);
-        butterfly2.process_inplace(&mut scratch[4..6]);
-        butterfly2.process_inplace(&mut scratch[6..]);
+        butterfly2.perform_fft_inplace(&mut scratch[..2]);
+        butterfly2.perform_fft_inplace(&mut scratch[2..4]);
+        butterfly2.perform_fft_inplace(&mut scratch[4..6]);
+        butterfly2.perform_fft_inplace(&mut scratch[6..]);
 
         // step 6: transpose the scratch into the buffer
         *buffer.get_unchecked_mut(0) = scratch[0];
@@ -611,56 +457,8 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly8<T> {
         *buffer.get_unchecked_mut(6) = scratch[5];
         *buffer.get_unchecked_mut(7) = scratch[7];
     }
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
-            self.process_inplace(chunk);
-        }
-    }
 }
-impl<T: FFTnum> FFT<T> for Butterfly8<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl<T: FFTnum> FftInline<T> for Butterfly8<T> {
-    fn process_inline(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-        verify_length_inline(buffer, self.len());
-        unsafe { self.process_inplace(buffer) };
-    }
-    fn process_inline_multi(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-        assert_eq!(buffer.len() % self.len(), 0, "Buffer is the wrong length. Expected multiple of {}, got {}", self.len(), buffer.len());
-
-        for chunk in buffer.chunks_exact_mut(self.len()) {
-            unsafe { self.process_inplace(chunk) };
-        }
-    }
-    fn get_required_scratch_len(&self) -> usize {
-        0
-    }
-}
-impl<T> Length for Butterfly8<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        8
-    }
-}
-impl<T> IsInverse for Butterfly8<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
-
+boilerplate_fft_butterfly!(Butterfly8, 8, |this: &Butterfly8<_>| this.inverse);
 
 
 pub struct Butterfly16<T> {
@@ -668,25 +466,20 @@ pub struct Butterfly16<T> {
     twiddle1: Complex<T>,
     twiddle2: Complex<T>,
     twiddle3: Complex<T>,
-    inverse: bool,
 }
-impl<T: FFTnum> Butterfly16<T>
-{
+impl<T: FFTnum> Butterfly16<T> {
     #[inline(always)]
     pub fn new(inverse: bool) -> Self {
-        Butterfly16 {
+        Self {
             butterfly8: Butterfly8::new(inverse),
             twiddle1: T::generate_twiddle_factor(1, 16, inverse),
             twiddle2: T::generate_twiddle_factor(2, 16, inverse),
             twiddle3: T::generate_twiddle_factor(3, 16, inverse),
-            inverse: inverse,
         }
     }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly16<T> {
-    #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
-        let butterfly4 = Butterfly4::new(self.inverse);
+
+    unsafe fn perform_fft_inplace(&self, buffer: &mut [Complex<T>]) {
+        let butterfly4 = Butterfly4::new(self.is_inverse());
 
         // we're going to hardcode a step of split radix
         // step 1: copy and reorder the  input into the scratch
@@ -715,9 +508,9 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly16<T> {
         ];
 
         // step 2: column FFTs
-        self.butterfly8.process_inplace(&mut scratch_evens);
-        butterfly4.process_inplace(&mut scratch_odds_n1);
-        butterfly4.process_inplace(&mut scratch_odds_n3);
+        self.butterfly8.perform_fft_inplace(&mut scratch_evens);
+        butterfly4.perform_fft_inplace(&mut scratch_odds_n1);
+        butterfly4.perform_fft_inplace(&mut scratch_odds_n3);
 
         // step 3: apply twiddle factors
         scratch_odds_n1[1] = scratch_odds_n1[1] * self.twiddle1;
@@ -736,10 +529,10 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly16<T> {
         Butterfly2::perform_fft_direct(&mut scratch_odds_n1[3], &mut scratch_odds_n3[3]);
 
         // apply the butterfly 4 twiddle factor, which is just a rotation
-        scratch_odds_n3[0] = twiddles::rotate_90(scratch_odds_n3[0], self.inverse);
-        scratch_odds_n3[1] = twiddles::rotate_90(scratch_odds_n3[1], self.inverse);
-        scratch_odds_n3[2] = twiddles::rotate_90(scratch_odds_n3[2], self.inverse);
-        scratch_odds_n3[3] = twiddles::rotate_90(scratch_odds_n3[3], self.inverse);
+        scratch_odds_n3[0] = twiddles::rotate_90(scratch_odds_n3[0], self.is_inverse());
+        scratch_odds_n3[1] = twiddles::rotate_90(scratch_odds_n3[1], self.is_inverse());
+        scratch_odds_n3[2] = twiddles::rotate_90(scratch_odds_n3[2], self.is_inverse());
+        scratch_odds_n3[3] = twiddles::rotate_90(scratch_odds_n3[3], self.is_inverse());
 
         //step 5: copy/add/subtract data back to buffer
         *buffer.get_unchecked_mut(0) =  scratch_evens[0] + scratch_odds_n1[0];
@@ -758,71 +551,18 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly16<T> {
         *buffer.get_unchecked_mut(13) = scratch_evens[5] - scratch_odds_n3[1];
         *buffer.get_unchecked_mut(14) = scratch_evens[6] - scratch_odds_n3[2];
         *buffer.get_unchecked_mut(15) = scratch_evens[7] - scratch_odds_n3[3];
-
-    }
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
-            self.process_inplace(chunk);
-        }
     }
 }
-impl<T: FFTnum> FFT<T> for Butterfly16<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl<T: FFTnum> FftInline<T> for Butterfly16<T> {
-    fn process_inline(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-        verify_length_inline(buffer, self.len());
-        unsafe { self.process_inplace(buffer) };
-    }
-    fn process_inline_multi(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-        assert_eq!(buffer.len() % self.len(), 0, "Buffer is the wrong length. Expected multiple of {}, got {}", self.len(), buffer.len());
-
-        for chunk in buffer.chunks_exact_mut(self.len()) {
-            unsafe { self.process_inplace(chunk) };
-        }
-    }
-    fn get_required_scratch_len(&self) -> usize {
-        0
-    }
-}
-impl<T> Length for Butterfly16<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        16
-    }
-}
-impl<T> IsInverse for Butterfly16<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
-
-
+boilerplate_fft_butterfly!(Butterfly16, 16, |this: &Butterfly16<_>| this.butterfly8.is_inverse());
 
 pub struct Butterfly32<T> {
     butterfly16: Butterfly16<T>,
     butterfly8: Butterfly8<T>,
     twiddles: [Complex<T>; 7],
-    inverse: bool,
 }
-impl<T: FFTnum> Butterfly32<T>
-{
-    #[inline(always)]
+impl<T: FFTnum> Butterfly32<T> {
     pub fn new(inverse: bool) -> Self {
-        Butterfly32 {
+        Self {
             butterfly16: Butterfly16::new(inverse),
             butterfly8: Butterfly8::new(inverse),
             twiddles: [
@@ -834,13 +574,10 @@ impl<T: FFTnum> Butterfly32<T>
                 T::generate_twiddle_factor(6, 32, inverse),
                 T::generate_twiddle_factor(7, 32, inverse),
             ],
-            inverse: inverse,
         }
     }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly32<T> {
-    #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+
+    unsafe fn perform_fft_inplace(&self, buffer: &mut [Complex<T>]) {
         // we're going to hardcode a step of split radix
         // step 1: copy and reorder the  input into the scratch
         let mut scratch_evens = [
@@ -884,9 +621,9 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly32<T> {
         ];
 
         // step 2: column FFTs
-        self.butterfly16.process_inplace(&mut scratch_evens);
-        self.butterfly8.process_inplace(&mut scratch_odds_n1);
-        self.butterfly8.process_inplace(&mut scratch_odds_n3);
+        self.butterfly16.perform_fft_inplace(&mut scratch_evens);
+        self.butterfly8.perform_fft_inplace(&mut scratch_odds_n1);
+        self.butterfly8.perform_fft_inplace(&mut scratch_odds_n3);
 
         // step 3: apply twiddle factors
         scratch_odds_n1[1] = scratch_odds_n1[1] * self.twiddles[0];
@@ -921,14 +658,14 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly32<T> {
         Butterfly2::perform_fft_direct(&mut scratch_odds_n1[7], &mut scratch_odds_n3[7]);
 
         // apply the butterfly 4 twiddle factor, which is just a rotation
-        scratch_odds_n3[0] = twiddles::rotate_90(scratch_odds_n3[0], self.inverse);
-        scratch_odds_n3[1] = twiddles::rotate_90(scratch_odds_n3[1], self.inverse);
-        scratch_odds_n3[2] = twiddles::rotate_90(scratch_odds_n3[2], self.inverse);
-        scratch_odds_n3[3] = twiddles::rotate_90(scratch_odds_n3[3], self.inverse);
-        scratch_odds_n3[4] = twiddles::rotate_90(scratch_odds_n3[4], self.inverse);
-        scratch_odds_n3[5] = twiddles::rotate_90(scratch_odds_n3[5], self.inverse);
-        scratch_odds_n3[6] = twiddles::rotate_90(scratch_odds_n3[6], self.inverse);
-        scratch_odds_n3[7] = twiddles::rotate_90(scratch_odds_n3[7], self.inverse);
+        scratch_odds_n3[0] = twiddles::rotate_90(scratch_odds_n3[0], self.is_inverse());
+        scratch_odds_n3[1] = twiddles::rotate_90(scratch_odds_n3[1], self.is_inverse());
+        scratch_odds_n3[2] = twiddles::rotate_90(scratch_odds_n3[2], self.is_inverse());
+        scratch_odds_n3[3] = twiddles::rotate_90(scratch_odds_n3[3], self.is_inverse());
+        scratch_odds_n3[4] = twiddles::rotate_90(scratch_odds_n3[4], self.is_inverse());
+        scratch_odds_n3[5] = twiddles::rotate_90(scratch_odds_n3[5], self.is_inverse());
+        scratch_odds_n3[6] = twiddles::rotate_90(scratch_odds_n3[6], self.is_inverse());
+        scratch_odds_n3[7] = twiddles::rotate_90(scratch_odds_n3[7], self.is_inverse());
 
         //step 5: copy/add/subtract data back to buffer
         *buffer.get_unchecked_mut(0) =  scratch_evens[0] +  scratch_odds_n1[0];
@@ -965,55 +702,8 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly32<T> {
         *buffer.get_unchecked_mut(31) = scratch_evens[15] - scratch_odds_n3[7];
 
     }
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
-            self.process_inplace(chunk);
-        }
-    }
 }
-impl<T: FFTnum> FFT<T> for Butterfly32<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl<T: FFTnum> FftInline<T> for Butterfly32<T> {
-    fn process_inline(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-        verify_length_inline(buffer, self.len());
-        unsafe { self.process_inplace(buffer) };
-    }
-    fn process_inline_multi(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-        assert_eq!(buffer.len() % self.len(), 0, "Buffer is the wrong length. Expected multiple of {}, got {}", self.len(), buffer.len());
-
-        for chunk in buffer.chunks_exact_mut(self.len()) {
-            unsafe { self.process_inplace(chunk) };
-        }
-    }
-    fn get_required_scratch_len(&self) -> usize {
-        0
-    }
-}
-impl<T> Length for Butterfly32<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        32
-    }
-}
-impl<T> IsInverse for Butterfly32<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
+boilerplate_fft_butterfly!(Butterfly32, 32, |this: &Butterfly32<_>| this.butterfly8.is_inverse());
 
 
 
@@ -1070,12 +760,12 @@ mod unit_tests {
         let mut inplace_multi_buffer = expected_input.clone();
 
         // perform the test
-        dft.process_multi(&mut expected_input, &mut expected_output);
+        dft.process_multi(&mut expected_input, &mut expected_output, &mut []);
 
-        unsafe { butterfly.process_multi_inplace(&mut inplace_multi_buffer); }
+        unsafe { butterfly.process_butterfly_multi_inplace(&mut inplace_multi_buffer); }
 
         for chunk in inplace_buffer.chunks_mut(size) {
-            unsafe { butterfly.process_inplace(chunk) };
+            unsafe { butterfly.process_butterfly_inplace(chunk) };
         }
 
         assert!(compare_vectors(&expected_output, &inplace_buffer), "process_inplace() failed, length = {}, inverse = {}", size, inverse);

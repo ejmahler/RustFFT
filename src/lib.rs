@@ -23,16 +23,16 @@
 //! // The fft instance returned by the planner is stored behind an `Arc`, so it's cheap to clone
 //! let fft_clone = Arc::clone(&fft);
 //! ```
-//! The planner returns trait objects of the [`FFT`](trait.FFT.html) trait, allowing for FFT sizes that aren't known
+//! The planner returns trait objects of the [`Fft`](trait.Fft.html) trait, allowing for FFT sizes that aren't known
 //! until runtime.
 //! 
-//! RustFFT also exposes individual FFT algorithms. If you know beforehand that you need a power-of-two FFT, you can
+//! RustFFT also exposes individual FFT algorithms. If you know beforehand that you need a power-of-two you can
 //! avoid the overhead of the planner and trait object by directly creating instances of the Radix4 algorithm:
 //!
 //! ```
 //! // Computes a forward FFT of size 4096
 //! use rustfft::algorithm::Radix4;
-//! use rustfft::FFT;
+//! use rustfft::Fft;
 //! use rustfft::num_complex::Complex;
 //! use rustfft::num_traits::Zero;
 //!
@@ -51,7 +51,7 @@
 //!
 //! RustFFT does not normalize outputs. Callers must manually normalize the results by scaling each element by
 //! `1/len().sqrt()`. Multiple normalization steps can be merged into one via pairwise multiplication, so when
-//! doing a forward FFT followed by an inverse FFT, callers can normalize once by scaling each element by `1/len()`
+//! doing a forward FFT followed by an inverse callers can normalize once by scaling each element by `1/len()`
 //!
 //! ### Output Order
 //!
@@ -79,6 +79,7 @@ mod plan;
 mod twiddles;
 
 use num_complex::Complex;
+use num_traits::Zero;
 
 pub use plan::FFTplanner;
 pub use common::FFTnum;
@@ -98,32 +99,34 @@ pub trait IsInverse {
 }
 
 /// An umbrella trait for all available FFT algorithms
-pub trait FFT<T: FFTnum>: Length + IsInverse + Sync + Send {
+pub trait Fft<T: FFTnum>: Length + IsInverse + Sync + Send {
     /// Computes an FFT on the `input` buffer and places the result in the `output` buffer.
     ///
     /// The output is not normalized. Callers must manually normalize the results by scaling each element by
     /// `1/len().sqrt()`. Multiple normalization steps can be merged into one via pairwise multiplication, so when
-    /// doing a forward FFT followed by an inverse FFT, callers can normalize once by scaling each element by `1/len()`
+    /// doing a forward FFT followed by an inverse callers can normalize once by scaling each element by `1/len()`
     ///
     /// This method uses the `input` buffer as scratch space, so the contents of `input` should be considered garbage
     /// after calling
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]);
+    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        let mut scratch = vec![Complex::zero(); self.get_out_of_place_scratch_len()];
+        self.process_with_scratch(input, output, &mut scratch);
+    }
+    fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+        let mut scratch = vec![Complex::zero(); self.get_inplace_scratch_len()];
+        self.process_inplace_with_scratch(buffer, &mut scratch);
+    }
 
-    /// Divides the `input` and `output` buffers into chunks of length self.len(), then computes an FFT on each chunk.
-    ///
-    /// The output is not normalized. Callers must manually normalize the results by scaling each element by
-    /// `1/len().sqrt()`. Multiple normalization steps can be merged into one via pairwise multiplication, so when
-    /// doing a forward FFT followed by an inverse FFT, callers can normalize once by scaling each element by `1/len()`
-    ///
-    /// This method uses the `input` buffer as scratch space, so the contents of `input` should be considered garbage
-    /// after calling
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]);
-}
-/// Trait for FFT algorithms that use the same buffer for input and output.
-pub trait FftInline<T: FFTnum>: Length + IsInverse + Sync + Send {
-    fn process_inline(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]);
-    fn process_inline_multi(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]);
-    fn get_required_scratch_len(&self) -> usize;
+    fn process_with_scratch(&self, input: &mut [Complex<T>], output: &mut [Complex<T>], scratch: &mut [Complex<T>]);
+    fn process_inplace_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]);
+
+    
+    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>], scratch: &mut [Complex<T>]);
+    fn process_inplace_multi(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]);
+
+
+    fn get_inplace_scratch_len(&self) -> usize;
+    fn get_out_of_place_scratch_len(&self) -> usize;
 }
 
 #[cfg(test)]

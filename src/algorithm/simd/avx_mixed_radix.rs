@@ -7,14 +7,14 @@ use num_traits::Zero;
 
 use common::FFTnum;
 
-use ::{Length, IsInverse, FftInline};
+use ::{Length, IsInverse, Fft};
 
 use super::avx_utils::AvxComplexArrayf32;
 use super::avx_utils;
 
 pub struct MixedRadix2xnAvx<T> {
     twiddles: Box<[__m256]>,
-    inner_fft: Arc<FftInline<T>>,
+    inner_fft: Arc<Fft<T>>,
     len: usize,
     inverse: bool,
 }
@@ -22,7 +22,7 @@ impl MixedRadix2xnAvx<f32> {
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the power-of-two FFT
     /// Returns Ok() if this machine has the required instruction sets, Err() if some instruction sets are missing
     #[inline]
-    pub fn new(inner_fft: Arc<FftInline<f32>>) -> Result<Self, ()> {
+    pub fn new(inner_fft: Arc<Fft<f32>>) -> Result<Self, ()> {
         let has_avx = is_x86_feature_detected!("avx");
         let has_fma = is_x86_feature_detected!("fma");
         if has_avx && has_fma {
@@ -33,7 +33,7 @@ impl MixedRadix2xnAvx<f32> {
         }
     }
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<FftInline<f32>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<Fft<f32>>) -> Self {
         let inverse = inner_fft.is_inverse();
         let half_len = inner_fft.len();
         let len = half_len * 2;
@@ -97,9 +97,7 @@ impl MixedRadix2xnAvx<f32> {
         }
 
         // process the row FFTs
-        for chunk in buffer.chunks_exact_mut(half_len) {
-        	self.inner_fft.process_inline(chunk, scratch);
-        }
+        self.inner_fft.process_inplace_multi(buffer, scratch);
 
         // transpose for the output. make sure to slice off any extra scratch first
         let scratch = &mut scratch[..half_len];
@@ -136,16 +134,23 @@ impl MixedRadix2xnAvx<f32> {
             }
         }
     }
+
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn perform_fft_out_of_place_f32(&self, input: &mut [Complex<f32>], output: &mut [Complex<f32>], _scratch: &mut [Complex<f32>]) {
+        output.copy_from_slice(input);
+        self.perform_fft_inplace_f32(output, input)
+    }
 }
 boilerplate_fft_simd_unsafe!(MixedRadix2xnAvx, 
     |this:&MixedRadix2xnAvx<_>| this.len,
-    |this:&MixedRadix2xnAvx<_>| this.len
+    |this:&MixedRadix2xnAvx<_>| this.len,
+    |_| 0
 );
 
 pub struct MixedRadix4xnAvx<T> {
     twiddle_config: avx_utils::Rotate90Config,
     twiddles: Box<[__m256]>,
-    inner_fft: Arc<FftInline<T>>,
+    inner_fft: Arc<Fft<T>>,
     len: usize,
     inverse: bool,
 }
@@ -153,7 +158,7 @@ impl MixedRadix4xnAvx<f32> {
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the power-of-two FFT
     /// Returns Ok() if this machine has the required instruction sets, Err() if some instruction sets are missing
     #[inline]
-    pub fn new(inner_fft: Arc<FftInline<f32>>) -> Result<Self, ()> {
+    pub fn new(inner_fft: Arc<Fft<f32>>) -> Result<Self, ()> {
         let has_avx = is_x86_feature_detected!("avx");
         let has_fma = is_x86_feature_detected!("fma");
         if has_avx && has_fma {
@@ -164,7 +169,7 @@ impl MixedRadix4xnAvx<f32> {
         }
     }
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<FftInline<f32>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<Fft<f32>>) -> Self {
         let inverse = inner_fft.is_inverse();
         let quarter_len = inner_fft.len();
         let len = quarter_len * 4;
@@ -246,9 +251,7 @@ impl MixedRadix4xnAvx<f32> {
         }
 
         // process the row FFTs
-        for chunk in buffer.chunks_exact_mut(quarter_len) {
-        	self.inner_fft.process_inline(chunk, scratch);
-        }
+        self.inner_fft.process_inplace_multi(buffer, scratch);
 
         // transpose for the output. make sure to slice off any extra scratch first
         let scratch = &mut scratch[..(len - quarter_len)];
@@ -294,17 +297,24 @@ impl MixedRadix4xnAvx<f32> {
             }
         }
     }
+
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn perform_fft_out_of_place_f32(&self, input: &mut [Complex<f32>], output: &mut [Complex<f32>], _scratch: &mut [Complex<f32>]) {
+        output.copy_from_slice(input);
+        self.perform_fft_inplace_f32(output, input)
+    }
 }
 boilerplate_fft_simd_unsafe!(MixedRadix4xnAvx, 
     |this:&MixedRadix4xnAvx<_>| this.len,
-    |this:&MixedRadix4xnAvx<_>| this.len
+    |this:&MixedRadix4xnAvx<_>| this.len,
+    |_| 0
 );
 
 pub struct MixedRadix8xnAvx<T> {
     twiddle_config: avx_utils::Rotate90Config,
     twiddles_butterfly8: __m256,
     twiddles: Box<[__m256]>,
-    inner_fft: Arc<FftInline<T>>,
+    inner_fft: Arc<Fft<T>>,
     len: usize,
     inverse: bool,
 }
@@ -312,7 +322,7 @@ impl MixedRadix8xnAvx<f32> {
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the power-of-two FFT
     /// Returns Ok() if this machine has the required instruction sets, Err() if some instruction sets are missing
     #[inline]
-    pub fn new(inner_fft: Arc<FftInline<f32>>) -> Result<Self, ()> {
+    pub fn new(inner_fft: Arc<Fft<f32>>) -> Result<Self, ()> {
         let has_avx = is_x86_feature_detected!("avx");
         let has_fma = is_x86_feature_detected!("fma");
         if has_avx && has_fma {
@@ -323,7 +333,7 @@ impl MixedRadix8xnAvx<f32> {
         }
     }
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<FftInline<f32>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<Fft<f32>>) -> Self {
         let inverse = inner_fft.is_inverse();
         let eigth_len = inner_fft.len();
         let len = eigth_len * 8;
@@ -432,9 +442,7 @@ impl MixedRadix8xnAvx<f32> {
         }
 
         // process the row FFTs
-        for chunk in buffer.chunks_exact_mut(eigth_len) {
-        	self.inner_fft.process_inline(chunk, scratch);
-        }
+        self.inner_fft.process_inplace_multi(buffer, scratch);
 
         // transpose for the output. make sure to slice off any extra scratch first
         let scratch = &mut scratch[..len];
@@ -497,17 +505,24 @@ impl MixedRadix8xnAvx<f32> {
         }
         buffer.copy_from_slice(scratch);
     }
+
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn perform_fft_out_of_place_f32(&self, input: &mut [Complex<f32>], output: &mut [Complex<f32>], _scratch: &mut [Complex<f32>]) {
+        output.copy_from_slice(input);
+        self.perform_fft_inplace_f32(output, input)
+    }
 }
 boilerplate_fft_simd_unsafe!(MixedRadix8xnAvx, 
     |this:&MixedRadix8xnAvx<_>| this.len,
-    |this:&MixedRadix8xnAvx<_>| this.len
+    |this:&MixedRadix8xnAvx<_>| this.len,
+    |_| 0
 );
 
 pub struct MixedRadix16xnAvx<T> {
     twiddle_config: avx_utils::Rotate90Config,
     twiddles_butterfly16: [__m256; 6],
     twiddles: Box<[__m256]>,
-    inner_fft: Arc<FftInline<T>>,
+    inner_fft: Arc<Fft<T>>,
     len: usize,
     inverse: bool,
 }
@@ -515,7 +530,7 @@ impl MixedRadix16xnAvx<f32> {
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the power-of-two FFT
     /// Returns Ok() if this machine has the required instruction sets, Err() if some instruction sets are missing
     #[inline]
-    pub fn new(inner_fft: Arc<FftInline<f32>>) -> Result<Self, ()> {
+    pub fn new(inner_fft: Arc<Fft<f32>>) -> Result<Self, ()> {
         let has_avx = is_x86_feature_detected!("avx");
         let has_fma = is_x86_feature_detected!("fma");
         if has_avx && has_fma {
@@ -526,7 +541,7 @@ impl MixedRadix16xnAvx<f32> {
         }
     }
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<FftInline<f32>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<Fft<f32>>) -> Self {
         let inverse = inner_fft.is_inverse();
         let sixteenth_len = inner_fft.len();
         let len = sixteenth_len * 16;
@@ -697,9 +712,7 @@ impl MixedRadix16xnAvx<f32> {
         }
 
         // process the row FFTs
-        for chunk in buffer.chunks_exact_mut(sixteenth_len) {
-        	self.inner_fft.process_inline(chunk, scratch);
-        }
+        self.inner_fft.process_inplace_multi(buffer, scratch);
 
         // transpose for the output. make sure to slice off any extra scratch first
        // transpose for the output. make sure to slice off any extra scratch first
@@ -796,16 +809,23 @@ impl MixedRadix16xnAvx<f32> {
         }
         buffer.copy_from_slice(scratch);
     }
+
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn perform_fft_out_of_place_f32(&self, input: &mut [Complex<f32>], output: &mut [Complex<f32>], _scratch: &mut [Complex<f32>]) {
+        output.copy_from_slice(input);
+        self.perform_fft_inplace_f32(output, input)
+    }
 }
 boilerplate_fft_simd_unsafe!(MixedRadix16xnAvx, 
     |this:&MixedRadix16xnAvx<_>| this.len,
-    |this:&MixedRadix16xnAvx<_>| this.len
+    |this:&MixedRadix16xnAvx<_>| this.len,
+    |_| 0
 );
 
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use test_utils::check_inline_fft_algorithm;
+    use test_utils::check_fft_algorithm;
     use std::sync::Arc;
     use algorithm::*;
 
@@ -821,10 +841,10 @@ mod unit_tests {
     }
 
     fn test_mixedradix_2xn_avx_with_length(len: usize, inverse: bool) {
-        let inner_fft = Arc::new(DFT::new(len / 2, inverse)) as Arc<dyn FftInline<f32>>;
+        let inner_fft = Arc::new(DFT::new(len / 2, inverse)) as Arc<dyn Fft<f32>>;
         let fft = MixedRadix2xnAvx::new(inner_fft).expect("Can't run test because this machine doesn't have the required instruction sets");
 
-        check_inline_fft_algorithm(&fft, len, inverse);
+        check_fft_algorithm(&fft, len, inverse);
     }
 
     #[test]
@@ -839,10 +859,10 @@ mod unit_tests {
     }
 
     fn test_mixedradix_4xn_avx_with_length(len: usize, inverse: bool) {
-        let inner_fft = Arc::new(DFT::new(len / 4, inverse)) as Arc<dyn FftInline<f32>>;
+        let inner_fft = Arc::new(DFT::new(len / 4, inverse)) as Arc<dyn Fft<f32>>;
         let fft = MixedRadix4xnAvx::new(inner_fft).expect("Can't run test because this machine doesn't have the required instruction sets");
 
-        check_inline_fft_algorithm(&fft, len, inverse);
+        check_fft_algorithm(&fft, len, inverse);
     }
 
     #[test]
@@ -857,10 +877,10 @@ mod unit_tests {
     }
 
     fn test_mixedradix_8xn_avx_with_length(len: usize, inverse: bool) {
-        let inner_fft = Arc::new(DFT::new(len / 8, inverse)) as Arc<dyn FftInline<f32>>;
+        let inner_fft = Arc::new(DFT::new(len / 8, inverse)) as Arc<dyn Fft<f32>>;
         let fft = MixedRadix8xnAvx::new(inner_fft).expect("Can't run test because this machine doesn't have the required instruction sets");
 
-        check_inline_fft_algorithm(&fft, len, inverse);
+        check_fft_algorithm(&fft, len, inverse);
     }
 
     #[test]
@@ -875,9 +895,9 @@ mod unit_tests {
     }
 
     fn test_mixedradix_16xn_avx_with_length(len: usize, inverse: bool) {
-        let inner_fft = Arc::new(DFT::new(len / 16, inverse)) as Arc<dyn FftInline<f32>>;
+        let inner_fft = Arc::new(DFT::new(len / 16, inverse)) as Arc<dyn Fft<f32>>;
         let fft = MixedRadix16xnAvx::new(inner_fft).expect("Can't run test because this machine doesn't have the required instruction sets");
 
-        check_inline_fft_algorithm(&fft, len, inverse);
+        check_fft_algorithm(&fft, len, inverse);
     }
 }

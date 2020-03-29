@@ -3,21 +3,21 @@ use std::sync::Arc;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use common::{FFTnum, verify_length_inline, verify_length_minimum};
+use common::FFTnum;
 
-use ::{Length, IsInverse, FftInline};
+use ::{Length, IsInverse, Fft};
 
 /// Implementation of Bluestein's Algorithm
 ///
 /// This algorithm computes an arbitrary-sized FFT in O(nlogn) time. It does this by converting this size n FFT into a
-/// size M FFT, where M >= 2N - 1. M is usually a power of two, although that isn't a requirement.
+/// size M where M >= 2N - 1. M is usually a power of two, although that isn't a requirement.
 ///
 /// It requires a large scratch space, so it's probably inconvenient to use as an inner FFT to other algorithms.
 ///
 /// ~~~
 /// // Computes a forward FFT of size 1201 (prime number), using Bluestein's Algorithm
 /// use rustfft::algorithm::RadersAlgorithm;
-/// use rustfft::{FFT, FFTplanner};
+/// use rustfft::{Fft, FFTplanner};
 /// use rustfft::num_complex::Complex;
 /// use rustfft::num_traits::Zero;
 ///
@@ -32,17 +32,18 @@ use ::{Length, IsInverse, FftInline};
 /// fft.process(&mut input, &mut output);
 /// ~~~
 ///
-/// Rader's Algorithm is relatively expensive compared to other FFT algorithms. Benchmarking shows that it is up to
+/// BluesteinsAlgorithm's Algorithm is relatively expensive compared to other FFT algorithms. Benchmarking shows that it is up to
 /// an order of magnitude slower than similar composite sizes. In the example size above of 1201, benchmarking shows
 /// that it takes 2.5x more time to compute than a FFT of size 1200.
 
 pub struct BluesteinsAlgorithm<T> {
-    inner_fft: Arc<FftInline<T>>,
+    inner_fft: Arc<Fft<T>>,
 
     inner_fft_multiplier: Box<[Complex<T>]>,
     twiddles: Box<[Complex<T>]>,
 
     len: usize,
+    inverse: bool,
 }
 
 impl<T: FFTnum> BluesteinsAlgorithm<T> {
@@ -71,11 +72,11 @@ impl<T: FFTnum> BluesteinsAlgorithm<T> {
     /// Note that this constructor is quite expensive to run; This algorithm must run a FFT of size inner_fft.len() within the
     /// constructor. This further underlines the fact that Bluesteins Algorithm is more expensive to run than other
     /// FFT algorithms
-    pub fn new(len: usize, inner_fft: Arc<FftInline<T>>) -> Self {
+    pub fn new(len: usize, inner_fft: Arc<Fft<T>>) -> Self {
         let inner_fft_len = inner_fft.len();
         assert!(len * 2 - 1 <= inner_fft_len, "Bluestein's algorithm requires inner_fft.len() >= self.len() * 2 - 1. Expected >= {}, got {}", len * 2 - 1, inner_fft_len);
 
-        // when computing FFTs, we're going to run our inner FFT, multiply pairise by some precomputed data, then run an inverse inner FFT. We need to precompute that inner data here
+        // when computing FFTs, we're going to run our inner multiply pairise by some precomputed data, then run an inverse inner FFT. We need to precompute that inner data here
         let inner_len_float = T::from_usize(inner_fft_len).unwrap();
         let inverse = inner_fft.is_inverse();
 
@@ -89,8 +90,8 @@ impl<T: FFTnum> BluesteinsAlgorithm<T> {
         }
 
         //Compute the inner fft
-        let mut inner_fft_scratch = vec![Complex::zero(); inner_fft.get_required_scratch_len()];
-        inner_fft.process_inline(&mut inner_fft_input, &mut inner_fft_scratch);
+        let mut inner_fft_scratch = vec![Complex::zero(); inner_fft.get_inplace_scratch_len()];
+        inner_fft.process_inplace_with_scratch(&mut inner_fft_input, &mut inner_fft_scratch);
 
         // also compute some more mundane twiddle factors to start and end with
         let twiddles : Vec<_> = (0..len).map(|i| Self::compute_bluesteins_twiddle(i, len, !inverse)).collect();
@@ -102,75 +103,77 @@ impl<T: FFTnum> BluesteinsAlgorithm<T> {
             twiddles: twiddles.into_boxed_slice(),
 
             len,
+            inverse,
         }
     }
 
-    fn perform_bluestein_fft(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+    fn perform_fft_inplace(&self, input: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
         let (inner_input, inner_scratch) = scratch.split_at_mut(self.inner_fft_multiplier.len());
 
         // Copy the buffer into our inner FFT input. the buffer will only fill part of the FFT input, so zero fill the rest
-        for ((buffer_entry, inner_entry), twiddle) in buffer.iter().zip(inner_input.iter_mut()).zip(self.twiddles.iter()) {
+        for ((buffer_entry, inner_entry), twiddle) in input.iter().zip(inner_input.iter_mut()).zip(self.twiddles.iter()) {
             *inner_entry = *buffer_entry * *twiddle ;
         }
-        for inner in inner_input.iter_mut().skip(buffer.len()) {
+        for inner in inner_input.iter_mut().skip(input.len()) {
             *inner = Complex::zero();
         }
 
         // run our inner forward FFT
-        self.inner_fft.process_inline(inner_input, inner_scratch);
+        self.inner_fft.process_inplace_with_scratch(inner_input, inner_scratch);
 
         // Multiply our inner FFT output by our precomputed data. Then, conjugate the result to set up for an inverse FFT
         for (inner, multiplier) in inner_input.iter_mut().zip(self.inner_fft_multiplier.iter()) {
             *inner = (*inner * *multiplier).conj();
         }
 
-        // inverse FFT. we're computing a forward FFT, but we're massaging it into an inverse by conjugating the inputs and outputs
-        self.inner_fft.process_inline(inner_input, inner_scratch);
+        // inverse FFT. we're computing a forward but we're massaging it into an inverse by conjugating the inputs and outputs
+        self.inner_fft.process_inplace_with_scratch(inner_input, inner_scratch);
 
         // copy our data back to the buffer, applying twiddle factors again as we go. Also conjugate inner_input to complete the inverse FFT
-        for ((buffer_entry, inner_entry), twiddle) in buffer.iter_mut().zip(inner_input.iter()).zip(self.twiddles.iter()) {
+        for ((buffer_entry, inner_entry), twiddle) in input.iter_mut().zip(inner_input.iter()).zip(self.twiddles.iter()) {
+            *buffer_entry = inner_entry.conj() * twiddle;
+        }
+    }
+
+    fn perform_fft_out_of_place(&self, input: &mut [Complex<T>], output: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        let (inner_input, inner_scratch) = scratch.split_at_mut(self.inner_fft_multiplier.len());
+
+        // Copy the buffer into our inner FFT input. the buffer will only fill part of the FFT input, so zero fill the rest
+        for ((buffer_entry, inner_entry), twiddle) in input.iter().zip(inner_input.iter_mut()).zip(self.twiddles.iter()) {
+            *inner_entry = *buffer_entry * *twiddle ;
+        }
+        for inner in inner_input.iter_mut().skip(input.len()) {
+            *inner = Complex::zero();
+        }
+
+        // run our inner forward FFT
+        self.inner_fft.process_inplace_with_scratch(inner_input, inner_scratch);
+
+        // Multiply our inner FFT output by our precomputed data. Then, conjugate the result to set up for an inverse FFT
+        for (inner, multiplier) in inner_input.iter_mut().zip(self.inner_fft_multiplier.iter()) {
+            *inner = (*inner * *multiplier).conj();
+        }
+
+        // inverse FFT. we're computing a forward but we're massaging it into an inverse by conjugating the inputs and outputs
+        self.inner_fft.process_inplace_with_scratch(inner_input, inner_scratch);
+
+        // copy our data back to the buffer, applying twiddle factors again as we go. Also conjugate inner_input to complete the inverse FFT
+        for ((buffer_entry, inner_entry), twiddle) in output.iter_mut().zip(inner_input.iter()).zip(self.twiddles.iter()) {
             *buffer_entry = inner_entry.conj() * twiddle;
         }
     }
 }
-
-impl<T: FFTnum> FftInline<T> for BluesteinsAlgorithm<T> {
-    fn process_inline(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-        verify_length_inline(buffer, self.len());
-        verify_length_minimum(scratch, self.get_required_scratch_len());
-
-        self.perform_bluestein_fft(buffer, scratch);
-    }
-    fn process_inline_multi(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-        assert_eq!(buffer.len() % self.len(), 0, "Buffer is the wrong length. Expected multiple of {}, got {}", self.len(), buffer.len());
-        verify_length_minimum(scratch, self.get_required_scratch_len());
-
-        for chunk in buffer.chunks_exact_mut(self.len()) {
-            self.perform_bluestein_fft(chunk, scratch);
-        }
-    }
-    fn get_required_scratch_len(&self) -> usize {
-        self.inner_fft_multiplier.len() + self.inner_fft.get_required_scratch_len()
-    }
-}
-impl<T> Length for BluesteinsAlgorithm<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        self.len
-    }
-}
-impl<T> IsInverse for BluesteinsAlgorithm<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inner_fft.is_inverse()
-    }
-}
+boilerplate_fft!(BluesteinsAlgorithm,
+    |this: &BluesteinsAlgorithm<_>| this.len, // FFT len
+    |this: &BluesteinsAlgorithm<_>| this.inner_fft_multiplier.len() + this.inner_fft.get_inplace_scratch_len(), // in-place scratch len
+    |this: &BluesteinsAlgorithm<_>| this.inner_fft_multiplier.len() + this.inner_fft.get_inplace_scratch_len() // out of place scratch len
+);
 
 #[cfg(test)]
 mod unit_tests {
     use super::*;
     use std::sync::Arc;
-    use test_utils::check_inline_fft_algorithm;
+    use test_utils::check_fft_algorithm;
     use algorithm::DFT;
 
     #[test]
@@ -185,6 +188,6 @@ mod unit_tests {
         let inner_fft = Arc::new(DFT::new((len *2 - 1).checked_next_power_of_two().unwrap(), inverse));
         let fft = BluesteinsAlgorithm::new(len, inner_fft);
 
-        check_inline_fft_algorithm(&fft, len, inverse);
+        check_fft_algorithm(&fft, len, inverse);
     }
 }

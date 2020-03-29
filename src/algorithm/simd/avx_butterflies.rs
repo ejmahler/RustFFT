@@ -5,7 +5,7 @@ use num_complex::Complex;
 
 use common::FFTnum;
 
-use ::{Length, IsInverse, FftInline};
+use ::{Length, IsInverse, Fft};
 
 use super::avx_utils::AvxComplexArrayf32;
 use super::avx_utils;
@@ -80,9 +80,16 @@ impl MixedRadixAvx4x2<f32> {
         buffer.store_complex_f32(0, output0);
         buffer.store_complex_f32(4, output1);
     }
+
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn perform_fft_out_of_place_f32(&self, input: &mut [Complex<f32>], output: &mut [Complex<f32>], _scratch: &mut [Complex<f32>]) {
+        output.copy_from_slice(input);
+        self.perform_fft_inplace_f32(output, input)
+    }
 }
 boilerplate_fft_simd_unsafe!(MixedRadixAvx4x2, 
     |_| 8,
+    |_| 0,
     |_| 0
 );
 
@@ -158,9 +165,16 @@ impl MixedRadixAvx4x4<f32> {
         buffer.store_complex_f32(2 * 4, output2);
         buffer.store_complex_f32(3 * 4, output3);
     }
+
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn perform_fft_out_of_place_f32(&self, input: &mut [Complex<f32>], output: &mut [Complex<f32>], _scratch: &mut [Complex<f32>]) {
+        output.copy_from_slice(input);
+        self.perform_fft_inplace_f32(output, input)
+    }
 }
 boilerplate_fft_simd_unsafe!(MixedRadixAvx4x4, 
     |_| 16,
+    |_| 0,
     |_| 0
 );
 
@@ -267,9 +281,16 @@ impl<T: FFTnum> MixedRadixAvx4x8<T> {
         buffer.store_complex_f32(6 * 4, output6);
         buffer.store_complex_f32(7 * 4, output7);
     }
+
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn perform_fft_out_of_place_f32(&self, input: &mut [Complex<f32>], output: &mut [Complex<f32>], _scratch: &mut [Complex<f32>]) {
+        output.copy_from_slice(input);
+        self.perform_fft_inplace_f32(output, input)
+    }
 }
 boilerplate_fft_simd_unsafe!(MixedRadixAvx4x8, 
     |_| 32,
+    |_| 0,
     |_| 0
 );
 
@@ -452,50 +473,57 @@ impl MixedRadixAvx8x8<f32> {
         buffer.store_complex_f32(13 * 4, output13);
         buffer.store_complex_f32(15 * 4, output15);
     }
+
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn perform_fft_out_of_place_f32(&self, input: &mut [Complex<f32>], output: &mut [Complex<f32>], _scratch: &mut [Complex<f32>]) {
+        output.copy_from_slice(input);
+        self.perform_fft_inplace_f32(output, input)
+    }
 }
 boilerplate_fft_simd_unsafe!(MixedRadixAvx8x8, 
     |_| 64,
+    |_| 0,
     |_| 0
 );
 
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use test_utils::{check_inline_fft_algorithm};
+    use test_utils::check_fft_algorithm;
 
     #[test]
     fn test_avx_mixedradix4x2() {
         let fft_forward = MixedRadixAvx4x2::new(false).expect("Can't run test because this machine doesn't have the required instruction sets");
-        check_inline_fft_algorithm(&fft_forward, 8, false);
+        check_fft_algorithm(&fft_forward, 8, false);
 
         let fft_inverse = MixedRadixAvx4x2::new(true).expect("Can't run test because this machine doesn't have the required instruction sets");
-        check_inline_fft_algorithm(&fft_inverse, 8, true);
+        check_fft_algorithm(&fft_inverse, 8, true);
     }
 
     #[test]
     fn test_avx_mixedradix4x4() {
         let fft_forward = MixedRadixAvx4x4::new(false).expect("Can't run test because this machine doesn't have the required instruction sets");
-        check_inline_fft_algorithm(&fft_forward, 16, false);
+        check_fft_algorithm(&fft_forward, 16, false);
 
         let fft_inverse = MixedRadixAvx4x4::new(true).expect("Can't run test because this machine doesn't have the required instruction sets");
-        check_inline_fft_algorithm(&fft_inverse, 16, true);
+        check_fft_algorithm(&fft_inverse, 16, true);
     }
 
     #[test]
     fn test_avx_mixedradix4x8() {
         let fft_forward = MixedRadixAvx4x8::new(false).expect("Can't run test because this machine doesn't have the required instruction sets");
-        check_inline_fft_algorithm(&fft_forward, 32, false);
+        check_fft_algorithm(&fft_forward, 32, false);
 
         let fft_inverse = MixedRadixAvx4x8::new(true).expect("Can't run test because this machine doesn't have the required instruction sets");
-        check_inline_fft_algorithm(&fft_inverse, 32, true);
+        check_fft_algorithm(&fft_inverse, 32, true);
     }
 
     #[test]
     fn test_avx_mixedradix8x8() {
         let fft_forward = MixedRadixAvx8x8::new(false).expect("Can't run test because this machine doesn't have the required instruction sets");
-        check_inline_fft_algorithm(&fft_forward, 64, false);
+        check_fft_algorithm(&fft_forward, 64, false);
 
         let fft_inverse = MixedRadixAvx8x8::new(true).expect("Can't run test because this machine doesn't have the required instruction sets");
-        check_inline_fft_algorithm(&fft_inverse, 64, true);
+        check_fft_algorithm(&fft_inverse, 64, true);
     }
 }

@@ -4,14 +4,14 @@ use num_traits::Zero;
 use common::FFTnum;
 
 use algorithm::butterflies::{Butterfly2, Butterfly4, Butterfly8, Butterfly16, FFTButterfly};
-use ::{Length, IsInverse, FFT, FftInline};
+use ::{Length, IsInverse, Fft};
 
 /// FFT algorithm optimized for power-of-two sizes
 ///
 /// ~~~
 /// // Computes a forward FFT of size 4096
 /// use rustfft::algorithm::Radix4;
-/// use rustfft::FFT;
+/// use rustfft::Fft;
 /// use rustfft::num_complex::Complex;
 /// use rustfft::num_traits::Zero;
 ///
@@ -67,16 +67,16 @@ impl<T: FFTnum> Radix4<T> {
         }
     }
 
-    fn perform_fft_out_of_place(&self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
+    fn perform_fft_out_of_place(&self, signal: &[Complex<T>], spectrum: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
         match self.len() {
             0|1 => spectrum.copy_from_slice(signal),
             2 => {
                 spectrum.copy_from_slice(signal);
-                unsafe { Butterfly2::new(self.inverse).process_inplace(spectrum) }
+                unsafe { Butterfly2::new(self.inverse).process_butterfly_inplace(spectrum) }
             },
             4 => {
                 spectrum.copy_from_slice(signal);
-                unsafe { Butterfly4::new(self.inverse).process_inplace(spectrum) }
+                unsafe { Butterfly4::new(self.inverse).process_butterfly_inplace(spectrum) }
             },
             _ => {
                 // copy the data into the spectrum vector
@@ -85,12 +85,12 @@ impl<T: FFTnum> Radix4<T> {
                 // perform the butterflies. the butterfly size depends on the input size
                 let num_bits = signal.len().trailing_zeros();
                 let mut current_size = if num_bits % 2 == 0 {
-                    unsafe { self.butterfly16.process_multi_inplace(spectrum) };
+                    unsafe { self.butterfly16.process_butterfly_multi_inplace(spectrum) };
 
                     // for the cross-ffts we want to to start off with a size of 64 (16 * 4)
                     64
                 } else {
-                    unsafe { self.butterfly8.process_multi_inplace(spectrum) };
+                    unsafe { self.butterfly8.process_butterfly_multi_inplace(spectrum) };
 
                     // for the cross-ffts we want to to start off with a size of 32 (8 * 4)
                     32
@@ -201,7 +201,7 @@ unsafe fn butterfly_4<T: FFTnum>(data: &mut [Complex<T>],
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use test_utils::{ check_fft_algorithm, check_inline_fft_algorithm };
+    use test_utils::check_fft_algorithm;
 
     #[test]
     fn test_radix4() {
@@ -216,6 +216,5 @@ mod unit_tests {
         let fft = Radix4::new(len, inverse);
 
         check_fft_algorithm(&fft, len, inverse);
-        check_inline_fft_algorithm(&fft, len, inverse);
     }
 }

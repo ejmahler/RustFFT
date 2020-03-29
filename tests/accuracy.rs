@@ -11,11 +11,10 @@ extern crate rand;
 use std::f32;
 
 use rustfft::num_complex::Complex;
-use rustfft::num_traits::Zero;
 
 use rand::{StdRng, SeedableRng};
 use rand::distributions::{Normal, Distribution};
-use rustfft::{FFT, FFTplanner};
+use rustfft::{FFTplanner, Fft};
 use rustfft::algorithm::DFT;
 
 /// The seed for the random number generator used to generate
@@ -37,23 +36,20 @@ fn compare_vectors(vec1: &[Complex<f32>], vec2: &[Complex<f32>]) -> bool {
 
 
 fn fft_matches_dft(signal: Vec<Complex<f32>>, inverse: bool) -> bool {
-    let mut signal_dft = signal.clone();
-    let mut signal_fft = signal.clone();
-
-    let mut spectrum_dft = vec![Zero::zero(); signal.len()];
-    let mut spectrum_fft = vec![Zero::zero(); signal.len()];
+    let mut buffer_expected = signal.clone();
+    let mut buffer_actual = signal.clone();
 
     let mut planner = FFTplanner::new(inverse);
     let fft = planner.plan_fft(signal.len());
     assert_eq!(fft.len(), signal.len(), "FFTplanner created FFT of wrong length");
     assert_eq!(fft.is_inverse(), inverse, "FFTplanner created FFT of wrong direction");
 
-    fft.process(&mut signal_fft, &mut spectrum_fft);
+    fft.process_inplace(&mut buffer_actual);
 
     let dft = DFT::new(signal.len(), inverse);
-    dft.process(&mut signal_dft, &mut spectrum_dft);
+    dft.process_inplace(&mut buffer_expected);
 
-    return compare_vectors(&spectrum_dft[..], &spectrum_fft[..]);
+    return compare_vectors(&buffer_expected, &buffer_actual);
 }
 
 fn random_signal(length: usize) -> Vec<Complex<f32>> {
