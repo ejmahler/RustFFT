@@ -7,8 +7,85 @@ use common::FFTnum;
 
 use ::{Length, IsInverse, Fft};
 
-use super::avx_utils::AvxComplexArrayf32;
+use super::avx_utils::{AvxComplexArrayf32, RawSlice, RawSliceMut};
 use super::avx_utils;
+
+// Safety: This macro will call `self::perform_fft_f32()` which probably has a #[target_feature(enable = "...")] annotation on it.
+// Calling functions with that annotation is unsafe, because it doesn't actually check if the CPU has the required features.
+// Callers of this macro must guarantee that users can't even obtain an instance of $struct_name if their CPU doesn't have the required CPU features.
+#[allow(unused)]
+macro_rules! boilerplate_fft_simd_butterfly {
+    ($struct_name:ident, $len:expr) => (
+		default impl<T: FFTnum> Fft<T> for $struct_name<T> {
+            fn process_inplace_with_scratch(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+				unimplemented!();
+            }
+            fn process_inplace_multi(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+                unimplemented!();
+			}
+			fn process_with_scratch(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+				unimplemented!();
+            }
+            fn process_multi(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+                unimplemented!();
+            }
+            fn get_inplace_scratch_len(&self) -> usize {
+                unimplemented!();
+            }
+            fn get_out_of_place_scratch_len(&self) -> usize {
+                unimplemented!();
+            }
+        }
+        impl Fft<f32> for $struct_name<f32> {
+            fn process_with_scratch(&self, input: &mut [Complex<f32>], output: &mut [Complex<f32>], _scratch: &mut [Complex<f32>]) {
+                assert_eq!(input.len(), self.len(), "Input is the wrong length. Expected {}, got {}", self.len(), input.len());
+                assert_eq!(output.len(), self.len(), "Output is the wrong length. Expected {}, got {}", self.len(), output.len());
+		
+				unsafe { self.perform_fft_f32(RawSlice::new(input), RawSliceMut::new(output)) };
+            }
+            fn process_multi(&self, input: &mut [Complex<f32>], output: &mut [Complex<f32>], _scratch: &mut [Complex<f32>]) {
+                assert!(input.len() % self.len() == 0, "Output is the wrong length. Expected multiple of {}, got {}", self.len(), input.len());
+                assert_eq!(input.len(), output.len(), "Output is the wrong length. input = {} output = {}", input.len(), output.len());
+		
+				for (in_chunk, out_chunk) in input.chunks_exact_mut(self.len()).zip(output.chunks_exact_mut(self.len())) {
+					unsafe { self.perform_fft_f32(RawSlice::new(in_chunk), RawSliceMut::new(out_chunk)) };
+				}
+            }
+            fn process_inplace_with_scratch(&self, buffer: &mut [Complex<f32>], _scratch: &mut [Complex<f32>]) {
+                assert_eq!(buffer.len(), self.len(), "Buffer is the wrong length. Expected {}, got {}", self.len(), buffer.len());
+        
+                unsafe { self.perform_fft_f32(RawSlice::new(buffer), RawSliceMut::new(buffer)) };
+            }
+            fn process_inplace_multi(&self, buffer: &mut [Complex<f32>], _scratch: &mut [Complex<f32>]) {
+                assert_eq!(buffer.len() % self.len(), 0, "Buffer is the wrong length. Expected multiple of {}, got {}", self.len(), buffer.len());
+        
+                for chunk in buffer.chunks_exact_mut(self.len()) {
+                    unsafe { self.perform_fft_f32(RawSlice::new(chunk), RawSliceMut::new(chunk)) };
+                }
+            }
+            #[inline(always)]
+            fn get_inplace_scratch_len(&self) -> usize {
+                0
+            }
+            #[inline(always)]
+            fn get_out_of_place_scratch_len(&self) -> usize {
+                0
+            }
+        }
+        impl<T> Length for $struct_name<T> {
+            #[inline(always)]
+            fn len(&self) -> usize {
+                $len
+            }
+        }
+        impl<T> IsInverse for $struct_name<T> {
+            #[inline(always)]
+            fn is_inverse(&self) -> bool {
+                self.inverse
+            }
+        }
+    )
+}
 
 
 pub struct MixedRadixAvx4x2<T> {
@@ -46,9 +123,9 @@ impl MixedRadixAvx4x2<f32> {
     }
     
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_inplace_f32(&self, buffer: &mut [Complex<f32>], _scratch: &[Complex<f32>]) {
-        let row0 = buffer.load_complex_f32(0);
-        let row1 = buffer.load_complex_f32(4);
+    unsafe fn perform_fft_f32(&self, input: RawSlice<Complex<f32>>, output: RawSliceMut<Complex<f32>>) {
+        let row0 = input.load_complex_f32(0);
+        let row1 = input.load_complex_f32(4);
 
         // Do our butterfly 2's down the columns
         let (intermediate0, intermediate1_pretwiddle) = avx_utils::column_butterfly2_f32(row0, row1);
@@ -77,21 +154,11 @@ impl MixedRadixAvx4x2<f32> {
 
         let (output0, output1) = avx_utils::column_butterfly2_f32(swapped0, swapped1);
 
-        buffer.store_complex_f32(0, output0);
-        buffer.store_complex_f32(4, output1);
-    }
-
-    #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_out_of_place_f32(&self, input: &mut [Complex<f32>], output: &mut [Complex<f32>], _scratch: &mut [Complex<f32>]) {
-        output.copy_from_slice(input);
-        self.perform_fft_inplace_f32(output, input)
+        output.store_complex_f32(0, output0);
+        output.store_complex_f32(4, output1);
     }
 }
-boilerplate_fft_simd_unsafe!(MixedRadixAvx4x2, 
-    |_| 8,
-    |_| 0,
-    |_| 0
-);
+boilerplate_fft_simd_butterfly!(MixedRadixAvx4x2, 8);
 
 pub struct MixedRadixAvx4x4<T> {
     twiddles: [__m256; 3],
@@ -140,11 +207,11 @@ impl MixedRadixAvx4x4<f32> {
     }
 
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_inplace_f32(&self, buffer: &mut [Complex<f32>], _scratch: &[Complex<f32>]) {
-        let input0 = buffer.load_complex_f32(0);
-        let input1 = buffer.load_complex_f32(1 * 4);
-        let input2 = buffer.load_complex_f32(2 * 4);
-        let input3 = buffer.load_complex_f32(3 * 4);
+    unsafe fn perform_fft_f32(&self, input: RawSlice<Complex<f32>>, output: RawSliceMut<Complex<f32>>) {
+        let input0 = input.load_complex_f32(0);
+        let input1 = input.load_complex_f32(1 * 4);
+        let input2 = input.load_complex_f32(2 * 4);
+        let input3 = input.load_complex_f32(3 * 4);
 
         // We're going to treat our input as a 3x4 2d array. First, do 3 butterfly 4's down the columns of that array.
         let (mid0, mid1, mid2, mid3) = avx_utils::column_butterfly4_f32(input0, input1, input2, input3, self.twiddle_config);
@@ -160,23 +227,13 @@ impl MixedRadixAvx4x4<f32> {
         // Do 4 butterfly 8's down the columns of our transpsed array
         let (output0, output1, output2, output3) = avx_utils::column_butterfly4_f32(transposed0, transposed1, transposed2, transposed3, self.twiddle_config);
 
-        buffer.store_complex_f32(0, output0);
-        buffer.store_complex_f32(1 * 4, output1);
-        buffer.store_complex_f32(2 * 4, output2);
-        buffer.store_complex_f32(3 * 4, output3);
-    }
-
-    #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_out_of_place_f32(&self, input: &mut [Complex<f32>], output: &mut [Complex<f32>], _scratch: &mut [Complex<f32>]) {
-        output.copy_from_slice(input);
-        self.perform_fft_inplace_f32(output, input)
+        output.store_complex_f32(0, output0);
+        output.store_complex_f32(1 * 4, output1);
+        output.store_complex_f32(2 * 4, output2);
+        output.store_complex_f32(3 * 4, output3);
     }
 }
-boilerplate_fft_simd_unsafe!(MixedRadixAvx4x4, 
-    |_| 16,
-    |_| 0,
-    |_| 0
-);
+boilerplate_fft_simd_butterfly!(MixedRadixAvx4x4, 16);
 
 pub struct MixedRadixAvx4x8<T> {
     twiddles: [__m256; 6],
@@ -185,7 +242,7 @@ pub struct MixedRadixAvx4x8<T> {
     inverse: bool,
     _phantom: std::marker::PhantomData<T>,
 }
-impl<T: FFTnum> MixedRadixAvx4x8<T> {
+impl MixedRadixAvx4x8<f32> {
     #[inline]
     pub fn new(inverse: bool) -> Result<Self, ()> {
         let has_avx = is_x86_feature_detected!("avx");
@@ -243,15 +300,15 @@ impl<T: FFTnum> MixedRadixAvx4x8<T> {
     }
 
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_inplace_f32(&self, buffer: &mut [Complex<f32>], _scratch: &[Complex<f32>]) {
-        let input0 = buffer.load_complex_f32(0);
-        let input1 = buffer.load_complex_f32(1 * 4);
-        let input2 = buffer.load_complex_f32(2 * 4);
-        let input3 = buffer.load_complex_f32(3 * 4);
-        let input4 = buffer.load_complex_f32(4 * 4);
-        let input5 = buffer.load_complex_f32(5 * 4);
-        let input6 = buffer.load_complex_f32(6 * 4);
-        let input7 = buffer.load_complex_f32(7 * 4);
+    unsafe fn perform_fft_f32(&self, input: RawSlice<Complex<f32>>, output: RawSliceMut<Complex<f32>>) {
+        let input0 = input.load_complex_f32(0);
+        let input1 = input.load_complex_f32(1 * 4);
+        let input2 = input.load_complex_f32(2 * 4);
+        let input3 = input.load_complex_f32(3 * 4);
+        let input4 = input.load_complex_f32(4 * 4);
+        let input5 = input.load_complex_f32(5 * 4);
+        let input6 = input.load_complex_f32(6 * 4);
+        let input7 = input.load_complex_f32(7 * 4);
 
         // We're going to treat our input as a 8x4 2d array. First, do 8 butterfly 4's down the columns of that array.
         let (mid0, mid2, mid4, mid6) = avx_utils::column_butterfly4_f32(input0, input2, input4, input6, self.twiddle_config);
@@ -272,27 +329,17 @@ impl<T: FFTnum> MixedRadixAvx4x8<T> {
         // Do 4 butterfly 8's down the columns of our transpsed array
         let (output0, output1, output2, output3, output4, output5, output6, output7) = avx_utils::column_butterfly8_fma_f32(transposed0, transposed1, transposed2, transposed3, transposed4, transposed5, transposed6, transposed7, self.twiddles_butterfly8, self.twiddle_config);
 
-        buffer.store_complex_f32(0, output0);
-        buffer.store_complex_f32(1 * 4, output1);
-        buffer.store_complex_f32(2 * 4, output2);
-        buffer.store_complex_f32(3 * 4, output3);
-        buffer.store_complex_f32(4 * 4, output4);
-        buffer.store_complex_f32(5 * 4, output5);
-        buffer.store_complex_f32(6 * 4, output6);
-        buffer.store_complex_f32(7 * 4, output7);
-    }
-
-    #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_out_of_place_f32(&self, input: &mut [Complex<f32>], output: &mut [Complex<f32>], _scratch: &mut [Complex<f32>]) {
-        output.copy_from_slice(input);
-        self.perform_fft_inplace_f32(output, input)
+        output.store_complex_f32(0, output0);
+        output.store_complex_f32(1 * 4, output1);
+        output.store_complex_f32(2 * 4, output2);
+        output.store_complex_f32(3 * 4, output3);
+        output.store_complex_f32(4 * 4, output4);
+        output.store_complex_f32(5 * 4, output5);
+        output.store_complex_f32(6 * 4, output6);
+        output.store_complex_f32(7 * 4, output7);
     }
 }
-boilerplate_fft_simd_unsafe!(MixedRadixAvx4x8, 
-    |_| 32,
-    |_| 0,
-    |_| 0
-);
+boilerplate_fft_simd_butterfly!(MixedRadixAvx4x8, 32);
 
 pub struct MixedRadixAvx8x8<T> {
     twiddles: [__m256; 14],
@@ -397,19 +444,17 @@ impl MixedRadixAvx8x8<f32> {
             _phantom: PhantomData,
         }
     }
-}
 
-impl MixedRadixAvx8x8<f32> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_inplace_f32(&self, buffer: &mut [Complex<f32>], _scratch: &[Complex<f32>]) {
-        let input0 = buffer.load_complex_f32(0);
-        let input2 = buffer.load_complex_f32(2 * 4);
-        let input4 = buffer.load_complex_f32(4 * 4);
-        let input6 = buffer.load_complex_f32(6 * 4);
-        let input8 = buffer.load_complex_f32(8 * 4);
-        let input10 = buffer.load_complex_f32(10 * 4);
-        let input12 = buffer.load_complex_f32(12 * 4);
-        let input14 = buffer.load_complex_f32(14 * 4);
+    unsafe fn perform_fft_f32(&self, input: RawSlice<Complex<f32>>, output: RawSliceMut<Complex<f32>>) {
+        let input0 = input.load_complex_f32(0);
+        let input2 = input.load_complex_f32(2 * 4);
+        let input4 = input.load_complex_f32(4 * 4);
+        let input6 = input.load_complex_f32(6 * 4);
+        let input8 = input.load_complex_f32(8 * 4);
+        let input10 = input.load_complex_f32(10 * 4);
+        let input12 = input.load_complex_f32(12 * 4);
+        let input14 = input.load_complex_f32(14 * 4);
 
         // We're going to treat our input as a 8x8 2d array. First, do 8 butterfly 8's down the columns of that array.
         let (mid0, mid2, mid4, mid6, mid8, mid10, mid12, mid14) = avx_utils::column_butterfly8_fma_f32(input0, input2, input4, input6, input8, input10, input12, input14, self.twiddles_butterfly8, self.twiddle_config);
@@ -428,14 +473,14 @@ impl MixedRadixAvx8x8<f32> {
         let (transposed1, transposed3,  transposed5,  transposed7)  = avx_utils::transpose_4x4_f32(mid8_twiddled, mid10_twiddled, mid12_twiddled, mid14_twiddled);
 
         // Now that the first half of our data has been transposed, the compiler is free to spill those registers to make room for the other half
-        let input1 = buffer.load_complex_f32(1 * 4);
-        let input3 = buffer.load_complex_f32(3 * 4);
-        let input5 = buffer.load_complex_f32(5 * 4);
-        let input7 = buffer.load_complex_f32(7 * 4);
-        let input9 = buffer.load_complex_f32(9 * 4);
-        let input11 = buffer.load_complex_f32(11 * 4);
-        let input13 = buffer.load_complex_f32(13 * 4);
-        let input15 = buffer.load_complex_f32(15 * 4);
+        let input1 = input.load_complex_f32(1 * 4);
+        let input3 = input.load_complex_f32(3 * 4);
+        let input5 = input.load_complex_f32(5 * 4);
+        let input7 = input.load_complex_f32(7 * 4);
+        let input9 = input.load_complex_f32(9 * 4);
+        let input11 = input.load_complex_f32(11 * 4);
+        let input13 = input.load_complex_f32(13 * 4);
+        let input15 = input.load_complex_f32(15 * 4);
         let (mid1, mid3, mid5, mid7, mid9, mid11, mid13, mid15) = avx_utils::column_butterfly8_fma_f32(input1, input3, input5, input7, input9, input11, input13, input15, self.twiddles_butterfly8, self.twiddle_config);
 
         // Apply twiddle factors to the second half of our data
@@ -453,38 +498,28 @@ impl MixedRadixAvx8x8<f32> {
 
         // Do 4 butterfly 8's down the columns of our transposed array, and store the results
         let (output0, output2, output4, output6, output8, output10, output12, output14) = avx_utils::column_butterfly8_fma_f32(transposed0, transposed2, transposed4, transposed6, transposed8, transposed10, transposed12, transposed14, self.twiddles_butterfly8, self.twiddle_config);
-        buffer.store_complex_f32(0, output0);
-        buffer.store_complex_f32(2 * 4, output2);
-        buffer.store_complex_f32(4 * 4, output4);
-        buffer.store_complex_f32(6 * 4, output6);
-        buffer.store_complex_f32(8 * 4, output8);
-        buffer.store_complex_f32(10 * 4, output10);
-        buffer.store_complex_f32(12 * 4, output12);
-        buffer.store_complex_f32(14 * 4, output14);
+        output.store_complex_f32(0, output0);
+        output.store_complex_f32(2 * 4, output2);
+        output.store_complex_f32(4 * 4, output4);
+        output.store_complex_f32(6 * 4, output6);
+        output.store_complex_f32(8 * 4, output8);
+        output.store_complex_f32(10 * 4, output10);
+        output.store_complex_f32(12 * 4, output12);
+        output.store_complex_f32(14 * 4, output14);
 
         // We freed up a bunch of registers, so we should easily have enough room to compute+store the other half of our butterfly 8s
         let (output1, output3, output5, output7, output9, output11, output13, output15) = avx_utils::column_butterfly8_fma_f32(transposed1, transposed3, transposed5, transposed7, transposed9, transposed11, transposed13, transposed15, self.twiddles_butterfly8, self.twiddle_config);
-        buffer.store_complex_f32(1 * 4, output1);
-        buffer.store_complex_f32(3 * 4, output3);
-        buffer.store_complex_f32(5 * 4, output5);
-        buffer.store_complex_f32(7 * 4, output7);
-        buffer.store_complex_f32(9 * 4, output9);
-        buffer.store_complex_f32(11 * 4, output11);
-        buffer.store_complex_f32(13 * 4, output13);
-        buffer.store_complex_f32(15 * 4, output15);
-    }
-
-    #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_out_of_place_f32(&self, input: &mut [Complex<f32>], output: &mut [Complex<f32>], _scratch: &mut [Complex<f32>]) {
-        output.copy_from_slice(input);
-        self.perform_fft_inplace_f32(output, input)
+        output.store_complex_f32(1 * 4, output1);
+        output.store_complex_f32(3 * 4, output3);
+        output.store_complex_f32(5 * 4, output5);
+        output.store_complex_f32(7 * 4, output7);
+        output.store_complex_f32(9 * 4, output9);
+        output.store_complex_f32(11 * 4, output11);
+        output.store_complex_f32(13 * 4, output13);
+        output.store_complex_f32(15 * 4, output15);
     }
 }
-boilerplate_fft_simd_unsafe!(MixedRadixAvx8x8, 
-    |_| 64,
-    |_| 0,
-    |_| 0
-);
+boilerplate_fft_simd_butterfly!(MixedRadixAvx8x8, 64);
 
 #[cfg(test)]
 mod unit_tests {

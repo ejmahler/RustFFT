@@ -270,7 +270,6 @@ fn bench_bluesteins_avx_prime(b: &mut Bencher, len: usize) {
 #[bench] fn bench_bluesteins_avx_prime_2017(b: &mut Bencher) { bench_bluesteins_avx_prime(b,  2017); }
 #[bench] fn bench_bluesteins_avx_prime_32767(b: &mut Bencher) { bench_bluesteins_avx_prime(b, 32767); }
 #[bench] fn bench_bluesteins_avx_prime_65521(b: &mut Bencher) { bench_bluesteins_avx_prime(b, 65521); }
-#[bench] fn bench_bluesteins_avx_prime_65536(b: &mut Bencher) { bench_bluesteins_avx_prime(b, 65536); }
 #[bench] fn bench_bluesteins_avx_prime_65537(b: &mut Bencher) { bench_bluesteins_avx_prime(b, 65537); }
 #[bench] fn bench_bluesteins_avx_prime_746483(b: &mut Bencher) { bench_bluesteins_avx_prime(b,746483); }
 #[bench] fn bench_bluesteins_avx_prime_746497(b: &mut Bencher) { bench_bluesteins_avx_prime(b,746497); }

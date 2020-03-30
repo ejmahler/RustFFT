@@ -8,22 +8,6 @@ pub trait AvxComplexArrayf32 {
     unsafe fn store_complex_remainder_f32(&mut self, remainder_mask: RemainderMask,  data: __m256, index: usize);
 }
 
-// Struct that encapsulates the process of storing/loading "remainders" for FFT buffers that are not multiples of 4.
-// Use with load_remainder_complex_f32 and store_remainder_complex_f32 beloe
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct RemainderMask(__m256i);
-impl RemainderMask {
-    #[inline(always)]
-    pub unsafe fn new_f32(remainder: usize) -> Self {
-        let mut mask_array = [0u64; 4];
-        for i in 0..remainder {
-            mask_array[i] = std::u64::MAX;
-        }
-        Self(_mm256_lddqu_si256(std::mem::transmute::<*const u64, *const __m256i>(mask_array.as_ptr())))
-    }
-}
-
 impl AvxComplexArrayf32 for [Complex<f32>] {
     #[inline(always)]
     unsafe fn load_complex_f32(&self, index: usize) -> __m256 {
@@ -50,6 +34,69 @@ impl AvxComplexArrayf32 for [Complex<f32>] {
         let complex_ref = self.get_unchecked_mut(index);
         let float_ptr = (&mut complex_ref.re) as *mut f32;
         _mm256_maskstore_ps(float_ptr, remainder_mask.0, data);
+    }
+}
+/// A RawSlice is a normal slice, but aliasable. Its functionality is severely limited.
+#[derive(Copy, Clone)]
+pub struct RawSlice<T> {
+    ptr: *const T,
+    len: usize,
+}
+impl<T> RawSlice<T> {
+    #[inline(always)]
+    pub fn new(slice: &[T]) -> Self {
+        Self {
+            ptr: slice.as_ptr(),
+            len: slice.len(),
+        }
+    }
+}
+impl RawSlice<Complex<f32>> {
+    #[inline(always)]
+    pub unsafe fn load_complex_f32(self, index: usize) -> __m256 {
+        debug_assert!(index + 4 <= self.len);
+        let float_ptr  = self.ptr.add(index) as *const f32;
+        _mm256_loadu_ps(float_ptr)
+    }
+}
+
+/// A RawSliceMut is a normal mutable slice, but aliasable. Its functionality is severely limited.
+#[derive(Copy, Clone)]
+pub struct RawSliceMut<T> {
+    ptr: *mut T,
+    len: usize,
+}
+impl<T> RawSliceMut<T> {
+    #[inline(always)]
+    pub fn new(slice: &mut [T]) -> Self {
+        Self {
+            ptr: slice.as_mut_ptr(),
+            len: slice.len(),
+        }
+    }
+}
+impl RawSliceMut<Complex<f32>> {
+    #[inline(always)]
+    pub unsafe fn store_complex_f32(self, index: usize, data: __m256) {
+        debug_assert!(index + 4 <= self.len);
+        let float_ptr = self.ptr.add(index) as *mut f32;
+        _mm256_storeu_ps(float_ptr, data);
+    }
+}
+
+// Struct that encapsulates the process of storing/loading "remainders" for FFT buffers that are not multiples of 4.
+// Use with load_remainder_complex_f32 and store_remainder_complex_f32 beloe
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct RemainderMask(__m256i);
+impl RemainderMask {
+    #[inline(always)]
+    pub unsafe fn new_f32(remainder: usize) -> Self {
+        let mut mask_array = [0u64; 4];
+        for i in 0..remainder {
+            mask_array[i] = std::u64::MAX;
+        }
+        Self(_mm256_lddqu_si256(std::mem::transmute::<*const u64, *const __m256i>(mask_array.as_ptr())))
     }
 }
 
