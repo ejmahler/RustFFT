@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::arch::x86_64::*;
+use std::cmp::max;
 
 use num_complex::Complex;
 
@@ -36,11 +37,13 @@ use super::avx_utils;
 /// }
 /// ~~~
 pub struct SplitRadixAvx<T> {
+    twiddle_config: avx_utils::Rotate90Config,
     twiddles: Box<[__m256]>,
     fft_half: Arc<Fft<T>>,
     fft_quarter: Arc<Fft<T>>,
     len: usize,
-    twiddle_config: avx_utils::Rotate90Config,
+    inplace_scratch_len: usize,
+    outofplace_scratch_len: usize,
     inverse: bool,
 }
 
@@ -60,18 +63,22 @@ impl SplitRadixAvx<f32> {
     }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(fft_half: Arc<Fft<f32>>, fft_quarter: Arc<Fft<f32>>) -> Self {
-        assert_eq!(
-            fft_half.is_inverse(), fft_quarter.is_inverse(), 
-            "fft_half and fft_quarter must both be inverse, or neither. got fft_half inverse={}, fft_quarter inverse={}",
-            fft_half.is_inverse(), fft_quarter.is_inverse());
-
-        assert_eq!(
-            fft_half.len(), fft_quarter.len() * 2, 
-            "fft_half must be 2x the len of fft_quarter. got fft_half len={}, fft_quarter len={}",
-            fft_half.len(), fft_quarter.len());
-
+        let half_inverse = fft_half.is_inverse();
         let inverse = fft_quarter.is_inverse();
+
+        let half_len = fft_half.len();
         let quarter_len = fft_quarter.len();
+
+        assert_eq!(
+            half_inverse, inverse, 
+            "fft_half and fft_quarter must both be inverse, or neither. got fft_half inverse={}, fft_quarter inverse={}",
+            half_inverse, inverse);
+
+        assert_eq!(
+            half_len, quarter_len * 2, 
+            "fft_half must be 2x the len of fft_quarter. got fft_half len={}, fft_quarter len={}",
+            half_len, quarter_len);
+
         let len = quarter_len * 4;
 
         assert_eq!(len % 16, 0, "SplitRadixAvx requires its FFT length to be a multiple of 16. Got {}", len);
@@ -87,12 +94,21 @@ impl SplitRadixAvx<f32> {
             twiddle_chunk.load_complex_f32(0)
         }).collect();
 
+        let half_inplace_scratch = fft_half.get_inplace_scratch_len();
+        let quarter_inplace_scratch = fft_quarter.get_inplace_scratch_len();
+        let quarter_out_of_place_scratch = fft_quarter.get_inplace_scratch_len();
+
+        let max_for_inplace = max(half_inplace_scratch, quarter_out_of_place_scratch);
+        let max_for_outofplace = max(half_inplace_scratch, quarter_inplace_scratch);
+
         Self {
+            twiddle_config: avx_utils::Rotate90Config::get_from_inverse(inverse),
             twiddles: twiddles.into_boxed_slice(),
             fft_half,
             fft_quarter,
             len,
-            twiddle_config: avx_utils::Rotate90Config::get_from_inverse(inverse),
+            inplace_scratch_len: len / 2 + 1 + max_for_inplace,
+            outofplace_scratch_len: if max_for_outofplace > len { max_for_outofplace } else { 0 },
             inverse,
         }
     }
@@ -101,9 +117,9 @@ impl SplitRadixAvx<f32> {
     unsafe fn perform_fft_inplace_f32(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
         let half_len = self.len / 2;
         let quarter_len = self.len / 4;
-        let three_quarter_len = half_len + quarter_len;
         let sixteenth_len = self.len / 16;
 
+        let (scratch, inner_scratch) = scratch.split_at_mut(half_len + 1);
         let (scratch_quarter1, scratch_quarter3) = scratch.split_at_mut(quarter_len);
 
         for i in 0..sixteenth_len {
@@ -123,27 +139,30 @@ impl SplitRadixAvx<f32> {
 
             // We need to rotate every entry in quarter3 downwards one, and wrap the last entry back to the first
             // We'll accomplish the shift here by adding 1 to the index, and complete the rotation after the loop
-           scratch_quarter3.store_complex_f32(i*4+1, quarter3);
+            scratch_quarter3.store_complex_f32(i*4+1, quarter3);
         }
 
         // complete the rotate of scratch_quarter3 by copying the last element to the first. then, slice off the last element
         *scratch_quarter3.get_unchecked_mut(0) = *scratch_quarter3.get_unchecked(quarter_len);
         let scratch_quarter3 = &mut scratch_quarter3[..quarter_len];
 
+        
         // Split up the input buffer. The first half contains the even-sized inner FFT data, and the second half will contain scratch space for our inner FFTs
-        let (inner_buffer, inner_scratch) = buffer.split_at_mut(half_len);
+        let (half_buffer, half_scratch) = buffer.split_at_mut(half_len);
 
         // Execute the inner FFTs
-        self.fft_half.process_inplace_with_scratch(inner_buffer, inner_scratch);
-        self.fft_quarter.process_inplace_with_scratch(scratch_quarter1, inner_scratch);
-        self.fft_quarter.process_inplace_with_scratch(scratch_quarter3, inner_scratch);
+        self.fft_half.process_inplace_with_scratch(half_buffer, if half_scratch.len() > inner_scratch.len() { &mut half_scratch[..] } else { &mut inner_scratch[..] });
+
+        let (buffer_quarter1, buffer_quarter3) = half_scratch.split_at_mut(quarter_len);
+        self.fft_quarter.process_with_scratch(scratch_quarter1, buffer_quarter1, &mut []);
+        self.fft_quarter.process_with_scratch(scratch_quarter3, buffer_quarter3, &mut []);
 
         // Recombine into a single buffer
         for i in 0..sixteenth_len {
-            let inner_even0_entry = buffer.load_complex_f32(i * 4);
-            let inner_even1_entry = buffer.load_complex_f32(quarter_len + i * 4);
-            let inner_quarter1_entry = scratch_quarter1.load_complex_f32(i * 4);
-            let inner_quarter3_entry = scratch_quarter3.load_complex_f32(i * 4);
+            let inner_even0_entry =     buffer.load_complex_f32(i*4);
+            let inner_even1_entry =     buffer.load_complex_f32(i*4 + quarter_len);
+            let inner_quarter1_entry =  buffer.load_complex_f32(i*4 + quarter_len*2);
+            let inner_quarter3_entry =  buffer.load_complex_f32(i*4 + quarter_len*3);
 
             let twiddle = *self.twiddles.get_unchecked(i);
 
@@ -158,23 +177,25 @@ impl SplitRadixAvx<f32> {
 
             let (output_quarter1, output_quarter3) = avx_utils::column_butterfly2_f32(inner_even1_entry, quarter_diff_rotated);
 
-            buffer.store_complex_f32(i * 4, output_i);
-            buffer.store_complex_f32(i * 4 + quarter_len, output_quarter1);
-            buffer.store_complex_f32(i * 4 + half_len, output_i_half);
-            buffer.store_complex_f32(i * 4 + three_quarter_len, output_quarter3);
+            buffer.store_complex_f32(i*4, output_i);
+            buffer.store_complex_f32(i*4 + quarter_len, output_quarter1);
+            buffer.store_complex_f32(i*4 + quarter_len*2, output_i_half);
+            buffer.store_complex_f32(i*4 + quarter_len*3, output_quarter3);
         }
     }
 
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_out_of_place_f32(&self, input: &mut [Complex<f32>], output: &mut [Complex<f32>], _scratch: &mut [Complex<f32>]) {
+    unsafe fn perform_fft_out_of_place_f32(&self, input: &mut [Complex<f32>], output: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
         let half_len = self.len / 2;
         let quarter_len = self.len / 4;
-        let three_quarter_len = half_len + quarter_len;
         let sixteenth_len = self.len / 16;
+        
+        // Split our scratch up into a section for our quarter1 and one for our quarter3 FFT
+        let (output_half, output_quarter) = output.split_at_mut(half_len);
+        let (output_quarter1, output_quarter3) = output_quarter.split_at_mut(quarter_len);
 
-        let (scratch_quarter1, scratch_quarter3) = output.split_at_mut(quarter_len);
-
-        for i in 0..sixteenth_len {
+        // process all but one of the chunks
+        for i in 0..(sixteenth_len - 1) {
             let chunk0 = input.load_complex_f32(i*16);
             let chunk1 = input.load_complex_f32(i*16 + 4);
             let (even0, odd0) = avx_utils::split_evens_odds_f32(chunk0, chunk1);
@@ -185,33 +206,53 @@ impl SplitRadixAvx<f32> {
 
             let (quarter1, quarter3) = avx_utils::split_evens_odds_f32(odd0, odd1);
 
-            input.store_complex_f32(i*8, even0);
-            input.store_complex_f32(i*8 + 4, even1);
-            scratch_quarter1.store_complex_f32(i*4, quarter1);
+            output_half.store_complex_f32(i*8, even0);
+            output_half.store_complex_f32(i*8 + 4, even1);
+            output_quarter1.store_complex_f32(i*4, quarter1);
 
             // We need to rotate every entry in quarter3 downwards one, and wrap the last entry back to the first
             // We'll accomplish the shift here by adding 1 to the index, and complete the rotation after the loop
-           scratch_quarter3.store_complex_f32(i*4+1, quarter3);
+            output_quarter3.store_complex_f32(i*4 + 1, quarter3);
         }
 
-        // complete the rotate of scratch_quarter3 by copying the last element to the first. then, slice off the last element
-        *scratch_quarter3.get_unchecked_mut(0) = *scratch_quarter3.get_unchecked(quarter_len);
-        let scratch_quarter3 = &mut scratch_quarter3[..quarter_len];
+        // process the remainder chunk
+        {
+            let last_index = sixteenth_len - 1;
 
-        // Split up the input buffer. The first half contains the even-sized inner FFT data, and the second half will contain scratch space for our inner FFTs
-        let (inner_buffer, inner_scratch) = input.split_at_mut(half_len);
+            let chunk0 = input.load_complex_f32(last_index*16);
+            let chunk1 = input.load_complex_f32(last_index*16 + 4);
+            let (even0, odd0) = avx_utils::split_evens_odds_f32(chunk0, chunk1);
+
+            let chunk2 = input.load_complex_f32(last_index*16 + 8);
+            let chunk3 = input.load_complex_f32(last_index*16 + 12);
+            let (even1, odd1) = avx_utils::split_evens_odds_f32(chunk2, chunk3);
+
+            let (quarter1, quarter3) = avx_utils::split_evens_odds_f32(odd0, odd1);
+
+            output_half.store_complex_f32(last_index*8, even0);
+            output_half.store_complex_f32(last_index*8 + 4, even1);
+            output_quarter1.store_complex_f32(last_index*4, quarter1);
+
+            // We've been writing to output_quarter3 offset by one this whole time. we want to keep doing that, but we can't write
+            // the final element offset by one, because we'll go past the end of the array
+            // so instead, only write 3 of the 4 elements, then complete the rotation by copying over the final element
+            let remainder_mask = avx_utils::RemainderMask::new_f32(3);
+            output_quarter3.store_complex_remainder_f32(remainder_mask, quarter3, last_index*4 + 1);
+            *output_quarter3.get_unchecked_mut(0) = *input.get_unchecked(input.len() - 1);
+        }
 
         // Execute the inner FFTs
-        self.fft_half.process_inplace_with_scratch(inner_buffer, inner_scratch);
-        self.fft_quarter.process_inplace_with_scratch(scratch_quarter1, inner_scratch);
-        self.fft_quarter.process_inplace_with_scratch(scratch_quarter3, inner_scratch);
+        let inner_scratch = if scratch.len() > 0 { scratch } else { &mut input[..] };
+        self.fft_half.process_inplace_with_scratch(output_half, inner_scratch);
+        self.fft_quarter.process_inplace_with_scratch(output_quarter1, inner_scratch);
+        self.fft_quarter.process_inplace_with_scratch(output_quarter3, inner_scratch);
 
         // Recombine into a single buffer
         for i in 0..sixteenth_len {
-            let inner_even0_entry = input.load_complex_f32(i * 4);
-            let inner_even1_entry = input.load_complex_f32(quarter_len + i * 4);
-            let inner_quarter1_entry = scratch_quarter1.load_complex_f32(i * 4);
-            let inner_quarter3_entry = scratch_quarter3.load_complex_f32(i * 4);
+            let inner_even0_entry       = output.load_complex_f32(i*4);
+            let inner_even1_entry       = output.load_complex_f32(i*4 + quarter_len);
+            let inner_quarter1_entry    = output.load_complex_f32(i*4 + quarter_len*2);
+            let inner_quarter3_entry    = output.load_complex_f32(i*4 + quarter_len*3);
 
             let twiddle = *self.twiddles.get_unchecked(i);
 
@@ -226,19 +267,17 @@ impl SplitRadixAvx<f32> {
 
             let (output_quarter1, output_quarter3) = avx_utils::column_butterfly2_f32(inner_even1_entry, quarter_diff_rotated);
 
-            input.store_complex_f32(i * 4, output_i);
-            input.store_complex_f32(i * 4 + quarter_len, output_quarter1);
-            input.store_complex_f32(i * 4 + half_len, output_i_half);
-            input.store_complex_f32(i * 4 + three_quarter_len, output_quarter3);
+            output.store_complex_f32(i*4, output_i);
+            output.store_complex_f32(i*4 + quarter_len, output_quarter1);
+            output.store_complex_f32(i*4 + quarter_len*2, output_i_half);
+            output.store_complex_f32(i*4 + quarter_len*3, output_quarter3);
         }
-
-        output.copy_from_slice(input);
     }
 }
 boilerplate_fft_simd_unsafe!(SplitRadixAvx, 
-    |this:&SplitRadixAvx<_>| this.len,
-    |this:&SplitRadixAvx<_>| this.len / 2 + 1,
-    |_| 0
+    |this: &SplitRadixAvx<_>| this.len,
+    |this: &SplitRadixAvx<_>| this.inplace_scratch_len,
+    |this: &SplitRadixAvx<_>| this.outofplace_scratch_len
 );
 
 #[cfg(test)]
