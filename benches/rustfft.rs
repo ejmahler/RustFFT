@@ -223,6 +223,24 @@ fn bench_raders(b: &mut Bencher, len: usize) {
 #[bench] fn raders_prime_746497(b: &mut Bencher) { bench_raders(b,746497); }
 
 /// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_raders_power2(b: &mut Bencher, len: usize) {
+
+    let inner_fft = get_mixed_planned_avx(len - 1);
+
+    let fft : Arc<Fft<_>> = Arc::new(RadersAlgorithm::new(len, inner_fft));
+
+    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; len];
+    let mut spectrum = signal.clone();
+    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
+}
+
+
+#[bench] fn raders_power2_0017(b: &mut Bencher) { bench_raders_power2(b,  17); }
+#[bench] fn raders_power2_0257(b: &mut Bencher) { bench_raders_power2(b,  257); }
+#[bench] fn raders_power2_65537(b: &mut Bencher) { bench_raders_power2(b, 65537); }
+
+/// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to Bluestein's Algorithm
 fn bench_bluesteins_scalar_prime(b: &mut Bencher, len: usize) {
 

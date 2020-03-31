@@ -96,35 +96,38 @@ impl<T: FFTnum> RadersAlgorithm<T> {
         }
     }
 
-    fn perform_fft_out_of_place(&self, input: &mut [Complex<T>], output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+    fn perform_fft_out_of_place(&self, input: &mut [Complex<T>], output: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
 
-        // The first output element is just the sum of all the input elements
-        output[0] = input.iter().sum();
-        let first_input_val = input[0];
+        // The first output element is just the sum of all the input elements, and we need to store off the first input value
+        let (output_first, output) = output.split_first_mut().unwrap();
+        let (input_first, input) = input.split_first_mut().unwrap();
+        let first_input_val = *input_first;
+        *output_first = *input_first;
 
-        // we're now done with the first input and output
-        let (_, output) = output.split_first_mut().unwrap();
-        let (_, input) = input.split_first_mut().unwrap();
-
-        // copy the input into the output, reordering as we go
+        // copy the inout into the output, reordering as we go. also compute a sum of all elements
         let mut input_index = 1;
         for output_element in output.iter_mut() {
             input_index = (input_index * self.primitive_root) % self.len;
-            *output_element = input[input_index - 1];
+
+            let input_element = input[input_index - 1];
+            *output_first = *output_first + input_element;
+            *output_element = input_element;
         }
 
         // perform the first of two inner FFTs
-        self.inner_fft.process_inplace_with_scratch(output, input);
+        let inner_scratch = if scratch.len() > 0 { &mut scratch[..] } else { &mut input[..] };
+        self.inner_fft.process_inplace_with_scratch(output, inner_scratch);
 
         // multiply the inner result with our cached setup data
         // also conjugate every entry. this sets us up to do an inverse FFT
         // (because an inverse FFT is equivalent to a normal FFT where you conjugate both the inputs and outputs)
-        for ((&input_cell, output_cell), &multiple) in input.iter().zip(output.iter_mut()).zip(self.inner_fft_data.iter()) {
-            *output_cell = (input_cell * multiple).conj();
+        for ((output_cell, input_cell), &multiple) in output.iter().zip(input.iter_mut()).zip(self.inner_fft_data.iter()) {
+            *input_cell = (*output_cell * multiple).conj();
         }
 
         // execute the second FFT
-        self.inner_fft.process_inplace_with_scratch(output, input);
+        let inner_scratch = if scratch.len() > 0 { scratch } else { &mut output[..] };
+        self.inner_fft.process_inplace_with_scratch(input, inner_scratch);
 
         // copy the final values into the output, reordering as we go
         let mut output_index = 1;
@@ -136,16 +139,17 @@ impl<T: FFTnum> RadersAlgorithm<T> {
     fn perform_fft_inplace(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
 
         // The first output element is just the sum of all the input elements, and we need to store off the first input value
-        let buffer_sum = buffer.iter().sum();
         let (buffer_first, buffer) = buffer.split_first_mut().unwrap();
         let buffer_first_val = *buffer_first;
-        *buffer_first = buffer_sum;
 
-        // copy the buffer into the scratch, reordering as we go
+        // copy the buffer into the scratch, reordering as we go. also compute a sum of all elements
         let mut input_index = 1;
         for scratch_element in scratch.iter_mut() {
             input_index = (input_index * self.primitive_root) % self.len;
-            *scratch_element = buffer[input_index - 1];
+
+            let buffer_element = buffer[input_index - 1];
+            *buffer_first = *buffer_first + buffer_element;
+            *scratch_element = buffer_element;
         }
 
         // perform the first of two inner FFTs
