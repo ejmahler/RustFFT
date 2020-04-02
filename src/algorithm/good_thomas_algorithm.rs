@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::cmp::max;
 
 use num_complex::Complex;
 use strength_reduce::StrengthReducedUsize;
@@ -50,6 +51,9 @@ pub struct GoodThomasAlgorithm<T> {
     input_x_stride: usize,
     input_y_stride: usize,
 
+    inplace_scratch_len: usize,
+    outofplace_scratch_len: usize,
+
     len: StrengthReducedUsize,
     inverse: bool,
 }
@@ -84,6 +88,14 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
             height_inverse += width as i64;
         }
 
+        let len = width * height;
+        let width_inplace_scratch = height_fft.get_inplace_scratch_len();
+        let height_inplace_scratch = width_fft.get_inplace_scratch_len();
+        let height_outofplace_scratch = width_fft.get_out_of_place_scratch_len();
+
+        let outofplace_scratch = max(height_inplace_scratch, width_inplace_scratch);
+        let inplace_extra = max(if width_inplace_scratch > len { width_inplace_scratch } else { 0 }, height_outofplace_scratch);
+
         Self {
             width: width,
             width_size_fft: width_fft,
@@ -94,12 +106,47 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
             input_x_stride: height_inverse as usize * height,
             input_y_stride: width_inverse as usize * width,
 
+            inplace_scratch_len: len + inplace_extra,
+            outofplace_scratch_len: if outofplace_scratch > len { outofplace_scratch } else { 0 },
+
             len: StrengthReducedUsize::new(width * height),
             inverse: is_inverse,
         }
     }
 
-    fn perform_fft_out_of_place(&self, input: &mut [Complex<T>], output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+    fn perform_fft_inplace(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        let (scratch, inner_scratch) = scratch.split_at_mut(self.len());
+
+        // copy the input into the output buffer
+        for (y, row) in scratch.chunks_mut(self.width).enumerate() {
+            let input_base = y * self.input_y_stride;
+            for (x, output_cell) in row.iter_mut().enumerate() {
+                let input_index = (input_base + x * self.input_x_stride) % self.len;
+                *output_cell = buffer[input_index];
+            }
+        }
+
+        // run FFTs of size `width`
+        let width_scratch = if inner_scratch.len() > buffer.len() { &mut inner_scratch[..] } else { &mut buffer[..] };
+        self.width_size_fft.process_inplace_multi(scratch, width_scratch);
+
+        // transpose
+        transpose::transpose(scratch, buffer, self.width, self.height);
+
+        // run FFTs of size 'height'
+        self.height_size_fft.process_multi(buffer, scratch, inner_scratch);
+
+        // copy to the output, using our output redordering mapping
+        for (x, row) in scratch.chunks(self.height).enumerate() {
+            let output_base = x * self.height;
+            for (y, input_cell) in row.iter().enumerate() {
+                let output_index = (output_base + y * self.width) % self.len;
+                buffer[output_index] = *input_cell;
+            }
+        }
+    }
+
+    fn perform_fft_out_of_place(&self, input: &mut [Complex<T>], output: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
         // copy the input into the output buffer
         for (y, row) in output.chunks_mut(self.width).enumerate() {
             let input_base = y * self.input_y_stride;
@@ -110,13 +157,15 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
         }
 
         // run FFTs of size `width`
-        self.width_size_fft.process_inplace_multi(output, input);
+        let width_scratch = if scratch.len() > input.len() { &mut scratch[..] } else { &mut input[..] };
+        self.width_size_fft.process_inplace_multi(output, width_scratch);
 
         // transpose
         transpose::transpose(output, input, self.width, self.height);
 
         // run FFTs of size 'height'
-        self.height_size_fft.process_inplace_multi(input, output);
+        let height_scratch = if scratch.len() > output.len() { &mut scratch[..] } else { &mut output[..] };
+        self.height_size_fft.process_inplace_multi(input, height_scratch);
 
         // copy to the output, using our output redordering mapping
         for (x, row) in input.chunks(self.height).enumerate() {
@@ -128,7 +177,11 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
         }
     }
 }
-boilerplate_fft_oop!(GoodThomasAlgorithm, |this: &GoodThomasAlgorithm<_>| this.width * this.height);
+boilerplate_fft!(GoodThomasAlgorithm,
+    |this: &GoodThomasAlgorithm<_>| this.len.get(),
+    |this: &GoodThomasAlgorithm<_>| this.inplace_scratch_len,
+    |this: &GoodThomasAlgorithm<_>| this.outofplace_scratch_len
+);
 
 /// Implementation of the Good-Thomas Algorithm, specialized for the case where both inner FFTs are butterflies
 ///

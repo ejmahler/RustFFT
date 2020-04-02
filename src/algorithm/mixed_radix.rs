@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::cmp::max;
 
 use num_complex::Complex;
 use transpose;
@@ -36,13 +37,17 @@ use array_utils;
 /// ~~~
 
 pub struct MixedRadix<T> {
-    width: usize,
-    width_size_fft: Arc<Fft<T>>,
-
-    height: usize,
-    height_size_fft: Arc<Fft<T>>,
-
     twiddles: Box<[Complex<T>]>,
+
+    width_size_fft: Arc<Fft<T>>,
+    width: usize,
+
+    height_size_fft: Arc<Fft<T>>,
+    height: usize,
+
+    inplace_scratch_len: usize,
+    outofplace_scratch_len: usize,
+
     inverse: bool,
 }
 
@@ -68,30 +73,67 @@ impl<T: FFTnum> MixedRadix<T> {
             }
         }
 
+        let height_inplace_scratch = height_fft.get_inplace_scratch_len();
+        let width_inplace_scratch = width_fft.get_inplace_scratch_len();
+        let width_outofplace_scratch = width_fft.get_out_of_place_scratch_len();
+
+        let outofplace_scratch = max(height_inplace_scratch, width_inplace_scratch);
+        let inplace_extra = max(if height_inplace_scratch > len { height_inplace_scratch } else { 0 }, width_outofplace_scratch);
+
         Self {
-            width: width,
-            width_size_fft: width_fft,
-
-            height: height,
-            height_size_fft: height_fft,
-
             twiddles: twiddles.into_boxed_slice(),
+
+            width_size_fft: width_fft,
+            width: width,
+
+            height_size_fft: height_fft,
+            height: height,
+
+            inplace_scratch_len: len + inplace_extra,
+            outofplace_scratch_len: if outofplace_scratch > len { outofplace_scratch } else { 0 },
+
             inverse: inverse,
         }
     }
 
+    fn perform_fft_inplace(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        // SIX STEP FFT:
+        let (scratch, inner_scratch) = scratch.split_at_mut(self.len());
 
-    fn perform_fft_out_of_place(&self, input: &mut [Complex<T>], output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+        // STEP 1: transpose
+        transpose::transpose(buffer, scratch, self.width, self.height);
+
+        // STEP 2: perform FFTs of size `height`
+        let height_scratch = if inner_scratch.len() > buffer.len() { &mut inner_scratch[..] } else { &mut buffer[..] };
+        self.height_size_fft.process_inplace_multi(scratch, height_scratch);
+
+        // STEP 3: Apply twiddle factors
+        for (element, twiddle) in scratch.iter_mut().zip(self.twiddles.iter()) {
+            *element = *element * twiddle;
+        }
+
+        // STEP 4: transpose again
+        transpose::transpose(scratch, buffer, self.height, self.width);
+
+        // STEP 5: perform FFTs of size `width`
+        self.width_size_fft.process_multi(buffer, scratch, inner_scratch);
+
+        // STEP 6: transpose again
+        transpose::transpose(scratch, buffer, self.width, self.height);
+    }
+    
+    fn perform_fft_out_of_place(&self, input: &mut [Complex<T>], output: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
         // SIX STEP FFT:
 
         // STEP 1: transpose
         transpose::transpose(input, output, self.width, self.height);
 
         // STEP 2: perform FFTs of size `height`
-        self.height_size_fft.process_inplace_multi(output, input);
+        let height_scratch = if scratch.len() > input.len() { &mut scratch[..] } else { &mut input[..] };
+        self.height_size_fft.process_inplace_multi(output, height_scratch);
 
         // STEP 3: Apply twiddle factors
-        for (element, &twiddle) in output.iter_mut().zip(self.twiddles.iter()) {
+        for (element, twiddle) in output.iter_mut().zip(self.twiddles.iter()) {
             *element = *element * twiddle;
         }
 
@@ -99,14 +141,17 @@ impl<T: FFTnum> MixedRadix<T> {
         transpose::transpose(output, input, self.height, self.width);
 
         // STEP 5: perform FFTs of size `width`
-        self.width_size_fft.process_inplace_multi(input, output);
+        let width_scratch = if scratch.len() > output.len() { &mut scratch[..] } else { &mut output[..] };
+        self.width_size_fft.process_inplace_multi(input, width_scratch);
 
         // STEP 6: transpose again
         transpose::transpose(input, output, self.width, self.height);
     }
 }
-boilerplate_fft_oop!(MixedRadix,
-    |this: &MixedRadix<_>| this.twiddles.len()
+boilerplate_fft!(MixedRadix,
+    |this: &MixedRadix<_>| this.twiddles.len(),
+    |this: &MixedRadix<_>| this.inplace_scratch_len,
+    |this: &MixedRadix<_>| this.outofplace_scratch_len
 );
 
 /// Implementation of the Mixed-Radix FFT algorithm, specialized for the case where both inner FFTs are butterflies

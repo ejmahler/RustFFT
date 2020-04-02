@@ -47,6 +47,8 @@ pub struct RadersAlgorithm<T> {
     primitive_root_inverse: usize,
 
     len: StrengthReducedUsize,
+    inplace_scratch_len: usize,
+    outofplace_scratch_len: usize,
     inverse: bool,
 }
 
@@ -80,8 +82,11 @@ impl<T: FFTnum> RadersAlgorithm<T> {
             twiddle_input = (twiddle_input * primitive_root_inverse) % reduced_len;
         }
 
+        let required_inner_scratch = inner_fft.get_inplace_scratch_len();
+        let extra_inner_scratch = if required_inner_scratch <= inner_fft_len { 0 } else { required_inner_scratch };
+
         //precompute a FFT of our reordered twiddle factors
-        let mut inner_fft_scratch = vec![Zero::zero(); inner_fft.get_inplace_scratch_len()];
+        let mut inner_fft_scratch = vec![Zero::zero(); required_inner_scratch];
         inner_fft.process_inplace_with_scratch(&mut inner_fft_input, &mut inner_fft_scratch);
 
         Self {
@@ -92,6 +97,8 @@ impl<T: FFTnum> RadersAlgorithm<T> {
             primitive_root_inverse,
 
             len: reduced_len,
+            inplace_scratch_len: inner_fft_len + extra_inner_scratch,
+            outofplace_scratch_len: extra_inner_scratch,
             inverse,
         }
     }
@@ -175,8 +182,8 @@ impl<T: FFTnum> RadersAlgorithm<T> {
 }
 boilerplate_fft!(RadersAlgorithm, 
     |this: &RadersAlgorithm<_>| this.len.get(),
-    |this: &RadersAlgorithm<_>| this.len.get() - 1,
-    |_| 0
+    |this: &RadersAlgorithm<_>| this.inplace_scratch_len,
+    |this: &RadersAlgorithm<_>| this.outofplace_scratch_len
 );
 
 #[cfg(test)]
