@@ -8,7 +8,7 @@ use common::FFTnum;
 
 use ::{Length, IsInverse, Fft};
 
-use algorithm::simd::avx_utils::AvxComplexArrayf32;
+use super::avx_utils::AvxComplexArrayf32;
 use super::avx_utils;
 
 /// Implementation of Bluestein's Algorithm

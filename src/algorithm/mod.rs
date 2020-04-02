@@ -5,10 +5,12 @@ mod raders_algorithm;
 mod radix4;
 mod dft;
 mod split_radix;
-mod simd;
 
 /// Hardcoded size-specfic FFT algorithms
 pub mod butterflies;
+
+// Algorithms implemented to use AVX instructions. Only compiled on x86_64.
+pub mod avx;
 
 pub use self::mixed_radix::{MixedRadix, MixedRadixDoubleButterfly};
 pub use self::raders_algorithm::RadersAlgorithm;
@@ -17,5 +19,3 @@ pub use self::radix4::Radix4;
 pub use self::good_thomas_algorithm::{GoodThomasAlgorithm, GoodThomasAlgorithmDoubleButterfly};
 pub use self::dft::DFT;
 pub use self::split_radix::SplitRadix;
-
-pub use self::simd::*;

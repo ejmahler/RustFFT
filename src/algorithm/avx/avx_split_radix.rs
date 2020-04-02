@@ -16,7 +16,8 @@ use super::avx_utils;
 /// ~~~
 /// // Computes a forward FFT of size 4096
 /// use std::sync::Arc;
-/// use rustfft::algorithm::{SplitRadixAvx, SplitRadix, DFT};
+/// use rustfft::algorithm::{SplitRadix, DFT};
+/// use rustfft::algorithm::avx::SplitRadixAvx;
 /// use rustfft::Fft;
 /// use rustfft::num_complex::Complex;
 /// use rustfft::num_traits::Zero;

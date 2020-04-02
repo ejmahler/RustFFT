@@ -7,6 +7,7 @@ use common::FFTnum;
 use Fft;
 use algorithm::*;
 use algorithm::butterflies::*;
+use algorithm::avx::MakeAvxButterfly;
 
 use math_utils;
 
@@ -14,7 +15,7 @@ use math_utils;
 const MIN_RADIX4_BITS: u32 = 5; // smallest size to consider radix 4 an option is 2^5 = 32
 const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option is 2^16 = 65536
 const BUTTERFLIES: [usize; 9] = [2, 3, 4, 5, 6, 7, 8, 16, 32];
-const COMPOSITE_BUTTERFLIES: [usize; 5] = [4, 6, 8, 16, 32];
+
 
 /// The Fft planner is used to make new Fft algorithm instances.
 ///
@@ -98,9 +99,10 @@ impl<T: FFTnum> FFTplanner<T> {
         if self.algorithm_cache.contains_key(&len) {
             Arc::clone(self.algorithm_cache.get(&len).unwrap())
         } else {
-            let result = if factors.len() == 1 || COMPOSITE_BUTTERFLIES.contains(&len) {
-                self.plan_fft_single_factor(len)
-
+            let result = if let Some(fft_instance) = self.plan_butterfly_algorithm(len) {
+                fft_instance
+            } else if factors.len() == 1 {
+                self.plan_prime(len)
             } else if len.trailing_zeros() <= MAX_RADIX4_BITS && len.trailing_zeros() >= MIN_RADIX4_BITS {
                 //the number of trailing zeroes in len is the number of `2` factors
                 //ie if len = 2048 * n, len.trailing_zeros() will equal 11 because 2^11 == 2048
@@ -190,19 +192,30 @@ impl<T: FFTnum> FFTplanner<T> {
     }
 
 
-    fn plan_fft_single_factor(&mut self, len: usize) -> Arc<Fft<T>> {
+    // Returns Some(instance) if we have a butterfly available for this size. Returns None if there is no butterfly available for this size
+    fn plan_butterfly_algorithm(&mut self, len: usize) -> Option<Arc<Fft<T>>>{
+        // First, make an attempt to find a SIMD butterfly
+        if let Some(butterfly) = self.make_avx_butterfly(len, self.inverse) {
+            return Some(butterfly);
+        }
+
+        fn wrap_butterfly<N: FFTnum>(butterfly: impl Fft<N> + 'static) -> Option<Arc<dyn Fft<N>>> {
+            Some(Arc::new(butterfly) as Arc<dyn Fft<N>>)
+        }
+
+
         match len {
-            0|1 => Arc::new(DFT::new(len, self.inverse)) as Arc<Fft<T>>,
-            2 => Arc::new(butterflies::Butterfly2::new(self.inverse)) as Arc<Fft<T>>,
-            3 => Arc::new(butterflies::Butterfly3::new(self.inverse)) as Arc<Fft<T>>,
-            4 => Arc::new(butterflies::Butterfly4::new(self.inverse)) as Arc<Fft<T>>,
-            5 => Arc::new(butterflies::Butterfly5::new(self.inverse)) as Arc<Fft<T>>,
-            6 => Arc::new(butterflies::Butterfly6::new(self.inverse)) as Arc<Fft<T>>,
-            7 => Arc::new(butterflies::Butterfly7::new(self.inverse)) as Arc<Fft<T>>,
-            8 => Arc::new(butterflies::Butterfly8::new(self.inverse)) as Arc<Fft<T>>,
-            16 => Arc::new(butterflies::Butterfly16::new(self.inverse)) as Arc<Fft<T>>,
-            32 => Arc::new(butterflies::Butterfly32::new(self.inverse)) as Arc<Fft<T>>,
-            _ => self.plan_prime(len),
+            0|1 => wrap_butterfly(DFT::new(len, self.inverse)),
+            2 => wrap_butterfly(butterflies::Butterfly2::new(self.inverse)),
+            3 => wrap_butterfly(butterflies::Butterfly3::new(self.inverse)),
+            4 => wrap_butterfly(butterflies::Butterfly4::new(self.inverse)),
+            5 => wrap_butterfly(butterflies::Butterfly5::new(self.inverse)),
+            6 => wrap_butterfly(butterflies::Butterfly6::new(self.inverse)),
+            7 => wrap_butterfly(butterflies::Butterfly7::new(self.inverse)),
+            8 => wrap_butterfly(butterflies::Butterfly8::new(self.inverse)),
+            16 => wrap_butterfly(butterflies::Butterfly8::new(self.inverse)),
+            32 => wrap_butterfly(butterflies::Butterfly32::new(self.inverse)),
+            _ => None,
         }
     }
 

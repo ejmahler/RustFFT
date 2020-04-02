@@ -12,6 +12,7 @@ use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 use rustfft::algorithm::*;
 use rustfft::algorithm::butterflies::*;
+use rustfft::algorithm::avx::*;
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
