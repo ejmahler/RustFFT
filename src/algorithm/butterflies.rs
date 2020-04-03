@@ -47,18 +47,6 @@ macro_rules! boilerplate_fft_butterfly {
                 0
             }
         }
-        impl<T: FFTnum> FFTButterfly<T> for $struct_name<T> {
-            #[inline(always)]
-            unsafe fn process_butterfly_inplace(&self, buffer: &mut [Complex<T>]) {
-                self.perform_fft_inplace(buffer);
-            }
-            #[inline(always)]
-            unsafe fn process_butterfly_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-                for chunk in buffer.chunks_exact_mut(self.len()) {
-                    self.perform_fft_inplace(chunk);
-                }
-            }
-        }
         impl<T> Length for $struct_name<T> {
             #[inline(always)]
             fn len(&self) -> usize {
@@ -74,32 +62,12 @@ macro_rules! boilerplate_fft_butterfly {
     )
 }
 
-
-pub trait FFTButterfly<T: FFTnum>: Length + IsInverse + Sync + Send {
-    /// Computes the FFT in-place in the given buffer
-    ///
-    /// # Safety
-    /// This method performs unsafe reads/writes on `buffer`. Make sure `buffer.len()` is equal to `self.len()`
-    unsafe fn process_butterfly_inplace(&self, buffer: &mut [Complex<T>]);
-
-    /// Divides the given buffer into chunks of length `self.len()` and computes an in-place FFT on each chunk
-    ///
-    /// # Safety
-    /// This method performs unsafe reads/writes on `buffer`. Make sure `buffer.len()` is a multiple of `self.len()`
-    unsafe fn process_butterfly_multi_inplace(&self, buffer: &mut [Complex<T>]);
-}
-
-
 #[inline(always)]
 unsafe fn swap_unchecked<T: Copy>(buffer: &mut [T], a: usize, b: usize) {
 	let temp = *buffer.get_unchecked(a);
 	*buffer.get_unchecked_mut(a) = *buffer.get_unchecked(b);
 	*buffer.get_unchecked_mut(b) = temp;
 }
-
-
-
-
 
 pub struct Butterfly2<T> {
     inverse: bool,
@@ -118,7 +86,7 @@ impl<T: FFTnum> Butterfly2<T> {
         *left = temp;
     }
     #[inline(always)]
-    unsafe fn perform_fft_inplace(&self, buffer: &mut [Complex<T>]) {
+    pub(crate) unsafe fn perform_fft_inplace(&self, buffer: &mut [Complex<T>]) {
         let temp = *buffer.get_unchecked(0) + *buffer.get_unchecked(1);
         
         *buffer.get_unchecked_mut(1) = *buffer.get_unchecked(0) - *buffer.get_unchecked(1);
@@ -173,7 +141,7 @@ impl<T: FFTnum> Butterfly4<T> {
         Self { inverse, _phantom: std::marker::PhantomData }
     }
     #[inline(always)]
-    unsafe fn perform_fft_inplace(&self, buffer: &mut [Complex<T>]) {
+    pub(crate) unsafe fn perform_fft_inplace(&self, buffer: &mut [Complex<T>]) {
         let butterfly2 = Butterfly2::new(self.inverse);
 
         //we're going to hardcode a step of mixed radix
@@ -218,7 +186,7 @@ impl<T: FFTnum> Butterfly5<T> {
     	let mut fft_data = [twiddle1, twiddle2.conj(), twiddle1.conj(), twiddle2];
 
     	let butterfly = Butterfly4::new(inverse);
-    	unsafe { butterfly.process_butterfly_inplace(&mut fft_data) };
+    	unsafe { butterfly.perform_fft_inplace(&mut fft_data) };
 
         Self { 
         	inner_fft_multiply: fft_data,
@@ -710,9 +678,7 @@ boilerplate_fft_butterfly!(Butterfly32, 32, |this: &Butterfly32<_>| this.butterf
 #[cfg(test)]
 mod unit_tests {
 	use super::*;
-	use test_utils::{random_signal, compare_vectors, check_fft_algorithm};
-	use algorithm::DFT;
-	use num_traits::Zero;
+	use test_utils::check_fft_algorithm;
 
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
@@ -721,14 +687,10 @@ mod unit_tests {
             #[test]
             fn $test_name() {
                 let butterfly = $struct_name::new(false);
-
                 check_fft_algorithm(&butterfly, $size, false);
-                check_butterfly(&butterfly, $size, false);
 
                 let butterfly_inverse = $struct_name::new(true);
-
                 check_fft_algorithm(&butterfly_inverse, $size, true);
-                check_butterfly(&butterfly_inverse, $size, true);
             }
         )
     }
@@ -741,34 +703,4 @@ mod unit_tests {
     test_butterfly_func!(test_butterfly8, Butterfly8, 8);
     test_butterfly_func!(test_butterfly16, Butterfly16, 16);
     test_butterfly_func!(test_butterfly32, Butterfly32, 32);
-    
-
-    fn check_butterfly(butterfly: &FFTButterfly<f32>, size: usize, inverse: bool) {
-        assert_eq!(butterfly.len(), size, "Butterfly algorithm reported wrong size");
-        assert_eq!(butterfly.is_inverse(), inverse, "Butterfly algorithm reported wrong inverse value");
-
-        let n = 5;
-
-        //test the forward direction
-        let dft = DFT::new(size, inverse);
-
-        // set up buffers
-        let mut expected_input = random_signal(size * n);
-        let mut expected_output = vec![Zero::zero(); size * n];
-
-        let mut inplace_buffer = expected_input.clone();
-        let mut inplace_multi_buffer = expected_input.clone();
-
-        // perform the test
-        dft.process_multi(&mut expected_input, &mut expected_output, &mut []);
-
-        unsafe { butterfly.process_butterfly_multi_inplace(&mut inplace_multi_buffer); }
-
-        for chunk in inplace_buffer.chunks_mut(size) {
-            unsafe { butterfly.process_butterfly_inplace(chunk) };
-        }
-
-        assert!(compare_vectors(&expected_output, &inplace_buffer), "process_inplace() failed, length = {}, inverse = {}", size, inverse);
-        assert!(compare_vectors(&expected_output, &inplace_multi_buffer), "process_multi_inplace() failed, length = {}, inverse = {}", size, inverse);
-    }
 }

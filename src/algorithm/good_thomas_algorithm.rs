@@ -11,7 +11,6 @@ use math_utils;
 use array_utils;
 
 use ::{Length, IsInverse, Fft};
-use algorithm::butterflies::FFTButterfly;
 
 /// Implementation of the [Good-Thomas Algorithm (AKA Prime Factor Algorithm)](https://en.wikipedia.org/wiki/Prime-factor_FFT_algorithm)
 ///
@@ -183,18 +182,18 @@ boilerplate_fft!(GoodThomasAlgorithm,
     |this: &GoodThomasAlgorithm<_>| this.outofplace_scratch_len
 );
 
-/// Implementation of the Good-Thomas Algorithm, specialized for the case where both inner FFTs are butterflies
+/// Implementation of the Good-Thomas Algorithm, specialized for smaller input sizes
 ///
 /// This algorithm factors a size n FFT into n1 * n2, where GCD(n1, n2) == 1
 ///
-/// Conceptually, this algorithm is very similar to the Mixed-Radix except because GCD(n1, n2) == 1 we can do some
-/// number theory trickery to reduce the number of floating-point multiplications and additions. It typically performs
-/// better than Mixed-Radix Double Butterfly Algorithm, especially at small sizes.
+/// Conceptually, this algorithm is very similar to MixedRadix except because GCD(n1, n2) == 1 we can do some
+/// number theory trickery to reduce the number of floating point operations. It typically performs
+/// better than MixedRadixSmall, especially at the smallest sizes.
 ///
 /// ~~~
 /// // Computes a forward FFT of size 56, using the Good-Thoma Butterfly Algorithm
 /// use std::sync::Arc;
-/// use rustfft::algorithm::GoodThomasAlgorithmDoubleButterfly;
+/// use rustfft::algorithm::GoodThomasAlgorithmSmall;
 /// use rustfft::algorithm::butterflies::{Butterfly7, Butterfly8};
 /// use rustfft::Fft;
 /// use rustfft::num_complex::Complex;
@@ -209,26 +208,26 @@ boilerplate_fft!(GoodThomasAlgorithm,
 /// let inner_fft_n2 = Arc::new(Butterfly8::new(false));
 ///
 /// // the good-thomas FFT length will be inner_fft_n1.len() * inner_fft_n2.len() = 56
-/// let fft = GoodThomasAlgorithmDoubleButterfly::new(inner_fft_n1, inner_fft_n2);
+/// let fft = GoodThomasAlgorithmSmall::new(inner_fft_n1, inner_fft_n2);
 /// fft.process(&mut input, &mut output);
 /// ~~~
-pub struct GoodThomasAlgorithmDoubleButterfly<T> {
+pub struct GoodThomasAlgorithmSmall<T> {
     width: usize,
-    width_size_fft: Arc<FFTButterfly<T>>,
+    width_size_fft: Arc<Fft<T>>,
 
     height: usize,
-    height_size_fft: Arc<FFTButterfly<T>>,
+    height_size_fft: Arc<Fft<T>>,
 
     input_output_map: Box<[usize]>,
 
     inverse: bool,
 }
 
-impl<T: FFTnum> GoodThomasAlgorithmDoubleButterfly<T> {
+impl<T: FFTnum> GoodThomasAlgorithmSmall<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
     ///
     /// GCD(n1.len(), n2.len()) must be equal to 1
-    pub fn new(width_fft: Arc<FFTButterfly<T>>, height_fft: Arc<FFTButterfly<T>>) -> Self {
+    pub fn new(width_fft: Arc<Fft<T>>, height_fft: Arc<Fft<T>>) -> Self {
         assert_eq!(
             width_fft.is_inverse(), height_fft.is_inverse(), 
             "n1_fft and height_fft must both be inverse, or neither. got width inverse={}, height inverse={}",
@@ -279,7 +278,7 @@ impl<T: FFTnum> GoodThomasAlgorithmDoubleButterfly<T> {
     }
 
     fn perform_fft_out_of_place(&self, input: &mut [Complex<T>], output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-        // we're relying on the optimizer to get rid of this assert
+        // These asserts are for the unsafe blocks down below. we're relying on the optimizer to get rid of this assert
         assert_eq!(self.len(), input.len());
         assert_eq!(self.len(), output.len());
 
@@ -291,13 +290,13 @@ impl<T: FFTnum> GoodThomasAlgorithmDoubleButterfly<T> {
         }
 
         // run FFTs of size `width`
-        unsafe { self.width_size_fft.process_butterfly_multi_inplace(output) };
+        self.width_size_fft.process_inplace_multi(output, input);
 
         // transpose
         unsafe { array_utils::transpose_small(self.width, self.height, output, input) };
 
         // run FFTs of size 'height'
-        unsafe { self.height_size_fft.process_butterfly_multi_inplace(input) };
+        self.height_size_fft.process_inplace_multi(input, output);
 
         // copy to the output, using our output redordeing mapping
         for (input_element, &output_index) in input.iter().zip(output_map.iter()) {
@@ -306,7 +305,7 @@ impl<T: FFTnum> GoodThomasAlgorithmDoubleButterfly<T> {
     }
 
     fn perform_fft_inplace(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-        // we're relying on the optimizer to get rid of this assert
+        // These asserts are for the unsafe blocks down below. we're relying on the optimizer to get rid of this assert
         assert_eq!(self.len(), buffer.len());
         assert_eq!(self.len(), scratch.len());
 
@@ -318,14 +317,13 @@ impl<T: FFTnum> GoodThomasAlgorithmDoubleButterfly<T> {
         }
 
         // run FFTs of size `width`
-        unsafe { self.width_size_fft.process_butterfly_multi_inplace(scratch) };
+        self.width_size_fft.process_inplace_multi(scratch, buffer);
 
         // transpose
         unsafe { array_utils::transpose_small(self.width, self.height, scratch, buffer) };
-        scratch.copy_from_slice(buffer);
 
         // run FFTs of size 'height'
-        unsafe { self.height_size_fft.process_butterfly_multi_inplace(scratch) };
+        self.height_size_fft.process_multi(buffer, scratch, &mut []);
 
         // copy to the output, using our output redordeing mapping
         for (input_element, &output_index) in scratch.iter().zip(output_map.iter()) {
@@ -333,9 +331,9 @@ impl<T: FFTnum> GoodThomasAlgorithmDoubleButterfly<T> {
         }
     }
 }
-boilerplate_fft!(GoodThomasAlgorithmDoubleButterfly, 
-    |this: &GoodThomasAlgorithmDoubleButterfly<_>| this.width * this.height,
-    |this: &GoodThomasAlgorithmDoubleButterfly<_>| this.len(),
+boilerplate_fft!(GoodThomasAlgorithmSmall, 
+    |this: &GoodThomasAlgorithmSmall<_>| this.width * this.height,
+    |this: &GoodThomasAlgorithmSmall<_>| this.len(),
     |_| 0
 );
 
@@ -343,7 +341,7 @@ boilerplate_fft!(GoodThomasAlgorithmDoubleButterfly,
 mod unit_tests {
     use super::*;
     use std::sync::Arc;
-    use test_utils::{check_fft_algorithm, make_butterfly};
+    use test_utils::check_fft_algorithm;
     use algorithm::DFT;
     use num_integer::gcd;
 
@@ -360,13 +358,13 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_good_thomas_double_butterfly() {
+    fn test_good_thomas_small() {
         let butterfly_sizes = [2,3,4,5,6,7,8,16];
         for width in &butterfly_sizes {
             for height in &butterfly_sizes {
                 if gcd(*width, *height) == 1 {
-                    test_good_thomas_butterfly_with_lengths(*width, *height, false);
-                    test_good_thomas_butterfly_with_lengths(*width, *height, true);
+                    test_good_thomas_small_with_lengths(*width, *height, false);
+                    test_good_thomas_small_with_lengths(*width, *height, true);
                 }
             }
         }
@@ -381,11 +379,11 @@ mod unit_tests {
         check_fft_algorithm(&fft, width * height, inverse);
     }
 
-    fn test_good_thomas_butterfly_with_lengths(width: usize, height: usize, inverse: bool) {
-        let width_fft = make_butterfly(width, inverse);
-        let height_fft = make_butterfly(height, inverse);
+    fn test_good_thomas_small_with_lengths(width: usize, height: usize, inverse: bool) {
+        let width_fft = Arc::new(DFT::new(width, inverse)) as Arc<Fft<f32>>;
+        let height_fft = Arc::new(DFT::new(height, inverse)) as Arc<Fft<f32>>;
 
-        let fft = GoodThomasAlgorithmDoubleButterfly::new(width_fft, height_fft);
+        let fft = GoodThomasAlgorithmSmall::new(width_fft, height_fft);
 
         check_fft_algorithm(&fft, width * height, inverse);
     }

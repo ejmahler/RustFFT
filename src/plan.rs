@@ -14,7 +14,6 @@ use math_utils;
 
 const MIN_RADIX4_BITS: u32 = 5; // smallest size to consider radix 4 an option is 2^5 = 32
 const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option is 2^16 = 65536
-const BUTTERFLIES: [usize; 9] = [2, 3, 4, 5, 6, 7, 8, 16, 32];
 
 
 /// The Fft planner is used to make new Fft algorithm instances.
@@ -50,7 +49,6 @@ const BUTTERFLIES: [usize; 9] = [2, 3, 4, 5, 6, 7, 8, 16, 32];
 pub struct FFTplanner<T> {
     inverse: bool,
     algorithm_cache: HashMap<usize, Arc<Fft<T>>>,
-    butterfly_cache: HashMap<usize, Arc<FFTButterfly<T>>>,
 }
 
 impl<T: FFTnum> FFTplanner<T> {
@@ -61,7 +59,6 @@ impl<T: FFTnum> FFTplanner<T> {
         FFTplanner {
             inverse: inverse,
             algorithm_cache: HashMap::new(),
-            butterfly_cache: HashMap::new(),
         }
     }
 
@@ -73,25 +70,6 @@ impl<T: FFTnum> FFTplanner<T> {
         } else {
             self.plan_fft_with_factors(len, math_utils::prime_factors(len))
         }
-    }
-
-    fn plan_butterfly(&mut self, len: usize) -> Arc<FFTButterfly<T>> {
-        let inverse = self.inverse;
-        let instance = self.butterfly_cache.entry(len).or_insert_with(|| 
-            match len {
-                2 => Arc::new(Butterfly2::new(inverse)),
-                3 => Arc::new(Butterfly3::new(inverse)),
-                4 => Arc::new(Butterfly4::new(inverse)),
-                5 => Arc::new(Butterfly5::new(inverse)),
-                6 => Arc::new(Butterfly6::new(inverse)),
-                7 => Arc::new(Butterfly7::new(inverse)),
-                8 => Arc::new(Butterfly8::new(inverse)),
-                16 => Arc::new(Butterfly16::new(inverse)),
-                32 => Arc::new(Butterfly32::new(inverse)),
-                _ => panic!("Invalid butterfly size: {}", len),
-            }
-        );
-        Arc::clone(instance)
     }
     
     fn plan_fft_with_factors(&mut self, len: usize, mut factors: Vec<math_utils::PrimeFactor>) -> Arc<Fft<T>> {
@@ -122,24 +100,20 @@ impl<T: FFTnum> FFTplanner<T> {
         let left_len = left_factors.iter().map(|factor| factor.value.pow(factor.count as u32)).product();
         let right_len = right_factors.iter().map(|factor| factor.value.pow(factor.count as u32)).product();
 
-        let left_is_butterfly = BUTTERFLIES.contains(&left_len);
-        let right_is_butterfly = BUTTERFLIES.contains(&right_len);
+        //neither size is a butterfly, so go with the normal algorithm
+        let left_fft = self.plan_fft_with_factors(left_len, left_factors);
+        let right_fft = self.plan_fft_with_factors(right_len, right_factors);
 
-        //if both left_len and right_len are butterflies, use a mixed radix implementation specialized for butterfly sub-FFTs
-        if left_is_butterfly && right_is_butterfly {
-            let left_fft = self.plan_butterfly(left_len);
-            let right_fft = self.plan_butterfly(right_len);
-
-            // for butterflies, if gcd is 1, we always want to use good-thomas
+        //if both left_len and right_len are small, use algorithms optimized for small FFTs
+        if left_len < 31 && right_len < 31 {
+            // for small FFTs, if gcd is 1, good-thomas is faster
             if gcd(left_len, right_len) == 1 {
-                Arc::new(GoodThomasAlgorithmDoubleButterfly::new(left_fft, right_fft)) as Arc<Fft<T>>
+                Arc::new(GoodThomasAlgorithmSmall::new(left_fft, right_fft)) as Arc<Fft<T>>
             } else {
-                Arc::new(MixedRadixDoubleButterfly::new(left_fft, right_fft)) as Arc<Fft<T>>
+                Arc::new(MixedRadixSmall::new(left_fft, right_fft)) as Arc<Fft<T>>
             }
         } else {
-            //neither size is a butterfly, so go with the normal algorithm
-            let left_fft = self.plan_fft_with_factors(left_len, left_factors);
-            let right_fft = self.plan_fft_with_factors(right_len, right_factors);
+            
 
             Arc::new(MixedRadix::new(left_fft, right_fft)) as Arc<Fft<T>>
         }
@@ -160,15 +134,15 @@ impl<T: FFTnum> FFTplanner<T> {
 
         match len {
             0|1 => wrap_butterfly(DFT::new(len, self.inverse)),
-            2 => wrap_butterfly(butterflies::Butterfly2::new(self.inverse)),
-            3 => wrap_butterfly(butterflies::Butterfly3::new(self.inverse)),
-            4 => wrap_butterfly(butterflies::Butterfly4::new(self.inverse)),
-            5 => wrap_butterfly(butterflies::Butterfly5::new(self.inverse)),
-            6 => wrap_butterfly(butterflies::Butterfly6::new(self.inverse)),
-            7 => wrap_butterfly(butterflies::Butterfly7::new(self.inverse)),
-            8 => wrap_butterfly(butterflies::Butterfly8::new(self.inverse)),
-            16 => wrap_butterfly(butterflies::Butterfly16::new(self.inverse)),
-            32 => wrap_butterfly(butterflies::Butterfly32::new(self.inverse)),
+            2 => wrap_butterfly(Butterfly2::new(self.inverse)),
+            3 => wrap_butterfly(Butterfly3::new(self.inverse)),
+            4 => wrap_butterfly(Butterfly4::new(self.inverse)),
+            5 => wrap_butterfly(Butterfly5::new(self.inverse)),
+            6 => wrap_butterfly(Butterfly6::new(self.inverse)),
+            7 => wrap_butterfly(Butterfly7::new(self.inverse)),
+            8 => wrap_butterfly(Butterfly8::new(self.inverse)),
+            16 => wrap_butterfly(Butterfly16::new(self.inverse)),
+            32 => wrap_butterfly(Butterfly32::new(self.inverse)),
             _ => None,
         }
     }

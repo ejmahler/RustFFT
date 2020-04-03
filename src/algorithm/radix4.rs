@@ -3,7 +3,7 @@ use num_traits::Zero;
 
 use common::FFTnum;
 
-use algorithm::butterflies::{Butterfly2, Butterfly4, Butterfly8, Butterfly16, FFTButterfly};
+use algorithm::butterflies::{Butterfly2, Butterfly4, Butterfly8, Butterfly16};
 use ::{Length, IsInverse, Fft};
 
 /// FFT algorithm optimized for power-of-two sizes
@@ -72,11 +72,11 @@ impl<T: FFTnum> Radix4<T> {
             0|1 => spectrum.copy_from_slice(signal),
             2 => {
                 spectrum.copy_from_slice(signal);
-                unsafe { Butterfly2::new(self.inverse).process_butterfly_inplace(spectrum) }
+                unsafe { Butterfly2::new(self.inverse).perform_fft_inplace(spectrum) }
             },
             4 => {
                 spectrum.copy_from_slice(signal);
-                unsafe { Butterfly4::new(self.inverse).process_butterfly_inplace(spectrum) }
+                unsafe { Butterfly4::new(self.inverse).perform_fft_inplace(spectrum) }
             },
             _ => {
                 // copy the data into the spectrum vector
@@ -85,12 +85,12 @@ impl<T: FFTnum> Radix4<T> {
                 // perform the butterflies. the butterfly size depends on the input size
                 let num_bits = signal.len().trailing_zeros();
                 let mut current_size = if num_bits % 2 == 0 {
-                    unsafe { self.butterfly16.process_butterfly_multi_inplace(spectrum) };
+                    self.butterfly16.process_inplace_multi(spectrum, &mut []);
 
                     // for the cross-ffts we want to to start off with a size of 64 (16 * 4)
                     64
                 } else {
-                    unsafe { self.butterfly8.process_butterfly_multi_inplace(spectrum) };
+                    self.butterfly8.process_inplace_multi(spectrum, &mut []);
 
                     // for the cross-ffts we want to to start off with a size of 32 (8 * 4)
                     32

@@ -1,14 +1,11 @@
 use num_complex::Complex;
 use num_traits::Zero;
 
-use std::sync::Arc;
-
 use rand::{StdRng, SeedableRng};
 use rand::distributions::{Normal, Distribution};
 
-use algorithm::{DFT, butterflies};
+use algorithm::DFT;
 use Fft;
-
 
 /// The seed for the random number generator used to generate
 /// random signals. It's defined here so that we have deterministic
@@ -159,19 +156,5 @@ pub fn check_fft_algorithm(fft: &Fft<f32>, len: usize, inverse: bool) {
 
             assert!(compare_vectors(&expected_output, &buffer), "process_inplace_multi() failed the 'dirty scratch' test, length = {}, inverse = {}", len, inverse);
         }
-    }
-}
-
-pub fn make_butterfly(len: usize, inverse: bool) -> Arc<butterflies::FFTButterfly<f32>> {
-    match len {
-        2 => Arc::new(butterflies::Butterfly2::new(inverse)),
-        3 => Arc::new(butterflies::Butterfly3::new(inverse)),
-        4 => Arc::new(butterflies::Butterfly4::new(inverse)),
-        5 => Arc::new(butterflies::Butterfly5::new(inverse)),
-        6 => Arc::new(butterflies::Butterfly6::new(inverse)),
-        7 => Arc::new(butterflies::Butterfly7::new(inverse)),
-        8 => Arc::new(butterflies::Butterfly8::new(inverse)),
-        16 => Arc::new(butterflies::Butterfly16::new(inverse)),
-        _ => panic!("Invalid butterfly size: {}", len),
     }
 }
