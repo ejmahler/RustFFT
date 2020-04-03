@@ -72,11 +72,11 @@ impl<T: FFTnum> Radix4<T> {
             0|1 => spectrum.copy_from_slice(signal),
             2 => {
                 spectrum.copy_from_slice(signal);
-                unsafe { Butterfly2::new(self.inverse).perform_fft_inplace(spectrum) }
+                unsafe { Butterfly2::new(self.inverse).perform_fft_butterfly(spectrum) }
             },
             4 => {
                 spectrum.copy_from_slice(signal);
-                unsafe { Butterfly4::new(self.inverse).perform_fft_inplace(spectrum) }
+                unsafe { Butterfly4::new(self.inverse).perform_fft_butterfly(spectrum) }
             },
             _ => {
                 // copy the data into the spectrum vector

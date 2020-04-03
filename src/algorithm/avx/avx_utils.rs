@@ -1,9 +1,13 @@
 use std::arch::x86_64::*;
 use num_complex::Complex;
 
+use ::array_utils::{RawSlice, RawSliceMut};
+
 pub trait AvxComplexArrayf32 {
     unsafe fn load_complex_f32(&self, index: usize) -> __m256;
     unsafe fn load_complex_remainder_f32(&self, remainder_mask: RemainderMask, index: usize) -> __m256;
+}
+pub trait AvxComplexArrayMutf32 {
     unsafe fn store_complex_f32(&mut self, index: usize, data: __m256);
     unsafe fn store_complex_remainder_f32(&mut self, remainder_mask: RemainderMask,  data: __m256, index: usize);
 }
@@ -22,6 +26,8 @@ impl AvxComplexArrayf32 for [Complex<f32>] {
         let float_ptr  = (&complex_ref.re) as *const f32;
         _mm256_maskload_ps(float_ptr, remainder_mask.0)
     }
+}
+impl AvxComplexArrayMutf32 for [Complex<f32>] {
     #[inline(always)]
     unsafe fn store_complex_f32(&mut self, index: usize, data: __m256) {
         debug_assert!(self.len() >= index + 4);
@@ -37,50 +43,32 @@ impl AvxComplexArrayf32 for [Complex<f32>] {
     }
 }
 /// A RawSlice is a normal slice, but aliasable. Its functionality is severely limited.
-#[derive(Copy, Clone)]
-pub struct RawSlice<T> {
-    ptr: *const T,
-    len: usize,
-}
-impl<T> RawSlice<T> {
+
+impl AvxComplexArrayf32 for RawSlice<Complex<f32>> {
     #[inline(always)]
-    pub fn new(slice: &[T]) -> Self {
-        Self {
-            ptr: slice.as_ptr(),
-            len: slice.len(),
-        }
-    }
-}
-impl RawSlice<Complex<f32>> {
-    #[inline(always)]
-    pub unsafe fn load_complex_f32(self, index: usize) -> __m256 {
-        debug_assert!(index + 4 <= self.len);
-        let float_ptr  = self.ptr.add(index) as *const f32;
+    unsafe fn load_complex_f32(&self, index: usize) -> __m256 {
+        debug_assert!(index + 4 <= self.len());
+        let float_ptr  = self.as_ptr().add(index) as *const f32;
         _mm256_loadu_ps(float_ptr)
+    }
+    #[inline(always)]
+    unsafe fn load_complex_remainder_f32(&self, remainder_mask: RemainderMask, index: usize) -> __m256 {
+        let float_ptr  = self.as_ptr().add(index) as *const f32;
+        _mm256_maskload_ps(float_ptr, remainder_mask.0)
     }
 }
 
-/// A RawSliceMut is a normal mutable slice, but aliasable. Its functionality is severely limited.
-#[derive(Copy, Clone)]
-pub struct RawSliceMut<T> {
-    ptr: *mut T,
-    len: usize,
-}
-impl<T> RawSliceMut<T> {
+impl AvxComplexArrayMutf32 for RawSliceMut<Complex<f32>> {
     #[inline(always)]
-    pub fn new(slice: &mut [T]) -> Self {
-        Self {
-            ptr: slice.as_mut_ptr(),
-            len: slice.len(),
-        }
-    }
-}
-impl RawSliceMut<Complex<f32>> {
-    #[inline(always)]
-    pub unsafe fn store_complex_f32(self, index: usize, data: __m256) {
-        debug_assert!(index + 4 <= self.len);
-        let float_ptr = self.ptr.add(index) as *mut f32;
+    unsafe fn store_complex_f32(&mut self, index: usize, data: __m256) {
+        debug_assert!(index + 4 <= self.len());
+        let float_ptr = self.as_mut_ptr().add(index) as *mut f32;
         _mm256_storeu_ps(float_ptr, data);
+    }
+    #[inline(always)]
+    unsafe fn store_complex_remainder_f32(&mut self, remainder_mask: RemainderMask, data: __m256, index: usize) {
+        let float_ptr = self.as_mut_ptr().add(index) as *mut f32;
+        _mm256_maskstore_ps(float_ptr, remainder_mask.0, data);
     }
 }
 

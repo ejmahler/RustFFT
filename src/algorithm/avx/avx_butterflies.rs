@@ -7,7 +7,8 @@ use common::FFTnum;
 
 use ::{Length, IsInverse, Fft};
 
-use super::avx_utils::{AvxComplexArrayf32, RawSlice, RawSliceMut};
+use ::array_utils::{RawSlice, RawSliceMut};
+use super::avx_utils::{AvxComplexArrayf32, AvxComplexArrayMutf32};
 use super::avx_utils;
 
 // Safety: This macro will call `self::perform_fft_f32()` which probably has a #[target_feature(enable = "...")] annotation on it.
@@ -123,7 +124,7 @@ impl MixedRadixAvx4x2<f32> {
     }
     
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(&self, input: RawSlice<Complex<f32>>, output: RawSliceMut<Complex<f32>>) {
+    unsafe fn perform_fft_f32(&self, input: RawSlice<Complex<f32>>, mut output: RawSliceMut<Complex<f32>>) {
         let row0 = input.load_complex_f32(0);
         let row1 = input.load_complex_f32(4);
 
@@ -207,7 +208,7 @@ impl MixedRadixAvx4x4<f32> {
     }
 
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(&self, input: RawSlice<Complex<f32>>, output: RawSliceMut<Complex<f32>>) {
+    unsafe fn perform_fft_f32(&self, input: RawSlice<Complex<f32>>, mut output: RawSliceMut<Complex<f32>>) {
         let input0 = input.load_complex_f32(0);
         let input1 = input.load_complex_f32(1 * 4);
         let input2 = input.load_complex_f32(2 * 4);
@@ -300,7 +301,7 @@ impl MixedRadixAvx4x8<f32> {
     }
 
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(&self, input: RawSlice<Complex<f32>>, output: RawSliceMut<Complex<f32>>) {
+    unsafe fn perform_fft_f32(&self, input: RawSlice<Complex<f32>>, mut output: RawSliceMut<Complex<f32>>) {
         let input0 = input.load_complex_f32(0);
         let input1 = input.load_complex_f32(1 * 4);
         let input2 = input.load_complex_f32(2 * 4);
@@ -446,7 +447,7 @@ impl MixedRadixAvx8x8<f32> {
     }
 
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(&self, input: RawSlice<Complex<f32>>, output: RawSliceMut<Complex<f32>>) {
+    unsafe fn perform_fft_f32(&self, input: RawSlice<Complex<f32>>, mut output: RawSliceMut<Complex<f32>>) {
         let input0 = input.load_complex_f32(0);
         let input2 = input.load_complex_f32(2 * 4);
         let input4 = input.load_complex_f32(4 * 4);
