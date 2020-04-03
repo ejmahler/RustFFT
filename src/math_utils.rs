@@ -135,21 +135,33 @@ pub fn distinct_prime_factors(mut n: u64) -> Vec<u64> {
     result
 }
 
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub struct PrimeFactor {
+    pub value: usize,
+    pub count: usize,
+}
+
 /// Factors an integer into its prime factors.
-pub fn prime_factors(mut n: usize) -> Vec<usize> {
+pub fn prime_factors(mut n: usize) -> Vec<PrimeFactor> {
     let mut result = Vec::new();
 
-    while n % 2 == 0 {
-        n /= 2;
-        result.push(2);
+    let trailing_zeros = n.trailing_zeros();
+    if trailing_zeros > 0 {
+        result.push(PrimeFactor { value: 2, count: trailing_zeros as usize });
+        n >>= trailing_zeros;
     }
     if n > 1 {
         let mut divisor = 3;
         let mut limit = (n as f32).sqrt() as usize + 1;
         while divisor < limit {
+            let mut count = 0;
             while n % divisor == 0 {
                 n /= divisor;
-                result.push(divisor);
+                count += 1;
+            }
+
+            if count > 0 {
+                result.push(PrimeFactor { value: divisor, count });
             }
 
             // recalculate the limit to reduce the amount of other factors we need to check
@@ -158,11 +170,48 @@ pub fn prime_factors(mut n: usize) -> Vec<usize> {
         }
 
         if n > 1 {
-            result.push(n);
+            result.push(PrimeFactor { value: n, count: 1 });
         }
     }
 
     result
+}
+
+// Splits a set of prime factors into two different sets so that the products of the two sets are as close as possible
+pub fn partition_factors(mut factors: Vec<PrimeFactor>) -> (Vec<PrimeFactor>, Vec<PrimeFactor>) {
+    // Make sure this isn't a prime number
+    assert!(factors.len() > 1 || factors[0].count > 0);
+
+    // If the given length is a perfect square, put the square root into both returned arays
+    if factors.iter().all(|factor| factor.count % 2 == 0) {
+        for factor in factors.iter_mut() {
+            factor.count /= 2;
+        }
+        (factors.clone(), factors)
+    } else if factors.len() == 1 {
+        // If there's only one factor, just split it as evenly as possible
+        let half = vec![PrimeFactor { value: factors[0].value, count: factors[0].count / 2 }];
+        factors[0].count -= half[0].count;
+        (factors, half)
+    } else {
+        let mut other_factors = Vec::with_capacity(factors.len());
+        let mut this_product = 1;
+        let mut other_product = 1;
+
+        factors.retain(|factor| {
+            let factor_product = factor.value.pow(factor.count as u32);
+            if this_product <= other_product {
+                this_product *= factor_product;
+                true
+            } else {
+                other_factors.push(*factor);
+                other_product *= factor_product;
+                false
+            }
+        });
+
+        (factors, other_factors)
+    }
 }
 
 #[cfg(test)]
@@ -245,7 +294,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_prime_factors() {
+    fn test_distinct_prime_factors() {
         let test_list = vec![
 			(46, vec![2,23]),
 			(2, vec![2]),
@@ -257,6 +306,46 @@ mod unit_tests {
             let factors = distinct_prime_factors(input);
 
             assert_eq!(factors, expected);
+        }
+    }
+
+    #[test]
+    fn test_prime_factors() {
+        let test_list = vec![
+			(2, vec![PrimeFactor { value: 2, count: 1 }]),
+			(3, vec![PrimeFactor { value: 3, count: 1 }]),
+			(6, vec![PrimeFactor { value: 2, count: 1 }, PrimeFactor { value: 3, count: 1 }]),
+			(256, vec![PrimeFactor { value: 2, count: 8 }]),
+			(768, vec![PrimeFactor { value: 2, count: 8 }, PrimeFactor { value: 3, count: 1 }]),
+			(44100, vec![PrimeFactor { value: 2, count: 2 }, PrimeFactor { value: 3, count: 2 }, PrimeFactor { value: 5, count: 2 }, PrimeFactor { value: 7, count: 2 }]),
+			];
+
+        for (input, expected) in test_list {
+            let factors = prime_factors(input);
+
+            assert_eq!(factors, expected);
+        }
+
+        for n in 1..200 {
+            let factors = prime_factors(n);
+            let multiplied : usize = factors.into_iter().map(|factor| factor.value.pow(factor.count as u32)).product();
+            assert_eq!(multiplied, n);
+        }
+    }
+
+    #[test]
+    fn test_partition_factors() {
+
+        for n in 4..200 {
+            let factors = prime_factors(n);
+            if factors.len() > 1 || factors[0].count > 1 {
+                let (left_factors, right_factors) = partition_factors(factors);
+
+                let left_product : usize = left_factors.into_iter().map(|factor| factor.value.pow(factor.count as u32)).product();
+                let right_product : usize = right_factors.into_iter().map(|factor| factor.value.pow(factor.count as u32)).product();
+
+                assert_eq!(left_product * right_product, n);
+            }
         }
     }
 }

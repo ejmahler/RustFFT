@@ -44,14 +44,21 @@ fn bench_fft(b: &mut Bencher, len: usize) {
 #[bench] fn complex_p7_16807(b: &mut Bencher) { bench_fft(b, 16807); }
 
 // Prime lengths
-#[bench] fn complex_prime_00005(b: &mut Bencher) { bench_fft(b, 5); }
-#[bench] fn complex_prime_00017(b: &mut Bencher) { bench_fft(b, 17); }
-#[bench] fn complex_prime_00151(b: &mut Bencher) { bench_fft(b, 151); }
-#[bench] fn complex_prime_00257(b: &mut Bencher) { bench_fft(b, 257); }
-#[bench] fn complex_prime_01009(b: &mut Bencher) { bench_fft(b, 1009); }
-#[bench] fn complex_prime_02017(b: &mut Bencher) { bench_fft(b, 2017); }
-#[bench] fn complex_prime_65537(b: &mut Bencher) { bench_fft(b, 65537); }
-#[bench] fn complex_prime_746497(b: &mut Bencher) { bench_fft(b, 746497); }
+// Prime lengths
+#[bench] fn complex_prime_0005(b: &mut Bencher)     { bench_fft(b,  5); }
+#[bench] fn complex_prime_0017(b: &mut Bencher)     { bench_fft(b,  17); }
+#[bench] fn complex_prime_0149(b: &mut Bencher)     { bench_fft(b,  149); }
+#[bench] fn complex_prime_0151(b: &mut Bencher)     { bench_fft(b,  151); }
+#[bench] fn complex_prime_0251(b: &mut Bencher)     { bench_fft(b,  251); }
+#[bench] fn complex_prime_0257(b: &mut Bencher)     { bench_fft(b,  257); }
+#[bench] fn complex_prime_1009(b: &mut Bencher)     { bench_fft(b,  1009); }
+#[bench] fn complex_prime_2017(b: &mut Bencher)     { bench_fft(b,  2017); }
+#[bench] fn complex_prime_2879(b: &mut Bencher)     { bench_fft(b,  2879); }
+#[bench] fn complex_prime_32767(b: &mut Bencher)    { bench_fft(b, 32767); }
+#[bench] fn complex_prime_65521(b: &mut Bencher)    { bench_fft(b, 65521); }
+#[bench] fn complex_prime_65537(b: &mut Bencher)    { bench_fft(b, 65537); }
+#[bench] fn complex_prime_746483(b: &mut Bencher)   { bench_fft(b,746483); }
+#[bench] fn complex_prime_746497(b: &mut Bencher)   { bench_fft(b,746497); }
 
 //primes raised to a power
 #[bench] fn complex_primepower_44521(b: &mut Bencher) { bench_fft(b, 44521); } // 211^2

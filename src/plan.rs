@@ -71,8 +71,7 @@ impl<T: FFTnum> FFTplanner<T> {
         if len < 2 {
             Arc::new(DFT::new(len, self.inverse)) as Arc<Fft<T>>
         } else {
-            let factors = math_utils::prime_factors(len);
-            self.plan_fft_with_factors(len, &factors)
+            self.plan_fft_with_factors(len, math_utils::prime_factors(len))
         }
     }
 
@@ -95,78 +94,33 @@ impl<T: FFTnum> FFTplanner<T> {
         Arc::clone(instance)
     }
     
-    fn plan_fft_with_factors(&mut self, len: usize, factors: &[usize]) -> Arc<Fft<T>> {
+    fn plan_fft_with_factors(&mut self, len: usize, mut factors: Vec<math_utils::PrimeFactor>) -> Arc<Fft<T>> {
         if self.algorithm_cache.contains_key(&len) {
             Arc::clone(self.algorithm_cache.get(&len).unwrap())
         } else {
             let result = if let Some(fft_instance) = self.plan_butterfly_algorithm(len) {
                 fft_instance
-            } else if factors.len() == 1 {
+            } else if factors.len() == 1 && factors[0].count == 1 {
                 self.plan_prime(len)
             } else if len.trailing_zeros() <= MAX_RADIX4_BITS && len.trailing_zeros() >= MIN_RADIX4_BITS {
-                //the number of trailing zeroes in len is the number of `2` factors
-                //ie if len = 2048 * n, len.trailing_zeros() will equal 11 because 2^11 == 2048
-
                 if len.is_power_of_two() {
                     Arc::new(Radix4::new(len, self.inverse))
                 } else {
-                    let left_len = 1 << len.trailing_zeros();
-                    let right_len = len / left_len;
-
-                    let (left_factors, right_factors) = factors.split_at(len.trailing_zeros() as usize);
-
-                    self.plan_mixed_radix(left_len, left_factors, right_len, right_factors)
+                    let right_factors = factors.split_off(1);
+                    self.plan_mixed_radix(factors, right_factors)
                 }
-
             } else {
-                let sqrt = (len as f32).sqrt() as usize;
-                if sqrt * sqrt == len {
-                    // since len is a perfect square, each of its prime factors is duplicated.
-                    // since we know they're sorted, we can loop through them in chunks of 2 and keep one out of each chunk
-                    // if the stride iterator ever becomes stabilized, it'll be cleaner to use that instead of chunks
-                    let mut sqrt_factors = Vec::with_capacity(factors.len() / 2);
-                    for chunk in factors.chunks(2) {
-                        sqrt_factors.push(chunk[0]);
-                    }
-
-                    self.plan_mixed_radix(sqrt, &sqrt_factors, sqrt, &sqrt_factors)
-                } else {
-                    //len isn't a perfect square. greedily take factors from the list until both sides are as close as possible to sqrt(len)
-                    //TODO: We can probably make this more optimal by using a more sophisticated non-greedy algorithm
-                    let mut product = 1;
-                    let mut second_half_index = 1;
-                    for (i, factor) in factors.iter().enumerate() {
-                        if product * *factor > sqrt {
-                            second_half_index = i;
-                            break;
-                        } else {
-                            product = product * *factor;
-                        }
-                    }
-
-                    //we now know that product is the largest it can be without being greater than len / product
-                    //there's one more thing we can try to make them closer together -- if product * factors[index] < len / product,
-                    if product * factors[second_half_index] < len / product {
-                        product = product * factors[second_half_index];
-                        second_half_index = second_half_index + 1;
-                    }
-
-                    //we now have our two Fft sizes: product and product / len
-                    let (left_factors, right_factors) = factors.split_at(second_half_index);
-                    self.plan_mixed_radix(product, left_factors, len / product, right_factors)
-                }
+                let (left_factors, right_factors) = math_utils::partition_factors(factors);
+                self.plan_mixed_radix(left_factors, right_factors)
             };
             self.algorithm_cache.insert(len, Arc::clone(&result));
             result
         }
     }
 
-    fn plan_mixed_radix(&mut self,
-                        left_len: usize,
-                        left_factors: &[usize],
-                        right_len: usize,
-                        right_factors: &[usize])
-                        -> Arc<Fft<T>> {
+    fn plan_mixed_radix(&mut self, left_factors: Vec<math_utils::PrimeFactor>, right_factors: Vec<math_utils::PrimeFactor>) -> Arc<Fft<T>> {
+        let left_len = left_factors.iter().map(|factor| factor.value.pow(factor.count as u32)).product();
+        let right_len = right_factors.iter().map(|factor| factor.value.pow(factor.count as u32)).product();
 
         let left_is_butterfly = BUTTERFLIES.contains(&left_len);
         let right_is_butterfly = BUTTERFLIES.contains(&right_len);
@@ -213,18 +167,30 @@ impl<T: FFTnum> FFTplanner<T> {
             6 => wrap_butterfly(butterflies::Butterfly6::new(self.inverse)),
             7 => wrap_butterfly(butterflies::Butterfly7::new(self.inverse)),
             8 => wrap_butterfly(butterflies::Butterfly8::new(self.inverse)),
-            16 => wrap_butterfly(butterflies::Butterfly8::new(self.inverse)),
+            16 => wrap_butterfly(butterflies::Butterfly16::new(self.inverse)),
             32 => wrap_butterfly(butterflies::Butterfly32::new(self.inverse)),
             _ => None,
         }
     }
 
     fn plan_prime(&mut self, len: usize) -> Arc<Fft<T>> {
+        // rader's algorithm is faster if the inner FFT is very composite, but bluestein's algorithm is faster in pretty much every other situation
+        // Compute the prime factors of our hpothetical inner FFT. if they're very composite, use rader's algorithm
         let inner_fft_len = len - 1;
         let factors = math_utils::prime_factors(inner_fft_len);
 
-        let inner_fft = self.plan_fft_with_factors(inner_fft_len, &factors);
+        // TODO: give an AVX trait a chance to plan a FFT. give it factors, and maybe the cache, so it can plan the whole thing internally? seems gross
 
-        Arc::new(RadersAlgorithm::new(len, inner_fft)) as Arc<Fft<T>>
+        let total_factor_count : usize = factors.iter().map(|factor| factor.count).sum();
+        if (total_factor_count as f32) < (len as f32).log(5.0) {
+            // the inner FFT isn't composite enough, so we're doing bluestein's algorithm instead
+            let inner_fft_len = (len * 2 - 1).checked_next_power_of_two().unwrap();
+            let inner_fft = self.plan_fft_with_factors(inner_fft_len, vec![math_utils::PrimeFactor { value: 2, count: inner_fft_len.trailing_zeros() as usize }]);
+
+            Arc::new(BluesteinsAlgorithm::new(len, inner_fft)) as Arc<Fft<T>>
+        } else {
+            let inner_fft = self.plan_fft_with_factors(inner_fft_len, factors);
+            Arc::new(RadersAlgorithm::new(len, inner_fft)) as Arc<Fft<T>>
+        }
     }
 }
