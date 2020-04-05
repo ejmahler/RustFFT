@@ -149,6 +149,8 @@ impl<T: FFTnum> RadersAlgorithm<T> {
         let (buffer_first, buffer) = buffer.split_first_mut().unwrap();
         let buffer_first_val = *buffer_first;
 
+        let (scratch, extra_scratch) = scratch.split_at_mut(self.len() - 1);
+
         // copy the buffer into the scratch, reordering as we go. also compute a sum of all elements
         let mut input_index = 1;
         for scratch_element in scratch.iter_mut() {
@@ -160,7 +162,8 @@ impl<T: FFTnum> RadersAlgorithm<T> {
         }
 
         // perform the first of two inner FFTs
-        self.inner_fft.process_inplace_with_scratch(scratch, buffer);
+        let inner_scratch = if extra_scratch.len() > 0 { extra_scratch } else { &mut buffer[..] };
+        self.inner_fft.process_inplace_with_scratch(scratch, inner_scratch);
 
         // multiply the inner result with our cached setup data
         // also conjugate every entry. this sets us up to do an inverse FFT
@@ -170,7 +173,7 @@ impl<T: FFTnum> RadersAlgorithm<T> {
         }
 
         // execute the second FFT
-        self.inner_fft.process_inplace_with_scratch(scratch, buffer);
+        self.inner_fft.process_inplace_with_scratch(scratch, inner_scratch);
 
         // copy the final values into the output, reordering as we go
         let mut output_index = 1;
