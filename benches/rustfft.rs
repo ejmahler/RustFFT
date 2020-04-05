@@ -753,6 +753,9 @@ fn bench_butterfly(b: &mut Bencher, len: usize) {
 #[bench] fn butterfly_06(b: &mut Bencher) { bench_butterfly(b, 6); }
 #[bench] fn butterfly_07(b: &mut Bencher) { bench_butterfly(b, 7); }
 #[bench] fn butterfly_08(b: &mut Bencher) { bench_butterfly(b, 8); }
+#[bench] fn butterfly_12(b: &mut Bencher) { bench_butterfly(b, 12); }
 #[bench] fn butterfly_16(b: &mut Bencher) { bench_butterfly(b, 16); }
+#[bench] fn butterfly_24(b: &mut Bencher) { bench_butterfly(b, 24); }
 #[bench] fn butterfly_32(b: &mut Bencher) { bench_butterfly(b, 32); }
+#[bench] fn butterfly_48(b: &mut Bencher) { bench_butterfly(b, 48); }
 #[bench] fn butterfly_64(b: &mut Bencher) { bench_butterfly(b, 64); }

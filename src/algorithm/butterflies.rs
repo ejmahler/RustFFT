@@ -274,10 +274,10 @@ impl<T: FFTnum> Butterfly6<T> {
         // but instead we can precompute and hardcode the ordering
         // note that we're also rolling a transpose step into this reorder
         output.store(scratch_a[0], 0);
-        output.store(scratch_b[0], 3);
-        output.store(scratch_a[1], 4);
         output.store(scratch_b[1], 1);
         output.store(scratch_a[2], 2);
+        output.store(scratch_b[0], 3);
+        output.store(scratch_a[1], 4);
         output.store(scratch_b[2], 5);
     }
 }
