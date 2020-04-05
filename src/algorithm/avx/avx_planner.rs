@@ -93,6 +93,7 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
             16 =>   wrap_fft_some(MixedRadixAvx4x4::new(self.inverse).unwrap()),
             24 =>   wrap_fft_some(MixedRadixAvx4x6::new(self.inverse).unwrap()),
             32 =>   wrap_fft_some(MixedRadixAvx4x8::new(self.inverse).unwrap()),
+            48 =>   wrap_fft_some(MixedRadixAvx4x12::new(self.inverse).unwrap()),
             64 =>   wrap_fft_some(MixedRadixAvx8x8::new(self.inverse).unwrap()),
             _ => None
         }

@@ -336,6 +336,27 @@ pub unsafe fn column_butterfly8_fma_f32(row0: __m256, row1: __m256, row2: __m256
     (final0, final2, final4, final6, final1, final3, final5, final7)
 }
 
+// Compute 4 parallel butterfly 12's using AVX instructions
+// rowN contains the nth element of each parallel FFT
+#[inline(always)]
+pub unsafe fn column_butterfly12_f32(
+    row0: __m256, row1: __m256, row2: __m256, row3: __m256, row4: __m256, row5: __m256,
+    row6: __m256, row7: __m256, row8: __m256, row9: __m256, row10: __m256, row11: __m256,
+    butterfly3_twiddles: __m256, twiddle_config: Rotate90Config) 
+-> (__m256, __m256, __m256, __m256, __m256, __m256, __m256, __m256, __m256, __m256, __m256, __m256) 
+{
+    let (mid0, mid3, mid6, mid9) = column_butterfly4_f32(row0, row3, row6, row9, twiddle_config);
+    let (mid1, mid4, mid7, mid10)= column_butterfly4_f32(row4, row7, row10,row1, twiddle_config);
+    let (mid2, mid5, mid8, mid11)= column_butterfly4_f32(row8, row11,row2, row5, twiddle_config);
+
+    let (output0, output1, output2) = column_butterfly3_f32(mid0, mid1, mid2, butterfly3_twiddles);
+    let (output3, output4, output5) = column_butterfly3_f32(mid3, mid4, mid5, butterfly3_twiddles);
+    let (output6, output7, output8) = column_butterfly3_f32(mid6, mid7, mid8, butterfly3_twiddles);
+    let (output9, output10,output11)= column_butterfly3_f32(mid9, mid10,mid11,butterfly3_twiddles);
+
+    (output0, output4, output8, output9, output1, output5, output6, output10, output2, output3, output7, output11)
+}
+
 // Compute 4 parallel butterfly 16's using AVX and FMA instructions
 // rowN contains the nth element of each parallel FFT
 #[inline(always)]

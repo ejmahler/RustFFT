@@ -532,6 +532,144 @@ impl MixedRadixAvx4x8<f32> {
 }
 boilerplate_fft_simd_butterfly!(MixedRadixAvx4x8, 32);
 
+pub struct MixedRadixAvx4x12<T> {
+    twiddles: [__m256; 9],
+    twiddles_butterfly3: __m256,
+    twiddle_config: avx_utils::Rotate90Config,
+    inverse: bool,
+    _phantom: std::marker::PhantomData<T>,
+}
+impl MixedRadixAvx4x12<f32> {
+    #[inline]
+    pub fn new(inverse: bool) -> Result<Self, ()> {
+        let has_avx = is_x86_feature_detected!("avx");
+        let has_fma = is_x86_feature_detected!("fma");
+        if has_avx && has_fma {
+            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
+            Ok(unsafe { Self::new_with_avx(inverse) })
+        } else {
+            Err(())
+        }
+    }
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inverse: bool) -> Self {
+        let twiddles = [
+            Complex{ re: 1.0, im: 0.0 },
+            f32::generate_twiddle_factor(1, 48, inverse),
+            f32::generate_twiddle_factor(2, 48, inverse),
+            f32::generate_twiddle_factor(3, 48, inverse),
+            f32::generate_twiddle_factor(4, 48, inverse),
+            f32::generate_twiddle_factor(5, 48, inverse),
+            f32::generate_twiddle_factor(6, 48, inverse),
+            f32::generate_twiddle_factor(7, 48, inverse),
+            f32::generate_twiddle_factor(8, 48, inverse),
+            f32::generate_twiddle_factor(9, 48, inverse),
+            f32::generate_twiddle_factor(10, 48, inverse),
+            f32::generate_twiddle_factor(11, 48, inverse),
+            Complex{ re: 1.0, im: 0.0 },
+            f32::generate_twiddle_factor(2, 48, inverse),
+            f32::generate_twiddle_factor(4, 48, inverse),
+            f32::generate_twiddle_factor(6, 48, inverse),
+            f32::generate_twiddle_factor(8, 48, inverse),
+            f32::generate_twiddle_factor(10, 48, inverse),
+            f32::generate_twiddle_factor(12, 48, inverse),
+            f32::generate_twiddle_factor(14, 48, inverse),
+            f32::generate_twiddle_factor(16, 48, inverse),
+            f32::generate_twiddle_factor(18, 48, inverse),
+            f32::generate_twiddle_factor(20, 48, inverse),
+            f32::generate_twiddle_factor(22, 48, inverse),
+            Complex{ re: 1.0, im: 0.0 },
+            f32::generate_twiddle_factor(3, 48, inverse),
+            f32::generate_twiddle_factor(6, 48, inverse),
+            f32::generate_twiddle_factor(9, 48, inverse),
+            f32::generate_twiddle_factor(12, 48, inverse),
+            f32::generate_twiddle_factor(15, 48, inverse),
+            f32::generate_twiddle_factor(18, 48, inverse),
+            f32::generate_twiddle_factor(21, 48, inverse),
+            f32::generate_twiddle_factor(24, 48, inverse),
+            f32::generate_twiddle_factor(27, 48, inverse),
+            f32::generate_twiddle_factor(30, 48, inverse),
+            f32::generate_twiddle_factor(33, 48, inverse),
+        ];
+        Self {
+            twiddles: [
+                twiddles.load_complex_f32(0),
+                twiddles.load_complex_f32(4),
+                twiddles.load_complex_f32(8),
+                twiddles.load_complex_f32(12),
+                twiddles.load_complex_f32(16),
+                twiddles.load_complex_f32(20),
+                twiddles.load_complex_f32(24),
+                twiddles.load_complex_f32(28),
+                twiddles.load_complex_f32(32),
+            ],
+            twiddles_butterfly3: avx_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 3, inverse)),
+            twiddle_config: avx_utils::Rotate90Config::get_from_inverse(inverse),
+            inverse: inverse,
+            _phantom: PhantomData,
+        }
+    }
+
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn perform_fft_f32(&self, input: RawSlice<Complex<f32>>, mut output: RawSliceMut<Complex<f32>>) {
+        let input0 = input.load_complex_f32(0);
+        let input1 = input.load_complex_f32(1 * 4);
+        let input2 = input.load_complex_f32(2 * 4);
+        let input3 = input.load_complex_f32(3 * 4);
+        let input4 = input.load_complex_f32(4 * 4);
+        let input5 = input.load_complex_f32(5 * 4);
+        let input6 = input.load_complex_f32(6 * 4);
+        let input7 = input.load_complex_f32(7 * 4);
+        let input8 = input.load_complex_f32(8 * 4);
+        let input9 = input.load_complex_f32(9 * 4);
+        let input10= input.load_complex_f32(10* 4);
+        let input11= input.load_complex_f32(11* 4);
+
+        // We're going to treat our input as a 12x4 2d array. First, do 12 butterfly 4's down the columns of that array.
+        let (mid0, mid3, mid6, mid9) = avx_utils::column_butterfly4_f32(input0, input3, input6, input9, self.twiddle_config);
+        let (mid1, mid4, mid7, mid10)= avx_utils::column_butterfly4_f32(input1, input4, input7, input10, self.twiddle_config);
+        let (mid2, mid5, mid8, mid11)= avx_utils::column_butterfly4_f32(input2, input5, input8, input11, self.twiddle_config);
+
+        // Multiply in our twiddle factors
+        let mid3_twiddled = avx_utils::complex_multiply_fma_f32(mid3, self.twiddles[0]);
+        let mid4_twiddled = avx_utils::complex_multiply_fma_f32(mid4, self.twiddles[1]);
+        let mid5_twiddled = avx_utils::complex_multiply_fma_f32(mid5, self.twiddles[2]);
+        let mid6_twiddled = avx_utils::complex_multiply_fma_f32(mid6, self.twiddles[3]);
+        let mid7_twiddled = avx_utils::complex_multiply_fma_f32(mid7, self.twiddles[4]);
+        let mid8_twiddled = avx_utils::complex_multiply_fma_f32(mid8, self.twiddles[5]);
+        let mid9_twiddled = avx_utils::complex_multiply_fma_f32(mid9, self.twiddles[6]);
+        let mid10_twiddled= avx_utils::complex_multiply_fma_f32(mid10, self.twiddles[7]);
+        let mid11_twiddled= avx_utils::complex_multiply_fma_f32(mid11, self.twiddles[8]);
+
+        // Transpose our 4x12 array into a 4x12.
+        let (transposed0, transposed1, transposed2, transposed3) = avx_utils::transpose_4x4_f32(mid0, mid3_twiddled, mid6_twiddled, mid9_twiddled);
+        let (transposed4, transposed5, transposed6, transposed7) = avx_utils::transpose_4x4_f32(mid1, mid4_twiddled, mid7_twiddled, mid10_twiddled);
+        let (transposed8, transposed9, transposed10,transposed11)= avx_utils::transpose_4x4_f32(mid2, mid5_twiddled, mid8_twiddled, mid11_twiddled);
+
+        // Do 4 butterfly 12's down the columns of our transposed array
+        let (output0, output1, output2, output3, output4, output5, output6, output7, output8, output9, output10, output11) = avx_utils::column_butterfly12_f32(
+            transposed0, transposed1, transposed2, transposed3, transposed4, transposed5,
+            transposed6, transposed7, transposed8, transposed9, transposed10, transposed11,
+            self.twiddles_butterfly3, self.twiddle_config
+        );
+
+        // the last two elements in each array are empty, so for every other element, we're only going to store half of the data
+        output.store_complex_f32(0, output0);
+        output.store_complex_f32(4, output1);
+        output.store_complex_f32(4 * 2, output2);
+        output.store_complex_f32(4 * 3, output3);
+        output.store_complex_f32(4 * 4, output4);
+        output.store_complex_f32(4 * 5, output5);
+        output.store_complex_f32(4 * 6, output6);
+        output.store_complex_f32(4 * 7, output7);
+        output.store_complex_f32(4 * 8, output8);
+        output.store_complex_f32(4 * 9, output9);
+        output.store_complex_f32(4 *10, output10);
+        output.store_complex_f32(4 *11, output11);
+    }
+}
+boilerplate_fft_simd_butterfly!(MixedRadixAvx4x12, 48);
+
 pub struct MixedRadixAvx8x8<T> {
     twiddles: [__m256; 14],
     twiddles_butterfly8: __m256,
@@ -735,24 +873,6 @@ mod unit_tests {
     test_avx_butterfly!(test_avx_mixedradix4x4, MixedRadixAvx4x4, 16);
     test_avx_butterfly!(test_avx_mixedradix4x6, MixedRadixAvx4x6, 24);
     test_avx_butterfly!(test_avx_mixedradix4x8, MixedRadixAvx4x8, 32);
+    test_avx_butterfly!(test_avx_mixedradix4x12,MixedRadixAvx4x12,48);
     test_avx_butterfly!(test_avx_mixedradix8x8, MixedRadixAvx8x8, 64);
-
-    use std::sync::Arc;
-    use ::algorithm::butterflies::*;
-    use ::algorithm::MixedRadixSmall;
-
-    #[test]
-    fn test_butterfly24() {
-        let inner_width = Arc::new(Butterfly4::new(false));
-        let inner_height = Arc::new(Butterfly6::new(false));
-
-        let control_fft = MixedRadixSmall::new(inner_width, inner_height);
-        check_fft_algorithm(&control_fft, 24, false);
-
-        let butterfly = MixedRadixAvx4x6::new(false).expect("Can't run test because this machine doesn't have the required instruction sets");
-        check_fft_algorithm(&butterfly, 24, false);
-
-        let butterfly_inverse = MixedRadixAvx4x6::new(true).expect("Can't run test because this machine doesn't have the required instruction sets");
-        check_fft_algorithm(&butterfly_inverse, 24, true);
-    }
 }
