@@ -306,21 +306,24 @@ fn bench_bluesteins_avx_prime(b: &mut Bencher, len: usize) {
 #[bench] fn bench_bluesteins_avx_prime_746497(b: &mut Bencher) { bench_bluesteins_avx_prime(b,746497); }
 
 #[bench] fn bench_bluesteins_wrap_inner8xn_65521(b: &mut Bencher) {
-    let len: usize = 8 * 65521;
+    let len: usize = 4 * 65521;
     let inner_fft = get_mixed_planned_avx((len * 2 - 1).checked_next_power_of_two().unwrap());
     let fft : Arc<Fft<f32>> = Arc::new(BluesteinsAvx::new(len, inner_fft).expect("Can't run benchmark because this machine doesn't have the required instruction sets"));
+
+    assert_eq!(fft.len(), len);
 
     let mut buffer = vec![Zero::zero(); len];
     let mut scratch = vec![Zero::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch);} );
 }
 
-#[bench] fn bench_bluesteins_wrap_outer8xn_65521(b: &mut Bencher) { 
-    let inner_len: usize = 65521;
-    let len = inner_len * 8;
+#[bench] fn bench_bluesteins_wrap_outer8xn_65521(b: &mut Bencher) {
+    let len : usize = 4 * 65521;
+    let inner_len = len / 4;
+    
     let inner_power2 = get_mixed_planned_avx((inner_len * 2 - 1).checked_next_power_of_two().unwrap());
     let inner_bluesteins = Arc::new(BluesteinsAvx::new(inner_len, inner_power2).expect("Can't run benchmark because this machine doesn't have the required instruction sets"));
-    let fft : Arc<Fft<f32>> = Arc::new(MixedRadix8xnAvx::new(inner_bluesteins).expect("Can't run benchmark because this machine doesn't have the required instruction sets"));
+    let fft : Arc<Fft<f32>> = Arc::new(MixedRadix4xnAvx::new(inner_bluesteins).expect("Can't run benchmark because this machine doesn't have the required instruction sets"));
 
     assert_eq!(fft.len(), len);
 
@@ -729,3 +732,27 @@ fn bench_mixed_radix_inline_power2(b: &mut Bencher, len: usize) {
 #[bench] fn mixed_radix_power2_inline__00065536(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 65536); }
 #[bench] fn mixed_radix_power2_inline__01048576(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 1048576); }
 #[bench] fn mixed_radix_power2_inline__16777216(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 16777216); }
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length
+fn bench_butterfly(b: &mut Bencher, len: usize) {
+
+    let mut planner = rustfft::FFTplanner::new(false);
+    let fft: Arc<dyn Fft<f32>> = planner.plan_fft(len);
+
+    let mut buffer = vec![Complex::zero(); len * 10];
+    let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
+    b.iter(|| { fft.process_inplace_multi(&mut buffer, &mut scratch); });
+}
+
+
+#[bench] fn butterfly_02(b: &mut Bencher) { bench_butterfly(b, 2); }
+#[bench] fn butterfly_03(b: &mut Bencher) { bench_butterfly(b, 3); }
+#[bench] fn butterfly_04(b: &mut Bencher) { bench_butterfly(b, 4); }
+#[bench] fn butterfly_05(b: &mut Bencher) { bench_butterfly(b, 5); }
+#[bench] fn butterfly_06(b: &mut Bencher) { bench_butterfly(b, 6); }
+#[bench] fn butterfly_07(b: &mut Bencher) { bench_butterfly(b, 7); }
+#[bench] fn butterfly_08(b: &mut Bencher) { bench_butterfly(b, 8); }
+#[bench] fn butterfly_16(b: &mut Bencher) { bench_butterfly(b, 16); }
+#[bench] fn butterfly_32(b: &mut Bencher) { bench_butterfly(b, 32); }
+#[bench] fn butterfly_64(b: &mut Bencher) { bench_butterfly(b, 64); }

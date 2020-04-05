@@ -123,7 +123,7 @@ impl<T: FFTnum> Butterfly3<T> {
         output.store(value0 + value1, 0);
         
         value1 = value1 * self.twiddle.re + value0;
-        value2 = value2 * Complex{re: T::zero(), im: self.twiddle.im};
+        value2 = twiddles::rotate_90(value2, true) * self.twiddle.im;
         
         Butterfly2::perform_fft_strided(&mut value1, &mut value2);
 
