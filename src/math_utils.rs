@@ -138,7 +138,7 @@ pub fn distinct_prime_factors(mut n: u64) -> Vec<u64> {
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct PrimeFactor {
     pub value: usize,
-    pub count: usize,
+    pub count: u32,
 }
 
 /// Factors an integer into its prime factors.
@@ -147,7 +147,7 @@ pub fn prime_factors(mut n: usize) -> Vec<PrimeFactor> {
 
     let trailing_zeros = n.trailing_zeros();
     if trailing_zeros > 0 {
-        result.push(PrimeFactor { value: 2, count: trailing_zeros as usize });
+        result.push(PrimeFactor { value: 2, count: trailing_zeros });
         n >>= trailing_zeros;
     }
     if n > 1 {

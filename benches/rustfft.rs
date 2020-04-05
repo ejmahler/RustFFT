@@ -28,53 +28,60 @@ fn bench_fft(b: &mut Bencher, len: usize) {
 
 
 // Powers of 4
-#[bench] fn complex_p2_00000064(b: &mut Bencher) { bench_fft(b,       64); }
-#[bench] fn complex_p2_00000256(b: &mut Bencher) { bench_fft(b,      256); }
-#[bench] fn complex_p2_00001024(b: &mut Bencher) { bench_fft(b,     1024); }
-#[bench] fn complex_p2_00004096(b: &mut Bencher) { bench_fft(b,     4096); }
-#[bench] fn complex_p2_00016384(b: &mut Bencher) { bench_fft(b,    16384); }
-#[bench] fn complex_p2_00065536(b: &mut Bencher) { bench_fft(b,    65536); }
-#[bench] fn complex_p2_01048576(b: &mut Bencher) { bench_fft(b,  1048576); }
-#[bench] fn complex_p2_16777216(b: &mut Bencher) { bench_fft(b, 16777216); }
+#[bench] fn planned_p2_00000064(b: &mut Bencher) { bench_fft(b,       64); }
+#[bench] fn planned_p2_00000256(b: &mut Bencher) { bench_fft(b,      256); }
+#[bench] fn planned_p2_00001024(b: &mut Bencher) { bench_fft(b,     1024); }
+#[bench] fn planned_p2_00004096(b: &mut Bencher) { bench_fft(b,     4096); }
+#[bench] fn planned_p2_00016384(b: &mut Bencher) { bench_fft(b,    16384); }
+#[bench] fn planned_p2_00065536(b: &mut Bencher) { bench_fft(b,    65536); }
+#[bench] fn planned_p2_01048576(b: &mut Bencher) { bench_fft(b,  1048576); }
+#[bench] fn planned_p2_16777216(b: &mut Bencher) { bench_fft(b, 16777216); }
 
 
 // Powers of 7
-#[bench] fn complex_p7_00343(b: &mut Bencher) { bench_fft(b,   343); }
-#[bench] fn complex_p7_02401(b: &mut Bencher) { bench_fft(b,  2401); }
-#[bench] fn complex_p7_16807(b: &mut Bencher) { bench_fft(b, 16807); }
+#[bench] fn planned_p7_00343(b: &mut Bencher) { bench_fft(b,   343); }
+#[bench] fn planned_p7_02401(b: &mut Bencher) { bench_fft(b,  2401); }
+#[bench] fn planned_p7_16807(b: &mut Bencher) { bench_fft(b, 16807); }
 
 // Prime lengths
 // Prime lengths
-#[bench] fn complex_prime_0005(b: &mut Bencher)     { bench_fft(b,  5); }
-#[bench] fn complex_prime_0017(b: &mut Bencher)     { bench_fft(b,  17); }
-#[bench] fn complex_prime_0149(b: &mut Bencher)     { bench_fft(b,  149); }
-#[bench] fn complex_prime_0151(b: &mut Bencher)     { bench_fft(b,  151); }
-#[bench] fn complex_prime_0251(b: &mut Bencher)     { bench_fft(b,  251); }
-#[bench] fn complex_prime_0257(b: &mut Bencher)     { bench_fft(b,  257); }
-#[bench] fn complex_prime_1009(b: &mut Bencher)     { bench_fft(b,  1009); }
-#[bench] fn complex_prime_2017(b: &mut Bencher)     { bench_fft(b,  2017); }
-#[bench] fn complex_prime_2879(b: &mut Bencher)     { bench_fft(b,  2879); }
-#[bench] fn complex_prime_32767(b: &mut Bencher)    { bench_fft(b, 32767); }
-#[bench] fn complex_prime_65521(b: &mut Bencher)    { bench_fft(b, 65521); }
-#[bench] fn complex_prime_65537(b: &mut Bencher)    { bench_fft(b, 65537); }
-#[bench] fn complex_prime_746483(b: &mut Bencher)   { bench_fft(b,746483); }
-#[bench] fn complex_prime_746497(b: &mut Bencher)   { bench_fft(b,746497); }
+#[bench] fn planned_prime_0005(b: &mut Bencher)     { bench_fft(b,  5); }
+#[bench] fn planned_prime_0017(b: &mut Bencher)     { bench_fft(b,  17); }
+#[bench] fn planned_prime_0149(b: &mut Bencher)     { bench_fft(b,  149); }
+#[bench] fn planned_prime_0151(b: &mut Bencher)     { bench_fft(b,  151); }
+#[bench] fn planned_prime_0251(b: &mut Bencher)     { bench_fft(b,  251); }
+#[bench] fn planned_prime_0257(b: &mut Bencher)     { bench_fft(b,  257); }
+#[bench] fn planned_prime_1009(b: &mut Bencher)     { bench_fft(b,  1009); }
+#[bench] fn planned_prime_2017(b: &mut Bencher)     { bench_fft(b,  2017); }
+#[bench] fn planned_prime_2879(b: &mut Bencher)     { bench_fft(b,  2879); }
+#[bench] fn planned_prime_32767(b: &mut Bencher)    { bench_fft(b, 32767); }
+#[bench] fn planned_prime_65521(b: &mut Bencher)    { bench_fft(b, 65521); }
+#[bench] fn planned_prime_65537(b: &mut Bencher)    { bench_fft(b, 65537); }
+#[bench] fn planned_prime_746483(b: &mut Bencher)   { bench_fft(b,746483); }
+#[bench] fn planned_prime_746497(b: &mut Bencher)   { bench_fft(b,746497); }
 
 //primes raised to a power
-#[bench] fn complex_primepower_44521(b: &mut Bencher) { bench_fft(b, 44521); } // 211^2
-#[bench] fn complex_primepower_160801(b: &mut Bencher) { bench_fft(b, 160801); } // 401^2
+#[bench] fn planned_primepower_44521(b: &mut Bencher) { bench_fft(b, 44521); } // 211^2
+#[bench] fn planned_primepower_160801(b: &mut Bencher) { bench_fft(b, 160801); } // 401^2
 
 // numbers times powers of two
-#[bench] fn complex_composite_24576(b: &mut Bencher) { bench_fft(b,  24576); }
-#[bench] fn complex_composite_20736(b: &mut Bencher) { bench_fft(b,  20736); }
+#[bench] fn planned_composite_024576(b: &mut Bencher) { bench_fft(b,  24576); }
+#[bench] fn planned_composite_020736(b: &mut Bencher) { bench_fft(b,  20736); }
 
 // power of 2 times large prime
-#[bench] fn complex_composite_32192(b: &mut Bencher) { bench_fft(b,  32192); }
-#[bench] fn complex_composite_24028(b: &mut Bencher) { bench_fft(b,  24028); }
+#[bench] fn planned_composite_032192(b: &mut Bencher) { bench_fft(b,  32192); }
+#[bench] fn planned_composite_024028(b: &mut Bencher) { bench_fft(b,  24028); }
 
 // small mixed composites times a large prime
-#[bench] fn complex_composite_30270(b: &mut Bencher) { bench_fft(b,  30270); }
+#[bench] fn planned_composite_030270(b: &mut Bencher) { bench_fft(b,  30270); }
 
+// small mixed composites
+#[bench] fn planned_composite_000018(b: &mut Bencher) { bench_fft(b,  00018); }
+#[bench] fn planned_composite_000360(b: &mut Bencher) { bench_fft(b,  00360); }
+#[bench] fn planned_composite_044100(b: &mut Bencher) { bench_fft(b,  44100); }
+#[bench] fn planned_composite_048000(b: &mut Bencher) { bench_fft(b,  48000); }
+#[bench] fn planned_composite_046656(b: &mut Bencher) { bench_fft(b,  46656); }
+#[bench] fn planned_composite_100000(b: &mut Bencher) { bench_fft(b,  100000); }
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to the Good-Thomas algorithm

@@ -7,14 +7,12 @@ use common::FFTnum;
 use Fft;
 use algorithm::*;
 use algorithm::butterflies::*;
-use algorithm::avx::MakeAvxButterfly;
+use algorithm::avx::avx_planner::FftPlannerAvx;
 
-use math_utils;
-
+use math_utils::{PrimeFactor, prime_factors, partition_factors};
 
 const MIN_RADIX4_BITS: u32 = 5; // smallest size to consider radix 4 an option is 2^5 = 32
 const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option is 2^16 = 65536
-
 
 /// The Fft planner is used to make new Fft algorithm instances.
 ///
@@ -46,9 +44,12 @@ const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option i
 ///
 /// Each Fft instance owns `Arc`s to its internal data, rather than borrowing it from the planner, so it's perfectly
 /// safe to drop the planner after creating Fft instances.
-pub struct FFTplanner<T> {
-    inverse: bool,
+pub struct FFTplanner<T: FFTnum> {
     algorithm_cache: HashMap<usize, Arc<Fft<T>>>,
+    inverse: bool,
+
+    // None if this machine doesn't support avx
+    avx_planner: Option<FftPlannerAvx<T>>,
 }
 
 impl<T: FFTnum> FFTplanner<T> {
@@ -56,23 +57,41 @@ impl<T: FFTnum> FFTplanner<T> {
     ///
     /// If `inverse` is false, this planner will plan forward FFTs. If `inverse` is true, it will plan inverse FFTs.
     pub fn new(inverse: bool) -> Self {
-        FFTplanner {
+        Self {
             inverse: inverse,
             algorithm_cache: HashMap::new(),
+            avx_planner: FftPlannerAvx::new(inverse).ok()
         }
     }
 
     /// Returns a Fft instance which processes signals of size `len`
     /// If this is called multiple times, it will attempt to re-use internal data between instances
     pub fn plan_fft(&mut self, len: usize) -> Arc<Fft<T>> {
-        if len < 2 {
-            Arc::new(DFT::new(len, self.inverse)) as Arc<Fft<T>>
+        if let Some(avx_planner) = &mut self.avx_planner {
+            // If we have an AVX planner, defer to that for all construction needs
+            // TODO: eventually, "FFTplanner" could be an enum of different planner types? "ScalarPlanner" etc
+            // That way, we wouldn't need to waste memoery storing the scalar planner's algorithm cache when we're not gonna use it
+            avx_planner.plan_fft(len)
+        } else if let Some(instance) = self.algorithm_cache.get(&len) {
+            Arc::clone(instance)
         } else {
-            self.plan_fft_with_factors(len, math_utils::prime_factors(len))
+            let instance = self.plan_new_fft_with_factors(len, prime_factors(len));
+            self.algorithm_cache.insert(len, Arc::clone(&instance));
+            instance
+        }
+    }
+
+    fn plan_fft_with_factors(&mut self, len: usize, factors: Vec<PrimeFactor>) -> Arc<Fft<T>> {
+        if let Some(instance) = self.algorithm_cache.get(&len) {
+            Arc::clone(instance)
+        } else {
+            let instance = self.plan_new_fft_with_factors(len, factors);
+            self.algorithm_cache.insert(len, Arc::clone(&instance));
+            instance
         }
     }
     
-    fn plan_fft_with_factors(&mut self, len: usize, mut factors: Vec<math_utils::PrimeFactor>) -> Arc<Fft<T>> {
+    fn plan_new_fft_with_factors(&mut self, len: usize, mut factors: Vec<PrimeFactor>) -> Arc<Fft<T>> {
         if self.algorithm_cache.contains_key(&len) {
             Arc::clone(self.algorithm_cache.get(&len).unwrap())
         } else {
@@ -88,7 +107,7 @@ impl<T: FFTnum> FFTplanner<T> {
                     self.plan_mixed_radix(factors, right_factors)
                 }
             } else {
-                let (left_factors, right_factors) = math_utils::partition_factors(factors);
+                let (left_factors, right_factors) = partition_factors(factors);
                 self.plan_mixed_radix(left_factors, right_factors)
             };
             self.algorithm_cache.insert(len, Arc::clone(&result));
@@ -96,9 +115,9 @@ impl<T: FFTnum> FFTplanner<T> {
         }
     }
 
-    fn plan_mixed_radix(&mut self, left_factors: Vec<math_utils::PrimeFactor>, right_factors: Vec<math_utils::PrimeFactor>) -> Arc<Fft<T>> {
-        let left_len = left_factors.iter().map(|factor| factor.value.pow(factor.count as u32)).product();
-        let right_len = right_factors.iter().map(|factor| factor.value.pow(factor.count as u32)).product();
+    fn plan_mixed_radix(&mut self, left_factors: Vec<PrimeFactor>, right_factors: Vec<PrimeFactor>) -> Arc<Fft<T>> {
+        let left_len = left_factors.iter().map(|factor| factor.value.pow(factor.count)).product();
+        let right_len = right_factors.iter().map(|factor| factor.value.pow(factor.count)).product();
 
         //neither size is a butterfly, so go with the normal algorithm
         let left_fft = self.plan_fft_with_factors(left_len, left_factors);
@@ -122,15 +141,9 @@ impl<T: FFTnum> FFTplanner<T> {
 
     // Returns Some(instance) if we have a butterfly available for this size. Returns None if there is no butterfly available for this size
     fn plan_butterfly_algorithm(&mut self, len: usize) -> Option<Arc<Fft<T>>>{
-        // First, make an attempt to find a SIMD butterfly
-        if let Some(butterfly) = self.make_avx_butterfly(len, self.inverse) {
-            return Some(butterfly);
-        }
-
         fn wrap_butterfly<N: FFTnum>(butterfly: impl Fft<N> + 'static) -> Option<Arc<dyn Fft<N>>> {
             Some(Arc::new(butterfly) as Arc<dyn Fft<N>>)
         }
-
 
         match len {
             0|1 => wrap_butterfly(DFT::new(len, self.inverse)),
@@ -148,18 +161,21 @@ impl<T: FFTnum> FFTplanner<T> {
     }
 
     fn plan_prime(&mut self, len: usize) -> Arc<Fft<T>> {
-        // rader's algorithm is faster if the inner FFT is very composite, but bluestein's algorithm is faster in pretty much every other situation
+        // for prime numbers, we can either use rader's algorithm, which computes an inner FFT if size len - 1
+        // or bluestein's algorithm, which computes an inner FFT of any size at least len * 2 - 1. (usually, we pick a power of two)
+
+        // rader's algorithm is faster if len - 1 is very composite, but bluestein's algorithm is faster if len - 1 has very few prime factors 
         // Compute the prime factors of our hpothetical inner FFT. if they're very composite, use rader's algorithm
         let inner_fft_len = len - 1;
-        let factors = math_utils::prime_factors(inner_fft_len);
+        let factors = prime_factors(inner_fft_len);
 
-        // TODO: give an AVX trait a chance to plan a FFT. give it factors, and maybe the cache, so it can plan the whole thing internally? seems gross
-
-        let total_factor_count : usize = factors.iter().map(|factor| factor.count).sum();
+        // "very composite" obviously isn't well-defined criteria, but we can form a pretty good heuristic by comparing the number of prime factors to log5(len)
+        // if the number of factors is less, that means there are fewer factors than there would have been if len was a power of 5
+        let total_factor_count : u32 = factors.iter().map(|factor| factor.count).sum();
         if (total_factor_count as f32) < (len as f32).log(5.0) {
             // the inner FFT isn't composite enough, so we're doing bluestein's algorithm instead
             let inner_fft_len = (len * 2 - 1).checked_next_power_of_two().unwrap();
-            let inner_fft = self.plan_fft_with_factors(inner_fft_len, vec![math_utils::PrimeFactor { value: 2, count: inner_fft_len.trailing_zeros() as usize }]);
+            let inner_fft = self.plan_fft_with_factors(inner_fft_len, vec![PrimeFactor { value: 2, count: inner_fft_len.trailing_zeros() }]);
 
             Arc::new(BluesteinsAlgorithm::new(len, inner_fft)) as Arc<Fft<T>>
         } else {
