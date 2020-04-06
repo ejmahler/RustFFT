@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use ::algorithm::butterflies::*;
 use ::algorithm::*;
-use ::math_utils::{PrimeFactor, prime_factors};
+use ::math_utils::{PrimeFactor, PrimeFactors };
 use ::common::FFTnum;
 use ::Fft;
 
@@ -41,18 +41,18 @@ impl<T: FFTnum> FftPlannerAvx<T> {
         if let Some(instance) = self.algorithm_cache.get(&len) {
             Arc::clone(instance)
         } else {
-            let instance = self.plan_fft_with_factors(len, prime_factors(len));
+            let instance = self.plan_fft_with_factors(len, PrimeFactors::compute(len));
             self.algorithm_cache.insert(len, Arc::clone(&instance));
             instance
         }
     }
 
-    fn plan_fft_with_factors(&mut self, len: usize, factors: Vec<PrimeFactor>) -> Arc<Fft<T>> {
+    fn plan_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Arc<Fft<T>> {
         if let Some(butterfly) = self.plan_new_butterfly(len) {
             println!("planned butterfly for len={}", len);
             butterfly
         }
-        else if factors.len() == 1 && factors[0].count == 1 {
+        else if factors.is_prime() {
             self.plan_new_prime(len)
         }
         else {
@@ -64,7 +64,7 @@ impl<T: FFTnum> FftPlannerAvx<T> {
 trait MakeFftAvx<T: FFTnum> {
     fn plan_new_butterfly(&self, len: usize) -> Option<Arc<Fft<T>>>;
     fn plan_new_prime(&mut self, len: usize) -> Arc<Fft<T>>;
-    fn plan_new_composite(&mut self, len: usize, factors: Vec<PrimeFactor>) -> Arc<Fft<T>>;
+    fn plan_new_composite(&mut self, len: usize, factors: PrimeFactors) -> Arc<Fft<T>>;
 }
 
 impl<T: FFTnum> MakeFftAvx<T> for FftPlannerAvx<T> {
@@ -74,7 +74,7 @@ impl<T: FFTnum> MakeFftAvx<T> for FftPlannerAvx<T> {
     default fn plan_new_prime(&mut self, _len: usize) -> Arc<Fft<T>> {
         unimplemented!();
     }
-    default fn plan_new_composite(&mut self, _len: usize, _factors: Vec<PrimeFactor>) -> Arc<Fft<T>> {
+    default fn plan_new_composite(&mut self, _len: usize, _factors: PrimeFactors) -> Arc<Fft<T>> {
         unimplemented!();
     }
 }
@@ -105,24 +105,23 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
 
         // rader's algorithm is faster if len - 1 is very composite, but bluestein's algorithm is faster if len - 1 has very few prime factors 
         // Compute the prime factors of our hpothetical inner FFT. if they're very composite, use rader's algorithm
-        let inner_fft_len = len - 1;
-        let inner_factors = prime_factors(inner_fft_len);
+        let raders_fft_len = len - 1;
+        let raders_factors = PrimeFactors::compute(raders_fft_len);
 
         // similar to the main planner, we're going 
-        let total_factor_count : u32 = inner_factors.iter().map(|factor| factor.count).sum();
-        if (total_factor_count as f32) < (len as f32).log(3.0) {
+        if (raders_factors.get_total_factor_count() as f32) < (len as f32).log(3.0) {
             // the inner FFT isn't composite enough, so we're doing bluestein's algorithm instead
             // TODO: instead of unconditionally using a power of 2, investigate 3x2^n butterflies like 24 and 48, and use them to build 
             let inner_fft_len = (len * 2 - 1).checked_next_power_of_two().unwrap();
-            let inner_fft = self.plan_fft_with_factors(inner_fft_len, vec![PrimeFactor { value: 2, count: inner_fft_len.trailing_zeros() }]);
+            let inner_fft = self.plan_fft_with_factors(inner_fft_len, PrimeFactors::compute(inner_fft_len));
 
             wrap_fft(BluesteinsAvx::new(len, inner_fft).unwrap())
         } else {
-            let inner_fft = self.plan_fft_with_factors(inner_fft_len, inner_factors);
+            let inner_fft = self.plan_fft_with_factors(raders_fft_len, raders_factors);
             wrap_fft(RadersAlgorithm::new(len, inner_fft))
         }
     }
-    fn plan_new_composite(&mut self, len: usize, mut factors: Vec<PrimeFactor>) -> Arc<Fft<f32>> {
+    fn plan_new_composite(&mut self, len: usize, factors: PrimeFactors) -> Arc<Fft<f32>> {
         // If we have factors of 2, split them off. Otherwise, use bluestein's algorithm
         // TODO: eventually we should be able to incorporate factors of 3 and 5
         let trailing_zeros = len.trailing_zeros();
@@ -153,10 +152,7 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
             };
 
             // update our factors to account for the factors of 2 we're going to strip away, and pass the updated factors to the planner to compute the inner FFT
-            factors[0].count -= fft_power;
-            if factors[0].count == 0 {
-                factors.remove(0);
-            }
+            let factors = factors.remove_factors(PrimeFactor { value: 2, count: fft_power }).unwrap();
             let inner_fft = self.plan_fft_with_factors(len >> fft_power, factors);
 
             // construct the outer FFT with the inner one
@@ -170,7 +166,7 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
         }
         else {
             let inner_fft_len = (len * 2 - 1).checked_next_power_of_two().unwrap();
-            let inner_fft = self.plan_fft_with_factors(inner_fft_len, vec![PrimeFactor { value: 2, count: inner_fft_len.trailing_zeros() }]);
+            let inner_fft = self.plan_fft_with_factors(inner_fft_len, PrimeFactors::compute(inner_fft_len));
 
             wrap_fft(BluesteinsAvx::new(len, inner_fft).unwrap())
         }
