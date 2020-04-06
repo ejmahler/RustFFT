@@ -230,6 +230,8 @@ fn bench_raders(b: &mut Bencher, len: usize) {
 #[bench] fn raders_prime_0257(b: &mut Bencher) { bench_raders(b,  257); }
 #[bench] fn raders_prime_1009(b: &mut Bencher) { bench_raders(b,  1009); }
 #[bench] fn raders_prime_2017(b: &mut Bencher) { bench_raders(b,  2017); }
+#[bench] fn raders_prime_12289(b: &mut Bencher) { bench_raders(b, 12289); }
+#[bench] fn raders_prime_18433(b: &mut Bencher) { bench_raders(b, 18433); }
 #[bench] fn raders_prime_65521(b: &mut Bencher) { bench_raders(b, 65521); }
 #[bench] fn raders_prime_65537(b: &mut Bencher) { bench_raders(b, 65537); }
 #[bench] fn raders_prime_746483(b: &mut Bencher) { bench_raders(b,746483); }
@@ -239,7 +241,8 @@ fn bench_raders(b: &mut Bencher, len: usize) {
 /// for a given length, specific to Rader's algorithm
 fn bench_raders_power2(b: &mut Bencher, len: usize) {
 
-    let inner_fft = get_mixed_planned_avx(len - 1);
+    let mut planner = rustfft::FFTplanner::new(false);
+    let inner_fft = planner.plan_fft(len - 1);
 
     let fft : Arc<Fft<_>> = Arc::new(RadersAlgorithm::new(len, inner_fft));
 
@@ -256,8 +259,8 @@ fn bench_raders_power2(b: &mut Bencher, len: usize) {
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to Bluestein's Algorithm
 fn bench_bluesteins_scalar_prime(b: &mut Bencher, len: usize) {
-
-    let inner_fft = get_mixed_planned_avx((len * 2 - 1).checked_next_power_of_two().unwrap());
+    let mut planner = rustfft::FFTplanner::new(false);
+    let inner_fft = planner.plan_fft((len * 2 - 1).checked_next_power_of_two().unwrap());
     let fft : Arc<Fft<f32>> = Arc::new(BluesteinsAlgorithm::new(len, inner_fft));
 
     let mut buffer = vec![Zero::zero(); len];
@@ -279,12 +282,37 @@ fn bench_bluesteins_scalar_prime(b: &mut Bencher, len: usize) {
 #[bench] fn bench_bluesteins_scalar_prime_746483(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,746483); }
 #[bench] fn bench_bluesteins_scalar_prime_746497(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,746497); }
 
+#[allow(unused)]
+fn plan_new_bluesteins_f32(len: usize) -> Arc<Fft<f32>> {
+    assert!(len > 1); // Internal consistency check: The logic in this method doesn't work for a length of 1
+
+    // Plan a step of Bluestein's Algorithm
+    // Bluestein's computes a FFT of size `len` by reorganizing it as a FFT of ANY size greter than or equal to len * 2 - 1
+    // an obvious choice is the next power of two larger than  len * 2 - 1, but if we can find a smaller FFT that will go faster, we can save a lot of time!
+    // We can very efficiently compute any 3 * 2^n, so we can take the next power of 2, divide it by 4, then multiply it by 3. If the result >= len*2 - 1, use it!
+
+    // TODO: if we get the ability to compute arbitrary powers of 3 on the fast path, we can also try max / 16 * 9, max / 32 * 27, max / 128 * 81, to give alternative sizes
+
+    // One caveat is that the size-12 blutterfly is slower than size-16, so we only want to do this if the next power of two is greater than 16
+    let min_size = len*2 - 1;
+    let max_size = min_size.checked_next_power_of_two().unwrap();
+
+    let potential_3x = max_size / 4 * 3;
+    let inner_fft_len = if max_size > 16 && potential_3x >= min_size {
+        potential_3x
+    } else {
+        max_size
+    };
+
+    let mut planner = rustfft::FFTplanner::new(false);
+    let inner_power2 = planner.plan_fft(inner_fft_len);
+    Arc::new(BluesteinsAvx::new(len, inner_power2).unwrap())
+}
+
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to Bluestein's Algorithm
 fn bench_bluesteins_avx_prime(b: &mut Bencher, len: usize) {
-
-    let inner_fft = get_mixed_planned_avx((len * 2 - 1).checked_next_power_of_two().unwrap());
-    let fft : Arc<Fft<f32>> = Arc::new(BluesteinsAvx::new(len, inner_fft).expect("Can't run benchmark because this machine doesn't have the required instruction sets"));
+    let fft : Arc<Fft<f32>> = plan_new_bluesteins_f32(len);
 
     let mut buffer = vec![Zero::zero(); len];
     let mut scratch = vec![Zero::zero(); fft.get_inplace_scratch_len()];
@@ -299,38 +327,13 @@ fn bench_bluesteins_avx_prime(b: &mut Bencher, len: usize) {
 #[bench] fn bench_bluesteins_avx_prime_0257(b: &mut Bencher) { bench_bluesteins_avx_prime(b,  257); }
 #[bench] fn bench_bluesteins_avx_prime_1009(b: &mut Bencher) { bench_bluesteins_avx_prime(b,  1009); }
 #[bench] fn bench_bluesteins_avx_prime_2017(b: &mut Bencher) { bench_bluesteins_avx_prime(b,  2017); }
+#[bench] fn bench_bluesteins_avx_prime_12289(b: &mut Bencher) { bench_bluesteins_avx_prime(b, 12289); }
+#[bench] fn bench_bluesteins_avx_prime_18433(b: &mut Bencher) { bench_bluesteins_avx_prime(b, 18433); }
 #[bench] fn bench_bluesteins_avx_prime_32767(b: &mut Bencher) { bench_bluesteins_avx_prime(b, 32767); }
 #[bench] fn bench_bluesteins_avx_prime_65521(b: &mut Bencher) { bench_bluesteins_avx_prime(b, 65521); }
 #[bench] fn bench_bluesteins_avx_prime_65537(b: &mut Bencher) { bench_bluesteins_avx_prime(b, 65537); }
 #[bench] fn bench_bluesteins_avx_prime_746483(b: &mut Bencher) { bench_bluesteins_avx_prime(b,746483); }
 #[bench] fn bench_bluesteins_avx_prime_746497(b: &mut Bencher) { bench_bluesteins_avx_prime(b,746497); }
-
-#[bench] fn bench_bluesteins_wrap_inner8xn_65521(b: &mut Bencher) {
-    let len: usize = 4 * 65521;
-    let inner_fft = get_mixed_planned_avx((len * 2 - 1).checked_next_power_of_two().unwrap());
-    let fft : Arc<Fft<f32>> = Arc::new(BluesteinsAvx::new(len, inner_fft).expect("Can't run benchmark because this machine doesn't have the required instruction sets"));
-
-    assert_eq!(fft.len(), len);
-
-    let mut buffer = vec![Zero::zero(); len];
-    let mut scratch = vec![Zero::zero(); fft.get_inplace_scratch_len()];
-    b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch);} );
-}
-
-#[bench] fn bench_bluesteins_wrap_outer8xn_65521(b: &mut Bencher) {
-    let len : usize = 4 * 65521;
-    let inner_len = len / 4;
-    
-    let inner_power2 = get_mixed_planned_avx((inner_len * 2 - 1).checked_next_power_of_two().unwrap());
-    let inner_bluesteins = Arc::new(BluesteinsAvx::new(inner_len, inner_power2).expect("Can't run benchmark because this machine doesn't have the required instruction sets"));
-    let fft : Arc<Fft<f32>> = Arc::new(MixedRadix4xnAvx::new(inner_bluesteins).expect("Can't run benchmark because this machine doesn't have the required instruction sets"));
-
-    assert_eq!(fft.len(), len);
-
-    let mut buffer = vec![Zero::zero(); len];
-    let mut scratch = vec![Zero::zero(); fft.get_inplace_scratch_len()];
-    b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch);} );
-}
 
 /// Times just the FFT setup (not execution)
 /// for a given length, specific to Rader's algorithm
@@ -621,18 +624,18 @@ fn bench_mixed_16xn_avx(b: &mut Bencher, len: usize) {
 #[bench] fn mixed_16xn_avx__0262144(b: &mut Bencher) { bench_mixed_16xn_avx(b, 262144); }
 #[bench] fn mixed_16xn_avx__1048576(b: &mut Bencher) { bench_mixed_16xn_avx(b, 1048576); }
 
-fn get_mixed_planned_avx(len: usize) -> Arc<dyn Fft<f32>> {
+fn get_mixed_3x2n_avx(len: usize) -> Arc<dyn Fft<f32>> {
     match len {
-        8 => Arc::new(MixedRadixAvx4x2::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
-        16 => Arc::new(MixedRadixAvx4x4::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
-        32 => Arc::new(MixedRadixAvx4x8::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
-        64 => Arc::new(MixedRadixAvx8x8::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
-        128 => Arc::new(MixedRadix2xnAvx::new(get_mixed_planned_avx(len/2)).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
-        256 => Arc::new(MixedRadix4xnAvx::new(get_mixed_planned_avx(len/4)).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
-        512 => Arc::new(MixedRadix8xnAvx::new(get_mixed_planned_avx(len/8)).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
-        1024 => Arc::new(MixedRadix16xnAvx::new(get_mixed_planned_avx(len/16)).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        6 => Arc::new(Butterfly6::new(false)),
+        12 => Arc::new(MixedRadixAvx4x3::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        24 => Arc::new(MixedRadixAvx4x6::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        48 => Arc::new(MixedRadixAvx4x12::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        96 => Arc::new(MixedRadix2xnAvx::new(get_mixed_3x2n_avx(len/2)).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        192 => Arc::new(MixedRadix4xnAvx::new(get_mixed_3x2n_avx(len/4)).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        384 => Arc::new(MixedRadix8xnAvx::new(get_mixed_3x2n_avx(len/8)).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        768 => Arc::new(MixedRadix16xnAvx::new(get_mixed_3x2n_avx(len/16)).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
         _ => {
-            let inner = get_mixed_planned_avx(len / 8);
+            let inner = get_mixed_3x2n_avx(len / 8);
             Arc::new(MixedRadix8xnAvx::new(inner).expect("Can't run benchmark because this machine doesn't have the required instruction sets"))
         }
     }
@@ -640,8 +643,8 @@ fn get_mixed_planned_avx(len: usize) -> Arc<dyn Fft<f32>> {
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to Rader's algorithm
-fn bench_mixed_planned_avx(b: &mut Bencher, len: usize) {
-    let fft = get_mixed_planned_avx(len);
+fn bench_mixed_3x2n_avx(b: &mut Bencher, len: usize) {
+    let fft = get_mixed_3x2n_avx(len);
 
     let mut buffer = vec![Zero::zero(); len];
     let mut scratch = vec![Zero::zero(); fft.get_inplace_scratch_len()];
@@ -650,19 +653,11 @@ fn bench_mixed_planned_avx(b: &mut Bencher, len: usize) {
     });
 }
 
-#[bench] fn mixed_planned_avx_00000128(b: &mut Bencher) { bench_mixed_planned_avx(b, 128); }
-#[bench] fn mixed_planned_avx_00000256(b: &mut Bencher) { bench_mixed_planned_avx(b, 256); }
-#[bench] fn mixed_planned_avx_00000512(b: &mut Bencher) { bench_mixed_planned_avx(b, 512); }
-#[bench] fn mixed_planned_avx_00001024(b: &mut Bencher) { bench_mixed_planned_avx(b, 1024); }
-#[bench] fn mixed_planned_avx_00002048(b: &mut Bencher) { bench_mixed_planned_avx(b, 2048); }
-#[bench] fn mixed_planned_avx_00004096(b: &mut Bencher) { bench_mixed_planned_avx(b, 4096); }
-#[bench] fn mixed_planned_avx_00008192(b: &mut Bencher) { bench_mixed_planned_avx(b, 8192); }
-#[bench] fn mixed_planned_avx_00016384(b: &mut Bencher) { bench_mixed_planned_avx(b, 16384); }
-#[bench] fn mixed_planned_avx_00032768(b: &mut Bencher) { bench_mixed_planned_avx(b, 32768); }
-#[bench] fn mixed_planned_avx_00065536(b: &mut Bencher) { bench_mixed_planned_avx(b, 65536); }
-#[bench] fn mixed_planned_avx_00262144(b: &mut Bencher) { bench_mixed_planned_avx(b, 262144); }
-#[bench] fn mixed_planned_avx_01048576(b: &mut Bencher) { bench_mixed_planned_avx(b, 1048576); }
-#[bench] fn mixed_planned_avx_16777216(b: &mut Bencher) { bench_mixed_planned_avx(b, 16777216); }
+#[bench] fn mixed_3x2n_avx_0096(b: &mut Bencher) { bench_mixed_3x2n_avx(b, 96); }
+#[bench] fn mixed_3x2n_avx_0192(b: &mut Bencher) { bench_mixed_3x2n_avx(b, 192); }
+#[bench] fn mixed_3x2n_avx_0384(b: &mut Bencher) { bench_mixed_3x2n_avx(b, 384); }
+#[bench] fn mixed_3x2n_avx_0768(b: &mut Bencher) { bench_mixed_3x2n_avx(b, 768); }
+#[bench] fn mixed_3x2n_avx_1536(b: &mut Bencher) { bench_mixed_3x2n_avx(b, 1536); }
 
 fn get_mixed_radix_power2(len: usize) -> Arc<dyn Fft<f32>> {
     match len {
