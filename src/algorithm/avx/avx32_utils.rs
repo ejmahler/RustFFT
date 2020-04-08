@@ -424,20 +424,43 @@ pub mod fma {
         (final0, final2, final4, final6, final1, final3, final5, final7)
     }
 
+    // Compute 4 parallel butterfly 8's using AVX and FMA instructions
+    // rowN contains the nth element of each parallel FFT
+    #[inline(always)]
+    pub unsafe fn column_butterfly8_array_f32(rows: [__m256;8], twiddles: __m256, twiddle_config: Rotate90Config)  -> [__m256;8] {
+        // Treat our butterfly-8 as a 2x4 array. first, do butterfly 4's down the columns
+        let (mid0, mid2, mid4, mid6) = column_butterfly4_f32(rows[0], rows[2], rows[4], rows[6], twiddle_config);
+        let (mid1, mid3, mid5, mid7) = column_butterfly4_f32(rows[1], rows[3], rows[5], rows[7], twiddle_config);
+
+        // Apply twiddle factors
+        // We want to negate the reals of the twiddles when multiplying mid7, but it's easier to conjugate the twiddles (Ie negate the imaginaries)
+        // Negating the reals before amultiplication is equivalent to negating the imaginaries before the multiplication and then negatign the entire result
+        // And we can "negate the entire result" by rollign that operation into the subsequent butterfly 2's
+        let mid3_twiddled       = complex_multiply_f32(twiddles, mid3);
+        let mid5_twiddled       = twiddle_config.rotate90(mid5);
+        let mid7_twiddled_neg   = complex_conjugated_multiply_f32(twiddles, mid7);
+
+        // Up next is a transpose, but since everything is already in registers, we don't actually have to transpose anything!
+        // "transposE" and thne apply butterfly 2's across the columns of our 4x2 array
+        let (final0, final1) = column_butterfly2_f32(mid0, mid1);
+        let (final2, final3) = column_butterfly2_f32(mid2, mid3_twiddled);
+        let (final4, final5) = column_butterfly2_f32(mid4, mid5_twiddled);
+        let (final6, final7) = column_butterfly2_f32_negaterow1(mid6, mid7_twiddled_neg); // Finish applying the negation from our twiddles by calling a different butterfly 2 function
+
+        [final0, final2, final4, final6, final1, final3, final5, final7]
+    }
+
     // Compute 4 parallel butterfly 16's using AVX and FMA instructions
     // rowN contains the nth element of each parallel FFT
     #[inline(always)]
     pub unsafe fn column_butterfly16_f32(
-        row0: __m256, row1: __m256, row2: __m256, row3: __m256, row4: __m256, row5: __m256, row6: __m256, row7: __m256,
-        row8: __m256, row9: __m256, row10: __m256, row11: __m256, row12: __m256, row13: __m256, row14: __m256, row15: __m256,
-        twiddles: [__m256; 6], twiddle_config: Rotate90Config) 
-    -> (__m256, __m256, __m256, __m256, __m256, __m256, __m256, __m256, __m256, __m256, __m256, __m256, __m256, __m256, __m256, __m256) 
+        rows: [__m256; 16], twiddles: [__m256; 6], twiddle_config: Rotate90Config) -> [__m256; 16] 
     {
         // Treat our butterfly-16 as a 4x4 array. first, do butterfly 4's down the columns
-        let (mid0, mid4, mid8,  mid12) = column_butterfly4_f32(row0, row4, row8,  row12, twiddle_config);
-        let (mid1, mid5, mid9,  mid13) = column_butterfly4_f32(row1, row5, row9,  row13, twiddle_config);
-        let (mid2, mid6, mid10, mid14) = column_butterfly4_f32(row2, row6, row10, row14, twiddle_config);
-        let (mid3, mid7, mid11, mid15) = column_butterfly4_f32(row3, row7, row11, row15, twiddle_config);
+        let (mid0, mid4, mid8,  mid12) = column_butterfly4_f32(rows[0], rows[4], rows[8],  rows[12], twiddle_config);
+        let (mid1, mid5, mid9,  mid13) = column_butterfly4_f32(rows[1], rows[5], rows[9],  rows[13], twiddle_config);
+        let (mid2, mid6, mid10, mid14) = column_butterfly4_f32(rows[2], rows[6], rows[10], rows[14], twiddle_config);
+        let (mid3, mid7, mid11, mid15) = column_butterfly4_f32(rows[3], rows[7], rows[11], rows[15], twiddle_config);
 
         // Apply twiddle factors. Note that we're re-using a couple twiddles!
         let mid5_twiddled   = complex_multiply_f32(twiddles[0], mid5);
@@ -458,6 +481,6 @@ pub mod fma {
         let (final12, final13, final14, final15) = column_butterfly4_f32(mid12, mid13_twiddled, mid14_twiddled, mid15_twiddled, twiddle_config);
 
         // finally, one more transpose
-        (final0, final4, final8, final12, final1, final5, final9, final13, final2, final6, final10, final14, final3, final7, final11, final15)
+        [final0, final4, final8, final12, final1, final5, final9, final13, final2, final6, final10, final14, final3, final7, final11, final15]
     }
 }
