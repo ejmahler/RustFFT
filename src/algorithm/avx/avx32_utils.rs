@@ -238,7 +238,7 @@ pub unsafe fn column_butterfly3_f32(row0: __m256, row1: __m256, row2: __m256, tw
 // rowN contains the nth element of each parallel FFT
 #[inline(always)]
 pub unsafe fn column_butterfly4_f32(row0: __m256, row1: __m256, row2: __m256, row3: __m256, twiddle_config: Rotate90Config) -> (__m256, __m256, __m256, __m256) {
-    // Perform the first set of size-2 FFTs. Make sure to apply the twiddle factor to element 3.
+    // Perform the first set of size-2 FFTs.
     let (mid0, mid2) = column_butterfly2_f32(row0, row2);
     let (mid1, mid3_pretwiddle) = column_butterfly2_f32(row1, row3);
 
@@ -251,6 +251,25 @@ pub unsafe fn column_butterfly4_f32(row0: __m256, row1: __m256, row2: __m256, ro
 
     // Swap outputs 1 and 2 in the output to do a square transpose
     (output0, output2, output1, output3)
+}
+
+// Compute 4 parallel butterfly 4's using AVX instructions
+// rowN contains the nth element of each parallel FFT
+#[inline(always)]
+pub unsafe fn column_butterfly4_array_f32(rows: [__m256;4], twiddle_config: Rotate90Config) -> [__m256;4] {
+    // Perform the first set of size-2 FFTs.
+    let (mid0, mid2) = column_butterfly2_f32(rows[0], rows[2]);
+    let (mid1, mid3) = column_butterfly2_f32(rows[1], rows[3]);
+
+    // Apply element 3 inner twiddle factor
+    let mid3_rotated = twiddle_config.rotate90(mid3);
+
+    // Perform the second set of size-2 FFTs
+    let (output0, output1) = column_butterfly2_f32(mid0, mid1);
+    let (output2, output3) = column_butterfly2_f32(mid2, mid3_rotated);
+
+    // Swap outputs 1 and 2 in the output to do a square transpose
+    [output0, output2, output1, output3]
 }
 
 // Compute 4 parallel butterfly 6's using AVX instructions

@@ -253,40 +253,44 @@ impl MixedRadix4xnAvx<f32> {
 
         // process the column FFTs
         for i in 0..chunk_count {
-        	let input0 = buffer.load_complex_f32(i*4); 
-        	let input1 = buffer.load_complex_f32(i*4 + quarter_len);
-        	let input2 = buffer.load_complex_f32(i*4 + quarter_len*2);
-        	let input3 = buffer.load_complex_f32(i*4 + quarter_len*3);
+            let mut rows = [_mm256_setzero_ps(); 4];
+            for n in 0..4 {
+                rows[n] = buffer.load_complex_f32(i*4 + quarter_len*n);
+            }
 
-        	let (output0, output1_pretwiddle, output2_pretwiddle, output3_pretwiddle) = avx32_utils::column_butterfly4_f32(input0, input1, input2, input3, self.twiddle_config);
+        	let processed_rows = avx32_utils::column_butterfly4_array_f32(rows, self.twiddle_config);
 
-            buffer.store_complex_f32(i*4, output0);
-            let output1 = avx32_utils::fma::complex_multiply_f32(*self.twiddles.get_unchecked(i*3), output1_pretwiddle);
-            buffer.store_complex_f32(i*4 + quarter_len, output1);
-            let output2 = avx32_utils::fma::complex_multiply_f32(*self.twiddles.get_unchecked(i*3+1), output2_pretwiddle);
-            buffer.store_complex_f32(i*4 + quarter_len*2, output2);
-            let output3 = avx32_utils::fma::complex_multiply_f32(*self.twiddles.get_unchecked(i*3+2), output3_pretwiddle);
-        	buffer.store_complex_f32(i*4 + quarter_len*3, output3);
+            // Apply twiddle factors to the column and store them where they came from
+            debug_assert!(self.twiddles.len() >= (i+1) * 3);
+        	buffer.store_complex_f32(i*4, processed_rows[0]);
+            for n in 1..4 {
+                let twiddle = *self.twiddles.get_unchecked(i*3 + n - 1);
+                let output = avx32_utils::fma::complex_multiply_f32(twiddle,  processed_rows[n]);
+        	    buffer.store_complex_f32(i*4 + quarter_len*n, output);
+            }
         }
 
         // process the remainder
         if remainder > 0 {
             let remainder_mask = avx32_utils::RemainderMask::new_f32(remainder);
 
-            let input0 = buffer.load_complex_remainder_f32(remainder_mask, chunk_count*4); 
-            let input1 = buffer.load_complex_remainder_f32(remainder_mask, chunk_count*4 + quarter_len);
-            let input2 = buffer.load_complex_remainder_f32(remainder_mask, chunk_count*4 + quarter_len*2);
-            let input3 = buffer.load_complex_remainder_f32(remainder_mask, chunk_count*4 + quarter_len*3);
+            // Load (up to) 4 columns at once, based on our remainder
+            let mut rows = [_mm256_setzero_ps(); 4];
+            for n in 0..4 {
+                rows[n] = buffer.load_complex_remainder_f32(remainder_mask, chunk_count*4 + quarter_len*n);
+            }
 
-            let (output0, output1_pretwiddle, output2_pretwiddle, output3_pretwiddle) = avx32_utils::column_butterfly4_f32(input0, input1, input2, input3, self.twiddle_config);
+            // Perform (up to) 4 parallel butterfly 8's on the columns
+        	let processed_rows = avx32_utils::column_butterfly4_array_f32(rows, self.twiddle_config);
 
-            buffer.store_complex_remainder_f32(remainder_mask, output0, chunk_count*4);
-            let output1 = avx32_utils::fma::complex_multiply_f32(*self.twiddles.get_unchecked(chunk_count*3), output1_pretwiddle);
-            buffer.store_complex_remainder_f32(remainder_mask, output1, chunk_count*4 + quarter_len);
-            let output2 = avx32_utils::fma::complex_multiply_f32(*self.twiddles.get_unchecked(chunk_count*3+1), output2_pretwiddle);
-            buffer.store_complex_remainder_f32(remainder_mask, output2, chunk_count*4 + quarter_len*2);
-            let output3 = avx32_utils::fma::complex_multiply_f32(*self.twiddles.get_unchecked(chunk_count*3+2), output3_pretwiddle);
-            buffer.store_complex_remainder_f32(remainder_mask, output3, chunk_count*4 + quarter_len*3);
+            // Apply twiddle factors to the column and store them where they came from
+        	debug_assert!(self.twiddles.len() >= (chunk_count+1) * 3);
+            buffer.store_complex_remainder_f32(remainder_mask, processed_rows[0], chunk_count*4);
+            for n in 1..4 {
+                let twiddle = *self.twiddles.get_unchecked(chunk_count*3 + n - 1);
+                let output = avx32_utils::fma::complex_multiply_f32(twiddle,  processed_rows[n]);
+                buffer.store_complex_remainder_f32(remainder_mask, output, chunk_count*4 + quarter_len*n);
+            }
         }
     }
 
@@ -300,42 +304,38 @@ impl MixedRadix4xnAvx<f32> {
 
         // transpose the scratch as a nx4 array into the buffer as an 4xn array
         for i in 0..chunk_count {
-            let input0 = input.load_complex_f32(i*4); 
-            let input1 = input.load_complex_f32(i*4 + quarter_len);
-            let input2 = input.load_complex_f32(i*4 + quarter_len*2);
-            let input3 = input.load_complex_f32(i*4 + quarter_len*3);
+            // Load 4 columns at once, giving us a 4x4 array
+            let mut rows = [_mm256_setzero_ps(); 4];
+            for n in 0..4 {
+                rows[n] = input.load_complex_f32(i*4 + quarter_len*n);
+            }
 
-            // Transpose the 8x4 array and scatter them
-            let (transposed0, transposed1, transposed2, transposed3) = avx32_utils::transpose_4x4_f32(input0, input1, input2, input3);
+            // Transpose the 4x4 array
+            let transposed = avx32_utils::transpose_4x4_array_f32(rows);
 
-            // store the first chunk directly back into 
-            output.store_complex_f32(i*16, transposed0);
-            output.store_complex_f32(i*16 + 4, transposed1);
-            output.store_complex_f32(i*16 + 4*2, transposed2);
-            output.store_complex_f32(i*16 + 4*3, transposed3);
+            // store each row of our transposed array contiguously. Manually unroll this loop because as of nightly april 8 2020,
+            // it generates horrible code wherei t dumps every ymm register to the stack and then immediatelyreloads it
+            output.store_complex_f32(i*16, transposed[0]);
+            output.store_complex_f32(i*16 + 4, transposed[1]);
+            output.store_complex_f32(i*16 + 2*4, transposed[2]);
+            output.store_complex_f32(i*16 + 3*4, transposed[3]);
         }
 
-        // transpose the remainder
         if remainder > 0 {
             let remainder_mask = avx32_utils::RemainderMask::new_f32(remainder);
 
-            let input0 = input.load_complex_remainder_f32(remainder_mask, chunk_count*4); 
-            let input1 = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + quarter_len);
-            let input2 = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + quarter_len*2);
-            let input3 = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + quarter_len*3);
+            // Load (up to) 4 columns at once, giving us a 4x48 array
+            let mut rows = [_mm256_setzero_ps(); 4];
+            for n in 0..4 {
+                rows[n] = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + quarter_len*n);
+            }
 
-            // Transpose the 8x4 array and scatter them
-            let (transposed0, transposed1, transposed2, _transposed3) = avx32_utils::transpose_4x4_f32(input0, input1, input2, input3);
+            // Transpose the 4x4 array
+            let transposed = avx32_utils::transpose_4x4_array_f32(rows);
 
             // store the transposed remainder back into the buffer -- but keep in account the fact we should only write out some of the chunks!
-            output.store_complex_f32(chunk_count*16, transposed0);
-            if remainder >= 2 {
-                output.store_complex_f32(chunk_count*16 + 4, transposed1);
-                if remainder >= 3 {
-                    output.store_complex_f32(chunk_count*16 + 4*2, transposed2);
-                    // the remainder will never be 4 - because if it was 4, it would have been handled in the loop above
-                    // so we can just not use the final 2 values. thankfully, the optimizer is smart enough to never even generate the last 2 values
-                }
+            for n in 0..remainder {
+                output.store_complex_f32(chunk_count*16 + n*4, transposed[n]);
             }
         }
     }
@@ -533,7 +533,6 @@ impl MixedRadix8xnAvx<f32> {
             let (chunk0, chunk1) = avx32_utils::transpose_4x8_to_8x4_f32(rows);
 
             // store the transposed remainder back into the buffer -- but keep in account the fact we should only write out some of the chunks!
-            // it would be nice to put this in a "for n in 0..remainder" loop, but as of nightly april 8 2020, it results in really shitty codegen where it dumps every isngle ymm trgister to the task and then reads them all back one by one
             for n in 0..remainder {
                 output.store_complex_f32(chunk_count*32 + n*8, chunk0[n]);
                 output.store_complex_f32(chunk_count*32 + n*8 + 4, chunk1[n]);
@@ -741,7 +740,6 @@ impl MixedRadix16xnAvx<f32> {
             let (chunk0, chunk1, chunk2, chunk3) = avx32_utils::transpose_4x16_to_16x4_f32(rows);
 
             // store the transposed remainder back into the buffer -- but keep in account the fact we should only write out some of the chunks!
-            // it would be nice to put this in a "for n in 0..remainder" loop, but as of nightly april 8 2020, it results in really shitty codegen where it dumps every isngle ymm trgister to the task and then reads them all back one by one
             for n in 0..remainder {
                 output.store_complex_f32(chunk_count*64 + n*16, chunk0[n]);
                 output.store_complex_f32(chunk_count*64 + n*16 + 4, chunk1[n]);
