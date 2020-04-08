@@ -195,6 +195,101 @@ macro_rules! boilerplate_fft {
     )
 }
 
+
+#[allow(unused)]
+macro_rules! boilerplate_fft_simd_f32 {
+    ($struct_name:ident, $len_fn:expr, $inplace_scratch_len_fn:expr, $out_of_place_scratch_len_fn:expr) => (
+		default impl<T: FFTnum> Fft<T> for $struct_name<T> {
+            fn process_inplace_with_scratch(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+				unimplemented!();
+            }
+            fn process_inplace_multi(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+                unimplemented!();
+			}
+			fn process_with_scratch(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+				unimplemented!();
+            }
+            fn process_multi(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+                unimplemented!();
+            }
+            fn get_inplace_scratch_len(&self) -> usize {
+                unimplemented!();
+            }
+            fn get_out_of_place_scratch_len(&self) -> usize {
+                unimplemented!();
+            }
+        }
+        impl Fft<f32> for $struct_name<f32> {
+            fn process_with_scratch(&self, input: &mut [Complex<f32>], output: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
+                assert_eq!(input.len(), self.len(), "Input is the wrong length. Expected {}, got {}", self.len(), input.len());
+                assert_eq!(output.len(), self.len(), "Output is the wrong length. Expected {}, got {}", self.len(), output.len());
+                
+                let required_scratch = self.get_out_of_place_scratch_len();
+                assert!(scratch.len() >= required_scratch, "Scratch is the wrong length. Expected {} or greater, got {}", required_scratch, scratch.len());
+        
+                let scratch = &mut scratch[..required_scratch];
+		
+				self.perform_fft_out_of_place_f32(input, output, scratch);
+            }
+            fn process_multi(&self, input: &mut [Complex<f32>], output: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
+                assert!(input.len() % self.len() == 0, "Output is the wrong length. Expected multiple of {}, got {}", self.len(), input.len());
+                assert_eq!(input.len(), output.len(), "Output is the wrong length. input = {} output = {}", input.len(), output.len());
+                
+                let required_scratch = self.get_out_of_place_scratch_len();
+                assert!(scratch.len() >= required_scratch, "Scratch is the wrong length. Expected {} or greater, got {}", required_scratch, scratch.len());
+        
+                let scratch = &mut scratch[..required_scratch];
+		
+				for (in_chunk, out_chunk) in input.chunks_exact_mut(self.len()).zip(output.chunks_exact_mut(self.len())) {
+					self.perform_fft_out_of_place_f32(in_chunk, out_chunk, scratch);
+				}
+            }
+            fn process_inplace_with_scratch(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
+                assert_eq!(buffer.len(), self.len(), "Buffer is the wrong length. Expected {}, got {}", self.len(), buffer.len());
+
+                let required_scratch = self.get_inplace_scratch_len();
+                assert!(scratch.len() >= required_scratch, "Scratch is the wrong length. Expected {} or greater, got {}", required_scratch, scratch.len());
+        
+                let scratch = &mut scratch[..required_scratch];
+        
+                self.perform_fft_inplace_f32(buffer, scratch);
+            }
+            fn process_inplace_multi(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
+                assert_eq!(buffer.len() % self.len(), 0, "Buffer is the wrong length. Expected multiple of {}, got {}", self.len(), buffer.len());
+
+                let required_scratch = self.get_inplace_scratch_len();
+                assert!(scratch.len() >= required_scratch, "Scratch is the wrong length. Expected {} or greater, got {}", required_scratch, scratch.len());
+        
+                let scratch = &mut scratch[..required_scratch];
+        
+                for chunk in buffer.chunks_exact_mut(self.len()) {
+                    self.perform_fft_inplace_f32(chunk, scratch);
+                }
+            }
+            #[inline(always)]
+            fn get_inplace_scratch_len(&self) -> usize {
+                $inplace_scratch_len_fn(self)
+            }
+            #[inline(always)]
+            fn get_out_of_place_scratch_len(&self) -> usize {
+                $out_of_place_scratch_len_fn(self)
+            }
+        }
+        impl<T> Length for $struct_name<T> {
+            #[inline(always)]
+            fn len(&self) -> usize {
+                $len_fn(self)
+            }
+        }
+        impl<T> IsInverse for $struct_name<T> {
+            #[inline(always)]
+            fn is_inverse(&self) -> bool {
+                self.inverse
+            }
+        }
+    )
+}
+
 // Safety: This macro will call `self::perform_fft_inplace_f32()` which probably has a #[target_feature(enable = "...")] annotation on it.
 // Calling functions with that annotation is unsafe, because it doesn't actually check if the CPU has the required features.
 // Callers of this macro must guarantee that users can't even obtain an instance of $struct_name if their CPU doesn't have the required CPU features.
