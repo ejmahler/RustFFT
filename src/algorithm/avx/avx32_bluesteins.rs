@@ -8,8 +8,8 @@ use common::FFTnum;
 
 use ::{Length, IsInverse, Fft};
 
-use super::avx_utils::{AvxComplexArrayf32, AvxComplexArrayMutf32};
-use super::avx_utils;
+use super::avx32_utils::{AvxComplexArrayf32, AvxComplexArrayMutf32};
+use super::avx32_utils;
 
 /// Implementation of Bluestein's Algorithm
 ///
@@ -102,7 +102,7 @@ impl BluesteinsAvx<f32> {
         // also compute some more mundane twiddle factors to start and end with.
         // these will be the "main" twiddles. we will also hve "remainder" twiddles down below. We support remainders of 0 and 4, and there's less work if the remainder is 4
         // So if len is divisible by 4, compute one less twiddle herelet mut twiddles = Vec::with_capacity(num_twiddle_columns * 7);
-        let (main_chunks, remainder) = avx_utils::compute_chunk_count_complex_f32(len);
+        let (main_chunks, remainder) = avx32_utils::compute_chunk_count_complex_f32(len);
         let twiddles : Vec<_> = (0..main_chunks+1).map(|x| {
             let chunk_size = if x == main_chunks { remainder } else { 4 };
 
@@ -129,22 +129,22 @@ impl BluesteinsAvx<f32> {
     unsafe fn perform_fft_inplace_f32(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
         let (inner_input, inner_scratch) = scratch.split_at_mut(self.inner_fft_multiplier.len()*4);
         
-        let (main_chunks, _remainder) = avx_utils::compute_chunk_count_complex_f32(self.len());
+        let (main_chunks, _remainder) = avx32_utils::compute_chunk_count_complex_f32(self.len());
 
         // Copy the buffer into our inner FFT input, applying twiddle factors as we go. the buffer will only fill part of the FFT input, so zero fill the rest
         for i in 0..main_chunks  {
             let buffer_vector = buffer.load_complex_f32(i*4);
-            let product_vector = avx_utils::complex_multiply_fma_f32(buffer_vector, *self.twiddles.get_unchecked(i));
+            let product_vector = avx32_utils::fma::complex_multiply_f32(buffer_vector, *self.twiddles.get_unchecked(i));
             inner_input.store_complex_f32(i*4, product_vector);
         }
 
         // the buffer will almost certainly have a remainder. it's so likely, in fact, that we're just going to apply a remainder unconditionally
         // it uses a couple more instructions in the rare case when our FFT size is a multiple of 4, but wastes instructions when it's not
         {
-            let remainder_mask = avx_utils::RemainderMask::new_f32(self.remainder_count);
+            let remainder_mask = avx32_utils::RemainderMask::new_f32(self.remainder_count);
 
             let buffer_vector = buffer.load_complex_remainder_f32(remainder_mask, main_chunks * 4);
-            let product_vector = avx_utils::complex_multiply_fma_f32(*self.twiddles.get_unchecked(main_chunks), buffer_vector);
+            let product_vector = avx32_utils::fma::complex_multiply_f32(*self.twiddles.get_unchecked(main_chunks), buffer_vector);
             inner_input.store_complex_f32(main_chunks * 4, product_vector);
         }
 
@@ -158,10 +158,10 @@ impl BluesteinsAvx<f32> {
         self.inner_fft.process_inplace_with_scratch(inner_input, inner_scratch);
 
         // Multiply our inner FFT output by our precomputed data. Then, conjugate the result to set up for an inverse FFT
-        let conjugation_mask = avx_utils::broadcast_complex_f32(Complex::new(0.0, -0.0));
+        let conjugation_mask = avx32_utils::broadcast_complex_f32(Complex::new(0.0, -0.0));
         for (i, twiddle) in self.inner_fft_multiplier.iter().enumerate() {
             let inner_vector = inner_input.load_complex_f32(i*4);
-            let product_vector = avx_utils::complex_multiply_fma_f32(inner_vector, *twiddle);
+            let product_vector = avx32_utils::fma::complex_multiply_f32(inner_vector, *twiddle);
             let conjugated_vector = _mm256_xor_ps(product_vector, conjugation_mask);
 
             inner_input.store_complex_f32(i*4, conjugated_vector);
@@ -173,16 +173,16 @@ impl BluesteinsAvx<f32> {
         // copy our data back to the buffer, applying twiddle factors again as we go. Also conjugate inner_input to complete the inverse FFT
         for i in 0..main_chunks  {
             let inner_vector = inner_input.load_complex_f32(i*4);
-            let product_vector = avx_utils::complex_conjugated_multiply_fma_f32(inner_vector, *self.twiddles.get_unchecked(i));
+            let product_vector = avx32_utils::fma::complex_conjugated_multiply_f32(inner_vector, *self.twiddles.get_unchecked(i));
             buffer.store_complex_f32(i*4, product_vector);
         }
 
         // again, unconditionally apply a remainder
         {
-            let remainder_mask = avx_utils::RemainderMask::new_f32(self.remainder_count);
+            let remainder_mask = avx32_utils::RemainderMask::new_f32(self.remainder_count);
 
             let inner_vector = inner_input.load_complex_f32(main_chunks * 4);
-            let product_vector = avx_utils::complex_conjugated_multiply_fma_f32(inner_vector, *self.twiddles.get_unchecked(main_chunks));
+            let product_vector = avx32_utils::fma::complex_conjugated_multiply_f32(inner_vector, *self.twiddles.get_unchecked(main_chunks));
             buffer.store_complex_remainder_f32(remainder_mask, product_vector, main_chunks * 4);
         }
     }
@@ -191,22 +191,22 @@ impl BluesteinsAvx<f32> {
     unsafe fn perform_fft_out_of_place_f32(&self, input: &mut [Complex<f32>], output: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
         let (inner_input, inner_scratch) = scratch.split_at_mut(self.inner_fft_multiplier.len()*4);
         
-        let (main_chunks, _remainder) = avx_utils::compute_chunk_count_complex_f32(self.len());
+        let (main_chunks, _remainder) = avx32_utils::compute_chunk_count_complex_f32(self.len());
 
         // Copy the buffer into our inner FFT input, applying twiddle factors as we go. the buffer will only fill part of the FFT input, so zero fill the rest
         for i in 0..main_chunks  {
             let buffer_vector = input.load_complex_f32(i*4);
-            let product_vector = avx_utils::complex_multiply_fma_f32(buffer_vector, *self.twiddles.get_unchecked(i));
+            let product_vector = avx32_utils::fma::complex_multiply_f32(buffer_vector, *self.twiddles.get_unchecked(i));
             inner_input.store_complex_f32(i*4, product_vector);
         }
 
         // the buffer will almost certainly have a remainder. it's so likely, in fact, that we're just going to apply a remainder unconditionally
         // it uses a couple more instructions in the rare case when our FFT size is a multiple of 4, but wastes instructions when it's not
         {
-            let remainder_mask = avx_utils::RemainderMask::new_f32(self.remainder_count);
+            let remainder_mask = avx32_utils::RemainderMask::new_f32(self.remainder_count);
 
             let buffer_vector = input.load_complex_remainder_f32(remainder_mask, main_chunks * 4);
-            let product_vector = avx_utils::complex_multiply_fma_f32(*self.twiddles.get_unchecked(main_chunks), buffer_vector);
+            let product_vector = avx32_utils::fma::complex_multiply_f32(*self.twiddles.get_unchecked(main_chunks), buffer_vector);
             inner_input.store_complex_f32(main_chunks * 4, product_vector);
         }
 
@@ -220,10 +220,10 @@ impl BluesteinsAvx<f32> {
         self.inner_fft.process_inplace_with_scratch(inner_input, inner_scratch);
 
         // Multiply our inner FFT output by our precomputed data. Then, conjugate the result to set up for an inverse FFT
-        let conjugation_mask = avx_utils::broadcast_complex_f32(Complex::new(0.0, -0.0));
+        let conjugation_mask = avx32_utils::broadcast_complex_f32(Complex::new(0.0, -0.0));
         for (i, twiddle) in self.inner_fft_multiplier.iter().enumerate() {
             let inner_vector = inner_input.load_complex_f32(i*4);
-            let product_vector = avx_utils::complex_multiply_fma_f32(inner_vector, *twiddle);
+            let product_vector = avx32_utils::fma::complex_multiply_f32(inner_vector, *twiddle);
             let conjugated_vector = _mm256_xor_ps(product_vector, conjugation_mask);
 
             inner_input.store_complex_f32(i*4, conjugated_vector);
@@ -235,16 +235,16 @@ impl BluesteinsAvx<f32> {
         // copy our data back to the buffer, applying twiddle factors again as we go. Also conjugate inner_input to complete the inverse FFT
         for i in 0..main_chunks  {
             let inner_vector = inner_input.load_complex_f32(i*4);
-            let product_vector = avx_utils::complex_conjugated_multiply_fma_f32(inner_vector, *self.twiddles.get_unchecked(i));
+            let product_vector = avx32_utils::fma::complex_conjugated_multiply_f32(inner_vector, *self.twiddles.get_unchecked(i));
             output.store_complex_f32(i*4, product_vector);
         }
 
         // again, unconditionally apply a remainder
         {
-            let remainder_mask = avx_utils::RemainderMask::new_f32(self.remainder_count);
+            let remainder_mask = avx32_utils::RemainderMask::new_f32(self.remainder_count);
 
             let inner_vector = inner_input.load_complex_f32(main_chunks * 4);
-            let product_vector = avx_utils::complex_conjugated_multiply_fma_f32(inner_vector, *self.twiddles.get_unchecked(main_chunks));
+            let product_vector = avx32_utils::fma::complex_conjugated_multiply_f32(inner_vector, *self.twiddles.get_unchecked(main_chunks));
             output.store_complex_remainder_f32(remainder_mask, product_vector, main_chunks * 4);
         }
     }

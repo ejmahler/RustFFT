@@ -730,7 +730,7 @@ fn bench_mixed_radix_inline_power2(b: &mut Bencher, len: usize) {
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
-fn bench_butterfly(b: &mut Bencher, len: usize) {
+fn bench_butterfly32(b: &mut Bencher, len: usize) {
 
     let mut planner = rustfft::FFTplanner::new(false);
     let fft: Arc<dyn Fft<f32>> = planner.plan_fft(len);
@@ -740,17 +740,38 @@ fn bench_butterfly(b: &mut Bencher, len: usize) {
     b.iter(|| { fft.process_inplace_multi(&mut buffer, &mut scratch); });
 }
 
+#[bench] fn butterfly32_02(b: &mut Bencher) { bench_butterfly32(b, 2); }
+#[bench] fn butterfly32_03(b: &mut Bencher) { bench_butterfly32(b, 3); }
+#[bench] fn butterfly32_04(b: &mut Bencher) { bench_butterfly32(b, 4); }
+#[bench] fn butterfly32_05(b: &mut Bencher) { bench_butterfly32(b, 5); }
+#[bench] fn butterfly32_06(b: &mut Bencher) { bench_butterfly32(b, 6); }
+#[bench] fn butterfly32_07(b: &mut Bencher) { bench_butterfly32(b, 7); }
+#[bench] fn butterfly32_08(b: &mut Bencher) { bench_butterfly32(b, 8); }
+#[bench] fn butterfly32_12(b: &mut Bencher) { bench_butterfly32(b, 12); }
+#[bench] fn butterfly32_16(b: &mut Bencher) { bench_butterfly32(b, 16); }
+#[bench] fn butterfly32_24(b: &mut Bencher) { bench_butterfly32(b, 24); }
+#[bench] fn butterfly32_32(b: &mut Bencher) { bench_butterfly32(b, 32); }
+#[bench] fn butterfly32_48(b: &mut Bencher) { bench_butterfly32(b, 48); }
+#[bench] fn butterfly32_64(b: &mut Bencher) { bench_butterfly32(b, 64); }
 
-#[bench] fn butterfly_02(b: &mut Bencher) { bench_butterfly(b, 2); }
-#[bench] fn butterfly_03(b: &mut Bencher) { bench_butterfly(b, 3); }
-#[bench] fn butterfly_04(b: &mut Bencher) { bench_butterfly(b, 4); }
-#[bench] fn butterfly_05(b: &mut Bencher) { bench_butterfly(b, 5); }
-#[bench] fn butterfly_06(b: &mut Bencher) { bench_butterfly(b, 6); }
-#[bench] fn butterfly_07(b: &mut Bencher) { bench_butterfly(b, 7); }
-#[bench] fn butterfly_08(b: &mut Bencher) { bench_butterfly(b, 8); }
-#[bench] fn butterfly_12(b: &mut Bencher) { bench_butterfly(b, 12); }
-#[bench] fn butterfly_16(b: &mut Bencher) { bench_butterfly(b, 16); }
-#[bench] fn butterfly_24(b: &mut Bencher) { bench_butterfly(b, 24); }
-#[bench] fn butterfly_32(b: &mut Bencher) { bench_butterfly(b, 32); }
-#[bench] fn butterfly_48(b: &mut Bencher) { bench_butterfly(b, 48); }
-#[bench] fn butterfly_64(b: &mut Bencher) { bench_butterfly(b, 64); }
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length
+fn bench_butterfly64(b: &mut Bencher, len: usize) {
+
+    let mut planner = rustfft::FFTplanner::new(false);
+    let fft: Arc<dyn Fft<f64>> = planner.plan_fft(len);
+
+    let mut buffer = vec![Complex::zero(); len * 10];
+    let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
+    b.iter(|| { fft.process_inplace_multi(&mut buffer, &mut scratch); });
+}
+
+#[bench] fn butterfly64_02(b: &mut Bencher) { bench_butterfly64(b, 2); }
+#[bench] fn butterfly64_03(b: &mut Bencher) { bench_butterfly64(b, 3); }
+#[bench] fn butterfly64_04(b: &mut Bencher) { bench_butterfly64(b, 4); }
+#[bench] fn butterfly64_05(b: &mut Bencher) { bench_butterfly64(b, 5); }
+#[bench] fn butterfly64_06(b: &mut Bencher) { bench_butterfly64(b, 6); }
+#[bench] fn butterfly64_07(b: &mut Bencher) { bench_butterfly64(b, 7); }
+#[bench] fn butterfly64_08(b: &mut Bencher) { bench_butterfly64(b, 8); }
+#[bench] fn butterfly64_16(b: &mut Bencher) { bench_butterfly64(b, 16); }
+#[bench] fn butterfly64_32(b: &mut Bencher) { bench_butterfly64(b, 32); }

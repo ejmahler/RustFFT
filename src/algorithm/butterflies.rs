@@ -667,10 +667,10 @@ mod unit_tests {
             #[test]
             fn $test_name() {
                 let butterfly = $struct_name::new(false);
-                check_fft_algorithm(&butterfly, $size, false);
+                check_fft_algorithm::<f32>(&butterfly, $size, false);
 
                 let butterfly_inverse = $struct_name::new(true);
-                check_fft_algorithm(&butterfly_inverse, $size, true);
+                check_fft_algorithm::<f32>(&butterfly_inverse, $size, true);
             }
         )
     }

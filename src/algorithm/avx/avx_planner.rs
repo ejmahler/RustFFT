@@ -49,7 +49,6 @@ impl<T: FFTnum> FftPlannerAvx<T> {
 
     fn plan_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Arc<Fft<T>> {
         if let Some(butterfly) = self.plan_new_butterfly(len) {
-            println!("planned butterfly for len={}", len);
             butterfly
         } else if factors.is_prime() {
             self.plan_new_prime(len)
@@ -226,5 +225,31 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
             // because this is composite, rader's algorithm isn't an option. so unconditionally apply bluestein's
             self.plan_new_bluesteins_f32(len)
         }
+    }
+}
+
+
+impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
+    fn plan_new_butterfly(&self, len: usize) -> Option<Arc<Fft<f64>>> {
+        match len {
+            0|1 =>  wrap_fft_some(DFT::new(len, self.inverse)),
+            2 =>    wrap_fft_some(Butterfly2::new(self.inverse)),
+            3 =>    wrap_fft_some(Butterfly3::new(self.inverse)),
+            4 =>    wrap_fft_some(Butterfly4::new(self.inverse)),
+            5 =>    wrap_fft_some(Butterfly5::new(self.inverse)),
+            6 =>    wrap_fft_some(Butterfly6::new(self.inverse)),
+            7 =>    wrap_fft_some(Butterfly7::new(self.inverse)),
+            8 =>    wrap_fft_some(MixedRadix64Avx4x2::new(self.inverse).unwrap()),
+            16 =>   wrap_fft_some(MixedRadix64Avx4x4::new(self.inverse).unwrap()),
+            32 =>   wrap_fft_some(MixedRadix64Avx4x8::new(self.inverse).unwrap()),
+            _ => None
+        }
+    }
+
+    fn plan_new_prime(&mut self, _len: usize) -> Arc<Fft<f64>> {
+        unimplemented!();
+    }
+    fn plan_new_composite(&mut self, _len: usize, _factors: PrimeFactors) -> Arc<Fft<f64>> {
+        unimplemented!();
     }
 }

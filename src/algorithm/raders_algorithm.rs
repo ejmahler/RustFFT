@@ -208,6 +208,6 @@ mod unit_tests {
         let inner_fft = Arc::new(DFT::new(len - 1, inverse));
         let fft = RadersAlgorithm::new(len, inner_fft);
 
-        check_fft_algorithm(&fft, len, inverse);
+        check_fft_algorithm::<f32>(&fft, len, inverse);
     }
 }

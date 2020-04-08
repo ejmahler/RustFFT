@@ -224,6 +224,6 @@ mod unit_tests {
         let half = Arc::new(DFT::new(len / 2, inverse));
         let fft = SplitRadix::new(half, quarter);
 
-        check_fft_algorithm(&fft, len, inverse);
+        check_fft_algorithm::<f32>(&fft, len, inverse);
     }
 }

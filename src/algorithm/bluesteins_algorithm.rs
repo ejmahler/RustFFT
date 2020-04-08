@@ -188,6 +188,6 @@ mod unit_tests {
         let inner_fft = Arc::new(DFT::new((len *2 - 1).checked_next_power_of_two().unwrap(), inverse));
         let fft = BluesteinsAlgorithm::new(len, inner_fft);
 
-        check_fft_algorithm(&fft, len, inverse);
+        check_fft_algorithm::<f32>(&fft, len, inverse);
     }
 }

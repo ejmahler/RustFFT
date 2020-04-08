@@ -8,8 +8,8 @@ use common::FFTnum;
 
 use ::{Length, IsInverse, Fft};
 
-use super::avx_utils::{AvxComplexArrayf32, AvxComplexArrayMutf32};
-use super::avx_utils;
+use super::avx32_utils::{AvxComplexArrayf32, AvxComplexArrayMutf32};
+use super::avx32_utils;
 
 /// FFT algorithm optimized for power-of-two sizes, using AVX instructions
 ///
@@ -38,7 +38,7 @@ use super::avx_utils;
 /// }
 /// ~~~
 pub struct SplitRadixAvx<T> {
-    twiddle_config: avx_utils::Rotate90Config,
+    twiddle_config: avx32_utils::Rotate90Config,
     twiddles: Box<[__m256]>,
     fft_half: Arc<Fft<T>>,
     fft_quarter: Arc<Fft<T>>,
@@ -103,7 +103,7 @@ impl SplitRadixAvx<f32> {
         let max_for_outofplace = max(half_inplace_scratch, quarter_inplace_scratch);
 
         Self {
-            twiddle_config: avx_utils::Rotate90Config::get_from_inverse(inverse),
+            twiddle_config: avx32_utils::Rotate90Config::get_from_inverse(inverse),
             twiddles: twiddles.into_boxed_slice(),
             fft_half,
             fft_quarter,
@@ -126,13 +126,13 @@ impl SplitRadixAvx<f32> {
         for i in 0..sixteenth_len {
             let chunk0 = buffer.load_complex_f32(i*16);
             let chunk1 = buffer.load_complex_f32(i*16 + 4);
-            let (even0, odd0) = avx_utils::split_evens_odds_f32(chunk0, chunk1);
+            let (even0, odd0) = avx32_utils::split_evens_odds_f32(chunk0, chunk1);
 
             let chunk2 = buffer.load_complex_f32(i*16 + 8);
             let chunk3 = buffer.load_complex_f32(i*16 + 12);
-            let (even1, odd1) = avx_utils::split_evens_odds_f32(chunk2, chunk3);
+            let (even1, odd1) = avx32_utils::split_evens_odds_f32(chunk2, chunk3);
 
-            let (quarter1, quarter3) = avx_utils::split_evens_odds_f32(odd0, odd1);
+            let (quarter1, quarter3) = avx32_utils::split_evens_odds_f32(odd0, odd1);
 
             buffer.store_complex_f32(i*8, even0);
             buffer.store_complex_f32(i*8 + 4, even1);
@@ -167,16 +167,16 @@ impl SplitRadixAvx<f32> {
 
             let twiddle = *self.twiddles.get_unchecked(i);
 
-            let twiddled_quarter1 = avx_utils::complex_multiply_fma_f32(twiddle, inner_quarter1_entry);
-            let twiddled_quarter3 = avx_utils::complex_conjugated_multiply_fma_f32(twiddle, inner_quarter3_entry);
-            let (quarter_sum, quarter_diff) = avx_utils::column_butterfly2_f32(twiddled_quarter1, twiddled_quarter3);
+            let twiddled_quarter1 = avx32_utils::fma::complex_multiply_f32(twiddle, inner_quarter1_entry);
+            let twiddled_quarter3 = avx32_utils::fma::complex_conjugated_multiply_f32(twiddle, inner_quarter3_entry);
+            let (quarter_sum, quarter_diff) = avx32_utils::column_butterfly2_f32(twiddled_quarter1, twiddled_quarter3);
 
-            let (output_i, output_i_half) = avx_utils::column_butterfly2_f32(inner_even0_entry, quarter_sum);
+            let (output_i, output_i_half) = avx32_utils::column_butterfly2_f32(inner_even0_entry, quarter_sum);
 
             // compute the twiddle for quarter diff by rotating it
-            let quarter_diff_rotated = avx_utils::rotate90_f32(quarter_diff, self.twiddle_config);
+            let quarter_diff_rotated = self.twiddle_config.rotate90(quarter_diff);
 
-            let (output_quarter1, output_quarter3) = avx_utils::column_butterfly2_f32(inner_even1_entry, quarter_diff_rotated);
+            let (output_quarter1, output_quarter3) = avx32_utils::column_butterfly2_f32(inner_even1_entry, quarter_diff_rotated);
 
             buffer.store_complex_f32(i*4, output_i);
             buffer.store_complex_f32(i*4 + quarter_len, output_quarter1);
@@ -199,13 +199,13 @@ impl SplitRadixAvx<f32> {
         for i in 0..(sixteenth_len - 1) {
             let chunk0 = input.load_complex_f32(i*16);
             let chunk1 = input.load_complex_f32(i*16 + 4);
-            let (even0, odd0) = avx_utils::split_evens_odds_f32(chunk0, chunk1);
+            let (even0, odd0) = avx32_utils::split_evens_odds_f32(chunk0, chunk1);
 
             let chunk2 = input.load_complex_f32(i*16 + 8);
             let chunk3 = input.load_complex_f32(i*16 + 12);
-            let (even1, odd1) = avx_utils::split_evens_odds_f32(chunk2, chunk3);
+            let (even1, odd1) = avx32_utils::split_evens_odds_f32(chunk2, chunk3);
 
-            let (quarter1, quarter3) = avx_utils::split_evens_odds_f32(odd0, odd1);
+            let (quarter1, quarter3) = avx32_utils::split_evens_odds_f32(odd0, odd1);
 
             output_half.store_complex_f32(i*8, even0);
             output_half.store_complex_f32(i*8 + 4, even1);
@@ -222,13 +222,13 @@ impl SplitRadixAvx<f32> {
 
             let chunk0 = input.load_complex_f32(last_index*16);
             let chunk1 = input.load_complex_f32(last_index*16 + 4);
-            let (even0, odd0) = avx_utils::split_evens_odds_f32(chunk0, chunk1);
+            let (even0, odd0) = avx32_utils::split_evens_odds_f32(chunk0, chunk1);
 
             let chunk2 = input.load_complex_f32(last_index*16 + 8);
             let chunk3 = input.load_complex_f32(last_index*16 + 12);
-            let (even1, odd1) = avx_utils::split_evens_odds_f32(chunk2, chunk3);
+            let (even1, odd1) = avx32_utils::split_evens_odds_f32(chunk2, chunk3);
 
-            let (quarter1, quarter3) = avx_utils::split_evens_odds_f32(odd0, odd1);
+            let (quarter1, quarter3) = avx32_utils::split_evens_odds_f32(odd0, odd1);
 
             output_half.store_complex_f32(last_index*8, even0);
             output_half.store_complex_f32(last_index*8 + 4, even1);
@@ -237,7 +237,7 @@ impl SplitRadixAvx<f32> {
             // We've been writing to output_quarter3 offset by one this whole time. we want to keep doing that, but we can't write
             // the final element offset by one, because we'll go past the end of the array
             // so instead, only write 3 of the 4 elements, then complete the rotation by copying over the final element
-            let remainder_mask = avx_utils::RemainderMask::new_f32(3);
+            let remainder_mask = avx32_utils::RemainderMask::new_f32(3);
             output_quarter3.store_complex_remainder_f32(remainder_mask, quarter3, last_index*4 + 1);
             *output_quarter3.get_unchecked_mut(0) = *input.get_unchecked(input.len() - 1);
         }
@@ -257,16 +257,16 @@ impl SplitRadixAvx<f32> {
 
             let twiddle = *self.twiddles.get_unchecked(i);
 
-            let twiddled_quarter1 = avx_utils::complex_multiply_fma_f32(twiddle, inner_quarter1_entry);
-            let twiddled_quarter3 = avx_utils::complex_conjugated_multiply_fma_f32(twiddle, inner_quarter3_entry);
-            let (quarter_sum, quarter_diff) = avx_utils::column_butterfly2_f32(twiddled_quarter1, twiddled_quarter3);
+            let twiddled_quarter1 = avx32_utils::fma::complex_multiply_f32(twiddle, inner_quarter1_entry);
+            let twiddled_quarter3 = avx32_utils::fma::complex_conjugated_multiply_f32(twiddle, inner_quarter3_entry);
+            let (quarter_sum, quarter_diff) = avx32_utils::column_butterfly2_f32(twiddled_quarter1, twiddled_quarter3);
 
-            let (output_i, output_i_half) = avx_utils::column_butterfly2_f32(inner_even0_entry, quarter_sum);
+            let (output_i, output_i_half) = avx32_utils::column_butterfly2_f32(inner_even0_entry, quarter_sum);
 
             // compute the twiddle for quarter diff by rotating it
-            let quarter_diff_rotated = avx_utils::rotate90_f32(quarter_diff, self.twiddle_config);
+            let quarter_diff_rotated = self.twiddle_config.rotate90(quarter_diff);
 
-            let (output_quarter1, output_quarter3) = avx_utils::column_butterfly2_f32(inner_even1_entry, quarter_diff_rotated);
+            let (output_quarter1, output_quarter3) = avx32_utils::column_butterfly2_f32(inner_even1_entry, quarter_diff_rotated);
 
             output.store_complex_f32(i*4, output_i);
             output.store_complex_f32(i*4 + quarter_len, output_quarter1);

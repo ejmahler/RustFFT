@@ -215,6 +215,6 @@ mod unit_tests {
     fn test_radix4_with_length(len: usize, inverse: bool) {
         let fft = Radix4::new(len, inverse);
 
-        check_fft_algorithm(&fft, len, inverse);
+        check_fft_algorithm::<f32>(&fft, len, inverse);
     }
 }
