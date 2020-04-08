@@ -504,59 +504,39 @@ impl MixedRadix8xnAvx<f32> {
 
         // transpose the scratch as a nx8 array into the buffer as an 8xn array
         for i in 0..chunk_count {
-            let input0 = input.load_complex_f32(i * 4); 
-            let input1 = input.load_complex_f32(i * 4 + eigth_len);
-            let input2 = input.load_complex_f32(i * 4 + eigth_len*2);
-            let input3 = input.load_complex_f32(i * 4 + eigth_len*3);
-            let input4 = input.load_complex_f32(i * 4 + eigth_len*4);
-            let input5 = input.load_complex_f32(i * 4 + eigth_len*5);
-            let input6 = input.load_complex_f32(i * 4 + eigth_len*6);
-            let input7 = input.load_complex_f32(i * 4 + eigth_len*7);
+            // Load 4 columns at once, giving us a 4x8 array
+            let mut rows = [_mm256_setzero_ps(); 8];
+            for n in 0..8 {
+                rows[n] = input.load_complex_f32(i*4 + eigth_len*n);
+            }
 
-            // Transpose the 8x4 array and scatter them
-            let (transposed0, transposed1, transposed2, transposed3) = avx32_utils::transpose_4x4_f32(input0, input1, input2, input3);
-            let (transposed4, transposed5, transposed6, transposed7) = avx32_utils::transpose_4x4_f32(input4, input5, input6, input7);
+            // Transpose the 4x8 array to a 8x4 array
+            let (chunk0, chunk1) = avx32_utils::transpose_4x8_to_8x4_f32(rows);
 
-            // store the first chunk directly back into 
-            output.store_complex_f32(i * 32, transposed0);
-            output.store_complex_f32(i * 32 + 4, transposed4);
-            output.store_complex_f32(i * 32 + 4*2, transposed1);
-            output.store_complex_f32(i * 32 + 4*3, transposed5);
-            output.store_complex_f32(i * 32 + 4*4, transposed2);
-            output.store_complex_f32(i * 32 + 4*5, transposed6);
-            output.store_complex_f32(i * 32 + 4*6, transposed3);
-            output.store_complex_f32(i * 32 + 4*7, transposed7);
+            // store each row of our transposed array contiguously
+            for n in 0..4 {
+                output.store_complex_f32(i*32 + n*8, chunk0[n]);
+                output.store_complex_f32(i*32 + n*8 + 4, chunk1[n]);
+            }
         }
 
-        // transpose the remainder, if there is a remainder to process
         if remainder > 0 {
             let remainder_mask = avx32_utils::RemainderMask::new_f32(remainder);
 
-            let input0 = input.load_complex_remainder_f32(remainder_mask, chunk_count*4); 
-            let input1 = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + eigth_len);
-            let input2 = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + eigth_len*2);
-            let input3 = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + eigth_len*3);
-            let input4 = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + eigth_len*4);
-            let input5 = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + eigth_len*5);
-            let input6 = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + eigth_len*6);
-            let input7 = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + eigth_len*7);
+            // Load (up to) 4 columns at once, giving us a 4x8 array
+            let mut rows = [_mm256_setzero_ps(); 8];
+            for n in 0..8 {
+                rows[n] = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + eigth_len*n);
+            }
 
-            // Transpose the 8x4 array and scatter them
-            let (transposed0, transposed1, transposed2, _transposed3) = avx32_utils::transpose_4x4_f32(input0, input1, input2, input3);
-            let (transposed4, transposed5, transposed6, _transposed7) = avx32_utils::transpose_4x4_f32(input4, input5, input6, input7);
+            // Transpose the 4x8 array to a 8x4 array
+            let (chunk0, chunk1) = avx32_utils::transpose_4x8_to_8x4_f32(rows);
 
             // store the transposed remainder back into the buffer -- but keep in account the fact we should only write out some of the chunks!
-            output.store_complex_f32(chunk_count*32, transposed0);
-            output.store_complex_f32(chunk_count*32 + 4, transposed4);
-            if remainder >= 2 {
-                output.store_complex_f32(chunk_count*32 + 4*2, transposed1);
-                output.store_complex_f32(chunk_count*32 + 4*3, transposed5);
-                if remainder >= 3 {
-                    output.store_complex_f32(chunk_count*32 + 4*4, transposed2);
-                    output.store_complex_f32(chunk_count*32 + 4*5, transposed6);
-                    // the remainder will never be 4 - because if it was 4, it would have been handled in the loop above
-                    // so we can just not use the final 2 values. thankfully, the optimizer is smart enough to never even generate the last 2 values
-                }
+            // it would be nice to put this in a "for n in 0..remainder" loop, but as of nightly april 8 2020, it results in really shitty codegen where it dumps every isngle ymm trgister to the task and then reads them all back one by one
+            for n in 0..remainder {
+                output.store_complex_f32(chunk_count*32 + n*8, chunk0[n]);
+                output.store_complex_f32(chunk_count*32 + n*8 + 4, chunk1[n]);
             }
         }
     }
@@ -730,92 +710,43 @@ impl MixedRadix16xnAvx<f32> {
         let remainder = sixteenth_len % 4;
 
         for i in 0..chunk_count {
-            let input0  = input.load_complex_f32(i * 4); 
-            let input1  = input.load_complex_f32(i * 4 + sixteenth_len);
-            let input2  = input.load_complex_f32(i * 4 + sixteenth_len*2);
-            let input3  = input.load_complex_f32(i * 4 + sixteenth_len*3);
-            let input4  = input.load_complex_f32(i * 4 + sixteenth_len*4);
-            let input5  = input.load_complex_f32(i * 4 + sixteenth_len*5);
-            let input6  = input.load_complex_f32(i * 4 + sixteenth_len*6);
-            let input7  = input.load_complex_f32(i * 4 + sixteenth_len*7);
-            let input8  = input.load_complex_f32(i * 4 + sixteenth_len*8); 
-            let input9  = input.load_complex_f32(i * 4 + sixteenth_len*9);
-            let input10 = input.load_complex_f32(i * 4 + sixteenth_len*10);
-            let input11 = input.load_complex_f32(i * 4 + sixteenth_len*11);
+            // Load 4 columns at once, giving us a 4x16 array
+            let mut rows = [_mm256_setzero_ps(); 16];
+            for n in 0..16 {
+                rows[n] = input.load_complex_f32(i*4 + sixteenth_len*n);
+            }
 
-            // Transpose the 8x4 array and scatter them
-            let (transposed0,  transposed1,  transposed2,  transposed3)  = avx32_utils::transpose_4x4_f32(input0, input1, input2, input3);
-            output.store_complex_f32(i * 64, transposed0);
-            let (transposed4,  transposed5,  transposed6,  transposed7)  = avx32_utils::transpose_4x4_f32(input4, input5, input6, input7);
-            output.store_complex_f32(i * 64 + 4, transposed4);
-            let (transposed8,  transposed9,  transposed10, transposed11) = avx32_utils::transpose_4x4_f32(input8, input9, input10, input11);
-            output.store_complex_f32(i * 64 + 4*2, transposed8);
-            let input12 = input.load_complex_f32(i * 4 + sixteenth_len*12);
-            let input13 = input.load_complex_f32(i * 4 + sixteenth_len*13);
-            let input14 = input.load_complex_f32(i * 4 + sixteenth_len*14);
-            let input15 = input.load_complex_f32(i * 4 + sixteenth_len*15);
-            let (transposed12, transposed13, transposed14, transposed15) = avx32_utils::transpose_4x4_f32(input12, input13, input14, input15);
+            // Transpose the 4x16 array to a 16x4 array
+            let (chunk0, chunk1, chunk2, chunk3) = avx32_utils::transpose_4x16_to_16x4_f32(rows);
 
-            // store the first chunk directly back into 
-            output.store_complex_f32(i * 64 + 4*3, transposed12);
-            output.store_complex_f32(i * 64 + 4*4, transposed1);
-            output.store_complex_f32(i * 64 + 4*5, transposed5);
-            output.store_complex_f32(i * 64 + 4*6, transposed9);
-            output.store_complex_f32(i * 64 + 4*7, transposed13);
-            output.store_complex_f32(i * 64 + 4*8, transposed2);
-            output.store_complex_f32(i * 64 + 4*9, transposed6);
-            output.store_complex_f32(i * 64 + 4*10, transposed10);
-            output.store_complex_f32(i * 64 + 4*11, transposed14);
-            output.store_complex_f32(i * 64 + 4*12, transposed3);
-            output.store_complex_f32(i * 64 + 4*13, transposed7);
-            output.store_complex_f32(i * 64 + 4*14, transposed11);
-            output.store_complex_f32(i * 64 + 4*15, transposed15);
+            // store each row of our transposed array contiguously
+            for n in 0..4 {
+                output.store_complex_f32(i*64 + n*16, chunk0[n]);
+                output.store_complex_f32(i*64 + n*16 + 4, chunk1[n]);
+                output.store_complex_f32(i*64 + n*16 + 8, chunk2[n]);
+                output.store_complex_f32(i*64 + n*16 + 12, chunk3[n]);
+            }
         }
 
         if remainder > 0 {
             let remainder_mask = avx32_utils::RemainderMask::new_f32(remainder);
 
-            let input0  = input.load_complex_remainder_f32(remainder_mask, chunk_count*4); 
-            let input1  = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + sixteenth_len);
-            let input2  = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + sixteenth_len*2);
-            let input3  = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + sixteenth_len*3);
-            let input4  = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + sixteenth_len*4);
-            let input5  = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + sixteenth_len*5);
-            let input6  = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + sixteenth_len*6);
-            let input7  = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + sixteenth_len*7);
-            let input8  = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + sixteenth_len*8); 
-            let input9  = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + sixteenth_len*9);
-            let input10 = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + sixteenth_len*10);
-            let input11 = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + sixteenth_len*11);
-            let input12 = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + sixteenth_len*12);
-            let input13 = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + sixteenth_len*13);
-            let input14 = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + sixteenth_len*14);
-            let input15 = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + sixteenth_len*15);
+            // Load (up to) 4 columns at once, giving us a 4x16 array
+            let mut rows = [_mm256_setzero_ps(); 16];
+            for n in 0..16 {
+                rows[n] = input.load_complex_remainder_f32(remainder_mask, chunk_count*4 + sixteenth_len*n);
+            }
 
-            // Transpose the 8x4 array and scatter them
-            let (transposed0,  transposed1,  transposed2,  _transposed3)  = avx32_utils::transpose_4x4_f32(input0, input1, input2, input3);
-            output.store_complex_f32(chunk_count*64, transposed0);
-            let (transposed4,  transposed5,  transposed6,  _transposed7)  = avx32_utils::transpose_4x4_f32(input4, input5, input6, input7);
-            output.store_complex_f32(chunk_count*64 + 4, transposed4);
-            let (transposed8,  transposed9,  transposed10, _transposed11) = avx32_utils::transpose_4x4_f32(input8, input9, input10, input11);
-            output.store_complex_f32(chunk_count*64 + 4*2, transposed8);
-            let (transposed12, transposed13, transposed14, _transposed15) = avx32_utils::transpose_4x4_f32(input12, input13, input14, input15);
-            output.store_complex_f32(chunk_count*64 + 4*3, transposed12);
+            // Transpose the 4x16 array to a 16x4 array
+            let (chunk0, chunk1, chunk2, chunk3) = avx32_utils::transpose_4x16_to_16x4_f32(rows);
 
             // store the transposed remainder back into the buffer -- but keep in account the fact we should only write out some of the chunks!
-            if remainder >= 2 {
-                output.store_complex_f32(chunk_count*64 + 4*4, transposed1);
-                output.store_complex_f32(chunk_count*64 + 4*5, transposed5);
-                output.store_complex_f32(chunk_count*64 + 4*6, transposed9);
-                output.store_complex_f32(chunk_count*64 + 4*7, transposed13);
-                if remainder >= 3 {
-                    output.store_complex_f32(chunk_count*64 + 4*8, transposed2);
-                    output.store_complex_f32(chunk_count*64 + 4*9, transposed6);
-                    output.store_complex_f32(chunk_count*64 + 4*10, transposed10);
-                    output.store_complex_f32(chunk_count*64 + 4*11, transposed14);
-                    // the remainder will never be 4 - because if it was 4, it would have been handled in the loop above
-                    // so we can just not use the final 2 values. thankfully, the optimizer is smart enough to never even generate the last 2 values
-                }
+            // it would be nice to put this in a "for n in 0..remainder" loop, but as of nightly april 8 2020, it results in really shitty codegen where it dumps every isngle ymm trgister to the task and then reads them all back one by one
+            for n in 0..remainder {
+                output.store_complex_f32(chunk_count*64 + n*16, chunk0[n]);
+                output.store_complex_f32(chunk_count*64 + n*16 + 4, chunk1[n]);
+                output.store_complex_f32(chunk_count*64 + n*16 + 8, chunk2[n]);
+                output.store_complex_f32(chunk_count*64 + n*16 + 12, chunk3[n]);
             }
         }
     }

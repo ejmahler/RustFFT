@@ -313,22 +313,59 @@ pub unsafe fn transpose_4x3_f32(row0: __m256, row1: __m256, row2: __m256) -> (__
 // Treat the input like the rows of a 4x4 array, and transpose said rows to the columns
 #[inline(always)]
 pub unsafe fn transpose_4x4_f32(row0: __m256, row1: __m256, row2: __m256, row3: __m256) -> (__m256, __m256, __m256, __m256) {
-    let unpacked0 = _mm256_unpacklo_ps(row0, row1);
-    let unpacked1 = _mm256_unpackhi_ps(row0, row1);
-    let unpacked2 = _mm256_unpacklo_ps(row2, row3);
-    let unpacked3 = _mm256_unpackhi_ps(row2, row3);
+    let (unpacked0, unpacked1) = unpack_complex_f32(row0, row1);
+    let (unpacked2, unpacked3) = unpack_complex_f32(row2, row3);
 
-    let swapped0 = _mm256_permute_ps(unpacked0, 0xD8);
-    let swapped1 = _mm256_permute_ps(unpacked1, 0xD8);
-    let swapped2 = _mm256_permute_ps(unpacked2, 0xD8);
-    let swapped3 = _mm256_permute_ps(unpacked3, 0xD8);
-
-    let col0 = _mm256_permute2f128_ps(swapped0, swapped2, 0x20);
-    let col1 = _mm256_permute2f128_ps(swapped1, swapped3, 0x20);
-    let col2 = _mm256_permute2f128_ps(swapped0, swapped2, 0x31);
-    let col3 = _mm256_permute2f128_ps(swapped1, swapped3, 0x31);
+    let col0 = _mm256_permute2f128_ps(unpacked0, unpacked2, 0x20);
+    let col1 = _mm256_permute2f128_ps(unpacked1, unpacked3, 0x20);
+    let col2 = _mm256_permute2f128_ps(unpacked0, unpacked2, 0x31);
+    let col3 = _mm256_permute2f128_ps(unpacked1, unpacked3, 0x31);
 
     (col0, col1, col2, col3)
+}
+
+// Treat the input like the rows of a 4x4 array, and transpose said rows to the columns
+#[inline(always)]
+pub unsafe fn transpose_4x4_array_f32(rows: [__m256;4]) -> [__m256;4] {
+    let (unpacked0, unpacked1) = unpack_complex_f32(rows[0], rows[1]);
+    let (unpacked2, unpacked3) = unpack_complex_f32(rows[2], rows[3]);
+
+    let col0 = _mm256_permute2f128_ps(unpacked0, unpacked2, 0x20);
+    let col1 = _mm256_permute2f128_ps(unpacked1, unpacked3, 0x20);
+    let col2 = _mm256_permute2f128_ps(unpacked0, unpacked2, 0x31);
+    let col3 = _mm256_permute2f128_ps(unpacked1, unpacked3, 0x31);
+
+    [col0, col1, col2, col3]
+}
+
+// Treat the input like the rows of a 4x8 array, and transpose it to a 8x4 array, where each array of 4 is one set of 4 columns
+// The assumption here is that it's very likely that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
+#[inline(always)]
+pub unsafe fn transpose_4x8_to_8x4_f32(rows: [__m256;8]) -> ([__m256;4], [__m256;4]) {
+    let chunk0 = [rows[0],  rows[1],  rows[2],  rows[3]];
+    let chunk1 = [rows[4],  rows[5],  rows[6],  rows[7]];
+
+    let output0 = transpose_4x4_array_f32(chunk0);
+    let output1 = transpose_4x4_array_f32(chunk1);
+
+    (output0, output1)
+}
+
+// Treat the input like the rows of a 4x16 array, and transpose it to a 16x4 array, where each array of 4 is one set of 4 columns
+// The assumption here is that it's very likely that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
+#[inline(always)]
+pub unsafe fn transpose_4x16_to_16x4_f32(rows: [__m256;16]) -> ([__m256;4], [__m256;4], [__m256;4], [__m256;4]) {
+    let chunk0 = [rows[0],  rows[1],  rows[2],  rows[3]];
+    let chunk1 = [rows[4],  rows[5],  rows[6],  rows[7]];
+    let chunk2 = [rows[8],  rows[9],  rows[10], rows[11]];
+    let chunk3 = [rows[12], rows[13], rows[14], rows[15]];
+
+    let output0 = transpose_4x4_array_f32(chunk0);
+    let output1 = transpose_4x4_array_f32(chunk1);
+    let output2 = transpose_4x4_array_f32(chunk2);
+    let output3 = transpose_4x4_array_f32(chunk3);
+
+    (output0, output1, output2, output3)
 }
 
 // Split the array into evens and odds
