@@ -213,27 +213,6 @@ pub unsafe fn column_butterfly2_f32_negaterow1(row0: __m256, row1: __m256) -> (_
     (output0, output1)
 }
 
-// Compute 4 parallel butterfly 3's using AVX instructions
-// rowN contains the nth element of each parallel FFT
-#[inline(always)]
-pub unsafe fn column_butterfly3_f32(row0: __m256, row1: __m256, row2: __m256, twiddles: __m256) -> (__m256, __m256, __m256) {
-    let (mid1_pretwiddle, mid2_pretwiddle) = column_butterfly2_f32(row1, row2);
-    let output0 = _mm256_add_ps(row0, mid1_pretwiddle);
-
-    let twiddle_real = _mm256_moveldup_ps(twiddles);
-    let twiddle_imag = _mm256_movehdup_ps(twiddles);
-    
-    let mid1_presum = _mm256_mul_ps(mid1_pretwiddle, twiddle_real);
-    let mid1 = _mm256_add_ps(mid1_presum, row0);
-
-    let mid2_rotated = Rotate90Config::get_from_inverse(true).rotate90(mid2_pretwiddle);
-    let mid2 = _mm256_mul_ps(mid2_rotated, twiddle_imag);
-
-    let (output1, output2) = column_butterfly2_f32(mid1, mid2);
-
-    (output0, output1, output2)
-}
-
 // Compute 4 parallel butterfly 4's using AVX instructions
 // rowN contains the nth element of each parallel FFT
 #[inline(always)]
@@ -272,49 +251,11 @@ pub unsafe fn column_butterfly4_array_f32(rows: [__m256;4], twiddle_config: Rota
     [output0, output2, output1, output3]
 }
 
-// Compute 4 parallel butterfly 6's using AVX instructions
-// rowN contains the nth element of each parallel FFT
-#[inline(always)]
-pub unsafe fn column_butterfly6_f32(row0: __m256, row1: __m256, row2: __m256, row3: __m256, row4: __m256, row5: __m256, butterfly3_twiddles: __m256) -> (__m256, __m256, __m256, __m256, __m256, __m256) {
-    // We're going good-thomas algorithm. We can reorder the inputs and outputs in such a way that we don't need twiddle factors!
-    let (mid0, mid2, mid4) = column_butterfly3_f32(row0, row2, row4, butterfly3_twiddles);
-    let (mid1, mid3, mid5) = column_butterfly3_f32(row3, row5, row1, butterfly3_twiddles);
-
-    // transpose the data and do butterfly 2's
-    let (output0, output1) = column_butterfly2_f32(mid0, mid1);
-    let (output2, output3) = column_butterfly2_f32(mid2, mid3);
-    let (output4, output5) = column_butterfly2_f32(mid4, mid5);
-
-    // reorder into output
-    (output0, output3, output4, output1, output2, output5)
-}
-
-// Compute 4 parallel butterfly 12's using AVX instructions
-// rowN contains the nth element of each parallel FFT
-#[inline(always)]
-pub unsafe fn column_butterfly12_f32(
-    row0: __m256, row1: __m256, row2: __m256, row3: __m256, row4: __m256, row5: __m256,
-    row6: __m256, row7: __m256, row8: __m256, row9: __m256, row10: __m256, row11: __m256,
-    butterfly3_twiddles: __m256, twiddle_config: Rotate90Config) 
--> (__m256, __m256, __m256, __m256, __m256, __m256, __m256, __m256, __m256, __m256, __m256, __m256) 
-{
-    let (mid0, mid3, mid6, mid9) = column_butterfly4_f32(row0, row3, row6, row9, twiddle_config);
-    let (mid1, mid4, mid7, mid10)= column_butterfly4_f32(row4, row7, row10,row1, twiddle_config);
-    let (mid2, mid5, mid8, mid11)= column_butterfly4_f32(row8, row11,row2, row5, twiddle_config);
-
-    let (output0, output1, output2) = column_butterfly3_f32(mid0, mid1, mid2, butterfly3_twiddles);
-    let (output3, output4, output5) = column_butterfly3_f32(mid3, mid4, mid5, butterfly3_twiddles);
-    let (output6, output7, output8) = column_butterfly3_f32(mid6, mid7, mid8, butterfly3_twiddles);
-    let (output9, output10,output11)= column_butterfly3_f32(mid9, mid10,mid11,butterfly3_twiddles);
-
-    (output0, output4, output8, output9, output1, output5, output6, output10, output2, output3, output7, output11)
-}
-
 // Treat the input like the rows of a 4x3 array, and transpose said rows to the columns.
-// But, since the output has 3 columns while AVX registers have 4 columns, we shift elements around so that they're stored contiguously in 3 registers
+// But, since the output has 3 columns while AVX registers have 4 columns, we shift elements around so that they're stored contiguously in 3 registers, hence the word "packed"
 #[allow(unused)]
 #[inline(always)]
-pub unsafe fn transpose_4x3_f32(row0: __m256, row1: __m256, row2: __m256) -> (__m256, __m256, __m256) {
+pub unsafe fn transpose_4x3_packed_f32(row0: __m256, row1: __m256, row2: __m256) -> (__m256, __m256, __m256) {
     let (unpacked0, _) = unpack_complex_f32(row0, row1);
     let (_, unpacked2) = unpack_complex_f32(row1, row2);
     
@@ -331,21 +272,7 @@ pub unsafe fn transpose_4x3_f32(row0: __m256, row1: __m256, row2: __m256) -> (__
 
 // Treat the input like the rows of a 4x4 array, and transpose said rows to the columns
 #[inline(always)]
-pub unsafe fn transpose_4x4_f32(row0: __m256, row1: __m256, row2: __m256, row3: __m256) -> (__m256, __m256, __m256, __m256) {
-    let (unpacked0, unpacked1) = unpack_complex_f32(row0, row1);
-    let (unpacked2, unpacked3) = unpack_complex_f32(row2, row3);
-
-    let col0 = _mm256_permute2f128_ps(unpacked0, unpacked2, 0x20);
-    let col1 = _mm256_permute2f128_ps(unpacked1, unpacked3, 0x20);
-    let col2 = _mm256_permute2f128_ps(unpacked0, unpacked2, 0x31);
-    let col3 = _mm256_permute2f128_ps(unpacked1, unpacked3, 0x31);
-
-    (col0, col1, col2, col3)
-}
-
-// Treat the input like the rows of a 4x4 array, and transpose said rows to the columns
-#[inline(always)]
-pub unsafe fn transpose_4x4_array_f32(rows: [__m256;4]) -> [__m256;4] {
+pub unsafe fn transpose_4x4_f32(rows: [__m256;4]) -> [__m256;4] {
     let (unpacked0, unpacked1) = unpack_complex_f32(rows[0], rows[1]);
     let (unpacked2, unpacked3) = unpack_complex_f32(rows[2], rows[3]);
 
@@ -359,13 +286,66 @@ pub unsafe fn transpose_4x4_array_f32(rows: [__m256;4]) -> [__m256;4] {
 
 // Treat the input like the rows of a 4x8 array, and transpose it to a 8x4 array, where each array of 4 is one set of 4 columns
 // The assumption here is that it's very likely that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
+// The second array only has two columns of valid data. TODO: make them __m128 instead
+#[inline(always)]
+pub unsafe fn transpose_4x6_to_6x4_f32(rows: [__m256;6]) -> ([__m256;4], [__m256;4]) {
+    let chunk0 = [rows[0], rows[1], rows[2], rows[3]];
+    let chunk1 = [rows[4], rows[5], _mm256_setzero_ps(), _mm256_setzero_ps()];
+
+    let output0 = transpose_4x4_f32(chunk0);
+    let output1 = transpose_4x4_f32(chunk1);
+
+    (output0, output1)
+}
+
+// Treat the input like the rows of a 4x8 array, and transpose it to a 8x4 array, where each array of 4 is one set of 4 columns
+// The assumption here is that it's very likely that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
 #[inline(always)]
 pub unsafe fn transpose_4x8_to_8x4_f32(rows: [__m256;8]) -> ([__m256;4], [__m256;4]) {
     let chunk0 = [rows[0],  rows[1],  rows[2],  rows[3]];
     let chunk1 = [rows[4],  rows[5],  rows[6],  rows[7]];
 
-    let output0 = transpose_4x4_array_f32(chunk0);
-    let output1 = transpose_4x4_array_f32(chunk1);
+    let output0 = transpose_4x4_f32(chunk0);
+    let output1 = transpose_4x4_f32(chunk1);
+
+    (output0, output1)
+}
+
+// Treat the input like the rows of a 12x4 array, and transpose it to a 4x12 array
+#[inline(always)]
+pub unsafe fn transpose_8x4_to_4x8_f32(rows0: [__m256;4], rows1: [__m256;4]) -> [__m256;8] {
+    let transposed0 = transpose_4x4_f32(rows0);
+    let transposed1 = transpose_4x4_f32(rows1);
+
+    [transposed0[0], transposed0[1], transposed0[2], transposed0[3], transposed1[0], transposed1[1], transposed1[2], transposed1[3]]
+}
+
+// Treat the input like the rows of a 12x4 array, and transpose it to a 4x12 array
+#[inline(always)]
+pub unsafe fn transpose_12x4_to_4x12_f32(rows0: [__m256;4], rows1: [__m256;4], rows2: [__m256;4]) -> [__m256;12] {
+    let transposed0 = transpose_4x4_f32(rows0);
+    let transposed1 = transpose_4x4_f32(rows1);
+    let transposed2 = transpose_4x4_f32(rows2);
+
+    [transposed0[0], transposed0[1], transposed0[2], transposed0[3], transposed1[0], transposed1[1], transposed1[2], transposed1[3], transposed2[0], transposed2[1], transposed2[2], transposed2[3]]
+}
+
+// Treat the input like the rows of a 8x8 array, and transpose said rows to the columns
+// The assumption here is that it's very likely that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
+#[inline(always)]
+pub unsafe fn transpose_8x8_f32(rows0: [__m256;8], rows1: [__m256;8]) -> ([__m256;8], [__m256;8]) {
+    let chunk00 = [rows0[0],  rows0[1],  rows0[2],  rows0[3]];
+    let chunk01 = [rows0[4],  rows0[5],  rows0[6],  rows0[7]];
+    let chunk10 = [rows1[0],  rows1[1],  rows1[2],  rows1[3]];
+    let chunk11 = [rows1[4],  rows1[5],  rows1[6],  rows1[7]];
+
+    let transposed00 = transpose_4x4_f32(chunk00);
+    let transposed01 = transpose_4x4_f32(chunk10);
+    let transposed10 = transpose_4x4_f32(chunk01);
+    let transposed11 = transpose_4x4_f32(chunk11);
+
+    let output0 = [transposed00[0], transposed00[1], transposed00[2], transposed00[3], transposed01[0], transposed01[1], transposed01[2], transposed01[3]];
+    let output1 = [transposed10[0], transposed10[1], transposed10[2], transposed10[3], transposed11[0], transposed11[1], transposed11[2], transposed11[3]];
 
     (output0, output1)
 }
@@ -379,10 +359,10 @@ pub unsafe fn transpose_4x16_to_16x4_f32(rows: [__m256;16]) -> ([__m256;4], [__m
     let chunk2 = [rows[8],  rows[9],  rows[10], rows[11]];
     let chunk3 = [rows[12], rows[13], rows[14], rows[15]];
 
-    let output0 = transpose_4x4_array_f32(chunk0);
-    let output1 = transpose_4x4_array_f32(chunk1);
-    let output2 = transpose_4x4_array_f32(chunk2);
-    let output3 = transpose_4x4_array_f32(chunk3);
+    let output0 = transpose_4x4_f32(chunk0);
+    let output1 = transpose_4x4_f32(chunk1);
+    let output2 = transpose_4x4_f32(chunk2);
+    let output3 = transpose_4x4_f32(chunk3);
 
     (output0, output1, output2, output3)
 }
@@ -410,7 +390,6 @@ pub unsafe fn interleave_evens_odds_f32(row0: __m256, row1: __m256) -> (__m256, 
     let output0 = _mm256_permute2f128_ps(permuted0, permuted1, 0x20);
     let output1 = _mm256_permute2f128_ps(permuted0, permuted1, 0x31);
     
-
     (output0, output1)
 }
 
@@ -454,36 +433,47 @@ pub mod fma {
         _mm256_fmsubadd_ps(left_real, right, output_right)
     }
 
-    // Compute 4 parallel butterfly 8's using AVX and FMA instructions
+    // Compute 4 parallel butterfly 3's using AVX and FMA instructions
     // rowN contains the nth element of each parallel FFT
     #[inline(always)]
-    pub unsafe fn column_butterfly8_f32(row0: __m256, row1: __m256, row2: __m256, row3: __m256, row4: __m256, row5: __m256, row6: __m256, row7: __m256, twiddles: __m256, twiddle_config: Rotate90Config)  -> (__m256, __m256, __m256, __m256, __m256, __m256, __m256, __m256) {
-        // Treat our butterfly-8 as a 2x4 array. first, do butterfly 4's down the columns
-        let (mid0, mid2, mid4, mid6) = column_butterfly4_f32(row0, row2, row4, row6, twiddle_config);
-        let (mid1, mid3, mid5, mid7) = column_butterfly4_f32(row1, row3, row5, row7, twiddle_config);
+    pub unsafe fn column_butterfly3_f32(row0: __m256, row1: __m256, row2: __m256, twiddles: __m256) -> (__m256, __m256, __m256) {
+        let (mid1_pretwiddle, mid2_pretwiddle) = column_butterfly2_f32(row1, row2);
+        let output0 = _mm256_add_ps(row0, mid1_pretwiddle);
 
-        // Apply twiddle factors
-        // We want to negate the reals of the twiddles when multiplying mid7, but it's easier to conjugate the twiddles (Ie negate the imaginaries)
-        // Negating the reals before amultiplication is equivalent to negating the imaginaries before the multiplication and then negatign the entire result
-        // And we can "negate the entire result" by rollign that operation into the subsequent butterfly 2's
-        let mid3_twiddled       = complex_multiply_f32(twiddles, mid3);
-        let mid5_twiddled       = twiddle_config.rotate90(mid5);
-        let mid7_twiddled_neg   = complex_conjugated_multiply_f32(twiddles, mid7);
+        let twiddle_real = _mm256_moveldup_ps(twiddles);
+        let twiddle_imag = _mm256_movehdup_ps(twiddles);
+        
+        let mid1 = _mm256_fmadd_ps(mid1_pretwiddle, twiddle_real, row0);
 
-        // Up next is a transpose, but since everything is already in registers, we don't actually have to transpose anything!
-        // "transposE" and thne apply butterfly 2's across the columns of our 4x2 array
-        let (final0, final1) = column_butterfly2_f32(mid0, mid1);
-        let (final2, final3) = column_butterfly2_f32(mid2, mid3_twiddled);
-        let (final4, final5) = column_butterfly2_f32(mid4, mid5_twiddled);
-        let (final6, final7) = column_butterfly2_f32_negaterow1(mid6, mid7_twiddled_neg); // Finish applying the negation from our twiddles by calling a different butterfly 2 function
+        let mid2_rotated = Rotate90Config::get_from_inverse(true).rotate90(mid2_pretwiddle);
+        let mid2 = _mm256_mul_ps(mid2_rotated, twiddle_imag);
 
-        (final0, final2, final4, final6, final1, final3, final5, final7)
+        let (output1, output2) = column_butterfly2_f32(mid1, mid2);
+
+        (output0, output1, output2)
+    }
+
+    // Compute 4 parallel butterfly 6's using AVX instructions
+    // rowN contains the nth element of each parallel FFT
+    #[inline(always)]
+    pub unsafe fn column_butterfly6_f32(rows: [__m256; 6], butterfly3_twiddles: __m256) -> [__m256; 6] {
+        // We're going good-thomas algorithm. We can reorder the inputs and outputs in such a way that we don't need twiddle factors!
+        let (mid0, mid2, mid4) = column_butterfly3_f32(rows[0], rows[2], rows[4], butterfly3_twiddles);
+        let (mid1, mid3, mid5) = column_butterfly3_f32(rows[3], rows[5], rows[1], butterfly3_twiddles);
+
+        // transpose the data and do butterfly 2's
+        let (output0, output1) = column_butterfly2_f32(mid0, mid1);
+        let (output2, output3) = column_butterfly2_f32(mid2, mid3);
+        let (output4, output5) = column_butterfly2_f32(mid4, mid5);
+
+        // reorder into output
+        [output0, output3, output4, output1, output2, output5]
     }
 
     // Compute 4 parallel butterfly 8's using AVX and FMA instructions
     // rowN contains the nth element of each parallel FFT
     #[inline(always)]
-    pub unsafe fn column_butterfly8_array_f32(rows: [__m256;8], twiddles: __m256, twiddle_config: Rotate90Config)  -> [__m256;8] {
+    pub unsafe fn column_butterfly8_f32(rows: [__m256;8], twiddles: __m256, twiddle_config: Rotate90Config)  -> [__m256;8] {
         // Treat our butterfly-8 as a 2x4 array. first, do butterfly 4's down the columns
         let (mid0, mid2, mid4, mid6) = column_butterfly4_f32(rows[0], rows[2], rows[4], rows[6], twiddle_config);
         let (mid1, mid3, mid5, mid7) = column_butterfly4_f32(rows[1], rows[3], rows[5], rows[7], twiddle_config);
@@ -504,6 +494,22 @@ pub mod fma {
         let (final6, final7) = column_butterfly2_f32_negaterow1(mid6, mid7_twiddled_neg); // Finish applying the negation from our twiddles by calling a different butterfly 2 function
 
         [final0, final2, final4, final6, final1, final3, final5, final7]
+    }
+
+    // Compute 4 parallel butterfly 12's using AVX and FMA instructions
+    // rowN contains the nth element of each parallel FFT
+    #[inline(always)]
+    pub unsafe fn column_butterfly12_f32(rows: [__m256; 12], butterfly3_twiddles: __m256, twiddle_config: Rotate90Config) -> [__m256; 12] { 
+        let (mid0, mid3, mid6, mid9) = column_butterfly4_f32(rows[0], rows[3], rows[6], rows[9], twiddle_config);
+        let (mid1, mid4, mid7, mid10)= column_butterfly4_f32(rows[4], rows[7], rows[10],rows[1], twiddle_config);
+        let (mid2, mid5, mid8, mid11)= column_butterfly4_f32(rows[8], rows[11],rows[2], rows[5], twiddle_config);
+
+        let (output0, output1, output2) = column_butterfly3_f32(mid0, mid1, mid2, butterfly3_twiddles);
+        let (output3, output4, output5) = column_butterfly3_f32(mid3, mid4, mid5, butterfly3_twiddles);
+        let (output6, output7, output8) = column_butterfly3_f32(mid6, mid7, mid8, butterfly3_twiddles);
+        let (output9, output10,output11)= column_butterfly3_f32(mid9, mid10,mid11,butterfly3_twiddles);
+
+        [output0, output4, output8, output9, output1, output5, output6, output10, output2, output3, output7, output11]
     }
 
     // Compute 4 parallel butterfly 16's using AVX and FMA instructions

@@ -311,7 +311,7 @@ impl MixedRadix4xnAvx<f32> {
             }
 
             // Transpose the 4x4 array
-            let transposed = avx32_utils::transpose_4x4_array_f32(rows);
+            let transposed = avx32_utils::transpose_4x4_f32(rows);
 
             // store each row of our transposed array contiguously. Manually unroll this loop because as of nightly april 8 2020,
             // it generates horrible code wherei t dumps every ymm register to the stack and then immediatelyreloads it
@@ -331,7 +331,7 @@ impl MixedRadix4xnAvx<f32> {
             }
 
             // Transpose the 4x4 array
-            let transposed = avx32_utils::transpose_4x4_array_f32(rows);
+            let transposed = avx32_utils::transpose_4x4_f32(rows);
 
             // store the transposed remainder back into the buffer -- but keep in account the fact we should only write out some of the chunks!
             for n in 0..remainder {
@@ -458,7 +458,7 @@ impl MixedRadix8xnAvx<f32> {
             }
 
             // Perform 4 parallel butterfly 8's on the columns
-        	let processed_columns = avx32_utils::fma::column_butterfly8_array_f32(columns, self.twiddles_butterfly8, self.twiddle_config);
+        	let processed_columns = avx32_utils::fma::column_butterfly8_f32(columns, self.twiddles_butterfly8, self.twiddle_config);
 
             // Apply twiddle factors to the column and store them where they came from
             debug_assert!(self.twiddles.len() >= (i+1) * 7);
@@ -481,7 +481,7 @@ impl MixedRadix8xnAvx<f32> {
             }
 
             // Perform (up to) 4 parallel butterfly 8's on the columns
-        	let processed_columns = avx32_utils::fma::column_butterfly8_array_f32(columns, self.twiddles_butterfly8, self.twiddle_config);
+        	let processed_columns = avx32_utils::fma::column_butterfly8_f32(columns, self.twiddles_butterfly8, self.twiddle_config);
 
             // Apply twiddle factors to the column and store them where they came from
         	debug_assert!(self.twiddles.len() >= (chunk_count+1) * 7);
