@@ -216,26 +216,7 @@ pub unsafe fn column_butterfly2_f32_negaterow1(row0: __m256, row1: __m256) -> (_
 // Compute 4 parallel butterfly 4's using AVX instructions
 // rowN contains the nth element of each parallel FFT
 #[inline(always)]
-pub unsafe fn column_butterfly4_f32(row0: __m256, row1: __m256, row2: __m256, row3: __m256, twiddle_config: Rotate90Config) -> (__m256, __m256, __m256, __m256) {
-    // Perform the first set of size-2 FFTs.
-    let (mid0, mid2) = column_butterfly2_f32(row0, row2);
-    let (mid1, mid3_pretwiddle) = column_butterfly2_f32(row1, row3);
-
-    // Apply element 3 inner twiddle factor
-    let mid3 = twiddle_config.rotate90(mid3_pretwiddle);
-
-    // Perform the second set of size-2 FFTs
-    let (output0, output1) = column_butterfly2_f32(mid0, mid1);
-    let (output2, output3) = column_butterfly2_f32(mid2, mid3);
-
-    // Swap outputs 1 and 2 in the output to do a square transpose
-    (output0, output2, output1, output3)
-}
-
-// Compute 4 parallel butterfly 4's using AVX instructions
-// rowN contains the nth element of each parallel FFT
-#[inline(always)]
-pub unsafe fn column_butterfly4_array_f32(rows: [__m256;4], twiddle_config: Rotate90Config) -> [__m256;4] {
+pub unsafe fn column_butterfly4_f32(rows: [__m256;4], twiddle_config: Rotate90Config) -> [__m256;4] {
     // Perform the first set of size-2 FFTs.
     let (mid0, mid2) = column_butterfly2_f32(rows[0], rows[2]);
     let (mid1, mid3) = column_butterfly2_f32(rows[1], rows[3]);
@@ -475,39 +456,40 @@ pub mod fma {
     #[inline(always)]
     pub unsafe fn column_butterfly8_f32(rows: [__m256;8], twiddles: __m256, twiddle_config: Rotate90Config)  -> [__m256;8] {
         // Treat our butterfly-8 as a 2x4 array. first, do butterfly 4's down the columns
-        let (mid0, mid2, mid4, mid6) = column_butterfly4_f32(rows[0], rows[2], rows[4], rows[6], twiddle_config);
-        let (mid1, mid3, mid5, mid7) = column_butterfly4_f32(rows[1], rows[3], rows[5], rows[7], twiddle_config);
+        let mid0     = column_butterfly4_f32([rows[0], rows[2], rows[4], rows[6]], twiddle_config);
+        let mut mid1 = column_butterfly4_f32([rows[1], rows[3], rows[5], rows[7]], twiddle_config);
 
         // Apply twiddle factors
         // We want to negate the reals of the twiddles when multiplying mid7, but it's easier to conjugate the twiddles (Ie negate the imaginaries)
         // Negating the reals before amultiplication is equivalent to negating the imaginaries before the multiplication and then negatign the entire result
         // And we can "negate the entire result" by rollign that operation into the subsequent butterfly 2's
-        let mid3_twiddled       = complex_multiply_f32(twiddles, mid3);
-        let mid5_twiddled       = twiddle_config.rotate90(mid5);
-        let mid7_twiddled_neg   = complex_conjugated_multiply_f32(twiddles, mid7);
+        mid1[1] = complex_multiply_f32(twiddles, mid1[1]);
+        mid1[2] = twiddle_config.rotate90(mid1[2]);
+        mid1[3] = complex_conjugated_multiply_f32(twiddles, mid1[3]);
 
         // Up next is a transpose, but since everything is already in registers, we don't actually have to transpose anything!
-        // "transposE" and thne apply butterfly 2's across the columns of our 4x2 array
-        let (final0, final1) = column_butterfly2_f32(mid0, mid1);
-        let (final2, final3) = column_butterfly2_f32(mid2, mid3_twiddled);
-        let (final4, final5) = column_butterfly2_f32(mid4, mid5_twiddled);
-        let (final6, final7) = column_butterfly2_f32_negaterow1(mid6, mid7_twiddled_neg); // Finish applying the negation from our twiddles by calling a different butterfly 2 function
+        // "transpose" and thne apply butterfly 2's across the columns of our 4x2 array
+        let (output0, output1) = column_butterfly2_f32(mid0[0], mid1[0]);
+        let (output2, output3) = column_butterfly2_f32(mid0[1], mid1[1]);
+        let (output4, output5) = column_butterfly2_f32(mid0[2], mid1[2]);
+        let (output6, output7) = column_butterfly2_f32_negaterow1(mid0[3], mid1[3]);// Finish applying the negation from our twiddles by calling a different butterfly 2 function
 
-        [final0, final2, final4, final6, final1, final3, final5, final7]
+        [output0, output2, output4, output6, output1, output3, output5, output7]
     }
 
     // Compute 4 parallel butterfly 12's using AVX and FMA instructions
     // rowN contains the nth element of each parallel FFT
     #[inline(always)]
-    pub unsafe fn column_butterfly12_f32(rows: [__m256; 12], butterfly3_twiddles: __m256, twiddle_config: Rotate90Config) -> [__m256; 12] { 
-        let (mid0, mid3, mid6, mid9) = column_butterfly4_f32(rows[0], rows[3], rows[6], rows[9], twiddle_config);
-        let (mid1, mid4, mid7, mid10)= column_butterfly4_f32(rows[4], rows[7], rows[10],rows[1], twiddle_config);
-        let (mid2, mid5, mid8, mid11)= column_butterfly4_f32(rows[8], rows[11],rows[2], rows[5], twiddle_config);
+    pub unsafe fn column_butterfly12_f32(rows: [__m256; 12], butterfly3_twiddles: __m256, twiddle_config: Rotate90Config) -> [__m256; 12] {
+        // Compute this as a 4x3 FFT. since 4 and 3 are coprime, we can use the good-thomas algorithm. That means crazy reordering of our inputs and outputs, but it also means no twiddle factors
+        let mid0 = column_butterfly4_f32([rows[0], rows[3], rows[6], rows[9]], twiddle_config);
+        let mid1 = column_butterfly4_f32([rows[4], rows[7], rows[10],rows[1]], twiddle_config);
+        let mid2 = column_butterfly4_f32([rows[8], rows[11],rows[2], rows[5]], twiddle_config);
 
-        let (output0, output1, output2) = column_butterfly3_f32(mid0, mid1, mid2, butterfly3_twiddles);
-        let (output3, output4, output5) = column_butterfly3_f32(mid3, mid4, mid5, butterfly3_twiddles);
-        let (output6, output7, output8) = column_butterfly3_f32(mid6, mid7, mid8, butterfly3_twiddles);
-        let (output9, output10,output11)= column_butterfly3_f32(mid9, mid10,mid11,butterfly3_twiddles);
+        let (output0, output1, output2) = column_butterfly3_f32(mid0[0], mid1[0], mid2[0], butterfly3_twiddles);
+        let (output3, output4, output5) = column_butterfly3_f32(mid0[1], mid1[1], mid2[1], butterfly3_twiddles);
+        let (output6, output7, output8) = column_butterfly3_f32(mid0[2], mid1[2], mid2[2], butterfly3_twiddles);
+        let (output9, output10,output11)= column_butterfly3_f32(mid0[3], mid1[3], mid2[3], butterfly3_twiddles);
 
         [output0, output4, output8, output9, output1, output5, output6, output10, output2, output3, output7, output11]
     }
@@ -519,30 +501,34 @@ pub mod fma {
         rows: [__m256; 16], twiddles: [__m256; 6], twiddle_config: Rotate90Config) -> [__m256; 16] 
     {
         // Treat our butterfly-16 as a 4x4 array. first, do butterfly 4's down the columns
-        let (mid0, mid4, mid8,  mid12) = column_butterfly4_f32(rows[0], rows[4], rows[8],  rows[12], twiddle_config);
-        let (mid1, mid5, mid9,  mid13) = column_butterfly4_f32(rows[1], rows[5], rows[9],  rows[13], twiddle_config);
-        let (mid2, mid6, mid10, mid14) = column_butterfly4_f32(rows[2], rows[6], rows[10], rows[14], twiddle_config);
-        let (mid3, mid7, mid11, mid15) = column_butterfly4_f32(rows[3], rows[7], rows[11], rows[15], twiddle_config);
+        let mid0     = column_butterfly4_f32([rows[0], rows[4], rows[8],  rows[12]], twiddle_config);
+        let mut mid1 = column_butterfly4_f32([rows[1], rows[5], rows[9],  rows[13]], twiddle_config);
+        let mut mid2 = column_butterfly4_f32([rows[2], rows[6], rows[10], rows[14]], twiddle_config);
+        let mut mid3 = column_butterfly4_f32([rows[3], rows[7], rows[11], rows[15]], twiddle_config);
+
+        // let (mid0, mid4, mid8,  mid12) = column_butterfly4_f32(rows[0], rows[4], rows[8],  rows[12], twiddle_config);
+        // let (mid1, mid5, mid9,  mid13) = column_butterfly4_f32(rows[1], rows[5], rows[9],  rows[13], twiddle_config);
+        // let (mid2, mid6, mid10, mid14) = column_butterfly4_f32(rows[2], rows[6], rows[10], rows[14], twiddle_config);
+        // let (mid3, mid7, mid11, mid15)
 
         // Apply twiddle factors. Note that we're re-using a couple twiddles!
-        let mid5_twiddled   = complex_multiply_f32(twiddles[0], mid5);
-        let mid6_twiddled   = complex_multiply_f32(twiddles[1], mid6);
-        let mid9_twiddled   = complex_multiply_f32(twiddles[1], mid9);
-        let mid7_twiddled   = complex_multiply_f32(twiddles[2], mid7);
-        let mid13_twiddled  = complex_multiply_f32(twiddles[2], mid13);
-        let mid10_twiddled  = complex_multiply_f32(twiddles[3], mid10);
-        let mid11_twiddled  = complex_multiply_f32(twiddles[4], mid11);
-        let mid14_twiddled  = complex_multiply_f32(twiddles[4], mid14);
+        mid1[1] = complex_multiply_f32(twiddles[0], mid1[1]);
+        mid2[1] = complex_multiply_f32(twiddles[1], mid2[1]);
+        mid1[2] = complex_multiply_f32(twiddles[1], mid1[2]);
+        mid3[1] = complex_multiply_f32(twiddles[2], mid3[1]);
+        mid1[3] = complex_multiply_f32(twiddles[2], mid1[3]);
+        mid2[2] = complex_multiply_f32(twiddles[3], mid2[2]);
+        mid3[2] = complex_multiply_f32(twiddles[4], mid3[2]);
+        mid2[3] = complex_multiply_f32(twiddles[4], mid2[3]);
 
         // Up next is a transpose, but since everything is already in registers, we don't actually have to transpose anything!
-        // "transposE" and thne apply butterfly 4's across the columns of our 4x4 array
-        let (final0,  final1,  final2,  final3)  = column_butterfly4_f32(mid0,  mid1, mid2, mid3, twiddle_config);
-        let (final4,  final5,  final6,  final7)  = column_butterfly4_f32(mid4,  mid5_twiddled, mid6_twiddled, mid7_twiddled, twiddle_config);
-        let (final8,  final9,  final10, final11) = column_butterfly4_f32(mid8,  mid9_twiddled, mid10_twiddled, mid11_twiddled, twiddle_config);
-        let mid15_twiddled  = complex_multiply_f32(twiddles[5], mid15);
-        let (final12, final13, final14, final15) = column_butterfly4_f32(mid12, mid13_twiddled, mid14_twiddled, mid15_twiddled, twiddle_config);
+        // "transpose" and thne apply butterfly 4's across the columns of our 4x4 array
+        let output0 = column_butterfly4_f32([mid0[0], mid1[0], mid2[0], mid3[0]], twiddle_config);
+        let output1 = column_butterfly4_f32([mid0[1], mid1[1], mid2[1], mid3[1]], twiddle_config);
+        let output2 = column_butterfly4_f32([mid0[2], mid1[2], mid2[2], mid3[2]], twiddle_config);
+        let output3 = column_butterfly4_f32([mid0[3], mid1[3], mid2[3], mid3[3]], twiddle_config);
 
         // finally, one more transpose
-        [final0, final4, final8, final12, final1, final5, final9, final13, final2, final6, final10, final14, final3, final7, final11, final15]
+        [output0[0], output1[0], output2[0], output3[0], output0[1], output1[1], output2[1], output3[1], output0[2], output1[2], output2[2], output3[2], output0[3], output1[3], output2[3], output3[3]]
     }
 }

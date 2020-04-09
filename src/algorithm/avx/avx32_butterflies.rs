@@ -224,7 +224,7 @@ impl MixedRadixAvx4x3<f32> {
         let transposed = avx32_utils::transpose_4x4_f32([mid0, mid1_twiddled, mid1_twiddled, mid2_twiddled]);
 
         // Do 4 butterfly 4's down the columns of our transposed array
-        let output_rows = avx32_utils::column_butterfly4_array_f32(transposed, self.twiddle_config);
+        let output_rows = avx32_utils::column_butterfly4_f32(transposed, self.twiddle_config);
 
         // Theoretically, we could do masked writes of our 4 output registers directly to memory, but we'd be doing overlapping writes, and benchmarking shows that it's incredibly slow
         // instead, aided by our column duplication above, we can pack our data into just 3 non-overlapping registers
@@ -300,7 +300,7 @@ impl MixedRadixAvx4x4<f32> {
         ];
 
         // We're going to treat our input as a 4x4 2d array. First, do 4 butterfly 4's down the columns of that array.
-        let mut mid = avx32_utils::column_butterfly4_array_f32(rows, self.twiddle_config);
+        let mut mid = avx32_utils::column_butterfly4_f32(rows, self.twiddle_config);
 
         // apply twiddle factors
         for r in 1..4 {
@@ -311,7 +311,7 @@ impl MixedRadixAvx4x4<f32> {
         let transposed = avx32_utils::transpose_4x4_f32(mid);
 
         // Do 4 butterfly 4's down the columns of our transposed array
-        let output_rows = avx32_utils::column_butterfly4_array_f32(transposed, self.twiddle_config);
+        let output_rows = avx32_utils::column_butterfly4_f32(transposed, self.twiddle_config);
 
         // Manually unrolling this loop because writing a "for r in 0..4" loop results in slow codegen that makes the whole thing take 1.5x longer :(
         output.store_complex_f32(0, output_rows[0]);
@@ -388,8 +388,8 @@ impl MixedRadixAvx4x6<f32> {
         let (transposed0, transposed1) = avx32_utils::transpose_4x6_to_6x4_f32(mid);
 
         // Do 4 butterfly 4's down the columns of our transposed array
-        let output0 = avx32_utils::column_butterfly4_array_f32(transposed0, self.twiddle_config);
-        let output1 = avx32_utils::column_butterfly4_array_f32(transposed1, self.twiddle_config);
+        let output0 = avx32_utils::column_butterfly4_f32(transposed0, self.twiddle_config);
+        let output1 = avx32_utils::column_butterfly4_f32(transposed1, self.twiddle_config);
 
         // the upper two elements of output1 are empty, so only store half the data for it
         for r in 0..4 {
@@ -454,8 +454,8 @@ impl MixedRadixAvx4x8<f32> {
         }
 
         // We're going to treat our input as a 8x4 2d array. First, do 8 butterfly 4's down the columns of that array.
-        let mut mid0 = avx32_utils::column_butterfly4_array_f32(rows0, self.twiddle_config);
-        let mut mid1 = avx32_utils::column_butterfly4_array_f32(rows1, self.twiddle_config);
+        let mut mid0 = avx32_utils::column_butterfly4_f32(rows0, self.twiddle_config);
+        let mut mid1 = avx32_utils::column_butterfly4_f32(rows1, self.twiddle_config);
 
         // apply twiddle factors
         for r in 1..4 {
@@ -537,9 +537,9 @@ impl MixedRadixAvx4x12<f32> {
         }
 
         // We're going to treat our input as a 12x4 2d array. First, do 12 butterfly 4's down the columns of that array.
-        let mut mid0 = avx32_utils::column_butterfly4_array_f32(rows0, self.twiddle_config);
-        let mut mid1 = avx32_utils::column_butterfly4_array_f32(rows1, self.twiddle_config);
-        let mut mid2 = avx32_utils::column_butterfly4_array_f32(rows2, self.twiddle_config);
+        let mut mid0 = avx32_utils::column_butterfly4_f32(rows0, self.twiddle_config);
+        let mut mid1 = avx32_utils::column_butterfly4_f32(rows1, self.twiddle_config);
+        let mut mid2 = avx32_utils::column_butterfly4_f32(rows2, self.twiddle_config);
 
         // apply twiddle factors
         for r in 1..4 {

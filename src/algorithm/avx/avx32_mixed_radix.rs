@@ -258,7 +258,7 @@ impl MixedRadix4xnAvx<f32> {
                 rows[n] = buffer.load_complex_f32(i*4 + quarter_len*n);
             }
 
-        	let processed_rows = avx32_utils::column_butterfly4_array_f32(rows, self.twiddle_config);
+        	let processed_rows = avx32_utils::column_butterfly4_f32(rows, self.twiddle_config);
 
             // Apply twiddle factors to the column and store them where they came from
             debug_assert!(self.twiddles.len() >= (i+1) * 3);
@@ -281,7 +281,7 @@ impl MixedRadix4xnAvx<f32> {
             }
 
             // Perform (up to) 4 parallel butterfly 8's on the columns
-        	let processed_rows = avx32_utils::column_butterfly4_array_f32(rows, self.twiddle_config);
+        	let processed_rows = avx32_utils::column_butterfly4_f32(rows, self.twiddle_config);
 
             // Apply twiddle factors to the column and store them where they came from
         	debug_assert!(self.twiddles.len() >= (chunk_count+1) * 3);
