@@ -38,7 +38,7 @@ use super::avx32_utils;
 /// }
 /// ~~~
 pub struct SplitRadixAvx<T> {
-    twiddle_config: avx32_utils::Rotate90Config,
+    twiddle_config: avx32_utils::Rotate90Config<__m256>,
     twiddles: Box<[__m256]>,
     fft_half: Arc<Fft<T>>,
     fft_quarter: Arc<Fft<T>>,
@@ -103,7 +103,7 @@ impl SplitRadixAvx<f32> {
         let max_for_outofplace = max(half_inplace_scratch, quarter_inplace_scratch);
 
         Self {
-            twiddle_config: avx32_utils::Rotate90Config::get_from_inverse(inverse),
+            twiddle_config: avx32_utils::Rotate90Config::new_f32(inverse),
             twiddles: twiddles.into_boxed_slice(),
             fft_half,
             fft_quarter,

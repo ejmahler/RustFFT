@@ -147,10 +147,10 @@ pub unsafe fn unpack_complex_f32(row0: __m256, row1: __m256) -> (__m256, __m256)
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub struct Rotate90Config(__m256);
-impl Rotate90Config {
+pub struct Rotate90Config<V>(V);
+impl Rotate90Config<__m256> {
     #[inline(always)]
-    pub unsafe fn get_from_inverse(is_inverse: bool) -> Self {
+    pub unsafe fn new_f32(is_inverse: bool) -> Self {
         if is_inverse { 
             Self(broadcast_complex_f32(Complex::new(-0.0, 0.0)))
         } else {
@@ -166,6 +166,27 @@ impl Rotate90Config {
 
         // We can negate the elements we want by xoring the row with a pre-set vector
         _mm256_xor_ps(elements_swapped, self.0)
+    }
+}
+use super::avx64_utils::broadcast_complex_f64;
+impl Rotate90Config<__m256d> {
+    #[inline(always)]
+    pub unsafe fn new_f64(is_inverse: bool) -> Self {
+        if is_inverse { 
+            Self(broadcast_complex_f64(Complex::new(-0.0, 0.0)))
+        } else {
+            Self(broadcast_complex_f64(Complex::new(0.0, -0.0)))
+        }
+    }
+
+    // Apply a multiplication by (0, i) or (0, -i), based on the value of rotation_config. Much faster than an actual multiplication.
+    #[inline(always)]
+    pub unsafe fn rotate90(&self, elements: __m256d) -> __m256d {
+        // Our goal is to swap the reals with the imaginaries, then negate either the reals or the imaginaries, based on whether we're an inverse or not
+        let elements_swapped = _mm256_permute_pd(elements, 0x05);
+
+        // We can negate the elements we want by xoring the row with a pre-set vector
+        _mm256_xor_pd(elements_swapped, self.0)
     }
 }
 #[repr(transparent)]
@@ -216,7 +237,7 @@ pub unsafe fn column_butterfly2_f32_negaterow1(row0: __m256, row1: __m256) -> (_
 // Compute 4 parallel butterfly 4's using AVX instructions
 // rowN contains the nth element of each parallel FFT
 #[inline(always)]
-pub unsafe fn column_butterfly4_f32(rows: [__m256;4], twiddle_config: Rotate90Config) -> [__m256;4] {
+pub unsafe fn column_butterfly4_f32(rows: [__m256;4], twiddle_config: Rotate90Config<__m256>) -> [__m256;4] {
     // Perform the first set of size-2 FFTs.
     let (mid0, mid2) = column_butterfly2_f32(rows[0], rows[2]);
     let (mid1, mid3) = column_butterfly2_f32(rows[1], rows[3]);
@@ -426,7 +447,7 @@ pub mod fma {
         
         let mid1 = _mm256_fmadd_ps(mid1_pretwiddle, twiddle_real, row0);
 
-        let mid2_rotated = Rotate90Config::get_from_inverse(true).rotate90(mid2_pretwiddle);
+        let mid2_rotated = Rotate90Config::new_f32(true).rotate90(mid2_pretwiddle);
         let mid2 = _mm256_mul_ps(mid2_rotated, twiddle_imag);
 
         let (output1, output2) = column_butterfly2_f32(mid1, mid2);
@@ -454,7 +475,7 @@ pub mod fma {
     // Compute 4 parallel butterfly 8's using AVX and FMA instructions
     // rowN contains the nth element of each parallel FFT
     #[inline(always)]
-    pub unsafe fn column_butterfly8_f32(rows: [__m256;8], twiddles: __m256, twiddle_config: Rotate90Config)  -> [__m256;8] {
+    pub unsafe fn column_butterfly8_f32(rows: [__m256;8], twiddles: __m256, twiddle_config: Rotate90Config<__m256>)  -> [__m256;8] {
         // Treat our butterfly-8 as a 2x4 array. first, do butterfly 4's down the columns
         let mid0     = column_butterfly4_f32([rows[0], rows[2], rows[4], rows[6]], twiddle_config);
         let mut mid1 = column_butterfly4_f32([rows[1], rows[3], rows[5], rows[7]], twiddle_config);
@@ -480,7 +501,7 @@ pub mod fma {
     // Compute 4 parallel butterfly 12's using AVX and FMA instructions
     // rowN contains the nth element of each parallel FFT
     #[inline(always)]
-    pub unsafe fn column_butterfly12_f32(rows: [__m256; 12], butterfly3_twiddles: __m256, twiddle_config: Rotate90Config) -> [__m256; 12] {
+    pub unsafe fn column_butterfly12_f32(rows: [__m256; 12], butterfly3_twiddles: __m256, twiddle_config: Rotate90Config<__m256>) -> [__m256; 12] {
         // Compute this as a 4x3 FFT. since 4 and 3 are coprime, we can use the good-thomas algorithm. That means crazy reordering of our inputs and outputs, but it also means no twiddle factors
         let mid0 = column_butterfly4_f32([rows[0], rows[3], rows[6], rows[9]], twiddle_config);
         let mid1 = column_butterfly4_f32([rows[4], rows[7], rows[10],rows[1]], twiddle_config);
@@ -498,18 +519,13 @@ pub mod fma {
     // rowN contains the nth element of each parallel FFT
     #[inline(always)]
     pub unsafe fn column_butterfly16_f32(
-        rows: [__m256; 16], twiddles: [__m256; 6], twiddle_config: Rotate90Config) -> [__m256; 16] 
+        rows: [__m256; 16], twiddles: [__m256; 6], twiddle_config: Rotate90Config<__m256>) -> [__m256; 16] 
     {
         // Treat our butterfly-16 as a 4x4 array. first, do butterfly 4's down the columns
         let mid0     = column_butterfly4_f32([rows[0], rows[4], rows[8],  rows[12]], twiddle_config);
         let mut mid1 = column_butterfly4_f32([rows[1], rows[5], rows[9],  rows[13]], twiddle_config);
         let mut mid2 = column_butterfly4_f32([rows[2], rows[6], rows[10], rows[14]], twiddle_config);
         let mut mid3 = column_butterfly4_f32([rows[3], rows[7], rows[11], rows[15]], twiddle_config);
-
-        // let (mid0, mid4, mid8,  mid12) = column_butterfly4_f32(rows[0], rows[4], rows[8],  rows[12], twiddle_config);
-        // let (mid1, mid5, mid9,  mid13) = column_butterfly4_f32(rows[1], rows[5], rows[9],  rows[13], twiddle_config);
-        // let (mid2, mid6, mid10, mid14) = column_butterfly4_f32(rows[2], rows[6], rows[10], rows[14], twiddle_config);
-        // let (mid3, mid7, mid11, mid15)
 
         // Apply twiddle factors. Note that we're re-using a couple twiddles!
         mid1[1] = complex_multiply_f32(twiddles[0], mid1[1]);

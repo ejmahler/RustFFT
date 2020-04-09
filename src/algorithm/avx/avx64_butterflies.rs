@@ -10,6 +10,7 @@ use ::{Length, IsInverse, Fft};
 use ::array_utils::{RawSlice, RawSliceMut};
 use super::avx64_utils::{AvxComplexArray64, AvxComplexArrayMut64};
 use super::avx64_utils;
+use super::avx32_utils;
 
 // Safety: This macro will call `self::perform_fft_f32()` which probably has a #[target_feature(enable = "...")] annotation on it.
 // Calling functions with that annotation is unsafe, because it doesn't actually check if the CPU has the required features.
@@ -91,7 +92,7 @@ macro_rules! boilerplate_fft_simd_butterfly {
 
 pub struct MixedRadix64Avx4x2<T> {
     twiddles: [__m256d; 2],
-    twiddle_config: avx64_utils::Rotate90Config,
+    twiddle_config: avx32_utils::Rotate90Config<__m256d>,
     inverse: bool,
     _phantom: std::marker::PhantomData<T>,
 }
@@ -118,7 +119,7 @@ impl MixedRadix64Avx4x2<f64> {
         ];
         Self {
             twiddles: [twiddle_array.load_complex_f64(0),twiddle_array.load_complex_f64(2)],
-            twiddle_config: avx64_utils::Rotate90Config::get_from_inverse(inverse),
+            twiddle_config: avx32_utils::Rotate90Config::new_f64(inverse),
             inverse: inverse,
             _phantom: PhantomData,
         }
@@ -153,7 +154,7 @@ impl MixedRadix64Avx4x2<f64> {
 
 pub struct MixedRadix64Avx4x4<T> {
     twiddles: [__m256d; 6],
-    twiddle_config: avx64_utils::Rotate90Config,
+    twiddle_config: avx32_utils::Rotate90Config<__m256d>,
     inverse: bool,
     _phantom: std::marker::PhantomData<T>,
 }
@@ -185,7 +186,7 @@ impl MixedRadix64Avx4x4<f64> {
         }
         Self {
             twiddles,
-            twiddle_config: avx64_utils::Rotate90Config::get_from_inverse(inverse),
+            twiddle_config: avx32_utils::Rotate90Config::new_f64(inverse),
             inverse: inverse,
             _phantom: PhantomData,
         }
@@ -346,7 +347,7 @@ impl MixedRadix64Avx4x4SplitRealImaginary<f64> {
 pub struct MixedRadix64Avx4x8<T> {
     twiddles: [__m256d; 12],
     twiddles_butterfly8: __m256d,
-    twiddle_config: avx64_utils::Rotate90Config,
+    twiddle_config: avx32_utils::Rotate90Config<__m256d>,
     inverse: bool,
     _phantom: std::marker::PhantomData<T>,
 }
@@ -379,7 +380,7 @@ impl MixedRadix64Avx4x8<f64> {
         Self {
             twiddles,
             twiddles_butterfly8: avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1,8,inverse)),
-            twiddle_config: avx64_utils::Rotate90Config::get_from_inverse(inverse),
+            twiddle_config: avx32_utils::Rotate90Config::new_f64(inverse),
             inverse: inverse,
             _phantom: PhantomData,
         }

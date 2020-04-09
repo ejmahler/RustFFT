@@ -8,13 +8,13 @@
 extern crate rustfft;
 extern crate rand;
 
-use std::f32;
 
 use rustfft::num_complex::Complex;
 
 use rand::{StdRng, SeedableRng};
 use rand::distributions::{Normal, Distribution};
 use rustfft::{FFTplanner, Fft};
+use rustfft::num_traits::Float;
 use rustfft::algorithm::DFT;
 
 /// The seed for the random number generator used to generate
@@ -25,17 +25,17 @@ const RNG_SEED: [u8; 32] = [1, 9, 1, 0, 1, 1, 4, 3, 1, 4, 9, 8,
 
 /// Returns true if the mean difference in the elements of the two vectors
 /// is small
-fn compare_vectors(vec1: &[Complex<f32>], vec2: &[Complex<f32>]) -> bool {
+fn compare_vectors<T: rustfft::FFTnum + Float>(vec1: &[Complex<T>], vec2: &[Complex<T>]) -> bool {
     assert_eq!(vec1.len(), vec2.len());
-    let mut sse = 0f32;
+    let mut error = T::zero();
     for (&a, &b) in vec1.iter().zip(vec2.iter()) {
-        sse = sse + (a - b).norm();
+        error = error + (a - b).norm();
     }
-    return (sse / vec1.len() as f32) < 0.1f32;
+    return (error.to_f64().unwrap() / vec1.len() as f64) < 0.1;
 }
 
 
-fn fft_matches_dft(signal: Vec<Complex<f32>>, inverse: bool) -> bool {
+fn fft_matches_dft<T: rustfft::FFTnum + Float>(signal: Vec<Complex<T>>, inverse: bool) -> bool {
     let mut buffer_expected = signal.clone();
     let mut buffer_actual = signal.clone();
 
@@ -52,13 +52,13 @@ fn fft_matches_dft(signal: Vec<Complex<f32>>, inverse: bool) -> bool {
     return compare_vectors(&buffer_expected, &buffer_actual);
 }
 
-fn random_signal(length: usize) -> Vec<Complex<f32>> {
+fn random_signal<T: rustfft::FFTnum>(length: usize) -> Vec<Complex<T>> {
     let mut sig = Vec::with_capacity(length);
     let normal_dist = Normal::new(0.0, 10.0);
     let mut rng: StdRng = SeedableRng::from_seed(RNG_SEED);
     for _ in 0..length {
-        sig.push(Complex{re: (normal_dist.sample(&mut rng) as f32),
-                         im: (normal_dist.sample(&mut rng) as f32)});
+        sig.push(Complex{re: T::from_f64(normal_dist.sample(&mut rng)).unwrap(),
+                         im: T::from_f64(normal_dist.sample(&mut rng)).unwrap()});
     }
     return sig;
 }
@@ -66,29 +66,59 @@ fn random_signal(length: usize) -> Vec<Complex<f32>> {
 /// Integration tests that verify our FFT output matches the direct DFT calculation
 /// for random signals.
 #[test]
-fn test_planned_fft_forward() {
-    for len in 19..20 {
-        let signal = random_signal(len);
+fn test_planned_fft_forward_f32() {
+    for len in 1..100 {
+        let signal = random_signal::<f32>(len);
         assert!(fft_matches_dft(signal, false), "length = {}", len);
     }
 
-    // //test some specific lengths > 100
-    // for &len in &[256, 768] {
-    //     let signal = random_signal(len);
-    //     assert!(fft_matches_dft(signal, false), "length = {}", len);
-    // }
+    //test some specific lengths > 100
+    for &len in &[256, 768] {
+        let signal = random_signal::<f32>(len);
+        assert!(fft_matches_dft(signal, false), "length = {}", len);
+    }
 }
 
 #[test]
-fn test_planned_fft_inverse() {
+fn test_planned_fft_inverse_f32() {
     for len in 1..100 {
-        let signal = random_signal(len);
+        let signal = random_signal::<f32>(len);
         assert!(fft_matches_dft(signal, true), "length = {}", len);
     }
 
     //test some specific lengths > 100
     for &len in &[256, 768] {
-        let signal = random_signal(len);
+        let signal = random_signal::<f32>(len);
         assert!(fft_matches_dft(signal, true), "length = {}", len);
     }
+}
+
+#[test]
+fn test_planned_fft_forward_f64() {
+    for i in 1..10 {
+        let len = 1 << i;
+        let signal = random_signal::<f64>(len);
+        assert!(fft_matches_dft(signal, false), "length = {}", len);
+    }
+
+    // //test some specific lengths > 100
+    // for &len in &[256, 768] {
+    //     let signal = random_signal::<f64>(len);
+    //     assert!(fft_matches_dft(signal, false), "length = {}", len);
+    // }
+}
+
+#[test]
+fn test_planned_fft_inverse_f64() {
+    for i in 1..10 {
+        let len = 1 << i;
+        let signal = random_signal::<f64>(len);
+        assert!(fft_matches_dft(signal, true), "length = {}", len);
+    }
+
+    // //test some specific lengths > 100
+    // for &len in &[256, 768] {
+    //     let signal = random_signal::<f64>(len);
+    //     assert!(fft_matches_dft(signal, true), "length = {}", len);
+    // }
 }

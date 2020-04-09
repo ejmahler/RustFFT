@@ -77,7 +77,7 @@ impl FftPlannerAvx<f32> {
 
         // construct the outer FFT with the inner one
         match power {
-            2 => wrap_fft(MixedRadix4xnAvx::new(inner_fft).unwrap()),
+            2 => wrap_fft(MixedRadix4xnAvx::new_f32(inner_fft).unwrap()),
             3 => wrap_fft(MixedRadix8xnAvx::new(inner_fft).unwrap()),
             4 => wrap_fft(MixedRadix16xnAvx::new(inner_fft).unwrap()),
             _ => panic!(),
@@ -101,8 +101,8 @@ impl FftPlannerAvx<f32> {
 
         // construct the outer FFT with the inner one
         match power {
-            1 => wrap_fft(MixedRadix2xnAvx::new(inner_fft).unwrap()),
-            2 => wrap_fft(MixedRadix4xnAvx::new(inner_fft).unwrap()),
+            1 => wrap_fft(MixedRadix2xnAvx::new_f32(inner_fft).unwrap()),
+            2 => wrap_fft(MixedRadix4xnAvx::new_f32(inner_fft).unwrap()),
             3 => wrap_fft(MixedRadix8xnAvx::new(inner_fft).unwrap()),
             4 => wrap_fft(MixedRadix16xnAvx::new(inner_fft).unwrap()),
             _ => panic!(),
@@ -214,8 +214,8 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
 
             // construct the outer FFT with the inner one
             match power {
-                1 => wrap_fft(MixedRadix2xnAvx::new(inner_fft).unwrap()),
-                2 => wrap_fft(MixedRadix4xnAvx::new(inner_fft).unwrap()),
+                1 => wrap_fft(MixedRadix2xnAvx::new_f32(inner_fft).unwrap()),
+                2 => wrap_fft(MixedRadix4xnAvx::new_f32(inner_fft).unwrap()),
                 3 => wrap_fft(MixedRadix8xnAvx::new(inner_fft).unwrap()),
                 4 => wrap_fft(MixedRadix16xnAvx::new(inner_fft).unwrap()),
                 _ => panic!(),
@@ -249,7 +249,21 @@ impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
     fn plan_new_prime(&mut self, _len: usize) -> Arc<Fft<f64>> {
         unimplemented!();
     }
-    fn plan_new_composite(&mut self, _len: usize, _factors: PrimeFactors) -> Arc<Fft<f64>> {
-        unimplemented!();
+    fn plan_new_composite(&mut self, len: usize, factors: PrimeFactors) -> Arc<Fft<f64>> {
+        if len.is_power_of_two() {
+            if len.trailing_zeros() - 5 <= 1 {
+                let factors = factors.remove_factors(PrimeFactor { value: 2, count: 1 }).unwrap();
+                let inner_fft = self.plan_fft_with_factors(len >> 1, factors);
+                wrap_fft(MixedRadix2xnAvx::new_f64(inner_fft).unwrap())
+            } else {
+                let factors = factors.remove_factors(PrimeFactor { value: 2, count: 2 }).unwrap();
+                let inner_fft = self.plan_fft_with_factors(len >> 2, factors);
+                wrap_fft(MixedRadix4xnAvx::new_f64(inner_fft).unwrap())
+            }
+        }
+        else {
+            dbg!(len);
+            panic!();
+        }
     }
 }

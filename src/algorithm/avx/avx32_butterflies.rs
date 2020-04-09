@@ -164,7 +164,7 @@ boilerplate_fft_simd_butterfly!(MixedRadixAvx4x2, 8);
 pub struct MixedRadixAvx4x3<T> {
     twiddles: [__m256; 2],
     twiddles_butterfly3: __m256,
-    twiddle_config: avx32_utils::Rotate90Config,
+    twiddle_config: avx32_utils::Rotate90Config<__m256>,
     inverse: bool,
     _phantom: std::marker::PhantomData<T>,
 }
@@ -198,7 +198,7 @@ impl MixedRadixAvx4x3<f32> {
                 twiddles.load_complex_f32(4),
             ],
             twiddles_butterfly3: avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 3, inverse)),
-            twiddle_config: avx32_utils::Rotate90Config::get_from_inverse(inverse),
+            twiddle_config: avx32_utils::Rotate90Config::new_f32(inverse),
             inverse: inverse,
             _phantom: PhantomData,
         }
@@ -251,7 +251,7 @@ boilerplate_fft_simd_butterfly!(MixedRadixAvx4x3, 12);
 
 pub struct MixedRadixAvx4x4<T> {
     twiddles: [__m256; 3],
-    twiddle_config: avx32_utils::Rotate90Config,
+    twiddle_config: avx32_utils::Rotate90Config<__m256>,
     inverse: bool,
     _phantom: std::marker::PhantomData<T>,
 }
@@ -283,7 +283,7 @@ impl MixedRadixAvx4x4<f32> {
         }
         Self {
             twiddles,
-            twiddle_config: avx32_utils::Rotate90Config::get_from_inverse(inverse),
+            twiddle_config: avx32_utils::Rotate90Config::new_f32(inverse),
             inverse: inverse,
             _phantom: PhantomData,
         }
@@ -325,7 +325,7 @@ boilerplate_fft_simd_butterfly!(MixedRadixAvx4x4, 16);
 pub struct MixedRadixAvx4x6<T> {
     twiddles: [__m256; 5],
     twiddles_butterfly3: __m256,
-    twiddle_config: avx32_utils::Rotate90Config,
+    twiddle_config: avx32_utils::Rotate90Config<__m256>,
     inverse: bool,
     _phantom: std::marker::PhantomData<T>,
 }
@@ -358,7 +358,7 @@ impl MixedRadixAvx4x6<f32> {
         Self {
             twiddles,
             twiddles_butterfly3: avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 3, inverse)),
-            twiddle_config: avx32_utils::Rotate90Config::get_from_inverse(inverse),
+            twiddle_config: avx32_utils::Rotate90Config::new_f32(inverse),
             inverse: inverse,
             _phantom: PhantomData,
         }
@@ -403,7 +403,7 @@ boilerplate_fft_simd_butterfly!(MixedRadixAvx4x6, 24);
 pub struct MixedRadixAvx4x8<T> {
     twiddles: [__m256; 6],
     twiddles_butterfly8: __m256,
-    twiddle_config: avx32_utils::Rotate90Config,
+    twiddle_config: avx32_utils::Rotate90Config<__m256>,
     inverse: bool,
     _phantom: std::marker::PhantomData<T>,
 }
@@ -438,7 +438,7 @@ impl MixedRadixAvx4x8<f32> {
         Self {
             twiddles,
             twiddles_butterfly8: avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 8, inverse)),
-            twiddle_config: avx32_utils::Rotate90Config::get_from_inverse(inverse),
+            twiddle_config: avx32_utils::Rotate90Config::new_f32(inverse),
             inverse: inverse,
             _phantom: PhantomData,
         }
@@ -485,7 +485,7 @@ boilerplate_fft_simd_butterfly!(MixedRadixAvx4x8, 32);
 pub struct MixedRadixAvx4x12<T> {
     twiddles: [__m256; 9],
     twiddles_butterfly3: __m256,
-    twiddle_config: avx32_utils::Rotate90Config,
+    twiddle_config: avx32_utils::Rotate90Config<__m256>,
     inverse: bool,
     _phantom: std::marker::PhantomData<T>,
 }
@@ -519,7 +519,7 @@ impl MixedRadixAvx4x12<f32> {
         Self {
             twiddles,
             twiddles_butterfly3: avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 3, inverse)),
-            twiddle_config: avx32_utils::Rotate90Config::get_from_inverse(inverse),
+            twiddle_config: avx32_utils::Rotate90Config::new_f32(inverse),
             inverse: inverse,
             _phantom: PhantomData,
         }
@@ -574,7 +574,7 @@ boilerplate_fft_simd_butterfly!(MixedRadixAvx4x12, 48);
 pub struct MixedRadixAvx8x8<T> {
     twiddles: [__m256; 14],
     twiddles_butterfly8: __m256,
-    twiddle_config: avx32_utils::Rotate90Config,
+    twiddle_config: avx32_utils::Rotate90Config<__m256>,
     inverse: bool,
     _phantom: std::marker::PhantomData<T>,
 }
@@ -610,7 +610,7 @@ impl MixedRadixAvx8x8<f32> {
         Self {
             twiddles,
             twiddles_butterfly8: avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 8, inverse)),
-            twiddle_config: avx32_utils::Rotate90Config::get_from_inverse(inverse),
+            twiddle_config: avx32_utils::Rotate90Config::new_f32(inverse),
             inverse: inverse,
             _phantom: PhantomData,
         }
