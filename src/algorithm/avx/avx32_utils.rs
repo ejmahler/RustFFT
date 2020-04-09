@@ -520,6 +520,7 @@ pub mod fma {
         mid2[2] = complex_multiply_f32(twiddles[3], mid2[2]);
         mid3[2] = complex_multiply_f32(twiddles[4], mid3[2]);
         mid2[3] = complex_multiply_f32(twiddles[4], mid2[3]);
+        mid3[3] = complex_multiply_f32(twiddles[5], mid3[3]);
 
         // Up next is a transpose, but since everything is already in registers, we don't actually have to transpose anything!
         // "transpose" and thne apply butterfly 4's across the columns of our 4x4 array
