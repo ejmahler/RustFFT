@@ -630,7 +630,7 @@ impl MixedRadixAvx8x8<f32> {
             mid0[r] = avx32_utils::fma::complex_multiply_f32(mid0[r],  self.twiddles[r - 1]);
         }
         
-        // do the other set of columns
+        // One half is done, so the compiler can spill everything above this. Now do the other set of columns
         let mut rows1 = [_mm256_setzero_ps(); 8];
         for r in 0..8 {
             rows1[r] = input.load_complex_f32(8*r + 4);
@@ -643,8 +643,8 @@ impl MixedRadixAvx8x8<f32> {
         // Transpose our 8x8 array
         let (transposed0, transposed1)  = avx32_utils::transpose_8x8_f32(mid0, mid1);
 
-        // Do 4 butterfly 8's down the columns of our transposed array, and store the results
-        // Same thing as above - Do the butterfly 8's separately to give the compiler a better hint about what to spill
+        // Do 8 butterfly 8's down the columns of our transposed array, and store the results
+        // Same thing as above - Do the half of the butterfly 8's separately to give the compiler a better hint about what to spill
         let output0 = avx32_utils::fma::column_butterfly8_f32(transposed0, self.twiddles_butterfly8, self.twiddle_config);
         for r in 0..8 {
             output.store_complex_f32(8*r, output0[r]);
