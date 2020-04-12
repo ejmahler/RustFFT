@@ -72,7 +72,7 @@ fn bench_planned_f32(b: &mut Bencher, len: usize) {
 #[bench] fn planned32_composite_020736(b: &mut Bencher) { bench_planned_f32(b,  20736); }
 
 // power of 2 times large prime
-#[bench] fn planned23_composite_032192(b: &mut Bencher) { bench_planned_f32(b,  32192); }
+#[bench] fn planned32_composite_032192(b: &mut Bencher) { bench_planned_f32(b,  32192); }
 #[bench] fn planned32_composite_024028(b: &mut Bencher) { bench_planned_f32(b,  24028); }
 
 // small mixed composites times a large prime
@@ -109,6 +109,49 @@ fn bench_planned_f64(b: &mut Bencher, len: usize) {
 #[bench] fn planned64_p2_00065536(b: &mut Bencher) { bench_planned_f64(b,    65536); }
 #[bench] fn planned64_p2_01048576(b: &mut Bencher) { bench_planned_f64(b,  1048576); }
 #[bench] fn planned64_p2_16777216(b: &mut Bencher) { bench_planned_f64(b, 16777216); }
+
+#[bench] fn planned64_p7_00343(b: &mut Bencher) { bench_planned_f64(b,   343); }
+#[bench] fn planned64_p7_02401(b: &mut Bencher) { bench_planned_f64(b,  2401); }
+#[bench] fn planned64_p7_16807(b: &mut Bencher) { bench_planned_f64(b, 16807); }
+
+// Prime lengths
+#[bench] fn planned64_prime_0005(b: &mut Bencher)     { bench_planned_f64(b,  5); }
+#[bench] fn planned64_prime_0017(b: &mut Bencher)     { bench_planned_f64(b,  17); }
+#[bench] fn planned64_prime_0149(b: &mut Bencher)     { bench_planned_f64(b,  149); }
+#[bench] fn planned64_prime_0151(b: &mut Bencher)     { bench_planned_f64(b,  151); }
+#[bench] fn planned64_prime_0251(b: &mut Bencher)     { bench_planned_f64(b,  251); }
+#[bench] fn planned64_prime_0257(b: &mut Bencher)     { bench_planned_f64(b,  257); }
+#[bench] fn planned64_prime_1009(b: &mut Bencher)     { bench_planned_f64(b,  1009); }
+#[bench] fn planned64_prime_2017(b: &mut Bencher)     { bench_planned_f64(b,  2017); }
+#[bench] fn planned64_prime_2879(b: &mut Bencher)     { bench_planned_f64(b,  2879); }
+#[bench] fn planned64_prime_32767(b: &mut Bencher)    { bench_planned_f64(b, 32767); }
+#[bench] fn planned64_prime_65521(b: &mut Bencher)    { bench_planned_f64(b, 65521); }
+#[bench] fn planned64_prime_65537(b: &mut Bencher)    { bench_planned_f64(b, 65537); }
+#[bench] fn planned64_prime_746483(b: &mut Bencher)   { bench_planned_f64(b,746483); }
+#[bench] fn planned64_prime_746497(b: &mut Bencher)   { bench_planned_f64(b,746497); }
+
+//primes raised to a power
+#[bench] fn planned64_primepower_044521(b: &mut Bencher) { bench_planned_f64(b, 44521); } // 211^2
+#[bench] fn planned64_primepower_160801(b: &mut Bencher) { bench_planned_f64(b, 160801); } // 401^2
+
+// numbers times powers of two
+#[bench] fn planned64_composite_024576(b: &mut Bencher) { bench_planned_f64(b,  24576); }
+#[bench] fn planned64_composite_020736(b: &mut Bencher) { bench_planned_f64(b,  20736); }
+
+// power of 2 times large prime
+#[bench] fn planned64_composite_032192(b: &mut Bencher) { bench_planned_f64(b,  32192); }
+#[bench] fn planned64_composite_024028(b: &mut Bencher) { bench_planned_f64(b,  24028); }
+
+// small mixed composites times a large prime
+#[bench] fn planned64_composite_030270(b: &mut Bencher) { bench_planned_f64(b,  30270); }
+
+// small mixed composites
+#[bench] fn planned64_composite_000018(b: &mut Bencher) { bench_planned_f64(b,  00018); }
+#[bench] fn planned64_composite_000360(b: &mut Bencher) { bench_planned_f64(b,  00360); }
+#[bench] fn planned64_composite_044100(b: &mut Bencher) { bench_planned_f64(b,  44100); }
+#[bench] fn planned64_composite_048000(b: &mut Bencher) { bench_planned_f64(b,  48000); }
+#[bench] fn planned64_composite_046656(b: &mut Bencher) { bench_planned_f64(b,  46656); }
+#[bench] fn planned64_composite_100000(b: &mut Bencher) { bench_planned_f64(b,  100000); }
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to the Good-Thomas algorithm
@@ -333,7 +376,7 @@ fn plan_new_bluesteins_f32(len: usize) -> Arc<Fft<f32>> {
 
     let mut planner = rustfft::FFTplanner::new(false);
     let inner_power2 = planner.plan_fft(inner_fft_len);
-    Arc::new(BluesteinsAvx::new(len, inner_power2).unwrap())
+    Arc::new(BluesteinsAvx::new_f32(len, inner_power2).unwrap())
 }
 
 /// Times just the FFT execution (not allocation and pre-calculation)

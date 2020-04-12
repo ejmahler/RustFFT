@@ -149,7 +149,7 @@ impl FftPlannerAvx<f32> {
         };
 
         let inner_fft = self.plan_fft_with_factors(inner_fft_len, PrimeFactors::compute(inner_fft_len));
-        wrap_fft(BluesteinsAvx::new(len, inner_fft).unwrap())
+        wrap_fft(BluesteinsAvx::new_f32(len, inner_fft).unwrap())
     }
 }
 impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
@@ -265,6 +265,17 @@ impl FftPlannerAvx<f64> {
             _ => panic!(),
         }
     }
+
+    fn plan_new_bluesteins_f64(&mut self, len: usize) -> Arc<Fft<f64>> {
+        assert!(len > 1); // Internal consistency check: The logic in this method doesn't work for a length of 1
+
+        // Plan a step of Bluestein's Algorithm
+        let min_size = len*2 - 1;
+        let max_size = min_size.checked_next_power_of_two().unwrap();
+
+        let inner_fft = self.plan_fft_with_factors(max_size, PrimeFactors::compute(max_size));
+        wrap_fft(BluesteinsAvx::new_f64(len, inner_fft).unwrap())
+    }
 }
 impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
     fn plan_new_butterfly(&self, len: usize) -> Option<Arc<Fft<f64>>> {
@@ -283,16 +294,59 @@ impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
         }
     }
 
-    fn plan_new_prime(&mut self, _len: usize) -> Arc<Fft<f64>> {
-        unimplemented!();
+    fn plan_new_prime(&mut self, len: usize) -> Arc<Fft<f64>> {
+        // for prime numbers, we can either use rader's algorithm, which computes an inner FFT if size len - 1
+        // or bluestein's algorithm, which computes an inner FFT of any size at least len * 2 - 1. (usually, we pick a power of two)
+
+        // rader's algorithm is faster if len - 1 is very composite, but bluestein's algorithm is faster if len - 1 has very few prime factors 
+        // Compute the prime factors of our hpothetical inner FFT. if they're very composite, use rader's algorithm
+        let raders_fft_len = len - 1;
+        let raders_factors = PrimeFactors::compute(raders_fft_len);
+
+        if (raders_factors.get_total_factor_count() as f32) < (len as f32).log(3.0) {
+            // the inner FFT isn't composite enough, so we're doing bluestein's algorithm instead
+            self.plan_new_bluesteins_f64(len)
+        } else {
+            let inner_fft = self.plan_fft_with_factors(raders_fft_len, raders_factors);
+            wrap_fft(RadersAlgorithm::new(len, inner_fft))
+        }
     }
-    fn plan_new_composite(&mut self, len: usize, _factors: PrimeFactors) -> Arc<Fft<f64>> {
+    fn plan_new_composite(&mut self, len: usize, factors: PrimeFactors) -> Arc<Fft<f64>> {
+        // First up: If this is a power of 2, we have a fast path  that goes straight down to butterflies
         if len.is_power_of_two() {
             self.plan_new_power2_f64(len)
         }
+        
+        // If we get to this point, we will need to use bluestein's algorithm or rader's algorithm. before do that, see if there are any powers of 2 we can split off
+        // TODO: is it ever worth it to use 2xn here, as opposed to just passing 2xwhatever into bluestein's? needs benchmarking
+        else if len.trailing_zeros() > 0 {
+            // we will recursively call power-of-two algorithms (16xn, 8xn, 4xn, 2xn) until we either hit a butterfly or all of our powers of two are gone
+            // we can handle any power of two, but we want to avoid 2xn if possible, because it's slower than the others
+            // so we're going to try to line it up so that we only need to plan a 2xn when we have no other options
+            let power : u32 = match len.trailing_zeros() {
+                1 => 1,
+                2 => 2,
+                3 => 3,
+                4 => 4,
+                _ => 3,  // 8xn is the fastest for larger sizes, so if we're not "in range" of the bottom of the stack, use 8xn
+            };
+
+            // update our factors to account for the factors of 2 we're going to strip away, and pass the updated factors to the planner to compute the inner FFT
+            let factors = factors.remove_factors(PrimeFactor { value: 2, count: power }).unwrap();
+            let inner_fft = self.plan_fft_with_factors(len >> power, factors);
+
+            // construct the outer FFT with the inner one
+            match power {
+                1 => wrap_fft(MixedRadix2xnAvx::new_f64(inner_fft).unwrap()),
+                2 => wrap_fft(MixedRadix4xnAvx::new_f64(inner_fft).unwrap()),
+                3 => wrap_fft(MixedRadix8xnAvx::new_f64(inner_fft).unwrap()),
+                4 => wrap_fft(MixedRadix16xnAvx::new_f64(inner_fft).unwrap()),
+                _ => panic!(),
+            }
+        }
         else {
-            dbg!(len);
-            panic!();
+            // because this is composite, rader's algorithm isn't an option. so unconditionally apply bluestein's
+            self.plan_new_bluesteins_f64(len)
         }
     }
 }

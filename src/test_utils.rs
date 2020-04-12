@@ -40,7 +40,7 @@ pub fn check_fft_algorithm<T: FFTnum + Float>(fft: &Fft<T>, len: usize, inverse:
     assert_eq!(fft.len(), len, "Algorithm reported incorrect size. Expected {}, got {}", len, fft.len());
     assert_eq!(fft.is_inverse(), inverse, "Algorithm reported incorrect inverse value");
 
-    let n = 3;
+    let n = 1;
 
     //test the forward direction
     let dft = DFT::new(len, inverse);
@@ -61,8 +61,6 @@ pub fn check_fft_algorithm<T: FFTnum + Float>(fft: &Fft<T>, len: usize, inverse:
         for (input_chunk, output_chunk) in input.chunks_mut(len).zip(output.chunks_mut(len)) {
             fft.process(input_chunk, output_chunk);
         }
-        dbg!(&output[..len]);
-        dbg!(&expected_output[..len]);
         assert!(compare_vectors(&expected_output, &output), "process() failed, length = {}, inverse = {}", len, inverse);
     }
     
@@ -86,7 +84,6 @@ pub fn check_fft_algorithm<T: FFTnum + Float>(fft: &Fft<T>, len: usize, inverse:
             for (input_chunk, output_chunk) in input.chunks_mut(len).zip(output.chunks_mut(len)) {
                 fft.process_with_scratch(input_chunk, output_chunk, &mut scratch);
             }
-
             assert!(compare_vectors(&expected_output, &output), "process_with_scratch() failed the 'dirty scratch' test, length = {}, inverse = {}", len, inverse);
         }
     }

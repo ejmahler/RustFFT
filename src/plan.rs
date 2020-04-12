@@ -60,7 +60,7 @@ impl<T: FFTnum> FFTplanner<T> {
         Self {
             inverse: inverse,
             algorithm_cache: HashMap::new(),
-            avx_planner: FftPlannerAvx::new(inverse).ok()
+            avx_planner: None//FftPlannerAvx::new(inverse).ok()
         }
     }
 

@@ -335,6 +335,17 @@ pub mod fma {
         _mm256_fmsubadd_pd(left_real, right, output_right)
     }
 
+    // compute buffer[i] = buffer[i].conj() * multiplier[i] pairwise complex multiplication for each element.
+    // This is kind of usage-specific, because 'b' is stored as pre-loaded AVX registers, but 'a' is stored as loose complex numbers
+    #[target_feature(enable = "avx", enable = "fma")]
+    pub unsafe fn pairwise_complex_multiply_conjugated(buffer: &mut [Complex<f64>], multiplier: &[__m256d]) {
+        for (i, twiddle) in multiplier.iter().enumerate() {
+            let inner_vector = buffer.load_complex_f64(i*2);
+            let product_vector = complex_conjugated_multiply_f64(inner_vector, *twiddle);
+            buffer.store_complex_f64(product_vector, i*2);
+        }
+    }
+
     // Compute 2 parallel butterfly 8's using AVX and FMA instructions
     // rowN contains the nth element of each parallel FFT
     #[inline(always)]
