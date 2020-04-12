@@ -160,7 +160,6 @@ pub unsafe fn transpose_2x2_f64(rows: [__m256d; 2]) -> [__m256d; 2] {
     [col0, col1]
 }
 
-
 // Treat the input like the rows of a 4x2 array, and transpose it to a 2x4 array
 #[inline(always)]
 pub unsafe fn transpose_4x2_to_2x4_f64(rows0: [__m256d; 2], rows1: [__m256d; 2]) -> [__m256d; 4] {
@@ -170,16 +169,58 @@ pub unsafe fn transpose_4x2_to_2x4_f64(rows0: [__m256d; 2], rows1: [__m256d; 2])
     [output00[0], output00[1], output01[0], output01[1]]
 }
 
-// Treat the input like the rows of a 4x2 array, and transpose it to a 2x4 array
+// Treat the input like the rows of a 2x4 array, and transpose it to a 4x2 array
 #[inline(always)]
-pub unsafe fn transpose_2x4_to_4x2_f64(rows0: [__m256d; 4]) -> ([__m256d; 2], [__m256d; 2]) {
-    let chunk00 = [rows0[0], rows0[1]];
-    let chunk01 = [rows0[2], rows0[3]];
+pub unsafe fn transpose_2x4_to_4x2_f64(rows: [__m256d; 4]) -> ([__m256d; 2], [__m256d; 2]) {
+    let chunk00 = [rows[0], rows[1]];
+    let chunk01 = [rows[2], rows[3]];
 
     let output00 = transpose_2x2_f64(chunk00);
     let output10 = transpose_2x2_f64(chunk01);
 
     (output00, output10)
+}
+
+// Treat the input like the rows of a 2x8 array, and transpose it to a 8x2 array.
+// But instead of storing "columns" of registers as separate arrays for further processing, pack them all into one array
+#[inline(always)]
+pub unsafe fn transpose_2x8_to_8x2_packed_f64(rows: [__m256d; 8]) -> [__m256d; 8] {
+    let chunk0 = [rows[0], rows[1]];
+    let chunk1 = [rows[2], rows[3]];
+    let chunk2 = [rows[4], rows[5]];
+    let chunk3 = [rows[6], rows[7]];
+
+    let output0 = transpose_2x2_f64(chunk0);
+    let output1 = transpose_2x2_f64(chunk1);
+    let output2 = transpose_2x2_f64(chunk2);
+    let output3 = transpose_2x2_f64(chunk3);
+
+    [output0[0], output1[0], output2[0], output3[0], output0[1], output1[1], output2[1], output3[1]] 
+}
+
+// Treat the input like the rows of a 2x16 array, and transpose it to a 16x2 array.
+// But instead of storing "columns" of registers as separate arrays for further processing, pack them all into one array
+#[inline(always)]
+pub unsafe fn transpose_2x16_to_16x2_packed_f64(rows: [__m256d; 16]) -> [__m256d; 16] {
+    let chunk0 = [rows[0], rows[1]];
+    let chunk1 = [rows[2], rows[3]];
+    let chunk2 = [rows[4], rows[5]];
+    let chunk3 = [rows[6], rows[7]];
+    let chunk4 = [rows[8], rows[9]];
+    let chunk5 = [rows[10], rows[11]];
+    let chunk6 = [rows[12], rows[13]];
+    let chunk7 = [rows[14], rows[15]];
+
+    let output0 = transpose_2x2_f64(chunk0);
+    let output1 = transpose_2x2_f64(chunk1);
+    let output2 = transpose_2x2_f64(chunk2);
+    let output3 = transpose_2x2_f64(chunk3);
+    let output4 = transpose_2x2_f64(chunk4);
+    let output5 = transpose_2x2_f64(chunk5);
+    let output6 = transpose_2x2_f64(chunk6);
+    let output7 = transpose_2x2_f64(chunk7);
+
+    [output0[0], output1[0], output2[0], output3[0], output4[0], output5[0], output6[0], output7[0], output0[1], output1[1], output2[1], output3[1], output4[1], output5[1], output6[1], output7[1]] 
 }
 
 
@@ -318,5 +359,37 @@ pub mod fma {
         let (final6, final7) = column_butterfly2_f64_negaterow1(mid0[3], mid1[3]); // Finish applying the negation from our twiddles by calling a different butterfly 2 function
 
         [final0, final2, final4, final6, final1, final3, final5, final7]
+    }
+
+    // Compute 2 parallel butterfly 16's using AVX and FMA instructions
+    // rowN contains the nth element of each parallel FFT
+    #[inline(always)]
+    pub unsafe fn column_butterfly16_f64( rows: [__m256d; 16], twiddles: [__m256d; 6], twiddle_config: Rotate90Config<__m256d>) -> [__m256d; 16] {
+        // Treat our butterfly-16 as a 4x4 array. first, do butterfly 4's down the columns
+        let mid0     = column_butterfly4_f64([rows[0], rows[4], rows[8],  rows[12]], twiddle_config);
+        let mut mid1 = column_butterfly4_f64([rows[1], rows[5], rows[9],  rows[13]], twiddle_config);
+        let mut mid2 = column_butterfly4_f64([rows[2], rows[6], rows[10], rows[14]], twiddle_config);
+        let mut mid3 = column_butterfly4_f64([rows[3], rows[7], rows[11], rows[15]], twiddle_config);
+
+        // Apply twiddle factors. Note that we're re-using a couple twiddles!
+        mid1[1] = complex_multiply_f64(twiddles[0], mid1[1]);
+        mid2[1] = complex_multiply_f64(twiddles[1], mid2[1]);
+        mid1[2] = complex_multiply_f64(twiddles[1], mid1[2]);
+        mid3[1] = complex_multiply_f64(twiddles[2], mid3[1]);
+        mid1[3] = complex_multiply_f64(twiddles[2], mid1[3]);
+        mid2[2] = complex_multiply_f64(twiddles[3], mid2[2]);
+        mid3[2] = complex_multiply_f64(twiddles[4], mid3[2]);
+        mid2[3] = complex_multiply_f64(twiddles[4], mid2[3]);
+        mid3[3] = complex_multiply_f64(twiddles[5], mid3[3]);
+
+        // Up next is a transpose, but since everything is already in registers, we don't actually have to transpose anything!
+        // "transpose" and thne apply butterfly 4's across the columns of our 4x4 array
+        let output0 = column_butterfly4_f64([mid0[0], mid1[0], mid2[0], mid3[0]], twiddle_config);
+        let output1 = column_butterfly4_f64([mid0[1], mid1[1], mid2[1], mid3[1]], twiddle_config);
+        let output2 = column_butterfly4_f64([mid0[2], mid1[2], mid2[2], mid3[2]], twiddle_config);
+        let output3 = column_butterfly4_f64([mid0[3], mid1[3], mid2[3], mid3[3]], twiddle_config);
+
+        // finally, one more transpose
+        [output0[0], output1[0], output2[0], output3[0], output0[1], output1[1], output2[1], output3[1], output0[2], output1[2], output2[2], output3[2], output0[3], output1[3], output2[3], output3[3]]
     }
 }

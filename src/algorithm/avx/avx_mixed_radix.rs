@@ -15,6 +15,9 @@ use super::avx64_utils::{AvxComplexArray64, AvxComplexArrayMut64};
 use super::avx64_utils;
 
 macro_rules! mixed_radix_boilerplate_f32{ () => (
+    #[allow(unused)]
+    const CHUNK_SIZE : usize = 4;
+    
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the FFT
     /// Returns Ok() if this machine has the required instruction sets, Err() if some instruction sets are missing
     #[inline]
@@ -59,6 +62,9 @@ macro_rules! mixed_radix_boilerplate_f32{ () => (
     }
 )}
 macro_rules! mixed_radix_boilerplate_f64{() => (
+    #[allow(unused)]
+    const CHUNK_SIZE : usize = 2;
+
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the FFT
     /// Returns Ok() if this machine has the required instruction sets, Err() if some instruction sets are missing
     #[inline]
@@ -501,8 +507,6 @@ impl MixedRadix4xnAvx<f32, __m256> {
 impl MixedRadix4xnAvx<f64, __m256d> {
     mixed_radix_boilerplate_f64!();
 
-    const CHUNK_SIZE : usize = 2;
-
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<Fft<f64>>) -> Self {
         let inverse = inner_fft.is_inverse();
@@ -644,30 +648,21 @@ impl MixedRadix4xnAvx<f64, __m256d> {
 
 
 
-pub struct MixedRadix8xnAvx<T> {
-    twiddle_config: avx32_utils::Rotate90Config<__m256>,
-    twiddles_butterfly8: __m256,
-    twiddles: Box<[__m256]>,
+pub struct MixedRadix8xnAvx<T, V> {
+    twiddle_config: avx32_utils::Rotate90Config<V>,
+    twiddles_butterfly8: V,
+    twiddles: Box<[V]>,
     inner_fft: Arc<Fft<T>>,
     len: usize,
     inplace_scratch_len: usize,
     outofplace_scratch_len: usize,
     inverse: bool,
 }
-impl MixedRadix8xnAvx<f32> {
-    /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the power-of-two FFT
-    /// Returns Ok() if this machine has the required instruction sets, Err() if some instruction sets are missing
-    #[inline]
-    pub fn new(inner_fft: Arc<Fft<f32>>) -> Result<Self, ()> {
-        let has_avx = is_x86_feature_detected!("avx");
-        let has_fma = is_x86_feature_detected!("fma");
-        if has_avx && has_fma {
-            // Safety: new_with_avx requires the "avx" feature set. Since we know it's present, we're safe
-            Ok(unsafe { Self::new_with_avx(inner_fft) })
-        } else {
-            Err(())
-        }
-    }
+boilerplate_fft_simd!(MixedRadix8xnAvx, |this:&MixedRadix8xnAvx<_,_>| this.len);
+
+impl MixedRadix8xnAvx<f32, __m256> {
+    mixed_radix_boilerplate_f32!();
+
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<Fft<f32>>) -> Self {
         let inverse = inner_fft.is_inverse();
@@ -676,19 +671,19 @@ impl MixedRadix8xnAvx<f32> {
 
         assert_eq!(len % 8, 0, "MixedRadix8xnAvx requires its FFT length to be a multiple of 8. Got {}", len);
 
-        let quotient = eigth_len / 4;
-        let remainder = eigth_len % 4;
+        let quotient = eigth_len / Self::CHUNK_SIZE;
+        let remainder = eigth_len % Self::CHUNK_SIZE;
 
         let num_twiddle_columns = quotient + if remainder > 0 { 1 } else { 0 };
 
         let mut twiddles = Vec::with_capacity(num_twiddle_columns * 7);
         for x in 0..num_twiddle_columns {
-            let chunk_size = if x == quotient { remainder } else { 4 };
+            let chunk_size = if x == quotient { remainder } else { Self::CHUNK_SIZE };
 
         	for y in 1..8 {
-                let mut twiddle_chunk = [Complex::zero(); 4];
+                let mut twiddle_chunk = [Complex::zero(); Self::CHUNK_SIZE];
                 for i in 0..chunk_size {
-                    twiddle_chunk[i] = f32::generate_twiddle_factor(y*(x*4 + i), len, inverse);
+                    twiddle_chunk[i] = f32::generate_twiddle_factor(y*(x*Self::CHUNK_SIZE + i), len, inverse);
                 }
 
 	            twiddles.push(twiddle_chunk.load_complex_f32(0));
@@ -807,67 +802,173 @@ impl MixedRadix8xnAvx<f32> {
             }
         }
     }
+}
+impl MixedRadix8xnAvx<f64, __m256d> {
+    mixed_radix_boilerplate_f64!();
 
-    #[inline]
-    fn perform_fft_inplace_f32(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
-        // Perform the column FFTs
-        // Safety: self.perform_column_butterflies() requres the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't available
-        unsafe { self.perform_column_butterflies(buffer) };
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inner_fft: Arc<Fft<f64>>) -> Self {
+        let inverse = inner_fft.is_inverse();
+        let eigth_len = inner_fft.len();
+        let len = eigth_len * 8;
 
-        // process the row FFTs
-        let (scratch, inner_scratch) = scratch.split_at_mut(self.len());
-        self.inner_fft.process_multi(buffer, scratch, inner_scratch);
+        assert_eq!(len % 8, 0, "MixedRadix8xnAvx requires its FFT length to be a multiple of 8. Got {}", len);
 
-        // Transpose
-        // Safety: self.transpose() requres the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
-        unsafe { self.transpose(scratch, buffer) };
+        let quotient = eigth_len / Self::CHUNK_SIZE;
+        let remainder = eigth_len % Self::CHUNK_SIZE;
+
+        let num_twiddle_columns = quotient + if remainder > 0 { 1 } else { 0 };
+
+        let mut twiddles = Vec::with_capacity(num_twiddle_columns * 7);
+        for x in 0..num_twiddle_columns {
+            let chunk_size = if x == quotient { remainder } else { Self::CHUNK_SIZE };
+
+        	for y in 1..8 {
+                let mut twiddle_chunk = [Complex::zero(); Self::CHUNK_SIZE];
+                for i in 0..chunk_size {
+                    twiddle_chunk[i] = f64::generate_twiddle_factor(y*(x*Self::CHUNK_SIZE + i), len, inverse);
+                }
+
+	            twiddles.push(twiddle_chunk.load_complex_f64(0));
+        	}
+        }
+
+        let inner_outofplace_scratch = inner_fft.get_out_of_place_scratch_len();
+        let inner_inplace_scratch = inner_fft.get_inplace_scratch_len();
+
+        Self {
+        	twiddle_config: avx32_utils::Rotate90Config::new_f64(inverse),
+        	twiddles_butterfly8: avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1, 8, inverse)),
+            twiddles: twiddles.into_boxed_slice(),
+            inplace_scratch_len: len + inner_outofplace_scratch,
+            outofplace_scratch_len: if inner_inplace_scratch > len { inner_inplace_scratch } else { 0 },
+            inner_fft,
+            len,
+            inverse,
+        }
     }
 
-    #[inline]
-    fn perform_fft_out_of_place_f32(&self, input: &mut [Complex<f32>], output: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
-        // Perform the column FFTs
-        // Safety: self.perform_column_butterflies() requres the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't avaiable
-        unsafe { self.perform_column_butterflies(input) };
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn perform_column_butterflies(&self, buffer: &mut [Complex<f64>]) {
+        let eigth_len = self.len() / 8;
 
-        // process the row FFTs. If extra scratch was provided, pass it in. Otherwise, use the output.
-        let inner_scratch = if scratch.len() > 0 { scratch } else { &mut output[..] };
-        self.inner_fft.process_inplace_multi(input, inner_scratch);
+        let chunk_count = eigth_len / 2;
+        let remainder = eigth_len % 2;
 
-        // Transpose
-        // Safety: self.transpose() requres the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
-        unsafe { self.transpose(input, output) };
+        // process the column FFTs
+        for i in 0..chunk_count {
+            // Load 4 columns at once
+            let mut columns = [_mm256_setzero_pd(); 8];
+            for n in 0..8 {
+                columns[n] = buffer.load_complex_f64(i*2 + eigth_len*n);
+            }
+
+            // Perform 4 parallel butterfly 8's on the columns
+        	let processed_columns = avx64_utils::fma::column_butterfly8_f64(columns, self.twiddles_butterfly8, self.twiddle_config);
+
+            // Apply twiddle factors to the column and store them where they came from
+            debug_assert!(self.twiddles.len() >= (i+1) * 7);
+        	buffer.store_complex_f64(processed_columns[0], i*2);
+            for n in 1..8 {
+                let twiddle = *self.twiddles.get_unchecked(i*7 + n - 1);
+                let output = avx64_utils::fma::complex_multiply_f64(twiddle,  processed_columns[n]);
+        	    buffer.store_complex_f64(output, i*2 + eigth_len*n);
+            }
+        }
+
+        // process the remainder, if there is a remainder to process
+        if remainder > 0 {
+            // Load 1 column instead of the usual 2, based on our remainder
+            let mut columns = [_mm256_setzero_pd(); 8];
+            for n in 0..8 {
+                columns[n] = buffer.load_complex_f64_lo(chunk_count*2 + eigth_len*n);
+            }
+
+            // Perform (up to) 4 parallel butterfly 8's on the columns
+        	let processed_columns = avx64_utils::fma::column_butterfly8_f64(columns, self.twiddles_butterfly8, self.twiddle_config);
+
+            // Apply twiddle factors to the column and store them where they came from
+        	debug_assert!(self.twiddles.len() >= (chunk_count+1) * 7);
+            buffer.store_complex_f64_lo(processed_columns[0], chunk_count*2);
+            for n in 1..8 {
+                let twiddle = *self.twiddles.get_unchecked(chunk_count*7 + n - 1);
+                let output = avx64_utils::fma::complex_multiply_f64(twiddle,  processed_columns[n]);
+                buffer.store_complex_f64_lo(output, chunk_count*2 + eigth_len*n);
+            }
+        }
+    }
+
+    // Transpose the input (treated as a nx8 array) into the output (as a 8xn array)
+    #[target_feature(enable = "avx")]
+    unsafe fn transpose(&self, input: &mut [Complex<f64>], output: &mut [Complex<f64>]) {
+        let eigth_len = self.len() / 8;
+
+        let chunk_count = eigth_len / 2;
+        let remainder = eigth_len % 2;
+
+        // transpose the scratch as a nx8 array into the buffer as an 8xn array
+        for i in 0..chunk_count {
+            // Load 2 columns at once, giving us a 2x8 array
+            let mut rows = [_mm256_setzero_pd(); 8];
+            for n in 0..8 {
+                rows[n] = input.load_complex_f64(i*2 + eigth_len*n);
+            }
+
+            // Transpose the 2x8 array to a 8x2 array
+            let transposed = avx64_utils::transpose_2x8_to_8x2_packed_f64(rows);
+
+            // store each row of our transposed array contiguously
+            // manually unroll
+            output.store_complex_f64(transposed[0], i*16);
+            output.store_complex_f64(transposed[1], i*16 + 2);
+            output.store_complex_f64(transposed[2], i*16 + 4);
+            output.store_complex_f64(transposed[3], i*16 + 6);
+            output.store_complex_f64(transposed[4], i*16 + 8);
+            output.store_complex_f64(transposed[5], i*16 + 10);
+            output.store_complex_f64(transposed[6], i*16 + 12);
+            output.store_complex_f64(transposed[7], i*16 + 14);
+        }
+
+        if remainder > 0 {
+            // Load only one column instead of 2, giving us a 1x8 array
+            let mut rows = [_mm256_setzero_pd(); 8];
+            for n in 0..8 {
+                rows[n] = input.load_complex_f64_lo(chunk_count*2 + eigth_len*n);
+            }
+
+            // Transpose the 2x8 array to a 8x2 array. because of the remainder situation, the second half of the array will be empty
+            let transposed= avx64_utils::transpose_2x8_to_8x2_packed_f64(rows);
+
+            // store the transposed remainder back into the buffer -- but keep in account the fact we should only write out some of the chunks!
+            // that's why we're looping up to 4 instead of 8
+            output.store_complex_f64(transposed[0], chunk_count*16);
+            output.store_complex_f64(transposed[1], chunk_count*16 + 2);
+            output.store_complex_f64(transposed[2], chunk_count*16 + 4);
+            output.store_complex_f64(transposed[3], chunk_count*16 + 6);
+        }
     }
 }
-boilerplate_fft_simd_f32!(MixedRadix8xnAvx, 
-    |this:&MixedRadix8xnAvx<_>| this.len,
-    |this:&MixedRadix8xnAvx<_>| this.inplace_scratch_len,
-    |this:&MixedRadix8xnAvx<_>| this.outofplace_scratch_len
-);
 
-pub struct MixedRadix16xnAvx<T> {
-    twiddle_config: avx32_utils::Rotate90Config<__m256>,
-    twiddles_butterfly16: [__m256; 6],
-    twiddles: Box<[__m256]>,
+
+
+
+
+
+pub struct MixedRadix16xnAvx<T, V> {
+    twiddle_config: avx32_utils::Rotate90Config<V>,
+    twiddles_butterfly16: [V; 6],
+    twiddles: Box<[V]>,
     inner_fft: Arc<Fft<T>>,
     len: usize,
     inplace_scratch_len: usize,
     outofplace_scratch_len: usize,
     inverse: bool,
 }
-impl MixedRadix16xnAvx<f32> {
-    /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the power-of-two FFT
-    /// Returns Ok() if this machine has the required instruction sets, Err() if some instruction sets are missing
-    #[inline]
-    pub fn new(inner_fft: Arc<Fft<f32>>) -> Result<Self, ()> {
-        let has_avx = is_x86_feature_detected!("avx");
-        let has_fma = is_x86_feature_detected!("fma");
-        if has_avx && has_fma {
-            // Safety: new_with_avx requires the "avx" feature set. Since we know it's present, we're safe
-            Ok(unsafe { Self::new_with_avx(inner_fft) })
-        } else {
-            Err(())
-        }
-    }
+boilerplate_fft_simd!(MixedRadix16xnAvx, |this:&MixedRadix16xnAvx<_,_>| this.len);
+
+impl MixedRadix16xnAvx<f32, __m256> {
+    mixed_radix_boilerplate_f32!();
+
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<Fft<f32>>) -> Self {
         let inverse = inner_fft.is_inverse();
@@ -1016,42 +1117,172 @@ impl MixedRadix16xnAvx<f32> {
             }
         }
     }
+}
+impl MixedRadix16xnAvx<f64, __m256d> {
+    mixed_radix_boilerplate_f64!();
 
-    #[inline]
-    fn perform_fft_inplace_f32(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
-        // Perform the column FFTs
-        // Safety: self.perform_column_butterflies() requres the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't available
-        unsafe { self.perform_column_butterflies(buffer) };
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inner_fft: Arc<Fft<f64>>) -> Self {
+        let inverse = inner_fft.is_inverse();
+        let sixteenth_len = inner_fft.len();
+        let len = sixteenth_len * 16;
 
-        // process the row FFTs
-        let (scratch, inner_scratch) = scratch.split_at_mut(self.len());
-        self.inner_fft.process_multi(buffer, scratch, inner_scratch);
+        assert_eq!(len % 16, 0, "MixedRadix16xnAvx requires its FFT length to be a multiple of 16. Got {}", len);
 
-        // Transpose
-        // Safety: self.transpose() requres the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
-        unsafe { self.transpose(scratch, buffer) };
+        let quotient = sixteenth_len / 2;
+        let remainder = sixteenth_len % 2;
+
+        let num_twiddle_columns = quotient + if remainder > 0 { 1 } else { 0 };
+
+        let mut twiddles = Vec::with_capacity(num_twiddle_columns * 15);
+        for x in 0..num_twiddle_columns {
+            let chunk_size = if x == quotient { remainder } else { 2 };
+
+        	for y in 1..16 {
+                let mut twiddle_chunk = [Complex::zero(); 2];
+                for i in 0..chunk_size {
+                    twiddle_chunk[i] = f64::generate_twiddle_factor(y*(x*2 + i), len, inverse);
+                }
+
+	            twiddles.push(twiddle_chunk.load_complex_f64(0));
+        	}
+        }
+
+        let inner_outofplace_scratch = inner_fft.get_out_of_place_scratch_len();
+        let inner_inplace_scratch = inner_fft.get_inplace_scratch_len();
+
+        Self {
+        	twiddle_config: avx32_utils::Rotate90Config::new_f64(inverse),
+        	twiddles_butterfly16: [
+                avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1, 16, inverse)),
+                avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(2, 16, inverse)),
+                avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(3, 16, inverse)),
+                avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(4, 16, inverse)),
+                avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(6, 16, inverse)),
+                avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(9, 16, inverse)),
+            ],
+            twiddles: twiddles.into_boxed_slice(),
+            inplace_scratch_len: len + inner_outofplace_scratch,
+            outofplace_scratch_len: if inner_inplace_scratch > len { inner_inplace_scratch } else { 0 },
+            inner_fft,
+            len,
+            inverse,
+        }
     }
 
-    #[inline]
-    fn perform_fft_out_of_place_f32(&self, input: &mut [Complex<f32>], output: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
-        // Perform the column FFTs
-        // Safety: self.perform_column_butterflies() requres the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't avaiable
-        unsafe { self.perform_column_butterflies(input) };
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn perform_column_butterflies(&self, buffer: &mut [Complex<f64>]) {
+        let sixteenth_len = self.len() / 16;
 
-        // process the row FFTs. If extra scratch was provided, pass it in. Otherwise, use the output.
-        let inner_scratch = if scratch.len() > 0 { scratch } else { &mut output[..] };
-        self.inner_fft.process_inplace_multi(input, inner_scratch);
+        let chunk_count = sixteenth_len / 2;
+        let remainder = sixteenth_len % 2;
 
-        // Transpose
-        // Safety: self.transpose() requres the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
-        unsafe { self.transpose(input, output) };
+        // process the column FFTs
+        for i in 0..chunk_count {
+            // Load 4 columns at once
+            let mut columns = [_mm256_setzero_pd(); 16];
+            for n in 0..16 {
+                columns[n] = buffer.load_complex_f64(i*2 + sixteenth_len*n);
+            }
+
+            // Perform 4 parallel butterfly 16's on the columns
+        	let processed_columns = avx64_utils::fma::column_butterfly16_f64(columns, self.twiddles_butterfly16, self.twiddle_config);
+
+            // Apply twiddle factors to the column and store them where they came from
+            debug_assert!(self.twiddles.len() >= (i+1) * 15);
+        	buffer.store_complex_f64(processed_columns[0], i*2);
+            for n in 1..16 {
+                let twiddle = *self.twiddles.get_unchecked(i*15 + n - 1);
+                let output = avx64_utils::fma::complex_multiply_f64(twiddle,  processed_columns[n]);
+        	    buffer.store_complex_f64(output, i*2 + sixteenth_len*n);
+            }
+        }
+
+        if remainder > 0 {
+            // Load half a column of data
+            let mut columns = [_mm256_setzero_pd(); 16];
+            for n in 0..16 {
+                columns[n] = buffer.load_complex_f64_lo(chunk_count*2 + sixteenth_len*n);
+            }
+
+            // Perform (up to) 4 parallel butterfly 16's on the columns
+        	let processed_columns = avx64_utils::fma::column_butterfly16_f64(columns, self.twiddles_butterfly16, self.twiddle_config);
+
+            // Apply twiddle factors to the column and store them where they came from
+        	debug_assert!(self.twiddles.len() >= (chunk_count+1) * 15);
+            buffer.store_complex_f64_lo(processed_columns[0], chunk_count*2);
+            for n in 1..16 {
+                let twiddle = *self.twiddles.get_unchecked(chunk_count*15 + n - 1);
+                let output = avx64_utils::fma::complex_multiply_f64(twiddle,  processed_columns[n]);
+                buffer.store_complex_f64_lo(output, chunk_count*2 + sixteenth_len*n);
+            }
+        }
+    }
+
+    // Transpose the input (treated as a nx16 array) into the output (as a 16xn array)
+    #[target_feature(enable = "avx")]
+    unsafe fn transpose(&self, input: &[Complex<f64>], output: &mut [Complex<f64>]) {
+        let sixteenth_len = self.len() / 16;
+
+        let chunk_count = sixteenth_len / 2;
+        let remainder = sixteenth_len % 2;
+
+        for i in 0..chunk_count {
+            // Load 2 columns at once, giving us a 2x16 array
+            let mut rows = [_mm256_setzero_pd(); 16];
+            for n in 0..16 {
+                rows[n] = input.load_complex_f64(i*2 + sixteenth_len*n);
+            }
+
+            // Transpose the 2x16 array to a 16x2 array
+            let transposed = avx64_utils::transpose_2x16_to_16x2_packed_f64(rows);
+
+            // store each row of our transposed array contiguously
+            // Manually unroll this loop because otherwise rustc generates slow code :(
+            // https://github.com/rust-lang/rust/issues/71025
+            output.store_complex_f64(transposed[0], i*32 + 0);
+            output.store_complex_f64(transposed[1], i*32 + 2);
+            output.store_complex_f64(transposed[2], i*32 + 4);
+            output.store_complex_f64(transposed[3], i*32 + 6);
+            output.store_complex_f64(transposed[4], i*32 + 8);
+            output.store_complex_f64(transposed[5], i*32 + 10);
+            output.store_complex_f64(transposed[6], i*32 + 12);
+            output.store_complex_f64(transposed[7], i*32 + 14);
+            output.store_complex_f64(transposed[8], i*32 + 16);
+            output.store_complex_f64(transposed[9], i*32 + 18);
+            output.store_complex_f64(transposed[10], i*32 + 20);
+            output.store_complex_f64(transposed[11], i*32 + 22);
+            output.store_complex_f64(transposed[12], i*32 + 24);
+            output.store_complex_f64(transposed[13], i*32 + 26);
+            output.store_complex_f64(transposed[14], i*32 + 28);
+            output.store_complex_f64(transposed[15], i*32 + 30);
+        }
+
+        if remainder > 0 {
+
+            // load a 128-bit value from Input at the given index. without this, the compiler generates very slow code :(
+            let load_sse = |index| {
+                debug_assert!(input.len() > index);
+                let complex_ref = input.get_unchecked(index);
+                let float_ptr  = (&complex_ref.re) as *const f64;
+                 _mm_loadu_pd(float_ptr)
+            };
+
+            let mut store_sse = |data, index| {
+                debug_assert!(output.len() > index);
+                let complex_ref = output.get_unchecked_mut(index);
+                let float_ptr  = (&mut complex_ref.re) as *mut f64;
+                 _mm_storeu_pd(float_ptr, data)
+            };
+
+            // Load half-columns at once, giving us a 1x16 array
+            for n in 0..16 {
+                let data = load_sse(chunk_count*2 + n*sixteenth_len);
+                store_sse(data, chunk_count*32 + n);
+            }
+        }
     }
 }
-boilerplate_fft_simd_f32!(MixedRadix16xnAvx, 
-    |this:&MixedRadix16xnAvx<_>| this.len,
-    |this:&MixedRadix16xnAvx<_>| this.inplace_scratch_len,
-    |this:&MixedRadix16xnAvx<_>| this.outofplace_scratch_len
-);
 
 #[cfg(test)]
 mod unit_tests {
@@ -1060,109 +1291,45 @@ mod unit_tests {
     use std::sync::Arc;
     use algorithm::*;
 
-    #[test]
-    fn test_mixedradix_2xn_avx_f32() {
-        for pow in 2..8 {
-            for remainder in 0..4 {
-                let len = (1 << pow) + 2 * remainder;
-                test_mixedradix_2xn_avx_32_with_length(len, false);
-                test_mixedradix_2xn_avx_32_with_length(len, true);
+    macro_rules! test_avx_mixed_radix {
+        ($f32_test_name:ident, $f64_test_name:ident, $struct_name:ident, $pow_range:expr, $inner_len:expr) => (
+            #[test]
+            fn $f32_test_name() {
+                for pow in $pow_range {
+                    for remainder in 0..4 {
+                        let len = (1 << pow) + $inner_len * remainder;
+
+                        let inner_fft_forward = Arc::new(DFT::new(len / $inner_len, false)) as Arc<dyn Fft<f32>>;
+                        let fft_forward = $struct_name::new_f32(inner_fft_forward).expect("Can't run test because this machine doesn't have the required instruction sets");
+                        check_fft_algorithm(&fft_forward, len, false);
+
+                        let inner_fft_inverse = Arc::new(DFT::new(len / $inner_len, true)) as Arc<dyn Fft<f32>>;
+                        let fft_inverse = $struct_name::new_f32(inner_fft_inverse).expect("Can't run test because this machine doesn't have the required instruction sets");
+                        check_fft_algorithm(&fft_inverse, len, true);
+                    }
+                }
             }
-        }
-    }
+            #[test]
+            fn $f64_test_name() {
+                for pow in $pow_range {
+                    for remainder in 0..2 {
+                        let len = (1 << pow) + $inner_len * remainder;
 
-    fn test_mixedradix_2xn_avx_32_with_length(len: usize, inverse: bool) {
-        let inner_fft = Arc::new(DFT::new(len / 2, inverse)) as Arc<dyn Fft<f32>>;
-        let fft = MixedRadix2xnAvx::new_f32(inner_fft).expect("Can't run test because this machine doesn't have the required instruction sets");
-        check_fft_algorithm(&fft, len, inverse);
-    }
+                        let inner_fft_forward = Arc::new(DFT::new(len / $inner_len, false)) as Arc<dyn Fft<f64>>;
+                        let fft_forward = $struct_name::new_f64(inner_fft_forward).expect("Can't run test because this machine doesn't have the required instruction sets");
+                        check_fft_algorithm(&fft_forward, len, false);
 
-    #[test]
-    fn test_mixedradix_2xn_avx_f64() {
-        for pow in 2..8 {
-            for remainder in 0..2 {
-                let len = (1 << pow) + 2 * remainder;
-                test_mixedradix_2xn_avx_64_with_length(len, false);
-                test_mixedradix_2xn_avx_64_with_length(len, true);
+                        let inner_fft_inverse = Arc::new(DFT::new(len / $inner_len, true)) as Arc<dyn Fft<f64>>;
+                        let fft_inverse = $struct_name::new_f64(inner_fft_inverse).expect("Can't run test because this machine doesn't have the required instruction sets");
+                        check_fft_algorithm(&fft_inverse, len, true);
+                    }
+                }
             }
-        }
+        )
     }
 
-    fn test_mixedradix_2xn_avx_64_with_length(len: usize, inverse: bool) {
-        let inner_fft = Arc::new(DFT::new(len / 2, inverse)) as Arc<dyn Fft<f64>>;
-        let fft = MixedRadix2xnAvx::new_f64(inner_fft).expect("Can't run test because this machine doesn't have the required instruction sets");
-        check_fft_algorithm(&fft, len, inverse);
-    }
-
-    #[test]
-    fn test_mixedradix_4xn_avx_f32() {
-        for pow in 2..8 {
-            for remainder in 0..4 {
-                let len = (1 << pow) + 4 * remainder;
-                test_mixedradix_4xn_avx_32_with_length(len, false);
-                test_mixedradix_4xn_avx_32_with_length(len, true);
-            }
-        }
-    }
-
-    fn test_mixedradix_4xn_avx_32_with_length(len: usize, inverse: bool) {
-        let inner_fft = Arc::new(DFT::new(len / 4, inverse)) as Arc<dyn Fft<f32>>;
-        let fft = MixedRadix4xnAvx::new_f32(inner_fft).expect("Can't run test because this machine doesn't have the required instruction sets");
-
-        check_fft_algorithm(&fft, len, inverse);
-    }
-
-    #[test]
-    fn test_mixedradix_4xn_avx_f64() {
-        for pow in 2..8 {
-            for remainder in 0..2 {
-                let len = (1 << pow) + 4 * remainder;
-                test_mixedradix_4xn_avx_64_with_length(len, false);
-                test_mixedradix_4xn_avx_64_with_length(len, true);
-            }
-        }
-    }
-
-    fn test_mixedradix_4xn_avx_64_with_length(len: usize, inverse: bool) {
-        let inner_fft = Arc::new(DFT::new(len / 4, inverse)) as Arc<dyn Fft<f64>>;
-        let fft = MixedRadix4xnAvx::new_f64(inner_fft).expect("Can't run test because this machine doesn't have the required instruction sets");
-
-        check_fft_algorithm(&fft, len, inverse);
-    }
-
-    #[test]
-    fn test_mixedradix_8xn_avx() {
-        for pow in 3..9 {
-            for remainder in 0..4 {
-                let len = (1 << pow) + remainder * 8;
-                test_mixedradix_8xn_avx_with_length(len, false);
-                test_mixedradix_8xn_avx_with_length(len, true);
-            }
-        }
-    }
-
-    fn test_mixedradix_8xn_avx_with_length(len: usize, inverse: bool) {
-        let inner_fft = Arc::new(DFT::new(len / 8, inverse)) as Arc<dyn Fft<f32>>;
-        let fft = MixedRadix8xnAvx::new(inner_fft).expect("Can't run test because this machine doesn't have the required instruction sets");
-
-        check_fft_algorithm(&fft, len, inverse);
-    }
-
-    #[test]
-    fn test_mixedradix_16xn_avx() {
-        for pow in 4..10 {
-            for remainder in 0..4 {
-                let len = (1 << pow) + remainder * 16;
-                test_mixedradix_16xn_avx_with_length(len, false);
-                test_mixedradix_16xn_avx_with_length(len, true);
-            }
-        }
-    }
-
-    fn test_mixedradix_16xn_avx_with_length(len: usize, inverse: bool) {
-        let inner_fft = Arc::new(DFT::new(len / 16, inverse)) as Arc<dyn Fft<f32>>;
-        let fft = MixedRadix16xnAvx::new(inner_fft).expect("Can't run test because this machine doesn't have the required instruction sets");
-
-        check_fft_algorithm(&fft, len, inverse);
-    }
+    test_avx_mixed_radix!(test_mixedradix_2xn_avx_f32, test_mixedradix_2xn_avx_f64, MixedRadix2xnAvx, 1..5, 2);
+    test_avx_mixed_radix!(test_mixedradix_4xn_avx_f32, test_mixedradix_4xn_avx_f64, MixedRadix4xnAvx, 2..6, 4);
+    test_avx_mixed_radix!(test_mixedradix_8xn_avx_f32, test_mixedradix_8xn_avx_f64, MixedRadix8xnAvx, 3..7, 8);
+    test_avx_mixed_radix!(test_mixedradix_16xn_avx_f32, test_mixedradix_16xn_avx_f64, MixedRadix16xnAvx, 4..8, 16);
 }

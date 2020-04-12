@@ -58,9 +58,28 @@ impl<T: FFTnum> FftPlannerAvx<T> {
     }
 }
 
+trait MakeFftAvx<T: FFTnum> {
+    fn plan_new_butterfly(&self, len: usize) -> Option<Arc<Fft<T>>>;
+    fn plan_new_prime(&mut self, len: usize) -> Arc<Fft<T>>;
+    fn plan_new_composite(&mut self, len: usize, factors: PrimeFactors) -> Arc<Fft<T>>;
+}
+
+impl<T: FFTnum> MakeFftAvx<T> for FftPlannerAvx<T> {
+    default fn plan_new_butterfly(&self, _len: usize) -> Option<Arc<Fft<T>>> { unimplemented!(); }
+    default fn plan_new_prime(&mut self, _len: usize) -> Arc<Fft<T>> {  unimplemented!(); }
+    default fn plan_new_composite(&mut self, _len: usize, _factors: PrimeFactors) -> Arc<Fft<T>> { unimplemented!(); }
+}
+
+
+
+
+
+
+
+
 impl FftPlannerAvx<f32> {
     fn plan_new_power2_f32(&mut self, len: usize) -> Arc<Fft<f32>> {
-        assert!(len.is_power_of_two() && len >= 64); //internal consistency check: we must be a power of two, and len should be more than our largest butterfly
+        assert!(len.is_power_of_two() && len > 64); //internal consistency check: we must be a power of two, and len should be more than our largest butterfly
 
         // We have several multiple-of-two algorithms to choose from. We can use the 2xn, 4x, 8x, and 6xn algorithms
         // if we're in-range to land exactly on the size-64 butterfly, intentionally do so by choosing whichever algorithm will have an inner FFT size of 64
@@ -78,8 +97,8 @@ impl FftPlannerAvx<f32> {
         // construct the outer FFT with the inner one
         match power {
             2 => wrap_fft(MixedRadix4xnAvx::new_f32(inner_fft).unwrap()),
-            3 => wrap_fft(MixedRadix8xnAvx::new(inner_fft).unwrap()),
-            4 => wrap_fft(MixedRadix16xnAvx::new(inner_fft).unwrap()),
+            3 => wrap_fft(MixedRadix8xnAvx::new_f32(inner_fft).unwrap()),
+            4 => wrap_fft(MixedRadix16xnAvx::new_f32(inner_fft).unwrap()),
             _ => panic!(),
         }
     }
@@ -103,8 +122,8 @@ impl FftPlannerAvx<f32> {
         match power {
             1 => wrap_fft(MixedRadix2xnAvx::new_f32(inner_fft).unwrap()),
             2 => wrap_fft(MixedRadix4xnAvx::new_f32(inner_fft).unwrap()),
-            3 => wrap_fft(MixedRadix8xnAvx::new(inner_fft).unwrap()),
-            4 => wrap_fft(MixedRadix16xnAvx::new(inner_fft).unwrap()),
+            3 => wrap_fft(MixedRadix8xnAvx::new_f32(inner_fft).unwrap()),
+            4 => wrap_fft(MixedRadix16xnAvx::new_f32(inner_fft).unwrap()),
             _ => panic!(),
         }
     }
@@ -132,18 +151,6 @@ impl FftPlannerAvx<f32> {
         let inner_fft = self.plan_fft_with_factors(inner_fft_len, PrimeFactors::compute(inner_fft_len));
         wrap_fft(BluesteinsAvx::new(len, inner_fft).unwrap())
     }
-}
-
-trait MakeFftAvx<T: FFTnum> {
-    fn plan_new_butterfly(&self, len: usize) -> Option<Arc<Fft<T>>>;
-    fn plan_new_prime(&mut self, len: usize) -> Arc<Fft<T>>;
-    fn plan_new_composite(&mut self, len: usize, factors: PrimeFactors) -> Arc<Fft<T>>;
-}
-
-impl<T: FFTnum> MakeFftAvx<T> for FftPlannerAvx<T> {
-    default fn plan_new_butterfly(&self, _len: usize) -> Option<Arc<Fft<T>>> { unimplemented!(); }
-    default fn plan_new_prime(&mut self, _len: usize) -> Arc<Fft<T>> {  unimplemented!(); }
-    default fn plan_new_composite(&mut self, _len: usize, _factors: PrimeFactors) -> Arc<Fft<T>> { unimplemented!(); }
 }
 impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
     fn plan_new_butterfly(&self, len: usize) -> Option<Arc<Fft<f32>>> {
@@ -189,7 +196,7 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
             self.plan_new_power2_f32(len)
         }
 
-        // If this is 3x2^n, we also have a fast path that goes straight down to butterflies
+        // If this is 3*2^n, we also have a fast path that goes straight down to butterflies
         else if factors.get_power_of_two() > 0 && factors.get_power_of_three() == 1 && factors.get_other_factors().len() == 0 {
             self.plan_new_3xpower2_f32(len)
         }
@@ -216,8 +223,8 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
             match power {
                 1 => wrap_fft(MixedRadix2xnAvx::new_f32(inner_fft).unwrap()),
                 2 => wrap_fft(MixedRadix4xnAvx::new_f32(inner_fft).unwrap()),
-                3 => wrap_fft(MixedRadix8xnAvx::new(inner_fft).unwrap()),
-                4 => wrap_fft(MixedRadix16xnAvx::new(inner_fft).unwrap()),
+                3 => wrap_fft(MixedRadix8xnAvx::new_f32(inner_fft).unwrap()),
+                4 => wrap_fft(MixedRadix16xnAvx::new_f32(inner_fft).unwrap()),
                 _ => panic!(),
             }
         }
@@ -229,6 +236,36 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
 }
 
 
+
+
+
+
+impl FftPlannerAvx<f64> {
+    fn plan_new_power2_f64(&mut self, len: usize) -> Arc<Fft<f64>> {
+        assert!(len.is_power_of_two() && len >= 64); //internal consistency check: we must be a power of two, and len should be more than our largest butterfly
+
+        // We have several multiple-of-two algorithms to choose from. We can use the 2xn, 4x, 8x, and 6xn algorithms
+        // if we're in-range to land exactly on the size-64 butterfly, intentionally do so by choosing whichever algorithm will have an inner FFT size of 64
+        let power : u32 = match len {
+            64 => 2, // 2xn is really slow, so we'd rather use 4xn to go down to 32
+            128 => 2,
+            256 => 3,
+            512 => 4,
+            _ => 3,
+        };
+
+        let inner_len = len >> power;
+        let inner_fft = self.plan_fft_with_factors(inner_len, PrimeFactors::compute(inner_len));
+
+        // construct the outer FFT with the inner one
+        match power {
+            2 => wrap_fft(MixedRadix4xnAvx::new_f64(inner_fft).unwrap()),
+            3 => wrap_fft(MixedRadix8xnAvx::new_f64(inner_fft).unwrap()),
+            4 => wrap_fft(MixedRadix16xnAvx::new_f64(inner_fft).unwrap()),
+            _ => panic!(),
+        }
+    }
+}
 impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
     fn plan_new_butterfly(&self, len: usize) -> Option<Arc<Fft<f64>>> {
         match len {
@@ -249,17 +286,9 @@ impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
     fn plan_new_prime(&mut self, _len: usize) -> Arc<Fft<f64>> {
         unimplemented!();
     }
-    fn plan_new_composite(&mut self, len: usize, factors: PrimeFactors) -> Arc<Fft<f64>> {
+    fn plan_new_composite(&mut self, len: usize, _factors: PrimeFactors) -> Arc<Fft<f64>> {
         if len.is_power_of_two() {
-            if len.trailing_zeros() - 5 <= 1 {
-                let factors = factors.remove_factors(PrimeFactor { value: 2, count: 1 }).unwrap();
-                let inner_fft = self.plan_fft_with_factors(len >> 1, factors);
-                wrap_fft(MixedRadix2xnAvx::new_f64(inner_fft).unwrap())
-            } else {
-                let factors = factors.remove_factors(PrimeFactor { value: 2, count: 2 }).unwrap();
-                let inner_fft = self.plan_fft_with_factors(len >> 2, factors);
-                wrap_fft(MixedRadix4xnAvx::new_f64(inner_fft).unwrap())
-            }
+            self.plan_new_power2_f64(len)
         }
         else {
             dbg!(len);

@@ -29,8 +29,11 @@ fn bench_planned_f32(b: &mut Bencher, len: usize) {
 
 // Powers of 4
 #[bench] fn planned32_p2_00000064(b: &mut Bencher) { bench_planned_f32(b,       64); }
+#[bench] fn planned32_p2_00000128(b: &mut Bencher) { bench_planned_f32(b,      128); }
 #[bench] fn planned32_p2_00000256(b: &mut Bencher) { bench_planned_f32(b,      256); }
+#[bench] fn planned32_p2_00000512(b: &mut Bencher) { bench_planned_f32(b,      512); }
 #[bench] fn planned32_p2_00001024(b: &mut Bencher) { bench_planned_f32(b,     1024); }
+#[bench] fn planned32_p2_00002048(b: &mut Bencher) { bench_planned_f32(b,     2048); }
 #[bench] fn planned32_p2_00004096(b: &mut Bencher) { bench_planned_f32(b,     4096); }
 #[bench] fn planned32_p2_00016384(b: &mut Bencher) { bench_planned_f32(b,    16384); }
 #[bench] fn planned32_p2_00065536(b: &mut Bencher) { bench_planned_f32(b,    65536); }
@@ -96,8 +99,11 @@ fn bench_planned_f64(b: &mut Bencher, len: usize) {
 }
 
 #[bench] fn planned64_p2_00000064(b: &mut Bencher) { bench_planned_f64(b,       64); }
+#[bench] fn planned64_p2_00000128(b: &mut Bencher) { bench_planned_f64(b,      128); }
 #[bench] fn planned64_p2_00000256(b: &mut Bencher) { bench_planned_f64(b,      256); }
+#[bench] fn planned64_p2_00000512(b: &mut Bencher) { bench_planned_f64(b,      512); }
 #[bench] fn planned64_p2_00001024(b: &mut Bencher) { bench_planned_f64(b,     1024); }
+#[bench] fn planned64_p2_00002048(b: &mut Bencher) { bench_planned_f64(b,     2048); }
 #[bench] fn planned64_p2_00004096(b: &mut Bencher) { bench_planned_f64(b,     4096); }
 #[bench] fn planned64_p2_00016384(b: &mut Bencher) { bench_planned_f64(b,    16384); }
 #[bench] fn planned64_p2_00065536(b: &mut Bencher) { bench_planned_f64(b,    65536); }
@@ -576,7 +582,7 @@ fn get_8xn_avx(len: usize) -> Arc<dyn Fft<f32>> {
         64 => Arc::new(MixedRadixAvx8x8::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
         _ => {
             let inner = get_8xn_avx(len / 8);
-            Arc::new(MixedRadix8xnAvx::new(inner).expect("Can't run benchmark because this machine doesn't have the required instruction sets"))
+            Arc::new(MixedRadix8xnAvx::new_f32(inner).expect("Can't run benchmark because this machine doesn't have the required instruction sets"))
         }
     }
 }
@@ -614,7 +620,7 @@ fn get_16xn_avx(len: usize) -> Arc<dyn Fft<f32>> {
         64 => Arc::new(MixedRadixAvx8x8::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
         _ => {
             let inner = get_16xn_avx(len / 16);
-            Arc::new(MixedRadix16xnAvx::new(inner).expect("Can't run benchmark because this machine doesn't have the required instruction sets"))
+            Arc::new(MixedRadix16xnAvx::new_f32(inner).expect("Can't run benchmark because this machine doesn't have the required instruction sets"))
         }
     }
 }
@@ -653,11 +659,11 @@ fn get_mixed_3x2n_avx(len: usize) -> Arc<dyn Fft<f32>> {
         48 => Arc::new(MixedRadixAvx4x12::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
         96 => Arc::new(MixedRadix2xnAvx::new_f32(get_mixed_3x2n_avx(len/2)).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
         192 => Arc::new(MixedRadix4xnAvx::new_f32(get_mixed_3x2n_avx(len/4)).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
-        384 => Arc::new(MixedRadix8xnAvx::new(get_mixed_3x2n_avx(len/8)).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
-        768 => Arc::new(MixedRadix16xnAvx::new(get_mixed_3x2n_avx(len/16)).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        384 => Arc::new(MixedRadix8xnAvx::new_f32(get_mixed_3x2n_avx(len/8)).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        768 => Arc::new(MixedRadix16xnAvx::new_f32(get_mixed_3x2n_avx(len/16)).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
         _ => {
             let inner = get_mixed_3x2n_avx(len / 8);
-            Arc::new(MixedRadix8xnAvx::new(inner).expect("Can't run benchmark because this machine doesn't have the required instruction sets"))
+            Arc::new(MixedRadix8xnAvx::new_f32(inner).expect("Can't run benchmark because this machine doesn't have the required instruction sets"))
         }
     }
 }

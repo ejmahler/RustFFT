@@ -37,7 +37,7 @@ pub fn compare_vectors<T: FFTnum + Float>(vec1: &[Complex<T>], vec2: &[Complex<T
 }
 
 pub fn check_fft_algorithm<T: FFTnum + Float>(fft: &Fft<T>, len: usize, inverse: bool) {
-    assert_eq!(fft.len(), len, "Algorithm reported incorrect size");
+    assert_eq!(fft.len(), len, "Algorithm reported incorrect size. Expected {}, got {}", len, fft.len());
     assert_eq!(fft.is_inverse(), inverse, "Algorithm reported incorrect inverse value");
 
     let n = 3;

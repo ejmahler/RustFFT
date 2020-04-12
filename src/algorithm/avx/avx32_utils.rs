@@ -518,9 +518,7 @@ pub mod fma {
     // Compute 4 parallel butterfly 16's using AVX and FMA instructions
     // rowN contains the nth element of each parallel FFT
     #[inline(always)]
-    pub unsafe fn column_butterfly16_f32(
-        rows: [__m256; 16], twiddles: [__m256; 6], twiddle_config: Rotate90Config<__m256>) -> [__m256; 16] 
-    {
+    pub unsafe fn column_butterfly16_f32(rows: [__m256; 16], twiddles: [__m256; 6], twiddle_config: Rotate90Config<__m256>) -> [__m256; 16] {
         // Treat our butterfly-16 as a 4x4 array. first, do butterfly 4's down the columns
         let mid0     = column_butterfly4_f32([rows[0], rows[4], rows[8],  rows[12]], twiddle_config);
         let mut mid1 = column_butterfly4_f32([rows[1], rows[5], rows[9],  rows[13]], twiddle_config);
