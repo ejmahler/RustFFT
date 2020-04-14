@@ -294,10 +294,10 @@ impl MixedRadix2xnAvx<f64, __m256d> {
             let input0 = buffer.load_complex_f64_lo(chunk_count*2); 
             let input1 = buffer.load_complex_f64_lo(chunk_count*2 + half_len);
 
-            let (output0, output1_pretwiddle) = avx64_utils::column_butterfly2_f64(input0, input1);
+            let (output0, output1_pretwiddle) = avx64_utils::column_butterfly2_f64_lo(input0, input1);
             buffer.store_complex_f64_lo(output0, chunk_count*2);
 
-            let output1 = avx64_utils::fma::complex_multiply_f64(*self.twiddles.get_unchecked(chunk_count), output1_pretwiddle);
+            let output1 = avx64_utils::fma::complex_multiply_f64_lo(_mm256_castpd256_pd128(*self.twiddles.get_unchecked(chunk_count)), output1_pretwiddle);
             buffer.store_complex_f64_lo(output1, chunk_count*2 + half_len);
         }
     }
@@ -325,14 +325,13 @@ impl MixedRadix2xnAvx<f64, __m256d> {
 
         // transpose the remainder
         if remainder > 0 {
+            // since we only have a single column, we don't need to do any transposing, just copying
             let input0 = input.load_complex_f64_lo(chunk_count*2); 
             let input1 = input.load_complex_f64_lo(chunk_count*2 + half_len);
 
-            // We loaded data from 2 separate arrays. inteleave the two arrays
-            let transposed = avx64_utils::transpose_2x2_f64([input0, input1]);
-
             // store the interleaved array contiguously
-            output.store_complex_f64(transposed[0], chunk_count*4);
+            output.store_complex_f64_lo(input0, chunk_count*4);
+            output.store_complex_f64_lo(input1, chunk_count*4 + 1);
         }
     }
 }
@@ -577,20 +576,20 @@ impl MixedRadix4xnAvx<f64, __m256d> {
         // process the remainder
         if remainder > 0 {
             // Load (up to) 4 columns at once, based on our remainder
-            let mut rows = [_mm256_setzero_pd(); 4];
+            let mut rows = [_mm_setzero_pd(); 4];
             for n in 0..4 {
                 rows[n] = buffer.load_complex_f64_lo(chunk_count*Self::CHUNK_SIZE + quarter_len*n);
             }
 
             // Perform (up to) 4 parallel butterfly 8's on the columns
-        	let processed_rows = avx64_utils::column_butterfly4_f64(rows, self.twiddle_config);
+        	let processed_rows = avx64_utils::column_butterfly4_f64_lo(rows, self.twiddle_config);
 
             // Apply twiddle factors to the column and store them where they came from
         	debug_assert!(self.twiddles.len() >= (chunk_count+1) * 3);
             buffer.store_complex_f64_lo(processed_rows[0], chunk_count*Self::CHUNK_SIZE);
             for n in 1..4 {
-                let twiddle = *self.twiddles.get_unchecked(chunk_count*3 + n - 1);
-                let output = avx64_utils::fma::complex_multiply_f64(twiddle,  processed_rows[n]);
+                let twiddle = _mm256_castpd256_pd128(*self.twiddles.get_unchecked(chunk_count*3 + n - 1));
+                let output = avx64_utils::fma::complex_multiply_f64_lo(twiddle,  processed_rows[n]);
                 buffer.store_complex_f64_lo(output, chunk_count*Self::CHUNK_SIZE + quarter_len*n);
             }
         }
@@ -624,17 +623,11 @@ impl MixedRadix4xnAvx<f64, __m256d> {
         }
 
         if remainder > 0 {
-            // Load (up to) 4 columns at once, giving us a 4x48 array
-            let mut rows = [_mm256_setzero_pd(); 4];
+            // since we only have a single column, we don't need to do any transposing, just copying
             for n in 0..4 {
-                rows[n] = input.load_complex_f64_lo(chunk_count*Self::CHUNK_SIZE + quarter_len*n);
+                let row = input.load_complex_f64_lo(chunk_count*Self::CHUNK_SIZE + quarter_len*n);
+                output.store_complex_f64_lo(row, chunk_count*8 + n);
             }
-
-            // Transpose the 4x4 array
-            let (transposed0, transposed1) = avx64_utils::transpose_2x4_to_4x2_f64(rows);
-
-            output.store_complex_f64(transposed0[0], chunk_count*8);
-            output.store_complex_f64(transposed1[0], chunk_count*8 + Self::CHUNK_SIZE);
         }
     }
 }
@@ -879,20 +872,20 @@ impl MixedRadix8xnAvx<f64, __m256d> {
         // process the remainder, if there is a remainder to process
         if remainder > 0 {
             // Load 1 column instead of the usual 2, based on our remainder
-            let mut columns = [_mm256_setzero_pd(); 8];
+            let mut columns = [_mm_setzero_pd(); 8];
             for n in 0..8 {
                 columns[n] = buffer.load_complex_f64_lo(chunk_count*2 + eigth_len*n);
             }
 
             // Perform (up to) 4 parallel butterfly 8's on the columns
-        	let processed_columns = avx64_utils::fma::column_butterfly8_f64(columns, self.twiddles_butterfly8, self.twiddle_config);
+        	let processed_columns = avx64_utils::fma::column_butterfly8_f64_lo(columns, _mm256_castpd256_pd128(self.twiddles_butterfly8), self.twiddle_config);
 
             // Apply twiddle factors to the column and store them where they came from
         	debug_assert!(self.twiddles.len() >= (chunk_count+1) * 7);
             buffer.store_complex_f64_lo(processed_columns[0], chunk_count*2);
             for n in 1..8 {
-                let twiddle = *self.twiddles.get_unchecked(chunk_count*7 + n - 1);
-                let output = avx64_utils::fma::complex_multiply_f64(twiddle,  processed_columns[n]);
+                let twiddle = _mm256_castpd256_pd128(*self.twiddles.get_unchecked(chunk_count*7 + n - 1));
+                let output = avx64_utils::fma::complex_multiply_f64_lo(twiddle,  processed_columns[n]);
                 buffer.store_complex_f64_lo(output, chunk_count*2 + eigth_len*n);
             }
         }
@@ -930,21 +923,11 @@ impl MixedRadix8xnAvx<f64, __m256d> {
         }
 
         if remainder > 0 {
-            // Load only one column instead of 2, giving us a 1x8 array
-            let mut rows = [_mm256_setzero_pd(); 8];
+            // since we only have a single column, we don't need to do any transposing, just copying
             for n in 0..8 {
-                rows[n] = input.load_complex_f64_lo(chunk_count*2 + eigth_len*n);
+                let row = input.load_complex_f64_lo(chunk_count*2 + eigth_len*n);
+                output.store_complex_f64_lo(row, chunk_count*16 + n);
             }
-
-            // Transpose the 2x8 array to a 8x2 array. because of the remainder situation, the second half of the array will be empty
-            let transposed= avx64_utils::transpose_2x8_to_8x2_packed_f64(rows);
-
-            // store the transposed remainder back into the buffer -- but keep in account the fact we should only write out some of the chunks!
-            // that's why we're looping up to 4 instead of 8
-            output.store_complex_f64(transposed[0], chunk_count*16);
-            output.store_complex_f64(transposed[1], chunk_count*16 + 2);
-            output.store_complex_f64(transposed[2], chunk_count*16 + 4);
-            output.store_complex_f64(transposed[3], chunk_count*16 + 6);
         }
     }
 }
@@ -1202,7 +1185,7 @@ impl MixedRadix16xnAvx<f64, __m256d> {
             // Load half a column of data
             let mut columns = [_mm256_setzero_pd(); 16];
             for n in 0..16 {
-                columns[n] = buffer.load_complex_f64_lo(chunk_count*2 + sixteenth_len*n);
+                columns[n] = _mm256_zextpd128_pd256(buffer.load_complex_f64_lo(chunk_count*2 + sixteenth_len*n));
             }
 
             // Perform (up to) 4 parallel butterfly 16's on the columns
@@ -1210,10 +1193,10 @@ impl MixedRadix16xnAvx<f64, __m256d> {
 
             // Apply twiddle factors to the column and store them where they came from
         	debug_assert!(self.twiddles.len() >= (chunk_count+1) * 15);
-            buffer.store_complex_f64_lo(processed_columns[0], chunk_count*2);
+            buffer.store_complex_f64_lo(_mm256_castpd256_pd128(processed_columns[0]), chunk_count*2);
             for n in 1..16 {
-                let twiddle = *self.twiddles.get_unchecked(chunk_count*15 + n - 1);
-                let output = avx64_utils::fma::complex_multiply_f64(twiddle,  processed_columns[n]);
+                let twiddle = _mm256_castpd256_pd128(*self.twiddles.get_unchecked(chunk_count*15 + n - 1));
+                let output = avx64_utils::fma::complex_multiply_f64_lo(twiddle,  _mm256_castpd256_pd128(processed_columns[n]));
                 buffer.store_complex_f64_lo(output, chunk_count*2 + sixteenth_len*n);
             }
         }
@@ -1259,26 +1242,10 @@ impl MixedRadix16xnAvx<f64, __m256d> {
         }
 
         if remainder > 0 {
-
-            // load a 128-bit value from Input at the given index. without this, the compiler generates very slow code :(
-            let load_sse = |index| {
-                debug_assert!(input.len() > index);
-                let complex_ref = input.get_unchecked(index);
-                let float_ptr  = (&complex_ref.re) as *const f64;
-                 _mm_loadu_pd(float_ptr)
-            };
-
-            let mut store_sse = |data, index| {
-                debug_assert!(output.len() > index);
-                let complex_ref = output.get_unchecked_mut(index);
-                let float_ptr  = (&mut complex_ref.re) as *mut f64;
-                 _mm_storeu_pd(float_ptr, data)
-            };
-
-            // Load half-columns at once, giving us a 1x16 array
+            // since we only have a single column, we don't need to do any transposing, just copying
             for n in 0..16 {
-                let data = load_sse(chunk_count*2 + n*sixteenth_len);
-                store_sse(data, chunk_count*32 + n);
+                let row = input.load_complex_f64_lo(chunk_count*2 + n*sixteenth_len);
+                output.store_complex_f64_lo(row, chunk_count*32 + n);
             }
         }
     }

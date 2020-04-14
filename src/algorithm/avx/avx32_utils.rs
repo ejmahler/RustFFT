@@ -188,6 +188,16 @@ impl Rotate90Config<__m256d> {
         // We can negate the elements we want by xoring the row with a pre-set vector
         _mm256_xor_pd(elements_swapped, self.0)
     }
+
+    // Apply a multiplication by (0, i) or (0, -i), based on the value of rotation_config. Much faster than an actual multiplication.
+    #[inline(always)]
+    pub unsafe fn rotate90_lo(&self, elements: __m128d) -> __m128d {
+        // Our goal is to swap the reals with the imaginaries, then negate either the reals or the imaginaries, based on whether we're an inverse or not
+        let elements_swapped = _mm_permute_pd(elements, 0x05);
+
+        // We can negate the elements we want by xoring the row with a pre-set vector
+        _mm_xor_pd(elements_swapped, _mm256_castpd256_pd128(self.0))
+    }
 }
 #[repr(transparent)]
 #[derive(Clone, Copy)]

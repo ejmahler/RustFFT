@@ -843,5 +843,7 @@ fn bench_butterfly64(b: &mut Bencher, len: usize) {
 #[bench] fn butterfly64_06(b: &mut Bencher) { bench_butterfly64(b, 6); }
 #[bench] fn butterfly64_07(b: &mut Bencher) { bench_butterfly64(b, 7); }
 #[bench] fn butterfly64_08(b: &mut Bencher) { bench_butterfly64(b, 8); }
+#[bench] fn butterfly64_12(b: &mut Bencher) { bench_butterfly64(b, 12); }
 #[bench] fn butterfly64_16(b: &mut Bencher) { bench_butterfly64(b, 16); }
+#[bench] fn butterfly64_24(b: &mut Bencher) { bench_butterfly64(b, 24); }
 #[bench] fn butterfly64_32(b: &mut Bencher) { bench_butterfly64(b, 32); }

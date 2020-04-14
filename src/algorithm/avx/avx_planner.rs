@@ -265,15 +265,56 @@ impl FftPlannerAvx<f64> {
             _ => panic!(),
         }
     }
+    fn plan_new_3xpower2_f64(&mut self, len: usize) -> Arc<Fft<f64>> {
+        assert!(len >> len.trailing_zeros() == 3); //internal consistency check. we must be 2^n times 3
 
+        // We have several multiple-of-two algorithms to choose from. We can use the 2xn, 4x, 8x, and 16xn algorithms
+        // if we're in-range to land exactly on the size-24 butterfly, intentionally do so by choosing whichever algorithm will have an inner FFT size of 24
+        let power : u32 = match len {
+            48 => 1,
+            96 => 2,
+            192 => 3,
+            384 => 4,
+            _ => 3,  // 8xn is the fastest for larger sizes, so if we're not "in range" to hit a butterfly with a single step, use 8xn
+        };
+
+        let inner_len = len >> power;
+        let inner_fft = self.plan_fft_with_factors(inner_len, PrimeFactors::compute(inner_len));
+
+        // construct the outer FFT with the inner one
+        match power {
+            1 => wrap_fft(MixedRadix2xnAvx::new_f64(inner_fft).unwrap()),
+            2 => wrap_fft(MixedRadix4xnAvx::new_f64(inner_fft).unwrap()),
+            3 => wrap_fft(MixedRadix8xnAvx::new_f64(inner_fft).unwrap()),
+            4 => wrap_fft(MixedRadix16xnAvx::new_f64(inner_fft).unwrap()),
+            _ => panic!(),
+        }
+    }
     fn plan_new_bluesteins_f64(&mut self, len: usize) -> Arc<Fft<f64>> {
         assert!(len > 1); // Internal consistency check: The logic in this method doesn't work for a length of 1
 
         // Plan a step of Bluestein's Algorithm
+        // Bluestein's computes a FFT of size `len` by reorganizing it as a FFT of ANY size greater than or equal to len * 2 - 1
+        // We can choose any size we want, and an obvious choice is the next power of two larger than  len * 2 - 1, since power of two FFTs are typically fast.
+        
+        // But if we can find a smaller FFT that will go faster, there's no reason not to use that instead of the power of two.
+        // We can very efficiently compute any 3 * 2^n, so before committing to using a power of two, take a stab at finding a 3 * 2^n FFT that's smaller than the next power of two, and greater than the minimum
+
+        // TODO: if we get the ability to compute arbitrary powers of 3 on the fast path, we try several sizes and pick the smallest.
+        // There's diminishing returns the more work we do here, but at least one more layer would be great
+
+        // One caveat is that the size-6 blutterfly is slower than size-8, so we only want to do this if the next power of two is greater than 8
         let min_size = len*2 - 1;
         let max_size = min_size.checked_next_power_of_two().unwrap();
 
-        let inner_fft = self.plan_fft_with_factors(max_size, PrimeFactors::compute(max_size));
+        let potential_3x = max_size / 4 * 3;
+        let inner_fft_len = if max_size > 8 && potential_3x >= min_size {
+            potential_3x
+        } else {
+            max_size
+        };
+
+        let inner_fft = self.plan_fft_with_factors(inner_fft_len, PrimeFactors::compute(inner_fft_len));
         wrap_fft(BluesteinsAvx::new_f64(len, inner_fft).unwrap())
     }
 }
@@ -288,7 +329,9 @@ impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
             6 =>    wrap_fft_some(Butterfly6::new(self.inverse)),
             7 =>    wrap_fft_some(Butterfly7::new(self.inverse)),
             8 =>    wrap_fft_some(MixedRadix64Avx4x2::new(self.inverse).unwrap()),
+            12 =>   wrap_fft_some(MixedRadix64Avx4x3::new(self.inverse).unwrap()),
             16 =>   wrap_fft_some(MixedRadix64Avx4x4::new(self.inverse).unwrap()),
+            24 =>   wrap_fft_some(MixedRadix64Avx4x6::new(self.inverse).unwrap()),
             32 =>   wrap_fft_some(MixedRadix64Avx4x8::new(self.inverse).unwrap()),
             _ => None
         }
@@ -315,6 +358,11 @@ impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
         // First up: If this is a power of 2, we have a fast path  that goes straight down to butterflies
         if len.is_power_of_two() {
             self.plan_new_power2_f64(len)
+        }
+
+        // If this is 3*2^n, we also have a fast path that goes straight down to butterflies
+        else if factors.get_power_of_two() > 0 && factors.get_power_of_three() == 1 && factors.get_other_factors().len() == 0 {
+            self.plan_new_3xpower2_f64(len)
         }
         
         // If we get to this point, we will need to use bluestein's algorithm or rader's algorithm. before do that, see if there are any powers of 2 we can split off

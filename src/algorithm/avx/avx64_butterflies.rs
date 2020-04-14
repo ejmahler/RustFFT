@@ -152,6 +152,82 @@ impl MixedRadix64Avx4x2<f64> {
     }
 }
 
+
+pub struct MixedRadix64Avx4x3<T> {
+    twiddles: [__m256d; 3],
+    twiddles_butterfly3: __m256d,
+    twiddle_config: avx32_utils::Rotate90Config<__m256d>,
+    inverse: bool,
+    _phantom: std::marker::PhantomData<T>,
+}
+boilerplate_fft_simd_butterfly!(MixedRadix64Avx4x3, 12);
+impl MixedRadix64Avx4x3<f64> {
+    #[inline]
+    pub fn new(inverse: bool) -> Result<Self, ()> {
+        let has_avx = is_x86_feature_detected!("avx");
+        let has_fma = is_x86_feature_detected!("fma");
+        if has_avx && has_fma {
+            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
+            Ok(unsafe { Self::new_with_avx(inverse) })
+        } else {
+            Err(())
+        }
+    }
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inverse: bool) -> Self {
+        let twiddle_array = [
+            f64::generate_twiddle_factor(1, 12, inverse),
+            f64::generate_twiddle_factor(2, 12, inverse),
+            f64::generate_twiddle_factor(2, 12, inverse),
+            f64::generate_twiddle_factor(4, 12, inverse),
+            f64::generate_twiddle_factor(3, 12, inverse),
+            f64::generate_twiddle_factor(6, 12, inverse),
+        ];
+        Self {
+            twiddles: [twiddle_array.load_complex_f64(0), twiddle_array.load_complex_f64(2), twiddle_array.load_complex_f64(4)],
+            twiddles_butterfly3: avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1, 3, inverse)),
+            twiddle_config: avx32_utils::Rotate90Config::new_f64(inverse),
+            inverse: inverse,
+            _phantom: PhantomData,
+        }
+    }
+    
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn perform_fft_f64(&self, input: RawSlice<Complex<f64>>, mut output: RawSliceMut<Complex<f64>>) {
+        // we're going to load our input as a 3x4 array. We have to load 3 columns, which is a little awkward
+        // We can reduce the number of multiplies we do if we load the first column as half-width and the second column as full.
+        let mut rows0 = [_mm_setzero_pd(); 4];
+        let mut rows1 = [_mm256_setzero_pd(); 4];
+
+        for n in 0..4 {
+            rows0[n] = input.load_complex_f64_lo(n * 3);
+            rows1[n] = input.load_complex_f64(n * 3 + 1);
+        }
+
+        // do butterfly 4's down the columns
+        let mid0 = avx64_utils::column_butterfly4_f64_lo(rows0, self.twiddle_config);
+        let mut mid1 = avx64_utils::column_butterfly4_f64(rows1, self.twiddle_config);
+
+        // apply twiddle factors
+        for n in 1..4 {
+            mid1[n] = avx64_utils::fma::complex_multiply_f64(mid1[n], self.twiddles[n - 1]);
+        }
+
+        // transpose our 3x4 array to a 4x3 array
+        let (transposed0, transposed1) = avx64_utils::transpose_3x4_to_4x3_f64(mid0, mid1);
+
+        // apply butterfly 3's down the columns
+        let output0 = avx64_utils::fma::column_butterfly3_f64(transposed0, self.twiddles_butterfly3);
+        let output1 = avx64_utils::fma::column_butterfly3_f64(transposed1, self.twiddles_butterfly3);
+
+        for r in 0..3 {
+            output.store_complex_f64(output0[r], 4*r);
+            output.store_complex_f64(output1[r], 4*r+2);
+        }
+    }
+}
+
+
 pub struct MixedRadix64Avx4x4<T> {
     twiddles: [__m256d; 6],
     twiddle_config: avx32_utils::Rotate90Config<__m256d>,
@@ -219,6 +295,86 @@ impl MixedRadix64Avx4x4<f64> {
         let output1 = avx64_utils::column_butterfly4_f64(transposed1, self.twiddle_config);
 
         for r in 0..4 {
+            output.store_complex_f64(output0[r], 4*r);
+            output.store_complex_f64(output1[r], 4*r+2);
+        }
+    }
+}
+
+pub struct MixedRadix64Avx4x6<T> {
+    twiddles: [__m256d; 9],
+    twiddles_butterfly3: __m256d,
+    twiddle_config: avx32_utils::Rotate90Config<__m256d>,
+    inverse: bool,
+    _phantom: std::marker::PhantomData<T>,
+}
+boilerplate_fft_simd_butterfly!(MixedRadix64Avx4x6, 24);
+impl MixedRadix64Avx4x6<f64> {
+    #[inline]
+    pub fn new(inverse: bool) -> Result<Self, ()> {
+        let has_avx = is_x86_feature_detected!("avx");
+        let has_fma = is_x86_feature_detected!("fma");
+        if has_avx && has_fma {
+            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
+            Ok(unsafe { Self::new_with_avx(inverse) })
+        } else {
+            Err(())
+        }
+    }
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inverse: bool) -> Self {
+        let mut twiddles = [_mm256_setzero_pd(); 9];
+        let mut index = 0;
+        for y in 1..4 {
+            for x in (0..6).step_by(2) {
+                let twiddle_chunk = [
+                    f64::generate_twiddle_factor(y*(x), 24, inverse),
+                    f64::generate_twiddle_factor(y*(x+1), 24, inverse),
+                ];
+                twiddles[index] = twiddle_chunk.load_complex_f64(0);
+                index += 1;
+            }
+        }
+        Self {
+            twiddles,
+            twiddles_butterfly3: avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1, 3, inverse)),
+            twiddle_config: avx32_utils::Rotate90Config::new_f64(inverse),
+            inverse: inverse,
+            _phantom: PhantomData,
+        }
+    }
+    
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn perform_fft_f64(&self, input: RawSlice<Complex<f64>>, mut output: RawSliceMut<Complex<f64>>) {
+        let mut rows0 = [_mm256_setzero_pd(); 4];
+        let mut rows1 = [_mm256_setzero_pd(); 4];
+        let mut rows2 = [_mm256_setzero_pd(); 4];
+        for r in 0..4 {
+            rows0[r] = input.load_complex_f64(6*r);
+            rows1[r] = input.load_complex_f64(6*r + 2);
+            rows2[r] = input.load_complex_f64(6*r + 4);
+        }
+
+        // We're going to treat our input as a 6x4 2d array. First, do 6 butterfly 4's down the columns of that array.
+        let mut mid0 = avx64_utils::column_butterfly4_f64(rows0, self.twiddle_config);
+        let mut mid1 = avx64_utils::column_butterfly4_f64(rows1, self.twiddle_config);
+        let mut mid2 = avx64_utils::column_butterfly4_f64(rows2, self.twiddle_config);
+
+        // apply twiddle factors
+        for r in 1..4 {
+            mid0[r] = avx64_utils::fma::complex_multiply_f64(mid0[r], self.twiddles[3*r - 3]);
+            mid1[r] = avx64_utils::fma::complex_multiply_f64(mid1[r], self.twiddles[3*r - 2]);
+            mid2[r] = avx64_utils::fma::complex_multiply_f64(mid2[r], self.twiddles[3*r - 1]);
+        }
+        
+        // Transpose our 6x4 array
+        let (transposed0, transposed1) = avx64_utils::transpose_6x4_to_4x6_f64(mid0, mid1, mid2);
+
+        // Butterfly 6's down columns of the transposed array
+        let output0 = avx64_utils::fma::column_butterfly6_f64(transposed0, self.twiddles_butterfly3);
+        let output1 = avx64_utils::fma::column_butterfly6_f64(transposed1, self.twiddles_butterfly3);
+
+        for r in 0..6 {
             output.store_complex_f64(output0[r], 4*r);
             output.store_complex_f64(output1[r], 4*r+2);
         }
@@ -444,6 +600,17 @@ mod unit_tests {
         ($test_name:ident, $struct_name:ident, $size:expr) => (
             #[test]
             fn $test_name() {
+                use algorithm::MixedRadixSmall;
+                use algorithm::DFT;
+                use std::sync::Arc;
+
+                let inner6 : Arc<dyn Fft<f32>> = Arc::new(DFT::new(6, false));
+                let inner4 = Arc::new(DFT::new(4, false));
+
+                let control = MixedRadixSmall::new(inner6, inner4);
+
+                check_fft_algorithm(&control, 24, false);
+
                 let butterfly = $struct_name::new(false).expect("Can't run test because this machine doesn't have the required instruction sets");
                 check_fft_algorithm(&butterfly, $size, false);
 
@@ -454,7 +621,9 @@ mod unit_tests {
     }
 
     test_avx_butterfly!(test_avx_mixedradix4x2_f64, MixedRadix64Avx4x2, 8);
+    test_avx_butterfly!(test_avx_mixedradix4x3_f64, MixedRadix64Avx4x3, 12);
     test_avx_butterfly!(test_avx_mixedradix4x4_f64, MixedRadix64Avx4x4, 16);
     //test_avx_butterfly!(test_avx_mixedradix4x4_split_f64, MixedRadix64Avx4x4SplitRealImaginary, 16); // Currently broken -- saving code for reference on splitting reals/imaginaries
+    test_avx_butterfly!(test_avx_mixedradix4x6_f64, MixedRadix64Avx4x6, 24);
     test_avx_butterfly!(test_avx_mixedradix4x8_f64, MixedRadix64Avx4x8, 32);
 }

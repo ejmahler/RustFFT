@@ -327,7 +327,9 @@ impl BluesteinsAvx<f64, __m256d> {
         }
 
         if remainder > 0 {
-            let input_vector = input.load_complex_f64_lo(main_chunks * 2);
+            let input_lo = input.load_complex_f64_lo(main_chunks * 2);
+            let input_vector = _mm256_zextpd128_pd256(input_lo);
+            
             let product_vector = avx64_utils::fma::complex_multiply_f64(*self.twiddles.get_unchecked(main_chunks), input_vector);
             inner_fft_buffer.store_complex_f64(product_vector, main_chunks * 2);
         }
@@ -354,8 +356,10 @@ impl BluesteinsAvx<f64, __m256d> {
         }
 
         if remainder > 0 {
-            let inner_vector = inner_fft_buffer.load_complex_f64_lo(main_chunks * 2);
-            let product_vector = avx64_utils::fma::complex_conjugated_multiply_f64(inner_vector, *self.twiddles.get_unchecked(main_chunks));
+            let inner_lo = inner_fft_buffer.load_complex_f64_lo(main_chunks * 2);
+            let twiddle = _mm256_castpd256_pd128(*self.twiddles.get_unchecked(main_chunks));
+
+            let product_vector = avx64_utils::fma::complex_conjugated_multiply_f64_lo(inner_lo, twiddle);
             output.store_complex_f64_lo(product_vector, main_chunks * 2);
         }
     }
