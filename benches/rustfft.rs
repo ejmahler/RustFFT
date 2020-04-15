@@ -108,7 +108,7 @@ fn bench_planned_f64(b: &mut Bencher, len: usize) {
 #[bench] fn planned64_p2_00016384(b: &mut Bencher) { bench_planned_f64(b,    16384); }
 #[bench] fn planned64_p2_00065536(b: &mut Bencher) { bench_planned_f64(b,    65536); }
 #[bench] fn planned64_p2_01048576(b: &mut Bencher) { bench_planned_f64(b,  1048576); }
-#[bench] fn planned64_p2_16777216(b: &mut Bencher) { bench_planned_f64(b, 16777216); }
+//#[bench] fn planned64_p2_16777216(b: &mut Bencher) { bench_planned_f64(b, 16777216); }
 
 #[bench] fn planned64_p7_00343(b: &mut Bencher) { bench_planned_f64(b,   343); }
 #[bench] fn planned64_p7_02401(b: &mut Bencher) { bench_planned_f64(b,  2401); }

@@ -227,6 +227,16 @@ impl Rotate90OddConfig {
 // Compute 4 parallel butterfly 2's using AVX instructions
 // rowN contains the nth element of each parallel FFT
 #[inline(always)]
+pub unsafe fn column_butterfly2_array_f32(rows: [__m256; 2]) -> [__m256; 2] {
+    let output0 = _mm256_add_ps(rows[0], rows[1]);
+    let output1 = _mm256_sub_ps(rows[0], rows[1]);
+
+    [output0, output1]
+}
+
+// Compute 4 parallel butterfly 2's using AVX instructions
+// rowN contains the nth element of each parallel FFT
+#[inline(always)]
 pub unsafe fn column_butterfly2_f32(row0: __m256, row1: __m256) -> (__m256, __m256) {
     let output0 = _mm256_add_ps(row0, row1);
     let output1 = _mm256_sub_ps(row0, row1);
@@ -310,20 +320,20 @@ pub unsafe fn transpose_4x6_to_6x4_f32(rows: [__m256;6]) -> ([__m256;4], [__m256
     (output0, output1)
 }
 
-// Treat the input like the rows of a 4x8 array, and transpose it to a 8x4 array, where each array of 4 is one set of 4 columns
-// The assumption here is that it's very likely that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
+// Treat the input like the rows of a 4x8 array, and transpose it to a 8x4 array
+// But instead of storing "columns" of registers as separate arrays for further processing, pack them all into one array
 #[inline(always)]
-pub unsafe fn transpose_4x8_to_8x4_f32(rows: [__m256;8]) -> ([__m256;4], [__m256;4]) {
+pub unsafe fn transpose_4x8_to_8x4_packed_f32(rows: [__m256;8]) -> [__m256;8] {
     let chunk0 = [rows[0],  rows[1],  rows[2],  rows[3]];
     let chunk1 = [rows[4],  rows[5],  rows[6],  rows[7]];
 
     let output0 = transpose_4x4_f32(chunk0);
     let output1 = transpose_4x4_f32(chunk1);
 
-    (output0, output1)
+    [output0[0], output1[0], output0[1], output1[1], output0[2], output1[2], output0[3], output1[3]]
 }
 
-// Treat the input like the rows of a 12x4 array, and transpose it to a 4x12 array
+// Treat the input like the rows of a 8x4 array, and transpose it to a 4x8 array
 #[inline(always)]
 pub unsafe fn transpose_8x4_to_4x8_f32(rows0: [__m256;4], rows1: [__m256;4]) -> [__m256;8] {
     let transposed0 = transpose_4x4_f32(rows0);
@@ -363,9 +373,9 @@ pub unsafe fn transpose_8x8_f32(rows0: [__m256;8], rows1: [__m256;8]) -> ([__m25
 }
 
 // Treat the input like the rows of a 4x16 array, and transpose it to a 16x4 array, where each array of 4 is one set of 4 columns
-// The assumption here is that it's very likely that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
+// But instead of storing "columns" of registers as separate arrays for further processing, pack them all into one array
 #[inline(always)]
-pub unsafe fn transpose_4x16_to_16x4_f32(rows: [__m256;16]) -> ([__m256;4], [__m256;4], [__m256;4], [__m256;4]) {
+pub unsafe fn transpose_4x16_to_16x4_packed_f32(rows: [__m256;16]) -> [__m256;16] {
     let chunk0 = [rows[0],  rows[1],  rows[2],  rows[3]];
     let chunk1 = [rows[4],  rows[5],  rows[6],  rows[7]];
     let chunk2 = [rows[8],  rows[9],  rows[10], rows[11]];
@@ -376,7 +386,12 @@ pub unsafe fn transpose_4x16_to_16x4_f32(rows: [__m256;16]) -> ([__m256;4], [__m
     let output2 = transpose_4x4_f32(chunk2);
     let output3 = transpose_4x4_f32(chunk3);
 
-    (output0, output1, output2, output3)
+    [
+        output0[0], output1[0], output2[0], output3[0],
+        output0[1], output1[1], output2[1], output3[1],
+        output0[2], output1[2], output2[2], output3[2],
+        output0[3], output1[3], output2[3], output3[3],
+    ]
 }
 
 // Split the array into evens and odds
@@ -394,15 +409,15 @@ pub unsafe fn split_evens_odds_f32(row0: __m256, row1: __m256) -> (__m256, __m25
 
 // Interleave even elements and odd elements into a single array
 #[inline(always)]
-pub unsafe fn interleave_evens_odds_f32(row0: __m256, row1: __m256) -> (__m256, __m256) {
-    let unpacked0 = _mm256_unpacklo_ps(row0, row1);
-    let unpacked1 = _mm256_unpackhi_ps(row0, row1);
+pub unsafe fn interleave_evens_odds_f32(rows: [__m256; 2]) -> [__m256; 2] {
+    let unpacked0 = _mm256_unpacklo_ps(rows[0], rows[1]);
+    let unpacked1 = _mm256_unpackhi_ps(rows[0], rows[1]);
     let permuted0 = _mm256_permute_ps(unpacked0, 0xD8);
     let permuted1 = _mm256_permute_ps(unpacked1, 0xD8);
     let output0 = _mm256_permute2f128_ps(permuted0, permuted1, 0x20);
     let output1 = _mm256_permute2f128_ps(permuted0, permuted1, 0x31);
     
-    (output0, output1)
+    [output0, output1]
 }
 
 // Functions in the "FMA" sub-module require the fma instruction set in addition to AVX
