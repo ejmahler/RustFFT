@@ -211,7 +211,7 @@ impl MixedRadixAvx4x3<f32> {
         let input2 = input.load_complex_f32(2 * 4);
 
         // We're going to treat our input as a 3x4 2d array. First, do 3 butterfly 4's down the columns of that array.
-        let (mid0, mid1, mid2) = avx32_utils::fma::column_butterfly3_f32(input0, input1, input2, self.twiddles_butterfly3);
+        let [mid0, mid1, mid2] = avx32_utils::fma::column_butterfly3_f32([input0, input1, input2], self.twiddles_butterfly3);
 
         // Multiply in our twiddle factors
         let mid1_twiddled = avx32_utils::fma::complex_multiply_f32(mid1, self.twiddles[0]);

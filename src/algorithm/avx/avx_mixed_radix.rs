@@ -646,10 +646,68 @@ impl MixedRadix2xnAvx<f64, __m256d> {
         |columns, _:_| avx64_utils::column_butterfly2_array_f64(columns),
         |columns, _:_| avx64_utils::column_butterfly2_f64_lo(columns)
     );
-    mixedradix_transpose_f64!(2,1,  avx64_utils::transpose_2x2_f64, 0;1);
+    mixedradix_transpose_f64!(2, 1, avx64_utils::transpose_2x2_f64, 0;1);
 }
 
+pub struct MixedRadix3xnAvx<T, V> {
+    twiddles_butterfly3: V,
+    common_data: CommonSimdData<T,V>
+}
+boilerplate_fft_commondata!(MixedRadix3xnAvx);
 
+impl MixedRadix3xnAvx<f32, __m256> {
+    mixedradix_boilerplate_f32!();
+    
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inner_fft: Arc<Fft<f32>>) -> Self {
+        Self {
+            twiddles_butterfly3: avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 3, inner_fft.is_inverse())),
+            common_data: mixedradix_gen_data_f32!(3, inner_fft),
+        }
+    }
+
+    mixedradix_column_butterflies_f32!(3, 1, |columns, this: &Self| avx32_utils::fma::column_butterfly3_f32(columns, this.twiddles_butterfly3));
+    mixedradix_transpose_f32!(3, 1, avx32_utils::transpose_4x3_packed_f32, 0;1;2);
+
+    // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
+    // and even different from f32 to f64 of the same algorithm, so it has to go outside the macro
+    #[inline(always)]
+    unsafe fn write_partial_remainder(output: &mut[Complex<f32>], packed_data: [__m256; 3], partial_remainder: usize) {
+        assert!(partial_remainder > 0 && partial_remainder < 4);
+        if partial_remainder == 1 {
+            let remainder_mask = avx32_utils::RemainderMask::new_f32(3);
+            output.store_complex_remainder_f32(remainder_mask, packed_data[0], 0);
+        } else {
+            output.store_complex_f32(0, packed_data[0]);
+
+            if partial_remainder == 2 {
+                output.store_complex_f32_lo(packed_data[1], 4);
+            }
+            if partial_remainder == 3 {
+                output.store_complex_f32(4, packed_data[1]);
+                let remainder_mask = avx32_utils::RemainderMask::new_f32(1);
+                output.store_complex_remainder_f32(remainder_mask, packed_data[2], 8);
+            }
+        }
+    }
+}
+impl MixedRadix3xnAvx<f64, __m256d> {
+    mixedradix_boilerplate_f64!();
+    
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inner_fft: Arc<Fft<f64>>) -> Self {
+        Self {
+            twiddles_butterfly3: avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1, 3, inner_fft.is_inverse())),
+            common_data: mixedradix_gen_data_f64!(3, inner_fft),
+        }
+    }
+
+    mixedradix_column_butterflies_f64!(3, 1,
+        |columns, this: &Self| avx64_utils::fma::column_butterfly3_f64(columns, this.twiddles_butterfly3),
+        |columns, this: &Self| avx64_utils::fma::column_butterfly3_f64_lo(columns, this.twiddles_butterfly3)
+    );
+    mixedradix_transpose_f64!(3, 1, avx64_utils::transpose_2x3_to_3x2_packed_f64, 0;1;2);
+}
 
 
 
@@ -711,6 +769,64 @@ impl MixedRadix4xnAvx<f64, __m256d> {
 
 
 
+
+
+pub struct MixedRadix6xnAvx<T, V> {
+    twiddles_butterfly3: V,
+    common_data: CommonSimdData<T,V>
+}
+boilerplate_fft_commondata!(MixedRadix6xnAvx);
+
+impl MixedRadix6xnAvx<f32, __m256> {
+    mixedradix_boilerplate_f32!();
+    
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inner_fft: Arc<Fft<f32>>) -> Self {
+        Self {
+            twiddles_butterfly3: avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 3, inner_fft.is_inverse())),
+            common_data: mixedradix_gen_data_f32!(6, inner_fft),
+        }
+    }
+
+    mixedradix_column_butterflies_f32!(6, 1, |columns, this: &Self| avx32_utils::fma::column_butterfly6_f32(columns, this.twiddles_butterfly3));
+    mixedradix_transpose_f32!(6, 1, avx32_utils::transpose_4x6_to_6x4_packed_f32, 0;1;2;3;4;5);
+
+    // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
+    // and even different from f32 to f64 of the same algorithm, so it has to go outside the macro
+    #[inline(always)]
+    unsafe fn write_partial_remainder(output: &mut[Complex<f32>], packed_data: [__m256; 6], partial_remainder: usize) {
+        assert!(partial_remainder > 0 && partial_remainder < 4);
+        output.store_complex_f32(0, packed_data[0]);
+        if partial_remainder == 1 {
+            output.store_complex_f32_lo(packed_data[1], 4);
+        } else {
+            output.store_complex_f32(4, packed_data[1]);
+            output.store_complex_f32(8, packed_data[2]);
+
+            if partial_remainder == 3 {
+                output.store_complex_f32(12, packed_data[3]);
+                output.store_complex_f32_lo(packed_data[4], 16);
+            }
+        }
+    }
+}
+impl MixedRadix6xnAvx<f64, __m256d> {
+    mixedradix_boilerplate_f64!();
+    
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inner_fft: Arc<Fft<f64>>) -> Self {
+        Self {
+            twiddles_butterfly3: avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1, 3, inner_fft.is_inverse())),
+            common_data: mixedradix_gen_data_f64!(6, inner_fft),
+        }
+    }
+
+    mixedradix_column_butterflies_f64!(6, 1,
+        |columns, this: &Self| avx64_utils::fma::column_butterfly6_f64(columns, this.twiddles_butterfly3),
+        |columns, this: &Self| avx64_utils::fma::column_butterfly6_f64_lo(columns, this.twiddles_butterfly3)
+    );
+    mixedradix_transpose_f64!(6, 1, avx64_utils::transpose_2x6_to_6x2_packed_f64, 0;1;2;3;4;5);
+}
 
 
 
@@ -778,6 +894,157 @@ impl MixedRadix8xnAvx<f64, __m256d> {
         |columns, this: &Self| avx64_utils::fma::column_butterfly8_f64_lo(columns, this.twiddles_butterfly8, this.twiddle_config)
     );
     mixedradix_transpose_f64!(8, 1, avx64_utils::transpose_2x8_to_8x2_packed_f64, 0;1;2;3;4;5;6;7);
+}
+
+
+
+
+pub struct MixedRadix9xnAvx<T, V> {
+    twiddles_butterfly9: [V; 3],
+    twiddles_butterfly3: V,
+    common_data: CommonSimdData<T, V>,
+}
+boilerplate_fft_commondata!(MixedRadix9xnAvx);
+
+impl MixedRadix9xnAvx<f32, __m256> {
+    mixedradix_boilerplate_f32!();
+
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inner_fft: Arc<Fft<f32>>) -> Self {
+        let inverse = inner_fft.is_inverse();
+        Self {
+        	twiddles_butterfly9: [
+                avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 9, inverse)),
+                avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(2, 9, inverse)),
+                avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(4, 9, inverse)),
+            ],
+        	twiddles_butterfly3: avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 3, inverse)),
+            common_data: mixedradix_gen_data_f32!(9, inner_fft),
+        }
+    }
+
+    mixedradix_column_butterflies_f32!(9, 1, |columns, this: &Self| avx32_utils::fma::column_butterfly9_f32(columns, this.twiddles_butterfly9, this.twiddles_butterfly3));
+    mixedradix_transpose_f32!(9, 1, avx32_utils::transpose_4x9_to_9x4_packed_f32, 0;1;2;3;4;5;6;7;8);
+
+    // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
+    // and even different from f32 to f64 of the same algorithm, so it has to go outside the macro
+    #[inline(always)]
+    unsafe fn write_partial_remainder(output: &mut[Complex<f32>], packed_data: [__m256; 9], partial_remainder: usize) {
+        output.store_complex_f32(0, packed_data[0]);
+        output.store_complex_f32(4, packed_data[1]);
+
+        if partial_remainder == 1 {
+            let remainder_mask = avx32_utils::RemainderMask::new_f32(1);
+            output.store_complex_remainder_f32(remainder_mask, packed_data[2], 8);
+        } else {
+            output.store_complex_f32(8,  packed_data[2]);
+            output.store_complex_f32(12, packed_data[3]);
+
+            if partial_remainder == 2 {
+                output.store_complex_f32_lo(packed_data[4], 16);
+            }
+            else {
+                let remainder_mask = avx32_utils::RemainderMask::new_f32(3);
+                output.store_complex_f32(16, packed_data[4]);
+                output.store_complex_f32(20, packed_data[5]);
+                output.store_complex_remainder_f32(remainder_mask, packed_data[6], 24);
+            }
+        }
+    }
+}
+impl MixedRadix9xnAvx<f64, __m256d> {
+    mixedradix_boilerplate_f64!();
+
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inner_fft: Arc<Fft<f64>>) -> Self {
+        let inverse = inner_fft.is_inverse();
+        Self {
+        	twiddles_butterfly9: [
+                avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1, 9, inverse)),
+                avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(2, 9, inverse)),
+                avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(4, 9, inverse)),
+            ],
+        	twiddles_butterfly3: avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1, 3, inverse)),
+            common_data: mixedradix_gen_data_f64!(9, inner_fft),
+        }
+    }
+
+    mixedradix_column_butterflies_f64!(9, 1,
+        |columns, this: &Self| avx64_utils::fma::column_butterfly9_f64(columns, this.twiddles_butterfly9, this.twiddles_butterfly3),
+        |columns, this: &Self| avx64_utils::fma::column_butterfly9_f64_lo(columns, this.twiddles_butterfly9, this.twiddles_butterfly3)
+    );
+    mixedradix_transpose_f64!(9, 1, avx64_utils::transpose_2x9_to_9x2_packed_f64, 0;1;2;3;4;5;6;7;8);
+}
+
+
+
+
+
+
+
+pub struct MixedRadix12xnAvx<T, V> {
+    twiddle_config: avx32_utils::Rotate90Config<V>,
+    twiddles_butterfly3: V,
+    common_data: CommonSimdData<T, V>,
+}
+boilerplate_fft_commondata!(MixedRadix12xnAvx);
+
+impl MixedRadix12xnAvx<f32, __m256> {
+    mixedradix_boilerplate_f32!();
+
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inner_fft: Arc<Fft<f32>>) -> Self {
+        let inverse = inner_fft.is_inverse();
+        Self {
+        	twiddle_config: avx32_utils::Rotate90Config::new_f32(inverse),
+        	twiddles_butterfly3: avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 3, inverse)),
+            common_data: mixedradix_gen_data_f32!(12, inner_fft),
+        }
+    }
+
+    mixedradix_column_butterflies_f32!(12, 1, |columns, this: &Self| avx32_utils::fma::column_butterfly12_f32(columns, this.twiddles_butterfly3, this.twiddle_config));
+    mixedradix_transpose_f32!(12, 1, avx32_utils::transpose_4x12_to_12x4_packed_f32, 0;1;2;3;4;5;6;7;8;9;10;11);
+
+    // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
+    // and even different from f32 to f64 of the same algorithm, so it has to go outside the macro
+    #[inline(always)]
+    unsafe fn write_partial_remainder(output: &mut[Complex<f32>], packed_data: [__m256; 12], partial_remainder: usize) {
+        // We're manually unrolling this loop. if we don't, the compiler will insert unnecessary writes+reads to the stack which tank performance
+        // see: https://github.com/rust-lang/rust/issues/71025
+        // once the compiler bug is fixed, this can be replaced by a "for i in 0..partial_remainder" loop
+        output.store_complex_f32(0, packed_data[0]);
+        output.store_complex_f32(4, packed_data[1]);
+        output.store_complex_f32(8, packed_data[2]);
+        if partial_remainder > 1 {
+            output.store_complex_f32(12, packed_data[3]);
+            output.store_complex_f32(16, packed_data[4]);
+            output.store_complex_f32(20, packed_data[5]);
+            if partial_remainder > 2 {
+                output.store_complex_f32(24, packed_data[6]);
+                output.store_complex_f32(28, packed_data[7]);
+                output.store_complex_f32(32, packed_data[8]);
+            }
+        }
+    }
+}
+impl MixedRadix12xnAvx<f64, __m256d> {
+    mixedradix_boilerplate_f64!();
+
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inner_fft: Arc<Fft<f64>>) -> Self {
+        let inverse = inner_fft.is_inverse();
+        Self {
+        	twiddle_config: avx32_utils::Rotate90Config::new_f64(inverse),
+        	twiddles_butterfly3: avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1, 3, inverse)),
+            common_data: mixedradix_gen_data_f64!(12, inner_fft),
+        }
+    }
+
+    mixedradix_column_butterflies_f64!(12, 1,
+        |columns, this: &Self| avx64_utils::fma::column_butterfly12_f64(columns, this.twiddles_butterfly3, this.twiddle_config),
+        |columns, this: &Self| avx64_utils::fma::column_butterfly12_f64_lo(columns, this.twiddles_butterfly3, this.twiddle_config)
+    );
+    mixedradix_transpose_f64!(12, 1, avx64_utils::transpose_2x12_to_12x2_packed_f64, 0;1;2;3;4;5;6;7;8;9;10;11);
 }
 
 
@@ -875,48 +1142,44 @@ mod unit_tests {
     use algorithm::*;
 
     macro_rules! test_avx_mixed_radix {
-        ($f32_test_name:ident, $f64_test_name:ident, $struct_name:ident, $pow_range:expr, $inner_len:expr) => (
+        ($f32_test_name:ident, $f64_test_name:ident, $struct_name:ident, $inner_count:expr) => (
             #[test]
             fn $f32_test_name() {
-                for pow in $pow_range {
-                    for remainder in 0..16 {
-                        let len = (1 << pow) + $inner_len * remainder;
+                for inner_fft_len in 1..32 {
+                    let len = inner_fft_len * $inner_count;
 
-                        let zinner_fft_forward = Arc::new(DFT::new(len / $inner_len, false)) as Arc<dyn Fft<f64>>;
-                        let zfft_forward = $struct_name::new_f64(zinner_fft_forward).expect("Can't run test because this machine doesn't have the required instruction sets");
-                        check_fft_algorithm(&zfft_forward, len, false);
+                    let inner_fft_forward = Arc::new(DFT::new(inner_fft_len, false)) as Arc<dyn Fft<f32>>;
+                    let fft_forward = $struct_name::new_f32(inner_fft_forward).expect("Can't run test because this machine doesn't have the required instruction sets");
+                    check_fft_algorithm(&fft_forward, len, false);
 
-                        let inner_fft_forward = Arc::new(DFT::new(len / $inner_len, false)) as Arc<dyn Fft<f32>>;
-                        let fft_forward = $struct_name::new_f32(inner_fft_forward).expect("Can't run test because this machine doesn't have the required instruction sets");
-                        check_fft_algorithm(&fft_forward, len, false);
-
-                        let inner_fft_inverse = Arc::new(DFT::new(len / $inner_len, true)) as Arc<dyn Fft<f32>>;
-                        let fft_inverse = $struct_name::new_f32(inner_fft_inverse).expect("Can't run test because this machine doesn't have the required instruction sets");
-                        check_fft_algorithm(&fft_inverse, len, true);
-                    }
+                    let inner_fft_inverse = Arc::new(DFT::new(inner_fft_len, true)) as Arc<dyn Fft<f32>>;
+                    let fft_inverse = $struct_name::new_f32(inner_fft_inverse).expect("Can't run test because this machine doesn't have the required instruction sets");
+                    check_fft_algorithm(&fft_inverse, len, true);
                 }
             }
             #[test]
             fn $f64_test_name() {
-                for pow in $pow_range {
-                    for remainder in 0..2 {
-                        let len = (1 << pow) + $inner_len * remainder;
+                for inner_fft_len in 1..32 {
+                    let len = inner_fft_len * $inner_count;
 
-                        let inner_fft_forward = Arc::new(DFT::new(len / $inner_len, false)) as Arc<dyn Fft<f64>>;
-                        let fft_forward = $struct_name::new_f64(inner_fft_forward).expect("Can't run test because this machine doesn't have the required instruction sets");
-                        check_fft_algorithm(&fft_forward, len, false);
+                    let inner_fft_forward = Arc::new(DFT::new(inner_fft_len, false)) as Arc<dyn Fft<f64>>;
+                    let fft_forward = $struct_name::new_f64(inner_fft_forward).expect("Can't run test because this machine doesn't have the required instruction sets");
+                    check_fft_algorithm(&fft_forward, len, false);
 
-                        let inner_fft_inverse = Arc::new(DFT::new(len / $inner_len, true)) as Arc<dyn Fft<f64>>;
-                        let fft_inverse = $struct_name::new_f64(inner_fft_inverse).expect("Can't run test because this machine doesn't have the required instruction sets");
-                        check_fft_algorithm(&fft_inverse, len, true);
-                    }
+                    let inner_fft_inverse = Arc::new(DFT::new(inner_fft_len, true)) as Arc<dyn Fft<f64>>;
+                    let fft_inverse = $struct_name::new_f64(inner_fft_inverse).expect("Can't run test because this machine doesn't have the required instruction sets");
+                    check_fft_algorithm(&fft_inverse, len, true);
                 }
             }
         )
     }
 
-    test_avx_mixed_radix!(test_mixedradix_2xn_avx_f32, test_mixedradix_2xn_avx_f64, MixedRadix2xnAvx, 1..5, 2);
-    test_avx_mixed_radix!(test_mixedradix_4xn_avx_f32, test_mixedradix_4xn_avx_f64, MixedRadix4xnAvx, 2..6, 4);
-    test_avx_mixed_radix!(test_mixedradix_8xn_avx_f32, test_mixedradix_8xn_avx_f64, MixedRadix8xnAvx, 3..7, 8);
-    test_avx_mixed_radix!(test_mixedradix_16xn_avx_f32, test_mixedradix_16xn_avx_f64, MixedRadix16xnAvx, 4..8, 16);
+    test_avx_mixed_radix!(test_mixedradix_2xn_avx_f32, test_mixedradix_2xn_avx_f64, MixedRadix2xnAvx, 2);
+    test_avx_mixed_radix!(test_mixedradix_3xn_avx_f32, test_mixedradix_3xn_avx_f64, MixedRadix3xnAvx, 3);
+    test_avx_mixed_radix!(test_mixedradix_4xn_avx_f32, test_mixedradix_4xn_avx_f64, MixedRadix4xnAvx, 4);
+    test_avx_mixed_radix!(test_mixedradix_6xn_avx_f32, test_mixedradix_6xn_avx_f64, MixedRadix6xnAvx, 6);
+    test_avx_mixed_radix!(test_mixedradix_8xn_avx_f32, test_mixedradix_8xn_avx_f64, MixedRadix8xnAvx, 8);
+    test_avx_mixed_radix!(test_mixedradix_9xn_avx_f32, test_mixedradix_9xn_avx_f64, MixedRadix9xnAvx, 9);
+    test_avx_mixed_radix!(test_mixedradix_12xn_avx_f32, test_mixedradix_12xn_avx_f64, MixedRadix12xnAvx, 12);
+    test_avx_mixed_radix!(test_mixedradix_16xn_avx_f32, test_mixedradix_16xn_avx_f64, MixedRadix16xnAvx, 16);
 }

@@ -169,4 +169,4 @@ pub use self::avx32_butterflies::{MixedRadixAvx4x2, MixedRadixAvx4x3, MixedRadix
 pub use self::avx64_butterflies::{MixedRadix64Avx4x2, MixedRadix64Avx4x3, MixedRadix64Avx4x4, MixedRadix64Avx4x6, MixedRadix64Avx4x4SplitRealImaginary, MixedRadix64Avx4x8};
 
 pub use self::avx_bluesteins::BluesteinsAvx;
-pub use self::avx_mixed_radix::{MixedRadix2xnAvx, MixedRadix4xnAvx, MixedRadix8xnAvx, MixedRadix16xnAvx};
+pub use self::avx_mixed_radix::{MixedRadix2xnAvx, MixedRadix3xnAvx, MixedRadix4xnAvx, MixedRadix6xnAvx, MixedRadix8xnAvx, MixedRadix9xnAvx, MixedRadix12xnAvx, MixedRadix16xnAvx};

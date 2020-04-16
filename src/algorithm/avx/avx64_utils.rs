@@ -214,6 +214,18 @@ pub unsafe fn transpose_4x2_to_2x4_f64(rows0: [__m256d; 2], rows1: [__m256d; 2])
     [output00[0], output00[1], output01[0], output01[1]]
 }
 
+
+// Treat the input like the rows of a 2x3 array, and transpose it to a 3x2 array
+// But instead of storing "columns" of registers as separate arrays for further processing, pack them all into one array
+#[inline(always)]
+pub unsafe fn transpose_2x3_to_3x2_packed_f64(rows: [__m256d; 3]) -> [__m256d; 3] {
+    [
+        _mm256_permute2f128_pd(rows[0], rows[1], 0x20),
+        _mm256_permute2f128_pd(rows[2], rows[0], 0x30),
+        _mm256_permute2f128_pd(rows[1], rows[2], 0x31),
+    ]
+}
+
 // Treat the input like the rows of a 2x4 array, and transpose it to a 4x2 array
 // But instead of storing "columns" of registers as separate arrays for further processing, pack them all into one array
 #[inline(always)]
@@ -225,6 +237,21 @@ pub unsafe fn transpose_2x4_to_4x2_packed_f64(rows: [__m256d; 4]) -> [__m256d; 4
     let output1 = transpose_2x2_f64(chunk1);
 
     [output0[0], output1[0], output0[1], output1[1]]
+}
+
+// Treat the input like the rows of a 2x8 array, and transpose it to a 8x2 array.
+// But instead of storing "columns" of registers as separate arrays for further processing, pack them all into one array
+#[inline(always)]
+pub unsafe fn transpose_2x6_to_6x2_packed_f64(rows: [__m256d; 6]) -> [__m256d; 6] {
+    let chunk0 = [rows[0], rows[1]];
+    let chunk1 = [rows[2], rows[3]];
+    let chunk2 = [rows[4], rows[5]];
+
+    let output0 = transpose_2x2_f64(chunk0);
+    let output1 = transpose_2x2_f64(chunk1);
+    let output2 = transpose_2x2_f64(chunk2);
+
+    [output0[0], output1[0], output2[0], output0[1], output1[1], output2[1]] 
 }
 
 // Treat the input like the rows of a 2x8 array, and transpose it to a 8x2 array.
@@ -242,6 +269,45 @@ pub unsafe fn transpose_2x8_to_8x2_packed_f64(rows: [__m256d; 8]) -> [__m256d; 8
     let output3 = transpose_2x2_f64(chunk3);
 
     [output0[0], output1[0], output2[0], output3[0], output0[1], output1[1], output2[1], output3[1]] 
+}
+
+
+// Treat the input like the rows of a 2x9 array, and transpose it to a 9x2 array
+// But instead of storing "columns" of registers as separate arrays for further processing, pack them all into one array
+#[inline(always)]
+pub unsafe fn transpose_2x9_to_9x2_packed_f64(rows: [__m256d; 9]) -> [__m256d; 9] {
+    [
+        _mm256_permute2f128_pd(rows[0], rows[1], 0x20),
+        _mm256_permute2f128_pd(rows[2], rows[3], 0x20),
+        _mm256_permute2f128_pd(rows[4], rows[5], 0x20),
+        _mm256_permute2f128_pd(rows[6], rows[7], 0x20),
+        _mm256_permute2f128_pd(rows[8], rows[0], 0x30),
+        _mm256_permute2f128_pd(rows[1], rows[2], 0x31),
+        _mm256_permute2f128_pd(rows[3], rows[4], 0x31),
+        _mm256_permute2f128_pd(rows[5], rows[6], 0x31),
+        _mm256_permute2f128_pd(rows[7], rows[8], 0x31),
+    ]
+}
+
+// Treat the input like the rows of a 2x12 array, and transpose it to a 12x2 array.
+// But instead of storing "columns" of registers as separate arrays for further processing, pack them all into one array
+#[inline(always)]
+pub unsafe fn transpose_2x12_to_12x2_packed_f64(rows: [__m256d; 12]) -> [__m256d; 12] {
+    let chunk0 = [rows[0], rows[1]];
+    let chunk1 = [rows[2], rows[3]];
+    let chunk2 = [rows[4], rows[5]];
+    let chunk3 = [rows[6], rows[7]];
+    let chunk4 = [rows[8], rows[9]];
+    let chunk5 = [rows[10], rows[11]];
+
+    let output0 = transpose_2x2_f64(chunk0);
+    let output1 = transpose_2x2_f64(chunk1);
+    let output2 = transpose_2x2_f64(chunk2);
+    let output3 = transpose_2x2_f64(chunk3);
+    let output4 = transpose_2x2_f64(chunk4);
+    let output5 = transpose_2x2_f64(chunk5);
+
+    [output0[0], output1[0], output2[0], output3[0], output4[0], output5[0], output0[1], output1[1], output2[1], output3[1], output4[1], output5[1]] 
 }
 
 // Treat the input like the rows of a 2x16 array, and transpose it to a 16x2 array.
@@ -488,6 +554,27 @@ pub mod fma {
         [output0, output1, output2]
     }
 
+    // Compute 2 parallel butterfly 3's using AVX and FMA instructions
+    // rowN contains the nth element of each parallel FFT
+    #[inline(always)]
+    pub unsafe fn column_butterfly3_f64_lo(rows: [__m128d; 3], twiddles: __m256d) -> [__m128d; 3] {
+        let [mid1_pretwiddle, mid2_pretwiddle] = column_butterfly2_f64_lo([rows[1], rows[2]]);
+        let output0 = _mm_add_pd(rows[0], mid1_pretwiddle);
+
+        let twiddles_lo = _mm256_castpd256_pd128(twiddles);
+        let twiddle_real = _mm_movedup_pd(twiddles_lo);
+        let twiddle_imag = _mm_permute_pd(twiddles_lo, 0x0F); // apparently the avx deigners just skipped movehdup f64?? So use a permute instruction to take its place, copying the imaginaries int othe reals
+        
+        let mid1 = _mm_fmadd_pd(mid1_pretwiddle, twiddle_real, rows[0]);
+
+        let mid2_rotated = Rotate90Config::new_f64(true).rotate90_lo(mid2_pretwiddle);
+        let mid2 = _mm_mul_pd(mid2_rotated, twiddle_imag);
+
+        let [output1, output2] = column_butterfly2_f64_lo([mid1, mid2]);
+
+        [output0, output1, output2]
+    }
+
     // Compute 2 parallel butterfly 6's using AVX instructions
     // rowN contains the nth element of each parallel FFT
     #[inline(always)]
@@ -500,6 +587,23 @@ pub mod fma {
         let (output0, output1) = column_butterfly2_f64(mid0[0], mid1[0]);
         let (output2, output3) = column_butterfly2_f64(mid0[1], mid1[1]);
         let (output4, output5) = column_butterfly2_f64(mid0[2], mid1[2]);
+
+        // reorder into output
+        [output0, output3, output4, output1, output2, output5]
+    }
+
+    // Compute 2 parallel butterfly 6's using AVX instructions
+    // rowN contains the nth element of each parallel FFT
+    #[inline(always)]
+    pub unsafe fn column_butterfly6_f64_lo(rows: [__m128d; 6], butterfly3_twiddles: __m256d) -> [__m128d; 6] {
+        // We're going good-thomas algorithm. We can reorder the inputs and outputs in such a way that we don't need twiddle factors!
+        let mid0 = column_butterfly3_f64_lo([rows[0], rows[2], rows[4]], butterfly3_twiddles);
+        let mid1 = column_butterfly3_f64_lo([rows[3], rows[5], rows[1]], butterfly3_twiddles);
+
+        // transpose the data and do butterfly 2's
+        let [output0, output1] = column_butterfly2_f64_lo([mid0[0], mid1[0]]);
+        let [output2, output3] = column_butterfly2_f64_lo([mid0[1], mid1[1]]);
+        let [output4, output5] = column_butterfly2_f64_lo([mid0[2], mid1[2]]);
 
         // reorder into output
         [output0, output3, output4, output1, output2, output5]
@@ -549,13 +653,89 @@ pub mod fma {
         mid1[3] = complex_conjugated_multiply_f64_lo(twiddles_lo, mid1[3]);
 
         // Up next is a transpose, but since everything is already in registers, we don't actually have to transpose anything!
-        // "transposE" and thne apply butterfly 2's across the columns of our 4x2 array
+        // "transpose" and then apply butterfly 2's across the columns of our 4x2 array
         let final0 = column_butterfly2_f64_lo([mid0[0], mid1[0]]);
         let final1 = column_butterfly2_f64_lo([mid0[1], mid1[1]]);
         let final2 = column_butterfly2_f64_lo([mid0[2], mid1[2]]);
         let final3 = column_butterfly2_f64_negaterow1_lo([mid0[3], mid1[3]]); // Finish applying the negation from our twiddles by calling a different butterfly 2 function
 
         [final0[0], final1[0], final2[0], final3[0], final0[1], final1[1], final2[1], final3[1]]
+    }
+
+    // Compute 2 parallel butterfly 9's using AVX and FMA instructions
+    // rowN contains the nth element of each parallel FFT
+    #[inline(always)]
+    pub unsafe fn column_butterfly9_f64(rows: [__m256d; 9], twiddles: [__m256d;3], butterfly3_twiddles: __m256d) -> [__m256d; 9] {
+        let mid0 = column_butterfly3_f64([rows[0], rows[3], rows[6]], butterfly3_twiddles);
+        let mut mid1 = column_butterfly3_f64([rows[1], rows[4], rows[7]], butterfly3_twiddles);
+        let mut mid2 = column_butterfly3_f64([rows[2], rows[5], rows[8]], butterfly3_twiddles);
+
+        // Apply twiddle factors. Note that we're re-using twiddles[1]
+        mid1[1] = complex_multiply_f64(twiddles[0], mid1[1]);
+        mid1[2] = complex_multiply_f64(twiddles[1], mid1[2]);
+        mid2[1] = complex_multiply_f64(twiddles[1], mid2[1]);
+        mid2[2] = complex_multiply_f64(twiddles[2], mid2[2]);
+
+        let [output0, output1, output2] = column_butterfly3_f64([mid0[0], mid1[0], mid2[0]], butterfly3_twiddles);
+        let [output3, output4, output5] = column_butterfly3_f64([mid0[1], mid1[1], mid2[1]], butterfly3_twiddles);
+        let [output6, output7, output8] = column_butterfly3_f64([mid0[2], mid1[2], mid2[2]], butterfly3_twiddles);
+
+        [output0, output3, output6, output1, output4, output7, output2, output5, output8]
+    }
+
+    // Compute 2 parallel butterfly 9's using AVX and FMA instructions
+    // rowN contains the nth element of each parallel FFT
+    #[inline(always)]
+    pub unsafe fn column_butterfly9_f64_lo(rows: [__m128d; 9], twiddles: [__m256d;3], butterfly3_twiddles: __m256d) -> [__m128d; 9] {
+        let mid0 = column_butterfly3_f64_lo([rows[0], rows[3], rows[6]], butterfly3_twiddles);
+        let mut mid1 = column_butterfly3_f64_lo([rows[1], rows[4], rows[7]], butterfly3_twiddles);
+        let mut mid2 = column_butterfly3_f64_lo([rows[2], rows[5], rows[8]], butterfly3_twiddles);
+
+        // Apply twiddle factors. Note that we're re-using twiddles[1]
+        mid1[1] = complex_multiply_f64_lo(_mm256_castpd256_pd128(twiddles[0]), mid1[1]);
+        mid1[2] = complex_multiply_f64_lo(_mm256_castpd256_pd128(twiddles[1]), mid1[2]);
+        mid2[1] = complex_multiply_f64_lo(_mm256_castpd256_pd128(twiddles[1]), mid2[1]);
+        mid2[2] = complex_multiply_f64_lo(_mm256_castpd256_pd128(twiddles[2]), mid2[2]);
+
+        let [output0, output1, output2] = column_butterfly3_f64_lo([mid0[0], mid1[0], mid2[0]], butterfly3_twiddles);
+        let [output3, output4, output5] = column_butterfly3_f64_lo([mid0[1], mid1[1], mid2[1]], butterfly3_twiddles);
+        let [output6, output7, output8] = column_butterfly3_f64_lo([mid0[2], mid1[2], mid2[2]], butterfly3_twiddles);
+
+        [output0, output3, output6, output1, output4, output7, output2, output5, output8]
+    }
+
+    // Compute 2 parallel butterfly 12's using AVX and FMA instructions
+    // rowN contains the nth element of each parallel FFT
+    #[inline(always)]
+    pub unsafe fn column_butterfly12_f64(rows: [__m256d; 12], butterfly3_twiddles: __m256d, twiddle_config: Rotate90Config<__m256d>) -> [__m256d; 12] {
+        // Compute this as a 4x3 FFT. since 4 and 3 are coprime, we can use the good-thomas algorithm. That means crazy reordering of our inputs and outputs, but it also means no twiddle factors
+        let mid0 = column_butterfly4_f64([rows[0], rows[3], rows[6], rows[9]], twiddle_config);
+        let mid1 = column_butterfly4_f64([rows[4], rows[7], rows[10],rows[1]], twiddle_config);
+        let mid2 = column_butterfly4_f64([rows[8], rows[11],rows[2], rows[5]], twiddle_config);
+
+        let [output0, output1, output2] = column_butterfly3_f64([mid0[0], mid1[0], mid2[0]], butterfly3_twiddles);
+        let [output3, output4, output5] = column_butterfly3_f64([mid0[1], mid1[1], mid2[1]], butterfly3_twiddles);
+        let [output6, output7, output8] = column_butterfly3_f64([mid0[2], mid1[2], mid2[2]], butterfly3_twiddles);
+        let [output9, output10,output11]= column_butterfly3_f64([mid0[3], mid1[3], mid2[3]], butterfly3_twiddles);
+
+        [output0, output4, output8, output9, output1, output5, output6, output10, output2, output3, output7, output11]
+    }
+
+    // Compute 2 parallel butterfly 12's using AVX and FMA instructions
+    // rowN contains the nth element of each parallel FFT
+    #[inline(always)]
+    pub unsafe fn column_butterfly12_f64_lo(rows: [__m128d; 12], butterfly3_twiddles: __m256d, twiddle_config: Rotate90Config<__m256d>) -> [__m128d; 12] {
+        // Compute this as a 4x3 FFT. since 4 and 3 are coprime, we can use the good-thomas algorithm. That means crazy reordering of our inputs and outputs, but it also means no twiddle factors
+        let mid0 = column_butterfly4_f64_lo([rows[0], rows[3], rows[6], rows[9]], twiddle_config);
+        let mid1 = column_butterfly4_f64_lo([rows[4], rows[7], rows[10],rows[1]], twiddle_config);
+        let mid2 = column_butterfly4_f64_lo([rows[8], rows[11],rows[2], rows[5]], twiddle_config);
+
+        let [output0, output1, output2] = column_butterfly3_f64_lo([mid0[0], mid1[0], mid2[0]], butterfly3_twiddles);
+        let [output3, output4, output5] = column_butterfly3_f64_lo([mid0[1], mid1[1], mid2[1]], butterfly3_twiddles);
+        let [output6, output7, output8] = column_butterfly3_f64_lo([mid0[2], mid1[2], mid2[2]], butterfly3_twiddles);
+        let [output9, output10,output11]= column_butterfly3_f64_lo([mid0[3], mid1[3], mid2[3]], butterfly3_twiddles);
+
+        [output0, output4, output8, output9, output1, output5, output6, output10, output2, output3, output7, output11]
     }
 
     // Compute 2 parallel butterfly 16's using AVX and FMA instructions
