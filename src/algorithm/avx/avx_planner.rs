@@ -1,9 +1,10 @@
 use std::sync::Arc;
 use std::collections::HashMap;
+use std::cmp::min;
 
 use ::algorithm::butterflies::*;
 use ::algorithm::*;
-use ::math_utils::{PrimeFactor, PrimeFactors };
+use ::math_utils::{PartialFactors, PrimeFactors};
 use ::common::FFTnum;
 use ::Fft;
 
@@ -15,6 +16,34 @@ fn wrap_fft<T: FFTnum>(butterfly: impl Fft<T> + 'static) -> Arc<dyn Fft<T>> {
 
 fn wrap_fft_some<T: FFTnum>(butterfly: impl Fft<T> + 'static) -> Option<Arc<dyn Fft<T>>> {
     Some(Arc::new(butterfly) as Arc<dyn Fft<T>>)
+}
+
+/// repreesnts a FFT plan, stored as a base FFT and a stack of MixedRadix*xn on top of it.
+#[derive(Debug)]
+struct MixedRadixPlan {
+    len: usize, // product of base and radixes
+    base: usize, // either a butterfly, or a bluesteins/raders step
+    radixes: Vec<u8>, // stored from smallest to largest
+}
+impl MixedRadixPlan {
+    fn new(base: usize, radixes: &[u8]) -> Self {
+        Self {
+            len: base * radixes.iter().map(|r| *r as usize).product::<usize>(),
+            base,
+            radixes: radixes.to_vec(),
+        }
+    }
+    fn push_radix(&mut self, radix: u8) {
+        self.radixes.push(radix);
+        self.len *= radix as usize;
+    }
+    fn push_radix_power(&mut self, radix: u8, power: u32) {
+        self.radixes.extend(std::iter::repeat(radix).take(power as usize));
+        self.len *= (radix as usize).pow(power);
+    }
+    fn is_base_only(&self) -> bool {
+        self.radixes.len() == 0
+    }
 }
 
 pub struct FftPlannerAvx<T: FFTnum> {
@@ -38,122 +67,267 @@ impl<T: FFTnum> FftPlannerAvx<T> {
     }
 
     pub fn plan_fft(&mut self, len: usize) -> Arc<Fft<T>> {
+        self.plan_with_cache(len, Self::plan_and_construct_new_fft)
+    }
+
+    // If we already have the provided FFT len cached, return the cached value. If not, call `create_fn`to create it, and cache the results
+    fn plan_with_cache(&mut self, len: usize, create_fn: impl FnOnce(&mut Self, usize) -> Arc<dyn Fft<T>>) -> Arc<dyn Fft<T>> {
         if let Some(instance) = self.algorithm_cache.get(&len) {
             Arc::clone(instance)
         } else {
-            let instance = self.plan_fft_with_factors(len, PrimeFactors::compute(len));
+            let instance = create_fn(self, len);
             self.algorithm_cache.insert(len, Arc::clone(&instance));
             instance
         }
     }
 
-    fn plan_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Arc<Fft<T>> {
-        if let Some(butterfly) = self.plan_new_butterfly(len) {
+    fn plan_and_construct_new_fft(&mut self, len: usize) -> Arc<Fft<T>> {
+        if let Some(butterfly) = self.try_construct_butterfly(len) {
             butterfly
-        } else if factors.is_prime() {
-            self.plan_new_prime(len)
         } else {
-            self.plan_new_composite(len, factors)
+            let factors = PartialFactors::compute(len);
+            let base = self.plan_mixed_radix_base(len, &factors);
+
+            // it's possible that the base planner plans outthe whole FFT. it's guaranteed if `len` is a prime number, for example
+            let plan = if base.len == len {
+                base
+            } else {
+                let radix_factors = factors.divide_by(&PartialFactors::compute(base.len)).unwrap();
+                self.plan_mixed_radix(radix_factors, base)
+            };
+
+            self.construct_plan(plan)
         }
     }
+
+    fn plan_mixed_radix(&self, mut radix_factors: PartialFactors, mut plan: MixedRadixPlan) -> MixedRadixPlan {
+        // if we can complete the FFT with a single radix, do it
+        if [2,3,4,6,8,9,12,16].contains(&radix_factors.product()) {
+            plan.push_radix(radix_factors.product() as u8)
+        } else {
+            // it's helpful to think of this process as rewriting the FFT length as powers of our radixes
+            // the fastest FFT we could possibly compute is 8^n, because the 8xn algorithm is blazing fast. 9xn and 12xn are also very fast, so those are what we will aim for
+            // unfortunately, most FFTs don't come in the form 8^n * 9^m * 12^k
+            // 
+            // so our goal will be to use 6xn to strip away as few factors as possible to get us to 8^n * 9^m * 12^k, then maximize k
+            //
+            // if you're curious about how these heuristics were developed, check out the "compare_3n2m_strategies" benchmark
+
+            // we're going to hypothetically add as many 12's to our plan as possible, keeping track of how many 6's were required to balance things out
+            // we can also compute this analytically with modular arithmetic, but that technique only works when the FFT is above a minimum size, but this loop+array technique always works
+            let max_twelves = min(radix_factors.get_power2() / 2, radix_factors.get_power3());
+            let mut required_sixes = [None; 4]; // only track 6^0 through 6^3. 6^4 can be converted into 12^2 * 9, which will be faster
+            for hypothetical_twelve_power in 0..(max_twelves+1) {
+                let hypothetical_twos = radix_factors.get_power2() - hypothetical_twelve_power * 2;
+                let hypothetical_threes = radix_factors.get_power3() - hypothetical_twelve_power;
+
+                // figure out how many sixes we would need to leave our FFT at 8^n * 9^m via modular arithmetic, and write to that index of our twelves_per_sixes array
+                let sixes = match (hypothetical_twos % 3, hypothetical_threes % 2) {
+                    (0, 0) => Some(0),
+                    (1, 1) => Some(1),
+                    (2, 0) => Some(2),
+                    (0, 1) => Some(3),
+                    (1, 0) => None, // it would take 4 sixes, which can be replaced by 2 twelves, so we'll hit it in a later loop (if we have that many factors)
+                    (2, 1) => None, // it would take 5 sixes, but note that 12 is literally 2^2 * 3^1, so instead of applying 5 sixes, we can apply a single 12
+                    (_, _) => unreachable!(),
+                };
+
+                // if we can bring the FFT into range for the fast path with sixes, record so in the required_sixes array
+                // but make sure the number of sixes we're going to apply actually fits into our available factors
+                if let Some(sixes) = sixes {
+                    if sixes <= hypothetical_twos && sixes <= hypothetical_threes {
+                        required_sixes[sixes as usize] = Some(hypothetical_twelve_power)
+                    }
+                }
+            }
+
+            // required_sixes[i] now contains the largest power of twelve that we can apply, given that we also apply 6^i
+            // we want to apply as many powers of 12 as possible, so take the smallest non-None element in the array
+            // note that it's possible (and very likely) that either of these is zero, or both of them are zero! this will happen for a pure power of 2 or power of 3 FFT, for example
+            let (power_twelve, mut power_six) = required_sixes
+                .iter()
+                .enumerate()
+                .filter_map(|(i, maybe_twelve)| maybe_twelve.map(|twelve| (twelve, i as u32)))
+                .fold((0, 0), |best, current| if current.0 >= best.0 { current } else { best });
+
+            // special case: if we have exactly one factor of 2 and at least one factor of 3 or vice versa, unconditionally apply a factor of 6 to get rid of the 2
+            if radix_factors.get_power2() == 1 && radix_factors.get_power3() > 0 {
+                power_six = 1;
+            }
+            // special case: if we have a single factor of 3 and more than one factor of 2 (and we don't have any twelves), unconditionally apply a factor of 6 to get rid of the 3
+            if radix_factors.get_power2() > 1 && radix_factors.get_power3() == 1 && power_twelve == 0 {
+                power_six = 1;
+            }
+            
+            // divide our powers of 12 and 6 out of our radix factors
+            radix_factors = radix_factors.divide_by(&PartialFactors::compute(6usize.pow(power_six) * 12usize.pow(power_twelve))).unwrap();
+
+            // now that we know the 12 and 6 factors, the plan array can be computed in descending radix size
+            if radix_factors.get_power2() % 3 == 1 {
+                // our factors of 2 might not quite be a power of 8 -- our 12 loop tried its best, but if we are a power of 2, it can't help. 
+                // if we're 2 * 8^N, benchmarking shows that applying a 16 before our chain of 8s is very fast.
+                plan.push_radix(16); 
+                radix_factors = radix_factors.divide_by(&PartialFactors::compute(16)).unwrap();
+            }
+            plan.push_radix_power(12, power_twelve);
+            plan.push_radix_power(9, radix_factors.get_power3() / 2);
+            plan.push_radix_power(8, radix_factors.get_power2() / 3);
+            plan.push_radix_power(6, power_six);
+            if radix_factors.get_power2() % 3 == 2 {
+                // our factors of 2 might not quite be a power of 8 -- our 12 loop tried its best, but if we are a power of 2, it can't help. 
+                // if we're 4 * 8^N, benchmarking shows that applying a 8 to the end our chain of 8s is very fast.
+                plan.push_radix(4);
+            }
+            if radix_factors.get_power3() % 2 == 1 {
+                // our factors of 3 might not quite be a power of 9 -- our 12 loop tried its best, but if we are a power of 3, it can't help. 
+                // if we're 3 * 9^N, our only choice is to add an 8xn step
+                plan.push_radix(3);
+            }
+
+            // measurement opportunity: is it faster to let the 12+6 loop put a 4 on the end instead of relying on all 8's?
+            // measurement opportunity: is it faster to slap a 16 on top of the stack?
+            // measurement opportunity: if our 12+6 loop adds both 12s and sixes, is it faster to drop combinations of 12+6 down to 8+9?
+        };
+        plan
+    }
+
+    fn construct_plan(&mut self, plan: MixedRadixPlan) -> Arc<dyn Fft<T>> {
+        if plan.is_base_only() {
+            self.construct_base(plan.base)
+        } else {
+            // first, see if we can find a cached FFT instance somewhere in the chain
+            let (base_index, base_fft) = plan.radixes
+                .iter()
+                .enumerate()
+                .scan(plan.base, |product, (index, radix)| { // compute a running product and pair it with each radix, so we can check the algorithm cache
+                    *product = *product * *radix as usize;
+                    self.algorithm_cache.get(product).map(|cached_instance| (index + 1, cached_instance))
+                })
+                .last()
+                .map(|(base_index, cached_instance)| (base_index, Arc::clone(cached_instance)))
+                .unwrap_or_else(|| (0, self.construct_base(plan.base)));
+
+            self.construct_radix_chain(&plan.radixes[base_index..], base_fft)
+        }
+    }
+
+    fn construct_base(&mut self, len: usize) -> Arc<dyn Fft<T>> {
+        if let Some(butterfly) = self.try_construct_butterfly(len) {
+            self.algorithm_cache.insert(len, Arc::clone(&butterfly));
+            return butterfly;
+        }
+
+        // if we get to this point, we will have to use either rader's algorithm or bluestein's algorithm as our base
+        // We can only use rader's if `len` is prime, so next step is to compute a full factorization
+        if PrimeFactors::compute(len).is_prime() {
+            // len is prime, so we can use Rader's Algorithm as a base. Whether or not that's a good idea is a different story
+            // Rader's Algorithm is only faster in a few narrow cases. as a heuristic, only use rader's algorithm if its inner FFT can be computed entirely without bluestein's or another raders step
+            let raders_inner_factors = PartialFactors::compute(len - 1);
+
+            if raders_inner_factors.get_other_factors() == 1 {
+                return self.plan_with_cache(len, Self::construct_raders);
+            }
+        }
+
+        // if we get to this point, we decided to use Bluestein's Algorithm as the base
+        self.plan_with_cache(len, Self::construct_bluesteins)
+    }
+    
 }
 
 trait MakeFftAvx<T: FFTnum> {
-    fn plan_new_butterfly(&self, len: usize) -> Option<Arc<Fft<T>>>;
-    fn plan_new_prime(&mut self, len: usize) -> Arc<Fft<T>>;
-    fn plan_new_composite(&mut self, len: usize, factors: PrimeFactors) -> Arc<Fft<T>>;
+    // todo: if we ever have a core plan type that ins't mixed radix, this could return an enum
+    fn plan_mixed_radix_base(&self, len: usize, factors: &PartialFactors) -> MixedRadixPlan;
+
+    fn try_construct_butterfly(&mut self, len: usize) -> Option<Arc<dyn Fft<T>>>;
+    fn construct_radix_chain(&mut self, chain: &[u8], base: Arc<dyn Fft<T>>) -> Arc<dyn Fft<T>>;
+    fn construct_bluesteins(&mut self, len: usize) -> Arc<dyn Fft<T>>;
+    fn construct_raders(&mut self, len: usize) -> Arc<dyn Fft<T>>;
 }
 
 impl<T: FFTnum> MakeFftAvx<T> for FftPlannerAvx<T> {
-    default fn plan_new_butterfly(&self, _len: usize) -> Option<Arc<Fft<T>>> { unimplemented!(); }
-    default fn plan_new_prime(&mut self, _len: usize) -> Arc<Fft<T>> {  unimplemented!(); }
-    default fn plan_new_composite(&mut self, _len: usize, _factors: PrimeFactors) -> Arc<Fft<T>> { unimplemented!(); }
-}
+    default fn plan_mixed_radix_base(&self, _len: usize, _factors: &PartialFactors) -> MixedRadixPlan { unimplemented!(); }
 
-
-
-
-
-
-
-
-impl FftPlannerAvx<f32> {
-    fn plan_new_power2_f32(&mut self, len: usize) -> Arc<Fft<f32>> {
-        assert!(len.is_power_of_two() && len > 64); //internal consistency check: we must be a power of two, and len should be more than our largest butterfly
-
-        // We have several multiple-of-two algorithms to choose from. We can use the 2xn, 4x, 8x, and 6xn algorithms
-        // if we're in-range to land exactly on the size-64 butterfly, intentionally do so by choosing whichever algorithm will have an inner FFT size of 64
-        let power : u32 = match len {
-            128 => 2, // 2xn is really slow, so we'd rather use 4xn to go down to 32
-            256 => 2,
-            512 => 3,
-            1024 => 4,
-            _ => 3,  // 8xn is the fastest for larger sizes, so if we're not "in range" to hit a butterfly with a single step, use 8xn
-        };
-
-        let inner_len = len >> power;
-        let inner_fft = self.plan_fft_with_factors(inner_len, PrimeFactors::compute(inner_len));
-
-        // construct the outer FFT with the inner one
-        match power {
-            2 => wrap_fft(MixedRadix4xnAvx::new_f32(inner_fft).unwrap()),
-            3 => wrap_fft(MixedRadix8xnAvx::new_f32(inner_fft).unwrap()),
-            4 => wrap_fft(MixedRadix16xnAvx::new_f32(inner_fft).unwrap()),
-            _ => panic!(),
-        }
-    }
-    fn plan_new_3xpower2_f32(&mut self, len: usize) -> Arc<Fft<f32>> {
-        assert!(len >> len.trailing_zeros() == 3); //internal consistency check. we must be 2^n times 3, and len should be larger than our largest butterfly
-
-        // We have several multiple-of-two algorithms to choose from. We can use the 2xn, 4x, 8x, and 6xn algorithms
-        // if we're in-range to land exactly on the size-48 butterfly, intentionally do so by choosing whichever algorithm will have an inner FFT size of 48
-        let power : u32 = match len {
-            96 => 1,
-            192 => 2,
-            384 => 3,
-            768 => 4,
-            _ => 3,  // 8xn is the fastest for larger sizes, so if we're not "in range" to hit a butterfly with a single step, use 8xn
-        };
-
-        let inner_len = len >> power;
-        let inner_fft = self.plan_fft_with_factors(inner_len, PrimeFactors::compute(inner_len));
-
-        // construct the outer FFT with the inner one
-        match power {
-            1 => wrap_fft(MixedRadix2xnAvx::new_f32(inner_fft).unwrap()),
-            2 => wrap_fft(MixedRadix4xnAvx::new_f32(inner_fft).unwrap()),
-            3 => wrap_fft(MixedRadix8xnAvx::new_f32(inner_fft).unwrap()),
-            4 => wrap_fft(MixedRadix16xnAvx::new_f32(inner_fft).unwrap()),
-            _ => panic!(),
-        }
-    }
-    fn plan_new_bluesteins_f32(&mut self, len: usize) -> Arc<Fft<f32>> {
-        assert!(len > 1); // Internal consistency check: The logic in this method doesn't work for a length of 1
-
-        // Plan a step of Bluestein's Algorithm
-        // Bluestein's computes a FFT of size `len` by reorganizing it as a FFT of ANY size greter than or equal to len * 2 - 1
-        // an obvious choice is the next power of two larger than  len * 2 - 1, but if we can find a smaller FFT that will go faster, we can save a lot of time!
-        // We can very efficiently compute any 3 * 2^n, so we can take the next power of 2, divide it by 4, then multiply it by 3. If the result >= len*2 - 1, use it!
-
-        // TODO: if we get the ability to compute arbitrary powers of 3 on the fast path, we can also try max / 16 * 9, max / 32 * 27, max / 128 * 81, to give alternative sizes
-
-        // One caveat is that the size-12 blutterfly is slower than size-16, so we only want to do this if the next power of two is greater than 16
-        let min_size = len*2 - 1;
-        let max_size = min_size.checked_next_power_of_two().unwrap();
-
-        let potential_3x = max_size / 4 * 3;
-        let inner_fft_len = if max_size > 16 && potential_3x >= min_size {
-            potential_3x
-        } else {
-            max_size
-        };
-
-        let inner_fft = self.plan_fft_with_factors(inner_fft_len, PrimeFactors::compute(inner_fft_len));
-        wrap_fft(BluesteinsAvx::new_f32(len, inner_fft).unwrap())
+    default fn try_construct_butterfly(&mut self, _len: usize) -> Option<Arc<dyn Fft<T>>> { unimplemented!(); }
+    default fn construct_radix_chain(&mut self, _chain: &[u8], _base: Arc<dyn Fft<T>>) -> Arc<dyn Fft<T>> { unimplemented!(); }
+    default fn construct_bluesteins(&mut self, _len: usize) -> Arc<dyn Fft<T>> { unimplemented!(); }
+    default fn construct_raders(&mut self, len: usize) -> Arc<dyn Fft<T>> {
+        let inner_fft = self.plan_fft(len - 1);
+        wrap_fft(RadersAlgorithm::new(len, inner_fft))
     }
 }
+
+
+
+
+
+
+
+
 impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
-    fn plan_new_butterfly(&self, len: usize) -> Option<Arc<Fft<f32>>> {
+    fn plan_mixed_radix_base(&self, _len: usize, factors: &PartialFactors) -> MixedRadixPlan { 
+        // most of this code is heuristics assuming FFTs of a minimum size. if the FFT is below that minimum size, the heuristics break down.
+        // so the first thing we're going to do is hardcode the plan for osme specific sizes where we know the heuristics won't be enough
+        let hardcoded_base = match factors.product() {
+            // 2^n special cases
+            128 => Some(MixedRadixPlan::new(32, &[4])), // 2^7
+
+            // 3 * 2^n special cases
+            96 => Some(MixedRadixPlan::new(32, &[3])), // 2^5 * 3
+            192 => Some(MixedRadixPlan::new(48, &[4])), // 2^6 * 3
+            1536 => Some(MixedRadixPlan::new(48, &[8, 4])), // 2^8 * 3
+
+            // 9 * 2^n special cases
+            9 => Some(MixedRadixPlan::new(3, &[3])), // 3^2
+            18 => Some(MixedRadixPlan::new(3, &[6])), // 2 * 3^2
+            36 => Some(MixedRadixPlan::new(12, &[3])), // 2^2 * 3^2
+            72 => Some(MixedRadixPlan::new(24, &[3])), // 2^3 * 3^2
+            288 => Some(MixedRadixPlan::new(48, &[6])), // 2^5 * 3^2
+            _=> None,
+        };
+        if let Some(hardcoded) = hardcoded_base {
+            return hardcoded;
+        }
+
+        if factors.get_other_factors() > 1 {
+            // todo: if we're just 2*other_factors, we might want to return the whole FFT as the base to hand it off to bluestein's
+            MixedRadixPlan::new(factors.get_other_factors(), &[])
+        } else {
+            match factors.get_power3() {
+                // if this FFT is a power of 2, our strategy here is to tweak the butterfly to free us up to do an 8xn chain
+                0 => match factors.get_power2() % 3 {
+                    0 => MixedRadixPlan::new(64, &[]),
+                    1 => MixedRadixPlan::new(64, &[16]),
+                    2 => MixedRadixPlan::new(32, &[]),
+                    _ => unreachable!(),
+                },
+                // if this FFT is 3 times a power of 2, our strategy here is to tweak butterflies to make it easier to set up a 8xn chain
+                1 => match factors.get_power2() % 3 {
+                    0 => MixedRadixPlan::new(64, &[12, 16]),
+                    1 => MixedRadixPlan::new(48, &[]),
+                    2 => MixedRadixPlan::new(64, &[]),
+                    _ => unreachable!(),
+                },
+                // if this FFT is 9 times a power of 2, our strategy here is to tweak butterflies to make it easier to set up a 8xn chain
+                2 => match factors.get_power2() % 3 {
+                    0 => MixedRadixPlan::new(48, &[]),
+                    1 => MixedRadixPlan::new(if factors.get_power2() > 10 { 64 } else { 48 }, &[]),
+                    2 => MixedRadixPlan::new(48, &[12]),
+                    _ => unreachable!(),
+                },
+                // this FFT is 2^n * 3^m, where M >= 3, we're just going to use use the largest multiple-of-3 butterfly we can, which usually ends up meaning 48
+                // TODO: benchmarking shows that for large FFTs, 64, 32, and 24 might be situationally faster, but for now 48 is a very reasonable default
+                _ => match factors.get_power2() {
+                    0|1 => MixedRadixPlan::new(3, &[]),
+                    2 => MixedRadixPlan::new(12, &[]),
+                    3 => MixedRadixPlan::new(24, &[]),
+                    _ => MixedRadixPlan::new(48, &[]),
+                }
+            }
+        }
+    }
+
+    fn try_construct_butterfly(&mut self, len: usize) -> Option<Arc<Fft<f32>>> {
         match len {
             0|1 =>  wrap_fft_some(DFT::new(len, self.inverse)),
             2 =>    wrap_fft_some(Butterfly2::new(self.inverse)),
@@ -172,154 +346,113 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
             _ => None
         }
     }
-
-    fn plan_new_prime(&mut self, len: usize) -> Arc<Fft<f32>> {
-        // for prime numbers, we can either use rader's algorithm, which computes an inner FFT if size len - 1
-        // or bluestein's algorithm, which computes an inner FFT of any size at least len * 2 - 1. (usually, we pick a power of two)
-
-        // rader's algorithm is faster if len - 1 is very composite, but bluestein's algorithm is faster if len - 1 has very few prime factors 
-        // Compute the prime factors of our hpothetical inner FFT. if they're very composite, use rader's algorithm
-        let raders_fft_len = len - 1;
-        let raders_factors = PrimeFactors::compute(raders_fft_len);
-
-        if (raders_factors.get_total_factor_count() as f32) < (len as f32).log(3.0) {
-            // the inner FFT isn't composite enough, so we're doing bluestein's algorithm instead
-            self.plan_new_bluesteins_f32(len)
-        } else {
-            let inner_fft = self.plan_fft_with_factors(raders_fft_len, raders_factors);
-            wrap_fft(RadersAlgorithm::new(len, inner_fft))
-        }
-    }
-    fn plan_new_composite(&mut self, len: usize, factors: PrimeFactors) -> Arc<Fft<f32>> {
-        // First up: If this is a power of 2, we have a fast path  that goes straight down to butterflies
-        if len.is_power_of_two() {
-            self.plan_new_power2_f32(len)
-        }
-
-        // If this is 3*2^n, we also have a fast path that goes straight down to butterflies
-        else if factors.get_power_of_two() > 0 && factors.get_power_of_three() == 1 && factors.get_other_factors().len() == 0 {
-            self.plan_new_3xpower2_f32(len)
-        }
-        
-        // If we get to this point, we will need to use bluestein's algorithm or rader's algorithm. before do that, see if there are any powers of 2 we can split off
-        // TODO: is it ever worth it to use 2xn here, as opposed to just passing 2xwhatever into bluestein's? needs benchmarking
-        else if len.trailing_zeros() > 0 {
-            // we will recursively call power-of-two algorithms (16xn, 8xn, 4xn, 2xn) until we either hit a butterfly or all of our powers of two are gone
-            // we can handle any power of two, but we want to avoid 2xn if possible, because it's slower than the others
-            // so we're going to try to line it up so that we only need to plan a 2xn when we have no other options
-            let power : u32 = match len.trailing_zeros() {
-                1 => 1,
-                2 => 2,
-                3 => 3,
-                4 => 4,
-                _ => 3,  // 8xn is the fastest for larger sizes, so if we're not "in range" of the bottom of the stack, use 8xn
+    fn construct_radix_chain(&mut self, chain: &[u8], base: Arc<dyn Fft<f32>>) -> Arc<dyn Fft<f32>> { 
+        let mut fft = base;
+        for radix in chain.iter() {
+            fft = match radix {
+                2  => wrap_fft(MixedRadix2xnAvx::new_f32(fft).unwrap()),
+                3  => wrap_fft(MixedRadix3xnAvx::new_f32(fft).unwrap()),
+                4  => wrap_fft(MixedRadix4xnAvx::new_f32(fft).unwrap()),
+                6  => wrap_fft(MixedRadix6xnAvx::new_f32(fft).unwrap()),
+                8  => wrap_fft(MixedRadix8xnAvx::new_f32(fft).unwrap()),
+                9  => wrap_fft(MixedRadix9xnAvx::new_f32(fft).unwrap()),
+                12 => wrap_fft(MixedRadix12xnAvx::new_f32(fft).unwrap()),
+                16 => wrap_fft(MixedRadix16xnAvx::new_f32(fft).unwrap()),
+                _ => unreachable!(),
             };
 
-            // update our factors to account for the factors of 2 we're going to strip away, and pass the updated factors to the planner to compute the inner FFT
-            let factors = factors.remove_factors(PrimeFactor { value: 2, count: power }).unwrap();
-            let inner_fft = self.plan_fft_with_factors(len >> power, factors);
-
-            // construct the outer FFT with the inner one
-            match power {
-                1 => wrap_fft(MixedRadix2xnAvx::new_f32(inner_fft).unwrap()),
-                2 => wrap_fft(MixedRadix4xnAvx::new_f32(inner_fft).unwrap()),
-                3 => wrap_fft(MixedRadix8xnAvx::new_f32(inner_fft).unwrap()),
-                4 => wrap_fft(MixedRadix16xnAvx::new_f32(inner_fft).unwrap()),
-                _ => panic!(),
-            }
+            // cache this algorithm for next time
+            self.algorithm_cache.insert(fft.len(), Arc::clone(&fft));
         }
-        else {
-            // because this is composite, rader's algorithm isn't an option. so unconditionally apply bluestein's
-            self.plan_new_bluesteins_f32(len)
-        }
+        
+        fft
     }
-}
-
-
-
-
-
-
-impl FftPlannerAvx<f64> {
-    fn plan_new_power2_f64(&mut self, len: usize) -> Arc<Fft<f64>> {
-        assert!(len.is_power_of_two() && len >= 64); //internal consistency check: we must be a power of two, and len should be more than our largest butterfly
-
-        // We have several multiple-of-two algorithms to choose from. We can use the 2xn, 4x, 8x, and 6xn algorithms
-        // if we're in-range to land exactly on the size-64 butterfly, intentionally do so by choosing whichever algorithm will have an inner FFT size of 64
-        let power : u32 = match len {
-            64 => 2, // 2xn is really slow, so we'd rather use 4xn to go down to 32
-            128 => 2,
-            256 => 3,
-            512 => 4,
-            _ => 3,
-        };
-
-        let inner_len = len >> power;
-        let inner_fft = self.plan_fft_with_factors(inner_len, PrimeFactors::compute(inner_len));
-
-        // construct the outer FFT with the inner one
-        match power {
-            2 => wrap_fft(MixedRadix4xnAvx::new_f64(inner_fft).unwrap()),
-            3 => wrap_fft(MixedRadix8xnAvx::new_f64(inner_fft).unwrap()),
-            4 => wrap_fft(MixedRadix16xnAvx::new_f64(inner_fft).unwrap()),
-            _ => panic!(),
-        }
-    }
-    fn plan_new_3xpower2_f64(&mut self, len: usize) -> Arc<Fft<f64>> {
-        assert!(len >> len.trailing_zeros() == 3); //internal consistency check. we must be 2^n times 3
-
-        // We have several multiple-of-two algorithms to choose from. We can use the 2xn, 4x, 8x, and 16xn algorithms
-        // if we're in-range to land exactly on the size-24 butterfly, intentionally do so by choosing whichever algorithm will have an inner FFT size of 24
-        let power : u32 = match len {
-            48 => 1,
-            96 => 2,
-            192 => 3,
-            384 => 4,
-            _ => 3,  // 8xn is the fastest for larger sizes, so if we're not "in range" to hit a butterfly with a single step, use 8xn
-        };
-
-        let inner_len = len >> power;
-        let inner_fft = self.plan_fft_with_factors(inner_len, PrimeFactors::compute(inner_len));
-
-        // construct the outer FFT with the inner one
-        match power {
-            1 => wrap_fft(MixedRadix2xnAvx::new_f64(inner_fft).unwrap()),
-            2 => wrap_fft(MixedRadix4xnAvx::new_f64(inner_fft).unwrap()),
-            3 => wrap_fft(MixedRadix8xnAvx::new_f64(inner_fft).unwrap()),
-            4 => wrap_fft(MixedRadix16xnAvx::new_f64(inner_fft).unwrap()),
-            _ => panic!(),
-        }
-    }
-    fn plan_new_bluesteins_f64(&mut self, len: usize) -> Arc<Fft<f64>> {
+    fn construct_bluesteins(&mut self, len: usize) -> Arc<dyn Fft<f32>> { 
         assert!(len > 1); // Internal consistency check: The logic in this method doesn't work for a length of 1
 
-        // Plan a step of Bluestein's Algorithm
-        // Bluestein's computes a FFT of size `len` by reorganizing it as a FFT of ANY size greater than or equal to len * 2 - 1
-        // We can choose any size we want, and an obvious choice is the next power of two larger than  len * 2 - 1, since power of two FFTs are typically fast.
-        
-        // But if we can find a smaller FFT that will go faster, there's no reason not to use that instead of the power of two.
-        // We can very efficiently compute any 3 * 2^n, so before committing to using a power of two, take a stab at finding a 3 * 2^n FFT that's smaller than the next power of two, and greater than the minimum
+        // Bluestein's computes a FFT of size `len` by reorganizing it as a FFT of ANY size greter than or equal to len * 2 - 1
+        // an obvious choice is the next power of two larger than  len * 2 - 1, but if we can find a smaller FFT that will go faster, we can save a lot of time!
+        // We can very efficiently compute any 3 * 2^n, so we can take the next power of 2, divide it by 4, then multiply it by 3. If the result >= len*2 - 1, use it!
 
-        // TODO: if we get the ability to compute arbitrary powers of 3 on the fast path, we try several sizes and pick the smallest.
-        // There's diminishing returns the more work we do here, but at least one more layer would be great
+        // TODO: if we get the ability to compute arbitrary powers of 3 on the fast path, we can also try max / 16 * 9, max / 32 * 27, max / 128 * 81, to give alternative sizes
 
-        // One caveat is that the size-6 blutterfly is slower than size-8, so we only want to do this if the next power of two is greater than 8
+        // One caveat is that the size-12 blutterfly is slower than size-16, so we only want to do this if the next power of two is greater than 16
         let min_size = len*2 - 1;
         let max_size = min_size.checked_next_power_of_two().unwrap();
 
         let potential_3x = max_size / 4 * 3;
-        let inner_fft_len = if max_size > 8 && potential_3x >= min_size {
+        let inner_fft_len = if max_size > 16 && potential_3x >= min_size {
             potential_3x
         } else {
             max_size
         };
 
-        let inner_fft = self.plan_fft_with_factors(inner_fft_len, PrimeFactors::compute(inner_fft_len));
-        wrap_fft(BluesteinsAvx::new_f64(len, inner_fft).unwrap())
+        let inner_fft = self.plan_fft(inner_fft_len);
+        wrap_fft(BluesteinsAvx::new_f32(len, inner_fft).unwrap())
     }
 }
+
+
+
 impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
-    fn plan_new_butterfly(&self, len: usize) -> Option<Arc<Fft<f64>>> {
+    fn plan_mixed_radix_base(&self, _len: usize, factors: &PartialFactors) -> MixedRadixPlan { 
+        // most of this code is heuristics assuming FFTs of a minimum size. if the FFT is below that minimum size, the heuristics break down.
+        // so the first thing we're going to do is hardcode the plan for osme specific sizes where we know the heuristics won't be enough
+        let hardcoded_base = match factors.product() {
+            // 2^n special cases
+            64 => Some(MixedRadixPlan::new(16, &[4])), // 2^6
+
+            // 3 * 2^n special cases
+
+            // 9 * 2^n special cases
+            9 => Some(MixedRadixPlan::new(3, &[3])), // 3^2
+            18 => Some(MixedRadixPlan::new(3, &[6])), // 2 * 3^2
+            36 => Some(MixedRadixPlan::new(12, &[3])), // 2^2 * 3^2
+            72 => Some(MixedRadixPlan::new(24, &[3])), // 2^3 * 3^2
+            _=> None,
+        };
+        if let Some(hardcoded) = hardcoded_base {
+            return hardcoded;
+        }
+
+        if factors.get_other_factors() > 1 {
+            // todo: if we're just 2*other_factors, we might want to return the whole FFT as the base to hand it off to bluestein's
+            MixedRadixPlan::new(factors.get_other_factors(), &[])
+        } else {
+            match factors.get_power3() {
+                // if this FFT is a power of 2, our strategy here is to tweak the butterfly to free us up to do an 8xn chain
+                0 => match factors.get_power2() % 3 {
+                    0 => MixedRadixPlan::new(32, &[16]),
+                    1 => MixedRadixPlan::new(32, &[]),
+                    2 => MixedRadixPlan::new(16, &[]),
+                    _ => unreachable!(),
+                },
+                // if this FFT is 3 times a power of 2, our strategy here is to tweak butterflies to make it easier to set up a 8xn chain
+                1 => match factors.get_power2() % 3 {
+                    0 => MixedRadixPlan::new(24, &[]),
+                    1 => MixedRadixPlan::new(24, &[]),
+                    2 => MixedRadixPlan::new(24, &[]),
+                    _ => unreachable!(),
+                },
+                // if this FFT is 9 times a power of 2, our strategy here is to tweak butterflies to make it easier to set up a 8xn chain
+                2 => match factors.get_power2() % 3 {
+                    0 => MixedRadixPlan::new(24, &[]),
+                    1 => MixedRadixPlan::new(24, &[]),
+                    2 => MixedRadixPlan::new(24, &[]),
+                    _ => unreachable!(),
+                },
+                // this FFT is 2^n * 3^m, where M >= 3, we're just going to use use the largest multiple-of-3 butterfly we can, which usually ends up meaning 48
+                // TODO: benchmarking shows that for large FFTs, 64, 32, and 24 might be situationally faster, but for now 48 is a very reasonable default
+                _ => match factors.get_power2() {
+                    0|1 => MixedRadixPlan::new(3, &[]),
+                    2 => MixedRadixPlan::new(12, &[]),
+                    _ => MixedRadixPlan::new(24, &[]),
+                }
+            }
+        }
+    }
+
+    fn try_construct_butterfly(&mut self, len: usize) -> Option<Arc<Fft<f64>>> {
         match len {
             0|1 =>  wrap_fft_some(DFT::new(len, self.inverse)),
             2 =>    wrap_fft_some(Butterfly2::new(self.inverse)),
@@ -336,65 +469,48 @@ impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
             _ => None
         }
     }
-
-    fn plan_new_prime(&mut self, len: usize) -> Arc<Fft<f64>> {
-        // for prime numbers, we can either use rader's algorithm, which computes an inner FFT if size len - 1
-        // or bluestein's algorithm, which computes an inner FFT of any size at least len * 2 - 1. (usually, we pick a power of two)
-
-        // rader's algorithm is faster if len - 1 is very composite, but bluestein's algorithm is faster if len - 1 has very few prime factors 
-        // Compute the prime factors of our hpothetical inner FFT. if they're very composite, use rader's algorithm
-        let raders_fft_len = len - 1;
-        let raders_factors = PrimeFactors::compute(raders_fft_len);
-
-        if (raders_factors.get_total_factor_count() as f32) < (len as f32).log(3.0) {
-            // the inner FFT isn't composite enough, so we're doing bluestein's algorithm instead
-            self.plan_new_bluesteins_f64(len)
-        } else {
-            let inner_fft = self.plan_fft_with_factors(raders_fft_len, raders_factors);
-            wrap_fft(RadersAlgorithm::new(len, inner_fft))
-        }
-    }
-    fn plan_new_composite(&mut self, len: usize, factors: PrimeFactors) -> Arc<Fft<f64>> {
-        // First up: If this is a power of 2, we have a fast path  that goes straight down to butterflies
-        if len.is_power_of_two() {
-            self.plan_new_power2_f64(len)
-        }
-
-        // If this is 3*2^n, we also have a fast path that goes straight down to butterflies
-        else if factors.get_power_of_two() > 0 && factors.get_power_of_three() == 1 && factors.get_other_factors().len() == 0 {
-            self.plan_new_3xpower2_f64(len)
-        }
-        
-        // If we get to this point, we will need to use bluestein's algorithm or rader's algorithm. before do that, see if there are any powers of 2 we can split off
-        // TODO: is it ever worth it to use 2xn here, as opposed to just passing 2xwhatever into bluestein's? needs benchmarking
-        else if len.trailing_zeros() > 0 {
-            // we will recursively call power-of-two algorithms (16xn, 8xn, 4xn, 2xn) until we either hit a butterfly or all of our powers of two are gone
-            // we can handle any power of two, but we want to avoid 2xn if possible, because it's slower than the others
-            // so we're going to try to line it up so that we only need to plan a 2xn when we have no other options
-            let power : u32 = match len.trailing_zeros() {
-                1 => 1,
-                2 => 2,
-                3 => 3,
-                4 => 4,
-                _ => 3,  // 8xn is the fastest for larger sizes, so if we're not "in range" of the bottom of the stack, use 8xn
+    fn construct_radix_chain(&mut self, chain: &[u8], base: Arc<dyn Fft<f64>>) -> Arc<dyn Fft<f64>> { 
+        let mut fft = base;
+        for radix in chain.iter() {
+            fft = match radix {
+                2  => wrap_fft(MixedRadix2xnAvx::new_f64(fft).unwrap()),
+                3  => wrap_fft(MixedRadix3xnAvx::new_f64(fft).unwrap()),
+                4  => wrap_fft(MixedRadix4xnAvx::new_f64(fft).unwrap()),
+                6  => wrap_fft(MixedRadix6xnAvx::new_f64(fft).unwrap()),
+                8  => wrap_fft(MixedRadix8xnAvx::new_f64(fft).unwrap()),
+                9  => wrap_fft(MixedRadix9xnAvx::new_f64(fft).unwrap()),
+                12 => wrap_fft(MixedRadix12xnAvx::new_f64(fft).unwrap()),
+                16 => wrap_fft(MixedRadix16xnAvx::new_f64(fft).unwrap()),
+                _ => unreachable!(),
             };
 
-            // update our factors to account for the factors of 2 we're going to strip away, and pass the updated factors to the planner to compute the inner FFT
-            let factors = factors.remove_factors(PrimeFactor { value: 2, count: power }).unwrap();
-            let inner_fft = self.plan_fft_with_factors(len >> power, factors);
+            // cache this algorithm for next time
+            self.algorithm_cache.insert(fft.len(), Arc::clone(&fft));
+        }
+        
+        fft
+    }
+    fn construct_bluesteins(&mut self, len: usize) -> Arc<dyn Fft<f64>> { 
+        assert!(len > 1); // Internal consistency check: The logic in this method doesn't work for a length of 1
 
-            // construct the outer FFT with the inner one
-            match power {
-                1 => wrap_fft(MixedRadix2xnAvx::new_f64(inner_fft).unwrap()),
-                2 => wrap_fft(MixedRadix4xnAvx::new_f64(inner_fft).unwrap()),
-                3 => wrap_fft(MixedRadix8xnAvx::new_f64(inner_fft).unwrap()),
-                4 => wrap_fft(MixedRadix16xnAvx::new_f64(inner_fft).unwrap()),
-                _ => panic!(),
-            }
-        }
-        else {
-            // because this is composite, rader's algorithm isn't an option. so unconditionally apply bluestein's
-            self.plan_new_bluesteins_f64(len)
-        }
+        // Bluestein's computes a FFT of size `len` by reorganizing it as a FFT of ANY size greter than or equal to len * 2 - 1
+        // an obvious choice is the next power of two larger than  len * 2 - 1, but if we can find a smaller FFT that will go faster, we can save a lot of time!
+        // We can very efficiently compute any 3 * 2^n, so we can take the next power of 2, divide it by 4, then multiply it by 3. If the result >= len*2 - 1, use it!
+
+        // TODO: if we get the ability to compute arbitrary powers of 3 on the fast path, we can also try max / 16 * 9, max / 32 * 27, max / 128 * 81, to give alternative sizes
+
+        // One caveat is that the size-12 blutterfly is slower than size-16, so we only want to do this if the next power of two is greater than 16
+        let min_size = len*2 - 1;
+        let max_size = min_size.checked_next_power_of_two().unwrap();
+
+        let potential_3x = max_size / 4 * 3;
+        let inner_fft_len = if max_size > 16 && potential_3x >= min_size {
+            potential_3x
+        } else {
+            max_size
+        };
+
+        let inner_fft = self.plan_fft(inner_fft_len);
+        wrap_fft(BluesteinsAvx::new_f64(len, inner_fft).unwrap())
     }
 }

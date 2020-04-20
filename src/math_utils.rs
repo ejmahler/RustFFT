@@ -381,6 +381,56 @@ impl PrimeFactors {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct PartialFactors {
+    power2: u32,
+    power3: u32,
+    other_factors: usize,
+}
+impl PartialFactors {
+    pub fn compute(len: usize) -> Self {
+        let power2 = len.trailing_zeros();
+        let mut other_factors = len >> power2;
+        let mut power3 = 0;
+        while other_factors % 3 == 0 {
+            power3 += 1;
+            other_factors /= 3;
+        }
+
+        Self { power2, power3, other_factors }
+    }
+
+    pub fn get_power2(&self) -> u32 {
+        self.power2
+    }
+    pub fn get_power3(&self) -> u32 {
+        self.power3
+    }
+    pub fn get_other_factors(&self) -> usize {
+        self.other_factors
+    }
+    #[allow(unused)]
+    pub fn product(&self) -> usize {
+        (self.other_factors * 3.pow(self.power3)) << self.power2
+    }
+    #[allow(unused)]
+    pub fn divide_by(&self, divisor: &PartialFactors) -> Option<PartialFactors> {
+        let two_divides = self.power2 >= divisor.power2;
+        let three_divides = self.power3 >= divisor.power3;
+        let other_divides = self.other_factors % divisor.other_factors == 0;
+        if two_divides && three_divides && other_divides {
+            Some(Self { 
+                power2: self.power2 - divisor.power2,
+                power3: self.power3 - divisor.power3,
+                other_factors: if self.other_factors == divisor.other_factors { 1 } else { self.other_factors / divisor.other_factors }
+            })
+        }
+        else {
+            None
+        }
+    }
+}
+
 #[cfg(test)]
 mod unit_tests {
     use super::*;
@@ -621,6 +671,82 @@ mod unit_tests {
                     // If the method returned None, this must be a power of two and i must be equal to the product
                     assert!(n.is_power_of_two());
                     assert!(i == factors.get_power_of_two());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_partial_factors() {
+        #[derive(Debug)]
+        struct ExpectedData {
+            len: usize,
+            power2: u32,
+            power3: u32,
+            other: usize,
+        }
+        impl ExpectedData {
+            fn new(len: usize, power2: u32, power3: u32, other: usize) -> Self {
+                Self { len, power2, power3, other }
+            }
+        }
+
+        let test_list = vec![
+			ExpectedData::new(2, 1, 0, 1),
+			ExpectedData::new(128, 7, 0, 1),
+			ExpectedData::new(3, 0, 1, 1),
+			ExpectedData::new(81, 0, 4, 1),
+			ExpectedData::new(5, 0, 0, 5),
+			ExpectedData::new(125, 0, 0, 125),
+			ExpectedData::new(97, 0, 0, 97),
+			ExpectedData::new(6, 1, 1, 1),
+			ExpectedData::new(12, 2, 1, 1),
+			ExpectedData::new(36, 2, 2, 1),
+			ExpectedData::new(10, 1, 0, 5),
+			ExpectedData::new(100, 2, 0, 25),
+			ExpectedData::new(44100, 2, 2, 1225),
+        ];
+
+        for expected in test_list {
+            let factors = PartialFactors::compute(expected.len);
+
+            assert_eq!(factors.get_power2(), expected.power2);
+            assert_eq!(factors.get_power3(), expected.power3);
+            assert_eq!(factors.get_other_factors(), expected.other);
+
+            assert_eq!(expected.len, (1 << factors.get_power2()) * 3.pow(factors.get_power3()) * factors.get_other_factors());
+            assert_eq!(expected.len, factors.product());
+            assert_eq!(factors.get_other_factors().trailing_zeros(), 0);
+            assert!(factors.get_other_factors() % 3 > 0);
+        }
+
+        // in addition to our precomputed list, go through a bunch of ofther factors and just make sure they're internally consistent
+        for n in 1..200 {
+            let factors = PartialFactors::compute(n);
+
+            assert_eq!(n, (1 << factors.get_power2()) * 3.pow(factors.get_power3()) * factors.get_other_factors());
+            assert_eq!(n, factors.product());
+            assert_eq!(factors.get_other_factors().trailing_zeros(), 0);
+            assert!(factors.get_other_factors() % 3 > 0);
+        }
+    }
+
+    #[test]
+    fn test_partial_factors_divide_by() {
+        for n in 2..200 {
+            let factors = PartialFactors::compute(n);
+
+            for power2 in 0..5 {
+                for power3 in 0..4 {
+                    for power5 in 0..3 {
+                        let divisor_product = (3.pow(power3) * 5.pow(power5)) << power2;
+                        let divisor = PartialFactors::compute(divisor_product);
+                        if let Some(quotient) = factors.divide_by(&divisor) {
+                            assert_eq!(quotient.product(), n / divisor_product);
+                        } else {
+                            assert!(n % divisor_product > 0);
+                        }
+                    }
                 }
             }
         }

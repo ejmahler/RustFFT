@@ -4,10 +4,10 @@
 //! for a variety of lengths, and test that our FFT algorithm matches our
 //! DFT calculation for those signals.
 
-
 extern crate rustfft;
 extern crate rand;
 
+use std::sync::Arc;
 
 use rustfft::num_complex::Complex;
 
@@ -15,7 +15,7 @@ use rand::{StdRng, SeedableRng};
 use rand::distributions::{Normal, Distribution};
 use rustfft::{FFTplanner, Fft};
 use rustfft::num_traits::Float;
-use rustfft::algorithm::DFT;
+use rustfft::algorithm::{BluesteinsAlgorithm, Radix4};
 
 /// The seed for the random number generator used to generate
 /// random signals. It's defined here so that we have deterministic
@@ -46,8 +46,10 @@ fn fft_matches_dft<T: rustfft::FFTnum + Float>(signal: Vec<Complex<T>>, inverse:
 
     fft.process_inplace(&mut buffer_actual);
 
-    let dft = DFT::new(signal.len(), inverse);
-    dft.process_inplace(&mut buffer_expected);
+    let inner_fft_len = (signal.len() * 2 - 1).checked_next_power_of_two().unwrap();
+    let inner_fft = Arc::new(Radix4::new(inner_fft_len, inverse));
+    let control = BluesteinsAlgorithm::new(signal.len(), inner_fft);
+    control.process_inplace(&mut buffer_expected);
 
     return compare_vectors(&buffer_expected, &buffer_actual);
 }
@@ -67,13 +69,7 @@ fn random_signal<T: rustfft::FFTnum>(length: usize) -> Vec<Complex<T>> {
 /// for random signals.
 #[test]
 fn test_planned_fft_forward_f32() {
-    for len in 1..100 {
-        let signal = random_signal::<f32>(len);
-        assert!(fft_matches_dft(signal, false), "length = {}", len);
-    }
-
-    //test some specific lengths > 100
-    for &len in &[256, 768] {
+    for len in 1..2000 {
         let signal = random_signal::<f32>(len);
         assert!(fft_matches_dft(signal, false), "length = {}", len);
     }
@@ -81,13 +77,7 @@ fn test_planned_fft_forward_f32() {
 
 #[test]
 fn test_planned_fft_inverse_f32() {
-    for len in 1..100 {
-        let signal = random_signal::<f32>(len);
-        assert!(fft_matches_dft(signal, true), "length = {}", len);
-    }
-
-    //test some specific lengths > 100
-    for &len in &[256, 768] {
+    for len in 1..2000 {
         let signal = random_signal::<f32>(len);
         assert!(fft_matches_dft(signal, true), "length = {}", len);
     }
@@ -95,30 +85,16 @@ fn test_planned_fft_inverse_f32() {
 
 #[test]
 fn test_planned_fft_forward_f64() {
-    for i in 1..10 {
-        let len = 1 << i;
+    for len in 1..2000 {
         let signal = random_signal::<f64>(len);
         assert!(fft_matches_dft(signal, false), "length = {}", len);
     }
-
-    // //test some specific lengths > 100
-    // for &len in &[256, 768] {
-    //     let signal = random_signal::<f64>(len);
-    //     assert!(fft_matches_dft(signal, false), "length = {}", len);
-    // }
 }
 
 #[test]
 fn test_planned_fft_inverse_f64() {
-    for i in 1..10 {
-        let len = 1 << i;
+    for len in 1..2000 {
         let signal = random_signal::<f64>(len);
         assert!(fft_matches_dft(signal, true), "length = {}", len);
     }
-
-    // //test some specific lengths > 100
-    // for &len in &[256, 768] {
-    //     let signal = random_signal::<f64>(len);
-    //     assert!(fft_matches_dft(signal, true), "length = {}", len);
-    // }
 }
