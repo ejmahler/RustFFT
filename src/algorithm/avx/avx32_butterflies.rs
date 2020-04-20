@@ -202,9 +202,12 @@ impl MixedRadixAvx3x3<f32> {
     unsafe fn perform_fft_f32(&self, input: RawSlice<Complex<f32>>, mut output: RawSliceMut<Complex<f32>>) {
         // we're going to load these elements in a peculiar way. instead of loading a row into the first 3 element of each register and leaving the last element empty
         // we're leaving the first element empty and putting the data in the last 3 elements. this will let us do 3 total complex multiplies instead of 4.
+
+        let input0_lo = _mm_castpd_ps(_mm_load1_pd(input.as_ptr() as *const f64));
+        let input0_hi = input.load_complex_f32_lo(1);
+        let input0 = _mm256_insertf128_ps(_mm256_castps128_ps256(input0_lo), input0_hi, 0x1);
         let input1 = input.load_complex_f32(2);
         let input2 = input.load_complex_f32(5);
-        let input0 = input.load_complex_packright_f32(0, 3);
 
         // We're going to treat our input as a 3x4 2d array. First, do 3 butterfly 4's down the columns of that array.
         let [mid0, mid1, mid2] = avx32_utils::fma::column_butterfly3_f32([input0, input1, input2], self.twiddles_butterfly3);
@@ -247,7 +250,7 @@ impl MixedRadixAvx3x3<f32> {
 }
 
 pub struct MixedRadixAvx4x3<T> {
-    twiddles: [__m256; 2],
+    twiddles: [__m256; 3],
     twiddles_butterfly3: __m256,
     twiddle_config: avx32_utils::Rotate90Config<__m256>,
     inverse: bool,
@@ -269,18 +272,23 @@ impl MixedRadixAvx4x3<f32> {
     unsafe fn new_with_avx(inverse: bool) -> Self {
         let twiddles = [
             Complex{ re: 1.0, im: 0.0 },
+            Complex{ re: 1.0, im: 0.0 },
             f32::generate_twiddle_factor(1, 12, inverse),
             f32::generate_twiddle_factor(2, 12, inverse),
-            f32::generate_twiddle_factor(3, 12, inverse),
+            Complex{ re: 1.0, im: 0.0 },
             Complex{ re: 1.0, im: 0.0 },
             f32::generate_twiddle_factor(2, 12, inverse),
             f32::generate_twiddle_factor(4, 12, inverse),
+            Complex{ re: 1.0, im: 0.0 },
+            Complex{ re: 1.0, im: 0.0 },
+            f32::generate_twiddle_factor(3, 12, inverse),
             f32::generate_twiddle_factor(6, 12, inverse),
         ];
         Self {
             twiddles: [
                 twiddles.load_complex_f32(0),
                 twiddles.load_complex_f32(4),
+                twiddles.load_complex_f32(8),
             ],
             twiddles_butterfly3: avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 3, inverse)),
             twiddle_config: avx32_utils::Rotate90Config::new_f32(inverse),
@@ -291,45 +299,36 @@ impl MixedRadixAvx4x3<f32> {
 
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_fft_f32(&self, input: RawSlice<Complex<f32>>, mut output: RawSliceMut<Complex<f32>>) {
-        let input0 = input.load_complex_f32(0);
-        let input1 = input.load_complex_f32(1 * 4);
-        let input2 = input.load_complex_f32(2 * 4);
+        // we're going to load these elements in a peculiar way. instead of loading a row into the first 3 element of each register and leaving the last element empty
+        // we're leaving the first element empty and putting the data in the last 3 elements. this will save us a complex multiply.
+        
+        // for everything but the first element, we can do overlapping reads. for the first element, an "overlapping read" would have us reading from index -1, so instead we have to shuffle some data around
+        let input0_lo = _mm_castpd_ps(_mm_load1_pd(input.as_ptr() as *const f64));
+        let input0_hi = input.load_complex_f32_lo(1);
+        let input_rows = [
+            _mm256_insertf128_ps(_mm256_castps128_ps256(input0_lo), input0_hi, 0x1),
+            input.load_complex_f32(2),
+            input.load_complex_f32(5),
+            input.load_complex_f32(8),
+        ];
 
-        // We're going to treat our input as a 3x4 2d array. First, do 3 butterfly 4's down the columns of that array.
-        let [mid0, mid1, mid2] = avx32_utils::fma::column_butterfly3_f32([input0, input1, input2], self.twiddles_butterfly3);
+        // butterfly 4's down the columns
+        let mut mid = avx32_utils::column_butterfly4_f32(input_rows, self.twiddle_config);
 
-        // Multiply in our twiddle factors
-        let mid1_twiddled = avx32_utils::fma::complex_multiply_f32(mid1, self.twiddles[0]);
-        let mid2_twiddled = avx32_utils::fma::complex_multiply_f32(mid2, self.twiddles[1]);
+        // Multiply in our twiddle factors. the first one will be normal, but for the second one, merge the twiddle-able parts of the vectors into a single vector, so that we can do one multiply instead of 2
+        mid[1] = avx32_utils::fma::complex_multiply_f32(mid[1], self.twiddles[0]);
+        mid[2] = avx32_utils::fma::complex_multiply_f32(mid[2], self.twiddles[1]);
+        mid[3] = avx32_utils::fma::complex_multiply_f32(mid[3], self.twiddles[2]);
 
-        // Transpose our 4x3 array into a 3x4
-        // this will leave us with an empty column. after the butterfly 4's, we'll need to do some data reshuffling,
-        // and that reshuffling will be simpler if we duplicate the second column into the third, and shift the third to the fourth. we can do that for free by shifting the rows we pass to the transpose
-        // the computed data and runtime cost will be the same either way, so why not?
-        let transposed = avx32_utils::transpose_4x4_f32([mid0, mid1_twiddled, mid1_twiddled, mid2_twiddled]);
+        // Transpose our 3x4 array into a 4x3
+        let [_, transposed0, transposed1, transposed2] = avx32_utils::transpose_4x4_f32(mid);
 
         // Do 4 butterfly 4's down the columns of our transposed array
-        let output_rows = avx32_utils::column_butterfly4_f32(transposed, self.twiddle_config);
+        let output_rows = avx32_utils::fma::column_butterfly3_f32([transposed0, transposed1, transposed2], self.twiddles_butterfly3); 
 
-        // Theoretically, we could do masked writes of our 4 output registers directly to memory, but we'd be doing overlapping writes, and benchmarking shows that it's incredibly slow
-        // instead, aided by our column duplication above, we can pack our data into just 3 non-overlapping registers
-
-        // the data we want is scattered across 4 different registers, so these first 3 instructions bring them all into the same register, in the right order
-        let intermediate0 = _mm256_permute2f128_ps(output_rows[0], output_rows[2], 0x13);
-        let intermediate1 = _mm256_permute2f128_ps(output_rows[1], output_rows[3], 0x02);
-
-        let shuffled = _mm256_castpd_ps(_mm256_shuffle_pd(_mm256_castps_pd(intermediate0), _mm256_castps_pd(intermediate1), 0x05));
-
-        // Now that the "suffled" vector contains all the elements gathere from the various rows, we can pack everything together
-        let packed1 = _mm256_permute2f128_ps(output_rows[1], output_rows[2], 0x21);
-        let packed0 = _mm256_permute2f128_ps(output_rows[0], shuffled, 0x30); 
-        let packed2 = _mm256_permute2f128_ps(shuffled, output_rows[3], 0x30); 
-
-        // the last element in each column is empty. We're going to do partially overlapping writes to stomp over the previous value.
-        // TODO: See if it's faster to rearrange the data back into 3 rows that we write non-overlapping. Might require AVX2
-        output.store_complex_f32(0, packed0);
-        output.store_complex_f32(1 * 4, packed1);
-        output.store_complex_f32(2 * 4, packed2);
+        output.store_complex_f32(0, output_rows[0]);
+        output.store_complex_f32(1 * 4, output_rows[1]);
+        output.store_complex_f32(2 * 4, output_rows[2]);
     }
 }
 boilerplate_fft_simd_butterfly!(MixedRadixAvx4x3, 12);

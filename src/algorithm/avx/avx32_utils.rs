@@ -7,9 +7,6 @@ pub trait AvxComplexArrayf32 {
     unsafe fn load_complex_f32(&self, index: usize) -> __m256;
     unsafe fn load_complex_f32_lo(&self, index: usize) -> __m128;
     unsafe fn load_complex_remainder_f32(&self, remainder_mask: RemainderMask, index: usize) -> __m256;
-
-    // very situational: Load 'count' elements into a register, packed to the right side, leaving elements to the left empty
-    unsafe fn load_complex_packright_f32(&self, index: usize, count: usize) -> __m256;
 }
 pub trait AvxComplexArrayMutf32 {
     // Store the 4 complex numbers contained in `data` at the given memory addresses
@@ -42,22 +39,6 @@ impl AvxComplexArrayf32 for [Complex<f32>] {
         let complex_ref = self.get_unchecked(index);
         let float_ptr  = (&complex_ref.re) as *const f32;
         _mm256_maskload_ps(float_ptr, remainder_mask.0)
-    }
-    #[inline(always)]
-    unsafe fn load_complex_packright_f32(&self, index: usize, count: usize) -> __m256 {
-        debug_assert!(self.len() >= index + count);
-        let mut mask_array = [0u64; 4];
-        for i in 0..count {
-            mask_array[3 - i] = std::u64::MAX;
-        }
-        let load_mask = _mm256_lddqu_si256(std::mem::transmute::<*const u64, *const __m256i>(mask_array.as_ptr()));
-
-        let complex_ref = self.get_unchecked(index);
-        let float_ptr  = (&complex_ref.re) as *const f32;
-
-        let empty_count = 4 - count;
-        let offset_ptr = float_ptr.offset(empty_count as isize * -2);
-        _mm256_maskload_ps(offset_ptr, load_mask)
     }
 }
 impl AvxComplexArrayMutf32 for [Complex<f32>] {
@@ -100,21 +81,6 @@ impl AvxComplexArrayf32 for RawSlice<Complex<f32>> {
     unsafe fn load_complex_remainder_f32(&self, remainder_mask: RemainderMask, index: usize) -> __m256 {
         let float_ptr  = self.as_ptr().add(index) as *const f32;
         _mm256_maskload_ps(float_ptr, remainder_mask.0)
-    }
-    #[inline(always)]
-    unsafe fn load_complex_packright_f32(&self, index: usize, count: usize) -> __m256 {
-        debug_assert!(self.len() >= index + count);
-        let mut mask_array = [0u64; 4];
-        for i in 0..count {
-            mask_array[3 - i] = std::u64::MAX;
-        }
-        let load_mask = _mm256_lddqu_si256(std::mem::transmute::<*const u64, *const __m256i>(mask_array.as_ptr()));
-        
-        let float_ptr  = self.as_ptr().add(index) as *const f32;
-
-        let empty_count = 4 - count;
-        let offset_ptr = float_ptr.offset(empty_count as isize * -2);
-        _mm256_maskload_ps(offset_ptr, load_mask)
     }
 }
 impl AvxComplexArrayMutf32 for RawSliceMut<Complex<f32>> {
