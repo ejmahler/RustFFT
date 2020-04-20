@@ -12,6 +12,7 @@ use rustfft::algorithm::DFT;
 use rustfft::{Fft, FFTnum};
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
+use rustfft::FFTplanner;
 
 use std::sync::Arc;
 
@@ -161,9 +162,42 @@ fn generate_3n2m_comparison_benchmarks(_: &mut test::Bencher) {
                 let strategy_strings : Vec<_> = s.into_iter().map(|i| i.to_string()).collect();
                 let test_id = strategy_strings.join("_");
                 let strategy_array = strategy_strings.join(",");
-                //println!("#[bench] fn comparef32__2power{:02}__3power{:02}__len{:03}__{}(b: &mut Bencher) {{ compare_fft_f32(b, &[{}]); }}", power2, power3, len, test_id, strategy_array);
+                println!("#[bench] fn comparef32__2power{:02}__3power{:02}__len{:03}__{}(b: &mut Bencher) {{ compare_fft_f32(b, &[{}]); }}", power2, power3, len, test_id, strategy_array);
             }
         }  
+    }
+}
+
+// cargo bench generate_3n2m_planned_benchmarks -- --nocapture --ignored
+#[ignore]
+#[bench]
+fn generate_3n2m_planned_benchmarks(_: &mut test::Bencher) {
+    let mut fft_sizes = vec![];
+
+    let max_len : usize = 1 << 20;
+    let max_power2 = max_len.trailing_zeros();
+    let max_power3 = (max_len as f32).log(3.0).ceil() as u32;
+    for power3 in 0..max_power3 {
+        for power2 in 0..max_power2 {
+            let len = 3usize.pow(power3) << power2;
+            if len <= max_len {
+                fft_sizes.push(len);
+            }
+        }
+    }
+
+    fft_sizes.sort();
+
+    for len in fft_sizes {
+        let power2 = len.trailing_zeros();
+        let mut remaining_factors = len >> power2;
+        let mut power3 = 0;
+        while remaining_factors % 3 == 0 {
+            power3 += 1;
+            remaining_factors /= 3;
+        }
+
+        println!("#[bench] fn comparef32_len{:07}_2power{:02}_3power{}(b: &mut Bencher) {{ bench_planned_fft_f32(b, {}); }}", len, power2, power3, len);
     }
 }
 
@@ -208,3 +242,13 @@ fn compare_fft_f32(b: &mut Bencher, strategy: &[usize]) {
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch); });
 }
+
+fn bench_planned_fft_f32(b: &mut Bencher, len: usize) {
+    let mut planner : FFTplanner<f32> = FFTplanner::new(false);
+    let fft = planner.plan_fft(len);
+
+    let mut buffer = vec![Complex::zero(); fft.len()];
+    let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
+    b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch); });
+}
+

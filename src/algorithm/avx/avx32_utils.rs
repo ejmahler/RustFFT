@@ -5,7 +5,11 @@ use ::array_utils::{RawSlice, RawSliceMut};
 
 pub trait AvxComplexArrayf32 {
     unsafe fn load_complex_f32(&self, index: usize) -> __m256;
+    unsafe fn load_complex_f32_lo(&self, index: usize) -> __m128;
     unsafe fn load_complex_remainder_f32(&self, remainder_mask: RemainderMask, index: usize) -> __m256;
+
+    // very situational: Load 'count' elements into a register, packed to the right side, leaving elements to the left empty
+    unsafe fn load_complex_packright_f32(&self, index: usize, count: usize) -> __m256;
 }
 pub trait AvxComplexArrayMutf32 {
     // Store the 4 complex numbers contained in `data` at the given memory addresses
@@ -27,10 +31,33 @@ impl AvxComplexArrayf32 for [Complex<f32>] {
         _mm256_loadu_ps(float_ptr)
     }
     #[inline(always)]
+    unsafe fn load_complex_f32_lo(&self, index: usize) -> __m128 {
+        debug_assert!(self.len() >= index + 2);
+        let complex_ref = self.get_unchecked(index);
+        let float_ptr  = (&complex_ref.re) as *const f32;
+        _mm_loadu_ps(float_ptr)
+    }
+    #[inline(always)]
     unsafe fn load_complex_remainder_f32(&self, remainder_mask: RemainderMask, index: usize) -> __m256 {
         let complex_ref = self.get_unchecked(index);
         let float_ptr  = (&complex_ref.re) as *const f32;
         _mm256_maskload_ps(float_ptr, remainder_mask.0)
+    }
+    #[inline(always)]
+    unsafe fn load_complex_packright_f32(&self, index: usize, count: usize) -> __m256 {
+        debug_assert!(self.len() >= index + count);
+        let mut mask_array = [0u64; 4];
+        for i in 0..count {
+            mask_array[3 - i] = std::u64::MAX;
+        }
+        let load_mask = _mm256_lddqu_si256(std::mem::transmute::<*const u64, *const __m256i>(mask_array.as_ptr()));
+
+        let complex_ref = self.get_unchecked(index);
+        let float_ptr  = (&complex_ref.re) as *const f32;
+
+        let empty_count = 4 - count;
+        let offset_ptr = float_ptr.offset(empty_count as isize * -2);
+        _mm256_maskload_ps(offset_ptr, load_mask)
     }
 }
 impl AvxComplexArrayMutf32 for [Complex<f32>] {
@@ -64,9 +91,30 @@ impl AvxComplexArrayf32 for RawSlice<Complex<f32>> {
         _mm256_loadu_ps(float_ptr)
     }
     #[inline(always)]
+    unsafe fn load_complex_f32_lo(&self, index: usize) -> __m128 {
+        debug_assert!(self.len() >= index + 2);
+        let float_ptr  = self.as_ptr().add(index) as *const f32;
+        _mm_loadu_ps(float_ptr)
+    }
+    #[inline(always)]
     unsafe fn load_complex_remainder_f32(&self, remainder_mask: RemainderMask, index: usize) -> __m256 {
         let float_ptr  = self.as_ptr().add(index) as *const f32;
         _mm256_maskload_ps(float_ptr, remainder_mask.0)
+    }
+    #[inline(always)]
+    unsafe fn load_complex_packright_f32(&self, index: usize, count: usize) -> __m256 {
+        debug_assert!(self.len() >= index + count);
+        let mut mask_array = [0u64; 4];
+        for i in 0..count {
+            mask_array[3 - i] = std::u64::MAX;
+        }
+        let load_mask = _mm256_lddqu_si256(std::mem::transmute::<*const u64, *const __m256i>(mask_array.as_ptr()));
+        
+        let float_ptr  = self.as_ptr().add(index) as *const f32;
+
+        let empty_count = 4 - count;
+        let offset_ptr = float_ptr.offset(empty_count as isize * -2);
+        _mm256_maskload_ps(offset_ptr, load_mask)
     }
 }
 impl AvxComplexArrayMutf32 for RawSliceMut<Complex<f32>> {
@@ -145,6 +193,24 @@ pub unsafe fn unpack_complex_f32(row0: __m256, row1: __m256) -> (__m256, __m256)
     (output0, output1)
 }
 
+// Does the equivalent of "unpackhi" and "unpacklo" but for complex numbers
+#[inline(always)]
+pub unsafe fn unpack_complex_f32_lo(row0: __m128, row1: __m128) -> (__m128, __m128) {
+    // these two intrinsics compile down to nothing! they're basically transmutes
+    let row0_double = _mm_castps_pd(row0);
+    let row1_double = _mm_castps_pd(row1);
+
+    // unpack as doubles
+    let unpacked0 = _mm_unpacklo_pd(row0_double, row1_double);
+    let unpacked1 = _mm_unpackhi_pd(row0_double, row1_double);
+
+    // re-cast to floats. again, just a transmute, so this compilesdown ot nothing
+    let output0 = _mm_castpd_ps(unpacked0);
+    let output1 = _mm_castpd_ps(unpacked1);
+
+    (output0, output1)
+}
+
 // Does the equivalent of "unpackhi" but for complex numbers
 #[inline(always)]
 pub unsafe fn unpackhi_complex_f32(row0: __m256, row1: __m256) -> __m256 {
@@ -194,6 +260,16 @@ impl Rotate90Config<__m256> {
 
         // We can negate the elements we want by xoring the row with a pre-set vector
         _mm256_xor_ps(elements_swapped, self.0)
+    }
+
+    // Apply a multiplication by (0, i) or (0, -i), based on the value of rotation_config. Much faster than an actual multiplication.
+    #[inline(always)]
+    pub unsafe fn rotate90_lo(&self, elements: __m128) -> __m128 {
+        // Our goal is to swap the reals with the imaginaries, then negate either the reals or the imaginaries, based on whether we're an inverse or not
+        let elements_swapped = _mm_permute_ps(elements, 0xB1);
+
+        // We can negate the elements we want by xoring the row with a pre-set vector
+        _mm_xor_ps(elements_swapped, _mm256_castps256_ps128(self.0))
     }
 }
 use super::avx64_utils::broadcast_complex_f64;
@@ -272,6 +348,16 @@ pub unsafe fn column_butterfly2_f32(row0: __m256, row1: __m256) -> (__m256, __m2
     (output0, output1)
 }
 
+// Compute 4 parallel butterfly 2's using AVX instructions
+// rowN contains the nth element of each parallel FFT
+#[inline(always)]
+pub unsafe fn column_butterfly2_f32_lo(rows: [__m128; 2]) -> [__m128; 2] {
+    let output0 = _mm_add_ps(rows[0], rows[1]);
+    let output1 = _mm_sub_ps(rows[0], rows[1]);
+
+    [output0, output1]
+}
+
 // Compute 4 parallel butterfly 2's using AVX instructions. This variant rolls in a negation of row 1
 // rowN contains the nth element of each parallel FFT
 #[inline(always)]
@@ -323,15 +409,16 @@ pub unsafe fn transpose_4x3_packed_f32(rows: [__m256; 3]) -> [__m256; 3] {
 // Treat the input like the rows of a 4x4 array, and transpose said rows to the columns
 #[inline(always)]
 pub unsafe fn transpose_4x4_f32(rows: [__m256;4]) -> [__m256;4] {
-    let (unpacked0, unpacked1) = unpack_complex_f32(rows[0], rows[1]);
-    let (unpacked2, unpacked3) = unpack_complex_f32(rows[2], rows[3]);
 
-    let col0 = _mm256_permute2f128_ps(unpacked0, unpacked2, 0x20);
-    let col1 = _mm256_permute2f128_ps(unpacked1, unpacked3, 0x20);
-    let col2 = _mm256_permute2f128_ps(unpacked0, unpacked2, 0x31);
-    let col3 = _mm256_permute2f128_ps(unpacked1, unpacked3, 0x31);
+    let permute0 = _mm256_permute2f128_ps(rows[0], rows[2], 0x20);
+    let permute1 = _mm256_permute2f128_ps(rows[1], rows[3], 0x20);
+    let permute2 = _mm256_permute2f128_ps(rows[0], rows[2], 0x31);
+    let permute3 = _mm256_permute2f128_ps(rows[1], rows[3], 0x31);
 
-    [col0, col1, col2, col3]
+    let (unpacked0, unpacked1) = unpack_complex_f32(permute0, permute1);
+    let (unpacked2, unpacked3) = unpack_complex_f32(permute2, permute3);
+
+    [unpacked0, unpacked1, unpacked2, unpacked3]
 }
 
 // Treat the input like the rows of a 4x8 array, and transpose it to a 8x4 array, where each array of 4 is one set of 4 columns
@@ -414,6 +501,22 @@ pub unsafe fn transpose_8x4_to_4x8_f32(rows0: [__m256;4], rows1: [__m256;4]) -> 
     let transposed1 = transpose_4x4_f32(rows1);
 
     [transposed0[0], transposed0[1], transposed0[2], transposed0[3], transposed1[0], transposed1[1], transposed1[2], transposed1[3]]
+}
+
+// Treat the input like the rows of a 9x3 array, and transpose it to a 3x9 array. 
+// our parameters are technically 10 columns, not 9 -- we're going to discard the second element of row0
+#[inline(always)]
+pub unsafe fn transpose_9x3_to_3x9_emptycolumn1_f32(rows0: [__m128;3], rows1: [__m256;3], rows2: [__m256;3]) -> [__m256;9] {
+
+    // the first row of the output will be the first column of the input
+    let (unpacked0, _) = unpack_complex_f32_lo(rows0[0], rows0[1]);
+    let (unpacked1, _) = unpack_complex_f32_lo(rows0[2], _mm_setzero_ps());
+    let output0 = _mm256_insertf128_ps(_mm256_castps128_ps256(unpacked0), unpacked1, 0x1);
+
+    let transposed0 = transpose_4x4_f32([rows1[0], rows1[1], rows1[2], _mm256_setzero_ps()]);
+    let transposed1 = transpose_4x4_f32([rows2[0], rows2[1], rows2[2], _mm256_setzero_ps()]);
+
+    [output0, transposed0[0], transposed0[1], transposed0[2], transposed0[3], transposed1[0], transposed1[1], transposed1[2], transposed1[3]]
 }
 
 // Treat the input like the rows of a 12x4 array, and transpose it to a 4x12 array
@@ -510,6 +613,29 @@ pub unsafe fn interleave_evens_odds_f32(rows: [__m256; 2]) -> [__m256; 2] {
     [output0, output1]
 }
 
+// utility for packing a 3x4 array into just 3 registers, preserving order
+#[inline(always)]
+pub unsafe fn pack_3x4_4x3_f32(rows: [__m256;4]) -> [__m256; 3] {
+    let (unpacked_lo, _) = unpack_complex_f32(rows[2], rows[1]); // 5 8 3 6
+
+    // copy the lower half of row 1 into the upper half, then swap even and od values
+    let row1_duplicated = _mm256_insertf128_ps(rows[1], _mm256_castps256_ps128(rows[1]), 0x1); // 4 3 4 3
+    let row1_dupswap = _mm256_permute_ps(row1_duplicated, 0x4E); // 3 4 3 4
+    
+    // both lanes of row 2 have some data they want to swap to the other side
+    let row2_swapped = _mm256_permute2f128_ps(rows[2], unpacked_lo, 0x03); // 7 6 5 8
+    
+    // none of the data in row 3 is in the right position, and it'll take several instructions to get there
+    let permuted3 = _mm256_permute_ps(rows[3], 0x4E); // swap even and odd complex numbers // 11 _ 9 10
+    let intermediate3 = _mm256_insertf128_ps(row2_swapped, _mm256_castps256_ps128(permuted3), 0x1); // 9 10 5 8
+    
+    let output0 = _mm256_blend_ps(rows[0], row1_dupswap, 0xC0); // 3 2 1 0
+    let output1 = _mm256_blend_ps(row2_swapped, row1_dupswap, 0x03); // 7 6 5 4
+    let output2 = _mm256_blend_ps(permuted3, intermediate3, 0x33); // 11 10 9 8
+
+    [output0, output1, output2]
+}
+
 // Functions in the "FMA" sub-module require the fma instruction set in addition to AVX
 pub mod fma {
     use super::*;
@@ -577,6 +703,27 @@ pub mod fma {
         let mid2 = _mm256_mul_ps(mid2_rotated, twiddle_imag);
 
         let (output1, output2) = column_butterfly2_f32(mid1, mid2);
+
+        [output0, output1, output2]
+    }
+
+    // Compute 2 parallel butterfly 3's using AVX and FMA instructions
+    // rowN contains the nth element of each parallel FFT
+    #[inline(always)]
+    pub unsafe fn column_butterfly3_f32_lo(rows: [__m128; 3], twiddles: __m256) -> [__m128; 3] {
+        let [mid1_pretwiddle, mid2_pretwiddle] = column_butterfly2_f32_lo([rows[1], rows[2]]);
+        let output0 = _mm_add_ps(rows[0], mid1_pretwiddle);
+
+        let twiddles_lo = _mm256_castps256_ps128(twiddles);
+        let twiddle_real = _mm_moveldup_ps(twiddles_lo);
+        let twiddle_imag = _mm_movehdup_ps(twiddles_lo);
+        
+        let mid1 = _mm_fmadd_ps(mid1_pretwiddle, twiddle_real, rows[0]);
+
+        let mid2_rotated = Rotate90Config::new_f32(true).rotate90_lo(mid2_pretwiddle);
+        let mid2 = _mm_mul_ps(mid2_rotated, twiddle_imag);
+
+        let [output1, output2] = column_butterfly2_f32_lo([mid1, mid2]);
 
         [output0, output1, output2]
     }
