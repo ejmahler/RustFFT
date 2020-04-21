@@ -88,13 +88,18 @@ impl<T: FFTnum> FftPlannerAvx<T> {
             let factors = PartialFactors::compute(len);
             let base = self.plan_mixed_radix_base(len, &factors);
 
-            // it's possible that the base planner plans outthe whole FFT. it's guaranteed if `len` is a prime number, for example
+            // it's possible that the base planner plans out the whole FFT. it's guaranteed if `len` is a prime number, for example
             let plan = if base.len == len {
                 base
             } else {
-                let radix_factors = factors.divide_by(&PartialFactors::compute(base.len)).unwrap();
+                let radix_factors = factors.divide_by(&PartialFactors::compute(base.len)).unwrap_or_else(|| panic!("Invalid base for FFT length={}, base={}", len, base.len));
                 self.plan_mixed_radix(radix_factors, base)
             };
+
+            let mut plan_strings : Vec<_> = plan.radixes.iter().map(|i| i.to_string()).collect();
+            plan_strings.insert(0, plan.base.to_string());
+            let plan_string = plan_strings.join("_");
+            println!("// planned for len={}: {}", len, plan_string);
 
             self.construct_plan(plan)
         }
@@ -265,7 +270,7 @@ impl<T: FFTnum> MakeFftAvx<T> for FftPlannerAvx<T> {
 
 
 impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
-    fn plan_mixed_radix_base(&self, _len: usize, factors: &PartialFactors) -> MixedRadixPlan { 
+    fn plan_mixed_radix_base(&self, len: usize, factors: &PartialFactors) -> MixedRadixPlan { 
         // most of this code is heuristics assuming FFTs of a minimum size. if the FFT is below that minimum size, the heuristics break down.
         // so the first thing we're going to do is hardcode the plan for osme specific sizes where we know the heuristics won't be enough
         let hardcoded_base = match factors.product() {
@@ -288,9 +293,9 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
         }
 
         if factors.get_other_factors() > 1 {
-            // todo: if we're just 2*other_factors, we might want to return the whole FFT as the base to hand it off to bluestein's
+            // todo: if we're just 2*other_factors, we might want to return the whole FFT as the base, and hand it off to bluestein's, because 2xn is slow
             MixedRadixPlan::new(factors.get_other_factors(), &[])
-        } else {
+        } else if factors.get_power3() < 3 {
             match factors.get_power3() {
                 // if this FFT is a power of 2, our strategy here is to tweak the butterfly to free us up to do an 8xn chain
                 0 => match factors.get_power2() % 3 {
@@ -313,15 +318,37 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
                     2 => MixedRadixPlan::new(48, &[12]),
                     _ => unreachable!(),
                 },
-                // this FFT is 2^n * 3^m, where M >= 3, we're just going to use use the largest multiple-of-3 butterfly we can, which usually ends up meaning 48
-                // TODO: benchmarking shows that for large FFTs, 64, 32, and 24 might be situationally faster, but for now 48 is a very reasonable default
-                _ => match factors.get_power2() {
-                    0 => MixedRadixPlan::new(27, &[]),
-                    1 => MixedRadixPlan::new(54, &[]),
-                    2 => MixedRadixPlan::new(36, &[]),
-                    3 => MixedRadixPlan::new(24, &[]),
-                    _ => MixedRadixPlan::new(48, &[]),
-                }
+                _ => unreachable!(),
+            }
+        } else if factors.get_power2() < 5 {
+            // Our FFT is a power of 3 times a low power of 2. A high level of our strategy is that we want to pick a base that will 
+            // A: consume all factors of 2, and B: leave us with an even power of 3, so that we can do a 9xn chain.
+            match factors.get_power2() {
+                0 => MixedRadixPlan::new(27, &[]),
+                1 => MixedRadixPlan::new(54, &[]),
+                2 => match factors.get_power3() % 2 {
+                    0 => MixedRadixPlan::new(36, &[]),
+                    1 => MixedRadixPlan::new(if len < 1000 { 36 } else { 12 }, &[]),
+                    _ => unreachable!(),
+                },
+                3 => match factors.get_power3() % 2 {
+                    0 => MixedRadixPlan::new(54, &[12]),
+                    1 => MixedRadixPlan::new(24, &[]),
+                    _ => unreachable!(),
+                },
+                4 => match factors.get_power3() % 2 {
+                    0 => MixedRadixPlan::new(16, &[]),
+                    1 => MixedRadixPlan::new(48, &[]),
+                    _ => unreachable!(),
+                },
+                _ => unreachable!(),
+            }
+        } else {
+            // this FFT is 2^n * 3^m, where N >= 3 and M >= 5, we're just going to use use the largest multiple-of-3 butterfly we can, which usually ends up meaning 48
+            // TODO: benchmarking shows that for large FFTs, 64, 32, and 24 might be situationally faster, but for now 48 is a very reasonable default
+            match factors.get_power2() {
+                3 => MixedRadixPlan::new(24, &[]),
+                _ => MixedRadixPlan::new(48, &[]),
             }
         }
     }

@@ -88,12 +88,13 @@ fn recursive_strategy_builder(strategy_list: &mut Vec<Vec<usize>>, last_ditch_st
         if filter_radix(&current_strategy, &len, true) {
             current_strategy.push(len.len);
 
-            // If this strategy contains a 3, it's very unlikely to be the fastest. we don't want to rule it out, because it's required sometimes, but don't use it unless there aren't any other
-            if current_strategy.contains(&3) {
-                last_ditch_strategy_list.push(current_strategy.clone());
-            } else {
-                strategy_list.push(current_strategy.clone());
-            }
+            // If this strategy contains a 2 or 3, it's very unlikely to be the fastest. we don't want to rule it out, because it's required sometimes, but don't use it unless there aren't any other
+            // if current_strategy.contains(&2) || current_strategy.contains(&3) {
+            //     last_ditch_strategy_list.push(current_strategy.clone());
+            // } else {
+            //     strategy_list.push(current_strategy.clone());
+            // }
+            strategy_list.push(current_strategy.clone());
         }
     }
     else if last_ditch_butterflies.contains(&len.len) {
@@ -130,23 +131,23 @@ fn filter_strategy(strategy: &Vec<usize>) -> bool {
 #[bench]
 fn generate_3n2m_comparison_benchmarks(_: &mut test::Bencher) {
     let butterfly_sizes_small3 = [ 32, 48, 64 ]; 
-    let butterfly_sizes_big3 = [ 48 ]; 
-    let last_ditch_butterflies = [ 24, 12, 3 ]; 
-    let available_radixes = [FftSize::new(3), FftSize::new(4), FftSize::new(6), FftSize::new(8), FftSize::new(9), FftSize::new(12), FftSize::new(16)];
+    let butterfly_sizes_big3 = [ 12, 16, 24, 36, 48, 54 ]; 
+    let last_ditch_butterflies = [ 27, 9 ]; 
+    let available_radixes = [FftSize::new(2), FftSize::new(3), FftSize::new(4), FftSize::new(6), FftSize::new(8), FftSize::new(9), FftSize::new(12), FftSize::new(16)];
 
-    let max_len : usize = 1 << 20;
+    let max_len : usize = 1 << 23;
     let min_len = 64;
     let max_power2 = max_len.trailing_zeros();
     let max_power3 = (max_len as f32).log(3.0).ceil() as u32;
     
-    for power3 in 0..max_power3 {
-        for power2 in 4..max_power2 {
+    for power2 in 1..5 {
+        for power3 in 0..max_power3 {
             let len = 3usize.pow(power3) << power2;
             if len > max_len { continue; }
 
             let planned_fft : Arc<dyn Fft<f32>> = rustfft::FFTplanner::new(false).plan_fft(len);
 
-            let butterfly_sizes : &[usize] = if power3 <= 2 { &butterfly_sizes_small3 } else { &butterfly_sizes_big3 };
+            let butterfly_sizes : &[usize] = if power2 > 4 { &butterfly_sizes_small3 } else { &butterfly_sizes_big3 };
 
             // we want to catalog all the different possible ways there are to compute a FFT of size `len`
             // we can do that by recursively looping over each radix, dividing our length by that radix, then recursively trying rach radix again
@@ -158,11 +159,12 @@ fn generate_3n2m_comparison_benchmarks(_: &mut test::Bencher) {
                 strategies = last_ditch_strategies;
             }
 
-            for s in strategies.into_iter().filter(filter_strategy) {
+            for mut s in strategies.into_iter().filter(filter_strategy) {
+                s.reverse();
                 let strategy_strings : Vec<_> = s.into_iter().map(|i| i.to_string()).collect();
                 let test_id = strategy_strings.join("_");
                 let strategy_array = strategy_strings.join(",");
-                println!("#[bench] fn comparef32__2power{:02}__3power{:02}__len{:03}__{}(b: &mut Bencher) {{ compare_fft_f32(b, &[{}]); }}", power2, power3, len, test_id, strategy_array);
+                println!("#[bench] fn comparef32__2power{:02}__3power{:02}__len{:02}__{}(b: &mut Bencher) {{ compare_fft_f32(b, &[{}]); }}", power2, power3, len, test_id, strategy_array);
             }
         }  
     }
@@ -174,10 +176,10 @@ fn generate_3n2m_comparison_benchmarks(_: &mut test::Bencher) {
 fn generate_3n2m_planned_benchmarks(_: &mut test::Bencher) {
     let mut fft_sizes = vec![];
 
-    let max_len : usize = 1 << 20;
+    let max_len : usize = 1 << 22;
     let max_power2 = max_len.trailing_zeros();
     let max_power3 = (max_len as f32).log(3.0).ceil() as u32;
-    for power2 in 1..3 {
+    for power2 in 0..max_power2 {
         for power3 in 0..max_power3 {
             let len = 3usize.pow(power3) << power2;
             if len <= max_len && !(power2 == 3 && len > 24) {
@@ -185,8 +187,6 @@ fn generate_3n2m_planned_benchmarks(_: &mut test::Bencher) {
             }
         }
     }
-
-    //fft_sizes.sort();
 
     for len in fft_sizes {
         let power2 = len.trailing_zeros();
@@ -197,7 +197,7 @@ fn generate_3n2m_planned_benchmarks(_: &mut test::Bencher) {
             remaining_factors /= 3;
         }
 
-        println!("#[bench] fn comparef32_2power{:02}_3power{:02}(b: &mut Bencher) {{ bench_planned_fft_f32(b, {}); }}", power2, power3, len);
+        println!("#[bench] fn comparef32_len{:07}_2power{:02}_3power{:02}(b: &mut Bencher) {{ bench_planned_fft_f32(b, {}); }}", len, power2, power3, len);
     }
 }
 
@@ -206,7 +206,7 @@ fn wrap_fft<T: FFTnum>(fft: impl Fft<T> + 'static) -> Arc<dyn Fft<T>> {
 }
 
 fn compare_fft_f32(b: &mut Bencher, strategy: &[usize]) {
-    let mut fft = match strategy.last().unwrap() {
+    let mut fft = match strategy[0] {
         1 =>    wrap_fft(DFT::new(1, false)),
         2 =>    wrap_fft(Butterfly2::new(false)),
         3 =>    wrap_fft(Butterfly3::new(false)),
@@ -215,16 +215,20 @@ fn compare_fft_f32(b: &mut Bencher, strategy: &[usize]) {
         6 =>    wrap_fft(Butterfly6::new(false)),
         7 =>    wrap_fft(Butterfly7::new(false)),
         8 =>    wrap_fft(MixedRadixAvx4x2::new(false).unwrap()),
+        9 =>    wrap_fft(MixedRadixAvx3x3::new(false).unwrap()),
         12 =>   wrap_fft(MixedRadixAvx4x3::new(false).unwrap()),
         16 =>   wrap_fft(MixedRadixAvx4x4::new(false).unwrap()),
         24 =>   wrap_fft(MixedRadixAvx4x6::new(false).unwrap()),
+        27 =>   wrap_fft(MixedRadixAvx3x9::new(false).unwrap()),
         32 =>   wrap_fft(MixedRadixAvx4x8::new(false).unwrap()),
+        36 =>   wrap_fft(MixedRadixAvx4x9::new(false).unwrap()),
         48 =>   wrap_fft(MixedRadixAvx4x12::new(false).unwrap()),
+        54 =>   wrap_fft(MixedRadixAvx6x9::new(false).unwrap()),
         64 =>   wrap_fft(MixedRadixAvx8x8::new(false).unwrap()),
         _ => panic!()
     };
 
-    for radix in strategy.iter().rev().skip(1) {
+    for radix in strategy.iter().skip(1) {
         fft = match radix {
             2 => wrap_fft(MixedRadix2xnAvx::new_f32(fft).unwrap()),
             3 => wrap_fft(MixedRadix3xnAvx::new_f32(fft).unwrap()),
@@ -251,3 +255,5 @@ fn bench_planned_fft_f32(b: &mut Bencher, len: usize) {
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch); });
 }
+
+
