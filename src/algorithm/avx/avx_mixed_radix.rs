@@ -622,12 +622,12 @@ impl MixedRadix2xnAvx<f32, __m256> {
     unsafe fn write_partial_remainder(output: &mut[Complex<f32>], packed_data: [__m256; 2], partial_remainder: usize) {
         assert!(partial_remainder > 0 && partial_remainder < 4);
         if partial_remainder == 1 {
-            output.store_complex_f32_lo(packed_data[0], 0);
+            output.store_complex_f32_lo(_mm256_castps256_ps128(packed_data[0]), 0);
         } else {
             output.store_complex_f32(0, packed_data[0]);
 
             if partial_remainder == 3 {
-                output.store_complex_f32_lo(packed_data[1], 4);
+                output.store_complex_f32_lo(_mm256_castps256_ps128(packed_data[1]), 4);
             }
         }
     }
@@ -681,7 +681,7 @@ impl MixedRadix3xnAvx<f32, __m256> {
             output.store_complex_f32(0, packed_data[0]);
 
             if partial_remainder == 2 {
-                output.store_complex_f32_lo(packed_data[1], 4);
+                output.store_complex_f32_lo(_mm256_castps256_ps128(packed_data[1]), 4);
             }
             if partial_remainder == 3 {
                 output.store_complex_f32(4, packed_data[1]);
@@ -798,14 +798,14 @@ impl MixedRadix6xnAvx<f32, __m256> {
         assert!(partial_remainder > 0 && partial_remainder < 4);
         output.store_complex_f32(0, packed_data[0]);
         if partial_remainder == 1 {
-            output.store_complex_f32_lo(packed_data[1], 4);
+            output.store_complex_f32_lo(_mm256_castps256_ps128(packed_data[1]), 4);
         } else {
             output.store_complex_f32(4, packed_data[1]);
             output.store_complex_f32(8, packed_data[2]);
 
             if partial_remainder == 3 {
                 output.store_complex_f32(12, packed_data[3]);
-                output.store_complex_f32_lo(packed_data[4], 16);
+                output.store_complex_f32_lo(_mm256_castps256_ps128(packed_data[4]), 16);
             }
         }
     }
@@ -941,7 +941,7 @@ impl MixedRadix9xnAvx<f32, __m256> {
             output.store_complex_f32(12, packed_data[3]);
 
             if partial_remainder == 2 {
-                output.store_complex_f32_lo(packed_data[4], 16);
+                output.store_complex_f32_lo(_mm256_castps256_ps128(packed_data[4]), 16);
             }
             else {
                 let remainder_mask = avx32_utils::RemainderMask::new_f32(3);

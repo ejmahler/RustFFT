@@ -279,7 +279,6 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
 
             // 9 * 2^n special cases
             18 => Some(MixedRadixPlan::new(3, &[6])), // 2 * 3^2
-            36 => Some(MixedRadixPlan::new(12, &[3])), // 2^2 * 3^2
             72 => Some(MixedRadixPlan::new(24, &[3])), // 2^3 * 3^2
             288 => Some(MixedRadixPlan::new(48, &[6])), // 2^5 * 3^2
             _=> None,
@@ -317,8 +316,9 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
                 // this FFT is 2^n * 3^m, where M >= 3, we're just going to use use the largest multiple-of-3 butterfly we can, which usually ends up meaning 48
                 // TODO: benchmarking shows that for large FFTs, 64, 32, and 24 might be situationally faster, but for now 48 is a very reasonable default
                 _ => match factors.get_power2() {
-                    0|1 => MixedRadixPlan::new(27, &[]),
-                    2 => MixedRadixPlan::new(12, &[]),
+                    0 => MixedRadixPlan::new(27, &[]),
+                    1 => MixedRadixPlan::new(54, &[]),
+                    2 => MixedRadixPlan::new(36, &[]),
                     3 => MixedRadixPlan::new(24, &[]),
                     _ => MixedRadixPlan::new(48, &[]),
                 }
@@ -342,7 +342,9 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
             24 =>   wrap_fft_some(MixedRadixAvx4x6::new(self.inverse).unwrap()),
             27 =>   wrap_fft_some(MixedRadixAvx3x9::new(self.inverse).unwrap()),
             32 =>   wrap_fft_some(MixedRadixAvx4x8::new(self.inverse).unwrap()),
+            36 =>   wrap_fft_some(MixedRadixAvx4x9::new(self.inverse).unwrap()),
             48 =>   wrap_fft_some(MixedRadixAvx4x12::new(self.inverse).unwrap()),
+            54 =>   wrap_fft_some(MixedRadixAvx6x9::new(self.inverse).unwrap()),
             64 =>   wrap_fft_some(MixedRadixAvx8x8::new(self.inverse).unwrap()),
             _ => None
         }
