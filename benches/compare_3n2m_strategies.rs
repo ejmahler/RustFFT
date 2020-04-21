@@ -177,16 +177,16 @@ fn generate_3n2m_planned_benchmarks(_: &mut test::Bencher) {
     let max_len : usize = 1 << 20;
     let max_power2 = max_len.trailing_zeros();
     let max_power3 = (max_len as f32).log(3.0).ceil() as u32;
-    for power3 in 0..max_power3 {
-        for power2 in 0..max_power2 {
+    for power2 in 0..2 {
+        for power3 in 0..max_power3 {
             let len = 3usize.pow(power3) << power2;
-            if len <= max_len {
+            if len <= max_len && !(power2 == 3 && len > 24) {
                 fft_sizes.push(len);
             }
         }
     }
 
-    fft_sizes.sort();
+    //fft_sizes.sort();
 
     for len in fft_sizes {
         let power2 = len.trailing_zeros();
@@ -197,7 +197,7 @@ fn generate_3n2m_planned_benchmarks(_: &mut test::Bencher) {
             remaining_factors /= 3;
         }
 
-        println!("#[bench] fn comparef32_len{:07}_2power{:02}_3power{}(b: &mut Bencher) {{ bench_planned_fft_f32(b, {}); }}", len, power2, power3, len);
+        println!("#[bench] fn comparef32_2power{:02}_3power{:02}(b: &mut Bencher) {{ bench_planned_fft_f32(b, {}); }}", power2, power3, len);
     }
 }
 
@@ -251,4 +251,28 @@ fn bench_planned_fft_f32(b: &mut Bencher, len: usize) {
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch); });
 }
-
+#[bench] fn comparef32_2power00_3power00(b: &mut Bencher) { bench_planned_fft_f32(b, 1); }
+#[bench] fn comparef32_2power00_3power01(b: &mut Bencher) { bench_planned_fft_f32(b, 3); }
+#[bench] fn comparef32_2power00_3power02(b: &mut Bencher) { bench_planned_fft_f32(b, 9); }
+#[bench] fn comparef32_2power00_3power03(b: &mut Bencher) { bench_planned_fft_f32(b, 27); }
+#[bench] fn comparef32_2power00_3power04(b: &mut Bencher) { bench_planned_fft_f32(b, 81); }
+#[bench] fn comparef32_2power00_3power05(b: &mut Bencher) { bench_planned_fft_f32(b, 243); }
+#[bench] fn comparef32_2power00_3power06(b: &mut Bencher) { bench_planned_fft_f32(b, 729); }
+#[bench] fn comparef32_2power00_3power07(b: &mut Bencher) { bench_planned_fft_f32(b, 2187); }
+#[bench] fn comparef32_2power00_3power08(b: &mut Bencher) { bench_planned_fft_f32(b, 6561); }
+#[bench] fn comparef32_2power00_3power09(b: &mut Bencher) { bench_planned_fft_f32(b, 19683); }
+#[bench] fn comparef32_2power00_3power10(b: &mut Bencher) { bench_planned_fft_f32(b, 59049); }
+#[bench] fn comparef32_2power00_3power11(b: &mut Bencher) { bench_planned_fft_f32(b, 177147); }
+#[bench] fn comparef32_2power00_3power12(b: &mut Bencher) { bench_planned_fft_f32(b, 531441); }
+#[bench] fn comparef32_2power01_3power00(b: &mut Bencher) { bench_planned_fft_f32(b, 2); }
+#[bench] fn comparef32_2power01_3power01(b: &mut Bencher) { bench_planned_fft_f32(b, 6); }
+#[bench] fn comparef32_2power01_3power02(b: &mut Bencher) { bench_planned_fft_f32(b, 18); }
+#[bench] fn comparef32_2power01_3power03(b: &mut Bencher) { bench_planned_fft_f32(b, 54); }
+#[bench] fn comparef32_2power01_3power04(b: &mut Bencher) { bench_planned_fft_f32(b, 162); }
+#[bench] fn comparef32_2power01_3power05(b: &mut Bencher) { bench_planned_fft_f32(b, 486); }
+#[bench] fn comparef32_2power01_3power06(b: &mut Bencher) { bench_planned_fft_f32(b, 1458); }
+#[bench] fn comparef32_2power01_3power07(b: &mut Bencher) { bench_planned_fft_f32(b, 4374); }
+#[bench] fn comparef32_2power01_3power08(b: &mut Bencher) { bench_planned_fft_f32(b, 13122); }
+#[bench] fn comparef32_2power01_3power09(b: &mut Bencher) { bench_planned_fft_f32(b, 39366); }
+#[bench] fn comparef32_2power01_3power10(b: &mut Bencher) { bench_planned_fft_f32(b, 118098); }
+#[bench] fn comparef32_2power01_3power11(b: &mut Bencher) { bench_planned_fft_f32(b, 354294); }

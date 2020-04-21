@@ -250,7 +250,7 @@ impl MixedRadixAvx3x3<f32> {
 }
 
 pub struct MixedRadixAvx4x3<T> {
-    twiddles: [__m256; 3],
+    twiddles: [__m256; 2],
     twiddles_butterfly3: __m256,
     twiddle_config: avx32_utils::Rotate90Config<__m256>,
     inverse: bool,
@@ -273,14 +273,12 @@ impl MixedRadixAvx4x3<f32> {
         let twiddles = [
             Complex{ re: 1.0, im: 0.0 },
             Complex{ re: 1.0, im: 0.0 },
-            f32::generate_twiddle_factor(1, 12, inverse),
-            f32::generate_twiddle_factor(2, 12, inverse),
-            Complex{ re: 1.0, im: 0.0 },
-            Complex{ re: 1.0, im: 0.0 },
             f32::generate_twiddle_factor(2, 12, inverse),
             f32::generate_twiddle_factor(4, 12, inverse),
-            Complex{ re: 1.0, im: 0.0 },
-            Complex{ re: 1.0, im: 0.0 },
+
+            // note that these twiddles are deliberately in a weird order, see perform_fft_f32 for why
+            f32::generate_twiddle_factor(1, 12, inverse),
+            f32::generate_twiddle_factor(2, 12, inverse),
             f32::generate_twiddle_factor(3, 12, inverse),
             f32::generate_twiddle_factor(6, 12, inverse),
         ];
@@ -288,7 +286,6 @@ impl MixedRadixAvx4x3<f32> {
             twiddles: [
                 twiddles.load_complex_f32(0),
                 twiddles.load_complex_f32(4),
-                twiddles.load_complex_f32(8),
             ],
             twiddles_butterfly3: avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 3, inverse)),
             twiddle_config: avx32_utils::Rotate90Config::new_f32(inverse),
@@ -315,16 +312,28 @@ impl MixedRadixAvx4x3<f32> {
         // butterfly 4's down the columns
         let mut mid = avx32_utils::column_butterfly4_f32(input_rows, self.twiddle_config);
 
-        // Multiply in our twiddle factors. the first one will be normal, but for the second one, merge the twiddle-able parts of the vectors into a single vector, so that we can do one multiply instead of 2
-        mid[1] = avx32_utils::fma::complex_multiply_f32(mid[1], self.twiddles[0]);
-        mid[2] = avx32_utils::fma::complex_multiply_f32(mid[2], self.twiddles[1]);
-        mid[3] = avx32_utils::fma::complex_multiply_f32(mid[3], self.twiddles[2]);
+        // Multiply in our twiddle factors. mid2 will be normal, but for mid1 and mid3, we're going to merge the twiddle-able parts into a single vector,
+        // and do a single complex multiply on it. this transformation saves a complex multiply and costs nothing,
+        // because we needthe second halves of mid1 and mid3 in a single vector for the transpose afterward anyways, so we would have done this permute2f128 operation either way
+        mid[2] = avx32_utils::fma::complex_multiply_f32(mid[2], self.twiddles[0]);
+        let merged_mid13 = _mm256_permute2f128_ps(mid[1], mid[3], 0x31);
+        let twiddled13 = avx32_utils::fma::complex_multiply_f32(self.twiddles[1], merged_mid13);
+        
+        // Transpose our 3x4 array into a 4x3. we're doing a custom transpose here because we have to re-distribute the merged twiddled23 back out, and we can roll that into the transpose to make it free
+        let transposed = {
+            let permute0 = _mm256_permute2f128_ps(mid[0], mid[2], 0x20);
+            let permute1 = _mm256_permute2f128_ps(mid[1], mid[3], 0x20);
+            let permute2 = _mm256_permute2f128_ps(mid[0], mid[2], 0x31);
+            let permute3 = twiddled13; // normally we'd need to do a permute here, but we can skip it because we already did it for twiddle factors
 
-        // Transpose our 3x4 array into a 4x3
-        let [_, transposed0, transposed1, transposed2] = avx32_utils::transpose_4x4_f32(mid);
+            let (_, unpacked1) = avx32_utils::unpack_complex_f32(permute0, permute1);
+            let (unpacked2, unpacked3) = avx32_utils::unpack_complex_f32(permute2, permute3);
+
+            [unpacked1, unpacked2, unpacked3]
+        };
 
         // Do 4 butterfly 4's down the columns of our transposed array
-        let output_rows = avx32_utils::fma::column_butterfly3_f32([transposed0, transposed1, transposed2], self.twiddles_butterfly3); 
+        let output_rows = avx32_utils::fma::column_butterfly3_f32(transposed, self.twiddles_butterfly3); 
 
         output.store_complex_f32(0, output_rows[0]);
         output.store_complex_f32(1 * 4, output_rows[1]);
