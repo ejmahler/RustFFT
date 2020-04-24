@@ -202,60 +202,23 @@ macro_rules! mixedradix_gen_data_f64 {
 
 
 macro_rules! mixedradix_column_butterflies_f32{
-    ($row_count: expr,  $unroll_count: expr, $butterfly_fn: expr) => (
+    ($row_count: expr, $butterfly_fn: expr) => (
 
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_column_butterflies(&self, buffer: &mut [Complex<f32>]) {
         // How many complex numbers fit in a single register
         const CHUNK_SIZE : usize = 4;
 
-        // How many loop iters we are unrolling, and how many complex numbers we are processing per unrolled loop
-        const UNROLL_COUNT : usize = $unroll_count;
-        const UNROLL_CHUNK_SIZE : usize = CHUNK_SIZE * UNROLL_COUNT;
-
         // How many rows this FFT has, ie 2 for 2xn, 4 for 4xn, etc
         const ROW_COUNT : usize = $row_count;
         const TWIDDLES_PER_COLUMN : usize = ROW_COUNT - 1;
 
         let len_per_row = self.len() / ROW_COUNT;
-        let chunk_count = len_per_row / UNROLL_CHUNK_SIZE;
+        let chunk_count = len_per_row / CHUNK_SIZE;
 
         // process the column FFTs
-        for (c, twiddle_chunk) in self.common_data.twiddles.chunks_exact(UNROLL_COUNT * TWIDDLES_PER_COLUMN).take(chunk_count).enumerate() {
-            for u in 0..UNROLL_COUNT {
-                let index_base = c*UNROLL_CHUNK_SIZE + u*CHUNK_SIZE;
-
-                // Load columns from the buffer into registers
-                let mut columns = [_mm256_setzero_ps(); ROW_COUNT];
-                for i in 0..ROW_COUNT {
-                    columns[i] = buffer.load_complex_f32(index_base + len_per_row*i);
-                }
-
-                // apply our butterfly function down the columns
-                let output = $butterfly_fn(columns, self);
-
-                // always write the first row directly back without twiddles
-                buffer.store_complex_f32(index_base, output[0]);
-                
-                // for every other row, apply twiddle factors and then write back to memory
-                for i in 1..ROW_COUNT {
-                    let twiddle = twiddle_chunk[u * TWIDDLES_PER_COLUMN + i - 1];
-                    let output = avx32_utils::fma::complex_multiply_f32(twiddle, output[i]);
-                    buffer.store_complex_f32(index_base + len_per_row*i, output);
-                }
-            }
-        }
-
-        // process the remainder. first, process whatever full chunks are leftover
-        // based on examining asm output, the compiler tends to unroll this loop
-        let full_remainder_base = chunk_count * UNROLL_CHUNK_SIZE;
-        let full_remainder_twiddle_base = chunk_count * UNROLL_COUNT * TWIDDLES_PER_COLUMN;
-        
-        let remainder = len_per_row % UNROLL_CHUNK_SIZE;
-        let full_remainder_chunks = remainder / CHUNK_SIZE;
-        
-        for c in 0..full_remainder_chunks {
-            let index_base = full_remainder_base + c*CHUNK_SIZE;
+        for (c, twiddle_chunk) in self.common_data.twiddles.chunks_exact(TWIDDLES_PER_COLUMN).take(chunk_count).enumerate() {
+            let index_base = c*CHUNK_SIZE;
 
             // Load columns from the buffer into registers
             let mut columns = [_mm256_setzero_ps(); ROW_COUNT];
@@ -270,9 +233,8 @@ macro_rules! mixedradix_column_butterflies_f32{
             buffer.store_complex_f32(index_base, output[0]);
             
             // for every other row, apply twiddle factors and then write back to memory
-            let twiddle_base = full_remainder_twiddle_base + c*TWIDDLES_PER_COLUMN;
             for i in 1..ROW_COUNT {
-                let twiddle = self.common_data.twiddles[twiddle_base + i - 1]; // TODO: see if we can write an assert to eliminate this bounds check
+                let twiddle = twiddle_chunk[i - 1];
                 let output = avx32_utils::fma::complex_multiply_f32(twiddle, output[i]);
                 buffer.store_complex_f32(index_base + len_per_row*i, output);
             }
@@ -280,9 +242,9 @@ macro_rules! mixedradix_column_butterflies_f32{
 
         // finally, we might have a single partial chunk.
         // Normally, we can fit 4 complex numbers into an AVX register, but we only have `partial_remainder` columns left, so we need special logic to handle these final columns
-        let partial_remainder = remainder % CHUNK_SIZE;
+        let partial_remainder = len_per_row % CHUNK_SIZE;
         if partial_remainder > 0 {
-            let partial_remainder_base = full_remainder_base + full_remainder_chunks * CHUNK_SIZE;
+            let partial_remainder_base = chunk_count * CHUNK_SIZE;
             let partial_remainder_twiddle_base = self.common_data.twiddles.len() - TWIDDLES_PER_COLUMN;
 
             let remainder_mask = avx32_utils::RemainderMask::new_f32(partial_remainder);
@@ -310,56 +272,21 @@ macro_rules! mixedradix_column_butterflies_f32{
 )}
 
 macro_rules! mixedradix_transpose_f32{
-    ($row_count: expr, $unroll_count: expr, $transpose_fn: path, $($unroll_workaround_index:expr);*) => (
+    ($row_count: expr, $transpose_fn: path, $($unroll_workaround_index:expr);*) => (
 
     // Transpose the input (treated as a nx2 array) into the output (as a 2xn array)
     #[target_feature(enable = "avx")]
     unsafe fn transpose(&self, input: &[Complex<f32>], output: &mut [Complex<f32>]) {
         const CHUNK_SIZE : usize = 4;
 
-        const UNROLL_COUNT : usize = $unroll_count;
-        const UNROLL_CHUNK_SIZE : usize = CHUNK_SIZE * UNROLL_COUNT;
-
         const ROW_COUNT : usize = $row_count;
 
         let len_per_row = self.len() / ROW_COUNT;
-        let chunk_count = len_per_row / UNROLL_CHUNK_SIZE;
+        let chunk_count = len_per_row / CHUNK_SIZE;
 
         // transpose the scratch as a nx2 array into the buffer as an 2xn array
         for c in 0..chunk_count {
-            for u in 0..UNROLL_COUNT {
-                let input_index_base = c*UNROLL_CHUNK_SIZE + u*CHUNK_SIZE;
-                let output_index_base = input_index_base * ROW_COUNT;
-
-                // Load columns from the input into registers
-                let mut columns = [_mm256_setzero_ps(); ROW_COUNT];
-                for i in 0..ROW_COUNT {
-                    columns[i] = input.load_complex_f32(input_index_base + len_per_row*i);
-                }
-
-                // transpose the columns to the rows
-                let transposed = $transpose_fn(columns);
-
-                // store the transposed rows contiguously
-                // we are using a macro hack to manually unroll the loop, to work around this rustc bug:
-                // https://github.com/rust-lang/rust/issues/71025
-                
-                // if we don't manually unroll the loop, the compiler will insert unnecessary writes+reads to the stack which tank performance
-                // once the compiler bug is fixed, this can be replaced by a "for i in 0..ROW_COUNT" loop
-                $( 
-                    output.store_complex_f32(output_index_base + CHUNK_SIZE * $unroll_workaround_index, transposed[$unroll_workaround_index]);
-                )*
-            }
-        }
-
-        // process the remainder. first, process whatever full chunks are leftover
-        // if UNROLL_COUNT is 1, this loop thankfully gets completely compiled out
-        let full_remainder_base = chunk_count * UNROLL_CHUNK_SIZE;
-
-        let remainder = len_per_row % UNROLL_CHUNK_SIZE;
-        let full_remainder_chunks = remainder / CHUNK_SIZE;
-        for r in 0..full_remainder_chunks {
-            let input_index_base = full_remainder_base + r*CHUNK_SIZE;
+            let input_index_base = c*CHUNK_SIZE;
             let output_index_base = input_index_base * ROW_COUNT;
 
             // Load columns from the input into registers
@@ -371,6 +298,7 @@ macro_rules! mixedradix_transpose_f32{
             // transpose the columns to the rows
             let transposed = $transpose_fn(columns);
 
+            // store the transposed rows contiguously
             // we are using a macro hack to manually unroll the loop, to work around this rustc bug:
             // https://github.com/rust-lang/rust/issues/71025
             
@@ -382,11 +310,11 @@ macro_rules! mixedradix_transpose_f32{
         }
 
         // transpose the remainder
-        let partial_remainder = remainder % CHUNK_SIZE;
+        let partial_remainder = len_per_row % CHUNK_SIZE;
         if partial_remainder > 0 {
             let load_remainder_mask = avx32_utils::RemainderMask::new_f32(partial_remainder);
 
-            let input_index_base = full_remainder_base + full_remainder_chunks * CHUNK_SIZE;
+            let input_index_base = chunk_count * CHUNK_SIZE;
             let output_index_base = input_index_base * ROW_COUNT;
 
             let mut columns = [_mm256_setzero_ps(); ROW_COUNT];
@@ -405,60 +333,23 @@ macro_rules! mixedradix_transpose_f32{
 )}
 
 macro_rules! mixedradix_column_butterflies_f64{
-    ($row_count: expr,  $unroll_count: expr, $butterfly_fn: expr, $butterfly_fn_lo: expr) => (
+    ($row_count: expr, $butterfly_fn: expr, $butterfly_fn_lo: expr) => (
 
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_column_butterflies(&self, buffer: &mut [Complex<f64>]) {
         // How many complex numbers fit in a single register
         const CHUNK_SIZE : usize = 2;
 
-        // How many loop iters we are unrolling, and how many complex numbers we are processing per unrolled loop
-        const UNROLL_COUNT : usize = $unroll_count;
-        const UNROLL_CHUNK_SIZE : usize = CHUNK_SIZE * UNROLL_COUNT;
-
         // How many rows this FFT has, ie 2 for 2xn, 4 for 4xn, etc
         const ROW_COUNT : usize = $row_count;
         const TWIDDLES_PER_COLUMN : usize = ROW_COUNT - 1;
 
         let len_per_row = self.len() / ROW_COUNT;
-        let chunk_count = len_per_row / UNROLL_CHUNK_SIZE;
+        let chunk_count = len_per_row / CHUNK_SIZE;
 
         // process the column FFTs
-        for (c, twiddle_chunk) in self.common_data.twiddles.chunks_exact(UNROLL_COUNT * TWIDDLES_PER_COLUMN).take(chunk_count).enumerate() {
-            for u in 0..UNROLL_COUNT {
-                let index_base = c*UNROLL_CHUNK_SIZE + u*CHUNK_SIZE;
-
-                // Load columns from the buffer into registers
-                let mut columns = [_mm256_setzero_pd(); ROW_COUNT];
-                for i in 0..ROW_COUNT {
-                    columns[i] = buffer.load_complex_f64(index_base + len_per_row*i);
-                }
-
-                // apply our butterfly function down the columns
-                let output = $butterfly_fn(columns, self);
-
-                // always write the first row directly back without twiddles
-                buffer.store_complex_f64(output[0], index_base);
-                
-                // for every other row, apply twiddle factors and then write back to memory
-                for i in 1..ROW_COUNT {
-                    let twiddle = twiddle_chunk[u * TWIDDLES_PER_COLUMN + i - 1];
-                    let output = avx64_utils::fma::complex_multiply_f64(twiddle, output[i]);
-                    buffer.store_complex_f64(output, index_base + len_per_row*i);
-                }
-            }
-        }
-
-        // process the remainder. first, process whatever full chunks are leftover
-        // based on examining asm output, the compiler tends to unroll this loop
-        let full_remainder_base = chunk_count * UNROLL_CHUNK_SIZE;
-        let full_remainder_twiddle_base = chunk_count * UNROLL_COUNT * TWIDDLES_PER_COLUMN;
-        
-        let remainder = len_per_row % UNROLL_CHUNK_SIZE;
-        let full_remainder_chunks = remainder / CHUNK_SIZE;
-        
-        for c in 0..full_remainder_chunks {
-            let index_base = full_remainder_base + c*CHUNK_SIZE;
+        for (c, twiddle_chunk) in self.common_data.twiddles.chunks_exact(TWIDDLES_PER_COLUMN).take(chunk_count).enumerate() {
+            let index_base = c*CHUNK_SIZE;
 
             // Load columns from the buffer into registers
             let mut columns = [_mm256_setzero_pd(); ROW_COUNT];
@@ -473,9 +364,8 @@ macro_rules! mixedradix_column_butterflies_f64{
             buffer.store_complex_f64(output[0], index_base);
             
             // for every other row, apply twiddle factors and then write back to memory
-            let twiddle_base = full_remainder_twiddle_base + c*TWIDDLES_PER_COLUMN;
             for i in 1..ROW_COUNT {
-                let twiddle = self.common_data.twiddles[twiddle_base + i - 1]; // TODO: see if we can write an assert to eliminate this bounds check
+                let twiddle = twiddle_chunk[i - 1];
                 let output = avx64_utils::fma::complex_multiply_f64(twiddle, output[i]);
                 buffer.store_complex_f64(output, index_base + len_per_row*i);
             }
@@ -483,9 +373,9 @@ macro_rules! mixedradix_column_butterflies_f64{
 
         // finally, we might have a single partial chunk.
         // Normally, we can fit 4 complex numbers into an AVX register, but we only have `partial_remainder` columns left, so we need special logic to handle these final columns
-        let partial_remainder = remainder % CHUNK_SIZE;
+        let partial_remainder = len_per_row % CHUNK_SIZE;
         if partial_remainder > 0 {
-            let partial_remainder_base = full_remainder_base + full_remainder_chunks * CHUNK_SIZE;
+            let partial_remainder_base = chunk_count * CHUNK_SIZE;
             let partial_remainder_twiddle_base = self.common_data.twiddles.len() - TWIDDLES_PER_COLUMN;
 
             // Load partial columns for our final remainder, using RemainderMask to limit which memory locations we load
@@ -511,56 +401,21 @@ macro_rules! mixedradix_column_butterflies_f64{
 )}
 
 macro_rules! mixedradix_transpose_f64{
-    ($row_count: expr, $unroll_count: expr, $transpose_fn: path, $($unroll_workaround_index:expr);*) => (
+    ($row_count: expr, $transpose_fn: path, $($unroll_workaround_index:expr);*) => (
 
     // Transpose the input (treated as a nx2 array) into the output (as a 2xn array)
     #[target_feature(enable = "avx")]
     unsafe fn transpose(&self, input: &[Complex<f64>], output: &mut [Complex<f64>]) {
         const CHUNK_SIZE : usize = 2;
 
-        const UNROLL_COUNT : usize = $unroll_count;
-        const UNROLL_CHUNK_SIZE : usize = CHUNK_SIZE * UNROLL_COUNT;
-
         const ROW_COUNT : usize = $row_count;
 
         let len_per_row = self.len() / ROW_COUNT;
-        let chunk_count = len_per_row / UNROLL_CHUNK_SIZE;
+        let chunk_count = len_per_row / CHUNK_SIZE;
 
         // transpose the scratch as a nx2 array into the buffer as an 2xn array
         for c in 0..chunk_count {
-            for u in 0..UNROLL_COUNT {
-                let input_index_base = c*UNROLL_CHUNK_SIZE + u*CHUNK_SIZE;
-                let output_index_base = input_index_base * ROW_COUNT;
-
-                // Load columns from the input into registers
-                let mut columns = [_mm256_setzero_pd(); ROW_COUNT];
-                for i in 0..ROW_COUNT {
-                    columns[i] = input.load_complex_f64(input_index_base + len_per_row*i);
-                }
-
-                // transpose the columns to the rows
-                let transposed = $transpose_fn(columns);
-
-                // store the transposed rows contiguously
-                // we are using a macro hack to manually unroll the loop, to work around this rustc bug:
-                // https://github.com/rust-lang/rust/issues/71025
-                
-                // if we don't manually unroll the loop, the compiler will insert unnecessary writes+reads to the stack which tank performance
-                // once the compiler bug is fixed, this can be replaced by a "for i in 0..ROW_COUNT" loop
-                $( 
-                    output.store_complex_f64(transposed[$unroll_workaround_index], output_index_base + CHUNK_SIZE * $unroll_workaround_index);
-                )*
-            }
-        }
-
-        // process the remainder. first, process whatever full chunks are leftover
-        // if UNROLL_COUNT is 1, this loop thankfully gets completely compiled out
-        let full_remainder_base = chunk_count * UNROLL_CHUNK_SIZE;
-
-        let remainder = len_per_row % UNROLL_CHUNK_SIZE;
-        let full_remainder_chunks = remainder / CHUNK_SIZE;
-        for r in 0..full_remainder_chunks {
-            let input_index_base = full_remainder_base + r*CHUNK_SIZE;
+            let input_index_base = c*CHUNK_SIZE;
             let output_index_base = input_index_base * ROW_COUNT;
 
             // Load columns from the input into registers
@@ -584,9 +439,9 @@ macro_rules! mixedradix_transpose_f64{
         }
 
         // transpose the remainder
-        let partial_remainder = remainder % CHUNK_SIZE;
+        let partial_remainder = len_per_row % CHUNK_SIZE;
         if partial_remainder > 0 {
-            let input_index_base = full_remainder_base + full_remainder_chunks * CHUNK_SIZE;
+            let input_index_base = chunk_count * CHUNK_SIZE;
             let output_index_base = input_index_base * ROW_COUNT;
 
             // since we only have a single column, we don't need to do any transposing, just copying
@@ -613,8 +468,8 @@ impl MixedRadix2xnAvx<f32, __m256> {
         }
     }
 
-    mixedradix_column_butterflies_f32!(2, 1, |columns, _:_| avx32_utils::column_butterfly2_array_f32(columns));
-    mixedradix_transpose_f32!(2, 1, avx32_utils::interleave_evens_odds_f32, 0;1);
+    mixedradix_column_butterflies_f32!(2, |columns, _:_| avx32_utils::column_butterfly2_array_f32(columns));
+    mixedradix_transpose_f32!(2, avx32_utils::interleave_evens_odds_f32, 0;1);
 
     // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
     // and even different from f32 to f64 of the same algorithm, so it has to go outside the macro
@@ -642,11 +497,11 @@ impl MixedRadix2xnAvx<f64, __m256d> {
         }
     }
 
-    mixedradix_column_butterflies_f64!(2, 1,
+    mixedradix_column_butterflies_f64!(2,
         |columns, _:_| avx64_utils::column_butterfly2_array_f64(columns),
         |columns, _:_| avx64_utils::column_butterfly2_f64_lo(columns)
     );
-    mixedradix_transpose_f64!(2, 1, avx64_utils::transpose_2x2_f64, 0;1);
+    mixedradix_transpose_f64!(2, avx64_utils::transpose_2x2_f64, 0;1);
 }
 
 pub struct MixedRadix3xnAvx<T, V> {
@@ -666,8 +521,8 @@ impl MixedRadix3xnAvx<f32, __m256> {
         }
     }
 
-    mixedradix_column_butterflies_f32!(3, 1, |columns, this: &Self| avx32_utils::fma::column_butterfly3_f32(columns, this.twiddles_butterfly3));
-    mixedradix_transpose_f32!(3, 1, avx32_utils::transpose_4x3_packed_f32, 0;1;2);
+    mixedradix_column_butterflies_f32!(3, |columns, this: &Self| avx32_utils::fma::column_butterfly3_f32(columns, this.twiddles_butterfly3));
+    mixedradix_transpose_f32!(3, avx32_utils::transpose_4x3_packed_f32, 0;1;2);
 
     // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
     // and even different from f32 to f64 of the same algorithm, so it has to go outside the macro
@@ -702,11 +557,11 @@ impl MixedRadix3xnAvx<f64, __m256d> {
         }
     }
 
-    mixedradix_column_butterflies_f64!(3, 1,
+    mixedradix_column_butterflies_f64!(3,
         |columns, this: &Self| avx64_utils::fma::column_butterfly3_f64(columns, this.twiddles_butterfly3),
         |columns, this: &Self| avx64_utils::fma::column_butterfly3_f64_lo(columns, this.twiddles_butterfly3)
     );
-    mixedradix_transpose_f64!(3, 1, avx64_utils::transpose_2x3_to_3x2_packed_f64, 0;1;2);
+    mixedradix_transpose_f64!(3, avx64_utils::transpose_2x3_to_3x2_packed_f64, 0;1;2);
 }
 
 
@@ -730,8 +585,8 @@ impl MixedRadix4xnAvx<f32, __m256> {
         }
     }
 
-    mixedradix_column_butterflies_f32!(4, 1, |columns, this: &Self| avx32_utils::column_butterfly4_f32(columns, this.twiddle_config));
-    mixedradix_transpose_f32!(4, 1, avx32_utils::transpose_4x4_f32, 0;1;2;3);
+    mixedradix_column_butterflies_f32!(4, |columns, this: &Self| avx32_utils::column_butterfly4_f32(columns, this.twiddle_config));
+    mixedradix_transpose_f32!(4, avx32_utils::transpose_4x4_f32, 0;1;2;3);
 
     // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
     // and even different from f32 to f64 of the same algorithm, so it has to go outside the macro
@@ -760,11 +615,11 @@ impl MixedRadix4xnAvx<f64, __m256d> {
         }
     }
 
-    mixedradix_column_butterflies_f64!(4, 1,
+    mixedradix_column_butterflies_f64!(4,
         |columns, this: &Self| avx64_utils::column_butterfly4_f64(columns, this.twiddle_config),
         |columns, this: &Self| avx64_utils::column_butterfly4_f64_lo(columns, this.twiddle_config)
     );
-    mixedradix_transpose_f64!(4, 1, avx64_utils::transpose_2x4_to_4x2_packed_f64, 0;1;2;3);
+    mixedradix_transpose_f64!(4, avx64_utils::transpose_2x4_to_4x2_packed_f64, 0;1;2;3);
 }
 
 
@@ -788,8 +643,8 @@ impl MixedRadix6xnAvx<f32, __m256> {
         }
     }
 
-    mixedradix_column_butterflies_f32!(6, 1, |columns, this: &Self| avx32_utils::fma::column_butterfly6_f32(columns, this.twiddles_butterfly3));
-    mixedradix_transpose_f32!(6, 1, avx32_utils::transpose_4x6_to_6x4_packed_f32, 0;1;2;3;4;5);
+    mixedradix_column_butterflies_f32!(6, |columns, this: &Self| avx32_utils::fma::column_butterfly6_f32(columns, this.twiddles_butterfly3));
+    mixedradix_transpose_f32!(6, avx32_utils::transpose_4x6_to_6x4_packed_f32, 0;1;2;3;4;5);
 
     // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
     // and even different from f32 to f64 of the same algorithm, so it has to go outside the macro
@@ -821,11 +676,11 @@ impl MixedRadix6xnAvx<f64, __m256d> {
         }
     }
 
-    mixedradix_column_butterflies_f64!(6, 1,
+    mixedradix_column_butterflies_f64!(6,
         |columns, this: &Self| avx64_utils::fma::column_butterfly6_f64(columns, this.twiddles_butterfly3),
         |columns, this: &Self| avx64_utils::fma::column_butterfly6_f64_lo(columns, this.twiddles_butterfly3)
     );
-    mixedradix_transpose_f64!(6, 1, avx64_utils::transpose_2x6_to_6x2_packed_f64, 0;1;2;3;4;5);
+    mixedradix_transpose_f64!(6, avx64_utils::transpose_2x6_to_6x2_packed_f64, 0;1;2;3;4;5);
 }
 
 
@@ -854,8 +709,8 @@ impl MixedRadix8xnAvx<f32, __m256> {
         }
     }
 
-    mixedradix_column_butterflies_f32!(8, 1, |columns, this: &Self| avx32_utils::fma::column_butterfly8_f32(columns, this.twiddles_butterfly8, this.twiddle_config));
-    mixedradix_transpose_f32!(8, 1, avx32_utils::transpose_4x8_to_8x4_packed_f32, 0;1;2;3;4;5;6;7);
+    mixedradix_column_butterflies_f32!(8, |columns, this: &Self| avx32_utils::fma::column_butterfly8_f32(columns, this.twiddles_butterfly8, this.twiddle_config));
+    mixedradix_transpose_f32!(8, avx32_utils::transpose_4x8_to_8x4_packed_f32, 0;1;2;3;4;5;6;7);
 
     // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
     // and even different from f32 to f64 of the same algorithm, so it has to go outside the macro
@@ -889,11 +744,11 @@ impl MixedRadix8xnAvx<f64, __m256d> {
         }
     }
 
-    mixedradix_column_butterflies_f64!(8, 1,
+    mixedradix_column_butterflies_f64!(8,
         |columns, this: &Self| avx64_utils::fma::column_butterfly8_f64(columns, this.twiddles_butterfly8, this.twiddle_config),
         |columns, this: &Self| avx64_utils::fma::column_butterfly8_f64_lo(columns, this.twiddles_butterfly8, this.twiddle_config)
     );
-    mixedradix_transpose_f64!(8, 1, avx64_utils::transpose_2x8_to_8x2_packed_f64, 0;1;2;3;4;5;6;7);
+    mixedradix_transpose_f64!(8, avx64_utils::transpose_2x8_to_8x2_packed_f64, 0;1;2;3;4;5;6;7);
 }
 
 
@@ -923,8 +778,8 @@ impl MixedRadix9xnAvx<f32, __m256> {
         }
     }
 
-    mixedradix_column_butterflies_f32!(9, 1, |columns, this: &Self| avx32_utils::fma::column_butterfly9_f32(columns, this.twiddles_butterfly9, this.twiddles_butterfly3));
-    mixedradix_transpose_f32!(9, 1, avx32_utils::transpose_4x9_to_9x4_packed_f32, 0;1;2;3;4;5;6;7;8);
+    mixedradix_column_butterflies_f32!(9, |columns, this: &Self| avx32_utils::fma::column_butterfly9_f32(columns, this.twiddles_butterfly9, this.twiddles_butterfly3));
+    mixedradix_transpose_f32!(9, avx32_utils::transpose_4x9_to_9x4_packed_f32, 0;1;2;3;4;5;6;7;8);
 
     // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
     // and even different from f32 to f64 of the same algorithm, so it has to go outside the macro
@@ -969,11 +824,11 @@ impl MixedRadix9xnAvx<f64, __m256d> {
         }
     }
 
-    mixedradix_column_butterflies_f64!(9, 1,
+    mixedradix_column_butterflies_f64!(9,
         |columns, this: &Self| avx64_utils::fma::column_butterfly9_f64(columns, this.twiddles_butterfly9, this.twiddles_butterfly3),
         |columns, this: &Self| avx64_utils::fma::column_butterfly9_f64_lo(columns, this.twiddles_butterfly9, this.twiddles_butterfly3)
     );
-    mixedradix_transpose_f64!(9, 1, avx64_utils::transpose_2x9_to_9x2_packed_f64, 0;1;2;3;4;5;6;7;8);
+    mixedradix_transpose_f64!(9, avx64_utils::transpose_2x9_to_9x2_packed_f64, 0;1;2;3;4;5;6;7;8);
 }
 
 
@@ -1002,8 +857,8 @@ impl MixedRadix12xnAvx<f32, __m256> {
         }
     }
 
-    mixedradix_column_butterflies_f32!(12, 1, |columns, this: &Self| avx32_utils::fma::column_butterfly12_f32(columns, this.twiddles_butterfly3, this.twiddle_config));
-    mixedradix_transpose_f32!(12, 1, avx32_utils::transpose_4x12_to_12x4_packed_f32, 0;1;2;3;4;5;6;7;8;9;10;11);
+    mixedradix_column_butterflies_f32!(12, |columns, this: &Self| avx32_utils::fma::column_butterfly12_f32(columns, this.twiddles_butterfly3, this.twiddle_config));
+    mixedradix_transpose_f32!(12, avx32_utils::transpose_4x12_to_12x4_packed_f32, 0;1;2;3;4;5;6;7;8;9;10;11);
 
     // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
     // and even different from f32 to f64 of the same algorithm, so it has to go outside the macro
@@ -1040,11 +895,11 @@ impl MixedRadix12xnAvx<f64, __m256d> {
         }
     }
 
-    mixedradix_column_butterflies_f64!(12, 1,
+    mixedradix_column_butterflies_f64!(12,
         |columns, this: &Self| avx64_utils::fma::column_butterfly12_f64(columns, this.twiddles_butterfly3, this.twiddle_config),
         |columns, this: &Self| avx64_utils::fma::column_butterfly12_f64_lo(columns, this.twiddles_butterfly3, this.twiddle_config)
     );
-    mixedradix_transpose_f64!(12, 1, avx64_utils::transpose_2x12_to_12x2_packed_f64, 0;1;2;3;4;5;6;7;8;9;10;11);
+    mixedradix_transpose_f64!(12, avx64_utils::transpose_2x12_to_12x2_packed_f64, 0;1;2;3;4;5;6;7;8;9;10;11);
 }
 
 
@@ -1079,8 +934,8 @@ impl MixedRadix16xnAvx<f32, __m256> {
         }
     }
 
-    mixedradix_column_butterflies_f32!(16, 1, |columns, this: &Self| avx32_utils::fma::column_butterfly16_f32(columns, this.twiddles_butterfly16, this.twiddle_config));
-    mixedradix_transpose_f32!(16, 1, avx32_utils::transpose_4x16_to_16x4_packed_f32, 0;1;2;3;4;5;6;7;8;9;10;11;12;13;14;15);
+    mixedradix_column_butterflies_f32!(16, |columns, this: &Self| avx32_utils::fma::column_butterfly16_f32(columns, this.twiddles_butterfly16, this.twiddle_config));
+    mixedradix_transpose_f32!(16, avx32_utils::transpose_4x16_to_16x4_packed_f32, 0;1;2;3;4;5;6;7;8;9;10;11;12;13;14;15);
 
     // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
     // and even different from f32 to f64 of the same algorithm, so it has to go outside the macro
@@ -1127,11 +982,11 @@ impl MixedRadix16xnAvx<f64, __m256d> {
         }
     }
 
-    mixedradix_column_butterflies_f64!(16, 1,
+    mixedradix_column_butterflies_f64!(16,
         |columns, this: &Self| avx64_utils::fma::column_butterfly16_f64(columns, this.twiddles_butterfly16, this.twiddle_config),
         |columns, this: &Self| avx64_utils::fma::column_butterfly16_f64_lo(columns, this.twiddles_butterfly16, this.twiddle_config)
     );
-    mixedradix_transpose_f64!(16, 1, avx64_utils::transpose_2x16_to_16x2_packed_f64, 0;1;2;3;4;5;6;7;8;9;10;11;12;13;14;15);
+    mixedradix_transpose_f64!(16, avx64_utils::transpose_2x16_to_16x2_packed_f64, 0;1;2;3;4;5;6;7;8;9;10;11;12;13;14;15);
 }
 
 #[cfg(test)]
