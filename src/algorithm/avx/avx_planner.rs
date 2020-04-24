@@ -20,7 +20,7 @@ fn wrap_fft_some<T: FFTnum>(butterfly: impl Fft<T> + 'static) -> Option<Arc<dyn 
 
 /// repreesnts a FFT plan, stored as a base FFT and a stack of MixedRadix*xn on top of it.
 #[derive(Debug)]
-struct MixedRadixPlan {
+pub struct MixedRadixPlan {
     len: usize, // product of base and radixes
     base: usize, // either a butterfly, or a bluesteins/raders step
     radixes: Vec<u8>, // stored from smallest to largest
@@ -220,10 +220,9 @@ impl<T: FFTnum> FftPlannerAvx<T> {
         // We can only use rader's if `len` is prime, so next step is to compute a full factorization
         if PrimeFactors::compute(len).is_prime() {
             // len is prime, so we can use Rader's Algorithm as a base. Whether or not that's a good idea is a different story
-            // Rader's Algorithm is only faster in a few narrow cases. as a heuristic, only use rader's algorithm if its inner FFT can be computed entirely without bluestein's or another raders step
-            let raders_inner_factors = PartialFactors::compute(len - 1);
-
-            if raders_inner_factors.get_other_factors() == 1 {
+            // Rader's Algorithm is only faster in a few narrow cases. 
+            // as a heuristic, only use rader's algorithm if its inner FFT can be computed entirely on the 2^n * 3^m fast path, and the problem is too large to fit easily in cache
+            if PartialFactors::compute(len - 1).get_other_factors() == 1 && len > 65536 {
                 return self.plan_with_cache(len, Self::construct_raders);
             }
         }
@@ -234,7 +233,7 @@ impl<T: FFTnum> FftPlannerAvx<T> {
     
 }
 
-trait MakeFftAvx<T: FFTnum> {
+pub trait MakeFftAvx<T: FFTnum> {
     // todo: if we ever have a core plan type that ins't mixed radix, this could return an enum
     fn plan_mixed_radix_base(&self, len: usize, factors: &PartialFactors) -> MixedRadixPlan;
 
@@ -287,7 +286,7 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
         }
 
         if factors.get_other_factors() > 1 {
-            // todo: if we're just 2*other_factors, we might want to return the whole FFT as the base, and hand it off to bluestein's, because 2xn is slow
+            // if we have a factor that computed with 2xn 3xn etc, we'll have to compute it with bluestein's or rader's, so use that as the base
             MixedRadixPlan::new(factors.get_other_factors(), &[])
         } else if factors.get_power3() < 3 {
             match factors.get_power3() {
@@ -315,7 +314,7 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
                 _ => unreachable!(),
             }
         } else if factors.get_power2() < 5 {
-            // Our FFT is a power of 3 times a low power of 2. A high level of our strategy is that we want to pick a base that will 
+            // Our FFT is a power of 3 times a low power of 2. A high level summary of our strategy is that we want to pick a base that will 
             // A: consume all factors of 2, and B: leave us with an even power of 3, so that we can do a 9xn chain.
             match factors.get_power2() {
                 0 => MixedRadixPlan::new(27, &[]),
@@ -397,11 +396,11 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
         // an obvious choice is the next power of two larger than  len * 2 - 1, but if we can find a smaller FFT that will go faster, we can save a lot of time.
         // We can very efficiently compute almost any 2^n * 3^m, so we're going to search for all numbers of the form 2^n * 3^m that lie between len * 2 - 1 and the next power of two.
         let min_len = len*2 - 1;
-        let max_len = min_len.checked_next_power_of_two().unwrap();
+        let baseline_candidate = min_len.checked_next_power_of_two().unwrap();
 
         // our algorithm here is to start with our next power of 2, and repeatedly divide by 2 and multiply by 3, trying to keep our value in range
         let mut bluesteins_candidates = Vec::new();
-        let mut candidate = max_len;
+        let mut candidate = baseline_candidate;
         let mut factor2 = candidate.trailing_zeros();
         let mut factor3 = 0;
 
@@ -412,7 +411,7 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
                 bluesteins_candidates.push((candidate, factor2, factor3));
             }
             // if the candidate is too large, divide it by 2. if it's too small, divide it by 3
-            if candidate >= max_len {
+            if candidate >= baseline_candidate {
                 candidate >>= 1;
                 factor2 -= 1;
             } else {
@@ -420,10 +419,20 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
                 factor3 += 1;
             }
         }
-
         bluesteins_candidates.sort();
 
-        let inner_fft = self.plan_fft(bluesteins_candidates[0].0);
+        // we now have a list of candidates to choosse from. some 2^n * 3^m FFTs are faster than others, so apply a filter, which will let us skip sizes that benchmarking shas shown to be slow
+        let inner_len = bluesteins_candidates.iter().find_map(|(len, factor2, factor3)| {
+            if *factor2 > 16 && *factor3 < 3 { 
+                // surprisingly, pure powers of 2 have a pretty steep dropoff in speed after 65536. 
+                // the algorithm is designed to generate candidadtes larget than baseline_candidate, so if we hit a large power of 2, there should be more after it that we can skip to
+                None
+            } else {
+                Some(*len)
+            }
+        }).unwrap_or_else(|| panic!("Failed to find a bluestein's candidate for len={}, candidates: {:?}", len, bluesteins_candidates));
+
+        let inner_fft = self.plan_fft(inner_len);
         wrap_fft(BluesteinsAvx::new_f32(len, inner_fft).unwrap())
     }
 }

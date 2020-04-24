@@ -161,7 +161,7 @@ mod avx64_butterflies;
 mod avx_mixed_radix;
 mod avx_bluesteins;
 
-pub(crate) mod avx_planner;
+pub mod avx_planner;
 
 pub use self::avx32_split_radix::SplitRadixAvx;
 pub use self::avx32_butterflies::{MixedRadixAvx4x2, MixedRadixAvx3x3, MixedRadixAvx4x3, MixedRadixAvx4x4, MixedRadixAvx4x6, MixedRadixAvx3x9, MixedRadixAvx4x8, MixedRadixAvx4x9, MixedRadixAvx4x12, MixedRadixAvx6x9, MixedRadixAvx8x8};
