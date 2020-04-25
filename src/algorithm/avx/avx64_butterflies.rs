@@ -381,128 +381,9 @@ impl MixedRadix64Avx4x6<f64> {
     }
 }
 
-pub struct MixedRadix64Avx4x4SplitRealImaginary<T> {
-    twiddles_real: [__m256d; 3],
-    twiddles_imag: [__m256d; 3],
-    inverse: bool,
-    _phantom: std::marker::PhantomData<T>,
-}
-boilerplate_fft_simd_butterfly!(MixedRadix64Avx4x4SplitRealImaginary, 16);
-impl MixedRadix64Avx4x4SplitRealImaginary<f64> {
-    #[inline]
-    pub fn new(inverse: bool) -> Result<Self, ()> {
-        let has_avx = is_x86_feature_detected!("avx");
-        let has_fma = is_x86_feature_detected!("fma");
-        if has_avx && has_fma {
-            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
-            Ok(unsafe { Self::new_with_avx(inverse) })
-        } else {
-            Err(())
-        }
-    }
-    #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inverse: bool) -> Self {
-        let twiddle_array = [
-            Complex{ re: 1.0, im: 0.0 },
-            f64::generate_twiddle_factor(1, 16, inverse),
-            f64::generate_twiddle_factor(2, 16, inverse),
-            f64::generate_twiddle_factor(3, 16, inverse),
-            Complex{ re: 1.0, im: 0.0 },
-            f64::generate_twiddle_factor(2, 16, inverse),
-            f64::generate_twiddle_factor(4, 16, inverse),
-            f64::generate_twiddle_factor(6, 16, inverse),
-            Complex{ re: 1.0, im: 0.0 },
-            f64::generate_twiddle_factor(3, 16, inverse),
-            f64::generate_twiddle_factor(6, 16, inverse),
-            f64::generate_twiddle_factor(9, 16, inverse),
-        ];
-
-        let combined_twiddles = [
-            twiddle_array.load_complex_f64(0),
-            twiddle_array.load_complex_f64(2),
-            twiddle_array.load_complex_f64(4),
-            twiddle_array.load_complex_f64(6),
-            twiddle_array.load_complex_f64(8),
-            twiddle_array.load_complex_f64(10),
-        ];
-        Self {
-            twiddles_real: [
-                _mm256_unpacklo_pd(combined_twiddles[0], combined_twiddles[1]),
-                _mm256_unpacklo_pd(combined_twiddles[2], combined_twiddles[3]),
-                _mm256_unpacklo_pd(combined_twiddles[4], combined_twiddles[5]),
-            ],
-            twiddles_imag: [
-                _mm256_unpackhi_pd(combined_twiddles[0], combined_twiddles[1]),
-                _mm256_unpackhi_pd(combined_twiddles[2], combined_twiddles[3]),
-                _mm256_unpackhi_pd(combined_twiddles[4], combined_twiddles[5]),
-            ],
-            inverse: inverse,
-            _phantom: PhantomData,
-        }
-    }
-    
-    #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f64(&self, input: RawSlice<Complex<f64>>, mut output: RawSliceMut<Complex<f64>>) {
-        let row0 = input.load_complex_f64(0);
-        let row1 = input.load_complex_f64(2);
-        let row2 = input.load_complex_f64(4);
-        let row3 = input.load_complex_f64(6);
-        let row4 = input.load_complex_f64(8);
-        let row5 = input.load_complex_f64(10);
-        let row6 = input.load_complex_f64(12);
-        let row7 = input.load_complex_f64(14);
-
-        let row0_real = _mm256_unpacklo_pd(row0, row1);
-        let row0_imag = _mm256_unpackhi_pd(row0, row1);
-        let row1_real = _mm256_unpacklo_pd(row2, row3);
-        let row1_imag = _mm256_unpackhi_pd(row2, row3);
-        let row2_real = _mm256_unpacklo_pd(row4, row5);
-        let row2_imag = _mm256_unpackhi_pd(row4, row5);
-        let row3_real = _mm256_unpacklo_pd(row6, row7);
-        let row3_imag = _mm256_unpackhi_pd(row6, row7);
-
-        // Do our butterfly 4's down the columns of a 4x4 array
-        let (mid0_real, mid0_imag, mid1_real, mid1_imag, mid2_real, mid2_imag, mid3_real, mid3_imag) = 
-            avx64_utils::column_butterfly4_split_f64(row0_real, row0_imag, row1_real, row1_imag, row2_real, row2_imag, row3_real, row3_imag);
-
-        // Apply twiddle factors
-        let (mid1_real_twiddled, mid1_imag_twiddled) = avx64_utils::fma::complex_multiply_split_f64(mid1_real, mid1_imag, self.twiddles_real[0], self.twiddles_imag[0]);
-        let (mid2_real_twiddled, mid2_imag_twiddled) = avx64_utils::fma::complex_multiply_split_f64(mid2_real, mid2_imag, self.twiddles_real[1], self.twiddles_imag[1]);
-        let (mid3_real_twiddled, mid3_imag_twiddled) = avx64_utils::fma::complex_multiply_split_f64(mid3_real, mid3_imag, self.twiddles_real[2], self.twiddles_imag[2]);
-
-        // Transpose our 4x4 array. but our unpacks to split the reals and imaginaries left the data in a weird order - and we can partially fix the wrong order by passing 
-        let (transposed0_real, transposed1_real, transposed2_real, transposed3_real) = avx64_utils::transpose_4x4_real_f64(mid0_real, mid1_real_twiddled, mid2_real_twiddled, mid3_real_twiddled);
-        let (transposed0_imag, transposed1_imag, transposed2_imag, transposed3_imag) = avx64_utils::transpose_4x4_real_f64(mid0_imag, mid1_imag_twiddled, mid2_imag_twiddled, mid3_imag_twiddled);
-
-        // Butterfly 4's down columns of the transposed array
-        let (output0_real, output0_imag, output1_real, output1_imag, output2_real, output2_imag, output3_real, output3_imag) = 
-            avx64_utils::column_butterfly4_split_f64(transposed0_real, transposed0_imag, transposed1_real, transposed1_imag, transposed2_real, transposed2_imag, transposed3_real, transposed3_imag);
-
-        let packed0 = _mm256_unpacklo_pd(output0_real, output0_imag);
-        let packed1 = _mm256_unpackhi_pd(output0_real, output0_imag);
-        output.store_complex_f64(packed0, 0);
-        output.store_complex_f64(packed1, 2);
-
-        let packed2 = _mm256_unpacklo_pd(output1_real, output1_imag);
-        let packed3 = _mm256_unpackhi_pd(output1_real, output1_imag);
-        output.store_complex_f64(packed2, 4);
-        output.store_complex_f64(packed3, 6);
-
-        let packed4 = _mm256_unpacklo_pd(output2_real, output2_imag);
-        let packed5 = _mm256_unpackhi_pd(output2_real, output2_imag);
-        output.store_complex_f64(packed4, 8);
-        output.store_complex_f64(packed5, 10);
-
-        let packed6 = _mm256_unpacklo_pd(output3_real, output3_imag);
-        let packed7 = _mm256_unpackhi_pd(output3_real, output3_imag);
-        output.store_complex_f64(packed6, 12);
-        output.store_complex_f64(packed7, 14);
-    }
-}
 
 pub struct MixedRadix64Avx4x8<T> {
     twiddles: [__m256d; 12],
-    twiddles_butterfly8: __m256d,
     twiddle_config: avx32_utils::Rotate90Config<__m256d>,
     inverse: bool,
     _phantom: std::marker::PhantomData<T>,
@@ -535,7 +416,6 @@ impl MixedRadix64Avx4x8<f64> {
         }
         Self {
             twiddles,
-            twiddles_butterfly8: avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1,8,inverse)),
             twiddle_config: avx32_utils::Rotate90Config::new_f64(inverse),
             inverse: inverse,
             _phantom: PhantomData,
@@ -579,11 +459,11 @@ impl MixedRadix64Avx4x8<f64> {
 
         // Do 4 butterfly 8's down columns of the transposed array
         // Same thing as above - Do the half of the butterfly 8's separately to give the compiler a better hint about what to spill
-        let output0 = avx64_utils::fma::column_butterfly8_f64(transposed0, self.twiddles_butterfly8, self.twiddle_config);
+        let output0 = avx64_utils::fma::column_butterfly8_f64(transposed0, self.twiddle_config);
         for r in 0..8 {
             output.store_complex_f64(output0[r], 4*r);
         }
-        let output1 = avx64_utils::fma::column_butterfly8_f64(transposed1, self.twiddles_butterfly8, self.twiddle_config);
+        let output1 = avx64_utils::fma::column_butterfly8_f64(transposed1, self.twiddle_config);
         for r in 0..8 {
             output.store_complex_f64(output1[r], 4*r + 2);
         }

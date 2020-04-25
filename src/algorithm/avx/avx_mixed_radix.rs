@@ -691,7 +691,6 @@ impl MixedRadix6xnAvx<f64, __m256d> {
 
 pub struct MixedRadix8xnAvx<T, V> {
     twiddle_config: avx32_utils::Rotate90Config<V>,
-    twiddles_butterfly8: V,
     common_data: CommonSimdData<T, V>,
 }
 boilerplate_fft_commondata!(MixedRadix8xnAvx);
@@ -704,12 +703,11 @@ impl MixedRadix8xnAvx<f32, __m256> {
         let inverse = inner_fft.is_inverse();
         Self {
         	twiddle_config: avx32_utils::Rotate90Config::new_f32(inverse),
-        	twiddles_butterfly8: avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 8, inverse)),
             common_data: mixedradix_gen_data_f32!(8, inner_fft),
         }
     }
 
-    mixedradix_column_butterflies_f32!(8, |columns, this: &Self| avx32_utils::fma::column_butterfly8_f32(columns, this.twiddles_butterfly8, this.twiddle_config));
+    mixedradix_column_butterflies_f32!(8, |columns, this: &Self| avx32_utils::fma::column_butterfly8_f32(columns, this.twiddle_config));
     mixedradix_transpose_f32!(8, avx32_utils::transpose_4x8_to_8x4_packed_f32, 0;1;2;3;4;5;6;7);
 
     // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
@@ -739,14 +737,13 @@ impl MixedRadix8xnAvx<f64, __m256d> {
         let inverse = inner_fft.is_inverse();
         Self {
         	twiddle_config: avx32_utils::Rotate90Config::new_f64(inverse),
-        	twiddles_butterfly8: avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1, 8, inverse)),
             common_data: mixedradix_gen_data_f64!(8, inner_fft),
         }
     }
 
     mixedradix_column_butterflies_f64!(8,
-        |columns, this: &Self| avx64_utils::fma::column_butterfly8_f64(columns, this.twiddles_butterfly8, this.twiddle_config),
-        |columns, this: &Self| avx64_utils::fma::column_butterfly8_f64_lo(columns, this.twiddles_butterfly8, this.twiddle_config)
+        |columns, this: &Self| avx64_utils::fma::column_butterfly8_f64(columns, this.twiddle_config),
+        |columns, this: &Self| avx64_utils::fma::column_butterfly8_f64_lo(columns, this.twiddle_config)
     );
     mixedradix_transpose_f64!(8, avx64_utils::transpose_2x8_to_8x2_packed_f64, 0;1;2;3;4;5;6;7);
 }
@@ -909,7 +906,7 @@ impl MixedRadix12xnAvx<f64, __m256d> {
 
 pub struct MixedRadix16xnAvx<T, V> {
     twiddle_config: avx32_utils::Rotate90Config<V>,
-    twiddles_butterfly16: [V; 6],
+    twiddles_butterfly16: [V; 2],
     common_data: CommonSimdData<T, V>,
 }
 boilerplate_fft_commondata!(MixedRadix16xnAvx);
@@ -924,11 +921,7 @@ impl MixedRadix16xnAvx<f32, __m256> {
         	twiddle_config: avx32_utils::Rotate90Config::new_f32(inverse),
         	twiddles_butterfly16: [
                 avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 16, inverse)),
-                avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(2, 16, inverse)),
                 avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(3, 16, inverse)),
-                avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(4, 16, inverse)),
-                avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(6, 16, inverse)),
-                avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(9, 16, inverse)),
             ],
             common_data: mixedradix_gen_data_f32!(16, inner_fft),
         }
@@ -972,11 +965,7 @@ impl MixedRadix16xnAvx<f64, __m256d> {
         	twiddle_config: avx32_utils::Rotate90Config::new_f64(inverse),
         	twiddles_butterfly16: [
                 avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1, 16, inverse)),
-                avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(2, 16, inverse)),
                 avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(3, 16, inverse)),
-                avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(4, 16, inverse)),
-                avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(6, 16, inverse)),
-                avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(9, 16, inverse)),
             ],
             common_data: mixedradix_gen_data_f64!(16, inner_fft),
         }

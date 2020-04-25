@@ -113,26 +113,6 @@ pub unsafe fn column_butterfly2_array_f64(rows: [__m256d; 2]) -> [__m256d; 2] {
     [output0, output1]
 }
 
-// Compute 2 parallel butterfly 2's using AVX instructions. This variant rolls in a negation of row 1
-// rowN contains the nth element of each parallel FFT
-#[inline(always)]
-pub unsafe fn column_butterfly2_f64_negaterow1(row0: __m256d, row1: __m256d) -> (__m256d, __m256d) {
-    let output0 = _mm256_sub_pd(row0, row1);
-    let output1 = _mm256_add_pd(row0, row1);
-
-    (output0, output1)
-}
-
-// Compute 1 butterfly 2's using AVX instructions. This variant rolls in a negation of row 1
-// rowN contains the nth element of the FFT
-#[inline(always)]
-pub unsafe fn column_butterfly2_f64_negaterow1_lo(rows: [__m128d; 2]) -> [__m128d; 2] {
-    let output0 = _mm_sub_pd(rows[0], rows[1]);
-    let output1 = _mm_add_pd(rows[0], rows[1]);
-
-    [output0, output1]
-}
-
 // Compute 2 parallel butterfly 4's using AVX instructions
 // rowN contains the nth element of each parallel FFT
 #[inline(always)]
@@ -150,6 +130,46 @@ pub unsafe fn column_butterfly4_f64(rows: [__m256d; 4], twiddle_config: Rotate90
 
     // Swap outputs 1 and 2 in the output to do a square transpose
     [output0, output2, output1, output3]
+}
+
+// Compute 2 parallel butterfly 4's using AVX instructions
+// rowN contains the nth element of each parallel FFT
+// this variant will roll a negation of row 3 wihout adding any new instructions
+#[inline(always)]
+pub unsafe fn column_butterfly4_negaterow3_f64(rows: [__m256d; 4], twiddle_config: Rotate90Config<__m256d>) -> [__m256d; 4] {
+    // Perform the first set of size-2 FFTs. Make sure to apply the twiddle factor to element 3.
+    let (mid0, mid2) = column_butterfly2_f64(rows[0], rows[2]);
+    let (mid1, mid3) = (_mm256_sub_pd(rows[1], rows[3]), _mm256_add_pd(rows[1], rows[3])); // to negate row 3, swap add and sub in the butterfly 2
+
+    // Apply element 3 inner twiddle factor
+    let mid3_rotated = twiddle_config.rotate90(mid3);
+
+    // Perform the second set of size-2 FFTs
+    let (output0, output1) = column_butterfly2_f64(mid0, mid1);
+    let (output2, output3) = column_butterfly2_f64(mid2, mid3_rotated);
+
+    // Swap outputs 1 and 2 in the output to do a square transpose
+    [output0, output2, output1, output3]
+}
+
+// Compute 1 butterfly 4 using AVX instructions
+// rowN contains the nth element of the FFT
+// this variant will roll a negation of row 3 wihout adding any new instructions
+#[inline(always)]
+pub unsafe fn column_butterfly4_negaterow3_f64_lo(rows: [__m128d; 4], twiddle_config: Rotate90Config<__m256d>) -> [__m128d; 4] {
+    // Perform the first set of size-2 FFTs. Make sure to apply the twiddle factor to element 3.
+    let mid0 = column_butterfly2_f64_lo([rows[0], rows[2]]);
+    let mid1 = [_mm_sub_pd(rows[1], rows[3]), _mm_add_pd(rows[1], rows[3])]; // to negate row 3, swap add and sub in the butterfly 2
+
+    // Apply element 3 inner twiddle factor
+    let mid3_rotated = twiddle_config.rotate90_lo(mid1[1]);
+
+    // Perform the second set of size-2 FFTs
+    let output0 = column_butterfly2_f64_lo([mid0[0], mid1[0]]);
+    let output1 = column_butterfly2_f64_lo([mid0[1], mid3_rotated]);
+
+    // Swap outputs 1 and 2 in the output to do a square transpose
+    [output0[0], output1[0], output0[1], output1[1]]
 }
 
 // Compute 1 butterfly 4 using AVX instructions
@@ -171,30 +191,6 @@ pub unsafe fn column_butterfly4_f64_lo(rows: [__m128d; 4], twiddle_config: Rotat
     [output0[0], output1[0], output0[1], output1[1]]
 }
 
-// Compute 2 parallel butterfly 4's using AVX instructions
-// rowN contains the nth element of each parallel FFT
-#[inline(always)]
-pub unsafe fn column_butterfly4_split_f64(row0_real: __m256d, row0_imag: __m256d, row1_real: __m256d, row1_imag: __m256d, row2_real: __m256d, row2_imag: __m256d, row3_real: __m256d, row3_imag: __m256d) 
--> (__m256d, __m256d, __m256d, __m256d, __m256d, __m256d, __m256d, __m256d) {
-    // Perform the first set of size-2 FFTs. Make sure to apply the twiddle factor to element 3.
-    let (mid0_real, mid2_real) = column_butterfly2_f64(row0_real, row2_real);
-    let (mid1_real, mid3_real) = column_butterfly2_f64(row1_real, row3_real);
-    let (mid0_imag, mid2_imag) = column_butterfly2_f64(row0_imag, row2_imag);
-    let (mid1_imag, mid3_imag) = column_butterfly2_f64(row1_imag, row3_imag);
-
-    // Apply element 3 inner twiddle factor. we do this by swapping the reals and imaginaries of element 3
-    // then negating the imaginaries. But we'll roll the negation int the following instructions.
-    let (mid3_real, mid3_imag_neg) = (mid3_imag, mid3_real);
-
-    // Perform the second set of size-2 FFTs
-    let (output0_real, output1_real) = column_butterfly2_f64(mid0_real, mid1_real);
-    let (output2_real, output3_real) = column_butterfly2_f64(mid2_real, mid3_real);
-    let (output0_imag, output1_imag) = column_butterfly2_f64(mid0_imag, mid1_imag);
-    let (output2_imag, output3_imag) = column_butterfly2_f64_negaterow1(mid2_imag, mid3_imag_neg);
-
-    // Swap outputs 1 and 2 in the output to do a square transpose
-    (output0_real, output0_imag, output2_real, output2_imag, output1_real, output1_imag, output3_real, output3_imag)
-}
 
 // Treat the input like the rows of a 2x2 array, and transpose said rows to the columns
 #[inline(always)]
@@ -419,22 +415,6 @@ pub unsafe fn transpose_8x4_to_4x8_f64(rows0: [__m256d;4], rows1: [__m256d; 4], 
     ([output00[0], output00[1], output01[0], output01[1], output02[0], output02[1], output03[0], output03[1]], [output10[0], output10[1], output11[0], output11[1], output12[0], output12[1], output13[0], output13[1]])
 }
 
-// Treat the input like the rows of a 4x4 array of real numbers (not complex numbers), and transpose said rows to the columns
-#[inline(always)]
-pub unsafe fn transpose_4x4_real_f64(row0: __m256d, row1: __m256d, row2: __m256d, row3: __m256d) -> (__m256d, __m256d, __m256d, __m256d) {
-    let unpacked0 = _mm256_unpacklo_pd(row0, row1);
-    let unpacked1 = _mm256_unpackhi_pd(row0, row1);
-    let unpacked2 = _mm256_unpacklo_pd(row2, row3);
-    let unpacked3 = _mm256_unpackhi_pd(row2, row3);
-
-    let col0 = _mm256_permute2f128_pd(unpacked0, unpacked2, 0x20);
-    let col1 = _mm256_permute2f128_pd(unpacked1, unpacked3, 0x20);
-    let col2 = _mm256_permute2f128_pd(unpacked0, unpacked2, 0x31);
-    let col3 = _mm256_permute2f128_pd(unpacked1, unpacked3, 0x31);
-
-    (col0, col1, col2, col3)
-}
-
 // Functions in the "FMA" sub-module require the fma instruction set in addition to AVX
 pub mod fma {
     use super::*;
@@ -471,18 +451,6 @@ pub mod fma {
 
         // use a FMA instruction to multiply together left side of the complex multiplication formula, then alternatingly add and subtract the left side from the right
         _mm_fmaddsub_pd(left_real, right, output_right)
-    }
-
-    // Multiply the complex numbers in `left` by the complex numbers in `right`, using FMA instructions where possible. 
-    #[inline(always)]
-    pub unsafe fn complex_multiply_split_f64(left_real: __m256d, left_imag: __m256d, right_real: __m256d, right_imag: __m256d) -> (__m256d, __m256d) {
-        let intermediate_real = _mm256_mul_pd(left_imag, right_imag);
-        let intermediate_imag = _mm256_mul_pd(left_real, right_imag);
-
-        let output_real = _mm256_fmsub_pd(left_real, right_real, intermediate_real);
-        let output_imag = _mm256_fmadd_pd(left_imag, right_real, intermediate_imag);
-
-        (output_real, output_imag)
     }
 
     // Multiply the complex numbers in `left` by the complex numbers in `right`, using FMA instructions where possible
@@ -609,28 +577,63 @@ pub mod fma {
         [output0, output3, output4, output1, output2, output5]
     }
 
+    #[inline(always)]
+    pub unsafe fn apply_butterfly8_twiddle1(input: __m256d, twiddle_config: Rotate90Config<__m256d>) -> __m256d {
+        // note: we're computing a square root here, but checking the assembly says the compiler is smart enough to turn this into a constant
+        let root2 = 2.0f64.sqrt() * 0.5;
+        let root2_vector = _mm256_broadcast_sd(&root2);
+        let rotated = twiddle_config.rotate90(input);
+        let combined = _mm256_add_pd(rotated, input);
+        _mm256_mul_pd(root2_vector, combined)
+    }
+    #[inline(always)]
+    pub unsafe fn apply_butterfly8_twiddle3(input: __m256d, twiddle_config: Rotate90Config<__m256d>) -> __m256d {
+        // note: we're computing a square root here, but checking the assembly says the compiler is smart enough to turn this into a constant
+        let root2 = 2.0f64.sqrt() * 0.5;
+        let root2_vector = _mm256_broadcast_sd(&root2);
+        let rotated = twiddle_config.rotate90(input);
+        let combined = _mm256_sub_pd(rotated, input);
+        _mm256_mul_pd(root2_vector, combined)
+    }
+
+    #[inline(always)]
+    pub unsafe fn apply_butterfly8_twiddle1_lo(input: __m128d, twiddle_config: Rotate90Config<__m256d>) -> __m128d {
+        // note: we're computing a square root here, but checking the assembly says the compiler is smart enough to turn this into a constant
+        let root2 = 2.0f64.sqrt() * 0.5;
+        let root2_vector = _mm_load1_pd(&root2);
+        let rotated = twiddle_config.rotate90_lo(input);
+        let combined = _mm_add_pd(rotated, input);
+        _mm_mul_pd(root2_vector, combined)
+    }
+    #[inline(always)]
+    pub unsafe fn apply_butterfly8_twiddle3_lo(input: __m128d, twiddle_config: Rotate90Config<__m256d>) -> __m128d {
+        // note: we're computing a square root here, but checking the assembly says the compiler is smart enough to turn this into a constant
+        let root2 = 2.0f64.sqrt() * 0.5;
+        let root2_vector = _mm_load1_pd(&root2);
+        let rotated = twiddle_config.rotate90_lo(input);
+        let combined = _mm_sub_pd(rotated, input);
+        _mm_mul_pd(root2_vector, combined)
+    }
+
     // Compute 2 parallel butterfly 8's using AVX and FMA instructions
     // rowN contains the nth element of each parallel FFT
     #[inline(always)]
-    pub unsafe fn column_butterfly8_f64(rows: [__m256d; 8], twiddles: __m256d, twiddle_config: Rotate90Config<__m256d>) -> [__m256d; 8] {
+    pub unsafe fn column_butterfly8_f64(rows: [__m256d; 8], twiddle_config: Rotate90Config<__m256d>) -> [__m256d; 8] {
         // Treat our butterfly-8 as a 2x4 array. first, do butterfly 4's down the columns
         let mid0     = column_butterfly4_f64([rows[0], rows[2], rows[4], rows[6]], twiddle_config);
         let mut mid1 = column_butterfly4_f64([rows[1], rows[3], rows[5], rows[7]], twiddle_config);
 
         // Apply twiddle factors
-        // We want to negate the reals of the twiddles when multiplying mid7, but it's easier to conjugate the twiddles (Ie negate the imaginaries)
-        // Negating the reals before amultiplication is equivalent to negating the imaginaries before the multiplication and then negatign the entire result
-        // And we can "negate the entire result" by rollign that operation into the subsequent butterfly 2's
-        mid1[1] = complex_multiply_f64(twiddles, mid1[1]);
+        mid1[1] = apply_butterfly8_twiddle1(mid1[1], twiddle_config);
         mid1[2] = twiddle_config.rotate90(mid1[2]);
-        mid1[3] = complex_conjugated_multiply_f64(twiddles, mid1[3]);
+        mid1[3] = apply_butterfly8_twiddle3(mid1[3], twiddle_config);
 
         // Up next is a transpose, but since everything is already in registers, we don't actually have to transpose anything!
         // "transposE" and thne apply butterfly 2's across the columns of our 4x2 array
         let (final0, final1) = column_butterfly2_f64(mid0[0], mid1[0]);
         let (final2, final3) = column_butterfly2_f64(mid0[1], mid1[1]);
         let (final4, final5) = column_butterfly2_f64(mid0[2], mid1[2]);
-        let (final6, final7) = column_butterfly2_f64_negaterow1(mid0[3], mid1[3]); // Finish applying the negation from our twiddles by calling a different butterfly 2 function
+        let (final6, final7) = column_butterfly2_f64(mid0[3], mid1[3]);
 
         [final0, final2, final4, final6, final1, final3, final5, final7]
     }
@@ -638,26 +641,22 @@ pub mod fma {
     // Compute 2 parallel butterfly 8's using AVX and FMA instructions
     // rowN contains the nth element of each parallel FFT
     #[inline(always)]
-    pub unsafe fn column_butterfly8_f64_lo(rows: [__m128d; 8], twiddles: __m256d, twiddle_config: Rotate90Config<__m256d>) -> [__m128d; 8] {
+    pub unsafe fn column_butterfly8_f64_lo(rows: [__m128d; 8], twiddle_config: Rotate90Config<__m256d>) -> [__m128d; 8] {
         // Treat our butterfly-8 as a 2x4 array. first, do butterfly 4's down the columns
         let mid0     = column_butterfly4_f64_lo([rows[0], rows[2], rows[4], rows[6]], twiddle_config);
         let mut mid1 = column_butterfly4_f64_lo([rows[1], rows[3], rows[5], rows[7]], twiddle_config);
 
         // Apply twiddle factors
-        // We want to negate the reals of the twiddles when multiplying mid7, but it's easier to conjugate the twiddles (Ie negate the imaginaries)
-        // Negating the reals before amultiplication is equivalent to negating the imaginaries before the multiplication and then negatign the entire result
-        // And we can "negate the entire result" by rollign that operation into the subsequent butterfly 2's
-        let twiddles_lo = _mm256_castpd256_pd128(twiddles);
-        mid1[1] = complex_multiply_f64_lo(twiddles_lo, mid1[1]);
+        mid1[1] = apply_butterfly8_twiddle1_lo(mid1[1], twiddle_config);
         mid1[2] = twiddle_config.rotate90_lo(mid1[2]);
-        mid1[3] = complex_conjugated_multiply_f64_lo(twiddles_lo, mid1[3]);
+        mid1[3] = apply_butterfly8_twiddle3_lo(mid1[3], twiddle_config);
 
         // Up next is a transpose, but since everything is already in registers, we don't actually have to transpose anything!
         // "transpose" and then apply butterfly 2's across the columns of our 4x2 array
         let final0 = column_butterfly2_f64_lo([mid0[0], mid1[0]]);
         let final1 = column_butterfly2_f64_lo([mid0[1], mid1[1]]);
         let final2 = column_butterfly2_f64_lo([mid0[2], mid1[2]]);
-        let final3 = column_butterfly2_f64_negaterow1_lo([mid0[3], mid1[3]]); // Finish applying the negation from our twiddles by calling a different butterfly 2 function
+        let final3 = column_butterfly2_f64_lo([mid0[3], mid1[3]]);
 
         [final0[0], final1[0], final2[0], final3[0], final0[1], final1[1], final2[1], final3[1]]
     }
@@ -741,30 +740,40 @@ pub mod fma {
     // Compute 2 parallel butterfly 16's using AVX and FMA instructions
     // rowN contains the nth element of each parallel FFT
     #[inline(always)]
-    pub unsafe fn column_butterfly16_f64( rows: [__m256d; 16], twiddles: [__m256d; 6], twiddle_config: Rotate90Config<__m256d>) -> [__m256d; 16] {
+    pub unsafe fn column_butterfly16_f64( rows: [__m256d; 16], twiddles: [__m256d; 2], twiddle_config: Rotate90Config<__m256d>) -> [__m256d; 16] {
         // Treat our butterfly-16 as a 4x4 array. first, do butterfly 4's down the columns
         let mid0     = column_butterfly4_f64([rows[0], rows[4], rows[8],  rows[12]], twiddle_config);
         let mut mid1 = column_butterfly4_f64([rows[1], rows[5], rows[9],  rows[13]], twiddle_config);
         let mut mid2 = column_butterfly4_f64([rows[2], rows[6], rows[10], rows[14]], twiddle_config);
         let mut mid3 = column_butterfly4_f64([rows[3], rows[7], rows[11], rows[15]], twiddle_config);
 
-        // Apply twiddle factors. Note that we're re-using a couple twiddles!
-        mid1[1] = complex_multiply_f64(twiddles[0], mid1[1]);
-        mid2[1] = complex_multiply_f64(twiddles[1], mid2[1]);
-        mid1[2] = complex_multiply_f64(twiddles[1], mid1[2]);
-        mid3[1] = complex_multiply_f64(twiddles[2], mid3[1]);
-        mid1[3] = complex_multiply_f64(twiddles[2], mid1[3]);
-        mid2[2] = complex_multiply_f64(twiddles[3], mid2[2]);
-        mid3[2] = complex_multiply_f64(twiddles[4], mid3[2]);
-        mid2[3] = complex_multiply_f64(twiddles[4], mid2[3]);
-        mid3[3] = complex_multiply_f64(twiddles[5], mid3[3]);
+        // Apply twiddle factors
+        mid1[1] = complex_multiply_f64(mid1[1], twiddles[0]);
+
+        // for twiddle(2, 16), we can use the butterfly8 twiddle1 instead, which takes fewer instructions and fewer multiplies
+        mid2[1] = apply_butterfly8_twiddle1(mid2[1], twiddle_config);
+        mid1[2] = apply_butterfly8_twiddle1(mid1[2], twiddle_config);
+
+        // for twiddle(3,16), we can use twiddle(1,16), sort of, but we'd need a branch, and at this point it's easier to just have another vector
+        mid3[1] = complex_multiply_f64(mid3[1], twiddles[1]);
+        mid1[3] = complex_multiply_f64(mid1[3], twiddles[1]);
+
+        // twiddle(4,16) is just a rotate
+        mid2[2] = twiddle_config.rotate90(mid2[2]);
+
+        // for twiddle(6, 16), we can use the butterfly8 twiddle3 instead, which takes fewer instructions and fewer multiplies
+        mid3[2] = apply_butterfly8_twiddle3(mid3[2], twiddle_config);
+        mid2[3] = apply_butterfly8_twiddle3(mid2[3], twiddle_config);
+
+        // twiddle(9, 16) is twiddle (1,16) negated. we're just going to use the same twiddle as (1,16) for now, and apply the negation as a part of our subsequent butterfly 4's
+        mid3[3] = complex_multiply_f64(mid3[3], twiddles[0]);
 
         // Up next is a transpose, but since everything is already in registers, we don't actually have to transpose anything!
         // "transpose" and thne apply butterfly 4's across the columns of our 4x4 array
         let output0 = column_butterfly4_f64([mid0[0], mid1[0], mid2[0], mid3[0]], twiddle_config);
         let output1 = column_butterfly4_f64([mid0[1], mid1[1], mid2[1], mid3[1]], twiddle_config);
         let output2 = column_butterfly4_f64([mid0[2], mid1[2], mid2[2], mid3[2]], twiddle_config);
-        let output3 = column_butterfly4_f64([mid0[3], mid1[3], mid2[3], mid3[3]], twiddle_config);
+        let output3 = column_butterfly4_negaterow3_f64([mid0[3], mid1[3], mid2[3], mid3[3]], twiddle_config);
 
         // finally, one more transpose
         [output0[0], output1[0], output2[0], output3[0], output0[1], output1[1], output2[1], output3[1], output0[2], output1[2], output2[2], output3[2], output0[3], output1[3], output2[3], output3[3]]
@@ -773,7 +782,7 @@ pub mod fma {
     // Compute 2 parallel butterfly 16's using AVX and FMA instructions
     // rowN contains the nth element of each parallel FFT
     #[inline(always)]
-    pub unsafe fn column_butterfly16_f64_lo(rows: [__m128d; 16], twiddles: [__m256d; 6], twiddle_config: Rotate90Config<__m256d>) -> [__m128d; 16] {
+    pub unsafe fn column_butterfly16_f64_lo(rows: [__m128d; 16], twiddles: [__m256d; 2], twiddle_config: Rotate90Config<__m256d>) -> [__m128d; 16] {
         // Treat our butterfly-16 as a 4x4 array. first, do butterfly 4's down the columns
         let mid0     = column_butterfly4_f64_lo([rows[0], rows[4], rows[8],  rows[12]], twiddle_config);
         let mut mid1 = column_butterfly4_f64_lo([rows[1], rows[5], rows[9],  rows[13]], twiddle_config);
@@ -781,22 +790,32 @@ pub mod fma {
         let mut mid3 = column_butterfly4_f64_lo([rows[3], rows[7], rows[11], rows[15]], twiddle_config);
 
         // Apply twiddle factors. Note that we're re-using a couple twiddles!
-        mid1[1] = complex_multiply_f64_lo(_mm256_castpd256_pd128(twiddles[0]), mid1[1]);
-        mid2[1] = complex_multiply_f64_lo(_mm256_castpd256_pd128(twiddles[1]), mid2[1]);
-        mid1[2] = complex_multiply_f64_lo(_mm256_castpd256_pd128(twiddles[1]), mid1[2]);
-        mid3[1] = complex_multiply_f64_lo(_mm256_castpd256_pd128(twiddles[2]), mid3[1]);
-        mid1[3] = complex_multiply_f64_lo(_mm256_castpd256_pd128(twiddles[2]), mid1[3]);
-        mid2[2] = complex_multiply_f64_lo(_mm256_castpd256_pd128(twiddles[3]), mid2[2]);
-        mid3[2] = complex_multiply_f64_lo(_mm256_castpd256_pd128(twiddles[4]), mid3[2]);
-        mid2[3] = complex_multiply_f64_lo(_mm256_castpd256_pd128(twiddles[4]), mid2[3]);
-        mid3[3] = complex_multiply_f64_lo(_mm256_castpd256_pd128(twiddles[5]), mid3[3]);
+        mid1[1] = complex_multiply_f64_lo(mid1[1], _mm256_castpd256_pd128(twiddles[0]));
+
+        // for twiddle(2, 16), we can use the butterfly8 twiddle1 instead, which takes fewer instructions and fewer multiplies
+        mid2[1] = apply_butterfly8_twiddle1_lo(mid2[1], twiddle_config);
+        mid1[2] = apply_butterfly8_twiddle1_lo(mid1[2], twiddle_config);
+
+        // for twiddle(3,16), we can use twiddle(1,16), sort of, but we'd need a branch, and at this point it's easier to just have another vector
+        mid3[1] = complex_multiply_f64_lo(mid3[1], _mm256_castpd256_pd128(twiddles[1]));
+        mid1[3] = complex_multiply_f64_lo(mid1[3], _mm256_castpd256_pd128(twiddles[1]));
+
+        // twiddle(4,16) is just a rotate
+        mid2[2] = twiddle_config.rotate90_lo(mid2[2]);
+
+        // for twiddle(6, 16), we can use the butterfly8 twiddle3 instead, which takes fewer instructions and fewer multiplies
+        mid3[2] = apply_butterfly8_twiddle3_lo(mid3[2], twiddle_config);
+        mid2[3] = apply_butterfly8_twiddle3_lo(mid2[3], twiddle_config);
+
+        // twiddle(9, 16) is twiddle (1,16) negated. we're just going to use the same twiddle as (1,16) for now, and apply the negation as a part of our subsequent butterfly 4's
+        mid3[3] = complex_multiply_f64_lo(mid3[3], _mm256_castpd256_pd128(twiddles[0]));
 
         // Up next is a transpose, but since everything is already in registers, we don't actually have to transpose anything!
         // "transpose" and thne apply butterfly 4's across the columns of our 4x4 array
         let output0 = column_butterfly4_f64_lo([mid0[0], mid1[0], mid2[0], mid3[0]], twiddle_config);
         let output1 = column_butterfly4_f64_lo([mid0[1], mid1[1], mid2[1], mid3[1]], twiddle_config);
         let output2 = column_butterfly4_f64_lo([mid0[2], mid1[2], mid2[2], mid3[2]], twiddle_config);
-        let output3 = column_butterfly4_f64_lo([mid0[3], mid1[3], mid2[3], mid3[3]], twiddle_config);
+        let output3 = column_butterfly4_negaterow3_f64_lo([mid0[3], mid1[3], mid2[3], mid3[3]], twiddle_config);
 
         // finally, one more transpose
         [output0[0], output1[0], output2[0], output3[0], output0[1], output1[1], output2[1], output3[1], output0[2], output1[2], output2[2], output3[2], output0[3], output1[3], output2[3], output3[3]]
