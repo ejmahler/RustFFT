@@ -740,14 +740,14 @@ pub mod fma {
         let output0 = _mm256_add_ps(rows[0], mid1_pretwiddle);
 
         let twiddle_real = _mm256_moveldup_ps(twiddles);
-        let twiddle_imag = _mm256_movehdup_ps(twiddles);
-        
         let mid1 = _mm256_fmadd_ps(mid1_pretwiddle, twiddle_real, rows[0]);
-
+        
         let mid2_rotated = Rotate90Config::new_f32(true).rotate90(mid2_pretwiddle);
-        let mid2 = _mm256_mul_ps(mid2_rotated, twiddle_imag);
-
-        let (output1, output2) = column_butterfly2_f32(mid1, mid2);
+        
+        // combine the twiddle with the subsequent butterfly 2 via FMA instructions. 3 instructions instead of two, and removes a layer of latency
+        let twiddle_imag = _mm256_movehdup_ps(twiddles);
+        let output1 = _mm256_fmadd_ps(mid2_rotated, twiddle_imag, mid1);
+        let output2 = _mm256_fnmadd_ps(mid2_rotated, twiddle_imag, mid1);
 
         [output0, output1, output2]
     }
@@ -761,14 +761,15 @@ pub mod fma {
 
         let twiddles_lo = _mm256_castps256_ps128(twiddles);
         let twiddle_real = _mm_moveldup_ps(twiddles_lo);
-        let twiddle_imag = _mm_movehdup_ps(twiddles_lo);
         
         let mid1 = _mm_fmadd_ps(mid1_pretwiddle, twiddle_real, rows[0]);
 
         let mid2_rotated = Rotate90Config::new_f32(true).rotate90_lo(mid2_pretwiddle);
-        let mid2 = _mm_mul_ps(mid2_rotated, twiddle_imag);
 
-        let [output1, output2] = column_butterfly2_f32_lo([mid1, mid2]);
+        // combine the twiddle with the subsequent butterfly 2 via FMA instructions. 3 instructions instead of two, and removes a layer of latency
+        let twiddle_imag = _mm_movehdup_ps(twiddles_lo);
+        let output1 = _mm_fmadd_ps(mid2_rotated, twiddle_imag, mid1);
+        let output2 = _mm_fnmadd_ps(mid2_rotated, twiddle_imag, mid1);
 
         [output0, output1, output2]
     }

@@ -510,14 +510,15 @@ pub mod fma {
         let output0 = _mm256_add_pd(rows[0], mid1_pretwiddle);
 
         let twiddle_real = _mm256_movedup_pd(twiddles);
-        let twiddle_imag = _mm256_permute_pd(twiddles, 0x0F); // apparently the avx deigners just skipped movehdup f64?? So use a permute instruction to take its place, copying the imaginaries int othe reals
         
         let mid1 = _mm256_fmadd_pd(mid1_pretwiddle, twiddle_real, rows[0]);
 
         let mid2_rotated = Rotate90Config::new_f64(true).rotate90(mid2_pretwiddle);
-        let mid2 = _mm256_mul_pd(mid2_rotated, twiddle_imag);
 
-        let (output1, output2) = column_butterfly2_f64(mid1, mid2);
+        // combine the twiddle with the subsequent butterfly 2 via FMA instructions. 3 instructions instead of two, and removes a layer of latency
+        let twiddle_imag = _mm256_permute_pd(twiddles, 0x0F); // apparently the avx deigners just skipped movehdup f64?? So use a permute instruction to take its place, copying the imaginaries into the reals
+        let output1 = _mm256_fmadd_pd(mid2_rotated, twiddle_imag, mid1);
+        let output2 = _mm256_fnmadd_pd(mid2_rotated, twiddle_imag, mid1);
 
         [output0, output1, output2]
     }
@@ -531,14 +532,15 @@ pub mod fma {
 
         let twiddles_lo = _mm256_castpd256_pd128(twiddles);
         let twiddle_real = _mm_movedup_pd(twiddles_lo);
-        let twiddle_imag = _mm_permute_pd(twiddles_lo, 0x0F); // apparently the avx deigners just skipped movehdup f64?? So use a permute instruction to take its place, copying the imaginaries int othe reals
         
         let mid1 = _mm_fmadd_pd(mid1_pretwiddle, twiddle_real, rows[0]);
 
         let mid2_rotated = Rotate90Config::new_f64(true).rotate90_lo(mid2_pretwiddle);
-        let mid2 = _mm_mul_pd(mid2_rotated, twiddle_imag);
 
-        let [output1, output2] = column_butterfly2_f64_lo([mid1, mid2]);
+        // combine the twiddle with the subsequent butterfly 2 via FMA instructions. 3 instructions instead of two, and removes a layer of latency
+        let twiddle_imag = _mm_permute_pd(twiddles_lo, 0x0F); // apparently the avx deigners just skipped movehdup f64?? So use a permute instruction to take its place, copying the imaginaries into the reals
+        let output1 = _mm_fmadd_pd(mid2_rotated, twiddle_imag, mid1);
+        let output2 = _mm_fnmadd_pd(mid2_rotated, twiddle_imag, mid1);
 
         [output0, output1, output2]
     }
