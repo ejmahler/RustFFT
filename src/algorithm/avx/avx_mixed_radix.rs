@@ -202,7 +202,7 @@ macro_rules! mixedradix_gen_data_f64 {
 
 
 macro_rules! mixedradix_column_butterflies_f32{
-    ($row_count: expr, $butterfly_fn: expr) => (
+    ($row_count: expr, $butterfly_fn: expr, $butterfly_fn_lo: expr) => (
 
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_column_butterflies(&self, buffer: &mut [Complex<f32>]) {
@@ -249,23 +249,45 @@ macro_rules! mixedradix_column_butterflies_f32{
 
             let remainder_mask = avx32_utils::RemainderMask::new_f32(partial_remainder);
 
-            // Load partial columns for our final remainder, using RemainderMask to limit which memory locations we load
-            let mut columns = [_mm256_setzero_ps(); ROW_COUNT];
-            for i in 0..ROW_COUNT {
-                columns[i] = buffer.load_complex_remainder_f32(remainder_mask, partial_remainder_base + len_per_row*i);
-            }
+            if partial_remainder > 2 {
+                // Load partial columns for our final remainder, using RemainderMask to limit which memory locations we load
+                let mut columns = [_mm256_setzero_ps(); ROW_COUNT];
+                for i in 0..ROW_COUNT {
+                    columns[i] = buffer.load_complex_remainder_f32(remainder_mask, partial_remainder_base + len_per_row*i);
+                }
 
-            // apply our butterfly function down the columns
-            let output = $butterfly_fn(columns, self);
+                // apply our butterfly function down the columns
+                let output = $butterfly_fn(columns, self);
 
-            // always write the first row without twiddles
-            buffer.store_complex_remainder_f32(remainder_mask, output[0], partial_remainder_base);
+                // always write the first row without twiddles
+                buffer.store_complex_remainder_f32(remainder_mask, output[0], partial_remainder_base);
 
-            // for every other row, apply twiddle factors and then write back to memory, using RemainderMask to limit which memory locations to write to
-            for i in 1..ROW_COUNT {
-                let twiddle = self.common_data.twiddles[partial_remainder_twiddle_base + i - 1];
-                let output = avx32_utils::fma::complex_multiply_f32(twiddle, output[i]);
-                buffer.store_complex_remainder_f32(remainder_mask, output, partial_remainder_base + len_per_row*i);
+                // for every other row, apply twiddle factors and then write back to memory, using RemainderMask to limit which memory locations to write to
+                for i in 1..ROW_COUNT {
+                    let twiddle = self.common_data.twiddles[partial_remainder_twiddle_base + i - 1];
+                    let output = avx32_utils::fma::complex_multiply_f32(twiddle, output[i]);
+                    buffer.store_complex_remainder_f32(remainder_mask, output, partial_remainder_base + len_per_row*i);
+                }
+            } else {
+                // Load partial columns for our final remainder, using RemainderMask to limit which memory locations we load
+                // our remainder will be only half-filled, so we can eke out a little speed by only doing a half-column
+                let mut columns = [_mm_setzero_ps(); ROW_COUNT];
+                for i in 0..ROW_COUNT {
+                    columns[i] = _mm256_castps256_ps128(buffer.load_complex_remainder_f32(remainder_mask, partial_remainder_base + len_per_row*i));
+                }
+
+                // apply our butterfly function down the columns
+                let output = $butterfly_fn_lo(columns, self);
+
+                // always write the first row without twiddles
+                buffer.store_complex_remainder_f32(remainder_mask, _mm256_castps128_ps256(output[0]), partial_remainder_base);
+
+                // for every other row, apply twiddle factors and then write back to memory, using RemainderMask to limit which memory locations to write to
+                for i in 1..ROW_COUNT {
+                    let twiddle = _mm256_castps256_ps128(self.common_data.twiddles[partial_remainder_twiddle_base + i - 1]);
+                    let output = avx32_utils::fma::complex_multiply_f32_lo(twiddle, output[i]);
+                    buffer.store_complex_remainder_f32(remainder_mask, _mm256_castps128_ps256(output), partial_remainder_base + len_per_row*i);
+                }
             }
         }
     }
@@ -468,7 +490,10 @@ impl MixedRadix2xnAvx<f32, __m256> {
         }
     }
 
-    mixedradix_column_butterflies_f32!(2, |columns, _:_| avx32_utils::column_butterfly2_array_f32(columns));
+    mixedradix_column_butterflies_f32!(2,
+        |columns, _:_| avx32_utils::column_butterfly2_array_f32(columns),
+        |columns, _:_| avx32_utils::column_butterfly2_f32_lo(columns)
+    );
     mixedradix_transpose_f32!(2, avx32_utils::interleave_evens_odds_f32, 0;1);
 
     // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
@@ -521,7 +546,10 @@ impl MixedRadix3xnAvx<f32, __m256> {
         }
     }
 
-    mixedradix_column_butterflies_f32!(3, |columns, this: &Self| avx32_utils::fma::column_butterfly3_f32(columns, this.twiddles_butterfly3));
+    mixedradix_column_butterflies_f32!(3, 
+        |columns, this: &Self| avx32_utils::fma::column_butterfly3_f32(columns, this.twiddles_butterfly3),
+        |columns, this: &Self| avx32_utils::fma::column_butterfly3_f32_lo(columns, this.twiddles_butterfly3)
+    );
     mixedradix_transpose_f32!(3, avx32_utils::transpose_4x3_packed_f32, 0;1;2);
 
     // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
@@ -585,7 +613,10 @@ impl MixedRadix4xnAvx<f32, __m256> {
         }
     }
 
-    mixedradix_column_butterflies_f32!(4, |columns, this: &Self| avx32_utils::column_butterfly4_f32(columns, this.twiddle_config));
+    mixedradix_column_butterflies_f32!(4, 
+        |columns, this: &Self| avx32_utils::column_butterfly4_f32(columns, this.twiddle_config),
+        |columns, this: &Self| avx32_utils::column_butterfly4_f32_lo(columns, this.twiddle_config)
+    );
     mixedradix_transpose_f32!(4, avx32_utils::transpose_4x4_f32, 0;1;2;3);
 
     // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
@@ -643,7 +674,10 @@ impl MixedRadix6xnAvx<f32, __m256> {
         }
     }
 
-    mixedradix_column_butterflies_f32!(6, |columns, this: &Self| avx32_utils::fma::column_butterfly6_f32(columns, this.twiddles_butterfly3));
+    mixedradix_column_butterflies_f32!(6,
+        |columns, this: &Self| avx32_utils::fma::column_butterfly6_f32(columns, this.twiddles_butterfly3),
+        |columns, this: &Self| avx32_utils::fma::column_butterfly6_f32_lo(columns, this.twiddles_butterfly3)
+    );
     mixedradix_transpose_f32!(6, avx32_utils::transpose_4x6_to_6x4_packed_f32, 0;1;2;3;4;5);
 
     // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
@@ -707,7 +741,10 @@ impl MixedRadix8xnAvx<f32, __m256> {
         }
     }
 
-    mixedradix_column_butterflies_f32!(8, |columns, this: &Self| avx32_utils::fma::column_butterfly8_f32(columns, this.twiddle_config));
+    mixedradix_column_butterflies_f32!(8,
+        |columns, this: &Self| avx32_utils::fma::column_butterfly8_f32(columns, this.twiddle_config),
+        |columns, this: &Self| avx32_utils::fma::column_butterfly8_f32_lo(columns, this.twiddle_config)
+    );
     mixedradix_transpose_f32!(8, avx32_utils::transpose_4x8_to_8x4_packed_f32, 0;1;2;3;4;5;6;7);
 
     // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
@@ -753,6 +790,7 @@ impl MixedRadix8xnAvx<f64, __m256d> {
 
 pub struct MixedRadix9xnAvx<T, V> {
     twiddles_butterfly9: [V; 3],
+    twiddles_butterfly9_lo: [V; 2],
     twiddles_butterfly3: V,
     common_data: CommonSimdData<T, V>,
 }
@@ -764,18 +802,36 @@ impl MixedRadix9xnAvx<f32, __m256> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<Fft<f32>>) -> Self {
         let inverse = inner_fft.is_inverse();
+
+        let twiddles_butterfly9_lo = [
+            f32::generate_twiddle_factor(1, 9, inverse),
+            f32::generate_twiddle_factor(1, 9, inverse),
+            f32::generate_twiddle_factor(2, 9, inverse),
+            f32::generate_twiddle_factor(2, 9, inverse),
+            f32::generate_twiddle_factor(2, 9, inverse),
+            f32::generate_twiddle_factor(2, 9, inverse),
+            f32::generate_twiddle_factor(4, 9, inverse),
+            f32::generate_twiddle_factor(4, 9, inverse),
+        ];
         Self {
         	twiddles_butterfly9: [
                 avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 9, inverse)),
                 avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(2, 9, inverse)),
                 avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(4, 9, inverse)),
             ],
+            twiddles_butterfly9_lo: [
+                twiddles_butterfly9_lo.load_complex_f32(0),
+                twiddles_butterfly9_lo.load_complex_f32(4),
+            ],
         	twiddles_butterfly3: avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 3, inverse)),
             common_data: mixedradix_gen_data_f32!(9, inner_fft),
         }
     }
 
-    mixedradix_column_butterflies_f32!(9, |columns, this: &Self| avx32_utils::fma::column_butterfly9_f32(columns, this.twiddles_butterfly9, this.twiddles_butterfly3));
+    mixedradix_column_butterflies_f32!(9, 
+        |columns, this: &Self| avx32_utils::fma::column_butterfly9_f32(columns, this.twiddles_butterfly9, this.twiddles_butterfly3),
+        |columns, this: &Self| avx32_utils::fma::column_butterfly9_f32_lo(columns, this.twiddles_butterfly9_lo, this.twiddles_butterfly3)
+    );
     mixedradix_transpose_f32!(9, avx32_utils::transpose_4x9_to_9x4_packed_f32, 0;1;2;3;4;5;6;7;8);
 
     // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
@@ -816,6 +872,10 @@ impl MixedRadix9xnAvx<f64, __m256d> {
                 avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(2, 9, inverse)),
                 avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(4, 9, inverse)),
             ],
+            twiddles_butterfly9_lo: [
+                avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1, 9, inverse)),
+                avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(2, 9, inverse)),
+            ],
         	twiddles_butterfly3: avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1, 3, inverse)),
             common_data: mixedradix_gen_data_f64!(9, inner_fft),
         }
@@ -854,7 +914,10 @@ impl MixedRadix12xnAvx<f32, __m256> {
         }
     }
 
-    mixedradix_column_butterflies_f32!(12, |columns, this: &Self| avx32_utils::fma::column_butterfly12_f32(columns, this.twiddles_butterfly3, this.twiddle_config));
+    mixedradix_column_butterflies_f32!(12, 
+        |columns, this: &Self| avx32_utils::fma::column_butterfly12_f32(columns, this.twiddles_butterfly3, this.twiddle_config),
+        |columns, this: &Self| avx32_utils::fma::column_butterfly12_f32_lo(columns, this.twiddles_butterfly3, this.twiddle_config)
+    );
     mixedradix_transpose_f32!(12, avx32_utils::transpose_4x12_to_12x4_packed_f32, 0;1;2;3;4;5;6;7;8;9;10;11);
 
     // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
@@ -927,7 +990,10 @@ impl MixedRadix16xnAvx<f32, __m256> {
         }
     }
 
-    mixedradix_column_butterflies_f32!(16, |columns, this: &Self| avx32_utils::fma::column_butterfly16_f32(columns, this.twiddles_butterfly16, this.twiddle_config));
+    mixedradix_column_butterflies_f32!(16, 
+        |columns, this: &Self| avx32_utils::fma::column_butterfly16_f32(columns, this.twiddles_butterfly16, this.twiddle_config),
+        |columns, this: &Self| avx32_utils::fma::column_butterfly16_f32_lo(columns, this.twiddles_butterfly16, this.twiddle_config)
+    );
     mixedradix_transpose_f32!(16, avx32_utils::transpose_4x16_to_16x4_packed_f32, 0;1;2;3;4;5;6;7;8;9;10;11;12;13;14;15);
 
     // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
