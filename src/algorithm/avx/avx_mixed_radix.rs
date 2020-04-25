@@ -246,6 +246,7 @@ macro_rules! mixedradix_column_butterflies_f32{
         if partial_remainder > 0 {
             let partial_remainder_base = chunk_count * CHUNK_SIZE;
             let partial_remainder_twiddle_base = self.common_data.twiddles.len() - TWIDDLES_PER_COLUMN;
+            let final_twiddle_chunk = &self.common_data.twiddles[partial_remainder_twiddle_base..];
 
             let remainder_mask = avx32_utils::RemainderMask::new_f32(partial_remainder);
 
@@ -264,7 +265,7 @@ macro_rules! mixedradix_column_butterflies_f32{
 
                 // for every other row, apply twiddle factors and then write back to memory, using RemainderMask to limit which memory locations to write to
                 for i in 1..ROW_COUNT {
-                    let twiddle = self.common_data.twiddles[partial_remainder_twiddle_base + i - 1];
+                    let twiddle = final_twiddle_chunk[i - 1];
                     let output = avx32_utils::fma::complex_multiply_f32(twiddle, output[i]);
                     buffer.store_complex_remainder_f32(remainder_mask, output, partial_remainder_base + len_per_row*i);
                 }
@@ -273,20 +274,20 @@ macro_rules! mixedradix_column_butterflies_f32{
                 // our remainder will be only half-filled, so we can eke out a little speed by only doing a half-column
                 let mut columns = [_mm_setzero_ps(); ROW_COUNT];
                 for i in 0..ROW_COUNT {
-                    columns[i] = _mm256_castps256_ps128(buffer.load_complex_remainder_f32(remainder_mask, partial_remainder_base + len_per_row*i));
+                    columns[i] = buffer.load_complex_remainder_f32_lo(remainder_mask, partial_remainder_base + len_per_row*i);
                 }
 
                 // apply our butterfly function down the columns
                 let output = $butterfly_fn_lo(columns, self);
 
                 // always write the first row without twiddles
-                buffer.store_complex_remainder_f32(remainder_mask, _mm256_castps128_ps256(output[0]), partial_remainder_base);
+                buffer.store_complex_remainder_f32_lo(remainder_mask, output[0], partial_remainder_base);
 
                 // for every other row, apply twiddle factors and then write back to memory, using RemainderMask to limit which memory locations to write to
                 for i in 1..ROW_COUNT {
-                    let twiddle = _mm256_castps256_ps128(self.common_data.twiddles[partial_remainder_twiddle_base + i - 1]);
+                    let twiddle = _mm256_castps256_ps128(final_twiddle_chunk[i - 1]);
                     let output = avx32_utils::fma::complex_multiply_f32_lo(twiddle, output[i]);
-                    buffer.store_complex_remainder_f32(remainder_mask, _mm256_castps128_ps256(output), partial_remainder_base + len_per_row*i);
+                    buffer.store_complex_remainder_f32_lo(remainder_mask, output, partial_remainder_base + len_per_row*i);
                 }
             }
         }
