@@ -322,12 +322,12 @@ pub unsafe fn column_butterfly2_f32_lo(rows: [__m128; 2]) -> [__m128; 2] {
     [output0, output1]
 }
 
-// Compute 4 parallel butterfly 2's using AVX instructions. This variant rolls in a negation of row 1
+// Compute 4 parallel butterfly 4's using AVX instructions
 // rowN contains the nth element of each parallel FFT
 #[inline(always)]
-pub unsafe fn column_butterfly2_f32_negaterow1(row0: __m256, row1: __m256) -> (__m256, __m256) {
-    let output0 = _mm256_sub_ps(row0, row1);
-    let output1 = _mm256_add_ps(row0, row1);
+pub unsafe fn column_butterfly4_f32(rows: [__m256;4], twiddle_config: Rotate90Config<__m256>) -> [__m256;4] {
+    // Perform the first set of size-2 FFTs.
+    let (mid0, mid2) = column_butterfly2_f32(rows[0], rows[2]);
     let (mid1, mid3) = column_butterfly2_f32(rows[1], rows[3]);
 
     // Apply element 3 inner twiddle factor
