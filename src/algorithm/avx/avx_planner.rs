@@ -507,9 +507,12 @@ impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
             6 =>    wrap_fft_some(Butterfly6::new(self.inverse)),
             7 =>    wrap_fft_some(Butterfly7::new(self.inverse)),
             8 =>    wrap_fft_some(MixedRadix64Avx4x2::new(self.inverse).unwrap()),
+            9 =>    wrap_fft_some(MixedRadix64Avx3x3::new(self.inverse).unwrap()),
             12 =>   wrap_fft_some(MixedRadix64Avx4x3::new(self.inverse).unwrap()),
             16 =>   wrap_fft_some(MixedRadix64Avx4x4::new(self.inverse).unwrap()),
+            18 =>   wrap_fft_some(MixedRadix64Avx3x6::new(self.inverse).unwrap()),
             24 =>   wrap_fft_some(MixedRadix64Avx4x6::new(self.inverse).unwrap()),
+            27 =>   wrap_fft_some(MixedRadix64Avx3x9::new(self.inverse).unwrap()),
             32 =>   wrap_fft_some(MixedRadix64Avx4x8::new(self.inverse).unwrap()),
             _ => None
         }

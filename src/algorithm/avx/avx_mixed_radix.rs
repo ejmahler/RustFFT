@@ -867,6 +867,12 @@ impl MixedRadix9xnAvx<f64, __m256d> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<Fft<f64>>) -> Self {
         let inverse = inner_fft.is_inverse();
+        let twiddles_butterfly9_lo = [
+            f64::generate_twiddle_factor(1, 9, inverse),
+            f64::generate_twiddle_factor(2, 9, inverse),
+            f64::generate_twiddle_factor(2, 9, inverse),
+            f64::generate_twiddle_factor(4, 9, inverse),
+        ];
         Self {
         	twiddles_butterfly9: [
                 avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1, 9, inverse)),
@@ -874,8 +880,8 @@ impl MixedRadix9xnAvx<f64, __m256d> {
                 avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(4, 9, inverse)),
             ],
             twiddles_butterfly9_lo: [
-                avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1, 9, inverse)),
-                avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(2, 9, inverse)),
+                twiddles_butterfly9_lo.load_complex_f64(0),
+                twiddles_butterfly9_lo.load_complex_f64(2),
             ],
         	twiddles_butterfly3: avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1, 3, inverse)),
             common_data: mixedradix_gen_data_f64!(9, inner_fft),
@@ -884,7 +890,7 @@ impl MixedRadix9xnAvx<f64, __m256d> {
 
     mixedradix_column_butterflies_f64!(9,
         |columns, this: &Self| avx64_utils::fma::column_butterfly9_f64(columns, this.twiddles_butterfly9, this.twiddles_butterfly3),
-        |columns, this: &Self| avx64_utils::fma::column_butterfly9_f64_lo(columns, this.twiddles_butterfly9, this.twiddles_butterfly3)
+        |columns, this: &Self| avx64_utils::fma::column_butterfly9_f64_lo(columns, this.twiddles_butterfly9_lo, this.twiddles_butterfly3)
     );
     mixedradix_transpose_f64!(9, avx64_utils::transpose_2x9_to_9x2_packed_f64, 0;1;2;3;4;5;6;7;8);
 }

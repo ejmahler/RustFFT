@@ -15,7 +15,6 @@ use super::avx32_utils;
 // Safety: This macro will call `self::perform_fft_f32()` which probably has a #[target_feature(enable = "...")] annotation on it.
 // Calling functions with that annotation is unsafe, because it doesn't actually check if the CPU has the required features.
 // Callers of this macro must guarantee that users can't even obtain an instance of $struct_name if their CPU doesn't have the required CPU features.
-#[allow(unused)]
 macro_rules! boilerplate_fft_simd_butterfly {
     ($struct_name:ident, $len:expr) => (
 		default impl<T: FFTnum> Fft<T> for $struct_name<T> {
@@ -88,6 +87,56 @@ macro_rules! boilerplate_fft_simd_butterfly {
         }
     )
 }
+
+macro_rules! gen_butterfly_twiddles_interleaved_columns {
+    ($num_rows:expr, $num_cols:expr, $skip_cols:expr, $inverse: expr) => {{
+        const FFT_LEN : usize = $num_rows * $num_cols;
+        const TWIDDLE_ROWS : usize = $num_rows - 1;
+        const TWIDDLE_COLS : usize = $num_cols - $skip_cols;
+        const TWIDDLE_VECTOR_COLS : usize = TWIDDLE_COLS / 4;
+        const TWIDDLE_VECTOR_COUNT : usize = TWIDDLE_VECTOR_COLS*TWIDDLE_ROWS;
+        let mut twiddles = [_mm256_setzero_ps(); TWIDDLE_VECTOR_COUNT];
+        for index in 0..TWIDDLE_VECTOR_COUNT {
+            let y = (index / TWIDDLE_VECTOR_COLS) + 1;
+            let x = (index % TWIDDLE_VECTOR_COLS) * 4 + $skip_cols;
+
+            let twiddle_chunk = [
+                f32::generate_twiddle_factor(y*(x), FFT_LEN, $inverse),
+                f32::generate_twiddle_factor(y*(x+1), FFT_LEN, $inverse),
+                f32::generate_twiddle_factor(y*(x+2), FFT_LEN, $inverse),
+                f32::generate_twiddle_factor(y*(x+3), FFT_LEN, $inverse),
+            ];
+            twiddles[index] = twiddle_chunk.load_complex_f32(0);
+        }
+        twiddles
+    }}
+}
+
+
+macro_rules! gen_butterfly_twiddles_separated_columns {
+    ($num_rows:expr, $num_cols:expr, $skip_cols:expr, $inverse: expr) => {{
+        const FFT_LEN : usize = $num_rows * $num_cols;
+        const TWIDDLE_ROWS : usize = $num_rows - 1;
+        const TWIDDLE_COLS : usize = $num_cols - $skip_cols;
+        const TWIDDLE_VECTOR_COLS : usize = TWIDDLE_COLS / 4;
+        const TWIDDLE_VECTOR_COUNT : usize = TWIDDLE_VECTOR_COLS*TWIDDLE_ROWS;
+        let mut twiddles = [_mm256_setzero_ps(); TWIDDLE_VECTOR_COUNT];
+        for index in 0..TWIDDLE_VECTOR_COUNT {
+            let y = (index % TWIDDLE_ROWS) + 1;
+            let x = (index / TWIDDLE_ROWS) * 4 + $skip_cols;
+
+            let twiddle_chunk = [
+                f32::generate_twiddle_factor(y*(x), FFT_LEN, $inverse),
+                f32::generate_twiddle_factor(y*(x+1), FFT_LEN, $inverse),
+                f32::generate_twiddle_factor(y*(x+2), FFT_LEN, $inverse),
+                f32::generate_twiddle_factor(y*(x+3), FFT_LEN, $inverse),
+            ];
+            twiddles[index] = twiddle_chunk.load_complex_f32(0);
+        }
+        twiddles
+    }}
+}
+
 
 
 pub struct MixedRadixAvx4x2<T> {
@@ -362,20 +411,8 @@ impl MixedRadixAvx4x4<f32> {
     }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
-        let mut twiddles = [_mm256_setzero_ps(); 3];
-        for index in 0..3 {
-            let y = index + 1;
-
-            let twiddle_chunk = [
-                Complex{ re: 1.0, im: 0.0 },
-                f32::generate_twiddle_factor(y*1, 16, inverse),
-                f32::generate_twiddle_factor(y*2, 16, inverse),
-                f32::generate_twiddle_factor(y*3, 16, inverse),
-            ];
-            twiddles[index] = twiddle_chunk.load_complex_f32(0);
-        }
         Self {
-            twiddles,
+            twiddles: gen_butterfly_twiddles_interleaved_columns!(4, 4, 0, inverse),
             twiddle_config: avx32_utils::Rotate90Config::new_f32(inverse),
             inverse: inverse,
             _phantom: PhantomData,
@@ -436,20 +473,8 @@ impl MixedRadixAvx4x6<f32> {
     }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
-        let mut twiddles = [_mm256_setzero_ps(); 5];
-        for index in 0..5 {
-            let y = index + 1;
-
-            let twiddle_chunk = [
-                Complex{ re: 1.0, im: 0.0 },
-                f32::generate_twiddle_factor(y*1, 24, inverse),
-                f32::generate_twiddle_factor(y*2, 24, inverse),
-                f32::generate_twiddle_factor(y*3, 24, inverse),
-            ];
-            twiddles[index] = twiddle_chunk.load_complex_f32(0);
-        }
         Self {
-            twiddles,
+            twiddles: gen_butterfly_twiddles_interleaved_columns!(6, 4, 0, inverse),
             twiddles_butterfly3: avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 3, inverse)),
             twiddle_config: avx32_utils::Rotate90Config::new_f32(inverse),
             inverse: inverse,
@@ -515,21 +540,8 @@ impl MixedRadixAvx3x9<f32> {
     }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
-        let mut twiddles = [_mm256_setzero_ps(); 4];
-        for index in 0..4 {
-            let y = (index / 2) + 1;
-            let x = (index % 2) * 4 + 1;
-
-            let twiddle_chunk = [
-                f32::generate_twiddle_factor(y*(x), 27, inverse),
-                f32::generate_twiddle_factor(y*(x+1), 27, inverse),
-                f32::generate_twiddle_factor(y*(x+2), 27, inverse),
-                f32::generate_twiddle_factor(y*(x+3), 27, inverse),
-            ];
-            twiddles[index] = twiddle_chunk.load_complex_f32(0);
-        }
         Self {
-            twiddles,
+            twiddles: gen_butterfly_twiddles_interleaved_columns!(3, 9, 1, inverse),
             twiddles_butterfly9: [
                 avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 9, inverse)),
                 avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(2, 9, inverse)),
@@ -609,22 +621,8 @@ impl MixedRadixAvx4x8<f32> {
     }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
-        let mut twiddles = [_mm256_setzero_ps(); 6];
-        for index in 0..6 {
-            let y = (index / 2) + 1;
-            let x = (index % 2) * 4;
-
-            let twiddle_chunk = [
-                f32::generate_twiddle_factor(y*(x), 32, inverse),
-                f32::generate_twiddle_factor(y*(x+1), 32, inverse),
-                f32::generate_twiddle_factor(y*(x+2), 32, inverse),
-                f32::generate_twiddle_factor(y*(x+3), 32, inverse),
-            ];
-            twiddles[index] = twiddle_chunk.load_complex_f32(0);
-        }
-
         Self {
-            twiddles,
+            twiddles: gen_butterfly_twiddles_interleaved_columns!(4, 8, 0, inverse),
             twiddle_config: avx32_utils::Rotate90Config::new_f32(inverse),
             inverse: inverse,
             _phantom: PhantomData,
@@ -691,21 +689,8 @@ impl MixedRadixAvx4x9<f32> {
     }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
-        let mut twiddles = [_mm256_setzero_ps(); 6];
-        for index in 0..6 {
-            let y = (index / 2) + 1;
-            let x = (index % 2) * 4 + 1;
-
-            let twiddle_chunk = [
-                f32::generate_twiddle_factor(y*(x), 36, inverse),
-                f32::generate_twiddle_factor(y*(x+1), 36, inverse),
-                f32::generate_twiddle_factor(y*(x+2), 36, inverse),
-                f32::generate_twiddle_factor(y*(x+3), 36, inverse),
-            ];
-            twiddles[index] = twiddle_chunk.load_complex_f32(0);
-        }
         Self {
-            twiddles,
+            twiddles: gen_butterfly_twiddles_interleaved_columns!(4, 9, 1, inverse),
             twiddles_butterfly9: [
                 avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 9, inverse)),
                 avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(2, 9, inverse)),
@@ -778,21 +763,8 @@ impl MixedRadixAvx4x12<f32> {
     }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
-        let mut twiddles = [_mm256_setzero_ps(); 9];
-        for index in 0..9 {
-            let y = (index / 3) + 1;
-            let x = (index % 3) * 4;
-
-            let twiddle_chunk = [
-                f32::generate_twiddle_factor(y*(x), 48, inverse),
-                f32::generate_twiddle_factor(y*(x+1), 48, inverse),
-                f32::generate_twiddle_factor(y*(x+2), 48, inverse),
-                f32::generate_twiddle_factor(y*(x+3), 48, inverse),
-            ];
-            twiddles[index] = twiddle_chunk.load_complex_f32(0);
-        }
         Self {
-            twiddles,
+            twiddles: gen_butterfly_twiddles_interleaved_columns!(4, 12, 0, inverse),
             twiddles_butterfly3: avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 3, inverse)),
             twiddle_config: avx32_utils::Rotate90Config::new_f32(inverse),
             inverse: inverse,
@@ -868,20 +840,6 @@ impl MixedRadixAvx6x9<f32> {
     }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
-        let mut twiddles = [_mm256_setzero_ps(); 10];
-        for index in 0..10 {
-            let y = (index / 2) + 1;
-            let x = (index % 2) * 4 + 1;
-
-            let twiddle_chunk = [
-                f32::generate_twiddle_factor(y*(x), 54, inverse),
-                f32::generate_twiddle_factor(y*(x+1), 54, inverse),
-                f32::generate_twiddle_factor(y*(x+2), 54, inverse),
-                f32::generate_twiddle_factor(y*(x+3), 54, inverse),
-            ];
-            twiddles[index] = twiddle_chunk.load_complex_f32(0);
-        }
-
         let twiddles_butterfly9_lo = [
             f32::generate_twiddle_factor(1, 9, inverse),
             f32::generate_twiddle_factor(1, 9, inverse),
@@ -894,7 +852,7 @@ impl MixedRadixAvx6x9<f32> {
         ];
 
         Self {
-            twiddles,
+            twiddles: gen_butterfly_twiddles_interleaved_columns!(6, 9, 1, inverse),
             twiddles_butterfly9: [
                 avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 9, inverse)),
                 avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(2, 9, inverse)),
@@ -984,23 +942,8 @@ impl MixedRadixAvx8x8<f32> {
     }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
-        let mut twiddles = [_mm256_setzero_ps(); 14];
-        for index in 0..14 {
-            // we're going to do one entire column of AVX twiddles, then a second entire column
-            let y = (index % 7) + 1;
-            let x = (index / 7) * 4;
-
-            let twiddle_chunk = [
-                f32::generate_twiddle_factor(y*(x), 64, inverse),
-                f32::generate_twiddle_factor(y*(x+1), 64, inverse),
-                f32::generate_twiddle_factor(y*(x+2), 64, inverse),
-                f32::generate_twiddle_factor(y*(x+3), 64, inverse),
-            ];
-            twiddles[index] = twiddle_chunk.load_complex_f32(0);
-        }
-
         Self {
-            twiddles,
+            twiddles: gen_butterfly_twiddles_separated_columns!(8, 8, 0, inverse),
             twiddle_config: avx32_utils::Rotate90Config::new_f32(inverse),
             inverse: inverse,
             _phantom: PhantomData,

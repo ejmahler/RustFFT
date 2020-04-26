@@ -331,8 +331,34 @@ pub unsafe fn transpose_2x16_to_16x2_packed_f64(rows: [__m256d; 16]) -> [__m256d
     [output0[0], output1[0], output2[0], output3[0], output4[0], output5[0], output6[0], output7[0], output0[1], output1[1], output2[1], output3[1], output4[1], output5[1], output6[1], output7[1]] 
 }
 
-// Treat the input like the rows of a 3x4 array, and transpose it to a 4x3 array
+// Treat the input like the rows of a 3x3 array, and transpose it
 // The assumption here is that it's very likely that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
+#[inline(always)]
+pub unsafe fn transpose_3x3_f64(rows0: [__m128d; 3], rows1: [__m256d; 3]) -> ([__m128d; 3], [__m256d; 3]) {
+    // the first column of output will be made up of the first row of input
+    let output0 = [
+        rows0[0],
+        _mm256_castpd256_pd128(rows1[0]),
+        _mm256_extractf128_pd(rows1[0], 1),
+    ];
+
+    // the second column of output will be made of the second 2 rows of input
+    let output10 = _mm256_permute2f128_pd(_mm256_castpd128_pd256(rows0[1]), _mm256_castpd128_pd256(rows0[2]), 0x20);
+    let lower_chunk = [rows1[1], rows1[2]];
+    let lower_transposed = transpose_2x2_f64(lower_chunk);
+    let output1 = [
+        output10,
+        lower_transposed[0],
+        lower_transposed[1],
+    ];
+
+    (output0, output1)
+}
+
+
+
+// Treat the input like the rows of a 3x4 array, and transpose it to a 4x3 array
+// The assumption here is that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
 #[inline(always)]
 pub unsafe fn transpose_3x4_to_4x3_f64(rows0: [__m128d; 4], rows1: [__m256d; 4]) -> ([__m256d; 3], [__m256d; 3]) {
     // the top row of each output array will come from the first column, and the second 2 rows will come from 2x2 transposing the rows1 array
@@ -351,6 +377,78 @@ pub unsafe fn transpose_3x4_to_4x3_f64(rows0: [__m128d; 4], rows1: [__m256d; 4])
     )
 }
 
+// Treat the input like the rows of a 3x6 array, and transpose it to a 6x3 array
+// The assumption here is that caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
+#[inline(always)]
+pub unsafe fn transpose_3x6_to_6x3_f64(rows0: [__m128d; 6], rows1: [__m256d; 6]) -> ([__m256d; 3], [__m256d; 3], [__m256d; 3]) {
+    let chunk0 = [rows1[0], rows1[1]];
+    let chunk1 = [rows1[2], rows1[3]];
+    let chunk2 = [rows1[4], rows1[5]];
+
+    let transposed0 = transpose_2x2_f64(chunk0);
+    let transposed1 = transpose_2x2_f64(chunk1);
+    let transposed2 = transpose_2x2_f64(chunk2);
+
+    
+    let output0 = [
+        _mm256_insertf128_pd(_mm256_castpd128_pd256(rows0[0]), rows0[1], 1),
+        transposed0[0],
+        transposed0[1],
+    ];
+    let output1 = [
+        _mm256_insertf128_pd(_mm256_castpd128_pd256(rows0[2]), rows0[3], 1),
+        transposed1[0],
+        transposed1[1],
+    ];
+    let output2 = [
+        _mm256_insertf128_pd(_mm256_castpd128_pd256(rows0[4]), rows0[5], 1),
+        transposed2[0],
+        transposed2[1],
+    ];
+
+    (output0, output1, output2)
+}
+
+// Treat the input like the rows of a 9x3 array, and transpose it to a 3x9 array
+// The assumption here is that caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
+#[inline(always)]
+pub unsafe fn transpose_9x3_to_3x9_f64(rows0: [__m128d; 3], rows1: [__m256d; 3], rows2: [__m256d; 3], rows3: [__m256d; 3], rows4: [__m256d; 3]) -> ([__m128d; 9], [__m256d; 9]) {
+    let chunk1 = [rows1[1], rows1[2]];
+    let chunk2 = [rows2[1], rows2[2]];
+    let chunk3 = [rows3[1], rows3[2]];
+    let chunk4 = [rows4[1], rows4[2]];
+
+    let transposed1 = transpose_2x2_f64(chunk1);
+    let transposed2 = transpose_2x2_f64(chunk2);
+    let transposed3 = transpose_2x2_f64(chunk3);
+    let transposed4 = transpose_2x2_f64(chunk4);
+
+    
+    let output0 = [
+        rows0[0],
+        _mm256_castpd256_pd128(rows1[0]),
+        _mm256_extractf128_pd(rows1[0], 1),
+        _mm256_castpd256_pd128(rows2[0]),
+        _mm256_extractf128_pd(rows2[0], 1),
+        _mm256_castpd256_pd128(rows3[0]),
+        _mm256_extractf128_pd(rows3[0], 1),
+        _mm256_castpd256_pd128(rows4[0]),
+        _mm256_extractf128_pd(rows4[0], 1),
+    ];
+    let output1 = [
+        _mm256_insertf128_pd(_mm256_castpd128_pd256(rows0[1]), rows0[2], 1),
+        transposed1[0],
+        transposed1[1],
+        transposed2[0],
+        transposed2[1],
+        transposed3[0],
+        transposed3[1],
+        transposed4[0],
+        transposed4[1],
+    ];
+
+    (output0, output1)
+}
 
 
 #[inline(always)]
@@ -566,9 +664,28 @@ pub mod fma {
     // rowN contains the nth element of each parallel FFT
     #[inline(always)]
     pub unsafe fn column_butterfly6_f64_lo(rows: [__m128d; 6], butterfly3_twiddles: __m256d) -> [__m128d; 6] {
+        
         // We're going good-thomas algorithm. We can reorder the inputs and outputs in such a way that we don't need twiddle factors!
-        let mid0 = column_butterfly3_f64_lo([rows[0], rows[2], rows[4]], butterfly3_twiddles);
-        let mid1 = column_butterfly3_f64_lo([rows[3], rows[5], rows[1]], butterfly3_twiddles);
+        // Since we're only dealing with f128s, we can merge the two butterfly 3's we have to compute into a single butterfly3. 
+        // Not a huge benefit but every little bit helps, and if we're loading right before this, the compiler is smart enough to generate instuctions that load directly from the inserts
+        let merged = [
+            _mm256_insertf128_pd(_mm256_castpd128_pd256(rows[0]), rows[3], 1),
+            _mm256_insertf128_pd(_mm256_castpd128_pd256(rows[2]), rows[5], 1),
+            _mm256_insertf128_pd(_mm256_castpd128_pd256(rows[4]), rows[1], 1),
+        ];
+        let mid = column_butterfly3_f64(merged, butterfly3_twiddles);
+
+        // extract our merged arrays
+        let mid0 = [
+            _mm256_castpd256_pd128(mid[0]),
+            _mm256_castpd256_pd128(mid[1]),
+            _mm256_castpd256_pd128(mid[2]),
+        ];
+        let mid1 = [
+            _mm256_extractf128_pd(mid[0], 1),
+            _mm256_extractf128_pd(mid[1], 1),
+            _mm256_extractf128_pd(mid[2], 1),
+        ];
 
         // transpose the data and do butterfly 2's
         let [output0, output1] = column_butterfly2_f64_lo([mid0[0], mid1[0]]);
@@ -687,20 +804,37 @@ pub mod fma {
     // Compute 2 parallel butterfly 9's using AVX and FMA instructions
     // rowN contains the nth element of each parallel FFT
     #[inline(always)]
-    pub unsafe fn column_butterfly9_f64_lo(rows: [__m128d; 9], twiddles: [__m256d;3], butterfly3_twiddles: __m256d) -> [__m128d; 9] {
+    pub unsafe fn column_butterfly9_f64_lo(rows: [__m128d; 9], twiddles_merged: [__m256d;2], butterfly3_twiddles: __m256d) -> [__m128d; 9] {
+        // since this is a "lo" step, each column is only half full. if we merge some registers, we can do a single column butterfly3 on YMM registers instead of 2 on XMM registers
+        let rows12 = _mm256_insertf128_pd(_mm256_castpd128_pd256(rows[1]), rows[2], 0x1);
+        let rows45 = _mm256_insertf128_pd(_mm256_castpd128_pd256(rows[4]), rows[5], 0x1);
+        let rows78 = _mm256_insertf128_pd(_mm256_castpd128_pd256(rows[7]), rows[8], 0x1);
+
         let mid0 = column_butterfly3_f64_lo([rows[0], rows[3], rows[6]], butterfly3_twiddles);
-        let mut mid1 = column_butterfly3_f64_lo([rows[1], rows[4], rows[7]], butterfly3_twiddles);
-        let mut mid2 = column_butterfly3_f64_lo([rows[2], rows[5], rows[8]], butterfly3_twiddles);
+        let mut mid12 = column_butterfly3_f64([rows12, rows45, rows78], butterfly3_twiddles);
 
-        // Apply twiddle factors. Note that we're re-using twiddles[1]
-        mid1[1] = complex_multiply_f64_lo(_mm256_castpd256_pd128(twiddles[0]), mid1[1]);
-        mid1[2] = complex_multiply_f64_lo(_mm256_castpd256_pd128(twiddles[1]), mid1[2]);
-        mid2[1] = complex_multiply_f64_lo(_mm256_castpd256_pd128(twiddles[1]), mid2[1]);
-        mid2[2] = complex_multiply_f64_lo(_mm256_castpd256_pd128(twiddles[2]), mid2[2]);
+        // Apply twiddle factors. we're applying them on the merged set of vectors, so we need slightly different twiddle factors
+        mid12[1] = complex_multiply_f64(twiddles_merged[0], mid12[1]);
+        mid12[2] = complex_multiply_f64(twiddles_merged[1], mid12[2]);
 
-        let [output0, output1, output2] = column_butterfly3_f64_lo([mid0[0], mid1[0], mid2[0]], butterfly3_twiddles);
-        let [output3, output4, output5] = column_butterfly3_f64_lo([mid0[1], mid1[1], mid2[1]], butterfly3_twiddles);
-        let [output6, output7, output8] = column_butterfly3_f64_lo([mid0[2], mid1[2], mid2[2]], butterfly3_twiddles);
+        // we can't use our merged columns anymore. we also want to merge some columns of our next set of FFTs, so extract/re-merge as necessary
+        let mid1_0 = _mm256_castpd256_pd128(mid12[0]);
+        let mid2_0 = _mm256_extractf128_pd(mid12[0], 0x1);
+        
+        let transposed12 = _mm256_insertf128_pd(_mm256_castpd128_pd256(mid0[1]), mid0[2], 0x1);
+        let transposed45 = _mm256_permute2f128_pd(mid12[1], mid12[2], 0x20);
+        let transposed78 = _mm256_permute2f128_pd(mid12[1], mid12[2], 0x31);
+
+        let [output0, output1, output2] = column_butterfly3_f64_lo([mid0[0], mid1_0, mid2_0], butterfly3_twiddles);
+        let [output36, output47, output58] = column_butterfly3_f64([transposed12, transposed45, transposed78], butterfly3_twiddles);
+
+        // finally, extract our second set of merged columns
+        let output3 = _mm256_castpd256_pd128(output36);
+        let output6 = _mm256_extractf128_pd(output36, 0x1);
+        let output4 = _mm256_castpd256_pd128(output47);
+        let output7 = _mm256_extractf128_pd(output47, 0x1);
+        let output5 = _mm256_castpd256_pd128(output58);
+        let output8 = _mm256_extractf128_pd(output58, 0x1);
 
         [output0, output3, output6, output1, output4, output7, output2, output5, output8]
     }
