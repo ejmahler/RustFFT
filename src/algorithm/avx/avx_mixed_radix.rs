@@ -559,8 +559,7 @@ impl MixedRadix3xnAvx<f32, __m256> {
     unsafe fn write_partial_remainder(output: &mut[Complex<f32>], packed_data: [__m256; 3], partial_remainder: usize) {
         assert!(partial_remainder > 0 && partial_remainder < 4);
         if partial_remainder == 1 {
-            let remainder_mask = avx32_utils::RemainderMask::new_f32(3);
-            output.store_complex_remainder_f32(remainder_mask, packed_data[0], 0);
+            output.store_complex_remainder3_f32(packed_data[0], 0);
         } else {
             output.store_complex_f32(0, packed_data[0]);
 
@@ -569,8 +568,7 @@ impl MixedRadix3xnAvx<f32, __m256> {
             }
             if partial_remainder == 3 {
                 output.store_complex_f32(4, packed_data[1]);
-                let remainder_mask = avx32_utils::RemainderMask::new_f32(1);
-                output.store_complex_remainder_f32(remainder_mask, packed_data[2], 8);
+                output.store_complex_remainder1_f32(_mm256_castps256_ps128(packed_data[2]), 8);
             }
         }
     }
@@ -843,8 +841,7 @@ impl MixedRadix9xnAvx<f32, __m256> {
         output.store_complex_f32(4, packed_data[1]);
 
         if partial_remainder == 1 {
-            let remainder_mask = avx32_utils::RemainderMask::new_f32(1);
-            output.store_complex_remainder_f32(remainder_mask, packed_data[2], 8);
+            output.store_complex_remainder1_f32(_mm256_castps256_ps128(packed_data[2]), 8);
         } else {
             output.store_complex_f32(8,  packed_data[2]);
             output.store_complex_f32(12, packed_data[3]);
@@ -853,10 +850,9 @@ impl MixedRadix9xnAvx<f32, __m256> {
                 output.store_complex_f32_lo(_mm256_castps256_ps128(packed_data[4]), 16);
             }
             else {
-                let remainder_mask = avx32_utils::RemainderMask::new_f32(3);
                 output.store_complex_f32(16, packed_data[4]);
                 output.store_complex_f32(20, packed_data[5]);
-                output.store_complex_remainder_f32(remainder_mask, packed_data[6], 24);
+                output.store_complex_remainder3_f32(packed_data[6], 24);
             }
         }
     }

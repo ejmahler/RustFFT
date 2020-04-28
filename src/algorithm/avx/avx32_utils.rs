@@ -5,7 +5,16 @@ use ::array_utils::{RawSlice, RawSliceMut};
 
 pub trait AvxComplexArrayf32 {
     unsafe fn load_complex_f32(&self, index: usize) -> __m256;
+
+    unsafe fn load_complex_remainder1_f32(&self, index: usize) -> __m128;
     unsafe fn load_complex_f32_lo(&self, index: usize) -> __m128;
+    unsafe fn load_complex_remainder3_f32(&self, index: usize) -> __m256 {
+        let lo = self.load_complex_f32_lo(index);
+        let hi = self.load_complex_remainder1_f32(index + 2);
+        _mm256_insertf128_ps(_mm256_castps128_ps256(lo), hi, 1)
+    }
+
+
     unsafe fn load_complex_remainder_f32(&self, remainder_mask: RemainderMask, index: usize) -> __m256;
     unsafe fn load_complex_remainder_f32_lo(&self, remainder_mask: RemainderMask, index: usize) -> __m128;
 }
@@ -14,12 +23,15 @@ pub trait AvxComplexArrayMutf32 {
     unsafe fn store_complex_f32(&mut self, index: usize, data: __m256);
 
     // Store the first 2 of 4 complex numbers in `data` at the given memory addresses
+    unsafe fn store_complex_remainder1_f32(&mut self, data: __m128, index: usize);
     unsafe fn store_complex_f32_lo(&mut self, data: __m128, index: usize);
+    unsafe fn store_complex_remainder3_f32(&mut self, data: __m256, index: usize) {
+        self.store_complex_f32_lo(_mm256_castps256_ps128(data), index);
+        self.store_complex_remainder1_f32(_mm256_extractf128_ps(data, 1), index + 2);
+    }
 
     // Store some of the 4 complex numbers in `data at the given memory address, using remainder_mask to decide which elements to write
     unsafe fn store_complex_remainder_f32(&mut self, remainder_mask: RemainderMask,  data: __m256, index: usize);
-
-    // Store some of the 2 complex numbers in `data at the given memory address, using remainder_mask to decide which elements to write
     unsafe fn store_complex_remainder_f32_lo(&mut self, remainder_mask: RemainderMask,  data: __m128, index: usize);
 }
 
@@ -30,6 +42,13 @@ impl AvxComplexArrayf32 for [Complex<f32>] {
         let complex_ref = self.get_unchecked(index);
         let float_ptr  = (&complex_ref.re) as *const f32;
         _mm256_loadu_ps(float_ptr)
+    }
+    #[inline(always)]
+    unsafe fn load_complex_remainder1_f32(&self, index: usize) -> __m128 {
+        debug_assert!(self.len() >= index + 2);
+        let complex_ref = self.get_unchecked(index);
+        let float_ptr  = (&complex_ref.re) as *const f32;
+        _mm_castpd_ps(_mm_load_sd(float_ptr as *const f64))
     }
     #[inline(always)]
     unsafe fn load_complex_f32_lo(&self, index: usize) -> __m128 {
@@ -73,6 +92,14 @@ impl AvxComplexArrayMutf32 for [Complex<f32>] {
         _mm256_maskstore_ps(float_ptr, remainder_mask.0, data);
     }
     #[inline(always)]
+    unsafe fn store_complex_remainder1_f32(&mut self, data: __m128, index: usize) {
+        debug_assert!(self.len() >= index + 1);
+
+        let complex_ref = self.get_unchecked_mut(index);
+        let float_ptr = (&mut complex_ref.re) as *mut f32;
+        _mm_store_sd(float_ptr as *mut f64, _mm_castps_pd(data));
+    }
+    #[inline(always)]
     unsafe fn store_complex_remainder_f32_lo(&mut self, remainder_mask: RemainderMask, data: __m128, index: usize) {
         let complex_ref = self.get_unchecked_mut(index);
         let float_ptr = (&mut complex_ref.re) as *mut f32;
@@ -85,6 +112,12 @@ impl AvxComplexArrayf32 for RawSlice<Complex<f32>> {
         debug_assert!(self.len() >= index + 4);
         let float_ptr  = self.as_ptr().add(index) as *const f32;
         _mm256_loadu_ps(float_ptr)
+    }
+    #[inline(always)]
+    unsafe fn load_complex_remainder1_f32(&self, index: usize) -> __m128 {
+        debug_assert!(self.len() >= index + 2);
+        let float_ptr  = self.as_ptr().add(index) as *const f32;
+        _mm_castpd_ps(_mm_load_sd(float_ptr as *const f64))
     }
     #[inline(always)]
     unsafe fn load_complex_f32_lo(&self, index: usize) -> __m128 {
@@ -120,6 +153,13 @@ impl AvxComplexArrayMutf32 for RawSliceMut<Complex<f32>> {
     unsafe fn store_complex_remainder_f32(&mut self, remainder_mask: RemainderMask, data: __m256, index: usize) {
         let float_ptr = self.as_mut_ptr().add(index) as *mut f32;
         _mm256_maskstore_ps(float_ptr, remainder_mask.0, data);
+    }
+    #[inline(always)]
+    unsafe fn store_complex_remainder1_f32(&mut self, data: __m128, index: usize) {
+        debug_assert!(self.len() >= index + 1);
+
+        let float_ptr = self.as_mut_ptr().add(index) as *mut f32;
+        _mm_store_sd(float_ptr as *mut f64, _mm_castps_pd(data));
     }
     #[inline(always)]
     unsafe fn store_complex_remainder_f32_lo(&mut self, remainder_mask: RemainderMask, data: __m128, index: usize) {

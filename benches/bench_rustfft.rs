@@ -618,7 +618,7 @@ fn bench_mixed64_2xn_avx(b: &mut Bencher, len: usize) {
 
 fn get_3xn_avx(len: usize) -> Arc<dyn Fft<f32>> {
     match len {
-        64 => Arc::new(MixedRadixAvx8x8::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        27 => Arc::new(MixedRadixAvx3x9::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
         _ => {
             let inner = get_3xn_avx(len / 3);
             Arc::new(MixedRadix3xnAvx::new_f32(inner).expect("Can't run benchmark because this machine doesn't have the required instruction sets"))
@@ -638,18 +638,20 @@ fn bench_mixed_3xn_avx(b: &mut Bencher, len: usize) {
     });
 }
 
-#[bench] fn mixed_3xn_avx__0000192(b: &mut Bencher) { bench_mixed_3xn_avx(b, 192); }
-#[bench] fn mixed_3xn_avx__0000576(b: &mut Bencher) { bench_mixed_3xn_avx(b, 576); }
-#[bench] fn mixed_3xn_avx__0001728(b: &mut Bencher) { bench_mixed_3xn_avx(b, 1728); }
-#[bench] fn mixed_3xn_avx__0005184(b: &mut Bencher) { bench_mixed_3xn_avx(b, 5184); }
-#[bench] fn mixed_3xn_avx__0015552(b: &mut Bencher) { bench_mixed_3xn_avx(b, 15552); }
-#[bench] fn mixed_3xn_avx__0046656(b: &mut Bencher) { bench_mixed_3xn_avx(b, 46656); }
-#[bench] fn mixed_3xn_avx__1259712(b: &mut Bencher) { bench_mixed_3xn_avx(b, 1259712); }
+#[bench] fn mixed_3xn_avx__000081(b: &mut Bencher) { bench_mixed_3xn_avx(b, 81); }
+#[bench] fn mixed_3xn_avx__000243(b: &mut Bencher) { bench_mixed_3xn_avx(b, 243); }
+#[bench] fn mixed_3xn_avx__000729(b: &mut Bencher) { bench_mixed_3xn_avx(b, 729); }
+#[bench] fn mixed_3xn_avx__002187(b: &mut Bencher) { bench_mixed_3xn_avx(b, 2187); }
+#[bench] fn mixed_3xn_avx__006561(b: &mut Bencher) { bench_mixed_3xn_avx(b, 6561); }
+#[bench] fn mixed_3xn_avx__019683(b: &mut Bencher) { bench_mixed_3xn_avx(b, 19683); }
+#[bench] fn mixed_3xn_avx__059049(b: &mut Bencher) { bench_mixed_3xn_avx(b, 59049); }
+#[bench] fn mixed_3xn_avx__177147(b: &mut Bencher) { bench_mixed_3xn_avx(b, 177147); }
 
 
 fn get_9xn_avx(len: usize) -> Arc<dyn Fft<f32>> {
     match len {
-        64 => Arc::new(MixedRadixAvx8x8::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        9 => Arc::new(MixedRadixAvx3x3::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        27 => Arc::new(MixedRadixAvx3x9::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
         _ => {
             let inner = get_9xn_avx(len / 9);
             Arc::new(MixedRadix9xnAvx::new_f32(inner).expect("Can't run benchmark because this machine doesn't have the required instruction sets"))
@@ -669,9 +671,14 @@ fn bench_mixed_9xn_avx(b: &mut Bencher, len: usize) {
     });
 }
 
-#[bench] fn mixed_9xn_avx__0000576(b: &mut Bencher) { bench_mixed_9xn_avx(b, 576); }
-#[bench] fn mixed_9xn_avx__0005184(b: &mut Bencher) { bench_mixed_9xn_avx(b, 5184); }
-#[bench] fn mixed_9xn_avx__0046656(b: &mut Bencher) { bench_mixed_9xn_avx(b, 46656); }
+#[bench] fn mixed_9xn_avx__000081(b: &mut Bencher) { bench_mixed_9xn_avx(b, 81); }
+#[bench] fn mixed_9xn_avx__000243(b: &mut Bencher) { bench_mixed_9xn_avx(b, 243); }
+#[bench] fn mixed_9xn_avx__000729(b: &mut Bencher) { bench_mixed_9xn_avx(b, 729); }
+#[bench] fn mixed_9xn_avx__002187(b: &mut Bencher) { bench_mixed_9xn_avx(b, 2187); }
+#[bench] fn mixed_9xn_avx__006561(b: &mut Bencher) { bench_mixed_9xn_avx(b, 6561); }
+#[bench] fn mixed_9xn_avx__019683(b: &mut Bencher) { bench_mixed_9xn_avx(b, 19683); }
+#[bench] fn mixed_9xn_avx__059049(b: &mut Bencher) { bench_mixed_9xn_avx(b, 59049); }
+#[bench] fn mixed_9xn_avx__177147(b: &mut Bencher) { bench_mixed_9xn_avx(b, 177147); }
 
 fn get_4xn_avx(len: usize) -> Arc<dyn Fft<f32>> {
     match len {
@@ -1018,3 +1025,59 @@ fn bench_butterfly64(b: &mut Bencher, len: usize) {
 #[bench] fn butterfly64_27(b: &mut Bencher) { bench_butterfly64(b, 27); }
 #[bench] fn butterfly64_32(b: &mut Bencher) { bench_butterfly64(b, 32); }
 #[bench] fn butterfly64_36(b: &mut Bencher) { bench_butterfly64(b, 36); }
+
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length
+fn bench_avx_remainder32(b: &mut Bencher, radix: usize, remainder: usize) {
+
+    let inner_fft : Arc<dyn Fft<f32>> = match remainder {
+        1 => Arc::new(DFT::new(1, false)),
+        2 => Arc::new( Butterfly2::new(false)),
+        3 => Arc::new(Butterfly3::new(false)),
+        _ => unimplemented!(),
+    };
+
+    let fft : Arc<dyn Fft<f32>> = match radix {
+        2  => Arc::new(MixedRadix2xnAvx::new_f32(inner_fft).unwrap()),
+        3  => Arc::new(MixedRadix3xnAvx::new_f32(inner_fft).unwrap()),
+        4  => Arc::new(MixedRadix4xnAvx::new_f32(inner_fft).unwrap()),
+        6  => Arc::new(MixedRadix6xnAvx::new_f32(inner_fft).unwrap()),
+        8  => Arc::new(MixedRadix8xnAvx::new_f32(inner_fft).unwrap()),
+        9  => Arc::new(MixedRadix9xnAvx::new_f32(inner_fft).unwrap()),
+        12 => Arc::new(MixedRadix12xnAvx::new_f32(inner_fft).unwrap()),
+        16 => Arc::new(MixedRadix16xnAvx::new_f32(inner_fft).unwrap()),
+        _ => unreachable!(),
+    };
+
+    let mut buffer = vec![Complex::zero(); fft.len() * 10];
+    let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
+    b.iter(|| { fft.process_inplace_multi(&mut buffer, &mut scratch); });
+}
+
+#[bench] fn remainder32_radix02_1(b: &mut Bencher) { bench_avx_remainder32(b, 2, 1); }
+#[bench] fn remainder32_radix03_1(b: &mut Bencher) { bench_avx_remainder32(b, 3, 1); }
+#[bench] fn remainder32_radix04_1(b: &mut Bencher) { bench_avx_remainder32(b, 4, 1); }
+#[bench] fn remainder32_radix06_1(b: &mut Bencher) { bench_avx_remainder32(b, 6, 1); }
+#[bench] fn remainder32_radix08_1(b: &mut Bencher) { bench_avx_remainder32(b, 8, 1); }
+#[bench] fn remainder32_radix09_1(b: &mut Bencher) { bench_avx_remainder32(b, 9, 1); }
+#[bench] fn remainder32_radix12_1(b: &mut Bencher) { bench_avx_remainder32(b, 12, 1); }
+#[bench] fn remainder32_radix16_1(b: &mut Bencher) { bench_avx_remainder32(b, 16, 1); }
+
+#[bench] fn remainder32_radix02_2(b: &mut Bencher) { bench_avx_remainder32(b, 2, 2); }
+#[bench] fn remainder32_radix03_2(b: &mut Bencher) { bench_avx_remainder32(b, 3, 2); }
+#[bench] fn remainder32_radix04_2(b: &mut Bencher) { bench_avx_remainder32(b, 4, 2); }
+#[bench] fn remainder32_radix06_2(b: &mut Bencher) { bench_avx_remainder32(b, 6, 2); }
+#[bench] fn remainder32_radix08_2(b: &mut Bencher) { bench_avx_remainder32(b, 8, 2); }
+#[bench] fn remainder32_radix09_2(b: &mut Bencher) { bench_avx_remainder32(b, 9, 2); }
+#[bench] fn remainder32_radix12_2(b: &mut Bencher) { bench_avx_remainder32(b, 12, 2); }
+#[bench] fn remainder32_radix16_2(b: &mut Bencher) { bench_avx_remainder32(b, 16, 2); }
+
+#[bench] fn remainder32_radix02_3(b: &mut Bencher) { bench_avx_remainder32(b, 2, 3); }
+#[bench] fn remainder32_radix03_3(b: &mut Bencher) { bench_avx_remainder32(b, 3, 3); }
+#[bench] fn remainder32_radix04_3(b: &mut Bencher) { bench_avx_remainder32(b, 4, 3); }
+#[bench] fn remainder32_radix06_3(b: &mut Bencher) { bench_avx_remainder32(b, 6, 3); }
+#[bench] fn remainder32_radix08_3(b: &mut Bencher) { bench_avx_remainder32(b, 8, 3); }
+#[bench] fn remainder32_radix09_3(b: &mut Bencher) { bench_avx_remainder32(b, 9, 3); }
+#[bench] fn remainder32_radix12_3(b: &mut Bencher) { bench_avx_remainder32(b, 12, 3); }
+#[bench] fn remainder32_radix16_3(b: &mut Bencher) { bench_avx_remainder32(b, 16, 3); }
