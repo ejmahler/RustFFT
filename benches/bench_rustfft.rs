@@ -1017,3 +1017,4 @@ fn bench_butterfly64(b: &mut Bencher, len: usize) {
 #[bench] fn butterfly64_24(b: &mut Bencher) { bench_butterfly64(b, 24); }
 #[bench] fn butterfly64_27(b: &mut Bencher) { bench_butterfly64(b, 27); }
 #[bench] fn butterfly64_32(b: &mut Bencher) { bench_butterfly64(b, 32); }
+#[bench] fn butterfly64_36(b: &mut Bencher) { bench_butterfly64(b, 36); }
