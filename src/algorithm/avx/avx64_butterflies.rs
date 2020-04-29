@@ -137,6 +137,82 @@ macro_rules! gen_butterfly_twiddles_separated_columns {
 
 
 
+pub struct Butterfly5Avx64<T> {
+    twiddles: [__m256d; 3],
+    inverse: bool,
+    _phantom: std::marker::PhantomData<T>,
+}
+boilerplate_fft_simd_butterfly!(Butterfly5Avx64, 5);
+impl Butterfly5Avx64<f64> {
+    #[inline]
+    pub fn new(inverse: bool) -> Result<Self, ()> {
+        let has_avx = is_x86_feature_detected!("avx");
+        let has_fma = is_x86_feature_detected!("fma");
+        if has_avx && has_fma {
+            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
+            Ok(unsafe { Self::new_with_avx(inverse) })
+        } else {
+            Err(())
+        }
+    }
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inverse: bool) -> Self {
+        let twiddle1 = f64::generate_twiddle_factor(1, 5, inverse);
+        let twiddle2 = f64::generate_twiddle_factor(2, 5, inverse);
+        Self {
+            twiddles: [
+                _mm256_set_pd(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),
+                _mm256_set_pd(twiddle2.im, twiddle2.im, twiddle2.re, twiddle2.re),
+                _mm256_set_pd(-twiddle1.im, -twiddle1.im, twiddle1.re, twiddle1.re),
+            ],
+            inverse: inverse,
+            _phantom: PhantomData,
+        }
+    }
+    
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn perform_fft_f64(&self, input: RawSlice<Complex<f64>>, mut output: RawSliceMut<Complex<f64>>) {
+        let input0 = _mm256_loadu2_m128d(input.as_ptr() as *const f64, input.as_ptr() as *const f64);
+        let input12 = input.load_complex_f64(1);
+        let input34 = input.load_complex_f64(3);
+        
+        // swap elements for inputs 3 and 4
+        let input43 = _mm256_permute2f128_pd(input34, input34, 0x01);
+
+        // do some prep work before we can start applying twiddle factors
+        let [sum12, diff43] = avx64_utils::column_butterfly2_array_f64([input12, input43]);
+        let rotated43 = avx32_utils::Rotate90Config::new_f64(true).rotate90(diff43);
+
+        let [mid14, mid23] = avx64_utils::transpose_2x2_f64([sum12, rotated43]);
+
+        // to compute the first output, compute the sum of all elements. mid14[0] and mid23[0] already have the sum of 1+4 and 2+3 respectively, so if we add them, we'll get the sum of all 4
+        let sum1234 = _mm_add_pd(_mm256_castpd256_pd128(mid14), _mm256_castpd256_pd128(mid23));
+        let output0 = _mm_add_pd(_mm256_castpd256_pd128(input0), sum1234);
+        
+        // apply twiddle factors
+        let twiddled_outer14 = _mm256_mul_pd(mid14, self.twiddles[0]);
+        let twiddled_inner14 = _mm256_mul_pd(mid14, self.twiddles[1]);
+        let twiddled14 = _mm256_fmadd_pd(mid23, self.twiddles[1], twiddled_outer14);
+        let twiddled23 = _mm256_fmadd_pd(mid23, self.twiddles[2], twiddled_inner14);
+
+        // unpack the data for the last butterfly 2
+        let [twiddled12, twiddled43] = avx64_utils::transpose_2x2_f64([twiddled14, twiddled23]);
+        let [output12, output43] = avx64_utils::column_butterfly2_array_f64([twiddled12, twiddled43]);
+
+        // swap the elements in output43 before writing them out, and add the first input to everything
+        let final12  = _mm256_add_pd(input0, output12);
+        let output34 = _mm256_permute2f128_pd(output43, output43, 0x01);
+        let final34  = _mm256_add_pd(input0, output34);
+
+        output.store_complex_f64_lo(output0, 0);
+        output.store_complex_f64(final12, 1);
+        output.store_complex_f64(final34, 3);
+    }
+}
+
+
+
+
 pub struct MixedRadix64Avx4x2<T> {
     twiddles: [__m256d; 2],
     twiddle_config: avx32_utils::Rotate90Config<__m256d>,
@@ -813,6 +889,7 @@ mod unit_tests {
         )
     }
 
+    test_avx_butterfly!(test_avx_butterfly5_f64, Butterfly5Avx64, 5);
     test_avx_butterfly!(test_avx_mixedradix4x2_f64, MixedRadix64Avx4x2, 8);
     test_avx_butterfly!(test_avx_mixedradix3x3_f64, MixedRadix64Avx3x3, 9);
     test_avx_butterfly!(test_avx_mixedradix4x3_f64, MixedRadix64Avx4x3, 12);
