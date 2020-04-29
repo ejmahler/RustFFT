@@ -1,5 +1,4 @@
 use num_complex::Complex;
-use num_traits::FromPrimitive;
 
 use common::FFTnum;
 
@@ -82,6 +81,13 @@ impl<T: FFTnum> Butterfly2<T> {
         
         *right = *left - *right;
         *left = temp;
+    }
+    #[inline(always)]
+    unsafe fn perform_fft_array(input: [Complex<T>; 2]) -> [Complex<T>; 2] {
+        [
+            input[0] + input[1],
+            input[0] - input[1]
+        ]
     }
     #[inline(always)]
     unsafe fn perform_fft_contiguous(&self, input: RawSlice<Complex<T>>, output: RawSliceMut<Complex<T>>) {
@@ -176,53 +182,62 @@ impl<T: FFTnum> Butterfly4<T> {
 boilerplate_fft_butterfly!(Butterfly4, 4, |this: &Butterfly4<_>| this.inverse);
 
 pub struct Butterfly5<T> {
-	inner_fft_multiply: [Complex<T>; 4],
+	twiddles: [Complex<T>; 2],
 	inverse: bool,
 }
 impl<T: FFTnum> Butterfly5<T> {
     pub fn new(inverse: bool) -> Self {
-    	//we're going to hardcode a raders algorithm of size 5 and an inner FFT of size 4
-    	let quarter: T = FromPrimitive::from_f32(0.25f32).unwrap();
-    	let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 5, inverse) * quarter;
-    	let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 5, inverse) * quarter;
-
-    	//our primitive root will be 2, and our inverse will be 3. the powers of 3 mod 5 are 1.3.4.2, so we hardcode to use the twiddles in that order
-    	let mut fft_data = [twiddle1, twiddle2.conj(), twiddle1.conj(), twiddle2];
-
-    	let butterfly = Butterfly4::new(inverse);
-    	unsafe { butterfly.perform_fft_butterfly(&mut fft_data) };
-
         Self { 
-        	inner_fft_multiply: fft_data,
+        	twiddles: [
+                T::generate_twiddle_factor(1, 5, inverse),
+                T::generate_twiddle_factor(2, 5, inverse),
+            ],
         	inverse,
         }
     }
 
+    #[inline(never)] // refusing to inline this code reduces code size, and doesn't hurt performance
     unsafe fn perform_fft_contiguous(&self, input: RawSlice<Complex<T>>, output: RawSliceMut<Complex<T>>) {
-        //we're going to reorder the buffer directly into our scratch vec
-        //our primitive root is 2. the powers of 2 mod 5 are 1, 2,4,3 so use that ordering
-        let mut scratch = [input.load(1), input.load(2), input.load(4), input.load(3)];
+        let mut outer = Butterfly2::perform_fft_array([input.load(1), input.load(4)]);
+        let mut inner = Butterfly2::perform_fft_array([input.load(2), input.load(3)]);
+        let input0 = input.load(0);
 
-        let first_input = input.load(0);
-        let scratch_sum : Complex<T> = scratch.iter().sum();
-        output.store(first_input + scratch_sum, 0);
+        output.store(input0 + outer[0] + inner[0], 0);
 
-        //perform the first inner FFT
-        Butterfly4::new(self.inverse).perform_fft_butterfly(&mut scratch);
+        inner[1] = twiddles::rotate_90(inner[1], true);
+        outer[1] = twiddles::rotate_90(outer[1], true);
 
-        //multiply the fft result with our precomputed data
-        for i in 0..4 {
-            scratch[i] = scratch[i] * self.inner_fft_multiply[i];
+        {
+            let twiddled1 = outer[0] * self.twiddles[0].re;
+            let twiddled2 = inner[0] * self.twiddles[1].re;
+            let twiddled3 = inner[1] * self.twiddles[1].im;
+            let twiddled4 = outer[1] * self.twiddles[0].im;
+
+            let sum12 = twiddled1 + twiddled2;
+            let sum34 = twiddled4 + twiddled3;
+
+            let output1 = sum12 + sum34;
+            let output4 = sum12 - sum34;
+
+            output.store(input0 + output1, 1);
+            output.store(input0 + output4, 4);
         }
 
-        //perform the second inner FFT
-        Butterfly4::new(!self.inverse).perform_fft_butterfly(&mut scratch);
+        {
+            let twiddled1 = outer[0] * self.twiddles[1].re;
+            let twiddled2 = inner[0] * self.twiddles[0].re;
+            let twiddled3 = inner[1] * self.twiddles[0].im;
+            let twiddled4 = outer[1] * self.twiddles[1].im;
 
-        //use the inverse root ordering to copy data back out
-        output.store(scratch[0] + first_input, 1);
-        output.store(scratch[1] + first_input, 3);
-        output.store(scratch[2] + first_input, 4);
-        output.store(scratch[3] + first_input, 2);
+            let sum12 = twiddled1 + twiddled2;
+            let sum34 = twiddled4 - twiddled3;
+
+            let output2 = sum12 + sum34;
+            let output3 = sum12 - sum34;
+
+            output.store(input0 + output2, 2);
+            output.store(input0 + output3, 3);
+        }
     }
 }
 boilerplate_fft_butterfly!(Butterfly5, 5, |this: &Butterfly5<_>| this.inverse);
@@ -284,66 +299,89 @@ impl<T: FFTnum> Butterfly6<T> {
 boilerplate_fft_butterfly!(Butterfly6, 6, |this: &Butterfly6<_>| this.butterfly3.is_inverse());
 
 pub struct Butterfly7<T> {
-    inner_fft: Butterfly6<T>,
-    inner_fft_multiply: [Complex<T>; 6]
+    twiddles: [Complex<T>; 3],
+    inverse: bool,
 }
 impl<T: FFTnum> Butterfly7<T> {
     pub fn new(inverse: bool) -> Self {
-        //we're going to hardcode a raders algorithm of size 5 and an inner FFT of size 4
-        let sixth: T = FromPrimitive::from_f64(1f64/6f64).unwrap();
-        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 7, inverse) * sixth;
-        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 7, inverse) * sixth;
-        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 7, inverse) * sixth;
-
-        //our primitive root will be 3, and our inverse will be 5. the powers of 5 mod 7 are 1,5,4,6,2,3, so we hardcode to use the twiddles in that order
-        let mut fft_data = [twiddle1, twiddle2.conj(), twiddle3.conj(), twiddle1.conj(), twiddle2, twiddle3];
-
-        let butterfly = Butterfly6::new(inverse);
-        unsafe { butterfly.perform_fft_butterfly(&mut fft_data) };
-
-        Butterfly7 { 
-            inner_fft: butterfly,
-            inner_fft_multiply: fft_data,
+        Self { 
+            twiddles: [
+                T::generate_twiddle_factor(1, 7, inverse),
+                T::generate_twiddle_factor(2, 7, inverse),
+                T::generate_twiddle_factor(3, 7, inverse),
+            ],
+            inverse,
         }
     }
+    #[inline(never)]
     unsafe fn perform_fft_contiguous(&self, input: RawSlice<Complex<T>>, output: RawSliceMut<Complex<T>>) {
-        //we're going to reorder the buffer directly into our scratch vec
-        //our primitive root is 3. use 3^n mod 7 to determine which index to copy from
-        let mut scratch = [
-            input.load(3),
-            input.load(2),
-            input.load(6),
-            input.load(4),
-            input.load(5),
-            input.load(1),
-        ];
+        let mut outer = Butterfly2::perform_fft_array([input.load(1), input.load(6)]);
+        let mut mid   = Butterfly2::perform_fft_array([input.load(2), input.load(5)]);
+        let mut inner = Butterfly2::perform_fft_array([input.load(3), input.load(4)]);
+        let input0 = input.load(0);
 
-        let first_input = input.load(0);
-        let scratch_sum : Complex<T> = scratch.iter().sum();
-        output.store(first_input + scratch_sum, 0);
+        output.store(input0 + outer[0] + mid[0] + inner[0], 0);
 
-        //perform the first inner FFT
-        self.inner_fft.perform_fft_butterfly(&mut scratch);
+        inner[1] = twiddles::rotate_90(inner[1], true);
+        mid[1]   = twiddles::rotate_90(mid[1],   true);
+        outer[1] = twiddles::rotate_90(outer[1], true);
 
-        //multiply the fft result with our precomputed data
-        for i in 0..6 {
-            scratch[i] = scratch[i] * self.inner_fft_multiply[i];
+        {
+            let twiddled1 = outer[0] * self.twiddles[0].re;
+            let twiddled2 =   mid[0] * self.twiddles[1].re;
+            let twiddled3 = inner[0] * self.twiddles[2].re;
+            let twiddled4 = inner[1] * self.twiddles[2].im;
+            let twiddled5 =   mid[1] * self.twiddles[1].im;
+            let twiddled6 = outer[1] * self.twiddles[0].im;
+
+            let sum123 = twiddled1 + twiddled2 + twiddled3;
+            let sum456 = twiddled4 + twiddled5 + twiddled6;
+
+            let output1 = sum123 + sum456;
+            let output6 = sum123 - sum456;
+
+            output.store(input0 + output1, 1);
+            output.store(input0 + output6, 6);
         }
 
-        //perform the second inner FFT
-        let inverse6 = Butterfly6::inverse_of(&self.inner_fft);
-        inverse6.perform_fft_butterfly(&mut scratch);
-        
-        //use the inverse root ordering to copy data back out
-        output.store(scratch[0] + first_input, 5);
-        output.store(scratch[1] + first_input, 4);
-        output.store(scratch[2] + first_input, 6);
-        output.store(scratch[3] + first_input, 2);
-        output.store(scratch[4] + first_input, 3);
-        output.store(scratch[5] + first_input, 1);
+        {
+            let twiddled1 = outer[0] * self.twiddles[1].re;
+            let twiddled2 =   mid[0] * self.twiddles[2].re;
+            let twiddled3 = inner[0] * self.twiddles[0].re;
+            let twiddled4 = inner[1] * self.twiddles[0].im;
+            let twiddled5 =   mid[1] * self.twiddles[2].im;
+            let twiddled6 = outer[1] * self.twiddles[1].im;
+
+            let sum123 = twiddled1 + twiddled2 + twiddled3;
+            let sum456 = twiddled6 - twiddled4 - twiddled5;
+
+            let output2 = sum123 + sum456;
+            let output5 = sum123 - sum456;
+
+            output.store(input0 + output2, 2);
+            output.store(input0 + output5, 5);
+        }
+
+        {
+            let twiddled1 = outer[0] * self.twiddles[2].re;
+            let twiddled2 =   mid[0] * self.twiddles[0].re;
+            let twiddled3 = inner[0] * self.twiddles[1].re;
+            let twiddled4 = inner[1] * self.twiddles[1].im;
+            let twiddled5 =   mid[1] * self.twiddles[0].im;
+            let twiddled6 = outer[1] * self.twiddles[2].im;
+
+            let sum123 = twiddled1 + twiddled2 + twiddled3;
+            let sum456 = twiddled4 - twiddled5 + twiddled6;
+
+            let output3 = sum123 + sum456;
+            let output4 = sum123 - sum456;
+
+            output.store(input0 + output3, 3);
+            output.store(input0 + output4, 4);
+        }
     }
 }
-boilerplate_fft_butterfly!(Butterfly7, 7, |this: &Butterfly7<_>| this.inner_fft.is_inverse());
+boilerplate_fft_butterfly!(Butterfly7, 7, |this: &Butterfly7<_>| this.inverse);
 
 pub struct Butterfly8<T> {
     twiddle: Complex<T>,
