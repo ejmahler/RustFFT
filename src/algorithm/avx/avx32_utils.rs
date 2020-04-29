@@ -651,6 +651,7 @@ pub unsafe fn transpose_9x6_to_6x9_emptycolumn1_f32(rows0: [__m128;6], rows1: [_
 }
 
 // Treat the input like the rows of a 12x4 array, and transpose it to a 4x12 array
+// The assumption here is that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
 #[inline(always)]
 pub unsafe fn transpose_12x4_to_4x12_f32(rows0: [__m256;4], rows1: [__m256;4], rows2: [__m256;4]) -> [__m256;12] {
     let transposed0 = transpose_4x4_f32(rows0);
@@ -658,6 +659,50 @@ pub unsafe fn transpose_12x4_to_4x12_f32(rows0: [__m256;4], rows1: [__m256;4], r
     let transposed2 = transpose_4x4_f32(rows2);
 
     [transposed0[0], transposed0[1], transposed0[2], transposed0[3], transposed1[0], transposed1[1], transposed1[2], transposed1[3], transposed2[0], transposed2[1], transposed2[2], transposed2[3]]
+}
+
+// Treat the input like the rows of a 12x6 array, and transpose it to a 6x12 array
+// The assumption here is that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
+#[inline(always)]
+pub unsafe fn transpose_12x6_to_6x12_f32(rows0: [__m256;6], rows1: [__m256;6], rows2: [__m256;6]) -> ([__m128;12], [__m256;12]) {
+    let (unpacked0, unpacked1) = unpack_complex_f32(rows0[0], rows0[1]);
+    let (unpacked2, unpacked3) = unpack_complex_f32(rows1[0], rows1[1]);
+    let (unpacked4, unpacked5) = unpack_complex_f32(rows2[0], rows2[1]);
+
+    let output0 = [
+        _mm256_castps256_ps128(unpacked0),
+        _mm256_castps256_ps128(unpacked1),
+        _mm256_extractf128_ps(unpacked0, 1),
+        _mm256_extractf128_ps(unpacked1, 1),
+        _mm256_castps256_ps128(unpacked2),
+        _mm256_castps256_ps128(unpacked3),
+        _mm256_extractf128_ps(unpacked2, 1),
+        _mm256_extractf128_ps(unpacked3, 1),
+        _mm256_castps256_ps128(unpacked4),
+        _mm256_castps256_ps128(unpacked5),
+        _mm256_extractf128_ps(unpacked4, 1),
+        _mm256_extractf128_ps(unpacked5, 1),
+    ];
+    let transposed0 = transpose_4x4_f32([rows0[2], rows0[3], rows0[4], rows0[5]]);
+    let transposed1 = transpose_4x4_f32([rows1[2], rows1[3], rows1[4], rows1[5]]);
+    let transposed2 = transpose_4x4_f32([rows2[2], rows2[3], rows2[4], rows2[5]]);
+
+    let output1 = [
+        transposed0[0],
+        transposed0[1],
+        transposed0[2],
+        transposed0[3],
+        transposed1[0],
+        transposed1[1],
+        transposed1[2],
+        transposed1[3],
+        transposed2[0],
+        transposed2[1],
+        transposed2[2],
+        transposed2[3],
+    ];
+
+    (output0, output1)
 }
 
 // Treat the input like the rows of a 4x12 array, and transpose it to a 12x4 array
@@ -677,7 +722,7 @@ pub unsafe fn transpose_4x12_to_12x4_packed_f32(rows: [__m256;12]) -> [__m256;12
 
 
 // Treat the input like the rows of a 8x8 array, and transpose said rows to the columns
-// The assumption here is that it's very likely that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
+// The assumption here is that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
 #[inline(always)]
 pub unsafe fn transpose_8x8_f32(rows0: [__m256;8], rows1: [__m256;8]) -> ([__m256;8], [__m256;8]) {
     let chunk00 = [rows0[0],  rows0[1],  rows0[2],  rows0[3]];
@@ -1076,14 +1121,57 @@ pub mod fma {
     #[inline(always)]
     pub unsafe fn column_butterfly12_f32_lo(rows: [__m128; 12], butterfly3_twiddles: __m256, twiddle_config: Rotate90Config<__m256>) -> [__m128; 12] {
         // Compute this as a 4x3 FFT. since 4 and 3 are coprime, we can use the good-thomas algorithm. That means crazy reordering of our inputs and outputs, but it also means no twiddle factors
+        let merged12 = [
+            _mm256_insertf128_ps(_mm256_castps128_ps256(rows[4]), rows[8], 0x1),
+            _mm256_insertf128_ps(_mm256_castps128_ps256(rows[7]), rows[11], 0x1),
+            _mm256_insertf128_ps(_mm256_castps128_ps256(rows[10]), rows[2], 0x1),
+            _mm256_insertf128_ps(_mm256_castps128_ps256(rows[1]), rows[5], 0x1),
+        ];
         let mid0 = column_butterfly4_f32_lo([rows[0], rows[3], rows[6], rows[9]], twiddle_config);
-        let mid1 = column_butterfly4_f32_lo([rows[4], rows[7], rows[10],rows[1]], twiddle_config);
-        let mid2 = column_butterfly4_f32_lo([rows[8], rows[11],rows[2], rows[5]], twiddle_config);
+        let mid12 = column_butterfly4_f32(merged12, twiddle_config);
 
-        let [output0, output1, output2] = column_butterfly3_f32_lo([mid0[0], mid1[0], mid2[0]], butterfly3_twiddles);
-        let [output3, output4, output5] = column_butterfly3_f32_lo([mid0[1], mid1[1], mid2[1]], butterfly3_twiddles);
-        let [output6, output7, output8] = column_butterfly3_f32_lo([mid0[2], mid1[2], mid2[2]], butterfly3_twiddles);
-        let [output9, output10,output11]= column_butterfly3_f32_lo([mid0[3], mid1[3], mid2[3]], butterfly3_twiddles);
+        // extract our merged data
+        let mid1 = [
+            _mm256_castps256_ps128(mid12[0]),
+            _mm256_castps256_ps128(mid12[1]),
+            _mm256_castps256_ps128(mid12[2]),
+            _mm256_castps256_ps128(mid12[3]),
+        ];
+        let mid2 = [
+            _mm256_extractf128_ps(mid12[0], 0x1),
+            _mm256_extractf128_ps(mid12[1], 0x1),
+            _mm256_extractf128_ps(mid12[2], 0x1),
+            _mm256_extractf128_ps(mid12[3], 0x1),
+        ];
+
+        // merge our half-registers into half as many full registers, so we can do 2 butterfly 3's instead of 3
+        let merged0 = [
+            _mm256_insertf128_ps(_mm256_castps128_ps256(mid0[0]), mid0[1], 0x1),
+            _mm256_insertf128_ps(_mm256_castps128_ps256(mid1[0]), mid1[1], 0x1),
+            _mm256_insertf128_ps(_mm256_castps128_ps256(mid2[0]), mid2[1], 0x1),
+        ];
+        let merged1 = [
+            _mm256_insertf128_ps(_mm256_castps128_ps256(mid0[2]), mid0[3], 0x1),
+            _mm256_insertf128_ps(_mm256_castps128_ps256(mid1[2]), mid1[3], 0x1),
+            _mm256_insertf128_ps(_mm256_castps128_ps256(mid2[2]), mid2[3], 0x1),
+        ];
+
+        let packed0 = column_butterfly3_f32(merged0, butterfly3_twiddles);
+        let packed1 = column_butterfly3_f32(merged1, butterfly3_twiddles);
+
+        // extract our merged data
+        let output0 = _mm256_castps256_ps128(packed0[0]);
+        let output1 = _mm256_castps256_ps128(packed0[1]);
+        let output2 = _mm256_castps256_ps128(packed0[2]);
+        let output3 = _mm256_extractf128_ps(packed0[0], 0x1);
+        let output4 = _mm256_extractf128_ps(packed0[1], 0x1);
+        let output5 = _mm256_extractf128_ps(packed0[2], 0x1);
+        let output6 = _mm256_castps256_ps128(packed1[0]);
+        let output7 = _mm256_castps256_ps128(packed1[1]);
+        let output8 = _mm256_castps256_ps128(packed1[2]);
+        let output9 = _mm256_extractf128_ps(packed1[0], 0x1);
+        let output10= _mm256_extractf128_ps(packed1[1], 0x1);
+        let output11= _mm256_extractf128_ps(packed1[2], 0x1);
 
         [output0, output4, output8, output9, output1, output5, output6, output10, output2, output3, output7, output11]
     }

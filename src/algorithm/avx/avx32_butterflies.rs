@@ -991,6 +991,88 @@ impl MixedRadixAvx8x8<f32> {
     }
 }
 
+pub struct MixedRadixAvx6x12<T> {
+    twiddles: [__m256; 15],
+    twiddle_config: avx32_utils::Rotate90Config<__m256>,
+    twiddles_butterfly3: __m256,
+    inverse: bool,
+    _phantom: std::marker::PhantomData<T>,
+}
+boilerplate_fft_simd_butterfly!(MixedRadixAvx6x12, 72);
+impl MixedRadixAvx6x12<f32> {
+    #[inline]
+    pub fn new(inverse: bool) -> Result<Self, ()> {
+        let has_avx = is_x86_feature_detected!("avx");
+        let has_fma = is_x86_feature_detected!("fma");
+        if has_avx && has_fma {
+            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
+            Ok(unsafe { Self::new_with_avx(inverse) })
+        } else {
+            Err(())
+        }
+    }
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inverse: bool) -> Self {
+        Self {
+            twiddles: gen_butterfly_twiddles_separated_columns!(6, 12, 0, inverse),
+            twiddle_config: avx32_utils::Rotate90Config::new_f32(inverse),
+            twiddles_butterfly3: avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 3, inverse)),
+            inverse: inverse,
+            _phantom: PhantomData,
+        }
+    }
+
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn perform_fft_f32(&self, input: RawSlice<Complex<f32>>, mut output: RawSliceMut<Complex<f32>>) {
+        // We're going to treat our input as a 12x6 2d array. First, do butterfly 6's down the columns of that array.
+        // We can't fit the whole problem into AVX registers at once, so we'll have to spill some things.
+        // By computing a sizeable chunk and not referencing any of it for a while, we're making it easy for the compiler to decide what to spill
+        let mut rows0 = [_mm256_setzero_ps(); 6];
+        for r in 0..6 {
+            rows0[r] = input.load_complex_f32(12*r);
+        }
+        let mut mid0 = avx32_utils::fma::column_butterfly6_f32(rows0, self.twiddles_butterfly3);
+        for r in 1..6 {
+            mid0[r] = avx32_utils::fma::complex_multiply_f32(mid0[r],  self.twiddles[r - 1]);
+        }
+        
+        // One third is done, so the compiler can spill everything above this. Now do the middle set of columns
+        let mut rows1 = [_mm256_setzero_ps(); 6];
+        for r in 0..6 {
+            rows1[r] = input.load_complex_f32(12*r + 4);
+        }
+        let mut mid1 = avx32_utils::fma::column_butterfly6_f32(rows1, self.twiddles_butterfly3);
+        for r in 1..6 {
+            mid1[r] = avx32_utils::fma::complex_multiply_f32(mid1[r],  self.twiddles[r - 1 + 5]);
+        }
+
+        // two thirds are done, so the compiler can spill everything above this. Now do the final set of columns
+        let mut rows2 = [_mm256_setzero_ps(); 6];
+        for r in 0..6 {
+            rows2[r] = input.load_complex_f32(12*r + 8);
+        }
+        let mut mid2 = avx32_utils::fma::column_butterfly6_f32(rows2, self.twiddles_butterfly3);
+        for r in 1..6 {
+            mid2[r] = avx32_utils::fma::complex_multiply_f32(mid2[r],  self.twiddles[r - 1 + 10]);
+        }
+
+        // Transpose our 12x6 array to 6x12 array
+        let (transposed0, transposed1)  = avx32_utils::transpose_12x6_to_6x12_f32(mid0, mid1, mid2);
+
+        // Do butterfly 12's down the columns of our transposed array, and store the results
+        // Same thing as above - Do the half of the butterfly 12's separately to give the compiler a better hint about what to spill
+        let output0 = avx32_utils::fma::column_butterfly12_f32_lo(transposed0, self.twiddles_butterfly3, self.twiddle_config);
+        for r in 0..12 {
+            output.store_complex_f32_lo(output0[r], 6*r);
+        }
+
+        let output1 = avx32_utils::fma::column_butterfly12_f32(transposed1, self.twiddles_butterfly3, self.twiddle_config);
+        for r in 0..12 {
+            output.store_complex_f32(6*r + 2, output1[r]);
+        }
+    }
+}
+
 #[cfg(test)]
 mod unit_tests {
     use super::*;
@@ -1020,4 +1102,5 @@ mod unit_tests {
     test_avx_butterfly!(test_avx_mixedradix4x12,MixedRadixAvx4x12,48);
     test_avx_butterfly!(test_avx_mixedradix9x6, MixedRadixAvx6x9, 54);
     test_avx_butterfly!(test_avx_mixedradix8x8, MixedRadixAvx8x8, 64);
+    test_avx_butterfly!(test_avx_mixedradix6x12, MixedRadixAvx6x12, 72);
 }
