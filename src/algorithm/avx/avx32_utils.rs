@@ -763,19 +763,6 @@ pub unsafe fn transpose_4x16_to_16x4_packed_f32(rows: [__m256;16]) -> [__m256;16
     ]
 }
 
-// Split the array into evens and odds
-#[inline(always)]
-pub unsafe fn split_evens_odds_f32(row0: __m256, row1: __m256) -> (__m256, __m256) {
-    let permuted0 = _mm256_permute2f128_ps(row0, row1, 0x20);
-    let permuted1 = _mm256_permute2f128_ps(row0, row1, 0x31);
-    let unpacked1 = _mm256_unpackhi_ps(permuted0, permuted1);
-    let unpacked0 = _mm256_unpacklo_ps(permuted0, permuted1);
-    let output1 = _mm256_permute_ps(unpacked1, 0xD8);
-    let output0 = _mm256_permute_ps(unpacked0, 0xD8);
-
-    (output0, output1)
-}
-
 // Interleave even elements and odd elements into a single array
 #[inline(always)]
 pub unsafe fn interleave_evens_odds_f32(rows: [__m256; 2]) -> [__m256; 2] {

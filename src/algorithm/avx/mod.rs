@@ -152,7 +152,6 @@ macro_rules! boilerplate_fft_commondata {
 }
 
 mod avx32_utils;
-mod avx32_split_radix;
 mod avx32_butterflies;
 
 mod avx64_utils;
@@ -163,7 +162,6 @@ mod avx_bluesteins;
 
 pub mod avx_planner;
 
-pub use self::avx32_split_radix::SplitRadixAvx;
 pub use self::avx32_butterflies::{
     Butterfly5Avx,
     Butterfly7Avx,

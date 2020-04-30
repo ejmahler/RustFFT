@@ -446,101 +446,6 @@ fn bench_radix4(b: &mut Bencher, len: usize) {
 #[bench] fn radix4__1048576(b: &mut Bencher) { bench_radix4(b, 1048576); }
 //#[bench] fn radix4_16777216(b: &mut Bencher) { bench_radix4(b, 16777216); }
 
-fn get_splitradix_scalar(len: usize) -> Arc<Fft<f32>> {
-    match len {
-        8 => Arc::new(Butterfly8::new(false)),
-        16 => Arc::new(Butterfly16::new(false)),
-        32 => Arc::new(Butterfly32::new(false)),
-        _ => {
-             let mut radishes = Vec::new();
-            radishes.push(Arc::new(Butterfly16::new(false)) as Arc<Fft<f32>>);
-            radishes.push(Arc::new(Butterfly32::new(false)) as Arc<Fft<f32>>);
-
-            while radishes.last().unwrap().len() < len {
-                let quarter = Arc::clone(&radishes[radishes.len() - 2]);
-                let half = Arc::clone(&radishes[radishes.len() - 1]);
-                radishes.push(Arc::new(SplitRadix::new(half, quarter)) as Arc<Fft<f32>>);
-            }
-            Arc::clone(&radishes.last().unwrap())
-        }
-    }
-}
-
-
-/// Times just the FFT execution (not allocation and pre-calculation)
-/// for a given length, specific to Rader's algorithm
-fn bench_splitradix_scalar(b: &mut Bencher, len: usize) {
-    assert!(len % 4 == 0);
-
-    let fft = get_splitradix_scalar(len);
-
-    let mut buffer = vec![Zero::zero(); len];
-    let mut scratch = vec![Zero::zero(); fft.get_inplace_scratch_len()];
-    b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch);} );
-}
-
-#[bench] fn splitradix_scalar__0000128(b: &mut Bencher) { bench_splitradix_scalar(b, 128); }
-#[bench] fn splitradix_scalar__0000256(b: &mut Bencher) { bench_splitradix_scalar(b, 256); }
-#[bench] fn splitradix_scalar__0000512(b: &mut Bencher) { bench_splitradix_scalar(b, 512); }
-#[bench] fn splitradix_scalar__0001024(b: &mut Bencher) { bench_splitradix_scalar(b, 1024); }
-#[bench] fn splitradix_scalar__0002048(b: &mut Bencher) { bench_splitradix_scalar(b, 2048); }
-#[bench] fn splitradix_scalar__0004096(b: &mut Bencher) { bench_splitradix_scalar(b, 4096); }
-#[bench] fn splitradix_scalar__0008192(b: &mut Bencher) { bench_splitradix_scalar(b, 8192); }
-#[bench] fn splitradix_scalar__0016384(b: &mut Bencher) { bench_splitradix_scalar(b, 16384); }
-#[bench] fn splitradix_scalar__0032768(b: &mut Bencher) { bench_splitradix_scalar(b, 32768); }
-#[bench] fn splitradix_scalar__0065536(b: &mut Bencher) { bench_splitradix_scalar(b, 65536); }
-#[bench] fn splitradix_scalar__1048576(b: &mut Bencher) { bench_splitradix_scalar(b, 1048576); }
-
-use std::collections::HashMap;
-
-fn get_splitradix_avx(len: usize) -> Arc<Fft<f32>> {
-    let mut fft_map = HashMap::new();
-
-    fft_map.insert(8, Arc::new(MixedRadixAvx4x2::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")) as Arc<Fft<f32>>);
-    fft_map.insert(16, Arc::new(MixedRadixAvx4x4::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")) as Arc<Fft<f32>>);
-    fft_map.insert(32, Arc::new(MixedRadixAvx4x8::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")) as Arc<Fft<f32>>);
-    fft_map.insert(64, Arc::new(MixedRadixAvx8x8::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")) as Arc<Fft<f32>>);
-
-    let len_zeros = len.trailing_zeros();
-    for i in 7..(len_zeros+1) {
-        let len = 1 << i;
-        let half_fft = Arc::clone(fft_map.get(&(len / 2)).unwrap());
-        let quarter_fft = Arc::clone(fft_map.get(&(len / 4)).unwrap());
-
-        fft_map.insert(len, Arc::new(SplitRadixAvx::new(half_fft, quarter_fft).expect("Can't run benchmark because this machine doesn't have the required instruction sets")));
-    }
-
-    Arc::clone(fft_map.get(&len).unwrap())
-}
-
-/// Times just the FFT execution (not allocation and pre-calculation)
-/// for a given length, specific to Rader's algorithm
-fn bench_splitradix_avx(b: &mut Bencher, len: usize) {
-    assert!(len % 16 == 0);
-
-    let fft = get_splitradix_avx(len);
-
-    let mut buffer = vec![Zero::zero(); len];
-    let mut scratch = vec![Zero::zero(); fft.get_inplace_scratch_len()];
-    b.iter(|| {
-        fft.process_inplace_with_scratch(&mut buffer, &mut scratch);
-    });
-}
-
-
-#[bench] fn splitradix_avx_00000128(b: &mut Bencher) { bench_splitradix_avx(b, 128); }
-#[bench] fn splitradix_avx_00000256(b: &mut Bencher) { bench_splitradix_avx(b, 256); }
-#[bench] fn splitradix_avx_00000512(b: &mut Bencher) { bench_splitradix_avx(b, 512); }
-#[bench] fn splitradix_avx_00001024(b: &mut Bencher) { bench_splitradix_avx(b, 1024); }
-#[bench] fn splitradix_avx_00002048(b: &mut Bencher) { bench_splitradix_avx(b, 2048); }
-#[bench] fn splitradix_avx_00004096(b: &mut Bencher) { bench_splitradix_avx(b, 4096); }
-#[bench] fn splitradix_avx_00008192(b: &mut Bencher) { bench_splitradix_avx(b, 8192); }
-#[bench] fn splitradix_avx_00016384(b: &mut Bencher) { bench_splitradix_avx(b, 16384); }
-#[bench] fn splitradix_avx_00032768(b: &mut Bencher) { bench_splitradix_avx(b, 32768); }
-#[bench] fn splitradix_avx_00065536(b: &mut Bencher) { bench_splitradix_avx(b, 65536); }
-#[bench] fn splitradix_avx_01048576(b: &mut Bencher) { bench_splitradix_avx(b, 1048576); }
-#[bench] fn splitradix_avx_16777216(b: &mut Bencher) { bench_splitradix_avx(b, 16777216); }
-
 fn get_2xn_avx(len: usize) -> Arc<dyn Fft<f32>> {
     match len {
         8 => Arc::new(MixedRadixAvx4x2::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
@@ -790,6 +695,7 @@ fn bench_mixed_8xn_avx(b: &mut Bencher, len: usize) {
 #[bench] fn mixed_8xn_avx__0032768(b: &mut Bencher) { bench_mixed_8xn_avx(b, 32768); }
 #[bench] fn mixed_8xn_avx__0065536(b: &mut Bencher) { bench_mixed_8xn_avx(b, 65536); }
 #[bench] fn mixed_8xn_avx__1048576(b: &mut Bencher) { bench_mixed_8xn_avx(b, 1048576); }
+#[bench] fn mixed_8xn_avx__16777216(b: &mut Bencher) { bench_mixed_8xn_avx(b, 16777216); }
 
 
 fn get_12xn_avx(len: usize) -> Arc<dyn Fft<f32>> {
