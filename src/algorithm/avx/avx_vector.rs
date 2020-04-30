@@ -20,22 +20,8 @@ pub trait AvxVector : Copy + Debug {
     unsafe fn xor(left: Self, right: Self) -> Self;
     unsafe fn mul(left: Self, right: Self) -> Self;
     unsafe fn fmadd(left: Self, right: Self, add: Self) -> Self;
+    unsafe fn fnmadd(left: Self, right: Self, add: Self) -> Self;
     unsafe fn fmaddsub(left: Self, right: Self, add: Self) -> Self;
-
-    #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn mul_complex(left: Self, right: Self) -> Self {
-        // Extract the real and imaginary components from left into 2 separate registers
-        let (left_real, left_imag) = Self::duplicate_complex_components(left);
-
-        // create a shuffled version of right where the imaginary values are swapped with the reals
-        let right_shuffled = Self::swap_complex_components(right);
-
-        // multiply our duplicated imaginary left vector by our shuffled right vector. that will give us the right side of the traditional complex multiplication formula
-        let output_right = Self::mul(left_imag, right_shuffled);
-
-        // use a FMA instruction to multiply together left side of the complex multiplication formula, then alternatingly add and subtract the left side from the right
-        Self::fmaddsub(left_real, right, output_right)
-    }
 
     // Reverse the order of complex numbers in the vector, so that the last is the first and the first is the last
     unsafe fn reverse_complex_elements(self) -> Self;
@@ -52,6 +38,25 @@ pub trait AvxVector : Copy + Debug {
     // create a Rotator90 instance to rotate complex numbers either 90 or 270 degrees, based on the value of `inverse`
     unsafe fn make_rotation90(inverse: bool) -> Rotation90<Self>;
 
+
+    
+
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn mul_complex(left: Self, right: Self) -> Self {
+        // Extract the real and imaginary components from left into 2 separate registers
+        let (left_real, left_imag) = Self::duplicate_complex_components(left);
+
+        // create a shuffled version of right where the imaginary values are swapped with the reals
+        let right_shuffled = Self::swap_complex_components(right);
+
+        // multiply our duplicated imaginary left vector by our shuffled right vector. that will give us the right side of the traditional complex multiplication formula
+        let output_right = Self::mul(left_imag, right_shuffled);
+
+        // use a FMA instruction to multiply together left side of the complex multiplication formula, then alternatingly add and subtract the left side from the right
+        Self::fmaddsub(left_real, right, output_right)
+    }
+
+    #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn rotate90(self, rotation: Rotation90<Self>) -> Self {
         // Our goal is to swap the reals with the imaginaries, then negate either the reals or the imaginaries, based on whether we're an inverse or not
         let elements_swapped = Self::swap_complex_components(self);
@@ -62,7 +67,51 @@ pub trait AvxVector : Copy + Debug {
 
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
-        [ Self::add(rows[0], rows[1]), Self::sub(rows[0], rows[1]), ]
+        [
+            Self::add(rows[0], rows[1]),
+            Self::sub(rows[0], rows[1]),
+        ]
+    }
+
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn column_butterfly3(rows: [Self; 3], twiddles: Self) -> [Self; 3] {
+        // This algorithm is derived directly from the definition of the DFT of size 3
+        // We'd theoretically have to do 4 complex multiplications, but all of the twiddles we'd be multiplying by are conjugates of each other
+        // By doing some algebra to expand the complex multiplications and factor out the multiplications, we get this
+
+        let [mut mid1, mid2] = Self::column_butterfly2([rows[1], rows[2]]);
+        let output0 = Self::add(rows[0], mid1);
+
+        let (twiddle_real, twiddle_imag) = Self::duplicate_complex_components(twiddles);
+
+        mid1 = Self::fmadd(mid1, twiddle_real, rows[0]);
+        
+        let rotation = Self::make_rotation90(true);
+        let mid2_rotated = Self::rotate90(mid2, rotation);
+
+        let output1 = Self::fmadd(mid2_rotated, twiddle_imag, mid1);
+        let output2 = Self::fnmadd(mid2_rotated, twiddle_imag, mid1);
+
+        [output0, output1, output2]
+    }
+
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn column_butterfly4(rows: [Self; 4], rotation: Rotation90<Self>) -> [Self; 4] {
+        // Algorithm: 2x2 mixed radix
+
+        // Perform the first set of size-2 FFTs.
+        let [mid0, mid2] = Self::column_butterfly2([rows[0], rows[2]]);
+        let [mid1, mid3] = Self::column_butterfly2([rows[1], rows[3]]);
+
+        // Apply twiddle factors (in this case just a rotation)
+        let mid3_rotated = mid3.rotate90(rotation);
+
+        // Perform the second set of size-2 FFTs
+        let [output0, output1] = Self::column_butterfly2([mid0, mid1]);
+        let [output2, output3] = Self::column_butterfly2([mid2, mid3_rotated]);
+
+        // Swap outputs 1 and 2 in the output to do a square transpose
+        [output0, output2, output1, output3]
     }
 }
 
@@ -127,6 +176,10 @@ impl AvxVector for __m256 {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn fmadd(left: Self, right: Self, add: Self) -> Self {
         _mm256_fmadd_ps(left, right, add)
+    }
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn fnmadd(left: Self, right: Self, add: Self) -> Self {
+        _mm256_fnmadd_ps(left, right, add)
     }
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn fmaddsub(left: Self, right: Self, add: Self) -> Self {
@@ -211,6 +264,10 @@ impl AvxVector for __m128 {
         _mm_fmadd_ps(left, right, add)
     }
     #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn fnmadd(left: Self, right: Self, add: Self) -> Self {
+        _mm_fnmadd_ps(left, right, add)
+    }
+    #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn fmaddsub(left: Self, right: Self, add: Self) -> Self {
         _mm_fmaddsub_ps(left, right, add)
     }
@@ -281,6 +338,10 @@ impl AvxVector for __m256d {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn fmadd(left: Self, right: Self, add: Self) -> Self {
         _mm256_fmadd_pd(left, right, add)
+    }
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn fnmadd(left: Self, right: Self, add: Self) -> Self {
+        _mm256_fnmadd_pd(left, right, add)
     }
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn fmaddsub(left: Self, right: Self, add: Self) -> Self {
@@ -357,6 +418,10 @@ impl AvxVector for __m128d {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn fmadd(left: Self, right: Self, add: Self) -> Self {
         _mm_fmadd_pd(left, right, add)
+    }
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn fnmadd(left: Self, right: Self, add: Self) -> Self {
+        _mm_fnmadd_pd(left, right, add)
     }
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn fmaddsub(left: Self, right: Self, add: Self) -> Self {

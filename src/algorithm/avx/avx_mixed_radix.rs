@@ -13,6 +13,7 @@ use super::avx32_utils;
 use super::avx64_utils::{AvxComplexArray64, AvxComplexArrayMut64};
 use super::avx64_utils;
 use super::CommonSimdData;
+use super::avx_vector::{AvxVector, AvxVector256, Rotation90};
 
 // Take the ceiling of dividing a by b
 // Ie, if the inputs are a=3, b=5, the return will be 1. if the inputs are a=12 and b=5, the return will be 3
@@ -492,8 +493,8 @@ impl MixedRadix2xnAvx<f32, __m256> {
     }
 
     mixedradix_column_butterflies_f32!(2,
-        |columns, _:_| avx32_utils::column_butterfly2_array_f32(columns),
-        |columns, _:_| avx32_utils::column_butterfly2_f32_lo(columns)
+        |rows, _:_| AvxVector::column_butterfly2(rows),
+        |rows, _:_| AvxVector::column_butterfly2(rows)
     );
     mixedradix_transpose_f32!(2, avx32_utils::interleave_evens_odds_f32, 0;1);
 
@@ -503,12 +504,12 @@ impl MixedRadix2xnAvx<f32, __m256> {
     unsafe fn write_partial_remainder(output: &mut[Complex<f32>], packed_data: [__m256; 2], partial_remainder: usize) {
         assert!(partial_remainder > 0 && partial_remainder < 4);
         if partial_remainder == 1 {
-            output.store_complex_f32_lo(_mm256_castps256_ps128(packed_data[0]), 0);
+            output.store_complex_f32_lo(packed_data[0].lo(), 0);
         } else {
             output.store_complex_f32(0, packed_data[0]);
 
             if partial_remainder == 3 {
-                output.store_complex_f32_lo(_mm256_castps256_ps128(packed_data[1]), 4);
+                output.store_complex_f32_lo(packed_data[1].lo(), 4);
             }
         }
     }
@@ -524,8 +525,8 @@ impl MixedRadix2xnAvx<f64, __m256d> {
     }
 
     mixedradix_column_butterflies_f64!(2,
-        |columns, _:_| avx64_utils::column_butterfly2_array_f64(columns),
-        |columns, _:_| avx64_utils::column_butterfly2_f64_lo(columns)
+        |columns, _:_| AvxVector::column_butterfly2(columns),
+        |columns, _:_| AvxVector::column_butterfly2(columns)
     );
     mixedradix_transpose_f64!(2, avx64_utils::transpose_2x2_f64, 0;1);
 }
@@ -548,8 +549,8 @@ impl MixedRadix3xnAvx<f32, __m256> {
     }
 
     mixedradix_column_butterflies_f32!(3, 
-        |columns, this: &Self| avx32_utils::fma::column_butterfly3_f32(columns, this.twiddles_butterfly3),
-        |columns, this: &Self| avx32_utils::fma::column_butterfly3_f32_lo(columns, this.twiddles_butterfly3)
+        |columns, this: &Self| AvxVector::column_butterfly3(columns, this.twiddles_butterfly3),
+        |columns, this: &Self| AvxVector::column_butterfly3(columns, this.twiddles_butterfly3.lo())
     );
     mixedradix_transpose_f32!(3, avx32_utils::transpose_4x3_packed_f32, 0;1;2);
 
@@ -564,11 +565,11 @@ impl MixedRadix3xnAvx<f32, __m256> {
             output.store_complex_f32(0, packed_data[0]);
 
             if partial_remainder == 2 {
-                output.store_complex_f32_lo(_mm256_castps256_ps128(packed_data[1]), 4);
+                output.store_complex_f32_lo(packed_data[1].lo(), 4);
             }
             if partial_remainder == 3 {
                 output.store_complex_f32(4, packed_data[1]);
-                output.store_complex_remainder1_f32(_mm256_castps256_ps128(packed_data[2]), 8);
+                output.store_complex_remainder1_f32(packed_data[2].lo(), 8);
             }
         }
     }
@@ -585,8 +586,8 @@ impl MixedRadix3xnAvx<f64, __m256d> {
     }
 
     mixedradix_column_butterflies_f64!(3,
-        |columns, this: &Self| avx64_utils::fma::column_butterfly3_f64(columns, this.twiddles_butterfly3),
-        |columns, this: &Self| avx64_utils::fma::column_butterfly3_f64_lo(columns, this.twiddles_butterfly3)
+        |columns, this: &Self| AvxVector::column_butterfly3(columns, this.twiddles_butterfly3),
+        |columns, this: &Self| AvxVector::column_butterfly3(columns, this.twiddles_butterfly3.lo())
     );
     mixedradix_transpose_f64!(3, avx64_utils::transpose_2x3_to_3x2_packed_f64, 0;1;2);
 }
@@ -596,7 +597,7 @@ impl MixedRadix3xnAvx<f64, __m256d> {
 
 
 pub struct MixedRadix4xnAvx<T, V> {
-    twiddle_config: avx32_utils::Rotate90Config<V>,
+    twiddles_butterfly4: Rotation90<V>,
     common_data: CommonSimdData<T,V>,
 }
 boilerplate_fft_commondata!(MixedRadix4xnAvx);
@@ -607,14 +608,14 @@ impl MixedRadix4xnAvx<f32, __m256> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f32>>) -> Self {
         Self {
-            twiddle_config: avx32_utils::Rotate90Config::new_f32(inner_fft.is_inverse()),
+            twiddles_butterfly4: AvxVector::make_rotation90(inner_fft.is_inverse()),
             common_data: mixedradix_gen_data_f32!(4, inner_fft),
         }
     }
 
     mixedradix_column_butterflies_f32!(4, 
-        |columns, this: &Self| avx32_utils::column_butterfly4_f32(columns, this.twiddle_config),
-        |columns, this: &Self| avx32_utils::column_butterfly4_f32_lo(columns, this.twiddle_config)
+        |columns, this: &Self| AvxVector::column_butterfly4(columns, this.twiddles_butterfly4),
+        |columns, this: &Self| AvxVector::column_butterfly4(columns, this.twiddles_butterfly4.lo())
     );
     mixedradix_transpose_f32!(4, avx32_utils::transpose_4x4_f32, 0;1;2;3);
 
@@ -640,14 +641,14 @@ impl MixedRadix4xnAvx<f64, __m256d> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f64>>) -> Self {
         Self {
-            twiddle_config: avx32_utils::Rotate90Config::new_f64(inner_fft.is_inverse()),
+            twiddles_butterfly4: AvxVector::make_rotation90(inner_fft.is_inverse()),
             common_data: mixedradix_gen_data_f64!(4, inner_fft),
         }
     }
 
     mixedradix_column_butterflies_f64!(4,
-        |columns, this: &Self| avx64_utils::column_butterfly4_f64(columns, this.twiddle_config),
-        |columns, this: &Self| avx64_utils::column_butterfly4_f64_lo(columns, this.twiddle_config)
+        |columns, this: &Self| AvxVector::column_butterfly4(columns, this.twiddles_butterfly4),
+        |columns, this: &Self| AvxVector::column_butterfly4(columns, this.twiddles_butterfly4.lo())
     );
     mixedradix_transpose_f64!(4, avx64_utils::transpose_2x4_to_4x2_packed_f64, 0;1;2;3);
 }

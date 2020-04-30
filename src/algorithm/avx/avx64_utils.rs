@@ -103,16 +103,6 @@ pub unsafe fn column_butterfly2_f64(row0: __m256d, row1: __m256d) -> (__m256d, _
     (output0, output1)
 }
 
-// Compute 2 parallel butterfly 2's using AVX instructions
-// rowN contains the nth element of each parallel FFT
-#[inline(always)]
-pub unsafe fn column_butterfly2_array_f64(rows: [__m256d; 2]) -> [__m256d; 2] {
-    let output0 = _mm256_add_pd(rows[0], rows[1]);
-    let output1 = _mm256_sub_pd(rows[0], rows[1]);
-
-    [output0, output1]
-}
-
 // Compute 2 parallel butterfly 4's using AVX instructions
 // rowN contains the nth element of each parallel FFT
 #[inline(always)]

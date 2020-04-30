@@ -361,16 +361,6 @@ impl Rotate90OddConfig {
 // Compute 4 parallel butterfly 2's using AVX instructions
 // rowN contains the nth element of each parallel FFT
 #[inline(always)]
-pub unsafe fn column_butterfly2_array_f32(rows: [__m256; 2]) -> [__m256; 2] {
-    let output0 = _mm256_add_ps(rows[0], rows[1]);
-    let output1 = _mm256_sub_ps(rows[0], rows[1]);
-
-    [output0, output1]
-}
-
-// Compute 4 parallel butterfly 2's using AVX instructions
-// rowN contains the nth element of each parallel FFT
-#[inline(always)]
 pub unsafe fn column_butterfly2_f32(row0: __m256, row1: __m256) -> (__m256, __m256) {
     let output0 = _mm256_add_ps(row0, row1);
     let output1 = _mm256_sub_ps(row0, row1);
