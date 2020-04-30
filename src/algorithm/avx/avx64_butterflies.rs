@@ -211,6 +211,105 @@ impl Butterfly5Avx64<f64> {
 }
 
 
+pub struct Butterfly7Avx64<T> {
+    twiddles: [__m256d; 5],
+    inverse: bool,
+    _phantom: std::marker::PhantomData<T>,
+}
+boilerplate_fft_simd_butterfly!(Butterfly7Avx64, 7);
+impl Butterfly7Avx64<f64> {
+    #[inline]
+    pub fn new(inverse: bool) -> Result<Self, ()> {
+        let has_avx = is_x86_feature_detected!("avx");
+        let has_fma = is_x86_feature_detected!("fma");
+        if has_avx && has_fma {
+            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
+            Ok(unsafe { Self::new_with_avx(inverse) })
+        } else {
+            Err(())
+        }
+    }
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inverse: bool) -> Self {
+        let twiddle1 = f64::generate_twiddle_factor(1, 7, inverse);
+        let twiddle2 = f64::generate_twiddle_factor(2, 7, inverse);
+        let twiddle3 = f64::generate_twiddle_factor(3, 7, inverse);
+        Self {
+            twiddles: [
+                _mm256_set_pd(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),
+                _mm256_set_pd(twiddle2.im, twiddle2.im, twiddle2.re, twiddle2.re),
+                _mm256_set_pd(twiddle3.im, twiddle3.im, twiddle3.re, twiddle3.re),
+                _mm256_set_pd(-twiddle3.im, -twiddle3.im, twiddle3.re, twiddle3.re),
+                _mm256_set_pd(-twiddle1.im, -twiddle1.im, twiddle1.re, twiddle1.re),
+            ],
+            inverse: inverse,
+            _phantom: PhantomData,
+        }
+    }
+    
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn perform_fft_f64(&self, input: RawSlice<Complex<f64>>, mut output: RawSliceMut<Complex<f64>>) {
+        let input0 = _mm256_loadu2_m128d(input.as_ptr() as *const f64, input.as_ptr() as *const f64);
+        let input12 = input.load_complex_f64(1);
+        let input3 = input.load_complex_f64_lo(3);
+        let input4 = input.load_complex_f64_lo(4);
+        let input56 = input.load_complex_f64(5);
+
+        // reverse the order of input56
+        let input65 = _mm256_permute2f128_pd(input56, input56, 0x01);
+
+        // do some prep work before we can start applying twiddle factors
+        let (sum12, diff65) = avx64_utils::column_butterfly2_f64(input12, input65);
+        let [sum3, diff4] = avx64_utils::column_butterfly2_f64_lo([input3, input4]);
+
+        let rotation_config = avx32_utils::Rotate90Config::new_f64(true);
+        let rotated65 = rotation_config.rotate90(diff65);
+        let rotated4 = rotation_config.rotate90_lo(diff4);
+
+        let [mid16, mid25] = avx64_utils::transpose_2x2_f64([sum12, rotated65]);
+        let mid34 = _mm256_insertf128_pd(_mm256_castpd128_pd256(sum3), rotated4, 1);
+
+        // to compute the first output, compute the sum of all elements. mid16[0], mid25[0], and mid34[0] already have the sum of 1+6, 2+5 and 3+4 respectively, so if we add them, we'll get 1+2+3+4+5+6
+        let output0_left  = _mm_add_pd(_mm256_castpd256_pd128(mid16), _mm256_castpd256_pd128(mid25));
+        let output0_right = _mm_add_pd(_mm256_castpd256_pd128(input0), _mm256_castpd256_pd128(mid34));
+        let output0 = _mm_add_pd(output0_left, output0_right);
+        output.store_complex_f64_lo(output0, 0);
+        
+        // apply twiddle factors
+        let twiddled16_intermediate1 = _mm256_mul_pd(mid16, self.twiddles[0]);
+        let twiddled25_intermediate1 = _mm256_mul_pd(mid16, self.twiddles[1]);
+        let twiddled34_intermediate1 = _mm256_mul_pd(mid16, self.twiddles[2]);
+
+        let twiddled16_intermediate2 = _mm256_fmadd_pd(mid25, self.twiddles[1], twiddled16_intermediate1);
+        let twiddled25_intermediate2 = _mm256_fmadd_pd(mid25, self.twiddles[3], twiddled25_intermediate1);
+        let twiddled34_intermediate2 = _mm256_fmadd_pd(mid25, self.twiddles[4], twiddled34_intermediate1);
+
+        let twiddled16 = _mm256_fmadd_pd(mid34, self.twiddles[2], twiddled16_intermediate2);
+        let twiddled25 = _mm256_fmadd_pd(mid34, self.twiddles[4], twiddled25_intermediate2);
+        let twiddled34 = _mm256_fmadd_pd(mid34, self.twiddles[1], twiddled34_intermediate2);
+
+        // unpack the data for the last butterfly 2
+        let [twiddled12, twiddled65] = avx64_utils::transpose_2x2_f64([twiddled16, twiddled25]);
+        let twiddled3 = _mm256_castpd256_pd128(twiddled34);
+        let twiddled4 = _mm256_extractf128_pd(twiddled34, 1);
+
+        // we can save one add if we add input0 to twiddled3 now. normally we'd add input0 to the final output, but the arrangement of data makes that a little awkward
+        let twiddled03 = _mm_add_pd(twiddled3, _mm256_castpd256_pd128(input0));
+
+        let (output12, output65) = avx64_utils::column_butterfly2_f64(twiddled12, twiddled65);
+        let final12 = _mm256_add_pd(output12, input0);
+        let output56 = _mm256_permute2f128_pd(output65, output65, 0x01);
+        let final56 = _mm256_add_pd(output56, input0);
+
+        let [final3, final4] = avx64_utils::column_butterfly2_f64_lo([twiddled03, twiddled4]);
+
+        
+        output.store_complex_f64(final12, 1);
+        output.store_complex_f64_lo(final3, 3);
+        output.store_complex_f64_lo(final4, 4);
+        output.store_complex_f64(final56, 5);
+    }
+}
 
 
 pub struct MixedRadix64Avx4x2<T> {
@@ -890,6 +989,7 @@ mod unit_tests {
     }
 
     test_avx_butterfly!(test_avx_butterfly5_f64, Butterfly5Avx64, 5);
+    test_avx_butterfly!(test_avx_butterfly7_f64, Butterfly7Avx64, 7);
     test_avx_butterfly!(test_avx_mixedradix4x2_f64, MixedRadix64Avx4x2, 8);
     test_avx_butterfly!(test_avx_mixedradix3x3_f64, MixedRadix64Avx3x3, 9);
     test_avx_butterfly!(test_avx_mixedradix4x3_f64, MixedRadix64Avx4x3, 12);

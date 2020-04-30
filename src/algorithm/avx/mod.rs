@@ -166,6 +166,7 @@ pub mod avx_planner;
 pub use self::avx32_split_radix::SplitRadixAvx;
 pub use self::avx32_butterflies::{
     Butterfly5Avx,
+    Butterfly7Avx,
     MixedRadixAvx4x2,
     MixedRadixAvx3x3,
     MixedRadixAvx4x3,
@@ -182,6 +183,7 @@ pub use self::avx32_butterflies::{
 
 pub use self::avx64_butterflies::{
     Butterfly5Avx64,
+    Butterfly7Avx64,
     MixedRadix64Avx4x2,
     MixedRadix64Avx3x3,
     MixedRadix64Avx4x3,

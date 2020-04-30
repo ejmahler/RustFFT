@@ -174,7 +174,7 @@ impl Butterfly5Avx<f32> {
     
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_fft_f32(&self, input: RawSlice<Complex<f32>>, mut output: RawSliceMut<Complex<f32>>) {
-        let input0 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr() as *const f64));
+        let input0 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr() as *const f64)); // load the first element of the input, and duplicate it into both complex number slots of input0
         let input12 = input.load_complex_f32_lo(1);
         let input34 = input.load_complex_f32_lo(3);
 
@@ -209,6 +209,105 @@ impl Butterfly5Avx<f32> {
         output.store_complex_remainder1_f32(output0, 0);
         output.store_complex_f32_lo(final12, 1);
         output.store_complex_f32_lo(final34, 3);
+    }
+}
+
+
+pub struct Butterfly7Avx<T> {
+    twiddles: [__m128; 5],
+    inverse: bool,
+    _phantom: std::marker::PhantomData<T>,
+}
+boilerplate_fft_simd_butterfly!(Butterfly7Avx, 7);
+impl Butterfly7Avx<f32> {
+    #[inline]
+    pub fn new(inverse: bool) -> Result<Self, ()> {
+        let has_avx = is_x86_feature_detected!("avx");
+        let has_fma = is_x86_feature_detected!("fma");
+        if has_avx && has_fma {
+            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
+            Ok(unsafe { Self::new_with_avx(inverse) })
+        } else {
+            Err(())
+        }
+    }
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inverse: bool) -> Self {
+        let twiddle1 = f32::generate_twiddle_factor(1, 7, inverse);
+        let twiddle2 = f32::generate_twiddle_factor(2, 7, inverse);
+        let twiddle3 = f32::generate_twiddle_factor(3, 7, inverse);
+        Self {
+            twiddles: [
+                _mm_set_ps(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),
+                _mm_set_ps(twiddle2.im, twiddle2.im, twiddle2.re, twiddle2.re),
+                _mm_set_ps(twiddle3.im, twiddle3.im, twiddle3.re, twiddle3.re),
+                _mm_set_ps(-twiddle3.im, -twiddle3.im, twiddle3.re, twiddle3.re),
+                _mm_set_ps(-twiddle1.im, -twiddle1.im, twiddle1.re, twiddle1.re),
+            ],
+            inverse: inverse,
+            _phantom: PhantomData,
+        }
+    }
+    
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn perform_fft_f32(&self, input: RawSlice<Complex<f32>>, mut output: RawSliceMut<Complex<f32>>) {
+        let input0 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr() as *const f64)); // load the first element of the input, and duplicate it into both complex number slots of input0
+        // we want to load 3 elements into 123 and 3 elements into 456, but we can only load 4, so we're going to do slightly overlapping reads here
+        // we have to reverse 456 immediately after loading, and that'll be easiest if we load the 456 into the latter 3 slots of the register, rather than the front 3 slots
+        // as a bonus, that also means we don't need masked reads or anything
+        let input123 = input.load_complex_f32(1);
+        let input456 = input.load_complex_f32(3);
+
+        // reverse the order of input456
+        let swapped456 = _mm256_permute_ps(input456, 0x4E);
+        let input654 = _mm256_permute2f128_ps(swapped456, swapped456, 0x01);
+
+        // do some prep work before we can start applying twiddle factors
+        let (sum123, diff654) = avx32_utils::column_butterfly2_f32(input123, input654);
+        let rotated654 = avx32_utils::Rotate90Config::new_f32(true).rotate90(diff654);
+
+        let (mid1634, mid25) = avx32_utils::unpack_complex_f32(sum123, rotated654);
+
+        let mid16 = _mm256_castps256_ps128(mid1634);
+        let mid25 = _mm256_castps256_ps128(mid25);
+        let mid34 = _mm256_extractf128_ps(mid1634, 1);
+
+        // to compute the first output, compute the sum of all elements. mid16[0], mid25[0], and mid34[0] already have the sum of 1+6, 2+5 and 3+4 respectively, so if we add them, we'll get 1+2+3+4+5+6
+        let output0_left  = _mm_add_ps(mid16, mid25);
+        let output0_right = _mm_add_ps(input0, mid34);
+        let output0 = _mm_add_ps(output0_left, output0_right);
+        output.store_complex_remainder1_f32(output0, 0);
+
+        _mm256_zeroupper();
+        
+        // apply twiddle factors
+        let twiddled16_intermediate1 = _mm_mul_ps(mid16, self.twiddles[0]);
+        let twiddled25_intermediate1 = _mm_mul_ps(mid16, self.twiddles[1]);
+        let twiddled34_intermediate1 = _mm_mul_ps(mid16, self.twiddles[2]);
+
+        let twiddled16_intermediate2 = _mm_fmadd_ps(mid25, self.twiddles[1], twiddled16_intermediate1);
+        let twiddled25_intermediate2 = _mm_fmadd_ps(mid25, self.twiddles[3], twiddled25_intermediate1);
+        let twiddled34_intermediate2 = _mm_fmadd_ps(mid25, self.twiddles[4], twiddled34_intermediate1);
+
+        let twiddled16 = _mm_fmadd_ps(mid34, self.twiddles[2], twiddled16_intermediate2);
+        let twiddled25 = _mm_fmadd_ps(mid34, self.twiddles[4], twiddled25_intermediate2);
+        let twiddled34 = _mm_fmadd_ps(mid34, self.twiddles[1], twiddled34_intermediate2);
+
+        // unpack the data for the last butterfly 2
+        let (twiddled12, twiddled65) = avx32_utils::unpack_complex_f32_lo(twiddled16, twiddled25);
+        let (twiddled33, twiddled44) = avx32_utils::unpack_complex_f32_lo(twiddled34, twiddled34);
+
+        // we can save one add if we add input0 to twiddled33 now. normally we'd add input0 to the final output, but the arrangement of data makes that a little awkward
+        let twiddled033 = _mm_add_ps(twiddled33, input0);
+
+        let [output12, output65] = avx32_utils::column_butterfly2_f32_lo([twiddled12, twiddled65]);
+        let [output033, output044] = avx32_utils::column_butterfly2_f32_lo([twiddled033, twiddled44]);
+        let output56 = _mm_permute_ps(output65, 0x4E);
+        
+        output.store_complex_f32_lo(_mm_add_ps(output12, input0), 1);
+        output.store_complex_remainder1_f32(output033, 3);
+        output.store_complex_remainder1_f32(output044, 4);
+        output.store_complex_f32_lo(_mm_add_ps(output56, input0), 5);
     }
 }
 
@@ -1157,9 +1256,9 @@ mod unit_tests {
         ($test_name:ident, $struct_name:ident, $size:expr) => (
             #[test]
             fn $test_name() {
-                use algorithm::butterflies::Butterfly5;
-                let control = Butterfly5::new(false);
-                check_fft_algorithm::<f32>(&control, 5, false);
+                use algorithm::butterflies::Butterfly7;
+                let control = Butterfly7::new(false);
+                check_fft_algorithm::<f32>(&control, 7, false);
 
                 let butterfly = $struct_name::new(false).expect("Can't run test because this machine doesn't have the required instruction sets");
                 check_fft_algorithm(&butterfly, $size, false);
@@ -1171,6 +1270,7 @@ mod unit_tests {
     }
 
     test_avx_butterfly!(test_avx_butterfly5, Butterfly5Avx, 5);
+    test_avx_butterfly!(test_avx_butterfly7, Butterfly7Avx, 7);
     test_avx_butterfly!(test_avx_mixedradix4x2, MixedRadixAvx4x2, 8);
     test_avx_butterfly!(test_avx_mixedradix3x3, MixedRadixAvx3x3, 9);
     test_avx_butterfly!(test_avx_mixedradix4x3, MixedRadixAvx4x3, 12);
