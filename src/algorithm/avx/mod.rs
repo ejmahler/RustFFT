@@ -151,6 +151,8 @@ macro_rules! boilerplate_fft_commondata {
     )
 }
 
+mod avx_vector;
+
 mod avx32_utils;
 mod avx32_butterflies;
 

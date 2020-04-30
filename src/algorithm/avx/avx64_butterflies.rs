@@ -11,6 +11,7 @@ use crate::array_utils::{RawSlice, RawSliceMut};
 use super::avx64_utils::{AvxComplexArray64, AvxComplexArrayMut64};
 use super::avx64_utils;
 use super::avx32_utils;
+use super::avx_vector::{AvxVector, AvxVector128, AvxVector256};
 
 // Safety: This macro will call `self::perform_fft_f32()` which probably has a #[target_feature(enable = "...")] annotation on it.
 // Calling functions with that annotation is unsafe, because it doesn't actually check if the CPU has the required features.
@@ -177,32 +178,34 @@ impl Butterfly5Avx64<f64> {
         let input34 = input.load_complex_f64(3);
         
         // swap elements for inputs 3 and 4
-        let input43 = _mm256_permute2f128_pd(input34, input34, 0x01);
+        let input43 = AvxVector::reverse_complex_elements(input34);
 
         // do some prep work before we can start applying twiddle factors
-        let [sum12, diff43] = avx64_utils::column_butterfly2_array_f64([input12, input43]);
-        let rotated43 = avx32_utils::Rotate90Config::new_f64(true).rotate90(diff43);
+        let [sum12, diff43] = AvxVector::column_butterfly2([input12, input43]);
+
+        let rotation = AvxVector::make_rotation90(true);
+        let rotated43 = AvxVector::rotate90(diff43, rotation);
 
         let [mid14, mid23] = avx64_utils::transpose_2x2_f64([sum12, rotated43]);
 
         // to compute the first output, compute the sum of all elements. mid14[0] and mid23[0] already have the sum of 1+4 and 2+3 respectively, so if we add them, we'll get the sum of all 4
-        let sum1234 = _mm_add_pd(_mm256_castpd256_pd128(mid14), _mm256_castpd256_pd128(mid23));
-        let output0 = _mm_add_pd(_mm256_castpd256_pd128(input0), sum1234);
+        let sum1234 = AvxVector::add(_mm256_castpd256_pd128(mid14), _mm256_castpd256_pd128(mid23));
+        let output0 = AvxVector::add(_mm256_castpd256_pd128(input0), sum1234);
         
         // apply twiddle factors
-        let twiddled_outer14 = _mm256_mul_pd(mid14, self.twiddles[0]);
-        let twiddled_inner14 = _mm256_mul_pd(mid14, self.twiddles[1]);
-        let twiddled14 = _mm256_fmadd_pd(mid23, self.twiddles[1], twiddled_outer14);
-        let twiddled23 = _mm256_fmadd_pd(mid23, self.twiddles[2], twiddled_inner14);
+        let twiddled_outer14 = AvxVector::mul(mid14, self.twiddles[0]);
+        let twiddled_inner14 = AvxVector::mul(mid14, self.twiddles[1]);
+        let twiddled14 = AvxVector::fmadd(mid23, self.twiddles[1], twiddled_outer14);
+        let twiddled23 = AvxVector::fmadd(mid23, self.twiddles[2], twiddled_inner14);
 
         // unpack the data for the last butterfly 2
         let [twiddled12, twiddled43] = avx64_utils::transpose_2x2_f64([twiddled14, twiddled23]);
-        let [output12, output43] = avx64_utils::column_butterfly2_array_f64([twiddled12, twiddled43]);
+        let [output12, output43] = AvxVector::column_butterfly2([twiddled12, twiddled43]);
 
         // swap the elements in output43 before writing them out, and add the first input to everything
-        let final12  = _mm256_add_pd(input0, output12);
-        let output34 = _mm256_permute2f128_pd(output43, output43, 0x01);
-        let final34  = _mm256_add_pd(input0, output34);
+        let final12  = AvxVector::add(input0, output12);
+        let output34 = AvxVector::reverse_complex_elements(output43);
+        let final34  = AvxVector::add(input0, output34);
 
         output.store_complex_f64_lo(output0, 0);
         output.store_complex_f64(final12, 1);
@@ -256,52 +259,50 @@ impl Butterfly7Avx64<f64> {
         let input56 = input.load_complex_f64(5);
 
         // reverse the order of input56
-        let input65 = _mm256_permute2f128_pd(input56, input56, 0x01);
+        let input65 = AvxVector::reverse_complex_elements(input56);
 
         // do some prep work before we can start applying twiddle factors
-        let (sum12, diff65) = avx64_utils::column_butterfly2_f64(input12, input65);
-        let [sum3, diff4] = avx64_utils::column_butterfly2_f64_lo([input3, input4]);
+        let [sum12, diff65] = AvxVector::column_butterfly2([input12, input65]);
+        let [sum3, diff4]   = AvxVector::column_butterfly2([input3, input4]);
 
-        let rotation_config = avx32_utils::Rotate90Config::new_f64(true);
-        let rotated65 = rotation_config.rotate90(diff65);
-        let rotated4 = rotation_config.rotate90_lo(diff4);
+        let rotation = AvxVector::make_rotation90(true);
+        let rotated65 = AvxVector::rotate90(diff65, rotation);
+        let rotated4  = AvxVector::rotate90(diff4, rotation.lo());
 
         let [mid16, mid25] = avx64_utils::transpose_2x2_f64([sum12, rotated65]);
-        let mid34 = _mm256_insertf128_pd(_mm256_castpd128_pd256(sum3), rotated4, 1);
+        let mid34 = __m128d::combine(sum3, rotated4);
 
         // to compute the first output, compute the sum of all elements. mid16[0], mid25[0], and mid34[0] already have the sum of 1+6, 2+5 and 3+4 respectively, so if we add them, we'll get 1+2+3+4+5+6
-        let output0_left  = _mm_add_pd(_mm256_castpd256_pd128(mid16), _mm256_castpd256_pd128(mid25));
-        let output0_right = _mm_add_pd(_mm256_castpd256_pd128(input0), _mm256_castpd256_pd128(mid34));
-        let output0 = _mm_add_pd(output0_left, output0_right);
+        let output0_left  = AvxVector::add(mid16.lo(),  mid25.lo());
+        let output0_right = AvxVector::add(input0.lo(), mid34.lo());
+        let output0 = AvxVector::add(output0_left, output0_right);
         output.store_complex_f64_lo(output0, 0);
         
         // apply twiddle factors
-        let twiddled16_intermediate1 = _mm256_mul_pd(mid16, self.twiddles[0]);
-        let twiddled25_intermediate1 = _mm256_mul_pd(mid16, self.twiddles[1]);
-        let twiddled34_intermediate1 = _mm256_mul_pd(mid16, self.twiddles[2]);
+        let twiddled16_intermediate1 = AvxVector::mul(mid16, self.twiddles[0]);
+        let twiddled25_intermediate1 = AvxVector::mul(mid16, self.twiddles[1]);
+        let twiddled34_intermediate1 = AvxVector::mul(mid16, self.twiddles[2]);
 
-        let twiddled16_intermediate2 = _mm256_fmadd_pd(mid25, self.twiddles[1], twiddled16_intermediate1);
-        let twiddled25_intermediate2 = _mm256_fmadd_pd(mid25, self.twiddles[3], twiddled25_intermediate1);
-        let twiddled34_intermediate2 = _mm256_fmadd_pd(mid25, self.twiddles[4], twiddled34_intermediate1);
+        let twiddled16_intermediate2 = AvxVector::fmadd(mid25, self.twiddles[1], twiddled16_intermediate1);
+        let twiddled25_intermediate2 = AvxVector::fmadd(mid25, self.twiddles[3], twiddled25_intermediate1);
+        let twiddled34_intermediate2 = AvxVector::fmadd(mid25, self.twiddles[4], twiddled34_intermediate1);
 
-        let twiddled16 = _mm256_fmadd_pd(mid34, self.twiddles[2], twiddled16_intermediate2);
-        let twiddled25 = _mm256_fmadd_pd(mid34, self.twiddles[4], twiddled25_intermediate2);
-        let twiddled34 = _mm256_fmadd_pd(mid34, self.twiddles[1], twiddled34_intermediate2);
+        let twiddled16 = AvxVector::fmadd(mid34, self.twiddles[2], twiddled16_intermediate2);
+        let twiddled25 = AvxVector::fmadd(mid34, self.twiddles[4], twiddled25_intermediate2);
+        let twiddled34 = AvxVector::fmadd(mid34, self.twiddles[1], twiddled34_intermediate2);
 
         // unpack the data for the last butterfly 2
         let [twiddled12, twiddled65] = avx64_utils::transpose_2x2_f64([twiddled16, twiddled25]);
-        let twiddled3 = _mm256_castpd256_pd128(twiddled34);
-        let twiddled4 = _mm256_extractf128_pd(twiddled34, 1);
 
         // we can save one add if we add input0 to twiddled3 now. normally we'd add input0 to the final output, but the arrangement of data makes that a little awkward
-        let twiddled03 = _mm_add_pd(twiddled3, _mm256_castpd256_pd128(input0));
+        let twiddled03 = AvxVector::add(twiddled34.lo(), input0.lo());
 
-        let (output12, output65) = avx64_utils::column_butterfly2_f64(twiddled12, twiddled65);
-        let final12 = _mm256_add_pd(output12, input0);
-        let output56 = _mm256_permute2f128_pd(output65, output65, 0x01);
-        let final56 = _mm256_add_pd(output56, input0);
+        let [output12, output65] = AvxVector::column_butterfly2([twiddled12, twiddled65]);
+        let final12  = AvxVector::add(output12, input0);
+        let output56 = AvxVector::reverse_complex_elements(output65);
+        let final56  = AvxVector::add(output56, input0);
 
-        let [final3, final4] = avx64_utils::column_butterfly2_f64_lo([twiddled03, twiddled4]);
+        let [final3, final4] = AvxVector::column_butterfly2([twiddled03, twiddled34.hi()]);
 
         
         output.store_complex_f64(final12, 1);
