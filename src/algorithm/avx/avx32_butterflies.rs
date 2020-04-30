@@ -4,11 +4,11 @@ use std::arch::x86_64::*;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use common::FFTnum;
+use crate::common::FFTnum;
 
-use ::{Length, IsInverse, Fft};
+use crate::{Length, IsInverse, Fft};
 
-use ::array_utils::{RawSlice, RawSliceMut};
+use crate::array_utils::{RawSlice, RawSliceMut};
 use super::avx32_utils::{AvxComplexArrayf32, AvxComplexArrayMutf32};
 use super::avx32_utils;
 
@@ -1250,16 +1250,12 @@ impl MixedRadixAvx6x12<f32> {
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use test_utils::check_fft_algorithm;
+    use crate::test_utils::check_fft_algorithm;
 
     macro_rules! test_avx_butterfly {
         ($test_name:ident, $struct_name:ident, $size:expr) => (
             #[test]
             fn $test_name() {
-                use algorithm::butterflies::Butterfly7;
-                let control = Butterfly7::new(false);
-                check_fft_algorithm::<f32>(&control, 7, false);
-
                 let butterfly = $struct_name::new(false).expect("Can't run test because this machine doesn't have the required instruction sets");
                 check_fft_algorithm(&butterfly, $size, false);
 

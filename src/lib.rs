@@ -57,8 +57,6 @@
 //!
 //! Elements in the output are ordered by ascending frequency, with the first element corresponding to frequency 0.
 
-#![allow(unknown_lints)] // The "bare trait objects" lint is unknown on rustc 1.26
-#![allow(bare_trait_objects)]
 #![feature(specialization)]
 
 pub extern crate num_complex;
@@ -81,8 +79,8 @@ mod twiddles;
 use num_complex::Complex;
 use num_traits::Zero;
 
-pub use plan::FFTplanner;
-pub use common::FFTnum;
+pub use crate::plan::FFTplanner;
+pub use crate::common::FFTnum;
 
 
 

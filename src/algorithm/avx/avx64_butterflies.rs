@@ -3,11 +3,11 @@ use std::arch::x86_64::*;
 
 use num_complex::Complex;
 
-use common::FFTnum;
+use crate::common::FFTnum;
 
-use ::{Length, IsInverse, Fft};
+use crate::{Length, IsInverse, Fft};
 
-use ::array_utils::{RawSlice, RawSliceMut};
+use crate::array_utils::{RawSlice, RawSliceMut};
 use super::avx64_utils::{AvxComplexArray64, AvxComplexArrayMut64};
 use super::avx64_utils;
 use super::avx32_utils;
@@ -973,7 +973,7 @@ impl MixedRadix64Avx6x6<f64> {
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use test_utils::check_fft_algorithm;
+    use crate::test_utils::check_fft_algorithm;
 
     macro_rules! test_avx_butterfly {
         ($test_name:ident, $struct_name:ident, $size:expr) => (

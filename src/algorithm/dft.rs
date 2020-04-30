@@ -1,10 +1,10 @@
 use num_complex::Complex;
 use num_traits::Zero;
 
-use common::FFTnum;
+use crate::common::FFTnum;
 
-use ::{Length, IsInverse, Fft};
-use twiddles;
+use crate::{Length, IsInverse, Fft};
+use crate::twiddles;
 
 /// Naive O(n^2 ) Discrete Fourier Transform implementation
 ///
@@ -64,7 +64,7 @@ boilerplate_fft_oop!(DFT, |this: &DFT<_>| this.twiddles.len());
 mod unit_tests {
     use super::*;
     use std::f32;
-    use test_utils::{random_signal, compare_vectors};
+    use crate::test_utils::{random_signal, compare_vectors};
     use num_complex::Complex;
     use num_traits::Zero;
 

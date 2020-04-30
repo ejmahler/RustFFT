@@ -4,9 +4,9 @@ use std::arch::x86_64::*;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use common::FFTnum;
+use crate::common::FFTnum;
 
-use ::{Length, IsInverse, Fft};
+use crate::{Length, IsInverse, Fft};
 
 use super::avx32_utils::{AvxComplexArrayf32, AvxComplexArrayMutf32};
 use super::avx32_utils;
@@ -24,7 +24,7 @@ macro_rules! mixedradix_boilerplate_f32{ () => (
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the FFT
     /// Returns Ok() if this machine has the required instruction sets, Err() if some instruction sets are missing
     #[inline]
-    pub fn new_f32(inner_fft: Arc<Fft<f32>>) -> Result<Self, ()> {
+    pub fn new_f32(inner_fft: Arc<dyn Fft<f32>>) -> Result<Self, ()> {
         let has_avx = is_x86_feature_detected!("avx");
         let has_fma = is_x86_feature_detected!("fma");
         if has_avx && has_fma {
@@ -68,7 +68,7 @@ macro_rules! mixedradix_boilerplate_f64{() => (
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the FFT
     /// Returns Ok() if this machine has the required instruction sets, Err() if some instruction sets are missing
     #[inline]
-    pub fn new_f64(inner_fft: Arc<Fft<f64>>) -> Result<Self, ()> {
+    pub fn new_f64(inner_fft: Arc<dyn Fft<f64>>) -> Result<Self, ()> {
         let has_avx = is_x86_feature_detected!("avx");
         let has_fma = is_x86_feature_detected!("fma");
         if has_avx && has_fma {
@@ -485,7 +485,7 @@ impl MixedRadix2xnAvx<f32, __m256> {
     mixedradix_boilerplate_f32!();
     
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<Fft<f32>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f32>>) -> Self {
         Self {
             common_data: mixedradix_gen_data_f32!(2, inner_fft),
         }
@@ -517,7 +517,7 @@ impl MixedRadix2xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
     
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<Fft<f64>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f64>>) -> Self {
         Self {
             common_data: mixedradix_gen_data_f64!(2, inner_fft),
         }
@@ -540,7 +540,7 @@ impl MixedRadix3xnAvx<f32, __m256> {
     mixedradix_boilerplate_f32!();
     
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<Fft<f32>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f32>>) -> Self {
         Self {
             twiddles_butterfly3: avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 3, inner_fft.is_inverse())),
             common_data: mixedradix_gen_data_f32!(3, inner_fft),
@@ -577,7 +577,7 @@ impl MixedRadix3xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
     
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<Fft<f64>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f64>>) -> Self {
         Self {
             twiddles_butterfly3: avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1, 3, inner_fft.is_inverse())),
             common_data: mixedradix_gen_data_f64!(3, inner_fft),
@@ -605,7 +605,7 @@ impl MixedRadix4xnAvx<f32, __m256> {
     mixedradix_boilerplate_f32!();
 
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<Fft<f32>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f32>>) -> Self {
         Self {
             twiddle_config: avx32_utils::Rotate90Config::new_f32(inner_fft.is_inverse()),
             common_data: mixedradix_gen_data_f32!(4, inner_fft),
@@ -638,7 +638,7 @@ impl MixedRadix4xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
 
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<Fft<f64>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f64>>) -> Self {
         Self {
             twiddle_config: avx32_utils::Rotate90Config::new_f64(inner_fft.is_inverse()),
             common_data: mixedradix_gen_data_f64!(4, inner_fft),
@@ -666,7 +666,7 @@ impl MixedRadix6xnAvx<f32, __m256> {
     mixedradix_boilerplate_f32!();
     
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<Fft<f32>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f32>>) -> Self {
         Self {
             twiddles_butterfly3: avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 3, inner_fft.is_inverse())),
             common_data: mixedradix_gen_data_f32!(6, inner_fft),
@@ -702,7 +702,7 @@ impl MixedRadix6xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
     
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<Fft<f64>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f64>>) -> Self {
         Self {
             twiddles_butterfly3: avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1, 3, inner_fft.is_inverse())),
             common_data: mixedradix_gen_data_f64!(6, inner_fft),
@@ -732,7 +732,7 @@ impl MixedRadix8xnAvx<f32, __m256> {
     mixedradix_boilerplate_f32!();
 
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<Fft<f32>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f32>>) -> Self {
         let inverse = inner_fft.is_inverse();
         Self {
         	twiddle_config: avx32_utils::Rotate90Config::new_f32(inverse),
@@ -769,7 +769,7 @@ impl MixedRadix8xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
 
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<Fft<f64>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f64>>) -> Self {
         let inverse = inner_fft.is_inverse();
         Self {
         	twiddle_config: avx32_utils::Rotate90Config::new_f64(inverse),
@@ -799,7 +799,7 @@ impl MixedRadix9xnAvx<f32, __m256> {
     mixedradix_boilerplate_f32!();
 
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<Fft<f32>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f32>>) -> Self {
         let inverse = inner_fft.is_inverse();
 
         let twiddles_butterfly9_lo = [
@@ -861,7 +861,7 @@ impl MixedRadix9xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
 
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<Fft<f64>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f64>>) -> Self {
         let inverse = inner_fft.is_inverse();
         let twiddles_butterfly9_lo = [
             f64::generate_twiddle_factor(1, 9, inverse),
@@ -908,7 +908,7 @@ impl MixedRadix12xnAvx<f32, __m256> {
     mixedradix_boilerplate_f32!();
 
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<Fft<f32>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f32>>) -> Self {
         let inverse = inner_fft.is_inverse();
         Self {
         	twiddle_config: avx32_utils::Rotate90Config::new_f32(inverse),
@@ -949,7 +949,7 @@ impl MixedRadix12xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
 
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<Fft<f64>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f64>>) -> Self {
         let inverse = inner_fft.is_inverse();
         Self {
         	twiddle_config: avx32_utils::Rotate90Config::new_f64(inverse),
@@ -981,7 +981,7 @@ impl MixedRadix16xnAvx<f32, __m256> {
     mixedradix_boilerplate_f32!();
 
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<Fft<f32>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f32>>) -> Self {
         let inverse = inner_fft.is_inverse();
         Self {
         	twiddle_config: avx32_utils::Rotate90Config::new_f32(inverse),
@@ -1028,7 +1028,7 @@ impl MixedRadix16xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
 
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<Fft<f64>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f64>>) -> Self {
         let inverse = inner_fft.is_inverse();
         Self {
         	twiddle_config: avx32_utils::Rotate90Config::new_f64(inverse),
@@ -1050,9 +1050,9 @@ impl MixedRadix16xnAvx<f64, __m256d> {
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use test_utils::check_fft_algorithm;
+    use crate::test_utils::check_fft_algorithm;
     use std::sync::Arc;
-    use algorithm::*;
+    use crate::algorithm::*;
 
     macro_rules! test_avx_mixed_radix {
         ($f32_test_name:ident, $f64_test_name:ident, $struct_name:ident, $inner_count:expr) => (

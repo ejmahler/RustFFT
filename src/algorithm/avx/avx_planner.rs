@@ -2,11 +2,11 @@ use std::sync::Arc;
 use std::collections::HashMap;
 use std::cmp::min;
 
-use ::algorithm::butterflies::*;
-use ::algorithm::*;
-use ::math_utils::{PartialFactors, PrimeFactors};
-use ::common::FFTnum;
-use ::Fft;
+use crate::algorithm::butterflies::*;
+use crate::algorithm::*;
+use crate::math_utils::{PartialFactors, PrimeFactors};
+use crate::common::FFTnum;
+use crate::Fft;
 
 use super::*;
 
@@ -47,7 +47,7 @@ impl MixedRadixPlan {
 }
 
 pub struct FftPlannerAvx<T: FFTnum> {
-    algorithm_cache: HashMap<usize, Arc<Fft<T>>>,
+    algorithm_cache: HashMap<usize, Arc<dyn Fft<T>>>,
     inverse: bool,
 }
 impl<T: FFTnum> FftPlannerAvx<T> {
@@ -66,7 +66,7 @@ impl<T: FFTnum> FftPlannerAvx<T> {
         }
     }
 
-    pub fn plan_fft(&mut self, len: usize) -> Arc<Fft<T>> {
+    pub fn plan_fft(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         self.plan_with_cache(len, Self::plan_and_construct_new_fft)
     }
 
@@ -81,7 +81,7 @@ impl<T: FFTnum> FftPlannerAvx<T> {
         }
     }
 
-    fn plan_and_construct_new_fft(&mut self, len: usize) -> Arc<Fft<T>> {
+    fn plan_and_construct_new_fft(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         if let Some(butterfly) = self.try_construct_butterfly(len) {
             butterfly
         } else {
@@ -346,7 +346,7 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
         }
     }
 
-    fn try_construct_butterfly(&mut self, len: usize) -> Option<Arc<Fft<f32>>> {
+    fn try_construct_butterfly(&mut self, len: usize) -> Option<Arc<dyn Fft<f32>>> {
         match len {
             0|1 =>  wrap_fft_some(DFT::new(len, self.inverse)),
             2 =>    wrap_fft_some(Butterfly2::new(self.inverse)),
@@ -522,7 +522,7 @@ impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
         }
     }
 
-    fn try_construct_butterfly(&mut self, len: usize) -> Option<Arc<Fft<f64>>> {
+    fn try_construct_butterfly(&mut self, len: usize) -> Option<Arc<dyn Fft<f64>>> {
         match len {
             0|1 =>  wrap_fft_some(DFT::new(len, self.inverse)),
             2 =>    wrap_fft_some(Butterfly2::new(self.inverse)),

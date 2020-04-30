@@ -4,10 +4,10 @@ use std::cmp::max;
 use num_complex::Complex;
 use transpose;
 
-use common::FFTnum;
+use crate::common::FFTnum;
 
-use ::{Length, IsInverse, Fft};
-use array_utils;
+use crate::{Length, IsInverse, Fft};
+use crate::array_utils;
 
 /// Implementation of the Mixed-Radix FFT algorithm
 ///
@@ -37,10 +37,10 @@ use array_utils;
 pub struct MixedRadix<T> {
     twiddles: Box<[Complex<T>]>,
 
-    width_size_fft: Arc<Fft<T>>,
+    width_size_fft: Arc<dyn Fft<T>>,
     width: usize,
 
-    height_size_fft: Arc<Fft<T>>,
+    height_size_fft: Arc<dyn Fft<T>>,
     height: usize,
 
     inplace_scratch_len: usize,
@@ -51,7 +51,7 @@ pub struct MixedRadix<T> {
 
 impl<T: FFTnum> MixedRadix<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
-    pub fn new(width_fft: Arc<Fft<T>>, height_fft: Arc<Fft<T>>) -> Self {
+    pub fn new(width_fft: Arc<dyn Fft<T>>, height_fft: Arc<dyn Fft<T>>) -> Self {
         assert_eq!(
             width_fft.is_inverse(), height_fft.is_inverse(), 
             "width_fft and height_fft must both be inverse, or neither. got width inverse={}, height inverse={}",
@@ -183,10 +183,10 @@ boilerplate_fft!(MixedRadix,
 pub struct MixedRadixSmall<T> {
     twiddles: Box<[Complex<T>]>,
 
-    width_size_fft: Arc<Fft<T>>,
+    width_size_fft: Arc<dyn Fft<T>>,
     width: usize,
 
-    height_size_fft: Arc<Fft<T>>,
+    height_size_fft: Arc<dyn Fft<T>>,
     height: usize,
 
     inverse: bool,
@@ -194,7 +194,7 @@ pub struct MixedRadixSmall<T> {
 
 impl<T: FFTnum> MixedRadixSmall<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
-    pub fn new(width_fft: Arc<Fft<T>>, height_fft: Arc<Fft<T>>) -> Self {
+    pub fn new(width_fft: Arc<dyn Fft<T>>, height_fft: Arc<dyn Fft<T>>) -> Self {
         assert_eq!(
             width_fft.is_inverse(), height_fft.is_inverse(), 
             "width_fft and height_fft must both be inverse, or neither. got width inverse={}, height inverse={}",
@@ -283,8 +283,8 @@ boilerplate_fft!(MixedRadixSmall,
 mod unit_tests {
     use super::*;
     use std::sync::Arc;
-    use test_utils::check_fft_algorithm;
-    use algorithm::DFT;
+    use crate::test_utils::check_fft_algorithm;
+    use crate::algorithm::DFT;
 
     #[test]
     fn test_mixed_radix() {
@@ -307,8 +307,8 @@ mod unit_tests {
     }
 
     fn test_mixed_radix_with_lengths(width: usize, height: usize, inverse: bool) {
-        let width_fft = Arc::new(DFT::new(width, inverse)) as Arc<Fft<f32>>;
-        let height_fft = Arc::new(DFT::new(height, inverse)) as Arc<Fft<f32>>;
+        let width_fft = Arc::new(DFT::new(width, inverse)) as Arc<dyn Fft<f32>>;
+        let height_fft = Arc::new(DFT::new(height, inverse)) as Arc<dyn Fft<f32>>;
 
         let fft = MixedRadix::new(width_fft, height_fft);
 
@@ -316,8 +316,8 @@ mod unit_tests {
     }
 
     fn test_mixed_radix_small_with_lengths(width: usize, height: usize, inverse: bool) {
-        let width_fft = Arc::new(DFT::new(width, inverse)) as Arc<Fft<f32>>;
-        let height_fft = Arc::new(DFT::new(height, inverse)) as Arc<Fft<f32>>;
+        let width_fft = Arc::new(DFT::new(width, inverse)) as Arc<dyn Fft<f32>>;
+        let height_fft = Arc::new(DFT::new(height, inverse)) as Arc<dyn Fft<f32>>;
 
         let fft = MixedRadixSmall::new(width_fft, height_fft);
 

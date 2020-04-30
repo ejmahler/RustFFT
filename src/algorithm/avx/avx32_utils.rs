@@ -1,7 +1,7 @@
 use std::arch::x86_64::*;
 use num_complex::Complex;
 
-use ::array_utils::{RawSlice, RawSliceMut};
+use crate::array_utils::{RawSlice, RawSliceMut};
 
 pub trait AvxComplexArrayf32 {
     unsafe fn load_complex_f32(&self, index: usize) -> __m256;

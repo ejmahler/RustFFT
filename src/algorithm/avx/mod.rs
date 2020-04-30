@@ -1,10 +1,10 @@
 use std::sync::Arc;
-use ::Fft;
+use crate::Fft;
 
 // Data that most (non-butterfly) SIMD FFT algorithms share
 // Algorithms aren't required to use this struct, but it allows for a lot of reduction in code duplication
 struct CommonSimdData<T, V> {
-    inner_fft: Arc<Fft<T>>,
+    inner_fft: Arc<dyn Fft<T>>,
     twiddles: Box<[V]>,
 
     len: usize,

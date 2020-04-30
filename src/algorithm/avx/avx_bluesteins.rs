@@ -4,9 +4,8 @@ use std::arch::x86_64::*;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use common::FFTnum;
-
-use ::{Length, IsInverse, Fft};
+use crate::common::FFTnum;
+use crate::{Length, IsInverse, Fft};
 
 use super::avx32_utils::{AvxComplexArrayf32, AvxComplexArrayMutf32};
 use super::avx32_utils;
@@ -43,7 +42,7 @@ use super::avx64_utils;
 /// that it takes 2.5x more time to compute than a FFT of size 1200.
 
 pub struct BluesteinsAvx<T, V> {
-    inner_fft: Arc<Fft<T>>,
+    inner_fft: Arc<dyn Fft<T>>,
 
     inner_fft_multiplier: Box<[V]>,
     twiddles: Box<[V]>,
@@ -71,7 +70,7 @@ impl BluesteinsAvx<f32, __m256> {
     ///
     /// Returns Ok() if this machine has the required instruction sets, Err() if some instruction sets are missing
     #[inline]
-    pub fn new_f32(len: usize, inner_fft: Arc<Fft<f32>>) -> Result<Self, ()> {
+    pub fn new_f32(len: usize, inner_fft: Arc<dyn Fft<f32>>) -> Result<Self, ()> {
         let has_avx = is_x86_feature_detected!("avx");
         let has_fma = is_x86_feature_detected!("fma");
         if has_avx && has_fma {
@@ -82,7 +81,7 @@ impl BluesteinsAvx<f32, __m256> {
         }
     }
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(len: usize, inner_fft: Arc<Fft<f32>>) -> Self {
+    unsafe fn new_with_avx(len: usize, inner_fft: Arc<dyn Fft<f32>>) -> Self {
         let inner_fft_len = inner_fft.len();
         assert!(len * 2 - 1 <= inner_fft_len, "Bluestein's algorithm requires inner_fft.len() >= self.len() * 2 - 1. Expected >= {}, got {}", len * 2 - 1, inner_fft_len);
         assert!(inner_fft_len % 4 == 0, "BluesteinsAvx<f32> requires its inner_fft.len() to be a multiple of 4. inner_fft.len() = {}", inner_fft_len);
@@ -239,7 +238,7 @@ impl BluesteinsAvx<f64, __m256d> {
     ///
     /// Returns Ok() if this machine has the required instruction sets, Err() if some instruction sets are missing
     #[inline]
-    pub fn new_f64(len: usize, inner_fft: Arc<Fft<f64>>) -> Result<Self, ()> {
+    pub fn new_f64(len: usize, inner_fft: Arc<dyn Fft<f64>>) -> Result<Self, ()> {
         let has_avx = is_x86_feature_detected!("avx");
         let has_fma = is_x86_feature_detected!("fma");
         if has_avx && has_fma {
@@ -250,7 +249,7 @@ impl BluesteinsAvx<f64, __m256d> {
         }
     }
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(len: usize, inner_fft: Arc<Fft<f64>>) -> Self {
+    unsafe fn new_with_avx(len: usize, inner_fft: Arc<dyn Fft<f64>>) -> Self {
         let inner_fft_len = inner_fft.len();
         assert!(len * 2 - 1 <= inner_fft_len, "Bluestein's algorithm requires inner_fft.len() >= self.len() * 2 - 1. Expected >= {}, got {}", len * 2 - 1, inner_fft_len);
         assert!(inner_fft_len % 2 == 0, "BluesteinsAvx<f64> requires its inner_fft.len() to be a multiple of 2. inner_fft.len() = {}", inner_fft_len);
@@ -407,8 +406,8 @@ boilerplate_fft_simd!(BluesteinsAvx, |this: &BluesteinsAvx<_,_>| this.len);
 mod unit_tests {
     use super::*;
     use std::sync::Arc;
-    use test_utils::check_fft_algorithm;
-    use algorithm::DFT;
+    use crate::test_utils::check_fft_algorithm;
+    use crate::algorithm::DFT;
 
     #[test]
     fn test_bluesteins_avx_f32() {

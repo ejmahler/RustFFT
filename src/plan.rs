@@ -2,14 +2,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use num_integer::gcd;
 
-use common::FFTnum;
+use crate::common::FFTnum;
 
-use Fft;
-use algorithm::*;
-use algorithm::butterflies::*;
-use algorithm::avx::avx_planner::FftPlannerAvx;
+use crate::Fft;
+use crate::algorithm::*;
+use crate::algorithm::butterflies::*;
+use crate::algorithm::avx::avx_planner::FftPlannerAvx;
 
-use math_utils::{ PrimeFactors, PrimeFactor };
+use crate::math_utils::{ PrimeFactors, PrimeFactor };
 
 const MIN_RADIX4_BITS: u32 = 5; // smallest size to consider radix 4 an option is 2^5 = 32
 const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option is 2^16 = 65536
@@ -45,7 +45,7 @@ const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option i
 /// Each Fft instance owns `Arc`s to its internal data, rather than borrowing it from the planner, so it's perfectly
 /// safe to drop the planner after creating Fft instances.
 pub struct FFTplanner<T: FFTnum> {
-    algorithm_cache: HashMap<usize, Arc<Fft<T>>>,
+    algorithm_cache: HashMap<usize, Arc<dyn Fft<T>>>,
     inverse: bool,
 
     // None if this machine doesn't support avx
@@ -66,7 +66,7 @@ impl<T: FFTnum> FFTplanner<T> {
 
     /// Returns a Fft instance which processes signals of size `len`
     /// If this is called multiple times, it will attempt to re-use internal data between instances
-    pub fn plan_fft(&mut self, len: usize) -> Arc<Fft<T>> {
+    pub fn plan_fft(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         if let Some(avx_planner) = &mut self.avx_planner {
             // If we have an AVX planner, defer to that for all construction needs
             // TODO: eventually, "FFTplanner" could be an enum of different planner types? "ScalarPlanner" etc
@@ -81,7 +81,7 @@ impl<T: FFTnum> FFTplanner<T> {
         }
     }
 
-    fn plan_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Arc<Fft<T>> {
+    fn plan_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Arc<dyn Fft<T>> {
         if let Some(instance) = self.algorithm_cache.get(&len) {
             Arc::clone(instance)
         } else {
@@ -91,7 +91,7 @@ impl<T: FFTnum> FFTplanner<T> {
         }
     }
     
-    fn plan_new_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Arc<Fft<T>> {
+    fn plan_new_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Arc<dyn Fft<T>> {
         if let Some(fft_instance) = self.plan_butterfly_algorithm(len) {
             fft_instance
         } else if factors.is_prime() {
@@ -110,7 +110,7 @@ impl<T: FFTnum> FFTplanner<T> {
         }
     }
 
-    fn plan_mixed_radix(&mut self, left_factors: PrimeFactors, right_factors: PrimeFactors) -> Arc<Fft<T>> {
+    fn plan_mixed_radix(&mut self, left_factors: PrimeFactors, right_factors: PrimeFactors) -> Arc<dyn Fft<T>> {
         let left_len = left_factors.get_product();
         let right_len = right_factors.get_product();
 
@@ -122,20 +122,20 @@ impl<T: FFTnum> FFTplanner<T> {
         if left_len < 31 && right_len < 31 {
             // for small FFTs, if gcd is 1, good-thomas is faster
             if gcd(left_len, right_len) == 1 {
-                Arc::new(GoodThomasAlgorithmSmall::new(left_fft, right_fft)) as Arc<Fft<T>>
+                Arc::new(GoodThomasAlgorithmSmall::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
             } else {
-                Arc::new(MixedRadixSmall::new(left_fft, right_fft)) as Arc<Fft<T>>
+                Arc::new(MixedRadixSmall::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
             }
         } else {
             
 
-            Arc::new(MixedRadix::new(left_fft, right_fft)) as Arc<Fft<T>>
+            Arc::new(MixedRadix::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
         }
     }
 
 
     // Returns Some(instance) if we have a butterfly available for this size. Returns None if there is no butterfly available for this size
-    fn plan_butterfly_algorithm(&mut self, len: usize) -> Option<Arc<Fft<T>>>{
+    fn plan_butterfly_algorithm(&mut self, len: usize) -> Option<Arc<dyn Fft<T>>>{
         fn wrap_butterfly<N: FFTnum>(butterfly: impl Fft<N> + 'static) -> Option<Arc<dyn Fft<N>>> {
             Some(Arc::new(butterfly) as Arc<dyn Fft<N>>)
         }
@@ -155,7 +155,7 @@ impl<T: FFTnum> FFTplanner<T> {
         }
     }
 
-    fn plan_prime(&mut self, len: usize) -> Arc<Fft<T>> {
+    fn plan_prime(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         // for prime numbers, we can either use rader's algorithm, which computes an inner FFT if size len - 1
         // or bluestein's algorithm, which computes an inner FFT of any size at least len * 2 - 1. (usually, we pick a power of two)
 
@@ -171,10 +171,10 @@ impl<T: FFTnum> FFTplanner<T> {
             let inner_fft_len = (len * 2 - 1).checked_next_power_of_two().unwrap();
             let inner_fft = self.plan_fft_with_factors(inner_fft_len, PrimeFactors::compute(inner_fft_len));
 
-            Arc::new(BluesteinsAlgorithm::new(len, inner_fft)) as Arc<Fft<T>>
+            Arc::new(BluesteinsAlgorithm::new(len, inner_fft)) as Arc<dyn Fft<T>>
         } else {
             let inner_fft = self.plan_fft_with_factors(raders_fft_len, raders_factors);
-            Arc::new(RadersAlgorithm::new(len, inner_fft)) as Arc<Fft<T>>
+            Arc::new(RadersAlgorithm::new(len, inner_fft)) as Arc<dyn Fft<T>>
         }
     }
 }

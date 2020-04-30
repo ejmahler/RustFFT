@@ -3,9 +3,9 @@ use std::sync::Arc;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use common::FFTnum;
+use crate::common::FFTnum;
 
-use ::{Length, IsInverse, Fft};
+use crate::{Length, IsInverse, Fft};
 
 /// Implementation of Bluestein's Algorithm
 ///
@@ -37,7 +37,7 @@ use ::{Length, IsInverse, Fft};
 /// that it takes 2.5x more time to compute than a FFT of size 1200.
 
 pub struct BluesteinsAlgorithm<T> {
-    inner_fft: Arc<Fft<T>>,
+    inner_fft: Arc<dyn Fft<T>>,
 
     inner_fft_multiplier: Box<[Complex<T>]>,
     twiddles: Box<[Complex<T>]>,
@@ -72,7 +72,7 @@ impl<T: FFTnum> BluesteinsAlgorithm<T> {
     /// Note that this constructor is quite expensive to run; This algorithm must run a FFT of size inner_fft.len() within the
     /// constructor. This further underlines the fact that Bluesteins Algorithm is more expensive to run than other
     /// FFT algorithms
-    pub fn new(len: usize, inner_fft: Arc<Fft<T>>) -> Self {
+    pub fn new(len: usize, inner_fft: Arc<dyn Fft<T>>) -> Self {
         let inner_fft_len = inner_fft.len();
         assert!(len * 2 - 1 <= inner_fft_len, "Bluestein's algorithm requires inner_fft.len() >= self.len() * 2 - 1. Expected >= {}, got {}", len * 2 - 1, inner_fft_len);
 
@@ -173,8 +173,8 @@ boilerplate_fft!(BluesteinsAlgorithm,
 mod unit_tests {
     use super::*;
     use std::sync::Arc;
-    use test_utils::check_fft_algorithm;
-    use algorithm::DFT;
+    use crate::test_utils::check_fft_algorithm;
+    use crate::algorithm::DFT;
 
     #[test]
     fn test_bluesteins() {

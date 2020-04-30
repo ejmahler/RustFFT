@@ -1,7 +1,7 @@
 use std::arch::x86_64::*;
 use num_complex::Complex;
 
-use ::array_utils::{RawSlice, RawSliceMut};
+use crate::array_utils::{RawSlice, RawSliceMut};
 use super::avx32_utils::Rotate90Config;
 
 pub trait AvxComplexArray64 {

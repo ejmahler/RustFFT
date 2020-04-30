@@ -1,6 +1,6 @@
 
 use num_complex::Complex;
-use common::FFTnum;
+use crate::common::FFTnum;
 
 pub fn generate_twiddle_factors<T: FFTnum>(fft_len: usize, inverse: bool) -> Vec<Complex<T>> {
     (0..fft_len).map(|i| T::generate_twiddle_factor(i, fft_len, inverse)).collect()
@@ -19,7 +19,7 @@ pub fn rotate_90<T: FFTnum>(value: Complex<T>, inverse:bool) -> Complex<T>
 mod unit_tests {
 	use super::*;
 	use std::f32;
-    use test_utils::{compare_vectors};
+    use crate::test_utils::{compare_vectors};
 
     #[test]
     fn test_generate() {

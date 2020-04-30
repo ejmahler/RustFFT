@@ -1,10 +1,10 @@
 use num_complex::Complex;
 
-use common::FFTnum;
+use crate::common::FFTnum;
 
-use twiddles;
-use ::{Length, IsInverse, Fft};
-use ::array_utils::{RawSlice, RawSliceMut};
+use crate::twiddles;
+use crate::{Length, IsInverse, Fft};
+use crate::array_utils::{RawSlice, RawSliceMut};
 
 #[allow(unused)]
 macro_rules! boilerplate_fft_butterfly {
@@ -696,7 +696,7 @@ boilerplate_fft_butterfly!(Butterfly32, 32, |this: &Butterfly32<_>| this.butterf
 #[cfg(test)]
 mod unit_tests {
 	use super::*;
-	use test_utils::check_fft_algorithm;
+	use crate::test_utils::check_fft_algorithm;
 
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro

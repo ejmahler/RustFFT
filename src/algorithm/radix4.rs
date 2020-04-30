@@ -1,10 +1,10 @@
 use num_complex::Complex;
 use num_traits::Zero;
 
-use common::FFTnum;
+use crate::common::FFTnum;
 
-use algorithm::butterflies::{Butterfly2, Butterfly4, Butterfly8, Butterfly16};
-use ::{Length, IsInverse, Fft};
+use crate::algorithm::butterflies::{Butterfly2, Butterfly4, Butterfly8, Butterfly16};
+use crate::{Length, IsInverse, Fft};
 
 /// FFT algorithm optimized for power-of-two sizes
 ///
@@ -201,7 +201,7 @@ unsafe fn butterfly_4<T: FFTnum>(data: &mut [Complex<T>],
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use test_utils::check_fft_algorithm;
+    use crate::test_utils::check_fft_algorithm;
 
     #[test]
     fn test_radix4() {

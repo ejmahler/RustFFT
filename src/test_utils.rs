@@ -4,9 +4,9 @@ use num_traits::{Zero, One, Float};
 use rand::{StdRng, SeedableRng};
 use rand::distributions::{Normal, Distribution};
 
-use algorithm::DFT;
-use Fft;
-use common::FFTnum;
+use crate::algorithm::DFT;
+use crate::Fft;
+use crate::common::FFTnum;
 
 /// The seed for the random number generator used to generate
 /// random signals. It's defined here so that we have deterministic
@@ -36,7 +36,7 @@ pub fn compare_vectors<T: FFTnum + Float>(vec1: &[Complex<T>], vec2: &[Complex<T
     return (error.to_f64().unwrap() / vec1.len() as f64) < 0.1f64;
 }
 
-pub fn check_fft_algorithm<T: FFTnum + Float>(fft: &Fft<T>, len: usize, inverse: bool) {
+pub fn check_fft_algorithm<T: FFTnum + Float>(fft: &dyn Fft<T>, len: usize, inverse: bool) {
     assert_eq!(fft.len(), len, "Algorithm reported incorrect size. Expected {}, got {}", len, fft.len());
     assert_eq!(fft.is_inverse(), inverse, "Algorithm reported incorrect inverse value");
 
