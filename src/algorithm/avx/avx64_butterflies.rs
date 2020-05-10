@@ -270,7 +270,7 @@ impl Butterfly7Avx64<f64> {
         let rotated4  = AvxVector::rotate90(diff4, rotation.lo());
 
         let [mid16, mid25] = avx64_utils::transpose_2x2_f64([sum12, rotated65]);
-        let mid34 = __m128d::combine(sum3, rotated4);
+        let mid34 = AvxVector128::merge(sum3, rotated4);
 
         // to compute the first output, compute the sum of all elements. mid16[0], mid25[0], and mid34[0] already have the sum of 1+6, 2+5 and 3+4 respectively, so if we add them, we'll get 1+2+3+4+5+6
         let output0_left  = AvxVector::add(mid16.lo(),  mid25.lo());
