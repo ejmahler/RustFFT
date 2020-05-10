@@ -2,8 +2,11 @@ use std::arch::x86_64::*;
 use std::fmt::Debug;
 
 use num_complex::Complex;
+use num_traits::Zero;
 
 use crate::common::FFTnum;
+use super::avx32_utils::AvxComplexArrayf32;
+use super::avx64_utils::AvxComplexArray64;
 
 /// A SIMD vector of complex numbers, stored with the real values and imaginary values interleaved. 
 /// Implemented for __m128, __m128d, __m256, __m256d, but these all require the AVX instruction set.
@@ -41,6 +44,13 @@ pub trait AvxVector : Copy + Debug {
 
     // create a Rotator90 instance to rotate complex numbers either 90 or 270 degrees, based on the value of `inverse`
     unsafe fn make_rotation90(inverse: bool) -> Rotation90<Self>;
+
+    // Generates a chunk of twiddle factors starting at (X,Y) and incrementing X `COMPLEX_PER_VECTOR` times.
+    // The result will be [twiddle(x*y, len), twiddle((x+1)*y, len), twiddle((x+2)*y, len), ...] for as many complex numbers fit in a vector
+    unsafe fn make_mixedradix_twiddle_chunk(x: usize, y: usize, len: usize, inverse: bool) -> Self;
+
+    // Computes the given twiddle factor and broadcasts it across the whole vector
+    unsafe fn broadcast_twiddle(index: usize, len: usize, inverse: bool) -> Self;
 
 
     
@@ -482,6 +492,21 @@ impl AvxVector for __m256 {
             Rotation90(Self::broadcast_complex_elements(Complex::new(-0.0, 0.0)))
         }
     }
+
+    #[inline(always)]
+    unsafe fn make_mixedradix_twiddle_chunk(x: usize, y: usize, len: usize, inverse: bool) -> Self {
+        let mut twiddle_chunk = [Complex::zero(); Self::COMPLEX_PER_VECTOR];
+        for i in 0..Self::COMPLEX_PER_VECTOR {
+            twiddle_chunk[i] = f32::generate_twiddle_factor(y*(x + i), len, inverse);
+        }
+
+        twiddle_chunk.load_complex_f32(0)
+    }
+
+    #[inline(always)]
+    unsafe fn broadcast_twiddle(index: usize, len: usize, inverse: bool) -> Self {
+        Self::broadcast_complex_elements(Self::ScalarType::generate_twiddle_factor(index, len, inverse))
+    }
 }
 impl AvxVector256 for __m256 {
     type HalfVector = __m128;
@@ -571,6 +596,19 @@ impl AvxVector for __m128 {
         } else {
             Rotation90(Self::broadcast_complex_elements(Complex::new(-0.0, 0.0)))
         }
+    }
+    #[inline(always)]
+    unsafe fn make_mixedradix_twiddle_chunk(x: usize, y: usize, len: usize, inverse: bool) -> Self {
+        let mut twiddle_chunk = [Complex::zero(); Self::COMPLEX_PER_VECTOR];
+        for i in 0..Self::COMPLEX_PER_VECTOR {
+            twiddle_chunk[i] = f32::generate_twiddle_factor(y*(x + i), len, inverse);
+        }
+
+        twiddle_chunk.load_complex_f32_lo(0)
+    }
+    #[inline(always)]
+    unsafe fn broadcast_twiddle(index: usize, len: usize, inverse: bool) -> Self {
+        Self::broadcast_complex_elements(Self::ScalarType::generate_twiddle_factor(index, len, inverse))
     }
 }
 impl AvxVector128 for __m128 {
@@ -664,6 +702,19 @@ impl AvxVector for __m256d {
             Rotation90(Self::broadcast_complex_elements(Complex::new(-0.0, 0.0)))
         }
     }
+    #[inline(always)]
+    unsafe fn make_mixedradix_twiddle_chunk(x: usize, y: usize, len: usize, inverse: bool) -> Self {
+        let mut twiddle_chunk = [Complex::zero(); Self::COMPLEX_PER_VECTOR];
+        for i in 0..Self::COMPLEX_PER_VECTOR {
+            twiddle_chunk[i] = f64::generate_twiddle_factor(y*(x + i), len, inverse);
+        }
+
+        twiddle_chunk.load_complex_f64(0)
+    }
+    #[inline(always)]
+    unsafe fn broadcast_twiddle(index: usize, len: usize, inverse: bool) -> Self {
+        Self::broadcast_complex_elements(Self::ScalarType::generate_twiddle_factor(index, len, inverse))
+    }
 }
 impl AvxVector256 for __m256d {
     type HalfVector = __m128d;
@@ -753,6 +804,19 @@ impl AvxVector for __m128d {
         } else {
             Rotation90(Self::broadcast_complex_elements(Complex::new(-0.0, 0.0)))
         }
+    }
+    #[inline(always)]
+    unsafe fn make_mixedradix_twiddle_chunk(x: usize, y: usize, len: usize, inverse: bool) -> Self {
+        let mut twiddle_chunk = [Complex::zero(); Self::COMPLEX_PER_VECTOR];
+        for i in 0..Self::COMPLEX_PER_VECTOR {
+            twiddle_chunk[i] = f64::generate_twiddle_factor(y*(x + i), len, inverse);
+        }
+
+        twiddle_chunk.load_complex_f64_lo(0)
+    }
+    #[inline(always)]
+    unsafe fn broadcast_twiddle(index: usize, len: usize, inverse: bool) -> Self {
+        Self::broadcast_complex_elements(Self::ScalarType::generate_twiddle_factor(index, len, inverse))
     }
 }
 impl AvxVector128 for __m128d {

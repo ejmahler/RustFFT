@@ -2,7 +2,6 @@ use std::sync::Arc;
 use std::arch::x86_64::*;
 
 use num_complex::Complex;
-use num_traits::Zero;
 
 use crate::common::FFTnum;
 
@@ -110,11 +109,10 @@ macro_rules! mixedradix_boilerplate_f64{() => (
     }
 )}
 
-macro_rules! mixedradix_gen_data_f32 {
+macro_rules! mixedradix_gen_data {
     ($row_count: expr, $inner_fft:expr) => {{
         // Important constants
         const ROW_COUNT : usize = $row_count;
-        const CHUNK_SIZE : usize = 4;
         const TWIDDLES_PER_COLUMN : usize = ROW_COUNT - 1;
 
         // derive some info from our inner FFT
@@ -124,20 +122,15 @@ macro_rules! mixedradix_gen_data_f32 {
 
         // We're going to process each row of the FFT one AVX register at a time. We need to know how many AVX registers each row can fit,
         // and if the last register in each row going to have partial data (ie a remainder)
-        let quotient = len_per_row / CHUNK_SIZE;
-        let remainder = len_per_row % CHUNK_SIZE;
+        let quotient = len_per_row / V::COMPLEX_PER_VECTOR;
+        let remainder = len_per_row % V::COMPLEX_PER_VECTOR;
 
-        let num_twiddle_columns = quotient + div_ceil(remainder, CHUNK_SIZE);
+        let num_twiddle_columns = quotient + div_ceil(remainder, V::COMPLEX_PER_VECTOR);
 
         let mut twiddles = Vec::with_capacity(num_twiddle_columns * TWIDDLES_PER_COLUMN);
         for x in 0..num_twiddle_columns {
             for y in 1..ROW_COUNT {
-                let mut twiddle_chunk = [Complex::zero(); CHUNK_SIZE];
-                for i in 0..CHUNK_SIZE {
-                    twiddle_chunk[i] = f32::generate_twiddle_factor(y*(x*CHUNK_SIZE + i), len, inverse);
-                }
-
-                twiddles.push(twiddle_chunk.load_complex_f32(0));
+                twiddles.push(AvxVector::make_mixedradix_twiddle_chunk(x * V::COMPLEX_PER_VECTOR, y, len, inverse));
             }
         }
 
@@ -154,53 +147,6 @@ macro_rules! mixedradix_gen_data_f32 {
         }
     }}
 }
-
-
-macro_rules! mixedradix_gen_data_f64 {
-    ($row_count: expr, $inner_fft:expr) => {{
-        // Important constants
-        const ROW_COUNT : usize = $row_count;
-        const CHUNK_SIZE : usize = 2;
-        const TWIDDLES_PER_COLUMN : usize = ROW_COUNT - 1;
-
-        // derive some info from our inner FFT
-        let inverse = $inner_fft.is_inverse();
-        let len_per_row = $inner_fft.len();
-        let len = len_per_row * ROW_COUNT;
-
-        // We're going to process each row of the FFT one AVX register at a time. We need to know how many AVX registers each row can fit,
-        // and if the last register in each row going to have partial data (ie a remainder)
-        let quotient = len_per_row / CHUNK_SIZE;
-        let remainder = len_per_row % CHUNK_SIZE;
-
-        let num_twiddle_columns = quotient + div_ceil(remainder, CHUNK_SIZE);
-
-        let mut twiddles = Vec::with_capacity(num_twiddle_columns * TWIDDLES_PER_COLUMN);
-        for x in 0..num_twiddle_columns {
-            for y in 1..ROW_COUNT {
-                let mut twiddle_chunk = [Complex::zero(); CHUNK_SIZE];
-                for i in 0..CHUNK_SIZE {
-                    twiddle_chunk[i] = f64::generate_twiddle_factor(y*(x*CHUNK_SIZE + i), len, inverse);
-                }
-
-                twiddles.push(twiddle_chunk.load_complex_f64(0));
-            }
-        }
-
-        let inner_outofplace_scratch = $inner_fft.get_out_of_place_scratch_len();
-        let inner_inplace_scratch = $inner_fft.get_inplace_scratch_len();
-
-        CommonSimdData {
-            twiddles: twiddles.into_boxed_slice(),
-            inplace_scratch_len: len + inner_outofplace_scratch,
-            outofplace_scratch_len: if inner_inplace_scratch > len { inner_inplace_scratch } else { 0 },
-            inner_fft: $inner_fft,
-            len,
-            inverse,
-        }
-    }}
-}
-
 
 macro_rules! mixedradix_column_butterflies_f32{
     ($row_count: expr, $butterfly_fn: expr, $butterfly_fn_lo: expr) => (
@@ -515,15 +461,17 @@ pub struct MixedRadix2xnAvx<T, V> {
 }
 boilerplate_fft_commondata!(MixedRadix2xnAvx);
 
-impl MixedRadix2xnAvx<f32, __m256> {
-    mixedradix_boilerplate_f32!();
-    
+impl<T: FFTnum, V: AvxVector> MixedRadix2xnAvx<T, V> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f32>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
-            common_data: mixedradix_gen_data_f32!(2, inner_fft),
+            common_data: mixedradix_gen_data!(2, inner_fft),
         }
     }
+}
+
+impl MixedRadix2xnAvx<f32, __m256> {
+    mixedradix_boilerplate_f32!();
 
     mixedradix_column_butterflies_f32!(2,
         |rows, _:_| AvxVector::column_butterfly2(rows),
@@ -533,13 +481,6 @@ impl MixedRadix2xnAvx<f32, __m256> {
 }
 impl MixedRadix2xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
-    
-    #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f64>>) -> Self {
-        Self {
-            common_data: mixedradix_gen_data_f64!(2, inner_fft),
-        }
-    }
 
     mixedradix_column_butterflies_f64!(2,
         |columns, _:_| AvxVector::column_butterfly2(columns),
@@ -554,16 +495,18 @@ pub struct MixedRadix3xnAvx<T, V> {
 }
 boilerplate_fft_commondata!(MixedRadix3xnAvx);
 
-impl MixedRadix3xnAvx<f32, __m256> {
-    mixedradix_boilerplate_f32!();
-    
+impl<T: FFTnum, V: AvxVector> MixedRadix3xnAvx<T, V> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f32>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
-            twiddles_butterfly3: AvxVector::broadcast_complex_elements(f32::generate_twiddle_factor(1, 3, inner_fft.is_inverse())),
-            common_data: mixedradix_gen_data_f32!(3, inner_fft),
+            twiddles_butterfly3: V::broadcast_twiddle(1, 3, inner_fft.is_inverse()),
+            common_data: mixedradix_gen_data!(3, inner_fft),
         }
     }
+}
+
+impl MixedRadix3xnAvx<f32, __m256> {
+    mixedradix_boilerplate_f32!();
 
     mixedradix_column_butterflies_f32!(3, 
         |columns, this: &Self| AvxVector::column_butterfly3(columns, this.twiddles_butterfly3),
@@ -573,14 +516,6 @@ impl MixedRadix3xnAvx<f32, __m256> {
 }
 impl MixedRadix3xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
-    
-    #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f64>>) -> Self {
-        Self {
-            twiddles_butterfly3: AvxVector::broadcast_complex_elements(f64::generate_twiddle_factor(1, 3, inner_fft.is_inverse())),
-            common_data: mixedradix_gen_data_f64!(3, inner_fft),
-        }
-    }
 
     mixedradix_column_butterflies_f64!(3,
         |columns, this: &Self| AvxVector::column_butterfly3(columns, this.twiddles_butterfly3),
@@ -599,16 +534,18 @@ pub struct MixedRadix4xnAvx<T, V> {
 }
 boilerplate_fft_commondata!(MixedRadix4xnAvx);
 
-impl MixedRadix4xnAvx<f32, __m256> {
-    mixedradix_boilerplate_f32!();
-
+impl<T: FFTnum, V: AvxVector> MixedRadix4xnAvx<T, V> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f32>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
-            twiddles_butterfly4: AvxVector::make_rotation90(inner_fft.is_inverse()),
-            common_data: mixedradix_gen_data_f32!(4, inner_fft),
+            twiddles_butterfly4: V::make_rotation90(inner_fft.is_inverse()),
+            common_data: mixedradix_gen_data!(4, inner_fft),
         }
     }
+}
+
+impl MixedRadix4xnAvx<f32, __m256> {
+    mixedradix_boilerplate_f32!();
 
     mixedradix_column_butterflies_f32!(4, 
         |columns, this: &Self| AvxVector::column_butterfly4(columns, this.twiddles_butterfly4),
@@ -618,14 +555,6 @@ impl MixedRadix4xnAvx<f32, __m256> {
 }
 impl MixedRadix4xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
-
-    #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f64>>) -> Self {
-        Self {
-            twiddles_butterfly4: AvxVector::make_rotation90(inner_fft.is_inverse()),
-            common_data: mixedradix_gen_data_f64!(4, inner_fft),
-        }
-    }
 
     mixedradix_column_butterflies_f64!(4,
         |columns, this: &Self| AvxVector::column_butterfly4(columns, this.twiddles_butterfly4),
@@ -644,16 +573,18 @@ pub struct MixedRadix6xnAvx<T, V> {
 }
 boilerplate_fft_commondata!(MixedRadix6xnAvx);
 
-impl MixedRadix6xnAvx<f32, __m256> {
-    mixedradix_boilerplate_f32!();
-    
+impl<T: FFTnum, V: AvxVector> MixedRadix6xnAvx<T, V> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f32>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
-            twiddles_butterfly3: AvxVector::broadcast_complex_elements(f32::generate_twiddle_factor(1, 3, inner_fft.is_inverse())),
-            common_data: mixedradix_gen_data_f32!(6, inner_fft),
+            twiddles_butterfly3: V::broadcast_twiddle(1, 3, inner_fft.is_inverse()),
+            common_data: mixedradix_gen_data!(6, inner_fft),
         }
     }
+}
+
+impl MixedRadix6xnAvx<f32, __m256> {
+    mixedradix_boilerplate_f32!();
 
     mixedradix_column_butterflies_f32!(6,
         |columns, this: &Self| AvxVector::column_butterfly6(columns, this.twiddles_butterfly3),
@@ -663,14 +594,6 @@ impl MixedRadix6xnAvx<f32, __m256> {
 }
 impl MixedRadix6xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
-    
-    #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f64>>) -> Self {
-        Self {
-            twiddles_butterfly3: AvxVector::broadcast_complex_elements(f64::generate_twiddle_factor(1, 3, inner_fft.is_inverse())),
-            common_data: mixedradix_gen_data_f64!(6, inner_fft),
-        }
-    }
 
     mixedradix_column_butterflies_f64!(6,
         |columns, this: &Self| AvxVector::column_butterfly6(columns, this.twiddles_butterfly3),
@@ -691,16 +614,18 @@ pub struct MixedRadix8xnAvx<T, V> {
 }
 boilerplate_fft_commondata!(MixedRadix8xnAvx);
 
-impl MixedRadix8xnAvx<f32, __m256> {
-    mixedradix_boilerplate_f32!();
-
+impl<T: FFTnum, V: AvxVector> MixedRadix8xnAvx<T, V> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f32>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
-        	twiddles_butterfly4: AvxVector::make_rotation90(inner_fft.is_inverse()),
-            common_data: mixedradix_gen_data_f32!(8, inner_fft),
+            twiddles_butterfly4: V::make_rotation90(inner_fft.is_inverse()),
+            common_data: mixedradix_gen_data!(8, inner_fft),
         }
     }
+}
+
+impl MixedRadix8xnAvx<f32, __m256> {
+    mixedradix_boilerplate_f32!();
 
     mixedradix_column_butterflies_f32!(8,
         |columns, this: &Self| AvxVector::column_butterfly8(columns, this.twiddles_butterfly4),
@@ -710,14 +635,6 @@ impl MixedRadix8xnAvx<f32, __m256> {
 }
 impl MixedRadix8xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
-
-    #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f64>>) -> Self {
-        Self {
-        	twiddles_butterfly4: AvxVector::make_rotation90(inner_fft.is_inverse()),
-            common_data: mixedradix_gen_data_f64!(8, inner_fft),
-        }
-    }
 
     mixedradix_column_butterflies_f64!(8,
         |columns, this: &Self| AvxVector::column_butterfly8(columns, this.twiddles_butterfly4),
@@ -737,37 +654,33 @@ pub struct MixedRadix9xnAvx<T, V> {
 }
 boilerplate_fft_commondata!(MixedRadix9xnAvx);
 
-impl MixedRadix9xnAvx<f32, __m256> {
-    mixedradix_boilerplate_f32!();
-
+impl<T: FFTnum, V: AvxVector256> MixedRadix9xnAvx<T, V> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f32>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         let inverse = inner_fft.is_inverse();
 
-        let twiddles_butterfly9_lo = [
-            f32::generate_twiddle_factor(1, 9, inverse),
-            f32::generate_twiddle_factor(1, 9, inverse),
-            f32::generate_twiddle_factor(2, 9, inverse),
-            f32::generate_twiddle_factor(2, 9, inverse),
-            f32::generate_twiddle_factor(2, 9, inverse),
-            f32::generate_twiddle_factor(2, 9, inverse),
-            f32::generate_twiddle_factor(4, 9, inverse),
-            f32::generate_twiddle_factor(4, 9, inverse),
-        ];
+        let twiddle1 = V::HalfVector::broadcast_twiddle(1, 9, inner_fft.is_inverse());
+        let twiddle2 = V::HalfVector::broadcast_twiddle(2, 9, inner_fft.is_inverse());
+        let twiddle4 = V::HalfVector::broadcast_twiddle(4, 9, inner_fft.is_inverse());
+
         Self {
         	twiddles_butterfly9: [
-                avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 9, inverse)),
-                avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(2, 9, inverse)),
-                avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(4, 9, inverse)),
+                V::broadcast_twiddle(1, 9, inverse),
+                V::broadcast_twiddle(2, 9, inverse),
+                V::broadcast_twiddle(4, 9, inverse),
             ],
             twiddles_butterfly9_lo: [
-                twiddles_butterfly9_lo.load_complex_f32(0),
-                twiddles_butterfly9_lo.load_complex_f32(4),
+                V::merge(twiddle1, twiddle2),
+                V::merge(twiddle2, twiddle4),
             ],
-        	twiddles_butterfly3: avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 3, inverse)),
-            common_data: mixedradix_gen_data_f32!(9, inner_fft),
+        	twiddles_butterfly3: V::broadcast_twiddle(1, 3, inner_fft.is_inverse()),
+            common_data: mixedradix_gen_data!(9, inner_fft),
         }
     }
+}
+
+impl MixedRadix9xnAvx<f32, __m256> {
+    mixedradix_boilerplate_f32!();
 
     mixedradix_column_butterflies_f32!(9, 
         |columns, this: &Self| AvxVector256::column_butterfly9(columns, this.twiddles_butterfly9, this.twiddles_butterfly3),
@@ -777,30 +690,6 @@ impl MixedRadix9xnAvx<f32, __m256> {
 }
 impl MixedRadix9xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
-
-    #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f64>>) -> Self {
-        let inverse = inner_fft.is_inverse();
-        let twiddles_butterfly9_lo = [
-            f64::generate_twiddle_factor(1, 9, inverse),
-            f64::generate_twiddle_factor(2, 9, inverse),
-            f64::generate_twiddle_factor(2, 9, inverse),
-            f64::generate_twiddle_factor(4, 9, inverse),
-        ];
-        Self {
-        	twiddles_butterfly9: [
-                avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1, 9, inverse)),
-                avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(2, 9, inverse)),
-                avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(4, 9, inverse)),
-            ],
-            twiddles_butterfly9_lo: [
-                twiddles_butterfly9_lo.load_complex_f64(0),
-                twiddles_butterfly9_lo.load_complex_f64(2),
-            ],
-        	twiddles_butterfly3: avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1, 3, inverse)),
-            common_data: mixedradix_gen_data_f64!(9, inner_fft),
-        }
-    }
 
     mixedradix_column_butterflies_f64!(9,
         |columns, this: &Self| AvxVector256::column_butterfly9(columns, this.twiddles_butterfly9, this.twiddles_butterfly3),
@@ -822,18 +711,20 @@ pub struct MixedRadix12xnAvx<T, V> {
 }
 boilerplate_fft_commondata!(MixedRadix12xnAvx);
 
-impl MixedRadix12xnAvx<f32, __m256> {
-    mixedradix_boilerplate_f32!();
-
+impl<T: FFTnum, V: AvxVector256> MixedRadix12xnAvx<T, V> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f32>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         let inverse = inner_fft.is_inverse();
         Self {
-        	twiddles_butterfly4: AvxVector::make_rotation90(inner_fft.is_inverse()),
-        	twiddles_butterfly3: avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 3, inverse)),
-            common_data: mixedradix_gen_data_f32!(12, inner_fft),
+        	twiddles_butterfly4: AvxVector::make_rotation90(inverse),
+        	twiddles_butterfly3: V::broadcast_twiddle(1, 3, inverse),
+            common_data: mixedradix_gen_data!(12, inner_fft),
         }
     }
+}
+
+impl MixedRadix12xnAvx<f32, __m256> {
+    mixedradix_boilerplate_f32!();
 
     mixedradix_column_butterflies_f32!(12, 
         |columns, this: &Self| AvxVector256::column_butterfly12(columns, this.twiddles_butterfly3, this.twiddles_butterfly4),
@@ -843,16 +734,6 @@ impl MixedRadix12xnAvx<f32, __m256> {
 }
 impl MixedRadix12xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
-
-    #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f64>>) -> Self {
-        let inverse = inner_fft.is_inverse();
-        Self {
-        	twiddles_butterfly4: AvxVector::make_rotation90(inner_fft.is_inverse()),
-        	twiddles_butterfly3: avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1, 3, inverse)),
-            common_data: mixedradix_gen_data_f64!(12, inner_fft),
-        }
-    }
 
     mixedradix_column_butterflies_f64!(12,
         |columns, this: &Self| AvxVector256::column_butterfly12(columns, this.twiddles_butterfly3, this.twiddles_butterfly4),
@@ -873,21 +754,23 @@ pub struct MixedRadix16xnAvx<T, V> {
 }
 boilerplate_fft_commondata!(MixedRadix16xnAvx);
 
-impl MixedRadix16xnAvx<f32, __m256> {
-    mixedradix_boilerplate_f32!();
-
+impl<T: FFTnum, V: AvxVector256> MixedRadix16xnAvx<T, V> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f32>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         let inverse = inner_fft.is_inverse();
         Self {
         	twiddles_butterfly4: AvxVector::make_rotation90(inner_fft.is_inverse()),
         	twiddles_butterfly16: [
-                avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(1, 16, inverse)),
-                avx32_utils::broadcast_complex_f32(f32::generate_twiddle_factor(3, 16, inverse)),
+                V::broadcast_twiddle(1, 16, inverse),
+                V::broadcast_twiddle(3, 16, inverse),
             ],
-            common_data: mixedradix_gen_data_f32!(16, inner_fft),
+            common_data: mixedradix_gen_data!(16, inner_fft),
         }
     }
+}
+
+impl MixedRadix16xnAvx<f32, __m256> {
+    mixedradix_boilerplate_f32!();
 
     mixedradix_column_butterflies_f32!(16, 
         |columns, this: &Self| AvxVector::column_butterfly16(columns, this.twiddles_butterfly16, this.twiddles_butterfly4),
@@ -897,19 +780,6 @@ impl MixedRadix16xnAvx<f32, __m256> {
 }
 impl MixedRadix16xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
-
-    #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<f64>>) -> Self {
-        let inverse = inner_fft.is_inverse();
-        Self {
-        	twiddles_butterfly4: AvxVector::make_rotation90(inner_fft.is_inverse()),
-        	twiddles_butterfly16: [
-                avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(1, 16, inverse)),
-                avx64_utils::broadcast_complex_f64(f64::generate_twiddle_factor(3, 16, inverse)),
-            ],
-            common_data: mixedradix_gen_data_f64!(16, inner_fft),
-        }
-    }
 
     mixedradix_column_butterflies_f64!(16,
         |columns, this: &Self| AvxVector::column_butterfly16(columns, this.twiddles_butterfly16, this.twiddles_butterfly4),
