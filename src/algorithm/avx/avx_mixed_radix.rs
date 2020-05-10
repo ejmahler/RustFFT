@@ -350,8 +350,41 @@ macro_rules! mixedradix_transpose_f32{
             let transposed = $transpose_fn(columns);
 
             // store the transposed rows contiguously, keeping in mind that because we're dealing with a remainder, we should only write a portion of the data
-            // This last section is different per row count, so it's not somethign we can put inside the macro, so we're going to call back into the algorithm for this
-            Self::write_partial_remainder(&mut output[output_index_base..], transposed, partial_remainder)
+            // first, see how many full AVX vectors we have to write
+            let full_vector_count = match partial_remainder {
+                1 => {
+                    let vector_count = ROW_COUNT / CHUNK_SIZE;
+                    for i in 0..vector_count {
+                        output.store_complex_f32(output_index_base + i * CHUNK_SIZE, transposed[i]);
+                    }
+                    vector_count
+                },
+                2 => {
+                    let vector_count = 2*ROW_COUNT / CHUNK_SIZE;
+                    for i in 0..vector_count {
+                        output.store_complex_f32(output_index_base + i * CHUNK_SIZE, transposed[i]);
+                    }
+                    vector_count
+                },
+                3 => {
+                    let vector_count = 3*ROW_COUNT / CHUNK_SIZE;
+                    for i in 0..vector_count {
+                        output.store_complex_f32(output_index_base + i * CHUNK_SIZE, transposed[i]);
+                    }
+                    vector_count
+                },
+                _ => unreachable!(),
+            };
+
+            // finally, transposed[full_vector_count] is only a partial vector, so write out only the elements we need to
+            let final_remainder = (partial_remainder * ROW_COUNT) % CHUNK_SIZE;
+            match final_remainder {
+                0 => {},
+                1 => output.store_complex_remainder1_f32(transposed[full_vector_count].lo(), output_index_base + full_vector_count * CHUNK_SIZE),
+                2 => output.store_complex_f32_lo(transposed[full_vector_count].lo(), output_index_base + full_vector_count * CHUNK_SIZE),
+                3 => output.store_complex_remainder3_f32(transposed[full_vector_count], output_index_base + full_vector_count * CHUNK_SIZE),
+                _ => unreachable!(),
+            }
         }
     }
 )}
@@ -497,22 +530,6 @@ impl MixedRadix2xnAvx<f32, __m256> {
         |rows, _:_| AvxVector::column_butterfly2(rows)
     );
     mixedradix_transpose_f32!(2, avx32_utils::interleave_evens_odds_f32, 0;1);
-
-    // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
-    // and even different from f32 to f64 of the same algorithm, so it has to go outside the macro
-    #[inline(always)]
-    unsafe fn write_partial_remainder(output: &mut[Complex<f32>], packed_data: [__m256; 2], partial_remainder: usize) {
-        assert!(partial_remainder > 0 && partial_remainder < 4);
-        if partial_remainder == 1 {
-            output.store_complex_f32_lo(packed_data[0].lo(), 0);
-        } else {
-            output.store_complex_f32(0, packed_data[0]);
-
-            if partial_remainder == 3 {
-                output.store_complex_f32_lo(packed_data[1].lo(), 4);
-            }
-        }
-    }
 }
 impl MixedRadix2xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
@@ -553,26 +570,6 @@ impl MixedRadix3xnAvx<f32, __m256> {
         |columns, this: &Self| AvxVector::column_butterfly3(columns, this.twiddles_butterfly3.lo())
     );
     mixedradix_transpose_f32!(3, avx32_utils::transpose_4x3_packed_f32, 0;1;2);
-
-    // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
-    // and even different from f32 to f64 of the same algorithm, so it has to go outside the macro
-    #[inline(always)]
-    unsafe fn write_partial_remainder(output: &mut[Complex<f32>], packed_data: [__m256; 3], partial_remainder: usize) {
-        assert!(partial_remainder > 0 && partial_remainder < 4);
-        if partial_remainder == 1 {
-            output.store_complex_remainder3_f32(packed_data[0], 0);
-        } else {
-            output.store_complex_f32(0, packed_data[0]);
-
-            if partial_remainder == 2 {
-                output.store_complex_f32_lo(packed_data[1].lo(), 4);
-            }
-            if partial_remainder == 3 {
-                output.store_complex_f32(4, packed_data[1]);
-                output.store_complex_remainder1_f32(packed_data[2].lo(), 8);
-            }
-        }
-    }
 }
 impl MixedRadix3xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
@@ -618,22 +615,6 @@ impl MixedRadix4xnAvx<f32, __m256> {
         |columns, this: &Self| AvxVector::column_butterfly4(columns, this.twiddles_butterfly4.lo())
     );
     mixedradix_transpose_f32!(4, avx32_utils::transpose_4x4_f32, 0;1;2;3);
-
-    // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
-    // and even different from f32 to f64 of the same algorithm, so it has to go outside the macro
-    #[inline(always)]
-    unsafe fn write_partial_remainder(output: &mut[Complex<f32>], packed_data: [__m256; 4], partial_remainder: usize) {
-        // We're manually unrolling this loop. if we don't, the compiler will insert unnecessary writes+reads to the stack which tank performance
-        // see: https://github.com/rust-lang/rust/issues/71025
-        // once the compiler bug is fixed, this can be replaced by a "for i in 0..partial_remainder" loop
-        output.store_complex_f32(0, packed_data[0]);
-        if partial_remainder > 1 {
-            output.store_complex_f32(4, packed_data[1]);
-            if partial_remainder > 2 {
-                output.store_complex_f32(8, packed_data[2]);
-            }
-        }
-    }
 }
 impl MixedRadix4xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
@@ -679,25 +660,6 @@ impl MixedRadix6xnAvx<f32, __m256> {
         |columns, this: &Self| AvxVector::column_butterfly6(columns, this.twiddles_butterfly3.lo())
     );
     mixedradix_transpose_f32!(6, avx32_utils::transpose_4x6_to_6x4_packed_f32, 0;1;2;3;4;5);
-
-    // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
-    // and even different from f32 to f64 of the same algorithm, so it has to go outside the macro
-    #[inline(always)]
-    unsafe fn write_partial_remainder(output: &mut[Complex<f32>], packed_data: [__m256; 6], partial_remainder: usize) {
-        assert!(partial_remainder > 0 && partial_remainder < 4);
-        output.store_complex_f32(0, packed_data[0]);
-        if partial_remainder == 1 {
-            output.store_complex_f32_lo(packed_data[1].lo(), 4);
-        } else {
-            output.store_complex_f32(4, packed_data[1]);
-            output.store_complex_f32(8, packed_data[2]);
-
-            if partial_remainder == 3 {
-                output.store_complex_f32(12, packed_data[3]);
-                output.store_complex_f32_lo(packed_data[4].lo(), 16);
-            }
-        }
-    }
 }
 impl MixedRadix6xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
@@ -745,25 +707,6 @@ impl MixedRadix8xnAvx<f32, __m256> {
         |columns, this: &Self| AvxVector::column_butterfly8(columns, this.twiddles_butterfly4.lo())
     );
     mixedradix_transpose_f32!(8, avx32_utils::transpose_4x8_to_8x4_packed_f32, 0;1;2;3;4;5;6;7);
-
-    // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
-    // and even different from f32 to f64 of the same algorithm, so it has to go outside the macro
-    #[inline(always)]
-    unsafe fn write_partial_remainder(output: &mut[Complex<f32>], packed_data: [__m256; 8], partial_remainder: usize) {
-        // We're manually unrolling this loop. if we don't, the compiler will insert unnecessary writes+reads to the stack which tank performance
-        // see: https://github.com/rust-lang/rust/issues/71025
-        // once the compiler bug is fixed, this can be replaced by a "for i in 0..partial_remainder" loop
-        output.store_complex_f32(0, packed_data[0]);
-        output.store_complex_f32(4, packed_data[1]);
-        if partial_remainder > 1 {
-            output.store_complex_f32(8, packed_data[2]);
-            output.store_complex_f32(12, packed_data[3]);
-            if partial_remainder > 2 {
-                output.store_complex_f32(16, packed_data[4]);
-                output.store_complex_f32(20, packed_data[5]);
-            }
-        }
-    }
 }
 impl MixedRadix8xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
@@ -831,30 +774,6 @@ impl MixedRadix9xnAvx<f32, __m256> {
         |columns, this: &Self| AvxVector128::column_butterfly9(columns, this.twiddles_butterfly9_lo, this.twiddles_butterfly3)
     );
     mixedradix_transpose_f32!(9, avx32_utils::transpose_4x9_to_9x4_packed_f32, 0;1;2;3;4;5;6;7;8);
-
-    // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
-    // and even different from f32 to f64 of the same algorithm, so it has to go outside the macro
-    #[inline(always)]
-    unsafe fn write_partial_remainder(output: &mut[Complex<f32>], packed_data: [__m256; 9], partial_remainder: usize) {
-        output.store_complex_f32(0, packed_data[0]);
-        output.store_complex_f32(4, packed_data[1]);
-
-        if partial_remainder == 1 {
-            output.store_complex_remainder1_f32(_mm256_castps256_ps128(packed_data[2]), 8);
-        } else {
-            output.store_complex_f32(8,  packed_data[2]);
-            output.store_complex_f32(12, packed_data[3]);
-
-            if partial_remainder == 2 {
-                output.store_complex_f32_lo(_mm256_castps256_ps128(packed_data[4]), 16);
-            }
-            else {
-                output.store_complex_f32(16, packed_data[4]);
-                output.store_complex_f32(20, packed_data[5]);
-                output.store_complex_remainder3_f32(packed_data[6], 24);
-            }
-        }
-    }
 }
 impl MixedRadix9xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
@@ -921,28 +840,6 @@ impl MixedRadix12xnAvx<f32, __m256> {
         |columns, this: &Self| AvxVector128::column_butterfly12(columns, this.twiddles_butterfly3, this.twiddles_butterfly4)
     );
     mixedradix_transpose_f32!(12, avx32_utils::transpose_4x12_to_12x4_packed_f32, 0;1;2;3;4;5;6;7;8;9;10;11);
-
-    // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
-    // and even different from f32 to f64 of the same algorithm, so it has to go outside the macro
-    #[inline(always)]
-    unsafe fn write_partial_remainder(output: &mut[Complex<f32>], packed_data: [__m256; 12], partial_remainder: usize) {
-        // We're manually unrolling this loop. if we don't, the compiler will insert unnecessary writes+reads to the stack which tank performance
-        // see: https://github.com/rust-lang/rust/issues/71025
-        // once the compiler bug is fixed, this can be replaced by a "for i in 0..partial_remainder" loop
-        output.store_complex_f32(0, packed_data[0]);
-        output.store_complex_f32(4, packed_data[1]);
-        output.store_complex_f32(8, packed_data[2]);
-        if partial_remainder > 1 {
-            output.store_complex_f32(12, packed_data[3]);
-            output.store_complex_f32(16, packed_data[4]);
-            output.store_complex_f32(20, packed_data[5]);
-            if partial_remainder > 2 {
-                output.store_complex_f32(24, packed_data[6]);
-                output.store_complex_f32(28, packed_data[7]);
-                output.store_complex_f32(32, packed_data[8]);
-            }
-        }
-    }
 }
 impl MixedRadix12xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
@@ -997,31 +894,6 @@ impl MixedRadix16xnAvx<f32, __m256> {
         |columns, this: &Self| AvxVector::column_butterfly16(columns, [this.twiddles_butterfly16[0].lo(), this.twiddles_butterfly16[1].lo()], this.twiddles_butterfly4.lo())
     );
     mixedradix_transpose_f32!(16, avx32_utils::transpose_4x16_to_16x4_packed_f32, 0;1;2;3;4;5;6;7;8;9;10;11;12;13;14;15);
-
-    // This is called by mixedradix_transpose_f32!() -- this one single section will be different for every mixed radix algorithm,
-    // and even different from f32 to f64 of the same algorithm, so it has to go outside the macro
-    #[inline(always)]
-    unsafe fn write_partial_remainder(output: &mut[Complex<f32>], packed_data: [__m256; 16], partial_remainder: usize) {
-        // We're manually unrolling this loop. if we don't, the compiler will insert unnecessary writes+reads to the stack which tank performance
-        // see: https://github.com/rust-lang/rust/issues/71025
-        // once the compiler bug is fixed, this can be replaced by a "for i in 0..partial_remainder" loop
-        output.store_complex_f32(0, packed_data[0]);
-        output.store_complex_f32(4, packed_data[1]);
-        output.store_complex_f32(8, packed_data[2]);
-        output.store_complex_f32(12, packed_data[3]);
-        if partial_remainder > 1 {
-            output.store_complex_f32(16, packed_data[4]);
-            output.store_complex_f32(20, packed_data[5]);
-            output.store_complex_f32(24, packed_data[6]);
-            output.store_complex_f32(28, packed_data[7]);
-            if partial_remainder > 2 {
-                output.store_complex_f32(32, packed_data[8]);
-                output.store_complex_f32(36, packed_data[9]);
-                output.store_complex_f32(40, packed_data[10]);
-                output.store_complex_f32(44, packed_data[11]);
-            }
-        }
-    }
 }
 impl MixedRadix16xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
