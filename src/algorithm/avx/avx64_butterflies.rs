@@ -102,11 +102,7 @@ macro_rules! gen_butterfly_twiddles_interleaved_columns {
             let y = (index / TWIDDLE_VECTOR_COLS) + 1;
             let x = (index % TWIDDLE_VECTOR_COLS) * 2 + $skip_cols;
 
-            let twiddle_chunk = [
-                f64::generate_twiddle_factor(y*(x), FFT_LEN, $inverse),
-                f64::generate_twiddle_factor(y*(x+1), FFT_LEN, $inverse),
-            ];
-            twiddles[index] = twiddle_chunk.load_complex_f64(0);
+            twiddles[index] = AvxVector::make_mixedradix_twiddle_chunk(x, y, FFT_LEN, $inverse);
         }
         twiddles
     }}
@@ -125,11 +121,7 @@ macro_rules! gen_butterfly_twiddles_separated_columns {
             let y = (index % TWIDDLE_ROWS) + 1;
             let x = (index / TWIDDLE_ROWS) * 2 + $skip_cols;
 
-            let twiddle_chunk = [
-                f64::generate_twiddle_factor(y*(x), FFT_LEN, $inverse),
-                f64::generate_twiddle_factor(y*(x+1), FFT_LEN, $inverse),
-            ];
-            twiddles[index] = twiddle_chunk.load_complex_f64(0);
+            twiddles[index] = AvxVector::make_mixedradix_twiddle_chunk(x, y, FFT_LEN, $inverse);
         }
         twiddles
     }}

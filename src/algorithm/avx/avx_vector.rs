@@ -21,7 +21,7 @@ pub trait AvxVector : Copy + Debug {
     unsafe fn zero() -> Self;
     unsafe fn half_root2() -> Self; // an entire vector filled with 0.5.sqrt()
 
-
+    // Basic operations that map directly to 1-2 AVX intrinsics
     unsafe fn add(left: Self, right: Self) -> Self;
     unsafe fn sub(left: Self, right: Self) -> Self;
     unsafe fn xor(left: Self, right: Self) -> Self;
@@ -30,27 +30,28 @@ pub trait AvxVector : Copy + Debug {
     unsafe fn fnmadd(left: Self, right: Self, add: Self) -> Self;
     unsafe fn fmaddsub(left: Self, right: Self, add: Self) -> Self;
 
-    // Reverse the order of complex numbers in the vector, so that the last is the first and the first is the last
-    unsafe fn reverse_complex_elements(self) -> Self;
-
+    // More basic operations that end up being implemented in 1-2 intrinsics, but unlike the ones above, these have higher-level meaning than just arithmetic
     /// Swap each real number with its corresponding imaginary number
     unsafe fn swap_complex_components(self) -> Self;
 
     /// first return is the reals duplicated into the imaginaries, second return is the imaginaries duplicated into the reals
     unsafe fn duplicate_complex_components(self) -> (Self, Self);
 
-    // Fill a vector by repeating the provided complex number as many times as possible
+    /// Reverse the order of complex numbers in the vector, so that the last is the first and the first is the last
+    unsafe fn reverse_complex_elements(self) -> Self;
+
+    /// Fill a vector by repeating the provided complex number as many times as possible
     unsafe fn broadcast_complex_elements(value: Complex<Self::ScalarType>) -> Self;
 
-    // create a Rotator90 instance to rotate complex numbers either 90 or 270 degrees, based on the value of `inverse`
+    /// Fill a vector by computing a twiddle factor and repeating it across the whole vector
+    unsafe fn broadcast_twiddle(index: usize, len: usize, inverse: bool) -> Self;
+
+    /// create a Rotator90 instance to rotate complex numbers either 90 or 270 degrees, based on the value of `inverse`
     unsafe fn make_rotation90(inverse: bool) -> Rotation90<Self>;
 
-    // Generates a chunk of twiddle factors starting at (X,Y) and incrementing X `COMPLEX_PER_VECTOR` times.
-    // The result will be [twiddle(x*y, len), twiddle((x+1)*y, len), twiddle((x+2)*y, len), ...] for as many complex numbers fit in a vector
+    /// Generates a chunk of twiddle factors starting at (X,Y) and incrementing X `COMPLEX_PER_VECTOR` times.
+    /// The result will be [twiddle(x*y, len), twiddle((x+1)*y, len), twiddle((x+2)*y, len), ...] for as many complex numbers fit in a vector
     unsafe fn make_mixedradix_twiddle_chunk(x: usize, y: usize, len: usize, inverse: bool) -> Self;
-
-    // Computes the given twiddle factor and broadcasts it across the whole vector
-    unsafe fn broadcast_twiddle(index: usize, len: usize, inverse: bool) -> Self;
 
 
     
