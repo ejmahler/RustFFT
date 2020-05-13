@@ -674,7 +674,7 @@ impl MixedRadixAvx4x6<f32> {
         ];
 
         // We're going to treat our input as a 4x6 2d array. First, do 4 butterfly 6's down the columns of that array.
-        let mut mid = AvxVector::column_butterfly6(rows, self.twiddles_butterfly3);
+        let mut mid = AvxVector256::column_butterfly6(rows, self.twiddles_butterfly3);
 
         // apply twiddle factors
         for r in 1..6 {
@@ -1051,7 +1051,7 @@ impl MixedRadixAvx6x9<f32> {
             rows0[r*2] = input.load_complex_f32_lo(r * 18);
             rows0[r*2+1] = input.load_complex_f32_lo(r * 18 + 9);
         }
-        let mid0 = AvxVector::column_butterfly6(rows0, self.twiddles_butterfly3.lo());
+        let mid0 = AvxVector128::column_butterfly6(rows0, self.twiddles_butterfly3);
 
         // next set of butterfly 6's
         let mut rows1 = [AvxVector::zero(); 6];
@@ -1059,7 +1059,7 @@ impl MixedRadixAvx6x9<f32> {
             rows1[r*2] = input.load_complex_f32(r * 18 + 1);
             rows1[r*2+1] = input.load_complex_f32(r * 18 + 10);
         }
-        let mut mid1 = AvxVector::column_butterfly6(rows1, self.twiddles_butterfly3);
+        let mut mid1 = AvxVector256::column_butterfly6(rows1, self.twiddles_butterfly3);
         for r in 1..6 {
             mid1[r] = AvxVector::mul_complex(mid1[r], self.twiddles[2*r - 2]);
         }
@@ -1070,7 +1070,7 @@ impl MixedRadixAvx6x9<f32> {
             rows2[r*2] = input.load_complex_f32(r * 18 + 5);
             rows2[r*2+1] = input.load_complex_f32(r * 18 + 14);
         }
-        let mut mid2 = AvxVector::column_butterfly6(rows2, self.twiddles_butterfly3);
+        let mut mid2 = AvxVector256::column_butterfly6(rows2, self.twiddles_butterfly3);
         for r in 1..6 {
             mid2[r] = AvxVector::mul_complex(mid2[r], self.twiddles[2*r - 1]);
         }
@@ -1203,7 +1203,7 @@ impl MixedRadixAvx6x12<f32> {
         for r in 0..6 {
             rows0[r] = input.load_complex_f32(12*r);
         }
-        let mut mid0 = AvxVector::column_butterfly6(rows0, self.twiddles_butterfly3);
+        let mut mid0 = AvxVector256::column_butterfly6(rows0, self.twiddles_butterfly3);
         for r in 1..6 {
             mid0[r] = AvxVector::mul_complex(mid0[r],  self.twiddles[r - 1]);
         }
@@ -1213,7 +1213,7 @@ impl MixedRadixAvx6x12<f32> {
         for r in 0..6 {
             rows1[r] = input.load_complex_f32(12*r + 4);
         }
-        let mut mid1 = AvxVector::column_butterfly6(rows1, self.twiddles_butterfly3);
+        let mut mid1 = AvxVector256::column_butterfly6(rows1, self.twiddles_butterfly3);
         for r in 1..6 {
             mid1[r] = AvxVector::mul_complex(mid1[r],  self.twiddles[r - 1 + 5]);
         }
@@ -1223,7 +1223,7 @@ impl MixedRadixAvx6x12<f32> {
         for r in 0..6 {
             rows2[r] = input.load_complex_f32(12*r + 8);
         }
-        let mut mid2 = AvxVector::column_butterfly6(rows2, self.twiddles_butterfly3);
+        let mut mid2 = AvxVector256::column_butterfly6(rows2, self.twiddles_butterfly3);
         for r in 1..6 {
             mid2[r] = AvxVector::mul_complex(mid2[r],  self.twiddles[r - 1 + 10]);
         }

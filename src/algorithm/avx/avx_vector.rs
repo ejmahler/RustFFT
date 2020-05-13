@@ -151,26 +151,6 @@ pub trait AvxVector : Copy + Debug {
     }
 
     #[inline(always)]
-    unsafe fn column_butterfly6(rows: [Self; 6], twiddles: Self) -> [Self; 6] {
-        // Algorithm: 3x2 good-thomas
-
-        // Size-3 FFTs down the columns of our reordered array
-        let mid0 = Self::column_butterfly3([rows[0], rows[2], rows[4]], twiddles);
-        let mid1 = Self::column_butterfly3([rows[3], rows[5], rows[1]], twiddles);
-
-        // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
-
-        // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = Self::column_butterfly2([mid0[0], mid1[0]]);
-        let [output2, output3] = Self::column_butterfly2([mid0[1], mid1[1]]);
-        let [output4, output5] = Self::column_butterfly2([mid0[2], mid1[2]]);
-
-        // Reorder into output
-        [output0, output3, output4, output1, output2, output5]
-    }
-
-
-    #[inline(always)]
     unsafe fn column_butterfly8(rows: [Self; 8], rotation: Rotation90<Self>) -> [Self; 8] {
         // Algorithm: 4x2 mixed radix
 
@@ -250,6 +230,25 @@ pub trait AvxVector256 : AvxVector {
     unsafe fn merge(lo: Self::HalfVector, hi: Self::HalfVector) -> Self;
 
     #[inline(always)]
+    unsafe fn column_butterfly6(rows: [Self; 6], twiddles: Self) -> [Self; 6] {
+        // Algorithm: 3x2 good-thomas
+
+        // Size-3 FFTs down the columns of our reordered array
+        let mid0 = Self::column_butterfly3([rows[0], rows[2], rows[4]], twiddles);
+        let mid1 = Self::column_butterfly3([rows[3], rows[5], rows[1]], twiddles);
+
+        // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
+
+        // Transpose the data and do size-2 FFTs down the columns
+        let [output0, output1] = Self::column_butterfly2([mid0[0], mid1[0]]);
+        let [output2, output3] = Self::column_butterfly2([mid0[1], mid1[1]]);
+        let [output4, output5] = Self::column_butterfly2([mid0[2], mid1[2]]);
+
+        // Reorder into output
+        [output0, output3, output4, output1, output2, output5]
+    }
+
+    #[inline(always)]
     unsafe fn column_butterfly9(rows: [Self; 9], twiddles: [Self;3], butterfly3_twiddles: Self) -> [Self; 9] {
         // Algorithm: 3x3 mixed radix
 
@@ -307,6 +306,34 @@ pub trait AvxVector128 : AvxVector {
         (Self::lo(input), Self::hi(input))
     }
     unsafe fn lo_rotation(input: Rotation90<Self::FullVector>) -> Rotation90<Self>;
+
+    #[inline(always)]
+    unsafe fn column_butterfly6(rows: [Self; 6], twiddles: Self::FullVector) -> [Self; 6] {
+        // Algorithm: 3x2 good-thomas
+
+        // if we merge some of our 128 registers into 256 registers, we can do 1 inner butterfly3 instead of 2
+        let rows03 = Self::merge(rows[0], rows[3]);
+        let rows25 = Self::merge(rows[2], rows[5]);
+        let rows41 = Self::merge(rows[4], rows[1]);
+
+        // Size-3 FFTs down the columns of our reordered array
+        let mid = Self::FullVector::column_butterfly3([rows03, rows25, rows41], twiddles);
+
+        // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
+
+        // we can't use our merged columns anymore. so split them back into half vectors
+        let (mid0_0, mid1_0) = Self::split(mid[0]);
+        let (mid0_1, mid1_1) = Self::split(mid[1]);
+        let (mid0_2, mid1_2) = Self::split(mid[2]);
+
+        // Transpose the data and do size-2 FFTs down the columns
+        let [output0, output1] = Self::column_butterfly2([mid0_0, mid1_0]);
+        let [output2, output3] = Self::column_butterfly2([mid0_1, mid1_1]);
+        let [output4, output5] = Self::column_butterfly2([mid0_2, mid1_2]);
+
+        // Reorder into output
+        [output0, output3, output4, output1, output2, output5]
+    }
 
     #[inline(always)]
     unsafe fn column_butterfly9(rows: [Self; 9], twiddles_merged: [Self::FullVector;2], butterfly3_twiddles: Self::FullVector) -> [Self; 9] {

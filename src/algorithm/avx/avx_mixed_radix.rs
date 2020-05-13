@@ -587,8 +587,8 @@ impl MixedRadix6xnAvx<f32, __m256> {
     mixedradix_boilerplate_f32!();
 
     mixedradix_column_butterflies_f32!(6,
-        |columns, this: &Self| AvxVector::column_butterfly6(columns, this.twiddles_butterfly3),
-        |columns, this: &Self| AvxVector::column_butterfly6(columns, this.twiddles_butterfly3.lo())
+        |columns, this: &Self| AvxVector256::column_butterfly6(columns, this.twiddles_butterfly3),
+        |columns, this: &Self| AvxVector128::column_butterfly6(columns, this.twiddles_butterfly3)
     );
     mixedradix_transpose_f32!(6, avx32_utils::transpose_4x6_to_6x4_packed_f32, 0;1;2;3;4;5);
 }
@@ -596,8 +596,8 @@ impl MixedRadix6xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
 
     mixedradix_column_butterflies_f64!(6,
-        |columns, this: &Self| AvxVector::column_butterfly6(columns, this.twiddles_butterfly3),
-        |columns, this: &Self| AvxVector::column_butterfly6(columns, this.twiddles_butterfly3.lo())
+        |columns, this: &Self| AvxVector256::column_butterfly6(columns, this.twiddles_butterfly3),
+        |columns, this: &Self| AvxVector128::column_butterfly6(columns, this.twiddles_butterfly3)
     );
     mixedradix_transpose_f64!(6, avx64_utils::transpose_2x6_to_6x2_packed_f64, 0;1;2;3;4;5);
 }

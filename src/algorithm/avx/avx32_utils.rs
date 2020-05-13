@@ -269,41 +269,6 @@ pub unsafe fn unpacklo_complex_f32(row0: __m256, row1: __m256) -> __m256 {
     _mm256_castpd_ps(unpacked)
 }
 
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct Rotate90Config<V>(V);
-use super::avx64_utils::broadcast_complex_f64;
-impl Rotate90Config<__m256d> {
-    #[inline(always)]
-    pub unsafe fn new_f64(is_inverse: bool) -> Self {
-        if is_inverse { 
-            Self(broadcast_complex_f64(Complex::new(-0.0, 0.0)))
-        } else {
-            Self(broadcast_complex_f64(Complex::new(0.0, -0.0)))
-        }
-    }
-
-    // Apply a multiplication by (0, i) or (0, -i), based on the value of rotation_config. Much faster than an actual multiplication.
-    #[inline(always)]
-    pub unsafe fn rotate90(&self, elements: __m256d) -> __m256d {
-        // Our goal is to swap the reals with the imaginaries, then negate either the reals or the imaginaries, based on whether we're an inverse or not
-        let elements_swapped = _mm256_permute_pd(elements, 0x05);
-
-        // We can negate the elements we want by xoring the row with a pre-set vector
-        _mm256_xor_pd(elements_swapped, self.0)
-    }
-
-    // Apply a multiplication by (0, i) or (0, -i), based on the value of rotation_config. Much faster than an actual multiplication.
-    #[inline(always)]
-    pub unsafe fn rotate90_lo(&self, elements: __m128d) -> __m128d {
-        // Our goal is to swap the reals with the imaginaries, then negate either the reals or the imaginaries, based on whether we're an inverse or not
-        let elements_swapped = _mm_permute_pd(elements, 0x05);
-
-        // We can negate the elements we want by xoring the row with a pre-set vector
-        _mm_xor_pd(elements_swapped, _mm256_castpd256_pd128(self.0))
-    }
-}
-
 // Treat the input like the rows of a 4x3 array, and transpose said rows to the columns.
 // But, since the output has 3 columns while AVX registers have 4 columns, we shift elements around so that they're stored contiguously in 3 registers, hence the word "packed"
 #[allow(unused)]
