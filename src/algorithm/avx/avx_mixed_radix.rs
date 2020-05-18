@@ -12,7 +12,7 @@ use super::avx32_utils;
 use super::avx64_utils::{AvxComplexArray64, AvxComplexArrayMut64};
 use super::avx64_utils;
 use super::CommonSimdData;
-use super::avx_vector::{AvxVector, AvxVector128, AvxVector256, Rotation90};
+use super::avx_vector::{AvxVector, AvxVector128, AvxVector256, Rotation90, AvxArray, AvxArrayMut, AvxArray256, AvxArray256Mut};
 
 // Take the ceiling of dividing a by b
 // Ie, if the inputs are a=3, b=5, the return will be 1. if the inputs are a=12 and b=5, the return will be 3
@@ -147,6 +147,105 @@ macro_rules! mixedradix_gen_data {
         }
     }}
 }
+
+macro_rules! mixedradix_column_butterflies{
+    ($row_count: expr, $butterfly_fn: expr, $butterfly_fn_lo: expr) => (
+
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn perform_column_butterflies(&self, buffer: &mut [Complex<V::ScalarType>]) {
+        // How many rows this FFT has, ie 2 for 2xn, 4 for 4xn, etc
+        const ROW_COUNT : usize = $row_count;
+        const TWIDDLES_PER_COLUMN : usize = ROW_COUNT - 1;
+
+        let len_per_row = self.len() / ROW_COUNT;
+        let chunk_count = len_per_row / V::COMPLEX_PER_VECTOR;
+
+        // process the column FFTs
+        for (c, twiddle_chunk) in self.common_data.twiddles.chunks_exact(TWIDDLES_PER_COLUMN).take(chunk_count).enumerate() {
+            let index_base = c*V::COMPLEX_PER_VECTOR;
+
+            // Load columns from the buffer into registers
+            let mut columns = [V::zero(); ROW_COUNT];
+            for i in 0..ROW_COUNT {
+                columns[i] = buffer.load_complex(index_base + len_per_row*i);
+            }
+
+            // apply our butterfly function down the columns
+            let output = AvxVector::column_butterfly4(columns, self.twiddles_butterfly4);
+
+            // always write the first row directly back without twiddles
+            buffer.store_complex(output[0], index_base);
+            
+            // for every other row, apply twiddle factors and then write back to memory
+            for i in 1..ROW_COUNT {
+                let twiddle = twiddle_chunk[i - 1];
+                let output = V::mul_complex(twiddle, output[i]);
+                buffer.store_complex(output, index_base + len_per_row*i);
+            }
+        }
+
+        // finally, we might have a single partial chunk.
+        // Normally, we can fit 4 complex numbers into an AVX register, but we only have `partial_remainder` columns left, so we need special logic to handle these final columns
+        let partial_remainder = len_per_row % V::COMPLEX_PER_VECTOR;
+        if partial_remainder > 0 {
+            let partial_remainder_base = chunk_count * V::COMPLEX_PER_VECTOR;
+            let partial_remainder_twiddle_base = self.common_data.twiddles.len() - TWIDDLES_PER_COLUMN;
+            let final_twiddle_chunk = &self.common_data.twiddles[partial_remainder_twiddle_base..];
+
+            if partial_remainder > 2 {
+                // Load 3 columns into full AVX vectors to preocess our remainder
+                let mut columns = [V::zero(); ROW_COUNT];
+                for i in 0..ROW_COUNT {
+                    columns[i] = buffer.load_partial3_complex(partial_remainder_base + len_per_row*i);
+                }
+
+                // apply our butterfly function down the columns
+                let mid = AvxVector::column_butterfly4(columns, self.twiddles_butterfly4);
+
+                // always write the first row without twiddles
+                buffer.store_partial3_complex(mid[0], partial_remainder_base);
+
+                // for the remaining rows, apply twiddle factors and then write back to memory, using RemainderMask to limit which memory locations to write to
+                for i in 1..ROW_COUNT {
+                    let twiddle = final_twiddle_chunk[i - 1];
+                    let output = AvxVector::mul_complex(twiddle, mid[i]);
+                    buffer.store_partial3_complex(output, partial_remainder_base + len_per_row*i);
+                }
+            } else {
+                // Load 1 or 2 columns into half vectors to process our remainder. Thankfully, the compiler is smart enough to eliminate this branch on f64, since the partial remainder can only possibly be 1
+                let mut columns = [V::HalfVector::zero(); ROW_COUNT];
+                if partial_remainder == 1 {
+                    for i in 0..ROW_COUNT {
+                        columns[i] = AvxArray256::<V>::load_partial1_complex(buffer, partial_remainder_base + len_per_row*i);
+                    }
+                } else {
+                    for i in 0..ROW_COUNT {
+                        columns[i] = AvxArray256::<V>::load_partial2_complex(buffer, partial_remainder_base + len_per_row*i);
+                    }
+                }
+
+                // apply our butterfly function down the columns
+                let mut mid = AvxVector::column_butterfly4(columns, self.twiddles_butterfly4.lo());
+
+                // apply twiddle factors
+                for i in 1..ROW_COUNT {
+                    mid[i] = AvxVector::mul_complex(final_twiddle_chunk[i - 1].lo(), mid[i]);
+                }
+
+                // store output
+                if partial_remainder == 1 {
+                    for i in 0..ROW_COUNT {
+                        AvxArray256Mut::<V>::store_partial1_complex(buffer, mid[i], partial_remainder_base + len_per_row*i);
+                    }
+                } else {
+                    for i in 0..ROW_COUNT {
+                        AvxArray256Mut::<V>::store_partial2_complex(buffer, mid[i], partial_remainder_base + len_per_row*i);
+                    }
+                }
+            }
+        }
+    }
+)}
 
 macro_rules! mixedradix_column_butterflies_f32{
     ($row_count: expr, $butterfly_fn: expr, $butterfly_fn_lo: expr) => (
@@ -534,7 +633,7 @@ pub struct MixedRadix4xnAvx<T, V> {
 }
 boilerplate_fft_commondata!(MixedRadix4xnAvx);
 
-impl<T: FFTnum, V: AvxVector> MixedRadix4xnAvx<T, V> {
+impl<T: FFTnum, V: AvxVector256> MixedRadix4xnAvx<T, V> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
@@ -542,24 +641,21 @@ impl<T: FFTnum, V: AvxVector> MixedRadix4xnAvx<T, V> {
             common_data: mixedradix_gen_data!(4, inner_fft),
         }
     }
+
+    mixedradix_column_butterflies!(4,
+        |columns, this: &Self| AvxVector::column_butterfly4(columns, this.twiddles_butterfly4),
+        |columns, this: &Self| AvxVector::column_butterfly4(columns, this.twiddles_butterfly4.lo())
+    );
 }
 
 impl MixedRadix4xnAvx<f32, __m256> {
     mixedradix_boilerplate_f32!();
 
-    mixedradix_column_butterflies_f32!(4, 
-        |columns, this: &Self| AvxVector::column_butterfly4(columns, this.twiddles_butterfly4),
-        |columns, this: &Self| AvxVector::column_butterfly4(columns, this.twiddles_butterfly4.lo())
-    );
     mixedradix_transpose_f32!(4, avx32_utils::transpose_4x4_f32, 0;1;2;3);
 }
 impl MixedRadix4xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
 
-    mixedradix_column_butterflies_f64!(4,
-        |columns, this: &Self| AvxVector::column_butterfly4(columns, this.twiddles_butterfly4),
-        |columns, this: &Self| AvxVector::column_butterfly4(columns, this.twiddles_butterfly4.lo())
-    );
     mixedradix_transpose_f64!(4, avx64_utils::transpose_2x4_to_4x2_packed_f64, 0;1;2;3);
 }
 
