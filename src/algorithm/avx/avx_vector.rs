@@ -5,8 +5,6 @@ use num_complex::Complex;
 use num_traits::Zero;
 
 use crate::common::FFTnum;
-use super::avx32_utils::AvxComplexArrayf32;
-use super::avx64_utils::AvxComplexArray64;
 use crate::array_utils::{RawSlice, RawSliceMut};
 
 /// A SIMD vector of complex numbers, stored with the real values and imaginary values interleaved. 
@@ -45,6 +43,16 @@ pub trait AvxVector : Copy + Debug {
     /// Reverse the order of complex numbers in the vector, so that the last is the first and the first is the last
     unsafe fn reverse_complex_elements(self) -> Self;
 
+    /// Copies the even elements of rows[1] into the corresponding odd elements of rows[0] and returns the result.
+    unsafe fn unpacklo_complex(rows: [Self; 2]) -> Self;
+    /// Copies the odd elements of rows[0] into the corresponding even elements of rows[1] and returns the result.
+    unsafe fn unpackhi_complex(rows: [Self; 2]) -> Self;
+
+    #[inline(always)]
+    unsafe fn unpack_complex(rows: [Self; 2]) -> [Self; 2] {
+        [Self::unpacklo_complex(rows), Self::unpackhi_complex(rows)]
+    }
+
     /// Fill a vector by repeating the provided complex number as many times as possible
     unsafe fn broadcast_complex_elements(value: Complex<Self::ScalarType>) -> Self;
 
@@ -58,9 +66,13 @@ pub trait AvxVector : Copy + Debug {
     /// The result will be [twiddle(x*y, len), twiddle((x+1)*y, len), twiddle((x+2)*y, len), ...] for as many complex numbers fit in a vector
     unsafe fn make_mixedradix_twiddle_chunk(x: usize, y: usize, len: usize, inverse: bool) -> Self;
 
+    /// Packed transposes. Used by mixed radix. These all take a NxC array, where C is COMPLEX_PER_VECTOR, and transpose it to a CxN array.
+    /// But they also pack the result into as few vectors as possible, with the goal of writing the transposed data out contiguously.
+    unsafe fn transpose2_packed(rows: [Self; 2]) -> [Self;2];
+    unsafe fn transpose3_packed(rows: [Self; 3]) -> [Self;3];
+    unsafe fn transpose4_packed(rows: [Self; 4]) -> [Self;4];
 
-    
-
+    /// Pairwise multiply the complex numbers in `left` with the complex numbers in `right`.
     #[inline(always)]
     unsafe fn mul_complex(left: Self, right: Self) -> Self {
         // Extract the real and imaginary components from left into 2 separate registers
@@ -519,6 +531,20 @@ impl AvxVector for __m256 {
         // swap the lanes
         _mm256_permute2f128_ps(permuted, permuted, 0x01)
     }
+    #[inline(always)]
+    unsafe fn unpacklo_complex(rows: [Self; 2]) -> Self {
+        let row0_double = _mm256_castps_pd(rows[0]);
+        let row1_double = _mm256_castps_pd(rows[1]);
+        let unpacked = _mm256_unpacklo_pd(row0_double, row1_double);
+        _mm256_castpd_ps(unpacked)
+    }
+    #[inline(always)]
+    unsafe fn unpackhi_complex(rows: [Self; 2]) -> Self {
+        let row0_double = _mm256_castps_pd(rows[0]);
+        let row1_double = _mm256_castps_pd(rows[1]);
+        let unpacked = _mm256_unpackhi_pd(row0_double, row1_double);
+        _mm256_castpd_ps(unpacked)
+    }
     
     #[inline(always)]
     unsafe fn swap_complex_components(self) -> Self {
@@ -551,12 +577,48 @@ impl AvxVector for __m256 {
             twiddle_chunk[i] = f32::generate_twiddle_factor(y*(x + i), len, inverse);
         }
 
-        twiddle_chunk.load_complex_f32(0)
+        twiddle_chunk.load_complex(0)
     }
 
     #[inline(always)]
     unsafe fn broadcast_twiddle(index: usize, len: usize, inverse: bool) -> Self {
         Self::broadcast_complex_elements(Self::ScalarType::generate_twiddle_factor(index, len, inverse))
+    }
+
+    #[inline(always)]
+    unsafe fn transpose2_packed(rows: [Self; 2]) -> [Self;2] {
+        let unpacked = Self::unpack_complex(rows);
+        let output0 = _mm256_permute2f128_ps(unpacked[0], unpacked[1], 0x20);
+        let output1 = _mm256_permute2f128_ps(unpacked[0], unpacked[1], 0x31);
+
+        [output0, output1]
+    }
+    #[inline(always)]
+    unsafe fn transpose3_packed(rows: [Self; 3]) -> [Self;3] {
+        let unpacked0 = Self::unpacklo_complex([rows[0], rows[1]]);
+        let unpacked2 = Self::unpackhi_complex([rows[1], rows[2]]);
+        
+        // output0 and output2 each need to swap some elements. thankfully we can blend those elements into the same intermediate value, and then do a permute 128 from there
+        let blended = _mm256_blend_ps(rows[0], rows[2], 0x33);
+        
+        let output1 = _mm256_permute2f128_ps(unpacked0, unpacked2, 0x12);
+        
+        let output0 = _mm256_permute2f128_ps(unpacked0, blended, 0x20);
+        let output2 = _mm256_permute2f128_ps(unpacked2, blended, 0x13);
+
+        [output0, output1, output2]
+    }
+    #[inline(always)]
+    unsafe fn transpose4_packed(rows: [Self; 4]) -> [Self;4] {
+        let permute0 = _mm256_permute2f128_ps(rows[0], rows[2], 0x20);
+        let permute1 = _mm256_permute2f128_ps(rows[1], rows[3], 0x20);
+        let permute2 = _mm256_permute2f128_ps(rows[0], rows[2], 0x31);
+        let permute3 = _mm256_permute2f128_ps(rows[1], rows[3], 0x31);
+
+        let [unpacked0, unpacked1] = Self::unpack_complex([permute0, permute1]);
+        let [unpacked2, unpacked3] = Self::unpack_complex([permute2, permute3]);
+
+        [unpacked0, unpacked1, unpacked2, unpacked3]
     }
 }
 impl AvxVector256 for __m256 {
@@ -664,6 +726,22 @@ impl AvxVector for __m128 {
         // swap the elements in-lane
         _mm_permute_ps(self, 0x4E)
     }
+
+    #[inline(always)]
+    unsafe fn unpacklo_complex(rows: [Self; 2]) -> Self {
+        let row0_double = _mm_castps_pd(rows[0]);
+        let row1_double = _mm_castps_pd(rows[1]);
+        let unpacked = _mm_unpacklo_pd(row0_double, row1_double);
+        _mm_castpd_ps(unpacked)
+    }
+    #[inline(always)]
+    unsafe fn unpackhi_complex(rows: [Self; 2]) -> Self {
+        let row0_double = _mm_castps_pd(rows[0]);
+        let row1_double = _mm_castps_pd(rows[1]);
+        let unpacked = _mm_unpackhi_pd(row0_double, row1_double);
+        _mm_castpd_ps(unpacked)
+    }
+
     #[inline(always)]
     unsafe fn swap_complex_components(self) -> Self {
         _mm_permute_ps(self, 0xB1)
@@ -692,11 +770,31 @@ impl AvxVector for __m128 {
             twiddle_chunk[i] = f32::generate_twiddle_factor(y*(x + i), len, inverse);
         }
 
-        twiddle_chunk.load_complex_f32_lo(0)
+        twiddle_chunk.load_complex(0)
     }
     #[inline(always)]
     unsafe fn broadcast_twiddle(index: usize, len: usize, inverse: bool) -> Self {
         Self::broadcast_complex_elements(Self::ScalarType::generate_twiddle_factor(index, len, inverse))
+    }
+
+    #[inline(always)]
+    unsafe fn transpose2_packed(rows: [Self; 2]) -> [Self;2] {
+        Self::unpack_complex(rows)
+    }
+    #[inline(always)]
+    unsafe fn transpose3_packed(rows: [Self; 3]) -> [Self;3] {
+        let unpacked0 = Self::unpacklo_complex([rows[0], rows[1]]);
+        let blended = _mm_blend_ps(rows[0], rows[2], 0x33);
+        let unpacked2 = Self::unpackhi_complex([rows[1], rows[2]]);
+
+        [unpacked0, blended, unpacked2]
+    }
+    #[inline(always)]
+    unsafe fn transpose4_packed(rows: [Self; 4]) -> [Self;4] {
+        let [unpacked0, unpacked1] = Self::unpack_complex([rows[0], rows[1]]);
+        let [unpacked2, unpacked3] = Self::unpack_complex([rows[2], rows[3]]);
+
+        [unpacked0, unpacked2, unpacked1, unpacked3]
     }
 }
 impl AvxVector128 for __m128 {
@@ -779,6 +877,15 @@ impl AvxVector for __m256d {
         _mm256_permute2f128_pd(self, self, 0x01)
     }
     #[inline(always)]
+    unsafe fn unpacklo_complex(rows: [Self; 2]) -> Self {
+        _mm256_permute2f128_pd(rows[0], rows[1], 0x20)
+    }
+    #[inline(always)]
+    unsafe fn unpackhi_complex(rows: [Self; 2]) -> Self {
+        _mm256_permute2f128_pd(rows[0], rows[1], 0x31)
+    }
+
+    #[inline(always)]
     unsafe fn swap_complex_components(self) -> Self {
         _mm256_permute_pd(self, 0x05)
     }
@@ -806,11 +913,31 @@ impl AvxVector for __m256d {
             twiddle_chunk[i] = f64::generate_twiddle_factor(y*(x + i), len, inverse);
         }
 
-        twiddle_chunk.load_complex_f64(0)
+        twiddle_chunk.load_complex(0)
     }
     #[inline(always)]
     unsafe fn broadcast_twiddle(index: usize, len: usize, inverse: bool) -> Self {
         Self::broadcast_complex_elements(Self::ScalarType::generate_twiddle_factor(index, len, inverse))
+    }
+
+    #[inline(always)]
+    unsafe fn transpose2_packed(rows: [Self; 2]) -> [Self;2] {
+        Self::unpack_complex(rows)
+    }
+    #[inline(always)]
+    unsafe fn transpose3_packed(rows: [Self; 3]) -> [Self;3] {
+        let unpacked0 = Self::unpacklo_complex([rows[0], rows[1]]);
+        let blended = _mm256_blend_pd(rows[0], rows[2], 0x33);
+        let unpacked2 = Self::unpackhi_complex([rows[1], rows[2]]);
+
+        [unpacked0, blended, unpacked2]
+    }
+    #[inline(always)]
+    unsafe fn transpose4_packed(rows: [Self; 4]) -> [Self;4] {
+        let [unpacked0, unpacked1] = Self::unpack_complex([rows[0], rows[1]]);
+        let [unpacked2, unpacked3] = Self::unpack_complex([rows[2], rows[3]]);
+
+        [unpacked0, unpacked2, unpacked1, unpacked3]
     }
 }
 impl AvxVector256 for __m256d {
@@ -916,6 +1043,15 @@ impl AvxVector for __m128d {
         self
     }
     #[inline(always)]
+    unsafe fn unpacklo_complex(_rows: [Self; 2]) -> Self {
+        unimplemented!(); // this operation doesn't make sense with one element. TODO: I don't know if it would be more useful to error here or to just return the inputs unchanged. If returning the inputs is useful, do that.
+    }
+    #[inline(always)]
+    unsafe fn unpackhi_complex(_rows: [Self; 2]) -> Self {
+        unimplemented!(); // this operation doesn't make sense with one element. TODO: I don't know if it would be more useful to error here or to just return the inputs unchanged. If returning the inputs is useful, do that.
+    }
+
+    #[inline(always)]
     unsafe fn swap_complex_components(self) -> Self {
         _mm_permute_pd(self, 0x05)
     }
@@ -943,12 +1079,16 @@ impl AvxVector for __m128d {
             twiddle_chunk[i] = f64::generate_twiddle_factor(y*(x + i), len, inverse);
         }
 
-        twiddle_chunk.load_complex_f64_lo(0)
+        twiddle_chunk.load_complex(0)
     }
     #[inline(always)]
     unsafe fn broadcast_twiddle(index: usize, len: usize, inverse: bool) -> Self {
         Self::broadcast_complex_elements(Self::ScalarType::generate_twiddle_factor(index, len, inverse))
     }
+
+    #[inline(always)] unsafe fn transpose2_packed(rows: [Self; 2]) -> [Self;2] { rows }
+    #[inline(always)] unsafe fn transpose3_packed(rows: [Self; 3]) -> [Self;3] { rows }
+    #[inline(always)] unsafe fn transpose4_packed(rows: [Self; 4]) -> [Self;4] { rows }
 }
 impl AvxVector128 for __m128d {
     type FullVector = __m256d;

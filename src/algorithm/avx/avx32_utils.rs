@@ -566,19 +566,6 @@ pub unsafe fn transpose_4x16_to_16x4_packed_f32(rows: [__m256;16]) -> [__m256;16
     ]
 }
 
-// Interleave even elements and odd elements into a single array
-#[inline(always)]
-pub unsafe fn interleave_evens_odds_f32(rows: [__m256; 2]) -> [__m256; 2] {
-    let unpacked0 = _mm256_unpacklo_ps(rows[0], rows[1]);
-    let unpacked1 = _mm256_unpackhi_ps(rows[0], rows[1]);
-    let permuted0 = _mm256_permute_ps(unpacked0, 0xD8);
-    let permuted1 = _mm256_permute_ps(unpacked1, 0xD8);
-    let output0 = _mm256_permute2f128_ps(permuted0, permuted1, 0x20);
-    let output1 = _mm256_permute2f128_ps(permuted0, permuted1, 0x31);
-    
-    [output0, output1]
-}
-
 // utility for packing a 3x4 array into just 3 registers, preserving order
 #[inline(always)]
 pub unsafe fn pack_3x4_4x3_f32(rows: [__m256;4]) -> [__m256; 3] {

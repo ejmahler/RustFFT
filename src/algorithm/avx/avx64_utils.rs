@@ -100,31 +100,6 @@ pub unsafe fn transpose_4x2_to_2x4_f64(rows0: [__m256d; 2], rows1: [__m256d; 2])
     [output00[0], output00[1], output01[0], output01[1]]
 }
 
-
-// Treat the input like the rows of a 2x3 array, and transpose it to a 3x2 array
-// But instead of storing "columns" of registers as separate arrays for further processing, pack them all into one array
-#[inline(always)]
-pub unsafe fn transpose_2x3_to_3x2_packed_f64(rows: [__m256d; 3]) -> [__m256d; 3] {
-    [
-        _mm256_permute2f128_pd(rows[0], rows[1], 0x20),
-        _mm256_permute2f128_pd(rows[2], rows[0], 0x30),
-        _mm256_permute2f128_pd(rows[1], rows[2], 0x31),
-    ]
-}
-
-// Treat the input like the rows of a 2x4 array, and transpose it to a 4x2 array
-// But instead of storing "columns" of registers as separate arrays for further processing, pack them all into one array
-#[inline(always)]
-pub unsafe fn transpose_2x4_to_4x2_packed_f64(rows: [__m256d; 4]) -> [__m256d; 4] {
-    let chunk0 = [rows[0], rows[1]];
-    let chunk1 = [rows[2], rows[3]];
-
-    let output0 = transpose_2x2_f64(chunk0);
-    let output1 = transpose_2x2_f64(chunk1);
-
-    [output0[0], output1[0], output0[1], output1[1]]
-}
-
 // Treat the input like the rows of a 2x8 array, and transpose it to a 8x2 array.
 // But instead of storing "columns" of registers as separate arrays for further processing, pack them all into one array
 #[inline(always)]

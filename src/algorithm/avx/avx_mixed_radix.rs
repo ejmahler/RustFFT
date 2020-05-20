@@ -171,7 +171,7 @@ macro_rules! mixedradix_column_butterflies{
             }
 
             // apply our butterfly function down the columns
-            let output = AvxVector::column_butterfly4(columns, self.twiddles_butterfly4);
+            let output = $butterfly_fn(columns, self);
 
             // always write the first row directly back without twiddles
             buffer.store_complex(output[0], index_base);
@@ -200,7 +200,7 @@ macro_rules! mixedradix_column_butterflies{
                 }
 
                 // apply our butterfly function down the columns
-                let mid = AvxVector::column_butterfly4(columns, self.twiddles_butterfly4);
+                let mid = $butterfly_fn(columns, self);
 
                 // always write the first row without twiddles
                 buffer.store_partial3_complex(mid[0], partial_remainder_base);
@@ -225,7 +225,7 @@ macro_rules! mixedradix_column_butterflies{
                 }
 
                 // apply our butterfly function down the columns
-                let mut mid = AvxVector::column_butterfly4(columns, self.twiddles_butterfly4.lo());
+                let mut mid = $butterfly_fn_lo(columns, self);
 
                 // apply twiddle factors
                 for i in 1..ROW_COUNT {
@@ -242,6 +242,106 @@ macro_rules! mixedradix_column_butterflies{
                         AvxArray256Mut::<V>::store_partial2_complex(buffer, mid[i], partial_remainder_base + len_per_row*i);
                     }
                 }
+            }
+        }
+    }
+)}
+
+macro_rules! mixedradix_transpose{
+    ($row_count: expr, $transpose_fn: path, $transpose_fn_lo: path, $($unroll_workaround_index:expr);*, $($remainder3_unroll_workaround_index:expr);*) => (
+
+    // Transpose the input (treated as a nx2 array) into the output (as a 2xn array)
+    #[target_feature(enable = "avx")]
+    unsafe fn transpose(&self, input: &[Complex<V::ScalarType>], output: &mut [Complex<V::ScalarType>]) {
+        const ROW_COUNT : usize = $row_count;
+
+        let len_per_row = self.len() / ROW_COUNT;
+        let chunk_count = len_per_row / V::COMPLEX_PER_VECTOR;
+
+        // transpose the scratch as a nx2 array into the buffer as an 2xn array
+        for c in 0..chunk_count {
+            let input_index_base = c*V::COMPLEX_PER_VECTOR;
+            let output_index_base = input_index_base * ROW_COUNT;
+
+            // Load rows from the input into registers
+            let mut rows : [V; ROW_COUNT] = [AvxVector::zero(); ROW_COUNT];
+            for i in 0..ROW_COUNT {
+                rows[i] = input.load_complex(input_index_base + len_per_row*i);
+            }
+
+            // transpose the rows to the columns
+            let transposed = $transpose_fn(rows);
+
+            // store the transposed rows contiguously
+            // we are using a macro hack to manually unroll the loop, to work around this rustc bug:
+            // https://github.com/rust-lang/rust/issues/71025
+            
+            // if we don't manually unroll the loop, the compiler will insert unnecessary writes+reads to the stack which tank performance
+            // once the compiler bug is fixed, this can be replaced by a "for i in 0..ROW_COUNT" loop
+            $( 
+                output.store_complex(transposed[$unroll_workaround_index], output_index_base + V::COMPLEX_PER_VECTOR * $unroll_workaround_index);
+            )*
+        }
+
+        // transpose the remainder
+        let input_index_base = chunk_count * V::COMPLEX_PER_VECTOR;
+        let output_index_base = input_index_base * ROW_COUNT;
+
+        let partial_remainder = len_per_row % V::COMPLEX_PER_VECTOR;
+        if partial_remainder == 1 {
+            // If the partial remainder is 1, there's no transposing to do - just gather from across the rows and store contiguously
+            for i in 0..ROW_COUNT {
+                let input_cell = input.get_unchecked(input_index_base + len_per_row*i);
+                let output_cell = output.get_unchecked_mut(output_index_base + i);
+                *output_cell = *input_cell;
+            }
+        } else if partial_remainder == 2 {
+            // If the partial remainder is 2, use the provided transpose_lo function to do a transpose on half-vectors
+            let mut rows : [V::HalfVector; ROW_COUNT] = [AvxVector::zero(); ROW_COUNT];
+            for i in 0..ROW_COUNT {
+                rows[i] = AvxArray256::<V>::load_partial2_complex(input, input_index_base + len_per_row*i);
+            }
+
+            let transposed = $transpose_fn_lo(rows);
+
+            // use the same macro hack as above to unroll the loop
+            $( 
+                AvxArray256Mut::<V>::store_partial2_complex(output, transposed[$unroll_workaround_index], output_index_base + V::HalfVector::COMPLEX_PER_VECTOR * $unroll_workaround_index);
+            )*
+        }
+        else if partial_remainder == 3 {
+            // If the partial remainder is 3, we have to load full vectors, use the full transpose, and then write out a variable number of outputs
+            let mut rows : [V; ROW_COUNT] = [AvxVector::zero(); ROW_COUNT];
+            for i in 0..ROW_COUNT {
+                rows[i] = input.load_partial3_complex(input_index_base + len_per_row*i);
+            }
+
+            // transpose the rows to the columns
+            let transposed = $transpose_fn(rows);
+
+            // We're going to write constant number of full vectors, and then some constant-sized partial vector
+            // Sadly, because of rust limitations, we can't make full_vector_count a const, so we have to cross our fingers that the compiler optimizes it to a constant
+            let element_count = 3*ROW_COUNT;
+            let full_vector_count = element_count / V::COMPLEX_PER_VECTOR;
+            let final_remainder_count = element_count % V::COMPLEX_PER_VECTOR;
+
+            // write out our full vectors
+            // we are using a macro hack to manually unroll the loop, to work around this rustc bug:
+            // https://github.com/rust-lang/rust/issues/71025
+            
+            // if we don't manually unroll the loop, the compiler will insert unnecessary writes+reads to the stack which tank performance
+            // once the compiler bug is fixed, this can be replaced by a "for i in 0..full_vector_count" loop
+            $( 
+                output.store_complex(transposed[$remainder3_unroll_workaround_index], output_index_base + V::COMPLEX_PER_VECTOR * $remainder3_unroll_workaround_index);
+            )*
+
+            // write out our partial vector. again, this is a compile-time constant, even if we can't represent that within rust yet
+            match final_remainder_count {
+                0 => {},
+                1 => AvxArray256Mut::<V>::store_partial1_complex(output, transposed[full_vector_count].lo(), output_index_base + full_vector_count * V::COMPLEX_PER_VECTOR),
+                2 => AvxArray256Mut::<V>::store_partial2_complex(output, transposed[full_vector_count].lo(), output_index_base + full_vector_count * V::COMPLEX_PER_VECTOR),
+                3 => AvxArray256Mut::<V>::store_partial3_complex(output, transposed[full_vector_count], output_index_base + full_vector_count * V::COMPLEX_PER_VECTOR),
+                _ => unreachable!(),
             }
         }
     }
@@ -560,32 +660,31 @@ pub struct MixedRadix2xnAvx<T, V> {
 }
 boilerplate_fft_commondata!(MixedRadix2xnAvx);
 
-impl<T: FFTnum, V: AvxVector> MixedRadix2xnAvx<T, V> {
+impl<T: FFTnum, V: AvxVector256> MixedRadix2xnAvx<T, V> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
             common_data: mixedradix_gen_data!(2, inner_fft),
         }
     }
+
+    mixedradix_column_butterflies!(2,
+        |columns, _: _| AvxVector::column_butterfly2(columns),
+        |columns, _: _| AvxVector::column_butterfly2(columns)
+    );
+
+    mixedradix_transpose!(2, 
+        AvxVector::transpose2_packed,
+        AvxVector::transpose2_packed,
+        0;1, 0
+    );
 }
 
 impl MixedRadix2xnAvx<f32, __m256> {
     mixedradix_boilerplate_f32!();
-
-    mixedradix_column_butterflies_f32!(2,
-        |rows, _:_| AvxVector::column_butterfly2(rows),
-        |rows, _:_| AvxVector::column_butterfly2(rows)
-    );
-    mixedradix_transpose_f32!(2, avx32_utils::interleave_evens_odds_f32, 0;1);
 }
 impl MixedRadix2xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
-
-    mixedradix_column_butterflies_f64!(2,
-        |columns, _:_| AvxVector::column_butterfly2(columns),
-        |columns, _:_| AvxVector::column_butterfly2(columns)
-    );
-    mixedradix_transpose_f64!(2, avx64_utils::transpose_2x2_f64, 0;1);
 }
 
 pub struct MixedRadix3xnAvx<T, V> {
@@ -594,7 +693,7 @@ pub struct MixedRadix3xnAvx<T, V> {
 }
 boilerplate_fft_commondata!(MixedRadix3xnAvx);
 
-impl<T: FFTnum, V: AvxVector> MixedRadix3xnAvx<T, V> {
+impl<T: FFTnum, V: AvxVector256> MixedRadix3xnAvx<T, V> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
@@ -602,25 +701,24 @@ impl<T: FFTnum, V: AvxVector> MixedRadix3xnAvx<T, V> {
             common_data: mixedradix_gen_data!(3, inner_fft),
         }
     }
+
+    mixedradix_column_butterflies!(3,
+        |columns, this: &Self| AvxVector::column_butterfly3(columns, this.twiddles_butterfly3),
+        |columns, this: &Self| AvxVector::column_butterfly3(columns, this.twiddles_butterfly3.lo())
+    );
+
+    mixedradix_transpose!(3, 
+        AvxVector::transpose3_packed,
+        AvxVector::transpose3_packed,
+        0;1;2, 0;1
+    );
 }
 
 impl MixedRadix3xnAvx<f32, __m256> {
     mixedradix_boilerplate_f32!();
-
-    mixedradix_column_butterflies_f32!(3, 
-        |columns, this: &Self| AvxVector::column_butterfly3(columns, this.twiddles_butterfly3),
-        |columns, this: &Self| AvxVector::column_butterfly3(columns, this.twiddles_butterfly3.lo())
-    );
-    mixedradix_transpose_f32!(3, avx32_utils::transpose_4x3_packed_f32, 0;1;2);
 }
 impl MixedRadix3xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
-
-    mixedradix_column_butterflies_f64!(3,
-        |columns, this: &Self| AvxVector::column_butterfly3(columns, this.twiddles_butterfly3),
-        |columns, this: &Self| AvxVector::column_butterfly3(columns, this.twiddles_butterfly3.lo())
-    );
-    mixedradix_transpose_f64!(3, avx64_utils::transpose_2x3_to_3x2_packed_f64, 0;1;2);
 }
 
 
@@ -646,17 +744,19 @@ impl<T: FFTnum, V: AvxVector256> MixedRadix4xnAvx<T, V> {
         |columns, this: &Self| AvxVector::column_butterfly4(columns, this.twiddles_butterfly4),
         |columns, this: &Self| AvxVector::column_butterfly4(columns, this.twiddles_butterfly4.lo())
     );
+
+    mixedradix_transpose!(4, 
+        AvxVector::transpose4_packed,
+        AvxVector::transpose4_packed,
+        0;1;2;3, 0;1;2
+    );
 }
 
 impl MixedRadix4xnAvx<f32, __m256> {
     mixedradix_boilerplate_f32!();
-
-    mixedradix_transpose_f32!(4, avx32_utils::transpose_4x4_f32, 0;1;2;3);
 }
 impl MixedRadix4xnAvx<f64, __m256d> {
     mixedradix_boilerplate_f64!();
-
-    mixedradix_transpose_f64!(4, avx64_utils::transpose_2x4_to_4x2_packed_f64, 0;1;2;3);
 }
 
 
