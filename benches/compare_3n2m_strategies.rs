@@ -385,9 +385,9 @@ fn compare_fft_f32(b: &mut Bencher, strategy: &[usize]) {
 
     for radix in strategy.iter().skip(1) {
         fft = match radix {
-            2 => wrap_fft(MixedRadix2xnAvx::new_f32(fft).unwrap()),
-            3 => wrap_fft(MixedRadix3xnAvx::new_f32(fft).unwrap()),
-            4 => wrap_fft(MixedRadix4xnAvx::new_f32(fft).unwrap()),
+            2 => wrap_fft(MixedRadix2xnAvx::new(fft).unwrap()),
+            3 => wrap_fft(MixedRadix3xnAvx::new(fft).unwrap()),
+            4 => wrap_fft(MixedRadix4xnAvx::new(fft).unwrap()),
             6 => wrap_fft(MixedRadix6xnAvx::new_f32(fft).unwrap()),
             8 => wrap_fft(MixedRadix8xnAvx::new_f32(fft).unwrap()),
             9 => wrap_fft(MixedRadix9xnAvx::new_f32(fft).unwrap()),
@@ -425,9 +425,9 @@ fn compare_fft_f64(b: &mut Bencher, strategy: &[usize]) {
 
     for radix in strategy.iter().skip(1) {
         fft = match radix {
-            2 => wrap_fft(MixedRadix2xnAvx::new_f64(fft).unwrap()),
-            3 => wrap_fft(MixedRadix3xnAvx::new_f64(fft).unwrap()),
-            4 => wrap_fft(MixedRadix4xnAvx::new_f64(fft).unwrap()),
+            2 => wrap_fft(MixedRadix2xnAvx::new(fft).unwrap()),
+            3 => wrap_fft(MixedRadix3xnAvx::new(fft).unwrap()),
+            4 => wrap_fft(MixedRadix4xnAvx::new(fft).unwrap()),
             6 => wrap_fft(MixedRadix6xnAvx::new_f64(fft).unwrap()),
             8 => wrap_fft(MixedRadix8xnAvx::new_f64(fft).unwrap()),
             9 => wrap_fft(MixedRadix9xnAvx::new_f64(fft).unwrap()),
@@ -482,7 +482,7 @@ fn bench_planned_bluesteins_f32(b: &mut Bencher, len: usize) {
 fn bench_2xn_bluesteins_f32(b: &mut Bencher, len: usize) {
     let mut planner : FftPlannerAvx<f32> = FftPlannerAvx::new(false).unwrap();
     let inner_fft = planner.construct_bluesteins(len);
-    let fft : Arc<dyn Fft<f32>> = Arc::new(MixedRadix2xnAvx::new_f32(inner_fft).unwrap());
+    let fft : Arc<dyn Fft<f32>> = Arc::new(MixedRadix2xnAvx::new(inner_fft).unwrap());
 
     let mut buffer = vec![Complex::zero(); fft.len()];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
@@ -493,7 +493,7 @@ fn bench_2xn_bluesteins_f32(b: &mut Bencher, len: usize) {
 fn bench_planned_raders_f32(b: &mut Bencher, len: usize) {
     let mut planner : FftPlannerAvx<f32> = FftPlannerAvx::new(false).unwrap();
     let inner_fft = planner.construct_raders(len);
-    let fft : Arc<dyn Fft<f32>> = Arc::new(MixedRadix2xnAvx::new_f32(inner_fft).unwrap());
+    let fft : Arc<dyn Fft<f32>> = Arc::new(MixedRadix2xnAvx::new(inner_fft).unwrap());
 
     let mut buffer = vec![Complex::zero(); fft.len()];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];

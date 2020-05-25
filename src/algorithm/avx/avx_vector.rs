@@ -11,8 +11,7 @@ use crate::array_utils::{RawSlice, RawSliceMut};
 /// Implemented for __m128, __m128d, __m256, __m256d, but these all require the AVX instruction set.
 ///
 /// The goal of this trait is to reduce code duplication by letting code be generic over the vector type 
-pub trait AvxVector : Copy + Debug {
-    type ScalarType : FFTnum;
+pub trait AvxVector : Copy + Debug + Send + Sync {
     const SCALAR_PER_VECTOR : usize;
     const COMPLEX_PER_VECTOR : usize;
 
@@ -28,10 +27,6 @@ pub trait AvxVector : Copy + Debug {
     unsafe fn fmadd(left: Self, right: Self, add: Self) -> Self;
     unsafe fn fnmadd(left: Self, right: Self, add: Self) -> Self;
     unsafe fn fmaddsub(left: Self, right: Self, add: Self) -> Self;
-
-    // loads/stores of complex numbers
-    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
-    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
 
     // More basic operations that end up being implemented in 1-2 intrinsics, but unlike the ones above, these have higher-level meaning than just arithmetic
     /// Swap each real number with its corresponding imaginary number
@@ -52,9 +47,6 @@ pub trait AvxVector : Copy + Debug {
     unsafe fn unpack_complex(rows: [Self; 2]) -> [Self; 2] {
         [Self::unpacklo_complex(rows), Self::unpackhi_complex(rows)]
     }
-
-    /// Fill a vector by repeating the provided complex number as many times as possible
-    unsafe fn broadcast_complex_elements(value: Complex<Self::ScalarType>) -> Self;
 
     /// Fill a vector by computing a twiddle factor and repeating it across the whole vector
     unsafe fn broadcast_twiddle(index: usize, len: usize, inverse: bool) -> Self;
@@ -234,11 +226,13 @@ pub trait AvxVector : Copy + Debug {
 }
 
 /// A 256-bit SIMD vector of complex numbers, stored with the real values and imaginary values interleaved. 
-/// Implemented for __m256, __m256d, but these are all oriented around AVX
+/// Implemented for __m256, __m256d
 ///
 /// This trait implements things specific to 256-types, like splitting a 256 vector into 128 vectors
+/// For compiler-placation reasons, all interactions/awareness the scalar type go here
 pub trait AvxVector256 : AvxVector {
-    type HalfVector : AvxVector128;
+    type HalfVector : AvxVector128<FullVector=Self>;
+    type ScalarType : FFTnum<AvxType=Self>;
 
     unsafe fn lo(self) -> Self::HalfVector;
     unsafe fn hi(self) -> Self::HalfVector;
@@ -246,6 +240,13 @@ pub trait AvxVector256 : AvxVector {
         (self.lo(), self.hi())
     }
     unsafe fn merge(lo: Self::HalfVector, hi: Self::HalfVector) -> Self;
+
+    /// Fill a vector by repeating the provided complex number as many times as possible
+    unsafe fn broadcast_complex_elements(value: Complex<Self::ScalarType>) -> Self;
+
+    // loads/stores of complex numbers
+    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
+    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
 
     // loads/stores of partial vectors of complex numbers. When loading, empty elements are zeroed
     // unimplemented!() if Self::COMPLEX_PER_VECTOR is not greater than the partial count
@@ -319,11 +320,11 @@ pub trait AvxVector256 : AvxVector {
 }
 
 /// A 128-bit SIMD vector of complex numbers, stored with the real values and imaginary values interleaved. 
-/// Implemented for __m128, __m128d, but these are all oriented around AVX
+/// Implemented for __m128, __m128d, but these are all oriented around AVX, so don't call methods on these from a SSE-only context
 ///
 /// This trait implements things specific to 128-types, like merging 2 128 vectors into a 256 vector
 pub trait AvxVector128 : AvxVector {
-    type FullVector : AvxVector256;
+    type FullVector : AvxVector256<HalfVector=Self>;
 
     unsafe fn merge(lo: Self, hi: Self) -> Self::FullVector;
 
@@ -333,6 +334,9 @@ pub trait AvxVector128 : AvxVector {
         (Self::lo(input), Self::hi(input))
     }
     unsafe fn lo_rotation(input: Rotation90<Self::FullVector>) -> Rotation90<Self>;
+
+    /// Fill a vector by repeating the provided complex number as many times as possible
+    unsafe fn broadcast_complex_elements(value: Complex<<<Self as AvxVector128>::FullVector as AvxVector256>::ScalarType>) -> Self;
 
     #[inline(always)]
     unsafe fn column_butterfly6(rows: [Self; 6], twiddles: Self::FullVector) -> [Self; 6] {
@@ -472,7 +476,6 @@ impl<V: AvxVector256> Rotation90<V> {
 
 
 impl AvxVector for __m256 {
-    type ScalarType = f32;
     const SCALAR_PER_VECTOR : usize = 8;
     const COMPLEX_PER_VECTOR : usize = 4;
 
@@ -514,16 +517,6 @@ impl AvxVector for __m256 {
     unsafe fn fmaddsub(left: Self, right: Self, add: Self) -> Self {
         _mm256_fmaddsub_ps(left, right, add)
     }
-
-    #[inline(always)]
-    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
-        _mm256_loadu_ps(ptr as *const Self::ScalarType)
-    }
-    #[inline(always)]
-    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
-        _mm256_storeu_ps(ptr as *mut Self::ScalarType, data)
-    }
-
     #[inline(always)]
     unsafe fn reverse_complex_elements(self) -> Self {
         // swap the elements in-lane
@@ -557,11 +550,6 @@ impl AvxVector for __m256 {
     }
 
     #[inline(always)]
-    unsafe fn broadcast_complex_elements(value: Complex<Self::ScalarType>) -> Self {
-        _mm256_set_ps(value.im, value.re, value.im, value.re, value.im, value.re, value.im, value.re)
-    }
-
-    #[inline(always)]
     unsafe fn make_rotation90(inverse: bool) -> Rotation90<Self> {
         if !inverse {
             Rotation90(Self::broadcast_complex_elements(Complex::new(0.0, -0.0)))
@@ -582,7 +570,7 @@ impl AvxVector for __m256 {
 
     #[inline(always)]
     unsafe fn broadcast_twiddle(index: usize, len: usize, inverse: bool) -> Self {
-        Self::broadcast_complex_elements(Self::ScalarType::generate_twiddle_factor(index, len, inverse))
+        Self::broadcast_complex_elements(f32::generate_twiddle_factor(index, len, inverse))
     }
 
     #[inline(always)]
@@ -622,6 +610,7 @@ impl AvxVector for __m256 {
     }
 }
 impl AvxVector256 for __m256 {
+    type ScalarType = f32;
     type HalfVector = __m128;
 
     #[inline(always)]
@@ -635,6 +624,20 @@ impl AvxVector256 for __m256 {
     #[inline(always)]
     unsafe fn merge(lo: Self::HalfVector, hi: Self::HalfVector) -> Self {
         _mm256_insertf128_ps(_mm256_castps128_ps256(lo), hi, 1)
+    }
+
+    #[inline(always)]
+    unsafe fn broadcast_complex_elements(value: Complex<Self::ScalarType>) -> Self {
+        _mm256_set_ps(value.im, value.re, value.im, value.re, value.im, value.re, value.im, value.re)
+    }
+
+    #[inline(always)]
+    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+        _mm256_loadu_ps(ptr as *const Self::ScalarType)
+    }
+    #[inline(always)]
+    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
+        _mm256_storeu_ps(ptr as *mut Self::ScalarType, data)
     }
     #[inline(always)]
     unsafe fn load_partial1_complex(ptr: *const Complex<Self::ScalarType>) -> Self::HalfVector {
@@ -669,7 +672,6 @@ impl AvxVector256 for __m256 {
 
 
 impl AvxVector for __m128 {
-    type ScalarType = f32;
     const SCALAR_PER_VECTOR : usize = 4;
     const COMPLEX_PER_VECTOR : usize = 2;
 
@@ -713,15 +715,6 @@ impl AvxVector for __m128 {
     }
 
     #[inline(always)]
-    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
-        _mm_loadu_ps(ptr as *const Self::ScalarType)
-    }
-    #[inline(always)]
-    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
-        _mm_storeu_ps(ptr as *mut Self::ScalarType, data)
-    }
-
-    #[inline(always)]
     unsafe fn reverse_complex_elements(self) -> Self {
         // swap the elements in-lane
         _mm_permute_ps(self, 0x4E)
@@ -750,10 +743,6 @@ impl AvxVector for __m128 {
     unsafe fn duplicate_complex_components(self) -> (Self, Self) {
         (_mm_moveldup_ps(self), _mm_movehdup_ps(self))
     }
-    #[inline(always)]
-    unsafe fn broadcast_complex_elements(value: Complex<Self::ScalarType>) -> Self {
-        _mm_set_ps(value.im, value.re, value.im, value.re)
-    }
 
     #[inline(always)]
     unsafe fn make_rotation90(inverse: bool) -> Rotation90<Self> {
@@ -770,11 +759,11 @@ impl AvxVector for __m128 {
             twiddle_chunk[i] = f32::generate_twiddle_factor(y*(x + i), len, inverse);
         }
 
-        twiddle_chunk.load_complex(0)
+        _mm_loadu_ps(twiddle_chunk.as_ptr() as *const f32)
     }
     #[inline(always)]
     unsafe fn broadcast_twiddle(index: usize, len: usize, inverse: bool) -> Self {
-        Self::broadcast_complex_elements(Self::ScalarType::generate_twiddle_factor(index, len, inverse))
+        Self::broadcast_complex_elements(f32::generate_twiddle_factor(index, len, inverse))
     }
 
     #[inline(always)]
@@ -816,11 +805,14 @@ impl AvxVector128 for __m128 {
     unsafe fn lo_rotation(input: Rotation90<Self::FullVector>) -> Rotation90<Self> {
         input.lo()
     }
+    #[inline(always)]
+    unsafe fn broadcast_complex_elements(value: Complex<f32>) -> Self {
+        _mm_set_ps(value.im, value.re, value.im, value.re)
+    }
 }
 
 
 impl AvxVector for __m256d {
-    type ScalarType = f64;
     const SCALAR_PER_VECTOR : usize = 4;
     const COMPLEX_PER_VECTOR : usize = 2;
 
@@ -864,15 +856,6 @@ impl AvxVector for __m256d {
     }
 
     #[inline(always)]
-    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
-        _mm256_loadu_pd(ptr as *const Self::ScalarType)
-    }
-    #[inline(always)]
-    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
-        _mm256_storeu_pd(ptr as *mut Self::ScalarType, data)
-    }
-
-    #[inline(always)]
     unsafe fn reverse_complex_elements(self) -> Self {
         _mm256_permute2f128_pd(self, self, 0x01)
     }
@@ -892,10 +875,6 @@ impl AvxVector for __m256d {
     #[inline(always)]
     unsafe fn duplicate_complex_components(self) -> (Self, Self) {
         (_mm256_movedup_pd(self), _mm256_permute_pd(self, 0x0F))
-    }
-    #[inline(always)]
-    unsafe fn broadcast_complex_elements(value: Complex<Self::ScalarType>) -> Self {
-        _mm256_set_pd(value.im, value.re, value.im, value.re)
     }
 
     #[inline(always)]
@@ -917,7 +896,7 @@ impl AvxVector for __m256d {
     }
     #[inline(always)]
     unsafe fn broadcast_twiddle(index: usize, len: usize, inverse: bool) -> Self {
-        Self::broadcast_complex_elements(Self::ScalarType::generate_twiddle_factor(index, len, inverse))
+        Self::broadcast_complex_elements(f64::generate_twiddle_factor(index, len, inverse))
     }
 
     #[inline(always)]
@@ -941,6 +920,7 @@ impl AvxVector for __m256d {
     }
 }
 impl AvxVector256 for __m256d {
+    type ScalarType = f64;
     type HalfVector = __m128d;
 
     #[inline(always)]
@@ -955,7 +935,20 @@ impl AvxVector256 for __m256d {
     unsafe fn merge(lo: Self::HalfVector, hi: Self::HalfVector) -> Self {
         _mm256_insertf128_pd(_mm256_castpd128_pd256(lo), hi, 1)
     }
+
+    #[inline(always)]
+    unsafe fn broadcast_complex_elements(value: Complex<Self::ScalarType>) -> Self {
+        _mm256_set_pd(value.im, value.re, value.im, value.re)
+    }
     
+    #[inline(always)]
+    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+        _mm256_loadu_pd(ptr as *const Self::ScalarType)
+    }
+    #[inline(always)]
+    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
+        _mm256_storeu_pd(ptr as *mut Self::ScalarType, data)
+    }
     #[inline(always)]
     unsafe fn load_partial1_complex(ptr: *const Complex<Self::ScalarType>) -> Self::HalfVector {
         _mm_loadu_pd(ptr as *const f64)
@@ -985,7 +978,6 @@ impl AvxVector256 for __m256d {
 
 
 impl AvxVector for __m128d {
-    type ScalarType = f64;
     const SCALAR_PER_VECTOR : usize = 2;
     const COMPLEX_PER_VECTOR : usize = 1;
 
@@ -1027,15 +1019,6 @@ impl AvxVector for __m128d {
     unsafe fn fmaddsub(left: Self, right: Self, add: Self) -> Self {
         _mm_fmaddsub_pd(left, right, add)
     }
-
-    #[inline(always)]
-    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
-        _mm_loadu_pd(ptr as *const Self::ScalarType)
-    }
-    #[inline(always)]
-    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
-        _mm_storeu_pd(ptr as *mut Self::ScalarType, data)
-    }
     
     #[inline(always)]
     unsafe fn reverse_complex_elements(self) -> Self {
@@ -1059,10 +1042,6 @@ impl AvxVector for __m128d {
     unsafe fn duplicate_complex_components(self) -> (Self, Self) {
         (_mm_movedup_pd(self), _mm_permute_pd(self, 0x0F))
     }
-    #[inline(always)]
-    unsafe fn broadcast_complex_elements(value: Complex<Self::ScalarType>) -> Self {
-        _mm_set_pd(value.im, value.re)
-    }
 
     #[inline(always)]
     unsafe fn make_rotation90(inverse: bool) -> Rotation90<Self> {
@@ -1079,11 +1058,11 @@ impl AvxVector for __m128d {
             twiddle_chunk[i] = f64::generate_twiddle_factor(y*(x + i), len, inverse);
         }
 
-        twiddle_chunk.load_complex(0)
+        _mm_loadu_pd(twiddle_chunk.as_ptr() as *const f64)
     }
     #[inline(always)]
     unsafe fn broadcast_twiddle(index: usize, len: usize, inverse: bool) -> Self {
-        Self::broadcast_complex_elements(Self::ScalarType::generate_twiddle_factor(index, len, inverse))
+        Self::broadcast_complex_elements(f64::generate_twiddle_factor(index, len, inverse))
     }
 
     #[inline(always)] unsafe fn transpose2_packed(rows: [Self; 2]) -> [Self;2] { rows }
@@ -1109,122 +1088,214 @@ impl AvxVector128 for __m128d {
     unsafe fn lo_rotation(input: Rotation90<Self::FullVector>) -> Rotation90<Self> {
         input.lo()
     }
+    #[inline(always)]
+    unsafe fn broadcast_complex_elements(value: Complex<f64>) -> Self {
+        _mm_set_pd(value.im, value.re)
+    }
 }
 
-pub trait AvxArray<V> {
+pub trait AvxArray<V: AvxVector256> {
     unsafe fn load_complex(&self, index: usize) -> V;
-}
-pub trait AvxArrayMut<V> {
-    unsafe fn store_complex(&mut self, data: V, index: usize);
-}
-
-impl<V: AvxVector> AvxArray<V> for [Complex<V::ScalarType>] {
-    #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> V {
-        debug_assert!(self.len() >= index + V::COMPLEX_PER_VECTOR);
-        V::load_complex(self.get_unchecked(index) as *const Complex<_>)
-    }
-}
-impl<V: AvxVector> AvxArray<V> for RawSlice<Complex<V::ScalarType>> {
-    #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> V {
-        debug_assert!(self.len() >= index + V::COMPLEX_PER_VECTOR);
-        V::load_complex(self.as_ptr().add(index))
-    }
-}
-
-impl<V: AvxVector> AvxArrayMut<V> for [Complex<V::ScalarType>] {
-    #[inline(always)]
-    unsafe fn store_complex(&mut self, data: V, index: usize) {
-        debug_assert!(self.len() >= index + V::COMPLEX_PER_VECTOR);
-        V::store_complex(self.get_unchecked_mut(index) as *mut Complex<_>, data);
-    }
-}
-impl<V: AvxVector> AvxArrayMut<V> for RawSliceMut<Complex<V::ScalarType>> {
-    #[inline(always)]
-    unsafe fn store_complex(&mut self, data: V, index: usize) {
-        debug_assert!(self.len() >= index + V::COMPLEX_PER_VECTOR);
-        V::store_complex(self.as_mut_ptr().add(index), data);
-    }
-}
-
-pub trait AvxArray256<V: AvxVector256> {
     unsafe fn load_partial1_complex(&self, index: usize) -> V::HalfVector;
     unsafe fn load_partial2_complex(&self, index: usize) -> V::HalfVector;
     unsafe fn load_partial3_complex(&self, index: usize) -> V;
 }
-pub trait AvxArray256Mut<V: AvxVector256> {
+pub trait AvxArrayMut<V: AvxVector256> {
+    unsafe fn store_complex(&mut self, data: V, index: usize);
     unsafe fn store_partial1_complex(&mut self, data: V::HalfVector, index: usize);
     unsafe fn store_partial2_complex(&mut self, data: V::HalfVector, index: usize);
     unsafe fn store_partial3_complex(&mut self, data: V, index: usize);
 }
 
-impl<V: AvxVector256> AvxArray256<V> for [Complex<V::ScalarType>] {
+impl<V: AvxVector256> AvxArray<V> for [Complex<V::ScalarType>] {
+    #[inline(always)]
+    unsafe fn load_complex(&self, index: usize) -> V {
+        debug_assert!(self.len() >= index + V::COMPLEX_PER_VECTOR);
+        V::load_complex(self.as_ptr().add(index))
+    }
     #[inline(always)]
     unsafe fn load_partial1_complex(&self, index: usize) -> V::HalfVector {
         debug_assert!(self.len() >= index + 1);
-        V::load_partial1_complex(self.get_unchecked(index) as *const Complex<_>)
+        V::load_partial1_complex(self.as_ptr().add(index))
     }
     #[inline(always)]
     unsafe fn load_partial2_complex(&self, index: usize) -> V::HalfVector {
         debug_assert!(self.len() >= index + 2);
-        V::load_partial2_complex(self.get_unchecked(index) as *const Complex<_>)
+        V::load_partial2_complex(self.as_ptr().add(index))
     }
     #[inline(always)]
     unsafe fn load_partial3_complex(&self, index: usize) -> V {
         debug_assert!(self.len() >= index + 3);
-        V::load_partial3_complex(self.get_unchecked(index) as *const Complex<_>)
+        V::load_partial3_complex(self.as_ptr().add(index))
     }
 }
-impl<V: AvxVector256> AvxArray256<V> for RawSlice<Complex<V::ScalarType>> {
+impl<V: AvxVector256> AvxArray<V> for RawSlice<Complex<V::ScalarType>> {
+    #[inline(always)]
+    unsafe fn load_complex(&self, index: usize) -> V {
+        debug_assert!(self.len() >= index + V::COMPLEX_PER_VECTOR);
+        V::load_complex(self.as_ptr().add(index))
+    }
     #[inline(always)]
     unsafe fn load_partial1_complex(&self, index: usize) -> V::HalfVector {
         debug_assert!(self.len() >= index + 1);
-        V::load_partial1_complex(self.as_ptr().add(index) as *const Complex<_>)
+        V::load_partial1_complex(self.as_ptr().add(index))
     }
     #[inline(always)]
     unsafe fn load_partial2_complex(&self, index: usize) -> V::HalfVector {
         debug_assert!(self.len() >= index + 2);
-        V::load_partial2_complex(self.as_ptr().add(index) as *const Complex<_>)
+        V::load_partial2_complex(self.as_ptr().add(index))
     }
     #[inline(always)]
     unsafe fn load_partial3_complex(&self, index: usize) -> V {
         debug_assert!(self.len() >= index + 3);
-        V::load_partial3_complex(self.as_ptr().add(index) as *const Complex<_>)
+        V::load_partial3_complex(self.as_ptr().add(index))
     }
 }
 
-impl<V: AvxVector256> AvxArray256Mut<V> for [Complex<V::ScalarType>] {
+impl<V: AvxVector256> AvxArrayMut<V> for [Complex<V::ScalarType>] {
+    #[inline(always)]
+    unsafe fn store_complex(&mut self, data: V, index: usize) {
+        debug_assert!(self.len() >= index + V::COMPLEX_PER_VECTOR);
+        V::store_complex(self.as_mut_ptr().add(index), data);
+    }
     #[inline(always)]
     unsafe fn store_partial1_complex(&mut self, data: V::HalfVector, index: usize) {
         debug_assert!(self.len() >= index + 1);
-        V::store_partial1_complex(self.get_unchecked_mut(index) as *mut Complex<_>, data)
+        V::store_partial1_complex(self.as_mut_ptr().add(index), data)
     }
     #[inline(always)]
     unsafe fn store_partial2_complex(&mut self, data: V::HalfVector, index: usize) {
         debug_assert!(self.len() >= index + 2);
-        V::store_partial2_complex(self.get_unchecked_mut(index) as *mut Complex<_>, data)
+        V::store_partial2_complex(self.as_mut_ptr().add(index), data)
     }
     #[inline(always)]
     unsafe fn store_partial3_complex(&mut self, data: V, index: usize){
         debug_assert!(self.len() >= index + 3);
-        V::store_partial3_complex(self.get_unchecked_mut(index) as *mut Complex<_>, data)
+        V::store_partial3_complex(self.as_mut_ptr().add(index), data)
     }
 }
-impl<V: AvxVector256> AvxArray256Mut<V> for RawSliceMut<Complex<V::ScalarType>> {
+impl<V: AvxVector256> AvxArrayMut<V> for RawSliceMut<Complex<V::ScalarType>> {
+    #[inline(always)]
+    unsafe fn store_complex(&mut self, data: V, index: usize) {
+        debug_assert!(self.len() >= index + V::COMPLEX_PER_VECTOR);
+        V::store_complex(self.as_mut_ptr().add(index), data);
+    }
     #[inline(always)]
     unsafe fn store_partial1_complex(&mut self, data: V::HalfVector, index: usize) {
         debug_assert!(self.len() >= index + 1);
-        V::store_partial1_complex(self.as_mut_ptr().add(index) as *mut Complex<_>, data)
+        V::store_partial1_complex(self.as_mut_ptr().add(index), data)
     }
     #[inline(always)]
     unsafe fn store_partial2_complex(&mut self, data: V::HalfVector, index: usize) {
         debug_assert!(self.len() >= index + 2);
-        V::store_partial2_complex(self.as_mut_ptr().add(index) as *mut Complex<_>, data)
+        V::store_partial2_complex(self.as_mut_ptr().add(index), data)
     }
     #[inline(always)]
     unsafe fn store_partial3_complex(&mut self, data: V, index: usize) {
         debug_assert!(self.len() >= index + 3);
-        V::store_partial3_complex(self.as_mut_ptr().add(index) as *mut Complex<_>, data)
+        V::store_partial3_complex(self.as_mut_ptr().add(index), data)
+    }
+}
+
+pub trait AvxArrayGeneric<T: FFTnum> {
+    unsafe fn load_complex2(&self, index: usize) -> T::AvxType;
+    unsafe fn load_partial1_complex2(&self, index: usize) -> <T::AvxType as AvxVector256>::HalfVector;
+    unsafe fn load_partial2_complex2(&self, index: usize) -> <T::AvxType as AvxVector256>::HalfVector;
+    unsafe fn load_partial3_complex2(&self, index: usize) -> T::AvxType;
+}
+pub trait AvxArrayMutGeneric<T: FFTnum> {
+    unsafe fn store_complex2(&mut self, data: T::AvxType, index: usize);
+    unsafe fn store_partial1_complex2(&mut self, data: <T::AvxType as AvxVector256>::HalfVector, index: usize);
+    unsafe fn store_partial2_complex2(&mut self, data: <T::AvxType as AvxVector256>::HalfVector, index: usize);
+    unsafe fn store_partial3_complex2(&mut self, data: T::AvxType, index: usize);
+}
+
+impl<T: FFTnum> AvxArrayGeneric<T> for [Complex<T>] {
+    #[inline(always)]
+    unsafe fn load_complex2(&self, index: usize) -> T::AvxType {
+        debug_assert!(self.len() >= index + T::AvxType::COMPLEX_PER_VECTOR);
+        T::AvxType::load_complex(self.as_ptr().add(index))
+    }
+    #[inline(always)]
+    unsafe fn load_partial1_complex2(&self, index: usize) -> <T::AvxType as AvxVector256>::HalfVector {
+        debug_assert!(self.len() >= index + 1);
+        T::AvxType::load_partial1_complex(self.as_ptr().add(index))
+    }
+    #[inline(always)]
+    unsafe fn load_partial2_complex2(&self, index: usize) -> <T::AvxType as AvxVector256>::HalfVector {
+        debug_assert!(self.len() >= index + 2);
+        T::AvxType::load_partial2_complex(self.as_ptr().add(index))
+    }
+    #[inline(always)]
+    unsafe fn load_partial3_complex2(&self, index: usize) -> T::AvxType {
+        debug_assert!(self.len() >= index + 3);
+        T::AvxType::load_partial3_complex(self.as_ptr().add(index))
+    }
+}
+impl<T: FFTnum> AvxArrayGeneric<T> for RawSlice<Complex<T>> {
+    #[inline(always)]
+    unsafe fn load_complex2(&self, index: usize) -> T::AvxType {
+        debug_assert!(self.len() >= index + T::AvxType::COMPLEX_PER_VECTOR);
+        T::AvxType::load_complex(self.as_ptr().add(index))
+    }
+    #[inline(always)]
+    unsafe fn load_partial1_complex2(&self, index: usize) -> <T::AvxType as AvxVector256>::HalfVector {
+        debug_assert!(self.len() >= index + 1);
+        T::AvxType::load_partial1_complex(self.as_ptr().add(index))
+    }
+    #[inline(always)]
+    unsafe fn load_partial2_complex2(&self, index: usize) -> <T::AvxType as AvxVector256>::HalfVector {
+        debug_assert!(self.len() >= index + 2);
+        T::AvxType::load_partial2_complex(self.as_ptr().add(index))
+    }
+    #[inline(always)]
+    unsafe fn load_partial3_complex2(&self, index: usize) -> T::AvxType {
+        debug_assert!(self.len() >= index + 3);
+        T::AvxType::load_partial3_complex(self.as_ptr().add(index))
+    }
+}
+
+impl<T: FFTnum> AvxArrayMutGeneric<T> for [Complex<T>] {
+    #[inline(always)]
+    unsafe fn store_complex2(&mut self, data: T::AvxType, index: usize) {
+        debug_assert!(self.len() >= index + T::AvxType::COMPLEX_PER_VECTOR);
+        T::AvxType::store_complex(self.as_mut_ptr().add(index), data);
+    }
+    #[inline(always)]
+    unsafe fn store_partial1_complex2(&mut self, data: <T::AvxType as AvxVector256>::HalfVector, index: usize) {
+        debug_assert!(self.len() >= index + 1);
+        T::AvxType::store_partial1_complex(self.as_mut_ptr().add(index), data)
+    }
+    #[inline(always)]
+    unsafe fn store_partial2_complex2(&mut self, data: <T::AvxType as AvxVector256>::HalfVector, index: usize) {
+        debug_assert!(self.len() >= index + 2);
+        T::AvxType::store_partial2_complex(self.as_mut_ptr().add(index), data)
+    }
+    #[inline(always)]
+    unsafe fn store_partial3_complex2(&mut self, data: T::AvxType, index: usize){
+        debug_assert!(self.len() >= index + 3);
+        T::AvxType::store_partial3_complex(self.as_mut_ptr().add(index), data)
+    }
+}
+impl<T: FFTnum> AvxArrayMutGeneric<T> for RawSliceMut<Complex<T>> {
+    #[inline(always)]
+    unsafe fn store_complex2(&mut self, data: T::AvxType, index: usize) {
+        debug_assert!(self.len() >= index + T::AvxType::COMPLEX_PER_VECTOR);
+        T::AvxType::store_complex(self.as_mut_ptr().add(index), data);
+    }
+    #[inline(always)]
+    unsafe fn store_partial1_complex2(&mut self, data: <T::AvxType as AvxVector256>::HalfVector, index: usize) {
+        debug_assert!(self.len() >= index + 1);
+        T::AvxType::store_partial1_complex(self.as_mut_ptr().add(index), data)
+    }
+    #[inline(always)]
+    unsafe fn store_partial2_complex2(&mut self, data: <T::AvxType as AvxVector256>::HalfVector, index: usize) {
+        debug_assert!(self.len() >= index + 2);
+        T::AvxType::store_partial2_complex(self.as_mut_ptr().add(index), data)
+    }
+    #[inline(always)]
+    unsafe fn store_partial3_complex2(&mut self, data: T::AvxType, index: usize) {
+        debug_assert!(self.len() >= index + 3);
+        T::AvxType::store_partial3_complex(self.as_mut_ptr().add(index), data)
     }
 }
