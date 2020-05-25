@@ -3,16 +3,58 @@ use std::sync::Arc;
 use num_complex::Complex;
 
 use crate::common::FFTnum;
-
+use crate::math_utils::div_ceil;
 use crate::{Length, IsInverse, Fft};
 
 use super::CommonSimdData;
 use super::avx_vector::{AvxVector, AvxVector128, AvxVector256, Rotation90, AvxArrayGeneric, AvxArrayMutGeneric};
 
-// Take the ceiling of dividing a by b
-// Ie, if the inputs are a=3, b=5, the return will be 1. if the inputs are a=12 and b=5, the return will be 3
-fn div_ceil(a: usize, b: usize) -> usize {
-    a / b + if a % b == 0 { 0 } else { 1 }
+macro_rules! boilerplate_mixedradix {
+    () => (
+        /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the FFT
+        /// Returns Ok() if this machine has the required instruction sets, Err() if some instruction sets are missing
+        #[inline]
+        pub fn new(inner_fft: Arc<dyn Fft<T>>) -> Result<Self, ()> {
+            let has_avx = is_x86_feature_detected!("avx");
+            let has_fma = is_x86_feature_detected!("fma");
+            if has_avx && has_fma {
+                // Safety: new_with_avx requires the "avx" feature set. Since we know it's present, we're safe
+                Ok(unsafe { Self::new_with_avx(inner_fft) })
+            } else {
+                Err(())
+            }
+        }
+
+        #[inline]
+        fn perform_fft_inplace(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+            // Perform the column FFTs
+            // Safety: self.perform_column_butterflies() requres the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't available
+            unsafe { self.perform_column_butterflies(buffer) };
+
+            // process the row FFTs
+            let (scratch, inner_scratch) = scratch.split_at_mut(self.len());
+            self.common_data.inner_fft.process_multi(buffer, scratch, inner_scratch);
+
+            // Transpose
+            // Safety: self.transpose() requres the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
+            unsafe { self.transpose(scratch, buffer) };
+        }
+
+        #[inline]
+        fn perform_fft_out_of_place(&self, input: &mut [Complex<T>], output: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+            // Perform the column FFTs
+            // Safety: self.perform_column_butterflies() requres the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't avaiable
+            unsafe { self.perform_column_butterflies(input) };
+
+            // process the row FFTs. If extra scratch was provided, pass it in. Otherwise, use the output.
+            let inner_scratch = if scratch.len() > 0 { scratch } else { &mut output[..] };
+            self.common_data.inner_fft.process_inplace_multi(input, inner_scratch);
+
+            // Transpose
+            // Safety: self.transpose() requres the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
+            unsafe { self.transpose(input, output) };
+        }
+    )
 }
 
 macro_rules! mixedradix_gen_data {
@@ -111,7 +153,7 @@ macro_rules! mixedradix_column_butterflies{
                 // always write the first row without twiddles
                 buffer.store_partial3_complex2(mid[0], partial_remainder_base);
 
-                // for the remaining rows, apply twiddle factors and then write back to memory, using RemainderMask to limit which memory locations to write to
+                // for the remaining rows, apply twiddle factors and then write back to memory
                 for i in 1..ROW_COUNT {
                     let twiddle = final_twiddle_chunk[i - 1];
                     let output = AvxVector::mul_complex(twiddle, mid[i]);
@@ -274,6 +316,7 @@ impl<T: FFTnum> MixedRadix2xnAvx<T> {
         AvxVector::transpose2_packed,
         0;1, 0
     );
+    boilerplate_mixedradix!();
 }
 
 pub struct MixedRadix3xnAvx<T: FFTnum> {
@@ -299,6 +342,7 @@ impl<T: FFTnum> MixedRadix3xnAvx<T> {
         AvxVector::transpose3_packed,
         0;1;2, 0;1
     );
+    boilerplate_mixedradix!();
 }
 
 
@@ -327,6 +371,7 @@ impl<T: FFTnum> MixedRadix4xnAvx<T> {
         AvxVector::transpose4_packed,
         0;1;2;3, 0;1;2
     );
+    boilerplate_mixedradix!();
 }
 
 
@@ -355,6 +400,7 @@ impl<T: FFTnum> MixedRadix6xnAvx<T> {
         AvxVector::transpose6_packed,
         0;1;2;3;4;5, 0;1;2;3
     );
+    boilerplate_mixedradix!();
 }
 
 
@@ -387,6 +433,7 @@ impl<T: FFTnum> MixedRadix8xnAvx<T> {
         AvxVector::transpose8_packed,
         0;1;2;3;4;5;6;7, 0;1;2;3;4;5
     );
+    boilerplate_mixedradix!();
 }
 
 
@@ -432,6 +479,7 @@ impl<T: FFTnum> MixedRadix9xnAvx<T> {
         AvxVector::transpose9_packed,
         0;1;2;3;4;5;6;7;8, 0;1;2;3;4;5
     );
+    boilerplate_mixedradix!();
 }
 
 
@@ -466,6 +514,7 @@ impl<T: FFTnum> MixedRadix12xnAvx<T> {
         AvxVector::transpose12_packed,
         0;1;2;3;4;5;6;7;8;9;10;11, 0;1;2;3;4;5;6;7;8
     );
+    boilerplate_mixedradix!();
 }
 
 
@@ -501,6 +550,7 @@ impl<T: FFTnum> MixedRadix16xnAvx<T> {
         AvxVector::transpose16_packed,
         0;1;2;3;4;5;6;7;8;9;10;11;12;13;14;15, 0;1;2;3;4;5;6;7;8;9;10;11
     );
+    boilerplate_mixedradix!();
 }
 
 

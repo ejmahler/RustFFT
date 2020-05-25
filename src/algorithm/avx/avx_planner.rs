@@ -435,7 +435,7 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
         }).unwrap_or_else(|| panic!("Failed to find a bluestein's candidate for len={}, candidates: {:?}", len, bluesteins_candidates));
 
         let inner_fft = self.plan_fft(inner_len);
-        wrap_fft(BluesteinsAvx::new_f32(len, inner_fft).unwrap())
+        wrap_fft(BluesteinsAvx::new(len, inner_fft).unwrap())
     }
 }
 
@@ -604,6 +604,6 @@ impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
         }).unwrap_or_else(|| panic!("Failed to find a bluestein's candidate for len={}, candidates: {:?}", len, bluesteins_candidates));
 
         let inner_fft = self.plan_fft(inner_len);
-        wrap_fft(BluesteinsAvx::new_f64(len, inner_fft).unwrap())
+        wrap_fft(BluesteinsAvx::new(len, inner_fft).unwrap())
     }
 }

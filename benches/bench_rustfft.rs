@@ -375,7 +375,7 @@ fn plan_new_bluesteins_f32(len: usize) -> Arc<Fft<f32>> {
 
     let mut planner = rustfft::FFTplanner::new(false);
     let inner_power2 = planner.plan_fft(inner_fft_len);
-    Arc::new(BluesteinsAvx::new_f32(len, inner_power2).unwrap())
+    Arc::new(BluesteinsAvx::new(len, inner_power2).unwrap())
 }
 
 /// Times just the FFT execution (not allocation and pre-calculation)

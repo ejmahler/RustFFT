@@ -11,7 +11,7 @@ use crate::{Length, IsInverse, Fft};
 use crate::array_utils::{RawSlice, RawSliceMut};
 use super::avx32_utils::{AvxComplexArrayf32, AvxComplexArrayMutf32};
 use super::avx32_utils;
-use super::avx_vector::{AvxVector, AvxVector128, AvxVector256, Rotation90};
+use super::avx_vector::{AvxVector, AvxVector128, AvxVector256, Rotation90, AvxArrayMutGeneric};
 
 // Safety: This macro will call `self::perform_fft_f32()` which probably has a #[target_feature(enable = "...")] annotation on it.
 // Calling functions with that annotation is unsafe, because it doesn't actually check if the CPU has the required features.
@@ -751,8 +751,6 @@ impl MixedRadixAvx3x9<f32> {
         let output_rows = AvxVector256::column_butterfly9(transposed, self.twiddles_butterfly9, self.twiddles_butterfly3);
 
         // we can't directly write our data to the output, because it's in an unpacked state with the last column enpty. we have to pack the data in, which will involve a lot of reshuffling
-        let final_mask = avx32_utils::RemainderMask::new_f32(3);
-
         let packed0 = avx32_utils::pack_3x4_4x3_f32([output_rows[0], output_rows[1], output_rows[2], output_rows[3]]);
         output.store_complex_f32(0, packed0[0]);
         output.store_complex_f32(4, packed0[1]);
@@ -763,7 +761,7 @@ impl MixedRadixAvx3x9<f32> {
         output.store_complex_f32(16, packed1[1]);
         output.store_complex_f32(20, packed1[2]);
 
-        output.store_complex_remainder_f32(final_mask, output_rows[8], 24);
+        output.store_partial3_complex2(output_rows[8], 24);
     }
 }
 

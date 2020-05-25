@@ -2,6 +2,12 @@
 use num_traits::{Zero, One, FromPrimitive, PrimInt, Signed};
 use std::mem::swap;
 
+// Take the ceiling of dividing a by b
+// Ie, if the inputs are a=3, b=5, the return will be 1. if the inputs are a=12 and b=5, the return will be 3
+pub fn div_ceil(a: usize, b: usize) -> usize {
+    a / b + if a % b == 0 { 0 } else { 1 }
+}
+
 pub fn primitive_root(prime: u64) -> Option<u64> {
     let test_exponents: Vec<u64> = distinct_prime_factors(prime - 1)
         .iter()

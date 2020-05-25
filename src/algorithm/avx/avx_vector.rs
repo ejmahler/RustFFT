@@ -27,6 +27,7 @@ pub trait AvxVector : Copy + Debug + Send + Sync {
     unsafe fn fmadd(left: Self, right: Self, add: Self) -> Self;
     unsafe fn fnmadd(left: Self, right: Self, add: Self) -> Self;
     unsafe fn fmaddsub(left: Self, right: Self, add: Self) -> Self;
+    unsafe fn fmsubadd(left: Self, right: Self, add: Self) -> Self;
 
     // More basic operations that end up being implemented in 1-2 intrinsics, but unlike the ones above, these have higher-level meaning than just arithmetic
     /// Swap each real number with its corresponding imaginary number
@@ -332,6 +333,7 @@ pub trait AvxVector128 : AvxVector {
     type FullVector : AvxVector256<HalfVector=Self>;
 
     unsafe fn merge(lo: Self, hi: Self) -> Self::FullVector;
+    unsafe fn zero_extend(self) -> Self::FullVector;
 
     unsafe fn lo(input: Self::FullVector) -> Self;
     unsafe fn hi(input: Self::FullVector) -> Self;
@@ -521,6 +523,10 @@ impl AvxVector for __m256 {
     #[inline(always)]
     unsafe fn fmaddsub(left: Self, right: Self, add: Self) -> Self {
         _mm256_fmaddsub_ps(left, right, add)
+    }
+    #[inline(always)]
+    unsafe fn fmsubadd(left: Self, right: Self, add: Self) -> Self {
+        _mm256_fmsubadd_ps(left, right, add)
     }
     #[inline(always)]
     unsafe fn reverse_complex_elements(self) -> Self {
@@ -792,6 +798,10 @@ impl AvxVector for __m128 {
     unsafe fn fmaddsub(left: Self, right: Self, add: Self) -> Self {
         _mm_fmaddsub_ps(left, right, add)
     }
+    #[inline(always)]
+    unsafe fn fmsubadd(left: Self, right: Self, add: Self) -> Self {
+        _mm_fmsubadd_ps(left, right, add)
+    }
 
     #[inline(always)]
     unsafe fn reverse_complex_elements(self) -> Self {
@@ -938,6 +948,10 @@ impl AvxVector128 for __m128 {
         _mm256_insertf128_ps(_mm256_castps128_ps256(lo), hi, 1)
     }
     #[inline(always)]
+    unsafe fn zero_extend(self) -> Self::FullVector {
+        _mm256_zextps128_ps256(self)
+    }
+    #[inline(always)]
     unsafe fn lo_rotation(input: Rotation90<Self::FullVector>) -> Rotation90<Self> {
         input.lo()
     }
@@ -989,6 +1003,10 @@ impl AvxVector for __m256d {
     #[inline(always)]
     unsafe fn fmaddsub(left: Self, right: Self, add: Self) -> Self {
         _mm256_fmaddsub_pd(left, right, add)
+    }
+    #[inline(always)]
+    unsafe fn fmsubadd(left: Self, right: Self, add: Self) -> Self {
+        _mm256_fmsubadd_pd(left, right, add)
     }
 
     #[inline(always)]
@@ -1212,6 +1230,10 @@ impl AvxVector for __m128d {
     unsafe fn fmaddsub(left: Self, right: Self, add: Self) -> Self {
         _mm_fmaddsub_pd(left, right, add)
     }
+    #[inline(always)]
+    unsafe fn fmsubadd(left: Self, right: Self, add: Self) -> Self {
+        _mm_fmsubadd_pd(left, right, add)
+    }
     
     #[inline(always)]
     unsafe fn reverse_complex_elements(self) -> Self {
@@ -1281,6 +1303,10 @@ impl AvxVector128 for __m128d {
     #[inline(always)]
     unsafe fn merge(lo: Self, hi: Self) -> Self::FullVector {
         _mm256_insertf128_pd(_mm256_castpd128_pd256(lo), hi, 1)
+    }
+    #[inline(always)]
+    unsafe fn zero_extend(self) -> Self::FullVector {
+        _mm256_zextpd128_pd256(self)
     }
     #[inline(always)]
     unsafe fn lo_rotation(input: Rotation90<Self::FullVector>) -> Rotation90<Self> {

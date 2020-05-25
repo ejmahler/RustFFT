@@ -18,51 +18,6 @@ struct CommonSimdData<T, V> {
 
 macro_rules! boilerplate_fft_commondata {
     ($struct_name:ident) => (
-        impl<T: FFTnum> $struct_name<T> {
-            /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the FFT
-            /// Returns Ok() if this machine has the required instruction sets, Err() if some instruction sets are missing
-            #[inline]
-            pub fn new(inner_fft: Arc<dyn Fft<T>>) -> Result<Self, ()> {
-                let has_avx = is_x86_feature_detected!("avx");
-                let has_fma = is_x86_feature_detected!("fma");
-                if has_avx && has_fma {
-                    // Safety: new_with_avx requires the "avx" feature set. Since we know it's present, we're safe
-                    Ok(unsafe { Self::new_with_avx(inner_fft) })
-                } else {
-                    Err(())
-                }
-            }
-            #[inline]
-            fn perform_fft_inplace(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-                // Perform the column FFTs
-                // Safety: self.perform_column_butterflies() requres the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't available
-                unsafe { self.perform_column_butterflies(buffer) };
-
-                // process the row FFTs
-                let (scratch, inner_scratch) = scratch.split_at_mut(self.len());
-                self.common_data.inner_fft.process_multi(buffer, scratch, inner_scratch);
-
-                // Transpose
-                // Safety: self.transpose() requres the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
-                unsafe { self.transpose(scratch, buffer) };
-            }
-
-            #[inline]
-            fn perform_fft_out_of_place(&self, input: &mut [Complex<T>], output: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-                // Perform the column FFTs
-                // Safety: self.perform_column_butterflies() requres the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't avaiable
-                unsafe { self.perform_column_butterflies(input) };
-
-                // process the row FFTs. If extra scratch was provided, pass it in. Otherwise, use the output.
-                let inner_scratch = if scratch.len() > 0 { scratch } else { &mut output[..] };
-                self.common_data.inner_fft.process_inplace_multi(input, inner_scratch);
-
-                // Transpose
-                // Safety: self.transpose() requres the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
-                unsafe { self.transpose(input, output) };
-            }
-        }
-
 		impl<T: FFTnum> Fft<T> for $struct_name<T> {
             fn process_with_scratch(&self, input: &mut [Complex<T>], output: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
                 assert_eq!(input.len(), self.len(), "Input is the wrong length. Expected {}, got {}", self.len(), input.len());

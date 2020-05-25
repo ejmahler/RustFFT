@@ -13,10 +13,6 @@ pub trait AvxComplexArrayf32 {
         let hi = self.load_complex_remainder1_f32(index + 2);
         _mm256_insertf128_ps(_mm256_castps128_ps256(lo), hi, 1)
     }
-
-
-    unsafe fn load_complex_remainder_f32(&self, remainder_mask: RemainderMask, index: usize) -> __m256;
-    unsafe fn load_complex_remainder_f32_lo(&self, remainder_mask: RemainderMask, index: usize) -> __m128;
 }
 pub trait AvxComplexArrayMutf32 {
     // Store the 4 complex numbers contained in `data` at the given memory addresses
@@ -29,10 +25,6 @@ pub trait AvxComplexArrayMutf32 {
         self.store_complex_f32_lo(_mm256_castps256_ps128(data), index);
         self.store_complex_remainder1_f32(_mm256_extractf128_ps(data, 1), index + 2);
     }
-
-    // Store some of the 4 complex numbers in `data at the given memory address, using remainder_mask to decide which elements to write
-    unsafe fn store_complex_remainder_f32(&mut self, remainder_mask: RemainderMask,  data: __m256, index: usize);
-    unsafe fn store_complex_remainder_f32_lo(&mut self, remainder_mask: RemainderMask,  data: __m128, index: usize);
 }
 
 impl AvxComplexArrayf32 for [Complex<f32>] {
@@ -57,18 +49,6 @@ impl AvxComplexArrayf32 for [Complex<f32>] {
         let float_ptr  = (&complex_ref.re) as *const f32;
         _mm_loadu_ps(float_ptr)
     }
-    #[inline(always)]
-    unsafe fn load_complex_remainder_f32(&self, remainder_mask: RemainderMask, index: usize) -> __m256 {
-        let complex_ref = self.get_unchecked(index);
-        let float_ptr  = (&complex_ref.re) as *const f32;
-        _mm256_maskload_ps(float_ptr, remainder_mask.0)
-    }
-    #[inline(always)]
-    unsafe fn load_complex_remainder_f32_lo(&self, remainder_mask: RemainderMask, index: usize) -> __m128 {
-        let complex_ref = self.get_unchecked(index);
-        let float_ptr  = (&complex_ref.re) as *const f32;
-        _mm_maskload_ps(float_ptr, _mm256_castsi256_si128(remainder_mask.0))
-    }
 }
 impl AvxComplexArrayMutf32 for [Complex<f32>] {
     #[inline(always)]
@@ -86,24 +66,12 @@ impl AvxComplexArrayMutf32 for [Complex<f32>] {
         _mm_storeu_ps(float_ptr, data);
     }
     #[inline(always)]
-    unsafe fn store_complex_remainder_f32(&mut self, remainder_mask: RemainderMask, data: __m256, index: usize) {
-        let complex_ref = self.get_unchecked_mut(index);
-        let float_ptr = (&mut complex_ref.re) as *mut f32;
-        _mm256_maskstore_ps(float_ptr, remainder_mask.0, data);
-    }
-    #[inline(always)]
     unsafe fn store_complex_remainder1_f32(&mut self, data: __m128, index: usize) {
         debug_assert!(self.len() >= index + 1);
 
         let complex_ref = self.get_unchecked_mut(index);
         let float_ptr = (&mut complex_ref.re) as *mut f32;
         _mm_store_sd(float_ptr as *mut f64, _mm_castps_pd(data));
-    }
-    #[inline(always)]
-    unsafe fn store_complex_remainder_f32_lo(&mut self, remainder_mask: RemainderMask, data: __m128, index: usize) {
-        let complex_ref = self.get_unchecked_mut(index);
-        let float_ptr = (&mut complex_ref.re) as *mut f32;
-        _mm_maskstore_ps(float_ptr, _mm256_castsi256_si128(remainder_mask.0), data);
     }
 }
 impl AvxComplexArrayf32 for RawSlice<Complex<f32>> {
@@ -125,16 +93,6 @@ impl AvxComplexArrayf32 for RawSlice<Complex<f32>> {
         let float_ptr  = self.as_ptr().add(index) as *const f32;
         _mm_loadu_ps(float_ptr)
     }
-    #[inline(always)]
-    unsafe fn load_complex_remainder_f32(&self, remainder_mask: RemainderMask, index: usize) -> __m256 {
-        let float_ptr  = self.as_ptr().add(index) as *const f32;
-        _mm256_maskload_ps(float_ptr, remainder_mask.0)
-    }
-    #[inline(always)]
-    unsafe fn load_complex_remainder_f32_lo(&self, remainder_mask: RemainderMask, index: usize) -> __m128 {
-        let float_ptr  = self.as_ptr().add(index) as *const f32;
-        _mm_maskload_ps(float_ptr, _mm256_castsi256_si128(remainder_mask.0))
-    }
 }
 impl AvxComplexArrayMutf32 for RawSliceMut<Complex<f32>> {
     #[inline(always)]
@@ -150,59 +108,12 @@ impl AvxComplexArrayMutf32 for RawSliceMut<Complex<f32>> {
         _mm_storeu_ps(float_ptr, data);
     }
     #[inline(always)]
-    unsafe fn store_complex_remainder_f32(&mut self, remainder_mask: RemainderMask, data: __m256, index: usize) {
-        let float_ptr = self.as_mut_ptr().add(index) as *mut f32;
-        _mm256_maskstore_ps(float_ptr, remainder_mask.0, data);
-    }
-    #[inline(always)]
     unsafe fn store_complex_remainder1_f32(&mut self, data: __m128, index: usize) {
         debug_assert!(self.len() >= index + 1);
 
         let float_ptr = self.as_mut_ptr().add(index) as *mut f32;
         _mm_store_sd(float_ptr as *mut f64, _mm_castps_pd(data));
     }
-    #[inline(always)]
-    unsafe fn store_complex_remainder_f32_lo(&mut self, remainder_mask: RemainderMask, data: __m128, index: usize) {
-        let float_ptr = self.as_mut_ptr().add(index) as *mut f32;
-        _mm_maskstore_ps(float_ptr, _mm256_castsi256_si128(remainder_mask.0), data);
-    }
-}
-
-// Struct that encapsulates the process of storing/loading "remainders" for FFT buffers that are not multiples of 4.
-// Use with load_remainder_complex_f32 and store_remainder_complex_f32 beloe
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct RemainderMask(__m256i);
-impl RemainderMask {
-    #[inline(always)]
-    pub unsafe fn new_f32(remainder: usize) -> Self {
-        let mut mask_array = [0u64; 4];
-        for i in 0..remainder {
-            mask_array[i] = std::u64::MAX;
-        }
-        Self(_mm256_lddqu_si256(std::mem::transmute::<*const u64, *const __m256i>(mask_array.as_ptr())))
-    }
-}
-
-// given a number of elements (assumed to be complex<f32>), divides the elements into chunks that will fit in AVX registers, with a remainder that may not completely fill an AVX register
-// returns (num_chunks, remainder) with remainder being in the range [1,4] (if len is 0, num_chunks and remainder will both be 0)
-// the intention is that this is used to create a main loop, and then an unconditional remainder after the loop
-#[inline(always)]
-pub fn compute_chunk_count_complex_f32(len: usize) -> (usize, usize) {
-    let quotient = len / 4;
-    let naive_remainder = len % 4;
-
-    if quotient > 0 && naive_remainder == 0 {
-        (quotient - 1, naive_remainder + 4)
-    } else {
-        (quotient, naive_remainder)
-    }
-}
-
-// Fills an AVX register by repeating the given complex number over and over
-#[inline(always)]
-pub unsafe fn broadcast_complex_f32(value: Complex<f32>) -> __m256 {
-    _mm256_set_ps(value.im, value.re, value.im, value.re, value.im, value.re, value.im, value.re)
 }
 
 // Does the equivalent of "unpackhi" and "unpacklo" but for complex numbers
@@ -443,56 +354,4 @@ pub unsafe fn pack_3x4_4x3_f32(rows: [__m256;4]) -> [__m256; 3] {
     let output2 = _mm256_blend_ps(permuted3, intermediate3, 0x33); // 11 10 9 8
 
     [output0, output1, output2]
-}
-
-// Functions in the "FMA" sub-module require the fma instruction set in addition to AVX
-pub mod fma {
-    use super::*;
-
-    // Multiply the complex numbers in `left` by the complex numbers in `right`, using FMA instructions where possible
-    #[inline(always)]
-    pub unsafe fn complex_multiply_f32(left: __m256, right: __m256) -> __m256 {
-        // Extract the real and imaginary components from left into 2 separate registers
-        let left_real = _mm256_moveldup_ps(left);
-        let left_imag = _mm256_movehdup_ps(left);
-
-        // create a shuffled version of right where the imaginary values are swapped with the reals
-        let right_shuffled = _mm256_permute_ps(right, 0xB1);
-
-        // multiply our duplicated imaginary left vector by our shuffled right vector. that will give us the right side of the traditional complex multiplication formula
-        let output_right = _mm256_mul_ps(left_imag, right_shuffled);
-
-        // use a FMA instruction to multiply together left side of the complex multiplication formula, then alternatingly add and subtract the left side from the right
-        _mm256_fmaddsub_ps(left_real, right, output_right)
-    }
-
-    // Multiply the complex numbers in `left` by the complex numbers in `right`, using FMA instructions where possible
-    // This variant assumes that `left` should be conjugated before multiplying (IE, the imaginary numbers in `left` should be negated)
-    // Thankfully, it is straightforward to roll this into existing instructions. Namely, we can get away with replacing "fmaddsub" with "fmsubadd"
-    #[inline(always)]
-    pub unsafe fn complex_conjugated_multiply_f32(left: __m256, right: __m256) -> __m256 {
-        // Extract the real and imaginary components from left into 2 separate registers
-        let left_real = _mm256_moveldup_ps(left);
-        let left_imag = _mm256_movehdup_ps(left);
-
-        // create a shuffled version of right where the imaginary values are swapped with the reals
-        let right_shuffled = _mm256_permute_ps(right, 0xB1);
-
-        // multiply our duplicated imaginary left vector by our shuffled right vector. that will give us the right side of the traditional complex multiplication formula
-        let output_right = _mm256_mul_ps(left_imag, right_shuffled);
-
-        // use a FMA instruction to multiply together left side of the complex multiplication formula, then alternatingly add and subtract the left side from the right
-        _mm256_fmsubadd_ps(left_real, right, output_right)
-    }
-
-    // compute buffer[i] = buffer[i].conj() * multiplier[i] pairwise complex multiplication for each element.
-    // This is kind of usage-specific, because 'b' is stored as pre-loaded AVX registers, but 'a' is stored as loose complex numbers
-    #[target_feature(enable = "avx", enable = "fma")]
-    pub unsafe fn pairwise_complex_multiply_conjugated(buffer: &mut [Complex<f32>], multiplier: &[__m256]) {
-        for (i, twiddle) in multiplier.iter().enumerate() {
-            let inner_vector = buffer.load_complex_f32(i*4);
-            let product_vector = complex_conjugated_multiply_f32(inner_vector, *twiddle);
-            buffer.store_complex_f32(i*4, product_vector);
-        }
-    }
 }

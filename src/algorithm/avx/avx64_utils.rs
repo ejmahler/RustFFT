@@ -76,12 +76,6 @@ impl AvxComplexArrayMut64 for RawSliceMut<Complex<f64>> {
     }
 }
 
-// Fills an AVX register by repeating the given complex number over and over
-#[inline(always)]
-pub unsafe fn broadcast_complex_f64(value: Complex<f64>) -> __m256d {
-    _mm256_set_pd(value.im, value.re, value.im, value.re)
-}
-
 // Treat the input like the rows of a 2x2 array, and transpose said rows to the columns
 #[inline(always)]
 pub unsafe fn transpose_2x2_f64(rows: [__m256d; 2]) -> [__m256d; 2] {
@@ -314,75 +308,4 @@ pub unsafe fn transpose_8x4_to_4x8_f64(rows0: [__m256d;4], rows1: [__m256d; 4], 
     let output13 = transpose_2x2_f64(chunk31);
 
     ([output00[0], output00[1], output01[0], output01[1], output02[0], output02[1], output03[0], output03[1]], [output10[0], output10[1], output11[0], output11[1], output12[0], output12[1], output13[0], output13[1]])
-}
-
-// Functions in the "FMA" sub-module require the fma instruction set in addition to AVX
-pub mod fma {
-    use super::*;
-
-    // Multiply the complex numbers in `left` by the complex numbers in `right`, using FMA instructions where possible
-    #[inline(always)]
-    pub unsafe fn complex_multiply_f64(left: __m256d, right: __m256d) -> __m256d {
-        // Extract the real and imaginary components from left into 2 separate registers
-        let left_real = _mm256_movedup_pd(left);
-        let left_imag = _mm256_permute_pd(left, 0x0F); // apparently the avx deigners just skipped movehdup f64?? So use a permute instruction to take its place, copying the imaginaries int othe reals
-
-        // create a shuffled version of right where the imaginary values are swapped with the reals
-        let right_shuffled = _mm256_permute_pd(right, 0x05);
-
-        // multiply our duplicated imaginary left vector by our shuffled right vector. that will give us the right side of the traditional complex multiplication formula
-        let output_right = _mm256_mul_pd(left_imag, right_shuffled);
-
-        // use a FMA instruction to multiply together left side of the complex multiplication formula, then alternatingly add and subtract the left side from the right
-        _mm256_fmaddsub_pd(left_real, right, output_right)
-    }
-
-    // Multiply the complex numbers in `left` by the complex numbers in `right`, using FMA instructions where possible
-    // This variant assumes that `left` should be conjugated before multiplying (IE, the imaginary numbers in `left` should be negated)
-    // Thankfully, it is straightforward to roll this into existing instructions. Namely, we can get away with replacing "fmaddsub" with "fmsubadd"
-    #[inline(always)]
-    pub unsafe fn complex_conjugated_multiply_f64(left: __m256d, right: __m256d) -> __m256d {
-        // Extract the real and imaginary components from left into 2 separate registers
-        let left_real = _mm256_movedup_pd(left);
-        let left_imag = _mm256_permute_pd(left, 0x0f);
-
-        // create a shuffled version of right where the imaginary values are swapped with the reals
-        let right_shuffled = _mm256_permute_pd(right, 0x05);
-
-        // multiply our duplicated imaginary left vector by our shuffled right vector. that will give us the right side of the traditional complex multiplication formula
-        let output_right = _mm256_mul_pd(left_imag, right_shuffled);
-
-        // use a FMA instruction to multiply together left side of the complex multiplication formula, then alternatingly add and subtract the left side from the right
-        _mm256_fmsubadd_pd(left_real, right, output_right)
-    }
-
-    // Multiply the complex number in `left` by the complex number in `right`, using FMA instructions where possible
-    // This variant assumes that `left` should be conjugated before multiplying (IE, the imaginary numbers in `left` should be negated)
-    // Thankfully, it is straightforward to roll this into existing instructions. Namely, we can get away with replacing "fmaddsub" with "fmsubadd"
-    #[inline(always)]
-    pub unsafe fn complex_conjugated_multiply_f64_lo(left: __m128d, right: __m128d) -> __m128d {
-        // Extract the real and imaginary components from left into 2 separate registers
-        let left_real = _mm_movedup_pd(left);
-        let left_imag = _mm_permute_pd(left, 0x0f);
-
-        // create a shuffled version of right where the imaginary values are swapped with the reals
-        let right_shuffled = _mm_permute_pd(right, 0x05);
-
-        // multiply our duplicated imaginary left vector by our shuffled right vector. that will give us the right side of the traditional complex multiplication formula
-        let output_right = _mm_mul_pd(left_imag, right_shuffled);
-
-        // use a FMA instruction to multiply together left side of the complex multiplication formula, then alternatingly add and subtract the left side from the right
-        _mm_fmsubadd_pd(left_real, right, output_right)
-    }
-
-    // compute buffer[i] = buffer[i].conj() * multiplier[i] pairwise complex multiplication for each element.
-    // This is kind of usage-specific, because 'b' is stored as pre-loaded AVX registers, but 'a' is stored as loose complex numbers
-    #[target_feature(enable = "avx", enable = "fma")]
-    pub unsafe fn pairwise_complex_multiply_conjugated(buffer: &mut [Complex<f64>], multiplier: &[__m256d]) {
-        for (i, twiddle) in multiplier.iter().enumerate() {
-            let inner_vector = buffer.load_complex_f64(i*2);
-            let product_vector = complex_conjugated_multiply_f64(inner_vector, *twiddle);
-            buffer.store_complex_f64(product_vector, i*2);
-        }
-    }
 }
