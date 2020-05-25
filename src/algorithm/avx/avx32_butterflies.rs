@@ -9,9 +9,8 @@ use crate::common::FFTnum;
 use crate::{Length, IsInverse, Fft};
 
 use crate::array_utils::{RawSlice, RawSliceMut};
-use super::avx32_utils::{AvxComplexArrayf32, AvxComplexArrayMutf32};
 use super::avx32_utils;
-use super::avx_vector::{AvxVector, AvxVector128, AvxVector256, Rotation90, AvxArrayMutGeneric};
+use super::avx_vector::{AvxVector, AvxVector128, AvxVector256, Rotation90, AvxArray, AvxArrayMut};
 
 // Safety: This macro will call `self::perform_fft_f32()` which probably has a #[target_feature(enable = "...")] annotation on it.
 // Calling functions with that annotation is unsafe, because it doesn't actually check if the CPU has the required features.
@@ -164,8 +163,8 @@ impl Butterfly5Avx<f32> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_fft_f32(&self, input: RawSlice<Complex<f32>>, mut output: RawSliceMut<Complex<f32>>) {
         let input0 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr() as *const f64)); // load the first element of the input, and duplicate it into both complex number slots of input0
-        let input12 = input.load_complex_f32_lo(1);
-        let input34 = input.load_complex_f32_lo(3);
+        let input12 = input.load_partial2_complex(1);
+        let input34 = input.load_partial2_complex(3);
 
         // swap elements for inputs 3 and 4
         let input43 = AvxVector::reverse_complex_elements(input34);
@@ -176,7 +175,7 @@ impl Butterfly5Avx<f32> {
         let rotation = AvxVector::make_rotation90(true);
         let rotated43 = AvxVector::rotate90(diff43, rotation);
 
-        let (mid14, mid23) = avx32_utils::unpack_complex_f32_lo(sum12, rotated43);
+        let [mid14, mid23] = AvxVector::unpack_complex([sum12, rotated43]);
 
         // to compute the first output, compute the sum of all elements. mid14[0] and mid23[0] already have the sum of 1+4 and 2+3 respectively, so if we add them, we'll get the sum of all 4
         let sum1234 = AvxVector::add(mid14, mid23);
@@ -189,7 +188,7 @@ impl Butterfly5Avx<f32> {
         let twiddled23 = AvxVector::fmadd(mid23, self.twiddles[2], twiddled_inner14);
 
         // unpack the data for the last butterfly 2
-        let (twiddled12, twiddled43) = avx32_utils::unpack_complex_f32_lo(twiddled14, twiddled23);
+        let [twiddled12, twiddled43] = AvxVector::unpack_complex([twiddled14, twiddled23]);
         let [output12, output43] = AvxVector::column_butterfly2([twiddled12, twiddled43]);
 
         // swap the elements in output43 before writing them out, and add the first input to everything
@@ -197,9 +196,9 @@ impl Butterfly5Avx<f32> {
         let output34 = AvxVector::reverse_complex_elements(output43);
         let final34 = AvxVector::add(input0, output34);
 
-        output.store_complex_remainder1_f32(output0, 0);
-        output.store_complex_f32_lo(final12, 1);
-        output.store_complex_f32_lo(final34, 3);
+        output.store_partial1_complex(output0, 0);
+        output.store_partial2_complex(final12, 1);
+        output.store_partial2_complex(final34, 3);
     }
 }
 
@@ -246,8 +245,8 @@ impl Butterfly7Avx<f32> {
         // we want to load 3 elements into 123 and 3 elements into 456, but we can only load 4, so we're going to do slightly overlapping reads here
         // we have to reverse 456 immediately after loading, and that'll be easiest if we load the 456 into the latter 3 slots of the register, rather than the front 3 slots
         // as a bonus, that also means we don't need masked reads or anything
-        let input123 = input.load_complex_f32(1);
-        let input456 = input.load_complex_f32(3);
+        let input123 = input.load_complex(1);
+        let input456 = input.load_complex(3);
 
         // reverse the order of input456
         let input654 = AvxVector::reverse_complex_elements(input456);
@@ -257,7 +256,7 @@ impl Butterfly7Avx<f32> {
         let rotation = AvxVector::make_rotation90(true);
         let rotated654 = AvxVector::rotate90(diff654, rotation);
 
-        let (mid1634, mid25) = avx32_utils::unpack_complex_f32(sum123, rotated654);
+        let [mid1634, mid25] = AvxVector::unpack_complex([sum123, rotated654]);
 
         let mid16 = _mm256_castps256_ps128(mid1634);
         let mid25 = _mm256_castps256_ps128(mid25);
@@ -267,7 +266,7 @@ impl Butterfly7Avx<f32> {
         let output0_left  = AvxVector::add(mid16, mid25);
         let output0_right = AvxVector::add(input0, mid34);
         let output0 = AvxVector::add(output0_left, output0_right);
-        output.store_complex_remainder1_f32(output0, 0);
+        output.store_partial1_complex(output0, 0);
 
         _mm256_zeroupper();
         
@@ -285,8 +284,8 @@ impl Butterfly7Avx<f32> {
         let twiddled34 = AvxVector::fmadd(mid34, self.twiddles[1], twiddled34_intermediate2);
 
         // unpack the data for the last butterfly 2
-        let (twiddled12, twiddled65) = avx32_utils::unpack_complex_f32_lo(twiddled16, twiddled25);
-        let (twiddled33, twiddled44) = avx32_utils::unpack_complex_f32_lo(twiddled34, twiddled34);
+        let [twiddled12, twiddled65] = AvxVector::unpack_complex([twiddled16, twiddled25]);
+        let [twiddled33, twiddled44] = AvxVector::unpack_complex([twiddled34, twiddled34]);
 
         // we can save one add if we add input0 to twiddled33 now. normally we'd add input0 to the final output, but the arrangement of data makes that a little awkward
         let twiddled033 = AvxVector::add(twiddled33, input0);
@@ -295,10 +294,10 @@ impl Butterfly7Avx<f32> {
         let [output033, output044] = AvxVector::column_butterfly2([twiddled033, twiddled44]);
         let output56 = AvxVector::reverse_complex_elements(output65);
         
-        output.store_complex_f32_lo(AvxVector::add(output12, input0), 1);
-        output.store_complex_remainder1_f32(output033, 3);
-        output.store_complex_remainder1_f32(output044, 4);
-        output.store_complex_f32_lo(AvxVector::add(output56, input0), 5);
+        output.store_partial2_complex(AvxVector::add(output12, input0), 1);
+        output.store_partial1_complex(output033, 3);
+        output.store_partial1_complex(output044, 4);
+        output.store_partial2_complex(AvxVector::add(output56, input0), 5);
     }
 }
 
@@ -328,9 +327,9 @@ impl MixedRadixAvx4x2<f32> {
         Self {
             twiddles: AvxVector::make_mixedradix_twiddle_chunk(0, 1, 8, inverse),
             twiddles_butterfly4: if inverse { 
-                [Complex::new(0.0, 0.0), Complex::new(-0.0, 0.0), Complex::new(0.0, 0.0), Complex::new(-0.0, 0.0)].load_complex_f32(0)
+                [Complex::new(0.0f32, 0.0), Complex::new(-0.0, 0.0), Complex::new(0.0, 0.0), Complex::new(-0.0, 0.0)].load_complex(0)
             } else {
-                [Complex::new(0.0, 0.0), Complex::new(0.0, -0.0), Complex::new(0.0, 0.0), Complex::new(0.0, -0.0)].load_complex_f32(0)
+                [Complex::new(0.0f32, 0.0), Complex::new(0.0, -0.0), Complex::new(0.0, 0.0), Complex::new(0.0, -0.0)].load_complex(0)
             },
             inverse: inverse,
             _phantom: PhantomData,
@@ -339,8 +338,8 @@ impl MixedRadixAvx4x2<f32> {
     
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_fft_f32(&self, input: RawSlice<Complex<f32>>, mut output: RawSliceMut<Complex<f32>>) {
-        let row0 = input.load_complex_f32(0);
-        let row1 = input.load_complex_f32(4);
+        let row0 = input.load_complex(0);
+        let row1 = input.load_complex(4);
 
         // Do our butterfly 2's down the columns
         let [intermediate0, intermediate1_pretwiddle] = AvxVector::column_butterfly2([row0, row1]);
@@ -373,8 +372,8 @@ impl MixedRadixAvx4x2<f32> {
 
         let [output0, output1] = AvxVector::column_butterfly2([swapped0, swapped1]);
 
-        output.store_complex_f32(0, output0);
-        output.store_complex_f32(4, output1);
+        output.store_complex(output0, 0);
+        output.store_complex(output1, 4);
     }
 }
 
@@ -407,7 +406,7 @@ impl MixedRadixAvx3x3<f32> {
             f32::generate_twiddle_factor(4, 9, inverse),
         ];
         Self {
-            twiddles: twiddles.load_complex_f32(0),
+            twiddles: twiddles.load_complex(0),
             twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, inverse),
             inverse: inverse,
             _phantom: PhantomData,
@@ -420,10 +419,10 @@ impl MixedRadixAvx3x3<f32> {
         // we're leaving the first element empty and putting the data in the last 3 elements. this will let us do 3 total complex multiplies instead of 4.
 
         let input0_lo = _mm_castpd_ps(_mm_load1_pd(input.as_ptr() as *const f64));
-        let input0_hi = input.load_complex_f32_lo(1);
-        let input0 = _mm256_insertf128_ps(_mm256_castps128_ps256(input0_lo), input0_hi, 0x1);
-        let input1 = input.load_complex_f32(2);
-        let input2 = input.load_complex_f32(5);
+        let input0_hi = input.load_partial2_complex(1);
+        let input0 = AvxVector256::merge(input0_lo, input0_hi);
+        let input1 = input.load_complex(2);
+        let input2 = input.load_complex(5);
 
         // We're going to treat our input as a 3x4 2d array. First, do 3 butterfly 4's down the columns of that array.
         let [mid0, mid1, mid2] = AvxVector::column_butterfly3([input0, input1, input2], self.twiddles_butterfly3);
@@ -440,8 +439,8 @@ impl MixedRadixAvx3x3<f32> {
         let permute2 = _mm256_permute2f128_ps(mid0, twiddled, 0x31);
         let permute3 = _mm256_permute2f128_ps(twiddled, twiddled, 0x20);
 
-        let (_, transposed0) = avx32_utils::unpack_complex_f32(permute0, permute1);
-        let (transposed1, transposed2) = avx32_utils::unpack_complex_f32(permute2, permute3);
+        let transposed0 = AvxVector::unpackhi_complex([permute0, permute1]);
+        let [transposed1, transposed2] = AvxVector::unpack_complex([permute2, permute3]);
 
         // more size 3 buterflies
         let output_rows = AvxVector::column_butterfly3([transposed0, transposed1, transposed2], self.twiddles_butterfly3);
@@ -449,18 +448,18 @@ impl MixedRadixAvx3x3<f32> {
         // the elements of row 1 are in pretty much the worst possible order, most of these instructions will be about getting them into the right order
         let swapped1 = _mm256_permute_ps(output_rows[1], 0x4E); // swap even and odd complex numbers
         let packed1 = _mm256_permute2f128_ps(swapped1, output_rows[2], 0x21);
-        output.store_complex_f32(4, packed1);
+        output.store_complex(packed1, 4);
 
         // merge just the high element of swapped_lo into the high element of row 0
         let empty = AvxVector::zero();
         let swapped1_lo = _mm256_extractf128_ps(swapped1, 0x0);
         let zero_swapped1_lo = _mm256_insertf128_ps(empty, swapped1_lo, 0x1);
         let packed0 = _mm256_blend_ps(output_rows[0], zero_swapped1_lo, 0xC0);
-        output.store_complex_f32(0, packed0);
+        output.store_complex(packed0, 0);
 
         // rather than trying to rearrange the last element with AVX registers, just write the register to the stack and copy normally
         let mut dump_output2 = [Complex::zero(); 4];
-        dump_output2.store_complex_f32(0, output_rows[2]);
+        dump_output2.store_complex(output_rows[2], 0);
         output.store(dump_output2[2], 8);
     }
 }
@@ -500,8 +499,8 @@ impl MixedRadixAvx4x3<f32> {
         ];
         Self {
             twiddles: [
-                twiddles.load_complex_f32(0),
-                twiddles.load_complex_f32(4),
+                twiddles.load_complex(0),
+                twiddles.load_complex(4),
             ],
             twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, inverse),
             twiddles_butterfly4: AvxVector::make_rotation90(inverse),
@@ -517,12 +516,12 @@ impl MixedRadixAvx4x3<f32> {
         
         // for everything but the first element, we can do overlapping reads. for the first element, an "overlapping read" would have us reading from index -1, so instead we have to shuffle some data around
         let input0_lo = _mm_castpd_ps(_mm_load1_pd(input.as_ptr() as *const f64));
-        let input0_hi = input.load_complex_f32_lo(1);
+        let input0_hi = input.load_partial2_complex(1);
         let input_rows = [
-            _mm256_insertf128_ps(_mm256_castps128_ps256(input0_lo), input0_hi, 0x1),
-            input.load_complex_f32(2),
-            input.load_complex_f32(5),
-            input.load_complex_f32(8),
+            AvxVector256::merge(input0_lo, input0_hi),
+            input.load_complex(2),
+            input.load_complex(5),
+            input.load_complex(8),
         ];
 
         // butterfly 4's down the columns
@@ -542,8 +541,8 @@ impl MixedRadixAvx4x3<f32> {
             let permute2 = _mm256_permute2f128_ps(mid[0], mid[2], 0x31);
             let permute3 = twiddled13; // normally we'd need to do a permute here, but we can skip it because we already did it for twiddle factors
 
-            let (_, unpacked1) = avx32_utils::unpack_complex_f32(permute0, permute1);
-            let (unpacked2, unpacked3) = avx32_utils::unpack_complex_f32(permute2, permute3);
+            let unpacked1 = AvxVector::unpackhi_complex([permute0, permute1]);
+            let [unpacked2, unpacked3] = AvxVector::unpack_complex([permute2, permute3]);
 
             [unpacked1, unpacked2, unpacked3]
         };
@@ -551,9 +550,9 @@ impl MixedRadixAvx4x3<f32> {
         // Do 4 butterfly 4's down the columns of our transposed array
         let output_rows = AvxVector::column_butterfly3(transposed, self.twiddles_butterfly3); 
 
-        output.store_complex_f32(0, output_rows[0]);
-        output.store_complex_f32(1 * 4, output_rows[1]);
-        output.store_complex_f32(2 * 4, output_rows[2]);
+        output.store_complex(output_rows[0], 0);
+        output.store_complex(output_rows[1], 4);
+        output.store_complex(output_rows[2], 8);
     }
 }
 boilerplate_fft_simd_butterfly!(MixedRadixAvx4x3, 12);
@@ -590,10 +589,10 @@ impl MixedRadixAvx4x4<f32> {
     unsafe fn perform_fft_f32(&self, input: RawSlice<Complex<f32>>, mut output: RawSliceMut<Complex<f32>>) {
         // Manually unrolling this loop because writing a "for r in 0..4" loop results in slow codegen that makes the whole thing take 1.5x longer :(
         let rows = [
-            input.load_complex_f32(0),
-            input.load_complex_f32(4),
-            input.load_complex_f32(8),
-            input.load_complex_f32(12),
+            input.load_complex(0),
+            input.load_complex(4),
+            input.load_complex(8),
+            input.load_complex(12),
         ];
 
         // We're going to treat our input as a 4x4 2d array. First, do 4 butterfly 4's down the columns of that array.
@@ -611,10 +610,10 @@ impl MixedRadixAvx4x4<f32> {
         let output_rows = AvxVector::column_butterfly4(transposed, self.twiddles_butterfly4);
 
         // Manually unrolling this loop because writing a "for r in 0..4" loop results in slow codegen that makes the whole thing take 1.5x longer :(
-        output.store_complex_f32(0, output_rows[0]);
-        output.store_complex_f32(4, output_rows[1]);
-        output.store_complex_f32(8, output_rows[2]);
-        output.store_complex_f32(12,output_rows[3]);
+        output.store_complex(output_rows[0], 0);
+        output.store_complex(output_rows[1], 4);
+        output.store_complex(output_rows[2], 8);
+        output.store_complex(output_rows[3], 12);
     }
 }
 boilerplate_fft_simd_butterfly!(MixedRadixAvx4x4, 16);
@@ -653,12 +652,12 @@ impl MixedRadixAvx4x6<f32> {
     unsafe fn perform_fft_f32(&self, input: RawSlice<Complex<f32>>, mut output: RawSliceMut<Complex<f32>>) {
         // Manually unrolling this loop because writing a "for r in 0..6" loop results in slow codegen that makes the whole thing take 1.5x longer :(
         let rows = [
-            input.load_complex_f32(0),
-            input.load_complex_f32(4),
-            input.load_complex_f32(8),
-            input.load_complex_f32(12),
-            input.load_complex_f32(16),
-            input.load_complex_f32(20),
+            input.load_complex(0),
+            input.load_complex(4),
+            input.load_complex(8),
+            input.load_complex(12),
+            input.load_complex(16),
+            input.load_complex(20),
         ];
 
         // We're going to treat our input as a 4x6 2d array. First, do 4 butterfly 6's down the columns of that array.
@@ -678,8 +677,8 @@ impl MixedRadixAvx4x6<f32> {
 
         // the upper two elements of output1 are empty, so only store half the data for it
         for r in 0..4 {
-            output.store_complex_f32(6*r, output0[r]);
-            output.store_complex_f32_lo(_mm256_castps256_ps128(output1[r]), r*6 + 4);
+            output.store_complex(output0[r], 6*r);
+            output.store_partial2_complex(output1[r].lo(), r*6 + 4);
         }
     }
 }
@@ -728,9 +727,9 @@ impl MixedRadixAvx3x9<f32> {
         let mut rows1 = [AvxVector::zero(); 3];
         let mut rows2 = [AvxVector::zero(); 3];
         for r in 0..3 {
-            rows0[r] = input.load_complex_f32_lo(r * 9);
-            rows1[r] = input.load_complex_f32(r * 9 + 1);
-            rows2[r] = input.load_complex_f32(r * 9 + 5);
+            rows0[r] = input.load_partial2_complex(r * 9);
+            rows1[r] = input.load_complex(r * 9 + 1);
+            rows2[r] = input.load_complex(r * 9 + 5);
         }
 
         // butterfly 3s down the columns
@@ -752,16 +751,16 @@ impl MixedRadixAvx3x9<f32> {
 
         // we can't directly write our data to the output, because it's in an unpacked state with the last column enpty. we have to pack the data in, which will involve a lot of reshuffling
         let packed0 = avx32_utils::pack_3x4_4x3_f32([output_rows[0], output_rows[1], output_rows[2], output_rows[3]]);
-        output.store_complex_f32(0, packed0[0]);
-        output.store_complex_f32(4, packed0[1]);
-        output.store_complex_f32(8, packed0[2]);
+        output.store_complex(packed0[0], 0);
+        output.store_complex(packed0[1], 4);
+        output.store_complex(packed0[2], 8);
 
         let packed1 = avx32_utils::pack_3x4_4x3_f32([output_rows[4], output_rows[5], output_rows[6], output_rows[7]]);
-        output.store_complex_f32(12, packed1[0]);
-        output.store_complex_f32(16, packed1[1]);
-        output.store_complex_f32(20, packed1[2]);
+        output.store_complex(packed1[0], 12);
+        output.store_complex(packed1[1], 16);
+        output.store_complex(packed1[2], 20);
 
-        output.store_partial3_complex2(output_rows[8], 24);
+        output.store_partial3_complex(output_rows[8], 24);
     }
 }
 
@@ -799,8 +798,8 @@ impl MixedRadixAvx4x8<f32> {
         let mut rows0 = [AvxVector::zero(); 4];
         let mut rows1 = [AvxVector::zero(); 4];
         for r in 0..4 {
-            rows0[r] = input.load_complex_f32(8*r);
-            rows1[r] = input.load_complex_f32(8*r + 4);
+            rows0[r] = input.load_complex(8*r);
+            rows1[r] = input.load_complex(8*r + 4);
         }
 
         // We're going to treat our input as a 8x4 2d array. First, do 8 butterfly 4's down the columns of that array.
@@ -820,14 +819,14 @@ impl MixedRadixAvx4x8<f32> {
         let output_rows = AvxVector::column_butterfly8(transposed, self.twiddles_butterfly4);
 
         // Manually unrolling this loop because writing a "for r in 0..8" loop results in slow codegen that makes the whole thing take 1.5x longer :(
-        output.store_complex_f32(0, output_rows[0]);
-        output.store_complex_f32(1 * 4, output_rows[1]);
-        output.store_complex_f32(2 * 4, output_rows[2]);
-        output.store_complex_f32(3 * 4, output_rows[3]);
-        output.store_complex_f32(4 * 4, output_rows[4]);
-        output.store_complex_f32(5 * 4, output_rows[5]);
-        output.store_complex_f32(6 * 4, output_rows[6]);
-        output.store_complex_f32(7 * 4, output_rows[7]);
+        output.store_complex(output_rows[0], 0);
+        output.store_complex(output_rows[1], 1 * 4);
+        output.store_complex(output_rows[2], 2 * 4);
+        output.store_complex(output_rows[3], 3 * 4);
+        output.store_complex(output_rows[4], 4 * 4);
+        output.store_complex(output_rows[5], 5 * 4);
+        output.store_complex(output_rows[6], 6 * 4);
+        output.store_complex(output_rows[7], 7 * 4);
     }
 }
 
@@ -876,9 +875,9 @@ impl MixedRadixAvx4x9<f32> {
         let mut rows1 = [AvxVector::zero(); 4];
         let mut rows2 = [AvxVector::zero(); 4];
         for r in 0..4 {
-            rows0[r] = input.load_complex_f32_lo(r * 9);
-            rows1[r] = input.load_complex_f32(r * 9 + 1);
-            rows2[r] = input.load_complex_f32(r * 9 + 5);
+            rows0[r] = input.load_partial2_complex(r * 9);
+            rows1[r] = input.load_complex(r * 9 + 1);
+            rows2[r] = input.load_complex(r * 9 + 5);
         }
 
         // butterfly 4s down the columns
@@ -899,9 +898,9 @@ impl MixedRadixAvx4x9<f32> {
         let output_rows = AvxVector256::column_butterfly9(transposed, self.twiddles_butterfly9, self.twiddles_butterfly3);
 
         for r in 0..3 {
-            output.store_complex_f32(r*12, output_rows[r*3]);
-            output.store_complex_f32(r*12 + 4, output_rows[r*3+1]);
-            output.store_complex_f32(r*12 + 8, output_rows[r*3+2]);
+            output.store_complex(output_rows[r*3], r*12);
+            output.store_complex(output_rows[r*3+1], r*12 + 4);
+            output.store_complex(output_rows[r*3+2], r*12 + 8);
         }
     }
 }
@@ -943,9 +942,9 @@ impl MixedRadixAvx4x12<f32> {
         let mut rows1 = [AvxVector::zero(); 4];
         let mut rows2 = [AvxVector::zero(); 4];
         for r in 0..4 {
-            rows0[r] = input.load_complex_f32(12*r);
-            rows1[r] = input.load_complex_f32(12*r + 4);
-            rows2[r] = input.load_complex_f32(12*r + 8);
+            rows0[r] = input.load_complex(12*r);
+            rows1[r] = input.load_complex(12*r + 4);
+            rows2[r] = input.load_complex(12*r + 8);
         }
 
         // We're going to treat our input as a 12x4 2d array. First, do 12 butterfly 4's down the columns of that array.
@@ -967,18 +966,18 @@ impl MixedRadixAvx4x12<f32> {
         let output_rows = AvxVector256::column_butterfly12(transposed, self.twiddles_butterfly3, self.twiddles_butterfly4);
 
         // Manually unrolling this loop because writing a "for r in 0..12" loop results in slow codegen that makes the whole thing take 1.5x longer :(
-        output.store_complex_f32(0, output_rows[0]);
-        output.store_complex_f32(4, output_rows[1]);
-        output.store_complex_f32(8, output_rows[2]);
-        output.store_complex_f32(12, output_rows[3]);
-        output.store_complex_f32(16, output_rows[4]);
-        output.store_complex_f32(20, output_rows[5]);
-        output.store_complex_f32(24, output_rows[6]);
-        output.store_complex_f32(28, output_rows[7]);
-        output.store_complex_f32(32, output_rows[8]);
-        output.store_complex_f32(36, output_rows[9]);
-        output.store_complex_f32(40, output_rows[10]);
-        output.store_complex_f32(44, output_rows[11]);
+        output.store_complex(output_rows[0], 0);
+        output.store_complex(output_rows[1], 4);
+        output.store_complex(output_rows[2], 8);
+        output.store_complex(output_rows[3], 12);
+        output.store_complex(output_rows[4], 16);
+        output.store_complex(output_rows[5], 20);
+        output.store_complex(output_rows[6], 24);
+        output.store_complex(output_rows[7], 28);
+        output.store_complex(output_rows[8], 32);
+        output.store_complex(output_rows[9], 36);
+        output.store_complex(output_rows[10], 40);
+        output.store_complex(output_rows[11], 44);
     }
 }
 
@@ -1034,16 +1033,16 @@ impl MixedRadixAvx6x9<f32> {
         // we have too much data to fit into registers all at once, so split up our data processing so that we entirely finish with one "rows_" array before moving to the next
         let mut rows0 = [AvxVector::zero(); 6];
         for r in 0..3 {
-            rows0[r*2] = input.load_complex_f32_lo(r * 18);
-            rows0[r*2+1] = input.load_complex_f32_lo(r * 18 + 9);
+            rows0[r*2] = input.load_partial2_complex(r * 18);
+            rows0[r*2+1] = input.load_partial2_complex(r * 18 + 9);
         }
         let mid0 = AvxVector128::column_butterfly6(rows0, self.twiddles_butterfly3);
 
         // next set of butterfly 6's
         let mut rows1 = [AvxVector::zero(); 6];
         for r in 0..3 {
-            rows1[r*2] = input.load_complex_f32(r * 18 + 1);
-            rows1[r*2+1] = input.load_complex_f32(r * 18 + 10);
+            rows1[r*2] = input.load_complex(r * 18 + 1);
+            rows1[r*2+1] = input.load_complex(r * 18 + 10);
         }
         let mut mid1 = AvxVector256::column_butterfly6(rows1, self.twiddles_butterfly3);
         for r in 1..6 {
@@ -1053,8 +1052,8 @@ impl MixedRadixAvx6x9<f32> {
         // final set of butterfly 6's
         let mut rows2 = [AvxVector::zero(); 6];
         for r in 0..3 {
-            rows2[r*2] = input.load_complex_f32(r * 18 + 5);
-            rows2[r*2+1] = input.load_complex_f32(r * 18 + 14);
+            rows2[r*2] = input.load_complex(r * 18 + 5);
+            rows2[r*2+1] = input.load_complex(r * 18 + 14);
         }
         let mut mid2 = AvxVector256::column_butterfly6(rows2, self.twiddles_butterfly3);
         for r in 1..6 {
@@ -1068,13 +1067,13 @@ impl MixedRadixAvx6x9<f32> {
         // process the other half
         let output_rows1 = AvxVector128::column_butterfly9(transposed1, self.twiddles_butterfly9_lo, self.twiddles_butterfly3);
         for r in 0..9 {
-            output.store_complex_f32_lo(output_rows1[r], r*6 + 4);
+            output.store_partial2_complex(output_rows1[r], r*6 + 4);
         }
         
         // we have too much data to fit into registers all at once, do one set of butterfly 9's and output them before even starting on the others, to make it easier for the compiler to figure out what to spill
         let output_rows0 = AvxVector256::column_butterfly9(transposed0, self.twiddles_butterfly9, self.twiddles_butterfly3);
         for r in 0..9 {
-            output.store_complex_f32(r*6, output_rows0[r]);
+            output.store_complex(output_rows0[r], r*6);
         }
     }
 }
@@ -1115,7 +1114,7 @@ impl MixedRadixAvx8x8<f32> {
         // By computing a sizeable chunk and not referencing any of it for a while, we're making it easy for the compiler to decide what to spill
         let mut rows0 = [AvxVector::zero(); 8];
         for r in 0..8 {
-            rows0[r] = input.load_complex_f32(8*r);
+            rows0[r] = input.load_complex(8*r);
         }
         let mut mid0 = AvxVector::column_butterfly8(rows0, self.twiddles_butterfly4);
         for r in 1..8 {
@@ -1125,7 +1124,7 @@ impl MixedRadixAvx8x8<f32> {
         // One half is done, so the compiler can spill everything above this. Now do the other set of columns
         let mut rows1 = [AvxVector::zero(); 8];
         for r in 0..8 {
-            rows1[r] = input.load_complex_f32(8*r + 4);
+            rows1[r] = input.load_complex(8*r + 4);
         }
         let mut mid1 = AvxVector::column_butterfly8(rows1, self.twiddles_butterfly4);
         for r in 1..8 {
@@ -1139,12 +1138,12 @@ impl MixedRadixAvx8x8<f32> {
         // Same thing as above - Do the half of the butterfly 8's separately to give the compiler a better hint about what to spill
         let output0 = AvxVector::column_butterfly8(transposed0, self.twiddles_butterfly4);
         for r in 0..8 {
-            output.store_complex_f32(8*r, output0[r]);
+            output.store_complex(output0[r], 8*r);
         }
 
         let output1 = AvxVector::column_butterfly8(transposed1, self.twiddles_butterfly4);
         for r in 0..8 {
-            output.store_complex_f32(8*r + 4, output1[r]);
+            output.store_complex(output1[r], 8*r + 4);
         }
     }
 }
@@ -1187,7 +1186,7 @@ impl MixedRadixAvx6x12<f32> {
         // By computing a sizeable chunk and not referencing any of it for a while, we're making it easy for the compiler to decide what to spill
         let mut rows0 = [AvxVector::zero(); 6];
         for r in 0..6 {
-            rows0[r] = input.load_complex_f32(12*r);
+            rows0[r] = input.load_complex(12*r);
         }
         let mut mid0 = AvxVector256::column_butterfly6(rows0, self.twiddles_butterfly3);
         for r in 1..6 {
@@ -1197,7 +1196,7 @@ impl MixedRadixAvx6x12<f32> {
         // One third is done, so the compiler can spill everything above this. Now do the middle set of columns
         let mut rows1 = [AvxVector::zero(); 6];
         for r in 0..6 {
-            rows1[r] = input.load_complex_f32(12*r + 4);
+            rows1[r] = input.load_complex(12*r + 4);
         }
         let mut mid1 = AvxVector256::column_butterfly6(rows1, self.twiddles_butterfly3);
         for r in 1..6 {
@@ -1207,7 +1206,7 @@ impl MixedRadixAvx6x12<f32> {
         // two thirds are done, so the compiler can spill everything above this. Now do the final set of columns
         let mut rows2 = [AvxVector::zero(); 6];
         for r in 0..6 {
-            rows2[r] = input.load_complex_f32(12*r + 8);
+            rows2[r] = input.load_complex(12*r + 8);
         }
         let mut mid2 = AvxVector256::column_butterfly6(rows2, self.twiddles_butterfly3);
         for r in 1..6 {
@@ -1221,12 +1220,12 @@ impl MixedRadixAvx6x12<f32> {
         // Same thing as above - Do the half of the butterfly 12's separately to give the compiler a better hint about what to spill
         let output0 = AvxVector128::column_butterfly12(transposed0, self.twiddles_butterfly3, self.twiddles_butterfly4);
         for r in 0..12 {
-            output.store_complex_f32_lo(output0[r], 6*r);
+            output.store_partial2_complex(output0[r], 6*r);
         }
 
         let output1 = AvxVector256::column_butterfly12(transposed1, self.twiddles_butterfly3, self.twiddles_butterfly4);
         for r in 0..12 {
-            output.store_complex_f32(6*r + 2, output1[r]);
+            output.store_complex(output1[r], 6*r + 2);
         }
     }
 }

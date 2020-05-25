@@ -1318,207 +1318,104 @@ impl AvxVector128 for __m128d {
     }
 }
 
-pub trait AvxArray<V: AvxVector256> {
-    unsafe fn load_complex(&self, index: usize) -> V;
-    unsafe fn load_partial1_complex(&self, index: usize) -> V::HalfVector;
-    unsafe fn load_partial2_complex(&self, index: usize) -> V::HalfVector;
-    unsafe fn load_partial3_complex(&self, index: usize) -> V;
+pub trait AvxArray<T: FFTnum> {
+    unsafe fn load_complex(&self, index: usize) -> T::AvxType;
+    unsafe fn load_partial1_complex(&self, index: usize) -> <T::AvxType as AvxVector256>::HalfVector;
+    unsafe fn load_partial2_complex(&self, index: usize) -> <T::AvxType as AvxVector256>::HalfVector;
+    unsafe fn load_partial3_complex(&self, index: usize) -> T::AvxType;
 }
-pub trait AvxArrayMut<V: AvxVector256> {
-    unsafe fn store_complex(&mut self, data: V, index: usize);
-    unsafe fn store_partial1_complex(&mut self, data: V::HalfVector, index: usize);
-    unsafe fn store_partial2_complex(&mut self, data: V::HalfVector, index: usize);
-    unsafe fn store_partial3_complex(&mut self, data: V, index: usize);
-}
-
-impl<V: AvxVector256> AvxArray<V> for [Complex<V::ScalarType>] {
-    #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> V {
-        debug_assert!(self.len() >= index + V::COMPLEX_PER_VECTOR);
-        V::load_complex(self.as_ptr().add(index))
-    }
-    #[inline(always)]
-    unsafe fn load_partial1_complex(&self, index: usize) -> V::HalfVector {
-        debug_assert!(self.len() >= index + 1);
-        V::load_partial1_complex(self.as_ptr().add(index))
-    }
-    #[inline(always)]
-    unsafe fn load_partial2_complex(&self, index: usize) -> V::HalfVector {
-        debug_assert!(self.len() >= index + 2);
-        V::load_partial2_complex(self.as_ptr().add(index))
-    }
-    #[inline(always)]
-    unsafe fn load_partial3_complex(&self, index: usize) -> V {
-        debug_assert!(self.len() >= index + 3);
-        V::load_partial3_complex(self.as_ptr().add(index))
-    }
-}
-impl<V: AvxVector256> AvxArray<V> for RawSlice<Complex<V::ScalarType>> {
-    #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> V {
-        debug_assert!(self.len() >= index + V::COMPLEX_PER_VECTOR);
-        V::load_complex(self.as_ptr().add(index))
-    }
-    #[inline(always)]
-    unsafe fn load_partial1_complex(&self, index: usize) -> V::HalfVector {
-        debug_assert!(self.len() >= index + 1);
-        V::load_partial1_complex(self.as_ptr().add(index))
-    }
-    #[inline(always)]
-    unsafe fn load_partial2_complex(&self, index: usize) -> V::HalfVector {
-        debug_assert!(self.len() >= index + 2);
-        V::load_partial2_complex(self.as_ptr().add(index))
-    }
-    #[inline(always)]
-    unsafe fn load_partial3_complex(&self, index: usize) -> V {
-        debug_assert!(self.len() >= index + 3);
-        V::load_partial3_complex(self.as_ptr().add(index))
-    }
+pub trait AvxArrayMut<T: FFTnum> {
+    unsafe fn store_complex(&mut self, data: T::AvxType, index: usize);
+    unsafe fn store_partial1_complex(&mut self, data: <T::AvxType as AvxVector256>::HalfVector, index: usize);
+    unsafe fn store_partial2_complex(&mut self, data: <T::AvxType as AvxVector256>::HalfVector, index: usize);
+    unsafe fn store_partial3_complex(&mut self, data: T::AvxType, index: usize);
 }
 
-impl<V: AvxVector256> AvxArrayMut<V> for [Complex<V::ScalarType>] {
+impl<T: FFTnum> AvxArray<T> for [Complex<T>] {
     #[inline(always)]
-    unsafe fn store_complex(&mut self, data: V, index: usize) {
-        debug_assert!(self.len() >= index + V::COMPLEX_PER_VECTOR);
-        V::store_complex(self.as_mut_ptr().add(index), data);
-    }
-    #[inline(always)]
-    unsafe fn store_partial1_complex(&mut self, data: V::HalfVector, index: usize) {
-        debug_assert!(self.len() >= index + 1);
-        V::store_partial1_complex(self.as_mut_ptr().add(index), data)
-    }
-    #[inline(always)]
-    unsafe fn store_partial2_complex(&mut self, data: V::HalfVector, index: usize) {
-        debug_assert!(self.len() >= index + 2);
-        V::store_partial2_complex(self.as_mut_ptr().add(index), data)
-    }
-    #[inline(always)]
-    unsafe fn store_partial3_complex(&mut self, data: V, index: usize){
-        debug_assert!(self.len() >= index + 3);
-        V::store_partial3_complex(self.as_mut_ptr().add(index), data)
-    }
-}
-impl<V: AvxVector256> AvxArrayMut<V> for RawSliceMut<Complex<V::ScalarType>> {
-    #[inline(always)]
-    unsafe fn store_complex(&mut self, data: V, index: usize) {
-        debug_assert!(self.len() >= index + V::COMPLEX_PER_VECTOR);
-        V::store_complex(self.as_mut_ptr().add(index), data);
-    }
-    #[inline(always)]
-    unsafe fn store_partial1_complex(&mut self, data: V::HalfVector, index: usize) {
-        debug_assert!(self.len() >= index + 1);
-        V::store_partial1_complex(self.as_mut_ptr().add(index), data)
-    }
-    #[inline(always)]
-    unsafe fn store_partial2_complex(&mut self, data: V::HalfVector, index: usize) {
-        debug_assert!(self.len() >= index + 2);
-        V::store_partial2_complex(self.as_mut_ptr().add(index), data)
-    }
-    #[inline(always)]
-    unsafe fn store_partial3_complex(&mut self, data: V, index: usize) {
-        debug_assert!(self.len() >= index + 3);
-        V::store_partial3_complex(self.as_mut_ptr().add(index), data)
-    }
-}
-
-pub trait AvxArrayGeneric<T: FFTnum> {
-    unsafe fn load_complex2(&self, index: usize) -> T::AvxType;
-    unsafe fn load_partial1_complex2(&self, index: usize) -> <T::AvxType as AvxVector256>::HalfVector;
-    unsafe fn load_partial2_complex2(&self, index: usize) -> <T::AvxType as AvxVector256>::HalfVector;
-    unsafe fn load_partial3_complex2(&self, index: usize) -> T::AvxType;
-}
-pub trait AvxArrayMutGeneric<T: FFTnum> {
-    unsafe fn store_complex2(&mut self, data: T::AvxType, index: usize);
-    unsafe fn store_partial1_complex2(&mut self, data: <T::AvxType as AvxVector256>::HalfVector, index: usize);
-    unsafe fn store_partial2_complex2(&mut self, data: <T::AvxType as AvxVector256>::HalfVector, index: usize);
-    unsafe fn store_partial3_complex2(&mut self, data: T::AvxType, index: usize);
-}
-
-impl<T: FFTnum> AvxArrayGeneric<T> for [Complex<T>] {
-    #[inline(always)]
-    unsafe fn load_complex2(&self, index: usize) -> T::AvxType {
+    unsafe fn load_complex(&self, index: usize) -> T::AvxType {
         debug_assert!(self.len() >= index + T::AvxType::COMPLEX_PER_VECTOR);
         T::AvxType::load_complex(self.as_ptr().add(index))
     }
     #[inline(always)]
-    unsafe fn load_partial1_complex2(&self, index: usize) -> <T::AvxType as AvxVector256>::HalfVector {
+    unsafe fn load_partial1_complex(&self, index: usize) -> <T::AvxType as AvxVector256>::HalfVector {
         debug_assert!(self.len() >= index + 1);
         T::AvxType::load_partial1_complex(self.as_ptr().add(index))
     }
     #[inline(always)]
-    unsafe fn load_partial2_complex2(&self, index: usize) -> <T::AvxType as AvxVector256>::HalfVector {
+    unsafe fn load_partial2_complex(&self, index: usize) -> <T::AvxType as AvxVector256>::HalfVector {
         debug_assert!(self.len() >= index + 2);
         T::AvxType::load_partial2_complex(self.as_ptr().add(index))
     }
     #[inline(always)]
-    unsafe fn load_partial3_complex2(&self, index: usize) -> T::AvxType {
+    unsafe fn load_partial3_complex(&self, index: usize) -> T::AvxType {
         debug_assert!(self.len() >= index + 3);
         T::AvxType::load_partial3_complex(self.as_ptr().add(index))
     }
 }
-impl<T: FFTnum> AvxArrayGeneric<T> for RawSlice<Complex<T>> {
+impl<T: FFTnum> AvxArray<T> for RawSlice<Complex<T>> {
     #[inline(always)]
-    unsafe fn load_complex2(&self, index: usize) -> T::AvxType {
+    unsafe fn load_complex(&self, index: usize) -> T::AvxType {
         debug_assert!(self.len() >= index + T::AvxType::COMPLEX_PER_VECTOR);
         T::AvxType::load_complex(self.as_ptr().add(index))
     }
     #[inline(always)]
-    unsafe fn load_partial1_complex2(&self, index: usize) -> <T::AvxType as AvxVector256>::HalfVector {
+    unsafe fn load_partial1_complex(&self, index: usize) -> <T::AvxType as AvxVector256>::HalfVector {
         debug_assert!(self.len() >= index + 1);
         T::AvxType::load_partial1_complex(self.as_ptr().add(index))
     }
     #[inline(always)]
-    unsafe fn load_partial2_complex2(&self, index: usize) -> <T::AvxType as AvxVector256>::HalfVector {
+    unsafe fn load_partial2_complex(&self, index: usize) -> <T::AvxType as AvxVector256>::HalfVector {
         debug_assert!(self.len() >= index + 2);
         T::AvxType::load_partial2_complex(self.as_ptr().add(index))
     }
     #[inline(always)]
-    unsafe fn load_partial3_complex2(&self, index: usize) -> T::AvxType {
+    unsafe fn load_partial3_complex(&self, index: usize) -> T::AvxType {
         debug_assert!(self.len() >= index + 3);
         T::AvxType::load_partial3_complex(self.as_ptr().add(index))
     }
 }
 
-impl<T: FFTnum> AvxArrayMutGeneric<T> for [Complex<T>] {
+impl<T: FFTnum> AvxArrayMut<T> for [Complex<T>] {
     #[inline(always)]
-    unsafe fn store_complex2(&mut self, data: T::AvxType, index: usize) {
+    unsafe fn store_complex(&mut self, data: T::AvxType, index: usize) {
         debug_assert!(self.len() >= index + T::AvxType::COMPLEX_PER_VECTOR);
         T::AvxType::store_complex(self.as_mut_ptr().add(index), data);
     }
     #[inline(always)]
-    unsafe fn store_partial1_complex2(&mut self, data: <T::AvxType as AvxVector256>::HalfVector, index: usize) {
+    unsafe fn store_partial1_complex(&mut self, data: <T::AvxType as AvxVector256>::HalfVector, index: usize) {
         debug_assert!(self.len() >= index + 1);
         T::AvxType::store_partial1_complex(self.as_mut_ptr().add(index), data)
     }
     #[inline(always)]
-    unsafe fn store_partial2_complex2(&mut self, data: <T::AvxType as AvxVector256>::HalfVector, index: usize) {
+    unsafe fn store_partial2_complex(&mut self, data: <T::AvxType as AvxVector256>::HalfVector, index: usize) {
         debug_assert!(self.len() >= index + 2);
         T::AvxType::store_partial2_complex(self.as_mut_ptr().add(index), data)
     }
     #[inline(always)]
-    unsafe fn store_partial3_complex2(&mut self, data: T::AvxType, index: usize){
+    unsafe fn store_partial3_complex(&mut self, data: T::AvxType, index: usize){
         debug_assert!(self.len() >= index + 3);
         T::AvxType::store_partial3_complex(self.as_mut_ptr().add(index), data)
     }
 }
-impl<T: FFTnum> AvxArrayMutGeneric<T> for RawSliceMut<Complex<T>> {
+impl<T: FFTnum> AvxArrayMut<T> for RawSliceMut<Complex<T>> {
     #[inline(always)]
-    unsafe fn store_complex2(&mut self, data: T::AvxType, index: usize) {
+    unsafe fn store_complex(&mut self, data: T::AvxType, index: usize) {
         debug_assert!(self.len() >= index + T::AvxType::COMPLEX_PER_VECTOR);
         T::AvxType::store_complex(self.as_mut_ptr().add(index), data);
     }
     #[inline(always)]
-    unsafe fn store_partial1_complex2(&mut self, data: <T::AvxType as AvxVector256>::HalfVector, index: usize) {
+    unsafe fn store_partial1_complex(&mut self, data: <T::AvxType as AvxVector256>::HalfVector, index: usize) {
         debug_assert!(self.len() >= index + 1);
         T::AvxType::store_partial1_complex(self.as_mut_ptr().add(index), data)
     }
     #[inline(always)]
-    unsafe fn store_partial2_complex2(&mut self, data: <T::AvxType as AvxVector256>::HalfVector, index: usize) {
+    unsafe fn store_partial2_complex(&mut self, data: <T::AvxType as AvxVector256>::HalfVector, index: usize) {
         debug_assert!(self.len() >= index + 2);
         T::AvxType::store_partial2_complex(self.as_mut_ptr().add(index), data)
     }
     #[inline(always)]
-    unsafe fn store_partial3_complex2(&mut self, data: T::AvxType, index: usize) {
+    unsafe fn store_partial3_complex(&mut self, data: T::AvxType, index: usize) {
         debug_assert!(self.len() >= index + 3);
         T::AvxType::store_partial3_complex(self.as_mut_ptr().add(index), data)
     }

@@ -1,156 +1,6 @@
 use std::arch::x86_64::*;
-use num_complex::Complex;
 
-use crate::array_utils::{RawSlice, RawSliceMut};
-
-pub trait AvxComplexArrayf32 {
-    unsafe fn load_complex_f32(&self, index: usize) -> __m256;
-
-    unsafe fn load_complex_remainder1_f32(&self, index: usize) -> __m128;
-    unsafe fn load_complex_f32_lo(&self, index: usize) -> __m128;
-    unsafe fn load_complex_remainder3_f32(&self, index: usize) -> __m256 {
-        let lo = self.load_complex_f32_lo(index);
-        let hi = self.load_complex_remainder1_f32(index + 2);
-        _mm256_insertf128_ps(_mm256_castps128_ps256(lo), hi, 1)
-    }
-}
-pub trait AvxComplexArrayMutf32 {
-    // Store the 4 complex numbers contained in `data` at the given memory addresses
-    unsafe fn store_complex_f32(&mut self, index: usize, data: __m256);
-
-    // Store the first 2 of 4 complex numbers in `data` at the given memory addresses
-    unsafe fn store_complex_remainder1_f32(&mut self, data: __m128, index: usize);
-    unsafe fn store_complex_f32_lo(&mut self, data: __m128, index: usize);
-    unsafe fn store_complex_remainder3_f32(&mut self, data: __m256, index: usize) {
-        self.store_complex_f32_lo(_mm256_castps256_ps128(data), index);
-        self.store_complex_remainder1_f32(_mm256_extractf128_ps(data, 1), index + 2);
-    }
-}
-
-impl AvxComplexArrayf32 for [Complex<f32>] {
-    #[inline(always)]
-    unsafe fn load_complex_f32(&self, index: usize) -> __m256 {
-        debug_assert!(self.len() >= index + 4);
-        let complex_ref = self.get_unchecked(index);
-        let float_ptr  = (&complex_ref.re) as *const f32;
-        _mm256_loadu_ps(float_ptr)
-    }
-    #[inline(always)]
-    unsafe fn load_complex_remainder1_f32(&self, index: usize) -> __m128 {
-        debug_assert!(self.len() >= index + 2);
-        let complex_ref = self.get_unchecked(index);
-        let float_ptr  = (&complex_ref.re) as *const f32;
-        _mm_castpd_ps(_mm_load_sd(float_ptr as *const f64))
-    }
-    #[inline(always)]
-    unsafe fn load_complex_f32_lo(&self, index: usize) -> __m128 {
-        debug_assert!(self.len() >= index + 2);
-        let complex_ref = self.get_unchecked(index);
-        let float_ptr  = (&complex_ref.re) as *const f32;
-        _mm_loadu_ps(float_ptr)
-    }
-}
-impl AvxComplexArrayMutf32 for [Complex<f32>] {
-    #[inline(always)]
-    unsafe fn store_complex_f32(&mut self, index: usize, data: __m256) {
-        debug_assert!(self.len() >= index + 4);
-        let complex_ref = self.get_unchecked_mut(index);
-        let float_ptr = (&mut complex_ref.re) as *mut f32;
-        _mm256_storeu_ps(float_ptr, data);
-    }
-    #[inline(always)]
-    unsafe fn store_complex_f32_lo(&mut self, data: __m128, index: usize) {
-        debug_assert!(self.len() >= index + 2);
-        let complex_ref = self.get_unchecked_mut(index);
-        let float_ptr = (&mut complex_ref.re) as *mut f32;
-        _mm_storeu_ps(float_ptr, data);
-    }
-    #[inline(always)]
-    unsafe fn store_complex_remainder1_f32(&mut self, data: __m128, index: usize) {
-        debug_assert!(self.len() >= index + 1);
-
-        let complex_ref = self.get_unchecked_mut(index);
-        let float_ptr = (&mut complex_ref.re) as *mut f32;
-        _mm_store_sd(float_ptr as *mut f64, _mm_castps_pd(data));
-    }
-}
-impl AvxComplexArrayf32 for RawSlice<Complex<f32>> {
-    #[inline(always)]
-    unsafe fn load_complex_f32(&self, index: usize) -> __m256 {
-        debug_assert!(self.len() >= index + 4);
-        let float_ptr  = self.as_ptr().add(index) as *const f32;
-        _mm256_loadu_ps(float_ptr)
-    }
-    #[inline(always)]
-    unsafe fn load_complex_remainder1_f32(&self, index: usize) -> __m128 {
-        debug_assert!(self.len() >= index + 2);
-        let float_ptr  = self.as_ptr().add(index) as *const f32;
-        _mm_castpd_ps(_mm_load_sd(float_ptr as *const f64))
-    }
-    #[inline(always)]
-    unsafe fn load_complex_f32_lo(&self, index: usize) -> __m128 {
-        debug_assert!(self.len() >= index + 2);
-        let float_ptr  = self.as_ptr().add(index) as *const f32;
-        _mm_loadu_ps(float_ptr)
-    }
-}
-impl AvxComplexArrayMutf32 for RawSliceMut<Complex<f32>> {
-    #[inline(always)]
-    unsafe fn store_complex_f32(&mut self, index: usize, data: __m256) {
-        debug_assert!(self.len() >= index + 4);
-        let float_ptr = self.as_mut_ptr().add(index) as *mut f32;
-        _mm256_storeu_ps(float_ptr, data);
-    }
-    #[inline(always)]
-    unsafe fn store_complex_f32_lo(&mut self, data: __m128, index: usize) {
-        debug_assert!(self.len() >= index + 2);
-        let float_ptr = self.as_mut_ptr().add(index) as *mut f32;
-        _mm_storeu_ps(float_ptr, data);
-    }
-    #[inline(always)]
-    unsafe fn store_complex_remainder1_f32(&mut self, data: __m128, index: usize) {
-        debug_assert!(self.len() >= index + 1);
-
-        let float_ptr = self.as_mut_ptr().add(index) as *mut f32;
-        _mm_store_sd(float_ptr as *mut f64, _mm_castps_pd(data));
-    }
-}
-
-// Does the equivalent of "unpackhi" and "unpacklo" but for complex numbers
-#[inline(always)]
-pub unsafe fn unpack_complex_f32(row0: __m256, row1: __m256) -> (__m256, __m256) {
-    // these two intrinsics compile down to nothing! they're basically transmutes
-    let row0_double = _mm256_castps_pd(row0);
-    let row1_double = _mm256_castps_pd(row1);
-
-    // unpack as doubles
-    let unpacked0 = _mm256_unpacklo_pd(row0_double, row1_double);
-    let unpacked1 = _mm256_unpackhi_pd(row0_double, row1_double);
-
-    // re-cast to floats. again, just a transmute, so this compilesdown ot nothing
-    let output0 = _mm256_castpd_ps(unpacked0);
-    let output1 = _mm256_castpd_ps(unpacked1);
-
-    (output0, output1)
-}
-
-// Does the equivalent of "unpackhi" and "unpacklo" but for complex numbers
-#[inline(always)]
-pub unsafe fn unpack_complex_f32_lo(row0: __m128, row1: __m128) -> (__m128, __m128) {
-    // these two intrinsics compile down to nothing! they're basically transmutes
-    let row0_double = _mm_castps_pd(row0);
-    let row1_double = _mm_castps_pd(row1);
-
-    // unpack as doubles
-    let unpacked0 = _mm_unpacklo_pd(row0_double, row1_double);
-    let unpacked1 = _mm_unpackhi_pd(row0_double, row1_double);
-
-    // re-cast to floats. again, just a transmute, so this compilesdown ot nothing
-    let output0 = _mm_castpd_ps(unpacked0);
-    let output1 = _mm_castpd_ps(unpacked1);
-
-    (output0, output1)
-}
+use super::avx_vector::{AvxVector, AvxVector256};
 
 // Treat the input like the rows of a 4x4 array, and transpose said rows to the columns
 #[inline(always)]
@@ -161,8 +11,8 @@ pub unsafe fn transpose_4x4_f32(rows: [__m256;4]) -> [__m256;4] {
     let permute2 = _mm256_permute2f128_ps(rows[0], rows[2], 0x31);
     let permute3 = _mm256_permute2f128_ps(rows[1], rows[3], 0x31);
 
-    let (unpacked0, unpacked1) = unpack_complex_f32(permute0, permute1);
-    let (unpacked2, unpacked3) = unpack_complex_f32(permute2, permute3);
+    let [unpacked0, unpacked1] = AvxVector::unpack_complex([permute0, permute1]);
+    let [unpacked2, unpacked3] = AvxVector::unpack_complex([permute2, permute3]);
 
     [unpacked0, unpacked1, unpacked2, unpacked3]
 }
@@ -196,9 +46,9 @@ pub unsafe fn transpose_8x4_to_4x8_f32(rows0: [__m256;4], rows1: [__m256;4]) -> 
 pub unsafe fn transpose_9x3_to_3x9_emptycolumn1_f32(rows0: [__m128;3], rows1: [__m256;3], rows2: [__m256;3]) -> [__m256;9] {
 
     // the first row of the output will be the first column of the input
-    let (unpacked0, _) = unpack_complex_f32_lo(rows0[0], rows0[1]);
-    let (unpacked1, _) = unpack_complex_f32_lo(rows0[2], _mm_setzero_ps());
-    let output0 = _mm256_insertf128_ps(_mm256_castps128_ps256(unpacked0), unpacked1, 0x1);
+    let unpacked0 = AvxVector::unpacklo_complex([rows0[0], rows0[1]]);
+    let unpacked1 = AvxVector::unpacklo_complex([rows0[2], _mm_setzero_ps()]);
+    let output0 = AvxVector256::merge(unpacked0, unpacked1);
 
     let transposed0 = transpose_4x4_f32([rows1[0], rows1[1], rows1[2], _mm256_setzero_ps()]);
     let transposed1 = transpose_4x4_f32([rows2[0], rows2[1], rows2[2], _mm256_setzero_ps()]);
@@ -213,9 +63,9 @@ pub unsafe fn transpose_9x3_to_3x9_emptycolumn1_f32(rows0: [__m128;3], rows1: [_
 pub unsafe fn transpose_9x4_to_4x9_emptycolumn1_f32(rows0: [__m128;4], rows1: [__m256;4], rows2: [__m256;4]) -> [__m256;9] {
 
     // the first row of the output will be the first column of the input
-    let (unpacked0, _) = unpack_complex_f32_lo(rows0[0], rows0[1]);
-    let (unpacked1, _) = unpack_complex_f32_lo(rows0[2], rows0[3]);
-    let output0 = _mm256_insertf128_ps(_mm256_castps128_ps256(unpacked0), unpacked1, 0x1);
+    let unpacked0 = AvxVector::unpacklo_complex([rows0[0], rows0[1]]);
+    let unpacked1 = AvxVector::unpacklo_complex([rows0[2], rows0[3]]);
+    let output0 = AvxVector256::merge(unpacked0, unpacked1);
 
     let transposed0 = transpose_4x4_f32([rows1[0], rows1[1], rows1[2], rows1[3]]);
     let transposed1 = transpose_4x4_f32([rows2[0], rows2[1], rows2[2], rows2[3]]);
@@ -229,27 +79,27 @@ pub unsafe fn transpose_9x4_to_4x9_emptycolumn1_f32(rows0: [__m128;4], rows1: [_
 pub unsafe fn transpose_9x6_to_6x9_emptycolumn1_f32(rows0: [__m128;6], rows1: [__m256;6], rows2: [__m256;6]) -> ([__m256;9], [__m128;9])  {
 
     // the first row of the output will be the first column of the input
-    let (unpacked0, _) = unpack_complex_f32_lo(rows0[0], rows0[1]);
-    let (unpacked1, _) = unpack_complex_f32_lo(rows0[2], rows0[3]);
-    let (unpacked2, _) = unpack_complex_f32_lo(rows0[4], rows0[5]);
-    let output0 = _mm256_insertf128_ps(_mm256_castps128_ps256(unpacked0), unpacked1, 0x1);
+    let unpacked0 = AvxVector::unpacklo_complex([rows0[0], rows0[1]]);
+    let unpacked1 = AvxVector::unpacklo_complex([rows0[2], rows0[3]]);
+    let unpacked2 = AvxVector::unpacklo_complex([rows0[4], rows0[5]]);
+    let output0 = AvxVector256::merge(unpacked0, unpacked1);
 
     let transposed_hi0 = transpose_4x4_f32([rows1[0], rows1[1], rows1[2], rows1[3]]);
     let transposed_hi1 = transpose_4x4_f32([rows2[0], rows2[1], rows2[2], rows2[3]]);
 
-    let (unpacked_bottom0, unpacked_bottom1) = unpack_complex_f32(rows1[4], rows1[5]);
-    let (unpacked_bottom2, unpacked_bottom3) = unpack_complex_f32(rows2[4], rows2[5]);
+    let [unpacked_bottom0, unpacked_bottom1] = AvxVector::unpack_complex([rows1[4], rows1[5]]);
+    let [unpacked_bottom2, unpacked_bottom3] = AvxVector::unpack_complex([rows2[4], rows2[5]]);
 
     let transposed_lo = [
         unpacked2,
-        _mm256_castps256_ps128(unpacked_bottom0),
-        _mm256_castps256_ps128(unpacked_bottom1),
-        _mm256_extractf128_ps(unpacked_bottom0, 0x1),
-        _mm256_extractf128_ps(unpacked_bottom1, 0x1),
-        _mm256_castps256_ps128(unpacked_bottom2),
-        _mm256_castps256_ps128(unpacked_bottom3),
-        _mm256_extractf128_ps(unpacked_bottom2, 0x1),
-        _mm256_extractf128_ps(unpacked_bottom3, 0x1),
+        unpacked_bottom0.lo(),
+        unpacked_bottom1.lo(),
+        unpacked_bottom0.hi(),
+        unpacked_bottom1.hi(),
+        unpacked_bottom2.lo(),
+        unpacked_bottom3.lo(),
+        unpacked_bottom2.hi(),
+        unpacked_bottom3.hi(),
     ];
 
     (
@@ -273,23 +123,23 @@ pub unsafe fn transpose_12x4_to_4x12_f32(rows0: [__m256;4], rows1: [__m256;4], r
 // The assumption here is that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
 #[inline(always)]
 pub unsafe fn transpose_12x6_to_6x12_f32(rows0: [__m256;6], rows1: [__m256;6], rows2: [__m256;6]) -> ([__m128;12], [__m256;12]) {
-    let (unpacked0, unpacked1) = unpack_complex_f32(rows0[0], rows0[1]);
-    let (unpacked2, unpacked3) = unpack_complex_f32(rows1[0], rows1[1]);
-    let (unpacked4, unpacked5) = unpack_complex_f32(rows2[0], rows2[1]);
+    let [unpacked0, unpacked1] = AvxVector::unpack_complex([rows0[0], rows0[1]]);
+    let [unpacked2, unpacked3] = AvxVector::unpack_complex([rows1[0], rows1[1]]);
+    let [unpacked4, unpacked5] = AvxVector::unpack_complex([rows2[0], rows2[1]]);
 
     let output0 = [
-        _mm256_castps256_ps128(unpacked0),
-        _mm256_castps256_ps128(unpacked1),
-        _mm256_extractf128_ps(unpacked0, 1),
-        _mm256_extractf128_ps(unpacked1, 1),
-        _mm256_castps256_ps128(unpacked2),
-        _mm256_castps256_ps128(unpacked3),
-        _mm256_extractf128_ps(unpacked2, 1),
-        _mm256_extractf128_ps(unpacked3, 1),
-        _mm256_castps256_ps128(unpacked4),
-        _mm256_castps256_ps128(unpacked5),
-        _mm256_extractf128_ps(unpacked4, 1),
-        _mm256_extractf128_ps(unpacked5, 1),
+        unpacked0.lo(),
+        unpacked1.lo(),
+        unpacked0.hi(),
+        unpacked1.hi(),
+        unpacked2.lo(),
+        unpacked3.lo(),
+        unpacked2.hi(),
+        unpacked3.hi(),
+        unpacked4.lo(),
+        unpacked5.lo(),
+        unpacked4.hi(),
+        unpacked5.hi(),
     ];
     let transposed0 = transpose_4x4_f32([rows0[2], rows0[3], rows0[4], rows0[5]]);
     let transposed1 = transpose_4x4_f32([rows1[2], rows1[3], rows1[4], rows1[5]]);
@@ -336,10 +186,10 @@ pub unsafe fn transpose_8x8_f32(rows0: [__m256;8], rows1: [__m256;8]) -> ([__m25
 // utility for packing a 3x4 array into just 3 registers, preserving order
 #[inline(always)]
 pub unsafe fn pack_3x4_4x3_f32(rows: [__m256;4]) -> [__m256; 3] {
-    let (unpacked_lo, _) = unpack_complex_f32(rows[2], rows[1]); // 5 8 3 6
+    let unpacked_lo = AvxVector::unpacklo_complex([rows[2], rows[1]]); // 5 8 3 6
 
     // copy the lower half of row 1 into the upper half, then swap even and od values
-    let row1_duplicated = _mm256_insertf128_ps(rows[1], _mm256_castps256_ps128(rows[1]), 0x1); // 4 3 4 3
+    let row1_duplicated = AvxVector256::merge(rows[1].lo(), rows[1].lo()); // 4 3 4 3
     let row1_dupswap = _mm256_permute_ps(row1_duplicated, 0x4E); // 3 4 3 4
     
     // both lanes of row 2 have some data they want to swap to the other side
@@ -347,7 +197,7 @@ pub unsafe fn pack_3x4_4x3_f32(rows: [__m256;4]) -> [__m256; 3] {
     
     // none of the data in row 3 is in the right position, and it'll take several instructions to get there
     let permuted3 = _mm256_permute_ps(rows[3], 0x4E); // swap even and odd complex numbers // 11 _ 9 10
-    let intermediate3 = _mm256_insertf128_ps(row2_swapped, _mm256_castps256_ps128(permuted3), 0x1); // 9 10 5 8
+    let intermediate3 = AvxVector256::merge(row2_swapped.lo(), permuted3.lo()); // 9 10 5 8
     
     let output0 = _mm256_blend_ps(rows[0], row1_dupswap, 0xC0); // 3 2 1 0
     let output1 = _mm256_blend_ps(row2_swapped, row1_dupswap, 0x03); // 7 6 5 4

@@ -7,7 +7,7 @@ use crate::math_utils::div_ceil;
 use crate::{Length, IsInverse, Fft};
 
 use super::CommonSimdData;
-use super::avx_vector::{AvxVector, AvxVector128, AvxVector256, Rotation90, AvxArrayGeneric, AvxArrayMutGeneric};
+use super::avx_vector::{AvxVector, AvxVector128, AvxVector256, Rotation90, AvxArray, AvxArrayMut};
 
 macro_rules! boilerplate_mixedradix {
     () => (
@@ -115,20 +115,20 @@ macro_rules! mixedradix_column_butterflies{
             // Load columns from the buffer into registers
             let mut columns = [AvxVector::zero(); ROW_COUNT];
             for i in 0..ROW_COUNT {
-                columns[i] = buffer.load_complex2(index_base + len_per_row*i);
+                columns[i] = buffer.load_complex(index_base + len_per_row*i);
             }
 
             // apply our butterfly function down the columns
             let output = $butterfly_fn(columns, self);
 
             // always write the first row directly back without twiddles
-            buffer.store_complex2(output[0], index_base);
+            buffer.store_complex(output[0], index_base);
             
             // for every other row, apply twiddle factors and then write back to memory
             for i in 1..ROW_COUNT {
                 let twiddle = twiddle_chunk[i - 1];
                 let output = AvxVector::mul_complex(twiddle, output[i]);
-                buffer.store_complex2(output, index_base + len_per_row*i);
+                buffer.store_complex(output, index_base + len_per_row*i);
             }
         }
 
@@ -144,31 +144,31 @@ macro_rules! mixedradix_column_butterflies{
                 // Load 3 columns into full AVX vectors to preocess our remainder
                 let mut columns = [AvxVector::zero(); ROW_COUNT];
                 for i in 0..ROW_COUNT {
-                    columns[i] = buffer.load_partial3_complex2(partial_remainder_base + len_per_row*i);
+                    columns[i] = buffer.load_partial3_complex(partial_remainder_base + len_per_row*i);
                 }
 
                 // apply our butterfly function down the columns
                 let mid = $butterfly_fn(columns, self);
 
                 // always write the first row without twiddles
-                buffer.store_partial3_complex2(mid[0], partial_remainder_base);
+                buffer.store_partial3_complex(mid[0], partial_remainder_base);
 
                 // for the remaining rows, apply twiddle factors and then write back to memory
                 for i in 1..ROW_COUNT {
                     let twiddle = final_twiddle_chunk[i - 1];
                     let output = AvxVector::mul_complex(twiddle, mid[i]);
-                    buffer.store_partial3_complex2(output, partial_remainder_base + len_per_row*i);
+                    buffer.store_partial3_complex(output, partial_remainder_base + len_per_row*i);
                 }
             } else {
                 // Load 1 or 2 columns into half vectors to process our remainder. Thankfully, the compiler is smart enough to eliminate this branch on f64, since the partial remainder can only possibly be 1
                 let mut columns = [AvxVector::zero(); ROW_COUNT];
                 if partial_remainder == 1 {
                     for i in 0..ROW_COUNT {
-                        columns[i] = AvxArrayGeneric::<T>::load_partial1_complex2(buffer, partial_remainder_base + len_per_row*i);
+                        columns[i] = AvxArray::<T>::load_partial1_complex(buffer, partial_remainder_base + len_per_row*i);
                     }
                 } else {
                     for i in 0..ROW_COUNT {
-                        columns[i] = AvxArrayGeneric::<T>::load_partial2_complex2(buffer, partial_remainder_base + len_per_row*i);
+                        columns[i] = AvxArray::<T>::load_partial2_complex(buffer, partial_remainder_base + len_per_row*i);
                     }
                 }
 
@@ -183,11 +183,11 @@ macro_rules! mixedradix_column_butterflies{
                 // store output
                 if partial_remainder == 1 {
                     for i in 0..ROW_COUNT {
-                        AvxArrayMutGeneric::<T>::store_partial1_complex2(buffer, mid[i], partial_remainder_base + len_per_row*i);
+                        AvxArrayMut::<T>::store_partial1_complex(buffer, mid[i], partial_remainder_base + len_per_row*i);
                     }
                 } else {
                     for i in 0..ROW_COUNT {
-                        AvxArrayMutGeneric::<T>::store_partial2_complex2(buffer, mid[i], partial_remainder_base + len_per_row*i);
+                        AvxArrayMut::<T>::store_partial2_complex(buffer, mid[i], partial_remainder_base + len_per_row*i);
                     }
                 }
             }
@@ -214,7 +214,7 @@ macro_rules! mixedradix_transpose{
             // Load rows from the input into registers
             let mut rows : [T::AvxType; ROW_COUNT] = [AvxVector::zero(); ROW_COUNT];
             for i in 0..ROW_COUNT {
-                rows[i] = input.load_complex2(input_index_base + len_per_row*i);
+                rows[i] = input.load_complex(input_index_base + len_per_row*i);
             }
 
             // transpose the rows to the columns
@@ -227,7 +227,7 @@ macro_rules! mixedradix_transpose{
             // if we don't manually unroll the loop, the compiler will insert unnecessary writes+reads to the stack which tank performance
             // once the compiler bug is fixed, this can be replaced by a "for i in 0..ROW_COUNT" loop
             $( 
-                output.store_complex2(transposed[$unroll_workaround_index], output_index_base + T::AvxType::COMPLEX_PER_VECTOR * $unroll_workaround_index);
+                output.store_complex(transposed[$unroll_workaround_index], output_index_base + T::AvxType::COMPLEX_PER_VECTOR * $unroll_workaround_index);
             )*
         }
 
@@ -247,21 +247,21 @@ macro_rules! mixedradix_transpose{
             // If the partial remainder is 2, use the provided transpose_lo function to do a transpose on half-vectors
             let mut rows = [AvxVector::zero(); ROW_COUNT];
             for i in 0..ROW_COUNT {
-                rows[i] = AvxArrayGeneric::<T>::load_partial2_complex2(input, input_index_base + len_per_row*i);
+                rows[i] = AvxArray::<T>::load_partial2_complex(input, input_index_base + len_per_row*i);
             }
 
             let transposed = $transpose_fn_lo(rows);
 
             // use the same macro hack as above to unroll the loop
             $( 
-                AvxArrayMutGeneric::<T>::store_partial2_complex2(output, transposed[$unroll_workaround_index], output_index_base + <T::AvxType as AvxVector256>::HalfVector::COMPLEX_PER_VECTOR * $unroll_workaround_index);
+                AvxArrayMut::<T>::store_partial2_complex(output, transposed[$unroll_workaround_index], output_index_base + <T::AvxType as AvxVector256>::HalfVector::COMPLEX_PER_VECTOR * $unroll_workaround_index);
             )*
         }
         else if partial_remainder == 3 {
             // If the partial remainder is 3, we have to load full vectors, use the full transpose, and then write out a variable number of outputs
             let mut rows = [AvxVector::zero(); ROW_COUNT];
             for i in 0..ROW_COUNT {
-                rows[i] = input.load_partial3_complex2(input_index_base + len_per_row*i);
+                rows[i] = input.load_partial3_complex(input_index_base + len_per_row*i);
             }
 
             // transpose the rows to the columns
@@ -280,15 +280,15 @@ macro_rules! mixedradix_transpose{
             // if we don't manually unroll the loop, the compiler will insert unnecessary writes+reads to the stack which tank performance
             // once the compiler bug is fixed, this can be replaced by a "for i in 0..full_vector_count" loop
             $( 
-                output.store_complex2(transposed[$remainder3_unroll_workaround_index], output_index_base + T::AvxType::COMPLEX_PER_VECTOR * $remainder3_unroll_workaround_index);
+                output.store_complex(transposed[$remainder3_unroll_workaround_index], output_index_base + T::AvxType::COMPLEX_PER_VECTOR * $remainder3_unroll_workaround_index);
             )*
 
             // write out our partial vector. again, this is a compile-time constant, even if we can't represent that within rust yet
             match final_remainder_count {
                 0 => {},
-                1 => AvxArrayMutGeneric::<T>::store_partial1_complex2(output, transposed[full_vector_count].lo(), output_index_base + full_vector_count * T::AvxType::COMPLEX_PER_VECTOR),
-                2 => AvxArrayMutGeneric::<T>::store_partial2_complex2(output, transposed[full_vector_count].lo(), output_index_base + full_vector_count * T::AvxType::COMPLEX_PER_VECTOR),
-                3 => AvxArrayMutGeneric::<T>::store_partial3_complex2(output, transposed[full_vector_count], output_index_base + full_vector_count * T::AvxType::COMPLEX_PER_VECTOR),
+                1 => AvxArrayMut::<T>::store_partial1_complex(output, transposed[full_vector_count].lo(), output_index_base + full_vector_count * T::AvxType::COMPLEX_PER_VECTOR),
+                2 => AvxArrayMut::<T>::store_partial2_complex(output, transposed[full_vector_count].lo(), output_index_base + full_vector_count * T::AvxType::COMPLEX_PER_VECTOR),
+                3 => AvxArrayMut::<T>::store_partial3_complex(output, transposed[full_vector_count], output_index_base + full_vector_count * T::AvxType::COMPLEX_PER_VECTOR),
                 _ => unreachable!(),
             }
         }
