@@ -63,6 +63,11 @@ pub trait AvxVector : Copy + Debug + Send + Sync {
     unsafe fn transpose2_packed(rows: [Self; 2]) -> [Self;2];
     unsafe fn transpose3_packed(rows: [Self; 3]) -> [Self;3];
     unsafe fn transpose4_packed(rows: [Self; 4]) -> [Self;4];
+    unsafe fn transpose6_packed(rows: [Self; 6]) -> [Self;6];
+    unsafe fn transpose8_packed(rows: [Self; 8]) -> [Self;8];
+    unsafe fn transpose9_packed(rows: [Self; 9]) -> [Self;9];
+    unsafe fn transpose12_packed(rows: [Self; 12]) -> [Self;12];
+    unsafe fn transpose16_packed(rows: [Self; 16]) -> [Self;16];
 
     /// Pairwise multiply the complex numbers in `left` with the complex numbers in `right`.
     #[inline(always)]
@@ -608,6 +613,80 @@ impl AvxVector for __m256 {
 
         [unpacked0, unpacked1, unpacked2, unpacked3]
     }
+    #[inline(always)]
+    unsafe fn transpose6_packed(rows: [Self; 6]) -> [Self;6] {
+        let [unpacked0, unpacked1] = Self::unpack_complex([rows[0], rows[1]]);
+        let [unpacked2, unpacked3] = Self::unpack_complex([rows[2], rows[3]]);
+        let [unpacked4, unpacked5] = Self::unpack_complex([rows[4], rows[5]]);
+
+        [
+            _mm256_permute2f128_ps(unpacked0, unpacked2, 0x20),
+            _mm256_permute2f128_ps(unpacked1, unpacked4, 0x02),
+            _mm256_permute2f128_ps(unpacked3, unpacked5, 0x20),
+            _mm256_permute2f128_ps(unpacked0, unpacked2, 0x31),
+            _mm256_permute2f128_ps(unpacked1, unpacked4, 0x13),
+            _mm256_permute2f128_ps(unpacked3, unpacked5, 0x31),
+        ]
+    }
+    #[inline(always)]
+    unsafe fn transpose8_packed(rows: [Self; 8]) -> [Self;8] {
+        let chunk0 = [rows[0],  rows[1],  rows[2],  rows[3]];
+        let chunk1 = [rows[4],  rows[5],  rows[6],  rows[7]];
+
+        let output0 = Self::transpose4_packed(chunk0);
+        let output1 = Self::transpose4_packed(chunk1);
+
+        [output0[0], output1[0], output0[1], output1[1], output0[2], output1[2], output0[3], output1[3]]
+    }
+    #[inline(always)]
+    unsafe fn transpose9_packed(rows: [Self; 9]) -> [Self;9] {
+        let unpacked0 = Self::unpacklo_complex([rows[0], rows[1]]);
+        let unpacked1 = Self::unpackhi_complex([rows[1], rows[2]]);
+        let unpacked2 = Self::unpacklo_complex([rows[2], rows[3]]);
+        let unpacked3 = Self::unpackhi_complex([rows[3], rows[4]]);
+        let unpacked5 = Self::unpacklo_complex([rows[4], rows[5]]);
+        let unpacked6 = Self::unpackhi_complex([rows[5], rows[6]]);
+        let unpacked7 = Self::unpacklo_complex([rows[6], rows[7]]);
+        let unpacked8 = Self::unpackhi_complex([rows[7], rows[8]]);
+        let blended9  = _mm256_blend_ps(rows[0], rows[8], 0x33);
+
+        [
+            _mm256_permute2f128_ps(unpacked0, unpacked2, 0x20),
+            _mm256_permute2f128_ps(unpacked5, unpacked7, 0x20),
+            _mm256_permute2f128_ps(blended9,  unpacked1, 0x20),
+            _mm256_permute2f128_ps(unpacked3, unpacked6, 0x20),
+            _mm256_blend_ps(unpacked0, unpacked8, 0x0f),
+            _mm256_permute2f128_ps(unpacked2, unpacked5, 0x31),
+            _mm256_permute2f128_ps(unpacked7, blended9,  0x31),
+            _mm256_permute2f128_ps(unpacked1, unpacked3, 0x31),
+            _mm256_permute2f128_ps(unpacked6, unpacked8, 0x31),
+        ]
+    }
+    #[inline(always)]
+    unsafe fn transpose12_packed(rows: [Self; 12]) -> [Self;12] {
+        let chunk0 = [rows[0],  rows[1],  rows[2],  rows[3]];
+        let chunk1 = [rows[4],  rows[5],  rows[6],  rows[7]];
+        let chunk2 = [rows[8],  rows[9],  rows[10], rows[11]];
+
+        let output0 = Self::transpose4_packed(chunk0);
+        let output1 = Self::transpose4_packed(chunk1);
+        let output2 = Self::transpose4_packed(chunk2);
+
+        [output0[0], output1[0], output2[0], output0[1], output1[1], output2[1], output0[2], output1[2], output2[2], output0[3], output1[3], output2[3]]
+    }
+    #[inline(always)]
+    unsafe fn transpose16_packed(rows: [Self; 16]) -> [Self;16] {
+        let chunk0 = [rows[0], rows[1], rows[2],  rows[3],  rows[4],  rows[5],  rows[6],  rows[7]];
+        let chunk1 = [rows[8], rows[9], rows[10], rows[11], rows[12], rows[13], rows[14], rows[15]];
+
+        let output0 = Self::transpose8_packed(chunk0);
+        let output1 = Self::transpose8_packed(chunk1);
+
+        [
+            output0[0], output0[1], output1[0], output1[1], output0[2], output0[3], output1[2], output1[3],
+            output0[4], output0[5], output1[4], output1[5], output0[6], output0[7], output1[6], output1[7],
+        ]
+    }
 }
 impl AvxVector256 for __m256 {
     type ScalarType = f32;
@@ -785,6 +864,63 @@ impl AvxVector for __m128 {
 
         [unpacked0, unpacked2, unpacked1, unpacked3]
     }
+    #[inline(always)]
+    unsafe fn transpose6_packed(rows: [Self; 6]) -> [Self;6] {
+        let [unpacked0, unpacked1] = Self::unpack_complex([rows[0], rows[1]]);
+        let [unpacked2, unpacked3] = Self::unpack_complex([rows[2], rows[3]]);
+        let [unpacked4, unpacked5] = Self::unpack_complex([rows[4], rows[5]]);
+
+        [unpacked0, unpacked2, unpacked4, unpacked1, unpacked3, unpacked5]
+    }
+    #[inline(always)]
+    unsafe fn transpose8_packed(rows: [Self; 8]) -> [Self;8] {
+        let chunk0 = [rows[0],  rows[1],  rows[2],  rows[3]];
+        let chunk1 = [rows[4],  rows[5],  rows[6],  rows[7]];
+
+        let output0 = Self::transpose4_packed(chunk0);
+        let output1 = Self::transpose4_packed(chunk1);
+
+        [output0[0], output0[1], output1[0], output1[1], output0[2], output0[3], output1[2], output1[3]]
+    }
+    #[inline(always)]
+    unsafe fn transpose9_packed(rows: [Self; 9]) -> [Self;9] {
+        [
+            Self::unpacklo_complex([rows[0], rows[1]]),
+            Self::unpacklo_complex([rows[2], rows[3]]),
+            Self::unpacklo_complex([rows[4], rows[5]]),
+            Self::unpacklo_complex([rows[6], rows[7]]),
+            _mm_shuffle_ps(rows[8], rows[0], 0xE4),
+            Self::unpackhi_complex([rows[1], rows[2]]),
+            Self::unpackhi_complex([rows[3], rows[4]]),
+            Self::unpackhi_complex([rows[5], rows[6]]),
+            Self::unpackhi_complex([rows[7], rows[8]]),
+        ]
+    }
+    #[inline(always)]
+    unsafe fn transpose12_packed(rows: [Self; 12]) -> [Self;12] {
+        let chunk0 = [rows[0],  rows[1],  rows[2],  rows[3]];
+        let chunk1 = [rows[4],  rows[5],  rows[6],  rows[7]];
+        let chunk2 = [rows[8],  rows[9],  rows[10], rows[11]];
+
+        let output0 = Self::transpose4_packed(chunk0);
+        let output1 = Self::transpose4_packed(chunk1);
+        let output2 = Self::transpose4_packed(chunk2);
+
+        [output0[0], output0[1], output1[0], output1[1], output2[0], output2[1], output0[2], output0[3], output1[2], output1[3], output2[2], output2[3]]
+    }
+    #[inline(always)]
+    unsafe fn transpose16_packed(rows: [Self; 16]) -> [Self;16] {
+        let chunk0 = [rows[0],  rows[1],  rows[2],  rows[3], rows[4],  rows[5],  rows[6],  rows[7]];
+        let chunk1 = [rows[8],  rows[9],  rows[10], rows[11], rows[12], rows[13], rows[14], rows[15]];
+
+        let output0 = Self::transpose8_packed(chunk0);
+        let output1 = Self::transpose8_packed(chunk1);
+
+        [
+            output0[0], output0[1], output0[2], output0[3], output1[0], output1[1], output1[2], output1[3],
+            output0[4], output0[5], output0[6], output0[7], output1[4], output1[5], output1[6], output1[7],
+        ]
+    }
 }
 impl AvxVector128 for __m128 {
     type FullVector = __m256;
@@ -917,6 +1053,63 @@ impl AvxVector for __m256d {
         let [unpacked2, unpacked3] = Self::unpack_complex([rows[2], rows[3]]);
 
         [unpacked0, unpacked2, unpacked1, unpacked3]
+    }
+    #[inline(always)]
+    unsafe fn transpose6_packed(rows: [Self; 6]) -> [Self;6] {
+        let [unpacked0, unpacked1] = Self::unpack_complex([rows[0], rows[1]]);
+        let [unpacked2, unpacked3] = Self::unpack_complex([rows[2], rows[3]]);
+        let [unpacked4, unpacked5] = Self::unpack_complex([rows[4], rows[5]]);
+
+        [unpacked0, unpacked2, unpacked4, unpacked1, unpacked3, unpacked5]
+    }
+    #[inline(always)]
+    unsafe fn transpose8_packed(rows: [Self; 8]) -> [Self;8] {
+        let chunk0 = [rows[0],  rows[1],  rows[2],  rows[3]];
+        let chunk1 = [rows[4],  rows[5],  rows[6],  rows[7]];
+
+        let output0 = Self::transpose4_packed(chunk0);
+        let output1 = Self::transpose4_packed(chunk1);
+
+        [output0[0], output0[1], output1[0], output1[1], output0[2], output0[3], output1[2], output1[3]]
+    }
+    #[inline(always)]
+    unsafe fn transpose9_packed(rows: [Self; 9]) -> [Self;9] {
+        [
+            _mm256_permute2f128_pd(rows[0], rows[1], 0x20),
+            _mm256_permute2f128_pd(rows[2], rows[3], 0x20),
+            _mm256_permute2f128_pd(rows[4], rows[5], 0x20),
+            _mm256_permute2f128_pd(rows[6], rows[7], 0x20),
+            _mm256_permute2f128_pd(rows[8], rows[0], 0x30),
+            _mm256_permute2f128_pd(rows[1], rows[2], 0x31),
+            _mm256_permute2f128_pd(rows[3], rows[4], 0x31),
+            _mm256_permute2f128_pd(rows[5], rows[6], 0x31),
+            _mm256_permute2f128_pd(rows[7], rows[8], 0x31),
+        ]
+    }
+    #[inline(always)]
+    unsafe fn transpose12_packed(rows: [Self; 12]) -> [Self;12] {
+        let chunk0 = [rows[0],  rows[1],  rows[2],  rows[3]];
+        let chunk1 = [rows[4],  rows[5],  rows[6],  rows[7]];
+        let chunk2 = [rows[8],  rows[9],  rows[10], rows[11]];
+
+        let output0 = Self::transpose4_packed(chunk0);
+        let output1 = Self::transpose4_packed(chunk1);
+        let output2 = Self::transpose4_packed(chunk2);
+
+        [output0[0], output0[1], output1[0], output1[1], output2[0], output2[1], output0[2], output0[3], output1[2], output1[3], output2[2], output2[3]]
+    }
+    #[inline(always)]
+    unsafe fn transpose16_packed(rows: [Self; 16]) -> [Self;16] {
+        let chunk0 = [rows[0],  rows[1],  rows[2],  rows[3], rows[4],  rows[5],  rows[6],  rows[7]];
+        let chunk1 = [rows[8],  rows[9],  rows[10], rows[11], rows[12], rows[13], rows[14], rows[15]];
+
+        let output0 = Self::transpose8_packed(chunk0);
+        let output1 = Self::transpose8_packed(chunk1);
+
+        [
+            output0[0], output0[1], output0[2], output0[3], output1[0], output1[1], output1[2], output1[3],
+            output0[4], output0[5], output0[6], output0[7], output1[4], output1[5], output1[6], output1[7],
+        ]
     }
 }
 impl AvxVector256 for __m256d {
@@ -1065,9 +1258,14 @@ impl AvxVector for __m128d {
         Self::broadcast_complex_elements(f64::generate_twiddle_factor(index, len, inverse))
     }
 
-    #[inline(always)] unsafe fn transpose2_packed(rows: [Self; 2]) -> [Self;2] { rows }
-    #[inline(always)] unsafe fn transpose3_packed(rows: [Self; 3]) -> [Self;3] { rows }
-    #[inline(always)] unsafe fn transpose4_packed(rows: [Self; 4]) -> [Self;4] { rows }
+    #[inline(always)] unsafe fn transpose2_packed(rows: [Self;2]) -> [Self;2] { rows }
+    #[inline(always)] unsafe fn transpose3_packed(rows: [Self;3]) -> [Self;3] { rows }
+    #[inline(always)] unsafe fn transpose4_packed(rows: [Self;4]) -> [Self;4] { rows }
+    #[inline(always)] unsafe fn transpose6_packed(rows: [Self;6]) -> [Self;6] { rows }
+    #[inline(always)] unsafe fn transpose8_packed(rows: [Self;8]) -> [Self;8] { rows }
+    #[inline(always)] unsafe fn transpose9_packed(rows: [Self;9]) -> [Self;9] { rows }
+    #[inline(always)] unsafe fn transpose12_packed(rows: [Self;12]) -> [Self;12] { rows }
+    #[inline(always)] unsafe fn transpose16_packed(rows: [Self;16]) -> [Self;16] { rows }
 }
 impl AvxVector128 for __m128d {
     type FullVector = __m256d;

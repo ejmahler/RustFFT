@@ -377,11 +377,11 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
                 2  => wrap_fft(MixedRadix2xnAvx::new(fft).unwrap()),
                 3  => wrap_fft(MixedRadix3xnAvx::new(fft).unwrap()),
                 4  => wrap_fft(MixedRadix4xnAvx::new(fft).unwrap()),
-                6  => wrap_fft(MixedRadix6xnAvx::new_f32(fft).unwrap()),
-                8  => wrap_fft(MixedRadix8xnAvx::new_f32(fft).unwrap()),
-                9  => wrap_fft(MixedRadix9xnAvx::new_f32(fft).unwrap()),
-                12 => wrap_fft(MixedRadix12xnAvx::new_f32(fft).unwrap()),
-                16 => wrap_fft(MixedRadix16xnAvx::new_f32(fft).unwrap()),
+                6  => wrap_fft(MixedRadix6xnAvx::new(fft).unwrap()),
+                8  => wrap_fft(MixedRadix8xnAvx::new(fft).unwrap()),
+                9  => wrap_fft(MixedRadix9xnAvx::new(fft).unwrap()),
+                12 => wrap_fft(MixedRadix12xnAvx::new(fft).unwrap()),
+                16 => wrap_fft(MixedRadix16xnAvx::new(fft).unwrap()),
                 _ => unreachable!(),
             };
 
@@ -550,11 +550,11 @@ impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
                 2  => wrap_fft(MixedRadix2xnAvx::new(fft).unwrap()),
                 3  => wrap_fft(MixedRadix3xnAvx::new(fft).unwrap()),
                 4  => wrap_fft(MixedRadix4xnAvx::new(fft).unwrap()),
-                6  => wrap_fft(MixedRadix6xnAvx::new_f64(fft).unwrap()),
-                8  => wrap_fft(MixedRadix8xnAvx::new_f64(fft).unwrap()),
-                9  => wrap_fft(MixedRadix9xnAvx::new_f64(fft).unwrap()),
-                12 => wrap_fft(MixedRadix12xnAvx::new_f64(fft).unwrap()),
-                16 => wrap_fft(MixedRadix16xnAvx::new_f64(fft).unwrap()),
+                6  => wrap_fft(MixedRadix6xnAvx::new(fft).unwrap()),
+                8  => wrap_fft(MixedRadix8xnAvx::new(fft).unwrap()),
+                9  => wrap_fft(MixedRadix9xnAvx::new(fft).unwrap()),
+                12 => wrap_fft(MixedRadix12xnAvx::new(fft).unwrap()),
+                16 => wrap_fft(MixedRadix16xnAvx::new(fft).unwrap()),
                 _ => unreachable!(),
             };
 

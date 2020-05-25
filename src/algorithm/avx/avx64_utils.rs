@@ -100,102 +100,6 @@ pub unsafe fn transpose_4x2_to_2x4_f64(rows0: [__m256d; 2], rows1: [__m256d; 2])
     [output00[0], output00[1], output01[0], output01[1]]
 }
 
-// Treat the input like the rows of a 2x8 array, and transpose it to a 8x2 array.
-// But instead of storing "columns" of registers as separate arrays for further processing, pack them all into one array
-#[inline(always)]
-pub unsafe fn transpose_2x6_to_6x2_packed_f64(rows: [__m256d; 6]) -> [__m256d; 6] {
-    let chunk0 = [rows[0], rows[1]];
-    let chunk1 = [rows[2], rows[3]];
-    let chunk2 = [rows[4], rows[5]];
-
-    let output0 = transpose_2x2_f64(chunk0);
-    let output1 = transpose_2x2_f64(chunk1);
-    let output2 = transpose_2x2_f64(chunk2);
-
-    [output0[0], output1[0], output2[0], output0[1], output1[1], output2[1]] 
-}
-
-// Treat the input like the rows of a 2x8 array, and transpose it to a 8x2 array.
-// But instead of storing "columns" of registers as separate arrays for further processing, pack them all into one array
-#[inline(always)]
-pub unsafe fn transpose_2x8_to_8x2_packed_f64(rows: [__m256d; 8]) -> [__m256d; 8] {
-    let chunk0 = [rows[0], rows[1]];
-    let chunk1 = [rows[2], rows[3]];
-    let chunk2 = [rows[4], rows[5]];
-    let chunk3 = [rows[6], rows[7]];
-
-    let output0 = transpose_2x2_f64(chunk0);
-    let output1 = transpose_2x2_f64(chunk1);
-    let output2 = transpose_2x2_f64(chunk2);
-    let output3 = transpose_2x2_f64(chunk3);
-
-    [output0[0], output1[0], output2[0], output3[0], output0[1], output1[1], output2[1], output3[1]] 
-}
-
-
-// Treat the input like the rows of a 2x9 array, and transpose it to a 9x2 array
-// But instead of storing "columns" of registers as separate arrays for further processing, pack them all into one array
-#[inline(always)]
-pub unsafe fn transpose_2x9_to_9x2_packed_f64(rows: [__m256d; 9]) -> [__m256d; 9] {
-    [
-        _mm256_permute2f128_pd(rows[0], rows[1], 0x20),
-        _mm256_permute2f128_pd(rows[2], rows[3], 0x20),
-        _mm256_permute2f128_pd(rows[4], rows[5], 0x20),
-        _mm256_permute2f128_pd(rows[6], rows[7], 0x20),
-        _mm256_permute2f128_pd(rows[8], rows[0], 0x30),
-        _mm256_permute2f128_pd(rows[1], rows[2], 0x31),
-        _mm256_permute2f128_pd(rows[3], rows[4], 0x31),
-        _mm256_permute2f128_pd(rows[5], rows[6], 0x31),
-        _mm256_permute2f128_pd(rows[7], rows[8], 0x31),
-    ]
-}
-
-// Treat the input like the rows of a 2x12 array, and transpose it to a 12x2 array.
-// But instead of storing "columns" of registers as separate arrays for further processing, pack them all into one array
-#[inline(always)]
-pub unsafe fn transpose_2x12_to_12x2_packed_f64(rows: [__m256d; 12]) -> [__m256d; 12] {
-    let chunk0 = [rows[0], rows[1]];
-    let chunk1 = [rows[2], rows[3]];
-    let chunk2 = [rows[4], rows[5]];
-    let chunk3 = [rows[6], rows[7]];
-    let chunk4 = [rows[8], rows[9]];
-    let chunk5 = [rows[10], rows[11]];
-
-    let output0 = transpose_2x2_f64(chunk0);
-    let output1 = transpose_2x2_f64(chunk1);
-    let output2 = transpose_2x2_f64(chunk2);
-    let output3 = transpose_2x2_f64(chunk3);
-    let output4 = transpose_2x2_f64(chunk4);
-    let output5 = transpose_2x2_f64(chunk5);
-
-    [output0[0], output1[0], output2[0], output3[0], output4[0], output5[0], output0[1], output1[1], output2[1], output3[1], output4[1], output5[1]] 
-}
-
-// Treat the input like the rows of a 2x16 array, and transpose it to a 16x2 array.
-// But instead of storing "columns" of registers as separate arrays for further processing, pack them all into one array
-#[inline(always)]
-pub unsafe fn transpose_2x16_to_16x2_packed_f64(rows: [__m256d; 16]) -> [__m256d; 16] {
-    let chunk0 = [rows[0], rows[1]];
-    let chunk1 = [rows[2], rows[3]];
-    let chunk2 = [rows[4], rows[5]];
-    let chunk3 = [rows[6], rows[7]];
-    let chunk4 = [rows[8], rows[9]];
-    let chunk5 = [rows[10], rows[11]];
-    let chunk6 = [rows[12], rows[13]];
-    let chunk7 = [rows[14], rows[15]];
-
-    let output0 = transpose_2x2_f64(chunk0);
-    let output1 = transpose_2x2_f64(chunk1);
-    let output2 = transpose_2x2_f64(chunk2);
-    let output3 = transpose_2x2_f64(chunk3);
-    let output4 = transpose_2x2_f64(chunk4);
-    let output5 = transpose_2x2_f64(chunk5);
-    let output6 = transpose_2x2_f64(chunk6);
-    let output7 = transpose_2x2_f64(chunk7);
-
-    [output0[0], output1[0], output2[0], output3[0], output4[0], output5[0], output6[0], output7[0], output0[1], output1[1], output2[1], output3[1], output4[1], output5[1], output6[1], output7[1]] 
-}
-
 // Treat the input like the rows of a 3x3 array, and transpose it
 // The assumption here is that it's very likely that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
 #[inline(always)]
@@ -431,23 +335,6 @@ pub mod fma {
 
         // use a FMA instruction to multiply together left side of the complex multiplication formula, then alternatingly add and subtract the left side from the right
         _mm256_fmaddsub_pd(left_real, right, output_right)
-    }
-
-    // Multiply the complex number in `left` by the complex numbers in `right`, using FMA instructions where possible
-    #[inline(always)]
-    pub unsafe fn complex_multiply_f64_lo(left: __m128d, right: __m128d) -> __m128d {
-        // Extract the real and imaginary components from left into 2 separate registers
-        let left_real = _mm_movedup_pd(left);
-        let left_imag = _mm_permute_pd(left, 0x0F); // apparently the avx deigners just skipped movehdup f64?? So use a permute instruction to take its place, copying the imaginaries int othe reals
-
-        // create a shuffled version of right where the imaginary values are swapped with the reals
-        let right_shuffled = _mm_permute_pd(right, 0x05);
-
-        // multiply our duplicated imaginary left vector by our shuffled right vector. that will give us the right side of the traditional complex multiplication formula
-        let output_right = _mm_mul_pd(left_imag, right_shuffled);
-
-        // use a FMA instruction to multiply together left side of the complex multiplication formula, then alternatingly add and subtract the left side from the right
-        _mm_fmaddsub_pd(left_real, right, output_right)
     }
 
     // Multiply the complex numbers in `left` by the complex numbers in `right`, using FMA instructions where possible

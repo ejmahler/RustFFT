@@ -241,53 +241,6 @@ pub unsafe fn unpack_complex_f32_lo(row0: __m128, row1: __m128) -> (__m128, __m1
     (output0, output1)
 }
 
-// Does the equivalent of "unpackhi" but for complex numbers
-#[inline(always)]
-pub unsafe fn unpackhi_complex_f32(row0: __m256, row1: __m256) -> __m256 {
-    // these two intrinsics compile down to nothing! they're basically transmutes
-    let row0_double = _mm256_castps_pd(row0);
-    let row1_double = _mm256_castps_pd(row1);
-
-    // unpack as doubles
-    let unpacked = _mm256_unpackhi_pd(row0_double, row1_double);
-
-    // re-cast to floats. again, just a transmute, so this compilesdown ot nothing
-    _mm256_castpd_ps(unpacked)
-}
-
-// Does the equivalent of "unpacklo" but for complex numbers
-#[inline(always)]
-pub unsafe fn unpacklo_complex_f32(row0: __m256, row1: __m256) -> __m256 {
-    // these two intrinsics compile down to nothing! they're basically transmutes
-    let row0_double = _mm256_castps_pd(row0);
-    let row1_double = _mm256_castps_pd(row1);
-
-    // unpack as doubles
-    let unpacked = _mm256_unpacklo_pd(row0_double, row1_double);
-
-    // re-cast to floats. again, just a transmute, so this compilesdown ot nothing
-    _mm256_castpd_ps(unpacked)
-}
-
-// Treat the input like the rows of a 4x3 array, and transpose said rows to the columns.
-// But, since the output has 3 columns while AVX registers have 4 columns, we shift elements around so that they're stored contiguously in 3 registers, hence the word "packed"
-#[allow(unused)]
-#[inline(always)]
-pub unsafe fn transpose_4x3_packed_f32(rows: [__m256; 3]) -> [__m256; 3] {
-    let (unpacked0, _) = unpack_complex_f32(rows[0], rows[1]);
-    let (_, unpacked2) = unpack_complex_f32(rows[1], rows[2]);
-    
-    // output0 and output2 each need to swap some elements. thankfully we can blend those elements into the same intermediate value, and then do a permute 128 from there
-    let blended = _mm256_blend_ps(rows[0], rows[2], 0x33);
-    
-    let output1 = _mm256_permute2f128_ps(unpacked0, unpacked2, 0x12);
-    
-    let output0 = _mm256_permute2f128_ps(unpacked0, blended, 0x20);
-    let output2 = _mm256_permute2f128_ps(unpacked2, blended, 0x13);
-
-    [output0, output1, output2]
-}
-
 // Treat the input like the rows of a 4x4 array, and transpose said rows to the columns
 #[inline(always)]
 pub unsafe fn transpose_4x4_f32(rows: [__m256;4]) -> [__m256;4] {
@@ -315,65 +268,6 @@ pub unsafe fn transpose_4x6_to_6x4_f32(rows: [__m256;6]) -> ([__m256;4], [__m256
     let output1 = transpose_4x4_f32(chunk1);
 
     (output0, output1)
-}
-
-
-// Treat the input like the rows of a 4x6 array, and transpose it to a 6x4 array
-// But instead of storing "columns" of registers as separate arrays for further processing, pack them all into one array
-#[inline(always)]
-pub unsafe fn transpose_4x6_to_6x4_packed_f32(rows: [__m256;6]) -> [__m256;6] {
-    let (unpacked0, unpacked1) = unpack_complex_f32(rows[0], rows[1]);
-    let (unpacked2, unpacked3) = unpack_complex_f32(rows[2], rows[3]);
-    let (unpacked4, unpacked5) = unpack_complex_f32(rows[4], rows[5]);
-
-    [
-        _mm256_permute2f128_ps(unpacked0, unpacked2, 0x20),
-        _mm256_permute2f128_ps(unpacked1, unpacked4, 0x02),
-        _mm256_permute2f128_ps(unpacked3, unpacked5, 0x20),
-        _mm256_permute2f128_ps(unpacked0, unpacked2, 0x31),
-        _mm256_permute2f128_ps(unpacked1, unpacked4, 0x13),
-        _mm256_permute2f128_ps(unpacked3, unpacked5, 0x31),
-    ]
-}
-
-// Treat the input like the rows of a 4x8 array, and transpose it to a 8x4 array
-// But instead of storing "columns" of registers as separate arrays for further processing, pack them all into one array
-#[inline(always)]
-pub unsafe fn transpose_4x8_to_8x4_packed_f32(rows: [__m256;8]) -> [__m256;8] {
-    let chunk0 = [rows[0],  rows[1],  rows[2],  rows[3]];
-    let chunk1 = [rows[4],  rows[5],  rows[6],  rows[7]];
-
-    let output0 = transpose_4x4_f32(chunk0);
-    let output1 = transpose_4x4_f32(chunk1);
-
-    [output0[0], output1[0], output0[1], output1[1], output0[2], output1[2], output0[3], output1[3]]
-}
-
-// Treat the input like the rows of a 4x9 array, and transpose it to a 9x4 array
-// But instead of storing "columns" of registers as separate arrays for further processing, pack them all into one array
-#[inline(always)]
-pub unsafe fn transpose_4x9_to_9x4_packed_f32(rows: [__m256;9]) -> [__m256;9] {
-    let unpacked0 = unpacklo_complex_f32(rows[0], rows[1]);
-    let unpacked1 = unpackhi_complex_f32(rows[1], rows[2]);
-    let unpacked2 = unpacklo_complex_f32(rows[2], rows[3]);
-    let unpacked3 = unpackhi_complex_f32(rows[3], rows[4]);
-    let unpacked5 = unpacklo_complex_f32(rows[4], rows[5]);
-    let unpacked6 = unpackhi_complex_f32(rows[5], rows[6]);
-    let unpacked7 = unpacklo_complex_f32(rows[6], rows[7]);
-    let unpacked8 = unpackhi_complex_f32(rows[7], rows[8]);
-    let blended9  = _mm256_blend_ps(rows[0], rows[8], 0x33);
-
-    [
-        _mm256_permute2f128_ps(unpacked0, unpacked2, 0x20),
-        _mm256_permute2f128_ps(unpacked5, unpacked7, 0x20),
-        _mm256_permute2f128_ps(blended9,  unpacked1, 0x20),
-        _mm256_permute2f128_ps(unpacked3, unpacked6, 0x20),
-        _mm256_blend_ps(unpacked0, unpacked8, 0x0f),
-        _mm256_permute2f128_ps(unpacked2, unpacked5, 0x31),
-        _mm256_permute2f128_ps(unpacked7, blended9,  0x31),
-        _mm256_permute2f128_ps(unpacked1, unpacked3, 0x31),
-        _mm256_permute2f128_ps(unpacked6, unpacked8, 0x31),
-    ]
 }
 
 // Treat the input like the rows of a 8x4 array, and transpose it to a 4x8 array
@@ -508,22 +402,6 @@ pub unsafe fn transpose_12x6_to_6x12_f32(rows0: [__m256;6], rows1: [__m256;6], r
     (output0, output1)
 }
 
-// Treat the input like the rows of a 4x12 array, and transpose it to a 12x4 array
-// But instead of storing "columns" of registers as separate arrays for further processing, pack them all into one array
-#[inline(always)]
-pub unsafe fn transpose_4x12_to_12x4_packed_f32(rows: [__m256;12]) -> [__m256;12] {
-    let chunk0 = [rows[0],  rows[1],  rows[2],  rows[3]];
-    let chunk1 = [rows[4],  rows[5],  rows[6],  rows[7]];
-    let chunk2 = [rows[8],  rows[9],  rows[10], rows[11]];
-
-    let output0 = transpose_4x4_f32(chunk0);
-    let output1 = transpose_4x4_f32(chunk1);
-    let output2 = transpose_4x4_f32(chunk2);
-
-    [output0[0], output1[0], output2[0], output0[1], output1[1], output2[1], output0[2], output1[2], output2[2], output0[3], output1[3], output2[3]]
-}
-
-
 // Treat the input like the rows of a 8x8 array, and transpose said rows to the columns
 // The assumption here is that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
 #[inline(always)]
@@ -542,28 +420,6 @@ pub unsafe fn transpose_8x8_f32(rows0: [__m256;8], rows1: [__m256;8]) -> ([__m25
     let output1 = [transposed10[0], transposed10[1], transposed10[2], transposed10[3], transposed11[0], transposed11[1], transposed11[2], transposed11[3]];
 
     (output0, output1)
-}
-
-// Treat the input like the rows of a 4x16 array, and transpose it to a 16x4 array, where each array of 4 is one set of 4 columns
-// But instead of storing "columns" of registers as separate arrays for further processing, pack them all into one array
-#[inline(always)]
-pub unsafe fn transpose_4x16_to_16x4_packed_f32(rows: [__m256;16]) -> [__m256;16] {
-    let chunk0 = [rows[0],  rows[1],  rows[2],  rows[3]];
-    let chunk1 = [rows[4],  rows[5],  rows[6],  rows[7]];
-    let chunk2 = [rows[8],  rows[9],  rows[10], rows[11]];
-    let chunk3 = [rows[12], rows[13], rows[14], rows[15]];
-
-    let output0 = transpose_4x4_f32(chunk0);
-    let output1 = transpose_4x4_f32(chunk1);
-    let output2 = transpose_4x4_f32(chunk2);
-    let output3 = transpose_4x4_f32(chunk3);
-
-    [
-        output0[0], output1[0], output2[0], output3[0],
-        output0[1], output1[1], output2[1], output3[1],
-        output0[2], output1[2], output2[2], output3[2],
-        output0[3], output1[3], output2[3], output3[3],
-    ]
 }
 
 // utility for packing a 3x4 array into just 3 registers, preserving order
@@ -608,23 +464,6 @@ pub mod fma {
 
         // use a FMA instruction to multiply together left side of the complex multiplication formula, then alternatingly add and subtract the left side from the right
         _mm256_fmaddsub_ps(left_real, right, output_right)
-    }
-
-    // Multiply the complex numbers in `left` by the complex numbers in `right`, using FMA instructions where possible
-    #[inline(always)]
-    pub unsafe fn complex_multiply_f32_lo(left: __m128, right: __m128) -> __m128 {
-        // Extract the real and imaginary components from left into 2 separate registers
-        let left_real = _mm_moveldup_ps(left);
-        let left_imag = _mm_movehdup_ps(left);
-
-        // create a shuffled version of right where the imaginary values are swapped with the reals
-        let right_shuffled = _mm_permute_ps(right, 0xB1);
-
-        // multiply our duplicated imaginary left vector by our shuffled right vector. that will give us the right side of the traditional complex multiplication formula
-        let output_right = _mm_mul_ps(left_imag, right_shuffled);
-
-        // use a FMA instruction to multiply together left side of the complex multiplication formula, then alternatingly add and subtract the left side from the right
-        _mm_fmaddsub_ps(left_real, right, output_right)
     }
 
     // Multiply the complex numbers in `left` by the complex numbers in `right`, using FMA instructions where possible
