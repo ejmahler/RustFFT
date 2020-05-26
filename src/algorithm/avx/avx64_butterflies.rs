@@ -303,14 +303,14 @@ impl Butterfly7Avx64<f64> {
 }
 
 
-pub struct MixedRadix64Avx4x2<T> {
+pub struct Butterfly8Avx64<T> {
     twiddles: [__m256d; 2],
     twiddles_butterfly4: Rotation90<__m256d>,
     inverse: bool,
     _phantom: std::marker::PhantomData<T>,
 }
-boilerplate_fft_simd_butterfly!(MixedRadix64Avx4x2, 8);
-impl MixedRadix64Avx4x2<f64> {
+boilerplate_fft_simd_butterfly!(Butterfly8Avx64, 8);
+impl Butterfly8Avx64<f64> {
     #[inline]
     pub fn new(inverse: bool) -> Result<Self, ()> {
         let has_avx = is_x86_feature_detected!("avx");
@@ -359,14 +359,14 @@ impl MixedRadix64Avx4x2<f64> {
     }
 }
 
-pub struct MixedRadix64Avx3x3<T> {
+pub struct Butterfly9Avx64<T> {
     twiddles: [__m256d; 2],
     twiddles_butterfly3: __m256d,
     inverse: bool,
     _phantom: std::marker::PhantomData<T>,
 }
-boilerplate_fft_simd_butterfly!(MixedRadix64Avx3x3, 9);
-impl MixedRadix64Avx3x3<f64> {
+boilerplate_fft_simd_butterfly!(Butterfly9Avx64, 9);
+impl Butterfly9Avx64<f64> {
     #[inline]
     pub fn new(inverse: bool) -> Result<Self, ()> {
         let has_avx = is_x86_feature_detected!("avx");
@@ -425,15 +425,15 @@ impl MixedRadix64Avx3x3<f64> {
 
 
 
-pub struct MixedRadix64Avx4x3<T> {
+pub struct Butterfly12Avx64<T> {
     twiddles: [__m256d; 3],
     twiddles_butterfly3: __m256d,
     twiddles_butterfly4: Rotation90<__m256d>,
     inverse: bool,
     _phantom: std::marker::PhantomData<T>,
 }
-boilerplate_fft_simd_butterfly!(MixedRadix64Avx4x3, 12);
-impl MixedRadix64Avx4x3<f64> {
+boilerplate_fft_simd_butterfly!(Butterfly12Avx64, 12);
+impl Butterfly12Avx64<f64> {
     #[inline]
     pub fn new(inverse: bool) -> Result<Self, ()> {
         let has_avx = is_x86_feature_detected!("avx");
@@ -492,14 +492,14 @@ impl MixedRadix64Avx4x3<f64> {
 }
 
 
-pub struct MixedRadix64Avx4x4<T> {
+pub struct Butterfly16Avx64<T> {
     twiddles: [__m256d; 6],
     twiddles_butterfly4: Rotation90<__m256d>,
     inverse: bool,
     _phantom: std::marker::PhantomData<T>,
 }
-boilerplate_fft_simd_butterfly!(MixedRadix64Avx4x4, 16);
-impl MixedRadix64Avx4x4<f64> {
+boilerplate_fft_simd_butterfly!(Butterfly16Avx64, 16);
+impl Butterfly16Avx64<f64> {
     #[inline]
     pub fn new(inverse: bool) -> Result<Self, ()> {
         let has_avx = is_x86_feature_detected!("avx");
@@ -554,14 +554,14 @@ impl MixedRadix64Avx4x4<f64> {
     }
 }
 
-pub struct MixedRadix64Avx3x6<T> {
+pub struct Butterfly18Avx64<T> {
     twiddles: [__m256d; 5],
     twiddles_butterfly3: __m256d,
     inverse: bool,
     _phantom: std::marker::PhantomData<T>,
 }
-boilerplate_fft_simd_butterfly!(MixedRadix64Avx3x6, 18);
-impl MixedRadix64Avx3x6<f64> {
+boilerplate_fft_simd_butterfly!(Butterfly18Avx64, 18);
+impl Butterfly18Avx64<f64> {
     #[inline]
     pub fn new(inverse: bool) -> Result<Self, ()> {
         let has_avx = is_x86_feature_detected!("avx");
@@ -619,15 +619,15 @@ impl MixedRadix64Avx3x6<f64> {
     }
 }
 
-pub struct MixedRadix64Avx4x6<T> {
+pub struct Butterfly24Avx64<T> {
     twiddles: [__m256d; 9],
     twiddles_butterfly3: __m256d,
     twiddles_butterfly4: Rotation90<__m256d>,
     inverse: bool,
     _phantom: std::marker::PhantomData<T>,
 }
-boilerplate_fft_simd_butterfly!(MixedRadix64Avx4x6, 24);
-impl MixedRadix64Avx4x6<f64> {
+boilerplate_fft_simd_butterfly!(Butterfly24Avx64, 24);
+impl Butterfly24Avx64<f64> {
     #[inline]
     pub fn new(inverse: bool) -> Result<Self, ()> {
         let has_avx = is_x86_feature_detected!("avx");
@@ -687,7 +687,7 @@ impl MixedRadix64Avx4x6<f64> {
     }
 }
 
-pub struct MixedRadix64Avx3x9<T> {
+pub struct Butterfly27Avx64<T> {
     twiddles: [__m256d; 8],
     twiddles_butterfly9: [__m256d; 3],
     twiddles_butterfly9_lo: [__m256d; 2],
@@ -695,8 +695,8 @@ pub struct MixedRadix64Avx3x9<T> {
     inverse: bool,
     _phantom: std::marker::PhantomData<T>,
 }
-boilerplate_fft_simd_butterfly!(MixedRadix64Avx3x9, 27);
-impl MixedRadix64Avx3x9<f64> {
+boilerplate_fft_simd_butterfly!(Butterfly27Avx64, 27);
+impl Butterfly27Avx64<f64> {
     #[inline]
     pub fn new(inverse: bool) -> Result<Self, ()> {
         let has_avx = is_x86_feature_detected!("avx");
@@ -792,14 +792,14 @@ impl MixedRadix64Avx3x9<f64> {
 
 
 
-pub struct MixedRadix64Avx4x8<T> {
+pub struct Butterfly32Avx64<T> {
     twiddles: [__m256d; 12],
     twiddles_butterfly4: Rotation90<__m256d>,
     inverse: bool,
     _phantom: std::marker::PhantomData<T>,
 }
-boilerplate_fft_simd_butterfly!(MixedRadix64Avx4x8, 32);
-impl MixedRadix64Avx4x8<f64> {
+boilerplate_fft_simd_butterfly!(Butterfly32Avx64, 32);
+impl Butterfly32Avx64<f64> {
     #[inline]
     pub fn new(inverse: bool) -> Result<Self, ()> {
         let has_avx = is_x86_feature_detected!("avx");
@@ -870,14 +870,14 @@ impl MixedRadix64Avx4x8<f64> {
 }
 
 
-pub struct MixedRadix64Avx6x6<T> {
+pub struct Butterfly36Avx64<T> {
     twiddles: [__m256d; 15],
     twiddles_butterfly3: __m256d,
     inverse: bool,
     _phantom: std::marker::PhantomData<T>,
 }
-boilerplate_fft_simd_butterfly!(MixedRadix64Avx6x6, 36);
-impl MixedRadix64Avx6x6<f64> {
+boilerplate_fft_simd_butterfly!(Butterfly36Avx64, 36);
+impl Butterfly36Avx64<f64> {
     #[inline]
     pub fn new(inverse: bool) -> Result<Self, ()> {
         let has_avx = is_x86_feature_detected!("avx");
@@ -977,13 +977,13 @@ mod unit_tests {
 
     test_avx_butterfly!(test_avx_butterfly5_f64, Butterfly5Avx64, 5);
     test_avx_butterfly!(test_avx_butterfly7_f64, Butterfly7Avx64, 7);
-    test_avx_butterfly!(test_avx_mixedradix4x2_f64, MixedRadix64Avx4x2, 8);
-    test_avx_butterfly!(test_avx_mixedradix3x3_f64, MixedRadix64Avx3x3, 9);
-    test_avx_butterfly!(test_avx_mixedradix4x3_f64, MixedRadix64Avx4x3, 12);
-    test_avx_butterfly!(test_avx_mixedradix4x4_f64, MixedRadix64Avx4x4, 16);
-    test_avx_butterfly!(test_avx_mixedradix3x6_f64, MixedRadix64Avx3x6, 18);
-    test_avx_butterfly!(test_avx_mixedradix4x6_f64, MixedRadix64Avx4x6, 24);
-    test_avx_butterfly!(test_avx_mixedradix3x9_f64, MixedRadix64Avx3x9, 27);
-    test_avx_butterfly!(test_avx_mixedradix4x8_f64, MixedRadix64Avx4x8, 32);
-    test_avx_butterfly!(test_avx_mixedradix6x6_f64, MixedRadix64Avx6x6, 36);
+    test_avx_butterfly!(test_avx_mixedradix4x2_f64, Butterfly8Avx64, 8);
+    test_avx_butterfly!(test_avx_mixedradix3x3_f64, Butterfly9Avx64, 9);
+    test_avx_butterfly!(test_avx_mixedradix4x3_f64, Butterfly12Avx64, 12);
+    test_avx_butterfly!(test_avx_mixedradix4x4_f64, Butterfly16Avx64, 16);
+    test_avx_butterfly!(test_avx_mixedradix3x6_f64, Butterfly18Avx64, 18);
+    test_avx_butterfly!(test_avx_mixedradix4x6_f64, Butterfly24Avx64, 24);
+    test_avx_butterfly!(test_avx_mixedradix3x9_f64, Butterfly27Avx64, 27);
+    test_avx_butterfly!(test_avx_mixedradix4x8_f64, Butterfly32Avx64, 32);
+    test_avx_butterfly!(test_avx_mixedradix6x6_f64, Butterfly36Avx64, 36);
 }

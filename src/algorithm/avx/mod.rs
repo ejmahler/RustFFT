@@ -105,32 +105,32 @@ pub mod avx_planner;
 pub use self::avx32_butterflies::{
     Butterfly5Avx,
     Butterfly7Avx,
-    MixedRadixAvx4x2,
-    MixedRadixAvx3x3,
-    MixedRadixAvx4x3,
-    MixedRadixAvx4x4,
-    MixedRadixAvx4x6,
-    MixedRadixAvx3x9,
-    MixedRadixAvx4x8,
-    MixedRadixAvx4x9,
-    MixedRadixAvx4x12,
-    MixedRadixAvx6x9,
-    MixedRadixAvx8x8,
-    MixedRadixAvx6x12,
+    Butterfly8Avx,
+    Butterfly9Avx,
+    Butterfly12Avx,
+    Butterfly16Avx,
+    Butterfly24Avx,
+    Butterfly27Avx,
+    Butterfly32Avx,
+    Butterfly36Avx,
+    Butterfly48Avx,
+    Butterfly54Avx,
+    Butterfly64Avx,
+    Butterfly72Avx,
 };
 
 pub use self::avx64_butterflies::{
     Butterfly5Avx64,
     Butterfly7Avx64,
-    MixedRadix64Avx4x2,
-    MixedRadix64Avx3x3,
-    MixedRadix64Avx4x3,
-    MixedRadix64Avx4x4,
-    MixedRadix64Avx3x6,
-    MixedRadix64Avx4x6,
-    MixedRadix64Avx3x9,
-    MixedRadix64Avx4x8,
-    MixedRadix64Avx6x6
+    Butterfly8Avx64,
+    Butterfly9Avx64,
+    Butterfly12Avx64,
+    Butterfly16Avx64,
+    Butterfly18Avx64,
+    Butterfly24Avx64,
+    Butterfly27Avx64,
+    Butterfly32Avx64,
+    Butterfly36Avx64
 };
 
 pub use self::avx_bluesteins::BluesteinsAvx;

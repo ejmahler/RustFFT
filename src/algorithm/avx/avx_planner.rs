@@ -288,7 +288,7 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
         }
 
         if factors.get_other_factors() > 1 {
-            // if we have a factor that computed with 2xn 3xn etc, we'll have to compute it with bluestein's or rader's, so use that as the base
+            // if we have a factor that can't be computed with 2xn 3xn etc, we'll have to compute it with bluestein's or rader's, so use that as the base
             MixedRadixPlan::new(factors.get_other_factors(), &[])
         } else if factors.get_power3() < 3 {
             match factors.get_power3() {
@@ -355,18 +355,18 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
             5 =>    wrap_fft_some(Butterfly5Avx::new(self.inverse).unwrap()),
             6 =>    wrap_fft_some(Butterfly6::new(self.inverse)),
             7 =>    wrap_fft_some(Butterfly7Avx::new(self.inverse).unwrap()),
-            8 =>    wrap_fft_some(MixedRadixAvx4x2::new(self.inverse).unwrap()),
-            9 =>    wrap_fft_some(MixedRadixAvx3x3::new(self.inverse).unwrap()),
-            12 =>   wrap_fft_some(MixedRadixAvx4x3::new(self.inverse).unwrap()),
-            16 =>   wrap_fft_some(MixedRadixAvx4x4::new(self.inverse).unwrap()),
-            24 =>   wrap_fft_some(MixedRadixAvx4x6::new(self.inverse).unwrap()),
-            27 =>   wrap_fft_some(MixedRadixAvx3x9::new(self.inverse).unwrap()),
-            32 =>   wrap_fft_some(MixedRadixAvx4x8::new(self.inverse).unwrap()),
-            36 =>   wrap_fft_some(MixedRadixAvx4x9::new(self.inverse).unwrap()),
-            48 =>   wrap_fft_some(MixedRadixAvx4x12::new(self.inverse).unwrap()),
-            54 =>   wrap_fft_some(MixedRadixAvx6x9::new(self.inverse).unwrap()),
-            64 =>   wrap_fft_some(MixedRadixAvx8x8::new(self.inverse).unwrap()),
-            72 =>   wrap_fft_some(MixedRadixAvx6x12::new(self.inverse).unwrap()),
+            8 =>    wrap_fft_some(Butterfly8Avx::new(self.inverse).unwrap()),
+            9 =>    wrap_fft_some(Butterfly9Avx::new(self.inverse).unwrap()),
+            12 =>   wrap_fft_some(Butterfly12Avx::new(self.inverse).unwrap()),
+            16 =>   wrap_fft_some(Butterfly16Avx::new(self.inverse).unwrap()),
+            24 =>   wrap_fft_some(Butterfly24Avx::new(self.inverse).unwrap()),
+            27 =>   wrap_fft_some(Butterfly27Avx::new(self.inverse).unwrap()),
+            32 =>   wrap_fft_some(Butterfly32Avx::new(self.inverse).unwrap()),
+            36 =>   wrap_fft_some(Butterfly36Avx::new(self.inverse).unwrap()),
+            48 =>   wrap_fft_some(Butterfly48Avx::new(self.inverse).unwrap()),
+            54 =>   wrap_fft_some(Butterfly54Avx::new(self.inverse).unwrap()),
+            64 =>   wrap_fft_some(Butterfly64Avx::new(self.inverse).unwrap()),
+            72 =>   wrap_fft_some(Butterfly72Avx::new(self.inverse).unwrap()),
             _ => None
         }
     }
@@ -531,15 +531,15 @@ impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
             5 =>    wrap_fft_some(Butterfly5Avx64::new(self.inverse).unwrap()),
             6 =>    wrap_fft_some(Butterfly6::new(self.inverse)),
             7 =>    wrap_fft_some(Butterfly7Avx64::new(self.inverse).unwrap()),
-            8 =>    wrap_fft_some(MixedRadix64Avx4x2::new(self.inverse).unwrap()),
-            9 =>    wrap_fft_some(MixedRadix64Avx3x3::new(self.inverse).unwrap()),
-            12 =>   wrap_fft_some(MixedRadix64Avx4x3::new(self.inverse).unwrap()),
-            16 =>   wrap_fft_some(MixedRadix64Avx4x4::new(self.inverse).unwrap()),
-            18 =>   wrap_fft_some(MixedRadix64Avx3x6::new(self.inverse).unwrap()),
-            24 =>   wrap_fft_some(MixedRadix64Avx4x6::new(self.inverse).unwrap()),
-            27 =>   wrap_fft_some(MixedRadix64Avx3x9::new(self.inverse).unwrap()),
-            32 =>   wrap_fft_some(MixedRadix64Avx4x8::new(self.inverse).unwrap()),
-            36 =>   wrap_fft_some(MixedRadix64Avx6x6::new(self.inverse).unwrap()),
+            8 =>    wrap_fft_some(Butterfly8Avx64::new(self.inverse).unwrap()),
+            9 =>    wrap_fft_some(Butterfly9Avx64::new(self.inverse).unwrap()),
+            12 =>   wrap_fft_some(Butterfly12Avx64::new(self.inverse).unwrap()),
+            16 =>   wrap_fft_some(Butterfly16Avx64::new(self.inverse).unwrap()),
+            18 =>   wrap_fft_some(Butterfly18Avx64::new(self.inverse).unwrap()),
+            24 =>   wrap_fft_some(Butterfly24Avx64::new(self.inverse).unwrap()),
+            27 =>   wrap_fft_some(Butterfly27Avx64::new(self.inverse).unwrap()),
+            32 =>   wrap_fft_some(Butterfly32Avx64::new(self.inverse).unwrap()),
+            36 =>   wrap_fft_some(Butterfly36Avx64::new(self.inverse).unwrap()),
             _ => None
         }
     }
