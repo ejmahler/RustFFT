@@ -749,17 +749,15 @@ impl Butterfly27Avx<f32> {
         // butterfly 9s down the rows
         let output_rows = AvxVector256::column_butterfly9(transposed, self.twiddles_butterfly9, self.twiddles_butterfly3);
 
-        // we can't directly write our data to the output, because it's in an unpacked state with the last column enpty. we have to pack the data in, which will involve a lot of reshuffling
-        let packed0 = avx32_utils::pack_3x4_4x3_f32([output_rows[0], output_rows[1], output_rows[2], output_rows[3]]);
-        output.store_complex(packed0[0], 0);
-        output.store_complex(packed0[1], 4);
-        output.store_complex(packed0[2], 8);
-
-        let packed1 = avx32_utils::pack_3x4_4x3_f32([output_rows[4], output_rows[5], output_rows[6], output_rows[7]]);
-        output.store_complex(packed1[0], 12);
-        output.store_complex(packed1[1], 16);
-        output.store_complex(packed1[2], 20);
-
+        // Our last column is empty, so it's a bit awkward to write out to memory. We could pack it in fewer vectors, but benchmarking shows it's simpler and just as fast to just brute-force it with partial writes
+        output.store_partial3_complex(output_rows[0], 0);
+        output.store_partial3_complex(output_rows[1], 3);
+        output.store_partial3_complex(output_rows[2], 6);
+        output.store_partial3_complex(output_rows[3], 9);
+        output.store_partial3_complex(output_rows[4], 12);
+        output.store_partial3_complex(output_rows[5], 15);
+        output.store_partial3_complex(output_rows[6], 18);
+        output.store_partial3_complex(output_rows[7], 21);
         output.store_partial3_complex(output_rows[8], 24);
     }
 }

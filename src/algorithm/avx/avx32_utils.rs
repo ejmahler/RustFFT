@@ -182,26 +182,3 @@ pub unsafe fn transpose_8x8_f32(rows0: [__m256;8], rows1: [__m256;8]) -> ([__m25
 
     (output0, output1)
 }
-
-// utility for packing a 3x4 array into just 3 registers, preserving order
-#[inline(always)]
-pub unsafe fn pack_3x4_4x3_f32(rows: [__m256;4]) -> [__m256; 3] {
-    let unpacked_lo = AvxVector::unpacklo_complex([rows[2], rows[1]]); // 5 8 3 6
-
-    // copy the lower half of row 1 into the upper half, then swap even and od values
-    let row1_duplicated = AvxVector256::merge(rows[1].lo(), rows[1].lo()); // 4 3 4 3
-    let row1_dupswap = _mm256_permute_ps(row1_duplicated, 0x4E); // 3 4 3 4
-    
-    // both lanes of row 2 have some data they want to swap to the other side
-    let row2_swapped = _mm256_permute2f128_ps(rows[2], unpacked_lo, 0x03); // 7 6 5 8
-    
-    // none of the data in row 3 is in the right position, and it'll take several instructions to get there
-    let permuted3 = _mm256_permute_ps(rows[3], 0x4E); // swap even and odd complex numbers // 11 _ 9 10
-    let intermediate3 = AvxVector256::merge(row2_swapped.lo(), permuted3.lo()); // 9 10 5 8
-    
-    let output0 = _mm256_blend_ps(rows[0], row1_dupswap, 0xC0); // 3 2 1 0
-    let output1 = _mm256_blend_ps(row2_swapped, row1_dupswap, 0x03); // 7 6 5 4
-    let output2 = _mm256_blend_ps(permuted3, intermediate3, 0x33); // 11 10 9 8
-
-    [output0, output1, output2]
-}
