@@ -61,14 +61,15 @@ pub trait AvxVector : Copy + Debug + Send + Sync {
 
     /// Packed transposes. Used by mixed radix. These all take a NxC array, where C is COMPLEX_PER_VECTOR, and transpose it to a CxN array.
     /// But they also pack the result into as few vectors as possible, with the goal of writing the transposed data out contiguously.
-    unsafe fn transpose2_packed(rows: [Self; 2]) -> [Self;2];
-    unsafe fn transpose3_packed(rows: [Self; 3]) -> [Self;3];
-    unsafe fn transpose4_packed(rows: [Self; 4]) -> [Self;4];
-    unsafe fn transpose6_packed(rows: [Self; 6]) -> [Self;6];
-    unsafe fn transpose8_packed(rows: [Self; 8]) -> [Self;8];
-    unsafe fn transpose9_packed(rows: [Self; 9]) -> [Self;9];
-    unsafe fn transpose12_packed(rows: [Self; 12]) -> [Self;12];
-    unsafe fn transpose16_packed(rows: [Self; 16]) -> [Self;16];
+    unsafe fn transpose2_packed(rows: [Self; 2]) -> [Self; 2];
+    unsafe fn transpose3_packed(rows: [Self; 3]) -> [Self; 3];
+    unsafe fn transpose4_packed(rows: [Self; 4]) -> [Self; 4];
+    unsafe fn transpose5_packed(rows: [Self; 5]) -> [Self; 5];
+    unsafe fn transpose6_packed(rows: [Self; 6]) -> [Self; 6];
+    unsafe fn transpose8_packed(rows: [Self; 8]) -> [Self; 8];
+    unsafe fn transpose9_packed(rows: [Self; 9]) -> [Self; 9];
+    unsafe fn transpose12_packed(rows: [Self; 12]) -> [Self; 12];
+    unsafe fn transpose16_packed(rows: [Self; 16]) -> [Self; 16];
 
     /// Pairwise multiply the complex numbers in `left` with the complex numbers in `right`.
     #[inline(always)]
@@ -164,6 +165,43 @@ pub trait AvxVector : Copy + Debug + Send + Sync {
 
         // Swap outputs 1 and 2 in the output to do a square transpose
         [output0, output2, output1, output3]
+    }
+
+    #[inline(always)]
+    unsafe fn column_butterfly5(rows: [Self; 5], twiddles: [Self; 2]) -> [Self; 5] {
+        // This algorithm is derived directly from the definition of the DFT of size 5
+        // We'd theoretically have to do 16 complex multiplications, but many of the twiddles we'd be multiplying by are conjugates of each other
+        // By doing some algebra to expand the complex multiplications and factor out the real multiplications, we get this faster formula
+
+        // do some prep work before we can start applying twiddle factors
+        let [sum1, diff4] = Self::column_butterfly2([rows[1], rows[4]]);
+        let [sum2, diff3] = Self::column_butterfly2([rows[2], rows[3]]);
+        
+        let rotation = Self::make_rotation90(true);
+        let rotated4 = Self::rotate90(diff4, rotation);
+        let rotated3 = Self::rotate90(diff3, rotation);
+
+        // to compute the first output, compute the sum of all elements. sum1 and sum2 already have the sum of 1+4 and 2+3 respectively, so if we add them, we'll get the sum of all 4
+        let sum1234 = Self::add(sum1, sum2);
+        let output0 = Self::add(rows[0], sum1234);
+
+        // apply twiddle factors
+        let (twiddles0_re, twiddles0_im) = Self::duplicate_complex_components(twiddles[0]);
+        let (twiddles1_re, twiddles1_im) = Self::duplicate_complex_components(twiddles[1]);
+        let twiddled1_mid = Self::fmadd(twiddles0_re, sum1, rows[0]);
+        let twiddled2_mid = Self::fmadd(twiddles1_re, sum1, rows[0]);
+        let twiddled3_mid = Self::mul(twiddles1_im, rotated4);
+        let twiddled4_mid = Self::mul(twiddles0_im, rotated4);
+        let twiddled1 = Self::fmadd(twiddles1_re, sum2, twiddled1_mid);
+        let twiddled2 = Self::fmadd(twiddles0_re, sum2, twiddled2_mid);
+        let twiddled3 = Self::fnmadd(twiddles0_im, rotated3, twiddled3_mid); // fnmadd instead of fmadd because we're actually re-using twiddle0 here. remember that this algorithm is all about factoring out conjugated multiplications -- this negation of the twiddle0 imaginaries is a reflection of one of those conugations
+        let twiddled4 = Self::fmadd(twiddles1_im, rotated3, twiddled4_mid);
+
+        // Post-processing to mix the twiddle factors between the rest of the output
+        let [output1, output4] = Self::column_butterfly2([twiddled1, twiddled4]);
+        let [output2, output3] = Self::column_butterfly2([twiddled2, twiddled3]);
+
+        [output0, output1, output2, output3, output4]
     }
 
     #[inline(always)]
@@ -620,6 +658,22 @@ impl AvxVector for __m256 {
         [unpacked0, unpacked1, unpacked2, unpacked3]
     }
     #[inline(always)]
+    unsafe fn transpose5_packed(rows: [Self; 5]) -> [Self; 5] {
+        let unpacked0 = Self::unpacklo_complex([rows[0], rows[1]]);
+        let unpacked1 = Self::unpackhi_complex([rows[1], rows[2]]);
+        let unpacked2 = Self::unpacklo_complex([rows[2], rows[3]]);
+        let unpacked3 = Self::unpackhi_complex([rows[3], rows[4]]);
+        let blended04  = _mm256_blend_ps(rows[0], rows[4], 0x33);
+
+        [
+            _mm256_permute2f128_ps(unpacked0, unpacked2, 0x20),
+            _mm256_permute2f128_ps(blended04, unpacked1, 0x20),
+            _mm256_blend_ps(unpacked0, unpacked3, 0x0f),
+            _mm256_permute2f128_ps(unpacked2, blended04, 0x31),
+            _mm256_permute2f128_ps(unpacked1, unpacked3, 0x31),
+        ]
+    }
+    #[inline(always)]
     unsafe fn transpose6_packed(rows: [Self; 6]) -> [Self;6] {
         let [unpacked0, unpacked1] = Self::unpack_complex([rows[0], rows[1]]);
         let [unpacked2, unpacked3] = Self::unpack_complex([rows[2], rows[3]]);
@@ -875,6 +929,16 @@ impl AvxVector for __m128 {
         [unpacked0, unpacked2, unpacked1, unpacked3]
     }
     #[inline(always)]
+    unsafe fn transpose5_packed(rows: [Self; 5]) -> [Self; 5] {
+        [
+            Self::unpacklo_complex([rows[0], rows[1]]),
+            Self::unpacklo_complex([rows[2], rows[3]]),
+            _mm_blend_ps(rows[0], rows[4], 0x33),
+            Self::unpackhi_complex([rows[1], rows[2]]),
+            Self::unpackhi_complex([rows[3], rows[4]]),
+        ]
+    }
+    #[inline(always)]
     unsafe fn transpose6_packed(rows: [Self; 6]) -> [Self;6] {
         let [unpacked0, unpacked1] = Self::unpack_complex([rows[0], rows[1]]);
         let [unpacked2, unpacked3] = Self::unpack_complex([rows[2], rows[3]]);
@@ -1071,6 +1135,16 @@ impl AvxVector for __m256d {
         let [unpacked2, unpacked3] = Self::unpack_complex([rows[2], rows[3]]);
 
         [unpacked0, unpacked2, unpacked1, unpacked3]
+    }
+    #[inline(always)]
+    unsafe fn transpose5_packed(rows: [Self; 5]) -> [Self; 5] {
+        [
+            Self::unpacklo_complex([rows[0], rows[1]]),
+            Self::unpacklo_complex([rows[2], rows[3]]),
+            _mm256_blend_pd(rows[0], rows[4], 0x33),
+            Self::unpackhi_complex([rows[1], rows[2]]),
+            Self::unpackhi_complex([rows[3], rows[4]]),
+        ]
     }
     #[inline(always)]
     unsafe fn transpose6_packed(rows: [Self; 6]) -> [Self;6] {
@@ -1283,6 +1357,7 @@ impl AvxVector for __m128d {
     #[inline(always)] unsafe fn transpose2_packed(rows: [Self;2]) -> [Self;2] { rows }
     #[inline(always)] unsafe fn transpose3_packed(rows: [Self;3]) -> [Self;3] { rows }
     #[inline(always)] unsafe fn transpose4_packed(rows: [Self;4]) -> [Self;4] { rows }
+    #[inline(always)] unsafe fn transpose5_packed(rows: [Self;5]) -> [Self;5] { rows }
     #[inline(always)] unsafe fn transpose6_packed(rows: [Self;6]) -> [Self;6] { rows }
     #[inline(always)] unsafe fn transpose8_packed(rows: [Self;8]) -> [Self;8] { rows }
     #[inline(always)] unsafe fn transpose9_packed(rows: [Self;9]) -> [Self;9] { rows }

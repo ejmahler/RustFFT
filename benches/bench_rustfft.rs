@@ -622,6 +622,38 @@ fn bench_mixed_4xn_avx(b: &mut Bencher, len: usize) {
 #[bench] fn mixed_4xn_avx__0065536(b: &mut Bencher) { bench_mixed_4xn_avx(b, 65536); }
 #[bench] fn mixed_4xn_avx__1048576(b: &mut Bencher) { bench_mixed_4xn_avx(b, 1048576); }
 
+
+fn get_5xn_avx(len: usize) -> Arc<dyn Fft<f32>> {
+    match len {
+        5 => Arc::new(Butterfly5Avx::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        _ => {
+            let inner = get_5xn_avx(len / 5);
+            Arc::new(MixedRadix5xnAvx::new(inner).expect("Can't run benchmark because this machine doesn't have the required instruction sets"))
+        }
+    }
+}
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_mixed_5xn_avx(b: &mut Bencher, len: usize) {
+    assert!(len % 5 == 0);
+    let fft = get_5xn_avx(len);
+
+    let mut buffer = vec![Zero::zero(); len];
+    let mut scratch = vec![Zero::zero(); fft.get_inplace_scratch_len()];
+    b.iter(|| {
+        fft.process_inplace_with_scratch(&mut buffer, &mut scratch);
+    });
+}
+
+#[bench] fn mixed_5xn_avx__0000025(b: &mut Bencher) { bench_mixed_5xn_avx(b, 25); }
+#[bench] fn mixed_5xn_avx__0000125(b: &mut Bencher) { bench_mixed_5xn_avx(b, 125); }
+#[bench] fn mixed_5xn_avx__0000625(b: &mut Bencher) { bench_mixed_5xn_avx(b, 625); }
+#[bench] fn mixed_5xn_avx__0003125(b: &mut Bencher) { bench_mixed_5xn_avx(b, 3125); }
+#[bench] fn mixed_5xn_avx__0015625(b: &mut Bencher) { bench_mixed_5xn_avx(b, 15625); }
+#[bench] fn mixed_5xn_avx__0078125(b: &mut Bencher) { bench_mixed_5xn_avx(b, 78125); }
+#[bench] fn mixed_5xn_avx__0390625(b: &mut Bencher) { bench_mixed_5xn_avx(b, 390625); }
+
 fn get_8xn_avx(len: usize) -> Arc<dyn Fft<f32>> {
     match len {
         8 => Arc::new(Butterfly8Avx::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),

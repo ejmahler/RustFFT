@@ -375,6 +375,36 @@ impl<T: FFTnum> MixedRadix4xnAvx<T> {
 }
 
 
+pub struct MixedRadix5xnAvx<T: FFTnum> {
+    twiddles_butterfly5: [T::AvxType; 2],
+    common_data: CommonSimdData<T,T::AvxType>
+}
+boilerplate_fft_commondata!(MixedRadix5xnAvx);
+
+impl<T: FFTnum> MixedRadix5xnAvx<T> {
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
+        Self {
+            twiddles_butterfly5: [
+                AvxVector::broadcast_twiddle(1, 5, inner_fft.is_inverse()),
+                AvxVector::broadcast_twiddle(2, 5, inner_fft.is_inverse()),
+            ],
+            common_data: mixedradix_gen_data!(5, inner_fft),
+        }
+    }
+    mixedradix_column_butterflies!(5,
+        |columns, this: &Self| AvxVector::column_butterfly5(columns, this.twiddles_butterfly5),
+        |columns, this: &Self| AvxVector::column_butterfly5(columns, [this.twiddles_butterfly5[0].lo(),this.twiddles_butterfly5[1].lo()])
+    );
+    mixedradix_transpose!(5,
+        AvxVector::transpose5_packed,
+        AvxVector::transpose5_packed,
+        0;1;2;3;4, 0;1;2
+    );
+    boilerplate_mixedradix!();
+}
+
+
 
 
 pub struct MixedRadix6xnAvx<T: FFTnum> {
@@ -597,6 +627,7 @@ mod unit_tests {
     test_avx_mixed_radix!(test_mixedradix_2xn_avx_f32, test_mixedradix_2xn_avx_f64, MixedRadix2xnAvx, 2);
     test_avx_mixed_radix!(test_mixedradix_3xn_avx_f32, test_mixedradix_3xn_avx_f64, MixedRadix3xnAvx, 3);
     test_avx_mixed_radix!(test_mixedradix_4xn_avx_f32, test_mixedradix_4xn_avx_f64, MixedRadix4xnAvx, 4);
+    test_avx_mixed_radix!(test_mixedradix_5xn_avx_f32, test_mixedradix_5xn_avx_f64, MixedRadix5xnAvx, 5);
     test_avx_mixed_radix!(test_mixedradix_6xn_avx_f32, test_mixedradix_6xn_avx_f64, MixedRadix6xnAvx, 6);
     test_avx_mixed_radix!(test_mixedradix_8xn_avx_f32, test_mixedradix_8xn_avx_f64, MixedRadix8xnAvx, 8);
     test_avx_mixed_radix!(test_mixedradix_9xn_avx_f32, test_mixedradix_9xn_avx_f64, MixedRadix9xnAvx, 9);
