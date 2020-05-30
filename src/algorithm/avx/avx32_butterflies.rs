@@ -182,10 +182,10 @@ impl Butterfly5Avx<f32> {
         let output0 = AvxVector::add(input0, sum1234);
         
         // apply twiddle factors
-        let twiddled_outer14 = AvxVector::mul(mid14, self.twiddles[0]);
-        let twiddled_inner14 = AvxVector::mul(mid14, self.twiddles[1]);
-        let twiddled14 = AvxVector::fmadd(mid23, self.twiddles[1], twiddled_outer14);
-        let twiddled23 = AvxVector::fmadd(mid23, self.twiddles[2], twiddled_inner14);
+        let twiddled14_mid = AvxVector::mul(mid14, self.twiddles[0]);
+        let twiddled23_mid = AvxVector::mul(mid14, self.twiddles[1]);
+        let twiddled14 = AvxVector::fmadd(mid23, self.twiddles[1], twiddled14_mid);
+        let twiddled23 = AvxVector::fmadd(mid23, self.twiddles[2], twiddled23_mid);
 
         // unpack the data for the last butterfly 2
         let [twiddled12, twiddled43] = AvxVector::unpack_complex([twiddled14, twiddled23]);

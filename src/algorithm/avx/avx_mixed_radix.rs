@@ -434,6 +434,38 @@ impl<T: FFTnum> MixedRadix6xnAvx<T> {
 }
 
 
+pub struct MixedRadix7xnAvx<T: FFTnum> {
+    twiddles_butterfly7: [T::AvxType; 3],
+    common_data: CommonSimdData<T,T::AvxType>
+}
+boilerplate_fft_commondata!(MixedRadix7xnAvx);
+
+impl<T: FFTnum> MixedRadix7xnAvx<T> {
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
+        Self {
+            twiddles_butterfly7: [
+                AvxVector::broadcast_twiddle(1, 7, inner_fft.is_inverse()),
+                AvxVector::broadcast_twiddle(2, 7, inner_fft.is_inverse()),
+                AvxVector::broadcast_twiddle(3, 7, inner_fft.is_inverse()),
+            ],
+            common_data: mixedradix_gen_data!(7, inner_fft),
+        }
+    }
+    mixedradix_column_butterflies!(7,
+        |columns, this: &Self| AvxVector::column_butterfly7(columns, this.twiddles_butterfly7),
+        |columns, this: &Self| AvxVector::column_butterfly7(columns, [this.twiddles_butterfly7[0].lo(), this.twiddles_butterfly7[1].lo(), this.twiddles_butterfly7[2].lo()])
+    );
+    mixedradix_transpose!(7,
+        AvxVector::transpose7_packed,
+        AvxVector::transpose7_packed,
+        0;1;2;3;4;5;6, 0;1;2;3;4
+    );
+    boilerplate_mixedradix!();
+}
+
+
+
 
 
 
@@ -629,6 +661,7 @@ mod unit_tests {
     test_avx_mixed_radix!(test_mixedradix_4xn_avx_f32, test_mixedradix_4xn_avx_f64, MixedRadix4xnAvx, 4);
     test_avx_mixed_radix!(test_mixedradix_5xn_avx_f32, test_mixedradix_5xn_avx_f64, MixedRadix5xnAvx, 5);
     test_avx_mixed_radix!(test_mixedradix_6xn_avx_f32, test_mixedradix_6xn_avx_f64, MixedRadix6xnAvx, 6);
+    test_avx_mixed_radix!(test_mixedradix_7xn_avx_f32, test_mixedradix_7xn_avx_f64, MixedRadix7xnAvx, 7);
     test_avx_mixed_radix!(test_mixedradix_8xn_avx_f32, test_mixedradix_8xn_avx_f64, MixedRadix8xnAvx, 8);
     test_avx_mixed_radix!(test_mixedradix_9xn_avx_f32, test_mixedradix_9xn_avx_f64, MixedRadix9xnAvx, 9);
     test_avx_mixed_radix!(test_mixedradix_12xn_avx_f32, test_mixedradix_12xn_avx_f64, MixedRadix12xnAvx, 12);
