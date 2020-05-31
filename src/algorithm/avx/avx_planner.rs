@@ -14,10 +14,6 @@ fn wrap_fft<T: FFTnum>(butterfly: impl Fft<T> + 'static) -> Arc<dyn Fft<T>> {
     Arc::new(butterfly) as Arc<dyn Fft<T>>
 }
 
-fn wrap_fft_some<T: FFTnum>(butterfly: impl Fft<T> + 'static) -> Option<Arc<dyn Fft<T>>> {
-    Some(Arc::new(butterfly) as Arc<dyn Fft<T>>)
-}
-
 /// repreesnts a FFT plan, stored as a base FFT and a stack of MixedRadix*xn on top of it.
 #[derive(Debug)]
 pub struct MixedRadixPlan {
@@ -82,26 +78,22 @@ impl<T: FFTnum> FftPlannerAvx<T> {
     }
 
     fn plan_and_construct_new_fft(&mut self, len: usize) -> Arc<dyn Fft<T>> {
-        if let Some(butterfly) = self.try_construct_butterfly(len) {
-            butterfly
-        } else {
-            let factors = PartialFactors::compute(len);
-            let base = self.plan_mixed_radix_base(len, &factors);
+        let factors = PartialFactors::compute(len);
+        let base = self.plan_mixed_radix_base(len, &factors);
 
-            // it's possible that the base planner plans out the whole FFT. it's guaranteed if `len` is a prime number, for example
-            let plan = if base.len == len {
-                base
-            } else {
-                let radix_factors = factors.divide_by(&PartialFactors::compute(base.len)).unwrap_or_else(|| panic!("Invalid base for FFT length={}, base={:?}, base radixes={:?}", len, base.base, base.radixes));
-                self.plan_mixed_radix(radix_factors, base)
-            };
-            self.construct_plan(plan)
-        }
+        // it's possible that the base planner plans out the whole FFT. it's guaranteed if `len` is a prime number, or if it's a butterfly, for example
+        let plan = if base.len == len {
+            base
+        } else {
+            let radix_factors = factors.divide_by(&PartialFactors::compute(base.len)).unwrap_or_else(|| panic!("Invalid base for FFT length={}, base={:?}, base radixes={:?}", len, base.base, base.radixes));
+            self.plan_mixed_radix(radix_factors, base)
+        };
+        self.construct_plan(plan)
     }
 
     fn plan_mixed_radix(&self, mut radix_factors: PartialFactors, mut plan: MixedRadixPlan) -> MixedRadixPlan {
         // if we can complete the FFT with a single radix, do it
-        if [2,3,4,6,8,9,12,16].contains(&radix_factors.product()) {
+        if [2,3,4,5,6,7,8,9,12,16].contains(&radix_factors.product()) {
             plan.push_radix(radix_factors.product() as u8)
         } else {
             // it's helpful to think of this process as rewriting the FFT length as powers of our radixes
@@ -115,7 +107,7 @@ impl<T: FFTnum> FftPlannerAvx<T> {
             // we're going to hypothetically add as many 12's to our plan as possible, keeping track of how many 6's were required to balance things out
             // we can also compute this analytically with modular arithmetic, but that technique only works when the FFT is above a minimum size, but this loop+array technique always works
             let max_twelves = min(radix_factors.get_power2() / 2, radix_factors.get_power3());
-            let mut required_sixes = [None; 4]; // only track 6^0 through 6^3. 6^4 can be converted into 12^2 * 9, which will be faster
+            let mut required_sixes = [None; 4]; // only track 6^0 through 6^3. 6^4 can be converted into 12^2 * 9, and 6^5 can be converted into 12^1
             for hypothetical_twelve_power in 0..(max_twelves+1) {
                 let hypothetical_twos = radix_factors.get_power2() - hypothetical_twelve_power * 2;
                 let hypothetical_threes = radix_factors.get_power3() - hypothetical_twelve_power;
@@ -162,7 +154,7 @@ impl<T: FFTnum> FftPlannerAvx<T> {
             radix_factors = radix_factors.divide_by(&PartialFactors::compute(6usize.pow(power_six) * 12usize.pow(power_twelve))).unwrap();
 
             // now that we know the 12 and 6 factors, the plan array can be computed in descending radix size
-            if radix_factors.get_power2() % 3 == 1 {
+            if radix_factors.get_power2() > 1 && radix_factors.get_power2() % 3 == 1 {
                 // our factors of 2 might not quite be a power of 8 -- our 12 loop tried its best, but if we are a power of 2, it can't help. 
                 // if we're 2 * 8^N, benchmarking shows that applying a 16 before our chain of 8s is very fast.
                 plan.push_radix(16); 
@@ -171,16 +163,22 @@ impl<T: FFTnum> FftPlannerAvx<T> {
             plan.push_radix_power(12, power_twelve);
             plan.push_radix_power(9, radix_factors.get_power3() / 2);
             plan.push_radix_power(8, radix_factors.get_power2() / 3);
+            plan.push_radix_power(7, radix_factors.get_power7());
             plan.push_radix_power(6, power_six);
+            plan.push_radix_power(5, radix_factors.get_power5());
             if radix_factors.get_power2() % 3 == 2 {
                 // our factors of 2 might not quite be a power of 8 -- our 12 loop tried its best, but if we are a power of 2, it can't help. 
-                // if we're 4 * 8^N, benchmarking shows that applying a 8 to the end our chain of 8s is very fast.
+                // if we're 4 * 8^N, benchmarking shows that applying a 4 to the end our chain of 8s is very fast.
                 plan.push_radix(4);
             }
             if radix_factors.get_power3() % 2 == 1 {
                 // our factors of 3 might not quite be a power of 9 -- our 12 loop tried its best, but if we are a power of 3, it can't help. 
                 // if we're 3 * 9^N, our only choice is to add an 8xn step
                 plan.push_radix(3);
+            }
+            if radix_factors.get_power2() % 3 == 1 {
+                // our factors of 2 might not quite be a power of 8. We tried to correct this with a 16 radix and 4 radix, but as a last resort, apply a 2. 2 is very slow, but it's better than not computing the FFT
+                plan.push_radix(2);
             }
 
             // measurement opportunity: is it faster to let the 12+6 loop put a 4 on the end instead of relying on all 8's?
@@ -211,7 +209,8 @@ impl<T: FFTnum> FftPlannerAvx<T> {
     }
 
     fn construct_base(&mut self, len: usize) -> Arc<dyn Fft<T>> {
-        if let Some(butterfly) = self.try_construct_butterfly(len) {
+        if self.is_butterfly(len) {
+            let butterfly = self.construct_butterfly(len);
             self.algorithm_cache.insert(len, Arc::clone(&butterfly));
             return butterfly;
         }
@@ -237,7 +236,9 @@ pub trait MakeFftAvx<T: FFTnum> {
     // todo: if we ever have a core plan type that ins't mixed radix, this could return an enum
     fn plan_mixed_radix_base(&self, len: usize, factors: &PartialFactors) -> MixedRadixPlan;
 
-    fn try_construct_butterfly(&mut self, len: usize) -> Option<Arc<dyn Fft<T>>>;
+    fn is_butterfly(&self, len: usize) -> bool;
+
+    fn construct_butterfly(&mut self, len: usize) -> Arc<dyn Fft<T>>;
     fn construct_radix_chain(&mut self, chain: &[u8], base: Arc<dyn Fft<T>>) -> Arc<dyn Fft<T>>;
     fn construct_bluesteins(&mut self, len: usize) -> Arc<dyn Fft<T>>;
     fn construct_raders(&mut self, len: usize) -> Arc<dyn Fft<T>>;
@@ -246,7 +247,9 @@ pub trait MakeFftAvx<T: FFTnum> {
 impl<T: FFTnum> MakeFftAvx<T> for FftPlannerAvx<T> {
     default fn plan_mixed_radix_base(&self, _len: usize, _factors: &PartialFactors) -> MixedRadixPlan { unimplemented!(); }
 
-    default fn try_construct_butterfly(&mut self, _len: usize) -> Option<Arc<dyn Fft<T>>> { unimplemented!(); }
+    default fn is_butterfly(&self, _len: usize) -> bool { unimplemented!(); }
+
+    default fn construct_butterfly(&mut self, _len: usize) -> Arc<dyn Fft<T>> { unimplemented!(); }
     default fn construct_radix_chain(&mut self, _chain: &[u8], _base: Arc<dyn Fft<T>>) -> Arc<dyn Fft<T>> { unimplemented!(); }
     default fn construct_bluesteins(&mut self, _len: usize) -> Arc<dyn Fft<T>> { unimplemented!(); }
     default fn construct_raders(&mut self, len: usize) -> Arc<dyn Fft<T>> {
@@ -264,9 +267,20 @@ impl<T: FFTnum> MakeFftAvx<T> for FftPlannerAvx<T> {
 
 impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
     fn plan_mixed_radix_base(&self, len: usize, factors: &PartialFactors) -> MixedRadixPlan { 
+        // if we have a factor that can't be computed with 2xn 3xn etc, we'll have to compute it with bluestein's or rader's, so use that as the base
+        if factors.get_other_factors() > 1 {
+            return MixedRadixPlan::new(factors.get_other_factors(), &[]);
+        }
+
+        // If the power2 * power3 component of this FFT is a butterfly, return that directly. Also return if len is 0 or 1
+        let power2power3 = factors.product_power2power3();
+        if len < 2 || (power2power3 > 1 && self.is_butterfly(power2power3)) {
+            return MixedRadixPlan::new(power2power3, &[]);
+        }
+
         // most of this code is heuristics assuming FFTs of a minimum size. if the FFT is below that minimum size, the heuristics break down.
         // so the first thing we're going to do is hardcode the plan for osme specific sizes where we know the heuristics won't be enough
-        let hardcoded_base = match factors.product() {
+        let hardcoded_base = match power2power3 {
             // 2^n special cases
             128 => Some(MixedRadixPlan::new(32, &[4])), // 2^7
 
@@ -287,10 +301,7 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
             return hardcoded;
         }
 
-        if factors.get_other_factors() > 1 {
-            // if we have a factor that can't be computed with 2xn 3xn etc, we'll have to compute it with bluestein's or rader's, so use that as the base
-            MixedRadixPlan::new(factors.get_other_factors(), &[])
-        } else if factors.get_power3() < 3 {
+        if factors.get_power2() >= 5 {
             match factors.get_power3() {
                 // if this FFT is a power of 2, our strategy here is to tweak the butterfly to free us up to do an 8xn chain
                 0 => match factors.get_power2() % 3 {
@@ -306,16 +317,12 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
                     2 => MixedRadixPlan::new(64, &[]),
                     _ => unreachable!(),
                 },
-                // if this FFT is 9 times a power of 2, our strategy here is to tweak butterflies to make it easier to set up a 8xn chain
-                2 => match factors.get_power2() % 3 {
-                    0 => MixedRadixPlan::new(72, &[]),
-                    1 => MixedRadixPlan::new(72, &[16]),
-                    2 => MixedRadixPlan::new(72, &[]),
-                    _ => unreachable!(),
-                },
-                _ => unreachable!(),
+                // if this FFT is 9 or greater times a power of 2, just use 72. As you might expect, in this vast field of options, what is optimal becomes a lot more muddy and situational
+                // but across all the benchmarking i've done, 72 seems like the best default that will get us the best plan in 95% of the cases
+                // 64, 54, and 48 are occasionally faster, although i haven't been able to discern a pattern.
+                _ => MixedRadixPlan::new(72, &[]),
             }
-        } else if factors.get_power2() < 5 {
+        } else if factors.get_power3() >= 3 {
             // Our FFT is a power of 3 times a low power of 2. A high level summary of our strategy is that we want to pick a base that will 
             // A: consume all factors of 2, and B: leave us with an even power of 3, so that we can do a 9xn chain.
             match factors.get_power2() {
@@ -336,38 +343,50 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
                     1 => MixedRadixPlan::new(if factors.get_power3() > 9 { 48 } else { 72 }, &[]),
                     _ => unreachable!(),
                 },
-                _ => unreachable!(),
+                // if this FFT is 32 or greater times a power of 3, just use 72. As you might expect, in this vast field of options, what is optimal becomes a lot more muddy and situational
+                // but across all the benchmarking i've done, 72 seems like the best default that will get us the best plan in 95% of the cases
+                // 64, 54, and 48 are occasionally faster, although i haven't been able to discern a pattern.
+                _ => MixedRadixPlan::new(72, &[]),
             }
+        }
+        // If this FFT has powers of 5, use that
+        else if factors.get_power5() > 0 {
+            MixedRadixPlan::new(5, &[])
+        }
+        // If this FFT has powers of 7, use that
+        else if factors.get_power7() > 0 {
+            MixedRadixPlan::new(7, &[])
         } else {
-            // this FFT is 2^n * 3^m, where N >= 5 and M >= 3. As you might expect, in this vast field of options, what is optimal becomes a lot more muddy and situational
-            // but across all the benchmarking i've done, 72 seems like the best default that will get us the best plan in 95% of the cases
-            // 64, 54, and 48 are occasionally faster, although i haven't been able to discern a pattern.
-            MixedRadixPlan::new(72, &[])
+            panic!("Couldn't find a base for FFT size {}, factors={:?}", len, factors)
         }
     }
 
-    fn try_construct_butterfly(&mut self, len: usize) -> Option<Arc<dyn Fft<f32>>> {
+    fn is_butterfly(&self, len: usize) -> bool {
+        [0,1,2,3,4,5,6,7,8,9,12,16,24,27,32,36,48,54,64,72].contains(&len)
+    }
+
+    fn construct_butterfly(&mut self, len: usize) -> Arc<dyn Fft<f32>> {
         match len {
-            0|1 =>  wrap_fft_some(DFT::new(len, self.inverse)),
-            2 =>    wrap_fft_some(Butterfly2::new(self.inverse)),
-            3 =>    wrap_fft_some(Butterfly3::new(self.inverse)),
-            4 =>    wrap_fft_some(Butterfly4::new(self.inverse)),
-            5 =>    wrap_fft_some(Butterfly5Avx::new(self.inverse).unwrap()),
-            6 =>    wrap_fft_some(Butterfly6::new(self.inverse)),
-            7 =>    wrap_fft_some(Butterfly7Avx::new(self.inverse).unwrap()),
-            8 =>    wrap_fft_some(Butterfly8Avx::new(self.inverse).unwrap()),
-            9 =>    wrap_fft_some(Butterfly9Avx::new(self.inverse).unwrap()),
-            12 =>   wrap_fft_some(Butterfly12Avx::new(self.inverse).unwrap()),
-            16 =>   wrap_fft_some(Butterfly16Avx::new(self.inverse).unwrap()),
-            24 =>   wrap_fft_some(Butterfly24Avx::new(self.inverse).unwrap()),
-            27 =>   wrap_fft_some(Butterfly27Avx::new(self.inverse).unwrap()),
-            32 =>   wrap_fft_some(Butterfly32Avx::new(self.inverse).unwrap()),
-            36 =>   wrap_fft_some(Butterfly36Avx::new(self.inverse).unwrap()),
-            48 =>   wrap_fft_some(Butterfly48Avx::new(self.inverse).unwrap()),
-            54 =>   wrap_fft_some(Butterfly54Avx::new(self.inverse).unwrap()),
-            64 =>   wrap_fft_some(Butterfly64Avx::new(self.inverse).unwrap()),
-            72 =>   wrap_fft_some(Butterfly72Avx::new(self.inverse).unwrap()),
-            _ => None
+            0|1 =>  wrap_fft(DFT::new(len, self.inverse)),
+            2 =>    wrap_fft(Butterfly2::new(self.inverse)),
+            3 =>    wrap_fft(Butterfly3::new(self.inverse)),
+            4 =>    wrap_fft(Butterfly4::new(self.inverse)),
+            5 =>    wrap_fft(Butterfly5Avx::new(self.inverse).unwrap()),
+            6 =>    wrap_fft(Butterfly6::new(self.inverse)),
+            7 =>    wrap_fft(Butterfly7Avx::new(self.inverse).unwrap()),
+            8 =>    wrap_fft(Butterfly8Avx::new(self.inverse).unwrap()),
+            9 =>    wrap_fft(Butterfly9Avx::new(self.inverse).unwrap()),
+            12 =>   wrap_fft(Butterfly12Avx::new(self.inverse).unwrap()),
+            16 =>   wrap_fft(Butterfly16Avx::new(self.inverse).unwrap()),
+            24 =>   wrap_fft(Butterfly24Avx::new(self.inverse).unwrap()),
+            27 =>   wrap_fft(Butterfly27Avx::new(self.inverse).unwrap()),
+            32 =>   wrap_fft(Butterfly32Avx::new(self.inverse).unwrap()),
+            36 =>   wrap_fft(Butterfly36Avx::new(self.inverse).unwrap()),
+            48 =>   wrap_fft(Butterfly48Avx::new(self.inverse).unwrap()),
+            54 =>   wrap_fft(Butterfly54Avx::new(self.inverse).unwrap()),
+            64 =>   wrap_fft(Butterfly64Avx::new(self.inverse).unwrap()),
+            72 =>   wrap_fft(Butterfly72Avx::new(self.inverse).unwrap()),
+            _ => panic!("Invalid butterfly len: {}", len)
         }
     }
     fn construct_radix_chain(&mut self, chain: &[u8], base: Arc<dyn Fft<f32>>) -> Arc<dyn Fft<f32>> { 
@@ -444,10 +463,21 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
 
 
 impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
-    fn plan_mixed_radix_base(&self, _len: usize, factors: &PartialFactors) -> MixedRadixPlan { 
+    fn plan_mixed_radix_base(&self, len: usize, factors: &PartialFactors) -> MixedRadixPlan {
+        // if we have a factor that can't be computed with 2xn 3xn etc, we'll have to compute it with bluestein's or rader's, so use that as the base
+        if factors.get_other_factors() > 1 {
+            return MixedRadixPlan::new(factors.get_other_factors(), &[]);
+        }
+
+        // If the power2 * power3 component of this FFT is a butterfly, return that directly. Also return if len is 0 or 1
+        let power2power3 = factors.product_power2power3();
+        if len < 2 || (power2power3 > 1 && self.is_butterfly(power2power3)) {
+            return MixedRadixPlan::new(power2power3, &[]);
+        }
+
         // most of this code is heuristics assuming FFTs of a minimum size. if the FFT is below that minimum size, the heuristics break down.
         // so the first thing we're going to do is hardcode the plan for osme specific sizes where we know the heuristics won't be enough
-        let hardcoded_base = match factors.product() {
+        let hardcoded_base = match power2power3 {
             // 2^n special cases
             64 => Some(MixedRadixPlan::new(16, &[4])), // 2^6
 
@@ -458,7 +488,7 @@ impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
 
             // 9 * 2^n special cases
             72 => Some(MixedRadixPlan::new(24, &[3])), // 2^3 * 3^2
-            288 => Some(MixedRadixPlan::new(32, &[9])), // 2^3 * 3^2
+            288 => Some(MixedRadixPlan::new(32, &[9])), // 2^5 * 3^2
 
             // 4 * 3^n special cases
             108 => Some(MixedRadixPlan::new(18, &[6])), // 2^4 * 3^2
@@ -468,10 +498,7 @@ impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
             return hardcoded;
         }
 
-        if factors.get_other_factors() > 1 {
-            // todo: if we're just 2*other_factors, we might want to return the whole FFT as the base to hand it off to bluestein's
-            MixedRadixPlan::new(factors.get_other_factors(), &[])
-        } else if factors.get_power3() < 3 {
+        if factors.get_power2() >= 4 {
             match factors.get_power3() {
                 // if this FFT is a power of 2, our strategy here is to tweak the butterfly to free us up to do an 8xn chain
                 0 => match factors.get_power2() % 3 {
@@ -494,11 +521,12 @@ impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
                     2 => MixedRadixPlan::new(18, &[]),
                     _ => unreachable!(),
                 },
-                // this FFT is 2^n * 3^m, where M >= 3, we're just going to use use the largest multiple-of-3 butterfly we can, which usually ends up meaning 48
-                // TODO: benchmarking shows that for large FFTs, 64, 32, and 24 might be situationally faster, but for now 48 is a very reasonable default
-                _ => unreachable!(),
+                // this FFT is 27 or greater times a power of two. As you might expect, in this vast field of options, what is optimal becomes a lot more muddy and situational
+                // but across all the benchmarking i've done, 36 seems like the best default that will get us the best plan in 95% of the cases
+                // 32 is rarely faster, although i haven't been able to discern a pattern.
+                _ => MixedRadixPlan::new(36, &[])
             }
-        } else if factors.get_power2() < 4 {
+        } else if factors.get_power3() >= 3 {
             // Our FFT is a power of 3 times a low power of 2
             match factors.get_power2() {
                 0 => match factors.get_power3() % 2 {
@@ -513,36 +541,47 @@ impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
                     _ => unreachable!(),
                 },
                 3 => MixedRadixPlan::new(18, &[]),
-                _ => unreachable!(),
+                // this FFT is 16 or greater times a power of three. As you might expect, in this vast field of options, what is optimal becomes a lot more muddy and situational
+                // but across all the benchmarking i've done, 36 seems like the best default that will get us the best plan in 95% of the cases
+                // 32 is rarely faster, although i haven't been able to discern a pattern.
+                _ => MixedRadixPlan::new(36, &[])
             }
+        } 
+        // If this FFT has powers of 5, use that
+        else if factors.get_power5() > 0 {
+            MixedRadixPlan::new(5, &[])
+        }
+        // If this FFT has powers of 7, use that
+        else if factors.get_power7() > 0 {
+            MixedRadixPlan::new(7, &[])
         } else {
-            // this FFT is 2^n * 3^m, where N >= 5 and M >= 3. As you might expect, in this vast field of options, what is optimal becomes a lot more muddy and situational
-            // but across all the benchmarking i've done, 48 seems like the best default that will get us the best plan in 95% of the cases
-            // 54 is rarely faster, although i haven't been able to discern a pattern.
-            // for example, as of this writing, for 2^7 * 3^10, switching the base from 48 to 64 results in a 10% faster FFT generated by the planner.
-            MixedRadixPlan::new(36, &[])
+            panic!("Couldn't find a base for FFT size {}, factors={:?}", len, factors)
         }
     }
 
-    fn try_construct_butterfly(&mut self, len: usize) -> Option<Arc<dyn Fft<f64>>> {
+    fn is_butterfly(&self, len: usize) -> bool {
+        [0,1,2,3,4,5,6,7,8,9,12,16,18,24,27,32,36].contains(&len)
+    }
+
+    fn construct_butterfly(&mut self, len: usize) -> Arc<dyn Fft<f64>> {
         match len {
-            0|1 =>  wrap_fft_some(DFT::new(len, self.inverse)),
-            2 =>    wrap_fft_some(Butterfly2::new(self.inverse)),
-            3 =>    wrap_fft_some(Butterfly3::new(self.inverse)),
-            4 =>    wrap_fft_some(Butterfly4::new(self.inverse)),
-            5 =>    wrap_fft_some(Butterfly5Avx64::new(self.inverse).unwrap()),
-            6 =>    wrap_fft_some(Butterfly6::new(self.inverse)),
-            7 =>    wrap_fft_some(Butterfly7Avx64::new(self.inverse).unwrap()),
-            8 =>    wrap_fft_some(Butterfly8Avx64::new(self.inverse).unwrap()),
-            9 =>    wrap_fft_some(Butterfly9Avx64::new(self.inverse).unwrap()),
-            12 =>   wrap_fft_some(Butterfly12Avx64::new(self.inverse).unwrap()),
-            16 =>   wrap_fft_some(Butterfly16Avx64::new(self.inverse).unwrap()),
-            18 =>   wrap_fft_some(Butterfly18Avx64::new(self.inverse).unwrap()),
-            24 =>   wrap_fft_some(Butterfly24Avx64::new(self.inverse).unwrap()),
-            27 =>   wrap_fft_some(Butterfly27Avx64::new(self.inverse).unwrap()),
-            32 =>   wrap_fft_some(Butterfly32Avx64::new(self.inverse).unwrap()),
-            36 =>   wrap_fft_some(Butterfly36Avx64::new(self.inverse).unwrap()),
-            _ => None
+            0|1 =>  wrap_fft(DFT::new(len, self.inverse)),
+            2 =>    wrap_fft(Butterfly2::new(self.inverse)),
+            3 =>    wrap_fft(Butterfly3::new(self.inverse)),
+            4 =>    wrap_fft(Butterfly4::new(self.inverse)),
+            5 =>    wrap_fft(Butterfly5Avx64::new(self.inverse).unwrap()),
+            6 =>    wrap_fft(Butterfly6::new(self.inverse)),
+            7 =>    wrap_fft(Butterfly7Avx64::new(self.inverse).unwrap()),
+            8 =>    wrap_fft(Butterfly8Avx64::new(self.inverse).unwrap()),
+            9 =>    wrap_fft(Butterfly9Avx64::new(self.inverse).unwrap()),
+            12 =>   wrap_fft(Butterfly12Avx64::new(self.inverse).unwrap()),
+            16 =>   wrap_fft(Butterfly16Avx64::new(self.inverse).unwrap()),
+            18 =>   wrap_fft(Butterfly18Avx64::new(self.inverse).unwrap()),
+            24 =>   wrap_fft(Butterfly24Avx64::new(self.inverse).unwrap()),
+            27 =>   wrap_fft(Butterfly27Avx64::new(self.inverse).unwrap()),
+            32 =>   wrap_fft(Butterfly32Avx64::new(self.inverse).unwrap()),
+            36 =>   wrap_fft(Butterfly36Avx64::new(self.inverse).unwrap()),
+            _ => panic!("Invalid butterfly len: {}", len)
         }
     }
     fn construct_radix_chain(&mut self, chain: &[u8], base: Arc<dyn Fft<f64>>) -> Arc<dyn Fft<f64>> { 

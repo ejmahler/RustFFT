@@ -22,7 +22,9 @@ fn bench_planned_f32(b: &mut Bencher, len: usize) {
 
     let mut buffer = vec![Complex::zero(); len];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
-    b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch); });
+    b.iter(|| {
+        fft.process_inplace_with_scratch(&mut buffer, &mut scratch); 
+    });
 }
 
 
@@ -39,6 +41,12 @@ fn bench_planned_f32(b: &mut Bencher, len: usize) {
 #[bench] fn planned32_p2_01048576(b: &mut Bencher) { bench_planned_f32(b,  1048576); }
 #[bench] fn planned32_p2_16777216(b: &mut Bencher) { bench_planned_f32(b, 16777216); }
 
+
+// Powers of 5
+#[bench] fn planned32_p5_00125(b: &mut Bencher) { bench_planned_f32(b, 125); }
+#[bench] fn planned32_p5_00625(b: &mut Bencher) { bench_planned_f32(b, 625); }
+#[bench] fn planned32_p5_03125(b: &mut Bencher) { bench_planned_f32(b, 3125); }
+#[bench] fn planned32_p5_15625(b: &mut Bencher) { bench_planned_f32(b, 15625); }
 
 // Powers of 7
 #[bench] fn planned32_p7_00343(b: &mut Bencher) { bench_planned_f32(b,   343); }
@@ -701,6 +709,55 @@ fn bench_mixed_6xn_avx(b: &mut Bencher, len: usize) {
 #[bench] fn mixed_6xn_avx__0082944(b: &mut Bencher) { bench_mixed_6xn_avx(b, 82944); }
 #[bench] fn mixed_6xn_avx__0497664(b: &mut Bencher) { bench_mixed_6xn_avx(b, 497664); }
 #[bench] fn mixed_6xn_avx__1492992(b: &mut Bencher) { bench_mixed_6xn_avx(b, 1492992); }
+
+fn get_7xn_avx(len: usize) -> Arc<dyn Fft<f32>> {
+    match len {
+        7 => Arc::new(Butterfly7Avx::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+        _ => {
+            let inner = get_7xn_avx(len / 7);
+            Arc::new(MixedRadix7xnAvx::new(inner).expect("Can't run benchmark because this machine doesn't have the required instruction sets"))
+        }
+    }
+}
+
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_mixed_7xn_avx(b: &mut Bencher, len: usize) {
+    assert!(len % 7 == 0);
+    let fft = get_7xn_avx(len);
+
+    let mut buffer = vec![Zero::zero(); len];
+    let mut scratch = vec![Zero::zero(); fft.get_inplace_scratch_len()];
+    b.iter(|| {
+        fft.process_inplace_with_scratch(&mut buffer, &mut scratch);
+    });
+}
+
+#[bench] fn mixed_7xn_avx__0000049(b: &mut Bencher) { bench_mixed_7xn_avx(b, 49); }
+#[bench] fn mixed_7xn_avx__0000343(b: &mut Bencher) { bench_mixed_7xn_avx(b, 343); }
+#[bench] fn mixed_7xn_avx__0002401(b: &mut Bencher) { bench_mixed_7xn_avx(b, 2401); }
+#[bench] fn mixed_7xn_avx__0016807(b: &mut Bencher) { bench_mixed_7xn_avx(b, 16807); }
+#[bench] fn mixed_7xn_avx__0390625(b: &mut Bencher) { bench_mixed_7xn_avx(b, 117649); }
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_bluesteins_7xn_avx(b: &mut Bencher, len: usize) {
+    assert!(len % 7 == 0);
+    let fft = plan_new_bluesteins_f32(len);
+
+    let mut buffer = vec![Zero::zero(); len];
+    let mut scratch = vec![Zero::zero(); fft.get_inplace_scratch_len()];
+    b.iter(|| {
+        fft.process_inplace_with_scratch(&mut buffer, &mut scratch);
+    });
+}
+
+#[bench] fn bluesteins_7xn_avx__0000049(b: &mut Bencher) { bench_bluesteins_7xn_avx(b, 49); }
+#[bench] fn bluesteins_7xn_avx__0000343(b: &mut Bencher) { bench_bluesteins_7xn_avx(b, 343); }
+#[bench] fn bluesteins_7xn_avx__0002401(b: &mut Bencher) { bench_bluesteins_7xn_avx(b, 2401); }
+#[bench] fn bluesteins_7xn_avx__0016807(b: &mut Bencher) { bench_bluesteins_7xn_avx(b, 16807); }
+#[bench] fn bluesteins_7xn_avx__0390625(b: &mut Bencher) { bench_bluesteins_7xn_avx(b, 117649); }
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to Rader's algorithm
