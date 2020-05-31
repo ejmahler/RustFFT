@@ -179,8 +179,8 @@ impl Butterfly5Avx64<f64> {
         let [mid14, mid23] = avx64_utils::transpose_2x2_f64([sum12, rotated43]);
 
         // to compute the first output, compute the sum of all elements. mid14[0] and mid23[0] already have the sum of 1+4 and 2+3 respectively, so if we add them, we'll get the sum of all 4
-        let sum1234 = AvxVector::add(_mm256_castpd256_pd128(mid14), _mm256_castpd256_pd128(mid23));
-        let output0 = AvxVector::add(_mm256_castpd256_pd128(input0), sum1234);
+        let sum1234 = AvxVector::add(mid14.lo(), mid23.lo());
+        let output0 = AvxVector::add(input0.lo(), sum1234);
         
         // apply twiddle factors
         let twiddled_outer14 = AvxVector::mul(mid14, self.twiddles[0]);

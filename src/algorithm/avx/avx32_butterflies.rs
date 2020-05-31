@@ -2,7 +2,6 @@ use std::marker::PhantomData;
 use std::arch::x86_64::*;
 
 use num_complex::Complex;
-use num_traits::Zero;
 
 use crate::common::FFTnum;
 
@@ -258,9 +257,9 @@ impl Butterfly7Avx<f32> {
 
         let [mid1634, mid25] = AvxVector::unpack_complex([sum123, rotated654]);
 
-        let mid16 = _mm256_castps256_ps128(mid1634);
-        let mid25 = _mm256_castps256_ps128(mid25);
-        let mid34 = _mm256_extractf128_ps(mid1634, 1);
+        let mid16 = mid1634.lo();
+        let mid25 = mid25.lo();
+        let mid34 = mid1634.hi();
 
         // to compute the first output, compute the sum of all elements. mid16[0], mid25[0], and mid34[0] already have the sum of 1+6, 2+5 and 3+4 respectively, so if we add them, we'll get 1+2+3+4+5+6
         let output0_left  = AvxVector::add(mid16, mid25);
@@ -357,20 +356,18 @@ impl Butterfly8Avx<f32> {
 
         // Which negative we blend in depends on whether we're forward or inverse
         // Our goal is to swap the reals with the imaginaries, then negate either the reals or the imaginaries, based on whether we're an inverse or not
+        // but we can't use the AvxVector swap_complex_components function, because we only want to swap the odd reals with the odd imaginaries
         let elements_swapped = _mm256_permute_ps(postbutterfly1_pretwiddle, 0xB4);
 
         // We can negate the elements we want by xoring the row with a pre-set vector
-        let postbutterfly1 = _mm256_xor_ps(elements_swapped, self.twiddles_butterfly4);
+        let postbutterfly1 = AvxVector::xor(elements_swapped, self.twiddles_butterfly4);
 
         // use unpack instructions to transpose, and to prepare for the final butterfly 2's
         let unpermuted0 = _mm256_permute2f128_ps(postbutterfly0, postbutterfly1, 0x20);
         let unpermuted1 = _mm256_permute2f128_ps(postbutterfly0, postbutterfly1, 0x31);
-        let unpacked0 = _mm256_unpacklo_ps(unpermuted0, unpermuted1);
-        let unpacked1 = _mm256_unpackhi_ps(unpermuted0, unpermuted1);
-        let swapped0 = _mm256_permute_ps(unpacked0, 0xD8);
-        let swapped1 = _mm256_permute_ps(unpacked1, 0xD8);
+        let unpacked = AvxVector::unpack_complex([unpermuted0, unpermuted1]);
 
-        let [output0, output1] = AvxVector::column_butterfly2([swapped0, swapped1]);
+        let [output0, output1] = AvxVector::column_butterfly2(unpacked);
 
         output.store_complex(output0, 0);
         output.store_complex(output1, 4);
@@ -451,16 +448,12 @@ impl Butterfly9Avx<f32> {
         output.store_complex(packed1, 4);
 
         // merge just the high element of swapped_lo into the high element of row 0
-        let empty = AvxVector::zero();
-        let swapped1_lo = _mm256_extractf128_ps(swapped1, 0x0);
-        let zero_swapped1_lo = _mm256_insertf128_ps(empty, swapped1_lo, 0x1);
+        let zero_swapped1_lo = AvxVector256::merge(AvxVector::zero(), swapped1.lo());
         let packed0 = _mm256_blend_ps(output_rows[0], zero_swapped1_lo, 0xC0);
         output.store_complex(packed0, 0);
 
-        // rather than trying to rearrange the last element with AVX registers, just write the register to the stack and copy normally
-        let mut dump_output2 = [Complex::zero(); 4];
-        dump_output2.store_complex(output_rows[2], 0);
-        output.store(dump_output2[2], 8);
+        // The last element can just be written on its own
+        output.store_partial1_complex(output_rows[2].hi(), 8);
     }
 }
 
