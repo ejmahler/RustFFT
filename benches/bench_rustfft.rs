@@ -992,6 +992,9 @@ fn bench_butterfly32(b: &mut Bencher, len: usize) {
 #[bench] fn butterfly32_54(b: &mut Bencher) { bench_butterfly32(b, 54); }
 #[bench] fn butterfly32_64(b: &mut Bencher) { bench_butterfly32(b, 64); }
 #[bench] fn butterfly32_72(b: &mut Bencher) { bench_butterfly32(b, 72); }
+#[bench] fn butterfly32_128(b: &mut Bencher) { bench_butterfly32(b, 128); }
+#[bench] fn butterfly32_256(b: &mut Bencher) { bench_butterfly32(b, 256); }
+#[bench] fn butterfly32_512(b: &mut Bencher) { bench_butterfly32(b, 512); }
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length

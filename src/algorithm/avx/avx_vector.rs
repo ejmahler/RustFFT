@@ -23,6 +23,7 @@ pub trait AvxVector : Copy + Debug + Send + Sync {
     unsafe fn add(left: Self, right: Self) -> Self;
     unsafe fn sub(left: Self, right: Self) -> Self;
     unsafe fn xor(left: Self, right: Self) -> Self;
+    unsafe fn neg(self) -> Self;
     unsafe fn mul(left: Self, right: Self) -> Self;
     unsafe fn fmadd(left: Self, right: Self, add: Self) -> Self;
     unsafe fn fnmadd(left: Self, right: Self, add: Self) -> Self;
@@ -90,11 +91,11 @@ pub trait AvxVector : Copy + Debug + Send + Sync {
 
     #[inline(always)]
     unsafe fn rotate90(self, rotation: Rotation90<Self>) -> Self {
-        // Our goal is to swap the reals with the imaginaries, then negate either the reals or the imaginaries, based on whether we're an inverse or not
-        let elements_swapped = Self::swap_complex_components(self);
-
         // Use the pre-computed vector stored in the Rotation90 instance to negate either the reals or imaginaries
-        Self::xor(elements_swapped, rotation.0)
+        let negated = Self::xor(self, rotation.0);
+
+        // Our goal is to swap the reals with the imaginaries, then negate either the reals or the imaginaries, based on whether we're an inverse or not
+        Self::swap_complex_components(negated)
     }
 
 
@@ -555,13 +556,13 @@ pub trait AvxVector128 : AvxVector {
 }
 
 #[inline(always)]
-unsafe fn apply_butterfly8_twiddle1<V: AvxVector>(input: V, rotation: Rotation90<V>) -> V {
+pub unsafe fn apply_butterfly8_twiddle1<V: AvxVector>(input: V, rotation: Rotation90<V>) -> V {
     let rotated = input.rotate90(rotation);
     let combined = V::add(rotated, input);
     V::mul(V::half_root2(), combined)
 }
 #[inline(always)]
-unsafe fn apply_butterfly8_twiddle3<V: AvxVector>(input: V, rotation: Rotation90<V>) -> V {
+pub unsafe fn apply_butterfly8_twiddle3<V: AvxVector>(input: V, rotation: Rotation90<V>) -> V {
     let rotated = input.rotate90(rotation);
     let combined = V::sub(rotated, input);
     V::mul(V::half_root2(), combined)
@@ -595,6 +596,10 @@ impl AvxVector for __m256 {
     #[inline(always)]
     unsafe fn xor(left: Self, right: Self) -> Self {
         _mm256_xor_ps(left, right)
+    }
+    #[inline(always)]
+    unsafe fn neg(self) -> Self {
+        _mm256_xor_ps(self, _mm256_broadcast_ss(&-0.0))
     }
     #[inline(always)]
     unsafe fn add(left: Self, right: Self) -> Self {
@@ -659,9 +664,9 @@ impl AvxVector for __m256 {
     #[inline(always)]
     unsafe fn make_rotation90(inverse: bool) -> Rotation90<Self> {
         if !inverse {
-            Rotation90(Self::broadcast_complex_elements(Complex::new(0.0, -0.0)))
-        } else {
             Rotation90(Self::broadcast_complex_elements(Complex::new(-0.0, 0.0)))
+        } else {
+            Rotation90(Self::broadcast_complex_elements(Complex::new(0.0, -0.0)))
         }
     }
 
@@ -907,6 +912,10 @@ impl AvxVector for __m128 {
         _mm_xor_ps(left, right)
     }
     #[inline(always)]
+    unsafe fn neg(self) -> Self {
+        _mm_xor_ps(self, _mm_broadcast_ss(&-0.0))
+    }
+    #[inline(always)]
     unsafe fn add(left: Self, right: Self) -> Self {
         _mm_add_ps(left, right)
     }
@@ -968,9 +977,9 @@ impl AvxVector for __m128 {
     #[inline(always)]
     unsafe fn make_rotation90(inverse: bool) -> Rotation90<Self> {
         if !inverse {
-            Rotation90(Self::broadcast_complex_elements(Complex::new(0.0, -0.0)))
-        } else {
             Rotation90(Self::broadcast_complex_elements(Complex::new(-0.0, 0.0)))
+        } else {
+            Rotation90(Self::broadcast_complex_elements(Complex::new(0.0, -0.0)))
         }
     }
     #[inline(always)]
@@ -1135,6 +1144,10 @@ impl AvxVector for __m256d {
         _mm256_xor_pd(left, right)
     }
     #[inline(always)]
+    unsafe fn neg(self) -> Self {
+        _mm256_xor_pd(self, _mm256_broadcast_sd(&-0.0))
+    }
+    #[inline(always)]
     unsafe fn add(left: Self, right: Self) -> Self {
         _mm256_add_pd(left, right)
     }
@@ -1188,9 +1201,9 @@ impl AvxVector for __m256d {
     #[inline(always)]
     unsafe fn make_rotation90(inverse: bool) -> Rotation90<Self> {
         if !inverse {
-            Rotation90(Self::broadcast_complex_elements(Complex::new(0.0, -0.0)))
-        } else {
             Rotation90(Self::broadcast_complex_elements(Complex::new(-0.0, 0.0)))
+        } else {
+            Rotation90(Self::broadcast_complex_elements(Complex::new(0.0, -0.0)))
         }
     }
     #[inline(always)]
@@ -1383,6 +1396,10 @@ impl AvxVector for __m128d {
         _mm_xor_pd(left, right)
     }
     #[inline(always)]
+    unsafe fn neg(self) -> Self {
+        _mm_xor_pd(self, _mm_load1_pd(&-0.0))
+    }
+    #[inline(always)]
     unsafe fn add(left: Self, right: Self) -> Self {
         _mm_add_pd(left, right)
     }
@@ -1437,9 +1454,9 @@ impl AvxVector for __m128d {
     #[inline(always)]
     unsafe fn make_rotation90(inverse: bool) -> Rotation90<Self> {
         if !inverse {
-            Rotation90(Self::broadcast_complex_elements(Complex::new(0.0, -0.0)))
-        } else {
             Rotation90(Self::broadcast_complex_elements(Complex::new(-0.0, 0.0)))
+        } else {
+            Rotation90(Self::broadcast_complex_elements(Complex::new(0.0, -0.0)))
         }
     }
     #[inline(always)]
@@ -1596,5 +1613,51 @@ impl<T: FFTnum> AvxArrayMut<T> for RawSliceMut<Complex<T>> {
     unsafe fn store_partial3_complex(&mut self, data: T::AvxType, index: usize) {
         debug_assert!(self.len() >= index + 3);
         T::AvxType::store_partial3_complex(self.as_mut_ptr().add(index), data)
+    }
+}
+
+
+// A custom butterfly-16 function that calls a lambda to load/store data instead of taking an array 
+// This is particularly useful for butterfly 16, because the whole problem doesn't fit into registers, and the compiler isn't smart enough to only load data when it's needed
+// So the version that takes an array ends up loading data and immediately re-storing it on the stack. By lazily loading and storing exactly when we need to, we can avoid some data reshuffling
+#[inline(always)]
+pub unsafe fn column_butterfly16_loadfn<V: AvxVector, LoadFn: FnMut(usize) -> V, StoreFn: FnMut(V, usize)>(mut load_fn: LoadFn, mut store_fn: StoreFn, twiddles: [V; 2], rotation: Rotation90<V>) {
+    // Algorithm: 4x4 mixed radix
+
+    use super::avx_vector;
+
+    // Size-4 FFTs down the columns
+    let input0 = [load_fn(0), load_fn(4), load_fn(8), load_fn(12)];
+    let mid0     = V::column_butterfly4(input0, rotation);
+
+    let input1 = [load_fn(1), load_fn(5), load_fn(9), load_fn(13)];
+    let mut mid1 = V::column_butterfly4(input1, rotation);
+
+    mid1[1] = V::mul_complex(mid1[1], twiddles[0]);
+    mid1[2] = avx_vector::apply_butterfly8_twiddle1(mid1[2], rotation);
+    mid1[3] = V::mul_complex(mid1[3], twiddles[1]);
+    
+    let input2 = [load_fn(2), load_fn(6), load_fn(10), load_fn(14)];
+    let mut mid2 = V::column_butterfly4(input2, rotation);
+    
+    mid2[1] = avx_vector::apply_butterfly8_twiddle1(mid2[1], rotation);
+    mid2[2] = mid2[2].rotate90(rotation);
+    mid2[3] = avx_vector::apply_butterfly8_twiddle3(mid2[3], rotation);
+
+    let input3 = [load_fn(3), load_fn(7), load_fn(11), load_fn(15)];
+    let mut mid3 = V::column_butterfly4(input3, rotation);
+    
+    mid3[1] = V::mul_complex(mid3[1], twiddles[1]);
+    mid3[2] = avx_vector::apply_butterfly8_twiddle3(mid3[2], rotation);
+    mid3[3] = V::mul_complex(mid3[3], twiddles[0].neg());
+
+    // All of the data is now in the right format to just do a bunch of butterfly 8's.
+    // Write the data out to the final output as we go so that the compiler can stop worrying about finding stack space for it
+    for i in 0..4 {
+        let output = V::column_butterfly4([mid0[i], mid1[i], mid2[i], mid3[i]], rotation);
+        store_fn(output[0], i);
+        store_fn(output[1], i + 4);
+        store_fn(output[2], i + 8);
+        store_fn(output[3], i + 12);
     }
 }

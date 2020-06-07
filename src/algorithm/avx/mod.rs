@@ -117,6 +117,9 @@ pub use self::avx32_butterflies::{
     Butterfly54Avx,
     Butterfly64Avx,
     Butterfly72Avx,
+    Butterfly128Avx,
+    Butterfly256Avx,
+    Butterfly512Avx,
 };
 
 pub use self::avx64_butterflies::{

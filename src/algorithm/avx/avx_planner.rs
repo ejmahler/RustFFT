@@ -281,9 +281,6 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
         // most of this code is heuristics assuming FFTs of a minimum size. if the FFT is below that minimum size, the heuristics break down.
         // so the first thing we're going to do is hardcode the plan for osme specific sizes where we know the heuristics won't be enough
         let hardcoded_base = match power2power3 {
-            // 2^n special cases
-            128 => Some(MixedRadixPlan::new(32, &[4])), // 2^7
-
             // 3 * 2^n special cases
             96 => Some(MixedRadixPlan::new(32, &[3])), // 2^5 * 3
             192 => Some(MixedRadixPlan::new(48, &[4])), // 2^6 * 3
@@ -305,9 +302,9 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
             match factors.get_power3() {
                 // if this FFT is a power of 2, our strategy here is to tweak the butterfly to free us up to do an 8xn chain
                 0 => match factors.get_power2() % 3 {
-                    0 => MixedRadixPlan::new(64, &[]),
-                    1 => MixedRadixPlan::new(64, &[16]),
-                    2 => MixedRadixPlan::new(32, &[]),
+                    0 => MixedRadixPlan::new(512, &[]),
+                    1 => MixedRadixPlan::new(256, &[]),
+                    2 => MixedRadixPlan::new(256, &[]),
                     _ => unreachable!(),
                 },
                 // if this FFT is 3 times a power of 2, our strategy here is to tweak butterflies to make it easier to set up a 8xn chain
@@ -362,7 +359,7 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
     }
 
     fn is_butterfly(&self, len: usize) -> bool {
-        [0,1,2,3,4,5,6,7,8,9,12,16,24,27,32,36,48,54,64,72].contains(&len)
+        [0,1,2,3,4,5,6,7,8,9,12,16,24,27,32,36,48,54,64,72,128,256,512].contains(&len)
     }
 
     fn construct_butterfly(&mut self, len: usize) -> Arc<dyn Fft<f32>> {
@@ -386,6 +383,9 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
             54 =>   wrap_fft(Butterfly54Avx::new(self.inverse).unwrap()),
             64 =>   wrap_fft(Butterfly64Avx::new(self.inverse).unwrap()),
             72 =>   wrap_fft(Butterfly72Avx::new(self.inverse).unwrap()),
+            128 =>  wrap_fft(Butterfly128Avx::new(self.inverse).unwrap()),
+            256 =>  wrap_fft(Butterfly256Avx::new(self.inverse).unwrap()),
+            512 =>  wrap_fft(Butterfly512Avx::new(self.inverse).unwrap()),
             _ => panic!("Invalid butterfly len: {}", len)
         }
     }

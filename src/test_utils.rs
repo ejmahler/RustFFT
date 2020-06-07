@@ -36,6 +36,19 @@ pub fn compare_vectors<T: FFTnum + Float>(vec1: &[Complex<T>], vec2: &[Complex<T
     return (error.to_f64().unwrap() / vec1.len() as f64) < 0.1f64;
 }
 
+#[allow(unused)]
+fn transppose_diagnostic<T: FFTnum + Float>(expected: &[Complex<T>], actual: &[Complex<T>]) {
+    for (i, (&e, &a)) in expected.iter().zip(actual.iter()).enumerate() {
+        if (e - a).norm().to_f32().unwrap() > 0.01 {
+            if let Some(found_index) = expected.iter().position(|&ev| (ev - a).norm().to_f32().unwrap() < 0.01) {
+                println!("{} incorrectly contained {}", i, found_index);
+            } else {
+                println!("{} X", i);
+            }
+        }
+    }
+}
+
 pub fn check_fft_algorithm<T: FFTnum + Float>(fft: &dyn Fft<T>, len: usize, inverse: bool) {
     assert_eq!(fft.len(), len, "Algorithm reported incorrect size. Expected {}, got {}", len, fft.len());
     assert_eq!(fft.is_inverse(), inverse, "Algorithm reported incorrect inverse value");
@@ -61,8 +74,6 @@ pub fn check_fft_algorithm<T: FFTnum + Float>(fft: &dyn Fft<T>, len: usize, inve
         for (input_chunk, output_chunk) in input.chunks_mut(len).zip(output.chunks_mut(len)) {
             fft.process(input_chunk, output_chunk);
         }
-        dbg!(&expected_output[..len]);
-        dbg!(&output[..len]);
         assert!(compare_vectors(&expected_output, &output), "process() failed, length = {}, inverse = {}", len, inverse);
     }
     
