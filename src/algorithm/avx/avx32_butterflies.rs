@@ -1394,9 +1394,9 @@ impl Butterfly128Avx<f32> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn row_butterflies(&self, input: RawSlice<Complex<f32>>, mut output: RawSliceMut<Complex<f32>>) {
         // butterfly 16's down the columns of our transposed array
-        for columnset in 0..2 {
-            avx_vector::column_butterfly16_loadfn(
-                |index| input.load_complex(columnset*4 + index*8),
+        for columnset in 0usize..2 {
+            column_butterfly16_loadfn!(
+                |index: usize| input.load_complex(columnset*4 + index*8),
                 |data, index| output.store_complex(data, columnset*4 + index*8),
                 self.twiddles_butterfly16,
                 self.twiddles_butterfly4

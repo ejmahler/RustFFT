@@ -89,6 +89,7 @@ macro_rules! boilerplate_fft_commondata {
     )
 }
 
+#[macro_use]
 mod avx_vector;
 
 mod avx32_utils;

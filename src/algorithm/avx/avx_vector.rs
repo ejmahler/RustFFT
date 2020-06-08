@@ -1620,44 +1620,41 @@ impl<T: FFTnum> AvxArrayMut<T> for RawSliceMut<Complex<T>> {
 // A custom butterfly-16 function that calls a lambda to load/store data instead of taking an array 
 // This is particularly useful for butterfly 16, because the whole problem doesn't fit into registers, and the compiler isn't smart enough to only load data when it's needed
 // So the version that takes an array ends up loading data and immediately re-storing it on the stack. By lazily loading and storing exactly when we need to, we can avoid some data reshuffling
-#[inline(always)]
-pub unsafe fn column_butterfly16_loadfn<V: AvxVector, LoadFn: FnMut(usize) -> V, StoreFn: FnMut(V, usize)>(mut load_fn: LoadFn, mut store_fn: StoreFn, twiddles: [V; 2], rotation: Rotation90<V>) {
-    // Algorithm: 4x4 mixed radix
+macro_rules! column_butterfly16_loadfn{
+    ($load_expr: expr, $store_expr: expr, $twiddles: expr, $rotation: expr) => (
+        // Size-4 FFTs down the columns
+        let input0 = [$load_expr(0), $load_expr(4), $load_expr(8), $load_expr(12)];
+        let mid0     = AvxVector::column_butterfly4(input0, $rotation);
 
-    use super::avx_vector;
+        let input1 = [$load_expr(1), $load_expr(5), $load_expr(9), $load_expr(13)];
+        let mut mid1 = AvxVector::column_butterfly4(input1, $rotation);
 
-    // Size-4 FFTs down the columns
-    let input0 = [load_fn(0), load_fn(4), load_fn(8), load_fn(12)];
-    let mid0     = V::column_butterfly4(input0, rotation);
+        mid1[1] = AvxVector::mul_complex(mid1[1], $twiddles[0]);
+        mid1[2] = avx_vector::apply_butterfly8_twiddle1(mid1[2], $rotation);
+        mid1[3] = AvxVector::mul_complex(mid1[3], $twiddles[1]);
+        
+        let input2 = [$load_expr(2), $load_expr(6), $load_expr(10), $load_expr(14)];
+        let mut mid2 = AvxVector::column_butterfly4(input2, $rotation);
+        
+        mid2[1] = avx_vector::apply_butterfly8_twiddle1(mid2[1], $rotation);
+        mid2[2] = mid2[2].rotate90($rotation);
+        mid2[3] = avx_vector::apply_butterfly8_twiddle3(mid2[3], $rotation);
 
-    let input1 = [load_fn(1), load_fn(5), load_fn(9), load_fn(13)];
-    let mut mid1 = V::column_butterfly4(input1, rotation);
+        let input3 = [$load_expr(3), $load_expr(7), $load_expr(11), $load_expr(15)];
+        let mut mid3 = AvxVector::column_butterfly4(input3, $rotation);
+        
+        mid3[1] = AvxVector::mul_complex(mid3[1], $twiddles[1]);
+        mid3[2] = avx_vector::apply_butterfly8_twiddle3(mid3[2], $rotation);
+        mid3[3] = AvxVector::mul_complex(mid3[3], $twiddles[0].neg());
 
-    mid1[1] = V::mul_complex(mid1[1], twiddles[0]);
-    mid1[2] = avx_vector::apply_butterfly8_twiddle1(mid1[2], rotation);
-    mid1[3] = V::mul_complex(mid1[3], twiddles[1]);
-    
-    let input2 = [load_fn(2), load_fn(6), load_fn(10), load_fn(14)];
-    let mut mid2 = V::column_butterfly4(input2, rotation);
-    
-    mid2[1] = avx_vector::apply_butterfly8_twiddle1(mid2[1], rotation);
-    mid2[2] = mid2[2].rotate90(rotation);
-    mid2[3] = avx_vector::apply_butterfly8_twiddle3(mid2[3], rotation);
-
-    let input3 = [load_fn(3), load_fn(7), load_fn(11), load_fn(15)];
-    let mut mid3 = V::column_butterfly4(input3, rotation);
-    
-    mid3[1] = V::mul_complex(mid3[1], twiddles[1]);
-    mid3[2] = avx_vector::apply_butterfly8_twiddle3(mid3[2], rotation);
-    mid3[3] = V::mul_complex(mid3[3], twiddles[0].neg());
-
-    // All of the data is now in the right format to just do a bunch of butterfly 8's.
-    // Write the data out to the final output as we go so that the compiler can stop worrying about finding stack space for it
-    for i in 0..4 {
-        let output = V::column_butterfly4([mid0[i], mid1[i], mid2[i], mid3[i]], rotation);
-        store_fn(output[0], i);
-        store_fn(output[1], i + 4);
-        store_fn(output[2], i + 8);
-        store_fn(output[3], i + 12);
-    }
+        // All of the data is now in the right format to just do a bunch of butterfly 8's.
+        // Write the data out to the final output as we go so that the compiler can stop worrying about finding stack space for it
+        for i in 0..4 {
+            let output = AvxVector::column_butterfly4([mid0[i], mid1[i], mid2[i], mid3[i]], $rotation);
+            $store_expr(output[0], i);
+            $store_expr(output[1], i + 4);
+            $store_expr(output[2], i + 8);
+            $store_expr(output[3], i + 12);
+        }
+    )
 }
