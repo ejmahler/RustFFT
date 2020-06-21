@@ -58,6 +58,7 @@
 //! Elements in the output are ordered by ascending frequency, with the first element corresponding to frequency 0.
 
 #![feature(specialization)]
+#![feature(maybe_uninit_uninit_array, maybe_uninit_slice_assume_init, maybe_uninit_slice)]
 
 pub extern crate num_complex;
 pub extern crate num_traits;
