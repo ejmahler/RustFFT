@@ -502,9 +502,9 @@ impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
             match factors.get_power3() {
                 // if this FFT is a power of 2, our strategy here is to tweak the butterfly to free us up to do an 8xn chain
                 0 => match factors.get_power2() % 3 {
-                    0 => MixedRadixPlan::new(32, &[16]),
-                    1 => MixedRadixPlan::new(32, &[]),
-                    2 => MixedRadixPlan::new(16, &[]),
+                    0 => MixedRadixPlan::new(512, &[]),
+                    1 => MixedRadixPlan::new(128, &[]),
+                    2 => MixedRadixPlan::new(256, &[]),
                     _ => unreachable!(),
                 },
                 // if this FFT is 3 times a power of 2, our strategy here is to tweak butterflies to make it easier to set up a 8xn chain
@@ -560,7 +560,7 @@ impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
     }
 
     fn is_butterfly(&self, len: usize) -> bool {
-        [0,1,2,3,4,5,6,7,8,9,12,16,18,24,27,32,36].contains(&len)
+        [0,1,2,3,4,5,6,7,8,9,12,16,18,24,27,32,36,64,128,256,512].contains(&len)
     }
 
     fn construct_butterfly(&mut self, len: usize) -> Arc<dyn Fft<f64>> {
@@ -581,6 +581,10 @@ impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
             27 =>   wrap_fft(Butterfly27Avx64::new(self.inverse).unwrap()),
             32 =>   wrap_fft(Butterfly32Avx64::new(self.inverse).unwrap()),
             36 =>   wrap_fft(Butterfly36Avx64::new(self.inverse).unwrap()),
+            64 =>   wrap_fft(Butterfly64Avx64::new(self.inverse).unwrap()),
+            128 =>   wrap_fft(Butterfly128Avx64::new(self.inverse).unwrap()),
+            256 =>   wrap_fft(Butterfly256Avx64::new(self.inverse).unwrap()),
+            512 =>   wrap_fft(Butterfly512Avx64::new(self.inverse).unwrap()),
             _ => panic!("Invalid butterfly len: {}", len)
         }
     }

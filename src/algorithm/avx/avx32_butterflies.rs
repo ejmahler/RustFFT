@@ -1472,8 +1472,8 @@ impl Butterfly256Avx<f32> {
     unsafe fn row_butterflies(&self, input: RawSlice<Complex<f32>>, mut output: RawSliceMut<Complex<f32>>) {
         // butterfly 32's down the columns
         for columnset in 0..2 {
-            avx_vector::column_butterfly32_loadfn(
-                |index| input.load_complex(columnset*4 + index*8),
+            column_butterfly32_loadfn!(
+                |index: usize| input.load_complex(columnset*4 + index*8),
                 |data, index| output.store_complex(data, columnset*4 + index*8),
                 self.twiddles_butterfly32,
                 self.twiddles_butterfly4
@@ -1574,8 +1574,8 @@ impl Butterfly512Avx<f32> {
     unsafe fn row_butterflies(&self, input: RawSlice<Complex<f32>>, mut output: RawSliceMut<Complex<f32>>) {
         // butterfly 32's down the columns
         for columnset in 0..4 {
-            avx_vector::column_butterfly32_loadfn(
-                |index| input.load_complex(columnset*4 + index*16),
+            column_butterfly32_loadfn!(
+                |index: usize| input.load_complex(columnset*4 + index*16),
                 |data, index| output.store_complex(data, columnset*4 + index*16),
                 self.twiddles_butterfly32,
                 self.twiddles_butterfly4

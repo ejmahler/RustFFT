@@ -134,7 +134,11 @@ pub use self::avx64_butterflies::{
     Butterfly24Avx64,
     Butterfly27Avx64,
     Butterfly32Avx64,
-    Butterfly36Avx64
+    Butterfly36Avx64,
+    Butterfly64Avx64,
+    Butterfly128Avx64,
+    Butterfly256Avx64,
+    Butterfly512Avx64,
 };
 
 pub use self::avx_bluesteins::BluesteinsAvx;

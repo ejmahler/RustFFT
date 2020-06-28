@@ -133,7 +133,7 @@ fn generate_3n2m_comparison_benchmarks_32(_: &mut test::Bencher) {
     let big_butterfly_sizes = [ 128, 256, 512 ]; 
     let butterfly_sizes = [ 72, 36, 48, 54, 64, 32 ]; 
     let last_ditch_butterflies = [ 27, 9 ]; 
-    let available_radixes = [FftSize::new(3), FftSize::new(4), FftSize::new(6), FftSize::new(8), FftSize::new(9), FftSize::new(12), FftSize::new(16)];
+    let available_radixes = [FftSize::new(3), FftSize::new(4), FftSize::new(6), FftSize::new(8), FftSize::new(9), FftSize::new(12), FftSize::new(16), FftSize::new(32)];
 
     let max_len : usize = 1 << 21;
     let min_len = 64;
@@ -173,25 +173,24 @@ fn generate_3n2m_comparison_benchmarks_32(_: &mut test::Bencher) {
 #[ignore]
 #[bench]
 fn generate_3n2m_comparison_benchmarks_64(_: &mut test::Bencher) {
-    let butterfly_sizes = [ 36, 32, 27, 24, 18, 16, 12 ]; 
-    let last_ditch_butterflies = [ 8, 9 ]; 
-    let available_radixes = [FftSize::new(3), FftSize::new(4), FftSize::new(6), FftSize::new(8), FftSize::new(9), FftSize::new(12), FftSize::new(16)];
+    let butterfly_sizes = [ 512, 256, 128, 64, 36, 27, 24, 18, 12 ]; 
+    let last_ditch_butterflies = [ 32, 16, 8, 9 ]; 
+    let available_radixes = [FftSize::new(3), FftSize::new(4), FftSize::new(6), FftSize::new(8), FftSize::new(9), FftSize::new(12)];
 
-    let max_len : usize = 1 << 20;
+    let max_len : usize = 1 << 21;
     let min_len = 64;
     let max_power2 = max_len.trailing_zeros();
     let max_power3 = (max_len as f32).log(3.0).ceil() as u32;
 
-    for power3 in 1..2 {
+    for power3 in 0..1 {
         for power2 in 3..max_power2 {
             let len = 3usize.pow(power3) << power2;
             if len > max_len { continue; }
 
-            let planned_fft : Arc<dyn Fft<f32>> = rustfft::FFTplanner::new(false).plan_fft(len);
-
-            let butterfly_sizes : &[usize] = &butterfly_sizes;
+            //let planned_fft : Arc<dyn Fft<f32>> = rustfft::FFTplanner::new(false).plan_fft(len);
 
             // we want to catalog all the different possible ways there are to compute a FFT of size `len`
+            // we can do that by recursively looping over each radix, dividing our length by that radix, then recursively trying rach radix again
             // we can do that by recursively looping over each radix, dividing our length by that radix, then recursively trying rach radix again
             let mut strategies = vec![];
             let mut last_ditch_strategies = vec![];
@@ -425,6 +424,10 @@ fn compare_fft_f64(b: &mut Bencher, strategy: &[usize]) {
         27 =>   wrap_fft(Butterfly27Avx64::new(false).unwrap()),
         32 =>   wrap_fft(Butterfly32Avx64::new(false).unwrap()),
         36 =>   wrap_fft(Butterfly36Avx64::new(false).unwrap()),
+        64 =>   wrap_fft(Butterfly64Avx64::new(false).unwrap()),
+        128=>   wrap_fft(Butterfly128Avx64::new(false).unwrap()),
+        256=>   wrap_fft(Butterfly256Avx64::new(false).unwrap()),
+        512=>   wrap_fft(Butterfly512Avx64::new(false).unwrap()),
         _ => unimplemented!()
     };
 
@@ -505,79 +508,32 @@ fn bench_planned_raders_f32(b: &mut Bencher, len: usize) {
     b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch); });
 }
 
-
-#[bench] fn comparef32__2power07__3power00__len00000128__32_4(b: &mut Bencher) { compare_fft_f32(b, &[32,4]); }
-#[bench] fn comparef32__2power07__3power00__len00000128__128(b: &mut Bencher) { compare_fft_f32(b, &[128]); }
-#[bench] fn comparef32__2power08__3power00__len00000256__64_4(b: &mut Bencher) { compare_fft_f32(b, &[64,4]); }
-#[bench] fn comparef32__2power08__3power00__len00000256__32_8(b: &mut Bencher) { compare_fft_f32(b, &[32,8]); }
-#[bench] fn comparef32__2power08__3power00__len00000256__256(b: &mut Bencher) { compare_fft_f32(b, &[256]); }
-#[bench] fn comparef32__2power09__3power00__len00000512__64_8(b: &mut Bencher) { compare_fft_f32(b, &[64,8]); }
-#[bench] fn comparef32__2power09__3power00__len00000512__32_16(b: &mut Bencher) { compare_fft_f32(b, &[32,16]); }
-#[bench] fn comparef32__2power09__3power00__len00000512__512(b: &mut Bencher) { compare_fft_f32(b, &[512]); }
-#[bench] fn comparef32__2power10__3power00__len00001024__32_8_4(b: &mut Bencher) { compare_fft_f32(b, &[32,8,4]); }
-#[bench] fn comparef32__2power10__3power00__len00001024__64_16(b: &mut Bencher) { compare_fft_f32(b, &[64,16]); }
-#[bench] fn comparef32__2power10__3power00__len00001024__256_4(b: &mut Bencher) { compare_fft_f32(b, &[256,4]); }
-#[bench] fn comparef32__2power10__3power00__len00001024__128_8(b: &mut Bencher) { compare_fft_f32(b, &[128,8]); }
-#[bench] fn comparef32__2power11__3power00__len00002048__64_8_4(b: &mut Bencher) { compare_fft_f32(b, &[64,8,4]); }
-#[bench] fn comparef32__2power11__3power00__len00002048__32_8_8(b: &mut Bencher) { compare_fft_f32(b, &[32,8,8]); }
-#[bench] fn comparef32__2power11__3power00__len00002048__512_4(b: &mut Bencher) { compare_fft_f32(b, &[512,4]); }
-#[bench] fn comparef32__2power11__3power00__len00002048__256_8(b: &mut Bencher) { compare_fft_f32(b, &[256,8]); }
-#[bench] fn comparef32__2power11__3power00__len00002048__128_16(b: &mut Bencher) { compare_fft_f32(b, &[128,16]); }
-#[bench] fn comparef32__2power12__3power00__len00004096__64_8_8(b: &mut Bencher) { compare_fft_f32(b, &[64,8,8]); }
-#[bench] fn comparef32__2power12__3power00__len00004096__32_16_8(b: &mut Bencher) { compare_fft_f32(b, &[32,16,8]); }
-#[bench] fn comparef32__2power12__3power00__len00004096__32_8_16(b: &mut Bencher) { compare_fft_f32(b, &[32,8,16]); }
-#[bench] fn comparef32__2power12__3power00__len00004096__128_8_4(b: &mut Bencher) { compare_fft_f32(b, &[128,8,4]); }
-#[bench] fn comparef32__2power12__3power00__len00004096__512_8(b: &mut Bencher) { compare_fft_f32(b, &[512,8]); }
-#[bench] fn comparef32__2power12__3power00__len00004096__256_16(b: &mut Bencher) { compare_fft_f32(b, &[256,16]); }
-#[bench] fn comparef32__2power13__3power00__len00008192__32_8_8_4(b: &mut Bencher) { compare_fft_f32(b, &[32,8,8,4]); }
-#[bench] fn comparef32__2power13__3power00__len00008192__64_16_8(b: &mut Bencher) { compare_fft_f32(b, &[64,16,8]); }
-#[bench] fn comparef32__2power13__3power00__len00008192__64_8_16(b: &mut Bencher) { compare_fft_f32(b, &[64,8,16]); }
-#[bench] fn comparef32__2power13__3power00__len00008192__256_8_4(b: &mut Bencher) { compare_fft_f32(b, &[256,8,4]); }
-#[bench] fn comparef32__2power13__3power00__len00008192__128_8_8(b: &mut Bencher) { compare_fft_f32(b, &[128,8,8]); }
-#[bench] fn comparef32__2power13__3power00__len00008192__512_16(b: &mut Bencher) { compare_fft_f32(b, &[512,16]); }
-#[bench] fn comparef32__2power14__3power00__len00016384__64_8_8_4(b: &mut Bencher) { compare_fft_f32(b, &[64,8,8,4]); }
-#[bench] fn comparef32__2power14__3power00__len00016384__32_8_8_8(b: &mut Bencher) { compare_fft_f32(b, &[32,8,8,8]); }
-#[bench] fn comparef32__2power14__3power00__len00016384__512_8_4(b: &mut Bencher) { compare_fft_f32(b, &[512,8,4]); }
-#[bench] fn comparef32__2power14__3power00__len00016384__256_8_8(b: &mut Bencher) { compare_fft_f32(b, &[256,8,8]); }
-#[bench] fn comparef32__2power14__3power00__len00016384__128_16_8(b: &mut Bencher) { compare_fft_f32(b, &[128,16,8]); }
-#[bench] fn comparef32__2power14__3power00__len00016384__128_8_16(b: &mut Bencher) { compare_fft_f32(b, &[128,8,16]); }
-#[bench] fn comparef32__2power15__3power00__len00032768__64_8_8_8(b: &mut Bencher) { compare_fft_f32(b, &[64,8,8,8]); }
-#[bench] fn comparef32__2power15__3power00__len00032768__32_16_8_8(b: &mut Bencher) { compare_fft_f32(b, &[32,16,8,8]); }
-#[bench] fn comparef32__2power15__3power00__len00032768__32_8_8_16(b: &mut Bencher) { compare_fft_f32(b, &[32,8,8,16]); }
-#[bench] fn comparef32__2power15__3power00__len00032768__128_8_8_4(b: &mut Bencher) { compare_fft_f32(b, &[128,8,8,4]); }
-#[bench] fn comparef32__2power15__3power00__len00032768__512_8_8(b: &mut Bencher) { compare_fft_f32(b, &[512,8,8]); }
-#[bench] fn comparef32__2power15__3power00__len00032768__256_16_8(b: &mut Bencher) { compare_fft_f32(b, &[256,16,8]); }
-#[bench] fn comparef32__2power15__3power00__len00032768__256_8_16(b: &mut Bencher) { compare_fft_f32(b, &[256,8,16]); }
-#[bench] fn comparef32__2power16__3power00__len00065536__32_8_8_8_4(b: &mut Bencher) { compare_fft_f32(b, &[32,8,8,8,4]); }
-#[bench] fn comparef32__2power16__3power00__len00065536__64_16_8_8(b: &mut Bencher) { compare_fft_f32(b, &[64,16,8,8]); }
-#[bench] fn comparef32__2power16__3power00__len00065536__64_8_8_16(b: &mut Bencher) { compare_fft_f32(b, &[64,8,8,16]); }
-#[bench] fn comparef32__2power16__3power00__len00065536__256_8_8_4(b: &mut Bencher) { compare_fft_f32(b, &[256,8,8,4]); }
-#[bench] fn comparef32__2power16__3power00__len00065536__128_8_8_8(b: &mut Bencher) { compare_fft_f32(b, &[128,8,8,8]); }
-#[bench] fn comparef32__2power16__3power00__len00065536__512_16_8(b: &mut Bencher) { compare_fft_f32(b, &[512,16,8]); }
-#[bench] fn comparef32__2power16__3power00__len00065536__512_8_16(b: &mut Bencher) { compare_fft_f32(b, &[512,8,16]); }
-#[bench] fn comparef32__2power17__3power00__len00131072__64_8_8_8_4(b: &mut Bencher) { compare_fft_f32(b, &[64,8,8,8,4]); }
-#[bench] fn comparef32__2power17__3power00__len00131072__32_8_8_8_8(b: &mut Bencher) { compare_fft_f32(b, &[32,8,8,8,8]); }
-#[bench] fn comparef32__2power17__3power00__len00131072__512_8_8_4(b: &mut Bencher) { compare_fft_f32(b, &[512,8,8,4]); }
-#[bench] fn comparef32__2power17__3power00__len00131072__256_8_8_8(b: &mut Bencher) { compare_fft_f32(b, &[256,8,8,8]); }
-#[bench] fn comparef32__2power17__3power00__len00131072__128_16_8_8(b: &mut Bencher) { compare_fft_f32(b, &[128,16,8,8]); }
-#[bench] fn comparef32__2power17__3power00__len00131072__128_8_8_16(b: &mut Bencher) { compare_fft_f32(b, &[128,8,8,16]); }
-#[bench] fn comparef32__2power18__3power00__len00262144__64_8_8_8_8(b: &mut Bencher) { compare_fft_f32(b, &[64,8,8,8,8]); }
-#[bench] fn comparef32__2power18__3power00__len00262144__32_16_8_8_8(b: &mut Bencher) { compare_fft_f32(b, &[32,16,8,8,8]); }
-#[bench] fn comparef32__2power18__3power00__len00262144__32_8_8_8_16(b: &mut Bencher) { compare_fft_f32(b, &[32,8,8,8,16]); }
-#[bench] fn comparef32__2power18__3power00__len00262144__128_8_8_8_4(b: &mut Bencher) { compare_fft_f32(b, &[128,8,8,8,4]); }
-#[bench] fn comparef32__2power18__3power00__len00262144__512_8_8_8(b: &mut Bencher) { compare_fft_f32(b, &[512,8,8,8]); }
-#[bench] fn comparef32__2power18__3power00__len00262144__256_16_8_8(b: &mut Bencher) { compare_fft_f32(b, &[256,16,8,8]); }
-#[bench] fn comparef32__2power18__3power00__len00262144__256_8_8_16(b: &mut Bencher) { compare_fft_f32(b, &[256,8,8,16]); }
-#[bench] fn comparef32__2power19__3power00__len00524288__32_8_8_8_8_4(b: &mut Bencher) { compare_fft_f32(b, &[32,8,8,8,8,4]); }
-#[bench] fn comparef32__2power19__3power00__len00524288__64_16_8_8_8(b: &mut Bencher) { compare_fft_f32(b, &[64,16,8,8,8]); }
-#[bench] fn comparef32__2power19__3power00__len00524288__64_8_8_8_16(b: &mut Bencher) { compare_fft_f32(b, &[64,8,8,8,16]); }
-#[bench] fn comparef32__2power19__3power00__len00524288__256_8_8_8_4(b: &mut Bencher) { compare_fft_f32(b, &[256,8,8,8,4]); }
-#[bench] fn comparef32__2power19__3power00__len00524288__128_8_8_8_8(b: &mut Bencher) { compare_fft_f32(b, &[128,8,8,8,8]); }
-#[bench] fn comparef32__2power19__3power00__len00524288__512_16_8_8(b: &mut Bencher) { compare_fft_f32(b, &[512,16,8,8]); }
-#[bench] fn comparef32__2power19__3power00__len00524288__512_8_8_16(b: &mut Bencher) { compare_fft_f32(b, &[512,8,8,16]); }
-#[bench] fn comparef32__2power20__3power00__len01048576__64_8_8_8_8_4(b: &mut Bencher) { compare_fft_f32(b, &[64,8,8,8,8,4]); }
-#[bench] fn comparef32__2power20__3power00__len01048576__32_8_8_8_8_8(b: &mut Bencher) { compare_fft_f32(b, &[32,8,8,8,8,8]); }
-#[bench] fn comparef32__2power20__3power00__len01048576__512_8_8_8_4(b: &mut Bencher) { compare_fft_f32(b, &[512,8,8,8,4]); }
-#[bench] fn comparef32__2power20__3power00__len01048576__256_8_8_8_8(b: &mut Bencher) { compare_fft_f32(b, &[256,8,8,8,8]); }
-#[bench] fn comparef32__2power20__3power00__len01048576__128_16_8_8_8(b: &mut Bencher) { compare_fft_f32(b, &[128,16,8,8,8]); }
-#[bench] fn comparef32__2power20__3power00__len01048576__128_8_8_8_16(b: &mut Bencher) { compare_fft_f32(b, &[128,8,8,8,16]); }
+#[bench] fn comparef64__2power03__3power00__len00000008__8(b: &mut Bencher) { compare_fft_f64(b, &[8]); }
+#[bench] fn comparef64__2power04__3power00__len00000016__16(b: &mut Bencher) { compare_fft_f64(b, &[16]); }
+#[bench] fn comparef64__2power05__3power00__len00000032__32(b: &mut Bencher) { compare_fft_f64(b, &[32]); }
+#[bench] fn comparef64__2power06__3power00__len00000064__64(b: &mut Bencher) { compare_fft_f64(b, &[64]); }
+#[bench] fn comparef64__2power07__3power00__len00000128__128(b: &mut Bencher) { compare_fft_f64(b, &[128]); }
+#[bench] fn comparef64__2power08__3power00__len00000256__256(b: &mut Bencher) { compare_fft_f64(b, &[256]); }
+#[bench] fn comparef64__2power09__3power00__len00000512__512(b: &mut Bencher) { compare_fft_f64(b, &[512]); }
+#[bench] fn comparef64__2power10__3power00__len00001024__256_4(b: &mut Bencher) { compare_fft_f64(b, &[256,4]); }
+#[bench] fn comparef64__2power10__3power00__len00001024__128_8(b: &mut Bencher) { compare_fft_f64(b, &[128,8]); }
+#[bench] fn comparef64__2power11__3power00__len00002048__512_4(b: &mut Bencher) { compare_fft_f64(b, &[512,4]); }
+#[bench] fn comparef64__2power11__3power00__len00002048__256_8(b: &mut Bencher) { compare_fft_f64(b, &[256,8]); }
+#[bench] fn comparef64__2power12__3power00__len00004096__128_8_4(b: &mut Bencher) { compare_fft_f64(b, &[128,8,4]); }
+#[bench] fn comparef64__2power12__3power00__len00004096__512_8(b: &mut Bencher) { compare_fft_f64(b, &[512,8]); }
+#[bench] fn comparef64__2power13__3power00__len00008192__256_8_4(b: &mut Bencher) { compare_fft_f64(b, &[256,8,4]); }
+#[bench] fn comparef64__2power13__3power00__len00008192__128_8_8(b: &mut Bencher) { compare_fft_f64(b, &[128,8,8]); }
+#[bench] fn comparef64__2power14__3power00__len00016384__512_8_4(b: &mut Bencher) { compare_fft_f64(b, &[512,8,4]); }
+#[bench] fn comparef64__2power14__3power00__len00016384__256_8_8(b: &mut Bencher) { compare_fft_f64(b, &[256,8,8]); }
+#[bench] fn comparef64__2power15__3power00__len00032768__128_8_8_4(b: &mut Bencher) { compare_fft_f64(b, &[128,8,8,4]); }
+#[bench] fn comparef64__2power15__3power00__len00032768__512_8_8(b: &mut Bencher) { compare_fft_f64(b, &[512,8,8]); }
+#[bench] fn comparef64__2power16__3power00__len00065536__256_8_8_4(b: &mut Bencher) { compare_fft_f64(b, &[256,8,8,4]); }
+#[bench] fn comparef64__2power16__3power00__len00065536__128_8_8_8(b: &mut Bencher) { compare_fft_f64(b, &[128,8,8,8]); }
+#[bench] fn comparef64__2power17__3power00__len00131072__512_8_8_4(b: &mut Bencher) { compare_fft_f64(b, &[512,8,8,4]); }
+#[bench] fn comparef64__2power17__3power00__len00131072__256_8_8_8(b: &mut Bencher) { compare_fft_f64(b, &[256,8,8,8]); }
+#[bench] fn comparef64__2power18__3power00__len00262144__128_8_8_8_4(b: &mut Bencher) { compare_fft_f64(b, &[128,8,8,8,4]); }
+#[bench] fn comparef64__2power18__3power00__len00262144__512_8_8_8(b: &mut Bencher) { compare_fft_f64(b, &[512,8,8,8]); }
+#[bench] fn comparef64__2power19__3power00__len00524288__256_8_8_8_4(b: &mut Bencher) { compare_fft_f64(b, &[256,8,8,8,4]); }
+#[bench] fn comparef64__2power19__3power00__len00524288__128_8_8_8_8(b: &mut Bencher) { compare_fft_f64(b, &[128,8,8,8,8]); }
+#[bench] fn comparef64__2power20__3power00__len01048576__512_8_8_8_4(b: &mut Bencher) { compare_fft_f64(b, &[512,8,8,8,4]); }
+#[bench] fn comparef64__2power20__3power00__len01048576__256_8_8_8_8(b: &mut Bencher) { compare_fft_f64(b, &[256,8,8,8,8]); }

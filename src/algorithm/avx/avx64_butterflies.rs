@@ -1,5 +1,6 @@
 use std::marker::PhantomData;
 use std::arch::x86_64::*;
+use std::mem::MaybeUninit;
 
 use num_complex::Complex;
 
@@ -10,6 +11,7 @@ use crate::{Length, IsInverse, Fft};
 use crate::array_utils::{RawSlice, RawSliceMut};
 use super::avx64_utils;
 use super::avx_vector::{AvxVector, AvxVector128, AvxVector256, Rotation90, AvxArray, AvxArrayMut};
+use super::avx_vector;
 
 // Safety: This macro will call `self::perform_fft_f32()` which probably has a #[target_feature(enable = "...")] annotation on it.
 // Calling functions with that annotation is unsafe, because it doesn't actually check if the CPU has the required features.
@@ -87,6 +89,113 @@ macro_rules! boilerplate_fft_simd_butterfly {
         }
     )
 }
+
+
+// Safety: This macro will call `self::column_butterflies_and_transpose()` and `self::row_butterflies()` which probably has a #[target_feature(enable = "...")] annotation on it.
+// Calling functions with that annotation is unsafe, because it doesn't actually check if the CPU has the required features.
+// Callers of this macro must guarantee that users can't even obtain an instance of $struct_name if their CPU doesn't have the required CPU features.
+macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
+    ($struct_name:ident, $len:expr) => (
+        impl $struct_name<f64> {
+            #[inline]
+            fn perform_fft_inplace(&self, buffer: &mut [Complex<f64>], scratch: &mut [Complex<f64>]) {
+                // Perform the column FFTs
+                // Safety: self.perform_column_butterflies() requres the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't available
+                unsafe { self.column_butterflies_and_transpose(buffer, scratch) };
+
+                // process the row FFTs, and copy from the scratch back to the buffer as we go
+                // Safety: self.transpose() requres the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
+                unsafe { self.row_butterflies(RawSlice::new(scratch), RawSliceMut::new(buffer)) };
+            }
+
+            #[inline]
+            fn perform_fft_out_of_place(&self, input: &mut [Complex<f64>], output: &mut [Complex<f64>]) {
+                // Perform the column FFTs
+                // Safety: self.perform_column_butterflies() requres the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't available
+                unsafe { self.column_butterflies_and_transpose(input, output) };
+
+                // process the row FFTs in-place in the output buffer
+                // Safety: self.transpose() requres the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
+                unsafe { self.row_butterflies(RawSlice::new(output), RawSliceMut::new(output)) };
+            }
+        }
+		default impl<T: FFTnum> Fft<T> for $struct_name<T> {
+            fn process_inplace_with_scratch(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+				unimplemented!();
+            }
+            fn process_inplace_multi(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+                unimplemented!();
+			}
+			fn process_with_scratch(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+				unimplemented!();
+            }
+            fn process_multi(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+                unimplemented!();
+            }
+            fn get_inplace_scratch_len(&self) -> usize {
+                unimplemented!();
+            }
+            fn get_out_of_place_scratch_len(&self) -> usize {
+                unimplemented!();
+            }
+        }
+        impl Fft<f64> for $struct_name<f64> {
+            fn process_with_scratch(&self, input: &mut [Complex<f64>], output: &mut [Complex<f64>], _scratch: &mut [Complex<f64>]) {
+                assert_eq!(input.len(), self.len(), "Input is the wrong length. Expected {}, got {}", self.len(), input.len());
+                assert_eq!(output.len(), self.len(), "Output is the wrong length. Expected {}, got {}", self.len(), output.len());
+		
+				self.perform_fft_out_of_place(input, output);
+            }
+            fn process_multi(&self, input: &mut [Complex<f64>], output: &mut [Complex<f64>], _scratch: &mut [Complex<f64>]) {
+                assert!(input.len() % self.len() == 0, "Output is the wrong length. Expected multiple of {}, got {}", self.len(), input.len());
+                assert_eq!(input.len(), output.len(), "Output is the wrong length. input = {} output = {}", input.len(), output.len());
+		
+				for (in_chunk, out_chunk) in input.chunks_exact_mut(self.len()).zip(output.chunks_exact_mut(self.len())) {
+					self.perform_fft_out_of_place(in_chunk, out_chunk);
+				}
+            }
+            fn process_inplace_with_scratch(&self, buffer: &mut [Complex<f64>], scratch: &mut [Complex<f64>]) {
+                assert_eq!(buffer.len(), self.len(), "Buffer is the wrong length. Expected {}, got {}", self.len(), buffer.len());
+
+                assert!(scratch.len() >= $len);
+                let scratch = &mut scratch[..$len];
+        
+                self.perform_fft_inplace(buffer, scratch);
+            }
+            fn process_inplace_multi(&self, buffer: &mut [Complex<f64>], scratch: &mut [Complex<f64>]) {
+                assert_eq!(buffer.len() % self.len(), 0, "Buffer is the wrong length. Expected multiple of {}, got {}", self.len(), buffer.len());
+
+                assert!(scratch.len() >= $len);
+                let scratch = &mut scratch[..$len];
+        
+                for chunk in buffer.chunks_exact_mut(self.len()) {
+                    self.perform_fft_inplace(chunk, scratch);
+                }
+            }
+            #[inline(always)]
+            fn get_inplace_scratch_len(&self) -> usize {
+                $len
+            }
+            #[inline(always)]
+            fn get_out_of_place_scratch_len(&self) -> usize {
+                0
+            }
+        }
+        impl<T> Length for $struct_name<T> {
+            #[inline(always)]
+            fn len(&self) -> usize {
+                $len
+            }
+        }
+        impl<T> IsInverse for $struct_name<T> {
+            #[inline(always)]
+            fn is_inverse(&self) -> bool {
+                self.inverse
+            }
+        }
+    )
+}
+
 
 
 macro_rules! gen_butterfly_twiddles_interleaved_columns {
@@ -957,6 +1066,340 @@ impl Butterfly36Avx64<f64> {
     }
 }
 
+
+pub struct Butterfly64Avx64<T> {
+    twiddles: [__m256d; 28],
+    twiddles_butterfly4: Rotation90<__m256d>,
+    inverse: bool,
+    _phantom: std::marker::PhantomData<T>,
+}
+boilerplate_fft_simd_butterfly_with_scratch!(Butterfly64Avx64, 64);
+impl Butterfly64Avx64<f64> {
+    #[inline]
+    pub fn new(inverse: bool) -> Result<Self, ()> {
+        let has_avx = is_x86_feature_detected!("avx");
+        let has_fma = is_x86_feature_detected!("fma");
+        if has_avx && has_fma {
+            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
+            Ok(unsafe { Self::new_with_avx(inverse) })
+        } else {
+            Err(())
+        }
+    }
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inverse: bool) -> Self {
+        Self {
+            twiddles: gen_butterfly_twiddles_separated_columns!(8, 8, 0, inverse),
+            twiddles_butterfly4: AvxVector::make_rotation90(inverse),
+            inverse: inverse,
+            _phantom: PhantomData,
+        }
+    }
+    
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn column_butterflies_and_transpose(&self, input: &[Complex<f64>], output: &mut [Complex<f64>]) {
+        // Treat this 64-length array like a 8x8 2D array, and do butterfly 8's down the columns
+        // Then, apply twiddle factors, and finally transpose into the output
+        for columnset in 0..4 {
+            let mut rows = [AvxVector::zero(); 8];
+            for r in 0..8 {
+                rows[r] = input.load_complex(columnset*2 + 8*r);
+            }
+            // apply butterfly 8
+            let mut mid = AvxVector::column_butterfly8(rows, self.twiddles_butterfly4);
+
+            // apply twiddle factors
+            for r in 1..8 {
+                mid[r] = AvxVector::mul_complex(mid[r],  self.twiddles[r - 1 + 7*columnset]);
+            }
+
+            // transpose
+            let transposed = AvxVector::transpose8_packed(mid);
+
+            // write out
+            for i in 0..4 {
+                output.store_complex(transposed[i*2],   columnset*16 + i*4);
+                output.store_complex(transposed[i*2+1], columnset*16 + i*4 + 2);
+            }
+        }
+    }
+
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn row_butterflies(&self, input: RawSlice<Complex<f64>>, mut output: RawSliceMut<Complex<f64>>) {
+        // butterfly 8's down the columns of our transposed array
+        for columnset in 0usize..4 {
+            let mut rows = [AvxVector::zero(); 8];
+            for r in 0..8 {
+                rows[r] = input.load_complex(columnset*2 + 8*r);
+            }
+            let mid = AvxVector::column_butterfly8(rows, self.twiddles_butterfly4);
+            for r in 0..8 {
+                output.store_complex(mid[r], columnset*2 + 8*r);
+            }
+        }
+    }
+}
+
+pub struct Butterfly128Avx64<T> {
+    twiddles: [__m256d; 56],
+    twiddles_butterfly16: [__m256d; 2],
+    twiddles_butterfly4: Rotation90<__m256d>,
+    inverse: bool,
+    _phantom: std::marker::PhantomData<T>,
+}
+boilerplate_fft_simd_butterfly_with_scratch!(Butterfly128Avx64, 128);
+impl Butterfly128Avx64<f64> {
+    #[inline]
+    pub fn new(inverse: bool) -> Result<Self, ()> {
+        let has_avx = is_x86_feature_detected!("avx");
+        let has_fma = is_x86_feature_detected!("fma");
+        if has_avx && has_fma {
+            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
+            Ok(unsafe { Self::new_with_avx(inverse) })
+        } else {
+            Err(())
+        }
+    }
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inverse: bool) -> Self {
+        Self {
+            twiddles: gen_butterfly_twiddles_separated_columns!(8, 16, 0, inverse),
+            twiddles_butterfly16: [
+                AvxVector::broadcast_twiddle(1, 16, inverse),
+                AvxVector::broadcast_twiddle(3, 16, inverse),
+            ],
+            twiddles_butterfly4: AvxVector::make_rotation90(inverse),
+            inverse: inverse,
+            _phantom: PhantomData,
+        }
+    }
+    
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn column_butterflies_and_transpose(&self, input: &[Complex<f64>], output: &mut [Complex<f64>]) {
+        // Treat this 128-length array like a 16x8 2D array, and do butterfly 8's down the columns
+        // Then, apply twiddle factors, and finally transpose into the output
+        for columnset in 0..8 {
+            let mut rows = [AvxVector::zero(); 8];
+            for r in 0..8 {
+                rows[r] = input.load_complex(columnset*2 + 16*r);
+            }
+            // apply butterfly 8
+            let mut mid = AvxVector::column_butterfly8(rows, self.twiddles_butterfly4);
+
+            // apply twiddle factors
+            for r in 1..8 {
+                mid[r] = AvxVector::mul_complex(mid[r],  self.twiddles[r - 1 + 7*columnset]);
+            }
+
+            // transpose
+            let transposed = AvxVector::transpose8_packed(mid);
+
+            // write out
+            for i in 0..4 {
+                output.store_complex(transposed[i*2],   columnset*16 + i*4);
+                output.store_complex(transposed[i*2+1], columnset*16 + i*4 + 2);
+            }
+        }
+    }
+
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn row_butterflies(&self, input: RawSlice<Complex<f64>>, mut output: RawSliceMut<Complex<f64>>) {
+         // butterfly 16's down the columns of our transposed array
+         for columnset in 0usize..4 {
+            column_butterfly16_loadfn!(
+                |index: usize| input.load_complex(columnset*2 + index*8),
+                |data, index| output.store_complex(data, columnset*2 + index*8),
+                self.twiddles_butterfly16,
+                self.twiddles_butterfly4
+            );
+        }
+    }
+}
+
+pub struct Butterfly256Avx64<T> {
+    twiddles: [__m256d; 112],
+    twiddles_butterfly32: [__m256d; 6],
+    twiddles_butterfly4: Rotation90<__m256d>,
+    inverse: bool,
+    _phantom: std::marker::PhantomData<T>,
+}
+boilerplate_fft_simd_butterfly_with_scratch!(Butterfly256Avx64, 256);
+impl Butterfly256Avx64<f64> {
+    #[inline]
+    pub fn new(inverse: bool) -> Result<Self, ()> {
+        let has_avx = is_x86_feature_detected!("avx");
+        let has_fma = is_x86_feature_detected!("fma");
+        if has_avx && has_fma {
+            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
+            Ok(unsafe { Self::new_with_avx(inverse) })
+        } else {
+            Err(())
+        }
+    }
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inverse: bool) -> Self {
+        Self {
+            twiddles: gen_butterfly_twiddles_separated_columns!(8, 32, 0, inverse),
+            twiddles_butterfly32: [
+                AvxVector::broadcast_twiddle(1, 32, inverse),
+                AvxVector::broadcast_twiddle(2, 32, inverse),
+                AvxVector::broadcast_twiddle(3, 32, inverse),
+                AvxVector::broadcast_twiddle(5, 32, inverse),
+                AvxVector::broadcast_twiddle(6, 32, inverse),
+                AvxVector::broadcast_twiddle(7, 32, inverse),
+            ],
+            twiddles_butterfly4: AvxVector::make_rotation90(inverse),
+            inverse: inverse,
+            _phantom: PhantomData,
+        }
+    }
+    
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn column_butterflies_and_transpose(&self, input: &[Complex<f64>], output: &mut [Complex<f64>]) {
+        // Treat this 256-length array like a 32x8 2D array, and do butterfly 8's down the columns
+        // Then, apply twiddle factors, and finally transpose into the output
+        for columnset in 0..16 {
+            let mut rows = [AvxVector::zero(); 8];
+            for r in 0..8 {
+                rows[r] = input.load_complex(columnset*2 + 32*r);
+            }
+            // apply butterfly 8
+            let mut mid = AvxVector::column_butterfly8(rows, self.twiddles_butterfly4);
+
+            // apply twiddle factors
+            for r in 1..8 {
+                mid[r] = AvxVector::mul_complex(mid[r],  self.twiddles[r - 1 + 7*columnset]);
+            }
+
+            // transpose
+            let transposed = AvxVector::transpose8_packed(mid);
+
+            // write out
+            for i in 0..4 {
+                output.store_complex(transposed[i*2],   columnset*16 + i*4);
+                output.store_complex(transposed[i*2+1], columnset*16 + i*4 + 2);
+            }
+        }
+    }
+
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn row_butterflies(&self, input: RawSlice<Complex<f64>>, mut output: RawSliceMut<Complex<f64>>) {
+         // butterfly 16's down the columns of our transposed array
+         for columnset in 0usize..4 {
+            column_butterfly32_loadfn!(
+                |index: usize| input.load_complex(columnset*2 + index*8),
+                |data, index| output.store_complex(data, columnset*2 + index*8),
+                self.twiddles_butterfly32,
+                self.twiddles_butterfly4
+            );
+        }
+    }
+}
+
+
+pub struct Butterfly512Avx64<T> {
+    twiddles: [__m256d; 240],
+    twiddles_butterfly32: [__m256d; 6],
+    twiddles_butterfly16: [__m256d; 2],
+    twiddles_butterfly4: Rotation90<__m256d>,
+    inverse: bool,
+    _phantom: std::marker::PhantomData<T>,
+}
+boilerplate_fft_simd_butterfly_with_scratch!(Butterfly512Avx64, 512);
+impl Butterfly512Avx64<f64> {
+    #[inline]
+    pub fn new(inverse: bool) -> Result<Self, ()> {
+        let has_avx = is_x86_feature_detected!("avx");
+        let has_fma = is_x86_feature_detected!("fma");
+        if has_avx && has_fma {
+            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
+            Ok(unsafe { Self::new_with_avx(inverse) })
+        } else {
+            Err(())
+        }
+    }
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inverse: bool) -> Self {
+        Self {
+            twiddles: gen_butterfly_twiddles_separated_columns!(16, 32, 0, inverse),
+            twiddles_butterfly32: [
+                AvxVector::broadcast_twiddle(1, 32, inverse),
+                AvxVector::broadcast_twiddle(2, 32, inverse),
+                AvxVector::broadcast_twiddle(3, 32, inverse),
+                AvxVector::broadcast_twiddle(5, 32, inverse),
+                AvxVector::broadcast_twiddle(6, 32, inverse),
+                AvxVector::broadcast_twiddle(7, 32, inverse),
+            ],
+            twiddles_butterfly16: [
+                AvxVector::broadcast_twiddle(1, 16, inverse),
+                AvxVector::broadcast_twiddle(3, 16, inverse),
+            ],
+            twiddles_butterfly4: AvxVector::make_rotation90(inverse),
+            inverse: inverse,
+            _phantom: PhantomData,
+        }
+    }
+    
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn column_butterflies_and_transpose(&self, input: &[Complex<f64>], output: &mut [Complex<f64>]) {
+        // In this function, we're going to trat our input like a 32x16 2D array, and do butterfly-16's down the columns of that array
+        // Then, we apply twiddle factors, then transpose into the output
+
+        // Because we're pushing the limit of how much data can for into registers here,
+        // we're including bespoke versions of butterfly 16 and transpose 16 that reorganize the operations with the goal of reducing spills to the stack.
+
+        const TWIDDLES_PER_COLUMN : usize = 15;
+
+        // Process FFTs of size 16 down the columns
+        for (columnset, twiddle_chunk) in self.twiddles.chunks_exact(TWIDDLES_PER_COLUMN).enumerate() {
+            // Sadly we have to use MaybeUninit here. If we init an array like normal with AvxVector::Zero(), the compiler can't seem to figure out that it can
+            // eliminate the dead stores of zeroes to the stack. By using uninit here, we avoid those unnecessary writes
+            let mut mid_uninit : [MaybeUninit::<__m256d>; 16] = MaybeUninit::uninit_array();
+
+            column_butterfly16_loadfn!(
+                |index: usize| input.load_complex(columnset*2 + 32*index),
+                |data, index| MaybeUninit::first_ptr_mut(&mut mid_uninit).add(index).write(data),
+                self.twiddles_butterfly16,
+                self.twiddles_butterfly4
+            );
+            let mid = MaybeUninit::slice_get_ref(&mid_uninit);
+
+
+            // Apply twiddle factors, transpose, and store. Traditionally we apply all the twiddle factors at once and then do all the transposes at once,
+            // But our data is pushing the limit of what we can store in registers, so the idea here is to get the data out the door with as few spills to the stack as possible
+            for chunk in 0..4 {
+                let twiddled = [
+                    if chunk > 0 { AvxVector::mul_complex(mid[4*chunk    ],  twiddle_chunk[4*chunk - 1]) } else { mid[4*chunk] },
+                    AvxVector::mul_complex(mid[4*chunk + 1],  twiddle_chunk[4*chunk    ]),
+                    AvxVector::mul_complex(mid[4*chunk + 2],  twiddle_chunk[4*chunk + 1]),
+                    AvxVector::mul_complex(mid[4*chunk + 3],  twiddle_chunk[4*chunk + 2]),
+                ];
+
+                let transposed = AvxVector::transpose4_packed(twiddled);
+
+                output.store_complex(transposed[0], columnset * 32 + 4*chunk);
+                output.store_complex(transposed[1], columnset * 32 + 4*chunk + 2);
+                output.store_complex(transposed[2], columnset * 32 + 4*chunk + 16);
+                output.store_complex(transposed[3], columnset * 32 + 4*chunk + 18);
+            }
+        }
+    }
+
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn row_butterflies(&self, input: RawSlice<Complex<f64>>, mut output: RawSliceMut<Complex<f64>>) {
+         // butterfly 16's down the columns of our transposed array
+         for columnset in 0usize..8 {
+            column_butterfly32_loadfn!(
+                |index: usize| input.load_complex(columnset*2 + index*16),
+                |data, index| output.store_complex(data, columnset*2 + index*16),
+                self.twiddles_butterfly32,
+                self.twiddles_butterfly4
+            );
+        }
+    }
+}
+
+
 #[cfg(test)]
 mod unit_tests {
     use super::*;
@@ -966,6 +1409,14 @@ mod unit_tests {
         ($test_name:ident, $struct_name:ident, $size:expr) => (
             #[test]
             fn $test_name() {
+                use crate::algorithm::{DFT, MixedRadixSmall};
+                use std::sync::Arc;
+                let a = Arc::new(DFT::new(32, false)) as Arc<dyn Fft<f64>>;
+                let b = Arc::new(DFT::new(16, false)) as Arc<dyn Fft<f64>>;
+
+                let control = MixedRadixSmall::new(a, b);
+                check_fft_algorithm(&control, 512, false);
+
                 let butterfly = $struct_name::new(false).expect("Can't run test because this machine doesn't have the required instruction sets");
                 check_fft_algorithm(&butterfly, $size, false);
 
@@ -977,13 +1428,17 @@ mod unit_tests {
 
     test_avx_butterfly!(test_avx_butterfly5_f64, Butterfly5Avx64, 5);
     test_avx_butterfly!(test_avx_butterfly7_f64, Butterfly7Avx64, 7);
-    test_avx_butterfly!(test_avx_mixedradix4x2_f64, Butterfly8Avx64, 8);
-    test_avx_butterfly!(test_avx_mixedradix3x3_f64, Butterfly9Avx64, 9);
-    test_avx_butterfly!(test_avx_mixedradix4x3_f64, Butterfly12Avx64, 12);
-    test_avx_butterfly!(test_avx_mixedradix4x4_f64, Butterfly16Avx64, 16);
-    test_avx_butterfly!(test_avx_mixedradix3x6_f64, Butterfly18Avx64, 18);
-    test_avx_butterfly!(test_avx_mixedradix4x6_f64, Butterfly24Avx64, 24);
-    test_avx_butterfly!(test_avx_mixedradix3x9_f64, Butterfly27Avx64, 27);
-    test_avx_butterfly!(test_avx_mixedradix4x8_f64, Butterfly32Avx64, 32);
-    test_avx_butterfly!(test_avx_mixedradix6x6_f64, Butterfly36Avx64, 36);
+    test_avx_butterfly!(test_avx_mixedradix8_f64, Butterfly8Avx64, 8);
+    test_avx_butterfly!(test_avx_mixedradix9_f64, Butterfly9Avx64, 9);
+    test_avx_butterfly!(test_avx_mixedradix12_f64, Butterfly12Avx64, 12);
+    test_avx_butterfly!(test_avx_mixedradix16_f64, Butterfly16Avx64, 16);
+    test_avx_butterfly!(test_avx_mixedradix18_f64, Butterfly18Avx64, 18);
+    test_avx_butterfly!(test_avx_mixedradix24_f64, Butterfly24Avx64, 24);
+    test_avx_butterfly!(test_avx_mixedradix27_f64, Butterfly27Avx64, 27);
+    test_avx_butterfly!(test_avx_mixedradix32_f64, Butterfly32Avx64, 32);
+    test_avx_butterfly!(test_avx_mixedradix36_f64, Butterfly36Avx64, 36);
+    test_avx_butterfly!(test_avx_mixedradix64_f64, Butterfly64Avx64, 64);
+    test_avx_butterfly!(test_avx_mixedradix128_f64, Butterfly128Avx64, 128);
+    test_avx_butterfly!(test_avx_mixedradix256_f64, Butterfly256Avx64, 256);
+    test_avx_butterfly!(test_avx_mixedradix512_f64, Butterfly512Avx64, 512);
 }

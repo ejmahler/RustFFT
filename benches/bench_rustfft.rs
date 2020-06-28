@@ -782,6 +782,7 @@ fn bench_mixed_8xn_avx(b: &mut Bencher, len: usize) {
 #[bench] fn mixed_8xn_avx__0016384(b: &mut Bencher) { bench_mixed_8xn_avx(b, 16384); }
 #[bench] fn mixed_8xn_avx__0032768(b: &mut Bencher) { bench_mixed_8xn_avx(b, 32768); }
 #[bench] fn mixed_8xn_avx__0065536(b: &mut Bencher) { bench_mixed_8xn_avx(b, 65536); }
+#[bench] fn mixed_8xn_avx__0262144(b: &mut Bencher) { bench_mixed_8xn_avx(b, 262144); }
 #[bench] fn mixed_8xn_avx__1048576(b: &mut Bencher) { bench_mixed_8xn_avx(b, 1048576); }
 #[bench] fn mixed_8xn_avx__16777216(b: &mut Bencher) { bench_mixed_8xn_avx(b, 16777216); }
 
@@ -1023,6 +1024,10 @@ fn bench_butterfly64(b: &mut Bencher, len: usize) {
 #[bench] fn butterfly64_27(b: &mut Bencher) { bench_butterfly64(b, 27); }
 #[bench] fn butterfly64_32(b: &mut Bencher) { bench_butterfly64(b, 32); }
 #[bench] fn butterfly64_36(b: &mut Bencher) { bench_butterfly64(b, 36); }
+#[bench] fn butterfly64_64(b: &mut Bencher) { bench_butterfly64(b, 64); }
+#[bench] fn butterfly64_128(b: &mut Bencher) { bench_butterfly64(b, 128); }
+#[bench] fn butterfly64_256(b: &mut Bencher) { bench_butterfly64(b, 256); }
+#[bench] fn butterfly64_512(b: &mut Bencher) { bench_butterfly64(b, 512); }
 
 
 /// Times just the FFT execution (not allocation and pre-calculation)
