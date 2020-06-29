@@ -1,13 +1,13 @@
 use std::sync::Arc;
 use std::cmp::max;
 
+use num_integer::Integer;
 use num_complex::Complex;
 use strength_reduce::StrengthReducedUsize;
 use transpose;
 
 use crate::common::FFTnum;
 
-use crate::math_utils;
 use crate::array_utils;
 
 use crate::{Length, IsInverse, Fft};
@@ -71,21 +71,16 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
         let height = height_fft.len();
         let is_inverse = width_fft.is_inverse();
 
-        // compute the nultiplicative inverse of width mod height and vice versa
-        let (gcd, mut width_inverse, mut height_inverse) =
-            math_utils::extended_euclidean_algorithm(width as i64, height as i64);
-        assert!(gcd == 1,
+        // compute the multiplicative inverse of width mod height and vice versa. x will be width mod height, and y will be height mod width
+        let gcd_data = i64::extended_gcd(&(width as i64), &(height as i64));
+        assert!(gcd_data.gcd == 1,
                 "Invalid input width and height to Good-Thomas Algorithm: ({},{}): Inputs must be coprime",
                 width,
                 height);
 
-        // width_inverse or height_inverse might be negative, make it positive
-        if width_inverse < 0 {
-            width_inverse += height as i64;
-        }
-        if height_inverse < 0 {
-            height_inverse += width as i64;
-        }
+        // width_inverse or height_inverse might be negative, make it positive by wrapping
+        let width_inverse = if gcd_data.x >= 0 { gcd_data.x } else { gcd_data.x + height as i64 } as usize;
+        let height_inverse = if gcd_data.y >= 0 { gcd_data.y } else { gcd_data.y + width as i64 } as usize;
 
         let len = width * height;
         let width_inplace_scratch = height_fft.get_inplace_scratch_len();
@@ -237,21 +232,16 @@ impl<T: FFTnum> GoodThomasAlgorithmSmall<T> {
         let height = height_fft.len();
         let len = width * height;
 
-        // compute the nultiplicative inverse of n1 mod height and vice versa
-        let (gcd, mut width_inverse, mut height_inverse) =
-            math_utils::extended_euclidean_algorithm(width as i64, height as i64);
-        assert!(gcd == 1,
-                "Invalid input n1 and height to Good-Thomas Algorithm: ({},{}): Inputs must be coprime",
+        // compute the multiplicative inverse of width mod height and vice versa. x will be width mod height, and y will be height mod width
+        let gcd_data = i64::extended_gcd(&(width as i64), &(height as i64));
+        assert!(gcd_data.gcd == 1,
+                "Invalid input width and height to Good-Thomas Algorithm: ({},{}): Inputs must be coprime",
                 width,
                 height);
 
-        // width_inverse or height_inverse might be negative, make it positive
-        if width_inverse < 0 {
-            width_inverse += height as i64;
-        }
-        if height_inverse < 0 {
-            height_inverse += width as i64;
-        }
+        // width_inverse or height_inverse might be negative, make it positive by wrapping
+        let width_inverse = if gcd_data.x >= 0 { gcd_data.x } else { gcd_data.x + height as i64 } as usize;
+        let height_inverse = if gcd_data.y >= 0 { gcd_data.y } else { gcd_data.y + width as i64 } as usize;
 
         // NOTE: we are precomputing the input and output reordering indexes, because benchmarking shows that it's 10-20% faster
         // If we wanted to optimize for memory use or setup time instead of multiple-FFT speed, we could compute these on the fly in the perform_fft() method

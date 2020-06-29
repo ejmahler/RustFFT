@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use num_integer::Integer;
 use num_complex::Complex;
 use num_traits::Zero;
 use strength_reduce::StrengthReducedUsize;
@@ -69,7 +70,12 @@ impl<T: FFTnum> RadersAlgorithm<T> {
 
         // compute the primitive root and its inverse for this size
         let primitive_root = math_utils::primitive_root(len as u64).unwrap() as usize;
-        let primitive_root_inverse = math_utils::multiplicative_inverse(primitive_root as usize, len);
+
+        // compute the multiplicative inverse of primative_root mod len and vice versa. 
+        // i64::extended_gcd will compute both the inverse of left mod right, and the inverse of right mod left, but we're only goingto use one of them
+        // the primtive root inverse might be negative, if o make it positive by wrapping
+        let gcd_data = i64::extended_gcd(&(primitive_root as i64), &(len as i64));
+        let primitive_root_inverse = if gcd_data.x >= 0 { gcd_data.x } else { gcd_data.x + len as i64 } as usize;
 
         // precompute the coefficients to use inside the process method
         let unity_scale = T::from_f64(1f64 / inner_fft_len as f64).unwrap();

@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
+use num_integer::div_ceil;
 use num_complex::Complex;
 use num_traits::Zero;
 
 use crate::common::FFTnum;
-use crate::math_utils::div_ceil;
 use crate::{Length, IsInverse, Fft};
 
 use super::avx_vector::{AvxVector, AvxVector128, AvxVector256, AvxArray, AvxArrayMut};

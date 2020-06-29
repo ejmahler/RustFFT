@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
+use num_integer::div_ceil;
 use num_complex::Complex;
 
 use crate::common::FFTnum;
-use crate::math_utils::div_ceil;
 use crate::{Length, IsInverse, Fft};
 
 use super::CommonSimdData;
