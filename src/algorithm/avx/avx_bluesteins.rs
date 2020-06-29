@@ -31,7 +31,7 @@ use super::CommonSimdData;
 /// let mut planner = FFTplanner::new(false);
 /// let inner_fft = planner.plan_fft(1200);
 ///
-/// let fft = RadersAlgorithm::new(1201, inner_fft);
+/// let fft = RadersAlgorithm::new(inner_fft);
 /// fft.process(&mut input, &mut output);
 /// ~~~
 ///

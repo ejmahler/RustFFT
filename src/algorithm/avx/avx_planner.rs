@@ -254,7 +254,7 @@ impl<T: FFTnum> MakeFftAvx<T> for FftPlannerAvx<T> {
     default fn construct_bluesteins(&mut self, _len: usize) -> Arc<dyn Fft<T>> { unimplemented!(); }
     default fn construct_raders(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         let inner_fft = self.plan_fft(len - 1);
-        wrap_fft(RadersAlgorithm::new(len, inner_fft))
+        wrap_fft(RadersAlgorithm::new(inner_fft))
     }
 }
 

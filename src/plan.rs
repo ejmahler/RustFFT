@@ -174,7 +174,7 @@ impl<T: FFTnum> FFTplanner<T> {
             Arc::new(BluesteinsAlgorithm::new(len, inner_fft)) as Arc<dyn Fft<T>>
         } else {
             let inner_fft = self.plan_fft_with_factors(raders_fft_len, raders_factors);
-            Arc::new(RadersAlgorithm::new(len, inner_fft)) as Arc<dyn Fft<T>>
+            Arc::new(RadersAlgorithm::new(inner_fft)) as Arc<dyn Fft<T>>
         }
     }
 }

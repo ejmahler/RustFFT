@@ -4,6 +4,7 @@ use num_integer::Integer;
 use num_complex::Complex;
 use num_traits::Zero;
 use strength_reduce::StrengthReducedUsize;
+use primal_check::miller_rabin;
 
 use crate::common::FFTnum;
 
@@ -32,13 +33,14 @@ use crate::{Length, IsInverse, Fft};
 /// let mut planner = FFTplanner::new(false);
 /// let inner_fft = planner.plan_fft(1200);
 ///
-/// let fft = RadersAlgorithm::new(1201, inner_fft);
+/// let fft = RadersAlgorithm::new(inner_fft);
 /// fft.process(&mut input, &mut output);
 /// ~~~
 ///
 /// Rader's Algorithm is relatively expensive compared to other FFT algorithms. Benchmarking shows that it is up to
 /// an order of magnitude slower than similar composite sizes. In the example size above of 1201, benchmarking shows
 /// that it takes 2.5x more time to compute than a FFT of size 1200.
+
 
 pub struct RadersAlgorithm<T> {
     inner_fft: Arc<dyn Fft<T>>,
@@ -60,12 +62,14 @@ impl<T: FFTnum> RadersAlgorithm<T> {
     /// constructor. This further underlines the fact that Rader's Algorithm is more expensive to run than other
     /// FFT algorithms
     ///
-    /// Note also that if `len` is not prime, this algorithm may silently produce garbage output
-    pub fn new(len: usize, inner_fft: Arc<dyn Fft<T>>) -> Self {
-        assert_eq!(len - 1, inner_fft.len(), "For raders algorithm, inner_fft.len() must be self.len() - 1. Expected {}, got {}", len - 1, inner_fft.len());
+    /// # Panics
+    /// Panics if `inner_fft_len() + 1` is not a prime number.
+    pub fn new(inner_fft: Arc<dyn Fft<T>>) -> Self {
+        let inner_fft_len = inner_fft.len();
+        let len = inner_fft_len + 1;
+        assert!(miller_rabin(len as u64), "For raders algorithm, inner_fft.len() + 1 must be prime. Expected prime number, got {} + 1 = {}", inner_fft_len, len);
 
         let inverse = inner_fft.is_inverse();
-        let inner_fft_len = len - 1;
         let reduced_len = StrengthReducedUsize::new(len);
 
         // compute the primitive root and its inverse for this size
@@ -204,15 +208,17 @@ mod unit_tests {
 
     #[test]
     fn test_raders() {
-        for &len in &[3,5,7,11,13] {
-            test_raders_with_length(len, false);
-            test_raders_with_length(len, true);
+        for len in 3..100 {
+            if miller_rabin(len as u64) {
+                test_raders_with_length(len, false);
+                test_raders_with_length(len, true);
+            }
         }
     }
 
     fn test_raders_with_length(len: usize, inverse: bool) {
         let inner_fft = Arc::new(DFT::new(len - 1, inverse));
-        let fft = RadersAlgorithm::new(len, inner_fft);
+        let fft = RadersAlgorithm::new(inner_fft);
 
         check_fft_algorithm::<f32>(&fft, len, inverse);
     }

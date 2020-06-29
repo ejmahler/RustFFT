@@ -292,7 +292,7 @@ fn bench_raders(b: &mut Bencher, len: usize) {
     let mut planner = rustfft::FFTplanner::new(false);
     let inner_fft = planner.plan_fft(len - 1);
 
-    let fft : Arc<Fft<_>> = Arc::new(RadersAlgorithm::new(len, inner_fft));
+    let fft : Arc<Fft<_>> = Arc::new(RadersAlgorithm::new(inner_fft));
 
     let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; len];
     let mut spectrum = signal.clone();
@@ -321,7 +321,7 @@ fn bench_raders_power2(b: &mut Bencher, len: usize) {
     let mut planner = rustfft::FFTplanner::new(false);
     let inner_fft = planner.plan_fft(len - 1);
 
-    let fft : Arc<Fft<_>> = Arc::new(RadersAlgorithm::new(len, inner_fft));
+    let fft : Arc<Fft<_>> = Arc::new(RadersAlgorithm::new(inner_fft));
 
     let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; len];
     let mut spectrum = signal.clone();
@@ -420,7 +420,7 @@ fn bench_raders_setup(b: &mut Bencher, len: usize) {
     let inner_fft = planner.plan_fft(len - 1);
 
     b.iter(|| { 
-        let fft : Arc<Fft<f32>> = Arc::new(RadersAlgorithm::new(len, Arc::clone(&inner_fft)));
+        let fft : Arc<Fft<f32>> = Arc::new(RadersAlgorithm::new(Arc::clone(&inner_fft)));
         test::black_box(fft);
     });
 }
