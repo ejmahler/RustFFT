@@ -6,12 +6,31 @@ extern crate rustfft;
 
 use std::sync::Arc;
 use test::Bencher;
-use rustfft::{Fft};
+use rustfft::{Fft, FFTnum, Length, IsInverse};
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 use rustfft::algorithm::*;
 use rustfft::algorithm::butterflies::*;
 use rustfft::algorithm::avx::*;
+
+struct Noop {
+    len: usize,
+    inverse: bool,
+}
+impl<T: FFTnum> Fft<T> for Noop {
+    fn process_with_scratch(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {}
+    fn process_multi(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {}
+    fn process_inplace_with_scratch(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {}
+    fn process_inplace_multi(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {}
+    fn get_inplace_scratch_len(&self) -> usize { self.len }
+    fn get_out_of_place_scratch_len(&self) -> usize { 0 }
+}
+impl Length for Noop {
+    fn len(&self) -> usize { self.len }
+}
+impl IsInverse for Noop {
+    fn is_inverse(&self) -> bool { self.inverse }
+}
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
@@ -287,32 +306,157 @@ fn bench_good_thomas_small(b: &mut Bencher, width: usize, height: usize) {
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to Rader's algorithm
-fn bench_raders(b: &mut Bencher, len: usize) {
+fn bench_raders_scalar(b: &mut Bencher, len: usize) {
 
     let mut planner = rustfft::FFTplanner::new(false);
     let inner_fft = planner.plan_fft(len - 1);
 
     let fft : Arc<Fft<_>> = Arc::new(RadersAlgorithm::new(inner_fft));
 
-    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; len];
-    let mut spectrum = signal.clone();
-    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
+    let mut buffer = vec![Complex{re: 0_f32, im: 0_f32}; len];
+    let mut scratch = vec![Complex{re: 0_f32, im: 0_f32}; fft.get_inplace_scratch_len()];
+    b.iter(|| {fft.process_inplace_with_scratch(&mut buffer, &mut scratch);} );
 }
 
-#[bench] fn raders_prime_0005(b: &mut Bencher) { bench_raders(b,  5); }
-#[bench] fn raders_prime_0017(b: &mut Bencher) { bench_raders(b,  17); }
-#[bench] fn raders_prime_0149(b: &mut Bencher) { bench_raders(b,  149); }
-#[bench] fn raders_prime_0151(b: &mut Bencher) { bench_raders(b,  151); }
-#[bench] fn raders_prime_0251(b: &mut Bencher) { bench_raders(b,  251); }
-#[bench] fn raders_prime_0257(b: &mut Bencher) { bench_raders(b,  257); }
-#[bench] fn raders_prime_1009(b: &mut Bencher) { bench_raders(b,  1009); }
-#[bench] fn raders_prime_2017(b: &mut Bencher) { bench_raders(b,  2017); }
-#[bench] fn raders_prime_12289(b: &mut Bencher) { bench_raders(b, 12289); }
-#[bench] fn raders_prime_18433(b: &mut Bencher) { bench_raders(b, 18433); }
-#[bench] fn raders_prime_65521(b: &mut Bencher) { bench_raders(b, 65521); }
-#[bench] fn raders_prime_65537(b: &mut Bencher) { bench_raders(b, 65537); }
-#[bench] fn raders_prime_746483(b: &mut Bencher) { bench_raders(b,746483); }
-#[bench] fn raders_prime_746497(b: &mut Bencher) { bench_raders(b,746497); }
+#[bench] fn raders_fft_scalar_prime_0005(b: &mut Bencher) { bench_raders_scalar(b,  5); }
+#[bench] fn raders_fft_scalar_prime_0017(b: &mut Bencher) { bench_raders_scalar(b,  17); }
+#[bench] fn raders_fft_scalar_prime_0149(b: &mut Bencher) { bench_raders_scalar(b,  149); }
+#[bench] fn raders_fft_scalar_prime_0151(b: &mut Bencher) { bench_raders_scalar(b,  151); }
+#[bench] fn raders_fft_scalar_prime_0251(b: &mut Bencher) { bench_raders_scalar(b,  251); }
+#[bench] fn raders_fft_scalar_prime_0257(b: &mut Bencher) { bench_raders_scalar(b,  257); }
+#[bench] fn raders_fft_scalar_prime_1009(b: &mut Bencher) { bench_raders_scalar(b,  1009); }
+#[bench] fn raders_fft_scalar_prime_2017(b: &mut Bencher) { bench_raders_scalar(b,  2017); }
+#[bench] fn raders_fft_scalar_prime_12289(b: &mut Bencher) { bench_raders_scalar(b, 12289); }
+#[bench] fn raders_fft_scalar_prime_18433(b: &mut Bencher) { bench_raders_scalar(b, 18433); }
+#[bench] fn raders_fft_scalar_prime_65521(b: &mut Bencher) { bench_raders_scalar(b, 65521); }
+#[bench] fn raders_fft_scalar_prime_65537(b: &mut Bencher) { bench_raders_scalar(b, 65537); }
+#[bench] fn raders_fft_scalar_prime_746483(b: &mut Bencher) { bench_raders_scalar(b,746483); }
+#[bench] fn raders_fft_scalar_prime_746497(b: &mut Bencher) { bench_raders_scalar(b,746497); }
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_raders_avx2(b: &mut Bencher, len: usize) {
+
+    let mut planner = rustfft::FFTplanner::new(false);
+    let inner_fft = planner.plan_fft(len - 1);
+
+    let fft : Arc<Fft<_>> = Arc::new(RadersAvx2::new(inner_fft).unwrap());
+
+    let mut buffer = vec![Complex{re: 0_f32, im: 0_f32}; len];
+    let mut scratch = vec![Complex{re: 0_f32, im: 0_f32}; fft.get_inplace_scratch_len()];
+    b.iter(|| {fft.process_inplace_with_scratch(&mut buffer, &mut scratch);} );
+}
+
+#[bench] fn raders_fft_avx2_prime_0005(b: &mut Bencher) { bench_raders_avx2(b,  5); }
+#[bench] fn raders_fft_avx2_prime_0017(b: &mut Bencher) { bench_raders_avx2(b,  17); }
+#[bench] fn raders_fft_avx2_prime_0149(b: &mut Bencher) { bench_raders_avx2(b,  149); }
+#[bench] fn raders_fft_avx2_prime_0151(b: &mut Bencher) { bench_raders_avx2(b,  151); }
+#[bench] fn raders_fft_avx2_prime_0251(b: &mut Bencher) { bench_raders_avx2(b,  251); }
+#[bench] fn raders_fft_avx2_prime_0257(b: &mut Bencher) { bench_raders_avx2(b,  257); }
+#[bench] fn raders_fft_avx2_prime_1009(b: &mut Bencher) { bench_raders_avx2(b,  1009); }
+#[bench] fn raders_fft_avx2_prime_2017(b: &mut Bencher) { bench_raders_avx2(b,  2017); }
+#[bench] fn raders_fft_avx2_prime_12289(b: &mut Bencher) { bench_raders_avx2(b, 12289); }
+#[bench] fn raders_fft_avx2_prime_18433(b: &mut Bencher) { bench_raders_avx2(b, 18433); }
+#[bench] fn raders_fft_avx2_prime_65521(b: &mut Bencher) { bench_raders_avx2(b, 65521); }
+#[bench] fn raders_fft_avx2_prime_65537(b: &mut Bencher) { bench_raders_avx2(b, 65537); }
+#[bench] fn raders_fft_avx2_prime_746483(b: &mut Bencher) { bench_raders_avx2(b,746483); }
+#[bench] fn raders_fft_avx2_prime_746497(b: &mut Bencher) { bench_raders_avx2(b,746497); }
+
+#[inline(never)]
+fn make_raders_scalar_noop(len: usize) -> Arc<dyn Fft<f32>> {
+    let inner_fft = Arc::new(Noop { len: len - 1, inverse: false});
+
+    Arc::new(RadersAlgorithm::new(inner_fft))
+}
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_raders_noop(b: &mut Bencher, len: usize) {
+    let fft = make_raders_scalar_noop(len);
+
+    let mut buffer = vec![Complex{re: 0_f32, im: 0_f32}; len];
+    let mut scratch = buffer.clone();
+    b.iter(|| {fft.process_inplace_with_scratch(&mut buffer, &mut scratch);} );
+}
+
+#[bench] fn raders_noop_scalar_prime_0005(b: &mut Bencher) { bench_raders_noop(b,  5); }
+#[bench] fn raders_noop_scalar_prime_0017(b: &mut Bencher) { bench_raders_noop(b,  17); }
+#[bench] fn raders_noop_scalar_prime_0149(b: &mut Bencher) { bench_raders_noop(b,  149); }
+#[bench] fn raders_noop_scalar_prime_0151(b: &mut Bencher) { bench_raders_noop(b,  151); }
+#[bench] fn raders_noop_scalar_prime_0251(b: &mut Bencher) { bench_raders_noop(b,  251); }
+#[bench] fn raders_noop_scalar_prime_0257(b: &mut Bencher) { bench_raders_noop(b,  257); }
+#[bench] fn raders_noop_scalar_prime_1009(b: &mut Bencher) { bench_raders_noop(b,  1009); }
+#[bench] fn raders_noop_scalar_prime_2017(b: &mut Bencher) { bench_raders_noop(b,  2017); }
+#[bench] fn raders_noop_scalar_prime_12289(b: &mut Bencher) { bench_raders_noop(b, 12289); }
+#[bench] fn raders_noop_scalar_prime_18433(b: &mut Bencher) { bench_raders_noop(b, 18433); }
+#[bench] fn raders_noop_scalar_prime_65521(b: &mut Bencher) { bench_raders_noop(b, 65521); }
+#[bench] fn raders_noop_scalar_prime_65537(b: &mut Bencher) { bench_raders_noop(b, 65537); }
+#[bench] fn raders_noop_scalar_prime_746483(b: &mut Bencher) { bench_raders_noop(b,746483); }
+#[bench] fn raders_noop_scalar_prime_746497(b: &mut Bencher) { bench_raders_noop(b,746497); }
+
+#[inline(never)]
+fn make_raders_avx2_noop(len: usize) -> Arc<dyn Fft<f32>> {
+    let inner_fft = Arc::new(Noop { len: len - 1, inverse: false});
+
+    Arc::new(RadersAvx2::new(inner_fft).unwrap())
+}
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_raders_avx2_noop(b: &mut Bencher, len: usize) {
+    let fft = make_raders_avx2_noop(len);
+
+    let mut buffer = vec![Complex{re: 0_f32, im: 0_f32}; len];
+    let mut scratch = buffer.clone();
+    b.iter(|| {fft.process_inplace_with_scratch(&mut buffer, &mut scratch);} );
+}
+
+#[bench] fn raders_noop_avx2_prime_0005(b: &mut Bencher) { bench_raders_avx2_noop(b,  5); }
+#[bench] fn raders_noop_avx2_prime_0017(b: &mut Bencher) { bench_raders_avx2_noop(b,  17); }
+#[bench] fn raders_noop_avx2_prime_0149(b: &mut Bencher) { bench_raders_avx2_noop(b,  149); }
+#[bench] fn raders_noop_avx2_prime_0151(b: &mut Bencher) { bench_raders_avx2_noop(b,  151); }
+#[bench] fn raders_noop_avx2_prime_0251(b: &mut Bencher) { bench_raders_avx2_noop(b,  251); }
+#[bench] fn raders_noop_avx2_prime_0257(b: &mut Bencher) { bench_raders_avx2_noop(b,  257); }
+#[bench] fn raders_noop_avx2_prime_1009(b: &mut Bencher) { bench_raders_avx2_noop(b,  1009); }
+#[bench] fn raders_noop_avx2_prime_2017(b: &mut Bencher) { bench_raders_avx2_noop(b,  2017); }
+#[bench] fn raders_noop_avx2_prime_12289(b: &mut Bencher) { bench_raders_avx2_noop(b, 12289); }
+#[bench] fn raders_noop_avx2_prime_18433(b: &mut Bencher) { bench_raders_avx2_noop(b, 18433); }
+#[bench] fn raders_noop_avx2_prime_65521(b: &mut Bencher) { bench_raders_avx2_noop(b, 65521); }
+#[bench] fn raders_noop_avx2_prime_65537(b: &mut Bencher) { bench_raders_avx2_noop(b, 65537); }
+#[bench] fn raders_noop_avx2_prime_746483(b: &mut Bencher) { bench_raders_avx2_noop(b,746483); }
+#[bench] fn raders_noop_avx2_prime_746497(b: &mut Bencher) { bench_raders_avx2_noop(b,746497); }
+
+#[inline(never)]
+fn make_raders64_avx2_noop(len: usize) -> Arc<dyn Fft<f64>> {
+    let inner_fft = Arc::new(Noop { len: len - 1, inverse: false});
+
+    Arc::new(RadersAvx2::new(inner_fft).unwrap())
+}
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_raders64_avx2_noop(b: &mut Bencher, len: usize) {
+    let fft = make_raders64_avx2_noop(len);
+
+    let mut buffer = vec![Complex{re: 0_f64, im: 0_f64}; len];
+    let mut scratch = buffer.clone();
+    b.iter(|| {fft.process_inplace_with_scratch(&mut buffer, &mut scratch);} );
+}
+
+#[bench] fn raders64_noop_avx2_prime_0005(b: &mut Bencher) { bench_raders64_avx2_noop(b,  5); }
+#[bench] fn raders64_noop_avx2_prime_0017(b: &mut Bencher) { bench_raders64_avx2_noop(b,  17); }
+#[bench] fn raders64_noop_avx2_prime_0149(b: &mut Bencher) { bench_raders64_avx2_noop(b,  149); }
+#[bench] fn raders64_noop_avx2_prime_0151(b: &mut Bencher) { bench_raders64_avx2_noop(b,  151); }
+#[bench] fn raders64_noop_avx2_prime_0251(b: &mut Bencher) { bench_raders64_avx2_noop(b,  251); }
+#[bench] fn raders64_noop_avx2_prime_0257(b: &mut Bencher) { bench_raders64_avx2_noop(b,  257); }
+#[bench] fn raders64_noop_avx2_prime_1009(b: &mut Bencher) { bench_raders64_avx2_noop(b,  1009); }
+#[bench] fn raders64_noop_avx2_prime_2017(b: &mut Bencher) { bench_raders64_avx2_noop(b,  2017); }
+#[bench] fn raders64_noop_avx2_prime_12289(b: &mut Bencher) { bench_raders64_avx2_noop(b, 12289); }
+#[bench] fn raders64_noop_avx2_prime_18433(b: &mut Bencher) { bench_raders64_avx2_noop(b, 18433); }
+#[bench] fn raders64_noop_avx2_prime_65521(b: &mut Bencher) { bench_raders64_avx2_noop(b, 65521); }
+#[bench] fn raders64_noop_avx2_prime_65537(b: &mut Bencher) { bench_raders64_avx2_noop(b, 65537); }
+#[bench] fn raders64_noop_avx2_prime_746483(b: &mut Bencher) { bench_raders64_avx2_noop(b,746483); }
+#[bench] fn raders64_noop_avx2_prime_746497(b: &mut Bencher) { bench_raders64_avx2_noop(b,746497); }
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to Rader's algorithm

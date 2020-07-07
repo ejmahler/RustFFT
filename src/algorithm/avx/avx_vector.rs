@@ -347,9 +347,18 @@ pub trait AvxVector256 : AvxVector {
     /// Fill a vector by repeating the provided complex number as many times as possible
     unsafe fn broadcast_complex_elements(value: Complex<Self::ScalarType>) -> Self;
 
+    /// Adds all complex elements from this vector horizontally
+    unsafe fn hadd_complex(self) -> Complex<Self::ScalarType>;
+
     // loads/stores of complex numbers
     unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
     unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
+
+    // Gather 4 complex numbers (for f32) or 2 complex numbers (for f64) using 4 i32 indexes (for gather32) or 4 i64 indexes (for gather64).
+    // For f32, there should be 1 index per complex. For f64, there should be 2 indexes, each duplicated 
+    // (So to load the complex<f64> at index 5 and 7, the index vector should contain 5,5,7,7. this api sucks but it's internal so whatever.)
+    unsafe fn gather32_complex_avx2(ptr: *const Complex<Self::ScalarType>, indexes: __m128i) -> Self;
+    unsafe fn gather64_complex_avx2(ptr: *const Complex<Self::ScalarType>, indexes: __m256i) -> Self;
 
     // loads/stores of partial vectors of complex numbers. When loading, empty elements are zeroed
     // unimplemented!() if Self::COMPLEX_PER_VECTOR is not greater than the partial count
@@ -441,6 +450,12 @@ pub trait AvxVector128 : AvxVector {
 
     /// Fill a vector by repeating the provided complex number as many times as possible
     unsafe fn broadcast_complex_elements(value: Complex<<<Self as AvxVector128>::FullVector as AvxVector256>::ScalarType>) -> Self;
+
+    // Gather 2 complex numbers (for f32) or 1 complex number (for f64) using 2 i32 indexes (for gather32) or 2 i64 indexes (for gather64).
+    // For f32, there should be 1 index per complex. For f64, there should be 2 indexes, each duplicated 
+    // (So to load the complex<f64> at index 5, the index vector should contain 5,5. this api sucks but it's internal so whatever.)
+    unsafe fn gather32_complex_avx2(ptr: *const Complex<<Self::FullVector as AvxVector256>::ScalarType>, indexes: __m128i) -> Self;
+    unsafe fn gather64_complex_avx2(ptr: *const Complex<<Self::FullVector as AvxVector256>::ScalarType>, indexes: __m128i) -> Self;
 
     #[inline(always)]
     unsafe fn column_butterfly6(rows: [Self; 6], twiddles: Self::FullVector) -> [Self; 6] {
@@ -854,6 +869,19 @@ impl AvxVector256 for __m256 {
     }
 
     #[inline(always)]
+    unsafe fn hadd_complex(self) -> Complex<Self::ScalarType> {
+        let lo = self.lo();
+        let hi = self.hi();
+        let sum = _mm_add_ps(lo, hi);
+        let shuffled_sum = Self::HalfVector::unpackhi_complex([sum, sum]);
+        let result = _mm_add_ps(sum, shuffled_sum);
+
+        let mut result_storage = [Complex::zero(); 1];
+        result_storage.store_partial1_complex(result, 0);
+        result_storage[0]
+    }
+
+    #[inline(always)]
     unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
         _mm256_loadu_ps(ptr as *const Self::ScalarType)
     }
@@ -861,6 +889,15 @@ impl AvxVector256 for __m256 {
     unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
         _mm256_storeu_ps(ptr as *mut Self::ScalarType, data)
     }
+    #[inline(always)]
+    unsafe fn gather32_complex_avx2(ptr: *const Complex<Self::ScalarType>, indexes: __m128i) -> Self {
+        _mm256_castpd_ps(_mm256_i32gather_pd(ptr as *const f64, indexes, 8))
+    }
+    #[inline(always)]
+    unsafe fn gather64_complex_avx2(ptr: *const Complex<Self::ScalarType>, indexes: __m256i) -> Self {
+        _mm256_castpd_ps(_mm256_i64gather_pd(ptr as *const f64, indexes, 8))
+    }
+
     #[inline(always)]
     unsafe fn load_partial1_complex(ptr: *const Complex<Self::ScalarType>) -> Self::HalfVector {
         let data = _mm_load_sd(ptr as *const f64);
@@ -1122,6 +1159,14 @@ impl AvxVector128 for __m128 {
     unsafe fn broadcast_complex_elements(value: Complex<f32>) -> Self {
         _mm_set_ps(value.im, value.re, value.im, value.re)
     }
+    #[inline(always)]
+    unsafe fn gather32_complex_avx2(ptr: *const Complex<f32>, indexes: __m128i) -> Self {
+        _mm_castpd_ps(_mm_i32gather_pd(ptr as *const f64, indexes, 8))
+    }
+    #[inline(always)]
+    unsafe fn gather64_complex_avx2(ptr: *const Complex<f32>, indexes: __m128i) -> Self {
+        _mm_castpd_ps(_mm_i64gather_pd(ptr as *const f64, indexes, 8))
+    }
 }
 
 
@@ -1340,6 +1385,17 @@ impl AvxVector256 for __m256d {
     unsafe fn broadcast_complex_elements(value: Complex<Self::ScalarType>) -> Self {
         _mm256_set_pd(value.im, value.re, value.im, value.re)
     }
+
+    #[inline(always)]
+    unsafe fn hadd_complex(self) -> Complex<Self::ScalarType> {
+        let lo = self.lo();
+        let hi = self.hi();
+        let sum = _mm_add_pd(lo, hi);
+
+        let mut result_storage = [Complex::zero(); 1];
+        result_storage.store_partial1_complex(sum, 0);
+        result_storage[0]
+    }
     
     #[inline(always)]
     unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
@@ -1348,6 +1404,22 @@ impl AvxVector256 for __m256d {
     #[inline(always)]
     unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
         _mm256_storeu_pd(ptr as *mut Self::ScalarType, data)
+    }
+    #[inline(always)]
+    unsafe fn gather32_complex_avx2(ptr: *const Complex<Self::ScalarType>, indexes: __m128i) -> Self {
+        let offsets = _mm_set_epi32(1,0,1,0);
+        let shifted = _mm_slli_epi32(indexes, 1);
+        let modified_indexes = _mm_add_epi32(offsets, shifted);
+
+        _mm256_i32gather_pd(ptr as *const f64, modified_indexes, 8)
+    }
+    #[inline(always)]
+    unsafe fn gather64_complex_avx2(ptr: *const Complex<Self::ScalarType>, indexes: __m256i) -> Self {
+        let offsets = _mm256_set_epi64x(1,0,1,0);
+        let shifted = _mm256_slli_epi64(indexes, 1);
+        let modified_indexes = _mm256_add_epi64(offsets, shifted);
+
+        _mm256_i64gather_pd(ptr as *const f64, modified_indexes, 8)
     }
     #[inline(always)]
     unsafe fn load_partial1_complex(ptr: *const Complex<Self::ScalarType>) -> Self::HalfVector {
@@ -1510,6 +1582,20 @@ impl AvxVector128 for __m128d {
     #[inline(always)]
     unsafe fn broadcast_complex_elements(value: Complex<f64>) -> Self {
         _mm_set_pd(value.im, value.re)
+    }
+    #[inline(always)]
+    unsafe fn gather32_complex_avx2(ptr: *const Complex<f64>, indexes: __m128i) -> Self {
+        let mut index_storage : [i32; 4] = [0; 4];
+        _mm_storeu_si128(index_storage.as_mut_ptr() as *mut __m128i, indexes);
+
+        _mm_loadu_pd(ptr.offset(index_storage[0] as isize) as *const f64)
+    }
+    #[inline(always)]
+    unsafe fn gather64_complex_avx2(ptr: *const Complex<f64>, indexes: __m128i) -> Self {
+        let mut index_storage : [i64; 4] = [0; 4];
+        _mm_storeu_si128(index_storage.as_mut_ptr() as *mut __m128i, indexes);
+
+        _mm_loadu_pd(ptr.offset(index_storage[0] as isize) as *const f64)
     }
 }
 
@@ -1733,4 +1819,106 @@ macro_rules! column_butterfly32_loadfn{
             $store_expr(output[7], i + 28);
         }
     )
+}
+
+/// Multiply the complex numbers in `left` by the complex numbers in `right`.
+/// This is exactly the same as `mul_complex` in `AvxVector`, but this implementation also conjugates the `left` input before multiplying
+#[inline(always)]
+unsafe fn mul_complex_conjugated<V: AvxVector>(left: V, right: V) -> V {
+    // Extract the real and imaginary components from left into 2 separate registers
+    let (left_real, left_imag) = V::duplicate_complex_components(left);
+
+    // create a shuffled version of right where the imaginary values are swapped with the reals
+    let right_shuffled = V::swap_complex_components(right);
+
+    // multiply our duplicated imaginary left vector by our shuffled right vector. that will give us the right side of the traditional complex multiplication formula
+    let output_right = V::mul(left_imag, right_shuffled);
+
+    // use a FMA instruction to multiply together left side of the complex multiplication formula, then alternatingly add and subtract the left side from the right
+    // By using subadd instead of addsub, we can conjugate the left side for free.
+    V::fmsubadd(left_real, right, output_right)
+}
+
+// compute buffer[i] = buffer[i].conj() * multiplier[i] pairwise complex multiplication for each element.
+#[target_feature(enable = "avx", enable = "fma")]
+pub unsafe fn pairwise_complex_mul_assign_conjugated<T: FFTnum>(buffer: &mut [Complex<T>], multiplier: &[T::AvxType]) {
+    assert!(multiplier.len() * T::AvxType::COMPLEX_PER_VECTOR >= buffer.len()); // Assert to convince the compiler to omit bounds checks inside the loop
+
+    for (i, buffer_chunk) in buffer.chunks_exact_mut(T::AvxType::COMPLEX_PER_VECTOR).enumerate() {
+        let left = buffer_chunk.load_complex(0);
+
+        // Do a complex multiplication between `left` and `right`
+        let product = mul_complex_conjugated(left, multiplier[i]);
+
+        // Store the result
+        buffer_chunk.store_complex(product, 0);
+    }
+
+    // Process the remainder, if there is one
+    let remainder_count = buffer.len() % T::AvxType::COMPLEX_PER_VECTOR;
+    if remainder_count > 0 {
+        let remainder_index = buffer.len() - remainder_count;
+        let remainder_multiplier = multiplier.last().unwrap();
+        match remainder_count {
+            1 => {
+                let left = buffer.load_partial1_complex(remainder_index);
+                let product = mul_complex_conjugated(left, remainder_multiplier.lo());
+                buffer.store_partial1_complex(product, remainder_index);
+            },
+            2 => {
+                let left = buffer.load_partial2_complex(remainder_index);
+                let product = mul_complex_conjugated(left, remainder_multiplier.lo());
+                buffer.store_partial2_complex(product, remainder_index);
+            },
+            3 => {
+                let left = buffer.load_partial3_complex(remainder_index);
+                let product = mul_complex_conjugated(left, *remainder_multiplier);
+                buffer.store_partial3_complex(product, remainder_index);
+            },
+            _ => unreachable!()
+        } 
+    }
+}
+
+// compute output[i] = input[i].conj() * multiplier[i] pairwise complex multiplication for each element.
+#[target_feature(enable = "avx", enable = "fma")]
+pub unsafe fn pairwise_complex_mul_conjugated<T: FFTnum>(input: &[Complex<T>], output: &mut [Complex<T>], multiplier: &[T::AvxType]) {
+    assert!(multiplier.len() * T::AvxType::COMPLEX_PER_VECTOR >= input.len(), "multiplier len = {}, input len = {}", multiplier.len(), input.len()); // Assert to convince the compiler to omit bounds checks inside the loop
+    assert!(input.len() == output.len()); // Assert to convince the compiler to omit bounds checks inside the loop
+    let main_loop_count = input.len() / T::AvxType::COMPLEX_PER_VECTOR;
+    let remainder_count = input.len() % T::AvxType::COMPLEX_PER_VECTOR;
+
+    for (i, m) in (&multiplier[..main_loop_count]).iter().enumerate() {
+        let left = input.load_complex(i * T::AvxType::COMPLEX_PER_VECTOR);
+
+        // Do a complex multiplication between `left` and `right`
+        let product = mul_complex_conjugated(left, *m);
+
+        // Store the result
+        output.store_complex(product, i * T::AvxType::COMPLEX_PER_VECTOR);
+    }
+
+    // Process the remainder, if there is one
+    if remainder_count > 0 {
+        let remainder_index = input.len() - remainder_count;
+        let remainder_multiplier = multiplier.last().unwrap();
+        match remainder_count {
+            1 => {
+                let left = input.load_partial1_complex(remainder_index);
+                let product = mul_complex_conjugated(left, remainder_multiplier.lo());
+                output.store_partial1_complex(product, remainder_index);
+            },
+            2 => {
+                let left = input.load_partial2_complex(remainder_index);
+                let product = mul_complex_conjugated(left, remainder_multiplier.lo());
+                output.store_partial2_complex(product, remainder_index);
+            },
+            3 => {
+                let left = input.load_partial3_complex(remainder_index);
+                let product = mul_complex_conjugated(left, *remainder_multiplier);
+                output.store_partial3_complex(product, remainder_index);
+            },
+            _ => unreachable!()
+        } 
+    }
 }

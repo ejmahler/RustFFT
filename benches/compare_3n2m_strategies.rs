@@ -15,6 +15,8 @@ use rustfft::num_traits::Zero;
 use rustfft::FFTplanner;
 use rustfft::algorithm::avx::avx_planner::*;
 
+use primal_check::miller_rabin;
+
 use std::sync::Arc;
 
 /// This benchmark's purpose is to build some programmer intuition for planner heuristics
@@ -130,18 +132,17 @@ fn filter_strategy(strategy: &Vec<usize>) -> bool {
 #[ignore]
 #[bench]
 fn generate_3n2m_comparison_benchmarks_32(_: &mut test::Bencher) {
-    let big_butterfly_sizes = [ 128, 256, 512 ]; 
-    let butterfly_sizes = [ 72, 36, 48, 54, 64, 32 ]; 
-    let last_ditch_butterflies = [ 27, 9 ]; 
-    let available_radixes = [FftSize::new(3), FftSize::new(4), FftSize::new(6), FftSize::new(8), FftSize::new(9), FftSize::new(12), FftSize::new(16), FftSize::new(32)];
+    let butterfly_sizes = [ 128, 256, 512, 72, 36, 48, 54, 64 ]; 
+    let last_ditch_butterflies = [ 27, 9, 32, 24 ]; 
+    let available_radixes = [FftSize::new(3), FftSize::new(4), FftSize::new(6), FftSize::new(8), FftSize::new(9), FftSize::new(12), FftSize::new(16)];
 
     let max_len : usize = 1 << 21;
     let min_len = 64;
     let max_power2 = max_len.trailing_zeros();
     let max_power3 = (max_len as f32).log(3.0).ceil() as u32;
     
-    for power3 in 0..1 {
-        for power2 in 7..max_power2 {
+    for power3 in 1..2 {
+        for power2 in 4..max_power2 {
             let len = 3usize.pow(power3) << power2;
             if len > max_len { continue; }
 
@@ -152,8 +153,7 @@ fn generate_3n2m_comparison_benchmarks_32(_: &mut test::Bencher) {
             let mut strategies = vec![];
             let mut last_ditch_strategies = vec![];
             recursive_strategy_builder(&mut strategies, &mut last_ditch_strategies, Vec::new(), FftSize::new(len), &butterfly_sizes, &last_ditch_butterflies, &available_radixes);
-            recursive_strategy_builder(&mut strategies, &mut last_ditch_strategies, Vec::new(), FftSize::new(len), &big_butterfly_sizes, &[], &available_radixes);
-
+            
             if strategies.len() == 0 {
                 strategies = last_ditch_strategies;
             }
@@ -283,19 +283,34 @@ fn generate_3n2m_planned_benchmarks_64(_: &mut test::Bencher) {
 pub struct PartialFactors {
     power2: u32,
     power3: u32,
+    power5: u32,
+    power7: u32,
     other_factors: usize,
 }
 impl PartialFactors {
     pub fn compute(len: usize) -> Self {
         let power2 = len.trailing_zeros();
         let mut other_factors = len >> power2;
+
         let mut power3 = 0;
         while other_factors % 3 == 0 {
             power3 += 1;
             other_factors /= 3;
         }
 
-        Self { power2, power3, other_factors }
+        let mut power5 = 0;
+        while other_factors % 5 == 0 {
+            power5 += 1;
+            other_factors /= 5;
+        }
+
+        let mut power7 = 0;
+        while other_factors % 7 == 0 {
+            power7 += 1;
+            other_factors /= 7;
+        }
+
+        Self { power2, power3, power5, power7, other_factors }
     }
 
     pub fn get_power2(&self) -> u32 {
@@ -304,22 +319,34 @@ impl PartialFactors {
     pub fn get_power3(&self) -> u32 {
         self.power3
     }
+    pub fn get_power5(&self) -> u32 {
+        self.power5
+    }
+    pub fn get_power7(&self) -> u32 {
+        self.power7
+    }
     pub fn get_other_factors(&self) -> usize {
         self.other_factors
     }
-    #[allow(unused)]
     pub fn product(&self) -> usize {
-        (self.other_factors * 3usize.pow(self.power3)) << self.power2
+        (self.other_factors * 3usize.pow(self.power3) * 5usize.pow(self.power5) * 7usize.pow(self.power7)) << self.power2
+    }
+    pub fn product_power2power3(&self) -> usize {
+        3usize.pow(self.power3) << self.power2
     }
     #[allow(unused)]
     pub fn divide_by(&self, divisor: &PartialFactors) -> Option<PartialFactors> {
         let two_divides = self.power2 >= divisor.power2;
         let three_divides = self.power3 >= divisor.power3;
+        let five_divides = self.power5 >= divisor.power5;
+        let seven_divides = self.power7 >= divisor.power7;
         let other_divides = self.other_factors % divisor.other_factors == 0;
-        if two_divides && three_divides && other_divides {
+        if two_divides && three_divides && five_divides && seven_divides && other_divides {
             Some(Self { 
                 power2: self.power2 - divisor.power2,
                 power3: self.power3 - divisor.power3,
+                power5: self.power5 - divisor.power5,
+                power7: self.power7 - divisor.power7,
                 other_factors: if self.other_factors == divisor.other_factors { 1 } else { self.other_factors / divisor.other_factors }
             })
         }
@@ -333,25 +360,13 @@ impl PartialFactors {
 #[ignore]
 #[bench]
 fn generate_raders_benchmarks(_: &mut test::Bencher) {
-    // simple sieve of eratosthones to get all primes below N
-    let max_prime = 1000000;
-    let primes = {
-        let mut primes : Vec<_> = (2..max_prime).collect();
-        let mut index = 0;
-        while index < primes.len() {
-            let value = primes[index];
-            primes.retain(|e| *e == value || e % value > 0);
-            index += 1;
-        }
-        primes
-    };
-
-    for len in primes {
-        let factors = PartialFactors::compute(len - 1);
-        if len > 10 && factors.get_other_factors() == 1 {
-            println!("#[bench] fn comparef32_len{:07}_bluesteins(b: &mut Bencher) {{ bench_planned_bluesteins_f32(b, {}); }}", len*2, len*2);
-            println!("#[bench] fn comparef32_len{:07}_2xn_bluesteins(b: &mut Bencher) {{ bench_2xn_bluesteins_f32(b, {}); }}", len*2, len*2);
-            println!("#[bench] fn comparef32_len{:07}_2xn_raders(b: &mut Bencher) {{ bench_planned_raders_f32(b, {}); }}", len*2, len*2);
+    for len in 10usize..200 {
+        if miller_rabin(len as u64) {
+            let inner_other_factors = PartialFactors::compute(len - 1).get_other_factors();
+            if inner_other_factors == 1 {
+                println!("#[bench] fn comparef32_len{:07}_bluesteins(b: &mut Bencher) {{ bench_planned_bluesteins_f32(b, {}); }}", len, len);
+                println!("#[bench] fn comparef32_len{:07}_raders(b: &mut Bencher) {{ bench_planned_raders_f32(b, {}); }}", len, len);
+            }
         }
     }
 }
@@ -500,40 +515,75 @@ fn bench_2xn_bluesteins_f32(b: &mut Bencher, len: usize) {
 // Computes the given FFT length using Rader's Algorithm, using the planner to plan the inner FFT
 fn bench_planned_raders_f32(b: &mut Bencher, len: usize) {
     let mut planner : FftPlannerAvx<f32> = FftPlannerAvx::new(false).unwrap();
-    let inner_fft = planner.construct_raders(len);
-    let fft : Arc<dyn Fft<f32>> = Arc::new(MixedRadix2xnAvx::new(inner_fft).unwrap());
+    let fft = planner.construct_raders(len);
 
     let mut buffer = vec![Complex::zero(); fft.len()];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch); });
 }
 
-#[bench] fn comparef64__2power03__3power00__len00000008__8(b: &mut Bencher) { compare_fft_f64(b, &[8]); }
-#[bench] fn comparef64__2power04__3power00__len00000016__16(b: &mut Bencher) { compare_fft_f64(b, &[16]); }
-#[bench] fn comparef64__2power05__3power00__len00000032__32(b: &mut Bencher) { compare_fft_f64(b, &[32]); }
-#[bench] fn comparef64__2power06__3power00__len00000064__64(b: &mut Bencher) { compare_fft_f64(b, &[64]); }
-#[bench] fn comparef64__2power07__3power00__len00000128__128(b: &mut Bencher) { compare_fft_f64(b, &[128]); }
-#[bench] fn comparef64__2power08__3power00__len00000256__256(b: &mut Bencher) { compare_fft_f64(b, &[256]); }
-#[bench] fn comparef64__2power09__3power00__len00000512__512(b: &mut Bencher) { compare_fft_f64(b, &[512]); }
-#[bench] fn comparef64__2power10__3power00__len00001024__256_4(b: &mut Bencher) { compare_fft_f64(b, &[256,4]); }
-#[bench] fn comparef64__2power10__3power00__len00001024__128_8(b: &mut Bencher) { compare_fft_f64(b, &[128,8]); }
-#[bench] fn comparef64__2power11__3power00__len00002048__512_4(b: &mut Bencher) { compare_fft_f64(b, &[512,4]); }
-#[bench] fn comparef64__2power11__3power00__len00002048__256_8(b: &mut Bencher) { compare_fft_f64(b, &[256,8]); }
-#[bench] fn comparef64__2power12__3power00__len00004096__128_8_4(b: &mut Bencher) { compare_fft_f64(b, &[128,8,4]); }
-#[bench] fn comparef64__2power12__3power00__len00004096__512_8(b: &mut Bencher) { compare_fft_f64(b, &[512,8]); }
-#[bench] fn comparef64__2power13__3power00__len00008192__256_8_4(b: &mut Bencher) { compare_fft_f64(b, &[256,8,4]); }
-#[bench] fn comparef64__2power13__3power00__len00008192__128_8_8(b: &mut Bencher) { compare_fft_f64(b, &[128,8,8]); }
-#[bench] fn comparef64__2power14__3power00__len00016384__512_8_4(b: &mut Bencher) { compare_fft_f64(b, &[512,8,4]); }
-#[bench] fn comparef64__2power14__3power00__len00016384__256_8_8(b: &mut Bencher) { compare_fft_f64(b, &[256,8,8]); }
-#[bench] fn comparef64__2power15__3power00__len00032768__128_8_8_4(b: &mut Bencher) { compare_fft_f64(b, &[128,8,8,4]); }
-#[bench] fn comparef64__2power15__3power00__len00032768__512_8_8(b: &mut Bencher) { compare_fft_f64(b, &[512,8,8]); }
-#[bench] fn comparef64__2power16__3power00__len00065536__256_8_8_4(b: &mut Bencher) { compare_fft_f64(b, &[256,8,8,4]); }
-#[bench] fn comparef64__2power16__3power00__len00065536__128_8_8_8(b: &mut Bencher) { compare_fft_f64(b, &[128,8,8,8]); }
-#[bench] fn comparef64__2power17__3power00__len00131072__512_8_8_4(b: &mut Bencher) { compare_fft_f64(b, &[512,8,8,4]); }
-#[bench] fn comparef64__2power17__3power00__len00131072__256_8_8_8(b: &mut Bencher) { compare_fft_f64(b, &[256,8,8,8]); }
-#[bench] fn comparef64__2power18__3power00__len00262144__128_8_8_8_4(b: &mut Bencher) { compare_fft_f64(b, &[128,8,8,8,4]); }
-#[bench] fn comparef64__2power18__3power00__len00262144__512_8_8_8(b: &mut Bencher) { compare_fft_f64(b, &[512,8,8,8]); }
-#[bench] fn comparef64__2power19__3power00__len00524288__256_8_8_8_4(b: &mut Bencher) { compare_fft_f64(b, &[256,8,8,8,4]); }
-#[bench] fn comparef64__2power19__3power00__len00524288__128_8_8_8_8(b: &mut Bencher) { compare_fft_f64(b, &[128,8,8,8,8]); }
-#[bench] fn comparef64__2power20__3power00__len01048576__512_8_8_8_4(b: &mut Bencher) { compare_fft_f64(b, &[512,8,8,8,4]); }
-#[bench] fn comparef64__2power20__3power00__len01048576__256_8_8_8_8(b: &mut Bencher) { compare_fft_f64(b, &[256,8,8,8,8]); }
+
+// Computes the given FFT length using Bluestein's Algorithm, using the planner to plan the inner FFT
+fn bench_planned_bluesteins_f64(b: &mut Bencher, len: usize) {
+    let mut planner : FftPlannerAvx<f64> = FftPlannerAvx::new(false).unwrap();
+    let fft = planner.construct_bluesteins(len*2);
+
+    let mut buffer = vec![Complex::zero(); fft.len()];
+    let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
+    b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch); });
+}
+
+// Computes the given FFT length using Rader's Algorithm, using the planner to plan the inner FFT
+fn bench_planned_raders_f64(b: &mut Bencher, len: usize) {
+    let mut planner : FftPlannerAvx<f64> = FftPlannerAvx::new(false).unwrap();
+    let fft = planner.construct_raders(len);
+
+    let mut buffer = vec![Complex::zero(); fft.len()];
+    let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
+    b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch); });
+}
+
+#[bench] fn comparef32_len0000011_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f32(b, 11); }
+#[bench] fn comparef32_len0000011_raders(b: &mut Bencher) { bench_planned_raders_f32(b, 11); }
+#[bench] fn comparef32_len0000013_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f32(b, 13); }
+#[bench] fn comparef32_len0000013_raders(b: &mut Bencher) { bench_planned_raders_f32(b, 13); }
+#[bench] fn comparef32_len0000017_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f32(b, 17); }
+#[bench] fn comparef32_len0000017_raders(b: &mut Bencher) { bench_planned_raders_f32(b, 17); }
+#[bench] fn comparef32_len0000019_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f32(b, 19); }
+#[bench] fn comparef32_len0000019_raders(b: &mut Bencher) { bench_planned_raders_f32(b, 19); }
+#[bench] fn comparef32_len0000029_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f32(b, 29); }
+#[bench] fn comparef32_len0000029_raders(b: &mut Bencher) { bench_planned_raders_f32(b, 29); }
+#[bench] fn comparef32_len0000031_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f32(b, 31); }
+#[bench] fn comparef32_len0000031_raders(b: &mut Bencher) { bench_planned_raders_f32(b, 31); }
+#[bench] fn comparef32_len0000037_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f32(b, 37); }
+#[bench] fn comparef32_len0000037_raders(b: &mut Bencher) { bench_planned_raders_f32(b, 37); }
+#[bench] fn comparef32_len0000041_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f32(b, 41); }
+#[bench] fn comparef32_len0000041_raders(b: &mut Bencher) { bench_planned_raders_f32(b, 41); }
+#[bench] fn comparef32_len0000043_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f32(b, 43); }
+#[bench] fn comparef32_len0000043_raders(b: &mut Bencher) { bench_planned_raders_f32(b, 43); }
+#[bench] fn comparef32_len0000061_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f32(b, 61); }
+#[bench] fn comparef32_len0000061_raders(b: &mut Bencher) { bench_planned_raders_f32(b, 61); }
+#[bench] fn comparef32_len0000071_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f32(b, 71); }
+#[bench] fn comparef32_len0000071_raders(b: &mut Bencher) { bench_planned_raders_f32(b, 71); }
+#[bench] fn comparef32_len0000073_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f32(b, 73); }
+#[bench] fn comparef32_len0000073_raders(b: &mut Bencher) { bench_planned_raders_f32(b, 73); }
+#[bench] fn comparef32_len0000097_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f32(b, 97); }
+#[bench] fn comparef32_len0000097_raders(b: &mut Bencher) { bench_planned_raders_f32(b, 97); }
+#[bench] fn comparef32_len0000101_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f32(b, 101); }
+#[bench] fn comparef32_len0000101_raders(b: &mut Bencher) { bench_planned_raders_f32(b, 101); }
+#[bench] fn comparef32_len0000109_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f32(b, 109); }
+#[bench] fn comparef32_len0000109_raders(b: &mut Bencher) { bench_planned_raders_f32(b, 109); }
+#[bench] fn comparef32_len0000113_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f32(b, 113); }
+#[bench] fn comparef32_len0000113_raders(b: &mut Bencher) { bench_planned_raders_f32(b, 113); }
+#[bench] fn comparef32_len0000127_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f32(b, 127); }
+#[bench] fn comparef32_len0000127_raders(b: &mut Bencher) { bench_planned_raders_f32(b, 127); }
+#[bench] fn comparef32_len0000151_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f32(b, 151); }
+#[bench] fn comparef32_len0000151_raders(b: &mut Bencher) { bench_planned_raders_f32(b, 151); }
+#[bench] fn comparef32_len0000163_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f32(b, 163); }
+#[bench] fn comparef32_len0000163_raders(b: &mut Bencher) { bench_planned_raders_f32(b, 163); }
+#[bench] fn comparef32_len0000181_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f32(b, 181); }
+#[bench] fn comparef32_len0000181_raders(b: &mut Bencher) { bench_planned_raders_f32(b, 181); }
+#[bench] fn comparef32_len0000193_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f32(b, 193); }
+#[bench] fn comparef32_len0000193_raders(b: &mut Bencher) { bench_planned_raders_f32(b, 193); }
+#[bench] fn comparef32_len0000197_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f32(b, 197); }
+#[bench] fn comparef32_len0000197_raders(b: &mut Bencher) { bench_planned_raders_f32(b, 197); }

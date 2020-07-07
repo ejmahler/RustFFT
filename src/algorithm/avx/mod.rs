@@ -100,6 +100,7 @@ mod avx64_butterflies;
 
 mod avx_mixed_radix;
 mod avx_bluesteins;
+mod avx_raders;
 
 pub mod avx_planner;
 
@@ -141,5 +142,6 @@ pub use self::avx64_butterflies::{
     Butterfly512Avx64,
 };
 
+pub use self::avx_raders::RadersAvx2;
 pub use self::avx_bluesteins::BluesteinsAvx;
 pub use self::avx_mixed_radix::{MixedRadix2xnAvx, MixedRadix3xnAvx, MixedRadix4xnAvx, MixedRadix5xnAvx, MixedRadix6xnAvx, MixedRadix7xnAvx, MixedRadix8xnAvx, MixedRadix9xnAvx, MixedRadix12xnAvx, MixedRadix16xnAvx};

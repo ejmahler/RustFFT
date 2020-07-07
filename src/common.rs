@@ -190,13 +190,13 @@ macro_rules! boilerplate_fft {
                 $out_of_place_scratch_len_fn(self)
             }
         }
-        impl<T> Length for $struct_name<T> {
+        impl<T: FFTnum> Length for $struct_name<T> {
             #[inline(always)]
             fn len(&self) -> usize {
                 $len_fn(self)
             }
         }
-        impl<T> IsInverse for $struct_name<T> {
+        impl<T: FFTnum> IsInverse for $struct_name<T> {
             #[inline(always)]
             fn is_inverse(&self) -> bool {
                 self.inverse

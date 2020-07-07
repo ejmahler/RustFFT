@@ -2,9 +2,11 @@ use std::sync::Arc;
 use std::collections::HashMap;
 use std::cmp::min;
 
+use primal_check::miller_rabin;
+
 use crate::algorithm::butterflies::*;
 use crate::algorithm::*;
-use crate::math_utils::{PartialFactors, PrimeFactors};
+use crate::math_utils::PartialFactors;
 use crate::common::FFTnum;
 use crate::Fft;
 
@@ -217,12 +219,18 @@ impl<T: FFTnum> FftPlannerAvx<T> {
 
         // if we get to this point, we will have to use either rader's algorithm or bluestein's algorithm as our base
         // We can only use rader's if `len` is prime, so next step is to compute a full factorization
-        if PrimeFactors::compute(len).is_prime() {
+        if miller_rabin(len as u64) {
             // len is prime, so we can use Rader's Algorithm as a base. Whether or not that's a good idea is a different story
             // Rader's Algorithm is only faster in a few narrow cases. 
-            // as a heuristic, only use rader's algorithm if its inner FFT can be computed entirely on the 2^n * 3^m fast path, and the problem is too large to fit easily in cache
-            if PartialFactors::compute(len - 1).get_other_factors() == 1 && len > 65536 {
-                return self.plan_with_cache(len, Self::construct_raders);
+            // as a heuristic, only use rader's algorithm if its inner FFT can be computed entirely without bluestein's or rader's
+            // We're intentionally being too conservative here. Otherwise we'd be recursively applying a heuristic, and repeated heuristic failures could stack to make a rader's chain significantly slower.
+            // If we were writing a measuring planner, expanding this heuristic and measuring its effectiveness would be an opportunity for up to 2x performance gains.
+            let inner_factors = PartialFactors::compute(len - 1);
+            if inner_factors.get_other_factors() == 1 {
+                // We only have factors of 2,3,5, and 7. If we don't have AVX2, we also have to exclude factors of 5 and 7, because avx2 gives us enough headroom for the overhead of those to not be a problem
+                if is_x86_feature_detected!("avx2") || (inner_factors.get_power5() == 0 && inner_factors.get_power7() == 0) {
+                    return self.plan_with_cache(len, Self::construct_raders);
+                }
             }
         }
 
@@ -254,7 +262,13 @@ impl<T: FFTnum> MakeFftAvx<T> for FftPlannerAvx<T> {
     default fn construct_bluesteins(&mut self, _len: usize) -> Arc<dyn Fft<T>> { unimplemented!(); }
     default fn construct_raders(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         let inner_fft = self.plan_fft(len - 1);
-        wrap_fft(RadersAlgorithm::new(inner_fft))
+        
+        // try to construct our AVX2 rader's algorithm. If that fails (probably because the machine we're running on doesn't have AVX2), fall back to scalar
+        if let Ok(raders_avx) = RadersAvx2::new(Arc::clone(&inner_fft)) {
+            wrap_fft(raders_avx)
+        } else {
+            wrap_fft(RadersAlgorithm::new(inner_fft))
+        }
     }
 }
 
@@ -331,7 +345,7 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
                     _ => unreachable!(),
                 },
                 3 => match factors.get_power3() % 2 {
-                    0 => MixedRadixPlan::new(72, &[12]),
+                    0 => MixedRadixPlan::new(72, &[]),
                     1 => MixedRadixPlan::new(if factors.get_power3() > 7 { 24 } else { 72 }, &[]),
                     _ => unreachable!(),
                 },
