@@ -100,7 +100,7 @@ mod unit_tests {
             let mut sum = Zero::zero();
             for (i, &x) in signal.iter().enumerate() {
                 let angle = -1f32 * (i * k) as f32 * 2f32 * f32::consts::PI / signal.len() as f32;
-                let twiddle = Complex::from_polar(&1f32, &angle);
+                let twiddle = Complex::from_polar(1f32, angle);
 
                 sum = sum + twiddle * x;
             }

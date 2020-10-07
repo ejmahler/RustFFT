@@ -18,7 +18,7 @@ pub fn single_twiddle<T: FFTnum>(i: usize, fft_len: usize, inverse: bool) -> Com
         -2f64 * f64::consts::PI
     };
 
-    let c = Complex::from_polar(&One::one(), &(constant * i as f64 / fft_len as f64));
+    let c = Complex::from_polar(One::one(), constant * i as f64 / fft_len as f64);
 
     Complex {
         re: FromPrimitive::from_f64(c.re).unwrap(),
@@ -51,7 +51,7 @@ mod unit_tests {
 
         for len in 1..10 {
             let actual: Vec<Complex<f32>> = generate_twiddle_factors(len, false);
-            let expected: Vec<Complex<f32>> = (0..len).map(|i| Complex::from_polar(&1f32, &(constant * i as f32 / len as f32))).collect();
+            let expected: Vec<Complex<f32>> = (0..len).map(|i| Complex::from_polar(1f32, constant * i as f32 / len as f32)).collect();
 
             assert!(compare_vectors(&actual, &expected), "len = {}", len)
         }

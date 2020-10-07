@@ -12,11 +12,11 @@ categories = ["algorithms", "compression", "multimedia::encoding", "science"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-num-complex = "0.2"
+num-complex = "0.3"
+num-integer = "0.1.43"
 num-traits = "0.2"
-num-integer = "0.1"
 strength_reduce = "^0.2.1"
-transpose = "0.1"
+transpose = "0.2"
 
 [dev-dependencies]
 rand = "0.5"
