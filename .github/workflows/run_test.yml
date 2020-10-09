@@ -1,6 +1,6 @@
 on: [push, pull_request]
 
-name: CI test and lint
+name: CI
 
 jobs:
   check:
