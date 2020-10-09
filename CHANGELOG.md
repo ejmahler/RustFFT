@@ -1,3 +1,10 @@
+## [4.0.0]
+### Breaking Changes
+- Increased the version of the num-complex dependency to 0.3. This is a breaking change because we have a public dependency on num-complex.
+See the [num-complex changelog](https://github.com/rust-num/num-complex/blob/master/RELEASES.md) for a list of breaking changes in num-complex 0.3.
+- Increased the minimum required Rust version from 1.26 to 1.31. This was required by the upgrade to num-complex 0.3.
+
+
 ## [3.0.1]
 ### Fixed
 - Fixed warnings regarding "dyn trait", and warnings regarding inclusive ranges

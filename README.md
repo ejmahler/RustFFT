@@ -1,16 +1,16 @@
 # RustFFT
 
-[![Build Status](https://travis-ci.org/awelkie/RustFFT.svg?branch=master)](https://travis-ci.org/awelkie/RustFFT)
+[![Build Status](https://github.com/ejmahler/RustFFT/workflows/CI%20test%20and%20lint/badge.svg)](https://github.com/ejmahler/RustFFT/actions?query=workflow%3A%22CI+test+and+lint%22)
 [![](https://img.shields.io/crates/v/rustfft.svg)](https://crates.io/crates/rustfft)
 [![](https://img.shields.io/crates/l/rustfft.svg)](https://crates.io/crates/rustfft)
 [![](https://docs.rs/rustfft/badge.svg)](https://docs.rs/rustfft/)
-![minimum rustc 1.26](https://img.shields.io/badge/rustc-1.26+-red.svg)
+![minimum rustc 1.31](https://img.shields.io/badge/rustc-1.31+-red.svg)
 
 RustFFT is a mixed-radix FFT implementation written in Rust. See the [documentation](https://docs.rs/rustfft/) for more details.
 
 ## Compatibility
 
-The `rustfft` crate requires rustc 1.26 or greater.
+The `rustfft` crate requires rustc 1.31 or greater.
 
 ## License
 
