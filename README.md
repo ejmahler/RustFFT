@@ -1,6 +1,6 @@
 # RustFFT
 
-![CI](https://github.com/ejmahler/RustFFT/workflows/CI/badge.svg)
+[![CI](https://github.com/ejmahler/RustFFT/workflows/CI/badge.svg)](https://github.com/ejmahler/RustFFT/actions?query=workflow%3ACI)
 [![](https://img.shields.io/crates/v/rustfft.svg)](https://crates.io/crates/rustfft)
 [![](https://img.shields.io/crates/l/rustfft.svg)](https://crates.io/crates/rustfft)
 [![](https://docs.rs/rustfft/badge.svg)](https://docs.rs/rustfft/)
