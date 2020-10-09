@@ -1,6 +1,6 @@
 # RustFFT
 
-[![Build Status](https://github.com/ejmahler/RustFFT/workflows/CI%20test%20and%20lint/badge.svg)](https://github.com/ejmahler/RustFFT/actions?query=workflow%3A%22CI+test+and+lint%22)
+![CI](https://github.com/ejmahler/RustFFT/workflows/CI/badge.svg)
 [![](https://img.shields.io/crates/v/rustfft.svg)](https://crates.io/crates/rustfft)
 [![](https://img.shields.io/crates/l/rustfft.svg)](https://crates.io/crates/rustfft)
 [![](https://docs.rs/rustfft/badge.svg)](https://docs.rs/rustfft/)
