@@ -5,8 +5,6 @@
 //! DFT calculation for those signals.
 
 
-extern crate rustfft;
-extern crate rand;
 
 use std::f32;
 

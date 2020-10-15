@@ -1,10 +1,10 @@
 use num_complex::Complex;
 use num_traits::Zero;
 
-use common::{FFTnum, verify_length, verify_length_divisible};
+use crate::common::{FFTnum, verify_length, verify_length_divisible};
 
-use ::{Length, IsInverse, FFT};
-use twiddles;
+use crate::{Length, IsInverse, FFT};
+use crate::twiddles;
 
 /// Naive O(n^2 ) Discrete Fourier Transform implementation
 ///
@@ -91,7 +91,7 @@ impl<T> IsInverse for DFT<T> {
 mod unit_tests {
     use super::*;
     use std::f32;
-    use test_utils::{random_signal, compare_vectors};
+    use crate::test_utils::{random_signal, compare_vectors};
     use num_complex::Complex;
     use num_traits::Zero;
 

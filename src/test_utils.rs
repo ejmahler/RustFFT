@@ -6,8 +6,8 @@ use std::sync::Arc;
 use rand::{StdRng, SeedableRng};
 use rand::distributions::{Normal, Distribution};
 
-use algorithm::{DFT, butterflies};
-use FFT;
+use crate::algorithm::{DFT, butterflies};
+use crate::FFT;
 
 
 /// The seed for the random number generator used to generate

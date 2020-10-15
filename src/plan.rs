@@ -2,13 +2,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use num_integer::gcd;
 
-use common::FFTnum;
+use crate::common::FFTnum;
 
-use FFT;
-use algorithm::*;
-use algorithm::butterflies::*;
+use crate::FFT;
+use crate::algorithm::*;
+use crate::algorithm::butterflies::*;
 
-use math_utils;
+use crate::math_utils;
 
 
 const MIN_RADIX4_BITS: u32 = 5; // smallest size to consider radix 4 an option is 2^5 = 32

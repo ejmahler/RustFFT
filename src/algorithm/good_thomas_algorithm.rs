@@ -4,13 +4,13 @@ use num_complex::Complex;
 use strength_reduce::StrengthReducedUsize;
 use transpose;
 
-use common::{FFTnum, verify_length, verify_length_divisible};
+use crate::common::{FFTnum, verify_length, verify_length_divisible};
 
-use math_utils;
-use array_utils;
+use crate::math_utils;
+use crate::array_utils;
 
-use ::{Length, IsInverse, FFT};
-use algorithm::butterflies::FFTButterfly;
+use crate::{Length, IsInverse, FFT};
+use crate::algorithm::butterflies::FFTButterfly;
 
 /// Implementation of the [Good-Thomas Algorithm (AKA Prime Factor Algorithm)](https://en.wikipedia.org/wiki/Prime-factor_FFT_algorithm)
 ///
@@ -311,8 +311,8 @@ impl<T> IsInverse for GoodThomasAlgorithmDoubleButterfly<T> {
 mod unit_tests {
     use super::*;
     use std::sync::Arc;
-    use test_utils::{check_fft_algorithm, make_butterfly};
-    use algorithm::DFT;
+    use crate::test_utils::{check_fft_algorithm, make_butterfly};
+    use crate::algorithm::DFT;
     use num_integer::gcd;
 
     #[test]

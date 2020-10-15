@@ -60,11 +60,8 @@
 #![allow(unknown_lints)] // The "bare trait objects" lint is unknown on rustc 1.26
 #![allow(bare_trait_objects)]
 
-pub extern crate num_complex;
-pub extern crate num_traits;
-extern crate num_integer;
-extern crate strength_reduce;
-extern crate transpose;
+pub use num_complex;
+pub use num_traits;
 
 
 
@@ -78,8 +75,8 @@ mod common;
 
 use num_complex::Complex;
 
-pub use plan::FFTplanner;
-pub use common::FFTnum;
+pub use crate::plan::FFTplanner;
+pub use crate::common::FFTnum;
 
 
 
@@ -118,7 +115,6 @@ pub trait FFT<T: FFTnum>: Length + IsInverse + Sync + Send {
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]);
 }
 
-#[cfg(test)]
-extern crate rand;
+
 #[cfg(test)]
 mod test_utils;

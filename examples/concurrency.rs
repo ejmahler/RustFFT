@@ -1,7 +1,5 @@
 //! Show how to use an `FFT` object from multiple threads
 
-extern crate rustfft;
-
 use std::thread;
 use std::sync::Arc;
 
