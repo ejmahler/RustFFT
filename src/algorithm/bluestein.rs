@@ -12,6 +12,7 @@ use ::{Length, IsInverse, FFT};
 /// This algorithm computes a FFT of any size by using converting it to a convolution, where a longer power-of-two length FFT is used. 
 /// The primary use is for prime-sized FFTs of lengths where Rader's alorithm is slow.
 ///
+/// This implementation is based on the one in the [fourier library](https://github.com/calebzulawski/fourier) by Caleb Zulawski.
 /// ~~~
 /// // Computes a forward FFT of size 1201 (prime number), using Bluesteins's Algorithm
 /// use rustfft::algorithm::Bluesteins;
