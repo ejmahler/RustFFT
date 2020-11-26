@@ -27,6 +27,18 @@ pub fn verify_length<T>(input: &[T], output: &[T], expected: usize) {
 
 #[inline(always)]
 pub fn verify_length_divisible<T>(input: &[T], output: &[T], expected: usize) {
-    assert_eq!(input.len() % expected,0,"Input is the wrong length. Expected multiple of {}, got {}",expected,input.len());
-    assert_eq!(input.len(),output.len(),"Input and output must have the same length. Expected {}, got {}",input.len(),output.len());
+    assert_eq!(
+        input.len() % expected,
+        0,
+        "Input is the wrong length. Expected multiple of {}, got {}",
+        expected,
+        input.len()
+    );
+    assert_eq!(
+        input.len(),
+        output.len(),
+        "Input and output must have the same length. Expected {}, got {}",
+        input.len(),
+        output.len()
+    );
 }
