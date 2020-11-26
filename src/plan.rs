@@ -206,28 +206,15 @@ impl<T: FFTnum> FFTplanner<T> {
         }
     }
 
-    //fn plan_prime(&mut self, len: usize) -> Arc<FFT<T>> {
-    //    let inner_fft_len = len - 1;
-    //    let factors = math_utils::prime_factors(inner_fft_len);
-    //
-    //    let inner_fft = self.plan_fft_with_factors(inner_fft_len, &factors);
-    //
-    //    Arc::new(RadersAlgorithm::new(len, inner_fft)) as Arc<FFT<T>>
-    //}
-
     fn plan_prime(&mut self, len: usize) -> Arc<FFT<T>> {
         let inner_fft_len = len - 1;
         if math_utils::distinct_prime_factors(inner_fft_len as u64/2).len() <= 2 {  
             let inner_fft_len = (2 * len - 1).checked_next_power_of_two().unwrap();
-            let factors = math_utils::prime_factors(inner_fft_len);
-            let mut planner_fw = FFTplanner::new(false);
-            let mut planner_inv = FFTplanner::new(true);
-            let inner_fft_fw = planner_fw.plan_fft_with_factors(inner_fft_len, &factors);
-            let inner_fft_inv = planner_inv.plan_fft_with_factors(inner_fft_len, &factors);
+            let inner_fft_fw = Arc::new(Radix4::new(inner_fft_len, false));
+            let inner_fft_inv = Arc::new(Radix4::new(inner_fft_len, true));
             Arc::new(Bluesteins::new(len, inner_fft_fw, inner_fft_inv, self.inverse)) as Arc<FFT<T>>
         }
         else {
-            //let inner_fft_len = len - 1;
             let factors = math_utils::prime_factors(inner_fft_len);
             let inner_fft = self.plan_fft_with_factors(inner_fft_len, &factors);
             Arc::new(RadersAlgorithm::new(len, inner_fft)) as Arc<FFT<T>>
