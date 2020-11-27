@@ -208,14 +208,15 @@ impl<T: FFTnum> FFTplanner<T> {
 
     fn plan_prime(&mut self, len: usize) -> Arc<FFT<T>> {
         let inner_fft_len = len - 1;
-        if math_utils::distinct_prime_factors(inner_fft_len as u64/2).len() <= 2 {  
+        let factors = math_utils::prime_factors(inner_fft_len);
+        // If any of the prime factors is larger than 7, Rader's gets slow and Bluestein's is the better choice
+        if factors.iter().any(|val| *val > 7) {
             let inner_fft_len = (2 * len - 1).checked_next_power_of_two().unwrap();
             let inner_fft_fw = Arc::new(Radix4::new(inner_fft_len, false));
             let inner_fft_inv = Arc::new(Radix4::new(inner_fft_len, true));
             Arc::new(Bluesteins::new(len, inner_fft_fw, inner_fft_inv, self.inverse)) as Arc<FFT<T>>
         }
         else {
-            let factors = math_utils::prime_factors(inner_fft_len);
             let inner_fft = self.plan_fft_with_factors(inner_fft_len, &factors);
             Arc::new(RadersAlgorithm::new(len, inner_fft)) as Arc<FFT<T>>
         }
