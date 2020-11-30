@@ -1,7 +1,6 @@
 use num_traits::{FromPrimitive, Num};
 use std::ops::Neg;
 
-/// Generic floating point number, implemented for f32 and f64
 pub trait FFTnum: Copy + FromPrimitive + Num + Neg<Output = Self> + Sync + Send + 'static {}
 
 impl<T> FFTnum for T where T: Copy + FromPrimitive + Num + Neg<Output = Self> + Sync + Send + 'static
