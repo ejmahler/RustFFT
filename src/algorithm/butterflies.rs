@@ -490,77 +490,139 @@ impl<T> IsInverse for Butterfly6<T> {
 
 
 pub struct Butterfly7<T> {
-    inner_fft: Butterfly6<T>,
-    inner_fft_multiply: [Complex<T>; 6]
+    //inner_fft: Butterfly6<T>,
+    //inner_fft_multiply: [Complex<T>; 6]
+    twiddle1: Complex<T>,
+    twiddle2: Complex<T>,
+    twiddle3: Complex<T>,
+    inverse: bool,
 }
 impl<T: FFTnum> Butterfly7<T> {
+//    pub fn new(inverse: bool) -> Self {
+//
+//        //we're going to hardcode a raders algorithm of size 5 and an inner FFT of size 4
+//        let sixth: T = FromPrimitive::from_f64(1f64/6f64).unwrap();
+//        let twiddle1: Complex<T> = twiddles::single_twiddle(1, 7, inverse) * sixth;
+//        let twiddle2: Complex<T> = twiddles::single_twiddle(2, 7, inverse) * sixth;
+//        let twiddle3: Complex<T> = twiddles::single_twiddle(3, 7, inverse) * sixth;
+//
+//        //our primitive root will be 3, and our inverse will be 5. the powers of 5 mod 7 are 1,5,4,6,2,3, so we hardcode to use the twiddles in that order
+//        let mut fft_data = [twiddle1, twiddle2.conj(), twiddle3.conj(), twiddle1.conj(), twiddle2, twiddle3];
+//
+//        let butterfly = Butterfly6::new(inverse);
+//        unsafe { butterfly.process_inplace(&mut fft_data) };
+//
+//        Butterfly7 { 
+//            inner_fft: butterfly,
+//            inner_fft_multiply: fft_data,
+//        }
+//    }
     pub fn new(inverse: bool) -> Self {
 
-        //we're going to hardcode a raders algorithm of size 5 and an inner FFT of size 4
-        let sixth: T = FromPrimitive::from_f64(1f64/6f64).unwrap();
-        let twiddle1: Complex<T> = twiddles::single_twiddle(1, 7, inverse) * sixth;
-        let twiddle2: Complex<T> = twiddles::single_twiddle(2, 7, inverse) * sixth;
-        let twiddle3: Complex<T> = twiddles::single_twiddle(3, 7, inverse) * sixth;
-
-        //our primitive root will be 3, and our inverse will be 5. the powers of 5 mod 7 are 1,5,4,6,2,3, so we hardcode to use the twiddles in that order
-        let mut fft_data = [twiddle1, twiddle2.conj(), twiddle3.conj(), twiddle1.conj(), twiddle2, twiddle3];
-
-        let butterfly = Butterfly6::new(inverse);
-        unsafe { butterfly.process_inplace(&mut fft_data) };
+        let twiddle1: Complex<T> = twiddles::single_twiddle(1, 7, inverse);
+        let twiddle2: Complex<T> = twiddles::single_twiddle(2, 7, inverse);
+        let twiddle3: Complex<T> = twiddles::single_twiddle(3, 7, inverse);
 
         Butterfly7 { 
-            inner_fft: butterfly,
-            inner_fft_multiply: fft_data,
+            twiddle1, 
+            twiddle2,
+            twiddle3,
+            inverse,
         }
     }
 }
 impl<T: FFTnum> FFTButterfly<T> for Butterfly7<T> {
-    #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
-        //we're going to reorder the buffer directly into our scratch vec
-        //our primitive root is 3. use 3^n mod 7 to determine which index to copy from
-        let mut scratch = [
-            *buffer.get_unchecked(3),
-            *buffer.get_unchecked(2),
-            *buffer.get_unchecked(6),
-            *buffer.get_unchecked(4),
-            *buffer.get_unchecked(5),
-            *buffer.get_unchecked(1),
-            ];
-
-        //perform the first inner FFT
-        self.inner_fft.process_inplace(&mut scratch);
-
-        //multiply the fft result with our precomputed data
-        for i in 0..6 {
-            scratch[i] = scratch[i] * self.inner_fft_multiply[i];
-        }
-
-        //perform the second inner FFT
-        let inverse6 = Butterfly6::inverse_of(&self.inner_fft);
-        inverse6.process_inplace(&mut scratch);
-
-        //the first element of the output is the sum of the rest
-        let first_input = *buffer.get_unchecked(0);
-        let mut sum = first_input;
-        for i in 1..7 {
-            sum = sum + *buffer.get_unchecked_mut(i);
-        }
-        *buffer.get_unchecked_mut(0) = sum;
-
-        //use the inverse root ordering to copy data back out
-        *buffer.get_unchecked_mut(5) = scratch[0] + first_input;
-        *buffer.get_unchecked_mut(4) = scratch[1] + first_input;
-        *buffer.get_unchecked_mut(6) = scratch[2] + first_input;
-        *buffer.get_unchecked_mut(2) = scratch[3] + first_input;
-        *buffer.get_unchecked_mut(3) = scratch[4] + first_input;
-        *buffer.get_unchecked_mut(1) = scratch[5] + first_input;
-    }
+//    #[inline(always)]
+//    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+//        //we're going to reorder the buffer directly into our scratch vec
+//        //our primitive root is 3. use 3^n mod 7 to determine which index to copy from
+//        let mut scratch = [
+//            *buffer.get_unchecked(3),
+//            *buffer.get_unchecked(2),
+//            *buffer.get_unchecked(6),
+//            *buffer.get_unchecked(4),
+//            *buffer.get_unchecked(5),
+//            *buffer.get_unchecked(1),
+//            ];
+//
+//        //perform the first inner FFT
+//        self.inner_fft.process_inplace(&mut scratch);
+//
+//        //multiply the fft result with our precomputed data
+//        for i in 0..6 {
+//            scratch[i] = scratch[i] * self.inner_fft_multiply[i];
+//        }
+//
+//        //perform the second inner FFT
+//        let inverse6 = Butterfly6::inverse_of(&self.inner_fft);
+//        inverse6.process_inplace(&mut scratch);
+//
+//        //the first element of the output is the sum of the rest
+//        let first_input = *buffer.get_unchecked(0);
+//        let mut sum = first_input;
+//        for i in 1..7 {
+//            sum = sum + *buffer.get_unchecked_mut(i);
+//        }
+//        *buffer.get_unchecked_mut(0) = sum;
+//
+//        //use the inverse root ordering to copy data back out
+//        *buffer.get_unchecked_mut(5) = scratch[0] + first_input;
+//        *buffer.get_unchecked_mut(4) = scratch[1] + first_input;
+//        *buffer.get_unchecked_mut(6) = scratch[2] + first_input;
+//        *buffer.get_unchecked_mut(2) = scratch[3] + first_input;
+//        *buffer.get_unchecked_mut(3) = scratch[4] + first_input;
+//        *buffer.get_unchecked_mut(1) = scratch[5] + first_input;
+//    }
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
         for chunk in buffer.chunks_mut(self.len()) {
             self.process_inplace(chunk);
         }
+    }
+    #[inline(always)]
+    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+        let sum = *buffer.get_unchecked(0) + *buffer.get_unchecked(1) + *buffer.get_unchecked(2) + *buffer.get_unchecked(3) + *buffer.get_unchecked(4) + *buffer.get_unchecked(5) + *buffer.get_unchecked(6);
+        let temp16p = *buffer.get_unchecked(1) + *buffer.get_unchecked(6);
+        let temp16n = *buffer.get_unchecked(1) - *buffer.get_unchecked(6);
+        let temp25p = *buffer.get_unchecked(2) + *buffer.get_unchecked(5);
+        let temp25n = *buffer.get_unchecked(2) - *buffer.get_unchecked(5);
+        let temp34p = *buffer.get_unchecked(3) + *buffer.get_unchecked(4);
+        let temp34n = *buffer.get_unchecked(3) - *buffer.get_unchecked(4);
+
+        let b16re_a = buffer.get_unchecked(0).re + self.twiddle1.re*temp16p.re + self.twiddle2.re*temp25p.re + self.twiddle3.re*temp34p.re;
+        let b16re_b =                  self.twiddle1.im*temp16n.im + self.twiddle2.im*temp25n.im + self.twiddle3.im*temp34n.im;
+        let b25re_a = buffer.get_unchecked(0).re + self.twiddle1.re*temp34p.re + self.twiddle2.re*temp16p.re + self.twiddle3.re*temp25p.re;
+        let b25re_b =                 -self.twiddle1.im*temp34n.im + self.twiddle2.im*temp16n.im - self.twiddle3.im*temp25n.im;
+        let b34re_a = buffer.get_unchecked(0).re + self.twiddle1.re*temp25p.re + self.twiddle2.re*temp34p.re + self.twiddle3.re*temp16p.re;
+        let b34re_b =                 -self.twiddle1.im*temp25n.im + self.twiddle2.im*temp34n.im + self.twiddle3.im*temp16n.im;
+        let b16im_a = buffer.get_unchecked(0).im + self.twiddle1.re*temp16p.im + self.twiddle2.re*temp25p.im + self.twiddle3.re*temp34p.im;
+        let b16im_b =                  self.twiddle1.im*temp16n.re + self.twiddle2.im*temp25n.re + self.twiddle3.im*temp34n.re;
+        let b25im_a = buffer.get_unchecked(0).im + self.twiddle1.re*temp34p.im + self.twiddle2.re*temp16p.im + self.twiddle3.re*temp25p.im;
+        let b25im_b =                 -self.twiddle1.im*temp34n.re + self.twiddle2.im*temp16n.re - self.twiddle3.im*temp25n.re;
+        let b34im_a = buffer.get_unchecked(0).im + self.twiddle1.re*temp25p.im + self.twiddle2.re*temp34p.im + self.twiddle3.re*temp16p.im;
+        let b34im_b =                  self.twiddle1.im*temp25n.re - self.twiddle2.im*temp34n.re - self.twiddle3.im*temp16n.re;
+
+        let b1re = b16re_a - b16re_b;
+        let b1im = b16im_a + b16im_b;
+        let b2re = b25re_a - b25re_b;
+        let b2im = b25im_a + b25im_b;
+        let b3re = b34re_a - b34re_b;
+        let b3im = b34im_a - b34im_b;
+        let b4re = b34re_a + b34re_b;
+        let b4im = b34im_a + b34im_b;
+        let b5re = b25re_a + b25re_b;
+        let b5im = b25im_a - b25im_b;
+        let b6re = b16re_a + b16re_b;
+        let b6im = b16im_a - b16im_b;
+    
+        *buffer.get_unchecked_mut(0) = sum;
+        *buffer.get_unchecked_mut(1) = Complex{re: b1re, im: b1im };
+        *buffer.get_unchecked_mut(2) = Complex{re: b2re, im: b2im };
+        *buffer.get_unchecked_mut(3) = Complex{re: b3re, im: b3im };
+        *buffer.get_unchecked_mut(4) = Complex{re: b4re, im: b4im };
+        *buffer.get_unchecked_mut(5) = Complex{re: b5re, im: b5im };
+        *buffer.get_unchecked_mut(6) = Complex{re: b6re, im: b6im };
+        
     }
 }
 impl<T: FFTnum> FFT<T> for Butterfly7<T> {
@@ -586,7 +648,8 @@ impl<T> Length for Butterfly7<T> {
 impl<T> IsInverse for Butterfly7<T> {
     #[inline(always)]
     fn is_inverse(&self) -> bool {
-        self.inner_fft.is_inverse()
+        //self.inner_fft.is_inverse()
+        self.inverse
     }
 }
 
