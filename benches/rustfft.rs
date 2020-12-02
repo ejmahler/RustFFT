@@ -40,6 +40,7 @@ fn bench_fft(b: &mut Bencher, len: usize) {
 
 // Prime lengths
 #[bench] fn complex_prime_00005(b: &mut Bencher) { bench_fft(b, 5); }
+#[bench] fn complex_prime_00007(b: &mut Bencher) { bench_fft(b, 7); }
 #[bench] fn complex_prime_00017(b: &mut Bencher) { bench_fft(b, 17); }
 #[bench] fn complex_prime_00151(b: &mut Bencher) { bench_fft(b, 151); }
 #[bench] fn complex_prime_00257(b: &mut Bencher) { bench_fft(b, 257); }
