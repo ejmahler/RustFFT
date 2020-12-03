@@ -134,15 +134,16 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly3<T> {
 //    }
     #[inline(always)]
     unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
-        let sum = *buffer.get_unchecked(0) + *buffer.get_unchecked(1) + *buffer.get_unchecked(2);
         let temp_a = *buffer.get_unchecked(1) + *buffer.get_unchecked(2);
         let temp_b = *buffer.get_unchecked(1) - *buffer.get_unchecked(2);
+        let sum = *buffer.get_unchecked(0) + temp_a;
 
         let d1re = *buffer.get_unchecked(0) + Complex{re: self.twiddle.re * temp_a.re, im: self.twiddle.re * temp_a.im};
-    
-        *buffer.get_unchecked_mut(1) = d1re + Complex{re: -self.twiddle.im * temp_b.im, im: self.twiddle.im * temp_b.re };
-        *buffer.get_unchecked_mut(2) = d1re + Complex{re: self.twiddle.im * temp_b.im, im: -self.twiddle.im * temp_b.re };
+        let d1im = Complex{re: -self.twiddle.im * temp_b.im, im: self.twiddle.im * temp_b.re };
+
         *buffer.get_unchecked_mut(0) = sum;
+        *buffer.get_unchecked_mut(1) = d1re + d1im;
+        *buffer.get_unchecked_mut(2) = d1re - d1im;
     }
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
