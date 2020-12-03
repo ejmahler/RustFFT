@@ -460,17 +460,17 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly7<T> {
         let temp34n = *buffer.get_unchecked(3) - *buffer.get_unchecked(4);
 
         let b16re_a = buffer.get_unchecked(0).re + self.twiddle1.re*temp16p.re + self.twiddle2.re*temp25p.re + self.twiddle3.re*temp34p.re;
-        let b16re_b =                  self.twiddle1.im*temp16n.im + self.twiddle2.im*temp25n.im + self.twiddle3.im*temp34n.im;
+        let b16re_b = self.twiddle1.im*temp16n.im + self.twiddle2.im*temp25n.im + self.twiddle3.im*temp34n.im;
         let b25re_a = buffer.get_unchecked(0).re + self.twiddle1.re*temp34p.re + self.twiddle2.re*temp16p.re + self.twiddle3.re*temp25p.re;
-        let b25re_b =                 -self.twiddle1.im*temp34n.im + self.twiddle2.im*temp16n.im - self.twiddle3.im*temp25n.im;
+        let b25re_b = -self.twiddle1.im*temp34n.im + self.twiddle2.im*temp16n.im - self.twiddle3.im*temp25n.im;
         let b34re_a = buffer.get_unchecked(0).re + self.twiddle1.re*temp25p.re + self.twiddle2.re*temp34p.re + self.twiddle3.re*temp16p.re;
-        let b34re_b =                 -self.twiddle1.im*temp25n.im + self.twiddle2.im*temp34n.im + self.twiddle3.im*temp16n.im;
+        let b34re_b = -self.twiddle1.im*temp25n.im + self.twiddle2.im*temp34n.im + self.twiddle3.im*temp16n.im;
         let b16im_a = buffer.get_unchecked(0).im + self.twiddle1.re*temp16p.im + self.twiddle2.re*temp25p.im + self.twiddle3.re*temp34p.im;
-        let b16im_b =                  self.twiddle1.im*temp16n.re + self.twiddle2.im*temp25n.re + self.twiddle3.im*temp34n.re;
+        let b16im_b = self.twiddle1.im*temp16n.re + self.twiddle2.im*temp25n.re + self.twiddle3.im*temp34n.re;
         let b25im_a = buffer.get_unchecked(0).im + self.twiddle1.re*temp34p.im + self.twiddle2.re*temp16p.im + self.twiddle3.re*temp25p.im;
-        let b25im_b =                 -self.twiddle1.im*temp34n.re + self.twiddle2.im*temp16n.re - self.twiddle3.im*temp25n.re;
+        let b25im_b = -self.twiddle1.im*temp34n.re + self.twiddle2.im*temp16n.re - self.twiddle3.im*temp25n.re;
         let b34im_a = buffer.get_unchecked(0).im + self.twiddle1.re*temp25p.im + self.twiddle2.re*temp34p.im + self.twiddle3.re*temp16p.im;
-        let b34im_b =                  self.twiddle1.im*temp25n.re - self.twiddle2.im*temp34n.re - self.twiddle3.im*temp16n.re;
+        let b34im_b = self.twiddle1.im*temp25n.re - self.twiddle2.im*temp34n.re - self.twiddle3.im*temp16n.re;
 
         let b1re = b16re_a - b16re_b;
         let b1im = b16im_a + b16im_b;
