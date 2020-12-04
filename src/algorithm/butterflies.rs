@@ -119,16 +119,58 @@ impl<T: FFTnum> Butterfly3<T> {
 impl<T: FFTnum> FFTButterfly<T> for Butterfly3<T> {
     #[inline(always)]
     unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
-        let temp_a = *buffer.get_unchecked(1) + *buffer.get_unchecked(2);
-        let temp_b = *buffer.get_unchecked(1) - *buffer.get_unchecked(2);
-        let sum = *buffer.get_unchecked(0) + temp_a;
+        // Let's do a plain 3-point DFT
+        // |X0|   | W0 W0  W0 |   |x0|
+        // |X1| = | W0 W1  W2 | * |x1|
+        // |X2|   | W0 W2  W4 |   |x2|
+        //
+        // where Wn = exp(-2*pi*n/3) for a forward transform, and exp(+2*pi*n/3) for an inverse.
+        //
+        // This can be simplified a bit since exp(-2*pi*n/3) = exp(-2*pi*n/3 + m*2*pi)
+        // |X0|   | W0 W0  W0 |   |x0|
+        // |X1| = | W0 W1  W2 | * |x1|
+        // |X2|   | W0 W2  W1 |   |x2|
+        //
+        // Next we can use the symmetry that W2 = W1* and W0 = 1
+        // |X0|   | 1  1   1   |   |x0|
+        // |X1| = | 1  W1  W1* | * |x1|
+        // |X2|   | 1  W1* W1  |   |x2|
+        //
+        // Next, we write out the whole expression with real and imaginary parts. 
+        // X0 = x0 + x1 + x2
+        // X1 = x0 + (W1.re + j*W1.im)*x1 + (W1.re - j*W1.im)*x2
+        // X2 = x0 + (W1.re - j*W1.im)*x1 + (W1.re + j*W1.im)*x2 
+        //
+        // Then we rearrange and sort terms.
+        // X0 = x0 + x1 + x2
+        // X1 = x0 + W1.re*(x1+x2) + j*W1.im*(x1-x2)
+        // X2 = x0 + W1.re*(x1+x2) - j*W1.im*(x1-x2) 
+        //
+        // Now we define xp=x1+x2 xn=x1-x2, and write out the complex and imaginary parts
+        // X0 = x0 + x1 + x2
+        // X1.re = x0.re + W1.re*xp.re - W1.im*xn.im
+        // X1.im = x0.im + W1.re*xp.im + W1.im*xn.re
+        // X2.re = x0.re + W1.re*xp.re + W1.im*xn.im
+        // X2.im = x0.im + W1.re*xp.im - W1.im*xn.re
+        //
+        // Finally defining:
+        // temp_a = x0 + W1.re*xp.re + j*W1.re*xp.im
+        // temp_b = -W1.im*xn.im + j*W1.im*xn.re
+        // leads to the final result:
+        // X0 = x0 + x1 + x2
+        // X1 = temp_a + temp_b
+        // X2 = temp_a - temp_b
 
-        let d1re = *buffer.get_unchecked(0) + Complex{re: self.twiddle.re * temp_a.re, im: self.twiddle.re * temp_a.im};
-        let d1im = Complex{re: -self.twiddle.im * temp_b.im, im: self.twiddle.im * temp_b.re };
+        let xp = *buffer.get_unchecked(1) + *buffer.get_unchecked(2);
+        let xn = *buffer.get_unchecked(1) - *buffer.get_unchecked(2);
+        let sum = *buffer.get_unchecked(0) + xp;
+
+        let temp_a = *buffer.get_unchecked(0) + Complex{re: self.twiddle.re * xp.re, im: self.twiddle.re * xp.im};
+        let temp_b = Complex{re: -self.twiddle.im * xn.im, im: self.twiddle.im * xn.re };
 
         *buffer.get_unchecked_mut(0) = sum;
-        *buffer.get_unchecked_mut(1) = d1re + d1im;
-        *buffer.get_unchecked_mut(2) = d1re - d1im;
+        *buffer.get_unchecked_mut(1) = temp_a + temp_b;
+        *buffer.get_unchecked_mut(2) = temp_a - temp_b;
     }
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
@@ -265,35 +307,82 @@ impl<T: FFTnum> Butterfly5<T> {
 impl<T: FFTnum> FFTButterfly<T> for Butterfly5<T> {
     #[inline(always)]
     unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+        // Let's do a plain 5-point DFT
+        // |X0|   | W0 W0  W0  W0  W0  |   |x0|
+        // |X1|   | W0 W1  W2  W3  W4  |   |x1|
+        // |X2| = | W0 W2  W4  W6  W8  | * |x2|
+        // |X3|   | W0 W3  W6  W9  W12 |   |x3|
+        // |X4|   | W0 W4  W8  W12 W16 |   |x4|
+        //
+        // where Wn = exp(-2*pi*n/5) for a forward transform, and exp(+2*pi*n/5) for an inverse.
+        //
+        // This can be simplified a bit since exp(-2*pi*n/5) = exp(-2*pi*n/5 + m*2*pi)
+        // |X0|   | W0 W0  W0  W0  W0 |   |x0|
+        // |X1|   | W0 W1  W2  W3  W4 |   |x1|
+        // |X2| = | W0 W2  W4  W1  W3 | * |x2|
+        // |X3|   | W0 W3  W1  W4  W2 |   |x3|
+        // |X4|   | W0 W4  W3  W2  W1 |   |x4|
+        //
+        // Next we can use the symmetry that W3 = W2* and W4 = W1* (where * means complex conjugate), and W0 = 1
+        // |X0|   | 1  1   1   1   1   |   |x0|
+        // |X1|   | 1  W1  W2  W2* W1* |   |x1|
+        // |X2| = | 1  W2  W1* W1  W2* | * |x2|
+        // |X3|   | 1  W2* W1  W1* W2  |   |x3|
+        // |X4|   | 1  W1* W2* W2  W1  |   |x4|
+        //
+        // Next, we write out the whole expression with real and imaginary parts. 
+        // X0 = x0 + x1 + x2 + x3 + x4
+        // X1 = x0 + (W1.re + j*W1.im)*x1 + (W2.re + j*W2.im)*x2 + (W2.re - j*W2.im)*x3 + (W1.re - j*W1.im)*x4
+        // X2 = x0 + (W2.re + j*W2.im)*x1 + (W1.re - j*W1.im)*x2 + (W1.re + j*W1.im)*x3 + (W2.re - j*W2.im)*x4
+        // X3 = x0 + (W2.re - j*W2.im)*x1 + (W1.re + j*W1.im)*x2 + (W1.re - j*W1.im)*x3 + (W2.re + j*W2.im)*x4
+        // X4 = x0 + (W1.re - j*W1.im)*x1 + (W2.re - j*W2.im)*x2 + (W2.re + j*W2.im)*x3 + (W1.re + j*W1.im)*x4
+        //
+        // Then we rearrange and sort terms.
+        // X0 = x0 + x1 + x2 + x3 + x4
+        // X1 = x0 + W1.re*(x1+x4) + W2.re*(x2+x3) + j*(W1.im*(x1-x4) + W2.im*(x2-x3))
+        // X2 = x0 + W1.re*(x2+x3) + W2.re*(x1+x4) - j*(W1.im*(x2-x3) - W2.im*(x1-x4)) 
+        // X3 = x0 + W1.re*(x2+x3) + W2.re*(x1+x4) + j*(W1.im*(x2-x3) - W2.im*(x1-x4))
+        // X4 = x0 + W1.re*(x1+x4) + W2.re*(x2+x3) - j*(W1.im*(x1-x4) + W2.im*(x2-x3))
+        //
+        // Now we define x14p=x1+x4 x14n=x1-x4, x23p=x2+x3, x23n=x2-x3
+        // X0 = x0 + x1 + x2 + x3 + x4
+        // X1 = x0 + W1.re*(x14p) + W2.re*(x23p) + j*(W1.im*(x14n) + W2.im*(x23n))
+        // X2 = x0 + W1.re*(x23p) + W2.re*(x14p) - j*(W1.im*(x23n) - W2.im*(x14n)) 
+        // X3 = x0 + W1.re*(x23p) + W2.re*(x14p) + j*(W1.im*(x23n) - W2.im*(x14n))
+        // X4 = x0 + W1.re*(x14p) + W2.re*(x23p) - j*(W1.im*(x14n) + W2.im*(x23n))
+        //
+        // The final step is to write out real and imaginary parts of x14n etc, and replacing using j*j=-1
+        // After this it's easy to remove any repeated calculation of the same values.
+
         let sum = *buffer.get_unchecked(0) + *buffer.get_unchecked(1) + *buffer.get_unchecked(2) + *buffer.get_unchecked(3) + *buffer.get_unchecked(4);
-        let temp14p = *buffer.get_unchecked(1) + *buffer.get_unchecked(4);
-        let temp14n = *buffer.get_unchecked(1) - *buffer.get_unchecked(4);
-        let temp23p = *buffer.get_unchecked(2) + *buffer.get_unchecked(3);
-        let temp23n = *buffer.get_unchecked(2) - *buffer.get_unchecked(3);
+        let x14p = *buffer.get_unchecked(1) + *buffer.get_unchecked(4);
+        let x14n = *buffer.get_unchecked(1) - *buffer.get_unchecked(4);
+        let x23p = *buffer.get_unchecked(2) + *buffer.get_unchecked(3);
+        let x23n = *buffer.get_unchecked(2) - *buffer.get_unchecked(3);
 
-        let b14re_a = buffer.get_unchecked(0).re + self.twiddle1.re*temp14p.re + self.twiddle2.re*temp23p.re;
-        let b14re_b = self.twiddle1.im*temp14n.im + self.twiddle2.im*temp23n.im;
-        let b23re_a = buffer.get_unchecked(0).re + self.twiddle1.re*temp23p.re + self.twiddle2.re*temp14p.re;
-        let b23re_b = self.twiddle1.im*temp23n.im - self.twiddle2.im*temp14n.im;
-        let b14im_a = buffer.get_unchecked(0).im + self.twiddle1.re*temp14p.im + self.twiddle2.re*temp23p.im;
-        let b14im_b = self.twiddle1.im*temp14n.re + self.twiddle2.im*temp23n.re;
-        let b23im_a = buffer.get_unchecked(0).im + self.twiddle1.re*temp23p.im + self.twiddle2.re*temp14p.im;
-        let b23im_b = self.twiddle1.im*temp23n.re - self.twiddle2.im*temp14n.re;
+        let x14re_a = buffer.get_unchecked(0).re + self.twiddle1.re*x14p.re + self.twiddle2.re*x23p.re;
+        let x14re_b = self.twiddle1.im*x14n.im + self.twiddle2.im*x23n.im;
+        let x23re_a = buffer.get_unchecked(0).re + self.twiddle1.re*x23p.re + self.twiddle2.re*x14p.re;
+        let x23re_b = self.twiddle1.im*x23n.im - self.twiddle2.im*x14n.im;
+        let x14im_a = buffer.get_unchecked(0).im + self.twiddle1.re*x14p.im + self.twiddle2.re*x23p.im;
+        let x14im_b = self.twiddle1.im*x14n.re + self.twiddle2.im*x23n.re;
+        let x23im_a = buffer.get_unchecked(0).im + self.twiddle1.re*x23p.im + self.twiddle2.re*x14p.im;
+        let x23im_b = self.twiddle1.im*x23n.re - self.twiddle2.im*x14n.re;
 
-        let b1re = b14re_a - b14re_b;
-        let b1im = b14im_a + b14im_b;
-        let b2re = b23re_a + b23re_b;
-        let b2im = b23im_a - b23im_b;
-        let b3re = b23re_a - b23re_b;
-        let b3im = b23im_a + b23im_b;
-        let b4re = b14re_a + b14re_b;
-        let b4im = b14im_a - b14im_b;
+        let out1re = x14re_a - x14re_b;
+        let out1im = x14im_a + x14im_b;
+        let out2re = x23re_a + x23re_b;
+        let out2im = x23im_a - x23im_b;
+        let out3re = x23re_a - x23re_b;
+        let out3im = x23im_a + x23im_b;
+        let out4re = x14re_a + x14re_b;
+        let out4im = x14im_a - x14im_b;
     
         *buffer.get_unchecked_mut(0) = sum;
-        *buffer.get_unchecked_mut(1) = Complex{re: b1re, im: b1im };
-        *buffer.get_unchecked_mut(2) = Complex{re: b2re, im: b2im };
-        *buffer.get_unchecked_mut(3) = Complex{re: b3re, im: b3im };
-        *buffer.get_unchecked_mut(4) = Complex{re: b4re, im: b4im };
+        *buffer.get_unchecked_mut(1) = Complex{re: out1re, im: out1im };
+        *buffer.get_unchecked_mut(2) = Complex{re: out2re, im: out2im };
+        *buffer.get_unchecked_mut(3) = Complex{re: out3re, im: out3im };
+        *buffer.get_unchecked_mut(4) = Complex{re: out4re, im: out4im };
     }
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
@@ -451,47 +540,69 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly7<T> {
     }
     #[inline(always)]
     unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+        // Let's do a plain 7-point DFT
+        // |X0|   | W0 W0  W0  W0  W0  W0  W0  |   |x0|
+        // |X1|   | W0 W1  W2  W3  W4  W5  W6  |   |x1|
+        // |X2|   | W0 W2  W4  W6  W8  W10 W12 |   |x2|
+        // |X3| = | W0 W3  W6  W9  W12 W15 W18 | * |x3|
+        // |X4|   | W0 W4  W8  W12 W16 W20 W24 |   |x4|
+        // |X5|   | W0 W5  W10 W15 W20 W25 W30 |   |x4|
+        // |X6|   | W0 W6  W12 W18 W24 W30 W36 |   |x4|
+        //
+        // where Wn = exp(-2*pi*n/7) for a forward transform, and exp(+2*pi*n/7) for an inverse.
+        //
+        // Using the same logic as for the 5-point butterfly, this can be simplified to:
+        // |X0|   | 1  1   1   1   1   1   1   |   |x0|
+        // |X1|   | 1  W1  W2  W3  W3* W2* W1* |   |x1|
+        // |X2|   | 1  W2  W3* W1* W1  W3  W2* |   |x2|
+        // |X3| = | 1  W3  W1* W2  W2* W1  W3* | * |x3|
+        // |X4|   | 1  W3* W1  W2* W2  W1* W3  |   |x4|
+        // |X5|   | 1  W2* W3  W1  W1* W3* W2  |   |x5|
+        // |X6|   | 1  W1* W2* W3* W3  W2  W1  |   |x6|
+        //
+        // From here it's just about eliminating repeated calculations, following the same procedure as for the 5-point butterfly.
+
         let sum = *buffer.get_unchecked(0) + *buffer.get_unchecked(1) + *buffer.get_unchecked(2) + *buffer.get_unchecked(3) + *buffer.get_unchecked(4) + *buffer.get_unchecked(5) + *buffer.get_unchecked(6);
-        let temp16p = *buffer.get_unchecked(1) + *buffer.get_unchecked(6);
-        let temp16n = *buffer.get_unchecked(1) - *buffer.get_unchecked(6);
-        let temp25p = *buffer.get_unchecked(2) + *buffer.get_unchecked(5);
-        let temp25n = *buffer.get_unchecked(2) - *buffer.get_unchecked(5);
-        let temp34p = *buffer.get_unchecked(3) + *buffer.get_unchecked(4);
-        let temp34n = *buffer.get_unchecked(3) - *buffer.get_unchecked(4);
+        let x16p = *buffer.get_unchecked(1) + *buffer.get_unchecked(6);
+        let x16n = *buffer.get_unchecked(1) - *buffer.get_unchecked(6);
+        let x25p = *buffer.get_unchecked(2) + *buffer.get_unchecked(5);
+        let x25n = *buffer.get_unchecked(2) - *buffer.get_unchecked(5);
+        let x34p = *buffer.get_unchecked(3) + *buffer.get_unchecked(4);
+        let x34n = *buffer.get_unchecked(3) - *buffer.get_unchecked(4);
 
-        let b16re_a = buffer.get_unchecked(0).re + self.twiddle1.re*temp16p.re + self.twiddle2.re*temp25p.re + self.twiddle3.re*temp34p.re;
-        let b16re_b = self.twiddle1.im*temp16n.im + self.twiddle2.im*temp25n.im + self.twiddle3.im*temp34n.im;
-        let b25re_a = buffer.get_unchecked(0).re + self.twiddle1.re*temp34p.re + self.twiddle2.re*temp16p.re + self.twiddle3.re*temp25p.re;
-        let b25re_b = -self.twiddle1.im*temp34n.im + self.twiddle2.im*temp16n.im - self.twiddle3.im*temp25n.im;
-        let b34re_a = buffer.get_unchecked(0).re + self.twiddle1.re*temp25p.re + self.twiddle2.re*temp34p.re + self.twiddle3.re*temp16p.re;
-        let b34re_b = -self.twiddle1.im*temp25n.im + self.twiddle2.im*temp34n.im + self.twiddle3.im*temp16n.im;
-        let b16im_a = buffer.get_unchecked(0).im + self.twiddle1.re*temp16p.im + self.twiddle2.re*temp25p.im + self.twiddle3.re*temp34p.im;
-        let b16im_b = self.twiddle1.im*temp16n.re + self.twiddle2.im*temp25n.re + self.twiddle3.im*temp34n.re;
-        let b25im_a = buffer.get_unchecked(0).im + self.twiddle1.re*temp34p.im + self.twiddle2.re*temp16p.im + self.twiddle3.re*temp25p.im;
-        let b25im_b = -self.twiddle1.im*temp34n.re + self.twiddle2.im*temp16n.re - self.twiddle3.im*temp25n.re;
-        let b34im_a = buffer.get_unchecked(0).im + self.twiddle1.re*temp25p.im + self.twiddle2.re*temp34p.im + self.twiddle3.re*temp16p.im;
-        let b34im_b = self.twiddle1.im*temp25n.re - self.twiddle2.im*temp34n.re - self.twiddle3.im*temp16n.re;
+        let x16re_a = buffer.get_unchecked(0).re + self.twiddle1.re*x16p.re + self.twiddle2.re*x25p.re + self.twiddle3.re*x34p.re;
+        let x16re_b = self.twiddle1.im*x16n.im + self.twiddle2.im*x25n.im + self.twiddle3.im*x34n.im;
+        let x25re_a = buffer.get_unchecked(0).re + self.twiddle1.re*x34p.re + self.twiddle2.re*x16p.re + self.twiddle3.re*x25p.re;
+        let x25re_b = -self.twiddle1.im*x34n.im + self.twiddle2.im*x16n.im - self.twiddle3.im*x25n.im;
+        let x34re_a = buffer.get_unchecked(0).re + self.twiddle1.re*x25p.re + self.twiddle2.re*x34p.re + self.twiddle3.re*x16p.re;
+        let x34re_b = -self.twiddle1.im*x25n.im + self.twiddle2.im*x34n.im + self.twiddle3.im*x16n.im;
+        let x16im_a = buffer.get_unchecked(0).im + self.twiddle1.re*x16p.im + self.twiddle2.re*x25p.im + self.twiddle3.re*x34p.im;
+        let x16im_b = self.twiddle1.im*x16n.re + self.twiddle2.im*x25n.re + self.twiddle3.im*x34n.re;
+        let x25im_a = buffer.get_unchecked(0).im + self.twiddle1.re*x34p.im + self.twiddle2.re*x16p.im + self.twiddle3.re*x25p.im;
+        let x25im_b = -self.twiddle1.im*x34n.re + self.twiddle2.im*x16n.re - self.twiddle3.im*x25n.re;
+        let x34im_a = buffer.get_unchecked(0).im + self.twiddle1.re*x25p.im + self.twiddle2.re*x34p.im + self.twiddle3.re*x16p.im;
+        let x34im_b = self.twiddle1.im*x25n.re - self.twiddle2.im*x34n.re - self.twiddle3.im*x16n.re;
 
-        let b1re = b16re_a - b16re_b;
-        let b1im = b16im_a + b16im_b;
-        let b2re = b25re_a - b25re_b;
-        let b2im = b25im_a + b25im_b;
-        let b3re = b34re_a - b34re_b;
-        let b3im = b34im_a - b34im_b;
-        let b4re = b34re_a + b34re_b;
-        let b4im = b34im_a + b34im_b;
-        let b5re = b25re_a + b25re_b;
-        let b5im = b25im_a - b25im_b;
-        let b6re = b16re_a + b16re_b;
-        let b6im = b16im_a - b16im_b;
+        let out1re = x16re_a - x16re_b;
+        let out1im = x16im_a + x16im_b;
+        let out2re = x25re_a - x25re_b;
+        let out2im = x25im_a + x25im_b;
+        let out3re = x34re_a - x34re_b;
+        let out3im = x34im_a - x34im_b;
+        let out4re = x34re_a + x34re_b;
+        let out4im = x34im_a + x34im_b;
+        let out5re = x25re_a + x25re_b;
+        let out5im = x25im_a - x25im_b;
+        let out6re = x16re_a + x16re_b;
+        let out6im = x16im_a - x16im_b;
     
         *buffer.get_unchecked_mut(0) = sum;
-        *buffer.get_unchecked_mut(1) = Complex{re: b1re, im: b1im };
-        *buffer.get_unchecked_mut(2) = Complex{re: b2re, im: b2im };
-        *buffer.get_unchecked_mut(3) = Complex{re: b3re, im: b3im };
-        *buffer.get_unchecked_mut(4) = Complex{re: b4re, im: b4im };
-        *buffer.get_unchecked_mut(5) = Complex{re: b5re, im: b5im };
-        *buffer.get_unchecked_mut(6) = Complex{re: b6re, im: b6im };
+        *buffer.get_unchecked_mut(1) = Complex{re: out1re, im: out1im };
+        *buffer.get_unchecked_mut(2) = Complex{re: out2re, im: out2im };
+        *buffer.get_unchecked_mut(3) = Complex{re: out3re, im: out3im };
+        *buffer.get_unchecked_mut(4) = Complex{re: out4re, im: out4im };
+        *buffer.get_unchecked_mut(5) = Complex{re: out5re, im: out5im };
+        *buffer.get_unchecked_mut(6) = Complex{re: out6re, im: out6im };
     }
 }
 impl<T: FFTnum> FFT<T> for Butterfly7<T> {
