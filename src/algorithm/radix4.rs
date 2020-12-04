@@ -158,36 +158,51 @@ fn prepare_radix4<T: FFTnum>(size: usize,
                            signal: &[Complex<T>],
                            spectrum: &mut [Complex<T>],
                            stride: usize) {
-    match size {
-        16 => unsafe {
-            for i in 0..16 {
+    if size<=16 {
+        unsafe {
+            for i in 0..size {
                 *spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stride);
-            }
-        },
-        8 => unsafe {
-            for i in 0..8 {
-                *spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stride);
-            }
-        },
-        4 => unsafe {
-            for i in 0..4 {
-                *spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stride);
-            }
-        },
-        2 => unsafe {
-            for i in 0..2 {
-                *spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stride);
-            }
-        },
-        _ => {
-            for i in 0..4 {
-                prepare_radix4(size / 4,
-                               &signal[i * stride..],
-                               &mut spectrum[i * (size / 4)..],
-                               stride * 4);
             }
         }
     }
+    else {
+        for i in 0..4 {
+            prepare_radix4(size / 4,
+                           &signal[i * stride..],
+                           &mut spectrum[i * (size / 4)..],
+                           stride * 4);
+        }
+    }
+//    match size {
+//        16 => unsafe {
+//            for i in 0..16 {
+//                *spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stride);
+//            }
+//        },
+//        8 => unsafe {
+//            for i in 0..8 {
+//                *spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stride);
+//            }
+//        },
+//        4 => unsafe {
+//            for i in 0..4 {
+//                *spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stride);
+//            }
+//        },
+//        2 => unsafe {
+//            for i in 0..2 {
+//                *spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stride);
+//            }
+//        },
+//        _ => {
+//            for i in 0..4 {
+//                prepare_radix4(size / 4,
+//                               &signal[i * stride..],
+//                               &mut spectrum[i * (size / 4)..],
+//                               stride * 4);
+//            }
+//        }
+//    }
 }
 
 unsafe fn butterfly_4<T: FFTnum>(data: &mut [Complex<T>],
@@ -197,27 +212,31 @@ unsafe fn butterfly_4<T: FFTnum>(data: &mut [Complex<T>],
 {
     let mut idx = 0usize;
     let mut tw_idx = 0usize;
-    let mut scratch: [Complex<T>; 6] = [Zero::zero(); 6];
+    //let mut scratch: [Complex<T>; 6] = [Zero::zero(); 6];
     for _ in 0..num_ffts {
-        scratch[0] = data.get_unchecked(idx + 1 * num_ffts) * twiddles[tw_idx];
-        scratch[1] = data.get_unchecked(idx + 2 * num_ffts) * twiddles[tw_idx + 1];
-        scratch[2] = data.get_unchecked(idx + 3 * num_ffts) * twiddles[tw_idx + 2];
-        scratch[5] = data.get_unchecked(idx) - scratch[1];
-        *data.get_unchecked_mut(idx) = data.get_unchecked(idx) + scratch[1];
-        scratch[3] = scratch[0] + scratch[2];
-        scratch[4] = scratch[0] - scratch[2];
-        *data.get_unchecked_mut(idx + 2 * num_ffts) = data.get_unchecked(idx) - scratch[3];
-        *data.get_unchecked_mut(idx) = data.get_unchecked(idx) + scratch[3];
+        let idx_numffts = idx + num_ffts;
+        let idx_2numffts = idx + 2*num_ffts;
+        let idx_3numffts = idx + 3*num_ffts;
+
+        let scratch0 = data.get_unchecked(idx_numffts) * twiddles.get_unchecked(tw_idx);
+        let scratch1 = data.get_unchecked(idx_2numffts) * twiddles.get_unchecked(tw_idx + 1);
+        let scratch2 = data.get_unchecked(idx_3numffts) * twiddles.get_unchecked(tw_idx + 2);
+        let scratch5 = data.get_unchecked(idx) - scratch1;
+        *data.get_unchecked_mut(idx) = data.get_unchecked(idx) + scratch1;
+        let scratch3 = scratch0 + scratch2;
+        let scratch4 = scratch0 - scratch2;
+        *data.get_unchecked_mut(idx_2numffts) = data.get_unchecked(idx) - scratch3;
+        *data.get_unchecked_mut(idx) = data.get_unchecked(idx) + scratch3;
         if inverse {
-            data.get_unchecked_mut(idx + num_ffts).re = scratch[5].re - scratch[4].im;
-            data.get_unchecked_mut(idx + num_ffts).im = scratch[5].im + scratch[4].re;
-            data.get_unchecked_mut(idx + 3 * num_ffts).re = scratch[5].re + scratch[4].im;
-            data.get_unchecked_mut(idx + 3 * num_ffts).im = scratch[5].im - scratch[4].re;
+            data.get_unchecked_mut(idx_numffts).re = scratch5.re - scratch4.im;
+            data.get_unchecked_mut(idx_numffts).im = scratch5.im + scratch4.re;
+            data.get_unchecked_mut(idx_3numffts).re = scratch5.re + scratch4.im;
+            data.get_unchecked_mut(idx_3numffts).im = scratch5.im - scratch4.re;
         } else {
-            data.get_unchecked_mut(idx + num_ffts).re = scratch[5].re + scratch[4].im;
-            data.get_unchecked_mut(idx + num_ffts).im = scratch[5].im - scratch[4].re;
-            data.get_unchecked_mut(idx + 3 * num_ffts).re = scratch[5].re - scratch[4].im;
-            data.get_unchecked_mut(idx + 3 * num_ffts).im = scratch[5].im + scratch[4].re;
+            data.get_unchecked_mut(idx_numffts).re = scratch5.re + scratch4.im;
+            data.get_unchecked_mut(idx_numffts).im = scratch5.im - scratch4.re;
+            data.get_unchecked_mut(idx_3numffts).re = scratch5.re - scratch4.im;
+            data.get_unchecked_mut(idx_3numffts).im = scratch5.im + scratch4.re;
         }
 
         tw_idx += 3;
