@@ -1,10 +1,9 @@
-use num_traits::{FromPrimitive, Num};
-use std::ops::Neg;
+use num_traits::{FromPrimitive, Signed};
 
-pub trait FFTnum: Copy + FromPrimitive + Num + Neg<Output = Self> + Sync + Send + 'static {}
+/// Generic floating point number
+pub trait FFTnum: Copy + FromPrimitive + Signed + Sync + Send + 'static {}
 
-impl<T> FFTnum for T where T: Copy + FromPrimitive + Num + Neg<Output = Self> + Sync + Send + 'static
-{}
+impl<T> FFTnum for T where T: Copy + FromPrimitive + Signed + Sync + Send + 'static {}
 
 #[inline(always)]
 pub fn verify_length<T>(input: &[T], output: &[T], expected: usize) {
