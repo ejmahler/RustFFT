@@ -9,8 +9,10 @@ use ::{Length, IsInverse, FFT};
 
 /// Implementation of Bluestein's Algorithm
 ///
-/// This algorithm computes a FFT of any size by using converting it to a convolution, where a longer power-of-two length FFT is used. 
+/// This algorithm computes a FFT of any size by using converting it to a convolution, where a longer FFT of an "easy" length is used. 
 /// The primary use is for prime-sized FFTs of lengths where Rader's alorithm is slow.
+/// When performing a FFT the inner FFT is run twice. These FFTs make up nearly all the processing time. 
+/// There are also simple O(n) processing steps before, in between and after the inner FFTs. 
 ///
 /// This implementation is based on the one in the [fourier library](https://github.com/calebzulawski/fourier) by Caleb Zulawski.
 /// ~~~
@@ -23,15 +25,12 @@ use ::{Length, IsInverse, FFT};
 /// let mut input:  Vec<Complex<f32>> = vec![Zero::zero(); 1201];
 /// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); 1201];
 ///
-/// // plan a forward FFT for the nearest power of two larger or equal to 2 * 1201 - 1 -> 4096
+/// // Plan a forward FFT for the nearest power of two larger or equal to 2 * 1201 - 1 -> 4096
+/// // Note that the inner fft determines if the Bluestein fft is a forward or inverse transform.
 /// let mut planner = FFTplanner::new(false);
-/// let inner_fft_fw = planner.plan_fft(4096);
+/// let inner_fft = planner.plan_fft(4096);
 ///
-/// // plan an inverse FFT for the nearest power of two larger or equal to 2 * 1201 - 1 -> 4096
-/// let mut planner = FFTplanner::new(true);
-/// let inner_fft_inv = planner.plan_fft(4096);
-///
-/// let fft = Bluesteins::new(1201, inner_fft_fw, inner_fft_inv, false);
+/// let fft = Bluesteins::new(1201, inner_fft);
 /// fft.process(&mut input, &mut output);
 /// ~~~
 ///
@@ -40,11 +39,9 @@ use ::{Length, IsInverse, FFT};
 
 pub struct Bluesteins<T> {
     len: usize,
-    inner_fft_fw: Arc<FFT<T>>,
-    inner_fft_inv: Arc<FFT<T>>,
+    inner_fft: Arc<FFT<T>>,
     w_twiddles: Box<[Complex<T>]>,
     x_twiddles: Box<[Complex<T>]>,
-    inverse: bool,
 }
 
 fn calculate_twiddle<T: FFTnum>(index: f64, len: usize) -> Complex<T> {
@@ -62,7 +59,6 @@ fn calculate_w_twiddles<T: FFTnum>(
     len: usize,
     fft: &Arc<FFT<T>>,
     twiddles: &mut [Complex<T>],
-    inverse: bool,
 ) {
     let mut scratch = vec![Complex::zero(); fft.len()];
     let scale = T::one() / T::from_usize(fft.len()).unwrap();
@@ -76,16 +72,15 @@ fn calculate_w_twiddles<T: FFTnum>(
                 None
             }
         } {
-            let twiddle = calculate_twiddle(index, len)*scale;
-            if inverse {
-                *tw = twiddle;
-            }
-            else {
-                *tw = twiddle.conj();
-            }
-        } 
+            *tw = calculate_twiddle(index, len).conj()*scale;
+        }
     }
     fft.process(&mut scratch, &mut twiddles[..]);
+    if fft.is_inverse() {
+        for tw in twiddles.iter_mut() {
+            *tw = tw.conj();
+        }
+    }
 }
 
 
@@ -109,45 +104,42 @@ fn calculate_x_twiddles<T: FFTnum>(
 
 
 impl<T: FFTnum > Bluesteins<T> {
-    /// Creates a FFT instance which will process inputs/outputs of size `len`. `inner_fft_fw.len()` and `inner_fft_inv.len()` must be the nearest 
-    /// power of two that is equal to or larger than `2 * len - 1`.
+    /// Creates a FFT instance which will process inputs/outputs of size `len`. The inner FFT can be any length that is equal to or larger than `2 * len - 1`.
+    /// The inner FFT determines if this becomes a forward or inverse transform.
     ///
     /// Note that this constructor is quite expensive to run; This algorithm must run a FFT within the
     /// constructor. 
-    pub fn new(len: usize, inner_fft_fw: Arc<FFT<T>>, inner_fft_inv: Arc<FFT<T>>, inverse: bool) -> Self {
-        let inner_fft_len = (2 * len - 1).checked_next_power_of_two().unwrap();
-        assert_eq!(inner_fft_len, inner_fft_fw.len(), "For Bluesteins algorithm, inner_fft_fw.len() must be a power of to larger than or equal to 2*self.len() - 1. Expected {}, got {}", inner_fft_len, inner_fft_fw.len());
-        assert_eq!(inner_fft_len, inner_fft_inv.len(), "For Bluesteins algorithm, inner_fft_inv.len() must be a power of to larger than or equal to 2*self.len() - 1. Expected {}, got {}", inner_fft_len, inner_fft_inv.len());
+    pub fn new(len: usize, inner_fft: Arc<FFT<T>> ) -> Self {
+        let min_inner_fft_len = 2 * len - 1;
+        assert!(inner_fft.len() >= min_inner_fft_len, "For Bluesteins algorithm, inner_fft.len() must be equal to or larger than 2*self.len() - 1. Expected at least {}, got {}", min_inner_fft_len, inner_fft.len());
 
-        let mut w_twiddles = vec![Complex::zero(); inner_fft_len];
+        let mut w_twiddles = vec![Complex::zero(); inner_fft.len()];
         let mut x_twiddles = vec![Complex::zero(); len];
-        calculate_w_twiddles(len, &inner_fft_fw, &mut w_twiddles, inverse);
-        calculate_x_twiddles(len, &mut x_twiddles, inverse);
+        calculate_w_twiddles(len, &inner_fft, &mut w_twiddles);
+        calculate_x_twiddles(len, &mut x_twiddles, inner_fft.is_inverse());
         Self {
             len,
-            inner_fft_fw,
-            inner_fft_inv,
+            inner_fft,
             w_twiddles: w_twiddles.into_boxed_slice(),
             x_twiddles: x_twiddles.into_boxed_slice(),
-            inverse,
         }
     }
 
     fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         assert_eq!(self.len(), input.len());
 
-        let mut scratch_a = vec![Complex::zero(); self.inner_fft_fw.len()];
-        let mut scratch_b = vec![Complex::zero(); self.inner_fft_fw.len()];
+        let mut scratch = vec![Complex::zero(); 2*self.inner_fft.len()];
+        let (mut scratch_a, mut scratch_b) = scratch.split_at_mut(self.inner_fft.len());
         for (w, (x, i)) in scratch_a.iter_mut().zip(self.x_twiddles.iter().zip(input.iter())) {
             *w = x * i;
         }
-        self.inner_fft_fw.process(&mut scratch_a, &mut scratch_b);
+        self.inner_fft.process(&mut scratch_a, &mut scratch_b);
         for (w, wi) in scratch_b.iter_mut().zip(self.w_twiddles.iter()) {
-            *w = *w * wi;
+            *w = (*w * wi).conj();
         }
-        self.inner_fft_inv.process(&mut scratch_b, &mut scratch_a);
+        self.inner_fft.process(&mut scratch_b, &mut scratch_a);
         for (i, (w, xi)) in output.iter_mut().zip(scratch_a.iter().zip(self.x_twiddles.iter())) {
-            *i = w * xi;
+            *i = w.conj() * xi;
         }
     }
 
@@ -177,7 +169,7 @@ impl<T> Length for Bluesteins<T> {
 impl<T> IsInverse for Bluesteins<T> {
     #[inline(always)]
     fn is_inverse(&self) -> bool {
-        self.inverse
+        self.inner_fft.is_inverse()
     }
 }
 
@@ -198,9 +190,8 @@ mod unit_tests {
 
     fn test_bluestein_with_length(len: usize, inverse: bool) {
         let inner_fft_len = (2 * len - 1).checked_next_power_of_two().unwrap();
-        let inner_fft_fw = Arc::new(DFT::new(inner_fft_len, false));
-        let inner_fft_inv = Arc::new(DFT::new(inner_fft_len, true));
-        let fft = Bluesteins::new(len, inner_fft_fw, inner_fft_inv, inverse);
+        let inner_fft = Arc::new(DFT::new(inner_fft_len, inverse));
+        let fft = Bluesteins::new(len, inner_fft);
 
         check_fft_algorithm(&fft, len, inverse);
     }
