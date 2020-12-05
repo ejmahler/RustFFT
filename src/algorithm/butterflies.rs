@@ -354,11 +354,11 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly5<T> {
         // The final step is to write out real and imaginary parts of x14n etc, and replacing using j*j=-1
         // After this it's easy to remove any repeated calculation of the same values.
 
-        let sum = *buffer.get_unchecked(0) + *buffer.get_unchecked(1) + *buffer.get_unchecked(2) + *buffer.get_unchecked(3) + *buffer.get_unchecked(4);
         let x14p = *buffer.get_unchecked(1) + *buffer.get_unchecked(4);
         let x14n = *buffer.get_unchecked(1) - *buffer.get_unchecked(4);
         let x23p = *buffer.get_unchecked(2) + *buffer.get_unchecked(3);
         let x23n = *buffer.get_unchecked(2) - *buffer.get_unchecked(3);
+        let sum = *buffer.get_unchecked(0) + x14p + x23p;
 
         let x14re_a = buffer.get_unchecked(0).re + self.twiddle1.re*x14p.re + self.twiddle2.re*x23p.re;
         let x14re_b = self.twiddle1.im*x14n.im + self.twiddle2.im*x23n.im;
@@ -562,13 +562,13 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly7<T> {
         //
         // From here it's just about eliminating repeated calculations, following the same procedure as for the 5-point butterfly.
 
-        let sum = *buffer.get_unchecked(0) + *buffer.get_unchecked(1) + *buffer.get_unchecked(2) + *buffer.get_unchecked(3) + *buffer.get_unchecked(4) + *buffer.get_unchecked(5) + *buffer.get_unchecked(6);
         let x16p = *buffer.get_unchecked(1) + *buffer.get_unchecked(6);
         let x16n = *buffer.get_unchecked(1) - *buffer.get_unchecked(6);
         let x25p = *buffer.get_unchecked(2) + *buffer.get_unchecked(5);
         let x25n = *buffer.get_unchecked(2) - *buffer.get_unchecked(5);
         let x34p = *buffer.get_unchecked(3) + *buffer.get_unchecked(4);
         let x34n = *buffer.get_unchecked(3) - *buffer.get_unchecked(4);
+        let sum = *buffer.get_unchecked(0) + x16p + x25p + x34p;
 
         let x16re_a = buffer.get_unchecked(0).re + self.twiddle1.re*x16p.re + self.twiddle2.re*x25p.re + self.twiddle3.re*x34p.re;
         let x16re_b = self.twiddle1.im*x16n.im + self.twiddle2.im*x25n.im + self.twiddle3.im*x34n.im;
