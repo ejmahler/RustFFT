@@ -126,20 +126,65 @@ impl<T: FFTnum > Bluesteins<T> {
     }
 
     fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+        // The steps of this algorithm are:
+        // - Multiply inputs with the X twiddles, and store in the first `len` elements of longer vector.
+        // - Perform a forward FFT of this vector to get a "spectrum".
+        // - Multipy the spectrum with the W twiddles.
+        // - Inverse transform the modified spectrum.
+        // - Multiply first `len` elements of the iFFT output with the X-twiddles, and store in the output.
+        //
+        // By using the fact that iFFT(X) = FFT(X*)* and FFT(X) = iFFT(X*)*, we can use a single inner
+        // FFT for both forward and inverse transform, by conjugating the inputs and outputs as needed.
+        
         assert_eq!(self.len(), input.len());
 
         let mut scratch = vec![Complex::zero(); 2*self.inner_fft.len()];
         let (mut scratch_a, mut scratch_b) = scratch.split_at_mut(self.inner_fft.len());
-        for (w, (x, i)) in scratch_a.iter_mut().zip(self.x_twiddles.iter().zip(input.iter())) {
-            *w = x * i;
+        // Copy input data to scratch vector, and multiply with X twiddles.
+        // If the inner FFT is inverse, then we conjugate the input here to make the first FFT step a forward transform
+        if self.inner_fft.is_inverse() {
+            for (w, (x, i)) in scratch_a.iter_mut().zip(self.x_twiddles.iter().zip(input.iter())) {
+                *w = (x * i).conj();
+            }
         }
+        else {
+            for (w, (x, i)) in scratch_a.iter_mut().zip(self.x_twiddles.iter().zip(input.iter())) {
+                *w = x * i;
+            }
+        }
+        
+        // Perform forward FFT (either directly or using an inverse FFT with conjugated inputs and outputs).
         self.inner_fft.process(&mut scratch_a, &mut scratch_b);
-        for (w, wi) in scratch_b.iter_mut().zip(self.w_twiddles.iter()) {
-            *w = (*w * wi).conj();
+
+        // Multiply spectrum with W twiddles.
+        // If the inner FFT is inverse, then we conjugate the results from the first FFT step to make it a forward transform.
+        if self.inner_fft.is_inverse() {
+            for (w, wi) in scratch_b.iter_mut().zip(self.w_twiddles.iter()) {
+                *w = w.conj() * wi;
+            }
         }
+        // If the inner FFT is forward, then we conjugate the input to the second FFT step here to make it an inverse transform
+        else {
+            for (w, wi) in scratch_b.iter_mut().zip(self.w_twiddles.iter()) {
+                *w = (*w * wi).conj();
+            }
+        }
+
+        // Perform inverse FFT (either directly or using a forward FFT with conjugated inputs and outputs).
         self.inner_fft.process(&mut scratch_b, &mut scratch_a);
-        for (i, (w, xi)) in output.iter_mut().zip(scratch_a.iter().zip(self.x_twiddles.iter())) {
-            *i = w.conj() * xi;
+
+        // Multiply with X twiddles and store in output.
+        // If the inner FFT is inverse, use the output directly.
+        if self.inner_fft.is_inverse() {
+            for (i, (w, xi)) in output.iter_mut().zip(scratch_a.iter().zip(self.x_twiddles.iter())) {
+                *i = w * xi;
+            }
+        }
+        // If the inner FFT is forward, then we conjugate the output from the second FFT step to make it an inverse transform.
+        else {
+            for (i, (w, xi)) in output.iter_mut().zip(scratch_a.iter().zip(self.x_twiddles.iter())) {
+                *i = w.conj() * xi;
+            }
         }
     }
 
@@ -182,7 +227,7 @@ mod unit_tests {
 
     #[test]
     fn test_bluestein() {
-        for &len in &[3,5,7,11,13] {
+        for &len in &[3,5,7,11,13,123] {
             test_bluestein_with_length(len, false);
             test_bluestein_with_length(len, true);
         }
