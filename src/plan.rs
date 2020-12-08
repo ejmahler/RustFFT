@@ -15,6 +15,8 @@ const MIN_RADIX4_BITS: u32 = 5; // smallest size to consider radix 4 an option i
 const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option is 2^16 = 65536
 const BUTTERFLIES: [usize; 9] = [2, 3, 4, 5, 6, 7, 8, 16, 32];
 const COMPOSITE_BUTTERFLIES: [usize; 5] = [4, 6, 8, 16, 32];
+const MAX_RADER_PRIME_FACTOR: usize = 7; // don't use Raders if the inner fft length has prime factor larger than this
+const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the inner fft of Bluestein if length is larger than this
 
 /// The FFT planner is used to make new FFT algorithm instances.
 ///
@@ -207,11 +209,26 @@ impl<T: FFTnum> FFTplanner<T> {
     }
 
     fn plan_prime(&mut self, len: usize) -> Arc<FFT<T>> {
-        let inner_fft_len = len - 1;
-        let factors = math_utils::prime_factors(inner_fft_len);
-
-        let inner_fft = self.plan_fft_with_factors(inner_fft_len, &factors);
-
-        Arc::new(RadersAlgorithm::new(len, inner_fft)) as Arc<FFT<T>>
+        let inner_fft_len_rader = len - 1;
+        let factors = math_utils::prime_factors(inner_fft_len_rader);
+        // If any of the prime factors is too large, Rader's gets slow and Bluestein's is the better choice
+        if factors.iter().any(|val| *val > MAX_RADER_PRIME_FACTOR) {
+            let inner_fft_len_pow2 = (2 * len - 1).checked_next_power_of_two().unwrap();
+            // for long ffts a mixed radix inner fft is faster than a longer radix4
+            let min_inner_len = 2 * len - 1;
+            let mixed_radix_len = 3*inner_fft_len_pow2/4;
+            let inner_fft = if mixed_radix_len >= min_inner_len && len >= MIN_BLUESTEIN_MIXED_RADIX_LEN {
+                let inner_factors = math_utils::prime_factors(mixed_radix_len);
+                self.plan_fft_with_factors(mixed_radix_len, &inner_factors)
+            }
+            else {
+                Arc::new(Radix4::new(inner_fft_len_pow2, self.inverse))
+            };
+            Arc::new(Bluesteins::new(len, inner_fft)) as Arc<FFT<T>>
+        }
+        else {
+            let inner_fft = self.plan_fft_with_factors(inner_fft_len_rader, &factors);
+            Arc::new(RadersAlgorithm::new(len, inner_fft)) as Arc<FFT<T>>
+        }
     }
 }
