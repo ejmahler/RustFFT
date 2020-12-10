@@ -13,7 +13,7 @@ use math_utils;
 
 const MIN_RADIX4_BITS: u32 = 5; // smallest size to consider radix 4 an option is 2^5 = 32
 const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option is 2^16 = 65536
-const BUTTERFLIES: [usize; 9] = [2, 3, 4, 5, 6, 7, 8, 16, 32];
+const BUTTERFLIES: [usize; 13] = [2, 3, 4, 5, 6, 7, 8, 11, 13, 16, 17, 19, 32];
 const COMPOSITE_BUTTERFLIES: [usize; 5] = [4, 6, 8, 16, 32];
 const MAX_RADER_PRIME_FACTOR: usize = 7; // don't use Raders if the inner fft length has prime factor larger than this
 const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the inner fft of Bluestein if length is larger than this
@@ -88,7 +88,11 @@ impl<T: FFTnum> FFTplanner<T> {
                 6 => Arc::new(Butterfly6::new(inverse)),
                 7 => Arc::new(Butterfly7::new(inverse)),
                 8 => Arc::new(Butterfly8::new(inverse)),
+                11 => Arc::new(Butterfly11::new(inverse)),
+                13 => Arc::new(Butterfly13::new(inverse)),
                 16 => Arc::new(Butterfly16::new(inverse)),
+                17 => Arc::new(Butterfly17::new(inverse)),
+                19 => Arc::new(Butterfly19::new(inverse)),
                 32 => Arc::new(Butterfly32::new(inverse)),
                 _ => panic!("Invalid butterfly size: {}", len),
             }
@@ -202,7 +206,11 @@ impl<T: FFTnum> FFTplanner<T> {
             6 => Arc::new(butterflies::Butterfly6::new(self.inverse)) as Arc<FFT<T>>,
             7 => Arc::new(butterflies::Butterfly7::new(self.inverse)) as Arc<FFT<T>>,
             8 => Arc::new(butterflies::Butterfly8::new(self.inverse)) as Arc<FFT<T>>,
+            11 => Arc::new(butterflies::Butterfly11::new(self.inverse)) as Arc<FFT<T>>,
+            13 => Arc::new(butterflies::Butterfly13::new(self.inverse)) as Arc<FFT<T>>,
             16 => Arc::new(butterflies::Butterfly16::new(self.inverse)) as Arc<FFT<T>>,
+            17 => Arc::new(butterflies::Butterfly17::new(self.inverse)) as Arc<FFT<T>>,
+            19 => Arc::new(butterflies::Butterfly19::new(self.inverse)) as Arc<FFT<T>>,
             32 => Arc::new(butterflies::Butterfly32::new(self.inverse)) as Arc<FFT<T>>,
             _ => self.plan_prime(len),
         }
