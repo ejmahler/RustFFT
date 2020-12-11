@@ -27,16 +27,16 @@ fn bench_fft(b: &mut Bencher, len: usize) {
 #[bench] fn complex_p2_00000256(b: &mut Bencher) { bench_fft(b,      256); }
 #[bench] fn complex_p2_00001024(b: &mut Bencher) { bench_fft(b,     1024); }
 #[bench] fn complex_p2_00004096(b: &mut Bencher) { bench_fft(b,     4096); }
-//#[bench] fn complex_p2_00016384(b: &mut Bencher) { bench_fft(b,    16384); }
-//#[bench] fn complex_p2_00065536(b: &mut Bencher) { bench_fft(b,    65536); }
-//#[bench] fn complex_p2_01048576(b: &mut Bencher) { bench_fft(b,  1048576); }
-//#[bench] fn complex_p2_16777216(b: &mut Bencher) { bench_fft(b, 16777216); }
+#[bench] fn complex_p2_00016384(b: &mut Bencher) { bench_fft(b,    16384); }
+#[bench] fn complex_p2_00065536(b: &mut Bencher) { bench_fft(b,    65536); }
+#[bench] fn complex_p2_01048576(b: &mut Bencher) { bench_fft(b,  1048576); }
+#[bench] fn complex_p2_16777216(b: &mut Bencher) { bench_fft(b, 16777216); }
 
 
 // Powers of 7
 #[bench] fn complex_p7_00343(b: &mut Bencher) { bench_fft(b,   343); }
 #[bench] fn complex_p7_02401(b: &mut Bencher) { bench_fft(b,  2401); }
-//#[bench] fn complex_p7_16807(b: &mut Bencher) { bench_fft(b, 16807); }
+#[bench] fn complex_p7_16807(b: &mut Bencher) { bench_fft(b, 16807); }
 
 // Prime lengths
 #[bench] fn complex_prime_00003(b: &mut Bencher) { bench_fft(b, 3); }
@@ -46,6 +46,9 @@ fn bench_fft(b: &mut Bencher, len: usize) {
 #[bench] fn complex_prime_00013(b: &mut Bencher) { bench_fft(b, 13); }
 #[bench] fn complex_prime_00017(b: &mut Bencher) { bench_fft(b, 17); }
 #[bench] fn complex_prime_00019(b: &mut Bencher) { bench_fft(b, 19); }
+#[bench] fn complex_prime_00023(b: &mut Bencher) { bench_fft(b, 23); }
+#[bench] fn complex_prime_00029(b: &mut Bencher) { bench_fft(b, 29); }
+#[bench] fn complex_prime_00031(b: &mut Bencher) { bench_fft(b, 31); }
 #[bench] fn complex_prime_00151(b: &mut Bencher) { bench_fft(b, 151); }
 #[bench] fn complex_prime_00257(b: &mut Bencher) { bench_fft(b, 257); }
 #[bench] fn complex_prime_01009(b: &mut Bencher) { bench_fft(b, 1009); }

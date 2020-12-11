@@ -13,7 +13,7 @@ use math_utils;
 
 const MIN_RADIX4_BITS: u32 = 5; // smallest size to consider radix 4 an option is 2^5 = 32
 const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option is 2^16 = 65536
-const BUTTERFLIES: [usize; 13] = [2, 3, 4, 5, 6, 7, 8, 11, 13, 16, 17, 19, 32];
+const BUTTERFLIES: [usize; 16] = [2, 3, 4, 5, 6, 7, 8, 11, 13, 16, 17, 19, 23, 29, 31, 32];
 const COMPOSITE_BUTTERFLIES: [usize; 5] = [4, 6, 8, 16, 32];
 
 /// The FFT planner is used to make new FFT algorithm instances.
@@ -91,6 +91,9 @@ impl<T: FFTnum> FFTplanner<T> {
                 16 => Arc::new(Butterfly16::new(inverse)),
                 17 => Arc::new(Butterfly17::new(inverse)),
                 19 => Arc::new(Butterfly19::new(inverse)),
+                23 => Arc::new(Butterfly23::new(inverse)),
+                29 => Arc::new(Butterfly29::new(inverse)),
+                31 => Arc::new(Butterfly31::new(inverse)),
                 32 => Arc::new(Butterfly32::new(inverse)),
                 _ => panic!("Invalid butterfly size: {}", len),
             }
@@ -209,6 +212,9 @@ impl<T: FFTnum> FFTplanner<T> {
             16 => Arc::new(butterflies::Butterfly16::new(self.inverse)) as Arc<FFT<T>>,
             17 => Arc::new(butterflies::Butterfly17::new(self.inverse)) as Arc<FFT<T>>,
             19 => Arc::new(butterflies::Butterfly19::new(self.inverse)) as Arc<FFT<T>>,
+            23 => Arc::new(butterflies::Butterfly23::new(self.inverse)) as Arc<FFT<T>>,
+            29 => Arc::new(butterflies::Butterfly29::new(self.inverse)) as Arc<FFT<T>>,
+            31 => Arc::new(butterflies::Butterfly31::new(self.inverse)) as Arc<FFT<T>>,
             32 => Arc::new(butterflies::Butterfly32::new(self.inverse)) as Arc<FFT<T>>,
             _ => self.plan_prime(len),
         }
