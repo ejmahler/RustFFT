@@ -57,7 +57,7 @@
 //!
 //! Elements in the output are ordered by ascending frequency, with the first element corresponding to frequency 0.
 
-#![feature(specialization)]
+#![feature(min_specialization)]
 #![feature(maybe_uninit_extra)]
 #![feature(maybe_uninit_slice)]
 

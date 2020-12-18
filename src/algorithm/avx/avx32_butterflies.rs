@@ -18,23 +18,23 @@ use super::avx_vector;
 // Callers of this macro must guarantee that users can't even obtain an instance of $struct_name if their CPU doesn't have the required CPU features.
 macro_rules! boilerplate_fft_simd_butterfly {
     ($struct_name:ident, $len:expr) => (
-		default impl<T: FFTnum> Fft<T> for $struct_name<T> {
-            fn process_inplace_with_scratch(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+		impl<T: FFTnum> Fft<T> for $struct_name<T> {
+            default fn process_inplace_with_scratch(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
 				unimplemented!();
             }
-            fn process_inplace_multi(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+            default fn process_inplace_multi(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
                 unimplemented!();
 			}
-			fn process_with_scratch(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+			default fn process_with_scratch(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
 				unimplemented!();
             }
-            fn process_multi(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+            default fn process_multi(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
                 unimplemented!();
             }
-            fn get_inplace_scratch_len(&self) -> usize {
+            default fn get_inplace_scratch_len(&self) -> usize {
                 unimplemented!();
             }
-            fn get_out_of_place_scratch_len(&self) -> usize {
+            default fn get_out_of_place_scratch_len(&self) -> usize {
                 unimplemented!();
             }
         }
@@ -117,23 +117,23 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                 unsafe { self.row_butterflies(RawSlice::new(output), RawSliceMut::new(output)) };
             }
         }
-		default impl<T: FFTnum> Fft<T> for $struct_name<T> {
-            fn process_inplace_with_scratch(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+		impl<T: FFTnum> Fft<T> for $struct_name<T> {
+            default fn process_inplace_with_scratch(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
 				unimplemented!();
             }
-            fn process_inplace_multi(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+            default fn process_inplace_multi(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
                 unimplemented!();
 			}
-			fn process_with_scratch(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+			default fn process_with_scratch(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
 				unimplemented!();
             }
-            fn process_multi(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+            default fn process_multi(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
                 unimplemented!();
             }
-            fn get_inplace_scratch_len(&self) -> usize {
+            default fn get_inplace_scratch_len(&self) -> usize {
                 unimplemented!();
             }
-            fn get_out_of_place_scratch_len(&self) -> usize {
+            default fn get_out_of_place_scratch_len(&self) -> usize {
                 unimplemented!();
             }
         }
