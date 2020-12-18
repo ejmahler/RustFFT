@@ -1,9 +1,9 @@
 use num_complex::Complex;
 
-use common::{FFTnum, verify_length, verify_length_divisible};
+use crate::common::{FFTnum, verify_length, verify_length_divisible};
 
-use twiddles;
-use ::{Length, IsInverse, FFT};
+use crate::twiddles;
+use crate::{Length, IsInverse, FFT};
 
 
 pub trait FFTButterfly<T: FFTnum>: Length + IsInverse + Sync + Send {
@@ -2481,8 +2481,8 @@ impl<T> IsInverse for Butterfly32<T> {
 #[cfg(test)]
 mod unit_tests {
 	use super::*;
-	use test_utils::{random_signal, compare_vectors, check_fft_algorithm};
-	use algorithm::DFT;
+	use crate::test_utils::{random_signal, compare_vectors, check_fft_algorithm};
+	use crate::algorithm::DFT;
 	use num_traits::Zero;
 
     //the tests for all butterflies will be identical except for the identifiers used and size
