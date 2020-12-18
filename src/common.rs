@@ -1,10 +1,11 @@
 use num_traits::{FromPrimitive, Signed};
 
-/// Generic floating point number, implemented for f32 and f64
+/// Generic floating point number
 pub trait FFTnum: Copy + FromPrimitive + Signed + Sync + Send + 'static {}
 
-impl FFTnum for f32 {}
-impl FFTnum for f64 {}
+// Blanket impl for any type that implements the required traits. 
+// Notably, this includes f32 and f64, but also allows flexibility for library authors of custom numeric types.
+impl<T> FFTnum for T where T: Copy + FromPrimitive + Signed + Sync + Send + 'static {}
 
 
 #[inline(always)]
