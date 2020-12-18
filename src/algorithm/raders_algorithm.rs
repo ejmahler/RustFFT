@@ -4,11 +4,11 @@ use num_complex::Complex;
 use num_traits::Zero;
 use strength_reduce::StrengthReducedUsize;
 
-use common::{FFTnum, verify_length, verify_length_divisible};
+use crate::common::{FFTnum, verify_length, verify_length_divisible};
 
-use math_utils;
-use twiddles;
-use ::{Length, IsInverse, FFT};
+use crate::math_utils;
+use crate::twiddles;
+use crate::{Length, IsInverse, FFT};
 
 /// Implementation of Rader's Algorithm
 ///
@@ -164,8 +164,8 @@ impl<T> IsInverse for RadersAlgorithm<T> {
 mod unit_tests {
     use super::*;
     use std::sync::Arc;
-    use test_utils::check_fft_algorithm;
-    use algorithm::DFT;
+    use crate::test_utils::check_fft_algorithm;
+    use crate::algorithm::DFT;
 
     #[test]
     fn test_raders() {

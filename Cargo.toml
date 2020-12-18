@@ -11,6 +11,8 @@ keywords = ["fft", "dft", "discrete", "fourier", "transform"]
 categories = ["algorithms", "compression", "multimedia::encoding", "science"]
 license = "MIT OR Apache-2.0"
 
+edition = "2018"
+
 [dependencies]
 num-complex = "0.3"
 num-integer = "0.1.43"

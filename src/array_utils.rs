@@ -18,7 +18,7 @@ pub unsafe fn transpose_small<T: Copy>(width: usize, height: usize, input: &[T],
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use test_utils::random_signal;
+    use crate::test_utils::random_signal;
     use num_complex::Complex;
     use num_traits::Zero;
 
