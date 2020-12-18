@@ -3,9 +3,9 @@ use std::sync::Arc;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use common::{FFTnum, verify_length, verify_length_divisible};
+use crate::common::{FFTnum, verify_length, verify_length_divisible};
 
-use ::{Length, IsInverse, FFT};
+use crate::{Length, IsInverse, FFT};
 
 /// Implementation of Bluestein's Algorithm
 ///
@@ -222,8 +222,8 @@ impl<T> IsInverse for Bluesteins<T> {
 mod unit_tests {
     use super::*;
     use std::sync::Arc;
-    use test_utils::check_fft_algorithm;
-    use algorithm::DFT;
+    use crate::test_utils::check_fft_algorithm;
+    use crate::algorithm::DFT;
 
     #[test]
     fn test_bluestein() {
