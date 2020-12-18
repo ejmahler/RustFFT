@@ -1539,15 +1539,15 @@ impl Butterfly512Avx<f32> {
         for (columnset, twiddle_chunk) in self.twiddles.chunks_exact(TWIDDLES_PER_COLUMN).enumerate() {
             // Sadly we have to use MaybeUninit here. If we init an array like normal with AvxVector::Zero(), the compiler can't seem to figure out that it can
             // eliminate the dead stores of zeroes to the stack. By using uninit here, we avoid those unnecessary writes
-            let mut mid_uninit : [MaybeUninit::<__m256>; 16] = MaybeUninit::uninit_array();
+            let mut mid_uninit : [MaybeUninit::<__m256>; 16] = [MaybeUninit::<__m256>::uninit(); 16];
 
             column_butterfly16_loadfn!(
-                |index: usize| input.load_complex(columnset*4 + 32*index),
-                |data, index| MaybeUninit::first_ptr_mut(&mut mid_uninit).add(index).write(data),
+                |index: usize| input.load_complex(columnset*2 + 32*index),
+                |data, index: usize| { mid_uninit[index].write(data); },
                 self.twiddles_butterfly16,
                 self.twiddles_butterfly4
             );
-            let mid = MaybeUninit::slice_get_ref(&mid_uninit);
+            let mid = MaybeUninit::slice_assume_init_ref(&mid_uninit);
 
 
             // Apply twiddle factors, transpose, and store. Traditionally we apply all the twiddle factors at once and then do all the transposes at once,

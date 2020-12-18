@@ -163,6 +163,7 @@ impl PrimeFactors {
     pub fn get_product(&self) -> usize {
         self.n
     }
+    #[allow(unused)]
     pub fn get_total_factor_count(&self) -> u32 {
         self.total_factor_count
     }

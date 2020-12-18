@@ -4,8 +4,6 @@
 //! for a variety of lengths, and test that our FFT algorithm matches our
 //! DFT calculation for those signals.
 
-extern crate rustfft;
-extern crate rand;
 
 use std::sync::Arc;
 

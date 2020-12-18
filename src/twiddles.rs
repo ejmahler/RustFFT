@@ -31,7 +31,7 @@ mod unit_tests {
 
         for len in 1..10 {
             let actual: Vec<Complex<f32>> = generate_twiddle_factors(len, false);
-            let expected: Vec<Complex<f32>> = (0..len).map(|i| Complex::from_polar(&1f32, &(constant * i as f32 / len as f32))).collect();
+            let expected: Vec<Complex<f32>> = (0..len).map(|i| Complex::from_polar(1f32, constant * i as f32 / len as f32)).collect();
 
             assert!(compare_vectors(&actual, &expected), "len = {}", len)
         }

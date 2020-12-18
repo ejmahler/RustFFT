@@ -58,13 +58,12 @@
 //! Elements in the output are ordered by ascending frequency, with the first element corresponding to frequency 0.
 
 #![feature(specialization)]
-#![feature(maybe_uninit_uninit_array, maybe_uninit_slice_assume_init, maybe_uninit_slice)]
+#![feature(maybe_uninit_extra)]
+#![feature(maybe_uninit_slice)]
 
-pub extern crate num_complex;
-pub extern crate num_traits;
-extern crate num_integer;
-extern crate strength_reduce;
-extern crate transpose;
+
+pub use num_complex;
+pub use num_traits;
 
 
 #[macro_use]
@@ -128,7 +127,6 @@ pub trait Fft<T: FFTnum>: Length + IsInverse + Sync + Send {
     fn get_out_of_place_scratch_len(&self) -> usize;
 }
 
-#[cfg(test)]
-extern crate rand;
+
 #[cfg(test)]
 mod test_utils;

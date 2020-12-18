@@ -13,6 +13,8 @@ use crate::math_utils::{ PrimeFactors, PrimeFactor };
 
 const MIN_RADIX4_BITS: u32 = 5; // smallest size to consider radix 4 an option is 2^5 = 32
 const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option is 2^16 = 65536
+const MAX_RADER_PRIME_FACTOR: usize = 7; // don't use Raders if the inner fft length has prime factor larger than this
+const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the inner fft of Bluestein if length is larger than this
 
 /// The Fft planner is used to make new Fft algorithm instances.
 ///
@@ -156,24 +158,26 @@ impl<T: FFTnum> FFTplanner<T> {
     }
 
     fn plan_prime(&mut self, len: usize) -> Arc<dyn Fft<T>> {
-        // for prime numbers, we can either use rader's algorithm, which computes an inner FFT if size len - 1
-        // or bluestein's algorithm, which computes an inner FFT of any size at least len * 2 - 1. (usually, we pick a power of two)
-
-        // rader's algorithm is faster if len - 1 is very composite, but bluestein's algorithm is faster if len - 1 has very few prime factors 
-        // Compute the prime factors of our hpothetical inner FFT. if they're very composite, use rader's algorithm
-        let raders_fft_len = len - 1;
-        let raders_factors = PrimeFactors::compute(raders_fft_len);
-
-        // "very composite" obviously isn't well-defined criteria, but we can form a pretty good heuristic by comparing the number of prime factors to log5(len)
-        // if the number of factors is less, that means there are fewer factors than there would have been if len was a power of 5, and we'll call that "not very composite"
-        if (raders_factors.get_total_factor_count() as f32) < (len as f32).log(5.0) {
-            // the inner FFT isn't composite enough, so we're doing bluestein's algorithm instead
-            let inner_fft_len = (len * 2 - 1).checked_next_power_of_two().unwrap();
-            let inner_fft = self.plan_fft_with_factors(inner_fft_len, PrimeFactors::compute(inner_fft_len));
-
+        let inner_fft_len_rader = len - 1;
+        let factors = crate::math_utils::distinct_prime_factors(inner_fft_len_rader as u64);
+        // If any of the prime factors is too large, Rader's gets slow and Bluestein's is the better choice
+        if factors.iter().any(|val| *val as usize > MAX_RADER_PRIME_FACTOR) {
+            let inner_fft_len_pow2 = (2 * len - 1).checked_next_power_of_two().unwrap();
+            // for long ffts a mixed radix inner fft is faster than a longer radix4
+            let min_inner_len = 2 * len - 1;
+            let mixed_radix_len = 3*inner_fft_len_pow2/4;
+            let inner_fft = if mixed_radix_len >= min_inner_len && len >= MIN_BLUESTEIN_MIXED_RADIX_LEN {
+                let inner_factors = crate::math_utils::PrimeFactors::compute(mixed_radix_len);
+                self.plan_fft_with_factors(mixed_radix_len, inner_factors)
+            }
+            else {
+                Arc::new(Radix4::new(inner_fft_len_pow2, self.inverse))
+            };
             Arc::new(BluesteinsAlgorithm::new(len, inner_fft)) as Arc<dyn Fft<T>>
-        } else {
-            let inner_fft = self.plan_fft_with_factors(raders_fft_len, raders_factors);
+        }
+        else {
+            let factors = crate::math_utils::PrimeFactors::compute(inner_fft_len_rader);
+            let inner_fft = self.plan_fft_with_factors(inner_fft_len_rader, factors);
             Arc::new(RadersAlgorithm::new(inner_fft)) as Arc<dyn Fft<T>>
         }
     }
