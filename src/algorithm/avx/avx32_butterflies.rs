@@ -1542,7 +1542,7 @@ impl Butterfly512Avx<f32> {
             let mut mid_uninit : [MaybeUninit::<__m256>; 16] = [MaybeUninit::<__m256>::uninit(); 16];
 
             column_butterfly16_loadfn!(
-                |index: usize| input.load_complex(columnset*2 + 32*index),
+                |index: usize| input.load_complex(columnset*4 + 32*index),
                 |data, index: usize| { mid_uninit[index].write(data); },
                 self.twiddles_butterfly16,
                 self.twiddles_butterfly4
