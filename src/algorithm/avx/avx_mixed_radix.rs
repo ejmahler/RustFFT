@@ -3,10 +3,9 @@ use std::sync::Arc;
 use num_integer::div_ceil;
 use num_complex::Complex;
 
-use crate::common::FFTnum;
 use crate::{Length, IsInverse, Fft};
 
-use super::CommonSimdData;
+use super::{AvxNum, CommonSimdData};
 
 use super::avx_vector::{AvxVector, AvxVector128, AvxVector256, Rotation90, AvxArray, AvxArrayMut};
 use super::avx_vector;
@@ -72,15 +71,15 @@ macro_rules! mixedradix_gen_data {
 
         // We're going to process each row of the FFT one AVX register at a time. We need to know how many AVX registers each row can fit,
         // and if the last register in each row going to have partial data (ie a remainder)
-        let quotient = len_per_row / T::AvxType::COMPLEX_PER_VECTOR;
-        let remainder = len_per_row % T::AvxType::COMPLEX_PER_VECTOR;
+        let quotient = len_per_row / T::VectorType::COMPLEX_PER_VECTOR;
+        let remainder = len_per_row % T::VectorType::COMPLEX_PER_VECTOR;
 
-        let num_twiddle_columns = quotient + div_ceil(remainder, T::AvxType::COMPLEX_PER_VECTOR);
+        let num_twiddle_columns = quotient + div_ceil(remainder, T::VectorType::COMPLEX_PER_VECTOR);
 
         let mut twiddles = Vec::with_capacity(num_twiddle_columns * TWIDDLES_PER_COLUMN);
         for x in 0..num_twiddle_columns {
             for y in 1..ROW_COUNT {
-                twiddles.push(AvxVector::make_mixedradix_twiddle_chunk(x * T::AvxType::COMPLEX_PER_VECTOR, y, len, inverse));
+                twiddles.push(AvxVector::make_mixedradix_twiddle_chunk(x * T::VectorType::COMPLEX_PER_VECTOR, y, len, inverse));
             }
         }
 
@@ -108,11 +107,11 @@ macro_rules! mixedradix_column_butterflies{
         const TWIDDLES_PER_COLUMN : usize = ROW_COUNT - 1;
 
         let len_per_row = self.len() / ROW_COUNT;
-        let chunk_count = len_per_row / T::AvxType::COMPLEX_PER_VECTOR;
+        let chunk_count = len_per_row / T::VectorType::COMPLEX_PER_VECTOR;
 
         // process the column FFTs
         for (c, twiddle_chunk) in self.common_data.twiddles.chunks_exact(TWIDDLES_PER_COLUMN).take(chunk_count).enumerate() {
-            let index_base = c*T::AvxType::COMPLEX_PER_VECTOR;
+            let index_base = c*T::VectorType::COMPLEX_PER_VECTOR;
 
             // Load columns from the buffer into registers
             let mut columns = [AvxVector::zero(); ROW_COUNT];
@@ -136,9 +135,9 @@ macro_rules! mixedradix_column_butterflies{
 
         // finally, we might have a single partial chunk.
         // Normally, we can fit 4 complex numbers into an AVX register, but we only have `partial_remainder` columns left, so we need special logic to handle these final columns
-        let partial_remainder = len_per_row % T::AvxType::COMPLEX_PER_VECTOR;
+        let partial_remainder = len_per_row % T::VectorType::COMPLEX_PER_VECTOR;
         if partial_remainder > 0 {
-            let partial_remainder_base = chunk_count * T::AvxType::COMPLEX_PER_VECTOR;
+            let partial_remainder_base = chunk_count * T::VectorType::COMPLEX_PER_VECTOR;
             let partial_remainder_twiddle_base = self.common_data.twiddles.len() - TWIDDLES_PER_COLUMN;
             let final_twiddle_chunk = &self.common_data.twiddles[partial_remainder_twiddle_base..];
 
@@ -206,15 +205,15 @@ macro_rules! mixedradix_transpose{
         const ROW_COUNT : usize = $row_count;
 
         let len_per_row = self.len() / ROW_COUNT;
-        let chunk_count = len_per_row / T::AvxType::COMPLEX_PER_VECTOR;
+        let chunk_count = len_per_row / T::VectorType::COMPLEX_PER_VECTOR;
 
         // transpose the scratch as a nx2 array into the buffer as an 2xn array
         for c in 0..chunk_count {
-            let input_index_base = c*T::AvxType::COMPLEX_PER_VECTOR;
+            let input_index_base = c*T::VectorType::COMPLEX_PER_VECTOR;
             let output_index_base = input_index_base * ROW_COUNT;
 
             // Load rows from the input into registers
-            let mut rows : [T::AvxType; ROW_COUNT] = [AvxVector::zero(); ROW_COUNT];
+            let mut rows : [T::VectorType; ROW_COUNT] = [AvxVector::zero(); ROW_COUNT];
             for i in 0..ROW_COUNT {
                 rows[i] = input.load_complex(input_index_base + len_per_row*i);
             }
@@ -229,15 +228,15 @@ macro_rules! mixedradix_transpose{
             // if we don't manually unroll the loop, the compiler will insert unnecessary writes+reads to the stack which tank performance
             // once the compiler bug is fixed, this can be replaced by a "for i in 0..ROW_COUNT" loop
             $( 
-                output.store_complex(transposed[$unroll_workaround_index], output_index_base + T::AvxType::COMPLEX_PER_VECTOR * $unroll_workaround_index);
+                output.store_complex(transposed[$unroll_workaround_index], output_index_base + T::VectorType::COMPLEX_PER_VECTOR * $unroll_workaround_index);
             )*
         }
 
         // transpose the remainder
-        let input_index_base = chunk_count * T::AvxType::COMPLEX_PER_VECTOR;
+        let input_index_base = chunk_count * T::VectorType::COMPLEX_PER_VECTOR;
         let output_index_base = input_index_base * ROW_COUNT;
 
-        let partial_remainder = len_per_row % T::AvxType::COMPLEX_PER_VECTOR;
+        let partial_remainder = len_per_row % T::VectorType::COMPLEX_PER_VECTOR;
         if partial_remainder == 1 {
             // If the partial remainder is 1, there's no transposing to do - just gather from across the rows and store contiguously
             for i in 0..ROW_COUNT {
@@ -256,7 +255,7 @@ macro_rules! mixedradix_transpose{
 
             // use the same macro hack as above to unroll the loop
             $( 
-                AvxArrayMut::<T>::store_partial2_complex(output, transposed[$unroll_workaround_index], output_index_base + <T::AvxType as AvxVector256>::HalfVector::COMPLEX_PER_VECTOR * $unroll_workaround_index);
+                AvxArrayMut::<T>::store_partial2_complex(output, transposed[$unroll_workaround_index], output_index_base + <T::VectorType as AvxVector256>::HalfVector::COMPLEX_PER_VECTOR * $unroll_workaround_index);
             )*
         }
         else if partial_remainder == 3 {
@@ -272,8 +271,8 @@ macro_rules! mixedradix_transpose{
             // We're going to write constant number of full vectors, and then some constant-sized partial vector
             // Sadly, because of rust limitations, we can't make full_vector_count a const, so we have to cross our fingers that the compiler optimizes it to a constant
             let element_count = 3*ROW_COUNT;
-            let full_vector_count = element_count / T::AvxType::COMPLEX_PER_VECTOR;
-            let final_remainder_count = element_count % T::AvxType::COMPLEX_PER_VECTOR;
+            let full_vector_count = element_count / T::VectorType::COMPLEX_PER_VECTOR;
+            let final_remainder_count = element_count % T::VectorType::COMPLEX_PER_VECTOR;
 
             // write out our full vectors
             // we are using a macro hack to manually unroll the loop, to work around this rustc bug:
@@ -282,27 +281,27 @@ macro_rules! mixedradix_transpose{
             // if we don't manually unroll the loop, the compiler will insert unnecessary writes+reads to the stack which tank performance
             // once the compiler bug is fixed, this can be replaced by a "for i in 0..full_vector_count" loop
             $( 
-                output.store_complex(transposed[$remainder3_unroll_workaround_index], output_index_base + T::AvxType::COMPLEX_PER_VECTOR * $remainder3_unroll_workaround_index);
+                output.store_complex(transposed[$remainder3_unroll_workaround_index], output_index_base + T::VectorType::COMPLEX_PER_VECTOR * $remainder3_unroll_workaround_index);
             )*
 
             // write out our partial vector. again, this is a compile-time constant, even if we can't represent that within rust yet
             match final_remainder_count {
                 0 => {},
-                1 => AvxArrayMut::<T>::store_partial1_complex(output, transposed[full_vector_count].lo(), output_index_base + full_vector_count * T::AvxType::COMPLEX_PER_VECTOR),
-                2 => AvxArrayMut::<T>::store_partial2_complex(output, transposed[full_vector_count].lo(), output_index_base + full_vector_count * T::AvxType::COMPLEX_PER_VECTOR),
-                3 => AvxArrayMut::<T>::store_partial3_complex(output, transposed[full_vector_count], output_index_base + full_vector_count * T::AvxType::COMPLEX_PER_VECTOR),
+                1 => AvxArrayMut::<T>::store_partial1_complex(output, transposed[full_vector_count].lo(), output_index_base + full_vector_count * T::VectorType::COMPLEX_PER_VECTOR),
+                2 => AvxArrayMut::<T>::store_partial2_complex(output, transposed[full_vector_count].lo(), output_index_base + full_vector_count * T::VectorType::COMPLEX_PER_VECTOR),
+                3 => AvxArrayMut::<T>::store_partial3_complex(output, transposed[full_vector_count], output_index_base + full_vector_count * T::VectorType::COMPLEX_PER_VECTOR),
                 _ => unreachable!(),
             }
         }
     }
 )}
 
-pub struct MixedRadix2xnAvx<T: FFTnum> {
-    common_data: CommonSimdData<T,T::AvxType>
+pub struct MixedRadix2xnAvx<T: AvxNum> {
+    common_data: CommonSimdData<T,T::VectorType>
 }
-boilerplate_fft_commondata!(MixedRadix2xnAvx);
+boilerplate_avx_fft_commondata!(MixedRadix2xnAvx);
 
-impl<T: FFTnum> MixedRadix2xnAvx<T> {
+impl<T: AvxNum> MixedRadix2xnAvx<T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
@@ -321,13 +320,13 @@ impl<T: FFTnum> MixedRadix2xnAvx<T> {
     boilerplate_mixedradix!();
 }
 
-pub struct MixedRadix3xnAvx<T: FFTnum> {
-    twiddles_butterfly3: T::AvxType,
-    common_data: CommonSimdData<T,T::AvxType>
+pub struct MixedRadix3xnAvx<T: AvxNum> {
+    twiddles_butterfly3: T::VectorType,
+    common_data: CommonSimdData<T,T::VectorType>
 }
-boilerplate_fft_commondata!(MixedRadix3xnAvx);
+boilerplate_avx_fft_commondata!(MixedRadix3xnAvx);
 
-impl<T: FFTnum> MixedRadix3xnAvx<T> {
+impl<T: AvxNum> MixedRadix3xnAvx<T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
@@ -350,13 +349,13 @@ impl<T: FFTnum> MixedRadix3xnAvx<T> {
 
 
 
-pub struct MixedRadix4xnAvx<T: FFTnum> {
-    twiddles_butterfly4: Rotation90<T::AvxType>,
-    common_data: CommonSimdData<T,T::AvxType>,
+pub struct MixedRadix4xnAvx<T: AvxNum> {
+    twiddles_butterfly4: Rotation90<T::VectorType>,
+    common_data: CommonSimdData<T,T::VectorType>,
 }
-boilerplate_fft_commondata!(MixedRadix4xnAvx);
+boilerplate_avx_fft_commondata!(MixedRadix4xnAvx);
 
-impl<T: FFTnum> MixedRadix4xnAvx<T> {
+impl<T: AvxNum> MixedRadix4xnAvx<T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
@@ -377,13 +376,13 @@ impl<T: FFTnum> MixedRadix4xnAvx<T> {
 }
 
 
-pub struct MixedRadix5xnAvx<T: FFTnum> {
-    twiddles_butterfly5: [T::AvxType; 2],
-    common_data: CommonSimdData<T,T::AvxType>
+pub struct MixedRadix5xnAvx<T: AvxNum> {
+    twiddles_butterfly5: [T::VectorType; 2],
+    common_data: CommonSimdData<T,T::VectorType>
 }
-boilerplate_fft_commondata!(MixedRadix5xnAvx);
+boilerplate_avx_fft_commondata!(MixedRadix5xnAvx);
 
-impl<T: FFTnum> MixedRadix5xnAvx<T> {
+impl<T: AvxNum> MixedRadix5xnAvx<T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
@@ -409,13 +408,13 @@ impl<T: FFTnum> MixedRadix5xnAvx<T> {
 
 
 
-pub struct MixedRadix6xnAvx<T: FFTnum> {
-    twiddles_butterfly3: T::AvxType,
-    common_data: CommonSimdData<T,T::AvxType>
+pub struct MixedRadix6xnAvx<T: AvxNum> {
+    twiddles_butterfly3: T::VectorType,
+    common_data: CommonSimdData<T,T::VectorType>
 }
-boilerplate_fft_commondata!(MixedRadix6xnAvx);
+boilerplate_avx_fft_commondata!(MixedRadix6xnAvx);
 
-impl<T: FFTnum> MixedRadix6xnAvx<T> {
+impl<T: AvxNum> MixedRadix6xnAvx<T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
@@ -436,13 +435,13 @@ impl<T: FFTnum> MixedRadix6xnAvx<T> {
 }
 
 
-pub struct MixedRadix7xnAvx<T: FFTnum> {
-    twiddles_butterfly7: [T::AvxType; 3],
-    common_data: CommonSimdData<T,T::AvxType>
+pub struct MixedRadix7xnAvx<T: AvxNum> {
+    twiddles_butterfly7: [T::VectorType; 3],
+    common_data: CommonSimdData<T,T::VectorType>
 }
-boilerplate_fft_commondata!(MixedRadix7xnAvx);
+boilerplate_avx_fft_commondata!(MixedRadix7xnAvx);
 
-impl<T: FFTnum> MixedRadix7xnAvx<T> {
+impl<T: AvxNum> MixedRadix7xnAvx<T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
@@ -473,13 +472,13 @@ impl<T: FFTnum> MixedRadix7xnAvx<T> {
 
 
 
-pub struct MixedRadix8xnAvx<T: FFTnum> {
-    twiddles_butterfly4: Rotation90<T::AvxType>,
-    common_data: CommonSimdData<T, T::AvxType>,
+pub struct MixedRadix8xnAvx<T: AvxNum> {
+    twiddles_butterfly4: Rotation90<T::VectorType>,
+    common_data: CommonSimdData<T, T::VectorType>,
 }
-boilerplate_fft_commondata!(MixedRadix8xnAvx);
+boilerplate_avx_fft_commondata!(MixedRadix8xnAvx);
 
-impl<T: FFTnum> MixedRadix8xnAvx<T> {
+impl<T: AvxNum> MixedRadix8xnAvx<T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
@@ -502,15 +501,15 @@ impl<T: FFTnum> MixedRadix8xnAvx<T> {
 
 
 
-pub struct MixedRadix9xnAvx<T: FFTnum> {
-    twiddles_butterfly9: [T::AvxType; 3],
-    twiddles_butterfly9_lo: [T::AvxType; 2],
-    twiddles_butterfly3: T::AvxType,
-    common_data: CommonSimdData<T, T::AvxType>,
+pub struct MixedRadix9xnAvx<T: AvxNum> {
+    twiddles_butterfly9: [T::VectorType; 3],
+    twiddles_butterfly9_lo: [T::VectorType; 2],
+    twiddles_butterfly3: T::VectorType,
+    common_data: CommonSimdData<T, T::VectorType>,
 }
-boilerplate_fft_commondata!(MixedRadix9xnAvx);
+boilerplate_avx_fft_commondata!(MixedRadix9xnAvx);
 
-impl<T: FFTnum> MixedRadix9xnAvx<T> {
+impl<T: AvxNum> MixedRadix9xnAvx<T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         let inverse = inner_fft.is_inverse();
@@ -551,14 +550,14 @@ impl<T: FFTnum> MixedRadix9xnAvx<T> {
 
 
 
-pub struct MixedRadix12xnAvx<T: FFTnum> {
-    twiddles_butterfly4: Rotation90<T::AvxType>,
-    twiddles_butterfly3: T::AvxType,
-    common_data: CommonSimdData<T, T::AvxType>,
+pub struct MixedRadix12xnAvx<T: AvxNum> {
+    twiddles_butterfly4: Rotation90<T::VectorType>,
+    twiddles_butterfly3: T::VectorType,
+    common_data: CommonSimdData<T, T::VectorType>,
 }
-boilerplate_fft_commondata!(MixedRadix12xnAvx);
+boilerplate_avx_fft_commondata!(MixedRadix12xnAvx);
 
-impl<T: FFTnum> MixedRadix12xnAvx<T> {
+impl<T: AvxNum> MixedRadix12xnAvx<T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         let inverse = inner_fft.is_inverse();
@@ -584,14 +583,14 @@ impl<T: FFTnum> MixedRadix12xnAvx<T> {
 
 
 
-pub struct MixedRadix16xnAvx<T: FFTnum> {
-    twiddles_butterfly4: Rotation90<T::AvxType>,
-    twiddles_butterfly16: [T::AvxType; 2],
-    common_data: CommonSimdData<T, T::AvxType>,
+pub struct MixedRadix16xnAvx<T: AvxNum> {
+    twiddles_butterfly4: Rotation90<T::VectorType>,
+    twiddles_butterfly16: [T::VectorType; 2],
+    common_data: CommonSimdData<T, T::VectorType>,
 }
-boilerplate_fft_commondata!(MixedRadix16xnAvx);
+boilerplate_avx_fft_commondata!(MixedRadix16xnAvx);
 
-impl<T: FFTnum> MixedRadix16xnAvx<T> {
+impl<T: AvxNum> MixedRadix16xnAvx<T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         let inverse = inner_fft.is_inverse();
@@ -612,11 +611,11 @@ impl<T: FFTnum> MixedRadix16xnAvx<T> {
         const TWIDDLES_PER_COLUMN : usize = ROW_COUNT - 1;
 
         let len_per_row = self.len() / ROW_COUNT;
-        let chunk_count = len_per_row / T::AvxType::COMPLEX_PER_VECTOR;
+        let chunk_count = len_per_row / T::VectorType::COMPLEX_PER_VECTOR;
 
         // process the column FFTs
         for (c, twiddle_chunk) in self.common_data.twiddles.chunks_exact(TWIDDLES_PER_COLUMN).take(chunk_count).enumerate() {
-            let index_base = c*T::AvxType::COMPLEX_PER_VECTOR;
+            let index_base = c*T::VectorType::COMPLEX_PER_VECTOR;
 
             column_butterfly16_loadfn!(
                 |index| buffer.load_complex(index_base + len_per_row*index),
@@ -633,9 +632,9 @@ impl<T: FFTnum> MixedRadix16xnAvx<T> {
 
         // finally, we might have a single partial chunk.
         // Normally, we can fit 4 complex numbers into an AVX register, but we only have `partial_remainder` columns left, so we need special logic to handle these final columns
-        let partial_remainder = len_per_row % T::AvxType::COMPLEX_PER_VECTOR;
+        let partial_remainder = len_per_row % T::VectorType::COMPLEX_PER_VECTOR;
         if partial_remainder > 0 {
-            let partial_remainder_base = chunk_count * T::AvxType::COMPLEX_PER_VECTOR;
+            let partial_remainder_base = chunk_count * T::VectorType::COMPLEX_PER_VECTOR;
             let partial_remainder_twiddle_base = self.common_data.twiddles.len() - TWIDDLES_PER_COLUMN;
             let final_twiddle_chunk = &self.common_data.twiddles[partial_remainder_twiddle_base..];
 
@@ -645,7 +644,7 @@ impl<T: FFTnum> MixedRadix16xnAvx<T> {
                         |index| buffer.load_partial1_complex(partial_remainder_base + len_per_row*index),
                         |mut data, index| {
                             if index > 0 {
-                                let twiddle : T::AvxType = final_twiddle_chunk[index - 1];
+                                let twiddle : T::VectorType = final_twiddle_chunk[index - 1];
                                 data = AvxVector::mul_complex(data, twiddle.lo());
                             }
                             buffer.store_partial1_complex(data, partial_remainder_base + len_per_row*index)
@@ -659,7 +658,7 @@ impl<T: FFTnum> MixedRadix16xnAvx<T> {
                         |index| buffer.load_partial2_complex(partial_remainder_base + len_per_row*index),
                         |mut data, index| {
                             if index > 0 {
-                                let twiddle : T::AvxType = final_twiddle_chunk[index - 1];
+                                let twiddle : T::VectorType = final_twiddle_chunk[index - 1];
                                 data = AvxVector::mul_complex(data, twiddle.lo());
                             }
                             buffer.store_partial2_complex(data, partial_remainder_base + len_per_row*index)

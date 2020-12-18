@@ -1,21 +1,33 @@
 use num_traits::{FromPrimitive, Signed};
 use std::fmt::Debug;
 
-use std::arch::x86_64::{__m256, __m256d};
-
 use num_complex::Complex;
-use crate::algorithm::avx::AvxVector256;
 
 /// Generic floating point number, implemented for f32 and f64
 pub trait FFTnum: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {
-	// two related methodsfor generating twiddle factors. The first is a convenience wrapper around the second.
+    // two related methodsfor generating twiddle factors. The first is a convenience wrapper around the second.
 	fn generate_twiddle_factor(index: usize, fft_len: usize, inverse: bool) -> Complex<Self> {
 		Self::generate_twiddle_factor_floatindex(index as f64, fft_len, inverse)
 	}
     fn generate_twiddle_factor_floatindex(index: f64, fft_len: usize, inverse: bool) -> Complex<Self>;
-    
-    // todo: cfg this on x86_64, or on a feature flag
-    type AvxType : AvxVector256<ScalarType=Self>;
+}
+
+impl<T> FFTnum for T where T: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {
+    default fn generate_twiddle_factor_floatindex(index: f64, fft_len: usize, inverse: bool) -> Complex<Self> {
+        let constant = -2f64 * std::f64::consts::PI / fft_len as f64;
+		let angle = constant * index;
+
+	    let result = Complex {
+	    	re: Self::from_f64(angle.cos()).unwrap(),
+	    	im: Self::from_f64(angle.cos()).unwrap(),
+	    };
+
+	    if inverse {
+	    	result.conj()
+	    } else {
+	    	result
+	    }
+    }
 }
 
 impl FFTnum for f32 {
@@ -34,8 +46,6 @@ impl FFTnum for f32 {
 	    	result
 	    }
     }
-    
-    type AvxType = __m256;
 }
 impl FFTnum for f64 {
 	fn generate_twiddle_factor_floatindex(index: f64, fft_len: usize, inverse: bool) -> Complex<Self> {
@@ -53,8 +63,6 @@ impl FFTnum for f64 {
 	    	result
 	    }
     }
-    
-    type AvxType = __m256d;
 }
 
 macro_rules! boilerplate_fft_oop {

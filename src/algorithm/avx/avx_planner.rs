@@ -251,7 +251,6 @@ pub trait MakeFftAvx<T: FFTnum> {
     fn construct_bluesteins(&mut self, len: usize) -> Arc<dyn Fft<T>>;
     fn construct_raders(&mut self, len: usize) -> Arc<dyn Fft<T>>;
 }
-
 impl<T: FFTnum> MakeFftAvx<T> for FftPlannerAvx<T> {
     default fn plan_mixed_radix_base(&self, _len: usize, _factors: &PartialFactors) -> MixedRadixPlan { unimplemented!(); }
 
@@ -260,16 +259,7 @@ impl<T: FFTnum> MakeFftAvx<T> for FftPlannerAvx<T> {
     default fn construct_butterfly(&mut self, _len: usize) -> Arc<dyn Fft<T>> { unimplemented!(); }
     default fn construct_radix_chain(&mut self, _chain: &[u8], _base: Arc<dyn Fft<T>>) -> Arc<dyn Fft<T>> { unimplemented!(); }
     default fn construct_bluesteins(&mut self, _len: usize) -> Arc<dyn Fft<T>> { unimplemented!(); }
-    default fn construct_raders(&mut self, len: usize) -> Arc<dyn Fft<T>> {
-        let inner_fft = self.plan_fft(len - 1);
-        
-        // try to construct our AVX2 rader's algorithm. If that fails (probably because the machine we're running on doesn't have AVX2), fall back to scalar
-        if let Ok(raders_avx) = RadersAvx2::new(Arc::clone(&inner_fft)) {
-            wrap_fft(raders_avx)
-        } else {
-            wrap_fft(RadersAlgorithm::new(inner_fft))
-        }
-    }
+    default fn construct_raders(&mut self, _len: usize) -> Arc<dyn Fft<T>> { unimplemented!(); }
 }
 
 
@@ -472,6 +462,17 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
         let inner_fft = self.plan_fft(inner_len);
         wrap_fft(BluesteinsAvx::new(len, inner_fft).unwrap())
     }
+
+    fn construct_raders(&mut self, len: usize) -> Arc<dyn Fft<f32>> {
+        let inner_fft = self.plan_fft(len - 1);
+        
+        // try to construct our AVX2 rader's algorithm. If that fails (probably because the machine we're running on doesn't have AVX2), fall back to scalar
+        if let Ok(raders_avx) = RadersAvx2::new(Arc::clone(&inner_fft)) {
+            wrap_fft(raders_avx)
+        } else {
+            wrap_fft(RadersAlgorithm::new(inner_fft))
+        }
+    }
 }
 
 
@@ -666,5 +667,15 @@ impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
 
         let inner_fft = self.plan_fft(inner_len);
         wrap_fft(BluesteinsAvx::new(len, inner_fft).unwrap())
+    }
+    fn construct_raders(&mut self, len: usize) -> Arc<dyn Fft<f64>> {
+        let inner_fft = self.plan_fft(len - 1);
+        
+        // try to construct our AVX2 rader's algorithm. If that fails (probably because the machine we're running on doesn't have AVX2), fall back to scalar
+        if let Ok(raders_avx) = RadersAvx2::new(Arc::clone(&inner_fft)) {
+            wrap_fft(raders_avx)
+        } else {
+            wrap_fft(RadersAlgorithm::new(inner_fft))
+        }
     }
 }

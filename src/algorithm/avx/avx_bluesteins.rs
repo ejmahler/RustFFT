@@ -4,10 +4,9 @@ use num_integer::div_ceil;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use crate::common::FFTnum;
 use crate::{Length, IsInverse, Fft};
 
-use super::avx_vector::{AvxVector, AvxVector128, AvxVector256, AvxArray, AvxArrayMut};
+use super::{AvxNum, avx_vector::{AvxVector, AvxVector128, AvxVector256, AvxArray, AvxArrayMut}};
 use super::CommonSimdData;
 
 /// Implementation of Bluestein's Algorithm
@@ -39,13 +38,13 @@ use super::CommonSimdData;
 /// an order of magnitude slower than similar composite sizes. In the example size above of 1201, benchmarking shows
 /// that it takes 2.5x more time to compute than a FFT of size 1200.
 
-pub struct BluesteinsAvx<T: FFTnum> {
-    inner_fft_multiplier: Box<[T::AvxType]>,
-    common_data: CommonSimdData<T, T::AvxType>,
+pub struct BluesteinsAvx<T: AvxNum> {
+    inner_fft_multiplier: Box<[T::VectorType]>,
+    common_data: CommonSimdData<T, T::VectorType>,
 }
-boilerplate_fft_commondata!(BluesteinsAvx);
+boilerplate_avx_fft_commondata!(BluesteinsAvx);
 
-impl<T: FFTnum> BluesteinsAvx<T> {
+impl<T: AvxNum> BluesteinsAvx<T> {
     fn compute_bluesteins_twiddle(index: usize, len: usize, inverse: bool) -> Complex<T> {
         let index_float = index as f64;
         let index_squared = index_float * index_float;
@@ -90,7 +89,7 @@ impl<T: FFTnum> BluesteinsAvx<T> {
     unsafe fn new_with_avx(len: usize, inner_fft: Arc<dyn Fft<T>>) -> Self {
         let inner_fft_len = inner_fft.len();
         assert!(len * 2 - 1 <= inner_fft_len, "Bluestein's algorithm requires inner_fft.len() >= self.len() * 2 - 1. Expected >= {}, got {}", len * 2 - 1, inner_fft_len);
-        assert_eq!(inner_fft_len % T::AvxType::COMPLEX_PER_VECTOR, 0, "BluesteinsAvx requires its inner_fft.len() to be a multiple of {} (IE the number of complex numbers in a single vector) inner_fft.len() = {}", T::AvxType::COMPLEX_PER_VECTOR, inner_fft_len);
+        assert_eq!(inner_fft_len % T::VectorType::COMPLEX_PER_VECTOR, 0, "BluesteinsAvx requires its inner_fft.len() to be a multiple of {} (IE the number of complex numbers in a single vector) inner_fft.len() = {}", T::VectorType::COMPLEX_PER_VECTOR, inner_fft_len);
 
         // when computing FFTs, we're going to run our inner multiply pairwise by some precomputed data, then run an inverse inner FFT. We need to precompute that inner data here
         let inner_len_float = T::from_usize(inner_fft_len).unwrap();
@@ -111,18 +110,18 @@ impl<T: FFTnum> BluesteinsAvx<T> {
 
         // When computing the FFT, we'll want this array to be pre-conjugated, so conjugate it now
         let conjugation_mask = AvxVector256::broadcast_complex_elements(Complex::new(T::zero(), -T::zero()));
-        let inner_fft_multiplier = inner_fft_input.chunks_exact(T::AvxType::COMPLEX_PER_VECTOR).map(|chunk| {
+        let inner_fft_multiplier = inner_fft_input.chunks_exact(T::VectorType::COMPLEX_PER_VECTOR).map(|chunk| {
             let chunk_vector = chunk.load_complex(0);
             AvxVector::xor(chunk_vector, conjugation_mask) // compute our conjugation by xoring our data with a precomputed mask
         }).collect::<Vec<_>>().into_boxed_slice();
 
         // also compute some more mundane twiddle factors to start and end with.
-        let chunk_count = div_ceil(len, T::AvxType::COMPLEX_PER_VECTOR);
+        let chunk_count = div_ceil(len, T::VectorType::COMPLEX_PER_VECTOR);
         let twiddles : Vec<_> = (0..chunk_count).map(|x| {
-            let mut twiddle_chunk = [Complex::zero();4]; // can't give this a length of T::AvxType::COMPLEX_PER_VECTOR because arrays obnoxiously can't have generic lengths
+            let mut twiddle_chunk = [Complex::zero();4]; // can't give this a length of T::VectorType::COMPLEX_PER_VECTOR because arrays obnoxiously can't have generic lengths
 
-            for i in 0..T::AvxType::COMPLEX_PER_VECTOR {
-                twiddle_chunk[i] = Self::compute_bluesteins_twiddle(x*T::AvxType::COMPLEX_PER_VECTOR+i, len, !inverse);
+            for i in 0..T::VectorType::COMPLEX_PER_VECTOR {
+                twiddle_chunk[i] = Self::compute_bluesteins_twiddle(x*T::VectorType::COMPLEX_PER_VECTOR+i, len, !inverse);
             }
             twiddle_chunk.load_complex(0)
         }).collect();
@@ -149,11 +148,11 @@ impl<T: FFTnum> BluesteinsAvx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn prepare_bluesteins(&self, input: &[Complex<T>], inner_fft_buffer: &mut [Complex<T>]) {
         let chunk_count = self.common_data.twiddles.len() - 1;
-        let remainder = self.len() - chunk_count * T::AvxType::COMPLEX_PER_VECTOR;
+        let remainder = self.len() - chunk_count * T::VectorType::COMPLEX_PER_VECTOR;
 
         // Copy the buffer into our inner FFT input, applying twiddle factors as we go. the buffer will only fill part of the FFT input, so zero fill the rest
         for (i, twiddle) in self.common_data.twiddles[..chunk_count].iter().enumerate() {
-            let index = i * T::AvxType::COMPLEX_PER_VECTOR;
+            let index = i * T::VectorType::COMPLEX_PER_VECTOR;
             let input_vector = input.load_complex(index);
             let product_vector = AvxVector::mul_complex(input_vector, *twiddle);
             inner_fft_buffer.store_complex(product_vector, index);
@@ -164,10 +163,10 @@ impl<T: FFTnum> BluesteinsAvx<T> {
         {
             let remainder_twiddle = self.common_data.twiddles[chunk_count];
 
-            let remainder_index = chunk_count * T::AvxType::COMPLEX_PER_VECTOR;
+            let remainder_index = chunk_count * T::VectorType::COMPLEX_PER_VECTOR;
             let remainder_data = match remainder {
                 1 => input.load_partial1_complex(remainder_index).zero_extend(),
-                2 => if T::AvxType::COMPLEX_PER_VECTOR == 2 {
+                2 => if T::VectorType::COMPLEX_PER_VECTOR == 2 {
                     input.load_complex(remainder_index)
                 } else {
                     input.load_partial2_complex(remainder_index).zero_extend()
@@ -183,8 +182,8 @@ impl<T: FFTnum> BluesteinsAvx<T> {
 
         // zero fill the rest of the `inner` array
         let zerofill_start = chunk_count + 1;
-        for i in zerofill_start..(inner_fft_buffer.len()/T::AvxType::COMPLEX_PER_VECTOR) {
-            let index = i * T::AvxType::COMPLEX_PER_VECTOR;
+        for i in zerofill_start..(inner_fft_buffer.len()/T::VectorType::COMPLEX_PER_VECTOR) {
+            let index = i * T::VectorType::COMPLEX_PER_VECTOR;
             inner_fft_buffer.store_complex(AvxVector::zero(), index);
         }
     }
@@ -193,11 +192,11 @@ impl<T: FFTnum> BluesteinsAvx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn finalize_bluesteins(&self, inner_fft_buffer: &[Complex<T>], output: &mut [Complex<T>]) {
         let chunk_count = self.common_data.twiddles.len() - 1;
-        let remainder = self.len() - chunk_count * T::AvxType::COMPLEX_PER_VECTOR;
+        let remainder = self.len() - chunk_count * T::VectorType::COMPLEX_PER_VECTOR;
 
         // copy our data to the output, applying twiddle factors again as we go. Also conjugate inner_fft_buffer to complete the inverse FFT
         for (i, twiddle) in self.common_data.twiddles[..chunk_count].iter().enumerate() {
-            let index = i * T::AvxType::COMPLEX_PER_VECTOR;
+            let index = i * T::VectorType::COMPLEX_PER_VECTOR;
             let inner_vector = inner_fft_buffer.load_complex(index);
             let product_vector = Self::mul_complex_conjugated(inner_vector, *twiddle);
             output.store_complex(product_vector, index);
@@ -207,13 +206,13 @@ impl<T: FFTnum> BluesteinsAvx<T> {
         {
             let remainder_twiddle = self.common_data.twiddles[chunk_count];
 
-            let remainder_index = chunk_count * T::AvxType::COMPLEX_PER_VECTOR;
+            let remainder_index = chunk_count * T::VectorType::COMPLEX_PER_VECTOR;
             let inner_vector = inner_fft_buffer.load_complex(remainder_index);
             let product_vector = Self::mul_complex_conjugated(inner_vector, remainder_twiddle);
 
             match remainder {
                 1 => output.store_partial1_complex(product_vector.lo(), remainder_index),
-                2 => if T::AvxType::COMPLEX_PER_VECTOR == 2 {
+                2 => if T::VectorType::COMPLEX_PER_VECTOR == 2 {
                     output.store_complex(product_vector, remainder_index)
                 } else {
                     output.store_partial2_complex(product_vector.lo(), remainder_index)
@@ -227,20 +226,20 @@ impl<T: FFTnum> BluesteinsAvx<T> {
 
     // compute buffer[i] = buffer[i].conj() * multiplier[i] pairwise complex multiplication for each element.
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn pairwise_complex_multiply_conjugated(buffer: &mut [Complex<T>], multiplier: &[T::AvxType]) {
+    unsafe fn pairwise_complex_multiply_conjugated(buffer: &mut [Complex<T>], multiplier: &[T::VectorType]) {
         for (i, right) in multiplier.iter().enumerate() {
-            let left = buffer.load_complex(i*T::AvxType::COMPLEX_PER_VECTOR);
+            let left = buffer.load_complex(i*T::VectorType::COMPLEX_PER_VECTOR);
 
             // Do a complex multiplication between `left` and `right`
             let product = Self::mul_complex_conjugated(left, *right);
 
             // Store the result
-            buffer.store_complex(product, i*T::AvxType::COMPLEX_PER_VECTOR);
+            buffer.store_complex(product, i*T::VectorType::COMPLEX_PER_VECTOR);
         }
     }
 
     fn perform_fft_inplace(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-        let (inner_input, inner_scratch) = scratch.split_at_mut(self.inner_fft_multiplier.len()*T::AvxType::COMPLEX_PER_VECTOR);
+        let (inner_input, inner_scratch) = scratch.split_at_mut(self.inner_fft_multiplier.len()*T::VectorType::COMPLEX_PER_VECTOR);
 
         // do the necessary setup for bluestein's algorithm: copy the data to the inner buffers, apply some twiddle factors, zero out the rest of the inner buffer
         unsafe { self.prepare_bluesteins(buffer, inner_input) };
@@ -260,7 +259,7 @@ impl<T: FFTnum> BluesteinsAvx<T> {
     }
 
     fn perform_fft_out_of_place(&self, input: &[Complex<T>], output: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-        let (inner_input, inner_scratch) = scratch.split_at_mut(self.inner_fft_multiplier.len()*T::AvxType::COMPLEX_PER_VECTOR);
+        let (inner_input, inner_scratch) = scratch.split_at_mut(self.inner_fft_multiplier.len()*T::VectorType::COMPLEX_PER_VECTOR);
 
         // do the necessary setup for bluestein's algorithm: copy the data to the inner buffers, apply some twiddle factors, zero out the rest of the inner buffer
         unsafe { self.prepare_bluesteins(input, inner_input) };
@@ -326,7 +325,7 @@ mod unit_tests {
         }
     }
 
-    fn test_bluesteins_avx_with_length<T: FFTnum + num_traits::Float>(len: usize, inner_len: usize, inverse: bool) {
+    fn test_bluesteins_avx_with_length<T: AvxNum + num_traits::Float>(len: usize, inner_len: usize, inverse: bool) {
         let inner_fft = Arc::new(DFT::new(inner_len, inverse));
         let fft : BluesteinsAvx<T> = BluesteinsAvx::new(len, inner_fft).expect("Can't run test because this machine doesn't have the required instruction sets");
 
