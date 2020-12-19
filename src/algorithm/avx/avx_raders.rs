@@ -333,9 +333,9 @@ impl<T: AvxNum> RadersAvx2<T> {
         unsafe { self.finalize_raders(input, output, first_input); }
     }
     fn perform_fft_inplace(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        let (scratch, extra_scratch) = scratch.split_at_mut(self.len());
         let (first_input, first_output) = unsafe { self.prepare_raders(buffer, scratch) };
 
-        let (scratch, extra_scratch) = scratch.split_at_mut(self.len());
         let truncated_scratch = &mut scratch[1..];
 
         // perform the first of two inner FFTs
