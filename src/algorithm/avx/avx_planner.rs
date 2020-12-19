@@ -93,71 +93,79 @@ impl<T: FFTnum> FftPlannerAvx<T> {
         self.construct_plan(plan)
     }
 
+    // given a set of factors, compute how many iterations of 12xn and 16xn we should plan for. Returns (k, j) for 12^k and 6^j
+    fn plan_power12_power6(radix_factors: &PartialFactors) -> (u32, u32) {
+        // it's helpful to think of this process as rewriting the FFT length as powers of our radixes
+        // the fastest FFT we could possibly compute is 8^n, because the 8xn algorithm is blazing fast. 9xn and 12xn are also in the top tier for speed, so those 3 algorithms are what we will aim for
+        // Specifically, we want to find a combination of 8, 9, and 12, that will "consume" all factors of 2 and 3, without having any leftovers
+        
+        // Unfortunately, most FFTs don't come in the form 8^n * 9^m * 12^k
+        // Thankfully, 6xn is also reasonably fast, so we can use 6xn to strip away factors.
+        // This function's job will be to divide radix_factors into 8^n * 9^m * 12^k * 6^j, which minimizes j, then maximizes k
+
+        // we're going to hypothetically add as many 12's to our plan as possible, keeping track of how many 6's were required to balance things out
+        // we can also compute this analytically with modular arithmetic, but that technique only works when the FFT is above a minimum size, but this loop+array technique always works
+        let max_twelves = min(radix_factors.get_power2() / 2, radix_factors.get_power3());
+        let mut required_sixes = [None; 4]; // only track 6^0 through 6^3. 6^4 can be converted into 12^2 * 9, and 6^5 can be converted into 12 * 8 * 9 * 9
+        for hypothetical_twelve_power in 0..(max_twelves+1) {
+            let hypothetical_twos = radix_factors.get_power2() - hypothetical_twelve_power * 2;
+            let hypothetical_threes = radix_factors.get_power3() - hypothetical_twelve_power;
+
+            // figure out how many sixes we would need to leave our FFT at 8^n * 9^m via modular arithmetic, and write to that index of our twelves_per_sixes array
+            let sixes = match (hypothetical_twos % 3, hypothetical_threes % 2) {
+                (0, 0) => Some(0),
+                (1, 1) => Some(1),
+                (2, 0) => Some(2),
+                (0, 1) => Some(3),
+                (1, 0) => None, // it would take 4 sixes, which can be replaced by 2 twelves, so we'll hit it in a later loop (if we have that many factors)
+                (2, 1) => None, // it would take 5 sixes, but note that 12 is literally 2^2 * 3^1, so instead of applying 5 sixes, we can apply a single 12
+                (_, _) => unreachable!(),
+            };
+
+            // if we can bring the FFT into range for the fast path with sixes, record so in the required_sixes array
+            // but make sure the number of sixes we're going to apply actually fits into our available factors
+            if let Some(sixes) = sixes {
+                if sixes <= hypothetical_twos && sixes <= hypothetical_threes {
+                    required_sixes[sixes as usize] = Some(hypothetical_twelve_power)
+                }
+            }
+        }
+
+        // required_sixes[i] now contains the largest power of twelve that we can apply, given that we also apply 6^i
+        // we want to apply as many of 12 as possible, so take the array element with the largest non-None element
+        // note that it's possible (and very likely) that either power_twelve or power_six is zero, or both of them are zero! this will happen for a pure power of 2 or power of 3 FFT, for example
+        let (power_twelve, mut power_six) = required_sixes
+            .iter()
+            .enumerate()
+            .filter_map(|(i, maybe_twelve)| maybe_twelve.map(|twelve| (twelve, i as u32)))
+            .fold((0, 0), |best, current| if current.0 >= best.0 { current } else { best });
+
+        // special case: if we have exactly one factor of 2 and at least one factor of 3, unconditionally apply a factor of 6 to get rid of the 2
+        if radix_factors.get_power2() == 1 && radix_factors.get_power3() > 0 {
+            power_six = 1;
+        }
+        // special case: if we have a single factor of 3 and more than one factor of 2 (and we don't have any twelves), unconditionally apply a factor of 6 to get rid of the 3
+        if radix_factors.get_power2() > 1 && radix_factors.get_power3() == 1 && power_twelve == 0 {
+            power_six = 1;
+        }
+
+        (power_twelve, power_six)
+    }
+
     fn plan_mixed_radix(&self, mut radix_factors: PartialFactors, mut plan: MixedRadixPlan) -> MixedRadixPlan {
         // if we can complete the FFT with a single radix, do it
         if [2,3,4,5,6,7,8,9,12,16].contains(&radix_factors.product()) {
             plan.push_radix(radix_factors.product() as u8)
         } else {
-            // it's helpful to think of this process as rewriting the FFT length as powers of our radixes
-            // the fastest FFT we could possibly compute is 8^n, because the 8xn algorithm is blazing fast. 9xn and 12xn are also very fast, so those are what we will aim for
-            // unfortunately, most FFTs don't come in the form 8^n * 9^m * 12^k
-            // 
-            // so our goal will be to use 6xn to strip away as few factors as possible to get us to 8^n * 9^m * 12^k, then maximize k
-            //
-            // if you're curious about how these heuristics were developed, check out the "compare_3n2m_strategies" benchmark
-
-            // we're going to hypothetically add as many 12's to our plan as possible, keeping track of how many 6's were required to balance things out
-            // we can also compute this analytically with modular arithmetic, but that technique only works when the FFT is above a minimum size, but this loop+array technique always works
-            let max_twelves = min(radix_factors.get_power2() / 2, radix_factors.get_power3());
-            let mut required_sixes = [None; 4]; // only track 6^0 through 6^3. 6^4 can be converted into 12^2 * 9, and 6^5 can be converted into 12^1
-            for hypothetical_twelve_power in 0..(max_twelves+1) {
-                let hypothetical_twos = radix_factors.get_power2() - hypothetical_twelve_power * 2;
-                let hypothetical_threes = radix_factors.get_power3() - hypothetical_twelve_power;
-
-                // figure out how many sixes we would need to leave our FFT at 8^n * 9^m via modular arithmetic, and write to that index of our twelves_per_sixes array
-                let sixes = match (hypothetical_twos % 3, hypothetical_threes % 2) {
-                    (0, 0) => Some(0),
-                    (1, 1) => Some(1),
-                    (2, 0) => Some(2),
-                    (0, 1) => Some(3),
-                    (1, 0) => None, // it would take 4 sixes, which can be replaced by 2 twelves, so we'll hit it in a later loop (if we have that many factors)
-                    (2, 1) => None, // it would take 5 sixes, but note that 12 is literally 2^2 * 3^1, so instead of applying 5 sixes, we can apply a single 12
-                    (_, _) => unreachable!(),
-                };
-
-                // if we can bring the FFT into range for the fast path with sixes, record so in the required_sixes array
-                // but make sure the number of sixes we're going to apply actually fits into our available factors
-                if let Some(sixes) = sixes {
-                    if sixes <= hypothetical_twos && sixes <= hypothetical_threes {
-                        required_sixes[sixes as usize] = Some(hypothetical_twelve_power)
-                    }
-                }
-            }
-
-            // required_sixes[i] now contains the largest power of twelve that we can apply, given that we also apply 6^i
-            // we want to apply as many powers of 12 as possible, so take the smallest non-None element in the array
-            // note that it's possible (and very likely) that either of these is zero, or both of them are zero! this will happen for a pure power of 2 or power of 3 FFT, for example
-            let (power_twelve, mut power_six) = required_sixes
-                .iter()
-                .enumerate()
-                .filter_map(|(i, maybe_twelve)| maybe_twelve.map(|twelve| (twelve, i as u32)))
-                .fold((0, 0), |best, current| if current.0 >= best.0 { current } else { best });
-
-            // special case: if we have exactly one factor of 2 and at least one factor of 3 or vice versa, unconditionally apply a factor of 6 to get rid of the 2
-            if radix_factors.get_power2() == 1 && radix_factors.get_power3() > 0 {
-                power_six = 1;
-            }
-            // special case: if we have a single factor of 3 and more than one factor of 2 (and we don't have any twelves), unconditionally apply a factor of 6 to get rid of the 3
-            if radix_factors.get_power2() > 1 && radix_factors.get_power3() == 1 && power_twelve == 0 {
-                power_six = 1;
-            }
+            // Compute how many powers of 12 and powers of 6 we want to strip away
+            let (power_twelve, power_six) = Self::plan_power12_power6(&radix_factors);
             
             // divide our powers of 12 and 6 out of our radix factors
             radix_factors = radix_factors.divide_by(&PartialFactors::compute(6usize.pow(power_six) * 12usize.pow(power_twelve))).unwrap();
 
             // now that we know the 12 and 6 factors, the plan array can be computed in descending radix size
-            if radix_factors.get_power2() > 1 && radix_factors.get_power2() % 3 == 1 {
-                // our factors of 2 might not quite be a power of 8 -- our 12 loop tried its best, but if we are a power of 2, it can't help. 
+            if radix_factors.get_power2() % 3 == 1 && radix_factors.get_power2() > 1 {
+                // our factors of 2 might not quite be a power of 8 -- our plan_power12_power6 function tried its best, but if there are very few factors of 3, it can't help. 
                 // if we're 2 * 8^N, benchmarking shows that applying a 16 before our chain of 8s is very fast.
                 plan.push_radix(16); 
                 radix_factors = radix_factors.divide_by(&PartialFactors::compute(16)).unwrap();
@@ -169,12 +177,12 @@ impl<T: FFTnum> FftPlannerAvx<T> {
             plan.push_radix_power(6, power_six);
             plan.push_radix_power(5, radix_factors.get_power5());
             if radix_factors.get_power2() % 3 == 2 {
-                // our factors of 2 might not quite be a power of 8 -- our 12 loop tried its best, but if we are a power of 2, it can't help. 
+                // our factors of 2 might not quite be a power of 8 -- our plan_power12_power6 function tried its best, but if we are a power of 2, it can't help. 
                 // if we're 4 * 8^N, benchmarking shows that applying a 4 to the end our chain of 8s is very fast.
                 plan.push_radix(4);
             }
             if radix_factors.get_power3() % 2 == 1 {
-                // our factors of 3 might not quite be a power of 9 -- our 12 loop tried its best, but if we are a power of 3, it can't help. 
+                // our factors of 3 might not quite be a power of 9 -- our plan_power12_power6 function tried its best, but if we are a power of 3, it can't help. 
                 // if we're 3 * 9^N, our only choice is to add an 8xn step
                 plan.push_radix(3);
             }
@@ -183,9 +191,9 @@ impl<T: FFTnum> FftPlannerAvx<T> {
                 plan.push_radix(2);
             }
 
-            // measurement opportunity: is it faster to let the 12+6 loop put a 4 on the end instead of relying on all 8's?
+            // measurement opportunity: is it faster to let the plan_power12_power6 function put a 4 on the end instead of relying on all 8's?
             // measurement opportunity: is it faster to slap a 16 on top of the stack?
-            // measurement opportunity: if our 12+6 loop adds both 12s and sixes, is it faster to drop combinations of 12+6 down to 8+9?
+            // measurement opportunity: if our plan_power12_power6 function adds both 12s and sixes, is it faster to drop combinations of 12+6 down to 8+9?
         };
         plan
     }
@@ -293,9 +301,7 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
             // 9 * 2^n special cases
             18 => Some(MixedRadixPlan::new(3, &[6])), // 2 * 3^2
             144 => Some(MixedRadixPlan::new(36, &[4])), // 2^4 * 3^2
-
-            // 8 * 3^n special cases
-            648 => Some(MixedRadixPlan::new(72, &[3])), // 2^3 * 3^4
+            
             _=> None,
         };
         if let Some(hardcoded) = hardcoded_base {
