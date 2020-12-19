@@ -13,7 +13,7 @@ use crate::math_utils::{ PrimeFactors, PrimeFactor };
 
 const MIN_RADIX4_BITS: u32 = 5; // smallest size to consider radix 4 an option is 2^5 = 32
 const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option is 2^16 = 65536
-const MAX_RADER_PRIME_FACTOR: usize = 7; // don't use Raders if the inner fft length has prime factor larger than this
+const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
 const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the inner fft of Bluestein if length is larger than this
 
 /// The Fft planner is used to make new Fft algorithm instances.
@@ -151,9 +151,16 @@ impl<T: FFTnum> FFTplanner<T> {
             6 => wrap_butterfly(Butterfly6::new(self.inverse)),
             7 => wrap_butterfly(Butterfly7::new(self.inverse)),
             8 => wrap_butterfly(Butterfly8::new(self.inverse)),
+            11 => wrap_butterfly(Butterfly11::new(self.inverse)),
+            13 => wrap_butterfly(Butterfly13::new(self.inverse)),
             16 => wrap_butterfly(Butterfly16::new(self.inverse)),
+            17 => wrap_butterfly(Butterfly17::new(self.inverse)),
+            19 => wrap_butterfly(Butterfly19::new(self.inverse)),
+            23 => wrap_butterfly(Butterfly23::new(self.inverse)),
+            29 => wrap_butterfly(Butterfly29::new(self.inverse)),
+            31 => wrap_butterfly(Butterfly31::new(self.inverse)),
             32 => wrap_butterfly(Butterfly32::new(self.inverse)),
-            _ => None,
+            _ => Some(self.plan_prime(len)),
         }
     }
 
