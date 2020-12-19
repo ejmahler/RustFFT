@@ -18,6 +18,21 @@ use super::avx_vector;
 // Callers of this macro must guarantee that users can't even obtain an instance of $struct_name if their CPU doesn't have the required CPU features.
 macro_rules! boilerplate_fft_simd_butterfly {
     ($struct_name:ident, $len:expr) => (
+        impl $struct_name<f32> {
+            #[inline]
+            pub fn is_supported_by_cpu() -> bool {
+                is_x86_feature_detected!("avx") && is_x86_feature_detected!("fma")
+            }
+            #[inline]
+            pub fn new(inverse: bool) -> Result<Self, ()> {
+                if Self::is_supported_by_cpu() {
+                    // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
+                    Ok(unsafe { Self::new_with_avx(inverse) })
+                } else {
+                    Err(())
+                }
+            }
+        }
 		impl<T: FFTnum> Fft<T> for $struct_name<T> {
             default fn process_inplace_with_scratch(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
 				unimplemented!();
@@ -95,6 +110,17 @@ macro_rules! boilerplate_fft_simd_butterfly {
 macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
     ($struct_name:ident, $len:expr) => (
         impl $struct_name<f32> {
+            #[inline]
+            pub fn new(inverse: bool) -> Result<Self, ()> {
+                let has_avx = is_x86_feature_detected!("avx");
+                let has_fma = is_x86_feature_detected!("fma");
+                if has_avx && has_fma {
+                    // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
+                    Ok(unsafe { Self::new_with_avx(inverse) })
+                } else {
+                    Err(())
+                }
+            }
             #[inline]
             fn perform_fft_inplace(&self, buffer: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) {
                 // Perform the column FFTs
@@ -241,17 +267,6 @@ pub struct Butterfly5Avx<T> {
 }
 boilerplate_fft_simd_butterfly!(Butterfly5Avx, 5);
 impl Butterfly5Avx<f32> {
-    #[inline]
-    pub fn new(inverse: bool) -> Result<Self, ()> {
-        let has_avx = is_x86_feature_detected!("avx");
-        let has_fma = is_x86_feature_detected!("fma");
-        if has_avx && has_fma {
-            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
-            Ok(unsafe { Self::new_with_avx(inverse) })
-        } else {
-            Err(())
-        }
-    }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
         let twiddle1 = f32::generate_twiddle_factor(1, 5, inverse);
@@ -317,17 +332,6 @@ pub struct Butterfly7Avx<T> {
 }
 boilerplate_fft_simd_butterfly!(Butterfly7Avx, 7);
 impl Butterfly7Avx<f32> {
-    #[inline]
-    pub fn new(inverse: bool) -> Result<Self, ()> {
-        let has_avx = is_x86_feature_detected!("avx");
-        let has_fma = is_x86_feature_detected!("fma");
-        if has_avx && has_fma {
-            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
-            Ok(unsafe { Self::new_with_avx(inverse) })
-        } else {
-            Err(())
-        }
-    }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
         let twiddle1 = f32::generate_twiddle_factor(1, 7, inverse);
@@ -418,17 +422,6 @@ pub struct Butterfly8Avx<T> {
 }
 boilerplate_fft_simd_butterfly!(Butterfly8Avx, 8);
 impl Butterfly8Avx<f32> {
-    #[inline]
-    pub fn new(inverse: bool) -> Result<Self, ()> {
-        let has_avx = is_x86_feature_detected!("avx");
-        let has_fma = is_x86_feature_detected!("fma");
-        if has_avx && has_fma {
-            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
-            Ok(unsafe { Self::new_with_avx(inverse) })
-        } else {
-            Err(())
-        }
-    }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
         Self {
@@ -491,17 +484,6 @@ pub struct Butterfly9Avx<T> {
 }
 boilerplate_fft_simd_butterfly!(Butterfly9Avx, 9);
 impl Butterfly9Avx<f32> {
-    #[inline]
-    pub fn new(inverse: bool) -> Result<Self, ()> {
-        let has_avx = is_x86_feature_detected!("avx");
-        let has_fma = is_x86_feature_detected!("fma");
-        if has_avx && has_fma {
-            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
-            Ok(unsafe { Self::new_with_avx(inverse) })
-        } else {
-            Err(())
-        }
-    }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
         let twiddles = [
@@ -573,17 +555,6 @@ pub struct Butterfly12Avx<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 impl Butterfly12Avx<f32> {
-    #[inline]
-    pub fn new(inverse: bool) -> Result<Self, ()> {
-        let has_avx = is_x86_feature_detected!("avx");
-        let has_fma = is_x86_feature_detected!("fma");
-        if has_avx && has_fma {
-            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
-            Ok(unsafe { Self::new_with_avx(inverse) })
-        } else {
-            Err(())
-        }
-    }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
         let twiddles = [
@@ -665,17 +636,6 @@ pub struct Butterfly16Avx<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 impl Butterfly16Avx<f32> {
-    #[inline]
-    pub fn new(inverse: bool) -> Result<Self, ()> {
-        let has_avx = is_x86_feature_detected!("avx");
-        let has_fma = is_x86_feature_detected!("fma");
-        if has_avx && has_fma {
-            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
-            Ok(unsafe { Self::new_with_avx(inverse) })
-        } else {
-            Err(())
-        }
-    }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
         Self {
@@ -727,17 +687,6 @@ pub struct Butterfly24Avx<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 impl Butterfly24Avx<f32> {
-    #[inline]
-    pub fn new(inverse: bool) -> Result<Self, ()> {
-        let has_avx = is_x86_feature_detected!("avx");
-        let has_fma = is_x86_feature_detected!("fma");
-        if has_avx && has_fma {
-            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
-            Ok(unsafe { Self::new_with_avx(inverse) })
-        } else {
-            Err(())
-        }
-    }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
         Self {
@@ -794,17 +743,6 @@ pub struct Butterfly27Avx<T> {
 }
 boilerplate_fft_simd_butterfly!(Butterfly27Avx, 27);
 impl Butterfly27Avx<f32> {
-    #[inline]
-    pub fn new(inverse: bool) -> Result<Self, ()> {
-        let has_avx = is_x86_feature_detected!("avx");
-        let has_fma = is_x86_feature_detected!("fma");
-        if has_avx && has_fma {
-            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
-            Ok(unsafe { Self::new_with_avx(inverse) })
-        } else {
-            Err(())
-        }
-    }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
         Self {
@@ -871,17 +809,6 @@ pub struct Butterfly32Avx<T> {
 }
 boilerplate_fft_simd_butterfly!(Butterfly32Avx, 32);
 impl Butterfly32Avx<f32> {
-    #[inline]
-    pub fn new(inverse: bool) -> Result<Self, ()> {
-        let has_avx = is_x86_feature_detected!("avx");
-        let has_fma = is_x86_feature_detected!("fma");
-        if has_avx && has_fma {
-            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
-            Ok(unsafe { Self::new_with_avx(inverse) })
-        } else {
-            Err(())
-        }
-    }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
         Self {
@@ -939,17 +866,6 @@ pub struct Butterfly36Avx<T> {
 }
 boilerplate_fft_simd_butterfly!(Butterfly36Avx, 36);
 impl Butterfly36Avx<f32> {
-    #[inline]
-    pub fn new(inverse: bool) -> Result<Self, ()> {
-        let has_avx = is_x86_feature_detected!("avx");
-        let has_fma = is_x86_feature_detected!("fma");
-        if has_avx && has_fma {
-            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
-            Ok(unsafe { Self::new_with_avx(inverse) })
-        } else {
-            Err(())
-        }
-    }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
         Self {
@@ -1013,17 +929,6 @@ pub struct Butterfly48Avx<T> {
 }
 boilerplate_fft_simd_butterfly!(Butterfly48Avx, 48);
 impl Butterfly48Avx<f32> {
-    #[inline]
-    pub fn new(inverse: bool) -> Result<Self, ()> {
-        let has_avx = is_x86_feature_detected!("avx");
-        let has_fma = is_x86_feature_detected!("fma");
-        if has_avx && has_fma {
-            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
-            Ok(unsafe { Self::new_with_avx(inverse) })
-        } else {
-            Err(())
-        }
-    }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
         Self {
@@ -1090,17 +995,6 @@ pub struct Butterfly54Avx<T> {
 }
 boilerplate_fft_simd_butterfly!(Butterfly54Avx, 54);
 impl Butterfly54Avx<f32> {
-    #[inline]
-    pub fn new(inverse: bool) -> Result<Self, ()> {
-        let has_avx = is_x86_feature_detected!("avx");
-        let has_fma = is_x86_feature_detected!("fma");
-        if has_avx && has_fma {
-            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
-            Ok(unsafe { Self::new_with_avx(inverse) })
-        } else {
-            Err(())
-        }
-    }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
         let twiddle1 = __m128::broadcast_twiddle(1, 9, inverse);
@@ -1185,17 +1079,6 @@ pub struct Butterfly64Avx<T> {
 }
 boilerplate_fft_simd_butterfly!(Butterfly64Avx, 64);
 impl Butterfly64Avx<f32> {
-    #[inline]
-    pub fn new(inverse: bool) -> Result<Self, ()> {
-        let has_avx = is_x86_feature_detected!("avx");
-        let has_fma = is_x86_feature_detected!("fma");
-        if has_avx && has_fma {
-            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
-            Ok(unsafe { Self::new_with_avx(inverse) })
-        } else {
-            Err(())
-        }
-    }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
         Self {
@@ -1256,17 +1139,6 @@ pub struct Butterfly72Avx<T> {
 }
 boilerplate_fft_simd_butterfly!(Butterfly72Avx, 72);
 impl Butterfly72Avx<f32> {
-    #[inline]
-    pub fn new(inverse: bool) -> Result<Self, ()> {
-        let has_avx = is_x86_feature_detected!("avx");
-        let has_fma = is_x86_feature_detected!("fma");
-        if has_avx && has_fma {
-            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
-            Ok(unsafe { Self::new_with_avx(inverse) })
-        } else {
-            Err(())
-        }
-    }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
         Self {
@@ -1339,17 +1211,6 @@ pub struct Butterfly128Avx<T> {
 }
 boilerplate_fft_simd_butterfly_with_scratch!(Butterfly128Avx, 128);
 impl Butterfly128Avx<f32> {
-    #[inline]
-    pub fn new(inverse: bool) -> Result<Self, ()> {
-        let has_avx = is_x86_feature_detected!("avx");
-        let has_fma = is_x86_feature_detected!("fma");
-        if has_avx && has_fma {
-            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
-            Ok(unsafe { Self::new_with_avx(inverse) })
-        } else {
-            Err(())
-        }
-    }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
         Self {
@@ -1416,17 +1277,6 @@ pub struct Butterfly256Avx<T> {
 }
 boilerplate_fft_simd_butterfly_with_scratch!(Butterfly256Avx, 256);
 impl Butterfly256Avx<f32> {
-    #[inline]
-    pub fn new(inverse: bool) -> Result<Self, ()> {
-        let has_avx = is_x86_feature_detected!("avx");
-        let has_fma = is_x86_feature_detected!("fma");
-        if has_avx && has_fma {
-            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
-            Ok(unsafe { Self::new_with_avx(inverse) })
-        } else {
-            Err(())
-        }
-    }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
         Self {
@@ -1492,17 +1342,6 @@ pub struct Butterfly512Avx<T> {
 }
 boilerplate_fft_simd_butterfly_with_scratch!(Butterfly512Avx, 512);
 impl Butterfly512Avx<f32> {
-    #[inline]
-    pub fn new(inverse: bool) -> Result<Self, ()> {
-        let has_avx = is_x86_feature_detected!("avx");
-        let has_fma = is_x86_feature_detected!("fma");
-        if has_avx && has_fma {
-            // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
-            Ok(unsafe { Self::new_with_avx(inverse) })
-        } else {
-            Err(())
-        }
-    }
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inverse: bool) -> Self {
         Self {
