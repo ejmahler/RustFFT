@@ -8,6 +8,8 @@
 
 RustFFT is a mixed-radix FFT implementation written in Rust. See the [documentation](https://docs.rs/rustfft/) for more details.
 
+If you're looking for the experimental AVX-accelerated release, check out the [SIMD branch](https://github.com/ejmahler/RustFFT/tree/simd).
+
 ## Compatibility
 
 The `rustfft` crate requires rustc 1.31 or greater.
