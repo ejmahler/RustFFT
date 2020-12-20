@@ -1,11 +1,11 @@
 [package]
 
 name = "rustfft"
-version = "4.0.0"
+version = "5.0.0-experimental.1"
 authors = ["Allen Welkie <allen.welkie at gmail>", "Elliott Mahler <join.together at gmail>"]
 edition = "2018"
 
-description = "Compute FFTs of any size in O(nlogn) time, in pure Rust."
+description = "High-performance FFT library written in pure Rust."
 documentation = "https://docs.rs/rustfft/"
 repository = "https://github.com/ejmahler/RustFFT"
 keywords = ["fft", "dft", "discrete", "fourier", "transform"]
