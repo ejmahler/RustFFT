@@ -6,14 +6,12 @@ extern crate test;
 extern crate rustfft;
 use test::Bencher;
 
-use rustfft::algorithm::avx::*;
 use rustfft::algorithm::butterflies::*;
 use rustfft::algorithm::DFT;
 use rustfft::{Fft, FFTnum};
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
-use rustfft::FFTplanner;
-use rustfft::algorithm::avx::avx_planner::*;
+use rustfft::{FftPlanner, FftPlannerAvx};
 
 use primal_check::miller_rabin;
 
@@ -146,7 +144,7 @@ fn generate_3n2m_comparison_benchmarks_32(_: &mut test::Bencher) {
             let len = 3usize.pow(power3) << power2;
             if len > max_len { continue; }
 
-            //let planned_fft : Arc<dyn Fft<f32>> = rustfft::FFTplanner::new(false).plan_fft(len);
+            //let planned_fft : Arc<dyn Fft<f32>> = rustfft::FftPlanner::new(false).plan_fft(len);
 
             // we want to catalog all the different possible ways there are to compute a FFT of size `len`
             // we can do that by recursively looping over each radix, dividing our length by that radix, then recursively trying rach radix again
@@ -187,7 +185,7 @@ fn generate_3n2m_comparison_benchmarks_64(_: &mut test::Bencher) {
             let len = 3usize.pow(power3) << power2;
             if len > max_len { continue; }
 
-            //let planned_fft : Arc<dyn Fft<f32>> = rustfft::FFTplanner::new(false).plan_fft(len);
+            //let planned_fft : Arc<dyn Fft<f32>> = rustfft::FftPlanner::new(false).plan_fft(len);
 
             // we want to catalog all the different possible ways there are to compute a FFT of size `len`
             // we can do that by recursively looping over each radix, dividing our length by that radix, then recursively trying rach radix again
@@ -387,99 +385,9 @@ fn wrap_fft<T: FFTnum>(fft: impl Fft<T> + 'static) -> Arc<dyn Fft<T>> {
     Arc::new(fft) as Arc<dyn Fft<T>>
 }
 
-fn compare_fft_f32(b: &mut Bencher, strategy: &[usize]) {
-    let mut fft = match strategy[0] {
-        1 =>    wrap_fft(DFT::new(1, false)),
-        2 =>    wrap_fft(Butterfly2::new(false)),
-        3 =>    wrap_fft(Butterfly3::new(false)),
-        4 =>    wrap_fft(Butterfly4::new(false)),
-        5 =>    wrap_fft(Butterfly5::new(false)),
-        6 =>    wrap_fft(Butterfly6::new(false)),
-        7 =>    wrap_fft(Butterfly7::new(false)),
-        8 =>    wrap_fft(Butterfly8Avx::new(false).unwrap()),
-        9 =>    wrap_fft(Butterfly9Avx::new(false).unwrap()),
-        12 =>   wrap_fft(Butterfly12Avx::new(false).unwrap()),
-        16 =>   wrap_fft(Butterfly16Avx::new(false).unwrap()),
-        24 =>   wrap_fft(Butterfly24Avx::new(false).unwrap()),
-        27 =>   wrap_fft(Butterfly27Avx::new(false).unwrap()),
-        32 =>   wrap_fft(Butterfly32Avx::new(false).unwrap()),
-        36 =>   wrap_fft(Butterfly36Avx::new(false).unwrap()),
-        48 =>   wrap_fft(Butterfly48Avx::new(false).unwrap()),
-        54 =>   wrap_fft(Butterfly54Avx::new(false).unwrap()),
-        64 =>   wrap_fft(Butterfly64Avx::new(false).unwrap()),
-        72 =>   wrap_fft(Butterfly72Avx::new(false).unwrap()),
-        128 =>   wrap_fft(Butterfly128Avx::new(false).unwrap()),
-        256 =>   wrap_fft(Butterfly256Avx::new(false).unwrap()),
-        512 =>   wrap_fft(Butterfly512Avx::new(false).unwrap()),
-        _ => panic!()
-    };
-
-    for radix in strategy.iter().skip(1) {
-        fft = match radix {
-            2 => wrap_fft(MixedRadix2xnAvx::new(fft).unwrap()),
-            3 => wrap_fft(MixedRadix3xnAvx::new(fft).unwrap()),
-            4 => wrap_fft(MixedRadix4xnAvx::new(fft).unwrap()),
-            6 => wrap_fft(MixedRadix6xnAvx::new(fft).unwrap()),
-            8 => wrap_fft(MixedRadix8xnAvx::new(fft).unwrap()),
-            9 => wrap_fft(MixedRadix9xnAvx::new(fft).unwrap()),
-            12 => wrap_fft(MixedRadix12xnAvx::new(fft).unwrap()),
-            16 => wrap_fft(MixedRadix16xnAvx::new(fft).unwrap()),
-            _ => panic!()
-        }
-    }
-
-    let mut buffer = vec![Complex::zero(); fft.len()];
-    let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
-    b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch); });
-}
-
-fn compare_fft_f64(b: &mut Bencher, strategy: &[usize]) {
-    let mut fft = match strategy[0] {
-        1 =>    wrap_fft(DFT::new(1, false)),
-        2 =>    wrap_fft(Butterfly2::new(false)),
-        3 =>    wrap_fft(Butterfly3::new(false)),
-        4 =>    wrap_fft(Butterfly4::new(false)),
-        5 =>    wrap_fft(Butterfly5::new(false)),
-        6 =>    wrap_fft(Butterfly6::new(false)),
-        7 =>    wrap_fft(Butterfly7::new(false)),
-        8 =>    wrap_fft(Butterfly8Avx64::new(false).unwrap()),
-        9 =>    wrap_fft(Butterfly9Avx64::new(false).unwrap()),
-        12 =>   wrap_fft(Butterfly12Avx64::new(false).unwrap()),
-        16 =>   wrap_fft(Butterfly16Avx64::new(false).unwrap()),
-        18 =>   wrap_fft(Butterfly18Avx64::new(false).unwrap()),
-        24 =>   wrap_fft(Butterfly24Avx64::new(false).unwrap()),
-        27 =>   wrap_fft(Butterfly27Avx64::new(false).unwrap()),
-        32 =>   wrap_fft(Butterfly32Avx64::new(false).unwrap()),
-        36 =>   wrap_fft(Butterfly36Avx64::new(false).unwrap()),
-        64 =>   wrap_fft(Butterfly64Avx64::new(false).unwrap()),
-        128=>   wrap_fft(Butterfly128Avx64::new(false).unwrap()),
-        256=>   wrap_fft(Butterfly256Avx64::new(false).unwrap()),
-        512=>   wrap_fft(Butterfly512Avx64::new(false).unwrap()),
-        _ => unimplemented!()
-    };
-
-    for radix in strategy.iter().skip(1) {
-        fft = match radix {
-            2 => wrap_fft(MixedRadix2xnAvx::new(fft).unwrap()),
-            3 => wrap_fft(MixedRadix3xnAvx::new(fft).unwrap()),
-            4 => wrap_fft(MixedRadix4xnAvx::new(fft).unwrap()),
-            6 => wrap_fft(MixedRadix6xnAvx::new(fft).unwrap()),
-            8 => wrap_fft(MixedRadix8xnAvx::new(fft).unwrap()),
-            9 => wrap_fft(MixedRadix9xnAvx::new(fft).unwrap()),
-            12 => wrap_fft(MixedRadix12xnAvx::new(fft).unwrap()),
-            16 => wrap_fft(MixedRadix16xnAvx::new(fft).unwrap()),
-            _ => panic!()
-        }
-    }
-
-    let mut buffer = vec![Complex::zero(); fft.len()];
-    let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
-    b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch); });
-}
-
 // passes the given FFT length directly to the FFT planner
 fn bench_planned_fft_f32(b: &mut Bencher, len: usize) {
-    let mut planner : FFTplanner<f32> = FFTplanner::new(false);
+    let mut planner : FftPlanner<f32> = FftPlanner::new(false);
     let fft = planner.plan_fft(len);
 
     let mut buffer = vec![Complex::zero(); fft.len()];
@@ -490,7 +398,7 @@ fn bench_planned_fft_f32(b: &mut Bencher, len: usize) {
 
 // passes the given FFT length directly to the FFT planner
 fn bench_planned_fft_f64(b: &mut Bencher, len: usize) {
-    let mut planner : FFTplanner<f64> = FFTplanner::new(false);
+    let mut planner : FftPlanner<f64> = FftPlanner::new(false);
     let fft = planner.plan_fft(len);
 
     let mut buffer = vec![Complex::zero(); fft.len()];
@@ -500,24 +408,12 @@ fn bench_planned_fft_f64(b: &mut Bencher, len: usize) {
 
 
 
-
+/*
 
 // Computes the given FFT length using Bluestein's Algorithm, using the planner to plan the inner FFT
 fn bench_planned_bluesteins_f32(b: &mut Bencher, len: usize) {
     let mut planner : FftPlannerAvx<f32> = FftPlannerAvx::new(false).unwrap();
     let fft = planner.construct_bluesteins(len);
-
-    let mut buffer = vec![Complex::zero(); fft.len()];
-    let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
-    b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch); });
-}
-
-
-// Computes the given FFT length using Bluestein's Algorithm, using the planner to plan the inner FFT
-fn bench_2xn_bluesteins_f32(b: &mut Bencher, len: usize) {
-    let mut planner : FftPlannerAvx<f32> = FftPlannerAvx::new(false).unwrap();
-    let inner_fft = planner.construct_bluesteins(len);
-    let fft : Arc<dyn Fft<f32>> = Arc::new(MixedRadix2xnAvx::new(inner_fft).unwrap());
 
     let mut buffer = vec![Complex::zero(); fft.len()];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
@@ -533,7 +429,6 @@ fn bench_planned_raders_f32(b: &mut Bencher, len: usize) {
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch); });
 }
-
 
 // Computes the given FFT length using Bluestein's Algorithm, using the planner to plan the inner FFT
 fn bench_planned_bluesteins_f64(b: &mut Bencher, len: usize) {
@@ -769,3 +664,5 @@ fn bench_planned_raders_f64(b: &mut Bencher, len: usize) {
 #[bench] fn comparef64_len0098561_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 98561); }
 #[bench] fn comparef64_len0099793_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 99793); }
 #[bench] fn comparef64_len0099793_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 99793); }
+
+*/

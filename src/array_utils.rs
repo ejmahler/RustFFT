@@ -26,10 +26,12 @@ impl<T> RawSlice<T> {
             slice_len: slice.len(),
         }
     }
+    #[allow(unused)]
     #[inline(always)]
     pub fn as_ptr(&self) -> *const T {
         self.ptr
     }
+    #[allow(unused)]
     #[inline(always)]
     pub fn len(&self) -> usize {
         self.slice_len
@@ -58,10 +60,12 @@ impl<T> RawSliceMut<T> {
         }
     }
 
+    #[allow(unused)]
     #[inline(always)]
     pub fn as_mut_ptr(&self) -> *mut T {
         self.ptr
     }
+    #[allow(unused)]
     #[inline(always)]
     pub fn len(&self) -> usize {
         self.slice_len

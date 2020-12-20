@@ -12,31 +12,12 @@ use super::CommonSimdData;
 /// Implementation of Bluestein's Algorithm
 ///
 /// This algorithm computes an arbitrary-sized FFT in O(nlogn) time. It does this by converting this size n FFT into a
-/// size M where M >= 2N - 1. M is usually a power of two, although that isn't a requirement.
+/// size M where M >= 2N - 1. The most obvious choice for M is a power of two, although that isn't a requirement.
 ///
 /// It requires a large scratch space, so it's probably inconvenient to use as an inner FFT to other algorithms.
 ///
-/// ~~~
-/// // Computes a forward FFT of size 1201 (prime number), using Bluestein's Algorithm
-/// use rustfft::algorithm::RadersAlgorithm;
-/// use rustfft::{FFTplanner, Fft};
-/// use rustfft::num_complex::Complex;
-/// use rustfft::num_traits::Zero;
-///
-/// let mut input:  Vec<Complex<f32>> = vec![Zero::zero(); 1201];
-/// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); 1201];
-///
-/// // plan a FFT of size n - 1 = 1200
-/// let mut planner = FFTplanner::new(false);
-/// let inner_fft = planner.plan_fft(1200);
-///
-/// let fft = RadersAlgorithm::new(inner_fft);
-/// fft.process(&mut input, &mut output);
-/// ~~~
-///
 /// Bluestein's Algorithm is relatively expensive compared to other FFT algorithms. Benchmarking shows that it is up to
-/// an order of magnitude slower than similar composite sizes. In the example size above of 1201, benchmarking shows
-/// that it takes 2.5x more time to compute than a FFT of size 1200.
+/// an order of magnitude slower than similar composite sizes.
 
 pub struct BluesteinsAvx<T: AvxNum> {
     inner_fft_multiplier: Box<[T::VectorType]>,

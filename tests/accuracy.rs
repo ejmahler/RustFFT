@@ -11,7 +11,7 @@ use rustfft::num_complex::Complex;
 
 use rand::{StdRng, SeedableRng};
 use rand::distributions::{Normal, Distribution};
-use rustfft::{FFTplanner, Fft};
+use rustfft::{FftPlanner, Fft};
 use rustfft::num_traits::Float;
 use rustfft::algorithm::{BluesteinsAlgorithm, Radix4};
 
@@ -37,10 +37,10 @@ fn fft_matches_dft<T: rustfft::FFTnum + Float>(signal: Vec<Complex<T>>, inverse:
     let mut buffer_expected = signal.clone();
     let mut buffer_actual = signal.clone();
 
-    let mut planner = FFTplanner::new(inverse);
+    let mut planner = FftPlanner::new(inverse);
     let fft = planner.plan_fft(signal.len());
-    assert_eq!(fft.len(), signal.len(), "FFTplanner created FFT of wrong length");
-    assert_eq!(fft.is_inverse(), inverse, "FFTplanner created FFT of wrong direction");
+    assert_eq!(fft.len(), signal.len(), "FftPlanner created FFT of wrong length");
+    assert_eq!(fft.is_inverse(), inverse, "FftPlanner created FFT of wrong direction");
 
     fft.process_inplace(&mut buffer_actual);
 

@@ -22,7 +22,7 @@ use crate::{Length, IsInverse, Fft};
 /// ~~~
 /// // Computes a forward FFT of size 1201 (prime number), using Rader's Algorithm
 /// use rustfft::algorithm::RadersAlgorithm;
-/// use rustfft::{Fft, FFTplanner};
+/// use rustfft::{Fft, FftPlanner};
 /// use rustfft::num_complex::Complex;
 /// use rustfft::num_traits::Zero;
 ///
@@ -30,7 +30,7 @@ use crate::{Length, IsInverse, Fft};
 /// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); 1201];
 ///
 /// // plan a FFT of size n - 1 = 1200
-/// let mut planner = FFTplanner::new(false);
+/// let mut planner = FftPlanner::new(false);
 /// let inner_fft = planner.plan_fft(1200);
 ///
 /// let fft = RadersAlgorithm::new(inner_fft);

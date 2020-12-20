@@ -7,7 +7,8 @@ use crate::common::FFTnum;
 use crate::Fft;
 use crate::algorithm::*;
 use crate::algorithm::butterflies::*;
-use crate::algorithm::avx::avx_planner::FftPlannerAvx;
+
+use crate::FftPlannerAvx;
 
 use crate::math_utils::{ PrimeFactors, PrimeFactor };
 
@@ -16,37 +17,35 @@ const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option i
 const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
 const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the inner fft of Bluestein if length is larger than this
 
-/// The Fft planner is used to make new Fft algorithm instances.
+/// The FFT planner is used to make new FFT algorithm instances.
 ///
-/// RustFFT has several Fft algorithms available; For a given Fft size, the FFTplanner decides which of the
-/// available Fft algorithms to use and then initializes them.
+/// RustFFT has several FFT algorithms available. For a given FFT size, the `FftPlanner` decides which of the
+/// available FFT algorithms to use and then initializes them.
 ///
 /// ~~~
 /// // Perform a forward Fft of size 1234
 /// use std::sync::Arc;
-/// use rustfft::FFTplanner;
-/// use rustfft::num_complex::Complex;
-/// use rustfft::num_traits::Zero;
+/// use rustfft::{FftPlanner, num_complex::Complex};
 ///
-/// let mut input:  Vec<Complex<f32>> = vec![Zero::zero(); 1234];
-/// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); 1234];
-///
-/// let mut planner = FFTplanner::new(false);
+/// let mut planner = FftPlanner::new(false);
 /// let fft = planner.plan_fft(1234);
-/// fft.process(&mut input, &mut output);
+///
+/// let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1234];
+/// fft.process_inplace(&mut buffer);
 /// 
-/// // The fft instance returned by the planner is stored behind an `Arc`, so it's cheap to clone
+/// // The FFT instance returned by the planner has the type `Arc<dyn Fft<T>>`,
+/// // where T is the numeric type, ie f32 or f64, so it's cheap to clone
 /// let fft_clone = Arc::clone(&fft);
 /// ~~~
 ///
-/// If you plan on creating multiple Fft instances, it is recommnded to reuse the same planner for all of them. This
-/// is because the planner re-uses internal data across Fft instances wherever possible, saving memory and reducing
-/// setup time. (Fft instances created with one planner will never re-use data and buffers with Fft instances created
+/// If you plan on creating multiple FFT instances, it is recommnded to reuse the same planner for all of them. This
+/// is because the planner re-uses internal data across FFT instances wherever possible, saving memory and reducing
+/// setup time. (FFT instances created with one planner will never re-use data and buffers with FFT instances created
 /// by a different planner)
 ///
-/// Each Fft instance owns `Arc`s to its internal data, rather than borrowing it from the planner, so it's perfectly
+/// Each FFT instance owns [`Arc`s](std::sync::Arc) to its internal data, rather than borrowing it from the planner, so it's perfectly
 /// safe to drop the planner after creating Fft instances.
-pub struct FFTplanner<T: FFTnum> {
+pub struct FftPlanner<T: FFTnum> {
     algorithm_cache: HashMap<usize, Arc<dyn Fft<T>>>,
     inverse: bool,
 
@@ -54,25 +53,27 @@ pub struct FFTplanner<T: FFTnum> {
     avx_planner: Option<FftPlannerAvx<T>>,
 }
 
-impl<T: FFTnum> FFTplanner<T> {
-    /// Creates a new Fft planner.
+impl<T: FFTnum> FftPlanner<T> {
+    /// Creates a new `FftPlanner` instance.
     ///
     /// If `inverse` is false, this planner will plan forward FFTs. If `inverse` is true, it will plan inverse FFTs.
     pub fn new(inverse: bool) -> Self {
         Self {
             inverse: inverse,
             algorithm_cache: HashMap::new(),
+
             avx_planner: FftPlannerAvx::new(inverse).ok()
         }
     }
 
-    /// Returns a Fft instance which processes signals of size `len`
-    /// If this is called multiple times, it will attempt to re-use internal data between instances
+    /// Returns a `Fft` instance which processes signals of size `len`
+    ///
+    /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         if let Some(avx_planner) = &mut self.avx_planner {
             // If we have an AVX planner, defer to that for all construction needs
-            // TODO: eventually, "FFTplanner" could be an enum of different planner types? "ScalarPlanner" etc
-            // That way, we wouldn't need to waste memoery storing the scalar planner's algorithm cache when we're not gonna use it
+            // TODO: eventually, "FftPlanner" could be an enum of different planner types? "ScalarPlanner" etc
+            // That way, we wouldn't need to waste memory storing the scalar planner's algorithm cache when we're not gonna use it
             avx_planner.plan_fft(len)
         } else if let Some(instance) = self.algorithm_cache.get(&len) {
             Arc::clone(instance)
@@ -160,7 +161,7 @@ impl<T: FFTnum> FFTplanner<T> {
             29 => wrap_butterfly(Butterfly29::new(self.inverse)),
             31 => wrap_butterfly(Butterfly31::new(self.inverse)),
             32 => wrap_butterfly(Butterfly32::new(self.inverse)),
-            _ => Some(self.plan_prime(len)),
+            _ => None,
         }
     }
 

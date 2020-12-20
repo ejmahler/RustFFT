@@ -23,7 +23,7 @@ use crate::{Length, IsInverse, Fft};
 /// ~~~
 /// // Computes a forward FFT of size 1200, using the Good-Thomas Algorithm
 /// use rustfft::algorithm::GoodThomasAlgorithm;
-/// use rustfft::{Fft, FFTplanner};
+/// use rustfft::{Fft, FftPlanner};
 /// use rustfft::num_complex::Complex;
 /// use rustfft::num_traits::Zero;
 ///
@@ -32,7 +32,7 @@ use crate::{Length, IsInverse, Fft};
 ///
 /// // we need to find an n1 and n2 such that n1 * n2 == 1200 and GCD(n1, n2) == 1
 /// // n1 = 48 and n2 = 25 satisfies this
-/// let mut planner = FFTplanner::new(false);
+/// let mut planner = FftPlanner::new(false);
 /// let inner_fft_n1 = planner.plan_fft(48);
 /// let inner_fft_n2 = planner.plan_fft(25);
 ///

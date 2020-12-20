@@ -44,11 +44,47 @@ impl MixedRadixPlan {
     }
 }
 
+/// The FFT planner is used to make new FFT algorithm instances. Specifically, `FftPlannerAvx` generates FFT algorithms
+/// that are designed with the AVX instruction set in mind.
+///
+/// Creating an instance of `FftPlannerAvx` requires the `avx` and `fma` instructions to be available on the current machine. A few algorithms will
+/// use `avx2` if it's available, but it isn't required.
+///
+/// For the time being, AVX acceleration is black box, and AVX accelerated algorithms are not available without a planner. This may change in the future.
+///
+/// ~~~
+/// // Perform a forward Fft of size 1234
+/// use std::sync::Arc;
+/// use rustfft::{FftPlannerAvx, num_complex::Complex};
+///
+/// // If FftPlannerAvx::new() returns Ok(), we'll know AVX algorithms are available on this machine
+/// if let Ok(mut planner) = FftPlannerAvx::new(false) {
+///     let fft = planner.plan_fft(1234);
+///
+///     let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1234];
+///     fft.process_inplace(&mut buffer);
+/// 
+///     // The FFT instance returned by the planner has the type `Arc<dyn Fft<T>>`,
+///     // where T is the numeric type, ie f32 or f64, so it's cheap to clone
+///     let fft_clone = Arc::clone(&fft);
+/// }
+/// ~~~
+///
+/// If you plan on creating multiple FFT instances, it is recommnded to reuse the same planner for all of them. This
+/// is because the planner re-uses internal data across FFT instances wherever possible, saving memory and reducing
+/// setup time. (FFT instances created with one planner will never re-use data and buffers with FFT instances created
+/// by a different planner)
+///
+/// Each FFT instance owns [`Arc`s](std::sync::Arc) to its internal data, rather than borrowing it from the planner, so it's perfectly
+/// safe to drop the planner after creating Fft instances.
 pub struct FftPlannerAvx<T: FFTnum> {
     algorithm_cache: HashMap<usize, Arc<dyn Fft<T>>>,
     inverse: bool,
 }
 impl<T: FFTnum> FftPlannerAvx<T> {
+    /// Constructs a new `FftPlannerAvx` instance.
+    ///
+    /// Returns `Ok(planner_instance)` if this machine has the required instruction sets, Err() if some instruction sets are missing.
     pub fn new(inverse: bool) -> Result<Self, ()> {
         // Eventually we might make AVX algorithms that don't also require FMA.
         // If that happens, we can only check for AVX here? seems like a pretty low-priority addition
@@ -64,6 +100,9 @@ impl<T: FFTnum> FftPlannerAvx<T> {
         }
     }
 
+    /// Returns a `Fft` instance which processes signals of size `len` using AVX instructions.
+    ///
+    /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         self.plan_with_cache(len, Self::plan_and_construct_new_fft)
     }

@@ -71,7 +71,7 @@ impl VectorizedMultiplyMod {
     }
 }
 
-/// Implementation of Rader's Algorithm
+/// Implementation of Rader's Algorithm, using AVX2 instructions.
 ///
 /// This algorithm computes a prime-sized FFT in O(nlogn) time. It does this by converting this size n FFT into a
 /// size (n - 1) which is guaranteed to be composite.
@@ -79,27 +79,8 @@ impl VectorizedMultiplyMod {
 /// The worst case for this algorithm is when (n - 1) is 2 * prime, resulting in a
 /// [Cunningham Chain](https://en.wikipedia.org/wiki/Cunningham_chain)
 ///
-/// ~~~
-/// // Computes a forward FFT of size 1201 (prime number), using Rader's Algorithm
-/// use rustfft::algorithm::avx::RadersAvx2;
-/// use rustfft::{Fft, FFTplanner};
-/// use rustfft::num_complex::Complex;
-/// use rustfft::num_traits::Zero;
-///
-/// let mut input:  Vec<Complex<f32>> = vec![Zero::zero(); 1201];
-/// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); 1201];
-///
-/// // plan a FFT of size n - 1 = 1200
-/// let mut planner = FFTplanner::new(false);
-/// let inner_fft = planner.plan_fft(1200);
-///
-/// let fft = RadersAvx2::new(inner_fft).unwrap();
-/// fft.process(&mut input, &mut output);
-/// ~~~
-///
 /// Rader's Algorithm is relatively expensive compared to other FFT algorithms. Benchmarking shows that it is up to
-/// an order of magnitude slower than similar composite sizes. In the example size above of 1201, benchmarking shows
-/// that it takes 2.5x more time to compute than a FFT of size 1200.
+/// an order of magnitude slower than similar composite sizes.
 pub struct RadersAvx2<T: AvxNum> {
     input_index_multiplier: VectorizedMultiplyMod,
     input_index_init: __m256i,

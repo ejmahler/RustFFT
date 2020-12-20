@@ -332,6 +332,7 @@ pub struct PartialFactors {
     other_factors: usize,
 }
 impl PartialFactors {
+    #[allow(unused)]
     pub fn compute(len: usize) -> Self {
         let power2 = len.trailing_zeros();
         let mut other_factors = len >> power2;
@@ -363,27 +364,35 @@ impl PartialFactors {
         Self { power2, power3, power5, power7, power11, other_factors }
     }
 
+    #[allow(unused)]
     pub fn get_power2(&self) -> u32 {
         self.power2
     }
+    #[allow(unused)]
     pub fn get_power3(&self) -> u32 {
         self.power3
     }
+    #[allow(unused)]
     pub fn get_power5(&self) -> u32 {
         self.power5
     }
+    #[allow(unused)]
     pub fn get_power7(&self) -> u32 {
         self.power7
     }
+    #[allow(unused)]
     pub fn get_power11(&self) -> u32 {
         self.power11
     }
+    #[allow(unused)]
     pub fn get_other_factors(&self) -> usize {
         self.other_factors
     }
+    #[allow(unused)]
     pub fn product(&self) -> usize {
         (self.other_factors * 3.pow(self.power3) * 5.pow(self.power5) * 7.pow(self.power7) * 11.pow(self.power11)) << self.power2
     }
+    #[allow(unused)]
     pub fn product_power2power3(&self) -> usize {
         3.pow(self.power3) << self.power2
     }
