@@ -415,6 +415,133 @@ impl Butterfly7Avx64<f64> {
     }
 }
 
+pub struct Butterfly11Avx64<T> {
+    twiddles: [__m256d; 10],
+    inverse: bool,
+    _phantom: std::marker::PhantomData<T>,
+}
+boilerplate_fft_simd_butterfly!(Butterfly11Avx64, 11);
+impl Butterfly11Avx64<f64> {
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inverse: bool) -> Self {
+        let twiddle1 = f64::generate_twiddle_factor(1, 11, inverse);
+        let twiddle2 = f64::generate_twiddle_factor(2, 11, inverse);
+        let twiddle3 = f64::generate_twiddle_factor(3, 11, inverse);
+        let twiddle4 = f64::generate_twiddle_factor(4, 11, inverse);
+        let twiddle5 = f64::generate_twiddle_factor(5, 11, inverse);
+
+        let twiddles = [
+            _mm256_set_pd(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),
+            _mm256_set_pd(twiddle2.im, twiddle2.im, twiddle2.re, twiddle2.re),
+            _mm256_set_pd(twiddle3.im, twiddle3.im, twiddle3.re, twiddle3.re),
+            _mm256_set_pd(twiddle4.im, twiddle4.im, twiddle4.re, twiddle4.re),
+            _mm256_set_pd(twiddle5.im, twiddle5.im, twiddle5.re, twiddle5.re),
+            _mm256_set_pd(-twiddle5.im, -twiddle5.im, twiddle5.re, twiddle5.re),
+            _mm256_set_pd(-twiddle4.im, -twiddle4.im, twiddle4.re, twiddle4.re),
+            _mm256_set_pd(-twiddle3.im, -twiddle3.im, twiddle3.re, twiddle3.re),
+            _mm256_set_pd(-twiddle2.im, -twiddle2.im, twiddle2.re, twiddle2.re),
+            _mm256_set_pd(-twiddle1.im, -twiddle1.im, twiddle1.re, twiddle1.re),
+        ];
+
+        Self {
+            twiddles,
+            inverse: inverse,
+            _phantom: PhantomData,
+        }
+    }
+    
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn perform_fft_f64(&self, input: RawSlice<Complex<f64>>, mut output: RawSliceMut<Complex<f64>>) {
+        let input0 = input.load_partial1_complex(0);
+        let input12 = input.load_complex(1);
+        let input34 = input.load_complex(3);
+        let input56 = input.load_complex(5);
+        let input78 = input.load_complex(7);
+        let input910 = input.load_complex(9);
+
+        // reverse the order of input78910, and separate 
+        let [input55, input66] = AvxVector::unpack_complex([input56, input56]);
+        let input87 = AvxVector::reverse_complex_elements(input78);
+        let input109 = AvxVector::reverse_complex_elements(input910);
+
+        // do some initial butterflies and rotations
+        let [sum12, diff109] = AvxVector::column_butterfly2([input12, input109]);
+        let [sum34, diff87] = AvxVector::column_butterfly2([input34, input87]);
+        let [sum55, diff66] = AvxVector::column_butterfly2([input55, input66]);
+
+        let rotation = AvxVector::make_rotation90(true);
+        let rotated109 = AvxVector::rotate90(diff109, rotation);
+        let rotated87 = AvxVector::rotate90(diff87, rotation);
+        let rotated66 = AvxVector::rotate90(diff66, rotation);
+
+        // arrange the data into the format to apply twiddles
+        let [mid110, mid29] = AvxVector::unpack_complex([sum12, rotated109]);
+        let [mid38, mid47] = AvxVector::unpack_complex([sum34, rotated87]);
+        let mid56 = AvxVector::unpacklo_complex([sum55, rotated66]);
+
+        // to compute the first output, compute the sum of all elements. mid110[0], mid29[0], mid38[0], mid47 already have the sum of 1+10, 2+9 and so on, so if we add them, we'll get the sum of everything
+        let mid12910  = AvxVector::add(mid110.lo(), mid29.lo());
+        let mid3478 = AvxVector::add(mid38.lo(), mid47.lo());
+        let output0_left = AvxVector::add(input0, mid56.lo());
+        let output0_right = AvxVector::add(mid12910, mid3478);
+        let output0 = AvxVector::add(output0_left, output0_right);
+        output.store_partial1_complex(output0, 0);
+
+        // we need to add the first input to each of our 5 twiddles values -- but only the first complex element of each vector. so just use zero for the other element
+        let zero = _mm_setzero_pd();
+        let input0 = AvxVector256::merge(input0, zero);
+        
+        // apply twiddle factors
+        let twiddled110= AvxVector::fmadd(mid110, self.twiddles[0], input0);
+        let twiddled38 = AvxVector::fmadd(mid110, self.twiddles[2], input0);
+        let twiddled29 = AvxVector::fmadd(mid110, self.twiddles[1], input0);
+        let twiddled47 = AvxVector::fmadd(mid110, self.twiddles[3], input0);
+        let twiddled56 = AvxVector::fmadd(mid110, self.twiddles[4], input0);
+
+        let twiddled110= AvxVector::fmadd(mid29, self.twiddles[1], twiddled110);
+        let twiddled38 = AvxVector::fmadd(mid29, self.twiddles[5], twiddled38);
+        let twiddled29 = AvxVector::fmadd(mid29, self.twiddles[3], twiddled29);
+        let twiddled47 = AvxVector::fmadd(mid29, self.twiddles[7], twiddled47);
+        let twiddled56 = AvxVector::fmadd(mid29, self.twiddles[9], twiddled56);
+
+        let twiddled110= AvxVector::fmadd(mid38, self.twiddles[2], twiddled110);
+        let twiddled38 = AvxVector::fmadd(mid38, self.twiddles[8], twiddled38);
+        let twiddled29 = AvxVector::fmadd(mid38, self.twiddles[5], twiddled29);
+        let twiddled47 = AvxVector::fmadd(mid38, self.twiddles[0], twiddled47);
+        let twiddled56 = AvxVector::fmadd(mid38, self.twiddles[3], twiddled56);
+
+        let twiddled110= AvxVector::fmadd(mid47, self.twiddles[3], twiddled110);
+        let twiddled38 = AvxVector::fmadd(mid47, self.twiddles[0], twiddled38);
+        let twiddled29 = AvxVector::fmadd(mid47, self.twiddles[7], twiddled29);
+        let twiddled47 = AvxVector::fmadd(mid47, self.twiddles[4], twiddled47);
+        let twiddled56 = AvxVector::fmadd(mid47, self.twiddles[8], twiddled56);
+
+        let twiddled110= AvxVector::fmadd(mid56, self.twiddles[4], twiddled110);
+        let twiddled38 = AvxVector::fmadd(mid56, self.twiddles[3], twiddled38);
+        let twiddled29 = AvxVector::fmadd(mid56, self.twiddles[9], twiddled29);
+        let twiddled47 = AvxVector::fmadd(mid56, self.twiddles[8], twiddled47);
+        let twiddled56 = AvxVector::fmadd(mid56, self.twiddles[2], twiddled56);
+
+        // unpack the data for the last butterfly 2
+        let [twiddled12, twiddled109] = AvxVector::unpack_complex([twiddled110, twiddled29]);
+        let [twiddled34, twiddled87] = AvxVector::unpack_complex([twiddled38, twiddled47]);
+        let [twiddled55, twiddled66] = AvxVector::unpack_complex([twiddled56, twiddled56]);
+
+        let [output12, output109] = AvxVector::column_butterfly2([twiddled12, twiddled109]);
+        let [output34, output87] = AvxVector::column_butterfly2([twiddled34, twiddled87]);
+        let [output55, output66] = AvxVector::column_butterfly2([twiddled55, twiddled66]);
+        let output78 = AvxVector::reverse_complex_elements(output87);
+        let output910 = AvxVector::reverse_complex_elements(output109);
+        
+        output.store_complex(output12, 1);
+        output.store_complex(output34, 3);
+        output.store_partial1_complex(output55.lo(), 5);
+        output.store_partial1_complex(output66.lo(), 6);
+        output.store_complex(output78, 7);
+        output.store_complex(output910, 9);
+    }
+}
+
 
 pub struct Butterfly8Avx64<T> {
     twiddles: [__m256d; 2],
@@ -1291,6 +1418,7 @@ mod unit_tests {
     test_avx_butterfly!(test_avx_butterfly7_f64, Butterfly7Avx64, 7);
     test_avx_butterfly!(test_avx_mixedradix8_f64, Butterfly8Avx64, 8);
     test_avx_butterfly!(test_avx_mixedradix9_f64, Butterfly9Avx64, 9);
+    test_avx_butterfly!(test_avx_mixedradix11_f64, Butterfly11Avx64, 11);
     test_avx_butterfly!(test_avx_mixedradix12_f64, Butterfly12Avx64, 12);
     test_avx_butterfly!(test_avx_mixedradix16_f64, Butterfly16Avx64, 16);
     test_avx_butterfly!(test_avx_mixedradix18_f64, Butterfly18Avx64, 18);

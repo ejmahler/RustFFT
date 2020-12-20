@@ -74,8 +74,8 @@ pub fn check_fft_algorithm<T: FFTnum + Float>(fft: &dyn Fft<T>, len: usize, inve
         for (input_chunk, output_chunk) in input.chunks_mut(len).zip(output.chunks_mut(len)) {
             fft.process(input_chunk, output_chunk);
         }
-        //dbg!(&expected_output);
-        //dbg!(&output);
+        dbg!(&expected_output);
+        dbg!(&output);
         transppose_diagnostic(&expected_output, &output);
         assert!(compare_vectors(&expected_output, &output), "process() failed, length = {}, inverse = {}", len, inverse);
     }

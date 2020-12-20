@@ -104,7 +104,7 @@ macro_rules! boilerplate_fft_simd_butterfly {
     )
 }
 
-// Safety: This macro will call `self::perform_fft_f32()` which probably has a #[target_feature(enable = "...")] annotation on it.
+// Safety: This macro will call `self::column_butterflies_and_transpose and self::row_butterflies()` which probably has a #[target_feature(enable = "...")] annotation on it.
 // Calling functions with that annotation is unsafe, because it doesn't actually check if the CPU has the required features.
 // Callers of this macro must guarantee that users can't even obtain an instance of $struct_name if their CPU doesn't have the required CPU features.
 macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
@@ -411,6 +411,143 @@ impl Butterfly7Avx<f32> {
         output.store_partial2_complex(AvxVector::add(output56, input0), 5);
     }
 }
+
+
+pub struct Butterfly11Avx<T> {
+    twiddles: [__m256; 10],
+    twiddle_lo_4: __m128,
+    twiddle_lo_9: __m128,
+    twiddle_lo_3: __m128,
+    twiddle_lo_8: __m128,
+    twiddle_lo_2: __m128,
+    inverse: bool,
+    _phantom: std::marker::PhantomData<T>,
+}
+boilerplate_fft_simd_butterfly!(Butterfly11Avx, 11);
+impl Butterfly11Avx<f32> {
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inverse: bool) -> Self {
+        let twiddle1 = f32::generate_twiddle_factor(1, 11, inverse);
+        let twiddle2 = f32::generate_twiddle_factor(2, 11, inverse);
+        let twiddle3 = f32::generate_twiddle_factor(3, 11, inverse);
+        let twiddle4 = f32::generate_twiddle_factor(4, 11, inverse);
+        let twiddle5 = f32::generate_twiddle_factor(5, 11, inverse);
+
+        let twiddles_lo = [
+            _mm_set_ps(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),
+            _mm_set_ps(twiddle2.im, twiddle2.im, twiddle2.re, twiddle2.re),
+            _mm_set_ps(twiddle3.im, twiddle3.im, twiddle3.re, twiddle3.re),
+            _mm_set_ps(twiddle4.im, twiddle4.im, twiddle4.re, twiddle4.re),
+            _mm_set_ps(twiddle5.im, twiddle5.im, twiddle5.re, twiddle5.re),
+            _mm_set_ps(-twiddle5.im, -twiddle5.im, twiddle5.re, twiddle5.re),
+            _mm_set_ps(-twiddle4.im, -twiddle4.im, twiddle4.re, twiddle4.re),
+            _mm_set_ps(-twiddle3.im, -twiddle3.im, twiddle3.re, twiddle3.re),
+            _mm_set_ps(-twiddle2.im, -twiddle2.im, twiddle2.re, twiddle2.re),
+            _mm_set_ps(-twiddle1.im, -twiddle1.im, twiddle1.re, twiddle1.re),
+        ];
+
+        Self {
+            twiddles: [
+                AvxVector256::merge(twiddles_lo[0], twiddles_lo[2]),
+                AvxVector256::merge(twiddles_lo[1], twiddles_lo[3]),
+                AvxVector256::merge(twiddles_lo[1], twiddles_lo[5]),
+                AvxVector256::merge(twiddles_lo[3], twiddles_lo[7]),
+                AvxVector256::merge(twiddles_lo[2], twiddles_lo[8]),
+                AvxVector256::merge(twiddles_lo[5], twiddles_lo[0]),
+                AvxVector256::merge(twiddles_lo[3], twiddles_lo[0]),
+                AvxVector256::merge(twiddles_lo[7], twiddles_lo[4]),
+                AvxVector256::merge(twiddles_lo[4], twiddles_lo[3]),
+                AvxVector256::merge(twiddles_lo[9], twiddles_lo[8]),
+            ],
+            twiddle_lo_4: twiddles_lo[4],
+            twiddle_lo_9: twiddles_lo[9],
+            twiddle_lo_3: twiddles_lo[3],
+            twiddle_lo_8: twiddles_lo[8],
+            twiddle_lo_2: twiddles_lo[2],
+            inverse: inverse,
+            _phantom: PhantomData,
+        }
+    }
+    
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn perform_fft_f32(&self, input: RawSlice<Complex<f32>>, mut output: RawSliceMut<Complex<f32>>) {
+        let input0 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr() as *const f64)); // load the first element of the input, and duplicate it into both complex number slots of input0
+        let input1234 = input.load_complex(1);
+        let input56 = input.load_partial2_complex(5);
+        let input78910 = input.load_complex(7);
+
+        // reverse the order of input78910, and separate 
+        let [input55, input66] = AvxVector::unpack_complex([input56, input56]);
+        let input10987 = AvxVector::reverse_complex_elements(input78910);
+
+        // do some initial butterflies and rotations
+        let [sum1234, diff10987] = AvxVector::column_butterfly2([input1234, input10987]);
+        let [sum55, diff66] = AvxVector::column_butterfly2([input55, input66]);
+
+        let rotation = AvxVector::make_rotation90(true);
+        let rotated10987 = AvxVector::rotate90(diff10987, rotation);
+        let rotated66 = AvxVector::rotate90(diff66, rotation.lo());
+
+        // arrange the data into the format to apply twiddles
+        let [mid11038, mid2947] = AvxVector::unpack_complex([sum1234, rotated10987]);
+        
+        let mid110 : __m256 = AvxVector256::merge(mid11038.lo(), mid11038.lo());
+        let mid29 : __m256  = AvxVector256::merge(mid2947.lo(), mid2947.lo());
+        let mid38 : __m256  = AvxVector256::merge(mid11038.hi(), mid11038.hi());
+        let mid47 : __m256  = AvxVector256::merge(mid2947.hi(), mid2947.hi());
+        let mid56 = AvxVector::unpacklo_complex([sum55, rotated66]);
+        let mid56 : __m256 = AvxVector256::merge(mid56, mid56);
+
+        // to compute the first output, compute the sum of all elements. mid16[0], mid25[0], and mid34[0] already have the sum of 1+6, 2+5 and 3+4 respectively, so if we add them, we'll get 1+2+3+4+5+6
+        let mid12910  = AvxVector::add(mid110.lo(), mid29.lo());
+        let mid3478 = AvxVector::add(mid38.lo(), mid47.lo());
+        let output0_left = AvxVector::add(input0, mid56.lo());
+        let output0_right = AvxVector::add(mid12910, mid3478);
+        let output0 = AvxVector::add(output0_left, output0_right);
+        output.store_partial1_complex(output0, 0);
+
+        // we need to add the first input to each of our 5 twiddles values -- but right now, input0 is duplicated into both slots
+        // but we only want to add it once, so zero the second element
+        let zero = _mm_setzero_pd();
+        let input0 = _mm_castpd_ps(_mm_move_sd(zero, _mm_castps_pd(input0)));
+        let input0 = AvxVector256::merge(input0, input0);
+        
+        // apply twiddle factors
+        let twiddled11038 = AvxVector::fmadd(mid110, self.twiddles[0], input0);
+        let twiddled2947  = AvxVector::fmadd(mid110, self.twiddles[1], input0);
+        let twiddled56    = AvxVector::fmadd(mid110.lo(), self.twiddle_lo_4, input0.lo());
+
+        let twiddled11038 = AvxVector::fmadd(mid29, self.twiddles[2], twiddled11038);
+        let twiddled2947  = AvxVector::fmadd(mid29, self.twiddles[3], twiddled2947);
+        let twiddled56    = AvxVector::fmadd(mid29.lo(), self.twiddle_lo_9, twiddled56);
+
+        let twiddled11038 = AvxVector::fmadd(mid38, self.twiddles[4], twiddled11038);
+        let twiddled2947  = AvxVector::fmadd(mid38, self.twiddles[5], twiddled2947);
+        let twiddled56    = AvxVector::fmadd(mid38.lo(), self.twiddle_lo_3, twiddled56);
+
+        let twiddled11038 = AvxVector::fmadd(mid47, self.twiddles[6], twiddled11038);
+        let twiddled2947  = AvxVector::fmadd(mid47, self.twiddles[7], twiddled2947);
+        let twiddled56    = AvxVector::fmadd(mid47.lo(), self.twiddle_lo_8, twiddled56);
+
+        let twiddled11038 = AvxVector::fmadd(mid56, self.twiddles[8], twiddled11038);
+        let twiddled2947  = AvxVector::fmadd(mid56, self.twiddles[9], twiddled2947);
+        let twiddled56 = AvxVector::fmadd(mid56.lo(), self.twiddle_lo_2, twiddled56);
+
+        // unpack the data for the last butterfly 2
+        let [twiddled1234, twiddled10987] = AvxVector::unpack_complex([twiddled11038, twiddled2947]);
+        let [twiddled55, twiddled66] = AvxVector::unpack_complex([twiddled56, twiddled56]);
+
+        let [output1234, output10987] = AvxVector::column_butterfly2([twiddled1234, twiddled10987]);
+        let [output55, output66] = AvxVector::column_butterfly2([twiddled55, twiddled66]);
+        let output78910 = AvxVector::reverse_complex_elements(output10987);
+        
+        output.store_complex(output1234, 1);
+        output.store_partial1_complex(output55, 5);
+        output.store_partial1_complex(output66, 6);
+        output.store_complex(output78910, 7);
+    }
+}
+
 
 
 
@@ -1445,6 +1582,7 @@ mod unit_tests {
     test_avx_butterfly!(test_avx_butterfly7, Butterfly7Avx, 7);
     test_avx_butterfly!(test_avx_butterfly8, Butterfly8Avx, 8);
     test_avx_butterfly!(test_avx_butterfly9, Butterfly9Avx, 9);
+    test_avx_butterfly!(test_avx_butterfly11, Butterfly11Avx, 11);
     test_avx_butterfly!(test_avx_butterfly12, Butterfly12Avx, 12);
     test_avx_butterfly!(test_avx_butterfly16, Butterfly16Avx, 16);
     test_avx_butterfly!(test_avx_butterfly24, Butterfly24Avx, 24);

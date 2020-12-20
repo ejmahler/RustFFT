@@ -328,6 +328,7 @@ pub struct PartialFactors {
     power3: u32,
     power5: u32,
     power7: u32,
+    power11: u32,
     other_factors: usize,
 }
 impl PartialFactors {
@@ -352,8 +353,14 @@ impl PartialFactors {
             power7 += 1;
             other_factors /= 7;
         }
+        
+        let mut power11 = 0;
+        while other_factors % 11 == 0 {
+            power11 += 1;
+            other_factors /= 11;
+        }
 
-        Self { power2, power3, power5, power7, other_factors }
+        Self { power2, power3, power5, power7, power11, other_factors }
     }
 
     pub fn get_power2(&self) -> u32 {
@@ -368,11 +375,14 @@ impl PartialFactors {
     pub fn get_power7(&self) -> u32 {
         self.power7
     }
+    pub fn get_power11(&self) -> u32 {
+        self.power11
+    }
     pub fn get_other_factors(&self) -> usize {
         self.other_factors
     }
     pub fn product(&self) -> usize {
-        (self.other_factors * 3.pow(self.power3) * 5.pow(self.power5) * 7.pow(self.power7)) << self.power2
+        (self.other_factors * 3.pow(self.power3) * 5.pow(self.power5) * 7.pow(self.power7) * 11.pow(self.power11)) << self.power2
     }
     pub fn product_power2power3(&self) -> usize {
         3.pow(self.power3) << self.power2
@@ -383,13 +393,15 @@ impl PartialFactors {
         let three_divides = self.power3 >= divisor.power3;
         let five_divides = self.power5 >= divisor.power5;
         let seven_divides = self.power7 >= divisor.power7;
+        let eleven_divides = self.power11 >= divisor.power11;
         let other_divides = self.other_factors % divisor.other_factors == 0;
-        if two_divides && three_divides && five_divides && seven_divides && other_divides {
+        if two_divides && three_divides && five_divides && seven_divides && eleven_divides && other_divides {
             Some(Self { 
                 power2: self.power2 - divisor.power2,
                 power3: self.power3 - divisor.power3,
                 power5: self.power5 - divisor.power5,
                 power7: self.power7 - divisor.power7,
+                power11: self.power11 - divisor.power11,
                 other_factors: if self.other_factors == divisor.other_factors { 1 } else { self.other_factors / divisor.other_factors }
             })
         }
@@ -609,24 +621,25 @@ mod unit_tests {
             power3: u32,
             power5: u32,
             power7: u32,
+            power11: u32,
             other: usize,
         }
 
         let test_list = vec![
-			ExpectedData{ len: 2,       power2: 1, power3: 0, power5: 0, power7: 0, other: 1 },
-			ExpectedData{ len: 128,     power2: 7, power3: 0, power5: 0, power7: 0, other: 1 },
-			ExpectedData{ len: 3,       power2: 0, power3: 1, power5: 0, power7: 0, other: 1 },
-			ExpectedData{ len: 81,      power2: 0, power3: 4, power5: 0, power7: 0, other: 1 },
-			ExpectedData{ len: 5,       power2: 0, power3: 0, power5: 1, power7: 0, other: 1 },
-			ExpectedData{ len: 125,     power2: 0, power3: 0, power5: 3, power7: 0, other: 1 },
-			ExpectedData{ len: 97,      power2: 0, power3: 0, power5: 0, power7: 0, other: 97 },
-			ExpectedData{ len: 6,       power2: 1, power3: 1, power5: 0, power7: 0, other: 1 },
-			ExpectedData{ len: 12,      power2: 2, power3: 1, power5: 0, power7: 0, other: 1 },
-			ExpectedData{ len: 36,      power2: 2, power3: 2, power5: 0, power7: 0, other: 1 },
-			ExpectedData{ len: 10,      power2: 1, power3: 0, power5: 1, power7: 0, other: 1 },
-			ExpectedData{ len: 100,     power2: 2, power3: 0, power5: 2, power7: 0, other: 1 },
-			ExpectedData{ len: 44100,   power2: 2, power3: 2, power5: 2, power7: 2, other: 1 },
-			ExpectedData{ len: 2310,    power2: 1, power3: 1, power5: 1, power7: 1, other: 11 },
+			ExpectedData{ len: 2,       power2: 1, power3: 0, power5: 0, power7: 0, power11: 0, other: 1 },
+			ExpectedData{ len: 128,     power2: 7, power3: 0, power5: 0, power7: 0, power11: 0, other: 1 },
+			ExpectedData{ len: 3,       power2: 0, power3: 1, power5: 0, power7: 0, power11: 0, other: 1 },
+			ExpectedData{ len: 81,      power2: 0, power3: 4, power5: 0, power7: 0, power11: 0, other: 1 },
+			ExpectedData{ len: 5,       power2: 0, power3: 0, power5: 1, power7: 0, power11: 0, other: 1 },
+			ExpectedData{ len: 125,     power2: 0, power3: 0, power5: 3, power7: 0, power11: 0, other: 1 },
+			ExpectedData{ len: 97,      power2: 0, power3: 0, power5: 0, power7: 0, power11: 0, other: 97 },
+			ExpectedData{ len: 6,       power2: 1, power3: 1, power5: 0, power7: 0, power11: 0, other: 1 },
+			ExpectedData{ len: 12,      power2: 2, power3: 1, power5: 0, power7: 0, power11: 0, other: 1 },
+			ExpectedData{ len: 36,      power2: 2, power3: 2, power5: 0, power7: 0, power11: 0, other: 1 },
+			ExpectedData{ len: 10,      power2: 1, power3: 0, power5: 1, power7: 0, power11: 0, other: 1 },
+			ExpectedData{ len: 100,     power2: 2, power3: 0, power5: 2, power7: 0, power11: 0, other: 1 },
+			ExpectedData{ len: 44100,   power2: 2, power3: 2, power5: 2, power7: 2, power11: 0, other: 1 },
+			ExpectedData{ len: 2310,    power2: 1, power3: 1, power5: 1, power7: 1, power11: 1, other: 1 },
         ];
 
         for expected in test_list {
@@ -636,9 +649,10 @@ mod unit_tests {
             assert_eq!(factors.get_power3(), expected.power3);
             assert_eq!(factors.get_power5(), expected.power5);
             assert_eq!(factors.get_power7(), expected.power7);
+            assert_eq!(factors.get_power11(), expected.power11);
             assert_eq!(factors.get_other_factors(), expected.other);
 
-            assert_eq!(expected.len, (1 << factors.get_power2()) * 3.pow(factors.get_power3()) * 5.pow(factors.get_power5()) * 7.pow(factors.get_power7()) * factors.get_other_factors());
+            assert_eq!(expected.len, (1 << factors.get_power2()) * 3.pow(factors.get_power3()) * 5.pow(factors.get_power5()) * 7.pow(factors.get_power7()) * 11.pow(factors.get_power11()) * factors.get_other_factors());
             assert_eq!(expected.len, factors.product());
             assert_eq!((1 << factors.get_power2()) * 3.pow(factors.get_power3()), factors.product_power2power3());
             assert_eq!(factors.get_other_factors().trailing_zeros(), 0);
@@ -649,7 +663,7 @@ mod unit_tests {
         for n in 1..200 {
             let factors = PartialFactors::compute(n);
 
-            assert_eq!(n, (1 << factors.get_power2()) * 3.pow(factors.get_power3()) * 5.pow(factors.get_power5()) * 7.pow(factors.get_power7()) * factors.get_other_factors());
+            assert_eq!(n, (1 << factors.get_power2()) * 3.pow(factors.get_power3()) * 5.pow(factors.get_power5()) * 7.pow(factors.get_power7()) * 11.pow(factors.get_power11()) * factors.get_other_factors());
             assert_eq!(n, factors.product());
             assert_eq!((1 << factors.get_power2()) * 3.pow(factors.get_power3()), factors.product_power2power3());
             assert_eq!(factors.get_other_factors().trailing_zeros(), 0);
@@ -667,12 +681,14 @@ mod unit_tests {
                     for power5 in 0..3 {
                         for power7 in 0..3 {
                             for power11 in 0..2 {
-                                let divisor_product = (3.pow(power3) * 5.pow(power5) * 7.pow(power7) * 11.pow(power11)) << power2;
-                                let divisor = PartialFactors::compute(divisor_product);
-                                if let Some(quotient) = factors.divide_by(&divisor) {
-                                    assert_eq!(quotient.product(), n / divisor_product);
-                                } else {
-                                    assert!(n % divisor_product > 0);
+                                for power13 in 0..2 {
+                                    let divisor_product = (3.pow(power3) * 5.pow(power5) * 7.pow(power7) * 11.pow(power11) * 13.pow(power13)) << power2;
+                                    let divisor = PartialFactors::compute(divisor_product);
+                                    if let Some(quotient) = factors.divide_by(&divisor) {
+                                        assert_eq!(quotient.product(), n / divisor_product);
+                                    } else {
+                                        assert!(n % divisor_product > 0);
+                                    }
                                 }
                             }
                         }

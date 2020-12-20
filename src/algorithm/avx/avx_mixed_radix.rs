@@ -549,6 +549,42 @@ impl<T: AvxNum> MixedRadix9xnAvx<T> {
 
 
 
+pub struct MixedRadix11xnAvx<T: AvxNum> {
+    twiddles_butterfly11: [T::VectorType; 5],
+    common_data: CommonSimdData<T,T::VectorType>
+}
+boilerplate_avx_fft_commondata!(MixedRadix11xnAvx);
+
+impl<T: AvxNum> MixedRadix11xnAvx<T> {
+    #[target_feature(enable = "avx")]
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
+        Self {
+            twiddles_butterfly11: [
+                AvxVector::broadcast_twiddle(1, 11, inner_fft.is_inverse()),
+                AvxVector::broadcast_twiddle(2, 11, inner_fft.is_inverse()),
+                AvxVector::broadcast_twiddle(3, 11, inner_fft.is_inverse()),
+                AvxVector::broadcast_twiddle(4, 11, inner_fft.is_inverse()),
+                AvxVector::broadcast_twiddle(5, 11, inner_fft.is_inverse()),
+            ],
+            common_data: mixedradix_gen_data!(11, inner_fft),
+        }
+    }
+    mixedradix_column_butterflies!(11,
+        |columns, this: &Self| AvxVector::column_butterfly11(columns, this.twiddles_butterfly11),
+        |columns, this: &Self| AvxVector::column_butterfly11(columns, [this.twiddles_butterfly11[0].lo(), this.twiddles_butterfly11[1].lo(), this.twiddles_butterfly11[2].lo(), this.twiddles_butterfly11[3].lo(), this.twiddles_butterfly11[4].lo()])
+    );
+    mixedradix_transpose!(11,
+        AvxVector::transpose11_packed,
+        AvxVector::transpose11_packed,
+        0;1;2;3;4;5;6;7;8;9;10, 0;1;2;3;4;5;6;7
+    );
+    boilerplate_mixedradix!();
+}
+
+
+
+
+
 
 pub struct MixedRadix12xnAvx<T: AvxNum> {
     twiddles_butterfly4: Rotation90<T::VectorType>,
@@ -741,6 +777,7 @@ mod unit_tests {
     test_avx_mixed_radix!(test_mixedradix_7xn_avx_f32, test_mixedradix_7xn_avx_f64, MixedRadix7xnAvx, 7);
     test_avx_mixed_radix!(test_mixedradix_8xn_avx_f32, test_mixedradix_8xn_avx_f64, MixedRadix8xnAvx, 8);
     test_avx_mixed_radix!(test_mixedradix_9xn_avx_f32, test_mixedradix_9xn_avx_f64, MixedRadix9xnAvx, 9);
+    test_avx_mixed_radix!(test_mixedradix_11xn_avx_f32, test_mixedradix_11xn_avx_f64, MixedRadix11xnAvx, 11);
     test_avx_mixed_radix!(test_mixedradix_12xn_avx_f32, test_mixedradix_12xn_avx_f64, MixedRadix12xnAvx, 12);
     test_avx_mixed_radix!(test_mixedradix_16xn_avx_f32, test_mixedradix_16xn_avx_f64, MixedRadix16xnAvx, 16);
 }

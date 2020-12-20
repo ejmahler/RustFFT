@@ -171,6 +171,7 @@ impl<T: FFTnum> FftPlannerAvx<T> {
                 radix_factors = radix_factors.divide_by(&PartialFactors::compute(16)).unwrap();
             }
             plan.push_radix_power(12, power_twelve);
+            plan.push_radix_power(11, radix_factors.get_power11());
             plan.push_radix_power(9, radix_factors.get_power3() / 2);
             plan.push_radix_power(8, radix_factors.get_power2() / 3);
             plan.push_radix_power(7, radix_factors.get_power7());
@@ -199,6 +200,7 @@ impl<T: FFTnum> FftPlannerAvx<T> {
     }
 
     fn construct_plan(&mut self, plan: MixedRadixPlan) -> Arc<dyn Fft<T>> {
+        dbg!(&plan);
         if plan.is_base_only() {
             self.construct_base(plan.base)
         } else {
@@ -284,9 +286,14 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
             return MixedRadixPlan::new(factors.get_other_factors(), &[]);
         }
 
-        // If the power2 * power3 component of this FFT is a butterfly, return that directly. Also return if len is 0 or 1
+        // If this FFT size is a butterfly, use that
+        if self.is_butterfly(len) {
+            return MixedRadixPlan::new(len, &[]);
+        }
+
+        // If the power2 * power3 component of this FFT is a butterfly and not too small, return that
         let power2power3 = factors.product_power2power3();
-        if len < 2 || (power2power3 > 1 && self.is_butterfly(power2power3)) {
+        if power2power3 > 4 && self.is_butterfly(power2power3) {
             return MixedRadixPlan::new(power2power3, &[]);
         }
 
@@ -356,20 +363,22 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
                 _ => MixedRadixPlan::new(72, &[]),
             }
         }
-        // If this FFT has powers of 5, use that
-        else if factors.get_power5() > 0 {
-            MixedRadixPlan::new(5, &[])
+        // If this FFT has powers of 11, 7, or 5, use that
+        else if factors.get_power11() > 0 {
+            MixedRadixPlan::new(11, &[])
         }
-        // If this FFT has powers of 7, use that
         else if factors.get_power7() > 0 {
             MixedRadixPlan::new(7, &[])
+        }
+        else if factors.get_power5() > 0 {
+            MixedRadixPlan::new(5, &[])
         } else {
             panic!("Couldn't find a base for FFT size {}, factors={:?}", len, factors)
         }
     }
 
     fn is_butterfly(&self, len: usize) -> bool {
-        [0,1,2,3,4,5,6,7,8,9,12,16,24,27,32,36,48,54,64,72,128,256,512].contains(&len)
+        [0,1,2,3,4,5,6,7,8,9,11,12,13,16,17,19,23,24,27,29,31,32,36,48,54,64,72,128,256,512].contains(&len)
     }
 
     fn construct_butterfly(&mut self, len: usize) -> Arc<dyn Fft<f32>> {
@@ -383,10 +392,17 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
             7 =>    wrap_fft(Butterfly7Avx::new(self.inverse).unwrap()),
             8 =>    wrap_fft(Butterfly8Avx::new(self.inverse).unwrap()),
             9 =>    wrap_fft(Butterfly9Avx::new(self.inverse).unwrap()),
+            11 =>   wrap_fft(Butterfly11Avx::new(self.inverse).unwrap()),
             12 =>   wrap_fft(Butterfly12Avx::new(self.inverse).unwrap()),
+            13 =>   wrap_fft(Butterfly13::new(self.inverse)),
             16 =>   wrap_fft(Butterfly16Avx::new(self.inverse).unwrap()),
+            17 =>   wrap_fft(Butterfly17::new(self.inverse)),
+            19 =>   wrap_fft(Butterfly19::new(self.inverse)),
+            23 =>   wrap_fft(Butterfly23::new(self.inverse)),
             24 =>   wrap_fft(Butterfly24Avx::new(self.inverse).unwrap()),
             27 =>   wrap_fft(Butterfly27Avx::new(self.inverse).unwrap()),
+            29 =>   wrap_fft(Butterfly29::new(self.inverse)),
+            31 =>   wrap_fft(Butterfly31::new(self.inverse)),
             32 =>   wrap_fft(Butterfly32Avx::new(self.inverse).unwrap()),
             36 =>   wrap_fft(Butterfly36Avx::new(self.inverse).unwrap()),
             48 =>   wrap_fft(Butterfly48Avx::new(self.inverse).unwrap()),
@@ -411,6 +427,7 @@ impl MakeFftAvx<f32> for FftPlannerAvx<f32> {
                 7  => wrap_fft(MixedRadix7xnAvx::new(fft).unwrap()),
                 8  => wrap_fft(MixedRadix8xnAvx::new(fft).unwrap()),
                 9  => wrap_fft(MixedRadix9xnAvx::new(fft).unwrap()),
+                11 => wrap_fft(MixedRadix11xnAvx::new(fft).unwrap()),
                 12 => wrap_fft(MixedRadix12xnAvx::new(fft).unwrap()),
                 16 => wrap_fft(MixedRadix16xnAvx::new(fft).unwrap()),
                 _ => unreachable!(),
@@ -490,9 +507,14 @@ impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
             return MixedRadixPlan::new(factors.get_other_factors(), &[]);
         }
 
-        // If the power2 * power3 component of this FFT is a butterfly, return that directly. Also return if len is 0 or 1
+        // If this FFT size is a butterfly, use that
+        if self.is_butterfly(len) {
+            return MixedRadixPlan::new(len, &[]);
+        }
+
+        // If the power2 * power3 component of this FFT is a butterfly and not too small, return that
         let power2power3 = factors.product_power2power3();
-        if len < 2 || (power2power3 > 1 && self.is_butterfly(power2power3)) {
+        if power2power3 > 4 && self.is_butterfly(power2power3) {
             return MixedRadixPlan::new(power2power3, &[]);
         }
 
@@ -568,20 +590,22 @@ impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
                 _ => MixedRadixPlan::new(36, &[])
             }
         } 
-        // If this FFT has powers of 5, use that
-        else if factors.get_power5() > 0 {
-            MixedRadixPlan::new(5, &[])
+         // If this FFT has powers of 11, 7, or 5, use that
+         else if factors.get_power11() > 0 {
+            MixedRadixPlan::new(11, &[])
         }
-        // If this FFT has powers of 7, use that
         else if factors.get_power7() > 0 {
             MixedRadixPlan::new(7, &[])
+        }
+        else if factors.get_power5() > 0 {
+            MixedRadixPlan::new(5, &[])
         } else {
             panic!("Couldn't find a base for FFT size {}, factors={:?}", len, factors)
         }
     }
 
     fn is_butterfly(&self, len: usize) -> bool {
-        [0,1,2,3,4,5,6,7,8,9,12,16,18,24,27,32,36,64,128,256,512].contains(&len)
+        [0,1,2,3,4,5,6,7,8,9,11,12,13,16,17,18,19,23,24,27,29,31,32,36,64,128,256,512].contains(&len)
     }
 
     fn construct_butterfly(&mut self, len: usize) -> Arc<dyn Fft<f64>> {
@@ -595,11 +619,18 @@ impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
             7 =>    wrap_fft(Butterfly7Avx64::new(self.inverse).unwrap()),
             8 =>    wrap_fft(Butterfly8Avx64::new(self.inverse).unwrap()),
             9 =>    wrap_fft(Butterfly9Avx64::new(self.inverse).unwrap()),
+            11 =>   wrap_fft(Butterfly11Avx64::new(self.inverse).unwrap()),
             12 =>   wrap_fft(Butterfly12Avx64::new(self.inverse).unwrap()),
+            13 =>   wrap_fft(Butterfly13::new(self.inverse)),
             16 =>   wrap_fft(Butterfly16Avx64::new(self.inverse).unwrap()),
+            17 =>   wrap_fft(Butterfly17::new(self.inverse)),
             18 =>   wrap_fft(Butterfly18Avx64::new(self.inverse).unwrap()),
+            19 =>   wrap_fft(Butterfly19::new(self.inverse)),
+            23 =>   wrap_fft(Butterfly23::new(self.inverse)),
             24 =>   wrap_fft(Butterfly24Avx64::new(self.inverse).unwrap()),
             27 =>   wrap_fft(Butterfly27Avx64::new(self.inverse).unwrap()),
+            29 =>   wrap_fft(Butterfly29::new(self.inverse)),
+            31 =>   wrap_fft(Butterfly31::new(self.inverse)),
             32 =>   wrap_fft(Butterfly32Avx64::new(self.inverse).unwrap()),
             36 =>   wrap_fft(Butterfly36Avx64::new(self.inverse).unwrap()),
             64 =>   wrap_fft(Butterfly64Avx64::new(self.inverse).unwrap()),
@@ -621,6 +652,7 @@ impl MakeFftAvx<f64> for FftPlannerAvx<f64> {
                 7  => wrap_fft(MixedRadix7xnAvx::new(fft).unwrap()),
                 8  => wrap_fft(MixedRadix8xnAvx::new(fft).unwrap()),
                 9  => wrap_fft(MixedRadix9xnAvx::new(fft).unwrap()),
+                11 => wrap_fft(MixedRadix11xnAvx::new(fft).unwrap()),
                 12 => wrap_fft(MixedRadix12xnAvx::new(fft).unwrap()),
                 16 => wrap_fft(MixedRadix16xnAvx::new(fft).unwrap()),
                 _ => unreachable!(),

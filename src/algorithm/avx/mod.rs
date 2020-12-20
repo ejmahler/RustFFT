@@ -194,6 +194,7 @@ pub use self::avx32_butterflies::{
     Butterfly7Avx,
     Butterfly8Avx,
     Butterfly9Avx,
+    Butterfly11Avx,
     Butterfly12Avx,
     Butterfly16Avx,
     Butterfly24Avx,
@@ -214,6 +215,7 @@ pub use self::avx64_butterflies::{
     Butterfly7Avx64,
     Butterfly8Avx64,
     Butterfly9Avx64,
+    Butterfly11Avx64,
     Butterfly12Avx64,
     Butterfly16Avx64,
     Butterfly18Avx64,
@@ -229,5 +231,5 @@ pub use self::avx64_butterflies::{
 
 pub use self::avx_raders::RadersAvx2;
 pub use self::avx_bluesteins::BluesteinsAvx;
-pub use self::avx_mixed_radix::{MixedRadix2xnAvx, MixedRadix3xnAvx, MixedRadix4xnAvx, MixedRadix5xnAvx, MixedRadix6xnAvx, MixedRadix7xnAvx, MixedRadix8xnAvx, MixedRadix9xnAvx, MixedRadix12xnAvx, MixedRadix16xnAvx};
+pub use self::avx_mixed_radix::{MixedRadix2xnAvx, MixedRadix3xnAvx, MixedRadix4xnAvx, MixedRadix5xnAvx, MixedRadix6xnAvx, MixedRadix7xnAvx, MixedRadix8xnAvx, MixedRadix9xnAvx, MixedRadix11xnAvx, MixedRadix12xnAvx, MixedRadix16xnAvx};
 use self::avx_vector::AvxVector256;

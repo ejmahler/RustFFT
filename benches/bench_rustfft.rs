@@ -38,6 +38,7 @@ fn bench_planned_f32(b: &mut Bencher, len: usize) {
 
     let mut planner = rustfft::FFTplanner::new(false);
     let fft: Arc<dyn Fft<f32>> = planner.plan_fft(len);
+    assert_eq!(fft.len(), len);
 
     let mut buffer = vec![Complex::zero(); len];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
@@ -931,6 +932,47 @@ fn bench_mixed_8xn_avx(b: &mut Bencher, len: usize) {
 #[bench] fn mixed_8xn_avx__16777216(b: &mut Bencher) { bench_mixed_8xn_avx(b, 16777216); }
 
 
+fn get_11xn_avx(len: usize) -> Arc<dyn Fft<f32>> {
+    if len % 11 == 0 {
+        let inner = get_11xn_avx(len / 11);
+        assert_eq!(inner.len(), len / 11);
+        Arc::new(MixedRadix11xnAvx::new(inner).expect("Can't run benchmark because this machine doesn't have the required instruction sets"))
+    }
+    else {
+        match len {
+            32 => Arc::new(Butterfly32Avx::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+            64 => Arc::new(Butterfly64Avx::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
+            _ => {
+                panic!();
+            }
+        }
+    }
+}
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_mixed_11xn_avx(b: &mut Bencher, len: usize) {
+    let fft = get_11xn_avx(len);
+
+    let mut buffer = vec![Zero::zero(); len];
+    let mut scratch = vec![Zero::zero(); fft.get_inplace_scratch_len()];
+    b.iter(|| {
+        fft.process_inplace_with_scratch(&mut buffer, &mut scratch);
+    });
+}
+
+#[bench] fn mixed_11xn_avx_000352(b: &mut Bencher) { bench_mixed_11xn_avx(b,  00352); }
+#[bench] fn mixed_11xn_avx_003872(b: &mut Bencher) { bench_mixed_11xn_avx(b,  03872); }
+#[bench] fn mixed_11xn_avx_042592(b: &mut Bencher) { bench_mixed_11xn_avx(b,  42592); }
+
+
+#[bench] fn planned32_11xn_000352(b: &mut Bencher) { bench_planned_f32(b,  00352); }
+#[bench] fn planned32_11xn_000384(b: &mut Bencher) { bench_planned_f32(b,  00384); }
+#[bench] fn planned32_11xn_000324(b: &mut Bencher) { bench_planned_f32(b,  00324); }
+#[bench] fn planned32_11xn_003872(b: &mut Bencher) { bench_planned_f32(b,  03872); }
+#[bench] fn planned32_11xn_003888(b: &mut Bencher) { bench_planned_f32(b,  03888); }
+#[bench] fn planned32_11xn_042592(b: &mut Bencher) { bench_planned_f32(b,  42592); }
+
 fn get_12xn_avx(len: usize) -> Arc<dyn Fft<f32>> {
     match len {
         32 => Arc::new(Butterfly32Avx::new(false).expect("Can't run benchmark because this machine doesn't have the required instruction sets")),
@@ -1127,6 +1169,7 @@ fn bench_butterfly32(b: &mut Bencher, len: usize) {
 #[bench] fn butterfly32_07(b: &mut Bencher) { bench_butterfly32(b, 7); }
 #[bench] fn butterfly32_08(b: &mut Bencher) { bench_butterfly32(b, 8); }
 #[bench] fn butterfly32_09(b: &mut Bencher) { bench_butterfly32(b, 9); }
+#[bench] fn butterfly32_11(b: &mut Bencher) { bench_butterfly32(b, 11); }
 #[bench] fn butterfly32_12(b: &mut Bencher) { bench_butterfly32(b, 12); }
 #[bench] fn butterfly32_16(b: &mut Bencher) { bench_butterfly32(b, 16); }
 #[bench] fn butterfly32_24(b: &mut Bencher) { bench_butterfly32(b, 24); }
@@ -1161,6 +1204,7 @@ fn bench_butterfly64(b: &mut Bencher, len: usize) {
 #[bench] fn butterfly64_07(b: &mut Bencher) { bench_butterfly64(b, 7); }
 #[bench] fn butterfly64_08(b: &mut Bencher) { bench_butterfly64(b, 8); }
 #[bench] fn butterfly64_09(b: &mut Bencher) { bench_butterfly64(b, 9); }
+#[bench] fn butterfly64_11(b: &mut Bencher) { bench_butterfly64(b, 11); }
 #[bench] fn butterfly64_12(b: &mut Bencher) { bench_butterfly64(b, 12); }
 #[bench] fn butterfly64_16(b: &mut Bencher) { bench_butterfly64(b, 16); }
 #[bench] fn butterfly64_18(b: &mut Bencher) { bench_butterfly64(b, 18); }
