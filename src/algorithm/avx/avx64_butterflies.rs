@@ -608,7 +608,7 @@ impl Butterfly9Avx64<f64> {
     
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_fft_f64(&self, input: RawSlice<Complex<f64>>, mut output: RawSliceMut<Complex<f64>>) {
-        // we're going to load our input as a 3x4 array. We have to load 3 columns, which is a little awkward
+        // we're going to load our input as a 3x3 array. We have to load 3 columns, which is a little awkward
         // We can reduce the number of multiplies we do if we load the first column as half-width and the second column as full.
         let mut rows0 = [AvxVector::zero(); 3];
         let mut rows1 = [AvxVector::zero(); 3];
@@ -618,7 +618,7 @@ impl Butterfly9Avx64<f64> {
             rows1[r] = input.load_complex(3*r+1);
         }
 
-        // do butterfly 4's down the columns
+        // do butterfly 3's down the columns
         let mid0 = AvxVector::column_butterfly3(rows0, self.twiddles_butterfly3.lo());
         let mut mid1 = AvxVector::column_butterfly3(rows1, self.twiddles_butterfly3);
 
@@ -726,7 +726,7 @@ impl Butterfly16Avx64<f64> {
             rows1[r] = input.load_complex(4*r + 2);
         }
 
-        // We're going to treat our input as a 8x4 2d array. First, do 8 butterfly 4's down the columns of that array.
+        // We're going to treat our input as a 4x4 2d array. First, do 4 butterfly 4's down the columns of that array.
         let mut mid0 = AvxVector::column_butterfly4(rows0, self.twiddles_butterfly4);
         let mut mid1 = AvxVector::column_butterfly4(rows1, self.twiddles_butterfly4);
 
@@ -788,7 +788,7 @@ impl Butterfly18Avx64<f64> {
             mid1[n] = AvxVector::mul_complex(mid1[n], self.twiddles[n - 1]);
         }
 
-        // transpose our 3x4 array to a 4x3 array
+        // transpose our 3x6 array to a 6x3 array
         let (transposed0, transposed1, transposed2) = avx64_utils::transpose_3x6_to_6x3_f64(mid0, mid1);
 
         // apply butterfly 3's down the columns
@@ -896,16 +896,17 @@ impl Butterfly27Avx64<f64> {
     
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_fft_f64(&self, input: RawSlice<Complex<f64>>, mut output: RawSliceMut<Complex<f64>>) {
-        // we're going to load our input as a 3x6 array. We have to load 3 columns, which is a little awkward
-        // We can reduce the number of multiplies we do if we load the first column as half-width and the second 2 columns as full.
+        // we're going to load our input as a 9x3 array. We have to load 9 columns, which is a little awkward
+        // We can reduce the number of multiplies we do if we load the first column as half-width and the remaining 4 sets of vectors as full.
+        // We can't fit the whole problem into AVX registers at once, so we'll have to spill some things.
+        // By computing chunks of the problem and then not referencing any of it for a while, we're making it easy for the compiler to decide what to spill
         let mut rows0 = [AvxVector::zero(); 3];
         for n in 0..3 {
             rows0[n] = input.load_partial1_complex(n*9);
         }
         let mid0 = AvxVector::column_butterfly3(rows0, self.twiddles_butterfly3.lo());
 
-        // we're going to load our input as a 3x6 array. We have to load 3 columns, which is a little awkward
-        // We can reduce the number of multiplies we do if we load the first column as half-width and the second 2 columns as full.
+        // First chunk is done and can be spilled, do 2 more chunks
         let mut rows1 = [AvxVector::zero(); 3];
         let mut rows2 = [AvxVector::zero(); 3];
         for n in 0..3 {
@@ -919,7 +920,7 @@ impl Butterfly27Avx64<f64> {
             mid2[r] = AvxVector::mul_complex(mid2[r], self.twiddles[4*r - 3]);
         }
 
-        // we're going to load our input as a 3x6 array. We have to load 3 columns, which is a little awkward
+        // First 3 chunks are done and can be spilled, do the final 2 chunks
         let mut rows3 = [AvxVector::zero(); 3];
         let mut rows4 = [AvxVector::zero(); 3];
         for n in 0..3 {
@@ -936,7 +937,7 @@ impl Butterfly27Avx64<f64> {
         // transpose our 9x3 array to a 3x9 array
         let (transposed0, transposed1) = avx64_utils::transpose_9x3_to_3x9_f64(mid0, mid1, mid2, mid3, mid4);
 
-        // apply butterfly 9's down the columns
+        // apply butterfly 9's down the columns. Again, do the work in chunks to make it easier for the compiler to spill
         let output0 = AvxVector128::column_butterfly9(transposed0, self.twiddles_butterfly9_lo, self.twiddles_butterfly3);
         for r in 0..3 {
             output.store_partial1_complex(output0[r*3], 9*r);
@@ -1043,6 +1044,8 @@ impl Butterfly36Avx64<f64> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_fft_f64(&self, input: RawSlice<Complex<f64>>, mut output: RawSliceMut<Complex<f64>>) {
         // we're going to load our input as a 6x6 array
+        // We can't fit the whole problem into AVX registers at once, so we'll have to spill some things.
+        // By computing chunks of the problem and then not referencing any of it for a while, we're making it easy for the compiler to decide what to spill
         let mut rows0 = [AvxVector::zero(); 6];
         for n in 0..6 {
             rows0[n] = input.load_complex(n*6);
@@ -1072,12 +1075,10 @@ impl Butterfly36Avx64<f64> {
             mid2[r] = AvxVector::mul_complex(mid2[r], self.twiddles[r + 9]);
         }
 
-
-        // transpose our 6x6 array
+        // Transpose our 6x6 array
         let (transposed0, transposed1, transposed2) = avx64_utils::transpose_6x6_f64(mid0, mid1, mid2);
 
-
-        // apply butterfly 6's down the columns
+        // Apply butterfly 6's down the columns.  Again, do the work in chunks to make it easier for the compiler to spill
         let output0 = AvxVector256::column_butterfly6(transposed0, self.twiddles_butterfly3);
         for r in 0..3 {
             output.store_complex(output0[r*2], 12*r);
@@ -1119,8 +1120,12 @@ impl Butterfly64Avx64<f64> {
     
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn column_butterflies_and_transpose(&self, input: &[Complex<f64>], output: &mut [Complex<f64>]) {
-        // Treat this 64-length array like a 8x8 2D array, and do butterfly 8's down the columns
-        // Then, apply twiddle factors, and finally transpose into the output
+        // A size-64 FFT is way too big to fit in registers, so instead we're going to compute it in two phases, storing in scratch in between.
+
+        // First phase is to treat this size-64 array like a 8x8 2D array, and do butterfly 8's down the columns
+        // Then, apply twiddle factors, and finally transpose into the scratch space
+
+        // But again, we don't have enough registers to load it all at once, so only load one column of AVX vectors at a time
         for columnset in 0..4 {
             let mut rows = [AvxVector::zero(); 8];
             for r in 0..8 {
@@ -1147,7 +1152,8 @@ impl Butterfly64Avx64<f64> {
 
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn row_butterflies(&self, input: RawSlice<Complex<f64>>, mut output: RawSliceMut<Complex<f64>>) {
-        // butterfly 8's down the columns of our transposed array
+        // Second phase: Butterfly 8's down the columns of our transposed array.
+        // Thankfully, during the first phase, we set everything up so that all we have to do here is compute the size-8 FFT columns and write them back out where we got them
         for columnset in 0usize..4 {
             let mut rows = [AvxVector::zero(); 8];
             for r in 0..8 {
@@ -1186,8 +1192,12 @@ impl Butterfly128Avx64<f64> {
     
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn column_butterflies_and_transpose(&self, input: &[Complex<f64>], output: &mut [Complex<f64>]) {
-        // Treat this 128-length array like a 16x8 2D array, and do butterfly 8's down the columns
-        // Then, apply twiddle factors, and finally transpose into the output
+        // A size-128 FFT is way too big to fit in registers, so instead we're going to compute it in two phases, storing in scratch in between.
+
+        // First phase is to treat this size-128 array like a 16x8 2D array, and do butterfly 8's down the columns
+        // Then, apply twiddle factors, and finally transpose into the scratch space
+
+        // But again, we don't have enough registers to load it all at once, so only load one column of AVX vectors at a time
         for columnset in 0..8 {
             let mut rows = [AvxVector::zero(); 8];
             for r in 0..8 {
@@ -1214,8 +1224,10 @@ impl Butterfly128Avx64<f64> {
 
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn row_butterflies(&self, input: RawSlice<Complex<f64>>, mut output: RawSliceMut<Complex<f64>>) {
-         // butterfly 16's down the columns of our transposed array
-         for columnset in 0usize..4 {
+        // Second phase: Butterfly 16's down the columns of our transposed array.
+        // Thankfully, during the first phase, we set everything up so that all we have to do here is compute the size-16 FFT columns and write them back out where we got them
+        // We're also using a customized butterfly16 function that is smarter about when it loads/stores data, to reduce register spilling
+        for columnset in 0usize..4 {
             column_butterfly16_loadfn!(
                 |index: usize| input.load_complex(columnset*2 + index*8),
                 |data, index| output.store_complex(data, columnset*2 + index*8),
@@ -1255,8 +1267,12 @@ impl Butterfly256Avx64<f64> {
     
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn column_butterflies_and_transpose(&self, input: &[Complex<f64>], output: &mut [Complex<f64>]) {
-        // Treat this 256-length array like a 32x8 2D array, and do butterfly 8's down the columns
-        // Then, apply twiddle factors, and finally transpose into the output
+        // A size-256 FFT is way too big to fit in registers, so instead we're going to compute it in two phases, storing in scratch in between.
+
+        // First phase is to treeat this size-256 array like a 32x8 2D array, and do butterfly 8's down the columns
+        // Then, apply twiddle factors, and finally transpose into the scratch space
+
+        // But again, we don't have enough registers to load it all at once, so only load one column of AVX vectors at a time
         for columnset in 0..16 {
             let mut rows = [AvxVector::zero(); 8];
             for r in 0..8 {
@@ -1283,7 +1299,9 @@ impl Butterfly256Avx64<f64> {
 
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn row_butterflies(&self, input: RawSlice<Complex<f64>>, mut output: RawSliceMut<Complex<f64>>) {
-         // butterfly 16's down the columns of our transposed array
+        // Second phase: Butterfly 32's down the columns of our transposed array.
+        // Thankfully, during the first phase, we set everything up so that all we have to do here is compute the size-32 FFT columns and write them back out where we got them
+        // We're also using a customized butterfly32 function that is smarter about when it loads/stores data, to reduce register spilling
          for columnset in 0usize..4 {
             column_butterfly32_loadfn!(
                 |index: usize| input.load_complex(columnset*2 + index*8),
@@ -1330,15 +1348,14 @@ impl Butterfly512Avx64<f64> {
     
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn column_butterflies_and_transpose(&self, input: &[Complex<f64>], output: &mut [Complex<f64>]) {
-        // In this function, we're going to trat our input like a 32x16 2D array, and do butterfly-16's down the columns of that array
-        // Then, we apply twiddle factors, then transpose into the output
+        // A size-512 FFT is way too big to fit in registers, so instead we're going to compute it in two phases, storing in scratch in between.
 
-        // Because we're pushing the limit of how much data can for into registers here,
-        // we're including bespoke versions of butterfly 16 and transpose 16 that reorganize the operations with the goal of reducing spills to the stack.
+        // First phase is to treat this size-512 array like a 32x16 2D array, and do butterfly 16's down the columns
+        // Then, apply twiddle factors, and finally transpose into the scratch space
 
+        // But again, we don't have enough registers to load it all at once, so only load one column of AVX vectors at a time
+        // We're also using a customized butterfly16 function that is smarter about when it loads/stores data, to reduce register spilling
         const TWIDDLES_PER_COLUMN : usize = 15;
-
-        // Process FFTs of size 16 down the columns
         for (columnset, twiddle_chunk) in self.twiddles.chunks_exact(TWIDDLES_PER_COLUMN).enumerate() {
             // Sadly we have to use MaybeUninit here. If we init an array like normal with AvxVector::Zero(), the compiler can't seem to figure out that it can
             // eliminate the dead stores of zeroes to the stack. By using uninit here, we avoid those unnecessary writes
@@ -1375,8 +1392,10 @@ impl Butterfly512Avx64<f64> {
 
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn row_butterflies(&self, input: RawSlice<Complex<f64>>, mut output: RawSliceMut<Complex<f64>>) {
-         // butterfly 16's down the columns of our transposed array
-         for columnset in 0usize..8 {
+        // Second phase: Butterfly 32's down the columns of our transposed array.
+        // Thankfully, during the first phase, we set everything up so that all we have to do here is compute the size-32 FFT columns and write them back out where we got them
+        // We're also using a customized butterfly32 function that is smarter about when it loads/stores data, to reduce register spilling
+        for columnset in 0usize..8 {
             column_butterfly32_loadfn!(
                 |index: usize| input.load_complex(columnset*2 + index*16),
                 |data, index| output.store_complex(data, columnset*2 + index*16),

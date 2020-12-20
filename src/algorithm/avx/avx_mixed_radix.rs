@@ -74,8 +74,8 @@ macro_rules! mixedradix_gen_data {
         let quotient = len_per_row / T::VectorType::COMPLEX_PER_VECTOR;
         let remainder = len_per_row % T::VectorType::COMPLEX_PER_VECTOR;
 
+        // Compute our twiddle factors, and arrange them so that we can access them one column of AVX vectors at a time
         let num_twiddle_columns = quotient + div_ceil(remainder, T::VectorType::COMPLEX_PER_VECTOR);
-
         let mut twiddles = Vec::with_capacity(num_twiddle_columns * TWIDDLES_PER_COLUMN);
         for x in 0..num_twiddle_columns {
             for y in 1..ROW_COUNT {
@@ -133,8 +133,8 @@ macro_rules! mixedradix_column_butterflies{
             }
         }
 
-        // finally, we might have a single partial chunk.
-        // Normally, we can fit 4 complex numbers into an AVX register, but we only have `partial_remainder` columns left, so we need special logic to handle these final columns
+        // finally, we might have a remainder chunk
+        // Normally, we can fit COMPLEX_PER_VECTOR complex numbers into an AVX register, but we only have `partial_remainder` columns left, so we need special logic to handle these final columns
         let partial_remainder = len_per_row % T::VectorType::COMPLEX_PER_VECTOR;
         if partial_remainder > 0 {
             let partial_remainder_base = chunk_count * T::VectorType::COMPLEX_PER_VECTOR;
@@ -199,7 +199,7 @@ macro_rules! mixedradix_column_butterflies{
 macro_rules! mixedradix_transpose{
     ($row_count: expr, $transpose_fn: path, $transpose_fn_lo: path, $($unroll_workaround_index:expr);*, $($remainder3_unroll_workaround_index:expr);*) => (
 
-    // Transpose the input (treated as a nx2 array) into the output (as a 2xn array)
+    // Transpose the input (treated as a nxc array) into the output (as a cxn array)
     #[target_feature(enable = "avx")]
     unsafe fn transpose(&self, input: &[Complex<T>], output: &mut [Complex<T>]) {
         const ROW_COUNT : usize = $row_count;
@@ -222,6 +222,9 @@ macro_rules! mixedradix_transpose{
             let transposed = $transpose_fn(rows);
 
             // store the transposed rows contiguously
+            // IE, unlike the way we loaded the data, which was to load it strided across each of our rows
+            // we will not output it strided, but instead writing it out as a contiguous block
+
             // we are using a macro hack to manually unroll the loop, to work around this rustc bug:
             // https://github.com/rust-lang/rust/issues/71025
             

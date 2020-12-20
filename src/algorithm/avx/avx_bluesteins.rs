@@ -248,13 +248,14 @@ impl<T: AvxNum> BluesteinsAvx<T> {
         self.common_data.inner_fft.process_inplace_with_scratch(inner_input, inner_scratch);
 
         // Multiply our inner FFT output by our precomputed data. Then, conjugate the result to set up for an inverse FFT. 
-        // We can conjugate the result of multiplication by conjugating both inputs. We pre-conjugated the multiplier array, so we just need to conjugate inner_input
+        // We can conjugate the result of multiplication by conjugating both inputs. We pre-conjugated the multiplier array,
+        // so we just need to conjugate inner_input, which the pairwise_complex_multiply_conjugated function will handle
         unsafe { Self::pairwise_complex_multiply_conjugated(inner_input, &self.inner_fft_multiplier) };
 
         // inverse FFT. we're computing a forward but we're massaging it into an inverse by conjugating the inputs and outputs
         self.common_data.inner_fft.process_inplace_with_scratch(inner_input, inner_scratch);
 
-        // conjugate the inner FFT again to finalize the 
+        // finalize the result
         unsafe { self.finalize_bluesteins(inner_input, buffer) };
     }
 
@@ -268,13 +269,14 @@ impl<T: AvxNum> BluesteinsAvx<T> {
         self.common_data.inner_fft.process_inplace_with_scratch(inner_input, inner_scratch);
 
         // Multiply our inner FFT output by our precomputed data. Then, conjugate the result to set up for an inverse FFT. 
-        // We can conjugate the result of multiplication by conjugating both inputs. We pre-conjugated the multiplier array, so we just need to conjugate inner_input
+        // We can conjugate the result of multiplication by conjugating both inputs. We pre-conjugated the multiplier array,
+        // so we just need to conjugate inner_input, which the pairwise_complex_multiply_conjugated function will handle
         unsafe { Self::pairwise_complex_multiply_conjugated(inner_input, &self.inner_fft_multiplier) };
 
         // inverse FFT. we're computing a forward but we're massaging it into an inverse by conjugating the inputs and outputs
         self.common_data.inner_fft.process_inplace_with_scratch(inner_input, inner_scratch);
 
-        // conjugate the inner FFT again to finalize the 
+        // finalize the result
         unsafe { self.finalize_bluesteins(inner_input, output) };
     }
 }

@@ -201,7 +201,8 @@ impl<T: AvxNum> RadersAvx2<T> {
         };
 
         // Set up our output index remapping. Ideally we could compute the output indexes on the fly, but the output reindexing requires scatter, which doesn't exist until avx-512
-        // Instead, we can invert the scatter indexes to be gather indexes. But if there's an algorithmic way to compute this, I don't know what it is. So instead, we're going to precompute the mapping
+        // Instead, we can invert the scatter indexes to be gather indexes. But if there's an algorithmic way to compute this, I don't know what it is --
+        // so we won't be able to compute it on the fly with some sort of VectorizedMultiplyMod thing. Instead, we're going to precompute the inverted mapping and gather from that mapping.
         // We want enough elements in our array to fill out an entire set of vectors so that we don't have to deal with any partial indexes etc.
         let mapping_size = 1 + div_ceil(len, T::VectorType::COMPLEX_PER_VECTOR) * T::VectorType::COMPLEX_PER_VECTOR;
         let mut output_mapping_inverse: Vec<i32> = vec![0; mapping_size];
@@ -249,7 +250,7 @@ impl<T: AvxNum> RadersAvx2<T> {
         // loop over the output array and use AVX gathers to reorder data from the input
         let mut chunks_iter = (&mut output[1..]).chunks_exact_mut(T::VectorType::COMPLEX_PER_VECTOR);
         for chunk in chunks_iter.by_ref() {
-            let gathered_elements = T::VectorType::gather64_complex_avx2(input.as_ptr(), indexes);
+            let gathered_elements = T::VectorType::gather_complex_avx2_index64(input.as_ptr(), indexes);
 
             // advance our indexes
             indexes = index_multiplier.mul_rem(indexes);
@@ -287,7 +288,7 @@ impl<T: AvxNum> RadersAvx2<T> {
         let mut chunks_iter = (&mut output[1..]).chunks_exact_mut(T::VectorType::COMPLEX_PER_VECTOR);
         for (i, chunk) in chunks_iter.by_ref().enumerate() {
             let index_chunk = *self.output_index_mapping.get_unchecked(i);
-            let gathered_elements = T::VectorType::gather32_complex_avx2(input.as_ptr(), index_chunk);
+            let gathered_elements = T::VectorType::gather_complex_avx2_index32(input.as_ptr(), index_chunk);
             let conjugated_elements = AvxVector::xor(gathered_elements, conjugation_mask);
 
             // Add the first input value to each output value, then store

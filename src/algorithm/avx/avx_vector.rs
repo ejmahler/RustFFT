@@ -488,11 +488,11 @@ pub trait AvxVector256 : AvxVector {
     unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
     unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
 
-    // Gather 4 complex numbers (for f32) or 2 complex numbers (for f64) using 4 i32 indexes (for gather32) or 4 i64 indexes (for gather64).
+    // Gather 4 complex numbers (for f32) or 2 complex numbers (for f64) using 4 i32 indexes (for index32) or 4 i64 indexes (for index64).
     // For f32, there should be 1 index per complex. For f64, there should be 2 indexes, each duplicated 
     // (So to load the complex<f64> at index 5 and 7, the index vector should contain 5,5,7,7. this api sucks but it's internal so whatever.)
-    unsafe fn gather32_complex_avx2(ptr: *const Complex<Self::ScalarType>, indexes: __m128i) -> Self;
-    unsafe fn gather64_complex_avx2(ptr: *const Complex<Self::ScalarType>, indexes: __m256i) -> Self;
+    unsafe fn gather_complex_avx2_index32(ptr: *const Complex<Self::ScalarType>, indexes: __m128i) -> Self;
+    unsafe fn gather_complex_avx2_index64(ptr: *const Complex<Self::ScalarType>, indexes: __m256i) -> Self;
 
     // loads/stores of partial vectors of complex numbers. When loading, empty elements are zeroed
     // unimplemented!() if Self::COMPLEX_PER_VECTOR is not greater than the partial count
@@ -1052,11 +1052,11 @@ impl AvxVector256 for __m256 {
         _mm256_storeu_ps(ptr as *mut Self::ScalarType, data)
     }
     #[inline(always)]
-    unsafe fn gather32_complex_avx2(ptr: *const Complex<Self::ScalarType>, indexes: __m128i) -> Self {
+    unsafe fn gather_complex_avx2_index32(ptr: *const Complex<Self::ScalarType>, indexes: __m128i) -> Self {
         _mm256_castpd_ps(_mm256_i32gather_pd(ptr as *const f64, indexes, 8))
     }
     #[inline(always)]
-    unsafe fn gather64_complex_avx2(ptr: *const Complex<Self::ScalarType>, indexes: __m256i) -> Self {
+    unsafe fn gather_complex_avx2_index64(ptr: *const Complex<Self::ScalarType>, indexes: __m256i) -> Self {
         _mm256_castpd_ps(_mm256_i64gather_pd(ptr as *const f64, indexes, 8))
     }
 
@@ -1600,7 +1600,7 @@ impl AvxVector256 for __m256d {
         _mm256_storeu_pd(ptr as *mut Self::ScalarType, data)
     }
     #[inline(always)]
-    unsafe fn gather32_complex_avx2(ptr: *const Complex<Self::ScalarType>, indexes: __m128i) -> Self {
+    unsafe fn gather_complex_avx2_index32(ptr: *const Complex<Self::ScalarType>, indexes: __m128i) -> Self {
         let offsets = _mm_set_epi32(1,0,1,0);
         let shifted = _mm_slli_epi32(indexes, 1);
         let modified_indexes = _mm_add_epi32(offsets, shifted);
@@ -1608,7 +1608,7 @@ impl AvxVector256 for __m256d {
         _mm256_i32gather_pd(ptr as *const f64, modified_indexes, 8)
     }
     #[inline(always)]
-    unsafe fn gather64_complex_avx2(ptr: *const Complex<Self::ScalarType>, indexes: __m256i) -> Self {
+    unsafe fn gather_complex_avx2_index64(ptr: *const Complex<Self::ScalarType>, indexes: __m256i) -> Self {
         let offsets = _mm256_set_epi64x(1,0,1,0);
         let shifted = _mm256_slli_epi64(indexes, 1);
         let modified_indexes = _mm256_add_epi64(offsets, shifted);
