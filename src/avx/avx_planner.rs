@@ -53,7 +53,7 @@ impl MixedRadixPlan {
 /// For the time being, AVX acceleration is black box, and AVX accelerated algorithms are not available without a planner. This may change in the future.
 ///
 /// ~~~
-/// // Perform a forward Fft of size 1234
+/// // Perform a forward Fft of size 1234, accelerated by AVX
 /// use std::sync::Arc;
 /// use rustfft::{FftPlannerAvx, num_complex::Complex};
 ///
@@ -84,7 +84,7 @@ pub struct FftPlannerAvx<T: FFTnum> {
 impl<T: FFTnum> FftPlannerAvx<T> {
     /// Constructs a new `FftPlannerAvx` instance.
     ///
-    /// Returns `Ok(planner_instance)` if this machine has the required instruction sets, Err() if some instruction sets are missing.
+    /// Returns `Ok(planner_instance)` if this machine has the required instruction sets, `Err(())` if some instruction sets are missing.
     pub fn new(inverse: bool) -> Result<Self, ()> {
         // Eventually we might make AVX algorithms that don't also require FMA.
         // If that happens, we can only check for AVX here? seems like a pretty low-priority addition

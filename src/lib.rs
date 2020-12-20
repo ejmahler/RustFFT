@@ -119,103 +119,94 @@ pub trait IsInverse {
 /// Trait for algorithms that compute FFTs.
 /// 
 /// This trait has two main methods:
-/// - [`process_inplace(buffer)`](crate::Fft::process_inplace) will compute a FFT using `buffer` as input and store the result back into `buffer`.
-/// - [`process(input, output)`](crate::Fft::process) will compute a FFT using `input` as input and store the result into `output`. 
+/// - [`process_inplace(buffer)`](crate::Fft::process_inplace) computes a FFT using `buffer` as input and store the result back into `buffer`.
+/// - [`process(input, output)`](crate::Fft::process) computes a FFT using `input` as input and store the result into `output`. 
 ///
 /// Both methods may need to allocate additional scratch space. If you'd like re-use that allocation across multiple FFT computations, call 
 /// `process_inplace_with_scratch` or `process_with_scratch`, respectively.
 pub trait Fft<T: FFTnum>: Length + IsInverse + Sync + Send {
+    /// Computes a FFT.
+    ///
     /// Convenience method that allocates the required scratch space and and calls `self.process_with_scratch`.
     ///
     /// This method uses the `input` buffer as scratch space, so the contents of `input` should be considered garbage
     /// after calling.
     ///
-    /// The output is not normalized. Callers must manually normalize the results by scaling each element by
-    /// `1/len().sqrt()`.
-    ///
     /// # Panics
     /// 
-    /// This method panics if
+    /// This method panics if:
     /// - `input.len() != self.len()`
     /// - `output.len() != self.len()`
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         let mut scratch = vec![Complex::zero(); self.get_out_of_place_scratch_len()];
         self.process_with_scratch(input, output, &mut scratch);
     }
-    /// Convenience method that allocates the required scratch space and calls `self.process_inplace_with_scratch`.
+
+    /// Computes a FFT.
     ///
-    /// The output is not normalized. Callers must manually normalize the results by scaling each element by
-    /// `1/len().sqrt()`.
+    /// Convenience method that allocates the required scratch space and calls `self.process_inplace_with_scratch`.
     ///
     /// # Panics
     /// 
-    /// This method panics if
+    /// This method panics if:
     /// - `buffer.len() != self.len()`
     fn process_inplace(&self, buffer: &mut [Complex<T>]) {
         let mut scratch = vec![Complex::zero(); self.get_inplace_scratch_len()];
         self.process_inplace_with_scratch(buffer, &mut scratch);
     }
 
-    /// Computes an FFT on the data in `input` and stores the result into `output`.
-    ///
-    /// This method uses both the `input` buffer and `scratch` buffer as scratch space, so the contents of both should
-    /// be considered garbage after calling.
-    ///
-    /// The output is not normalized. Callers must manually normalize the results by scaling each element by
-    /// `1/len().sqrt()`.
+    /// Computes a FFT.
+    /// 
+    /// Uses both the `input` buffer and `scratch` buffer as scratch space, so the contents of both should be
+    /// considered garbage after calling.
     ///
     /// # Panics
     /// 
-    /// This method panics if
+    /// This method panics if:
     /// - `input.len() != self.len()`
     /// - `output.len() != self.len()`
     /// - `scratch.len() < self.get_out_of_place_scratch_len()`
     fn process_with_scratch(&self, input: &mut [Complex<T>], output: &mut [Complex<T>], scratch: &mut [Complex<T>]);
 
-    /// Computes an FFT on `buffer` and stores the result back into `buffer`.
+    /// Computes a FFT, in-place.
     ///
-    /// This method uses the `scratch` buffer as scratch space, so the contents of `scratch` should be considered garbage
+    /// Uses the `scratch` buffer as scratch space, so the contents of `scratch` should be considered garbage
     /// after calling.
-    ///
-    /// The output is not normalized. Callers must manually normalize the results by scaling each element by
-    /// `1/len().sqrt()`.
     ///
     /// # Panics
     /// 
-    /// This method panics if
+    /// This method panics if:
     /// - `buffer.len() != self.len()`
     /// - `scratch.len() < self.get_inplace_scratch_len()`
     fn process_inplace_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]);
 
+    /// Computes multiple FFTs.
+    ///
     /// Divides `input` and `output` into chunks of size `self.len()`, computes an FFT on each input chunk,
     /// and stores the result in the corresponding output chunk.
     ///
     /// This method uses both the `input` buffer and `scratch` buffer as scratch space, so the contents of both should
     /// be considered garbage after calling.
     ///
-    /// The output is not normalized. Callers must manually normalize the results by scaling each element by
-    /// `1/len().sqrt()`.
-    ///
     /// # Panics
     /// 
-    /// This method panics if
+    /// This method panics if:
     /// - `input.len() % self.len() != 0`
     /// - `output.len() != input.len()`
     /// - `scratch.len() < self.get_out_of_place_scratch_len()`
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>], scratch: &mut [Complex<T>]);
 
+    /// Computes multiple FFTs, in-place.
+    ///
     /// Divides `buffer` into chunks of size `self.len()`, computes an FFT on each chunk, and stores the result back
     /// into `buffer`.
     ///
     /// This method uses the `scratch` buffer as scratch space, so its contents should be considered garbage after
     /// calling.
     ///
-    /// The output is not normalized. Callers must manually normalize the results by scaling each element by
-    /// `1/len().sqrt()`.
-    ///
     /// # Panics
     /// 
-    /// This method panics if
+    /// This method panics if:
     /// - `buffer.len() % self.len() != 0`
     /// - `scratch.len() < self.get_inplace_scratch_len()`
     fn process_inplace_multi(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]);
