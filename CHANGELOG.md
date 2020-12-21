@@ -1,3 +1,17 @@
+## [5.0.0-experimental.2]
+### Fixed
+- Removed a stray debug in the AVX planner
+
+## [5.0.0-experimental.1]
+### Added
+- Added support for the AVX instruction set. Plan a FFT from a machine that supports AVX, and you'll get AVX-accelerated FFTs.
+
+### Breaking Changes
+- Restructured the Fft trait to be much more flexible about scratch space
+- Renamed several structs and traits to fit more in line with idiomatic Rust naming conventions
+- Changed MSRV to nightly instead of stable 1.31
+
+
 ## [4.0.0]
 ### Breaking Changes
 - Increased the version of the num-complex dependency to 0.3. This is a breaking change because we have a public dependency on num-complex.
