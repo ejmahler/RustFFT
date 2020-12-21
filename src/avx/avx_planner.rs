@@ -239,7 +239,6 @@ impl<T: FFTnum> FftPlannerAvx<T> {
     }
 
     fn construct_plan(&mut self, plan: MixedRadixPlan) -> Arc<dyn Fft<T>> {
-        dbg!(&plan);
         if plan.is_base_only() {
             self.construct_base(plan.base)
         } else {
