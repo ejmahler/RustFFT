@@ -3,26 +3,28 @@ use num_traits::Zero;
 
 use std::sync::Arc;
 
-use rand::{StdRng, SeedableRng};
-use rand::distributions::{Normal, Distribution};
+use rand::distributions::{Distribution, Normal};
+use rand::{SeedableRng, StdRng};
 
-use crate::algorithm::{DFT, butterflies};
+use crate::algorithm::{butterflies, DFT};
 use crate::FFT;
-
 
 /// The seed for the random number generator used to generate
 /// random signals. It's defined here so that we have deterministic
 /// tests
-const RNG_SEED: [u8; 32] = [1, 9, 1, 0, 1, 1, 4, 3, 1, 4, 9, 8,
-    4, 1, 4, 8, 2, 8, 1, 2, 2, 2, 6, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+const RNG_SEED: [u8; 32] = [
+    1, 9, 1, 0, 1, 1, 4, 3, 1, 4, 9, 8, 4, 1, 4, 8, 2, 8, 1, 2, 2, 2, 6, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+];
 
 pub fn random_signal(length: usize) -> Vec<Complex<f32>> {
     let mut sig = Vec::with_capacity(length);
     let normal_dist = Normal::new(0.0, 10.0);
     let mut rng: StdRng = SeedableRng::from_seed(RNG_SEED);
     for _ in 0..length {
-        sig.push(Complex{re: (normal_dist.sample(&mut rng) as f32),
-                         im: (normal_dist.sample(&mut rng) as f32)});
+        sig.push(Complex {
+            re: (normal_dist.sample(&mut rng) as f32),
+            im: (normal_dist.sample(&mut rng) as f32),
+        });
     }
     return sig;
 }
@@ -38,7 +40,11 @@ pub fn compare_vectors(vec1: &[Complex<f32>], vec2: &[Complex<f32>]) -> bool {
 
 pub fn check_fft_algorithm(fft: &FFT<f32>, size: usize, inverse: bool) {
     assert_eq!(fft.len(), size, "Algorithm reported incorrect size");
-    assert_eq!(fft.is_inverse(), inverse, "Algorithm reported incorrect inverse value");
+    assert_eq!(
+        fft.is_inverse(),
+        inverse,
+        "Algorithm reported incorrect inverse value"
+    );
 
     let n = 5;
 
@@ -58,12 +64,20 @@ pub fn check_fft_algorithm(fft: &FFT<f32>, size: usize, inverse: bool) {
     dft.process_multi(&mut expected_input, &mut expected_output);
     fft.process_multi(&mut multi_input, &mut multi_output);
 
-    for (input_chunk, output_chunk) in actual_input.chunks_mut(size).zip(actual_output.chunks_mut(size)) {
+    for (input_chunk, output_chunk) in actual_input
+        .chunks_mut(size)
+        .zip(actual_output.chunks_mut(size))
+    {
         fft.process(input_chunk, output_chunk);
     }
 
     //assert!(compare_vectors(&expected_output, &actual_output), "process() failed, length = {}, inverse = {}", size, inverse);
-    assert!(compare_vectors(&expected_output, &multi_output), "process_multi() failed, length = {}, inverse = {}", size, inverse);
+    assert!(
+        compare_vectors(&expected_output, &multi_output),
+        "process_multi() failed, length = {}, inverse = {}",
+        size,
+        inverse
+    );
 }
 
 pub fn make_butterfly(len: usize, inverse: bool) -> Arc<butterflies::FFTButterfly<f32>> {

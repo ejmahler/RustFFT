@@ -1,20 +1,20 @@
+use num_integer::gcd;
 use std::collections::HashMap;
 use std::sync::Arc;
-use num_integer::gcd;
 
 use crate::common::FFTnum;
 
-use crate::FFT;
-use crate::algorithm::*;
 use crate::algorithm::butterflies::*;
+use crate::algorithm::*;
+use crate::FFT;
 
 use crate::math_utils;
-
 
 const MIN_RADIX4_BITS: u32 = 5; // smallest size to consider radix 4 an option is 2^5 = 32
 const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option is 2^16 = 65536
 const BUTTERFLIES: [usize; 16] = [2, 3, 4, 5, 6, 7, 8, 11, 13, 16, 17, 19, 23, 29, 31, 32];
-const COMPOSITE_BUTTERFLIES: [usize; 16] = [2, 3, 4, 5, 6, 7, 8, 11, 13, 16, 17, 19, 23, 29, 31, 32];
+const COMPOSITE_BUTTERFLIES: [usize; 16] =
+    [2, 3, 4, 5, 6, 7, 8, 11, 13, 16, 17, 19, 23, 29, 31, 32];
 //const COMPOSITE_BUTTERFLIES: [usize; 5] = [4, 6, 8, 16, 32];
 const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
 const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the inner fft of Bluestein if length is larger than this
@@ -37,7 +37,7 @@ const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the
 /// let mut planner = FFTplanner::new(false);
 /// let fft = planner.plan_fft(1234);
 /// fft.process(&mut input, &mut output);
-/// 
+///
 /// // The fft instance returned by the planner is stored behind an `Arc`, so it's cheap to clone
 /// let fft_clone = Arc::clone(&fft);
 /// ~~~
@@ -80,8 +80,10 @@ impl<T: FFTnum> FFTplanner<T> {
 
     fn plan_butterfly(&mut self, len: usize) -> Arc<FFTButterfly<T>> {
         let inverse = self.inverse;
-        let instance = self.butterfly_cache.entry(len).or_insert_with(|| 
-            match len {
+        let instance = self
+            .butterfly_cache
+            .entry(len)
+            .or_insert_with(|| match len {
                 2 => Arc::new(Butterfly2::new(inverse)),
                 3 => Arc::new(Butterfly3::new(inverse)),
                 4 => Arc::new(Butterfly4::new(inverse)),
@@ -99,19 +101,19 @@ impl<T: FFTnum> FFTplanner<T> {
                 31 => Arc::new(Butterfly31::new(inverse)),
                 32 => Arc::new(Butterfly32::new(inverse)),
                 _ => panic!("Invalid butterfly size: {}", len),
-            }
-        );
+            });
         Arc::clone(instance)
     }
-    
+
     fn plan_fft_with_factors(&mut self, len: usize, factors: &[usize]) -> Arc<FFT<T>> {
         if self.algorithm_cache.contains_key(&len) {
             Arc::clone(self.algorithm_cache.get(&len).unwrap())
         } else {
             let result = if factors.len() == 1 || COMPOSITE_BUTTERFLIES.contains(&len) {
                 self.plan_fft_single_factor(len)
-
-            } else if len.trailing_zeros() <= MAX_RADIX4_BITS && len.trailing_zeros() >= MIN_RADIX4_BITS {
+            } else if len.trailing_zeros() <= MAX_RADIX4_BITS
+                && len.trailing_zeros() >= MIN_RADIX4_BITS
+            {
                 //the number of trailing zeroes in len is the number of `2` factors
                 //ie if len = 2048 * n, len.trailing_zeros() will equal 11 because 2^11 == 2048
 
@@ -121,11 +123,11 @@ impl<T: FFTnum> FFTplanner<T> {
                     let left_len = 1 << len.trailing_zeros();
                     let right_len = len / left_len;
 
-                    let (left_factors, right_factors) = factors.split_at(len.trailing_zeros() as usize);
+                    let (left_factors, right_factors) =
+                        factors.split_at(len.trailing_zeros() as usize);
 
                     self.plan_mixed_radix(left_len, left_factors, right_len, right_factors)
                 }
-
             } else {
                 let sqrt = (len as f32).sqrt() as usize;
                 if sqrt * sqrt == len {
@@ -169,13 +171,13 @@ impl<T: FFTnum> FFTplanner<T> {
         }
     }
 
-    fn plan_mixed_radix(&mut self,
-                        left_len: usize,
-                        left_factors: &[usize],
-                        right_len: usize,
-                        right_factors: &[usize])
-                        -> Arc<FFT<T>> {
-
+    fn plan_mixed_radix(
+        &mut self,
+        left_len: usize,
+        left_factors: &[usize],
+        right_len: usize,
+        right_factors: &[usize],
+    ) -> Arc<FFT<T>> {
         let left_is_butterfly = BUTTERFLIES.contains(&left_len);
         let right_is_butterfly = BUTTERFLIES.contains(&right_len);
 
@@ -186,7 +188,8 @@ impl<T: FFTnum> FFTplanner<T> {
 
             // for butterflies, if gcd is 1, we always want to use good-thomas
             if gcd(left_len, right_len) == 1 {
-                Arc::new(GoodThomasAlgorithmDoubleButterfly::new(left_fft, right_fft)) as Arc<FFT<T>>
+                Arc::new(GoodThomasAlgorithmDoubleButterfly::new(left_fft, right_fft))
+                    as Arc<FFT<T>>
             } else {
                 Arc::new(MixedRadixDoubleButterfly::new(left_fft, right_fft)) as Arc<FFT<T>>
             }
@@ -199,10 +202,9 @@ impl<T: FFTnum> FFTplanner<T> {
         }
     }
 
-
     fn plan_fft_single_factor(&mut self, len: usize) -> Arc<FFT<T>> {
         match len {
-            0|1 => Arc::new(DFT::new(len, self.inverse)) as Arc<FFT<T>>,
+            0 | 1 => Arc::new(DFT::new(len, self.inverse)) as Arc<FFT<T>>,
             2 => Arc::new(butterflies::Butterfly2::new(self.inverse)) as Arc<FFT<T>>,
             3 => Arc::new(butterflies::Butterfly3::new(self.inverse)) as Arc<FFT<T>>,
             4 => Arc::new(butterflies::Butterfly4::new(self.inverse)) as Arc<FFT<T>>,
@@ -231,17 +233,16 @@ impl<T: FFTnum> FFTplanner<T> {
             let inner_fft_len_pow2 = (2 * len - 1).checked_next_power_of_two().unwrap();
             // for long ffts a mixed radix inner fft is faster than a longer radix4
             let min_inner_len = 2 * len - 1;
-            let mixed_radix_len = 3*inner_fft_len_pow2/4;
-            let inner_fft = if mixed_radix_len >= min_inner_len && len >= MIN_BLUESTEIN_MIXED_RADIX_LEN {
-                let inner_factors = math_utils::prime_factors(mixed_radix_len);
-                self.plan_fft_with_factors(mixed_radix_len, &inner_factors)
-            }
-            else {
-                Arc::new(Radix4::new(inner_fft_len_pow2, self.inverse))
-            };
+            let mixed_radix_len = 3 * inner_fft_len_pow2 / 4;
+            let inner_fft =
+                if mixed_radix_len >= min_inner_len && len >= MIN_BLUESTEIN_MIXED_RADIX_LEN {
+                    let inner_factors = math_utils::prime_factors(mixed_radix_len);
+                    self.plan_fft_with_factors(mixed_radix_len, &inner_factors)
+                } else {
+                    Arc::new(Radix4::new(inner_fft_len_pow2, self.inverse))
+                };
             Arc::new(Bluesteins::new(len, inner_fft)) as Arc<FFT<T>>
-        }
-        else {
+        } else {
             let inner_fft = self.plan_fft_with_factors(inner_fft_len_rader, &factors);
             Arc::new(RadersAlgorithm::new(len, inner_fft)) as Arc<FFT<T>>
         }

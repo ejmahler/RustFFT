@@ -3,16 +3,16 @@ use std::sync::Arc;
 use num_complex::Complex;
 use transpose;
 
-use crate::common::{FFTnum, verify_length, verify_length_divisible};
+use crate::common::{verify_length, verify_length_divisible, FFTnum};
 
-use crate::{Length, IsInverse, FFT};
 use crate::algorithm::butterflies::FFTButterfly;
 use crate::array_utils;
 use crate::twiddles;
+use crate::{IsInverse, Length, FFT};
 
 /// Implementation of the Mixed-Radix FFT algorithm
 ///
-/// This algorithm factors a size n FFT into n1 * n2, computes several inner FFTs of size n1 and n2, then combines the 
+/// This algorithm factors a size n FFT into n1 * n2, computes several inner FFTs of size n1 and n2, then combines the
 /// results to get the final answer
 ///
 /// ~~~
@@ -51,7 +51,7 @@ impl<T: FFTnum> MixedRadix<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
     pub fn new(width_fft: Arc<FFT<T>>, height_fft: Arc<FFT<T>>) -> Self {
         assert_eq!(
-            width_fft.is_inverse(), height_fft.is_inverse(), 
+            width_fft.is_inverse(), height_fft.is_inverse(),
             "width_fft and height_fft must both be inverse, or neither. got width inverse={}, height inverse={}",
             width_fft.is_inverse(), height_fft.is_inverse());
 
@@ -80,7 +80,6 @@ impl<T: FFTnum> MixedRadix<T> {
             inverse: inverse,
         }
     }
-
 
     fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         // SIX STEP FFT:
@@ -115,7 +114,10 @@ impl<T: FFTnum> FFT<T> for MixedRadix<T> {
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         verify_length_divisible(input, output, self.len());
 
-        for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
+        for (in_chunk, out_chunk) in input
+            .chunks_mut(self.len())
+            .zip(output.chunks_mut(self.len()))
+        {
             self.perform_fft(in_chunk, out_chunk);
         }
     }
@@ -132,10 +134,6 @@ impl<T> IsInverse for MixedRadix<T> {
         self.inverse
     }
 }
-
-
-
-
 
 /// Implementation of the Mixed-Radix FFT algorithm, specialized for the case where both inner FFTs are butterflies
 ///
@@ -177,7 +175,7 @@ impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
     pub fn new(width_fft: Arc<FFTButterfly<T>>, height_fft: Arc<FFTButterfly<T>>) -> Self {
         assert_eq!(
-            width_fft.is_inverse(), height_fft.is_inverse(), 
+            width_fft.is_inverse(), height_fft.is_inverse(),
             "width_fft and height_fft must both be inverse, or neither. got width inverse={}, height inverse={}",
             width_fft.is_inverse(), height_fft.is_inverse());
 
@@ -203,10 +201,9 @@ impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
             height_size_fft: height_fft,
 
             twiddles: twiddles.into_boxed_slice(),
-            inverse: inverse
+            inverse: inverse,
         }
     }
-
 
     unsafe fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         // SIX STEP FFT:
@@ -242,7 +239,10 @@ impl<T: FFTnum> FFT<T> for MixedRadixDoubleButterfly<T> {
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         verify_length_divisible(input, output, self.len());
 
-        for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
+        for (in_chunk, out_chunk) in input
+            .chunks_mut(self.len())
+            .zip(output.chunks_mut(self.len()))
+        {
             unsafe { self.perform_fft(in_chunk, out_chunk) };
         }
     }
@@ -260,15 +260,12 @@ impl<T> IsInverse for MixedRadixDoubleButterfly<T> {
     }
 }
 
-
-
-
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use std::sync::Arc;
-    use crate::test_utils::{check_fft_algorithm, make_butterfly};
     use crate::algorithm::DFT;
+    use crate::test_utils::{check_fft_algorithm, make_butterfly};
+    use std::sync::Arc;
 
     #[test]
     fn test_mixed_radix() {
@@ -289,9 +286,6 @@ mod unit_tests {
             }
         }
     }
-
-
-
 
     fn test_mixed_radix_with_lengths(width: usize, height: usize, inverse: bool) {
         let width_fft = Arc::new(DFT::new(width, inverse)) as Arc<FFT<f32>>;

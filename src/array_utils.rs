@@ -1,4 +1,3 @@
-
 /// Given an array of size width * height, representing a flattened 2D array,
 /// transpose the rows and columns of that 2D array into the output
 /// benchmarking shows that loop tiling isn't effective for small arrays (in the range of 50x50 or smaller)
@@ -12,8 +11,6 @@ pub unsafe fn transpose_small<T: Copy>(width: usize, height: usize, input: &[T],
         }
     }
 }
-
-
 
 #[cfg(test)]
 mod unit_tests {
@@ -37,10 +34,15 @@ mod unit_tests {
 
                 for x in 0..width {
                     for y in 0..height {
-                        assert_eq!(input[x + y * width], output[y + x * height], "x = {}, y = {}", x, y);
+                        assert_eq!(
+                            input[x + y * width],
+                            output[y + x * height],
+                            "x = {}, y = {}",
+                            x,
+                            y
+                        );
                     }
                 }
-
             }
         }
     }

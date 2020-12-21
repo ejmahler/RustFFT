@@ -19,13 +19,13 @@
 //! let mut planner = FFTplanner::new(false);
 //! let fft = planner.plan_fft(1234);
 //! fft.process(&mut input, &mut output);
-//! 
+//!
 //! // The fft instance returned by the planner is stored behind an `Arc`, so it's cheap to clone
 //! let fft_clone = Arc::clone(&fft);
 //! ```
 //! The planner returns trait objects of the [`FFT`](trait.FFT.html) trait, allowing for FFT sizes that aren't known
 //! until runtime.
-//! 
+//!
 //! RustFFT also exposes individual FFT algorithms. If you know beforehand that you need a power-of-two FFT, you can
 //! avoid the overhead of the planner and trait object by directly creating instances of the Radix4 algorithm:
 //!
@@ -63,22 +63,18 @@
 pub use num_complex;
 pub use num_traits;
 
-
-
 /// Individual FFT algorithms
 pub mod algorithm;
-mod math_utils;
 mod array_utils;
+mod common;
+mod math_utils;
 mod plan;
 mod twiddles;
-mod common;
 
 use num_complex::Complex;
 
-pub use crate::plan::FFTplanner;
 pub use crate::common::FFTnum;
-
-
+pub use crate::plan::FFTplanner;
 
 /// A trait that allows FFT algorithms to report their expected input/output size
 pub trait Length {
@@ -114,7 +110,6 @@ pub trait FFT<T: FFTnum>: Length + IsInverse + Sync + Send {
     /// after calling
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]);
 }
-
 
 #[cfg(test)]
 mod test_utils;

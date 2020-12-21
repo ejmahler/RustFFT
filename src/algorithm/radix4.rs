@@ -1,11 +1,13 @@
 use num_complex::Complex;
 use num_traits::Zero;
 
-use crate::common::{FFTnum, verify_length, verify_length_divisible};
+use crate::common::{verify_length, verify_length_divisible, FFTnum};
 
-use crate::algorithm::butterflies::{Butterfly2, Butterfly4, Butterfly8, Butterfly16, FFTButterfly};
-use crate::{Length, IsInverse, FFT};
+use crate::algorithm::butterflies::{
+    Butterfly16, Butterfly2, Butterfly4, Butterfly8, FFTButterfly,
+};
 use crate::twiddles;
+use crate::{IsInverse, Length, FFT};
 
 /// FFT algorithm optimized for power-of-two sizes
 ///
@@ -34,14 +36,18 @@ pub struct Radix4<T> {
 impl<T: FFTnum> Radix4<T> {
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the power-of-two FFT
     pub fn new(len: usize, inverse: bool) -> Self {
-        assert!(len.is_power_of_two(), "Radix4 algorithm requires a power-of-two input size. Got {}", len);
+        assert!(
+            len.is_power_of_two(),
+            "Radix4 algorithm requires a power-of-two input size. Got {}",
+            len
+        );
 
         // precompute the twiddle factors this algorithm will use.
         // we're doing the same precomputation of twiddle factors as the mixed radix algorithm where width=4 and height=len/4
         // but mixed radix only does one step and then calls itself recusrively, and this algorithm does every layer all the way down
         // so we're going to pack all the "layers" of twiddle factors into a single array, starting with the bottom and going up
         let num_bits = len.trailing_zeros();
-        let mut twiddle_stride = if num_bits%2 == 0 {
+        let mut twiddle_stride = if num_bits % 2 == 0 {
             len / 64
         } else {
             len / 32
@@ -70,15 +76,15 @@ impl<T: FFTnum> Radix4<T> {
 
     fn perform_fft(&self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
         match self.len() {
-            0|1 => spectrum.copy_from_slice(signal),
+            0 | 1 => spectrum.copy_from_slice(signal),
             2 => {
                 spectrum.copy_from_slice(signal);
                 unsafe { Butterfly2::new(self.inverse).process_inplace(spectrum) }
-            },
+            }
             4 => {
                 spectrum.copy_from_slice(signal);
                 unsafe { Butterfly4::new(self.inverse).process_inplace(spectrum) }
-            },
+            }
             _ => {
                 // copy the data into the spectrum vector
                 prepare_radix4(signal.len(), signal, spectrum, 1);
@@ -105,10 +111,12 @@ impl<T: FFTnum> Radix4<T> {
 
                     for i in 0..num_rows {
                         unsafe {
-                            butterfly_4(&mut spectrum[i * current_size..],
-                                        layer_twiddles,
-                                        current_size / 4,
-                                        self.inverse)
+                            butterfly_4(
+                                &mut spectrum[i * current_size..],
+                                layer_twiddles,
+                                current_size / 4,
+                                self.inverse,
+                            )
                         }
                     }
 
@@ -132,7 +140,10 @@ impl<T: FFTnum> FFT<T> for Radix4<T> {
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         verify_length_divisible(input, output, self.len());
 
-        for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
+        for (in_chunk, out_chunk) in input
+            .chunks_mut(self.len())
+            .zip(output.chunks_mut(self.len()))
+        {
             self.perform_fft(in_chunk, out_chunk);
         }
     }
@@ -150,14 +161,14 @@ impl<T> IsInverse for Radix4<T> {
     }
 }
 
-
-
 // after testing an iterative bit reversal algorithm, this recursive algorithm
 // was almost an order of magnitude faster at setting up
-fn prepare_radix4<T: FFTnum>(size: usize,
-                           signal: &[Complex<T>],
-                           spectrum: &mut [Complex<T>],
-                           stride: usize) {
+fn prepare_radix4<T: FFTnum>(
+    size: usize,
+    signal: &[Complex<T>],
+    spectrum: &mut [Complex<T>],
+    stride: usize,
+) {
     match size {
         16 => unsafe {
             for i in 0..16 {
@@ -181,20 +192,23 @@ fn prepare_radix4<T: FFTnum>(size: usize,
         },
         _ => {
             for i in 0..4 {
-                prepare_radix4(size / 4,
-                               &signal[i * stride..],
-                               &mut spectrum[i * (size / 4)..],
-                               stride * 4);
+                prepare_radix4(
+                    size / 4,
+                    &signal[i * stride..],
+                    &mut spectrum[i * (size / 4)..],
+                    stride * 4,
+                );
             }
         }
     }
 }
 
-unsafe fn butterfly_4<T: FFTnum>(data: &mut [Complex<T>],
-                             twiddles: &[Complex<T>],
-                             num_ffts: usize,
-                             inverse: bool)
-{
+unsafe fn butterfly_4<T: FFTnum>(
+    data: &mut [Complex<T>],
+    twiddles: &[Complex<T>],
+    num_ffts: usize,
+    inverse: bool,
+) {
     let mut idx = 0usize;
     let mut tw_idx = 0usize;
     let mut scratch: [Complex<T>; 6] = [Zero::zero(); 6];
