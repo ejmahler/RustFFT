@@ -4,11 +4,11 @@ use num_complex::Complex;
 use num_traits::Zero;
 use strength_reduce::StrengthReducedUsize;
 
-use crate::common::{FFTnum, verify_length, verify_length_divisible};
+use crate::common::{verify_length, verify_length_divisible, FFTnum};
 
 use crate::math_utils;
 use crate::twiddles;
-use crate::{Length, IsInverse, FFT};
+use crate::{IsInverse, Length, FFT};
 
 /// Implementation of Rader's Algorithm
 ///
@@ -59,14 +59,21 @@ impl<T: FFTnum> RadersAlgorithm<T> {
     ///
     /// Note also that if `len` is not prime, this algorithm may silently produce garbage output
     pub fn new(len: usize, inner_fft: Arc<FFT<T>>) -> Self {
-        assert_eq!(len - 1, inner_fft.len(), "For raders algorithm, inner_fft.len() must be self.len() - 1. Expected {}, got {}", len - 1, inner_fft.len());
+        assert_eq!(
+            len - 1,
+            inner_fft.len(),
+            "For raders algorithm, inner_fft.len() must be self.len() - 1. Expected {}, got {}",
+            len - 1,
+            inner_fft.len()
+        );
 
         let inner_fft_len = len - 1;
         let reduced_len = StrengthReducedUsize::new(len);
 
         // compute the primitive root and its inverse for this size
         let primitive_root = math_utils::primitive_root(len as u64).unwrap() as usize;
-        let primitive_root_inverse = math_utils::multiplicative_inverse(primitive_root as usize, len);
+        let primitive_root_inverse =
+            math_utils::multiplicative_inverse(primitive_root as usize, len);
 
         // precompute the coefficients to use inside the process method
         let unity_scale = T::from_f64(1f64 / inner_fft_len as f64).unwrap();
@@ -95,7 +102,6 @@ impl<T: FFTnum> RadersAlgorithm<T> {
     }
 
     fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-
         // The first output element is just the sum of all the input elements
         output[0] = input.iter().sum();
         let first_input_val = input[0];
@@ -117,7 +123,11 @@ impl<T: FFTnum> RadersAlgorithm<T> {
         // multiply the inner result with our cached setup data
         // also conjugate every entry. this sets us up to do an inverse FFT
         // (because an inverse FFT is equivalent to a normal FFT where you conjugate both the inputs and outputs)
-        for ((&input_cell, output_cell), &multiple) in input.iter().zip(output.iter_mut()).zip(self.inner_fft_data.iter()) {
+        for ((&input_cell, output_cell), &multiple) in input
+            .iter()
+            .zip(output.iter_mut())
+            .zip(self.inner_fft_data.iter())
+        {
             *output_cell = (input_cell * multiple).conj();
         }
 
@@ -142,7 +152,10 @@ impl<T: FFTnum> FFT<T> for RadersAlgorithm<T> {
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         verify_length_divisible(input, output, self.len());
 
-        for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
+        for (in_chunk, out_chunk) in input
+            .chunks_mut(self.len())
+            .zip(output.chunks_mut(self.len()))
+        {
             self.perform_fft(in_chunk, out_chunk);
         }
     }
@@ -163,13 +176,13 @@ impl<T> IsInverse for RadersAlgorithm<T> {
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use std::sync::Arc;
-    use crate::test_utils::check_fft_algorithm;
     use crate::algorithm::DFT;
+    use crate::test_utils::check_fft_algorithm;
+    use std::sync::Arc;
 
     #[test]
     fn test_raders() {
-        for &len in &[3,5,7,11,13] {
+        for &len in &[3, 5, 7, 11, 13] {
             test_raders_with_length(len, false);
             test_raders_with_length(len, true);
         }

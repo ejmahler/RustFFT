@@ -1,4 +1,3 @@
-
 use std::f64;
 
 use num_complex::Complex;
@@ -7,7 +6,9 @@ use num_traits::{FromPrimitive, One};
 use crate::common::FFTnum;
 
 pub fn generate_twiddle_factors<T: FFTnum>(fft_len: usize, inverse: bool) -> Vec<Complex<T>> {
-    (0..fft_len).map(|i| single_twiddle(i, fft_len, inverse)).collect()
+    (0..fft_len)
+        .map(|i| single_twiddle(i, fft_len, inverse))
+        .collect()
 }
 
 #[inline(always)]
@@ -26,20 +27,25 @@ pub fn single_twiddle<T: FFTnum>(i: usize, fft_len: usize, inverse: bool) -> Com
     }
 }
 
-pub fn rotate_90<T: FFTnum>(value: Complex<T>, inverse:bool) -> Complex<T>
-{
+pub fn rotate_90<T: FFTnum>(value: Complex<T>, inverse: bool) -> Complex<T> {
     if inverse {
-        Complex{re:-value.im, im: value.re}
+        Complex {
+            re: -value.im,
+            im: value.re,
+        }
     } else {
-        Complex{re: value.im, im:-value.re}
+        Complex {
+            re: value.im,
+            im: -value.re,
+        }
     }
 }
 
 #[cfg(test)]
 mod unit_tests {
-	use super::*;
-	use std::f32;
-    use crate::test_utils::{compare_vectors};
+    use super::*;
+    use crate::test_utils::compare_vectors;
+    use std::f32;
 
     #[test]
     fn test_generate() {
@@ -51,7 +57,9 @@ mod unit_tests {
 
         for len in 1..10 {
             let actual: Vec<Complex<f32>> = generate_twiddle_factors(len, false);
-            let expected: Vec<Complex<f32>> = (0..len).map(|i| Complex::from_polar(1f32, constant * i as f32 / len as f32)).collect();
+            let expected: Vec<Complex<f32>> = (0..len)
+                .map(|i| Complex::from_polar(1f32, constant * i as f32 / len as f32))
+                .collect();
 
             assert!(compare_vectors(&actual, &expected), "len = {}", len)
         }
@@ -61,12 +69,15 @@ mod unit_tests {
             let twiddles: Vec<Complex<f32>> = generate_twiddle_factors(len, false);
             let mut twiddles_inverse: Vec<Complex<f32>> = generate_twiddle_factors(len, true);
 
-            for value in twiddles_inverse.iter_mut()
-            {
+            for value in twiddles_inverse.iter_mut() {
                 *value = value.conj();
             }
 
-            assert!(compare_vectors(&twiddles, &twiddles_inverse), "len = {}", len)
+            assert!(
+                compare_vectors(&twiddles, &twiddles_inverse),
+                "len = {}",
+                len
+            )
         }
     }
 

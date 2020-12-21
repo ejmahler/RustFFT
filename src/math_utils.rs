@@ -1,5 +1,4 @@
-
-use num_traits::{Zero, One, FromPrimitive, PrimInt, Signed};
+use num_traits::{FromPrimitive, One, PrimInt, Signed, Zero};
 use std::mem::swap;
 
 pub fn primitive_root(prime: u64) -> Option<u64> {
@@ -69,9 +68,7 @@ pub fn multiplicative_inverse<T: PrimInt + FromPrimitive>(a: T, n: T) -> T {
     t
 }
 
-pub fn extended_euclidean_algorithm<T: PrimInt + Signed + FromPrimitive>(a: T,
-                                                                                   b: T)
-                                                                                   -> (T, T, T) {
+pub fn extended_euclidean_algorithm<T: PrimInt + Signed + FromPrimitive>(a: T, b: T) -> (T, T, T) {
     let mut s = Zero::zero();
     let mut s_old = One::one();
 
@@ -113,7 +110,6 @@ pub fn distinct_prime_factors(mut n: u64) -> Vec<u64> {
         let mut limit = (n as f32).sqrt() as u64 + 1;
         while divisor < limit {
             if n % divisor == 0 {
-
                 // remove as many factors as possible from n
                 while n % divisor == 0 {
                     n /= divisor;
@@ -174,11 +170,11 @@ mod unit_tests {
         // make sure to test something that would overflow under ordinary circumstances
         // ie 3 ^ 416788 mod 47
         let test_list = vec![
-			((2,8,300), 256),
-			((2,9,300), 212),
-			((1,9,300), 1),
-			((3,416788,47), 8),
-		];
+            ((2, 8, 300), 256),
+            ((2, 9, 300), 212),
+            ((1, 9, 300), 1),
+            ((3, 416788, 47), 8),
+        ];
 
         for (input, expected) in test_list {
             let (base, exponent, modulo) = input;
@@ -205,9 +201,9 @@ mod unit_tests {
     #[test]
     fn test_extended_euclidean() {
         let test_list = vec![
-            ((3,5), (1, 2, -1)),
-            ((15,12), (3, 1, -1)),
-            ((16,21), (1, 4, -3)),
+            ((3, 5), (1, 2, -1)),
+            ((15, 12), (3, 1, -1)),
+            ((16, 21), (1, 4, -3)),
         ];
 
         for (input, expected) in test_list {
@@ -247,11 +243,11 @@ mod unit_tests {
     #[test]
     fn test_prime_factors() {
         let test_list = vec![
-			(46, vec![2,23]),
-			(2, vec![2]),
-			(3, vec![3]),
-			(162, vec![2, 3]),
-			];
+            (46, vec![2, 23]),
+            (2, vec![2]),
+            (3, vec![3]),
+            (162, vec![2, 3]),
+        ];
 
         for (input, expected) in test_list {
             let factors = distinct_prime_factors(input);

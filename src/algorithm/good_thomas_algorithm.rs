@@ -4,13 +4,13 @@ use num_complex::Complex;
 use strength_reduce::StrengthReducedUsize;
 use transpose;
 
-use crate::common::{FFTnum, verify_length, verify_length_divisible};
+use crate::common::{verify_length, verify_length_divisible, FFTnum};
 
-use crate::math_utils;
 use crate::array_utils;
+use crate::math_utils;
 
-use crate::{Length, IsInverse, FFT};
 use crate::algorithm::butterflies::FFTButterfly;
+use crate::{IsInverse, Length, FFT};
 
 /// Implementation of the [Good-Thomas Algorithm (AKA Prime Factor Algorithm)](https://en.wikipedia.org/wiki/Prime-factor_FFT_algorithm)
 ///
@@ -60,7 +60,7 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
     /// GCD(width_fft.len(), height_fft.len()) must be equal to 1
     pub fn new(width_fft: Arc<FFT<T>>, height_fft: Arc<FFT<T>>) -> Self {
         assert_eq!(
-            width_fft.is_inverse(), height_fft.is_inverse(), 
+            width_fft.is_inverse(), height_fft.is_inverse(),
             "width_fft and height_fft must both be inverse, or neither. got width inverse={}, height inverse={}",
             width_fft.is_inverse(), height_fft.is_inverse());
 
@@ -138,7 +138,10 @@ impl<T: FFTnum> FFT<T> for GoodThomasAlgorithm<T> {
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         verify_length_divisible(input, output, self.len());
 
-        for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
+        for (in_chunk, out_chunk) in input
+            .chunks_mut(self.len())
+            .zip(output.chunks_mut(self.len()))
+        {
             self.perform_fft(in_chunk, out_chunk);
         }
     }
@@ -155,9 +158,6 @@ impl<T> IsInverse for GoodThomasAlgorithm<T> {
         self.inverse
     }
 }
-
-
-
 
 /// Implementation of the Good-Thomas Algorithm, specialized for the case where both inner FFTs are butterflies
 ///
@@ -206,7 +206,7 @@ impl<T: FFTnum> GoodThomasAlgorithmDoubleButterfly<T> {
     /// GCD(n1.len(), n2.len()) must be equal to 1
     pub fn new(width_fft: Arc<FFTButterfly<T>>, height_fft: Arc<FFTButterfly<T>>) -> Self {
         assert_eq!(
-            width_fft.is_inverse(), height_fft.is_inverse(), 
+            width_fft.is_inverse(), height_fft.is_inverse(),
             "n1_fft and height_fft must both be inverse, or neither. got width inverse={}, height inverse={}",
             width_fft.is_inverse(), height_fft.is_inverse());
 
@@ -217,10 +217,12 @@ impl<T: FFTnum> GoodThomasAlgorithmDoubleButterfly<T> {
         // compute the nultiplicative inverse of n1 mod height and vice versa
         let (gcd, mut width_inverse, mut height_inverse) =
             math_utils::extended_euclidean_algorithm(width as i64, height as i64);
-        assert!(gcd == 1,
-                "Invalid input n1 and height to Good-Thomas Algorithm: ({},{}): Inputs must be coprime",
-                width,
-                height);
+        assert!(
+            gcd == 1,
+            "Invalid input n1 and height to Good-Thomas Algorithm: ({},{}): Inputs must be coprime",
+            width,
+            height
+        );
 
         // width_inverse or height_inverse might be negative, make it positive
         if width_inverse < 0 {
@@ -233,11 +235,11 @@ impl<T: FFTnum> GoodThomasAlgorithmDoubleButterfly<T> {
         // NOTE: we are precomputing the input and output reordering indexes, because benchmarking shows that it's 10-20% faster
         // If we wanted to optimize for memory use or setup time instead of multiple-FFT speed, we could compute these on the fly in the perform_fft() method
         let input_iter = (0..len)
-                .map(|i| (i % width, i / width))
-                .map(|(x, y)| (x * height + y * width) % len);
-        let output_iter = (0..len)
-                .map(|i| (i % height, i / height))
-                .map(|(y, x)| (x * height * height_inverse as usize + y * width * width_inverse as usize) % len);
+            .map(|i| (i % width, i / width))
+            .map(|(x, y)| (x * height + y * width) % len);
+        let output_iter = (0..len).map(|i| (i % height, i / height)).map(|(y, x)| {
+            (x * height * height_inverse as usize + y * width * width_inverse as usize) % len
+        });
 
         let input_output_map: Vec<usize> = input_iter.chain(output_iter).collect();
 
@@ -249,13 +251,12 @@ impl<T: FFTnum> GoodThomasAlgorithmDoubleButterfly<T> {
 
             height: height,
             height_size_fft: height_fft,
-            
+
             input_output_map: input_output_map.into_boxed_slice(),
         }
     }
 
     unsafe fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-
         let (input_map, output_map) = self.input_output_map.split_at(self.len());
 
         // copy the input using our reordering mapping
@@ -288,8 +289,11 @@ impl<T: FFTnum> FFT<T> for GoodThomasAlgorithmDoubleButterfly<T> {
     fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         verify_length_divisible(input, output, self.len());
 
-        for (in_chunk, out_chunk) in input.chunks_mut(self.len()).zip(output.chunks_mut(self.len())) {
-             unsafe { self.perform_fft(in_chunk, out_chunk) };
+        for (in_chunk, out_chunk) in input
+            .chunks_mut(self.len())
+            .zip(output.chunks_mut(self.len()))
+        {
+            unsafe { self.perform_fft(in_chunk, out_chunk) };
         }
     }
 }
@@ -306,14 +310,13 @@ impl<T> IsInverse for GoodThomasAlgorithmDoubleButterfly<T> {
     }
 }
 
-
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use std::sync::Arc;
-    use crate::test_utils::{check_fft_algorithm, make_butterfly};
     use crate::algorithm::DFT;
+    use crate::test_utils::{check_fft_algorithm, make_butterfly};
     use num_integer::gcd;
+    use std::sync::Arc;
 
     #[test]
     fn test_good_thomas() {
@@ -329,7 +332,7 @@ mod unit_tests {
 
     #[test]
     fn test_good_thomas_double_butterfly() {
-        let butterfly_sizes = [2,3,4,5,6,7,8,16];
+        let butterfly_sizes = [2, 3, 4, 5, 6, 7, 8, 16];
         for width in &butterfly_sizes {
             for height in &butterfly_sizes {
                 if gcd(*width, *height) == 1 {

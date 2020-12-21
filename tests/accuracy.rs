@@ -4,23 +4,22 @@
 //! for a variety of lengths, and test that our FFT algorithm matches our
 //! DFT calculation for those signals.
 
-
-
 use std::f32;
 
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 
-use rand::{StdRng, SeedableRng};
-use rand::distributions::{Normal, Distribution};
-use rustfft::{FFT, FFTplanner};
+use rand::distributions::{Distribution, Normal};
+use rand::{SeedableRng, StdRng};
 use rustfft::algorithm::DFT;
+use rustfft::{FFTplanner, FFT};
 
 /// The seed for the random number generator used to generate
 /// random signals. It's defined here so that we have deterministic
 /// tests
-const RNG_SEED: [u8; 32] = [1, 9, 1, 0, 1, 1, 4, 3, 1, 4, 9, 8,
-    4, 1, 4, 8, 2, 8, 1, 2, 2, 2, 6, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+const RNG_SEED: [u8; 32] = [
+    1, 9, 1, 0, 1, 1, 4, 3, 1, 4, 9, 8, 4, 1, 4, 8, 2, 8, 1, 2, 2, 2, 6, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+];
 
 /// Returns true if the mean difference in the elements of the two vectors
 /// is small
@@ -33,7 +32,6 @@ fn compare_vectors(vec1: &[Complex<f32>], vec2: &[Complex<f32>]) -> bool {
     return (sse / vec1.len() as f32) < 0.1f32;
 }
 
-
 fn fft_matches_dft(signal: Vec<Complex<f32>>, inverse: bool) -> bool {
     let mut signal_dft = signal.clone();
     let mut signal_fft = signal.clone();
@@ -43,8 +41,16 @@ fn fft_matches_dft(signal: Vec<Complex<f32>>, inverse: bool) -> bool {
 
     let mut planner = FFTplanner::new(inverse);
     let fft = planner.plan_fft(signal.len());
-    assert_eq!(fft.len(), signal.len(), "FFTplanner created FFT of wrong length");
-    assert_eq!(fft.is_inverse(), inverse, "FFTplanner created FFT of wrong direction");
+    assert_eq!(
+        fft.len(),
+        signal.len(),
+        "FFTplanner created FFT of wrong length"
+    );
+    assert_eq!(
+        fft.is_inverse(),
+        inverse,
+        "FFTplanner created FFT of wrong direction"
+    );
 
     fft.process(&mut signal_fft, &mut spectrum_fft);
 
@@ -59,8 +65,10 @@ fn random_signal(length: usize) -> Vec<Complex<f32>> {
     let normal_dist = Normal::new(0.0, 10.0);
     let mut rng: StdRng = SeedableRng::from_seed(RNG_SEED);
     for _ in 0..length {
-        sig.push(Complex{re: (normal_dist.sample(&mut rng) as f32),
-                         im: (normal_dist.sample(&mut rng) as f32)});
+        sig.push(Complex {
+            re: (normal_dist.sample(&mut rng) as f32),
+            im: (normal_dist.sample(&mut rng) as f32),
+        });
     }
     return sig;
 }
