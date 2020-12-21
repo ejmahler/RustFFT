@@ -170,23 +170,8 @@ fn prepare_radix4<T: FFTnum>(
     stride: usize,
 ) {
     match size {
-        16 => unsafe {
-            for i in 0..16 {
-                *spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stride);
-            }
-        },
-        8 => unsafe {
-            for i in 0..8 {
-                *spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stride);
-            }
-        },
-        4 => unsafe {
-            for i in 0..4 {
-                *spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stride);
-            }
-        },
-        2 => unsafe {
-            for i in 0..2 {
+        2 | 4 | 8 | 16 => unsafe {
+            for i in 0..size {
                 *spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stride);
             }
         },
