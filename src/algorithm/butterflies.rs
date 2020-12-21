@@ -32,7 +32,7 @@ pub struct Butterfly2 {
 impl Butterfly2 {
     #[inline(always)]
     pub fn new(inverse: bool) -> Self {
-        Butterfly2 { inverse: inverse }
+        Self { inverse }
     }
 
     #[inline(always)]
@@ -92,15 +92,15 @@ pub struct Butterfly3<T> {
 impl<T: FFTnum> Butterfly3<T> {
     #[inline(always)]
     pub fn new(inverse: bool) -> Self {
-        Butterfly3 {
+        Self {
             twiddle: twiddles::single_twiddle(1, 3, inverse),
-            inverse: inverse,
+            inverse,
         }
     }
 
     #[inline(always)]
-    pub fn inverse_of(fft: &Butterfly3<T>) -> Self {
-        Butterfly3 {
+    pub fn inverse_of(fft: &Self) -> Self {
+        Self {
             twiddle: fft.twiddle.conj(),
             inverse: !fft.inverse,
         }
@@ -209,7 +209,7 @@ pub struct Butterfly4 {
 impl Butterfly4 {
     #[inline(always)]
     pub fn new(inverse: bool) -> Self {
-        Butterfly4 { inverse: inverse }
+        Self { inverse }
     }
 }
 impl<T: FFTnum> FFTButterfly<T> for Butterfly4 {
@@ -284,7 +284,7 @@ impl<T: FFTnum> Butterfly5<T> {
     pub fn new(inverse: bool) -> Self {
         let twiddle1: Complex<T> = twiddles::single_twiddle(1, 5, inverse);
         let twiddle2: Complex<T> = twiddles::single_twiddle(2, 5, inverse);
-        Butterfly5 {
+        Self {
             twiddle1,
             twiddle2,
             inverse,
@@ -426,12 +426,12 @@ pub struct Butterfly6<T> {
 }
 impl<T: FFTnum> Butterfly6<T> {
     pub fn new(inverse: bool) -> Self {
-        Butterfly6 {
+        Self {
             butterfly3: Butterfly3::new(inverse),
         }
     }
-    pub fn inverse_of(fft: &Butterfly6<T>) -> Self {
-        Butterfly6 {
+    pub fn inverse_of(fft: &Self) -> Self {
+        Self {
             butterfly3: Butterfly3::inverse_of(&fft.butterfly3),
         }
     }
@@ -525,7 +525,7 @@ impl<T: FFTnum> Butterfly7<T> {
         let twiddle1: Complex<T> = twiddles::single_twiddle(1, 7, inverse);
         let twiddle2: Complex<T> = twiddles::single_twiddle(2, 7, inverse);
         let twiddle3: Complex<T> = twiddles::single_twiddle(3, 7, inverse);
-        Butterfly7 {
+        Self {
             twiddle1,
             twiddle2,
             twiddle3,
@@ -683,8 +683,8 @@ pub struct Butterfly8<T> {
 impl<T: FFTnum> Butterfly8<T> {
     #[inline(always)]
     pub fn new(inverse: bool) -> Self {
-        Butterfly8 {
-            inverse: inverse,
+        Self {
+            inverse,
             twiddle: twiddles::single_twiddle(1, 8, inverse),
         }
     }
@@ -807,7 +807,7 @@ impl<T: FFTnum> Butterfly11<T> {
         let twiddle3: Complex<T> = twiddles::single_twiddle(3, 11, inverse);
         let twiddle4: Complex<T> = twiddles::single_twiddle(4, 11, inverse);
         let twiddle5: Complex<T> = twiddles::single_twiddle(5, 11, inverse);
-        Butterfly11 {
+        Self {
             twiddle1,
             twiddle2,
             twiddle3,
@@ -1060,7 +1060,7 @@ impl<T: FFTnum> Butterfly13<T> {
         let twiddle4: Complex<T> = twiddles::single_twiddle(4, 13, inverse);
         let twiddle5: Complex<T> = twiddles::single_twiddle(5, 13, inverse);
         let twiddle6: Complex<T> = twiddles::single_twiddle(6, 13, inverse);
-        Butterfly13 {
+        Self {
             twiddle1,
             twiddle2,
             twiddle3,
@@ -1366,12 +1366,12 @@ pub struct Butterfly16<T> {
 impl<T: FFTnum> Butterfly16<T> {
     #[inline(always)]
     pub fn new(inverse: bool) -> Self {
-        Butterfly16 {
+        Self {
             butterfly8: Butterfly8::new(inverse),
             twiddle1: twiddles::single_twiddle(1, 16, inverse),
             twiddle2: twiddles::single_twiddle(2, 16, inverse),
             twiddle3: twiddles::single_twiddle(3, 16, inverse),
-            inverse: inverse,
+            inverse,
         }
     }
 }
@@ -1506,7 +1506,7 @@ impl<T: FFTnum> Butterfly17<T> {
         let twiddle6: Complex<T> = twiddles::single_twiddle(6, 17, inverse);
         let twiddle7: Complex<T> = twiddles::single_twiddle(7, 17, inverse);
         let twiddle8: Complex<T> = twiddles::single_twiddle(8, 17, inverse);
-        Butterfly17 {
+        Self {
             twiddle1,
             twiddle2,
             twiddle3,
@@ -1972,7 +1972,7 @@ impl<T: FFTnum> Butterfly19<T> {
         let twiddle7: Complex<T> = twiddles::single_twiddle(7, 19, inverse);
         let twiddle8: Complex<T> = twiddles::single_twiddle(8, 19, inverse);
         let twiddle9: Complex<T> = twiddles::single_twiddle(9, 19, inverse);
-        Butterfly19 {
+        Self {
             twiddle1,
             twiddle2,
             twiddle3,
@@ -2535,7 +2535,7 @@ impl<T: FFTnum> Butterfly23<T> {
         let twiddle9: Complex<T> = twiddles::single_twiddle(9, 23, inverse);
         let twiddle10: Complex<T> = twiddles::single_twiddle(10, 23, inverse);
         let twiddle11: Complex<T> = twiddles::single_twiddle(11, 23, inverse);
-        Butterfly23 {
+        Self {
             twiddle1,
             twiddle2,
             twiddle3,
@@ -3300,7 +3300,7 @@ impl<T: FFTnum> Butterfly29<T> {
         let twiddle12: Complex<T> = twiddles::single_twiddle(12, 29, inverse);
         let twiddle13: Complex<T> = twiddles::single_twiddle(13, 29, inverse);
         let twiddle14: Complex<T> = twiddles::single_twiddle(14, 29, inverse);
-        Butterfly29 {
+        Self {
             twiddle1,
             twiddle2,
             twiddle3,
@@ -4421,7 +4421,7 @@ impl<T: FFTnum> Butterfly31<T> {
         let twiddle13: Complex<T> = twiddles::single_twiddle(13, 31, inverse);
         let twiddle14: Complex<T> = twiddles::single_twiddle(14, 31, inverse);
         let twiddle15: Complex<T> = twiddles::single_twiddle(15, 31, inverse);
-        Butterfly31 {
+        Self {
             twiddle1,
             twiddle2,
             twiddle3,
@@ -5650,7 +5650,7 @@ pub struct Butterfly32<T> {
 impl<T: FFTnum> Butterfly32<T> {
     #[inline(always)]
     pub fn new(inverse: bool) -> Self {
-        Butterfly32 {
+        Self {
             butterfly16: Butterfly16::new(inverse),
             butterfly8: Butterfly8::new(inverse),
             twiddles: [
@@ -5662,7 +5662,7 @@ impl<T: FFTnum> Butterfly32<T> {
                 twiddles::single_twiddle(6, 32, inverse),
                 twiddles::single_twiddle(7, 32, inverse),
             ],
-            inverse: inverse,
+            inverse,
         }
     }
 }
