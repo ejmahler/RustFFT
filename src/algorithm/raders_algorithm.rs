@@ -91,7 +91,7 @@ impl<T: FFTnum> RadersAlgorithm<T> {
         inner_fft.process(&mut inner_fft_input, &mut inner_fft_output);
 
         Self {
-            inner_fft: inner_fft,
+            inner_fft,
             inner_fft_data: inner_fft_output.into_boxed_slice(),
 
             primitive_root,

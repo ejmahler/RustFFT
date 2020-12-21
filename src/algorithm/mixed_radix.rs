@@ -69,15 +69,15 @@ impl<T: FFTnum> MixedRadix<T> {
             }
         }
 
-        MixedRadix {
-            width: width,
+        Self {
+            width,
             width_size_fft: width_fft,
 
-            height: height,
+            height,
             height_size_fft: height_fft,
 
             twiddles: twiddles.into_boxed_slice(),
-            inverse: inverse,
+            inverse,
         }
     }
 
@@ -193,15 +193,15 @@ impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
             }
         }
 
-        MixedRadixDoubleButterfly {
-            width: width,
+        Self {
+            width,
             width_size_fft: width_fft,
 
-            height: height,
+            height,
             height_size_fft: height_fft,
 
             twiddles: twiddles.into_boxed_slice(),
-            inverse: inverse,
+            inverse,
         }
     }
 

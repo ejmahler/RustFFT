@@ -60,8 +60,8 @@ impl<T: FFTnum> FFTplanner<T> {
     ///
     /// If `inverse` is false, this planner will plan forward FFTs. If `inverse` is true, it will plan inverse FFTs.
     pub fn new(inverse: bool) -> Self {
-        FFTplanner {
-            inverse: inverse,
+        Self {
+            inverse,
             algorithm_cache: HashMap::new(),
             butterfly_cache: HashMap::new(),
         }

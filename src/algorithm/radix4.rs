@@ -65,12 +65,12 @@ impl<T: FFTnum> Radix4<T> {
             twiddle_stride >>= 2;
         }
 
-        Radix4 {
+        Self {
             twiddles: twiddle_factors.into_boxed_slice(),
             butterfly8: Butterfly8::new(inverse),
             butterfly16: Butterfly16::new(inverse),
-            len: len,
-            inverse: inverse,
+            len,
+            inverse,
         }
     }
 

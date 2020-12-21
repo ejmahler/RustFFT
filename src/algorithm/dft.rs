@@ -33,9 +33,9 @@ pub struct DFT<T> {
 impl<T: FFTnum> DFT<T> {
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute DFT
     pub fn new(len: usize, inverse: bool) -> Self {
-        DFT {
+        Self {
             twiddles: twiddles::generate_twiddle_factors(len, inverse),
-            inverse: inverse,
+            inverse,
         }
     }
 
