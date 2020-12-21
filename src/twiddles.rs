@@ -13,11 +13,7 @@ pub fn generate_twiddle_factors<T: FFTnum>(fft_len: usize, inverse: bool) -> Vec
 
 #[inline(always)]
 pub fn single_twiddle<T: FFTnum>(i: usize, fft_len: usize, inverse: bool) -> Complex<T> {
-    let constant = if inverse {
-        2f64 * f64::consts::PI
-    } else {
-        -2f64 * f64::consts::PI
-    };
+    let constant = if inverse { 2f64 } else { -2f64 } * f64::consts::PI;
 
     let c = Complex::from_polar(One::one(), constant * i as f64 / fft_len as f64);
 
