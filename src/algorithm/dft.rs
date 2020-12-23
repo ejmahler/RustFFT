@@ -70,8 +70,8 @@ impl<T: FFTnum> FFT<T> for DFT<T> {
         verify_length_divisible(input, output, self.len());
 
         for (in_chunk, out_chunk) in input
-            .chunks_mut(self.len())
-            .zip(output.chunks_mut(self.len()))
+            .chunks_exact_mut(self.len())
+            .zip(output.chunks_exact_mut(self.len()))
         {
             self.perform_fft(in_chunk, out_chunk);
         }
@@ -135,15 +135,15 @@ mod unit_tests {
             dft_instance.process_multi(&mut multi_input, &mut multi_output);
 
             for (input_chunk, output_chunk) in actual_input
-                .chunks_mut(len)
-                .zip(actual_output.chunks_mut(len))
+                .chunks_exact_mut(len)
+                .zip(actual_output.chunks_exact_mut(len))
             {
                 dft_instance.process(input_chunk, output_chunk);
             }
 
             for (input_chunk, output_chunk) in expected_input
-                .chunks_mut(len)
-                .zip(expected_output.chunks_mut(len))
+                .chunks_exact_mut(len)
+                .zip(expected_output.chunks_exact_mut(len))
             {
                 dft(input_chunk, output_chunk);
             }

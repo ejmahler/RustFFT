@@ -101,7 +101,7 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
 
     fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         // copy the input into the output buffer
-        for (y, row) in output.chunks_mut(self.width).enumerate() {
+        for (y, row) in output.chunks_exact_mut(self.width).enumerate() {
             let input_base = y * self.input_y_stride;
             for (x, output_cell) in row.iter_mut().enumerate() {
                 let input_index = (input_base + x * self.input_x_stride) % self.len;
@@ -119,7 +119,7 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
         self.height_size_fft.process_multi(output, input);
 
         // copy to the output, using our output redordering mapping
-        for (x, row) in input.chunks(self.height).enumerate() {
+        for (x, row) in input.chunks_exact(self.height).enumerate() {
             let output_base = x * self.height;
             for (y, input_cell) in row.iter().enumerate() {
                 let output_index = (output_base + y * self.width) % self.len;
@@ -139,8 +139,8 @@ impl<T: FFTnum> FFT<T> for GoodThomasAlgorithm<T> {
         verify_length_divisible(input, output, self.len());
 
         for (in_chunk, out_chunk) in input
-            .chunks_mut(self.len())
-            .zip(output.chunks_mut(self.len()))
+            .chunks_exact_mut(self.len())
+            .zip(output.chunks_exact_mut(self.len()))
         {
             self.perform_fft(in_chunk, out_chunk);
         }
@@ -290,8 +290,8 @@ impl<T: FFTnum> FFT<T> for GoodThomasAlgorithmDoubleButterfly<T> {
         verify_length_divisible(input, output, self.len());
 
         for (in_chunk, out_chunk) in input
-            .chunks_mut(self.len())
-            .zip(output.chunks_mut(self.len()))
+            .chunks_exact_mut(self.len())
+            .zip(output.chunks_exact_mut(self.len()))
         {
             unsafe { self.perform_fft(in_chunk, out_chunk) };
         }

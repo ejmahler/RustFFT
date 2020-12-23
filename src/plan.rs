@@ -135,7 +135,7 @@ impl<T: FFTnum> FFTplanner<T> {
                     // since we know they're sorted, we can loop through them in chunks of 2 and keep one out of each chunk
                     // if the stride iterator ever becomes stabilized, it'll be cleaner to use that instead of chunks
                     let mut sqrt_factors = Vec::with_capacity(factors.len() / 2);
-                    for chunk in factors.chunks(2) {
+                    for chunk in factors.chunks_exact(2) {
                         sqrt_factors.push(chunk[0]);
                     }
 

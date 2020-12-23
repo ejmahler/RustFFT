@@ -197,8 +197,8 @@ impl<T: FFTnum> FFT<T> for Bluesteins<T> {
         verify_length_divisible(input, output, self.len());
 
         for (in_chunk, out_chunk) in input
-            .chunks_mut(self.len())
-            .zip(output.chunks_mut(self.len()))
+            .chunks_exact_mut(self.len())
+            .zip(output.chunks_exact_mut(self.len()))
         {
             self.perform_fft(in_chunk, out_chunk);
         }
