@@ -77,9 +77,9 @@
 //!
 //! Elements in the output are ordered by ascending frequency, with the first element corresponding to frequency 0.
 
-#![feature(min_specialization)]
-#![feature(maybe_uninit_extra)]
-#![feature(maybe_uninit_slice)]
+//#![feature(min_specialization)]
+//#![feature(maybe_uninit_extra)]
+//#![feature(maybe_uninit_slice)]
 
 
 pub use num_complex;
@@ -218,31 +218,31 @@ pub trait Fft<T: FFTnum>: Length + IsInverse + Sync + Send {
     fn get_out_of_place_scratch_len(&self) -> usize;
 }
 
-// Algorithms implemented to use AVX instructions. Only compiled on x86_64.
-#[cfg(target_arch="x86_64")]
-mod avx;
-
-// When we're not on avx, keep a stub implementation around that just does nothing
-#[cfg(not(target_arch="x86_64"))]
-mod avx{
-   pub mod avx_planner {
-        use crate::{Fft, FFTnum};
-        use std::sync::Arc;
-        pub struct FftPlannerAvx<T: FFTnum> {
-            _phantom: std::marker::PhantomData<T>,
-        }
-        impl<T: FFTnum> FftPlannerAvx<T> {
-            pub fn new(_inverse: bool) -> Result<Self, ()> {
-                Err(())
-            }
-            pub fn plan_fft(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
-                unreachable!();
-            }
-        }
-    }
-}
-
-pub use self::avx::avx_planner::FftPlannerAvx;
+//// Algorithms implemented to use AVX instructions. Only compiled on x86_64.
+//#[cfg(target_arch="x86_64")]
+//mod avx;
+//
+//// When we're not on avx, keep a stub implementation around that just does nothing
+//#[cfg(not(target_arch="x86_64"))]
+//mod avx{
+//   pub mod avx_planner {
+//        use crate::{Fft, FFTnum};
+//        use std::sync::Arc;
+//        pub struct FftPlannerAvx<T: FFTnum> {
+//            _phantom: std::marker::PhantomData<T>,
+//        }
+//        impl<T: FFTnum> FftPlannerAvx<T> {
+//            pub fn new(_inverse: bool) -> Result<Self, ()> {
+//                Err(())
+//            }
+//            pub fn plan_fft(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
+//                unreachable!();
+//            }
+//        }
+//    }
+//}
+//
+//pub use self::avx::avx_planner::FftPlannerAvx;
 
 #[cfg(test)]
 mod test_utils;

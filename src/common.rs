@@ -13,7 +13,8 @@ pub trait FFTnum: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static 
 }
 
 impl<T> FFTnum for T where T: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {
-    default fn generate_twiddle_factor_floatindex(index: f64, fft_len: usize, inverse: bool) -> Complex<Self> {
+    //default fn generate_twiddle_factor_floatindex(index: f64, fft_len: usize, inverse: bool) -> Complex<Self> {
+	fn generate_twiddle_factor_floatindex(index: f64, fft_len: usize, inverse: bool) -> Complex<Self> {
         let constant = -2f64 * std::f64::consts::PI / fft_len as f64;
 		let angle = constant * index;
 
@@ -30,40 +31,40 @@ impl<T> FFTnum for T where T: Copy + FromPrimitive + Signed + Sync + Send + Debu
     }
 }
 
-impl FFTnum for f32 {
-	fn generate_twiddle_factor_floatindex(index: f64, fft_len: usize, inverse: bool) -> Complex<Self> {
-		let constant = -2f64 * std::f64::consts::PI / fft_len as f64;
-		let angle = constant * index;
-
-	    let result = Complex {
-	    	re: angle.cos() as f32,
-	    	im: angle.sin() as f32,
-	    };
-
-	    if inverse {
-	    	result.conj()
-	    } else {
-	    	result
-	    }
-    }
-}
-impl FFTnum for f64 {
-	fn generate_twiddle_factor_floatindex(index: f64, fft_len: usize, inverse: bool) -> Complex<Self> {
-		let constant = -2f64 * std::f64::consts::PI / fft_len as f64;
-		let angle = constant * index;
-
-	    let result = Complex {
-	    	re: angle.cos(),
-	    	im: angle.sin(),
-	    };
-
-	    if inverse {
-	    	result.conj()
-	    } else {
-	    	result
-	    }
-    }
-}
+//impl FFTnum for f32 {
+//	fn generate_twiddle_factor_floatindex(index: f64, fft_len: usize, inverse: bool) -> Complex<Self> {
+//		let constant = -2f64 * std::f64::consts::PI / fft_len as f64;
+//		let angle = constant * index;
+//
+//	    let result = Complex {
+//	    	re: angle.cos() as f32,
+//	    	im: angle.sin() as f32,
+//	    };
+//
+//	    if inverse {
+//	    	result.conj()
+//	    } else {
+//	    	result
+//	    }
+//    }
+//}
+//impl FFTnum for f64 {
+//	fn generate_twiddle_factor_floatindex(index: f64, fft_len: usize, inverse: bool) -> Complex<Self> {
+//		let constant = -2f64 * std::f64::consts::PI / fft_len as f64;
+//		let angle = constant * index;
+//
+//	    let result = Complex {
+//	    	re: angle.cos(),
+//	    	im: angle.sin(),
+//	    };
+//
+//	    if inverse {
+//	    	result.conj()
+//	    } else {
+//	    	result
+//	    }
+//    }
+//}
 
 macro_rules! boilerplate_fft_oop {
     ($struct_name:ident, $len_fn:expr) => (

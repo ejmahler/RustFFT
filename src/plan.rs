@@ -8,7 +8,7 @@ use crate::Fft;
 use crate::algorithm::*;
 use crate::algorithm::butterflies::*;
 
-use crate::FftPlannerAvx;
+//use crate::FftPlannerAvx;
 
 use crate::math_utils::{ PrimeFactors, PrimeFactor };
 
@@ -50,7 +50,7 @@ pub struct FftPlanner<T: FFTnum> {
     inverse: bool,
 
     // None if this machine doesn't support avx
-    avx_planner: Option<FftPlannerAvx<T>>,
+    //avx_planner: Option<FftPlannerAvx<T>>,
 }
 
 impl<T: FFTnum> FftPlanner<T> {
@@ -62,7 +62,7 @@ impl<T: FFTnum> FftPlanner<T> {
             inverse: inverse,
             algorithm_cache: HashMap::new(),
 
-            avx_planner: FftPlannerAvx::new(inverse).ok()
+            //avx_planner: FftPlannerAvx::new(inverse).ok()
         }
     }
 
@@ -70,12 +70,13 @@ impl<T: FFTnum> FftPlanner<T> {
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft(&mut self, len: usize) -> Arc<dyn Fft<T>> {
-        if let Some(avx_planner) = &mut self.avx_planner {
-            // If we have an AVX planner, defer to that for all construction needs
-            // TODO: eventually, "FftPlanner" could be an enum of different planner types? "ScalarPlanner" etc
-            // That way, we wouldn't need to waste memory storing the scalar planner's algorithm cache when we're not gonna use it
-            avx_planner.plan_fft(len)
-        } else if let Some(instance) = self.algorithm_cache.get(&len) {
+        //if let Some(avx_planner) = &mut self.avx_planner {
+        //    // If we have an AVX planner, defer to that for all construction needs
+        //    // TODO: eventually, "FftPlanner" could be an enum of different planner types? "ScalarPlanner" etc
+        //    // That way, we wouldn't need to waste memory storing the scalar planner's algorithm cache when we're not gonna use it
+        //    avx_planner.plan_fft(len)
+        //} else 
+        if let Some(instance) = self.algorithm_cache.get(&len) {
             Arc::clone(instance)
         } else {
             let instance = self.plan_new_fft_with_factors(len, PrimeFactors::compute(len));
