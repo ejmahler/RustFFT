@@ -20,7 +20,7 @@ impl<T> FFTnum for T where T: Copy + FromPrimitive + Signed + Sync + Send + Debu
 
 	    let result = Complex {
 	    	re: Self::from_f64(angle.cos()).unwrap(),
-	    	im: Self::from_f64(angle.cos()).unwrap(),
+	    	im: Self::from_f64(angle.sin()).unwrap(),
 	    };
 
 	    if inverse {

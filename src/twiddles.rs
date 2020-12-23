@@ -33,7 +33,7 @@ mod unit_tests {
             let actual: Vec<Complex<f32>> = generate_twiddle_factors(len, false);
             let expected: Vec<Complex<f32>> = (0..len).map(|i| Complex::from_polar(1f32, constant * i as f32 / len as f32)).collect();
 
-            assert!(compare_vectors(&actual, &expected), "len = {}", len)
+            assert!(compare_vectors(&actual, &expected), "len = {}, actual {:?}, expected {:?}", len, actual, expected)
         }
 
         //for each len, verify that each element in the inverse is the conjugate of the non-inverse
