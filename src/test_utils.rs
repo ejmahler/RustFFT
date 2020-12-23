@@ -65,8 +65,8 @@ pub fn check_fft_algorithm(fft: &FFT<f32>, size: usize, inverse: bool) {
     fft.process_multi(&mut multi_input, &mut multi_output);
 
     for (input_chunk, output_chunk) in actual_input
-        .chunks_mut(size)
-        .zip(actual_output.chunks_mut(size))
+        .chunks_exact_mut(size)
+        .zip(actual_output.chunks_exact_mut(size))
     {
         fft.process(input_chunk, output_chunk);
     }

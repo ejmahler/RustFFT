@@ -53,7 +53,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly2 {
     }
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
+        for chunk in buffer.chunks_exact_mut(self.len()) {
             self.process_inplace(chunk);
         }
     }
@@ -171,7 +171,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly3<T> {
     }
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
+        for chunk in buffer.chunks_exact_mut(self.len()) {
             self.process_inplace(chunk);
         }
     }
@@ -243,7 +243,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly4 {
     }
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
+        for chunk in buffer.chunks_exact_mut(self.len()) {
             self.process_inplace(chunk);
         }
     }
@@ -389,7 +389,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly5<T> {
     }
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
+        for chunk in buffer.chunks_exact_mut(self.len()) {
             self.process_inplace(chunk);
         }
     }
@@ -480,7 +480,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly6<T> {
     }
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
+        for chunk in buffer.chunks_exact_mut(self.len()) {
             self.process_inplace(chunk);
         }
     }
@@ -536,7 +536,7 @@ impl<T: FFTnum> Butterfly7<T> {
 impl<T: FFTnum> FFTButterfly<T> for Butterfly7<T> {
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
+        for chunk in buffer.chunks_exact_mut(self.len()) {
             self.process_inplace(chunk);
         }
     }
@@ -760,7 +760,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly8<T> {
     }
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
+        for chunk in buffer.chunks_exact_mut(self.len()) {
             self.process_inplace(chunk);
         }
     }
@@ -820,7 +820,7 @@ impl<T: FFTnum> Butterfly11<T> {
 impl<T: FFTnum> FFTButterfly<T> for Butterfly11<T> {
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
+        for chunk in buffer.chunks_exact_mut(self.len()) {
             self.process_inplace(chunk);
         }
     }
@@ -1074,7 +1074,7 @@ impl<T: FFTnum> Butterfly13<T> {
 impl<T: FFTnum> FFTButterfly<T> for Butterfly13<T> {
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
+        for chunk in buffer.chunks_exact_mut(self.len()) {
             self.process_inplace(chunk);
         }
     }
@@ -1453,7 +1453,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly16<T> {
     }
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
+        for chunk in buffer.chunks_exact_mut(self.len()) {
             self.process_inplace(chunk);
         }
     }
@@ -1522,7 +1522,7 @@ impl<T: FFTnum> Butterfly17<T> {
 impl<T: FFTnum> FFTButterfly<T> for Butterfly17<T> {
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
+        for chunk in buffer.chunks_exact_mut(self.len()) {
             self.process_inplace(chunk);
         }
     }
@@ -1989,7 +1989,7 @@ impl<T: FFTnum> Butterfly19<T> {
 impl<T: FFTnum> FFTButterfly<T> for Butterfly19<T> {
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
+        for chunk in buffer.chunks_exact_mut(self.len()) {
             self.process_inplace(chunk);
         }
     }
@@ -2554,7 +2554,7 @@ impl<T: FFTnum> Butterfly23<T> {
 impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
+        for chunk in buffer.chunks_exact_mut(self.len()) {
             self.process_inplace(chunk);
         }
     }
@@ -3322,7 +3322,7 @@ impl<T: FFTnum> Butterfly29<T> {
 impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
+        for chunk in buffer.chunks_exact_mut(self.len()) {
             self.process_inplace(chunk);
         }
     }
@@ -4444,7 +4444,7 @@ impl<T: FFTnum> Butterfly31<T> {
 impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
+        for chunk in buffer.chunks_exact_mut(self.len()) {
             self.process_inplace(chunk);
         }
     }
@@ -5794,7 +5794,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly32<T> {
     }
     #[inline(always)]
     unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_mut(self.len()) {
+        for chunk in buffer.chunks_exact_mut(self.len()) {
             self.process_inplace(chunk);
         }
     }
@@ -5899,7 +5899,7 @@ mod unit_tests {
             butterfly.process_multi_inplace(&mut inplace_multi_buffer);
         }
 
-        for chunk in inplace_buffer.chunks_mut(size) {
+        for chunk in inplace_buffer.chunks_exact_mut(size) {
             unsafe { butterfly.process_inplace(chunk) };
         }
 
