@@ -9,9 +9,9 @@ use std::sync::Arc;
 use num_traits::Float;
 use rustfft::num_traits::Zero;
 use rustfft::{
-    algorithm::{Bluesteins, Radix4},
+    algorithm::{BluesteinsAlgorithm, Radix4},
     num_complex::Complex,
-    FFTnum, FftPlanner, Fft,
+    FFTnum, Fft, FftPlanner,
 };
 
 use rand::distributions::{uniform::SampleUniform, Distribution, Uniform};
@@ -26,13 +26,13 @@ const RNG_SEED: [u8; 32] = [
 
 /// Returns true if the mean difference in the elements of the two vectors
 /// is small
-fn compare_vectors<T: FFTnum + Float>(vec1: &[Complex<T>], vec2: &[Complex<T>]) -> bool {
+fn compare_vectors<T: rustfft::FFTnum + Float>(vec1: &[Complex<T>], vec2: &[Complex<T>]) -> bool {
     assert_eq!(vec1.len(), vec2.len());
-    let mut sse = T::zero();
+    let mut error = T::zero();
     for (&a, &b) in vec1.iter().zip(vec2.iter()) {
-        sse = sse + (a - b).norm();
+        error = error + (a - b).norm();
     }
-    return (sse / T::from_usize(vec1.len()).unwrap()) < T::from_f32(0.1).unwrap();
+    return (error / T::from_usize(vec1.len()).unwrap()) < T::from_f32(0.1).unwrap();
 }
 
 fn fft_matches_control<T: FFTnum + Float>(control: Arc<dyn Fft<T>>, input: &[Complex<T>]) -> bool {
@@ -97,7 +97,7 @@ impl<T: FFTnum> ControlCache<T> {
         let inner_fft_len = (len * 2 - 1).checked_next_power_of_two().unwrap();
         let inner_fft_index = inner_fft_len.trailing_zeros() as usize;
         let inner_fft = Arc::clone(&self.fft_cache[inner_fft_index]);
-        Arc::new(Bluesteins::new(len, inner_fft))
+        Arc::new(BluesteinsAlgorithm::new(len, inner_fft))
     }
 }
 

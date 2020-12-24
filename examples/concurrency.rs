@@ -15,9 +15,8 @@ fn main() {
         .map(|_| {
             let fft_copy = Arc::clone(&fft);
             thread::spawn(move || {
-                let mut signal = vec![Complex32::new(0.0, 0.0); 100];
-                let mut spectrum = vec![Complex32::new(0.0, 0.0); 100];
-                fft_copy.process(&mut signal, &mut spectrum);
+                let mut buffer = vec![Complex32::new(0.0, 0.0); 100];
+                fft_copy.process_inplace(&mut buffer);
             })
         })
         .collect();

@@ -1,20 +1,17 @@
 use num_complex::Complex;
 use num_traits::Zero;
 
-use crate::common::{verify_length, verify_length_divisible, FFTnum};
+use crate::common::FFTnum;
 
-use crate::algorithm::butterflies::{
-    Butterfly16, Butterfly2, Butterfly4, Butterfly8, FFTButterfly,
-};
-use crate::twiddles;
-use crate::{IsInverse, Length, Fft};
+use crate::algorithm::butterflies::{Butterfly16, Butterfly2, Butterfly4, Butterfly8};
+use crate::{Fft, IsInverse, Length};
 
 /// FFT algorithm optimized for power-of-two sizes
 ///
 /// ~~~
 /// // Computes a forward FFT of size 4096
 /// use rustfft::algorithm::Radix4;
-/// use rustfft::FFT;
+/// use rustfft::Fft;
 /// use rustfft::num_complex::Complex;
 /// use rustfft::num_traits::Zero;
 ///
@@ -58,7 +55,7 @@ impl<T: FFTnum> Radix4<T> {
             let num_rows = len / (twiddle_stride * 4);
             for i in 0..num_rows {
                 for k in 1..4 {
-                    let twiddle = twiddles::single_twiddle(i * k * twiddle_stride, len, inverse);
+                    let twiddle = T::generate_twiddle_factor(i * k * twiddle_stride, len, inverse);
                     twiddle_factors.push(twiddle);
                 }
             }
@@ -74,16 +71,21 @@ impl<T: FFTnum> Radix4<T> {
         }
     }
 
-    fn perform_fft(&self, signal: &[Complex<T>], spectrum: &mut [Complex<T>]) {
+    fn perform_fft_out_of_place(
+        &self,
+        signal: &[Complex<T>],
+        spectrum: &mut [Complex<T>],
+        _scratch: &mut [Complex<T>],
+    ) {
         match self.len() {
             0 | 1 => spectrum.copy_from_slice(signal),
             2 => {
                 spectrum.copy_from_slice(signal);
-                unsafe { Butterfly2::new(self.inverse).process_inplace(spectrum) }
+                unsafe { Butterfly2::new(self.inverse).perform_fft_butterfly(spectrum) }
             }
             4 => {
                 spectrum.copy_from_slice(signal);
-                unsafe { Butterfly4::new(self.inverse).process_inplace(spectrum) }
+                unsafe { Butterfly4::new(self.inverse).perform_fft_butterfly(spectrum) }
             }
             _ => {
                 // copy the data into the spectrum vector
@@ -92,12 +94,12 @@ impl<T: FFTnum> Radix4<T> {
                 // perform the butterflies. the butterfly size depends on the input size
                 let num_bits = signal.len().trailing_zeros();
                 let mut current_size = if num_bits % 2 == 0 {
-                    unsafe { self.butterfly16.process_multi_inplace(spectrum) };
+                    self.butterfly16.process_inplace_multi(spectrum, &mut []);
 
                     // for the cross-ffts we want to to start off with a size of 64 (16 * 4)
                     64
                 } else {
-                    unsafe { self.butterfly8.process_multi_inplace(spectrum) };
+                    self.butterfly8.process_inplace_multi(spectrum, &mut []);
 
                     // for the cross-ffts we want to to start off with a size of 32 (8 * 4)
                     32
@@ -130,36 +132,7 @@ impl<T: FFTnum> Radix4<T> {
         }
     }
 }
-
-impl<T: FFTnum> Fft<T> for Radix4<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-
-        self.perform_fft(input, output);
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-
-        for (in_chunk, out_chunk) in input
-            .chunks_exact_mut(self.len())
-            .zip(output.chunks_exact_mut(self.len()))
-        {
-            self.perform_fft(in_chunk, out_chunk);
-        }
-    }
-}
-impl<T> Length for Radix4<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        self.len
-    }
-}
-impl<T> IsInverse for Radix4<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
+boilerplate_fft_oop!(Radix4, |this: &Radix4<_>| this.len);
 
 // after testing an iterative bit reversal algorithm, this recursive algorithm
 // was almost an order of magnitude faster at setting up
@@ -241,6 +214,6 @@ mod unit_tests {
     fn test_radix4_with_length(len: usize, inverse: bool) {
         let fft = Radix4::new(len, inverse);
 
-        check_fft_algorithm(&fft, len, inverse);
+        check_fft_algorithm::<f32>(&fft, len, inverse);
     }
 }

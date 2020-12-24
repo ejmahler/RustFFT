@@ -1,19 +1,20 @@
 use std::sync::Arc;
 
 use num_complex::Complex;
+use num_integer::Integer;
 use num_traits::Zero;
+use primal_check::miller_rabin;
 use strength_reduce::StrengthReducedUsize;
 
-use crate::common::{verify_length, verify_length_divisible, FFTnum};
+use crate::common::FFTnum;
 
 use crate::math_utils;
-use crate::twiddles;
-use crate::{IsInverse, Length, Fft};
+use crate::{Fft, IsInverse, Length};
 
 /// Implementation of Rader's Algorithm
 ///
 /// This algorithm computes a prime-sized FFT in O(nlogn) time. It does this by converting this size n FFT into a
-/// size (n - 1) FFT, which is guaranteed to be composite.
+/// size (n - 1) which is guaranteed to be composite.
 ///
 /// The worst case for this algorithm is when (n - 1) is 2 * prime, resulting in a
 /// [Cunningham Chain](https://en.wikipedia.org/wiki/Cunningham_chain)
@@ -21,7 +22,7 @@ use crate::{IsInverse, Length, Fft};
 /// ~~~
 /// // Computes a forward FFT of size 1201 (prime number), using Rader's Algorithm
 /// use rustfft::algorithm::RadersAlgorithm;
-/// use rustfft::{FFT, FFTplanner};
+/// use rustfft::{Fft, FftPlanner};
 /// use rustfft::num_complex::Complex;
 /// use rustfft::num_traits::Zero;
 ///
@@ -29,10 +30,10 @@ use crate::{IsInverse, Length, Fft};
 /// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); 1201];
 ///
 /// // plan a FFT of size n - 1 = 1200
-/// let mut planner = FFTplanner::new(false);
+/// let mut planner = FftPlanner::new(false);
 /// let inner_fft = planner.plan_fft(1200);
 ///
-/// let fft = RadersAlgorithm::new(1201, inner_fft);
+/// let fft = RadersAlgorithm::new(inner_fft);
 /// fft.process(&mut input, &mut output);
 /// ~~~
 ///
@@ -48,6 +49,9 @@ pub struct RadersAlgorithm<T> {
     primitive_root_inverse: usize,
 
     len: StrengthReducedUsize,
+    inplace_scratch_len: usize,
+    outofplace_scratch_len: usize,
+    inverse: bool,
 }
 
 impl<T: FFTnum> RadersAlgorithm<T> {
@@ -57,82 +61,115 @@ impl<T: FFTnum> RadersAlgorithm<T> {
     /// constructor. This further underlines the fact that Rader's Algorithm is more expensive to run than other
     /// FFT algorithms
     ///
-    /// Note also that if `len` is not prime, this algorithm may silently produce garbage output
-    pub fn new(len: usize, inner_fft: Arc<dyn Fft<T>>) -> Self {
-        assert_eq!(
-            len - 1,
-            inner_fft.len(),
-            "For raders algorithm, inner_fft.len() must be self.len() - 1. Expected {}, got {}",
-            len - 1,
-            inner_fft.len()
-        );
+    /// # Panics
+    /// Panics if `inner_fft_len() + 1` is not a prime number.
+    pub fn new(inner_fft: Arc<dyn Fft<T>>) -> Self {
+        let inner_fft_len = inner_fft.len();
+        let len = inner_fft_len + 1;
+        assert!(miller_rabin(len as u64), "For raders algorithm, inner_fft.len() + 1 must be prime. Expected prime number, got {} + 1 = {}", inner_fft_len, len);
 
-        let inner_fft_len = len - 1;
+        let inverse = inner_fft.is_inverse();
         let reduced_len = StrengthReducedUsize::new(len);
 
         // compute the primitive root and its inverse for this size
         let primitive_root = math_utils::primitive_root(len as u64).unwrap() as usize;
-        let primitive_root_inverse =
-            math_utils::multiplicative_inverse(primitive_root as usize, len);
+
+        // compute the multiplicative inverse of primative_root mod len and vice versa.
+        // i64::extended_gcd will compute both the inverse of left mod right, and the inverse of right mod left, but we're only goingto use one of them
+        // the primtive root inverse might be negative, if o make it positive by wrapping
+        let gcd_data = i64::extended_gcd(&(primitive_root as i64), &(len as i64));
+        let primitive_root_inverse = if gcd_data.x >= 0 {
+            gcd_data.x
+        } else {
+            gcd_data.x + len as i64
+        } as usize;
 
         // precompute the coefficients to use inside the process method
         let unity_scale = T::from_f64(1f64 / inner_fft_len as f64).unwrap();
         let mut inner_fft_input = vec![Complex::zero(); inner_fft_len];
         let mut twiddle_input = 1;
         for input_cell in &mut inner_fft_input {
-            let twiddle = twiddles::single_twiddle(twiddle_input, len, inner_fft.is_inverse());
+            let twiddle = T::generate_twiddle_factor(twiddle_input, len, inverse);
             *input_cell = twiddle * unity_scale;
 
             twiddle_input = (twiddle_input * primitive_root_inverse) % reduced_len;
         }
 
+        let required_inner_scratch = inner_fft.get_inplace_scratch_len();
+        let extra_inner_scratch = if required_inner_scratch <= inner_fft_len {
+            0
+        } else {
+            required_inner_scratch
+        };
+
         //precompute a FFT of our reordered twiddle factors
-        let mut inner_fft_output = vec![Zero::zero(); inner_fft_len];
-        inner_fft.process(&mut inner_fft_input, &mut inner_fft_output);
+        let mut inner_fft_scratch = vec![Zero::zero(); required_inner_scratch];
+        inner_fft.process_inplace_with_scratch(&mut inner_fft_input, &mut inner_fft_scratch);
 
         Self {
             inner_fft,
-            inner_fft_data: inner_fft_output.into_boxed_slice(),
+            inner_fft_data: inner_fft_input.into_boxed_slice(),
 
             primitive_root,
             primitive_root_inverse,
 
             len: reduced_len,
+            inplace_scratch_len: inner_fft_len + extra_inner_scratch,
+            outofplace_scratch_len: extra_inner_scratch,
+            inverse,
         }
     }
 
-    fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        // The first output element is just the sum of all the input elements
-        output[0] = input.iter().sum();
-        let first_input_val = input[0];
+    fn perform_fft_out_of_place(
+        &self,
+        input: &mut [Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) {
+        // The first output element is just the sum of all the input elements, and we need to store off the first input value
+        let (output_first, output) = output.split_first_mut().unwrap();
+        let (input_first, input) = input.split_first_mut().unwrap();
+        let first_input_val = *input_first;
+        *output_first = *input_first;
 
-        // we're now done with the first input and output
-        let (_, output) = output.split_first_mut().unwrap();
-        let (_, input) = input.split_first_mut().unwrap();
-
-        // copy the input into the output, reordering as we go
+        // copy the inout into the output, reordering as we go. also compute a sum of all elements
         let mut input_index = 1;
         for output_element in output.iter_mut() {
             input_index = (input_index * self.primitive_root) % self.len;
-            *output_element = input[input_index - 1];
+
+            let input_element = input[input_index - 1];
+            *output_first = *output_first + input_element;
+            *output_element = input_element;
         }
 
         // perform the first of two inner FFTs
-        self.inner_fft.process(output, input);
+        let inner_scratch = if scratch.len() > 0 {
+            &mut scratch[..]
+        } else {
+            &mut input[..]
+        };
+        self.inner_fft
+            .process_inplace_with_scratch(output, inner_scratch);
 
         // multiply the inner result with our cached setup data
         // also conjugate every entry. this sets us up to do an inverse FFT
         // (because an inverse FFT is equivalent to a normal FFT where you conjugate both the inputs and outputs)
-        for ((&input_cell, output_cell), &multiple) in input
+        for ((output_cell, input_cell), &multiple) in output
             .iter()
-            .zip(output.iter_mut())
+            .zip(input.iter_mut())
             .zip(self.inner_fft_data.iter())
         {
-            *output_cell = (input_cell * multiple).conj();
+            *input_cell = (*output_cell * multiple).conj();
         }
 
         // execute the second FFT
-        self.inner_fft.process(output, input);
+        let inner_scratch = if scratch.len() > 0 {
+            scratch
+        } else {
+            &mut output[..]
+        };
+        self.inner_fft
+            .process_inplace_with_scratch(input, inner_scratch);
 
         // copy the final values into the output, reordering as we go
         let mut output_index = 1;
@@ -141,37 +178,57 @@ impl<T: FFTnum> RadersAlgorithm<T> {
             output[output_index - 1] = input_element.conj() + first_input_val;
         }
     }
-}
+    fn perform_fft_inplace(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        // The first output element is just the sum of all the input elements, and we need to store off the first input value
+        let (buffer_first, buffer) = buffer.split_first_mut().unwrap();
+        let buffer_first_val = *buffer_first;
 
-impl<T: FFTnum> Fft<T> for RadersAlgorithm<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
+        let (scratch, extra_scratch) = scratch.split_at_mut(self.len() - 1);
 
-        self.perform_fft(input, output);
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
+        // copy the buffer into the scratch, reordering as we go. also compute a sum of all elements
+        let mut input_index = 1;
+        for scratch_element in scratch.iter_mut() {
+            input_index = (input_index * self.primitive_root) % self.len;
 
-        for (in_chunk, out_chunk) in input
-            .chunks_exact_mut(self.len())
-            .zip(output.chunks_exact_mut(self.len()))
-        {
-            self.perform_fft(in_chunk, out_chunk);
+            let buffer_element = buffer[input_index - 1];
+            *buffer_first = *buffer_first + buffer_element;
+            *scratch_element = buffer_element;
+        }
+
+        // perform the first of two inner FFTs
+        let inner_scratch = if extra_scratch.len() > 0 {
+            extra_scratch
+        } else {
+            &mut buffer[..]
+        };
+        self.inner_fft
+            .process_inplace_with_scratch(scratch, inner_scratch);
+
+        // multiply the inner result with our cached setup data
+        // also conjugate every entry. this sets us up to do an inverse FFT
+        // (because an inverse FFT is equivalent to a normal FFT where you conjugate both the inputs and outputs)
+        for (scratch_cell, &twiddle) in scratch.iter_mut().zip(self.inner_fft_data.iter()) {
+            *scratch_cell = (*scratch_cell * twiddle).conj();
+        }
+
+        // execute the second FFT
+        self.inner_fft
+            .process_inplace_with_scratch(scratch, inner_scratch);
+
+        // copy the final values into the output, reordering as we go
+        let mut output_index = 1;
+        for scratch_element in scratch {
+            output_index = (output_index * self.primitive_root_inverse) % self.len;
+            buffer[output_index - 1] = scratch_element.conj() + buffer_first_val;
         }
     }
 }
-impl<T> Length for RadersAlgorithm<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        self.len.get()
-    }
-}
-impl<T> IsInverse for RadersAlgorithm<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inner_fft.is_inverse()
-    }
-}
+boilerplate_fft!(
+    RadersAlgorithm,
+    |this: &RadersAlgorithm<_>| this.len.get(),
+    |this: &RadersAlgorithm<_>| this.inplace_scratch_len,
+    |this: &RadersAlgorithm<_>| this.outofplace_scratch_len
+);
 
 #[cfg(test)]
 mod unit_tests {
@@ -182,16 +239,18 @@ mod unit_tests {
 
     #[test]
     fn test_raders() {
-        for &len in &[3, 5, 7, 11, 13] {
-            test_raders_with_length(len, false);
-            test_raders_with_length(len, true);
+        for len in 3..100 {
+            if miller_rabin(len as u64) {
+                test_raders_with_length(len, false);
+                test_raders_with_length(len, true);
+            }
         }
     }
 
     fn test_raders_with_length(len: usize, inverse: bool) {
         let inner_fft = Arc::new(DFT::new(len - 1, inverse));
-        let fft = RadersAlgorithm::new(len, inner_fft);
+        let fft = RadersAlgorithm::new(inner_fft);
 
-        check_fft_algorithm(&fft, len, inverse);
+        check_fft_algorithm::<f32>(&fft, len, inverse);
     }
 }
