@@ -52,6 +52,10 @@
 //!
 //! Elements in the output are ordered by ascending frequency, with the first element corresponding to frequency 0.
 
+#![feature(min_specialization)]
+#![feature(maybe_uninit_slice)]
+#![feature(maybe_uninit_extra)]
+
 pub use num_complex;
 pub use num_traits;
 
@@ -196,11 +200,11 @@ pub trait Fft<T: FFTnum>: Length + IsInverse + Sync + Send {
 }
 
 // Algorithms implemented to use AVX instructions. Only compiled on x86_64.
-//#[cfg(target_arch="x86_64")]
-//mod avx;
+#[cfg(target_arch = "x86_64")]
+mod avx;
 
 // When we're not on avx, keep a stub implementation around that just does nothing
-//#[cfg(not(target_arch="x86_64"))]
+#[cfg(not(target_arch = "x86_64"))]
 mod avx {
     pub mod avx_planner {
         use crate::{FFTnum, Fft};
