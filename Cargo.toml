@@ -21,4 +21,4 @@ strength_reduce = "^0.2.1"
 transpose = "0.2"
 
 [dev-dependencies]
-rand = "0.5"
+rand = "0.8"
