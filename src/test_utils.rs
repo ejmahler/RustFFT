@@ -3,8 +3,8 @@ use num_traits::Zero;
 
 use std::sync::Arc;
 
-use rand::distributions::{Distribution, Normal};
-use rand::{SeedableRng, StdRng};
+use rand::distributions::{Distribution, Uniform};
+use rand::{rngs::StdRng, SeedableRng};
 
 use crate::algorithm::{butterflies, DFT};
 use crate::FFT;
@@ -18,7 +18,7 @@ const RNG_SEED: [u8; 32] = [
 
 pub fn random_signal(length: usize) -> Vec<Complex<f32>> {
     let mut sig = Vec::with_capacity(length);
-    let normal_dist = Normal::new(0.0, 10.0);
+    let normal_dist = Uniform::new(0.0, 10.0);
     let mut rng: StdRng = SeedableRng::from_seed(RNG_SEED);
     for _ in 0..length {
         sig.push(Complex {
