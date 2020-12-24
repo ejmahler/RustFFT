@@ -13,8 +13,8 @@
 //! let mut planner = FFTplanner::new(false);
 //! let fft = planner.plan_fft(1234);
 //!
-//! let mut input:  Vec<Complex<f32>> = vec![Complex{ re: 0.0, im: 0.0 }; 4096];
-//! let mut output: Vec<Complex<f32>> = vec![Complex{ re: 0.0, im: 0.0 }; 4096];
+//! let mut input:  Vec<Complex<f32>> = vec![Complex{ re: 0.0, im: 0.0 }; 1234];
+//! let mut output: Vec<Complex<f32>> = vec![Complex{ re: 0.0, im: 0.0 }; 1234];
 //!
 //! fft.process(&mut input, &mut output);
 //! ```

@@ -2,10 +2,17 @@
 Released 24 December 2020
 ### Added
 - Added a blanked impl of `FFTnum` to any type that implements the required traits (#7)
-- Added butterflies for many prime sizes, up to 31 (#10)
+- Added butterflies for many prime sizes, up to 31, and optimized the size-3, size-5, and size-7 buitterflies (#10)
+- Added an implementation of Bluestein's Algorithm (#6)
+
+### Changed
+- Improved the performance of GoodThomasAlgorithm re-indexing (#20)
 
 ## [4.0.0]
 Released 8 October 2020
+
+This release moved the home repository of RustFFT from https://github.com/awelkie/RustFFT to https://github.com/ejmahler/RustFFT
+
 ### Breaking Changes
 - Increased the version of the num-complex dependency to 0.3. This is a breaking change because we have a public dependency on num-complex.
 See the [num-complex changelog](https://github.com/rust-num/num-complex/blob/master/RELEASES.md) for a list of breaking changes in num-complex 0.3.
