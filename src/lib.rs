@@ -50,9 +50,6 @@
 //!
 //! Elements in the output are ordered by ascending frequency, with the first element corresponding to frequency 0.
 
-#![allow(unknown_lints)] // The "bare trait objects" lint is unknown on rustc 1.26
-#![allow(bare_trait_objects)]
-
 pub use num_complex;
 pub use num_traits;
 
