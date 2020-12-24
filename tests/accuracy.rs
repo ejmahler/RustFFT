@@ -4,14 +4,18 @@
 //! for a variety of lengths, and test that our FFT algorithm matches our
 //! DFT calculation for those signals.
 
-use std::{f32, sync::Arc};
+use std::sync::Arc;
 
 use num_traits::Float;
-use rustfft::{FFTnum, algorithm::{Bluesteins, Radix4}, num_complex::Complex};
 use rustfft::num_traits::Zero;
+use rustfft::{
+    algorithm::{Bluesteins, Radix4},
+    num_complex::Complex,
+    FFTnum, FFTplanner, FFT,
+};
 
-use rand::{SeedableRng, distributions::{Distribution, Uniform, uniform::SampleUniform}, rngs::StdRng};
-use rustfft::{FFTplanner, FFT};
+use rand::distributions::{uniform::SampleUniform, Distribution, Uniform};
+use rand::{rngs::StdRng, SeedableRng};
 
 /// The seed for the random number generator used to generate
 /// random signals. It's defined here so that we have deterministic
@@ -59,7 +63,7 @@ fn fft_matches_control<T: FFTnum + Float>(control: Arc<dyn FFT<T>>, input: &[Com
 
 fn random_signal<T: FFTnum + SampleUniform>(length: usize) -> Vec<Complex<T>> {
     let mut sig = Vec::with_capacity(length);
-    let dist : Uniform<T> = Uniform::new(T::zero(), T::from_f64(10.0).unwrap());
+    let dist: Uniform<T> = Uniform::new(T::zero(), T::from_f64(10.0).unwrap());
     let mut rng: StdRng = SeedableRng::from_seed(RNG_SEED);
     for _ in 0..length {
         sig.push(Complex {
@@ -72,7 +76,7 @@ fn random_signal<T: FFTnum + SampleUniform>(length: usize) -> Vec<Complex<T>> {
 
 // A cache that makes setup for integration tests faster
 struct ControlCache<T: FFTnum> {
-    fft_cache : Vec<Arc<dyn FFT<T>>>,
+    fft_cache: Vec<Arc<dyn FFT<T>>>,
 }
 impl<T: FFTnum> ControlCache<T> {
     pub fn new(max_outer_len: usize, inverse: bool) -> Self {
@@ -80,10 +84,12 @@ impl<T: FFTnum> ControlCache<T> {
         let max_power = max_inner_len.trailing_zeros() as usize;
 
         Self {
-            fft_cache: (0..=max_power).map(|i| {
-                let len = 1 << i;
-                Arc::new(Radix4::new(len, inverse)) as Arc<dyn FFT<_>>
-            }).collect()
+            fft_cache: (0..=max_power)
+                .map(|i| {
+                    let len = 1 << i;
+                    Arc::new(Radix4::new(len, inverse)) as Arc<dyn FFT<_>>
+                })
+                .collect(),
         }
     }
 
@@ -95,14 +101,14 @@ impl<T: FFTnum> ControlCache<T> {
     }
 }
 
-const TEST_MAX : usize = 1001;
+const TEST_MAX: usize = 1001;
 
 /// Integration tests that verify our FFT output matches the direct DFT calculation
 /// for random signals.
 #[test]
 fn test_planned_fft_forward_f32() {
     let is_inverse = false;
-    let cache : ControlCache<f32> = ControlCache::new(TEST_MAX, is_inverse);
+    let cache: ControlCache<f32> = ControlCache::new(TEST_MAX, is_inverse);
 
     for len in 1..TEST_MAX {
         let control = cache.plan_fft(len);
@@ -117,7 +123,7 @@ fn test_planned_fft_forward_f32() {
 #[test]
 fn test_planned_fft_inverse_f32() {
     let is_inverse = true;
-    let cache : ControlCache<f32> = ControlCache::new(TEST_MAX, is_inverse);
+    let cache: ControlCache<f32> = ControlCache::new(TEST_MAX, is_inverse);
 
     for len in 1..TEST_MAX {
         let control = cache.plan_fft(len);
@@ -132,7 +138,7 @@ fn test_planned_fft_inverse_f32() {
 #[test]
 fn test_planned_fft_forward_f64() {
     let is_inverse = false;
-    let cache : ControlCache<f64> = ControlCache::new(TEST_MAX, is_inverse);
+    let cache: ControlCache<f64> = ControlCache::new(TEST_MAX, is_inverse);
 
     for len in 1..TEST_MAX {
         let control = cache.plan_fft(len);
@@ -147,7 +153,7 @@ fn test_planned_fft_forward_f64() {
 #[test]
 fn test_planned_fft_inverse_f64() {
     let is_inverse = true;
-    let cache : ControlCache<f64> = ControlCache::new(TEST_MAX, is_inverse);
+    let cache: ControlCache<f64> = ControlCache::new(TEST_MAX, is_inverse);
 
     for len in 1..TEST_MAX {
         let control = cache.plan_fft(len);

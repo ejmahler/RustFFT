@@ -3,7 +3,8 @@ use num_traits::Zero;
 
 use std::sync::Arc;
 
-use rand::{SeedableRng, distributions::{Distribution, Uniform}, rngs::StdRng};
+use rand::distributions::{Distribution, Uniform};
+use rand::{rngs::StdRng, SeedableRng};
 
 use crate::algorithm::{butterflies, DFT};
 use crate::FFT;
