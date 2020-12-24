@@ -39,7 +39,7 @@ use crate::{IsInverse, Length, FFT};
 
 pub struct Bluesteins<T> {
     len: usize,
-    inner_fft: Arc<FFT<T>>,
+    inner_fft: Arc<dyn FFT<T>>,
     w_twiddles: Box<[Complex<T>]>,
     x_twiddles: Box<[Complex<T>]>,
 }
@@ -53,7 +53,7 @@ fn calculate_twiddle<T: FFTnum>(index: f64, len: usize) -> Complex<T> {
 }
 
 /// Calculate the "w" twiddles.
-fn calculate_w_twiddles<T: FFTnum>(len: usize, fft: &Arc<FFT<T>>, twiddles: &mut [Complex<T>]) {
+fn calculate_w_twiddles<T: FFTnum>(len: usize, fft: &Arc<dyn FFT<T>>, twiddles: &mut [Complex<T>]) {
     let mut scratch = vec![Complex::zero(); fft.len()];
     let scale = T::one() / T::from_usize(fft.len()).unwrap();
     for (i, tw) in scratch.iter_mut().enumerate() {
@@ -96,7 +96,7 @@ impl<T: FFTnum> Bluesteins<T> {
     ///
     /// Note that this constructor is quite expensive to run; This algorithm must run a FFT within the
     /// constructor.
-    pub fn new(len: usize, inner_fft: Arc<FFT<T>>) -> Self {
+    pub fn new(len: usize, inner_fft: Arc<dyn FFT<T>>) -> Self {
         let min_inner_fft_len = 2 * len - 1;
         assert!(inner_fft.len() >= min_inner_fft_len, "For Bluesteins algorithm, inner_fft.len() must be equal to or larger than 2*self.len() - 1. Expected at least {}, got {}", min_inner_fft_len, inner_fft.len());
 

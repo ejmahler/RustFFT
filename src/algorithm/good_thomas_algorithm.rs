@@ -42,10 +42,10 @@ use crate::{IsInverse, Length, FFT};
 /// ~~~
 pub struct GoodThomasAlgorithm<T> {
     width: usize,
-    width_size_fft: Arc<FFT<T>>,
+    width_size_fft: Arc<dyn FFT<T>>,
 
     height: usize,
-    height_size_fft: Arc<FFT<T>>,
+    height_size_fft: Arc<dyn FFT<T>>,
 
     reduced_width: StrengthReducedUsize,
     reduced_width_plus_one: StrengthReducedUsize,
@@ -57,7 +57,7 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
     ///
     /// GCD(width_fft.len(), height_fft.len()) must be equal to 1
-    pub fn new(mut width_fft: Arc<FFT<T>>, mut height_fft: Arc<FFT<T>>) -> Self {
+    pub fn new(mut width_fft: Arc<dyn FFT<T>>, mut height_fft: Arc<dyn FFT<T>>) -> Self {
         assert_eq!(
             width_fft.is_inverse(), height_fft.is_inverse(),
             "width_fft and height_fft must both be inverse, or neither. got width inverse={}, height inverse={}",
@@ -240,10 +240,10 @@ impl<T> IsInverse for GoodThomasAlgorithm<T> {
 /// ~~~
 pub struct GoodThomasAlgorithmDoubleButterfly<T> {
     width: usize,
-    width_size_fft: Arc<FFTButterfly<T>>,
+    width_size_fft: Arc<dyn FFTButterfly<T>>,
 
     height: usize,
-    height_size_fft: Arc<FFTButterfly<T>>,
+    height_size_fft: Arc<dyn FFTButterfly<T>>,
 
     input_output_map: Box<[usize]>,
 
@@ -254,7 +254,7 @@ impl<T: FFTnum> GoodThomasAlgorithmDoubleButterfly<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
     ///
     /// GCD(n1.len(), n2.len()) must be equal to 1
-    pub fn new(width_fft: Arc<FFTButterfly<T>>, height_fft: Arc<FFTButterfly<T>>) -> Self {
+    pub fn new(width_fft: Arc<dyn FFTButterfly<T>>, height_fft: Arc<dyn FFTButterfly<T>>) -> Self {
         assert_eq!(
             width_fft.is_inverse(), height_fft.is_inverse(),
             "n1_fft and height_fft must both be inverse, or neither. got width inverse={}, height inverse={}",
@@ -394,8 +394,8 @@ mod unit_tests {
     }
 
     fn test_good_thomas_with_lengths(width: usize, height: usize, inverse: bool) {
-        let width_fft = Arc::new(DFT::new(width, inverse)) as Arc<FFT<f32>>;
-        let height_fft = Arc::new(DFT::new(height, inverse)) as Arc<FFT<f32>>;
+        let width_fft = Arc::new(DFT::new(width, inverse)) as Arc<dyn FFT<f32>>;
+        let height_fft = Arc::new(DFT::new(height, inverse)) as Arc<dyn FFT<f32>>;
 
         let fft = GoodThomasAlgorithm::new(width_fft, height_fft);
 
@@ -416,8 +416,8 @@ mod unit_tests {
         let width = 15;
         for height in 3..width {
             if gcd(width, height) == 1 {
-                let width_fft = Arc::new(DFT::new(width, false)) as Arc<FFT<f32>>;
-                let height_fft = Arc::new(DFT::new(height, false)) as Arc<FFT<f32>>;
+                let width_fft = Arc::new(DFT::new(width, false)) as Arc<dyn FFT<f32>>;
+                let height_fft = Arc::new(DFT::new(height, false)) as Arc<dyn FFT<f32>>;
 
                 let fft = GoodThomasAlgorithm::new(width_fft, height_fft);
 

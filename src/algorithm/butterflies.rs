@@ -5868,7 +5868,7 @@ mod unit_tests {
     test_butterfly_func!(test_butterfly31, Butterfly31, 31);
     test_butterfly_func!(test_butterfly32, Butterfly32, 32);
 
-    fn check_butterfly(butterfly: &FFTButterfly<f32>, size: usize, inverse: bool) {
+    fn check_butterfly(butterfly: &dyn FFTButterfly<f32>, size: usize, inverse: bool) {
         assert_eq!(
             butterfly.len(),
             size,
