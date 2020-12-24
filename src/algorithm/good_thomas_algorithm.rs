@@ -47,10 +47,9 @@ pub struct GoodThomasAlgorithm<T> {
     height: usize,
     height_size_fft: Arc<FFT<T>>,
 
-    input_x_stride: usize,
-    input_y_stride: usize,
+    reduced_width: StrengthReducedUsize,
+    reduced_width_plus_one: StrengthReducedUsize,
 
-    len: StrengthReducedUsize,
     inverse: bool,
 }
 
@@ -58,30 +57,27 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
     ///
     /// GCD(width_fft.len(), height_fft.len()) must be equal to 1
-    pub fn new(width_fft: Arc<FFT<T>>, height_fft: Arc<FFT<T>>) -> Self {
+    pub fn new(mut width_fft: Arc<FFT<T>>, mut height_fft: Arc<FFT<T>>) -> Self {
         assert_eq!(
             width_fft.is_inverse(), height_fft.is_inverse(),
             "width_fft and height_fft must both be inverse, or neither. got width inverse={}, height inverse={}",
             width_fft.is_inverse(), height_fft.is_inverse());
 
-        let width = width_fft.len();
-        let height = height_fft.len();
+        let mut width = width_fft.len();
+        let mut height = height_fft.len();
         let is_inverse = width_fft.is_inverse();
 
-        // compute the nultiplicative inverse of width mod height and vice versa
-        let (gcd, mut width_inverse, mut height_inverse) =
-            math_utils::extended_euclidean_algorithm(width as i64, height as i64);
+        // This algorithm doesn't work if width and height aren't coprime
+        let gcd = num_integer::gcd(width as i64, height as i64);
         assert!(gcd == 1,
-                "Invalid input width and height to Good-Thomas Algorithm: ({},{}): Inputs must be coprime",
+                "Invalid width and height for Good-Thomas Algorithm (width={}, height={}): Inputs must be coprime",
                 width,
                 height);
 
-        // width_inverse or height_inverse might be negative, make it positive
-        if width_inverse < 0 {
-            width_inverse += height as i64;
-        }
-        if height_inverse < 0 {
-            height_inverse += width as i64;
+        // The trick we're using for our index remapping will only work if width < height, so just swap them if it isn't
+        if width > height {
+            std::mem::swap(&mut width, &mut height);
+            std::mem::swap(&mut width_fft, &mut height_fft);
         }
 
         Self {
@@ -91,22 +87,54 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
             height,
             height_size_fft: height_fft,
 
-            input_x_stride: height_inverse as usize * height,
-            input_y_stride: width_inverse as usize * width,
+            reduced_width: StrengthReducedUsize::new(width),
+            reduced_width_plus_one: StrengthReducedUsize::new(width + 1),
 
-            len: StrengthReducedUsize::new(width * height),
             inverse: is_inverse,
         }
     }
 
     fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        // copy the input into the output buffer
-        for (y, row) in output.chunks_exact_mut(self.width).enumerate() {
-            let input_base = y * self.input_y_stride;
-            for (x, output_cell) in row.iter_mut().enumerate() {
-                let input_index = (input_base + x * self.input_x_stride) % self.len;
-                *output_cell = input[input_index];
+        // A critical part of the good-thomas algorithm is re-indexing the inputs and outputs.
+        // To remap the inputs, we will use the CRT mapping, paired with the normal transpose we'd do for mixed radix.
+        //
+        // The algorithm for the CRT mapping will work like this:
+        // 1: Keep an output index, initialized to 0
+        // 2: The output index will be incremented by width + 1
+        // 3: At the start of the row, compute if we will increment output_index past self.len()
+        //      3a: If we will, then compute exactly how many increments it will take,
+        //      3b: Increment however many times as we scan over the input row, copying each element to the output index
+        //      3c: Subtract self.len() from output_index
+        // 4: Scan over the rest of the row, incrementing output_index, and copying each element to output_index, thne incrementing output_index
+        // 5: The first index of each row will be the final index of the previous row plus one, but because of our incrementing (width+1) inside the loop, we overshot, so at the end of the row, subtract width from output_index
+        //
+        // This ends up producing the same result as computing the multiplicative inverse of width mod height and etc by the CRT mapping, but with only one integer division per row, instead of one per element.
+        let mut output_index = 0;
+        for mut input_row in input.chunks_exact(self.width) {
+            let increments_until_cycle =
+                1 + (self.len() - output_index) / self.reduced_width_plus_one;
+
+            // If we will have to rollover output_index on this row, do it in a separate loop
+            if increments_until_cycle < self.width {
+                let (pre_cycle_row, post_cycle_row) = input_row.split_at(increments_until_cycle);
+
+                for input_element in pre_cycle_row {
+                    output[output_index] = *input_element;
+                    output_index += self.reduced_width_plus_one.get();
+                }
+
+                // Store the split slice back to input_row, os that outside the loop, we can finish the job of iterating the row
+                input_row = post_cycle_row;
+                output_index -= self.len();
             }
+
+            // Loop over the entire row (if we did not roll over) or what's left of the row (if we did) and keep incrementing output_row
+            for input_element in input_row {
+                output[output_index] = *input_element;
+                output_index += self.reduced_width_plus_one.get();
+            }
+
+            output_index -= self.width;
         }
 
         // run FFTs of size `width`
@@ -118,12 +146,34 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
         // run FFTs of size 'height'
         self.height_size_fft.process_multi(output, input);
 
-        // copy to the output, using our output redordering mapping
-        for (x, row) in input.chunks_exact(self.height).enumerate() {
-            let output_base = x * self.height;
-            for (y, input_cell) in row.iter().enumerate() {
-                let output_index = (output_base + y * self.width) % self.len;
-                output[output_index] = *input_cell;
+        // To remap the outputs, we will use the ruritanian mapping, paired with the normal transpose we'd do for mixed radix.
+        //
+        // The algorithm for the ruritanian mapping will work like this:
+        // 1: At the start of every row, compute the output index = (y * self.height) % self.width
+        // 2: We will increment this output index by self.width for every element
+        // 3: Compute where in the row the output index will wrap around
+        // 4: Instead of starting copying from the beginning of the row, start copying from after the rollover point
+        // 5: When we hit the end of the row, continue from the beginning of the row, continuing to increment the output index by self.width
+        //
+        // This achieves the same result as the modular arithmetic ofthe ruritanian mapping, but with only one integer divison per row, instead of one per element
+        for (y, input_chunk) in input.chunks_exact(self.height).enumerate() {
+            let (quotient, remainder) =
+                StrengthReducedUsize::div_rem(y * self.height, self.reduced_width);
+
+            // Compute our base index and starting point in the row
+            let mut output_index = remainder;
+            let start_x = self.height - quotient;
+
+            // Process the first part of the row
+            for x in start_x..self.height {
+                output[output_index] = input_chunk[x];
+                output_index += self.width;
+            }
+
+            // Wrap back around to the beginning of the row and keep incrementing
+            for x in 0..start_x {
+                output[output_index] = input_chunk[x];
+                output_index += self.width;
             }
         }
     }
@@ -359,5 +409,23 @@ mod unit_tests {
         let fft = GoodThomasAlgorithmDoubleButterfly::new(width_fft, height_fft);
 
         check_fft_algorithm(&fft, width * height, inverse);
+    }
+
+    #[test]
+    fn test_output_mapping() {
+        let width = 15;
+        for height in 3..width {
+            if gcd(width, height) == 1 {
+                let width_fft = Arc::new(DFT::new(width, false)) as Arc<FFT<f32>>;
+                let height_fft = Arc::new(DFT::new(height, false)) as Arc<FFT<f32>>;
+
+                let fft = GoodThomasAlgorithm::new(width_fft, height_fft);
+
+                let mut input = vec![Complex { re: 0.0, im: 0.0 }; fft.len()];
+                let mut output = vec![Complex { re: 0.0, im: 0.0 }; fft.len()];
+
+                fft.process(&mut input, &mut output);
+            }
+        }
     }
 }
