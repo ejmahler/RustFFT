@@ -8,20 +8,15 @@
 //!
 //! ```
 //! // Perform a forward FFT of size 1234
-//! use std::sync::Arc;
-//! use rustfft::FFTplanner;
-//! use rustfft::num_complex::Complex;
-//! use rustfft::num_traits::Zero;
-//!
-//! let mut input:  Vec<Complex<f32>> = vec![Complex::zero(); 1234];
-//! let mut output: Vec<Complex<f32>> = vec![Complex::zero(); 1234];
+//! use rustfft::{FFTplanner, num_complex::Complex};
 //!
 //! let mut planner = FFTplanner::new(false);
 //! let fft = planner.plan_fft(1234);
-//! fft.process(&mut input, &mut output);
 //!
-//! // The fft instance returned by the planner is stored behind an `Arc`, so it's cheap to clone
-//! let fft_clone = Arc::clone(&fft);
+//! let mut input:  Vec<Complex<f32>> = vec![Complex{ re: 0.0, im: 0.0 }; 4096];
+//! let mut output: Vec<Complex<f32>> = vec![Complex{ re: 0.0, im: 0.0 }; 4096];
+//!
+//! fft.process(&mut input, &mut output);
 //! ```
 //! The planner returns trait objects of the [`FFT`](trait.FFT.html) trait, allowing for FFT sizes that aren't known
 //! until runtime.
@@ -31,15 +26,13 @@
 //!
 //! ```
 //! // Computes a forward FFT of size 4096
-//! use rustfft::algorithm::Radix4;
-//! use rustfft::FFT;
-//! use rustfft::num_complex::Complex;
-//! use rustfft::num_traits::Zero;
-//!
-//! let mut input:  Vec<Complex<f32>> = vec![Complex::zero(); 4096];
-//! let mut output: Vec<Complex<f32>> = vec![Complex::zero(); 4096];
+//! use rustfft::{FFT, algorithm::Radix4, num_complex::Complex};
 //!
 //! let fft = Radix4::new(4096, false);
+//!
+//! let mut input:  Vec<Complex<f32>> = vec![Complex{ re: 0.0, im: 0.0 }; 4096];
+//! let mut output: Vec<Complex<f32>> = vec![Complex{ re: 0.0, im: 0.0 }; 4096];
+//!
 //! fft.process(&mut input, &mut output);
 //! ```
 //!

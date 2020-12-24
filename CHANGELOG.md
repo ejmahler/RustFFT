@@ -1,4 +1,11 @@
+## [4.1.0]
+Released 24 December 2020
+### Added
+- Added a blanked impl of `FFTnum` to any type that implements the required traits (#7)
+- Added butterflies for many prime sizes, up to 31 (#10)
+
 ## [4.0.0]
+Released 8 October 2020
 ### Breaking Changes
 - Increased the version of the num-complex dependency to 0.3. This is a breaking change because we have a public dependency on num-complex.
 See the [num-complex changelog](https://github.com/rust-num/num-complex/blob/master/RELEASES.md) for a list of breaking changes in num-complex 0.3.
@@ -6,11 +13,13 @@ See the [num-complex changelog](https://github.com/rust-num/num-complex/blob/mas
 
 
 ## [3.0.1]
+Released 27 December 2019
 ### Fixed
 - Fixed warnings regarding "dyn trait", and warnings regarding inclusive ranges
 - Several documentation improvements
 
 ## [3.0.0]
+Released 4 January 2019
 ### Changed
 - Reduced the setup time and memory usage of GoodThomasAlgorithm
 - Reduced the setup time and memory usage of RadersAlgorithm
@@ -21,17 +30,19 @@ See the [num-complex changelog](https://github.com/rust-num/num-complex/blob/mas
 See the [num-complex changelog](https://github.com/rust-num/num-complex/blob/master/RELEASES.md) for a list of breaking changes in num-complex 0.2
 
 ## [2.1.0]
+Released 30 July 2018
 ### Added
-- Added a specialized implementation of Good Thomas Algorithm for when both inner FFTs are butterflies. (#33)
+- Added a specialized implementation of Good Thomas Algorithm for when both inner FFTs are butterflies
 
 ### Changed
-- Documentation typo fixes (#27, #35)
+- Documentation typo fixes
 - Increased minimum version of num_traits and num_complex. Notably, Complex<T> is now guaranteed to be repr(C)
-- Significantly improved the performance of the Radix4 algorithm (#26)
-- Reduced memory usage of prime-sized FFTs (#34)
+- Significantly improved the performance of the Radix4 algorithm
+- Reduced memory usage of prime-sized FFTs
 - Incorporated the Good-Thomas Double Butterfly algorithm into the planner, improving performance for most composite and prime FFTs
 
 ## [2.0.0]
+Released 22 May 2017
 ### Added
 - Added implementation of Good Thomas algorithm.
 - Added implementation of Raders algorithm.
@@ -42,9 +53,11 @@ See the [num-complex changelog](https://github.com/rust-num/num-complex/blob/mas
 - Changed API to take the "signal" as mutable and use it for scratch space.
 
 ## [1.0.1]
+Released 15 January 2016
 ### Changed
 - Relicensed to dual MIT/Apache-2.0.
 
 ## [1.0.0]
+Released 4 October 2015
 ### Added
 - Added initial implementation of Cooley-Tukey.

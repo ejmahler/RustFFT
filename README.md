@@ -10,6 +10,21 @@ RustFFT is a mixed-radix FFT implementation written in Rust. See the [documentat
 
 If you're looking for the experimental AVX-accelerated release, check out the [SIMD branch](https://github.com/ejmahler/RustFFT/tree/simd).
 
+## Usage
+
+```rust
+// Perform a forward FFT of size 1234
+use rustfft::{FFTplanner, num_complex::Complex};
+
+let mut planner = FFTplanner::new(false);
+let fft = planner.plan_fft(1234);
+
+let mut input:  Vec<Complex<f32>> = vec![Complex{ re: 0.0, im: 0.0 }; 4096];
+let mut output: Vec<Complex<f32>> = vec![Complex{ re: 0.0, im: 0.0 }; 4096];
+
+fft.process(&mut input, &mut output);
+```
+
 ## Compatibility
 
 The `rustfft` crate requires rustc 1.31 or greater.
