@@ -1,6 +1,6 @@
 #![feature(test)]
 extern crate test;
-use rustfft;
+use rustfft::{self, FFTnum, IsInverse, Length};
 
 use std::sync::Arc;
 use test::Bencher;
@@ -8,6 +8,25 @@ use rustfft::FFT;
 use rustfft::num_complex::Complex;
 use rustfft::algorithm::*;
 use rustfft::algorithm::butterflies::*;
+
+struct Noop {
+    len: usize,
+    inverse: bool,
+}
+impl<T: FFTnum> FFT<T> for Noop {
+    fn process(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>]) {}
+    fn process_multi(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>]) {}
+}
+impl<T: FFTnum> FFTButterfly<T> for Noop {
+    unsafe fn process_inplace(&self, _input: &mut [Complex<T>]) {}
+    unsafe fn process_multi_inplace(&self, _input: &mut [Complex<T>]) {}
+}
+impl Length for Noop {
+    fn len(&self) -> usize { self.len }
+}
+impl IsInverse for Noop {
+    fn is_inverse(&self) -> bool { self.inverse }
+}
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
@@ -96,28 +115,28 @@ fn bench_good_thomas(b: &mut Bencher, width: usize, height: usize) {
 #[bench] fn good_thomas_2048_3(b: &mut Bencher) { bench_good_thomas(b,  2048, 3); }
 #[bench] fn good_thomas_2048_2187(b: &mut Bencher) { bench_good_thomas(b,  2048, 2187); }
 
-/// Times just the FFT setup (not execution)
-/// for a given length, specific to the Good-Thomas algorithm
-fn bench_good_thomas_setup(b: &mut Bencher, width: usize, height: usize) {
+// /// Times just the FFT setup (not execution)
+// /// for a given length, specific to the Good-Thomas algorithm
+// fn bench_good_thomas_setup(b: &mut Bencher, width: usize, height: usize) {
 
-    let mut planner = rustfft::FFTplanner::new(false);
-    let width_fft = planner.plan_fft(width);
-    let height_fft = planner.plan_fft(height);
+//     let mut planner = rustfft::FFTplanner::new(false);
+//     let width_fft = planner.plan_fft(width);
+//     let height_fft = planner.plan_fft(height);
 
-    b.iter(|| { 
-        let fft : Arc<dyn FFT<f32>> = Arc::new(GoodThomasAlgorithm::new(Arc::clone(&width_fft), Arc::clone(&height_fft)));
-        test::black_box(fft);
-    });
-}
+//     b.iter(|| { 
+//         let fft : Arc<dyn FFT<f32>> = Arc::new(GoodThomasAlgorithm::new(Arc::clone(&width_fft), Arc::clone(&height_fft)));
+//         test::black_box(fft);
+//     });
+// }
 
-#[bench] fn good_thomas_setup_0002_3(b: &mut Bencher) { bench_good_thomas_setup(b,  2, 3); }
-#[bench] fn good_thomas_setup_0003_4(b: &mut Bencher) { bench_good_thomas_setup(b,  3, 4); }
-#[bench] fn good_thomas_setup_0004_5(b: &mut Bencher) { bench_good_thomas_setup(b,  4, 5); }
-#[bench] fn good_thomas_setup_0007_32(b: &mut Bencher) { bench_good_thomas_setup(b, 7, 32); }
-#[bench] fn good_thomas_setup_0032_27(b: &mut Bencher) { bench_good_thomas_setup(b,  32, 27); }
-#[bench] fn good_thomas_setup_0256_243(b: &mut Bencher) { bench_good_thomas_setup(b,  256, 243); }
-#[bench] fn good_thomas_setup_2048_3(b: &mut Bencher) { bench_good_thomas_setup(b,  2048, 3); }
-#[bench] fn good_thomas_setup_2048_2187(b: &mut Bencher) { bench_good_thomas_setup(b,  2048, 2187); }
+// #[bench] fn good_thomas_setup_0002_3(b: &mut Bencher) { bench_good_thomas_setup(b,  2, 3); }
+// #[bench] fn good_thomas_setup_0003_4(b: &mut Bencher) { bench_good_thomas_setup(b,  3, 4); }
+// #[bench] fn good_thomas_setup_0004_5(b: &mut Bencher) { bench_good_thomas_setup(b,  4, 5); }
+// #[bench] fn good_thomas_setup_0007_32(b: &mut Bencher) { bench_good_thomas_setup(b, 7, 32); }
+// #[bench] fn good_thomas_setup_0032_27(b: &mut Bencher) { bench_good_thomas_setup(b,  32, 27); }
+// #[bench] fn good_thomas_setup_0256_243(b: &mut Bencher) { bench_good_thomas_setup(b,  256, 243); }
+// #[bench] fn good_thomas_setup_2048_3(b: &mut Bencher) { bench_good_thomas_setup(b,  2048, 3); }
+// #[bench] fn good_thomas_setup_2048_2187(b: &mut Bencher) { bench_good_thomas_setup(b,  2048, 2187); }
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to the Mixed-Radix algorithm
@@ -243,3 +262,37 @@ fn bench_raders_setup(b: &mut Bencher, len: usize) {
 #[bench] fn raders_setup_2017(b: &mut Bencher) { bench_raders_setup(b,  2017); }
 #[bench] fn raders_setup_65537(b: &mut Bencher) { bench_raders_setup(b, 65537); }
 #[bench] fn raders_setup_746497(b: &mut Bencher) { bench_raders_setup(b,746497); }
+
+// Benchmark just the overhead that good-Thomas adds to a FFT, without benchmarking any of its child FFTs
+fn bench_good_thomas_noop(b: &mut Bencher, width: usize, height: usize) {
+
+    let width_fft = Arc::new(Noop { len: width, inverse: false });
+    let height_fft = Arc::new(Noop { len: height, inverse: false });
+    let fft : Arc<dyn FFT<_>> = Arc::new(GoodThomasAlgorithm::new(width_fft, height_fft));
+
+    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; width * height];
+    let mut spectrum = signal.clone();
+    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
+}
+
+#[bench] fn noop_good_thomas_1000_1001(b: &mut Bencher) { bench_good_thomas_noop(b,1000, 1001); }
+#[bench] fn noop_good_thomas_0100_0101(b: &mut Bencher) { bench_good_thomas_noop(b,100, 101); }
+#[bench] fn noop_good_thomas_0010_0011(b: &mut Bencher) { bench_good_thomas_noop(b,10, 11); }
+#[bench] fn noop_good_thomas_0003_1024(b: &mut Bencher) { bench_good_thomas_noop(b,3, 1024); }
+
+// Benchmark just the overhead that Mixed Radix adds to a FFT, without benchmarking any of its child FFTs
+fn bench_mixed_radix_noop(b: &mut Bencher, width: usize, height: usize) {
+
+    let width_fft = Arc::new(Noop { len: width, inverse: false });
+    let height_fft = Arc::new(Noop { len: height, inverse: false });
+    let fft : Arc<dyn FFT<_>> = Arc::new(MixedRadix::new(width_fft, height_fft));
+
+    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; width * height];
+    let mut spectrum = signal.clone();
+    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
+}
+
+#[bench] fn noop_mixed_radix_1000_1001(b: &mut Bencher) { bench_mixed_radix_noop(b,1000, 1001); }
+#[bench] fn noop_mixed_radix_0100_0101(b: &mut Bencher) { bench_mixed_radix_noop(b,100, 101); }
+#[bench] fn noop_mixed_radix_0010_0011(b: &mut Bencher) { bench_mixed_radix_noop(b,10, 11); }
+#[bench] fn noop_mixed_radix_0003_1024(b: &mut Bencher) { bench_mixed_radix_noop(b,3, 1024); }
