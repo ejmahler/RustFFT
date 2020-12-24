@@ -4,7 +4,7 @@ name: CI
 
 jobs:
   check:
-    name: Run check and test
+    name: Check+Test
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -34,7 +34,7 @@ jobs:
         with:
           command: test
   fmt:
-    name: Check Rustfmt
+    name: Rustfmt
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
