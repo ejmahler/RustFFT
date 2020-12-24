@@ -33,3 +33,24 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
+  fmt:
+    name: Check Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+      
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.31.0
+          override: true
+          components: rustfmt
+      
+      - name: Run cargo fmt
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: -- --check
+        
