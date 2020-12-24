@@ -1601,7 +1601,7 @@ impl Butterfly512Avx64<f64> {
             column_butterfly16_loadfn!(
                 |index: usize| input.load_complex(columnset * 2 + 32 * index),
                 |data, index: usize| {
-                    mid_uninit[index].write(data);
+                    mid_uninit[index].as_mut_ptr().write(data);
                 },
                 self.twiddles_butterfly16,
                 self.twiddles_butterfly4
