@@ -1,4 +1,4 @@
-mod bluestein;
+mod bluesteins_algorithm;
 mod dft;
 mod good_thomas_algorithm;
 mod mixed_radix;
@@ -8,9 +8,9 @@ mod radix4;
 /// Hardcoded size-specfic FFT algorithms
 pub mod butterflies;
 
-pub use self::bluestein::Bluesteins;
+pub use self::bluesteins_algorithm::BluesteinsAlgorithm;
 pub use self::dft::DFT;
-pub use self::good_thomas_algorithm::{GoodThomasAlgorithm, GoodThomasAlgorithmDoubleButterfly};
-pub use self::mixed_radix::{MixedRadix, MixedRadixDoubleButterfly};
+pub use self::good_thomas_algorithm::{GoodThomasAlgorithm, GoodThomasAlgorithmSmall};
+pub use self::mixed_radix::{MixedRadix, MixedRadixSmall};
 pub use self::raders_algorithm::RadersAlgorithm;
 pub use self::radix4::Radix4;

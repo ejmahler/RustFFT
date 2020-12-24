@@ -1,87 +1,164 @@
 use num_complex::Complex;
 
-use crate::common::{verify_length, verify_length_divisible, FFTnum};
+use crate::common::FFTnum;
 
+use crate::array_utils::{RawSlice, RawSliceMut};
 use crate::twiddles;
-use crate::{IsInverse, Length, FFT};
+use crate::{Fft, IsInverse, Length};
 
-pub trait FFTButterfly<T: FFTnum>: Length + IsInverse + Sync + Send {
-    /// Computes the FFT in-place in the given buffer
-    ///
-    /// # Safety
-    /// This method performs unsafe reads/writes on `buffer`. Make sure `buffer.len()` is equal to `self.len()`
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]);
+#[allow(unused)]
+macro_rules! boilerplate_fft_butterfly {
+    ($struct_name:ident, $len:expr, $inverse_fn:expr) => {
+        impl<T: FFTnum> $struct_name<T> {
+            #[inline(always)]
+            pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
+                self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
+            }
+        }
+        impl<T: FFTnum> Fft<T> for $struct_name<T> {
+            fn process_with_scratch(
+                &self,
+                input: &mut [Complex<T>],
+                output: &mut [Complex<T>],
+                _scratch: &mut [Complex<T>],
+            ) {
+                assert_eq!(
+                    input.len(),
+                    self.len(),
+                    "Input is the wrong length. Expected {}, got {}",
+                    self.len(),
+                    input.len()
+                );
+                assert_eq!(
+                    output.len(),
+                    self.len(),
+                    "Output is the wrong length. Expected {}, got {}",
+                    self.len(),
+                    output.len()
+                );
 
-    /// Divides the given buffer into chunks of length `self.len()` and computes an in-place FFT on each chunk
-    ///
-    /// # Safety
-    /// This method performs unsafe reads/writes on `buffer`. Make sure `buffer.len()` is a multiple of `self.len()`
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]);
+                unsafe {
+                    self.perform_fft_contiguous(RawSlice::new(input), RawSliceMut::new(output))
+                };
+            }
+            fn process_multi(
+                &self,
+                input: &mut [Complex<T>],
+                output: &mut [Complex<T>],
+                _scratch: &mut [Complex<T>],
+            ) {
+                assert!(
+                    input.len() % self.len() == 0,
+                    "Output is the wrong length. Expected multiple of {}, got {}",
+                    self.len(),
+                    input.len()
+                );
+                assert_eq!(
+                    input.len(),
+                    output.len(),
+                    "Output is the wrong length. input = {} output = {}",
+                    input.len(),
+                    output.len()
+                );
+
+                for (out_chunk, in_chunk) in output
+                    .chunks_exact_mut(self.len())
+                    .zip(input.chunks_exact(self.len()))
+                {
+                    unsafe {
+                        self.perform_fft_contiguous(
+                            RawSlice::new(in_chunk),
+                            RawSliceMut::new(out_chunk),
+                        )
+                    };
+                }
+            }
+            fn process_inplace_with_scratch(
+                &self,
+                buffer: &mut [Complex<T>],
+                _scratch: &mut [Complex<T>],
+            ) {
+                assert_eq!(
+                    buffer.len(),
+                    self.len(),
+                    "Buffer is the wrong length. Expected {}, got {}",
+                    self.len(),
+                    buffer.len()
+                );
+
+                unsafe { self.perform_fft_butterfly(buffer) };
+            }
+            fn process_inplace_multi(
+                &self,
+                buffer: &mut [Complex<T>],
+                _scratch: &mut [Complex<T>],
+            ) {
+                assert_eq!(
+                    buffer.len() % self.len(),
+                    0,
+                    "Buffer is the wrong length. Expected multiple of {}, got {}",
+                    self.len(),
+                    buffer.len()
+                );
+
+                for chunk in buffer.chunks_exact_mut(self.len()) {
+                    unsafe { self.perform_fft_butterfly(chunk) };
+                }
+            }
+            #[inline(always)]
+            fn get_inplace_scratch_len(&self) -> usize {
+                0
+            }
+            #[inline(always)]
+            fn get_out_of_place_scratch_len(&self) -> usize {
+                0
+            }
+        }
+        impl<T> Length for $struct_name<T> {
+            #[inline(always)]
+            fn len(&self) -> usize {
+                $len
+            }
+        }
+        impl<T> IsInverse for $struct_name<T> {
+            #[inline(always)]
+            fn is_inverse(&self) -> bool {
+                $inverse_fn(self)
+            }
+        }
+    };
 }
 
-#[inline(always)]
-unsafe fn swap_unchecked<T: Copy>(buffer: &mut [T], a: usize, b: usize) {
-    let temp = *buffer.get_unchecked(a);
-    *buffer.get_unchecked_mut(a) = *buffer.get_unchecked(b);
-    *buffer.get_unchecked_mut(b) = temp;
-}
-
-pub struct Butterfly2 {
+pub struct Butterfly2<T> {
     inverse: bool,
+    _phantom: std::marker::PhantomData<T>,
 }
-impl Butterfly2 {
+boilerplate_fft_butterfly!(Butterfly2, 2, |this: &Butterfly2<_>| this.inverse);
+impl<T: FFTnum> Butterfly2<T> {
     #[inline(always)]
     pub fn new(inverse: bool) -> Self {
-        Self { inverse }
+        Self {
+            inverse,
+            _phantom: std::marker::PhantomData,
+        }
     }
-
     #[inline(always)]
-    unsafe fn perform_fft_direct<T: FFTnum>(left: &mut Complex<T>, right: &mut Complex<T>) {
+    unsafe fn perform_fft_strided(left: &mut Complex<T>, right: &mut Complex<T>) {
         let temp = *left + *right;
 
         *right = *left - *right;
         *left = temp;
     }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly2 {
     #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
-        let temp = *buffer.get_unchecked(0) + *buffer.get_unchecked(1);
-
-        *buffer.get_unchecked_mut(1) = *buffer.get_unchecked(0) - *buffer.get_unchecked(1);
-        *buffer.get_unchecked_mut(0) = temp;
-    }
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_exact_mut(self.len()) {
-            self.process_inplace(chunk);
-        }
-    }
-}
-impl<T: FFTnum> FFT<T> for Butterfly2 {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl Length for Butterfly2 {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        2
-    }
-}
-impl IsInverse for Butterfly2 {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
+    unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
+        let value0 = input.load(0);
+        let value1 = input.load(1);
+        output.store(value0 + value1, 0);
+        output.store(value0 - value1, 1);
     }
 }
 
@@ -89,73 +166,33 @@ pub struct Butterfly3<T> {
     pub twiddle: Complex<T>,
     inverse: bool,
 }
+boilerplate_fft_butterfly!(Butterfly3, 3, |this: &Butterfly3<_>| this.inverse);
 impl<T: FFTnum> Butterfly3<T> {
     #[inline(always)]
     pub fn new(inverse: bool) -> Self {
         Self {
-            twiddle: twiddles::single_twiddle(1, 3, inverse),
-            inverse,
+            twiddle: T::generate_twiddle_factor(1, 3, inverse),
+            inverse: inverse,
         }
     }
-
     #[inline(always)]
-    pub fn inverse_of(fft: &Self) -> Self {
+    pub fn inverse_of(fft: &Butterfly3<T>) -> Self {
         Self {
             twiddle: fft.twiddle.conj(),
             inverse: !fft.inverse,
         }
     }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly3<T> {
     #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
-        // Let's do a plain 3-point DFT
-        // |X0|   | W0 W0  W0 |   |x0|
-        // |X1| = | W0 W1  W2 | * |x1|
-        // |X2|   | W0 W2  W4 |   |x2|
-        //
-        // where Wn = exp(-2*pi*n/3) for a forward transform, and exp(+2*pi*n/3) for an inverse.
-        //
-        // This can be simplified a bit since exp(-2*pi*n/3) = exp(-2*pi*n/3 + m*2*pi)
-        // |X0|   | W0 W0  W0 |   |x0|
-        // |X1| = | W0 W1  W2 | * |x1|
-        // |X2|   | W0 W2  W1 |   |x2|
-        //
-        // Next we can use the symmetry that W2 = W1* and W0 = 1
-        // |X0|   | 1  1   1   |   |x0|
-        // |X1| = | 1  W1  W1* | * |x1|
-        // |X2|   | 1  W1* W1  |   |x2|
-        //
-        // Next, we write out the whole expression with real and imaginary parts.
-        // X0 = x0 + x1 + x2
-        // X1 = x0 + (W1.re + j*W1.im)*x1 + (W1.re - j*W1.im)*x2
-        // X2 = x0 + (W1.re - j*W1.im)*x1 + (W1.re + j*W1.im)*x2
-        //
-        // Then we rearrange and sort terms.
-        // X0 = x0 + x1 + x2
-        // X1 = x0 + W1.re*(x1+x2) + j*W1.im*(x1-x2)
-        // X2 = x0 + W1.re*(x1+x2) - j*W1.im*(x1-x2)
-        //
-        // Now we define xp=x1+x2 xn=x1-x2, and write out the complex and imaginary parts
-        // X0 = x0 + x1 + x2
-        // X1.re = x0.re + W1.re*xp.re - W1.im*xn.im
-        // X1.im = x0.im + W1.re*xp.im + W1.im*xn.re
-        // X2.re = x0.re + W1.re*xp.re + W1.im*xn.im
-        // X2.im = x0.im + W1.re*xp.im - W1.im*xn.re
-        //
-        // Finally defining:
-        // temp_a = x0 + W1.re*xp.re + j*W1.re*xp.im
-        // temp_b = -W1.im*xn.im + j*W1.im*xn.re
-        // leads to the final result:
-        // X0 = x0 + x1 + x2
-        // X1 = temp_a + temp_b
-        // X2 = temp_a - temp_b
+    unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
+        let xp = input.load(1) + input.load(2);
+        let xn = input.load(1) - input.load(2);
+        let sum = input.load(0) + xp;
 
-        let xp = *buffer.get_unchecked(1) + *buffer.get_unchecked(2);
-        let xn = *buffer.get_unchecked(1) - *buffer.get_unchecked(2);
-        let sum = *buffer.get_unchecked(0) + xp;
-
-        let temp_a = *buffer.get_unchecked(0)
+        let temp_a = input.load(0)
             + Complex {
                 re: self.twiddle.re * xp.re,
                 im: self.twiddle.re * xp.im,
@@ -165,113 +202,58 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly3<T> {
             im: self.twiddle.im * xn.re,
         };
 
-        *buffer.get_unchecked_mut(0) = sum;
-        *buffer.get_unchecked_mut(1) = temp_a + temp_b;
-        *buffer.get_unchecked_mut(2) = temp_a - temp_b;
-    }
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_exact_mut(self.len()) {
-            self.process_inplace(chunk);
-        }
-    }
-}
-impl<T: FFTnum> FFT<T> for Butterfly3<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl<T> Length for Butterfly3<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        3
-    }
-}
-impl<T> IsInverse for Butterfly3<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
+        output.store(sum, 0);
+        output.store(temp_a + temp_b, 1);
+        output.store(temp_a - temp_b, 2);
     }
 }
 
-pub struct Butterfly4 {
+pub struct Butterfly4<T> {
     inverse: bool,
+    _phantom: std::marker::PhantomData<T>,
 }
-impl Butterfly4 {
+boilerplate_fft_butterfly!(Butterfly4, 4, |this: &Butterfly4<_>| this.inverse);
+impl<T: FFTnum> Butterfly4<T> {
     #[inline(always)]
     pub fn new(inverse: bool) -> Self {
-        Self { inverse }
+        Self {
+            inverse,
+            _phantom: std::marker::PhantomData,
+        }
     }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly4 {
     #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
-        let butterfly2 = Butterfly2::new(self.inverse);
-
+    unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
         //we're going to hardcode a step of mixed radix
         //aka we're going to do the six step algorithm
 
         // step 1: transpose, which we're skipping because we're just going to perform non-contiguous FFTs
+        let mut value0 = input.load(0);
+        let mut value1 = input.load(1);
+        let mut value2 = input.load(2);
+        let mut value3 = input.load(3);
 
         // step 2: column FFTs
-        {
-            let (a, b) = buffer.split_at_mut(2);
-            Butterfly2::perform_fft_direct(a.get_unchecked_mut(0), b.get_unchecked_mut(0));
-            Butterfly2::perform_fft_direct(a.get_unchecked_mut(1), b.get_unchecked_mut(1));
+        Butterfly2::perform_fft_strided(&mut value0, &mut value2);
+        Butterfly2::perform_fft_strided(&mut value1, &mut value3);
 
-            // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-            *b.get_unchecked_mut(1) = twiddles::rotate_90(*b.get_unchecked(1), self.inverse);
+        // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
+        value3 = twiddles::rotate_90(value3, self.inverse);
 
-            // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
+        // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
-            // step 5: row FFTs
-            butterfly2.process_inplace(a);
-            butterfly2.process_inplace(b);
-        }
+        // step 5: row FFTs
+        Butterfly2::perform_fft_strided(&mut value0, &mut value1);
+        Butterfly2::perform_fft_strided(&mut value2, &mut value3);
 
-        // step 6: transpose
-        swap_unchecked(buffer, 1, 2);
-    }
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_exact_mut(self.len()) {
-            self.process_inplace(chunk);
-        }
-    }
-}
-impl<T: FFTnum> FFT<T> for Butterfly4 {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl Length for Butterfly4 {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        4
-    }
-}
-impl IsInverse for Butterfly4 {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
+        // step 6: transpose by swapping index 1 and 2
+        output.store(value0, 0);
+        output.store(value2, 1);
+        output.store(value1, 2);
+        output.store(value3, 3);
     }
 }
 
@@ -280,21 +262,54 @@ pub struct Butterfly5<T> {
     twiddle2: Complex<T>,
     inverse: bool,
 }
+boilerplate_fft_butterfly!(Butterfly5, 5, |this: &Butterfly5<_>| this.inverse);
 impl<T: FFTnum> Butterfly5<T> {
     pub fn new(inverse: bool) -> Self {
-        let twiddle1: Complex<T> = twiddles::single_twiddle(1, 5, inverse);
-        let twiddle2: Complex<T> = twiddles::single_twiddle(2, 5, inverse);
         Self {
-            twiddle1,
-            twiddle2,
+            twiddle1: T::generate_twiddle_factor(1, 5, inverse),
+            twiddle2: T::generate_twiddle_factor(2, 5, inverse),
             inverse,
         }
     }
-}
 
-impl<T: FFTnum> FFTButterfly<T> for Butterfly5<T> {
-    #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+    #[inline(never)] // refusing to inline this code reduces code size, and doesn't hurt performance
+    unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
+        // let mut outer = Butterfly2::perform_fft_array([input.load(1), input.load(4)]);
+        // let mut inner = Butterfly2::perform_fft_array([input.load(2), input.load(3)]);
+        // let input0 = input.load(0);
+
+        // output.store(input0 + outer[0] + inner[0], 0);
+
+        // inner[1] = twiddles::rotate_90(inner[1], true);
+        // outer[1] = twiddles::rotate_90(outer[1], true);
+
+        // {
+        //     let twiddled1 = outer[0] * self.twiddles[0].re;
+        //     let twiddled2 = inner[0] * self.twiddles[1].re;
+        //     let twiddled3 = inner[1] * self.twiddles[1].im;
+        //     let twiddled4 = outer[1] * self.twiddles[0].im;
+
+        //     let sum12 = twiddled1 + twiddled2;
+        //     let sum34 = twiddled4 + twiddled3;
+
+        //     let output1 = sum12 + sum34;
+        //     let output4 = sum12 - sum34;
+
+        //     output.store(input0 + output1, 1);
+        //     output.store(input0 + output4, 4);
+        // }
+
+        // {
+        //     let twiddled1 = outer[0] * self.twiddles[1].re;
+        //     let twiddled2 = inner[0] * self.twiddles[0].re;
+        //     let twiddled3 = inner[1] * self.twiddles[0].im;
+        //     let twiddled4 = outer[1] * self.twiddles[1].im;
+        // }
+
         // Let's do a plain 5-point DFT
         // |X0|   | W0 W0  W0  W0  W0  |   |x0|
         // |X1|   | W0 W1  W2  W3  W4  |   |x1|
@@ -342,23 +357,19 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly5<T> {
         // The final step is to write out real and imaginary parts of x14n etc, and replacing using j*j=-1
         // After this it's easy to remove any repeated calculation of the same values.
 
-        let x14p = *buffer.get_unchecked(1) + *buffer.get_unchecked(4);
-        let x14n = *buffer.get_unchecked(1) - *buffer.get_unchecked(4);
-        let x23p = *buffer.get_unchecked(2) + *buffer.get_unchecked(3);
-        let x23n = *buffer.get_unchecked(2) - *buffer.get_unchecked(3);
-        let sum = *buffer.get_unchecked(0) + x14p + x23p;
-        let b14re_a =
-            buffer.get_unchecked(0).re + self.twiddle1.re * x14p.re + self.twiddle2.re * x23p.re;
+        let x14p = input.load(1) + input.load(4);
+        let x14n = input.load(1) - input.load(4);
+        let x23p = input.load(2) + input.load(3);
+        let x23n = input.load(2) - input.load(3);
+        let sum = input.load(0) + x14p + x23p;
+        let b14re_a = input.load(0).re + self.twiddle1.re * x14p.re + self.twiddle2.re * x23p.re;
         let b14re_b = self.twiddle1.im * x14n.im + self.twiddle2.im * x23n.im;
-        let b23re_a =
-            buffer.get_unchecked(0).re + self.twiddle2.re * x14p.re + self.twiddle1.re * x23p.re;
+        let b23re_a = input.load(0).re + self.twiddle2.re * x14p.re + self.twiddle1.re * x23p.re;
         let b23re_b = self.twiddle2.im * x14n.im + -self.twiddle1.im * x23n.im;
 
-        let b14im_a =
-            buffer.get_unchecked(0).im + self.twiddle1.re * x14p.im + self.twiddle2.re * x23p.im;
+        let b14im_a = input.load(0).im + self.twiddle1.re * x14p.im + self.twiddle2.re * x23p.im;
         let b14im_b = self.twiddle1.im * x14n.re + self.twiddle2.im * x23n.re;
-        let b23im_a =
-            buffer.get_unchecked(0).im + self.twiddle2.re * x14p.im + self.twiddle1.re * x23p.im;
+        let b23im_a = input.load(0).im + self.twiddle2.re * x14p.im + self.twiddle1.re * x23p.im;
         let b23im_b = self.twiddle2.im * x14n.re + -self.twiddle1.im * x23n.re;
 
         let out1re = b14re_a - b14re_b;
@@ -369,179 +380,165 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly5<T> {
         let out3im = b23im_a - b23im_b;
         let out4re = b14re_a + b14re_b;
         let out4im = b14im_a - b14im_b;
-        *buffer.get_unchecked_mut(0) = sum;
-        *buffer.get_unchecked_mut(1) = Complex {
-            re: out1re,
-            im: out1im,
-        };
-        *buffer.get_unchecked_mut(2) = Complex {
-            re: out2re,
-            im: out2im,
-        };
-        *buffer.get_unchecked_mut(3) = Complex {
-            re: out3re,
-            im: out3im,
-        };
-        *buffer.get_unchecked_mut(4) = Complex {
-            re: out4re,
-            im: out4im,
-        };
-    }
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_exact_mut(self.len()) {
-            self.process_inplace(chunk);
-        }
-    }
-}
-impl<T: FFTnum> FFT<T> for Butterfly5<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl<T> Length for Butterfly5<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        5
-    }
-}
-impl<T> IsInverse for Butterfly5<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
+        output.store(sum, 0);
+        output.store(
+            Complex {
+                re: out1re,
+                im: out1im,
+            },
+            1,
+        );
+        output.store(
+            Complex {
+                re: out2re,
+                im: out2im,
+            },
+            2,
+        );
+        output.store(
+            Complex {
+                re: out3re,
+                im: out3im,
+            },
+            3,
+        );
+        output.store(
+            Complex {
+                re: out4re,
+                im: out4im,
+            },
+            4,
+        );
     }
 }
 
 pub struct Butterfly6<T> {
     butterfly3: Butterfly3<T>,
 }
+boilerplate_fft_butterfly!(Butterfly6, 6, |this: &Butterfly6<_>| this
+    .butterfly3
+    .is_inverse());
 impl<T: FFTnum> Butterfly6<T> {
+    #[inline(always)]
     pub fn new(inverse: bool) -> Self {
         Self {
             butterfly3: Butterfly3::new(inverse),
         }
     }
-    pub fn inverse_of(fft: &Self) -> Self {
+    #[inline(always)]
+    pub fn inverse_of(fft: &Butterfly6<T>) -> Self {
         Self {
             butterfly3: Butterfly3::inverse_of(&fft.butterfly3),
         }
     }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly6<T> {
     #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+    unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
         //since GCD(2,3) == 1 we're going to hardcode a step of the Good-Thomas algorithm to avoid twiddle factors
 
         // step 1: reorder the input directly into the scratch. normally there's a whole thing to compute this ordering
         //but thankfully we can just precompute it and hardcode it
-        let mut scratch_a = [
-            *buffer.get_unchecked(0),
-            *buffer.get_unchecked(2),
-            *buffer.get_unchecked(4),
-        ];
+        let mut scratch_a = [input.load(0), input.load(2), input.load(4)];
 
-        let mut scratch_b = [
-            *buffer.get_unchecked(3),
-            *buffer.get_unchecked(5),
-            *buffer.get_unchecked(1),
-        ];
+        let mut scratch_b = [input.load(3), input.load(5), input.load(1)];
 
         // step 2: column FFTs
-        self.butterfly3.process_inplace(&mut scratch_a);
-        self.butterfly3.process_inplace(&mut scratch_b);
+        self.butterfly3.perform_fft_butterfly(&mut scratch_a);
+        self.butterfly3.perform_fft_butterfly(&mut scratch_b);
 
         // step 3: apply twiddle factors -- SKIPPED because good-thomas doesn't have twiddle factors :)
 
         // step 4: SKIPPED because the next FFTs will be non-contiguous
 
         // step 5: row FFTs
-        Butterfly2::perform_fft_direct(&mut scratch_a[0], &mut scratch_b[0]);
-        Butterfly2::perform_fft_direct(&mut scratch_a[1], &mut scratch_b[1]);
-        Butterfly2::perform_fft_direct(&mut scratch_a[2], &mut scratch_b[2]);
+        Butterfly2::perform_fft_strided(&mut scratch_a[0], &mut scratch_b[0]);
+        Butterfly2::perform_fft_strided(&mut scratch_a[1], &mut scratch_b[1]);
+        Butterfly2::perform_fft_strided(&mut scratch_a[2], &mut scratch_b[2]);
 
         // step 6: reorder the result back into the buffer. again we would normally have to do an expensive computation
         // but instead we can precompute and hardcode the ordering
         // note that we're also rolling a transpose step into this reorder
-        *buffer.get_unchecked_mut(0) = scratch_a[0];
-        *buffer.get_unchecked_mut(3) = scratch_b[0];
-        *buffer.get_unchecked_mut(4) = scratch_a[1];
-        *buffer.get_unchecked_mut(1) = scratch_b[1];
-        *buffer.get_unchecked_mut(2) = scratch_a[2];
-        *buffer.get_unchecked_mut(5) = scratch_b[2];
-    }
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_exact_mut(self.len()) {
-            self.process_inplace(chunk);
-        }
-    }
-}
-impl<T: FFTnum> FFT<T> for Butterfly6<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl<T> Length for Butterfly6<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        6
-    }
-}
-impl<T> IsInverse for Butterfly6<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.butterfly3.is_inverse()
+        output.store(scratch_a[0], 0);
+        output.store(scratch_b[1], 1);
+        output.store(scratch_a[2], 2);
+        output.store(scratch_b[0], 3);
+        output.store(scratch_a[1], 4);
+        output.store(scratch_b[2], 5);
     }
 }
 
 pub struct Butterfly7<T> {
-    //inner_fft: Butterfly6<T>,
-    //inner_fft_multiply: [Complex<T>; 6]
     twiddle1: Complex<T>,
     twiddle2: Complex<T>,
     twiddle3: Complex<T>,
     inverse: bool,
 }
+boilerplate_fft_butterfly!(Butterfly7, 7, |this: &Butterfly7<_>| this.inverse);
 impl<T: FFTnum> Butterfly7<T> {
     pub fn new(inverse: bool) -> Self {
-        let twiddle1: Complex<T> = twiddles::single_twiddle(1, 7, inverse);
-        let twiddle2: Complex<T> = twiddles::single_twiddle(2, 7, inverse);
-        let twiddle3: Complex<T> = twiddles::single_twiddle(3, 7, inverse);
         Self {
-            twiddle1,
-            twiddle2,
-            twiddle3,
+            twiddle1: T::generate_twiddle_factor(1, 7, inverse),
+            twiddle2: T::generate_twiddle_factor(2, 7, inverse),
+            twiddle3: T::generate_twiddle_factor(3, 7, inverse),
             inverse,
         }
     }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly7<T> {
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_exact_mut(self.len()) {
-            self.process_inplace(chunk);
-        }
-    }
-    #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+    #[inline(never)]
+    unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
+        // let mut outer = Butterfly2::perform_fft_array([input.load(1), input.load(6)]);
+        // let mut mid   = Butterfly2::perform_fft_array([input.load(2), input.load(5)]);
+        // let mut inner = Butterfly2::perform_fft_array([input.load(3), input.load(4)]);
+        // let input0 = input.load(0);
+
+        // output.store(input0 + outer[0] + mid[0] + inner[0], 0);
+
+        // inner[1] = twiddles::rotate_90(inner[1], true);
+        // mid[1]   = twiddles::rotate_90(mid[1],   true);
+        // outer[1] = twiddles::rotate_90(outer[1], true);
+
+        // {
+        //     let twiddled1 = outer[0] * self.twiddles[0].re;
+        //     let twiddled2 =   mid[0] * self.twiddles[1].re;
+        //     let twiddled3 = inner[0] * self.twiddles[2].re;
+        //     let twiddled4 = inner[1] * self.twiddles[2].im;
+        //     let twiddled5 =   mid[1] * self.twiddles[1].im;
+        //     let twiddled6 = outer[1] * self.twiddles[0].im;
+
+        //     let sum123 = twiddled1 + twiddled2 + twiddled3;
+        //     let sum456 = twiddled4 + twiddled5 + twiddled6;
+
+        //     let output1 = sum123 + sum456;
+        //     let output6 = sum123 - sum456;
+
+        //     output.store(input0 + output1, 1);
+        //     output.store(input0 + output6, 6);
+        // }
+
+        // {
+        //     let twiddled1 = outer[0] * self.twiddles[1].re;
+        //     let twiddled2 =   mid[0] * self.twiddles[2].re;
+        //     let twiddled3 = inner[0] * self.twiddles[0].re;
+        //     let twiddled4 = inner[1] * self.twiddles[0].im;
+        //     let twiddled5 =   mid[1] * self.twiddles[2].im;
+        //     let twiddled6 = outer[1] * self.twiddles[1].im;
+
+        //     let sum123 = twiddled1 + twiddled2 + twiddled3;
+        //     let sum456 = twiddled6 - twiddled4 - twiddled5;
+
+        //     let output2 = sum123 + sum456;
+        //     let output5 = sum123 - sum456;
+
+        //     output.store(input0 + output2, 2);
+        //     output.store(input0 + output5, 5);
+        // }
+
         // Let's do a plain 7-point DFT
         // |X0|   | W0 W0  W0  W0  W0  W0  W0  |   |x0|
         // |X1|   | W0 W1  W2  W3  W4  W5  W6  |   |x1|
@@ -564,45 +561,45 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly7<T> {
         //
         // From here it's just about eliminating repeated calculations, following the same procedure as for the 5-point butterfly.
 
-        let x16p = *buffer.get_unchecked(1) + *buffer.get_unchecked(6);
-        let x16n = *buffer.get_unchecked(1) - *buffer.get_unchecked(6);
-        let x25p = *buffer.get_unchecked(2) + *buffer.get_unchecked(5);
-        let x25n = *buffer.get_unchecked(2) - *buffer.get_unchecked(5);
-        let x34p = *buffer.get_unchecked(3) + *buffer.get_unchecked(4);
-        let x34n = *buffer.get_unchecked(3) - *buffer.get_unchecked(4);
-        let sum = *buffer.get_unchecked(0) + x16p + x25p + x34p;
+        let x16p = input.load(1) + input.load(6);
+        let x16n = input.load(1) - input.load(6);
+        let x25p = input.load(2) + input.load(5);
+        let x25n = input.load(2) - input.load(5);
+        let x34p = input.load(3) + input.load(4);
+        let x34n = input.load(3) - input.load(4);
+        let sum = input.load(0) + x16p + x25p + x34p;
 
-        let x16re_a = buffer.get_unchecked(0).re
+        let x16re_a = input.load(0).re
             + self.twiddle1.re * x16p.re
             + self.twiddle2.re * x25p.re
             + self.twiddle3.re * x34p.re;
         let x16re_b =
             self.twiddle1.im * x16n.im + self.twiddle2.im * x25n.im + self.twiddle3.im * x34n.im;
-        let x25re_a = buffer.get_unchecked(0).re
+        let x25re_a = input.load(0).re
             + self.twiddle1.re * x34p.re
             + self.twiddle2.re * x16p.re
             + self.twiddle3.re * x25p.re;
         let x25re_b =
             -self.twiddle1.im * x34n.im + self.twiddle2.im * x16n.im - self.twiddle3.im * x25n.im;
-        let x34re_a = buffer.get_unchecked(0).re
+        let x34re_a = input.load(0).re
             + self.twiddle1.re * x25p.re
             + self.twiddle2.re * x34p.re
             + self.twiddle3.re * x16p.re;
         let x34re_b =
             -self.twiddle1.im * x25n.im + self.twiddle2.im * x34n.im + self.twiddle3.im * x16n.im;
-        let x16im_a = buffer.get_unchecked(0).im
+        let x16im_a = input.load(0).im
             + self.twiddle1.re * x16p.im
             + self.twiddle2.re * x25p.im
             + self.twiddle3.re * x34p.im;
         let x16im_b =
             self.twiddle1.im * x16n.re + self.twiddle2.im * x25n.re + self.twiddle3.im * x34n.re;
-        let x25im_a = buffer.get_unchecked(0).im
+        let x25im_a = input.load(0).im
             + self.twiddle1.re * x34p.im
             + self.twiddle2.re * x16p.im
             + self.twiddle3.re * x25p.im;
         let x25im_b =
             -self.twiddle1.im * x34n.re + self.twiddle2.im * x16n.re - self.twiddle3.im * x25n.re;
-        let x34im_a = buffer.get_unchecked(0).im
+        let x34im_a = input.load(0).im
             + self.twiddle1.re * x25p.im
             + self.twiddle2.re * x34p.im
             + self.twiddle3.re * x16p.im;
@@ -622,57 +619,49 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly7<T> {
         let out6re = x16re_a + x16re_b;
         let out6im = x16im_a - x16im_b;
 
-        *buffer.get_unchecked_mut(0) = sum;
-        *buffer.get_unchecked_mut(1) = Complex {
-            re: out1re,
-            im: out1im,
-        };
-        *buffer.get_unchecked_mut(2) = Complex {
-            re: out2re,
-            im: out2im,
-        };
-        *buffer.get_unchecked_mut(3) = Complex {
-            re: out3re,
-            im: out3im,
-        };
-        *buffer.get_unchecked_mut(4) = Complex {
-            re: out4re,
-            im: out4im,
-        };
-        *buffer.get_unchecked_mut(5) = Complex {
-            re: out5re,
-            im: out5im,
-        };
-        *buffer.get_unchecked_mut(6) = Complex {
-            re: out6re,
-            im: out6im,
-        };
-    }
-}
-impl<T: FFTnum> FFT<T> for Butterfly7<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl<T> Length for Butterfly7<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        7
-    }
-}
-impl<T> IsInverse for Butterfly7<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
+        output.store(sum, 0);
+        output.store(
+            Complex {
+                re: out1re,
+                im: out1im,
+            },
+            1,
+        );
+        output.store(
+            Complex {
+                re: out2re,
+                im: out2im,
+            },
+            2,
+        );
+        output.store(
+            Complex {
+                re: out3re,
+                im: out3im,
+            },
+            3,
+        );
+        output.store(
+            Complex {
+                re: out4re,
+                im: out4im,
+            },
+            4,
+        );
+        output.store(
+            Complex {
+                re: out5re,
+                im: out5im,
+            },
+            5,
+        );
+        output.store(
+            Complex {
+                re: out6re,
+                im: out6im,
+            },
+            6,
+        );
     }
 }
 
@@ -680,52 +669,34 @@ pub struct Butterfly8<T> {
     twiddle: Complex<T>,
     inverse: bool,
 }
+boilerplate_fft_butterfly!(Butterfly8, 8, |this: &Butterfly8<_>| this.inverse);
 impl<T: FFTnum> Butterfly8<T> {
     #[inline(always)]
     pub fn new(inverse: bool) -> Self {
         Self {
-            inverse,
-            twiddle: twiddles::single_twiddle(1, 8, inverse),
+            inverse: inverse,
+            twiddle: T::generate_twiddle_factor(1, 8, inverse),
         }
     }
 
     #[inline(always)]
-    unsafe fn transpose_4x2_to_2x4(buffer: &mut [Complex<T>; 8]) {
-        let temp1 = buffer[1];
-        buffer[1] = buffer[4];
-        buffer[4] = buffer[2];
-        buffer[2] = temp1;
-
-        let temp6 = buffer[6];
-        buffer[6] = buffer[3];
-        buffer[3] = buffer[5];
-        buffer[5] = temp6;
-    }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly8<T> {
-    #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
-        let butterfly2 = Butterfly2::new(self.inverse);
+    unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
         let butterfly4 = Butterfly4::new(self.inverse);
 
         //we're going to hardcode a step of mixed radix
         //aka we're going to do the six step algorithm
 
         // step 1: transpose the input into the scratch
-        let mut scratch = [
-            *buffer.get_unchecked(0),
-            *buffer.get_unchecked(2),
-            *buffer.get_unchecked(4),
-            *buffer.get_unchecked(6),
-            *buffer.get_unchecked(1),
-            *buffer.get_unchecked(3),
-            *buffer.get_unchecked(5),
-            *buffer.get_unchecked(7),
-        ];
+        let mut scratch0 = [input.load(0), input.load(2), input.load(4), input.load(6)];
+        let mut scratch1 = [input.load(1), input.load(3), input.load(5), input.load(7)];
 
         // step 2: column FFTs
-        butterfly4.process_inplace(&mut scratch[..4]);
-        butterfly4.process_inplace(&mut scratch[4..]);
+        butterfly4.perform_fft_butterfly(&mut scratch0);
+        butterfly4.perform_fft_butterfly(&mut scratch1);
 
         // step 3: apply twiddle factors
         let twiddle1 = self.twiddle;
@@ -734,61 +705,24 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly8<T> {
             im: twiddle1.im,
         };
 
-        *scratch.get_unchecked_mut(5) = scratch.get_unchecked(5) * twiddle1;
-        *scratch.get_unchecked_mut(6) =
-            twiddles::rotate_90(*scratch.get_unchecked(6), self.inverse);
-        *scratch.get_unchecked_mut(7) = scratch.get_unchecked(7) * twiddle3;
+        scratch1[1] = scratch1[1] * twiddle1;
+        scratch1[2] = twiddles::rotate_90(scratch1[2], self.inverse);
+        scratch1[3] = scratch1[3] * twiddle3;
 
-        // step 4: transpose
-        Self::transpose_4x2_to_2x4(&mut scratch);
+        // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
 
         // step 5: row FFTs
-        butterfly2.process_inplace(&mut scratch[..2]);
-        butterfly2.process_inplace(&mut scratch[2..4]);
-        butterfly2.process_inplace(&mut scratch[4..6]);
-        butterfly2.process_inplace(&mut scratch[6..]);
-
-        // step 6: transpose the scratch into the buffer
-        *buffer.get_unchecked_mut(0) = scratch[0];
-        *buffer.get_unchecked_mut(1) = scratch[2];
-        *buffer.get_unchecked_mut(2) = scratch[4];
-        *buffer.get_unchecked_mut(3) = scratch[6];
-        *buffer.get_unchecked_mut(4) = scratch[1];
-        *buffer.get_unchecked_mut(5) = scratch[3];
-        *buffer.get_unchecked_mut(6) = scratch[5];
-        *buffer.get_unchecked_mut(7) = scratch[7];
-    }
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_exact_mut(self.len()) {
-            self.process_inplace(chunk);
+        for i in 0..4 {
+            Butterfly2::perform_fft_strided(&mut scratch0[i], &mut scratch1[i]);
         }
-    }
-}
-impl<T: FFTnum> FFT<T> for Butterfly8<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
 
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl<T> Length for Butterfly8<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        8
-    }
-}
-impl<T> IsInverse for Butterfly8<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
+        // step 6: copy data to the output. we don't need to transpose, because we skipped the step 4 transpose
+        for i in 0..4 {
+            output.store(scratch0[i], i);
+        }
+        for i in 0..4 {
+            output.store(scratch1[i], i + 4);
+        }
     }
 }
 
@@ -800,13 +734,14 @@ pub struct Butterfly11<T> {
     twiddle5: Complex<T>,
     inverse: bool,
 }
+boilerplate_fft_butterfly!(Butterfly11, 11, |this: &Butterfly11<_>| this.inverse);
 impl<T: FFTnum> Butterfly11<T> {
     pub fn new(inverse: bool) -> Self {
-        let twiddle1: Complex<T> = twiddles::single_twiddle(1, 11, inverse);
-        let twiddle2: Complex<T> = twiddles::single_twiddle(2, 11, inverse);
-        let twiddle3: Complex<T> = twiddles::single_twiddle(3, 11, inverse);
-        let twiddle4: Complex<T> = twiddles::single_twiddle(4, 11, inverse);
-        let twiddle5: Complex<T> = twiddles::single_twiddle(5, 11, inverse);
+        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 11, inverse);
+        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 11, inverse);
+        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 11, inverse);
+        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 11, inverse);
+        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 11, inverse);
         Self {
             twiddle1,
             twiddle2,
@@ -816,32 +751,29 @@ impl<T: FFTnum> Butterfly11<T> {
             inverse,
         }
     }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly11<T> {
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_exact_mut(self.len()) {
-            self.process_inplace(chunk);
-        }
-    }
-    #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+
+    #[inline(never)]
+    unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
         // This function was derived in the same manner as the butterflies for length 3, 5 and 7.
         // However, instead of doing it by hand the actual code is autogenerated
         // with the `genbutterflies.py` script in the `tools` directory.
 
-        let x110p = *buffer.get_unchecked(1) + *buffer.get_unchecked(10);
-        let x110n = *buffer.get_unchecked(1) - *buffer.get_unchecked(10);
-        let x29p = *buffer.get_unchecked(2) + *buffer.get_unchecked(9);
-        let x29n = *buffer.get_unchecked(2) - *buffer.get_unchecked(9);
-        let x38p = *buffer.get_unchecked(3) + *buffer.get_unchecked(8);
-        let x38n = *buffer.get_unchecked(3) - *buffer.get_unchecked(8);
-        let x47p = *buffer.get_unchecked(4) + *buffer.get_unchecked(7);
-        let x47n = *buffer.get_unchecked(4) - *buffer.get_unchecked(7);
-        let x56p = *buffer.get_unchecked(5) + *buffer.get_unchecked(6);
-        let x56n = *buffer.get_unchecked(5) - *buffer.get_unchecked(6);
-        let sum = *buffer.get_unchecked(0) + x110p + x29p + x38p + x47p + x56p;
-        let b110re_a = buffer.get_unchecked(0).re
+        let x110p = input.load(1) + input.load(10);
+        let x110n = input.load(1) - input.load(10);
+        let x29p = input.load(2) + input.load(9);
+        let x29n = input.load(2) - input.load(9);
+        let x38p = input.load(3) + input.load(8);
+        let x38n = input.load(3) - input.load(8);
+        let x47p = input.load(4) + input.load(7);
+        let x47n = input.load(4) - input.load(7);
+        let x56p = input.load(5) + input.load(6);
+        let x56n = input.load(5) - input.load(6);
+        let sum = input.load(0) + x110p + x29p + x38p + x47p + x56p;
+        let b110re_a = input.load(0).re
             + self.twiddle1.re * x110p.re
             + self.twiddle2.re * x29p.re
             + self.twiddle3.re * x38p.re
@@ -852,7 +784,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly11<T> {
             + self.twiddle3.im * x38n.im
             + self.twiddle4.im * x47n.im
             + self.twiddle5.im * x56n.im;
-        let b29re_a = buffer.get_unchecked(0).re
+        let b29re_a = input.load(0).re
             + self.twiddle2.re * x110p.re
             + self.twiddle4.re * x29p.re
             + self.twiddle5.re * x38p.re
@@ -863,7 +795,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly11<T> {
             + -self.twiddle5.im * x38n.im
             + -self.twiddle3.im * x47n.im
             + -self.twiddle1.im * x56n.im;
-        let b38re_a = buffer.get_unchecked(0).re
+        let b38re_a = input.load(0).re
             + self.twiddle3.re * x110p.re
             + self.twiddle5.re * x29p.re
             + self.twiddle2.re * x38p.re
@@ -874,7 +806,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly11<T> {
             + -self.twiddle2.im * x38n.im
             + self.twiddle1.im * x47n.im
             + self.twiddle4.im * x56n.im;
-        let b47re_a = buffer.get_unchecked(0).re
+        let b47re_a = input.load(0).re
             + self.twiddle4.re * x110p.re
             + self.twiddle3.re * x29p.re
             + self.twiddle1.re * x38p.re
@@ -885,7 +817,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly11<T> {
             + self.twiddle1.im * x38n.im
             + self.twiddle5.im * x47n.im
             + -self.twiddle2.im * x56n.im;
-        let b56re_a = buffer.get_unchecked(0).re
+        let b56re_a = input.load(0).re
             + self.twiddle5.re * x110p.re
             + self.twiddle1.re * x29p.re
             + self.twiddle4.re * x38p.re
@@ -897,7 +829,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly11<T> {
             + -self.twiddle2.im * x47n.im
             + self.twiddle3.im * x56n.im;
 
-        let b110im_a = buffer.get_unchecked(0).im
+        let b110im_a = input.load(0).im
             + self.twiddle1.re * x110p.im
             + self.twiddle2.re * x29p.im
             + self.twiddle3.re * x38p.im
@@ -908,7 +840,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly11<T> {
             + self.twiddle3.im * x38n.re
             + self.twiddle4.im * x47n.re
             + self.twiddle5.im * x56n.re;
-        let b29im_a = buffer.get_unchecked(0).im
+        let b29im_a = input.load(0).im
             + self.twiddle2.re * x110p.im
             + self.twiddle4.re * x29p.im
             + self.twiddle5.re * x38p.im
@@ -919,7 +851,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly11<T> {
             + -self.twiddle5.im * x38n.re
             + -self.twiddle3.im * x47n.re
             + -self.twiddle1.im * x56n.re;
-        let b38im_a = buffer.get_unchecked(0).im
+        let b38im_a = input.load(0).im
             + self.twiddle3.re * x110p.im
             + self.twiddle5.re * x29p.im
             + self.twiddle2.re * x38p.im
@@ -930,7 +862,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly11<T> {
             + -self.twiddle2.im * x38n.re
             + self.twiddle1.im * x47n.re
             + self.twiddle4.im * x56n.re;
-        let b47im_a = buffer.get_unchecked(0).im
+        let b47im_a = input.load(0).im
             + self.twiddle4.re * x110p.im
             + self.twiddle3.re * x29p.im
             + self.twiddle1.re * x38p.im
@@ -941,7 +873,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly11<T> {
             + self.twiddle1.im * x38n.re
             + self.twiddle5.im * x47n.re
             + -self.twiddle2.im * x56n.re;
-        let b56im_a = buffer.get_unchecked(0).im
+        let b56im_a = input.load(0).im
             + self.twiddle5.re * x110p.im
             + self.twiddle1.re * x29p.im
             + self.twiddle4.re * x38p.im
@@ -973,73 +905,77 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly11<T> {
         let out9im = b29im_a - b29im_b;
         let out10re = b110re_a + b110re_b;
         let out10im = b110im_a - b110im_b;
-        *buffer.get_unchecked_mut(0) = sum;
-        *buffer.get_unchecked_mut(1) = Complex {
-            re: out1re,
-            im: out1im,
-        };
-        *buffer.get_unchecked_mut(2) = Complex {
-            re: out2re,
-            im: out2im,
-        };
-        *buffer.get_unchecked_mut(3) = Complex {
-            re: out3re,
-            im: out3im,
-        };
-        *buffer.get_unchecked_mut(4) = Complex {
-            re: out4re,
-            im: out4im,
-        };
-        *buffer.get_unchecked_mut(5) = Complex {
-            re: out5re,
-            im: out5im,
-        };
-        *buffer.get_unchecked_mut(6) = Complex {
-            re: out6re,
-            im: out6im,
-        };
-        *buffer.get_unchecked_mut(7) = Complex {
-            re: out7re,
-            im: out7im,
-        };
-        *buffer.get_unchecked_mut(8) = Complex {
-            re: out8re,
-            im: out8im,
-        };
-        *buffer.get_unchecked_mut(9) = Complex {
-            re: out9re,
-            im: out9im,
-        };
-        *buffer.get_unchecked_mut(10) = Complex {
-            re: out10re,
-            im: out10im,
-        };
-    }
-}
-impl<T: FFTnum> FFT<T> for Butterfly11<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl<T> Length for Butterfly11<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        11
-    }
-}
-impl<T> IsInverse for Butterfly11<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
+        output.store(sum, 0);
+        output.store(
+            Complex {
+                re: out1re,
+                im: out1im,
+            },
+            1,
+        );
+        output.store(
+            Complex {
+                re: out2re,
+                im: out2im,
+            },
+            2,
+        );
+        output.store(
+            Complex {
+                re: out3re,
+                im: out3im,
+            },
+            3,
+        );
+        output.store(
+            Complex {
+                re: out4re,
+                im: out4im,
+            },
+            4,
+        );
+        output.store(
+            Complex {
+                re: out5re,
+                im: out5im,
+            },
+            5,
+        );
+        output.store(
+            Complex {
+                re: out6re,
+                im: out6im,
+            },
+            6,
+        );
+        output.store(
+            Complex {
+                re: out7re,
+                im: out7im,
+            },
+            7,
+        );
+        output.store(
+            Complex {
+                re: out8re,
+                im: out8im,
+            },
+            8,
+        );
+        output.store(
+            Complex {
+                re: out9re,
+                im: out9im,
+            },
+            9,
+        );
+        output.store(
+            Complex {
+                re: out10re,
+                im: out10im,
+            },
+            10,
+        );
     }
 }
 
@@ -1052,14 +988,15 @@ pub struct Butterfly13<T> {
     twiddle6: Complex<T>,
     inverse: bool,
 }
+boilerplate_fft_butterfly!(Butterfly13, 13, |this: &Butterfly13<_>| this.inverse);
 impl<T: FFTnum> Butterfly13<T> {
     pub fn new(inverse: bool) -> Self {
-        let twiddle1: Complex<T> = twiddles::single_twiddle(1, 13, inverse);
-        let twiddle2: Complex<T> = twiddles::single_twiddle(2, 13, inverse);
-        let twiddle3: Complex<T> = twiddles::single_twiddle(3, 13, inverse);
-        let twiddle4: Complex<T> = twiddles::single_twiddle(4, 13, inverse);
-        let twiddle5: Complex<T> = twiddles::single_twiddle(5, 13, inverse);
-        let twiddle6: Complex<T> = twiddles::single_twiddle(6, 13, inverse);
+        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 13, inverse);
+        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 13, inverse);
+        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 13, inverse);
+        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 13, inverse);
+        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 13, inverse);
+        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 13, inverse);
         Self {
             twiddle1,
             twiddle2,
@@ -1070,33 +1007,30 @@ impl<T: FFTnum> Butterfly13<T> {
             inverse,
         }
     }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly13<T> {
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_exact_mut(self.len()) {
-            self.process_inplace(chunk);
-        }
-    }
-    #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+
+    #[inline(never)]
+    unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
         // This function was derived in the same manner as the butterflies for length 3, 5 and 7.
         // However, instead of doing it by hand the actual code is autogenerated
         // with the `genbutterflies.py` script in the `tools` directory.
-        let x112p = *buffer.get_unchecked(1) + *buffer.get_unchecked(12);
-        let x112n = *buffer.get_unchecked(1) - *buffer.get_unchecked(12);
-        let x211p = *buffer.get_unchecked(2) + *buffer.get_unchecked(11);
-        let x211n = *buffer.get_unchecked(2) - *buffer.get_unchecked(11);
-        let x310p = *buffer.get_unchecked(3) + *buffer.get_unchecked(10);
-        let x310n = *buffer.get_unchecked(3) - *buffer.get_unchecked(10);
-        let x49p = *buffer.get_unchecked(4) + *buffer.get_unchecked(9);
-        let x49n = *buffer.get_unchecked(4) - *buffer.get_unchecked(9);
-        let x58p = *buffer.get_unchecked(5) + *buffer.get_unchecked(8);
-        let x58n = *buffer.get_unchecked(5) - *buffer.get_unchecked(8);
-        let x67p = *buffer.get_unchecked(6) + *buffer.get_unchecked(7);
-        let x67n = *buffer.get_unchecked(6) - *buffer.get_unchecked(7);
-        let sum = *buffer.get_unchecked(0) + x112p + x211p + x310p + x49p + x58p + x67p;
-        let b112re_a = buffer.get_unchecked(0).re
+        let x112p = input.load(1) + input.load(12);
+        let x112n = input.load(1) - input.load(12);
+        let x211p = input.load(2) + input.load(11);
+        let x211n = input.load(2) - input.load(11);
+        let x310p = input.load(3) + input.load(10);
+        let x310n = input.load(3) - input.load(10);
+        let x49p = input.load(4) + input.load(9);
+        let x49n = input.load(4) - input.load(9);
+        let x58p = input.load(5) + input.load(8);
+        let x58n = input.load(5) - input.load(8);
+        let x67p = input.load(6) + input.load(7);
+        let x67n = input.load(6) - input.load(7);
+        let sum = input.load(0) + x112p + x211p + x310p + x49p + x58p + x67p;
+        let b112re_a = input.load(0).re
             + self.twiddle1.re * x112p.re
             + self.twiddle2.re * x211p.re
             + self.twiddle3.re * x310p.re
@@ -1109,7 +1043,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly13<T> {
             + self.twiddle4.im * x49n.im
             + self.twiddle5.im * x58n.im
             + self.twiddle6.im * x67n.im;
-        let b211re_a = buffer.get_unchecked(0).re
+        let b211re_a = input.load(0).re
             + self.twiddle2.re * x112p.re
             + self.twiddle4.re * x211p.re
             + self.twiddle6.re * x310p.re
@@ -1122,7 +1056,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly13<T> {
             + -self.twiddle5.im * x49n.im
             + -self.twiddle3.im * x58n.im
             + -self.twiddle1.im * x67n.im;
-        let b310re_a = buffer.get_unchecked(0).re
+        let b310re_a = input.load(0).re
             + self.twiddle3.re * x112p.re
             + self.twiddle6.re * x211p.re
             + self.twiddle4.re * x310p.re
@@ -1135,7 +1069,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly13<T> {
             + -self.twiddle1.im * x49n.im
             + self.twiddle2.im * x58n.im
             + self.twiddle5.im * x67n.im;
-        let b49re_a = buffer.get_unchecked(0).re
+        let b49re_a = input.load(0).re
             + self.twiddle4.re * x112p.re
             + self.twiddle5.re * x211p.re
             + self.twiddle1.re * x310p.re
@@ -1148,7 +1082,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly13<T> {
             + self.twiddle3.im * x49n.im
             + -self.twiddle6.im * x58n.im
             + -self.twiddle2.im * x67n.im;
-        let b58re_a = buffer.get_unchecked(0).re
+        let b58re_a = input.load(0).re
             + self.twiddle5.re * x112p.re
             + self.twiddle3.re * x211p.re
             + self.twiddle2.re * x310p.re
@@ -1161,7 +1095,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly13<T> {
             + -self.twiddle6.im * x49n.im
             + -self.twiddle1.im * x58n.im
             + self.twiddle4.im * x67n.im;
-        let b67re_a = buffer.get_unchecked(0).re
+        let b67re_a = input.load(0).re
             + self.twiddle6.re * x112p.re
             + self.twiddle1.re * x211p.re
             + self.twiddle5.re * x310p.re
@@ -1175,7 +1109,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly13<T> {
             + self.twiddle4.im * x58n.im
             + -self.twiddle3.im * x67n.im;
 
-        let b112im_a = buffer.get_unchecked(0).im
+        let b112im_a = input.load(0).im
             + self.twiddle1.re * x112p.im
             + self.twiddle2.re * x211p.im
             + self.twiddle3.re * x310p.im
@@ -1188,7 +1122,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly13<T> {
             + self.twiddle4.im * x49n.re
             + self.twiddle5.im * x58n.re
             + self.twiddle6.im * x67n.re;
-        let b211im_a = buffer.get_unchecked(0).im
+        let b211im_a = input.load(0).im
             + self.twiddle2.re * x112p.im
             + self.twiddle4.re * x211p.im
             + self.twiddle6.re * x310p.im
@@ -1201,7 +1135,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly13<T> {
             + -self.twiddle5.im * x49n.re
             + -self.twiddle3.im * x58n.re
             + -self.twiddle1.im * x67n.re;
-        let b310im_a = buffer.get_unchecked(0).im
+        let b310im_a = input.load(0).im
             + self.twiddle3.re * x112p.im
             + self.twiddle6.re * x211p.im
             + self.twiddle4.re * x310p.im
@@ -1214,7 +1148,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly13<T> {
             + -self.twiddle1.im * x49n.re
             + self.twiddle2.im * x58n.re
             + self.twiddle5.im * x67n.re;
-        let b49im_a = buffer.get_unchecked(0).im
+        let b49im_a = input.load(0).im
             + self.twiddle4.re * x112p.im
             + self.twiddle5.re * x211p.im
             + self.twiddle1.re * x310p.im
@@ -1227,7 +1161,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly13<T> {
             + self.twiddle3.im * x49n.re
             + -self.twiddle6.im * x58n.re
             + -self.twiddle2.im * x67n.re;
-        let b58im_a = buffer.get_unchecked(0).im
+        let b58im_a = input.load(0).im
             + self.twiddle5.re * x112p.im
             + self.twiddle3.re * x211p.im
             + self.twiddle2.re * x310p.im
@@ -1240,7 +1174,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly13<T> {
             + -self.twiddle6.im * x49n.re
             + -self.twiddle1.im * x58n.re
             + self.twiddle4.im * x67n.re;
-        let b67im_a = buffer.get_unchecked(0).im
+        let b67im_a = input.load(0).im
             + self.twiddle6.re * x112p.im
             + self.twiddle1.re * x211p.im
             + self.twiddle5.re * x310p.im
@@ -1278,81 +1212,91 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly13<T> {
         let out11im = b211im_a - b211im_b;
         let out12re = b112re_a + b112re_b;
         let out12im = b112im_a - b112im_b;
-        *buffer.get_unchecked_mut(0) = sum;
-        *buffer.get_unchecked_mut(1) = Complex {
-            re: out1re,
-            im: out1im,
-        };
-        *buffer.get_unchecked_mut(2) = Complex {
-            re: out2re,
-            im: out2im,
-        };
-        *buffer.get_unchecked_mut(3) = Complex {
-            re: out3re,
-            im: out3im,
-        };
-        *buffer.get_unchecked_mut(4) = Complex {
-            re: out4re,
-            im: out4im,
-        };
-        *buffer.get_unchecked_mut(5) = Complex {
-            re: out5re,
-            im: out5im,
-        };
-        *buffer.get_unchecked_mut(6) = Complex {
-            re: out6re,
-            im: out6im,
-        };
-        *buffer.get_unchecked_mut(7) = Complex {
-            re: out7re,
-            im: out7im,
-        };
-        *buffer.get_unchecked_mut(8) = Complex {
-            re: out8re,
-            im: out8im,
-        };
-        *buffer.get_unchecked_mut(9) = Complex {
-            re: out9re,
-            im: out9im,
-        };
-        *buffer.get_unchecked_mut(10) = Complex {
-            re: out10re,
-            im: out10im,
-        };
-        *buffer.get_unchecked_mut(11) = Complex {
-            re: out11re,
-            im: out11im,
-        };
-        *buffer.get_unchecked_mut(12) = Complex {
-            re: out12re,
-            im: out12im,
-        };
-    }
-}
-impl<T: FFTnum> FFT<T> for Butterfly13<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl<T> Length for Butterfly13<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        13
-    }
-}
-impl<T> IsInverse for Butterfly13<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
+        output.store(sum, 0);
+        output.store(
+            Complex {
+                re: out1re,
+                im: out1im,
+            },
+            1,
+        );
+        output.store(
+            Complex {
+                re: out2re,
+                im: out2im,
+            },
+            2,
+        );
+        output.store(
+            Complex {
+                re: out3re,
+                im: out3im,
+            },
+            3,
+        );
+        output.store(
+            Complex {
+                re: out4re,
+                im: out4im,
+            },
+            4,
+        );
+        output.store(
+            Complex {
+                re: out5re,
+                im: out5im,
+            },
+            5,
+        );
+        output.store(
+            Complex {
+                re: out6re,
+                im: out6im,
+            },
+            6,
+        );
+        output.store(
+            Complex {
+                re: out7re,
+                im: out7im,
+            },
+            7,
+        );
+        output.store(
+            Complex {
+                re: out8re,
+                im: out8im,
+            },
+            8,
+        );
+        output.store(
+            Complex {
+                re: out9re,
+                im: out9im,
+            },
+            9,
+        );
+        output.store(
+            Complex {
+                re: out10re,
+                im: out10im,
+            },
+            10,
+        );
+        output.store(
+            Complex {
+                re: out11re,
+                im: out11im,
+            },
+            11,
+        );
+        output.store(
+            Complex {
+                re: out12re,
+                im: out12im,
+            },
+            12,
+        );
     }
 }
 
@@ -1361,55 +1305,49 @@ pub struct Butterfly16<T> {
     twiddle1: Complex<T>,
     twiddle2: Complex<T>,
     twiddle3: Complex<T>,
-    inverse: bool,
 }
+boilerplate_fft_butterfly!(Butterfly16, 16, |this: &Butterfly16<_>| this
+    .butterfly8
+    .is_inverse());
 impl<T: FFTnum> Butterfly16<T> {
     #[inline(always)]
     pub fn new(inverse: bool) -> Self {
         Self {
             butterfly8: Butterfly8::new(inverse),
-            twiddle1: twiddles::single_twiddle(1, 16, inverse),
-            twiddle2: twiddles::single_twiddle(2, 16, inverse),
-            twiddle3: twiddles::single_twiddle(3, 16, inverse),
-            inverse,
+            twiddle1: T::generate_twiddle_factor(1, 16, inverse),
+            twiddle2: T::generate_twiddle_factor(2, 16, inverse),
+            twiddle3: T::generate_twiddle_factor(3, 16, inverse),
         }
     }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly16<T> {
-    #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
-        let butterfly4 = Butterfly4::new(self.inverse);
+
+    #[inline(never)]
+    unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
+        let butterfly4 = Butterfly4::new(self.is_inverse());
 
         // we're going to hardcode a step of split radix
         // step 1: copy and reorder the  input into the scratch
         let mut scratch_evens = [
-            *buffer.get_unchecked(0),
-            *buffer.get_unchecked(2),
-            *buffer.get_unchecked(4),
-            *buffer.get_unchecked(6),
-            *buffer.get_unchecked(8),
-            *buffer.get_unchecked(10),
-            *buffer.get_unchecked(12),
-            *buffer.get_unchecked(14),
+            input.load(0),
+            input.load(2),
+            input.load(4),
+            input.load(6),
+            input.load(8),
+            input.load(10),
+            input.load(12),
+            input.load(14),
         ];
 
-        let mut scratch_odds_n1 = [
-            *buffer.get_unchecked(1),
-            *buffer.get_unchecked(5),
-            *buffer.get_unchecked(9),
-            *buffer.get_unchecked(13),
-        ];
-        let mut scratch_odds_n3 = [
-            *buffer.get_unchecked(15),
-            *buffer.get_unchecked(3),
-            *buffer.get_unchecked(7),
-            *buffer.get_unchecked(11),
-        ];
+        let mut scratch_odds_n1 = [input.load(1), input.load(5), input.load(9), input.load(13)];
+        let mut scratch_odds_n3 = [input.load(15), input.load(3), input.load(7), input.load(11)];
 
         // step 2: column FFTs
-        self.butterfly8.process_inplace(&mut scratch_evens);
-        butterfly4.process_inplace(&mut scratch_odds_n1);
-        butterfly4.process_inplace(&mut scratch_odds_n3);
+        self.butterfly8.perform_fft_butterfly(&mut scratch_evens);
+        butterfly4.perform_fft_butterfly(&mut scratch_odds_n1);
+        butterfly4.perform_fft_butterfly(&mut scratch_odds_n3);
 
         // step 3: apply twiddle factors
         scratch_odds_n1[1] = scratch_odds_n1[1] * self.twiddle1;
@@ -1422,66 +1360,34 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly16<T> {
         scratch_odds_n3[3] = scratch_odds_n3[3] * self.twiddle3.conj();
 
         // step 4: cross FFTs
-        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[0], &mut scratch_odds_n3[0]);
-        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[1], &mut scratch_odds_n3[1]);
-        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[2], &mut scratch_odds_n3[2]);
-        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[3], &mut scratch_odds_n3[3]);
+        Butterfly2::perform_fft_strided(&mut scratch_odds_n1[0], &mut scratch_odds_n3[0]);
+        Butterfly2::perform_fft_strided(&mut scratch_odds_n1[1], &mut scratch_odds_n3[1]);
+        Butterfly2::perform_fft_strided(&mut scratch_odds_n1[2], &mut scratch_odds_n3[2]);
+        Butterfly2::perform_fft_strided(&mut scratch_odds_n1[3], &mut scratch_odds_n3[3]);
 
         // apply the butterfly 4 twiddle factor, which is just a rotation
-        scratch_odds_n3[0] = twiddles::rotate_90(scratch_odds_n3[0], self.inverse);
-        scratch_odds_n3[1] = twiddles::rotate_90(scratch_odds_n3[1], self.inverse);
-        scratch_odds_n3[2] = twiddles::rotate_90(scratch_odds_n3[2], self.inverse);
-        scratch_odds_n3[3] = twiddles::rotate_90(scratch_odds_n3[3], self.inverse);
+        scratch_odds_n3[0] = twiddles::rotate_90(scratch_odds_n3[0], self.is_inverse());
+        scratch_odds_n3[1] = twiddles::rotate_90(scratch_odds_n3[1], self.is_inverse());
+        scratch_odds_n3[2] = twiddles::rotate_90(scratch_odds_n3[2], self.is_inverse());
+        scratch_odds_n3[3] = twiddles::rotate_90(scratch_odds_n3[3], self.is_inverse());
 
         //step 5: copy/add/subtract data back to buffer
-        *buffer.get_unchecked_mut(0) = scratch_evens[0] + scratch_odds_n1[0];
-        *buffer.get_unchecked_mut(1) = scratch_evens[1] + scratch_odds_n1[1];
-        *buffer.get_unchecked_mut(2) = scratch_evens[2] + scratch_odds_n1[2];
-        *buffer.get_unchecked_mut(3) = scratch_evens[3] + scratch_odds_n1[3];
-        *buffer.get_unchecked_mut(4) = scratch_evens[4] + scratch_odds_n3[0];
-        *buffer.get_unchecked_mut(5) = scratch_evens[5] + scratch_odds_n3[1];
-        *buffer.get_unchecked_mut(6) = scratch_evens[6] + scratch_odds_n3[2];
-        *buffer.get_unchecked_mut(7) = scratch_evens[7] + scratch_odds_n3[3];
-        *buffer.get_unchecked_mut(8) = scratch_evens[0] - scratch_odds_n1[0];
-        *buffer.get_unchecked_mut(9) = scratch_evens[1] - scratch_odds_n1[1];
-        *buffer.get_unchecked_mut(10) = scratch_evens[2] - scratch_odds_n1[2];
-        *buffer.get_unchecked_mut(11) = scratch_evens[3] - scratch_odds_n1[3];
-        *buffer.get_unchecked_mut(12) = scratch_evens[4] - scratch_odds_n3[0];
-        *buffer.get_unchecked_mut(13) = scratch_evens[5] - scratch_odds_n3[1];
-        *buffer.get_unchecked_mut(14) = scratch_evens[6] - scratch_odds_n3[2];
-        *buffer.get_unchecked_mut(15) = scratch_evens[7] - scratch_odds_n3[3];
-    }
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_exact_mut(self.len()) {
-            self.process_inplace(chunk);
-        }
-    }
-}
-impl<T: FFTnum> FFT<T> for Butterfly16<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl<T> Length for Butterfly16<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        16
-    }
-}
-impl<T> IsInverse for Butterfly16<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
+        output.store(scratch_evens[0] + scratch_odds_n1[0], 0);
+        output.store(scratch_evens[1] + scratch_odds_n1[1], 1);
+        output.store(scratch_evens[2] + scratch_odds_n1[2], 2);
+        output.store(scratch_evens[3] + scratch_odds_n1[3], 3);
+        output.store(scratch_evens[4] + scratch_odds_n3[0], 4);
+        output.store(scratch_evens[5] + scratch_odds_n3[1], 5);
+        output.store(scratch_evens[6] + scratch_odds_n3[2], 6);
+        output.store(scratch_evens[7] + scratch_odds_n3[3], 7);
+        output.store(scratch_evens[0] - scratch_odds_n1[0], 8);
+        output.store(scratch_evens[1] - scratch_odds_n1[1], 9);
+        output.store(scratch_evens[2] - scratch_odds_n1[2], 10);
+        output.store(scratch_evens[3] - scratch_odds_n1[3], 11);
+        output.store(scratch_evens[4] - scratch_odds_n3[0], 12);
+        output.store(scratch_evens[5] - scratch_odds_n3[1], 13);
+        output.store(scratch_evens[6] - scratch_odds_n3[2], 14);
+        output.store(scratch_evens[7] - scratch_odds_n3[3], 15);
     }
 }
 
@@ -1496,16 +1402,17 @@ pub struct Butterfly17<T> {
     twiddle8: Complex<T>,
     inverse: bool,
 }
+boilerplate_fft_butterfly!(Butterfly17, 17, |this: &Butterfly17<_>| this.inverse);
 impl<T: FFTnum> Butterfly17<T> {
     pub fn new(inverse: bool) -> Self {
-        let twiddle1: Complex<T> = twiddles::single_twiddle(1, 17, inverse);
-        let twiddle2: Complex<T> = twiddles::single_twiddle(2, 17, inverse);
-        let twiddle3: Complex<T> = twiddles::single_twiddle(3, 17, inverse);
-        let twiddle4: Complex<T> = twiddles::single_twiddle(4, 17, inverse);
-        let twiddle5: Complex<T> = twiddles::single_twiddle(5, 17, inverse);
-        let twiddle6: Complex<T> = twiddles::single_twiddle(6, 17, inverse);
-        let twiddle7: Complex<T> = twiddles::single_twiddle(7, 17, inverse);
-        let twiddle8: Complex<T> = twiddles::single_twiddle(8, 17, inverse);
+        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 17, inverse);
+        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 17, inverse);
+        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 17, inverse);
+        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 17, inverse);
+        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 17, inverse);
+        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 17, inverse);
+        let twiddle7: Complex<T> = T::generate_twiddle_factor(7, 17, inverse);
+        let twiddle8: Complex<T> = T::generate_twiddle_factor(8, 17, inverse);
         Self {
             twiddle1,
             twiddle2,
@@ -1518,38 +1425,34 @@ impl<T: FFTnum> Butterfly17<T> {
             inverse,
         }
     }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly17<T> {
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_exact_mut(self.len()) {
-            self.process_inplace(chunk);
-        }
-    }
-    #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+
+    #[inline(never)]
+    unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
         // This function was derived in the same manner as the butterflies for length 3, 5 and 7.
         // However, instead of doing it by hand the actual code is autogenerated
         // with the `genbutterflies.py` script in the `tools` directory.
-        let x116p = *buffer.get_unchecked(1) + *buffer.get_unchecked(16);
-        let x116n = *buffer.get_unchecked(1) - *buffer.get_unchecked(16);
-        let x215p = *buffer.get_unchecked(2) + *buffer.get_unchecked(15);
-        let x215n = *buffer.get_unchecked(2) - *buffer.get_unchecked(15);
-        let x314p = *buffer.get_unchecked(3) + *buffer.get_unchecked(14);
-        let x314n = *buffer.get_unchecked(3) - *buffer.get_unchecked(14);
-        let x413p = *buffer.get_unchecked(4) + *buffer.get_unchecked(13);
-        let x413n = *buffer.get_unchecked(4) - *buffer.get_unchecked(13);
-        let x512p = *buffer.get_unchecked(5) + *buffer.get_unchecked(12);
-        let x512n = *buffer.get_unchecked(5) - *buffer.get_unchecked(12);
-        let x611p = *buffer.get_unchecked(6) + *buffer.get_unchecked(11);
-        let x611n = *buffer.get_unchecked(6) - *buffer.get_unchecked(11);
-        let x710p = *buffer.get_unchecked(7) + *buffer.get_unchecked(10);
-        let x710n = *buffer.get_unchecked(7) - *buffer.get_unchecked(10);
-        let x89p = *buffer.get_unchecked(8) + *buffer.get_unchecked(9);
-        let x89n = *buffer.get_unchecked(8) - *buffer.get_unchecked(9);
-        let sum =
-            *buffer.get_unchecked(0) + x116p + x215p + x314p + x413p + x512p + x611p + x710p + x89p;
-        let b116re_a = buffer.get_unchecked(0).re
+        let x116p = input.load(1) + input.load(16);
+        let x116n = input.load(1) - input.load(16);
+        let x215p = input.load(2) + input.load(15);
+        let x215n = input.load(2) - input.load(15);
+        let x314p = input.load(3) + input.load(14);
+        let x314n = input.load(3) - input.load(14);
+        let x413p = input.load(4) + input.load(13);
+        let x413n = input.load(4) - input.load(13);
+        let x512p = input.load(5) + input.load(12);
+        let x512n = input.load(5) - input.load(12);
+        let x611p = input.load(6) + input.load(11);
+        let x611n = input.load(6) - input.load(11);
+        let x710p = input.load(7) + input.load(10);
+        let x710n = input.load(7) - input.load(10);
+        let x89p = input.load(8) + input.load(9);
+        let x89n = input.load(8) - input.load(9);
+        let sum = input.load(0) + x116p + x215p + x314p + x413p + x512p + x611p + x710p + x89p;
+        let b116re_a = input.load(0).re
             + self.twiddle1.re * x116p.re
             + self.twiddle2.re * x215p.re
             + self.twiddle3.re * x314p.re
@@ -1566,7 +1469,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly17<T> {
             + self.twiddle6.im * x611n.im
             + self.twiddle7.im * x710n.im
             + self.twiddle8.im * x89n.im;
-        let b215re_a = buffer.get_unchecked(0).re
+        let b215re_a = input.load(0).re
             + self.twiddle2.re * x116p.re
             + self.twiddle4.re * x215p.re
             + self.twiddle6.re * x314p.re
@@ -1583,7 +1486,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly17<T> {
             + -self.twiddle5.im * x611n.im
             + -self.twiddle3.im * x710n.im
             + -self.twiddle1.im * x89n.im;
-        let b314re_a = buffer.get_unchecked(0).re
+        let b314re_a = input.load(0).re
             + self.twiddle3.re * x116p.re
             + self.twiddle6.re * x215p.re
             + self.twiddle8.re * x314p.re
@@ -1600,7 +1503,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly17<T> {
             + self.twiddle1.im * x611n.im
             + self.twiddle4.im * x710n.im
             + self.twiddle7.im * x89n.im;
-        let b413re_a = buffer.get_unchecked(0).re
+        let b413re_a = input.load(0).re
             + self.twiddle4.re * x116p.re
             + self.twiddle8.re * x215p.re
             + self.twiddle5.re * x314p.re
@@ -1617,7 +1520,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly17<T> {
             + self.twiddle7.im * x611n.im
             + -self.twiddle6.im * x710n.im
             + -self.twiddle2.im * x89n.im;
-        let b512re_a = buffer.get_unchecked(0).re
+        let b512re_a = input.load(0).re
             + self.twiddle5.re * x116p.re
             + self.twiddle7.re * x215p.re
             + self.twiddle2.re * x314p.re
@@ -1634,7 +1537,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly17<T> {
             + -self.twiddle4.im * x611n.im
             + self.twiddle1.im * x710n.im
             + self.twiddle6.im * x89n.im;
-        let b611re_a = buffer.get_unchecked(0).re
+        let b611re_a = input.load(0).re
             + self.twiddle6.re * x116p.re
             + self.twiddle5.re * x215p.re
             + self.twiddle1.re * x314p.re
@@ -1651,7 +1554,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly17<T> {
             + self.twiddle2.im * x611n.im
             + self.twiddle8.im * x710n.im
             + -self.twiddle3.im * x89n.im;
-        let b710re_a = buffer.get_unchecked(0).re
+        let b710re_a = input.load(0).re
             + self.twiddle7.re * x116p.re
             + self.twiddle3.re * x215p.re
             + self.twiddle4.re * x314p.re
@@ -1668,7 +1571,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly17<T> {
             + self.twiddle8.im * x611n.im
             + -self.twiddle2.im * x710n.im
             + self.twiddle5.im * x89n.im;
-        let b89re_a = buffer.get_unchecked(0).re
+        let b89re_a = input.load(0).re
             + self.twiddle8.re * x116p.re
             + self.twiddle1.re * x215p.re
             + self.twiddle7.re * x314p.re
@@ -1686,7 +1589,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly17<T> {
             + self.twiddle5.im * x710n.im
             + -self.twiddle4.im * x89n.im;
 
-        let b116im_a = buffer.get_unchecked(0).im
+        let b116im_a = input.load(0).im
             + self.twiddle1.re * x116p.im
             + self.twiddle2.re * x215p.im
             + self.twiddle3.re * x314p.im
@@ -1703,7 +1606,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly17<T> {
             + self.twiddle6.im * x611n.re
             + self.twiddle7.im * x710n.re
             + self.twiddle8.im * x89n.re;
-        let b215im_a = buffer.get_unchecked(0).im
+        let b215im_a = input.load(0).im
             + self.twiddle2.re * x116p.im
             + self.twiddle4.re * x215p.im
             + self.twiddle6.re * x314p.im
@@ -1720,7 +1623,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly17<T> {
             + -self.twiddle5.im * x611n.re
             + -self.twiddle3.im * x710n.re
             + -self.twiddle1.im * x89n.re;
-        let b314im_a = buffer.get_unchecked(0).im
+        let b314im_a = input.load(0).im
             + self.twiddle3.re * x116p.im
             + self.twiddle6.re * x215p.im
             + self.twiddle8.re * x314p.im
@@ -1737,7 +1640,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly17<T> {
             + self.twiddle1.im * x611n.re
             + self.twiddle4.im * x710n.re
             + self.twiddle7.im * x89n.re;
-        let b413im_a = buffer.get_unchecked(0).im
+        let b413im_a = input.load(0).im
             + self.twiddle4.re * x116p.im
             + self.twiddle8.re * x215p.im
             + self.twiddle5.re * x314p.im
@@ -1754,7 +1657,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly17<T> {
             + self.twiddle7.im * x611n.re
             + -self.twiddle6.im * x710n.re
             + -self.twiddle2.im * x89n.re;
-        let b512im_a = buffer.get_unchecked(0).im
+        let b512im_a = input.load(0).im
             + self.twiddle5.re * x116p.im
             + self.twiddle7.re * x215p.im
             + self.twiddle2.re * x314p.im
@@ -1771,7 +1674,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly17<T> {
             + -self.twiddle4.im * x611n.re
             + self.twiddle1.im * x710n.re
             + self.twiddle6.im * x89n.re;
-        let b611im_a = buffer.get_unchecked(0).im
+        let b611im_a = input.load(0).im
             + self.twiddle6.re * x116p.im
             + self.twiddle5.re * x215p.im
             + self.twiddle1.re * x314p.im
@@ -1788,7 +1691,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly17<T> {
             + self.twiddle2.im * x611n.re
             + self.twiddle8.im * x710n.re
             + -self.twiddle3.im * x89n.re;
-        let b710im_a = buffer.get_unchecked(0).im
+        let b710im_a = input.load(0).im
             + self.twiddle7.re * x116p.im
             + self.twiddle3.re * x215p.im
             + self.twiddle4.re * x314p.im
@@ -1805,7 +1708,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly17<T> {
             + self.twiddle8.im * x611n.re
             + -self.twiddle2.im * x710n.re
             + self.twiddle5.im * x89n.re;
-        let b89im_a = buffer.get_unchecked(0).im
+        let b89im_a = input.load(0).im
             + self.twiddle8.re * x116p.im
             + self.twiddle1.re * x215p.im
             + self.twiddle7.re * x314p.im
@@ -1855,97 +1758,119 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly17<T> {
         let out15im = b215im_a - b215im_b;
         let out16re = b116re_a + b116re_b;
         let out16im = b116im_a - b116im_b;
-        *buffer.get_unchecked_mut(0) = sum;
-        *buffer.get_unchecked_mut(1) = Complex {
-            re: out1re,
-            im: out1im,
-        };
-        *buffer.get_unchecked_mut(2) = Complex {
-            re: out2re,
-            im: out2im,
-        };
-        *buffer.get_unchecked_mut(3) = Complex {
-            re: out3re,
-            im: out3im,
-        };
-        *buffer.get_unchecked_mut(4) = Complex {
-            re: out4re,
-            im: out4im,
-        };
-        *buffer.get_unchecked_mut(5) = Complex {
-            re: out5re,
-            im: out5im,
-        };
-        *buffer.get_unchecked_mut(6) = Complex {
-            re: out6re,
-            im: out6im,
-        };
-        *buffer.get_unchecked_mut(7) = Complex {
-            re: out7re,
-            im: out7im,
-        };
-        *buffer.get_unchecked_mut(8) = Complex {
-            re: out8re,
-            im: out8im,
-        };
-        *buffer.get_unchecked_mut(9) = Complex {
-            re: out9re,
-            im: out9im,
-        };
-        *buffer.get_unchecked_mut(10) = Complex {
-            re: out10re,
-            im: out10im,
-        };
-        *buffer.get_unchecked_mut(11) = Complex {
-            re: out11re,
-            im: out11im,
-        };
-        *buffer.get_unchecked_mut(12) = Complex {
-            re: out12re,
-            im: out12im,
-        };
-        *buffer.get_unchecked_mut(13) = Complex {
-            re: out13re,
-            im: out13im,
-        };
-        *buffer.get_unchecked_mut(14) = Complex {
-            re: out14re,
-            im: out14im,
-        };
-        *buffer.get_unchecked_mut(15) = Complex {
-            re: out15re,
-            im: out15im,
-        };
-        *buffer.get_unchecked_mut(16) = Complex {
-            re: out16re,
-            im: out16im,
-        };
-    }
-}
-impl<T: FFTnum> FFT<T> for Butterfly17<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl<T> Length for Butterfly17<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        17
-    }
-}
-impl<T> IsInverse for Butterfly17<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
+        output.store(sum, 0);
+        output.store(
+            Complex {
+                re: out1re,
+                im: out1im,
+            },
+            1,
+        );
+        output.store(
+            Complex {
+                re: out2re,
+                im: out2im,
+            },
+            2,
+        );
+        output.store(
+            Complex {
+                re: out3re,
+                im: out3im,
+            },
+            3,
+        );
+        output.store(
+            Complex {
+                re: out4re,
+                im: out4im,
+            },
+            4,
+        );
+        output.store(
+            Complex {
+                re: out5re,
+                im: out5im,
+            },
+            5,
+        );
+        output.store(
+            Complex {
+                re: out6re,
+                im: out6im,
+            },
+            6,
+        );
+        output.store(
+            Complex {
+                re: out7re,
+                im: out7im,
+            },
+            7,
+        );
+        output.store(
+            Complex {
+                re: out8re,
+                im: out8im,
+            },
+            8,
+        );
+        output.store(
+            Complex {
+                re: out9re,
+                im: out9im,
+            },
+            9,
+        );
+        output.store(
+            Complex {
+                re: out10re,
+                im: out10im,
+            },
+            10,
+        );
+        output.store(
+            Complex {
+                re: out11re,
+                im: out11im,
+            },
+            11,
+        );
+        output.store(
+            Complex {
+                re: out12re,
+                im: out12im,
+            },
+            12,
+        );
+        output.store(
+            Complex {
+                re: out13re,
+                im: out13im,
+            },
+            13,
+        );
+        output.store(
+            Complex {
+                re: out14re,
+                im: out14im,
+            },
+            14,
+        );
+        output.store(
+            Complex {
+                re: out15re,
+                im: out15im,
+            },
+            15,
+        );
+        output.store(
+            Complex {
+                re: out16re,
+                im: out16im,
+            },
+            16,
+        );
     }
 }
 
@@ -1961,17 +1886,18 @@ pub struct Butterfly19<T> {
     twiddle9: Complex<T>,
     inverse: bool,
 }
+boilerplate_fft_butterfly!(Butterfly19, 19, |this: &Butterfly19<_>| this.inverse);
 impl<T: FFTnum> Butterfly19<T> {
     pub fn new(inverse: bool) -> Self {
-        let twiddle1: Complex<T> = twiddles::single_twiddle(1, 19, inverse);
-        let twiddle2: Complex<T> = twiddles::single_twiddle(2, 19, inverse);
-        let twiddle3: Complex<T> = twiddles::single_twiddle(3, 19, inverse);
-        let twiddle4: Complex<T> = twiddles::single_twiddle(4, 19, inverse);
-        let twiddle5: Complex<T> = twiddles::single_twiddle(5, 19, inverse);
-        let twiddle6: Complex<T> = twiddles::single_twiddle(6, 19, inverse);
-        let twiddle7: Complex<T> = twiddles::single_twiddle(7, 19, inverse);
-        let twiddle8: Complex<T> = twiddles::single_twiddle(8, 19, inverse);
-        let twiddle9: Complex<T> = twiddles::single_twiddle(9, 19, inverse);
+        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 19, inverse);
+        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 19, inverse);
+        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 19, inverse);
+        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 19, inverse);
+        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 19, inverse);
+        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 19, inverse);
+        let twiddle7: Complex<T> = T::generate_twiddle_factor(7, 19, inverse);
+        let twiddle8: Complex<T> = T::generate_twiddle_factor(8, 19, inverse);
+        let twiddle9: Complex<T> = T::generate_twiddle_factor(9, 19, inverse);
         Self {
             twiddle1,
             twiddle2,
@@ -1985,48 +1911,37 @@ impl<T: FFTnum> Butterfly19<T> {
             inverse,
         }
     }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly19<T> {
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_exact_mut(self.len()) {
-            self.process_inplace(chunk);
-        }
-    }
-    #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+
+    #[inline(never)]
+    unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
         // This function was derived in the same manner as the butterflies for length 3, 5 and 7.
         // However, instead of doing it by hand the actual code is autogenerated
         // with the `genbutterflies.py` script in the `tools` directory.
-        let x118p = *buffer.get_unchecked(1) + *buffer.get_unchecked(18);
-        let x118n = *buffer.get_unchecked(1) - *buffer.get_unchecked(18);
-        let x217p = *buffer.get_unchecked(2) + *buffer.get_unchecked(17);
-        let x217n = *buffer.get_unchecked(2) - *buffer.get_unchecked(17);
-        let x316p = *buffer.get_unchecked(3) + *buffer.get_unchecked(16);
-        let x316n = *buffer.get_unchecked(3) - *buffer.get_unchecked(16);
-        let x415p = *buffer.get_unchecked(4) + *buffer.get_unchecked(15);
-        let x415n = *buffer.get_unchecked(4) - *buffer.get_unchecked(15);
-        let x514p = *buffer.get_unchecked(5) + *buffer.get_unchecked(14);
-        let x514n = *buffer.get_unchecked(5) - *buffer.get_unchecked(14);
-        let x613p = *buffer.get_unchecked(6) + *buffer.get_unchecked(13);
-        let x613n = *buffer.get_unchecked(6) - *buffer.get_unchecked(13);
-        let x712p = *buffer.get_unchecked(7) + *buffer.get_unchecked(12);
-        let x712n = *buffer.get_unchecked(7) - *buffer.get_unchecked(12);
-        let x811p = *buffer.get_unchecked(8) + *buffer.get_unchecked(11);
-        let x811n = *buffer.get_unchecked(8) - *buffer.get_unchecked(11);
-        let x910p = *buffer.get_unchecked(9) + *buffer.get_unchecked(10);
-        let x910n = *buffer.get_unchecked(9) - *buffer.get_unchecked(10);
-        let sum = *buffer.get_unchecked(0)
-            + x118p
-            + x217p
-            + x316p
-            + x415p
-            + x514p
-            + x613p
-            + x712p
-            + x811p
-            + x910p;
-        let b118re_a = buffer.get_unchecked(0).re
+        let x118p = input.load(1) + input.load(18);
+        let x118n = input.load(1) - input.load(18);
+        let x217p = input.load(2) + input.load(17);
+        let x217n = input.load(2) - input.load(17);
+        let x316p = input.load(3) + input.load(16);
+        let x316n = input.load(3) - input.load(16);
+        let x415p = input.load(4) + input.load(15);
+        let x415n = input.load(4) - input.load(15);
+        let x514p = input.load(5) + input.load(14);
+        let x514n = input.load(5) - input.load(14);
+        let x613p = input.load(6) + input.load(13);
+        let x613n = input.load(6) - input.load(13);
+        let x712p = input.load(7) + input.load(12);
+        let x712n = input.load(7) - input.load(12);
+        let x811p = input.load(8) + input.load(11);
+        let x811n = input.load(8) - input.load(11);
+        let x910p = input.load(9) + input.load(10);
+        let x910n = input.load(9) - input.load(10);
+        let sum =
+            input.load(0) + x118p + x217p + x316p + x415p + x514p + x613p + x712p + x811p + x910p;
+        let b118re_a = input.load(0).re
             + self.twiddle1.re * x118p.re
             + self.twiddle2.re * x217p.re
             + self.twiddle3.re * x316p.re
@@ -2045,7 +1960,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly19<T> {
             + self.twiddle7.im * x712n.im
             + self.twiddle8.im * x811n.im
             + self.twiddle9.im * x910n.im;
-        let b217re_a = buffer.get_unchecked(0).re
+        let b217re_a = input.load(0).re
             + self.twiddle2.re * x118p.re
             + self.twiddle4.re * x217p.re
             + self.twiddle6.re * x316p.re
@@ -2064,7 +1979,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly19<T> {
             + -self.twiddle5.im * x712n.im
             + -self.twiddle3.im * x811n.im
             + -self.twiddle1.im * x910n.im;
-        let b316re_a = buffer.get_unchecked(0).re
+        let b316re_a = input.load(0).re
             + self.twiddle3.re * x118p.re
             + self.twiddle6.re * x217p.re
             + self.twiddle9.re * x316p.re
@@ -2083,7 +1998,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly19<T> {
             + self.twiddle2.im * x712n.im
             + self.twiddle5.im * x811n.im
             + self.twiddle8.im * x910n.im;
-        let b415re_a = buffer.get_unchecked(0).re
+        let b415re_a = input.load(0).re
             + self.twiddle4.re * x118p.re
             + self.twiddle8.re * x217p.re
             + self.twiddle7.re * x316p.re
@@ -2102,7 +2017,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly19<T> {
             + self.twiddle9.im * x712n.im
             + -self.twiddle6.im * x811n.im
             + -self.twiddle2.im * x910n.im;
-        let b514re_a = buffer.get_unchecked(0).re
+        let b514re_a = input.load(0).re
             + self.twiddle5.re * x118p.re
             + self.twiddle9.re * x217p.re
             + self.twiddle4.re * x316p.re
@@ -2121,7 +2036,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly19<T> {
             + -self.twiddle3.im * x712n.im
             + self.twiddle2.im * x811n.im
             + self.twiddle7.im * x910n.im;
-        let b613re_a = buffer.get_unchecked(0).re
+        let b613re_a = input.load(0).re
             + self.twiddle6.re * x118p.re
             + self.twiddle7.re * x217p.re
             + self.twiddle1.re * x316p.re
@@ -2140,7 +2055,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly19<T> {
             + self.twiddle4.im * x712n.im
             + -self.twiddle9.im * x811n.im
             + -self.twiddle3.im * x910n.im;
-        let b712re_a = buffer.get_unchecked(0).re
+        let b712re_a = input.load(0).re
             + self.twiddle7.re * x118p.re
             + self.twiddle5.re * x217p.re
             + self.twiddle2.re * x316p.re
@@ -2159,7 +2074,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly19<T> {
             + -self.twiddle8.im * x712n.im
             + -self.twiddle1.im * x811n.im
             + self.twiddle6.im * x910n.im;
-        let b811re_a = buffer.get_unchecked(0).re
+        let b811re_a = input.load(0).re
             + self.twiddle8.re * x118p.re
             + self.twiddle3.re * x217p.re
             + self.twiddle5.re * x316p.re
@@ -2178,7 +2093,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly19<T> {
             + -self.twiddle1.im * x712n.im
             + self.twiddle7.im * x811n.im
             + -self.twiddle4.im * x910n.im;
-        let b910re_a = buffer.get_unchecked(0).re
+        let b910re_a = input.load(0).re
             + self.twiddle9.re * x118p.re
             + self.twiddle1.re * x217p.re
             + self.twiddle8.re * x316p.re
@@ -2198,7 +2113,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly19<T> {
             + -self.twiddle4.im * x811n.im
             + self.twiddle5.im * x910n.im;
 
-        let b118im_a = buffer.get_unchecked(0).im
+        let b118im_a = input.load(0).im
             + self.twiddle1.re * x118p.im
             + self.twiddle2.re * x217p.im
             + self.twiddle3.re * x316p.im
@@ -2217,7 +2132,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly19<T> {
             + self.twiddle7.im * x712n.re
             + self.twiddle8.im * x811n.re
             + self.twiddle9.im * x910n.re;
-        let b217im_a = buffer.get_unchecked(0).im
+        let b217im_a = input.load(0).im
             + self.twiddle2.re * x118p.im
             + self.twiddle4.re * x217p.im
             + self.twiddle6.re * x316p.im
@@ -2236,7 +2151,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly19<T> {
             + -self.twiddle5.im * x712n.re
             + -self.twiddle3.im * x811n.re
             + -self.twiddle1.im * x910n.re;
-        let b316im_a = buffer.get_unchecked(0).im
+        let b316im_a = input.load(0).im
             + self.twiddle3.re * x118p.im
             + self.twiddle6.re * x217p.im
             + self.twiddle9.re * x316p.im
@@ -2255,7 +2170,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly19<T> {
             + self.twiddle2.im * x712n.re
             + self.twiddle5.im * x811n.re
             + self.twiddle8.im * x910n.re;
-        let b415im_a = buffer.get_unchecked(0).im
+        let b415im_a = input.load(0).im
             + self.twiddle4.re * x118p.im
             + self.twiddle8.re * x217p.im
             + self.twiddle7.re * x316p.im
@@ -2274,7 +2189,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly19<T> {
             + self.twiddle9.im * x712n.re
             + -self.twiddle6.im * x811n.re
             + -self.twiddle2.im * x910n.re;
-        let b514im_a = buffer.get_unchecked(0).im
+        let b514im_a = input.load(0).im
             + self.twiddle5.re * x118p.im
             + self.twiddle9.re * x217p.im
             + self.twiddle4.re * x316p.im
@@ -2293,7 +2208,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly19<T> {
             + -self.twiddle3.im * x712n.re
             + self.twiddle2.im * x811n.re
             + self.twiddle7.im * x910n.re;
-        let b613im_a = buffer.get_unchecked(0).im
+        let b613im_a = input.load(0).im
             + self.twiddle6.re * x118p.im
             + self.twiddle7.re * x217p.im
             + self.twiddle1.re * x316p.im
@@ -2312,7 +2227,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly19<T> {
             + self.twiddle4.im * x712n.re
             + -self.twiddle9.im * x811n.re
             + -self.twiddle3.im * x910n.re;
-        let b712im_a = buffer.get_unchecked(0).im
+        let b712im_a = input.load(0).im
             + self.twiddle7.re * x118p.im
             + self.twiddle5.re * x217p.im
             + self.twiddle2.re * x316p.im
@@ -2331,7 +2246,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly19<T> {
             + -self.twiddle8.im * x712n.re
             + -self.twiddle1.im * x811n.re
             + self.twiddle6.im * x910n.re;
-        let b811im_a = buffer.get_unchecked(0).im
+        let b811im_a = input.load(0).im
             + self.twiddle8.re * x118p.im
             + self.twiddle3.re * x217p.im
             + self.twiddle5.re * x316p.im
@@ -2350,7 +2265,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly19<T> {
             + -self.twiddle1.im * x712n.re
             + self.twiddle7.im * x811n.re
             + -self.twiddle4.im * x910n.re;
-        let b910im_a = buffer.get_unchecked(0).im
+        let b910im_a = input.load(0).im
             + self.twiddle9.re * x118p.im
             + self.twiddle1.re * x217p.im
             + self.twiddle8.re * x316p.im
@@ -2406,105 +2321,133 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly19<T> {
         let out17im = b217im_a - b217im_b;
         let out18re = b118re_a + b118re_b;
         let out18im = b118im_a - b118im_b;
-        *buffer.get_unchecked_mut(0) = sum;
-        *buffer.get_unchecked_mut(1) = Complex {
-            re: out1re,
-            im: out1im,
-        };
-        *buffer.get_unchecked_mut(2) = Complex {
-            re: out2re,
-            im: out2im,
-        };
-        *buffer.get_unchecked_mut(3) = Complex {
-            re: out3re,
-            im: out3im,
-        };
-        *buffer.get_unchecked_mut(4) = Complex {
-            re: out4re,
-            im: out4im,
-        };
-        *buffer.get_unchecked_mut(5) = Complex {
-            re: out5re,
-            im: out5im,
-        };
-        *buffer.get_unchecked_mut(6) = Complex {
-            re: out6re,
-            im: out6im,
-        };
-        *buffer.get_unchecked_mut(7) = Complex {
-            re: out7re,
-            im: out7im,
-        };
-        *buffer.get_unchecked_mut(8) = Complex {
-            re: out8re,
-            im: out8im,
-        };
-        *buffer.get_unchecked_mut(9) = Complex {
-            re: out9re,
-            im: out9im,
-        };
-        *buffer.get_unchecked_mut(10) = Complex {
-            re: out10re,
-            im: out10im,
-        };
-        *buffer.get_unchecked_mut(11) = Complex {
-            re: out11re,
-            im: out11im,
-        };
-        *buffer.get_unchecked_mut(12) = Complex {
-            re: out12re,
-            im: out12im,
-        };
-        *buffer.get_unchecked_mut(13) = Complex {
-            re: out13re,
-            im: out13im,
-        };
-        *buffer.get_unchecked_mut(14) = Complex {
-            re: out14re,
-            im: out14im,
-        };
-        *buffer.get_unchecked_mut(15) = Complex {
-            re: out15re,
-            im: out15im,
-        };
-        *buffer.get_unchecked_mut(16) = Complex {
-            re: out16re,
-            im: out16im,
-        };
-        *buffer.get_unchecked_mut(17) = Complex {
-            re: out17re,
-            im: out17im,
-        };
-        *buffer.get_unchecked_mut(18) = Complex {
-            re: out18re,
-            im: out18im,
-        };
-    }
-}
-impl<T: FFTnum> FFT<T> for Butterfly19<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl<T> Length for Butterfly19<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        19
-    }
-}
-impl<T> IsInverse for Butterfly19<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
+        output.store(sum, 0);
+        output.store(
+            Complex {
+                re: out1re,
+                im: out1im,
+            },
+            1,
+        );
+        output.store(
+            Complex {
+                re: out2re,
+                im: out2im,
+            },
+            2,
+        );
+        output.store(
+            Complex {
+                re: out3re,
+                im: out3im,
+            },
+            3,
+        );
+        output.store(
+            Complex {
+                re: out4re,
+                im: out4im,
+            },
+            4,
+        );
+        output.store(
+            Complex {
+                re: out5re,
+                im: out5im,
+            },
+            5,
+        );
+        output.store(
+            Complex {
+                re: out6re,
+                im: out6im,
+            },
+            6,
+        );
+        output.store(
+            Complex {
+                re: out7re,
+                im: out7im,
+            },
+            7,
+        );
+        output.store(
+            Complex {
+                re: out8re,
+                im: out8im,
+            },
+            8,
+        );
+        output.store(
+            Complex {
+                re: out9re,
+                im: out9im,
+            },
+            9,
+        );
+        output.store(
+            Complex {
+                re: out10re,
+                im: out10im,
+            },
+            10,
+        );
+        output.store(
+            Complex {
+                re: out11re,
+                im: out11im,
+            },
+            11,
+        );
+        output.store(
+            Complex {
+                re: out12re,
+                im: out12im,
+            },
+            12,
+        );
+        output.store(
+            Complex {
+                re: out13re,
+                im: out13im,
+            },
+            13,
+        );
+        output.store(
+            Complex {
+                re: out14re,
+                im: out14im,
+            },
+            14,
+        );
+        output.store(
+            Complex {
+                re: out15re,
+                im: out15im,
+            },
+            15,
+        );
+        output.store(
+            Complex {
+                re: out16re,
+                im: out16im,
+            },
+            16,
+        );
+        output.store(
+            Complex {
+                re: out17re,
+                im: out17im,
+            },
+            17,
+        );
+        output.store(
+            Complex {
+                re: out18re,
+                im: out18im,
+            },
+            18,
+        );
     }
 }
 
@@ -2522,19 +2465,20 @@ pub struct Butterfly23<T> {
     twiddle11: Complex<T>,
     inverse: bool,
 }
+boilerplate_fft_butterfly!(Butterfly23, 23, |this: &Butterfly23<_>| this.inverse);
 impl<T: FFTnum> Butterfly23<T> {
     pub fn new(inverse: bool) -> Self {
-        let twiddle1: Complex<T> = twiddles::single_twiddle(1, 23, inverse);
-        let twiddle2: Complex<T> = twiddles::single_twiddle(2, 23, inverse);
-        let twiddle3: Complex<T> = twiddles::single_twiddle(3, 23, inverse);
-        let twiddle4: Complex<T> = twiddles::single_twiddle(4, 23, inverse);
-        let twiddle5: Complex<T> = twiddles::single_twiddle(5, 23, inverse);
-        let twiddle6: Complex<T> = twiddles::single_twiddle(6, 23, inverse);
-        let twiddle7: Complex<T> = twiddles::single_twiddle(7, 23, inverse);
-        let twiddle8: Complex<T> = twiddles::single_twiddle(8, 23, inverse);
-        let twiddle9: Complex<T> = twiddles::single_twiddle(9, 23, inverse);
-        let twiddle10: Complex<T> = twiddles::single_twiddle(10, 23, inverse);
-        let twiddle11: Complex<T> = twiddles::single_twiddle(11, 23, inverse);
+        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 23, inverse);
+        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 23, inverse);
+        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 23, inverse);
+        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 23, inverse);
+        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 23, inverse);
+        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 23, inverse);
+        let twiddle7: Complex<T> = T::generate_twiddle_factor(7, 23, inverse);
+        let twiddle8: Complex<T> = T::generate_twiddle_factor(8, 23, inverse);
+        let twiddle9: Complex<T> = T::generate_twiddle_factor(9, 23, inverse);
+        let twiddle10: Complex<T> = T::generate_twiddle_factor(10, 23, inverse);
+        let twiddle11: Complex<T> = T::generate_twiddle_factor(11, 23, inverse);
         Self {
             twiddle1,
             twiddle2,
@@ -2550,42 +2494,39 @@ impl<T: FFTnum> Butterfly23<T> {
             inverse,
         }
     }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_exact_mut(self.len()) {
-            self.process_inplace(chunk);
-        }
-    }
-    #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+
+    #[inline(never)]
+    unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
         // This function was derived in the same manner as the butterflies for length 3, 5 and 7.
         // However, instead of doing it by hand the actual code is autogenerated
         // with the `genbutterflies.py` script in the `tools` directory.
-        let x122p = *buffer.get_unchecked(1) + *buffer.get_unchecked(22);
-        let x122n = *buffer.get_unchecked(1) - *buffer.get_unchecked(22);
-        let x221p = *buffer.get_unchecked(2) + *buffer.get_unchecked(21);
-        let x221n = *buffer.get_unchecked(2) - *buffer.get_unchecked(21);
-        let x320p = *buffer.get_unchecked(3) + *buffer.get_unchecked(20);
-        let x320n = *buffer.get_unchecked(3) - *buffer.get_unchecked(20);
-        let x419p = *buffer.get_unchecked(4) + *buffer.get_unchecked(19);
-        let x419n = *buffer.get_unchecked(4) - *buffer.get_unchecked(19);
-        let x518p = *buffer.get_unchecked(5) + *buffer.get_unchecked(18);
-        let x518n = *buffer.get_unchecked(5) - *buffer.get_unchecked(18);
-        let x617p = *buffer.get_unchecked(6) + *buffer.get_unchecked(17);
-        let x617n = *buffer.get_unchecked(6) - *buffer.get_unchecked(17);
-        let x716p = *buffer.get_unchecked(7) + *buffer.get_unchecked(16);
-        let x716n = *buffer.get_unchecked(7) - *buffer.get_unchecked(16);
-        let x815p = *buffer.get_unchecked(8) + *buffer.get_unchecked(15);
-        let x815n = *buffer.get_unchecked(8) - *buffer.get_unchecked(15);
-        let x914p = *buffer.get_unchecked(9) + *buffer.get_unchecked(14);
-        let x914n = *buffer.get_unchecked(9) - *buffer.get_unchecked(14);
-        let x1013p = *buffer.get_unchecked(10) + *buffer.get_unchecked(13);
-        let x1013n = *buffer.get_unchecked(10) - *buffer.get_unchecked(13);
-        let x1112p = *buffer.get_unchecked(11) + *buffer.get_unchecked(12);
-        let x1112n = *buffer.get_unchecked(11) - *buffer.get_unchecked(12);
-        let sum = *buffer.get_unchecked(0)
+        let x122p = input.load(1) + input.load(22);
+        let x122n = input.load(1) - input.load(22);
+        let x221p = input.load(2) + input.load(21);
+        let x221n = input.load(2) - input.load(21);
+        let x320p = input.load(3) + input.load(20);
+        let x320n = input.load(3) - input.load(20);
+        let x419p = input.load(4) + input.load(19);
+        let x419n = input.load(4) - input.load(19);
+        let x518p = input.load(5) + input.load(18);
+        let x518n = input.load(5) - input.load(18);
+        let x617p = input.load(6) + input.load(17);
+        let x617n = input.load(6) - input.load(17);
+        let x716p = input.load(7) + input.load(16);
+        let x716n = input.load(7) - input.load(16);
+        let x815p = input.load(8) + input.load(15);
+        let x815n = input.load(8) - input.load(15);
+        let x914p = input.load(9) + input.load(14);
+        let x914n = input.load(9) - input.load(14);
+        let x1013p = input.load(10) + input.load(13);
+        let x1013n = input.load(10) - input.load(13);
+        let x1112p = input.load(11) + input.load(12);
+        let x1112n = input.load(11) - input.load(12);
+        let sum = input.load(0)
             + x122p
             + x221p
             + x320p
@@ -2597,7 +2538,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
             + x914p
             + x1013p
             + x1112p;
-        let b122re_a = buffer.get_unchecked(0).re
+        let b122re_a = input.load(0).re
             + self.twiddle1.re * x122p.re
             + self.twiddle2.re * x221p.re
             + self.twiddle3.re * x320p.re
@@ -2620,7 +2561,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
             + self.twiddle9.im * x914n.im
             + self.twiddle10.im * x1013n.im
             + self.twiddle11.im * x1112n.im;
-        let b221re_a = buffer.get_unchecked(0).re
+        let b221re_a = input.load(0).re
             + self.twiddle2.re * x122p.re
             + self.twiddle4.re * x221p.re
             + self.twiddle6.re * x320p.re
@@ -2643,7 +2584,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
             + -self.twiddle5.im * x914n.im
             + -self.twiddle3.im * x1013n.im
             + -self.twiddle1.im * x1112n.im;
-        let b320re_a = buffer.get_unchecked(0).re
+        let b320re_a = input.load(0).re
             + self.twiddle3.re * x122p.re
             + self.twiddle6.re * x221p.re
             + self.twiddle9.re * x320p.re
@@ -2666,7 +2607,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
             + self.twiddle4.im * x914n.im
             + self.twiddle7.im * x1013n.im
             + self.twiddle10.im * x1112n.im;
-        let b419re_a = buffer.get_unchecked(0).re
+        let b419re_a = input.load(0).re
             + self.twiddle4.re * x122p.re
             + self.twiddle8.re * x221p.re
             + self.twiddle11.re * x320p.re
@@ -2689,7 +2630,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
             + -self.twiddle10.im * x914n.im
             + -self.twiddle6.im * x1013n.im
             + -self.twiddle2.im * x1112n.im;
-        let b518re_a = buffer.get_unchecked(0).re
+        let b518re_a = input.load(0).re
             + self.twiddle5.re * x122p.re
             + self.twiddle10.re * x221p.re
             + self.twiddle8.re * x320p.re
@@ -2712,7 +2653,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
             + -self.twiddle1.im * x914n.im
             + self.twiddle4.im * x1013n.im
             + self.twiddle9.im * x1112n.im;
-        let b617re_a = buffer.get_unchecked(0).re
+        let b617re_a = input.load(0).re
             + self.twiddle6.re * x122p.re
             + self.twiddle11.re * x221p.re
             + self.twiddle5.re * x320p.re
@@ -2735,7 +2676,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
             + self.twiddle8.im * x914n.im
             + -self.twiddle9.im * x1013n.im
             + -self.twiddle3.im * x1112n.im;
-        let b716re_a = buffer.get_unchecked(0).re
+        let b716re_a = input.load(0).re
             + self.twiddle7.re * x122p.re
             + self.twiddle9.re * x221p.re
             + self.twiddle2.re * x320p.re
@@ -2758,7 +2699,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
             + -self.twiddle6.im * x914n.im
             + self.twiddle1.im * x1013n.im
             + self.twiddle8.im * x1112n.im;
-        let b815re_a = buffer.get_unchecked(0).re
+        let b815re_a = input.load(0).re
             + self.twiddle8.re * x122p.re
             + self.twiddle7.re * x221p.re
             + self.twiddle1.re * x320p.re
@@ -2781,7 +2722,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
             + self.twiddle3.im * x914n.im
             + self.twiddle11.im * x1013n.im
             + -self.twiddle4.im * x1112n.im;
-        let b914re_a = buffer.get_unchecked(0).re
+        let b914re_a = input.load(0).re
             + self.twiddle9.re * x122p.re
             + self.twiddle5.re * x221p.re
             + self.twiddle4.re * x320p.re
@@ -2804,7 +2745,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
             + -self.twiddle11.im * x914n.im
             + -self.twiddle2.im * x1013n.im
             + self.twiddle7.im * x1112n.im;
-        let b1013re_a = buffer.get_unchecked(0).re
+        let b1013re_a = input.load(0).re
             + self.twiddle10.re * x122p.re
             + self.twiddle3.re * x221p.re
             + self.twiddle7.re * x320p.re
@@ -2827,7 +2768,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
             + -self.twiddle2.im * x914n.im
             + self.twiddle8.im * x1013n.im
             + -self.twiddle5.im * x1112n.im;
-        let b1112re_a = buffer.get_unchecked(0).re
+        let b1112re_a = input.load(0).re
             + self.twiddle11.re * x122p.re
             + self.twiddle1.re * x221p.re
             + self.twiddle10.re * x320p.re
@@ -2851,7 +2792,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
             + -self.twiddle5.im * x1013n.im
             + self.twiddle6.im * x1112n.im;
 
-        let b122im_a = buffer.get_unchecked(0).im
+        let b122im_a = input.load(0).im
             + self.twiddle1.re * x122p.im
             + self.twiddle2.re * x221p.im
             + self.twiddle3.re * x320p.im
@@ -2874,7 +2815,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
             + self.twiddle9.im * x914n.re
             + self.twiddle10.im * x1013n.re
             + self.twiddle11.im * x1112n.re;
-        let b221im_a = buffer.get_unchecked(0).im
+        let b221im_a = input.load(0).im
             + self.twiddle2.re * x122p.im
             + self.twiddle4.re * x221p.im
             + self.twiddle6.re * x320p.im
@@ -2897,7 +2838,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
             + -self.twiddle5.im * x914n.re
             + -self.twiddle3.im * x1013n.re
             + -self.twiddle1.im * x1112n.re;
-        let b320im_a = buffer.get_unchecked(0).im
+        let b320im_a = input.load(0).im
             + self.twiddle3.re * x122p.im
             + self.twiddle6.re * x221p.im
             + self.twiddle9.re * x320p.im
@@ -2920,7 +2861,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
             + self.twiddle4.im * x914n.re
             + self.twiddle7.im * x1013n.re
             + self.twiddle10.im * x1112n.re;
-        let b419im_a = buffer.get_unchecked(0).im
+        let b419im_a = input.load(0).im
             + self.twiddle4.re * x122p.im
             + self.twiddle8.re * x221p.im
             + self.twiddle11.re * x320p.im
@@ -2943,7 +2884,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
             + -self.twiddle10.im * x914n.re
             + -self.twiddle6.im * x1013n.re
             + -self.twiddle2.im * x1112n.re;
-        let b518im_a = buffer.get_unchecked(0).im
+        let b518im_a = input.load(0).im
             + self.twiddle5.re * x122p.im
             + self.twiddle10.re * x221p.im
             + self.twiddle8.re * x320p.im
@@ -2966,7 +2907,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
             + -self.twiddle1.im * x914n.re
             + self.twiddle4.im * x1013n.re
             + self.twiddle9.im * x1112n.re;
-        let b617im_a = buffer.get_unchecked(0).im
+        let b617im_a = input.load(0).im
             + self.twiddle6.re * x122p.im
             + self.twiddle11.re * x221p.im
             + self.twiddle5.re * x320p.im
@@ -2989,7 +2930,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
             + self.twiddle8.im * x914n.re
             + -self.twiddle9.im * x1013n.re
             + -self.twiddle3.im * x1112n.re;
-        let b716im_a = buffer.get_unchecked(0).im
+        let b716im_a = input.load(0).im
             + self.twiddle7.re * x122p.im
             + self.twiddle9.re * x221p.im
             + self.twiddle2.re * x320p.im
@@ -3012,7 +2953,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
             + -self.twiddle6.im * x914n.re
             + self.twiddle1.im * x1013n.re
             + self.twiddle8.im * x1112n.re;
-        let b815im_a = buffer.get_unchecked(0).im
+        let b815im_a = input.load(0).im
             + self.twiddle8.re * x122p.im
             + self.twiddle7.re * x221p.im
             + self.twiddle1.re * x320p.im
@@ -3035,7 +2976,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
             + self.twiddle3.im * x914n.re
             + self.twiddle11.im * x1013n.re
             + -self.twiddle4.im * x1112n.re;
-        let b914im_a = buffer.get_unchecked(0).im
+        let b914im_a = input.load(0).im
             + self.twiddle9.re * x122p.im
             + self.twiddle5.re * x221p.im
             + self.twiddle4.re * x320p.im
@@ -3058,7 +2999,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
             + -self.twiddle11.im * x914n.re
             + -self.twiddle2.im * x1013n.re
             + self.twiddle7.im * x1112n.re;
-        let b1013im_a = buffer.get_unchecked(0).im
+        let b1013im_a = input.load(0).im
             + self.twiddle10.re * x122p.im
             + self.twiddle3.re * x221p.im
             + self.twiddle7.re * x320p.im
@@ -3081,7 +3022,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
             + -self.twiddle2.im * x914n.re
             + self.twiddle8.im * x1013n.re
             + -self.twiddle5.im * x1112n.re;
-        let b1112im_a = buffer.get_unchecked(0).im
+        let b1112im_a = input.load(0).im
             + self.twiddle11.re * x122p.im
             + self.twiddle1.re * x221p.im
             + self.twiddle10.re * x320p.im
@@ -3149,121 +3090,161 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly23<T> {
         let out21im = b221im_a - b221im_b;
         let out22re = b122re_a + b122re_b;
         let out22im = b122im_a - b122im_b;
-        *buffer.get_unchecked_mut(0) = sum;
-        *buffer.get_unchecked_mut(1) = Complex {
-            re: out1re,
-            im: out1im,
-        };
-        *buffer.get_unchecked_mut(2) = Complex {
-            re: out2re,
-            im: out2im,
-        };
-        *buffer.get_unchecked_mut(3) = Complex {
-            re: out3re,
-            im: out3im,
-        };
-        *buffer.get_unchecked_mut(4) = Complex {
-            re: out4re,
-            im: out4im,
-        };
-        *buffer.get_unchecked_mut(5) = Complex {
-            re: out5re,
-            im: out5im,
-        };
-        *buffer.get_unchecked_mut(6) = Complex {
-            re: out6re,
-            im: out6im,
-        };
-        *buffer.get_unchecked_mut(7) = Complex {
-            re: out7re,
-            im: out7im,
-        };
-        *buffer.get_unchecked_mut(8) = Complex {
-            re: out8re,
-            im: out8im,
-        };
-        *buffer.get_unchecked_mut(9) = Complex {
-            re: out9re,
-            im: out9im,
-        };
-        *buffer.get_unchecked_mut(10) = Complex {
-            re: out10re,
-            im: out10im,
-        };
-        *buffer.get_unchecked_mut(11) = Complex {
-            re: out11re,
-            im: out11im,
-        };
-        *buffer.get_unchecked_mut(12) = Complex {
-            re: out12re,
-            im: out12im,
-        };
-        *buffer.get_unchecked_mut(13) = Complex {
-            re: out13re,
-            im: out13im,
-        };
-        *buffer.get_unchecked_mut(14) = Complex {
-            re: out14re,
-            im: out14im,
-        };
-        *buffer.get_unchecked_mut(15) = Complex {
-            re: out15re,
-            im: out15im,
-        };
-        *buffer.get_unchecked_mut(16) = Complex {
-            re: out16re,
-            im: out16im,
-        };
-        *buffer.get_unchecked_mut(17) = Complex {
-            re: out17re,
-            im: out17im,
-        };
-        *buffer.get_unchecked_mut(18) = Complex {
-            re: out18re,
-            im: out18im,
-        };
-        *buffer.get_unchecked_mut(19) = Complex {
-            re: out19re,
-            im: out19im,
-        };
-        *buffer.get_unchecked_mut(20) = Complex {
-            re: out20re,
-            im: out20im,
-        };
-        *buffer.get_unchecked_mut(21) = Complex {
-            re: out21re,
-            im: out21im,
-        };
-        *buffer.get_unchecked_mut(22) = Complex {
-            re: out22re,
-            im: out22im,
-        };
-    }
-}
-impl<T: FFTnum> FFT<T> for Butterfly23<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl<T> Length for Butterfly23<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        23
-    }
-}
-impl<T> IsInverse for Butterfly23<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
+        output.store(sum, 0);
+        output.store(
+            Complex {
+                re: out1re,
+                im: out1im,
+            },
+            1,
+        );
+        output.store(
+            Complex {
+                re: out2re,
+                im: out2im,
+            },
+            2,
+        );
+        output.store(
+            Complex {
+                re: out3re,
+                im: out3im,
+            },
+            3,
+        );
+        output.store(
+            Complex {
+                re: out4re,
+                im: out4im,
+            },
+            4,
+        );
+        output.store(
+            Complex {
+                re: out5re,
+                im: out5im,
+            },
+            5,
+        );
+        output.store(
+            Complex {
+                re: out6re,
+                im: out6im,
+            },
+            6,
+        );
+        output.store(
+            Complex {
+                re: out7re,
+                im: out7im,
+            },
+            7,
+        );
+        output.store(
+            Complex {
+                re: out8re,
+                im: out8im,
+            },
+            8,
+        );
+        output.store(
+            Complex {
+                re: out9re,
+                im: out9im,
+            },
+            9,
+        );
+        output.store(
+            Complex {
+                re: out10re,
+                im: out10im,
+            },
+            10,
+        );
+        output.store(
+            Complex {
+                re: out11re,
+                im: out11im,
+            },
+            11,
+        );
+        output.store(
+            Complex {
+                re: out12re,
+                im: out12im,
+            },
+            12,
+        );
+        output.store(
+            Complex {
+                re: out13re,
+                im: out13im,
+            },
+            13,
+        );
+        output.store(
+            Complex {
+                re: out14re,
+                im: out14im,
+            },
+            14,
+        );
+        output.store(
+            Complex {
+                re: out15re,
+                im: out15im,
+            },
+            15,
+        );
+        output.store(
+            Complex {
+                re: out16re,
+                im: out16im,
+            },
+            16,
+        );
+        output.store(
+            Complex {
+                re: out17re,
+                im: out17im,
+            },
+            17,
+        );
+        output.store(
+            Complex {
+                re: out18re,
+                im: out18im,
+            },
+            18,
+        );
+        output.store(
+            Complex {
+                re: out19re,
+                im: out19im,
+            },
+            19,
+        );
+        output.store(
+            Complex {
+                re: out20re,
+                im: out20im,
+            },
+            20,
+        );
+        output.store(
+            Complex {
+                re: out21re,
+                im: out21im,
+            },
+            21,
+        );
+        output.store(
+            Complex {
+                re: out22re,
+                im: out22im,
+            },
+            22,
+        );
     }
 }
 
@@ -3284,22 +3265,23 @@ pub struct Butterfly29<T> {
     twiddle14: Complex<T>,
     inverse: bool,
 }
+boilerplate_fft_butterfly!(Butterfly29, 29, |this: &Butterfly29<_>| this.inverse);
 impl<T: FFTnum> Butterfly29<T> {
     pub fn new(inverse: bool) -> Self {
-        let twiddle1: Complex<T> = twiddles::single_twiddle(1, 29, inverse);
-        let twiddle2: Complex<T> = twiddles::single_twiddle(2, 29, inverse);
-        let twiddle3: Complex<T> = twiddles::single_twiddle(3, 29, inverse);
-        let twiddle4: Complex<T> = twiddles::single_twiddle(4, 29, inverse);
-        let twiddle5: Complex<T> = twiddles::single_twiddle(5, 29, inverse);
-        let twiddle6: Complex<T> = twiddles::single_twiddle(6, 29, inverse);
-        let twiddle7: Complex<T> = twiddles::single_twiddle(7, 29, inverse);
-        let twiddle8: Complex<T> = twiddles::single_twiddle(8, 29, inverse);
-        let twiddle9: Complex<T> = twiddles::single_twiddle(9, 29, inverse);
-        let twiddle10: Complex<T> = twiddles::single_twiddle(10, 29, inverse);
-        let twiddle11: Complex<T> = twiddles::single_twiddle(11, 29, inverse);
-        let twiddle12: Complex<T> = twiddles::single_twiddle(12, 29, inverse);
-        let twiddle13: Complex<T> = twiddles::single_twiddle(13, 29, inverse);
-        let twiddle14: Complex<T> = twiddles::single_twiddle(14, 29, inverse);
+        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 29, inverse);
+        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 29, inverse);
+        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 29, inverse);
+        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 29, inverse);
+        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 29, inverse);
+        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 29, inverse);
+        let twiddle7: Complex<T> = T::generate_twiddle_factor(7, 29, inverse);
+        let twiddle8: Complex<T> = T::generate_twiddle_factor(8, 29, inverse);
+        let twiddle9: Complex<T> = T::generate_twiddle_factor(9, 29, inverse);
+        let twiddle10: Complex<T> = T::generate_twiddle_factor(10, 29, inverse);
+        let twiddle11: Complex<T> = T::generate_twiddle_factor(11, 29, inverse);
+        let twiddle12: Complex<T> = T::generate_twiddle_factor(12, 29, inverse);
+        let twiddle13: Complex<T> = T::generate_twiddle_factor(13, 29, inverse);
+        let twiddle14: Complex<T> = T::generate_twiddle_factor(14, 29, inverse);
         Self {
             twiddle1,
             twiddle2,
@@ -3318,48 +3300,45 @@ impl<T: FFTnum> Butterfly29<T> {
             inverse,
         }
     }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_exact_mut(self.len()) {
-            self.process_inplace(chunk);
-        }
-    }
-    #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+
+    #[inline(never)]
+    unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
         // This function was derived in the same manner as the butterflies for length 3, 5 and 7.
         // However, instead of doing it by hand the actual code is autogenerated
         // with the `genbutterflies.py` script in the `tools` directory.
-        let x128p = *buffer.get_unchecked(1) + *buffer.get_unchecked(28);
-        let x128n = *buffer.get_unchecked(1) - *buffer.get_unchecked(28);
-        let x227p = *buffer.get_unchecked(2) + *buffer.get_unchecked(27);
-        let x227n = *buffer.get_unchecked(2) - *buffer.get_unchecked(27);
-        let x326p = *buffer.get_unchecked(3) + *buffer.get_unchecked(26);
-        let x326n = *buffer.get_unchecked(3) - *buffer.get_unchecked(26);
-        let x425p = *buffer.get_unchecked(4) + *buffer.get_unchecked(25);
-        let x425n = *buffer.get_unchecked(4) - *buffer.get_unchecked(25);
-        let x524p = *buffer.get_unchecked(5) + *buffer.get_unchecked(24);
-        let x524n = *buffer.get_unchecked(5) - *buffer.get_unchecked(24);
-        let x623p = *buffer.get_unchecked(6) + *buffer.get_unchecked(23);
-        let x623n = *buffer.get_unchecked(6) - *buffer.get_unchecked(23);
-        let x722p = *buffer.get_unchecked(7) + *buffer.get_unchecked(22);
-        let x722n = *buffer.get_unchecked(7) - *buffer.get_unchecked(22);
-        let x821p = *buffer.get_unchecked(8) + *buffer.get_unchecked(21);
-        let x821n = *buffer.get_unchecked(8) - *buffer.get_unchecked(21);
-        let x920p = *buffer.get_unchecked(9) + *buffer.get_unchecked(20);
-        let x920n = *buffer.get_unchecked(9) - *buffer.get_unchecked(20);
-        let x1019p = *buffer.get_unchecked(10) + *buffer.get_unchecked(19);
-        let x1019n = *buffer.get_unchecked(10) - *buffer.get_unchecked(19);
-        let x1118p = *buffer.get_unchecked(11) + *buffer.get_unchecked(18);
-        let x1118n = *buffer.get_unchecked(11) - *buffer.get_unchecked(18);
-        let x1217p = *buffer.get_unchecked(12) + *buffer.get_unchecked(17);
-        let x1217n = *buffer.get_unchecked(12) - *buffer.get_unchecked(17);
-        let x1316p = *buffer.get_unchecked(13) + *buffer.get_unchecked(16);
-        let x1316n = *buffer.get_unchecked(13) - *buffer.get_unchecked(16);
-        let x1415p = *buffer.get_unchecked(14) + *buffer.get_unchecked(15);
-        let x1415n = *buffer.get_unchecked(14) - *buffer.get_unchecked(15);
-        let sum = *buffer.get_unchecked(0)
+        let x128p = input.load(1) + input.load(28);
+        let x128n = input.load(1) - input.load(28);
+        let x227p = input.load(2) + input.load(27);
+        let x227n = input.load(2) - input.load(27);
+        let x326p = input.load(3) + input.load(26);
+        let x326n = input.load(3) - input.load(26);
+        let x425p = input.load(4) + input.load(25);
+        let x425n = input.load(4) - input.load(25);
+        let x524p = input.load(5) + input.load(24);
+        let x524n = input.load(5) - input.load(24);
+        let x623p = input.load(6) + input.load(23);
+        let x623n = input.load(6) - input.load(23);
+        let x722p = input.load(7) + input.load(22);
+        let x722n = input.load(7) - input.load(22);
+        let x821p = input.load(8) + input.load(21);
+        let x821n = input.load(8) - input.load(21);
+        let x920p = input.load(9) + input.load(20);
+        let x920n = input.load(9) - input.load(20);
+        let x1019p = input.load(10) + input.load(19);
+        let x1019n = input.load(10) - input.load(19);
+        let x1118p = input.load(11) + input.load(18);
+        let x1118n = input.load(11) - input.load(18);
+        let x1217p = input.load(12) + input.load(17);
+        let x1217n = input.load(12) - input.load(17);
+        let x1316p = input.load(13) + input.load(16);
+        let x1316n = input.load(13) - input.load(16);
+        let x1415p = input.load(14) + input.load(15);
+        let x1415n = input.load(14) - input.load(15);
+        let sum = input.load(0)
             + x128p
             + x227p
             + x326p
@@ -3374,7 +3353,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + x1217p
             + x1316p
             + x1415p;
-        let b128re_a = buffer.get_unchecked(0).re
+        let b128re_a = input.load(0).re
             + self.twiddle1.re * x128p.re
             + self.twiddle2.re * x227p.re
             + self.twiddle3.re * x326p.re
@@ -3403,7 +3382,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + self.twiddle12.im * x1217n.im
             + self.twiddle13.im * x1316n.im
             + self.twiddle14.im * x1415n.im;
-        let b227re_a = buffer.get_unchecked(0).re
+        let b227re_a = input.load(0).re
             + self.twiddle2.re * x128p.re
             + self.twiddle4.re * x227p.re
             + self.twiddle6.re * x326p.re
@@ -3432,7 +3411,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + -self.twiddle5.im * x1217n.im
             + -self.twiddle3.im * x1316n.im
             + -self.twiddle1.im * x1415n.im;
-        let b326re_a = buffer.get_unchecked(0).re
+        let b326re_a = input.load(0).re
             + self.twiddle3.re * x128p.re
             + self.twiddle6.re * x227p.re
             + self.twiddle9.re * x326p.re
@@ -3461,7 +3440,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + self.twiddle7.im * x1217n.im
             + self.twiddle10.im * x1316n.im
             + self.twiddle13.im * x1415n.im;
-        let b425re_a = buffer.get_unchecked(0).re
+        let b425re_a = input.load(0).re
             + self.twiddle4.re * x128p.re
             + self.twiddle8.re * x227p.re
             + self.twiddle12.re * x326p.re
@@ -3490,7 +3469,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + -self.twiddle10.im * x1217n.im
             + -self.twiddle6.im * x1316n.im
             + -self.twiddle2.im * x1415n.im;
-        let b524re_a = buffer.get_unchecked(0).re
+        let b524re_a = input.load(0).re
             + self.twiddle5.re * x128p.re
             + self.twiddle10.re * x227p.re
             + self.twiddle14.re * x326p.re
@@ -3519,7 +3498,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + self.twiddle2.im * x1217n.im
             + self.twiddle7.im * x1316n.im
             + self.twiddle12.im * x1415n.im;
-        let b623re_a = buffer.get_unchecked(0).re
+        let b623re_a = input.load(0).re
             + self.twiddle6.re * x128p.re
             + self.twiddle12.re * x227p.re
             + self.twiddle11.re * x326p.re
@@ -3548,7 +3527,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + self.twiddle14.im * x1217n.im
             + -self.twiddle9.im * x1316n.im
             + -self.twiddle3.im * x1415n.im;
-        let b722re_a = buffer.get_unchecked(0).re
+        let b722re_a = input.load(0).re
             + self.twiddle7.re * x128p.re
             + self.twiddle14.re * x227p.re
             + self.twiddle8.re * x326p.re
@@ -3577,7 +3556,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + -self.twiddle3.im * x1217n.im
             + self.twiddle4.im * x1316n.im
             + self.twiddle11.im * x1415n.im;
-        let b821re_a = buffer.get_unchecked(0).re
+        let b821re_a = input.load(0).re
             + self.twiddle8.re * x128p.re
             + self.twiddle13.re * x227p.re
             + self.twiddle5.re * x326p.re
@@ -3606,7 +3585,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + self.twiddle9.im * x1217n.im
             + -self.twiddle12.im * x1316n.im
             + -self.twiddle4.im * x1415n.im;
-        let b920re_a = buffer.get_unchecked(0).re
+        let b920re_a = input.load(0).re
             + self.twiddle9.re * x128p.re
             + self.twiddle11.re * x227p.re
             + self.twiddle2.re * x326p.re
@@ -3635,7 +3614,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + -self.twiddle8.im * x1217n.im
             + self.twiddle1.im * x1316n.im
             + self.twiddle10.im * x1415n.im;
-        let b1019re_a = buffer.get_unchecked(0).re
+        let b1019re_a = input.load(0).re
             + self.twiddle10.re * x128p.re
             + self.twiddle9.re * x227p.re
             + self.twiddle1.re * x326p.re
@@ -3664,7 +3643,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + self.twiddle4.im * x1217n.im
             + self.twiddle14.im * x1316n.im
             + -self.twiddle5.im * x1415n.im;
-        let b1118re_a = buffer.get_unchecked(0).re
+        let b1118re_a = input.load(0).re
             + self.twiddle11.re * x128p.re
             + self.twiddle7.re * x227p.re
             + self.twiddle4.re * x326p.re
@@ -3693,7 +3672,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + -self.twiddle13.im * x1217n.im
             + -self.twiddle2.im * x1316n.im
             + self.twiddle9.im * x1415n.im;
-        let b1217re_a = buffer.get_unchecked(0).re
+        let b1217re_a = input.load(0).re
             + self.twiddle12.re * x128p.re
             + self.twiddle5.re * x227p.re
             + self.twiddle7.re * x326p.re
@@ -3722,7 +3701,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + -self.twiddle1.im * x1217n.im
             + self.twiddle11.im * x1316n.im
             + -self.twiddle6.im * x1415n.im;
-        let b1316re_a = buffer.get_unchecked(0).re
+        let b1316re_a = input.load(0).re
             + self.twiddle13.re * x128p.re
             + self.twiddle3.re * x227p.re
             + self.twiddle10.re * x326p.re
@@ -3751,7 +3730,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + self.twiddle11.im * x1217n.im
             + -self.twiddle5.im * x1316n.im
             + self.twiddle8.im * x1415n.im;
-        let b1415re_a = buffer.get_unchecked(0).re
+        let b1415re_a = input.load(0).re
             + self.twiddle14.re * x128p.re
             + self.twiddle1.re * x227p.re
             + self.twiddle13.re * x326p.re
@@ -3781,7 +3760,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + self.twiddle8.im * x1316n.im
             + -self.twiddle7.im * x1415n.im;
 
-        let b128im_a = buffer.get_unchecked(0).im
+        let b128im_a = input.load(0).im
             + self.twiddle1.re * x128p.im
             + self.twiddle2.re * x227p.im
             + self.twiddle3.re * x326p.im
@@ -3810,7 +3789,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + self.twiddle12.im * x1217n.re
             + self.twiddle13.im * x1316n.re
             + self.twiddle14.im * x1415n.re;
-        let b227im_a = buffer.get_unchecked(0).im
+        let b227im_a = input.load(0).im
             + self.twiddle2.re * x128p.im
             + self.twiddle4.re * x227p.im
             + self.twiddle6.re * x326p.im
@@ -3839,7 +3818,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + -self.twiddle5.im * x1217n.re
             + -self.twiddle3.im * x1316n.re
             + -self.twiddle1.im * x1415n.re;
-        let b326im_a = buffer.get_unchecked(0).im
+        let b326im_a = input.load(0).im
             + self.twiddle3.re * x128p.im
             + self.twiddle6.re * x227p.im
             + self.twiddle9.re * x326p.im
@@ -3868,7 +3847,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + self.twiddle7.im * x1217n.re
             + self.twiddle10.im * x1316n.re
             + self.twiddle13.im * x1415n.re;
-        let b425im_a = buffer.get_unchecked(0).im
+        let b425im_a = input.load(0).im
             + self.twiddle4.re * x128p.im
             + self.twiddle8.re * x227p.im
             + self.twiddle12.re * x326p.im
@@ -3897,7 +3876,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + -self.twiddle10.im * x1217n.re
             + -self.twiddle6.im * x1316n.re
             + -self.twiddle2.im * x1415n.re;
-        let b524im_a = buffer.get_unchecked(0).im
+        let b524im_a = input.load(0).im
             + self.twiddle5.re * x128p.im
             + self.twiddle10.re * x227p.im
             + self.twiddle14.re * x326p.im
@@ -3926,7 +3905,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + self.twiddle2.im * x1217n.re
             + self.twiddle7.im * x1316n.re
             + self.twiddle12.im * x1415n.re;
-        let b623im_a = buffer.get_unchecked(0).im
+        let b623im_a = input.load(0).im
             + self.twiddle6.re * x128p.im
             + self.twiddle12.re * x227p.im
             + self.twiddle11.re * x326p.im
@@ -3955,7 +3934,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + self.twiddle14.im * x1217n.re
             + -self.twiddle9.im * x1316n.re
             + -self.twiddle3.im * x1415n.re;
-        let b722im_a = buffer.get_unchecked(0).im
+        let b722im_a = input.load(0).im
             + self.twiddle7.re * x128p.im
             + self.twiddle14.re * x227p.im
             + self.twiddle8.re * x326p.im
@@ -3984,7 +3963,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + -self.twiddle3.im * x1217n.re
             + self.twiddle4.im * x1316n.re
             + self.twiddle11.im * x1415n.re;
-        let b821im_a = buffer.get_unchecked(0).im
+        let b821im_a = input.load(0).im
             + self.twiddle8.re * x128p.im
             + self.twiddle13.re * x227p.im
             + self.twiddle5.re * x326p.im
@@ -4013,7 +3992,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + self.twiddle9.im * x1217n.re
             + -self.twiddle12.im * x1316n.re
             + -self.twiddle4.im * x1415n.re;
-        let b920im_a = buffer.get_unchecked(0).im
+        let b920im_a = input.load(0).im
             + self.twiddle9.re * x128p.im
             + self.twiddle11.re * x227p.im
             + self.twiddle2.re * x326p.im
@@ -4042,7 +4021,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + -self.twiddle8.im * x1217n.re
             + self.twiddle1.im * x1316n.re
             + self.twiddle10.im * x1415n.re;
-        let b1019im_a = buffer.get_unchecked(0).im
+        let b1019im_a = input.load(0).im
             + self.twiddle10.re * x128p.im
             + self.twiddle9.re * x227p.im
             + self.twiddle1.re * x326p.im
@@ -4071,7 +4050,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + self.twiddle4.im * x1217n.re
             + self.twiddle14.im * x1316n.re
             + -self.twiddle5.im * x1415n.re;
-        let b1118im_a = buffer.get_unchecked(0).im
+        let b1118im_a = input.load(0).im
             + self.twiddle11.re * x128p.im
             + self.twiddle7.re * x227p.im
             + self.twiddle4.re * x326p.im
@@ -4100,7 +4079,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + -self.twiddle13.im * x1217n.re
             + -self.twiddle2.im * x1316n.re
             + self.twiddle9.im * x1415n.re;
-        let b1217im_a = buffer.get_unchecked(0).im
+        let b1217im_a = input.load(0).im
             + self.twiddle12.re * x128p.im
             + self.twiddle5.re * x227p.im
             + self.twiddle7.re * x326p.im
@@ -4129,7 +4108,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + -self.twiddle1.im * x1217n.re
             + self.twiddle11.im * x1316n.re
             + -self.twiddle6.im * x1415n.re;
-        let b1316im_a = buffer.get_unchecked(0).im
+        let b1316im_a = input.load(0).im
             + self.twiddle13.re * x128p.im
             + self.twiddle3.re * x227p.im
             + self.twiddle10.re * x326p.im
@@ -4158,7 +4137,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
             + self.twiddle11.im * x1217n.re
             + -self.twiddle5.im * x1316n.re
             + self.twiddle8.im * x1415n.re;
-        let b1415im_a = buffer.get_unchecked(0).im
+        let b1415im_a = input.load(0).im
             + self.twiddle14.re * x128p.im
             + self.twiddle1.re * x227p.im
             + self.twiddle13.re * x326p.im
@@ -4244,148 +4223,205 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly29<T> {
         let out27im = b227im_a - b227im_b;
         let out28re = b128re_a + b128re_b;
         let out28im = b128im_a - b128im_b;
-        *buffer.get_unchecked_mut(0) = sum;
-        *buffer.get_unchecked_mut(1) = Complex {
-            re: out1re,
-            im: out1im,
-        };
-        *buffer.get_unchecked_mut(2) = Complex {
-            re: out2re,
-            im: out2im,
-        };
-        *buffer.get_unchecked_mut(3) = Complex {
-            re: out3re,
-            im: out3im,
-        };
-        *buffer.get_unchecked_mut(4) = Complex {
-            re: out4re,
-            im: out4im,
-        };
-        *buffer.get_unchecked_mut(5) = Complex {
-            re: out5re,
-            im: out5im,
-        };
-        *buffer.get_unchecked_mut(6) = Complex {
-            re: out6re,
-            im: out6im,
-        };
-        *buffer.get_unchecked_mut(7) = Complex {
-            re: out7re,
-            im: out7im,
-        };
-        *buffer.get_unchecked_mut(8) = Complex {
-            re: out8re,
-            im: out8im,
-        };
-        *buffer.get_unchecked_mut(9) = Complex {
-            re: out9re,
-            im: out9im,
-        };
-        *buffer.get_unchecked_mut(10) = Complex {
-            re: out10re,
-            im: out10im,
-        };
-        *buffer.get_unchecked_mut(11) = Complex {
-            re: out11re,
-            im: out11im,
-        };
-        *buffer.get_unchecked_mut(12) = Complex {
-            re: out12re,
-            im: out12im,
-        };
-        *buffer.get_unchecked_mut(13) = Complex {
-            re: out13re,
-            im: out13im,
-        };
-        *buffer.get_unchecked_mut(14) = Complex {
-            re: out14re,
-            im: out14im,
-        };
-        *buffer.get_unchecked_mut(15) = Complex {
-            re: out15re,
-            im: out15im,
-        };
-        *buffer.get_unchecked_mut(16) = Complex {
-            re: out16re,
-            im: out16im,
-        };
-        *buffer.get_unchecked_mut(17) = Complex {
-            re: out17re,
-            im: out17im,
-        };
-        *buffer.get_unchecked_mut(18) = Complex {
-            re: out18re,
-            im: out18im,
-        };
-        *buffer.get_unchecked_mut(19) = Complex {
-            re: out19re,
-            im: out19im,
-        };
-        *buffer.get_unchecked_mut(20) = Complex {
-            re: out20re,
-            im: out20im,
-        };
-        *buffer.get_unchecked_mut(21) = Complex {
-            re: out21re,
-            im: out21im,
-        };
-        *buffer.get_unchecked_mut(22) = Complex {
-            re: out22re,
-            im: out22im,
-        };
-        *buffer.get_unchecked_mut(23) = Complex {
-            re: out23re,
-            im: out23im,
-        };
-        *buffer.get_unchecked_mut(24) = Complex {
-            re: out24re,
-            im: out24im,
-        };
-        *buffer.get_unchecked_mut(25) = Complex {
-            re: out25re,
-            im: out25im,
-        };
-        *buffer.get_unchecked_mut(26) = Complex {
-            re: out26re,
-            im: out26im,
-        };
-        *buffer.get_unchecked_mut(27) = Complex {
-            re: out27re,
-            im: out27im,
-        };
-        *buffer.get_unchecked_mut(28) = Complex {
-            re: out28re,
-            im: out28im,
-        };
+        output.store(sum, 0);
+        output.store(
+            Complex {
+                re: out1re,
+                im: out1im,
+            },
+            1,
+        );
+        output.store(
+            Complex {
+                re: out2re,
+                im: out2im,
+            },
+            2,
+        );
+        output.store(
+            Complex {
+                re: out3re,
+                im: out3im,
+            },
+            3,
+        );
+        output.store(
+            Complex {
+                re: out4re,
+                im: out4im,
+            },
+            4,
+        );
+        output.store(
+            Complex {
+                re: out5re,
+                im: out5im,
+            },
+            5,
+        );
+        output.store(
+            Complex {
+                re: out6re,
+                im: out6im,
+            },
+            6,
+        );
+        output.store(
+            Complex {
+                re: out7re,
+                im: out7im,
+            },
+            7,
+        );
+        output.store(
+            Complex {
+                re: out8re,
+                im: out8im,
+            },
+            8,
+        );
+        output.store(
+            Complex {
+                re: out9re,
+                im: out9im,
+            },
+            9,
+        );
+        output.store(
+            Complex {
+                re: out10re,
+                im: out10im,
+            },
+            10,
+        );
+        output.store(
+            Complex {
+                re: out11re,
+                im: out11im,
+            },
+            11,
+        );
+        output.store(
+            Complex {
+                re: out12re,
+                im: out12im,
+            },
+            12,
+        );
+        output.store(
+            Complex {
+                re: out13re,
+                im: out13im,
+            },
+            13,
+        );
+        output.store(
+            Complex {
+                re: out14re,
+                im: out14im,
+            },
+            14,
+        );
+        output.store(
+            Complex {
+                re: out15re,
+                im: out15im,
+            },
+            15,
+        );
+        output.store(
+            Complex {
+                re: out16re,
+                im: out16im,
+            },
+            16,
+        );
+        output.store(
+            Complex {
+                re: out17re,
+                im: out17im,
+            },
+            17,
+        );
+        output.store(
+            Complex {
+                re: out18re,
+                im: out18im,
+            },
+            18,
+        );
+        output.store(
+            Complex {
+                re: out19re,
+                im: out19im,
+            },
+            19,
+        );
+        output.store(
+            Complex {
+                re: out20re,
+                im: out20im,
+            },
+            20,
+        );
+        output.store(
+            Complex {
+                re: out21re,
+                im: out21im,
+            },
+            21,
+        );
+        output.store(
+            Complex {
+                re: out22re,
+                im: out22im,
+            },
+            22,
+        );
+        output.store(
+            Complex {
+                re: out23re,
+                im: out23im,
+            },
+            23,
+        );
+        output.store(
+            Complex {
+                re: out24re,
+                im: out24im,
+            },
+            24,
+        );
+        output.store(
+            Complex {
+                re: out25re,
+                im: out25im,
+            },
+            25,
+        );
+        output.store(
+            Complex {
+                re: out26re,
+                im: out26im,
+            },
+            26,
+        );
+        output.store(
+            Complex {
+                re: out27re,
+                im: out27im,
+            },
+            27,
+        );
+        output.store(
+            Complex {
+                re: out28re,
+                im: out28im,
+            },
+            28,
+        );
     }
 }
-impl<T: FFTnum> FFT<T> for Butterfly29<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl<T> Length for Butterfly29<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        29
-    }
-}
-impl<T> IsInverse for Butterfly29<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
-
 pub struct Butterfly31<T> {
     twiddle1: Complex<T>,
     twiddle2: Complex<T>,
@@ -4404,23 +4440,24 @@ pub struct Butterfly31<T> {
     twiddle15: Complex<T>,
     inverse: bool,
 }
+boilerplate_fft_butterfly!(Butterfly31, 31, |this: &Butterfly31<_>| this.inverse);
 impl<T: FFTnum> Butterfly31<T> {
     pub fn new(inverse: bool) -> Self {
-        let twiddle1: Complex<T> = twiddles::single_twiddle(1, 31, inverse);
-        let twiddle2: Complex<T> = twiddles::single_twiddle(2, 31, inverse);
-        let twiddle3: Complex<T> = twiddles::single_twiddle(3, 31, inverse);
-        let twiddle4: Complex<T> = twiddles::single_twiddle(4, 31, inverse);
-        let twiddle5: Complex<T> = twiddles::single_twiddle(5, 31, inverse);
-        let twiddle6: Complex<T> = twiddles::single_twiddle(6, 31, inverse);
-        let twiddle7: Complex<T> = twiddles::single_twiddle(7, 31, inverse);
-        let twiddle8: Complex<T> = twiddles::single_twiddle(8, 31, inverse);
-        let twiddle9: Complex<T> = twiddles::single_twiddle(9, 31, inverse);
-        let twiddle10: Complex<T> = twiddles::single_twiddle(10, 31, inverse);
-        let twiddle11: Complex<T> = twiddles::single_twiddle(11, 31, inverse);
-        let twiddle12: Complex<T> = twiddles::single_twiddle(12, 31, inverse);
-        let twiddle13: Complex<T> = twiddles::single_twiddle(13, 31, inverse);
-        let twiddle14: Complex<T> = twiddles::single_twiddle(14, 31, inverse);
-        let twiddle15: Complex<T> = twiddles::single_twiddle(15, 31, inverse);
+        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 31, inverse);
+        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 31, inverse);
+        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 31, inverse);
+        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 31, inverse);
+        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 31, inverse);
+        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 31, inverse);
+        let twiddle7: Complex<T> = T::generate_twiddle_factor(7, 31, inverse);
+        let twiddle8: Complex<T> = T::generate_twiddle_factor(8, 31, inverse);
+        let twiddle9: Complex<T> = T::generate_twiddle_factor(9, 31, inverse);
+        let twiddle10: Complex<T> = T::generate_twiddle_factor(10, 31, inverse);
+        let twiddle11: Complex<T> = T::generate_twiddle_factor(11, 31, inverse);
+        let twiddle12: Complex<T> = T::generate_twiddle_factor(12, 31, inverse);
+        let twiddle13: Complex<T> = T::generate_twiddle_factor(13, 31, inverse);
+        let twiddle14: Complex<T> = T::generate_twiddle_factor(14, 31, inverse);
+        let twiddle15: Complex<T> = T::generate_twiddle_factor(15, 31, inverse);
         Self {
             twiddle1,
             twiddle2,
@@ -4440,50 +4477,47 @@ impl<T: FFTnum> Butterfly31<T> {
             inverse,
         }
     }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_exact_mut(self.len()) {
-            self.process_inplace(chunk);
-        }
-    }
-    #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+
+    #[inline(never)]
+    unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
         // This function was derived in the same manner as the butterflies for length 3, 5 and 7.
         // However, instead of doing it by hand the actual code is autogenerated
         // with the `genbutterflies.py` script in the `tools` directory.
-        let x130p = *buffer.get_unchecked(1) + *buffer.get_unchecked(30);
-        let x130n = *buffer.get_unchecked(1) - *buffer.get_unchecked(30);
-        let x229p = *buffer.get_unchecked(2) + *buffer.get_unchecked(29);
-        let x229n = *buffer.get_unchecked(2) - *buffer.get_unchecked(29);
-        let x328p = *buffer.get_unchecked(3) + *buffer.get_unchecked(28);
-        let x328n = *buffer.get_unchecked(3) - *buffer.get_unchecked(28);
-        let x427p = *buffer.get_unchecked(4) + *buffer.get_unchecked(27);
-        let x427n = *buffer.get_unchecked(4) - *buffer.get_unchecked(27);
-        let x526p = *buffer.get_unchecked(5) + *buffer.get_unchecked(26);
-        let x526n = *buffer.get_unchecked(5) - *buffer.get_unchecked(26);
-        let x625p = *buffer.get_unchecked(6) + *buffer.get_unchecked(25);
-        let x625n = *buffer.get_unchecked(6) - *buffer.get_unchecked(25);
-        let x724p = *buffer.get_unchecked(7) + *buffer.get_unchecked(24);
-        let x724n = *buffer.get_unchecked(7) - *buffer.get_unchecked(24);
-        let x823p = *buffer.get_unchecked(8) + *buffer.get_unchecked(23);
-        let x823n = *buffer.get_unchecked(8) - *buffer.get_unchecked(23);
-        let x922p = *buffer.get_unchecked(9) + *buffer.get_unchecked(22);
-        let x922n = *buffer.get_unchecked(9) - *buffer.get_unchecked(22);
-        let x1021p = *buffer.get_unchecked(10) + *buffer.get_unchecked(21);
-        let x1021n = *buffer.get_unchecked(10) - *buffer.get_unchecked(21);
-        let x1120p = *buffer.get_unchecked(11) + *buffer.get_unchecked(20);
-        let x1120n = *buffer.get_unchecked(11) - *buffer.get_unchecked(20);
-        let x1219p = *buffer.get_unchecked(12) + *buffer.get_unchecked(19);
-        let x1219n = *buffer.get_unchecked(12) - *buffer.get_unchecked(19);
-        let x1318p = *buffer.get_unchecked(13) + *buffer.get_unchecked(18);
-        let x1318n = *buffer.get_unchecked(13) - *buffer.get_unchecked(18);
-        let x1417p = *buffer.get_unchecked(14) + *buffer.get_unchecked(17);
-        let x1417n = *buffer.get_unchecked(14) - *buffer.get_unchecked(17);
-        let x1516p = *buffer.get_unchecked(15) + *buffer.get_unchecked(16);
-        let x1516n = *buffer.get_unchecked(15) - *buffer.get_unchecked(16);
-        let sum = *buffer.get_unchecked(0)
+        let x130p = input.load(1) + input.load(30);
+        let x130n = input.load(1) - input.load(30);
+        let x229p = input.load(2) + input.load(29);
+        let x229n = input.load(2) - input.load(29);
+        let x328p = input.load(3) + input.load(28);
+        let x328n = input.load(3) - input.load(28);
+        let x427p = input.load(4) + input.load(27);
+        let x427n = input.load(4) - input.load(27);
+        let x526p = input.load(5) + input.load(26);
+        let x526n = input.load(5) - input.load(26);
+        let x625p = input.load(6) + input.load(25);
+        let x625n = input.load(6) - input.load(25);
+        let x724p = input.load(7) + input.load(24);
+        let x724n = input.load(7) - input.load(24);
+        let x823p = input.load(8) + input.load(23);
+        let x823n = input.load(8) - input.load(23);
+        let x922p = input.load(9) + input.load(22);
+        let x922n = input.load(9) - input.load(22);
+        let x1021p = input.load(10) + input.load(21);
+        let x1021n = input.load(10) - input.load(21);
+        let x1120p = input.load(11) + input.load(20);
+        let x1120n = input.load(11) - input.load(20);
+        let x1219p = input.load(12) + input.load(19);
+        let x1219n = input.load(12) - input.load(19);
+        let x1318p = input.load(13) + input.load(18);
+        let x1318n = input.load(13) - input.load(18);
+        let x1417p = input.load(14) + input.load(17);
+        let x1417n = input.load(14) - input.load(17);
+        let x1516p = input.load(15) + input.load(16);
+        let x1516n = input.load(15) - input.load(16);
+        let sum = input.load(0)
             + x130p
             + x229p
             + x328p
@@ -4499,7 +4533,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + x1318p
             + x1417p
             + x1516p;
-        let b130re_a = buffer.get_unchecked(0).re
+        let b130re_a = input.load(0).re
             + self.twiddle1.re * x130p.re
             + self.twiddle2.re * x229p.re
             + self.twiddle3.re * x328p.re
@@ -4530,7 +4564,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + self.twiddle13.im * x1318n.im
             + self.twiddle14.im * x1417n.im
             + self.twiddle15.im * x1516n.im;
-        let b229re_a = buffer.get_unchecked(0).re
+        let b229re_a = input.load(0).re
             + self.twiddle2.re * x130p.re
             + self.twiddle4.re * x229p.re
             + self.twiddle6.re * x328p.re
@@ -4561,7 +4595,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + -self.twiddle5.im * x1318n.im
             + -self.twiddle3.im * x1417n.im
             + -self.twiddle1.im * x1516n.im;
-        let b328re_a = buffer.get_unchecked(0).re
+        let b328re_a = input.load(0).re
             + self.twiddle3.re * x130p.re
             + self.twiddle6.re * x229p.re
             + self.twiddle9.re * x328p.re
@@ -4592,7 +4626,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + self.twiddle8.im * x1318n.im
             + self.twiddle11.im * x1417n.im
             + self.twiddle14.im * x1516n.im;
-        let b427re_a = buffer.get_unchecked(0).re
+        let b427re_a = input.load(0).re
             + self.twiddle4.re * x130p.re
             + self.twiddle8.re * x229p.re
             + self.twiddle12.re * x328p.re
@@ -4623,7 +4657,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + -self.twiddle10.im * x1318n.im
             + -self.twiddle6.im * x1417n.im
             + -self.twiddle2.im * x1516n.im;
-        let b526re_a = buffer.get_unchecked(0).re
+        let b526re_a = input.load(0).re
             + self.twiddle5.re * x130p.re
             + self.twiddle10.re * x229p.re
             + self.twiddle15.re * x328p.re
@@ -4654,7 +4688,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + self.twiddle3.im * x1318n.im
             + self.twiddle8.im * x1417n.im
             + self.twiddle13.im * x1516n.im;
-        let b625re_a = buffer.get_unchecked(0).re
+        let b625re_a = input.load(0).re
             + self.twiddle6.re * x130p.re
             + self.twiddle12.re * x229p.re
             + self.twiddle13.re * x328p.re
@@ -4685,7 +4719,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + -self.twiddle15.im * x1318n.im
             + -self.twiddle9.im * x1417n.im
             + -self.twiddle3.im * x1516n.im;
-        let b724re_a = buffer.get_unchecked(0).re
+        let b724re_a = input.load(0).re
             + self.twiddle7.re * x130p.re
             + self.twiddle14.re * x229p.re
             + self.twiddle10.re * x328p.re
@@ -4716,7 +4750,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + -self.twiddle2.im * x1318n.im
             + self.twiddle5.im * x1417n.im
             + self.twiddle12.im * x1516n.im;
-        let b823re_a = buffer.get_unchecked(0).re
+        let b823re_a = input.load(0).re
             + self.twiddle8.re * x130p.re
             + self.twiddle15.re * x229p.re
             + self.twiddle7.re * x328p.re
@@ -4747,7 +4781,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + self.twiddle11.im * x1318n.im
             + -self.twiddle12.im * x1417n.im
             + -self.twiddle4.im * x1516n.im;
-        let b922re_a = buffer.get_unchecked(0).re
+        let b922re_a = input.load(0).re
             + self.twiddle9.re * x130p.re
             + self.twiddle13.re * x229p.re
             + self.twiddle4.re * x328p.re
@@ -4778,7 +4812,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + -self.twiddle7.im * x1318n.im
             + self.twiddle2.im * x1417n.im
             + self.twiddle11.im * x1516n.im;
-        let b1021re_a = buffer.get_unchecked(0).re
+        let b1021re_a = input.load(0).re
             + self.twiddle10.re * x130p.re
             + self.twiddle11.re * x229p.re
             + self.twiddle1.re * x328p.re
@@ -4809,7 +4843,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + self.twiddle6.im * x1318n.im
             + -self.twiddle15.im * x1417n.im
             + -self.twiddle5.im * x1516n.im;
-        let b1120re_a = buffer.get_unchecked(0).re
+        let b1120re_a = input.load(0).re
             + self.twiddle11.re * x130p.re
             + self.twiddle9.re * x229p.re
             + self.twiddle2.re * x328p.re
@@ -4840,7 +4874,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + -self.twiddle12.im * x1318n.im
             + -self.twiddle1.im * x1417n.im
             + self.twiddle10.im * x1516n.im;
-        let b1219re_a = buffer.get_unchecked(0).re
+        let b1219re_a = input.load(0).re
             + self.twiddle12.re * x130p.re
             + self.twiddle7.re * x229p.re
             + self.twiddle5.re * x328p.re
@@ -4871,7 +4905,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + self.twiddle1.im * x1318n.im
             + self.twiddle13.im * x1417n.im
             + -self.twiddle6.im * x1516n.im;
-        let b1318re_a = buffer.get_unchecked(0).re
+        let b1318re_a = input.load(0).re
             + self.twiddle13.re * x130p.re
             + self.twiddle5.re * x229p.re
             + self.twiddle8.re * x328p.re
@@ -4902,7 +4936,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + self.twiddle14.im * x1318n.im
             + -self.twiddle4.im * x1417n.im
             + self.twiddle9.im * x1516n.im;
-        let b1417re_a = buffer.get_unchecked(0).re
+        let b1417re_a = input.load(0).re
             + self.twiddle14.re * x130p.re
             + self.twiddle3.re * x229p.re
             + self.twiddle11.re * x328p.re
@@ -4933,7 +4967,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + -self.twiddle4.im * x1318n.im
             + self.twiddle10.im * x1417n.im
             + -self.twiddle7.im * x1516n.im;
-        let b1516re_a = buffer.get_unchecked(0).re
+        let b1516re_a = input.load(0).re
             + self.twiddle15.re * x130p.re
             + self.twiddle1.re * x229p.re
             + self.twiddle14.re * x328p.re
@@ -4965,7 +4999,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + -self.twiddle7.im * x1417n.im
             + self.twiddle8.im * x1516n.im;
 
-        let b130im_a = buffer.get_unchecked(0).im
+        let b130im_a = input.load(0).im
             + self.twiddle1.re * x130p.im
             + self.twiddle2.re * x229p.im
             + self.twiddle3.re * x328p.im
@@ -4996,7 +5030,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + self.twiddle13.im * x1318n.re
             + self.twiddle14.im * x1417n.re
             + self.twiddle15.im * x1516n.re;
-        let b229im_a = buffer.get_unchecked(0).im
+        let b229im_a = input.load(0).im
             + self.twiddle2.re * x130p.im
             + self.twiddle4.re * x229p.im
             + self.twiddle6.re * x328p.im
@@ -5027,7 +5061,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + -self.twiddle5.im * x1318n.re
             + -self.twiddle3.im * x1417n.re
             + -self.twiddle1.im * x1516n.re;
-        let b328im_a = buffer.get_unchecked(0).im
+        let b328im_a = input.load(0).im
             + self.twiddle3.re * x130p.im
             + self.twiddle6.re * x229p.im
             + self.twiddle9.re * x328p.im
@@ -5058,7 +5092,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + self.twiddle8.im * x1318n.re
             + self.twiddle11.im * x1417n.re
             + self.twiddle14.im * x1516n.re;
-        let b427im_a = buffer.get_unchecked(0).im
+        let b427im_a = input.load(0).im
             + self.twiddle4.re * x130p.im
             + self.twiddle8.re * x229p.im
             + self.twiddle12.re * x328p.im
@@ -5089,7 +5123,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + -self.twiddle10.im * x1318n.re
             + -self.twiddle6.im * x1417n.re
             + -self.twiddle2.im * x1516n.re;
-        let b526im_a = buffer.get_unchecked(0).im
+        let b526im_a = input.load(0).im
             + self.twiddle5.re * x130p.im
             + self.twiddle10.re * x229p.im
             + self.twiddle15.re * x328p.im
@@ -5120,7 +5154,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + self.twiddle3.im * x1318n.re
             + self.twiddle8.im * x1417n.re
             + self.twiddle13.im * x1516n.re;
-        let b625im_a = buffer.get_unchecked(0).im
+        let b625im_a = input.load(0).im
             + self.twiddle6.re * x130p.im
             + self.twiddle12.re * x229p.im
             + self.twiddle13.re * x328p.im
@@ -5151,7 +5185,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + -self.twiddle15.im * x1318n.re
             + -self.twiddle9.im * x1417n.re
             + -self.twiddle3.im * x1516n.re;
-        let b724im_a = buffer.get_unchecked(0).im
+        let b724im_a = input.load(0).im
             + self.twiddle7.re * x130p.im
             + self.twiddle14.re * x229p.im
             + self.twiddle10.re * x328p.im
@@ -5182,7 +5216,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + -self.twiddle2.im * x1318n.re
             + self.twiddle5.im * x1417n.re
             + self.twiddle12.im * x1516n.re;
-        let b823im_a = buffer.get_unchecked(0).im
+        let b823im_a = input.load(0).im
             + self.twiddle8.re * x130p.im
             + self.twiddle15.re * x229p.im
             + self.twiddle7.re * x328p.im
@@ -5213,7 +5247,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + self.twiddle11.im * x1318n.re
             + -self.twiddle12.im * x1417n.re
             + -self.twiddle4.im * x1516n.re;
-        let b922im_a = buffer.get_unchecked(0).im
+        let b922im_a = input.load(0).im
             + self.twiddle9.re * x130p.im
             + self.twiddle13.re * x229p.im
             + self.twiddle4.re * x328p.im
@@ -5244,7 +5278,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + -self.twiddle7.im * x1318n.re
             + self.twiddle2.im * x1417n.re
             + self.twiddle11.im * x1516n.re;
-        let b1021im_a = buffer.get_unchecked(0).im
+        let b1021im_a = input.load(0).im
             + self.twiddle10.re * x130p.im
             + self.twiddle11.re * x229p.im
             + self.twiddle1.re * x328p.im
@@ -5275,7 +5309,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + self.twiddle6.im * x1318n.re
             + -self.twiddle15.im * x1417n.re
             + -self.twiddle5.im * x1516n.re;
-        let b1120im_a = buffer.get_unchecked(0).im
+        let b1120im_a = input.load(0).im
             + self.twiddle11.re * x130p.im
             + self.twiddle9.re * x229p.im
             + self.twiddle2.re * x328p.im
@@ -5306,7 +5340,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + -self.twiddle12.im * x1318n.re
             + -self.twiddle1.im * x1417n.re
             + self.twiddle10.im * x1516n.re;
-        let b1219im_a = buffer.get_unchecked(0).im
+        let b1219im_a = input.load(0).im
             + self.twiddle12.re * x130p.im
             + self.twiddle7.re * x229p.im
             + self.twiddle5.re * x328p.im
@@ -5337,7 +5371,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + self.twiddle1.im * x1318n.re
             + self.twiddle13.im * x1417n.re
             + -self.twiddle6.im * x1516n.re;
-        let b1318im_a = buffer.get_unchecked(0).im
+        let b1318im_a = input.load(0).im
             + self.twiddle13.re * x130p.im
             + self.twiddle5.re * x229p.im
             + self.twiddle8.re * x328p.im
@@ -5368,7 +5402,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + self.twiddle14.im * x1318n.re
             + -self.twiddle4.im * x1417n.re
             + self.twiddle9.im * x1516n.re;
-        let b1417im_a = buffer.get_unchecked(0).im
+        let b1417im_a = input.load(0).im
             + self.twiddle14.re * x130p.im
             + self.twiddle3.re * x229p.im
             + self.twiddle11.re * x328p.im
@@ -5399,7 +5433,7 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
             + -self.twiddle4.im * x1318n.re
             + self.twiddle10.im * x1417n.re
             + -self.twiddle7.im * x1516n.re;
-        let b1516im_a = buffer.get_unchecked(0).im
+        let b1516im_a = input.load(0).im
             + self.twiddle15.re * x130p.im
             + self.twiddle1.re * x229p.im
             + self.twiddle14.re * x328p.im
@@ -5491,230 +5525,296 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly31<T> {
         let out29im = b229im_a - b229im_b;
         let out30re = b130re_a + b130re_b;
         let out30im = b130im_a - b130im_b;
-        *buffer.get_unchecked_mut(0) = sum;
-        *buffer.get_unchecked_mut(1) = Complex {
-            re: out1re,
-            im: out1im,
-        };
-        *buffer.get_unchecked_mut(2) = Complex {
-            re: out2re,
-            im: out2im,
-        };
-        *buffer.get_unchecked_mut(3) = Complex {
-            re: out3re,
-            im: out3im,
-        };
-        *buffer.get_unchecked_mut(4) = Complex {
-            re: out4re,
-            im: out4im,
-        };
-        *buffer.get_unchecked_mut(5) = Complex {
-            re: out5re,
-            im: out5im,
-        };
-        *buffer.get_unchecked_mut(6) = Complex {
-            re: out6re,
-            im: out6im,
-        };
-        *buffer.get_unchecked_mut(7) = Complex {
-            re: out7re,
-            im: out7im,
-        };
-        *buffer.get_unchecked_mut(8) = Complex {
-            re: out8re,
-            im: out8im,
-        };
-        *buffer.get_unchecked_mut(9) = Complex {
-            re: out9re,
-            im: out9im,
-        };
-        *buffer.get_unchecked_mut(10) = Complex {
-            re: out10re,
-            im: out10im,
-        };
-        *buffer.get_unchecked_mut(11) = Complex {
-            re: out11re,
-            im: out11im,
-        };
-        *buffer.get_unchecked_mut(12) = Complex {
-            re: out12re,
-            im: out12im,
-        };
-        *buffer.get_unchecked_mut(13) = Complex {
-            re: out13re,
-            im: out13im,
-        };
-        *buffer.get_unchecked_mut(14) = Complex {
-            re: out14re,
-            im: out14im,
-        };
-        *buffer.get_unchecked_mut(15) = Complex {
-            re: out15re,
-            im: out15im,
-        };
-        *buffer.get_unchecked_mut(16) = Complex {
-            re: out16re,
-            im: out16im,
-        };
-        *buffer.get_unchecked_mut(17) = Complex {
-            re: out17re,
-            im: out17im,
-        };
-        *buffer.get_unchecked_mut(18) = Complex {
-            re: out18re,
-            im: out18im,
-        };
-        *buffer.get_unchecked_mut(19) = Complex {
-            re: out19re,
-            im: out19im,
-        };
-        *buffer.get_unchecked_mut(20) = Complex {
-            re: out20re,
-            im: out20im,
-        };
-        *buffer.get_unchecked_mut(21) = Complex {
-            re: out21re,
-            im: out21im,
-        };
-        *buffer.get_unchecked_mut(22) = Complex {
-            re: out22re,
-            im: out22im,
-        };
-        *buffer.get_unchecked_mut(23) = Complex {
-            re: out23re,
-            im: out23im,
-        };
-        *buffer.get_unchecked_mut(24) = Complex {
-            re: out24re,
-            im: out24im,
-        };
-        *buffer.get_unchecked_mut(25) = Complex {
-            re: out25re,
-            im: out25im,
-        };
-        *buffer.get_unchecked_mut(26) = Complex {
-            re: out26re,
-            im: out26im,
-        };
-        *buffer.get_unchecked_mut(27) = Complex {
-            re: out27re,
-            im: out27im,
-        };
-        *buffer.get_unchecked_mut(28) = Complex {
-            re: out28re,
-            im: out28im,
-        };
-        *buffer.get_unchecked_mut(29) = Complex {
-            re: out29re,
-            im: out29im,
-        };
-        *buffer.get_unchecked_mut(30) = Complex {
-            re: out30re,
-            im: out30im,
-        };
+        output.store(sum, 0);
+        output.store(
+            Complex {
+                re: out1re,
+                im: out1im,
+            },
+            1,
+        );
+        output.store(
+            Complex {
+                re: out2re,
+                im: out2im,
+            },
+            2,
+        );
+        output.store(
+            Complex {
+                re: out3re,
+                im: out3im,
+            },
+            3,
+        );
+        output.store(
+            Complex {
+                re: out4re,
+                im: out4im,
+            },
+            4,
+        );
+        output.store(
+            Complex {
+                re: out5re,
+                im: out5im,
+            },
+            5,
+        );
+        output.store(
+            Complex {
+                re: out6re,
+                im: out6im,
+            },
+            6,
+        );
+        output.store(
+            Complex {
+                re: out7re,
+                im: out7im,
+            },
+            7,
+        );
+        output.store(
+            Complex {
+                re: out8re,
+                im: out8im,
+            },
+            8,
+        );
+        output.store(
+            Complex {
+                re: out9re,
+                im: out9im,
+            },
+            9,
+        );
+        output.store(
+            Complex {
+                re: out10re,
+                im: out10im,
+            },
+            10,
+        );
+        output.store(
+            Complex {
+                re: out11re,
+                im: out11im,
+            },
+            11,
+        );
+        output.store(
+            Complex {
+                re: out12re,
+                im: out12im,
+            },
+            12,
+        );
+        output.store(
+            Complex {
+                re: out13re,
+                im: out13im,
+            },
+            13,
+        );
+        output.store(
+            Complex {
+                re: out14re,
+                im: out14im,
+            },
+            14,
+        );
+        output.store(
+            Complex {
+                re: out15re,
+                im: out15im,
+            },
+            15,
+        );
+        output.store(
+            Complex {
+                re: out16re,
+                im: out16im,
+            },
+            16,
+        );
+        output.store(
+            Complex {
+                re: out17re,
+                im: out17im,
+            },
+            17,
+        );
+        output.store(
+            Complex {
+                re: out18re,
+                im: out18im,
+            },
+            18,
+        );
+        output.store(
+            Complex {
+                re: out19re,
+                im: out19im,
+            },
+            19,
+        );
+        output.store(
+            Complex {
+                re: out20re,
+                im: out20im,
+            },
+            20,
+        );
+        output.store(
+            Complex {
+                re: out21re,
+                im: out21im,
+            },
+            21,
+        );
+        output.store(
+            Complex {
+                re: out22re,
+                im: out22im,
+            },
+            22,
+        );
+        output.store(
+            Complex {
+                re: out23re,
+                im: out23im,
+            },
+            23,
+        );
+        output.store(
+            Complex {
+                re: out24re,
+                im: out24im,
+            },
+            24,
+        );
+        output.store(
+            Complex {
+                re: out25re,
+                im: out25im,
+            },
+            25,
+        );
+        output.store(
+            Complex {
+                re: out26re,
+                im: out26im,
+            },
+            26,
+        );
+        output.store(
+            Complex {
+                re: out27re,
+                im: out27im,
+            },
+            27,
+        );
+        output.store(
+            Complex {
+                re: out28re,
+                im: out28im,
+            },
+            28,
+        );
+        output.store(
+            Complex {
+                re: out29re,
+                im: out29im,
+            },
+            29,
+        );
+        output.store(
+            Complex {
+                re: out30re,
+                im: out30im,
+            },
+            30,
+        );
     }
 }
-impl<T: FFTnum> FFT<T> for Butterfly31<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl<T> Length for Butterfly31<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        31
-    }
-}
-impl<T> IsInverse for Butterfly31<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
-
 pub struct Butterfly32<T> {
     butterfly16: Butterfly16<T>,
     butterfly8: Butterfly8<T>,
     twiddles: [Complex<T>; 7],
-    inverse: bool,
 }
+boilerplate_fft_butterfly!(Butterfly32, 32, |this: &Butterfly32<_>| this
+    .butterfly8
+    .is_inverse());
 impl<T: FFTnum> Butterfly32<T> {
-    #[inline(always)]
     pub fn new(inverse: bool) -> Self {
         Self {
             butterfly16: Butterfly16::new(inverse),
             butterfly8: Butterfly8::new(inverse),
             twiddles: [
-                twiddles::single_twiddle(1, 32, inverse),
-                twiddles::single_twiddle(2, 32, inverse),
-                twiddles::single_twiddle(3, 32, inverse),
-                twiddles::single_twiddle(4, 32, inverse),
-                twiddles::single_twiddle(5, 32, inverse),
-                twiddles::single_twiddle(6, 32, inverse),
-                twiddles::single_twiddle(7, 32, inverse),
+                T::generate_twiddle_factor(1, 32, inverse),
+                T::generate_twiddle_factor(2, 32, inverse),
+                T::generate_twiddle_factor(3, 32, inverse),
+                T::generate_twiddle_factor(4, 32, inverse),
+                T::generate_twiddle_factor(5, 32, inverse),
+                T::generate_twiddle_factor(6, 32, inverse),
+                T::generate_twiddle_factor(7, 32, inverse),
             ],
-            inverse,
         }
     }
-}
-impl<T: FFTnum> FFTButterfly<T> for Butterfly32<T> {
-    #[inline(always)]
-    unsafe fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+
+    #[inline(never)]
+    unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
         // we're going to hardcode a step of split radix
         // step 1: copy and reorder the  input into the scratch
         let mut scratch_evens = [
-            *buffer.get_unchecked(0),
-            *buffer.get_unchecked(2),
-            *buffer.get_unchecked(4),
-            *buffer.get_unchecked(6),
-            *buffer.get_unchecked(8),
-            *buffer.get_unchecked(10),
-            *buffer.get_unchecked(12),
-            *buffer.get_unchecked(14),
-            *buffer.get_unchecked(16),
-            *buffer.get_unchecked(18),
-            *buffer.get_unchecked(20),
-            *buffer.get_unchecked(22),
-            *buffer.get_unchecked(24),
-            *buffer.get_unchecked(26),
-            *buffer.get_unchecked(28),
-            *buffer.get_unchecked(30),
+            input.load(0),
+            input.load(2),
+            input.load(4),
+            input.load(6),
+            input.load(8),
+            input.load(10),
+            input.load(12),
+            input.load(14),
+            input.load(16),
+            input.load(18),
+            input.load(20),
+            input.load(22),
+            input.load(24),
+            input.load(26),
+            input.load(28),
+            input.load(30),
         ];
 
         let mut scratch_odds_n1 = [
-            *buffer.get_unchecked(1),
-            *buffer.get_unchecked(5),
-            *buffer.get_unchecked(9),
-            *buffer.get_unchecked(13),
-            *buffer.get_unchecked(17),
-            *buffer.get_unchecked(21),
-            *buffer.get_unchecked(25),
-            *buffer.get_unchecked(29),
+            input.load(1),
+            input.load(5),
+            input.load(9),
+            input.load(13),
+            input.load(17),
+            input.load(21),
+            input.load(25),
+            input.load(29),
         ];
         let mut scratch_odds_n3 = [
-            *buffer.get_unchecked(31),
-            *buffer.get_unchecked(3),
-            *buffer.get_unchecked(7),
-            *buffer.get_unchecked(11),
-            *buffer.get_unchecked(15),
-            *buffer.get_unchecked(19),
-            *buffer.get_unchecked(23),
-            *buffer.get_unchecked(27),
+            input.load(31),
+            input.load(3),
+            input.load(7),
+            input.load(11),
+            input.load(15),
+            input.load(19),
+            input.load(23),
+            input.load(27),
         ];
 
         // step 2: column FFTs
-        self.butterfly16.process_inplace(&mut scratch_evens);
-        self.butterfly8.process_inplace(&mut scratch_odds_n1);
-        self.butterfly8.process_inplace(&mut scratch_odds_n3);
+        self.butterfly16.perform_fft_butterfly(&mut scratch_evens);
+        self.butterfly8.perform_fft_butterfly(&mut scratch_odds_n1);
+        self.butterfly8.perform_fft_butterfly(&mut scratch_odds_n3);
 
         // step 3: apply twiddle factors
         scratch_odds_n1[1] = scratch_odds_n1[1] * self.twiddles[0];
@@ -5739,99 +5839,65 @@ impl<T: FFTnum> FFTButterfly<T> for Butterfly32<T> {
         scratch_odds_n3[7] = scratch_odds_n3[7] * self.twiddles[6].conj();
 
         // step 4: cross FFTs
-        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[0], &mut scratch_odds_n3[0]);
-        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[1], &mut scratch_odds_n3[1]);
-        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[2], &mut scratch_odds_n3[2]);
-        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[3], &mut scratch_odds_n3[3]);
-        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[4], &mut scratch_odds_n3[4]);
-        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[5], &mut scratch_odds_n3[5]);
-        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[6], &mut scratch_odds_n3[6]);
-        Butterfly2::perform_fft_direct(&mut scratch_odds_n1[7], &mut scratch_odds_n3[7]);
+        Butterfly2::perform_fft_strided(&mut scratch_odds_n1[0], &mut scratch_odds_n3[0]);
+        Butterfly2::perform_fft_strided(&mut scratch_odds_n1[1], &mut scratch_odds_n3[1]);
+        Butterfly2::perform_fft_strided(&mut scratch_odds_n1[2], &mut scratch_odds_n3[2]);
+        Butterfly2::perform_fft_strided(&mut scratch_odds_n1[3], &mut scratch_odds_n3[3]);
+        Butterfly2::perform_fft_strided(&mut scratch_odds_n1[4], &mut scratch_odds_n3[4]);
+        Butterfly2::perform_fft_strided(&mut scratch_odds_n1[5], &mut scratch_odds_n3[5]);
+        Butterfly2::perform_fft_strided(&mut scratch_odds_n1[6], &mut scratch_odds_n3[6]);
+        Butterfly2::perform_fft_strided(&mut scratch_odds_n1[7], &mut scratch_odds_n3[7]);
 
         // apply the butterfly 4 twiddle factor, which is just a rotation
-        scratch_odds_n3[0] = twiddles::rotate_90(scratch_odds_n3[0], self.inverse);
-        scratch_odds_n3[1] = twiddles::rotate_90(scratch_odds_n3[1], self.inverse);
-        scratch_odds_n3[2] = twiddles::rotate_90(scratch_odds_n3[2], self.inverse);
-        scratch_odds_n3[3] = twiddles::rotate_90(scratch_odds_n3[3], self.inverse);
-        scratch_odds_n3[4] = twiddles::rotate_90(scratch_odds_n3[4], self.inverse);
-        scratch_odds_n3[5] = twiddles::rotate_90(scratch_odds_n3[5], self.inverse);
-        scratch_odds_n3[6] = twiddles::rotate_90(scratch_odds_n3[6], self.inverse);
-        scratch_odds_n3[7] = twiddles::rotate_90(scratch_odds_n3[7], self.inverse);
+        scratch_odds_n3[0] = twiddles::rotate_90(scratch_odds_n3[0], self.is_inverse());
+        scratch_odds_n3[1] = twiddles::rotate_90(scratch_odds_n3[1], self.is_inverse());
+        scratch_odds_n3[2] = twiddles::rotate_90(scratch_odds_n3[2], self.is_inverse());
+        scratch_odds_n3[3] = twiddles::rotate_90(scratch_odds_n3[3], self.is_inverse());
+        scratch_odds_n3[4] = twiddles::rotate_90(scratch_odds_n3[4], self.is_inverse());
+        scratch_odds_n3[5] = twiddles::rotate_90(scratch_odds_n3[5], self.is_inverse());
+        scratch_odds_n3[6] = twiddles::rotate_90(scratch_odds_n3[6], self.is_inverse());
+        scratch_odds_n3[7] = twiddles::rotate_90(scratch_odds_n3[7], self.is_inverse());
 
         //step 5: copy/add/subtract data back to buffer
-        *buffer.get_unchecked_mut(0) = scratch_evens[0] + scratch_odds_n1[0];
-        *buffer.get_unchecked_mut(1) = scratch_evens[1] + scratch_odds_n1[1];
-        *buffer.get_unchecked_mut(2) = scratch_evens[2] + scratch_odds_n1[2];
-        *buffer.get_unchecked_mut(3) = scratch_evens[3] + scratch_odds_n1[3];
-        *buffer.get_unchecked_mut(4) = scratch_evens[4] + scratch_odds_n1[4];
-        *buffer.get_unchecked_mut(5) = scratch_evens[5] + scratch_odds_n1[5];
-        *buffer.get_unchecked_mut(6) = scratch_evens[6] + scratch_odds_n1[6];
-        *buffer.get_unchecked_mut(7) = scratch_evens[7] + scratch_odds_n1[7];
-        *buffer.get_unchecked_mut(8) = scratch_evens[8] + scratch_odds_n3[0];
-        *buffer.get_unchecked_mut(9) = scratch_evens[9] + scratch_odds_n3[1];
-        *buffer.get_unchecked_mut(10) = scratch_evens[10] + scratch_odds_n3[2];
-        *buffer.get_unchecked_mut(11) = scratch_evens[11] + scratch_odds_n3[3];
-        *buffer.get_unchecked_mut(12) = scratch_evens[12] + scratch_odds_n3[4];
-        *buffer.get_unchecked_mut(13) = scratch_evens[13] + scratch_odds_n3[5];
-        *buffer.get_unchecked_mut(14) = scratch_evens[14] + scratch_odds_n3[6];
-        *buffer.get_unchecked_mut(15) = scratch_evens[15] + scratch_odds_n3[7];
-        *buffer.get_unchecked_mut(16) = scratch_evens[0] - scratch_odds_n1[0];
-        *buffer.get_unchecked_mut(17) = scratch_evens[1] - scratch_odds_n1[1];
-        *buffer.get_unchecked_mut(18) = scratch_evens[2] - scratch_odds_n1[2];
-        *buffer.get_unchecked_mut(19) = scratch_evens[3] - scratch_odds_n1[3];
-        *buffer.get_unchecked_mut(20) = scratch_evens[4] - scratch_odds_n1[4];
-        *buffer.get_unchecked_mut(21) = scratch_evens[5] - scratch_odds_n1[5];
-        *buffer.get_unchecked_mut(22) = scratch_evens[6] - scratch_odds_n1[6];
-        *buffer.get_unchecked_mut(23) = scratch_evens[7] - scratch_odds_n1[7];
-        *buffer.get_unchecked_mut(24) = scratch_evens[8] - scratch_odds_n3[0];
-        *buffer.get_unchecked_mut(25) = scratch_evens[9] - scratch_odds_n3[1];
-        *buffer.get_unchecked_mut(26) = scratch_evens[10] - scratch_odds_n3[2];
-        *buffer.get_unchecked_mut(27) = scratch_evens[11] - scratch_odds_n3[3];
-        *buffer.get_unchecked_mut(28) = scratch_evens[12] - scratch_odds_n3[4];
-        *buffer.get_unchecked_mut(29) = scratch_evens[13] - scratch_odds_n3[5];
-        *buffer.get_unchecked_mut(30) = scratch_evens[14] - scratch_odds_n3[6];
-        *buffer.get_unchecked_mut(31) = scratch_evens[15] - scratch_odds_n3[7];
-    }
-    #[inline(always)]
-    unsafe fn process_multi_inplace(&self, buffer: &mut [Complex<T>]) {
-        for chunk in buffer.chunks_exact_mut(self.len()) {
-            self.process_inplace(chunk);
-        }
-    }
-}
-impl<T: FFTnum> FFT<T> for Butterfly32<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_inplace(output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
-        output.copy_from_slice(input);
-
-        unsafe { self.process_multi_inplace(output) };
-    }
-}
-impl<T> Length for Butterfly32<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        32
-    }
-}
-impl<T> IsInverse for Butterfly32<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
+        output.store(scratch_evens[0] + scratch_odds_n1[0], 0);
+        output.store(scratch_evens[1] + scratch_odds_n1[1], 1);
+        output.store(scratch_evens[2] + scratch_odds_n1[2], 2);
+        output.store(scratch_evens[3] + scratch_odds_n1[3], 3);
+        output.store(scratch_evens[4] + scratch_odds_n1[4], 4);
+        output.store(scratch_evens[5] + scratch_odds_n1[5], 5);
+        output.store(scratch_evens[6] + scratch_odds_n1[6], 6);
+        output.store(scratch_evens[7] + scratch_odds_n1[7], 7);
+        output.store(scratch_evens[8] + scratch_odds_n3[0], 8);
+        output.store(scratch_evens[9] + scratch_odds_n3[1], 9);
+        output.store(scratch_evens[10] + scratch_odds_n3[2], 10);
+        output.store(scratch_evens[11] + scratch_odds_n3[3], 11);
+        output.store(scratch_evens[12] + scratch_odds_n3[4], 12);
+        output.store(scratch_evens[13] + scratch_odds_n3[5], 13);
+        output.store(scratch_evens[14] + scratch_odds_n3[6], 14);
+        output.store(scratch_evens[15] + scratch_odds_n3[7], 15);
+        output.store(scratch_evens[0] - scratch_odds_n1[0], 16);
+        output.store(scratch_evens[1] - scratch_odds_n1[1], 17);
+        output.store(scratch_evens[2] - scratch_odds_n1[2], 18);
+        output.store(scratch_evens[3] - scratch_odds_n1[3], 19);
+        output.store(scratch_evens[4] - scratch_odds_n1[4], 20);
+        output.store(scratch_evens[5] - scratch_odds_n1[5], 21);
+        output.store(scratch_evens[6] - scratch_odds_n1[6], 22);
+        output.store(scratch_evens[7] - scratch_odds_n1[7], 23);
+        output.store(scratch_evens[8] - scratch_odds_n3[0], 24);
+        output.store(scratch_evens[9] - scratch_odds_n3[1], 25);
+        output.store(scratch_evens[10] - scratch_odds_n3[2], 26);
+        output.store(scratch_evens[11] - scratch_odds_n3[3], 27);
+        output.store(scratch_evens[12] - scratch_odds_n3[4], 28);
+        output.store(scratch_evens[13] - scratch_odds_n3[5], 29);
+        output.store(scratch_evens[14] - scratch_odds_n3[6], 30);
+        output.store(scratch_evens[15] - scratch_odds_n3[7], 31);
     }
 }
 
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use crate::algorithm::DFT;
-    use crate::test_utils::{check_fft_algorithm, compare_vectors, random_signal};
-    use num_traits::Zero;
+    use crate::test_utils::check_fft_algorithm;
 
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
@@ -5840,14 +5906,10 @@ mod unit_tests {
             #[test]
             fn $test_name() {
                 let butterfly = $struct_name::new(false);
-
-                check_fft_algorithm(&butterfly, $size, false);
-                check_butterfly(&butterfly, $size, false);
+                check_fft_algorithm::<f32>(&butterfly, $size, false);
 
                 let butterfly_inverse = $struct_name::new(true);
-
-                check_fft_algorithm(&butterfly_inverse, $size, true);
-                check_butterfly(&butterfly_inverse, $size, true);
+                check_fft_algorithm::<f32>(&butterfly_inverse, $size, true);
             }
         };
     }
@@ -5867,53 +5929,4 @@ mod unit_tests {
     test_butterfly_func!(test_butterfly29, Butterfly29, 29);
     test_butterfly_func!(test_butterfly31, Butterfly31, 31);
     test_butterfly_func!(test_butterfly32, Butterfly32, 32);
-
-    fn check_butterfly(butterfly: &dyn FFTButterfly<f32>, size: usize, inverse: bool) {
-        assert_eq!(
-            butterfly.len(),
-            size,
-            "Butterfly algorithm reported wrong size"
-        );
-        assert_eq!(
-            butterfly.is_inverse(),
-            inverse,
-            "Butterfly algorithm reported wrong inverse value"
-        );
-
-        let n = 5;
-
-        //test the forward direction
-        let dft = DFT::new(size, inverse);
-
-        // set up buffers
-        let mut expected_input = random_signal(size * n);
-        let mut expected_output = vec![Zero::zero(); size * n];
-
-        let mut inplace_buffer = expected_input.clone();
-        let mut inplace_multi_buffer = expected_input.clone();
-
-        // perform the test
-        dft.process_multi(&mut expected_input, &mut expected_output);
-
-        unsafe {
-            butterfly.process_multi_inplace(&mut inplace_multi_buffer);
-        }
-
-        for chunk in inplace_buffer.chunks_exact_mut(size) {
-            unsafe { butterfly.process_inplace(chunk) };
-        }
-
-        assert!(
-            compare_vectors(&expected_output, &inplace_buffer),
-            "process_inplace() failed, length = {}, inverse = {}",
-            size,
-            inverse
-        );
-        assert!(
-            compare_vectors(&expected_output, &inplace_multi_buffer),
-            "process_multi_inplace() failed, length = {}, inverse = {}",
-            size,
-            inverse
-        );
-    }
 }

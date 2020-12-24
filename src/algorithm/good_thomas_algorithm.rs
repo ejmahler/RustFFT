@@ -1,29 +1,29 @@
+use std::cmp::max;
 use std::sync::Arc;
 
 use num_complex::Complex;
+use num_integer::Integer;
 use strength_reduce::StrengthReducedUsize;
 use transpose;
 
-use crate::common::{verify_length, verify_length_divisible, FFTnum};
+use crate::common::FFTnum;
 
 use crate::array_utils;
-use crate::math_utils;
 
-use crate::algorithm::butterflies::FFTButterfly;
-use crate::{IsInverse, Length, FFT};
+use crate::{Fft, IsInverse, Length};
 
 /// Implementation of the [Good-Thomas Algorithm (AKA Prime Factor Algorithm)](https://en.wikipedia.org/wiki/Prime-factor_FFT_algorithm)
 ///
 /// This algorithm factors a size n FFT into n1 * n2, where GCD(n1, n2) == 1
 ///
-/// Conceptually, this algorithm is very similar to the Mixed-Radix FFT, except because GCD(n1, n2) == 1 we can do some
+/// Conceptually, this algorithm is very similar to the Mixed-Radix except because GCD(n1, n2) == 1 we can do some
 /// number theory trickery to reduce the number of floating-point multiplications and additions. Additionally, It can
 /// be faster than Mixed-Radix at sizes below 10,000 or so.
 ///
 /// ~~~
 /// // Computes a forward FFT of size 1200, using the Good-Thomas Algorithm
 /// use rustfft::algorithm::GoodThomasAlgorithm;
-/// use rustfft::{FFT, FFTplanner};
+/// use rustfft::{Fft, FftPlanner};
 /// use rustfft::num_complex::Complex;
 /// use rustfft::num_traits::Zero;
 ///
@@ -32,7 +32,7 @@ use crate::{IsInverse, Length, FFT};
 ///
 /// // we need to find an n1 and n2 such that n1 * n2 == 1200 and GCD(n1, n2) == 1
 /// // n1 = 48 and n2 = 25 satisfies this
-/// let mut planner = FFTplanner::new(false);
+/// let mut planner = FftPlanner::new(false);
 /// let inner_fft_n1 = planner.plan_fft(48);
 /// let inner_fft_n2 = planner.plan_fft(25);
 ///
@@ -42,14 +42,18 @@ use crate::{IsInverse, Length, FFT};
 /// ~~~
 pub struct GoodThomasAlgorithm<T> {
     width: usize,
-    width_size_fft: Arc<dyn FFT<T>>,
+    width_size_fft: Arc<dyn Fft<T>>,
 
     height: usize,
-    height_size_fft: Arc<dyn FFT<T>>,
+    height_size_fft: Arc<dyn Fft<T>>,
 
     reduced_width: StrengthReducedUsize,
     reduced_width_plus_one: StrengthReducedUsize,
 
+    inplace_scratch_len: usize,
+    outofplace_scratch_len: usize,
+
+    len: usize,
     inverse: bool,
 }
 
@@ -57,7 +61,7 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
     ///
     /// GCD(width_fft.len(), height_fft.len()) must be equal to 1
-    pub fn new(mut width_fft: Arc<dyn FFT<T>>, mut height_fft: Arc<dyn FFT<T>>) -> Self {
+    pub fn new(mut width_fft: Arc<dyn Fft<T>>, mut height_fft: Arc<dyn Fft<T>>) -> Self {
         assert_eq!(
             width_fft.is_inverse(), height_fft.is_inverse(),
             "width_fft and height_fft must both be inverse, or neither. got width inverse={}, height inverse={}",
@@ -80,6 +84,21 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
             std::mem::swap(&mut width_fft, &mut height_fft);
         }
 
+        let len = width * height;
+        let width_inplace_scratch = height_fft.get_inplace_scratch_len();
+        let height_inplace_scratch = width_fft.get_inplace_scratch_len();
+        let height_outofplace_scratch = width_fft.get_out_of_place_scratch_len();
+
+        let outofplace_scratch = max(height_inplace_scratch, width_inplace_scratch);
+        let inplace_extra = max(
+            if width_inplace_scratch > len {
+                width_inplace_scratch
+            } else {
+                0
+            },
+            height_outofplace_scratch,
+        );
+
         Self {
             width,
             width_size_fft: width_fft,
@@ -90,11 +109,19 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
             reduced_width: StrengthReducedUsize::new(width),
             reduced_width_plus_one: StrengthReducedUsize::new(width + 1),
 
+            inplace_scratch_len: len + inplace_extra,
+            outofplace_scratch_len: if outofplace_scratch > len {
+                outofplace_scratch
+            } else {
+                0
+            },
+
+            len,
             inverse: is_inverse,
         }
     }
 
-    fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+    fn reindex_input(&self, source: &[Complex<T>], destination: &mut [Complex<T>]) {
         // A critical part of the good-thomas algorithm is re-indexing the inputs and outputs.
         // To remap the inputs, we will use the CRT mapping, paired with the normal transpose we'd do for mixed radix.
         //
@@ -109,43 +136,39 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
         // 5: The first index of each row will be the final index of the previous row plus one, but because of our incrementing (width+1) inside the loop, we overshot, so at the end of the row, subtract width from output_index
         //
         // This ends up producing the same result as computing the multiplicative inverse of width mod height and etc by the CRT mapping, but with only one integer division per row, instead of one per element.
-        let mut output_index = 0;
-        for mut input_row in input.chunks_exact(self.width) {
+        let mut destination_index = 0;
+        for mut source_row in source.chunks_exact(self.width) {
             let increments_until_cycle =
-                1 + (self.len() - output_index) / self.reduced_width_plus_one;
+                1 + (self.len() - destination_index) / self.reduced_width_plus_one;
 
             // If we will have to rollover output_index on this row, do it in a separate loop
             if increments_until_cycle < self.width {
-                let (pre_cycle_row, post_cycle_row) = input_row.split_at(increments_until_cycle);
+                let (pre_cycle_row, post_cycle_row) = source_row.split_at(increments_until_cycle);
 
                 for input_element in pre_cycle_row {
-                    output[output_index] = *input_element;
-                    output_index += self.reduced_width_plus_one.get();
+                    destination[destination_index] = *input_element;
+                    destination_index += self.reduced_width_plus_one.get();
                 }
 
                 // Store the split slice back to input_row, os that outside the loop, we can finish the job of iterating the row
-                input_row = post_cycle_row;
-                output_index -= self.len();
+                source_row = post_cycle_row;
+                destination_index -= self.len();
             }
 
             // Loop over the entire row (if we did not roll over) or what's left of the row (if we did) and keep incrementing output_row
-            for input_element in input_row {
-                output[output_index] = *input_element;
-                output_index += self.reduced_width_plus_one.get();
+            for input_element in source_row {
+                destination[destination_index] = *input_element;
+                destination_index += self.reduced_width_plus_one.get();
             }
 
-            output_index -= self.width;
+            // The first index of the next will be the final index this row, plus one.
+            // But because of our incrementing (width+1) inside the loop above, we overshot, so subtract width, and we'll get (width + 1) - width = 1
+            destination_index -= self.width;
         }
+    }
 
-        // run FFTs of size `width`
-        self.width_size_fft.process_multi(output, input);
-
-        // transpose
-        transpose::transpose(input, output, self.width, self.height);
-
-        // run FFTs of size 'height'
-        self.height_size_fft.process_multi(output, input);
-
+    fn reindex_output(&self, source: &[Complex<T>], destination: &mut [Complex<T>]) {
+        // A critical part of the good-thomas algorithm is re-indexing the inputs and outputs.
         // To remap the outputs, we will use the ruritanian mapping, paired with the normal transpose we'd do for mixed radix.
         //
         // The algorithm for the ruritanian mapping will work like this:
@@ -156,73 +179,109 @@ impl<T: FFTnum> GoodThomasAlgorithm<T> {
         // 5: When we hit the end of the row, continue from the beginning of the row, continuing to increment the output index by self.width
         //
         // This achieves the same result as the modular arithmetic ofthe ruritanian mapping, but with only one integer divison per row, instead of one per element
-        for (y, input_chunk) in input.chunks_exact(self.height).enumerate() {
+        for (y, source_chunk) in source.chunks_exact(self.height).enumerate() {
             let (quotient, remainder) =
                 StrengthReducedUsize::div_rem(y * self.height, self.reduced_width);
 
             // Compute our base index and starting point in the row
-            let mut output_index = remainder;
+            let mut destination_index = remainder;
             let start_x = self.height - quotient;
 
             // Process the first part of the row
             for x in start_x..self.height {
-                output[output_index] = input_chunk[x];
-                output_index += self.width;
+                destination[destination_index] = source_chunk[x];
+                destination_index += self.width;
             }
 
             // Wrap back around to the beginning of the row and keep incrementing
             for x in 0..start_x {
-                output[output_index] = input_chunk[x];
-                output_index += self.width;
+                destination[destination_index] = source_chunk[x];
+                destination_index += self.width;
             }
         }
     }
-}
 
-impl<T: FFTnum> FFT<T> for GoodThomasAlgorithm<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
+    fn perform_fft_inplace(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        let (scratch, inner_scratch) = scratch.split_at_mut(self.len());
 
-        self.perform_fft(input, output);
+        // Re-index the input, copying from the buffer to the scratch in the process
+        self.reindex_input(buffer, scratch);
+
+        // run FFTs of size `width`
+        let width_scratch = if inner_scratch.len() > buffer.len() {
+            &mut inner_scratch[..]
+        } else {
+            &mut buffer[..]
+        };
+        self.width_size_fft
+            .process_inplace_multi(scratch, width_scratch);
+
+        // transpose
+        transpose::transpose(scratch, buffer, self.width, self.height);
+
+        // run FFTs of size 'height'
+        self.height_size_fft
+            .process_multi(buffer, scratch, inner_scratch);
+
+        // Re-index the output, copying from the scratch to the buffer in the process
+        self.reindex_output(scratch, buffer);
     }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
 
-        for (in_chunk, out_chunk) in input
-            .chunks_exact_mut(self.len())
-            .zip(output.chunks_exact_mut(self.len()))
-        {
-            self.perform_fft(in_chunk, out_chunk);
-        }
+    fn perform_fft_out_of_place(
+        &self,
+        input: &mut [Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) {
+        // Re-index the input, copying from the input to the output in the process
+        self.reindex_input(input, output);
+
+        // run FFTs of size `width`
+        let width_scratch = if scratch.len() > input.len() {
+            &mut scratch[..]
+        } else {
+            &mut input[..]
+        };
+        self.width_size_fft
+            .process_inplace_multi(output, width_scratch);
+
+        // transpose
+        transpose::transpose(output, input, self.width, self.height);
+
+        // run FFTs of size 'height'
+        let height_scratch = if scratch.len() > output.len() {
+            &mut scratch[..]
+        } else {
+            &mut output[..]
+        };
+        self.height_size_fft
+            .process_inplace_multi(input, height_scratch);
+
+        // Re-index the output, copying from the input to the output in the process
+        self.reindex_output(input, output);
     }
 }
-impl<T> Length for GoodThomasAlgorithm<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        self.width * self.height
-    }
-}
-impl<T> IsInverse for GoodThomasAlgorithm<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
+boilerplate_fft!(
+    GoodThomasAlgorithm,
+    |this: &GoodThomasAlgorithm<_>| this.len,
+    |this: &GoodThomasAlgorithm<_>| this.inplace_scratch_len,
+    |this: &GoodThomasAlgorithm<_>| this.outofplace_scratch_len
+);
 
-/// Implementation of the Good-Thomas Algorithm, specialized for the case where both inner FFTs are butterflies
+/// Implementation of the Good-Thomas Algorithm, specialized for smaller input sizes
 ///
 /// This algorithm factors a size n FFT into n1 * n2, where GCD(n1, n2) == 1
 ///
-/// Conceptually, this algorithm is very similar to the Mixed-Radix FFT, except because GCD(n1, n2) == 1 we can do some
-/// number theory trickery to reduce the number of floating-point multiplications and additions. It typically performs
-/// better than Mixed-Radix Double Butterfly Algorithm, especially at small sizes.
+/// Conceptually, this algorithm is very similar to MixedRadix except because GCD(n1, n2) == 1 we can do some
+/// number theory trickery to reduce the number of floating point operations. It typically performs
+/// better than MixedRadixSmall, especially at the smallest sizes.
 ///
 /// ~~~
 /// // Computes a forward FFT of size 56, using the Good-Thoma Butterfly Algorithm
 /// use std::sync::Arc;
-/// use rustfft::algorithm::GoodThomasAlgorithmDoubleButterfly;
+/// use rustfft::algorithm::GoodThomasAlgorithmSmall;
 /// use rustfft::algorithm::butterflies::{Butterfly7, Butterfly8};
-/// use rustfft::FFT;
+/// use rustfft::Fft;
 /// use rustfft::num_complex::Complex;
 /// use rustfft::num_traits::Zero;
 ///
@@ -235,26 +294,26 @@ impl<T> IsInverse for GoodThomasAlgorithm<T> {
 /// let inner_fft_n2 = Arc::new(Butterfly8::new(false));
 ///
 /// // the good-thomas FFT length will be inner_fft_n1.len() * inner_fft_n2.len() = 56
-/// let fft = GoodThomasAlgorithmDoubleButterfly::new(inner_fft_n1, inner_fft_n2);
+/// let fft = GoodThomasAlgorithmSmall::new(inner_fft_n1, inner_fft_n2);
 /// fft.process(&mut input, &mut output);
 /// ~~~
-pub struct GoodThomasAlgorithmDoubleButterfly<T> {
+pub struct GoodThomasAlgorithmSmall<T> {
     width: usize,
-    width_size_fft: Arc<dyn FFTButterfly<T>>,
+    width_size_fft: Arc<dyn Fft<T>>,
 
     height: usize,
-    height_size_fft: Arc<dyn FFTButterfly<T>>,
+    height_size_fft: Arc<dyn Fft<T>>,
 
     input_output_map: Box<[usize]>,
 
     inverse: bool,
 }
 
-impl<T: FFTnum> GoodThomasAlgorithmDoubleButterfly<T> {
+impl<T: FFTnum> GoodThomasAlgorithmSmall<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
     ///
     /// GCD(n1.len(), n2.len()) must be equal to 1
-    pub fn new(width_fft: Arc<dyn FFTButterfly<T>>, height_fft: Arc<dyn FFTButterfly<T>>) -> Self {
+    pub fn new(width_fft: Arc<dyn Fft<T>>, height_fft: Arc<dyn Fft<T>>) -> Self {
         assert_eq!(
             width_fft.is_inverse(), height_fft.is_inverse(),
             "n1_fft and height_fft must both be inverse, or neither. got width inverse={}, height inverse={}",
@@ -264,23 +323,24 @@ impl<T: FFTnum> GoodThomasAlgorithmDoubleButterfly<T> {
         let height = height_fft.len();
         let len = width * height;
 
-        // compute the nultiplicative inverse of n1 mod height and vice versa
-        let (gcd, mut width_inverse, mut height_inverse) =
-            math_utils::extended_euclidean_algorithm(width as i64, height as i64);
-        assert!(
-            gcd == 1,
-            "Invalid input n1 and height to Good-Thomas Algorithm: ({},{}): Inputs must be coprime",
-            width,
-            height
-        );
+        // compute the multiplicative inverse of width mod height and vice versa. x will be width mod height, and y will be height mod width
+        let gcd_data = i64::extended_gcd(&(width as i64), &(height as i64));
+        assert!(gcd_data.gcd == 1,
+                "Invalid input width and height to Good-Thomas Algorithm: ({},{}): Inputs must be coprime",
+                width,
+                height);
 
-        // width_inverse or height_inverse might be negative, make it positive
-        if width_inverse < 0 {
-            width_inverse += height as i64;
-        }
-        if height_inverse < 0 {
-            height_inverse += width as i64;
-        }
+        // width_inverse or height_inverse might be negative, make it positive by wrapping
+        let width_inverse = if gcd_data.x >= 0 {
+            gcd_data.x
+        } else {
+            gcd_data.x + height as i64
+        } as usize;
+        let height_inverse = if gcd_data.y >= 0 {
+            gcd_data.y
+        } else {
+            gcd_data.y + width as i64
+        } as usize;
 
         // NOTE: we are precomputing the input and output reordering indexes, because benchmarking shows that it's 10-20% faster
         // If we wanted to optimize for memory use or setup time instead of multiple-FFT speed, we could compute these on the fly in the perform_fft() method
@@ -306,7 +366,16 @@ impl<T: FFTnum> GoodThomasAlgorithmDoubleButterfly<T> {
         }
     }
 
-    unsafe fn perform_fft(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
+    fn perform_fft_out_of_place(
+        &self,
+        input: &mut [Complex<T>],
+        output: &mut [Complex<T>],
+        _scratch: &mut [Complex<T>],
+    ) {
+        // These asserts are for the unsafe blocks down below. we're relying on the optimizer to get rid of this assert
+        assert_eq!(self.len(), input.len());
+        assert_eq!(self.len(), output.len());
+
         let (input_map, output_map) = self.input_output_map.split_at(self.len());
 
         // copy the input using our reordering mapping
@@ -315,56 +384,59 @@ impl<T: FFTnum> GoodThomasAlgorithmDoubleButterfly<T> {
         }
 
         // run FFTs of size `width`
-        self.width_size_fft.process_multi_inplace(output);
+        self.width_size_fft.process_inplace_multi(output, input);
 
         // transpose
-        array_utils::transpose_small(self.width, self.height, output, input);
+        unsafe { array_utils::transpose_small(self.width, self.height, output, input) };
 
         // run FFTs of size 'height'
-        self.height_size_fft.process_multi_inplace(input);
+        self.height_size_fft.process_inplace_multi(input, output);
 
         // copy to the output, using our output redordeing mapping
         for (input_element, &output_index) in input.iter().zip(output_map.iter()) {
             output[output_index] = *input_element;
         }
     }
-}
 
-impl<T: FFTnum> FFT<T> for GoodThomasAlgorithmDoubleButterfly<T> {
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length(input, output, self.len());
+    fn perform_fft_inplace(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        // These asserts are for the unsafe blocks down below. we're relying on the optimizer to get rid of this assert
+        assert_eq!(self.len(), buffer.len());
+        assert_eq!(self.len(), scratch.len());
 
-        unsafe { self.perform_fft(input, output) };
-    }
-    fn process_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        verify_length_divisible(input, output, self.len());
+        let (input_map, output_map) = self.input_output_map.split_at(self.len());
 
-        for (in_chunk, out_chunk) in input
-            .chunks_exact_mut(self.len())
-            .zip(output.chunks_exact_mut(self.len()))
-        {
-            unsafe { self.perform_fft(in_chunk, out_chunk) };
+        // copy the input using our reordering mapping
+        for (output_element, &input_index) in scratch.iter_mut().zip(input_map.iter()) {
+            *output_element = buffer[input_index];
+        }
+
+        // run FFTs of size `width`
+        self.width_size_fft.process_inplace_multi(scratch, buffer);
+
+        // transpose
+        unsafe { array_utils::transpose_small(self.width, self.height, scratch, buffer) };
+
+        // run FFTs of size 'height'
+        self.height_size_fft.process_multi(buffer, scratch, &mut []);
+
+        // copy to the output, using our output redordeing mapping
+        for (input_element, &output_index) in scratch.iter().zip(output_map.iter()) {
+            buffer[output_index] = *input_element;
         }
     }
 }
-impl<T> Length for GoodThomasAlgorithmDoubleButterfly<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        self.width * self.height
-    }
-}
-impl<T> IsInverse for GoodThomasAlgorithmDoubleButterfly<T> {
-    #[inline(always)]
-    fn is_inverse(&self) -> bool {
-        self.inverse
-    }
-}
+boilerplate_fft!(
+    GoodThomasAlgorithmSmall,
+    |this: &GoodThomasAlgorithmSmall<_>| this.width * this.height,
+    |this: &GoodThomasAlgorithmSmall<_>| this.len(),
+    |_| 0
+);
 
 #[cfg(test)]
 mod unit_tests {
     use super::*;
     use crate::algorithm::DFT;
-    use crate::test_utils::{check_fft_algorithm, make_butterfly};
+    use crate::test_utils::check_fft_algorithm;
     use num_integer::gcd;
     use std::sync::Arc;
 
@@ -381,32 +453,32 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_good_thomas_double_butterfly() {
+    fn test_good_thomas_small() {
         let butterfly_sizes = [2, 3, 4, 5, 6, 7, 8, 16];
         for width in &butterfly_sizes {
             for height in &butterfly_sizes {
                 if gcd(*width, *height) == 1 {
-                    test_good_thomas_butterfly_with_lengths(*width, *height, false);
-                    test_good_thomas_butterfly_with_lengths(*width, *height, true);
+                    test_good_thomas_small_with_lengths(*width, *height, false);
+                    test_good_thomas_small_with_lengths(*width, *height, true);
                 }
             }
         }
     }
 
     fn test_good_thomas_with_lengths(width: usize, height: usize, inverse: bool) {
-        let width_fft = Arc::new(DFT::new(width, inverse)) as Arc<dyn FFT<f32>>;
-        let height_fft = Arc::new(DFT::new(height, inverse)) as Arc<dyn FFT<f32>>;
+        let width_fft = Arc::new(DFT::new(width, inverse)) as Arc<dyn Fft<f32>>;
+        let height_fft = Arc::new(DFT::new(height, inverse)) as Arc<dyn Fft<f32>>;
 
         let fft = GoodThomasAlgorithm::new(width_fft, height_fft);
 
         check_fft_algorithm(&fft, width * height, inverse);
     }
 
-    fn test_good_thomas_butterfly_with_lengths(width: usize, height: usize, inverse: bool) {
-        let width_fft = make_butterfly(width, inverse);
-        let height_fft = make_butterfly(height, inverse);
+    fn test_good_thomas_small_with_lengths(width: usize, height: usize, inverse: bool) {
+        let width_fft = Arc::new(DFT::new(width, inverse)) as Arc<dyn Fft<f32>>;
+        let height_fft = Arc::new(DFT::new(height, inverse)) as Arc<dyn Fft<f32>>;
 
-        let fft = GoodThomasAlgorithmDoubleButterfly::new(width_fft, height_fft);
+        let fft = GoodThomasAlgorithmSmall::new(width_fft, height_fft);
 
         check_fft_algorithm(&fft, width * height, inverse);
     }
@@ -416,8 +488,8 @@ mod unit_tests {
         let width = 15;
         for height in 3..width {
             if gcd(width, height) == 1 {
-                let width_fft = Arc::new(DFT::new(width, false)) as Arc<dyn FFT<f32>>;
-                let height_fft = Arc::new(DFT::new(height, false)) as Arc<dyn FFT<f32>>;
+                let width_fft = Arc::new(DFT::new(width, false)) as Arc<dyn Fft<f32>>;
+                let height_fft = Arc::new(DFT::new(height, false)) as Arc<dyn Fft<f32>>;
 
                 let fft = GoodThomasAlgorithm::new(width_fft, height_fft);
 

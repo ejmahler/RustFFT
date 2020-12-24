@@ -1,13 +1,11 @@
 use num_complex::Complex;
-use num_traits::Zero;
+use num_traits::{Float, One, Zero};
 
-use std::sync::Arc;
-
-use rand::distributions::{Distribution, Uniform};
+use rand::distributions::{uniform::SampleUniform, Distribution, Uniform};
 use rand::{rngs::StdRng, SeedableRng};
 
-use crate::algorithm::{butterflies, DFT};
-use crate::FFT;
+use crate::Fft;
+use crate::{algorithm::DFT, FFTnum};
 
 /// The seed for the random number generator used to generate
 /// random signals. It's defined here so that we have deterministic
@@ -16,80 +14,224 @@ const RNG_SEED: [u8; 32] = [
     1, 9, 1, 0, 1, 1, 4, 3, 1, 4, 9, 8, 4, 1, 4, 8, 2, 8, 1, 2, 2, 2, 6, 1, 2, 3, 4, 5, 6, 7, 8, 9,
 ];
 
-pub fn random_signal(length: usize) -> Vec<Complex<f32>> {
+pub fn random_signal<T: FFTnum + SampleUniform>(length: usize) -> Vec<Complex<T>> {
     let mut sig = Vec::with_capacity(length);
-    let normal_dist = Uniform::new(0.0, 10.0);
+    let normal_dist: Uniform<T> = Uniform::new(T::zero(), T::from_f32(10.0).unwrap());
     let mut rng: StdRng = SeedableRng::from_seed(RNG_SEED);
     for _ in 0..length {
         sig.push(Complex {
-            re: (normal_dist.sample(&mut rng) as f32),
-            im: (normal_dist.sample(&mut rng) as f32),
+            re: normal_dist.sample(&mut rng),
+            im: normal_dist.sample(&mut rng),
         });
     }
     return sig;
 }
 
-pub fn compare_vectors(vec1: &[Complex<f32>], vec2: &[Complex<f32>]) -> bool {
+pub fn compare_vectors<T: FFTnum + Float>(vec1: &[Complex<T>], vec2: &[Complex<T>]) -> bool {
     assert_eq!(vec1.len(), vec2.len());
-    let mut sse = 0f32;
+    let mut error = T::zero();
     for (&a, &b) in vec1.iter().zip(vec2.iter()) {
-        sse = sse + (a - b).norm();
+        error = error + (a - b).norm();
     }
-    return (sse / vec1.len() as f32) < 0.1f32;
+    return (error.to_f64().unwrap() / vec1.len() as f64) < 0.1f64;
 }
 
-pub fn check_fft_algorithm(fft: &dyn FFT<f32>, size: usize, inverse: bool) {
-    assert_eq!(fft.len(), size, "Algorithm reported incorrect size");
+#[allow(unused)]
+fn transppose_diagnostic<T: FFTnum + Float>(expected: &[Complex<T>], actual: &[Complex<T>]) {
+    for (i, (&e, &a)) in expected.iter().zip(actual.iter()).enumerate() {
+        if (e - a).norm().to_f32().unwrap() > 0.01 {
+            if let Some(found_index) = expected
+                .iter()
+                .position(|&ev| (ev - a).norm().to_f32().unwrap() < 0.01)
+            {
+                println!("{} incorrectly contained {}", i, found_index);
+            } else {
+                println!("{} X", i);
+            }
+        }
+    }
+}
+
+pub fn check_fft_algorithm<T: FFTnum + Float + SampleUniform>(
+    fft: &dyn Fft<T>,
+    len: usize,
+    inverse: bool,
+) {
+    assert_eq!(
+        fft.len(),
+        len,
+        "Algorithm reported incorrect size. Expected {}, got {}",
+        len,
+        fft.len()
+    );
     assert_eq!(
         fft.is_inverse(),
         inverse,
         "Algorithm reported incorrect inverse value"
     );
 
-    let n = 5;
+    let n = 1;
 
     //test the forward direction
-    let dft = DFT::new(size, inverse);
+    let dft = DFT::new(len, inverse);
+
+    let dirty_scratch_value = Complex::one() * T::from_i32(100).unwrap();
 
     // set up buffers
-    let mut expected_input = random_signal(size * n);
-    let mut actual_input = expected_input.clone();
-    let mut multi_input = expected_input.clone();
+    let reference_input = random_signal(len * n);
+    let mut expected_input = reference_input.clone();
+    let mut expected_output = vec![Zero::zero(); len * n];
+    dft.process_multi(&mut expected_input, &mut expected_output, &mut []);
 
-    let mut expected_output = vec![Zero::zero(); size * n];
-    let mut actual_output = expected_output.clone();
-    let mut multi_output = expected_output.clone();
-
-    // perform the test
-    dft.process_multi(&mut expected_input, &mut expected_output);
-    fft.process_multi(&mut multi_input, &mut multi_output);
-
-    for (input_chunk, output_chunk) in actual_input
-        .chunks_exact_mut(size)
-        .zip(actual_output.chunks_exact_mut(size))
+    // test process()
     {
-        fft.process(input_chunk, output_chunk);
+        let mut input = reference_input.clone();
+        let mut output = expected_output.clone();
+
+        for (input_chunk, output_chunk) in input.chunks_mut(len).zip(output.chunks_mut(len)) {
+            fft.process(input_chunk, output_chunk);
+        }
+        dbg!(&expected_output);
+        dbg!(&output);
+        transppose_diagnostic(&expected_output, &output);
+        assert!(
+            compare_vectors(&expected_output, &output),
+            "process() failed, length = {}, inverse = {}",
+            len,
+            inverse
+        );
     }
 
-    //assert!(compare_vectors(&expected_output, &actual_output), "process() failed, length = {}, inverse = {}", size, inverse);
-    assert!(
-        compare_vectors(&expected_output, &multi_output),
-        "process_multi() failed, length = {}, inverse = {}",
-        size,
-        inverse
-    );
-}
+    // test process_with_scratch()
+    {
+        let mut input = reference_input.clone();
+        let mut scratch = vec![Zero::zero(); fft.get_out_of_place_scratch_len()];
+        let mut output = expected_output.clone();
 
-pub fn make_butterfly(len: usize, inverse: bool) -> Arc<dyn butterflies::FFTButterfly<f32>> {
-    match len {
-        2 => Arc::new(butterflies::Butterfly2::new(inverse)),
-        3 => Arc::new(butterflies::Butterfly3::new(inverse)),
-        4 => Arc::new(butterflies::Butterfly4::new(inverse)),
-        5 => Arc::new(butterflies::Butterfly5::new(inverse)),
-        6 => Arc::new(butterflies::Butterfly6::new(inverse)),
-        7 => Arc::new(butterflies::Butterfly7::new(inverse)),
-        8 => Arc::new(butterflies::Butterfly8::new(inverse)),
-        16 => Arc::new(butterflies::Butterfly16::new(inverse)),
-        _ => panic!("Invalid butterfly size: {}", len),
+        for (input_chunk, output_chunk) in input.chunks_mut(len).zip(output.chunks_mut(len)) {
+            fft.process_with_scratch(input_chunk, output_chunk, &mut scratch);
+        }
+        assert!(
+            compare_vectors(&expected_output, &output),
+            "process_with_scratch() failed, length = {}, inverse = {}",
+            len,
+            inverse
+        );
+
+        // make sure this algorithm works correctly with dirty scratch
+        if scratch.len() > 0 {
+            for item in scratch.iter_mut() {
+                *item = dirty_scratch_value;
+            }
+            input.copy_from_slice(&reference_input);
+            for (input_chunk, output_chunk) in input.chunks_mut(len).zip(output.chunks_mut(len)) {
+                fft.process_with_scratch(input_chunk, output_chunk, &mut scratch);
+            }
+            assert!(
+                compare_vectors(&expected_output, &output),
+                "process_with_scratch() failed the 'dirty scratch' test, length = {}, inverse = {}",
+                len,
+                inverse
+            );
+        }
+    }
+
+    // test process_multi()
+    {
+        let mut input = reference_input.clone();
+        let mut scratch = vec![Zero::zero(); fft.get_out_of_place_scratch_len()];
+        let mut output = expected_output.clone();
+
+        fft.process_multi(&mut input, &mut output, &mut scratch);
+        assert!(
+            compare_vectors(&expected_output, &output),
+            "process_multi() failed, length = {}, inverse = {}",
+            len,
+            inverse
+        );
+
+        // make sure this algorithm works correctly with dirty scratch
+        if scratch.len() > 0 {
+            for item in scratch.iter_mut() {
+                *item = dirty_scratch_value;
+            }
+            input.copy_from_slice(&reference_input);
+            fft.process_multi(&mut input, &mut output, &mut scratch);
+
+            assert!(
+                compare_vectors(&expected_output, &output),
+                "process_multi() failed the 'dirty scratch' test, length = {}, inverse = {}",
+                len,
+                inverse
+            );
+        }
+    }
+
+    // test process_inplace()
+    {
+        let mut buffer = reference_input.clone();
+
+        for chunk in buffer.chunks_mut(len) {
+            fft.process_inplace(chunk);
+        }
+        assert!(
+            compare_vectors(&expected_output, &buffer),
+            "process_inplace() failed, length = {}, inverse = {}",
+            len,
+            inverse
+        );
+    }
+
+    // test process_inplace_with_scratch()
+    {
+        let mut buffer = reference_input.clone();
+        let mut scratch = vec![Zero::zero(); fft.get_inplace_scratch_len()];
+
+        for chunk in buffer.chunks_mut(len) {
+            fft.process_inplace_with_scratch(chunk, &mut scratch);
+        }
+        assert!(
+            compare_vectors(&expected_output, &buffer),
+            "process_inplace_with_scratch() failed, length = {}, inverse = {}",
+            len,
+            inverse
+        );
+
+        // make sure this algorithm works correctly with dirty scratch
+        if scratch.len() > 0 {
+            for item in scratch.iter_mut() {
+                *item = dirty_scratch_value;
+            }
+            buffer.copy_from_slice(&reference_input);
+            for chunk in buffer.chunks_mut(len) {
+                fft.process_inplace_with_scratch(chunk, &mut scratch);
+            }
+            assert!(compare_vectors(&expected_output, &buffer), "process_inplace_with_scratch() failed the 'dirty scratch' test, length = {}, inverse = {}", len, inverse);
+        }
+    }
+
+    // test process_inplace_multi()
+    {
+        let mut buffer = reference_input.clone();
+        let mut scratch = vec![Zero::zero(); fft.get_inplace_scratch_len()];
+
+        fft.process_inplace_multi(&mut buffer, &mut scratch);
+        assert!(
+            compare_vectors(&expected_output, &buffer),
+            "process_inplace_multi() failed, length = {}, inverse = {}",
+            len,
+            inverse
+        );
+
+        // make sure this algorithm works correctly with dirty scratch
+        if scratch.len() > 0 {
+            for item in scratch.iter_mut() {
+                *item = dirty_scratch_value;
+            }
+            buffer.copy_from_slice(&reference_input);
+            fft.process_inplace_multi(&mut buffer, &mut scratch);
+
+            assert!(compare_vectors(&expected_output, &buffer), "process_inplace_multi() failed the 'dirty scratch' test, length = {}, inverse = {}", len, inverse);
+        }
     }
 }

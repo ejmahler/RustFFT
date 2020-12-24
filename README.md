@@ -4,9 +4,28 @@
 [![](https://img.shields.io/crates/v/rustfft.svg)](https://crates.io/crates/rustfft)
 [![](https://img.shields.io/crates/l/rustfft.svg)](https://crates.io/crates/rustfft)
 [![](https://docs.rs/rustfft/badge.svg)](https://docs.rs/rustfft/)
-![minimum rustc 1.31](https://img.shields.io/badge/rustc-1.31+-red.svg)
+![minimum rustc nightly](https://img.shields.io/badge/rustc-nightly-red.svg)
 
-RustFFT is a mixed-radix FFT implementation written in Rust. See the [documentation](https://docs.rs/rustfft/) for more details.
+RustFFT is a high-performance FFT library written in pure Rust. See the [documentation](https://docs.rs/rustfft/) for more details.
+
+This is an experimental release of RustFFT that enables AVX acceleration. It currently requires a nightly compiler,
+mainly for the `min_specialization` feature. The eventual plan is to release this experimental version as version 5.0 of RustFFT,
+but that will not happen until it compiles on stable Rust.
+
+No special code is needed to activate AVX: Simply plan a FFT using the FftPlanner on a machine that supports the `avx` and `fma` features.
+
+## Usage
+
+```rust
+// Perform a forward FFT of size 1234
+use rustfft::{FftPlanner, num_complex::Complex};
+
+let mut planner = FftPlanner::new(false);
+let fft = planner.plan_fft(1234);
+
+let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1234];
+fft.process_inplace(&mut buffer);
+```
 
 If you're looking for the experimental AVX-accelerated release, check out the [SIMD branch](https://github.com/ejmahler/RustFFT/tree/simd).
 
@@ -27,7 +46,7 @@ fft.process(&mut input, &mut output);
 
 ## Compatibility
 
-The `rustfft` crate requires rustc 1.31 or greater.
+This experimental version of `rustfft` crate requires nightly Rust.
 
 ## License
 

@@ -1,26 +1,10 @@
-use std::f64;
-
-use num_complex::Complex;
-use num_traits::{FromPrimitive, One};
-
 use crate::common::FFTnum;
+use num_complex::Complex;
 
 pub fn generate_twiddle_factors<T: FFTnum>(fft_len: usize, inverse: bool) -> Vec<Complex<T>> {
     (0..fft_len)
-        .map(|i| single_twiddle(i, fft_len, inverse))
+        .map(|i| T::generate_twiddle_factor(i, fft_len, inverse))
         .collect()
-}
-
-#[inline(always)]
-pub fn single_twiddle<T: FFTnum>(i: usize, fft_len: usize, inverse: bool) -> Complex<T> {
-    let constant = if inverse { 2f64 } else { -2f64 } * f64::consts::PI;
-
-    let c = Complex::from_polar(One::one(), constant * i as f64 / fft_len as f64);
-
-    Complex {
-        re: FromPrimitive::from_f64(c.re).unwrap(),
-        im: FromPrimitive::from_f64(c.im).unwrap(),
-    }
 }
 
 pub fn rotate_90<T: FFTnum>(value: Complex<T>, inverse: bool) -> Complex<T> {
@@ -74,22 +58,6 @@ mod unit_tests {
                 "len = {}",
                 len
             )
-        }
-    }
-
-    #[test]
-    fn test_single() {
-        let len = 20;
-
-        let twiddles: Vec<Complex<f32>> = generate_twiddle_factors(len, false);
-        let twiddles_inverse: Vec<Complex<f32>> = generate_twiddle_factors(len, true);
-
-        for i in 0..len {
-            let single: Complex<f32> = single_twiddle(i, len, false);
-            let single_inverse: Complex<f32> = single_twiddle(i, len, true);
-
-            assert_eq!(single, twiddles[i], "forwards, i = {}", i);
-            assert_eq!(single_inverse, twiddles_inverse[i], "inverse, i = {}", i);
         }
     }
 }

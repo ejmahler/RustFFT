@@ -12,7 +12,6 @@ jobs:
           - stable
           - beta
           - nightly
-          - 1.31.0 
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2

@@ -12,6 +12,70 @@ pub unsafe fn transpose_small<T: Copy>(width: usize, height: usize, input: &[T],
     }
 }
 
+#[derive(Copy, Clone)]
+pub struct RawSlice<T> {
+    ptr: *const T,
+    slice_len: usize,
+}
+impl<T> RawSlice<T> {
+    #[inline(always)]
+    pub fn new(slice: &[T]) -> Self {
+        Self {
+            ptr: slice.as_ptr(),
+            slice_len: slice.len(),
+        }
+    }
+    #[allow(unused)]
+    #[inline(always)]
+    pub fn as_ptr(&self) -> *const T {
+        self.ptr
+    }
+    #[allow(unused)]
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.slice_len
+    }
+}
+impl<T: Copy> RawSlice<T> {
+    #[inline(always)]
+    pub unsafe fn load(&self, index: usize) -> T {
+        debug_assert!(index < self.slice_len);
+        *self.ptr.add(index)
+    }
+}
+
+/// A RawSliceMut is a normal mutable slice, but aliasable. Its functionality is severely limited.
+#[derive(Copy, Clone)]
+pub struct RawSliceMut<T> {
+    ptr: *mut T,
+    slice_len: usize,
+}
+impl<T> RawSliceMut<T> {
+    #[inline(always)]
+    pub fn new(slice: &mut [T]) -> Self {
+        Self {
+            ptr: slice.as_mut_ptr(),
+            slice_len: slice.len(),
+        }
+    }
+
+    #[allow(unused)]
+    #[inline(always)]
+    pub fn as_mut_ptr(&self) -> *mut T {
+        self.ptr
+    }
+    #[allow(unused)]
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.slice_len
+    }
+    #[inline(always)]
+    pub unsafe fn store(&self, value: T, index: usize) {
+        debug_assert!(index < self.slice_len);
+        *self.ptr.add(index) = value;
+    }
+}
+
 #[cfg(test)]
 mod unit_tests {
     use super::*;

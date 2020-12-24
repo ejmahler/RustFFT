@@ -3,22 +3,22 @@
 name = "rustfft"
 version = "4.1.0"
 authors = ["Allen Welkie <allen.welkie at gmail>", "Elliott Mahler <join.together at gmail>"]
+edition = "2018"
 
-description = "Compute FFTs of any size in O(nlogn) time, in pure Rust."
+description = "High-performance FFT library written in pure Rust."
 documentation = "https://docs.rs/rustfft/"
 repository = "https://github.com/ejmahler/RustFFT"
 keywords = ["fft", "dft", "discrete", "fourier", "transform"]
 categories = ["algorithms", "compression", "multimedia::encoding", "science"]
 license = "MIT OR Apache-2.0"
 
-edition = "2018"
-
 [dependencies]
 num-complex = "0.3"
-num-integer = "0.1.43"
 num-traits = "0.2"
+num-integer = "^0.1.40"
 strength_reduce = "^0.2.1"
 transpose = "0.2"
+primal-check = "0.3.1"
 
 [dev-dependencies]
 rand = "0.6"
