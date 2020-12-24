@@ -7,7 +7,7 @@ use rand::distributions::{Distribution, Uniform};
 use rand::{rngs::StdRng, SeedableRng};
 
 use crate::algorithm::{butterflies, DFT};
-use crate::FFT;
+use crate::Fft;
 
 /// The seed for the random number generator used to generate
 /// random signals. It's defined here so that we have deterministic
@@ -38,7 +38,7 @@ pub fn compare_vectors(vec1: &[Complex<f32>], vec2: &[Complex<f32>]) -> bool {
     return (sse / vec1.len() as f32) < 0.1f32;
 }
 
-pub fn check_fft_algorithm(fft: &dyn FFT<f32>, size: usize, inverse: bool) {
+pub fn check_fft_algorithm(fft: &dyn Fft<f32>, size: usize, inverse: bool) {
     assert_eq!(fft.len(), size, "Algorithm reported incorrect size");
     assert_eq!(
         fft.is_inverse(),

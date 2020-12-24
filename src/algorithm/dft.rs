@@ -4,7 +4,7 @@ use num_traits::Zero;
 use crate::common::{verify_length, verify_length_divisible, FFTnum};
 
 use crate::twiddles;
-use crate::{IsInverse, Length, FFT};
+use crate::{IsInverse, Length, Fft};
 
 /// Naive O(n^2 ) Discrete Fourier Transform implementation
 ///
@@ -60,7 +60,7 @@ impl<T: FFTnum> DFT<T> {
     }
 }
 
-impl<T: FFTnum> FFT<T> for DFT<T> {
+impl<T: FFTnum> Fft<T> for DFT<T> {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         verify_length(input, output, self.len());
 

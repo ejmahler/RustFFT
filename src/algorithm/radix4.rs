@@ -7,7 +7,7 @@ use crate::algorithm::butterflies::{
     Butterfly16, Butterfly2, Butterfly4, Butterfly8, FFTButterfly,
 };
 use crate::twiddles;
-use crate::{IsInverse, Length, FFT};
+use crate::{IsInverse, Length, Fft};
 
 /// FFT algorithm optimized for power-of-two sizes
 ///
@@ -131,7 +131,7 @@ impl<T: FFTnum> Radix4<T> {
     }
 }
 
-impl<T: FFTnum> FFT<T> for Radix4<T> {
+impl<T: FFTnum> Fft<T> for Radix4<T> {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         verify_length(input, output, self.len());
 

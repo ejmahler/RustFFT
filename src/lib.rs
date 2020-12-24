@@ -64,7 +64,7 @@ mod twiddles;
 use num_complex::Complex;
 
 pub use crate::common::FFTnum;
-pub use crate::plan::FFTplanner;
+pub use crate::plan::FftPlanner;
 
 /// A trait that allows FFT algorithms to report their expected input/output size
 pub trait Length {
@@ -79,7 +79,7 @@ pub trait IsInverse {
 }
 
 /// An umbrella trait for all available FFT algorithms
-pub trait FFT<T: FFTnum>: Length + IsInverse + Sync + Send {
+pub trait Fft<T: FFTnum>: Length + IsInverse + Sync + Send {
     /// Computes an FFT on the `input` buffer and places the result in the `output` buffer.
     ///
     /// The output is not normalized. Callers must manually normalize the results by scaling each element by

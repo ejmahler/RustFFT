@@ -11,7 +11,7 @@ use rustfft::num_traits::Zero;
 use rustfft::{
     algorithm::{Bluesteins, Radix4},
     num_complex::Complex,
-    FFTnum, FFTplanner, FFT,
+    FFTnum, FftPlanner, Fft,
 };
 
 use rand::distributions::{uniform::SampleUniform, Distribution, Uniform};
@@ -35,14 +35,14 @@ fn compare_vectors<T: FFTnum + Float>(vec1: &[Complex<T>], vec2: &[Complex<T>]) 
     return (sse / T::from_usize(vec1.len()).unwrap()) < T::from_f32(0.1).unwrap();
 }
 
-fn fft_matches_control<T: FFTnum + Float>(control: Arc<dyn FFT<T>>, input: &[Complex<T>]) -> bool {
+fn fft_matches_control<T: FFTnum + Float>(control: Arc<dyn Fft<T>>, input: &[Complex<T>]) -> bool {
     let mut control_input = input.to_vec();
     let mut test_input = input.to_vec();
 
     let mut control_output = vec![Zero::zero(); control.len()];
     let mut test_output = vec![Zero::zero(); control.len()];
 
-    let mut planner = FFTplanner::new(control.is_inverse());
+    let mut planner = FftPlanner::new(control.is_inverse());
     let fft = planner.plan_fft(control.len());
     assert_eq!(
         fft.len(),
@@ -76,7 +76,7 @@ fn random_signal<T: FFTnum + SampleUniform>(length: usize) -> Vec<Complex<T>> {
 
 // A cache that makes setup for integration tests faster
 struct ControlCache<T: FFTnum> {
-    fft_cache: Vec<Arc<dyn FFT<T>>>,
+    fft_cache: Vec<Arc<dyn Fft<T>>>,
 }
 impl<T: FFTnum> ControlCache<T> {
     pub fn new(max_outer_len: usize, inverse: bool) -> Self {
@@ -87,13 +87,13 @@ impl<T: FFTnum> ControlCache<T> {
             fft_cache: (0..=max_power)
                 .map(|i| {
                     let len = 1 << i;
-                    Arc::new(Radix4::new(len, inverse)) as Arc<dyn FFT<_>>
+                    Arc::new(Radix4::new(len, inverse)) as Arc<dyn Fft<_>>
                 })
                 .collect(),
         }
     }
 
-    pub fn plan_fft(&self, len: usize) -> Arc<dyn FFT<T>> {
+    pub fn plan_fft(&self, len: usize) -> Arc<dyn Fft<T>> {
         let inner_fft_len = (len * 2 - 1).checked_next_power_of_two().unwrap();
         let inner_fft_index = inner_fft_len.trailing_zeros() as usize;
         let inner_fft = Arc::clone(&self.fft_cache[inner_fft_index]);

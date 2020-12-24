@@ -4,7 +4,7 @@ use rustfft::{self, FFTnum, IsInverse, Length};
 
 use std::sync::Arc;
 use test::Bencher;
-use rustfft::FFT;
+use rustfft::Fft;
 use rustfft::num_complex::Complex;
 use rustfft::algorithm::*;
 use rustfft::algorithm::butterflies::*;
@@ -13,7 +13,7 @@ struct Noop {
     len: usize,
     inverse: bool,
 }
-impl<T: FFTnum> FFT<T> for Noop {
+impl<T: FFTnum> Fft<T> for Noop {
     fn process(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>]) {}
     fn process_multi(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>]) {}
 }
@@ -32,7 +32,7 @@ impl IsInverse for Noop {
 /// for a given length
 fn bench_fft(b: &mut Bencher, len: usize) {
 
-    let mut planner = rustfft::FFTplanner::new(false);
+    let mut planner = rustfft::FftPlanner::new(false);
     let fft = planner.plan_fft(len);
 
     let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; len];
@@ -95,11 +95,11 @@ fn bench_fft(b: &mut Bencher, len: usize) {
 /// for a given length, specific to the Good-Thomas algorithm
 fn bench_good_thomas(b: &mut Bencher, width: usize, height: usize) {
 
-    let mut planner = rustfft::FFTplanner::new(false);
+    let mut planner = rustfft::FftPlanner::new(false);
     let width_fft = planner.plan_fft(width);
     let height_fft = planner.plan_fft(height);
 
-    let fft : Arc<dyn FFT<_>> = Arc::new(GoodThomasAlgorithm::new(width_fft, height_fft));
+    let fft : Arc<dyn Fft<_>> = Arc::new(GoodThomasAlgorithm::new(width_fft, height_fft));
 
     let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; width * height];
     let mut spectrum = signal.clone();
@@ -142,11 +142,11 @@ fn bench_good_thomas(b: &mut Bencher, width: usize, height: usize) {
 /// for a given length, specific to the Mixed-Radix algorithm
 fn bench_mixed_radix(b: &mut Bencher, width: usize, height: usize) {
 
-    let mut planner = rustfft::FFTplanner::new(false);
+    let mut planner = rustfft::FftPlanner::new(false);
     let width_fft = planner.plan_fft(width);
     let height_fft = planner.plan_fft(height);
 
-    let fft : Arc<dyn FFT<_>> = Arc::new(MixedRadix::new(width_fft, height_fft));
+    let fft : Arc<dyn Fft<_>> = Arc::new(MixedRadix::new(width_fft, height_fft));
 
     let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; width * height];
     let mut spectrum = signal.clone();
@@ -186,7 +186,7 @@ fn bench_mixed_radix_butterfly(b: &mut Bencher, width: usize, height: usize) {
     let width_fft = plan_butterfly(width);
     let height_fft = plan_butterfly(height);
 
-    let fft : Arc<dyn FFT<_>> = Arc::new(MixedRadixDoubleButterfly::new(width_fft, height_fft));
+    let fft : Arc<dyn Fft<_>> = Arc::new(MixedRadixDoubleButterfly::new(width_fft, height_fft));
 
     let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; width * height];
     let mut spectrum = signal.clone();
@@ -205,7 +205,7 @@ fn bench_good_thomas_butterfly(b: &mut Bencher, width: usize, height: usize) {
     let width_fft = plan_butterfly(width);
     let height_fft = plan_butterfly(height);
 
-    let fft : Arc<dyn FFT<_>> = Arc::new(GoodThomasAlgorithmDoubleButterfly::new(width_fft, height_fft));
+    let fft : Arc<dyn Fft<_>> = Arc::new(GoodThomasAlgorithmDoubleButterfly::new(width_fft, height_fft));
 
     let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; width * height];
     let mut spectrum = signal.clone();
@@ -222,10 +222,10 @@ fn bench_good_thomas_butterfly(b: &mut Bencher, width: usize, height: usize) {
 /// for a given length, specific to Rader's algorithm
 fn bench_raders(b: &mut Bencher, len: usize) {
 
-    let mut planner = rustfft::FFTplanner::new(false);
+    let mut planner = rustfft::FftPlanner::new(false);
     let inner_fft = planner.plan_fft(len - 1);
 
-    let fft : Arc<dyn FFT<_>> = Arc::new(RadersAlgorithm::new(len, inner_fft));
+    let fft : Arc<dyn Fft<_>> = Arc::new(RadersAlgorithm::new(len, inner_fft));
 
     let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; len];
     let mut spectrum = signal.clone();
@@ -245,11 +245,11 @@ fn bench_raders(b: &mut Bencher, len: usize) {
 /// for a given length, specific to Rader's algorithm
 fn bench_raders_setup(b: &mut Bencher, len: usize) {
 
-    let mut planner = rustfft::FFTplanner::new(false);
+    let mut planner = rustfft::FftPlanner::new(false);
     let inner_fft = planner.plan_fft(len - 1);
 
     b.iter(|| { 
-        let fft : Arc<dyn FFT<f32>> = Arc::new(RadersAlgorithm::new(len, Arc::clone(&inner_fft)));
+        let fft : Arc<dyn Fft<f32>> = Arc::new(RadersAlgorithm::new(len, Arc::clone(&inner_fft)));
         test::black_box(fft);
     });
 }
@@ -268,7 +268,7 @@ fn bench_good_thomas_noop(b: &mut Bencher, width: usize, height: usize) {
 
     let width_fft = Arc::new(Noop { len: width, inverse: false });
     let height_fft = Arc::new(Noop { len: height, inverse: false });
-    let fft : Arc<dyn FFT<_>> = Arc::new(GoodThomasAlgorithm::new(width_fft, height_fft));
+    let fft : Arc<dyn Fft<_>> = Arc::new(GoodThomasAlgorithm::new(width_fft, height_fft));
 
     let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; width * height];
     let mut spectrum = signal.clone();
@@ -285,7 +285,7 @@ fn bench_mixed_radix_noop(b: &mut Bencher, width: usize, height: usize) {
 
     let width_fft = Arc::new(Noop { len: width, inverse: false });
     let height_fft = Arc::new(Noop { len: height, inverse: false });
-    let fft : Arc<dyn FFT<_>> = Arc::new(MixedRadix::new(width_fft, height_fft));
+    let fft : Arc<dyn Fft<_>> = Arc::new(MixedRadix::new(width_fft, height_fft));
 
     let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; width * height];
     let mut spectrum = signal.clone();

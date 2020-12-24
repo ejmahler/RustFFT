@@ -6,7 +6,7 @@ use crate::common::FFTnum;
 
 use crate::algorithm::butterflies::*;
 use crate::algorithm::*;
-use crate::FFT;
+use crate::Fft;
 
 use crate::math_utils;
 
@@ -49,13 +49,13 @@ const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the
 ///
 /// Each FFT instance owns `Arc`s to its internal data, rather than borrowing it from the planner, so it's perfectly
 /// safe to drop the planner after creating FFT instances.
-pub struct FFTplanner<T> {
+pub struct FftPlanner<T> {
     inverse: bool,
-    algorithm_cache: HashMap<usize, Arc<dyn FFT<T>>>,
+    algorithm_cache: HashMap<usize, Arc<dyn Fft<T>>>,
     butterfly_cache: HashMap<usize, Arc<dyn FFTButterfly<T>>>,
 }
 
-impl<T: FFTnum> FFTplanner<T> {
+impl<T: FFTnum> FftPlanner<T> {
     /// Creates a new FFT planner.
     ///
     /// If `inverse` is false, this planner will plan forward FFTs. If `inverse` is true, it will plan inverse FFTs.
@@ -69,9 +69,9 @@ impl<T: FFTnum> FFTplanner<T> {
 
     /// Returns a FFT instance which processes signals of size `len`
     /// If this is called multiple times, it will attempt to re-use internal data between instances
-    pub fn plan_fft(&mut self, len: usize) -> Arc<dyn FFT<T>> {
+    pub fn plan_fft(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         if len < 2 {
-            Arc::new(DFT::new(len, self.inverse)) as Arc<dyn FFT<T>>
+            Arc::new(DFT::new(len, self.inverse)) as Arc<dyn Fft<T>>
         } else {
             let factors = math_utils::prime_factors(len);
             self.plan_fft_with_factors(len, &factors)
@@ -105,7 +105,7 @@ impl<T: FFTnum> FFTplanner<T> {
         Arc::clone(instance)
     }
 
-    fn plan_fft_with_factors(&mut self, len: usize, factors: &[usize]) -> Arc<dyn FFT<T>> {
+    fn plan_fft_with_factors(&mut self, len: usize, factors: &[usize]) -> Arc<dyn Fft<T>> {
         if self.algorithm_cache.contains_key(&len) {
             Arc::clone(self.algorithm_cache.get(&len).unwrap())
         } else {
@@ -177,7 +177,7 @@ impl<T: FFTnum> FFTplanner<T> {
         left_factors: &[usize],
         right_len: usize,
         right_factors: &[usize],
-    ) -> Arc<dyn FFT<T>> {
+    ) -> Arc<dyn Fft<T>> {
         let left_is_butterfly = BUTTERFLIES.contains(&left_len);
         let right_is_butterfly = BUTTERFLIES.contains(&right_len);
 
@@ -189,43 +189,43 @@ impl<T: FFTnum> FFTplanner<T> {
             // for butterflies, if gcd is 1, we always want to use good-thomas
             if gcd(left_len, right_len) == 1 {
                 Arc::new(GoodThomasAlgorithmDoubleButterfly::new(left_fft, right_fft))
-                    as Arc<dyn FFT<T>>
+                    as Arc<dyn Fft<T>>
             } else {
-                Arc::new(MixedRadixDoubleButterfly::new(left_fft, right_fft)) as Arc<dyn FFT<T>>
+                Arc::new(MixedRadixDoubleButterfly::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
             }
         } else {
             //neither size is a butterfly, so go with the normal algorithm
             let left_fft = self.plan_fft_with_factors(left_len, left_factors);
             let right_fft = self.plan_fft_with_factors(right_len, right_factors);
 
-            Arc::new(MixedRadix::new(left_fft, right_fft)) as Arc<dyn FFT<T>>
+            Arc::new(MixedRadix::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
         }
     }
 
-    fn plan_fft_single_factor(&mut self, len: usize) -> Arc<dyn FFT<T>> {
+    fn plan_fft_single_factor(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         match len {
-            0 | 1 => Arc::new(DFT::new(len, self.inverse)) as Arc<dyn FFT<T>>,
-            2 => Arc::new(butterflies::Butterfly2::new(self.inverse)) as Arc<dyn FFT<T>>,
-            3 => Arc::new(butterflies::Butterfly3::new(self.inverse)) as Arc<dyn FFT<T>>,
-            4 => Arc::new(butterflies::Butterfly4::new(self.inverse)) as Arc<dyn FFT<T>>,
-            5 => Arc::new(butterflies::Butterfly5::new(self.inverse)) as Arc<dyn FFT<T>>,
-            6 => Arc::new(butterflies::Butterfly6::new(self.inverse)) as Arc<dyn FFT<T>>,
-            7 => Arc::new(butterflies::Butterfly7::new(self.inverse)) as Arc<dyn FFT<T>>,
-            8 => Arc::new(butterflies::Butterfly8::new(self.inverse)) as Arc<dyn FFT<T>>,
-            11 => Arc::new(butterflies::Butterfly11::new(self.inverse)) as Arc<dyn FFT<T>>,
-            13 => Arc::new(butterflies::Butterfly13::new(self.inverse)) as Arc<dyn FFT<T>>,
-            16 => Arc::new(butterflies::Butterfly16::new(self.inverse)) as Arc<dyn FFT<T>>,
-            17 => Arc::new(butterflies::Butterfly17::new(self.inverse)) as Arc<dyn FFT<T>>,
-            19 => Arc::new(butterflies::Butterfly19::new(self.inverse)) as Arc<dyn FFT<T>>,
-            23 => Arc::new(butterflies::Butterfly23::new(self.inverse)) as Arc<dyn FFT<T>>,
-            29 => Arc::new(butterflies::Butterfly29::new(self.inverse)) as Arc<dyn FFT<T>>,
-            31 => Arc::new(butterflies::Butterfly31::new(self.inverse)) as Arc<dyn FFT<T>>,
-            32 => Arc::new(butterflies::Butterfly32::new(self.inverse)) as Arc<dyn FFT<T>>,
+            0 | 1 => Arc::new(DFT::new(len, self.inverse)) as Arc<dyn Fft<T>>,
+            2 => Arc::new(butterflies::Butterfly2::new(self.inverse)) as Arc<dyn Fft<T>>,
+            3 => Arc::new(butterflies::Butterfly3::new(self.inverse)) as Arc<dyn Fft<T>>,
+            4 => Arc::new(butterflies::Butterfly4::new(self.inverse)) as Arc<dyn Fft<T>>,
+            5 => Arc::new(butterflies::Butterfly5::new(self.inverse)) as Arc<dyn Fft<T>>,
+            6 => Arc::new(butterflies::Butterfly6::new(self.inverse)) as Arc<dyn Fft<T>>,
+            7 => Arc::new(butterflies::Butterfly7::new(self.inverse)) as Arc<dyn Fft<T>>,
+            8 => Arc::new(butterflies::Butterfly8::new(self.inverse)) as Arc<dyn Fft<T>>,
+            11 => Arc::new(butterflies::Butterfly11::new(self.inverse)) as Arc<dyn Fft<T>>,
+            13 => Arc::new(butterflies::Butterfly13::new(self.inverse)) as Arc<dyn Fft<T>>,
+            16 => Arc::new(butterflies::Butterfly16::new(self.inverse)) as Arc<dyn Fft<T>>,
+            17 => Arc::new(butterflies::Butterfly17::new(self.inverse)) as Arc<dyn Fft<T>>,
+            19 => Arc::new(butterflies::Butterfly19::new(self.inverse)) as Arc<dyn Fft<T>>,
+            23 => Arc::new(butterflies::Butterfly23::new(self.inverse)) as Arc<dyn Fft<T>>,
+            29 => Arc::new(butterflies::Butterfly29::new(self.inverse)) as Arc<dyn Fft<T>>,
+            31 => Arc::new(butterflies::Butterfly31::new(self.inverse)) as Arc<dyn Fft<T>>,
+            32 => Arc::new(butterflies::Butterfly32::new(self.inverse)) as Arc<dyn Fft<T>>,
             _ => self.plan_prime(len),
         }
     }
 
-    fn plan_prime(&mut self, len: usize) -> Arc<dyn FFT<T>> {
+    fn plan_prime(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         let inner_fft_len_rader = len - 1;
         let factors = math_utils::prime_factors(inner_fft_len_rader);
         // If any of the prime factors is too large, Rader's gets slow and Bluestein's is the better choice
@@ -241,10 +241,10 @@ impl<T: FFTnum> FFTplanner<T> {
                 } else {
                     Arc::new(Radix4::new(inner_fft_len_pow2, self.inverse))
                 };
-            Arc::new(Bluesteins::new(len, inner_fft)) as Arc<dyn FFT<T>>
+            Arc::new(Bluesteins::new(len, inner_fft)) as Arc<dyn Fft<T>>
         } else {
             let inner_fft = self.plan_fft_with_factors(inner_fft_len_rader, &factors);
-            Arc::new(RadersAlgorithm::new(len, inner_fft)) as Arc<dyn FFT<T>>
+            Arc::new(RadersAlgorithm::new(len, inner_fft)) as Arc<dyn Fft<T>>
         }
     }
 }

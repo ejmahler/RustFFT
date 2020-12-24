@@ -8,7 +8,7 @@ use crate::common::{verify_length, verify_length_divisible, FFTnum};
 use crate::algorithm::butterflies::FFTButterfly;
 use crate::array_utils;
 use crate::twiddles;
-use crate::{IsInverse, Length, FFT};
+use crate::{IsInverse, Length, Fft};
 
 /// Implementation of the Mixed-Radix FFT algorithm
 ///
@@ -38,10 +38,10 @@ use crate::{IsInverse, Length, FFT};
 
 pub struct MixedRadix<T> {
     width: usize,
-    width_size_fft: Arc<dyn FFT<T>>,
+    width_size_fft: Arc<dyn Fft<T>>,
 
     height: usize,
-    height_size_fft: Arc<dyn FFT<T>>,
+    height_size_fft: Arc<dyn Fft<T>>,
 
     twiddles: Box<[Complex<T>]>,
     inverse: bool,
@@ -49,7 +49,7 @@ pub struct MixedRadix<T> {
 
 impl<T: FFTnum> MixedRadix<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
-    pub fn new(width_fft: Arc<dyn FFT<T>>, height_fft: Arc<dyn FFT<T>>) -> Self {
+    pub fn new(width_fft: Arc<dyn Fft<T>>, height_fft: Arc<dyn Fft<T>>) -> Self {
         assert_eq!(
             width_fft.is_inverse(), height_fft.is_inverse(),
             "width_fft and height_fft must both be inverse, or neither. got width inverse={}, height inverse={}",
@@ -105,7 +105,7 @@ impl<T: FFTnum> MixedRadix<T> {
         transpose::transpose(input, output, self.width, self.height);
     }
 }
-impl<T: FFTnum> FFT<T> for MixedRadix<T> {
+impl<T: FFTnum> Fft<T> for MixedRadix<T> {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         verify_length(input, output, self.len());
 
@@ -230,7 +230,7 @@ impl<T: FFTnum> MixedRadixDoubleButterfly<T> {
     }
 }
 
-impl<T: FFTnum> FFT<T> for MixedRadixDoubleButterfly<T> {
+impl<T: FFTnum> Fft<T> for MixedRadixDoubleButterfly<T> {
     fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
         verify_length(input, output, self.len());
 
@@ -288,8 +288,8 @@ mod unit_tests {
     }
 
     fn test_mixed_radix_with_lengths(width: usize, height: usize, inverse: bool) {
-        let width_fft = Arc::new(DFT::new(width, inverse)) as Arc<dyn FFT<f32>>;
-        let height_fft = Arc::new(DFT::new(height, inverse)) as Arc<dyn FFT<f32>>;
+        let width_fft = Arc::new(DFT::new(width, inverse)) as Arc<dyn Fft<f32>>;
+        let height_fft = Arc::new(DFT::new(height, inverse)) as Arc<dyn Fft<f32>>;
 
         let fft = MixedRadix::new(width_fft, height_fft);
 
