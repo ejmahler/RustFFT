@@ -1606,20 +1606,19 @@ impl Butterfly512Avx64<f64> {
                 self.twiddles_butterfly16,
                 self.twiddles_butterfly4
             );
-            let mid = MaybeUninit::slice_assume_init_ref(&mid_uninit);
 
             // Apply twiddle factors, transpose, and store. Traditionally we apply all the twiddle factors at once and then do all the transposes at once,
             // But our data is pushing the limit of what we can store in registers, so the idea here is to get the data out the door with as few spills to the stack as possible
             for chunk in 0..4 {
                 let twiddled = [
                     if chunk > 0 {
-                        AvxVector::mul_complex(mid[4 * chunk], twiddle_chunk[4 * chunk - 1])
+                        AvxVector::mul_complex(mid_uninit[4 * chunk].assume_init(), twiddle_chunk[4 * chunk - 1])
                     } else {
-                        mid[4 * chunk]
+                        mid_uninit[4 * chunk].assume_init()
                     },
-                    AvxVector::mul_complex(mid[4 * chunk + 1], twiddle_chunk[4 * chunk]),
-                    AvxVector::mul_complex(mid[4 * chunk + 2], twiddle_chunk[4 * chunk + 1]),
-                    AvxVector::mul_complex(mid[4 * chunk + 3], twiddle_chunk[4 * chunk + 2]),
+                    AvxVector::mul_complex(mid_uninit[4 * chunk + 1].assume_init(), twiddle_chunk[4 * chunk]),
+                    AvxVector::mul_complex(mid_uninit[4 * chunk + 2].assume_init(), twiddle_chunk[4 * chunk + 1]),
+                    AvxVector::mul_complex(mid_uninit[4 * chunk + 3].assume_init(), twiddle_chunk[4 * chunk + 2]),
                 ];
 
                 let transposed = AvxVector::transpose4_packed(twiddled);
