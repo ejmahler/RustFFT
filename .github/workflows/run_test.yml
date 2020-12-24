@@ -48,6 +48,12 @@ jobs:
           override: true
           components: rustfmt
       
+      - name: Print rustfmt version
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: -- --version
+      
       - name: Run cargo fmt
         uses: actions-rs/cargo@v1
         with:
