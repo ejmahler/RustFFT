@@ -1,1 +1,3 @@
+unstable_features = true # for "ignore", remove asap
+
 ignore = ["benches/rustfft.rs"]
