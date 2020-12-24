@@ -44,7 +44,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: stable
+          toolchain: nightly # required for the "ignore" entry in rustfmt.toml, switch to stable asap
           override: true
           components: rustfmt
       
