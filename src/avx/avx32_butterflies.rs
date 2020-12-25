@@ -8,6 +8,9 @@ use crate::common::FFTnum;
 
 use crate::{Fft, IsInverse, Length};
 
+use crate::array_utils;
+
+use super::AvxNum;
 use super::avx32_utils;
 use super::avx_vector;
 use super::avx_vector::{AvxArray, AvxArrayMut, AvxVector, AvxVector128, AvxVector256, Rotation90};
@@ -33,50 +36,13 @@ macro_rules! boilerplate_fft_simd_butterfly {
                 }
             }
         }
-        impl<T: FFTnum> Fft<T> for $struct_name<T> {
-            default fn process_inplace_with_scratch(
-                &self,
-                _buffer: &mut [Complex<T>],
-                _scratch: &mut [Complex<T>],
-            ) {
-                unimplemented!();
-            }
-            default fn process_inplace_multi(
-                &self,
-                _buffer: &mut [Complex<T>],
-                _scratch: &mut [Complex<T>],
-            ) {
-                unimplemented!();
-            }
-            default fn process_with_scratch(
-                &self,
-                _input: &mut [Complex<T>],
-                _output: &mut [Complex<T>],
-                _scratch: &mut [Complex<T>],
-            ) {
-                unimplemented!();
-            }
-            default fn process_multi(
-                &self,
-                _input: &mut [Complex<T>],
-                _output: &mut [Complex<T>],
-                _scratch: &mut [Complex<T>],
-            ) {
-                unimplemented!();
-            }
-            default fn get_inplace_scratch_len(&self) -> usize {
-                unimplemented!();
-            }
-            default fn get_out_of_place_scratch_len(&self) -> usize {
-                unimplemented!();
-            }
-        }
-        impl Fft<f32> for $struct_name<f32> {
+
+        impl<T: AvxNum> Fft<T> for $struct_name<T> {
             fn process_with_scratch(
                 &self,
-                input: &mut [Complex<f32>],
-                output: &mut [Complex<f32>],
-                _scratch: &mut [Complex<f32>],
+                input: &mut [Complex<T>],
+                output: &mut [Complex<T>],
+                _scratch: &mut [Complex<T>],
             ) {
                 assert_eq!(
                     input.len(),
@@ -93,13 +59,19 @@ macro_rules! boilerplate_fft_simd_butterfly {
                     output.len()
                 );
 
-                unsafe { self.perform_fft_f32(RawSlice::new(input), RawSliceMut::new(output)) };
+                unsafe {
+                    // Safety: We're converting from [Complex<T>] to [Compex<f32>] in RawSlice::neW_transmuted
+                    // We only define a constructor fir this struct when T is f32, so we're safe
+                    let input_slice = RawSlice::<Complex<f32>>::new_transmuted(input);
+                    let output_slice = RawSliceMut::<Complex<f32>>::new_transmuted(output);
+                    self.perform_fft_f32(input_slice, output_slice);
+                }
             }
             fn process_multi(
                 &self,
-                input: &mut [Complex<f32>],
-                output: &mut [Complex<f32>],
-                _scratch: &mut [Complex<f32>],
+                input: &mut [Complex<T>],
+                output: &mut [Complex<T>],
+                _scratch: &mut [Complex<T>],
             ) {
                 assert!(
                     input.len() % self.len() == 0,
@@ -120,14 +92,18 @@ macro_rules! boilerplate_fft_simd_butterfly {
                     .zip(output.chunks_exact_mut(self.len()))
                 {
                     unsafe {
-                        self.perform_fft_f32(RawSlice::new(in_chunk), RawSliceMut::new(out_chunk))
-                    };
+                        // Safety: We're converting from [Complex<T>] to [Compex<f32>] in RawSlice::neW_transmuted
+                        // We only define a constructor fir this struct when T is f32, so we're safe
+                        let input_slice = RawSlice::<Complex<f32>>::new_transmuted(in_chunk);
+                        let output_slice = RawSliceMut::<Complex<f32>>::new_transmuted(out_chunk);
+                        self.perform_fft_f32(input_slice, output_slice);
+                    }
                 }
             }
             fn process_inplace_with_scratch(
                 &self,
-                buffer: &mut [Complex<f32>],
-                _scratch: &mut [Complex<f32>],
+                buffer: &mut [Complex<T>],
+                _scratch: &mut [Complex<T>],
             ) {
                 assert_eq!(
                     buffer.len(),
@@ -137,12 +113,18 @@ macro_rules! boilerplate_fft_simd_butterfly {
                     buffer.len()
                 );
 
-                unsafe { self.perform_fft_f32(RawSlice::new(buffer), RawSliceMut::new(buffer)) };
+                unsafe {
+                    // Safety: We're converting from [Complex<T>] to [Compex<f32>] in RawSlice::neW_transmuted
+                    // We only define a constructor fir this struct when T is f32, so we're safe
+                    let input_slice = RawSlice::<Complex<f32>>::new_transmuted(buffer);
+                    let output_slice = RawSliceMut::<Complex<f32>>::new_transmuted(buffer);
+                    self.perform_fft_f32(input_slice, output_slice);
+                }
             }
             fn process_inplace_multi(
                 &self,
-                buffer: &mut [Complex<f32>],
-                _scratch: &mut [Complex<f32>],
+                buffer: &mut [Complex<T>],
+                _scratch: &mut [Complex<T>],
             ) {
                 assert_eq!(
                     buffer.len() % self.len(),
@@ -153,7 +135,13 @@ macro_rules! boilerplate_fft_simd_butterfly {
                 );
 
                 for chunk in buffer.chunks_exact_mut(self.len()) {
-                    unsafe { self.perform_fft_f32(RawSlice::new(chunk), RawSliceMut::new(chunk)) };
+                    unsafe {
+                        // Safety: We're converting from [Complex<T>] to [Compex<f32>] in RawSlice::neW_transmuted
+                        // We only define a constructor fir this struct when T is f32, so we're safe
+                        let input_slice = RawSlice::<Complex<f32>>::new_transmuted(chunk);
+                        let output_slice = RawSliceMut::<Complex<f32>>::new_transmuted(chunk);
+                        self.perform_fft_f32(input_slice, output_slice);
+                    }
                 }
             }
             #[inline(always)]
@@ -197,80 +185,54 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                     Err(())
                 }
             }
+        }
+        impl<T: AvxNum> $struct_name<T> {
             #[inline]
             fn perform_fft_inplace(
                 &self,
-                buffer: &mut [Complex<f32>],
-                scratch: &mut [Complex<f32>],
+                buffer: &mut [Complex<T>],
+                scratch: &mut [Complex<T>],
             ) {
+                // safety: We're transmuting from &mut [Complex<T>] to &mut [Complex<f32>]
+                // We only define a constructor for T=f32, so they *have* to be the same type, so it's guaranteed safe
+                let transmuted_buffer : &mut [Complex<f32>] = unsafe { array_utils::transmute_slice_mut(buffer) };
+                let transmuted_scratch : &mut [Complex<f32>]  = unsafe { array_utils::transmute_slice_mut(scratch) };
+
                 // Perform the column FFTs
                 // Safety: self.perform_column_butterflies() requres the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't available
-                unsafe { self.column_butterflies_and_transpose(buffer, scratch) };
+                unsafe { self.column_butterflies_and_transpose(transmuted_buffer, transmuted_scratch) };
 
                 // process the row FFTs, and copy from the scratch back to the buffer as we go
                 // Safety: self.transpose() requres the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
-                unsafe { self.row_butterflies(RawSlice::new(scratch), RawSliceMut::new(buffer)) };
+                unsafe { self.row_butterflies(RawSlice::new(transmuted_scratch), RawSliceMut::new(transmuted_buffer)) };
             }
 
             #[inline]
             fn perform_fft_out_of_place(
                 &self,
-                input: &mut [Complex<f32>],
-                output: &mut [Complex<f32>],
+                input: &mut [Complex<T>],
+                output: &mut [Complex<T>],
             ) {
+                // safety: We're transmuting from &mut [Complex<T>] to &mut [Complex<f32>]
+                // We only define a constructor for T=f32, so they *have* to be the same type, so it's guaranteed safe
+                let transmuted_input : &mut [Complex<f32>] = unsafe { array_utils::transmute_slice_mut(input) };
+                let transmuted_output : &mut [Complex<f32>]  = unsafe { array_utils::transmute_slice_mut(output) };
+
                 // Perform the column FFTs
                 // Safety: self.perform_column_butterflies() requres the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't available
-                unsafe { self.column_butterflies_and_transpose(input, output) };
+                unsafe { self.column_butterflies_and_transpose(transmuted_input, transmuted_output) };
 
                 // process the row FFTs in-place in the output buffer
                 // Safety: self.transpose() requres the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
-                unsafe { self.row_butterflies(RawSlice::new(output), RawSliceMut::new(output)) };
+                unsafe { self.row_butterflies(RawSlice::new(transmuted_output), RawSliceMut::new(transmuted_output)) };
             }
         }
-        impl<T: FFTnum> Fft<T> for $struct_name<T> {
-            default fn process_inplace_with_scratch(
-                &self,
-                _buffer: &mut [Complex<T>],
-                _scratch: &mut [Complex<T>],
-            ) {
-                unimplemented!();
-            }
-            default fn process_inplace_multi(
-                &self,
-                _buffer: &mut [Complex<T>],
-                _scratch: &mut [Complex<T>],
-            ) {
-                unimplemented!();
-            }
-            default fn process_with_scratch(
-                &self,
-                _input: &mut [Complex<T>],
-                _output: &mut [Complex<T>],
-                _scratch: &mut [Complex<T>],
-            ) {
-                unimplemented!();
-            }
-            default fn process_multi(
-                &self,
-                _input: &mut [Complex<T>],
-                _output: &mut [Complex<T>],
-                _scratch: &mut [Complex<T>],
-            ) {
-                unimplemented!();
-            }
-            default fn get_inplace_scratch_len(&self) -> usize {
-                unimplemented!();
-            }
-            default fn get_out_of_place_scratch_len(&self) -> usize {
-                unimplemented!();
-            }
-        }
-        impl Fft<f32> for $struct_name<f32> {
+        impl<T: AvxNum> Fft<T> for $struct_name<T> {
             fn process_with_scratch(
                 &self,
-                input: &mut [Complex<f32>],
-                output: &mut [Complex<f32>],
-                _scratch: &mut [Complex<f32>],
+                input: &mut [Complex<T>],
+                output: &mut [Complex<T>],
+                _scratch: &mut [Complex<T>],
             ) {
                 assert_eq!(
                     input.len(),
@@ -291,9 +253,9 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
             }
             fn process_multi(
                 &self,
-                input: &mut [Complex<f32>],
-                output: &mut [Complex<f32>],
-                _scratch: &mut [Complex<f32>],
+                input: &mut [Complex<T>],
+                output: &mut [Complex<T>],
+                _scratch: &mut [Complex<T>],
             ) {
                 assert!(
                     input.len() % self.len() == 0,
@@ -318,8 +280,8 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
             }
             fn process_inplace_with_scratch(
                 &self,
-                buffer: &mut [Complex<f32>],
-                scratch: &mut [Complex<f32>],
+                buffer: &mut [Complex<T>],
+                scratch: &mut [Complex<T>],
             ) {
                 assert_eq!(
                     buffer.len(),
@@ -336,8 +298,8 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
             }
             fn process_inplace_multi(
                 &self,
-                buffer: &mut [Complex<f32>],
-                scratch: &mut [Complex<f32>],
+                buffer: &mut [Complex<T>],
+                scratch: &mut [Complex<T>],
             ) {
                 assert_eq!(
                     buffer.len() % self.len(),
@@ -435,7 +397,8 @@ impl Butterfly5Avx<f32> {
             _phantom: PhantomData,
         }
     }
-
+}
+impl<T: AvxNum> Butterfly5Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_fft_f32(
         &self,
@@ -506,7 +469,8 @@ impl Butterfly7Avx<f32> {
             _phantom: PhantomData,
         }
     }
-
+}
+impl<T: AvxNum> Butterfly7Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_fft_f32(
         &self,
@@ -631,7 +595,8 @@ impl Butterfly11Avx<f32> {
             _phantom: PhantomData,
         }
     }
-
+}
+impl<T: AvxNum> Butterfly11Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_fft_f32(
         &self,
@@ -749,7 +714,8 @@ impl Butterfly8Avx<f32> {
             _phantom: PhantomData,
         }
     }
-
+}
+impl<T: AvxNum> Butterfly8Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_fft_f32(
         &self,
@@ -817,7 +783,8 @@ impl Butterfly9Avx<f32> {
             _phantom: PhantomData,
         }
     }
-
+}
+impl<T: AvxNum> Butterfly9Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_fft_f32(
         &self,
@@ -902,7 +869,8 @@ impl Butterfly12Avx<f32> {
             _phantom: PhantomData,
         }
     }
-
+}
+impl<T: AvxNum> Butterfly12Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_fft_f32(
         &self,
@@ -971,7 +939,8 @@ impl Butterfly16Avx<f32> {
             _phantom: PhantomData,
         }
     }
-
+}
+impl<T: AvxNum> Butterfly16Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_fft_f32(
         &self,
@@ -1027,7 +996,8 @@ impl Butterfly24Avx<f32> {
             _phantom: PhantomData,
         }
     }
-
+}
+impl<T: AvxNum> Butterfly24Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_fft_f32(
         &self,
@@ -1091,7 +1061,8 @@ impl Butterfly27Avx<f32> {
             _phantom: PhantomData,
         }
     }
-
+}
+impl<T: AvxNum> Butterfly27Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_fft_f32(
         &self,
@@ -1160,7 +1131,8 @@ impl Butterfly32Avx<f32> {
             _phantom: PhantomData,
         }
     }
-
+}
+impl<T: AvxNum> Butterfly32Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_fft_f32(
         &self,
@@ -1227,7 +1199,8 @@ impl Butterfly36Avx<f32> {
             _phantom: PhantomData,
         }
     }
-
+}
+impl<T: AvxNum> Butterfly36Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_fft_f32(
         &self,
@@ -1293,7 +1266,8 @@ impl Butterfly48Avx<f32> {
             _phantom: PhantomData,
         }
     }
-
+}
+impl<T: AvxNum> Butterfly48Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_fft_f32(
         &self,
@@ -1379,7 +1353,8 @@ impl Butterfly54Avx<f32> {
             _phantom: PhantomData,
         }
     }
-
+}
+impl<T: AvxNum> Butterfly54Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_fft_f32(
         &self,
@@ -1463,7 +1438,8 @@ impl Butterfly64Avx<f32> {
             _phantom: PhantomData,
         }
     }
-
+}
+impl<T: AvxNum> Butterfly64Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_fft_f32(
         &self,
@@ -1528,7 +1504,8 @@ impl Butterfly72Avx<f32> {
             _phantom: PhantomData,
         }
     }
-
+}
+impl<T: AvxNum> Butterfly72Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_fft_f32(
         &self,
@@ -1614,7 +1591,8 @@ impl Butterfly128Avx<f32> {
             _phantom: PhantomData,
         }
     }
-
+}
+impl<T: AvxNum> Butterfly128Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn column_butterflies_and_transpose(
         &self,
@@ -1698,7 +1676,8 @@ impl Butterfly256Avx<f32> {
             _phantom: PhantomData,
         }
     }
-
+}
+impl<T: AvxNum> Butterfly256Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn column_butterflies_and_transpose(
         &self,
@@ -1782,7 +1761,8 @@ impl Butterfly512Avx<f32> {
             _phantom: PhantomData,
         }
     }
-
+}
+impl<T: AvxNum> Butterfly512Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn column_butterflies_and_transpose(
         &self,

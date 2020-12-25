@@ -12,6 +12,12 @@ pub unsafe fn transpose_small<T: Copy>(width: usize, height: usize, input: &[T],
     }
 }
 
+pub unsafe fn transmute_slice_mut<T, U>(slice: &mut [T]) -> &mut [U] {
+    let ptr = slice.as_mut_ptr() as *mut U;
+    let len = slice.len();
+    std::slice::from_raw_parts_mut(ptr, len)
+}
+
 #[derive(Copy, Clone)]
 pub struct RawSlice<T> {
     ptr: *const T,
@@ -22,6 +28,13 @@ impl<T> RawSlice<T> {
     pub fn new(slice: &[T]) -> Self {
         Self {
             ptr: slice.as_ptr(),
+            slice_len: slice.len(),
+        }
+    }
+    #[inline(always)]
+    pub unsafe fn new_transmuted<U>(slice: &[U]) -> Self {
+        Self {
+            ptr: slice.as_ptr() as *const T,
             slice_len: slice.len(),
         }
     }
@@ -58,7 +71,13 @@ impl<T> RawSliceMut<T> {
             slice_len: slice.len(),
         }
     }
-
+    #[inline(always)]
+    pub unsafe fn new_transmuted<U>(slice: &mut [U]) -> Self {
+        Self {
+            ptr: slice.as_mut_ptr() as *mut T,
+            slice_len: slice.len(),
+        }
+    }
     #[allow(unused)]
     #[inline(always)]
     pub fn as_mut_ptr(&self) -> *mut T {
