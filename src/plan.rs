@@ -72,6 +72,7 @@ const MIN_RADIX4_BITS: u32 = 5; // smallest size to consider radix 4 an option i
 const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option is 2^16 = 65536
 const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
 const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the inner fft of Bluestein if length is larger than this
+const BUTTERFLIES: [usize; 16] = [2, 3, 4, 5, 6, 7, 8, 11, 13, 16, 17, 19, 23, 29, 31, 32];
 
 <<<<<<< HEAD
 /// The Scalar FFT planner creates new FFT algorithm instances using non-SIMD algorithms.
@@ -80,11 +81,11 @@ const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the
 pub enum Recipe {
     DFT(usize),
     MixedRadix { left_fft: Box<Recipe>, right_fft: Box<Recipe>},
-    GoodThomas { left_fft: Box<Recipe>, right_fft: Box<Recipe>},
-    MixedRadixDoubleButterfly(usize, usize),
-    GoodThomasDoubleButterfly(usize, usize),
-    Rader { len: usize, inner_fft: Box<Recipe>},
-    Bluestein { len: usize, inner_fft: Box<Recipe>},
+    GoodThomasAlgorithm { left_fft: Box<Recipe>, right_fft: Box<Recipe>},
+    MixedRadixSmall { left_fft: Box<Recipe>, right_fft: Box<Recipe>},
+    GoodThomasAlgorithmSmall { left_fft: Box<Recipe>, right_fft: Box<Recipe>},
+    RadersAlgorithm { inner_fft: Box<Recipe>},
+    BluesteinsAlgorithm { len: usize, inner_fft: Box<Recipe>},
     Radix4(usize),
     Butterfly(usize),
 }
@@ -168,7 +169,7 @@ impl<T: FFTnum> FftPlannerScalar<T> {
             Arc::clone(instance)
         } else {
             let recipe = self.make_recipe_for_len(len);
-            let fft = self.construct_fft(plan);
+            let fft = self.construct_fft(recipe);
             self.algorithm_cache.insert(len, Arc::clone(&fft));
             fft
         }
@@ -180,196 +181,200 @@ impl<T: FFTnum> FftPlannerScalar<T> {
             Recipe::DFT(len)
         } else {    
             let factors = PrimeFactors::compute(len);
-            self.make_recipe_from_factors(len, &factors)
+            self.plan_fft_with_factors2(len, factors)
         }
     }
-
+//
     // Make a recipe for the given prime factors
-    fn make_recipe_from_factors(&mut self, len: usize, factors: &[usize]) -> Recipe {
-        if factors.len() == 1 || COMPOSITE_BUTTERFLIES.contains(&len) {
-            //the length is either a prime or matches a butterfly
-            self.make_recipe_for_single_factor(len)
-        } else if len.trailing_zeros() <= MAX_RADIX4_BITS && len.trailing_zeros() >= MIN_RADIX4_BITS && len.is_power_of_two(){
-            //the length is a power of two in the range where Radix4 is the fastest option.
-            Recipe::Radix4(len)
-        } else {
-            self.make_recipe_for_mixed_radix(len, &factors)
-        }
-    }
+    //fn make_recipe_from_factors(&mut self, len: usize, factors: &PrimeFactors) -> Recipe {
+    //    if factors.is_prime() || COMPOSITE_BUTTERFLIES.contains(&len) {
+    //        //the length is either a prime or matches a butterfly
+    //        self.make_recipe_for_single_factor(len)
+    //    } else if len.trailing_zeros() <= MAX_RADIX4_BITS && len.trailing_zeros() >= MIN_RADIX4_BITS && len.is_power_of_two(){
+    //        //the length is a power of two in the range where Radix4 is the fastest option.
+    //        Recipe::Radix4(len)
+    //    } else {
+    //        self.make_recipe_for_mixed_radix(len, &factors)
+    //    }
+    //}
 
-    fn make_recipe_for_mixed_radix(&mut self, len: usize, factors: &[usize]) -> Recipe {
-        if len.trailing_zeros() <= MAX_RADIX4_BITS && len.trailing_zeros() >= MIN_RADIX4_BITS {
-            //the number of trailing zeroes in len is the number of `2` factors
-            //ie if len = 2048 * n, len.trailing_zeros() will equal 11 because 2^11 == 2048
-            let left_len = 1 << len.trailing_zeros();
-            let right_len = len / left_len;
-            let (left_factors, right_factors) = factors.split_at(len.trailing_zeros() as usize);
-            self.make_recipe_for_mixed_radix_from_factor_lists(left_len, left_factors, right_len, right_factors)
-        } else {
-            let sqrt = (len as f32).sqrt() as usize;
-            if sqrt * sqrt == len {
-                // since len is a perfect square, each of its prime factors is duplicated.
-                // since we know they're sorted, we can loop through them in chunks of 2 and keep one out of each chunk
-                // if the stride iterator ever becomes stabilized, it'll be cleaner to use that instead of chunks
-                let mut sqrt_factors = Vec::with_capacity(factors.len() / 2);
-                for chunk in factors.chunks(2) {
-                    sqrt_factors.push(chunk[0]);
-                }
-                self.make_recipe_for_mixed_radix_from_factor_lists(sqrt, &sqrt_factors, sqrt, &sqrt_factors)
-            } else {
-                //len isn't a perfect square. greedily take factors from the list until both sides are as close as possible to sqrt(len)
-                //TODO: We can probably make this more optimal by using a more sophisticated non-greedy algorithm
-                let mut product = 1;
-                let mut second_half_index = 1;
-                for (i, factor) in factors.iter().enumerate() {
-                    if product * *factor > sqrt {
-                        second_half_index = i;
-                        break;
-                    } else {
-                        product = product * *factor;
-                    }
-                }
-
-                //we now know that product is the largest it can be without being greater than len / product
-                //there's one more thing we can try to make them closer together -- if product * factors[index] < len / product,
-                if product * factors[second_half_index] < len / product {
-                    product = product * factors[second_half_index];
-                    second_half_index = second_half_index + 1;
-                }
-
-                //we now have our two FFT sizes: product and product / len
-                let (left_factors, right_factors) = factors.split_at(second_half_index);
-                self.make_recipe_for_mixed_radix_from_factor_lists(product, left_factors, len / product, right_factors)
-            }
-        }
-    }
+    //fn make_recipe_for_mixed_radix(&mut self, len: usize, factors: &PrimeFactors) -> Recipe {
+    //    if len.trailing_zeros() <= MAX_RADIX4_BITS && len.trailing_zeros() >= MIN_RADIX4_BITS {
+    //        //the number of trailing zeroes in len is the number of `2` factors
+    //        //ie if len = 2048 * n, len.trailing_zeros() will equal 11 because 2^11 == 2048
+    //        let left_len = 1 << len.trailing_zeros();
+    //        let right_len = len / left_len;
+    //        let (left_factors, right_factors) = factors.split_at(len.trailing_zeros() as usize);
+    //        self.make_recipe_for_mixed_radix_from_factor_lists(left_len, left_factors, right_len, right_factors)
+    //    } else {
+    //        let sqrt = (len as f32).sqrt() as usize;
+    //        if sqrt * sqrt == len {
+    //            // since len is a perfect square, each of its prime factors is duplicated.
+    //            // since we know they're sorted, we can loop through them in chunks of 2 and keep one out of each chunk
+    //            // if the stride iterator ever becomes stabilized, it'll be cleaner to use that instead of chunks
+    //            let mut sqrt_factors = Vec::with_capacity(factors.len() / 2);
+    //            for chunk in factors.chunks(2) {
+    //                sqrt_factors.push(chunk[0]);
+    //            }
+    //            self.make_recipe_for_mixed_radix_from_factor_lists(sqrt, &sqrt_factors, sqrt, &sqrt_factors)
+    //        } else {
+    //            //len isn't a perfect square. greedily take factors from the list until both sides are as close as possible to sqrt(len)
+    //            //TODO: We can probably make this more optimal by using a more sophisticated non-greedy algorithm
+    //            let mut product = 1;
+    //            let mut second_half_index = 1;
+    //            for (i, factor) in factors.iter().enumerate() {
+    //                if product * *factor > sqrt {
+    //                    second_half_index = i;
+    //                    break;
+    //                } else {
+    //                    product = product * *factor;
+    //                }
+    //            }
+//
+    //            //we now know that product is the largest it can be without being greater than len / product
+    //            //there's one more thing we can try to make them closer together -- if product * factors[index] < len / product,
+    //            if product * factors[second_half_index] < len / product {
+    //                product = product * factors[second_half_index];
+    //                second_half_index = second_half_index + 1;
+    //            }
+//
+    //            //we now have our two FFT sizes: product and product / len
+    //            let (left_factors, right_factors) = factors.split_at(second_half_index);
+    //            self.make_recipe_for_mixed_radix_from_factor_lists(product, left_factors, len / product, right_factors)
+    //        }
+    //    }
+    //}
 
     // Make a recipe using mixed radix
-    fn make_recipe_for_mixed_radix_from_factor_lists(&mut self,
-        left_len: usize,
-        left_factors: &[usize],
-        right_len: usize,
-        right_factors: &[usize])
-        -> Recipe {
-
-        let left_is_butterfly = BUTTERFLIES.contains(&left_len);
-        let right_is_butterfly = BUTTERFLIES.contains(&right_len);
-
-        //if both left_len and right_len are butterflies, use a mixed radix implementation specialized for butterfly sub-FFTs
-        if left_is_butterfly && right_is_butterfly {            
-            // for butterflies, if gcd is 1, we always want to use good-thomas
-            if gcd(left_len, right_len) == 1 {
-                Recipe::GoodThomasDoubleButterfly(left_len, right_len)
-            } else {
-                Recipe::MixedRadixDoubleButterfly(left_len, right_len)
-            }
-        } else {
-            //neither size is a butterfly, so go with the normal algorithm
-            let left_fft = Box::new(self.make_recipe_from_factors(left_len, left_factors));
-            let right_fft = Box::new(self.make_recipe_from_factors(right_len, right_factors));
-            //if gcd(left_len, right_len) == 1 {
-            //    Recipe::GoodThomas{left_fft, right_fft}
-            //} else {
-                Recipe::MixedRadix{left_fft, right_fft}
-            //}
-        }
-    }
-
+    //fn make_recipe_for_mixed_radix_from_factor_lists(&mut self,
+    //    left_len: usize,
+    //    left_factors: &[usize],
+    //    right_len: usize,
+    //    right_factors: &[usize])
+    //    -> Recipe {
+//
+    //    let left_is_butterfly = BUTTERFLIES.contains(&left_len);
+    //    let right_is_butterfly = BUTTERFLIES.contains(&right_len);
+//
+    //    //if both left_len and right_len are butterflies, use a mixed radix implementation specialized for butterfly sub-FFTs
+    //    if left_is_butterfly && right_is_butterfly {            
+    //        // for butterflies, if gcd is 1, we always want to use good-thomas
+    //        if gcd(left_len, right_len) == 1 {
+    //            Recipe::GoodThomasDoubleButterfly(left_fft, right_fft)
+    //        } else {
+    //            Recipe::MixedRadixDoubleButterfly(left_fft, right_fft)
+    //        }
+    //    } else {
+    //        //neither size is a butterfly, so go with the normal algorithm
+    //        let left_fft = Box::new(self.make_recipe_from_factors(left_len, left_factors));
+    //        let right_fft = Box::new(self.make_recipe_from_factors(right_len, right_factors));
+    //        //if gcd(left_len, right_len) == 1 {
+    //        //    Recipe::GoodThomas{left_fft, right_fft}
+    //        //} else {
+    //            Recipe::MixedRadix{left_fft, right_fft}
+    //        //}
+    //    }
+    //}
+//
     // Make a recipe for a single factor
-    fn make_recipe_for_single_factor(&mut self, len: usize) -> Recipe {
-        match len {
-            0|1=> Recipe::DFT(len),
-            2|3|4|5|6|7|8|16|32 => Recipe::Butterfly(len),
-            _ => self.make_recipe_for_prime(len),
-        }
-    }
+    //fn make_recipe_for_single_factor(&mut self, len: usize) -> Recipe {
+    //    match len {
+    //        0|1=> Recipe::DFT(len),
+    //        2|3|4|5|6|7|8|16|32 => Recipe::Butterfly(len),
+    //        _ => self.make_recipe_for_prime(len),
+    //    }
+    //}
 
     // Make a recipe for a prime factor
-    fn make_recipe_for_prime(&mut self, len: usize) -> Recipe {
-        let inner_fft_len_rader = len - 1;
-        let factors = math_utils::prime_factors(inner_fft_len_rader);
-        // If any of the prime factors is too large, Rader's gets slow and Bluestein's is the better choice
-        if factors.iter().any(|val| *val > MAX_RADER_PRIME_FACTOR) {
-            let inner_fft_len_pow2 = (2 * len - 1).checked_next_power_of_two().unwrap();
-            // over a certain length, a shorter mixed radix inner fft is faster than a longer radix4
-            let min_inner_len = 2 * len - 1;
-            let mixed_radix_len = 3*inner_fft_len_pow2/4;
-            let inner_fft = if mixed_radix_len >= min_inner_len && len >= MIN_BLUESTEIN_MIXED_RADIX_LEN {
-                let inner_factors = math_utils::prime_factors(mixed_radix_len);
-                self.make_recipe_from_factors(mixed_radix_len, &inner_factors)
-            }
-            else {
-                Recipe::Radix4(inner_fft_len_pow2)
-            };
-            Recipe::Bluestein{len, inner_fft: Box::new(inner_fft)}
-        }
-        else {
-            let inner_fft = self.make_recipe_from_factors(inner_fft_len_rader, &factors);
-            Recipe::Rader{len, inner_fft: Box::new(inner_fft)}
-        }
-    }
+    //fn make_recipe_for_prime(&mut self, len: usize) -> Recipe {
+    //    let inner_fft_len_rader = len - 1;
+    //    let factors = PrimeFactors::compute(inner_fft_len_rader);
+    //    // If any of the prime factors is too large, Rader's gets slow and Bluestein's is the better choice
+    //    if factors.get_other_factors().iter().any(|fact| fact.value > MAX_RADER_PRIME_FACTOR) {
+    //        let inner_fft_len_pow2 = (2 * len - 1).checked_next_power_of_two().unwrap();
+    //        // over a certain length, a shorter mixed radix inner fft is faster than a longer radix4
+    //        let min_inner_len = 2 * len - 1;
+    //        let mixed_radix_len = 3*inner_fft_len_pow2/4;
+    //        let inner_fft = if mixed_radix_len >= min_inner_len && len >= MIN_BLUESTEIN_MIXED_RADIX_LEN {
+    //            let inner_factors = PrimeFactors::compute(mixed_radix_len);
+    //            self.make_recipe_from_factors(mixed_radix_len, &inner_factors)
+    //        }
+    //        else {
+    //            Recipe::Radix4(inner_fft_len_pow2)
+    //        };
+    //        Recipe::BluesteinsAlgorithm{len, inner_fft: Box::new(inner_fft)}
+    //    }
+    //    else {
+    //        let inner_fft = self.make_recipe_from_factors(inner_fft_len_rader, &factors);
+    //        Recipe::RadersAlgorithm{inner_fft: Box::new(inner_fft)}
+    //    }
+    //}
 
     // Create the fft from a recipe
-    fn construct_fft(&mut self, plan: Recipe) -> Arc<FFT<T>> {
+    fn construct_fft(&mut self, plan: Recipe) -> Arc<dyn Fft<T>> {
         match plan {
-            Recipe::DFT(len) => Arc::new(DFT::new(len, self.inverse)) as Arc<FFT<T>>,
-            Recipe::Radix4(len) => Arc::new(Radix4::new(len, self.inverse)) as Arc<FFT<T>>,
+            Recipe::DFT(len) => Arc::new(DFT::new(len, self.inverse)) as Arc<dyn Fft<T>>,
+            Recipe::Radix4(len) => Arc::new(Radix4::new(len, self.inverse)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly(len) => {
                 butterfly!(len, self.inverse)
             }
             Recipe::MixedRadix { left_fft, right_fft } => {
                 let left_fft = self.construct_fft(*left_fft);
                 let right_fft = self.construct_fft(*right_fft);
-                Arc::new(MixedRadix::new(left_fft, right_fft)) as Arc<FFT<T>>
+                Arc::new(MixedRadix::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
             },
-            Recipe::GoodThomas { left_fft, right_fft } => {
+            Recipe::GoodThomasAlgorithm { left_fft, right_fft } => {
                 let left_fft = self.construct_fft(*left_fft);
                 let right_fft = self.construct_fft(*right_fft);
-                Arc::new(GoodThomasAlgorithm::new(left_fft, right_fft)) as Arc<FFT<T>>
+                Arc::new(GoodThomasAlgorithm::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
             },
-            Recipe::MixedRadixDoubleButterfly(left_len, right_len) => {
-                let left_fft = self.construct_butterfly(left_len);
-                let right_fft = self.construct_butterfly(right_len);
-                Arc::new(MixedRadixDoubleButterfly::new(left_fft, right_fft)) as Arc<FFT<T>>
+            Recipe::MixedRadixSmall{left_fft, right_fft} => {
+                let left_fft = self.construct_fft(*left_fft);
+                let right_fft = self.construct_fft(*right_fft);
+                Arc::new(MixedRadixSmall::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
             },
-            Recipe::GoodThomasDoubleButterfly(left_len, right_len) => {
-                let left_fft = self.construct_butterfly(left_len);
-                let right_fft = self.construct_butterfly(right_len);
-                Arc::new(GoodThomasAlgorithmDoubleButterfly::new(left_fft, right_fft)) as Arc<FFT<T>>
+            Recipe::GoodThomasAlgorithmSmall{left_fft, right_fft} => {
+                let left_fft = self.construct_fft(*left_fft);
+                let right_fft = self.construct_fft(*right_fft);
+                Arc::new(GoodThomasAlgorithmSmall::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
             },
-            Recipe::Rader { len, inner_fft } => {
+            Recipe::RadersAlgorithm { inner_fft } => {
                 let inner_fft = self.construct_fft(*inner_fft);
-                Arc::new(RadersAlgorithm::new(len, inner_fft)) as Arc<FFT<T>>
+                Arc::new(RadersAlgorithm::new(inner_fft)) as Arc<dyn Fft<T>>
             },
-            Recipe::Bluestein { len , inner_fft } => {
+            Recipe::BluesteinsAlgorithm { len , inner_fft } => {
                 let inner_fft = self.construct_fft(*inner_fft);
-                Arc::new(Bluesteins::new(len, inner_fft)) as Arc<FFT<T>>
+                Arc::new(BluesteinsAlgorithm::new(len, inner_fft)) as Arc<dyn Fft<T>>
             },
         }
     }
 
     // Create a butterfly
-    fn construct_butterfly(&mut self, len: usize) -> Arc<FFTButterfly<T>> {
+    fn construct_butterfly(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         let inverse = self.inverse;
-        let instance = self.butterfly_cache.entry(len).or_insert_with(|| 
+        fn wrap_butterfly<N: FFTnum>(butterfly: impl Fft<N> + 'static) -> Arc<dyn Fft<N>> {
+            Arc::new(butterfly) as Arc<dyn Fft<N>>
+        }
+        let instance = self.algorithm_cache.entry(len).or_insert_with(|| 
             match len {
-                0 | 1 => wrap_butterfly(DFT::new(len, self.inverse)),
-                2 => wrap_butterfly(Butterfly2::new(self.inverse)),
-                3 => wrap_butterfly(Butterfly3::new(self.inverse)),
-                4 => wrap_butterfly(Butterfly4::new(self.inverse)),
-                5 => wrap_butterfly(Butterfly5::new(self.inverse)),
-                6 => wrap_butterfly(Butterfly6::new(self.inverse)),
-                7 => wrap_butterfly(Butterfly7::new(self.inverse)),
-                8 => wrap_butterfly(Butterfly8::new(self.inverse)),
-                11 => wrap_butterfly(Butterfly11::new(self.inverse)),
-                13 => wrap_butterfly(Butterfly13::new(self.inverse)),
-                16 => wrap_butterfly(Butterfly16::new(self.inverse)),
-                17 => wrap_butterfly(Butterfly17::new(self.inverse)),
-                19 => wrap_butterfly(Butterfly19::new(self.inverse)),
-                23 => wrap_butterfly(Butterfly23::new(self.inverse)),
-                29 => wrap_butterfly(Butterfly29::new(self.inverse)),
-                31 => wrap_butterfly(Butterfly31::new(self.inverse)),
-                32 => wrap_butterfly(Butterfly32::new(self.inverse)),
+                0 | 1 => wrap_butterfly(DFT::new(len, inverse)),
+                2 => wrap_butterfly(Butterfly2::new(inverse)),
+                3 => wrap_butterfly(Butterfly3::new(inverse)),
+                4 => wrap_butterfly(Butterfly4::new(inverse)),
+                5 => wrap_butterfly(Butterfly5::new(inverse)),
+                6 => wrap_butterfly(Butterfly6::new(inverse)),
+                7 => wrap_butterfly(Butterfly7::new(inverse)),
+                8 => wrap_butterfly(Butterfly8::new(inverse)),
+                11 => wrap_butterfly(Butterfly11::new(inverse)),
+                13 => wrap_butterfly(Butterfly13::new(inverse)),
+                16 => wrap_butterfly(Butterfly16::new(inverse)),
+                17 => wrap_butterfly(Butterfly17::new(inverse)),
+                19 => wrap_butterfly(Butterfly19::new(inverse)),
+                23 => wrap_butterfly(Butterfly23::new(inverse)),
+                29 => wrap_butterfly(Butterfly29::new(inverse)),
+                31 => wrap_butterfly(Butterfly31::new(inverse)),
+                32 => wrap_butterfly(Butterfly32::new(inverse)),
+                _ => panic!("Invalid butterfly length"),
             }
         );
         Arc::clone(instance)
@@ -383,6 +388,46 @@ impl<T: FFTnum> FftPlannerScalar<T> {
             let instance = self.plan_new_fft_with_factors(len, factors);
             self.algorithm_cache.insert(len, Arc::clone(&instance));
             instance
+        }
+    }
+
+    fn plan_fft_with_factors2(&mut self, len: usize, factors: PrimeFactors) -> Recipe {
+        //if let Some(instance) = self.algorithm_cache.get(&len) {
+        //    Arc::clone(instance)
+        //} else {
+        //    let instance = self.plan_new_fft_with_factors(len, factors);
+        //    self.algorithm_cache.insert(len, Arc::clone(&instance));
+        //    instance
+        //}
+        self.plan_new_fft_with_factors2(len, factors)
+    }
+
+    fn plan_new_fft_with_factors2(&mut self, len: usize, factors: PrimeFactors) -> Recipe {
+        if let Some(fft_instance) = self.plan_butterfly_algorithm2(len) {
+            fft_instance
+        } else if factors.is_prime() {
+            self.plan_prime2(len)
+        } else if len.trailing_zeros() <= MAX_RADIX4_BITS && len.trailing_zeros() >= MIN_RADIX4_BITS
+        {
+            if len.is_power_of_two() {
+                //Arc::new(Radix4::new(len, self.inverse))
+                Recipe::Radix4(len)
+            } else {
+                dbg!(len);
+                dbg!(len.trailing_zeros());
+                dbg!(&factors);
+                let non_power_of_two = factors
+                    .remove_factors(PrimeFactor {
+                        value: 2,
+                        count: len.trailing_zeros(),
+                    })
+                    .unwrap();
+                let power_of_two = PrimeFactors::compute(1 << len.trailing_zeros());
+                self.plan_mixed_radix2(power_of_two, non_power_of_two)
+            }
+        } else {
+            let (left_factors, right_factors) = factors.partition_factors();
+            self.plan_mixed_radix2(left_factors, right_factors)
         }
     }
 
@@ -439,6 +484,34 @@ impl<T: FFTnum> FftPlannerScalar<T> {
         }
     }
 
+    fn plan_mixed_radix2(
+        &mut self,
+        left_factors: PrimeFactors,
+        right_factors: PrimeFactors,
+    ) -> Recipe {
+        let left_len = left_factors.get_product();
+        let right_len = right_factors.get_product();
+
+        //neither size is a butterfly, so go with the normal algorithm
+        let left_fft = Box::new(self.plan_fft_with_factors2(left_len, left_factors));
+        let right_fft = Box::new(self.plan_fft_with_factors2(right_len, right_factors));
+
+        //if both left_len and right_len are small, use algorithms optimized for small FFTs
+        if left_len < 31 && right_len < 31 {
+            // for small FFTs, if gcd is 1, good-thomas is faster
+            if gcd(left_len, right_len) == 1 {
+                //Arc::new(GoodThomasAlgorithmSmall::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
+                Recipe::GoodThomasAlgorithmSmall{ left_fft, right_fft }
+            } else {
+                //Arc::new(MixedRadixSmall::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
+                Recipe::MixedRadixSmall{ left_fft, right_fft }
+            }
+        } else {
+            //Arc::new(MixedRadix::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
+            Recipe::MixedRadix{ left_fft, right_fft }
+        }
+    }
+
     // Returns Some(instance) if we have a butterfly available for this size. Returns None if there is no butterfly available for this size
     fn plan_butterfly_algorithm(&mut self, len: usize) -> Option<Arc<dyn Fft<T>>> {
         fn wrap_butterfly<N: FFTnum>(butterfly: impl Fft<N> + 'static) -> Option<Arc<dyn Fft<N>>> {
@@ -464,6 +537,16 @@ impl<T: FFTnum> FftPlannerScalar<T> {
             31 => wrap_butterfly(Butterfly31::new(self.inverse)),
             32 => wrap_butterfly(Butterfly32::new(self.inverse)),
             _ => None,
+        }
+    }
+
+    // Returns Some(instance) if we have a butterfly available for this size. Returns None if there is no butterfly available for this size
+    fn plan_butterfly_algorithm2(&mut self, len: usize) -> Option<Recipe> {
+        if BUTTERFLIES.contains(&len) {
+            Some(Recipe::Butterfly(len))
+        }
+        else {
+            None
         }
     }
 
@@ -493,6 +576,36 @@ impl<T: FFTnum> FftPlannerScalar<T> {
             Arc::new(RadersAlgorithm::new(inner_fft)) as Arc<dyn Fft<T>>
         }
     }
+
+    fn plan_prime2(&mut self, len: usize) -> Recipe {
+        let inner_fft_len_rader = len - 1;
+        let raders_factors = PrimeFactors::compute(inner_fft_len_rader);
+        // If any of the prime factors is too large, Rader's gets slow and Bluestein's is the better choice
+        if raders_factors
+            .get_other_factors()
+            .iter()
+            .any(|val| val.value > MAX_RADER_PRIME_FACTOR)
+        {
+            let inner_fft_len_pow2 = (2 * len - 1).checked_next_power_of_two().unwrap();
+            // for long ffts a mixed radix inner fft is faster than a longer radix4
+            let min_inner_len = 2 * len - 1;
+            let mixed_radix_len = 3 * inner_fft_len_pow2 / 4;
+            let inner_fft =
+                if mixed_radix_len >= min_inner_len && len >= MIN_BLUESTEIN_MIXED_RADIX_LEN {
+                    let mixed_radix_factors = PrimeFactors::compute(mixed_radix_len);
+                    Box::new(self.plan_fft_with_factors2(mixed_radix_len, mixed_radix_factors))
+                } else {
+                    Box::new(Recipe::Radix4(inner_fft_len_pow2))
+                    //Arc::new(Radix4::new(inner_fft_len_pow2, self.inverse))
+                };
+            //Arc::new(BluesteinsAlgorithm::new(len, inner_fft)) as Arc<dyn Fft<T>>
+            Recipe::BluesteinsAlgorithm{ len, inner_fft }
+        } else {
+            let inner_fft = Box::new(self.plan_fft_with_factors2(inner_fft_len_rader, raders_factors));
+            //Arc::new(RadersAlgorithm::new(inner_fft)) as Arc<dyn Fft<T>>
+            Recipe::RadersAlgorithm{inner_fft}
+        }
+    }
 }
 
 
@@ -503,7 +616,7 @@ mod unit_tests {
     #[test]
     fn test_plan_trivial() {
         // Length 0 and 1 should use DFT
-        let mut planner = FFTplanner::<f64>::new(false);
+        let mut planner = FftPlanner::<f64>::new(false);
         for len in 0..2 {
             let plan = planner.make_recipe_for_len(len);
             assert_eq!(plan, Recipe::DFT(len));
@@ -513,7 +626,7 @@ mod unit_tests {
     #[test]
     fn test_plan_mediumpoweroftwo() {
         // Powers of 2 between 64 and 32768 should use Radix4
-        let mut planner = FFTplanner::<f64>::new(false);
+        let mut planner = FftPlanner::<f64>::new(false);
         for pow in 6..16 {
             let len = 1 << pow;
             let plan = planner.make_recipe_for_len(len);
@@ -524,7 +637,7 @@ mod unit_tests {
     #[test]
     fn test_plan_largepoweroftwo() {
         // Powers of 2 from 65536 and up should use MixedRadix
-        let mut planner = FFTplanner::<f64>::new(false);
+        let mut planner = FftPlanner::<f64>::new(false);
         for pow in 17..32 {
             let len = 1 << pow;
             let plan = planner.make_recipe_for_len(len);
@@ -535,7 +648,7 @@ mod unit_tests {
     #[test]
     fn test_plan_butterflies() {
         // Check that all butterflies are used
-        let mut planner = FFTplanner::<f64>::new(false);
+        let mut planner = FftPlanner::<f64>::new(false);
         for len in [2,3,4,5,6,7,8,16,32].iter() {
             let plan = planner.make_recipe_for_len(*len);
             assert_eq!(plan, Recipe::Butterfly(*len));
@@ -545,7 +658,7 @@ mod unit_tests {
     #[test]
     fn test_plan_mixedradix() {
         // Products of several different primes should become MixedRadix
-        let mut planner = FFTplanner::<f64>::new(false);
+        let mut planner = FftPlanner::<f64>::new(false);
         for pow2 in 1..3 {
             for pow3 in 1..3 {
                 for pow5 in 1..3 {
@@ -569,7 +682,7 @@ mod unit_tests {
     #[test]
     fn test_plan_mixedradixbutterfly() {
         // Products of two existing butterfly lengths that have a common divisor >1, and isn't a power of 2 should be MixedRadixDoubleButterfly
-        let mut planner = FFTplanner::<f64>::new(false);
+        let mut planner = FftPlanner::<f64>::new(false);
         for len in [4*6, 3*6, 3*3].iter() {
             let plan = planner.make_recipe_for_len(*len);
             assert!(is_mixedradixbutterfly(&plan), "Expected MixedRadixDoubleButterfly, got {:?}", plan);
@@ -578,14 +691,14 @@ mod unit_tests {
 
     fn is_mixedradixbutterfly(plan: &Recipe) -> bool {
         match plan {
-            &Recipe::MixedRadixDoubleButterfly{..} => true,
+            &Recipe::MixedRadixSmall{..} => true,
             _ => false,
         }
     }
 
     #[test]
     fn test_plan_goodthomasbutterfly() {
-        let mut planner = FFTplanner::<f64>::new(false);
+        let mut planner = FftPlanner::<f64>::new(false);
         for len in [3*4, 3*5, 3*7, 5*7].iter() {
             let plan = planner.make_recipe_for_len(*len);
             assert!(is_goodthomasbutterfly(&plan), "Expected GoodThomasDoubleButterfly, got {:?}", plan);
@@ -594,7 +707,7 @@ mod unit_tests {
 
     fn is_goodthomasbutterfly(plan: &Recipe) -> bool {
         match plan {
-            &Recipe::GoodThomasDoubleButterfly{..} => true,
+            &Recipe::GoodThomasAlgorithmSmall{..} => true,
             _ => false,
         }
     }
@@ -603,7 +716,7 @@ mod unit_tests {
     fn test_plan_bluestein() {
         let primes: [usize; 6] = [89, 179, 359, 719, 1439, 2879];
 
-        let mut planner = FFTplanner::<f64>::new(false);
+        let mut planner = FftPlanner::<f64>::new(false);
         for len in primes.iter() {
             let plan = planner.make_recipe_for_len(*len);
             assert!(is_bluesteins(&plan), "Expected Bluesteins, got {:?}", plan);
@@ -612,7 +725,7 @@ mod unit_tests {
 
     fn is_bluesteins(plan: &Recipe) -> bool {
         match plan {
-            &Recipe::Bluestein{..} => true,
+            &Recipe::BluesteinsAlgorithm{..} => true,
             _ => false,
         }
     }
