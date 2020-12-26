@@ -1,4 +1,4 @@
-use std::arch::x86_64::*;
+use std::{any::TypeId, arch::x86_64::*};
 use std::convert::TryInto;
 use std::sync::Arc;
 
@@ -9,7 +9,8 @@ use primal_check::miller_rabin;
 use strength_reduce::StrengthReducedUsize;
 
 use crate::math_utils;
-use crate::{Fft, IsInverse, Length};
+use crate::{Fft, IsInverse, Length, FFTnum};
+use crate::array_utils;
 
 use super::avx_vector;
 use super::{
@@ -92,12 +93,12 @@ impl VectorizedMultiplyMod {
 ///
 /// Rader's Algorithm is relatively expensive compared to other FFT algorithms. Benchmarking shows that it is up to
 /// an order of magnitude slower than similar composite sizes.
-pub struct RadersAvx2<T: AvxNum> {
+pub struct RadersAvx2<A: AvxNum, T> {
     input_index_multiplier: VectorizedMultiplyMod,
     input_index_init: __m256i,
 
     output_index_mapping: Box<[__m128i]>,
-    twiddles: Box<[T::VectorType]>,
+    twiddles: Box<[A::VectorType]>,
 
     inner_fft: Arc<dyn Fft<T>>,
 
@@ -106,9 +107,11 @@ pub struct RadersAvx2<T: AvxNum> {
     inplace_scratch_len: usize,
     outofplace_scratch_len: usize,
     inverse: bool,
+
+    _phantom: std::marker::PhantomData<T>,
 }
 
-impl<T: AvxNum> RadersAvx2<T> {
+impl<A: AvxNum, T: FFTnum> RadersAvx2<A, T> {
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the FFT
     /// Returns Ok(instance) if this machine has the required instruction sets ("avx", "fma", and "avx2"), Err() if some instruction sets are missing
     ///
@@ -116,6 +119,13 @@ impl<T: AvxNum> RadersAvx2<T> {
     /// Panics if `inner_fft_len() + 1` is not a prime number.
     #[inline]
     pub fn new(inner_fft: Arc<dyn Fft<T>>) -> Result<Self, ()> {
+        // Internal sanity check: Make sure that A == T.
+        // This struct has two generic parameters A and T, but they must always be the same, and are only kept separate to help work around the lack of specialization.
+        // It would be cool if we could do this as a static_assert instead
+        let id_a = TypeId::of::<A>();
+        let id_t = TypeId::of::<T>();
+        assert_eq!(id_a, id_t);
+
         let has_avx = is_x86_feature_detected!("avx");
         let has_avx2 = is_x86_feature_detected!("avx2");
         let has_fma = is_x86_feature_detected!("fma");
@@ -173,26 +183,32 @@ impl<T: AvxNum> RadersAvx2<T> {
 
         // When computing the FFT, we'll want this array to be pre-conjugated, so conjugate it. at the same time, convert it to vectors for convenient use later.
         let conjugation_mask =
-            AvxVector256::broadcast_complex_elements(Complex::new(T::zero(), -T::zero()));
-        let inner_fft_multiplier: Box<[_]> = inner_fft_input
-            .chunks(T::VectorType::COMPLEX_PER_VECTOR)
-            .map(|chunk| {
-                let chunk_vector = match chunk.len() {
-                    1 => chunk.load_partial1_complex(0).zero_extend(),
-                    2 => {
-                        if chunk.len() == T::VectorType::COMPLEX_PER_VECTOR {
-                            chunk.load_complex(0)
-                        } else {
-                            chunk.load_partial2_complex(0).zero_extend()
+            AvxVector256::broadcast_complex_elements(Complex::new(A::zero(), -A::zero()));
+
+        let inner_fft_multiplier: Box<[_]> = {
+            // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
+            let transmuted_inner_input: &mut [Complex<A>] = array_utils::workaround_transmute_mut(&mut inner_fft_input);
+
+            transmuted_inner_input
+                .chunks(A::VectorType::COMPLEX_PER_VECTOR)
+                .map(|chunk| {
+                    let chunk_vector = match chunk.len() {
+                        1 => chunk.load_partial1_complex(0).zero_extend(),
+                        2 => {
+                            if chunk.len() == A::VectorType::COMPLEX_PER_VECTOR {
+                                chunk.load_complex(0)
+                            } else {
+                                chunk.load_partial2_complex(0).zero_extend()
+                            }
                         }
-                    }
-                    3 => chunk.load_partial3_complex(0),
-                    4 => chunk.load_complex(0),
-                    _ => unreachable!(),
-                };
-                AvxVector::xor(chunk_vector, conjugation_mask) // compute our conjugation by xoring our data with a precomputed mask
-            })
-            .collect();
+                        3 => chunk.load_partial3_complex(0),
+                        4 => chunk.load_complex(0),
+                        _ => unreachable!(),
+                    };
+                    AvxVector::xor(chunk_vector, conjugation_mask) // compute our conjugation by xoring our data with a precomputed mask
+                })
+                .collect()
+        };
 
         // Set up the data for our input index remapping computation
         const NUM_POWERS: usize = 5;
@@ -203,7 +219,7 @@ impl<T: AvxNum> RadersAvx2<T> {
             current_power = (current_power * primitive_root) % reduced_len;
         }
 
-        let (input_index_multiplier, input_index_init) = if T::VectorType::COMPLEX_PER_VECTOR == 4 {
+        let (input_index_multiplier, input_index_init) = if A::VectorType::COMPLEX_PER_VECTOR == 4 {
             (
                 VectorizedMultiplyMod::new(root_powers[4] as u32, len as u32),
                 _mm256_loadu_si256(root_powers.as_ptr().add(1) as *const __m256i),
@@ -225,8 +241,8 @@ impl<T: AvxNum> RadersAvx2<T> {
         // Instead, we can invert the scatter indexes to be gather indexes. But if there's an algorithmic way to compute this, I don't know what it is --
         // so we won't be able to compute it on the fly with some sort of VectorizedMultiplyMod thing. Instead, we're going to precompute the inverted mapping and gather from that mapping.
         // We want enough elements in our array to fill out an entire set of vectors so that we don't have to deal with any partial indexes etc.
-        let mapping_size = 1 + div_ceil(len, T::VectorType::COMPLEX_PER_VECTOR)
-            * T::VectorType::COMPLEX_PER_VECTOR;
+        let mapping_size = 1 + div_ceil(len, A::VectorType::COMPLEX_PER_VECTOR)
+            * A::VectorType::COMPLEX_PER_VECTOR;
         let mut output_mapping_inverse: Vec<i32> = vec![0; mapping_size];
         let mut output_index = 1;
         for i in 1..len {
@@ -235,14 +251,14 @@ impl<T: AvxNum> RadersAvx2<T> {
         }
 
         // the actual vector of indexes depends on whether we're f32 or f64
-        let output_index_mapping = if T::VectorType::COMPLEX_PER_VECTOR == 4 {
+        let output_index_mapping = if A::VectorType::COMPLEX_PER_VECTOR == 4 {
             (&output_mapping_inverse[1..])
-                .chunks_exact(T::VectorType::COMPLEX_PER_VECTOR)
+                .chunks_exact(A::VectorType::COMPLEX_PER_VECTOR)
                 .map(|chunk| _mm_loadu_si128(chunk.as_ptr() as *const __m128i))
                 .collect::<Box<[__m128i]>>()
         } else {
             (&output_mapping_inverse[1..])
-                .chunks_exact(T::VectorType::COMPLEX_PER_VECTOR)
+                .chunks_exact(A::VectorType::COMPLEX_PER_VECTOR)
                 .map(|chunk| {
                     let duplicated_indexes = [chunk[0], chunk[0], chunk[1], chunk[1]];
                     _mm_loadu_si128(duplicated_indexes.as_ptr() as *const __m128i)
@@ -263,6 +279,8 @@ impl<T: AvxNum> RadersAvx2<T> {
             inplace_scratch_len: len + extra_inner_scratch,
             outofplace_scratch_len: extra_inner_scratch,
             inverse,
+
+            _phantom: std::marker::PhantomData,
         }
     }
 
@@ -270,10 +288,10 @@ impl<T: AvxNum> RadersAvx2<T> {
     #[target_feature(enable = "avx2", enable = "avx", enable = "fma")]
     unsafe fn prepare_raders(
         &self,
-        input: &[Complex<T>],
-        output: &mut [Complex<T>],
-    ) -> (Complex<T>, Complex<T>) {
-        let mut vector_sum = T::VectorType::zero();
+        input: &[Complex<A>],
+        output: &mut [Complex<A>],
+    ) -> (Complex<A>, Complex<A>) {
+        let mut vector_sum = A::VectorType::zero();
         let mut indexes = self.input_index_init;
         let first_element = input[0];
 
@@ -281,10 +299,10 @@ impl<T: AvxNum> RadersAvx2<T> {
 
         // loop over the output array and use AVX gathers to reorder data from the input
         let mut chunks_iter =
-            (&mut output[1..]).chunks_exact_mut(T::VectorType::COMPLEX_PER_VECTOR);
+            (&mut output[1..]).chunks_exact_mut(A::VectorType::COMPLEX_PER_VECTOR);
         for chunk in chunks_iter.by_ref() {
             let gathered_elements =
-                T::VectorType::gather_complex_avx2_index64(input.as_ptr(), indexes);
+                A::VectorType::gather_complex_avx2_index64(input.as_ptr(), indexes);
 
             // advance our indexes
             indexes = index_multiplier.mul_rem(indexes);
@@ -318,22 +336,22 @@ impl<T: AvxNum> RadersAvx2<T> {
     #[target_feature(enable = "avx2", enable = "avx", enable = "fma")]
     unsafe fn finalize_raders(
         &self,
-        input: &[Complex<T>],
-        output: &mut [Complex<T>],
-        first_input: Complex<T>,
+        input: &[Complex<A>],
+        output: &mut [Complex<A>],
+        first_input: Complex<A>,
     ) {
         let output_add = AvxVector256::broadcast_complex_elements(first_input);
 
         // We need to conjugate elements as a part of the finalization step, and sadly we can't roll it into any other instructions. So we'll do it via an xor.
         let conjugation_mask =
-            AvxVector256::broadcast_complex_elements(Complex::new(T::zero(), -T::zero()));
+            AvxVector256::broadcast_complex_elements(Complex::new(A::zero(), -A::zero()));
 
         let mut chunks_iter =
-            (&mut output[1..]).chunks_exact_mut(T::VectorType::COMPLEX_PER_VECTOR);
+            (&mut output[1..]).chunks_exact_mut(A::VectorType::COMPLEX_PER_VECTOR);
         for (i, chunk) in chunks_iter.by_ref().enumerate() {
             let index_chunk = *self.output_index_mapping.get_unchecked(i);
             let gathered_elements =
-                T::VectorType::gather_complex_avx2_index32(input.as_ptr(), index_chunk);
+                A::VectorType::gather_complex_avx2_index32(input.as_ptr(), index_chunk);
             let conjugated_elements = AvxVector::xor(gathered_elements, conjugation_mask);
 
             // Add the first input value to each output value, then store
@@ -363,7 +381,12 @@ impl<T: AvxNum> RadersAvx2<T> {
         output: &mut [Complex<T>],
         scratch: &mut [Complex<T>],
     ) {
-        let (first_input, first_output) = unsafe { self.prepare_raders(input, output) };
+        let (first_input, first_output) = unsafe {
+            // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
+            let transmuted_input: &mut [Complex<A>] = array_utils::workaround_transmute_mut(input);
+            let transmuted_output: &mut [Complex<A>] = array_utils::workaround_transmute_mut(output);
+            self.prepare_raders(transmuted_input, transmuted_output)
+        };
 
         let inner_input = &mut input[1..];
         let inner_output = &mut output[1..];
@@ -381,9 +404,12 @@ impl<T: AvxNum> RadersAvx2<T> {
         // also conjugate every entry. this sets us up to do an inverse FFT
         // (because an inverse FFT is equivalent to a normal FFT where you conjugate both the inputs and outputs)
         unsafe {
+            // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
+            let transmuted_inner_input: &mut [Complex<A>] = array_utils::workaround_transmute_mut(inner_input);
+            let transmuted_inner_output: &mut [Complex<A>] = array_utils::workaround_transmute_mut(inner_output);
             avx_vector::pairwise_complex_mul_conjugated(
-                &mut inner_output[..],
-                &mut inner_input[..],
+                transmuted_inner_output,
+                transmuted_inner_input,
                 &self.twiddles,
             )
         };
@@ -398,14 +424,22 @@ impl<T: AvxNum> RadersAvx2<T> {
             .process_inplace_with_scratch(inner_input, inner_scratch);
 
         // copy the final values into the output, reordering as we go
-        output[0] = first_output;
         unsafe {
-            self.finalize_raders(input, output, first_input);
+            // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
+            let transmuted_input: &mut [Complex<A>] = array_utils::workaround_transmute_mut(input);
+            let transmuted_output: &mut [Complex<A>] = array_utils::workaround_transmute_mut(output);
+            transmuted_output[0] = first_output;
+            self.finalize_raders(transmuted_input, transmuted_output, first_input);
         }
     }
     fn perform_fft_inplace(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
         let (scratch, extra_scratch) = scratch.split_at_mut(self.len());
-        let (first_input, first_output) = unsafe { self.prepare_raders(buffer, scratch) };
+        let (first_input, first_output) = unsafe { 
+            // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
+            let transmuted_scratch: &mut [Complex<A>] = array_utils::workaround_transmute_mut(scratch);
+            let transmuted_buffer: &mut [Complex<A>] = array_utils::workaround_transmute_mut(buffer);
+            self.prepare_raders(transmuted_buffer, transmuted_scratch)
+        };
 
         let truncated_scratch = &mut scratch[1..];
 
@@ -422,7 +456,9 @@ impl<T: AvxNum> RadersAvx2<T> {
         // also conjugate every entry. this sets us up to do an inverse FFT
         // (because an inverse FFT is equivalent to a normal FFT where you conjugate both the inputs and outputs)
         unsafe {
-            avx_vector::pairwise_complex_mul_assign_conjugated(truncated_scratch, &self.twiddles)
+            // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
+            let transmuted_scratch: &mut [Complex<A>] = array_utils::workaround_transmute_mut(truncated_scratch);
+            avx_vector::pairwise_complex_mul_assign_conjugated(transmuted_scratch, &self.twiddles)
         };
 
         // execute the second FFT
@@ -430,17 +466,20 @@ impl<T: AvxNum> RadersAvx2<T> {
             .process_inplace_with_scratch(truncated_scratch, inner_scratch);
 
         // copy the final values into the output, reordering as we go
-        buffer[0] = first_output;
         unsafe {
-            self.finalize_raders(scratch, buffer, first_input);
+            // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
+            let transmuted_scratch: &mut [Complex<A>] = array_utils::workaround_transmute_mut(scratch);
+            let transmuted_buffer: &mut [Complex<A>] = array_utils::workaround_transmute_mut(buffer);
+            transmuted_buffer[0] = first_output;
+            self.finalize_raders(transmuted_scratch, transmuted_buffer, first_input);
         }
     }
 }
 boilerplate_avx_fft!(
     RadersAvx2,
-    |this: &RadersAvx2<_>| this.len,
-    |this: &RadersAvx2<_>| this.inplace_scratch_len,
-    |this: &RadersAvx2<_>| this.outofplace_scratch_len
+    |this: &RadersAvx2<_, _>| this.len,
+    |this: &RadersAvx2<_, _>| this.inplace_scratch_len,
+    |this: &RadersAvx2<_, _>| this.outofplace_scratch_len
 );
 
 #[cfg(test)]
@@ -475,7 +514,7 @@ mod unit_tests {
 
     fn test_raders_with_length<T: AvxNum + Float + SampleUniform>(len: usize, inverse: bool) {
         let inner_fft = Arc::new(DFT::new(len - 1, inverse));
-        let fft = RadersAvx2::new(inner_fft).unwrap();
+        let fft = RadersAvx2::<T, T>::new(inner_fft).unwrap();
 
         check_fft_algorithm::<T>(&fft, len, inverse);
     }

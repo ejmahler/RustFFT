@@ -12,7 +12,12 @@ pub unsafe fn transpose_small<T: Copy>(width: usize, height: usize, input: &[T],
     }
 }
 
-pub unsafe fn transmute_slice_mut<T, U>(slice: &mut [T]) -> &mut [U] {
+pub unsafe fn workaround_transmute<T, U>(slice: &[T]) -> &[U] {
+    let ptr = slice.as_ptr() as *const U;
+    let len = slice.len();
+    std::slice::from_raw_parts(ptr, len)
+}
+pub unsafe fn workaround_transmute_mut<T, U>(slice: &mut [T]) -> &mut [U] {
     let ptr = slice.as_mut_ptr() as *mut U;
     let len = slice.len();
     std::slice::from_raw_parts_mut(ptr, len)

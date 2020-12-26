@@ -29,7 +29,7 @@ struct CommonSimdData<T, V> {
 
 macro_rules! boilerplate_avx_fft {
     ($struct_name:ident, $len_fn:expr, $inplace_scratch_len_fn:expr, $out_of_place_scratch_len_fn:expr) => {
-        impl<T: AvxNum> Fft<T> for $struct_name<T> {
+        impl<A: AvxNum, T: FFTnum> Fft<T> for $struct_name<A, T> {
             fn process_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
@@ -157,13 +157,13 @@ macro_rules! boilerplate_avx_fft {
                 $out_of_place_scratch_len_fn(self)
             }
         }
-        impl<T: AvxNum> Length for $struct_name<T> {
+        impl<A: AvxNum, T> Length for $struct_name<A, T> {
             #[inline(always)]
             fn len(&self) -> usize {
                 $len_fn(self)
             }
         }
-        impl<T: AvxNum> IsInverse for $struct_name<T> {
+        impl<A: AvxNum, T> IsInverse for $struct_name<A, T> {
             #[inline(always)]
             fn is_inverse(&self) -> bool {
                 self.inverse
@@ -174,7 +174,7 @@ macro_rules! boilerplate_avx_fft {
 
 macro_rules! boilerplate_avx_fft_commondata {
     ($struct_name:ident) => {
-        impl<T: AvxNum> Fft<T> for $struct_name<T> {
+        impl<A: AvxNum, T: FFTnum> Fft<T> for $struct_name<A, T> {
             fn process_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
@@ -302,13 +302,13 @@ macro_rules! boilerplate_avx_fft_commondata {
                 self.common_data.outofplace_scratch_len
             }
         }
-        impl<T: AvxNum> Length for $struct_name<T> {
+        impl<A: AvxNum, T> Length for $struct_name<A, T> {
             #[inline(always)]
             fn len(&self) -> usize {
                 self.common_data.len
             }
         }
-        impl<T: AvxNum> IsInverse for $struct_name<T> {
+        impl<A: AvxNum, T> IsInverse for $struct_name<A, T> {
             #[inline(always)]
             fn is_inverse(&self) -> bool {
                 self.common_data.inverse

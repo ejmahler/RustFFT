@@ -52,8 +52,6 @@
 //!
 //! Elements in the output are ordered by ascending frequency, with the first element corresponding to frequency 0.
 
-#![feature(min_specialization)]
-
 pub use num_complex;
 pub use num_traits;
 
