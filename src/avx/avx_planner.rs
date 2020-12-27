@@ -1,6 +1,6 @@
-use std::{any::TypeId, cmp::min};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::{any::TypeId, cmp::min};
 
 use primal_check::miller_rabin;
 
@@ -19,15 +19,15 @@ fn wrap_fft<T: FFTnum>(butterfly: impl Fft<T> + 'static) -> Arc<dyn Fft<T>> {
 #[derive(Debug)]
 enum MixedRadixBase {
     // The base will be a butterfly algorithm
-    ButterflyBase(usize),   
-    
+    ButterflyBase(usize),
+
     // The base will be an instance of Rader's Algorithm. That will require its own plan for the internal FFT, which we'll handle separately
-    RadersBase(usize),   
-    
+    RadersBase(usize),
+
     // The base will be an instance of Bluestein's Algorithm. That will require its own plan for the internal FFT, which we'll handle separately.
     // First usize is the base length, second usize is the inner FFT length
-    BluesteinsBase(usize, usize), 
-    
+    BluesteinsBase(usize, usize),
+
     // The "base" is a FFT instance we already have cached
     CacheBase(usize),
 }
@@ -45,8 +45,8 @@ impl MixedRadixBase {
 /// repreesnts a FFT plan, stored as a base FFT and a stack of MixedRadix*xn on top of it.
 #[derive(Debug)]
 pub struct MixedRadixPlan {
-    len: usize,             // product of base and radixes
-    radixes: Vec<u8>,       // stored from innermost to outermost
+    len: usize,       // product of base and radixes
+    radixes: Vec<u8>, // stored from innermost to outermost
     base: MixedRadixBase,
 }
 impl MixedRadixPlan {
@@ -123,7 +123,6 @@ impl<T: FFTnum> FftPlannerAvx<T> {
         let has_avx = is_x86_feature_detected!("avx");
         let has_fma = is_x86_feature_detected!("fma");
         if has_avx && has_fma {
-
             // Ideally, we would implement the planner with specialization.
             // Specialization won't be on stable rust for a long time tohugh, so in the meantime, we can hack around it.
             //
@@ -151,9 +150,13 @@ impl<T: FFTnum> FftPlannerAvx<T> {
             let id_t = TypeId::of::<T>();
 
             if id_t == id_f32 {
-                return Ok(Self { internal_planner: Box::new(AvxPlannerInternal::<f32, T>::new(inverse)) });
+                return Ok(Self {
+                    internal_planner: Box::new(AvxPlannerInternal::<f32, T>::new(inverse)),
+                });
             } else if id_t == id_f64 {
-                return Ok(Self { internal_planner: Box::new(AvxPlannerInternal::<f64, T>::new(inverse)) });
+                return Ok(Self {
+                    internal_planner: Box::new(AvxPlannerInternal::<f64, T>::new(inverse)),
+                });
             }
         }
         Err(())
@@ -190,7 +193,11 @@ impl<T: FFTnum> AvxPlannerInternalAPI<T> for AvxPlannerInternal<f32, T> {
         let plan = self.plan_fft(len, Self::plan_mixed_radix_base);
 
         // Step 2: Construct the plan. If the base is rader's algorithm or bluestein's algorithm, this may call self.plan_and_construct_fft recursively!
-        self.construct_plan(plan, Self::construct_butterfly, Self::plan_and_construct_fft)
+        self.construct_plan(
+            plan,
+            Self::construct_butterfly,
+            Self::plan_and_construct_fft,
+        )
     }
     fn debug_plan_fft(&self, len: usize) -> MixedRadixPlan {
         self.plan_fft(len, Self::plan_mixed_radix_base)
@@ -202,15 +209,16 @@ impl<T: FFTnum> AvxPlannerInternalAPI<T> for AvxPlannerInternal<f64, T> {
         let plan = self.plan_fft(len, Self::plan_mixed_radix_base);
 
         // Step 2: Construct the plan. If the base is rader's algorithm or bluestein's algorithm, this may call self.plan_and_construct_fft recursively!
-        self.construct_plan(plan, Self::construct_butterfly, Self::plan_and_construct_fft)
+        self.construct_plan(
+            plan,
+            Self::construct_butterfly,
+            Self::plan_and_construct_fft,
+        )
     }
     fn debug_plan_fft(&self, len: usize) -> MixedRadixPlan {
         self.plan_fft(len, Self::plan_mixed_radix_base)
     }
 }
-
-
-
 
 //-------------------------------------------------------------------
 // f32-specific planning stuff
@@ -227,7 +235,7 @@ impl<T: FFTnum> AvxPlannerInternal<f32, T> {
         Self {
             algorithm_cache: HashMap::new(),
             inverse,
-            _phantom: std::marker::PhantomData
+            _phantom: std::marker::PhantomData,
         }
     }
 
@@ -246,22 +254,31 @@ impl<T: FFTnum> AvxPlannerInternal<f32, T> {
                 let inner_factors = PartialFactors::compute(other_factors - 1);
                 if inner_factors.get_other_factors() == 1 {
                     // We only have factors of 2,3,5,7, and 11. If we don't have AVX2, we also have to exclude factors of 5 and 7 and 11, because avx2 gives us enough headroom for the overhead of those to not be a problem
-                    if is_x86_feature_detected!("avx2") || (inner_factors.product_power2power3() == len - 1) {
-                        return MixedRadixPlan::new(MixedRadixBase::RadersBase(other_factors), vec![]);
+                    if is_x86_feature_detected!("avx2")
+                        || (inner_factors.product_power2power3() == len - 1)
+                    {
+                        return MixedRadixPlan::new(
+                            MixedRadixBase::RadersBase(other_factors),
+                            vec![],
+                        );
                     }
                 }
             }
 
             // At this point, we know we're using bluestein's algorithm for the base. Next step is to plan the inner size we'll use for bluestein's algorithm.
-            let inner_bluesteins_len = self.plan_bluesteins(other_factors, |(_len, factor2, factor3)| {
-                if *factor2 > 16 && *factor3 < 3 {
-                    // surprisingly, pure powers of 2 have a pretty steep dropoff in speed after 65536.
-                    // the algorithm is designed to generate candidadtes larger than baseline_candidate, so if we hit a large power of 2, there should be more after it that we can skip to
-                    return false;
-                }
-                true
-            });
-            return MixedRadixPlan::new(MixedRadixBase::BluesteinsBase(other_factors, inner_bluesteins_len), vec![]);
+            let inner_bluesteins_len =
+                self.plan_bluesteins(other_factors, |(_len, factor2, factor3)| {
+                    if *factor2 > 16 && *factor3 < 3 {
+                        // surprisingly, pure powers of 2 have a pretty steep dropoff in speed after 65536.
+                        // the algorithm is designed to generate candidadtes larger than baseline_candidate, so if we hit a large power of 2, there should be more after it that we can skip to
+                        return false;
+                    }
+                    true
+                });
+            return MixedRadixPlan::new(
+                MixedRadixBase::BluesteinsBase(other_factors, inner_bluesteins_len),
+                vec![],
+            );
         }
 
         // If this FFT size is a butterfly, use that
@@ -327,12 +344,21 @@ impl<T: FFTnum> AvxPlannerInternal<f32, T> {
                 },
                 3 => match factors.get_power3() % 2 {
                     0 => MixedRadixPlan::butterfly(72, vec![]),
-                    1 => MixedRadixPlan::butterfly(if factors.get_power3() > 7 { 24 } else { 72 }, vec![]),
+                    1 => MixedRadixPlan::butterfly(
+                        if factors.get_power3() > 7 { 24 } else { 72 },
+                        vec![],
+                    ),
                     _ => unreachable!(),
                 },
                 4 => match factors.get_power3() % 2 {
-                    0 => MixedRadixPlan::butterfly(if factors.get_power3() > 6 { 16 } else { 72 }, vec![]),
-                    1 => MixedRadixPlan::butterfly(if factors.get_power3() > 9 { 48 } else { 72 }, vec![]),
+                    0 => MixedRadixPlan::butterfly(
+                        if factors.get_power3() > 6 { 16 } else { 72 },
+                        vec![],
+                    ),
+                    1 => MixedRadixPlan::butterfly(
+                        if factors.get_power3() > 9 { 48 } else { 72 },
+                        vec![],
+                    ),
                     _ => unreachable!(),
                 },
                 // if this FFT is 32 or greater times a power of 3, just use 72. As you might expect, in this vast field of options, what is optimal becomes a lot more muddy and situational
@@ -400,10 +426,6 @@ impl<T: FFTnum> AvxPlannerInternal<f32, T> {
     }
 }
 
-
-
-
-
 //-------------------------------------------------------------------
 // f64-specific planning stuff
 //-------------------------------------------------------------------
@@ -419,7 +441,7 @@ impl<T: FFTnum> AvxPlannerInternal<f64, T> {
         Self {
             algorithm_cache: HashMap::new(),
             inverse,
-            _phantom: std::marker::PhantomData
+            _phantom: std::marker::PhantomData,
         }
     }
 
@@ -438,23 +460,32 @@ impl<T: FFTnum> AvxPlannerInternal<f64, T> {
                 let inner_factors = PartialFactors::compute(other_factors - 1);
                 if inner_factors.get_other_factors() == 1 {
                     // We only have factors of 2,3,5,7, and 11. If we don't have AVX2, we also have to exclude factors of 5 and 7 and 11, because avx2 gives us enough headroom for the overhead of those to not be a problem
-                    if is_x86_feature_detected!("avx2") || (inner_factors.product_power2power3() == len - 1) {
-                        return MixedRadixPlan::new(MixedRadixBase::RadersBase(other_factors), vec![]);
+                    if is_x86_feature_detected!("avx2")
+                        || (inner_factors.product_power2power3() == len - 1)
+                    {
+                        return MixedRadixPlan::new(
+                            MixedRadixBase::RadersBase(other_factors),
+                            vec![],
+                        );
                     }
                 }
             }
 
             // At this point, we know we're using bluestein's algorithm for the base. Next step is to plan the inner size we'll use for bluestein's algorithm.
-            let inner_bluesteins_len = self.plan_bluesteins(other_factors, |(_len, factor2, factor3)| {
-                if *factor3 < 1 && *factor2 > 13 {
-                    return false;
-                }
-                if *factor3 < 4 && *factor2 > 14 {
-                    return false;
-                }
-                true
-            });
-            return MixedRadixPlan::new(MixedRadixBase::BluesteinsBase(other_factors, inner_bluesteins_len), vec![]);
+            let inner_bluesteins_len =
+                self.plan_bluesteins(other_factors, |(_len, factor2, factor3)| {
+                    if *factor3 < 1 && *factor2 > 13 {
+                        return false;
+                    }
+                    if *factor3 < 4 && *factor2 > 14 {
+                        return false;
+                    }
+                    true
+                });
+            return MixedRadixPlan::new(
+                MixedRadixBase::BluesteinsBase(other_factors, inner_bluesteins_len),
+                vec![],
+            );
         }
 
         // If this FFT size is a butterfly, use that
@@ -523,14 +554,20 @@ impl<T: FFTnum> AvxPlannerInternal<f64, T> {
             // Our FFT is a power of 3 times a low power of 2
             match factors.get_power2() {
                 0 => match factors.get_power3() % 2 {
-                    0 => MixedRadixPlan::butterfly(if factors.get_power3() > 10 { 9 } else { 27 }, vec![]),
+                    0 => MixedRadixPlan::butterfly(
+                        if factors.get_power3() > 10 { 9 } else { 27 },
+                        vec![],
+                    ),
                     1 => MixedRadixPlan::butterfly(27, vec![]),
                     _ => unreachable!(),
                 },
                 1 => MixedRadixPlan::butterfly(18, vec![]),
                 2 => match factors.get_power3() % 2 {
                     0 => MixedRadixPlan::butterfly(36, vec![]),
-                    1 => MixedRadixPlan::butterfly(if factors.get_power3() > 10 { 36 } else { 18 }, vec![]),
+                    1 => MixedRadixPlan::butterfly(
+                        if factors.get_power3() > 10 { 36 } else { 18 },
+                        vec![],
+                    ),
                     _ => unreachable!(),
                 },
                 3 => MixedRadixPlan::butterfly(18, vec![]),
@@ -597,13 +634,16 @@ impl<T: FFTnum> AvxPlannerInternal<f64, T> {
     }
 }
 
-
 //-------------------------------------------------------------------
 // type-agnostic planning stuff
 //-------------------------------------------------------------------
 impl<A: AvxNum, T: FFTnum> AvxPlannerInternal<A, T> {
     // Given a length, return a plan for how this FFT should be computed
-    fn plan_fft(&self, len: usize, base_fn: impl FnOnce(&Self, usize, &PartialFactors) -> MixedRadixPlan) -> MixedRadixPlan {
+    fn plan_fft(
+        &self,
+        len: usize,
+        base_fn: impl FnOnce(&Self, usize, &PartialFactors) -> MixedRadixPlan,
+    ) -> MixedRadixPlan {
         // First step: If this size is already cached, return it directly
         if self.algorithm_cache.contains_key(&len) {
             return MixedRadixPlan::cached(len);
@@ -617,7 +657,7 @@ impl<A: AvxNum, T: FFTnum> AvxPlannerInternal<A, T> {
         let uncached_plan = if base.len == len {
             base
         } else {
-            // We have some mixed radix steps to compute! Compute the factors that need to computed by mixed radix steps, 
+            // We have some mixed radix steps to compute! Compute the factors that need to computed by mixed radix steps,
             let radix_factors = factors
                 .divide_by(&PartialFactors::compute(base.len))
                 .unwrap_or_else(|| {
@@ -634,7 +674,11 @@ impl<A: AvxNum, T: FFTnum> AvxPlannerInternal<A, T> {
     }
 
     // Takes a plan and an algorithm cache, and replaces steps of the plan with cached steps, if possible
-    fn replan_with_cache(&self, plan: MixedRadixPlan, cache: &HashMap<usize, Arc<dyn Fft<T>>>) -> MixedRadixPlan {
+    fn replan_with_cache(
+        &self,
+        plan: MixedRadixPlan,
+        cache: &HashMap<usize, Arc<dyn Fft<T>>>,
+    ) -> MixedRadixPlan {
         enum CacheLocation {
             None,
             Base,
@@ -644,7 +688,7 @@ impl<A: AvxNum, T: FFTnum> AvxPlannerInternal<A, T> {
         let mut largest_cached_len = CacheLocation::None;
         let base_len = plan.base.base_len();
         let mut current_len = base_len;
-        
+
         // Check if the cache contains the base
         if cache.contains_key(&current_len) {
             largest_cached_len = CacheLocation::Base;
@@ -662,13 +706,15 @@ impl<A: AvxNum, T: FFTnum> AvxPlannerInternal<A, T> {
         // If we found a cached length within the plan, update the plan to account for the cache
         match largest_cached_len {
             CacheLocation::None => plan,
-            CacheLocation::Base => MixedRadixPlan::new( MixedRadixBase::CacheBase(base_len), plan.radixes),
+            CacheLocation::Base => {
+                MixedRadixPlan::new(MixedRadixBase::CacheBase(base_len), plan.radixes)
+            }
             CacheLocation::Radix(cached_len, cached_index) => {
                 // We know that `plan.radixes[cached_index]` is the largest cache value, and `cached_len` will be our new base legth
                 // Drop every element from `plan.radixes` from up to and including cached_index
                 let mut chain = plan.radixes;
                 chain.drain(0..=cached_index);
-                MixedRadixPlan::new( MixedRadixBase::CacheBase(cached_len), chain)
+                MixedRadixPlan::new(MixedRadixBase::CacheBase(cached_len), chain)
             }
         }
     }
@@ -792,10 +838,11 @@ impl<A: AvxNum, T: FFTnum> AvxPlannerInternal<A, T> {
     }
 
     // Constructs and returns a FFT instance from a FFT plan.
-    // If the base is a butterfly, it will call the provided `construct_butterfly_fn` to do so. 
+    // If the base is a butterfly, it will call the provided `construct_butterfly_fn` to do so.
     // If constructing the base requires constructing an inner FFT (IE bluetein's or rader's algorithm), it will call the provided `inner_fft_fn` to construct it
-    fn construct_plan(&mut self, 
-        plan: MixedRadixPlan, 
+    fn construct_plan(
+        &mut self,
+        plan: MixedRadixPlan,
         construct_butterfly_fn: impl FnOnce(&Self, usize) -> Arc<dyn Fft<T>>,
         inner_fft_fn: impl FnOnce(&mut Self, usize) -> Arc<dyn Fft<T>>,
     ) -> Arc<dyn Fft<T>> {
@@ -805,35 +852,40 @@ impl<A: AvxNum, T: FFTnum> AvxPlannerInternal<A, T> {
                 let butterfly_instance = construct_butterfly_fn(self, len);
 
                 // Cache this FFT instance for future calls to `plan_fft`
-                self.algorithm_cache.insert(len, Arc::clone(&butterfly_instance));
+                self.algorithm_cache
+                    .insert(len, Arc::clone(&butterfly_instance));
                 butterfly_instance
-            },
+            }
             MixedRadixBase::RadersBase(len) => {
                 // Rader's Algorithm requires an inner FFT of size len - 1
                 let inner_fft = inner_fft_fn(self, len - 1);
 
                 // try to construct our AVX2 rader's algorithm. If that fails (probably because the machine we're running on doesn't have AVX2), fall back to scalar
-                let raders_instance = if let Ok(raders_avx) = RadersAvx2::<A, T>::new(Arc::clone(&inner_fft)) {
-                    dbg!("constructing avx2 raders");
-                    wrap_fft(raders_avx)
-                } else {
-                    dbg!("constructing scalar raders");
-                    wrap_fft(RadersAlgorithm::new(inner_fft))
-                };
+                let raders_instance =
+                    if let Ok(raders_avx) = RadersAvx2::<A, T>::new(Arc::clone(&inner_fft)) {
+                        dbg!("constructing avx2 raders");
+                        wrap_fft(raders_avx)
+                    } else {
+                        dbg!("constructing scalar raders");
+                        wrap_fft(RadersAlgorithm::new(inner_fft))
+                    };
 
                 // Cache this FFT instance for future calls to `plan_fft`
-                self.algorithm_cache.insert(len, Arc::clone(&raders_instance));
+                self.algorithm_cache
+                    .insert(len, Arc::clone(&raders_instance));
                 raders_instance
-            },
+            }
             MixedRadixBase::BluesteinsBase(len, inner_fft_len) => {
                 // Bluestein's has an inner FFT of arbitrary size. But we've already planned it, so just use what we planned
                 let inner_fft = inner_fft_fn(self, inner_fft_len);
 
                 // try to construct our AVX2 rader's algorithm. If that fails (probably because the machine we're running on doesn't have AVX2), fall back to scalar
-                let bluesteins_instance = wrap_fft(BluesteinsAvx::<A, T>::new(len, inner_fft).unwrap());
+                let bluesteins_instance =
+                    wrap_fft(BluesteinsAvx::<A, T>::new(len, inner_fft).unwrap());
 
                 // Cache this FFT instance for future calls to `plan_fft`
-                self.algorithm_cache.insert(len, Arc::clone(&bluesteins_instance));
+                self.algorithm_cache
+                    .insert(len, Arc::clone(&bluesteins_instance));
                 bluesteins_instance
             }
         };
@@ -864,7 +916,11 @@ impl<A: AvxNum, T: FFTnum> AvxPlannerInternal<A, T> {
 
     // Plan and return the inner size to be used with Bluestein's Algorithm
     // Calls `filter_fn` on result candidates, giving the caller the opportunity to reject certain sizes
-    fn plan_bluesteins(&self, len: usize, filter_fn: impl FnMut(&&(usize, u32, u32)) -> bool) -> usize {
+    fn plan_bluesteins(
+        &self,
+        len: usize,
+        filter_fn: impl FnMut(&&(usize, u32, u32)) -> bool,
+    ) -> usize {
         assert!(len > 1); // Internal consistency check: The logic in this method doesn't work for a length of 1
 
         // Bluestein's computes a FFT of size `len` by reorganizing it as a FFT of ANY size greater than or equal to len * 2 - 1
@@ -897,15 +953,16 @@ impl<A: AvxNum, T: FFTnum> AvxPlannerInternal<A, T> {
         bluesteins_candidates.sort();
 
         // we now have a list of candidates to choosse from. some 2^n * 3^m FFTs are faster than others, so apply a filter, which will let us skip sizes that benchmarking has shown to be slow
-        let (chosen_size, _, _) = bluesteins_candidates
-            .iter()
-            .find(filter_fn)
-            .unwrap_or_else(|| {
-                panic!(
-                    "Failed to find a bluestein's candidate for len={}, candidates: {:?}",
-                    len, bluesteins_candidates
-                )
-            });
+        let (chosen_size, _, _) =
+            bluesteins_candidates
+                .iter()
+                .find(filter_fn)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Failed to find a bluestein's candidate for len={}, candidates: {:?}",
+                        len, bluesteins_candidates
+                    )
+                });
 
         *chosen_size
     }

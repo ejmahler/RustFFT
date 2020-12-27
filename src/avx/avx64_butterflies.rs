@@ -235,8 +235,10 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                 );
 
                 // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
-                let transmuted_input : &mut [Complex<f64>] = unsafe { array_utils::workaround_transmute_mut(input) };
-                let transmuted_output : &mut [Complex<f64>]  = unsafe { array_utils::workaround_transmute_mut(output) };
+                let transmuted_input: &mut [Complex<f64>] =
+                    unsafe { array_utils::workaround_transmute_mut(input) };
+                let transmuted_output: &mut [Complex<f64>] =
+                    unsafe { array_utils::workaround_transmute_mut(output) };
 
                 self.perform_fft_out_of_place(transmuted_input, transmuted_output);
             }
@@ -261,8 +263,10 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                 );
 
                 // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
-                let transmuted_input : &mut [Complex<f64>] = unsafe { array_utils::workaround_transmute_mut(input) };
-                let transmuted_output : &mut [Complex<f64>]  = unsafe { array_utils::workaround_transmute_mut(output) };
+                let transmuted_input: &mut [Complex<f64>] =
+                    unsafe { array_utils::workaround_transmute_mut(input) };
+                let transmuted_output: &mut [Complex<f64>] =
+                    unsafe { array_utils::workaround_transmute_mut(output) };
 
                 for (in_chunk, out_chunk) in transmuted_input
                     .chunks_exact_mut(self.len())
@@ -288,16 +292,14 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                 let scratch = &mut scratch[..$len];
 
                 // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
-                let transmuted_buffer : &mut [Complex<f64>] = unsafe { array_utils::workaround_transmute_mut(buffer) };
-                let transmuted_scratch : &mut [Complex<f64>]  = unsafe { array_utils::workaround_transmute_mut(scratch) };
+                let transmuted_buffer: &mut [Complex<f64>] =
+                    unsafe { array_utils::workaround_transmute_mut(buffer) };
+                let transmuted_scratch: &mut [Complex<f64>] =
+                    unsafe { array_utils::workaround_transmute_mut(scratch) };
 
                 self.perform_fft_inplace(transmuted_buffer, transmuted_scratch);
             }
-            fn process_inplace_multi(
-                &self,
-                buffer: &mut [Complex<T>],
-                scratch: &mut [Complex<T>],
-            ) {
+            fn process_inplace_multi(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
                 assert_eq!(
                     buffer.len() % self.len(),
                     0,
@@ -310,8 +312,10 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                 let scratch = &mut scratch[..$len];
 
                 // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
-                let transmuted_buffer : &mut [Complex<f64>] = unsafe { array_utils::workaround_transmute_mut(buffer) };
-                let transmuted_scratch : &mut [Complex<f64>]  = unsafe { array_utils::workaround_transmute_mut(scratch) };
+                let transmuted_buffer: &mut [Complex<f64>] =
+                    unsafe { array_utils::workaround_transmute_mut(buffer) };
+                let transmuted_scratch: &mut [Complex<f64>] =
+                    unsafe { array_utils::workaround_transmute_mut(scratch) };
 
                 for chunk in transmuted_buffer.chunks_exact_mut(self.len()) {
                     self.perform_fft_inplace(chunk, transmuted_scratch);
@@ -1590,13 +1594,25 @@ impl<T> Butterfly512Avx64<T> {
             for chunk in 0..4 {
                 let twiddled = [
                     if chunk > 0 {
-                        AvxVector::mul_complex(mid_uninit[4 * chunk].assume_init(), twiddle_chunk[4 * chunk - 1])
+                        AvxVector::mul_complex(
+                            mid_uninit[4 * chunk].assume_init(),
+                            twiddle_chunk[4 * chunk - 1],
+                        )
                     } else {
                         mid_uninit[4 * chunk].assume_init()
                     },
-                    AvxVector::mul_complex(mid_uninit[4 * chunk + 1].assume_init(), twiddle_chunk[4 * chunk]),
-                    AvxVector::mul_complex(mid_uninit[4 * chunk + 2].assume_init(), twiddle_chunk[4 * chunk + 1]),
-                    AvxVector::mul_complex(mid_uninit[4 * chunk + 3].assume_init(), twiddle_chunk[4 * chunk + 2]),
+                    AvxVector::mul_complex(
+                        mid_uninit[4 * chunk + 1].assume_init(),
+                        twiddle_chunk[4 * chunk],
+                    ),
+                    AvxVector::mul_complex(
+                        mid_uninit[4 * chunk + 2].assume_init(),
+                        twiddle_chunk[4 * chunk + 1],
+                    ),
+                    AvxVector::mul_complex(
+                        mid_uninit[4 * chunk + 3].assume_init(),
+                        twiddle_chunk[4 * chunk + 2],
+                    ),
                 ];
 
                 let transposed = AvxVector::transpose4_packed(twiddled);

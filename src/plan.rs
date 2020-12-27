@@ -40,7 +40,7 @@ use crate::math_utils::{PrimeFactor, PrimeFactors};
 ///
 /// Each FFT instance owns [`Arc`s](std::sync::Arc) to its internal data, rather than borrowing it from the planner, so it's perfectly
 /// safe to drop the planner after creating Fft instances.
-pub enum FftPlanner<T:FFTnum> {
+pub enum FftPlanner<T: FFTnum> {
     Scalar(FftPlannerScalar<T>),
     Avx(FftPlannerAvx<T>),
 }
@@ -67,7 +67,6 @@ impl<T: FFTnum> FftPlanner<T> {
         }
     }
 }
-
 
 const MIN_RADIX4_BITS: u32 = 5; // smallest size to consider radix 4 an option is 2^5 = 32
 const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option is 2^16 = 65536

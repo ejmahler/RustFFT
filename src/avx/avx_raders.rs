@@ -1,6 +1,6 @@
-use std::{any::TypeId, arch::x86_64::*};
 use std::convert::TryInto;
 use std::sync::Arc;
+use std::{any::TypeId, arch::x86_64::*};
 
 use num_complex::Complex;
 use num_integer::{div_ceil, Integer};
@@ -8,9 +8,9 @@ use num_traits::Zero;
 use primal_check::miller_rabin;
 use strength_reduce::StrengthReducedUsize;
 
-use crate::math_utils;
-use crate::{Fft, IsInverse, Length, FFTnum};
 use crate::array_utils;
+use crate::math_utils;
+use crate::{FFTnum, Fft, IsInverse, Length};
 
 use super::avx_vector;
 use super::{
@@ -187,7 +187,8 @@ impl<A: AvxNum, T: FFTnum> RadersAvx2<A, T> {
 
         let inner_fft_multiplier: Box<[_]> = {
             // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
-            let transmuted_inner_input: &mut [Complex<A>] = array_utils::workaround_transmute_mut(&mut inner_fft_input);
+            let transmuted_inner_input: &mut [Complex<A>] =
+                array_utils::workaround_transmute_mut(&mut inner_fft_input);
 
             transmuted_inner_input
                 .chunks(A::VectorType::COMPLEX_PER_VECTOR)
@@ -384,7 +385,8 @@ impl<A: AvxNum, T: FFTnum> RadersAvx2<A, T> {
         let (first_input, first_output) = unsafe {
             // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
             let transmuted_input: &mut [Complex<A>] = array_utils::workaround_transmute_mut(input);
-            let transmuted_output: &mut [Complex<A>] = array_utils::workaround_transmute_mut(output);
+            let transmuted_output: &mut [Complex<A>] =
+                array_utils::workaround_transmute_mut(output);
             self.prepare_raders(transmuted_input, transmuted_output)
         };
 
@@ -405,8 +407,10 @@ impl<A: AvxNum, T: FFTnum> RadersAvx2<A, T> {
         // (because an inverse FFT is equivalent to a normal FFT where you conjugate both the inputs and outputs)
         unsafe {
             // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
-            let transmuted_inner_input: &mut [Complex<A>] = array_utils::workaround_transmute_mut(inner_input);
-            let transmuted_inner_output: &mut [Complex<A>] = array_utils::workaround_transmute_mut(inner_output);
+            let transmuted_inner_input: &mut [Complex<A>] =
+                array_utils::workaround_transmute_mut(inner_input);
+            let transmuted_inner_output: &mut [Complex<A>] =
+                array_utils::workaround_transmute_mut(inner_output);
             avx_vector::pairwise_complex_mul_conjugated(
                 transmuted_inner_output,
                 transmuted_inner_input,
@@ -427,17 +431,20 @@ impl<A: AvxNum, T: FFTnum> RadersAvx2<A, T> {
         unsafe {
             // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
             let transmuted_input: &mut [Complex<A>] = array_utils::workaround_transmute_mut(input);
-            let transmuted_output: &mut [Complex<A>] = array_utils::workaround_transmute_mut(output);
+            let transmuted_output: &mut [Complex<A>] =
+                array_utils::workaround_transmute_mut(output);
             transmuted_output[0] = first_output;
             self.finalize_raders(transmuted_input, transmuted_output, first_input);
         }
     }
     fn perform_fft_inplace(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
         let (scratch, extra_scratch) = scratch.split_at_mut(self.len());
-        let (first_input, first_output) = unsafe { 
+        let (first_input, first_output) = unsafe {
             // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
-            let transmuted_scratch: &mut [Complex<A>] = array_utils::workaround_transmute_mut(scratch);
-            let transmuted_buffer: &mut [Complex<A>] = array_utils::workaround_transmute_mut(buffer);
+            let transmuted_scratch: &mut [Complex<A>] =
+                array_utils::workaround_transmute_mut(scratch);
+            let transmuted_buffer: &mut [Complex<A>] =
+                array_utils::workaround_transmute_mut(buffer);
             self.prepare_raders(transmuted_buffer, transmuted_scratch)
         };
 
@@ -457,7 +464,8 @@ impl<A: AvxNum, T: FFTnum> RadersAvx2<A, T> {
         // (because an inverse FFT is equivalent to a normal FFT where you conjugate both the inputs and outputs)
         unsafe {
             // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
-            let transmuted_scratch: &mut [Complex<A>] = array_utils::workaround_transmute_mut(truncated_scratch);
+            let transmuted_scratch: &mut [Complex<A>] =
+                array_utils::workaround_transmute_mut(truncated_scratch);
             avx_vector::pairwise_complex_mul_assign_conjugated(transmuted_scratch, &self.twiddles)
         };
 
@@ -468,8 +476,10 @@ impl<A: AvxNum, T: FFTnum> RadersAvx2<A, T> {
         // copy the final values into the output, reordering as we go
         unsafe {
             // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
-            let transmuted_scratch: &mut [Complex<A>] = array_utils::workaround_transmute_mut(scratch);
-            let transmuted_buffer: &mut [Complex<A>] = array_utils::workaround_transmute_mut(buffer);
+            let transmuted_scratch: &mut [Complex<A>] =
+                array_utils::workaround_transmute_mut(scratch);
+            let transmuted_buffer: &mut [Complex<A>] =
+                array_utils::workaround_transmute_mut(buffer);
             transmuted_buffer[0] = first_output;
             self.finalize_raders(transmuted_scratch, transmuted_buffer, first_input);
         }
