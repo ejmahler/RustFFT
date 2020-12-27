@@ -166,10 +166,17 @@ impl<T: FFTnum> FftPlannerAvx<T> {
     pub fn plan_fft(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         self.internal_planner.plan_and_construct_fft(len)
     }
+
+    /// Returns a FFT plan without constructing it
+    #[allow(unused)]
+    pub(crate) fn debug_plan_fft(&self, len: usize) -> MixedRadixPlan {
+        self.internal_planner.debug_plan_fft(len)
+    }
 }
 
 trait AvxPlannerInternalAPI<T: FFTnum> {
     fn plan_and_construct_fft(&mut self, len: usize) -> Arc<dyn Fft<T>>;
+    fn debug_plan_fft(&self, len: usize) -> MixedRadixPlan;
 }
 
 struct AvxPlannerInternal<A: AvxNum, T: FFTnum> {
@@ -186,6 +193,9 @@ impl<T: FFTnum> AvxPlannerInternalAPI<T> for AvxPlannerInternal<f32, T> {
         // Step 2: Construct the plan. If the base is rader's algorithm or bluestein's algorithm, this may call self.plan_and_construct_fft recursively!
         self.construct_plan(plan, Self::construct_butterfly, Self::plan_and_construct_fft)
     }
+    fn debug_plan_fft(&self, len: usize) -> MixedRadixPlan {
+        self.plan_fft(len, Self::plan_mixed_radix_base)
+    }
 }
 impl<T: FFTnum> AvxPlannerInternalAPI<T> for AvxPlannerInternal<f64, T> {
     fn plan_and_construct_fft(&mut self, len: usize) -> Arc<dyn Fft<T>> {
@@ -194,6 +204,9 @@ impl<T: FFTnum> AvxPlannerInternalAPI<T> for AvxPlannerInternal<f64, T> {
 
         // Step 2: Construct the plan. If the base is rader's algorithm or bluestein's algorithm, this may call self.plan_and_construct_fft recursively!
         self.construct_plan(plan, Self::construct_butterfly, Self::plan_and_construct_fft)
+    }
+    fn debug_plan_fft(&self, len: usize) -> MixedRadixPlan {
+        self.plan_fft(len, Self::plan_mixed_radix_base)
     }
 }
 
@@ -802,8 +815,10 @@ impl<A: AvxNum, T: FFTnum> AvxPlannerInternal<A, T> {
 
                 // try to construct our AVX2 rader's algorithm. If that fails (probably because the machine we're running on doesn't have AVX2), fall back to scalar
                 let raders_instance = if let Ok(raders_avx) = RadersAvx2::<A, T>::new(Arc::clone(&inner_fft)) {
+                    dbg!("constructing avx2 raders");
                     wrap_fft(raders_avx)
                 } else {
+                    dbg!("constructing scalar raders");
                     wrap_fft(RadersAlgorithm::new(inner_fft))
                 };
 
