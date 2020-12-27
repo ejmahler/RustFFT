@@ -50,7 +50,7 @@ impl VectorizedMultiplyMod {
     // Input: 4 unsigned 64-bit numbers, each less than 2^30
     // Output: (x * multiplier) % divisor for each x in input
     #[allow(unused)]
-    #[target_feature(enable = "avx2")]
+    #[inline(always)]
     unsafe fn mul_rem(&self, a: __m256i) -> __m256i {
         // Pretty hacky, but we need to prove to the compiler that each entry of the divisor is a 32-bit number, by blending the divisor vector with zeroes in the upper bits of each number.
         // If we don't do this manually, the compiler will do it anyways, but only for _mm256_mul_epu32, not for the _mm256_sub_epi64 correction step at the end
