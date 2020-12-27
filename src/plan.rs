@@ -73,17 +73,33 @@ const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option i
 const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
 const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the inner fft of Bluestein if length is larger than this
 
-
 #[derive(Debug, std::cmp::PartialEq, Clone)]
 #[allow(dead_code)]
 pub enum Recipe {
     DFT(usize),
-    MixedRadix { left_fft: Box<Recipe>, right_fft: Box<Recipe>},
-    GoodThomasAlgorithm { left_fft: Box<Recipe>, right_fft: Box<Recipe>},
-    MixedRadixSmall { left_fft: Box<Recipe>, right_fft: Box<Recipe>},
-    GoodThomasAlgorithmSmall { left_fft: Box<Recipe>, right_fft: Box<Recipe>},
-    RadersAlgorithm { inner_fft: Box<Recipe>},
-    BluesteinsAlgorithm { len: usize, inner_fft: Box<Recipe>},
+    MixedRadix {
+        left_fft: Box<Recipe>,
+        right_fft: Box<Recipe>,
+    },
+    GoodThomasAlgorithm {
+        left_fft: Box<Recipe>,
+        right_fft: Box<Recipe>,
+    },
+    MixedRadixSmall {
+        left_fft: Box<Recipe>,
+        right_fft: Box<Recipe>,
+    },
+    GoodThomasAlgorithmSmall {
+        left_fft: Box<Recipe>,
+        right_fft: Box<Recipe>,
+    },
+    RadersAlgorithm {
+        inner_fft: Box<Recipe>,
+    },
+    BluesteinsAlgorithm {
+        len: usize,
+        inner_fft: Box<Recipe>,
+    },
     Radix4(usize),
     Butterfly2,
     Butterfly3,
@@ -102,8 +118,6 @@ pub enum Recipe {
     Butterfly31,
     Butterfly32,
 }
-
-
 
 /// The Scalar FFT planner creates new FFT algorithm instances using non-SIMD algorithms.
 ///
@@ -149,12 +163,7 @@ impl<T: FFTnum> FftPlannerScalar<T> {
         Self {
             inverse,
             algorithm_cache: HashMap::new(),
-<<<<<<< HEAD
-=======
             recipe_cache: HashMap::new(),
-
-            avx_planner: FftPlannerAvx::new(inverse).ok(),
->>>>>>> 1cc6d0a... Better tests, add recipe cache
         }
     }
 
@@ -176,12 +185,11 @@ impl<T: FFTnum> FftPlannerScalar<T> {
     fn design_fft_for_len(&mut self, len: usize) -> Recipe {
         if len < 2 {
             Recipe::DFT(len)
-        } else {    
+        } else {
             let factors = PrimeFactors::compute(len);
             self.design_fft_with_factors(len, factors)
         }
     }
- 
 
     // Create the fft from a recipe
     fn build_fft(&mut self, plan: Recipe) -> Arc<dyn Fft<T>> {
@@ -204,38 +212,48 @@ impl<T: FFTnum> FftPlannerScalar<T> {
             Recipe::Butterfly29 => Arc::new(Butterfly29::new(self.inverse)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly31 => Arc::new(Butterfly31::new(self.inverse)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly32 => Arc::new(Butterfly32::new(self.inverse)) as Arc<dyn Fft<T>>,
-            Recipe::MixedRadix { left_fft, right_fft } => {
+            Recipe::MixedRadix {
+                left_fft,
+                right_fft,
+            } => {
                 let left_fft = self.build_fft(*left_fft);
                 let right_fft = self.build_fft(*right_fft);
                 Arc::new(MixedRadix::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
-            },
-            Recipe::GoodThomasAlgorithm { left_fft, right_fft } => {
+            }
+            Recipe::GoodThomasAlgorithm {
+                left_fft,
+                right_fft,
+            } => {
                 let left_fft = self.build_fft(*left_fft);
                 let right_fft = self.build_fft(*right_fft);
                 Arc::new(GoodThomasAlgorithm::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
-            },
-            Recipe::MixedRadixSmall{left_fft, right_fft} => {
+            }
+            Recipe::MixedRadixSmall {
+                left_fft,
+                right_fft,
+            } => {
                 let left_fft = self.build_fft(*left_fft);
                 let right_fft = self.build_fft(*right_fft);
                 Arc::new(MixedRadixSmall::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
-            },
-            Recipe::GoodThomasAlgorithmSmall{left_fft, right_fft} => {
+            }
+            Recipe::GoodThomasAlgorithmSmall {
+                left_fft,
+                right_fft,
+            } => {
                 let left_fft = self.build_fft(*left_fft);
                 let right_fft = self.build_fft(*right_fft);
                 Arc::new(GoodThomasAlgorithmSmall::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
-            },
+            }
             Recipe::RadersAlgorithm { inner_fft } => {
                 let inner_fft = self.build_fft(*inner_fft);
                 Arc::new(RadersAlgorithm::new(inner_fft)) as Arc<dyn Fft<T>>
-            },
-            Recipe::BluesteinsAlgorithm { len , inner_fft } => {
+            }
+            Recipe::BluesteinsAlgorithm { len, inner_fft } => {
                 let inner_fft = self.build_fft(*inner_fft);
                 Arc::new(BluesteinsAlgorithm::new(len, inner_fft)) as Arc<dyn Fft<T>>
-            },
+            }
         }
     }
-
-   
 
     fn design_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Recipe {
         if let Some(recipe) = self.recipe_cache.get(&len) {
@@ -245,7 +263,6 @@ impl<T: FFTnum> FftPlannerScalar<T> {
             self.recipe_cache.insert(len, recipe.clone());
             recipe
         }
-        
     }
 
     fn design_new_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Recipe {
@@ -277,7 +294,6 @@ impl<T: FFTnum> FftPlannerScalar<T> {
         }
     }
 
-    
     fn design_mixed_radix(
         &mut self,
         left_factors: PrimeFactors,
@@ -295,18 +311,25 @@ impl<T: FFTnum> FftPlannerScalar<T> {
             // for small FFTs, if gcd is 1, good-thomas is faster
             if gcd(left_len, right_len) == 1 {
                 //Arc::new(GoodThomasAlgorithmSmall::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
-                Recipe::GoodThomasAlgorithmSmall{ left_fft, right_fft }
+                Recipe::GoodThomasAlgorithmSmall {
+                    left_fft,
+                    right_fft,
+                }
             } else {
                 //Arc::new(MixedRadixSmall::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
-                Recipe::MixedRadixSmall{ left_fft, right_fft }
+                Recipe::MixedRadixSmall {
+                    left_fft,
+                    right_fft,
+                }
             }
         } else {
             //Arc::new(MixedRadix::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
-            Recipe::MixedRadix{ left_fft, right_fft }
+            Recipe::MixedRadix {
+                left_fft,
+                right_fft,
+            }
         }
     }
-
-   
 
     // Returns Some(instance) if we have a butterfly available for this size. Returns None if there is no butterfly available for this size
     fn design_butterfly_algorithm(&mut self, len: usize) -> Option<Recipe> {
@@ -331,8 +354,6 @@ impl<T: FFTnum> FftPlannerScalar<T> {
         }
     }
 
-    
-
     fn design_prime(&mut self, len: usize) -> Recipe {
         let inner_fft_len_rader = len - 1;
         let raders_factors = PrimeFactors::compute(inner_fft_len_rader);
@@ -355,15 +376,15 @@ impl<T: FFTnum> FftPlannerScalar<T> {
                     //Arc::new(Radix4::new(inner_fft_len_pow2, self.inverse))
                 };
             //Arc::new(BluesteinsAlgorithm::new(len, inner_fft)) as Arc<dyn Fft<T>>
-            Recipe::BluesteinsAlgorithm{ len, inner_fft }
+            Recipe::BluesteinsAlgorithm { len, inner_fft }
         } else {
-            let inner_fft = Box::new(self.design_fft_with_factors(inner_fft_len_rader, raders_factors));
+            let inner_fft =
+                Box::new(self.design_fft_with_factors(inner_fft_len_rader, raders_factors));
             //Arc::new(RadersAlgorithm::new(inner_fft)) as Arc<dyn Fft<T>>
-            Recipe::RadersAlgorithm{inner_fft}
+            Recipe::RadersAlgorithm { inner_fft }
         }
     }
 }
-
 
 #[cfg(test)]
 mod unit_tests {
@@ -371,43 +392,43 @@ mod unit_tests {
 
     fn is_mixedradix(plan: &Recipe) -> bool {
         match plan {
-            &Recipe::MixedRadix{..} => true,
+            &Recipe::MixedRadix { .. } => true,
             _ => false,
         }
     }
 
     fn is_mixedradixsmall(plan: &Recipe) -> bool {
         match plan {
-            &Recipe::MixedRadixSmall{..} => true,
+            &Recipe::MixedRadixSmall { .. } => true,
             _ => false,
         }
     }
 
     fn is_goodthomassmall(plan: &Recipe) -> bool {
         match plan {
-            &Recipe::GoodThomasAlgorithmSmall{..} => true,
+            &Recipe::GoodThomasAlgorithmSmall { .. } => true,
             _ => false,
         }
     }
 
     fn is_raders(plan: &Recipe) -> bool {
         match plan {
-            &Recipe::RadersAlgorithm{..} => true,
+            &Recipe::RadersAlgorithm { .. } => true,
             _ => false,
         }
     }
 
     fn is_bluesteins(plan: &Recipe) -> bool {
         match plan {
-            &Recipe::BluesteinsAlgorithm{..} => true,
+            &Recipe::BluesteinsAlgorithm { .. } => true,
             _ => false,
         }
     }
 
     #[test]
-    fn test_plan_trivial() {
+    fn test_plan_scalar_trivial() {
         // Length 0 and 1 should use DFT
-        let mut planner = FftPlanner::<f64>::new(false);
+        let mut planner = FftPlannerScalar::<f64>::new(false);
         for len in 0..2 {
             let plan = planner.design_fft_for_len(len);
             assert_eq!(plan, Recipe::DFT(len));
@@ -415,9 +436,9 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_plan_mediumpoweroftwo() {
+    fn test_plan_scalar_mediumpoweroftwo() {
         // Powers of 2 between 64 and 32768 should use Radix4
-        let mut planner = FftPlanner::<f64>::new(false);
+        let mut planner = FftPlannerScalar::<f64>::new(false);
         for pow in 6..16 {
             let len = 1 << pow;
             let plan = planner.design_fft_for_len(len);
@@ -426,9 +447,9 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_plan_largepoweroftwo() {
+    fn test_plan_scalar_largepoweroftwo() {
         // Powers of 2 from 65536 and up should use MixedRadix
-        let mut planner = FftPlanner::<f64>::new(false);
+        let mut planner = FftPlannerScalar::<f64>::new(false);
         for pow in 17..32 {
             let len = 1 << pow;
             let plan = planner.design_fft_for_len(len);
@@ -437,9 +458,9 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_plan_butterflies() {
+    fn test_plan_scalar_butterflies() {
         // Check that all butterflies are used
-        let mut planner = FftPlanner::<f64>::new(false);
+        let mut planner = FftPlannerScalar::<f64>::new(false);
         assert_eq!(planner.design_fft_for_len(2), Recipe::Butterfly2);
         assert_eq!(planner.design_fft_for_len(3), Recipe::Butterfly3);
         assert_eq!(planner.design_fft_for_len(4), Recipe::Butterfly4);
@@ -459,14 +480,17 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_plan_mixedradix() {
+    fn test_plan_scalar_mixedradix() {
         // Products of several different primes should become MixedRadix
-        let mut planner = FftPlanner::<f64>::new(false);
+        let mut planner = FftPlannerScalar::<f64>::new(false);
         for pow2 in 2..6 {
             for pow3 in 2..6 {
                 for pow5 in 2..6 {
                     for pow7 in 2..6 {
-                        let len = 2usize.pow(pow2) * 3usize.pow(pow3) * 5usize.pow(pow5) * 7usize.pow(pow7);
+                        let len = 2usize.pow(pow2)
+                            * 3usize.pow(pow3)
+                            * 5usize.pow(pow5)
+                            * 7usize.pow(pow7);
                         let plan = planner.design_fft_for_len(len);
                         assert!(is_mixedradix(&plan), "Expected MixedRadix, got {:?}", plan);
                     }
@@ -475,45 +499,53 @@ mod unit_tests {
         }
     }
 
-
-
     #[test]
-    fn test_plan_mixedradixsmall() {
+    fn test_plan_scalar_mixedradixsmall() {
         // Products of two "small" lengths < 31 that have a common divisor >1, and isn't a power of 2 should be MixedRadixSmall
-        let mut planner = FftPlanner::<f64>::new(false);
-        for len in [5*20, 5*25].iter() {
+        let mut planner = FftPlannerScalar::<f64>::new(false);
+        for len in [5 * 20, 5 * 25].iter() {
             let plan = planner.design_fft_for_len(*len);
-            assert!(is_mixedradixsmall(&plan), "Expected MixedRadixSmall, got {:?}", plan);
+            assert!(
+                is_mixedradixsmall(&plan),
+                "Expected MixedRadixSmall, got {:?}",
+                plan
+            );
         }
     }
 
-
-
     #[test]
-    fn test_plan_goodthomasbutterfly() {
-        let mut planner = FftPlanner::<f64>::new(false);
-        for len in [3*4, 3*5, 3*7, 5*7, 11*13].iter() {
+    fn test_plan_scalar_goodthomasbutterfly() {
+        let mut planner = FftPlannerScalar::<f64>::new(false);
+        for len in [3 * 4, 3 * 5, 3 * 7, 5 * 7, 11 * 13].iter() {
             let plan = planner.design_fft_for_len(*len);
-            assert!(is_goodthomassmall(&plan), "Expected GoodThomasAlgorithmSmall, got {:?}", plan);
+            assert!(
+                is_goodthomassmall(&plan),
+                "Expected GoodThomasAlgorithmSmall, got {:?}",
+                plan
+            );
         }
     }
 
-
-
     #[test]
-    fn test_plan_bluestein_vs_rader() {
+    fn test_plan_scalar_bluestein_vs_rader() {
         let difficultprimes: [usize; 11] = [59, 83, 107, 149, 167, 173, 179, 359, 719, 1439, 2879];
-        let easyprimes: [usize; 24] = [53, 61, 67, 71, 73, 79, 89, 97, 101, 103, 109, 113, 127, 131, 137, 139, 151, 157, 163, 181, 191, 193, 197, 199];
+        let easyprimes: [usize; 24] = [
+            53, 61, 67, 71, 73, 79, 89, 97, 101, 103, 109, 113, 127, 131, 137, 139, 151, 157, 163,
+            181, 191, 193, 197, 199,
+        ];
 
-        let mut planner = FftPlanner::<f64>::new(false);
+        let mut planner = FftPlannerScalar::<f64>::new(false);
         for len in difficultprimes.iter() {
             let plan = planner.design_fft_for_len(*len);
-            assert!(is_bluesteins(&plan), "Expected BluesteinsAlgorithm, got {:?}", plan);
+            assert!(
+                is_bluesteins(&plan),
+                "Expected BluesteinsAlgorithm, got {:?}",
+                plan
+            );
         }
         for len in easyprimes.iter() {
             let plan = planner.design_fft_for_len(*len);
             assert!(is_raders(&plan), "Expected RadersAlgorithm, got {:?}", plan);
         }
     }
-
 }
