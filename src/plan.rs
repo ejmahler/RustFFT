@@ -263,7 +263,6 @@ impl<T: FFTnum> FftPlannerScalar<T> {
             self.recipe_cache.insert(len, recipe.clone());
             recipe
         }
-        
     }
 
     fn design_new_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Recipe {
@@ -551,42 +550,41 @@ mod unit_tests {
     }
 }
 
-
 #[cfg(test)]
 mod unit_tests {
     use super::*;
 
     fn is_mixedradix(plan: &Recipe) -> bool {
         match plan {
-            &Recipe::MixedRadix{..} => true,
+            &Recipe::MixedRadix { .. } => true,
             _ => false,
         }
     }
 
     fn is_mixedradixsmall(plan: &Recipe) -> bool {
         match plan {
-            &Recipe::MixedRadixSmall{..} => true,
+            &Recipe::MixedRadixSmall { .. } => true,
             _ => false,
         }
     }
 
     fn is_goodthomassmall(plan: &Recipe) -> bool {
         match plan {
-            &Recipe::GoodThomasAlgorithmSmall{..} => true,
+            &Recipe::GoodThomasAlgorithmSmall { .. } => true,
             _ => false,
         }
     }
 
     fn is_raders(plan: &Recipe) -> bool {
         match plan {
-            &Recipe::RadersAlgorithm{..} => true,
+            &Recipe::RadersAlgorithm { .. } => true,
             _ => false,
         }
     }
 
     fn is_bluesteins(plan: &Recipe) -> bool {
         match plan {
-            &Recipe::BluesteinsAlgorithm{..} => true,
+            &Recipe::BluesteinsAlgorithm { .. } => true,
             _ => false,
         }
     }
@@ -653,7 +651,10 @@ mod unit_tests {
             for pow3 in 2..6 {
                 for pow5 in 2..6 {
                     for pow7 in 2..6 {
-                        let len = 2usize.pow(pow2) * 3usize.pow(pow3) * 5usize.pow(pow5) * 7usize.pow(pow7);
+                        let len = 2usize.pow(pow2)
+                            * 3usize.pow(pow3)
+                            * 5usize.pow(pow5)
+                            * 7usize.pow(pow7);
                         let plan = planner.design_fft_for_len(len);
                         assert!(is_mixedradix(&plan), "Expected MixedRadix, got {:?}", plan);
                     }
@@ -662,45 +663,53 @@ mod unit_tests {
         }
     }
 
-
-
     #[test]
     fn test_plan_mixedradixsmall() {
         // Products of two "small" lengths < 31 that have a common divisor >1, and isn't a power of 2 should be MixedRadixSmall
         let mut planner = FftPlanner::<f64>::new(false);
-        for len in [5*20, 5*25].iter() {
+        for len in [5 * 20, 5 * 25].iter() {
             let plan = planner.design_fft_for_len(*len);
-            assert!(is_mixedradixsmall(&plan), "Expected MixedRadixSmall, got {:?}", plan);
+            assert!(
+                is_mixedradixsmall(&plan),
+                "Expected MixedRadixSmall, got {:?}",
+                plan
+            );
         }
     }
-
-
 
     #[test]
     fn test_plan_goodthomasbutterfly() {
         let mut planner = FftPlanner::<f64>::new(false);
-        for len in [3*4, 3*5, 3*7, 5*7, 11*13].iter() {
+        for len in [3 * 4, 3 * 5, 3 * 7, 5 * 7, 11 * 13].iter() {
             let plan = planner.design_fft_for_len(*len);
-            assert!(is_goodthomassmall(&plan), "Expected GoodThomasAlgorithmSmall, got {:?}", plan);
+            assert!(
+                is_goodthomassmall(&plan),
+                "Expected GoodThomasAlgorithmSmall, got {:?}",
+                plan
+            );
         }
     }
-
-
 
     #[test]
     fn test_plan_bluestein_vs_rader() {
         let difficultprimes: [usize; 11] = [59, 83, 107, 149, 167, 173, 179, 359, 719, 1439, 2879];
-        let easyprimes: [usize; 24] = [53, 61, 67, 71, 73, 79, 89, 97, 101, 103, 109, 113, 127, 131, 137, 139, 151, 157, 163, 181, 191, 193, 197, 199];
+        let easyprimes: [usize; 24] = [
+            53, 61, 67, 71, 73, 79, 89, 97, 101, 103, 109, 113, 127, 131, 137, 139, 151, 157, 163,
+            181, 191, 193, 197, 199,
+        ];
 
         let mut planner = FftPlanner::<f64>::new(false);
         for len in difficultprimes.iter() {
             let plan = planner.design_fft_for_len(*len);
-            assert!(is_bluesteins(&plan), "Expected BluesteinsAlgorithm, got {:?}", plan);
+            assert!(
+                is_bluesteins(&plan),
+                "Expected BluesteinsAlgorithm, got {:?}",
+                plan
+            );
         }
         for len in easyprimes.iter() {
             let plan = planner.design_fft_for_len(*len);
             assert!(is_raders(&plan), "Expected RadersAlgorithm, got {:?}", plan);
         }
     }
-
 }
