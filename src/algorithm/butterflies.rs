@@ -129,6 +129,66 @@ macro_rules! boilerplate_fft_butterfly {
     };
 }
 
+pub struct Butterfly1<T> {
+    inverse: bool,
+    _phantom: std::marker::PhantomData<T>,
+}
+impl<T: FFTnum> Butterfly1<T> {
+    #[inline(always)]
+    pub fn new(inverse: bool) -> Self {
+        Self {
+            inverse,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+impl<T: FFTnum> Fft<T> for Butterfly1<T> {
+    fn process_with_scratch(
+        &self,
+        input: &mut [Complex<T>],
+        output: &mut [Complex<T>],
+        _scratch: &mut [Complex<T>],
+    ) {
+        output.copy_from_slice(&input);
+    }
+
+    fn process_inplace_with_scratch(
+        &self,
+        _buffer: &mut [Complex<T>],
+        _scratch: &mut [Complex<T>],
+    ) {
+    }
+
+    fn process_multi(
+        &self,
+        input: &mut [Complex<T>],
+        output: &mut [Complex<T>],
+        _scratch: &mut [Complex<T>],
+    ) {
+        output.copy_from_slice(&input);
+    }
+
+    fn process_inplace_multi(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {}
+
+    fn get_inplace_scratch_len(&self) -> usize {
+        0
+    }
+
+    fn get_out_of_place_scratch_len(&self) -> usize {
+        0
+    }
+}
+impl<T> Length for Butterfly1<T> {
+    fn len(&self) -> usize {
+        1
+    }
+}
+impl<T> IsInverse for Butterfly1<T> {
+    fn is_inverse(&self) -> bool {
+        self.inverse
+    }
+}
+
 pub struct Butterfly2<T> {
     inverse: bool,
     _phantom: std::marker::PhantomData<T>,
@@ -222,7 +282,7 @@ impl<T: FFTnum> Butterfly4<T> {
         }
     }
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(
+    pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         input: RawSlice<Complex<T>>,
         output: RawSliceMut<Complex<T>>,
