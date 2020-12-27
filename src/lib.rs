@@ -2,9 +2,7 @@
 
 //! RustFFT is a high-performance FFT library written in pure Rust.
 //!
-//! This is an experimental release of RustFFT that enables AVX acceleration. It currently requires a nightly compiler,
-//! mainly for the `min_specialization` feature. The eventual plan is to release this experimental version as version 5.0 of RustFFT,
-//! but that will not happen until it compiles on stable Rust.
+//! This is an experimental release of RustFFT that enables AVX acceleration.
 //!
 //! ### Usage
 //!
@@ -69,7 +67,7 @@ use num_complex::Complex;
 use num_traits::Zero;
 
 pub use crate::common::FFTnum;
-pub use crate::plan::FftPlanner;
+pub use crate::plan::{FftPlanner, FftPlannerScalar};
 
 /// A trait that allows FFT algorithms to report their expected input/output size
 pub trait Length {
@@ -196,11 +194,11 @@ pub trait Fft<T: FFTnum>: Length + IsInverse + Sync + Send {
 }
 
 // Algorithms implemented to use AVX instructions. Only compiled on x86_64.
-//#[cfg(target_arch="x86_64")]
-//mod avx;
+#[cfg(target_arch = "x86_64")]
+mod avx;
 
 // When we're not on avx, keep a stub implementation around that just does nothing
-//#[cfg(not(target_arch="x86_64"))]
+#[cfg(not(target_arch = "x86_64"))]
 mod avx {
     pub mod avx_planner {
         use crate::{FFTnum, Fft};

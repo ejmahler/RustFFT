@@ -12,11 +12,6 @@ use crate::FftPlannerAvx;
 
 use crate::math_utils::{PrimeFactor, PrimeFactors};
 
-const MIN_RADIX4_BITS: u32 = 5; // smallest size to consider radix 4 an option is 2^5 = 32
-const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option is 2^16 = 65536
-const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
-const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the inner fft of Bluestein if length is larger than this
-
 /// The FFT planner is used to make new FFT algorithm instances.
 ///
 /// RustFFT has several FFT algorithms available. For a given FFT size, the `FftPlanner` decides which of the
@@ -45,24 +40,20 @@ const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the
 ///
 /// Each FFT instance owns [`Arc`s](std::sync::Arc) to its internal data, rather than borrowing it from the planner, so it's perfectly
 /// safe to drop the planner after creating Fft instances.
-pub struct FftPlanner<T: FFTnum> {
-    algorithm_cache: HashMap<usize, Arc<dyn Fft<T>>>,
-    inverse: bool,
-
-    // None if this machine doesn't support avx
-    avx_planner: Option<FftPlannerAvx<T>>,
+pub enum FftPlanner<T: FFTnum> {
+    Scalar(FftPlannerScalar<T>),
+    Avx(FftPlannerAvx<T>),
 }
-
 impl<T: FFTnum> FftPlanner<T> {
-    /// Creates a new `FftPlanner` instance.
+    /// Creates a new `FftPlanner` instance. It detects if AVX is supported on the current machine. If it is, it will plan AVX-accelerated FFTs.
+    /// If AVX isn't supported, it will seamlessly fall back to planning non-SIMD FFTs.
     ///
     /// If `inverse` is false, this planner will plan forward FFTs. If `inverse` is true, it will plan inverse FFTs.
     pub fn new(inverse: bool) -> Self {
-        Self {
-            inverse,
-            algorithm_cache: HashMap::new(),
-
-            avx_planner: FftPlannerAvx::new(inverse).ok(),
+        if let Ok(avx_planner) = FftPlannerAvx::new(inverse) {
+            Self::Avx(avx_planner)
+        } else {
+            Self::Scalar(FftPlannerScalar::new(inverse))
         }
     }
 
@@ -70,12 +61,69 @@ impl<T: FFTnum> FftPlanner<T> {
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft(&mut self, len: usize) -> Arc<dyn Fft<T>> {
-        if let Some(avx_planner) = &mut self.avx_planner {
-            // If we have an AVX planner, defer to that for all construction needs
-            // TODO: eventually, "FftPlanner" could be an enum of different planner types? "ScalarPlanner" etc
-            // That way, we wouldn't need to waste memory storing the scalar planner's algorithm cache when we're not gonna use it
-            avx_planner.plan_fft(len)
-        } else if let Some(instance) = self.algorithm_cache.get(&len) {
+        match self {
+            Self::Scalar(scalar_planner) => scalar_planner.plan_fft(len),
+            Self::Avx(avx_planner) => avx_planner.plan_fft(len),
+        }
+    }
+}
+
+const MIN_RADIX4_BITS: u32 = 5; // smallest size to consider radix 4 an option is 2^5 = 32
+const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option is 2^16 = 65536
+const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
+const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the inner fft of Bluestein if length is larger than this
+
+/// The Scalar FFT planner creates new FFT algorithm instances using non-SIMD algorithms.
+///
+/// RustFFT has several FFT algorithms available. For a given FFT size, the `FftPlannerScalar` decides which of the
+/// available FFT algorithms to use and then initializes them.
+///
+/// Use `FftPlannerScalar` instead of [`FftPlanner`](crate::FftPlanner) or [`FftPlannerAvx`](crate::FftPlannerAvx) when you want to explicitly opt out of using any SIMD-accelerated algorithms.
+///
+/// ~~~
+/// // Perform a forward Fft of size 1234
+/// use std::sync::Arc;
+/// use rustfft::{FftPlannerScalar, num_complex::Complex};
+///
+/// let mut planner = FftPlannerScalar::new(false);
+/// let fft = planner.plan_fft(1234);
+///
+/// let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1234];
+/// fft.process_inplace(&mut buffer);
+///
+/// // The FFT instance returned by the planner has the type `Arc<dyn Fft<T>>`,
+/// // where T is the numeric type, ie f32 or f64, so it's cheap to clone
+/// let fft_clone = Arc::clone(&fft);
+/// ~~~
+///
+/// If you plan on creating multiple FFT instances, it is recommnded to reuse the same planner for all of them. This
+/// is because the planner re-uses internal data across FFT instances wherever possible, saving memory and reducing
+/// setup time. (FFT instances created with one planner will never re-use data and buffers with FFT instances created
+/// by a different planner)
+///
+/// Each FFT instance owns [`Arc`s](std::sync::Arc) to its internal data, rather than borrowing it from the planner, so it's perfectly
+/// safe to drop the planner after creating Fft instances.
+pub struct FftPlannerScalar<T: FFTnum> {
+    algorithm_cache: HashMap<usize, Arc<dyn Fft<T>>>,
+    inverse: bool,
+}
+
+impl<T: FFTnum> FftPlannerScalar<T> {
+    /// Creates a new `FftPlannerScalar` instance.
+    ///
+    /// If `inverse` is false, this planner will plan forward FFTs. If `inverse` is true, it will plan inverse FFTs.
+    pub fn new(inverse: bool) -> Self {
+        Self {
+            inverse,
+            algorithm_cache: HashMap::new(),
+        }
+    }
+
+    /// Returns a `Fft` instance which processes signals of size `len`
+    ///
+    /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+    pub fn plan_fft(&mut self, len: usize) -> Arc<dyn Fft<T>> {
+        if let Some(instance) = self.algorithm_cache.get(&len) {
             Arc::clone(instance)
         } else {
             let instance = self.plan_new_fft_with_factors(len, PrimeFactors::compute(len));
