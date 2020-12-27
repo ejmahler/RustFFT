@@ -2,9 +2,7 @@
 
 //! RustFFT is a high-performance FFT library written in pure Rust.
 //!
-//! This is an experimental release of RustFFT that enables AVX acceleration. It currently requires a nightly compiler,
-//! mainly for the `min_specialization` feature. The eventual plan is to release this experimental version as version 5.0 of RustFFT,
-//! but that will not happen until it compiles on stable Rust.
+//! This is an experimental release of RustFFT that enables AVX acceleration.
 //!
 //! ### Usage
 //!
@@ -69,7 +67,7 @@ use num_complex::Complex;
 use num_traits::Zero;
 
 pub use crate::common::FFTnum;
-pub use crate::plan::FftPlanner;
+pub use crate::plan::{FftPlanner, FftPlannerScalar};
 
 /// A trait that allows FFT algorithms to report their expected input/output size
 pub trait Length {

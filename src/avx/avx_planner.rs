@@ -78,8 +78,7 @@ impl MixedRadixPlan {
     }
 }
 
-/// The FFT planner is used to make new FFT algorithm instances. Specifically, `FftPlannerAvx` generates FFT algorithms
-/// that are designed with the AVX instruction set in mind.
+/// The AVX FFT planner creates new FFT algorithm instances which take advantage of the AVX instruction set.
 ///
 /// Creating an instance of `FftPlannerAvx` requires the `avx` and `fma` instructions to be available on the current machine. A few algorithms will
 /// use `avx2` if it's available, but it isn't required.
