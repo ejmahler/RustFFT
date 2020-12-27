@@ -72,12 +72,9 @@ const MIN_RADIX4_BITS: u32 = 5; // smallest size to consider radix 4 an option i
 const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option is 2^16 = 65536
 const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
 const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the inner fft of Bluestein if length is larger than this
-const BUTTERFLIES: [usize; 16] = [2, 3, 4, 5, 6, 7, 8, 11, 13, 16, 17, 19, 23, 29, 31, 32];
 
-<<<<<<< HEAD
-/// The Scalar FFT planner creates new FFT algorithm instances using non-SIMD algorithms.
-=======
-#[derive(Debug, std::cmp::PartialEq)]
+
+#[derive(Debug, std::cmp::PartialEq, Clone)]
 #[allow(dead_code)]
 pub enum Recipe {
     DFT(usize),
@@ -88,35 +85,27 @@ pub enum Recipe {
     RadersAlgorithm { inner_fft: Box<Recipe>},
     BluesteinsAlgorithm { len: usize, inner_fft: Box<Recipe>},
     Radix4(usize),
-    Butterfly(usize),
+    Butterfly2,
+    Butterfly3,
+    Butterfly4,
+    Butterfly5,
+    Butterfly6,
+    Butterfly7,
+    Butterfly8,
+    Butterfly11,
+    Butterfly13,
+    Butterfly16,
+    Butterfly17,
+    Butterfly19,
+    Butterfly23,
+    Butterfly29,
+    Butterfly31,
+    Butterfly32,
 }
 
-macro_rules! butterfly {
-    ($len:expr, $inverse:expr) => {
-        match $len {
-            2 => Arc::new(Butterfly2::new($inverse)),
-            3 => Arc::new(Butterfly3::new($inverse)),
-            4 => Arc::new(Butterfly4::new($inverse)),
-            5 => Arc::new(Butterfly5::new($inverse)),
-            6 => Arc::new(Butterfly6::new($inverse)),
-            7 => Arc::new(Butterfly7::new($inverse)),
-            8 => Arc::new(Butterfly8::new($inverse)),
-            11 => Arc::new(Butterfly11::new($inverse)),
-            13 => Arc::new(Butterfly13::new($inverse)),
-            16 => Arc::new(Butterfly16::new($inverse)),
-            17 => Arc::new(Butterfly17::new($inverse)),
-            19 => Arc::new(Butterfly19::new($inverse)),
-            23 => Arc::new(Butterfly23::new($inverse)),
-            29 => Arc::new(Butterfly29::new($inverse)),
-            31 => Arc::new(Butterfly31::new($inverse)),
-            32 => Arc::new(Butterfly32::new($inverse)),
-            _ => panic!("Invalid butterfly size: {}", $len),
-        }
-    };
-}
 
-/// The FFT planner is used to make new FFT algorithm instances.
->>>>>>> db2c653... WIP adapt new planner
+
+/// The Scalar FFT planner creates new FFT algorithm instances using non-SIMD algorithms.
 ///
 /// RustFFT has several FFT algorithms available. For a given FFT size, the `FftPlannerScalar` decides which of the
 /// available FFT algorithms to use and then initializes them.
@@ -148,6 +137,7 @@ macro_rules! butterfly {
 /// safe to drop the planner after creating Fft instances.
 pub struct FftPlannerScalar<T: FFTnum> {
     algorithm_cache: HashMap<usize, Arc<dyn Fft<T>>>,
+    recipe_cache: HashMap<usize, Recipe>,
     inverse: bool,
 }
 
@@ -159,6 +149,12 @@ impl<T: FFTnum> FftPlannerScalar<T> {
         Self {
             inverse,
             algorithm_cache: HashMap::new(),
+<<<<<<< HEAD
+=======
+            recipe_cache: HashMap::new(),
+
+            avx_planner: FftPlannerAvx::new(inverse).ok(),
+>>>>>>> 1cc6d0a... Better tests, add recipe cache
         }
     }
 
@@ -192,9 +188,22 @@ impl<T: FFTnum> FftPlannerScalar<T> {
         match plan {
             Recipe::DFT(len) => Arc::new(DFT::new(len, self.inverse)) as Arc<dyn Fft<T>>,
             Recipe::Radix4(len) => Arc::new(Radix4::new(len, self.inverse)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly(len) => {
-                butterfly!(len, self.inverse)
-            }
+            Recipe::Butterfly2 => Arc::new(Butterfly2::new(self.inverse)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly3 => Arc::new(Butterfly3::new(self.inverse)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly4 => Arc::new(Butterfly4::new(self.inverse)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly5 => Arc::new(Butterfly5::new(self.inverse)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly6 => Arc::new(Butterfly6::new(self.inverse)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly7 => Arc::new(Butterfly7::new(self.inverse)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly8 => Arc::new(Butterfly8::new(self.inverse)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly11 => Arc::new(Butterfly11::new(self.inverse)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly13 => Arc::new(Butterfly13::new(self.inverse)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly16 => Arc::new(Butterfly16::new(self.inverse)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly17 => Arc::new(Butterfly17::new(self.inverse)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly19 => Arc::new(Butterfly19::new(self.inverse)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly23 => Arc::new(Butterfly23::new(self.inverse)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly29 => Arc::new(Butterfly29::new(self.inverse)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly31 => Arc::new(Butterfly31::new(self.inverse)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly32 => Arc::new(Butterfly32::new(self.inverse)) as Arc<dyn Fft<T>>,
             Recipe::MixedRadix { left_fft, right_fft } => {
                 let left_fft = self.build_fft(*left_fft);
                 let right_fft = self.build_fft(*right_fft);
@@ -229,14 +238,14 @@ impl<T: FFTnum> FftPlannerScalar<T> {
    
 
     fn design_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Recipe {
-        //if let Some(instance) = self.algorithm_cache.get(&len) {
-        //    Arc::clone(instance)
-        //} else {
-        //    let instance = self.plan_new_fft_with_factors(len, factors);
-        //    self.algorithm_cache.insert(len, Arc::clone(&instance));
-        //    instance
-        //}
-        self.design_new_fft_with_factors(len, factors)
+        if let Some(recipe) = self.recipe_cache.get(&len) {
+            recipe.clone()
+        } else {
+            let recipe = self.design_new_fft_with_factors(len, factors);
+            self.recipe_cache.insert(len, recipe.clone());
+            recipe
+        }
+        
     }
 
     fn design_new_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Recipe {
@@ -301,11 +310,24 @@ impl<T: FFTnum> FftPlannerScalar<T> {
 
     // Returns Some(instance) if we have a butterfly available for this size. Returns None if there is no butterfly available for this size
     fn design_butterfly_algorithm(&mut self, len: usize) -> Option<Recipe> {
-        if BUTTERFLIES.contains(&len) {
-            Some(Recipe::Butterfly(len))
-        }
-        else {
-            None
+        match len {
+            2 => Some(Recipe::Butterfly2),
+            3 => Some(Recipe::Butterfly3),
+            4 => Some(Recipe::Butterfly4),
+            5 => Some(Recipe::Butterfly5),
+            6 => Some(Recipe::Butterfly6),
+            7 => Some(Recipe::Butterfly7),
+            8 => Some(Recipe::Butterfly8),
+            11 => Some(Recipe::Butterfly11),
+            13 => Some(Recipe::Butterfly13),
+            16 => Some(Recipe::Butterfly16),
+            17 => Some(Recipe::Butterfly17),
+            19 => Some(Recipe::Butterfly19),
+            23 => Some(Recipe::Butterfly23),
+            29 => Some(Recipe::Butterfly29),
+            31 => Some(Recipe::Butterfly31),
+            32 => Some(Recipe::Butterfly32),
+            _ => None,
         }
     }
 
@@ -418,10 +440,22 @@ mod unit_tests {
     fn test_plan_butterflies() {
         // Check that all butterflies are used
         let mut planner = FftPlanner::<f64>::new(false);
-        for len in [2,3,4,5,6,7,8,11,13,16,17,19,23,29,31,32].iter() {
-            let plan = planner.design_fft_for_len(*len);
-            assert_eq!(plan, Recipe::Butterfly(*len));
-        }
+        assert_eq!(planner.design_fft_for_len(2), Recipe::Butterfly2);
+        assert_eq!(planner.design_fft_for_len(3), Recipe::Butterfly3);
+        assert_eq!(planner.design_fft_for_len(4), Recipe::Butterfly4);
+        assert_eq!(planner.design_fft_for_len(5), Recipe::Butterfly5);
+        assert_eq!(planner.design_fft_for_len(6), Recipe::Butterfly6);
+        assert_eq!(planner.design_fft_for_len(7), Recipe::Butterfly7);
+        assert_eq!(planner.design_fft_for_len(8), Recipe::Butterfly8);
+        assert_eq!(planner.design_fft_for_len(11), Recipe::Butterfly11);
+        assert_eq!(planner.design_fft_for_len(13), Recipe::Butterfly13);
+        assert_eq!(planner.design_fft_for_len(16), Recipe::Butterfly16);
+        assert_eq!(planner.design_fft_for_len(17), Recipe::Butterfly17);
+        assert_eq!(planner.design_fft_for_len(19), Recipe::Butterfly19);
+        assert_eq!(planner.design_fft_for_len(23), Recipe::Butterfly23);
+        assert_eq!(planner.design_fft_for_len(29), Recipe::Butterfly29);
+        assert_eq!(planner.design_fft_for_len(31), Recipe::Butterfly31);
+        assert_eq!(planner.design_fft_for_len(32), Recipe::Butterfly32);
     }
 
     #[test]
