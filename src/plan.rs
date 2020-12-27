@@ -273,7 +273,6 @@ impl<T: FFTnum> FftPlannerScalar<T> {
         } else if len.trailing_zeros() <= MAX_RADIX4_BITS && len.trailing_zeros() >= MIN_RADIX4_BITS
         {
             if len.is_power_of_two() {
-                //Arc::new(Radix4::new(len, self.inverse))
                 Recipe::Radix4(len)
             } else {
                 dbg!(len);
@@ -310,20 +309,17 @@ impl<T: FFTnum> FftPlannerScalar<T> {
         if left_len < 31 && right_len < 31 {
             // for small FFTs, if gcd is 1, good-thomas is faster
             if gcd(left_len, right_len) == 1 {
-                //Arc::new(GoodThomasAlgorithmSmall::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
                 Recipe::GoodThomasAlgorithmSmall {
                     left_fft,
                     right_fft,
                 }
             } else {
-                //Arc::new(MixedRadixSmall::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
                 Recipe::MixedRadixSmall {
                     left_fft,
                     right_fft,
                 }
             }
         } else {
-            //Arc::new(MixedRadix::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
             Recipe::MixedRadix {
                 left_fft,
                 right_fft,
@@ -373,14 +369,11 @@ impl<T: FFTnum> FftPlannerScalar<T> {
                     Box::new(self.design_fft_with_factors(mixed_radix_len, mixed_radix_factors))
                 } else {
                     Box::new(Recipe::Radix4(inner_fft_len_pow2))
-                    //Arc::new(Radix4::new(inner_fft_len_pow2, self.inverse))
                 };
-            //Arc::new(BluesteinsAlgorithm::new(len, inner_fft)) as Arc<dyn Fft<T>>
             Recipe::BluesteinsAlgorithm { len, inner_fft }
         } else {
             let inner_fft =
                 Box::new(self.design_fft_with_factors(inner_fft_len_rader, raders_factors));
-            //Arc::new(RadersAlgorithm::new(inner_fft)) as Arc<dyn Fft<T>>
             Recipe::RadersAlgorithm { inner_fft }
         }
     }
