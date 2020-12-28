@@ -726,7 +726,7 @@ impl<T: FFTnum> Butterfly7<T> {
 }
 
 pub struct Butterfly8<T> {
-    twiddle: Complex<T>,
+    root2: T,
     inverse: bool,
 }
 boilerplate_fft_butterfly!(Butterfly8, 8, |this: &Butterfly8<_>| this.inverse);
@@ -734,8 +734,8 @@ impl<T: FFTnum> Butterfly8<T> {
     #[inline(always)]
     pub fn new(inverse: bool) -> Self {
         Self {
-            inverse: inverse,
-            twiddle: T::generate_twiddle_factor(1, 8, inverse),
+            root2: T::from_f64(0.5f64.sqrt()).unwrap(),
+            inverse,
         }
     }
 
@@ -759,15 +759,9 @@ impl<T: FFTnum> Butterfly8<T> {
         butterfly4.perform_fft_butterfly(&mut scratch1);
 
         // step 3: apply twiddle factors
-        let twiddle1 = self.twiddle;
-        let twiddle3 = Complex {
-            re: -twiddle1.re,
-            im: twiddle1.im,
-        };
-
-        scratch1[1] = scratch1[1] * twiddle1;
+        scratch1[1] = (twiddles::rotate_90(scratch1[1], self.inverse) + scratch1[1]) * self.root2;
         scratch1[2] = twiddles::rotate_90(scratch1[2], self.inverse);
-        scratch1[3] = scratch1[3] * twiddle3;
+        scratch1[3] = (twiddles::rotate_90(scratch1[3], self.inverse) - scratch1[3]) * self.root2;
 
         // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
 
