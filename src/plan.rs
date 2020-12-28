@@ -74,13 +74,13 @@ const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft l
 const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the inner fft of Bluestein if length is larger than this
 
 #[derive(Debug, std::cmp::PartialEq, Clone)]
-#[allow(dead_code)]
 pub enum Recipe {
     DFT(usize),
     MixedRadix {
         left_fft: Box<Recipe>,
         right_fft: Box<Recipe>,
     },
+    #[allow(dead_code)]
     GoodThomasAlgorithm {
         left_fft: Box<Recipe>,
         right_fft: Box<Recipe>,
