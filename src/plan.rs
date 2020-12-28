@@ -119,6 +119,49 @@ pub enum Recipe {
     Butterfly32,
 }
 
+impl Recipe {
+    pub fn len(&self) -> usize {
+        match self {
+            Recipe::DFT(length) => *length,
+            Recipe::Radix4(length) => *length,
+            Recipe::Butterfly2 => 2,
+            Recipe::Butterfly3 => 3,
+            Recipe::Butterfly4 => 4,
+            Recipe::Butterfly5 => 5,
+            Recipe::Butterfly6 => 6,
+            Recipe::Butterfly7 => 7,
+            Recipe::Butterfly8 => 8,
+            Recipe::Butterfly11 => 11,
+            Recipe::Butterfly13 => 13,
+            Recipe::Butterfly16 => 16,
+            Recipe::Butterfly17 => 17,
+            Recipe::Butterfly19 => 19,
+            Recipe::Butterfly23 => 23,
+            Recipe::Butterfly29 => 29,
+            Recipe::Butterfly31 => 31,
+            Recipe::Butterfly32 => 32,
+            Recipe::MixedRadix {
+                left_fft,
+                right_fft,
+            } => left_fft.len() * right_fft.len(),
+            Recipe::GoodThomasAlgorithm {
+                left_fft,
+                right_fft,
+            } => left_fft.len() * right_fft.len(),
+            Recipe::MixedRadixSmall {
+                left_fft,
+                right_fft,
+            } => left_fft.len() * right_fft.len(),
+            Recipe::GoodThomasAlgorithmSmall {
+                left_fft,
+                right_fft,
+            } => left_fft.len() * right_fft.len(),
+            Recipe::RadersAlgorithm { inner_fft } => inner_fft.len() + 1,
+            Recipe::BluesteinsAlgorithm { len, .. } => *len,
+        }
+    }
+}
+
 /// The Scalar FFT planner creates new FFT algorithm instances using non-SIMD algorithms.
 ///
 /// RustFFT has several FFT algorithms available. For a given FFT size, the `FftPlannerScalar` decides which of the
@@ -175,7 +218,7 @@ impl<T: FFTnum> FftPlannerScalar<T> {
             Arc::clone(instance)
         } else {
             let recipe = self.design_fft_for_len(len);
-            let fft = self.build_fft(recipe);
+            let fft = self.build_new_fft(recipe);
             self.algorithm_cache.insert(len, Arc::clone(&fft));
             fft
         }
@@ -191,9 +234,21 @@ impl<T: FFTnum> FftPlannerScalar<T> {
         }
     }
 
-    // Create the fft from a recipe
-    fn build_fft(&mut self, plan: Recipe) -> Arc<dyn Fft<T>> {
-        match plan {
+    // Create the fft from a recipe, take from cache if possible
+    fn build_fft(&mut self, recipe: Recipe) -> Arc<dyn Fft<T>> {
+        let len = recipe.len();
+        if let Some(instance) = self.algorithm_cache.get(&len) {
+            Arc::clone(instance)
+        } else {
+            let fft = self.build_new_fft(recipe);
+            self.algorithm_cache.insert(len, Arc::clone(&fft));
+            fft
+        }
+    }
+
+    // Create a new fft from a recipe
+    fn build_new_fft(&mut self, recipe: Recipe) -> Arc<dyn Fft<T>> {
+        match recipe {
             Recipe::DFT(len) => Arc::new(DFT::new(len, self.inverse)) as Arc<dyn Fft<T>>,
             Recipe::Radix4(len) => Arc::new(Radix4::new(len, self.inverse)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly2 => Arc::new(Butterfly2::new(self.inverse)) as Arc<dyn Fft<T>>,
@@ -425,6 +480,7 @@ mod unit_tests {
         for len in 0..2 {
             let plan = planner.design_fft_for_len(len);
             assert_eq!(plan, Recipe::DFT(len));
+            assert_eq!(plan.len(), len, "Recipe reports wrong length");
         }
     }
 
@@ -436,6 +492,7 @@ mod unit_tests {
             let len = 1 << pow;
             let plan = planner.design_fft_for_len(len);
             assert_eq!(plan, Recipe::Radix4(len));
+            assert_eq!(plan.len(), len, "Recipe reports wrong length");
         }
     }
 
@@ -447,6 +504,7 @@ mod unit_tests {
             let len = 1 << pow;
             let plan = planner.design_fft_for_len(len);
             assert!(is_mixedradix(&plan), "Expected MixedRadix, got {:?}", plan);
+            assert_eq!(plan.len(), len, "Recipe reports wrong length");
         }
     }
 
@@ -486,6 +544,7 @@ mod unit_tests {
                             * 7usize.pow(pow7);
                         let plan = planner.design_fft_for_len(len);
                         assert!(is_mixedradix(&plan), "Expected MixedRadix, got {:?}", plan);
+                        assert_eq!(plan.len(), len, "Recipe reports wrong length");
                     }
                 }
             }
@@ -503,6 +562,7 @@ mod unit_tests {
                 "Expected MixedRadixSmall, got {:?}",
                 plan
             );
+            assert_eq!(plan.len(), *len, "Recipe reports wrong length");
         }
     }
 
@@ -516,6 +576,7 @@ mod unit_tests {
                 "Expected GoodThomasAlgorithmSmall, got {:?}",
                 plan
             );
+            assert_eq!(plan.len(), *len, "Recipe reports wrong length");
         }
     }
 
@@ -535,10 +596,12 @@ mod unit_tests {
                 "Expected BluesteinsAlgorithm, got {:?}",
                 plan
             );
+            assert_eq!(plan.len(), *len, "Recipe reports wrong length");
         }
         for len in easyprimes.iter() {
             let plan = planner.design_fft_for_len(*len);
             assert!(is_raders(&plan), "Expected RadersAlgorithm, got {:?}", plan);
+            assert_eq!(plan.len(), *len, "Recipe reports wrong length");
         }
     }
 }
