@@ -217,14 +217,11 @@ impl<T: FFTnum> FftPlannerScalar<T> {
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft(&mut self, len: usize) -> Arc<dyn Fft<T>> {
-        if let Some(instance) = self.algorithm_cache.get(&len) {
-            Arc::clone(instance)
-        } else {
-            let recipe = self.design_fft_for_len(len);
-            let fft = self.build_fft(&recipe);
-            self.algorithm_cache.insert(len, Arc::clone(&fft));
-            fft
-        }
+        // Step 1: Create a "recipe" for this FFT, which will tell us exactly which combination of algorithms to use
+        let recipe = self.design_fft_for_len(len);
+
+        // Step 2: Use our recipe to construct a Fft trait object
+        self.build_fft(&recipe)
     }
 
     // Make a recipe for a length
