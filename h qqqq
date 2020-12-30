@@ -1,0 +1,2724 @@
+[33mcommit 56eb46079dd116da5711932b3a3ba4e83b95c23b[m[33m ([m[1;36mHEAD -> [m[1;32mmaster[m[33m, [m[1;31mupstream/master[m[33m)[m
+Author: songww <sww4718168@163.com>
+Date:   Wed Jan 13 12:14:39 2021 +0800
+
+    Fix typo (#54)
+
+[33mcommit 4868d4c3c4867dbbfca1a2fec8959d65f073b4ea[m[33m ([m[1;31morigin/master[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32msse[m[33m)[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Jan 8 20:11:43 2021 -0500
+
+    5.0.1 release (#52)
+    
+    * Update CHANGELOG.md
+    
+    * 5.0.1 release
+
+[33mcommit 856cf7fdaed968268ed0d550ad0ac9896b01f4de[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Jan 8 19:54:45 2021 -0500
+
+    Performance tips improvement (#51)
+
+[33mcommit cf4f91cef68a5bf8756616d41662657463939e6d[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Wed Jan 6 19:07:22 2021 -0500
+
+    Update capitalization of readme example (#48)
+
+[33mcommit 1bcf52edf0f8f760c97675c5e14f4220791b0b88[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Tue Jan 5 19:04:07 2021 -0500
+
+    Improve documentation for scratch methods (#47)
+
+[33mcommit 4dc194d1b0658831104ed26d2b68b957e42504b4[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Tue Jan 5 18:59:17 2021 -0500
+
+    Fixed AVX planner not using prime butterflies as bases (#46)
+    
+    * Fixed AVX planner not using prime butterflies as bases
+    
+    * rustfmt
+
+[33mcommit 66bb2a9825ad0f6e5583a71f55930706daa26425[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Mon Jan 4 21:14:07 2021 -0500
+
+    Final documentation tweaks for 5.0 (#44)
+    
+    * Update UpgradeGuide4to5.md
+    
+    * Documentation tweaks
+    
+    * Update dft.rs
+    
+    * Update CHANGELOG.md
+    
+    * Update Cargo.toml
+
+[33mcommit 7b7f94423d00128a5427345fdaccb4e36d74204b[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Mon Jan 4 16:31:54 2021 -0800
+
+    MSRV 1.37
+
+[33mcommit 0c3b0c9445334d05f3793e9288fa42fcec597a6d[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Mon Jan 4 16:31:17 2021 -0800
+
+    Found a more permissive MSRV version
+
+[33mcommit fbd05ce564477503b9ebcafafc88d22184684cf6[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Mon Jan 4 19:29:31 2021 -0500
+
+    Fix bug with scratch supply in GoodThomasAlgorithm (#42)
+    
+    * Fix bug with incorrect scratch supplying, and improve scratch supply dcumentation
+    
+    * Renamed get_outofplace_scratch_len() to be consistent with process_outofplace_with_scratch()
+
+[33mcommit 94f38d19fc1f2b223277fd0e21884b4139a1c079[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Mon Jan 4 02:13:07 2021 -0500
+
+    Upgrade guide (#41)
+    
+    * First draft of upgrade guide
+    
+    * Update README.md
+    
+    * First draft of upgrade guide
+    
+    * Update README.md
+    
+    * Update UpgradeGuide4to5.md
+    
+    * Update UpgradeGuide4to5.md
+    
+    * Update UpgradeGuide4to5.md
+    
+    * Update UpgradeGuide4to5.md
+    
+    * Update UpgradeGuide4to5.md
+
+[33mcommit c4e0519f13bcdf3b7031181c183a1380e770d5fe[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Mon Jan 4 01:19:16 2021 -0500
+
+    Renamed the 'DFT' struct to 'Dft' (#40)
+
+[33mcommit b6780bef18f36f8591b5389b356ddd50d149564d[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Mon Jan 4 00:39:08 2021 -0500
+
+    Reshuffled Fft trait methods to reduce binary size and user confusion (#39)
+    
+    * Reshuffled Fft trait methods to reduce binary size and user confusion
+    
+    * rustfmt
+
+[33mcommit f10b54c761226de3909e669c4f9e7e192356240b[m
+Author: Henrik Enquist <henrik.enquist@gmail.com>
+Date:   Sun Jan 3 21:36:38 2021 +0100
+
+    CI for arm64 and x86 (#36)
+    
+    * Add check and test for aarch64
+    
+    * Run ci on push
+    
+    * Try i586
+    
+    * Clean up, reduce test fft length
+    
+    * Only run tests on PR
+
+[33mcommit 0826b686fd0c41cdf57d7344497bbdeb00a39c53[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Jan 1 23:34:45 2021 -0800
+
+    rustfmt
+
+[33mcommit 460e2f7a2b0400020f22086810180da9c015ef75[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Jan 1 23:33:36 2021 -0800
+
+    Created a feature flag for AVX, enabled by default
+
+[33mcommit cc8df019f8c53f086737cf138de693425d4d1338[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Jan 1 22:07:57 2021 -0800
+
+    Add rustc 1.48 to CI
+
+[33mcommit d8dc6b7e7d4f4ce4a080d9b7ef3798550f2788ed[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Jan 2 01:05:32 2021 -0500
+
+    Documentation stuff for 5.0 (#33)
+    
+    * Hide the FFT planner enum from the public API, and documentation imrovements
+    
+    * Readme and documentation updates
+    
+    * Deocumentation regarding performance
+    
+    * cargo fmt
+    
+    * Don't complicate the usage example
+    
+    * Wrong buffer size
+    
+    * Put the generic parameter on the planner itself
+    
+    * Fix markdown formatting problem
+
+[33mcommit 865300446034435804c9d2ee708bd1e29e40d8de[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Dec 31 19:13:13 2020 -0500
+
+    Removed twiddle factors from public API (#31)
+    
+    * Removed twiddle factors from public API
+    
+    * rustfmt
+
+[33mcommit b505582644578719155e5b5ad46798c4e1e1766d[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Dec 31 18:14:51 2020 -0500
+
+    Rename FFTnum to FftNum to satisfy naming conventions (#30)
+    
+    * REnamed FFTnum to FftNum to satisfy naming conventions
+    
+    * rustfmt
+
+[33mcommit 8432a1286de8556211eddbc4fc14598decaef1ce[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Dec 31 18:02:12 2020 -0500
+
+    Big refactor: Inverse is now an enum instead of a bool  (#29)
+    
+    * Big refactor: Inverse is now an enum instead of a bool
+    
+    * rustfmt
+
+[33mcommit 11112f3399decadc0dd310fb2bb94668a5358b5f[m
+Merge: 197c33c fe38c9e
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Tue Dec 29 21:12:08 2020 -0500
+
+    Merge pull request #26 from HEnquist/newplanner
+    
+    Two-step planner to allow testing
+
+[33mcommit fe38c9ea738e9d0ff2ec347da430c0ce0b56bb26[m[33m ([m[1;31morigin/newplanner[m[33m)[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Tue Dec 29 18:00:58 2020 -0800
+
+    Remove superflouous caching from plan_fft()
+
+[33mcommit 184d66e06adb587c4d5ac75578bf5c7affef7843[m[33m ([m[1;32mnewplanner[m[33m)[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Tue Dec 29 17:41:31 2020 +0100
+
+    Change from Boxed to Rc for Recipes
+
+[33mcommit 73e3673aa92a3bb22bf778490641e9368e5863e2[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Mon Dec 28 21:21:48 2020 +0100
+
+    Reuse ffts from cache whenever possible
+
+[33mcommit e7f4344e1b78c7d6c73077c17cea24b3f62f9591[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Mon Dec 28 20:57:38 2020 +0100
+
+    Only allow one specific unused variant
+
+[33mcommit 197c33cabef22a8ce838cb1732fe62ac4ea4dce1[m
+Merge: b9b9a1d 6c12740
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Dec 27 23:07:00 2020 -0500
+
+    Moderately improved performance and readability of radix4
+
+[33mcommit 6c127402643cfacf23591827da56075ef9b80fb2[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Dec 27 20:02:23 2020 -0800
+
+    Moderately improved performance of Butterfly8
+
+[33mcommit 6ab56f96fa0c0779a8886d2755c979bd836e8f41[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Dec 27 14:58:14 2020 -0800
+
+    Rewrote radix4 to be simpler, more readable, slightly faster
+
+[33mcommit 1a8a5508f909b25a8474968c5f622d1f2497d7d3[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Sun Dec 27 21:45:04 2020 +0100
+
+    Remove some commented code
+
+[33mcommit 2686547e3b8d9ef8aea881e5598c3c88d7a197d4[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Sun Dec 27 21:33:43 2020 +0100
+
+    Merge and format
+
+[33mcommit 6c28f0e2f0a2d904af135188538a5313e4ac7ec5[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Sun Dec 27 21:33:31 2020 +0100
+
+    Merge and format
+
+[33mcommit 40719f2d90df436abbfbdb9a793e98ca086dfb19[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Sun Dec 27 21:30:13 2020 +0100
+
+    Merge and format
+
+[33mcommit ca2c38f289d4355318a96035ee3661c748a08c68[m
+Merge: ab32637 1cc6d0a
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Sun Dec 27 21:29:28 2020 +0100
+
+    Merge branch 'newplanner' of https://github.com/HEnquist/RustFFT into newplanner
+
+[33mcommit ab3263763b396d1628aa25ec0ae9d9bd80e61996[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Sun Dec 27 21:25:57 2020 +0100
+
+    Clean up after rebase
+
+[33mcommit 25afbd13a38c7d28ce1fd492e81a0d3d0feaa2b5[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Sun Dec 27 21:08:29 2020 +0100
+
+    Better tests, add recipe cache
+
+[33mcommit 861eaea0cde5d254ebbeab1edeeea00fefc3822a[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Sat Dec 26 23:16:16 2020 +0100
+
+    Clean up, fix and improve tests
+
+[33mcommit a4185d9fb4e61c4a39aafc1224797cf800f33dda[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Sat Dec 26 20:24:19 2020 +0100
+
+    Remove unused functions
+
+[33mcommit e276fa5f622f394486a864582431f58a2ca674ab[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Fri Dec 25 23:17:56 2020 +0100
+
+    WIP adapt to new version
+
+[33mcommit 6165beaa7b626644cbf9ef525ac683a20b3b996e[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Fri Dec 25 12:58:16 2020 +0100
+
+    WIP adapt new planner
+
+[33mcommit 1cc6d0a132ad9fd22dcfb712bc4b4e7a2934b6b3[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Sun Dec 27 21:08:29 2020 +0100
+
+    Better tests, add recipe cache
+
+[33mcommit b9b9a1df44eb3e2276fb58ea68b025f94eb907d4[m
+Merge: cbc1b2f 644b583
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Dec 26 21:23:13 2020 -0500
+
+    Merge pull request #25 from ejmahler/simd
+    
+    Merge AVX code into master
+
+[33mcommit 644b5839126ffb11e39c9008b32e6f21122bf9ec[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Dec 26 18:20:27 2020 -0800
+
+    Ran rustfmt
+
+[33mcommit bacaa55b93d6e72fa965906adcc75e8068aa3119[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Dec 26 18:17:46 2020 -0800
+
+    Turned FftPlanner into an enum of different specific planner types
+
+[33mcommit 4d7ea64b2304f2f68da99c21d712eec826900c15[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Dec 26 17:31:23 2020 -0800
+
+    Added a pub(crate) method to debug the FftPlannerAvx's plan
+
+[33mcommit f62c575822b2905780fc92a9104f600d06fccf1a[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Dec 26 17:29:53 2020 -0800
+
+    Fixed a performance regression after the planning refactor
+
+[33mcommit 21e13e21065b6d2b6b8a2a409c3d5dd0caa4ece6[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Dec 26 15:46:56 2020 -0800
+
+    Removed dependency on min_specialization. AVX now compiles on stable.
+
+[33mcommit 765d25484bd3b5b2ca1f5b7757accba919eb67bf[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Sat Dec 26 23:16:16 2020 +0100
+
+    Clean up, fix and improve tests
+
+[33mcommit fa586c0d1d1affafbf3f3aafaa5574618d23a5df[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Sat Dec 26 20:24:19 2020 +0100
+
+    Remove unused functions
+
+[33mcommit 4d4198efc4791e80da23659db6c808e0fb91d814[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Fri Dec 25 23:17:56 2020 +0100
+
+    WIP adapt to new version
+
+[33mcommit db2c653d3062325cd1d9a497532b341d66d7a493[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Fri Dec 25 12:58:16 2020 +0100
+
+    WIP adapt new planner
+
+[33mcommit b45fab25043848901b04dbd3f131314f25b2a180[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Dec 24 19:22:23 2020 -0800
+
+    Implement AVX butterflies without specialization
+
+[33mcommit 4e2f0e5a573b7680c0f0e24420a0b6c0611cd182[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Dec 24 13:31:42 2020 -0800
+
+    Removed dependency on "maybe_uninit_extra" unstable feature
+
+[33mcommit de047c03368735c953deb36d6cef5a26c8f4822b[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Dec 24 12:20:38 2020 -0800
+
+    Removed dependency on "maybe_uninit_slice" unstable feature
+
+[33mcommit bf2f08a61c0327ab1e17809095535b8bb3d4b098[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Dec 24 12:08:37 2020 -0800
+
+    Re-added AVX code after merge
+
+[33mcommit cbc1b2f47a2bd68db7ce21ea095c238e3183ddbc[m
+Merge: a67f46a 1ef5c41
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Dec 24 14:54:04 2020 -0500
+
+    Merge pull request #24 from ejmahler/merge-simd
+    
+    Merge simd
+
+[33mcommit 1ef5c41c0843162f16b4781fdb59d64873eb3ac0[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Dec 24 11:52:20 2020 -0800
+
+    Remove rustc 1.31 from CI
+
+[33mcommit 07df4e2f74f2e6bbc62990bb3aaac6546f5dbb08[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Dec 24 11:47:23 2020 -0800
+
+    Unformatted benchmarks
+
+[33mcommit 3821a651a972b29483b2d060118b0be33bd3a2d0[m
+Merge: 803f7d9 aa8924e
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Dec 24 11:44:39 2020 -0800
+
+    Merge branch 'simd' into merge-simd
+
+[33mcommit 803f7d90e9a78ee1710f33104fd7686dc0924717[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Dec 24 10:28:21 2020 -0800
+
+    renamed FFT to Fft, and FFTplaneer to FftPlanner
+
+[33mcommit a67f46a8fe0920d5983c0d8c626b8ff8ad036ca3[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Dec 24 12:56:21 2020 -0500
+
+    Upgrade to rand v0.6, and added more thorough integration tests (#23)
+    
+    * Upgrade to rand v0.8, and added more thorough integration tests
+    
+    * Ran fmt, and downgraded to rand 0.6
+
+[33mcommit f94ae3721333badbe0d4d499819ecbc7b645a11e[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Dec 24 08:49:54 2020 -0800
+
+    Don't allow bare trait objects anymore
+
+[33mcommit 9d245ce8497ad9786d5247c2dc0b442260c93470[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Dec 24 08:42:48 2020 -0800
+
+    A few more documentation updates
+
+[33mcommit f240a4f4f488d9cfc6a735987575dea10c951582[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Dec 24 08:33:13 2020 -0800
+
+    Documentation updates for release 4.1
+
+[33mcommit 6c19ee681ef3e49a471973f4e5a0c5c738d2c949[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Wed Dec 23 20:59:18 2020 -0800
+
+    Improved the performance of GoodThomasAlgoithm re-indexing
+
+[33mcommit eafb8ae1c647c8ce60a2236a852fb0a2eb725929[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Wed Dec 23 11:15:30 2020 -0800
+
+    Use chunks_exact() instead of chunks() whenever possible
+
+[33mcommit 06a863ac1815360a67bde2488cd00a39b51d6ac9[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Dec 24 11:11:30 2020 -0500
+
+    Add rustfmt to CI (#18)
+
+[33mcommit e477c1bcfde0fd331057063d17c7687db10faf88[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Wed Dec 23 10:59:51 2020 -0800
+
+    Exclude benchmarks from formatting
+
+[33mcommit 8fd5cd2f35102a84338ee204ce20195581ad2e9e[m
+Author: adamnemecek <adamnemecek@gmail.com>
+Date:   Tue Dec 22 12:05:42 2020 -0800
+
+    added cargo fmt note to readme
+
+[33mcommit 3a087738dfd86ac3d49b8a7a4876a6e3b4b1e4e9[m
+Author: Adam Nemecek <adamnemecek@gmail.com>
+Date:   Mon Dec 21 08:39:09 2020 -0800
+
+    minor refactoring
+
+[33mcommit 52f6def22c2aff3847bf57c474f51d87e8dc324f[m
+Author: Adam Nemecek <adamnemecek@gmail.com>
+Date:   Mon Dec 21 08:25:16 2020 -0800
+
+    minor refactoring
+
+[33mcommit 391ddbb2e7043532e761a60491c9b075bbc05af0[m
+Author: Adam Nemecek <adamnemecek@gmail.com>
+Date:   Mon Dec 21 08:20:26 2020 -0800
+
+    minor refactoring
+
+[33mcommit 3e1d29c63dfee79703586cef8176b4fabc1c363f[m
+Author: Adam Nemecek <adamnemecek@gmail.com>
+Date:   Mon Dec 21 08:16:42 2020 -0800
+
+    cargo fmt
+
+[33mcommit aa8924e69091f95db99cccd5378cf2ac196a0216[m[33m ([m[1;31mupstream/simd[m[33m)[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Dec 20 18:34:02 2020 -0800
+
+    Update CHANGELOG.md
+
+[33mcommit 9c9a655bd1848817b2a86e8aba4e08e1cead7e68[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Dec 20 18:22:45 2020 -0800
+
+    Update version
+
+[33mcommit 3e06a29da9670f5d521c18e96a862b8691fa5426[m
+Author: sakex <alexandre@senges.ch>
+Date:   Mon Dec 21 02:07:52 2020 +0100
+
+    Remove dbg macro
+
+[33mcommit 0d67125c76f092614eec9741a87985dcdbc4a0cc[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Dec 20 16:35:45 2020 -0500
+
+    Update README.md (#13)
+
+[33mcommit ab3dd41c654fd4ea835e4910f2b80b79547da7d8[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Dec 20 13:06:41 2020 -0800
+
+    Update README.md
+
+[33mcommit c599c9019fc79372e53b94626d99c4ab66032339[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Dec 20 13:01:30 2020 -0800
+
+    Version upgrade
+
+[33mcommit 6cb5064f0b97d1760a15ca8e517a065d1a787404[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Dec 20 13:01:18 2020 -0800
+
+    More documentation tweaks
+
+[33mcommit e15f4566d39ca54341fe6ba3bde93b86f1b53405[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Dec 20 11:43:33 2020 -0800
+
+    Documentation and layout changes in preparation for release
+
+[33mcommit cdf38a40444571c14fba1fce06b0ce11e4c8d706[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Dec 20 07:05:38 2020 -0800
+
+    Misc cleanup
+
+[33mcommit 2b60fa6ae5b8be55510a13dc10f3a8570073726e[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Dec 19 17:50:14 2020 -0800
+
+    Implemented 11xn and butterfly11 AVX implementations
+
+[33mcommit 74cf2a247fe44818a361b87355e729c74fd2bbb3[m
+Merge: b1e3d61 cefebfb
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Dec 19 15:20:14 2020 -0800
+
+    Merge branch 'master' into simd
+
+[33mcommit b1e3d610545215e156d0e84f08f046be423b0fba[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Dec 19 08:12:45 2020 -0800
+
+    Small butterfly cleanup
+
+[33mcommit 318cac8aee4db4850ae484c9289e519cac660ab8[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Dec 19 07:13:57 2020 -0800
+
+    Planner cleanup
+
+[33mcommit ab90b6dda72ce53646209c0fe7bfa585499f8f53[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Dec 19 04:36:36 2020 -0800
+
+    Deleted some unused boilerplate macros
+
+[33mcommit 1c26c5f852aad993995d3405d8ac61c17e3a717c[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Dec 19 04:34:35 2020 -0800
+
+    Split off the scratch before passing it to prepare_raders
+
+[33mcommit cefebfb628e27d48262158a37016623aac0da38b[m
+Author: Henrik Enquist <henrik.enquist@gmail.com>
+Date:   Fri Dec 18 17:27:19 2020 +0100
+
+    Prime butterflies up to length 31 (#10)
+    
+    * Hand-optimize butterflies for 3 and 5
+    
+    * Optimized for 7
+    
+    * Add bench for length 7
+    
+    * Finetune length 3
+    
+    * Clean up, add bench for prime 3
+    
+    * Remove unused imports
+    
+    * Remove extra whiespace
+    
+    * Add documentation on how butterflies were derived
+    
+    * Revert unintended changes of radix4
+    
+    * Remove a few repeated adds
+    
+    * Add butterflies for 11, 13, 17 and 19
+    
+    * add larger prime factor butterflies
+    
+    * Hand-optimize butterflies for 3 and 5
+    
+    * Optimized for 7
+    
+    * Add bench for length 7
+    
+    * Finetune length 3
+    
+    * Clean up, add bench for prime 3
+    
+    * Remove unused imports
+    
+    * Remove extra whiespace
+    
+    * Add documentation on how butterflies were derived
+    
+    * Revert unintended changes of radix4
+    
+    * Remove a few repeated adds
+    
+    * Add butterflies for 11, 13, 17 and 19
+    
+    * add larger prime factor butterflies
+    
+    * Improve planning Rader vs Bluestein
+    
+    * Add butterfly python tool
+    
+    * Add comment on autogenerated code
+    
+    * Applied changes for 2018 edition
+    
+    Co-authored-by: Elliott Mahler <join.together@gmail.com>
+
+[33mcommit 6cd30b8c1b93a593a4836da2fdb2d66cf5985c3e[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Dec 18 10:59:36 2020 -0500
+
+    Fftnum blanket impl (#12)
+    
+    * Update common.rs
+    
+    * Update common.rs
+
+[33mcommit 1169a6f28079f4dca78284b86de40f00bd9ef6b5[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Dec 18 07:44:49 2020 -0800
+
+    Moved all AVX vector stuff out of common
+
+[33mcommit c3a8667215b1679dc4ea565d170e9d7e314b7d0e[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Dec 18 07:02:27 2020 -0800
+
+    Switched to min_specialization
+
+[33mcommit 76465b2e105ba587f6958e8f18554887349dbf28[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Dec 18 05:41:40 2020 -0800
+
+    Fixed test failure in AVX 32-bit butterfly512
+
+[33mcommit 48446d5fbf70233bc1645f542c1a9a80a88c9964[m
+Merge: 935a293 391be46
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Dec 18 05:29:12 2020 -0800
+
+    Merge branch 'master' into simd
+
+[33mcommit 391be46953a8047778b5895e6715504f65c332d5[m
+Merge: 82e1d0a 898123d
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Dec 18 07:45:14 2020 -0500
+
+    Merge pull request #11 from ejmahler/bluesteins-2018
+    
+    Updates bluesteins implementation to 2018
+
+[33mcommit 898123d535785f4095007b1a0ede6896e1cbaf55[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Dec 18 04:42:43 2020 -0800
+
+    Updates bluesteins implementation to 2018
+
+[33mcommit 82e1d0aa7055befac1721523d8f60122a1e9af12[m
+Merge: 982a040 682705a
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Dec 18 07:38:38 2020 -0500
+
+    Merge pull request #5 from nacaclanga/master
+    
+    Bump source code to 2018 edition
+
+[33mcommit 982a040d906942b3ea01d0e21f7bd7aa74c5a1c6[m
+Merge: a7f55c5 2818c7e
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Mon Dec 7 20:29:32 2020 -0500
+
+    Merge pull request #6 from HEnquist/bluestein
+    
+    Bluestein's algorithm
+
+[33mcommit 2818c7ed59f5dfc736f081adcb155f237dd817b9[m[33m ([m[1;31morigin/bluestein[m[33m, [m[1;32mbluestein[m[33m)[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Mon Dec 7 10:26:47 2020 +0100
+
+    Conjugate to use FFT as iFFT and vice versa, comment steps
+
+[33mcommit de777c0b33617387f0688a3fb2ef2683af2faca1[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Sat Dec 5 16:24:41 2020 +0100
+
+    Improve planner, minor optimizations of Bluestein
+
+[33mcommit 04043fba02ec0812c6250ba443cb205c29646411[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Fri Nov 27 12:06:59 2020 +0100
+
+    Use Raders for small prime factors, Bluesteins for large
+
+[33mcommit 7a0649db2a0ce44c43d87b255d4b18f92aead365[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Thu Nov 26 23:24:14 2020 +0100
+
+    Add credits
+
+[33mcommit 959c5cc06ddce54bace6d95429baa7bbd9283fbd[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Thu Nov 26 23:11:41 2020 +0100
+
+    Update docs, clean up
+
+[33mcommit 018d3e151635056ac8d091799ab5c5a5b8e99245[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Thu Nov 26 21:41:43 2020 +0100
+
+    Add a Bluestein algorithm
+
+[33mcommit 9fb83913d94e3f91166bd826228658026ee202ed[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Thu Nov 26 21:41:28 2020 +0100
+
+    Add a Bluestein algorithm
+
+[33mcommit 682705adb55892a6349d015b16ee08b2fc142a8f[m
+Author: Johannes Blumberg <johannes.blumberg@bioquant.uni-heidelberg.de>
+Date:   Thu Oct 15 15:35:15 2020 +0200
+
+    Bump to 2018 edition
+
+[33mcommit a7f55c55eb0dd0336fa261aa7e15e4349e83869b[m[33m ([m[1;33mtag: 4.0[m[33m)[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Oct 9 02:21:03 2020 -0400
+
+    Release 4.0 (#4)
+    
+    * release 4.0
+    
+    * Update run_test.yml
+    
+    * Update README.md
+    
+    * Update README.md
+
+[33mcommit cf0ad3ae297a80f43d393be8a9c8588d923f82b9[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Wed Oct 7 22:31:59 2020 +0200
+
+    Bump num-complex to 0.3, transpose to 0.2
+
+[33mcommit 885fae5c457adec1b0b85b2a3c52e452590c36df[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Oct 8 22:15:59 2020 -0700
+
+    Removed Travis CI config
+
+[33mcommit 90fca4c746508bcbffb315b6652ad192f829d273[m
+Merge: a34d4f1 29d20ba
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Oct 8 21:58:36 2020 -0700
+
+    Merge branch 'pr/61'
+
+[33mcommit 29d20bacdb75c9d66891234d7925138babf3e378[m
+Author: HEnquist <henrik.enquist@gmail.com>
+Date:   Thu Oct 8 08:59:15 2020 +0200
+
+    Add github action for check and test
+
+[33mcommit 935a29391b006030be4b4a784ba90a343379d3dd[m[33m ([m[1;31morigin/simd[m[33m)[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Tue Jul 7 06:57:36 2020 -0700
+
+    Implemented an AVX2 version of Rader's Algorithm
+
+[33mcommit d9207c8bd37783d459393182c2eb61be1e5424bd[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Jun 28 18:59:47 2020 -0700
+
+    Assert that the input size to rader's algorithm is prime, instead of producing garbage data
+
+[33mcommit 5c56257b465ed413a5b24fb3921b08f8462b26b4[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Jun 28 18:06:54 2020 -0700
+
+    Replaced some hand-written number theory functions with num_integer implementations
+
+[33mcommit 4ec79a07049a2bd1409745ce3f47e0d596ad4cb6[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Jun 28 13:48:02 2020 -0700
+
+    Implemented big butterflies for power of 2 f64
+
+[33mcommit 7ee5d6f63369ef8a79ebf518187b9263c81229e5[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Jun 21 13:49:07 2020 -0700
+
+    Rewrote the butterfly512 using maybe-uninit
+
+[33mcommit ddded951c96a616988d887182d4a9f6226e78984[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Mon Jun 8 07:25:41 2020 -0700
+
+    Reduced stack shuffling in mixed radix 16xn
+
+[33mcommit 7bd6889f83d790fb7b8f016b0a1e826f12b206a8[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Jun 7 10:24:48 2020 -0700
+
+    Implemented butterfly 128, 256, and 512
+
+[33mcommit 5afac66c6f731b67c5b66086cb6d6db2248936ee[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun May 31 12:18:59 2020 -0700
+
+    Cleanup of some butterfly implementations
+
+[33mcommit 132b673799782a26c730cfbbbd56f1f5be764ed4[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun May 31 11:40:09 2020 -0700
+
+    Refactored the AVX planner to support 5xn and 7xn on the fast path
+
+[33mcommit 14a6a4863fb438b5831489d4efc9f0d8de379407[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat May 30 14:07:38 2020 -0700
+
+    Added a 7xn mixed radix implementation
+
+[33mcommit 643a15564cde7e1e3e56c155503cb73d9c613c0d[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat May 30 11:14:36 2020 -0700
+
+    Added a 5xn mixed radix implementation
+
+[33mcommit 6cc350c98699511e93acaba684bce70580564bf1[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Tue May 26 03:46:53 2020 -0700
+
+    10% faster storage for Butterfly 27
+
+[33mcommit a7485c39d159f78fb33e7880b7160e3a22e641b3[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Tue May 26 02:56:22 2020 -0700
+
+    Renamed AVX butterflies
+
+[33mcommit fecbf2139bbdd1a5aaf6febe33c40b287ea684b4[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Mon May 25 12:34:33 2020 -0700
+
+    Deleted most remaining legacy AVX code
+
+[33mcommit 296c16a09e4d9ce3dcb08060e27cb3ec38ae8902[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Mon May 25 11:45:32 2020 -0700
+
+    Converted bluestein's to be fully generic
+
+[33mcommit 0a26d3d5405f362855ad73a2b30ca77bd84419e1[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Mon May 25 08:15:55 2020 -0700
+
+    Converted the remaining mixed radix implementations to be fully generic
+
+[33mcommit d9a4eb7a8dc9d1ba0c15f37abb7d7a20d7bc5401[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun May 24 21:41:45 2020 -0700
+
+    Converted some mixed radix implementations to be fully generic
+
+[33mcommit dabdf8a462e4e038027ab7e05088cf15f9b29f65[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Wed May 20 02:24:44 2020 -0700
+
+    Converted transpose for 2xsn, 3xn, 4xn over to AvxVector
+
+[33mcommit 1083f7eb7ee36afdfd7f79e9739d0be8b86d6e80[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun May 17 21:04:18 2020 -0700
+
+    Implemented loads/stores in the AvxVector trait system
+
+[33mcommit adc5a4971e6f094c7b702017e8520cc4348b64fa[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Tue May 12 21:41:26 2020 -0700
+
+    Convert butterfly twiddle factors to use AvxVector
+
+[33mcommit 9b1af638557eeaa15e0e9e6d8a2ba9e3d149bbbb[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Tue May 12 21:22:07 2020 -0700
+
+    Converted size-64 butterflies to use AvxVector
+
+[33mcommit 430f06895119ce8921cd2b6841c9ddb078173460[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat May 9 21:04:06 2020 -0700
+
+    Switched f32 butterflies over to AvxVector, and reduced code duplication in mixed radix init
+
+[33mcommit cb2827431ade2b08e6eaf744bf71c4f0ff23fe12[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat May 9 19:26:43 2020 -0700
+
+    Generified the mixed radix remainder code
+
+[33mcommit de40d0044661fc661daffa127c8d3272d9579f37[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat May 9 18:47:05 2020 -0700
+
+    Converted remaining mixed radix impls to use AvxVector for their butterflies
+
+[33mcommit 8468d1d1f489eb518ffdfbecf85cab9e0efc6291[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Apr 30 05:11:42 2020 -0700
+
+    Switched a few MixedRadix*xn implementations over to the new trait
+
+[33mcommit d2c8339d45a088dda6033aed2218140fee9963fa[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Apr 30 04:19:25 2020 -0700
+
+    Introduced a new trait to abstract away 128 vs 256, f32 vs f64 where possible
+
+[33mcommit 949a3695bd577bc101458ffb3e50f23e584d1179[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Apr 30 00:38:14 2020 -0700
+
+    Ran cargo-fix and upgraded to 2018 edition
+
+[33mcommit da894bf9206f3675dd24c7865980dcfd37098433[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Apr 30 00:20:51 2020 -0700
+
+    Deleted split radix
+
+[33mcommit b24afd0c1ae3de8d6319334470d2aa697ab98212[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Apr 30 00:01:57 2020 -0700
+
+    Implemented AVX size 7 butterflies
+
+[33mcommit b2c3f27aabd91f741186de30d229b9cdf94aba82[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Wed Apr 29 04:32:58 2020 -0700
+
+    Added AVX implementations of butterfly 5 and butterfly 7
+
+[33mcommit aaecd0ad3911fdcb7a7c8178ac610c8a35ff7bfa[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Wed Apr 29 00:50:08 2020 -0700
+
+    comment update
+
+[33mcommit 79bd15735c35453cc568d325bc534ab7fc064008[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Wed Apr 29 00:48:50 2020 -0700
+
+    Added a size-74 butterfly for f32, and integrated it into the planner
+
+[33mcommit ddb904745707697afcee5e406f22240cd12833d8[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Tue Apr 28 20:08:36 2020 -0700
+
+    Improved performance of butterfly5 and butterfly7
+
+[33mcommit fe750229a40f4e5c449875884539b36269ca8614[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Tue Apr 28 16:59:58 2020 -0700
+
+    More thorough benchmarking for f64 planning
+
+[33mcommit 6355b300395cd7523c54f80304e74889beb57bda[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Tue Apr 28 04:47:42 2020 -0700
+
+    Improved perormance for small mixed radix with remainders by avoiding remiander masks at the end of the array
+
+[33mcommit c8644537364991d5c363c58a44b647234df85147[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Tue Apr 28 01:34:21 2020 -0700
+
+    Implemented butterfly 36 for f64
+
+[33mcommit e8158e26833bdbf37168ba53b5efb218d2291195[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Apr 26 06:10:04 2020 -0700
+
+    Added size 9, 18, and 27 butterflies
+
+[33mcommit 3786b3f0437bcdd0fedfe6ac2301864548360d44[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Apr 25 06:30:22 2020 -0700
+
+    misc f32 mixed radix codegen improvements
+
+[33mcommit aa20eb886cee10fca088dbcd4c2b3f764ce764df[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Apr 25 05:57:31 2020 -0700
+
+    Implemented dedicated lo butterlies for mixed radix f32
+
+[33mcommit eb7db22805b62198e693565a8806b515b042ee6c[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Apr 25 05:11:04 2020 -0700
+
+    Improved performance of column butterfly 3
+
+[33mcommit 0016422b20e25062b32bf027baff66548256a6f0[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Apr 25 02:40:38 2020 -0700
+
+    Applied an uncommitted change
+
+[33mcommit 058bc099714cc6c9f58ca6b26902868580d8f94c[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Apr 25 02:39:36 2020 -0700
+
+    Reduced the number of multiplications needed for column butterfly 16 and column vbutterfly 8
+
+[33mcommit 5f6e00a06eafdcaaea43b918813f43c3e2f65fec[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Apr 24 00:02:48 2020 -0700
+
+    Pulled manual unrolling support out of the mixed radix macros
+
+[33mcommit 9e05be8218d15957fb7174f3b1c3984f86ca2292[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Apr 23 23:41:47 2020 -0700
+
+    Base raders vs bluestein's selection on bemchmarking
+
+[33mcommit a5e78692fe19f4101d6e54b25f13d6e395249d73[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Wed Apr 22 04:41:41 2020 -0700
+
+    Integrated power of 3 mixed radix algorithms into bluestein's algorithm
+
+[33mcommit a6e925707d8f4013d403d70f613775211724986f[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Tue Apr 21 07:33:32 2020 -0700
+
+    Benchmark-driven base selection for 3^n FFTs
+
+[33mcommit 40a27c01555a2087759f1018766b7becd261d341[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Tue Apr 21 05:41:19 2020 -0700
+
+    Added size 36 and 54 butterflies, use 54 for 2^1 * 3^n FFTs
+
+[33mcommit dcd3118a0cc00ba25984c0c17f788465e49aa417[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Tue Apr 21 02:16:07 2020 -0700
+
+    More performance improvements for butterfly 12
+
+[33mcommit 7edb547f6436c7294bd9380cb85609ac00083007[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Mon Apr 20 09:56:55 2020 -0700
+
+    Improved performance of avx butterfly 12 and butterfly 9
+
+[33mcommit 829695af270083670b18bfb5940e9e2d488af954[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Mon Apr 20 07:45:09 2020 -0700
+
+    Added 3^2 and 3^3 butterflies
+
+[33mcommit 193f0e1e0abf3386961611317b259c6492086209[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Apr 19 23:13:59 2020 -0700
+
+    reimplemented the planner to incorporate the power of 3 mixed radix algorithms
+
+[33mcommit c1c898b5bdcd02120bd5248ccbff826fa402d352[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Wed Apr 15 23:26:42 2020 -0700
+
+    Added 3xn, 6xn, 9x, 12xn mixed radix AVX implementations. Not hooked up to planner yet.
+
+[33mcommit 9272ef5696ed0522a448f8f4189b1814c3af9a99[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Wed Apr 15 02:37:32 2020 -0700
+
+    Experimenting with more macros for avx mixed radix
+
+[33mcommit 619f4609f595fd7e0dbe9dba2f92e06dd17b6323[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Tue Apr 14 07:56:18 2020 -0700
+
+    Added size-12 and size-24 f64 butterflies, and taught the planner to use them for bluestein's
+
+[33mcommit 51c172c8ecfafe044d09c35279df3d17ac0ffd2e[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Apr 12 02:58:50 2020 -0700
+
+    re-enabled AVX
+
+[33mcommit f17103204fa111649add056d9c4bbbb01612461a[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Apr 12 02:55:14 2020 -0700
+
+    Implemented bluestein's algorithm for f64
+
+[33mcommit 0fadc52ed8299f62fc81e72d567e1c42867bc3d9[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Apr 11 23:10:22 2020 -0700
+
+    Rearranged bluestein's avx implementation to reduce code duplication
+
+[33mcommit 13821ba0638ddde2fb670ef241e1798f1e3d3caa[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Apr 11 19:44:38 2020 -0700
+
+    Implemented 8xn and 16xn for f64
+
+[33mcommit 23aa9904b155b0c57204abaf7c605514a92311f7[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Apr 9 04:10:06 2020 -0700
+
+    Imlemented barebones f64 power of 2 support. Still hacky, but already 2x faster than scalar
+
+[33mcommit 7c367364c5cd437c142f34804fc5f9c5c3be3f8e[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Apr 9 02:36:25 2020 -0700
+
+    Fixed test failure in mixed radix 16xn
+
+[33mcommit da9c9f379bc3e627973ba2753661225a12b06c36[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Apr 9 02:32:11 2020 -0700
+
+    Array-ified f64 butterflies
+
+[33mcommit ef58e006c0d9985498a6956c9634f0d9834cf795[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Apr 9 00:12:12 2020 -0700
+
+    Finished array-ifying f32 SIMD code
+
+[33mcommit 5c2172d75bb8086fc14a5bc0db3a8615d0edda3c[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Wed Apr 8 23:53:08 2020 -0700
+
+    Cleaned up butterflies
+
+[33mcommit 0950e5821aa516b3ca5dda6a5fc9340601da92cf[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Wed Apr 8 05:35:02 2020 -0700
+
+    More cleanup
+
+[33mcommit e86f3ced35df4cbe5af743ba671e44dc85c16b59[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Wed Apr 8 05:02:16 2020 -0700
+
+    More reduction in code size
+
+[33mcommit 3b4c4a53f11557ec212d2994bac4ed7bbdbc6746[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Wed Apr 8 03:38:10 2020 -0700
+
+    more elimination of code duplication
+
+[33mcommit 9914b7a8bf37802ea3411cc4ae8fbe356e67097b[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Wed Apr 8 02:50:34 2020 -0700
+
+    Reduced code duplication in SIMD mixed radix impls
+
+[33mcommit 03360586bf8c845bb4f16462281e9557a13f96a0[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Wed Apr 8 01:55:04 2020 -0700
+
+    Started support for 64-bit SIMD
+
+[33mcommit fe84f88cdd86773853568b3376ab6961afde49b5[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Apr 5 23:33:11 2020 -0700
+
+    Taught the planner to use 3x2^n for bluestein's when possible
+
+[33mcommit 50b89733efa3f04d5ac34ba1eecd33b90d0ded27[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Apr 5 20:00:28 2020 -0700
+
+    Refactored the prime factorization code to return a struct with more computed data
+
+[33mcommit 7cfc604f4e1456c2fe0333e669aa5682098a9712[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Apr 5 07:13:38 2020 -0700
+
+    Added a size-48 butterfly
+
+[33mcommit b734359c1fe87a64ba6ffa902c9227bf49befab5[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Apr 5 05:03:03 2020 -0700
+
+    Implemented size 12 and size 24 AVX butterflies
+
+[33mcommit 8dac8402af0f6d32e9d1268cd25238aff74f1298[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Apr 4 19:10:03 2020 -0700
+
+    Marginally improved butterfly3 performance
+
+[33mcommit d87212d43bcad20b8e4fd0f2352a80bf81e0f818[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Apr 4 18:40:25 2020 -0700
+
+    Hooked up an AVX planner with some un-tuned heuristics. Still, 2x-6x improvement on every benchmark
+
+[33mcommit 397d8fe36714fa301251358a454509f13b918528[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Apr 4 18:40:20 2020 -0700
+
+    Updated rader's algorithm to correctly forward its scratch
+
+[33mcommit dd2dc7bb15b80696041c2223f01e0250535d2e4f[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Apr 3 00:34:46 2020 -0700
+
+    Taught butterflies to respect inplace vs out of place. Clearer, safer, and significantly faster
+
+[33mcommit 8a194f2ba57d2849d83db8cd4fd8b6b3303a51f1[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Apr 2 22:53:14 2020 -0700
+
+    Deleted the FFTButterfly trait. Replaced MixedRadixDoubleButterfly with MixedRadixSmall
+
+[33mcommit 021b7610f5787a0f953d6faa718b187d134baa8c[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Apr 2 21:43:10 2020 -0700
+
+    Hooked up non-avx Bluestein's Algorithm in the planner
+
+[33mcommit 6663de9ccd9e806e929d54852d34354399d51418[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Apr 2 02:54:09 2020 -0700
+
+    Integrated AVX butterflies into the planner
+
+[33mcommit 3c12fad789fe3384a91b9113431133276eb650c4[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Wed Apr 1 23:59:58 2020 -0700
+
+    Made all remaining algorithms respect the cratch needs of their children
+
+[33mcommit ad7dd809ad4ed3068e32a164655625aee35b6f0c[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Tue Mar 31 02:09:45 2020 -0700
+
+    Slight optimization to cache-friendliness of Rader's Algorithm
+
+[33mcommit 0764a2081b69c30dd9f6c6031a9909153a51fc39[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Tue Mar 31 01:20:00 2020 -0700
+
+    Updated split radix and AVX split radix to be respectful of inner scratch requirements.
+
+[33mcommit 1d13fa4c22ffabb3dbd636eace4a9d9dc64b3bd0[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Mon Mar 30 02:07:09 2020 -0700
+
+    Optimized the mixed radix AVX algorithms to take advantage of both inplace and out of place
+
+[33mcommit 556aedf78a474e8bf07becea4231d510f3501644[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Mar 29 05:09:47 2020 -0700
+
+    Huge refactor: Merged the FFT and FftInline trait
+
+[33mcommit fcd985001f4c0e4ccf8254806230c561fda164fc[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Mar 28 21:58:34 2020 -0700
+
+    Big refactor: Most FFT tratit impls are implemented inside boilerplate macros
+
+[33mcommit 65a3707464cf6e9426838b9557ea3b34b63b0958[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Mar 28 15:51:42 2020 -0700
+
+    Removed accidental unsafe
+
+[33mcommit 9bc77e704a292d75ad929dd23f24402acfcd5ca1[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Mar 27 23:33:35 2020 -0700
+
+    Fleshed out remainders and implemented them for mixed radix
+
+[33mcommit d683b086b4519e01e8d4c4c6de21fac2e85873fa[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Mar 26 01:38:53 2020 -0700
+
+    Implemented Bluestein's algorithm (Scalar nad AVX), refactored twiddles to eliminate unwraps
+
+[33mcommit 3907bd69447385934c0e13c1d5393f39412e0620[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Mon Mar 16 23:07:56 2020 -0700
+
+    do transposes with AVX instructions instead of the transpose library
+
+[33mcommit 81518804adeaae6c932d45d0ad348e33c08d8b0a[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Mar 14 20:14:15 2020 -0700
+
+    Replaced mixed radix 4xn implementation
+
+[33mcommit 587dca534e2f3760a0fdc7f9690aa22947f6cbaa[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Mar 14 20:12:59 2020 -0700
+
+    Back out changes to the planner
+
+[33mcommit 7e04f9a98ceecde1c228fb9189308f8683e5bc50[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Mar 14 14:03:40 2020 -0700
+
+    Reorganized AVX code
+
+[33mcommit 2ceee478e2215ee612bdafc86335decd34a84780[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Mar 14 05:36:20 2020 -0700
+
+    Removed branches from AVX hot loops, reduced instruction count for butterfly 4
+
+[33mcommit 91708954299675ff34c7c5a2a8217d3e8bdfc2c3[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Mar 14 04:29:24 2020 -0700
+
+    Moved all other AVX support macros into real functions
+
+[33mcommit bdde0bf3cf9fbbcea2dada9346e1460aa79b8c9e[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Mar 14 02:47:31 2020 -0700
+
+    Moved loading+saving macros into actual functions
+
+[33mcommit c025b9a7a42306bd100b0495f8fb88812dae1795[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sat Mar 14 01:28:56 2020 -0700
+
+    Store SplitRadixAvx twiddles as __m256
+
+[33mcommit 8ee6487b4c7192fbf78ed2676ab0e8f43904ee87[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Mar 13 22:41:46 2020 -0700
+
+    Implemented FftInline for AVX algorithms, moved algorithm constructors behind feature checks
+
+[33mcommit f348031813c0523b720a0789637f9b012e7e77f7[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Mar 12 22:53:41 2020 -0700
+
+    Improved SplitRadix memory locality with an experimental "FftInline" trait
+
+[33mcommit f6ef08e32d395fe50b8fac534941628636690abe[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Mon Mar 9 02:36:25 2020 -0700
+
+    Assert that SplitRadixAvx gets a multiple of 16 size
+
+[33mcommit 1c6533f6bb53cbacdb323106a4925d296abe47c4[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Mon Mar 9 02:16:06 2020 -0700
+
+    More SIMD progress
+
+[33mcommit 6eb6e1880e76b97dd6982a7cd52b09c869beb02c[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Mar 1 20:13:44 2020 -0500
+
+    SIMD progress
+
+[33mcommit 0ac7c03a1678b4b81634f52c5209e3f32d9faf5b[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Wed Feb 26 01:43:17 2020 -0800
+
+    Experimenting with SIMD
+
+[33mcommit a34d4f15c905a6b94eee0cbdad7ac95b6ff5481b[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Dec 27 23:58:01 2019 -0500
+
+    Bumped to version 3.0.1
+
+[33mcommit 131ca3f28a0f4394765911a6df89a603ff2b1e6d[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Dec 27 23:49:10 2019 -0500
+
+    Fixed warning regarding inclusive ranges (#56)
+
+[33mcommit 051951f5e47efd9d89bc2c61897bbe586b1604fe[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Dec 27 18:43:10 2019 -0500
+
+    Disable dyn warning (#55)
+    
+    * Ignore dyn warnings to eliminate warning spam
+    
+    * Also ignore the unknown lint warning
+
+[33mcommit 891c7a20b1c06908baaa41986b37e6e940f64c79[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Dec 27 18:13:53 2019 -0500
+
+    Add rustc 1.26 to CI config (#54)
+    
+    * Add rustc 1.26 to CI config
+
+[33mcommit 4b4acc788f014ab6ad98cb3749dce3b95bea1f2b[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Tue Dec 24 23:54:22 2019 -0500
+
+    Added documentation on RustFFT's normalization and output order
+
+[33mcommit 4129f7109bf78c44b5fc90905d3a2a8e8059cc26[m
+Author: justwalt <36315275+justwalt@users.noreply.github.com>
+Date:   Tue Nov 26 21:48:16 2019 -0700
+
+    Fixed spelling (#47)
+
+[33mcommit 8ccea9f23a7f8b38028e1e484ca29d7a0d2aa896[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Jan 4 22:46:01 2019 -0500
+
+    Increase version number to 3.0.0 (#43)
+    
+    Increase version number to 3.0.0
+
+[33mcommit 42e33f90ba1691edef13ea77145ef1e30a1391ac[m
+Merge: 2fecdc0 293ef63
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Jan 4 22:34:23 2019 -0500
+
+    Merge pull request #42 from ejmahler/master
+    
+    Cargo.toml and documentation updates for 3.0
+
+[33mcommit 293ef632bad1128a8c173f4967b8ed306733cdaf[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Jan 4 19:31:11 2019 -0800
+
+    Cargo.toml and documentation updates for 3.0
+
+[33mcommit 2fecdc08432c1a62749ebee8d96027403a28e6e6[m
+Merge: 8f1fdd2 bc0c1ae
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Jan 4 01:09:38 2019 -0500
+
+    Merge pull request #41 from ejmahler/master
+    
+    Performance improvements and memory usage reduction
+
+[33mcommit bc0c1ae3b428f494f6c08d72847a092e17da9874[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Jan 3 22:06:59 2019 -0800
+
+    Don't use chunks exact, because rustc 1.26 doesn't support it
+
+[33mcommit f3346ac8ddf6ed5aa500761e4500176b649e3869[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Jan 3 22:03:25 2019 -0800
+
+    Use transpose library
+
+[33mcommit a91c91ccb8837471aab417b705a24a6699d92739[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Jan 3 19:00:45 2019 -0800
+
+    Reduced setup time and memory overhead of raders algorithm
+
+[33mcommit 22f7610cdcbbc8f6c0619de3b8d5c751221b6282[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Jan 3 17:38:29 2019 -0800
+
+    Significantly reduced raders algorithm setup time
+
+[33mcommit e2b3ed2bcbe86f9815f78581216728b93b9afddf[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Jan 3 16:14:06 2019 -0800
+
+    Dramatically reduced good-thomas setup time (to almost free)
+
+[33mcommit 8234aec1e6bfb69f8922612a3b6de2635cd3ced6[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Jan 3 15:21:28 2019 -0800
+
+    Fixed deprecation warnings in tests
+
+[33mcommit 4b34c8de66cb1523672a4f2ff03e7d71d21db4da[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Jan 3 02:41:00 2019 -0800
+
+    Fixed deprecated random number generation
+
+[33mcommit 05f9b063cca7dbc114d01adf8e0593055d175e1e[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Dec 16 14:54:25 2018 -0800
+
+    Simplified and sped up good-thomas test
+
+[33mcommit 8f1fdd20afba859704916a29ce4c13d49da70dad[m
+Author: Chris West (Faux) <git@goeswhere.com>
+Date:   Sat Sep 29 12:52:14 2018 +0100
+
+    bump num-complex and rand
+
+[33mcommit 8493cb361087871b3c2183a181bd507f5afc3b75[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Mon Jul 30 00:41:51 2018 -0700
+
+    Typo fix
+
+[33mcommit de577be6cec3aa019c077db7d0551fa69d17d05b[m
+Author: emahler <join.together@gmail.com>
+Date:   Mon Jul 30 00:27:39 2018 -0700
+
+    Increase version to 2.1.0
+
+[33mcommit fcf4cf5821d50c5a16f49fe23afae7831e5b2ebd[m
+Author: emahler <join.together@gmail.com>
+Date:   Mon Jul 30 00:17:22 2018 -0700
+
+    Documentation typo fixes
+
+[33mcommit ffacbac40350ef088ee68ae962de78b7a49a6e39[m
+Author: emahler <join.together@gmail.com>
+Date:   Mon Jul 30 00:13:02 2018 -0700
+
+    Cargo.toml updates: authors, description, keywords, categories
+
+[33mcommit e72250f6a815c991e862236b1d5654237744bdea[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Jul 29 23:41:23 2018 -0700
+
+    Reduce rader's algorithm memory usage (#34)
+    
+    * Added some more benchmarks for raders algorithm, to test larger sizes
+    
+    * Use one reordering index array instead of two in rader's algorithm
+
+[33mcommit 5bdca2caf499213fcd076c7e51671d665e6af67c[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Sun Jul 29 23:37:26 2018 -0700
+
+    Add a "good-thomas double butterfly" algorithm impl (#33)
+    
+    * Rewrote the good-thomas algorithm, and added a specialized version for butterflies
+    
+    * Convert good-thomas algorithm back to a map of indexes
+    
+    * Incorporate the good-thomas double-butterfly into the planner
+    
+    * Fixed some out-of-date comments
+
+[33mcommit 3bd0f459fbddaf276e45e4f714e846498c727d5f[m
+Merge: aab861c 30498e5
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Tue Mar 20 11:13:20 2018 -0400
+
+    Merge pull request #31 from FauxFaux/bump-1
+    
+    bump rand and num-traits
+
+[33mcommit 30498e5d95460282b28060d4b9ad9b360044afda[m
+Author: Chris West (Faux) <git@goeswhere.com>
+Date:   Tue Mar 20 12:09:51 2018 +0000
+
+    bump rand and num-traits, ...
+    
+    and force num-complex to the minimum version needed for new num-traits.
+
+[33mcommit aab861ca3f8fe06ebb68d494792f9f8334536d78[m
+Merge: 1e3f7c9 373885c
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Mon Jan 29 16:38:18 2018 -0500
+
+    Merge pull request #28 from ejmahler/master
+    
+    Best practices: Replace arc_instance.clone() with Arc::clone(&arc_instance)
+
+[33mcommit 373885c0caf36ccf9341992349763b1bbfea9fe5[m
+Author: emahler <join.together@gmail.com>
+Date:   Sat Jan 27 13:35:18 2018 -0800
+
+    Best practices: Replace arc_instance.clone() with Arc::clone(&arc_instance)
+
+[33mcommit 1e3f7c9cc04c797b271f41d3d94b7eb04ae2940b[m
+Merge: d262160 415c498
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Mon Oct 30 12:28:03 2017 -0400
+
+    Merge pull request #27 from fintelia/patch-1
+    
+    Make documentation of process_multi more clear
+
+[33mcommit 415c498e87a684ab1e932ffd29866bd0bdec64d3[m
+Author: Jonathan Behrens <fintelia@gmail.com>
+Date:   Mon Oct 30 10:46:55 2017 -0400
+
+    Make documentation of process_multi more clear
+
+[33mcommit d26216043e68e738ee88fa39a414b1a8703290ec[m
+Merge: 9b8755f f4720a0
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Mon Aug 7 08:59:00 2017 -0400
+
+    Merge pull request #26 from ejmahler/master
+    
+    Greatly improve cache-friendliness of size 2^n FFTs
+
+[33mcommit f4720a00d138e2ccfdac258bafbad25a0943eb9c[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sun Aug 6 01:48:53 2017 -0700
+
+    Remove restriction that Radix4 len must be > 1
+
+[33mcommit 2d246d6fd55060b9cb8539208fa8322271fb788c[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sun Aug 6 01:40:34 2017 -0700
+
+    Removed unnecessary benchmarks
+
+[33mcommit b8ffc098b655f548bfe9527d6cff459a1618af90[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sun Aug 6 01:17:45 2017 -0700
+
+    Improve cache-friendliness of Radix4 for a dramatic speedup
+
+[33mcommit 76fbcd840cd0515798887c759996d0e353d86ea3[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Tue Jul 11 01:22:09 2017 -0700
+
+    Merge power of two benchmarks for better readability
+
+[33mcommit 9b8755fbbbcd39bedabfa9960323c3c88c25faa8[m
+Merge: 1eb36a9 f27cc9e
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Mon May 22 13:21:24 2017 -0400
+
+    Merge pull request #23 from awelkie/readme
+    
+    Add docs.rs links to README
+
+[33mcommit f27cc9e87a76835fe9cf6589f92f4151b47463c1[m
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Mon May 22 13:16:36 2017 -0400
+
+    Remove example from README, and add link to docs.rs
+
+[33mcommit d4a046c5dcf9ef90d89ec22c07c198815bb396a4[m
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Mon May 22 13:14:48 2017 -0400
+
+    Add docs.rs badge
+
+[33mcommit 1eb36a9cf1fa20f4e3fbd7e8e6fb6f42a21169e3[m
+Merge: cdc35fb eecf566
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Mon May 22 13:08:28 2017 -0400
+
+    Merge pull request #22 from awelkie/2.0
+    
+    Remove wildcard dependency on rand
+
+[33mcommit eecf566ce3027a757eef3cda774964f15bc26f24[m
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Mon May 22 13:02:51 2017 -0400
+
+    Remove wildcard dependency on rand
+
+[33mcommit cdc35fb3aabbf1522b053b526fb0d01f620d8f02[m
+Merge: 862a654 444e268
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Mon May 22 13:00:27 2017 -0400
+
+    Merge pull request #21 from awelkie/2.0
+    
+    Increment version to 2.0
+
+[33mcommit 444e268477379ba1621bd287ce1f1cab4402030e[m
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Mon May 22 12:56:55 2017 -0400
+
+    Increment version to 2.0
+    
+    * Also add changelog
+
+[33mcommit 862a654eac1d0cfaaeef5574b413787db7031db7[m
+Merge: 00f89d6 34a0a0a
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Mon May 22 12:50:28 2017 -0400
+
+    Merge pull request #20 from awelkie/change_rc_to_arc
+    
+    Change rc to arc
+
+[33mcommit 34a0a0a7e242dcda529372acc93d25713561bab6[m
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Mon May 22 12:47:16 2017 -0400
+
+    Move concurrency from tests to examples
+
+[33mcommit c6490860c6e4e6195e0c427d2fe84fb17d506d27[m
+Merge: 3a76b16 95f2c15
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Fri May 19 13:09:59 2017 -0400
+
+    Merge https://github.com/ejmahler/RustFFT into change_rc_to_arc
+
+[33mcommit 3a76b16e293f244a6254751a195c0d57151b3891[m
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Fri May 19 13:05:32 2017 -0400
+
+    Add test for concurrently using an FFT object
+
+[33mcommit d06b8524c093a406a14e3ccd69e2eea5288050d7[m
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Fri May 19 13:01:49 2017 -0400
+
+    Fixed typo "FFTplannet"
+
+[33mcommit 6d6822717f2fa9167cb246fbc877bc2bccf64700[m
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Fri May 19 13:01:23 2017 -0400
+
+    Add Send + Sync to FFT, FFTButterfly, and FFTnum
+
+[33mcommit fbda0b54d27a0ce1bac4cf3939688196dd1a99de[m
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Thu May 18 16:06:02 2017 -0400
+
+    Change usage of `Rc` to `Arc`
+
+[33mcommit 95f2c15cf29af1c833d9a4e8ebdf46c14b4d1a0c[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Tue May 16 16:00:42 2017 -0700
+
+    Copy-edit to lib.rs docs
+
+[33mcommit 98ed57a59b2744b2f7f47eb00b01b0652965f93d[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Tue May 16 16:00:24 2017 -0700
+
+    Converted all usages of Rc to Arc
+
+[33mcommit 00f89d6321426c814c6a4302fe0e172be8a9e236[m
+Merge: 8efcf51 e607d99
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Mon Apr 24 17:34:22 2017 -0400
+
+    Merge pull request #18 from ejmahler/master
+    
+    Add doc-comments
+
+[33mcommit e607d994bbb7153221663d0def33516e55bee608[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sun Apr 23 14:03:34 2017 -0700
+
+    lib.rs documentation improvements
+
+[33mcommit a4ba8406b78f013f66f8932c814b5df63b495786[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sun Apr 23 13:43:41 2017 -0700
+
+    Added missing doc comments
+
+[33mcommit 60ea8b31b658789f9ad50628e437335bf87b7c86[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sun Apr 16 00:32:46 2017 -0700
+
+    Added docstrings for all FFT algorithms
+
+[33mcommit 85f2c79c1e0a14d6112bce84ea9455d210a6d8ed[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sat Apr 15 22:03:21 2017 -0700
+
+    Added docs for all front page things
+
+[33mcommit 01694a4001e0dc7bcf30bfef8fc954026dccc791[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sat Apr 15 21:49:33 2017 -0700
+
+    Edits to FFTplanner docs
+
+[33mcommit 17b53a2ac323ed405d1d51b5d0be86bfb17731a6[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Thu Apr 13 21:44:19 2017 -0700
+
+    Added documentation and example for FFTplanner
+
+[33mcommit 8efcf5111db16ece8365b26baa6e0b9f2c43e271[m
+Merge: c9cc451 8c859f9
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Wed Apr 12 17:43:39 2017 -0400
+
+    Merge pull request #16 from ejmahler/master
+    
+    Ergonomics improvements
+
+[33mcommit 8c859f92fd0d2900c80b05022c5861e797db0051[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Wed Apr 12 06:03:06 2017 -0700
+
+    Revert "FFTnum now requires Debug"
+    
+    This reverts commit e0ba38387e0fadd8088f40148d003ff4cebac3b1.
+
+[33mcommit b63ce5f6378759da810c8a9ce91736b805e62951[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Mon Apr 10 22:56:12 2017 -0700
+
+    Added "is_inverse()" trait
+
+[33mcommit 66e4a3b17fb5684afb21a83ce33057986afa9fd5[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sat Apr 8 14:28:25 2017 -0700
+
+    renamed Planner to FFTPlanner
+
+[33mcommit e0ba38387e0fadd8088f40148d003ff4cebac3b1[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sat Apr 8 14:28:09 2017 -0700
+
+    FFTnum now requires Debug
+
+[33mcommit 4cefc051af6b2140906af86178686da40e6d9869[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sat Apr 8 14:17:45 2017 -0700
+
+    Depend on num-traits and num-complex instead of num
+
+[33mcommit c9cc4519e801ad304dd2fe3d583f7ad735d76c7d[m
+Merge: 5e2b67a ccff7fc
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Fri Mar 24 15:41:11 2017 -0400
+
+    Merge pull request #15 from ejmahler/docstrings
+    
+    Fix #13: Replace FFT struct with FFT trait
+
+[33mcommit ccff7fc87c6f2ce7ed39cf4257d8fb7d02615c86[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Tue Mar 21 03:32:30 2017 -0700
+
+    Replaced FFT struct with FFT trait
+
+[33mcommit 5e2b67a9b0e48c715b994aa4615b91b72ed88bef[m
+Merge: 6545201 9bcde68
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Wed Mar 22 13:02:03 2017 -0400
+
+    Merge pull request #14 from ejmahler/master
+    
+    Make FFT algorithms public
+
+[33mcommit 9bcde680fe3bdefa7a1dd1c1c56c24241565abf7[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Tue Mar 21 03:24:44 2017 -0700
+
+    Make MixedRadixDoubleButterfly operate on trait objects
+
+[33mcommit c4a3eeabc4210769040aa3a030ac16c2a7da25db[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sat Mar 18 13:58:11 2017 -0700
+
+    Refactored FFTButterfly trait and tests
+
+[33mcommit 7298eb88477c3d0da0722d98e15a8cf88431dc27[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sat Mar 18 12:08:34 2017 -0700
+
+    Improved test coverage for all algorithms
+
+[33mcommit 6413fdb7f3bc2c24dac6b3d631903056e64f6ebe[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sat Mar 18 10:31:35 2017 -0700
+
+    Removed unsafe blocks and added unit test for GoodThomasAlgorithm
+
+[33mcommit 15a1ae988737c2642333a3e10f351c424c2e1025[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sat Mar 18 08:14:36 2017 -0700
+
+    Reduced memory footprint of ButterflyEnum
+
+[33mcommit 15a0e39509b4093ff67da0bab25eef147942a055[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Fri Mar 17 00:08:19 2017 -0700
+
+    Made algorithm module public
+
+[33mcommit e08cae44fb905d14e24014ddc07202e580aa13a9[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Thu Mar 16 23:45:40 2017 -0700
+
+    Replaced dft() free function with DFT struct
+
+[33mcommit 38aa81c0b04cec2ec6e0596afa738ac179ca692f[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Thu Mar 16 22:55:47 2017 -0700
+
+    Replace uses of NoopAlgorithm with DFTAlgorithm
+
+[33mcommit 6545201c1430818a635678db0d1f88617b90d8e8[m
+Merge: 6f4aca6 d0853e4
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Thu Mar 16 17:07:53 2017 -0400
+
+    Merge pull request #12 from ejmahler/master
+    
+    Overhaul mixed radix implementation for better readability, composability, and performance
+
+[33mcommit d0853e42d72e00f1ab85b57498e9b6d9a46ff62e[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Mon Mar 13 19:57:18 2017 -0700
+
+    Fixed regression in NoopAlgorithm, and a hole in the integration test that let it slip through
+
+[33mcommit 651edb78908c13fcfc16c970f3a4616e1a85d3d0[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Mon Mar 13 19:49:17 2017 -0700
+
+    Integration test FFT algorithms all the way down to size 1
+
+[33mcommit 271fccd954672c20ab8a509800036c8664377835[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Tue Mar 7 02:55:22 2017 -0800
+
+    Removed references to unstable `self` in constructors
+
+[33mcommit 1755f99f0459becc02a2ba3ce8b69cef40582fd2[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Tue Mar 7 02:19:13 2017 -0800
+
+    Fixed failing test
+
+[33mcommit f140e370cd98eaa56348c833019a3b53f34f324e[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Tue Mar 7 00:28:47 2017 -0800
+
+    Added assertions to protect unsafe blocks
+
+[33mcommit c64f2e7ca278f814488cfc7c7597cc9ca9a02819[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sun Mar 5 22:38:15 2017 -0800
+
+    Made the DFT FFTAlgorithm implementation a test-only module
+
+[33mcommit b444a6ab0cce53a289525e64e63e356d18ac3707[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sun Mar 5 22:30:59 2017 -0800
+
+    Re-added Radix4 algorithm to planner
+
+[33mcommit 84e6bc79af1fb61058e1545a89591fd07826a687[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sun Mar 5 21:38:30 2017 -0800
+
+    Improved cache friendliness of mixed radix twiddle factors
+
+[33mcommit 87be337c7f96759a243143ec5109d4a08f31febc[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sun Mar 5 21:08:28 2017 -0800
+
+    Significantly improved raders algorithm performance
+
+[33mcommit dea463a5a3b433df542e49de68fc1f30b715d991[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sun Mar 5 19:46:50 2017 -0800
+
+    Added butterfly8 and butterfly16 algorithms
+
+[33mcommit 6da3d69fa033356f3b56e0bcdbe734ce97a1e1e1[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sun Mar 5 15:45:57 2017 -0800
+
+    Added size 7 butterfly
+
+[33mcommit 354a3a8bbe7c7ccc93a0e3cb45f8689e2ae0bbec[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sun Mar 5 15:45:43 2017 -0800
+
+    Removed unused imports
+
+[33mcommit afebf99676c978c7bd628e4ba5ed2c3f8464a9b9[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sun Mar 5 15:13:45 2017 -0800
+
+    The planner now caches and shares FFTAlgorithm instances
+
+[33mcommit d65fcad278707945cc63e7ea1eed02f593fc68aa[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Wed Mar 1 23:04:01 2017 -0800
+
+    Removed the "single butterfly" class because it wasn't improving performance
+
+[33mcommit 135cf20af77afad642fd4f1338fdd08098f8f65e[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Wed Mar 1 21:10:24 2017 -0800
+
+    Implemented loop tiling in transpose for much better performance
+
+[33mcommit 0840539cb841f63287d758e22bdf1eee4b09fd24[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Tue Feb 28 20:58:26 2017 -0800
+
+    Performance improvements to DFT implementation
+
+[33mcommit 5997de00783b60e71666d6c7890f9b26f202fd1c[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Tue Feb 28 00:26:40 2017 -0800
+
+    Save memory by using the signal buffer as scratch space
+
+[33mcommit 297249cd8558536294f90ae6e86686f5d2d8a9e3[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sun Feb 26 23:05:13 2017 -0800
+
+    added len() method to FFTAlgorithm trait
+
+[33mcommit 3481bd7b40ba28dd4c91eff3178087c8005329ff[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sun Feb 26 22:46:30 2017 -0800
+
+    Renamed test modules to avoid collision with extern crate test
+
+[33mcommit ef50752f9e597ff636b451a0780dfe25cedb7d3b[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sun Feb 26 22:40:52 2017 -0800
+
+    Replaced myriad trait constraints with a single one called FFTnum
+
+[33mcommit 6594605fd53e097c617e3908aa8895dfa0b2f0f7[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sun Feb 26 21:27:11 2017 -0800
+
+    Overhauled the planner to use the new butterflies
+
+[33mcommit d386f57cee31976527fd4310579b32fa5d2387dc[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sun Feb 26 16:23:36 2017 -0800
+
+    Added butterflies 2 through 6 as FFTAlgorithm impls
+
+[33mcommit c1d9cdd5cfab1873358e81637d5490f696c6b010[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sat Feb 25 15:02:10 2017 -0800
+
+    Centralized twiddle factor computation to a single place
+
+[33mcommit 375202ee9910d6d1c44eb1977dcbd35b8bf02364[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sat Feb 25 12:57:52 2017 -0800
+
+    Added DFT as a FFT algorithm
+
+[33mcommit 99a9cf67348f48e73768f51824beaa71b38bc413[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Fri Feb 24 22:29:44 2017 -0800
+
+    Added a nlogn implementation for the prime-to-a-power case
+
+[33mcommit 83a330277cfca716be62886916ae85c56342eb70[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Fri Feb 24 20:42:48 2017 -0800
+
+    Added single-shot cooley tukey
+
+[33mcommit 6f4aca61d3177b86021343a70f7fb1c8d7a7ad60[m
+Merge: 26c9750 73624d3
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Tue Sep 6 21:42:15 2016 -0400
+
+    Merge pull request #11 from ejmahler/good_thomas
+    
+    Use the Good-Thomas algorithm to compose other FFT algorithms
+
+[33mcommit 73624d393a1e120ee6dff3e341b3ba7597f6a9a0[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Jul 28 03:16:13 2016 +0100
+
+    replaced unstable 'sum' call with 'fold'
+
+[33mcommit be5249d75a7182c7b76acc33255053e8c020f847[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Mon Jul 25 20:07:23 2016 +0100
+
+    removed debug requirements from templates
+
+[33mcommit f5fa608162017fb64f2b992fa266658e2c374c21[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Jul 14 01:33:04 2016 +0100
+
+    Applied rustfmt
+
+[33mcommit d736647d9d05bee9de0e640cca7b20713794359f[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Jul 14 01:24:02 2016 +0100
+
+    Implemented good-thomas algorithm
+
+[33mcommit f9be11c86941aceda50f01c904faa9c4cd3580f5[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Jul 8 17:18:37 2016 +0100
+
+    created a folder for fft algorithms
+
+[33mcommit 686a77b4bed0c24fb5adbd0d932d9ad0a3c92180[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Jul 8 13:33:02 2016 +0100
+
+    reorganized algorithms into trait objects
+
+[33mcommit 26c9750cc3bc10a0d54a1ae769aef76461ba519e[m
+Merge: df9b73c e099174
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Mon Jul 25 09:40:40 2016 -0400
+
+    Merge pull request #10 from ejmahler/raders_algorthm
+    
+    Use Rader's Algorithm when the input's size is a prime number
+
+[33mcommit e099174c7b0af382f13f387a74f604b6b5898343[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Jul 8 09:39:57 2016 +0100
+
+    add new butterfly functions for inverse and DIF
+
+[33mcommit a224dbb8b87540c8d36b747090594c644a19c8fc[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Jul 8 09:12:16 2016 +0100
+
+    applied rustfmt
+
+[33mcommit ab41aff4b222f501269fe095c588c48332ba0310[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Fri Jul 8 08:58:52 2016 +0100
+
+    Removed stride parameter to eliminate unsafe blocks
+
+[33mcommit 87cd281e0a9f2a2b9341133b4a76f8d431871f60[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Thu Jul 7 21:14:15 2016 +0100
+
+    Optimized and cleaned up raders algorithm
+
+[33mcommit 0891806d87a9cdcdf88c569766312f72c0fadabb[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Wed Jul 6 17:16:11 2016 +0100
+
+    raders algorithm passes tests now
+
+[33mcommit ab4eaf89b696234f244ddabc465da5ce4ec2fc69[m
+Author: Elliott Mahler <join.together@gmail.com>
+Date:   Tue Jul 5 15:40:52 2016 +0100
+
+    fixed prime factor implementation
+
+[33mcommit 42d13149e5a06c617d21f67396a41e5bfe25cc81[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Fri Jul 1 03:14:15 2016 -0700
+
+    WIP on raders algorithm
+
+[33mcommit df9b73ccd8219dae83ceabf0f542fc6328f21db5[m
+Merge: 00cb2fa b67584a
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Tue Jul 5 20:49:05 2016 -0400
+
+    Merge pull request #9 from ejmahler/radix_2
+    
+    When the input size is a power of 2, use the radix-4 algorithm instead of mixed radix
+
+[33mcommit b67584a3985355ef0771157f303a5b2369a03a17[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Thu Jun 30 01:06:57 2016 -0700
+
+    returned to a recursive setup algorithm, but kept iterative execution
+
+[33mcommit a3d20f0657ab9c68600210fc52ba0cb001c938ba[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Wed Jun 29 21:24:13 2016 -0700
+
+    Switched radix 4 to an iterative algorithm rather than recursive
+
+[33mcommit e402ec0f6f7b40c164150f01f5b32e9365b6f91a[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sun Jun 26 01:45:03 2016 -0700
+
+    Move algorithms into separate files
+
+[33mcommit 17d4435e8bb9baea03dd17881b668b8496813f91[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sun Jun 26 00:01:00 2016 -0700
+
+    Converted radix4 into an in-place algorithm
+
+[33mcommit 941ba0ffde89f3b5203fbf551787b4909898c975[m
+Author: Elliott Mahler <emahler@usc.edu>
+Date:   Sat Jun 25 22:41:17 2016 -0700
+
+    Use radix-4 algorithm on power of 2 sizes
+
+[33mcommit 00cb2fa0dd74160ad01eb890a2c02ee9a8cdece9[m
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Fri Jan 15 10:57:31 2016 -0500
+
+    Increment version number for licensing change.
+
+[33mcommit f98e7071e5e5146bdc8069790f39f09743c7309f[m
+Merge: b8983c8 569e318
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Fri Jan 15 10:53:44 2016 -0500
+
+    Merge pull request #8 from cmr/master
+    
+    Relicense to dual MIT/Apache-2.0
+
+[33mcommit 569e31869d629fac4d9001d7d49f3ef7c847a419[m
+Author: Corey Richardson <corey@octayn.net>
+Date:   Thu Jan 14 16:13:27 2016 -0500
+
+    Relicense to dual MIT/Apache-2.0
+    
+    Closes https://github.com/awelkie/RustFFT/issues/7
+
+[33mcommit b8983c8970201ff86f237d364f719a4f52cadda2[m
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Wed Dec 16 17:34:19 2015 -0500
+
+    Added example to README.
+
+[33mcommit d0f49eb7e5ac9384bcff33b5559a6c2ae2900188[m
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Wed Dec 16 16:50:55 2015 -0500
+
+    Deleted .gitmodules
+
+[33mcommit e58eeec77b936585077732dd49bc82e9b2619801[m
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Wed Dec 16 16:30:09 2015 -0500
+
+    Removed unnecessary parentheses.
+
+[33mcommit fb796b667db416f959908f770b22b930bac98e66[m
+Author: Allen Welkie <allen.welkie@gmail.com>
+Date:   Wed Dec 16 16:12:55 2015 -0500
+
+    Cleaned up benchmarks
+    
+    Removed KissFFT benchmarks
+    Changed the names of the benchmarks for prettier printing
+
+[33mcommit 4e79779216111103461175e1c785cd2b3bfdd49d[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Tue Sep 15 20:06:44 2015 -0400
+
+    Increment version number to 1.0.0
+
+[33mcommit 7cf3bb2e92109252143d5cbefaab66894c87672f[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Tue Sep 15 20:03:42 2015 -0400
+
+    Added crates.io version and license badges.
+
+[33mcommit 15e20528ce6dfe8ee4d3f762edfa2237a633341f[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Tue Sep 15 19:49:39 2015 -0400
+
+    Feature-gate benchmarks. Fixes testing on stable.
+    
+    Also added a travis build badge.
+
+[33mcommit bd2908be442792fca34d69531e9611ed1233a4af[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Tue Sep 15 19:15:25 2015 -0400
+
+    Added travis config.
+
+[33mcommit 354b218cac5e9da7c6ded146cefd9eb836881e64[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Sat Jun 27 18:24:49 2015 -0400
+
+    Increment version number.
+
+[33mcommit 5f330974b0ae35d9b568b8f1094a927bd3c53b8a[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Sun Apr 26 17:15:43 2015 -0400
+
+    Document the main interface.
+
+[33mcommit 725037f2d26ec647b20239bf6ab5dc855e9cf27e[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Sun Apr 26 16:22:43 2015 -0400
+
+    Pre-allocate scratch space for generic butterfly.
+
+[33mcommit 03ebaa7fe27e8f437f8ad645c784f4e7b8e45aae[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Sun Apr 26 15:33:25 2015 -0400
+
+    Speed up butterfly_2 by doing complex addition ourselves. Matches the performance of kiss_fft's butterfly.
+
+[33mcommit 1d498c9474c9640cfc6faa8120f186d1db40a63e[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Sun Apr 26 13:07:32 2015 -0400
+
+    New rust-kissfft commit.
+
+[33mcommit 67a86a5bb8b92490298b1af3f7554e8eeccfae1d[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Sun Apr 19 10:08:00 2015 -0400
+
+    Changed generic values from num::Float to more specific traits.
+
+[33mcommit cd769e7783dd2f856230c17536f9801e1f287d47[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Sat Apr 18 13:42:40 2015 -0400
+
+    Use One trait instead of casting the literal 1.
+
+[33mcommit 796e520e3e8d695bf0cff9fd64cf1d89383dd52c[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Sat Apr 18 13:39:56 2015 -0400
+
+    Changed DFT to be generic, and use slices instead of iterators.
+
+[33mcommit 2c04fbaed5c0b66e3b2e8be520a54b9e183fe82a[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Fri Apr 17 21:55:03 2015 -0400
+
+    Added generics for FFT.
+
+[33mcommit 68497494e2181ccd705343bf2f67f26e5562d6a9[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Fri Apr 17 21:48:48 2015 -0400
+
+    Fixed bugs in compiling benchmarks.
+
+[33mcommit 8d3a1ea71a9c93b994944b73246809d4aa0653a7[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Fri Apr 17 20:54:18 2015 -0400
+
+    Assert on signal and spectrum lengths.
+
+[33mcommit 925c6d0bee18d633de29fb8f18cd8ab220e3f744[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Fri Apr 17 20:52:35 2015 -0400
+
+    Made butterflies unsafe functions.
+
+[33mcommit fe27b50cf82e2680845c68c10b0ffb43c9cc5637[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Fri Apr 17 20:22:50 2015 -0400
+
+    Added inverse FFT. Fixes #5.
+
+[33mcommit e6bdbdda96301caa18850fdaa7c5ccb17146c699[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Fri Apr 17 07:16:32 2015 -0400
+
+    'hardcoded_butterflies' => 'butterflies'
+
+[33mcommit b7c172270bc891acc574f850374d4b50db730f44[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Fri Apr 17 07:06:03 2015 -0400
+
+    Changed rust-kissfft submodule to point to my fork.
+
+[33mcommit 6a6d19d90e9694c2354a2e004bdb465b280618a3[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Wed Apr 15 07:46:33 2015 -0400
+
+    Incremented library version
+
+[33mcommit 9d4281690df3867779a22d82301908e4cc979c07[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Wed Apr 15 07:44:22 2015 -0400
+
+    Don't build the benchmarks when testing.
+
+[33mcommit 0967f14c354ca694f669be10bf81929b48ea6f66[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Thu Apr 9 07:04:36 2015 -0500
+
+    Fixed some bugs from changing to stable branch in the last commit. Tests now pass, but still no benchmarking.
+
+[33mcommit 82519b77f9395cdb5201ba37215773131aa2e3c7[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Wed Apr 8 06:41:28 2015 -0500
+
+    Fixed bugs to build in 1.0-beta. Still cannot test or bench, however.
+
+[33mcommit 0a9a0efaccced8e412017c79633a4e729ab1083e[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Tue Mar 31 19:20:28 2015 -0500
+
+    Fixed nightly fallout.
+
+[33mcommit d85cf2cb91d50ddd4ffc0775a57d3976d9154f35[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Mon Mar 16 20:22:57 2015 -0400
+
+    Have to add a version number for kissfft dependency
+
+[33mcommit 90cedce57f359542dd232db9cd7d61e55e79ad01[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Mon Mar 16 20:18:20 2015 -0400
+
+    Incremented library version
+
+[33mcommit 309d10c0dc9c0768ca3967dc2ac0480cf74890ca[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Mon Mar 16 20:14:49 2015 -0400
+
+    Cleaned up warnings
+
+[33mcommit 7646fc3a00f424f9088c251e0ec79ed604c16a19[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Mon Mar 16 19:23:25 2015 -0400
+
+    Added benches for rest of hardcoded butterflies
+
+[33mcommit 820e638bb71ac7808d87229c3d51394bd4b41e8e[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Mon Mar 16 19:02:21 2015 -0400
+
+    Fixed rust-kissfft submodule, and added copyright notice for KissFFT code
+
+[33mcommit e3d9076cc8e84d655073e7f56a47f8ffbd322445[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Fri Mar 6 22:42:23 2015 -0500
+
+    Added hardcoded butterfly of length 5
+
+[33mcommit 75340eb0bf529c3981f6ee772d0003c1d92711ab[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Fri Mar 6 22:03:59 2015 -0500
+
+    Added hardcoded butterfly of length 3
+
+[33mcommit e562956461a317f14878857f355bb15b5c093f2f[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Fri Mar 6 21:48:43 2015 -0500
+
+    Added hardcoded butterfly of length 4
+
+[33mcommit 09a4e26aa6816fac2cec5c18bd46b68af82cb366[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Wed Feb 18 22:35:30 2015 -0500
+
+    Added rust-kissfft submodule and kissfft butterfly2 benchmark
+
+[33mcommit 381734eeb406682c408484126d121ca9527621f4[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Wed Feb 18 21:59:51 2015 -0500
+
+    Added benchmark for butterfly_2
+
+[33mcommit 6edde3e80b4be0c36600dc9796ee010aaef45887[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Sun Feb 1 15:03:23 2015 -0500
+
+    Changed to use a single buffer for the butterflies
+
+[33mcommit 8854ea2b937319740cccb5f0d551a886d99250f0[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Sat Jan 31 21:59:19 2015 -0500
+
+    Store multiplication to avoid two multiplications. Small performance improvement
+
+[33mcommit cc3f37f3d6c018f1a8e3efe4ea03c64cb3810b49[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Mon Jan 26 21:17:25 2015 -0500
+
+    Use butterflies for base-case of recursion instead of dft
+
+[33mcommit 673a7a4d1ccb4b415fa44aa659fb134eff8930a4[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Mon Jan 26 21:15:27 2015 -0500
+
+    Changed from 'chunks' to explicit pointer incrementing in butterfly_2
+
+[33mcommit 03e6b151d5929ea4b7046b91a3f0a9c343e10be4[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Sun Jan 25 21:46:22 2015 -0500
+
+    Added hardcoded butterfly of length 2 using slices
+
+[33mcommit 6b53ec7a2e2ce0b9a61787b5829bec26bb56d4a2[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Sun Jan 25 14:04:35 2015 -0500
+
+    Added repo url to Cargo.toml
+
+[33mcommit 86097426f47d46efbe7bfe9207f455d4e8add38f[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Sun Jan 25 13:56:05 2015 -0500
+
+    Added initial readme
+
+[33mcommit d1778c00bd7bc0cf31b3a6b869fb8eda14236de5[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Sun Jan 25 13:47:13 2015 -0500
+
+    Changed from 'slice_from' to slicing syntax
+
+[33mcommit 37a5641a18794fa7da7f75bc56223253bb5516f9[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Sun Jan 25 13:46:19 2015 -0500
+
+    Cleaned up Cargo.toml. Fixes #12
+
+[33mcommit 01432b378abe12756b505a702d64618408f279f3[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Sun Jan 25 13:10:39 2015 -0500
+
+    Adde MIT License. Fixes #2
+
+[33mcommit 2214644a560f74a9555e6400864790ed1357258e[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Thu Jan 15 20:56:52 2015 -0500
+
+    Added more benches
+
+[33mcommit 9834ddd1483e32258c186c029a2889d541b84135[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Thu Jan 15 20:46:19 2015 -0500
+
+    Cleaned up tests. Fixes #13
+
+[33mcommit f784d9eb728465b9ad1d72d570f0d95953c33e9e[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Thu Jan 15 20:27:40 2015 -0500
+
+    Use a const seed for deterministic randomness. Fixes #14
+
+[33mcommit 13ba123f0a9c7329ed5c573b478e5f6503e7c98b[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Thu Jan 15 19:52:11 2015 -0500
+
+    Some stylistic changes
+
+[33mcommit b48b6a44831d155b6c20ec6e7117e8b1642c1f07[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Wed Jan 14 23:16:21 2015 -0500
+
+    More speed improvements with twiddle idx incrementing
+
+[33mcommit b5ea3bdc57b738331cf3b6a1f5ef63c7f74e2e9a[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Wed Jan 14 23:11:16 2015 -0500
+
+    Fixed small regression
+
+[33mcommit 0ca8008986550189bc0f5a2f9a6acae4a93583a3[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Wed Jan 14 23:07:26 2015 -0500
+
+    Added more benches
+
+[33mcommit 6ad1c5f786bc4a374028c4be0fd677b32449b0fa[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Wed Jan 14 23:03:59 2015 -0500
+
+    Explicitely increase the twiddle idx, instead of calculating it from multiplication and modulo. Large performance gain
+
+[33mcommit bdf52ab32aba88b071bd1b9033d8a5c9ae95fc66[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Wed Jan 14 22:31:36 2015 -0500
+
+    the factor function now calculates n1 and n2
+
+[33mcommit dc7ff43b46b72695565d9a130fa3a2caf68c8113[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Wed Jan 14 22:26:16 2015 -0500
+
+    Fixed bugs in no abstraction calculation. Tests now pass
+
+[33mcommit e58b5db31a32cff03c0caba757e4d3ea2c6fe698[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Wed Jan 14 19:46:36 2015 -0500
+
+    Compile without abstractions. Tests fail though
+
+[33mcommit a4afb66f8c90b03f4c9d17e75e2b001f845b4e7b[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Mon Jan 12 20:32:11 2015 -0500
+
+    Precalculate the twiddle factors
+
+[33mcommit 42e61c9ccba576602fedbdcdb2ec19d2f591da2a[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Mon Jan 12 20:14:37 2015 -0500
+
+    Added more benches
+
+[33mcommit d5ca1f640ca40bbda6e3981e80b03f26b02b90fa[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Sun Jan 11 16:43:32 2015 -0500
+
+    Added some benching functions
+
+[33mcommit 0b5e4836aed1fbe236d13ffc48a5424c65560982[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Sat Jan 10 22:44:49 2015 -0500
+
+    Fixed error accumulation in DFT. Fixes #4
+
+[33mcommit f56baa2c921424b644f4066855aca95aa4d62ed5[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Sat Jan 10 22:28:37 2015 -0500
+
+    Fixed buy in take_some, and added tests comparing cooley tukey with DFT for lengths up to 100
+
+[33mcommit a76b400ec553c7f230be3bfeb73354e8685fe803[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Sat Jan 10 21:36:44 2015 -0500
+
+    Added some tests, and some bug fixes in cooley tukey
+
+[33mcommit 35258e080b3f52d5d6bbbc483587d6b1f7ab6c37[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Sat Jan 10 19:01:20 2015 -0500
+
+    Stride struct uses slices directly
+
+[33mcommit 9eed8dba114da787318f59a5fe38a7cb6cb563f7[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Tue Jan 6 19:53:14 2015 -0500
+
+    Trying to use Index and IndexMut traits
+
+[33mcommit e45b35d5e9a5ede616ab9cb2947fb99c427196a7[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Sat Jan 3 23:20:47 2015 -0500
+
+    Added DFT function, some Cooley-Tukey helper functions, and a Stride iterator adapter
+
+[33mcommit 92c3a0b06a9443c8b203624ad2c6152863f6000a[m
+Author: Allen Welkie <allen@localhost.localdomain>
+Date:   Sat Jan 3 21:07:03 2015 -0500
+
+    initial Cargo files

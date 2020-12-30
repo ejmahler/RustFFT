@@ -1,0 +1,78 @@
+
+running 28 tests
+test algorithm::butterflies::unit_tests::test_butterfly16 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly2 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly3 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly32 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly4 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly5 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly6 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly7 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly8 ... ignored
+test algorithm::dft::unit_tests::test_dft_known_len_2 ... ignored
+test algorithm::dft::unit_tests::test_dft_known_len_3 ... ignored
+test algorithm::dft::unit_tests::test_dft_known_len_4 ... ignored
+test algorithm::dft::unit_tests::test_dft_known_len_6 ... ignored
+test algorithm::dft::unit_tests::test_matches_dft ... ignored
+test algorithm::good_thomas_algorithm::unit_tests::test_good_thomas ... ignored
+test algorithm::good_thomas_algorithm::unit_tests::test_good_thomas_double_butterfly ... ignored
+test algorithm::mixed_radix::unit_tests::test_mixed_radix ... ignored
+test algorithm::mixed_radix::unit_tests::test_mixed_radix_double_butterfly ... ignored
+test algorithm::raders_algorithm::unit_tests::test_raders ... ignored
+test algorithm::radix4::unit_tests::test_radix4 ... ignored
+test array_utils::unit_tests::test_transpose ... ignored
+test math_utils::unit_tests::test_extended_euclidean ... ignored
+test math_utils::unit_tests::test_modular_exponent ... ignored
+test math_utils::unit_tests::test_multiplicative_inverse ... ignored
+test math_utils::unit_tests::test_prime_factors ... ignored
+test math_utils::unit_tests::test_primitive_root ... ignored
+test twiddles::unit_tests::test_generate ... ignored
+test twiddles::unit_tests::test_single ... ignored
+
+test result: ok. 0 passed; 0 failed; 28 ignored; 0 measured; 0 filtered out
+
+
+running 40 tests
+test complex_composite_24576       ... bench:     359,023 ns/iter (+/- 26,938)
+test complex_p2_00000064           ... bench:         239 ns/iter (+/- 16)
+test complex_p2_00000256           ... bench:       1,278 ns/iter (+/- 139)
+test complex_p2_00001024           ... bench:       7,206 ns/iter (+/- 137)
+test complex_p2_00004096           ... bench:      37,966 ns/iter (+/- 1,021)
+test complex_p7_00343              ... bench:       4,508 ns/iter (+/- 83)
+test complex_prime_00005           ... bench:           8 ns/iter (+/- 0)
+test complex_prime_00017           ... bench:         197 ns/iter (+/- 2)
+test complex_prime_00151           ... bench:       3,994 ns/iter (+/- 100)
+test complex_prime_00257           ... bench:       4,878 ns/iter (+/- 153)
+test complex_primepower_44521      ... bench:   2,676,052 ns/iter (+/- 72,324)
+test good_thomas_0002_3            ... bench:          62 ns/iter (+/- 3)
+test good_thomas_0003_4            ... bench:          98 ns/iter (+/- 5)
+test good_thomas_0004_5            ... bench:         173 ns/iter (+/- 2)
+test good_thomas_0007_32           ... bench:       2,247 ns/iter (+/- 39)
+test good_thomas_butterfly_0002_3  ... bench:          31 ns/iter (+/- 0)
+test good_thomas_butterfly_0003_4  ... bench:          42 ns/iter (+/- 1)
+test good_thomas_butterfly_0004_5  ... bench:          75 ns/iter (+/- 1)
+test good_thomas_butterfly_0007_32 ... bench:       1,568 ns/iter (+/- 24)
+test good_thomas_setup_0002_3      ... bench:          94 ns/iter (+/- 1)
+test good_thomas_setup_0003_4      ... bench:          92 ns/iter (+/- 0)
+test good_thomas_setup_0004_5      ... bench:          92 ns/iter (+/- 5)
+test good_thomas_setup_0007_32     ... bench:          96 ns/iter (+/- 1)
+test mixed_radix_0002_3            ... bench:          64 ns/iter (+/- 1)
+test mixed_radix_0003_4            ... bench:          77 ns/iter (+/- 10)
+test mixed_radix_0004_5            ... bench:         118 ns/iter (+/- 3)
+test mixed_radix_0007_32           ... bench:       1,726 ns/iter (+/- 24)
+test mixed_radix_0032_27           ... bench:      12,960 ns/iter (+/- 988)
+test mixed_radix_butterfly_0002_3  ... bench:          41 ns/iter (+/- 2)
+test mixed_radix_butterfly_0003_4  ... bench:          48 ns/iter (+/- 1)
+test mixed_radix_butterfly_0004_5  ... bench:          81 ns/iter (+/- 3)
+test mixed_radix_butterfly_0007_32 ... bench:       1,621 ns/iter (+/- 23)
+test raders_0005                   ... bench:          51 ns/iter (+/- 0)
+test raders_0017                   ... bench:         199 ns/iter (+/- 4)
+test raders_0151                   ... bench:       4,013 ns/iter (+/- 33)
+test raders_0257                   ... bench:       4,915 ns/iter (+/- 44)
+test raders_setup_0005             ... bench:         256 ns/iter (+/- 6)
+test raders_setup_0017             ... bench:         601 ns/iter (+/- 7)
+test raders_setup_0151             ... bench:       5,638 ns/iter (+/- 75)
+test raders_setup_0257             ... bench:       8,897 ns/iter (+/- 121)
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 40 measured; 0 filtered out
+

@@ -1,0 +1,142 @@
+
+running 45 tests
+test algorithm::bluestein::unit_tests::test_bluestein ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly11 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly13 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly16 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly17 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly19 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly2 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly23 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly29 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly3 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly31 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly32 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly4 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly5 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly6 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly7 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly8 ... ignored
+test algorithm::dft::unit_tests::test_dft_known_len_2 ... ignored
+test algorithm::dft::unit_tests::test_dft_known_len_3 ... ignored
+test algorithm::dft::unit_tests::test_dft_known_len_4 ... ignored
+test algorithm::dft::unit_tests::test_dft_known_len_6 ... ignored
+test algorithm::dft::unit_tests::test_matches_dft ... ignored
+test algorithm::good_thomas_algorithm::unit_tests::test_good_thomas ... ignored
+test algorithm::good_thomas_algorithm::unit_tests::test_good_thomas_double_butterfly ... ignored
+test algorithm::mixed_radix::unit_tests::test_mixed_radix ... ignored
+test algorithm::mixed_radix::unit_tests::test_mixed_radix_double_butterfly ... ignored
+test algorithm::raders_algorithm::unit_tests::test_raders ... ignored
+test algorithm::radix4::unit_tests::test_radix4 ... ignored
+test array_utils::unit_tests::test_transpose ... ignored
+test math_utils::unit_tests::test_extended_euclidean ... ignored
+test math_utils::unit_tests::test_modular_exponent ... ignored
+test math_utils::unit_tests::test_multiplicative_inverse ... ignored
+test math_utils::unit_tests::test_prime_factors ... ignored
+test math_utils::unit_tests::test_primitive_root ... ignored
+test plan::unit_tests::test_dft_cost ... ignored
+test plan::unit_tests::test_plan_bluestein ... ignored
+test plan::unit_tests::test_plan_butterflies ... ignored
+test plan::unit_tests::test_plan_goodthomasbutterfly ... ignored
+test plan::unit_tests::test_plan_largepoweroftwo ... ignored
+test plan::unit_tests::test_plan_mediumpoweroftwo ... ignored
+test plan::unit_tests::test_plan_mixedradix ... ignored
+test plan::unit_tests::test_plan_mixedradixbutterfly ... ignored
+test plan::unit_tests::test_plan_trivial ... ignored
+test twiddles::unit_tests::test_generate ... ignored
+test twiddles::unit_tests::test_single ... ignored
+
+test result: ok. 0 passed; 0 failed; 45 ignored; 0 measured; 0 filtered out
+
+
+running 87 tests
+test complex_composite_20736       ... bench:     436,151 ns/iter (+/- 15,801)
+test complex_composite_24028       ... bench:   1,041,603 ns/iter (+/- 77,279)
+test complex_composite_24576       ... bench:     358,656 ns/iter (+/- 6,692)
+test complex_composite_30270       ... bench:   1,056,481 ns/iter (+/- 64,569)
+test complex_composite_32192       ... bench:   1,217,144 ns/iter (+/- 22,060)
+test complex_p2_00000002           ... bench:           2 ns/iter (+/- 0)
+test complex_p2_00000004           ... bench:           4 ns/iter (+/- 0)
+test complex_p2_00000008           ... bench:          12 ns/iter (+/- 0)
+test complex_p2_00000016           ... bench:          29 ns/iter (+/- 0)
+test complex_p2_00000032           ... bench:         137 ns/iter (+/- 1)
+test complex_p2_00000064           ... bench:         246 ns/iter (+/- 17)
+test complex_p2_00000256           ... bench:       1,270 ns/iter (+/- 16)
+test complex_p2_00001024           ... bench:       7,190 ns/iter (+/- 122)
+test complex_p2_00004096           ... bench:      37,511 ns/iter (+/- 877)
+test complex_p2_00016384           ... bench:     206,631 ns/iter (+/- 3,389)
+test complex_p2_00065536           ... bench:   1,122,461 ns/iter (+/- 15,488)
+test complex_p2_01048576           ... bench:  28,406,435 ns/iter (+/- 522,095)
+test complex_p2_16777216           ... bench: 537,004,984 ns/iter (+/- 6,686,942)
+test complex_p7_00343              ... bench:       3,314 ns/iter (+/- 70)
+test complex_p7_02401              ... bench:      31,092 ns/iter (+/- 1,421)
+test complex_p7_16807              ... bench:     283,615 ns/iter (+/- 9,768)
+test complex_prime_00003           ... bench:           5 ns/iter (+/- 0)
+test complex_prime_00005           ... bench:           6 ns/iter (+/- 0)
+test complex_prime_00007           ... bench:          11 ns/iter (+/- 0)
+test complex_prime_00011           ... bench:          23 ns/iter (+/- 0)
+test complex_prime_00013           ... bench:          39 ns/iter (+/- 4)
+test complex_prime_00017           ... bench:          58 ns/iter (+/- 1)
+test complex_prime_00019           ... bench:          97 ns/iter (+/- 3)
+test complex_prime_00023           ... bench:         135 ns/iter (+/- 5)
+test complex_prime_00029           ... bench:         191 ns/iter (+/- 8)
+test complex_prime_00031           ... bench:         260 ns/iter (+/- 8)
+test complex_prime_00151           ... bench:       3,774 ns/iter (+/- 548)
+test complex_prime_00257           ... bench:       4,956 ns/iter (+/- 37)
+test complex_prime_01009           ... bench:      30,244 ns/iter (+/- 188)
+test complex_prime_02017           ... bench:      80,081 ns/iter (+/- 5,930)
+test complex_prime_65537           ... bench:   2,986,960 ns/iter (+/- 82,776)
+test complex_prime_746497          ... bench:  81,030,039 ns/iter (+/- 1,861,231)
+test complex_primepower_160801     ... bench:  10,152,262 ns/iter (+/- 447,437)
+test complex_primepower_44521      ... bench:   2,396,413 ns/iter (+/- 378,742)
+test good_thomas_0002_3            ... bench:          65 ns/iter (+/- 3)
+test good_thomas_0003_4            ... bench:          95 ns/iter (+/- 8)
+test good_thomas_0004_5            ... bench:         143 ns/iter (+/- 5)
+test good_thomas_0007_32           ... bench:       2,016 ns/iter (+/- 59)
+test good_thomas_0032_27           ... bench:      15,971 ns/iter (+/- 301)
+test good_thomas_0256_243          ... bench:   1,930,341 ns/iter (+/- 26,714)
+test good_thomas_2048_2187         ... bench: 295,755,808 ns/iter (+/- 1,652,238)
+test good_thomas_2048_3            ... bench:      87,972 ns/iter (+/- 4,044)
+test good_thomas_butterfly_0002_3  ... bench:          33 ns/iter (+/- 3)
+test good_thomas_butterfly_0003_4  ... bench:          58 ns/iter (+/- 17)
+test good_thomas_butterfly_0004_5  ... bench:          60 ns/iter (+/- 6)
+test good_thomas_butterfly_0007_32 ... bench:       1,343 ns/iter (+/- 86)
+test good_thomas_setup_0002_3      ... bench:         418 ns/iter (+/- 551)
+test good_thomas_setup_0003_4      ... bench:          93 ns/iter (+/- 1)
+test good_thomas_setup_0004_5      ... bench:          93 ns/iter (+/- 1)
+test good_thomas_setup_0007_32     ... bench:          97 ns/iter (+/- 1)
+test good_thomas_setup_0032_27     ... bench:          94 ns/iter (+/- 6)
+test good_thomas_setup_0256_243    ... bench:          95 ns/iter (+/- 2)
+test good_thomas_setup_2048_2187   ... bench:         106 ns/iter (+/- 4)
+test good_thomas_setup_2048_3      ... bench:          92 ns/iter (+/- 4)
+test mixed_radix_0002_3            ... bench:          67 ns/iter (+/- 1)
+test mixed_radix_0003_4            ... bench:          79 ns/iter (+/- 5)
+test mixed_radix_0004_5            ... bench:         102 ns/iter (+/- 7)
+test mixed_radix_0007_32           ... bench:       1,494 ns/iter (+/- 33)
+test mixed_radix_0032_27           ... bench:      13,702 ns/iter (+/- 485)
+test mixed_radix_0256_243          ... bench:   1,682,736 ns/iter (+/- 98,421)
+test mixed_radix_2048_2187         ... bench: 226,871,649 ns/iter (+/- 11,642,506)
+test mixed_radix_2048_3            ... bench:      81,559 ns/iter (+/- 3,812)
+test mixed_radix_butterfly_0002_3  ... bench:          45 ns/iter (+/- 10)
+test mixed_radix_butterfly_0003_4  ... bench:          50 ns/iter (+/- 4)
+test mixed_radix_butterfly_0004_5  ... bench:          73 ns/iter (+/- 3)
+test mixed_radix_butterfly_0007_32 ... bench:       1,461 ns/iter (+/- 18)
+test raders_0005                   ... bench:          55 ns/iter (+/- 1)
+test raders_0017                   ... bench:         214 ns/iter (+/- 6)
+test raders_0151                   ... bench:       4,021 ns/iter (+/- 57)
+test raders_0257                   ... bench:       5,295 ns/iter (+/- 115)
+test raders_1009                   ... bench:      32,196 ns/iter (+/- 1,367)
+test raders_2017                   ... bench:      86,134 ns/iter (+/- 1,926)
+test raders_65537                  ... bench:   3,139,388 ns/iter (+/- 100,134)
+test raders_746497                 ... bench:  85,949,939 ns/iter (+/- 1,463,230)
+test raders_setup_0005             ... bench:         279 ns/iter (+/- 4)
+test raders_setup_0017             ... bench:         674 ns/iter (+/- 49)
+test raders_setup_0151             ... bench:       5,937 ns/iter (+/- 84)
+test raders_setup_0257             ... bench:       9,734 ns/iter (+/- 120)
+test raders_setup_1009             ... bench:      45,385 ns/iter (+/- 2,303)
+test raders_setup_2017             ... bench:     106,720 ns/iter (+/- 2,272)
+test raders_setup_65537            ... bench:   3,803,817 ns/iter (+/- 140,016)
+test raders_setup_746497           ... bench:  63,184,919 ns/iter (+/- 1,163,767)
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 87 measured; 0 filtered out
+

@@ -1,0 +1,195 @@
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 109 filtered out
+
+
+running 139 tests
+test estimates_10_butterfly_________00000002_0000 ... bench:       1,112 ns/iter (+/- 174)
+test estimates_10_butterfly_________00000003_0000 ... bench:       1,526 ns/iter (+/- 160)
+test estimates_10_butterfly_________00000004_0000 ... bench:       2,377 ns/iter (+/- 148)
+test estimates_10_butterfly_________00000005_0000 ... bench:       4,763 ns/iter (+/- 142)
+test estimates_10_butterfly_________00000006_0000 ... bench:       3,751 ns/iter (+/- 149)
+test estimates_10_butterfly_________00000007_0000 ... bench:       9,775 ns/iter (+/- 142)
+test estimates_10_butterfly_________00000008_0000 ... bench:       9,095 ns/iter (+/- 1,485)
+test estimates_10_butterfly_________00000011_0000 ... bench:      22,277 ns/iter (+/- 1,246)
+test estimates_10_butterfly_________00000013_0000 ... bench:      30,937 ns/iter (+/- 635)
+test estimates_10_butterfly_________00000016_0000 ... bench:      45,708 ns/iter (+/- 1,150)
+test estimates_10_butterfly_________00000017_0000 ... bench:      57,835 ns/iter (+/- 3,599)
+test estimates_10_butterfly_________00000019_0000 ... bench:      72,985 ns/iter (+/- 1,634)
+test estimates_10_butterfly_________00000023_0000 ... bench:     178,616 ns/iter (+/- 7,886)
+test estimates_10_butterfly_________00000029_0000 ... bench:     346,183 ns/iter (+/- 18,452)
+test estimates_10_butterfly_________00000031_0000 ... bench:     407,353 ns/iter (+/- 8,767)
+test estimates_10_butterfly_________00000032_0000 ... bench:     147,854 ns/iter (+/- 3,895)
+test estimates_20_mixed_radix_inner_00000002_0000 ... bench:       1,101 ns/iter (+/- 40)
+test estimates_20_mixed_radix_inner_00000003_0000 ... bench:       1,513 ns/iter (+/- 15)
+test estimates_20_mixed_radix_inner_00000004_0000 ... bench:       2,425 ns/iter (+/- 55)
+test estimates_20_mixed_radix_inner_00000005_0000 ... bench:       4,695 ns/iter (+/- 162)
+test estimates_20_mixed_radix_inner_00000007_0000 ... bench:      12,206 ns/iter (+/- 359)
+test estimates_20_mixed_radix_inner_00000011_0000 ... bench:      29,137 ns/iter (+/- 5,502)
+test estimates_20_mixed_radix_inner_00000017_0000 ... bench:      57,508 ns/iter (+/- 25,720)
+test estimates_20_mixed_radix_inner_00000029_0000 ... bench:     346,207 ns/iter (+/- 11,072)
+test estimates_20_mixed_radix_inner_00000031_0000 ... bench:     407,517 ns/iter (+/- 7,619)
+test estimates_20_mixed_radix_inner_00000032_0000 ... bench:     152,892 ns/iter (+/- 6,993)
+test estimates_20_mixed_radix_inner_00000128_0000 ... bench:     787,951 ns/iter (+/- 22,609)
+test estimates_20_mixed_radix_inner_00000181_0000 ... bench:   5,291,623 ns/iter (+/- 160,931)
+test estimates_20_mixed_radix_inner_00000191_0000 ... bench:   6,933,491 ns/iter (+/- 235,407)
+test estimates_20_mixed_radix_inner_00000256_0000 ... bench:   2,241,292 ns/iter (+/- 41,055)
+test estimates_20_mixed_radix_inner_00000512_0000 ... bench:   4,724,150 ns/iter (+/- 65,178)
+test estimates_20_mixed_radix_inner_00001024_0000 ... bench:  10,349,955 ns/iter (+/- 365,076)
+test estimates_20_mixed_radix_inner_00002048_0000 ... bench:  22,352,061 ns/iter (+/- 184,574)
+test estimates_21_good_thomas_______00000002_0003 ... bench:          67 ns/iter (+/- 1)
+test estimates_21_good_thomas_______00000003_0004 ... bench:         106 ns/iter (+/- 2)
+test estimates_21_good_thomas_______00000004_0005 ... bench:         140 ns/iter (+/- 5)
+test estimates_21_good_thomas_______00000007_0032 ... bench:       1,908 ns/iter (+/- 129)
+test estimates_21_good_thomas_______00000011_0017 ... bench:       1,518 ns/iter (+/- 40)
+test estimates_21_good_thomas_______00000017_0031 ... bench:      10,269 ns/iter (+/- 579)
+test estimates_21_good_thomas_______00000029_0031 ... bench:      24,842 ns/iter (+/- 696)
+test estimates_21_good_thomas_______00000128_0181 ... bench:     919,856 ns/iter (+/- 24,360)
+test estimates_21_good_thomas_______00000128_0256 ... FAILED
+test estimates_21_good_thomas_______00000181_0191 ... bench:   2,127,344 ns/iter (+/- 289,721)
+test estimates_21_good_thomas_______00000256_0256 ... FAILED
+test estimates_21_good_thomas_______00000512_0512 ... FAILED
+test estimates_21_good_thomas_______00001024_1024 ... FAILED
+test estimates_21_good_thomas_______00002048_2048 ... FAILED
+test estimates_22_mixed_radix_______00000002_0003 ... bench:          75 ns/iter (+/- 13)
+test estimates_22_mixed_radix_______00000003_0004 ... bench:         129 ns/iter (+/- 5)
+test estimates_22_mixed_radix_______00000004_0005 ... bench:         174 ns/iter (+/- 5)
+test estimates_22_mixed_radix_______00000007_0032 ... bench:       2,031 ns/iter (+/- 216)
+test estimates_22_mixed_radix_______00000011_0017 ... bench:       1,652 ns/iter (+/- 78)
+test estimates_22_mixed_radix_______00000017_0031 ... bench:      10,260 ns/iter (+/- 824)
+test estimates_22_mixed_radix_______00000029_0031 ... bench:      24,624 ns/iter (+/- 279)
+test estimates_22_mixed_radix_______00000128_0181 ... bench:     831,229 ns/iter (+/- 22,879)
+test estimates_22_mixed_radix_______00000128_0256 ... bench:     533,332 ns/iter (+/- 17,213)
+test estimates_22_mixed_radix_______00000181_0191 ... bench:   2,074,598 ns/iter (+/- 44,753)
+test estimates_22_mixed_radix_______00000256_0256 ... bench:   1,198,605 ns/iter (+/- 72,389)
+test estimates_22_mixed_radix_______00000512_0512 ... bench:   7,849,054 ns/iter (+/- 139,834)
+test estimates_22_mixed_radix_______00001024_1024 ... bench:  35,547,657 ns/iter (+/- 1,421,780)
+test estimates_22_mixed_radix_______00002048_2048 ... bench: 158,871,549 ns/iter (+/- 5,162,409)
+test estimates_23_mixed_radix_small_00000002_0003 ... bench:          47 ns/iter (+/- 1)
+test estimates_23_mixed_radix_small_00000003_0004 ... bench:          70 ns/iter (+/- 9)
+test estimates_23_mixed_radix_small_00000004_0005 ... bench:         103 ns/iter (+/- 2)
+test estimates_23_mixed_radix_small_00000007_0032 ... bench:       1,922 ns/iter (+/- 229)
+test estimates_23_mixed_radix_small_00000011_0017 ... bench:       1,522 ns/iter (+/- 40)
+test estimates_23_mixed_radix_small_00000017_0031 ... bench:       9,889 ns/iter (+/- 273)
+test estimates_23_mixed_radix_small_00000029_0031 ... bench:      24,447 ns/iter (+/- 563)
+test estimates_23_mixed_radix_small_00000128_0181 ... bench:     914,980 ns/iter (+/- 91,026)
+test estimates_23_mixed_radix_small_00000128_0256 ... bench:     804,553 ns/iter (+/- 153,554)
+test estimates_23_mixed_radix_small_00000181_0191 ... bench:   2,090,925 ns/iter (+/- 78,935)
+test estimates_23_mixed_radix_small_00000256_0256 ... bench:   2,101,193 ns/iter (+/- 80,544)
+test estimates_23_mixed_radix_small_00000512_0512 ... bench:  10,971,139 ns/iter (+/- 213,190)
+test estimates_23_mixed_radix_small_00001024_1024 ... bench:  49,931,605 ns/iter (+/- 4,215,927)
+test estimates_23_mixed_radix_small_00002048_2048 ... bench: 213,195,122 ns/iter (+/- 7,287,802)
+test estimates_24_good_thomas_small_00000002_0003 ... bench:          43 ns/iter (+/- 0)
+test estimates_24_good_thomas_small_00000003_0004 ... bench:          57 ns/iter (+/- 2)
+test estimates_24_good_thomas_small_00000004_0005 ... bench:         106 ns/iter (+/- 2)
+test estimates_24_good_thomas_small_00000007_0032 ... bench:       1,817 ns/iter (+/- 143)
+test estimates_24_good_thomas_small_00000011_0017 ... bench:       1,413 ns/iter (+/- 86)
+test estimates_24_good_thomas_small_00000017_0031 ... bench:       9,851 ns/iter (+/- 617)
+test estimates_24_good_thomas_small_00000029_0031 ... bench:      23,872 ns/iter (+/- 1,387)
+test estimates_24_good_thomas_small_00000128_0181 ... bench:     909,854 ns/iter (+/- 44,069)
+test estimates_24_good_thomas_small_00000128_0256 ... FAILED
+test estimates_24_good_thomas_small_00000181_0191 ... bench:   2,135,734 ns/iter (+/- 92,474)
+test estimates_24_good_thomas_small_00000256_0256 ... FAILED
+test estimates_24_good_thomas_small_00000512_0512 ... FAILED
+test estimates_24_good_thomas_small_00001024_1024 ... FAILED
+test estimates_24_good_thomas_small_00002048_2048 ... FAILED
+test estimates_30_raders____________00000005_0000 ... bench:          48 ns/iter (+/- 1)
+test estimates_30_raders____________00000017_0000 ... bench:         245 ns/iter (+/- 7)
+test estimates_30_raders____________00000149_0000 ... bench:       8,002 ns/iter (+/- 282)
+test estimates_30_raders____________00000151_0000 ... bench:       3,698 ns/iter (+/- 111)
+test estimates_30_raders____________00000251_0000 ... bench:       8,424 ns/iter (+/- 942)
+test estimates_30_raders____________00000257_0000 ... bench:       5,719 ns/iter (+/- 352)
+test estimates_30_raders_inner______00000005_0000 ... bench:           7 ns/iter (+/- 0)
+test estimates_30_raders_inner______00000017_0000 ... bench:          45 ns/iter (+/- 3)
+test estimates_30_raders_inner______00000149_0000 ... bench:       3,333 ns/iter (+/- 80)
+test estimates_30_raders_inner______00000151_0000 ... bench:       1,197 ns/iter (+/- 81)
+test estimates_30_raders_inner______00000251_0000 ... bench:       3,218 ns/iter (+/- 201)
+test estimates_30_raders_inner______00000257_0000 ... bench:       1,700 ns/iter (+/- 247)
+test estimates_31_bluesteins_inner__00000005_0000 ... bench:          48 ns/iter (+/- 2)
+test estimates_31_bluesteins_inner__00000017_0000 ... bench:         354 ns/iter (+/- 18)
+test estimates_31_bluesteins_inner__00000149_0000 ... bench:       3,432 ns/iter (+/- 104)
+test estimates_31_bluesteins_inner__00000151_0000 ... bench:       3,432 ns/iter (+/- 104)
+test estimates_31_bluesteins_inner__00000251_0000 ... bench:       3,411 ns/iter (+/- 118)
+test estimates_31_bluesteins_inner__00000257_0000 ... bench:       7,572 ns/iter (+/- 395)
+test estimates_31_bluesteins_prime__00000005_0000 ... bench:         143 ns/iter (+/- 16)
+test estimates_31_bluesteins_prime__00000017_0000 ... bench:         864 ns/iter (+/- 91)
+test estimates_31_bluesteins_prime__00000149_0000 ... bench:       7,683 ns/iter (+/- 598)
+test estimates_31_bluesteins_prime__00000151_0000 ... bench:       7,910 ns/iter (+/- 290)
+test estimates_31_bluesteins_prime__00000251_0000 ... bench:       8,049 ns/iter (+/- 242)
+test estimates_31_bluesteins_prime__00000257_0000 ... bench:      17,455 ns/iter (+/- 328)
+test estimates_40_radix4____________00000064_0000 ... bench:         318 ns/iter (+/- 11)
+test estimates_40_radix4____________00000256_0000 ... bench:       1,546 ns/iter (+/- 63)
+test estimates_40_radix4____________00001024_0000 ... bench:       7,440 ns/iter (+/- 280)
+test estimates_40_radix4____________00004096_0000 ... bench:      38,931 ns/iter (+/- 1,260)
+test estimates_40_radix4____________00016384_0000 ... bench:     205,355 ns/iter (+/- 51,264)
+test estimates_40_radix4____________00065536_0000 ... bench:   1,001,061 ns/iter (+/- 18,386)
+test estimates_40_radix4____________00262144_0000 ... bench:   6,426,202 ns/iter (+/- 304,508)
+test estimates_40_radix4____________01048576_0000 ... bench:  32,192,090 ns/iter (+/- 394,198)
+test estimates_40_radix4____________04194304_0000 ... bench: 135,011,492 ns/iter (+/- 4,174,290)
+test estimates_50_dft_______________00000002_0000 ... bench:       9,131 ns/iter (+/- 533)
+test estimates_50_dft_______________00000003_0000 ... bench:      19,902 ns/iter (+/- 738)
+test estimates_50_dft_______________00000004_0000 ... bench:      35,341 ns/iter (+/- 2,649)
+test estimates_50_dft_______________00000005_0000 ... bench:      56,117 ns/iter (+/- 2,285)
+test estimates_50_dft_______________00000006_0000 ... bench:      84,487 ns/iter (+/- 2,416)
+test estimates_50_dft_______________00000007_0000 ... bench:     120,986 ns/iter (+/- 5,524)
+test estimates_50_dft_______________00000008_0000 ... bench:     164,538 ns/iter (+/- 5,254)
+test estimates_50_dft_______________00000011_0000 ... bench:     311,511 ns/iter (+/- 12,346)
+test estimates_50_dft_______________00000013_0000 ... bench:     437,643 ns/iter (+/- 100,785)
+test estimates_50_dft_______________00000016_0000 ... bench:     687,287 ns/iter (+/- 34,033)
+test estimates_50_dft_______________00000017_0000 ... bench:     758,388 ns/iter (+/- 17,515)
+test estimates_50_dft_______________00000019_0000 ... bench:     998,882 ns/iter (+/- 47,368)
+test estimates_50_dft_______________00000023_0000 ... bench:   1,499,703 ns/iter (+/- 38,361)
+test estimates_50_dft_______________00000027_0000 ... bench:   2,145,407 ns/iter (+/- 42,103)
+test estimates_50_dft_______________00000029_0000 ... bench:   2,619,512 ns/iter (+/- 117,384)
+test estimates_50_dft_______________00000031_0000 ... bench:   3,021,107 ns/iter (+/- 58,488)
+test estimates_50_dft_______________00000032_0000 ... bench:   3,176,583 ns/iter (+/- 115,599)
+
+failures:
+
+---- estimates_21_good_thomas_______00000128_0256 stdout ----
+thread 'main' panicked at 'Invalid width and height for Good-Thomas Algorithm (width=128, height=256): Inputs must be coprime', /home/henrik/rust/RustFFT/src/algorithm/good_thomas_algorithm.rs:76:9
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- estimates_21_good_thomas_______00000256_0256 stdout ----
+thread 'main' panicked at 'Invalid width and height for Good-Thomas Algorithm (width=256, height=256): Inputs must be coprime', /home/henrik/rust/RustFFT/src/algorithm/good_thomas_algorithm.rs:76:9
+
+---- estimates_21_good_thomas_______00000512_0512 stdout ----
+thread 'main' panicked at 'Invalid width and height for Good-Thomas Algorithm (width=512, height=512): Inputs must be coprime', /home/henrik/rust/RustFFT/src/algorithm/good_thomas_algorithm.rs:76:9
+
+---- estimates_21_good_thomas_______00001024_1024 stdout ----
+thread 'main' panicked at 'Invalid width and height for Good-Thomas Algorithm (width=1024, height=1024): Inputs must be coprime', /home/henrik/rust/RustFFT/src/algorithm/good_thomas_algorithm.rs:76:9
+
+---- estimates_21_good_thomas_______00002048_2048 stdout ----
+thread 'main' panicked at 'Invalid width and height for Good-Thomas Algorithm (width=2048, height=2048): Inputs must be coprime', /home/henrik/rust/RustFFT/src/algorithm/good_thomas_algorithm.rs:76:9
+
+---- estimates_24_good_thomas_small_00000128_0256 stdout ----
+thread 'main' panicked at 'Invalid input width and height to Good-Thomas Algorithm: (128,256): Inputs must be coprime', /home/henrik/rust/RustFFT/src/algorithm/good_thomas_algorithm.rs:328:9
+
+---- estimates_24_good_thomas_small_00000256_0256 stdout ----
+thread 'main' panicked at 'Invalid input width and height to Good-Thomas Algorithm: (256,256): Inputs must be coprime', /home/henrik/rust/RustFFT/src/algorithm/good_thomas_algorithm.rs:328:9
+
+---- estimates_24_good_thomas_small_00000512_0512 stdout ----
+thread 'main' panicked at 'Invalid input width and height to Good-Thomas Algorithm: (512,512): Inputs must be coprime', /home/henrik/rust/RustFFT/src/algorithm/good_thomas_algorithm.rs:328:9
+
+---- estimates_24_good_thomas_small_00001024_1024 stdout ----
+thread 'main' panicked at 'Invalid input width and height to Good-Thomas Algorithm: (1024,1024): Inputs must be coprime', /home/henrik/rust/RustFFT/src/algorithm/good_thomas_algorithm.rs:328:9
+
+---- estimates_24_good_thomas_small_00002048_2048 stdout ----
+thread 'main' panicked at 'Invalid input width and height to Good-Thomas Algorithm: (2048,2048): Inputs must be coprime', /home/henrik/rust/RustFFT/src/algorithm/good_thomas_algorithm.rs:328:9
+
+
+failures:
+    estimates_21_good_thomas_______00000128_0256
+    estimates_21_good_thomas_______00000256_0256
+    estimates_21_good_thomas_______00000512_0512
+    estimates_21_good_thomas_______00001024_1024
+    estimates_21_good_thomas_______00002048_2048
+    estimates_24_good_thomas_small_00000128_0256
+    estimates_24_good_thomas_small_00000256_0256
+    estimates_24_good_thomas_small_00000512_0512
+    estimates_24_good_thomas_small_00001024_1024
+    estimates_24_good_thomas_small_00002048_2048
+
+test result: FAILED. 0 passed; 10 failed; 0 ignored; 129 measured; 0 filtered out
+
