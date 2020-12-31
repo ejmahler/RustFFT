@@ -3,11 +3,11 @@ use std::{any::TypeId, cmp::min};
 
 use primal_check::miller_rabin;
 
-use crate::{algorithm::butterflies::*, fft_cache::FftCache};
 use crate::algorithm::*;
 use crate::common::FFTnum;
 use crate::math_utils::PartialFactors;
 use crate::Fft;
+use crate::{algorithm::butterflies::*, fft_cache::FftCache};
 
 use super::*;
 
@@ -167,9 +167,15 @@ impl<T: FFTnum> FftPlannerAvx<T> {
     pub fn plan_fft(&mut self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
         self.internal_planner.plan_and_construct_fft(len, direction)
     }
+    /// Returns a `Fft` instance which processes signals of size `len` using AVX instructions.
+    ///
+    /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft_forward(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         self.plan_fft(len, FftDirection::Forward)
     }
+    /// Returns a `Fft` instance which processes signals of size `len` using AVX instructions.
+    ///
+    /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft_inverse(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         self.plan_fft(len, FftDirection::Inverse)
     }
@@ -679,11 +685,7 @@ impl<A: AvxNum, T: FFTnum> AvxPlannerInternal<A, T> {
     }
 
     // Takes a plan and an algorithm cache, and replaces steps of the plan with cached steps, if possible
-    fn replan_with_cache(
-        &self,
-        plan: MixedRadixPlan,
-        direction: FftDirection,
-    ) -> MixedRadixPlan {
+    fn replan_with_cache(&self, plan: MixedRadixPlan, direction: FftDirection) -> MixedRadixPlan {
         enum CacheLocation {
             None,
             Base,

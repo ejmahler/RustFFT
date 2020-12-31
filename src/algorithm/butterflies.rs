@@ -1,10 +1,10 @@
 use num_complex::Complex;
 
-use crate::{FftDirection, common::FFTnum};
+use crate::{common::FFTnum, FftDirection};
 
 use crate::array_utils::{RawSlice, RawSliceMut};
 use crate::twiddles;
-use crate::{Fft, Direction, Length};
+use crate::{Direction, Fft, Length};
 
 #[allow(unused)]
 macro_rules! boilerplate_fft_butterfly {
@@ -232,7 +232,7 @@ impl<T: FFTnum> Butterfly3<T> {
     pub fn new(direction: FftDirection) -> Self {
         Self {
             twiddle: T::generate_twiddle_factor(1, 3, direction),
-            direction
+            direction,
         }
     }
     #[inline(always)]

@@ -6,10 +6,10 @@ use num_traits::Zero;
 use primal_check::miller_rabin;
 use strength_reduce::StrengthReducedUsize;
 
-use crate::{FftDirection, common::FFTnum};
+use crate::{common::FFTnum, FftDirection};
 
 use crate::math_utils;
-use crate::{Fft, Direction, Length};
+use crate::{Direction, Fft, Length};
 
 /// Implementation of Rader's Algorithm
 ///

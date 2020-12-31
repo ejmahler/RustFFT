@@ -6,7 +6,7 @@ use num_complex::Complex;
 
 use crate::common::FFTnum;
 
-use crate::{Fft, Direction, Length, FftDirection};
+use crate::{Direction, Fft, FftDirection, Length};
 
 use crate::array_utils;
 

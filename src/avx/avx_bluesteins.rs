@@ -5,8 +5,8 @@ use num_complex::Complex;
 use num_integer::div_ceil;
 use num_traits::Zero;
 
-use crate::{FftDirection, array_utils};
-use crate::{FFTnum, Fft, Direction, Length};
+use crate::{array_utils, FftDirection};
+use crate::{Direction, FFTnum, Fft, Length};
 
 use super::CommonSimdData;
 use super::{

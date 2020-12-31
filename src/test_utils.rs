@@ -4,8 +4,8 @@ use num_traits::{Float, One, Zero};
 use rand::distributions::{uniform::SampleUniform, Distribution, Uniform};
 use rand::{rngs::StdRng, SeedableRng};
 
-use crate::{Fft, FftDirection};
 use crate::{algorithm::DFT, FFTnum};
+use crate::{Fft, FftDirection};
 
 /// The seed for the random number generator used to generate
 /// random signals. It's defined here so that we have deterministic

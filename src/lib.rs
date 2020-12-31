@@ -61,10 +61,10 @@ mod common;
 /// Individual FFT algorithms
 pub mod algorithm;
 mod array_utils;
+mod fft_cache;
 mod math_utils;
 mod plan;
 mod twiddles;
-mod fft_cache;
 
 use num_complex::Complex;
 use num_traits::Zero;

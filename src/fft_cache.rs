@@ -23,7 +23,8 @@ impl<T> FftCache<T> {
         match direction {
             FftDirection::Forward => self.forward_cache.get(&len),
             FftDirection::Inverse => self.inverse_cache.get(&len),
-        }.map(Arc::clone)
+        }
+        .map(Arc::clone)
     }
     pub fn insert(&mut self, fft: &Arc<dyn Fft<T>>) {
         let cloned = Arc::clone(fft);

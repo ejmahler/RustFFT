@@ -8,9 +8,9 @@ use num_traits::Zero;
 use primal_check::miller_rabin;
 use strength_reduce::StrengthReducedUsize;
 
-use crate::{FftDirection, array_utils};
 use crate::math_utils;
-use crate::{FFTnum, Fft, Direction, Length};
+use crate::{array_utils, FftDirection};
+use crate::{Direction, FFTnum, Fft, Length};
 
 use super::avx_vector;
 use super::{
@@ -522,7 +522,10 @@ mod unit_tests {
         }
     }
 
-    fn test_raders_with_length<T: AvxNum + Float + SampleUniform>(len: usize, direction: FftDirection) {
+    fn test_raders_with_length<T: AvxNum + Float + SampleUniform>(
+        len: usize,
+        direction: FftDirection,
+    ) {
         let inner_fft = Arc::new(DFT::new(len - 1, direction));
         let fft = RadersAvx2::<T, T>::new(inner_fft).unwrap();
 

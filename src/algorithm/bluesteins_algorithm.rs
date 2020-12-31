@@ -3,9 +3,9 @@ use std::sync::Arc;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use crate::{FftDirection, common::FFTnum};
+use crate::{common::FFTnum, FftDirection};
 
-use crate::{Fft, Direction, Length};
+use crate::{Direction, Fft, Length};
 
 /// Implementation of Bluestein's Algorithm
 ///
@@ -47,7 +47,11 @@ pub struct BluesteinsAlgorithm<T> {
 }
 
 impl<T: FFTnum> BluesteinsAlgorithm<T> {
-    fn compute_bluesteins_twiddle(index: usize, size: usize, direction: FftDirection) -> Complex<T> {
+    fn compute_bluesteins_twiddle(
+        index: usize,
+        size: usize,
+        direction: FftDirection,
+    ) -> Complex<T> {
         let index_multiplier = core::f64::consts::PI / size as f64;
 
         let index_float = index as f64;
@@ -61,7 +65,7 @@ impl<T: FFTnum> BluesteinsAlgorithm<T> {
 
         match direction {
             FftDirection::Forward => result,
-            FftDirection::Inverse => result.conj()
+            FftDirection::Inverse => result.conj(),
         }
     }
 

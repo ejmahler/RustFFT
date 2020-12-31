@@ -4,10 +4,10 @@ use std::sync::Arc;
 use num_complex::Complex;
 use transpose;
 
-use crate::{FftDirection, common::FFTnum};
+use crate::{common::FFTnum, FftDirection};
 
 use crate::array_utils;
-use crate::{Fft, Direction, Length};
+use crate::{Direction, Fft, Length};
 
 /// Implementation of the Mixed-Radix FFT algorithm
 ///

@@ -7,12 +7,12 @@
 use std::sync::Arc;
 
 use num_traits::Float;
-use rustfft::{FftDirection, num_traits::Zero};
 use rustfft::{
     algorithm::{BluesteinsAlgorithm, Radix4},
     num_complex::Complex,
     FFTnum, Fft, FftPlanner,
 };
+use rustfft::{num_traits::Zero, FftDirection};
 
 use rand::distributions::{uniform::SampleUniform, Distribution, Uniform};
 use rand::{rngs::StdRng, SeedableRng};

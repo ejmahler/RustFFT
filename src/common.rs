@@ -8,7 +8,11 @@ use crate::FftDirection;
 /// Generic floating point number, implemented for f32 and f64
 pub trait FFTnum: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {
     // two related methodsfor generating twiddle factors. The first is a convenience wrapper around the second.
-    fn generate_twiddle_factor(index: usize, fft_len: usize, direction: FftDirection) -> Complex<Self> {
+    fn generate_twiddle_factor(
+        index: usize,
+        fft_len: usize,
+        direction: FftDirection,
+    ) -> Complex<Self> {
         Self::generate_twiddle_factor_floatindex(index as f64, fft_len, direction)
     }
     fn generate_twiddle_factor_floatindex(
@@ -37,7 +41,7 @@ where
 
         match direction {
             FftDirection::Forward => result,
-            FftDirection::Inverse => result.conj()
+            FftDirection::Inverse => result.conj(),
         }
     }
 }

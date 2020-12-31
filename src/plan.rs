@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use crate::{FftDirection, common::FFTnum, fft_cache::FftCache};
+use crate::{common::FFTnum, fft_cache::FftCache, FftDirection};
 
 use crate::algorithm::butterflies::*;
 use crate::algorithm::*;
@@ -641,7 +641,10 @@ mod unit_tests {
             let mut planner = FftPlannerScalar::<f64>::new();
             let fft_a = planner.plan_fft(1234, FftDirection::Forward);
             let fft_b = planner.plan_fft(1234, FftDirection::Inverse);
-            assert!(!Arc::ptr_eq(&fft_a, &fft_b), "Existing fft was reused, even though directions don't match");
+            assert!(
+                !Arc::ptr_eq(&fft_a, &fft_b),
+                "Existing fft was reused, even though directions don't match"
+            );
         }
     }
 

@@ -6,11 +6,11 @@ use num_integer::Integer;
 use strength_reduce::StrengthReducedUsize;
 use transpose;
 
-use crate::{FftDirection, common::FFTnum};
+use crate::{common::FFTnum, FftDirection};
 
 use crate::array_utils;
 
-use crate::{Fft, Direction, Length};
+use crate::{Direction, Fft, Length};
 
 /// Implementation of the [Good-Thomas Algorithm (AKA Prime Factor Algorithm)](https://en.wikipedia.org/wiki/Prime-factor_FFT_algorithm)
 ///
@@ -488,8 +488,10 @@ mod unit_tests {
         let width = 15;
         for height in 3..width {
             if gcd(width, height) == 1 {
-                let width_fft = Arc::new(DFT::new(width, FftDirection::Forward)) as Arc<dyn Fft<f32>>;
-                let height_fft = Arc::new(DFT::new(height, FftDirection::Forward)) as Arc<dyn Fft<f32>>;
+                let width_fft =
+                    Arc::new(DFT::new(width, FftDirection::Forward)) as Arc<dyn Fft<f32>>;
+                let height_fft =
+                    Arc::new(DFT::new(height, FftDirection::Forward)) as Arc<dyn Fft<f32>>;
 
                 let fft = GoodThomasAlgorithm::new(width_fft, height_fft);
 

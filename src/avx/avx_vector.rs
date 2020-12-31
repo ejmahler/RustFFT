@@ -4,8 +4,11 @@ use std::fmt::Debug;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use crate::{FftDirection, array_utils::{RawSlice, RawSliceMut}};
 use crate::common::FFTnum;
+use crate::{
+    array_utils::{RawSlice, RawSliceMut},
+    FftDirection,
+};
 
 use super::AvxNum;
 
@@ -60,7 +63,12 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
 
     /// Generates a chunk of twiddle factors starting at (X,Y) and incrementing X `COMPLEX_PER_VECTOR` times.
     /// The result will be [twiddle(x*y, len), twiddle((x+1)*y, len), twiddle((x+2)*y, len), ...] for as many complex numbers fit in a vector
-    unsafe fn make_mixedradix_twiddle_chunk(x: usize, y: usize, len: usize, direction: FftDirection) -> Self;
+    unsafe fn make_mixedradix_twiddle_chunk(
+        x: usize,
+        y: usize,
+        len: usize,
+        direction: FftDirection,
+    ) -> Self;
 
     /// Packed transposes. Used by mixed radix. These all take a NxC array, where C is COMPLEX_PER_VECTOR, and transpose it to a CxN array.
     /// But they also pack the result into as few vectors as possible, with the goal of writing the transposed data out contiguously.
@@ -895,7 +903,12 @@ impl AvxVector for __m256 {
     }
 
     #[inline(always)]
-    unsafe fn make_mixedradix_twiddle_chunk(x: usize, y: usize, len: usize, direction: FftDirection) -> Self {
+    unsafe fn make_mixedradix_twiddle_chunk(
+        x: usize,
+        y: usize,
+        len: usize,
+        direction: FftDirection,
+    ) -> Self {
         let mut twiddle_chunk = [Complex::zero(); Self::COMPLEX_PER_VECTOR];
         for i in 0..Self::COMPLEX_PER_VECTOR {
             twiddle_chunk[i] = f32::generate_twiddle_factor(y * (x + i), len, direction);
@@ -1274,7 +1287,12 @@ impl AvxVector for __m128 {
         Rotation90(Self::broadcast_complex_elements(broadcast))
     }
     #[inline(always)]
-    unsafe fn make_mixedradix_twiddle_chunk(x: usize, y: usize, len: usize, direction: FftDirection) -> Self {
+    unsafe fn make_mixedradix_twiddle_chunk(
+        x: usize,
+        y: usize,
+        len: usize,
+        direction: FftDirection,
+    ) -> Self {
         let mut twiddle_chunk = [Complex::zero(); Self::COMPLEX_PER_VECTOR];
         for i in 0..Self::COMPLEX_PER_VECTOR {
             twiddle_chunk[i] = f32::generate_twiddle_factor(y * (x + i), len, direction);
@@ -1534,7 +1552,12 @@ impl AvxVector for __m256d {
         Rotation90(Self::broadcast_complex_elements(broadcast))
     }
     #[inline(always)]
-    unsafe fn make_mixedradix_twiddle_chunk(x: usize, y: usize, len: usize, direction: FftDirection) -> Self {
+    unsafe fn make_mixedradix_twiddle_chunk(
+        x: usize,
+        y: usize,
+        len: usize,
+        direction: FftDirection,
+    ) -> Self {
         let mut twiddle_chunk = [Complex::zero(); Self::COMPLEX_PER_VECTOR];
         for i in 0..Self::COMPLEX_PER_VECTOR {
             twiddle_chunk[i] = f64::generate_twiddle_factor(y * (x + i), len, direction);
@@ -1850,7 +1873,12 @@ impl AvxVector for __m128d {
         Rotation90(Self::broadcast_complex_elements(broadcast))
     }
     #[inline(always)]
-    unsafe fn make_mixedradix_twiddle_chunk(x: usize, y: usize, len: usize, direction: FftDirection) -> Self {
+    unsafe fn make_mixedradix_twiddle_chunk(
+        x: usize,
+        y: usize,
+        len: usize,
+        direction: FftDirection,
+    ) -> Self {
         let mut twiddle_chunk = [Complex::zero(); Self::COMPLEX_PER_VECTOR];
         for i in 0..Self::COMPLEX_PER_VECTOR {
             twiddle_chunk[i] = f64::generate_twiddle_factor(y * (x + i), len, direction);

@@ -6,7 +6,7 @@ use num_complex::Complex;
 
 use crate::common::FFTnum;
 
-use crate::{Fft, Direction, Length, FftDirection};
+use crate::{Direction, Fft, FftDirection, Length};
 
 use crate::array_utils;
 
@@ -711,7 +711,8 @@ impl Butterfly8Avx<f32> {
                     Complex::new(-0.0, 0.0),
                     Complex::new(0.0, 0.0),
                     Complex::new(-0.0, 0.0),
-                ].load_complex(0)
+                ]
+                .load_complex(0),
             },
             direction,
             _phantom_t: PhantomData,
