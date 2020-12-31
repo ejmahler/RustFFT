@@ -69,7 +69,7 @@ mod twiddles;
 use num_complex::Complex;
 use num_traits::Zero;
 
-pub use crate::common::FFTnum;
+pub use crate::common::FftNum;
 pub use crate::plan::{FftPlanner, FftPlannerScalar};
 
 /// A trait that allows FFT algorithms to report their expected input/output size
@@ -114,7 +114,7 @@ pub trait Direction {
 ///
 /// Both methods may need to allocate additional scratch space. If you'd like re-use that allocation across multiple FFT computations, call
 /// `process_inplace_with_scratch` or `process_with_scratch`, respectively.
-pub trait Fft<T: FFTnum>: Length + Direction + Sync + Send {
+pub trait Fft<T: FftNum>: Length + Direction + Sync + Send {
     /// Computes a FFT.
     ///
     /// Convenience method that allocates the required scratch space and and calls `self.process_with_scratch`.
@@ -226,12 +226,12 @@ mod avx;
 #[cfg(not(target_arch = "x86_64"))]
 mod avx {
     pub mod avx_planner {
-        use crate::{FFTnum, Fft};
+        use crate::{Fft, FftNum};
         use std::sync::Arc;
-        pub struct FftPlannerAvx<T: FFTnum> {
+        pub struct FftPlannerAvx<T: FftNum> {
             _phantom: std::marker::PhantomData<T>,
         }
-        impl<T: FFTnum> FftPlannerAvx<T> {
+        impl<T: FftNum> FftPlannerAvx<T> {
             pub fn new(_direction: FftDirection) -> Result<Self, ()> {
                 Err(())
             }

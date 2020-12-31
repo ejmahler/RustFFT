@@ -6,7 +6,7 @@ use num_integer::div_ceil;
 use num_traits::Zero;
 
 use crate::{array_utils, FftDirection};
-use crate::{Direction, FFTnum, Fft, Length};
+use crate::{Direction, Fft, FftNum, Length};
 
 use super::CommonSimdData;
 use super::{
@@ -31,7 +31,7 @@ pub struct BluesteinsAvx<A: AvxNum, T> {
 }
 boilerplate_avx_fft_commondata!(BluesteinsAvx);
 
-impl<A: AvxNum, T: FFTnum> BluesteinsAvx<A, T> {
+impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
     fn compute_bluesteins_twiddle(index: usize, len: usize, direction: FftDirection) -> Complex<A> {
         let index_float = index as f64;
         let index_squared = index_float * index_float;

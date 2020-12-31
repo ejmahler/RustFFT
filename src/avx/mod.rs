@@ -1,8 +1,8 @@
-use crate::{FFTnum, Fft, FftDirection};
+use crate::{Fft, FftDirection, FftNum};
 use std::arch::x86_64::{__m256, __m256d};
 use std::sync::Arc;
 
-pub trait AvxNum: FFTnum {
+pub trait AvxNum: FftNum {
     type VectorType: AvxVector256<ScalarType = Self>;
 }
 
@@ -29,7 +29,7 @@ struct CommonSimdData<T, V> {
 
 macro_rules! boilerplate_avx_fft {
     ($struct_name:ident, $len_fn:expr, $inplace_scratch_len_fn:expr, $out_of_place_scratch_len_fn:expr) => {
-        impl<A: AvxNum, T: FFTnum> Fft<T> for $struct_name<A, T> {
+        impl<A: AvxNum, T: FftNum> Fft<T> for $struct_name<A, T> {
             fn process_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
@@ -174,7 +174,7 @@ macro_rules! boilerplate_avx_fft {
 
 macro_rules! boilerplate_avx_fft_commondata {
     ($struct_name:ident) => {
-        impl<A: AvxNum, T: FFTnum> Fft<T> for $struct_name<A, T> {
+        impl<A: AvxNum, T: FftNum> Fft<T> for $struct_name<A, T> {
             fn process_with_scratch(
                 &self,
                 input: &mut [Complex<T>],

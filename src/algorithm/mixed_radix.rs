@@ -4,7 +4,7 @@ use std::sync::Arc;
 use num_complex::Complex;
 use transpose;
 
-use crate::{common::FFTnum, FftDirection};
+use crate::{common::FftNum, FftDirection};
 
 use crate::array_utils;
 use crate::{Direction, Fft, Length};
@@ -49,7 +49,7 @@ pub struct MixedRadix<T> {
     direction: FftDirection,
 }
 
-impl<T: FFTnum> MixedRadix<T> {
+impl<T: FftNum> MixedRadix<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
     pub fn new(width_fft: Arc<dyn Fft<T>>, height_fft: Arc<dyn Fft<T>>) -> Self {
         assert_eq!(
@@ -225,7 +225,7 @@ pub struct MixedRadixSmall<T> {
     direction: FftDirection,
 }
 
-impl<T: FFTnum> MixedRadixSmall<T> {
+impl<T: FftNum> MixedRadixSmall<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
     pub fn new(width_fft: Arc<dyn Fft<T>>, height_fft: Arc<dyn Fft<T>>) -> Self {
         assert_eq!(

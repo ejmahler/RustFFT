@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use crate::{common::FFTnum, fft_cache::FftCache, FftDirection};
+use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
 
 use crate::algorithm::butterflies::*;
 use crate::algorithm::*;
@@ -41,11 +41,11 @@ use crate::math_utils::{PrimeFactor, PrimeFactors};
 ///
 /// Each FFT instance owns [`Arc`s](std::sync::Arc) to its internal data, rather than borrowing it from the planner, so it's perfectly
 /// safe to drop the planner after creating Fft instances.
-pub enum FftPlanner<T: FFTnum> {
+pub enum FftPlanner<T: FftNum> {
     Scalar(FftPlannerScalar<T>),
     Avx(FftPlannerAvx<T>),
 }
-impl<T: FFTnum> FftPlanner<T> {
+impl<T: FftNum> FftPlanner<T> {
     /// Creates a new `FftPlanner` instance. It detects if AVX is supported on the current machine. If it is, it will plan AVX-accelerated FFTs.
     /// If AVX isn't supported, it will seamlessly fall back to planning non-SIMD FFTs.
     pub fn new() -> Self {
@@ -207,12 +207,12 @@ impl Recipe {
 ///
 /// Each FFT instance owns [`Arc`s](std::sync::Arc) to its internal data, rather than borrowing it from the planner, so it's perfectly
 /// safe to drop the planner after creating Fft instances.
-pub struct FftPlannerScalar<T: FFTnum> {
+pub struct FftPlannerScalar<T: FftNum> {
     algorithm_cache: FftCache<T>,
     recipe_cache: HashMap<usize, Rc<Recipe>>,
 }
 
-impl<T: FFTnum> FftPlannerScalar<T> {
+impl<T: FftNum> FftPlannerScalar<T> {
     /// Creates a new `FftPlannerScalar` instance.
     pub fn new() -> Self {
         Self {

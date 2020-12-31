@@ -5,7 +5,7 @@ use num_complex::Complex;
 use num_integer::div_ceil;
 
 use crate::array_utils;
-use crate::{Direction, FFTnum, Fft, FftDirection, Length};
+use crate::{Direction, Fft, FftDirection, FftNum, Length};
 
 use super::{AvxNum, CommonSimdData};
 
@@ -381,7 +381,7 @@ pub struct MixedRadix2xnAvx<A: AvxNum, T> {
 }
 boilerplate_avx_fft_commondata!(MixedRadix2xnAvx);
 
-impl<A: AvxNum, T: FFTnum> MixedRadix2xnAvx<A, T> {
+impl<A: AvxNum, T: FftNum> MixedRadix2xnAvx<A, T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
@@ -409,7 +409,7 @@ pub struct MixedRadix3xnAvx<A: AvxNum, T> {
 }
 boilerplate_avx_fft_commondata!(MixedRadix3xnAvx);
 
-impl<A: AvxNum, T: FFTnum> MixedRadix3xnAvx<A, T> {
+impl<A: AvxNum, T: FftNum> MixedRadix3xnAvx<A, T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
@@ -438,7 +438,7 @@ pub struct MixedRadix4xnAvx<A: AvxNum, T> {
 }
 boilerplate_avx_fft_commondata!(MixedRadix4xnAvx);
 
-impl<A: AvxNum, T: FFTnum> MixedRadix4xnAvx<A, T> {
+impl<A: AvxNum, T: FftNum> MixedRadix4xnAvx<A, T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
@@ -467,7 +467,7 @@ pub struct MixedRadix5xnAvx<A: AvxNum, T> {
 }
 boilerplate_avx_fft_commondata!(MixedRadix5xnAvx);
 
-impl<A: AvxNum, T: FFTnum> MixedRadix5xnAvx<A, T> {
+impl<A: AvxNum, T: FftNum> MixedRadix5xnAvx<A, T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
@@ -505,7 +505,7 @@ pub struct MixedRadix6xnAvx<A: AvxNum, T> {
 }
 boilerplate_avx_fft_commondata!(MixedRadix6xnAvx);
 
-impl<A: AvxNum, T: FFTnum> MixedRadix6xnAvx<A, T> {
+impl<A: AvxNum, T: FftNum> MixedRadix6xnAvx<A, T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
@@ -534,7 +534,7 @@ pub struct MixedRadix7xnAvx<A: AvxNum, T> {
 }
 boilerplate_avx_fft_commondata!(MixedRadix7xnAvx);
 
-impl<A: AvxNum, T: FFTnum> MixedRadix7xnAvx<A, T> {
+impl<A: AvxNum, T: FftNum> MixedRadix7xnAvx<A, T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
@@ -574,7 +574,7 @@ pub struct MixedRadix8xnAvx<A: AvxNum, T> {
 }
 boilerplate_avx_fft_commondata!(MixedRadix8xnAvx);
 
-impl<A: AvxNum, T: FFTnum> MixedRadix8xnAvx<A, T> {
+impl<A: AvxNum, T: FftNum> MixedRadix8xnAvx<A, T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
@@ -606,7 +606,7 @@ pub struct MixedRadix9xnAvx<A: AvxNum, T> {
 }
 boilerplate_avx_fft_commondata!(MixedRadix9xnAvx);
 
-impl<A: AvxNum, T: FFTnum> MixedRadix9xnAvx<A, T> {
+impl<A: AvxNum, T: FftNum> MixedRadix9xnAvx<A, T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         let inverse = inner_fft.fft_direction();
@@ -659,7 +659,7 @@ pub struct MixedRadix11xnAvx<A: AvxNum, T> {
 }
 boilerplate_avx_fft_commondata!(MixedRadix11xnAvx);
 
-impl<A: AvxNum, T: FFTnum> MixedRadix11xnAvx<A, T> {
+impl<A: AvxNum, T: FftNum> MixedRadix11xnAvx<A, T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
@@ -704,7 +704,7 @@ pub struct MixedRadix12xnAvx<A: AvxNum, T> {
 }
 boilerplate_avx_fft_commondata!(MixedRadix12xnAvx);
 
-impl<A: AvxNum, T: FFTnum> MixedRadix12xnAvx<A, T> {
+impl<A: AvxNum, T: FftNum> MixedRadix12xnAvx<A, T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         let inverse = inner_fft.fft_direction();
@@ -745,7 +745,7 @@ pub struct MixedRadix16xnAvx<A: AvxNum, T> {
 }
 boilerplate_avx_fft_commondata!(MixedRadix16xnAvx);
 
-impl<A: AvxNum, T: FFTnum> MixedRadix16xnAvx<A, T> {
+impl<A: AvxNum, T: FftNum> MixedRadix16xnAvx<A, T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         let inverse = inner_fft.fft_direction();

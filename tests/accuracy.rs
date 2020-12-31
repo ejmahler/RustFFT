@@ -10,7 +10,7 @@ use num_traits::Float;
 use rustfft::{
     algorithm::{BluesteinsAlgorithm, Radix4},
     num_complex::Complex,
-    FFTnum, Fft, FftPlanner,
+    Fft, FftNum, FftPlanner,
 };
 use rustfft::{num_traits::Zero, FftDirection};
 
@@ -26,7 +26,7 @@ const RNG_SEED: [u8; 32] = [
 
 /// Returns true if the mean difference in the elements of the two vectors
 /// is small
-fn compare_vectors<T: rustfft::FFTnum + Float>(vec1: &[Complex<T>], vec2: &[Complex<T>]) -> bool {
+fn compare_vectors<T: rustfft::FftNum + Float>(vec1: &[Complex<T>], vec2: &[Complex<T>]) -> bool {
     assert_eq!(vec1.len(), vec2.len());
     let mut error = T::zero();
     for (&a, &b) in vec1.iter().zip(vec2.iter()) {
@@ -35,7 +35,7 @@ fn compare_vectors<T: rustfft::FFTnum + Float>(vec1: &[Complex<T>], vec2: &[Comp
     return (error / T::from_usize(vec1.len()).unwrap()) < T::from_f32(0.1).unwrap();
 }
 
-fn fft_matches_control<T: FFTnum + Float>(control: Arc<dyn Fft<T>>, input: &[Complex<T>]) -> bool {
+fn fft_matches_control<T: FftNum + Float>(control: Arc<dyn Fft<T>>, input: &[Complex<T>]) -> bool {
     let mut control_input = input.to_vec();
     let mut test_input = input.to_vec();
 
@@ -61,7 +61,7 @@ fn fft_matches_control<T: FFTnum + Float>(control: Arc<dyn Fft<T>>, input: &[Com
     return compare_vectors(&test_output, &control_output);
 }
 
-fn random_signal<T: FFTnum + SampleUniform>(length: usize) -> Vec<Complex<T>> {
+fn random_signal<T: FftNum + SampleUniform>(length: usize) -> Vec<Complex<T>> {
     let mut sig = Vec::with_capacity(length);
     let dist: Uniform<T> = Uniform::new(T::zero(), T::from_f64(10.0).unwrap());
     let mut rng: StdRng = SeedableRng::from_seed(RNG_SEED);
@@ -75,10 +75,10 @@ fn random_signal<T: FFTnum + SampleUniform>(length: usize) -> Vec<Complex<T>> {
 }
 
 // A cache that makes setup for integration tests faster
-struct ControlCache<T: FFTnum> {
+struct ControlCache<T: FftNum> {
     fft_cache: Vec<Arc<dyn Fft<T>>>,
 }
-impl<T: FFTnum> ControlCache<T> {
+impl<T: FftNum> ControlCache<T> {
     pub fn new(max_outer_len: usize, direction: FftDirection) -> Self {
         let max_inner_len = (max_outer_len * 2 - 1).checked_next_power_of_two().unwrap();
         let max_power = max_inner_len.trailing_zeros() as usize;

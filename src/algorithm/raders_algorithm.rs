@@ -6,7 +6,7 @@ use num_traits::Zero;
 use primal_check::miller_rabin;
 use strength_reduce::StrengthReducedUsize;
 
-use crate::{common::FFTnum, FftDirection};
+use crate::{common::FftNum, FftDirection};
 
 use crate::math_utils;
 use crate::{Direction, Fft, Length};
@@ -54,7 +54,7 @@ pub struct RadersAlgorithm<T> {
     direction: FftDirection,
 }
 
-impl<T: FFTnum> RadersAlgorithm<T> {
+impl<T: FftNum> RadersAlgorithm<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `len`. `inner_fft.len()` must be `len - 1`
     ///
     /// Note that this constructor is quite expensive to run; This algorithm must run a FFT of size n - 1 within the

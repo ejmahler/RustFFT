@@ -4,7 +4,7 @@ use num_traits::{Float, One, Zero};
 use rand::distributions::{uniform::SampleUniform, Distribution, Uniform};
 use rand::{rngs::StdRng, SeedableRng};
 
-use crate::{algorithm::DFT, FFTnum};
+use crate::{algorithm::DFT, FftNum};
 use crate::{Fft, FftDirection};
 
 /// The seed for the random number generator used to generate
@@ -14,7 +14,7 @@ const RNG_SEED: [u8; 32] = [
     1, 9, 1, 0, 1, 1, 4, 3, 1, 4, 9, 8, 4, 1, 4, 8, 2, 8, 1, 2, 2, 2, 6, 1, 2, 3, 4, 5, 6, 7, 8, 9,
 ];
 
-pub fn random_signal<T: FFTnum + SampleUniform>(length: usize) -> Vec<Complex<T>> {
+pub fn random_signal<T: FftNum + SampleUniform>(length: usize) -> Vec<Complex<T>> {
     let mut sig = Vec::with_capacity(length);
     let normal_dist: Uniform<T> = Uniform::new(T::zero(), T::from_f32(10.0).unwrap());
     let mut rng: StdRng = SeedableRng::from_seed(RNG_SEED);
@@ -27,7 +27,7 @@ pub fn random_signal<T: FFTnum + SampleUniform>(length: usize) -> Vec<Complex<T>
     return sig;
 }
 
-pub fn compare_vectors<T: FFTnum + Float>(vec1: &[Complex<T>], vec2: &[Complex<T>]) -> bool {
+pub fn compare_vectors<T: FftNum + Float>(vec1: &[Complex<T>], vec2: &[Complex<T>]) -> bool {
     assert_eq!(vec1.len(), vec2.len());
     let mut error = T::zero();
     for (&a, &b) in vec1.iter().zip(vec2.iter()) {
@@ -37,7 +37,7 @@ pub fn compare_vectors<T: FFTnum + Float>(vec1: &[Complex<T>], vec2: &[Complex<T
 }
 
 #[allow(unused)]
-fn transppose_diagnostic<T: FFTnum + Float>(expected: &[Complex<T>], actual: &[Complex<T>]) {
+fn transppose_diagnostic<T: FftNum + Float>(expected: &[Complex<T>], actual: &[Complex<T>]) {
     for (i, (&e, &a)) in expected.iter().zip(actual.iter()).enumerate() {
         if (e - a).norm().to_f32().unwrap() > 0.01 {
             if let Some(found_index) = expected
@@ -52,7 +52,7 @@ fn transppose_diagnostic<T: FFTnum + Float>(expected: &[Complex<T>], actual: &[C
     }
 }
 
-pub fn check_fft_algorithm<T: FFTnum + Float + SampleUniform>(
+pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
     fft: &dyn Fft<T>,
     len: usize,
     direction: FftDirection,

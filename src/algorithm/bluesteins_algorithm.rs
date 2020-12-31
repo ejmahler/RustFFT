@@ -3,7 +3,7 @@ use std::sync::Arc;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use crate::{common::FFTnum, FftDirection};
+use crate::{common::FftNum, FftDirection};
 
 use crate::{Direction, Fft, Length};
 
@@ -46,7 +46,7 @@ pub struct BluesteinsAlgorithm<T> {
     direction: FftDirection,
 }
 
-impl<T: FFTnum> BluesteinsAlgorithm<T> {
+impl<T: FftNum> BluesteinsAlgorithm<T> {
     fn compute_bluesteins_twiddle(
         index: usize,
         size: usize,

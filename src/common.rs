@@ -6,7 +6,7 @@ use num_complex::Complex;
 use crate::FftDirection;
 
 /// Generic floating point number, implemented for f32 and f64
-pub trait FFTnum: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {
+pub trait FftNum: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {
     // two related methodsfor generating twiddle factors. The first is a convenience wrapper around the second.
     fn generate_twiddle_factor(
         index: usize,
@@ -22,7 +22,7 @@ pub trait FFTnum: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static 
     ) -> Complex<Self>;
 }
 
-impl<T> FFTnum for T
+impl<T> FftNum for T
 where
     T: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static,
 {
@@ -46,7 +46,7 @@ where
     }
 }
 
-// impl FFTnum for f32 {
+// impl FftNum for f32 {
 // 	fn generate_twiddle_factor_floatindex(index: f64, fft_len: usize, direction: FftDirection) -> Complex<Self> {
 // 		let constant = -2f64 * std::f64::consts::PI / fft_len as f64;
 // 		let angle = constant * index;
@@ -63,7 +63,7 @@ where
 // 	    }
 //     }
 // }
-// impl FFTnum for f64 {
+// impl FftNum for f64 {
 // 	fn generate_twiddle_factor_floatindex(index: f64, fft_len: usize, direction: FftDirection) -> Complex<Self> {
 // 		let constant = -2f64 * std::f64::consts::PI / fft_len as f64;
 // 		let angle = constant * index;
@@ -83,7 +83,7 @@ where
 
 macro_rules! boilerplate_fft_oop {
     ($struct_name:ident, $len_fn:expr) => {
-        impl<T: FFTnum> Fft<T> for $struct_name<T> {
+        impl<T: FftNum> Fft<T> for $struct_name<T> {
             fn process_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
@@ -230,7 +230,7 @@ macro_rules! boilerplate_fft_oop {
 
 macro_rules! boilerplate_fft {
     ($struct_name:ident, $len_fn:expr, $inplace_scratch_len_fn:expr, $out_of_place_scratch_len_fn:expr) => {
-        impl<T: FFTnum> Fft<T> for $struct_name<T> {
+        impl<T: FftNum> Fft<T> for $struct_name<T> {
             fn process_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
@@ -358,13 +358,13 @@ macro_rules! boilerplate_fft {
                 $out_of_place_scratch_len_fn(self)
             }
         }
-        impl<T: FFTnum> Length for $struct_name<T> {
+        impl<T: FftNum> Length for $struct_name<T> {
             #[inline(always)]
             fn len(&self) -> usize {
                 $len_fn(self)
             }
         }
-        impl<T: FFTnum> Direction for $struct_name<T> {
+        impl<T: FftNum> Direction for $struct_name<T> {
             #[inline(always)]
             fn fft_direction(&self) -> FftDirection {
                 self.direction

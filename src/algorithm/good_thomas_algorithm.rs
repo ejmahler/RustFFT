@@ -6,7 +6,7 @@ use num_integer::Integer;
 use strength_reduce::StrengthReducedUsize;
 use transpose;
 
-use crate::{common::FFTnum, FftDirection};
+use crate::{common::FftNum, FftDirection};
 
 use crate::array_utils;
 
@@ -57,7 +57,7 @@ pub struct GoodThomasAlgorithm<T> {
     direction: FftDirection,
 }
 
-impl<T: FFTnum> GoodThomasAlgorithm<T> {
+impl<T: FftNum> GoodThomasAlgorithm<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
     ///
     /// GCD(width_fft.len(), height_fft.len()) must be equal to 1
@@ -309,7 +309,7 @@ pub struct GoodThomasAlgorithmSmall<T> {
     direction: FftDirection,
 }
 
-impl<T: FFTnum> GoodThomasAlgorithmSmall<T> {
+impl<T: FftNum> GoodThomasAlgorithmSmall<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
     ///
     /// GCD(n1.len(), n2.len()) must be equal to 1

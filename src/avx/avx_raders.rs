@@ -10,7 +10,7 @@ use strength_reduce::StrengthReducedUsize;
 
 use crate::math_utils;
 use crate::{array_utils, FftDirection};
-use crate::{Direction, FFTnum, Fft, Length};
+use crate::{Direction, Fft, FftNum, Length};
 
 use super::avx_vector;
 use super::{
@@ -111,7 +111,7 @@ pub struct RadersAvx2<A: AvxNum, T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-impl<A: AvxNum, T: FFTnum> RadersAvx2<A, T> {
+impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the FFT
     /// Returns Ok(instance) if this machine has the required instruction sets ("avx", "fma", and "avx2"), Err() if some instruction sets are missing
     ///

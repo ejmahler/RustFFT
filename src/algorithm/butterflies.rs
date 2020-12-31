@@ -1,6 +1,6 @@
 use num_complex::Complex;
 
-use crate::{common::FFTnum, FftDirection};
+use crate::{common::FftNum, FftDirection};
 
 use crate::array_utils::{RawSlice, RawSliceMut};
 use crate::twiddles;
@@ -9,13 +9,13 @@ use crate::{Direction, Fft, Length};
 #[allow(unused)]
 macro_rules! boilerplate_fft_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
-        impl<T: FFTnum> $struct_name<T> {
+        impl<T: FftNum> $struct_name<T> {
             #[inline(always)]
             pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
                 self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
             }
         }
-        impl<T: FFTnum> Fft<T> for $struct_name<T> {
+        impl<T: FftNum> Fft<T> for $struct_name<T> {
             fn process_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
@@ -133,7 +133,7 @@ pub struct Butterfly1<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
 }
-impl<T: FFTnum> Butterfly1<T> {
+impl<T: FftNum> Butterfly1<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
@@ -142,7 +142,7 @@ impl<T: FFTnum> Butterfly1<T> {
         }
     }
 }
-impl<T: FFTnum> Fft<T> for Butterfly1<T> {
+impl<T: FftNum> Fft<T> for Butterfly1<T> {
     fn process_with_scratch(
         &self,
         input: &mut [Complex<T>],
@@ -194,7 +194,7 @@ pub struct Butterfly2<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 boilerplate_fft_butterfly!(Butterfly2, 2, |this: &Butterfly2<_>| this.direction);
-impl<T: FFTnum> Butterfly2<T> {
+impl<T: FftNum> Butterfly2<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
@@ -227,7 +227,7 @@ pub struct Butterfly3<T> {
     direction: FftDirection,
 }
 boilerplate_fft_butterfly!(Butterfly3, 3, |this: &Butterfly3<_>| this.direction);
-impl<T: FFTnum> Butterfly3<T> {
+impl<T: FftNum> Butterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
@@ -273,7 +273,7 @@ pub struct Butterfly4<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 boilerplate_fft_butterfly!(Butterfly4, 4, |this: &Butterfly4<_>| this.direction);
-impl<T: FFTnum> Butterfly4<T> {
+impl<T: FftNum> Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
@@ -323,7 +323,7 @@ pub struct Butterfly5<T> {
     direction: FftDirection,
 }
 boilerplate_fft_butterfly!(Butterfly5, 5, |this: &Butterfly5<_>| this.direction);
-impl<T: FFTnum> Butterfly5<T> {
+impl<T: FftNum> Butterfly5<T> {
     pub fn new(direction: FftDirection) -> Self {
         Self {
             twiddle1: T::generate_twiddle_factor(1, 5, direction),
@@ -478,7 +478,7 @@ pub struct Butterfly6<T> {
 boilerplate_fft_butterfly!(Butterfly6, 6, |this: &Butterfly6<_>| this
     .butterfly3
     .fft_direction());
-impl<T: FFTnum> Butterfly6<T> {
+impl<T: FftNum> Butterfly6<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
@@ -537,7 +537,7 @@ pub struct Butterfly7<T> {
     direction: FftDirection,
 }
 boilerplate_fft_butterfly!(Butterfly7, 7, |this: &Butterfly7<_>| this.direction);
-impl<T: FFTnum> Butterfly7<T> {
+impl<T: FftNum> Butterfly7<T> {
     pub fn new(direction: FftDirection) -> Self {
         Self {
             twiddle1: T::generate_twiddle_factor(1, 7, direction),
@@ -730,7 +730,7 @@ pub struct Butterfly8<T> {
     direction: FftDirection,
 }
 boilerplate_fft_butterfly!(Butterfly8, 8, |this: &Butterfly8<_>| this.direction);
-impl<T: FFTnum> Butterfly8<T> {
+impl<T: FftNum> Butterfly8<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
@@ -789,7 +789,7 @@ pub struct Butterfly11<T> {
     direction: FftDirection,
 }
 boilerplate_fft_butterfly!(Butterfly11, 11, |this: &Butterfly11<_>| this.direction);
-impl<T: FFTnum> Butterfly11<T> {
+impl<T: FftNum> Butterfly11<T> {
     pub fn new(direction: FftDirection) -> Self {
         let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 11, direction);
         let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 11, direction);
@@ -1043,7 +1043,7 @@ pub struct Butterfly13<T> {
     direction: FftDirection,
 }
 boilerplate_fft_butterfly!(Butterfly13, 13, |this: &Butterfly13<_>| this.direction);
-impl<T: FFTnum> Butterfly13<T> {
+impl<T: FftNum> Butterfly13<T> {
     pub fn new(direction: FftDirection) -> Self {
         let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 13, direction);
         let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 13, direction);
@@ -1363,7 +1363,7 @@ pub struct Butterfly16<T> {
 boilerplate_fft_butterfly!(Butterfly16, 16, |this: &Butterfly16<_>| this
     .butterfly8
     .fft_direction());
-impl<T: FFTnum> Butterfly16<T> {
+impl<T: FftNum> Butterfly16<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
@@ -1457,7 +1457,7 @@ pub struct Butterfly17<T> {
     direction: FftDirection,
 }
 boilerplate_fft_butterfly!(Butterfly17, 17, |this: &Butterfly17<_>| this.direction);
-impl<T: FFTnum> Butterfly17<T> {
+impl<T: FftNum> Butterfly17<T> {
     pub fn new(direction: FftDirection) -> Self {
         let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 17, direction);
         let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 17, direction);
@@ -1941,7 +1941,7 @@ pub struct Butterfly19<T> {
     direction: FftDirection,
 }
 boilerplate_fft_butterfly!(Butterfly19, 19, |this: &Butterfly19<_>| this.direction);
-impl<T: FFTnum> Butterfly19<T> {
+impl<T: FftNum> Butterfly19<T> {
     pub fn new(direction: FftDirection) -> Self {
         let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 19, direction);
         let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 19, direction);
@@ -2520,7 +2520,7 @@ pub struct Butterfly23<T> {
     direction: FftDirection,
 }
 boilerplate_fft_butterfly!(Butterfly23, 23, |this: &Butterfly23<_>| this.direction);
-impl<T: FFTnum> Butterfly23<T> {
+impl<T: FftNum> Butterfly23<T> {
     pub fn new(direction: FftDirection) -> Self {
         let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 23, direction);
         let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 23, direction);
@@ -3320,7 +3320,7 @@ pub struct Butterfly29<T> {
     direction: FftDirection,
 }
 boilerplate_fft_butterfly!(Butterfly29, 29, |this: &Butterfly29<_>| this.direction);
-impl<T: FFTnum> Butterfly29<T> {
+impl<T: FftNum> Butterfly29<T> {
     pub fn new(direction: FftDirection) -> Self {
         let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 29, direction);
         let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 29, direction);
@@ -4495,7 +4495,7 @@ pub struct Butterfly31<T> {
     direction: FftDirection,
 }
 boilerplate_fft_butterfly!(Butterfly31, 31, |this: &Butterfly31<_>| this.direction);
-impl<T: FFTnum> Butterfly31<T> {
+impl<T: FftNum> Butterfly31<T> {
     pub fn new(direction: FftDirection) -> Self {
         let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 31, direction);
         let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 31, direction);
@@ -5800,7 +5800,7 @@ pub struct Butterfly32<T> {
 boilerplate_fft_butterfly!(Butterfly32, 32, |this: &Butterfly32<_>| this
     .butterfly8
     .fft_direction());
-impl<T: FFTnum> Butterfly32<T> {
+impl<T: FftNum> Butterfly32<T> {
     pub fn new(direction: FftDirection) -> Self {
         Self {
             butterfly16: Butterfly16::new(direction),
