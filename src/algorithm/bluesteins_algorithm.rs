@@ -3,9 +3,9 @@ use std::sync::Arc;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use crate::common::FFTnum;
+use crate::{FftDirection, common::FFTnum};
 
-use crate::{Fft, IsInverse, Length};
+use crate::{Fft, Direction, Length};
 
 /// Implementation of Bluestein's Algorithm
 ///
@@ -25,8 +25,8 @@ use crate::{Fft, IsInverse, Length};
 /// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); 1201];
 ///
 /// // plan a FFT of size n - 1 = 1200
-/// let mut planner = FftPlanner::new(false);
-/// let inner_fft = planner.plan_fft(1200);
+/// let mut planner = FftPlanner::new();
+/// let inner_fft = planner.plan_fft_forward(1200);
 ///
 /// let fft = RadersAlgorithm::new(inner_fft);
 /// fft.process(&mut input, &mut output);
@@ -43,11 +43,11 @@ pub struct BluesteinsAlgorithm<T> {
     twiddles: Box<[Complex<T>]>,
 
     len: usize,
-    inverse: bool,
+    direction: FftDirection,
 }
 
 impl<T: FFTnum> BluesteinsAlgorithm<T> {
-    fn compute_bluesteins_twiddle(index: usize, size: usize, inverse: bool) -> Complex<T> {
+    fn compute_bluesteins_twiddle(index: usize, size: usize, direction: FftDirection) -> Complex<T> {
         let index_multiplier = core::f64::consts::PI / size as f64;
 
         let index_float = index as f64;
@@ -59,10 +59,9 @@ impl<T: FFTnum> BluesteinsAlgorithm<T> {
             T::from_f64(theta.sin()).unwrap(),
         );
 
-        if inverse {
-            result.conj()
-        } else {
-            result
+        match direction {
+            FftDirection::Forward => result,
+            FftDirection::Inverse => result.conj()
         }
     }
 
@@ -77,13 +76,13 @@ impl<T: FFTnum> BluesteinsAlgorithm<T> {
 
         // when computing FFTs, we're going to run our inner multiply pairise by some precomputed data, then run an inverse inner FFT. We need to precompute that inner data here
         let inner_len_float = T::from_usize(inner_fft_len).unwrap();
-        let inverse = inner_fft.is_inverse();
+        let direction = inner_fft.fft_direction();
 
         // Compute twiddle factors that we'll run our inner FFT on
         let mut inner_fft_input = vec![Complex::zero(); inner_fft_len];
         for i in 0..len {
             inner_fft_input[i] =
-                Self::compute_bluesteins_twiddle(i, len, inverse) / inner_len_float;
+                Self::compute_bluesteins_twiddle(i, len, direction) / inner_len_float;
         }
         for i in 1..len {
             inner_fft_input[inner_fft_len - i] = inner_fft_input[i];
@@ -95,7 +94,7 @@ impl<T: FFTnum> BluesteinsAlgorithm<T> {
 
         // also compute some more mundane twiddle factors to start and end with
         let twiddles: Vec<_> = (0..len)
-            .map(|i| Self::compute_bluesteins_twiddle(i, len, !inverse))
+            .map(|i| Self::compute_bluesteins_twiddle(i, len, direction.reverse()))
             .collect();
 
         Self {
@@ -105,7 +104,7 @@ impl<T: FFTnum> BluesteinsAlgorithm<T> {
             twiddles: twiddles.into_boxed_slice(),
 
             len,
-            inverse,
+            direction,
         }
     }
 
@@ -209,18 +208,18 @@ mod unit_tests {
     #[test]
     fn test_bluesteins() {
         for &len in &[3, 5, 7, 11, 13] {
-            test_bluesteins_with_length(len, false);
-            test_bluesteins_with_length(len, true);
+            test_bluesteins_with_length(len, FftDirection::Forward);
+            test_bluesteins_with_length(len, FftDirection::Inverse);
         }
     }
 
-    fn test_bluesteins_with_length(len: usize, inverse: bool) {
+    fn test_bluesteins_with_length(len: usize, direction: FftDirection) {
         let inner_fft = Arc::new(DFT::new(
             (len * 2 - 1).checked_next_power_of_two().unwrap(),
-            inverse,
+            direction,
         ));
         let fft = BluesteinsAlgorithm::new(len, inner_fft);
 
-        check_fft_algorithm::<f32>(&fft, len, inverse);
+        check_fft_algorithm::<f32>(&fft, len, direction);
     }
 }

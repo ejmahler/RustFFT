@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use num_traits::Float;
-use rustfft::num_traits::Zero;
+use rustfft::{FftDirection, num_traits::Zero};
 use rustfft::{
     algorithm::{BluesteinsAlgorithm, Radix4},
     num_complex::Complex,
@@ -42,16 +42,16 @@ fn fft_matches_control<T: FFTnum + Float>(control: Arc<dyn Fft<T>>, input: &[Com
     let mut control_output = vec![Zero::zero(); control.len()];
     let mut test_output = vec![Zero::zero(); control.len()];
 
-    let mut planner = FftPlanner::new(control.is_inverse());
-    let fft = planner.plan_fft(control.len());
+    let mut planner = FftPlanner::new();
+    let fft = planner.plan_fft(control.len(), control.fft_direction());
     assert_eq!(
         fft.len(),
         control.len(),
         "FFTplanner created FFT of wrong length"
     );
     assert_eq!(
-        fft.is_inverse(),
-        control.is_inverse(),
+        fft.fft_direction(),
+        control.fft_direction(),
         "FFTplanner created FFT of wrong direction"
     );
 
@@ -79,7 +79,7 @@ struct ControlCache<T: FFTnum> {
     fft_cache: Vec<Arc<dyn Fft<T>>>,
 }
 impl<T: FFTnum> ControlCache<T> {
-    pub fn new(max_outer_len: usize, inverse: bool) -> Self {
+    pub fn new(max_outer_len: usize, direction: FftDirection) -> Self {
         let max_inner_len = (max_outer_len * 2 - 1).checked_next_power_of_two().unwrap();
         let max_power = max_inner_len.trailing_zeros() as usize;
 
@@ -87,7 +87,7 @@ impl<T: FFTnum> ControlCache<T> {
             fft_cache: (0..=max_power)
                 .map(|i| {
                     let len = 1 << i;
-                    Arc::new(Radix4::new(len, inverse)) as Arc<dyn Fft<_>>
+                    Arc::new(Radix4::new(len, direction)) as Arc<dyn Fft<_>>
                 })
                 .collect(),
         }
@@ -107,13 +107,13 @@ const TEST_MAX: usize = 1001;
 /// for random signals.
 #[test]
 fn test_planned_fft_forward_f32() {
-    let is_inverse = false;
-    let cache: ControlCache<f32> = ControlCache::new(TEST_MAX, is_inverse);
+    let direction = FftDirection::Forward;
+    let cache: ControlCache<f32> = ControlCache::new(TEST_MAX, direction);
 
     for len in 1..TEST_MAX {
         let control = cache.plan_fft(len);
         assert_eq!(control.len(), len);
-        assert_eq!(control.is_inverse(), is_inverse);
+        assert_eq!(control.fft_direction(), direction);
 
         let signal = random_signal(len);
         assert!(fft_matches_control(control, &signal), "length = {}", len);
@@ -122,13 +122,13 @@ fn test_planned_fft_forward_f32() {
 
 #[test]
 fn test_planned_fft_inverse_f32() {
-    let is_inverse = true;
-    let cache: ControlCache<f32> = ControlCache::new(TEST_MAX, is_inverse);
+    let direction = FftDirection::Inverse;
+    let cache: ControlCache<f32> = ControlCache::new(TEST_MAX, direction);
 
     for len in 1..TEST_MAX {
         let control = cache.plan_fft(len);
         assert_eq!(control.len(), len);
-        assert_eq!(control.is_inverse(), is_inverse);
+        assert_eq!(control.fft_direction(), direction);
 
         let signal = random_signal(len);
         assert!(fft_matches_control(control, &signal), "length = {}", len);
@@ -137,13 +137,13 @@ fn test_planned_fft_inverse_f32() {
 
 #[test]
 fn test_planned_fft_forward_f64() {
-    let is_inverse = false;
-    let cache: ControlCache<f64> = ControlCache::new(TEST_MAX, is_inverse);
+    let direction = FftDirection::Forward;
+    let cache: ControlCache<f64> = ControlCache::new(TEST_MAX, direction);
 
     for len in 1..TEST_MAX {
         let control = cache.plan_fft(len);
         assert_eq!(control.len(), len);
-        assert_eq!(control.is_inverse(), is_inverse);
+        assert_eq!(control.fft_direction(), direction);
 
         let signal = random_signal(len);
         assert!(fft_matches_control(control, &signal), "length = {}", len);
@@ -152,13 +152,13 @@ fn test_planned_fft_forward_f64() {
 
 #[test]
 fn test_planned_fft_inverse_f64() {
-    let is_inverse = true;
-    let cache: ControlCache<f64> = ControlCache::new(TEST_MAX, is_inverse);
+    let direction = FftDirection::Inverse;
+    let cache: ControlCache<f64> = ControlCache::new(TEST_MAX, direction);
 
     for len in 1..TEST_MAX {
         let control = cache.plan_fft(len);
         assert_eq!(control.len(), len);
-        assert_eq!(control.is_inverse(), is_inverse);
+        assert_eq!(control.fft_direction(), direction);
 
         let signal = random_signal(len);
         assert!(fft_matches_control(control, &signal), "length = {}", len);

@@ -1,10 +1,9 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::{any::TypeId, cmp::min};
 
 use primal_check::miller_rabin;
 
-use crate::algorithm::butterflies::*;
+use crate::{algorithm::butterflies::*, fft_cache::FftCache};
 use crate::algorithm::*;
 use crate::common::FFTnum;
 use crate::math_utils::PartialFactors;
@@ -91,8 +90,8 @@ impl MixedRadixPlan {
 /// use rustfft::{FftPlannerAvx, num_complex::Complex};
 ///
 /// // If FftPlannerAvx::new() returns Ok(), we'll know AVX algorithms are available on this machine
-/// if let Ok(mut planner) = FftPlannerAvx::new(false) {
-///     let fft = planner.plan_fft(1234);
+/// if let Ok(mut planner) = FftPlannerAvx::new() {
+///     let fft = planner.plan_fft_forward(1234);
 ///
 ///     let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1234];
 ///     fft.process_inplace(&mut buffer);
@@ -117,7 +116,7 @@ impl<T: FFTnum> FftPlannerAvx<T> {
     /// Constructs a new `FftPlannerAvx` instance.
     ///
     /// Returns `Ok(planner_instance)` if this machine has the required instruction sets, `Err(())` if some instruction sets are missing.
-    pub fn new(inverse: bool) -> Result<Self, ()> {
+    pub fn new() -> Result<Self, ()> {
         // Eventually we might make AVX algorithms that don't also require FMA.
         // If that happens, we can only check for AVX here? seems like a pretty low-priority addition
         let has_avx = is_x86_feature_detected!("avx");
@@ -151,11 +150,11 @@ impl<T: FFTnum> FftPlannerAvx<T> {
 
             if id_t == id_f32 {
                 return Ok(Self {
-                    internal_planner: Box::new(AvxPlannerInternal::<f32, T>::new(inverse)),
+                    internal_planner: Box::new(AvxPlannerInternal::<f32, T>::new()),
                 });
             } else if id_t == id_f64 {
                 return Ok(Self {
-                    internal_planner: Box::new(AvxPlannerInternal::<f64, T>::new(inverse)),
+                    internal_planner: Box::new(AvxPlannerInternal::<f64, T>::new()),
                 });
             }
         }
@@ -165,58 +164,65 @@ impl<T: FFTnum> FftPlannerAvx<T> {
     /// Returns a `Fft` instance which processes signals of size `len` using AVX instructions.
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
-    pub fn plan_fft(&mut self, len: usize) -> Arc<dyn Fft<T>> {
-        self.internal_planner.plan_and_construct_fft(len)
+    pub fn plan_fft(&mut self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
+        self.internal_planner.plan_and_construct_fft(len, direction)
+    }
+    pub fn plan_fft_forward(&mut self, len: usize) -> Arc<dyn Fft<T>> {
+        self.plan_fft(len, FftDirection::Forward)
+    }
+    pub fn plan_fft_inverse(&mut self, len: usize) -> Arc<dyn Fft<T>> {
+        self.plan_fft(len, FftDirection::Inverse)
     }
 
     /// Returns a FFT plan without constructing it
     #[allow(unused)]
-    pub(crate) fn debug_plan_fft(&self, len: usize) -> MixedRadixPlan {
-        self.internal_planner.debug_plan_fft(len)
+    pub(crate) fn debug_plan_fft(&self, len: usize, direction: FftDirection) -> MixedRadixPlan {
+        self.internal_planner.debug_plan_fft(len, direction)
     }
 }
 
 trait AvxPlannerInternalAPI<T: FFTnum> {
-    fn plan_and_construct_fft(&mut self, len: usize) -> Arc<dyn Fft<T>>;
-    fn debug_plan_fft(&self, len: usize) -> MixedRadixPlan;
+    fn plan_and_construct_fft(&mut self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>>;
+    fn debug_plan_fft(&self, len: usize, direction: FftDirection) -> MixedRadixPlan;
 }
 
 struct AvxPlannerInternal<A: AvxNum, T: FFTnum> {
-    algorithm_cache: HashMap<usize, Arc<dyn Fft<T>>>,
-    inverse: bool,
+    cache: FftCache<T>,
     _phantom: std::marker::PhantomData<A>,
 }
 
 impl<T: FFTnum> AvxPlannerInternalAPI<T> for AvxPlannerInternal<f32, T> {
-    fn plan_and_construct_fft(&mut self, len: usize) -> Arc<dyn Fft<T>> {
+    fn plan_and_construct_fft(&mut self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
         // Step 1: Create a plan for this FFT length.
-        let plan = self.plan_fft(len, Self::plan_mixed_radix_base);
+        let plan = self.plan_fft(len, direction, Self::plan_mixed_radix_base);
 
         // Step 2: Construct the plan. If the base is rader's algorithm or bluestein's algorithm, this may call self.plan_and_construct_fft recursively!
         self.construct_plan(
             plan,
+            direction,
             Self::construct_butterfly,
             Self::plan_and_construct_fft,
         )
     }
-    fn debug_plan_fft(&self, len: usize) -> MixedRadixPlan {
-        self.plan_fft(len, Self::plan_mixed_radix_base)
+    fn debug_plan_fft(&self, len: usize, direction: FftDirection) -> MixedRadixPlan {
+        self.plan_fft(len, direction, Self::plan_mixed_radix_base)
     }
 }
 impl<T: FFTnum> AvxPlannerInternalAPI<T> for AvxPlannerInternal<f64, T> {
-    fn plan_and_construct_fft(&mut self, len: usize) -> Arc<dyn Fft<T>> {
+    fn plan_and_construct_fft(&mut self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
         // Step 1: Create a plan for this FFT length.
-        let plan = self.plan_fft(len, Self::plan_mixed_radix_base);
+        let plan = self.plan_fft(len, direction, Self::plan_mixed_radix_base);
 
         // Step 2: Construct the plan. If the base is rader's algorithm or bluestein's algorithm, this may call self.plan_and_construct_fft recursively!
         self.construct_plan(
             plan,
+            direction,
             Self::construct_butterfly,
             Self::plan_and_construct_fft,
         )
     }
-    fn debug_plan_fft(&self, len: usize) -> MixedRadixPlan {
-        self.plan_fft(len, Self::plan_mixed_radix_base)
+    fn debug_plan_fft(&self, len: usize, direction: FftDirection) -> MixedRadixPlan {
+        self.plan_fft(len, direction, Self::plan_mixed_radix_base)
     }
 }
 
@@ -224,7 +230,7 @@ impl<T: FFTnum> AvxPlannerInternalAPI<T> for AvxPlannerInternal<f64, T> {
 // f32-specific planning stuff
 //-------------------------------------------------------------------
 impl<T: FFTnum> AvxPlannerInternal<f32, T> {
-    pub fn new(inverse: bool) -> Self {
+    pub fn new() -> Self {
         // Internal sanity check: Make sure that T == f32.
         // This struct has two generic parameters A and T, but they must always be the same, and are only kept separate to help work around the lack of specialization.
         // It would be cool if we could do this as a static_assert instead
@@ -233,8 +239,7 @@ impl<T: FFTnum> AvxPlannerInternal<f32, T> {
         assert_eq!(id_f32, id_t);
 
         Self {
-            algorithm_cache: HashMap::new(),
-            inverse,
+            cache: FftCache::new(),
             _phantom: std::marker::PhantomData,
         }
     }
@@ -390,37 +395,37 @@ impl<T: FFTnum> AvxPlannerInternal<f32, T> {
         .contains(&len)
     }
 
-    fn construct_butterfly(&self, len: usize) -> Arc<dyn Fft<T>> {
+    fn construct_butterfly(&self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
         match len {
-            0 | 1 => wrap_fft(DFT::new(len, self.inverse)),
-            2 => wrap_fft(Butterfly2::new(self.inverse)),
-            3 => wrap_fft(Butterfly3::new(self.inverse)),
-            4 => wrap_fft(Butterfly4::new(self.inverse)),
-            5 => wrap_fft(Butterfly5Avx::new(self.inverse).unwrap()),
-            6 => wrap_fft(Butterfly6::new(self.inverse)),
-            7 => wrap_fft(Butterfly7Avx::new(self.inverse).unwrap()),
-            8 => wrap_fft(Butterfly8Avx::new(self.inverse).unwrap()),
-            9 => wrap_fft(Butterfly9Avx::new(self.inverse).unwrap()),
-            11 => wrap_fft(Butterfly11Avx::new(self.inverse).unwrap()),
-            12 => wrap_fft(Butterfly12Avx::new(self.inverse).unwrap()),
-            13 => wrap_fft(Butterfly13::new(self.inverse)),
-            16 => wrap_fft(Butterfly16Avx::new(self.inverse).unwrap()),
-            17 => wrap_fft(Butterfly17::new(self.inverse)),
-            19 => wrap_fft(Butterfly19::new(self.inverse)),
-            23 => wrap_fft(Butterfly23::new(self.inverse)),
-            24 => wrap_fft(Butterfly24Avx::new(self.inverse).unwrap()),
-            27 => wrap_fft(Butterfly27Avx::new(self.inverse).unwrap()),
-            29 => wrap_fft(Butterfly29::new(self.inverse)),
-            31 => wrap_fft(Butterfly31::new(self.inverse)),
-            32 => wrap_fft(Butterfly32Avx::new(self.inverse).unwrap()),
-            36 => wrap_fft(Butterfly36Avx::new(self.inverse).unwrap()),
-            48 => wrap_fft(Butterfly48Avx::new(self.inverse).unwrap()),
-            54 => wrap_fft(Butterfly54Avx::new(self.inverse).unwrap()),
-            64 => wrap_fft(Butterfly64Avx::new(self.inverse).unwrap()),
-            72 => wrap_fft(Butterfly72Avx::new(self.inverse).unwrap()),
-            128 => wrap_fft(Butterfly128Avx::new(self.inverse).unwrap()),
-            256 => wrap_fft(Butterfly256Avx::new(self.inverse).unwrap()),
-            512 => wrap_fft(Butterfly512Avx::new(self.inverse).unwrap()),
+            0 | 1 => wrap_fft(DFT::new(len, direction)),
+            2 => wrap_fft(Butterfly2::new(direction)),
+            3 => wrap_fft(Butterfly3::new(direction)),
+            4 => wrap_fft(Butterfly4::new(direction)),
+            5 => wrap_fft(Butterfly5Avx::new(direction).unwrap()),
+            6 => wrap_fft(Butterfly6::new(direction)),
+            7 => wrap_fft(Butterfly7Avx::new(direction).unwrap()),
+            8 => wrap_fft(Butterfly8Avx::new(direction).unwrap()),
+            9 => wrap_fft(Butterfly9Avx::new(direction).unwrap()),
+            11 => wrap_fft(Butterfly11Avx::new(direction).unwrap()),
+            12 => wrap_fft(Butterfly12Avx::new(direction).unwrap()),
+            13 => wrap_fft(Butterfly13::new(direction)),
+            16 => wrap_fft(Butterfly16Avx::new(direction).unwrap()),
+            17 => wrap_fft(Butterfly17::new(direction)),
+            19 => wrap_fft(Butterfly19::new(direction)),
+            23 => wrap_fft(Butterfly23::new(direction)),
+            24 => wrap_fft(Butterfly24Avx::new(direction).unwrap()),
+            27 => wrap_fft(Butterfly27Avx::new(direction).unwrap()),
+            29 => wrap_fft(Butterfly29::new(direction)),
+            31 => wrap_fft(Butterfly31::new(direction)),
+            32 => wrap_fft(Butterfly32Avx::new(direction).unwrap()),
+            36 => wrap_fft(Butterfly36Avx::new(direction).unwrap()),
+            48 => wrap_fft(Butterfly48Avx::new(direction).unwrap()),
+            54 => wrap_fft(Butterfly54Avx::new(direction).unwrap()),
+            64 => wrap_fft(Butterfly64Avx::new(direction).unwrap()),
+            72 => wrap_fft(Butterfly72Avx::new(direction).unwrap()),
+            128 => wrap_fft(Butterfly128Avx::new(direction).unwrap()),
+            256 => wrap_fft(Butterfly256Avx::new(direction).unwrap()),
+            512 => wrap_fft(Butterfly512Avx::new(direction).unwrap()),
             _ => panic!("Invalid butterfly len: {}", len),
         }
     }
@@ -430,7 +435,7 @@ impl<T: FFTnum> AvxPlannerInternal<f32, T> {
 // f64-specific planning stuff
 //-------------------------------------------------------------------
 impl<T: FFTnum> AvxPlannerInternal<f64, T> {
-    pub fn new(inverse: bool) -> Self {
+    pub fn new() -> Self {
         // Internal sanity check: Make sure that T == f64.
         // This struct has two generic parameters A and T, but they must always be the same, and are only kept separate to help work around the lack of specialization.
         // It would be cool if we could do this as a static_assert instead
@@ -439,8 +444,7 @@ impl<T: FFTnum> AvxPlannerInternal<f64, T> {
         assert_eq!(id_f64, id_t);
 
         Self {
-            algorithm_cache: HashMap::new(),
-            inverse,
+            cache: FftCache::new(),
             _phantom: std::marker::PhantomData,
         }
     }
@@ -600,35 +604,35 @@ impl<T: FFTnum> AvxPlannerInternal<f64, T> {
         .contains(&len)
     }
 
-    fn construct_butterfly(&self, len: usize) -> Arc<dyn Fft<T>> {
+    fn construct_butterfly(&self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
         match len {
-            0 | 1 => wrap_fft(DFT::new(len, self.inverse)),
-            2 => wrap_fft(Butterfly2::new(self.inverse)),
-            3 => wrap_fft(Butterfly3::new(self.inverse)),
-            4 => wrap_fft(Butterfly4::new(self.inverse)),
-            5 => wrap_fft(Butterfly5Avx64::new(self.inverse).unwrap()),
-            6 => wrap_fft(Butterfly6::new(self.inverse)),
-            7 => wrap_fft(Butterfly7Avx64::new(self.inverse).unwrap()),
-            8 => wrap_fft(Butterfly8Avx64::new(self.inverse).unwrap()),
-            9 => wrap_fft(Butterfly9Avx64::new(self.inverse).unwrap()),
-            11 => wrap_fft(Butterfly11Avx64::new(self.inverse).unwrap()),
-            12 => wrap_fft(Butterfly12Avx64::new(self.inverse).unwrap()),
-            13 => wrap_fft(Butterfly13::new(self.inverse)),
-            16 => wrap_fft(Butterfly16Avx64::new(self.inverse).unwrap()),
-            17 => wrap_fft(Butterfly17::new(self.inverse)),
-            18 => wrap_fft(Butterfly18Avx64::new(self.inverse).unwrap()),
-            19 => wrap_fft(Butterfly19::new(self.inverse)),
-            23 => wrap_fft(Butterfly23::new(self.inverse)),
-            24 => wrap_fft(Butterfly24Avx64::new(self.inverse).unwrap()),
-            27 => wrap_fft(Butterfly27Avx64::new(self.inverse).unwrap()),
-            29 => wrap_fft(Butterfly29::new(self.inverse)),
-            31 => wrap_fft(Butterfly31::new(self.inverse)),
-            32 => wrap_fft(Butterfly32Avx64::new(self.inverse).unwrap()),
-            36 => wrap_fft(Butterfly36Avx64::new(self.inverse).unwrap()),
-            64 => wrap_fft(Butterfly64Avx64::new(self.inverse).unwrap()),
-            128 => wrap_fft(Butterfly128Avx64::new(self.inverse).unwrap()),
-            256 => wrap_fft(Butterfly256Avx64::new(self.inverse).unwrap()),
-            512 => wrap_fft(Butterfly512Avx64::new(self.inverse).unwrap()),
+            0 | 1 => wrap_fft(DFT::new(len, direction)),
+            2 => wrap_fft(Butterfly2::new(direction)),
+            3 => wrap_fft(Butterfly3::new(direction)),
+            4 => wrap_fft(Butterfly4::new(direction)),
+            5 => wrap_fft(Butterfly5Avx64::new(direction).unwrap()),
+            6 => wrap_fft(Butterfly6::new(direction)),
+            7 => wrap_fft(Butterfly7Avx64::new(direction).unwrap()),
+            8 => wrap_fft(Butterfly8Avx64::new(direction).unwrap()),
+            9 => wrap_fft(Butterfly9Avx64::new(direction).unwrap()),
+            11 => wrap_fft(Butterfly11Avx64::new(direction).unwrap()),
+            12 => wrap_fft(Butterfly12Avx64::new(direction).unwrap()),
+            13 => wrap_fft(Butterfly13::new(direction)),
+            16 => wrap_fft(Butterfly16Avx64::new(direction).unwrap()),
+            17 => wrap_fft(Butterfly17::new(direction)),
+            18 => wrap_fft(Butterfly18Avx64::new(direction).unwrap()),
+            19 => wrap_fft(Butterfly19::new(direction)),
+            23 => wrap_fft(Butterfly23::new(direction)),
+            24 => wrap_fft(Butterfly24Avx64::new(direction).unwrap()),
+            27 => wrap_fft(Butterfly27Avx64::new(direction).unwrap()),
+            29 => wrap_fft(Butterfly29::new(direction)),
+            31 => wrap_fft(Butterfly31::new(direction)),
+            32 => wrap_fft(Butterfly32Avx64::new(direction).unwrap()),
+            36 => wrap_fft(Butterfly36Avx64::new(direction).unwrap()),
+            64 => wrap_fft(Butterfly64Avx64::new(direction).unwrap()),
+            128 => wrap_fft(Butterfly128Avx64::new(direction).unwrap()),
+            256 => wrap_fft(Butterfly256Avx64::new(direction).unwrap()),
+            512 => wrap_fft(Butterfly512Avx64::new(direction).unwrap()),
             _ => panic!("Invalid butterfly len: {}", len),
         }
     }
@@ -642,10 +646,11 @@ impl<A: AvxNum, T: FFTnum> AvxPlannerInternal<A, T> {
     fn plan_fft(
         &self,
         len: usize,
+        direction: FftDirection,
         base_fn: impl FnOnce(&Self, usize, &PartialFactors) -> MixedRadixPlan,
     ) -> MixedRadixPlan {
         // First step: If this size is already cached, return it directly
-        if self.algorithm_cache.contains_key(&len) {
+        if self.cache.contains_fft(len, direction) {
             return MixedRadixPlan::cached(len);
         }
 
@@ -670,14 +675,14 @@ impl<A: AvxNum, T: FFTnum> AvxPlannerInternal<A, T> {
         };
 
         // Last step: We have a full FFT plan, but some of the steps of that plan may have been cached. If they have, use the largest cached step as the base.
-        self.replan_with_cache(uncached_plan, &self.algorithm_cache)
+        self.replan_with_cache(uncached_plan, direction)
     }
 
     // Takes a plan and an algorithm cache, and replaces steps of the plan with cached steps, if possible
     fn replan_with_cache(
         &self,
         plan: MixedRadixPlan,
-        cache: &HashMap<usize, Arc<dyn Fft<T>>>,
+        direction: FftDirection,
     ) -> MixedRadixPlan {
         enum CacheLocation {
             None,
@@ -690,7 +695,7 @@ impl<A: AvxNum, T: FFTnum> AvxPlannerInternal<A, T> {
         let mut current_len = base_len;
 
         // Check if the cache contains the base
-        if cache.contains_key(&current_len) {
+        if self.cache.contains_fft(current_len, direction) {
             largest_cached_len = CacheLocation::Base;
         }
 
@@ -698,7 +703,7 @@ impl<A: AvxNum, T: FFTnum> AvxPlannerInternal<A, T> {
         for (i, radix) in plan.radixes.iter().enumerate() {
             current_len *= *radix as usize;
 
-            if cache.contains_key(&current_len) {
+            if self.cache.contains_fft(current_len, direction) {
                 largest_cached_len = CacheLocation::Radix(current_len, i);
             }
         }
@@ -843,22 +848,23 @@ impl<A: AvxNum, T: FFTnum> AvxPlannerInternal<A, T> {
     fn construct_plan(
         &mut self,
         plan: MixedRadixPlan,
-        construct_butterfly_fn: impl FnOnce(&Self, usize) -> Arc<dyn Fft<T>>,
-        inner_fft_fn: impl FnOnce(&mut Self, usize) -> Arc<dyn Fft<T>>,
+        direction: FftDirection,
+        construct_butterfly_fn: impl FnOnce(&Self, usize, FftDirection) -> Arc<dyn Fft<T>>,
+        inner_fft_fn: impl FnOnce(&mut Self, usize, FftDirection) -> Arc<dyn Fft<T>>,
     ) -> Arc<dyn Fft<T>> {
         let mut fft = match plan.base {
-            MixedRadixBase::CacheBase(len) => Arc::clone(self.algorithm_cache.get(&len).unwrap()),
+            MixedRadixBase::CacheBase(len) => self.cache.get(len, direction).unwrap(),
             MixedRadixBase::ButterflyBase(len) => {
-                let butterfly_instance = construct_butterfly_fn(self, len);
+                let butterfly_instance = construct_butterfly_fn(self, len, direction);
 
                 // Cache this FFT instance for future calls to `plan_fft`
-                self.algorithm_cache
-                    .insert(len, Arc::clone(&butterfly_instance));
+                self.cache.insert(&butterfly_instance);
+
                 butterfly_instance
             }
             MixedRadixBase::RadersBase(len) => {
                 // Rader's Algorithm requires an inner FFT of size len - 1
-                let inner_fft = inner_fft_fn(self, len - 1);
+                let inner_fft = inner_fft_fn(self, len - 1, direction);
 
                 // try to construct our AVX2 rader's algorithm. If that fails (probably because the machine we're running on doesn't have AVX2), fall back to scalar
                 let raders_instance =
@@ -871,21 +877,21 @@ impl<A: AvxNum, T: FFTnum> AvxPlannerInternal<A, T> {
                     };
 
                 // Cache this FFT instance for future calls to `plan_fft`
-                self.algorithm_cache
-                    .insert(len, Arc::clone(&raders_instance));
+                self.cache.insert(&raders_instance);
+
                 raders_instance
             }
             MixedRadixBase::BluesteinsBase(len, inner_fft_len) => {
                 // Bluestein's has an inner FFT of arbitrary size. But we've already planned it, so just use what we planned
-                let inner_fft = inner_fft_fn(self, inner_fft_len);
+                let inner_fft = inner_fft_fn(self, inner_fft_len, direction);
 
                 // try to construct our AVX2 rader's algorithm. If that fails (probably because the machine we're running on doesn't have AVX2), fall back to scalar
                 let bluesteins_instance =
                     wrap_fft(BluesteinsAvx::<A, T>::new(len, inner_fft).unwrap());
 
                 // Cache this FFT instance for future calls to `plan_fft`
-                self.algorithm_cache
-                    .insert(len, Arc::clone(&bluesteins_instance));
+                self.cache.insert(&bluesteins_instance);
+
                 bluesteins_instance
             }
         };
@@ -908,7 +914,7 @@ impl<A: AvxNum, T: FFTnum> AvxPlannerInternal<A, T> {
             };
 
             // Cache this FFT instance for future calls to `plan_fft`
-            self.algorithm_cache.insert(fft.len(), Arc::clone(&fft));
+            self.cache.insert(&fft);
         }
 
         fft

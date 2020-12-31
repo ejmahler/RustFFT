@@ -8,9 +8,9 @@ use num_traits::Zero;
 use primal_check::miller_rabin;
 use strength_reduce::StrengthReducedUsize;
 
-use crate::array_utils;
+use crate::{FftDirection, array_utils};
 use crate::math_utils;
-use crate::{FFTnum, Fft, IsInverse, Length};
+use crate::{FFTnum, Fft, Direction, Length};
 
 use super::avx_vector;
 use super::{
@@ -106,7 +106,7 @@ pub struct RadersAvx2<A: AvxNum, T> {
 
     inplace_scratch_len: usize,
     outofplace_scratch_len: usize,
-    inverse: bool,
+    direction: FftDirection,
 
     _phantom: std::marker::PhantomData<T>,
 }
@@ -143,7 +143,7 @@ impl<A: AvxNum, T: FFTnum> RadersAvx2<A, T> {
         let len = inner_fft_len + 1;
         assert!(miller_rabin(len as u64), "For raders algorithm, inner_fft.len() + 1 must be prime. Expected prime number, got {} + 1 = {}", inner_fft_len, len);
 
-        let inverse = inner_fft.is_inverse();
+        let direction = inner_fft.fft_direction();
         let reduced_len = StrengthReducedUsize::new(len);
 
         // compute the primitive root and its inverse for this size
@@ -164,7 +164,7 @@ impl<A: AvxNum, T: FFTnum> RadersAvx2<A, T> {
         let mut inner_fft_input = vec![Complex::zero(); inner_fft_len];
         let mut twiddle_input = 1;
         for input_cell in &mut inner_fft_input {
-            let twiddle = T::generate_twiddle_factor(twiddle_input, len, inverse);
+            let twiddle = T::generate_twiddle_factor(twiddle_input, len, direction);
             *input_cell = twiddle * unity_scale;
 
             twiddle_input = (twiddle_input * primitive_root_inverse) % reduced_len;
@@ -279,7 +279,7 @@ impl<A: AvxNum, T: FFTnum> RadersAvx2<A, T> {
 
             inplace_scratch_len: len + extra_inner_scratch,
             outofplace_scratch_len: extra_inner_scratch,
-            inverse,
+            direction,
 
             _phantom: std::marker::PhantomData,
         }
@@ -506,8 +506,8 @@ mod unit_tests {
     fn test_raders_avx_f32() {
         for len in 3..100 {
             if miller_rabin(len as u64) {
-                test_raders_with_length::<f32>(len, false);
-                test_raders_with_length::<f32>(len, true);
+                test_raders_with_length::<f32>(len, FftDirection::Forward);
+                test_raders_with_length::<f32>(len, FftDirection::Inverse);
             }
         }
     }
@@ -516,16 +516,16 @@ mod unit_tests {
     fn test_raders_avx_f64() {
         for len in 3..100 {
             if miller_rabin(len as u64) {
-                test_raders_with_length::<f64>(len, false);
-                test_raders_with_length::<f64>(len, true);
+                test_raders_with_length::<f64>(len, FftDirection::Forward);
+                test_raders_with_length::<f64>(len, FftDirection::Inverse);
             }
         }
     }
 
-    fn test_raders_with_length<T: AvxNum + Float + SampleUniform>(len: usize, inverse: bool) {
-        let inner_fft = Arc::new(DFT::new(len - 1, inverse));
+    fn test_raders_with_length<T: AvxNum + Float + SampleUniform>(len: usize, direction: FftDirection) {
+        let inner_fft = Arc::new(DFT::new(len - 1, direction));
         let fft = RadersAvx2::<T, T>::new(inner_fft).unwrap();
 
-        check_fft_algorithm::<T>(&fft, len, inverse);
+        check_fft_algorithm::<T>(&fft, len, direction);
     }
 }

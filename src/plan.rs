@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use crate::common::FFTnum;
+use crate::{FftDirection, common::FFTnum, fft_cache::FftCache};
 
 use crate::algorithm::butterflies::*;
 use crate::algorithm::*;
@@ -23,8 +23,8 @@ use crate::math_utils::{PrimeFactor, PrimeFactors};
 /// use std::sync::Arc;
 /// use rustfft::{FftPlanner, num_complex::Complex};
 ///
-/// let mut planner = FftPlanner::new(false);
-/// let fft = planner.plan_fft(1234);
+/// let mut planner = FftPlanner::new();
+/// let fft = planner.plan_fft_forward(1234);
 ///
 /// let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1234];
 /// fft.process_inplace(&mut buffer);
@@ -48,24 +48,36 @@ pub enum FftPlanner<T: FFTnum> {
 impl<T: FFTnum> FftPlanner<T> {
     /// Creates a new `FftPlanner` instance. It detects if AVX is supported on the current machine. If it is, it will plan AVX-accelerated FFTs.
     /// If AVX isn't supported, it will seamlessly fall back to planning non-SIMD FFTs.
-    ///
-    /// If `inverse` is false, this planner will plan forward FFTs. If `inverse` is true, it will plan inverse FFTs.
-    pub fn new(inverse: bool) -> Self {
-        if let Ok(avx_planner) = FftPlannerAvx::new(inverse) {
+    pub fn new() -> Self {
+        if let Ok(avx_planner) = FftPlannerAvx::new() {
             Self::Avx(avx_planner)
         } else {
-            Self::Scalar(FftPlannerScalar::new(inverse))
+            Self::Scalar(FftPlannerScalar::new())
         }
     }
 
     /// Returns a `Fft` instance which processes signals of size `len`
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
-    pub fn plan_fft(&mut self, len: usize) -> Arc<dyn Fft<T>> {
+    pub fn plan_fft(&mut self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
         match self {
-            Self::Scalar(scalar_planner) => scalar_planner.plan_fft(len),
-            Self::Avx(avx_planner) => avx_planner.plan_fft(len),
+            Self::Scalar(scalar_planner) => scalar_planner.plan_fft(len, direction),
+            Self::Avx(avx_planner) => avx_planner.plan_fft(len, direction),
         }
+    }
+
+    /// Returns a `Fft` instance which processes signals of size `len`
+    ///
+    /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+    pub fn plan_fft_forward(&mut self, len: usize) -> Arc<dyn Fft<T>> {
+        self.plan_fft(len, FftDirection::Forward)
+    }
+
+    /// Returns a `Fft` instance which processes signals of size `len`
+    ///
+    /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+    pub fn plan_fft_inverse(&mut self, len: usize) -> Arc<dyn Fft<T>> {
+        self.plan_fft(len, FftDirection::Inverse)
     }
 }
 
@@ -177,8 +189,8 @@ impl Recipe {
 /// use std::sync::Arc;
 /// use rustfft::{FftPlannerScalar, num_complex::Complex};
 ///
-/// let mut planner = FftPlannerScalar::new(false);
-/// let fft = planner.plan_fft(1234);
+/// let mut planner = FftPlannerScalar::new();
+/// let fft = planner.plan_fft_forward(1234);
 ///
 /// let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1234];
 /// fft.process_inplace(&mut buffer);
@@ -196,19 +208,15 @@ impl Recipe {
 /// Each FFT instance owns [`Arc`s](std::sync::Arc) to its internal data, rather than borrowing it from the planner, so it's perfectly
 /// safe to drop the planner after creating Fft instances.
 pub struct FftPlannerScalar<T: FFTnum> {
-    algorithm_cache: HashMap<usize, Arc<dyn Fft<T>>>,
+    algorithm_cache: FftCache<T>,
     recipe_cache: HashMap<usize, Rc<Recipe>>,
-    inverse: bool,
 }
 
 impl<T: FFTnum> FftPlannerScalar<T> {
     /// Creates a new `FftPlannerScalar` instance.
-    ///
-    /// If `inverse` is false, this planner will plan forward FFTs. If `inverse` is true, it will plan inverse FFTs.
-    pub fn new(inverse: bool) -> Self {
+    pub fn new() -> Self {
         Self {
-            inverse,
-            algorithm_cache: HashMap::new(),
+            algorithm_cache: FftCache::new(),
             recipe_cache: HashMap::new(),
         }
     }
@@ -216,12 +224,26 @@ impl<T: FFTnum> FftPlannerScalar<T> {
     /// Returns a `Fft` instance which processes signals of size `len`
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
-    pub fn plan_fft(&mut self, len: usize) -> Arc<dyn Fft<T>> {
+    pub fn plan_fft(&mut self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
         // Step 1: Create a "recipe" for this FFT, which will tell us exactly which combination of algorithms to use
         let recipe = self.design_fft_for_len(len);
 
         // Step 2: Use our recipe to construct a Fft trait object
-        self.build_fft(&recipe)
+        self.build_fft(&recipe, direction)
+    }
+
+    /// Returns a `Fft` instance which processes signals of size `len`
+    ///
+    /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+    pub fn plan_fft_forward(&mut self, len: usize) -> Arc<dyn Fft<T>> {
+        self.plan_fft(len, FftDirection::Forward)
+    }
+
+    /// Returns a `Fft` instance which processes signals of size `len`
+    ///
+    /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+    pub fn plan_fft_inverse(&mut self, len: usize) -> Arc<dyn Fft<T>> {
+        self.plan_fft(len, FftDirection::Inverse)
     }
 
     // Make a recipe for a length
@@ -239,76 +261,76 @@ impl<T: FFTnum> FftPlannerScalar<T> {
     }
 
     // Create the fft from a recipe, take from cache if possible
-    fn build_fft(&mut self, recipe: &Recipe) -> Arc<dyn Fft<T>> {
+    fn build_fft(&mut self, recipe: &Recipe, direction: FftDirection) -> Arc<dyn Fft<T>> {
         let len = recipe.len();
-        if let Some(instance) = self.algorithm_cache.get(&len) {
-            Arc::clone(instance)
+        if let Some(instance) = self.algorithm_cache.get(len, direction) {
+            instance
         } else {
-            let fft = self.build_new_fft(recipe);
-            self.algorithm_cache.insert(len, Arc::clone(&fft));
+            let fft = self.build_new_fft(recipe, direction);
+            self.algorithm_cache.insert(&fft);
             fft
         }
     }
 
     // Create a new fft from a recipe
-    fn build_new_fft(&mut self, recipe: &Recipe) -> Arc<dyn Fft<T>> {
+    fn build_new_fft(&mut self, recipe: &Recipe, direction: FftDirection) -> Arc<dyn Fft<T>> {
         match recipe {
-            Recipe::DFT(len) => Arc::new(DFT::new(*len, self.inverse)) as Arc<dyn Fft<T>>,
-            Recipe::Radix4(len) => Arc::new(Radix4::new(*len, self.inverse)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly2 => Arc::new(Butterfly2::new(self.inverse)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly3 => Arc::new(Butterfly3::new(self.inverse)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly4 => Arc::new(Butterfly4::new(self.inverse)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly5 => Arc::new(Butterfly5::new(self.inverse)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly6 => Arc::new(Butterfly6::new(self.inverse)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly7 => Arc::new(Butterfly7::new(self.inverse)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly8 => Arc::new(Butterfly8::new(self.inverse)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly11 => Arc::new(Butterfly11::new(self.inverse)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly13 => Arc::new(Butterfly13::new(self.inverse)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly16 => Arc::new(Butterfly16::new(self.inverse)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly17 => Arc::new(Butterfly17::new(self.inverse)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly19 => Arc::new(Butterfly19::new(self.inverse)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly23 => Arc::new(Butterfly23::new(self.inverse)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly29 => Arc::new(Butterfly29::new(self.inverse)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly31 => Arc::new(Butterfly31::new(self.inverse)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly32 => Arc::new(Butterfly32::new(self.inverse)) as Arc<dyn Fft<T>>,
+            Recipe::DFT(len) => Arc::new(DFT::new(*len, direction)) as Arc<dyn Fft<T>>,
+            Recipe::Radix4(len) => Arc::new(Radix4::new(*len, direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly2 => Arc::new(Butterfly2::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly3 => Arc::new(Butterfly3::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly4 => Arc::new(Butterfly4::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly5 => Arc::new(Butterfly5::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly6 => Arc::new(Butterfly6::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly7 => Arc::new(Butterfly7::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly8 => Arc::new(Butterfly8::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly11 => Arc::new(Butterfly11::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly13 => Arc::new(Butterfly13::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly16 => Arc::new(Butterfly16::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly17 => Arc::new(Butterfly17::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly19 => Arc::new(Butterfly19::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly23 => Arc::new(Butterfly23::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly29 => Arc::new(Butterfly29::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly31 => Arc::new(Butterfly31::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly32 => Arc::new(Butterfly32::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::MixedRadix {
                 left_fft,
                 right_fft,
             } => {
-                let left_fft = self.build_fft(&left_fft);
-                let right_fft = self.build_fft(&right_fft);
+                let left_fft = self.build_fft(&left_fft, direction);
+                let right_fft = self.build_fft(&right_fft, direction);
                 Arc::new(MixedRadix::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
             }
             Recipe::GoodThomasAlgorithm {
                 left_fft,
                 right_fft,
             } => {
-                let left_fft = self.build_fft(&left_fft);
-                let right_fft = self.build_fft(&right_fft);
+                let left_fft = self.build_fft(&left_fft, direction);
+                let right_fft = self.build_fft(&right_fft, direction);
                 Arc::new(GoodThomasAlgorithm::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
             }
             Recipe::MixedRadixSmall {
                 left_fft,
                 right_fft,
             } => {
-                let left_fft = self.build_fft(&left_fft);
-                let right_fft = self.build_fft(&right_fft);
+                let left_fft = self.build_fft(&left_fft, direction);
+                let right_fft = self.build_fft(&right_fft, direction);
                 Arc::new(MixedRadixSmall::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
             }
             Recipe::GoodThomasAlgorithmSmall {
                 left_fft,
                 right_fft,
             } => {
-                let left_fft = self.build_fft(&left_fft);
-                let right_fft = self.build_fft(&right_fft);
+                let left_fft = self.build_fft(&left_fft, direction);
+                let right_fft = self.build_fft(&right_fft, direction);
                 Arc::new(GoodThomasAlgorithmSmall::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
             }
             Recipe::RadersAlgorithm { inner_fft } => {
-                let inner_fft = self.build_fft(&inner_fft);
+                let inner_fft = self.build_fft(&inner_fft, direction);
                 Arc::new(RadersAlgorithm::new(inner_fft)) as Arc<dyn Fft<T>>
             }
             Recipe::BluesteinsAlgorithm { len, inner_fft } => {
-                let inner_fft = self.build_fft(&inner_fft);
+                let inner_fft = self.build_fft(&inner_fft, direction);
                 Arc::new(BluesteinsAlgorithm::new(*len, inner_fft)) as Arc<dyn Fft<T>>
             }
         }
@@ -469,7 +491,7 @@ mod unit_tests {
     #[test]
     fn test_plan_scalar_trivial() {
         // Length 0 and 1 should use DFT
-        let mut planner = FftPlannerScalar::<f64>::new(false);
+        let mut planner = FftPlannerScalar::<f64>::new();
         for len in 0..2 {
             let plan = planner.design_fft_for_len(len);
             assert_eq!(*plan, Recipe::DFT(len));
@@ -480,7 +502,7 @@ mod unit_tests {
     #[test]
     fn test_plan_scalar_mediumpoweroftwo() {
         // Powers of 2 between 64 and 32768 should use Radix4
-        let mut planner = FftPlannerScalar::<f64>::new(false);
+        let mut planner = FftPlannerScalar::<f64>::new();
         for pow in 6..16 {
             let len = 1 << pow;
             let plan = planner.design_fft_for_len(len);
@@ -492,7 +514,7 @@ mod unit_tests {
     #[test]
     fn test_plan_scalar_largepoweroftwo() {
         // Powers of 2 from 65536 and up should use MixedRadix
-        let mut planner = FftPlannerScalar::<f64>::new(false);
+        let mut planner = FftPlannerScalar::<f64>::new();
         for pow in 17..32 {
             let len = 1 << pow;
             let plan = planner.design_fft_for_len(len);
@@ -504,7 +526,7 @@ mod unit_tests {
     #[test]
     fn test_plan_scalar_butterflies() {
         // Check that all butterflies are used
-        let mut planner = FftPlannerScalar::<f64>::new(false);
+        let mut planner = FftPlannerScalar::<f64>::new();
         assert_eq!(*planner.design_fft_for_len(2), Recipe::Butterfly2);
         assert_eq!(*planner.design_fft_for_len(3), Recipe::Butterfly3);
         assert_eq!(*planner.design_fft_for_len(4), Recipe::Butterfly4);
@@ -526,7 +548,7 @@ mod unit_tests {
     #[test]
     fn test_plan_scalar_mixedradix() {
         // Products of several different primes should become MixedRadix
-        let mut planner = FftPlannerScalar::<f64>::new(false);
+        let mut planner = FftPlannerScalar::<f64>::new();
         for pow2 in 2..6 {
             for pow3 in 2..6 {
                 for pow5 in 2..6 {
@@ -547,7 +569,7 @@ mod unit_tests {
     #[test]
     fn test_plan_scalar_mixedradixsmall() {
         // Products of two "small" lengths < 31 that have a common divisor >1, and isn't a power of 2 should be MixedRadixSmall
-        let mut planner = FftPlannerScalar::<f64>::new(false);
+        let mut planner = FftPlannerScalar::<f64>::new();
         for len in [5 * 20, 5 * 25].iter() {
             let plan = planner.design_fft_for_len(*len);
             assert!(
@@ -561,7 +583,7 @@ mod unit_tests {
 
     #[test]
     fn test_plan_scalar_goodthomasbutterfly() {
-        let mut planner = FftPlannerScalar::<f64>::new(false);
+        let mut planner = FftPlannerScalar::<f64>::new();
         for len in [3 * 4, 3 * 5, 3 * 7, 5 * 7, 11 * 13].iter() {
             let plan = planner.design_fft_for_len(*len);
             assert!(
@@ -581,7 +603,7 @@ mod unit_tests {
             181, 191, 193, 197, 199,
         ];
 
-        let mut planner = FftPlannerScalar::<f64>::new(false);
+        let mut planner = FftPlannerScalar::<f64>::new();
         for len in difficultprimes.iter() {
             let plan = planner.design_fft_for_len(*len);
             assert!(
@@ -600,17 +622,33 @@ mod unit_tests {
 
     #[test]
     fn test_scalar_fft_cache() {
-        // Check that all butterflies are used
-        let mut planner = FftPlannerScalar::<f64>::new(false);
-        let fft_a = planner.plan_fft(1234);
-        let fft_b = planner.plan_fft(1234);
-        assert!(Arc::ptr_eq(&fft_a, &fft_b), "Existing fft was not reused");
+        {
+            // Check that FFTs are reused if they're both forward
+            let mut planner = FftPlannerScalar::<f64>::new();
+            let fft_a = planner.plan_fft(1234, FftDirection::Forward);
+            let fft_b = planner.plan_fft(1234, FftDirection::Forward);
+            assert!(Arc::ptr_eq(&fft_a, &fft_b), "Existing fft was not reused");
+        }
+        {
+            // Check that FFTs are reused if they're both inverse
+            let mut planner = FftPlannerScalar::<f64>::new();
+            let fft_a = planner.plan_fft(1234, FftDirection::Inverse);
+            let fft_b = planner.plan_fft(1234, FftDirection::Inverse);
+            assert!(Arc::ptr_eq(&fft_a, &fft_b), "Existing fft was not reused");
+        }
+        {
+            // Check that FFTs are NOT resued if they don't both have the same direction
+            let mut planner = FftPlannerScalar::<f64>::new();
+            let fft_a = planner.plan_fft(1234, FftDirection::Forward);
+            let fft_b = planner.plan_fft(1234, FftDirection::Inverse);
+            assert!(!Arc::ptr_eq(&fft_a, &fft_b), "Existing fft was reused, even though directions don't match");
+        }
     }
 
     #[test]
     fn test_scalar_recipe_cache() {
         // Check that all butterflies are used
-        let mut planner = FftPlannerScalar::<f64>::new(false);
+        let mut planner = FftPlannerScalar::<f64>::new();
         let fft_a = planner.design_fft_for_len(1234);
         let fft_b = planner.design_fft_for_len(1234);
         assert!(Rc::ptr_eq(&fft_a, &fft_b), "Existing recipe was not reused");

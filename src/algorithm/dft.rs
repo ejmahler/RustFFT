@@ -1,8 +1,8 @@
 use num_complex::Complex;
 use num_traits::Zero;
 
-use crate::twiddles;
-use crate::{FFTnum, Fft, IsInverse, Length};
+use crate::{FftDirection, twiddles};
+use crate::{FFTnum, Fft, Direction, Length};
 
 /// Naive O(n^2 ) Discrete Fourier Transform implementation
 ///
@@ -13,27 +13,27 @@ use crate::{FFTnum, Fft, IsInverse, Length};
 /// ~~~
 /// // Computes a naive DFT of size 1234
 /// use rustfft::algorithm::DFT;
-/// use rustfft::Fft;
+/// use rustfft::{Fft, FftDirection};
 /// use rustfft::num_complex::Complex;
 /// use rustfft::num_traits::Zero;
 ///
 /// let mut input:  Vec<Complex<f32>> = vec![Zero::zero(); 1234];
 /// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); 1234];
 ///
-/// let dft = DFT::new(1234, false);
+/// let dft = DFT::new(1234, FftDirection::Forward);
 /// dft.process(&mut input, &mut output);
 /// ~~~
 pub struct DFT<T> {
     twiddles: Vec<Complex<T>>,
-    inverse: bool,
+    direction: FftDirection,
 }
 
 impl<T: FFTnum> DFT<T> {
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute DFT
-    pub fn new(len: usize, inverse: bool) -> Self {
+    pub fn new(len: usize, direction: FftDirection) -> Self {
         Self {
-            twiddles: twiddles::generate_twiddle_factors(len, inverse),
-            inverse,
+            twiddles: twiddles::generate_twiddle_factors(len, direction),
+            direction,
         }
     }
 
@@ -89,7 +89,7 @@ mod unit_tests {
         let n = 4;
 
         for len in 1..20 {
-            let dft_instance = DFT::new(len, false);
+            let dft_instance = DFT::new(len, FftDirection::Forward);
             assert_eq!(
                 dft_instance.len(),
                 len,
@@ -180,7 +180,7 @@ mod unit_tests {
         }
 
         //verify that it doesn't crash if we have a length of 0
-        let zero_dft = DFT::new(0, false);
+        let zero_dft = DFT::new(0, FftDirection::Forward);
         let mut zero_input: Vec<Complex<f32>> = Vec::new();
         let mut zero_output: Vec<Complex<f32>> = Vec::new();
         let mut zero_scratch: Vec<Complex<f32>> = Vec::new();
@@ -203,7 +203,7 @@ mod unit_tests {
             len
         );
 
-        let dft_instance = DFT::new(len, false);
+        let dft_instance = DFT::new(len, FftDirection::Forward);
         let mut actual_input = input.to_vec();
         let mut actual_output = vec![Zero::zero(); len];
         let mut inline_buffer = input.to_vec();

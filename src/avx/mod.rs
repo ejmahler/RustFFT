@@ -1,4 +1,4 @@
-use crate::{FFTnum, Fft};
+use crate::{FFTnum, Fft, FftDirection};
 use std::arch::x86_64::{__m256, __m256d};
 use std::sync::Arc;
 
@@ -24,7 +24,7 @@ struct CommonSimdData<T, V> {
     inplace_scratch_len: usize,
     outofplace_scratch_len: usize,
 
-    inverse: bool,
+    direction: FftDirection,
 }
 
 macro_rules! boilerplate_avx_fft {
@@ -163,10 +163,10 @@ macro_rules! boilerplate_avx_fft {
                 $len_fn(self)
             }
         }
-        impl<A: AvxNum, T> IsInverse for $struct_name<A, T> {
+        impl<A: AvxNum, T> Direction for $struct_name<A, T> {
             #[inline(always)]
-            fn is_inverse(&self) -> bool {
-                self.inverse
+            fn fft_direction(&self) -> FftDirection {
+                self.direction
             }
         }
     };
@@ -308,10 +308,10 @@ macro_rules! boilerplate_avx_fft_commondata {
                 self.common_data.len
             }
         }
-        impl<A: AvxNum, T> IsInverse for $struct_name<A, T> {
+        impl<A: AvxNum, T> Direction for $struct_name<A, T> {
             #[inline(always)]
-            fn is_inverse(&self) -> bool {
-                self.common_data.inverse
+            fn fft_direction(&self) -> FftDirection {
+                self.common_data.direction
             }
         }
     };

@@ -39,12 +39,12 @@
 # pub struct Butterfly5<T> {
 #     twiddle1: Complex<T>,
 #     twiddle2: Complex<T>,
-# 	inverse: bool,
+# 	direction: FftDirection,
 # }
 # 
 # With twiddle values:
-# twiddle1: Complex<T> = twiddles::single_twiddle(1, 5, inverse);
-# twiddle2: Complex<T> = twiddles::single_twiddle(2, 5, inverse);
+# twiddle1: Complex<T> = twiddles::single_twiddle(1, 5, direction);
+# twiddle2: Complex<T> = twiddles::single_twiddle(2, 5, direction);
 
 import sys
 

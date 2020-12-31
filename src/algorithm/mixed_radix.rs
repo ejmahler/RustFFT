@@ -4,10 +4,10 @@ use std::sync::Arc;
 use num_complex::Complex;
 use transpose;
 
-use crate::common::FFTnum;
+use crate::{FftDirection, common::FFTnum};
 
 use crate::array_utils;
-use crate::{Fft, IsInverse, Length};
+use crate::{Fft, Direction, Length};
 
 /// Implementation of the Mixed-Radix FFT algorithm
 ///
@@ -26,9 +26,9 @@ use crate::{Fft, IsInverse, Length};
 ///
 /// // we need to find an n1 and n2 such that n1 * n2 == 1200
 /// // n1 = 30 and n2 = 40 satisfies this
-/// let mut planner = FftPlanner::new(false);
-/// let inner_fft_n1 = planner.plan_fft(30);
-/// let inner_fft_n2 = planner.plan_fft(40);
+/// let mut planner = FftPlanner::new();
+/// let inner_fft_n1 = planner.plan_fft_forward(30);
+/// let inner_fft_n2 = planner.plan_fft_forward(40);
 ///
 /// // the mixed radix FFT length will be inner_fft_n1.len() * inner_fft_n2.len() = 1200
 /// let fft = MixedRadix::new(inner_fft_n1, inner_fft_n2);
@@ -46,18 +46,18 @@ pub struct MixedRadix<T> {
     inplace_scratch_len: usize,
     outofplace_scratch_len: usize,
 
-    inverse: bool,
+    direction: FftDirection,
 }
 
 impl<T: FFTnum> MixedRadix<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
     pub fn new(width_fft: Arc<dyn Fft<T>>, height_fft: Arc<dyn Fft<T>>) -> Self {
         assert_eq!(
-            width_fft.is_inverse(), height_fft.is_inverse(),
-            "width_fft and height_fft must both be inverse, or neither. got width inverse={}, height inverse={}",
-            width_fft.is_inverse(), height_fft.is_inverse());
+            width_fft.fft_direction(), height_fft.fft_direction(),
+            "width_fft and height_fft must have the same direction. got width direction={}, height direction={}",
+            width_fft.fft_direction(), height_fft.fft_direction());
 
-        let inverse = width_fft.is_inverse();
+        let direction = width_fft.fft_direction();
 
         let width = width_fft.len();
         let height = height_fft.len();
@@ -67,7 +67,7 @@ impl<T: FFTnum> MixedRadix<T> {
         let mut twiddles = Vec::with_capacity(len);
         for x in 0..width {
             for y in 0..height {
-                twiddles.push(T::generate_twiddle_factor(x * y, len, inverse));
+                twiddles.push(T::generate_twiddle_factor(x * y, len, direction));
             }
         }
 
@@ -101,7 +101,7 @@ impl<T: FFTnum> MixedRadix<T> {
                 0
             },
 
-            inverse,
+            direction,
         }
     }
 
@@ -195,7 +195,7 @@ boilerplate_fft!(
 /// use std::sync::Arc;
 /// use rustfft::algorithm::MixedRadixSmall;
 /// use rustfft::algorithm::butterflies::{Butterfly5, Butterfly8};
-/// use rustfft::Fft;
+/// use rustfft::{Fft, FftDirection};
 /// use rustfft::num_complex::Complex;
 /// use rustfft::num_traits::Zero;
 ///
@@ -206,8 +206,8 @@ boilerplate_fft!(
 ///
 /// // we need to find an n1 and n2 such that n1 * n2 == 40
 /// // n1 = 5 and n2 = 8 satisfies this
-/// let inner_fft_n1 = Arc::new(Butterfly5::new(false));
-/// let inner_fft_n2 = Arc::new(Butterfly8::new(false));
+/// let inner_fft_n1 = Arc::new(Butterfly5::new(FftDirection::Forward));
+/// let inner_fft_n2 = Arc::new(Butterfly8::new(FftDirection::Forward));
 ///
 /// // the mixed radix FFT length will be inner_fft_n1.len() * inner_fft_n2.len() = 40
 /// let fft = MixedRadixSmall::new(inner_fft_n1, inner_fft_n2);
@@ -222,18 +222,18 @@ pub struct MixedRadixSmall<T> {
     height_size_fft: Arc<dyn Fft<T>>,
     height: usize,
 
-    inverse: bool,
+    direction: FftDirection,
 }
 
 impl<T: FFTnum> MixedRadixSmall<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
     pub fn new(width_fft: Arc<dyn Fft<T>>, height_fft: Arc<dyn Fft<T>>) -> Self {
         assert_eq!(
-            width_fft.is_inverse(), height_fft.is_inverse(),
-            "width_fft and height_fft must both be inverse, or neither. got width inverse={}, height inverse={}",
-            width_fft.is_inverse(), height_fft.is_inverse());
+            width_fft.fft_direction(), height_fft.fft_direction(),
+            "width_fft and height_fft must have the same direction. got width direction={}, height direction={}",
+            width_fft.fft_direction(), height_fft.fft_direction());
 
-        let inverse = width_fft.is_inverse();
+        let direction = width_fft.fft_direction();
 
         let width = width_fft.len();
         let height = height_fft.len();
@@ -243,7 +243,7 @@ impl<T: FFTnum> MixedRadixSmall<T> {
         let mut twiddles = Vec::with_capacity(len);
         for x in 0..width {
             for y in 0..height {
-                twiddles.push(T::generate_twiddle_factor(x * y, len, inverse));
+                twiddles.push(T::generate_twiddle_factor(x * y, len, direction));
             }
         }
 
@@ -256,7 +256,7 @@ impl<T: FFTnum> MixedRadixSmall<T> {
             height_size_fft: height_fft,
             height: height,
 
-            inverse,
+            direction,
         }
     }
 
@@ -329,8 +329,8 @@ mod unit_tests {
     fn test_mixed_radix() {
         for width in 1..7 {
             for height in 1..7 {
-                test_mixed_radix_with_lengths(width, height, false);
-                test_mixed_radix_with_lengths(width, height, true);
+                test_mixed_radix_with_lengths(width, height, FftDirection::Forward);
+                test_mixed_radix_with_lengths(width, height, FftDirection::Inverse);
             }
         }
     }
@@ -339,27 +339,27 @@ mod unit_tests {
     fn test_mixed_radix_small() {
         for width in 2..7 {
             for height in 2..7 {
-                test_mixed_radix_small_with_lengths(width, height, false);
-                test_mixed_radix_small_with_lengths(width, height, true);
+                test_mixed_radix_small_with_lengths(width, height, FftDirection::Forward);
+                test_mixed_radix_small_with_lengths(width, height, FftDirection::Inverse);
             }
         }
     }
 
-    fn test_mixed_radix_with_lengths(width: usize, height: usize, inverse: bool) {
-        let width_fft = Arc::new(DFT::new(width, inverse)) as Arc<dyn Fft<f32>>;
-        let height_fft = Arc::new(DFT::new(height, inverse)) as Arc<dyn Fft<f32>>;
+    fn test_mixed_radix_with_lengths(width: usize, height: usize, direction: FftDirection) {
+        let width_fft = Arc::new(DFT::new(width, direction)) as Arc<dyn Fft<f32>>;
+        let height_fft = Arc::new(DFT::new(height, direction)) as Arc<dyn Fft<f32>>;
 
         let fft = MixedRadix::new(width_fft, height_fft);
 
-        check_fft_algorithm(&fft, width * height, inverse);
+        check_fft_algorithm(&fft, width * height, direction);
     }
 
-    fn test_mixed_radix_small_with_lengths(width: usize, height: usize, inverse: bool) {
-        let width_fft = Arc::new(DFT::new(width, inverse)) as Arc<dyn Fft<f32>>;
-        let height_fft = Arc::new(DFT::new(height, inverse)) as Arc<dyn Fft<f32>>;
+    fn test_mixed_radix_small_with_lengths(width: usize, height: usize, direction: FftDirection) {
+        let width_fft = Arc::new(DFT::new(width, direction)) as Arc<dyn Fft<f32>>;
+        let height_fft = Arc::new(DFT::new(height, direction)) as Arc<dyn Fft<f32>>;
 
         let fft = MixedRadixSmall::new(width_fft, height_fft);
 
-        check_fft_algorithm(&fft, width * height, inverse);
+        check_fft_algorithm(&fft, width * height, direction);
     }
 }

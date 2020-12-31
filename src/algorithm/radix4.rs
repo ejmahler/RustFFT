@@ -3,27 +3,24 @@ use std::sync::Arc;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use crate::{
-    array_utils::{RawSlice, RawSliceMut},
-    common::FFTnum,
-};
+use crate::{FftDirection, array_utils::{RawSlice, RawSliceMut}, common::FFTnum};
 
 use crate::algorithm::butterflies::{Butterfly1, Butterfly16, Butterfly2, Butterfly4, Butterfly8};
-use crate::{Fft, IsInverse, Length};
+use crate::{Fft, Direction, Length};
 
 /// FFT algorithm optimized for power-of-two sizes
 ///
 /// ~~~
 /// // Computes a forward FFT of size 4096
 /// use rustfft::algorithm::Radix4;
-/// use rustfft::Fft;
+/// use rustfft::{Fft, FftDirection};
 /// use rustfft::num_complex::Complex;
 /// use rustfft::num_traits::Zero;
 ///
 /// let mut input:  Vec<Complex<f32>> = vec![Zero::zero(); 4096];
 /// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); 4096];
 ///
-/// let fft = Radix4::new(4096, false);
+/// let fft = Radix4::new(4096, FftDirection::Forward);
 /// fft.process(&mut input, &mut output);
 /// ~~~
 
@@ -34,12 +31,12 @@ pub struct Radix4<T> {
     base_len: usize,
 
     len: usize,
-    inverse: bool,
+    direction: FftDirection,
 }
 
 impl<T: FFTnum> Radix4<T> {
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the power-of-two FFT
-    pub fn new(len: usize, inverse: bool) -> Self {
+    pub fn new(len: usize, direction: FftDirection) -> Self {
         assert!(
             len.is_power_of_two(),
             "Radix4 algorithm requires a power-of-two input size. Got {}",
@@ -49,14 +46,14 @@ impl<T: FFTnum> Radix4<T> {
         // figure out which base length we're going to use
         let num_bits = len.trailing_zeros();
         let (base_len, base_fft) = match num_bits {
-            0 => (len, Arc::new(Butterfly1::new(inverse)) as Arc<dyn Fft<T>>),
-            1 => (len, Arc::new(Butterfly2::new(inverse)) as Arc<dyn Fft<T>>),
-            2 => (len, Arc::new(Butterfly4::new(inverse)) as Arc<dyn Fft<T>>),
+            0 => (len, Arc::new(Butterfly1::new(direction)) as Arc<dyn Fft<T>>),
+            1 => (len, Arc::new(Butterfly2::new(direction)) as Arc<dyn Fft<T>>),
+            2 => (len, Arc::new(Butterfly4::new(direction)) as Arc<dyn Fft<T>>),
             _ => {
                 if num_bits % 2 == 1 {
-                    (8, Arc::new(Butterfly8::new(inverse)) as Arc<dyn Fft<T>>)
+                    (8, Arc::new(Butterfly8::new(direction)) as Arc<dyn Fft<T>>)
                 } else {
-                    (16, Arc::new(Butterfly16::new(inverse)) as Arc<dyn Fft<T>>)
+                    (16, Arc::new(Butterfly16::new(direction)) as Arc<dyn Fft<T>>)
                 }
             }
         };
@@ -71,7 +68,7 @@ impl<T: FFTnum> Radix4<T> {
             let num_rows = len / (twiddle_stride * 4);
             for i in 0..num_rows {
                 for k in 1..4 {
-                    let twiddle = T::generate_twiddle_factor(i * k * twiddle_stride, len, inverse);
+                    let twiddle = T::generate_twiddle_factor(i * k * twiddle_stride, len, direction);
                     twiddle_factors.push(twiddle);
                 }
             }
@@ -85,7 +82,7 @@ impl<T: FFTnum> Radix4<T> {
             base_len,
 
             len,
-            inverse,
+            direction,
         }
     }
 
@@ -114,7 +111,7 @@ impl<T: FFTnum> Radix4<T> {
                         &mut spectrum[i * current_size..],
                         layer_twiddles,
                         current_size / 4,
-                        self.inverse,
+                        self.direction,
                     )
                 }
             }
@@ -161,9 +158,9 @@ unsafe fn butterfly_4<T: FFTnum>(
     data: &mut [Complex<T>],
     twiddles: &[Complex<T>],
     num_ffts: usize,
-    inverse: bool,
+    direction: FftDirection,
 ) {
-    let butterfly4 = Butterfly4::new(inverse);
+    let butterfly4 = Butterfly4::new(direction);
 
     let mut idx = 0usize;
     let mut tw_idx = 0usize;
@@ -195,14 +192,14 @@ mod unit_tests {
     fn test_radix4() {
         for pow in 0..8 {
             let len = 1 << pow;
-            test_radix4_with_length(len, false);
-            test_radix4_with_length(len, true);
+            test_radix4_with_length(len, FftDirection::Forward);
+            test_radix4_with_length(len, FftDirection::Inverse);
         }
     }
 
-    fn test_radix4_with_length(len: usize, inverse: bool) {
-        let fft = Radix4::new(len, inverse);
+    fn test_radix4_with_length(len: usize, direction: FftDirection) {
+        let fft = Radix4::new(len, direction);
 
-        check_fft_algorithm::<f32>(&fft, len, inverse);
+        check_fft_algorithm::<f32>(&fft, len, direction);
     }
 }
