@@ -1,14 +1,14 @@
 use num_complex::Complex;
 
-use crate::common::FFTnum;
+use crate::{common::FFTnum, FftDirection};
 
 use crate::array_utils::{RawSlice, RawSliceMut};
 use crate::twiddles;
-use crate::{Fft, IsInverse, Length};
+use crate::{Direction, Fft, Length};
 
 #[allow(unused)]
 macro_rules! boilerplate_fft_butterfly {
-    ($struct_name:ident, $len:expr, $inverse_fn:expr) => {
+    ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FFTnum> $struct_name<T> {
             #[inline(always)]
             pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
@@ -120,24 +120,24 @@ macro_rules! boilerplate_fft_butterfly {
                 $len
             }
         }
-        impl<T> IsInverse for $struct_name<T> {
+        impl<T> Direction for $struct_name<T> {
             #[inline(always)]
-            fn is_inverse(&self) -> bool {
-                $inverse_fn(self)
+            fn fft_direction(&self) -> FftDirection {
+                $direction_fn(self)
             }
         }
     };
 }
 
 pub struct Butterfly1<T> {
-    inverse: bool,
+    direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
 }
 impl<T: FFTnum> Butterfly1<T> {
     #[inline(always)]
-    pub fn new(inverse: bool) -> Self {
+    pub fn new(direction: FftDirection) -> Self {
         Self {
-            inverse,
+            direction,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -183,22 +183,22 @@ impl<T> Length for Butterfly1<T> {
         1
     }
 }
-impl<T> IsInverse for Butterfly1<T> {
-    fn is_inverse(&self) -> bool {
-        self.inverse
+impl<T> Direction for Butterfly1<T> {
+    fn fft_direction(&self) -> FftDirection {
+        self.direction
     }
 }
 
 pub struct Butterfly2<T> {
-    inverse: bool,
+    direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
 }
-boilerplate_fft_butterfly!(Butterfly2, 2, |this: &Butterfly2<_>| this.inverse);
+boilerplate_fft_butterfly!(Butterfly2, 2, |this: &Butterfly2<_>| this.direction);
 impl<T: FFTnum> Butterfly2<T> {
     #[inline(always)]
-    pub fn new(inverse: bool) -> Self {
+    pub fn new(direction: FftDirection) -> Self {
         Self {
-            inverse,
+            direction,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -224,22 +224,22 @@ impl<T: FFTnum> Butterfly2<T> {
 
 pub struct Butterfly3<T> {
     pub twiddle: Complex<T>,
-    inverse: bool,
+    direction: FftDirection,
 }
-boilerplate_fft_butterfly!(Butterfly3, 3, |this: &Butterfly3<_>| this.inverse);
+boilerplate_fft_butterfly!(Butterfly3, 3, |this: &Butterfly3<_>| this.direction);
 impl<T: FFTnum> Butterfly3<T> {
     #[inline(always)]
-    pub fn new(inverse: bool) -> Self {
+    pub fn new(direction: FftDirection) -> Self {
         Self {
-            twiddle: T::generate_twiddle_factor(1, 3, inverse),
-            inverse: inverse,
+            twiddle: T::generate_twiddle_factor(1, 3, direction),
+            direction,
         }
     }
     #[inline(always)]
-    pub fn inverse_of(fft: &Butterfly3<T>) -> Self {
+    pub fn direction_of(fft: &Butterfly3<T>) -> Self {
         Self {
             twiddle: fft.twiddle.conj(),
-            inverse: !fft.inverse,
+            direction: fft.direction.reverse(),
         }
     }
     #[inline(always)]
@@ -269,15 +269,15 @@ impl<T: FFTnum> Butterfly3<T> {
 }
 
 pub struct Butterfly4<T> {
-    inverse: bool,
+    direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
 }
-boilerplate_fft_butterfly!(Butterfly4, 4, |this: &Butterfly4<_>| this.inverse);
+boilerplate_fft_butterfly!(Butterfly4, 4, |this: &Butterfly4<_>| this.direction);
 impl<T: FFTnum> Butterfly4<T> {
     #[inline(always)]
-    pub fn new(inverse: bool) -> Self {
+    pub fn new(direction: FftDirection) -> Self {
         Self {
-            inverse,
+            direction,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -301,7 +301,7 @@ impl<T: FFTnum> Butterfly4<T> {
         Butterfly2::perform_fft_strided(&mut value1, &mut value3);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-        value3 = twiddles::rotate_90(value3, self.inverse);
+        value3 = twiddles::rotate_90(value3, self.direction);
 
         // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
@@ -320,15 +320,15 @@ impl<T: FFTnum> Butterfly4<T> {
 pub struct Butterfly5<T> {
     twiddle1: Complex<T>,
     twiddle2: Complex<T>,
-    inverse: bool,
+    direction: FftDirection,
 }
-boilerplate_fft_butterfly!(Butterfly5, 5, |this: &Butterfly5<_>| this.inverse);
+boilerplate_fft_butterfly!(Butterfly5, 5, |this: &Butterfly5<_>| this.direction);
 impl<T: FFTnum> Butterfly5<T> {
-    pub fn new(inverse: bool) -> Self {
+    pub fn new(direction: FftDirection) -> Self {
         Self {
-            twiddle1: T::generate_twiddle_factor(1, 5, inverse),
-            twiddle2: T::generate_twiddle_factor(2, 5, inverse),
-            inverse,
+            twiddle1: T::generate_twiddle_factor(1, 5, direction),
+            twiddle2: T::generate_twiddle_factor(2, 5, direction),
+            direction,
         }
     }
 
@@ -377,7 +377,7 @@ impl<T: FFTnum> Butterfly5<T> {
         // |X3|   | W0 W3  W6  W9  W12 |   |x3|
         // |X4|   | W0 W4  W8  W12 W16 |   |x4|
         //
-        // where Wn = exp(-2*pi*n/5) for a forward transform, and exp(+2*pi*n/5) for an inverse.
+        // where Wn = exp(-2*pi*n/5) for a forward transform, and exp(+2*pi*n/5) for an direction.
         //
         // This can be simplified a bit since exp(-2*pi*n/5) = exp(-2*pi*n/5 + m*2*pi)
         // |X0|   | W0 W0  W0  W0  W0 |   |x0|
@@ -477,18 +477,18 @@ pub struct Butterfly6<T> {
 }
 boilerplate_fft_butterfly!(Butterfly6, 6, |this: &Butterfly6<_>| this
     .butterfly3
-    .is_inverse());
+    .fft_direction());
 impl<T: FFTnum> Butterfly6<T> {
     #[inline(always)]
-    pub fn new(inverse: bool) -> Self {
+    pub fn new(direction: FftDirection) -> Self {
         Self {
-            butterfly3: Butterfly3::new(inverse),
+            butterfly3: Butterfly3::new(direction),
         }
     }
     #[inline(always)]
-    pub fn inverse_of(fft: &Butterfly6<T>) -> Self {
+    pub fn direction_of(fft: &Butterfly6<T>) -> Self {
         Self {
-            butterfly3: Butterfly3::inverse_of(&fft.butterfly3),
+            butterfly3: Butterfly3::direction_of(&fft.butterfly3),
         }
     }
     #[inline(always)]
@@ -534,16 +534,16 @@ pub struct Butterfly7<T> {
     twiddle1: Complex<T>,
     twiddle2: Complex<T>,
     twiddle3: Complex<T>,
-    inverse: bool,
+    direction: FftDirection,
 }
-boilerplate_fft_butterfly!(Butterfly7, 7, |this: &Butterfly7<_>| this.inverse);
+boilerplate_fft_butterfly!(Butterfly7, 7, |this: &Butterfly7<_>| this.direction);
 impl<T: FFTnum> Butterfly7<T> {
-    pub fn new(inverse: bool) -> Self {
+    pub fn new(direction: FftDirection) -> Self {
         Self {
-            twiddle1: T::generate_twiddle_factor(1, 7, inverse),
-            twiddle2: T::generate_twiddle_factor(2, 7, inverse),
-            twiddle3: T::generate_twiddle_factor(3, 7, inverse),
-            inverse,
+            twiddle1: T::generate_twiddle_factor(1, 7, direction),
+            twiddle2: T::generate_twiddle_factor(2, 7, direction),
+            twiddle3: T::generate_twiddle_factor(3, 7, direction),
+            direction,
         }
     }
     #[inline(never)]
@@ -608,7 +608,7 @@ impl<T: FFTnum> Butterfly7<T> {
         // |X5|   | W0 W5  W10 W15 W20 W25 W30 |   |x4|
         // |X6|   | W0 W6  W12 W18 W24 W30 W36 |   |x4|
         //
-        // where Wn = exp(-2*pi*n/7) for a forward transform, and exp(+2*pi*n/7) for an inverse.
+        // where Wn = exp(-2*pi*n/7) for a forward transform, and exp(+2*pi*n/7) for an direction.
         //
         // Using the same logic as for the 5-point butterfly, this can be simplified to:
         // |X0|   | 1  1   1   1   1   1   1   |   |x0|
@@ -727,15 +727,15 @@ impl<T: FFTnum> Butterfly7<T> {
 
 pub struct Butterfly8<T> {
     root2: T,
-    inverse: bool,
+    direction: FftDirection,
 }
-boilerplate_fft_butterfly!(Butterfly8, 8, |this: &Butterfly8<_>| this.inverse);
+boilerplate_fft_butterfly!(Butterfly8, 8, |this: &Butterfly8<_>| this.direction);
 impl<T: FFTnum> Butterfly8<T> {
     #[inline(always)]
-    pub fn new(inverse: bool) -> Self {
+    pub fn new(direction: FftDirection) -> Self {
         Self {
             root2: T::from_f64(0.5f64.sqrt()).unwrap(),
-            inverse,
+            direction,
         }
     }
 
@@ -745,7 +745,7 @@ impl<T: FFTnum> Butterfly8<T> {
         input: RawSlice<Complex<T>>,
         output: RawSliceMut<Complex<T>>,
     ) {
-        let butterfly4 = Butterfly4::new(self.inverse);
+        let butterfly4 = Butterfly4::new(self.direction);
 
         //we're going to hardcode a step of mixed radix
         //aka we're going to do the six step algorithm
@@ -759,9 +759,9 @@ impl<T: FFTnum> Butterfly8<T> {
         butterfly4.perform_fft_butterfly(&mut scratch1);
 
         // step 3: apply twiddle factors
-        scratch1[1] = (twiddles::rotate_90(scratch1[1], self.inverse) + scratch1[1]) * self.root2;
-        scratch1[2] = twiddles::rotate_90(scratch1[2], self.inverse);
-        scratch1[3] = (twiddles::rotate_90(scratch1[3], self.inverse) - scratch1[3]) * self.root2;
+        scratch1[1] = (twiddles::rotate_90(scratch1[1], self.direction) + scratch1[1]) * self.root2;
+        scratch1[2] = twiddles::rotate_90(scratch1[2], self.direction);
+        scratch1[3] = (twiddles::rotate_90(scratch1[3], self.direction) - scratch1[3]) * self.root2;
 
         // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
 
@@ -786,23 +786,23 @@ pub struct Butterfly11<T> {
     twiddle3: Complex<T>,
     twiddle4: Complex<T>,
     twiddle5: Complex<T>,
-    inverse: bool,
+    direction: FftDirection,
 }
-boilerplate_fft_butterfly!(Butterfly11, 11, |this: &Butterfly11<_>| this.inverse);
+boilerplate_fft_butterfly!(Butterfly11, 11, |this: &Butterfly11<_>| this.direction);
 impl<T: FFTnum> Butterfly11<T> {
-    pub fn new(inverse: bool) -> Self {
-        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 11, inverse);
-        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 11, inverse);
-        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 11, inverse);
-        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 11, inverse);
-        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 11, inverse);
+    pub fn new(direction: FftDirection) -> Self {
+        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 11, direction);
+        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 11, direction);
+        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 11, direction);
+        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 11, direction);
+        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 11, direction);
         Self {
             twiddle1,
             twiddle2,
             twiddle3,
             twiddle4,
             twiddle5,
-            inverse,
+            direction,
         }
     }
 
@@ -1040,17 +1040,17 @@ pub struct Butterfly13<T> {
     twiddle4: Complex<T>,
     twiddle5: Complex<T>,
     twiddle6: Complex<T>,
-    inverse: bool,
+    direction: FftDirection,
 }
-boilerplate_fft_butterfly!(Butterfly13, 13, |this: &Butterfly13<_>| this.inverse);
+boilerplate_fft_butterfly!(Butterfly13, 13, |this: &Butterfly13<_>| this.direction);
 impl<T: FFTnum> Butterfly13<T> {
-    pub fn new(inverse: bool) -> Self {
-        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 13, inverse);
-        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 13, inverse);
-        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 13, inverse);
-        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 13, inverse);
-        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 13, inverse);
-        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 13, inverse);
+    pub fn new(direction: FftDirection) -> Self {
+        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 13, direction);
+        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 13, direction);
+        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 13, direction);
+        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 13, direction);
+        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 13, direction);
+        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 13, direction);
         Self {
             twiddle1,
             twiddle2,
@@ -1058,7 +1058,7 @@ impl<T: FFTnum> Butterfly13<T> {
             twiddle4,
             twiddle5,
             twiddle6,
-            inverse,
+            direction,
         }
     }
 
@@ -1362,15 +1362,15 @@ pub struct Butterfly16<T> {
 }
 boilerplate_fft_butterfly!(Butterfly16, 16, |this: &Butterfly16<_>| this
     .butterfly8
-    .is_inverse());
+    .fft_direction());
 impl<T: FFTnum> Butterfly16<T> {
     #[inline(always)]
-    pub fn new(inverse: bool) -> Self {
+    pub fn new(direction: FftDirection) -> Self {
         Self {
-            butterfly8: Butterfly8::new(inverse),
-            twiddle1: T::generate_twiddle_factor(1, 16, inverse),
-            twiddle2: T::generate_twiddle_factor(2, 16, inverse),
-            twiddle3: T::generate_twiddle_factor(3, 16, inverse),
+            butterfly8: Butterfly8::new(direction),
+            twiddle1: T::generate_twiddle_factor(1, 16, direction),
+            twiddle2: T::generate_twiddle_factor(2, 16, direction),
+            twiddle3: T::generate_twiddle_factor(3, 16, direction),
         }
     }
 
@@ -1380,7 +1380,7 @@ impl<T: FFTnum> Butterfly16<T> {
         input: RawSlice<Complex<T>>,
         output: RawSliceMut<Complex<T>>,
     ) {
-        let butterfly4 = Butterfly4::new(self.is_inverse());
+        let butterfly4 = Butterfly4::new(self.fft_direction());
 
         // we're going to hardcode a step of split radix
         // step 1: copy and reorder the  input into the scratch
@@ -1420,10 +1420,10 @@ impl<T: FFTnum> Butterfly16<T> {
         Butterfly2::perform_fft_strided(&mut scratch_odds_n1[3], &mut scratch_odds_n3[3]);
 
         // apply the butterfly 4 twiddle factor, which is just a rotation
-        scratch_odds_n3[0] = twiddles::rotate_90(scratch_odds_n3[0], self.is_inverse());
-        scratch_odds_n3[1] = twiddles::rotate_90(scratch_odds_n3[1], self.is_inverse());
-        scratch_odds_n3[2] = twiddles::rotate_90(scratch_odds_n3[2], self.is_inverse());
-        scratch_odds_n3[3] = twiddles::rotate_90(scratch_odds_n3[3], self.is_inverse());
+        scratch_odds_n3[0] = twiddles::rotate_90(scratch_odds_n3[0], self.fft_direction());
+        scratch_odds_n3[1] = twiddles::rotate_90(scratch_odds_n3[1], self.fft_direction());
+        scratch_odds_n3[2] = twiddles::rotate_90(scratch_odds_n3[2], self.fft_direction());
+        scratch_odds_n3[3] = twiddles::rotate_90(scratch_odds_n3[3], self.fft_direction());
 
         //step 5: copy/add/subtract data back to buffer
         output.store(scratch_evens[0] + scratch_odds_n1[0], 0);
@@ -1454,19 +1454,19 @@ pub struct Butterfly17<T> {
     twiddle6: Complex<T>,
     twiddle7: Complex<T>,
     twiddle8: Complex<T>,
-    inverse: bool,
+    direction: FftDirection,
 }
-boilerplate_fft_butterfly!(Butterfly17, 17, |this: &Butterfly17<_>| this.inverse);
+boilerplate_fft_butterfly!(Butterfly17, 17, |this: &Butterfly17<_>| this.direction);
 impl<T: FFTnum> Butterfly17<T> {
-    pub fn new(inverse: bool) -> Self {
-        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 17, inverse);
-        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 17, inverse);
-        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 17, inverse);
-        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 17, inverse);
-        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 17, inverse);
-        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 17, inverse);
-        let twiddle7: Complex<T> = T::generate_twiddle_factor(7, 17, inverse);
-        let twiddle8: Complex<T> = T::generate_twiddle_factor(8, 17, inverse);
+    pub fn new(direction: FftDirection) -> Self {
+        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 17, direction);
+        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 17, direction);
+        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 17, direction);
+        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 17, direction);
+        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 17, direction);
+        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 17, direction);
+        let twiddle7: Complex<T> = T::generate_twiddle_factor(7, 17, direction);
+        let twiddle8: Complex<T> = T::generate_twiddle_factor(8, 17, direction);
         Self {
             twiddle1,
             twiddle2,
@@ -1476,7 +1476,7 @@ impl<T: FFTnum> Butterfly17<T> {
             twiddle6,
             twiddle7,
             twiddle8,
-            inverse,
+            direction,
         }
     }
 
@@ -1938,20 +1938,20 @@ pub struct Butterfly19<T> {
     twiddle7: Complex<T>,
     twiddle8: Complex<T>,
     twiddle9: Complex<T>,
-    inverse: bool,
+    direction: FftDirection,
 }
-boilerplate_fft_butterfly!(Butterfly19, 19, |this: &Butterfly19<_>| this.inverse);
+boilerplate_fft_butterfly!(Butterfly19, 19, |this: &Butterfly19<_>| this.direction);
 impl<T: FFTnum> Butterfly19<T> {
-    pub fn new(inverse: bool) -> Self {
-        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 19, inverse);
-        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 19, inverse);
-        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 19, inverse);
-        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 19, inverse);
-        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 19, inverse);
-        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 19, inverse);
-        let twiddle7: Complex<T> = T::generate_twiddle_factor(7, 19, inverse);
-        let twiddle8: Complex<T> = T::generate_twiddle_factor(8, 19, inverse);
-        let twiddle9: Complex<T> = T::generate_twiddle_factor(9, 19, inverse);
+    pub fn new(direction: FftDirection) -> Self {
+        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 19, direction);
+        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 19, direction);
+        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 19, direction);
+        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 19, direction);
+        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 19, direction);
+        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 19, direction);
+        let twiddle7: Complex<T> = T::generate_twiddle_factor(7, 19, direction);
+        let twiddle8: Complex<T> = T::generate_twiddle_factor(8, 19, direction);
+        let twiddle9: Complex<T> = T::generate_twiddle_factor(9, 19, direction);
         Self {
             twiddle1,
             twiddle2,
@@ -1962,7 +1962,7 @@ impl<T: FFTnum> Butterfly19<T> {
             twiddle7,
             twiddle8,
             twiddle9,
-            inverse,
+            direction,
         }
     }
 
@@ -2517,22 +2517,22 @@ pub struct Butterfly23<T> {
     twiddle9: Complex<T>,
     twiddle10: Complex<T>,
     twiddle11: Complex<T>,
-    inverse: bool,
+    direction: FftDirection,
 }
-boilerplate_fft_butterfly!(Butterfly23, 23, |this: &Butterfly23<_>| this.inverse);
+boilerplate_fft_butterfly!(Butterfly23, 23, |this: &Butterfly23<_>| this.direction);
 impl<T: FFTnum> Butterfly23<T> {
-    pub fn new(inverse: bool) -> Self {
-        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 23, inverse);
-        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 23, inverse);
-        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 23, inverse);
-        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 23, inverse);
-        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 23, inverse);
-        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 23, inverse);
-        let twiddle7: Complex<T> = T::generate_twiddle_factor(7, 23, inverse);
-        let twiddle8: Complex<T> = T::generate_twiddle_factor(8, 23, inverse);
-        let twiddle9: Complex<T> = T::generate_twiddle_factor(9, 23, inverse);
-        let twiddle10: Complex<T> = T::generate_twiddle_factor(10, 23, inverse);
-        let twiddle11: Complex<T> = T::generate_twiddle_factor(11, 23, inverse);
+    pub fn new(direction: FftDirection) -> Self {
+        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 23, direction);
+        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 23, direction);
+        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 23, direction);
+        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 23, direction);
+        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 23, direction);
+        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 23, direction);
+        let twiddle7: Complex<T> = T::generate_twiddle_factor(7, 23, direction);
+        let twiddle8: Complex<T> = T::generate_twiddle_factor(8, 23, direction);
+        let twiddle9: Complex<T> = T::generate_twiddle_factor(9, 23, direction);
+        let twiddle10: Complex<T> = T::generate_twiddle_factor(10, 23, direction);
+        let twiddle11: Complex<T> = T::generate_twiddle_factor(11, 23, direction);
         Self {
             twiddle1,
             twiddle2,
@@ -2545,7 +2545,7 @@ impl<T: FFTnum> Butterfly23<T> {
             twiddle9,
             twiddle10,
             twiddle11,
-            inverse,
+            direction,
         }
     }
 
@@ -3317,25 +3317,25 @@ pub struct Butterfly29<T> {
     twiddle12: Complex<T>,
     twiddle13: Complex<T>,
     twiddle14: Complex<T>,
-    inverse: bool,
+    direction: FftDirection,
 }
-boilerplate_fft_butterfly!(Butterfly29, 29, |this: &Butterfly29<_>| this.inverse);
+boilerplate_fft_butterfly!(Butterfly29, 29, |this: &Butterfly29<_>| this.direction);
 impl<T: FFTnum> Butterfly29<T> {
-    pub fn new(inverse: bool) -> Self {
-        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 29, inverse);
-        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 29, inverse);
-        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 29, inverse);
-        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 29, inverse);
-        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 29, inverse);
-        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 29, inverse);
-        let twiddle7: Complex<T> = T::generate_twiddle_factor(7, 29, inverse);
-        let twiddle8: Complex<T> = T::generate_twiddle_factor(8, 29, inverse);
-        let twiddle9: Complex<T> = T::generate_twiddle_factor(9, 29, inverse);
-        let twiddle10: Complex<T> = T::generate_twiddle_factor(10, 29, inverse);
-        let twiddle11: Complex<T> = T::generate_twiddle_factor(11, 29, inverse);
-        let twiddle12: Complex<T> = T::generate_twiddle_factor(12, 29, inverse);
-        let twiddle13: Complex<T> = T::generate_twiddle_factor(13, 29, inverse);
-        let twiddle14: Complex<T> = T::generate_twiddle_factor(14, 29, inverse);
+    pub fn new(direction: FftDirection) -> Self {
+        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 29, direction);
+        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 29, direction);
+        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 29, direction);
+        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 29, direction);
+        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 29, direction);
+        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 29, direction);
+        let twiddle7: Complex<T> = T::generate_twiddle_factor(7, 29, direction);
+        let twiddle8: Complex<T> = T::generate_twiddle_factor(8, 29, direction);
+        let twiddle9: Complex<T> = T::generate_twiddle_factor(9, 29, direction);
+        let twiddle10: Complex<T> = T::generate_twiddle_factor(10, 29, direction);
+        let twiddle11: Complex<T> = T::generate_twiddle_factor(11, 29, direction);
+        let twiddle12: Complex<T> = T::generate_twiddle_factor(12, 29, direction);
+        let twiddle13: Complex<T> = T::generate_twiddle_factor(13, 29, direction);
+        let twiddle14: Complex<T> = T::generate_twiddle_factor(14, 29, direction);
         Self {
             twiddle1,
             twiddle2,
@@ -3351,7 +3351,7 @@ impl<T: FFTnum> Butterfly29<T> {
             twiddle12,
             twiddle13,
             twiddle14,
-            inverse,
+            direction,
         }
     }
 
@@ -4492,26 +4492,26 @@ pub struct Butterfly31<T> {
     twiddle13: Complex<T>,
     twiddle14: Complex<T>,
     twiddle15: Complex<T>,
-    inverse: bool,
+    direction: FftDirection,
 }
-boilerplate_fft_butterfly!(Butterfly31, 31, |this: &Butterfly31<_>| this.inverse);
+boilerplate_fft_butterfly!(Butterfly31, 31, |this: &Butterfly31<_>| this.direction);
 impl<T: FFTnum> Butterfly31<T> {
-    pub fn new(inverse: bool) -> Self {
-        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 31, inverse);
-        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 31, inverse);
-        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 31, inverse);
-        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 31, inverse);
-        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 31, inverse);
-        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 31, inverse);
-        let twiddle7: Complex<T> = T::generate_twiddle_factor(7, 31, inverse);
-        let twiddle8: Complex<T> = T::generate_twiddle_factor(8, 31, inverse);
-        let twiddle9: Complex<T> = T::generate_twiddle_factor(9, 31, inverse);
-        let twiddle10: Complex<T> = T::generate_twiddle_factor(10, 31, inverse);
-        let twiddle11: Complex<T> = T::generate_twiddle_factor(11, 31, inverse);
-        let twiddle12: Complex<T> = T::generate_twiddle_factor(12, 31, inverse);
-        let twiddle13: Complex<T> = T::generate_twiddle_factor(13, 31, inverse);
-        let twiddle14: Complex<T> = T::generate_twiddle_factor(14, 31, inverse);
-        let twiddle15: Complex<T> = T::generate_twiddle_factor(15, 31, inverse);
+    pub fn new(direction: FftDirection) -> Self {
+        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 31, direction);
+        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 31, direction);
+        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 31, direction);
+        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 31, direction);
+        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 31, direction);
+        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 31, direction);
+        let twiddle7: Complex<T> = T::generate_twiddle_factor(7, 31, direction);
+        let twiddle8: Complex<T> = T::generate_twiddle_factor(8, 31, direction);
+        let twiddle9: Complex<T> = T::generate_twiddle_factor(9, 31, direction);
+        let twiddle10: Complex<T> = T::generate_twiddle_factor(10, 31, direction);
+        let twiddle11: Complex<T> = T::generate_twiddle_factor(11, 31, direction);
+        let twiddle12: Complex<T> = T::generate_twiddle_factor(12, 31, direction);
+        let twiddle13: Complex<T> = T::generate_twiddle_factor(13, 31, direction);
+        let twiddle14: Complex<T> = T::generate_twiddle_factor(14, 31, direction);
+        let twiddle15: Complex<T> = T::generate_twiddle_factor(15, 31, direction);
         Self {
             twiddle1,
             twiddle2,
@@ -4528,7 +4528,7 @@ impl<T: FFTnum> Butterfly31<T> {
             twiddle13,
             twiddle14,
             twiddle15,
-            inverse,
+            direction,
         }
     }
 
@@ -5799,20 +5799,20 @@ pub struct Butterfly32<T> {
 }
 boilerplate_fft_butterfly!(Butterfly32, 32, |this: &Butterfly32<_>| this
     .butterfly8
-    .is_inverse());
+    .fft_direction());
 impl<T: FFTnum> Butterfly32<T> {
-    pub fn new(inverse: bool) -> Self {
+    pub fn new(direction: FftDirection) -> Self {
         Self {
-            butterfly16: Butterfly16::new(inverse),
-            butterfly8: Butterfly8::new(inverse),
+            butterfly16: Butterfly16::new(direction),
+            butterfly8: Butterfly8::new(direction),
             twiddles: [
-                T::generate_twiddle_factor(1, 32, inverse),
-                T::generate_twiddle_factor(2, 32, inverse),
-                T::generate_twiddle_factor(3, 32, inverse),
-                T::generate_twiddle_factor(4, 32, inverse),
-                T::generate_twiddle_factor(5, 32, inverse),
-                T::generate_twiddle_factor(6, 32, inverse),
-                T::generate_twiddle_factor(7, 32, inverse),
+                T::generate_twiddle_factor(1, 32, direction),
+                T::generate_twiddle_factor(2, 32, direction),
+                T::generate_twiddle_factor(3, 32, direction),
+                T::generate_twiddle_factor(4, 32, direction),
+                T::generate_twiddle_factor(5, 32, direction),
+                T::generate_twiddle_factor(6, 32, direction),
+                T::generate_twiddle_factor(7, 32, direction),
             ],
         }
     }
@@ -5903,14 +5903,14 @@ impl<T: FFTnum> Butterfly32<T> {
         Butterfly2::perform_fft_strided(&mut scratch_odds_n1[7], &mut scratch_odds_n3[7]);
 
         // apply the butterfly 4 twiddle factor, which is just a rotation
-        scratch_odds_n3[0] = twiddles::rotate_90(scratch_odds_n3[0], self.is_inverse());
-        scratch_odds_n3[1] = twiddles::rotate_90(scratch_odds_n3[1], self.is_inverse());
-        scratch_odds_n3[2] = twiddles::rotate_90(scratch_odds_n3[2], self.is_inverse());
-        scratch_odds_n3[3] = twiddles::rotate_90(scratch_odds_n3[3], self.is_inverse());
-        scratch_odds_n3[4] = twiddles::rotate_90(scratch_odds_n3[4], self.is_inverse());
-        scratch_odds_n3[5] = twiddles::rotate_90(scratch_odds_n3[5], self.is_inverse());
-        scratch_odds_n3[6] = twiddles::rotate_90(scratch_odds_n3[6], self.is_inverse());
-        scratch_odds_n3[7] = twiddles::rotate_90(scratch_odds_n3[7], self.is_inverse());
+        scratch_odds_n3[0] = twiddles::rotate_90(scratch_odds_n3[0], self.fft_direction());
+        scratch_odds_n3[1] = twiddles::rotate_90(scratch_odds_n3[1], self.fft_direction());
+        scratch_odds_n3[2] = twiddles::rotate_90(scratch_odds_n3[2], self.fft_direction());
+        scratch_odds_n3[3] = twiddles::rotate_90(scratch_odds_n3[3], self.fft_direction());
+        scratch_odds_n3[4] = twiddles::rotate_90(scratch_odds_n3[4], self.fft_direction());
+        scratch_odds_n3[5] = twiddles::rotate_90(scratch_odds_n3[5], self.fft_direction());
+        scratch_odds_n3[6] = twiddles::rotate_90(scratch_odds_n3[6], self.fft_direction());
+        scratch_odds_n3[7] = twiddles::rotate_90(scratch_odds_n3[7], self.fft_direction());
 
         //step 5: copy/add/subtract data back to buffer
         output.store(scratch_evens[0] + scratch_odds_n1[0], 0);
@@ -5959,11 +5959,11 @@ mod unit_tests {
         ($test_name:ident, $struct_name:ident, $size:expr) => {
             #[test]
             fn $test_name() {
-                let butterfly = $struct_name::new(false);
-                check_fft_algorithm::<f32>(&butterfly, $size, false);
+                let butterfly = $struct_name::new(FftDirection::Forward);
+                check_fft_algorithm::<f32>(&butterfly, $size, FftDirection::Forward);
 
-                let butterfly_inverse = $struct_name::new(true);
-                check_fft_algorithm::<f32>(&butterfly_inverse, $size, true);
+                let butterfly_direction = $struct_name::new(FftDirection::Inverse);
+                check_fft_algorithm::<f32>(&butterfly_direction, $size, FftDirection::Inverse);
             }
         };
     }

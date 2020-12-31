@@ -3,16 +3,22 @@ use std::fmt::Debug;
 
 use num_complex::Complex;
 
+use crate::FftDirection;
+
 /// Generic floating point number, implemented for f32 and f64
 pub trait FFTnum: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {
     // two related methodsfor generating twiddle factors. The first is a convenience wrapper around the second.
-    fn generate_twiddle_factor(index: usize, fft_len: usize, inverse: bool) -> Complex<Self> {
-        Self::generate_twiddle_factor_floatindex(index as f64, fft_len, inverse)
+    fn generate_twiddle_factor(
+        index: usize,
+        fft_len: usize,
+        direction: FftDirection,
+    ) -> Complex<Self> {
+        Self::generate_twiddle_factor_floatindex(index as f64, fft_len, direction)
     }
     fn generate_twiddle_factor_floatindex(
         index: f64,
         fft_len: usize,
-        inverse: bool,
+        direction: FftDirection,
     ) -> Complex<Self>;
 }
 
@@ -23,7 +29,7 @@ where
     fn generate_twiddle_factor_floatindex(
         index: f64,
         fft_len: usize,
-        inverse: bool,
+        direction: FftDirection,
     ) -> Complex<Self> {
         let constant = -2f64 * std::f64::consts::PI / fft_len as f64;
         let angle = constant * index;
@@ -33,16 +39,15 @@ where
             im: Self::from_f64(angle.sin()).unwrap(),
         };
 
-        if inverse {
-            result.conj()
-        } else {
-            result
+        match direction {
+            FftDirection::Forward => result,
+            FftDirection::Inverse => result.conj(),
         }
     }
 }
 
 // impl FFTnum for f32 {
-// 	fn generate_twiddle_factor_floatindex(index: f64, fft_len: usize, inverse: bool) -> Complex<Self> {
+// 	fn generate_twiddle_factor_floatindex(index: f64, fft_len: usize, direction: FftDirection) -> Complex<Self> {
 // 		let constant = -2f64 * std::f64::consts::PI / fft_len as f64;
 // 		let angle = constant * index;
 
@@ -59,7 +64,7 @@ where
 //     }
 // }
 // impl FFTnum for f64 {
-// 	fn generate_twiddle_factor_floatindex(index: f64, fft_len: usize, inverse: bool) -> Complex<Self> {
+// 	fn generate_twiddle_factor_floatindex(index: f64, fft_len: usize, direction: FftDirection) -> Complex<Self> {
 // 		let constant = -2f64 * std::f64::consts::PI / fft_len as f64;
 // 		let angle = constant * index;
 
@@ -214,10 +219,10 @@ macro_rules! boilerplate_fft_oop {
                 $len_fn(self)
             }
         }
-        impl<T> IsInverse for $struct_name<T> {
+        impl<T> Direction for $struct_name<T> {
             #[inline(always)]
-            fn is_inverse(&self) -> bool {
-                self.inverse
+            fn fft_direction(&self) -> FftDirection {
+                self.direction
             }
         }
     };
@@ -359,10 +364,10 @@ macro_rules! boilerplate_fft {
                 $len_fn(self)
             }
         }
-        impl<T: FFTnum> IsInverse for $struct_name<T> {
+        impl<T: FFTnum> Direction for $struct_name<T> {
             #[inline(always)]
-            fn is_inverse(&self) -> bool {
-                self.inverse
+            fn fft_direction(&self) -> FftDirection {
+                self.direction
             }
         }
     };

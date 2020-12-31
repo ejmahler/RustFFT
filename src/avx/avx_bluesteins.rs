@@ -5,8 +5,8 @@ use num_complex::Complex;
 use num_integer::div_ceil;
 use num_traits::Zero;
 
-use crate::array_utils;
-use crate::{FFTnum, Fft, IsInverse, Length};
+use crate::{array_utils, FftDirection};
+use crate::{Direction, FFTnum, Fft, Length};
 
 use super::CommonSimdData;
 use super::{
@@ -32,11 +32,11 @@ pub struct BluesteinsAvx<A: AvxNum, T> {
 boilerplate_avx_fft_commondata!(BluesteinsAvx);
 
 impl<A: AvxNum, T: FFTnum> BluesteinsAvx<A, T> {
-    fn compute_bluesteins_twiddle(index: usize, len: usize, inverse: bool) -> Complex<A> {
+    fn compute_bluesteins_twiddle(index: usize, len: usize, direction: FftDirection) -> Complex<A> {
         let index_float = index as f64;
         let index_squared = index_float * index_float;
 
-        A::generate_twiddle_factor_floatindex(index_squared, len * 2, !inverse)
+        A::generate_twiddle_factor_floatindex(index_squared, len * 2, direction.reverse())
     }
 
     /// Pairwise multiply the complex numbers in `left` with the complex numbers in `right`.
@@ -86,13 +86,13 @@ impl<A: AvxNum, T: FFTnum> BluesteinsAvx<A, T> {
 
         // when computing FFTs, we're going to run our inner multiply pairwise by some precomputed data, then run an inverse inner FFT. We need to precompute that inner data here
         let inner_len_float = A::from_usize(inner_fft_len).unwrap();
-        let inverse = inner_fft.is_inverse();
+        let direction = inner_fft.fft_direction();
 
         // Compute twiddle factors that we'll run our inner FFT on
         let mut inner_fft_input = vec![Complex::zero(); inner_fft_len];
         for i in 0..len {
             inner_fft_input[i] =
-                Self::compute_bluesteins_twiddle(i, len, inverse) / inner_len_float;
+                Self::compute_bluesteins_twiddle(i, len, direction) / inner_len_float;
         }
         for i in 1..len {
             inner_fft_input[inner_fft_len - i] = inner_fft_input[i];
@@ -131,7 +131,7 @@ impl<A: AvxNum, T: FFTnum> BluesteinsAvx<A, T> {
                     twiddle_chunk[i] = Self::compute_bluesteins_twiddle(
                         x * A::VectorType::COMPLEX_PER_VECTOR + i,
                         len,
-                        !inverse,
+                        direction.reverse(),
                     );
                 }
                 twiddle_chunk.load_complex(0)
@@ -151,7 +151,7 @@ impl<A: AvxNum, T: FFTnum> BluesteinsAvx<A, T> {
                 inplace_scratch_len: required_scratch,
                 outofplace_scratch_len: required_scratch,
 
-                inverse,
+                direction,
             },
             _phantom: std::marker::PhantomData,
         }
@@ -393,8 +393,8 @@ mod unit_tests {
 
             // start at the next multiple of 4, and increment by 4 unti lwe get to the next power of 2.
             for inner_len in (next_multiple_of_4..maximum_inner).step_by(4) {
-                test_bluesteins_avx_with_length::<f32>(len, inner_len, false);
-                test_bluesteins_avx_with_length::<f32>(len, inner_len, true);
+                test_bluesteins_avx_with_length::<f32>(len, inner_len, FftDirection::Forward);
+                test_bluesteins_avx_with_length::<f32>(len, inner_len, FftDirection::Inverse);
             }
         }
     }
@@ -412,8 +412,8 @@ mod unit_tests {
 
             // start at the next multiple of 2, and increment by 2 unti lwe get to the next power of 2.
             for inner_len in (next_multiple_of_2..maximum_inner).step_by(2) {
-                test_bluesteins_avx_with_length::<f64>(len, inner_len, false);
-                test_bluesteins_avx_with_length::<f64>(len, inner_len, true);
+                test_bluesteins_avx_with_length::<f64>(len, inner_len, FftDirection::Forward);
+                test_bluesteins_avx_with_length::<f64>(len, inner_len, FftDirection::Inverse);
             }
         }
     }
@@ -421,13 +421,13 @@ mod unit_tests {
     fn test_bluesteins_avx_with_length<T: AvxNum + Float + SampleUniform>(
         len: usize,
         inner_len: usize,
-        inverse: bool,
+        direction: FftDirection,
     ) {
-        let inner_fft = Arc::new(DFT::new(inner_len, inverse));
+        let inner_fft = Arc::new(DFT::new(inner_len, direction));
         let fft: BluesteinsAvx<T, T> = BluesteinsAvx::new(len, inner_fft).expect(
             "Can't run test because this machine doesn't have the required instruction sets",
         );
 
-        check_fft_algorithm::<T>(&fft, len, inverse);
+        check_fft_algorithm::<T>(&fft, len, direction);
     }
 }

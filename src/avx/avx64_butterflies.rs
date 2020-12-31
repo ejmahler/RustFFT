@@ -6,7 +6,7 @@ use num_complex::Complex;
 
 use crate::common::FFTnum;
 
-use crate::{Fft, IsInverse, Length};
+use crate::{Direction, Fft, FftDirection, Length};
 
 use crate::array_utils;
 
@@ -23,12 +23,12 @@ macro_rules! boilerplate_fft_simd_butterfly {
     ($struct_name:ident, $len:expr) => {
         impl $struct_name<f64> {
             #[inline]
-            pub fn new(inverse: bool) -> Result<Self, ()> {
+            pub fn new(direction: FftDirection) -> Result<Self, ()> {
                 let has_avx = is_x86_feature_detected!("avx");
                 let has_fma = is_x86_feature_detected!("fma");
                 if has_avx && has_fma {
                     // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
-                    Ok(unsafe { Self::new_with_avx(inverse) })
+                    Ok(unsafe { Self::new_with_avx(direction) })
                 } else {
                     Err(())
                 }
@@ -152,10 +152,10 @@ macro_rules! boilerplate_fft_simd_butterfly {
                 $len
             }
         }
-        impl<T> IsInverse for $struct_name<T> {
+        impl<T> Direction for $struct_name<T> {
             #[inline(always)]
-            fn is_inverse(&self) -> bool {
-                self.inverse
+            fn fft_direction(&self) -> FftDirection {
+                self.direction
             }
         }
     };
@@ -172,10 +172,10 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                 is_x86_feature_detected!("avx") && is_x86_feature_detected!("fma")
             }
             #[inline]
-            pub fn new(inverse: bool) -> Result<Self, ()> {
+            pub fn new(direction: FftDirection) -> Result<Self, ()> {
                 if Self::is_supported_by_cpu() {
                     // Safety: new_internal requires the "avx" feature set. Since we know it's present, we're safe
-                    Ok(unsafe { Self::new_with_avx(inverse) })
+                    Ok(unsafe { Self::new_with_avx(direction) })
                 } else {
                     Err(())
                 }
@@ -336,17 +336,17 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                 $len
             }
         }
-        impl<T> IsInverse for $struct_name<T> {
+        impl<T> Direction for $struct_name<T> {
             #[inline(always)]
-            fn is_inverse(&self) -> bool {
-                self.inverse
+            fn fft_direction(&self) -> FftDirection {
+                self.direction
             }
         }
     };
 }
 
 macro_rules! gen_butterfly_twiddles_interleaved_columns {
-    ($num_rows:expr, $num_cols:expr, $skip_cols:expr, $inverse: expr) => {{
+    ($num_rows:expr, $num_cols:expr, $skip_cols:expr, $direction: expr) => {{
         const FFT_LEN: usize = $num_rows * $num_cols;
         const TWIDDLE_ROWS: usize = $num_rows - 1;
         const TWIDDLE_COLS: usize = $num_cols - $skip_cols;
@@ -357,14 +357,14 @@ macro_rules! gen_butterfly_twiddles_interleaved_columns {
             let y = (index / TWIDDLE_VECTOR_COLS) + 1;
             let x = (index % TWIDDLE_VECTOR_COLS) * 2 + $skip_cols;
 
-            twiddles[index] = AvxVector::make_mixedradix_twiddle_chunk(x, y, FFT_LEN, $inverse);
+            twiddles[index] = AvxVector::make_mixedradix_twiddle_chunk(x, y, FFT_LEN, $direction);
         }
         twiddles
     }};
 }
 
 macro_rules! gen_butterfly_twiddles_separated_columns {
-    ($num_rows:expr, $num_cols:expr, $skip_cols:expr, $inverse: expr) => {{
+    ($num_rows:expr, $num_cols:expr, $skip_cols:expr, $direction: expr) => {{
         const FFT_LEN: usize = $num_rows * $num_cols;
         const TWIDDLE_ROWS: usize = $num_rows - 1;
         const TWIDDLE_COLS: usize = $num_cols - $skip_cols;
@@ -375,7 +375,7 @@ macro_rules! gen_butterfly_twiddles_separated_columns {
             let y = (index % TWIDDLE_ROWS) + 1;
             let x = (index / TWIDDLE_ROWS) * 2 + $skip_cols;
 
-            twiddles[index] = AvxVector::make_mixedradix_twiddle_chunk(x, y, FFT_LEN, $inverse);
+            twiddles[index] = AvxVector::make_mixedradix_twiddle_chunk(x, y, FFT_LEN, $direction);
         }
         twiddles
     }};
@@ -383,22 +383,22 @@ macro_rules! gen_butterfly_twiddles_separated_columns {
 
 pub struct Butterfly5Avx64<T> {
     twiddles: [__m256d; 3],
-    inverse: bool,
+    direction: FftDirection,
     _phantom_t: std::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly5Avx64, 5);
 impl Butterfly5Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inverse: bool) -> Self {
-        let twiddle1 = f64::generate_twiddle_factor(1, 5, inverse);
-        let twiddle2 = f64::generate_twiddle_factor(2, 5, inverse);
+    unsafe fn new_with_avx(direction: FftDirection) -> Self {
+        let twiddle1 = f64::generate_twiddle_factor(1, 5, direction);
+        let twiddle2 = f64::generate_twiddle_factor(2, 5, direction);
         Self {
             twiddles: [
                 _mm256_set_pd(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),
                 _mm256_set_pd(twiddle2.im, twiddle2.im, twiddle2.re, twiddle2.re),
                 _mm256_set_pd(-twiddle1.im, -twiddle1.im, twiddle1.re, twiddle1.re),
             ],
-            inverse: inverse,
+            direction,
             _phantom_t: PhantomData,
         }
     }
@@ -421,7 +421,7 @@ impl<T> Butterfly5Avx64<T> {
         // do some prep work before we can start applying twiddle factors
         let [sum12, diff43] = AvxVector::column_butterfly2([input12, input43]);
 
-        let rotation = AvxVector::make_rotation90(true);
+        let rotation = AvxVector::make_rotation90(FftDirection::Inverse);
         let rotated43 = AvxVector::rotate90(diff43, rotation);
 
         let [mid14, mid23] = avx64_utils::transpose_2x2_f64([sum12, rotated43]);
@@ -453,16 +453,16 @@ impl<T> Butterfly5Avx64<T> {
 
 pub struct Butterfly7Avx64<T> {
     twiddles: [__m256d; 5],
-    inverse: bool,
+    direction: FftDirection,
     _phantom_t: std::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly7Avx64, 7);
 impl Butterfly7Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inverse: bool) -> Self {
-        let twiddle1 = f64::generate_twiddle_factor(1, 7, inverse);
-        let twiddle2 = f64::generate_twiddle_factor(2, 7, inverse);
-        let twiddle3 = f64::generate_twiddle_factor(3, 7, inverse);
+    unsafe fn new_with_avx(direction: FftDirection) -> Self {
+        let twiddle1 = f64::generate_twiddle_factor(1, 7, direction);
+        let twiddle2 = f64::generate_twiddle_factor(2, 7, direction);
+        let twiddle3 = f64::generate_twiddle_factor(3, 7, direction);
         Self {
             twiddles: [
                 _mm256_set_pd(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),
@@ -471,7 +471,7 @@ impl Butterfly7Avx64<f64> {
                 _mm256_set_pd(-twiddle3.im, -twiddle3.im, twiddle3.re, twiddle3.re),
                 _mm256_set_pd(-twiddle1.im, -twiddle1.im, twiddle1.re, twiddle1.re),
             ],
-            inverse: inverse,
+            direction,
             _phantom_t: PhantomData,
         }
     }
@@ -497,7 +497,7 @@ impl<T> Butterfly7Avx64<T> {
         let [sum12, diff65] = AvxVector::column_butterfly2([input12, input65]);
         let [sum3, diff4] = AvxVector::column_butterfly2([input3, input4]);
 
-        let rotation = AvxVector::make_rotation90(true);
+        let rotation = AvxVector::make_rotation90(FftDirection::Inverse);
         let rotated65 = AvxVector::rotate90(diff65, rotation);
         let rotated4 = AvxVector::rotate90(diff4, rotation.lo());
 
@@ -548,18 +548,18 @@ impl<T> Butterfly7Avx64<T> {
 
 pub struct Butterfly11Avx64<T> {
     twiddles: [__m256d; 10],
-    inverse: bool,
+    direction: FftDirection,
     _phantom_t: std::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly11Avx64, 11);
 impl Butterfly11Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inverse: bool) -> Self {
-        let twiddle1 = f64::generate_twiddle_factor(1, 11, inverse);
-        let twiddle2 = f64::generate_twiddle_factor(2, 11, inverse);
-        let twiddle3 = f64::generate_twiddle_factor(3, 11, inverse);
-        let twiddle4 = f64::generate_twiddle_factor(4, 11, inverse);
-        let twiddle5 = f64::generate_twiddle_factor(5, 11, inverse);
+    unsafe fn new_with_avx(direction: FftDirection) -> Self {
+        let twiddle1 = f64::generate_twiddle_factor(1, 11, direction);
+        let twiddle2 = f64::generate_twiddle_factor(2, 11, direction);
+        let twiddle3 = f64::generate_twiddle_factor(3, 11, direction);
+        let twiddle4 = f64::generate_twiddle_factor(4, 11, direction);
+        let twiddle5 = f64::generate_twiddle_factor(5, 11, direction);
 
         let twiddles = [
             _mm256_set_pd(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),
@@ -576,7 +576,7 @@ impl Butterfly11Avx64<f64> {
 
         Self {
             twiddles,
-            inverse: inverse,
+            direction,
             _phantom_t: PhantomData,
         }
     }
@@ -605,7 +605,7 @@ impl<T> Butterfly11Avx64<T> {
         let [sum34, diff87] = AvxVector::column_butterfly2([input34, input87]);
         let [sum55, diff66] = AvxVector::column_butterfly2([input55, input66]);
 
-        let rotation = AvxVector::make_rotation90(true);
+        let rotation = AvxVector::make_rotation90(FftDirection::Inverse);
         let rotated109 = AvxVector::rotate90(diff109, rotation);
         let rotated87 = AvxVector::rotate90(diff87, rotation);
         let rotated66 = AvxVector::rotate90(diff66, rotation);
@@ -681,17 +681,17 @@ impl<T> Butterfly11Avx64<T> {
 pub struct Butterfly8Avx64<T> {
     twiddles: [__m256d; 2],
     twiddles_butterfly4: Rotation90<__m256d>,
-    inverse: bool,
+    direction: FftDirection,
     _phantom_t: std::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly8Avx64, 8);
 impl Butterfly8Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inverse: bool) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self {
         Self {
-            twiddles: gen_butterfly_twiddles_interleaved_columns!(2, 4, 0, inverse),
-            twiddles_butterfly4: AvxVector::make_rotation90(inverse),
-            inverse: inverse,
+            twiddles: gen_butterfly_twiddles_interleaved_columns!(2, 4, 0, direction),
+            twiddles_butterfly4: AvxVector::make_rotation90(direction),
+            direction,
             _phantom_t: PhantomData,
         }
     }
@@ -732,17 +732,17 @@ impl<T> Butterfly8Avx64<T> {
 pub struct Butterfly9Avx64<T> {
     twiddles: [__m256d; 2],
     twiddles_butterfly3: __m256d,
-    inverse: bool,
+    direction: FftDirection,
     _phantom_t: std::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly9Avx64, 9);
 impl Butterfly9Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inverse: bool) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self {
         Self {
-            twiddles: gen_butterfly_twiddles_interleaved_columns!(3, 3, 1, inverse),
-            twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, inverse),
-            inverse: inverse,
+            twiddles: gen_butterfly_twiddles_interleaved_columns!(3, 3, 1, direction),
+            twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, direction),
+            direction,
             _phantom_t: PhantomData,
         }
     }
@@ -791,18 +791,18 @@ pub struct Butterfly12Avx64<T> {
     twiddles: [__m256d; 3],
     twiddles_butterfly3: __m256d,
     twiddles_butterfly4: Rotation90<__m256d>,
-    inverse: bool,
+    direction: FftDirection,
     _phantom_t: std::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly12Avx64, 12);
 impl Butterfly12Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inverse: bool) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self {
         Self {
-            twiddles: gen_butterfly_twiddles_interleaved_columns!(4, 3, 1, inverse),
-            twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, inverse),
-            twiddles_butterfly4: AvxVector::make_rotation90(inverse),
-            inverse: inverse,
+            twiddles: gen_butterfly_twiddles_interleaved_columns!(4, 3, 1, direction),
+            twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, direction),
+            twiddles_butterfly4: AvxVector::make_rotation90(direction),
+            direction,
             _phantom_t: PhantomData,
         }
     }
@@ -850,17 +850,17 @@ impl<T> Butterfly12Avx64<T> {
 pub struct Butterfly16Avx64<T> {
     twiddles: [__m256d; 6],
     twiddles_butterfly4: Rotation90<__m256d>,
-    inverse: bool,
+    direction: FftDirection,
     _phantom_t: std::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly16Avx64, 16);
 impl Butterfly16Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inverse: bool) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self {
         Self {
-            twiddles: gen_butterfly_twiddles_interleaved_columns!(4, 4, 0, inverse),
-            twiddles_butterfly4: AvxVector::make_rotation90(inverse),
-            inverse: inverse,
+            twiddles: gen_butterfly_twiddles_interleaved_columns!(4, 4, 0, direction),
+            twiddles_butterfly4: AvxVector::make_rotation90(direction),
+            direction,
             _phantom_t: PhantomData,
         }
     }
@@ -906,17 +906,17 @@ impl<T> Butterfly16Avx64<T> {
 pub struct Butterfly18Avx64<T> {
     twiddles: [__m256d; 5],
     twiddles_butterfly3: __m256d,
-    inverse: bool,
+    direction: FftDirection,
     _phantom_t: std::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly18Avx64, 18);
 impl Butterfly18Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inverse: bool) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self {
         Self {
-            twiddles: gen_butterfly_twiddles_interleaved_columns!(6, 3, 1, inverse),
-            twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, inverse),
-            inverse: inverse,
+            twiddles: gen_butterfly_twiddles_interleaved_columns!(6, 3, 1, direction),
+            twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, direction),
+            direction,
             _phantom_t: PhantomData,
         }
     }
@@ -967,18 +967,18 @@ pub struct Butterfly24Avx64<T> {
     twiddles: [__m256d; 9],
     twiddles_butterfly3: __m256d,
     twiddles_butterfly4: Rotation90<__m256d>,
-    inverse: bool,
+    direction: FftDirection,
     _phantom_t: std::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly24Avx64, 24);
 impl Butterfly24Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inverse: bool) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self {
         Self {
-            twiddles: gen_butterfly_twiddles_interleaved_columns!(4, 6, 0, inverse),
-            twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, inverse),
-            twiddles_butterfly4: AvxVector::make_rotation90(inverse),
-            inverse: inverse,
+            twiddles: gen_butterfly_twiddles_interleaved_columns!(4, 6, 0, direction),
+            twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, direction),
+            twiddles_butterfly4: AvxVector::make_rotation90(direction),
+            direction,
             _phantom_t: PhantomData,
         }
     }
@@ -1030,30 +1030,30 @@ pub struct Butterfly27Avx64<T> {
     twiddles_butterfly9: [__m256d; 3],
     twiddles_butterfly9_lo: [__m256d; 2],
     twiddles_butterfly3: __m256d,
-    inverse: bool,
+    direction: FftDirection,
     _phantom_t: std::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly27Avx64, 27);
 impl Butterfly27Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inverse: bool) -> Self {
-        let twiddle1 = __m128d::broadcast_twiddle(1, 9, inverse);
-        let twiddle2 = __m128d::broadcast_twiddle(2, 9, inverse);
-        let twiddle4 = __m128d::broadcast_twiddle(4, 9, inverse);
+    unsafe fn new_with_avx(direction: FftDirection) -> Self {
+        let twiddle1 = __m128d::broadcast_twiddle(1, 9, direction);
+        let twiddle2 = __m128d::broadcast_twiddle(2, 9, direction);
+        let twiddle4 = __m128d::broadcast_twiddle(4, 9, direction);
 
         Self {
-            twiddles: gen_butterfly_twiddles_interleaved_columns!(3, 9, 1, inverse),
+            twiddles: gen_butterfly_twiddles_interleaved_columns!(3, 9, 1, direction),
             twiddles_butterfly9: [
-                AvxVector::broadcast_twiddle(1, 9, inverse),
-                AvxVector::broadcast_twiddle(2, 9, inverse),
-                AvxVector::broadcast_twiddle(4, 9, inverse),
+                AvxVector::broadcast_twiddle(1, 9, direction),
+                AvxVector::broadcast_twiddle(2, 9, direction),
+                AvxVector::broadcast_twiddle(4, 9, direction),
             ],
             twiddles_butterfly9_lo: [
                 AvxVector256::merge(twiddle1, twiddle2),
                 AvxVector256::merge(twiddle2, twiddle4),
             ],
-            twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, inverse),
-            inverse: inverse,
+            twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, direction),
+            direction,
             _phantom_t: PhantomData,
         }
     }
@@ -1135,17 +1135,17 @@ impl<T> Butterfly27Avx64<T> {
 pub struct Butterfly32Avx64<T> {
     twiddles: [__m256d; 12],
     twiddles_butterfly4: Rotation90<__m256d>,
-    inverse: bool,
+    direction: FftDirection,
     _phantom_t: std::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly32Avx64, 32);
 impl Butterfly32Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inverse: bool) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self {
         Self {
-            twiddles: gen_butterfly_twiddles_interleaved_columns!(4, 8, 0, inverse),
-            twiddles_butterfly4: AvxVector::make_rotation90(inverse),
-            inverse: inverse,
+            twiddles: gen_butterfly_twiddles_interleaved_columns!(4, 8, 0, direction),
+            twiddles_butterfly4: AvxVector::make_rotation90(direction),
+            direction,
             _phantom_t: PhantomData,
         }
     }
@@ -1207,17 +1207,17 @@ impl<T> Butterfly32Avx64<T> {
 pub struct Butterfly36Avx64<T> {
     twiddles: [__m256d; 15],
     twiddles_butterfly3: __m256d,
-    inverse: bool,
+    direction: FftDirection,
     _phantom_t: std::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly36Avx64, 36);
 impl Butterfly36Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inverse: bool) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self {
         Self {
-            twiddles: gen_butterfly_twiddles_separated_columns!(6, 6, 0, inverse),
-            twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, inverse),
-            inverse: inverse,
+            twiddles: gen_butterfly_twiddles_separated_columns!(6, 6, 0, direction),
+            twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, direction),
+            direction,
             _phantom_t: PhantomData,
         }
     }
@@ -1289,17 +1289,17 @@ impl<T> Butterfly36Avx64<T> {
 pub struct Butterfly64Avx64<T> {
     twiddles: [__m256d; 28],
     twiddles_butterfly4: Rotation90<__m256d>,
-    inverse: bool,
+    direction: FftDirection,
     _phantom_t: std::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly_with_scratch!(Butterfly64Avx64, 64);
 impl Butterfly64Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inverse: bool) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self {
         Self {
-            twiddles: gen_butterfly_twiddles_separated_columns!(8, 8, 0, inverse),
-            twiddles_butterfly4: AvxVector::make_rotation90(inverse),
-            inverse: inverse,
+            twiddles: gen_butterfly_twiddles_separated_columns!(8, 8, 0, direction),
+            twiddles_butterfly4: AvxVector::make_rotation90(direction),
+            direction,
             _phantom_t: PhantomData,
         }
     }
@@ -1366,21 +1366,21 @@ pub struct Butterfly128Avx64<T> {
     twiddles: [__m256d; 56],
     twiddles_butterfly16: [__m256d; 2],
     twiddles_butterfly4: Rotation90<__m256d>,
-    inverse: bool,
+    direction: FftDirection,
     _phantom_t: std::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly_with_scratch!(Butterfly128Avx64, 128);
 impl Butterfly128Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inverse: bool) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self {
         Self {
-            twiddles: gen_butterfly_twiddles_separated_columns!(8, 16, 0, inverse),
+            twiddles: gen_butterfly_twiddles_separated_columns!(8, 16, 0, direction),
             twiddles_butterfly16: [
-                AvxVector::broadcast_twiddle(1, 16, inverse),
-                AvxVector::broadcast_twiddle(3, 16, inverse),
+                AvxVector::broadcast_twiddle(1, 16, direction),
+                AvxVector::broadcast_twiddle(3, 16, direction),
             ],
-            twiddles_butterfly4: AvxVector::make_rotation90(inverse),
-            inverse: inverse,
+            twiddles_butterfly4: AvxVector::make_rotation90(direction),
+            direction,
             _phantom_t: PhantomData,
         }
     }
@@ -1446,25 +1446,25 @@ pub struct Butterfly256Avx64<T> {
     twiddles: [__m256d; 112],
     twiddles_butterfly32: [__m256d; 6],
     twiddles_butterfly4: Rotation90<__m256d>,
-    inverse: bool,
+    direction: FftDirection,
     _phantom_t: std::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly_with_scratch!(Butterfly256Avx64, 256);
 impl Butterfly256Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inverse: bool) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self {
         Self {
-            twiddles: gen_butterfly_twiddles_separated_columns!(8, 32, 0, inverse),
+            twiddles: gen_butterfly_twiddles_separated_columns!(8, 32, 0, direction),
             twiddles_butterfly32: [
-                AvxVector::broadcast_twiddle(1, 32, inverse),
-                AvxVector::broadcast_twiddle(2, 32, inverse),
-                AvxVector::broadcast_twiddle(3, 32, inverse),
-                AvxVector::broadcast_twiddle(5, 32, inverse),
-                AvxVector::broadcast_twiddle(6, 32, inverse),
-                AvxVector::broadcast_twiddle(7, 32, inverse),
+                AvxVector::broadcast_twiddle(1, 32, direction),
+                AvxVector::broadcast_twiddle(2, 32, direction),
+                AvxVector::broadcast_twiddle(3, 32, direction),
+                AvxVector::broadcast_twiddle(5, 32, direction),
+                AvxVector::broadcast_twiddle(6, 32, direction),
+                AvxVector::broadcast_twiddle(7, 32, direction),
             ],
-            twiddles_butterfly4: AvxVector::make_rotation90(inverse),
-            inverse: inverse,
+            twiddles_butterfly4: AvxVector::make_rotation90(direction),
+            direction,
             _phantom_t: PhantomData,
         }
     }
@@ -1531,29 +1531,29 @@ pub struct Butterfly512Avx64<T> {
     twiddles_butterfly32: [__m256d; 6],
     twiddles_butterfly16: [__m256d; 2],
     twiddles_butterfly4: Rotation90<__m256d>,
-    inverse: bool,
+    direction: FftDirection,
     _phantom_t: std::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly_with_scratch!(Butterfly512Avx64, 512);
 impl Butterfly512Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inverse: bool) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self {
         Self {
-            twiddles: gen_butterfly_twiddles_separated_columns!(16, 32, 0, inverse),
+            twiddles: gen_butterfly_twiddles_separated_columns!(16, 32, 0, direction),
             twiddles_butterfly32: [
-                AvxVector::broadcast_twiddle(1, 32, inverse),
-                AvxVector::broadcast_twiddle(2, 32, inverse),
-                AvxVector::broadcast_twiddle(3, 32, inverse),
-                AvxVector::broadcast_twiddle(5, 32, inverse),
-                AvxVector::broadcast_twiddle(6, 32, inverse),
-                AvxVector::broadcast_twiddle(7, 32, inverse),
+                AvxVector::broadcast_twiddle(1, 32, direction),
+                AvxVector::broadcast_twiddle(2, 32, direction),
+                AvxVector::broadcast_twiddle(3, 32, direction),
+                AvxVector::broadcast_twiddle(5, 32, direction),
+                AvxVector::broadcast_twiddle(6, 32, direction),
+                AvxVector::broadcast_twiddle(7, 32, direction),
             ],
             twiddles_butterfly16: [
-                AvxVector::broadcast_twiddle(1, 16, inverse),
-                AvxVector::broadcast_twiddle(3, 16, inverse),
+                AvxVector::broadcast_twiddle(1, 16, direction),
+                AvxVector::broadcast_twiddle(3, 16, direction),
             ],
-            twiddles_butterfly4: AvxVector::make_rotation90(inverse),
-            inverse: inverse,
+            twiddles_butterfly4: AvxVector::make_rotation90(direction),
+            direction,
             _phantom_t: PhantomData,
         }
     }
@@ -1654,11 +1654,11 @@ mod unit_tests {
         ($test_name:ident, $struct_name:ident, $size:expr) => (
             #[test]
             fn $test_name() {
-                let butterfly = $struct_name::new(false).expect("Can't run test because this machine doesn't have the required instruction sets");
-                check_fft_algorithm(&butterfly as &dyn Fft<f64>, $size, false);
+                let butterfly = $struct_name::new(FftDirection::Forward).expect("Can't run test because this machine doesn't have the required instruction sets");
+                check_fft_algorithm(&butterfly as &dyn Fft<f64>, $size, FftDirection::Forward);
 
-                let butterfly_inverse = $struct_name::new(true).expect("Can't run test because this machine doesn't have the required instruction sets");
-                check_fft_algorithm(&butterfly_inverse as &dyn Fft<f64>, $size, true);
+                let butterfly_inverse = $struct_name::new(FftDirection::Inverse).expect("Can't run test because this machine doesn't have the required instruction sets");
+                check_fft_algorithm(&butterfly_inverse as &dyn Fft<f64>, $size, FftDirection::Inverse);
             }
         )
     }

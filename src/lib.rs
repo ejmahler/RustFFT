@@ -14,8 +14,8 @@
 //! // Perform a forward FFT of size 1234
 //! use rustfft::{FftPlanner, num_complex::Complex};
 //!
-//! let mut planner = FftPlanner::new(false);
-//! let fft = planner.plan_fft(1234);
+//! let mut planner = FftPlanner::new();
+//! let fft = planner.plan_fft_forward(1234);
 //!
 //! let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1234];
 //! fft.process_inplace(&mut buffer);
@@ -28,9 +28,9 @@
 //!
 //! ```
 //! // Computes a forward FFT of size 4096
-//! use rustfft::{Fft, num_complex::Complex, algorithm::Radix4};
+//! use rustfft::{Fft, FftDirection, num_complex::Complex, algorithm::Radix4};
 //!
-//! let fft = Radix4::new(4096, false);
+//! let fft = Radix4::new(4096, FftDirection::Forward);
 //!
 //! let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 4096];
 //! fft.process_inplace(&mut buffer);
@@ -50,6 +50,8 @@
 //!
 //! Elements in the output are ordered by ascending frequency, with the first element corresponding to frequency 0.
 
+use std::fmt::Display;
+
 pub use num_complex;
 pub use num_traits;
 
@@ -59,6 +61,7 @@ mod common;
 /// Individual FFT algorithms
 pub mod algorithm;
 mod array_utils;
+mod fft_cache;
 mod math_utils;
 mod plan;
 mod twiddles;
@@ -75,10 +78,32 @@ pub trait Length {
     fn len(&self) -> usize;
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum FftDirection {
+    Forward,
+    Inverse,
+}
+impl FftDirection {
+    pub fn reverse(&self) -> FftDirection {
+        match self {
+            Self::Forward => Self::Inverse,
+            Self::Inverse => Self::Forward,
+        }
+    }
+}
+impl Display for FftDirection {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
+        match self {
+            Self::Forward => f.write_str("Forward"),
+            Self::Inverse => f.write_str("Inverse"),
+        }
+    }
+}
+
 /// A trait that allows FFT algorithms to report whether they compute forward FFTs or inverse FFTs
-pub trait IsInverse {
+pub trait Direction {
     /// Returns false if this instance computes forward FFTs, true for inverse FFTs
-    fn is_inverse(&self) -> bool;
+    fn fft_direction(&self) -> FftDirection;
 }
 
 /// Trait for algorithms that compute FFTs.
@@ -89,7 +114,7 @@ pub trait IsInverse {
 ///
 /// Both methods may need to allocate additional scratch space. If you'd like re-use that allocation across multiple FFT computations, call
 /// `process_inplace_with_scratch` or `process_with_scratch`, respectively.
-pub trait Fft<T: FFTnum>: Length + IsInverse + Sync + Send {
+pub trait Fft<T: FFTnum>: Length + Direction + Sync + Send {
     /// Computes a FFT.
     ///
     /// Convenience method that allocates the required scratch space and and calls `self.process_with_scratch`.
@@ -207,7 +232,7 @@ mod avx {
             _phantom: std::marker::PhantomData<T>,
         }
         impl<T: FFTnum> FftPlannerAvx<T> {
-            pub fn new(_inverse: bool) -> Result<Self, ()> {
+            pub fn new(_direction: FftDirection) -> Result<Self, ()> {
                 Err(())
             }
             pub fn plan_fft(&mut self, _len: usize) -> Arc<dyn Fft<T>> {

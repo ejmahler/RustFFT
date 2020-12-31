@@ -4,8 +4,11 @@ use std::fmt::Debug;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use crate::array_utils::{RawSlice, RawSliceMut};
 use crate::common::FFTnum;
+use crate::{
+    array_utils::{RawSlice, RawSliceMut},
+    FftDirection,
+};
 
 use super::AvxNum;
 
@@ -53,14 +56,19 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
     }
 
     /// Fill a vector by computing a twiddle factor and repeating it across the whole vector
-    unsafe fn broadcast_twiddle(index: usize, len: usize, inverse: bool) -> Self;
+    unsafe fn broadcast_twiddle(index: usize, len: usize, direction: FftDirection) -> Self;
 
     /// create a Rotator90 instance to rotate complex numbers either 90 or 270 degrees, based on the value of `inverse`
-    unsafe fn make_rotation90(inverse: bool) -> Rotation90<Self>;
+    unsafe fn make_rotation90(direction: FftDirection) -> Rotation90<Self>;
 
     /// Generates a chunk of twiddle factors starting at (X,Y) and incrementing X `COMPLEX_PER_VECTOR` times.
     /// The result will be [twiddle(x*y, len), twiddle((x+1)*y, len), twiddle((x+2)*y, len), ...] for as many complex numbers fit in a vector
-    unsafe fn make_mixedradix_twiddle_chunk(x: usize, y: usize, len: usize, inverse: bool) -> Self;
+    unsafe fn make_mixedradix_twiddle_chunk(
+        x: usize,
+        y: usize,
+        len: usize,
+        direction: FftDirection,
+    ) -> Self;
 
     /// Packed transposes. Used by mixed radix. These all take a NxC array, where C is COMPLEX_PER_VECTOR, and transpose it to a CxN array.
     /// But they also pack the result into as few vectors as possible, with the goal of writing the transposed data out contiguously.
@@ -119,7 +127,7 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
 
         mid1 = Self::fmadd(mid1, twiddle_real, rows[0]);
 
-        let rotation = Self::make_rotation90(true);
+        let rotation = Self::make_rotation90(FftDirection::Inverse);
         let mid2_rotated = Self::rotate90(mid2, rotation);
 
         let output1 = Self::fmadd(mid2_rotated, twiddle_imag, mid1);
@@ -180,7 +188,7 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
         let [sum1, diff4] = Self::column_butterfly2([rows[1], rows[4]]);
         let [sum2, diff3] = Self::column_butterfly2([rows[2], rows[3]]);
 
-        let rotation = Self::make_rotation90(true);
+        let rotation = Self::make_rotation90(FftDirection::Inverse);
         let rotated4 = Self::rotate90(diff4, rotation);
         let rotated3 = Self::rotate90(diff3, rotation);
 
@@ -220,7 +228,7 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
         let [sum2, diff5] = Self::column_butterfly2([rows[2], rows[5]]);
         let [sum3, diff4] = Self::column_butterfly2([rows[3], rows[4]]);
 
-        let rotation = Self::make_rotation90(true);
+        let rotation = Self::make_rotation90(FftDirection::Inverse);
         let rotated4 = Self::rotate90(diff4, rotation);
         let rotated5 = Self::rotate90(diff5, rotation);
         let rotated6 = Self::rotate90(diff6, rotation);
@@ -333,7 +341,7 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
         let [sum4, diff7] = Self::column_butterfly2([rows[4], rows[7]]);
         let [sum5, diff6] = Self::column_butterfly2([rows[5], rows[6]]);
 
-        let rotation = Self::make_rotation90(true);
+        let rotation = Self::make_rotation90(FftDirection::Inverse);
         let rotated10 = Self::rotate90(diff10, rotation);
         let rotated9 = Self::rotate90(diff9, rotation);
         let rotated8 = Self::rotate90(diff8, rotation);
@@ -886,27 +894,32 @@ impl AvxVector for __m256 {
     }
 
     #[inline(always)]
-    unsafe fn make_rotation90(inverse: bool) -> Rotation90<Self> {
-        if !inverse {
-            Rotation90(Self::broadcast_complex_elements(Complex::new(-0.0, 0.0)))
-        } else {
-            Rotation90(Self::broadcast_complex_elements(Complex::new(0.0, -0.0)))
-        }
+    unsafe fn make_rotation90(direction: FftDirection) -> Rotation90<Self> {
+        let broadcast = match direction {
+            FftDirection::Forward => Complex::new(-0.0, 0.0),
+            FftDirection::Inverse => Complex::new(0.0, -0.0),
+        };
+        Rotation90(Self::broadcast_complex_elements(broadcast))
     }
 
     #[inline(always)]
-    unsafe fn make_mixedradix_twiddle_chunk(x: usize, y: usize, len: usize, inverse: bool) -> Self {
+    unsafe fn make_mixedradix_twiddle_chunk(
+        x: usize,
+        y: usize,
+        len: usize,
+        direction: FftDirection,
+    ) -> Self {
         let mut twiddle_chunk = [Complex::zero(); Self::COMPLEX_PER_VECTOR];
         for i in 0..Self::COMPLEX_PER_VECTOR {
-            twiddle_chunk[i] = f32::generate_twiddle_factor(y * (x + i), len, inverse);
+            twiddle_chunk[i] = f32::generate_twiddle_factor(y * (x + i), len, direction);
         }
 
         twiddle_chunk.load_complex(0)
     }
 
     #[inline(always)]
-    unsafe fn broadcast_twiddle(index: usize, len: usize, inverse: bool) -> Self {
-        Self::broadcast_complex_elements(f32::generate_twiddle_factor(index, len, inverse))
+    unsafe fn broadcast_twiddle(index: usize, len: usize, direction: FftDirection) -> Self {
+        Self::broadcast_complex_elements(f32::generate_twiddle_factor(index, len, direction))
     }
 
     #[inline(always)]
@@ -1266,25 +1279,30 @@ impl AvxVector for __m128 {
     }
 
     #[inline(always)]
-    unsafe fn make_rotation90(inverse: bool) -> Rotation90<Self> {
-        if !inverse {
-            Rotation90(Self::broadcast_complex_elements(Complex::new(-0.0, 0.0)))
-        } else {
-            Rotation90(Self::broadcast_complex_elements(Complex::new(0.0, -0.0)))
-        }
+    unsafe fn make_rotation90(direction: FftDirection) -> Rotation90<Self> {
+        let broadcast = match direction {
+            FftDirection::Forward => Complex::new(-0.0, 0.0),
+            FftDirection::Inverse => Complex::new(0.0, -0.0),
+        };
+        Rotation90(Self::broadcast_complex_elements(broadcast))
     }
     #[inline(always)]
-    unsafe fn make_mixedradix_twiddle_chunk(x: usize, y: usize, len: usize, inverse: bool) -> Self {
+    unsafe fn make_mixedradix_twiddle_chunk(
+        x: usize,
+        y: usize,
+        len: usize,
+        direction: FftDirection,
+    ) -> Self {
         let mut twiddle_chunk = [Complex::zero(); Self::COMPLEX_PER_VECTOR];
         for i in 0..Self::COMPLEX_PER_VECTOR {
-            twiddle_chunk[i] = f32::generate_twiddle_factor(y * (x + i), len, inverse);
+            twiddle_chunk[i] = f32::generate_twiddle_factor(y * (x + i), len, direction);
         }
 
         _mm_loadu_ps(twiddle_chunk.as_ptr() as *const f32)
     }
     #[inline(always)]
-    unsafe fn broadcast_twiddle(index: usize, len: usize, inverse: bool) -> Self {
-        Self::broadcast_complex_elements(f32::generate_twiddle_factor(index, len, inverse))
+    unsafe fn broadcast_twiddle(index: usize, len: usize, direction: FftDirection) -> Self {
+        Self::broadcast_complex_elements(f32::generate_twiddle_factor(index, len, direction))
     }
 
     #[inline(always)]
@@ -1526,25 +1544,30 @@ impl AvxVector for __m256d {
     }
 
     #[inline(always)]
-    unsafe fn make_rotation90(inverse: bool) -> Rotation90<Self> {
-        if !inverse {
-            Rotation90(Self::broadcast_complex_elements(Complex::new(-0.0, 0.0)))
-        } else {
-            Rotation90(Self::broadcast_complex_elements(Complex::new(0.0, -0.0)))
-        }
+    unsafe fn make_rotation90(direction: FftDirection) -> Rotation90<Self> {
+        let broadcast = match direction {
+            FftDirection::Forward => Complex::new(-0.0, 0.0),
+            FftDirection::Inverse => Complex::new(0.0, -0.0),
+        };
+        Rotation90(Self::broadcast_complex_elements(broadcast))
     }
     #[inline(always)]
-    unsafe fn make_mixedradix_twiddle_chunk(x: usize, y: usize, len: usize, inverse: bool) -> Self {
+    unsafe fn make_mixedradix_twiddle_chunk(
+        x: usize,
+        y: usize,
+        len: usize,
+        direction: FftDirection,
+    ) -> Self {
         let mut twiddle_chunk = [Complex::zero(); Self::COMPLEX_PER_VECTOR];
         for i in 0..Self::COMPLEX_PER_VECTOR {
-            twiddle_chunk[i] = f64::generate_twiddle_factor(y * (x + i), len, inverse);
+            twiddle_chunk[i] = f64::generate_twiddle_factor(y * (x + i), len, direction);
         }
 
         twiddle_chunk.load_complex(0)
     }
     #[inline(always)]
-    unsafe fn broadcast_twiddle(index: usize, len: usize, inverse: bool) -> Self {
-        Self::broadcast_complex_elements(f64::generate_twiddle_factor(index, len, inverse))
+    unsafe fn broadcast_twiddle(index: usize, len: usize, direction: FftDirection) -> Self {
+        Self::broadcast_complex_elements(f64::generate_twiddle_factor(index, len, direction))
     }
 
     #[inline(always)]
@@ -1842,25 +1865,30 @@ impl AvxVector for __m128d {
     }
 
     #[inline(always)]
-    unsafe fn make_rotation90(inverse: bool) -> Rotation90<Self> {
-        if !inverse {
-            Rotation90(Self::broadcast_complex_elements(Complex::new(-0.0, 0.0)))
-        } else {
-            Rotation90(Self::broadcast_complex_elements(Complex::new(0.0, -0.0)))
-        }
+    unsafe fn make_rotation90(direction: FftDirection) -> Rotation90<Self> {
+        let broadcast = match direction {
+            FftDirection::Forward => Complex::new(-0.0, 0.0),
+            FftDirection::Inverse => Complex::new(0.0, -0.0),
+        };
+        Rotation90(Self::broadcast_complex_elements(broadcast))
     }
     #[inline(always)]
-    unsafe fn make_mixedradix_twiddle_chunk(x: usize, y: usize, len: usize, inverse: bool) -> Self {
+    unsafe fn make_mixedradix_twiddle_chunk(
+        x: usize,
+        y: usize,
+        len: usize,
+        direction: FftDirection,
+    ) -> Self {
         let mut twiddle_chunk = [Complex::zero(); Self::COMPLEX_PER_VECTOR];
         for i in 0..Self::COMPLEX_PER_VECTOR {
-            twiddle_chunk[i] = f64::generate_twiddle_factor(y * (x + i), len, inverse);
+            twiddle_chunk[i] = f64::generate_twiddle_factor(y * (x + i), len, direction);
         }
 
         _mm_loadu_pd(twiddle_chunk.as_ptr() as *const f64)
     }
     #[inline(always)]
-    unsafe fn broadcast_twiddle(index: usize, len: usize, inverse: bool) -> Self {
-        Self::broadcast_complex_elements(f64::generate_twiddle_factor(index, len, inverse))
+    unsafe fn broadcast_twiddle(index: usize, len: usize, direction: FftDirection) -> Self {
+        Self::broadcast_complex_elements(f64::generate_twiddle_factor(index, len, direction))
     }
 
     #[inline(always)]

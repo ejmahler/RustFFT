@@ -6,10 +6,10 @@ use num_traits::Zero;
 use primal_check::miller_rabin;
 use strength_reduce::StrengthReducedUsize;
 
-use crate::common::FFTnum;
+use crate::{common::FFTnum, FftDirection};
 
 use crate::math_utils;
-use crate::{Fft, IsInverse, Length};
+use crate::{Direction, Fft, Length};
 
 /// Implementation of Rader's Algorithm
 ///
@@ -30,8 +30,8 @@ use crate::{Fft, IsInverse, Length};
 /// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); 1201];
 ///
 /// // plan a FFT of size n - 1 = 1200
-/// let mut planner = FftPlanner::new(false);
-/// let inner_fft = planner.plan_fft(1200);
+/// let mut planner = FftPlanner::new();
+/// let inner_fft = planner.plan_fft_forward(1200);
 ///
 /// let fft = RadersAlgorithm::new(inner_fft);
 /// fft.process(&mut input, &mut output);
@@ -51,7 +51,7 @@ pub struct RadersAlgorithm<T> {
     len: StrengthReducedUsize,
     inplace_scratch_len: usize,
     outofplace_scratch_len: usize,
-    inverse: bool,
+    direction: FftDirection,
 }
 
 impl<T: FFTnum> RadersAlgorithm<T> {
@@ -68,7 +68,7 @@ impl<T: FFTnum> RadersAlgorithm<T> {
         let len = inner_fft_len + 1;
         assert!(miller_rabin(len as u64), "For raders algorithm, inner_fft.len() + 1 must be prime. Expected prime number, got {} + 1 = {}", inner_fft_len, len);
 
-        let inverse = inner_fft.is_inverse();
+        let direction = inner_fft.fft_direction();
         let reduced_len = StrengthReducedUsize::new(len);
 
         // compute the primitive root and its inverse for this size
@@ -89,7 +89,7 @@ impl<T: FFTnum> RadersAlgorithm<T> {
         let mut inner_fft_input = vec![Complex::zero(); inner_fft_len];
         let mut twiddle_input = 1;
         for input_cell in &mut inner_fft_input {
-            let twiddle = T::generate_twiddle_factor(twiddle_input, len, inverse);
+            let twiddle = T::generate_twiddle_factor(twiddle_input, len, direction);
             *input_cell = twiddle * unity_scale;
 
             twiddle_input = (twiddle_input * primitive_root_inverse) % reduced_len;
@@ -116,7 +116,7 @@ impl<T: FFTnum> RadersAlgorithm<T> {
             len: reduced_len,
             inplace_scratch_len: inner_fft_len + extra_inner_scratch,
             outofplace_scratch_len: extra_inner_scratch,
-            inverse,
+            direction,
         }
     }
 
@@ -241,16 +241,16 @@ mod unit_tests {
     fn test_raders() {
         for len in 3..100 {
             if miller_rabin(len as u64) {
-                test_raders_with_length(len, false);
-                test_raders_with_length(len, true);
+                test_raders_with_length(len, FftDirection::Forward);
+                test_raders_with_length(len, FftDirection::Inverse);
             }
         }
     }
 
-    fn test_raders_with_length(len: usize, inverse: bool) {
-        let inner_fft = Arc::new(DFT::new(len - 1, inverse));
+    fn test_raders_with_length(len: usize, direction: FftDirection) {
+        let inner_fft = Arc::new(DFT::new(len - 1, direction));
         let fft = RadersAlgorithm::new(inner_fft);
 
-        check_fft_algorithm::<f32>(&fft, len, inverse);
+        check_fft_algorithm::<f32>(&fft, len, direction);
     }
 }

@@ -4,8 +4,8 @@ use num_traits::{Float, One, Zero};
 use rand::distributions::{uniform::SampleUniform, Distribution, Uniform};
 use rand::{rngs::StdRng, SeedableRng};
 
-use crate::Fft;
 use crate::{algorithm::DFT, FFTnum};
+use crate::{Fft, FftDirection};
 
 /// The seed for the random number generator used to generate
 /// random signals. It's defined here so that we have deterministic
@@ -55,7 +55,7 @@ fn transppose_diagnostic<T: FFTnum + Float>(expected: &[Complex<T>], actual: &[C
 pub fn check_fft_algorithm<T: FFTnum + Float + SampleUniform>(
     fft: &dyn Fft<T>,
     len: usize,
-    inverse: bool,
+    direction: FftDirection,
 ) {
     assert_eq!(
         fft.len(),
@@ -65,15 +65,15 @@ pub fn check_fft_algorithm<T: FFTnum + Float + SampleUniform>(
         fft.len()
     );
     assert_eq!(
-        fft.is_inverse(),
-        inverse,
-        "Algorithm reported incorrect inverse value"
+        fft.fft_direction(),
+        direction,
+        "Algorithm reported incorrect FFT direction"
     );
 
     let n = 1;
 
     //test the forward direction
-    let dft = DFT::new(len, inverse);
+    let dft = DFT::new(len, direction);
 
     let dirty_scratch_value = Complex::one() * T::from_i32(100).unwrap();
 
@@ -96,9 +96,9 @@ pub fn check_fft_algorithm<T: FFTnum + Float + SampleUniform>(
         transppose_diagnostic(&expected_output, &output);
         assert!(
             compare_vectors(&expected_output, &output),
-            "process() failed, length = {}, inverse = {}",
+            "process() failed, length = {}, direction = {}",
             len,
-            inverse
+            direction
         );
     }
 
@@ -113,9 +113,9 @@ pub fn check_fft_algorithm<T: FFTnum + Float + SampleUniform>(
         }
         assert!(
             compare_vectors(&expected_output, &output),
-            "process_with_scratch() failed, length = {}, inverse = {}",
+            "process_with_scratch() failed, length = {}, direction = {}",
             len,
-            inverse
+            direction
         );
 
         // make sure this algorithm works correctly with dirty scratch
@@ -129,9 +129,9 @@ pub fn check_fft_algorithm<T: FFTnum + Float + SampleUniform>(
             }
             assert!(
                 compare_vectors(&expected_output, &output),
-                "process_with_scratch() failed the 'dirty scratch' test, length = {}, inverse = {}",
+                "process_with_scratch() failed the 'dirty scratch' test, length = {}, direction = {}",
                 len,
-                inverse
+                direction
             );
         }
     }
@@ -145,9 +145,9 @@ pub fn check_fft_algorithm<T: FFTnum + Float + SampleUniform>(
         fft.process_multi(&mut input, &mut output, &mut scratch);
         assert!(
             compare_vectors(&expected_output, &output),
-            "process_multi() failed, length = {}, inverse = {}",
+            "process_multi() failed, length = {}, direction = {}",
             len,
-            inverse
+            direction
         );
 
         // make sure this algorithm works correctly with dirty scratch
@@ -160,9 +160,9 @@ pub fn check_fft_algorithm<T: FFTnum + Float + SampleUniform>(
 
             assert!(
                 compare_vectors(&expected_output, &output),
-                "process_multi() failed the 'dirty scratch' test, length = {}, inverse = {}",
+                "process_multi() failed the 'dirty scratch' test, length = {}, direction = {}",
                 len,
-                inverse
+                direction
             );
         }
     }
@@ -176,9 +176,9 @@ pub fn check_fft_algorithm<T: FFTnum + Float + SampleUniform>(
         }
         assert!(
             compare_vectors(&expected_output, &buffer),
-            "process_inplace() failed, length = {}, inverse = {}",
+            "process_inplace() failed, length = {}, direction = {}",
             len,
-            inverse
+            direction
         );
     }
 
@@ -192,9 +192,9 @@ pub fn check_fft_algorithm<T: FFTnum + Float + SampleUniform>(
         }
         assert!(
             compare_vectors(&expected_output, &buffer),
-            "process_inplace_with_scratch() failed, length = {}, inverse = {}",
+            "process_inplace_with_scratch() failed, length = {}, direction = {}",
             len,
-            inverse
+            direction
         );
 
         // make sure this algorithm works correctly with dirty scratch
@@ -206,7 +206,7 @@ pub fn check_fft_algorithm<T: FFTnum + Float + SampleUniform>(
             for chunk in buffer.chunks_mut(len) {
                 fft.process_inplace_with_scratch(chunk, &mut scratch);
             }
-            assert!(compare_vectors(&expected_output, &buffer), "process_inplace_with_scratch() failed the 'dirty scratch' test, length = {}, inverse = {}", len, inverse);
+            assert!(compare_vectors(&expected_output, &buffer), "process_inplace_with_scratch() failed the 'dirty scratch' test, length = {}, direction = {}", len, direction);
         }
     }
 
@@ -218,9 +218,9 @@ pub fn check_fft_algorithm<T: FFTnum + Float + SampleUniform>(
         fft.process_inplace_multi(&mut buffer, &mut scratch);
         assert!(
             compare_vectors(&expected_output, &buffer),
-            "process_inplace_multi() failed, length = {}, inverse = {}",
+            "process_inplace_multi() failed, length = {}, direction = {}",
             len,
-            inverse
+            direction
         );
 
         // make sure this algorithm works correctly with dirty scratch
@@ -231,7 +231,7 @@ pub fn check_fft_algorithm<T: FFTnum + Float + SampleUniform>(
             buffer.copy_from_slice(&reference_input);
             fft.process_inplace_multi(&mut buffer, &mut scratch);
 
-            assert!(compare_vectors(&expected_output, &buffer), "process_inplace_multi() failed the 'dirty scratch' test, length = {}, inverse = {}", len, inverse);
+            assert!(compare_vectors(&expected_output, &buffer), "process_inplace_multi() failed the 'dirty scratch' test, length = {}, direction = {}", len, direction);
         }
     }
 }

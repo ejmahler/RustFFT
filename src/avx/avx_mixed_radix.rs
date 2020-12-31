@@ -5,7 +5,7 @@ use num_complex::Complex;
 use num_integer::div_ceil;
 
 use crate::array_utils;
-use crate::{FFTnum, Fft, IsInverse, Length};
+use crate::{Direction, FFTnum, Fft, FftDirection, Length};
 
 use super::{AvxNum, CommonSimdData};
 
@@ -115,7 +115,7 @@ macro_rules! mixedradix_gen_data {
         const TWIDDLES_PER_COLUMN : usize = ROW_COUNT - 1;
 
         // derive some info from our inner FFT
-        let inverse = $inner_fft.is_inverse();
+        let direction = $inner_fft.fft_direction();
         let len_per_row = $inner_fft.len();
         let len = len_per_row * ROW_COUNT;
 
@@ -129,7 +129,7 @@ macro_rules! mixedradix_gen_data {
         let mut twiddles = Vec::with_capacity(num_twiddle_columns * TWIDDLES_PER_COLUMN);
         for x in 0..num_twiddle_columns {
             for y in 1..ROW_COUNT {
-                twiddles.push(AvxVector::make_mixedradix_twiddle_chunk(x * A::VectorType::COMPLEX_PER_VECTOR, y, len, inverse));
+                twiddles.push(AvxVector::make_mixedradix_twiddle_chunk(x * A::VectorType::COMPLEX_PER_VECTOR, y, len, direction));
             }
         }
 
@@ -142,7 +142,7 @@ macro_rules! mixedradix_gen_data {
             outofplace_scratch_len: if inner_inplace_scratch > len { inner_inplace_scratch } else { 0 },
             inner_fft: $inner_fft,
             len,
-            inverse,
+            direction,
         }
     }}
 }
@@ -413,7 +413,7 @@ impl<A: AvxNum, T: FFTnum> MixedRadix3xnAvx<A, T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
-            twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, inner_fft.is_inverse()),
+            twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, inner_fft.fft_direction()),
             common_data: mixedradix_gen_data!(3, inner_fft),
             _phantom: std::marker::PhantomData,
         }
@@ -442,7 +442,7 @@ impl<A: AvxNum, T: FFTnum> MixedRadix4xnAvx<A, T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
-            twiddles_butterfly4: AvxVector::make_rotation90(inner_fft.is_inverse()),
+            twiddles_butterfly4: AvxVector::make_rotation90(inner_fft.fft_direction()),
             common_data: mixedradix_gen_data!(4, inner_fft),
             _phantom: std::marker::PhantomData,
         }
@@ -472,8 +472,8 @@ impl<A: AvxNum, T: FFTnum> MixedRadix5xnAvx<A, T> {
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
             twiddles_butterfly5: [
-                AvxVector::broadcast_twiddle(1, 5, inner_fft.is_inverse()),
-                AvxVector::broadcast_twiddle(2, 5, inner_fft.is_inverse()),
+                AvxVector::broadcast_twiddle(1, 5, inner_fft.fft_direction()),
+                AvxVector::broadcast_twiddle(2, 5, inner_fft.fft_direction()),
             ],
             common_data: mixedradix_gen_data!(5, inner_fft),
             _phantom: std::marker::PhantomData,
@@ -509,7 +509,7 @@ impl<A: AvxNum, T: FFTnum> MixedRadix6xnAvx<A, T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
-            twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, inner_fft.is_inverse()),
+            twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, inner_fft.fft_direction()),
             common_data: mixedradix_gen_data!(6, inner_fft),
             _phantom: std::marker::PhantomData,
         }
@@ -539,9 +539,9 @@ impl<A: AvxNum, T: FFTnum> MixedRadix7xnAvx<A, T> {
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
             twiddles_butterfly7: [
-                AvxVector::broadcast_twiddle(1, 7, inner_fft.is_inverse()),
-                AvxVector::broadcast_twiddle(2, 7, inner_fft.is_inverse()),
-                AvxVector::broadcast_twiddle(3, 7, inner_fft.is_inverse()),
+                AvxVector::broadcast_twiddle(1, 7, inner_fft.fft_direction()),
+                AvxVector::broadcast_twiddle(2, 7, inner_fft.fft_direction()),
+                AvxVector::broadcast_twiddle(3, 7, inner_fft.fft_direction()),
             ],
             common_data: mixedradix_gen_data!(7, inner_fft),
             _phantom: std::marker::PhantomData,
@@ -578,7 +578,7 @@ impl<A: AvxNum, T: FFTnum> MixedRadix8xnAvx<A, T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
-            twiddles_butterfly4: AvxVector::make_rotation90(inner_fft.is_inverse()),
+            twiddles_butterfly4: AvxVector::make_rotation90(inner_fft.fft_direction()),
             common_data: mixedradix_gen_data!(8, inner_fft),
             _phantom: std::marker::PhantomData,
         }
@@ -609,11 +609,11 @@ boilerplate_avx_fft_commondata!(MixedRadix9xnAvx);
 impl<A: AvxNum, T: FFTnum> MixedRadix9xnAvx<A, T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
-        let inverse = inner_fft.is_inverse();
+        let inverse = inner_fft.fft_direction();
 
-        let twiddle1 = AvxVector::broadcast_twiddle(1, 9, inner_fft.is_inverse());
-        let twiddle2 = AvxVector::broadcast_twiddle(2, 9, inner_fft.is_inverse());
-        let twiddle4 = AvxVector::broadcast_twiddle(4, 9, inner_fft.is_inverse());
+        let twiddle1 = AvxVector::broadcast_twiddle(1, 9, inner_fft.fft_direction());
+        let twiddle2 = AvxVector::broadcast_twiddle(2, 9, inner_fft.fft_direction());
+        let twiddle4 = AvxVector::broadcast_twiddle(4, 9, inner_fft.fft_direction());
 
         Self {
             twiddles_butterfly9: [
@@ -625,7 +625,7 @@ impl<A: AvxNum, T: FFTnum> MixedRadix9xnAvx<A, T> {
                 AvxVector256::merge(twiddle1, twiddle2),
                 AvxVector256::merge(twiddle2, twiddle4),
             ],
-            twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, inner_fft.is_inverse()),
+            twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, inner_fft.fft_direction()),
             common_data: mixedradix_gen_data!(9, inner_fft),
             _phantom: std::marker::PhantomData,
         }
@@ -664,11 +664,11 @@ impl<A: AvxNum, T: FFTnum> MixedRadix11xnAvx<A, T> {
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
             twiddles_butterfly11: [
-                AvxVector::broadcast_twiddle(1, 11, inner_fft.is_inverse()),
-                AvxVector::broadcast_twiddle(2, 11, inner_fft.is_inverse()),
-                AvxVector::broadcast_twiddle(3, 11, inner_fft.is_inverse()),
-                AvxVector::broadcast_twiddle(4, 11, inner_fft.is_inverse()),
-                AvxVector::broadcast_twiddle(5, 11, inner_fft.is_inverse()),
+                AvxVector::broadcast_twiddle(1, 11, inner_fft.fft_direction()),
+                AvxVector::broadcast_twiddle(2, 11, inner_fft.fft_direction()),
+                AvxVector::broadcast_twiddle(3, 11, inner_fft.fft_direction()),
+                AvxVector::broadcast_twiddle(4, 11, inner_fft.fft_direction()),
+                AvxVector::broadcast_twiddle(5, 11, inner_fft.fft_direction()),
             ],
             common_data: mixedradix_gen_data!(11, inner_fft),
             _phantom: std::marker::PhantomData,
@@ -707,7 +707,7 @@ boilerplate_avx_fft_commondata!(MixedRadix12xnAvx);
 impl<A: AvxNum, T: FFTnum> MixedRadix12xnAvx<A, T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
-        let inverse = inner_fft.is_inverse();
+        let inverse = inner_fft.fft_direction();
         Self {
             twiddles_butterfly4: AvxVector::make_rotation90(inverse),
             twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, inverse),
@@ -748,9 +748,9 @@ boilerplate_avx_fft_commondata!(MixedRadix16xnAvx);
 impl<A: AvxNum, T: FFTnum> MixedRadix16xnAvx<A, T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
-        let inverse = inner_fft.is_inverse();
+        let inverse = inner_fft.fft_direction();
         Self {
-            twiddles_butterfly4: AvxVector::make_rotation90(inner_fft.is_inverse()),
+            twiddles_butterfly4: AvxVector::make_rotation90(inner_fft.fft_direction()),
             twiddles_butterfly16: [
                 AvxVector::broadcast_twiddle(1, 16, inverse),
                 AvxVector::broadcast_twiddle(3, 16, inverse),
@@ -887,13 +887,13 @@ mod unit_tests {
                 for inner_fft_len in 1..32 {
                     let len = inner_fft_len * $inner_count;
 
-                    let inner_fft_forward = Arc::new(DFT::new(inner_fft_len, false)) as Arc<dyn Fft<f32>>;
+                    let inner_fft_forward = Arc::new(DFT::new(inner_fft_len, FftDirection::Forward)) as Arc<dyn Fft<f32>>;
                     let fft_forward = $struct_name::<f32, f32>::new(inner_fft_forward).expect("Can't run test because this machine doesn't have the required instruction sets");
-                    check_fft_algorithm(&fft_forward, len, false);
+                    check_fft_algorithm(&fft_forward, len, FftDirection::Forward);
 
-                    let inner_fft_inverse = Arc::new(DFT::new(inner_fft_len, true)) as Arc<dyn Fft<f32>>;
+                    let inner_fft_inverse = Arc::new(DFT::new(inner_fft_len, FftDirection::Inverse)) as Arc<dyn Fft<f32>>;
                     let fft_inverse = $struct_name::<f32, f32>::new(inner_fft_inverse).expect("Can't run test because this machine doesn't have the required instruction sets");
-                    check_fft_algorithm(&fft_inverse, len, true);
+                    check_fft_algorithm(&fft_inverse, len, FftDirection::Inverse);
                 }
             }
             #[test]
@@ -901,13 +901,13 @@ mod unit_tests {
                 for inner_fft_len in 1..32 {
                     let len = inner_fft_len * $inner_count;
 
-                    let inner_fft_forward = Arc::new(DFT::new(inner_fft_len, false)) as Arc<dyn Fft<f64>>;
+                    let inner_fft_forward = Arc::new(DFT::new(inner_fft_len, FftDirection::Forward)) as Arc<dyn Fft<f64>>;
                     let fft_forward = $struct_name::<f64, f64>::new(inner_fft_forward).expect("Can't run test because this machine doesn't have the required instruction sets");
-                    check_fft_algorithm(&fft_forward, len, false);
+                    check_fft_algorithm(&fft_forward, len, FftDirection::Forward);
 
-                    let inner_fft_inverse = Arc::new(DFT::new(inner_fft_len, true)) as Arc<dyn Fft<f64>>;
+                    let inner_fft_inverse = Arc::new(DFT::new(inner_fft_len, FftDirection::Inverse)) as Arc<dyn Fft<f64>>;
                     let fft_inverse = $struct_name::<f64, f64>::new(inner_fft_inverse).expect("Can't run test because this machine doesn't have the required instruction sets");
-                    check_fft_algorithm(&fft_inverse, len, true);
+                    check_fft_algorithm(&fft_inverse, len, FftDirection::Inverse);
                 }
             }
         )

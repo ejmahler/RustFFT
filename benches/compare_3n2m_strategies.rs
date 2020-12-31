@@ -494,8 +494,8 @@ fn wrap_fft<T: FFTnum>(fft: impl Fft<T> + 'static) -> Arc<dyn Fft<T>> {
 
 // passes the given FFT length directly to the FFT planner
 fn bench_planned_fft_f32(b: &mut Bencher, len: usize) {
-    let mut planner: FftPlanner<f32> = FftPlanner::new(false);
-    let fft = planner.plan_fft(len);
+    let mut planner: FftPlanner<f32> = FftPlanner::new();
+    let fft = planner.plan_fft_forward(len);
 
     let mut buffer = vec![Complex::zero(); fft.len()];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
@@ -506,8 +506,8 @@ fn bench_planned_fft_f32(b: &mut Bencher, len: usize) {
 
 // passes the given FFT length directly to the FFT planner
 fn bench_planned_fft_f64(b: &mut Bencher, len: usize) {
-    let mut planner: FftPlanner<f64> = FftPlanner::new(false);
-    let fft = planner.plan_fft(len);
+    let mut planner: FftPlanner<f64> = FftPlanner::new();
+    let fft = planner.plan_fft_forward(len);
 
     let mut buffer = vec![Complex::zero(); fft.len()];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
