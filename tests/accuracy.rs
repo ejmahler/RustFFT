@@ -10,7 +10,7 @@ use num_traits::Float;
 use rustfft::{
     algorithm::{BluesteinsAlgorithm, Radix4},
     num_complex::Complex,
-    FftNum, Fft, FftPlanner,
+    Fft, FftNum, FftPlanner,
 };
 use rustfft::{num_traits::Zero, FftDirection};
 

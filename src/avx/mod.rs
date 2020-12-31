@@ -1,4 +1,4 @@
-use crate::{FftNum, Fft, FftDirection};
+use crate::{Fft, FftDirection, FftNum};
 use std::arch::x86_64::{__m256, __m256d};
 use std::sync::Arc;
 

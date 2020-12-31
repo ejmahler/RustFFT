@@ -5,7 +5,7 @@ use num_complex::Complex;
 use num_integer::div_ceil;
 
 use crate::array_utils;
-use crate::{Direction, FftNum, Fft, FftDirection, Length};
+use crate::{Direction, Fft, FftDirection, FftNum, Length};
 
 use super::{AvxNum, CommonSimdData};
 

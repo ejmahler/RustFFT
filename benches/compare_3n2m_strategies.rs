@@ -10,7 +10,7 @@ use rustfft::algorithm::butterflies::*;
 use rustfft::algorithm::DFT;
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
-use rustfft::{FftNum, Fft};
+use rustfft::{Fft, FftNum};
 use rustfft::{FftPlanner, FftPlannerAvx};
 
 use primal_check::miller_rabin;

@@ -226,7 +226,7 @@ mod avx;
 #[cfg(not(target_arch = "x86_64"))]
 mod avx {
     pub mod avx_planner {
-        use crate::{FftNum, Fft};
+        use crate::{Fft, FftNum};
         use std::sync::Arc;
         pub struct FftPlannerAvx<T: FftNum> {
             _phantom: std::marker::PhantomData<T>,

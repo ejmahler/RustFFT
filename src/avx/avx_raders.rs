@@ -10,7 +10,7 @@ use strength_reduce::StrengthReducedUsize;
 
 use crate::math_utils;
 use crate::{array_utils, FftDirection};
-use crate::{Direction, FftNum, Fft, Length};
+use crate::{Direction, Fft, FftNum, Length};
 
 use super::avx_vector;
 use super::{

@@ -6,7 +6,7 @@ use num_integer::div_ceil;
 use num_traits::Zero;
 
 use crate::{array_utils, FftDirection};
-use crate::{Direction, FftNum, Fft, Length};
+use crate::{Direction, Fft, FftNum, Length};
 
 use super::CommonSimdData;
 use super::{
