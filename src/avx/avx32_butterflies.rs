@@ -4,7 +4,7 @@ use std::mem::MaybeUninit;
 
 use num_complex::Complex;
 
-use crate::common::FFTnum;
+use crate::common::FftNum;
 
 use crate::{Direction, Fft, FftDirection, Length};
 
@@ -36,7 +36,7 @@ macro_rules! boilerplate_fft_simd_butterfly {
             }
         }
 
-        impl<T: FFTnum> Fft<T> for $struct_name<f32> {
+        impl<T: FftNum> Fft<T> for $struct_name<f32> {
             fn process_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
@@ -181,7 +181,7 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                 }
             }
         }
-        impl<T: FFTnum> $struct_name<T> {
+        impl<T: FftNum> $struct_name<T> {
             #[inline]
             fn perform_fft_inplace(
                 &self,
@@ -212,7 +212,7 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                 unsafe { self.row_butterflies(RawSlice::new(output), RawSliceMut::new(output)) };
             }
         }
-        impl<T: FFTnum> Fft<T> for $struct_name<f32> {
+        impl<T: FftNum> Fft<T> for $struct_name<f32> {
             fn process_with_scratch(
                 &self,
                 input: &mut [Complex<T>],

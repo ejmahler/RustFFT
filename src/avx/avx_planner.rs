@@ -4,14 +4,14 @@ use std::{any::TypeId, cmp::min};
 use primal_check::miller_rabin;
 
 use crate::algorithm::*;
-use crate::common::FFTnum;
+use crate::common::FftNum;
 use crate::math_utils::PartialFactors;
 use crate::Fft;
 use crate::{algorithm::butterflies::*, fft_cache::FftCache};
 
 use super::*;
 
-fn wrap_fft<T: FFTnum>(butterfly: impl Fft<T> + 'static) -> Arc<dyn Fft<T>> {
+fn wrap_fft<T: FftNum>(butterfly: impl Fft<T> + 'static) -> Arc<dyn Fft<T>> {
     Arc::new(butterfly) as Arc<dyn Fft<T>>
 }
 
@@ -109,10 +109,10 @@ impl MixedRadixPlan {
 ///
 /// Each FFT instance owns [`Arc`s](std::sync::Arc) to its internal data, rather than borrowing it from the planner, so it's perfectly
 /// safe to drop the planner after creating Fft instances.
-pub struct FftPlannerAvx<T: FFTnum> {
+pub struct FftPlannerAvx<T: FftNum> {
     internal_planner: Box<dyn AvxPlannerInternalAPI<T>>,
 }
-impl<T: FFTnum> FftPlannerAvx<T> {
+impl<T: FftNum> FftPlannerAvx<T> {
     /// Constructs a new `FftPlannerAvx` instance.
     ///
     /// Returns `Ok(planner_instance)` if this machine has the required instruction sets, `Err(())` if some instruction sets are missing.
@@ -126,21 +126,21 @@ impl<T: FFTnum> FftPlannerAvx<T> {
             // Specialization won't be on stable rust for a long time tohugh, so in the meantime, we can hack around it.
             //
             // The first step of the hack is to use TypeID to determine if T is f32, f64, or neither. If neither, we don't want to di any AVX acceleration
-            // If it's f32 or f64, then construct an internal type that has two generic parameters, one bounded on AvxNum, the other bounded on FFTnum
+            // If it's f32 or f64, then construct an internal type that has two generic parameters, one bounded on AvxNum, the other bounded on FftNum
             //
             // - A is bounded on the AvxNum trait, and is the type we use for any AVX computations. It has associated types for AVX vectors,
             //      associated constants for the number of elements per vector, etc.
-            // - T is bounded on the FFTnum trait, and thus is the type that every FFT algorithm will recieve its input/output buffers in.
+            // - T is bounded on the FftNum trait, and thus is the type that every FFT algorithm will recieve its input/output buffers in.
             //
             // An important snag relevant to the planner is that we have to box and type-erase the AvxNum bound,
             // since the only other option is making the AvxNum bound a part of this struct's external API
             //
             // Another annoying snag with this setup is that we frequently have to transmute buffers from &mut [Complex<T>] to &mut [Complex<A>] or vice versa.
             // We know this is safe because we assert everywhere that Type(A)==Type(T), so it's just a matter of "doing it right" every time.
-            // These transmutes are required because the FFT algorithm's input will come through the FFT trait, which may only be bounded by FFTnum.
+            // These transmutes are required because the FFT algorithm's input will come through the FFT trait, which may only be bounded by FftNum.
             // So the buffers will have the type &mut [Complex<T>]. The problem comes in that all of our AVX computation tools are on the AvxNum trait.
             //
-            // If we had specialization, we could easily convince the compilr that AvxNum and FFTnum were different bounds on the same underlying type (IE f32 or f64)
+            // If we had specialization, we could easily convince the compilr that AvxNum and FftNum were different bounds on the same underlying type (IE f32 or f64)
             // but without it, the compiler is convinced that they are different. So we use the transmute as a last-resort way to overcome this limitation.
             //
             // We keep both the A and T types around in all of our AVX-related structs so that we can cast between A and T whenever necessary.
@@ -187,17 +187,17 @@ impl<T: FFTnum> FftPlannerAvx<T> {
     }
 }
 
-trait AvxPlannerInternalAPI<T: FFTnum> {
+trait AvxPlannerInternalAPI<T: FftNum> {
     fn plan_and_construct_fft(&mut self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>>;
     fn debug_plan_fft(&self, len: usize, direction: FftDirection) -> MixedRadixPlan;
 }
 
-struct AvxPlannerInternal<A: AvxNum, T: FFTnum> {
+struct AvxPlannerInternal<A: AvxNum, T: FftNum> {
     cache: FftCache<T>,
     _phantom: std::marker::PhantomData<A>,
 }
 
-impl<T: FFTnum> AvxPlannerInternalAPI<T> for AvxPlannerInternal<f32, T> {
+impl<T: FftNum> AvxPlannerInternalAPI<T> for AvxPlannerInternal<f32, T> {
     fn plan_and_construct_fft(&mut self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
         // Step 1: Create a plan for this FFT length.
         let plan = self.plan_fft(len, direction, Self::plan_mixed_radix_base);
@@ -214,7 +214,7 @@ impl<T: FFTnum> AvxPlannerInternalAPI<T> for AvxPlannerInternal<f32, T> {
         self.plan_fft(len, direction, Self::plan_mixed_radix_base)
     }
 }
-impl<T: FFTnum> AvxPlannerInternalAPI<T> for AvxPlannerInternal<f64, T> {
+impl<T: FftNum> AvxPlannerInternalAPI<T> for AvxPlannerInternal<f64, T> {
     fn plan_and_construct_fft(&mut self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
         // Step 1: Create a plan for this FFT length.
         let plan = self.plan_fft(len, direction, Self::plan_mixed_radix_base);
@@ -235,7 +235,7 @@ impl<T: FFTnum> AvxPlannerInternalAPI<T> for AvxPlannerInternal<f64, T> {
 //-------------------------------------------------------------------
 // f32-specific planning stuff
 //-------------------------------------------------------------------
-impl<T: FFTnum> AvxPlannerInternal<f32, T> {
+impl<T: FftNum> AvxPlannerInternal<f32, T> {
     pub fn new() -> Self {
         // Internal sanity check: Make sure that T == f32.
         // This struct has two generic parameters A and T, but they must always be the same, and are only kept separate to help work around the lack of specialization.
@@ -440,7 +440,7 @@ impl<T: FFTnum> AvxPlannerInternal<f32, T> {
 //-------------------------------------------------------------------
 // f64-specific planning stuff
 //-------------------------------------------------------------------
-impl<T: FFTnum> AvxPlannerInternal<f64, T> {
+impl<T: FftNum> AvxPlannerInternal<f64, T> {
     pub fn new() -> Self {
         // Internal sanity check: Make sure that T == f64.
         // This struct has two generic parameters A and T, but they must always be the same, and are only kept separate to help work around the lack of specialization.
@@ -647,7 +647,7 @@ impl<T: FFTnum> AvxPlannerInternal<f64, T> {
 //-------------------------------------------------------------------
 // type-agnostic planning stuff
 //-------------------------------------------------------------------
-impl<A: AvxNum, T: FFTnum> AvxPlannerInternal<A, T> {
+impl<A: AvxNum, T: FftNum> AvxPlannerInternal<A, T> {
     // Given a length, return a plan for how this FFT should be computed
     fn plan_fft(
         &self,

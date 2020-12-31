@@ -1,7 +1,7 @@
-use crate::{common::FFTnum, FftDirection};
+use crate::{common::FftNum, FftDirection};
 use num_complex::Complex;
 
-pub fn generate_twiddle_factors<T: FFTnum>(
+pub fn generate_twiddle_factors<T: FftNum>(
     fft_len: usize,
     direction: FftDirection,
 ) -> Vec<Complex<T>> {
@@ -10,7 +10,7 @@ pub fn generate_twiddle_factors<T: FFTnum>(
         .collect()
 }
 
-pub fn rotate_90<T: FFTnum>(value: Complex<T>, direction: FftDirection) -> Complex<T> {
+pub fn rotate_90<T: FftNum>(value: Complex<T>, direction: FftDirection) -> Complex<T> {
     match direction {
         FftDirection::Forward => Complex {
             re: value.im,

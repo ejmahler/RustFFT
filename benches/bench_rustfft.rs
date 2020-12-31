@@ -6,7 +6,7 @@ extern crate rustfft;
 
 use std::sync::Arc;
 use test::Bencher;
-use rustfft::{Direction, FFTnum, Fft, FftDirection, Length};
+use rustfft::{Direction, FftNum, Fft, FftDirection, Length};
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 use rustfft::algorithm::*;
@@ -16,7 +16,7 @@ struct Noop {
     len: usize,
     direction: FftDirection,
 }
-impl<T: FFTnum> Fft<T> for Noop {
+impl<T: FftNum> Fft<T> for Noop {
     fn process_with_scratch(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {}
     fn process_multi(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {}
     fn process_inplace_with_scratch(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {}

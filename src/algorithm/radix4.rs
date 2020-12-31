@@ -5,7 +5,7 @@ use num_traits::Zero;
 
 use crate::{
     array_utils::{RawSlice, RawSliceMut},
-    common::FFTnum,
+    common::FftNum,
     FftDirection,
 };
 
@@ -38,7 +38,7 @@ pub struct Radix4<T> {
     direction: FftDirection,
 }
 
-impl<T: FFTnum> Radix4<T> {
+impl<T: FftNum> Radix4<T> {
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the power-of-two FFT
     pub fn new(len: usize, direction: FftDirection) -> Self {
         assert!(
@@ -133,7 +133,7 @@ boilerplate_fft_oop!(Radix4, |this: &Radix4<_>| this.len);
 
 // after testing an iterative bit reversal algorithm, this recursive algorithm
 // was almost an order of magnitude faster at setting up
-fn prepare_radix4<T: FFTnum>(
+fn prepare_radix4<T: FftNum>(
     size: usize,
     base_len: usize,
     signal: &[Complex<T>],
@@ -159,7 +159,7 @@ fn prepare_radix4<T: FFTnum>(
     }
 }
 
-unsafe fn butterfly_4<T: FFTnum>(
+unsafe fn butterfly_4<T: FftNum>(
     data: &mut [Complex<T>],
     twiddles: &[Complex<T>],
     num_ffts: usize,

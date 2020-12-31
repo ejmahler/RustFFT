@@ -1,7 +1,7 @@
 ## [4.1.0]
 Released 24 December 2020
 ### Added
-- Added a blanked impl of `FFTnum` to any type that implements the required traits (#7)
+- Added a blanked impl of `FftNum` to any type that implements the required traits (#7)
 - Added butterflies for many prime sizes, up to 31, and optimized the size-3, size-5, and size-7 buitterflies (#10)
 - Added an implementation of Bluestein's Algorithm (#6)
 

@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use crate::common::FFTnum;
+use crate::common::FftNum;
 use crate::{
     array_utils::{RawSlice, RawSliceMut},
     FftDirection,

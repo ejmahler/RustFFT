@@ -10,7 +10,7 @@ use rustfft::algorithm::butterflies::*;
 use rustfft::algorithm::DFT;
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
-use rustfft::{FFTnum, Fft};
+use rustfft::{FftNum, Fft};
 use rustfft::{FftPlanner, FftPlannerAvx};
 
 use primal_check::miller_rabin;
@@ -488,7 +488,7 @@ fn generate_raders_benchmarks(_: &mut test::Bencher) {
     }
 }
 
-fn wrap_fft<T: FFTnum>(fft: impl Fft<T> + 'static) -> Arc<dyn Fft<T>> {
+fn wrap_fft<T: FftNum>(fft: impl Fft<T> + 'static) -> Arc<dyn Fft<T>> {
     Arc::new(fft) as Arc<dyn Fft<T>>
 }
 

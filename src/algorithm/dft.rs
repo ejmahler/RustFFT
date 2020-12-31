@@ -2,7 +2,7 @@ use num_complex::Complex;
 use num_traits::Zero;
 
 use crate::{twiddles, FftDirection};
-use crate::{Direction, FFTnum, Fft, Length};
+use crate::{Direction, FftNum, Fft, Length};
 
 /// Naive O(n^2 ) Discrete Fourier Transform implementation
 ///
@@ -28,7 +28,7 @@ pub struct DFT<T> {
     direction: FftDirection,
 }
 
-impl<T: FFTnum> DFT<T> {
+impl<T: FftNum> DFT<T> {
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute DFT
     pub fn new(len: usize, direction: FftDirection) -> Self {
         Self {
