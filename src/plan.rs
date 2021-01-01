@@ -200,13 +200,18 @@ impl Recipe {
 
     pub fn cost(&self) -> f32 {
         match self {
+<<<<<<< HEAD
             Recipe::DFT(len) => 0.9*(*len as f32).powf(2.2),
+=======
+            Recipe::DFT(len) => 4.0*(*len as f32).powf(2.2),
+>>>>>>> f5b19b6... WIP estimating planner
             Recipe::Radix4(len) => {
                 let mut cost = 1.2 * (*len as f32).powf(1.2);
                 if *len > SLOWDOWN_LEN {
                     cost += 10.0 * (*len-SLOWDOWN_LEN) as f32;
                 }
                 cost
+<<<<<<< HEAD
             },
             Recipe::Butterfly1 => 0.3,
             Recipe::Butterfly2 => 0.625,
@@ -225,6 +230,25 @@ impl Recipe {
             Recipe::Butterfly29 => 198.0,
             Recipe::Butterfly31 => 233.0,
             Recipe::Butterfly32 => 86.3,
+=======
+            }
+            Recipe::Butterfly2 => 0.6246,
+            Recipe::Butterfly3 => 0.8484,
+            Recipe::Butterfly4 => 1.3584,
+            Recipe::Butterfly5 => 2.6484,
+            Recipe::Butterfly6 => 2.1108,
+            Recipe::Butterfly7 => 6.4626,
+            Recipe::Butterfly8 => 5.4474,
+            Recipe::Butterfly11 => 12.852,
+            Recipe::Butterfly13 => 17.6034,
+            Recipe::Butterfly16 => 25.7688,
+            Recipe::Butterfly17 => 31.0176,
+            Recipe::Butterfly19 => 39.5826,
+            Recipe::Butterfly23 => 97.9686,
+            Recipe::Butterfly29 => 197.7,
+            Recipe::Butterfly31 => 232.9878,
+            Recipe::Butterfly32 => 86.2956,
+>>>>>>> f5b19b6... WIP estimating planner
             Recipe::MixedRadix { left_fft, right_fft } => {
                 let len = self.len();
                 let inners_cost = left_fft.cost()*right_fft.len() as f32 + right_fft.cost()*left_fft.len() as f32;
@@ -237,7 +261,11 @@ impl Recipe {
             Recipe::GoodThomasAlgorithm { left_fft, right_fft } => {
                 let len = self.len();
                 let inners_cost = left_fft.cost()*right_fft.len() as f32 + right_fft.cost()*left_fft.len() as f32;
+<<<<<<< HEAD
                 let mut twiddle_cost = 10.0 + 1.4 * len as f32;
+=======
+                let mut twiddle_cost = 15.0 + 1.3 * len as f32;
+>>>>>>> f5b19b6... WIP estimating planner
                 if len > SLOWDOWN_LEN {
                     twiddle_cost += 10.0 * (len-SLOWDOWN_LEN) as f32;
                 }
@@ -255,14 +283,23 @@ impl Recipe {
             Recipe::GoodThomasAlgorithmSmall { left_fft, right_fft } => {
                 let len = self.len();
                 let inners_cost = left_fft.cost()*right_fft.len() as f32 + right_fft.cost()*left_fft.len() as f32;
+<<<<<<< HEAD
                 let mut twiddle_cost = 10.0 + 1.4 * len as f32;
+=======
+                let mut twiddle_cost = 15.0 + 1.3 * len as f32;
+>>>>>>> f5b19b6... WIP estimating planner
                 if len > SLOWDOWN_LEN {
                     twiddle_cost += 10.0 * (len-SLOWDOWN_LEN) as f32;
                 }
                 inners_cost + twiddle_cost
             },
+<<<<<<< HEAD
             Recipe::RadersAlgorithm {inner_fft } => 5.0 * self.len() as f32 + 2.0*inner_fft.cost(),
             Recipe::BluesteinsAlgorithm { len , inner_fft } =>  4.0 * *len as f32 + 2.0*inner_fft.cost(),
+=======
+            Recipe::RadersAlgorithm {inner_fft } => self.len() as f32 + 2.0*inner_fft.cost(),
+            Recipe::BluesteinsAlgorithm { len , inner_fft } =>  *len as f32 + 2.0*inner_fft.cost(),
+>>>>>>> f5b19b6... WIP estimating planner
         }
     }
 }
