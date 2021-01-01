@@ -4,7 +4,7 @@ use std::sync::Arc;
 use num_complex::Complex;
 use transpose;
 
-use crate::{FftDirection, common::FftNum, twiddles};
+use crate::{common::FftNum, twiddles, FftDirection};
 
 use crate::array_utils;
 use crate::{Direction, Fft, Length};

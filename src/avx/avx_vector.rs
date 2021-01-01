@@ -5,9 +5,8 @@ use num_complex::Complex;
 use num_traits::Zero;
 
 use crate::{
-    twiddles,
     array_utils::{RawSlice, RawSliceMut},
-    FftDirection,
+    twiddles, FftDirection,
 };
 
 use super::AvxNum;

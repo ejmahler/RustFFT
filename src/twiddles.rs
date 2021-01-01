@@ -1,7 +1,11 @@
 use crate::{common::FftNum, FftDirection};
 use num_complex::Complex;
 
-pub fn compute_twiddle<T: FftNum>(index: usize, fft_len: usize, direction: FftDirection) -> Complex<T> {
+pub fn compute_twiddle<T: FftNum>(
+    index: usize,
+    fft_len: usize,
+    direction: FftDirection,
+) -> Complex<T> {
     let constant = -2f64 * std::f64::consts::PI / fft_len as f64;
     let angle = constant * index as f64;
 
@@ -16,7 +20,11 @@ pub fn compute_twiddle<T: FftNum>(index: usize, fft_len: usize, direction: FftDi
     }
 }
 
-pub fn compute_twiddle_floatindex<T: FftNum>(index: f64, fft_len: usize, direction: FftDirection) -> Complex<T> {
+pub fn compute_twiddle_floatindex<T: FftNum>(
+    index: f64,
+    fft_len: usize,
+    direction: FftDirection,
+) -> Complex<T> {
     let constant = -2f64 * std::f64::consts::PI / fft_len as f64;
     let angle = constant * index;
 

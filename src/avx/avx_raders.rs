@@ -8,8 +8,8 @@ use num_traits::Zero;
 use primal_check::miller_rabin;
 use strength_reduce::StrengthReducedUsize;
 
-use crate::{math_utils, twiddles};
 use crate::{array_utils, FftDirection};
+use crate::{math_utils, twiddles};
 use crate::{Direction, Fft, FftNum, Length};
 
 use super::avx_vector;

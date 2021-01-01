@@ -3,7 +3,7 @@ use std::sync::Arc;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use crate::{FftDirection, common::FftNum, twiddles};
+use crate::{common::FftNum, twiddles, FftDirection};
 
 use crate::{Direction, Fft, Length};
 

@@ -5,7 +5,7 @@ use num_complex::Complex;
 use num_integer::div_ceil;
 use num_traits::Zero;
 
-use crate::{FftDirection, array_utils, twiddles};
+use crate::{array_utils, twiddles, FftDirection};
 use crate::{Direction, Fft, FftNum, Length};
 
 use super::CommonSimdData;

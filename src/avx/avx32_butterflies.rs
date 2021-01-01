@@ -774,7 +774,7 @@ boilerplate_fft_simd_butterfly!(Butterfly9Avx, 9);
 impl Butterfly9Avx<f32> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(direction: FftDirection) -> Self {
-        let twiddles : [Complex<f32>; 4] = [
+        let twiddles: [Complex<f32>; 4] = [
             twiddles::compute_twiddle(1, 9, direction),
             twiddles::compute_twiddle(2, 9, direction),
             twiddles::compute_twiddle(2, 9, direction),
@@ -856,7 +856,10 @@ impl Butterfly12Avx<f32> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(direction: FftDirection) -> Self {
         let twiddles = [
-            Complex { re: 1.0f32, im: 0.0 },
+            Complex {
+                re: 1.0f32,
+                im: 0.0,
+            },
             Complex { re: 1.0, im: 0.0 },
             twiddles::compute_twiddle(2, 12, direction),
             twiddles::compute_twiddle(4, 12, direction),
