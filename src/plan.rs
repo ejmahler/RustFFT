@@ -85,6 +85,8 @@ const MIN_RADIX4_BITS: u32 = 5; // smallest size to consider radix 4 an option i
 const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option is 2^16 = 65536
 const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
 const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the inner fft of Bluestein if length is larger than this
+const SLOWDOWN_LEN: usize = 100000; // lenght where we run out of cpu cache and algorithms tend to slow down
+const SMALL_LEN: usize = 1000; // limit of "small" length for mixed radix algos 
 
 /// A Recipe is a structure that describes the design of a FFT, without actually creating it.
 /// It is used as a middle step in the planning process.
@@ -173,6 +175,73 @@ impl Recipe {
             } => left_fft.len() * right_fft.len(),
             Recipe::RadersAlgorithm { inner_fft } => inner_fft.len() + 1,
             Recipe::BluesteinsAlgorithm { len, .. } => *len,
+        }
+    }
+
+    pub fn cost(&self) -> f32 {
+        match self {
+            Recipe::DFT(len) => 4.0*(*len as f32).powf(2.2),
+            Recipe::Radix4(len) => {
+                let mut cost = 1.2 * (*len as f32).powf(1.2);
+                if *len > SLOWDOWN_LEN {
+                    cost += 10.0 * (*len-SLOWDOWN_LEN) as f32;
+                }
+                cost
+            }
+            Recipe::Butterfly2 => 0.6246,
+            Recipe::Butterfly3 => 0.8484,
+            Recipe::Butterfly4 => 1.3584,
+            Recipe::Butterfly5 => 2.6484,
+            Recipe::Butterfly6 => 2.1108,
+            Recipe::Butterfly7 => 6.4626,
+            Recipe::Butterfly8 => 5.4474,
+            Recipe::Butterfly11 => 12.852,
+            Recipe::Butterfly13 => 17.6034,
+            Recipe::Butterfly16 => 25.7688,
+            Recipe::Butterfly17 => 31.0176,
+            Recipe::Butterfly19 => 39.5826,
+            Recipe::Butterfly23 => 97.9686,
+            Recipe::Butterfly29 => 197.7,
+            Recipe::Butterfly31 => 232.9878,
+            Recipe::Butterfly32 => 86.2956,
+            Recipe::MixedRadix { left_fft, right_fft } => {
+                let len = self.len();
+                let inners_cost = left_fft.cost()*right_fft.len() as f32 + right_fft.cost()*left_fft.len() as f32;
+                let mut twiddle_cost = 15.0 + 1.3 * len as f32;
+                if len > SLOWDOWN_LEN {
+                    twiddle_cost+= 10.0 * (len-SLOWDOWN_LEN) as f32;
+                }
+                inners_cost + twiddle_cost
+            },
+            Recipe::GoodThomasAlgorithm { left_fft, right_fft } => {
+                let len = self.len();
+                let inners_cost = left_fft.cost()*right_fft.len() as f32 + right_fft.cost()*left_fft.len() as f32;
+                let mut twiddle_cost = 15.0 + 1.3 * len as f32;
+                if len > SLOWDOWN_LEN {
+                    twiddle_cost += 10.0 * (len-SLOWDOWN_LEN) as f32;
+                }
+                inners_cost + twiddle_cost
+            },
+            Recipe::MixedRadixSmall { left_fft, right_fft } => {
+                let len = self.len();
+                let inners_cost = left_fft.cost()*right_fft.len() as f32 + right_fft.cost()*left_fft.len() as f32;
+                let mut twiddle_cost = 15.0 + 1.3 * len as f32;
+                if len > SLOWDOWN_LEN {
+                    twiddle_cost += 10.0 * (len-SLOWDOWN_LEN) as f32;
+                }
+                inners_cost + twiddle_cost
+            },
+            Recipe::GoodThomasAlgorithmSmall { left_fft, right_fft } => {
+                let len = self.len();
+                let inners_cost = left_fft.cost()*right_fft.len() as f32 + right_fft.cost()*left_fft.len() as f32;
+                let mut twiddle_cost = 15.0 + 1.3 * len as f32;
+                if len > SLOWDOWN_LEN {
+                    twiddle_cost += 10.0 * (len-SLOWDOWN_LEN) as f32;
+                }
+                inners_cost + twiddle_cost
+            },
+            Recipe::RadersAlgorithm {inner_fft } => self.len() as f32 + 2.0*inner_fft.cost(),
+            Recipe::BluesteinsAlgorithm { len , inner_fft } =>  *len as f32 + 2.0*inner_fft.cost(),
         }
     }
 }
