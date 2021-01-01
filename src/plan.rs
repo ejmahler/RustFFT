@@ -135,6 +135,7 @@ pub enum Recipe {
         inner_fft: Rc<Recipe>,
     },
     Radix4(usize),
+    Butterfly1,
     Butterfly2,
     Butterfly3,
     Butterfly4,
@@ -158,6 +159,7 @@ impl Recipe {
         match self {
             Recipe::Dft(length) => *length,
             Recipe::Radix4(length) => *length,
+            Recipe::Butterfly1 => 1,
             Recipe::Butterfly2 => 2,
             Recipe::Butterfly3 => 3,
             Recipe::Butterfly4 => 4,
@@ -197,30 +199,31 @@ impl Recipe {
 
     pub fn cost(&self) -> f32 {
         match self {
-            Recipe::DFT(len) => 4.0*(*len as f32).powf(2.2),
+            Recipe::DFT(len) => 0.9*(*len as f32).powf(2.2),
             Recipe::Radix4(len) => {
                 let mut cost = 1.2 * (*len as f32).powf(1.2);
                 if *len > SLOWDOWN_LEN {
                     cost += 10.0 * (*len-SLOWDOWN_LEN) as f32;
                 }
                 cost
-            }
-            Recipe::Butterfly2 => 0.6246,
-            Recipe::Butterfly3 => 0.8484,
-            Recipe::Butterfly4 => 1.3584,
-            Recipe::Butterfly5 => 2.6484,
-            Recipe::Butterfly6 => 2.1108,
-            Recipe::Butterfly7 => 6.4626,
-            Recipe::Butterfly8 => 5.4474,
-            Recipe::Butterfly11 => 12.852,
-            Recipe::Butterfly13 => 17.6034,
-            Recipe::Butterfly16 => 25.7688,
-            Recipe::Butterfly17 => 31.0176,
-            Recipe::Butterfly19 => 39.5826,
-            Recipe::Butterfly23 => 97.9686,
-            Recipe::Butterfly29 => 197.7,
-            Recipe::Butterfly31 => 232.9878,
-            Recipe::Butterfly32 => 86.2956,
+            },
+            Recipe::Butterfly1 => 0.3,
+            Recipe::Butterfly2 => 0.625,
+            Recipe::Butterfly3 => 0.848,
+            Recipe::Butterfly4 => 1.36,
+            Recipe::Butterfly5 => 2.65,
+            Recipe::Butterfly6 => 2.11,
+            Recipe::Butterfly7 => 6.46,
+            Recipe::Butterfly8 => 5.45,
+            Recipe::Butterfly11 => 12.9,
+            Recipe::Butterfly13 => 17.6,
+            Recipe::Butterfly16 => 25.8,
+            Recipe::Butterfly17 => 31.0,
+            Recipe::Butterfly19 => 39.6,
+            Recipe::Butterfly23 => 98.0,
+            Recipe::Butterfly29 => 198.0,
+            Recipe::Butterfly31 => 233.0,
+            Recipe::Butterfly32 => 86.3,
             Recipe::MixedRadix { left_fft, right_fft } => {
                 let len = self.len();
                 let inners_cost = left_fft.cost()*right_fft.len() as f32 + right_fft.cost()*left_fft.len() as f32;
@@ -233,7 +236,7 @@ impl Recipe {
             Recipe::GoodThomasAlgorithm { left_fft, right_fft } => {
                 let len = self.len();
                 let inners_cost = left_fft.cost()*right_fft.len() as f32 + right_fft.cost()*left_fft.len() as f32;
-                let mut twiddle_cost = 15.0 + 1.3 * len as f32;
+                let mut twiddle_cost = 10.0 + 1.4 * len as f32;
                 if len > SLOWDOWN_LEN {
                     twiddle_cost += 10.0 * (len-SLOWDOWN_LEN) as f32;
                 }
@@ -251,14 +254,14 @@ impl Recipe {
             Recipe::GoodThomasAlgorithmSmall { left_fft, right_fft } => {
                 let len = self.len();
                 let inners_cost = left_fft.cost()*right_fft.len() as f32 + right_fft.cost()*left_fft.len() as f32;
-                let mut twiddle_cost = 15.0 + 1.3 * len as f32;
+                let mut twiddle_cost = 10.0 + 1.4 * len as f32;
                 if len > SLOWDOWN_LEN {
                     twiddle_cost += 10.0 * (len-SLOWDOWN_LEN) as f32;
                 }
                 inners_cost + twiddle_cost
             },
-            Recipe::RadersAlgorithm {inner_fft } => self.len() as f32 + 2.0*inner_fft.cost(),
-            Recipe::BluesteinsAlgorithm { len , inner_fft } =>  *len as f32 + 2.0*inner_fft.cost(),
+            Recipe::RadersAlgorithm {inner_fft } => 5.0 * self.len() as f32 + 2.0*inner_fft.cost(),
+            Recipe::BluesteinsAlgorithm { len , inner_fft } =>  4.0 * *len as f32 + 2.0*inner_fft.cost(),
         }
     }
 }
@@ -336,9 +339,10 @@ impl<T: FftNum> FftPlannerScalar<T> {
 
     // Make a recipe for a length
     fn design_fft_for_len(&mut self, len: usize) -> Rc<Recipe> {
-        if len < 2 {
-            Rc::new(Recipe::Dft(len))
-        } else if let Some(recipe) = self.recipe_cache.get(&len) {
+        if len == 0 {
+            Rc::new(Recipe::DFT(0))
+        }
+        else if let Some(recipe) = self.recipe_cache.get(&len) {
             Rc::clone(&recipe)
         } else {
             let factors = PrimeFactors::compute(len);
@@ -365,6 +369,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
         match recipe {
             Recipe::Dft(len) => Arc::new(Dft::new(*len, direction)) as Arc<dyn Fft<T>>,
             Recipe::Radix4(len) => Arc::new(Radix4::new(*len, direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly1 => Arc::new(Butterfly2::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly2 => Arc::new(Butterfly2::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly3 => Arc::new(Butterfly3::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly4 => Arc::new(Butterfly4::new(direction)) as Arc<dyn Fft<T>>,
@@ -486,6 +491,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
     // Returns Some(instance) if we have a butterfly available for this size. Returns None if there is no butterfly available for this size
     fn design_butterfly_algorithm(&mut self, len: usize) -> Option<Rc<Recipe>> {
         match len {
+            1 => Some(Rc::new(Recipe::Butterfly1)),
             2 => Some(Rc::new(Recipe::Butterfly2)),
             3 => Some(Rc::new(Recipe::Butterfly3)),
             4 => Some(Rc::new(Recipe::Butterfly4)),
@@ -575,9 +581,9 @@ mod unit_tests {
 
     #[test]
     fn test_plan_scalar_trivial() {
-        // Length 0 and 1 should use Dft
+        // Length 0 should use DFT
         let mut planner = FftPlannerScalar::<f64>::new();
-        for len in 0..2 {
+        for len in 0..1 {
             let plan = planner.design_fft_for_len(len);
             assert_eq!(*plan, Recipe::Dft(len));
             assert_eq!(plan.len(), len, "Recipe reports wrong length");
@@ -612,6 +618,7 @@ mod unit_tests {
     fn test_plan_scalar_butterflies() {
         // Check that all butterflies are used
         let mut planner = FftPlannerScalar::<f64>::new();
+        assert_eq!(*planner.design_fft_for_len(1), Recipe::Butterfly1);
         assert_eq!(*planner.design_fft_for_len(2), Recipe::Butterfly2);
         assert_eq!(*planner.design_fft_for_len(3), Recipe::Butterfly3);
         assert_eq!(*planner.design_fft_for_len(4), Recipe::Butterfly4);
