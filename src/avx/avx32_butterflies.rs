@@ -4,7 +4,7 @@ use std::mem::MaybeUninit;
 
 use num_complex::Complex;
 
-use crate::common::FftNum;
+use crate::{common::FftNum, twiddles};
 
 use crate::{Direction, Fft, FftDirection, Length};
 
@@ -390,8 +390,8 @@ boilerplate_fft_simd_butterfly!(Butterfly5Avx, 5);
 impl Butterfly5Avx<f32> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(direction: FftDirection) -> Self {
-        let twiddle1 = f32::generate_twiddle_factor(1, 5, direction);
-        let twiddle2 = f32::generate_twiddle_factor(2, 5, direction);
+        let twiddle1 = twiddles::compute_twiddle(1, 5, direction);
+        let twiddle2 = twiddles::compute_twiddle(2, 5, direction);
         Self {
             twiddles: [
                 _mm_set_ps(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),
@@ -459,9 +459,9 @@ boilerplate_fft_simd_butterfly!(Butterfly7Avx, 7);
 impl Butterfly7Avx<f32> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(direction: FftDirection) -> Self {
-        let twiddle1 = f32::generate_twiddle_factor(1, 7, direction);
-        let twiddle2 = f32::generate_twiddle_factor(2, 7, direction);
-        let twiddle3 = f32::generate_twiddle_factor(3, 7, direction);
+        let twiddle1 = twiddles::compute_twiddle(1, 7, direction);
+        let twiddle2 = twiddles::compute_twiddle(2, 7, direction);
+        let twiddle3 = twiddles::compute_twiddle(3, 7, direction);
         Self {
             twiddles: [
                 _mm_set_ps(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),
@@ -559,11 +559,11 @@ boilerplate_fft_simd_butterfly!(Butterfly11Avx, 11);
 impl Butterfly11Avx<f32> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(direction: FftDirection) -> Self {
-        let twiddle1 = f32::generate_twiddle_factor(1, 11, direction);
-        let twiddle2 = f32::generate_twiddle_factor(2, 11, direction);
-        let twiddle3 = f32::generate_twiddle_factor(3, 11, direction);
-        let twiddle4 = f32::generate_twiddle_factor(4, 11, direction);
-        let twiddle5 = f32::generate_twiddle_factor(5, 11, direction);
+        let twiddle1 = twiddles::compute_twiddle(1, 11, direction);
+        let twiddle2 = twiddles::compute_twiddle(2, 11, direction);
+        let twiddle3 = twiddles::compute_twiddle(3, 11, direction);
+        let twiddle4 = twiddles::compute_twiddle(4, 11, direction);
+        let twiddle5 = twiddles::compute_twiddle(5, 11, direction);
 
         let twiddles_lo = [
             _mm_set_ps(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),
@@ -774,11 +774,11 @@ boilerplate_fft_simd_butterfly!(Butterfly9Avx, 9);
 impl Butterfly9Avx<f32> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(direction: FftDirection) -> Self {
-        let twiddles = [
-            f32::generate_twiddle_factor(1, 9, direction),
-            f32::generate_twiddle_factor(2, 9, direction),
-            f32::generate_twiddle_factor(2, 9, direction),
-            f32::generate_twiddle_factor(4, 9, direction),
+        let twiddles: [Complex<f32>; 4] = [
+            twiddles::compute_twiddle(1, 9, direction),
+            twiddles::compute_twiddle(2, 9, direction),
+            twiddles::compute_twiddle(2, 9, direction),
+            twiddles::compute_twiddle(4, 9, direction),
         ];
         Self {
             twiddles: twiddles.load_complex(0),
@@ -856,15 +856,18 @@ impl Butterfly12Avx<f32> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(direction: FftDirection) -> Self {
         let twiddles = [
+            Complex {
+                re: 1.0f32,
+                im: 0.0,
+            },
             Complex { re: 1.0, im: 0.0 },
-            Complex { re: 1.0, im: 0.0 },
-            f32::generate_twiddle_factor(2, 12, direction),
-            f32::generate_twiddle_factor(4, 12, direction),
+            twiddles::compute_twiddle(2, 12, direction),
+            twiddles::compute_twiddle(4, 12, direction),
             // note that these twiddles are deliberately in a weird order, see perform_fft_f32 for why
-            f32::generate_twiddle_factor(1, 12, direction),
-            f32::generate_twiddle_factor(2, 12, direction),
-            f32::generate_twiddle_factor(3, 12, direction),
-            f32::generate_twiddle_factor(6, 12, direction),
+            twiddles::compute_twiddle(1, 12, direction),
+            twiddles::compute_twiddle(2, 12, direction),
+            twiddles::compute_twiddle(3, 12, direction),
+            twiddles::compute_twiddle(6, 12, direction),
         ];
         Self {
             twiddles: [twiddles.load_complex(0), twiddles.load_complex(4)],

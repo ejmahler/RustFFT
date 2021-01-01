@@ -4,10 +4,9 @@ use std::fmt::Debug;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use crate::common::FftNum;
 use crate::{
     array_utils::{RawSlice, RawSliceMut},
-    FftDirection,
+    twiddles, FftDirection,
 };
 
 use super::AvxNum;
@@ -909,9 +908,9 @@ impl AvxVector for __m256 {
         len: usize,
         direction: FftDirection,
     ) -> Self {
-        let mut twiddle_chunk = [Complex::zero(); Self::COMPLEX_PER_VECTOR];
+        let mut twiddle_chunk = [Complex::<f32>::zero(); Self::COMPLEX_PER_VECTOR];
         for i in 0..Self::COMPLEX_PER_VECTOR {
-            twiddle_chunk[i] = f32::generate_twiddle_factor(y * (x + i), len, direction);
+            twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
         }
 
         twiddle_chunk.load_complex(0)
@@ -919,7 +918,7 @@ impl AvxVector for __m256 {
 
     #[inline(always)]
     unsafe fn broadcast_twiddle(index: usize, len: usize, direction: FftDirection) -> Self {
-        Self::broadcast_complex_elements(f32::generate_twiddle_factor(index, len, direction))
+        Self::broadcast_complex_elements(twiddles::compute_twiddle(index, len, direction))
     }
 
     #[inline(always)]
@@ -1293,16 +1292,16 @@ impl AvxVector for __m128 {
         len: usize,
         direction: FftDirection,
     ) -> Self {
-        let mut twiddle_chunk = [Complex::zero(); Self::COMPLEX_PER_VECTOR];
+        let mut twiddle_chunk = [Complex::<f32>::zero(); Self::COMPLEX_PER_VECTOR];
         for i in 0..Self::COMPLEX_PER_VECTOR {
-            twiddle_chunk[i] = f32::generate_twiddle_factor(y * (x + i), len, direction);
+            twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
         }
 
         _mm_loadu_ps(twiddle_chunk.as_ptr() as *const f32)
     }
     #[inline(always)]
     unsafe fn broadcast_twiddle(index: usize, len: usize, direction: FftDirection) -> Self {
-        Self::broadcast_complex_elements(f32::generate_twiddle_factor(index, len, direction))
+        Self::broadcast_complex_elements(twiddles::compute_twiddle(index, len, direction))
     }
 
     #[inline(always)]
@@ -1558,16 +1557,16 @@ impl AvxVector for __m256d {
         len: usize,
         direction: FftDirection,
     ) -> Self {
-        let mut twiddle_chunk = [Complex::zero(); Self::COMPLEX_PER_VECTOR];
+        let mut twiddle_chunk = [Complex::<f64>::zero(); Self::COMPLEX_PER_VECTOR];
         for i in 0..Self::COMPLEX_PER_VECTOR {
-            twiddle_chunk[i] = f64::generate_twiddle_factor(y * (x + i), len, direction);
+            twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
         }
 
         twiddle_chunk.load_complex(0)
     }
     #[inline(always)]
     unsafe fn broadcast_twiddle(index: usize, len: usize, direction: FftDirection) -> Self {
-        Self::broadcast_complex_elements(f64::generate_twiddle_factor(index, len, direction))
+        Self::broadcast_complex_elements(twiddles::compute_twiddle(index, len, direction))
     }
 
     #[inline(always)]
@@ -1879,16 +1878,16 @@ impl AvxVector for __m128d {
         len: usize,
         direction: FftDirection,
     ) -> Self {
-        let mut twiddle_chunk = [Complex::zero(); Self::COMPLEX_PER_VECTOR];
+        let mut twiddle_chunk = [Complex::<f64>::zero(); Self::COMPLEX_PER_VECTOR];
         for i in 0..Self::COMPLEX_PER_VECTOR {
-            twiddle_chunk[i] = f64::generate_twiddle_factor(y * (x + i), len, direction);
+            twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
         }
 
         _mm_loadu_pd(twiddle_chunk.as_ptr() as *const f64)
     }
     #[inline(always)]
     unsafe fn broadcast_twiddle(index: usize, len: usize, direction: FftDirection) -> Self {
-        Self::broadcast_complex_elements(f64::generate_twiddle_factor(index, len, direction))
+        Self::broadcast_complex_elements(twiddles::compute_twiddle(index, len, direction))
     }
 
     #[inline(always)]

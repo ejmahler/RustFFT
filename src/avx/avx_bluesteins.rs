@@ -5,7 +5,7 @@ use num_complex::Complex;
 use num_integer::div_ceil;
 use num_traits::Zero;
 
-use crate::{array_utils, FftDirection};
+use crate::{array_utils, twiddles, FftDirection};
 use crate::{Direction, Fft, FftNum, Length};
 
 use super::CommonSimdData;
@@ -36,7 +36,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
         let index_float = index as f64;
         let index_squared = index_float * index_float;
 
-        A::generate_twiddle_factor_floatindex(index_squared, len * 2, direction.reverse())
+        twiddles::compute_twiddle_floatindex(index_squared, len * 2, direction.reverse())
     }
 
     /// Pairwise multiply the complex numbers in `left` with the complex numbers in `right`.

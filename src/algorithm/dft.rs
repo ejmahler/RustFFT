@@ -31,8 +31,11 @@ pub struct DFT<T> {
 impl<T: FftNum> DFT<T> {
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute DFT
     pub fn new(len: usize, direction: FftDirection) -> Self {
+        let twiddles = (0..len)
+            .map(|i| twiddles::compute_twiddle(i, len, direction))
+            .collect();
         Self {
-            twiddles: twiddles::generate_twiddle_factors(len, direction),
+            twiddles,
             direction,
         }
     }

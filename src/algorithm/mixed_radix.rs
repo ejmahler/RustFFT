@@ -4,7 +4,7 @@ use std::sync::Arc;
 use num_complex::Complex;
 use transpose;
 
-use crate::{common::FftNum, FftDirection};
+use crate::{common::FftNum, twiddles, FftDirection};
 
 use crate::array_utils;
 use crate::{Direction, Fft, Length};
@@ -67,7 +67,7 @@ impl<T: FftNum> MixedRadix<T> {
         let mut twiddles = Vec::with_capacity(len);
         for x in 0..width {
             for y in 0..height {
-                twiddles.push(T::generate_twiddle_factor(x * y, len, direction));
+                twiddles.push(twiddles::compute_twiddle(x * y, len, direction));
             }
         }
 
@@ -243,7 +243,7 @@ impl<T: FftNum> MixedRadixSmall<T> {
         let mut twiddles = Vec::with_capacity(len);
         for x in 0..width {
             for y in 0..height {
-                twiddles.push(T::generate_twiddle_factor(x * y, len, direction));
+                twiddles.push(twiddles::compute_twiddle(x * y, len, direction));
             }
         }
 

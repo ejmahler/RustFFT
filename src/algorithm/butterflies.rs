@@ -231,7 +231,7 @@ impl<T: FftNum> Butterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
-            twiddle: T::generate_twiddle_factor(1, 3, direction),
+            twiddle: twiddles::compute_twiddle(1, 3, direction),
             direction,
         }
     }
@@ -326,8 +326,8 @@ boilerplate_fft_butterfly!(Butterfly5, 5, |this: &Butterfly5<_>| this.direction)
 impl<T: FftNum> Butterfly5<T> {
     pub fn new(direction: FftDirection) -> Self {
         Self {
-            twiddle1: T::generate_twiddle_factor(1, 5, direction),
-            twiddle2: T::generate_twiddle_factor(2, 5, direction),
+            twiddle1: twiddles::compute_twiddle(1, 5, direction),
+            twiddle2: twiddles::compute_twiddle(2, 5, direction),
             direction,
         }
     }
@@ -540,9 +540,9 @@ boilerplate_fft_butterfly!(Butterfly7, 7, |this: &Butterfly7<_>| this.direction)
 impl<T: FftNum> Butterfly7<T> {
     pub fn new(direction: FftDirection) -> Self {
         Self {
-            twiddle1: T::generate_twiddle_factor(1, 7, direction),
-            twiddle2: T::generate_twiddle_factor(2, 7, direction),
-            twiddle3: T::generate_twiddle_factor(3, 7, direction),
+            twiddle1: twiddles::compute_twiddle(1, 7, direction),
+            twiddle2: twiddles::compute_twiddle(2, 7, direction),
+            twiddle3: twiddles::compute_twiddle(3, 7, direction),
             direction,
         }
     }
@@ -791,11 +791,11 @@ pub struct Butterfly11<T> {
 boilerplate_fft_butterfly!(Butterfly11, 11, |this: &Butterfly11<_>| this.direction);
 impl<T: FftNum> Butterfly11<T> {
     pub fn new(direction: FftDirection) -> Self {
-        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 11, direction);
-        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 11, direction);
-        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 11, direction);
-        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 11, direction);
-        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 11, direction);
+        let twiddle1: Complex<T> = twiddles::compute_twiddle(1, 11, direction);
+        let twiddle2: Complex<T> = twiddles::compute_twiddle(2, 11, direction);
+        let twiddle3: Complex<T> = twiddles::compute_twiddle(3, 11, direction);
+        let twiddle4: Complex<T> = twiddles::compute_twiddle(4, 11, direction);
+        let twiddle5: Complex<T> = twiddles::compute_twiddle(5, 11, direction);
         Self {
             twiddle1,
             twiddle2,
@@ -1045,12 +1045,12 @@ pub struct Butterfly13<T> {
 boilerplate_fft_butterfly!(Butterfly13, 13, |this: &Butterfly13<_>| this.direction);
 impl<T: FftNum> Butterfly13<T> {
     pub fn new(direction: FftDirection) -> Self {
-        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 13, direction);
-        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 13, direction);
-        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 13, direction);
-        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 13, direction);
-        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 13, direction);
-        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 13, direction);
+        let twiddle1: Complex<T> = twiddles::compute_twiddle(1, 13, direction);
+        let twiddle2: Complex<T> = twiddles::compute_twiddle(2, 13, direction);
+        let twiddle3: Complex<T> = twiddles::compute_twiddle(3, 13, direction);
+        let twiddle4: Complex<T> = twiddles::compute_twiddle(4, 13, direction);
+        let twiddle5: Complex<T> = twiddles::compute_twiddle(5, 13, direction);
+        let twiddle6: Complex<T> = twiddles::compute_twiddle(6, 13, direction);
         Self {
             twiddle1,
             twiddle2,
@@ -1368,9 +1368,9 @@ impl<T: FftNum> Butterfly16<T> {
     pub fn new(direction: FftDirection) -> Self {
         Self {
             butterfly8: Butterfly8::new(direction),
-            twiddle1: T::generate_twiddle_factor(1, 16, direction),
-            twiddle2: T::generate_twiddle_factor(2, 16, direction),
-            twiddle3: T::generate_twiddle_factor(3, 16, direction),
+            twiddle1: twiddles::compute_twiddle(1, 16, direction),
+            twiddle2: twiddles::compute_twiddle(2, 16, direction),
+            twiddle3: twiddles::compute_twiddle(3, 16, direction),
         }
     }
 
@@ -1459,14 +1459,14 @@ pub struct Butterfly17<T> {
 boilerplate_fft_butterfly!(Butterfly17, 17, |this: &Butterfly17<_>| this.direction);
 impl<T: FftNum> Butterfly17<T> {
     pub fn new(direction: FftDirection) -> Self {
-        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 17, direction);
-        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 17, direction);
-        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 17, direction);
-        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 17, direction);
-        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 17, direction);
-        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 17, direction);
-        let twiddle7: Complex<T> = T::generate_twiddle_factor(7, 17, direction);
-        let twiddle8: Complex<T> = T::generate_twiddle_factor(8, 17, direction);
+        let twiddle1: Complex<T> = twiddles::compute_twiddle(1, 17, direction);
+        let twiddle2: Complex<T> = twiddles::compute_twiddle(2, 17, direction);
+        let twiddle3: Complex<T> = twiddles::compute_twiddle(3, 17, direction);
+        let twiddle4: Complex<T> = twiddles::compute_twiddle(4, 17, direction);
+        let twiddle5: Complex<T> = twiddles::compute_twiddle(5, 17, direction);
+        let twiddle6: Complex<T> = twiddles::compute_twiddle(6, 17, direction);
+        let twiddle7: Complex<T> = twiddles::compute_twiddle(7, 17, direction);
+        let twiddle8: Complex<T> = twiddles::compute_twiddle(8, 17, direction);
         Self {
             twiddle1,
             twiddle2,
@@ -1943,15 +1943,15 @@ pub struct Butterfly19<T> {
 boilerplate_fft_butterfly!(Butterfly19, 19, |this: &Butterfly19<_>| this.direction);
 impl<T: FftNum> Butterfly19<T> {
     pub fn new(direction: FftDirection) -> Self {
-        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 19, direction);
-        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 19, direction);
-        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 19, direction);
-        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 19, direction);
-        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 19, direction);
-        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 19, direction);
-        let twiddle7: Complex<T> = T::generate_twiddle_factor(7, 19, direction);
-        let twiddle8: Complex<T> = T::generate_twiddle_factor(8, 19, direction);
-        let twiddle9: Complex<T> = T::generate_twiddle_factor(9, 19, direction);
+        let twiddle1: Complex<T> = twiddles::compute_twiddle(1, 19, direction);
+        let twiddle2: Complex<T> = twiddles::compute_twiddle(2, 19, direction);
+        let twiddle3: Complex<T> = twiddles::compute_twiddle(3, 19, direction);
+        let twiddle4: Complex<T> = twiddles::compute_twiddle(4, 19, direction);
+        let twiddle5: Complex<T> = twiddles::compute_twiddle(5, 19, direction);
+        let twiddle6: Complex<T> = twiddles::compute_twiddle(6, 19, direction);
+        let twiddle7: Complex<T> = twiddles::compute_twiddle(7, 19, direction);
+        let twiddle8: Complex<T> = twiddles::compute_twiddle(8, 19, direction);
+        let twiddle9: Complex<T> = twiddles::compute_twiddle(9, 19, direction);
         Self {
             twiddle1,
             twiddle2,
@@ -2522,17 +2522,17 @@ pub struct Butterfly23<T> {
 boilerplate_fft_butterfly!(Butterfly23, 23, |this: &Butterfly23<_>| this.direction);
 impl<T: FftNum> Butterfly23<T> {
     pub fn new(direction: FftDirection) -> Self {
-        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 23, direction);
-        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 23, direction);
-        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 23, direction);
-        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 23, direction);
-        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 23, direction);
-        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 23, direction);
-        let twiddle7: Complex<T> = T::generate_twiddle_factor(7, 23, direction);
-        let twiddle8: Complex<T> = T::generate_twiddle_factor(8, 23, direction);
-        let twiddle9: Complex<T> = T::generate_twiddle_factor(9, 23, direction);
-        let twiddle10: Complex<T> = T::generate_twiddle_factor(10, 23, direction);
-        let twiddle11: Complex<T> = T::generate_twiddle_factor(11, 23, direction);
+        let twiddle1: Complex<T> = twiddles::compute_twiddle(1, 23, direction);
+        let twiddle2: Complex<T> = twiddles::compute_twiddle(2, 23, direction);
+        let twiddle3: Complex<T> = twiddles::compute_twiddle(3, 23, direction);
+        let twiddle4: Complex<T> = twiddles::compute_twiddle(4, 23, direction);
+        let twiddle5: Complex<T> = twiddles::compute_twiddle(5, 23, direction);
+        let twiddle6: Complex<T> = twiddles::compute_twiddle(6, 23, direction);
+        let twiddle7: Complex<T> = twiddles::compute_twiddle(7, 23, direction);
+        let twiddle8: Complex<T> = twiddles::compute_twiddle(8, 23, direction);
+        let twiddle9: Complex<T> = twiddles::compute_twiddle(9, 23, direction);
+        let twiddle10: Complex<T> = twiddles::compute_twiddle(10, 23, direction);
+        let twiddle11: Complex<T> = twiddles::compute_twiddle(11, 23, direction);
         Self {
             twiddle1,
             twiddle2,
@@ -3322,20 +3322,20 @@ pub struct Butterfly29<T> {
 boilerplate_fft_butterfly!(Butterfly29, 29, |this: &Butterfly29<_>| this.direction);
 impl<T: FftNum> Butterfly29<T> {
     pub fn new(direction: FftDirection) -> Self {
-        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 29, direction);
-        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 29, direction);
-        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 29, direction);
-        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 29, direction);
-        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 29, direction);
-        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 29, direction);
-        let twiddle7: Complex<T> = T::generate_twiddle_factor(7, 29, direction);
-        let twiddle8: Complex<T> = T::generate_twiddle_factor(8, 29, direction);
-        let twiddle9: Complex<T> = T::generate_twiddle_factor(9, 29, direction);
-        let twiddle10: Complex<T> = T::generate_twiddle_factor(10, 29, direction);
-        let twiddle11: Complex<T> = T::generate_twiddle_factor(11, 29, direction);
-        let twiddle12: Complex<T> = T::generate_twiddle_factor(12, 29, direction);
-        let twiddle13: Complex<T> = T::generate_twiddle_factor(13, 29, direction);
-        let twiddle14: Complex<T> = T::generate_twiddle_factor(14, 29, direction);
+        let twiddle1: Complex<T> = twiddles::compute_twiddle(1, 29, direction);
+        let twiddle2: Complex<T> = twiddles::compute_twiddle(2, 29, direction);
+        let twiddle3: Complex<T> = twiddles::compute_twiddle(3, 29, direction);
+        let twiddle4: Complex<T> = twiddles::compute_twiddle(4, 29, direction);
+        let twiddle5: Complex<T> = twiddles::compute_twiddle(5, 29, direction);
+        let twiddle6: Complex<T> = twiddles::compute_twiddle(6, 29, direction);
+        let twiddle7: Complex<T> = twiddles::compute_twiddle(7, 29, direction);
+        let twiddle8: Complex<T> = twiddles::compute_twiddle(8, 29, direction);
+        let twiddle9: Complex<T> = twiddles::compute_twiddle(9, 29, direction);
+        let twiddle10: Complex<T> = twiddles::compute_twiddle(10, 29, direction);
+        let twiddle11: Complex<T> = twiddles::compute_twiddle(11, 29, direction);
+        let twiddle12: Complex<T> = twiddles::compute_twiddle(12, 29, direction);
+        let twiddle13: Complex<T> = twiddles::compute_twiddle(13, 29, direction);
+        let twiddle14: Complex<T> = twiddles::compute_twiddle(14, 29, direction);
         Self {
             twiddle1,
             twiddle2,
@@ -4497,21 +4497,21 @@ pub struct Butterfly31<T> {
 boilerplate_fft_butterfly!(Butterfly31, 31, |this: &Butterfly31<_>| this.direction);
 impl<T: FftNum> Butterfly31<T> {
     pub fn new(direction: FftDirection) -> Self {
-        let twiddle1: Complex<T> = T::generate_twiddle_factor(1, 31, direction);
-        let twiddle2: Complex<T> = T::generate_twiddle_factor(2, 31, direction);
-        let twiddle3: Complex<T> = T::generate_twiddle_factor(3, 31, direction);
-        let twiddle4: Complex<T> = T::generate_twiddle_factor(4, 31, direction);
-        let twiddle5: Complex<T> = T::generate_twiddle_factor(5, 31, direction);
-        let twiddle6: Complex<T> = T::generate_twiddle_factor(6, 31, direction);
-        let twiddle7: Complex<T> = T::generate_twiddle_factor(7, 31, direction);
-        let twiddle8: Complex<T> = T::generate_twiddle_factor(8, 31, direction);
-        let twiddle9: Complex<T> = T::generate_twiddle_factor(9, 31, direction);
-        let twiddle10: Complex<T> = T::generate_twiddle_factor(10, 31, direction);
-        let twiddle11: Complex<T> = T::generate_twiddle_factor(11, 31, direction);
-        let twiddle12: Complex<T> = T::generate_twiddle_factor(12, 31, direction);
-        let twiddle13: Complex<T> = T::generate_twiddle_factor(13, 31, direction);
-        let twiddle14: Complex<T> = T::generate_twiddle_factor(14, 31, direction);
-        let twiddle15: Complex<T> = T::generate_twiddle_factor(15, 31, direction);
+        let twiddle1: Complex<T> = twiddles::compute_twiddle(1, 31, direction);
+        let twiddle2: Complex<T> = twiddles::compute_twiddle(2, 31, direction);
+        let twiddle3: Complex<T> = twiddles::compute_twiddle(3, 31, direction);
+        let twiddle4: Complex<T> = twiddles::compute_twiddle(4, 31, direction);
+        let twiddle5: Complex<T> = twiddles::compute_twiddle(5, 31, direction);
+        let twiddle6: Complex<T> = twiddles::compute_twiddle(6, 31, direction);
+        let twiddle7: Complex<T> = twiddles::compute_twiddle(7, 31, direction);
+        let twiddle8: Complex<T> = twiddles::compute_twiddle(8, 31, direction);
+        let twiddle9: Complex<T> = twiddles::compute_twiddle(9, 31, direction);
+        let twiddle10: Complex<T> = twiddles::compute_twiddle(10, 31, direction);
+        let twiddle11: Complex<T> = twiddles::compute_twiddle(11, 31, direction);
+        let twiddle12: Complex<T> = twiddles::compute_twiddle(12, 31, direction);
+        let twiddle13: Complex<T> = twiddles::compute_twiddle(13, 31, direction);
+        let twiddle14: Complex<T> = twiddles::compute_twiddle(14, 31, direction);
+        let twiddle15: Complex<T> = twiddles::compute_twiddle(15, 31, direction);
         Self {
             twiddle1,
             twiddle2,
@@ -5806,13 +5806,13 @@ impl<T: FftNum> Butterfly32<T> {
             butterfly16: Butterfly16::new(direction),
             butterfly8: Butterfly8::new(direction),
             twiddles: [
-                T::generate_twiddle_factor(1, 32, direction),
-                T::generate_twiddle_factor(2, 32, direction),
-                T::generate_twiddle_factor(3, 32, direction),
-                T::generate_twiddle_factor(4, 32, direction),
-                T::generate_twiddle_factor(5, 32, direction),
-                T::generate_twiddle_factor(6, 32, direction),
-                T::generate_twiddle_factor(7, 32, direction),
+                twiddles::compute_twiddle(1, 32, direction),
+                twiddles::compute_twiddle(2, 32, direction),
+                twiddles::compute_twiddle(3, 32, direction),
+                twiddles::compute_twiddle(4, 32, direction),
+                twiddles::compute_twiddle(5, 32, direction),
+                twiddles::compute_twiddle(6, 32, direction),
+                twiddles::compute_twiddle(7, 32, direction),
             ],
         }
     }

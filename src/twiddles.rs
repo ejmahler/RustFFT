@@ -1,13 +1,42 @@
 use crate::{common::FftNum, FftDirection};
 use num_complex::Complex;
 
-pub fn generate_twiddle_factors<T: FftNum>(
+pub fn compute_twiddle<T: FftNum>(
+    index: usize,
     fft_len: usize,
     direction: FftDirection,
-) -> Vec<Complex<T>> {
-    (0..fft_len)
-        .map(|i| T::generate_twiddle_factor(i, fft_len, direction))
-        .collect()
+) -> Complex<T> {
+    let constant = -2f64 * std::f64::consts::PI / fft_len as f64;
+    let angle = constant * index as f64;
+
+    let result = Complex {
+        re: T::from_f64(angle.cos()).unwrap(),
+        im: T::from_f64(angle.sin()).unwrap(),
+    };
+
+    match direction {
+        FftDirection::Forward => result,
+        FftDirection::Inverse => result.conj(),
+    }
+}
+
+pub fn compute_twiddle_floatindex<T: FftNum>(
+    index: f64,
+    fft_len: usize,
+    direction: FftDirection,
+) -> Complex<T> {
+    let constant = -2f64 * std::f64::consts::PI / fft_len as f64;
+    let angle = constant * index;
+
+    let result = Complex {
+        re: T::from_f64(angle.cos()).unwrap(),
+        im: T::from_f64(angle.sin()).unwrap(),
+    };
+
+    match direction {
+        FftDirection::Forward => result,
+        FftDirection::Inverse => result.conj(),
+    }
 }
 
 pub fn rotate_90<T: FftNum>(value: Complex<T>, direction: FftDirection) -> Complex<T> {
@@ -26,41 +55,28 @@ pub fn rotate_90<T: FftNum>(value: Complex<T>, direction: FftDirection) -> Compl
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use crate::test_utils::compare_vectors;
-    use std::f32;
 
     #[test]
-    fn test_generate() {
-        //test the length-0 case
-        let zero_twiddles: Vec<Complex<f32>> = generate_twiddle_factors(0, FftDirection::Forward);
-        assert_eq!(0, zero_twiddles.len());
+    fn test_rotate() {
+        // Verify that the rotate90 function does the same thing as multiplying by twiddle(1,4), in the forward direction
+        let value = Complex { re: 9.1, im: 2.2 };
+        let rotated_forward = rotate_90(value, FftDirection::Forward);
+        let twiddled_forward = value * compute_twiddle(1, 4, FftDirection::Forward);
 
-        let constant = -2f32 * f32::consts::PI;
+        assert_eq!(value.re, -rotated_forward.im);
+        assert_eq!(value.im, rotated_forward.re);
 
-        for len in 1..10 {
-            let actual: Vec<Complex<f32>> = generate_twiddle_factors(len, FftDirection::Forward);
-            let expected: Vec<Complex<f32>> = (0..len)
-                .map(|i| Complex::from_polar(1f32, constant * i as f32 / len as f32))
-                .collect();
+        assert!(value.re + twiddled_forward.im < 0.0001);
+        assert!(value.im - rotated_forward.re < 0.0001);
 
-            assert!(compare_vectors(&actual, &expected), "len = {}", len)
-        }
+        // Verify that the rotate90 function does the same thing as multiplying by twiddle(1,4), in the inverse direction
+        let rotated_forward = rotate_90(value, FftDirection::Inverse);
+        let twiddled_forward = value * compute_twiddle(1, 4, FftDirection::Inverse);
 
-        //for each len, verify that each element in the inverse is the conjugate of the non-inverse
-        for len in 1..10 {
-            let twiddles: Vec<Complex<f32>> = generate_twiddle_factors(len, FftDirection::Forward);
-            let mut twiddles_inverse: Vec<Complex<f32>> =
-                generate_twiddle_factors(len, FftDirection::Inverse);
+        assert_eq!(value.re, rotated_forward.im);
+        assert_eq!(value.im, -rotated_forward.re);
 
-            for value in twiddles_inverse.iter_mut() {
-                *value = value.conj();
-            }
-
-            assert!(
-                compare_vectors(&twiddles, &twiddles_inverse),
-                "len = {}",
-                len
-            )
-        }
+        assert!(value.re - twiddled_forward.im < 0.0001);
+        assert!(value.im + rotated_forward.re < 0.0001);
     }
 }
