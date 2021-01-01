@@ -3,11 +3,7 @@ use std::sync::Arc;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use crate::{
-    array_utils::{RawSlice, RawSliceMut},
-    common::FftNum,
-    FftDirection,
-};
+use crate::{FftDirection, array_utils::{RawSlice, RawSliceMut}, common::FftNum, twiddles};
 
 use crate::algorithm::butterflies::{Butterfly1, Butterfly16, Butterfly2, Butterfly4, Butterfly8};
 use crate::{Direction, Fft, Length};
@@ -73,7 +69,7 @@ impl<T: FftNum> Radix4<T> {
             for i in 0..num_rows {
                 for k in 1..4 {
                     let twiddle =
-                        T::generate_twiddle_factor(i * k * twiddle_stride, len, direction);
+                        twiddles::compute_twiddle(i * k * twiddle_stride, len, direction);
                     twiddle_factors.push(twiddle);
                 }
             }

@@ -1,50 +1,10 @@
 use num_traits::{FromPrimitive, Signed};
 use std::fmt::Debug;
 
-use num_complex::Complex;
-
-use crate::FftDirection;
-
 /// Generic floating point number, implemented for f32 and f64
-pub trait FftNum: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {
-    // two related methodsfor generating twiddle factors. The first is a convenience wrapper around the second.
-    fn generate_twiddle_factor(
-        index: usize,
-        fft_len: usize,
-        direction: FftDirection,
-    ) -> Complex<Self> {
-        Self::generate_twiddle_factor_floatindex(index as f64, fft_len, direction)
-    }
-    fn generate_twiddle_factor_floatindex(
-        index: f64,
-        fft_len: usize,
-        direction: FftDirection,
-    ) -> Complex<Self>;
-}
+pub trait FftNum: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {}
 
-impl<T> FftNum for T
-where
-    T: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static,
-{
-    fn generate_twiddle_factor_floatindex(
-        index: f64,
-        fft_len: usize,
-        direction: FftDirection,
-    ) -> Complex<Self> {
-        let constant = -2f64 * std::f64::consts::PI / fft_len as f64;
-        let angle = constant * index;
-
-        let result = Complex {
-            re: Self::from_f64(angle.cos()).unwrap(),
-            im: Self::from_f64(angle.sin()).unwrap(),
-        };
-
-        match direction {
-            FftDirection::Forward => result,
-            FftDirection::Inverse => result.conj(),
-        }
-    }
-}
+impl<T> FftNum for T where T: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {}
 
 // impl FftNum for f32 {
 // 	fn generate_twiddle_factor_floatindex(index: f64, fft_len: usize, direction: FftDirection) -> Complex<Self> {

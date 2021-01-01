@@ -4,7 +4,7 @@ use std::mem::MaybeUninit;
 
 use num_complex::Complex;
 
-use crate::common::FftNum;
+use crate::{common::FftNum, twiddles};
 
 use crate::{Direction, Fft, FftDirection, Length};
 
@@ -390,8 +390,8 @@ boilerplate_fft_simd_butterfly!(Butterfly5Avx64, 5);
 impl Butterfly5Avx64<f64> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(direction: FftDirection) -> Self {
-        let twiddle1 = f64::generate_twiddle_factor(1, 5, direction);
-        let twiddle2 = f64::generate_twiddle_factor(2, 5, direction);
+        let twiddle1 = twiddles::compute_twiddle(1, 5, direction);
+        let twiddle2 = twiddles::compute_twiddle(2, 5, direction);
         Self {
             twiddles: [
                 _mm256_set_pd(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),
@@ -460,9 +460,9 @@ boilerplate_fft_simd_butterfly!(Butterfly7Avx64, 7);
 impl Butterfly7Avx64<f64> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(direction: FftDirection) -> Self {
-        let twiddle1 = f64::generate_twiddle_factor(1, 7, direction);
-        let twiddle2 = f64::generate_twiddle_factor(2, 7, direction);
-        let twiddle3 = f64::generate_twiddle_factor(3, 7, direction);
+        let twiddle1 = twiddles::compute_twiddle(1, 7, direction);
+        let twiddle2 = twiddles::compute_twiddle(2, 7, direction);
+        let twiddle3 = twiddles::compute_twiddle(3, 7, direction);
         Self {
             twiddles: [
                 _mm256_set_pd(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),
@@ -555,11 +555,11 @@ boilerplate_fft_simd_butterfly!(Butterfly11Avx64, 11);
 impl Butterfly11Avx64<f64> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(direction: FftDirection) -> Self {
-        let twiddle1 = f64::generate_twiddle_factor(1, 11, direction);
-        let twiddle2 = f64::generate_twiddle_factor(2, 11, direction);
-        let twiddle3 = f64::generate_twiddle_factor(3, 11, direction);
-        let twiddle4 = f64::generate_twiddle_factor(4, 11, direction);
-        let twiddle5 = f64::generate_twiddle_factor(5, 11, direction);
+        let twiddle1 = twiddles::compute_twiddle(1, 11, direction);
+        let twiddle2 = twiddles::compute_twiddle(2, 11, direction);
+        let twiddle3 = twiddles::compute_twiddle(3, 11, direction);
+        let twiddle4 = twiddles::compute_twiddle(4, 11, direction);
+        let twiddle5 = twiddles::compute_twiddle(5, 11, direction);
 
         let twiddles = [
             _mm256_set_pd(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),

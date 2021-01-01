@@ -8,7 +8,7 @@ use num_traits::Zero;
 use primal_check::miller_rabin;
 use strength_reduce::StrengthReducedUsize;
 
-use crate::math_utils;
+use crate::{math_utils, twiddles};
 use crate::{array_utils, FftDirection};
 use crate::{Direction, Fft, FftNum, Length};
 
@@ -164,7 +164,7 @@ impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
         let mut inner_fft_input = vec![Complex::zero(); inner_fft_len];
         let mut twiddle_input = 1;
         for input_cell in &mut inner_fft_input {
-            let twiddle = T::generate_twiddle_factor(twiddle_input, len, direction);
+            let twiddle = twiddles::compute_twiddle(twiddle_input, len, direction);
             *input_cell = twiddle * unity_scale;
 
             twiddle_input = (twiddle_input * primitive_root_inverse) % reduced_len;

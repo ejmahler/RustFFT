@@ -3,7 +3,7 @@ use std::sync::Arc;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use crate::{common::FftNum, FftDirection};
+use crate::{FftDirection, common::FftNum, twiddles};
 
 use crate::{Direction, Fft, Length};
 
@@ -47,26 +47,11 @@ pub struct BluesteinsAlgorithm<T> {
 }
 
 impl<T: FftNum> BluesteinsAlgorithm<T> {
-    fn compute_bluesteins_twiddle(
-        index: usize,
-        size: usize,
-        direction: FftDirection,
-    ) -> Complex<T> {
-        let index_multiplier = core::f64::consts::PI / size as f64;
-
+    fn compute_bluesteins_twiddle(index: usize, len: usize, direction: FftDirection) -> Complex<T> {
         let index_float = index as f64;
         let index_squared = index_float * index_float;
 
-        let theta = index_squared * index_multiplier;
-        let result = Complex::new(
-            T::from_f64(theta.cos()).unwrap(),
-            T::from_f64(theta.sin()).unwrap(),
-        );
-
-        match direction {
-            FftDirection::Forward => result,
-            FftDirection::Inverse => result.conj(),
-        }
+        twiddles::compute_twiddle_floatindex(index_squared, len * 2, direction.reverse())
     }
 
     /// Creates a FFT instance which will process inputs/outputs of size `len`. `inner_fft.len()` must be >= `len * 2 - 1`
