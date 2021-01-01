@@ -60,23 +60,22 @@ fn bench_planned_multi_f64(b: &mut Bencher, len: usize) {
 }
 
 // all butterflies
-#[bench] fn estimates_10_butterfly_________0002_0000(b: &mut Bencher) { bench_planned_multi_f64(b,        2); }
-#[bench] fn estimates_10_butterfly_________0003_0000(b: &mut Bencher) { bench_planned_multi_f64(b,        3); }
-#[bench] fn estimates_10_butterfly_________0004_0000(b: &mut Bencher) { bench_planned_multi_f64(b,        4); }
-#[bench] fn estimates_10_butterfly_________0005_0000(b: &mut Bencher) { bench_planned_multi_f64(b,        5); }
-#[bench] fn estimates_10_butterfly_________0006_0000(b: &mut Bencher) { bench_planned_multi_f64(b,        6); }
-#[bench] fn estimates_10_butterfly_________0007_0000(b: &mut Bencher) { bench_planned_multi_f64(b,        7); }
-#[bench] fn estimates_10_butterfly_________0008_0000(b: &mut Bencher) { bench_planned_multi_f64(b,        8); }
-#[bench] fn estimates_10_butterfly_________0011_0000(b: &mut Bencher) { bench_planned_multi_f64(b,       11); }
-#[bench] fn estimates_10_butterfly_________0013_0000(b: &mut Bencher) { bench_planned_multi_f64(b,       13); }
-#[bench] fn estimates_10_butterfly_________0016_0000(b: &mut Bencher) { bench_planned_multi_f64(b,       16); }
-#[bench] fn estimates_10_butterfly_________0017_0000(b: &mut Bencher) { bench_planned_multi_f64(b,       17); }
-#[bench] fn estimates_10_butterfly_________0019_0000(b: &mut Bencher) { bench_planned_multi_f64(b,       19); }
-#[bench] fn estimates_10_butterfly_________0023_0000(b: &mut Bencher) { bench_planned_multi_f64(b,       23); }
-#[bench] fn estimates_10_butterfly_________0027_0000(b: &mut Bencher) { bench_planned_multi_f64(b,       27); }
-#[bench] fn estimates_10_butterfly_________0029_0000(b: &mut Bencher) { bench_planned_multi_f64(b,       29); }
-#[bench] fn estimates_10_butterfly_________0031_0000(b: &mut Bencher) { bench_planned_multi_f64(b,       31); }
-#[bench] fn estimates_10_butterfly_________0032_0000(b: &mut Bencher) { bench_planned_multi_f64(b,       32); }
+#[bench] fn estimates_10_butterfly_________00000002_0000(b: &mut Bencher) { bench_planned_multi_f64(b,        2); }
+#[bench] fn estimates_10_butterfly_________00000003_0000(b: &mut Bencher) { bench_planned_multi_f64(b,        3); }
+#[bench] fn estimates_10_butterfly_________00000004_0000(b: &mut Bencher) { bench_planned_multi_f64(b,        4); }
+#[bench] fn estimates_10_butterfly_________00000005_0000(b: &mut Bencher) { bench_planned_multi_f64(b,        5); }
+#[bench] fn estimates_10_butterfly_________00000006_0000(b: &mut Bencher) { bench_planned_multi_f64(b,        6); }
+#[bench] fn estimates_10_butterfly_________00000007_0000(b: &mut Bencher) { bench_planned_multi_f64(b,        7); }
+#[bench] fn estimates_10_butterfly_________00000008_0000(b: &mut Bencher) { bench_planned_multi_f64(b,        8); }
+#[bench] fn estimates_10_butterfly_________00000011_0000(b: &mut Bencher) { bench_planned_multi_f64(b,       11); }
+#[bench] fn estimates_10_butterfly_________00000013_0000(b: &mut Bencher) { bench_planned_multi_f64(b,       13); }
+#[bench] fn estimates_10_butterfly_________00000016_0000(b: &mut Bencher) { bench_planned_multi_f64(b,       16); }
+#[bench] fn estimates_10_butterfly_________00000017_0000(b: &mut Bencher) { bench_planned_multi_f64(b,       17); }
+#[bench] fn estimates_10_butterfly_________00000019_0000(b: &mut Bencher) { bench_planned_multi_f64(b,       19); }
+#[bench] fn estimates_10_butterfly_________00000023_0000(b: &mut Bencher) { bench_planned_multi_f64(b,       23); }
+#[bench] fn estimates_10_butterfly_________00000029_0000(b: &mut Bencher) { bench_planned_multi_f64(b,       29); }
+#[bench] fn estimates_10_butterfly_________00000031_0000(b: &mut Bencher) { bench_planned_multi_f64(b,       31); }
+#[bench] fn estimates_10_butterfly_________00000032_0000(b: &mut Bencher) { bench_planned_multi_f64(b,       32); }
 
 
 /// Times just the FFT execution (not allocation and pre-calculation)
@@ -93,16 +92,20 @@ fn bench_good_thomas(b: &mut Bencher, width: usize, height: usize) {
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| {fft.process_inplace_with_scratch(&mut buffer, &mut scratch);} );
 }
-#[bench] fn estimates_21_good_thomas_______0002_0003(b: &mut Bencher) { bench_good_thomas(b,  2,  3); }
-#[bench] fn estimates_21_good_thomas_______0003_0004(b: &mut Bencher) { bench_good_thomas(b,  3,  4); }
-#[bench] fn estimates_21_good_thomas_______0004_0005(b: &mut Bencher) { bench_good_thomas(b,  4,  5); }
-#[bench] fn estimates_21_good_thomas_______0007_0032(b: &mut Bencher) { bench_good_thomas(b,  7, 32); }
-#[bench] fn estimates_21_good_thomas_______0011_0017(b: &mut Bencher) { bench_good_thomas(b, 11, 17); }
-#[bench] fn estimates_21_good_thomas_______0017_0031(b: &mut Bencher) { bench_good_thomas(b, 17, 31); }
-#[bench] fn estimates_21_good_thomas_______0029_0031(b: &mut Bencher) { bench_good_thomas(b, 29, 31); }
-#[bench] fn estimates_21_good_thomas_______0128_0256(b: &mut Bencher) { bench_good_thomas(b,128, 256); }
-#[bench] fn estimates_21_good_thomas_______0128_0181(b: &mut Bencher) { bench_good_thomas(b,128, 181); }
-#[bench] fn estimates_21_good_thomas_______0181_0191(b: &mut Bencher) { bench_good_thomas(b,181, 191); }
+#[bench] fn estimates_21_good_thomas_______00000002_0003(b: &mut Bencher) { bench_good_thomas(b,  2,  3); }
+#[bench] fn estimates_21_good_thomas_______00000003_0004(b: &mut Bencher) { bench_good_thomas(b,  3,  4); }
+#[bench] fn estimates_21_good_thomas_______00000004_0005(b: &mut Bencher) { bench_good_thomas(b,  4,  5); }
+#[bench] fn estimates_21_good_thomas_______00000007_0032(b: &mut Bencher) { bench_good_thomas(b,  7, 32); }
+#[bench] fn estimates_21_good_thomas_______00000011_0017(b: &mut Bencher) { bench_good_thomas(b, 11, 17); }
+#[bench] fn estimates_21_good_thomas_______00000017_0031(b: &mut Bencher) { bench_good_thomas(b, 17, 31); }
+#[bench] fn estimates_21_good_thomas_______00000029_0031(b: &mut Bencher) { bench_good_thomas(b, 29, 31); }
+#[bench] fn estimates_21_good_thomas_______00000128_0256(b: &mut Bencher) { bench_good_thomas(b,128, 256); }
+#[bench] fn estimates_21_good_thomas_______00000128_0181(b: &mut Bencher) { bench_good_thomas(b,128, 181); }
+#[bench] fn estimates_21_good_thomas_______00000181_0191(b: &mut Bencher) { bench_good_thomas(b,181, 191); }
+#[bench] fn estimates_21_good_thomas_______00000256_0256(b: &mut Bencher) { bench_good_thomas(b,256, 256); }
+#[bench] fn estimates_21_good_thomas_______00000512_0512(b: &mut Bencher) { bench_good_thomas(b,512, 512); }
+#[bench] fn estimates_21_good_thomas_______00001024_1024(b: &mut Bencher) { bench_good_thomas(b,1024, 1024); }
+#[bench] fn estimates_21_good_thomas_______00002048_2048(b: &mut Bencher) { bench_good_thomas(b,2048, 2048); }
 
 
 
@@ -121,16 +124,20 @@ fn bench_mixed_radix(b: &mut Bencher, width: usize, height: usize) {
     let mut spectrum = signal.clone();
     b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
 }
-#[bench] fn estimates_22_mixed_radix_______0002_0003(b: &mut Bencher) { bench_mixed_radix(b,  2,  3); }
-#[bench] fn estimates_22_mixed_radix_______0003_0004(b: &mut Bencher) { bench_mixed_radix(b,  3,  4); }
-#[bench] fn estimates_22_mixed_radix_______0004_0005(b: &mut Bencher) { bench_mixed_radix(b,  4,  5); }
-#[bench] fn estimates_22_mixed_radix_______0007_0032(b: &mut Bencher) { bench_mixed_radix(b,  7, 32); }
-#[bench] fn estimates_22_mixed_radix_______0011_0017(b: &mut Bencher) { bench_mixed_radix(b, 11, 17); }
-#[bench] fn estimates_22_mixed_radix_______0017_0031(b: &mut Bencher) { bench_mixed_radix(b, 17, 31); }
-#[bench] fn estimates_22_mixed_radix_______0029_0031(b: &mut Bencher) { bench_mixed_radix(b, 29, 31); }
-#[bench] fn estimates_22_mixed_radix_______0128_0256(b: &mut Bencher) { bench_mixed_radix(b,128, 256); }
-#[bench] fn estimates_22_mixed_radix_______0128_0181(b: &mut Bencher) { bench_mixed_radix(b,128, 181); }
-#[bench] fn estimates_22_mixed_radix_______0181_0191(b: &mut Bencher) { bench_mixed_radix(b,181, 191); }
+#[bench] fn estimates_22_mixed_radix_______00000002_0003(b: &mut Bencher) { bench_mixed_radix(b,  2,  3); }
+#[bench] fn estimates_22_mixed_radix_______00000003_0004(b: &mut Bencher) { bench_mixed_radix(b,  3,  4); }
+#[bench] fn estimates_22_mixed_radix_______00000004_0005(b: &mut Bencher) { bench_mixed_radix(b,  4,  5); }
+#[bench] fn estimates_22_mixed_radix_______00000007_0032(b: &mut Bencher) { bench_mixed_radix(b,  7, 32); }
+#[bench] fn estimates_22_mixed_radix_______00000011_0017(b: &mut Bencher) { bench_mixed_radix(b, 11, 17); }
+#[bench] fn estimates_22_mixed_radix_______00000017_0031(b: &mut Bencher) { bench_mixed_radix(b, 17, 31); }
+#[bench] fn estimates_22_mixed_radix_______00000029_0031(b: &mut Bencher) { bench_mixed_radix(b, 29, 31); }
+#[bench] fn estimates_22_mixed_radix_______00000128_0256(b: &mut Bencher) { bench_mixed_radix(b,128, 256); }
+#[bench] fn estimates_22_mixed_radix_______00000128_0181(b: &mut Bencher) { bench_mixed_radix(b,128, 181); }
+#[bench] fn estimates_22_mixed_radix_______00000181_0191(b: &mut Bencher) { bench_mixed_radix(b,181, 191); }
+#[bench] fn estimates_22_mixed_radix_______00000256_0256(b: &mut Bencher) { bench_mixed_radix(b,256, 256); }
+#[bench] fn estimates_22_mixed_radix_______00000512_0512(b: &mut Bencher) { bench_mixed_radix(b,512, 512); }
+#[bench] fn estimates_22_mixed_radix_______00001024_1024(b: &mut Bencher) { bench_mixed_radix(b,1024, 1024); }
+#[bench] fn estimates_22_mixed_radix_______00002048_2048(b: &mut Bencher) { bench_mixed_radix(b,2048, 2048); }
 
 
 /// Times just the FFT execution (not allocation and pre-calculation)
@@ -147,16 +154,20 @@ fn bench_mixed_radix_small(b: &mut Bencher, width: usize, height: usize) {
     let mut spectrum = signal.clone();
     b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
 }
-#[bench] fn estimates_23_mixed_radix_small_0002_0003(b: &mut Bencher) { bench_mixed_radix_small(b,  2,  3); }
-#[bench] fn estimates_23_mixed_radix_small_0003_0004(b: &mut Bencher) { bench_mixed_radix_small(b,  3,  4); }
-#[bench] fn estimates_23_mixed_radix_small_0004_0005(b: &mut Bencher) { bench_mixed_radix_small(b,  4,  5); }
-#[bench] fn estimates_23_mixed_radix_small_0007_0032(b: &mut Bencher) { bench_mixed_radix_small(b,  7, 32); }
-#[bench] fn estimates_23_mixed_radix_small_0011_0017(b: &mut Bencher) { bench_mixed_radix_small(b, 11, 17); }
-#[bench] fn estimates_23_mixed_radix_small_0017_0031(b: &mut Bencher) { bench_mixed_radix_small(b, 17, 31); }
-#[bench] fn estimates_23_mixed_radix_small_0029_0031(b: &mut Bencher) { bench_mixed_radix_small(b, 29, 31); }
-#[bench] fn estimates_23_mixed_radix_small_0128_0256(b: &mut Bencher) { bench_mixed_radix_small(b,128, 256); }
-#[bench] fn estimates_23_mixed_radix_small_0128_0281(b: &mut Bencher) { bench_mixed_radix_small(b,128, 181); }
-#[bench] fn estimates_23_mixed_radix_small_0181_0191(b: &mut Bencher) { bench_mixed_radix_small(b,181, 191); }
+#[bench] fn estimates_23_mixed_radix_small_00000002_0003(b: &mut Bencher) { bench_mixed_radix_small(b,  2,  3); }
+#[bench] fn estimates_23_mixed_radix_small_00000003_0004(b: &mut Bencher) { bench_mixed_radix_small(b,  3,  4); }
+#[bench] fn estimates_23_mixed_radix_small_00000004_0005(b: &mut Bencher) { bench_mixed_radix_small(b,  4,  5); }
+#[bench] fn estimates_23_mixed_radix_small_00000007_0032(b: &mut Bencher) { bench_mixed_radix_small(b,  7, 32); }
+#[bench] fn estimates_23_mixed_radix_small_00000011_0017(b: &mut Bencher) { bench_mixed_radix_small(b, 11, 17); }
+#[bench] fn estimates_23_mixed_radix_small_00000017_0031(b: &mut Bencher) { bench_mixed_radix_small(b, 17, 31); }
+#[bench] fn estimates_23_mixed_radix_small_00000029_0031(b: &mut Bencher) { bench_mixed_radix_small(b, 29, 31); }
+#[bench] fn estimates_23_mixed_radix_small_00000128_0256(b: &mut Bencher) { bench_mixed_radix_small(b,128, 256); }
+#[bench] fn estimates_23_mixed_radix_small_00000128_0181(b: &mut Bencher) { bench_mixed_radix_small(b,128, 181); }
+#[bench] fn estimates_23_mixed_radix_small_00000181_0191(b: &mut Bencher) { bench_mixed_radix_small(b,181, 191); }
+#[bench] fn estimates_23_mixed_radix_small_00000256_0256(b: &mut Bencher) { bench_mixed_radix_small(b,256, 256); }
+#[bench] fn estimates_23_mixed_radix_small_00000512_0512(b: &mut Bencher) { bench_mixed_radix_small(b,512, 512); }
+#[bench] fn estimates_23_mixed_radix_small_00001024_1024(b: &mut Bencher) { bench_mixed_radix_small(b,1024, 1024); }
+#[bench] fn estimates_23_mixed_radix_small_00002048_2048(b: &mut Bencher) { bench_mixed_radix_small(b,2048, 2048); }
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to the Mixed-Radix Double Butterfly algorithm
@@ -172,32 +183,38 @@ fn bench_good_thomas_small(b: &mut Bencher, width: usize, height: usize) {
     let mut spectrum = signal.clone();
     b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
 }
-#[bench] fn estimates_24_good_thomas_small_0002_0003(b: &mut Bencher) { bench_good_thomas_small(b,  2,  3); }
-#[bench] fn estimates_24_good_thomas_small_0003_0004(b: &mut Bencher) { bench_good_thomas_small(b,  3,  4); }
-#[bench] fn estimates_24_good_thomas_small_0004_0005(b: &mut Bencher) { bench_good_thomas_small(b,  4,  5); }
-#[bench] fn estimates_24_good_thomas_small_0007_0032(b: &mut Bencher) { bench_good_thomas_small(b,  7, 32); }
-#[bench] fn estimates_24_good_thomas_small_0011_0017(b: &mut Bencher) { bench_good_thomas_small(b, 11, 17); }
-#[bench] fn estimates_24_good_thomas_small_0017_0031(b: &mut Bencher) { bench_good_thomas_small(b, 17, 31); }
-#[bench] fn estimates_24_good_thomas_small_0029_0031(b: &mut Bencher) { bench_good_thomas_small(b, 29, 31); }
-#[bench] fn estimates_24_good_thomas_small_0128_0256(b: &mut Bencher) { bench_good_thomas_small(b,128, 256); }
-#[bench] fn estimates_24_good_thomas_small_0128_0181(b: &mut Bencher) { bench_good_thomas_small(b,128, 181); }
-#[bench] fn estimates_24_good_thomas_small_0181_0191(b: &mut Bencher) { bench_good_thomas_small(b,181, 191); }
+#[bench] fn estimates_24_good_thomas_small_00000002_0003(b: &mut Bencher) { bench_good_thomas_small(b,  2,  3); }
+#[bench] fn estimates_24_good_thomas_small_00000003_0004(b: &mut Bencher) { bench_good_thomas_small(b,  3,  4); }
+#[bench] fn estimates_24_good_thomas_small_00000004_0005(b: &mut Bencher) { bench_good_thomas_small(b,  4,  5); }
+#[bench] fn estimates_24_good_thomas_small_00000007_0032(b: &mut Bencher) { bench_good_thomas_small(b,  7, 32); }
+#[bench] fn estimates_24_good_thomas_small_00000011_0017(b: &mut Bencher) { bench_good_thomas_small(b, 11, 17); }
+#[bench] fn estimates_24_good_thomas_small_00000017_0031(b: &mut Bencher) { bench_good_thomas_small(b, 17, 31); }
+#[bench] fn estimates_24_good_thomas_small_00000029_0031(b: &mut Bencher) { bench_good_thomas_small(b, 29, 31); }
+#[bench] fn estimates_24_good_thomas_small_00000128_0256(b: &mut Bencher) { bench_good_thomas_small(b,128, 256); }
+#[bench] fn estimates_24_good_thomas_small_00000128_0181(b: &mut Bencher) { bench_good_thomas_small(b,128, 181); }
+#[bench] fn estimates_24_good_thomas_small_00000181_0191(b: &mut Bencher) { bench_good_thomas_small(b,181, 191); }
+#[bench] fn estimates_24_good_thomas_small_00000256_0256(b: &mut Bencher) { bench_good_thomas_small(b,256, 256); }
+#[bench] fn estimates_24_good_thomas_small_00000512_0512(b: &mut Bencher) { bench_good_thomas_small(b,512, 512); }
+#[bench] fn estimates_24_good_thomas_small_00001024_1024(b: &mut Bencher) { bench_good_thomas_small(b,1024, 1024); }
+#[bench] fn estimates_24_good_thomas_small_00002048_2048(b: &mut Bencher) { bench_good_thomas_small(b,2048, 2048); }
 
-#[bench] fn estimates_20_mixed_radix_inner_0002_0000(b: &mut Bencher) { bench_planned_multi_f64(b,  2); }
-#[bench] fn estimates_20_mixed_radix_inner_0003_0000(b: &mut Bencher) { bench_planned_multi_f64(b,  3); }
-#[bench] fn estimates_20_mixed_radix_inner_0004_0000(b: &mut Bencher) { bench_planned_multi_f64(b,  4); }
-#[bench] fn estimates_20_mixed_radix_inner_0005_0000(b: &mut Bencher) { bench_planned_multi_f64(b,  5); }
-#[bench] fn estimates_20_mixed_radix_inner_0007_0000(b: &mut Bencher) { bench_planned_multi_f64(b,  7); }
-#[bench] fn estimates_20_mixed_radix_inner_0011_0000(b: &mut Bencher) { bench_planned_multi_f64(b, 11); }
-#[bench] fn estimates_20_mixed_radix_inner_0017_0000(b: &mut Bencher) { bench_planned_multi_f64(b, 17); }
-#[bench] fn estimates_20_mixed_radix_inner_0029_0000(b: &mut Bencher) { bench_planned_multi_f64(b, 29); }
-#[bench] fn estimates_20_mixed_radix_inner_0031_0000(b: &mut Bencher) { bench_planned_multi_f64(b, 31); }
-#[bench] fn estimates_20_mixed_radix_inner_0032_0000(b: &mut Bencher) { bench_planned_multi_f64(b, 32); }
-#[bench] fn estimates_20_mixed_radix_inner_0128_0000(b: &mut Bencher) { bench_planned_multi_f64(b, 128); }
-#[bench] fn estimates_20_mixed_radix_inner_0181_0000(b: &mut Bencher) { bench_planned_multi_f64(b, 181); }
-#[bench] fn estimates_20_mixed_radix_inner_0191_0000(b: &mut Bencher) { bench_planned_multi_f64(b, 191); }
-#[bench] fn estimates_20_mixed_radix_inner_0256_0000(b: &mut Bencher) { bench_planned_multi_f64(b, 256); }
-
+#[bench] fn estimates_20_mixed_radix_inner_00000002_0000(b: &mut Bencher) { bench_planned_multi_f64(b,  2); }
+#[bench] fn estimates_20_mixed_radix_inner_00000003_0000(b: &mut Bencher) { bench_planned_multi_f64(b,  3); }
+#[bench] fn estimates_20_mixed_radix_inner_00000004_0000(b: &mut Bencher) { bench_planned_multi_f64(b,  4); }
+#[bench] fn estimates_20_mixed_radix_inner_00000005_0000(b: &mut Bencher) { bench_planned_multi_f64(b,  5); }
+#[bench] fn estimates_20_mixed_radix_inner_00000007_0000(b: &mut Bencher) { bench_planned_multi_f64(b,  7); }
+#[bench] fn estimates_20_mixed_radix_inner_00000011_0000(b: &mut Bencher) { bench_planned_multi_f64(b, 11); }
+#[bench] fn estimates_20_mixed_radix_inner_00000017_0000(b: &mut Bencher) { bench_planned_multi_f64(b, 17); }
+#[bench] fn estimates_20_mixed_radix_inner_00000029_0000(b: &mut Bencher) { bench_planned_multi_f64(b, 29); }
+#[bench] fn estimates_20_mixed_radix_inner_00000031_0000(b: &mut Bencher) { bench_planned_multi_f64(b, 31); }
+#[bench] fn estimates_20_mixed_radix_inner_00000032_0000(b: &mut Bencher) { bench_planned_multi_f64(b, 32); }
+#[bench] fn estimates_20_mixed_radix_inner_00000128_0000(b: &mut Bencher) { bench_planned_multi_f64(b, 128); }
+#[bench] fn estimates_20_mixed_radix_inner_00000181_0000(b: &mut Bencher) { bench_planned_multi_f64(b, 181); }
+#[bench] fn estimates_20_mixed_radix_inner_00000191_0000(b: &mut Bencher) { bench_planned_multi_f64(b, 191); }
+#[bench] fn estimates_20_mixed_radix_inner_00000256_0000(b: &mut Bencher) { bench_planned_multi_f64(b, 256); }
+#[bench] fn estimates_20_mixed_radix_inner_00000512_0000(b: &mut Bencher) { bench_planned_multi_f64(b, 512); }
+#[bench] fn estimates_20_mixed_radix_inner_00001024_0000(b: &mut Bencher) { bench_planned_multi_f64(b, 1024); }
+#[bench] fn estimates_20_mixed_radix_inner_00002048_0000(b: &mut Bencher) { bench_planned_multi_f64(b, 2048); }
 
 
 /// Times just the FFT execution (not allocation and pre-calculation)
@@ -224,18 +241,18 @@ fn bench_raders_inner(b: &mut Bencher, len: usize) {
     b.iter(|| {fft.process_inplace_with_scratch(&mut buffer, &mut scratch);} );
 }
 
-#[bench] fn estimates_30_raders____________0005_0000(b: &mut Bencher) { bench_raders_scalar(b,  5); }
-#[bench] fn estimates_30_raders_inner______0005_0000(b: &mut Bencher) { bench_raders_inner(b,  5); }
-#[bench] fn estimates_30_raders____________0017_0000(b: &mut Bencher) { bench_raders_scalar(b,  17); }
-#[bench] fn estimates_30_raders_inner______0017_0000(b: &mut Bencher) { bench_raders_inner(b,  17); }
-#[bench] fn estimates_30_raders____________0149_0000(b: &mut Bencher) { bench_raders_scalar(b,  149); }
-#[bench] fn estimates_30_raders_inner______0149_0000(b: &mut Bencher) { bench_raders_inner(b,  149); }
-#[bench] fn estimates_30_raders____________0151_0000(b: &mut Bencher) { bench_raders_scalar(b,  151); }
-#[bench] fn estimates_30_raders_inner______0151_0000(b: &mut Bencher) { bench_raders_inner(b,  151); }
-#[bench] fn estimates_30_raders____________0251_0000(b: &mut Bencher) { bench_raders_scalar(b,  251); }
-#[bench] fn estimates_30_raders_inner______0251_0000(b: &mut Bencher) { bench_raders_inner(b,  251); }
-#[bench] fn estimates_30_raders____________0257_0000(b: &mut Bencher) { bench_raders_scalar(b,  257); }
-#[bench] fn estimates_30_raders_inner______0257_0000(b: &mut Bencher) { bench_raders_inner(b,  257); }
+#[bench] fn estimates_30_raders____________00000005_0000(b: &mut Bencher) { bench_raders_scalar(b,  5); }
+#[bench] fn estimates_30_raders_inner______00000005_0000(b: &mut Bencher) { bench_raders_inner(b,  5); }
+#[bench] fn estimates_30_raders____________00000017_0000(b: &mut Bencher) { bench_raders_scalar(b,  17); }
+#[bench] fn estimates_30_raders_inner______00000017_0000(b: &mut Bencher) { bench_raders_inner(b,  17); }
+#[bench] fn estimates_30_raders____________00000149_0000(b: &mut Bencher) { bench_raders_scalar(b,  149); }
+#[bench] fn estimates_30_raders_inner______00000149_0000(b: &mut Bencher) { bench_raders_inner(b,  149); }
+#[bench] fn estimates_30_raders____________00000151_0000(b: &mut Bencher) { bench_raders_scalar(b,  151); }
+#[bench] fn estimates_30_raders_inner______00000151_0000(b: &mut Bencher) { bench_raders_inner(b,  151); }
+#[bench] fn estimates_30_raders____________00000251_0000(b: &mut Bencher) { bench_raders_scalar(b,  251); }
+#[bench] fn estimates_30_raders_inner______00000251_0000(b: &mut Bencher) { bench_raders_inner(b,  251); }
+#[bench] fn estimates_30_raders____________00000257_0000(b: &mut Bencher) { bench_raders_scalar(b,  257); }
+#[bench] fn estimates_30_raders_inner______00000257_0000(b: &mut Bencher) { bench_raders_inner(b,  257); }
 
 
 
@@ -261,18 +278,18 @@ fn bench_bluesteins_scalar_inner(b: &mut Bencher, len: usize) {
     b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch);} );
 }
 
-#[bench] fn estimates_31_bluesteins_prime__0005_0000(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  5); }
-#[bench] fn estimates_31_bluesteins_inner__0005_0000(b: &mut Bencher) { bench_bluesteins_scalar_inner(b,  5); }
-#[bench] fn estimates_31_bluesteins_prime__0017_0000(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  17); }
-#[bench] fn estimates_31_bluesteins_inner__0017_0000(b: &mut Bencher) { bench_bluesteins_scalar_inner(b,  17); }
-#[bench] fn estimates_31_bluesteins_prime__0149_0000(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  149); }
-#[bench] fn estimates_31_bluesteins_inner__0149_0000(b: &mut Bencher) { bench_bluesteins_scalar_inner(b,  149); }
-#[bench] fn estimates_31_bluesteins_prime__0151_0000(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  151); }
-#[bench] fn estimates_31_bluesteins_inner__0151_0000(b: &mut Bencher) { bench_bluesteins_scalar_inner(b,  151); }
-#[bench] fn estimates_31_bluesteins_prime__0251_0000(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  251); }
-#[bench] fn estimates_31_bluesteins_inner__0251_0000(b: &mut Bencher) { bench_bluesteins_scalar_inner(b,  251); }
-#[bench] fn estimates_31_bluesteins_prime__0257_0000(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  257); }
-#[bench] fn estimates_31_bluesteins_inner__0257_0000(b: &mut Bencher) { bench_bluesteins_scalar_inner(b,  257); }
+#[bench] fn estimates_31_bluesteins_prime__00000005_0000(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  5); }
+#[bench] fn estimates_31_bluesteins_inner__00000005_0000(b: &mut Bencher) { bench_bluesteins_scalar_inner(b,  5); }
+#[bench] fn estimates_31_bluesteins_prime__00000017_0000(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  17); }
+#[bench] fn estimates_31_bluesteins_inner__00000017_0000(b: &mut Bencher) { bench_bluesteins_scalar_inner(b,  17); }
+#[bench] fn estimates_31_bluesteins_prime__00000149_0000(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  149); }
+#[bench] fn estimates_31_bluesteins_inner__00000149_0000(b: &mut Bencher) { bench_bluesteins_scalar_inner(b,  149); }
+#[bench] fn estimates_31_bluesteins_prime__00000151_0000(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  151); }
+#[bench] fn estimates_31_bluesteins_inner__00000151_0000(b: &mut Bencher) { bench_bluesteins_scalar_inner(b,  151); }
+#[bench] fn estimates_31_bluesteins_prime__00000251_0000(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  251); }
+#[bench] fn estimates_31_bluesteins_inner__00000251_0000(b: &mut Bencher) { bench_bluesteins_scalar_inner(b,  251); }
+#[bench] fn estimates_31_bluesteins_prime__00000257_0000(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  257); }
+#[bench] fn estimates_31_bluesteins_inner__00000257_0000(b: &mut Bencher) { bench_bluesteins_scalar_inner(b,  257); }
 
 
 
@@ -288,7 +305,41 @@ fn bench_radix4(b: &mut Bencher, len: usize) {
     b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
 }
 
-#[bench] fn estimates_40_radix4____________0064_0000(b: &mut Bencher) { bench_radix4(b, 64); }
-#[bench] fn estimates_40_radix4____________0256_0000(b: &mut Bencher) { bench_radix4(b, 256); }
-#[bench] fn estimates_40_radix4____________1024_0000(b: &mut Bencher) { bench_radix4(b, 1024); }
-#[bench] fn estimates_40_radix4____________4096_0000(b: &mut Bencher) { bench_radix4(b, 4096); }
+#[bench] fn estimates_40_radix4____________00000064_0000(b: &mut Bencher) { bench_radix4(b, 64); }
+#[bench] fn estimates_40_radix4____________00000256_0000(b: &mut Bencher) { bench_radix4(b, 256); }
+#[bench] fn estimates_40_radix4____________00001024_0000(b: &mut Bencher) { bench_radix4(b, 1024); }
+#[bench] fn estimates_40_radix4____________00004096_0000(b: &mut Bencher) { bench_radix4(b, 4096); }
+#[bench] fn estimates_40_radix4____________00016384_0000(b: &mut Bencher) { bench_radix4(b, 16384); }
+#[bench] fn estimates_40_radix4____________00065536_0000(b: &mut Bencher) { bench_radix4(b, 65536); }
+#[bench] fn estimates_40_radix4____________00262144_0000(b: &mut Bencher) { bench_radix4(b, 262144); }
+#[bench] fn estimates_40_radix4____________01048576_0000(b: &mut Bencher) { bench_radix4(b, 1048576); }
+#[bench] fn estimates_40_radix4____________04194304_0000(b: &mut Bencher) { bench_radix4(b, 4194304); }
+
+
+fn bench_dft_multi_f64(b: &mut Bencher, len: usize) {
+    let fft = DFT::new(len, false);
+
+    let mut buffer = vec![Complex{re: 0_f64, im: 0_f64}; 1000*len];
+    let mut output = vec![Complex{re: 0_f64, im: 0_f64}; 1000*len];
+    let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
+    b.iter(|| { fft.process_multi(&mut buffer, &mut output, &mut scratch); });
+}
+
+// all butterflies
+#[bench] fn estimates_50_dft_______________00000002_0000(b: &mut Bencher) { bench_dft_multi_f64(b,        2); }
+#[bench] fn estimates_50_dft_______________00000003_0000(b: &mut Bencher) { bench_dft_multi_f64(b,        3); }
+#[bench] fn estimates_50_dft_______________00000004_0000(b: &mut Bencher) { bench_dft_multi_f64(b,        4); }
+#[bench] fn estimates_50_dft_______________00000005_0000(b: &mut Bencher) { bench_dft_multi_f64(b,        5); }
+#[bench] fn estimates_50_dft_______________00000006_0000(b: &mut Bencher) { bench_dft_multi_f64(b,        6); }
+#[bench] fn estimates_50_dft_______________00000007_0000(b: &mut Bencher) { bench_dft_multi_f64(b,        7); }
+#[bench] fn estimates_50_dft_______________00000008_0000(b: &mut Bencher) { bench_dft_multi_f64(b,        8); }
+#[bench] fn estimates_50_dft_______________00000011_0000(b: &mut Bencher) { bench_dft_multi_f64(b,       11); }
+#[bench] fn estimates_50_dft_______________00000013_0000(b: &mut Bencher) { bench_dft_multi_f64(b,       13); }
+#[bench] fn estimates_50_dft_______________00000016_0000(b: &mut Bencher) { bench_dft_multi_f64(b,       16); }
+#[bench] fn estimates_50_dft_______________00000017_0000(b: &mut Bencher) { bench_dft_multi_f64(b,       17); }
+#[bench] fn estimates_50_dft_______________00000019_0000(b: &mut Bencher) { bench_dft_multi_f64(b,       19); }
+#[bench] fn estimates_50_dft_______________00000023_0000(b: &mut Bencher) { bench_dft_multi_f64(b,       23); }
+#[bench] fn estimates_50_dft_______________00000027_0000(b: &mut Bencher) { bench_dft_multi_f64(b,       27); }
+#[bench] fn estimates_50_dft_______________00000029_0000(b: &mut Bencher) { bench_dft_multi_f64(b,       29); }
+#[bench] fn estimates_50_dft_______________00000031_0000(b: &mut Bencher) { bench_dft_multi_f64(b,       31); }
+#[bench] fn estimates_50_dft_______________00000032_0000(b: &mut Bencher) { bench_dft_multi_f64(b,       32); }
