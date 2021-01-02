@@ -16,10 +16,10 @@ RustFFT supports the AVX instruction set for increased performance. No special c
 // Perform a forward FFT of size 1234
 use rustfft::{FFTplanner, num_complex::Complex};
 
-let mut planner = FFTplanner::new();
+let mut planner = FFTplanner::<f32>::new();
 let fft = planner.plan_fft_forward(1234);
 
-let mut buffer:  Vec<Complex<f32>> = vec![Complex{ re: 0.0, im: 0.0 }; 1234];
+let mut buffer = vec![Complex{ re: 0.0, im: 0.0 }; 1234];
 
 fft.process_inplace(&mut buffer);
 ```
