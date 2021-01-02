@@ -2,7 +2,9 @@
 
 //! RustFFT is a high-performance FFT library written in pure Rust.
 //!
-//! This is an experimental release of RustFFT that enables AVX acceleration.
+//! RustFFT supports the AVX instruction set for increased performance. No special code is needed to activate AVX:
+//! Simply plan a FFT using the FftPlanner on a machine that supports the `avx` and `fma` CPU features, and RustFFT
+//! will automatically switch to faster AVX-accelerated algorithms.
 //!
 //! ### Usage
 //!
@@ -40,6 +42,8 @@
 //! advanced users may have better insight than the planner into which algorithms are best for a specific size. See the
 //! [`algorithm`](crate::algorithm) module for a complete list of scalar algorithms implemented by RustFFT.
 //!
+//! Users should beware, however, that bypassing the planner will disable all AVX optimizations.
+//!
 //! ### Normalization
 //!
 //! RustFFT does not normalize outputs. Callers must manually normalize the results by scaling each element by
@@ -49,6 +53,30 @@
 //! ### Output Order
 //!
 //! Elements in the output are ordered by ascending frequency, with the first element corresponding to frequency 0.
+//!
+//! ### AVX Performance Tips
+//!
+//! In any FFT computation, the time required to compute a FFT of size N relies heavily on the [prime factorization](https://en.wikipedia.org/wiki/Integer_factorization) of N.
+//! If N's prime factors are all very small, computing a FFT of size N will be fast, and it'll be slow if N has large prime
+//! factors, or if N is a prime number.
+//!
+//! In most FFT libraries (Including RustFFT when using non-AVX code), power-of-two FFT sizes are the fastest, and users see a steep
+//! falloff in performance when using non-power-of-two sizes. Thankfully, RustFFT using AVX acceleration is not quite as restrictive:
+//!
+//! - Any FFT whose size is of the form `2^n * 3^m` can be considered the "fastest" in RustFFT.
+//! - Any FFT whose prime factors are all 11 or smaller will also be very fast, but the fewer the factors of 2 and 3 the slower it will be.
+//!     For example, computing a FFT of size 13552 (2^4 * 7 * 11 * 11) is takes 12% longer to compute than 13824 (2^9 * 3^3),
+//!     and computing a FFT of size 2541 (3*7*11*11) is takes 65% longer to compute than 2592 (2^5 * 3^4)
+//! - Any other FFT size will be noticeably slower. A considerable amount of effort has been put into making these FFT sizes as fast as
+//!     they can be, but some FFT sizes just take more work than others. For example, computing a FFT of size 5183 (71 * 73) takes about
+//!     5x longer than computing a FFT of size 5184 (2^6 * 3^4).
+//!
+//! In most cases, even prime-sized FFTs will be fast enough for your application. In the example of 5183 above, even that "slow" FFT
+//! only takes a few tens of microseconds to compute.
+//!
+//! Our advice is to start by trying the size that's most convenient to your application.
+//! If that's too slow, see if you can find a nearby size whose prime factors are all 11 or smaller, and you can expect a 2x-5x speedup.
+//! If that's still too slow, find a nearby size whose prime factors are all 2 or 3, and you can expect a 1.1x-1.5x speedup.
 
 use std::fmt::Display;
 
@@ -78,12 +106,17 @@ pub trait Length {
     fn len(&self) -> usize;
 }
 
+/// Represents a FFT direction, IE a forward FFT or an inverse FFT
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum FftDirection {
     Forward,
     Inverse,
 }
 impl FftDirection {
+    /// Returns the opposite direction of `self`.
+    ///
+    ///  - If `self` is `FftDirection::Forward`, returns `FftDirection::Inverse`
+    ///  - If `self` is `FftDirection::Inverse`, returns `FftDirection::Forward`
     pub fn reverse(&self) -> FftDirection {
         match self {
             Self::Forward => Self::Inverse,
