@@ -13,6 +13,7 @@ impl<T> FftCache<T> {
             inverse_cache: HashMap::new(),
         }
     }
+    #[allow(unused)]
     pub fn contains_fft(&self, len: usize, direction: FftDirection) -> bool {
         match direction {
             FftDirection::Forward => self.forward_cache.contains_key(&len),

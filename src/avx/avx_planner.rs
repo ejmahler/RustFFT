@@ -79,8 +79,8 @@ impl MixedRadixPlan {
 
 /// The AVX FFT planner creates new FFT algorithm instances which take advantage of the AVX instruction set.
 ///
-/// Creating an instance of `FftPlannerAvx` requires the `avx` and `fma` instructions to be available on the current machine. A few algorithms will
-/// use `avx2` if it's available, but it isn't required.
+/// Creating an instance of `FftPlannerAvx` requires the `avx` and `fma` instructions to be available on the current machine, and it requires RustFFT's
+///  `avx` feature flag to be set. A few algorithms will use `avx2` if it's available, but it isn't required.
 ///
 /// For the time being, AVX acceleration is black box, and AVX accelerated algorithms are not available without a planner. This may change in the future.
 ///
@@ -89,7 +89,8 @@ impl MixedRadixPlan {
 /// use std::sync::Arc;
 /// use rustfft::{FftPlannerAvx, num_complex::Complex};
 ///
-/// // If FftPlannerAvx::new() returns Ok(), we'll know AVX algorithms are available on this machine
+/// // If FftPlannerAvx::new() returns Ok(), we'll know AVX algorithms are available 
+/// // on this machine, and that RustFFT was compiled with the `avx` feature flag
 /// if let Ok(mut planner) = FftPlannerAvx::new() {
 ///     let fft = planner.plan_fft_forward(1234);
 ///
@@ -115,7 +116,8 @@ pub struct FftPlannerAvx<T: FftNum> {
 impl<T: FftNum> FftPlannerAvx<T> {
     /// Constructs a new `FftPlannerAvx` instance.
     ///
-    /// Returns `Ok(planner_instance)` if this machine has the required instruction sets, `Err(())` if some instruction sets are missing.
+    /// Returns `Ok(planner_instance)` if this machine has the required instruction sets and the `avx` feature flag is set. 
+    /// Returns `Err(())` if some instruction sets are missing, or if the `avx` feature flag is not set.
     pub fn new() -> Result<Self, ()> {
         // Eventually we might make AVX algorithms that don't also require FMA.
         // If that happens, we can only check for AVX here? seems like a pretty low-priority addition

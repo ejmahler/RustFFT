@@ -44,6 +44,14 @@
 //!
 //! Users should beware, however, that bypassing the planner will disable all AVX optimizations.
 //!
+//! ### Feature Flags
+//!
+//! * `avx` (Enabled by default)
+//!
+//!     On x86_64, the `avx` feature enables compilation of AVX-accelerated code. Enabling it greatly improves performance if the
+//!     client CPU supports AVX, while disabling it reduces compile time and binary size.
+//!     On every other platform, this feature does nothing, and RustFFT will behave like it's not set.
+//!
 //! ### Normalization
 //!
 //! RustFFT does not normalize outputs. Callers must manually normalize the results by scaling each element by
@@ -251,25 +259,81 @@ pub trait Fft<T: FftNum>: Length + Direction + Sync + Send {
     fn get_out_of_place_scratch_len(&self) -> usize;
 }
 
-// Algorithms implemented to use AVX instructions. Only compiled on x86_64.
-#[cfg(target_arch = "x86_64")]
+// Algorithms implemented to use AVX instructions. Only compiled on x86_64, and only compiled if the "avx" feature flag is set.
+#[cfg(all(target_arch = "x86_64", feature = "avx"))]
 mod avx;
 
-// When we're not on avx, keep a stub implementation around that just does nothing
-#[cfg(not(target_arch = "x86_64"))]
+// If we're not on x86_64, or if the avx feature was disabled, keep a stub implementation around that has the same API, but does nothing
+// That way, users can write code using the AVX planner and compile it on any platform
+#[cfg(not(all(target_arch = "x86_64", feature = "avx")))]
 mod avx {
     pub mod avx_planner {
-        use crate::{Fft, FftNum};
+        use crate::{Fft, FftNum, FftDirection};
         use std::sync::Arc;
+
+        /// The AVX FFT planner creates new FFT algorithm instances which take advantage of the AVX instruction set.
+        ///
+        /// Creating an instance of `FftPlannerAvx` requires the `avx` and `fma` instructions to be available on the current machine, and it requires RustFFT's
+        ///  `avx` feature flag to be set. A few algorithms will use `avx2` if it's available, but it isn't required.
+        ///
+        /// For the time being, AVX acceleration is black box, and AVX accelerated algorithms are not available without a planner. This may change in the future.
+        ///
+        /// ~~~
+        /// // Perform a forward Fft of size 1234, accelerated by AVX
+        /// use std::sync::Arc;
+        /// use rustfft::{FftPlannerAvx, num_complex::Complex};
+        ///
+        /// // If FftPlannerAvx::new() returns Ok(), we'll know AVX algorithms are available 
+        /// // on this machine, and that RustFFT was compiled with the `avx` feature flag
+        /// if let Ok(mut planner) = FftPlannerAvx::new() {
+        ///     let fft = planner.plan_fft_forward(1234);
+        ///
+        ///     let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1234];
+        ///     fft.process_inplace(&mut buffer);
+        ///
+        ///     // The FFT instance returned by the planner has the type `Arc<dyn Fft<T>>`,
+        ///     // where T is the numeric type, ie f32 or f64, so it's cheap to clone
+        ///     let fft_clone = Arc::clone(&fft);
+        /// }
+        /// ~~~
+        ///
+        /// If you plan on creating multiple FFT instances, it is recommended to reuse the same planner for all of them. This
+        /// is because the planner re-uses internal data across FFT instances wherever possible, saving memory and reducing
+        /// setup time. (FFT instances created with one planner will never re-use data and buffers with FFT instances created
+        /// by a different planner)
+        ///
+        /// Each FFT instance owns [`Arc`s](std::sync::Arc) to its internal data, rather than borrowing it from the planner, so it's perfectly
+        /// safe to drop the planner after creating Fft instances.
         pub struct FftPlannerAvx<T: FftNum> {
             _phantom: std::marker::PhantomData<T>,
         }
         impl<T: FftNum> FftPlannerAvx<T> {
-            pub fn new(_direction: FftDirection) -> Result<Self, ()> {
+            /// Constructs a new `FftPlannerAvx` instance.
+            ///
+            /// Returns `Ok(planner_instance)` if this machine has the required instruction sets and the `avx` feature flag is set. 
+            /// Returns `Err(())` if some instruction sets are missing, or if the `avx` feature flag is not set.
+            pub fn new() -> Result<Self, ()> {
                 Err(())
             }
-            pub fn plan_fft(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
-                unreachable!();
+            /// Returns a `Fft` instance which uses AVX instructions to compute FFTs of size `len`.
+            ///
+            /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
+            ///
+            /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+            pub fn plan_fft(&mut self, _len: usize, _direction: FftDirection) -> Arc<dyn Fft<T>> {
+                unreachable!()
+            }
+            /// Returns a `Fft` instance which uses AVX instructions to compute forward FFTs of size `len`.
+            ///
+            /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+            pub fn plan_fft_forward(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
+                unreachable!()
+            }
+            /// Returns a `Fft` instance which uses AVX instructions to compute inverse FFTs of size `len.
+            ///
+            /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+            pub fn plan_fft_inverse(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
+                unreachable!()
             }
         }
     }
