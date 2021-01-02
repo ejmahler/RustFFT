@@ -89,7 +89,7 @@ impl MixedRadixPlan {
 /// use std::sync::Arc;
 /// use rustfft::{FftPlannerAvx, num_complex::Complex};
 ///
-/// // If FftPlannerAvx::new() returns Ok(), we'll know AVX algorithms are available 
+/// // If FftPlannerAvx::new() returns Ok(), we'll know AVX algorithms are available
 /// // on this machine, and that RustFFT was compiled with the `avx` feature flag
 /// if let Ok(mut planner) = FftPlannerAvx::new() {
 ///     let fft = planner.plan_fft_forward(1234);
@@ -116,7 +116,7 @@ pub struct FftPlannerAvx<T: FftNum> {
 impl<T: FftNum> FftPlannerAvx<T> {
     /// Constructs a new `FftPlannerAvx` instance.
     ///
-    /// Returns `Ok(planner_instance)` if this machine has the required instruction sets and the `avx` feature flag is set. 
+    /// Returns `Ok(planner_instance)` if this machine has the required instruction sets and the `avx` feature flag is set.
     /// Returns `Err(())` if some instruction sets are missing, or if the `avx` feature flag is not set.
     pub fn new() -> Result<Self, ()> {
         // Eventually we might make AVX algorithms that don't also require FMA.
