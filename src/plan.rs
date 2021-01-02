@@ -13,6 +13,12 @@ use crate::FftPlannerAvx;
 
 use crate::math_utils::{PrimeFactor, PrimeFactors};
 
+enum ChosenFftPlanner<T: FftNum> {
+    Scalar(FftPlannerScalar<T>),
+    Avx(FftPlannerAvx<T>),
+    // todo: If we add NEON, SSE, avx-512 etc support, add more enum variants for them here
+}
+
 /// The FFT planner is used to make new FFT algorithm instances.
 ///
 /// RustFFT has several FFT algorithms available. For a given FFT size, the `FftPlanner` decides which of the
@@ -41,39 +47,44 @@ use crate::math_utils::{PrimeFactor, PrimeFactors};
 ///
 /// Each FFT instance owns [`Arc`s](std::sync::Arc) to its internal data, rather than borrowing it from the planner, so it's perfectly
 /// safe to drop the planner after creating Fft instances.
-pub enum FftPlanner<T: FftNum> {
-    Scalar(FftPlannerScalar<T>),
-    Avx(FftPlannerAvx<T>),
+pub struct FftPlanner<T: FftNum> {
+    chosen_planner: ChosenFftPlanner<T>,
 }
 impl<T: FftNum> FftPlanner<T> {
     /// Creates a new `FftPlanner` instance. It detects if AVX is supported on the current machine. If it is, it will plan AVX-accelerated FFTs.
     /// If AVX isn't supported, it will seamlessly fall back to planning non-SIMD FFTs.
     pub fn new() -> Self {
         if let Ok(avx_planner) = FftPlannerAvx::new() {
-            Self::Avx(avx_planner)
+            Self {
+                chosen_planner: ChosenFftPlanner::Avx(avx_planner),
+            }
         } else {
-            Self::Scalar(FftPlannerScalar::new())
+            Self {
+                chosen_planner: ChosenFftPlanner::Scalar(FftPlannerScalar::new()),
+            }
         }
     }
 
-    /// Returns a `Fft` instance which processes signals of size `len`
+    /// Returns a `Fft` instance which computes FFTs of size `len`.
+    ///
+    /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft(&mut self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
-        match self {
-            Self::Scalar(scalar_planner) => scalar_planner.plan_fft(len, direction),
-            Self::Avx(avx_planner) => avx_planner.plan_fft(len, direction),
+        match &mut self.chosen_planner {
+            ChosenFftPlanner::Scalar(scalar_planner) => scalar_planner.plan_fft(len, direction),
+            ChosenFftPlanner::Avx(avx_planner) => avx_planner.plan_fft(len, direction),
         }
     }
 
-    /// Returns a `Fft` instance which processes signals of size `len`
+    /// Returns a `Fft` instance which computes forward FFTs of size `len`
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft_forward(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         self.plan_fft(len, FftDirection::Forward)
     }
 
-    /// Returns a `Fft` instance which processes signals of size `len`
+    /// Returns a `Fft` instance which computes inverse FFTs of size `len`
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft_inverse(&mut self, len: usize) -> Arc<dyn Fft<T>> {
@@ -221,7 +232,9 @@ impl<T: FftNum> FftPlannerScalar<T> {
         }
     }
 
-    /// Returns a `Fft` instance which processes signals of size `len`
+    /// Returns a `Fft` instance which computes FFTs of size `len`.
+    ///
+    /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft(&mut self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
@@ -232,14 +245,14 @@ impl<T: FftNum> FftPlannerScalar<T> {
         self.build_fft(&recipe, direction)
     }
 
-    /// Returns a `Fft` instance which processes signals of size `len`
+    /// Returns a `Fft` instance which computes forward FFTs of size `len`
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft_forward(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         self.plan_fft(len, FftDirection::Forward)
     }
 
-    /// Returns a `Fft` instance which processes signals of size `len`
+    /// Returns a `Fft` instance which computes inverse FFTs of size `len`
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft_inverse(&mut self, len: usize) -> Arc<dyn Fft<T>> {

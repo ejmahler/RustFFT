@@ -78,12 +78,17 @@ pub trait Length {
     fn len(&self) -> usize;
 }
 
+/// Represents a FFT direction, IE a forward FFT or an inverse FFT
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum FftDirection {
     Forward,
     Inverse,
 }
 impl FftDirection {
+    /// Returns the opposite direction of `self`.
+    ///
+    ///  - If `self` is `FftDirection::Forward`, returns `FftDirection::Inverse`
+    ///  - If `self` is `FftDirection::Inverse`, returns `FftDirection::Forward`
     pub fn reverse(&self) -> FftDirection {
         match self {
             Self::Forward => Self::Inverse,

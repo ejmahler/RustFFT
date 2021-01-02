@@ -161,13 +161,15 @@ impl<T: FftNum> FftPlannerAvx<T> {
         Err(())
     }
 
-    /// Returns a `Fft` instance which processes signals of size `len` using AVX instructions.
+    /// Returns a `Fft` instance which computes FFTs of size `len` using AVX instructions.
+    ///
+    /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft(&mut self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
         self.internal_planner.plan_and_construct_fft(len, direction)
     }
-    /// Returns a `Fft` instance which processes signals of size `len` using AVX instructions.
+    /// Returns a `Fft` instance which computes forward FFTs of size `len`
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft_forward(&mut self, len: usize) -> Arc<dyn Fft<T>> {
