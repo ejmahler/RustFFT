@@ -65,7 +65,7 @@
 //!
 //! - Any FFT whose size is of the form `2^n * 3^m` can be considered the "fastest" in RustFFT.
 //! - Any FFT whose prime factors are all 11 or smaller will also be very fast, but the fewer the factors of 2 and 3 the slower it will be.
-//!     For example, computing a FFT of size 13552 (2^4 * 7*11*11) is takes 12% longer to compute than 13824 (2^9 * 3^3),
+//!     For example, computing a FFT of size 13552 (2^4 * 7 * 11 * 11) is takes 12% longer to compute than 13824 (2^9 * 3^3),
 //!     and computing a FFT of size 2541 (3*7*11*11) is takes 65% longer to compute than 2592 (2^5 * 3^4)
 //! - Any other FFT size will be noticeably slower. A considerable amount of effort has been put into making these FFT sizes as fast as
 //!     they can be, but some FFT sizes just take more work than others. For example, computing a FFT of size 5183 (71 * 73) takes about
