@@ -83,7 +83,7 @@ impl<T: FftNum> FftPlanner<T> {
 }
 
 const SLOWDOWN_LEN: usize = 100000; // lenght where we run out of cpu cache and algorithms tend to slow down
-const SMALL_LEN: usize = 1000; // limit of "small" length for mixed radix algos 
+const SMALL_LEN: usize = 32; // limit of "small" length for mixed radix algos 
 
 /// A Recipe is a structure that describes the design of a FFT, without actually creating it.
 /// It is used as a middle step in the planning process.
@@ -450,7 +450,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
             let right_fft = self.design_fft_for_len(right_len, depth+1);
 
             // if total length is small, use algorithms optimized for small FFTs
-            if len < SMALL_LEN {
+            if right_len <= SMALL_LEN && left_len <= SMALL_LEN {
                 Some(Rc::new(Recipe::MixedRadixSmall {
                     left_fft,
                     right_fft,
@@ -480,7 +480,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
             let right_fft = self.design_fft_for_len(non_power_of_two, depth+1);
 
             // if total length is small, use algorithms optimized for small FFTs
-            if len < SMALL_LEN {
+            if power_of_two <= SMALL_LEN && non_power_of_two <= SMALL_LEN {
                 Some(Rc::new(Recipe::MixedRadixSmall {
                     left_fft,
                     right_fft,
@@ -516,7 +516,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
                 let right_fft = self.design_fft_for_len(right_len, depth+1);
                 
                 //if both left_len and right_len are small, use algorithms optimized for small FFTs
-                if len<SMALL_LEN {
+                if right_len <= SMALL_LEN && left_len <= SMALL_LEN {
                     Some(Rc::new(Recipe::GoodThomasAlgorithmSmall {
                         left_fft,
                         right_fft,
@@ -580,7 +580,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
     }
 
     fn design_bluesteins(&mut self, factors: &PrimeFactors, depth: usize) -> Option<Rc<Recipe>> {
-        if !factors.is_prime() || depth > 0 {
+        if !factors.is_prime() || depth > 10000 {
             None
         }
         else {
@@ -641,12 +641,19 @@ mod unit_tests {
         }
     }
 
+    fn is_dft(plan: &Recipe) -> bool {
+        match plan {
+            &Recipe::DFT(_len) => true,
+            _ => false,
+        }
+    }
+
     #[test]
     fn test_plan_scalar_trivial() {
         // Length 0 should use DFT
         let mut planner = FftPlannerScalar::<f64>::new();
         for len in 0..1 {
-            let plan = planner.design_fft_for_len(len);
+            let plan = planner.design_fft_for_len(len, 0);
             assert_eq!(*plan, Recipe::DFT(len));
             assert_eq!(plan.len(), len, "Recipe reports wrong length");
         }
@@ -658,7 +665,7 @@ mod unit_tests {
         let mut planner = FftPlannerScalar::<f64>::new();
         for pow in 6..12 {
             let len = 1 << pow;
-            let plan = planner.design_fft_for_len(len);
+            let plan = planner.design_fft_for_len(len, 0);
             assert_eq!(*plan, Recipe::Radix4(len), "Length: {}, expected Radix4, got {:?}", len, plan);
             assert_eq!(plan.len(), len, "Recipe reports wrong length");
         }
@@ -670,7 +677,7 @@ mod unit_tests {
         let mut planner = FftPlannerScalar::<f64>::new();
         for pow in 17..32 {
             let len = 1 << pow;
-            let plan = planner.design_fft_for_len(len);
+            let plan = planner.design_fft_for_len(len, 0);
             assert!(is_mixedradix(&plan), "Length: {}, expected MixedRadix, got {:?}", len, plan);
             assert_eq!(plan.len(), len, "Recipe reports wrong length");
         }
@@ -680,23 +687,23 @@ mod unit_tests {
     fn test_plan_scalar_butterflies() {
         // Check that all butterflies are used
         let mut planner = FftPlannerScalar::<f64>::new();
-        assert_eq!(*planner.design_fft_for_len(1), Recipe::Butterfly1);
-        assert_eq!(*planner.design_fft_for_len(2), Recipe::Butterfly2);
-        assert_eq!(*planner.design_fft_for_len(3), Recipe::Butterfly3);
-        assert_eq!(*planner.design_fft_for_len(4), Recipe::Butterfly4);
-        assert_eq!(*planner.design_fft_for_len(5), Recipe::Butterfly5);
-        assert_eq!(*planner.design_fft_for_len(6), Recipe::Butterfly6);
-        assert_eq!(*planner.design_fft_for_len(7), Recipe::Butterfly7);
-        assert_eq!(*planner.design_fft_for_len(8), Recipe::Butterfly8);
-        assert_eq!(*planner.design_fft_for_len(11), Recipe::Butterfly11);
-        assert_eq!(*planner.design_fft_for_len(13), Recipe::Butterfly13);
-        assert_eq!(*planner.design_fft_for_len(16), Recipe::Butterfly16);
-        assert_eq!(*planner.design_fft_for_len(17), Recipe::Butterfly17);
-        assert_eq!(*planner.design_fft_for_len(19), Recipe::Butterfly19);
-        assert_eq!(*planner.design_fft_for_len(23), Recipe::Butterfly23);
-        assert_eq!(*planner.design_fft_for_len(29), Recipe::Butterfly29);
-        assert_eq!(*planner.design_fft_for_len(31), Recipe::Butterfly31);
-        assert_eq!(*planner.design_fft_for_len(32), Recipe::Butterfly32);
+        assert_eq!(*planner.design_fft_for_len(1, 0), Recipe::Butterfly1);
+        assert_eq!(*planner.design_fft_for_len(2, 0), Recipe::Butterfly2);
+        assert_eq!(*planner.design_fft_for_len(3, 0), Recipe::Butterfly3);
+        assert_eq!(*planner.design_fft_for_len(4, 0), Recipe::Butterfly4);
+        assert_eq!(*planner.design_fft_for_len(5, 0), Recipe::Butterfly5);
+        assert_eq!(*planner.design_fft_for_len(6, 0), Recipe::Butterfly6);
+        assert_eq!(*planner.design_fft_for_len(7, 0), Recipe::Butterfly7);
+        assert_eq!(*planner.design_fft_for_len(8, 0), Recipe::Butterfly8);
+        assert_eq!(*planner.design_fft_for_len(11, 0), Recipe::Butterfly11);
+        assert_eq!(*planner.design_fft_for_len(13, 0), Recipe::Butterfly13);
+        assert_eq!(*planner.design_fft_for_len(16, 0), Recipe::Butterfly16);
+        assert_eq!(*planner.design_fft_for_len(17, 0), Recipe::Butterfly17);
+        assert_eq!(*planner.design_fft_for_len(19, 0), Recipe::Butterfly19);
+        assert_eq!(*planner.design_fft_for_len(23, 0), Recipe::Butterfly23);
+        assert_eq!(*planner.design_fft_for_len(29, 0), Recipe::Butterfly29);
+        assert_eq!(*planner.design_fft_for_len(31, 0), Recipe::Butterfly31);
+        assert_eq!(*planner.design_fft_for_len(32, 0), Recipe::Butterfly32);
     }
 
     #[test]
@@ -711,7 +718,7 @@ mod unit_tests {
                             * 3usize.pow(pow3)
                             * 5usize.pow(pow5)
                             * 7usize.pow(pow7);
-                        let plan = planner.design_fft_for_len(len);
+                        let plan = planner.design_fft_for_len(len, 0);
                         assert!(is_mixedradix(&plan), "Length: {}, expected MixedRadix, got {:?}", len, plan);
                         assert_eq!(plan.len(), len, "Recipe reports wrong length");
                     }
@@ -725,7 +732,7 @@ mod unit_tests {
         // Products of two "small" lengths < 31 that have a common divisor >1, and isn't a power of 2 should be MixedRadixSmall
         let mut planner = FftPlannerScalar::<f64>::new();
         for len in [5 * 20, 5 * 25].iter() {
-            let plan = planner.design_fft_for_len(*len);
+            let plan = planner.design_fft_for_len(*len, 0);
             assert!(
                 is_mixedradixsmall(&plan),
                 "Length: {}, expected MixedRadixSmall, got {:?}",
@@ -739,7 +746,7 @@ mod unit_tests {
     fn test_plan_scalar_goodthomasbutterfly() {
         let mut planner = FftPlannerScalar::<f64>::new();
         for len in [3 * 4, 3 * 5, 3 * 7, 5 * 7, 11 * 13].iter() {
-            let plan = planner.design_fft_for_len(*len);
+            let plan = planner.design_fft_for_len(*len, 0);
             assert!(
                 is_goodthomassmall(&plan),
                 "Length: {}, expected GoodThomasAlgorithmSmall, got {:?}",
@@ -759,7 +766,7 @@ mod unit_tests {
 
         let mut planner = FftPlannerScalar::<f64>::new();
         for len in difficultprimes.iter() {
-            let plan = planner.design_fft_for_len(*len);
+            let plan = planner.design_fft_for_len(*len, 0);
             assert!(
                 is_bluesteins(&plan),
                 "Length: {}, Expected BluesteinsAlgorithm, got {:?}",
@@ -768,7 +775,7 @@ mod unit_tests {
             assert_eq!(plan.len(), *len, "Recipe reports wrong length");
         }
         for len in easyprimes.iter() {
-            let plan = planner.design_fft_for_len(*len);
+            let plan = planner.design_fft_for_len(*len, 0);
             assert!(is_raders(&plan), "Length: {}, Expected RadersAlgorithm, got {:?}", len, plan);
             assert_eq!(plan.len(), *len, "Recipe reports wrong length");
         }
@@ -806,8 +813,38 @@ mod unit_tests {
     fn test_scalar_recipe_cache() {
         // Check that all butterflies are used
         let mut planner = FftPlannerScalar::<f64>::new();
-        let fft_a = planner.design_fft_for_len(1234);
-        let fft_b = planner.design_fft_for_len(1234);
+        let fft_a = planner.design_fft_for_len(1234, 0);
+        let fft_b = planner.design_fft_for_len(1234, 0);
         assert!(Rc::ptr_eq(&fft_a, &fft_b), "Existing recipe was not reused");
+    }
+
+    #[test]
+    fn test_plan_whatisit1() {
+        // Products of two "small" lengths < 31 that have a common divisor >1, and isn't a power of 2 should be MixedRadixSmall
+        let mut planner = FftPlannerScalar::<f64>::new();
+        for len in [48, 55,448, 118, 487,  933].iter() { //48, 55,448, 118, 487,  933
+            let plan = planner.design_fft_for_len(*len, 0);
+            assert!(
+                is_dft(&plan),
+                "Len {}, got {:?}",
+                len, plan
+            );
+            assert_eq!(plan.len(), *len, "Recipe reports wrong length");
+        }
+    }
+
+    #[test]
+    fn test_plan_whatisit2() {
+        // Products of two "small" lengths < 31 that have a common divisor >1, and isn't a power of 2 should be MixedRadixSmall
+        let mut planner = FftPlannerScalar::<f64>::new();
+        for len in [446,454,  501, 934, 958, 963, 998, 1002, 1006, 1018].iter() { // 446,454,  501, 934, 958, 963, 998, 1002, 1006, 1018]
+            let plan = planner.design_fft_for_len(*len, 0);
+            assert!(
+                is_dft(&plan),
+                "Len {}, got {:?}",
+                len, plan
+            );
+            assert_eq!(plan.len(), *len, "Recipe reports wrong length");
+        }
     }
 }
