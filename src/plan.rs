@@ -94,7 +94,6 @@ pub enum Recipe {
         left_fft: Rc<Recipe>,
         right_fft: Rc<Recipe>,
     },
-    #[allow(dead_code)]
     GoodThomasAlgorithm {
         left_fft: Rc<Recipe>,
         right_fft: Rc<Recipe>,
@@ -277,7 +276,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft(&mut self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
         // Step 1: Create a "recipe" for this FFT, which will tell us exactly which combination of algorithms to use
-        let recipe = self.design_fft_for_len(len, 0);
+        let recipe = self.design_fft_for_len(len);
 
         // Step 2: Use our recipe to construct a Fft trait object
         self.build_fft(&recipe, direction)
@@ -298,7 +297,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
     }
 
     // Make a recipe for a length
-    fn design_fft_for_len(&mut self, len: usize, depth: usize) -> Rc<Recipe> {
+    fn design_fft_for_len(&mut self, len: usize) -> Rc<Recipe> {
         if len == 0 {
             Rc::new(Recipe::DFT(0))
         }
@@ -306,7 +305,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
             Rc::clone(&recipe)
         } else {
             let factors = PrimeFactors::compute(len);
-            let recipe = self.design_fft_with_factors(len, factors, depth);
+            let recipe = self.design_fft_with_factors(len, factors);
             self.recipe_cache.insert(len, Rc::clone(&recipe));
             recipe
         }
@@ -389,8 +388,8 @@ impl<T: FftNum> FftPlannerScalar<T> {
         }
     }
 
-    fn design_fft_with_factors(&mut self, len: usize, factors: PrimeFactors, depth: usize) -> Rc<Recipe> {
-        let recipes = self.design_all_ffts_with_factors(len, factors, depth);
+    fn design_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Rc<Recipe> {
+        let recipes = self.design_all_ffts_with_factors(len, factors);
         let fastest = recipes.iter().min_by(|x, y| {
             match x.cost().partial_cmp(&y.cost()) {
                 Some(Ordering::Equal) => Ordering::Equal,
@@ -402,14 +401,14 @@ impl<T: FftNum> FftPlannerScalar<T> {
         Rc::clone(fastest)
     }
 
-    fn design_all_ffts_with_factors(&mut self, len: usize, factors: PrimeFactors, depth: usize) -> Vec<Rc<Recipe>> {
+    fn design_all_ffts_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Vec<Rc<Recipe>> {
         let mut recipes = Vec::new();
         if let Some(butterfly) = self.design_butterfly_algorithm(len) {
             recipes.push(butterfly);
             // We can't beat the butterflies, stop here
             return recipes;
         }
-        if let Some(mixedradix) = self.design_mixedradix(&factors, depth) {
+        if let Some(mixedradix) = self.design_mixedradix(&factors) {
             recipes.push(mixedradix);
         }
         if let Some(radix4) = self.design_radix4(&factors) {
@@ -417,16 +416,16 @@ impl<T: FftNum> FftPlannerScalar<T> {
             // We have a power of two, return here since nothing below here can be faster
             return recipes;
         }
-        if let Some(mixedradixpow2) = self.design_mixedradix_separate_twos(&factors, depth) {
+        if let Some(mixedradixpow2) = self.design_mixedradix_separate_twos(&factors) {
             recipes.push(mixedradixpow2);
         }
-        if let Some(goodthomas) = self.design_goodthomas(&factors, depth) {
+        if let Some(goodthomas) = self.design_goodthomas(&factors) {
             recipes.push(goodthomas);
         }
-        if let Some(raders) = self.design_raders(&factors, depth) {
+        if let Some(raders) = self.design_raders(&factors) {
             recipes.push(raders);
         }
-        if let Some(bluestein) = self.design_bluesteins(&factors, depth) {
+        if let Some(bluestein) = self.design_bluesteins(&factors) {
             recipes.push(bluestein);
         }
         recipes
@@ -435,19 +434,17 @@ impl<T: FftNum> FftPlannerScalar<T> {
     fn design_mixedradix(
         &mut self,
         factors: &PrimeFactors,
-        depth: usize
     ) -> Option<Rc<Recipe>> {
         if factors.is_prime() {
             None
         }
         else {
             let factors = factors.clone();
-            let len = factors.get_product();
             let (left_factors, right_factors) = factors.partition_factors();
             let left_len = left_factors.get_product();
             let right_len = right_factors.get_product();
-            let left_fft = self.design_fft_for_len(left_len, depth+1);
-            let right_fft = self.design_fft_for_len(right_len, depth+1);
+            let left_fft = self.design_fft_for_len(left_len);
+            let right_fft = self.design_fft_for_len(right_len);
 
             // if total length is small, use algorithms optimized for small FFTs
             if right_len <= SMALL_LEN && left_len <= SMALL_LEN {
@@ -467,7 +464,6 @@ impl<T: FftNum> FftPlannerScalar<T> {
     fn design_mixedradix_separate_twos(
         &mut self,
         factors: &PrimeFactors,
-        depth: usize
     ) -> Option<Rc<Recipe>> {
         let len = factors.get_product();
         if factors.is_prime() || len.is_power_of_two() || len.trailing_zeros() < 1 {
@@ -476,8 +472,8 @@ impl<T: FftNum> FftPlannerScalar<T> {
         else {
             let power_of_two = 1 << len.trailing_zeros();
             let non_power_of_two = len/power_of_two;
-            let left_fft = self.design_fft_for_len(power_of_two, depth+1);
-            let right_fft = self.design_fft_for_len(non_power_of_two, depth+1);
+            let left_fft = self.design_fft_for_len(power_of_two);
+            let right_fft = self.design_fft_for_len(non_power_of_two);
 
             // if total length is small, use algorithms optimized for small FFTs
             if power_of_two <= SMALL_LEN && non_power_of_two <= SMALL_LEN {
@@ -497,14 +493,12 @@ impl<T: FftNum> FftPlannerScalar<T> {
     fn design_goodthomas(
         &mut self,
         factors: &PrimeFactors,
-        depth: usize
     ) -> Option<Rc<Recipe>> {
         if factors.is_prime() {
             None
         }
         else {
             let factors = factors.clone();
-            let len = factors.get_product();
             let (left_factors, right_factors) = factors.partition_factors();
             let left_len = left_factors.get_product();
             let right_len = right_factors.get_product();
@@ -512,8 +506,8 @@ impl<T: FftNum> FftPlannerScalar<T> {
                 None
             }
             else {
-                let left_fft = self.design_fft_for_len(left_len, depth+1);
-                let right_fft = self.design_fft_for_len(right_len, depth+1);
+                let left_fft = self.design_fft_for_len(left_len);
+                let right_fft = self.design_fft_for_len(right_len);
                 
                 //if both left_len and right_len are small, use algorithms optimized for small FFTs
                 if right_len <= SMALL_LEN && left_len <= SMALL_LEN {
@@ -568,19 +562,19 @@ impl<T: FftNum> FftPlannerScalar<T> {
         }
     }
 
-    fn design_raders(&mut self, factors: &PrimeFactors, depth: usize) -> Option<Rc<Recipe>> {
+    fn design_raders(&mut self, factors: &PrimeFactors) -> Option<Rc<Recipe>> {
         if !factors.is_prime() {
             None
         }
         else {
             let len = factors.get_product();
-            let inner_fft = self.design_fft_for_len(len - 1, depth+1);
+            let inner_fft = self.design_fft_for_len(len - 1);
             Some(Rc::new(Recipe::RadersAlgorithm { inner_fft }))
         }
     }
 
-    fn design_bluesteins(&mut self, factors: &PrimeFactors, depth: usize) -> Option<Rc<Recipe>> {
-        if !factors.is_prime() || depth > 10000 {
+    fn design_bluesteins(&mut self, factors: &PrimeFactors) -> Option<Rc<Recipe>> {
+        if !factors.is_prime() {
             None
         }
         else {
@@ -596,7 +590,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
                 } else {
                     inner_fft_len_pow2
                 };
-            let inner_fft = self.design_fft_for_len(inner_fft_len, depth+1);
+            let inner_fft = self.design_fft_for_len(inner_fft_len);
             Some(Rc::new(Recipe::BluesteinsAlgorithm { len, inner_fft }))
         }
     }
@@ -641,19 +635,13 @@ mod unit_tests {
         }
     }
 
-    fn is_dft(plan: &Recipe) -> bool {
-        match plan {
-            &Recipe::DFT(_len) => true,
-            _ => false,
-        }
-    }
 
     #[test]
     fn test_plan_scalar_trivial() {
         // Length 0 should use DFT
         let mut planner = FftPlannerScalar::<f64>::new();
         for len in 0..1 {
-            let plan = planner.design_fft_for_len(len, 0);
+            let plan = planner.design_fft_for_len(len);
             assert_eq!(*plan, Recipe::DFT(len));
             assert_eq!(plan.len(), len, "Recipe reports wrong length");
         }
@@ -665,7 +653,7 @@ mod unit_tests {
         let mut planner = FftPlannerScalar::<f64>::new();
         for pow in 6..12 {
             let len = 1 << pow;
-            let plan = planner.design_fft_for_len(len, 0);
+            let plan = planner.design_fft_for_len(len);
             assert_eq!(*plan, Recipe::Radix4(len), "Length: {}, expected Radix4, got {:?}", len, plan);
             assert_eq!(plan.len(), len, "Recipe reports wrong length");
         }
@@ -677,7 +665,7 @@ mod unit_tests {
         let mut planner = FftPlannerScalar::<f64>::new();
         for pow in 17..32 {
             let len = 1 << pow;
-            let plan = planner.design_fft_for_len(len, 0);
+            let plan = planner.design_fft_for_len(len);
             assert!(is_mixedradix(&plan), "Length: {}, expected MixedRadix, got {:?}", len, plan);
             assert_eq!(plan.len(), len, "Recipe reports wrong length");
         }
@@ -687,23 +675,23 @@ mod unit_tests {
     fn test_plan_scalar_butterflies() {
         // Check that all butterflies are used
         let mut planner = FftPlannerScalar::<f64>::new();
-        assert_eq!(*planner.design_fft_for_len(1, 0), Recipe::Butterfly1);
-        assert_eq!(*planner.design_fft_for_len(2, 0), Recipe::Butterfly2);
-        assert_eq!(*planner.design_fft_for_len(3, 0), Recipe::Butterfly3);
-        assert_eq!(*planner.design_fft_for_len(4, 0), Recipe::Butterfly4);
-        assert_eq!(*planner.design_fft_for_len(5, 0), Recipe::Butterfly5);
-        assert_eq!(*planner.design_fft_for_len(6, 0), Recipe::Butterfly6);
-        assert_eq!(*planner.design_fft_for_len(7, 0), Recipe::Butterfly7);
-        assert_eq!(*planner.design_fft_for_len(8, 0), Recipe::Butterfly8);
-        assert_eq!(*planner.design_fft_for_len(11, 0), Recipe::Butterfly11);
-        assert_eq!(*planner.design_fft_for_len(13, 0), Recipe::Butterfly13);
-        assert_eq!(*planner.design_fft_for_len(16, 0), Recipe::Butterfly16);
-        assert_eq!(*planner.design_fft_for_len(17, 0), Recipe::Butterfly17);
-        assert_eq!(*planner.design_fft_for_len(19, 0), Recipe::Butterfly19);
-        assert_eq!(*planner.design_fft_for_len(23, 0), Recipe::Butterfly23);
-        assert_eq!(*planner.design_fft_for_len(29, 0), Recipe::Butterfly29);
-        assert_eq!(*planner.design_fft_for_len(31, 0), Recipe::Butterfly31);
-        assert_eq!(*planner.design_fft_for_len(32, 0), Recipe::Butterfly32);
+        assert_eq!(*planner.design_fft_for_len(1), Recipe::Butterfly1);
+        assert_eq!(*planner.design_fft_for_len(2), Recipe::Butterfly2);
+        assert_eq!(*planner.design_fft_for_len(3), Recipe::Butterfly3);
+        assert_eq!(*planner.design_fft_for_len(4), Recipe::Butterfly4);
+        assert_eq!(*planner.design_fft_for_len(5), Recipe::Butterfly5);
+        assert_eq!(*planner.design_fft_for_len(6), Recipe::Butterfly6);
+        assert_eq!(*planner.design_fft_for_len(7), Recipe::Butterfly7);
+        assert_eq!(*planner.design_fft_for_len(8), Recipe::Butterfly8);
+        assert_eq!(*planner.design_fft_for_len(11), Recipe::Butterfly11);
+        assert_eq!(*planner.design_fft_for_len(13), Recipe::Butterfly13);
+        assert_eq!(*planner.design_fft_for_len(16), Recipe::Butterfly16);
+        assert_eq!(*planner.design_fft_for_len(17), Recipe::Butterfly17);
+        assert_eq!(*planner.design_fft_for_len(19), Recipe::Butterfly19);
+        assert_eq!(*planner.design_fft_for_len(23), Recipe::Butterfly23);
+        assert_eq!(*planner.design_fft_for_len(29), Recipe::Butterfly29);
+        assert_eq!(*planner.design_fft_for_len(31), Recipe::Butterfly31);
+        assert_eq!(*planner.design_fft_for_len(32), Recipe::Butterfly32);
     }
 
     #[test]
@@ -718,7 +706,7 @@ mod unit_tests {
                             * 3usize.pow(pow3)
                             * 5usize.pow(pow5)
                             * 7usize.pow(pow7);
-                        let plan = planner.design_fft_for_len(len, 0);
+                        let plan = planner.design_fft_for_len(len);
                         assert!(is_mixedradix(&plan), "Length: {}, expected MixedRadix, got {:?}", len, plan);
                         assert_eq!(plan.len(), len, "Recipe reports wrong length");
                     }
@@ -732,7 +720,7 @@ mod unit_tests {
         // Products of two "small" lengths < 31 that have a common divisor >1, and isn't a power of 2 should be MixedRadixSmall
         let mut planner = FftPlannerScalar::<f64>::new();
         for len in [5 * 20, 5 * 25].iter() {
-            let plan = planner.design_fft_for_len(*len, 0);
+            let plan = planner.design_fft_for_len(*len);
             assert!(
                 is_mixedradixsmall(&plan),
                 "Length: {}, expected MixedRadixSmall, got {:?}",
@@ -746,7 +734,7 @@ mod unit_tests {
     fn test_plan_scalar_goodthomasbutterfly() {
         let mut planner = FftPlannerScalar::<f64>::new();
         for len in [3 * 4, 3 * 5, 3 * 7, 5 * 7, 11 * 13].iter() {
-            let plan = planner.design_fft_for_len(*len, 0);
+            let plan = planner.design_fft_for_len(*len);
             assert!(
                 is_goodthomassmall(&plan),
                 "Length: {}, expected GoodThomasAlgorithmSmall, got {:?}",
@@ -759,14 +747,14 @@ mod unit_tests {
     #[test]
     fn test_plan_scalar_bluestein_vs_rader() {
         let difficultprimes: [usize; 10] = [59, 83, 107, 167, 173, 179, 359, 719, 1439, 2879];
-        let easyprimes: [usize; 25] = [
+        let easyprimes: [usize; 24] = [
             53, 61, 67, 71, 73, 79, 89, 97, 101, 103, 109, 113, 131, 137, 139, 149, 151, 157, 163,
-            181, 191, 193, 197, 199, 118
+            181, 191, 193, 197, 199
         ];
 
         let mut planner = FftPlannerScalar::<f64>::new();
         for len in difficultprimes.iter() {
-            let plan = planner.design_fft_for_len(*len, 0);
+            let plan = planner.design_fft_for_len(*len);
             assert!(
                 is_bluesteins(&plan),
                 "Length: {}, Expected BluesteinsAlgorithm, got {:?}",
@@ -775,7 +763,7 @@ mod unit_tests {
             assert_eq!(plan.len(), *len, "Recipe reports wrong length");
         }
         for len in easyprimes.iter() {
-            let plan = planner.design_fft_for_len(*len, 0);
+            let plan = planner.design_fft_for_len(*len);
             assert!(is_raders(&plan), "Length: {}, Expected RadersAlgorithm, got {:?}", len, plan);
             assert_eq!(plan.len(), *len, "Recipe reports wrong length");
         }
@@ -813,38 +801,8 @@ mod unit_tests {
     fn test_scalar_recipe_cache() {
         // Check that all butterflies are used
         let mut planner = FftPlannerScalar::<f64>::new();
-        let fft_a = planner.design_fft_for_len(1234, 0);
-        let fft_b = planner.design_fft_for_len(1234, 0);
+        let fft_a = planner.design_fft_for_len(1234);
+        let fft_b = planner.design_fft_for_len(1234);
         assert!(Rc::ptr_eq(&fft_a, &fft_b), "Existing recipe was not reused");
-    }
-
-    #[test]
-    fn test_plan_whatisit1() {
-        // Products of two "small" lengths < 31 that have a common divisor >1, and isn't a power of 2 should be MixedRadixSmall
-        let mut planner = FftPlannerScalar::<f64>::new();
-        for len in [48, 55,448, 118, 487,  933].iter() { //48, 55,448, 118, 487,  933
-            let plan = planner.design_fft_for_len(*len, 0);
-            assert!(
-                is_dft(&plan),
-                "Len {}, got {:?}",
-                len, plan
-            );
-            assert_eq!(plan.len(), *len, "Recipe reports wrong length");
-        }
-    }
-
-    #[test]
-    fn test_plan_whatisit2() {
-        // Products of two "small" lengths < 31 that have a common divisor >1, and isn't a power of 2 should be MixedRadixSmall
-        let mut planner = FftPlannerScalar::<f64>::new();
-        for len in [446,454,  501, 934, 958, 963, 998, 1002, 1006, 1018].iter() { // 446,454,  501, 934, 958, 963, 998, 1002, 1006, 1018]
-            let plan = planner.design_fft_for_len(*len, 0);
-            assert!(
-                is_dft(&plan),
-                "Len {}, got {:?}",
-                len, plan
-            );
-            assert_eq!(plan.len(), *len, "Recipe reports wrong length");
-        }
     }
 }
