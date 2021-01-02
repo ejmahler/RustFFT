@@ -1,0 +1,47 @@
+
+running 28 tests
+test algorithm::butterflies::unit_tests::test_butterfly16 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly2 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly3 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly32 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly4 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly5 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly6 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly7 ... ignored
+test algorithm::butterflies::unit_tests::test_butterfly8 ... ignored
+test algorithm::dft::unit_tests::test_dft_known_len_2 ... ignored
+test algorithm::dft::unit_tests::test_dft_known_len_3 ... ignored
+test algorithm::dft::unit_tests::test_dft_known_len_4 ... ignored
+test algorithm::dft::unit_tests::test_dft_known_len_6 ... ignored
+test algorithm::dft::unit_tests::test_matches_dft ... ignored
+test algorithm::good_thomas_algorithm::unit_tests::test_good_thomas ... ignored
+test algorithm::good_thomas_algorithm::unit_tests::test_good_thomas_double_butterfly ... ignored
+test algorithm::mixed_radix::unit_tests::test_mixed_radix ... ignored
+test algorithm::mixed_radix::unit_tests::test_mixed_radix_double_butterfly ... ignored
+test algorithm::raders_algorithm::unit_tests::test_raders ... ignored
+test algorithm::radix4::unit_tests::test_radix4 ... ignored
+test array_utils::unit_tests::test_transpose ... ignored
+test math_utils::unit_tests::test_extended_euclidean ... ignored
+test math_utils::unit_tests::test_modular_exponent ... ignored
+test math_utils::unit_tests::test_multiplicative_inverse ... ignored
+test math_utils::unit_tests::test_prime_factors ... ignored
+test math_utils::unit_tests::test_primitive_root ... ignored
+test twiddles::unit_tests::test_generate ... ignored
+test twiddles::unit_tests::test_single ... ignored
+
+test result: ok. 0 passed; 0 failed; 28 ignored; 0 measured; 0 filtered out
+
+
+running 76 tests
+test complex_composite_20736       ... bench:     421,196 ns/iter (+/- 20,715)
+test complex_composite_24028       ... bench:   2,211,645 ns/iter (+/- 54,738)
+test complex_composite_24576       ... bench:     345,477 ns/iter (+/- 2,839)
+test complex_composite_30270       ... bench:   1,252,320 ns/iter (+/- 11,651)
+test complex_composite_32192       ... bench:   2,858,689 ns/iter (+/- 26,058)
+test complex_p2_00000064           ... bench:         226 ns/iter (+/- 13)
+test complex_p2_00000256           ... bench:       1,215 ns/iter (+/- 42)
+test complex_p2_00001024           ... bench:       7,046 ns/iter (+/- 126)
+test complex_p2_00004096           ... bench:      37,495 ns/iter (+/- 718)
+test complex_p2_00016384           ... bench:     201,573 ns/iter (+/- 1,766)
+test complex_p2_00065536           ... bench:   1,093,894 ns/iter (+/- 26,647)
+test complex_p2_01048576           ... bench:  25,923,299 ns/iter (+/- 502,731)
