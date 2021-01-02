@@ -4,30 +4,11 @@
 [![](https://img.shields.io/crates/v/rustfft.svg)](https://crates.io/crates/rustfft)
 [![](https://img.shields.io/crates/l/rustfft.svg)](https://crates.io/crates/rustfft)
 [![](https://docs.rs/rustfft/badge.svg)](https://docs.rs/rustfft/)
-![minimum rustc nightly](https://img.shields.io/badge/rustc-nightly-red.svg)
+![minimum rustc 1.48](https://img.shields.io/badge/rustc-1.48+-red.svg)
 
-RustFFT is a high-performance FFT library written in pure Rust. See the [documentation](https://docs.rs/rustfft/) for more details.
+RustFFT is a high-performance FFT library written in pure Rust. It can compute FFTs of any size, including prime-number sizes, in O(nlogn) time.
 
-This is an experimental release of RustFFT that enables AVX acceleration. It currently requires a nightly compiler,
-mainly for the `min_specialization` feature. The eventual plan is to release this experimental version as version 5.0 of RustFFT,
-but that will not happen until it compiles on stable Rust.
-
-No special code is needed to activate AVX: Simply plan a FFT using the FftPlanner on a machine that supports the `avx` and `fma` features.
-
-## Usage
-
-```rust
-// Perform a forward FFT of size 1234
-use rustfft::{FftPlanner, num_complex::Complex};
-
-let mut planner = FftPlanner::new(false);
-let fft = planner.plan_fft(1234);
-
-let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1234];
-fft.process_inplace(&mut buffer);
-```
-
-If you're looking for the experimental AVX-accelerated release, check out the [SIMD branch](https://github.com/ejmahler/RustFFT/tree/simd).
+RustFFT supports the AVX instruction set for increased performance. No special code is needed to activate AVX: Simply plan a FFT using the FftPlanner on a machine that supports the `avx` and `fma` CPU features, and RustFFT will automatically switch to faster AVX-accelerated algorithms.
 
 ## Usage
 
@@ -35,18 +16,29 @@ If you're looking for the experimental AVX-accelerated release, check out the [S
 // Perform a forward FFT of size 1234
 use rustfft::{FFTplanner, num_complex::Complex};
 
-let mut planner = FFTplanner::new(false);
-let fft = planner.plan_fft(1234);
+let mut planner = FFTplanner::new();
+let fft = planner.plan_fft_forward(1234);
 
-let mut input:  Vec<Complex<f32>> = vec![Complex{ re: 0.0, im: 0.0 }; 4096];
-let mut output: Vec<Complex<f32>> = vec![Complex{ re: 0.0, im: 0.0 }; 4096];
+let mut buffer:  Vec<Complex<f32>> = vec![Complex{ re: 0.0, im: 0.0 }; 4096];
 
-fft.process(&mut input, &mut output);
+fft.process_inplace(&mut buffer);
+
+// perform an inverse FFT on the same buffer
+let inverse_fft = planner.plan_fft_inverse(1234);
+
+inverse_fft.process_inplace(&mut buffer);
 ```
 
-## Compatibility
+## Supported Rust Versions
 
-This experimental version of `rustfft` crate requires nightly Rust.
+RustFFT requires rustc 1.48 or newer. Minor releases of RustFFT may upgrade the MSRV(minimum supported Rust version) to a newer version of rustc.
+However, if we need to increase the MSRV, the new Rust version must have been released at least six months ago.
+
+## Stability/Future Breaking Changes
+
+Version 5.0 contains several breaking API changes. In the interest of stability, we're committing to making no more breaking changes for 3 years, aka until 2024.
+
+This policy has one exception: We currently re-export pre-1.0 versions of the [num-complex](https://crates.io/crates/num-complex) and [num-traits](https://crates.io/crates/num-traits) crates. If those crates release new major versions, we will upgrade as soon as possible, which will require a major version change of our own. If this happens, the version increase of num-complex/num-traits will be the only breaking change.
 
 ## License
 

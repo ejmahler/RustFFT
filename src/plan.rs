@@ -40,7 +40,7 @@ enum ChosenFftPlanner<T: FftNum> {
 /// let fft_clone = Arc::clone(&fft);
 /// ~~~
 ///
-/// If you plan on creating multiple FFT instances, it is recommnded to reuse the same planner for all of them. This
+/// If you plan on creating multiple FFT instances, it is recommended to reuse the same planner for all of them. This
 /// is because the planner re-uses internal data across FFT instances wherever possible, saving memory and reducing
 /// setup time. (FFT instances created with one planner will never re-use data and buffers with FFT instances created
 /// by a different planner)
@@ -211,7 +211,7 @@ impl Recipe {
 /// let fft_clone = Arc::clone(&fft);
 /// ~~~
 ///
-/// If you plan on creating multiple FFT instances, it is recommnded to reuse the same planner for all of them. This
+/// If you plan on creating multiple FFT instances, it is recommended to reuse the same planner for all of them. This
 /// is because the planner re-uses internal data across FFT instances wherever possible, saving memory and reducing
 /// setup time. (FFT instances created with one planner will never re-use data and buffers with FFT instances created
 /// by a different planner)

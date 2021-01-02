@@ -102,7 +102,7 @@ impl MixedRadixPlan {
 /// }
 /// ~~~
 ///
-/// If you plan on creating multiple FFT instances, it is recommnded to reuse the same planner for all of them. This
+/// If you plan on creating multiple FFT instances, it is recommended to reuse the same planner for all of them. This
 /// is because the planner re-uses internal data across FFT instances wherever possible, saving memory and reducing
 /// setup time. (FFT instances created with one planner will never re-use data and buffers with FFT instances created
 /// by a different planner)
@@ -161,7 +161,7 @@ impl<T: FftNum> FftPlannerAvx<T> {
         Err(())
     }
 
-    /// Returns a `Fft` instance which computes FFTs of size `len` using AVX instructions.
+    /// Returns a `Fft` instance which uses AVX instructions to compute FFTs of size `len`.
     ///
     /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
     ///
@@ -169,13 +169,13 @@ impl<T: FftNum> FftPlannerAvx<T> {
     pub fn plan_fft(&mut self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
         self.internal_planner.plan_and_construct_fft(len, direction)
     }
-    /// Returns a `Fft` instance which computes forward FFTs of size `len`
+    /// Returns a `Fft` instance which uses AVX instructions to compute forward FFTs of size `len`.
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft_forward(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         self.plan_fft(len, FftDirection::Forward)
     }
-    /// Returns a `Fft` instance which processes signals of size `len` using AVX instructions.
+    /// Returns a `Fft` instance which uses AVX instructions to compute inverse FFTs of size `len.
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft_inverse(&mut self, len: usize) -> Arc<dyn Fft<T>> {
