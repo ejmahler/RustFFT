@@ -59,4 +59,33 @@ jobs:
         with:
           command: fmt
           args: -- --check
+
+  check_arm64:
+    name: Check and test Linux arm 64bit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          target: aarch64-unknown-linux-gnu
+          override: true
+
+      - name: Run cargo check
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          use-cross: true
+          args: --target aarch64-unknown-linux-gnu
+
+      - name: Run cargo test for arm
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          use-cross: true
+          args: --target aarch64-unknown-linux-gnu
         
