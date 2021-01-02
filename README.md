@@ -29,7 +29,7 @@ let inverse_fft = planner.plan_fft_inverse(1234);
 inverse_fft.process_inplace(&mut buffer);
 ```
 
-## Supported Rust Versions
+## Supported Rust Version
 
 RustFFT requires rustc 1.48 or newer. Minor releases of RustFFT may upgrade the MSRV(minimum supported Rust version) to a newer version of rustc.
 However, if we need to increase the MSRV, the new Rust version must have been released at least six months ago.
