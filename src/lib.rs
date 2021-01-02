@@ -268,7 +268,7 @@ mod avx;
 #[cfg(not(all(target_arch = "x86_64", feature = "avx")))]
 mod avx {
     pub mod avx_planner {
-        use crate::{Fft, FftNum, FftDirection};
+        use crate::{Fft, FftDirection, FftNum};
         use std::sync::Arc;
 
         /// The AVX FFT planner creates new FFT algorithm instances which take advantage of the AVX instruction set.
@@ -283,7 +283,7 @@ mod avx {
         /// use std::sync::Arc;
         /// use rustfft::{FftPlannerAvx, num_complex::Complex};
         ///
-        /// // If FftPlannerAvx::new() returns Ok(), we'll know AVX algorithms are available 
+        /// // If FftPlannerAvx::new() returns Ok(), we'll know AVX algorithms are available
         /// // on this machine, and that RustFFT was compiled with the `avx` feature flag
         /// if let Ok(mut planner) = FftPlannerAvx::new() {
         ///     let fft = planner.plan_fft_forward(1234);
@@ -310,7 +310,7 @@ mod avx {
         impl<T: FftNum> FftPlannerAvx<T> {
             /// Constructs a new `FftPlannerAvx` instance.
             ///
-            /// Returns `Ok(planner_instance)` if this machine has the required instruction sets and the `avx` feature flag is set. 
+            /// Returns `Ok(planner_instance)` if this machine has the required instruction sets and the `avx` feature flag is set.
             /// Returns `Err(())` if some instruction sets are missing, or if the `avx` feature flag is not set.
             pub fn new() -> Result<Self, ()> {
                 Err(())
