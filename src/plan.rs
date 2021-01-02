@@ -1,4 +1,5 @@
 use num_integer::gcd;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -266,6 +267,24 @@ impl Recipe {
     }
 }
 
+//impl Ord for Recipe {
+//    fn cmp(&self, other: &Self) -> Ordering {
+//        match self.partial_cmp(&other) {
+//            Some(Ordering::Equal) => Ordering::Equal,
+//            Some(Ordering::Less) => Ordering::Less,
+//            Some(Ordering::Greater) => Ordering::Greater,
+//            None => Ordering::Equal, //This shoud never happen
+//        }
+//    }
+//}
+//
+//impl PartialOrd for Recipe {
+//    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+//        self.cost().partial_cmp(&other.cost())
+//    }
+//}
+//
+
 /// The Scalar FFT planner creates new FFT algorithm instances using non-SIMD algorithms.
 ///
 /// RustFFT has several FFT algorithms available. For a given FFT size, the `FftPlannerScalar` decides which of the
@@ -430,6 +449,42 @@ impl<T: FftNum> FftPlannerScalar<T> {
     }
 
     fn design_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Rc<Recipe> {
+        let recipes = self.design_all_ffts_with_factors(len, factors);
+        let fastest = recipes.iter().min_by(|x, y| {
+            match x.cost().partial_cmp(&y.cost()) {
+                Some(Ordering::Equal) => Ordering::Equal,
+                Some(Ordering::Less) => Ordering::Less,
+                Some(Ordering::Greater) => Ordering::Greater,
+                None => Ordering::Equal, //This shoud never happen
+            }
+        }).unwrap();
+        Rc::clone(fastest)
+    }
+
+    fn design_all_ffts_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Vec<Rc<Recipe>> {
+        let mut recipes = Vec::new();
+        if let Some(butterfly) = self.design_butterfly_algorithm(len) {
+            recipes.push(butterfly);
+        }
+        if let Some(radix4) = self.design_radix4(&factors) {
+            recipes.push(radix4);
+        }
+        if let Some(bluestein) = self.design_bluesteins(&factors) {
+            recipes.push(bluestein);
+        }
+        if let Some(raders) = self.design_raders(&factors) {
+            recipes.push(raders);
+        }
+        if let Some(mixedradix) = self.design_mixedradix(&factors) {
+            recipes.push(mixedradix);
+        }
+        if let Some(goodthomas) = self.design_goodthomas(&factors) {
+            recipes.push(goodthomas);
+        }
+        recipes
+    }
+
+    fn design_fft_with_factors_fixedlogic(&mut self, len: usize, factors: PrimeFactors) -> Rc<Recipe> {
         if let Some(fft_instance) = self.design_butterfly_algorithm(len) {
             fft_instance
         } else if factors.is_prime() {
@@ -488,6 +543,85 @@ impl<T: FftNum> FftPlannerScalar<T> {
         }
     }
 
+    fn design_mixedradix(
+        &mut self,
+        factors: &PrimeFactors,
+    ) -> Option<Rc<Recipe>> {
+        if factors.is_prime() {
+            None
+        }
+        else {
+            let factors = factors.clone();
+            let (left_factors, right_factors) = factors.partition_factors();
+            let left_len = left_factors.get_product();
+            let right_len = right_factors.get_product();
+            let left_fft = self.design_fft_for_len(left_len);
+            let right_fft = self.design_fft_for_len(right_len);
+
+            //if both left_len and right_len are small, use algorithms optimized for small FFTs
+            if left_len < 31 && right_len < 31 {
+                Some(Rc::new(Recipe::MixedRadixSmall {
+                    left_fft,
+                    right_fft,
+                }))
+            } else {
+                Some(Rc::new(Recipe::MixedRadix {
+                    left_fft,
+                    right_fft,
+                }))
+            }
+        }
+    }
+
+    fn design_goodthomas(
+        &mut self,
+        factors: &PrimeFactors,
+    ) -> Option<Rc<Recipe>> {
+        if factors.is_prime() {
+            None
+        }
+        else {
+            let factors = factors.clone();
+            let (left_factors, right_factors) = factors.partition_factors();
+            let left_len = left_factors.get_product();
+            let right_len = right_factors.get_product();
+            if gcd(left_len, right_len) > 1 {
+                None
+            }
+            else {
+                let left_fft = self.design_fft_for_len(left_len);
+                let right_fft = self.design_fft_for_len(right_len);
+                
+
+                //if both left_len and right_len are small, use algorithms optimized for small FFTs
+                if left_len < 31 && right_len < 31 {
+                    Some(Rc::new(Recipe::MixedRadixSmall {
+                        left_fft,
+                        right_fft,
+                    }))
+                } else {
+                    Some(Rc::new(Recipe::MixedRadix {
+                        left_fft,
+                        right_fft,
+                    }))
+                }
+            }
+        }
+    }
+
+    fn design_radix4(
+        &mut self,
+        factors: &PrimeFactors,
+    ) -> Option<Rc<Recipe>> {
+        let len = factors.get_product();
+        if !len.is_power_of_two() || len < 4 {
+            None
+        }
+        else {
+            Some(Rc::new(Recipe::Radix4(len)))
+        }
+    }
+
     // Returns Some(instance) if we have a butterfly available for this size. Returns None if there is no butterfly available for this size
     fn design_butterfly_algorithm(&mut self, len: usize) -> Option<Rc<Recipe>> {
         match len {
@@ -536,6 +670,39 @@ impl<T: FftNum> FftPlannerScalar<T> {
         } else {
             let inner_fft = self.design_fft_with_factors(inner_fft_len_rader, raders_factors);
             Rc::new(Recipe::RadersAlgorithm { inner_fft })
+        }
+    }
+
+    fn design_raders(&mut self, factors: &PrimeFactors) -> Option<Rc<Recipe>> {
+        if !factors.is_prime() {
+            None
+        }
+        else {
+            let len = factors.get_product();
+            let inner_fft = self.design_fft_for_len(len - 1);
+            Some(Rc::new(Recipe::RadersAlgorithm { inner_fft }))
+        }
+    }
+
+    fn design_bluesteins(&mut self, factors: &PrimeFactors) -> Option<Rc<Recipe>> {
+        if !factors.is_prime() {
+            None
+        }
+        else {
+            let len = factors.get_product();
+            
+            // for long ffts a mixed radix inner fft is faster than a longer radix4
+            let min_inner_len = 2 * len - 1;
+            let inner_fft_len_pow2 = min_inner_len.checked_next_power_of_two().unwrap();
+            let mixed_radix_len = 3 * inner_fft_len_pow2 / 4;
+            let inner_fft_len =
+                if mixed_radix_len >= min_inner_len {
+                    mixed_radix_len
+                } else {
+                    inner_fft_len_pow2
+                };
+            let inner_fft = self.design_fft_for_len(inner_fft_len);
+            Some(Rc::new(Recipe::BluesteinsAlgorithm { len, inner_fft }))
         }
     }
 }
