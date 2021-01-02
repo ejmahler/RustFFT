@@ -6,52 +6,30 @@ extern crate rustfft;
 
 use std::sync::Arc;
 use test::Bencher;
-use rustfft::{Fft, FFTnum, Length, IsInverse};
+use rustfft::{Fft, FftDirection};
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 use rustfft::algorithm::*;
-use rustfft::algorithm::butterflies::*;
-
-struct Noop {
-    len: usize,
-    inverse: bool,
-}
-impl<T: FFTnum> Fft<T> for Noop {
-    fn process_with_scratch(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {}
-    fn process_multi(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {}
-    fn process_inplace_with_scratch(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {}
-    fn process_inplace_multi(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {}
-    fn get_inplace_scratch_len(&self) -> usize { self.len }
-    fn get_out_of_place_scratch_len(&self) -> usize { 0 }
-}
-impl Length for Noop {
-    fn len(&self) -> usize { self.len }
-}
-impl IsInverse for Noop {
-    fn is_inverse(&self) -> bool { self.inverse }
-}
-
-
-
+//use rustfft::algorithm::butterflies::*;
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
-fn bench_planned_f64(b: &mut Bencher, len: usize) {
-
-    let mut planner = rustfft::FftPlannerScalar::new(false);
-    let fft: Arc<dyn Fft<f64>> = planner.plan_fft(len);
-
-    let mut buffer = vec![Complex::zero(); len];
-    let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
-    b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch); });
-}
+//fn bench_planned_f64(b: &mut Bencher, len: usize) {
+//
+//    let mut planner = rustfft::FftPlannerScalar::new();
+//    let fft: Arc<dyn Fft<f64>> = planner.plan_fft_forward(len);
+//
+//    let mut buffer = vec![Complex::zero(); len];
+//    let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
+//    b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch); });
+//}
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
 fn bench_planned_multi_f64(b: &mut Bencher, len: usize) {
 
-    let mut planner = rustfft::FftPlannerScalar::new(false);
-    let fft: Arc<dyn Fft<f64>> = planner.plan_fft(len);
+    let mut planner = rustfft::FftPlannerScalar::new();
+    let fft: Arc<dyn Fft<f64>> = planner.plan_fft_forward(len);
 
     let mut buffer = vec![Complex::zero(); 1000*len];
     let mut output = vec![Complex::zero(); 1000*len];
@@ -82,9 +60,9 @@ fn bench_planned_multi_f64(b: &mut Bencher, len: usize) {
 /// for a given length, specific to the Good-Thomas algorithm
 fn bench_good_thomas(b: &mut Bencher, width: usize, height: usize) {
 
-    let mut planner = rustfft::FftPlannerScalar::new(false);
-    let width_fft = planner.plan_fft(width);
-    let height_fft = planner.plan_fft(height);
+    let mut planner = rustfft::FftPlannerScalar::new();
+    let width_fft = planner.plan_fft_forward(width);
+    let height_fft = planner.plan_fft_forward(height);
 
     let fft : Arc<Fft<f64>> = Arc::new(GoodThomasAlgorithm::new(width_fft, height_fft));
 
@@ -114,9 +92,9 @@ fn bench_good_thomas(b: &mut Bencher, width: usize, height: usize) {
 /// for a given length, specific to the Mixed-Radix algorithm
 fn bench_mixed_radix(b: &mut Bencher, width: usize, height: usize) {
 
-    let mut planner = rustfft::FftPlannerScalar::new(false);
-    let width_fft = planner.plan_fft(width);
-    let height_fft = planner.plan_fft(height);
+    let mut planner = rustfft::FftPlannerScalar::new();
+    let width_fft = planner.plan_fft_forward(width);
+    let height_fft = planner.plan_fft_forward(height);
 
     let fft : Arc<Fft<_>> = Arc::new(MixedRadix::new(width_fft, height_fft));
 
@@ -144,9 +122,9 @@ fn bench_mixed_radix(b: &mut Bencher, width: usize, height: usize) {
 /// for a given length, specific to the MixedRadixSmall algorithm
 fn bench_mixed_radix_small(b: &mut Bencher, width: usize, height: usize) {
 
-    let mut planner = rustfft::FftPlannerScalar::new(false);
-    let width_fft = planner.plan_fft(width);
-    let height_fft = planner.plan_fft(height);
+    let mut planner = rustfft::FftPlannerScalar::new();
+    let width_fft = planner.plan_fft_forward(width);
+    let height_fft = planner.plan_fft_forward(height);
 
     let fft : Arc<Fft<_>> = Arc::new(MixedRadixSmall::new(width_fft, height_fft));
 
@@ -173,9 +151,9 @@ fn bench_mixed_radix_small(b: &mut Bencher, width: usize, height: usize) {
 /// for a given length, specific to the Mixed-Radix Double Butterfly algorithm
 fn bench_good_thomas_small(b: &mut Bencher, width: usize, height: usize) {
 
-    let mut planner = rustfft::FftPlannerScalar::new(false);
-    let width_fft = planner.plan_fft(width);
-    let height_fft = planner.plan_fft(height);
+    let mut planner = rustfft::FftPlannerScalar::new();
+    let width_fft = planner.plan_fft_forward(width);
+    let height_fft = planner.plan_fft_forward(height);
 
     let fft : Arc<Fft<_>> = Arc::new(GoodThomasAlgorithmSmall::new(width_fft, height_fft));
 
@@ -221,8 +199,8 @@ fn bench_good_thomas_small(b: &mut Bencher, width: usize, height: usize) {
 /// for a given length, specific to Rader's algorithm
 fn bench_raders_scalar(b: &mut Bencher, len: usize) {
 
-    let mut planner = rustfft::FftPlannerScalar::new(false);
-    let inner_fft = planner.plan_fft(len - 1);
+    let mut planner = rustfft::FftPlannerScalar::new();
+    let inner_fft = planner.plan_fft_forward(len - 1);
 
     let fft : Arc<Fft<_>> = Arc::new(RadersAlgorithm::new(inner_fft));
 
@@ -233,8 +211,8 @@ fn bench_raders_scalar(b: &mut Bencher, len: usize) {
 
 fn bench_raders_inner(b: &mut Bencher, len: usize) {
 
-    let mut planner = rustfft::FftPlannerScalar::new(false);
-    let fft = planner.plan_fft(len - 1);
+    let mut planner = rustfft::FftPlannerScalar::new();
+    let fft = planner.plan_fft_forward(len - 1);
 
     let mut buffer = vec![Complex{re: 0_f64, im: 0_f64}; len-1];
     let mut scratch = vec![Complex{re: 0_f64, im: 0_f64}; fft.get_inplace_scratch_len()];
@@ -259,8 +237,8 @@ fn bench_raders_inner(b: &mut Bencher, len: usize) {
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to Bluestein's Algorithm
 fn bench_bluesteins_scalar_prime(b: &mut Bencher, len: usize) {
-    let mut planner = rustfft::FftPlannerScalar::new(false);
-    let inner_fft = planner.plan_fft((len * 2 - 1).checked_next_power_of_two().unwrap());
+    let mut planner = rustfft::FftPlannerScalar::new();
+    let inner_fft = planner.plan_fft_forward((len * 2 - 1).checked_next_power_of_two().unwrap());
     let fft : Arc<Fft<f64>> = Arc::new(BluesteinsAlgorithm::new(len, inner_fft));
 
     let mut buffer = vec![Zero::zero(); len];
@@ -269,9 +247,9 @@ fn bench_bluesteins_scalar_prime(b: &mut Bencher, len: usize) {
 }
 
 fn bench_bluesteins_scalar_inner(b: &mut Bencher, len: usize) {
-    let mut planner = rustfft::FftPlannerScalar::new(false);
+    let mut planner = rustfft::FftPlannerScalar::new();
     let inner_len = (len * 2 - 1).checked_next_power_of_two().unwrap();
-    let fft = planner.plan_fft(inner_len);
+    let fft = planner.plan_fft_forward(inner_len);
 
     let mut buffer = vec![Complex{re: 0_f64, im: 0_f64}; inner_len];
     let mut scratch = vec![Complex{re: 0_f64, im: 0_f64}; fft.get_inplace_scratch_len()];
@@ -298,7 +276,7 @@ fn bench_bluesteins_scalar_inner(b: &mut Bencher, len: usize) {
 fn bench_radix4(b: &mut Bencher, len: usize) {
     assert!(len % 4 == 0);
 
-    let fft = Radix4::new(len, false);
+    let fft = Radix4::new(len, FftDirection::Forward);
 
     let mut signal = vec![Complex{re: 0_f64, im: 0_f64}; len];
     let mut spectrum = signal.clone();
@@ -317,7 +295,7 @@ fn bench_radix4(b: &mut Bencher, len: usize) {
 
 
 fn bench_dft_multi_f64(b: &mut Bencher, len: usize) {
-    let fft = DFT::new(len, false);
+    let fft = DFT::new(len, FftDirection::Forward);
 
     let mut buffer = vec![Complex{re: 0_f64, im: 0_f64}; 1000*len];
     let mut output = vec![Complex{re: 0_f64, im: 0_f64}; 1000*len];
