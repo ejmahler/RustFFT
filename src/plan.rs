@@ -562,10 +562,10 @@ mod unit_tests {
     fn test_plan_scalar_mixedradix() {
         // Products of several different primes should become MixedRadix
         let mut planner = FftPlannerScalar::<f64>::new();
-        for pow2 in 2..6 {
-            for pow3 in 2..6 {
-                for pow5 in 2..6 {
-                    for pow7 in 2..6 {
+        for pow2 in 2..5 {
+            for pow3 in 2..5 {
+                for pow5 in 2..5 {
+                    for pow7 in 2..5 {
                         let len = 2usize.pow(pow2)
                             * 3usize.pow(pow3)
                             * 5usize.pow(pow5)
