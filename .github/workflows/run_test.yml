@@ -87,7 +87,7 @@ jobs:
         with:
           command: test
           use-cross: true
-          args: --target aarch64-unknown-linux-gnu
+          args: --release --target aarch64-unknown-linux-gnu
 
   check_x86:
     name: Check and test Linux x86 32bit
@@ -111,7 +111,7 @@ jobs:
           use-cross: true
           args: --target i586-unknown-linux-gnu
 
-      - name: Run cargo test for arm
+      - name: Run cargo test for i586
         uses: actions-rs/cargo@v1
         with:
           command: test
