@@ -14,52 +14,6 @@ The following were renamed in RustFFT 5.0 to conform to this style:
 * The `FFTplanner` struct was renamed to `FftPlanner`
 * The `DFT` struct was renamed to `Dft`
 
-## Fft Trait Methods
-In RustFFT 4.0, the `Fft` trait has two methods:
- * `FFT::process()` took an input and output buffer equal to `fft.len()`, and computed a single FFT, using the input buffer as scratch space, and storing the result in the output.
- * `FFT::process_multi()` took an input and output buffer whose lengths are a multiple of `fft.len()`, divided those buffers into chunks of size `fft.len()`, and computed a FFT on each chunk.
-
-RustFFT 5.0 makes a few changes to this setup. First, there is no longer a distinction between "single" and multi" FFT methods: All `Fft` trait methods compute multiple FFTs.
-
-Second, the `Fft` trait now has three methods. Most users will want the first method:
-1. `Fft::process()` takes a single buffer instead of two, and computes FFTs in-place. Internally, it allocates scratch space as needed.
-1. `Fft::process_with_scratch()` takes two buffers: An input/output buffer, and a scratch buffer. It computes FFTs in-place on the given buffer, using the provided scratch space as needed.
-1. `Fft::process_outofplace_with_scratch()` takes three buffers: An input buffer, an output buffer, and a scratch buffer. It computes FFTs from the input buffer, store the results in the output buffer, using the provided scratch space as needed.
-
-Example for users who want to use the new in-place `process()` behavior:
-```rust
-// RustFFT 4.0
-let fft = Radix4::new(4096, false);
-
-let mut input : Vec<Complex<f32>> = get_my_input_data();
-let mut output = vec![Complex::zero(); fft.len()];
-fft.process(&mut input, &mut output);
-
-// RustFFT 5.0
-let fft = Radix4::new(4096, FftDirection::Forward);
-
-let mut buffer : Vec<Complex<f32>> = get_my_input_data();
-fft.process(&mut buffer);
-```
-
-Example for users who want to keep the old out-of-place `process()` behavior from RustFFT 4.0:
-```rust
-// RustFFT 4.0
-let fft = Radix4::new(4096, false);
-
-let mut input : Vec<Complex<f32>> = get_my_input_data();
-let mut output = vec![Complex::zero(); fft.len()];
-fft.process(&mut input, &mut output);
-
-// RustFFT 5.0
-let fft = Radix4::new(4096, FftDirection::Forward);
-
-let mut input : Vec<Complex<f32>> = get_my_input_data();
-let mut output = vec![Complex::zero(); fft.len()];
-let mut scratch = vec![Complex::zero(); fft.get_out_of_place_scratch_len()];
-fft.process_outofplace_with_scratch(&mut input, &mut output, &mut scratch);
-```
-
 ## FFT Direction
 In RustFFT 4.0, forward FFTs vs inverse FFTs were specified by a boolean. For example, the 4.0 `FFTplanner` constructor expects a boolean parameter for direction: If you pass `false`, the planner will plan forward FFTs. If you pass `true`, the planner will plan inverse FFTs.
 
@@ -100,6 +54,52 @@ let fft_forward2 = planner.plan_fft_forward(1234);
 
 let fft_inverse1 = planner.plan_fft(1234, FftDirection::Inverse);
 let fft_unverse2 = planner.plan_fft_inverse(1234);
+```
+
+## Fft Trait Methods
+In RustFFT 4.0, the `Fft` trait has two methods:
+ * `FFT::process()` took an input and output buffer, and computed a single FFT, storing the result in the output buffer.
+ * `FFT::process_multi()` took an input and output buffer, divided those buffers into chunks of size `fft.len()`, and computed a FFT on each chunk.
+
+RustFFT 5.0 makes a few changes to this setup. First, there is no longer a distinction between "single" and "multi" FFT methods: All `Fft` trait methods compute multiple FFTs if provided a buffer whose length is a multiple of the FFT length.
+
+Second, the `Fft` trait now has three methods. Most users will want the first method:
+1. `Fft::process()` takes a single buffer instead of two, and computes FFTs in-place. Internally, it allocates scratch space as needed.
+1. `Fft::process_with_scratch()` takes two buffers: An input/output buffer, and a scratch buffer. It computes FFTs in-place on the given buffer, using the provided scratch space as needed.
+1. `Fft::process_outofplace_with_scratch()` takes three buffers: An input buffer, an output buffer, and a scratch buffer. It computes FFTs from the input buffer, store the results in the output buffer, using the provided scratch space as needed.
+
+Example for users who want to use the new in-place `process()` behavior:
+```rust
+// RustFFT 4.0
+let fft = Radix4::new(4096, false);
+
+let mut input : Vec<Complex<f32>> = get_my_input_data();
+let mut output = vec![Complex::zero(); fft.len()];
+fft.process(&mut input, &mut output);
+
+// RustFFT 5.0
+let fft = Radix4::new(4096, FftDirection::Forward);
+
+let mut buffer : Vec<Complex<f32>> = get_my_input_data();
+fft.process(&mut buffer);
+```
+
+Example for users who want to keep the old out-of-place `process()` behavior from RustFFT 4.0:
+```rust
+// RustFFT 4.0
+let fft = Radix4::new(4096, false);
+
+let mut input : Vec<Complex<f32>> = get_my_input_data();
+let mut output = vec![Complex::zero(); fft.len()];
+fft.process(&mut input, &mut output);
+
+// RustFFT 5.0
+let fft = Radix4::new(4096, FftDirection::Forward);
+
+let mut input : Vec<Complex<f32>> = get_my_input_data();
+let mut output = vec![Complex::zero(); fft.len()];
+let mut scratch = vec![Complex::zero(); fft.get_out_of_place_scratch_len()];
+fft.process_outofplace_with_scratch(&mut input, &mut output, &mut scratch);
 ```
 
 ## Rader's Algorithm Constructor
