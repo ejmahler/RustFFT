@@ -12,6 +12,7 @@ The following were renamed in RustFFT 5.0 to conform to this style
 * The `FFT` trait was renamed to `Fft`
 * The `FFTnum` trait was renamed to `FftNum`
 * The `FFTplanner` struct was renamed to `FftPlanner`
+* The `DFT` struct was renamed to `Dft`
 
 ## Fft Trait Methods
 In RustFFT 4.0, the `Fft` trait has two methods:
