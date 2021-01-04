@@ -52,7 +52,10 @@ fn fft_matches_control<T: FftNum + Float>(control: Arc<dyn Fft<T>>, input: &[Com
         "FFTplanner created FFT of wrong direction"
     );
 
-    let scratch_max = std::cmp::max(control.get_inplace_scratch_len(), fft.get_inplace_scratch_len());
+    let scratch_max = std::cmp::max(
+        control.get_inplace_scratch_len(),
+        fft.get_inplace_scratch_len(),
+    );
     let mut scratch = vec![Zero::zero(); scratch_max];
 
     control.process_with_scratch(&mut control_input, &mut scratch);

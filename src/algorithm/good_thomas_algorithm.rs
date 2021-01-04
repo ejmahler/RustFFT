@@ -6,10 +6,10 @@ use num_integer::Integer;
 use strength_reduce::StrengthReducedUsize;
 use transpose;
 
+use crate::array_utils;
+use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::{common::FftNum, FftDirection};
 use crate::{Direction, Fft, Length};
-use crate::common::{fft_error_inplace, fft_error_outofplace};
-use crate::array_utils;
 
 /// Implementation of the [Good-Thomas Algorithm (AKA Prime Factor Algorithm)](https://en.wikipedia.org/wiki/Prime-factor_FFT_algorithm)
 ///
@@ -413,7 +413,8 @@ impl<T: FftNum> GoodThomasAlgorithmSmall<T> {
         unsafe { array_utils::transpose_small(self.width, self.height, scratch, buffer) };
 
         // run FFTs of size 'height'
-        self.height_size_fft.process_outofplace_with_scratch(buffer, scratch, &mut []);
+        self.height_size_fft
+            .process_outofplace_with_scratch(buffer, scratch, &mut []);
 
         // copy to the output, using our output redordeing mapping
         for (input_element, &output_index) in scratch.iter().zip(output_map.iter()) {

@@ -82,7 +82,7 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
     let mut expected_output = reference_input.clone();
     let mut dft_scratch = vec![Zero::zero(); dft.get_inplace_scratch_len()];
     dft.process_with_scratch(&mut expected_output, &mut dft_scratch);
-    
+
     // test process()
     {
         let mut buffer = reference_input.clone();
@@ -119,7 +119,7 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
             buffer.copy_from_slice(&reference_input);
 
             fft.process_with_scratch(&mut buffer, &mut scratch);
-            
+
             assert!(compare_vectors(&expected_output, &buffer), "process_with_scratch() failed the 'dirty scratch' test, length = {}, direction = {}", len, direction);
         }
     }
@@ -147,7 +147,7 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
             input.copy_from_slice(&reference_input);
 
             fft.process_outofplace_with_scratch(&mut input, &mut output, &mut scratch);
-            
+
             assert!(
                 compare_vectors(&expected_output, &output),
                 "process_outofplace_with_scratch() failed the 'dirty scratch' test, length = {}, direction = {}",

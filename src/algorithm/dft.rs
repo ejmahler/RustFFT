@@ -1,10 +1,10 @@
 use num_complex::Complex;
 use num_traits::Zero;
 
+use crate::array_utils;
+use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::{twiddles, FftDirection};
 use crate::{Direction, Fft, FftNum, Length};
-use crate::common::{fft_error_inplace, fft_error_outofplace};
-use crate::array_utils;
 
 /// Naive O(n^2 ) Discrete Fourier Transform implementation
 ///
@@ -99,13 +99,12 @@ mod unit_tests {
                 "DFT instance reported incorrect length"
             );
 
-            let input = random_signal(len * n);          
+            let input = random_signal(len * n);
             let mut expected_output = input.clone();
 
             // Compute the control data using our simplified DFT definition
-            for (input_chunk, output_chunk) in input
-                .chunks(len)
-                .zip(expected_output.chunks_mut(len))
+            for (input_chunk, output_chunk) in
+                input.chunks(len).zip(expected_output.chunks_mut(len))
             {
                 dft(input_chunk, output_chunk);
             }
@@ -126,23 +125,26 @@ mod unit_tests {
             // test process_with_scratch()
             {
                 let mut inplace_with_scratch_buffer = input.clone();
-                let mut inplace_scratch = vec![Zero::zero(); dft_instance.get_inplace_scratch_len()];
+                let mut inplace_scratch =
+                    vec![Zero::zero(); dft_instance.get_inplace_scratch_len()];
 
-                dft_instance.process_with_scratch(&mut inplace_with_scratch_buffer, &mut inplace_scratch);
+                dft_instance
+                    .process_with_scratch(&mut inplace_with_scratch_buffer, &mut inplace_scratch);
 
                 assert!(
                     compare_vectors(&expected_output, &inplace_with_scratch_buffer),
                     "process_inplace() failed, length = {}",
                     len
                 );
-    
+
                 // one more thing: make sure that the DFT algorithm even works with dirty scratch space
                 for item in inplace_scratch.iter_mut() {
                     *item = Complex::new(100.0, 100.0);
                 }
                 inplace_with_scratch_buffer.copy_from_slice(&input);
-                
-                dft_instance.process_with_scratch(&mut inplace_with_scratch_buffer, &mut inplace_scratch);
+
+                dft_instance
+                    .process_with_scratch(&mut inplace_with_scratch_buffer, &mut inplace_scratch);
 
                 assert!(
                     compare_vectors(&expected_output, &inplace_with_scratch_buffer),
@@ -156,7 +158,11 @@ mod unit_tests {
                 let mut outofplace_input = input.clone();
                 let mut outofplace_output = expected_output.clone();
 
-                dft_instance.process_outofplace_with_scratch(&mut outofplace_input, &mut outofplace_output, &mut []);
+                dft_instance.process_outofplace_with_scratch(
+                    &mut outofplace_input,
+                    &mut outofplace_output,
+                    &mut [],
+                );
 
                 assert!(
                     compare_vectors(&expected_output, &outofplace_output),
@@ -174,7 +180,11 @@ mod unit_tests {
 
         zero_dft.process(&mut zero_input);
         zero_dft.process_with_scratch(&mut zero_input, &mut zero_scratch);
-        zero_dft.process_outofplace_with_scratch(&mut zero_input, &mut zero_output, &mut zero_scratch);
+        zero_dft.process_outofplace_with_scratch(
+            &mut zero_input,
+            &mut zero_output,
+            &mut zero_scratch,
+        );
     }
 
     /// Returns true if our `dft` function calculates the given output from the
@@ -211,7 +221,8 @@ mod unit_tests {
             let mut inplace_with_scratch_buffer = input.to_vec();
             let mut inplace_scratch = vec![Zero::zero(); dft_instance.get_inplace_scratch_len()];
 
-            dft_instance.process_with_scratch(&mut inplace_with_scratch_buffer, &mut inplace_scratch);
+            dft_instance
+                .process_with_scratch(&mut inplace_with_scratch_buffer, &mut inplace_scratch);
 
             assert!(
                 compare_vectors(&expected_output, &inplace_with_scratch_buffer),
@@ -225,7 +236,8 @@ mod unit_tests {
             }
             inplace_with_scratch_buffer.copy_from_slice(&input);
 
-            dft_instance.process_with_scratch(&mut inplace_with_scratch_buffer, &mut inplace_scratch);
+            dft_instance
+                .process_with_scratch(&mut inplace_with_scratch_buffer, &mut inplace_scratch);
 
             assert!(
                 compare_vectors(&expected_output, &inplace_with_scratch_buffer),
@@ -239,7 +251,11 @@ mod unit_tests {
             let mut outofplace_input = input.to_vec();
             let mut outofplace_output = expected_output.to_vec();
 
-            dft_instance.process_outofplace_with_scratch(&mut outofplace_input, &mut outofplace_output, &mut []);
+            dft_instance.process_outofplace_with_scratch(
+                &mut outofplace_input,
+                &mut outofplace_output,
+                &mut [],
+            );
 
             assert!(
                 compare_vectors(&expected_output, &outofplace_output),

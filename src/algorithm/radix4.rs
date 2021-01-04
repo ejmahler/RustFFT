@@ -3,15 +3,15 @@ use std::sync::Arc;
 use num_complex::Complex;
 use num_traits::Zero;
 
+use crate::algorithm::butterflies::{Butterfly1, Butterfly16, Butterfly2, Butterfly4, Butterfly8};
+use crate::array_utils;
+use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::{
     array_utils::{RawSlice, RawSliceMut},
     common::FftNum,
     twiddles, FftDirection,
 };
-use crate::algorithm::butterflies::{Butterfly1, Butterfly16, Butterfly2, Butterfly4, Butterfly8};
 use crate::{Direction, Fft, Length};
-use crate::common::{fft_error_inplace, fft_error_outofplace};
-use crate::array_utils;
 
 /// FFT algorithm optimized for power-of-two sizes
 ///

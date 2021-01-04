@@ -6,11 +6,11 @@ use num_traits::Zero;
 use primal_check::miller_rabin;
 use strength_reduce::StrengthReducedUsize;
 
-use crate::{common::FftNum, twiddles, FftDirection};
-use crate::math_utils;
-use crate::{Direction, Fft, Length};
-use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::array_utils;
+use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::math_utils;
+use crate::{common::FftNum, twiddles, FftDirection};
+use crate::{Direction, Fft, Length};
 
 /// Implementation of Rader's Algorithm
 ///
@@ -147,8 +147,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
         } else {
             &mut input[..]
         };
-        self.inner_fft
-            .process_with_scratch(output, inner_scratch);
+        self.inner_fft.process_with_scratch(output, inner_scratch);
 
         // multiply the inner result with our cached setup data
         // also conjugate every entry. this sets us up to do an inverse FFT
@@ -167,8 +166,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
         } else {
             &mut output[..]
         };
-        self.inner_fft
-            .process_with_scratch(input, inner_scratch);
+        self.inner_fft.process_with_scratch(input, inner_scratch);
 
         // copy the final values into the output, reordering as we go
         let mut output_index = 1;
@@ -200,8 +198,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
         } else {
             &mut buffer[..]
         };
-        self.inner_fft
-            .process_with_scratch(scratch, inner_scratch);
+        self.inner_fft.process_with_scratch(scratch, inner_scratch);
 
         // multiply the inner result with our cached setup data
         // also conjugate every entry. this sets us up to do an inverse FFT
@@ -211,8 +208,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
         }
 
         // execute the second FFT
-        self.inner_fft
-            .process_with_scratch(scratch, inner_scratch);
+        self.inner_fft.process_with_scratch(scratch, inner_scratch);
 
         // copy the final values into the output, reordering as we go
         let mut output_index = 1;

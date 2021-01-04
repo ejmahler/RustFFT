@@ -4,10 +4,10 @@ use std::sync::Arc;
 use num_complex::Complex;
 use transpose;
 
+use crate::array_utils;
+use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::{common::FftNum, twiddles, FftDirection};
 use crate::{Direction, Fft, Length};
-use crate::common::{fft_error_inplace, fft_error_outofplace};
-use crate::array_utils;
 
 /// Implementation of the Mixed-Radix FFT algorithm
 ///
@@ -273,7 +273,8 @@ impl<T: FftNum> MixedRadixSmall<T> {
         unsafe { array_utils::transpose_small(self.height, self.width, scratch, buffer) };
 
         // STEP 5: perform FFTs of size `width`
-        self.width_size_fft.process_outofplace_with_scratch(buffer, scratch, &mut []);
+        self.width_size_fft
+            .process_outofplace_with_scratch(buffer, scratch, &mut []);
 
         // STEP 6: transpose again
         unsafe { array_utils::transpose_small(self.width, self.height, scratch, buffer) };

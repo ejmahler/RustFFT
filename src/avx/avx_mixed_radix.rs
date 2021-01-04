@@ -5,8 +5,8 @@ use num_complex::Complex;
 use num_integer::div_ceil;
 
 use crate::array_utils;
-use crate::{Direction, Fft, FftDirection, FftNum, Length};
 use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::{Direction, Fft, FftDirection, FftNum, Length};
 
 use super::{AvxNum, CommonSimdData};
 
@@ -50,9 +50,11 @@ macro_rules! boilerplate_mixedradix {
 
             // process the row FFTs
             let (scratch, inner_scratch) = scratch.split_at_mut(self.len());
-            self.common_data
-                .inner_fft
-                .process_outofplace_with_scratch(buffer, scratch, inner_scratch);
+            self.common_data.inner_fft.process_outofplace_with_scratch(
+                buffer,
+                scratch,
+                inner_scratch,
+            );
 
             // Transpose
             // Safety: self.transpose() requres the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
