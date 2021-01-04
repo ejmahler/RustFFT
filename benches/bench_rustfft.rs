@@ -17,10 +17,8 @@ struct Noop {
     direction: FftDirection,
 }
 impl<T: FftNum> Fft<T> for Noop {
-    fn process_with_scratch(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {}
-    fn process_multi(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {}
-    fn process_inplace_with_scratch(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {}
-    fn process_inplace_multi(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {}
+    fn process_with_scratch(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {}
+    fn process_outofplace_with_scratch(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {}
     fn get_inplace_scratch_len(&self) -> usize { self.len }
     fn get_out_of_place_scratch_len(&self) -> usize { 0 }
 }
@@ -42,7 +40,7 @@ fn bench_planned_f32(b: &mut Bencher, len: usize) {
     let mut buffer = vec![Complex::zero(); len];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| {
-        fft.process_inplace_with_scratch(&mut buffer, &mut scratch); 
+        fft.process_with_scratch(&mut buffer, &mut scratch); 
     });
 }
 
@@ -123,7 +121,7 @@ fn bench_planned_f64(b: &mut Bencher, len: usize) {
 
     let mut buffer = vec![Complex::zero(); len];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
-    b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch); });
+    b.iter(|| { fft.process_with_scratch(&mut buffer, &mut scratch); });
 }
 
 #[bench] fn planned64_p2_00000064(b: &mut Bencher) { bench_planned_f64(b,       64); }
@@ -199,7 +197,7 @@ fn bench_good_thomas(b: &mut Bencher, width: usize, height: usize) {
 
     let mut buffer = vec![Complex::zero(); width * height];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
-    b.iter(|| {fft.process_inplace_with_scratch(&mut buffer, &mut scratch);} );
+    b.iter(|| {fft.process_with_scratch(&mut buffer, &mut scratch);} );
 }
 
 #[bench] fn good_thomas_0002_3(b: &mut Bencher) { bench_good_thomas(b,  2, 3); }
@@ -244,9 +242,9 @@ fn bench_mixed_radix(b: &mut Bencher, width: usize, height: usize) {
 
     let fft : Arc<Fft<_>> = Arc::new(MixedRadix::new(width_fft, height_fft));
 
-    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; width * height];
-    let mut spectrum = signal.clone();
-    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
+    let mut buffer = vec![Complex{re: 0_f32, im: 0_f32}; fft.len()];
+    let mut scratch = vec![Complex{re: 0_f32, im: 0_f32}; fft.get_inplace_scratch_len()];
+    b.iter(|| {fft.process_with_scratch(&mut buffer, &mut scratch);} );
 }
 
 #[bench] fn mixed_radix_0002_3(b: &mut Bencher) { bench_mixed_radix(b,  2, 3); }
@@ -284,7 +282,7 @@ fn bench_mixed_radix_small(b: &mut Bencher, width: usize, height: usize) {
 
     let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; width * height];
     let mut spectrum = signal.clone();
-    b.iter(|| {fft.process_inplace_with_scratch(&mut signal, &mut spectrum);} );
+    b.iter(|| {fft.process_with_scratch(&mut signal, &mut spectrum);} );
 }
 
 #[bench] fn mixed_radix_small_0002_3(b: &mut Bencher) { bench_mixed_radix_small(b,  2, 3); }
@@ -303,7 +301,7 @@ fn bench_good_thomas_small(b: &mut Bencher, width: usize, height: usize) {
 
     let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; width * height];
     let mut spectrum = signal.clone();
-    b.iter(|| {fft.process_inplace_with_scratch(&mut signal, &mut spectrum);} );
+    b.iter(|| {fft.process_with_scratch(&mut signal, &mut spectrum);} );
 }
 
 #[bench] fn good_thomas_small_0002_3(b: &mut Bencher) { bench_good_thomas_small(b,  2, 3); }
@@ -323,7 +321,7 @@ fn bench_raders_scalar(b: &mut Bencher, len: usize) {
 
     let mut buffer = vec![Complex{re: 0_f32, im: 0_f32}; len];
     let mut scratch = vec![Complex{re: 0_f32, im: 0_f32}; fft.get_inplace_scratch_len()];
-    b.iter(|| {fft.process_inplace_with_scratch(&mut buffer, &mut scratch);} );
+    b.iter(|| {fft.process_with_scratch(&mut buffer, &mut scratch);} );
 }
 
 #[bench] fn raders_fft_scalar_prime_0005(b: &mut Bencher) { bench_raders_scalar(b,  5); }
@@ -351,7 +349,7 @@ fn bench_bluesteins_scalar_prime(b: &mut Bencher, len: usize) {
 
     let mut buffer = vec![Zero::zero(); len];
     let mut scratch = vec![Zero::zero(); fft.get_inplace_scratch_len()];
-    b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch);} );
+    b.iter(|| { fft.process_with_scratch(&mut buffer, &mut scratch);} );
 }
 
 #[bench] fn bench_bluesteins_scalar_prime_0005(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  5); }
@@ -378,7 +376,7 @@ fn bench_radix4(b: &mut Bencher, len: usize) {
 
     let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; len];
     let mut spectrum = signal.clone();
-    b.iter(|| {fft.process(&mut signal, &mut spectrum);} );
+    b.iter(|| {fft.process_outofplace_with_scratch(&mut signal, &mut spectrum, &mut []);} );
 }
 
 #[bench] fn radix4_______64(b: &mut Bencher) { bench_radix4(b, 64); }
@@ -411,7 +409,7 @@ fn bench_mixed_radix_power2(b: &mut Bencher, len: usize) {
     let mut buffer = vec![Zero::zero(); len];
     let mut scratch = vec![Zero::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| {
-        fft.process_inplace_with_scratch(&mut buffer, &mut scratch);
+        fft.process_with_scratch(&mut buffer, &mut scratch);
     });
 }
 
@@ -446,7 +444,7 @@ fn bench_mixed_radix_inline_power2(b: &mut Bencher, len: usize) {
     let mut buffer = vec![Zero::zero(); len];
     let mut scratch = vec![Zero::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| {
-        fft.process_inplace_with_scratch(&mut buffer, &mut scratch);
+        fft.process_with_scratch(&mut buffer, &mut scratch);
     });
 }
 
@@ -466,7 +464,7 @@ fn bench_butterfly32(b: &mut Bencher, len: usize) {
 
     let mut buffer = vec![Complex::zero(); len * 10];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
-    b.iter(|| { fft.process_inplace_multi(&mut buffer, &mut scratch); });
+    b.iter(|| { fft.process_with_scratch(&mut buffer, &mut scratch); });
 }
 
 #[bench] fn butterfly32_02(b: &mut Bencher) { bench_butterfly32(b, 2); }
@@ -501,7 +499,7 @@ fn bench_butterfly64(b: &mut Bencher, len: usize) {
 
     let mut buffer = vec![Complex::zero(); len * 10];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
-    b.iter(|| { fft.process_inplace_multi(&mut buffer, &mut scratch); });
+    b.iter(|| { fft.process_with_scratch(&mut buffer, &mut scratch); });
 }
 
 #[bench] fn butterfly64_02(b: &mut Bencher) { bench_butterfly64(b, 2); }

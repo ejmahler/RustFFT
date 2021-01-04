@@ -20,7 +20,7 @@
 //! let fft = planner.plan_fft_forward(1234);
 //!
 //! let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1234];
-//! fft.process_inplace(&mut buffer);
+//! fft.process(&mut buffer);
 //! ```
 //! The planner returns trait objects of the [`Fft`](crate::Fft) trait, allowing for FFT sizes that aren't known
 //! until runtime.
@@ -35,7 +35,7 @@
 //! let fft = Radix4::new(4096, FftDirection::Forward);
 //!
 //! let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 4096];
-//! fft.process_inplace(&mut buffer);
+//! fft.process(&mut buffer);
 //! ```
 //!
 //! For the vast majority of situations, simply using the [`FftPlanner`](crate::FftPlanner) will be enough, but
@@ -149,62 +149,26 @@ pub trait Direction {
 
 /// Trait for algorithms that compute FFTs.
 ///
-/// This trait has two main methods:
-/// - [`process_inplace(buffer)`](crate::Fft::process_inplace) computes a FFT using `buffer` as input and store the result back into `buffer`.
-/// - [`process(input, output)`](crate::Fft::process) computes a FFT using `input` as input and store the result into `output`.
-///
-/// Both methods may need to allocate additional scratch space. If you'd like re-use that allocation across multiple FFT computations, call
-/// `process_inplace_with_scratch` or `process_with_scratch`, respectively.
+/// This trait has a few mothods for computing FFTs, but its most conveinent method is [`process(buffer)`](crate::Fft::process).
+/// It takes in a &mut [T] buffer and computes a FFT on that buffer, in-place. It may copy the data over to internal scratch buffers
+/// if that speeds up the computation, but the output will always end up in the same buffer as the input.
 pub trait Fft<T: FftNum>: Length + Direction + Sync + Send {
-    /// Computes a FFT.
+    /// Computes a FFT in-place.
     ///
-    /// Convenience method that allocates the required scratch space and and calls `self.process_with_scratch`.
-    ///
-    /// This method uses the `input` buffer as scratch space, so the contents of `input` should be considered garbage
-    /// after calling.
+    /// Convenience method that allocates a `Vec` with the required scratch space and calls `self.process_with_scratch`.
+    /// If you want to re-use that allocation across multiple FFT computations, consider calling `process_with_scratch` instead.
     ///
     /// # Panics
     ///
     /// This method panics if:
-    /// - `input.len() != self.len()`
-    /// - `output.len() != self.len()`
-    fn process(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) {
-        let mut scratch = vec![Complex::zero(); self.get_out_of_place_scratch_len()];
-        self.process_with_scratch(input, output, &mut scratch);
-    }
-
-    /// Computes a FFT.
-    ///
-    /// Convenience method that allocates the required scratch space and calls `self.process_inplace_with_scratch`.
-    ///
-    /// # Panics
-    ///
-    /// This method panics if:
-    /// - `buffer.len() != self.len()`
-    fn process_inplace(&self, buffer: &mut [Complex<T>]) {
+    /// - `buffer.len() % self.len() > 0`
+    /// - `buffer.len() < self.len()`
+    fn process(&self, buffer: &mut [Complex<T>]) {
         let mut scratch = vec![Complex::zero(); self.get_inplace_scratch_len()];
-        self.process_inplace_with_scratch(buffer, &mut scratch);
+        self.process_with_scratch(buffer, &mut scratch);
     }
 
-    /// Computes a FFT.
-    ///
-    /// Uses both the `input` buffer and `scratch` buffer as scratch space, so the contents of both should be
-    /// considered garbage after calling.
-    ///
-    /// # Panics
-    ///
-    /// This method panics if:
-    /// - `input.len() != self.len()`
-    /// - `output.len() != self.len()`
-    /// - `scratch.len() < self.get_out_of_place_scratch_len()`
-    fn process_with_scratch(
-        &self,
-        input: &mut [Complex<T>],
-        output: &mut [Complex<T>],
-        scratch: &mut [Complex<T>],
-    );
-
-    /// Computes a FFT, in-place.
+    /// Divides `buffer` into chunks of size `self.len()`, and computes a FFT on each chunk.
     ///
     /// Uses the `scratch` buffer as scratch space, so the contents of `scratch` should be considered garbage
     /// after calling.
@@ -212,50 +176,42 @@ pub trait Fft<T: FftNum>: Length + Direction + Sync + Send {
     /// # Panics
     ///
     /// This method panics if:
-    /// - `buffer.len() != self.len()`
+    /// - `buffer.len() % self.len() > 0`
+    /// - `buffer.len() < self.len()`
     /// - `scratch.len() < self.get_inplace_scratch_len()`
-    fn process_inplace_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]);
+    fn process_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]);
 
-    /// Computes multiple FFTs.
+    /// Divides `input` and `output` into chunks of size `self.len()`, and computes a FFT on each chunk.
     ///
-    /// Divides `input` and `output` into chunks of size `self.len()`, computes an FFT on each input chunk,
-    /// and stores the result in the corresponding output chunk.
+    /// This method uses both the `input` buffer and `scratch` buffer as scratch space, so the contents of both should be
+    /// considered garbage after calling.
     ///
-    /// This method uses both the `input` buffer and `scratch` buffer as scratch space, so the contents of both should
-    /// be considered garbage after calling.
+    /// This is a more niche way of computing a FFT. It's useful to avoid a `copy_from_slice()` if you need the output
+    /// in a different buffer than the input for some reason. This happens frequently in RustFFT internals, but is probably
+    /// less common among RustFFT users.
+    ///
+    /// For many FFT sizes, `self.get_out_of_place_scratch_len()` returns 0
     ///
     /// # Panics
     ///
     /// This method panics if:
-    /// - `input.len() % self.len() != 0`
     /// - `output.len() != input.len()`
+    /// - `input.len() % self.len() > 0`
+    /// - `input.len() < self.len()`
     /// - `scratch.len() < self.get_out_of_place_scratch_len()`
-    fn process_multi(
+    fn process_outofplace_with_scratch(
         &self,
         input: &mut [Complex<T>],
         output: &mut [Complex<T>],
         scratch: &mut [Complex<T>],
     );
 
-    /// Computes multiple FFTs, in-place.
-    ///
-    /// Divides `buffer` into chunks of size `self.len()`, computes an FFT on each chunk, and stores the result back
-    /// into `buffer`.
-    ///
-    /// This method uses the `scratch` buffer as scratch space, so its contents should be considered garbage after
-    /// calling.
-    ///
-    /// # Panics
-    ///
-    /// This method panics if:
-    /// - `buffer.len() % self.len() != 0`
-    /// - `scratch.len() < self.get_inplace_scratch_len()`
-    fn process_inplace_multi(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]);
-
     /// Returns the size of the scratch buffer required by `process_inplace_with_scratch` and `process_inplace_multi`
     fn get_inplace_scratch_len(&self) -> usize;
 
     /// Returns the size of the scratch buffer required by `process_with_scratch` and `process_multi`
+    ///
+    /// For many FFT sizes, out-of-place FFTs require zero scratch, and this method will return zero - although that may change from one RustFFT version to the next.
     fn get_out_of_place_scratch_len(&self) -> usize;
 }
 

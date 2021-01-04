@@ -4,9 +4,9 @@ use std::sync::Arc;
 use num_complex::Complex;
 use transpose;
 
-use crate::{common::FftNum, twiddles, FftDirection};
-
 use crate::array_utils;
+use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::{common::FftNum, twiddles, FftDirection};
 use crate::{Direction, Fft, Length};
 
 /// Implementation of the Mixed-Radix FFT algorithm
@@ -19,10 +19,8 @@ use crate::{Direction, Fft, Length};
 /// use rustfft::algorithm::MixedRadix;
 /// use rustfft::{Fft, FftPlanner};
 /// use rustfft::num_complex::Complex;
-/// use rustfft::num_traits::Zero;
 ///
-/// let mut input:  Vec<Complex<f32>> = vec![Zero::zero(); 1200];
-/// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); 1200];
+/// let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1200];
 ///
 /// // we need to find an n1 and n2 such that n1 * n2 == 1200
 /// // n1 = 30 and n2 = 40 satisfies this
@@ -32,7 +30,7 @@ use crate::{Direction, Fft, Length};
 ///
 /// // the mixed radix FFT length will be inner_fft_n1.len() * inner_fft_n2.len() = 1200
 /// let fft = MixedRadix::new(inner_fft_n1, inner_fft_n2);
-/// fft.process(&mut input, &mut output);
+/// fft.process(&mut buffer);
 /// ~~~
 pub struct MixedRadix<T> {
     twiddles: Box<[Complex<T>]>,
@@ -119,7 +117,7 @@ impl<T: FftNum> MixedRadix<T> {
             &mut buffer[..]
         };
         self.height_size_fft
-            .process_inplace_multi(scratch, height_scratch);
+            .process_with_scratch(scratch, height_scratch);
 
         // STEP 3: Apply twiddle factors
         for (element, twiddle) in scratch.iter_mut().zip(self.twiddles.iter()) {
@@ -131,7 +129,7 @@ impl<T: FftNum> MixedRadix<T> {
 
         // STEP 5: perform FFTs of size `width`
         self.width_size_fft
-            .process_multi(buffer, scratch, inner_scratch);
+            .process_outofplace_with_scratch(buffer, scratch, inner_scratch);
 
         // STEP 6: transpose again
         transpose::transpose(scratch, buffer, self.width, self.height);
@@ -155,7 +153,7 @@ impl<T: FftNum> MixedRadix<T> {
             &mut input[..]
         };
         self.height_size_fft
-            .process_inplace_multi(output, height_scratch);
+            .process_with_scratch(output, height_scratch);
 
         // STEP 3: Apply twiddle factors
         for (element, twiddle) in output.iter_mut().zip(self.twiddles.iter()) {
@@ -172,7 +170,7 @@ impl<T: FftNum> MixedRadix<T> {
             &mut output[..]
         };
         self.width_size_fft
-            .process_inplace_multi(input, width_scratch);
+            .process_with_scratch(input, width_scratch);
 
         // STEP 6: transpose again
         transpose::transpose(input, output, self.width, self.height);
@@ -197,12 +195,10 @@ boilerplate_fft!(
 /// use rustfft::algorithm::butterflies::{Butterfly5, Butterfly8};
 /// use rustfft::{Fft, FftDirection};
 /// use rustfft::num_complex::Complex;
-/// use rustfft::num_traits::Zero;
 ///
 /// let len = 40;
 ///
-/// let mut input:  Vec<Complex<f32>> = vec![Zero::zero(); len];
-/// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); len];
+/// let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; len];
 ///
 /// // we need to find an n1 and n2 such that n1 * n2 == 40
 /// // n1 = 5 and n2 = 8 satisfies this
@@ -211,7 +207,7 @@ boilerplate_fft!(
 ///
 /// // the mixed radix FFT length will be inner_fft_n1.len() * inner_fft_n2.len() = 40
 /// let fft = MixedRadixSmall::new(inner_fft_n1, inner_fft_n2);
-/// fft.process(&mut input, &mut output);
+/// fft.process(&mut buffer);
 /// ~~~
 pub struct MixedRadixSmall<T> {
     twiddles: Box<[Complex<T>]>,
@@ -266,7 +262,7 @@ impl<T: FftNum> MixedRadixSmall<T> {
         unsafe { array_utils::transpose_small(self.width, self.height, buffer, scratch) };
 
         // STEP 2: perform FFTs of size `height`
-        self.height_size_fft.process_inplace_multi(scratch, buffer);
+        self.height_size_fft.process_with_scratch(scratch, buffer);
 
         // STEP 3: Apply twiddle factors
         for (element, twiddle) in scratch.iter_mut().zip(self.twiddles.iter()) {
@@ -277,7 +273,8 @@ impl<T: FftNum> MixedRadixSmall<T> {
         unsafe { array_utils::transpose_small(self.height, self.width, scratch, buffer) };
 
         // STEP 5: perform FFTs of size `width`
-        self.width_size_fft.process_multi(buffer, scratch, &mut []);
+        self.width_size_fft
+            .process_outofplace_with_scratch(buffer, scratch, &mut []);
 
         // STEP 6: transpose again
         unsafe { array_utils::transpose_small(self.width, self.height, scratch, buffer) };
@@ -294,7 +291,7 @@ impl<T: FftNum> MixedRadixSmall<T> {
         unsafe { array_utils::transpose_small(self.width, self.height, input, output) };
 
         // STEP 2: perform FFTs of size `height`
-        self.height_size_fft.process_inplace_multi(output, input);
+        self.height_size_fft.process_with_scratch(output, input);
 
         // STEP 3: Apply twiddle factors
         for (element, twiddle) in output.iter_mut().zip(self.twiddles.iter()) {
@@ -305,7 +302,7 @@ impl<T: FftNum> MixedRadixSmall<T> {
         unsafe { array_utils::transpose_small(self.height, self.width, output, input) };
 
         // STEP 5: perform FFTs of size `width`
-        self.width_size_fft.process_inplace_multi(input, output);
+        self.width_size_fft.process_with_scratch(input, output);
 
         // STEP 6: transpose again
         unsafe { array_utils::transpose_small(self.width, self.height, input, output) };

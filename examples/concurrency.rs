@@ -15,7 +15,7 @@ fn main() {
             let fft_copy = Arc::clone(&fft);
             thread::spawn(move || {
                 let mut buffer = vec![Complex32::new(0.0, 0.0); 100];
-                fft_copy.process_inplace(&mut buffer);
+                fft_copy.process(&mut buffer);
             })
         })
         .collect();
