@@ -4,11 +4,11 @@ RustFFT 5.0 has several breaking changes compared to 4.0. This document will gui
 Each section is ordered by how likely they are to impact you: Things at the top of this document are likely to affect every user of RustFFT, while things at the bottom are unlikely to affect most users.
 
 ## Renaming Structs
-Several structs and traits in RustFFT were renamed to conform closer to the [Rust API guidlines](https://rust-lang.github.io/api-guidelines/naming.html) regarding acronyms:
+Several structs and traits in RustFFT were renamed to follow the [Rust API guidlines](https://rust-lang.github.io/api-guidelines/naming.html) regarding acronyms:
 
 > In UpperCamelCase, acronyms and contractions of compound words count as one word: use Uuid rather than UUID, Usize rather than USize or Stdin rather than StdIn.
 
-The following were renamed in RustFFT 5.0 to conform to this style
+The following were renamed in RustFFT 5.0 to conform to this style:
 * The `FFT` trait was renamed to `Fft`
 * The `FFTnum` trait was renamed to `FftNum`
 * The `FFTplanner` struct was renamed to `FftPlanner`
