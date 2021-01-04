@@ -602,7 +602,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
     }
 
     fn design_bluesteins(&mut self, factors: &PrimeFactors) -> Option<Rc<Recipe>> {
-        if !factors.is_prime() {
+        if factors.get_other_factors().is_empty() {
             None
         } else {
             let len = factors.get_product();
