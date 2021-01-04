@@ -5,10 +5,9 @@ use std::mem::MaybeUninit;
 use num_complex::Complex;
 
 use crate::{common::FftNum, twiddles};
-
 use crate::{Direction, Fft, FftDirection, Length};
-
 use crate::array_utils;
+use crate::common::{fft_error_inplace, fft_error_outofplace};
 
 use super::avx64_utils;
 use super::avx_vector;
@@ -35,106 +34,57 @@ macro_rules! boilerplate_fft_simd_butterfly {
             }
         }
         impl<T: FftNum> Fft<T> for $struct_name<f64> {
-            fn process_with_scratch(
+            fn process_outofplace_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                assert_eq!(
-                    input.len(),
-                    self.len(),
-                    "Input is the wrong length. Expected {}, got {}",
-                    self.len(),
-                    input.len()
-                );
-                assert_eq!(
-                    output.len(),
-                    self.len(),
-                    "Output is the wrong length. Expected {}, got {}",
-                    self.len(),
-                    output.len()
-                );
-
-                unsafe {
-                    // Specialization workaround: See the comments in FftPlannerAvx::new() for why we have to transmute these slices
-                    let input_slice = RawSlice::<Complex<f64>>::new_transmuted(input);
-                    let output_slice = RawSliceMut::<Complex<f64>>::new_transmuted(output);
-                    self.perform_fft_f64(input_slice, output_slice);
+                if input.len() < self.len() || output.len() != input.len() {
+                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
+                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
                 }
-            }
-            fn process_multi(
-                &self,
-                input: &mut [Complex<T>],
-                output: &mut [Complex<T>],
-                _scratch: &mut [Complex<T>],
-            ) {
-                assert!(
-                    input.len() % self.len() == 0,
-                    "Output is the wrong length. Expected multiple of {}, got {}",
-                    self.len(),
-                    input.len()
-                );
-                assert_eq!(
-                    input.len(),
-                    output.len(),
-                    "Output is the wrong length. input = {} output = {}",
-                    input.len(),
-                    output.len()
-                );
 
-                for (in_chunk, out_chunk) in input
-                    .chunks_exact_mut(self.len())
-                    .zip(output.chunks_exact_mut(self.len()))
-                {
+                let result = array_utils::iter_chunks_zipped(input, output, self.len(), |in_chunk, out_chunk| {
                     unsafe {
                         // Specialization workaround: See the comments in FftPlannerAvx::new() for why we have to transmute these slices
                         let input_slice = RawSlice::<Complex<f64>>::new_transmuted(in_chunk);
                         let output_slice = RawSliceMut::<Complex<f64>>::new_transmuted(out_chunk);
                         self.perform_fft_f64(input_slice, output_slice);
                     }
+                });
+
+                if result.is_err() {
+                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
+                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
                 }
             }
-            fn process_inplace_with_scratch(
+            fn process_with_scratch(
                 &self,
                 buffer: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                assert_eq!(
-                    buffer.len(),
-                    self.len(),
-                    "Buffer is the wrong length. Expected {}, got {}",
-                    self.len(),
-                    buffer.len()
-                );
-
-                unsafe {
-                    // Specialization workaround: See the comments in FftPlannerAvx::new() for why we have to transmute these slices
-                    let input_slice = RawSlice::<Complex<f64>>::new_transmuted(buffer);
-                    let output_slice = RawSliceMut::<Complex<f64>>::new_transmuted(buffer);
-                    self.perform_fft_f64(input_slice, output_slice);
+                if buffer.len() < self.len() {
+                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_inplace(self.len(), buffer.len(), 0, 0);
+                    return; // Unreachable, because fft_error_inplace asserts, but it helps codegen to put it here
                 }
-            }
-            fn process_inplace_multi(
-                &self,
-                buffer: &mut [Complex<T>],
-                _scratch: &mut [Complex<T>],
-            ) {
-                assert_eq!(
-                    buffer.len() % self.len(),
-                    0,
-                    "Buffer is the wrong length. Expected multiple of {}, got {}",
-                    self.len(),
-                    buffer.len()
-                );
 
-                for chunk in buffer.chunks_exact_mut(self.len()) {
+                let result = array_utils::iter_chunks(buffer, self.len(), |chunk| {
                     unsafe {
                         // Specialization workaround: See the comments in FftPlannerAvx::new() for why we have to transmute these slices
                         let input_slice = RawSlice::<Complex<f64>>::new_transmuted(chunk);
                         let output_slice = RawSliceMut::<Complex<f64>>::new_transmuted(chunk);
                         self.perform_fft_f64(input_slice, output_slice);
                     }
+                });
+
+                if result.is_err() {
+                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
+                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_inplace(self.len(), buffer.len(), 0, 0);
                 }
             }
             #[inline(always)]
@@ -213,112 +163,56 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
             }
         }
         impl<T: FftNum> Fft<T> for $struct_name<f64> {
-            fn process_with_scratch(
+            fn process_outofplace_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                assert_eq!(
-                    input.len(),
-                    self.len(),
-                    "Input is the wrong length. Expected {}, got {}",
-                    self.len(),
-                    input.len()
-                );
-                assert_eq!(
-                    output.len(),
-                    self.len(),
-                    "Output is the wrong length. Expected {}, got {}",
-                    self.len(),
-                    output.len()
-                );
+                if input.len() < self.len() || output.len() != input.len() {
+                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
+                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
+                }
 
                 // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
                 let transmuted_input: &mut [Complex<f64>] =
                     unsafe { array_utils::workaround_transmute_mut(input) };
                 let transmuted_output: &mut [Complex<f64>] =
                     unsafe { array_utils::workaround_transmute_mut(output) };
+                let result = array_utils::iter_chunks_zipped(transmuted_input, transmuted_output, self.len(), |in_chunk, out_chunk| self.perform_fft_out_of_place(in_chunk, out_chunk));
 
-                self.perform_fft_out_of_place(transmuted_input, transmuted_output);
-            }
-            fn process_multi(
-                &self,
-                input: &mut [Complex<T>],
-                output: &mut [Complex<T>],
-                _scratch: &mut [Complex<T>],
-            ) {
-                assert!(
-                    input.len() % self.len() == 0,
-                    "Output is the wrong length. Expected multiple of {}, got {}",
-                    self.len(),
-                    input.len()
-                );
-                assert_eq!(
-                    input.len(),
-                    output.len(),
-                    "Output is the wrong length. input = {} output = {}",
-                    input.len(),
-                    output.len()
-                );
-
-                // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
-                let transmuted_input: &mut [Complex<f64>] =
-                    unsafe { array_utils::workaround_transmute_mut(input) };
-                let transmuted_output: &mut [Complex<f64>] =
-                    unsafe { array_utils::workaround_transmute_mut(output) };
-
-                for (in_chunk, out_chunk) in transmuted_input
-                    .chunks_exact_mut(self.len())
-                    .zip(transmuted_output.chunks_exact_mut(self.len()))
-                {
-                    self.perform_fft_out_of_place(in_chunk, out_chunk);
+                if result.is_err() {
+                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
+                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
                 }
             }
-            fn process_inplace_with_scratch(
+            fn process_with_scratch(
                 &self,
                 buffer: &mut [Complex<T>],
                 scratch: &mut [Complex<T>],
             ) {
-                assert_eq!(
-                    buffer.len(),
-                    self.len(),
-                    "Buffer is the wrong length. Expected {}, got {}",
-                    self.len(),
-                    buffer.len()
-                );
+                let required_scratch = self.len();
+                if scratch.len() < required_scratch || buffer.len() < self.len() {
+                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_inplace(self.len(), buffer.len(), self.len(), scratch.len());
+                    return; // Unreachable, because fft_error_inplace asserts, but it helps codegen to put it here
+                }
 
-                assert!(scratch.len() >= $len);
-                let scratch = &mut scratch[..$len];
+                let scratch = &mut scratch[..required_scratch];
 
                 // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
                 let transmuted_buffer: &mut [Complex<f64>] =
                     unsafe { array_utils::workaround_transmute_mut(buffer) };
                 let transmuted_scratch: &mut [Complex<f64>] =
                     unsafe { array_utils::workaround_transmute_mut(scratch) };
+                let result = array_utils::iter_chunks(transmuted_buffer, self.len(), |chunk| self.perform_fft_inplace(chunk, transmuted_scratch));
 
-                self.perform_fft_inplace(transmuted_buffer, transmuted_scratch);
-            }
-            fn process_inplace_multi(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-                assert_eq!(
-                    buffer.len() % self.len(),
-                    0,
-                    "Buffer is the wrong length. Expected multiple of {}, got {}",
-                    self.len(),
-                    buffer.len()
-                );
-
-                assert!(scratch.len() >= $len);
-                let scratch = &mut scratch[..$len];
-
-                // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
-                let transmuted_buffer: &mut [Complex<f64>] =
-                    unsafe { array_utils::workaround_transmute_mut(buffer) };
-                let transmuted_scratch: &mut [Complex<f64>] =
-                    unsafe { array_utils::workaround_transmute_mut(scratch) };
-
-                for chunk in transmuted_buffer.chunks_exact_mut(self.len()) {
-                    self.perform_fft_inplace(chunk, transmuted_scratch);
+                if result.is_err() {
+                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
+                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_inplace(self.len(), buffer.len(), self.len(), scratch.len());
                 }
             }
             #[inline(always)]

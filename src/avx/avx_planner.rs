@@ -95,7 +95,7 @@ impl MixedRadixPlan {
 ///     let fft = planner.plan_fft_forward(1234);
 ///
 ///     let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1234];
-///     fft.process_inplace(&mut buffer);
+///     fft.process(&mut buffer);
 ///
 ///     // The FFT instance returned by the planner has the type `Arc<dyn Fft<T>>`,
 ///     // where T is the numeric type, ie f32 or f64, so it's cheap to clone
@@ -875,10 +875,8 @@ impl<A: AvxNum, T: FftNum> AvxPlannerInternal<A, T> {
                 // try to construct our AVX2 rader's algorithm. If that fails (probably because the machine we're running on doesn't have AVX2), fall back to scalar
                 let raders_instance =
                     if let Ok(raders_avx) = RadersAvx2::<A, T>::new(Arc::clone(&inner_fft)) {
-                        dbg!("constructing avx2 raders");
                         wrap_fft(raders_avx)
                     } else {
-                        dbg!("constructing scalar raders");
                         wrap_fft(RadersAlgorithm::new(inner_fft))
                     };
 

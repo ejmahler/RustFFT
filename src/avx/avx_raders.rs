@@ -11,6 +11,7 @@ use strength_reduce::StrengthReducedUsize;
 use crate::{array_utils, FftDirection};
 use crate::{math_utils, twiddles};
 use crate::{Direction, Fft, FftNum, Length};
+use crate::common::{fft_error_inplace, fft_error_outofplace};
 
 use super::avx_vector;
 use super::{
@@ -179,7 +180,7 @@ impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
 
         //precompute a FFT of our reordered twiddle factors
         let mut inner_fft_scratch = vec![Zero::zero(); required_inner_scratch];
-        inner_fft.process_inplace_with_scratch(&mut inner_fft_input, &mut inner_fft_scratch);
+        inner_fft.process_with_scratch(&mut inner_fft_input, &mut inner_fft_scratch);
 
         // When computing the FFT, we'll want this array to be pre-conjugated, so conjugate it. at the same time, convert it to vectors for convenient use later.
         let conjugation_mask =
@@ -400,7 +401,7 @@ impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
             &mut inner_input[..]
         };
         self.inner_fft
-            .process_inplace_with_scratch(inner_output, inner_scratch);
+            .process_with_scratch(inner_output, inner_scratch);
 
         // multiply the inner result with our cached setup data
         // also conjugate every entry. this sets us up to do an inverse FFT
@@ -425,7 +426,7 @@ impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
             &mut inner_output[..]
         };
         self.inner_fft
-            .process_inplace_with_scratch(inner_input, inner_scratch);
+            .process_with_scratch(inner_input, inner_scratch);
 
         // copy the final values into the output, reordering as we go
         unsafe {
@@ -457,7 +458,7 @@ impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
             &mut buffer[..]
         };
         self.inner_fft
-            .process_inplace_with_scratch(truncated_scratch, inner_scratch);
+            .process_with_scratch(truncated_scratch, inner_scratch);
 
         // multiply the inner result with our cached setup data
         // also conjugate every entry. this sets us up to do an inverse FFT
@@ -471,7 +472,7 @@ impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
 
         // execute the second FFT
         self.inner_fft
-            .process_inplace_with_scratch(truncated_scratch, inner_scratch);
+            .process_with_scratch(truncated_scratch, inner_scratch);
 
         // copy the final values into the output, reordering as we go
         unsafe {

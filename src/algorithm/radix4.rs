@@ -8,9 +8,10 @@ use crate::{
     common::FftNum,
     twiddles, FftDirection,
 };
-
 use crate::algorithm::butterflies::{Butterfly1, Butterfly16, Butterfly2, Butterfly4, Butterfly8};
 use crate::{Direction, Fft, Length};
+use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::array_utils;
 
 /// FFT algorithm optimized for power-of-two sizes
 ///
@@ -19,13 +20,11 @@ use crate::{Direction, Fft, Length};
 /// use rustfft::algorithm::Radix4;
 /// use rustfft::{Fft, FftDirection};
 /// use rustfft::num_complex::Complex;
-/// use rustfft::num_traits::Zero;
 ///
-/// let mut input:  Vec<Complex<f32>> = vec![Zero::zero(); 4096];
-/// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); 4096];
+/// let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 4096];
 ///
 /// let fft = Radix4::new(4096, FftDirection::Forward);
-/// fft.process(&mut input, &mut output);
+/// fft.process(&mut buffer);
 /// ~~~
 
 pub struct Radix4<T> {
@@ -100,7 +99,7 @@ impl<T: FftNum> Radix4<T> {
         prepare_radix4(signal.len(), self.base_len, signal, spectrum, 1);
 
         // Base-level FFTs
-        self.base_fft.process_inplace_multi(spectrum, &mut []);
+        self.base_fft.process_with_scratch(spectrum, &mut []);
 
         // cross-FFTs
         let mut current_size = self.base_len * 4;

@@ -30,122 +30,47 @@ struct CommonSimdData<T, V> {
 macro_rules! boilerplate_avx_fft {
     ($struct_name:ident, $len_fn:expr, $inplace_scratch_len_fn:expr, $out_of_place_scratch_len_fn:expr) => {
         impl<A: AvxNum, T: FftNum> Fft<T> for $struct_name<A, T> {
-            fn process_with_scratch(
+            fn process_outofplace_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
                 output: &mut [Complex<T>],
                 scratch: &mut [Complex<T>],
             ) {
-                assert_eq!(
-                    input.len(),
-                    self.len(),
-                    "Input is the wrong length. Expected {}, got {}",
-                    self.len(),
-                    input.len()
-                );
-                assert_eq!(
-                    output.len(),
-                    self.len(),
-                    "Output is the wrong length. Expected {}, got {}",
-                    self.len(),
-                    output.len()
-                );
-
                 let required_scratch = self.get_out_of_place_scratch_len();
-                assert!(
-                    scratch.len() >= required_scratch,
-                    "Scratch is the wrong length. Expected {} or greater, got {}",
-                    required_scratch,
-                    scratch.len()
-                );
+                if scratch.len() < required_scratch || input.len() < self.len() || output.len() != input.len() {
+                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_outofplace(self.len(), input.len(), output.len(), self.get_out_of_place_scratch_len(), scratch.len());
+                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
+                }
 
                 let scratch = &mut scratch[..required_scratch];
+                let result = array_utils::iter_chunks_zipped(input, output, self.len(), |in_chunk, out_chunk| self.perform_fft_out_of_place(in_chunk, out_chunk, scratch));
 
-                self.perform_fft_out_of_place(input, output, scratch);
-            }
-            fn process_multi(
-                &self,
-                input: &mut [Complex<T>],
-                output: &mut [Complex<T>],
-                scratch: &mut [Complex<T>],
-            ) {
-                assert!(
-                    input.len() % self.len() == 0,
-                    "Output is the wrong length. Expected multiple of {}, got {}",
-                    self.len(),
-                    input.len()
-                );
-                assert_eq!(
-                    input.len(),
-                    output.len(),
-                    "Output is the wrong length. input = {} output = {}",
-                    input.len(),
-                    output.len()
-                );
-
-                let required_scratch = self.get_out_of_place_scratch_len();
-                assert!(
-                    scratch.len() >= required_scratch,
-                    "Scratch is the wrong length. Expected {} or greater, got {}",
-                    required_scratch,
-                    scratch.len()
-                );
-
-                let scratch = &mut scratch[..required_scratch];
-
-                for (in_chunk, out_chunk) in input
-                    .chunks_exact_mut(self.len())
-                    .zip(output.chunks_exact_mut(self.len()))
-                {
-                    self.perform_fft_out_of_place(in_chunk, out_chunk, scratch);
+                if result.is_err() {
+                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
+                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_outofplace(self.len(), input.len(), output.len(), self.get_out_of_place_scratch_len(), scratch.len())
                 }
             }
-            fn process_inplace_with_scratch(
+            fn process_with_scratch(
                 &self,
                 buffer: &mut [Complex<T>],
                 scratch: &mut [Complex<T>],
             ) {
-                assert_eq!(
-                    buffer.len(),
-                    self.len(),
-                    "Buffer is the wrong length. Expected {}, got {}",
-                    self.len(),
-                    buffer.len()
-                );
-
                 let required_scratch = self.get_inplace_scratch_len();
-                assert!(
-                    scratch.len() >= required_scratch,
-                    "Scratch is the wrong length. Expected {} or greater, got {}",
-                    required_scratch,
-                    scratch.len()
-                );
+                if scratch.len() < required_scratch || buffer.len() < self.len() {
+                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_inplace(self.len(), buffer.len(), self.get_inplace_scratch_len(), scratch.len());
+                    return; // Unreachable, because fft_error_inplace asserts, but it helps codegen to put it here
+                }
 
                 let scratch = &mut scratch[..required_scratch];
+                let result = array_utils::iter_chunks(buffer, self.len(), |chunk| self.perform_fft_inplace(chunk, scratch));
 
-                self.perform_fft_inplace(buffer, scratch);
-            }
-            fn process_inplace_multi(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-                assert_eq!(
-                    buffer.len() % self.len(),
-                    0,
-                    "Buffer is the wrong length. Expected multiple of {}, got {}",
-                    self.len(),
-                    buffer.len()
-                );
-
-                let required_scratch = self.get_inplace_scratch_len();
-                assert!(
-                    scratch.len() >= required_scratch,
-                    "Scratch is the wrong length. Expected {} or greater, got {}",
-                    required_scratch,
-                    scratch.len()
-                );
-
-                let scratch = &mut scratch[..required_scratch];
-
-                for chunk in buffer.chunks_exact_mut(self.len()) {
-                    self.perform_fft_inplace(chunk, scratch);
+                if result.is_err() {
+                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
+                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_inplace(self.len(), buffer.len(), self.get_inplace_scratch_len(), scratch.len())
                 }
             }
             #[inline(always)]
@@ -175,122 +100,55 @@ macro_rules! boilerplate_avx_fft {
 macro_rules! boilerplate_avx_fft_commondata {
     ($struct_name:ident) => {
         impl<A: AvxNum, T: FftNum> Fft<T> for $struct_name<A, T> {
-            fn process_with_scratch(
+            fn process_outofplace_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
                 output: &mut [Complex<T>],
                 scratch: &mut [Complex<T>],
             ) {
-                assert_eq!(
-                    input.len(),
-                    self.len(),
-                    "Input is the wrong length. Expected {}, got {}",
-                    self.len(),
-                    input.len()
-                );
-                assert_eq!(
-                    output.len(),
-                    self.len(),
-                    "Output is the wrong length. Expected {}, got {}",
-                    self.len(),
-                    output.len()
-                );
+                if self.len() == 0 {
+                    return;
+                }
 
                 let required_scratch = self.get_out_of_place_scratch_len();
-                assert!(
-                    scratch.len() >= required_scratch,
-                    "Scratch is the wrong length. Expected {} or greater, got {}",
-                    required_scratch,
-                    scratch.len()
-                );
+                if scratch.len() < required_scratch || input.len() < self.len() || output.len() != input.len() {
+                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_outofplace(self.len(), input.len(), output.len(), self.get_out_of_place_scratch_len(), scratch.len());
+                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
+                }
 
                 let scratch = &mut scratch[..required_scratch];
+                let result = array_utils::iter_chunks_zipped(input, output, self.len(), |in_chunk, out_chunk| self.perform_fft_out_of_place(in_chunk, out_chunk, scratch));
 
-                self.perform_fft_out_of_place(input, output, scratch);
-            }
-            fn process_multi(
-                &self,
-                input: &mut [Complex<T>],
-                output: &mut [Complex<T>],
-                scratch: &mut [Complex<T>],
-            ) {
-                assert!(
-                    input.len() % self.len() == 0,
-                    "Output is the wrong length. Expected multiple of {}, got {}",
-                    self.len(),
-                    input.len()
-                );
-                assert_eq!(
-                    input.len(),
-                    output.len(),
-                    "Output is the wrong length. input = {} output = {}",
-                    input.len(),
-                    output.len()
-                );
-
-                let required_scratch = self.get_out_of_place_scratch_len();
-                assert!(
-                    scratch.len() >= required_scratch,
-                    "Scratch is the wrong length. Expected {} or greater, got {}",
-                    required_scratch,
-                    scratch.len()
-                );
-
-                let scratch = &mut scratch[..required_scratch];
-
-                for (in_chunk, out_chunk) in input
-                    .chunks_exact_mut(self.len())
-                    .zip(output.chunks_exact_mut(self.len()))
-                {
-                    self.perform_fft_out_of_place(in_chunk, out_chunk, scratch);
+                if result.is_err() {
+                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
+                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_outofplace(self.len(), input.len(), output.len(), self.get_out_of_place_scratch_len(), scratch.len());
                 }
             }
-            fn process_inplace_with_scratch(
+            fn process_with_scratch(
                 &self,
                 buffer: &mut [Complex<T>],
                 scratch: &mut [Complex<T>],
             ) {
-                assert_eq!(
-                    buffer.len(),
-                    self.len(),
-                    "Buffer is the wrong length. Expected {}, got {}",
-                    self.len(),
-                    buffer.len()
-                );
+                if self.len() == 0 {
+                    return;
+                }
 
                 let required_scratch = self.get_inplace_scratch_len();
-                assert!(
-                    scratch.len() >= required_scratch,
-                    "Scratch is the wrong length. Expected {} or greater, got {}",
-                    required_scratch,
-                    scratch.len()
-                );
+                if scratch.len() < required_scratch || buffer.len() < self.len() {
+                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_inplace(self.len(), buffer.len(), self.get_inplace_scratch_len(), scratch.len());
+                    return; // Unreachable, because fft_error_inplace asserts, but it helps codegen to put it here
+                }
 
                 let scratch = &mut scratch[..required_scratch];
+                let result = array_utils::iter_chunks(buffer, self.len(), |chunk| self.perform_fft_inplace(chunk, scratch));
 
-                self.perform_fft_inplace(buffer, scratch);
-            }
-            fn process_inplace_multi(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-                assert_eq!(
-                    buffer.len() % self.len(),
-                    0,
-                    "Buffer is the wrong length. Expected multiple of {}, got {}",
-                    self.len(),
-                    buffer.len()
-                );
-
-                let required_scratch = self.get_inplace_scratch_len();
-                assert!(
-                    scratch.len() >= required_scratch,
-                    "Scratch is the wrong length. Expected {} or greater, got {}",
-                    required_scratch,
-                    scratch.len()
-                );
-
-                let scratch = &mut scratch[..required_scratch];
-
-                for chunk in buffer.chunks_exact_mut(self.len()) {
-                    self.perform_fft_inplace(chunk, scratch);
+                if result.is_err() {
+                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
+                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_inplace(self.len(), buffer.len(), self.get_inplace_scratch_len(), scratch.len());
                 }
             }
             #[inline(always)]

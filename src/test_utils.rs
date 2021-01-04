@@ -79,23 +79,18 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
 
     // set up buffers
     let reference_input = random_signal(len * n);
-    let mut expected_input = reference_input.clone();
-    let mut expected_output = vec![Zero::zero(); len * n];
-    dft.process_multi(&mut expected_input, &mut expected_output, &mut []);
-
+    let mut expected_output = reference_input.clone();
+    let mut dft_scratch = vec![Zero::zero(); dft.get_inplace_scratch_len()];
+    dft.process_with_scratch(&mut expected_output, &mut dft_scratch);
+    
     // test process()
     {
-        let mut input = reference_input.clone();
-        let mut output = expected_output.clone();
+        let mut buffer = reference_input.clone();
 
-        for (input_chunk, output_chunk) in input.chunks_mut(len).zip(output.chunks_mut(len)) {
-            fft.process(input_chunk, output_chunk);
-        }
-        dbg!(&expected_output);
-        dbg!(&output);
-        transppose_diagnostic(&expected_output, &output);
+        fft.process(&mut buffer);
+
         assert!(
-            compare_vectors(&expected_output, &output),
+            compare_vectors(&expected_output, &buffer),
             "process() failed, length = {}, direction = {}",
             len,
             direction
@@ -104,15 +99,13 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
 
     // test process_with_scratch()
     {
-        let mut input = reference_input.clone();
-        let mut scratch = vec![Zero::zero(); fft.get_out_of_place_scratch_len()];
-        let mut output = expected_output.clone();
+        let mut buffer = reference_input.clone();
+        let mut scratch = vec![Zero::zero(); fft.get_inplace_scratch_len()];
 
-        for (input_chunk, output_chunk) in input.chunks_mut(len).zip(output.chunks_mut(len)) {
-            fft.process_with_scratch(input_chunk, output_chunk, &mut scratch);
-        }
+        fft.process_with_scratch(&mut buffer, &mut scratch);
+
         assert!(
-            compare_vectors(&expected_output, &output),
+            compare_vectors(&expected_output, &buffer),
             "process_with_scratch() failed, length = {}, direction = {}",
             len,
             direction
@@ -123,29 +116,25 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
             for item in scratch.iter_mut() {
                 *item = dirty_scratch_value;
             }
-            input.copy_from_slice(&reference_input);
-            for (input_chunk, output_chunk) in input.chunks_mut(len).zip(output.chunks_mut(len)) {
-                fft.process_with_scratch(input_chunk, output_chunk, &mut scratch);
-            }
-            assert!(
-                compare_vectors(&expected_output, &output),
-                "process_with_scratch() failed the 'dirty scratch' test, length = {}, direction = {}",
-                len,
-                direction
-            );
+            buffer.copy_from_slice(&reference_input);
+
+            fft.process_with_scratch(&mut buffer, &mut scratch);
+            
+            assert!(compare_vectors(&expected_output, &buffer), "process_with_scratch() failed the 'dirty scratch' test, length = {}, direction = {}", len, direction);
         }
     }
 
-    // test process_multi()
+    // test process_outofplace_with_scratch()
     {
         let mut input = reference_input.clone();
         let mut scratch = vec![Zero::zero(); fft.get_out_of_place_scratch_len()];
         let mut output = expected_output.clone();
 
-        fft.process_multi(&mut input, &mut output, &mut scratch);
+        fft.process_outofplace_with_scratch(&mut input, &mut output, &mut scratch);
+
         assert!(
             compare_vectors(&expected_output, &output),
-            "process_multi() failed, length = {}, direction = {}",
+            "process_outofplace_with_scratch() failed, length = {}, direction = {}",
             len,
             direction
         );
@@ -156,82 +145,15 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
                 *item = dirty_scratch_value;
             }
             input.copy_from_slice(&reference_input);
-            fft.process_multi(&mut input, &mut output, &mut scratch);
 
+            fft.process_outofplace_with_scratch(&mut input, &mut output, &mut scratch);
+            
             assert!(
                 compare_vectors(&expected_output, &output),
-                "process_multi() failed the 'dirty scratch' test, length = {}, direction = {}",
+                "process_outofplace_with_scratch() failed the 'dirty scratch' test, length = {}, direction = {}",
                 len,
                 direction
             );
-        }
-    }
-
-    // test process_inplace()
-    {
-        let mut buffer = reference_input.clone();
-
-        for chunk in buffer.chunks_mut(len) {
-            fft.process_inplace(chunk);
-        }
-        assert!(
-            compare_vectors(&expected_output, &buffer),
-            "process_inplace() failed, length = {}, direction = {}",
-            len,
-            direction
-        );
-    }
-
-    // test process_inplace_with_scratch()
-    {
-        let mut buffer = reference_input.clone();
-        let mut scratch = vec![Zero::zero(); fft.get_inplace_scratch_len()];
-
-        for chunk in buffer.chunks_mut(len) {
-            fft.process_inplace_with_scratch(chunk, &mut scratch);
-        }
-        assert!(
-            compare_vectors(&expected_output, &buffer),
-            "process_inplace_with_scratch() failed, length = {}, direction = {}",
-            len,
-            direction
-        );
-
-        // make sure this algorithm works correctly with dirty scratch
-        if scratch.len() > 0 {
-            for item in scratch.iter_mut() {
-                *item = dirty_scratch_value;
-            }
-            buffer.copy_from_slice(&reference_input);
-            for chunk in buffer.chunks_mut(len) {
-                fft.process_inplace_with_scratch(chunk, &mut scratch);
-            }
-            assert!(compare_vectors(&expected_output, &buffer), "process_inplace_with_scratch() failed the 'dirty scratch' test, length = {}, direction = {}", len, direction);
-        }
-    }
-
-    // test process_inplace_multi()
-    {
-        let mut buffer = reference_input.clone();
-        let mut scratch = vec![Zero::zero(); fft.get_inplace_scratch_len()];
-
-        fft.process_inplace_multi(&mut buffer, &mut scratch);
-        assert!(
-            compare_vectors(&expected_output, &buffer),
-            "process_inplace_multi() failed, length = {}, direction = {}",
-            len,
-            direction
-        );
-
-        // make sure this algorithm works correctly with dirty scratch
-        if scratch.len() > 0 {
-            for item in scratch.iter_mut() {
-                *item = dirty_scratch_value;
-            }
-            buffer.copy_from_slice(&reference_input);
-            fft.process_inplace_multi(&mut buffer, &mut scratch);
-
-            assert!(compare_vectors(&expected_output, &buffer), "process_inplace_multi() failed the 'dirty scratch' test, length = {}, direction = {}", len, direction);
         }
     }
 }

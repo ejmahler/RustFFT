@@ -500,7 +500,7 @@ fn bench_planned_fft_f32(b: &mut Bencher, len: usize) {
     let mut buffer = vec![Complex::zero(); fft.len()];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| {
-        fft.process_inplace_with_scratch(&mut buffer, &mut scratch);
+        fft.process_with_scratch(&mut buffer, &mut scratch);
     });
 }
 
@@ -512,7 +512,7 @@ fn bench_planned_fft_f64(b: &mut Bencher, len: usize) {
     let mut buffer = vec![Complex::zero(); fft.len()];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| {
-        fft.process_inplace_with_scratch(&mut buffer, &mut scratch);
+        fft.process_with_scratch(&mut buffer, &mut scratch);
     });
 }
 
@@ -525,7 +525,7 @@ fn bench_planned_bluesteins_f32(b: &mut Bencher, len: usize) {
 
     let mut buffer = vec![Complex::zero(); fft.len()];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
-    b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch); });
+    b.iter(|| { fft.process_with_scratch(&mut buffer, &mut scratch); });
 }
 
 // Computes the given FFT length using Rader's Algorithm, using the planner to plan the inner FFT
@@ -535,7 +535,7 @@ fn bench_planned_raders_f32(b: &mut Bencher, len: usize) {
 
     let mut buffer = vec![Complex::zero(); fft.len()];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
-    b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch); });
+    b.iter(|| { fft.process_with_scratch(&mut buffer, &mut scratch); });
 }
 
 // Computes the given FFT length using Bluestein's Algorithm, using the planner to plan the inner FFT
@@ -545,7 +545,7 @@ fn bench_planned_bluesteins_f64(b: &mut Bencher, len: usize) {
 
     let mut buffer = vec![Complex::zero(); fft.len()];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
-    b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch); });
+    b.iter(|| { fft.process_with_scratch(&mut buffer, &mut scratch); });
 }
 
 // Computes the given FFT length using Rader's Algorithm, using the planner to plan the inner FFT
@@ -555,7 +555,7 @@ fn bench_planned_raders_f64(b: &mut Bencher, len: usize) {
 
     let mut buffer = vec![Complex::zero(); fft.len()];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
-    b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch); });
+    b.iter(|| { fft.process_with_scratch(&mut buffer, &mut scratch); });
 }
 
 #[bench] fn comparef64_len0000023_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 23); }

@@ -39,9 +39,6 @@ fn fft_matches_control<T: FftNum + Float>(control: Arc<dyn Fft<T>>, input: &[Com
     let mut control_input = input.to_vec();
     let mut test_input = input.to_vec();
 
-    let mut control_output = vec![Zero::zero(); control.len()];
-    let mut test_output = vec![Zero::zero(); control.len()];
-
     let mut planner = FftPlanner::new();
     let fft = planner.plan_fft(control.len(), control.fft_direction());
     assert_eq!(
@@ -55,10 +52,13 @@ fn fft_matches_control<T: FftNum + Float>(control: Arc<dyn Fft<T>>, input: &[Com
         "FFTplanner created FFT of wrong direction"
     );
 
-    control.process(&mut control_input, &mut control_output);
-    fft.process(&mut test_input, &mut test_output);
+    let scratch_max = std::cmp::max(control.get_inplace_scratch_len(), fft.get_inplace_scratch_len());
+    let mut scratch = vec![Zero::zero(); scratch_max];
 
-    return compare_vectors(&test_output, &control_output);
+    control.process_with_scratch(&mut control_input, &mut scratch);
+    fft.process_with_scratch(&mut test_input, &mut scratch);
+
+    return compare_vectors(&test_input, &control_input);
 }
 
 fn random_signal<T: FftNum + SampleUniform>(length: usize) -> Vec<Complex<T>> {

@@ -7,9 +7,10 @@ use primal_check::miller_rabin;
 use strength_reduce::StrengthReducedUsize;
 
 use crate::{common::FftNum, twiddles, FftDirection};
-
 use crate::math_utils;
 use crate::{Direction, Fft, Length};
+use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::array_utils;
 
 /// Implementation of Rader's Algorithm
 ///
@@ -24,17 +25,15 @@ use crate::{Direction, Fft, Length};
 /// use rustfft::algorithm::RadersAlgorithm;
 /// use rustfft::{Fft, FftPlanner};
 /// use rustfft::num_complex::Complex;
-/// use rustfft::num_traits::Zero;
 ///
-/// let mut input:  Vec<Complex<f32>> = vec![Zero::zero(); 1201];
-/// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); 1201];
+/// let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1201];
 ///
 /// // plan a FFT of size n - 1 = 1200
 /// let mut planner = FftPlanner::new();
 /// let inner_fft = planner.plan_fft_forward(1200);
 ///
 /// let fft = RadersAlgorithm::new(inner_fft);
-/// fft.process(&mut input, &mut output);
+/// fft.process(&mut buffer);
 /// ~~~
 ///
 /// Rader's Algorithm is relatively expensive compared to other FFT algorithms. Benchmarking shows that it is up to
@@ -104,7 +103,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
 
         //precompute a FFT of our reordered twiddle factors
         let mut inner_fft_scratch = vec![Zero::zero(); required_inner_scratch];
-        inner_fft.process_inplace_with_scratch(&mut inner_fft_input, &mut inner_fft_scratch);
+        inner_fft.process_with_scratch(&mut inner_fft_input, &mut inner_fft_scratch);
 
         Self {
             inner_fft,
@@ -149,7 +148,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
             &mut input[..]
         };
         self.inner_fft
-            .process_inplace_with_scratch(output, inner_scratch);
+            .process_with_scratch(output, inner_scratch);
 
         // multiply the inner result with our cached setup data
         // also conjugate every entry. this sets us up to do an inverse FFT
@@ -169,7 +168,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
             &mut output[..]
         };
         self.inner_fft
-            .process_inplace_with_scratch(input, inner_scratch);
+            .process_with_scratch(input, inner_scratch);
 
         // copy the final values into the output, reordering as we go
         let mut output_index = 1;
@@ -202,7 +201,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
             &mut buffer[..]
         };
         self.inner_fft
-            .process_inplace_with_scratch(scratch, inner_scratch);
+            .process_with_scratch(scratch, inner_scratch);
 
         // multiply the inner result with our cached setup data
         // also conjugate every entry. this sets us up to do an inverse FFT
@@ -213,7 +212,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
 
         // execute the second FFT
         self.inner_fft
-            .process_inplace_with_scratch(scratch, inner_scratch);
+            .process_with_scratch(scratch, inner_scratch);
 
         // copy the final values into the output, reordering as we go
         let mut output_index = 1;

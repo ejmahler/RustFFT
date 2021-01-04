@@ -7,10 +7,9 @@ use strength_reduce::StrengthReducedUsize;
 use transpose;
 
 use crate::{common::FftNum, FftDirection};
-
-use crate::array_utils;
-
 use crate::{Direction, Fft, Length};
+use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::array_utils;
 
 /// Implementation of the [Good-Thomas Algorithm (AKA Prime Factor Algorithm)](https://en.wikipedia.org/wiki/Prime-factor_FFT_algorithm)
 ///
@@ -27,8 +26,7 @@ use crate::{Direction, Fft, Length};
 /// use rustfft::num_complex::Complex;
 /// use rustfft::num_traits::Zero;
 ///
-/// let mut input:  Vec<Complex<f32>> = vec![Zero::zero(); 1200];
-/// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); 1200];
+/// let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1200];
 ///
 /// // we need to find an n1 and n2 such that n1 * n2 == 1200 and GCD(n1, n2) == 1
 /// // n1 = 48 and n2 = 25 satisfies this
@@ -38,7 +36,7 @@ use crate::{Direction, Fft, Length};
 ///
 /// // the good-thomas FFT length will be inner_fft_n1.len() * inner_fft_n2.len() = 1200
 /// let fft = GoodThomasAlgorithm::new(inner_fft_n1, inner_fft_n2);
-/// fft.process(&mut input, &mut output);
+/// fft.process(&mut buffer);
 /// ~~~
 pub struct GoodThomasAlgorithm<T> {
     width: usize,
@@ -214,14 +212,14 @@ impl<T: FftNum> GoodThomasAlgorithm<T> {
             &mut buffer[..]
         };
         self.width_size_fft
-            .process_inplace_multi(scratch, width_scratch);
+            .process_with_scratch(scratch, width_scratch);
 
         // transpose
         transpose::transpose(scratch, buffer, self.width, self.height);
 
         // run FFTs of size 'height'
         self.height_size_fft
-            .process_multi(buffer, scratch, inner_scratch);
+            .process_outofplace_with_scratch(buffer, scratch, inner_scratch);
 
         // Re-index the output, copying from the scratch to the buffer in the process
         self.reindex_output(scratch, buffer);
@@ -243,7 +241,7 @@ impl<T: FftNum> GoodThomasAlgorithm<T> {
             &mut input[..]
         };
         self.width_size_fft
-            .process_inplace_multi(output, width_scratch);
+            .process_with_scratch(output, width_scratch);
 
         // transpose
         transpose::transpose(output, input, self.width, self.height);
@@ -255,7 +253,7 @@ impl<T: FftNum> GoodThomasAlgorithm<T> {
             &mut output[..]
         };
         self.height_size_fft
-            .process_inplace_multi(input, height_scratch);
+            .process_with_scratch(input, height_scratch);
 
         // Re-index the output, copying from the input to the output in the process
         self.reindex_output(input, output);
@@ -283,10 +281,8 @@ boilerplate_fft!(
 /// use rustfft::algorithm::butterflies::{Butterfly7, Butterfly8};
 /// use rustfft::{Fft, FftDirection};
 /// use rustfft::num_complex::Complex;
-/// use rustfft::num_traits::Zero;
 ///
-/// let mut input:  Vec<Complex<f32>> = vec![Zero::zero(); 56];
-/// let mut output: Vec<Complex<f32>> = vec![Zero::zero(); 56];
+/// let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 56];
 ///
 /// // we need to find an n1 and n2 such that n1 * n2 == 56 and GCD(n1, n2) == 1
 /// // n1 = 7 and n2 = 8 satisfies this
@@ -295,7 +291,7 @@ boilerplate_fft!(
 ///
 /// // the good-thomas FFT length will be inner_fft_n1.len() * inner_fft_n2.len() = 56
 /// let fft = GoodThomasAlgorithmSmall::new(inner_fft_n1, inner_fft_n2);
-/// fft.process(&mut input, &mut output);
+/// fft.process(&mut buffer);
 /// ~~~
 pub struct GoodThomasAlgorithmSmall<T> {
     width: usize,
@@ -384,13 +380,13 @@ impl<T: FftNum> GoodThomasAlgorithmSmall<T> {
         }
 
         // run FFTs of size `width`
-        self.width_size_fft.process_inplace_multi(output, input);
+        self.width_size_fft.process_with_scratch(output, input);
 
         // transpose
         unsafe { array_utils::transpose_small(self.width, self.height, output, input) };
 
         // run FFTs of size 'height'
-        self.height_size_fft.process_inplace_multi(input, output);
+        self.height_size_fft.process_with_scratch(input, output);
 
         // copy to the output, using our output redordeing mapping
         for (input_element, &output_index) in input.iter().zip(output_map.iter()) {
@@ -411,13 +407,13 @@ impl<T: FftNum> GoodThomasAlgorithmSmall<T> {
         }
 
         // run FFTs of size `width`
-        self.width_size_fft.process_inplace_multi(scratch, buffer);
+        self.width_size_fft.process_with_scratch(scratch, buffer);
 
         // transpose
         unsafe { array_utils::transpose_small(self.width, self.height, scratch, buffer) };
 
         // run FFTs of size 'height'
-        self.height_size_fft.process_multi(buffer, scratch, &mut []);
+        self.height_size_fft.process_outofplace_with_scratch(buffer, scratch, &mut []);
 
         // copy to the output, using our output redordeing mapping
         for (input_element, &output_index) in scratch.iter().zip(output_map.iter()) {
@@ -495,10 +491,9 @@ mod unit_tests {
 
                 let fft = GoodThomasAlgorithm::new(width_fft, height_fft);
 
-                let mut input = vec![Complex { re: 0.0, im: 0.0 }; fft.len()];
-                let mut output = vec![Complex { re: 0.0, im: 0.0 }; fft.len()];
+                let mut buffer = vec![Complex { re: 0.0, im: 0.0 }; fft.len()];
 
-                fft.process(&mut input, &mut output);
+                fft.process(&mut buffer);
             }
         }
     }

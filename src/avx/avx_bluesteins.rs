@@ -7,6 +7,7 @@ use num_traits::Zero;
 
 use crate::{array_utils, twiddles, FftDirection};
 use crate::{Direction, Fft, FftNum, Length};
+use crate::common::{fft_error_inplace, fft_error_outofplace};
 
 use super::CommonSimdData;
 use super::{
@@ -106,7 +107,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
             let transmuted_input: &mut [Complex<T>] =
                 array_utils::workaround_transmute_mut(&mut inner_fft_input);
 
-            inner_fft.process_inplace_with_scratch(transmuted_input, &mut inner_fft_scratch);
+            inner_fft.process_with_scratch(transmuted_input, &mut inner_fft_scratch);
         }
 
         // When computing the FFT, we'll want this array to be pre-conjugated, so conjugate it now
@@ -280,7 +281,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
         // run our inner forward FFT
         self.common_data
             .inner_fft
-            .process_inplace_with_scratch(inner_input, inner_scratch);
+            .process_with_scratch(inner_input, inner_scratch);
 
         // Multiply our inner FFT output by our precomputed data. Then, conjugate the result to set up for an inverse FFT.
         // We can conjugate the result of multiplication by conjugating both inputs. We pre-conjugated the multiplier array,
@@ -299,7 +300,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
         // inverse FFT. we're computing a forward but we're massaging it into an inverse by conjugating the inputs and outputs
         self.common_data
             .inner_fft
-            .process_inplace_with_scratch(inner_input, inner_scratch);
+            .process_with_scratch(inner_input, inner_scratch);
 
         // finalize the result
         unsafe {
@@ -335,7 +336,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
         // run our inner forward FFT
         self.common_data
             .inner_fft
-            .process_inplace_with_scratch(inner_input, inner_scratch);
+            .process_with_scratch(inner_input, inner_scratch);
 
         // Multiply our inner FFT output by our precomputed data. Then, conjugate the result to set up for an inverse FFT.
         // We can conjugate the result of multiplication by conjugating both inputs. We pre-conjugated the multiplier array,
@@ -354,7 +355,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
         // inverse FFT. we're computing a forward but we're massaging it into an inverse by conjugating the inputs and outputs
         self.common_data
             .inner_fft
-            .process_inplace_with_scratch(inner_input, inner_scratch);
+            .process_with_scratch(inner_input, inner_scratch);
 
         // finalize the result
         unsafe {
