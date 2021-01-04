@@ -376,7 +376,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
         match recipe {
             Recipe::Dft(len) => Arc::new(Dft::new(*len, direction)) as Arc<dyn Fft<T>>,
             Recipe::Radix4(len) => Arc::new(Radix4::new(*len, direction)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly1 => Arc::new(Butterfly2::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly1 => Arc::new(Butterfly1::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly2 => Arc::new(Butterfly2::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly3 => Arc::new(Butterfly3::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly4 => Arc::new(Butterfly4::new(direction)) as Arc<dyn Fft<T>>,
@@ -613,7 +613,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
 
     fn design_bluesteins(&mut self, factors: &PrimeFactors) -> Option<Rc<Recipe>> {
         if factors.get_other_factors().is_empty() {
-            // Don't propose a recipe for simple lengths. 
+            // Don't propose a recipe for simple lengths.
             // This is mostly to stop a Bluestein from trying a Bluestein inner, which will try a Bluestein inner and so on forever.
             None
         } else {
@@ -790,9 +790,14 @@ mod unit_tests {
         for prime1 in &[5, 7, 11, 13, 17, 19, 23, 29, 31] {
             for prime2 in &[5, 7, 11, 13, 17, 19, 23, 29, 31] {
                 if prime1 != prime2 {
-                    let len = prime1*prime2;
+                    let len = prime1 * prime2;
                     let plan = planner.design_fft_for_len(len);
-                    assert!(is_goodthomassmall(&plan), "Len: {}, expected GoodThomasAlgorithmSmall, got {:?}", len ,plan);
+                    assert!(
+                        is_goodthomassmall(&plan),
+                        "Len: {}, expected GoodThomasAlgorithmSmall, got {:?}",
+                        len,
+                        plan
+                    );
                     assert_eq!(plan.len(), len, "Recipe reports wrong length");
                 }
             }
@@ -833,7 +838,7 @@ mod unit_tests {
     // For these lengths a Bluesteins would be faster than the MixedRadix that currently gets chosen
     //#[test]
     //fn test_plan_scalar_bluestein_specials() {
-    //    let good_for_bluesteins: [usize; 12] = [619, 807, 811, 815, 830, 835, 865, 895, 913, 919, 921, 991]; 
+    //    let good_for_bluesteins: [usize; 12] = [619, 807, 811, 815, 830, 835, 865, 895, 913, 919, 921, 991];
     //    let mut planner = FftPlannerScalar::<f64>::new();
     //    for len in good_for_bluesteins.iter() {
     //        let plan = planner.design_fft_for_len(*len);
