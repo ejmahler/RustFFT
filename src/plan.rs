@@ -240,16 +240,25 @@ impl Recipe {
             Recipe::GoodThomasAlgorithm {
                 left_fft,
                 right_fft,
+            } => {
+                let len = self.len();
+                let inners_cost = left_fft.cost() * right_fft.len() as f32
+                    + right_fft.cost() * left_fft.len() as f32;
+                // This means this algo will never be used, good since there currently a bug somewhere if one inner is Bluestein
+                let mut twiddle_cost = 10.0 + 1.4 * len as f32;
+                if len > SLOWDOWN_LEN {
+                    twiddle_cost += 10.0 * (len - SLOWDOWN_LEN) as f32;
+                }
+                inners_cost + twiddle_cost
             }
-            | Recipe::GoodThomasAlgorithmSmall {
+            Recipe::GoodThomasAlgorithmSmall {
                 left_fft,
                 right_fft,
             } => {
                 let len = self.len();
                 let inners_cost = left_fft.cost() * right_fft.len() as f32
                     + right_fft.cost() * left_fft.len() as f32;
-                let mut twiddle_cost = 10.0 + 1.32 * len as f32;
-
+                let mut twiddle_cost = 10.0 + 1.3 * len as f32;
                 if len > SLOWDOWN_LEN {
                     twiddle_cost += 10.0 * (len - SLOWDOWN_LEN) as f32;
                 }
@@ -593,6 +602,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
 
     fn design_raders(&mut self, factors: &PrimeFactors) -> Option<Rc<Recipe>> {
         if !factors.is_prime() {
+            // For Raders the length must be a prime
             None
         } else {
             let len = factors.get_product();
@@ -603,6 +613,8 @@ impl<T: FftNum> FftPlannerScalar<T> {
 
     fn design_bluesteins(&mut self, factors: &PrimeFactors) -> Option<Rc<Recipe>> {
         if factors.get_other_factors().is_empty() {
+            // Don't propose a recipe for simple lengths. 
+            // This is mostly to stop a Bluestein from trying a Bluestein inner, which will try a Bluestein inner and so on forever.
             None
         } else {
             let len = factors.get_product();
@@ -773,17 +785,17 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_plan_scalar_goodthomasbutterfly() {
+    fn test_plan_scalar_goodthomassmall() {
         let mut planner = FftPlannerScalar::<f64>::new();
-        for len in [3 * 4, 3 * 5, 3 * 7, 5 * 7, 11 * 13].iter() {
-            let plan = planner.design_fft_for_len(*len);
-            assert!(
-                is_goodthomassmall(&plan),
-                "Length: {}, expected GoodThomasAlgorithmSmall, got {:?}",
-                len,
-                plan
-            );
-            assert_eq!(plan.len(), *len, "Recipe reports wrong length");
+        for prime1 in &[5, 7, 11, 13, 17, 19, 23, 29, 31] {
+            for prime2 in &[5, 7, 11, 13, 17, 19, 23, 29, 31] {
+                if prime1 != prime2 {
+                    let len = prime1*prime2;
+                    let plan = planner.design_fft_for_len(len);
+                    assert!(is_goodthomassmall(&plan), "Len: {}, expected GoodThomasAlgorithmSmall, got {:?}", len ,plan);
+                    assert_eq!(plan.len(), len, "Recipe reports wrong length");
+                }
+            }
         }
     }
 
@@ -817,6 +829,23 @@ mod unit_tests {
             assert_eq!(plan.len(), *len, "Recipe reports wrong length");
         }
     }
+
+    // For these lengths a Bluesteins would be faster than the MixedRadix that currently gets chosen
+    //#[test]
+    //fn test_plan_scalar_bluestein_specials() {
+    //    let good_for_bluesteins: [usize; 12] = [619, 807, 811, 815, 830, 835, 865, 895, 913, 919, 921, 991]; 
+    //    let mut planner = FftPlannerScalar::<f64>::new();
+    //    for len in good_for_bluesteins.iter() {
+    //        let plan = planner.design_fft_for_len(*len);
+    //        assert!(
+    //            is_bluesteins(&plan),
+    //            "Length: {}, Expected BluesteinsAlgorithm, got {:?}",
+    //            len,
+    //            plan
+    //        );
+    //        assert_eq!(plan.len(), *len, "Recipe reports wrong length");
+    //    }
+    //}
 
     #[test]
     fn test_scalar_fft_cache() {
