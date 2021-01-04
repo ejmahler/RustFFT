@@ -376,7 +376,7 @@ mod unit_tests {
     use rand::distributions::uniform::SampleUniform;
 
     use super::*;
-    use crate::algorithm::DFT;
+    use crate::algorithm::Dft;
     use crate::test_utils::check_fft_algorithm;
     use std::sync::Arc;
 
@@ -424,7 +424,7 @@ mod unit_tests {
         inner_len: usize,
         direction: FftDirection,
     ) {
-        let inner_fft = Arc::new(DFT::new(inner_len, direction));
+        let inner_fft = Arc::new(Dft::new(inner_len, direction));
         let fft: BluesteinsAvx<T, T> = BluesteinsAvx::new(len, inner_fft).expect(
             "Can't run test because this machine doesn't have the required instruction sets",
         );

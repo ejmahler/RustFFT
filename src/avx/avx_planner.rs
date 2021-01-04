@@ -407,7 +407,7 @@ impl<T: FftNum> AvxPlannerInternal<f32, T> {
 
     fn construct_butterfly(&self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
         match len {
-            0 | 1 => wrap_fft(DFT::new(len, direction)),
+            0 | 1 => wrap_fft(Dft::new(len, direction)),
             2 => wrap_fft(Butterfly2::new(direction)),
             3 => wrap_fft(Butterfly3::new(direction)),
             4 => wrap_fft(Butterfly4::new(direction)),
@@ -616,7 +616,7 @@ impl<T: FftNum> AvxPlannerInternal<f64, T> {
 
     fn construct_butterfly(&self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
         match len {
-            0 | 1 => wrap_fft(DFT::new(len, direction)),
+            0 | 1 => wrap_fft(Dft::new(len, direction)),
             2 => wrap_fft(Butterfly2::new(direction)),
             3 => wrap_fft(Butterfly3::new(direction)),
             4 => wrap_fft(Butterfly4::new(direction)),

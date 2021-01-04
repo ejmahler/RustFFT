@@ -192,7 +192,7 @@ boilerplate_fft!(
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use crate::algorithm::DFT;
+    use crate::algorithm::Dft;
     use crate::test_utils::check_fft_algorithm;
     use std::sync::Arc;
 
@@ -205,7 +205,7 @@ mod unit_tests {
     }
 
     fn test_bluesteins_with_length(len: usize, direction: FftDirection) {
-        let inner_fft = Arc::new(DFT::new(
+        let inner_fft = Arc::new(Dft::new(
             (len * 2 - 1).checked_next_power_of_two().unwrap(),
             direction,
         ));

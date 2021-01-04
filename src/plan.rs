@@ -101,7 +101,7 @@ const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the
 /// It is used as a middle step in the planning process.
 #[derive(Debug, std::cmp::PartialEq, Clone)]
 pub enum Recipe {
-    DFT(usize),
+    Dft(usize),
     MixedRadix {
         left_fft: Rc<Recipe>,
         right_fft: Rc<Recipe>,
@@ -148,7 +148,7 @@ pub enum Recipe {
 impl Recipe {
     pub fn len(&self) -> usize {
         match self {
-            Recipe::DFT(length) => *length,
+            Recipe::Dft(length) => *length,
             Recipe::Radix4(length) => *length,
             Recipe::Butterfly2 => 2,
             Recipe::Butterfly3 => 3,
@@ -262,7 +262,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
     // Make a recipe for a length
     fn design_fft_for_len(&mut self, len: usize) -> Rc<Recipe> {
         if len < 2 {
-            Rc::new(Recipe::DFT(len))
+            Rc::new(Recipe::Dft(len))
         } else if let Some(recipe) = self.recipe_cache.get(&len) {
             Rc::clone(&recipe)
         } else {
@@ -288,7 +288,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
     // Create a new fft from a recipe
     fn build_new_fft(&mut self, recipe: &Recipe, direction: FftDirection) -> Arc<dyn Fft<T>> {
         match recipe {
-            Recipe::DFT(len) => Arc::new(DFT::new(*len, direction)) as Arc<dyn Fft<T>>,
+            Recipe::Dft(len) => Arc::new(Dft::new(*len, direction)) as Arc<dyn Fft<T>>,
             Recipe::Radix4(len) => Arc::new(Radix4::new(*len, direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly2 => Arc::new(Butterfly2::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly3 => Arc::new(Butterfly3::new(direction)) as Arc<dyn Fft<T>>,
@@ -503,11 +503,11 @@ mod unit_tests {
 
     #[test]
     fn test_plan_scalar_trivial() {
-        // Length 0 and 1 should use DFT
+        // Length 0 and 1 should use Dft
         let mut planner = FftPlannerScalar::<f64>::new();
         for len in 0..2 {
             let plan = planner.design_fft_for_len(len);
-            assert_eq!(*plan, Recipe::DFT(len));
+            assert_eq!(*plan, Recipe::Dft(len));
             assert_eq!(plan.len(), len, "Recipe reports wrong length");
         }
     }

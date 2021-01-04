@@ -228,7 +228,7 @@ boilerplate_fft!(
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use crate::algorithm::DFT;
+    use crate::algorithm::Dft;
     use crate::test_utils::check_fft_algorithm;
     use std::sync::Arc;
 
@@ -243,7 +243,7 @@ mod unit_tests {
     }
 
     fn test_raders_with_length(len: usize, direction: FftDirection) {
-        let inner_fft = Arc::new(DFT::new(len - 1, direction));
+        let inner_fft = Arc::new(Dft::new(len - 1, direction));
         let fft = RadersAlgorithm::new(inner_fft);
 
         check_fft_algorithm::<f32>(&fft, len, direction);

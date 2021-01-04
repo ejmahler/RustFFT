@@ -318,7 +318,7 @@ boilerplate_fft!(
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use crate::algorithm::DFT;
+    use crate::algorithm::Dft;
     use crate::test_utils::check_fft_algorithm;
     use std::sync::Arc;
 
@@ -343,8 +343,8 @@ mod unit_tests {
     }
 
     fn test_mixed_radix_with_lengths(width: usize, height: usize, direction: FftDirection) {
-        let width_fft = Arc::new(DFT::new(width, direction)) as Arc<dyn Fft<f32>>;
-        let height_fft = Arc::new(DFT::new(height, direction)) as Arc<dyn Fft<f32>>;
+        let width_fft = Arc::new(Dft::new(width, direction)) as Arc<dyn Fft<f32>>;
+        let height_fft = Arc::new(Dft::new(height, direction)) as Arc<dyn Fft<f32>>;
 
         let fft = MixedRadix::new(width_fft, height_fft);
 
@@ -352,8 +352,8 @@ mod unit_tests {
     }
 
     fn test_mixed_radix_small_with_lengths(width: usize, height: usize, direction: FftDirection) {
-        let width_fft = Arc::new(DFT::new(width, direction)) as Arc<dyn Fft<f32>>;
-        let height_fft = Arc::new(DFT::new(height, direction)) as Arc<dyn Fft<f32>>;
+        let width_fft = Arc::new(Dft::new(width, direction)) as Arc<dyn Fft<f32>>;
+        let height_fft = Arc::new(Dft::new(height, direction)) as Arc<dyn Fft<f32>>;
 
         let fft = MixedRadixSmall::new(width_fft, height_fft);
 

@@ -890,11 +890,11 @@ mod unit_tests {
                 for inner_fft_len in 1..32 {
                     let len = inner_fft_len * $inner_count;
 
-                    let inner_fft_forward = Arc::new(DFT::new(inner_fft_len, FftDirection::Forward)) as Arc<dyn Fft<f32>>;
+                    let inner_fft_forward = Arc::new(Dft::new(inner_fft_len, FftDirection::Forward)) as Arc<dyn Fft<f32>>;
                     let fft_forward = $struct_name::<f32, f32>::new(inner_fft_forward).expect("Can't run test because this machine doesn't have the required instruction sets");
                     check_fft_algorithm(&fft_forward, len, FftDirection::Forward);
 
-                    let inner_fft_inverse = Arc::new(DFT::new(inner_fft_len, FftDirection::Inverse)) as Arc<dyn Fft<f32>>;
+                    let inner_fft_inverse = Arc::new(Dft::new(inner_fft_len, FftDirection::Inverse)) as Arc<dyn Fft<f32>>;
                     let fft_inverse = $struct_name::<f32, f32>::new(inner_fft_inverse).expect("Can't run test because this machine doesn't have the required instruction sets");
                     check_fft_algorithm(&fft_inverse, len, FftDirection::Inverse);
                 }
@@ -904,11 +904,11 @@ mod unit_tests {
                 for inner_fft_len in 1..32 {
                     let len = inner_fft_len * $inner_count;
 
-                    let inner_fft_forward = Arc::new(DFT::new(inner_fft_len, FftDirection::Forward)) as Arc<dyn Fft<f64>>;
+                    let inner_fft_forward = Arc::new(Dft::new(inner_fft_len, FftDirection::Forward)) as Arc<dyn Fft<f64>>;
                     let fft_forward = $struct_name::<f64, f64>::new(inner_fft_forward).expect("Can't run test because this machine doesn't have the required instruction sets");
                     check_fft_algorithm(&fft_forward, len, FftDirection::Forward);
 
-                    let inner_fft_inverse = Arc::new(DFT::new(inner_fft_len, FftDirection::Inverse)) as Arc<dyn Fft<f64>>;
+                    let inner_fft_inverse = Arc::new(Dft::new(inner_fft_len, FftDirection::Inverse)) as Arc<dyn Fft<f64>>;
                     let fft_inverse = $struct_name::<f64, f64>::new(inner_fft_inverse).expect("Can't run test because this machine doesn't have the required instruction sets");
                     check_fft_algorithm(&fft_inverse, len, FftDirection::Inverse);
                 }

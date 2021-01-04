@@ -9,7 +9,7 @@ mod radix4;
 pub mod butterflies;
 
 pub use self::bluesteins_algorithm::BluesteinsAlgorithm;
-pub use self::dft::DFT;
+pub use self::dft::Dft;
 pub use self::good_thomas_algorithm::{GoodThomasAlgorithm, GoodThomasAlgorithmSmall};
 pub use self::mixed_radix::{MixedRadix, MixedRadixSmall};
 pub use self::raders_algorithm::RadersAlgorithm;
