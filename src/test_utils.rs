@@ -4,7 +4,7 @@ use num_traits::{Float, One, Zero};
 use rand::distributions::{uniform::SampleUniform, Distribution, Uniform};
 use rand::{rngs::StdRng, SeedableRng};
 
-use crate::{algorithm::DFT, FftNum};
+use crate::{algorithm::Dft, FftNum};
 use crate::{Fft, FftDirection};
 
 /// The seed for the random number generator used to generate
@@ -73,7 +73,7 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
     let n = 1;
 
     //test the forward direction
-    let dft = DFT::new(len, direction);
+    let dft = Dft::new(len, direction);
 
     let dirty_scratch_value = Complex::one() * T::from_i32(100).unwrap();
 

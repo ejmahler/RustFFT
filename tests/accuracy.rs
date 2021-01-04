@@ -1,8 +1,8 @@
 //! To test the accuracy of our FFT algorithm, we first test that our
-//! naive DFT function is correct by comparing its output against several
+//! naive Dft function is correct by comparing its output against several
 //! known signal/spectrum relationships. Then, we generate random signals
 //! for a variety of lengths, and test that our FFT algorithm matches our
-//! DFT calculation for those signals.
+//! Dft calculation for those signals.
 
 use std::sync::Arc;
 
@@ -106,7 +106,7 @@ impl<T: FftNum> ControlCache<T> {
 
 const TEST_MAX: usize = 1001;
 
-/// Integration tests that verify our FFT output matches the direct DFT calculation
+/// Integration tests that verify our FFT output matches the direct Dft calculation
 /// for random signals.
 #[test]
 fn test_planned_fft_forward_f32() {

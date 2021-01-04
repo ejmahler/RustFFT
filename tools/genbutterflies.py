@@ -2,7 +2,7 @@
 # The generated code is simply printed in the terminal.
 # This is only intended for prime lengths, where the usual tricks can't be used.
 # The generated code is O(n^2), but for short lengths this is still faster than fancier algorithms.
-# Example, make a length 5 DFT:
+# Example, make a length 5 Dft:
 # > python genbutterflies.py 5
 # Output:
 # let x14p = *buffer.get_unchecked(1) + *buffer.get_unchecked(4);

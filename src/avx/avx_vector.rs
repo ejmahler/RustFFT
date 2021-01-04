@@ -115,7 +115,7 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
 
     #[inline(always)]
     unsafe fn column_butterfly3(rows: [Self; 3], twiddles: Self) -> [Self; 3] {
-        // This algorithm is derived directly from the definition of the DFT of size 3
+        // This algorithm is derived directly from the definition of the Dft of size 3
         // We'd theoretically have to do 4 complex multiplications, but all of the twiddles we'd be multiplying by are conjugates of each other
         // By doing some algebra to expand the complex multiplications and factor out the multiplications, we get this
 
@@ -179,8 +179,8 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
 
     #[inline(always)]
     unsafe fn column_butterfly5(rows: [Self; 5], twiddles: [Self; 2]) -> [Self; 5] {
-        // This algorithm is derived directly from the definition of the DFT of size 5
-        // We'd theoretically have to do 16 complex multiplications for the DFT, but many of the twiddles we'd be multiplying by are conjugates of each other
+        // This algorithm is derived directly from the definition of the Dft of size 5
+        // We'd theoretically have to do 16 complex multiplications for the Dft, but many of the twiddles we'd be multiplying by are conjugates of each other
         // By doing some algebra to expand the complex multiplications and factor out the real multiplications, we get this faster formula where we only do the equivalent of 4 multiplications
 
         // do some prep work before we can start applying twiddle factors
@@ -218,8 +218,8 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
 
     #[inline(always)]
     unsafe fn column_butterfly7(rows: [Self; 7], twiddles: [Self; 3]) -> [Self; 7] {
-        // This algorithm is derived directly from the definition of the DFT of size 7
-        // We'd theoretically have to do 36 complex multiplications for the DFT, but many of the twiddles we'd be multiplying by are conjugates of each other
+        // This algorithm is derived directly from the definition of the Dft of size 7
+        // We'd theoretically have to do 36 complex multiplications for the Dft, but many of the twiddles we'd be multiplying by are conjugates of each other
         // By doing some algebra to expand the complex multiplications and factor out the real multiplications, we get this faster formula where we only do the equivalent of 9 multiplications
 
         // do some prep work before we can start applying twiddle factors
@@ -243,7 +243,7 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
         let (twiddles1_re, twiddles1_im) = Self::duplicate_complex_components(twiddles[1]);
         let (twiddles2_re, twiddles2_im) = Self::duplicate_complex_components(twiddles[2]);
 
-        // Let's do a plain 7-point DFT
+        // Let's do a plain 7-point Dft
         // | X0 |   | W0  W0  W0  W0  W0  W0  W0  |   | x0 |
         // | X1 |   | W0  W1  W2  W3  W4  W5  W6  |   | x1 |
         // | X2 |   | W0  W2  W4  W6  W8  W10 W12 |   | x2 |
@@ -253,7 +253,7 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
         // | X6 |   | W0  W6  W12 W18 W24 W30 W36 |   | x6 |
         // where Wn = exp(-2*pi*n/7) for a forward transform, and exp(+2*pi*n/7) for an inverse.
 
-        // Next, take advantage of the fact that twiddle factor indexes for a size-7 DFT are cyclical mod 7
+        // Next, take advantage of the fact that twiddle factor indexes for a size-7 Dft are cyclical mod 7
         // | X0 |   | W0  W0  W0  W0  W0  W0  W0  |   | x0 |
         // | X1 |   | W0  W1  W2  W3  W4  W5  W6  |   | x1 |
         // | X2 |   | W0  W2  W4  W6  W1  W3  W5  |   | x2 |
@@ -262,7 +262,7 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
         // | X5 |   | W0  W5  W3  W1  W6  W4  W2  |   | x5 |
         // | X6 |   | W0  W6  W5  W4  W3  W2  W1  |   | x6 |
 
-        // Finally, take advantage of the fact that for a size-7 DFT,
+        // Finally, take advantage of the fact that for a size-7 Dft,
         // twiddles 4 through 6 are conjugates of twiddes 3 through 0 (Asterisk marks conjugates)
         // | X0 |   | W0  W0  W0  W0  W0  W0  W0  |   | x0 |
         // | X1 |   | W0  W1  W2  W3  W3* W2* W1* |   | x1 |
@@ -329,8 +329,8 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
 
     #[inline(always)]
     unsafe fn column_butterfly11(rows: [Self; 11], twiddles: [Self; 5]) -> [Self; 11] {
-        // This algorithm is derived directly from the definition of the DFT of size 11
-        // We'd theoretically have to do 100 complex multiplications for the DFT, but many of the twiddles we'd be multiplying by are conjugates of each other
+        // This algorithm is derived directly from the definition of the Dft of size 11
+        // We'd theoretically have to do 100 complex multiplications for the Dft, but many of the twiddles we'd be multiplying by are conjugates of each other
         // By doing some algebra to expand the complex multiplications and factor out the real multiplications, we get this faster formula where we only do the equivalent of 9 multiplications
 
         // do some prep work before we can start applying twiddle factors

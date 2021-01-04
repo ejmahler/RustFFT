@@ -14,22 +14,22 @@ use crate::{Direction, Fft, FftNum, Length};
 ///
 /// ~~~
 /// // Computes a naive DFT of size 1234
-/// use rustfft::algorithm::DFT;
+/// use rustfft::algorithm::Dft;
 /// use rustfft::{Fft, FftDirection};
 /// use rustfft::num_complex::Complex;
 ///
 /// let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1234];
 ///
-/// let dft = DFT::new(1234, FftDirection::Forward);
+/// let dft = Dft::new(1234, FftDirection::Forward);
 /// dft.process(&mut buffer);
 /// ~~~
-pub struct DFT<T> {
+pub struct Dft<T> {
     twiddles: Vec<Complex<T>>,
     direction: FftDirection,
 }
 
-impl<T: FftNum> DFT<T> {
-    /// Preallocates necessary arrays and precomputes necessary data to efficiently compute DFT
+impl<T: FftNum> Dft<T> {
+    /// Preallocates necessary arrays and precomputes necessary data to efficiently compute Dft
     pub fn new(len: usize, direction: FftDirection) -> Self {
         let twiddles = (0..len)
             .map(|i| twiddles::compute_twiddle(i, len, direction))
@@ -64,7 +64,7 @@ impl<T: FftNum> DFT<T> {
         }
     }
 }
-boilerplate_fft_oop!(DFT, |this: &DFT<_>| this.twiddles.len());
+boilerplate_fft_oop!(Dft, |this: &Dft<_>| this.twiddles.len());
 
 #[cfg(test)]
 mod unit_tests {
@@ -92,17 +92,17 @@ mod unit_tests {
         let n = 4;
 
         for len in 1..20 {
-            let dft_instance = DFT::new(len, FftDirection::Forward);
+            let dft_instance = Dft::new(len, FftDirection::Forward);
             assert_eq!(
                 dft_instance.len(),
                 len,
-                "DFT instance reported incorrect length"
+                "Dft instance reported incorrect length"
             );
 
             let input = random_signal(len * n);
             let mut expected_output = input.clone();
 
-            // Compute the control data using our simplified DFT definition
+            // Compute the control data using our simplified Dft definition
             for (input_chunk, output_chunk) in
                 input.chunks(len).zip(expected_output.chunks_mut(len))
             {
@@ -137,7 +137,7 @@ mod unit_tests {
                     len
                 );
 
-                // one more thing: make sure that the DFT algorithm even works with dirty scratch space
+                // one more thing: make sure that the Dft algorithm even works with dirty scratch space
                 for item in inplace_scratch.iter_mut() {
                     *item = Complex::new(100.0, 100.0);
                 }
@@ -173,7 +173,7 @@ mod unit_tests {
         }
 
         //verify that it doesn't crash or infinite loop if we have a length of 0
-        let zero_dft = DFT::new(0, FftDirection::Forward);
+        let zero_dft = Dft::new(0, FftDirection::Forward);
         let mut zero_input: Vec<Complex<f32>> = Vec::new();
         let mut zero_output: Vec<Complex<f32>> = Vec::new();
         let mut zero_scratch: Vec<Complex<f32>> = Vec::new();
@@ -188,7 +188,7 @@ mod unit_tests {
     }
 
     /// Returns true if our `dft` function calculates the given output from the
-    /// given input, and if rustfft's DFT struct does the same
+    /// given input, and if rustfft's Dft struct does the same
     fn test_dft_correct(input: &[Complex<f32>], expected_output: &[Complex<f32>]) {
         assert_eq!(input.len(), expected_output.len());
         let len = input.len();
@@ -201,7 +201,7 @@ mod unit_tests {
             len
         );
 
-        let dft_instance = DFT::new(len, FftDirection::Forward);
+        let dft_instance = Dft::new(len, FftDirection::Forward);
 
         // test process()
         {
@@ -230,7 +230,7 @@ mod unit_tests {
                 len
             );
 
-            // one more thing: make sure that the DFT algorithm even works with dirty scratch space
+            // one more thing: make sure that the Dft algorithm even works with dirty scratch space
             for item in inplace_scratch.iter_mut() {
                 *item = Complex::new(100.0, 100.0);
             }

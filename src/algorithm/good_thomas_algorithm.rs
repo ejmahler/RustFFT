@@ -432,7 +432,7 @@ boilerplate_fft!(
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use crate::algorithm::DFT;
+    use crate::algorithm::Dft;
     use crate::test_utils::check_fft_algorithm;
     use num_integer::gcd;
     use std::sync::Arc;
@@ -463,8 +463,8 @@ mod unit_tests {
     }
 
     fn test_good_thomas_with_lengths(width: usize, height: usize, direction: FftDirection) {
-        let width_fft = Arc::new(DFT::new(width, direction)) as Arc<dyn Fft<f32>>;
-        let height_fft = Arc::new(DFT::new(height, direction)) as Arc<dyn Fft<f32>>;
+        let width_fft = Arc::new(Dft::new(width, direction)) as Arc<dyn Fft<f32>>;
+        let height_fft = Arc::new(Dft::new(height, direction)) as Arc<dyn Fft<f32>>;
 
         let fft = GoodThomasAlgorithm::new(width_fft, height_fft);
 
@@ -472,8 +472,8 @@ mod unit_tests {
     }
 
     fn test_good_thomas_small_with_lengths(width: usize, height: usize, direction: FftDirection) {
-        let width_fft = Arc::new(DFT::new(width, direction)) as Arc<dyn Fft<f32>>;
-        let height_fft = Arc::new(DFT::new(height, direction)) as Arc<dyn Fft<f32>>;
+        let width_fft = Arc::new(Dft::new(width, direction)) as Arc<dyn Fft<f32>>;
+        let height_fft = Arc::new(Dft::new(height, direction)) as Arc<dyn Fft<f32>>;
 
         let fft = GoodThomasAlgorithmSmall::new(width_fft, height_fft);
 
@@ -486,9 +486,9 @@ mod unit_tests {
         for height in 3..width {
             if gcd(width, height) == 1 {
                 let width_fft =
-                    Arc::new(DFT::new(width, FftDirection::Forward)) as Arc<dyn Fft<f32>>;
+                    Arc::new(Dft::new(width, FftDirection::Forward)) as Arc<dyn Fft<f32>>;
                 let height_fft =
-                    Arc::new(DFT::new(height, FftDirection::Forward)) as Arc<dyn Fft<f32>>;
+                    Arc::new(Dft::new(height, FftDirection::Forward)) as Arc<dyn Fft<f32>>;
 
                 let fft = GoodThomasAlgorithm::new(width_fft, height_fft);
 

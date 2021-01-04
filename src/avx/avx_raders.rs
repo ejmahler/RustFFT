@@ -499,7 +499,7 @@ mod unit_tests {
     use rand::distributions::uniform::SampleUniform;
 
     use super::*;
-    use crate::algorithm::DFT;
+    use crate::algorithm::Dft;
     use crate::test_utils::check_fft_algorithm;
     use std::sync::Arc;
 
@@ -527,7 +527,7 @@ mod unit_tests {
         len: usize,
         direction: FftDirection,
     ) {
-        let inner_fft = Arc::new(DFT::new(len - 1, direction));
+        let inner_fft = Arc::new(Dft::new(len - 1, direction));
         let fft = RadersAvx2::<T, T>::new(inner_fft).unwrap();
 
         check_fft_algorithm::<T>(&fft, len, direction);

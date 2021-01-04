@@ -316,7 +316,7 @@ impl<T: FftNum> Butterfly5<T> {
         //     let twiddled4 = outer[1] * self.twiddles[1].im;
         // }
 
-        // Let's do a plain 5-point DFT
+        // Let's do a plain 5-point Dft
         // |X0|   | W0 W0  W0  W0  W0  |   |x0|
         // |X1|   | W0 W1  W2  W3  W4  |   |x1|
         // |X2| = | W0 W2  W4  W6  W8  | * |x2|
@@ -545,7 +545,7 @@ impl<T: FftNum> Butterfly7<T> {
         //     output.store(input0 + output5, 5);
         // }
 
-        // Let's do a plain 7-point DFT
+        // Let's do a plain 7-point Dft
         // |X0|   | W0 W0  W0  W0  W0  W0  W0  |   |x0|
         // |X1|   | W0 W1  W2  W3  W4  W5  W6  |   |x1|
         // |X2|   | W0 W2  W4  W6  W8  W10 W12 |   |x2|

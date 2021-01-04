@@ -7,7 +7,7 @@ extern crate test;
 use test::Bencher;
 
 use rustfft::algorithm::butterflies::*;
-use rustfft::algorithm::DFT;
+use rustfft::algorithm::Dft;
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 use rustfft::{Fft, FftNum};
