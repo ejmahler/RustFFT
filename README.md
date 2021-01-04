@@ -10,6 +10,8 @@ RustFFT is a high-performance FFT library written in pure Rust. It can compute F
 
 RustFFT supports the AVX instruction set for increased performance. No special code is needed to activate AVX: Simply plan a FFT using the FftPlanner on a machine that supports the `avx` and `fma` CPU features, and RustFFT will automatically switch to faster AVX-accelerated algorithms.
 
+Unlike previous major versions, RustFFT 5.0 has several breaking changes compared to RustFFT 4.0. Check out the [Upgrade Guide](/UpgradeGuide4to5.md) for a walkthrough of the changes RustFFT 5.0 requires.
+
 ## Usage
 
 ```rust
