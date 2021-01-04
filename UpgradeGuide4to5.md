@@ -1,7 +1,7 @@
 # 4.0 to 5.0 Upgrade Guide
 RustFFT 5.0 has several breaking changes compared to 4.0. This document will guide users through the upgrade process, explaining each breaking change and how to upgrade code to fit the new style.
 
-Each section is ordered by how likely they are to impact you: Things at the top of this document are likely to affect every user of RustFFT, while things at the bottom are unlikely to affect most users.
+Each section is ordered by how likely they are to impact you: Things at the top are likely to affect every user of RustFFT, while things at the bottom are unlikely to affect most users.
 
 ## Renaming Structs
 Several structs and traits in RustFFT were renamed to follow the [Rust API guidlines](https://rust-lang.github.io/api-guidelines/naming.html) regarding acronyms:
@@ -17,7 +17,7 @@ The following were renamed in RustFFT 5.0 to conform to this style:
 ## FFT Direction
 In RustFFT 4.0, forward FFTs vs inverse FFTs were specified by a boolean. For example, the 4.0 `FFTplanner` constructor expects a boolean parameter for direction: If you pass `false`, the planner will plan forward FFTs. If you pass `true`, the planner will plan inverse FFTs.
 
-In 5.0, there is a new `FftDirection` enum with `Forward` and `Inverse` variants. Any FFT algorithms that took a `bool` for direction now take `FftDirection` instead. For example, if you were constructing a `Radix4` instance to compute a power-of-two FFT, you will have to change the parameters to the constructor:
+In 5.0, there is a new `FftDirection` enum with `Forward` and `Inverse` variants. FFT algorithms that took a `bool` for direction now take `FftDirection` instead. For example, if you were constructing a `Radix4` instance to compute a power-of-two FFT, you will have to change the parameters to the constructor:
 
 ```rust 
 // RustFFT 4.0
