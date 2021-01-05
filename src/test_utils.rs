@@ -4,7 +4,7 @@ use num_traits::{Float, One, Zero};
 use rand::distributions::{uniform::SampleUniform, Distribution, Uniform};
 use rand::{rngs::StdRng, SeedableRng};
 
-use crate::{algorithm::Dft, FftNum};
+use crate::{algorithm::Dft, Direction, FftNum, Length};
 use crate::{Fft, FftDirection};
 
 /// The seed for the random number generator used to generate
@@ -155,5 +155,55 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
                 direction
             );
         }
+    }
+}
+
+// A fake FFT algorithm that requests much more scratch than it needs. You can use this as an inner FFT to other algorithms to test their scratch-supplying logic
+#[derive(Debug)]
+pub struct BigScratchAlgorithm {
+    pub len: usize,
+
+    pub inplace_scratch: usize,
+    pub outofplace_scratch: usize,
+
+    pub direction: FftDirection,
+}
+impl<T: FftNum> Fft<T> for BigScratchAlgorithm {
+    fn process_with_scratch(&self, _buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        assert!(
+            scratch.len() >= self.inplace_scratch,
+            "Not enough inplace scratch provided, self={:?}, provided scratch={}",
+            &self,
+            scratch.len()
+        );
+    }
+    fn process_outofplace_with_scratch(
+        &self,
+        _input: &mut [Complex<T>],
+        _output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) {
+        assert!(
+            scratch.len() >= self.outofplace_scratch,
+            "Not enough OOP scratch provided, self={:?}, provided scratch={}",
+            &self,
+            scratch.len()
+        );
+    }
+    fn get_inplace_scratch_len(&self) -> usize {
+        self.inplace_scratch
+    }
+    fn get_out_of_place_scratch_len(&self) -> usize {
+        self.outofplace_scratch
+    }
+}
+impl Length for BigScratchAlgorithm {
+    fn len(&self) -> usize {
+        self.len
+    }
+}
+impl Direction for BigScratchAlgorithm {
+    fn fft_direction(&self) -> FftDirection {
+        self.direction
     }
 }
