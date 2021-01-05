@@ -69,19 +69,38 @@ impl<T: FftNum> MixedRadix<T> {
             }
         }
 
+        // Collect some data about what kind of scratch space our inner FFTs need
         let height_inplace_scratch = height_fft.get_inplace_scratch_len();
         let width_inplace_scratch = width_fft.get_inplace_scratch_len();
-        let width_outofplace_scratch = width_fft.get_out_of_place_scratch_len();
+        let width_outofplace_scratch = width_fft.get_outofplace_scratch_len();
 
-        let outofplace_scratch = max(height_inplace_scratch, width_inplace_scratch);
-        let inplace_extra = max(
-            if height_inplace_scratch > len {
-                height_inplace_scratch
-            } else {
-                0
-            },
-            width_outofplace_scratch,
-        );
+        // Computing the scratch we'll require is a somewhat confusing process.
+        // When we compute an out-of-place FFT, both of our inner FFTs are in-place
+        // When we compute an inplace FFT, our inner width FFT will be inplace, and our height FFT will be out-of-place
+        // For the out-of-place FFT, one of 2 things can happen regarding scratch:
+        //      - If the required scratch of both FFTs is <= self.len(), then we can use the input or output buffer as scratch, and so we need 0 extra scratch
+        //      - If either of the inner FFTs require more, then we'll have to request an entire scratch buffer for the inner FFTs,
+        //          whose size is the max of the two inner FFTs' required scratch
+        let max_inner_inplace_scratch = max(height_inplace_scratch, width_inplace_scratch);
+        let outofplace_scratch_len = if max_inner_inplace_scratch > len {
+            max_inner_inplace_scratch
+        } else {
+            0
+        };
+
+        // For the in-place FFT, again the best case is that we can just bounce data around between internal buffers, and the only inplace scratch we need is self.len()
+        // If our width fft's OOP FFT requires any scratch, then we can tack that on the end of our own scratch, and use split_at_mut to separate our own from our internal FFT's
+        // Likewise, if our height inplace FFT requires more inplace scracth than self.len(), we can tack that on to the end of our own inplace scratch.
+        // Thus, the total inplace scratch is our own length plus the max of what the two inner FFTs will need
+        let inplace_scratch_len = len
+            + max(
+                if height_inplace_scratch > len {
+                    height_inplace_scratch
+                } else {
+                    0
+                },
+                width_outofplace_scratch,
+            );
 
         Self {
             twiddles: twiddles.into_boxed_slice(),
@@ -92,12 +111,8 @@ impl<T: FftNum> MixedRadix<T> {
             height_size_fft: height_fft,
             height: height,
 
-            inplace_scratch_len: len + inplace_extra,
-            outofplace_scratch_len: if outofplace_scratch > len {
-                outofplace_scratch
-            } else {
-                0
-            },
+            inplace_scratch_len,
+            outofplace_scratch_len,
 
             direction,
         }
@@ -229,12 +244,18 @@ impl<T: FftNum> MixedRadixSmall<T> {
             "width_fft and height_fft must have the same direction. got width direction={}, height direction={}",
             width_fft.fft_direction(), height_fft.fft_direction());
 
-        let direction = width_fft.fft_direction();
-
+        // Verify that the inner FFTs don't require out-of-place scratch, and only arequire a small amount of inplace scratch
         let width = width_fft.len();
         let height = height_fft.len();
-
         let len = width * height;
+
+        assert_eq!(width_fft.get_outofplace_scratch_len(), 0, "MixedRadixSmall should only be used with algorithms that require 0 out-of-place scratch. Width FFT (len={}) requires {}, should require 0", width, width_fft.get_outofplace_scratch_len());
+        assert_eq!(height_fft.get_outofplace_scratch_len(), 0, "MixedRadixSmall should only be used with algorithms that require 0 out-of-place scratch. Height FFT (len={}) requires {}, should require 0", height, height_fft.get_outofplace_scratch_len());
+
+        assert!(width_fft.get_inplace_scratch_len() <= width, "MixedRadixSmall should only be used with algorithms that require little inplace scratch. Width FFT (len={}) requires {}, should require {} or less", width, width_fft.get_inplace_scratch_len(), width);
+        assert!(height_fft.get_inplace_scratch_len() <= height, "MixedRadixSmall should only be used with algorithms that require little inplace scratch. Height FFT (len={}) requires {}, should require {} or less", height, height_fft.get_inplace_scratch_len(), height);
+
+        let direction = width_fft.fft_direction();
 
         let mut twiddles = Vec::with_capacity(len);
         for x in 0..width {
@@ -318,8 +339,9 @@ boilerplate_fft!(
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use crate::algorithm::Dft;
     use crate::test_utils::check_fft_algorithm;
+    use crate::{algorithm::Dft, test_utils::BigScratchAlgorithm};
+    use num_traits::Zero;
     use std::sync::Arc;
 
     #[test]
@@ -358,5 +380,47 @@ mod unit_tests {
         let fft = MixedRadixSmall::new(width_fft, height_fft);
 
         check_fft_algorithm(&fft, width * height, direction);
+    }
+
+    // Verify that the mixed radix algorithm correctly provides scratch space to inner FFTs
+    #[test]
+    fn test_mixed_radix_inner_scratch() {
+        let scratch_lengths = [1, 5, 25];
+
+        let mut inner_ffts = Vec::new();
+
+        for &len in &scratch_lengths {
+            for &inplace_scratch in &scratch_lengths {
+                for &outofplace_scratch in &scratch_lengths {
+                    inner_ffts.push(Arc::new(BigScratchAlgorithm {
+                        len,
+                        inplace_scratch,
+                        outofplace_scratch,
+                        direction: FftDirection::Forward,
+                    }) as Arc<dyn Fft<f32>>);
+                }
+            }
+        }
+
+        for width_fft in inner_ffts.iter() {
+            for height_fft in inner_ffts.iter() {
+                let fft = MixedRadix::new(Arc::clone(width_fft), Arc::clone(height_fft));
+
+                let mut inplace_buffer = vec![Complex::zero(); fft.len()];
+                let mut inplace_scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
+
+                fft.process_with_scratch(&mut inplace_buffer, &mut inplace_scratch);
+
+                let mut outofplace_input = vec![Complex::zero(); fft.len()];
+                let mut outofplace_output = vec![Complex::zero(); fft.len()];
+                let mut outofplace_scratch =
+                    vec![Complex::zero(); fft.get_outofplace_scratch_len()];
+                fft.process_outofplace_with_scratch(
+                    &mut outofplace_input,
+                    &mut outofplace_output,
+                    &mut outofplace_scratch,
+                );
+            }
+        }
     }
 }

@@ -83,19 +83,39 @@ impl<T: FftNum> GoodThomasAlgorithm<T> {
         }
 
         let len = width * height;
-        let width_inplace_scratch = height_fft.get_inplace_scratch_len();
-        let height_inplace_scratch = width_fft.get_inplace_scratch_len();
-        let height_outofplace_scratch = width_fft.get_out_of_place_scratch_len();
 
-        let outofplace_scratch = max(height_inplace_scratch, width_inplace_scratch);
-        let inplace_extra = max(
-            if width_inplace_scratch > len {
-                width_inplace_scratch
-            } else {
-                0
-            },
-            height_outofplace_scratch,
-        );
+        // Collect some data about what kind of scratch space our inner FFTs need
+        let width_inplace_scratch = width_fft.get_inplace_scratch_len();
+        let height_inplace_scratch = height_fft.get_inplace_scratch_len();
+        let height_outofplace_scratch = height_fft.get_outofplace_scratch_len();
+
+        // Computing the scratch we'll require is a somewhat confusing process.
+        // When we compute an out-of-place FFT, both of our inner FFTs are in-place
+        // When we compute an inplace FFT, our inner width FFT will be inplace, and our height FFT will be out-of-place
+        // For the out-of-place FFT, one of 2 things can happen regarding scratch:
+        //      - If the required scratch of both FFTs is <= self.len(), then we can use the input or output buffer as scratch, and so we need 0 extra scratch
+        //      - If either of the inner FFTs require more, then we'll have to request an entire scratch buffer for the inner FFTs,
+        //          whose size is the max of the two inner FFTs' required scratch
+        let max_inner_inplace_scratch = max(height_inplace_scratch, width_inplace_scratch);
+        let outofplace_scratch_len = if max_inner_inplace_scratch > len {
+            max_inner_inplace_scratch
+        } else {
+            0
+        };
+
+        // For the in-place FFT, again the best case is that we can just bounce data around between internal buffers, and the only inplace scratch we need is self.len()
+        // If our height fft's OOP FFT requires any scratch, then we can tack that on the end of our own scratch, and use split_at_mut to separate our own from our internal FFT's
+        // Likewise, if our width inplace FFT requires more inplace scracth than self.len(), we can tack that on to the end of our own inplace scratch.
+        // Thus, the total inplace scratch is our own length plus the max of what the two inner FFTs will need
+        let inplace_scratch_len = len
+            + max(
+                if width_inplace_scratch > len {
+                    width_inplace_scratch
+                } else {
+                    0
+                },
+                height_outofplace_scratch,
+            );
 
         Self {
             width,
@@ -107,12 +127,8 @@ impl<T: FftNum> GoodThomasAlgorithm<T> {
             reduced_width: StrengthReducedUsize::new(width),
             reduced_width_plus_one: StrengthReducedUsize::new(width + 1),
 
-            inplace_scratch_len: len + inplace_extra,
-            outofplace_scratch_len: if outofplace_scratch > len {
-                outofplace_scratch
-            } else {
-                0
-            },
+            inplace_scratch_len,
+            outofplace_scratch_len,
 
             len,
             direction,
@@ -319,6 +335,12 @@ impl<T: FftNum> GoodThomasAlgorithmSmall<T> {
         let height = height_fft.len();
         let len = width * height;
 
+        assert_eq!(width_fft.get_outofplace_scratch_len(), 0, "GoodThomasAlgorithmSmall should only be used with algorithms that require 0 out-of-place scratch. Width FFT (len={}) requires {}, should require 0", width, width_fft.get_outofplace_scratch_len());
+        assert_eq!(height_fft.get_outofplace_scratch_len(), 0, "GoodThomasAlgorithmSmall should only be used with algorithms that require 0 out-of-place scratch. Height FFT (len={}) requires {}, should require 0", height, height_fft.get_outofplace_scratch_len());
+
+        assert!(width_fft.get_inplace_scratch_len() <= width, "GoodThomasAlgorithmSmall should only be used with algorithms that require little inplace scratch. Width FFT (len={}) requires {}, should require {} or less", width, width_fft.get_inplace_scratch_len(), width);
+        assert!(height_fft.get_inplace_scratch_len() <= height, "GoodThomasAlgorithmSmall should only be used with algorithms that require little inplace scratch. Height FFT (len={}) requires {}, should require {} or less", height, height_fft.get_inplace_scratch_len(), height);
+
         // compute the multiplicative inverse of width mod height and vice versa. x will be width mod height, and y will be height mod width
         let gcd_data = i64::extended_gcd(&(width as i64), &(height as i64));
         assert!(gcd_data.gcd == 1,
@@ -432,9 +454,10 @@ boilerplate_fft!(
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use crate::algorithm::Dft;
     use crate::test_utils::check_fft_algorithm;
+    use crate::{algorithm::Dft, test_utils::BigScratchAlgorithm};
     use num_integer::gcd;
+    use num_traits::Zero;
     use std::sync::Arc;
 
     #[test]
@@ -495,6 +518,53 @@ mod unit_tests {
                 let mut buffer = vec![Complex { re: 0.0, im: 0.0 }; fft.len()];
 
                 fft.process(&mut buffer);
+            }
+        }
+    }
+
+    // Verify that the Good-Thomas algorithm correctly provides scratch space to inner FFTs
+    #[test]
+    fn test_good_thomas_inner_scratch() {
+        let scratch_lengths = [1, 5, 24];
+
+        let mut inner_ffts = Vec::new();
+
+        for &len in &scratch_lengths {
+            for &inplace_scratch in &scratch_lengths {
+                for &outofplace_scratch in &scratch_lengths {
+                    inner_ffts.push(Arc::new(BigScratchAlgorithm {
+                        len,
+                        inplace_scratch,
+                        outofplace_scratch,
+                        direction: FftDirection::Forward,
+                    }) as Arc<dyn Fft<f32>>);
+                }
+            }
+        }
+
+        for width_fft in inner_ffts.iter() {
+            for height_fft in inner_ffts.iter() {
+                if width_fft.len() == height_fft.len() {
+                    continue;
+                }
+
+                let fft = GoodThomasAlgorithm::new(Arc::clone(width_fft), Arc::clone(height_fft));
+
+                let mut inplace_buffer = vec![Complex::zero(); fft.len()];
+                let mut inplace_scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
+
+                fft.process_with_scratch(&mut inplace_buffer, &mut inplace_scratch);
+
+                let mut outofplace_input = vec![Complex::zero(); fft.len()];
+                let mut outofplace_output = vec![Complex::zero(); fft.len()];
+                let mut outofplace_scratch =
+                    vec![Complex::zero(); fft.get_outofplace_scratch_len()];
+
+                fft.process_outofplace_with_scratch(
+                    &mut outofplace_input,
+                    &mut outofplace_output,
+                    &mut outofplace_scratch,
+                );
             }
         }
     }

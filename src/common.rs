@@ -143,7 +143,7 @@ macro_rules! boilerplate_fft_oop {
                 self.len()
             }
             #[inline(always)]
-            fn get_out_of_place_scratch_len(&self) -> usize {
+            fn get_outofplace_scratch_len(&self) -> usize {
                 0
             }
         }
@@ -175,7 +175,7 @@ macro_rules! boilerplate_fft {
                     return;
                 }
 
-                let required_scratch = self.get_out_of_place_scratch_len();
+                let required_scratch = self.get_outofplace_scratch_len();
                 if scratch.len() < required_scratch
                     || input.len() < self.len()
                     || output.len() != input.len()
@@ -185,7 +185,7 @@ macro_rules! boilerplate_fft {
                         self.len(),
                         input.len(),
                         output.len(),
-                        self.get_out_of_place_scratch_len(),
+                        self.get_outofplace_scratch_len(),
                         scratch.len(),
                     );
                     return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
@@ -208,7 +208,7 @@ macro_rules! boilerplate_fft {
                         self.len(),
                         input.len(),
                         output.len(),
-                        self.get_out_of_place_scratch_len(),
+                        self.get_outofplace_scratch_len(),
                         scratch.len(),
                     );
                 }
@@ -251,7 +251,7 @@ macro_rules! boilerplate_fft {
                 $inplace_scratch_len_fn(self)
             }
             #[inline(always)]
-            fn get_out_of_place_scratch_len(&self) -> usize {
+            fn get_outofplace_scratch_len(&self) -> usize {
                 $out_of_place_scratch_len_fn(self)
             }
         }

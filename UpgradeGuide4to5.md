@@ -98,7 +98,7 @@ let fft = Radix4::new(4096, FftDirection::Forward);
 
 let mut input : Vec<Complex<f32>> = get_my_input_data();
 let mut output = vec![Complex::zero(); fft.len()];
-let mut scratch = vec![Complex::zero(); fft.get_out_of_place_scratch_len()];
+let mut scratch = vec![Complex::zero(); fft.get_outofplace_scratch_len()];
 fft.process_outofplace_with_scratch(&mut input, &mut output, &mut scratch);
 ```
 

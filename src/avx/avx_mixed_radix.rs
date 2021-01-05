@@ -136,7 +136,7 @@ macro_rules! mixedradix_gen_data {
             }
         }
 
-        let inner_outofplace_scratch = $inner_fft.get_out_of_place_scratch_len();
+        let inner_outofplace_scratch = $inner_fft.get_outofplace_scratch_len();
         let inner_inplace_scratch = $inner_fft.get_inplace_scratch_len();
 
         CommonSimdData {

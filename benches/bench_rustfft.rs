@@ -20,7 +20,7 @@ impl<T: FftNum> Fft<T> for Noop {
     fn process_with_scratch(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {}
     fn process_outofplace_with_scratch(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {}
     fn get_inplace_scratch_len(&self) -> usize { self.len }
-    fn get_out_of_place_scratch_len(&self) -> usize { 0 }
+    fn get_outofplace_scratch_len(&self) -> usize { 0 }
 }
 impl Length for Noop {
     fn len(&self) -> usize { self.len }
