@@ -99,7 +99,7 @@ const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the
 
 /// A Recipe is a structure that describes the design of a FFT, without actually creating it.
 /// It is used as a middle step in the planning process.
-#[derive(Debug, std::cmp::PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Recipe {
     Dft(usize),
     MixedRadix {
@@ -359,9 +359,6 @@ impl<T: FftNum> FftPlannerScalar<T> {
             if len.is_power_of_two() {
                 Rc::new(Recipe::Radix4(len))
             } else {
-                dbg!(len);
-                dbg!(len.trailing_zeros());
-                dbg!(&factors);
                 let non_power_of_two = factors
                     .remove_factors(PrimeFactor {
                         value: 2,
