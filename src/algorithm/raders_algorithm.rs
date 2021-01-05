@@ -14,10 +14,10 @@ use crate::{Direction, Fft, Length};
 
 /// Implementation of Rader's Algorithm
 ///
-/// This algorithm computes a prime-sized FFT in O(nlogn) time. It does this by converting this size n FFT into a
-/// size (n - 1) which is guaranteed to be composite.
+/// This algorithm computes a prime-sized FFT in O(nlogn) time. It does this by converting this size-N FFT into a
+/// size-(N - 1) FFT, which is guaranteed to be composite.
 ///
-/// The worst case for this algorithm is when (n - 1) is 2 * prime, resulting in a
+/// The worst case for this algorithm is when (N - 1) is 2 * prime, resulting in a
 /// [Cunningham Chain](https://en.wikipedia.org/wiki/Cunningham_chain)
 ///
 /// ~~~
@@ -54,14 +54,14 @@ pub struct RadersAlgorithm<T> {
 }
 
 impl<T: FftNum> RadersAlgorithm<T> {
-    /// Creates a FFT instance which will process inputs/outputs of size `len`. `inner_fft.len()` must be `len - 1`
+    /// Creates a FFT instance which will process inputs/outputs of size `inner_fft.len() + 1`.
     ///
-    /// Note that this constructor is quite expensive to run; This algorithm must run a FFT of size n - 1 within the
+    /// Note that this constructor is quite expensive to run; This algorithm must compute a FFT using `inner_fft` within the
     /// constructor. This further underlines the fact that Rader's Algorithm is more expensive to run than other
     /// FFT algorithms
     ///
     /// # Panics
-    /// Panics if `inner_fft_len() + 1` is not a prime number.
+    /// Panics if `inner_fft.len() + 1` is not a prime number.
     pub fn new(inner_fft: Arc<dyn Fft<T>>) -> Self {
         let inner_fft_len = inner_fft.len();
         let len = inner_fft_len + 1;

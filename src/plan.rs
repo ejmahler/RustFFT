@@ -19,7 +19,7 @@ enum ChosenFftPlanner<T: FftNum> {
     // todo: If we add NEON, SSE, avx-512 etc support, add more enum variants for them here
 }
 
-/// The FFT planner is used to make new FFT algorithm instances.
+/// The FFT planner creates new FFT algorithm instances.
 ///
 /// RustFFT has several FFT algorithms available. For a given FFT size, the `FftPlanner` decides which of the
 /// available FFT algorithms to use and then initializes them.
@@ -47,12 +47,18 @@ enum ChosenFftPlanner<T: FftNum> {
 ///
 /// Each FFT instance owns [`Arc`s](std::sync::Arc) to its internal data, rather than borrowing it from the planner, so it's perfectly
 /// safe to drop the planner after creating Fft instances.
+///
+/// In the constructor, the FftPlanner will detect available CPU features. If AVX is available, it will set itself up to plan AVX-accelerated FFTs.
+/// If AVX isn't available, the planner will seamlessly fall back to planning non-SIMD FFTs.
+///
+/// If you'd prefer not to compute a FFT at all if AVX isn't available, consider creating a [`FftPlannerAvx`](crate::FftPlannerAvx) instead.
+///
+/// If you'd prefer to opt out of SIMD algorithms, consider creating a [`FftPlannerScalar`](crate::FftPlannerScalar) instead.
 pub struct FftPlanner<T: FftNum> {
     chosen_planner: ChosenFftPlanner<T>,
 }
 impl<T: FftNum> FftPlanner<T> {
-    /// Creates a new `FftPlanner` instance. It detects if AVX is supported on the current machine. If it is, it will plan AVX-accelerated FFTs.
-    /// If AVX isn't supported, it will seamlessly fall back to planning non-SIMD FFTs.
+    /// Creates a new `FftPlanner` instance.
     pub fn new() -> Self {
         if let Ok(avx_planner) = FftPlannerAvx::new() {
             Self {

@@ -8,19 +8,17 @@ use crate::{Direction, Fft, FftNum, Length};
 
 /// Naive O(n^2 ) Discrete Fourier Transform implementation
 ///
-/// This implementation is primarily used to test other FFT algorithms. In a few rare cases, such as small
-/// [Cunningham Chain](https://en.wikipedia.org/wiki/Cunningham_chain) primes, this can be faster than the O(nlogn)
-/// algorithms
+/// This implementation is primarily used to test other FFT algorithms.
 ///
 /// ~~~
-/// // Computes a naive DFT of size 1234
+/// // Computes a naive DFT of size 123
 /// use rustfft::algorithm::Dft;
 /// use rustfft::{Fft, FftDirection};
 /// use rustfft::num_complex::Complex;
 ///
-/// let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1234];
+/// let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 123];
 ///
-/// let dft = Dft::new(1234, FftDirection::Forward);
+/// let dft = Dft::new(123, FftDirection::Forward);
 /// dft.process(&mut buffer);
 /// ~~~
 pub struct Dft<T> {
