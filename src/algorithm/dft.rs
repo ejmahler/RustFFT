@@ -18,7 +18,7 @@ use crate::{Direction, Fft, FftNum, Length};
 ///
 /// let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 123];
 ///
-/// let dft = Dft::new(1234, FftDirection::Forward);
+/// let dft = Dft::new(123, FftDirection::Forward);
 /// dft.process(&mut buffer);
 /// ~~~
 pub struct Dft<T> {
