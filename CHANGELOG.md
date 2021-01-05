@@ -1,7 +1,18 @@
+## [5.0.0]
+Released 4 January 2021
+### Breaking Changes
+- Several breaking changes. See the [Upgrade Guide](/UpgradeGuide4to5.md) for details.
+
+### Added
+- Added support for the `Avx` instruction set. Plan a FFT with the `FftPlanner` on a machine that supports AVX, and you'll get a 5x-10x speedup in FFT performance.
+
+### Changed
+- Even though the main focus of this release is on AVX, most users should see moderate performance improvements due to a new internal architecture that reduces the amount of internal copies required when computing a FFT.
+
 ## [4.1.0]
 Released 24 December 2020
 ### Added
-- Added a blanked impl of `FftNum` to any type that implements the required traits (#7)
+- Added a blanket impl of `FftNum` to any type that implements the required traits (#7)
 - Added butterflies for many prime sizes, up to 31, and optimized the size-3, size-5, and size-7 buitterflies (#10)
 - Added an implementation of Bluestein's Algorithm (#6)
 
