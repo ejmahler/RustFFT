@@ -37,7 +37,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
         let index_float = index as f64;
         let index_squared = index_float * index_float;
 
-        twiddles::compute_twiddle_floatindex(index_squared, len * 2, direction.reverse())
+        twiddles::compute_twiddle_floatindex(index_squared, len * 2, direction.opposite_direction())
     }
 
     /// Pairwise multiply the complex numbers in `left` with the complex numbers in `right`.
@@ -132,7 +132,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
                     twiddle_chunk[i] = Self::compute_bluesteins_twiddle(
                         x * A::VectorType::COMPLEX_PER_VECTOR + i,
                         len,
-                        direction.reverse(),
+                        direction.opposite_direction(),
                     );
                 }
                 twiddle_chunk.load_complex(0)

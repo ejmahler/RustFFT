@@ -15,7 +15,7 @@ use crate::{Direction, Fft, Length};
 ///
 /// This algorithm factors a size n FFT into n1 * n2, where GCD(n1, n2) == 1
 ///
-/// Conceptually, this algorithm is very similar to the Mixed-Radix except because GCD(n1, n2) == 1 we can do some
+/// Conceptually, this algorithm is very similar to the Mixed-Radix, except because GCD(n1, n2) == 1 we can do some
 /// number theory trickery to reduce the number of floating-point multiplications and additions. Additionally, It can
 /// be faster than Mixed-Radix at sizes below 10,000 or so.
 ///
@@ -58,7 +58,7 @@ pub struct GoodThomasAlgorithm<T> {
 impl<T: FftNum> GoodThomasAlgorithm<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
     ///
-    /// GCD(width_fft.len(), height_fft.len()) must be equal to 1
+    /// `GCD(width_fft.len(), height_fft.len())` must be equal to 1
     pub fn new(mut width_fft: Arc<dyn Fft<T>>, mut height_fft: Arc<dyn Fft<T>>) -> Self {
         assert_eq!(
             width_fft.fft_direction(), height_fft.fft_direction(),
@@ -286,12 +286,12 @@ boilerplate_fft!(
 ///
 /// This algorithm factors a size n FFT into n1 * n2, where GCD(n1, n2) == 1
 ///
-/// Conceptually, this algorithm is very similar to MixedRadix except because GCD(n1, n2) == 1 we can do some
+/// Conceptually, this algorithm is very similar to MixedRadix, except because GCD(n1, n2) == 1 we can do some
 /// number theory trickery to reduce the number of floating point operations. It typically performs
 /// better than MixedRadixSmall, especially at the smallest sizes.
 ///
 /// ~~~
-/// // Computes a forward FFT of size 56, using the Good-Thoma Butterfly Algorithm
+/// // Computes a forward FFT of size 56 using GoodThomasAlgorithmSmall
 /// use std::sync::Arc;
 /// use rustfft::algorithm::GoodThomasAlgorithmSmall;
 /// use rustfft::algorithm::butterflies::{Butterfly7, Butterfly8};
@@ -324,7 +324,7 @@ pub struct GoodThomasAlgorithmSmall<T> {
 impl<T: FftNum> GoodThomasAlgorithmSmall<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
     ///
-    /// GCD(n1.len(), n2.len()) must be equal to 1
+    /// `GCD(width_fft.len(), height_fft.len())` must be equal to 1
     pub fn new(width_fft: Arc<dyn Fft<T>>, height_fft: Arc<dyn Fft<T>>) -> Self {
         assert_eq!(
             width_fft.fft_direction(), height_fft.fft_direction(),

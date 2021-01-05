@@ -73,11 +73,11 @@
 //!
 //! - Any FFT whose size is of the form `2^n * 3^m` can be considered the "fastest" in RustFFT.
 //! - Any FFT whose prime factors are all 11 or smaller will also be very fast, but the fewer the factors of 2 and 3 the slower it will be.
-//!     For example, computing a FFT of size 13552 (2^4 * 7 * 11 * 11) is takes 12% longer to compute than 13824 (2^9 * 3^3),
-//!     and computing a FFT of size 2541 (3*7*11*11) is takes 65% longer to compute than 2592 (2^5 * 3^4)
+//!     For example, computing a FFT of size 13552 `(2^4*7*11*11)` is takes 12% longer to compute than 13824 `(2^9 * 3^3)`,
+//!     and computing a FFT of size 2541 `(3*7*11*11)` takes 65% longer to compute than 2592 `(2^5 * 3^4)`
 //! - Any other FFT size will be noticeably slower. A considerable amount of effort has been put into making these FFT sizes as fast as
-//!     they can be, but some FFT sizes just take more work than others. For example, computing a FFT of size 5183 (71 * 73) takes about
-//!     5x longer than computing a FFT of size 5184 (2^6 * 3^4).
+//!     they can be, but some FFT sizes just take more work than others. For example, computing a FFT of size 5183 `(71 * 73)` takes about
+//!     5x longer than computing a FFT of size 5184 `(2^6 * 3^4)`.
 //!
 //! In most cases, even prime-sized FFTs will be fast enough for your application. In the example of 5183 above, even that "slow" FFT
 //! only takes a few tens of microseconds to compute.
@@ -125,7 +125,7 @@ impl FftDirection {
     ///
     ///  - If `self` is `FftDirection::Forward`, returns `FftDirection::Inverse`
     ///  - If `self` is `FftDirection::Inverse`, returns `FftDirection::Forward`
-    pub fn reverse(&self) -> FftDirection {
+    pub fn opposite_direction(&self) -> FftDirection {
         match self {
             Self::Forward => Self::Inverse,
             Self::Inverse => Self::Forward,
@@ -143,15 +143,15 @@ impl Display for FftDirection {
 
 /// A trait that allows FFT algorithms to report whether they compute forward FFTs or inverse FFTs
 pub trait Direction {
-    /// Returns false if this instance computes forward FFTs, true for inverse FFTs
+    /// Returns FftDirection::Forward if this instance computes forward FFTs, or FftDirection::Inverse for inverse FFTs
     fn fft_direction(&self) -> FftDirection;
 }
 
 /// Trait for algorithms that compute FFTs.
 ///
-/// This trait has a few mothods for computing FFTs, but its most conveinent method is [`process(buffer)`](crate::Fft::process).
-/// It takes in a &mut [T] buffer and computes a FFT on that buffer, in-place. It may copy the data over to internal scratch buffers
-/// if that speeds up the computation, but the output will always end up in the same buffer as the input.
+/// This trait has a few methods for computing FFTs. Its most conveinent method is [`process(slice)`](crate::Fft::process).
+/// It takes in a slice of `Complex<T>` and computes a FFT on that slice, in-place. It may copy the data over to internal scratch buffers
+/// if that speeds up the computation, but the output will always end up in the same slice as the input.
 pub trait Fft<T: FftNum>: Length + Direction + Sync + Send {
     /// Computes a FFT in-place.
     ///
@@ -206,10 +206,10 @@ pub trait Fft<T: FftNum>: Length + Direction + Sync + Send {
         scratch: &mut [Complex<T>],
     );
 
-    /// Returns the size of the scratch buffer required by `process_inplace_with_scratch` and `process_inplace_multi`
+    /// Returns the size of the scratch buffer required by `process_with_scratch`
     fn get_inplace_scratch_len(&self) -> usize;
 
-    /// Returns the size of the scratch buffer required by `process_with_scratch` and `process_multi`
+    /// Returns the size of the scratch buffer required by `process_outofplace_with_scratch`
     ///
     /// For many FFT sizes, out-of-place FFTs require zero scratch, and this method will return zero - although that may change from one RustFFT version to the next.
     fn get_outofplace_scratch_len(&self) -> usize;

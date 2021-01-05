@@ -185,7 +185,7 @@ impl<T: FftNum> Butterfly3<T> {
     pub fn direction_of(fft: &Butterfly3<T>) -> Self {
         Self {
             twiddle: fft.twiddle.conj(),
-            direction: fft.direction.reverse(),
+            direction: fft.direction.opposite_direction(),
         }
     }
     #[inline(always)]

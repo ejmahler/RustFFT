@@ -204,7 +204,7 @@ boilerplate_fft!(
 /// results to get the final answer
 ///
 /// ~~~
-/// // Computes a forward FFT of size 40, using the Mixed-Radix Algorithm
+/// // Computes a forward FFT of size 40 using MixedRadixSmall
 /// use std::sync::Arc;
 /// use rustfft::algorithm::MixedRadixSmall;
 /// use rustfft::algorithm::butterflies::{Butterfly5, Butterfly8};

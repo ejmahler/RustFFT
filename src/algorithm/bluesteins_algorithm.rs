@@ -10,11 +10,11 @@ use crate::{Direction, Fft, Length};
 
 /// Implementation of Bluestein's Algorithm
 ///
-/// This algorithm computes an arbitrary-sized FFT in O(nlogn) time. It does this by converting this size n FFT into a
-/// size M where M >= 2N - 1.
+/// This algorithm computes an arbitrary-sized FFT in O(nlogn) time. It does this by converting this size-N FFT into a
+/// size-M FFT where M >= 2N - 1.
 ///
-/// The choice of M is very important to the performance of Bluestein's Algorithm. The most obvious choice is the next-largest
-/// power of two -- but if there's a smaller FFT size that satisfies the `>= 2N - 1` requirement, that will significantly
+/// The choice of M is very important for the performance of Bluestein's Algorithm. The most obvious choice is the next-largest
+/// power of two -- but if there's a smaller/faster FFT size that satisfies the `>= 2N - 1` requirement, that will significantly
 /// improve this algorithm's overall performance.
 ///
 /// ~~~
@@ -53,14 +53,17 @@ impl<T: FftNum> BluesteinsAlgorithm<T> {
         let index_float = index as f64;
         let index_squared = index_float * index_float;
 
-        twiddles::compute_twiddle_floatindex(index_squared, len * 2, direction.reverse())
+        twiddles::compute_twiddle_floatindex(index_squared, len * 2, direction.opposite_direction())
     }
 
     /// Creates a FFT instance which will process inputs/outputs of size `len`. `inner_fft.len()` must be >= `len * 2 - 1`
     ///
-    /// Note that this constructor is quite expensive to run; This algorithm must run a FFT of size inner_fft.len() within the
+    /// Note that this constructor is quite expensive to run; This algorithm must compute a FFT using `inner_fft` within the
     /// constructor. This further underlines the fact that Bluesteins Algorithm is more expensive to run than other
     /// FFT algorithms
+    ///
+    /// # Panics
+    /// Panics if `inner_fft.len() < len * 2 - 1`.
     pub fn new(len: usize, inner_fft: Arc<dyn Fft<T>>) -> Self {
         let inner_fft_len = inner_fft.len();
         assert!(len * 2 - 1 <= inner_fft_len, "Bluestein's algorithm requires inner_fft.len() >= self.len() * 2 - 1. Expected >= {}, got {}", len * 2 - 1, inner_fft_len);
@@ -85,7 +88,7 @@ impl<T: FftNum> BluesteinsAlgorithm<T> {
 
         // also compute some more mundane twiddle factors to start and end with
         let twiddles: Vec<_> = (0..len)
-            .map(|i| Self::compute_bluesteins_twiddle(i, len, direction.reverse()))
+            .map(|i| Self::compute_bluesteins_twiddle(i, len, direction.opposite_direction()))
             .collect();
 
         Self {
