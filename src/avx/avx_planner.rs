@@ -272,7 +272,7 @@ impl<T: FftNum> AvxPlannerInternal<f32, T> {
                 // We're intentionally being too conservative here. Otherwise we'd be recursively applying a heuristic, and repeated heuristic failures could stack to make a rader's chain significantly slower.
                 // If we were writing a measuring planner, expanding this heuristic and measuring its effectiveness would be an opportunity for up to 2x performance gains.
                 let inner_factors = PartialFactors::compute(other_factors - 1);
-                if inner_factors.get_other_factors() == 1 || self.is_butterfly(inner_factors.get_other_factors()) {
+                if self.is_butterfly(inner_factors.get_other_factors()) {
                     // We only have factors of 2,3,5,7, and 11. If we don't have AVX2, we also have to exclude factors of 5 and 7 and 11, because avx2 gives us enough headroom for the overhead of those to not be a problem
                     if is_x86_feature_detected!("avx2")
                         || (inner_factors.product_power2power3() == len - 1)
@@ -482,7 +482,7 @@ impl<T: FftNum> AvxPlannerInternal<f64, T> {
                 // We're intentionally being too conservative here. Otherwise we'd be recursively applying a heuristic, and repeated heuristic failures could stack to make a rader's chain significantly slower.
                 // If we were writing a measuring planner, expanding this heuristic and measuring its effectiveness would be an opportunity for up to 2x performance gains.
                 let inner_factors = PartialFactors::compute(other_factors - 1);
-                if inner_factors.get_other_factors() == 1 {
+                if self.is_butterfly(inner_factors.get_other_factors()) {
                     // We only have factors of 2,3,5,7, and 11. If we don't have AVX2, we also have to exclude factors of 5 and 7 and 11, because avx2 gives us enough headroom for the overhead of those to not be a problem
                     if is_x86_feature_detected!("avx2")
                         || (inner_factors.product_power2power3() == len - 1)
