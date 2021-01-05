@@ -259,6 +259,11 @@ impl<T: FftNum> AvxPlannerInternal<f32, T> {
         if factors.get_other_factors() > 1 {
             let other_factors = factors.get_other_factors();
 
+            // First, if the "other factors" are a butterfly, use that as the butterfly
+            if self.is_butterfly(other_factors) {
+                return MixedRadixPlan::butterfly(other_factors, vec![]);
+            }
+
             // We can only use rader's if `other_factors` is prime
             if miller_rabin(other_factors as u64) {
                 // len is prime, so we can use Rader's Algorithm as a base. Whether or not that's a good idea is a different story
@@ -267,7 +272,7 @@ impl<T: FftNum> AvxPlannerInternal<f32, T> {
                 // We're intentionally being too conservative here. Otherwise we'd be recursively applying a heuristic, and repeated heuristic failures could stack to make a rader's chain significantly slower.
                 // If we were writing a measuring planner, expanding this heuristic and measuring its effectiveness would be an opportunity for up to 2x performance gains.
                 let inner_factors = PartialFactors::compute(other_factors - 1);
-                if inner_factors.get_other_factors() == 1 {
+                if inner_factors.get_other_factors() == 1 || self.is_butterfly(inner_factors.get_other_factors()) {
                     // We only have factors of 2,3,5,7, and 11. If we don't have AVX2, we also have to exclude factors of 5 and 7 and 11, because avx2 gives us enough headroom for the overhead of those to not be a problem
                     if is_x86_feature_detected!("avx2")
                         || (inner_factors.product_power2power3() == len - 1)
@@ -463,6 +468,11 @@ impl<T: FftNum> AvxPlannerInternal<f64, T> {
         // if we have a factor that can't be computed with 2xn 3xn etc, we'll have to compute it with bluestein's or rader's, so use that as the base
         if factors.get_other_factors() > 1 {
             let other_factors = factors.get_other_factors();
+
+            // First, if the "other factors" are a butterfly, use that as the butterfly
+            if self.is_butterfly(other_factors) {
+                return MixedRadixPlan::butterfly(other_factors, vec![]);
+            }
 
             // We can only use rader's if `other_factors` is prime
             if miller_rabin(other_factors as u64) {

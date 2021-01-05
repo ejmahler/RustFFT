@@ -101,6 +101,7 @@ fn bench_planned_f32(b: &mut Bencher, len: usize) {
 #[bench] fn planned32_composite_024028(b: &mut Bencher) { bench_planned_f32(b,  24028); }
 
 // small mixed composites times a large prime
+#[bench] fn planned32_composite_005472(b: &mut Bencher) { bench_planned_f32(b,  5472); }
 #[bench] fn planned32_composite_030270(b: &mut Bencher) { bench_planned_f32(b,  30270); }
 
 // small mixed composites
