@@ -66,7 +66,7 @@ RustFFT 5.0 makes a few changes to this setup. First, there is no longer a disti
 Second, the `Fft` trait now has three methods. Most users will want the first method:
 1. `Fft::process()` takes a single buffer instead of two, and computes FFTs in-place. Internally, it allocates scratch space as needed.
 1. `Fft::process_with_scratch()` takes two buffers: A data buffer, and a scratch buffer. It computes FFTs in-place on the data buffer, using the provided scratch space as needed.
-1. `Fft::process_outofplace_with_scratch()` takes three buffers: An input buffer, an output buffer, and a scratch buffer. It computes FFTs from the input buffer, store the results in the output buffer, using the provided scratch space as needed.
+1. `Fft::process_outofplace_with_scratch()` takes three buffers: An input buffer, an output buffer, and a scratch buffer. It computes FFTs from the input buffer and stores the results in the output buffer, using the provided scratch space as needed.
 
 Example for users who want to use the new in-place `process()` behavior:
 ```rust
