@@ -94,7 +94,7 @@ macro_rules! boilerplate_fft_simd_butterfly {
                 0
             }
             #[inline(always)]
-            fn get_out_of_place_scratch_len(&self) -> usize {
+            fn get_outofplace_scratch_len(&self) -> usize {
                 0
             }
         }
@@ -225,7 +225,7 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                 $len
             }
             #[inline(always)]
-            fn get_out_of_place_scratch_len(&self) -> usize {
+            fn get_outofplace_scratch_len(&self) -> usize {
                 0
             }
         }

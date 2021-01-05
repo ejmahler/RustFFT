@@ -190,7 +190,7 @@ pub trait Fft<T: FftNum>: Length + Direction + Sync + Send {
     /// in a different buffer than the input for some reason. This happens frequently in RustFFT internals, but is probably
     /// less common among RustFFT users.
     ///
-    /// For many FFT sizes, `self.get_out_of_place_scratch_len()` returns 0
+    /// For many FFT sizes, `self.get_outofplace_scratch_len()` returns 0
     ///
     /// # Panics
     ///
@@ -198,7 +198,7 @@ pub trait Fft<T: FftNum>: Length + Direction + Sync + Send {
     /// - `output.len() != input.len()`
     /// - `input.len() % self.len() > 0`
     /// - `input.len() < self.len()`
-    /// - `scratch.len() < self.get_out_of_place_scratch_len()`
+    /// - `scratch.len() < self.get_outofplace_scratch_len()`
     fn process_outofplace_with_scratch(
         &self,
         input: &mut [Complex<T>],
@@ -212,7 +212,7 @@ pub trait Fft<T: FftNum>: Length + Direction + Sync + Send {
     /// Returns the size of the scratch buffer required by `process_with_scratch` and `process_multi`
     ///
     /// For many FFT sizes, out-of-place FFTs require zero scratch, and this method will return zero - although that may change from one RustFFT version to the next.
-    fn get_out_of_place_scratch_len(&self) -> usize;
+    fn get_outofplace_scratch_len(&self) -> usize;
 }
 
 // Algorithms implemented to use AVX instructions. Only compiled on x86_64, and only compiled if the "avx" feature flag is set.

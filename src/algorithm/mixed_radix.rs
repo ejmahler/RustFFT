@@ -72,7 +72,7 @@ impl<T: FftNum> MixedRadix<T> {
         // Collect some data about what kind of scratch space our inner FFTs need
         let height_inplace_scratch = height_fft.get_inplace_scratch_len();
         let width_inplace_scratch = width_fft.get_inplace_scratch_len();
-        let width_outofplace_scratch = width_fft.get_out_of_place_scratch_len();
+        let width_outofplace_scratch = width_fft.get_outofplace_scratch_len();
 
         // Computing the scratch we'll require is a somewhat confusing process.
         // When we compute an out-of-place FFT, both of our inner FFTs are in-place
@@ -249,8 +249,8 @@ impl<T: FftNum> MixedRadixSmall<T> {
         let height = height_fft.len();
         let len = width * height;
 
-        assert_eq!(width_fft.get_out_of_place_scratch_len(), 0, "MixedRadixSmall should only be used with algorithms that require 0 out-of-place scratch. Width FFT (len={}) requires {}, should require 0", width, width_fft.get_out_of_place_scratch_len());
-        assert_eq!(height_fft.get_out_of_place_scratch_len(), 0, "MixedRadixSmall should only be used with algorithms that require 0 out-of-place scratch. Height FFT (len={}) requires {}, should require 0", height, height_fft.get_out_of_place_scratch_len());
+        assert_eq!(width_fft.get_outofplace_scratch_len(), 0, "MixedRadixSmall should only be used with algorithms that require 0 out-of-place scratch. Width FFT (len={}) requires {}, should require 0", width, width_fft.get_outofplace_scratch_len());
+        assert_eq!(height_fft.get_outofplace_scratch_len(), 0, "MixedRadixSmall should only be used with algorithms that require 0 out-of-place scratch. Height FFT (len={}) requires {}, should require 0", height, height_fft.get_outofplace_scratch_len());
 
         assert!(width_fft.get_inplace_scratch_len() <= width, "MixedRadixSmall should only be used with algorithms that require little inplace scratch. Width FFT (len={}) requires {}, should require {} or less", width, width_fft.get_inplace_scratch_len(), width);
         assert!(height_fft.get_inplace_scratch_len() <= height, "MixedRadixSmall should only be used with algorithms that require little inplace scratch. Height FFT (len={}) requires {}, should require {} or less", height, height_fft.get_inplace_scratch_len(), height);
@@ -414,7 +414,7 @@ mod unit_tests {
                 let mut outofplace_input = vec![Complex::zero(); fft.len()];
                 let mut outofplace_output = vec![Complex::zero(); fft.len()];
                 let mut outofplace_scratch =
-                    vec![Complex::zero(); fft.get_out_of_place_scratch_len()];
+                    vec![Complex::zero(); fft.get_outofplace_scratch_len()];
                 fft.process_outofplace_with_scratch(
                     &mut outofplace_input,
                     &mut outofplace_output,

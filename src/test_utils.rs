@@ -127,7 +127,7 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
     // test process_outofplace_with_scratch()
     {
         let mut input = reference_input.clone();
-        let mut scratch = vec![Zero::zero(); fft.get_out_of_place_scratch_len()];
+        let mut scratch = vec![Zero::zero(); fft.get_outofplace_scratch_len()];
         let mut output = expected_output.clone();
 
         fft.process_outofplace_with_scratch(&mut input, &mut output, &mut scratch);
@@ -193,7 +193,7 @@ impl<T: FftNum> Fft<T> for BigScratchAlgorithm {
     fn get_inplace_scratch_len(&self) -> usize {
         self.inplace_scratch
     }
-    fn get_out_of_place_scratch_len(&self) -> usize {
+    fn get_outofplace_scratch_len(&self) -> usize {
         self.outofplace_scratch
     }
 }
