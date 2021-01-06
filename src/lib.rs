@@ -207,11 +207,17 @@ pub trait Fft<T: FftNum>: Length + Direction + Sync + Send {
     );
 
     /// Returns the size of the scratch buffer required by `process_with_scratch`
+    ///
+    /// For most FFT sizes, this method will return `self.len()`. For a few small sizes it will return 0, and for some special FFT sizes
+    /// (Sizes that require the use of Bluestein's Algorithm), this may return a scratch size larger than `self.len()`.
+    /// The returned value may change from one version of RustFFT to the next.
     fn get_inplace_scratch_len(&self) -> usize;
 
     /// Returns the size of the scratch buffer required by `process_outofplace_with_scratch`
     ///
-    /// For many FFT sizes, out-of-place FFTs require zero scratch, and this method will return zero - although that may change from one RustFFT version to the next.
+    /// For most FFT sizes, this method will return 0. For some special FFT sizes
+    /// (Sizes that require the use of Bluestein's Algorithm), this may return a scratch size larger than `self.len()`.
+    /// The returned value may change from one version of RustFFT to the next.
     fn get_outofplace_scratch_len(&self) -> usize;
 }
 
