@@ -16,9 +16,9 @@ Unlike previous major versions, RustFFT 5.0 has several breaking changes compare
 
 ```rust
 // Perform a forward FFT of size 1234
-use rustfft::{FFTplanner, num_complex::Complex};
+use rustfft::{FftPlanner, num_complex::Complex};
 
-let mut planner = FFTplanner::<f32>::new();
+let mut planner = FftPlanner::<f32>::new();
 let fft = planner.plan_fft_forward(1234);
 
 let mut buffer = vec![Complex{ re: 0.0, im: 0.0 }; 1234];
