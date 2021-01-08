@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{Fft, FftDirection};
+use crate::{Fft, FftComplexToReal, FftDirection, FftRealToComplex};
 
 pub(crate) struct FftCache<T> {
     forward_cache: HashMap<usize, Arc<dyn Fft<T>>>,
@@ -37,3 +37,50 @@ impl<T> FftCache<T> {
         };
     }
 }
+
+pub(crate) struct RealToComplexCache<T> {
+    cache: HashMap<usize, Arc<dyn FftRealToComplex<T>>>,
+}
+impl<T> RealToComplexCache<T> {
+    pub fn new() -> Self {
+        Self {
+            cache: HashMap::new(),
+        }
+    }
+    #[allow(unused)]
+    pub fn contains_fft(&self, len: usize) -> bool {
+        self.cache.contains_key(&len)
+    }
+    pub fn get(&self, len: usize) -> Option<Arc<dyn FftRealToComplex<T>>> {
+        self.cache.get(&len).map(Arc::clone)
+    }
+    pub fn insert(&mut self, fft: &Arc<dyn FftRealToComplex<T>>) {
+        let cloned = Arc::clone(fft);
+        let len = cloned.len();
+        self.cache.insert(len, cloned);
+    }
+}
+
+pub(crate) struct ComplexToRealCache<T> {
+    cache: HashMap<usize, Arc<dyn FftComplexToReal<T>>>,
+}
+impl<T> ComplexToRealCache<T> {
+    pub fn new() -> Self {
+        Self {
+            cache: HashMap::new(),
+        }
+    }
+    #[allow(unused)]
+    pub fn contains_fft(&self, len: usize) -> bool {
+        self.cache.contains_key(&len)
+    }
+    pub fn get(&self, len: usize) -> Option<Arc<dyn FftComplexToReal<T>>> {
+        self.cache.get(&len).map(Arc::clone)
+    }
+    pub fn insert(&mut self, fft: &Arc<dyn FftComplexToReal<T>>) {
+        let cloned = Arc::clone(fft);
+        let len = cloned.len();
+        self.cache.insert(len, cloned);
+    }
+}
+

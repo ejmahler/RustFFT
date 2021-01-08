@@ -221,6 +221,18 @@ pub trait Fft<T: FftNum>: Length + Direction + Sync + Send {
     fn get_outofplace_scratch_len(&self) -> usize;
 }
 
+// A FFT with real-only inputs
+pub trait FftRealToComplex<T: FftNum>: Length + Sync + Send {
+    fn process(&self, input: &mut [T], output: &mut [Complex<T>], scratch: &mut [T]);
+    fn get_scratch_len(&self) -> usize;
+}
+
+// A FFT with real-only outputs
+pub trait FftComplexToReal<T: FftNum>: Length + Sync + Send {
+    fn process(&self, input: &mut [Complex<T>], output: &mut [T], scratch: &mut [T]);
+    fn get_scratch_len(&self) -> usize;
+}
+
 // Algorithms implemented to use AVX instructions. Only compiled on x86_64, and only compiled if the "avx" feature flag is set.
 #[cfg(all(target_arch = "x86_64", feature = "avx"))]
 mod avx;

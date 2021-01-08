@@ -1,9 +1,10 @@
 use num_integer::gcd;
+use real_to_complex::ComplexToRealEven;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
+use crate::{FftComplexToReal, FftDirection, FftRealToComplex, algorithm::real_to_complex::RealToComplexEven, common::FftNum, fft_cache::{ComplexToRealCache, FftCache, RealToComplexCache}};
 
 use crate::algorithm::butterflies::*;
 use crate::algorithm::*;
@@ -95,6 +96,36 @@ impl<T: FftNum> FftPlanner<T> {
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft_inverse(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         self.plan_fft(len, FftDirection::Inverse)
+    }
+
+    /// Returns a `FftRealToComplex` instance which computes FFTs of size `len`
+    ///
+    /// The FFT instances returned by this method are specialized for cases where all the imaginary elements of the input are zero (and omitted).
+    /// The input is N real numbers, and the output is N/2 + 1 complex numbers. The remaining complex numbers are redundant when all input imaginary elements are zero
+    /// so this variant of the FFT saves memory and computing power by not computing them.
+    ///
+    /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+    pub fn plan_r2c(&mut self, len: usize) -> Arc<dyn FftRealToComplex<T>> {
+        match &mut self.chosen_planner {
+            ChosenFftPlanner::Scalar(scalar_planner) => scalar_planner.plan_r2c(len),
+            ChosenFftPlanner::Avx(avx_planner) => avx_planner.plan_r2c(len),
+        }
+    }
+
+    /// Returns a `FftComplexToReal` instance which computes FFTs of size `len`
+    ///
+    /// The FFT instances returned by this method are specialized for cases where the second half of the input is redundant. It is the logical inverse of
+    /// `plan_real_to_complex` above
+    ///
+    /// The input is (N/2) + 1 complex numbers, representing the non-redundant parts of the input. The output is N real numbers, representing just the real
+    /// components of the FFT output. The imaginary elements are omitted because they're all zero, so this variant of the FFT saves memory and computing power by not computing them.
+    ///
+    /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+    pub fn plan_c2r(&mut self, len: usize) -> Arc<dyn FftComplexToReal<T>> {
+        match &mut self.chosen_planner {
+            ChosenFftPlanner::Scalar(scalar_planner) => scalar_planner.plan_c2r(len),
+            ChosenFftPlanner::Avx(avx_planner) => avx_planner.plan_c2r(len),
+        }
     }
 }
 
@@ -227,6 +258,8 @@ impl Recipe {
 pub struct FftPlannerScalar<T: FftNum> {
     algorithm_cache: FftCache<T>,
     recipe_cache: HashMap<usize, Rc<Recipe>>,
+    r2c_cache: RealToComplexCache<T>,
+    c2r_cache: ComplexToRealCache<T>,
 }
 
 impl<T: FftNum> FftPlannerScalar<T> {
@@ -235,6 +268,8 @@ impl<T: FftNum> FftPlannerScalar<T> {
         Self {
             algorithm_cache: FftCache::new(),
             recipe_cache: HashMap::new(),
+            r2c_cache: RealToComplexCache::new(),
+            c2r_cache: ComplexToRealCache::new(),
         }
     }
 
@@ -263,6 +298,56 @@ impl<T: FftNum> FftPlannerScalar<T> {
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft_inverse(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         self.plan_fft(len, FftDirection::Inverse)
+    }
+
+    /// Returns a `FftRealToComplex` instance which computes FFTs of size `len`
+    ///
+    /// The FFT instances returned by this method are specialized for cases where all the imaginary elements of the input are zero (and omitted).
+    /// The input is N real numbers, and the output is N/2 + 1 complex numbers. The remaining complex numbers are redundant when all input imaginary elements are zero
+    /// so this variant of the FFT saves memory and computing power by not computing them.
+    ///
+    /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+    pub fn plan_r2c(&mut self, len: usize) -> Arc<dyn FftRealToComplex<T>> {
+        if len % 2 == 0 {
+            if let Some(fft) = self.r2c_cache.get(len) {
+                fft
+            } else {
+                let inner_fft = self.plan_fft_forward(len);
+                let fft = Arc::new(RealToComplexEven::new(inner_fft)) as Arc<dyn FftRealToComplex<T>>;
+
+                self.r2c_cache.insert(&fft);
+
+                fft
+            }
+        } else {
+            unimplemented!("Complex-to-real FFTs with off length aren't supported yet, but will be soon.");
+        }
+    }
+
+    /// Returns a `FftComplexToReal` instance which computes FFTs of size `len`
+    ///
+    /// The FFT instances returned by this method are specialized for cases where the second half of the input is redundant. It is the logical inverse of
+    /// `plan_real_to_complex` above
+    ///
+    /// The input is (N/2) + 1 complex numbers, representing the non-redundant parts of the input. The output is N real numbers, representing just the real
+    /// components of the FFT output. The imaginary elements are omitted because they're all zero, so this variant of the FFT saves memory and computing power by not computing them.
+    ///
+    /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+    pub fn plan_c2r(&mut self, len: usize) -> Arc<dyn FftComplexToReal<T>> {
+        if len % 2 == 0 {
+            if let Some(fft) = self.c2r_cache.get(len) {
+                fft
+            } else {
+                let inner_fft = self.plan_fft_forward(len);
+                let fft = Arc::new(ComplexToRealEven::new(inner_fft)) as Arc<dyn FftComplexToReal<T>>;
+
+                self.c2r_cache.insert(&fft);
+
+                fft
+            }
+        } else {
+            unimplemented!("Complex-to-real FFTs with off length aren't supported yet, but will be soon.");
+        }
     }
 
     // Make a recipe for a length

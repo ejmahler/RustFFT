@@ -6,7 +6,7 @@ extern crate rustfft;
 
 use std::sync::Arc;
 use test::Bencher;
-use rustfft::{Direction, FftNum, Fft, FftDirection, Length};
+use rustfft::{Direction, Fft, FftDirection, FftNum, FftPlanner, FftRealToComplex, FftComplexToReal, Length, algorithm::real_to_complex::{ComplexToRealEven, RealToComplexEven}};
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 use rustfft::algorithm::*;
@@ -33,7 +33,7 @@ impl Direction for Noop {
 /// for a given length
 fn bench_planned_f32(b: &mut Bencher, len: usize) {
 
-    let mut planner = rustfft::FftPlanner::new();
+    let mut planner = FftPlanner::new();
     let fft: Arc<dyn Fft<f32>> = planner.plan_fft_forward(len);
     assert_eq!(fft.len(), len);
 
@@ -46,6 +46,10 @@ fn bench_planned_f32(b: &mut Bencher, len: usize) {
 
 
 // Powers of 4
+#[bench] fn planned32_p2_00000004(b: &mut Bencher) { bench_planned_f32(b,       4); }
+#[bench] fn planned32_p2_00000008(b: &mut Bencher) { bench_planned_f32(b,       8); }
+#[bench] fn planned32_p2_00000016(b: &mut Bencher) { bench_planned_f32(b,       16); }
+#[bench] fn planned32_p2_00000032(b: &mut Bencher) { bench_planned_f32(b,       32); }
 #[bench] fn planned32_p2_00000064(b: &mut Bencher) { bench_planned_f32(b,       64); }
 #[bench] fn planned32_p2_00000128(b: &mut Bencher) { bench_planned_f32(b,      128); }
 #[bench] fn planned32_p2_00000256(b: &mut Bencher) { bench_planned_f32(b,      256); }
@@ -380,12 +384,19 @@ fn bench_radix4(b: &mut Bencher, len: usize) {
     b.iter(|| {fft.process_outofplace_with_scratch(&mut signal, &mut spectrum, &mut []);} );
 }
 
-#[bench] fn radix4_______64(b: &mut Bencher) { bench_radix4(b, 64); }
-#[bench] fn radix4______256(b: &mut Bencher) { bench_radix4(b, 256); }
-#[bench] fn radix4_____1024(b: &mut Bencher) { bench_radix4(b, 1024); }
-#[bench] fn radix4____65536(b: &mut Bencher) { bench_radix4(b, 65536); }
+#[bench] fn radix4__0000004(b: &mut Bencher) { bench_radix4(b, 4); }
+#[bench] fn radix4__0000008(b: &mut Bencher) { bench_radix4(b, 8); }
+#[bench] fn radix4__0000016(b: &mut Bencher) { bench_radix4(b, 16); }
+#[bench] fn radix4__0000032(b: &mut Bencher) { bench_radix4(b, 32); }
+#[bench] fn radix4__0000064(b: &mut Bencher) { bench_radix4(b, 64); }
+#[bench] fn radix4__0000128(b: &mut Bencher) { bench_radix4(b, 128); }
+#[bench] fn radix4__0000256(b: &mut Bencher) { bench_radix4(b, 256); }
+#[bench] fn radix4__0000512(b: &mut Bencher) { bench_radix4(b, 512); }
+#[bench] fn radix4__0001024(b: &mut Bencher) { bench_radix4(b, 1024); }
+#[bench] fn radix4__0002048(b: &mut Bencher) { bench_radix4(b, 2048); }
+#[bench] fn radix4__0032768(b: &mut Bencher) { bench_radix4(b, 32768); }
+#[bench] fn radix4__0065536(b: &mut Bencher) { bench_radix4(b, 65536); }
 #[bench] fn radix4__1048576(b: &mut Bencher) { bench_radix4(b, 1048576); }
-//#[bench] fn radix4_16777216(b: &mut Bencher) { bench_radix4(b, 16777216); }
 
 fn get_mixed_radix_power2(len: usize) -> Arc<dyn Fft<f32>> {
     match len {
@@ -523,3 +534,184 @@ fn bench_butterfly64(b: &mut Bencher, len: usize) {
 #[bench] fn butterfly64_128(b: &mut Bencher) { bench_butterfly64(b, 128); }
 #[bench] fn butterfly64_256(b: &mut Bencher) { bench_butterfly64(b, 256); }
 #[bench] fn butterfly64_512(b: &mut Bencher) { bench_butterfly64(b, 512); }
+
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a real-to-complex, with noop as its inner FFT
+fn bench_r2c_noop(b: &mut Bencher, len: usize) {
+    let inner_fft_len = len / 2;
+
+    let inner_fft = Arc::new(Noop {len: inner_fft_len, direction: FftDirection::Forward });
+    let fft = RealToComplexEven::new(inner_fft);
+
+    let mut input = vec![0f32; len];
+    let mut output = vec![Complex::zero(); inner_fft_len+1];
+    let mut scratch = vec![0.0f32; fft.get_scratch_len()];
+    b.iter(|| { fft.process(&mut input, &mut output, &mut scratch); } );
+}
+
+#[bench] fn r2c_noop__0000032(b: &mut Bencher) { bench_r2c_noop(b, 32); }
+#[bench] fn r2c_noop__0000064(b: &mut Bencher) { bench_r2c_noop(b, 64); }
+#[bench] fn r2c_noop__0000128(b: &mut Bencher) { bench_r2c_noop(b, 128); }
+#[bench] fn r2c_noop__0000256(b: &mut Bencher) { bench_r2c_noop(b, 256); }
+#[bench] fn r2c_noop__0000512(b: &mut Bencher) { bench_r2c_noop(b, 512); }
+#[bench] fn r2c_noop__0001024(b: &mut Bencher) { bench_r2c_noop(b, 1024); }
+#[bench] fn r2c_noop__0002048(b: &mut Bencher) { bench_r2c_noop(b, 2048); }
+#[bench] fn r2c_noop__0016384(b: &mut Bencher) { bench_r2c_noop(b, 16384); }
+#[bench] fn r2c_noop__0065536(b: &mut Bencher) { bench_r2c_noop(b, 65536); }
+#[bench] fn r2c_noop__1048576(b: &mut Bencher) { bench_r2c_noop(b, 1048576); }
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a real-to-complex, with radix4 as the inner FFT
+fn bench_r2c_radix4(b: &mut Bencher, len: usize) {
+    assert!(len % 4 == 0);
+    let inner_fft_len = len / 2;
+
+    let inner_fft = Arc::new(Radix4::new(inner_fft_len, FftDirection::Forward));
+    let fft = RealToComplexEven::new(inner_fft);
+
+    let mut input = vec![0f32; len];
+    let mut output = vec![Complex::zero(); inner_fft_len+1];
+    let mut scratch = vec![0.0f32; fft.get_scratch_len()];
+    b.iter(|| { fft.process(&mut input, &mut output, &mut scratch); } );
+}
+
+#[bench] fn r2c_radix4__0000004(b: &mut Bencher) { bench_r2c_radix4(b, 4); }
+#[bench] fn r2c_radix4__0000008(b: &mut Bencher) { bench_r2c_radix4(b, 8); }
+#[bench] fn r2c_radix4__0000016(b: &mut Bencher) { bench_r2c_radix4(b, 16); }
+#[bench] fn r2c_radix4__0000032(b: &mut Bencher) { bench_r2c_radix4(b, 32); }
+#[bench] fn r2c_radix4__0000064(b: &mut Bencher) { bench_r2c_radix4(b, 64); }
+#[bench] fn r2c_radix4__0000128(b: &mut Bencher) { bench_r2c_radix4(b, 128); }
+#[bench] fn r2c_radix4__0000256(b: &mut Bencher) { bench_r2c_radix4(b, 256); }
+#[bench] fn r2c_radix4__0000512(b: &mut Bencher) { bench_r2c_radix4(b, 512); }
+#[bench] fn r2c_radix4__0001024(b: &mut Bencher) { bench_r2c_radix4(b, 1024); }
+#[bench] fn r2c_radix4__0002048(b: &mut Bencher) { bench_r2c_radix4(b, 2048); }
+#[bench] fn r2c_radix4__0016384(b: &mut Bencher) { bench_r2c_radix4(b, 16384); }
+#[bench] fn r2c_radix4__0065536(b: &mut Bencher) { bench_r2c_radix4(b, 65536); }
+#[bench] fn r2c_radix4__1048576(b: &mut Bencher) { bench_r2c_radix4(b, 1048576); }
+
+
+
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a real-to-complex, with a planned (probably AVX) FFT as the inner FFT
+fn bench_r2c_planned32(b: &mut Bencher, len: usize) {
+    assert!(len % 2 == 0);
+    let inner_fft_len = len / 2;
+
+    let mut planner : FftPlanner<f32> = FftPlanner::new();
+    let inner_fft = planner.plan_fft_forward(inner_fft_len);
+
+    let fft = RealToComplexEven::new(inner_fft);
+
+    let mut input = vec![0.0; len];
+    let mut output = vec![Complex::zero(); inner_fft_len+1];
+    let mut scratch = vec![0.0; fft.get_scratch_len()];
+    b.iter(|| { fft.process(&mut input, &mut output, &mut scratch); } );
+}
+
+#[bench] fn r2c_planned32__0000004(b: &mut Bencher) { bench_r2c_planned32(b, 4); }
+#[bench] fn r2c_planned32__0000008(b: &mut Bencher) { bench_r2c_planned32(b, 8); }
+#[bench] fn r2c_planned32__0000016(b: &mut Bencher) { bench_r2c_planned32(b, 16); }
+#[bench] fn r2c_planned32__0000032(b: &mut Bencher) { bench_r2c_planned32(b, 32); }
+#[bench] fn r2c_planned32__0000064(b: &mut Bencher) { bench_r2c_planned32(b, 64); }
+#[bench] fn r2c_planned32__0000128(b: &mut Bencher) { bench_r2c_planned32(b, 128); }
+#[bench] fn r2c_planned32__0000256(b: &mut Bencher) { bench_r2c_planned32(b, 256); }
+#[bench] fn r2c_planned32__0000512(b: &mut Bencher) { bench_r2c_planned32(b, 512); }
+#[bench] fn r2c_planned32__0001024(b: &mut Bencher) { bench_r2c_planned32(b, 1024); }
+#[bench] fn r2c_planned32__0002048(b: &mut Bencher) { bench_r2c_planned32(b, 2048); }
+#[bench] fn r2c_planned32__0004096(b: &mut Bencher) { bench_r2c_planned32(b, 4096); }
+#[bench] fn r2c_planned32__0016384(b: &mut Bencher) { bench_r2c_planned32(b, 16384); }
+#[bench] fn r2c_planned32__0065536(b: &mut Bencher) { bench_r2c_planned32(b, 65536); }
+#[bench] fn r2c_planned32__1048576(b: &mut Bencher) { bench_r2c_planned32(b, 1048576); }
+
+
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a real-to-complex, with noop as its inner FFT
+fn bench_c2r_noop(b: &mut Bencher, len: usize) {
+    let inner_fft_len = len / 2;
+
+    let inner_fft = Arc::new(Noop {len: inner_fft_len, direction: FftDirection::Forward });
+    let fft = ComplexToRealEven::new(inner_fft);
+
+    let mut input = vec![Complex::zero(); inner_fft_len+1];
+    let mut output = vec![0f32; len];
+    let mut scratch = vec![0f32; fft.get_scratch_len()];
+    b.iter(|| { fft.process(&mut input, &mut output, &mut scratch); } );
+}
+
+#[bench] fn c2r_noop__0000032(b: &mut Bencher) { bench_c2r_noop(b, 32); }
+#[bench] fn c2r_noop__0000064(b: &mut Bencher) { bench_c2r_noop(b, 64); }
+#[bench] fn c2r_noop__0000128(b: &mut Bencher) { bench_c2r_noop(b, 128); }
+#[bench] fn c2r_noop__0000256(b: &mut Bencher) { bench_c2r_noop(b, 256); }
+#[bench] fn c2r_noop__0000512(b: &mut Bencher) { bench_c2r_noop(b, 512); }
+#[bench] fn c2r_noop__0001024(b: &mut Bencher) { bench_c2r_noop(b, 1024); }
+#[bench] fn c2r_noop__0002048(b: &mut Bencher) { bench_c2r_noop(b, 2048); }
+#[bench] fn c2r_noop__0016384(b: &mut Bencher) { bench_c2r_noop(b, 16384); }
+#[bench] fn c2r_noop__0065536(b: &mut Bencher) { bench_c2r_noop(b, 65536); }
+#[bench] fn c2r_noop__1048576(b: &mut Bencher) { bench_c2r_noop(b, 1048576); }
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a real-to-complex, with radix4 as the inner FFT
+fn bench_c2r_radix4(b: &mut Bencher, len: usize) {
+    assert!(len % 4 == 0);
+    let inner_fft_len = len / 2;
+
+    let inner_fft = Arc::new(Radix4::new(inner_fft_len, FftDirection::Forward));
+    let fft = ComplexToRealEven::new(inner_fft);
+
+    let mut input = vec![Complex::zero(); inner_fft_len+1];
+    let mut output = vec![0f32; len];
+    let mut scratch = vec![0.0f32; fft.get_scratch_len()];
+    b.iter(|| { fft.process(&mut input, &mut output, &mut scratch); } );
+}
+
+#[bench] fn c2r_radix4__0000004(b: &mut Bencher) { bench_c2r_radix4(b, 4); }
+#[bench] fn c2r_radix4__0000008(b: &mut Bencher) { bench_c2r_radix4(b, 8); }
+#[bench] fn c2r_radix4__0000016(b: &mut Bencher) { bench_c2r_radix4(b, 16); }
+#[bench] fn c2r_radix4__0000032(b: &mut Bencher) { bench_c2r_radix4(b, 32); }
+#[bench] fn c2r_radix4__0000064(b: &mut Bencher) { bench_c2r_radix4(b, 64); }
+#[bench] fn c2r_radix4__0000128(b: &mut Bencher) { bench_c2r_radix4(b, 128); }
+#[bench] fn c2r_radix4__0000256(b: &mut Bencher) { bench_c2r_radix4(b, 256); }
+#[bench] fn c2r_radix4__0000512(b: &mut Bencher) { bench_c2r_radix4(b, 512); }
+#[bench] fn c2r_radix4__0001024(b: &mut Bencher) { bench_c2r_radix4(b, 1024); }
+#[bench] fn c2r_radix4__0002048(b: &mut Bencher) { bench_c2r_radix4(b, 2048); }
+#[bench] fn c2r_radix4__0016384(b: &mut Bencher) { bench_c2r_radix4(b, 16384); }
+#[bench] fn c2r_radix4__0065536(b: &mut Bencher) { bench_c2r_radix4(b, 65536); }
+#[bench] fn c2r_radix4__1048576(b: &mut Bencher) { bench_c2r_radix4(b, 1048576); }
+
+
+
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a real-to-complex, with a planned (probably AVX) FFT as the inner FFT
+fn bench_c2r_planned32(b: &mut Bencher, len: usize) {
+    assert!(len % 2 == 0);
+    let inner_fft_len = len / 2;
+
+    let mut planner : FftPlanner<f32> = FftPlanner::new();
+    let inner_fft = planner.plan_fft_forward(inner_fft_len);
+
+    let fft = ComplexToRealEven::new(inner_fft);
+
+    let mut input = vec![Complex::zero(); inner_fft_len+1];
+    let mut output = vec![0f32; len];
+    let mut scratch = vec![0.0; fft.get_scratch_len()];
+    b.iter(|| { fft.process(&mut input, &mut output, &mut scratch); } );
+}
+
+#[bench] fn c2r_planned32__0000004(b: &mut Bencher) { bench_c2r_planned32(b, 4); }
+#[bench] fn c2r_planned32__0000008(b: &mut Bencher) { bench_c2r_planned32(b, 8); }
+#[bench] fn c2r_planned32__0000016(b: &mut Bencher) { bench_c2r_planned32(b, 16); }
+#[bench] fn c2r_planned32__0000032(b: &mut Bencher) { bench_c2r_planned32(b, 32); }
+#[bench] fn c2r_planned32__0000064(b: &mut Bencher) { bench_c2r_planned32(b, 64); }
+#[bench] fn c2r_planned32__0000128(b: &mut Bencher) { bench_c2r_planned32(b, 128); }
+#[bench] fn c2r_planned32__0000256(b: &mut Bencher) { bench_c2r_planned32(b, 256); }
+#[bench] fn c2r_planned32__0000512(b: &mut Bencher) { bench_c2r_planned32(b, 512); }
+#[bench] fn c2r_planned32__0001024(b: &mut Bencher) { bench_c2r_planned32(b, 1024); }
+#[bench] fn c2r_planned32__0002048(b: &mut Bencher) { bench_c2r_planned32(b, 2048); }
+#[bench] fn c2r_planned32__0004096(b: &mut Bencher) { bench_c2r_planned32(b, 4096); }
+#[bench] fn c2r_planned32__0016384(b: &mut Bencher) { bench_c2r_planned32(b, 16384); }
+#[bench] fn c2r_planned32__0065536(b: &mut Bencher) { bench_c2r_planned32(b, 65536); }
+#[bench] fn c2r_planned32__1048576(b: &mut Bencher) { bench_c2r_planned32(b, 1048576); }
