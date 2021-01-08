@@ -3,12 +3,15 @@ use std::{any::TypeId, cmp::min};
 
 use primal_check::miller_rabin;
 
-use crate::fft_cache::{FftCache, ComplexToRealCache, RealToComplexCache};
-use crate::{FftComplexToReal, FftRealToComplex, algorithm::{real_to_complex::{ComplexToRealEven, RealToComplexEven}}};
+use crate::algorithm::{butterflies::*, Dft, RadersAlgorithm};
 use crate::common::FftNum;
+use crate::fft_cache::{ComplexToRealCache, FftCache, RealToComplexCache};
 use crate::math_utils::PartialFactors;
 use crate::Fft;
-use crate::algorithm::{butterflies::*, Dft, RadersAlgorithm};
+use crate::{
+    algorithm::real_to_complex::{ComplexToRealEven, RealToComplexEven},
+    FftComplexToReal, FftRealToComplex,
+};
 
 use super::*;
 
@@ -204,14 +207,17 @@ impl<T: FftNum> FftPlannerAvx<T> {
                 fft
             } else {
                 let inner_fft = self.plan_fft_forward(len);
-                let fft = Arc::new(RealToComplexEven::new(inner_fft)) as Arc<dyn FftRealToComplex<T>>;
+                let fft =
+                    Arc::new(RealToComplexEven::new(inner_fft)) as Arc<dyn FftRealToComplex<T>>;
 
                 self.r2c_cache.insert(&fft);
 
                 fft
             }
         } else {
-            unimplemented!("Complex-to-real FFTs with off length aren't supported yet, but will be soon.");
+            unimplemented!(
+                "Complex-to-real FFTs with off length aren't supported yet, but will be soon."
+            );
         }
     }
 
@@ -230,14 +236,17 @@ impl<T: FftNum> FftPlannerAvx<T> {
                 fft
             } else {
                 let inner_fft = self.plan_fft_forward(len);
-                let fft = Arc::new(ComplexToRealEven::new(inner_fft)) as Arc<dyn FftComplexToReal<T>>;
+                let fft =
+                    Arc::new(ComplexToRealEven::new(inner_fft)) as Arc<dyn FftComplexToReal<T>>;
 
                 self.c2r_cache.insert(&fft);
 
                 fft
             }
         } else {
-            unimplemented!("Complex-to-real FFTs with off length aren't supported yet, but will be soon.");
+            unimplemented!(
+                "Complex-to-real FFTs with off length aren't supported yet, but will be soon."
+            );
         }
     }
 

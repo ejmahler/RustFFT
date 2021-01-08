@@ -83,4 +83,3 @@ impl<T> ComplexToRealCache<T> {
         self.cache.insert(len, cloned);
     }
 }
-

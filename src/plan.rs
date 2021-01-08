@@ -4,7 +4,12 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use crate::{FftComplexToReal, FftDirection, FftRealToComplex, algorithm::real_to_complex::RealToComplexEven, common::FftNum, fft_cache::{ComplexToRealCache, FftCache, RealToComplexCache}};
+use crate::{
+    algorithm::real_to_complex::RealToComplexEven,
+    common::FftNum,
+    fft_cache::{ComplexToRealCache, FftCache, RealToComplexCache},
+    FftComplexToReal, FftDirection, FftRealToComplex,
+};
 
 use crate::algorithm::butterflies::*;
 use crate::algorithm::*;
@@ -313,14 +318,17 @@ impl<T: FftNum> FftPlannerScalar<T> {
                 fft
             } else {
                 let inner_fft = self.plan_fft_forward(len);
-                let fft = Arc::new(RealToComplexEven::new(inner_fft)) as Arc<dyn FftRealToComplex<T>>;
+                let fft =
+                    Arc::new(RealToComplexEven::new(inner_fft)) as Arc<dyn FftRealToComplex<T>>;
 
                 self.r2c_cache.insert(&fft);
 
                 fft
             }
         } else {
-            unimplemented!("Complex-to-real FFTs with off length aren't supported yet, but will be soon.");
+            unimplemented!(
+                "Complex-to-real FFTs with off length aren't supported yet, but will be soon."
+            );
         }
     }
 
@@ -339,14 +347,17 @@ impl<T: FftNum> FftPlannerScalar<T> {
                 fft
             } else {
                 let inner_fft = self.plan_fft_forward(len);
-                let fft = Arc::new(ComplexToRealEven::new(inner_fft)) as Arc<dyn FftComplexToReal<T>>;
+                let fft =
+                    Arc::new(ComplexToRealEven::new(inner_fft)) as Arc<dyn FftComplexToReal<T>>;
 
                 self.c2r_cache.insert(&fft);
 
                 fft
             }
         } else {
-            unimplemented!("Complex-to-real FFTs with off length aren't supported yet, but will be soon.");
+            unimplemented!(
+                "Complex-to-real FFTs with off length aren't supported yet, but will be soon."
+            );
         }
     }
 
