@@ -82,7 +82,8 @@
 //! In most cases, even prime-sized FFTs will be fast enough for your application. In the example of 5183 above, even that "slow" FFT
 //! only takes a few tens of microseconds to compute.
 //!
-//! Our advice is to start by trying the size that's most convenient to your application.
+//! Some applications of the FFT allow for choosing an arbitrary FFT size (In many applications the size is pre-determined by whatever you're computing).
+//! If your application supports choosing your own size, our advice is still to start by trying the size that's most convenient to your application.
 //! If that's too slow, see if you can find a nearby size whose prime factors are all 11 or smaller, and you can expect a 2x-5x speedup.
 //! If that's still too slow, find a nearby size whose prime factors are all 2 or 3, and you can expect a 1.1x-1.5x speedup.
 
