@@ -255,15 +255,18 @@ impl<T: FftNum> FftComplexToReal<T> for ComplexToRealEven<T> {
             let twiddled_re_diff = diff * twiddle.re;
             let twiddled_im_diff = diff * twiddle.im;
 
+            let output_twiddled_real = twiddled_re_sum.im + twiddled_im_diff.re;
+            let output_twiddled_im = twiddled_im_sum.im - twiddled_re_diff.re;
+
             // We finally have all the data we need to write our preprocessed data back where we got it from
             *fft_input = Complex {
-                re: sum.re - twiddled_re_sum.im - twiddled_im_diff.re,
-                im: diff.im + twiddled_re_diff.re - twiddled_im_sum.im,
+                re: sum.re - output_twiddled_real,
+                im: diff.im - output_twiddled_im,
             };
 
             *fft_input_rev = Complex {
-                re: sum.re + twiddled_re_sum.im + twiddled_im_diff.re,
-                im: twiddled_re_diff.re - twiddled_im_sum.im - diff.im,
+                re: sum.re + output_twiddled_real,
+                im: -output_twiddled_im - diff.im,
             }
         }
 
