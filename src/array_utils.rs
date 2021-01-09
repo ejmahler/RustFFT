@@ -1,3 +1,5 @@
+use num_complex::Complex;
+
 /// Given an array of size width * height, representing a flattened 2D array,
 /// transpose the rows and columns of that 2D array into the output
 /// benchmarking shows that loop tiling isn't effective for small arrays (in the range of 50x50 or smaller)
@@ -23,6 +25,29 @@ pub unsafe fn workaround_transmute_mut<T, U>(slice: &mut [T]) -> &mut [U] {
     let ptr = slice.as_mut_ptr() as *mut U;
     let len = slice.len();
     std::slice::from_raw_parts_mut(ptr, len)
+}
+
+pub fn into_complex_mut<T>(buffer: &mut [T]) -> &mut [Complex<T>] {
+    let complex_len = buffer.len() / 2;
+    let ptr = buffer.as_mut_ptr() as *mut Complex<T>;
+    unsafe { std::slice::from_raw_parts_mut(ptr, complex_len) }
+}
+#[allow(unused)]
+pub fn into_real_mut<T>(buffer: &mut [Complex<T>]) -> &mut [T] {
+    let real_len = buffer.len() * 2;
+    let ptr = buffer.as_mut_ptr() as *mut T;
+    unsafe { std::slice::from_raw_parts_mut(ptr, real_len) }
+}
+
+pub fn zip3<A, B, C>(a: A, b: B, c: C) -> impl Iterator<Item = (A::Item, B::Item, C::Item)>
+where
+    A: IntoIterator,
+    B: IntoIterator,
+    C: IntoIterator,
+{
+    a.into_iter()
+        .zip(b.into_iter().zip(c))
+        .map(|(x, (y, z))| (x, y, z))
 }
 
 #[derive(Copy, Clone)]

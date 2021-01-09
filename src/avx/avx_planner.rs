@@ -3,15 +3,12 @@ use std::{any::TypeId, cmp::min};
 
 use primal_check::miller_rabin;
 
-use crate::algorithm::{butterflies::*, Dft, RadersAlgorithm};
+use crate::algorithm::{butterflies::*, real_to_complex::ComplexToRealEven, Dft, RadersAlgorithm};
 use crate::common::FftNum;
 use crate::fft_cache::{ComplexToRealCache, FftCache, RealToComplexCache};
 use crate::math_utils::PartialFactors;
 use crate::Fft;
-use crate::{
-    algorithm::real_to_complex::{ComplexToRealEven, RealToComplexEven},
-    FftComplexToReal, FftRealToComplex,
-};
+use crate::{FftComplexToReal, FftRealToComplex};
 
 use super::*;
 
@@ -116,8 +113,6 @@ impl MixedRadixPlan {
 /// safe to drop the planner after creating Fft instances.
 pub struct FftPlannerAvx<T: FftNum> {
     internal_planner: Box<dyn AvxPlannerInternalAPI<T>>,
-    r2c_cache: RealToComplexCache<T>,
-    c2r_cache: ComplexToRealCache<T>,
 }
 impl<T: FftNum> FftPlannerAvx<T> {
     /// Constructs a new `FftPlannerAvx` instance.
@@ -159,14 +154,10 @@ impl<T: FftNum> FftPlannerAvx<T> {
             if id_t == id_f32 {
                 return Ok(Self {
                     internal_planner: Box::new(AvxPlannerInternal::<f32, T>::new()),
-                    r2c_cache: RealToComplexCache::new(),
-                    c2r_cache: ComplexToRealCache::new(),
                 });
             } else if id_t == id_f64 {
                 return Ok(Self {
                     internal_planner: Box::new(AvxPlannerInternal::<f64, T>::new()),
-                    r2c_cache: RealToComplexCache::new(),
-                    c2r_cache: ComplexToRealCache::new(),
                 });
             }
         }
@@ -202,23 +193,7 @@ impl<T: FftNum> FftPlannerAvx<T> {
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_r2c(&mut self, len: usize) -> Arc<dyn FftRealToComplex<T>> {
-        if len % 2 == 0 {
-            if let Some(fft) = self.r2c_cache.get(len) {
-                fft
-            } else {
-                let inner_fft = self.plan_fft_forward(len);
-                let fft =
-                    Arc::new(RealToComplexEven::new(inner_fft)) as Arc<dyn FftRealToComplex<T>>;
-
-                self.r2c_cache.insert(&fft);
-
-                fft
-            }
-        } else {
-            unimplemented!(
-                "Complex-to-real FFTs with off length aren't supported yet, but will be soon."
-            );
-        }
+        self.internal_planner.plan_r2c(len)
     }
 
     /// Returns a `FftComplexToReal` instance which computes FFTs of size `len`
@@ -231,23 +206,7 @@ impl<T: FftNum> FftPlannerAvx<T> {
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_c2r(&mut self, len: usize) -> Arc<dyn FftComplexToReal<T>> {
-        if len % 2 == 0 {
-            if let Some(fft) = self.c2r_cache.get(len) {
-                fft
-            } else {
-                let inner_fft = self.plan_fft_forward(len);
-                let fft =
-                    Arc::new(ComplexToRealEven::new(inner_fft)) as Arc<dyn FftComplexToReal<T>>;
-
-                self.c2r_cache.insert(&fft);
-
-                fft
-            }
-        } else {
-            unimplemented!(
-                "Complex-to-real FFTs with off length aren't supported yet, but will be soon."
-            );
-        }
+        self.internal_planner.plan_c2r(len)
     }
 
     /// Returns a FFT plan without constructing it
@@ -259,11 +218,15 @@ impl<T: FftNum> FftPlannerAvx<T> {
 
 trait AvxPlannerInternalAPI<T: FftNum> {
     fn plan_and_construct_fft(&mut self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>>;
+    fn plan_r2c(&mut self, len: usize) -> Arc<dyn FftRealToComplex<T>>;
+    fn plan_c2r(&mut self, len: usize) -> Arc<dyn FftComplexToReal<T>>;
     fn debug_plan_fft(&self, len: usize, direction: FftDirection) -> MixedRadixPlan;
 }
 
 struct AvxPlannerInternal<A: AvxNum, T: FftNum> {
     cache: FftCache<T>,
+    r2c_cache: RealToComplexCache<T>,
+    c2r_cache: ComplexToRealCache<T>,
     _phantom: std::marker::PhantomData<A>,
 }
 
@@ -283,6 +246,44 @@ impl<T: FftNum> AvxPlannerInternalAPI<T> for AvxPlannerInternal<f32, T> {
     fn debug_plan_fft(&self, len: usize, direction: FftDirection) -> MixedRadixPlan {
         self.plan_fft(len, direction, Self::plan_mixed_radix_base)
     }
+
+    fn plan_r2c(&mut self, len: usize) -> Arc<dyn FftRealToComplex<T>> {
+        if len % 2 == 0 {
+            if let Some(fft) = self.r2c_cache.get(len) {
+                fft
+            } else {
+                let inner_fft = self.plan_and_construct_fft(len, FftDirection::Forward);
+                let fft = Arc::new(RealToComplexEvenAvx::<f32, T>::new(inner_fft).unwrap())
+                    as Arc<dyn FftRealToComplex<T>>;
+
+                self.r2c_cache.insert(&fft);
+
+                fft
+            }
+        } else {
+            unimplemented!(
+                "Complex-to-real FFTs with off length aren't supported yet, but will be soon."
+            );
+        }
+    }
+
+    fn plan_c2r(&mut self, len: usize) -> Arc<dyn FftComplexToReal<T>> {
+        if len % 2 == 0 {
+            if let Some(fft) = self.c2r_cache.get(len) {
+                fft
+            } else {
+                let inner_fft = self.plan_and_construct_fft(len, FftDirection::Inverse);
+                let fft =
+                    Arc::new(ComplexToRealEven::new(inner_fft)) as Arc<dyn FftComplexToReal<T>>;
+
+                self.c2r_cache.insert(&fft);
+
+                fft
+            }
+        } else {
+            todo!("Complex-to-real FFTs with odd length aren't supported yet, but will be soon.");
+        }
+    }
 }
 impl<T: FftNum> AvxPlannerInternalAPI<T> for AvxPlannerInternal<f64, T> {
     fn plan_and_construct_fft(&mut self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
@@ -300,6 +301,42 @@ impl<T: FftNum> AvxPlannerInternalAPI<T> for AvxPlannerInternal<f64, T> {
     fn debug_plan_fft(&self, len: usize, direction: FftDirection) -> MixedRadixPlan {
         self.plan_fft(len, direction, Self::plan_mixed_radix_base)
     }
+
+    fn plan_r2c(&mut self, len: usize) -> Arc<dyn FftRealToComplex<T>> {
+        if len % 2 == 0 {
+            if let Some(fft) = self.r2c_cache.get(len) {
+                fft
+            } else {
+                let inner_fft = self.plan_and_construct_fft(len, FftDirection::Forward);
+                let fft = Arc::new(RealToComplexEvenAvx::<f64, T>::new(inner_fft).unwrap())
+                    as Arc<dyn FftRealToComplex<T>>;
+
+                self.r2c_cache.insert(&fft);
+
+                fft
+            }
+        } else {
+            todo!("Complex-to-real FFTs with odd length aren't supported yet, but will be soon.");
+        }
+    }
+
+    fn plan_c2r(&mut self, len: usize) -> Arc<dyn FftComplexToReal<T>> {
+        if len % 2 == 0 {
+            if let Some(fft) = self.c2r_cache.get(len) {
+                fft
+            } else {
+                let inner_fft = self.plan_and_construct_fft(len, FftDirection::Inverse);
+                let fft =
+                    Arc::new(ComplexToRealEven::new(inner_fft)) as Arc<dyn FftComplexToReal<T>>;
+
+                self.c2r_cache.insert(&fft);
+
+                fft
+            }
+        } else {
+            todo!("Complex-to-real FFTs with odd length aren't supported yet, but will be soon.");
+        }
+    }
 }
 
 //-------------------------------------------------------------------
@@ -316,6 +353,8 @@ impl<T: FftNum> AvxPlannerInternal<f32, T> {
 
         Self {
             cache: FftCache::new(),
+            r2c_cache: RealToComplexCache::new(),
+            c2r_cache: ComplexToRealCache::new(),
             _phantom: std::marker::PhantomData,
         }
     }
@@ -526,6 +565,8 @@ impl<T: FftNum> AvxPlannerInternal<f64, T> {
 
         Self {
             cache: FftCache::new(),
+            r2c_cache: RealToComplexCache::new(),
+            c2r_cache: ComplexToRealCache::new(),
             _phantom: std::marker::PhantomData,
         }
     }

@@ -2,29 +2,8 @@ use std::sync::Arc;
 
 use num_complex::Complex;
 
+use crate::array_utils::{into_complex_mut, zip3};
 use crate::{twiddles, Fft, FftComplexToReal, FftDirection, FftNum, FftRealToComplex, Length};
-
-pub fn into_complex_mut<T>(buffer: &mut [T]) -> &mut [Complex<T>] {
-    let complex_len = buffer.len() / 2;
-    let ptr = buffer.as_mut_ptr() as *mut Complex<T>;
-    unsafe { std::slice::from_raw_parts_mut(ptr, complex_len) }
-}
-pub fn into_real_mut<T>(buffer: &mut [Complex<T>]) -> &mut [T] {
-    let real_len = buffer.len() * 2;
-    let ptr = buffer.as_mut_ptr() as *mut T;
-    unsafe { std::slice::from_raw_parts_mut(ptr, real_len) }
-}
-
-fn zip3<A, B, C>(a: A, b: B, c: C) -> impl Iterator<Item = (A::Item, B::Item, C::Item)>
-where
-    A: IntoIterator,
-    B: IntoIterator,
-    C: IntoIterator,
-{
-    a.into_iter()
-        .zip(b.into_iter().zip(c))
-        .map(|(x, (y, z))| (x, y, z))
-}
 
 /// Processes FFTs with real-only inputs. Restricted to even input sizes.
 pub struct RealToComplexEven<T> {
@@ -128,6 +107,30 @@ impl<T: FftNum> FftRealToComplex<T> for RealToComplexEven<T> {
         ) {
             let sum = *out + *out_rev;
             let diff = *out - *out_rev;
+
+            // let sumdiff_blended = Complex { re: sum.re, im: diff.im };
+            // let diffsum_blended = Complex { re: diff.re, im: sum.im };
+            // let diffsum_swapped = Complex { re: sum.im, im: diff.re };
+
+            // let twiddled_diffsum_blended = diffsum_blended * twiddle.im;
+            // let twiddled_diffsum_swapped = diffsum_swapped * twiddle.re;
+            // let half_sumdiff = sumdiff_blended * half;
+
+            // let twiddled_output = Complex {
+            //     re: twiddled_diffsum_blended.re + twiddled_diffsum_swapped.re,
+            //     im: twiddled_diffsum_blended.im - twiddled_diffsum_swapped.im,
+            // };
+
+            // #[allow(unused)]
+            // let tmp_out = Complex {
+            //     re: half_sumdiff.re + twiddled_output.re,
+            //     im: half_sumdiff.im + twiddled_output.im,
+            // };
+            // #[allow(unused)]
+            // let tmp_out_rev = Complex {
+            //     re: half_sumdiff.re - twiddled_output.re,
+            //     im: -half_sumdiff.im + twiddled_output.im,
+            // };
 
             // Apply twiddle factors. Theoretically we'd have to load 2 separate twiddle factors here, one for the beginning
             // and one for the end. But the twiddle factor for the end is jsut the twiddle for the beginning, with the
@@ -312,24 +315,24 @@ mod unit_tests {
     use num_traits::Zero;
 
     #[test]
-    fn test_r2c_even() {
-        for inner_len in 0..10 {
+    fn test_r2c_even_scalar() {
+        for inner_len in 6..7 {
             test_r2c_even_with_inner(inner_len, FftDirection::Forward);
 
             // Note: Even though R2C is usually used with a forward FFT, it was pretty trivial to make it support inverse FFTs.
             // If there's a compelling performance reason to drop inverse support, go ahead.
-            test_r2c_even_with_inner(inner_len, FftDirection::Inverse);
+            //test_r2c_even_with_inner(inner_len, FftDirection::Inverse);
         }
     }
 
     fn test_r2c_even_with_inner(inner_len: usize, direction: FftDirection) {
-        let inner_fft: Arc<Dft<f32>> = Arc::new(Dft::new(inner_len, direction));
+        let inner_fft: Arc<Dft<f64>> = Arc::new(Dft::new(inner_len, direction));
         let fft = RealToComplexEven::new(inner_fft);
 
         let control = Dft::new(inner_len * 2, direction);
 
         let mut real_input = random_real_signal(control.len());
-        let mut complex_input: Vec<Complex<f32>> = real_input.iter().map(Complex::from).collect();
+        let mut complex_input: Vec<Complex<f64>> = real_input.iter().map(Complex::from).collect();
 
         control.process(&mut complex_input);
 
@@ -348,8 +351,8 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_c2r_even() {
-        for inner_len in 0..10 {
+    fn test_c2r_even_scalar() {
+        for inner_len in 6..7 {
             // Note: Even though C2R is usually used with an inverse FFT, it was pretty trivial to make it support forward FFTs.
             // If there's a compelling performance reason to drop forward support, go ahead.
             test_c2r_even_with_inner(inner_len, FftDirection::Forward);

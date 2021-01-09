@@ -21,13 +21,16 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
 
     // useful constants
     unsafe fn zero() -> Self;
+    unsafe fn half() -> Self;
     unsafe fn half_root2() -> Self; // an entire vector filled with 0.5.sqrt()
 
     // Basic operations that map directly to 1-2 AVX intrinsics
     unsafe fn add(left: Self, right: Self) -> Self;
     unsafe fn sub(left: Self, right: Self) -> Self;
+    unsafe fn addsub(left: Self, right: Self) -> Self;
     unsafe fn xor(left: Self, right: Self) -> Self;
     unsafe fn neg(self) -> Self;
+    unsafe fn conj(self) -> Self;
     unsafe fn mul(left: Self, right: Self) -> Self;
     unsafe fn fmadd(left: Self, right: Self, add: Self) -> Self;
     unsafe fn fnmadd(left: Self, right: Self, add: Self) -> Self;
@@ -43,6 +46,9 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
 
     /// Reverse the order of complex numbers in the vector, so that the last is the first and the first is the last
     unsafe fn reverse_complex_elements(self) -> Self;
+
+    /// Returns a vector that takes the real values from `re`, and the imaginary values from `im`
+    unsafe fn blend_real_imaginary(re: Self, im: Self) -> Self;
 
     /// Copies the even elements of rows[1] into the corresponding odd elements of rows[0] and returns the result.
     unsafe fn unpacklo_complex(rows: [Self; 2]) -> Self;
@@ -819,6 +825,10 @@ impl AvxVector for __m256 {
         _mm256_setzero_ps()
     }
     #[inline(always)]
+    unsafe fn half() -> Self {
+        _mm256_set1_ps(0.5)
+    }
+    #[inline(always)]
     unsafe fn half_root2() -> Self {
         // note: we're computing a square root here, but checking the assembly says the compiler is smart enough to turn this into a constant
         _mm256_broadcast_ss(&0.5f32.sqrt())
@@ -833,12 +843,21 @@ impl AvxVector for __m256 {
         _mm256_xor_ps(self, _mm256_broadcast_ss(&-0.0))
     }
     #[inline(always)]
+    unsafe fn conj(self) -> Self {
+        let conjugation_mask = Self::broadcast_complex_elements(Complex { re: 0.0, im: -0.0 });
+        _mm256_xor_ps(self, conjugation_mask)
+    }
+    #[inline(always)]
     unsafe fn add(left: Self, right: Self) -> Self {
         _mm256_add_ps(left, right)
     }
     #[inline(always)]
     unsafe fn sub(left: Self, right: Self) -> Self {
         _mm256_sub_ps(left, right)
+    }
+    #[inline(always)]
+    unsafe fn addsub(left: Self, right: Self) -> Self {
+        _mm256_addsub_ps(left, right)
     }
     #[inline(always)]
     unsafe fn mul(left: Self, right: Self) -> Self {
@@ -866,6 +885,10 @@ impl AvxVector for __m256 {
         let permuted = _mm256_permute_ps(self, 0x4E);
         // swap the lanes
         _mm256_permute2f128_ps(permuted, permuted, 0x01)
+    }
+    #[inline(always)]
+    unsafe fn blend_real_imaginary(re: Self, im: Self) -> Self {
+        _mm256_blend_ps(re, im, 0xaa)
     }
     #[inline(always)]
     unsafe fn unpacklo_complex(rows: [Self; 2]) -> Self {
@@ -1205,6 +1228,10 @@ impl AvxVector for __m128 {
         _mm_setzero_ps()
     }
     #[inline(always)]
+    unsafe fn half() -> Self {
+        _mm_set1_ps(0.5)
+    }
+    #[inline(always)]
     unsafe fn half_root2() -> Self {
         // note: we're computing a square root here, but checking the assembly says the compiler is smart enough to turn this into a constant
         _mm_broadcast_ss(&0.5f32.sqrt())
@@ -1219,12 +1246,21 @@ impl AvxVector for __m128 {
         _mm_xor_ps(self, _mm_broadcast_ss(&-0.0))
     }
     #[inline(always)]
+    unsafe fn conj(self) -> Self {
+        let conjugation_mask = Self::broadcast_complex_elements(Complex { re: 0.0, im: -0.0 });
+        _mm_xor_ps(self, conjugation_mask)
+    }
+    #[inline(always)]
     unsafe fn add(left: Self, right: Self) -> Self {
         _mm_add_ps(left, right)
     }
     #[inline(always)]
     unsafe fn sub(left: Self, right: Self) -> Self {
         _mm_sub_ps(left, right)
+    }
+    #[inline(always)]
+    unsafe fn addsub(left: Self, right: Self) -> Self {
+        _mm_addsub_ps(left, right)
     }
     #[inline(always)]
     unsafe fn mul(left: Self, right: Self) -> Self {
@@ -1252,7 +1288,10 @@ impl AvxVector for __m128 {
         // swap the elements in-lane
         _mm_permute_ps(self, 0x4E)
     }
-
+    #[inline(always)]
+    unsafe fn blend_real_imaginary(re: Self, im: Self) -> Self {
+        _mm_blend_ps(re, im, 0xaa)
+    }
     #[inline(always)]
     unsafe fn unpacklo_complex(rows: [Self; 2]) -> Self {
         let row0_double = _mm_castps_pd(rows[0]);
@@ -1478,6 +1517,10 @@ impl AvxVector for __m256d {
         _mm256_setzero_pd()
     }
     #[inline(always)]
+    unsafe fn half() -> Self {
+        _mm256_set1_pd(0.5)
+    }
+    #[inline(always)]
     unsafe fn half_root2() -> Self {
         // note: we're computing a square root here, but checking the assembly says the compiler is smart enough to turn this into a constant
         _mm256_broadcast_sd(&0.5f64.sqrt())
@@ -1492,12 +1535,21 @@ impl AvxVector for __m256d {
         _mm256_xor_pd(self, _mm256_broadcast_sd(&-0.0))
     }
     #[inline(always)]
+    unsafe fn conj(self) -> Self {
+        let conjugation_mask = Self::broadcast_complex_elements(Complex { re: 0.0, im: -0.0 });
+        _mm256_xor_pd(self, conjugation_mask)
+    }
+    #[inline(always)]
     unsafe fn add(left: Self, right: Self) -> Self {
         _mm256_add_pd(left, right)
     }
     #[inline(always)]
     unsafe fn sub(left: Self, right: Self) -> Self {
         _mm256_sub_pd(left, right)
+    }
+    #[inline(always)]
+    unsafe fn addsub(left: Self, right: Self) -> Self {
+        _mm256_addsub_pd(left, right)
     }
     #[inline(always)]
     unsafe fn mul(left: Self, right: Self) -> Self {
@@ -1523,6 +1575,10 @@ impl AvxVector for __m256d {
     #[inline(always)]
     unsafe fn reverse_complex_elements(self) -> Self {
         _mm256_permute2f128_pd(self, self, 0x01)
+    }
+    #[inline(always)]
+    unsafe fn blend_real_imaginary(re: Self, im: Self) -> Self {
+        _mm256_blend_pd(re, im, 0xaa)
     }
     #[inline(always)]
     unsafe fn unpacklo_complex(rows: [Self; 2]) -> Self {
@@ -1798,6 +1854,10 @@ impl AvxVector for __m128d {
         _mm_setzero_pd()
     }
     #[inline(always)]
+    unsafe fn half() -> Self {
+        _mm_set1_pd(0.5)
+    }
+    #[inline(always)]
     unsafe fn half_root2() -> Self {
         // note: we're computing a square root here, but checking the assembly says the compiler is smart enough to turn this into a constant
         _mm_load1_pd(&0.5f64.sqrt())
@@ -1812,12 +1872,21 @@ impl AvxVector for __m128d {
         _mm_xor_pd(self, _mm_load1_pd(&-0.0))
     }
     #[inline(always)]
+    unsafe fn conj(self) -> Self {
+        let conjugation_mask = Self::broadcast_complex_elements(Complex { re: 0.0, im: -0.0 });
+        _mm_xor_pd(self, conjugation_mask)
+    }
+    #[inline(always)]
     unsafe fn add(left: Self, right: Self) -> Self {
         _mm_add_pd(left, right)
     }
     #[inline(always)]
     unsafe fn sub(left: Self, right: Self) -> Self {
         _mm_sub_pd(left, right)
+    }
+    #[inline(always)]
+    unsafe fn addsub(left: Self, right: Self) -> Self {
+        _mm_addsub_pd(left, right)
     }
     #[inline(always)]
     unsafe fn mul(left: Self, right: Self) -> Self {
@@ -1844,6 +1913,10 @@ impl AvxVector for __m128d {
     unsafe fn reverse_complex_elements(self) -> Self {
         // nothing to reverse
         self
+    }
+    #[inline(always)]
+    unsafe fn blend_real_imaginary(re: Self, im: Self) -> Self {
+        _mm_blend_pd(re, im, 0xaa)
     }
     #[inline(always)]
     unsafe fn unpacklo_complex(_rows: [Self; 2]) -> Self {
