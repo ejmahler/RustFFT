@@ -1,3 +1,9 @@
+## [5.0.1]
+Released 8 January 2021
+### Fixed
+ - Fixed the FFT planner not choosing an obviously faster plan in some rare cases (#46)
+ - Documentation fixes and clarificarions (#47, #48, #51)
+
 ## [5.0.0]
 Released 4 January 2021
 ### Breaking Changes
