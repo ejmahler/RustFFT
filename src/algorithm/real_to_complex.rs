@@ -193,10 +193,13 @@ impl<T: FftNum> ComplexToRealEven<T> {
         let len = inner_fft_len * 2;
         let direction = inner_fft.fft_direction();
 
-        // Compute our twiddle factors. We only need half as many twiddle factors as our FFT length,
-        // and keep in mind that we're baking a multiply by half into the twiddles
-        let twiddle_count = inner_fft_len;
-        let twiddles: Box<[Complex<T>]> = (0..twiddle_count)
+        // Compute our twiddle factors. We only need half as many twiddle factors as our FFT length, and we're skipping the first one because it's just (1,0)
+        let twiddle_count = if inner_fft_len % 2 == 0 {
+            inner_fft_len / 2
+        } else {
+            inner_fft_len / 2 + 1
+        };
+        let twiddles: Box<[Complex<T>]> = (1..twiddle_count)
             .map(|i| twiddles::compute_twiddle(i, len, direction))
             .collect();
 
@@ -223,26 +226,30 @@ impl<T: FftNum> FftComplexToReal<T> for ComplexToRealEven<T> {
         assert_eq!(output.len(), self.len());
         assert!(scratch.len() >= self.get_scratch_len());
 
+        let (mut input_left, mut input_right) = input.split_at_mut(input.len() / 2);
+
         // We have to preprocess the input in-place before we send it to the FFT.
         // The first and centermost values have to be preprocessed separately from the rest, so do that now
-        {
-            let last_value = input[input.len() - 1];
-            let first_value = input[0];
-            let first_sum = first_value + last_value;
-            let first_diff = first_value - last_value;
+        match (input_left.first_mut(), input_right.last_mut()) {
+            (Some(first_input), Some(last_input)) => {
+                let first_sum = *first_input + *last_input;
+                let first_diff = *first_input - *last_input;
 
-            input[0] = Complex {
-                re: first_sum.re - first_sum.im,
-                im: first_diff.re - first_diff.im,
-            };
-        }
+                *first_input = Complex {
+                    re: first_sum.re - first_sum.im,
+                    im: first_diff.re - first_diff.im,
+                };
+
+                input_left = &mut input_left[1..];
+                let right_len = input_right.len();
+                input_right = &mut input_right[..right_len - 1];
+            }
+            _ => return,
+        };
 
         // now, in a loop, preprocess the rest of the elements 2 at a time
-        let chopped_input = &mut input[1..inner_fft_len];
-        let (input_left, input_right) = chopped_input.split_at_mut(chopped_input.len() / 2);
-
         for (twiddle, fft_input, fft_input_rev) in zip3(
-            (&self.twiddles[1..]).iter(),
+            self.twiddles.iter(),
             input_left.iter_mut(),
             input_right.iter_mut().rev(),
         ) {
@@ -316,7 +323,7 @@ mod unit_tests {
 
     #[test]
     fn test_r2c_even_scalar() {
-        for inner_len in 6..7 {
+        for inner_len in 1..10 {
             test_r2c_even_with_inner(inner_len, FftDirection::Forward);
 
             // Note: Even though R2C is usually used with a forward FFT, it was pretty trivial to make it support inverse FFTs.
@@ -352,7 +359,7 @@ mod unit_tests {
 
     #[test]
     fn test_c2r_even_scalar() {
-        for inner_len in 6..7 {
+        for inner_len in 1..10 {
             // Note: Even though C2R is usually used with an inverse FFT, it was pretty trivial to make it support forward FFTs.
             // If there's a compelling performance reason to drop forward support, go ahead.
             test_c2r_even_with_inner(inner_len, FftDirection::Forward);
