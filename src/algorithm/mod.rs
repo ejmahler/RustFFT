@@ -5,6 +5,8 @@ mod mixed_radix;
 mod raders_algorithm;
 mod radix4;
 
+pub mod real_to_complex;
+
 /// Hardcoded size-specfic FFT algorithms
 pub mod butterflies;
 

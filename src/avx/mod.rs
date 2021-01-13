@@ -247,6 +247,7 @@ mod avx64_utils;
 mod avx_bluesteins;
 mod avx_mixed_radix;
 mod avx_raders;
+mod avx_real_to_complex;
 
 pub mod avx_planner;
 
@@ -272,3 +273,5 @@ pub use self::avx_mixed_radix::{
 };
 pub use self::avx_raders::RadersAvx2;
 use self::avx_vector::AvxVector256;
+
+pub use self::avx_real_to_complex::RealToComplexEvenAvx;

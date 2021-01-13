@@ -14,6 +14,16 @@ const RNG_SEED: [u8; 32] = [
     1, 9, 1, 0, 1, 1, 4, 3, 1, 4, 9, 8, 4, 1, 4, 8, 2, 8, 1, 2, 2, 2, 6, 1, 2, 3, 4, 5, 6, 7, 8, 9,
 ];
 
+pub fn random_real_signal<T: FftNum + SampleUniform>(length: usize) -> Vec<T> {
+    let mut sig = Vec::with_capacity(length);
+    let normal_dist: Uniform<T> = Uniform::new(T::zero(), T::from_f32(10.0).unwrap());
+    let mut rng: StdRng = SeedableRng::from_seed(RNG_SEED);
+    for _ in 0..length {
+        sig.push(normal_dist.sample(&mut rng));
+    }
+    return sig;
+}
+
 pub fn random_signal<T: FftNum + SampleUniform>(length: usize) -> Vec<Complex<T>> {
     let mut sig = Vec::with_capacity(length);
     let normal_dist: Uniform<T> = Uniform::new(T::zero(), T::from_f32(10.0).unwrap());
