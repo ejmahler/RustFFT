@@ -53,7 +53,7 @@ let fft_forward1 = planner.plan_fft(1234, FftDirection::Forward);
 let fft_forward2 = planner.plan_fft_forward(1234);
 
 let fft_inverse1 = planner.plan_fft(1234, FftDirection::Inverse);
-let fft_unverse2 = planner.plan_fft_inverse(1234);
+let fft_inverse2 = planner.plan_fft_inverse(1234);
 ```
 
 ## Fft Trait Methods
