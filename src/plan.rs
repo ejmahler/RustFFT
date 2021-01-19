@@ -674,4 +674,14 @@ mod unit_tests {
             "Existing recipe was not reused"
         );
     }
+
+    // This test is not designed to be run, only to compile.
+    // We cannot make it #[test] since there is a generic parameter.
+    #[allow(dead_code)]
+    fn test_impl_fft_planner_send<T: FftNum>() {
+        fn is_send<T: Send>() {}
+        is_send::<FftPlanner<T>>();
+        is_send::<FftPlannerScalar<T>>();
+        is_send::<FftPlannerAvx<T>>();
+    }
 }
