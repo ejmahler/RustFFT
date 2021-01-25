@@ -195,7 +195,7 @@ impl Recipe {
 
     pub fn cost(&self) -> f32 {
         match self {
-            Recipe::DFT(len) => 0.9 * (*len as f32).powf(2.2),
+            Recipe::Dft(len) => 0.9 * (*len as f32).powf(2.2),
             Recipe::Radix4(len) => {
                 let mut cost = 1.2 * (*len as f32).powf(1.2);
                 if *len > SLOWDOWN_LEN {
@@ -348,7 +348,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
     // Make a recipe for a length
     fn design_fft_for_len(&mut self, len: usize) -> Rc<Recipe> {
         if len == 0 {
-            Rc::new(Recipe::DFT(0))
+            Rc::new(Recipe::Dft(0))
         } else if let Some(recipe) = self.recipe_cache.get(&len) {
             Rc::clone(&recipe)
         } else {
@@ -679,7 +679,7 @@ mod unit_tests {
         let mut planner = FftPlannerScalar::<f64>::new();
         for len in 0..1 {
             let plan = planner.design_fft_for_len(len);
-            assert_eq!(*plan, Recipe::DFT(len));
+            assert_eq!(*plan, Recipe::Dft(len));
             assert_eq!(plan.len(), len, "Recipe reports wrong length");
         }
     }
