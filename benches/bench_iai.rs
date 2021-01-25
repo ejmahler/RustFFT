@@ -1,54 +1,13 @@
-#![allow(bare_trait_objects)]
 #![allow(non_snake_case)]
-#![feature(custom_test_frameworks)]
-#![test_runner(iai::runner)]
 extern crate rustfft;
-//extern crate test;
 
-use rustfft::algorithm::*;
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
-use rustfft::{Fft, FftDirection};
+use rustfft::Fft;
 use std::sync::Arc;
 
 use iai::black_box;
-//use iai_macro::iai;
 
-//fn fibonacci(n: u64) -> u64 {
-//    match n {
-//        0 => 1,
-//        1 => 1,
-//        n => fibonacci(n-1) + fibonacci(n-2),
-//    }
-//}
-//
-//fn iai_benchmark_short() -> u64 {
-//    fibonacci(black_box(10))
-//}
-//
-//fn iai_benchmark_long() -> u64 {
-//    fibonacci(black_box(30))
-//}
-//
-//
-//iai::main!(iai_benchmark_short, iai_benchmark_long);
-
-//use rustfft::algorithm::butterflies::*;
-
-/// Times just the FFT execution (not allocation and pre-calculation)
-/// for a given length
-//fn bench_planned_f64(b: &mut Bencher, len: usize) {
-//
-//    let mut planner = rustfft::FftPlannerScalar::new();
-//    let fft: Arc<dyn Fft<f64>> = planner.plan_fft_forward(len);
-//
-//    let mut buffer = vec![Complex::zero(); len];
-//    let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
-//    b.iter(|| { fft.process_inplace_with_scratch(&mut buffer, &mut scratch); });
-//}
-
-/// Times just the FFT execution (not allocation and pre-calculation)
-/// for a given length
 fn bench_planned_multi_f64(len: usize) {
     let mut planner = rustfft::FftPlannerScalar::new();
     let fft: Arc<dyn Fft<f64>> = planner.plan_fft_forward(len);
@@ -63,11 +22,13 @@ fn bench_planned_multi_f64_setup(len: usize) {
     let mut planner = rustfft::FftPlannerScalar::new();
     let fft: Arc<dyn Fft<f64>> = planner.plan_fft_forward(len);
 
-    let mut buffer: Vec<Complex<f64>> = vec![Complex::zero(); 1000 * len];
-    let mut output: Vec<Complex<f64>>  = vec![Complex::zero(); 1000 * len];
-    let mut scratch: Vec<Complex<f64>>  = vec![Complex::zero(); fft.get_outofplace_scratch_len()];
+    let buffer: Vec<Complex<f64>> = vec![Complex::zero(); 1000 * len];
+    let output: Vec<Complex<f64>>  = vec![Complex::zero(); 1000 * len];
+    let scratch: Vec<Complex<f64>>  = vec![Complex::zero(); fft.get_outofplace_scratch_len()];
+    // make sure we don't optimize away anything..
+    black_box(buffer);
+    black_box(output);
     black_box(scratch);
-    //fft.process_outofplace_with_scratch(&mut buffer, &mut output, &mut scratch);
 }
 
 // all butterflies
