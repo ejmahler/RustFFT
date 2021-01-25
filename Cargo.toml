@@ -29,3 +29,9 @@ primal-check = "0.3.1"
 
 [dev-dependencies]
 rand = "0.6"
+iai = "0.1"
+#iai_macro = "0.1"
+
+[[bench]]
+name = "bench_iai"
+harness = false
