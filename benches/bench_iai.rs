@@ -1,101 +1,92 @@
-#![allow(non_snake_case)]
+//#![feature(custom_test_frameworks)]
+//#![test_runner(iai::runner)]
+//#![allow(non_snake_case)]
 extern crate rustfft;
 
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
-use rustfft::Fft;
+use rustfft::algorithm::*;
+use rustfft::{Fft, FftDirection};
 use std::sync::Arc;
+use paste::paste;
 
 use iai::black_box;
+use iai::iai;
 
-fn bench_planned_multi_f64(len: usize) {
+fn bench_butterfly(len: usize, process: bool) {
     let mut planner = rustfft::FftPlannerScalar::new();
     let fft: Arc<dyn Fft<f64>> = planner.plan_fft_forward(len);
 
-    let mut buffer: Vec<Complex<f64>>  = vec![Complex::zero(); 1000 * len];
+    let mut buffer: Vec<Complex<f64>> = vec![Complex::zero(); 1000 * len];
     let mut output: Vec<Complex<f64>>  = vec![Complex::zero(); 1000 * len];
     let mut scratch: Vec<Complex<f64>>  = vec![Complex::zero(); fft.get_outofplace_scratch_len()];
-    fft.process_outofplace_with_scratch(&mut buffer, &mut output, &mut scratch);
+    if process {
+        fft.process_outofplace_with_scratch(&mut buffer, &mut output, &mut scratch);
+    }
+    else {
+        black_box(buffer);
+        black_box(output);
+        black_box(scratch);
+    }
 }
 
-fn bench_planned_multi_f64_setup(len: usize) {
-    let mut planner = rustfft::FftPlannerScalar::new();
-    let fft: Arc<dyn Fft<f64>> = planner.plan_fft_forward(len);
+fn bench_radix4(len: usize, process: bool) {
+    assert!(len % 4 == 0);
 
-    let buffer: Vec<Complex<f64>> = vec![Complex::zero(); 1000 * len];
-    let output: Vec<Complex<f64>>  = vec![Complex::zero(); 1000 * len];
-    let scratch: Vec<Complex<f64>>  = vec![Complex::zero(); fft.get_outofplace_scratch_len()];
-    // make sure we don't optimize away anything..
-    black_box(buffer);
-    black_box(output);
-    black_box(scratch);
+    let fft = Radix4::new(len, FftDirection::Forward);
+
+    let mut buffer = vec![ Complex { re: 0_f64, im: 0_f64 }; len ];
+    let mut output = buffer.clone();
+    let mut scratch = vec![ Complex { re: 0_f64, im: 0_f64 }; fft.get_outofplace_scratch_len() ];
+    if process {
+        fft.process_outofplace_with_scratch(&mut buffer, &mut output, &mut scratch);
+    }
+    else {
+        black_box(buffer);
+        black_box(output);
+        black_box(scratch);
+    }
 }
 
-// all butterflies
-fn estimates_10_butterfly_________00000002_0000() { bench_planned_multi_f64(black_box(2)); }
-fn estimates_10_butterfly_________00000003_0000() { bench_planned_multi_f64(black_box(3)); }
-fn estimates_10_butterfly_________00000004_0000() { bench_planned_multi_f64(black_box(4)); }
-fn estimates_10_butterfly_________00000005_0000() { bench_planned_multi_f64(black_box(5)); }
-fn estimates_10_butterfly_________00000006_0000() { bench_planned_multi_f64(black_box(6)); }
-fn estimates_10_butterfly_________00000007_0000() { bench_planned_multi_f64(black_box(7)); }
-fn estimates_10_butterfly_________00000008_0000() { bench_planned_multi_f64(black_box(8)); }
-fn estimates_10_butterfly_________00000011_0000() { bench_planned_multi_f64(black_box(11)); }
-fn estimates_10_butterfly_________00000013_0000() { bench_planned_multi_f64(black_box(13)); }
-fn estimates_10_butterfly_________00000016_0000() { bench_planned_multi_f64(black_box(16)); }
-fn estimates_10_butterfly_________00000017_0000() { bench_planned_multi_f64(black_box(17)); }
-fn estimates_10_butterfly_________00000019_0000() { bench_planned_multi_f64(black_box(19)); }
-fn estimates_10_butterfly_________00000023_0000() { bench_planned_multi_f64(black_box(23)); }
-fn estimates_10_butterfly_________00000029_0000() { bench_planned_multi_f64(black_box(29)); }
-fn estimates_10_butterfly_________00000031_0000() { bench_planned_multi_f64(black_box(31)); }
-fn estimates_10_butterfly_________00000032_0000() { bench_planned_multi_f64(black_box(32)); }
+macro_rules! make_benches {
+    ($name:ident { $($len:literal),* }) => {
+        paste! {
+            $(
+                //#[iai]
+                fn [<bench_ $name _ $len>]() {
+                    [<bench_ $name>](black_box($len), true);
+                }
+                //#[iai]
+                fn [<bench_ $name _setup_ $len>]() {
+                    [<bench_ $name>](black_box($len), false);
+                }
+            )*
+        }
+    }
+}
 
-fn estimates_10_butterfly_noop____00000002_0000() { bench_planned_multi_f64_setup(black_box(2)); }
-fn estimates_10_butterfly_noop____00000003_0000() { bench_planned_multi_f64_setup(black_box(3)); }
-fn estimates_10_butterfly_noop____00000004_0000() { bench_planned_multi_f64_setup(black_box(4)); }
-fn estimates_10_butterfly_noop____00000005_0000() { bench_planned_multi_f64_setup(black_box(5)); }
-fn estimates_10_butterfly_noop____00000006_0000() { bench_planned_multi_f64_setup(black_box(6)); }
-fn estimates_10_butterfly_noop____00000007_0000() { bench_planned_multi_f64_setup(black_box(7)); }
-fn estimates_10_butterfly_noop____00000008_0000() { bench_planned_multi_f64_setup(black_box(8)); }
-fn estimates_10_butterfly_noop____00000011_0000() { bench_planned_multi_f64_setup(black_box(11)); }
-fn estimates_10_butterfly_noop____00000013_0000() { bench_planned_multi_f64_setup(black_box(13)); }
-fn estimates_10_butterfly_noop____00000016_0000() { bench_planned_multi_f64_setup(black_box(16)); }
-fn estimates_10_butterfly_noop____00000017_0000() { bench_planned_multi_f64_setup(black_box(17)); }
-fn estimates_10_butterfly_noop____00000019_0000() { bench_planned_multi_f64_setup(black_box(19)); }
-fn estimates_10_butterfly_noop____00000023_0000() { bench_planned_multi_f64_setup(black_box(23)); }
-fn estimates_10_butterfly_noop____00000029_0000() { bench_planned_multi_f64_setup(black_box(29)); }
-fn estimates_10_butterfly_noop____00000031_0000() { bench_planned_multi_f64_setup(black_box(31)); }
-fn estimates_10_butterfly_noop____00000032_0000() { bench_planned_multi_f64_setup(black_box(32)); }
+make_benches!(butterfly {2,3,4,5,6,7,8,11,13,16,17,19,23,29,31,32});
+make_benches!(radix4 {64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304});
 
-iai::main!(estimates_10_butterfly_________00000002_0000,
-    estimates_10_butterfly_noop____00000002_0000,
-    estimates_10_butterfly_________00000003_0000,
-    estimates_10_butterfly_noop____00000003_0000,
-    estimates_10_butterfly_________00000004_0000,
-    estimates_10_butterfly_noop____00000004_0000,
-    estimates_10_butterfly_________00000005_0000,
-    estimates_10_butterfly_noop____00000005_0000,
-    estimates_10_butterfly_________00000006_0000,
-    estimates_10_butterfly_noop____00000006_0000,
-    estimates_10_butterfly_________00000007_0000,
-    estimates_10_butterfly_noop____00000007_0000,
-    estimates_10_butterfly_________00000008_0000,
-    estimates_10_butterfly_noop____00000008_0000,
-    estimates_10_butterfly_________00000011_0000,
-    estimates_10_butterfly_noop____00000011_0000,
-    estimates_10_butterfly_________00000013_0000,
-    estimates_10_butterfly_noop____00000013_0000,
-    estimates_10_butterfly_________00000016_0000,
-    estimates_10_butterfly_noop____00000016_0000,
-    estimates_10_butterfly_________00000017_0000,
-    estimates_10_butterfly_noop____00000017_0000,
-    estimates_10_butterfly_________00000019_0000,
-    estimates_10_butterfly_noop____00000019_0000,
-    estimates_10_butterfly_________00000023_0000,
-    estimates_10_butterfly_noop____00000023_0000,
-    estimates_10_butterfly_________00000029_0000,
-    estimates_10_butterfly_noop____00000029_0000,
-    estimates_10_butterfly_________00000031_0000,
-    estimates_10_butterfly_noop____00000031_0000,
-    estimates_10_butterfly_________00000032_0000,
-    estimates_10_butterfly_noop____00000032_0000
+macro_rules! run_benches {
+    ($({$name:ident { $($len:literal),* }}), *) => {
+        paste! {
+            iai::main!(
+                $(
+                    $(
+                        [<bench_ $name _ $len>],
+                        [<bench_ $name _setup_ $len>],
+                    )*
+                )*
+            );
+        }
+    }
+}
+
+run_benches!(
+    { butterfly {2,3,4,5,6,7,8,11,13,16,17,19,23,29,31,32}},
+    { radix4 {64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304} }
 );
+
+
+
