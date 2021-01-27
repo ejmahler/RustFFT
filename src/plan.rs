@@ -1,6 +1,5 @@
 use num_integer::gcd;
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
@@ -109,28 +108,28 @@ const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the
 pub enum Recipe {
     Dft(usize),
     MixedRadix {
-        left_fft: Rc<Recipe>,
-        right_fft: Rc<Recipe>,
+        left_fft: Arc<Recipe>,
+        right_fft: Arc<Recipe>,
     },
     #[allow(dead_code)]
     GoodThomasAlgorithm {
-        left_fft: Rc<Recipe>,
-        right_fft: Rc<Recipe>,
+        left_fft: Arc<Recipe>,
+        right_fft: Arc<Recipe>,
     },
     MixedRadixSmall {
-        left_fft: Rc<Recipe>,
-        right_fft: Rc<Recipe>,
+        left_fft: Arc<Recipe>,
+        right_fft: Arc<Recipe>,
     },
     GoodThomasAlgorithmSmall {
-        left_fft: Rc<Recipe>,
-        right_fft: Rc<Recipe>,
+        left_fft: Arc<Recipe>,
+        right_fft: Arc<Recipe>,
     },
     RadersAlgorithm {
-        inner_fft: Rc<Recipe>,
+        inner_fft: Arc<Recipe>,
     },
     BluesteinsAlgorithm {
         len: usize,
-        inner_fft: Rc<Recipe>,
+        inner_fft: Arc<Recipe>,
     },
     Radix4(usize),
     Butterfly2,
@@ -226,7 +225,7 @@ impl Recipe {
 /// safe to drop the planner after creating Fft instances.
 pub struct FftPlannerScalar<T: FftNum> {
     algorithm_cache: FftCache<T>,
-    recipe_cache: HashMap<usize, Rc<Recipe>>,
+    recipe_cache: HashMap<usize, Arc<Recipe>>,
 }
 
 impl<T: FftNum> FftPlannerScalar<T> {
@@ -266,15 +265,15 @@ impl<T: FftNum> FftPlannerScalar<T> {
     }
 
     // Make a recipe for a length
-    fn design_fft_for_len(&mut self, len: usize) -> Rc<Recipe> {
+    fn design_fft_for_len(&mut self, len: usize) -> Arc<Recipe> {
         if len < 2 {
-            Rc::new(Recipe::Dft(len))
+            Arc::new(Recipe::Dft(len))
         } else if let Some(recipe) = self.recipe_cache.get(&len) {
-            Rc::clone(&recipe)
+            Arc::clone(&recipe)
         } else {
             let factors = PrimeFactors::compute(len);
             let recipe = self.design_fft_with_factors(len, factors);
-            self.recipe_cache.insert(len, Rc::clone(&recipe));
+            self.recipe_cache.insert(len, Arc::clone(&recipe));
             recipe
         }
     }
@@ -355,7 +354,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
         }
     }
 
-    fn design_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Rc<Recipe> {
+    fn design_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Arc<Recipe> {
         if let Some(fft_instance) = self.design_butterfly_algorithm(len) {
             fft_instance
         } else if factors.is_prime() {
@@ -363,7 +362,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
         } else if len.trailing_zeros() <= MAX_RADIX4_BITS && len.trailing_zeros() >= MIN_RADIX4_BITS
         {
             if len.is_power_of_two() {
-                Rc::new(Recipe::Radix4(len))
+                Arc::new(Recipe::Radix4(len))
             } else {
                 let non_power_of_two = factors
                     .remove_factors(PrimeFactor {
@@ -384,7 +383,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
         &mut self,
         left_factors: PrimeFactors,
         right_factors: PrimeFactors,
-    ) -> Rc<Recipe> {
+    ) -> Arc<Recipe> {
         let left_len = left_factors.get_product();
         let right_len = right_factors.get_product();
 
@@ -396,18 +395,18 @@ impl<T: FftNum> FftPlannerScalar<T> {
         if left_len < 31 && right_len < 31 {
             // for small FFTs, if gcd is 1, good-thomas is faster
             if gcd(left_len, right_len) == 1 {
-                Rc::new(Recipe::GoodThomasAlgorithmSmall {
+                Arc::new(Recipe::GoodThomasAlgorithmSmall {
                     left_fft,
                     right_fft,
                 })
             } else {
-                Rc::new(Recipe::MixedRadixSmall {
+                Arc::new(Recipe::MixedRadixSmall {
                     left_fft,
                     right_fft,
                 })
             }
         } else {
-            Rc::new(Recipe::MixedRadix {
+            Arc::new(Recipe::MixedRadix {
                 left_fft,
                 right_fft,
             })
@@ -415,29 +414,29 @@ impl<T: FftNum> FftPlannerScalar<T> {
     }
 
     // Returns Some(instance) if we have a butterfly available for this size. Returns None if there is no butterfly available for this size
-    fn design_butterfly_algorithm(&mut self, len: usize) -> Option<Rc<Recipe>> {
+    fn design_butterfly_algorithm(&mut self, len: usize) -> Option<Arc<Recipe>> {
         match len {
-            2 => Some(Rc::new(Recipe::Butterfly2)),
-            3 => Some(Rc::new(Recipe::Butterfly3)),
-            4 => Some(Rc::new(Recipe::Butterfly4)),
-            5 => Some(Rc::new(Recipe::Butterfly5)),
-            6 => Some(Rc::new(Recipe::Butterfly6)),
-            7 => Some(Rc::new(Recipe::Butterfly7)),
-            8 => Some(Rc::new(Recipe::Butterfly8)),
-            11 => Some(Rc::new(Recipe::Butterfly11)),
-            13 => Some(Rc::new(Recipe::Butterfly13)),
-            16 => Some(Rc::new(Recipe::Butterfly16)),
-            17 => Some(Rc::new(Recipe::Butterfly17)),
-            19 => Some(Rc::new(Recipe::Butterfly19)),
-            23 => Some(Rc::new(Recipe::Butterfly23)),
-            29 => Some(Rc::new(Recipe::Butterfly29)),
-            31 => Some(Rc::new(Recipe::Butterfly31)),
-            32 => Some(Rc::new(Recipe::Butterfly32)),
+            2 => Some(Arc::new(Recipe::Butterfly2)),
+            3 => Some(Arc::new(Recipe::Butterfly3)),
+            4 => Some(Arc::new(Recipe::Butterfly4)),
+            5 => Some(Arc::new(Recipe::Butterfly5)),
+            6 => Some(Arc::new(Recipe::Butterfly6)),
+            7 => Some(Arc::new(Recipe::Butterfly7)),
+            8 => Some(Arc::new(Recipe::Butterfly8)),
+            11 => Some(Arc::new(Recipe::Butterfly11)),
+            13 => Some(Arc::new(Recipe::Butterfly13)),
+            16 => Some(Arc::new(Recipe::Butterfly16)),
+            17 => Some(Arc::new(Recipe::Butterfly17)),
+            19 => Some(Arc::new(Recipe::Butterfly19)),
+            23 => Some(Arc::new(Recipe::Butterfly23)),
+            29 => Some(Arc::new(Recipe::Butterfly29)),
+            31 => Some(Arc::new(Recipe::Butterfly31)),
+            32 => Some(Arc::new(Recipe::Butterfly32)),
             _ => None,
         }
     }
 
-    fn design_prime(&mut self, len: usize) -> Rc<Recipe> {
+    fn design_prime(&mut self, len: usize) -> Arc<Recipe> {
         let inner_fft_len_rader = len - 1;
         let raders_factors = PrimeFactors::compute(inner_fft_len_rader);
         // If any of the prime factors is too large, Rader's gets slow and Bluestein's is the better choice
@@ -455,12 +454,12 @@ impl<T: FftNum> FftPlannerScalar<T> {
                     let mixed_radix_factors = PrimeFactors::compute(mixed_radix_len);
                     self.design_fft_with_factors(mixed_radix_len, mixed_radix_factors)
                 } else {
-                    Rc::new(Recipe::Radix4(inner_fft_len_pow2))
+                    Arc::new(Recipe::Radix4(inner_fft_len_pow2))
                 };
-            Rc::new(Recipe::BluesteinsAlgorithm { len, inner_fft })
+            Arc::new(Recipe::BluesteinsAlgorithm { len, inner_fft })
         } else {
             let inner_fft = self.design_fft_with_factors(inner_fft_len_rader, raders_factors);
-            Rc::new(Recipe::RadersAlgorithm { inner_fft })
+            Arc::new(Recipe::RadersAlgorithm { inner_fft })
         }
     }
 }
@@ -670,6 +669,19 @@ mod unit_tests {
         let mut planner = FftPlannerScalar::<f64>::new();
         let fft_a = planner.design_fft_for_len(1234);
         let fft_b = planner.design_fft_for_len(1234);
-        assert!(Rc::ptr_eq(&fft_a, &fft_b), "Existing recipe was not reused");
+        assert!(
+            Arc::ptr_eq(&fft_a, &fft_b),
+            "Existing recipe was not reused"
+        );
+    }
+
+    // This test is not designed to be run, only to compile.
+    // We cannot make it #[test] since there is a generic parameter.
+    #[allow(dead_code)]
+    fn test_impl_fft_planner_send<T: FftNum>() {
+        fn is_send<T: Send>() {}
+        is_send::<FftPlanner<T>>();
+        is_send::<FftPlannerScalar<T>>();
+        is_send::<FftPlannerAvx<T>>();
     }
 }
