@@ -34,5 +34,5 @@ paste = "1.0.4"
 
 [[bench]]
 name = "bench_iai"
-harness = false
+#harness = false
 

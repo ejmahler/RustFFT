@@ -69,7 +69,7 @@ if __name__ == "__main__":
         cycles = get_cycles(results, calibration)
         results_noop = read_cachegrind(fname_noop)
         cycles_noop = get_cycles(results_noop, calibration)
-        estimated_cycles = (cycles-cycles_noop)/1000.0
+        estimated_cycles = (cycles-cycles_noop)
         print(f"{fftlen} {estimated_cycles}")
         butterfly_cycles.append(estimated_cycles)
 
@@ -86,10 +86,26 @@ if __name__ == "__main__":
         print(f"{fftlen} {estimated_cycles}")
         radix4_cycles.append(estimated_cycles)
 
+    mixedradix_rx4_inner_length = [32, 64, 128, 256, 512, 1024, 2048]
+    mixedradix_rx4_cycles = []
+    mixedradix_rx4_length = []
+    for fftlen in mixedradix_rx4_inner_length:
+        fname = f"target/iai/cachegrind.out.bench_mixedradix_rx4_{fftlen}"
+        fname_noop = f"target/iai/cachegrind.out.bench_mixedradix_rx4_setup_{fftlen}"
+        results = read_cachegrind(fname)
+        cycles = get_cycles(results, calibration)
+        results_noop = read_cachegrind(fname_noop)
+        cycles_noop = get_cycles(results_noop, calibration)
+        estimated_cycles = cycles-cycles_noop
+        print(f"{fftlen} {estimated_cycles}")
+        mixedradix_rx4_cycles.append(estimated_cycles)
+        mixedradix_rx4_length.append(fftlen**2)
+
     plt.figure()
     plt.loglog(butterfly_length, butterfly_cycles, '*')
 
     plt.figure()
     plt.loglog(radix4_length, radix4_cycles, '*')
+    plt.loglog(mixedradix_rx4_length, mixedradix_rx4_cycles, '*')
     plt.show()
 
