@@ -675,6 +675,18 @@ mod unit_tests {
         );
     }
 
+    // We don't need to actually compute anything for a FFT size of zero, but we do need to verify that it doesn't explode
+    #[test]
+    fn test_plan_zero_scalar() {
+        let mut planner32 = FftPlannerScalar::<f32>::new();
+        let fft_zero32 = planner32.plan_fft_forward(0);
+        fft_zero32.process(&mut []);
+
+        let mut planner64 = FftPlannerScalar::<f64>::new();
+        let fft_zero64 = planner64.plan_fft_forward(0);
+        fft_zero64.process(&mut []);
+    }
+
     // This test is not designed to be run, only to compile.
     // We cannot make it #[test] since there is a generic parameter.
     #[allow(dead_code)]
