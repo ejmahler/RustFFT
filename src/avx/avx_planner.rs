@@ -674,6 +674,12 @@ impl<A: AvxNum, T: FftNum> AvxPlannerInternal<A, T> {
             return MixedRadixPlan::cached(len);
         }
 
+        // We have butterflies for everything below 10, so if it's below 10, just skip the factorization etc
+        // Notably, this step is *required* if the len is 0, since we can't compute a prime factorization for zero
+        if len < 10 {
+            return MixedRadixPlan::butterfly(len, Vec::new());
+        }
+
         // This length is not cached, so we have to come up with a new plan. The first step is to find a suitable base.
         let factors = PartialFactors::compute(len);
         let base = base_fn(self, len, &factors);
@@ -985,5 +991,22 @@ impl<A: AvxNum, T: FftNum> AvxPlannerInternal<A, T> {
                 });
 
         *chosen_size
+    }
+}
+
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+
+    // We don't need to actually compute anything for a FFT size of zero, but we do need to verify that it doesn't explode
+    #[test]
+    fn test_plan_zero_avx() {
+        let mut planner32 = FftPlannerAvx::<f32>::new().unwrap();
+        let fft_zero32 = planner32.plan_fft_forward(0);
+        fft_zero32.process(&mut []);
+
+        let mut planner64 = FftPlannerAvx::<f64>::new().unwrap();
+        let fft_zero64 = planner64.plan_fft_forward(0);
+        fft_zero64.process(&mut []);
     }
 }
