@@ -196,10 +196,12 @@ impl Recipe {
         match self {
             // TODO measure DFT
             Recipe::Dft(len) => (50.0 * (*len as f32).powf(2.2)) * repeats_f,
-            Recipe::Radix4(len) => (2103.35233 + 41.6912359 * (*len as f32).powf(1.14495956)) * repeats_f,
+            Recipe::Radix4(len) => {
+                (2103.35233 + 41.6912359 * (*len as f32).powf(1.14495956)) * repeats_f
+            }
             Recipe::Butterfly1 => 13.157575757575756 * repeats_f + 32.933333333333294, //TODO
             Recipe::Butterfly2 => 13.157575757575756 * repeats_f + 32.933333333333294,
-            Recipe::Butterfly3 => 27.927272727272726 * repeats_f +  38.7999999999999,
+            Recipe::Butterfly3 => 27.927272727272726 * repeats_f + 38.7999999999999,
             Recipe::Butterfly4 => 50.878787878787875 * repeats_f + 30.466666666666498,
             Recipe::Butterfly5 => 82.1212121212121 * repeats_f + 48.73333333333305,
             Recipe::Butterfly6 => 70.75757575757575 * repeats_f + 55.13333333333324,
@@ -219,46 +221,49 @@ impl Recipe {
                 right_fft,
             } => {
                 let len = self.len();
-                let inners_cost = left_fft.cost(right_fft.len())
-                    + right_fft.cost(left_fft.len());
+                let inners_cost = left_fft.cost(right_fft.len()) + right_fft.cost(left_fft.len());
                 let twiddle_cost = 2575.45078485663 + 41.61205995769018 * len as f32;
-                (inners_cost + twiddle_cost)*repeats_f
+                (inners_cost + twiddle_cost) * repeats_f
             }
             Recipe::MixedRadixSmall {
                 left_fft,
                 right_fft,
             } => {
                 let len = self.len();
-                let inners_cost = left_fft.cost(right_fft.len())
-                    + right_fft.cost(left_fft.len());
+                let inners_cost = left_fft.cost(right_fft.len()) + right_fft.cost(left_fft.len());
                 let twiddle_cost = 196.44358219785454 + 41.31584980164673 * len as f32;
-                (inners_cost + twiddle_cost)*repeats_f
+                (inners_cost + twiddle_cost) * repeats_f
             }
             Recipe::GoodThomasAlgorithm {
                 left_fft,
                 right_fft,
             } => {
                 let len = self.len();
-                let inners_cost = left_fft.cost(right_fft.len())
-                    + right_fft.cost(left_fft.len());
+                let inners_cost = left_fft.cost(right_fft.len()) + right_fft.cost(left_fft.len());
                 let twiddle_cost = 739.0453975308011 + 41.67142523506587 * len as f32;
-                (inners_cost + twiddle_cost)*repeats_f
+                (inners_cost + twiddle_cost) * repeats_f
             }
             Recipe::GoodThomasAlgorithmSmall {
                 left_fft,
                 right_fft,
             } => {
                 let len = self.len();
-                let inners_cost = left_fft.cost(right_fft.len())
-                    + right_fft.cost(left_fft.len());
+                let inners_cost = left_fft.cost(right_fft.len()) + right_fft.cost(left_fft.len());
                 let twiddle_cost = -174.51378043994816 + 38.09567006103072 * len as f32;
-                (inners_cost + twiddle_cost)*repeats_f
+                (inners_cost + twiddle_cost) * repeats_f
             }
             Recipe::RadersAlgorithm { inner_fft } => {
-                (-1379.1051278789978 + 89.94692932629732 * self.len() as f32 + 2.0 * inner_fft.cost(1)) * repeats_f
+                (-1379.1051278789978
+                    + 89.94692932629732 * self.len() as f32
+                    + 2.0 * inner_fft.cost(1))
+                    * repeats_f
             }
             Recipe::BluesteinsAlgorithm { len, inner_fft } => {
-                (-175.8752539925308 + 24.56703387912983 * *len as f32 + 28.877753143124266 * inner_fft.len() as f32 + 2.0 * inner_fft.cost(1)) * repeats_f
+                (-175.8752539925308
+                    + 24.56703387912983 * *len as f32
+                    + 28.877753143124266 * inner_fft.len() as f32
+                    + 2.0 * inner_fft.cost(1))
+                    * repeats_f
             }
         }
     }
