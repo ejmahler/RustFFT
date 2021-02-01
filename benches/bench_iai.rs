@@ -23,10 +23,8 @@ fn bench_planned(len: usize, process: bool) {
     if process {
         fft.process_with_scratch(&mut buffer, &mut scratch);
     }
-    else {
-        black_box(buffer);
-        black_box(scratch);
-    }
+    black_box(buffer);
+    black_box(scratch);
 }
 
 // Make fft using planner
@@ -40,11 +38,9 @@ fn bench_planned_multi(len: usize, reps: usize, process: bool) {
     if process {
         fft.process_with_scratch(&mut buffer, &mut scratch);
     }
-    else {
-        black_box(buffer);
-        black_box(scratch);
-        black_box(warmup_buffer);
-    }
+    black_box(buffer);
+    black_box(scratch);
+    black_box(warmup_buffer);
 }
 
 // Make a radix4
@@ -59,10 +55,8 @@ fn bench_radix4(len: usize, process: bool) {
     if process {
         fft.process_with_scratch(&mut buffer, &mut scratch);
     }
-    else {
-        black_box(buffer);
-        black_box(scratch);
-    }
+    black_box(buffer);
+    black_box(scratch);
 }
 
 // Make a mixed radix that uses two radix4 as inners
@@ -80,10 +74,8 @@ fn bench_mixedradix_rx4(len: usize, process: bool) {
     if process {
         fft.process_with_scratch(&mut buffer, &mut scratch);
     }
-    else {
-        black_box(buffer);
-        black_box(scratch);
-    }
+    black_box(buffer);
+    black_box(scratch);
 }
 
 // Make a mixed radix that uses a planner for the inners
@@ -101,10 +93,8 @@ fn bench_mixedradix(len_a: usize, len_b: usize, process: bool) {
     if process {
         fft.process_with_scratch(&mut buffer, &mut scratch);
     }
-    else {
-        black_box(buffer);
-        black_box(scratch);
-    }
+    black_box(buffer);
+    black_box(scratch);
 }
 
 // Make a mixed radix that uses a planner for the inners
@@ -122,10 +112,8 @@ fn bench_mixedradixsmall(len_a: usize, len_b: usize, process: bool) {
     if process {
         fft.process_with_scratch(&mut buffer, &mut scratch);
     }
-    else {
-        black_box(buffer);
-        black_box(scratch);
-    }
+    black_box(buffer);
+    black_box(scratch);
 }
 
 // Make a good thomas that uses a planner for the inners
@@ -143,10 +131,8 @@ fn bench_goodthomas(len_a: usize, len_b: usize, process: bool) {
     if process {
         fft.process_with_scratch(&mut buffer, &mut scratch);
     }
-    else {
-        black_box(buffer);
-        black_box(scratch);
-    }
+    black_box(buffer);
+    black_box(scratch);
 }
 
 // Make a good thomas that uses a planner for the inners
@@ -164,10 +150,42 @@ fn bench_goodthomassmall(len_a: usize, len_b: usize, process: bool) {
     if process {
         fft.process_with_scratch(&mut buffer, &mut scratch);
     }
-    else {
-        black_box(buffer);
-        black_box(scratch);
+    black_box(buffer);
+    black_box(scratch);
+}
+
+// Make a Raders that uses a planner for the inner
+fn bench_raders(len: usize, process: bool) {
+    let mut planner = rustfft::FftPlannerScalar::new();
+    let fft_inner: Arc<dyn Fft<_>> = planner.plan_fft_forward(len-1);
+
+    let fft: Arc<dyn Fft<_>> = Arc::new(RadersAlgorithm::new(fft_inner));
+
+    let mut buffer = vec![ Complex { re: 0_f64, im: 0_f64 }; len ];
+    let mut scratch = vec![ Complex { re: 0_f64, im: 0_f64 }; fft.get_inplace_scratch_len() ];
+    fft.process_with_scratch(&mut buffer, &mut scratch);
+    if process {
+        fft.process_with_scratch(&mut buffer, &mut scratch);
     }
+    black_box(buffer);
+    black_box(scratch);
+}
+
+// Make a Raders that uses a planner for the inner
+fn bench_bluesteins(len: usize, inner_len: usize, process: bool) {
+    let mut planner = rustfft::FftPlannerScalar::new();
+    let fft_inner: Arc<dyn Fft<_>> = planner.plan_fft_forward(inner_len);
+
+    let fft: Arc<dyn Fft<_>> = Arc::new(BluesteinsAlgorithm::new(len, fft_inner));
+
+    let mut buffer = vec![ Complex { re: 0_f64, im: 0_f64 }; len ];
+    let mut scratch = vec![ Complex { re: 0_f64, im: 0_f64 }; fft.get_inplace_scratch_len() ];
+    fft.process_with_scratch(&mut buffer, &mut scratch);
+    if process {
+        fft.process_with_scratch(&mut buffer, &mut scratch);
+    }
+    black_box(buffer);
+    black_box(scratch);
 }
 
 // Create benches using functions taking one argument
@@ -224,3 +242,9 @@ make_benches_two_args!(planned_multi, planned_multi, {(2,8),(3,8), (4,8), (5,8),
 make_benches_two_args!(planned_multi, planned_multi, {(2,9),(3,9), (4,9), (5,9), (6,9), (7,9), (8,9), (11,9), (13,9), (16,9), (17,9), (19,9), (23,9), (29,9), (31,9), (32,9), (127,9), (233,9)});
 make_benches_two_args!(planned_multi, planned_multi, {(2,10),(3,10), (4,10), (5,10), (6,10), (7,10), (8,10), (11,10), (13,10), (16,10), (17,10), (19,10), (23,10), (29,10), (31,10), (32,10), (127,10), (233,10)});
 
+make_benches!(raders, raders, {73, 179, 283, 419, 547, 661, 811, 947, 1087, 1229});
+make_benches!(planned, planned, {72, 178, 282, 418, 546, 660, 810, 946, 1086, 1228});
+
+make_benches_two_args!(bluesteins, bluesteins, {(50,128),(50,256), (50,512), (50,1024), (50,2048)});
+make_benches_two_args!(bluesteins, bluesteins, {(10,512),(30,512), (70,512), (90,512)});
+make_benches!(planned, planned, {128, 256, 512, 1024, 2048});
