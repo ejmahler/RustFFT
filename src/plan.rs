@@ -98,7 +98,6 @@ impl<T: FftNum> FftPlanner<T> {
     }
 }
 
-const SLOWDOWN_LEN: usize = 100000; // lenght where we run out of cpu cache and algorithms tend to slow down
 const SMALL_LEN: usize = 32; // limit of "small" length for mixed radix algos
 
 /// A Recipe is a structure that describes the design of a FFT, without actually creating it.
@@ -192,82 +191,74 @@ impl Recipe {
         }
     }
 
-    pub fn cost(&self) -> f32 {
+    pub fn cost(&self, repeats: usize) -> f32 {
+        let repeats_f = repeats as f32;
         match self {
-            Recipe::Dft(len) => 0.9 * (*len as f32).powf(2.2),
-            Recipe::Radix4(len) => {
-                let mut cost = 1.2 * (*len as f32).powf(1.2);
-                if *len > SLOWDOWN_LEN {
-                    cost += 10.0 * (*len - SLOWDOWN_LEN) as f32;
-                }
-                cost
-            }
-            Recipe::Butterfly1 => 0.3,
-            Recipe::Butterfly2 => 0.625,
-            Recipe::Butterfly3 => 0.848,
-            Recipe::Butterfly4 => 1.36,
-            Recipe::Butterfly5 => 2.65,
-            Recipe::Butterfly6 => 2.11,
-            Recipe::Butterfly7 => 6.46,
-            Recipe::Butterfly8 => 5.45,
-            Recipe::Butterfly11 => 12.9,
-            Recipe::Butterfly13 => 17.6,
-            Recipe::Butterfly16 => 25.8,
-            Recipe::Butterfly17 => 31.0,
-            Recipe::Butterfly19 => 39.6,
-            Recipe::Butterfly23 => 98.0,
-            Recipe::Butterfly29 => 198.0,
-            Recipe::Butterfly31 => 233.0,
-            Recipe::Butterfly32 => 86.3,
+            // TODO measure DFT
+            Recipe::Dft(len) => (50.0 * (*len as f32).powf(2.2)) * repeats_f,
+            Recipe::Radix4(len) => (2103.35233 + 41.6912359 * (*len as f32).powf(1.14495956)) * repeats_f,
+            Recipe::Butterfly1 => 13.157575757575756 * repeats_f + 32.933333333333294, //TODO
+            Recipe::Butterfly2 => 13.157575757575756 * repeats_f + 32.933333333333294,
+            Recipe::Butterfly3 => 27.927272727272726 * repeats_f +  38.7999999999999,
+            Recipe::Butterfly4 => 50.878787878787875 * repeats_f + 30.466666666666498,
+            Recipe::Butterfly5 => 82.1212121212121 * repeats_f + 48.73333333333305,
+            Recipe::Butterfly6 => 70.75757575757575 * repeats_f + 55.13333333333324,
+            Recipe::Butterfly7 => 165.99999999999994 * repeats_f + 48.99999999999941,
+            Recipe::Butterfly8 => 175.99999999999997 * repeats_f + 55.99999999999931,
+            Recipe::Butterfly11 => 396.99999999999994 * repeats_f + 48.199999999999015,
+            Recipe::Butterfly13 => 568.5393939393939 * repeats_f + 44.733333333331444,
+            Recipe::Butterfly16 => 686.9272727272725 * repeats_f + 48.999999999998174,
+            Recipe::Butterfly17 => 1011.0969696969696 * repeats_f + 48.466666666663514,
+            Recipe::Butterfly19 => 1243.9757575757574 * repeats_f + 49.53333333332907,
+            Recipe::Butterfly23 => 1864.2181818181814 * repeats_f + 47.39999999999372,
+            Recipe::Butterfly29 => 3805.0242424242415 * repeats_f + 49.26666666666049,
+            Recipe::Butterfly31 => 4484.0 * repeats_f + 48.99999999999021,
+            Recipe::Butterfly32 => 1810.9999999999998 * repeats_f + 48.99999999999362,
             Recipe::MixedRadix {
-                left_fft,
-                right_fft,
-            }
-            | Recipe::MixedRadixSmall {
                 left_fft,
                 right_fft,
             } => {
                 let len = self.len();
-                let inners_cost = left_fft.cost() * right_fft.len() as f32
-                    + right_fft.cost() * left_fft.len() as f32;
-                let mut twiddle_cost = 15.0 + 1.3 * len as f32;
-                if len > SLOWDOWN_LEN {
-                    twiddle_cost += 10.0 * (len - SLOWDOWN_LEN) as f32;
-                }
-                inners_cost + twiddle_cost
+                let inners_cost = left_fft.cost(right_fft.len())
+                    + right_fft.cost(left_fft.len());
+                let twiddle_cost = 2575.45078485663 + 41.61205995769018 * len as f32;
+                (inners_cost + twiddle_cost)*repeats_f
+            }
+            Recipe::MixedRadixSmall {
+                left_fft,
+                right_fft,
+            } => {
+                let len = self.len();
+                let inners_cost = left_fft.cost(right_fft.len())
+                    + right_fft.cost(left_fft.len());
+                let twiddle_cost = 196.44358219785454 + 41.31584980164673 * len as f32;
+                (inners_cost + twiddle_cost)*repeats_f
             }
             Recipe::GoodThomasAlgorithm {
                 left_fft,
                 right_fft,
             } => {
                 let len = self.len();
-                let inners_cost = left_fft.cost() * right_fft.len() as f32
-                    + right_fft.cost() * left_fft.len() as f32;
-                // This means this algo will never be used, good since there currently a bug somewhere if one inner is Bluestein
-                let mut twiddle_cost = 10.0 + 1.4 * len as f32;
-                if len > SLOWDOWN_LEN {
-                    twiddle_cost += 10.0 * (len - SLOWDOWN_LEN) as f32;
-                }
-                inners_cost + twiddle_cost
+                let inners_cost = left_fft.cost(right_fft.len())
+                    + right_fft.cost(left_fft.len());
+                let twiddle_cost = 739.0453975308011 + 41.67142523506587 * len as f32;
+                (inners_cost + twiddle_cost)*repeats_f
             }
             Recipe::GoodThomasAlgorithmSmall {
                 left_fft,
                 right_fft,
             } => {
                 let len = self.len();
-                let inners_cost = left_fft.cost() * right_fft.len() as f32
-                    + right_fft.cost() * left_fft.len() as f32;
-                let mut twiddle_cost = 10.0 + 1.3 * len as f32;
-                if len > SLOWDOWN_LEN {
-                    twiddle_cost += 10.0 * (len - SLOWDOWN_LEN) as f32;
-                }
-                inners_cost + twiddle_cost
+                let inners_cost = left_fft.cost(right_fft.len())
+                    + right_fft.cost(left_fft.len());
+                let twiddle_cost = -174.51378043994816 + 38.09567006103072 * len as f32;
+                (inners_cost + twiddle_cost)*repeats_f
             }
             Recipe::RadersAlgorithm { inner_fft } => {
-                5.0 * self.len() as f32 + 2.0 * inner_fft.cost()
+                (-1379.1051278789978 + 89.94692932629732 * self.len() as f32 + 2.0 * inner_fft.cost(1)) * repeats_f
             }
             Recipe::BluesteinsAlgorithm { len, inner_fft } => {
-                4.0 * *len as f32 + 2.0 * inner_fft.cost()
+                (-175.8752539925308 + 24.56703387912983 * *len as f32 + 28.877753143124266 * inner_fft.len() as f32 + 2.0 * inner_fft.cost(1)) * repeats_f
             }
         }
     }
@@ -345,9 +336,9 @@ impl<T: FftNum> FftPlannerScalar<T> {
     }
 
     // Make a recipe for a length
-    fn design_fft_for_len(&mut self, len: usize) -> Rc<Recipe> {
+    fn design_fft_for_len(&mut self, len: usize) -> Arc<Recipe> {
         if len == 0 {
-            Rc::new(Recipe::Dft(0))
+            Arc::new(Recipe::Dft(0))
         } else if let Some(recipe) = self.recipe_cache.get(&len) {
             Arc::clone(&recipe)
         } else {
@@ -435,12 +426,12 @@ impl<T: FftNum> FftPlannerScalar<T> {
         }
     }
 
-    fn design_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Rc<Recipe> {
+    fn design_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Arc<Recipe> {
         let recipes = self.design_all_ffts_with_factors(len, factors);
         let fastest = recipes
             .iter()
             .min_by(|x, y| {
-                match x.cost().partial_cmp(&y.cost()) {
+                match x.cost(1).partial_cmp(&y.cost(1)) {
                     Some(Ordering::Equal) => Ordering::Equal,
                     Some(Ordering::Less) => Ordering::Less,
                     Some(Ordering::Greater) => Ordering::Greater,
@@ -448,14 +439,14 @@ impl<T: FftNum> FftPlannerScalar<T> {
                 }
             })
             .unwrap();
-        Rc::clone(fastest)
+        Arc::clone(fastest)
     }
 
     fn design_all_ffts_with_factors(
         &mut self,
         len: usize,
         factors: PrimeFactors,
-    ) -> Vec<Rc<Recipe>> {
+    ) -> Vec<Arc<Recipe>> {
         let mut recipes = Vec::new();
         if let Some(butterfly) = self.design_butterfly_algorithm(len) {
             recipes.push(butterfly);
@@ -485,7 +476,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
         recipes
     }
 
-    fn design_mixedradix(&mut self, factors: &PrimeFactors) -> Option<Rc<Recipe>> {
+    fn design_mixedradix(&mut self, factors: &PrimeFactors) -> Option<Arc<Recipe>> {
         if factors.is_prime() {
             None
         } else {
@@ -498,12 +489,12 @@ impl<T: FftNum> FftPlannerScalar<T> {
 
             // if total length is small, use algorithms optimized for small FFTs
             if right_len <= SMALL_LEN && left_len <= SMALL_LEN {
-                Some(Rc::new(Recipe::MixedRadixSmall {
+                Some(Arc::new(Recipe::MixedRadixSmall {
                     left_fft,
                     right_fft,
                 }))
             } else {
-                Some(Rc::new(Recipe::MixedRadix {
+                Some(Arc::new(Recipe::MixedRadix {
                     left_fft,
                     right_fft,
                 }))
@@ -511,7 +502,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
         }
     }
 
-    fn design_mixedradix_separate_twos(&mut self, factors: &PrimeFactors) -> Option<Rc<Recipe>> {
+    fn design_mixedradix_separate_twos(&mut self, factors: &PrimeFactors) -> Option<Arc<Recipe>> {
         let len = factors.get_product();
         if factors.is_prime() || len.is_power_of_two() || len.trailing_zeros() < 1 {
             None
@@ -523,12 +514,12 @@ impl<T: FftNum> FftPlannerScalar<T> {
 
             // if total length is small, use algorithms optimized for small FFTs
             if power_of_two <= SMALL_LEN && non_power_of_two <= SMALL_LEN {
-                Some(Rc::new(Recipe::MixedRadixSmall {
+                Some(Arc::new(Recipe::MixedRadixSmall {
                     left_fft,
                     right_fft,
                 }))
             } else {
-                Some(Rc::new(Recipe::MixedRadix {
+                Some(Arc::new(Recipe::MixedRadix {
                     left_fft,
                     right_fft,
                 }))
@@ -536,7 +527,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
         }
     }
 
-    fn design_goodthomas(&mut self, factors: &PrimeFactors) -> Option<Rc<Recipe>> {
+    fn design_goodthomas(&mut self, factors: &PrimeFactors) -> Option<Arc<Recipe>> {
         if factors.is_prime() {
             None
         } else {
@@ -552,12 +543,12 @@ impl<T: FftNum> FftPlannerScalar<T> {
 
                 //if both left_len and right_len are small, use algorithms optimized for small FFTs
                 if right_len <= SMALL_LEN && left_len <= SMALL_LEN {
-                    Some(Rc::new(Recipe::GoodThomasAlgorithmSmall {
+                    Some(Arc::new(Recipe::GoodThomasAlgorithmSmall {
                         left_fft,
                         right_fft,
                     }))
                 } else {
-                    Some(Rc::new(Recipe::GoodThomasAlgorithm {
+                    Some(Arc::new(Recipe::GoodThomasAlgorithm {
                         left_fft,
                         right_fft,
                     }))
@@ -566,18 +557,19 @@ impl<T: FftNum> FftPlannerScalar<T> {
         }
     }
 
-    fn design_radix4(&mut self, factors: &PrimeFactors) -> Option<Rc<Recipe>> {
+    fn design_radix4(&mut self, factors: &PrimeFactors) -> Option<Arc<Recipe>> {
         let len = factors.get_product();
         if !len.is_power_of_two() || len < 4 {
             None
         } else {
-            Some(Rc::new(Recipe::Radix4(len)))
+            Some(Arc::new(Recipe::Radix4(len)))
         }
     }
 
     // Returns Some(instance) if we have a butterfly available for this size. Returns None if there is no butterfly available for this size
     fn design_butterfly_algorithm(&mut self, len: usize) -> Option<Arc<Recipe>> {
         match len {
+            1 => Some(Arc::new(Recipe::Butterfly1)),
             2 => Some(Arc::new(Recipe::Butterfly2)),
             3 => Some(Arc::new(Recipe::Butterfly3)),
             4 => Some(Arc::new(Recipe::Butterfly4)),
@@ -598,18 +590,18 @@ impl<T: FftNum> FftPlannerScalar<T> {
         }
     }
 
-    fn design_raders(&mut self, factors: &PrimeFactors) -> Option<Rc<Recipe>> {
+    fn design_raders(&mut self, factors: &PrimeFactors) -> Option<Arc<Recipe>> {
         if !factors.is_prime() {
             // For Raders the length must be a prime
             None
         } else {
             let len = factors.get_product();
             let inner_fft = self.design_fft_for_len(len - 1);
-            Some(Rc::new(Recipe::RadersAlgorithm { inner_fft }))
+            Some(Arc::new(Recipe::RadersAlgorithm { inner_fft }))
         }
     }
 
-    fn design_bluesteins(&mut self, factors: &PrimeFactors) -> Option<Rc<Recipe>> {
+    fn design_bluesteins(&mut self, factors: &PrimeFactors) -> Option<Arc<Recipe>> {
         if factors.get_other_factors().is_empty() {
             // Don't propose a recipe for simple lengths.
             // This is mostly to stop a Bluestein from trying a Bluestein inner, which will try a Bluestein inner and so on forever.
@@ -627,7 +619,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
                 inner_fft_len_pow2
             };
             let inner_fft = self.design_fft_for_len(inner_fft_len);
-            Some(Rc::new(Recipe::BluesteinsAlgorithm { len, inner_fft }))
+            Some(Arc::new(Recipe::BluesteinsAlgorithm { len, inner_fft }))
         }
     }
 }

@@ -33,8 +33,8 @@ for fftlen in length:
     overhead_cycles.append(fft_cycles- 2*fft_cycles_inner)
 
 # y = k*x + m
-#k, m = np.polyfit(multi_nbr, estimated_cycles, 1)
-
+k, m = np.polyfit(length, overhead_cycles, 1)
+print(f"slope: {k}, const: {m}")
 plt.figure(1)
 plt.plot(length, rader_cycles, '*')
 plt.plot(length, inner_cycles, '*')

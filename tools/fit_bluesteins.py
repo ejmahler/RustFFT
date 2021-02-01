@@ -62,6 +62,7 @@ f = lambda x: rms_rel_diff( diff_len, x[0] + x[1]*len_array + x[2]*inner_len_arr
 x0 = [0, 1, 1]
 res = minimize(f, x0)
 print(res.x)
+print(f"Overhead: const: {res.x[0]}, slope_len: {res.x[1]}, slope_inner_len: {res.x[2]}")
 
 plt.figure(1)
 plt.plot(length, bluestein_sweeplen_cycles, '*')
