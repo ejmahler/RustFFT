@@ -1,7 +1,6 @@
 use num_integer::gcd;
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
@@ -108,27 +107,27 @@ const SMALL_LEN: usize = 32; // limit of "small" length for mixed radix algos
 pub enum Recipe {
     Dft(usize),
     MixedRadix {
-        left_fft: Rc<Recipe>,
-        right_fft: Rc<Recipe>,
+        left_fft: Arc<Recipe>,
+        right_fft: Arc<Recipe>,
     },
     GoodThomasAlgorithm {
-        left_fft: Rc<Recipe>,
-        right_fft: Rc<Recipe>,
+        left_fft: Arc<Recipe>,
+        right_fft: Arc<Recipe>,
     },
     MixedRadixSmall {
-        left_fft: Rc<Recipe>,
-        right_fft: Rc<Recipe>,
+        left_fft: Arc<Recipe>,
+        right_fft: Arc<Recipe>,
     },
     GoodThomasAlgorithmSmall {
-        left_fft: Rc<Recipe>,
-        right_fft: Rc<Recipe>,
+        left_fft: Arc<Recipe>,
+        right_fft: Arc<Recipe>,
     },
     RadersAlgorithm {
-        inner_fft: Rc<Recipe>,
+        inner_fft: Arc<Recipe>,
     },
     BluesteinsAlgorithm {
         len: usize,
-        inner_fft: Rc<Recipe>,
+        inner_fft: Arc<Recipe>,
     },
     Radix4(usize),
     Butterfly1,
@@ -306,7 +305,7 @@ impl Recipe {
 /// safe to drop the planner after creating Fft instances.
 pub struct FftPlannerScalar<T: FftNum> {
     algorithm_cache: FftCache<T>,
-    recipe_cache: HashMap<usize, Rc<Recipe>>,
+    recipe_cache: HashMap<usize, Arc<Recipe>>,
 }
 
 impl<T: FftNum> FftPlannerScalar<T> {
@@ -350,11 +349,11 @@ impl<T: FftNum> FftPlannerScalar<T> {
         if len == 0 {
             Rc::new(Recipe::Dft(0))
         } else if let Some(recipe) = self.recipe_cache.get(&len) {
-            Rc::clone(&recipe)
+            Arc::clone(&recipe)
         } else {
             let factors = PrimeFactors::compute(len);
             let recipe = self.design_fft_with_factors(len, factors);
-            self.recipe_cache.insert(len, Rc::clone(&recipe));
+            self.recipe_cache.insert(len, Arc::clone(&recipe));
             recipe
         }
     }
@@ -577,25 +576,24 @@ impl<T: FftNum> FftPlannerScalar<T> {
     }
 
     // Returns Some(instance) if we have a butterfly available for this size. Returns None if there is no butterfly available for this size
-    fn design_butterfly_algorithm(&mut self, len: usize) -> Option<Rc<Recipe>> {
+    fn design_butterfly_algorithm(&mut self, len: usize) -> Option<Arc<Recipe>> {
         match len {
-            1 => Some(Rc::new(Recipe::Butterfly1)),
-            2 => Some(Rc::new(Recipe::Butterfly2)),
-            3 => Some(Rc::new(Recipe::Butterfly3)),
-            4 => Some(Rc::new(Recipe::Butterfly4)),
-            5 => Some(Rc::new(Recipe::Butterfly5)),
-            6 => Some(Rc::new(Recipe::Butterfly6)),
-            7 => Some(Rc::new(Recipe::Butterfly7)),
-            8 => Some(Rc::new(Recipe::Butterfly8)),
-            11 => Some(Rc::new(Recipe::Butterfly11)),
-            13 => Some(Rc::new(Recipe::Butterfly13)),
-            16 => Some(Rc::new(Recipe::Butterfly16)),
-            17 => Some(Rc::new(Recipe::Butterfly17)),
-            19 => Some(Rc::new(Recipe::Butterfly19)),
-            23 => Some(Rc::new(Recipe::Butterfly23)),
-            29 => Some(Rc::new(Recipe::Butterfly29)),
-            31 => Some(Rc::new(Recipe::Butterfly31)),
-            32 => Some(Rc::new(Recipe::Butterfly32)),
+            2 => Some(Arc::new(Recipe::Butterfly2)),
+            3 => Some(Arc::new(Recipe::Butterfly3)),
+            4 => Some(Arc::new(Recipe::Butterfly4)),
+            5 => Some(Arc::new(Recipe::Butterfly5)),
+            6 => Some(Arc::new(Recipe::Butterfly6)),
+            7 => Some(Arc::new(Recipe::Butterfly7)),
+            8 => Some(Arc::new(Recipe::Butterfly8)),
+            11 => Some(Arc::new(Recipe::Butterfly11)),
+            13 => Some(Arc::new(Recipe::Butterfly13)),
+            16 => Some(Arc::new(Recipe::Butterfly16)),
+            17 => Some(Arc::new(Recipe::Butterfly17)),
+            19 => Some(Arc::new(Recipe::Butterfly19)),
+            23 => Some(Arc::new(Recipe::Butterfly23)),
+            29 => Some(Arc::new(Recipe::Butterfly29)),
+            31 => Some(Arc::new(Recipe::Butterfly31)),
+            32 => Some(Arc::new(Recipe::Butterfly32)),
             _ => None,
         }
     }
@@ -886,6 +884,31 @@ mod unit_tests {
         let mut planner = FftPlannerScalar::<f64>::new();
         let fft_a = planner.design_fft_for_len(1234);
         let fft_b = planner.design_fft_for_len(1234);
-        assert!(Rc::ptr_eq(&fft_a, &fft_b), "Existing recipe was not reused");
+        assert!(
+            Arc::ptr_eq(&fft_a, &fft_b),
+            "Existing recipe was not reused"
+        );
+    }
+
+    // We don't need to actually compute anything for a FFT size of zero, but we do need to verify that it doesn't explode
+    #[test]
+    fn test_plan_zero_scalar() {
+        let mut planner32 = FftPlannerScalar::<f32>::new();
+        let fft_zero32 = planner32.plan_fft_forward(0);
+        fft_zero32.process(&mut []);
+
+        let mut planner64 = FftPlannerScalar::<f64>::new();
+        let fft_zero64 = planner64.plan_fft_forward(0);
+        fft_zero64.process(&mut []);
+    }
+
+    // This test is not designed to be run, only to compile.
+    // We cannot make it #[test] since there is a generic parameter.
+    #[allow(dead_code)]
+    fn test_impl_fft_planner_send<T: FftNum>() {
+        fn is_send<T: Send>() {}
+        is_send::<FftPlanner<T>>();
+        is_send::<FftPlannerScalar<T>>();
+        is_send::<FftPlannerAvx<T>>();
     }
 }
