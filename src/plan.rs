@@ -676,32 +676,15 @@ mod unit_tests {
 
     #[test]
     fn test_plan_scalar_mediumpoweroftwo() {
-        // Powers of 2 between 64 and 4096 should use Radix4
+        // Powers of 2 from 128 to 4096 should use Radix4, (larger may use mixed radix)
         let mut planner = FftPlannerScalar::<f64>::new();
-        for pow in 6..12 {
+        for pow in 7..12 {
             let len = 1 << pow;
             let plan = planner.design_fft_for_len(len);
             assert_eq!(
                 *plan,
                 Recipe::Radix4(len),
                 "Length: {}, expected Radix4, got {:?}",
-                len,
-                plan
-            );
-            assert_eq!(plan.len(), len, "Recipe reports wrong length");
-        }
-    }
-
-    #[test]
-    fn test_plan_scalar_largepoweroftwo() {
-        // Powers of 2 from 65536 and up should use MixedRadix
-        let mut planner = FftPlannerScalar::<f64>::new();
-        for pow in 17..32 {
-            let len = 1 << pow;
-            let plan = planner.design_fft_for_len(len);
-            assert!(
-                is_mixedradix(&plan),
-                "Length: {}, expected MixedRadix, got {:?}",
                 len,
                 plan
             );
@@ -796,7 +779,7 @@ mod unit_tests {
 
     #[test]
     fn test_plan_scalar_bluestein_vs_rader() {
-        let difficultprimes: [usize; 10] = [59, 83, 107, 167, 173, 179, 359, 719, 1439, 2879];
+        let difficultprimes: [usize; 4] = [359, 719, 1439, 2879];
         let easyprimes: [usize; 24] = [
             53, 61, 67, 71, 73, 79, 89, 97, 101, 103, 109, 113, 131, 137, 139, 149, 151, 157, 163,
             181, 191, 193, 197, 199,
