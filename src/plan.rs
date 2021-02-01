@@ -727,7 +727,7 @@ mod unit_tests {
         for pow2 in 2..5 {
             for pow3 in 2..5 {
                 for pow5 in 2..5 {
-                    for pow7 in 2..5 {
+                    for pow7 in 2..4 {
                         let len = 2usize.pow(pow2)
                             * 3usize.pow(pow3)
                             * 5usize.pow(pow5)
