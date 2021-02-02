@@ -433,6 +433,10 @@ impl<T: FftNum> FftPlannerScalar<T> {
 
     fn design_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Arc<Recipe> {
         let recipes = self.design_all_ffts_with_factors(len, factors);
+        //for recipe in recipes.iter() {
+        //    println!("For {}, cost {} -> {:?}", len, recipe.cost(1), recipe);
+        //}
+
         let fastest = recipes
             .iter()
             .min_by(|x, y| {
@@ -891,4 +895,16 @@ mod unit_tests {
         is_send::<FftPlannerScalar<T>>();
         is_send::<FftPlannerAvx<T>>();
     }
+    // Dummy test to just get some prints
+    //#[test]
+    //fn test_dummy() {
+    //    let mut planner32 = FftPlannerScalar::<f32>::new();
+    //    println!("Plan 59");
+    //    let fft_zero32 = planner32.plan_fft_forward(59);
+    //    println!("Plan 58");
+    //    let fft_zero32 = planner32.plan_fft_forward(58);
+    //    println!("Plan 128");
+    //    let fft_zero32 = planner32.plan_fft_forward(128);
+    //    assert!(false);
+    //}
 }
