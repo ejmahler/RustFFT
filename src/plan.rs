@@ -197,32 +197,41 @@ impl Recipe {
             // TODO measure DFT
             Recipe::Dft(len) => (50.0 * (*len as f32).powf(2.2)) * repeats_f,
             Recipe::Radix4(len) => {
-                (2103.35233 + 41.6912359 * (*len as f32).powf(1.14495956)) * repeats_f
+                if *len <= 128 {
+                    (160.48878860233782
+                        + 32.74797225004794 * (*len as f32).powf(1.2055084062655856))
+                        * repeats_f
+                } else {
+                    (0.012437725998876438
+                        + 83.05431508429177 * (*len as f32).powf(1.0964028261963141))
+                        * repeats_f
+                }
             }
-            Recipe::Butterfly1 => 13.157575757575756 * repeats_f + 32.933333333333294, //TODO
-            Recipe::Butterfly2 => 13.157575757575756 * repeats_f + 32.933333333333294,
-            Recipe::Butterfly3 => 27.927272727272726 * repeats_f + 38.7999999999999,
-            Recipe::Butterfly4 => 50.878787878787875 * repeats_f + 30.466666666666498,
-            Recipe::Butterfly5 => 82.1212121212121 * repeats_f + 48.73333333333305,
-            Recipe::Butterfly6 => 70.75757575757575 * repeats_f + 55.13333333333324,
-            Recipe::Butterfly7 => 165.99999999999994 * repeats_f + 48.99999999999941,
-            Recipe::Butterfly8 => 175.99999999999997 * repeats_f + 55.99999999999931,
-            Recipe::Butterfly11 => 396.99999999999994 * repeats_f + 48.199999999999015,
-            Recipe::Butterfly13 => 568.5393939393939 * repeats_f + 44.733333333331444,
-            Recipe::Butterfly16 => 686.9272727272725 * repeats_f + 48.999999999998174,
-            Recipe::Butterfly17 => 1011.0969696969696 * repeats_f + 48.466666666663514,
-            Recipe::Butterfly19 => 1243.9757575757574 * repeats_f + 49.53333333332907,
-            Recipe::Butterfly23 => 1864.2181818181814 * repeats_f + 47.39999999999372,
-            Recipe::Butterfly29 => 3805.0242424242415 * repeats_f + 49.26666666666049,
-            Recipe::Butterfly31 => 4484.0 * repeats_f + 48.99999999999021,
-            Recipe::Butterfly32 => 1810.9999999999998 * repeats_f + 48.99999999999362,
+            Recipe::Butterfly1 => (12.999999999999995 * repeats_f + 45.0) * 1.5, //TODO
+            Recipe::Butterfly2 => (12.999999999999995 * repeats_f + 45.0) * 1.5,
+            Recipe::Butterfly3 => (27.999999999999993 * repeats_f + 83.00000000000003) * 1.5,
+            Recipe::Butterfly4 => (50.466666666666654 * repeats_f + 7.866666666666645) * 1.5,
+            Recipe::Butterfly5 => (82.99999999999997 * repeats_f + 94.00000000000016) * 1.5,
+            Recipe::Butterfly6 => (75.66666666666667 * repeats_f + 53.666666666666494) * 1.5,
+            Recipe::Butterfly7 => (166.99999999999994 * repeats_f + 94.88888888888856) * 1.5,
+            Recipe::Butterfly8 => (181.33333333333331 * repeats_f + 52.44444444444443) * 1.5,
+            Recipe::Butterfly11 => (397.99999999999994 * repeats_f + 93.9999999999995) * 1.5,
+            Recipe::Butterfly13 => (569.6333333333332 * repeats_f + 13.53333333333295) * 1.5,
+            Recipe::Butterfly16 => (688.0 * repeats_f + 93.99999999999982) * 1.5,
+            Recipe::Butterfly17 => (1011.8 * repeats_f + 26.755555555555645) * 1.5,
+            Recipe::Butterfly19 => (1244.9999999999998 * repeats_f + 93.99999999999893) * 1.5,
+            Recipe::Butterfly23 => (1864.8 * repeats_f + 26.755555555551666) * 1.5,
+            Recipe::Butterfly29 => (3805.7333333333327 * repeats_f + 95.15555555555517) * 1.5,
+            Recipe::Butterfly31 => (4484.466666666666 * repeats_f + 28.311111111111178) * 1.5,
+            Recipe::Butterfly32 => (1811.8666666666666 * repeats_f + 95.68888888888473) * 1.5,
             Recipe::MixedRadix {
                 left_fft,
                 right_fft,
             } => {
                 let len = self.len();
                 let inners_cost = left_fft.cost(right_fft.len()) + right_fft.cost(left_fft.len());
-                let twiddle_cost = 2575.45078485663 + 41.61205995769018 * len as f32;
+                let twiddle_cost = -0.0003517351074938784
+                    + 190.64596141502813 * (len as f32).powf(1.153489145207959);
                 (inners_cost + twiddle_cost) * repeats_f
             }
             Recipe::MixedRadixSmall {
@@ -231,7 +240,8 @@ impl Recipe {
             } => {
                 let len = self.len();
                 let inners_cost = left_fft.cost(right_fft.len()) + right_fft.cost(left_fft.len());
-                let twiddle_cost = 196.44358219785454 + 41.31584980164673 * len as f32;
+                let twiddle_cost =
+                    238.24647639503732 + 44.580793833572706 * (len as f32).powf(0.9845876650176);
                 (inners_cost + twiddle_cost) * repeats_f
             }
             Recipe::GoodThomasAlgorithm {
@@ -240,7 +250,8 @@ impl Recipe {
             } => {
                 let len = self.len();
                 let inners_cost = left_fft.cost(right_fft.len()) + right_fft.cost(left_fft.len());
-                let twiddle_cost = 739.0453975308011 + 41.67142523506587 * len as f32;
+                let twiddle_cost = -0.0003792946240805136
+                    + 186.90464906090043 * (len as f32).powf(1.1555063658352036);
                 (inners_cost + twiddle_cost) * repeats_f
             }
             Recipe::GoodThomasAlgorithmSmall {
@@ -249,7 +260,8 @@ impl Recipe {
             } => {
                 let len = self.len();
                 let inners_cost = left_fft.cost(right_fft.len()) + right_fft.cost(left_fft.len());
-                let twiddle_cost = -174.51378043994816 + 38.09567006103072 * len as f32;
+                let twiddle_cost =
+                    216.00927721620226 + 25.295596559928814 * (len as f32).powf(1.0552120016915703);
                 (inners_cost + twiddle_cost) * repeats_f
             }
             Recipe::RadersAlgorithm { inner_fft } => {
@@ -896,15 +908,15 @@ mod unit_tests {
         is_send::<FftPlannerAvx<T>>();
     }
     // Dummy test to just get some prints
-    //#[test]
-    //fn test_dummy() {
-    //    let mut planner32 = FftPlannerScalar::<f32>::new();
-    //    println!("Plan 59");
-    //    let fft_zero32 = planner32.plan_fft_forward(59);
-    //    println!("Plan 58");
-    //    let fft_zero32 = planner32.plan_fft_forward(58);
-    //    println!("Plan 128");
-    //    let fft_zero32 = planner32.plan_fft_forward(128);
-    //    assert!(false);
-    //}
+    #[test]
+    fn test_dummy() {
+        let mut planner32 = FftPlannerScalar::<f32>::new();
+        println!("Plan 59");
+        let fft_zero32 = planner32.plan_fft_forward(59);
+        println!("Plan 58");
+        let fft_zero32 = planner32.plan_fft_forward(58);
+        println!("Plan 128");
+        let fft_zero32 = planner32.plan_fft_forward(128);
+        assert!(false);
+    }
 }

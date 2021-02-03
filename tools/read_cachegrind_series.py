@@ -40,6 +40,8 @@ def get_cycles(data, calib):
     total_memory_rw = instruction_reads + data_reads + data_writes
     l1_hits = total_memory_rw - (ram_hits + l3_hits)
 
+    # Use formula from iai
+    # https://pythonspeed.com/articles/consistent-benchmarking-in-ci/
     estimated_cycles = l1_hits + (5 * l3_hits) + (35 * ram_hits)
 
     #print(f"Instructions: {instruction_reads}")

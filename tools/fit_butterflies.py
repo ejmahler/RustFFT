@@ -8,8 +8,8 @@ if len(sys.argv)>1:
     showplots = bool(sys.argv[1])
 calibfile = "target/iai/cachegrind.out.iai_calibration"
 calibration = read_cachegrind(calibfile)
-length = [2, 3, 4, 5, 6, 7, 8, 11, 13, 16, 17, 19, 23, 29, 31, 32, 127, 233]
-multi_nbr = np.arange(1,11)
+length = [2, 3, 4, 5, 6, 7, 8, 11, 13, 16, 17, 19, 23, 29, 31, 32]
+multi_nbr = np.arange(2,11)
 plot_nbr = np.arange(0,11)
 all_cycles = []
 for fftlen in length:
