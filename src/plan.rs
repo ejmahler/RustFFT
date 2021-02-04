@@ -101,7 +101,7 @@ impl<T: FftNum> FftPlanner<T> {
 }
 
 const SMALL_LEN: usize = 32; // limit of "small" length for mixed radix algos
-const BUTTERFLY_COST_FACTOR: f32 = 1.5; // iai underestimates the execution time for butterflies, this factor compensates. 
+const BUTTERFLY_COST_FACTOR: f32 = 1.5; // iai underestimates the execution time for butterflies, this factor compensates.
 
 /// A Recipe is a structure that describes the design of a FFT, without actually creating it.
 /// It is used as a middle step in the planning process.
@@ -217,8 +217,14 @@ impl Recipe {
             Recipe::Butterfly29 => BUTTERFLY_COST_FACTOR * estimate_butterfly_cost_29(repeats),
             Recipe::Butterfly31 => BUTTERFLY_COST_FACTOR * estimate_butterfly_cost_31(repeats),
             Recipe::Butterfly32 => BUTTERFLY_COST_FACTOR * estimate_butterfly_cost_32(repeats),
-            Recipe::MixedRadix { left_fft, right_fft } => estimate_mixedradix_cost(self.len(), left_fft, right_fft, repeats),
-            Recipe::MixedRadixSmall { left_fft, right_fft } => estimate_mixedradixsmall_cost(self.len(), left_fft, right_fft, repeats),
+            Recipe::MixedRadix {
+                left_fft,
+                right_fft,
+            } => estimate_mixedradix_cost(self.len(), left_fft, right_fft, repeats),
+            Recipe::MixedRadixSmall {
+                left_fft,
+                right_fft,
+            } => estimate_mixedradixsmall_cost(self.len(), left_fft, right_fft, repeats),
             Recipe::GoodThomasAlgorithm {
                 left_fft,
                 right_fft,
@@ -228,7 +234,9 @@ impl Recipe {
                 right_fft,
             } => estimate_goodthomassmall_cost(self.len(), left_fft, right_fft, repeats),
             Recipe::RadersAlgorithm { inner_fft } => estimate_raders_cost(inner_fft, repeats),
-            Recipe::BluesteinsAlgorithm { len, inner_fft } => estimate_bluesteins_cost(*len, inner_fft, repeats),
+            Recipe::BluesteinsAlgorithm { len, inner_fft } => {
+                estimate_bluesteins_cost(*len, inner_fft, repeats)
+            }
         }
     }
 }
