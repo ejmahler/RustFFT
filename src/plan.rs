@@ -13,6 +13,8 @@ use crate::FftPlannerAvx;
 
 use crate::math_utils::PrimeFactors;
 
+use crate::scalar_planner_estimates::*;
+
 enum ChosenFftPlanner<T: FftNum> {
     Scalar(FftPlannerScalar<T>),
     Avx(FftPlannerAvx<T>),
@@ -99,6 +101,7 @@ impl<T: FftNum> FftPlanner<T> {
 }
 
 const SMALL_LEN: usize = 32; // limit of "small" length for mixed radix algos
+const BUTTERFLY_COST_FACTOR: f32 = 1.5; // iai underestimates the execution time for butterflies, this factor compensates. 
 
 /// A Recipe is a structure that describes the design of a FFT, without actually creating it.
 /// It is used as a middle step in the planning process.
@@ -196,87 +199,36 @@ impl Recipe {
         match self {
             // TODO measure DFT
             Recipe::Dft(len) => (50.0 * (*len as f32).powf(2.2)) * repeats_f,
-            Recipe::Radix4(len) => {
-                if *len <= 128 {
-                    (160.48878860233782
-                        + 32.74797225004794 * (*len as f32).powf(1.2055084062655856))
-                        * repeats_f
-                } else {
-                    (0.012437725998876438
-                        + 83.05431508429177 * (*len as f32).powf(1.0964028261963141))
-                        * repeats_f
-                }
-            }
-            Recipe::Butterfly1 => (12.999999999999995 * repeats_f + 45.0) * 1.5, //TODO
-            Recipe::Butterfly2 => (12.999999999999995 * repeats_f + 45.0) * 1.5,
-            Recipe::Butterfly3 => (27.999999999999993 * repeats_f + 83.00000000000003) * 1.5,
-            Recipe::Butterfly4 => (50.466666666666654 * repeats_f + 7.866666666666645) * 1.5,
-            Recipe::Butterfly5 => (82.99999999999997 * repeats_f + 94.00000000000016) * 1.5,
-            Recipe::Butterfly6 => (75.66666666666667 * repeats_f + 53.666666666666494) * 1.5,
-            Recipe::Butterfly7 => (166.99999999999994 * repeats_f + 94.88888888888856) * 1.5,
-            Recipe::Butterfly8 => (181.33333333333331 * repeats_f + 52.44444444444443) * 1.5,
-            Recipe::Butterfly11 => (397.99999999999994 * repeats_f + 93.9999999999995) * 1.5,
-            Recipe::Butterfly13 => (569.6333333333332 * repeats_f + 13.53333333333295) * 1.5,
-            Recipe::Butterfly16 => (688.0 * repeats_f + 93.99999999999982) * 1.5,
-            Recipe::Butterfly17 => (1011.8 * repeats_f + 26.755555555555645) * 1.5,
-            Recipe::Butterfly19 => (1244.9999999999998 * repeats_f + 93.99999999999893) * 1.5,
-            Recipe::Butterfly23 => (1864.8 * repeats_f + 26.755555555551666) * 1.5,
-            Recipe::Butterfly29 => (3805.7333333333327 * repeats_f + 95.15555555555517) * 1.5,
-            Recipe::Butterfly31 => (4484.466666666666 * repeats_f + 28.311111111111178) * 1.5,
-            Recipe::Butterfly32 => (1811.8666666666666 * repeats_f + 95.68888888888473) * 1.5,
-            Recipe::MixedRadix {
-                left_fft,
-                right_fft,
-            } => {
-                let len = self.len();
-                let inners_cost = left_fft.cost(right_fft.len()) + right_fft.cost(left_fft.len());
-                let twiddle_cost = -0.0003517351074938784
-                    + 190.64596141502813 * (len as f32).powf(1.153489145207959);
-                (inners_cost + twiddle_cost) * repeats_f
-            }
-            Recipe::MixedRadixSmall {
-                left_fft,
-                right_fft,
-            } => {
-                let len = self.len();
-                let inners_cost = left_fft.cost(right_fft.len()) + right_fft.cost(left_fft.len());
-                let twiddle_cost =
-                    238.24647639503732 + 44.580793833572706 * (len as f32).powf(0.9845876650176);
-                (inners_cost + twiddle_cost) * repeats_f
-            }
+            Recipe::Radix4(len) => estimate_radix4_cost(*len, repeats),
+            Recipe::Butterfly1 => BUTTERFLY_COST_FACTOR * estimate_butterfly_cost_2(repeats), //TODO
+            Recipe::Butterfly2 => BUTTERFLY_COST_FACTOR * estimate_butterfly_cost_2(repeats),
+            Recipe::Butterfly3 => BUTTERFLY_COST_FACTOR * estimate_butterfly_cost_3(repeats),
+            Recipe::Butterfly4 => BUTTERFLY_COST_FACTOR * estimate_butterfly_cost_4(repeats),
+            Recipe::Butterfly5 => BUTTERFLY_COST_FACTOR * estimate_butterfly_cost_5(repeats),
+            Recipe::Butterfly6 => BUTTERFLY_COST_FACTOR * estimate_butterfly_cost_6(repeats),
+            Recipe::Butterfly7 => BUTTERFLY_COST_FACTOR * estimate_butterfly_cost_7(repeats),
+            Recipe::Butterfly8 => BUTTERFLY_COST_FACTOR * estimate_butterfly_cost_8(repeats),
+            Recipe::Butterfly11 => BUTTERFLY_COST_FACTOR * estimate_butterfly_cost_11(repeats),
+            Recipe::Butterfly13 => BUTTERFLY_COST_FACTOR * estimate_butterfly_cost_13(repeats),
+            Recipe::Butterfly16 => BUTTERFLY_COST_FACTOR * estimate_butterfly_cost_16(repeats),
+            Recipe::Butterfly17 => BUTTERFLY_COST_FACTOR * estimate_butterfly_cost_17(repeats),
+            Recipe::Butterfly19 => BUTTERFLY_COST_FACTOR * estimate_butterfly_cost_19(repeats),
+            Recipe::Butterfly23 => BUTTERFLY_COST_FACTOR * estimate_butterfly_cost_23(repeats),
+            Recipe::Butterfly29 => BUTTERFLY_COST_FACTOR * estimate_butterfly_cost_29(repeats),
+            Recipe::Butterfly31 => BUTTERFLY_COST_FACTOR * estimate_butterfly_cost_31(repeats),
+            Recipe::Butterfly32 => BUTTERFLY_COST_FACTOR * estimate_butterfly_cost_32(repeats),
+            Recipe::MixedRadix { left_fft, right_fft } => estimate_mixedradix_cost(self.len(), left_fft, right_fft, repeats),
+            Recipe::MixedRadixSmall { left_fft, right_fft } => estimate_mixedradixsmall_cost(self.len(), left_fft, right_fft, repeats),
             Recipe::GoodThomasAlgorithm {
                 left_fft,
                 right_fft,
-            } => {
-                let len = self.len();
-                let inners_cost = left_fft.cost(right_fft.len()) + right_fft.cost(left_fft.len());
-                let twiddle_cost = -0.0003792946240805136
-                    + 186.90464906090043 * (len as f32).powf(1.1555063658352036);
-                (inners_cost + twiddle_cost) * repeats_f
-            }
+            } => estimate_goodthomas_cost(self.len(), left_fft, right_fft, repeats),
             Recipe::GoodThomasAlgorithmSmall {
                 left_fft,
                 right_fft,
-            } => {
-                let len = self.len();
-                let inners_cost = left_fft.cost(right_fft.len()) + right_fft.cost(left_fft.len());
-                let twiddle_cost =
-                    216.00927721620226 + 25.295596559928814 * (len as f32).powf(1.0552120016915703);
-                (inners_cost + twiddle_cost) * repeats_f
-            }
-            Recipe::RadersAlgorithm { inner_fft } => {
-                (-1379.1051278789978
-                    + 89.94692932629732 * self.len() as f32
-                    + 2.0 * inner_fft.cost(1))
-                    * repeats_f
-            }
-            Recipe::BluesteinsAlgorithm { len, inner_fft } => {
-                (-175.8752539925308
-                    + 24.56703387912983 * *len as f32
-                    + 28.877753143124266 * inner_fft.len() as f32
-                    + 2.0 * inner_fft.cost(1))
-                    * repeats_f
-            }
+            } => estimate_goodthomassmall_cost(self.len(), left_fft, right_fft, repeats),
+            Recipe::RadersAlgorithm { inner_fft } => estimate_raders_cost(inner_fft, repeats),
+            Recipe::BluesteinsAlgorithm { len, inner_fft } => estimate_bluesteins_cost(*len, inner_fft, repeats),
         }
     }
 }

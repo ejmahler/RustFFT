@@ -101,6 +101,7 @@ mod array_utils;
 mod fft_cache;
 mod math_utils;
 mod plan;
+mod scalar_planner_estimates;
 mod twiddles;
 
 use num_complex::Complex;

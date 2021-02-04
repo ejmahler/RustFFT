@@ -1,3 +1,3 @@
 unstable_features = true # for "ignore", remove asap
 
-ignore = ["benches/bench_rustfft.rs", "benches/bench_for_estimates.rs", "benches/bench_iai.rs"]
+ignore = ["benches/bench_rustfft.rs", "benches/bench_for_estimates.rs", "benches/bench_iai.rs", "benches/bench_iaicheck.rs", "benches/bench_iaicheck_ref.rs"]

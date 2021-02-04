@@ -33,9 +33,7 @@ fn bench_raders(b: &mut Bencher, len: usize) {
 }
 
 #[bench]
-fn iaicheck_a_raders_59(b: &mut Bencher) {
-    bench_raders(b, 59);
-}
+fn iaicheck_a_raders_59(b: &mut Bencher) { bench_raders(b, 59); }
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to Bluestein's Algorithm
@@ -52,9 +50,7 @@ fn bench_bluesteins(b: &mut Bencher, len: usize) {
 }
 
 #[bench]
-fn iaicheck_a_bluesteins_59(b: &mut Bencher) {
-    bench_bluesteins(b, 59);
-}
+fn iaicheck_a_bluesteins_59(b: &mut Bencher) { bench_bluesteins(b, 59); }
 
 fn bench_planned(b: &mut Bencher, len: usize) {
     let mut planner = rustfft::FftPlannerScalar::new();
@@ -68,13 +64,9 @@ fn bench_planned(b: &mut Bencher, len: usize) {
 }
 
 #[bench]
-fn iaicheck_ai_planned_58(b: &mut Bencher) {
-    bench_planned(b, 58);
-}
+fn iaicheck_ai_planned_58(b: &mut Bencher) { bench_planned(b, 58); }
 #[bench]
-fn iaicheck_ai_planned_128(b: &mut Bencher) {
-    bench_planned(b, 128);
-}
+fn iaicheck_ai_planned_128(b: &mut Bencher) { bench_planned(b, 128); }
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to Rader's algorithm
@@ -103,34 +95,18 @@ fn bench_radix4(b: &mut Bencher, len: usize) {
 }
 
 #[bench]
-fn inicheck_b_radix4_4(b: &mut Bencher) {
-    bench_radix4(b, 4);
-}
+fn inicheck_b_radix4_4(b: &mut Bencher) { bench_radix4(b, 4); }
 #[bench]
-fn inicheck_b_radix4_8(b: &mut Bencher) {
-    bench_radix4(b, 8);
-}
+fn inicheck_b_radix4_8(b: &mut Bencher) { bench_radix4(b, 8); }
 #[bench]
-fn inicheck_b_radix4_16(b: &mut Bencher) {
-    bench_radix4(b, 16);
-}
+fn inicheck_b_radix4_16(b: &mut Bencher) { bench_radix4(b, 16); }
 #[bench]
-fn inicheck_b_radix4_32(b: &mut Bencher) {
-    bench_radix4(b, 32);
-}
+fn inicheck_b_radix4_32(b: &mut Bencher) { bench_radix4(b, 32); }
 #[bench]
-fn inicheck_b_planned_4(b: &mut Bencher) {
-    bench_planned(b, 4);
-}
+fn inicheck_b_planned_4(b: &mut Bencher) { bench_planned(b, 4); }
 #[bench]
-fn inicheck_b_planned_8(b: &mut Bencher) {
-    bench_planned(b, 8);
-}
+fn inicheck_b_planned_8(b: &mut Bencher) { bench_planned(b, 8); }
 #[bench]
-fn inicheck_b_planned_16(b: &mut Bencher) {
-    bench_planned(b, 16);
-}
+fn inicheck_b_planned_16(b: &mut Bencher) { bench_planned(b, 16); }
 #[bench]
-fn inicheck_b_planned_32(b: &mut Bencher) {
-    bench_planned(b, 32);
-}
+fn inicheck_b_planned_32(b: &mut Bencher) { bench_planned(b, 32); }
