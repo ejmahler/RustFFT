@@ -623,6 +623,13 @@ mod unit_tests {
         }
     }
 
+    fn is_goodthomas(plan: &Recipe) -> bool {
+        match plan {
+            &Recipe::GoodThomasAlgorithm { .. } => true,
+            _ => false,
+        }
+    }
+
     fn is_goodthomassmall(plan: &Recipe) -> bool {
         match plan {
             &Recipe::GoodThomasAlgorithmSmall { .. } => true,
@@ -697,32 +704,6 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_plan_scalar_mixedradix() {
-        // Products of several different primes should become MixedRadix
-        let mut planner = FftPlannerScalar::<f64>::new();
-        for pow2 in 2..5 {
-            for pow3 in 2..5 {
-                for pow5 in 2..5 {
-                    for pow7 in 2..4 {
-                        let len = 2usize.pow(pow2)
-                            * 3usize.pow(pow3)
-                            * 5usize.pow(pow5)
-                            * 7usize.pow(pow7);
-                        let plan = planner.design_fft_for_len(len);
-                        assert!(
-                            is_mixedradix(&plan),
-                            "Length: {}, expected MixedRadix, got {:?}",
-                            len,
-                            plan
-                        );
-                        assert_eq!(plan.len(), len, "Recipe reports wrong length");
-                    }
-                }
-            }
-        }
-    }
-
-    #[test]
     fn test_plan_scalar_mixedradixsmall() {
         // Products of two "small" lengths < 31 that have a common divisor >1, and isn't a power of 2 should be MixedRadixSmall
         let mut planner = FftPlannerScalar::<f64>::new();
@@ -761,10 +742,7 @@ mod unit_tests {
     #[test]
     fn test_plan_scalar_bluestein_vs_rader() {
         let difficultprimes: [usize; 4] = [359, 719, 1439, 2879];
-        let easyprimes: [usize; 24] = [
-            53, 61, 67, 71, 73, 79, 89, 97, 101, 103, 109, 113, 131, 137, 139, 149, 151, 157, 163,
-            181, 191, 193, 197, 199,
-        ];
+        let easyprimes: [usize; 3] = [101, 149, 257];
 
         let mut planner = FftPlannerScalar::<f64>::new();
         for len in difficultprimes.iter() {
@@ -868,15 +846,15 @@ mod unit_tests {
         is_send::<FftPlannerAvx<T>>();
     }
     // Dummy test to just get some prints
-    #[test]
-    fn test_dummy() {
-        let mut planner32 = FftPlannerScalar::<f32>::new();
-        println!("Plan 59");
-        let fft_zero32 = planner32.plan_fft_forward(59);
-        println!("Plan 58");
-        let fft_zero32 = planner32.plan_fft_forward(58);
-        println!("Plan 128");
-        let fft_zero32 = planner32.plan_fft_forward(128);
-        assert!(false);
-    }
+    //#[test]
+    //fn test_dummy() {
+    //    let mut planner32 = FftPlannerScalar::<f32>::new();
+    //    println!("Plan 59");
+    //    let fft_zero32 = planner32.plan_fft_forward(59);
+    //    println!("Plan 58");
+    //    let fft_zero32 = planner32.plan_fft_forward(58);
+    //    println!("Plan 128");
+    //    let fft_zero32 = planner32.plan_fft_forward(128);
+    //    assert!(false);
+    //}
 }
