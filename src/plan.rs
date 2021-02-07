@@ -101,7 +101,7 @@ impl<T: FftNum> FftPlanner<T> {
 }
 
 const SMALL_LEN: usize = 32; // limit of "small" length for mixed radix algos
-const BUTTERFLY_COST_FACTOR: f32 = 1.5; // iai underestimates the execution time for butterflies, this factor compensates.
+const BUTTERFLY_COST_FACTOR: f32 = 1.0; // iai underestimates the execution time for butterflies, this factor compensates.
 
 /// A Recipe is a structure that describes the design of a FFT, without actually creating it.
 /// It is used as a middle step in the planning process.
@@ -609,12 +609,12 @@ impl<T: FftNum> FftPlannerScalar<T> {
 mod unit_tests {
     use super::*;
 
-    fn is_mixedradix(plan: &Recipe) -> bool {
-        match plan {
-            &Recipe::MixedRadix { .. } => true,
-            _ => false,
-        }
-    }
+    //fn is_mixedradix(plan: &Recipe) -> bool {
+    //    match plan {
+    //        &Recipe::MixedRadix { .. } => true,
+    //        _ => false,
+    //    }
+    //}
 
     fn is_mixedradixsmall(plan: &Recipe) -> bool {
         match plan {
@@ -623,12 +623,12 @@ mod unit_tests {
         }
     }
 
-    fn is_goodthomas(plan: &Recipe) -> bool {
-        match plan {
-            &Recipe::GoodThomasAlgorithm { .. } => true,
-            _ => false,
-        }
-    }
+    //fn is_goodthomas(plan: &Recipe) -> bool {
+    //    match plan {
+    //        &Recipe::GoodThomasAlgorithm { .. } => true,
+    //        _ => false,
+    //    }
+    //}
 
     fn is_goodthomassmall(plan: &Recipe) -> bool {
         match plan {
@@ -666,7 +666,7 @@ mod unit_tests {
     fn test_plan_scalar_mediumpoweroftwo() {
         // Powers of 2 from 128 to 4096 should use Radix4, (larger may use mixed radix)
         let mut planner = FftPlannerScalar::<f64>::new();
-        for pow in 7..12 {
+        for pow in 8..12 {
             let len = 1 << pow;
             let plan = planner.design_fft_for_len(len);
             assert_eq!(
@@ -849,12 +849,18 @@ mod unit_tests {
     //#[test]
     //fn test_dummy() {
     //    let mut planner32 = FftPlannerScalar::<f32>::new();
-    //    println!("Plan 59");
-    //    let fft_zero32 = planner32.plan_fft_forward(59);
-    //    println!("Plan 58");
-    //    let fft_zero32 = planner32.plan_fft_forward(58);
-    //    println!("Plan 128");
-    //    let fft_zero32 = planner32.plan_fft_forward(128);
+    //    println!("Plan13");
+    //    let fft_zero32 = planner32.plan_fft_forward(13);
+    //    println!("Plan 19");
+    //    let fft_zero32 = planner32.plan_fft_forward(19);
+    //    println!("Plan 167");
+    //    let fft_zero32 = planner32.plan_fft_forward(167);
+    //    println!("Plan 899");
+    //    let fft_zero32 = planner32.plan_fft_forward(899);
+    //    //println!("Plan 58");
+    //    //let fft_zero32 = planner32.plan_fft_forward(58);
+    //    //println!("Plan 128");
+    //    //let fft_zero32 = planner32.plan_fft_forward(128);
     //    assert!(false);
     //}
 }

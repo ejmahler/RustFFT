@@ -26,12 +26,12 @@ use test::Bencher;
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
-fn bench_planned_multi_f64(b: &mut Bencher, len: usize) {
+fn bench_planned_multi_f64(b: &mut Bencher, len: usize, repeats: usize) {
     let mut planner = rustfft::FftPlannerScalar::new();
     let fft: Arc<dyn Fft<f64>> = planner.plan_fft_forward(len);
 
-    let mut buffer = vec![Complex::zero(); 1000 * len];
-    let mut output = vec![Complex::zero(); 1000 * len];
+    let mut buffer = vec![Complex::zero(); 1000 * repeats];
+    let mut output = vec![Complex::zero(); 1000 * repeats];
     let mut scratch = vec![Complex::zero(); fft.get_outofplace_scratch_len()];
     b.iter(|| {
         fft.process_outofplace_with_scratch(&mut buffer, &mut output, &mut scratch);
