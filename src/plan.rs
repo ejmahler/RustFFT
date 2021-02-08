@@ -707,7 +707,8 @@ mod unit_tests {
     fn test_plan_scalar_mixedradixsmall() {
         // Products of two "small" lengths < 31 that have a common divisor >1, and isn't a power of 2 should be MixedRadixSmall
         let mut planner = FftPlannerScalar::<f64>::new();
-        for len in [5 * 20, 5 * 25].iter() {
+        let lengths: [usize; 2] = [5 * 20, 5 * 25];
+        for len in lengths.iter() {
             let plan = planner.design_fft_for_len(*len);
             assert!(
                 is_mixedradixsmall(&plan),
@@ -722,8 +723,9 @@ mod unit_tests {
     #[test]
     fn test_plan_scalar_goodthomassmall() {
         let mut planner = FftPlannerScalar::<f64>::new();
-        for prime1 in &[5, 7, 11, 13, 17, 19, 23, 29, 31] {
-            for prime2 in &[5, 7, 11, 13, 17, 19, 23, 29, 31] {
+        let primes: [usize; 9] = [5, 7, 11, 13, 17, 19, 23, 29, 31];
+        for prime1 in primes.iter() {
+            for prime2 in primes.iter() {
                 if prime1 != prime2 {
                     let len = prime1 * prime2;
                     let plan = planner.design_fft_for_len(len);
@@ -742,7 +744,7 @@ mod unit_tests {
     #[test]
     fn test_plan_scalar_bluestein_vs_rader() {
         let difficultprimes: [usize; 4] = [359, 719, 1439, 2879];
-        let easyprimes: [usize; 3] = [101, 149, 257];
+        let easyprimes: [usize; 2] = [101, 257];
 
         let mut planner = FftPlannerScalar::<f64>::new();
         for len in difficultprimes.iter() {

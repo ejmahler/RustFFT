@@ -4,13 +4,13 @@
 extern crate rustfft;
 extern crate test;
 
+use paste::paste;
 use rustfft::algorithm::*;
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 use rustfft::{Fft, FftDirection};
 use std::sync::Arc;
 use test::Bencher;
-use paste::paste;
 
 // Make fft using planner
 fn bench_planned(b: &mut Bencher, len: usize) {
@@ -18,7 +18,7 @@ fn bench_planned(b: &mut Bencher, len: usize) {
     let fft: Arc<dyn Fft<f64>> = planner.plan_fft_forward(len);
 
     let mut buffer: Vec<Complex<f64>> = vec![Complex::zero(); len];
-    let mut scratch: Vec<Complex<f64>>  = vec![Complex::zero(); fft.get_inplace_scratch_len()];
+    let mut scratch: Vec<Complex<f64>> = vec![Complex::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| {
         fft.process_with_scratch(&mut buffer, &mut scratch);
     });
@@ -28,9 +28,9 @@ fn bench_planned(b: &mut Bencher, len: usize) {
 fn bench_planned_multi(b: &mut Bencher, len: usize, reps: usize) {
     let mut planner = rustfft::FftPlannerScalar::new();
     let fft: Arc<dyn Fft<f64>> = planner.plan_fft_forward(len);
-    let mut buffer: Vec<Complex<f64>> = vec![Complex::zero(); len*reps];
+    let mut buffer: Vec<Complex<f64>> = vec![Complex::zero(); len * reps];
     let mut output = buffer.clone();
-    let mut scratch: Vec<Complex<f64>>  = vec![Complex::zero(); fft.get_outofplace_scratch_len()];
+    let mut scratch: Vec<Complex<f64>> = vec![Complex::zero(); fft.get_outofplace_scratch_len()];
     b.iter(|| {
         fft.process_outofplace_with_scratch(&mut buffer, &mut output, &mut scratch);
     });
@@ -42,8 +42,20 @@ fn bench_radix4(b: &mut Bencher, len: usize) {
 
     let fft = Radix4::new(len, FftDirection::Forward);
 
-    let mut buffer = vec![ Complex { re: 0_f64, im: 0_f64 }; len ];
-    let mut scratch = vec![ Complex { re: 0_f64, im: 0_f64 }; fft.get_inplace_scratch_len() ];
+    let mut buffer = vec![
+        Complex {
+            re: 0_f64,
+            im: 0_f64
+        };
+        len
+    ];
+    let mut scratch = vec![
+        Complex {
+            re: 0_f64,
+            im: 0_f64
+        };
+        fft.get_inplace_scratch_len()
+    ];
     b.iter(|| {
         fft.process_with_scratch(&mut buffer, &mut scratch);
     });
@@ -52,14 +64,26 @@ fn bench_radix4(b: &mut Bencher, len: usize) {
 // Make a mixed radix that uses a planner for the inners
 fn bench_mixedradix(b: &mut Bencher, len_a: usize, len_b: usize) {
     let mut planner = rustfft::FftPlannerScalar::new();
-    let totlen = len_a*len_b;
+    let totlen = len_a * len_b;
     let fft_a: Arc<dyn Fft<_>> = planner.plan_fft_forward(len_a);
     let fft_b: Arc<dyn Fft<_>> = planner.plan_fft_forward(len_b);
 
     let fft: Arc<dyn Fft<_>> = Arc::new(MixedRadix::new(fft_a, fft_b));
 
-    let mut buffer = vec![ Complex { re: 0_f64, im: 0_f64 }; totlen ];
-    let mut scratch = vec![ Complex { re: 0_f64, im: 0_f64 }; fft.get_inplace_scratch_len() ];
+    let mut buffer = vec![
+        Complex {
+            re: 0_f64,
+            im: 0_f64
+        };
+        totlen
+    ];
+    let mut scratch = vec![
+        Complex {
+            re: 0_f64,
+            im: 0_f64
+        };
+        fft.get_inplace_scratch_len()
+    ];
     b.iter(|| {
         fft.process_with_scratch(&mut buffer, &mut scratch);
     });
@@ -68,14 +92,26 @@ fn bench_mixedradix(b: &mut Bencher, len_a: usize, len_b: usize) {
 // Make a mixed radix that uses a planner for the inners
 fn bench_mixedradixsmall(b: &mut Bencher, len_a: usize, len_b: usize) {
     let mut planner = rustfft::FftPlannerScalar::new();
-    let totlen = len_a*len_b;
+    let totlen = len_a * len_b;
     let fft_a: Arc<dyn Fft<_>> = planner.plan_fft_forward(len_a);
     let fft_b: Arc<dyn Fft<_>> = planner.plan_fft_forward(len_b);
 
     let fft: Arc<dyn Fft<_>> = Arc::new(MixedRadixSmall::new(fft_a, fft_b));
 
-    let mut buffer = vec![ Complex { re: 0_f64, im: 0_f64 }; totlen ];
-    let mut scratch = vec![ Complex { re: 0_f64, im: 0_f64 }; fft.get_inplace_scratch_len() ];
+    let mut buffer = vec![
+        Complex {
+            re: 0_f64,
+            im: 0_f64
+        };
+        totlen
+    ];
+    let mut scratch = vec![
+        Complex {
+            re: 0_f64,
+            im: 0_f64
+        };
+        fft.get_inplace_scratch_len()
+    ];
     b.iter(|| {
         fft.process_with_scratch(&mut buffer, &mut scratch);
     });
@@ -84,14 +120,26 @@ fn bench_mixedradixsmall(b: &mut Bencher, len_a: usize, len_b: usize) {
 // Make a good thomas that uses a planner for the inners
 fn bench_goodthomas(b: &mut Bencher, len_a: usize, len_b: usize) {
     let mut planner = rustfft::FftPlannerScalar::new();
-    let totlen = len_a*len_b;
+    let totlen = len_a * len_b;
     let fft_a: Arc<dyn Fft<_>> = planner.plan_fft_forward(len_a);
     let fft_b: Arc<dyn Fft<_>> = planner.plan_fft_forward(len_b);
 
     let fft: Arc<dyn Fft<_>> = Arc::new(GoodThomasAlgorithm::new(fft_a, fft_b));
 
-    let mut buffer = vec![ Complex { re: 0_f64, im: 0_f64 }; totlen ];
-    let mut scratch = vec![ Complex { re: 0_f64, im: 0_f64 }; fft.get_inplace_scratch_len() ];
+    let mut buffer = vec![
+        Complex {
+            re: 0_f64,
+            im: 0_f64
+        };
+        totlen
+    ];
+    let mut scratch = vec![
+        Complex {
+            re: 0_f64,
+            im: 0_f64
+        };
+        fft.get_inplace_scratch_len()
+    ];
     b.iter(|| {
         fft.process_with_scratch(&mut buffer, &mut scratch);
     });
@@ -100,14 +148,26 @@ fn bench_goodthomas(b: &mut Bencher, len_a: usize, len_b: usize) {
 // Make a good thomas that uses a planner for the inners
 fn bench_goodthomassmall(b: &mut Bencher, len_a: usize, len_b: usize) {
     let mut planner = rustfft::FftPlannerScalar::new();
-    let totlen = len_a*len_b;
+    let totlen = len_a * len_b;
     let fft_a: Arc<dyn Fft<_>> = planner.plan_fft_forward(len_a);
     let fft_b: Arc<dyn Fft<_>> = planner.plan_fft_forward(len_b);
 
     let fft: Arc<dyn Fft<_>> = Arc::new(GoodThomasAlgorithmSmall::new(fft_a, fft_b));
 
-    let mut buffer = vec![ Complex { re: 0_f64, im: 0_f64 }; totlen ];
-    let mut scratch = vec![ Complex { re: 0_f64, im: 0_f64 }; fft.get_inplace_scratch_len() ];
+    let mut buffer = vec![
+        Complex {
+            re: 0_f64,
+            im: 0_f64
+        };
+        totlen
+    ];
+    let mut scratch = vec![
+        Complex {
+            re: 0_f64,
+            im: 0_f64
+        };
+        fft.get_inplace_scratch_len()
+    ];
     b.iter(|| {
         fft.process_with_scratch(&mut buffer, &mut scratch);
     });
@@ -116,12 +176,24 @@ fn bench_goodthomassmall(b: &mut Bencher, len_a: usize, len_b: usize) {
 // Make a Raders that uses a planner for the inner
 fn bench_raders(b: &mut Bencher, len: usize) {
     let mut planner = rustfft::FftPlannerScalar::new();
-    let fft_inner: Arc<dyn Fft<_>> = planner.plan_fft_forward(len-1);
+    let fft_inner: Arc<dyn Fft<_>> = planner.plan_fft_forward(len - 1);
 
     let fft: Arc<dyn Fft<_>> = Arc::new(RadersAlgorithm::new(fft_inner));
 
-    let mut buffer = vec![ Complex { re: 0_f64, im: 0_f64 }; len ];
-    let mut scratch = vec![ Complex { re: 0_f64, im: 0_f64 }; fft.get_inplace_scratch_len() ];
+    let mut buffer = vec![
+        Complex {
+            re: 0_f64,
+            im: 0_f64
+        };
+        len
+    ];
+    let mut scratch = vec![
+        Complex {
+            re: 0_f64,
+            im: 0_f64
+        };
+        fft.get_inplace_scratch_len()
+    ];
     b.iter(|| {
         fft.process_with_scratch(&mut buffer, &mut scratch);
     });
@@ -134,14 +206,25 @@ fn bench_bluesteins(b: &mut Bencher, len: usize, inner_len: usize) {
 
     let fft: Arc<dyn Fft<_>> = Arc::new(BluesteinsAlgorithm::new(len, fft_inner));
 
-    let mut buffer = vec![ Complex { re: 0_f64, im: 0_f64 }; len ];
-    let mut scratch = vec![ Complex { re: 0_f64, im: 0_f64 }; fft.get_inplace_scratch_len() ];
+    let mut buffer = vec![
+        Complex {
+            re: 0_f64,
+            im: 0_f64
+        };
+        len
+    ];
+    let mut scratch = vec![
+        Complex {
+            re: 0_f64,
+            im: 0_f64
+        };
+        fft.get_inplace_scratch_len()
+    ];
 
     b.iter(|| {
         fft.process_with_scratch(&mut buffer, &mut scratch);
     });
 }
-
 
 // Create benches using functions taking one argument
 macro_rules! make_benches {
