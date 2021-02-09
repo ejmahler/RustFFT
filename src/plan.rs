@@ -769,23 +769,6 @@ mod unit_tests {
         }
     }
 
-    // For these lengths a Bluesteins would be faster than the MixedRadix that currently gets chosen
-    //#[test]
-    //fn test_plan_scalar_bluestein_specials() {
-    //    let good_for_bluesteins: [usize; 12] = [619, 807, 811, 815, 830, 835, 865, 895, 913, 919, 921, 991];
-    //    let mut planner = FftPlannerScalar::<f64>::new();
-    //    for len in good_for_bluesteins.iter() {
-    //        let plan = planner.design_fft_for_len(*len);
-    //        assert!(
-    //            is_bluesteins(&plan),
-    //            "Length: {}, Expected BluesteinsAlgorithm, got {:?}",
-    //            len,
-    //            plan
-    //        );
-    //        assert_eq!(plan.len(), *len, "Recipe reports wrong length");
-    //    }
-    //}
-
     #[test]
     fn test_scalar_fft_cache() {
         {
@@ -847,6 +830,7 @@ mod unit_tests {
         is_send::<FftPlannerScalar<T>>();
         is_send::<FftPlannerAvx<T>>();
     }
+
     // Dummy test to just get some prints
     //#[test]
     //fn test_dummy() {
