@@ -831,6 +831,19 @@ mod unit_tests {
         is_send::<FftPlannerAvx<T>>();
     }
 
+
+    // Dummy test to dump all recipes of length 2 - 1024
+    #[test]
+    fn test_dummy_printall() {
+        let mut planner = FftPlannerScalar::<f32>::new();
+        for len in 2..1025 {
+            let plan = planner.design_fft_for_len(len);
+            println!("{}: {:?}", len, plan);
+        }
+        // make it fail so the test prints the output
+        assert!(false);
+    }
+
     // Dummy test to just get some prints
     //#[test]
     //fn test_dummy() {
