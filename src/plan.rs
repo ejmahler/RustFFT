@@ -833,33 +833,15 @@ mod unit_tests {
 
 
     // Dummy test to dump all recipes of length 2 - 1024
-    #[test]
-    fn test_dummy_printall() {
-        let mut planner = FftPlannerScalar::<f32>::new();
-        for len in 2..1025 {
-            let plan = planner.design_fft_for_len(len);
-            println!("{}: {:?}", len, plan);
-        }
-        // make it fail so the test prints the output
-        assert!(false);
-    }
-
-    // Dummy test to just get some prints
     //#[test]
-    //fn test_dummy() {
-    //    let mut planner32 = FftPlannerScalar::<f32>::new();
-    //    println!("Plan13");
-    //    let fft_zero32 = planner32.plan_fft_forward(13);
-    //    println!("Plan 19");
-    //    let fft_zero32 = planner32.plan_fft_forward(19);
-    //    println!("Plan 167");
-    //    let fft_zero32 = planner32.plan_fft_forward(167);
-    //    println!("Plan 899");
-    //    let fft_zero32 = planner32.plan_fft_forward(899);
-    //    //println!("Plan 58");
-    //    //let fft_zero32 = planner32.plan_fft_forward(58);
-    //    //println!("Plan 128");
-    //    //let fft_zero32 = planner32.plan_fft_forward(128);
+    //fn test_dummy_printall() {
+    //    let mut planner = FftPlannerScalar::<f32>::new();
+    //    for len in 2..1025 {
+    //        let plan = planner.design_fft_for_len(len);
+    //        println!("{}: {:?}", len, plan);
+    //    }
+    //    // make it fail so the test prints the output
     //    assert!(false);
     //}
+
 }

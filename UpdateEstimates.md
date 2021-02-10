@@ -12,7 +12,7 @@ The bench results are affected by other processes competing for the CPU. Keep as
 Also disable any turbo feature of the CPU. This will make the benches take a little longer to run, but the CPU speed will be more constant which improves the results.
 
 ## Run the benches
-The bench results almost always contain some points that are quite off. To mitigate this, the benches shouldbe repeated several times. Using 5 repeats seems to give good results.
+The bench results almost always contain some points that are quite off. To mitigate this, the benches should be repeated several times. Using 5 repeats seems to give good results.
 
 Run the benches with the `run_benches.sh` script:
 ```sh
@@ -72,3 +72,21 @@ The fits are done by subtracting the measured time for performing the inner fft.
 ## Testing
 
 Some of the tests in the planner check that the planned fft is the expected one. After updating the estimates, some of these might fail and need modifications.
+
+To check what algorithms the planner picks, there is a dummy test called `test_dummy_printall` in `plan.rs`. The test isn't actually testing anything and is commented out. Enabling this test will print all the recipes from length 2 to 1024. Then it will fail, to ensure that the output is printed in the terminal. 
+
+## Checking performance
+
+There is a series of benches from length 2 to 1024, that can be used to check for differences in the speed.
+
+Run with:
+```sh
+cargo bench --bench bench_check_scalar_2to1024 | tee new_estimates.txt
+```
+
+Run this both on the master branch, and with the new estimates. Then the two series can be compared with [cargo-benchcmp](https://crates.io/crates/cargo-benchcmp):
+```sh
+cargo benchcmp prev_estimates.txt new_estimates.txt
+```
+This will list the all the differences. This is also affected by noise, so it's advised to run it several times before drawing too many conclusions.
+
