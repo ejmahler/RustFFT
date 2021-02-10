@@ -831,7 +831,6 @@ mod unit_tests {
         is_send::<FftPlannerAvx<T>>();
     }
 
-
     // Dummy test to dump all recipes of length 2 - 1024
     //#[test]
     //fn test_dummy_printall() {
@@ -843,5 +842,4 @@ mod unit_tests {
     //    // make it fail so the test prints the output
     //    assert!(false);
     //}
-
 }
