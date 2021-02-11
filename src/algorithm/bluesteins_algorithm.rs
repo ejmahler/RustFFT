@@ -113,7 +113,7 @@ impl<T: FftNum> BluesteinsAlgorithm<T> {
         {
             *inner_entry = *buffer_entry * *twiddle;
         }
-        for inner in inner_input.iter_mut().skip(input.len()) {
+        for inner in (&mut inner_input[input.len()..]).iter_mut() {
             *inner = Complex::zero();
         }
 

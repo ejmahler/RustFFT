@@ -173,7 +173,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
         }
 
         // the buffer will almost certainly have a remainder. it's so likely, in fact, that we're just going to apply a remainder unconditionally
-        // it uses a couple more instructions in the rare case when our FFT size is a multiple of 4, but wastes instructions when it's not
+        // it uses a couple more instructions in the rare case when our FFT size is a multiple of 4, but saves instructions when it's not
         {
             let remainder_twiddle = self.common_data.twiddles[chunk_count];
 
