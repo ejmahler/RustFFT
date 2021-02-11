@@ -1,4 +1,7 @@
 use num_complex::Complex;
+use std::any::TypeId;
+use std::arch::x86_64::*;
+//use std::mem::transmute;
 
 use crate::{common::FftNum, FftDirection};
 
@@ -7,6 +10,7 @@ use crate::array_utils::{RawSlice, RawSliceMut};
 use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
+
 
 #[allow(unused)]
 macro_rules! boilerplate_fft_butterfly {
@@ -235,31 +239,216 @@ impl<T: FftNum> Butterfly4<T> {
     ) {
         //we're going to hardcode a step of mixed radix
         //aka we're going to do the six step algorithm
+        let id_f32 = TypeId::of::<f32>();
+        let id_f64 = TypeId::of::<f64>();
+        let id_t = TypeId::of::<T>();
 
-        // step 1: transpose, which we're skipping because we're just going to perform non-contiguous FFTs
-        let mut value0 = input.load(0);
-        let mut value1 = input.load(1);
-        let mut value2 = input.load(2);
-        let mut value3 = input.load(3);
+        if id_t == id_f32 {
+            //println!("we have f32!");
 
-        // step 2: column FFTs
-        Butterfly2::perform_fft_strided(&mut value0, &mut value2);
-        Butterfly2::perform_fft_strided(&mut value1, &mut value3);
+            //let input_slice = transmute::<RawSlice<Complex<T>>, [f32; 8]>(input);
+            //let mut output_slice = transmute::<RawSliceMut<Complex<T>>, [f32; 8]>(output);
+            let value01 = _mm_loadu_ps(input.as_ptr() as *const f32);
+            let value23 = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
+            //println!("input");
+            //println!("{:?}", value01);
+            //println!("{:?}", value23);
+            let mut temp0 = _mm_add_ps(value01, value23);
+            let mut temp1 = _mm_sub_ps(value01, value23);
 
-        // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-        value3 = twiddles::rotate_90(value3, self.direction);
+            //println!("after 1st");
+            //println!("{:?}", temp0);
+            //println!("{:?}", temp1);
 
-        // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
+                
+            if self.direction == FftDirection::Inverse {
+                temp1 = _mm_permute_ps(temp1, 0xB4);
+                let rot = _mm_set_ps(0.0, -0.0, 0.0, 0.0);
+                temp1 = _mm_xor_ps(temp1, rot);
+            }
+            else {
+                temp1 = _mm_permute_ps(temp1, 0xB4);
+                let rot = _mm_set_ps(-0.0, 0.0, 0.0, 0.0);
+                temp1 = _mm_xor_ps(temp1, rot);
+            }
+            //println!("after rotate");
+            //println!("{:?}", temp0);
+            //println!("{:?}", temp1);
+            let temp3 = _mm_shuffle_ps(temp0, temp1, 0x44);
+            let temp4 = _mm_shuffle_ps(temp0, temp1, 0xEE);
 
-        // step 5: row FFTs
-        Butterfly2::perform_fft_strided(&mut value0, &mut value1);
-        Butterfly2::perform_fft_strided(&mut value2, &mut value3);
+            //println!("after shuffle");
+            //println!("{:?}", temp3);
+            //println!("{:?}", temp4);
 
-        // step 6: transpose by swapping index 1 and 2
-        output.store(value0, 0);
-        output.store(value2, 1);
-        output.store(value1, 2);
-        output.store(value3, 3);
+            temp0 = _mm_add_ps(temp3, temp4);
+            temp1 = _mm_sub_ps(temp3, temp4);
+
+            //println!("after 2nd fft");
+            //println!("{:?}", temp0);
+            //println!("{:?}", temp1);
+
+            let array0 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(temp0);
+            let array1 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(temp1);
+
+            let transmuted_out0: &[Complex<T>] = array_utils::workaround_transmute(&array0);
+            let transmuted_out1: &[Complex<T>] = array_utils::workaround_transmute(&array1);
+
+            //println!("out");
+            //println!("{:?}",transmuted_out0[0]);
+            //println!("{:?}",transmuted_out0[1]);
+            //println!("{:?}",transmuted_out1[0]);
+            //println!("{:?}",transmuted_out1[1]);
+            output.store(transmuted_out0[0], 0);
+            output.store(transmuted_out0[1], 1);
+            output.store(transmuted_out1[0], 2);
+            output.store(transmuted_out1[1], 3);
+            //println!("{:?}",input.load(0));
+            //println!("{:?}",input.load(1));
+            //println!("{:?}",input.load(2));
+            //println!("{:?}",input.load(3));
+            //let temp = *left + *right;
+            //*right = *left - *right;
+            //*left = temp;
+        }
+        else if id_t == id_f64 {
+            //println!("we have f64!");
+            //let input_slice = transmute::<RawSlice<Complex<T>>, [f32; 8]>(input);
+            //let mut output_slice = transmute::<RawSliceMut<Complex<T>>, [f32; 8]>(output);
+            let mut value0 = _mm_loadu_pd(input.as_ptr() as *const f64);
+            let mut value1 = _mm_loadu_pd(input.as_ptr().add(1) as *const f64);
+            let mut value2 = _mm_loadu_pd(input.as_ptr().add(2) as *const f64);
+            let mut value3 = _mm_loadu_pd(input.as_ptr().add(3) as *const f64);
+            //println!("input");
+            //println!("{:?}", value0);
+            //println!("{:?}", value1);
+            //println!("{:?}", value2);
+            //println!("{:?}", value3);
+            let temp0 = _mm_add_pd(value0, value2);
+            let temp2 = _mm_sub_pd(value0, value2);
+            let temp1 = _mm_add_pd(value1, value3);
+            let mut temp3 = _mm_sub_pd(value1, value3);
+
+            //println!("after 1st");
+            //println!("{:?}", temp0);
+            //println!("{:?}", temp1);
+            //println!("{:?}", temp2);
+            //println!("{:?}", temp3);
+
+                
+            if self.direction == FftDirection::Inverse {
+                temp3 = _mm_permute_pd(temp3, 0x01);
+                let rot = _mm_set_pd(0.0, -0.0);
+                temp3 = _mm_xor_pd(temp3, rot);
+            }
+            else {
+                temp3 = _mm_permute_pd(temp3, 0x01);
+                let rot = _mm_set_pd(-0.0, 0.0);
+                temp3 = _mm_xor_pd(temp3, rot);
+            }
+            //println!("after rotate");
+            //println!("{:?}", temp0);
+            //println!("{:?}", temp1);
+            //println!("{:?}", temp2);
+            //println!("{:?}", temp3);
+
+            value0 = _mm_add_pd(temp0, temp1);
+            value1 = _mm_sub_pd(temp0, temp1);
+            value2 = _mm_add_pd(temp2, temp3);
+            value3 = _mm_sub_pd(temp2, temp3);
+
+            //println!("after 2nd fft");
+            //println!("{:?}", value0);
+            //println!("{:?}", value1);
+            //println!("{:?}", value2);
+            //println!("{:?}", value3);
+
+            //let val0 = std::mem::transmute_copy::<__m128d, Complex<T>>(&value0);
+            //let val1 = std::mem::transmute_copy::<__m128d, Complex<T>>(&value1);
+            //let val2 = std::mem::transmute_copy::<__m128d, Complex<T>>(&value2);
+            //let val3 = std::mem::transmute_copy::<__m128d, Complex<T>>(&value3);
+
+            output.store(std::mem::transmute_copy::<__m128d, Complex<T>>(&value0), 0);
+            output.store(std::mem::transmute_copy::<__m128d, Complex<T>>(&value2), 1);
+            output.store(std::mem::transmute_copy::<__m128d, Complex<T>>(&value1), 2);
+            output.store(std::mem::transmute_copy::<__m128d, Complex<T>>(&value3), 3);
+            //let transmuted_out0: &[Complex<T>] = array_utils::workaround_transmute(&array0);
+            //let transmuted_out1: &[Complex<T>] = array_utils::workaround_transmute(&array1);
+            //let transmuted_out2: &[Complex<T>] = array_utils::workaround_transmute(&array0);
+            //let transmuted_out3: &[Complex<T>] = array_utils::workaround_transmute(&array1);
+            //let t0 = &val0 as *const Complex<T>;
+            //let t1 = &val1 as *const Complex<T>;
+            //let t2 = &val2 as *const Complex<T>;
+            //let t3 = &val3 as *const Complex<T>;
+
+            //println!("out");
+            //println!("{:?}",val0);
+            //println!("{:?}",val2);
+            //println!("{:?}",val1);
+            //println!("{:?}",val3);
+            //output.store(val0, 0);
+            //output.store(val2, 1);
+            //output.store(val1, 2);
+            //output.store(val3, 3);
+            //println!("{:?}",input.load(0));
+            //println!("{:?}",input.load(1));
+            //println!("{:?}",input.load(2));
+            //println!("{:?}",input.load(3));
+            //let temp = *left + *right;
+            //*right = *left - *right;
+            //*left = temp;
+        }
+        else {
+            //println!("we have general");
+            // step 1: transpose, which we're skipping because we're just going to perform non-contiguous FFTs
+            let mut value0 = input.load(0);
+            let mut value1 = input.load(1);
+            let mut value2 = input.load(2);
+            let mut value3 = input.load(3);
+
+            // step 2: column FFTs
+            Butterfly2::perform_fft_strided(&mut value0, &mut value2);
+            Butterfly2::perform_fft_strided(&mut value1, &mut value3);
+
+            //println!("after 1st fft");
+            //println!("{:?}",value0);
+            //println!("{:?}",value1);
+            //println!("{:?}",value2);
+            //println!("{:?}",value3);
+
+            // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
+            value3 = twiddles::rotate_90(value3, self.direction);
+
+            //println!("after rotate");
+            //println!("{:?}",value0);
+            //println!("{:?}",value1);
+            //println!("{:?}",value2);
+            //println!("{:?}",value3);
+
+            // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
+
+            // step 5: row FFTs
+            Butterfly2::perform_fft_strided(&mut value0, &mut value1);
+            Butterfly2::perform_fft_strided(&mut value2, &mut value3);
+
+            //println!("after 2nd fft");
+            //println!("{:?}",value0);
+            //println!("{:?}",value1);
+            //println!("{:?}",value2);
+            //println!("{:?}",value3);
+
+            // step 6: transpose by swapping index 1 and 2
+            output.store(value0, 0);
+            output.store(value2, 1);
+            output.store(value1, 2);
+            output.store(value3, 3);
+            //println!("out ref");
+            //println!("{:?}",input.load(0));
+            //println!("{:?}",input.load(1));
+            //println!("{:?}",input.load(2));
+            //println!("{:?}",input.load(3));
+        }
+        //}
     }
 }
 
@@ -5929,4 +6118,22 @@ mod unit_tests {
     test_butterfly_func!(test_butterfly29, Butterfly29, 29);
     test_butterfly_func!(test_butterfly31, Butterfly31, 31);
     test_butterfly_func!(test_butterfly32, Butterfly32, 32);
+
+    #[test]
+    fn check_type() {
+        let butterfly = Butterfly4::new(FftDirection::Forward);
+        let mut input = vec![Complex::<f64>::new(1.0, 1.5),Complex::<f64>::new(2.0, 2.4),Complex::<f64>::new(7.0, 9.5),Complex::<f64>::new(-4.0, -4.5)];
+        let mut scratch = vec![Complex::<f64>::from(0.0); 0];
+        butterfly.process_with_scratch(&mut input, &mut scratch);
+        assert!(false);
+    }
+
+    #[test]
+    fn check_type_inv() {
+        let butterfly = Butterfly4::new(FftDirection::Inverse);
+        let mut input = vec![Complex::<f64>::new(1.0, 1.5),Complex::<f64>::new(2.0, 2.4),Complex::<f64>::new(7.0, 9.5),Complex::<f64>::new(-4.0, -4.5)];
+        let mut scratch = vec![Complex::<f64>::from(0.0); 0];
+        butterfly.process_with_scratch(&mut input, &mut scratch);
+        assert!(false);
+    }
 }

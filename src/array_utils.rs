@@ -103,6 +103,13 @@ impl<T> RawSliceMut<T> {
         *self.ptr.add(index) = value;
     }
 }
+//impl<T: Copy> RawSliceMut<T> {
+//    #[inline(always)]
+//    pub unsafe fn load(&self, index: usize) -> T {
+//        debug_assert!(index < self.slice_len);
+//        *self.ptr.add(index)
+//    }
+//}
 
 #[cfg(test)]
 mod unit_tests {
