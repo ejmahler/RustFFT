@@ -1,7 +1,8 @@
 use num_complex::Complex;
 use std::any::TypeId;
-use std::arch::x86_64::*;
+use core::arch::x86_64::*;
 //use std::mem::transmute;
+use std::time::{Duration, Instant};
 
 use crate::{common::FftNum, FftDirection};
 
@@ -231,7 +232,8 @@ impl<T: FftNum> Butterfly4<T> {
             _phantom: std::marker::PhantomData,
         }
     }
-    #[inline(always)]
+    #[inline]
+    #[target_feature(enable = "sse", enable = "sse2")]
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         input: RawSlice<Complex<T>>,
@@ -252,16 +254,14 @@ impl<T: FftNum> Butterfly4<T> {
             let mut temp0 = _mm_add_ps(value01, value23);
             let mut temp1 = _mm_sub_ps(value01, value23);
                 
-            if self.direction == FftDirection::Inverse {
-                temp1 = _mm_permute_ps(temp1, 0xB4);
-                let rot = _mm_set_ps(0.0, -0.0, 0.0, 0.0);
-                temp1 = _mm_xor_ps(temp1, rot);
+            temp1 = _mm_permute_ps(temp1, 0xB4);
+            let rot = if self.direction == FftDirection::Inverse {
+                _mm_set_ps(0.0, -0.0, 0.0, 0.0)
             }
             else {
-                temp1 = _mm_permute_ps(temp1, 0xB4);
-                let rot = _mm_set_ps(-0.0, 0.0, 0.0, 0.0);
-                temp1 = _mm_xor_ps(temp1, rot);
-            }
+                _mm_set_ps(-0.0, 0.0, 0.0, 0.0)
+            };
+            temp1 = _mm_xor_ps(temp1, rot);
 
             let temp3 = _mm_shuffle_ps(temp0, temp1, 0x44);
             let temp4 = _mm_shuffle_ps(temp0, temp1, 0xEE);
@@ -284,20 +284,20 @@ impl<T: FftNum> Butterfly4<T> {
             let mut value1 = _mm_loadu_pd(input.as_ptr().add(1) as *const f64);
             let mut value2 = _mm_loadu_pd(input.as_ptr().add(2) as *const f64);
             let mut value3 = _mm_loadu_pd(input.as_ptr().add(3) as *const f64);
+
             let temp0 = _mm_add_pd(value0, value2);
             let temp2 = _mm_sub_pd(value0, value2);
             let temp1 = _mm_add_pd(value1, value3);
             let mut temp3 = _mm_sub_pd(value1, value3);
-            if self.direction == FftDirection::Inverse {
-                temp3 = _mm_permute_pd(temp3, 0x01);
-                let rot = _mm_set_pd(0.0, -0.0);
-                temp3 = _mm_xor_pd(temp3, rot);
+
+            temp3 = _mm_permute_pd(temp3, 0x01);
+            let rot = if self.direction == FftDirection::Inverse {
+                _mm_set_pd(0.0, -0.0)
             }
             else {
-                temp3 = _mm_permute_pd(temp3, 0x01);
-                let rot = _mm_set_pd(-0.0, 0.0);
-                temp3 = _mm_xor_pd(temp3, rot);
-            }
+                _mm_set_pd(-0.0, 0.0)
+            };
+            temp3 = _mm_xor_pd(temp3, rot);
 
             value0 = _mm_add_pd(temp0, temp1);
             value1 = _mm_sub_pd(temp0, temp1);
@@ -314,7 +314,6 @@ impl<T: FftNum> Butterfly4<T> {
             *output_slice.add(1) = val2;
             *output_slice.add(2) = val1;
             *output_slice.add(3) = val3;
-
         }
         else {
             // step 1: transpose, which we're skipping because we're just going to perform non-contiguous FFTs
@@ -327,20 +326,8 @@ impl<T: FftNum> Butterfly4<T> {
             Butterfly2::perform_fft_strided(&mut value0, &mut value2);
             Butterfly2::perform_fft_strided(&mut value1, &mut value3);
 
-            //println!("after 1st fft");
-            //println!("{:?}",value0);
-            //println!("{:?}",value1);
-            //println!("{:?}",value2);
-            //println!("{:?}",value3);
-
             // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
             value3 = twiddles::rotate_90(value3, self.direction);
-
-            //println!("after rotate");
-            //println!("{:?}",value0);
-            //println!("{:?}",value1);
-            //println!("{:?}",value2);
-            //println!("{:?}",value3);
 
             // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
@@ -348,24 +335,12 @@ impl<T: FftNum> Butterfly4<T> {
             Butterfly2::perform_fft_strided(&mut value0, &mut value1);
             Butterfly2::perform_fft_strided(&mut value2, &mut value3);
 
-            //println!("after 2nd fft");
-            //println!("{:?}",value0);
-            //println!("{:?}",value1);
-            //println!("{:?}",value2);
-            //println!("{:?}",value3);
-
             // step 6: transpose by swapping index 1 and 2
             output.store(value0, 0);
             output.store(value2, 1);
             output.store(value1, 2);
             output.store(value3, 3);
-            //println!("out ref");
-            //println!("{:?}",input.load(0));
-            //println!("{:?}",input.load(1));
-            //println!("{:?}",input.load(2));
-            //println!("{:?}",input.load(3));
         }
-        //}
     }
 }
 
@@ -6046,10 +6021,10 @@ mod unit_tests {
     }
 
     #[test]
-    fn check_type_inv() {
-        let butterfly = Butterfly4::new(FftDirection::Inverse);
-        let mut input = vec![Complex::<f64>::new(1.0, 1.5),Complex::<f64>::new(2.0, 2.4),Complex::<f64>::new(7.0, 9.5),Complex::<f64>::new(-4.0, -4.5)];
-        let mut scratch = vec![Complex::<f64>::from(0.0); 0];
+    fn check_type_32() {
+        let butterfly = Butterfly4::new(FftDirection::Forward);
+        let mut input = vec![Complex::<f32>::new(1.0, 1.5),Complex::<f32>::new(2.0, 2.4),Complex::<f32>::new(7.0, 9.5),Complex::<f32>::new(-4.0, -4.5)];
+        let mut scratch = vec![Complex::<f32>::from(0.0); 0];
         butterfly.process_with_scratch(&mut input, &mut scratch);
         assert!(false);
     }
