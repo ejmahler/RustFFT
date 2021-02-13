@@ -387,6 +387,25 @@ fn bench_radix4(b: &mut Bencher, len: usize) {
 //#[bench] fn radix4__1048576(b: &mut Bencher) { bench_radix4(b, 1048576); }
 //#[bench] fn radix4_16777216(b: &mut Bencher) { bench_radix4(b, 16777216); }
 
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_64_radix4(b: &mut Bencher, len: usize) {
+    assert!(len % 4 == 0);
+
+    let fft = Radix4::new(len, FftDirection::Forward);
+
+    let mut signal = vec![Complex{re: 0_f64, im: 0_f64}; len];
+    let mut spectrum = signal.clone();
+    b.iter(|| {fft.process_outofplace_with_scratch(&mut signal, &mut spectrum, &mut []);} );
+}
+
+#[bench] fn radix4_64____64(b: &mut Bencher) { bench_64_radix4(b, 64); }
+#[bench] fn radix4_64___256(b: &mut Bencher) { bench_64_radix4(b, 256); }
+#[bench] fn radix4_64__1024(b: &mut Bencher) { bench_64_radix4(b, 1024); }
+#[bench] fn radix4_64_65536(b: &mut Bencher) { bench_64_radix4(b, 65536); }
+//#[bench] fn radix4__1048576(b: &mut Bencher) { bench_radix4(b, 1048576); }
+//#[bench] fn radix4_16777216(b: &mut Bencher) { bench_radix4(b, 16777216); }
+
 fn get_mixed_radix_power2(len: usize) -> Arc<dyn Fft<f32>> {
     match len {
         8 => Arc::new(Butterfly8::new( FftDirection::Forward)),
