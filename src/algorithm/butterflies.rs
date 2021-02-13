@@ -222,18 +222,36 @@ impl<T: FftNum> Butterfly3<T> {
 pub struct Butterfly4<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
+    rot32: __m128,
+    rot64: __m128d,
 }
 boilerplate_fft_butterfly!(Butterfly4, 4, |this: &Butterfly4<_>| this.direction);
 impl<T: FftNum> Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
+        let rot32 = if direction == FftDirection::Inverse {
+            unsafe {
+                _mm_set_ps(0.0, -0.0, 0.0, 0.0)
+            }
+        }
+        else {
+            unsafe { _mm_set_ps(-0.0, 0.0, 0.0, 0.0) }
+        };
+        let rot64 = if direction == FftDirection::Inverse {
+            unsafe {_mm_set_pd(0.0, -0.0) }
+        }
+        else {
+            unsafe { _mm_set_pd(-0.0, 0.0) }
+        };
+
         Self {
             direction,
             _phantom: std::marker::PhantomData,
+            rot32,
+            rot64,
         }
     }
-    #[inline]
-    #[target_feature(enable = "sse", enable = "sse2")]
+    #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         input: RawSlice<Complex<T>>,
@@ -254,14 +272,15 @@ impl<T: FftNum> Butterfly4<T> {
             let mut temp0 = _mm_add_ps(value01, value23);
             let mut temp1 = _mm_sub_ps(value01, value23);
                 
-            temp1 = _mm_permute_ps(temp1, 0xB4);
-            let rot = if self.direction == FftDirection::Inverse {
-                _mm_set_ps(0.0, -0.0, 0.0, 0.0)
-            }
-            else {
-                _mm_set_ps(-0.0, 0.0, 0.0, 0.0)
-            };
-            temp1 = _mm_xor_ps(temp1, rot);
+            //temp1 = _mm_permute_ps(temp1, 0xB4);
+            temp1 = _mm_shuffle_ps(temp1, temp1, 0xB4);
+            //let rot = if self.direction == FftDirection::Inverse {
+            //    _mm_set_ps(0.0, -0.0, 0.0, 0.0)
+            //}
+            //else {
+            //    _mm_set_ps(-0.0, 0.0, 0.0, 0.0)
+            //};
+            temp1 = _mm_xor_ps(temp1, self.rot32);
 
             let temp3 = _mm_shuffle_ps(temp0, temp1, 0x44);
             let temp4 = _mm_shuffle_ps(temp0, temp1, 0xEE);
@@ -290,14 +309,15 @@ impl<T: FftNum> Butterfly4<T> {
             let temp1 = _mm_add_pd(value1, value3);
             let mut temp3 = _mm_sub_pd(value1, value3);
 
-            temp3 = _mm_permute_pd(temp3, 0x01);
-            let rot = if self.direction == FftDirection::Inverse {
-                _mm_set_pd(0.0, -0.0)
-            }
-            else {
-                _mm_set_pd(-0.0, 0.0)
-            };
-            temp3 = _mm_xor_pd(temp3, rot);
+            //temp3 = _mm_permute_pd(temp3, 0x01);
+            temp3 = _mm_shuffle_pd(temp3, temp3, 0x01);
+            //let rot = if self.direction == FftDirection::Inverse {
+            //    _mm_set_pd(0.0, -0.0)
+            //}
+            //else {
+            //    _mm_set_pd(-0.0, 0.0)
+            //};
+            temp3 = _mm_xor_pd(temp3, self.rot64);
 
             value0 = _mm_add_pd(temp0, temp1);
             value1 = _mm_sub_pd(temp0, temp1);
