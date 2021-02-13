@@ -46,6 +46,15 @@ pub fn compare_vectors<T: FftNum + Float>(vec1: &[Complex<T>], vec2: &[Complex<T
     return (error.to_f64().unwrap() / vec1.len() as f64) < 0.1f64;
 }
 
+pub fn compare_real_vectors<T: FftNum + Float>(vec1: &[T], vec2: &[T]) -> bool {
+    assert_eq!(vec1.len(), vec2.len());
+    let mut error = T::zero();
+    for (&a, &b) in vec1.iter().zip(vec2.iter()) {
+        error = error + (a - b).abs();
+    }
+    return (error.to_f64().unwrap() / vec1.len() as f64) < 0.1f64;
+}
+
 #[allow(unused)]
 fn transppose_diagnostic<T: FftNum + Float>(expected: &[Complex<T>], actual: &[Complex<T>]) {
     for (i, (&e, &a)) in expected.iter().zip(actual.iter()).enumerate() {

@@ -70,6 +70,41 @@ pub fn fft_error_outofplace(
     );
 }
 
+// Prints an error raised by an in-place FFT algorithm's `process_inplace` method
+// Marked cold and inline never to keep all formatting code out of the many monomorphized process_inplace methods
+#[cold]
+#[inline(never)]
+pub fn r2c_error_outofplace(
+    expected_len: usize,
+    actual_input: usize,
+    actual_output: usize,
+    expected_scratch: usize,
+    actual_scratch: usize,
+) {
+    assert!(
+        actual_input >= expected_len,
+        "Provided FFT input was too small. Expected len = {}, got len = {}",
+        expected_len,
+        actual_input
+    );
+    assert_eq!(
+        actual_input % expected_len,
+        0,
+        "Input FFT buffer must be a multiple of FFT length. Expected multiple of {}, got len = {}",
+        expected_len,
+        actual_input
+    );
+    let multiplier = actual_input / expected_len;
+    let single_output = expected_len / 2 + 1;
+    assert_eq!(actual_output, multiplier * single_output);
+    assert!(
+        actual_scratch >= expected_scratch,
+        "Not enough scratch space was provided. Expected scratch len >= {}, got scratch len = {}",
+        expected_scratch,
+        actual_scratch
+    );
+}
+
 macro_rules! boilerplate_fft_oop {
     ($struct_name:ident, $len_fn:expr) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {

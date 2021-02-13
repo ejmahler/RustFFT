@@ -6,7 +6,7 @@ extern crate rustfft;
 
 use std::sync::Arc;
 use test::Bencher;
-use rustfft::{Direction, Fft, FftDirection, FftNum, FftPlanner, FftRealToComplex, FftComplexToReal, Length, algorithm::real_to_complex::{ComplexToRealEven, RealToComplexEven}};
+use rustfft::{Direction, Fft, FftComplexToReal, FftDirection, FftNum, FftPlanner, FftRealToComplex, Length, algorithm::real_to_complex::{ComplexToRealEven, RealToComplexEven}, r2c::MixedRadixR2C};
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 use rustfft::algorithm::*;
@@ -21,6 +21,10 @@ impl<T: FftNum> Fft<T> for Noop {
     fn process_outofplace_with_scratch(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {}
     fn get_inplace_scratch_len(&self) -> usize { self.len }
     fn get_outofplace_scratch_len(&self) -> usize { 0 }
+}
+impl<T: FftNum> FftRealToComplex<T> for Noop {
+    fn process(&self, _input: &mut [T], _output: &mut [Complex<T>], _scratch: &mut [T]) {}
+    fn get_scratch_len(&self) -> usize { 0 }
 }
 impl Length for Noop {
     fn len(&self) -> usize { self.len }
@@ -715,3 +719,58 @@ fn bench_c2r_planned32(b: &mut Bencher, len: usize) {
 #[bench] fn c2r_planned32__0016384(b: &mut Bencher) { bench_c2r_planned32(b, 16384); }
 #[bench] fn c2r_planned32__0065536(b: &mut Bencher) { bench_c2r_planned32(b, 65536); }
 #[bench] fn c2r_planned32__1048576(b: &mut Bencher) { bench_c2r_planned32(b, 1048576); }
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_mixed_radix_noop(b: &mut Bencher, width: usize, height: usize) {
+    let width_fft = Arc::new(Noop { len: width, direction: FftDirection::Forward });
+    let height_fft = Arc::new(Noop { len: height, direction: FftDirection::Forward });
+
+    let fft = Arc::new(MixedRadix::new(width_fft, height_fft)) as Arc<dyn Fft<f32>>;
+
+    let mut buffer = vec![Zero::zero(); fft.len()];
+    let mut scratch = vec![Zero::zero(); fft.get_inplace_scratch_len()];
+    b.iter(|| {
+        fft.process_with_scratch(&mut buffer, &mut scratch);
+    });
+}
+
+#[bench] fn mixed_radix_noop_0002_3(b: &mut Bencher) { bench_mixed_radix_noop(b,  2, 3); }
+#[bench] fn mixed_radix_noop_0003_4(b: &mut Bencher) { bench_mixed_radix_noop(b,  3, 4); }
+#[bench] fn mixed_radix_noop_0004_5(b: &mut Bencher) { bench_mixed_radix_noop(b,  4, 5); }
+#[bench] fn mixed_radix_noop_0007_32(b: &mut Bencher) { bench_mixed_radix_noop(b, 7, 32); }
+#[bench] fn mixed_radix_noop_0032_27(b: &mut Bencher) { bench_mixed_radix_noop(b,  32, 27); }
+#[bench] fn mixed_radix_noop_0256_243(b: &mut Bencher) { bench_mixed_radix_noop(b,  256, 243); }
+#[bench] fn mixed_radix_noop_2048_0003(b: &mut Bencher) { bench_mixed_radix_noop(b,  2048, 3); }
+#[bench] fn mixed_radix_noop_0003_2048(b: &mut Bencher) { bench_mixed_radix_noop(b,  3, 2048); }
+#[bench] fn mixed_radix_noop_2048_2048(b: &mut Bencher) { bench_mixed_radix_noop(b,  2048, 2048); }
+#[bench] fn mixed_radix_noop_2048_2187(b: &mut Bencher) { bench_mixed_radix_noop(b,  2048, 2187); }
+#[bench] fn mixed_radix_noop_2187_2187(b: &mut Bencher) { bench_mixed_radix_noop(b,  2187, 2187); }
+
+/// Times just the FFT execution (not allocation and pre-calculation)
+/// for a given length, specific to Rader's algorithm
+fn bench_r2c_mixed_radix_noop(b: &mut Bencher, width: usize, height: usize) {
+    let width_fft = Arc::new(Noop { len: width, direction: FftDirection::Forward });
+    let height_fft = Arc::new(Noop { len: height, direction: FftDirection::Forward });
+
+    let fft = Arc::new(MixedRadixR2C::new(width_fft, height_fft)) as Arc<dyn FftRealToComplex<f32>>;
+
+    let mut input = vec![Zero::zero(); fft.len()];
+    let mut output = vec![Zero::zero(); fft.len() / 2 + 1];
+    let mut scratch = vec![Zero::zero(); fft.get_scratch_len()];
+    b.iter(|| {
+        fft.process(&mut input, &mut output, &mut scratch);
+    });
+}
+
+#[bench] fn r2c_mixed_radix_noop_0002_3(b: &mut Bencher) { bench_r2c_mixed_radix_noop(b,  2, 3); }
+#[bench] fn r2c_mixed_radix_noop_0003_4(b: &mut Bencher) { bench_r2c_mixed_radix_noop(b,  3, 4); }
+#[bench] fn r2c_mixed_radix_noop_0004_5(b: &mut Bencher) { bench_r2c_mixed_radix_noop(b,  4, 5); }
+#[bench] fn r2c_mixed_radix_noop_0007_32(b: &mut Bencher) { bench_r2c_mixed_radix_noop(b, 7, 32); }
+#[bench] fn r2c_mixed_radix_noop_0032_27(b: &mut Bencher) { bench_r2c_mixed_radix_noop(b,  32, 27); }
+#[bench] fn r2c_mixed_radix_noop_0256_243(b: &mut Bencher) { bench_r2c_mixed_radix_noop(b,  256, 243); }
+#[bench] fn r2c_mixed_radix_noop_2048_0003(b: &mut Bencher) { bench_r2c_mixed_radix_noop(b,  2048, 3); }
+#[bench] fn r2c_mixed_radix_noop_0003_2048(b: &mut Bencher) { bench_r2c_mixed_radix_noop(b,  3, 2048); }
+#[bench] fn r2c_mixed_radix_noop_2048_2048(b: &mut Bencher) { bench_r2c_mixed_radix_noop(b,  2048, 2048); }
+#[bench] fn r2c_mixed_radix_noop_2048_2187(b: &mut Bencher) { bench_r2c_mixed_radix_noop(b,  2048, 2187); }
+#[bench] fn r2c_mixed_radix_noop_2187_2187(b: &mut Bencher) { bench_r2c_mixed_radix_noop(b,  2187, 2187); }

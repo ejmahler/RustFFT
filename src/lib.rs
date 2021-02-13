@@ -101,6 +101,7 @@ mod fft_cache;
 mod math_utils;
 mod plan;
 mod twiddles;
+pub mod r2c;
 
 use num_complex::Complex;
 use num_traits::Zero;

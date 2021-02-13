@@ -16,3 +16,5 @@ pub use self::good_thomas_algorithm::{GoodThomasAlgorithm, GoodThomasAlgorithmSm
 pub use self::mixed_radix::{MixedRadix, MixedRadixSmall};
 pub use self::raders_algorithm::RadersAlgorithm;
 pub use self::radix4::Radix4;
+
+mod dht;
