@@ -36,24 +36,9 @@ fn bench_planned_multi(b: &mut Bencher, len: usize, reps: usize) {
 
 // Make a radix4
 fn bench_radix4(b: &mut Bencher, len: usize) {
-    assert!(len % 4 == 0);
-
     let fft = Radix4::new(len, FftDirection::Forward);
-
-    let mut buffer = vec![
-        Complex {
-            re: 0_f64,
-            im: 0_f64
-        };
-        len
-    ];
-    let mut scratch = vec![
-        Complex {
-            re: 0_f64,
-            im: 0_f64
-        };
-        fft.get_inplace_scratch_len()
-    ];
+    let mut buffer: Vec<Complex<f64>> = vec![Complex::zero(); len];
+    let mut scratch: Vec<Complex<f64>> = vec![Complex::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| {
         fft.process_with_scratch(&mut buffer, &mut scratch);
     });
@@ -68,20 +53,8 @@ fn bench_mixedradix(b: &mut Bencher, len_a: usize, len_b: usize) {
 
     let fft: Arc<dyn Fft<_>> = Arc::new(MixedRadix::new(fft_a, fft_b));
 
-    let mut buffer = vec![
-        Complex {
-            re: 0_f64,
-            im: 0_f64
-        };
-        totlen
-    ];
-    let mut scratch = vec![
-        Complex {
-            re: 0_f64,
-            im: 0_f64
-        };
-        fft.get_inplace_scratch_len()
-    ];
+    let mut buffer: Vec<Complex<f64>> = vec![Complex::zero(); totlen];
+    let mut scratch: Vec<Complex<f64>> = vec![Complex::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| {
         fft.process_with_scratch(&mut buffer, &mut scratch);
     });
@@ -96,20 +69,8 @@ fn bench_mixedradixsmall(b: &mut Bencher, len_a: usize, len_b: usize) {
 
     let fft: Arc<dyn Fft<_>> = Arc::new(MixedRadixSmall::new(fft_a, fft_b));
 
-    let mut buffer = vec![
-        Complex {
-            re: 0_f64,
-            im: 0_f64
-        };
-        totlen
-    ];
-    let mut scratch = vec![
-        Complex {
-            re: 0_f64,
-            im: 0_f64
-        };
-        fft.get_inplace_scratch_len()
-    ];
+    let mut buffer: Vec<Complex<f64>> = vec![Complex::zero(); totlen];
+    let mut scratch: Vec<Complex<f64>> = vec![Complex::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| {
         fft.process_with_scratch(&mut buffer, &mut scratch);
     });
@@ -124,20 +85,8 @@ fn bench_goodthomas(b: &mut Bencher, len_a: usize, len_b: usize) {
 
     let fft: Arc<dyn Fft<_>> = Arc::new(GoodThomasAlgorithm::new(fft_a, fft_b));
 
-    let mut buffer = vec![
-        Complex {
-            re: 0_f64,
-            im: 0_f64
-        };
-        totlen
-    ];
-    let mut scratch = vec![
-        Complex {
-            re: 0_f64,
-            im: 0_f64
-        };
-        fft.get_inplace_scratch_len()
-    ];
+    let mut buffer: Vec<Complex<f64>> = vec![Complex::zero(); totlen];
+    let mut scratch: Vec<Complex<f64>> = vec![Complex::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| {
         fft.process_with_scratch(&mut buffer, &mut scratch);
     });
@@ -152,20 +101,8 @@ fn bench_goodthomassmall(b: &mut Bencher, len_a: usize, len_b: usize) {
 
     let fft: Arc<dyn Fft<_>> = Arc::new(GoodThomasAlgorithmSmall::new(fft_a, fft_b));
 
-    let mut buffer = vec![
-        Complex {
-            re: 0_f64,
-            im: 0_f64
-        };
-        totlen
-    ];
-    let mut scratch = vec![
-        Complex {
-            re: 0_f64,
-            im: 0_f64
-        };
-        fft.get_inplace_scratch_len()
-    ];
+    let mut buffer: Vec<Complex<f64>> = vec![Complex::zero(); totlen];
+    let mut scratch: Vec<Complex<f64>> = vec![Complex::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| {
         fft.process_with_scratch(&mut buffer, &mut scratch);
     });
@@ -178,20 +115,8 @@ fn bench_raders(b: &mut Bencher, len: usize) {
 
     let fft: Arc<dyn Fft<_>> = Arc::new(RadersAlgorithm::new(fft_inner));
 
-    let mut buffer = vec![
-        Complex {
-            re: 0_f64,
-            im: 0_f64
-        };
-        len
-    ];
-    let mut scratch = vec![
-        Complex {
-            re: 0_f64,
-            im: 0_f64
-        };
-        fft.get_inplace_scratch_len()
-    ];
+    let mut buffer: Vec<Complex<f64>> = vec![Complex::zero(); len];
+    let mut scratch: Vec<Complex<f64>> = vec![Complex::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| {
         fft.process_with_scratch(&mut buffer, &mut scratch);
     });
@@ -204,20 +129,8 @@ fn bench_bluesteins(b: &mut Bencher, len: usize, inner_len: usize) {
 
     let fft: Arc<dyn Fft<_>> = Arc::new(BluesteinsAlgorithm::new(len, fft_inner));
 
-    let mut buffer = vec![
-        Complex {
-            re: 0_f64,
-            im: 0_f64
-        };
-        len
-    ];
-    let mut scratch = vec![
-        Complex {
-            re: 0_f64,
-            im: 0_f64
-        };
-        fft.get_inplace_scratch_len()
-    ];
+    let mut buffer: Vec<Complex<f64>> = vec![Complex::zero(); len];
+    let mut scratch: Vec<Complex<f64>> = vec![Complex::zero(); fft.get_inplace_scratch_len()];
 
     b.iter(|| {
         fft.process_with_scratch(&mut buffer, &mut scratch);
