@@ -411,14 +411,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
 
         let fastest = recipes
             .iter()
-            .min_by(|x, y| {
-                match x.cost(1).partial_cmp(&y.cost(1)) {
-                    Some(Ordering::Equal) => Ordering::Equal,
-                    Some(Ordering::Less) => Ordering::Less,
-                    Some(Ordering::Greater) => Ordering::Greater,
-                    None => Ordering::Equal, //This shoud never happen
-                }
-            })
+            .min_by(|x, y| x.cost(1).partial_cmp(&y.cost(1)).unwrap_or(Ordering::Equal))
             .unwrap();
         Arc::clone(fastest)
     }
