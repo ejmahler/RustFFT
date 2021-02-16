@@ -166,11 +166,11 @@ macro_rules! make_benches_two_args {
 }
 
 // A series of power-of-two for fitting Radix4.
-make_benches!(radix4, radix4, {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304});
+make_benches!(radix4, radix4, {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304, 8388608, 16777216});
 
 // Mixed radixes. Runs the same combinations for MixedRadix and GoodThomas for easy comparison.
-make_benches_two_args!(mixedradix, mixedradix, {(3, 4), (3, 5), (3, 7), (3,13), (3,31), (7, 31), (23, 31), (29,31), (31, 127), (31, 233), (127, 233), (127, 1031), (1031, 2003)});
-make_benches_two_args!(goodthomas, goodthomas, {(3, 4), (3, 5), (3, 7), (3,13), (3,31), (7, 31), (23, 31), (29,31), (31, 127), (31, 233), (127, 233), (127, 1031), (1031, 2003)});
+make_benches_two_args!(mixedradix, mixedradix, {(3, 4), (3, 5), (3, 7), (3,13), (3,31), (7, 31), (23, 31), (29,31), (31, 127), (31, 233), (127, 233), (127, 1031), (1031, 2003), (2003, 2048), (4093, 4096)});
+make_benches_two_args!(goodthomas, goodthomas, {(3, 4), (3, 5), (3, 7), (3,13), (3,31), (7, 31), (23, 31), (29,31), (31, 127), (31, 233), (127, 233), (127, 1031), (1031, 2003), (2003, 2048), (4093, 4096)});
 make_benches_two_args!(mixedradixsmall, mixedradixsmall, {(3, 4), (3, 5), (3, 7), (3,13), (3,31), (7, 31), (23, 31), (29,31)});
 make_benches_two_args!(goodthomassmall, goodthomassmall, {(3, 4), (3, 5), (3, 7), (3,13), (3,31), (7, 31), (23, 31), (29,31)});
 
@@ -190,7 +190,7 @@ make_benches_two_args!(planned_multi, planned_multi, {(2,89),(3,89), (4,89), (5,
 make_benches_two_args!(mixinners, planned_multi, {(3, 4), (4, 3), (3, 5), (5, 3), (3, 7), (7, 3),  (3,13), (13,3), (3,31), (31,3)});
 make_benches_two_args!(mixinners, planned_multi, {(7, 31), (31, 7), (23, 31), (31, 23), (29,31), (31,29)});
 make_benches_two_args!(mixinners, planned_multi, {(31, 127), (127, 31), (31, 233), (233, 31), (127, 233), (233, 127)});
-make_benches_two_args!(mixinners, planned_multi, {(127, 1031), (1031, 127), (1031, 2003), (2003, 1031)});
+make_benches_two_args!(mixinners, planned_multi, {(127, 1031), (1031, 127), (1031, 2003), (2003, 1031), (2003, 2048), (2048, 2003), (4093, 4096), (4096, 4093)});
 
 // Raders and the corresponding inners.
 make_benches!(raders, raders, {73, 179, 283, 419, 547, 661, 811, 947, 1087, 1229});
@@ -204,5 +204,33 @@ make_benches_two_args!(bluesteins, bluesteins, {(10,512),(30,512), (70,512), (90
 // Inners.
 make_benches!(planned, planned, {128, 256, 512, 1024, 2048});
 
-// Measure the non-butterfly inners used in the mixed radix benches.
-make_benches!(planned, planned, {127, 233, 1031, 2003});
+
+
+//fn bench_power2_direct(b: &mut Bencher, len: usize) {
+//    let fft = Arc::new(Radix4::new(len, FftDirection::Forward)) as Arc<dyn Fft<f64>>;
+//
+//    let mut buffer = vec![Complex::zero(); len];
+//    let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len() ];
+//    b.iter(|| {
+//        fft.process_with_scratch(&mut buffer, &mut scratch);
+//    });
+//}
+//
+//fn bench_power2_split(b: &mut Bencher, len: usize) {
+//    let zeros = len.trailing_zeros();
+//    let left_zeros = zeros/ 2;
+//    let right_zeros = zeros - left_zeros;
+//    let left_size = 1 << left_zeros;
+//    let right_size = 1 << right_zeros;
+//    let left_fft = Arc::new(Radix4::new(left_size, FftDirection::Forward)) as Arc<dyn Fft<f64>>;
+//    let right_fft = Arc::new(Radix4::new(right_size, FftDirection::Forward)) as Arc<dyn Fft<f64>>;
+//    let fft = Arc::new(MixedRadix::new(left_fft, right_fft));
+//
+//    let mut buffer = vec![Complex::zero(); len];
+//    let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len() ];
+//    b.iter(|| {
+//        fft.process_with_scratch(&mut buffer, &mut scratch);
+//    });
+//}
+//make_benches!(power2_direct, power2_direct, {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304});
+//make_benches!(power2_split, power2_split, {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304});

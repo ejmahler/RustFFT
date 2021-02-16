@@ -13,7 +13,7 @@ data = normalize(data)
 def rms_rel_diff(array1, array2):
    return np.sqrt(np.mean(np.square((array1 - array2))))
 
-mixedradixes_lengths = [(3, 4), (3, 5), (3, 7), (3,13), (3,31), (7, 31), (23, 31), (29,31), (31, 127), (31, 233), (127, 233), (127, 1031), (1031, 2003)]
+mixedradixes_lengths = [(3, 4), (3, 5), (3, 7), (3,13), (3,31), (7, 31), (23, 31), (29,31), (31, 127), (31, 233), (127, 233), (127, 1031), (1031, 2003), (2003, 2048), (4093, 4096)]
 mixedradixes_large_lengths = mixedradixes_lengths[8:]
 mixedradixes_small_lengths = mixedradixes_lengths[0:8]
 mixedradixes_cost = {}
