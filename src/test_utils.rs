@@ -91,9 +91,11 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
 
         assert!(
             compare_vectors(&expected_output, &buffer),
-            "process() failed, length = {}, direction = {}",
+            "process() failed, length = {}, direction = {}, result = {:?}, expected = {:?}",
             len,
-            direction
+            direction,
+            expected_output,
+            buffer
         );
     }
 
