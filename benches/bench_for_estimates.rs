@@ -165,13 +165,16 @@ macro_rules! make_benches_two_args {
     }
 }
 
-//make_benches!(planned, planned, {2,3,4,5,6,7,8,11,13,16,17,19,23,29,31,32,127,233});
+// A series of power-of-two for fitting Radix4.
 make_benches!(radix4, radix4, {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304});
-//make_benches!(mixedradix_rx4, mixedradix_rx4, {32, 64, 128, 256, 512, 1024, 2048});
+
+// Mixed radixes. Runs the same combinations for MixedRadix and GoodThomas for easy comparison.
 make_benches_two_args!(mixedradix, mixedradix, {(3, 4), (3, 5), (3, 7), (3,13), (3,31), (7, 31), (23, 31), (29,31), (31, 127), (31, 233), (127, 233), (127, 1031), (1031, 2003)});
 make_benches_two_args!(goodthomas, goodthomas, {(3, 4), (3, 5), (3, 7), (3,13), (3,31), (7, 31), (23, 31), (29,31), (31, 127), (31, 233), (127, 233), (127, 1031), (1031, 2003)});
 make_benches_two_args!(mixedradixsmall, mixedradixsmall, {(3, 4), (3, 5), (3, 7), (3,13), (3,31), (7, 31), (23, 31), (29,31)});
 make_benches_two_args!(goodthomassmall, goodthomassmall, {(3, 4), (3, 5), (3, 7), (3,13), (3,31), (7, 31), (23, 31), (29,31)});
+
+// Make a series of different number of repeats for all butterflies. This will give both the fixed overhead of calling a butterfly, and the additional cost of adding one more repeat.
 make_benches_two_args!(planned_multi, planned_multi, {(2,1),(3,1), (4,1), (5,1), (6,1), (7,1), (8,1), (11,1), (13,1), (16,1), (17,1), (19,1), (23,1), (29,1), (31,1), (32,1)});
 make_benches_two_args!(planned_multi, planned_multi, {(2,2),(3,2), (4,2), (5,2), (6,2), (7,2), (8,2), (11,2), (13,2), (16,2), (17,2), (19,2), (23,2), (29,2), (31,2), (32,2)});
 make_benches_two_args!(planned_multi, planned_multi, {(2,3),(3,3), (4,3), (5,3), (6,3), (7,3), (8,3), (11,3), (13,3), (16,3), (17,3), (19,3), (23,3), (29,3), (31,3), (32,3)});
@@ -183,16 +186,23 @@ make_benches_two_args!(planned_multi, planned_multi, {(2,34),(3,34), (4,34), (5,
 make_benches_two_args!(planned_multi, planned_multi, {(2,55),(3,55), (4,55), (5,55), (6,55), (7,55), (8,55), (11,55), (13,55), (16,55), (17,55), (19,55), (23,55), (29,55), (31,55), (32,55)});
 make_benches_two_args!(planned_multi, planned_multi, {(2,89),(3,89), (4,89), (5,89), (6,89), (7,89), (8,89), (11,89), (13,89), (16,89), (17,89), (19,89), (23,89), (29,89), (31,89), (32,89)});
 
+// Measure the inners used in the mixed radix benches above. Measuring these separately instead of using estimated values gives less noise in the data.
 make_benches_two_args!(mixinners, planned_multi, {(3, 4), (4, 3), (3, 5), (5, 3), (3, 7), (7, 3),  (3,13), (13,3), (3,31), (31,3)});
 make_benches_two_args!(mixinners, planned_multi, {(7, 31), (31, 7), (23, 31), (31, 23), (29,31), (31,29)});
 make_benches_two_args!(mixinners, planned_multi, {(31, 127), (127, 31), (31, 233), (233, 31), (127, 233), (233, 127)});
 make_benches_two_args!(mixinners, planned_multi, {(127, 1031), (1031, 127), (1031, 2003), (2003, 1031)});
 
+// Raders and the corresponding inners.
 make_benches!(raders, raders, {73, 179, 283, 419, 547, 661, 811, 947, 1087, 1229});
 make_benches!(planned, planned, {72, 178, 282, 418, 546, 660, 810, 946, 1086, 1228});
 
+// Bluesteins
+// Series with fixed fft length and varying inner length.
 make_benches_two_args!(bluesteins, bluesteins, {(50,128),(50,256), (50,512), (50,1024), (50,2048)});
+// Series with varying fft length and fixed inner length.
 make_benches_two_args!(bluesteins, bluesteins, {(10,512),(30,512), (70,512), (90,512)});
+// Inners.
 make_benches!(planned, planned, {128, 256, 512, 1024, 2048});
 
+// Measure the non-butterfly inners used in the mixed radix benches.
 make_benches!(planned, planned, {127, 233, 1031, 2003});
