@@ -1,8 +1,4 @@
 use num_complex::Complex;
-use std::any::TypeId;
-use core::arch::x86_64::*;
-//use std::mem::transmute;
-use std::time::{Duration, Instant};
 
 use crate::{common::FftNum, FftDirection};
 
@@ -222,33 +218,14 @@ impl<T: FftNum> Butterfly3<T> {
 pub struct Butterfly4<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    rot32: __m128,
-    rot64: __m128d,
 }
 boilerplate_fft_butterfly!(Butterfly4, 4, |this: &Butterfly4<_>| this.direction);
 impl<T: FftNum> Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
-        let rot32 = if direction == FftDirection::Inverse {
-            unsafe {
-                _mm_set_ps(0.0, -0.0, 0.0, 0.0)
-            }
-        }
-        else {
-            unsafe { _mm_set_ps(-0.0, 0.0, 0.0, 0.0) }
-        };
-        let rot64 = if direction == FftDirection::Inverse {
-            unsafe {_mm_set_pd(0.0, -0.0) }
-        }
-        else {
-            unsafe { _mm_set_pd(-0.0, 0.0) }
-        };
-
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            rot32,
-            rot64,
         }
     }
     #[inline(always)]
@@ -259,108 +236,31 @@ impl<T: FftNum> Butterfly4<T> {
     ) {
         //we're going to hardcode a step of mixed radix
         //aka we're going to do the six step algorithm
-        let id_f32 = TypeId::of::<f32>();
-        //let id_f32 = TypeId::of::<isize>();
-        let id_f64 = TypeId::of::<f64>();
-        //let id_f64 = TypeId::of::<usize>();
-        let id_t = TypeId::of::<T>();
+        
+        // step 1: transpose, which we're skipping because we're just going to perform non-contiguous FFTs
+        let mut value0 = input.load(0);
+        let mut value1 = input.load(1);
+        let mut value2 = input.load(2);
+        let mut value3 = input.load(3);
 
-        if id_t == id_f32 {
-            let value01 = _mm_loadu_ps(input.as_ptr() as *const f32);
-            let value23 = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
+        // step 2: column FFTs
+        Butterfly2::perform_fft_strided(&mut value0, &mut value2);
+        Butterfly2::perform_fft_strided(&mut value1, &mut value3);
 
-            let mut temp0 = _mm_add_ps(value01, value23);
-            let mut temp1 = _mm_sub_ps(value01, value23);
-                
-            //temp1 = _mm_permute_ps(temp1, 0xB4);
-            temp1 = _mm_shuffle_ps(temp1, temp1, 0xB4);
-            //let rot = if self.direction == FftDirection::Inverse {
-            //    _mm_set_ps(0.0, -0.0, 0.0, 0.0)
-            //}
-            //else {
-            //    _mm_set_ps(-0.0, 0.0, 0.0, 0.0)
-            //};
-            temp1 = _mm_xor_ps(temp1, self.rot32);
+        // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
+        value3 = twiddles::rotate_90(value3, self.direction);
 
-            let temp3 = _mm_shuffle_ps(temp0, temp1, 0x44);
-            let temp4 = _mm_shuffle_ps(temp0, temp1, 0xEE);
+        // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
-            temp0 = _mm_add_ps(temp3, temp4);
-            temp1 = _mm_sub_ps(temp3, temp4);
+        // step 5: row FFTs
+        Butterfly2::perform_fft_strided(&mut value0, &mut value1);
+        Butterfly2::perform_fft_strided(&mut value2, &mut value3);
 
-            let array0 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(temp0);
-            let array1 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(temp1);
-
-            let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-
-            *output_slice.add(0) = array0[0];
-            *output_slice.add(1) = array0[1];
-            *output_slice.add(2) = array1[0];
-            *output_slice.add(3) = array1[1];
-        }
-        else if id_t == id_f64 {
-            let mut value0 = _mm_loadu_pd(input.as_ptr() as *const f64);
-            let mut value1 = _mm_loadu_pd(input.as_ptr().add(1) as *const f64);
-            let mut value2 = _mm_loadu_pd(input.as_ptr().add(2) as *const f64);
-            let mut value3 = _mm_loadu_pd(input.as_ptr().add(3) as *const f64);
-
-            let temp0 = _mm_add_pd(value0, value2);
-            let temp2 = _mm_sub_pd(value0, value2);
-            let temp1 = _mm_add_pd(value1, value3);
-            let mut temp3 = _mm_sub_pd(value1, value3);
-
-            //temp3 = _mm_permute_pd(temp3, 0x01);
-            temp3 = _mm_shuffle_pd(temp3, temp3, 0x01);
-            //let rot = if self.direction == FftDirection::Inverse {
-            //    _mm_set_pd(0.0, -0.0)
-            //}
-            //else {
-            //    _mm_set_pd(-0.0, 0.0)
-            //};
-            temp3 = _mm_xor_pd(temp3, self.rot64);
-
-            value0 = _mm_add_pd(temp0, temp1);
-            value1 = _mm_sub_pd(temp0, temp1);
-            value2 = _mm_add_pd(temp2, temp3);
-            value3 = _mm_sub_pd(temp2, temp3);
-
-            let val0 = std::mem::transmute::<__m128d, Complex<f64>>(value0);
-            let val1 = std::mem::transmute::<__m128d, Complex<f64>>(value1);
-            let val2 = std::mem::transmute::<__m128d, Complex<f64>>(value2);
-            let val3 = std::mem::transmute::<__m128d, Complex<f64>>(value3);
-
-            let output_slice = output.as_mut_ptr() as *mut Complex<f64>;
-            *output_slice.add(0) = val0;
-            *output_slice.add(1) = val2;
-            *output_slice.add(2) = val1;
-            *output_slice.add(3) = val3;
-        }
-        else {
-            // step 1: transpose, which we're skipping because we're just going to perform non-contiguous FFTs
-            let mut value0 = input.load(0);
-            let mut value1 = input.load(1);
-            let mut value2 = input.load(2);
-            let mut value3 = input.load(3);
-
-            // step 2: column FFTs
-            Butterfly2::perform_fft_strided(&mut value0, &mut value2);
-            Butterfly2::perform_fft_strided(&mut value1, &mut value3);
-
-            // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-            value3 = twiddles::rotate_90(value3, self.direction);
-
-            // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
-
-            // step 5: row FFTs
-            Butterfly2::perform_fft_strided(&mut value0, &mut value1);
-            Butterfly2::perform_fft_strided(&mut value2, &mut value3);
-
-            // step 6: transpose by swapping index 1 and 2
-            output.store(value0, 0);
-            output.store(value2, 1);
-            output.store(value1, 2);
-            output.store(value3, 3);
-        }
+        // step 6: transpose by swapping index 1 and 2
+        output.store(value0, 0);
+        output.store(value2, 1);
+        output.store(value1, 2);
+        output.store(value3, 3);
     }
 }
 
@@ -6031,21 +5931,14 @@ mod unit_tests {
     test_butterfly_func!(test_butterfly31, Butterfly31, 31);
     test_butterfly_func!(test_butterfly32, Butterfly32, 32);
 
-    #[test]
-    fn check_type() {
-        let butterfly = Butterfly4::new(FftDirection::Forward);
-        let mut input = vec![Complex::<f64>::new(1.0, 1.5),Complex::<f64>::new(2.0, 2.4),Complex::<f64>::new(7.0, 9.5),Complex::<f64>::new(-4.0, -4.5)];
-        let mut scratch = vec![Complex::<f64>::from(0.0); 0];
-        butterfly.process_with_scratch(&mut input, &mut scratch);
-        assert!(false);
-    }
+    //#[test]
+    //fn check_scalar_dummy() {
+    //    let butterfly = Butterfly8::new(FftDirection::Forward);
+    //    let mut input = vec![Complex::<f64>::new(1.0, 1.5), Complex::<f64>::new(2.0, 2.4),Complex::<f64>::new(7.0, 9.5),Complex::<f64>::new(-4.0, -4.5),
+    //                    Complex::<f64>::new(-1.0, 5.5), Complex::<f64>::new(3.3, 2.8),Complex::<f64>::new(7.5, 3.5),Complex::<f64>::new(-14.0, -6.5)];
+    //    let mut scratch = vec![Complex::<f64>::from(0.0); 0];
+    //    butterfly.process_with_scratch(&mut input, &mut scratch);
+    //    assert!(false);
+    //}
 
-    #[test]
-    fn check_type_32() {
-        let butterfly = Butterfly4::new(FftDirection::Forward);
-        let mut input = vec![Complex::<f32>::new(1.0, 1.5),Complex::<f32>::new(2.0, 2.4),Complex::<f32>::new(7.0, 9.5),Complex::<f32>::new(-4.0, -4.5)];
-        let mut scratch = vec![Complex::<f32>::from(0.0); 0];
-        butterfly.process_with_scratch(&mut input, &mut scratch);
-        assert!(false);
-    }
 }

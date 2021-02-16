@@ -1,10 +1,12 @@
 use num_integer::gcd;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::any::TypeId;
 
 use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
 
 use crate::algorithm::butterflies::*;
+use crate::algorithm::sse_butterflies::*;
 use crate::algorithm::*;
 use crate::Fft;
 
@@ -292,16 +294,39 @@ impl<T: FftNum> FftPlannerScalar<T> {
 
     // Create a new fft from a recipe
     fn build_new_fft(&mut self, recipe: &Recipe, direction: FftDirection) -> Arc<dyn Fft<T>> {
+        let id_f32 = TypeId::of::<f32>();
+        //let id_f32 = TypeId::of::<isize>();
+        let id_f64 = TypeId::of::<f64>();
+        //let id_f64 = TypeId::of::<usize>();
+        let id_t = TypeId::of::<T>();
+
         match recipe {
             Recipe::Dft(len) => Arc::new(Dft::new(*len, direction)) as Arc<dyn Fft<T>>,
             Recipe::Radix4(len) => Arc::new(Radix4::new(*len, direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly2 => Arc::new(Butterfly2::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly3 => Arc::new(Butterfly3::new(direction)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly4 => Arc::new(Butterfly4::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly4 => {
+                if id_t == id_f32 {
+                    Arc::new(Sse32Butterfly4::new(direction)) as Arc<dyn Fft<T>>
+                }
+                else if id_t == id_f64 {
+                    Arc::new(Sse64Butterfly4::new(direction)) as Arc<dyn Fft<T>>
+                }
+                else {
+                    Arc::new(Butterfly4::new(direction)) as Arc<dyn Fft<T>>
+                }
+            },
             Recipe::Butterfly5 => Arc::new(Butterfly5::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly6 => Arc::new(Butterfly6::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly7 => Arc::new(Butterfly7::new(direction)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly8 => Arc::new(Butterfly8::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly8 => {
+                if id_t == id_f64 {
+                    Arc::new(Sse64Butterfly8::new(direction)) as Arc<dyn Fft<T>>
+                }
+                else {
+                    Arc::new(Butterfly8::new(direction)) as Arc<dyn Fft<T>>
+                }
+            },
             Recipe::Butterfly11 => Arc::new(Butterfly11::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly13 => Arc::new(Butterfly13::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly16 => Arc::new(Butterfly16::new(direction)) as Arc<dyn Fft<T>>,
