@@ -1,5 +1,3 @@
-#![allow(bare_trait_objects)]
-#![allow(non_snake_case)]
 #![feature(test)]
 extern crate rustfft;
 extern crate test;
