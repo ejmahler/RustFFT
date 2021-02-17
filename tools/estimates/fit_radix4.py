@@ -9,7 +9,7 @@ fnames = sys.argv[1:]
 data = read_benches(fnames)
 data = normalize(data)
 
-radix4_length = [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304, 8388608, 16777216]
+radix4_length = [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304]
 radix4_fit_length = radix4_length[0:12]
 radix4_cost = []
 for fftlen in radix4_length:
@@ -28,8 +28,6 @@ f = lambda x: rms_rel_diff( np_cost, x[0] + x[1]*np_len + x[2]*np_len*np.log(np_
 x0 = [0, 0, 1]
 res = minimize(f, x0)
 
-#print(f"Radix 4, const: {res.x[0]}, slope: {res.x[1]}, exponent {res.x[2]}")
-#cost_fit = res.x[0] + res.x[1]*np_len**res.x[2]
 cost_fit = res.x[0] + res.x[1]*np.array(radix4_length) + res.x[2]*np.array(radix4_length)*np.log(np.array(radix4_length))
 
 print("--- Paste in scalar_planner_estimates.rs ---")

@@ -66,10 +66,6 @@ for mr in mix_algos:
     plt.ylabel("Cost")
     plt.loglog(mixedradixes_len[mr], mr_overhead,'*')
 
-    print(mr)
-    print(mr_overhead)
-    print(mixedradixes_len[mr])
-    #k, m = np.polyfit(np.log(mixedradixes_len[mr]), np.log(mr_overhead), 1)
     f = lambda x: rms_rel_diff( mr_overhead, x[0] + x[1]*np.array(mixedradixes_len[mr]), np.array(mixedradixes_len[mr]))
     x0 = [0, 1]
     res = minimize(f, x0)
@@ -80,7 +76,6 @@ for mr in mix_algos:
     plt.semilogx(mixedradixes_len[mr], fit/mr_overhead)
     legends.append(mr)
     legends.append(f"fit to {mr}")
-
 
     slope_d[mr] = res.x[1]
     const_d[mr] = res.x[0]

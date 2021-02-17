@@ -25,8 +25,6 @@ for fftlen in length:
         benchname = f"bench_planned_multi_{fftlen}_{nbr}"
         cost = data[benchname]
         estimated_cost.append(cost)
-    # y = k*x + m
-    #k, m = np.polyfit(multi_nbr, estimated_cost, 1)
     f = lambda x: rms_rel_diff( estimated_cost, x[0] + x[1]*multi_nbr, multi_nbr)
     x0 = [0, 1]
     res = minimize(f, x0)

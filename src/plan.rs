@@ -837,15 +837,14 @@ mod unit_tests {
     //}
 
     // Dummy test to dump some recipes
-    #[test]
-    fn test_dummy_printsome() {
-        let mut planner = FftPlannerScalar::<f32>::new();
-        for len in &[100834, 100682, 100582, 100616,100766,100994, 100726, 100318, 100066, 100094] {
-            let plan = planner.design_fft_for_len(*len);
-            println!("{}: {:?}", len, plan);
-        }
-        // make it fail so the test prints the output
-        assert!(false);
-    }
-
+    //#[test]
+    //fn test_dummy_printsome() {
+    //    let mut planner = FftPlannerScalar::<f32>::new();
+    //    for len in &[100834, 100682, 100582, 100616,100766,100994, 100726, 100318, 100066, 100094] {
+    //        let plan = planner.design_fft_for_len(*len);
+    //        println!("{}: {:?}", len, plan);
+    //    }
+    //    // make it fail so the test prints the output
+    //    assert!(false);
+    //}
 }
