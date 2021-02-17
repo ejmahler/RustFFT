@@ -31,11 +31,6 @@ for inlen in inner_length:
     fft_cost_inner = data[benchname]
     inner_cost.append(2*fft_cost_inner)
 
-    #overhead_cost.append(fft_cost- 2*fft_cost_inner)
-
-# y = k*x + m
-#k, m = np.polyfit(multi_nbr, estimated_cost, 1)
-
 diff_len = np.array(bluestein_sweeplen_cost) - inner_cost[2]
 diff_inner = np.array(bluestein_sweepinner_cost) - np.array(inner_cost)
 
@@ -81,11 +76,13 @@ plt.ylabel("Cost")
 
 plt.figure(302)
 plt.plot(length, diff_len, '*')
+plt.plot(length, res.x[1]*np.array(length) + res.x[2]*512 + res.x[0])
 plt.title("Bluesteins overhead, sweep length")
 plt.xlabel("Length")
 plt.ylabel("Cost")
 plt.figure(303)
 plt.plot(inner_length, diff_inner, '*')
+plt.plot(inner_length, res.x[2]*np.array(inner_length) + res.x[1]*50 + res.x[0])
 plt.title("Bluesteins overhead, sweep inner length")
 plt.xlabel("Inner length")
 plt.ylabel("Cost")

@@ -203,6 +203,3 @@ make_benches_two_args!(bluesteins, bluesteins, {(50,128),(50,256), (50,512), (50
 make_benches_two_args!(bluesteins, bluesteins, {(10,512),(30,512), (70,512), (90,512)});
 // Inners.
 make_benches!(planned, planned, {128, 256, 512, 1024, 2048});
-
-// Measure the non-butterfly inners used in the mixed radix benches.
-make_benches!(planned, planned, {127, 233, 1031, 2003});

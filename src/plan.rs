@@ -411,14 +411,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
 
         let fastest = recipes
             .iter()
-            .min_by(|x, y| {
-                match x.cost(1).partial_cmp(&y.cost(1)) {
-                    Some(Ordering::Equal) => Ordering::Equal,
-                    Some(Ordering::Less) => Ordering::Less,
-                    Some(Ordering::Greater) => Ordering::Greater,
-                    None => Ordering::Equal, //This shoud never happen
-                }
-            })
+            .min_by(|x, y| x.cost(1).partial_cmp(&y.cost(1)).unwrap_or(Ordering::Equal))
             .unwrap();
         Arc::clone(fastest)
     }
@@ -837,6 +830,18 @@ mod unit_tests {
     //    let mut planner = FftPlannerScalar::<f32>::new();
     //    for len in 2..1025 {
     //        let plan = planner.design_fft_for_len(len);
+    //        println!("{}: {:?}", len, plan);
+    //    }
+    //    // make it fail so the test prints the output
+    //    assert!(false);
+    //}
+
+    // Dummy test to dump some recipes
+    //#[test]
+    //fn test_dummy_printsome() {
+    //    let mut planner = FftPlannerScalar::<f32>::new();
+    //    for len in &[100834, 100682, 100582, 100616,100766,100994, 100726, 100318, 100066, 100094] {
+    //        let plan = planner.design_fft_for_len(*len);
     //        println!("{}: {:?}", len, plan);
     //    }
     //    // make it fail so the test prints the output
