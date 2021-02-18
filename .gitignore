@@ -2,3 +2,4 @@
 /Cargo.lock
 *.swp
 .vscode/
+/**/__pycache__
