@@ -321,7 +321,10 @@ impl<T: FftNum> FftPlannerScalar<T> {
             Recipe::Butterfly6 => Arc::new(Butterfly6::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly7 => Arc::new(Butterfly7::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly8 => {
-                if id_t == id_f64 {
+                if id_t == id_f32 {
+                    Arc::new(Sse32Butterfly8::new(direction)) as Arc<dyn Fft<T>>
+                }
+                else if id_t == id_f64 {
                     Arc::new(Sse64Butterfly8::new(direction)) as Arc<dyn Fft<T>>
                 }
                 else {
@@ -330,7 +333,14 @@ impl<T: FftNum> FftPlannerScalar<T> {
             },
             Recipe::Butterfly11 => Arc::new(Butterfly11::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly13 => Arc::new(Butterfly13::new(direction)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly16 => Arc::new(Butterfly16::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly16 => {
+                if id_t == id_f64 {
+                    Arc::new(Sse64Butterfly16::new(direction)) as Arc<dyn Fft<T>>
+                }
+                else {
+                    Arc::new(Butterfly16::new(direction)) as Arc<dyn Fft<T>>
+                }
+            },
             Recipe::Butterfly17 => Arc::new(Butterfly17::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly19 => Arc::new(Butterfly19::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly23 => Arc::new(Butterfly23::new(direction)) as Arc<dyn Fft<T>>,

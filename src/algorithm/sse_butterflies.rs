@@ -8,7 +8,7 @@ use crate::{common::FftNum, FftDirection};
 use crate::array_utils;
 use crate::array_utils::{RawSlice, RawSliceMut};
 use crate::common::{fft_error_inplace, fft_error_outofplace};
-//use crate::twiddles;
+use crate::twiddles;
 use crate::{Direction, Fft, Length};
 
 
@@ -96,21 +96,23 @@ macro_rules! boilerplate_fft_butterfly {
 }
 
 // double lenth 2 fft of a and b, given as [a0, b0], [a1, b1]
+// result is [A0, B0], [A1, B1]
 #[inline(always)]
-unsafe fn double_fft2_interleaved_32(val02: __m128, val13: __m128) -> (__m128, __m128) {
+unsafe fn double_fft2_interleaved_32(val02: __m128, val13: __m128) -> [__m128; 2] {
     let temp0 = _mm_add_ps(val02, val13);
     let temp1 = _mm_sub_ps(val02, val13);
-    (temp0, temp1)
+    [temp0, temp1]
 }
 
 // double lenth 2 fft of a and b, given as [a0, a1], [b0, b1]
+// result is [A0, B0], [A1, B1]
 #[inline(always)]
-unsafe fn double_fft2_contiguous_32(left: __m128, right: __m128) -> (__m128, __m128) {
+unsafe fn double_fft2_contiguous_32(left: __m128, right: __m128) -> [__m128; 2] {
     let temp02 = _mm_shuffle_ps(left, right, 0x44);
     let temp13 = _mm_shuffle_ps(left, right, 0xEE);
     let temp0 = _mm_add_ps(temp02, temp13);
     let temp1 = _mm_sub_ps(temp02, temp13);
-    (temp0, temp1)
+    [temp0, temp1]
 }
 
 struct Rotate90_32 {
@@ -167,7 +169,7 @@ impl Rotate90_32 {
     #[inline(always)]
     unsafe fn rotate_both(&self, values: __m128) -> __m128 {
         let temp = _mm_shuffle_ps(values, values, 0xB1);
-        _mm_xor_ps(temp, self.sign_1st)
+        _mm_xor_ps(temp, self.sign_both)
     }
 }
 
@@ -200,10 +202,22 @@ impl Rotate90_64 {
 
 
 #[inline(always)]
-unsafe fn single_fft2_64(left: __m128d, right: __m128d) -> (__m128d, __m128d) {
+unsafe fn single_fft2_64(left: __m128d, right: __m128d) -> [__m128d; 2] {
     let temp0 = _mm_add_pd(left, right);
     let temp1 = _mm_sub_pd(left, right);
-    (temp0, temp1)
+    [temp0, temp1]
+}
+
+#[inline(always)]
+unsafe fn complex_mul_64(left: __m128d, right: __m128d) -> __m128d {
+    let mul1 = _mm_mul_pd(left, right);
+    let right_flipped = _mm_shuffle_pd(right, right, 0x01);
+    let mul2 = _mm_mul_pd(left, right_flipped);
+    let sign = _mm_set_pd(-0.0, 0.0);
+    let mul1 = _mm_xor_pd(mul1, sign);
+    let temp1 = _mm_shuffle_pd(mul1, mul2, 0x00);
+    let temp2 = _mm_shuffle_pd(mul1, mul2, 0x03);
+    _mm_add_pd(temp1, temp2)
 }
 
 
@@ -247,28 +261,29 @@ impl<T: FftNum> Sse32Butterfly4<T> {
         let value01 = _mm_loadu_ps(input.as_ptr() as *const f32);
         let value23 = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
 
-        let (temp0, temp1) = self.perform_fft_direct(value01, value23);
+        let temp = self.perform_fft_direct(value01, value23);
 
-        let array0 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(temp0);
-        let array1 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(temp1);
+        let array = std::mem::transmute::<[__m128;2], [Complex<f32>; 4]>(temp);
 
         let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
 
-        *output_slice.add(0) = array0[0];
-        *output_slice.add(1) = array0[1];
-        *output_slice.add(2) = array1[0];
-        *output_slice.add(3) = array1[1];
+        *output_slice.add(0) = array[0];
+        *output_slice.add(1) = array[1];
+        *output_slice.add(2) = array[2];
+        *output_slice.add(3) = array[3];
     }
 
+    // length 4 fft of a, given as [a0, a1], [a2, a3]
+    // result is [A0, A1], [A2, A3]
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
         &self,
         value01: __m128,
         value23: __m128,
-    ) -> (__m128, __m128) {
-        let (temp0, mut temp1) = double_fft2_interleaved_32(value01, value23);
-        temp1 = self.rotate.rotate_2nd(temp1);
-        double_fft2_contiguous_32(temp0, temp1)
+    ) -> [__m128; 2] {
+        let mut temp = double_fft2_interleaved_32(value01, value23);
+        temp[1] = self.rotate.rotate_2nd(temp[1]);
+        double_fft2_contiguous_32(temp[0], temp[1])
     }
 }
 
@@ -303,18 +318,15 @@ impl<T: FftNum> Sse64Butterfly4<T> {
         let value2 = _mm_loadu_pd(input.as_ptr().add(2) as *const f64);
         let value3 = _mm_loadu_pd(input.as_ptr().add(3) as *const f64);
 
-        let (out0, out1, out2, out3) = self.perform_fft_direct(value0, value1, value2, value3);
+        let out = self.perform_fft_direct(value0, value1, value2, value3);
 
-        let val0 = std::mem::transmute::<__m128d, Complex<f64>>(out0);
-        let val1 = std::mem::transmute::<__m128d, Complex<f64>>(out1);
-        let val2 = std::mem::transmute::<__m128d, Complex<f64>>(out2);
-        let val3 = std::mem::transmute::<__m128d, Complex<f64>>(out3);
+        let val = std::mem::transmute::<[__m128d; 4], [Complex<f64>; 4]>(out);
 
         let output_slice = output.as_mut_ptr() as *mut Complex<f64>;
-        *output_slice.add(0) = val0;
-        *output_slice.add(1) = val1;
-        *output_slice.add(2) = val2;
-        *output_slice.add(3) = val3;
+        *output_slice.add(0) = val[0];
+        *output_slice.add(1) = val[1];
+        *output_slice.add(2) = val[2];
+        *output_slice.add(3) = val[3];
     }
 
     #[inline(always)]
@@ -324,15 +336,15 @@ impl<T: FftNum> Sse64Butterfly4<T> {
         value1: __m128d,
         value2: __m128d,
         value3: __m128d,
-    ) -> (__m128d, __m128d, __m128d, __m128d) {
-        let (temp0, temp2) = single_fft2_64(value0, value2);
-        let (temp1, temp3) = single_fft2_64(value1, value3);
+    ) -> [__m128d; 4] {
+        let temp0 = single_fft2_64(value0, value2);
+        let mut temp1 = single_fft2_64(value1, value3);
 
-        let temp3 = self.rotate.rotate(temp3);
+        temp1[1] = self.rotate.rotate(temp1[1]);
 
-        let (out0, out1) = single_fft2_64(temp0, temp1);
-        let (out2, out3) = single_fft2_64(temp2, temp3);
-        (out0, out2, out1, out3)
+        let out0 = single_fft2_64(temp0[0], temp1[0]);
+        let out2 = single_fft2_64(temp0[1], temp1[1]);
+        [out0[0], out2[0], out0[1], out2[1]]
     }
     
 }
@@ -350,7 +362,7 @@ impl<T: FftNum> Sse32Butterfly8<T> {
     pub fn new(direction: FftDirection) -> Self {
         let bf4 = Sse32Butterfly4::new(direction);
         let root2 = unsafe {
-            _mm_load1_ps(&0.5f32.sqrt())
+            _mm_set_ps(0.5f32.sqrt(), 0.5f32.sqrt(), 1.0, 1.0)
         };
         let rotate90 = if direction == FftDirection::Inverse {
             Rotate90_32::new(true)
@@ -372,95 +384,56 @@ impl<T: FftNum> Sse32Butterfly8<T> {
         input: RawSlice<Complex<T>>,
         output: RawSliceMut<Complex<T>>,
     ) {
-        //we're going to hardcode a step of mixed radix
-        //aka we're going to do the six step algorithm
         let in01 = _mm_loadu_ps(input.as_ptr() as *const f32);
         let in23 = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
         let in45 = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
         let in67 = _mm_loadu_ps(input.as_ptr().add(6) as *const f32);
 
-        //we're going to hardcode a step of mixed radix
-        //aka we're going to do the six step algorithm
+        let out = self.perform_fft_direct([in01, in23, in45, in67]);
 
-        // step 1: transpose the input into the scratch
-        //let mut scratch0 = [input.load(0), input.load(2), input.load(4), input.load(6)];
-        //let mut scratch1 = [input.load(1), input.load(3), input.load(5), input.load(7)];
+        let outvals = std::mem::transmute::<[__m128;4], [Complex<f32>; 8]>(out);
 
-        // step 2: column FFTs
-        //butterfly4.perform_fft_butterfly(&mut scratch0);
-        //butterfly4.perform_fft_butterfly(&mut scratch1);
-        println!("scr0 {:?} {:?}", in01, in23);
-        println!("scr1 {:?} {:?}", in45, in67);
+        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
 
+        *output_slice.add(0) = outvals[0];
+        *output_slice.add(1) = outvals[1];
+        *output_slice.add(2) = outvals[2];
+        *output_slice.add(3) = outvals[3];
+        *output_slice.add(4) = outvals[4];
+        *output_slice.add(5) = outvals[5];
+        *output_slice.add(6) = outvals[6];
+        *output_slice.add(7) = outvals[7];
+    }
+
+    #[inline(always)]
+    unsafe fn perform_fft_direct(&self, values: [__m128; 4]) -> [__m128; 4] {
         // transpose
-        let in02 = _mm_shuffle_ps(in01, in23, 0x44);
-        let in13 = _mm_shuffle_ps(in01, in23, 0xEE);
-        let in46 = _mm_shuffle_ps(in45, in67, 0x44);
-        let in57 = _mm_shuffle_ps(in45, in67, 0xEE);
-
-        println!("scr0 sh {:?} {:?}", in02, in13);
-        println!("scr1 sh {:?} {:?}", in46, in57);
-
-        let (val0, val1) = self.bf4.perform_fft_direct(in02, in46);
-        let (val2, val3) = self.bf4.perform_fft_direct(in13, in57);
-
-        println!("scr0 fft {:?} {:?} ", val0, val1);
-        println!("scr1 fft {:?} {:?} ", val2, val3);
-
+        let in02 = _mm_shuffle_ps(values[0], values[1], 0x44);
+        let in13 = _mm_shuffle_ps(values[0], values[1], 0xEE);
+        let in46 = _mm_shuffle_ps(values[2], values[3], 0x44);
+        let in57 = _mm_shuffle_ps(values[2], values[3], 0xEE);
+        
+        let mut val0 = self.bf4.perform_fft_direct(in02, in46);
+        let mut val2 = self.bf4.perform_fft_direct(in13, in57);
+        
         // step 3: apply twiddle factors
-        //scratch1[1] = (twiddles::rotate_90(scratch1[1], self.direction) + scratch1[1]) * self.root2;
-        //scratch1[2] = twiddles::rotate_90(scratch1[2], self.direction);
-        //scratch1[3] = (twiddles::rotate_90(scratch1[3], self.direction) - scratch1[3]) * self.root2;
+        let val2b = self.rotate90.rotate_2nd(val2[0]);
+        let val2c = _mm_add_ps(val2b, val2[0]);
+        let val2d = _mm_mul_ps(val2c, self.root2);
+        val2[0] = _mm_shuffle_ps(val2[0], val2d, 0xE4);
 
-        //let val5b = self.rotate90.rotate(val5);
-        //let val5c = _mm_add_pd(val5b, val5);
-        //let val5 = _mm_mul_pd(val5c, self.root2);
-//
-        //let val6 = self.rotate90.rotate(val6);
-//
-        //let val7b = self.rotate90.rotate(val7);
-        //let val7c = _mm_sub_pd(val7b, val7);
-        //let val7 = _mm_mul_pd(val7c, self.root2);
-
-        //println!("scr1 rot {:?} {:?} {:?} {:?}", val4, val5, val6, val7);
+        let val3b = self.rotate90.rotate_both(val2[1]);
+        let val3c = _mm_sub_ps(val3b, val2[1]);
+        let val3d = _mm_mul_ps(val3c, self.root2);
+        val2[1] = _mm_shuffle_ps(val3b, val3d, 0xE4);
 
         // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
 
         // step 5: row FFTs
-        //for i in 0..4 {
-        //    Butterfly2::perform_fft_strided(&mut scratch0[i], &mut scratch1[i]);
-        //}
-        //let (out0, out4) = single_fft2_64(val0, val4);
-        //let (out1, out5) = single_fft2_64(val1, val5);
-        //let (out2, out6) = single_fft2_64(val2, val6);
-        //let (out3, out7) = single_fft2_64(val3, val7);
-//
-        //println!("scr0 fft2 {:?} {:?} {:?} {:?}", out0, out1, out2, out3);
-        //println!("scr1 fft2 {:?} {:?} {:?} {:?}", out4, out5, out6, out7);
+        let out0 = double_fft2_interleaved_32(val0[0], val2[0]);
+        let out1 = double_fft2_interleaved_32(val0[1], val2[1]);
 
-        // step 6: copy data to the output. we don't need to transpose, because we skipped the step 4 transpose
-        //for i in 0..4 {
-        //    output.store(scratch0[i], i);
-        //}
-        //for i in 0..4 {
-        //    output.store(scratch1[i], i + 4);
-        //}
-
-        let array0 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(val0);
-        let array1 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(val1);
-        let array2 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(val2);
-        let array3 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(val3);
-
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-
-        *output_slice.add(0) = array0[0];
-        *output_slice.add(1) = array0[1];
-        *output_slice.add(2) = array1[0];
-        *output_slice.add(3) = array1[1];
-        *output_slice.add(4) = array2[0];
-        *output_slice.add(5) = array2[1];
-        *output_slice.add(6) = array3[0];
-        *output_slice.add(7) = array3[1];
+        [out0[0], out1[0], out0[1], out1[1]]
     }
 }
 
@@ -509,72 +482,255 @@ impl<T: FftNum> Sse64Butterfly8<T> {
         let in6 = _mm_loadu_pd(input.as_ptr().add(6) as *const f64);
         let in7 = _mm_loadu_pd(input.as_ptr().add(7) as *const f64);
 
-        //we're going to hardcode a step of mixed radix
-        //aka we're going to do the six step algorithm
+        let out = self.perform_fft_direct([in0, in1, in2, in3, in4, in5, in6, in7]);
 
-        // step 1: transpose the input into the scratch
-        //let mut scratch0 = [input.load(0), input.load(2), input.load(4), input.load(6)];
-        //let mut scratch1 = [input.load(1), input.load(3), input.load(5), input.load(7)];
+        let outvals = std::mem::transmute::<[__m128d; 8], [Complex<f64>;8]>(out);
 
-        // step 2: column FFTs
-        //butterfly4.perform_fft_butterfly(&mut scratch0);
-        //butterfly4.perform_fft_butterfly(&mut scratch1);
-        println!("scr0 {:?} {:?} {:?} {:?}", in0, in2, in4, in6);
-        println!("scr1 {:?} {:?} {:?} {:?}", in1, in3, in5, in7);
+        let output_slice = output.as_mut_ptr() as *mut Complex<f64>;
 
-        let (val0, val1, val2, val3) = self.bf4.perform_fft_direct(in0, in2, in4, in6);
-        let (val4, val5, val6, val7) = self.bf4.perform_fft_direct(in1, in3, in5, in7);
+        *output_slice.add(0) = outvals[0];
+        *output_slice.add(1) = outvals[1];
+        *output_slice.add(2) = outvals[2];
+        *output_slice.add(3) = outvals[3];
+        *output_slice.add(4) = outvals[4];
+        *output_slice.add(5) = outvals[5];
+        *output_slice.add(6) = outvals[6];
+        *output_slice.add(7) = outvals[7];
+    }
 
-        println!("scr0 fft {:?} {:?} {:?} {:?}", val0, val1, val2, val3);
-        println!("scr1 fft {:?} {:?} {:?} {:?}", val4, val5, val6, val7);
+    #[inline(always)]
+    unsafe fn perform_fft_direct(&self, values: [__m128d; 8]) -> [__m128d; 8] {
+        let val03 = self.bf4.perform_fft_direct(values[0], values[2], values[4], values[6]);
+        let mut val47 = self.bf4.perform_fft_direct(values[1], values[3], values[5], values[7]);
 
         // step 3: apply twiddle factors
-        //scratch1[1] = (twiddles::rotate_90(scratch1[1], self.direction) + scratch1[1]) * self.root2;
-        //scratch1[2] = twiddles::rotate_90(scratch1[2], self.direction);
-        //scratch1[3] = (twiddles::rotate_90(scratch1[3], self.direction) - scratch1[3]) * self.root2;
+        let val5b = self.rotate90.rotate(val47[1]);
+        let val5c = _mm_add_pd(val5b, val47[1]);
+        val47[1] = _mm_mul_pd(val5c, self.root2);
 
-        let val5b = self.rotate90.rotate(val5);
-        let val5c = _mm_add_pd(val5b, val5);
-        let val5 = _mm_mul_pd(val5c, self.root2);
+        val47[2] = self.rotate90.rotate(val47[2]);
 
-        let val6 = self.rotate90.rotate(val6);
+        let val7b = self.rotate90.rotate(val47[3]);
+        let val7c = _mm_sub_pd(val7b, val47[3]);
+        val47[3] = _mm_mul_pd(val7c, self.root2);
 
-        let val7b = self.rotate90.rotate(val7);
-        let val7c = _mm_sub_pd(val7b, val7);
-        let val7 = _mm_mul_pd(val7c, self.root2);
-
-        println!("scr1 rot {:?} {:?} {:?} {:?}", val4, val5, val6, val7);
 
         // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
 
         // step 5: row FFTs
-        //for i in 0..4 {
-        //    Butterfly2::perform_fft_strided(&mut scratch0[i], &mut scratch1[i]);
-        //}
-        let (out0, out4) = single_fft2_64(val0, val4);
-        let (out1, out5) = single_fft2_64(val1, val5);
-        let (out2, out6) = single_fft2_64(val2, val6);
-        let (out3, out7) = single_fft2_64(val3, val7);
+        let out0 = single_fft2_64(val03[0], val47[0]);
+        let out1 = single_fft2_64(val03[1], val47[1]);
+        let out2 = single_fft2_64(val03[2], val47[2]);
+        let out3 = single_fft2_64(val03[3], val47[3]);
+        [out0[0], out1[0], out2[0], out3[0], out0[1], out1[1], out2[1], out3[1]]
+    }
+}
 
-        println!("scr0 fft2 {:?} {:?} {:?} {:?}", out0, out1, out2, out3);
-        println!("scr1 fft2 {:?} {:?} {:?} {:?}", out4, out5, out6, out7);
 
-        // step 6: copy data to the output. we don't need to transpose, because we skipped the step 4 transpose
-        //for i in 0..4 {
-        //    output.store(scratch0[i], i);
-        //}
-        //for i in 0..4 {
-        //    output.store(scratch1[i], i + 4);
-        //}
 
-        let val0 = std::mem::transmute::<__m128d, Complex<f64>>(out0);
-        let val1 = std::mem::transmute::<__m128d, Complex<f64>>(out1);
-        let val2 = std::mem::transmute::<__m128d, Complex<f64>>(out2);
-        let val3 = std::mem::transmute::<__m128d, Complex<f64>>(out3);
-        let val4 = std::mem::transmute::<__m128d, Complex<f64>>(out4);
-        let val5 = std::mem::transmute::<__m128d, Complex<f64>>(out5);
-        let val6 = std::mem::transmute::<__m128d, Complex<f64>>(out6);
-        let val7 = std::mem::transmute::<__m128d, Complex<f64>>(out7);
+pub struct Sse64Butterfly16<T> {
+    root2: __m128d,
+    direction: FftDirection,
+    bf4: Sse64Butterfly4<T>,
+    bf8: Sse64Butterfly8<T>,
+    rotate90: Rotate90_64,
+    twiddle1: __m128d,
+    twiddle2: __m128d,
+    twiddle3: __m128d,
+    twiddle1c: __m128d,
+    twiddle2c: __m128d,
+    twiddle3c: __m128d,
+}
+
+boilerplate_fft_butterfly!(Sse64Butterfly16, 16, |this: &Sse64Butterfly16<_>| this.direction);
+impl<T: FftNum> Sse64Butterfly16<T> {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        let bf8 = Sse64Butterfly8::new(direction);
+        let bf4 = Sse64Butterfly4::new(direction);
+        let root2 = unsafe {
+            _mm_load1_pd(&0.5f64.sqrt())
+        };
+        let rotate90 = if direction == FftDirection::Inverse {
+            Rotate90_64::new(true)
+        }
+        else {
+            Rotate90_64::new(false)
+        };
+        let twiddle1 = unsafe {
+            _mm_loadu_pd(&twiddles::compute_twiddle(1, 16, direction).re as *const f64)
+        };
+        let twiddle2 = unsafe {
+            _mm_loadu_pd(&twiddles::compute_twiddle(2, 16, direction).re as *const f64)
+        };
+        let twiddle3 = unsafe {
+            _mm_loadu_pd(&twiddles::compute_twiddle(3, 16, direction).re as *const f64)
+        };
+        let twiddle1c = unsafe {
+            _mm_loadu_pd(&twiddles::compute_twiddle(1, 16, direction).conj().re as *const f64)
+        };
+        let twiddle2c = unsafe {
+            _mm_loadu_pd(&twiddles::compute_twiddle(2, 16, direction).conj().re as *const f64)
+        };
+        let twiddle3c = unsafe {
+            _mm_loadu_pd(&twiddles::compute_twiddle(3, 16, direction).conj().re as *const f64)
+        };
+
+        Self {
+            root2,
+            direction,
+            bf4,
+            bf8,
+            rotate90,
+            twiddle1,
+            twiddle2,
+            twiddle3,
+            twiddle1c,
+            twiddle2c,
+            twiddle3c,
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
+        //we're going to hardcode a step of mixed radix
+        //aka we're going to do the six step algorithm
+
+        //let mut scratch_evens = [
+        //    input.load(0),
+        //    input.load(2),
+        //    input.load(4),
+        //    input.load(6),
+        //    input.load(8),
+        //    input.load(10),
+        //    input.load(12),
+        //    input.load(14),
+        //];
+
+        //let mut scratch_odds_n1 = [input.load(1), input.load(5), input.load(9), input.load(13)];
+        //let mut scratch_odds_n3 = [input.load(15), input.load(3), input.load(7), input.load(11)];
+
+        let in0 = _mm_loadu_pd(input.as_ptr() as *const f64);
+        let in1 = _mm_loadu_pd(input.as_ptr().add(1) as *const f64);
+        let in2 = _mm_loadu_pd(input.as_ptr().add(2) as *const f64);
+        let in3 = _mm_loadu_pd(input.as_ptr().add(3) as *const f64);
+        let in4 = _mm_loadu_pd(input.as_ptr().add(4) as *const f64);
+        let in5 = _mm_loadu_pd(input.as_ptr().add(5) as *const f64);
+        let in6 = _mm_loadu_pd(input.as_ptr().add(6) as *const f64);
+        let in7 = _mm_loadu_pd(input.as_ptr().add(7) as *const f64);
+        let in8 = _mm_loadu_pd(input.as_ptr().add(8) as *const f64);
+        let in9 = _mm_loadu_pd(input.as_ptr().add(9) as *const f64);
+        let in10 = _mm_loadu_pd(input.as_ptr().add(10) as *const f64);
+        let in11 = _mm_loadu_pd(input.as_ptr().add(11) as *const f64);
+        let in12 = _mm_loadu_pd(input.as_ptr().add(12) as *const f64);
+        let in13 = _mm_loadu_pd(input.as_ptr().add(13) as *const f64);
+        let in14 = _mm_loadu_pd(input.as_ptr().add(14) as *const f64);
+        let in15 = _mm_loadu_pd(input.as_ptr().add(15) as *const f64);
+
+
+
+        // step 2: column FFTs
+        let evens = self.bf8.perform_fft_direct([in0, in2, in4, in6, in8, in10, in12, in14]);
+        let mut odds1 = self.bf4.perform_fft_direct(in1, in5, in9, in13);
+        let mut odds3 = self.bf4.perform_fft_direct(in15, in3, in7, in11);
+
+        //println!("scr0 fft {:?} {:?} {:?} {:?}", val0, val1, val2, val3);
+        //println!("scr1 fft {:?} {:?} {:?} {:?}", val4, val5, val6, val7);
+
+        // step 3: apply twiddle factors
+        odds1[1] = complex_mul_64(odds1[1], self.twiddle1);
+        odds3[1] = complex_mul_64(odds3[1], self.twiddle1c);
+
+        odds1[2] = complex_mul_64(odds1[2], self.twiddle2);
+        odds3[2] = complex_mul_64(odds3[2], self.twiddle2c);
+
+        odds1[3] = complex_mul_64(odds1[3], self.twiddle3);
+        odds3[3] = complex_mul_64(odds3[3], self.twiddle3c);
+
+        //println!("scr1 rot {:?} {:?} {:?} {:?}", val4, val5, val6, val7);
+
+        // step 4: cross FFTs
+        //Butterfly2::perform_fft_strided(&mut scratch_odds_n1[0], &mut scratch_odds_n3[0]);
+        //Butterfly2::perform_fft_strided(&mut scratch_odds_n1[1], &mut scratch_odds_n3[1]);
+        //Butterfly2::perform_fft_strided(&mut scratch_odds_n1[2], &mut scratch_odds_n3[2]);
+        //Butterfly2::perform_fft_strided(&mut scratch_odds_n1[3], &mut scratch_odds_n3[3]);
+
+        let mut temp0 = single_fft2_64(odds1[0], odds3[0]);
+        let mut temp1 = single_fft2_64(odds1[1], odds3[1]);
+        let mut temp2 = single_fft2_64(odds1[2], odds3[2]);
+        let mut temp3 = single_fft2_64(odds1[3], odds3[3]);
+
+        temp0[1] = self.rotate90.rotate(temp0[1]);
+        temp1[1] = self.rotate90.rotate(temp1[1]);
+        temp2[1] = self.rotate90.rotate(temp2[1]);
+        temp3[1] = self.rotate90.rotate(temp3[1]);
+
+        // apply the butterfly 4 twiddle factor, which is just a rotation
+        //scratch_odds_n3[0] = twiddles::rotate_90(scratch_odds_n3[0], self.fft_direction());
+        //scratch_odds_n3[1] = twiddles::rotate_90(scratch_odds_n3[1], self.fft_direction());
+        //scratch_odds_n3[2] = twiddles::rotate_90(scratch_odds_n3[2], self.fft_direction());
+        //scratch_odds_n3[3] = twiddles::rotate_90(scratch_odds_n3[3], self.fft_direction());
+
+        //println!("scr0 fft2 {:?} {:?} {:?} {:?}", out0, out1, out2, out3);
+        //println!("scr1 fft2 {:?} {:?} {:?} {:?}", out4, out5, out6, out7);
+
+        //step 5: copy/add/subtract data back to buffer
+        //output.store(scratch_evens[0] + scratch_odds_n1[0], 0);
+        //output.store(scratch_evens[1] + scratch_odds_n1[1], 1);
+        //output.store(scratch_evens[2] + scratch_odds_n1[2], 2);
+        //output.store(scratch_evens[3] + scratch_odds_n1[3], 3);
+        //output.store(scratch_evens[4] + scratch_odds_n3[0], 4);
+        //output.store(scratch_evens[5] + scratch_odds_n3[1], 5);
+        //output.store(scratch_evens[6] + scratch_odds_n3[2], 6);
+        //output.store(scratch_evens[7] + scratch_odds_n3[3], 7);
+        //output.store(scratch_evens[0] - scratch_odds_n1[0], 8);
+        //output.store(scratch_evens[1] - scratch_odds_n1[1], 9);
+        //output.store(scratch_evens[2] - scratch_odds_n1[2], 10);
+        //output.store(scratch_evens[3] - scratch_odds_n1[3], 11);
+        //output.store(scratch_evens[4] - scratch_odds_n3[0], 12);
+        //output.store(scratch_evens[5] - scratch_odds_n3[1], 13);
+        //output.store(scratch_evens[6] - scratch_odds_n3[2], 14);
+        //output.store(scratch_evens[7] - scratch_odds_n3[3], 15);
+
+        let out0 = _mm_add_pd(evens[0], temp0[0]);
+        let out1 = _mm_add_pd(evens[1], temp1[0]);
+        let out2 = _mm_add_pd(evens[2], temp2[0]);
+        let out3 = _mm_add_pd(evens[3], temp3[0]);
+        let out4 = _mm_add_pd(evens[4], temp0[1]);
+        let out5 = _mm_add_pd(evens[5], temp1[1]);
+        let out6 = _mm_add_pd(evens[6], temp2[1]);
+        let out7 = _mm_add_pd(evens[7], temp3[1]);
+        let out8 = _mm_sub_pd(evens[0], temp0[0]);
+        let out9 = _mm_sub_pd(evens[1], temp1[0]);
+        let out10 = _mm_sub_pd(evens[2], temp2[0]);
+        let out11 = _mm_sub_pd(evens[3], temp3[0]);
+        let out12 = _mm_sub_pd(evens[4], temp0[1]);
+        let out13 = _mm_sub_pd(evens[5], temp1[1]);
+        let out14 = _mm_sub_pd(evens[6], temp2[1]);
+        let out15 = _mm_sub_pd(evens[7], temp3[1]);
+
+
+
+        let val0  = std::mem::transmute::<__m128d, Complex<f64>>(out0);
+        let val1  = std::mem::transmute::<__m128d, Complex<f64>>(out1);
+        let val2  = std::mem::transmute::<__m128d, Complex<f64>>(out2);
+        let val3  = std::mem::transmute::<__m128d, Complex<f64>>(out3);
+        let val4  = std::mem::transmute::<__m128d, Complex<f64>>(out4);
+        let val5  = std::mem::transmute::<__m128d, Complex<f64>>(out5);
+        let val6  = std::mem::transmute::<__m128d, Complex<f64>>(out6);
+        let val7  = std::mem::transmute::<__m128d, Complex<f64>>(out7);
+        let val8  = std::mem::transmute::<__m128d, Complex<f64>>(out8);
+        let val9  = std::mem::transmute::<__m128d, Complex<f64>>(out9);
+        let val10 = std::mem::transmute::<__m128d, Complex<f64>>(out10);
+        let val11 = std::mem::transmute::<__m128d, Complex<f64>>(out11);
+        let val12 = std::mem::transmute::<__m128d, Complex<f64>>(out12);
+        let val13 = std::mem::transmute::<__m128d, Complex<f64>>(out13);
+        let val14 = std::mem::transmute::<__m128d, Complex<f64>>(out14);
+        let val15 = std::mem::transmute::<__m128d, Complex<f64>>(out15);
 
         let output_slice = output.as_mut_ptr() as *mut Complex<f64>;
         *output_slice.add(0) = val0;
@@ -585,6 +741,14 @@ impl<T: FftNum> Sse64Butterfly8<T> {
         *output_slice.add(5) = val5;
         *output_slice.add(6) = val6;
         *output_slice.add(7) = val7;
+        *output_slice.add(8) = val8;
+        *output_slice.add(9) = val9;
+        *output_slice.add(10) = val10;
+        *output_slice.add(11) = val11;
+        *output_slice.add(12) = val12;
+        *output_slice.add(13) = val13;
+        *output_slice.add(14) = val14;
+        *output_slice.add(15) = val15;
     }
 }
 
@@ -608,6 +772,7 @@ mod unit_tests {
         };
     }
     test_butterfly_32_func!(test_ssef32_butterfly4, Sse32Butterfly4, 4);
+    test_butterfly_32_func!(test_ssef32_butterfly8, Sse32Butterfly8, 8);
 
         //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
@@ -625,6 +790,7 @@ mod unit_tests {
     }
     test_butterfly_64_func!(test_ssef64_butterfly4, Sse64Butterfly4, 4);
     test_butterfly_64_func!(test_ssef64_butterfly8, Sse64Butterfly8, 8);
+    test_butterfly_64_func!(test_ssef64_butterfly16, Sse64Butterfly16, 16);
 
     //#[test]
     //fn check_type() {
@@ -662,5 +828,19 @@ mod unit_tests {
         let mut scratch = vec![Complex::<f32>::from(0.0); 0];
         butterfly.process_with_scratch(&mut input, &mut scratch);
         assert!(false);
+    }
+
+    #[test]
+    fn test_complex_mul_64() {
+        unsafe {
+            let right = _mm_set_pd(1.0, 2.0);
+            let left = _mm_set_pd(5.0, 7.0);
+            println!("left: {:?}", left);
+            println!("right: {:?}", right);
+            let res = complex_mul_64(left, right);
+            println!("res: {:?}", res);
+            let expected = _mm_set_pd(2.0*5.0 + 1.0*7.0, 2.0*7.0 - 1.0*5.0);
+            assert_eq!(std::mem::transmute::<__m128d, Complex<f64>>(res), std::mem::transmute::<__m128d, Complex<f64>>(expected));
+        }
     }
 }
