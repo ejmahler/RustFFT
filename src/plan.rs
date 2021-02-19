@@ -7,6 +7,7 @@ use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
 
 use crate::algorithm::butterflies::*;
 use crate::algorithm::sse_butterflies::*;
+use crate::algorithm::sse_radix4::*;
 use crate::algorithm::*;
 use crate::Fft;
 
@@ -302,8 +303,25 @@ impl<T: FftNum> FftPlannerScalar<T> {
 
         match recipe {
             Recipe::Dft(len) => Arc::new(Dft::new(*len, direction)) as Arc<dyn Fft<T>>,
-            Recipe::Radix4(len) => Arc::new(Radix4::new(*len, direction)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly2 => Arc::new(Butterfly2::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Radix4(len) => {
+                if id_t == id_f64 {
+                    Arc::new(Sse64Radix4::new(*len, direction)) as Arc<dyn Fft<T>>
+                }
+                else {
+                    Arc::new(Radix4::new(*len, direction)) as Arc<dyn Fft<T>>
+                }
+            },
+            Recipe::Butterfly2 => {
+                if id_t == id_f32 {
+                    Arc::new(Sse32Butterfly2::new(direction)) as Arc<dyn Fft<T>>
+                }
+                else if id_t == id_f64 {
+                    Arc::new(Sse64Butterfly2::new(direction)) as Arc<dyn Fft<T>>
+                }
+                else {
+                    Arc::new(Butterfly2::new(direction)) as Arc<dyn Fft<T>>
+                }
+            },
             Recipe::Butterfly3 => Arc::new(Butterfly3::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly4 => {
                 if id_t == id_f32 {
@@ -333,7 +351,10 @@ impl<T: FftNum> FftPlannerScalar<T> {
             Recipe::Butterfly11 => Arc::new(Butterfly11::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly13 => Arc::new(Butterfly13::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly16 => {
-                if id_t == id_f64 {
+                if id_t == id_f32 {
+                    Arc::new(Sse32Butterfly16::new(direction)) as Arc<dyn Fft<T>>
+                }
+                else if id_t == id_f64 {
                     Arc::new(Sse64Butterfly16::new(direction)) as Arc<dyn Fft<T>>
                 }
                 else {

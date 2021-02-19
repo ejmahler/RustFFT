@@ -9,6 +9,7 @@ mod radix4;
 pub mod butterflies;
 
 pub mod sse_butterflies;
+pub mod sse_radix4;
 
 pub use self::bluesteins_algorithm::BluesteinsAlgorithm;
 pub use self::dft::Dft;
