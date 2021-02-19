@@ -255,8 +255,8 @@ impl<T: FftNum> Sse32Butterfly1<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        _input: RawSlice<Complex<T>>,
+        _output: RawSliceMut<Complex<T>>,
     ) {}
 
     // length 2 fft of a, given as [a0, a1]
@@ -287,8 +287,8 @@ impl<T: FftNum> Sse64Butterfly1<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        _input: RawSlice<Complex<T>>,
+        _output: RawSliceMut<Complex<T>>,
     ) {}
 
     #[inline(always)]
@@ -347,7 +347,7 @@ impl<T: FftNum> Sse32Butterfly2<T> {
         &self,
         values: __m128,
     ) -> __m128 {
-        let mut temp = _mm_shuffle_ps(values, values, 0x4E);
+        let temp = _mm_shuffle_ps(values, values, 0x4E);
         let sign = _mm_set_ps(-0.0, -0.0, 0.0, 0.0);
         let temp2 = _mm_xor_ps(values, sign);
         _mm_add_ps(temp2, temp)
@@ -657,7 +657,7 @@ impl<T: FftNum> Sse32Butterfly8<T> {
         let in46 = _mm_shuffle_ps(values[2], values[3], 0x44);
         let in57 = _mm_shuffle_ps(values[2], values[3], 0xEE);
         
-        let mut val0 = self.bf4.perform_fft_direct(in02, in46);
+        let val0 = self.bf4.perform_fft_direct(in02, in46);
         let mut val2 = self.bf4.perform_fft_direct(in13, in57);
         
         // step 3: apply twiddle factors
@@ -791,7 +791,6 @@ impl<T: FftNum> Sse64Butterfly8<T> {
 //                                           
 
 pub struct Sse32Butterfly16<T> {
-    root2: __m128,
     direction: FftDirection,
     bf4: Sse32Butterfly4<T>,
     bf8: Sse32Butterfly8<T>,
@@ -808,9 +807,6 @@ impl<T: FftNum> Sse32Butterfly16<T> {
     pub fn new(direction: FftDirection) -> Self {
         let bf8 = Sse32Butterfly8::new(direction);
         let bf4 = Sse32Butterfly4::new(direction);
-        let root2 = unsafe {
-            _mm_load1_ps(&0.5f32.sqrt())
-        };
         let rotate90 = if direction == FftDirection::Inverse {
             Rotate90_32::new(true)
         }
@@ -833,7 +829,6 @@ impl<T: FftNum> Sse32Butterfly16<T> {
             _mm_set_ps(-tw3.im, tw3.re, -tw2.im, tw2.re)
         };
         Self {
-            root2,
             direction,
             bf4,
             bf8,
@@ -1048,7 +1043,6 @@ impl<T: FftNum> Sse32Butterfly16<T> {
 
 
 pub struct Sse64Butterfly16<T> {
-    root2: __m128d,
     direction: FftDirection,
     bf4: Sse64Butterfly4<T>,
     bf8: Sse64Butterfly8<T>,
@@ -1067,9 +1061,6 @@ impl<T: FftNum> Sse64Butterfly16<T> {
     pub fn new(direction: FftDirection) -> Self {
         let bf8 = Sse64Butterfly8::new(direction);
         let bf4 = Sse64Butterfly4::new(direction);
-        let root2 = unsafe {
-            _mm_load1_pd(&0.5f64.sqrt())
-        };
         let rotate90 = if direction == FftDirection::Inverse {
             Rotate90_64::new(true)
         }
@@ -1096,7 +1087,6 @@ impl<T: FftNum> Sse64Butterfly16<T> {
         };
 
         Self {
-            root2,
             direction,
             bf4,
             bf8,

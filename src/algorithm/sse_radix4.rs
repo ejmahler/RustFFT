@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use num_complex::Complex;
-use num_traits::Zero;
+//use num_traits::Zero;
 
 use core::arch::x86_64::*;
 
@@ -9,7 +9,7 @@ use crate::algorithm::sse_butterflies::{Sse64Butterfly1, Sse64Butterfly16, Sse64
 use crate::array_utils;
 use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::{
-    array_utils::{RawSlice, RawSliceMut},
+    //array_utils::{RawSlice, RawSliceMut},
     common::FftNum,
     twiddles, FftDirection,
 };
@@ -123,7 +123,6 @@ impl<T: FftNum> Sse64Radix4<T> {
                         &mut spectrum[i * current_size..],
                         layer_twiddles,
                         current_size / 4,
-                        self.direction,
                         &self.bf4,
                     )
                 }
@@ -183,13 +182,11 @@ unsafe fn butterfly_4<T: FftNum>(
     data: &mut [Complex<T>],
     twiddles: &[__m128d],
     num_ffts: usize,
-    direction: FftDirection,
     bf4: &Sse64Butterfly4<T>,
 ) {
     let mut idx = 0usize;
     let mut tw_idx = 0usize;
     for _ in 0..num_ffts {
-        let tempdata = data.as_mut_ptr();
         let scratch0 = _mm_loadu_pd(data.as_ptr().add(idx) as *const f64);
         let mut scratch1 = _mm_loadu_pd(data.as_ptr().add(idx + 1 * num_ffts) as *const f64);
         let mut scratch2 = _mm_loadu_pd(data.as_ptr().add(idx + 2 * num_ffts) as *const f64);
