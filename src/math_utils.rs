@@ -187,6 +187,7 @@ impl PrimeFactors {
     }
 
     // Divides the number by the given prime factor. Returns None if the resulting number is one.
+    #[allow(unused)]
     pub fn remove_factors(mut self, factor: PrimeFactor) -> Option<Self> {
         if factor.count == 0 {
             return Some(self);

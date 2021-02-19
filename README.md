@@ -54,3 +54,5 @@ license, shall be dual licensed as above, without any additional terms or
 conditions.
 
 Before submitting a PR, please make sure to run `cargo fmt`.
+
+If the changes affect the speed of some of the scalar algorithms, the estimation functions should be updated. See the [guide on updating the estimates](/UpdateEstimates.md)
