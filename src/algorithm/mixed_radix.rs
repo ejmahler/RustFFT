@@ -2,6 +2,7 @@ use std::cmp::max;
 use std::sync::Arc;
 
 use num_complex::Complex;
+use num_traits::Zero;
 use transpose;
 
 use crate::array_utils;
@@ -62,10 +63,10 @@ impl<T: FftNum> MixedRadix<T> {
 
         let len = width * height;
 
-        let mut twiddles = Vec::with_capacity(len);
-        for x in 0..width {
-            for y in 0..height {
-                twiddles.push(twiddles::compute_twiddle(x * y, len, direction));
+        let mut twiddles = vec![Complex::zero(); len];
+        for (x, twiddle_chunk) in twiddles.chunks_exact_mut(height).enumerate() {
+            for (y, twiddle_element) in twiddle_chunk.iter_mut().enumerate() {
+                *twiddle_element = twiddles::compute_twiddle(x * y, len, direction);
             }
         }
 
@@ -257,10 +258,10 @@ impl<T: FftNum> MixedRadixSmall<T> {
 
         let direction = width_fft.fft_direction();
 
-        let mut twiddles = Vec::with_capacity(len);
-        for x in 0..width {
-            for y in 0..height {
-                twiddles.push(twiddles::compute_twiddle(x * y, len, direction));
+        let mut twiddles = vec![Complex::zero(); len];
+        for (x, twiddle_chunk) in twiddles.chunks_exact_mut(height).enumerate() {
+            for (y, twiddle_element) in twiddle_chunk.iter_mut().enumerate() {
+                *twiddle_element = twiddles::compute_twiddle(x * y, len, direction);
             }
         }
 
