@@ -5,7 +5,7 @@ use num_complex::Complex;
 
 use core::arch::x86_64::*;
 
-use crate::algorithm::sse_butterflies::{Sse64Butterfly1, Sse64Butterfly16, Sse64Butterfly2, Sse64Butterfly4, Sse64Butterfly8};
+use crate::sse::sse_butterflies::{Sse64Butterfly1, Sse64Butterfly16, Sse64Butterfly2, Sse64Butterfly4, Sse64Butterfly8};
 use crate::array_utils;
 use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::{
@@ -14,6 +14,8 @@ use crate::{
     twiddles, FftDirection,
 };
 use crate::{Direction, Fft, Length};
+
+use super::sse_utils::*;
 
 /// FFT algorithm optimized for power-of-two sizes
 ///
@@ -164,18 +166,6 @@ fn prepare_radix4<T: FftNum>(
             );
         }
     }
-}
-
-#[inline(always)]
-unsafe fn complex_mul_64(left: __m128d, right: __m128d) -> __m128d {
-    let mul1 = _mm_mul_pd(left, right);
-    let right_flipped = _mm_shuffle_pd(right, right, 0x01);
-    let mul2 = _mm_mul_pd(left, right_flipped);
-    let sign = _mm_set_pd(-0.0, 0.0);
-    let mul1 = _mm_xor_pd(mul1, sign);
-    let temp1 = _mm_shuffle_pd(mul1, mul2, 0x00);
-    let temp2 = _mm_shuffle_pd(mul1, mul2, 0x03);
-    _mm_add_pd(temp1, temp2)
 }
 
 unsafe fn butterfly_4<T: FftNum>(
