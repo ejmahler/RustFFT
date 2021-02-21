@@ -17,6 +17,9 @@ use crate::{Direction, Fft, Length};
 
 use super::sse_utils::*;
 
+use super::sse_common;
+
+
 /// FFT algorithm optimized for power-of-two sizes
 ///
 /// ~~~
@@ -100,6 +103,7 @@ impl<T: FftNum> Sse64Radix4<T> {
         }
     }
 
+    
     fn perform_fft_out_of_place(
         &self,
         signal: &[Complex<T>],
@@ -138,7 +142,7 @@ impl<T: FftNum> Sse64Radix4<T> {
         }
     }
 }
-boilerplate_fft_oop!(Sse64Radix4, |this: &Sse64Radix4<_>| this.len);
+boilerplate_fft_sse_oop!(Sse64Radix4, |this: &Sse64Radix4<_>| this.len);
 
 // after testing an iterative bit reversal algorithm, this recursive algorithm
 // was almost an order of magnitude faster at setting up
