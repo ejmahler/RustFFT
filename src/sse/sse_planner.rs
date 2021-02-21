@@ -252,7 +252,9 @@ impl<T: FftNum> FftPlannerSse<T> {
         match recipe {
             Recipe::Dft(len) => Arc::new(Dft::new(*len, direction)) as Arc<dyn Fft<T>>,
             Recipe::Radix4(len) => {
-                if id_t == id_f64 {
+                if id_t == id_f32 {
+                    Arc::new(Sse32Radix4::new(*len, direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
                     Arc::new(Sse64Radix4::new(*len, direction)) as Arc<dyn Fft<T>>
                 }
                 else {
@@ -522,7 +524,7 @@ mod unit_tests {
     #[test]
     fn test_plan_scalar_trivial() {
         // Length 0 and 1 should use Dft
-        let mut planner = FftPlannerSse::<f64>::new();
+        let mut planner = FftPlannerSse::<f64>::new().unwrap();
         for len in 0..2 {
             let plan = planner.design_fft_for_len(len);
             assert_eq!(*plan, Recipe::Dft(len));
@@ -533,7 +535,7 @@ mod unit_tests {
     #[test]
     fn test_plan_scalar_mediumpoweroftwo() {
         // Powers of 2 between 64 and 32768 should use Radix4
-        let mut planner = FftPlannerSse::<f64>::new();
+        let mut planner = FftPlannerSse::<f64>::new().unwrap();
         for pow in 6..16 {
             let len = 1 << pow;
             let plan = planner.design_fft_for_len(len);
@@ -545,7 +547,7 @@ mod unit_tests {
     #[test]
     fn test_plan_scalar_largepoweroftwo() {
         // Powers of 2 from 65536 and up should use MixedRadix
-        let mut planner = FftPlannerSse::<f64>::new();
+        let mut planner = FftPlannerSse::<f64>::new().unwrap();
         for pow in 17..32 {
             let len = 1 << pow;
             let plan = planner.design_fft_for_len(len);
@@ -557,7 +559,7 @@ mod unit_tests {
     #[test]
     fn test_plan_scalar_butterflies() {
         // Check that all butterflies are used
-        let mut planner = FftPlannerSse::<f64>::new();
+        let mut planner = FftPlannerSse::<f64>::new().unwrap();
         assert_eq!(*planner.design_fft_for_len(2), Recipe::Butterfly2);
         assert_eq!(*planner.design_fft_for_len(3), Recipe::Butterfly3);
         assert_eq!(*planner.design_fft_for_len(4), Recipe::Butterfly4);
@@ -579,7 +581,7 @@ mod unit_tests {
     #[test]
     fn test_plan_scalar_mixedradix() {
         // Products of several different primes should become MixedRadix
-        let mut planner = FftPlannerSse::<f64>::new();
+        let mut planner = FftPlannerSse::<f64>::new().unwrap();
         for pow2 in 2..5 {
             for pow3 in 2..5 {
                 for pow5 in 2..5 {
@@ -600,7 +602,7 @@ mod unit_tests {
     #[test]
     fn test_plan_scalar_mixedradixsmall() {
         // Products of two "small" lengths < 31 that have a common divisor >1, and isn't a power of 2 should be MixedRadixSmall
-        let mut planner = FftPlannerSse::<f64>::new();
+        let mut planner = FftPlannerSse::<f64>::new().unwrap();
         for len in [5 * 20, 5 * 25].iter() {
             let plan = planner.design_fft_for_len(*len);
             assert!(
@@ -614,7 +616,7 @@ mod unit_tests {
 
     #[test]
     fn test_plan_scalar_goodthomasbutterfly() {
-        let mut planner = FftPlannerSse::<f64>::new();
+        let mut planner = FftPlannerSse::<f64>::new().unwrap();
         for len in [3 * 4, 3 * 5, 3 * 7, 5 * 7, 11 * 13].iter() {
             let plan = planner.design_fft_for_len(*len);
             assert!(
@@ -634,7 +636,7 @@ mod unit_tests {
             181, 191, 193, 197, 199,
         ];
 
-        let mut planner = FftPlannerSse::<f64>::new();
+        let mut planner = FftPlannerSse::<f64>::new().unwrap();
         for len in difficultprimes.iter() {
             let plan = planner.design_fft_for_len(*len);
             assert!(
@@ -655,21 +657,21 @@ mod unit_tests {
     fn test_scalar_fft_cache() {
         {
             // Check that FFTs are reused if they're both forward
-            let mut planner = FftPlannerSse::<f64>::new();
+            let mut planner = FftPlannerSse::<f64>::new().unwrap();
             let fft_a = planner.plan_fft(1234, FftDirection::Forward);
             let fft_b = planner.plan_fft(1234, FftDirection::Forward);
             assert!(Arc::ptr_eq(&fft_a, &fft_b), "Existing fft was not reused");
         }
         {
             // Check that FFTs are reused if they're both inverse
-            let mut planner = FftPlannerSse::<f64>::new();
+            let mut planner = FftPlannerSse::<f64>::new().unwrap();
             let fft_a = planner.plan_fft(1234, FftDirection::Inverse);
             let fft_b = planner.plan_fft(1234, FftDirection::Inverse);
             assert!(Arc::ptr_eq(&fft_a, &fft_b), "Existing fft was not reused");
         }
         {
             // Check that FFTs are NOT resued if they don't both have the same direction
-            let mut planner = FftPlannerSse::<f64>::new();
+            let mut planner = FftPlannerSse::<f64>::new().unwrap();
             let fft_a = planner.plan_fft(1234, FftDirection::Forward);
             let fft_b = planner.plan_fft(1234, FftDirection::Inverse);
             assert!(
@@ -682,7 +684,7 @@ mod unit_tests {
     #[test]
     fn test_scalar_recipe_cache() {
         // Check that all butterflies are used
-        let mut planner = FftPlannerSse::<f64>::new();
+        let mut planner = FftPlannerSse::<f64>::new().unwrap();
         let fft_a = planner.design_fft_for_len(1234);
         let fft_b = planner.design_fft_for_len(1234);
         assert!(Rc::ptr_eq(&fft_a, &fft_b), "Existing recipe was not reused");
