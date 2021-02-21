@@ -15,7 +15,7 @@ use super::sse_utils::*;
 
 
 #[allow(unused)]
-macro_rules! boilerplate_fft_butterfly {
+macro_rules! boilerplate_fft_sse_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> $struct_name<T> {
             #[inline(always)]
@@ -104,7 +104,7 @@ pub struct Sse32Butterfly1<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_butterfly!(Sse32Butterfly1, 1, |this: &Sse32Butterfly1<_>| this.direction);
+boilerplate_fft_sse_butterfly!(Sse32Butterfly1, 1, |this: &Sse32Butterfly1<_>| this.direction);
 impl<T: FftNum> Sse32Butterfly1<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -136,7 +136,7 @@ pub struct Sse64Butterfly1<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_butterfly!(Sse64Butterfly1, 1, |this: &Sse64Butterfly1<_>| this.direction);
+boilerplate_fft_sse_butterfly!(Sse64Butterfly1, 1, |this: &Sse64Butterfly1<_>| this.direction);
 impl<T: FftNum> Sse64Butterfly1<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -174,7 +174,7 @@ pub struct Sse32Butterfly2<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_butterfly!(Sse32Butterfly2, 2, |this: &Sse32Butterfly2<_>| this.direction);
+boilerplate_fft_sse_butterfly!(Sse32Butterfly2, 2, |this: &Sse32Butterfly2<_>| this.direction);
 impl<T: FftNum> Sse32Butterfly2<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -251,7 +251,7 @@ pub struct Sse64Butterfly2<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_butterfly!(Sse64Butterfly2, 2, |this: &Sse64Butterfly2<_>| this.direction);
+boilerplate_fft_sse_butterfly!(Sse64Butterfly2, 2, |this: &Sse64Butterfly2<_>| this.direction);
 impl<T: FftNum> Sse64Butterfly2<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -318,7 +318,7 @@ pub struct Sse32Butterfly4<T> {
     //rot: __m128,
 }
 
-boilerplate_fft_butterfly!(Sse32Butterfly4, 4, |this: &Sse32Butterfly4<_>| this.direction);
+boilerplate_fft_sse_butterfly!(Sse32Butterfly4, 4, |this: &Sse32Butterfly4<_>| this.direction);
 impl<T: FftNum> Sse32Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -383,7 +383,7 @@ pub struct Sse64Butterfly4<T> {
     rotate: Rotate90_64,
 }
 
-boilerplate_fft_butterfly!(Sse64Butterfly4, 4, |this: &Sse64Butterfly4<_>| this.direction);
+boilerplate_fft_sse_butterfly!(Sse64Butterfly4, 4, |this: &Sse64Butterfly4<_>| this.direction);
 impl<T: FftNum> Sse64Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -461,7 +461,7 @@ pub struct Sse32Butterfly8<T> {
     bf4: Sse32Butterfly4<T>,
     rotate90: Rotate90_32,
 }
-boilerplate_fft_butterfly!(Sse32Butterfly8, 8, |this: &Sse32Butterfly8<_>| this.direction);
+boilerplate_fft_sse_butterfly!(Sse32Butterfly8, 8, |this: &Sse32Butterfly8<_>| this.direction);
 impl<T: FftNum> Sse32Butterfly8<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -559,7 +559,7 @@ pub struct Sse64Butterfly8<T> {
     bf4: Sse64Butterfly4<T>,
     rotate90: Rotate90_64,
 }
-boilerplate_fft_butterfly!(Sse64Butterfly8, 8, |this: &Sse64Butterfly8<_>| this.direction);
+boilerplate_fft_sse_butterfly!(Sse64Butterfly8, 8, |this: &Sse64Butterfly8<_>| this.direction);
 impl<T: FftNum> Sse64Butterfly8<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -662,7 +662,7 @@ pub struct Sse32Butterfly16<T> {
     twiddle23conj: __m128,
 }
 
-boilerplate_fft_butterfly!(Sse32Butterfly16, 16, |this: &Sse32Butterfly16<_>| this.direction);
+boilerplate_fft_sse_butterfly!(Sse32Butterfly16, 16, |this: &Sse32Butterfly16<_>| this.direction);
 impl<T: FftNum> Sse32Butterfly16<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -916,7 +916,7 @@ pub struct Sse64Butterfly16<T> {
     twiddle3c: __m128d,
 }
 
-boilerplate_fft_butterfly!(Sse64Butterfly16, 16, |this: &Sse64Butterfly16<_>| this.direction);
+boilerplate_fft_sse_butterfly!(Sse64Butterfly16, 16, |this: &Sse64Butterfly16<_>| this.direction);
 impl<T: FftNum> Sse64Butterfly16<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
