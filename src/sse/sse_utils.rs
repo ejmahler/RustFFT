@@ -77,17 +77,28 @@ pub unsafe fn pack_2nd_32(left: __m128, right: __m128) -> __m128 {
     _mm_shuffle_ps(left, right, 0xEE)
 }
 
-// http://microperf.blogspot.com/2016/12/multiplying-two-complex-numbers-by-two.html
+
 #[inline(always)]
-pub unsafe fn complex_double_mul_32(ar_ai_cr_ci: __m128, br_bi_dr_di: __m128) -> __m128 {
-    let sign = _mm_set_ps(0.0, -0.0, 0.0, -0.0);
-    let ar_ar_cr_cr = _mm_shuffle_ps(ar_ai_cr_ci, ar_ai_cr_ci, 0xA0);
-    let ai_ai_ci_ci = _mm_shuffle_ps(ar_ai_cr_ci, ar_ai_cr_ci, 0xF5);
-    let bi_br_di_dr = _mm_shuffle_ps(br_bi_dr_di, br_bi_dr_di, 0xB1);
-    let arbr_arbi_crdr_crdi = _mm_mul_ps(ar_ar_cr_cr, br_bi_dr_di);
-    let aibi_aibr_cidi_cidr = _mm_mul_ps(ai_ai_ci_ci, bi_br_di_dr);
-    let naibi_aibr_ncidi_cidr = _mm_xor_ps(aibi_aibr_cidi_cidr, sign);
-    _mm_add_ps(arbr_arbi_crdr_crdi, naibi_aibr_ncidi_cidr)
+pub unsafe fn complex_double_mul_32(left: __m128, right: __m128) -> __m128 {
+    // SSE2
+    // http://microperf.blogspot.com/2016/12/multiplying-two-complex-numbers-by-two.html
+    // ar_ai_cr_ci: __m128, br_bi_dr_di: __m128
+    //let sign = _mm_set_ps(0.0, -0.0, 0.0, -0.0);
+    //let ar_ar_cr_cr = _mm_shuffle_ps(ar_ai_cr_ci, ar_ai_cr_ci, 0xA0);
+    //let ai_ai_ci_ci = _mm_shuffle_ps(ar_ai_cr_ci, ar_ai_cr_ci, 0xF5);
+    //let bi_br_di_dr = _mm_shuffle_ps(br_bi_dr_di, br_bi_dr_di, 0xB1);
+    //let arbr_arbi_crdr_crdi = _mm_mul_ps(ar_ar_cr_cr, br_bi_dr_di);
+    //let aibi_aibr_cidi_cidr = _mm_mul_ps(ai_ai_ci_ci, bi_br_di_dr);
+    //let naibi_aibr_ncidi_cidr = _mm_xor_ps(aibi_aibr_cidi_cidr, sign);
+    //_mm_add_ps(arbr_arbi_crdr_crdi, naibi_aibr_ncidi_cidr)
+
+    //SSE3, Intel manual
+    let mut temp1 = _mm_shuffle_ps(right, right,0xA0);
+    let mut temp2 = _mm_shuffle_ps(right, right,0xF5);
+    temp1 = _mm_mul_ps(temp1, left);
+    temp2 = _mm_mul_ps(temp2, left);
+    temp2 = _mm_shuffle_ps(temp2, temp2, 0xB1);
+    _mm_addsub_ps(temp1, temp2)
 }
 
 
@@ -128,14 +139,25 @@ impl Rotate90_64 {
 
 #[inline(always)]
 pub unsafe fn complex_mul_64(left: __m128d, right: __m128d) -> __m128d {
-    let mul1 = _mm_mul_pd(left, right);
-    let right_flipped = _mm_shuffle_pd(right, right, 0x01);
-    let mul2 = _mm_mul_pd(left, right_flipped);
-    let sign = _mm_set_pd(-0.0, 0.0);
-    let mul1 = _mm_xor_pd(mul1, sign);
-    let temp1 = _mm_shuffle_pd(mul1, mul2, 0x00);
-    let temp2 = _mm_shuffle_pd(mul1, mul2, 0x03);
-    _mm_add_pd(temp1, temp2)
+    // SSE2
+    //let mul1 = _mm_mul_pd(left, right);
+    //let right_flipped = _mm_shuffle_pd(right, right, 0x01);
+    //let mul2 = _mm_mul_pd(left, right_flipped);
+    //let sign = _mm_set_pd(-0.0, 0.0);
+    //let mul1 = _mm_xor_pd(mul1, sign);
+    //let temp1 = _mm_shuffle_pd(mul1, mul2, 0x00);
+    //let temp2 = _mm_shuffle_pd(mul1, mul2, 0x03);
+    //_mm_add_pd(temp1, temp2)
+
+    // SSE3
+    let mut temp1 = _mm_unpacklo_pd(right, right);
+    let mut temp2 = _mm_unpackhi_pd(right, right);
+    temp1 = _mm_mul_pd(temp1, left);
+    temp2 = _mm_mul_pd(temp2, left);
+    temp2 = _mm_shuffle_pd(temp2, temp2, 0x01);
+    _mm_addsub_pd(temp1, temp2)
+
+
 }
 
 

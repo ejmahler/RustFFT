@@ -18,7 +18,7 @@ use super::sse_utils::*;
 macro_rules! boilerplate_fft_sse_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> $struct_name<T> {
-            #[inline(always)]
+            #[target_feature(enable = "sse3")]
             pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
                 self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
             }
