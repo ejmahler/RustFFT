@@ -12,6 +12,7 @@ use crate::twiddles;
 use crate::{Direction, Fft, Length};
 
 use super::sse_utils::*;
+use super::sse_common::{assert_f32, assert_f64};
 
 
 #[allow(unused)]
@@ -22,7 +23,26 @@ macro_rules! boilerplate_fft_sse_butterfly {
             pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
                 self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
             }
+            
+            #[target_feature(enable = "sse3")]
+            pub (crate) unsafe fn perform_fft_butterfly_multi(&self, buffer: &mut [Complex<T>]) -> Result<(), ()> {
+                array_utils::iter_chunks(buffer, self.len(), |chunk| self.perform_fft_butterfly(chunk))
+            }
+
+            #[target_feature(enable = "sse3")]
+            pub (crate) unsafe fn perform_oop_fft_butterfly_multi(&self, input: &mut [Complex<T>], output: &mut [Complex<T>]) -> Result<(), ()> {
+                array_utils::iter_chunks_zipped(
+                    input,
+                    output,
+                    self.len(),
+                    |in_chunk, out_chunk| self.perform_fft_contiguous(
+                                RawSlice::new(in_chunk),
+                                RawSliceMut::new(out_chunk),
+                            )
+                )
+            }
         }
+
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             fn process_outofplace_with_scratch(
                 &self,
@@ -35,20 +55,7 @@ macro_rules! boilerplate_fft_sse_butterfly {
                     fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
                     return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
                 }
-
-                let result = array_utils::iter_chunks_zipped(
-                    input,
-                    output,
-                    self.len(),
-                    |in_chunk, out_chunk| {
-                        unsafe {
-                            self.perform_fft_contiguous(
-                                RawSlice::new(in_chunk),
-                                RawSliceMut::new(out_chunk),
-                            )
-                        };
-                    },
-                );
+                let result = unsafe { self.perform_oop_fft_butterfly_multi(input, output) };
 
                 if result.is_err() {
                     // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
@@ -63,9 +70,10 @@ macro_rules! boilerplate_fft_sse_butterfly {
                     return; // Unreachable, because fft_error_inplace asserts, but it helps codegen to put it here
                 }
 
-                let result = array_utils::iter_chunks(buffer, self.len(), |chunk| unsafe {
-                    self.perform_fft_butterfly(chunk)
-                });
+                //let result = array_utils::iter_chunks(buffer, self.len(), |chunk| unsafe {
+                //    self.perform_fft_butterfly(chunk)
+                //});
+                let result = unsafe { self.perform_fft_butterfly_multi(buffer) };
 
                 if result.is_err() {
                     // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
@@ -108,6 +116,7 @@ boilerplate_fft_sse_butterfly!(Sse32Butterfly1, 1, |this: &Sse32Butterfly1<_>| t
 impl<T: FftNum> Sse32Butterfly1<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
+        assert_f32::<T>();
         Self {
             direction,
             _phantom: std::marker::PhantomData,
@@ -140,6 +149,7 @@ boilerplate_fft_sse_butterfly!(Sse64Butterfly1, 1, |this: &Sse64Butterfly1<_>| t
 impl<T: FftNum> Sse64Butterfly1<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
+        assert_f64::<T>();
         Self {
             direction,
             _phantom: std::marker::PhantomData,
@@ -178,6 +188,7 @@ boilerplate_fft_sse_butterfly!(Sse32Butterfly2, 2, |this: &Sse32Butterfly2<_>| t
 impl<T: FftNum> Sse32Butterfly2<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
+        assert_f32::<T>();
         Self {
             direction,
             _phantom: std::marker::PhantomData,
@@ -255,6 +266,7 @@ boilerplate_fft_sse_butterfly!(Sse64Butterfly2, 2, |this: &Sse64Butterfly2<_>| t
 impl<T: FftNum> Sse64Butterfly2<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
+        assert_f64::<T>();
         Self {
             direction,
             _phantom: std::marker::PhantomData,
@@ -322,6 +334,7 @@ boilerplate_fft_sse_butterfly!(Sse32Butterfly4, 4, |this: &Sse32Butterfly4<_>| t
 impl<T: FftNum> Sse32Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
+        assert_f32::<T>();
         let rotate = if direction == FftDirection::Inverse {
             Rotate90_32::new(true)
         }
@@ -387,6 +400,7 @@ boilerplate_fft_sse_butterfly!(Sse64Butterfly4, 4, |this: &Sse64Butterfly4<_>| t
 impl<T: FftNum> Sse64Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
+        assert_f64::<T>();
         let rotate = if direction == FftDirection::Inverse {
             Rotate90_64::new(true)
         }
@@ -465,6 +479,7 @@ boilerplate_fft_sse_butterfly!(Sse32Butterfly8, 8, |this: &Sse32Butterfly8<_>| t
 impl<T: FftNum> Sse32Butterfly8<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
+        assert_f32::<T>();
         let bf4 = Sse32Butterfly4::new(direction);
         let root2 = unsafe {
             _mm_set_ps(0.5f32.sqrt(), 0.5f32.sqrt(), 1.0, 1.0)
@@ -563,6 +578,7 @@ boilerplate_fft_sse_butterfly!(Sse64Butterfly8, 8, |this: &Sse64Butterfly8<_>| t
 impl<T: FftNum> Sse64Butterfly8<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
+        assert_f64::<T>();
         let bf4 = Sse64Butterfly4::new(direction);
         let root2 = unsafe {
             _mm_load1_pd(&0.5f64.sqrt())
@@ -666,6 +682,7 @@ boilerplate_fft_sse_butterfly!(Sse32Butterfly16, 16, |this: &Sse32Butterfly16<_>
 impl<T: FftNum> Sse32Butterfly16<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
+        assert_f32::<T>();
         let bf8 = Sse32Butterfly8::new(direction);
         let bf4 = Sse32Butterfly4::new(direction);
         let rotate90 = if direction == FftDirection::Inverse {
@@ -920,6 +937,7 @@ boilerplate_fft_sse_butterfly!(Sse64Butterfly16, 16, |this: &Sse64Butterfly16<_>
 impl<T: FftNum> Sse64Butterfly16<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
+        assert_f64::<T>();
         let bf8 = Sse64Butterfly8::new(direction);
         let bf4 = Sse64Butterfly4::new(direction);
         let rotate90 = if direction == FftDirection::Inverse {
@@ -1192,29 +1210,29 @@ mod unit_tests {
     //    assert!(false);
     //}
 
-    #[test]
-    fn check_scalar_dummy() {
-        let butterfly = Sse64Butterfly16::new(FftDirection::Forward);
-        let mut input = vec![Complex::new(1.0, 1.5), Complex::new(2.0, 2.4),Complex::new(7.0, 9.5),Complex::new(-4.0, -4.5),
-                            Complex::new(-1.0, 5.5), Complex::new(3.3, 2.8),Complex::new(7.5, 3.5),Complex::new(-14.0, -6.5),
-                            Complex::new(-7.6, 53.5), Complex::new(-4.3, 2.2),Complex::new(8.1, 1.123),Complex::new(-24.0, -16.5),
-                            Complex::new(-11.0, 55.0), Complex::new(33.3, 62.8),Complex::new(17.2, 23.5),Complex::new(-54.0, -3.8)];
-        let mut scratch = vec![Complex::<f64>::from(0.0); 0];
-        butterfly.process_with_scratch(&mut input, &mut scratch);
-        assert!(false);
-    }
-
-    #[test]
-    fn check_scalar_dummy32() {
-        let butterfly = Sse32Butterfly16::new(FftDirection::Forward);
-        let mut input = vec![Complex::new(1.0, 1.5), Complex::new(2.0, 2.4),Complex::new(7.0, 9.5),Complex::new(-4.0, -4.5),
-                        Complex::new(-1.0, 5.5), Complex::new(3.3, 2.8),Complex::new(7.5, 3.5),Complex::new(-14.0, -6.5),
-                        Complex::new(-7.6, 53.5), Complex::new(-4.3, 2.2),Complex::new(8.1, 1.123),Complex::new(-24.0, -16.5),
-                        Complex::new(-11.0, 55.0), Complex::new(33.3, 62.8),Complex::new(17.2, 23.5),Complex::new(-54.0, -3.8)];
-        let mut scratch = vec![Complex::<f32>::from(0.0); 0];
-        butterfly.process_with_scratch(&mut input, &mut scratch);
-        assert!(false);
-    }
+    //#[test]
+    //fn check_scalar_dummy() {
+    //    let butterfly = Sse64Butterfly16::new(FftDirection::Forward);
+    //    let mut input = vec![Complex::new(1.0, 1.5), Complex::new(2.0, 2.4),Complex::new(7.0, 9.5),Complex::new(-4.0, -4.5),
+    //                        Complex::new(-1.0, 5.5), Complex::new(3.3, 2.8),Complex::new(7.5, 3.5),Complex::new(-14.0, -6.5),
+    //                        Complex::new(-7.6, 53.5), Complex::new(-4.3, 2.2),Complex::new(8.1, 1.123),Complex::new(-24.0, -16.5),
+    //                        Complex::new(-11.0, 55.0), Complex::new(33.3, 62.8),Complex::new(17.2, 23.5),Complex::new(-54.0, -3.8)];
+    //    let mut scratch = vec![Complex::<f64>::from(0.0); 0];
+    //    butterfly.process_with_scratch(&mut input, &mut scratch);
+    //    assert!(false);
+    //}
+//
+    //#[test]
+    //fn check_scalar_dummy32() {
+    //    let butterfly = Sse32Butterfly16::new(FftDirection::Forward);
+    //    let mut input = vec![Complex::new(1.0, 1.5), Complex::new(2.0, 2.4),Complex::new(7.0, 9.5),Complex::new(-4.0, -4.5),
+    //                    Complex::new(-1.0, 5.5), Complex::new(3.3, 2.8),Complex::new(7.5, 3.5),Complex::new(-14.0, -6.5),
+    //                    Complex::new(-7.6, 53.5), Complex::new(-4.3, 2.2),Complex::new(8.1, 1.123),Complex::new(-24.0, -16.5),
+    //                    Complex::new(-11.0, 55.0), Complex::new(33.3, 62.8),Complex::new(17.2, 23.5),Complex::new(-54.0, -3.8)];
+    //    let mut scratch = vec![Complex::<f32>::from(0.0); 0];
+    //    butterfly.process_with_scratch(&mut input, &mut scratch);
+    //    assert!(false);
+    //}
 
     #[test]
     fn test_complex_mul_64() {
