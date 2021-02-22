@@ -1,5 +1,18 @@
-use num_traits::{FromPrimitive, Signed};
-use std::fmt::Debug;
+
+use std::any::TypeId;
+
+pub fn assert_f32<T: 'static>() {
+    let id_f32 = TypeId::of::<f32>();
+    let id_t = TypeId::of::<T>();
+    assert!(id_t == id_f32, "Wrong float type, must be f32");
+}
+
+pub fn assert_f64<T: 'static>() {
+    let id_f64 = TypeId::of::<f64>();
+    let id_t = TypeId::of::<T>();
+    assert!(id_t == id_f64, "Wrong float type, must be f64");
+}
+
 
 macro_rules! boilerplate_fft_sse_oop {
     ($struct_name:ident, $len_fn:expr) => {
@@ -19,7 +32,7 @@ macro_rules! boilerplate_fft_sse_oop {
                     fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
                     return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
                 }
-
+                
                 let result = unsafe {
                     array_utils::iter_chunks_zipped(
                         input,
