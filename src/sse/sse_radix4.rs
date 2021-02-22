@@ -7,7 +7,7 @@ use std::time;
 
 use core::arch::x86_64::*;
 
-use crate::sse::sse_butterflies::{Sse64Butterfly1, Sse64Butterfly16, Sse64Butterfly2, Sse64Butterfly4, Sse64Butterfly8};
+use crate::sse::sse_butterflies::{Sse64Butterfly1, Sse64Butterfly16, Sse64Butterfly2, Sse64Butterfly4, Sse64Butterfly8, Sse64Butterfly32};
 use crate::sse::sse_butterflies::{Sse32Butterfly1, Sse32Butterfly16, Sse32Butterfly2, Sse32Butterfly4, Sse32Butterfly8};
 use crate::array_utils;
 use crate::common::{fft_error_inplace, fft_error_outofplace};
@@ -125,12 +125,12 @@ impl<T: FftNum> Sse32Radix4<T> {
         spectrum: &mut [Complex<T>],
         _scratch: &mut [Complex<T>],
     ) {
-        let start = time::Instant::now();
+        //let start = time::Instant::now();
         // copy the data into the spectrum vector
         prepare_radix4_32(signal.len(), self.base_len, signal, spectrum, 1);
-        let end = time::Instant::now();
-        println!("prepare: {} ns", end.duration_since(start).as_nanos());
-        let start = time::Instant::now();
+        //let end = time::Instant::now();
+        //println!("prepare: {} ns", end.duration_since(start).as_nanos());
+        //let start = time::Instant::now();
         // Base-level FFTs
         match &self.base_fft {
             Sse32Butterfly::Len1(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
@@ -140,10 +140,10 @@ impl<T: FftNum> Sse32Radix4<T> {
             Sse32Butterfly::Len16(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
         }
 
-        let end = time::Instant::now();
-        println!("base fft: {} ns", end.duration_since(start).as_nanos());
+        //let end = time::Instant::now();
+        //println!("base fft: {} ns", end.duration_since(start).as_nanos());
 
-        let start = time::Instant::now();
+        //let start = time::Instant::now();
         //self.base_fft.perform_fft_butterfly(spectrum); //, &mut []);
 
         // cross-FFTs
@@ -168,8 +168,8 @@ impl<T: FftNum> Sse32Radix4<T> {
 
             current_size *= 4;
         }
-        let end = time::Instant::now();
-        println!("cross fft: {} ns", end.duration_since(start).as_nanos());
+        //let end = time::Instant::now();
+        //println!("cross fft: {} ns", end.duration_since(start).as_nanos());
     }
 }
 boilerplate_fft_sse_oop!(Sse32Radix4, |this: &Sse32Radix4<_>| this.len);
@@ -270,9 +270,10 @@ impl<T: FftNum> Sse64Radix4<T> {
             0 => (len, Arc::new(Sse64Butterfly1::new(direction)) as Arc<dyn Fft<T>>),
             1 => (len, Arc::new(Sse64Butterfly2::new(direction)) as Arc<dyn Fft<T>>),
             2 => (len, Arc::new(Sse64Butterfly4::new(direction)) as Arc<dyn Fft<T>>),
+            3 => (len, Arc::new(Sse64Butterfly8::new(direction)) as Arc<dyn Fft<T>>),
             _ => {
                 if num_bits % 2 == 1 {
-                    (8, Arc::new(Sse64Butterfly8::new(direction)) as Arc<dyn Fft<T>>)
+                    (32, Arc::new(Sse64Butterfly32::new(direction)) as Arc<dyn Fft<T>>)
                 } else {
                     (16, Arc::new(Sse64Butterfly16::new(direction)) as Arc<dyn Fft<T>>)
                 }
@@ -319,20 +320,20 @@ impl<T: FftNum> Sse64Radix4<T> {
         spectrum: &mut [Complex<T>],
         _scratch: &mut [Complex<T>],
     ) {
-        let start = time::Instant::now();
+        //let start = time::Instant::now();
         // copy the data into the spectrum vector
         prepare_radix4_64(signal.len(), self.base_len, signal, spectrum, 1);
-        let end = time::Instant::now();
-        println!("prepare: {} ns", end.duration_since(start).as_nanos());
+        //let end = time::Instant::now();
+        //println!("prepare: {} ns", end.duration_since(start).as_nanos());
 
-        let start = time::Instant::now();
+        //let start = time::Instant::now();
         // Base-level FFTs
         self.base_fft.process_with_scratch(spectrum, &mut []);
 
-        let end = time::Instant::now();
-        println!("base fft: {} ns", end.duration_since(start).as_nanos());
-
-        let start = time::Instant::now();
+        //let end = time::Instant::now();
+        //println!("base fft: {} ns", end.duration_since(start).as_nanos());
+//
+        //let start = time::Instant::now();
         // cross-FFTs
         let mut current_size = self.base_len * 4;
         let mut layer_twiddles: &[__m128d] = &self.twiddles;
@@ -355,8 +356,8 @@ impl<T: FftNum> Sse64Radix4<T> {
 
             current_size *= 4;
         }
-        let end = time::Instant::now();
-        println!("cross fft: {} ns", end.duration_since(start).as_nanos());
+        //let end = time::Instant::now();
+        //println!("cross fft: {} ns", end.duration_since(start).as_nanos());
     }
 }
 boilerplate_fft_sse_oop!(Sse64Radix4, |this: &Sse64Radix4<_>| this.len);
