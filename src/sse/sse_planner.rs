@@ -14,7 +14,7 @@ use crate::Fft;
 
 use crate::math_utils::{PrimeFactor, PrimeFactors};
 
-const MIN_RADIX4_BITS: u32 = 5; // smallest size to consider radix 4 an option is 2^5 = 32
+const MIN_RADIX4_BITS: u32 = 6; // smallest size to consider radix 4 an option is 2^6 = 64
 const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option is 2^16 = 65536
 const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
 const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the inner fft of Bluestein if length is larger than this
@@ -113,6 +113,7 @@ impl Recipe {
 }
 
 /// The SSE FFT planner creates new FFT algorithm instances using a mix of scalar and SSE accelerated algorithms.
+/// It requires at least SSE3, which is available on all reasonably recent x86_64 cpus.
 ///
 /// RustFFT has several FFT algorithms available. For a given FFT size, the `FftPlannerSse` decides which of the
 /// available FFT algorithms to use and then initializes them.
@@ -148,32 +149,20 @@ pub struct FftPlannerSse<T: FftNum> {
 impl<T: FftNum> FftPlannerSse<T> {
     /// Creates a new `FftPlannerSse` instance.
     pub fn new() -> Result<Self, ()> {
-        // Eventually we might make AVX algorithms that don't also require FMA.
-        // If that happens, we can only check for AVX here? seems like a pretty low-priority addition
-        let has_sse3 = is_x86_feature_detected!("sse3");
-        if has_sse3 {
+        if is_x86_feature_detected!("sse3") {
             // Ideally, we would implement the planner with specialization.
-            // Specialization won't be on stable rust for a long time tohugh, so in the meantime, we can hack around it.
+            // Specialization won't be on stable rust for a long time though, so in the meantime, we can hack around it.
             //
-            // The first step of the hack is to use TypeID to determine if T is f32, f64, or neither. If neither, we don't want to di any AVX acceleration
-            // If it's f32 or f64, then construct an internal type that has two generic parameters, one bounded on AvxNum, the other bounded on FftNum
+            // We use TypeID to determine if T is f32, f64, or neither. If neither, we don't want to do any SSE acceleration
+            // If it's f32 or f64, then construct and return a SSE planner instance.
             //
-            // - A is bounded on the AvxNum trait, and is the type we use for any AVX computations. It has associated types for AVX vectors,
-            //      associated constants for the number of elements per vector, etc.
-            // - T is bounded on the FftNum trait, and thus is the type that every FFT algorithm will recieve its input/output buffers in.
+            // All SSE accelerated algorithms come in separate versions for f32 and f64. The type is checked when a new one is created, and if it does not
+            // match the type the FFT is meant for, it will panic. This will never be a problem if using a planner to construct the FFTs.
             //
-            // An important snag relevant to the planner is that we have to box and type-erase the AvxNum bound,
-            // since the only other option is making the AvxNum bound a part of this struct's external API
-            //
-            // Another annoying snag with this setup is that we frequently have to transmute buffers from &mut [Complex<T>] to &mut [Complex<A>] or vice versa.
-            // We know this is safe because we assert everywhere that Type(A)==Type(T), so it's just a matter of "doing it right" every time.
+            // An annoying snag with this setup is that we frequently have to transmute buffers from &mut [Complex<T>] to &mut [Complex<f32 or f64>] or vice versa.
+            // We know this is safe because we assert everywhere that Type(f32 or f64)==Type(T), so it's just a matter of "doing it right" every time.
             // These transmutes are required because the FFT algorithm's input will come through the FFT trait, which may only be bounded by FftNum.
-            // So the buffers will have the type &mut [Complex<T>]. The problem comes in that all of our AVX computation tools are on the AvxNum trait.
-            //
-            // If we had specialization, we could easily convince the compilr that AvxNum and FftNum were different bounds on the same underlying type (IE f32 or f64)
-            // but without it, the compiler is convinced that they are different. So we use the transmute as a last-resort way to overcome this limitation.
-            //
-            // We keep both the A and T types around in all of our AVX-related structs so that we can cast between A and T whenever necessary.
+            // So the buffers will have the type &mut [Complex<T>].
             let id_f32 = TypeId::of::<f32>();
             let id_f64 = TypeId::of::<f64>();
             let id_t = TypeId::of::<T>();
@@ -533,7 +522,7 @@ mod unit_tests {
     fn test_plan_scalar_trivial() {
         // Length 0 and 1 should use Dft
         let mut planner = FftPlannerSse::<f64>::new().unwrap();
-        for len in 0..2 {
+        for len in 0..1 {
             let plan = planner.design_fft_for_len(len);
             assert_eq!(*plan, Recipe::Dft(len));
             assert_eq!(plan.len(), len, "Recipe reports wrong length");
