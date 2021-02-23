@@ -109,6 +109,7 @@ macro_rules! boilerplate_fft_sse_oop {
     };
 }
 
+/* Not used now, but maybe later for the mixed radixes etc
 macro_rules! boilerplate_sse_fft {
     ($struct_name:ident, $len_fn:expr, $inplace_scratch_len_fn:expr, $out_of_place_scratch_len_fn:expr) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
@@ -216,3 +217,4 @@ macro_rules! boilerplate_sse_fft {
         }
     };
 }
+*/

@@ -1,14 +1,9 @@
-use std::sync::Arc;
-
 use num_complex::Complex;
-//use num_traits::Zero;
-
-use std::time;
 
 use core::arch::x86_64::*;
 
 use crate::sse::sse_butterflies::{Sse64Butterfly1, Sse64Butterfly16, Sse64Butterfly2, Sse64Butterfly4, Sse64Butterfly8, Sse64Butterfly32};
-use crate::sse::sse_butterflies::{Sse32Butterfly1, Sse32Butterfly16, Sse32Butterfly2, Sse32Butterfly4, Sse32Butterfly8};
+use crate::sse::sse_butterflies::{Sse32Butterfly1, Sse32Butterfly16, Sse32Butterfly2, Sse32Butterfly4, Sse32Butterfly8, Sse32Butterfly32};
 use crate::array_utils;
 use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::{
@@ -42,6 +37,16 @@ enum Sse32Butterfly<T> {
     Len4(Sse32Butterfly4<T>),
     Len8(Sse32Butterfly8<T>),
     Len16(Sse32Butterfly16<T>),
+    Len32(Sse32Butterfly32<T>),
+}
+
+enum Sse64Butterfly<T> {
+    Len1(Sse64Butterfly1<T>),
+    Len2(Sse64Butterfly2<T>),
+    Len4(Sse64Butterfly4<T>),
+    Len8(Sse64Butterfly8<T>),
+    Len16(Sse64Butterfly16<T>),
+    Len32(Sse64Butterfly32<T>),
 }
 
 pub struct Sse32Radix4<T> {
@@ -72,9 +77,10 @@ impl<T: FftNum> Sse32Radix4<T> {
             0 => (len, Sse32Butterfly::Len1(Sse32Butterfly1::new(direction))),
             1 => (len, Sse32Butterfly::Len2(Sse32Butterfly2::new(direction))),
             2 => (len, Sse32Butterfly::Len4(Sse32Butterfly4::new(direction))),
+            3 => (len, Sse32Butterfly::Len8(Sse32Butterfly8::new(direction))),
             _ => {
                 if num_bits % 2 == 1 {
-                    (8, Sse32Butterfly::Len8(Sse32Butterfly8::new(direction)))
+                    (32, Sse32Butterfly::Len32(Sse32Butterfly32::new(direction)))
                 } else {
                     (16, Sse32Butterfly::Len16(Sse32Butterfly16::new(direction)))
                 }
@@ -138,6 +144,7 @@ impl<T: FftNum> Sse32Radix4<T> {
             Sse32Butterfly::Len4(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
             Sse32Butterfly::Len8(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
             Sse32Butterfly::Len16(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
+            Sse32Butterfly::Len32(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
         }
 
         //let end = time::Instant::now();
@@ -245,7 +252,7 @@ pub struct Sse64Radix4<T> {
     _phantom: std::marker::PhantomData<T>,
     twiddles: Box<[__m128d]>,
 
-    base_fft: Arc<dyn Fft<T>>,
+    base_fft: Sse64Butterfly<T>,
     base_len: usize,
 
     len: usize,
@@ -267,15 +274,15 @@ impl<T: FftNum> Sse64Radix4<T> {
         // figure out which base length we're going to use
         let num_bits = len.trailing_zeros();
         let (base_len, base_fft) = match num_bits {
-            0 => (len, Arc::new(Sse64Butterfly1::new(direction)) as Arc<dyn Fft<T>>),
-            1 => (len, Arc::new(Sse64Butterfly2::new(direction)) as Arc<dyn Fft<T>>),
-            2 => (len, Arc::new(Sse64Butterfly4::new(direction)) as Arc<dyn Fft<T>>),
-            3 => (len, Arc::new(Sse64Butterfly8::new(direction)) as Arc<dyn Fft<T>>),
+            0 => (len, Sse64Butterfly::Len1(Sse64Butterfly1::new(direction))),
+            1 => (len, Sse64Butterfly::Len2(Sse64Butterfly2::new(direction))),
+            2 => (len, Sse64Butterfly::Len4(Sse64Butterfly4::new(direction))),
+            3 => (len, Sse64Butterfly::Len8(Sse64Butterfly8::new(direction))),
             _ => {
                 if num_bits % 2 == 1 {
-                    (32, Arc::new(Sse64Butterfly32::new(direction)) as Arc<dyn Fft<T>>)
+                    (32, Sse64Butterfly::Len32(Sse64Butterfly32::new(direction)))
                 } else {
-                    (16, Arc::new(Sse64Butterfly16::new(direction)) as Arc<dyn Fft<T>>)
+                    (16, Sse64Butterfly::Len16(Sse64Butterfly16::new(direction)))
                 }
             }
         };
@@ -328,7 +335,15 @@ impl<T: FftNum> Sse64Radix4<T> {
 
         //let start = time::Instant::now();
         // Base-level FFTs
-        self.base_fft.process_with_scratch(spectrum, &mut []);
+        //self.base_fft.process_with_scratch(spectrum, &mut []);
+        match &self.base_fft {
+            Sse64Butterfly::Len1(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
+            Sse64Butterfly::Len2(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
+            Sse64Butterfly::Len4(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
+            Sse64Butterfly::Len8(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
+            Sse64Butterfly::Len16(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
+            Sse64Butterfly::Len32(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
+        }
 
         //let end = time::Instant::now();
         //println!("base fft: {} ns", end.duration_since(start).as_nanos());

@@ -217,7 +217,7 @@ impl<T: FftNum> FftPlannerSse<T> {
 
     // Make a recipe for a length
     fn design_fft_for_len(&mut self, len: usize) -> Rc<Recipe> {
-        if len < 2 {
+        if len < 1 {
             Rc::new(Recipe::Dft(len))
         } else if let Some(recipe) = self.recipe_cache.get(&len) {
             Rc::clone(&recipe)
@@ -244,9 +244,7 @@ impl<T: FftNum> FftPlannerSse<T> {
     // Create a new fft from a recipe
     fn build_new_fft(&mut self, recipe: &Recipe, direction: FftDirection) -> Arc<dyn Fft<T>> {
         let id_f32 = TypeId::of::<f32>();
-        //let id_f32 = TypeId::of::<isize>();
         let id_f64 = TypeId::of::<f64>();
-        //let id_f64 = TypeId::of::<usize>();
         let id_t = TypeId::of::<T>();
 
         match recipe {
@@ -327,7 +325,17 @@ impl<T: FftNum> FftPlannerSse<T> {
             Recipe::Butterfly23 => Arc::new(Butterfly23::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly29 => Arc::new(Butterfly29::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly31 => Arc::new(Butterfly31::new(direction)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly32 => Arc::new(Butterfly32::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly32 => {
+                if id_t == id_f32 {
+                    Arc::new(Sse32Butterfly32::new(direction)) as Arc<dyn Fft<T>>
+                }
+                else if id_t == id_f64 {
+                    Arc::new(Sse64Butterfly32::new(direction)) as Arc<dyn Fft<T>>
+                }
+                else {
+                    panic!("Not f32 or f64");
+                }
+            },
             Recipe::MixedRadix {
                 left_fft,
                 right_fft,
