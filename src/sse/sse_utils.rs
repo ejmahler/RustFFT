@@ -1,13 +1,11 @@
 use core::arch::x86_64::*;
 
-//  __  __       _   _               _________  _     _ _   
-// |  \/  | __ _| |_| |__           |___ /___ \| |__ (_) |_ 
+//  __  __       _   _               _________  _     _ _
+// |  \/  | __ _| |_| |__           |___ /___ \| |__ (_) |_
 // | |\/| |/ _` | __| '_ \   _____    |_ \ __) | '_ \| | __|
-// | |  | | (_| | |_| | | | |_____|  ___) / __/| |_) | | |_ 
+// | |  | | (_| | |_| | | | |_____|  ___) / __/| |_) | | |_
 // |_|  |_|\__,_|\__|_| |_|         |____/_____|_.__/|_|\__|
-//                                                          
-
-
+//
 
 pub struct Rotate90_32 {
     //sign_1st: __m128,
@@ -28,16 +26,14 @@ impl Rotate90_32 {
         let sign_2nd = unsafe {
             if positive {
                 _mm_set_ps(0.0, -0.0, 0.0, 0.0)
-            }
-            else {
+            } else {
                 _mm_set_ps(-0.0, 0.0, 0.0, 0.0)
             }
         };
         let sign_both = unsafe {
             if positive {
                 _mm_set_ps(0.0, -0.0, 0.0, -0.0)
-            }
-            else {
+            } else {
                 _mm_set_ps(-0.0, 0.0, -0.0, 0.0)
             }
         };
@@ -77,7 +73,6 @@ pub unsafe fn pack_2nd_32(left: __m128, right: __m128) -> __m128 {
     _mm_shuffle_ps(left, right, 0xEE)
 }
 
-
 #[inline(always)]
 pub unsafe fn complex_double_mul_32(left: __m128, right: __m128) -> __m128 {
     // SSE2
@@ -93,23 +88,20 @@ pub unsafe fn complex_double_mul_32(left: __m128, right: __m128) -> __m128 {
     //_mm_add_ps(arbr_arbi_crdr_crdi, naibi_aibr_ncidi_cidr)
 
     //SSE3, Intel manual
-    let mut temp1 = _mm_shuffle_ps(right, right,0xA0);
-    let mut temp2 = _mm_shuffle_ps(right, right,0xF5);
+    let mut temp1 = _mm_shuffle_ps(right, right, 0xA0);
+    let mut temp2 = _mm_shuffle_ps(right, right, 0xF5);
     temp1 = _mm_mul_ps(temp1, left);
     temp2 = _mm_mul_ps(temp2, left);
     temp2 = _mm_shuffle_ps(temp2, temp2, 0xB1);
     _mm_addsub_ps(temp1, temp2)
 }
 
-
-//  __  __       _   _                __   _  _   _     _ _   
-// |  \/  | __ _| |_| |__            / /_ | || | | |__ (_) |_ 
+//  __  __       _   _                __   _  _   _     _ _
+// |  \/  | __ _| |_| |__            / /_ | || | | |__ (_) |_
 // | |\/| |/ _` | __| '_ \   _____  | '_ \| || |_| '_ \| | __|
-// | |  | | (_| | |_| | | | |_____| | (_) |__   _| |_) | | |_ 
+// | |  | | (_| | |_| | | | |_____| | (_) |__   _| |_) | | |_
 // |_|  |_|\__,_|\__|_| |_|          \___/   |_| |_.__/|_|\__|
-//                                                            
-
-
+//
 
 pub(crate) struct Rotate90_64 {
     sign: __m128d,
@@ -120,14 +112,11 @@ impl Rotate90_64 {
         let sign = unsafe {
             if positive {
                 _mm_set_pd(0.0, -0.0)
-            }
-            else {
+            } else {
                 _mm_set_pd(-0.0, 0.0)
             }
         };
-        Self {
-            sign,
-        }
+        Self { sign }
     }
 
     #[inline(always)]
@@ -156,10 +145,7 @@ pub unsafe fn complex_mul_64(left: __m128d, right: __m128d) -> __m128d {
     temp2 = _mm_mul_pd(temp2, left);
     temp2 = _mm_shuffle_pd(temp2, temp2, 0x01);
     _mm_addsub_pd(temp1, temp2)
-
-
 }
-
 
 #[cfg(test)]
 mod unit_tests {
@@ -178,7 +164,6 @@ mod unit_tests {
         _mm_add_pd(temp1, temp2)
     }
 
-
     #[test]
     fn test_complex_mul_64() {
         unsafe {
@@ -188,8 +173,11 @@ mod unit_tests {
             println!("right: {:?}", right);
             let res = complex_mul_64(left, right);
             println!("res: {:?}", res);
-            let expected = _mm_set_pd(2.0*5.0 + 1.0*7.0, 2.0*7.0 - 1.0*5.0);
-            assert_eq!(std::mem::transmute::<__m128d, Complex<f64>>(res), std::mem::transmute::<__m128d, Complex<f64>>(expected));
+            let expected = _mm_set_pd(2.0 * 5.0 + 1.0 * 7.0, 2.0 * 7.0 - 1.0 * 5.0);
+            assert_eq!(
+                std::mem::transmute::<__m128d, Complex<f64>>(res),
+                std::mem::transmute::<__m128d, Complex<f64>>(expected)
+            );
         }
     }
 
@@ -206,9 +194,9 @@ mod unit_tests {
             println!("left: {:?}", nbr1);
             println!("right: {:?}", nbr2);
             let res = complex_double_mul_32(nbr1, nbr2);
-            let res = std::mem::transmute::<__m128, [Complex<f32>;2]>(res);
+            let res = std::mem::transmute::<__m128, [Complex<f32>; 2]>(res);
             println!("res: {:?}", res);
-            let expected = [val1*val3, val2*val4];
+            let expected = [val1 * val3, val2 * val4];
             assert_eq!(res, expected);
         }
     }
@@ -224,8 +212,8 @@ mod unit_tests {
             let second = pack_2nd_32(nbr1, nbr2);
             println!("first: {:?}", first);
             println!("second: {:?}", first);
-            let first = std::mem::transmute::<__m128, [Complex<f32>;2]>(first);
-            let second = std::mem::transmute::<__m128, [Complex<f32>;2]>(second);
+            let first = std::mem::transmute::<__m128, [Complex<f32>; 2]>(first);
+            let second = std::mem::transmute::<__m128, [Complex<f32>; 2]>(second);
             let first_expected = [Complex::new(1.0, 2.0), Complex::new(5.0, 6.0)];
             let second_expected = [Complex::new(3.0, 4.0), Complex::new(7.0, 8.0)];
             assert_eq!(first, first_expected);
