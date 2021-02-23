@@ -10,21 +10,21 @@ use core::arch::x86_64::*;
 
 
 pub struct Rotate90_32 {
-    sign_1st: __m128,
+    //sign_1st: __m128,
     sign_2nd: __m128,
     sign_both: __m128,
 }
 
 impl Rotate90_32 {
     pub fn new(positive: bool) -> Self {
-        let sign_1st = unsafe {
-            if positive {
-                _mm_set_ps(0.0, 0.0, 0.0, -0.0)
-            }
-            else {
-                _mm_set_ps(0.0, 0.0, -0.0, 0.0)
-            }
-        };
+        //let sign_1st = unsafe {
+        //    if positive {
+        //        _mm_set_ps(0.0, 0.0, 0.0, -0.0)
+        //    }
+        //    else {
+        //        _mm_set_ps(0.0, 0.0, -0.0, 0.0)
+        //    }
+        //};
         let sign_2nd = unsafe {
             if positive {
                 _mm_set_ps(0.0, -0.0, 0.0, 0.0)
@@ -42,7 +42,7 @@ impl Rotate90_32 {
             }
         };
         Self {
-            sign_1st,
+            //sign_1st,
             sign_2nd,
             sign_both,
         }
@@ -54,11 +54,11 @@ impl Rotate90_32 {
         _mm_xor_ps(temp, self.sign_2nd)
     }
 
-    #[inline(always)]
-    pub unsafe fn rotate_1st(&self, values: __m128) -> __m128 {
-        let temp = _mm_shuffle_ps(values, values, 0xE1);
-        _mm_xor_ps(temp, self.sign_1st)
-    }
+    //#[inline(always)]
+    //pub unsafe fn rotate_1st(&self, values: __m128) -> __m128 {
+    //    let temp = _mm_shuffle_ps(values, values, 0xE1);
+    //    _mm_xor_ps(temp, self.sign_1st)
+    //}
 
     #[inline(always)]
     pub unsafe fn rotate_both(&self, values: __m128) -> __m128 {
