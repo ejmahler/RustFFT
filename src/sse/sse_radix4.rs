@@ -2,20 +2,26 @@ use num_complex::Complex;
 
 use core::arch::x86_64::*;
 
-use crate::sse::sse_butterflies::{Sse64Butterfly1, Sse64Butterfly16, Sse64Butterfly2, Sse64Butterfly4, Sse64Butterfly8, Sse64Butterfly32};
-use crate::sse::sse_butterflies::{Sse32Butterfly1, Sse32Butterfly16, Sse32Butterfly2, Sse32Butterfly4, Sse32Butterfly8, Sse32Butterfly32};
 use crate::array_utils;
 use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::sse::sse_butterflies::{
+    Sse32Butterfly1, Sse32Butterfly16, Sse32Butterfly2, Sse32Butterfly32, Sse32Butterfly4,
+    Sse32Butterfly8,
+};
+use crate::sse::sse_butterflies::{
+    Sse64Butterfly1, Sse64Butterfly16, Sse64Butterfly2, Sse64Butterfly32, Sse64Butterfly4,
+    Sse64Butterfly8,
+};
 use crate::{
     //array_utils::{RawSlice, RawSliceMut},
     common::FftNum,
-    twiddles, FftDirection,
+    twiddles,
+    FftDirection,
 };
 use crate::{Direction, Fft, Length};
 
-use super::sse_utils::*;
 use super::sse_common::{assert_f32, assert_f64};
-
+use super::sse_utils::*;
 
 /// FFT algorithm optimized for power-of-two sizes
 ///
@@ -99,10 +105,13 @@ impl<T: FftNum> Sse32Radix4<T> {
                 //for k in 1..4 {
                 unsafe {
                     let twiddle1 = twiddles::compute_twiddle(i * twiddle_stride, len, direction);
-                    let twiddle2 = twiddles::compute_twiddle(i * 2 * twiddle_stride, len, direction);
-                    let twiddle3 = twiddles::compute_twiddle(i * 3 * twiddle_stride, len, direction);
+                    let twiddle2 =
+                        twiddles::compute_twiddle(i * 2 * twiddle_stride, len, direction);
+                    let twiddle3 =
+                        twiddles::compute_twiddle(i * 3 * twiddle_stride, len, direction);
                     let twiddle01_packed = _mm_set_ps(twiddle1.im, twiddle1.re, 0.0, 1.0);
-                    let twiddle23_packed = _mm_set_ps(twiddle3.im, twiddle3.re, twiddle2.im, twiddle2.re);
+                    let twiddle23_packed =
+                        _mm_set_ps(twiddle3.im, twiddle3.re, twiddle2.im, twiddle2.re);
                     twiddle_factors.push(twiddle01_packed);
                     twiddle_factors.push(twiddle23_packed);
                 }
@@ -222,9 +231,15 @@ unsafe fn butterfly_4_32<T: FftNum>(
     for _ in 0..num_ffts {
         // There is no intrinsic to load the lower or upper two singles. Instead we load them as a double and the cast the __m128d to a __m128.
         let scratch0 = _mm_load_sd(output_slice.add(idx) as *const f64);
-        let mut scratch0 = _mm_castpd_ps(_mm_loadh_pd(scratch0, output_slice.add(idx + 1 * num_ffts) as *const f64));
+        let mut scratch0 = _mm_castpd_ps(_mm_loadh_pd(
+            scratch0,
+            output_slice.add(idx + 1 * num_ffts) as *const f64,
+        ));
         let scratch2 = _mm_load_sd(output_slice.add(idx + 2 * num_ffts) as *const f64);
-        let mut scratch2 = _mm_castpd_ps(_mm_loadh_pd(scratch2, output_slice.add(idx + 3 * num_ffts) as *const f64));
+        let mut scratch2 = _mm_castpd_ps(_mm_loadh_pd(
+            scratch2,
+            output_slice.add(idx + 3 * num_ffts) as *const f64,
+        ));
 
         scratch0 = complex_double_mul_32(scratch0, twiddles[tw_idx]);
         scratch2 = complex_double_mul_32(scratch2, twiddles[tw_idx + 1]);
@@ -233,9 +248,18 @@ unsafe fn butterfly_4_32<T: FftNum>(
 
         // There is no intrinsic to store the lower or upper two elements of a __m128. Instead we cast the __m128d to a __m128 and store them as single f64.
         _mm_storel_pd(output_slice.add(idx) as *mut f64, _mm_castps_pd(scratch[0]));
-        _mm_storeh_pd(output_slice.add(idx + 1 * num_ffts) as *mut f64, _mm_castps_pd(scratch[0]));
-        _mm_storel_pd(output_slice.add(idx + 2 * num_ffts) as *mut f64, _mm_castps_pd(scratch[1]));
-        _mm_storeh_pd(output_slice.add(idx + 3 * num_ffts) as *mut f64, _mm_castps_pd(scratch[1]));
+        _mm_storeh_pd(
+            output_slice.add(idx + 1 * num_ffts) as *mut f64,
+            _mm_castps_pd(scratch[0]),
+        );
+        _mm_storel_pd(
+            output_slice.add(idx + 2 * num_ffts) as *mut f64,
+            _mm_castps_pd(scratch[1]),
+        );
+        _mm_storeh_pd(
+            output_slice.add(idx + 3 * num_ffts) as *mut f64,
+            _mm_castps_pd(scratch[1]),
+        );
 
         tw_idx += 2;
         idx += 1;
@@ -292,7 +316,8 @@ impl<T: FftNum> Sse64Radix4<T> {
             for i in 0..num_rows {
                 for k in 1..4 {
                     unsafe {
-                        let twiddle = twiddles::compute_twiddle(i * k * twiddle_stride, len, direction);
+                        let twiddle =
+                            twiddles::compute_twiddle(i * k * twiddle_stride, len, direction);
                         let twiddle_packed = _mm_set_pd(twiddle.im, twiddle.re);
                         twiddle_factors.push(twiddle_packed);
                     }
@@ -341,7 +366,7 @@ impl<T: FftNum> Sse64Radix4<T> {
 
         //let end = time::Instant::now();
         //println!("base fft: {} ns", end.duration_since(start).as_nanos());
-//
+        //
         //let start = time::Instant::now();
         // cross-FFTs
         let mut current_size = self.base_len * 4;
@@ -457,7 +482,7 @@ mod unit_tests {
     //    fft.process(&mut data);
     //    assert!(false);
     //}
-//
+    //
     //#[test]
     //fn test_dummy_radix4_32() {
     //    let fft = Sse32Radix4::<f32>::new(65536, FftDirection::Forward);
