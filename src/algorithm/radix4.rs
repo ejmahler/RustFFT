@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use std::time;
-
 use num_complex::Complex;
 use num_traits::Zero;
 

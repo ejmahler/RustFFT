@@ -1,6 +1,7 @@
 //! Compile something that has a scalar butterfly 4
 
-use rustfft::num_complex::{Complex32, Complex64};
+//use rustfft::num_complex::Complex32;
+use rustfft::num_complex::Complex64;
 use rustfft::FftPlannerScalar;
 
 fn main() {

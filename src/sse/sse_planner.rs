@@ -123,15 +123,16 @@ impl Recipe {
 /// use std::sync::Arc;
 /// use rustfft::{FftPlannerSse, num_complex::Complex};
 ///
-/// let mut planner = FftPlannerSse::new();
-/// let fft = planner.plan_fft_forward(1234);
+/// if let Ok(mut planner) = FftPlannerSse::new() {
+///   let fft = planner.plan_fft_forward(1234);
 ///
-/// let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1234];
-/// fft.process(&mut buffer);
+///   let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1234];
+///   fft.process(&mut buffer);
 ///
-/// // The FFT instance returned by the planner has the type `Arc<dyn Fft<T>>`,
-/// // where T is the numeric type, ie f32 or f64, so it's cheap to clone
-/// let fft_clone = Arc::clone(&fft);
+///   // The FFT instance returned by the planner has the type `Arc<dyn Fft<T>>`,
+///   // where T is the numeric type, ie f32 or f64, so it's cheap to clone
+///   let fft_clone = Arc::clone(&fft);
+/// }
 /// ~~~
 ///
 /// If you plan on creating multiple FFT instances, it is recommended to reuse the same planner for all of them. This
