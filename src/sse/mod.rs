@@ -7,8 +7,6 @@ pub mod sse_radix4;
 
 mod sse_utils;
 
-
-
 pub mod sse_planner;
 
 pub use self::sse_butterflies::*;

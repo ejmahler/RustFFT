@@ -97,18 +97,11 @@ impl<T: FftNum> Radix4<T> {
         spectrum: &mut [Complex<T>],
         _scratch: &mut [Complex<T>],
     ) {
-        let start = time::Instant::now();
         // copy the data into the spectrum vector
         prepare_radix4(signal.len(), self.base_len, signal, spectrum, 1);
-        let end = time::Instant::now();
-        println!("prepare: {} ns", end.duration_since(start).as_nanos());
-        let start = time::Instant::now();
+
         // Base-level FFTs
         self.base_fft.process_with_scratch(spectrum, &mut []);
-
-        let end = time::Instant::now();
-        println!("base fft: {} ns", end.duration_since(start).as_nanos());
-        let start = time::Instant::now();
 
         // cross-FFTs
         let mut current_size = self.base_len * 4;
@@ -134,8 +127,6 @@ impl<T: FftNum> Radix4<T> {
 
             current_size *= 4;
         }
-        let end = time::Instant::now();
-        println!("cross fft: {} ns", end.duration_since(start).as_nanos());
     }
 }
 boilerplate_fft_oop!(Radix4, |this: &Radix4<_>| this.len);
@@ -215,14 +206,5 @@ mod unit_tests {
         let fft = Radix4::new(len, direction);
 
         check_fft_algorithm::<f32>(&fft, len, direction);
-    }
-
-    #[test]
-    fn test_dummy_radix4_64() {
-        let fft = Radix4::<f64>::new(65536, FftDirection::Forward);
-        let mut data = vec![Complex::from(0.0); 65536];
-        let mut scr = vec![Complex::from(0.0); 65536];
-        fft.process_with_scratch(&mut data, &mut scr);
-        assert!(false);
     }
 }

@@ -220,28 +220,22 @@ unsafe fn butterfly_4_32<T: FftNum>(
     let mut tw_idx = 0usize;
     let output_slice = data.as_mut_ptr() as *mut Complex<f32>;
     for _ in 0..num_ffts {
+        // There is no intrinsic to load the lower or upper two singles. Instead we load them as a double and the cast the __m128d to a __m128.
+        let scratch0 = _mm_load_sd(output_slice.add(idx) as *const f64);
+        let mut scratch0 = _mm_castpd_ps(_mm_loadh_pd(scratch0, output_slice.add(idx + 1 * num_ffts) as *const f64));
+        let scratch2 = _mm_load_sd(output_slice.add(idx + 2 * num_ffts) as *const f64);
+        let mut scratch2 = _mm_castpd_ps(_mm_loadh_pd(scratch2, output_slice.add(idx + 3 * num_ffts) as *const f64));
 
-        let mut scratch0 = _mm_loadu_ps(output_slice.add(idx) as *const f32);
-        let scratch1 = _mm_loadu_ps(output_slice.add(idx + 1 * num_ffts) as *const f32);
-        let mut scratch2 = _mm_loadu_ps(output_slice.add(idx + 2 * num_ffts) as *const f32);
-        let scratch3 = _mm_loadu_ps(output_slice.add(idx + 3 * num_ffts) as *const f32);
-
-        scratch0 = _mm_shuffle_ps(scratch0, scratch1, 0x44);
         scratch0 = complex_double_mul_32(scratch0, twiddles[tw_idx]);
-
-        scratch2 = _mm_shuffle_ps(scratch2, scratch3, 0x44);
         scratch2 = complex_double_mul_32(scratch2, twiddles[tw_idx + 1]);
 
         let scratch = bf4.perform_fft_direct(scratch0, scratch2);
 
-        let array = std::mem::transmute::<[__m128; 2], [Complex<f32>; 4]>(scratch);
-
-        
-
-        *output_slice.add(idx) = array[0];
-        *output_slice.add(idx + 1 * num_ffts) = array[1];
-        *output_slice.add(idx + 2 * num_ffts) = array[2];
-        *output_slice.add(idx + 3 * num_ffts) = array[3];
+        // There is no intrinsic to store the lower or upper two elements of a __m128. Instead we cast the __m128d to a __m128 and store them as single f64.
+        _mm_storel_pd(output_slice.add(idx) as *mut f64, _mm_castps_pd(scratch[0]));
+        _mm_storeh_pd(output_slice.add(idx + 1 * num_ffts) as *mut f64, _mm_castps_pd(scratch[0]));
+        _mm_storel_pd(output_slice.add(idx + 2 * num_ffts) as *mut f64, _mm_castps_pd(scratch[1]));
+        _mm_storeh_pd(output_slice.add(idx + 3 * num_ffts) as *mut f64, _mm_castps_pd(scratch[1]));
 
         tw_idx += 2;
         idx += 1;
@@ -414,11 +408,12 @@ unsafe fn butterfly_4_64<T: FftNum>(
 ) {
     let mut idx = 0usize;
     let mut tw_idx = 0usize;
+    let output_slice = data.as_mut_ptr() as *mut Complex<f64>;
     for _ in 0..num_ffts {
-        let scratch0 = _mm_loadu_pd(data.as_ptr().add(idx) as *const f64);
-        let mut scratch1 = _mm_loadu_pd(data.as_ptr().add(idx + 1 * num_ffts) as *const f64);
-        let mut scratch2 = _mm_loadu_pd(data.as_ptr().add(idx + 2 * num_ffts) as *const f64);
-        let mut scratch3 = _mm_loadu_pd(data.as_ptr().add(idx + 3 * num_ffts) as *const f64);
+        let scratch0 = _mm_loadu_pd(output_slice.add(idx) as *const f64);
+        let mut scratch1 = _mm_loadu_pd(output_slice.add(idx + 1 * num_ffts) as *const f64);
+        let mut scratch2 = _mm_loadu_pd(output_slice.add(idx + 2 * num_ffts) as *const f64);
+        let mut scratch3 = _mm_loadu_pd(output_slice.add(idx + 3 * num_ffts) as *const f64);
 
         scratch1 = complex_mul_64(scratch1, twiddles[tw_idx]);
         scratch2 = complex_mul_64(scratch2, twiddles[tw_idx + 1]);
@@ -426,14 +421,10 @@ unsafe fn butterfly_4_64<T: FftNum>(
 
         let scratch = bf4.perform_fft_direct(scratch0, scratch1, scratch2, scratch3);
 
-        let array = std::mem::transmute::<[__m128d; 4], [Complex<f64>; 4]>(scratch);
-
-        let output_slice = data.as_mut_ptr() as *mut Complex<f64>;
-
-        *output_slice.add(idx) = array[0];
-        *output_slice.add(idx + 1 * num_ffts) = array[1];
-        *output_slice.add(idx + 2 * num_ffts) = array[2];
-        *output_slice.add(idx + 3 * num_ffts) = array[3];
+        _mm_storeu_pd(output_slice.add(idx) as *mut f64, scratch[0]);
+        _mm_storeu_pd(output_slice.add(idx + 1 * num_ffts) as *mut f64, scratch[1]);
+        _mm_storeu_pd(output_slice.add(idx + 2 * num_ffts) as *mut f64, scratch[2]);
+        _mm_storeu_pd(output_slice.add(idx + 3 * num_ffts) as *mut f64, scratch[3]);
 
         tw_idx += 3;
         idx += 1;
@@ -459,21 +450,21 @@ mod unit_tests {
         check_fft_algorithm::<f64>(&fft, len, direction);
     }
 
-    #[test]
-    fn test_dummy_radix4_64() {
-        let fft = Sse64Radix4::<f64>::new(65536, FftDirection::Forward);
-        let mut data = vec![Complex::from(0.0); 65536];
-        fft.process(&mut data);
-        assert!(false);
-    }
-
-    #[test]
-    fn test_dummy_radix4_32() {
-        let fft = Sse32Radix4::<f32>::new(65536, FftDirection::Forward);
-        let mut data = vec![Complex::<f32>::from(0.0); 65536];
-        fft.process(&mut data);
-        assert!(false);
-    }
+    //#[test]
+    //fn test_dummy_radix4_64() {
+    //    let fft = Sse64Radix4::<f64>::new(65536, FftDirection::Forward);
+    //    let mut data = vec![Complex::from(0.0); 65536];
+    //    fft.process(&mut data);
+    //    assert!(false);
+    //}
+//
+    //#[test]
+    //fn test_dummy_radix4_32() {
+    //    let fft = Sse32Radix4::<f32>::new(65536, FftDirection::Forward);
+    //    let mut data = vec![Complex::<f32>::from(0.0); 65536];
+    //    fft.process(&mut data);
+    //    assert!(false);
+    //}
 
     #[test]
     fn test_sse_radix4_32() {

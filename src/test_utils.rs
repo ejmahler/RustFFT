@@ -94,8 +94,8 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
             "process() failed, length = {}, direction = {}, result = {:?}, expected = {:?}",
             len,
             direction,
-            expected_output,
-            buffer
+            buffer,
+            expected_output
         );
     }
 
