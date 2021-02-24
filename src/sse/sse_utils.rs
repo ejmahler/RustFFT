@@ -63,31 +63,59 @@ impl Rotate90_32 {
     }
 }
 
+// Pack 1st complex 
+// left: r1.re + r1.im, r2.re, r2.im 
+// right: l1.re + l1.im, l2.re, l2.im
+// --> r1.re, r1.im, l1.re + l1.im
 #[inline(always)]
 pub unsafe fn pack_1st_32(left: __m128, right: __m128) -> __m128 {
     _mm_shuffle_ps(left, right, 0x44)
 }
 
+// Pack 2nd complex 
+// left: r1.re + r1.im, r2.re, r2.im 
+// right: l1.re + l1.im, l2.re, l2.im
+// --> r2.re, r2.im, l2.re + l2.im
 #[inline(always)]
 pub unsafe fn pack_2nd_32(left: __m128, right: __m128) -> __m128 {
     _mm_shuffle_ps(left, right, 0xEE)
 }
 
+// Reverse complex 
+// values: a.re + a.im, b.re, b.im 
+// --> b.re, b.im, a.re + a.im
+#[inline(always)]
+pub unsafe fn reverse_32(values: __m128) -> __m128 {
+    _mm_shuffle_ps(values, values, 0x4E)
+}
+
+// Invert sign of 2nd complex 
+// values: a.re + a.im, b.re, b.im 
+// -->  a.re + a.im, -b.re, -b.im
+#[inline(always)]
+pub unsafe fn invert_2nd_32(values: __m128) -> __m128 {
+    _mm_xor_ps(values, _mm_set_ps(-0.0, -0.0, 0.0, 0.0))
+}
+
+// Duplicate 1st complex 
+// values: a.re + a.im, b.re, b.im 
+// --> a.re + a.im, a.re + a.im
+#[inline(always)]
+pub unsafe fn duplicate_1st_32(values: __m128) -> __m128 {
+    _mm_shuffle_ps(values, values, 0x44)
+}
+
+// Duplicate 2nd complex 
+// values: a.re + a.im, b.re, b.im 
+// --> b.re + b.im, b.re + b.im
+#[inline(always)]
+pub unsafe fn duplicate_2nd_32(values: __m128) -> __m128 {
+    _mm_shuffle_ps(values, values, 0xEE)
+}
+
 #[inline(always)]
 pub unsafe fn complex_double_mul_32(left: __m128, right: __m128) -> __m128 {
-    // SSE2
-    // http://microperf.blogspot.com/2016/12/multiplying-two-complex-numbers-by-two.html
-    // ar_ai_cr_ci: __m128, br_bi_dr_di: __m128
-    //let sign = _mm_set_ps(0.0, -0.0, 0.0, -0.0);
-    //let ar_ar_cr_cr = _mm_shuffle_ps(ar_ai_cr_ci, ar_ai_cr_ci, 0xA0);
-    //let ai_ai_ci_ci = _mm_shuffle_ps(ar_ai_cr_ci, ar_ai_cr_ci, 0xF5);
-    //let bi_br_di_dr = _mm_shuffle_ps(br_bi_dr_di, br_bi_dr_di, 0xB1);
-    //let arbr_arbi_crdr_crdi = _mm_mul_ps(ar_ar_cr_cr, br_bi_dr_di);
-    //let aibi_aibr_cidi_cidr = _mm_mul_ps(ai_ai_ci_ci, bi_br_di_dr);
-    //let naibi_aibr_ncidi_cidr = _mm_xor_ps(aibi_aibr_cidi_cidr, sign);
-    //_mm_add_ps(arbr_arbi_crdr_crdi, naibi_aibr_ncidi_cidr)
-
-    //SSE3, Intel manual
+    //SSE3, from Intel performance manual
     let mut temp1 = _mm_shuffle_ps(right, right, 0xA0);
     let mut temp2 = _mm_shuffle_ps(right, right, 0xF5);
     temp1 = _mm_mul_ps(temp1, left);
