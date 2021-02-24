@@ -1982,23 +1982,23 @@ mod unit_tests {
     //    assert!(false);
     //}
 
-    #[test]
-    fn check_3_dummy() {
-        let butterfly = Sse64Butterfly3::new(FftDirection::Forward);
-        let mut input = vec![Complex::new(1.0, 1.5), Complex::new(2.0, 2.4),Complex::new(7.0, 9.5)];
-        let mut scratch = vec![Complex::<f64>::from(0.0); 0];
-        butterfly.process_with_scratch(&mut input, &mut scratch);
-        assert!(false);
-    }
-    
-    #[test]
-    fn check_3_dummy32() {
-        let butterfly = Sse32Butterfly3::new(FftDirection::Forward);
-        let mut input = vec![Complex::new(1.0, 1.5), Complex::new(2.0, 2.4),Complex::new(7.0, 9.5)];
-        let mut scratch = vec![Complex::<f32>::from(0.0); 0];
-        butterfly.process_with_scratch(&mut input, &mut scratch);
-        assert!(false);
-    }
+    //#[test]
+    //fn check_3_dummy() {
+    //    let butterfly = Sse64Butterfly3::new(FftDirection::Forward);
+    //    let mut input = vec![Complex::new(1.0, 1.5), Complex::new(2.0, 2.4),Complex::new(7.0, 9.5)];
+    //    let mut scratch = vec![Complex::<f64>::from(0.0); 0];
+    //    butterfly.process_with_scratch(&mut input, &mut scratch);
+    //    assert!(false);
+    //}
+    //
+    //#[test]
+    //fn check_3_dummy32() {
+    //    let butterfly = Sse32Butterfly3::new(FftDirection::Forward);
+    //    let mut input = vec![Complex::new(1.0, 1.5), Complex::new(2.0, 2.4),Complex::new(7.0, 9.5)];
+    //    let mut scratch = vec![Complex::<f32>::from(0.0); 0];
+    //    butterfly.process_with_scratch(&mut input, &mut scratch);
+    //    assert!(false);
+    //}
 
     #[test]
     fn test_complex_mul_64() {
