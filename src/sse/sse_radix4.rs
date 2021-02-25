@@ -97,23 +97,25 @@ impl<T: FftNum> Sse32Radix4<T> {
         // we're doing the same precomputation of twiddle factors as the mixed radix algorithm where width=4 and height=len/4
         // but mixed radix only does one step and then calls itself recusrively, and this algorithm does every layer all the way down
         // so we're going to pack all the "layers" of twiddle factors into a single array, starting with the bottom layer and going up
-        let mut twiddle_stride = len / (base_len * 4);
+        let mut twiddle_stride = len / (base_len * 3);
         let mut twiddle_factors = Vec::with_capacity(len * 2);
         while twiddle_stride > 0 {
             let num_rows = len / (twiddle_stride * 4);
-            for i in 0..num_rows {
+            for i in 0..num_rows/2 {
                 //for k in 1..4 {
                 unsafe {
-                    let twiddle1 = twiddles::compute_twiddle(i * twiddle_stride, len, direction);
-                    let twiddle2 =
-                        twiddles::compute_twiddle(i * 2 * twiddle_stride, len, direction);
-                    let twiddle3 =
-                        twiddles::compute_twiddle(i * 3 * twiddle_stride, len, direction);
-                    let twiddle01_packed = _mm_set_ps(twiddle1.im, twiddle1.re, 0.0, 1.0);
-                    let twiddle23_packed =
-                        _mm_set_ps(twiddle3.im, twiddle3.re, twiddle2.im, twiddle2.re);
-                    twiddle_factors.push(twiddle01_packed);
-                    twiddle_factors.push(twiddle23_packed);
+                    let twiddle1a = twiddles::compute_twiddle(2*i * twiddle_stride, len, direction);
+                    let twiddle2a = twiddles::compute_twiddle(2*i * 2 * twiddle_stride, len, direction);
+                    let twiddle3a = twiddles::compute_twiddle(2*i * 3 * twiddle_stride, len, direction);
+                    let twiddle1b = twiddles::compute_twiddle((2*i+1) * twiddle_stride, len, direction);
+                    let twiddle2b = twiddles::compute_twiddle((2*i+1) * 2 * twiddle_stride, len, direction);
+                    let twiddle3b = twiddles::compute_twiddle((2*i+1) * 3 * twiddle_stride, len, direction);
+                    let twiddle1_packed = _mm_set_ps(twiddle1b.im, twiddle1b.re, twiddle1a.im, twiddle1a.re);
+                    let twiddle2_packed = _mm_set_ps(twiddle2b.im, twiddle2b.re, twiddle2a.im, twiddle2a.re);
+                    let twiddle3_packed = _mm_set_ps(twiddle3b.im, twiddle3b.re, twiddle3a.im, twiddle3a.re);
+                    twiddle_factors.push(twiddle1_packed);
+                    twiddle_factors.push(twiddle2_packed);
+                    twiddle_factors.push(twiddle3_packed);
                 }
                 //}
             }
@@ -179,7 +181,7 @@ impl<T: FftNum> Sse32Radix4<T> {
             }
 
             //skip past all the twiddle factors used in this layer
-            let twiddle_offset = (current_size * 2) / 4;
+            let twiddle_offset = current_size / 4;
             layer_twiddles = &layer_twiddles[twiddle_offset..];
 
             current_size *= 4;
@@ -228,6 +230,7 @@ unsafe fn butterfly_4_32<T: FftNum>(
     let mut idx = 0usize;
     let mut tw_idx = 0usize;
     let output_slice = data.as_mut_ptr() as *mut Complex<f32>;
+    /*
     for _ in 0..num_ffts {
         // There is no intrinsic to load the lower or upper two singles. Instead we load them as a double and the cast the __m128d to a __m128.
         let scratch0 = _mm_load_sd(output_slice.add(idx) as *const f64);
@@ -263,6 +266,25 @@ unsafe fn butterfly_4_32<T: FftNum>(
 
         tw_idx += 2;
         idx += 1;
+    } */
+    for _ in 0..num_ffts/2 {
+        let scratch0 = _mm_loadu_ps(output_slice.add(idx) as *const f32);
+        let mut scratch1 = _mm_loadu_ps(output_slice.add(idx + 1 * num_ffts) as *const f32);
+        let mut scratch2 = _mm_loadu_ps(output_slice.add(idx + 2 * num_ffts) as *const f32);
+        let mut scratch3 = _mm_loadu_ps(output_slice.add(idx + 3 * num_ffts) as *const f32);
+
+        scratch1 = complex_double_mul_32(scratch1, twiddles[tw_idx]);
+        scratch2 = complex_double_mul_32(scratch2, twiddles[tw_idx + 1]);
+        scratch3 = complex_double_mul_32(scratch3, twiddles[tw_idx + 2]);
+
+        let scratch = bf4.perform_double_fft_direct(scratch0, scratch1, scratch2, scratch3);
+
+        _mm_storeu_ps(output_slice.add(idx) as *mut f32, scratch[0]);
+        _mm_storeu_ps(output_slice.add(idx + 1 * num_ffts) as *mut f32, scratch[1]);
+        _mm_storeu_ps(output_slice.add(idx + 2 * num_ffts) as *mut f32, scratch[2]);
+        _mm_storeu_ps(output_slice.add(idx + 3 * num_ffts) as *mut f32, scratch[3]);
+        tw_idx += 3;
+        idx += 2;
     }
 }
 
