@@ -562,6 +562,36 @@ impl<T: FftNum> Sse32Butterfly4<T> {
         // step 6: transpose by swapping index 1 and 2
         double_fft2_contiguous_32(temp[0], temp[1])
     }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_double_fft_direct(
+        &self,
+        values0: __m128,
+        values1: __m128,
+        values2: __m128,
+        values3: __m128,
+    ) -> [__m128; 4] {
+        //we're going to hardcode a step of mixed radix
+        //aka we're going to do the six step algorithm
+
+        // step 1: transpose
+        // and
+        // step 2: column FFTs
+        let temp0 = double_fft2_interleaved_32(values0, values2);
+        let mut temp1 = double_fft2_interleaved_32(values1, values3);
+
+        // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
+        temp1[1] = self.rotate.rotate_both(temp1[1]);
+
+        // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
+
+        // step 5: row FFTs
+        let out0 = double_fft2_interleaved_32(temp0[0], temp1[0]);
+        let out2 = double_fft2_interleaved_32(temp0[1], temp1[1]);
+
+        // step 6: transpose by swapping index 1 and 2
+        [out0[0], out2[0], out0[1], out2[1]]
+    }
 }
 
 //   _  _              __   _  _   _     _ _
@@ -1894,7 +1924,8 @@ impl<T: FftNum> Sse64Butterfly32<T> {
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use crate::test_utils::check_fft_algorithm;
+    use crate::test_utils::{check_fft_algorithm, compare_vectors};
+    use crate::{algorithm::Dft, Direction, FftNum, Length};
 
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
@@ -2034,6 +2065,48 @@ mod unit_tests {
             println!("res: {:?}", res);
             let expected = [val1 * val3, val2 * val4];
             assert_eq!(res, expected);
+        }
+    }
+
+    #[test]
+    fn test_double_fft4_32() {
+        unsafe {
+            let val_a1 = Complex::<f32>::new(1.0, 2.5);
+            let val_a2 = Complex::<f32>::new(3.2, 4.2);
+            let val_a3 = Complex::<f32>::new(5.6, 6.2);
+            let val_a4 = Complex::<f32>::new(7.4, 8.3);
+
+            let val_b1 = Complex::<f32>::new(6.0, 24.5);
+            let val_b2 = Complex::<f32>::new(4.2, 34.2);
+            let val_b3 = Complex::<f32>::new(9.6, 61.2);
+            let val_b4 = Complex::<f32>::new(17.4, 81.3);
+
+            let p1 = _mm_set_ps(val_b1.im, val_b1.re, val_a1.im, val_a1.re);
+            let p2 = _mm_set_ps(val_b2.im, val_b2.re, val_a2.im, val_a2.re);
+            let p3 = _mm_set_ps(val_b3.im, val_b3.re, val_a3.im, val_a3.re);
+            let p4 = _mm_set_ps(val_b4.im, val_b4.re, val_a4.im, val_a4.re);
+
+            let mut val_a = vec![val_a1, val_a2, val_a3, val_a4];
+            let mut val_b = vec![val_b1, val_b2, val_b3, val_b4];
+
+            let dft = Dft::new(4, FftDirection::Forward);
+
+            let bf4 = Sse32Butterfly4::<f32>::new(FftDirection::Forward);
+
+            //println!("left: {:?}", nbr1);
+            //println!("right: {:?}", nbr2);
+            dft.process(&mut val_a);
+            dft.process(&mut val_b);
+            let res_both = bf4.perform_double_fft_direct(p1, p2, p3, p4);
+
+            let res = std::mem::transmute::<[__m128; 4], [Complex<f32>; 8]>(res_both);
+            println!("sse: {:?}", res);
+            println!("dft a: {:?}", val_a);
+            println!("dft b: {:?}", val_b);
+            let sse_res_a = [res[0], res[2], res[4], res[6]];
+            let sse_res_b = [res[1], res[3], res[5], res[7]];
+            assert!(compare_vectors(&val_a, &sse_res_a));
+            assert!(compare_vectors(&val_b, &sse_res_b));
         }
     }
 
