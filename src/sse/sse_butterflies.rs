@@ -117,14 +117,14 @@ macro_rules! boilerplate_fft_sse_butterfly {
 //  |_|          |____/_____|_.__/|_|\__|
 //
 
-pub struct Sse32Butterfly1<T> {
+pub struct SseF32Butterfly1<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_sse_butterfly!(Sse32Butterfly1, 1, |this: &Sse32Butterfly1<_>| this
+boilerplate_fft_sse_butterfly!(SseF32Butterfly1, 1, |this: &SseF32Butterfly1<_>| this
     .direction);
-impl<T: FftNum> Sse32Butterfly1<T> {
+impl<T: FftNum> SseF32Butterfly1<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
@@ -157,14 +157,14 @@ impl<T: FftNum> Sse32Butterfly1<T> {
 //  |_|           \___/   |_| |_.__/|_|\__|
 //
 
-pub struct Sse64Butterfly1<T> {
+pub struct SseF64Butterfly1<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_sse_butterfly!(Sse64Butterfly1, 1, |this: &Sse64Butterfly1<_>| this
+boilerplate_fft_sse_butterfly!(SseF64Butterfly1, 1, |this: &SseF64Butterfly1<_>| this
     .direction);
-impl<T: FftNum> Sse64Butterfly1<T> {
+impl<T: FftNum> SseF64Butterfly1<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
@@ -197,14 +197,14 @@ impl<T: FftNum> Sse64Butterfly1<T> {
 //  |_____|         |____/_____|_.__/|_|\__|
 //
 
-pub struct Sse32Butterfly2<T> {
+pub struct SseF32Butterfly2<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_sse_butterfly!(Sse32Butterfly2, 2, |this: &Sse32Butterfly2<_>| this
+boilerplate_fft_sse_butterfly!(SseF32Butterfly2, 2, |this: &SseF32Butterfly2<_>| this
     .direction);
-impl<T: FftNum> Sse32Butterfly2<T> {
+impl<T: FftNum> SseF32Butterfly2<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
@@ -235,14 +235,14 @@ impl<T: FftNum> Sse32Butterfly2<T> {
     // result is [A0, A1]
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(&self, values: __m128) -> __m128 {
-        single_fft2_32(values)
+        solo_fft2_f32(values)
     }
 }
 
 // double lenth 2 fft of a and b, given as [a0, b0], [a1, b1]
 // result is [A0, B0], [A1, B1]
 #[inline(always)]
-unsafe fn double_fft2_interleaved_32(val02: __m128, val13: __m128) -> [__m128; 2] {
+unsafe fn dual_fft2_interleaved_f32(val02: __m128, val13: __m128) -> [__m128; 2] {
     let temp0 = _mm_add_ps(val02, val13);
     let temp1 = _mm_sub_ps(val02, val13);
     [temp0, temp1]
@@ -251,7 +251,7 @@ unsafe fn double_fft2_interleaved_32(val02: __m128, val13: __m128) -> [__m128; 2
 // double lenth 2 fft of a and b, given as [a0, a1], [b0, b1]
 // result is [A0, B0], [A1, B1]
 #[inline(always)]
-unsafe fn double_fft2_contiguous_32(left: __m128, right: __m128) -> [__m128; 2] {
+unsafe fn dual_fft2_contiguous_f32(left: __m128, right: __m128) -> [__m128; 2] {
     let temp02 = _mm_shuffle_ps(left, right, 0x44);
     let temp13 = _mm_shuffle_ps(left, right, 0xEE);
     let temp0 = _mm_add_ps(temp02, temp13);
@@ -262,7 +262,7 @@ unsafe fn double_fft2_contiguous_32(left: __m128, right: __m128) -> [__m128; 2] 
 // length 2 fft of a, given as [a0, a1]
 // result is [A0, A1]
 #[inline(always)]
-unsafe fn single_fft2_32(values: __m128) -> __m128 {
+unsafe fn solo_fft2_f32(values: __m128) -> __m128 {
     let temp = _mm_shuffle_ps(values, values, 0x4E);
     let sign = _mm_set_ps(-0.0, -0.0, 0.0, 0.0);
     let temp2 = _mm_xor_ps(values, sign);
@@ -276,14 +276,14 @@ unsafe fn single_fft2_32(values: __m128) -> __m128 {
 //  |_____|          \___/   |_| |_.__/|_|\__|
 //
 
-pub struct Sse64Butterfly2<T> {
+pub struct SseF64Butterfly2<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_sse_butterfly!(Sse64Butterfly2, 2, |this: &Sse64Butterfly2<_>| this
+boilerplate_fft_sse_butterfly!(SseF64Butterfly2, 2, |this: &SseF64Butterfly2<_>| this
     .direction);
-impl<T: FftNum> Sse64Butterfly2<T> {
+impl<T: FftNum> SseF64Butterfly2<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
@@ -317,12 +317,12 @@ impl<T: FftNum> Sse64Butterfly2<T> {
         value0: __m128d,
         value1: __m128d,
     ) -> [__m128d; 2] {
-        single_fft2_64(value0, value1)
+        solo_fft2_f64(value0, value1)
     }
 }
 
 #[inline(always)]
-unsafe fn single_fft2_64(left: __m128d, right: __m128d) -> [__m128d; 2] {
+unsafe fn solo_fft2_f64(left: __m128d, right: __m128d) -> [__m128d; 2] {
     let temp0 = _mm_add_pd(left, right);
     let temp1 = _mm_sub_pd(left, right);
     [temp0, temp1]
@@ -338,20 +338,20 @@ unsafe fn single_fft2_64(left: __m128d, right: __m128d) -> [__m128d; 2] {
 //                                           
 
 
-pub struct Sse32Butterfly3<T> {
+pub struct SseF32Butterfly3<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    rotate: Rotate90_32,
+    rotate: Rotate90F32,
     twiddle: __m128,
 }
 
-boilerplate_fft_sse_butterfly!(Sse32Butterfly3, 3, |this: &Sse32Butterfly3<_>| this
+boilerplate_fft_sse_butterfly!(SseF32Butterfly3, 3, |this: &SseF32Butterfly3<_>| this
     .direction);
-impl<T: FftNum> Sse32Butterfly3<T> {
+impl<T: FftNum> SseF32Butterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let rotate = Rotate90_32::new(true);
+        let rotate = Rotate90F32::new(true);
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 3, direction);
         let twiddle = unsafe { _mm_set_ps(-tw1.im, -tw1.im, tw1.re, tw1.re) };
         Self {
@@ -391,11 +391,11 @@ impl<T: FftNum> Sse32Butterfly3<T> {
         value12: __m128,
     ) -> [__m128; 2] {
         // This is a SSE translation of the scalar 5-point butterfly 
-        let rev12 = invert_2nd_32(reverse_32(value12));
+        let rev12 = invert_2nd_f32(reverse_f32(value12));
         let temp12pn = self.rotate.rotate_2nd(_mm_add_ps(value12, rev12));
         let twiddled = _mm_mul_ps(temp12pn, self.twiddle);
         let temp = _mm_add_ps(value0x, twiddled);
-        let out12 = single_fft2_32(temp);
+        let out12 = solo_fft2_f32(temp);
         let out0x = _mm_add_ps(value0x, temp12pn);
         [out0x, out12]
     }
@@ -411,21 +411,21 @@ impl<T: FftNum> Sse32Butterfly3<T> {
 //                                                                                     
 
 
-pub struct Sse64Butterfly3<T> {
+pub struct SseF64Butterfly3<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    rotate: Rotate90_64,
+    rotate: Rotate90F64,
     twiddle1re: __m128d,
     twiddle1im: __m128d,
 }
 
-boilerplate_fft_sse_butterfly!(Sse64Butterfly3, 3, |this: &Sse64Butterfly3<_>| this
+boilerplate_fft_sse_butterfly!(SseF64Butterfly3, 3, |this: &SseF64Butterfly3<_>| this
     .direction);
-impl<T: FftNum> Sse64Butterfly3<T> {
+impl<T: FftNum> SseF64Butterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let rotate = Rotate90_64::new(true);
+        let rotate = Rotate90F64::new(true);
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 3, direction);
         let twiddle1re = unsafe { _mm_set_pd(tw1.re, tw1.re) };
         let twiddle1im = unsafe { _mm_set_pd(tw1.im, tw1.im) };
@@ -492,22 +492,22 @@ impl<T: FftNum> Sse64Butterfly3<T> {
 //     |_|           |____/_____|_.__/|_|\__|
 //
 
-pub struct Sse32Butterfly4<T> {
+pub struct SseF32Butterfly4<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    rotate: Rotate90_32,
+    rotate: Rotate90F32,
 }
 
-boilerplate_fft_sse_butterfly!(Sse32Butterfly4, 4, |this: &Sse32Butterfly4<_>| this
+boilerplate_fft_sse_butterfly!(SseF32Butterfly4, 4, |this: &SseF32Butterfly4<_>| this
     .direction);
-impl<T: FftNum> Sse32Butterfly4<T> {
+impl<T: FftNum> SseF32Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let rotate = if direction == FftDirection::Inverse {
-            Rotate90_32::new(true)
+            Rotate90F32::new(true)
         } else {
-            Rotate90_32::new(false)
+            Rotate90F32::new(false)
         };
         Self {
             direction,
@@ -550,7 +550,7 @@ impl<T: FftNum> Sse32Butterfly4<T> {
         // step 1: transpose
         // and
         // step 2: column FFTs
-        let mut temp = double_fft2_interleaved_32(value01, value23);
+        let mut temp = dual_fft2_interleaved_f32(value01, value23);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
         temp[1] = self.rotate.rotate_2nd(temp[1]);
@@ -560,7 +560,7 @@ impl<T: FftNum> Sse32Butterfly4<T> {
         // step 5: row FFTs
         // and
         // step 6: transpose by swapping index 1 and 2
-        double_fft2_contiguous_32(temp[0], temp[1])
+        dual_fft2_contiguous_f32(temp[0], temp[1])
     }
 
     #[inline(always)]
@@ -577,8 +577,8 @@ impl<T: FftNum> Sse32Butterfly4<T> {
         // step 1: transpose
         // and
         // step 2: column FFTs
-        let temp0 = double_fft2_interleaved_32(values0, values2);
-        let mut temp1 = double_fft2_interleaved_32(values1, values3);
+        let temp0 = dual_fft2_interleaved_f32(values0, values2);
+        let mut temp1 = dual_fft2_interleaved_f32(values1, values3);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
         temp1[1] = self.rotate.rotate_both(temp1[1]);
@@ -586,8 +586,8 @@ impl<T: FftNum> Sse32Butterfly4<T> {
         // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
         // step 5: row FFTs
-        let out0 = double_fft2_interleaved_32(temp0[0], temp1[0]);
-        let out2 = double_fft2_interleaved_32(temp0[1], temp1[1]);
+        let out0 = dual_fft2_interleaved_f32(temp0[0], temp1[0]);
+        let out2 = dual_fft2_interleaved_f32(temp0[1], temp1[1]);
 
         // step 6: transpose by swapping index 1 and 2
         [out0[0], out2[0], out0[1], out2[1]]
@@ -601,22 +601,22 @@ impl<T: FftNum> Sse32Butterfly4<T> {
 //     |_|            \___/   |_| |_.__/|_|\__|
 //
 
-pub struct Sse64Butterfly4<T> {
+pub struct SseF64Butterfly4<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    rotate: Rotate90_64,
+    rotate: Rotate90F64,
 }
 
-boilerplate_fft_sse_butterfly!(Sse64Butterfly4, 4, |this: &Sse64Butterfly4<_>| this
+boilerplate_fft_sse_butterfly!(SseF64Butterfly4, 4, |this: &SseF64Butterfly4<_>| this
     .direction);
-impl<T: FftNum> Sse64Butterfly4<T> {
+impl<T: FftNum> SseF64Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let rotate = if direction == FftDirection::Inverse {
-            Rotate90_64::new(true)
+            Rotate90F64::new(true)
         } else {
-            Rotate90_64::new(false)
+            Rotate90F64::new(false)
         };
 
         Self {
@@ -662,8 +662,8 @@ impl<T: FftNum> Sse64Butterfly4<T> {
         // step 1: transpose
         // and
         // step 2: column FFTs
-        let temp0 = single_fft2_64(value0, value2);
-        let mut temp1 = single_fft2_64(value1, value3);
+        let temp0 = solo_fft2_f64(value0, value2);
+        let mut temp1 = solo_fft2_f64(value1, value3);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
         temp1[1] = self.rotate.rotate(temp1[1]);
@@ -671,8 +671,8 @@ impl<T: FftNum> Sse64Butterfly4<T> {
         // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
         // step 5: row FFTs
-        let out0 = single_fft2_64(temp0[0], temp1[0]);
-        let out2 = single_fft2_64(temp0[1], temp1[1]);
+        let out0 = solo_fft2_f64(temp0[0], temp1[0]);
+        let out2 = solo_fft2_f64(temp0[1], temp1[1]);
 
         // step 6: transpose by swapping index 1 and 2
         [out0[0], out2[0], out0[1], out2[1]]
@@ -693,7 +693,7 @@ impl<T: FftNum> Sse64Butterfly4<T> {
 pub struct Sse32Butterfly5<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    rotate: Rotate90_32,
+    rotate: Rotate90F32,
     twiddle12re: __m128,
     twiddle21re: __m128,
     twiddle12im: __m128,
@@ -706,7 +706,7 @@ impl<T: FftNum> Sse32Butterfly5<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let rotate = Rotate90_32::new(true);
+        let rotate = Rotate90F32::new(true);
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 5, direction);
         let tw2: Complex<f32> = twiddles::compute_twiddle(2, 5, direction);
         let twiddle12re = unsafe { _mm_set_ps(tw2.re, tw2.re, tw1.re, tw1.re) };
@@ -758,14 +758,14 @@ impl<T: FftNum> Sse32Butterfly5<T> {
         value34: __m128,
     ) -> [__m128; 3] {
         // This is a SSE translation of the scalar 5-point butterfly 
-        let temp43 = reverse_32(value34);
+        let temp43 = reverse_f32(value34);
         let x1423p = _mm_add_ps(value12, temp43);
         let x1423n = _mm_sub_ps(value12, temp43);
 
-        let x1414p = duplicate_1st_32(x1423p); 
-        let x2323p = duplicate_2nd_32(x1423p); 
-        let x1414n = duplicate_1st_32(x1423n); 
-        let x2323n = duplicate_2nd_32(x1423n); 
+        let x1414p = duplicate_1st_f32(x1423p); 
+        let x2323p = duplicate_2nd_f32(x1423p); 
+        let x1414n = duplicate_1st_f32(x1423n); 
+        let x2323n = duplicate_2nd_f32(x1423n); 
 
         let temp_a1 = _mm_mul_ps(self.twiddle12re, x1414p);
         let temp_a2 = _mm_mul_ps(self.twiddle21re, x2323p);
@@ -796,23 +796,23 @@ impl<T: FftNum> Sse32Butterfly5<T> {
 //                                             
 
 
-pub struct Sse64Butterfly5<T> {
+pub struct SseF64Butterfly5<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    rotate: Rotate90_64,
+    rotate: Rotate90F64,
     twiddle1re: __m128d,
     twiddle1im: __m128d,
     twiddle2re: __m128d,
     twiddle2im: __m128d,
 }
 
-boilerplate_fft_sse_butterfly!(Sse64Butterfly5, 5, |this: &Sse64Butterfly5<_>| this
+boilerplate_fft_sse_butterfly!(SseF64Butterfly5, 5, |this: &SseF64Butterfly5<_>| this
     .direction);
-impl<T: FftNum> Sse64Butterfly5<T> {
+impl<T: FftNum> SseF64Butterfly5<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let rotate = Rotate90_64::new(true);
+        let rotate = Rotate90F64::new(true);
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 5, direction);
         let tw2: Complex<f64> = twiddles::compute_twiddle(2, 5, direction);
         let twiddle1re = unsafe { _mm_set_pd(tw1.re, tw1.re) };
@@ -902,24 +902,24 @@ impl<T: FftNum> Sse64Butterfly5<T> {
 //   \___/          |____/_____|_.__/|_|\__|
 //
 
-pub struct Sse32Butterfly8<T> {
+pub struct SseF32Butterfly8<T> {
     root2: __m128,
     direction: FftDirection,
-    bf4: Sse32Butterfly4<T>,
-    rotate90: Rotate90_32,
+    bf4: SseF32Butterfly4<T>,
+    rotate90: Rotate90F32,
 }
-boilerplate_fft_sse_butterfly!(Sse32Butterfly8, 8, |this: &Sse32Butterfly8<_>| this
+boilerplate_fft_sse_butterfly!(SseF32Butterfly8, 8, |this: &SseF32Butterfly8<_>| this
     .direction);
-impl<T: FftNum> Sse32Butterfly8<T> {
+impl<T: FftNum> SseF32Butterfly8<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let bf4 = Sse32Butterfly4::new(direction);
+        let bf4 = SseF32Butterfly4::new(direction);
         let root2 = unsafe { _mm_set_ps(0.5f32.sqrt(), 0.5f32.sqrt(), 1.0, 1.0) };
         let rotate90 = if direction == FftDirection::Inverse {
-            Rotate90_32::new(true)
+            Rotate90F32::new(true)
         } else {
-            Rotate90_32::new(false)
+            Rotate90F32::new(false)
         };
         Self {
             root2,
@@ -983,8 +983,8 @@ impl<T: FftNum> Sse32Butterfly8<T> {
         // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
 
         // step 5: row FFTs
-        let out0 = double_fft2_interleaved_32(val0[0], val2[0]);
-        let out1 = double_fft2_interleaved_32(val0[1], val2[1]);
+        let out0 = dual_fft2_interleaved_f32(val0[0], val2[0]);
+        let out1 = dual_fft2_interleaved_f32(val0[1], val2[1]);
 
         // step 6: rearrange and copy to buffer
         [out0[0], out1[0], out0[1], out1[1]]
@@ -998,24 +998,24 @@ impl<T: FftNum> Sse32Butterfly8<T> {
 //   \___/           \___/   |_| |_.__/|_|\__|
 //
 
-pub struct Sse64Butterfly8<T> {
+pub struct SseF64Butterfly8<T> {
     root2: __m128d,
     direction: FftDirection,
-    bf4: Sse64Butterfly4<T>,
-    rotate90: Rotate90_64,
+    bf4: SseF64Butterfly4<T>,
+    rotate90: Rotate90F64,
 }
-boilerplate_fft_sse_butterfly!(Sse64Butterfly8, 8, |this: &Sse64Butterfly8<_>| this
+boilerplate_fft_sse_butterfly!(SseF64Butterfly8, 8, |this: &SseF64Butterfly8<_>| this
     .direction);
-impl<T: FftNum> Sse64Butterfly8<T> {
+impl<T: FftNum> SseF64Butterfly8<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let bf4 = Sse64Butterfly4::new(direction);
+        let bf4 = SseF64Butterfly4::new(direction);
         let root2 = unsafe { _mm_load1_pd(&0.5f64.sqrt()) };
         let rotate90 = if direction == FftDirection::Inverse {
-            Rotate90_64::new(true)
+            Rotate90F64::new(true)
         } else {
-            Rotate90_64::new(false)
+            Rotate90F64::new(false)
         };
         Self {
             root2,
@@ -1081,10 +1081,10 @@ impl<T: FftNum> Sse64Butterfly8<T> {
         // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
 
         // step 5: row FFTs
-        let out0 = single_fft2_64(val03[0], val47[0]);
-        let out1 = single_fft2_64(val03[1], val47[1]);
-        let out2 = single_fft2_64(val03[2], val47[2]);
-        let out3 = single_fft2_64(val03[3], val47[3]);
+        let out0 = solo_fft2_f64(val03[0], val47[0]);
+        let out1 = solo_fft2_f64(val03[1], val47[1]);
+        let out2 = solo_fft2_f64(val03[2], val47[2]);
+        let out3 = solo_fft2_f64(val03[3], val47[3]);
 
         // step 6: rearrange and copy to buffer
         [
@@ -1100,29 +1100,29 @@ impl<T: FftNum> Sse64Butterfly8<T> {
 //  |_|\___/          |____/_____|_.__/|_|\__|
 //
 
-pub struct Sse32Butterfly16<T> {
+pub struct SseF32Butterfly16<T> {
     direction: FftDirection,
-    bf4: Sse32Butterfly4<T>,
-    bf8: Sse32Butterfly8<T>,
-    rotate90: Rotate90_32,
+    bf4: SseF32Butterfly4<T>,
+    bf8: SseF32Butterfly8<T>,
+    rotate90: Rotate90F32,
     twiddle01: __m128,
     twiddle23: __m128,
     twiddle01conj: __m128,
     twiddle23conj: __m128,
 }
 
-boilerplate_fft_sse_butterfly!(Sse32Butterfly16, 16, |this: &Sse32Butterfly16<_>| this
+boilerplate_fft_sse_butterfly!(SseF32Butterfly16, 16, |this: &SseF32Butterfly16<_>| this
     .direction);
-impl<T: FftNum> Sse32Butterfly16<T> {
+impl<T: FftNum> SseF32Butterfly16<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let bf8 = Sse32Butterfly8::new(direction);
-        let bf4 = Sse32Butterfly4::new(direction);
+        let bf8 = SseF32Butterfly8::new(direction);
+        let bf4 = SseF32Butterfly4::new(direction);
         let rotate90 = if direction == FftDirection::Inverse {
-            Rotate90_32::new(true)
+            Rotate90F32::new(true)
         } else {
-            Rotate90_32::new(false)
+            Rotate90F32::new(false)
         };
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 16, direction);
         let tw2: Complex<f32> = twiddles::compute_twiddle(2, 16, direction);
@@ -1185,15 +1185,15 @@ impl<T: FftNum> Sse32Butterfly16<T> {
     unsafe fn perform_fft_direct(&self, input: [__m128; 8]) -> [__m128; 8] {
         // we're going to hardcode a step of split radix
         // step 1: copy and reorder the input into the scratch
-        let in0002 = pack_1st_32(input[0], input[1]);
-        let in0406 = pack_1st_32(input[2], input[3]);
-        let in0810 = pack_1st_32(input[4], input[5]);
-        let in1214 = pack_1st_32(input[6], input[7]);
+        let in0002 = pack_1st_f32(input[0], input[1]);
+        let in0406 = pack_1st_f32(input[2], input[3]);
+        let in0810 = pack_1st_f32(input[4], input[5]);
+        let in1214 = pack_1st_f32(input[6], input[7]);
 
-        let in0105 = pack_2nd_32(input[0], input[2]);
-        let in0913 = pack_2nd_32(input[4], input[6]);
-        let in1503 = pack_2nd_32(input[7], input[1]);
-        let in0711 = pack_2nd_32(input[3], input[5]);
+        let in0105 = pack_2nd_f32(input[0], input[2]);
+        let in0913 = pack_2nd_f32(input[4], input[6]);
+        let in1503 = pack_2nd_f32(input[7], input[1]);
+        let in0711 = pack_2nd_f32(input[3], input[5]);
 
         let in_evens = [in0002, in0406, in0810, in1214];
 
@@ -1203,15 +1203,15 @@ impl<T: FftNum> Sse32Butterfly16<T> {
         let mut odds3 = self.bf4.perform_fft_direct(in1503, in0711);
 
         // step 3: apply twiddle factors
-        odds1[0] = complex_double_mul_32(odds1[0], self.twiddle01);
-        odds3[0] = complex_double_mul_32(odds3[0], self.twiddle01conj);
+        odds1[0] = complex_dual_mul_f32(odds1[0], self.twiddle01);
+        odds3[0] = complex_dual_mul_f32(odds3[0], self.twiddle01conj);
 
-        odds1[1] = complex_double_mul_32(odds1[1], self.twiddle23);
-        odds3[1] = complex_double_mul_32(odds3[1], self.twiddle23conj);
+        odds1[1] = complex_dual_mul_f32(odds1[1], self.twiddle23);
+        odds3[1] = complex_dual_mul_f32(odds3[1], self.twiddle23conj);
 
         // step 4: cross FFTs
-        let mut temp0 = double_fft2_interleaved_32(odds1[0], odds3[0]);
-        let mut temp1 = double_fft2_interleaved_32(odds1[1], odds3[1]);
+        let mut temp0 = dual_fft2_interleaved_f32(odds1[0], odds3[0]);
+        let mut temp1 = dual_fft2_interleaved_f32(odds1[1], odds3[1]);
 
         // apply the butterfly 4 twiddle factor, which is just a rotation
         temp0[1] = self.rotate90.rotate_both(temp0[1]);
@@ -1238,11 +1238,11 @@ impl<T: FftNum> Sse32Butterfly16<T> {
 //  |_|\___/           \___/   |_| |_.__/|_|\__|
 //
 
-pub struct Sse64Butterfly16<T> {
+pub struct SseF64Butterfly16<T> {
     direction: FftDirection,
-    bf4: Sse64Butterfly4<T>,
-    bf8: Sse64Butterfly8<T>,
-    rotate90: Rotate90_64,
+    bf4: SseF64Butterfly4<T>,
+    bf8: SseF64Butterfly8<T>,
+    rotate90: Rotate90F64,
     twiddle1: __m128d,
     twiddle2: __m128d,
     twiddle3: __m128d,
@@ -1251,18 +1251,18 @@ pub struct Sse64Butterfly16<T> {
     twiddle3c: __m128d,
 }
 
-boilerplate_fft_sse_butterfly!(Sse64Butterfly16, 16, |this: &Sse64Butterfly16<_>| this
+boilerplate_fft_sse_butterfly!(SseF64Butterfly16, 16, |this: &SseF64Butterfly16<_>| this
     .direction);
-impl<T: FftNum> Sse64Butterfly16<T> {
+impl<T: FftNum> SseF64Butterfly16<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let bf8 = Sse64Butterfly8::new(direction);
-        let bf4 = Sse64Butterfly4::new(direction);
+        let bf8 = SseF64Butterfly8::new(direction);
+        let bf4 = SseF64Butterfly4::new(direction);
         let rotate90 = if direction == FftDirection::Inverse {
-            Rotate90_64::new(true)
+            Rotate90F64::new(true)
         } else {
-            Rotate90_64::new(false)
+            Rotate90F64::new(false)
         };
         let twiddle1 =
             unsafe { _mm_loadu_pd(&twiddles::compute_twiddle(1, 16, direction).re as *const f64) };
@@ -1359,20 +1359,20 @@ impl<T: FftNum> Sse64Butterfly16<T> {
             .perform_fft_direct(input[15], input[3], input[7], input[11]);
 
         // step 3: apply twiddle factors
-        odds1[1] = complex_mul_64(odds1[1], self.twiddle1);
-        odds3[1] = complex_mul_64(odds3[1], self.twiddle1c);
+        odds1[1] = complex_mul_f64(odds1[1], self.twiddle1);
+        odds3[1] = complex_mul_f64(odds3[1], self.twiddle1c);
 
-        odds1[2] = complex_mul_64(odds1[2], self.twiddle2);
-        odds3[2] = complex_mul_64(odds3[2], self.twiddle2c);
+        odds1[2] = complex_mul_f64(odds1[2], self.twiddle2);
+        odds3[2] = complex_mul_f64(odds3[2], self.twiddle2c);
 
-        odds1[3] = complex_mul_64(odds1[3], self.twiddle3);
-        odds3[3] = complex_mul_64(odds3[3], self.twiddle3c);
+        odds1[3] = complex_mul_f64(odds1[3], self.twiddle3);
+        odds3[3] = complex_mul_f64(odds3[3], self.twiddle3c);
 
         // step 4: cross FFTs
-        let mut temp0 = single_fft2_64(odds1[0], odds3[0]);
-        let mut temp1 = single_fft2_64(odds1[1], odds3[1]);
-        let mut temp2 = single_fft2_64(odds1[2], odds3[2]);
-        let mut temp3 = single_fft2_64(odds1[3], odds3[3]);
+        let mut temp0 = solo_fft2_f64(odds1[0], odds3[0]);
+        let mut temp1 = solo_fft2_f64(odds1[1], odds3[1]);
+        let mut temp2 = solo_fft2_f64(odds1[2], odds3[2]);
+        let mut temp3 = solo_fft2_f64(odds1[3], odds3[3]);
 
         // apply the butterfly 4 twiddle factor, which is just a rotation
         temp0[1] = self.rotate90.rotate(temp0[1]);
@@ -1412,11 +1412,11 @@ impl<T: FftNum> Sse64Butterfly16<T> {
 //  |____/_____|         |____/_____|_.__/|_|\__|
 //
 
-pub struct Sse32Butterfly32<T> {
+pub struct SseF32Butterfly32<T> {
     direction: FftDirection,
-    bf8: Sse32Butterfly8<T>,
-    bf16: Sse32Butterfly16<T>,
-    rotate90: Rotate90_32,
+    bf8: SseF32Butterfly8<T>,
+    bf16: SseF32Butterfly16<T>,
+    rotate90: Rotate90F32,
     twiddle01: __m128,
     twiddle23: __m128,
     twiddle45: __m128,
@@ -1427,18 +1427,18 @@ pub struct Sse32Butterfly32<T> {
     twiddle67conj: __m128,
 }
 
-boilerplate_fft_sse_butterfly!(Sse32Butterfly32, 32, |this: &Sse32Butterfly32<_>| this
+boilerplate_fft_sse_butterfly!(SseF32Butterfly32, 32, |this: &SseF32Butterfly32<_>| this
     .direction);
-impl<T: FftNum> Sse32Butterfly32<T> {
+impl<T: FftNum> SseF32Butterfly32<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let bf8 = Sse32Butterfly8::new(direction);
-        let bf16 = Sse32Butterfly16::new(direction);
+        let bf8 = SseF32Butterfly8::new(direction);
+        let bf16 = SseF32Butterfly16::new(direction);
         let rotate90 = if direction == FftDirection::Inverse {
-            Rotate90_32::new(true)
+            Rotate90F32::new(true)
         } else {
-            Rotate90_32::new(false)
+            Rotate90F32::new(false)
         };
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 32, direction);
         let tw2: Complex<f32> = twiddles::compute_twiddle(2, 32, direction);
@@ -1496,24 +1496,24 @@ impl<T: FftNum> Sse32Butterfly32<T> {
         let in28 = _mm_loadu_ps(input.as_ptr().add(28) as *const f32);
         let in30 = _mm_loadu_ps(input.as_ptr().add(30) as *const f32);
 
-        let in0002 = pack_1st_32(in0, in2);
-        let in0406 = pack_1st_32(in4, in6);
-        let in0810 = pack_1st_32(in8, in10);
-        let in1214 = pack_1st_32(in12, in14);
-        let in1618 = pack_1st_32(in16, in18);
-        let in2022 = pack_1st_32(in20, in22);
-        let in2426 = pack_1st_32(in24, in26);
-        let in2830 = pack_1st_32(in28, in30);
+        let in0002 = pack_1st_f32(in0, in2);
+        let in0406 = pack_1st_f32(in4, in6);
+        let in0810 = pack_1st_f32(in8, in10);
+        let in1214 = pack_1st_f32(in12, in14);
+        let in1618 = pack_1st_f32(in16, in18);
+        let in2022 = pack_1st_f32(in20, in22);
+        let in2426 = pack_1st_f32(in24, in26);
+        let in2830 = pack_1st_f32(in28, in30);
 
-        let in0105 = pack_2nd_32(in0, in4);
-        let in0913 = pack_2nd_32(in8, in12);
-        let in1721 = pack_2nd_32(in16, in20);
-        let in2529 = pack_2nd_32(in24, in28);
+        let in0105 = pack_2nd_f32(in0, in4);
+        let in0913 = pack_2nd_f32(in8, in12);
+        let in1721 = pack_2nd_f32(in16, in20);
+        let in2529 = pack_2nd_f32(in24, in28);
 
-        let in3103 = pack_2nd_32(in30, in2);
-        let in0711 = pack_2nd_32(in6, in10);
-        let in1519 = pack_2nd_32(in14, in18);
-        let in2327 = pack_2nd_32(in22, in26);
+        let in3103 = pack_2nd_f32(in30, in2);
+        let in0711 = pack_2nd_f32(in6, in10);
+        let in1519 = pack_2nd_f32(in14, in18);
+        let in2327 = pack_2nd_f32(in22, in26);
 
         let in_evens = [
             in0002, in0406, in0810, in1214, in1618, in2022, in2426, in2830,
@@ -1529,23 +1529,23 @@ impl<T: FftNum> Sse32Butterfly32<T> {
             .perform_fft_direct([in3103, in0711, in1519, in2327]);
 
         // step 3: apply twiddle factors
-        odds1[0] = complex_double_mul_32(odds1[0], self.twiddle01);
-        odds3[0] = complex_double_mul_32(odds3[0], self.twiddle01conj);
+        odds1[0] = complex_dual_mul_f32(odds1[0], self.twiddle01);
+        odds3[0] = complex_dual_mul_f32(odds3[0], self.twiddle01conj);
 
-        odds1[1] = complex_double_mul_32(odds1[1], self.twiddle23);
-        odds3[1] = complex_double_mul_32(odds3[1], self.twiddle23conj);
+        odds1[1] = complex_dual_mul_f32(odds1[1], self.twiddle23);
+        odds3[1] = complex_dual_mul_f32(odds3[1], self.twiddle23conj);
 
-        odds1[2] = complex_double_mul_32(odds1[2], self.twiddle45);
-        odds3[2] = complex_double_mul_32(odds3[2], self.twiddle45conj);
+        odds1[2] = complex_dual_mul_f32(odds1[2], self.twiddle45);
+        odds3[2] = complex_dual_mul_f32(odds3[2], self.twiddle45conj);
 
-        odds1[3] = complex_double_mul_32(odds1[3], self.twiddle67);
-        odds3[3] = complex_double_mul_32(odds3[3], self.twiddle67conj);
+        odds1[3] = complex_dual_mul_f32(odds1[3], self.twiddle67);
+        odds3[3] = complex_dual_mul_f32(odds3[3], self.twiddle67conj);
 
         // step 4: cross FFTs
-        let mut temp0 = double_fft2_interleaved_32(odds1[0], odds3[0]);
-        let mut temp1 = double_fft2_interleaved_32(odds1[1], odds3[1]);
-        let mut temp2 = double_fft2_interleaved_32(odds1[2], odds3[2]);
-        let mut temp3 = double_fft2_interleaved_32(odds1[3], odds3[3]);
+        let mut temp0 = dual_fft2_interleaved_f32(odds1[0], odds3[0]);
+        let mut temp1 = dual_fft2_interleaved_f32(odds1[1], odds3[1]);
+        let mut temp2 = dual_fft2_interleaved_f32(odds1[2], odds3[2]);
+        let mut temp3 = dual_fft2_interleaved_f32(odds1[3], odds3[3]);
 
         // apply the butterfly 4 twiddle factor, which is just a rotation
         temp0[1] = self.rotate90.rotate_both(temp0[1]);
@@ -1631,11 +1631,11 @@ impl<T: FftNum> Sse32Butterfly32<T> {
 //  |____/_____|          \___/   |_| |_.__/|_|\__|
 //
 
-pub struct Sse64Butterfly32<T> {
+pub struct SseF64Butterfly32<T> {
     direction: FftDirection,
-    bf8: Sse64Butterfly8<T>,
-    bf16: Sse64Butterfly16<T>,
-    rotate90: Rotate90_64,
+    bf8: SseF64Butterfly8<T>,
+    bf16: SseF64Butterfly16<T>,
+    rotate90: Rotate90F64,
     twiddle1: __m128d,
     twiddle2: __m128d,
     twiddle3: __m128d,
@@ -1652,18 +1652,18 @@ pub struct Sse64Butterfly32<T> {
     twiddle7c: __m128d,
 }
 
-boilerplate_fft_sse_butterfly!(Sse64Butterfly32, 32, |this: &Sse64Butterfly32<_>| this
+boilerplate_fft_sse_butterfly!(SseF64Butterfly32, 32, |this: &SseF64Butterfly32<_>| this
     .direction);
-impl<T: FftNum> Sse64Butterfly32<T> {
+impl<T: FftNum> SseF64Butterfly32<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let bf8 = Sse64Butterfly8::new(direction);
-        let bf16 = Sse64Butterfly16::new(direction);
+        let bf8 = SseF64Butterfly8::new(direction);
+        let bf16 = SseF64Butterfly16::new(direction);
         let rotate90 = if direction == FftDirection::Inverse {
-            Rotate90_64::new(true)
+            Rotate90F64::new(true)
         } else {
-            Rotate90_64::new(false)
+            Rotate90F64::new(false)
         };
         let twiddle1 =
             unsafe { _mm_loadu_pd(&twiddles::compute_twiddle(1, 32, direction).re as *const f64) };
@@ -1777,36 +1777,36 @@ impl<T: FftNum> Sse64Butterfly32<T> {
             .perform_fft_direct([in31, in3, in7, in11, in15, in19, in23, in27]);
 
         // step 3: apply twiddle factors
-        odds1[1] = complex_mul_64(odds1[1], self.twiddle1);
-        odds3[1] = complex_mul_64(odds3[1], self.twiddle1c);
+        odds1[1] = complex_mul_f64(odds1[1], self.twiddle1);
+        odds3[1] = complex_mul_f64(odds3[1], self.twiddle1c);
 
-        odds1[2] = complex_mul_64(odds1[2], self.twiddle2);
-        odds3[2] = complex_mul_64(odds3[2], self.twiddle2c);
+        odds1[2] = complex_mul_f64(odds1[2], self.twiddle2);
+        odds3[2] = complex_mul_f64(odds3[2], self.twiddle2c);
 
-        odds1[3] = complex_mul_64(odds1[3], self.twiddle3);
-        odds3[3] = complex_mul_64(odds3[3], self.twiddle3c);
+        odds1[3] = complex_mul_f64(odds1[3], self.twiddle3);
+        odds3[3] = complex_mul_f64(odds3[3], self.twiddle3c);
 
-        odds1[4] = complex_mul_64(odds1[4], self.twiddle4);
-        odds3[4] = complex_mul_64(odds3[4], self.twiddle4c);
+        odds1[4] = complex_mul_f64(odds1[4], self.twiddle4);
+        odds3[4] = complex_mul_f64(odds3[4], self.twiddle4c);
 
-        odds1[5] = complex_mul_64(odds1[5], self.twiddle5);
-        odds3[5] = complex_mul_64(odds3[5], self.twiddle5c);
+        odds1[5] = complex_mul_f64(odds1[5], self.twiddle5);
+        odds3[5] = complex_mul_f64(odds3[5], self.twiddle5c);
 
-        odds1[6] = complex_mul_64(odds1[6], self.twiddle6);
-        odds3[6] = complex_mul_64(odds3[6], self.twiddle6c);
+        odds1[6] = complex_mul_f64(odds1[6], self.twiddle6);
+        odds3[6] = complex_mul_f64(odds3[6], self.twiddle6c);
 
-        odds1[7] = complex_mul_64(odds1[7], self.twiddle7);
-        odds3[7] = complex_mul_64(odds3[7], self.twiddle7c);
+        odds1[7] = complex_mul_f64(odds1[7], self.twiddle7);
+        odds3[7] = complex_mul_f64(odds3[7], self.twiddle7c);
 
         // step 4: cross FFTs
-        let mut temp0 = single_fft2_64(odds1[0], odds3[0]);
-        let mut temp1 = single_fft2_64(odds1[1], odds3[1]);
-        let mut temp2 = single_fft2_64(odds1[2], odds3[2]);
-        let mut temp3 = single_fft2_64(odds1[3], odds3[3]);
-        let mut temp4 = single_fft2_64(odds1[4], odds3[4]);
-        let mut temp5 = single_fft2_64(odds1[5], odds3[5]);
-        let mut temp6 = single_fft2_64(odds1[6], odds3[6]);
-        let mut temp7 = single_fft2_64(odds1[7], odds3[7]);
+        let mut temp0 = solo_fft2_f64(odds1[0], odds3[0]);
+        let mut temp1 = solo_fft2_f64(odds1[1], odds3[1]);
+        let mut temp2 = solo_fft2_f64(odds1[2], odds3[2]);
+        let mut temp3 = solo_fft2_f64(odds1[3], odds3[3]);
+        let mut temp4 = solo_fft2_f64(odds1[4], odds3[4]);
+        let mut temp5 = solo_fft2_f64(odds1[5], odds3[5]);
+        let mut temp6 = solo_fft2_f64(odds1[6], odds3[6]);
+        let mut temp7 = solo_fft2_f64(odds1[7], odds3[7]);
 
         // apply the butterfly 4 twiddle factor, which is just a rotation
         temp0[1] = self.rotate90.rotate(temp0[1]);
@@ -1941,13 +1941,13 @@ mod unit_tests {
             }
         };
     }
-    test_butterfly_32_func!(test_ssef32_butterfly2, Sse32Butterfly2, 2);
-    test_butterfly_32_func!(test_ssef32_butterfly3, Sse32Butterfly3, 3);
-    test_butterfly_32_func!(test_ssef32_butterfly4, Sse32Butterfly4, 4);
+    test_butterfly_32_func!(test_ssef32_butterfly2, SseF32Butterfly2, 2);
+    test_butterfly_32_func!(test_ssef32_butterfly3, SseF32Butterfly3, 3);
+    test_butterfly_32_func!(test_ssef32_butterfly4, SseF32Butterfly4, 4);
     test_butterfly_32_func!(test_ssef32_butterfly5, Sse32Butterfly5, 5);
-    test_butterfly_32_func!(test_ssef32_butterfly8, Sse32Butterfly8, 8);
-    test_butterfly_32_func!(test_ssef32_butterfly16, Sse32Butterfly16, 16);
-    test_butterfly_32_func!(test_ssef32_butterfly32, Sse32Butterfly32, 32);
+    test_butterfly_32_func!(test_ssef32_butterfly8, SseF32Butterfly8, 8);
+    test_butterfly_32_func!(test_ssef32_butterfly16, SseF32Butterfly16, 16);
+    test_butterfly_32_func!(test_ssef32_butterfly32, SseF32Butterfly32, 32);
 
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
@@ -1963,13 +1963,13 @@ mod unit_tests {
             }
         };
     }
-    test_butterfly_64_func!(test_ssef64_butterfly2, Sse64Butterfly2, 2);
-    test_butterfly_64_func!(test_ssef64_butterfly3, Sse64Butterfly3, 3);
-    test_butterfly_64_func!(test_ssef64_butterfly4, Sse64Butterfly4, 4);
-    test_butterfly_64_func!(test_ssef64_butterfly5, Sse64Butterfly5, 5);
-    test_butterfly_64_func!(test_ssef64_butterfly8, Sse64Butterfly8, 8);
-    test_butterfly_64_func!(test_ssef64_butterfly16, Sse64Butterfly16, 16);
-    test_butterfly_64_func!(test_ssef64_butterfly32, Sse64Butterfly32, 32);
+    test_butterfly_64_func!(test_ssef64_butterfly2, SseF64Butterfly2, 2);
+    test_butterfly_64_func!(test_ssef64_butterfly3, SseF64Butterfly3, 3);
+    test_butterfly_64_func!(test_ssef64_butterfly4, SseF64Butterfly4, 4);
+    test_butterfly_64_func!(test_ssef64_butterfly5, SseF64Butterfly5, 5);
+    test_butterfly_64_func!(test_ssef64_butterfly8, SseF64Butterfly8, 8);
+    test_butterfly_64_func!(test_ssef64_butterfly16, SseF64Butterfly16, 16);
+    test_butterfly_64_func!(test_ssef64_butterfly32, SseF64Butterfly32, 32);
 
     //#[test]
     //fn check_type() {
@@ -1991,7 +1991,7 @@ mod unit_tests {
 
     //#[test]
     //fn check_scalar_dummy() {
-    //    let butterfly = Sse64Butterfly16::new(FftDirection::Forward);
+    //    let butterfly = SseF64Butterfly16::new(FftDirection::Forward);
     //    let mut input = vec![Complex::new(1.0, 1.5), Complex::new(2.0, 2.4),Complex::new(7.0, 9.5),Complex::new(-4.0, -4.5),
     //                        Complex::new(-1.0, 5.5), Complex::new(3.3, 2.8),Complex::new(7.5, 3.5),Complex::new(-14.0, -6.5),
     //                        Complex::new(-7.6, 53.5), Complex::new(-4.3, 2.2),Complex::new(8.1, 1.123),Complex::new(-24.0, -16.5),
@@ -2003,7 +2003,7 @@ mod unit_tests {
     //
     //#[test]
     //fn check_scalar_dummy32() {
-    //    let butterfly = Sse32Butterfly16::new(FftDirection::Forward);
+    //    let butterfly = SseF32Butterfly16::new(FftDirection::Forward);
     //    let mut input = vec![Complex::new(1.0, 1.5), Complex::new(2.0, 2.4),Complex::new(7.0, 9.5),Complex::new(-4.0, -4.5),
     //                    Complex::new(-1.0, 5.5), Complex::new(3.3, 2.8),Complex::new(7.5, 3.5),Complex::new(-14.0, -6.5),
     //                    Complex::new(-7.6, 53.5), Complex::new(-4.3, 2.2),Complex::new(8.1, 1.123),Complex::new(-24.0, -16.5),
@@ -2015,7 +2015,7 @@ mod unit_tests {
 
     //#[test]
     //fn check_3_dummy() {
-    //    let butterfly = Sse64Butterfly3::new(FftDirection::Forward);
+    //    let butterfly = SseF64Butterfly3::new(FftDirection::Forward);
     //    let mut input = vec![Complex::new(1.0, 1.5), Complex::new(2.0, 2.4),Complex::new(7.0, 9.5)];
     //    let mut scratch = vec![Complex::<f64>::from(0.0); 0];
     //    butterfly.process_with_scratch(&mut input, &mut scratch);
@@ -2024,7 +2024,7 @@ mod unit_tests {
     //
     //#[test]
     //fn check_3_dummy32() {
-    //    let butterfly = Sse32Butterfly3::new(FftDirection::Forward);
+    //    let butterfly = SseF32Butterfly3::new(FftDirection::Forward);
     //    let mut input = vec![Complex::new(1.0, 1.5), Complex::new(2.0, 2.4),Complex::new(7.0, 9.5)];
     //    let mut scratch = vec![Complex::<f32>::from(0.0); 0];
     //    butterfly.process_with_scratch(&mut input, &mut scratch);
@@ -2032,13 +2032,13 @@ mod unit_tests {
     //}
 
     #[test]
-    fn test_complex_mul_64() {
+    fn test_complex_mul_f64() {
         unsafe {
             let right = _mm_set_pd(1.0, 2.0);
             let left = _mm_set_pd(5.0, 7.0);
             println!("left: {:?}", left);
             println!("right: {:?}", right);
-            let res = complex_mul_64(left, right);
+            let res = complex_mul_f64(left, right);
             println!("res: {:?}", res);
             let expected = _mm_set_pd(2.0 * 5.0 + 1.0 * 7.0, 2.0 * 7.0 - 1.0 * 5.0);
             assert_eq!(
@@ -2049,7 +2049,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_complex_double_mul_32() {
+    fn test_complex_dual_mul_f32() {
         unsafe {
             let val1 = Complex::<f32>::new(1.0, 2.5);
             let val2 = Complex::<f32>::new(3.2, 4.2);
@@ -2060,7 +2060,7 @@ mod unit_tests {
             let nbr1 = _mm_set_ps(val2.im, val2.re, val1.im, val1.re);
             println!("left: {:?}", nbr1);
             println!("right: {:?}", nbr2);
-            let res = complex_double_mul_32(nbr1, nbr2);
+            let res = complex_dual_mul_f32(nbr1, nbr2);
             let res = std::mem::transmute::<__m128, [Complex<f32>; 2]>(res);
             println!("res: {:?}", res);
             let expected = [val1 * val3, val2 * val4];
@@ -2091,7 +2091,7 @@ mod unit_tests {
 
             let dft = Dft::new(4, FftDirection::Forward);
 
-            let bf4 = Sse32Butterfly4::<f32>::new(FftDirection::Forward);
+            let bf4 = SseF32Butterfly4::<f32>::new(FftDirection::Forward);
 
             //println!("left: {:?}", nbr1);
             //println!("right: {:?}", nbr2);
@@ -2117,8 +2117,8 @@ mod unit_tests {
             let nbr1 = _mm_set_ps(4.0, 3.0, 2.0, 1.0);
             println!("nbr1: {:?}", nbr1);
             println!("nbr2: {:?}", nbr2);
-            let first = pack_1st_32(nbr1, nbr2);
-            let second = pack_2nd_32(nbr1, nbr2);
+            let first = pack_1st_f32(nbr1, nbr2);
+            let second = pack_2nd_f32(nbr1, nbr2);
             println!("first: {:?}", first);
             println!("second: {:?}", first);
             let first = std::mem::transmute::<__m128, [Complex<f32>; 2]>(first);
