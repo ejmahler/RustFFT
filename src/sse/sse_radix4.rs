@@ -83,10 +83,10 @@ impl<T: FftNum> Sse32Radix4<T> {
             0 => (len, Sse32Butterfly::Len1(SseF32Butterfly1::new(direction))),
             1 => (len, Sse32Butterfly::Len2(SseF32Butterfly2::new(direction))),
             2 => (len, Sse32Butterfly::Len4(SseF32Butterfly4::new(direction))),
-            3 => (len, Sse32Butterfly::Len8(SseF32Butterfly8::new(direction))),
+            //3 => (len, Sse32Butterfly::Len8(SseF32Butterfly8::new(direction))),
             _ => {
                 if num_bits % 2 == 1 {
-                    (32, Sse32Butterfly::Len32(SseF32Butterfly32::new(direction)))
+                    (8, Sse32Butterfly::Len8(SseF32Butterfly8::new(direction)))
                 } else {
                     (16, Sse32Butterfly::Len16(SseF32Butterfly16::new(direction)))
                 }
@@ -515,7 +515,7 @@ mod unit_tests {
 
     #[test]
     fn test_sse_radix4_64() {
-        for pow in 0..8 {
+        for pow in 0..10 {
             let len = 1 << pow;
             test_sse_radix4_64_with_length(len, FftDirection::Forward);
             test_sse_radix4_64_with_length(len, FftDirection::Inverse);
@@ -545,7 +545,7 @@ mod unit_tests {
 
     #[test]
     fn test_sse_radix4_32() {
-        for pow in 0..8 {
+        for pow in 0..10 {
             let len = 1 << pow;
             test_sse_radix4_32_with_length(len, FftDirection::Forward);
             test_sse_radix4_32_with_length(len, FftDirection::Inverse);
