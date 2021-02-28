@@ -5,12 +5,12 @@ use core::arch::x86_64::*;
 use crate::array_utils;
 use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::sse::sse_butterflies::{
-    Sse32Butterfly1, Sse32Butterfly16, Sse32Butterfly2, Sse32Butterfly32, Sse32Butterfly4,
-    Sse32Butterfly8,
+    SseF32Butterfly1, SseF32Butterfly16, SseF32Butterfly2, SseF32Butterfly32, SseF32Butterfly4,
+    SseF32Butterfly8,
 };
 use crate::sse::sse_butterflies::{
-    Sse64Butterfly1, Sse64Butterfly16, Sse64Butterfly2, Sse64Butterfly32, Sse64Butterfly4,
-    Sse64Butterfly8,
+    SseF64Butterfly1, SseF64Butterfly16, SseF64Butterfly2, SseF64Butterfly32, SseF64Butterfly4,
+    SseF64Butterfly8,
 };
 use crate::{
     //array_utils::{RawSlice, RawSliceMut},
@@ -38,21 +38,21 @@ use super::sse_utils::*;
 /// ~~~
 
 enum Sse32Butterfly<T> {
-    Len1(Sse32Butterfly1<T>),
-    Len2(Sse32Butterfly2<T>),
-    Len4(Sse32Butterfly4<T>),
-    Len8(Sse32Butterfly8<T>),
-    Len16(Sse32Butterfly16<T>),
-    Len32(Sse32Butterfly32<T>),
+    Len1(SseF32Butterfly1<T>),
+    Len2(SseF32Butterfly2<T>),
+    Len4(SseF32Butterfly4<T>),
+    Len8(SseF32Butterfly8<T>),
+    Len16(SseF32Butterfly16<T>),
+    Len32(SseF32Butterfly32<T>),
 }
 
 enum Sse64Butterfly<T> {
-    Len1(Sse64Butterfly1<T>),
-    Len2(Sse64Butterfly2<T>),
-    Len4(Sse64Butterfly4<T>),
-    Len8(Sse64Butterfly8<T>),
-    Len16(Sse64Butterfly16<T>),
-    Len32(Sse64Butterfly32<T>),
+    Len1(SseF64Butterfly1<T>),
+    Len2(SseF64Butterfly2<T>),
+    Len4(SseF64Butterfly4<T>),
+    Len8(SseF64Butterfly8<T>),
+    Len16(SseF64Butterfly16<T>),
+    Len32(SseF64Butterfly32<T>),
 }
 
 pub struct Sse32Radix4<T> {
@@ -64,7 +64,7 @@ pub struct Sse32Radix4<T> {
 
     len: usize,
     direction: FftDirection,
-    bf4: Sse32Butterfly4<T>,
+    bf4: SseF32Butterfly4<T>,
 }
 
 impl<T: FftNum> Sse32Radix4<T> {
@@ -80,15 +80,15 @@ impl<T: FftNum> Sse32Radix4<T> {
         // figure out which base length we're going to use
         let num_bits = len.trailing_zeros();
         let (base_len, base_fft) = match num_bits {
-            0 => (len, Sse32Butterfly::Len1(Sse32Butterfly1::new(direction))),
-            1 => (len, Sse32Butterfly::Len2(Sse32Butterfly2::new(direction))),
-            2 => (len, Sse32Butterfly::Len4(Sse32Butterfly4::new(direction))),
-            3 => (len, Sse32Butterfly::Len8(Sse32Butterfly8::new(direction))),
+            0 => (len, Sse32Butterfly::Len1(SseF32Butterfly1::new(direction))),
+            1 => (len, Sse32Butterfly::Len2(SseF32Butterfly2::new(direction))),
+            2 => (len, Sse32Butterfly::Len4(SseF32Butterfly4::new(direction))),
+            3 => (len, Sse32Butterfly::Len8(SseF32Butterfly8::new(direction))),
             _ => {
                 if num_bits % 2 == 1 {
-                    (32, Sse32Butterfly::Len32(Sse32Butterfly32::new(direction)))
+                    (32, Sse32Butterfly::Len32(SseF32Butterfly32::new(direction)))
                 } else {
-                    (16, Sse32Butterfly::Len16(Sse32Butterfly16::new(direction)))
+                    (16, Sse32Butterfly::Len16(SseF32Butterfly16::new(direction)))
                 }
             }
         };
@@ -131,7 +131,7 @@ impl<T: FftNum> Sse32Radix4<T> {
             len,
             direction,
             _phantom: std::marker::PhantomData,
-            bf4: Sse32Butterfly4::<T>::new(direction),
+            bf4: SseF32Butterfly4::<T>::new(direction),
         }
     }
 
@@ -225,7 +225,7 @@ unsafe fn butterfly_4_32<T: FftNum>(
     data: &mut [Complex<T>],
     twiddles: &[__m128],
     num_ffts: usize,
-    bf4: &Sse32Butterfly4<T>,
+    bf4: &SseF32Butterfly4<T>,
 ) {
     let mut idx = 0usize;
     let mut tw_idx = 0usize;
@@ -244,8 +244,8 @@ unsafe fn butterfly_4_32<T: FftNum>(
             output_slice.add(idx + 3 * num_ffts) as *const f64,
         ));
 
-        scratch0 = complex_double_mul_32(scratch0, twiddles[tw_idx]);
-        scratch2 = complex_double_mul_32(scratch2, twiddles[tw_idx + 1]);
+        scratch0 = complex_dual_mul_f32(scratch0, twiddles[tw_idx]);
+        scratch2 = complex_dual_mul_f32(scratch2, twiddles[tw_idx + 1]);
 
         let scratch = bf4.perform_fft_direct(scratch0, scratch2);
 
@@ -280,12 +280,12 @@ unsafe fn butterfly_4_32<T: FftNum>(
         let mut scratch3 = _mm_loadu_ps(output_slice.add(idx + 3 * num_ffts) as *const f32);
         let mut scratch3b = _mm_loadu_ps(output_slice.add(idx+2 + 3 * num_ffts) as *const f32);
 
-        scratch1 = complex_double_mul_32(scratch1, twiddles[tw_idx]);
-        scratch2 = complex_double_mul_32(scratch2, twiddles[tw_idx + 1]);
-        scratch3 = complex_double_mul_32(scratch3, twiddles[tw_idx + 2]);
-        scratch1b = complex_double_mul_32(scratch1b, twiddles[tw_idx + 3]);
-        scratch2b = complex_double_mul_32(scratch2b, twiddles[tw_idx + 4]);
-        scratch3b = complex_double_mul_32(scratch3b, twiddles[tw_idx + 5]);
+        scratch1 = complex_dual_mul_f32(scratch1, twiddles[tw_idx]);
+        scratch2 = complex_dual_mul_f32(scratch2, twiddles[tw_idx + 1]);
+        scratch3 = complex_dual_mul_f32(scratch3, twiddles[tw_idx + 2]);
+        scratch1b = complex_dual_mul_f32(scratch1b, twiddles[tw_idx + 3]);
+        scratch2b = complex_dual_mul_f32(scratch2b, twiddles[tw_idx + 4]);
+        scratch3b = complex_dual_mul_f32(scratch3b, twiddles[tw_idx + 5]);
 
         let scratch = bf4.perform_double_fft_direct(scratch0, scratch1, scratch2, scratch3);
         let scratchb = bf4.perform_double_fft_direct(scratch0b, scratch1b, scratch2b, scratch3b);
@@ -315,7 +315,7 @@ pub struct Sse64Radix4<T> {
 
     len: usize,
     direction: FftDirection,
-    bf4: Sse64Butterfly4<T>,
+    bf4: SseF64Butterfly4<T>,
 }
 
 impl<T: FftNum> Sse64Radix4<T> {
@@ -332,15 +332,15 @@ impl<T: FftNum> Sse64Radix4<T> {
         // figure out which base length we're going to use
         let num_bits = len.trailing_zeros();
         let (base_len, base_fft) = match num_bits {
-            0 => (len, Sse64Butterfly::Len1(Sse64Butterfly1::new(direction))),
-            1 => (len, Sse64Butterfly::Len2(Sse64Butterfly2::new(direction))),
-            2 => (len, Sse64Butterfly::Len4(Sse64Butterfly4::new(direction))),
-            3 => (len, Sse64Butterfly::Len8(Sse64Butterfly8::new(direction))),
+            0 => (len, Sse64Butterfly::Len1(SseF64Butterfly1::new(direction))),
+            1 => (len, Sse64Butterfly::Len2(SseF64Butterfly2::new(direction))),
+            2 => (len, Sse64Butterfly::Len4(SseF64Butterfly4::new(direction))),
+            3 => (len, Sse64Butterfly::Len8(SseF64Butterfly8::new(direction))),
             _ => {
                 if num_bits % 2 == 1 {
-                    (32, Sse64Butterfly::Len32(Sse64Butterfly32::new(direction)))
+                    (32, Sse64Butterfly::Len32(SseF64Butterfly32::new(direction)))
                 } else {
-                    (16, Sse64Butterfly::Len16(Sse64Butterfly16::new(direction)))
+                    (16, Sse64Butterfly::Len16(SseF64Butterfly16::new(direction)))
                 }
             }
         };
@@ -375,7 +375,7 @@ impl<T: FftNum> Sse64Radix4<T> {
             len,
             direction,
             _phantom: std::marker::PhantomData,
-            bf4: Sse64Butterfly4::<T>::new(direction),
+            bf4: SseF64Butterfly4::<T>::new(direction),
         }
     }
 
@@ -469,7 +469,7 @@ unsafe fn butterfly_4_64<T: FftNum>(
     data: &mut [Complex<T>],
     twiddles: &[__m128d],
     num_ffts: usize,
-    bf4: &Sse64Butterfly4<T>,
+    bf4: &SseF64Butterfly4<T>,
 ) {
     let mut idx = 0usize;
     let mut tw_idx = 0usize;
@@ -484,12 +484,12 @@ unsafe fn butterfly_4_64<T: FftNum>(
         let mut scratch3 = _mm_loadu_pd(output_slice.add(idx + 3 * num_ffts) as *const f64);
         let mut scratch3b = _mm_loadu_pd(output_slice.add(idx+1 + 3 * num_ffts) as *const f64);
 
-        scratch1 = complex_mul_64(scratch1, twiddles[tw_idx]);
-        scratch2 = complex_mul_64(scratch2, twiddles[tw_idx + 1]);
-        scratch3 = complex_mul_64(scratch3, twiddles[tw_idx + 2]);
-        scratch1b = complex_mul_64(scratch1b, twiddles[tw_idx + 3]);
-        scratch2b = complex_mul_64(scratch2b, twiddles[tw_idx + 4]);
-        scratch3b = complex_mul_64(scratch3b, twiddles[tw_idx + 5]);
+        scratch1 = complex_mul_f64(scratch1, twiddles[tw_idx]);
+        scratch2 = complex_mul_f64(scratch2, twiddles[tw_idx + 1]);
+        scratch3 = complex_mul_f64(scratch3, twiddles[tw_idx + 2]);
+        scratch1b = complex_mul_f64(scratch1b, twiddles[tw_idx + 3]);
+        scratch2b = complex_mul_f64(scratch2b, twiddles[tw_idx + 4]);
+        scratch3b = complex_mul_f64(scratch3b, twiddles[tw_idx + 5]);
 
         let scratch = bf4.perform_fft_direct(scratch0, scratch1, scratch2, scratch3);
         let scratchb = bf4.perform_fft_direct(scratch0b, scratch1b, scratch2b, scratch3b);

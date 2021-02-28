@@ -7,13 +7,13 @@ use core::arch::x86_64::*;
 // |_|  |_|\__,_|\__|_| |_|         |____/_____|_.__/|_|\__|
 //
 
-pub struct Rotate90_32 {
+pub struct Rotate90F32 {
     //sign_1st: __m128,
     sign_2nd: __m128,
     sign_both: __m128,
 }
 
-impl Rotate90_32 {
+impl Rotate90F32 {
     pub fn new(positive: bool) -> Self {
         //let sign_1st = unsafe {
         //    if positive {
@@ -68,7 +68,7 @@ impl Rotate90_32 {
 // right: l1.re + l1.im, l2.re, l2.im
 // --> r1.re, r1.im, l1.re + l1.im
 #[inline(always)]
-pub unsafe fn pack_1st_32(left: __m128, right: __m128) -> __m128 {
+pub unsafe fn pack_1st_f32(left: __m128, right: __m128) -> __m128 {
     _mm_shuffle_ps(left, right, 0x44)
 }
 
@@ -77,7 +77,7 @@ pub unsafe fn pack_1st_32(left: __m128, right: __m128) -> __m128 {
 // right: l1.re + l1.im, l2.re, l2.im
 // --> r2.re, r2.im, l2.re + l2.im
 #[inline(always)]
-pub unsafe fn pack_2nd_32(left: __m128, right: __m128) -> __m128 {
+pub unsafe fn pack_2nd_f32(left: __m128, right: __m128) -> __m128 {
     _mm_shuffle_ps(left, right, 0xEE)
 }
 
@@ -85,7 +85,7 @@ pub unsafe fn pack_2nd_32(left: __m128, right: __m128) -> __m128 {
 // values: a.re + a.im, b.re, b.im 
 // --> b.re, b.im, a.re + a.im
 #[inline(always)]
-pub unsafe fn reverse_32(values: __m128) -> __m128 {
+pub unsafe fn reverse_f32(values: __m128) -> __m128 {
     _mm_shuffle_ps(values, values, 0x4E)
 }
 
@@ -93,7 +93,7 @@ pub unsafe fn reverse_32(values: __m128) -> __m128 {
 // values: a.re + a.im, b.re, b.im 
 // -->  a.re + a.im, -b.re, -b.im
 #[inline(always)]
-pub unsafe fn invert_2nd_32(values: __m128) -> __m128 {
+pub unsafe fn invert_2nd_f32(values: __m128) -> __m128 {
     _mm_xor_ps(values, _mm_set_ps(-0.0, -0.0, 0.0, 0.0))
 }
 
@@ -101,7 +101,7 @@ pub unsafe fn invert_2nd_32(values: __m128) -> __m128 {
 // values: a.re + a.im, b.re, b.im 
 // --> a.re + a.im, a.re + a.im
 #[inline(always)]
-pub unsafe fn duplicate_1st_32(values: __m128) -> __m128 {
+pub unsafe fn duplicate_1st_f32(values: __m128) -> __m128 {
     _mm_shuffle_ps(values, values, 0x44)
 }
 
@@ -109,12 +109,12 @@ pub unsafe fn duplicate_1st_32(values: __m128) -> __m128 {
 // values: a.re + a.im, b.re, b.im 
 // --> b.re + b.im, b.re + b.im
 #[inline(always)]
-pub unsafe fn duplicate_2nd_32(values: __m128) -> __m128 {
+pub unsafe fn duplicate_2nd_f32(values: __m128) -> __m128 {
     _mm_shuffle_ps(values, values, 0xEE)
 }
 
 #[inline(always)]
-pub unsafe fn complex_double_mul_32(left: __m128, right: __m128) -> __m128 {
+pub unsafe fn complex_dual_mul_f32(left: __m128, right: __m128) -> __m128 {
     //SSE3, from Intel performance manual
     let mut temp1 = _mm_shuffle_ps(right, right, 0xA0);
     let mut temp2 = _mm_shuffle_ps(right, right, 0xF5);
@@ -131,11 +131,11 @@ pub unsafe fn complex_double_mul_32(left: __m128, right: __m128) -> __m128 {
 // |_|  |_|\__,_|\__|_| |_|          \___/   |_| |_.__/|_|\__|
 //
 
-pub(crate) struct Rotate90_64 {
+pub(crate) struct Rotate90F64 {
     sign: __m128d,
 }
 
-impl Rotate90_64 {
+impl Rotate90F64 {
     pub fn new(positive: bool) -> Self {
         let sign = unsafe {
             if positive {
@@ -155,7 +155,7 @@ impl Rotate90_64 {
 }
 
 #[inline(always)]
-pub unsafe fn complex_mul_64(left: __m128d, right: __m128d) -> __m128d {
+pub unsafe fn complex_mul_f64(left: __m128d, right: __m128d) -> __m128d {
     // SSE2
     //let mul1 = _mm_mul_pd(left, right);
     //let right_flipped = _mm_shuffle_pd(right, right, 0x01);
@@ -181,7 +181,7 @@ mod unit_tests {
     use num_complex::Complex;
 
     #[inline(always)]
-    unsafe fn complex_mul_64(left: __m128d, right: __m128d) -> __m128d {
+    unsafe fn complex_mul_f64(left: __m128d, right: __m128d) -> __m128d {
         let mul1 = _mm_mul_pd(left, right);
         let right_flipped = _mm_shuffle_pd(right, right, 0x01);
         let mul2 = _mm_mul_pd(left, right_flipped);
@@ -193,13 +193,13 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_complex_mul_64() {
+    fn test_complex_mul_f64() {
         unsafe {
             let right = _mm_set_pd(1.0, 2.0);
             let left = _mm_set_pd(5.0, 7.0);
             println!("left: {:?}", left);
             println!("right: {:?}", right);
-            let res = complex_mul_64(left, right);
+            let res = complex_mul_f64(left, right);
             println!("res: {:?}", res);
             let expected = _mm_set_pd(2.0 * 5.0 + 1.0 * 7.0, 2.0 * 7.0 - 1.0 * 5.0);
             assert_eq!(
@@ -210,7 +210,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_complex_double_mul_32() {
+    fn test_complex_dual_mul_f32() {
         unsafe {
             let val1 = Complex::<f32>::new(1.0, 2.5);
             let val2 = Complex::<f32>::new(3.2, 4.2);
@@ -221,7 +221,7 @@ mod unit_tests {
             let nbr1 = _mm_set_ps(val2.im, val2.re, val1.im, val1.re);
             println!("left: {:?}", nbr1);
             println!("right: {:?}", nbr2);
-            let res = complex_double_mul_32(nbr1, nbr2);
+            let res = complex_dual_mul_f32(nbr1, nbr2);
             let res = std::mem::transmute::<__m128, [Complex<f32>; 2]>(res);
             println!("res: {:?}", res);
             let expected = [val1 * val3, val2 * val4];
@@ -236,8 +236,8 @@ mod unit_tests {
             let nbr1 = _mm_set_ps(4.0, 3.0, 2.0, 1.0);
             println!("nbr1: {:?}", nbr1);
             println!("nbr2: {:?}", nbr2);
-            let first = pack_1st_32(nbr1, nbr2);
-            let second = pack_2nd_32(nbr1, nbr2);
+            let first = pack_1st_f32(nbr1, nbr2);
+            let second = pack_2nd_f32(nbr1, nbr2);
             println!("first: {:?}", first);
             println!("second: {:?}", first);
             let first = std::mem::transmute::<__m128, [Complex<f32>; 2]>(first);

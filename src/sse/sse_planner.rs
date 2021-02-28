@@ -250,36 +250,36 @@ impl<T: FftNum> FftPlannerSse<T> {
             }
             Recipe::Butterfly1 => {
                 if id_t == id_f32 {
-                    Arc::new(Sse32Butterfly1::new(direction)) as Arc<dyn Fft<T>>
+                    Arc::new(SseF32Butterfly1::new(direction)) as Arc<dyn Fft<T>>
                 } else if id_t == id_f64 {
-                    Arc::new(Sse64Butterfly1::new(direction)) as Arc<dyn Fft<T>>
+                    Arc::new(SseF64Butterfly1::new(direction)) as Arc<dyn Fft<T>>
                 } else {
                     panic!("Not f32 or f64");
                 }
             }
             Recipe::Butterfly2 => {
                 if id_t == id_f32 {
-                    Arc::new(Sse32Butterfly2::new(direction)) as Arc<dyn Fft<T>>
+                    Arc::new(SseF32Butterfly2::new(direction)) as Arc<dyn Fft<T>>
                 } else if id_t == id_f64 {
-                    Arc::new(Sse64Butterfly2::new(direction)) as Arc<dyn Fft<T>>
+                    Arc::new(SseF64Butterfly2::new(direction)) as Arc<dyn Fft<T>>
                 } else {
                     panic!("Not f32 or f64");
                 }
             }
             Recipe::Butterfly3 => {
                 if id_t == id_f32 {
-                    Arc::new(Sse32Butterfly3::new(direction)) as Arc<dyn Fft<T>>
+                    Arc::new(SseF32Butterfly3::new(direction)) as Arc<dyn Fft<T>>
                 } else if id_t == id_f64 {
-                    Arc::new(Sse64Butterfly3::new(direction)) as Arc<dyn Fft<T>>
+                    Arc::new(SseF64Butterfly3::new(direction)) as Arc<dyn Fft<T>>
                 } else {
                     panic!("Not f32 or f64");
                 }
             }
             Recipe::Butterfly4 => {
                 if id_t == id_f32 {
-                    Arc::new(Sse32Butterfly4::new(direction)) as Arc<dyn Fft<T>>
+                    Arc::new(SseF32Butterfly4::new(direction)) as Arc<dyn Fft<T>>
                 } else if id_t == id_f64 {
-                    Arc::new(Sse64Butterfly4::new(direction)) as Arc<dyn Fft<T>>
+                    Arc::new(SseF64Butterfly4::new(direction)) as Arc<dyn Fft<T>>
                 } else {
                     panic!("Not f32 or f64");
                 }
@@ -288,7 +288,7 @@ impl<T: FftNum> FftPlannerSse<T> {
                 if id_t == id_f32 {
                     Arc::new(Sse32Butterfly5::new(direction)) as Arc<dyn Fft<T>>
                 } else if id_t == id_f64 {
-                    Arc::new(Sse64Butterfly5::new(direction)) as Arc<dyn Fft<T>>
+                    Arc::new(SseF64Butterfly5::new(direction)) as Arc<dyn Fft<T>>
                 } else {
                     panic!("Not f32 or f64");
                 }
@@ -297,9 +297,9 @@ impl<T: FftNum> FftPlannerSse<T> {
             Recipe::Butterfly7 => Arc::new(Butterfly7::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly8 => {
                 if id_t == id_f32 {
-                    Arc::new(Sse32Butterfly8::new(direction)) as Arc<dyn Fft<T>>
+                    Arc::new(SseF32Butterfly8::new(direction)) as Arc<dyn Fft<T>>
                 } else if id_t == id_f64 {
-                    Arc::new(Sse64Butterfly8::new(direction)) as Arc<dyn Fft<T>>
+                    Arc::new(SseF64Butterfly8::new(direction)) as Arc<dyn Fft<T>>
                 } else {
                     panic!("Not f32 or f64");
                 }
@@ -308,9 +308,9 @@ impl<T: FftNum> FftPlannerSse<T> {
             Recipe::Butterfly13 => Arc::new(Butterfly13::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly16 => {
                 if id_t == id_f32 {
-                    Arc::new(Sse32Butterfly16::new(direction)) as Arc<dyn Fft<T>>
+                    Arc::new(SseF32Butterfly16::new(direction)) as Arc<dyn Fft<T>>
                 } else if id_t == id_f64 {
-                    Arc::new(Sse64Butterfly16::new(direction)) as Arc<dyn Fft<T>>
+                    Arc::new(SseF64Butterfly16::new(direction)) as Arc<dyn Fft<T>>
                 } else {
                     panic!("Not f32 or f64");
                 }
@@ -322,9 +322,9 @@ impl<T: FftNum> FftPlannerSse<T> {
             Recipe::Butterfly31 => Arc::new(Butterfly31::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly32 => {
                 if id_t == id_f32 {
-                    Arc::new(Sse32Butterfly32::new(direction)) as Arc<dyn Fft<T>>
+                    Arc::new(SseF32Butterfly32::new(direction)) as Arc<dyn Fft<T>>
                 } else if id_t == id_f64 {
-                    Arc::new(Sse64Butterfly32::new(direction)) as Arc<dyn Fft<T>>
+                    Arc::new(SseF64Butterfly32::new(direction)) as Arc<dyn Fft<T>>
                 } else {
                     panic!("Not f32 or f64");
                 }
