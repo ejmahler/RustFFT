@@ -564,7 +564,7 @@ impl<T: FftNum> SseF32Butterfly4<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_double_fft_direct(
+    pub(crate) unsafe fn perform_dual_fft_direct(
         &self,
         values0: __m128,
         values1: __m128,
@@ -2069,7 +2069,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_double_fft4_32() {
+    fn test_ddual_fft4_32() {
         unsafe {
             let val_a1 = Complex::<f32>::new(1.0, 2.5);
             let val_a2 = Complex::<f32>::new(3.2, 4.2);
@@ -2097,7 +2097,7 @@ mod unit_tests {
             //println!("right: {:?}", nbr2);
             dft.process(&mut val_a);
             dft.process(&mut val_b);
-            let res_both = bf4.perform_double_fft_direct(p1, p2, p3, p4);
+            let res_both = bf4.perform_dual_fft_direct(p1, p2, p3, p4);
 
             let res = std::mem::transmute::<[__m128; 4], [Complex<f32>; 8]>(res_both);
             println!("sse: {:?}", res);

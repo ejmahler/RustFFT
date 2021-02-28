@@ -287,8 +287,8 @@ unsafe fn butterfly_4_32<T: FftNum>(
         scratch2b = complex_dual_mul_f32(scratch2b, twiddles[tw_idx + 4]);
         scratch3b = complex_dual_mul_f32(scratch3b, twiddles[tw_idx + 5]);
 
-        let scratch = bf4.perform_double_fft_direct(scratch0, scratch1, scratch2, scratch3);
-        let scratchb = bf4.perform_double_fft_direct(scratch0b, scratch1b, scratch2b, scratch3b);
+        let scratch = bf4.perform_dual_fft_direct(scratch0, scratch1, scratch2, scratch3);
+        let scratchb = bf4.perform_dual_fft_direct(scratch0b, scratch1b, scratch2b, scratch3b);
 
         _mm_storeu_ps(output_slice.add(idx) as *mut f32, scratch[0]);
         _mm_storeu_ps(output_slice.add(idx+2) as *mut f32, scratchb[0]);
