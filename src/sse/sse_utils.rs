@@ -81,6 +81,24 @@ pub unsafe fn pack_2nd_f32(left: __m128, right: __m128) -> __m128 {
     _mm_shuffle_ps(left, right, 0xEE)
 }
 
+// Pack 1st and 2nd complex 
+// left: r1.re + r1.im, r2.re, r2.im 
+// right: l1.re + l1.im, l2.re, l2.im
+// --> r1.re, r1.im, l2.re + l2.im
+#[inline(always)]
+pub unsafe fn pack_1and2_f32(left: __m128, right: __m128) -> __m128 {
+    _mm_shuffle_ps(left, right, 0xE4)
+}
+
+// Pack 1st and 2nd complex 
+// left: r1.re + r1.im, r2.re, r2.im 
+// right: l1.re + l1.im, l2.re, l2.im
+// --> r1.re, r1.im, l2.re + l2.im
+#[inline(always)]
+pub unsafe fn pack_2and1_f32(left: __m128, right: __m128) -> __m128 {
+    _mm_shuffle_ps(left, right, 0x4E)
+}
+
 // Reverse complex 
 // values: a.re + a.im, b.re, b.im 
 // --> b.re, b.im, a.re + a.im
