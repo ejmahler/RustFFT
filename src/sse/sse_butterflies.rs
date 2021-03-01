@@ -1843,6 +1843,21 @@ pub struct SseF32Butterfly32<T> {
     twiddle23conj: __m128,
     twiddle45conj: __m128,
     twiddle67conj: __m128,
+    twiddle1: __m128,
+    twiddle2: __m128,
+    twiddle3: __m128,
+    twiddle4: __m128,
+    twiddle5: __m128,
+    twiddle6: __m128,
+    twiddle7: __m128,
+    twiddle1c: __m128,
+    twiddle2c: __m128,
+    twiddle3c: __m128,
+    twiddle4c: __m128,
+    twiddle5c: __m128,
+    twiddle6c: __m128,
+    twiddle7c: __m128,
+
 }
 
 boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly32, 32, |this: &SseF32Butterfly32<_>| this
@@ -1875,6 +1890,20 @@ impl<T: FftNum> SseF32Butterfly32<T> {
         let twiddle23conj = unsafe { _mm_set_ps(-tw3.im, tw3.re, -tw2.im, tw2.re) };
         let twiddle45conj = unsafe { _mm_set_ps(-tw5.im, tw5.re, -tw4.im, tw4.re) };
         let twiddle67conj = unsafe { _mm_set_ps(-tw7.im, tw7.re, -tw6.im, tw6.re) };
+        let twiddle1 = unsafe { _mm_set_ps(tw1.im, tw1.re, tw1.im, tw1.re) };
+        let twiddle2 = unsafe { _mm_set_ps(tw2.im, tw2.re, tw2.im, tw2.re) };
+        let twiddle3 = unsafe { _mm_set_ps(tw3.im, tw3.re, tw3.im, tw3.re) };
+        let twiddle4 = unsafe { _mm_set_ps(tw4.im, tw4.re, tw4.im, tw4.re) };
+        let twiddle5 = unsafe { _mm_set_ps(tw5.im, tw5.re, tw5.im, tw5.re) };
+        let twiddle6 = unsafe { _mm_set_ps(tw6.im, tw6.re, tw6.im, tw6.re) };
+        let twiddle7 = unsafe { _mm_set_ps(tw7.im, tw7.re, tw7.im, tw7.re) };
+        let twiddle1c = unsafe { _mm_set_ps(-tw1.im, tw1.re, -tw1.im, tw1.re) };
+        let twiddle2c = unsafe { _mm_set_ps(-tw2.im, tw2.re, -tw2.im, tw2.re) };
+        let twiddle3c = unsafe { _mm_set_ps(-tw3.im, tw3.re, -tw3.im, tw3.re) };
+        let twiddle4c = unsafe { _mm_set_ps(-tw4.im, tw4.re, -tw4.im, tw4.re) };
+        let twiddle5c = unsafe { _mm_set_ps(-tw5.im, tw5.re, -tw5.im, tw5.re) };
+        let twiddle6c = unsafe { _mm_set_ps(-tw6.im, tw6.re, -tw6.im, tw6.re) };
+        let twiddle7c = unsafe { _mm_set_ps(-tw7.im, tw7.re, -tw7.im, tw7.re) };
         Self {
             direction,
             bf8,
@@ -1888,6 +1917,20 @@ impl<T: FftNum> SseF32Butterfly32<T> {
             twiddle23conj,
             twiddle45conj,
             twiddle67conj,
+            twiddle1,
+            twiddle2,
+            twiddle3,
+            twiddle4,
+            twiddle5,
+            twiddle6,
+            twiddle7,
+            twiddle1c,
+            twiddle2c,
+            twiddle3c,
+            twiddle4c,
+            twiddle5c,
+            twiddle6c,
+            twiddle7c,
         }
     }
 
@@ -1897,8 +1940,6 @@ impl<T: FftNum> SseF32Butterfly32<T> {
         input: RawSlice<Complex<T>>,
         output: RawSliceMut<Complex<T>>,
     ) {
-        // we're going to hardcode a step of split radix
-        // step 1: copy and reorder the input into the scratch
         let in0 = _mm_loadu_ps(input.as_ptr() as *const f32);
         let in2 = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
         let in4 = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
@@ -1916,24 +1957,218 @@ impl<T: FftNum> SseF32Butterfly32<T> {
         let in28 = _mm_loadu_ps(input.as_ptr().add(28) as *const f32);
         let in30 = _mm_loadu_ps(input.as_ptr().add(30) as *const f32);
 
-        let in0002 = pack_1st_f32(in0, in2);
-        let in0406 = pack_1st_f32(in4, in6);
-        let in0810 = pack_1st_f32(in8, in10);
-        let in1214 = pack_1st_f32(in12, in14);
-        let in1618 = pack_1st_f32(in16, in18);
-        let in2022 = pack_1st_f32(in20, in22);
-        let in2426 = pack_1st_f32(in24, in26);
-        let in2830 = pack_1st_f32(in28, in30);
+        let result = self.perform_fft_direct([in0, in2, in4, in6, in8, in10, in12, in14, in16, in18, in20, in22, in24, in26, in28, in30]);
 
-        let in0105 = pack_2nd_f32(in0, in4);
-        let in0913 = pack_2nd_f32(in8, in12);
-        let in1721 = pack_2nd_f32(in16, in20);
-        let in2529 = pack_2nd_f32(in24, in28);
+        let values = std::mem::transmute::<[__m128; 16], [Complex<f32>; 32]>(result);
 
-        let in3103 = pack_2nd_f32(in30, in2);
-        let in0711 = pack_2nd_f32(in6, in10);
-        let in1519 = pack_2nd_f32(in14, in18);
-        let in2327 = pack_2nd_f32(in22, in26);
+        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
+        *output_slice.add(0) = values[0];
+        *output_slice.add(1) = values[1];
+        *output_slice.add(2) = values[2];
+        *output_slice.add(3) = values[3];
+        *output_slice.add(4) = values[4];
+        *output_slice.add(5) = values[5];
+        *output_slice.add(6) = values[6];
+        *output_slice.add(7) = values[7];
+        *output_slice.add(8) = values[8];
+        *output_slice.add(9) = values[9];
+        *output_slice.add(10) = values[10];
+        *output_slice.add(11) = values[11];
+        *output_slice.add(12) = values[12];
+        *output_slice.add(13) = values[13];
+        *output_slice.add(14) = values[14];
+        *output_slice.add(15) = values[15];
+        *output_slice.add(16) = values[16];
+        *output_slice.add(17) = values[17];
+        *output_slice.add(18) = values[18];
+        *output_slice.add(19) = values[19];
+        *output_slice.add(20) = values[20];
+        *output_slice.add(21) = values[21];
+        *output_slice.add(22) = values[22];
+        *output_slice.add(23) = values[23];
+        *output_slice.add(24) = values[24];
+        *output_slice.add(25) = values[25];
+        *output_slice.add(26) = values[26];
+        *output_slice.add(27) = values[27];
+        *output_slice.add(28) = values[28];
+        *output_slice.add(29) = values[29];
+        *output_slice.add(30) = values[30];
+        *output_slice.add(31) = values[31];
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_dual_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
+        let value01a = _mm_loadu_ps(input.as_ptr() as *const f32);
+        let value23a = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
+        let value45a = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
+        let value67a = _mm_loadu_ps(input.as_ptr().add(6) as *const f32);
+        let value89a = _mm_loadu_ps(input.as_ptr().add(8) as *const f32);
+        let value1011a = _mm_loadu_ps(input.as_ptr().add(10) as *const f32);
+        let value1213a = _mm_loadu_ps(input.as_ptr().add(12) as *const f32);
+        let value1415a = _mm_loadu_ps(input.as_ptr().add(14) as *const f32);
+        let value1617a = _mm_loadu_ps(input.as_ptr().add(16) as *const f32);
+        let value1819a = _mm_loadu_ps(input.as_ptr().add(18) as *const f32);
+        let value2021a = _mm_loadu_ps(input.as_ptr().add(20) as *const f32);
+        let value2223a = _mm_loadu_ps(input.as_ptr().add(22) as *const f32);
+        let value2425a = _mm_loadu_ps(input.as_ptr().add(24) as *const f32);
+        let value2627a = _mm_loadu_ps(input.as_ptr().add(26) as *const f32);
+        let value2829a = _mm_loadu_ps(input.as_ptr().add(28) as *const f32);
+        let value3031a = _mm_loadu_ps(input.as_ptr().add(30) as *const f32);
+        let value01b = _mm_loadu_ps(input.as_ptr().add(32) as *const f32);
+        let value23b = _mm_loadu_ps(input.as_ptr().add(34) as *const f32);
+        let value45b = _mm_loadu_ps(input.as_ptr().add(36) as *const f32);
+        let value67b = _mm_loadu_ps(input.as_ptr().add(38) as *const f32);
+        let value89b = _mm_loadu_ps(input.as_ptr().add(40) as *const f32);
+        let value1011b = _mm_loadu_ps(input.as_ptr().add(42) as *const f32);
+        let value1213b = _mm_loadu_ps(input.as_ptr().add(44) as *const f32);
+        let value1415b = _mm_loadu_ps(input.as_ptr().add(46) as *const f32);
+        let value1617b = _mm_loadu_ps(input.as_ptr().add(48) as *const f32);
+        let value1819b = _mm_loadu_ps(input.as_ptr().add(50) as *const f32);
+        let value2021b = _mm_loadu_ps(input.as_ptr().add(52) as *const f32);
+        let value2223b = _mm_loadu_ps(input.as_ptr().add(54) as *const f32);
+        let value2425b = _mm_loadu_ps(input.as_ptr().add(56) as *const f32);
+        let value2627b = _mm_loadu_ps(input.as_ptr().add(58) as *const f32);
+        let value2829b = _mm_loadu_ps(input.as_ptr().add(60) as *const f32);
+        let value3031b = _mm_loadu_ps(input.as_ptr().add(62) as *const f32);
+
+        let values0 = pack_1st_f32(value01a, value01b);
+        let values1 = pack_2nd_f32(value01a, value01b);
+        let values2 = pack_1st_f32(value23a, value23b);
+        let values3 = pack_2nd_f32(value23a, value23b);
+        let values4 = pack_1st_f32(value45a, value45b);
+        let values5 = pack_2nd_f32(value45a, value45b);
+        let values6 = pack_1st_f32(value67a, value67b);
+        let values7 = pack_2nd_f32(value67a, value67b);
+        let values8 = pack_1st_f32(value89a, value89b);
+        let values9 = pack_2nd_f32(value89a, value89b);
+        let values10 = pack_1st_f32(value1011a, value1011b);
+        let values11 = pack_2nd_f32(value1011a, value1011b);
+        let values12 = pack_1st_f32(value1213a, value1213b);
+        let values13 = pack_2nd_f32(value1213a, value1213b);
+        let values14 = pack_1st_f32(value1415a, value1415b);
+        let values15 = pack_2nd_f32(value1415a, value1415b);
+        let values16 = pack_1st_f32(value1617a, value1617b);
+        let values17 = pack_2nd_f32(value1617a, value1617b);
+        let values18 = pack_1st_f32(value1819a, value1819b);
+        let values19 = pack_2nd_f32(value1819a, value1819b);
+        let values20 = pack_1st_f32(value2021a, value2021b);
+        let values21 = pack_2nd_f32(value2021a, value2021b);
+        let values22 = pack_1st_f32(value2223a, value2223b);
+        let values23 = pack_2nd_f32(value2223a, value2223b);
+        let values24 = pack_1st_f32(value2425a, value2425b);
+        let values25 = pack_2nd_f32(value2425a, value2425b);
+        let values26 = pack_1st_f32(value2627a, value2627b);
+        let values27 = pack_2nd_f32(value2627a, value2627b);
+        let values28 = pack_1st_f32(value2829a, value2829b);
+        let values29 = pack_2nd_f32(value2829a, value2829b);
+        let values30 = pack_1st_f32(value3031a, value3031b);
+        let values31 = pack_2nd_f32(value3031a, value3031b);
+
+        let temp = self.perform_dual_fft_direct([values0, values1, values2, values3, values4, values5, values6, values7, values8, values9,
+                                                 values10, values11, values12, values13, values14, values15, values16, values17, values18, values19,
+                                                 values20, values21, values22, values23, values24, values25, values26, values27, values28, values29,
+                                                 values30, values31]);
+
+        let array = std::mem::transmute::<[__m128; 32], [Complex<f32>; 64]>(temp);
+
+        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
+
+        *output_slice.add(0) = array[0];
+        *output_slice.add(1) = array[2];
+        *output_slice.add(2) = array[4];
+        *output_slice.add(3) = array[6];
+        *output_slice.add(4) = array[8];
+        *output_slice.add(5) = array[10];
+        *output_slice.add(6) = array[12];
+        *output_slice.add(7) = array[14];
+        *output_slice.add(8) = array[16];
+        *output_slice.add(9) = array[18];
+        *output_slice.add(10) = array[20];
+        *output_slice.add(11) = array[22];
+        *output_slice.add(12) = array[24];
+        *output_slice.add(13) = array[26];
+        *output_slice.add(14) = array[28];
+        *output_slice.add(15) = array[30];
+        *output_slice.add(16) = array[32];
+        *output_slice.add(17) = array[34];
+        *output_slice.add(18) = array[36];
+        *output_slice.add(19) = array[38];
+        *output_slice.add(20) = array[40];
+        *output_slice.add(21) = array[42];
+        *output_slice.add(22) = array[44];
+        *output_slice.add(23) = array[46];
+        *output_slice.add(24) = array[48];
+        *output_slice.add(25) = array[50];
+        *output_slice.add(26) = array[52];
+        *output_slice.add(27) = array[54];
+        *output_slice.add(28) = array[56];
+        *output_slice.add(29) = array[58];
+        *output_slice.add(30) = array[60];
+        *output_slice.add(31) = array[62];
+
+        *output_slice.add(32) = array[1];
+        *output_slice.add(33) = array[3];
+        *output_slice.add(34) = array[5];
+        *output_slice.add(35) = array[7];
+        *output_slice.add(36) = array[9];
+        *output_slice.add(37) = array[11];
+        *output_slice.add(38) = array[13];
+        *output_slice.add(39) = array[15];
+        *output_slice.add(40) = array[17];
+        *output_slice.add(41) = array[19];
+        *output_slice.add(42) = array[21];
+        *output_slice.add(43) = array[23];
+        *output_slice.add(44) = array[25];
+        *output_slice.add(45) = array[27];
+        *output_slice.add(46) = array[29];
+        *output_slice.add(47) = array[31];
+        *output_slice.add(48) = array[33];
+        *output_slice.add(49) = array[35];
+        *output_slice.add(50) = array[37];
+        *output_slice.add(51) = array[39];
+        *output_slice.add(52) = array[41];
+        *output_slice.add(53) = array[43];
+        *output_slice.add(54) = array[45];
+        *output_slice.add(55) = array[47];
+        *output_slice.add(56) = array[49];
+        *output_slice.add(57) = array[51];
+        *output_slice.add(58) = array[53];
+        *output_slice.add(59) = array[55];
+        *output_slice.add(60) = array[57];
+        *output_slice.add(61) = array[59];
+        *output_slice.add(62) = array[61];
+        *output_slice.add(63) = array[63];
+    }
+    
+    #[inline(always)]
+    unsafe fn perform_fft_direct(
+        &self,
+        input: [__m128; 16]
+    ) -> [__m128; 16] {
+        // we're going to hardcode a step of split radix
+        // step 1: copy and reorder the input into the scratch
+        let in0002 = pack_1st_f32(input[0], input[1]);
+        let in0406 = pack_1st_f32(input[2], input[3]);
+        let in0810 = pack_1st_f32(input[4], input[5]);
+        let in1214 = pack_1st_f32(input[6], input[7]);
+        let in1618 = pack_1st_f32(input[8], input[9]);
+        let in2022 = pack_1st_f32(input[10], input[11]);
+        let in2426 = pack_1st_f32(input[12], input[13]);
+        let in2830 = pack_1st_f32(input[14], input[15]);
+
+        let in0105 = pack_2nd_f32(input[0], input[2]);
+        let in0913 = pack_2nd_f32(input[4], input[6]);
+        let in1721 = pack_2nd_f32(input[8], input[10]);
+        let in2529 = pack_2nd_f32(input[12], input[14]);
+
+        let in3103 = pack_2nd_f32(input[15], input[1]);
+        let in0711 = pack_2nd_f32(input[3], input[5]);
+        let in1519 = pack_2nd_f32(input[7], input[9]);
+        let in2327 = pack_2nd_f32(input[11], input[13]);
 
         let in_evens = [
             in0002, in0406, in0810, in1214, in1618, in2022, in2426, in2830,
@@ -1991,65 +2226,108 @@ impl<T: FftNum> SseF32Butterfly32<T> {
         let out14 = _mm_sub_ps(evens[6], temp2[1]);
         let out15 = _mm_sub_ps(evens[7], temp3[1]);
 
-        let val0 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(out0);
-        let val1 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(out1);
-        let val2 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(out2);
-        let val3 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(out3);
-        let val4 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(out4);
-        let val5 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(out5);
-        let val6 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(out6);
-        let val7 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(out7);
-        let val8 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(out8);
-        let val9 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(out9);
-        let val10 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(out10);
-        let val11 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(out11);
-        let val12 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(out12);
-        let val13 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(out13);
-        let val14 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(out14);
-        let val15 = std::mem::transmute::<__m128, [Complex<f32>; 2]>(out15);
-
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-        *output_slice.add(0) = val0[0];
-        *output_slice.add(1) = val0[1];
-        *output_slice.add(2) = val1[0];
-        *output_slice.add(3) = val1[1];
-        *output_slice.add(4) = val2[0];
-        *output_slice.add(5) = val2[1];
-        *output_slice.add(6) = val3[0];
-        *output_slice.add(7) = val3[1];
-        *output_slice.add(8) = val4[0];
-        *output_slice.add(9) = val4[1];
-        *output_slice.add(10) = val5[0];
-        *output_slice.add(11) = val5[1];
-        *output_slice.add(12) = val6[0];
-        *output_slice.add(13) = val6[1];
-        *output_slice.add(14) = val7[0];
-        *output_slice.add(15) = val7[1];
-        *output_slice.add(16) = val8[0];
-        *output_slice.add(17) = val8[1];
-        *output_slice.add(18) = val9[0];
-        *output_slice.add(19) = val9[1];
-        *output_slice.add(20) = val10[0];
-        *output_slice.add(21) = val10[1];
-        *output_slice.add(22) = val11[0];
-        *output_slice.add(23) = val11[1];
-        *output_slice.add(24) = val12[0];
-        *output_slice.add(25) = val12[1];
-        *output_slice.add(26) = val13[0];
-        *output_slice.add(27) = val13[1];
-        *output_slice.add(28) = val14[0];
-        *output_slice.add(29) = val14[1];
-        *output_slice.add(30) = val15[0];
-        *output_slice.add(31) = val15[1];
+        [out0, out1, out2, out3, out4, out5, out6, out7, out8, out9, out10, out11, out12, out13, out14, out15]
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_contiguous(
+    pub(crate) unsafe fn perform_dual_fft_direct(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
-    ) {
-        panic!("not done yet");
+        input: [__m128; 32]
+    ) -> [__m128; 32] {
+        // we're going to hardcode a step of split radix
+        // step 1: copy and reorder the  input into the scratch
+        // step 2: column FFTs
+        let evens = self.bf16.perform_dual_fft_direct([
+            input[0], input[2], input[4], input[6], input[8], input[10], input[12], input[14], input[16], input[18], input[20], input[22], input[24], input[26], input[28],
+            input[30],
+        ]);
+        let mut odds1 = self
+            .bf8
+            .perform_dual_fft_direct([input[1], input[5], input[9], input[13], input[17], input[21], input[25], input[29]]);
+        let mut odds3 = self
+            .bf8
+            .perform_dual_fft_direct([input[31], input[3], input[7], input[11], input[15], input[19], input[23], input[27]]);
+
+        // step 3: apply twiddle factors
+        odds1[1] = complex_dual_mul_f32(odds1[1], self.twiddle1);
+        odds3[1] = complex_dual_mul_f32(odds3[1], self.twiddle1c);
+
+        odds1[2] = complex_dual_mul_f32(odds1[2], self.twiddle2);
+        odds3[2] = complex_dual_mul_f32(odds3[2], self.twiddle2c);
+
+        odds1[3] = complex_dual_mul_f32(odds1[3], self.twiddle3);
+        odds3[3] = complex_dual_mul_f32(odds3[3], self.twiddle3c);
+
+        odds1[4] = complex_dual_mul_f32(odds1[4], self.twiddle4);
+        odds3[4] = complex_dual_mul_f32(odds3[4], self.twiddle4c);
+
+        odds1[5] = complex_dual_mul_f32(odds1[5], self.twiddle5);
+        odds3[5] = complex_dual_mul_f32(odds3[5], self.twiddle5c);
+
+        odds1[6] = complex_dual_mul_f32(odds1[6], self.twiddle6);
+        odds3[6] = complex_dual_mul_f32(odds3[6], self.twiddle6c);
+
+        odds1[7] = complex_dual_mul_f32(odds1[7], self.twiddle7);
+        odds3[7] = complex_dual_mul_f32(odds3[7], self.twiddle7c);
+
+        // step 4: cross FFTs
+        let mut temp0 = dual_fft2_interleaved_f32(odds1[0], odds3[0]);
+        let mut temp1 = dual_fft2_interleaved_f32(odds1[1], odds3[1]);
+        let mut temp2 = dual_fft2_interleaved_f32(odds1[2], odds3[2]);
+        let mut temp3 = dual_fft2_interleaved_f32(odds1[3], odds3[3]);
+        let mut temp4 = dual_fft2_interleaved_f32(odds1[4], odds3[4]);
+        let mut temp5 = dual_fft2_interleaved_f32(odds1[5], odds3[5]);
+        let mut temp6 = dual_fft2_interleaved_f32(odds1[6], odds3[6]);
+        let mut temp7 = dual_fft2_interleaved_f32(odds1[7], odds3[7]);
+
+        // apply the butterfly 4 twiddle factor, which is just a rotation
+        temp0[1] = self.rotate90.rotate_both(temp0[1]);
+        temp1[1] = self.rotate90.rotate_both(temp1[1]);
+        temp2[1] = self.rotate90.rotate_both(temp2[1]);
+        temp3[1] = self.rotate90.rotate_both(temp3[1]);
+        temp4[1] = self.rotate90.rotate_both(temp4[1]);
+        temp5[1] = self.rotate90.rotate_both(temp5[1]);
+        temp6[1] = self.rotate90.rotate_both(temp6[1]);
+        temp7[1] = self.rotate90.rotate_both(temp7[1]);
+
+        //step 5: copy/add/subtract data back to buffer
+        let out0 = _mm_add_ps(evens[0], temp0[0]);
+        let out1 = _mm_add_ps(evens[1], temp1[0]);
+        let out2 = _mm_add_ps(evens[2], temp2[0]);
+        let out3 = _mm_add_ps(evens[3], temp3[0]);
+        let out4 = _mm_add_ps(evens[4], temp4[0]);
+        let out5 = _mm_add_ps(evens[5], temp5[0]);
+        let out6 = _mm_add_ps(evens[6], temp6[0]);
+        let out7 = _mm_add_ps(evens[7], temp7[0]);
+        let out8 = _mm_add_ps(evens[8], temp0[1]);
+        let out9 = _mm_add_ps(evens[9], temp1[1]);
+        let out10 = _mm_add_ps(evens[10], temp2[1]);
+        let out11 = _mm_add_ps(evens[11], temp3[1]);
+        let out12 = _mm_add_ps(evens[12], temp4[1]);
+        let out13 = _mm_add_ps(evens[13], temp5[1]);
+        let out14 = _mm_add_ps(evens[14], temp6[1]);
+        let out15 = _mm_add_ps(evens[15], temp7[1]);
+        let out16 = _mm_sub_ps(evens[0], temp0[0]);
+        let out17 = _mm_sub_ps(evens[1], temp1[0]);
+        let out18 = _mm_sub_ps(evens[2], temp2[0]);
+        let out19 = _mm_sub_ps(evens[3], temp3[0]);
+        let out20 = _mm_sub_ps(evens[4], temp4[0]);
+        let out21 = _mm_sub_ps(evens[5], temp5[0]);
+        let out22 = _mm_sub_ps(evens[6], temp6[0]);
+        let out23 = _mm_sub_ps(evens[7], temp7[0]);
+        let out24 = _mm_sub_ps(evens[8], temp0[1]);
+        let out25 = _mm_sub_ps(evens[9], temp1[1]);
+        let out26 = _mm_sub_ps(evens[10], temp2[1]);
+        let out27 = _mm_sub_ps(evens[11], temp3[1]);
+        let out28 = _mm_sub_ps(evens[12], temp4[1]);
+        let out29 = _mm_sub_ps(evens[13], temp5[1]);
+        let out30 = _mm_sub_ps(evens[14], temp6[1]);
+        let out31 = _mm_sub_ps(evens[15], temp7[1]);
+
+        [out0, out1, out2, out3, out4, out5, out6, out7, out8, out9, 
+        out10, out11, out12, out13, out14, out15, out16, out17, out18, out19,
+        out20, out21, out22, out23, out24, out25, out26, out27, out28, out29,
+        out30, out31]
     }
 }
 
@@ -2160,8 +2438,6 @@ impl<T: FftNum> SseF64Butterfly32<T> {
         input: RawSlice<Complex<T>>,
         output: RawSliceMut<Complex<T>>,
     ) {
-        // we're going to hardcode a step of split radix
-        // step 1: copy and reorder the  input into the scratch
         let in0 = _mm_loadu_pd(input.as_ptr() as *const f64);
         let in1 = _mm_loadu_pd(input.as_ptr().add(1) as *const f64);
         let in2 = _mm_loadu_pd(input.as_ptr().add(2) as *const f64);
@@ -2195,17 +2471,68 @@ impl<T: FftNum> SseF64Butterfly32<T> {
         let in30 = _mm_loadu_pd(input.as_ptr().add(30) as *const f64);
         let in31 = _mm_loadu_pd(input.as_ptr().add(31) as *const f64);
 
+        let result = self.perform_fft_direct([
+            in0, in1, in2, in3, in4, in5, in6, in7, in8, in9, 
+            in10, in11, in12, in13, in14, in15, in16, in17, in18, in19,
+            in20, in21, in22, in23, in24, in25, in26, in27, in28, in29,
+            in30, in31
+        ]);
+
+        let values = std::mem::transmute::<[__m128d; 32], [Complex<f64>; 32]>(result);
+
+        let output_slice = output.as_mut_ptr() as *mut Complex<f64>;
+        *output_slice.add(0) = values[0];
+        *output_slice.add(1) = values[1];
+        *output_slice.add(2) = values[2];
+        *output_slice.add(3) = values[3];
+        *output_slice.add(4) = values[4];
+        *output_slice.add(5) = values[5];
+        *output_slice.add(6) = values[6];
+        *output_slice.add(7) = values[7];
+        *output_slice.add(8) = values[8];
+        *output_slice.add(9) = values[9];
+        *output_slice.add(10) = values[10];
+        *output_slice.add(11) = values[11];
+        *output_slice.add(12) = values[12];
+        *output_slice.add(13) = values[13];
+        *output_slice.add(14) = values[14];
+        *output_slice.add(15) = values[15];
+        *output_slice.add(16) = values[16];
+        *output_slice.add(17) = values[17];
+        *output_slice.add(18) = values[18];
+        *output_slice.add(19) = values[19];
+        *output_slice.add(20) = values[20];
+        *output_slice.add(21) = values[21];
+        *output_slice.add(22) = values[22];
+        *output_slice.add(23) = values[23];
+        *output_slice.add(24) = values[24];
+        *output_slice.add(25) = values[25];
+        *output_slice.add(26) = values[26];
+        *output_slice.add(27) = values[27];
+        *output_slice.add(28) = values[28];
+        *output_slice.add(29) = values[29];
+        *output_slice.add(30) = values[30];
+        *output_slice.add(31) = values[31];
+    }
+
+    #[inline(always)]
+    unsafe fn perform_fft_direct(
+        &self,
+        input: [__m128d; 32]
+    ) -> [__m128d; 32] {
+        // we're going to hardcode a step of split radix
+        // step 1: copy and reorder the  input into the scratch
         // step 2: column FFTs
         let evens = self.bf16.perform_fft_direct([
-            in0, in2, in4, in6, in8, in10, in12, in14, in16, in18, in20, in22, in24, in26, in28,
-            in30,
+            input[0], input[2], input[4], input[6], input[8], input[10], input[12], input[14], input[16], input[18], input[20], input[22], input[24], input[26], input[28],
+            input[30],
         ]);
         let mut odds1 = self
             .bf8
-            .perform_fft_direct([in1, in5, in9, in13, in17, in21, in25, in29]);
+            .perform_fft_direct([input[1], input[5], input[9], input[13], input[17], input[21], input[25], input[29]]);
         let mut odds3 = self
             .bf8
-            .perform_fft_direct([in31, in3, in7, in11, in15, in19, in23, in27]);
+            .perform_fft_direct([input[31], input[3], input[7], input[11], input[15], input[19], input[23], input[27]]);
 
         // step 3: apply twiddle factors
         odds1[1] = complex_mul_f64(odds1[1], self.twiddle1);
@@ -2283,72 +2610,10 @@ impl<T: FftNum> SseF64Butterfly32<T> {
         let out30 = _mm_sub_pd(evens[14], temp6[1]);
         let out31 = _mm_sub_pd(evens[15], temp7[1]);
 
-        let val0 = std::mem::transmute::<__m128d, Complex<f64>>(out0);
-        let val1 = std::mem::transmute::<__m128d, Complex<f64>>(out1);
-        let val2 = std::mem::transmute::<__m128d, Complex<f64>>(out2);
-        let val3 = std::mem::transmute::<__m128d, Complex<f64>>(out3);
-        let val4 = std::mem::transmute::<__m128d, Complex<f64>>(out4);
-        let val5 = std::mem::transmute::<__m128d, Complex<f64>>(out5);
-        let val6 = std::mem::transmute::<__m128d, Complex<f64>>(out6);
-        let val7 = std::mem::transmute::<__m128d, Complex<f64>>(out7);
-        let val8 = std::mem::transmute::<__m128d, Complex<f64>>(out8);
-        let val9 = std::mem::transmute::<__m128d, Complex<f64>>(out9);
-        let val10 = std::mem::transmute::<__m128d, Complex<f64>>(out10);
-        let val11 = std::mem::transmute::<__m128d, Complex<f64>>(out11);
-        let val12 = std::mem::transmute::<__m128d, Complex<f64>>(out12);
-        let val13 = std::mem::transmute::<__m128d, Complex<f64>>(out13);
-        let val14 = std::mem::transmute::<__m128d, Complex<f64>>(out14);
-        let val15 = std::mem::transmute::<__m128d, Complex<f64>>(out15);
-        let val16 = std::mem::transmute::<__m128d, Complex<f64>>(out16);
-        let val17 = std::mem::transmute::<__m128d, Complex<f64>>(out17);
-        let val18 = std::mem::transmute::<__m128d, Complex<f64>>(out18);
-        let val19 = std::mem::transmute::<__m128d, Complex<f64>>(out19);
-        let val20 = std::mem::transmute::<__m128d, Complex<f64>>(out20);
-        let val21 = std::mem::transmute::<__m128d, Complex<f64>>(out21);
-        let val22 = std::mem::transmute::<__m128d, Complex<f64>>(out22);
-        let val23 = std::mem::transmute::<__m128d, Complex<f64>>(out23);
-        let val24 = std::mem::transmute::<__m128d, Complex<f64>>(out24);
-        let val25 = std::mem::transmute::<__m128d, Complex<f64>>(out25);
-        let val26 = std::mem::transmute::<__m128d, Complex<f64>>(out26);
-        let val27 = std::mem::transmute::<__m128d, Complex<f64>>(out27);
-        let val28 = std::mem::transmute::<__m128d, Complex<f64>>(out28);
-        let val29 = std::mem::transmute::<__m128d, Complex<f64>>(out29);
-        let val30 = std::mem::transmute::<__m128d, Complex<f64>>(out30);
-        let val31 = std::mem::transmute::<__m128d, Complex<f64>>(out31);
-
-        let output_slice = output.as_mut_ptr() as *mut Complex<f64>;
-        *output_slice.add(0) = val0;
-        *output_slice.add(1) = val1;
-        *output_slice.add(2) = val2;
-        *output_slice.add(3) = val3;
-        *output_slice.add(4) = val4;
-        *output_slice.add(5) = val5;
-        *output_slice.add(6) = val6;
-        *output_slice.add(7) = val7;
-        *output_slice.add(8) = val8;
-        *output_slice.add(9) = val9;
-        *output_slice.add(10) = val10;
-        *output_slice.add(11) = val11;
-        *output_slice.add(12) = val12;
-        *output_slice.add(13) = val13;
-        *output_slice.add(14) = val14;
-        *output_slice.add(15) = val15;
-        *output_slice.add(16) = val16;
-        *output_slice.add(17) = val17;
-        *output_slice.add(18) = val18;
-        *output_slice.add(19) = val19;
-        *output_slice.add(20) = val20;
-        *output_slice.add(21) = val21;
-        *output_slice.add(22) = val22;
-        *output_slice.add(23) = val23;
-        *output_slice.add(24) = val24;
-        *output_slice.add(25) = val25;
-        *output_slice.add(26) = val26;
-        *output_slice.add(27) = val27;
-        *output_slice.add(28) = val28;
-        *output_slice.add(29) = val29;
-        *output_slice.add(30) = val30;
-        *output_slice.add(31) = val31;
+        [out0, out1, out2, out3, out4, out5, out6, out7, out8, out9, 
+        out10, out11, out12, out13, out14, out15, out16, out17, out18, out19,
+        out20, out21, out22, out23, out24, out25, out26, out27, out28, out29,
+        out30, out31]
     }
 }
 
