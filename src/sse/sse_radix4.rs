@@ -83,10 +83,10 @@ impl<T: FftNum> Sse32Radix4<T> {
             0 => (len, Sse32Butterfly::Len1(SseF32Butterfly1::new(direction))),
             1 => (len, Sse32Butterfly::Len2(SseF32Butterfly2::new(direction))),
             2 => (len, Sse32Butterfly::Len4(SseF32Butterfly4::new(direction))),
-            //3 => (len, Sse32Butterfly::Len8(SseF32Butterfly8::new(direction))),
+            3 => (len, Sse32Butterfly::Len8(SseF32Butterfly8::new(direction))),
             _ => {
                 if num_bits % 2 == 1 {
-                    (8, Sse32Butterfly::Len8(SseF32Butterfly8::new(direction)))
+                    (32, Sse32Butterfly::Len32(SseF32Butterfly32::new(direction)))
                 } else {
                     (16, Sse32Butterfly::Len16(SseF32Butterfly16::new(direction)))
                 }
@@ -97,30 +97,56 @@ impl<T: FftNum> Sse32Radix4<T> {
         // we're doing the same precomputation of twiddle factors as the mixed radix algorithm where width=4 and height=len/4
         // but mixed radix only does one step and then calls itself recusrively, and this algorithm does every layer all the way down
         // so we're going to pack all the "layers" of twiddle factors into a single array, starting with the bottom layer and going up
-        let mut twiddle_stride = len / (base_len * 3);
+        let mut twiddle_stride = len / (base_len * 4);
         let mut twiddle_factors = Vec::with_capacity(len * 2);
         while twiddle_stride > 0 {
             let num_rows = len / (twiddle_stride * 4);
             for i in 0..num_rows/2 {
-                //for k in 1..4 {
-                unsafe {
-                    let twiddle1a = twiddles::compute_twiddle(2*i * twiddle_stride, len, direction);
-                    let twiddle2a = twiddles::compute_twiddle(2*i * 2 * twiddle_stride, len, direction);
-                    let twiddle3a = twiddles::compute_twiddle(2*i * 3 * twiddle_stride, len, direction);
-                    let twiddle1b = twiddles::compute_twiddle((2*i+1) * twiddle_stride, len, direction);
-                    let twiddle2b = twiddles::compute_twiddle((2*i+1) * 2 * twiddle_stride, len, direction);
-                    let twiddle3b = twiddles::compute_twiddle((2*i+1) * 3 * twiddle_stride, len, direction);
-                    let twiddle1_packed = _mm_set_ps(twiddle1b.im, twiddle1b.re, twiddle1a.im, twiddle1a.re);
-                    let twiddle2_packed = _mm_set_ps(twiddle2b.im, twiddle2b.re, twiddle2a.im, twiddle2a.re);
-                    let twiddle3_packed = _mm_set_ps(twiddle3b.im, twiddle3b.re, twiddle3a.im, twiddle3a.re);
-                    twiddle_factors.push(twiddle1_packed);
-                    twiddle_factors.push(twiddle2_packed);
-                    twiddle_factors.push(twiddle3_packed);
+                // //for k in 1..4 {
+                // unsafe {
+                //     let twiddle1a = twiddles::compute_twiddle(2*i * twiddle_stride, len, direction);
+                //     let twiddle2a = twiddles::compute_twiddle(2*i * 2 * twiddle_stride, len, direction);
+                //     let twiddle3a = twiddles::compute_twiddle(2*i * 3 * twiddle_stride, len, direction);
+                //     let twiddle1b = twiddles::compute_twiddle((2*i+1) * twiddle_stride, len, direction);
+                //     let twiddle2b = twiddles::compute_twiddle((2*i+1) * 2 * twiddle_stride, len, direction);
+                //     let twiddle3b = twiddles::compute_twiddle((2*i+1) * 3 * twiddle_stride, len, direction);
+                //     let twiddle1_packed = _mm_set_ps(twiddle1b.im, twiddle1b.re, twiddle1a.im, twiddle1a.re);
+                //     let twiddle2_packed = _mm_set_ps(twiddle2b.im, twiddle2b.re, twiddle2a.im, twiddle2a.re);
+                //     let twiddle3_packed = _mm_set_ps(twiddle3b.im, twiddle3b.re, twiddle3a.im, twiddle3a.re);
+                //     twiddle_factors.push(twiddle1_packed);
+                //     twiddle_factors.push(twiddle2_packed);
+                //     twiddle_factors.push(twiddle3_packed);
+                // }
+                // //}
+                for k in 1..4 {
+                    unsafe {
+                        let twiddle_a =
+                            twiddles::compute_twiddle(2*i * k * twiddle_stride, len, direction);
+                        let twiddle_b =
+                            twiddles::compute_twiddle((2*i + 1) * k * twiddle_stride, len, direction);
+                        let twiddles_packed = _mm_set_ps(twiddle_b.im, twiddle_b.re, twiddle_a.im, twiddle_a.re);
+                        twiddle_factors.push(twiddles_packed);
+                    }
                 }
-                //}
             }
             twiddle_stride >>= 2;
         }
+
+        // while twiddle_stride > 0 {
+        //     let num_rows = len / (twiddle_stride * 4);
+        //     for i in 0..num_rows {
+        //         for k in 1..4 {
+        //             unsafe {
+        //                 let twiddle =
+        //                     twiddles::compute_twiddle(i * k * twiddle_stride, len, direction);
+        //                 let twiddle_packed = _mm_set_pd(twiddle.im, twiddle.re);
+        //                 twiddle_factors.push(twiddle_packed);
+        //             }
+        //         }
+        //     }
+        //     twiddle_stride >>= 2;
+        // }
+
 
         Self {
             twiddles: twiddle_factors.into_boxed_slice(),
@@ -144,7 +170,12 @@ impl<T: FftNum> Sse32Radix4<T> {
     ) {
         //let start = time::Instant::now();
         // copy the data into the spectrum vector
-        prepare_radix4_32(signal.len(), self.base_len, signal, spectrum, 1);
+
+        let signal_tm: &[Complex<f32>] = array_utils::workaround_transmute(signal);
+        let spectrum_tm: &mut [Complex<f32>] = array_utils::workaround_transmute_mut(spectrum);
+        prepare_radix4_sse32(signal.len(), self.base_len, signal_tm, spectrum_tm, 1);
+
+        //prepare_radix4_32(signal.len(), self.base_len, signal, spectrum, 1);
         //let end = time::Instant::now();
         //println!("prepare: {} ns", end.duration_since(start).as_nanos());
         //let start = time::Instant::now();
@@ -181,7 +212,8 @@ impl<T: FftNum> Sse32Radix4<T> {
             }
 
             //skip past all the twiddle factors used in this layer
-            let twiddle_offset = current_size / 4;
+            let twiddle_offset = (current_size * 3) / 8;
+            //let twiddle_offset = current_size / 4;
             layer_twiddles = &layer_twiddles[twiddle_offset..];
 
             current_size *= 4;
@@ -210,6 +242,35 @@ fn prepare_radix4_32<T: FftNum>(
     } else {
         for i in 0..4 {
             prepare_radix4_32(
+                size / 4,
+                base_len,
+                &signal[i * stride..],
+                &mut spectrum[i * (size / 4)..],
+                stride * 4,
+            );
+        }
+    }
+}
+
+// after testing an iterative bit reversal algorithm, this recursive algorithm
+// was almost an order of magnitude faster at setting up
+fn prepare_radix4_sse32(
+    size: usize,
+    base_len: usize,
+    signal: &[Complex<f32>],
+    spectrum: &mut [Complex<f32>],
+    stride: usize,
+) {
+    if size == base_len {
+        unsafe {
+            for i in 0..size {
+                _mm_storel_pd(spectrum.as_mut_ptr().add(i) as *mut f64, _mm_load1_pd(signal.as_ptr().add(i * stride) as *const f64));
+                //*spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stride);
+            }
+        }
+    } else {
+        for i in 0..4 {
+            prepare_radix4_sse32(
                 size / 4,
                 base_len,
                 &signal[i * stride..],
@@ -303,6 +364,8 @@ unsafe fn butterfly_4_32<T: FftNum>(
         _mm_storeu_ps(output_slice.add(idx+2 + 3 * num_ffts) as *mut f32, scratchb[3]);
         tw_idx += 6;
         idx += 4;
+        // tw_idx += 3;
+        // idx += 2;
     }
 }
 
@@ -388,7 +451,10 @@ impl<T: FftNum> Sse64Radix4<T> {
     ) {
         //let start = time::Instant::now();
         // copy the data into the spectrum vector
-        prepare_radix4_64(signal.len(), self.base_len, signal, spectrum, 1);
+        let signal_tm: &[Complex<f64>] = array_utils::workaround_transmute(signal);
+        let spectrum_tm: &mut [Complex<f64>] = array_utils::workaround_transmute_mut(spectrum);
+        prepare_radix4_sse64(signal.len(), self.base_len, signal_tm, spectrum_tm, 1);
+        //prepare_radix4_64(signal.len(), self.base_len, signal, spectrum, 1);
         //let end = time::Instant::now();
         //println!("prepare: {} ns", end.duration_since(start).as_nanos());
 
@@ -464,6 +530,37 @@ fn prepare_radix4_64<T: FftNum>(
     }
 }
 
+// after testing an iterative bit reversal algorithm, this recursive algorithm
+// was almost an order of magnitude faster at setting up
+fn prepare_radix4_sse64(
+    size: usize,
+    base_len: usize,
+    signal: &[Complex<f64>],
+    spectrum: &mut [Complex<f64>],
+    stride: usize,
+) {
+    if size == base_len {
+        unsafe {
+            for i in 0..size {
+                _mm_storeu_pd(spectrum.as_mut_ptr().add(i) as *mut f64, _mm_loadu_pd(signal.as_ptr().add(i * stride) as *const f64));
+                //*spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stride);
+            }
+        }
+    } else {
+        for i in 0..4 {
+            prepare_radix4_sse64(
+                size / 4,
+                base_len,
+                &signal[i * stride..],
+                &mut spectrum[i * (size / 4)..],
+                stride * 4,
+            );
+        }
+    }
+}
+
+
+
 #[target_feature(enable = "sse3")]
 unsafe fn butterfly_4_64<T: FftNum>(
     data: &mut [Complex<T>],
@@ -515,7 +612,7 @@ mod unit_tests {
 
     #[test]
     fn test_sse_radix4_64() {
-        for pow in 0..10 {
+        for pow in 0..12 {
             let len = 1 << pow;
             test_sse_radix4_64_with_length(len, FftDirection::Forward);
             test_sse_radix4_64_with_length(len, FftDirection::Inverse);
@@ -545,7 +642,7 @@ mod unit_tests {
 
     #[test]
     fn test_sse_radix4_32() {
-        for pow in 0..10 {
+        for pow in 0..12 {
             let len = 1 << pow;
             test_sse_radix4_32_with_length(len, FftDirection::Forward);
             test_sse_radix4_32_with_length(len, FftDirection::Inverse);
@@ -555,5 +652,44 @@ mod unit_tests {
     fn test_sse_radix4_32_with_length(len: usize, direction: FftDirection) {
         let fft = Sse32Radix4::new(len, direction);
         check_fft_algorithm::<f32>(&fft, len, direction);
+    }
+
+    fn prepare_radix4(
+        size: usize,
+        base_len: usize,
+        signal: &[f32],
+        spectrum: &mut [f32],
+        stride: usize,
+    ) {
+        if size == base_len {
+            unsafe {
+                for i in 0..size {
+                    *spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stride);
+                }
+            }
+        } else {
+            for i in 0..4 {
+                prepare_radix4(
+                    size / 4,
+                    base_len,
+                    &signal[i * stride..],
+                    &mut spectrum[i * (size / 4)..],
+                    stride * 4,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_prepare() {
+        let len = 128;
+        let mut signal = vec![0.0; len];
+        let mut spectrum = vec![0.0_f32; len];
+        for n in 0..signal.len() {
+            signal[n] = n as f32;
+        }
+        prepare_radix4(signal.len(), 32, &signal[..], &mut spectrum[..], 1);
+        println!("{:?}", spectrum);
+        assert!(false);
     }
 }

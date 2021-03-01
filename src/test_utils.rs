@@ -70,7 +70,7 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
         "Algorithm reported incorrect FFT direction"
     );
 
-    let n = 3;
+    let n = 1;
 
     //test the forward direction
     let dft = Dft::new(len, direction);
