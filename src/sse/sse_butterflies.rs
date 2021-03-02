@@ -1154,26 +1154,31 @@ impl<T: FftNum> SseF64Butterfly5<T> {
         let x14n = _mm_sub_pd(value1, value4);
         let x23p = _mm_add_pd(value2, value3);
         let x23n = _mm_sub_pd(value2, value3);
-
+        
         let temp_a1_1 = _mm_mul_pd(self.twiddle1re, x14p);
         let temp_a1_2 = _mm_mul_pd(self.twiddle2re, x23p);
+        let temp_a2_1 = _mm_mul_pd(self.twiddle2re, x14p);
+        let temp_a2_2 = _mm_mul_pd(self.twiddle1re, x23p);
+        
         let temp_b1_1 = _mm_mul_pd(self.twiddle1im, x14n);
         let temp_b1_2 = _mm_mul_pd(self.twiddle2im, x23n);
-        let temp_a2_1 = _mm_mul_pd(self.twiddle1re, x23p);
-        let temp_a2_2 = _mm_mul_pd(self.twiddle2re, x14p);
         let temp_b2_1 = _mm_mul_pd(self.twiddle2im, x14n);
         let temp_b2_2 = _mm_mul_pd(self.twiddle1im, x23n);
-
+        
         let temp_a1 = _mm_add_pd(value0, _mm_add_pd(temp_a1_1, temp_a1_2));
-        let temp_b1 = _mm_add_pd(temp_b1_1, temp_b1_2);
         let temp_a2 = _mm_add_pd(value0, _mm_add_pd(temp_a2_1, temp_a2_2));
+        
+        let temp_b1 = _mm_add_pd(temp_b1_1, temp_b1_2);
         let temp_b2 = _mm_sub_pd(temp_b2_1, temp_b2_2);
-
+        
+        let temp_b1_rot = self.rotate.rotate(temp_b1);
+        let temp_b2_rot = self.rotate.rotate(temp_b2);
+        
         let x0 = _mm_add_pd(value0, _mm_add_pd(x14p, x23p));
-        let x1 = _mm_add_pd(temp_a1, self.rotate.rotate(temp_b1));
-        let x2 = _mm_add_pd(temp_a2, self.rotate.rotate(temp_b2));
-        let x3 = _mm_sub_pd(temp_a2, self.rotate.rotate(temp_b2));
-        let x4 = _mm_sub_pd(temp_a1, self.rotate.rotate(temp_b1));
+        let x1 = _mm_add_pd(temp_a1, temp_b1_rot);
+        let x2 = _mm_add_pd(temp_a2, temp_b2_rot);
+        let x3 = _mm_sub_pd(temp_a2, temp_b2_rot);
+        let x4 = _mm_sub_pd(temp_a1, temp_b1_rot);
         [x0, x1, x2, x3, x4]
     }
 }
@@ -1464,80 +1469,37 @@ impl<T: FftNum> SseF64Butterfly7<T> {
         value5: __m128d,
         value6: __m128d,
     ) -> [__m128d; 7] {
-        // This is a SSE translation of the scalar 5-point butterfly 
+        // This is a SSE translation of the scalar 7-point butterfly 
         let x16p = _mm_add_pd(value1, value6);
         let x16n = _mm_sub_pd(value1, value6);
         let x25p = _mm_add_pd(value2, value5);
         let x25n = _mm_sub_pd(value2, value5);
         let x34p = _mm_add_pd(value3, value4);
         let x34n = _mm_sub_pd(value3, value4);
-/*
-    let x16re_a = input.load(0).re + self.twiddle1.re * x16p.re + self.twiddle2.re * x25p.re + self.twiddle3.re * x34p.re;
-    let x16im_a = input.load(0).im + self.twiddle1.re * x16p.im + self.twiddle2.re * x25p.im + self.twiddle3.re * x34p.im;
 
-    let x25re_a = input.load(0).re + self.twiddle1.re * x34p.re + self.twiddle2.re * x16p.re + self.twiddle3.re * x25p.re;
-    let x25im_a = input.load(0).im + self.twiddle1.re * x34p.im + self.twiddle2.re * x16p.im + self.twiddle3.re * x25p.im;
-
-    let x34re_a = input.load(0).re + self.twiddle1.re * x25p.re + self.twiddle2.re * x34p.re + self.twiddle3.re * x16p.re;
-    let x34im_a = input.load(0).im + self.twiddle1.re * x25p.im + self.twiddle2.re * x34p.im + self.twiddle3.re * x16p.im;
-
-    let x16im_b = self.twiddle1.im * x16n.re + self.twiddle2.im * x25n.re + self.twiddle3.im * x34n.re;
-    let x16re_b = self.twiddle1.im * x16n.im + self.twiddle2.im * x25n.im + self.twiddle3.im * x34n.im;
-    
-    let x25im_b = self.twiddle2.im * x16n.re - self.twiddle3.im * x25n.re - self.twiddle1.im * x34n.re;
-    let x25re_b = self.twiddle2.im * x16n.im - self.twiddle3.im * x25n.im - self.twiddle1.im * x34n.im ;
-    
-    let x34im_b =   self.twiddle3.im * x16n.re - (self.twiddle1.im * x25n.re - self.twiddle2.im * x34n.re)
-    let x34re_b =   self.twiddle3.im * x16n.im - (self.twiddle1.im * x25n.im - self.twiddle2.im * x34n.im)
-    
-
-    let out1re = x16re_a - x16re_b;
-    let out1im = x16im_a + x16im_b;
-
-    let out2re = x25re_a - x25re_b;
-    let out2im = x25im_a + x25im_b;
-
-    let out3re = x34re_a - x34re_b;
-    let out3im = x34im_a + x34im_b;
-
-    let out4re = x34re_a + x34re_b;
-    let out4im = x34im_a - x34im_b;
-
-    let out5re = x25re_a + x25re_b;
-    let out5im = x25im_a - x25im_b;
-
-    let out6re = x16re_a + x16re_b;
-    let out6im = x16im_a - x16im_b;
-
-
-*/
         let temp_a1_1 = _mm_mul_pd(self.twiddle1re, x16p);
         let temp_a1_2 = _mm_mul_pd(self.twiddle2re, x25p);
         let temp_a1_3 = _mm_mul_pd(self.twiddle3re, x34p);
-
-        let temp_a2_1 = _mm_mul_pd(self.twiddle1re, x34p);
-        let temp_a2_2 = _mm_mul_pd(self.twiddle2re, x16p);
-        let temp_a2_3 = _mm_mul_pd(self.twiddle3re, x25p);
-
-        let temp_a3_1 = _mm_mul_pd(self.twiddle1re, x25p);
-        let temp_a3_2 = _mm_mul_pd(self.twiddle2re, x34p);
-        let temp_a3_3 = _mm_mul_pd(self.twiddle3re, x16p);
+        let temp_a2_1 = _mm_mul_pd(self.twiddle2re, x16p);
+        let temp_a2_2 = _mm_mul_pd(self.twiddle3re, x25p);
+        let temp_a2_3 = _mm_mul_pd(self.twiddle1re, x34p);
+        let temp_a3_1 = _mm_mul_pd(self.twiddle3re, x16p);
+        let temp_a3_2 = _mm_mul_pd(self.twiddle1re, x25p);
+        let temp_a3_3 = _mm_mul_pd(self.twiddle2re, x34p);
 
         let temp_b1_1 = _mm_mul_pd(self.twiddle1im, x16n);
         let temp_b1_2 = _mm_mul_pd(self.twiddle2im, x25n);
         let temp_b1_3 = _mm_mul_pd(self.twiddle3im, x34n);
-
         let temp_b2_1 = _mm_mul_pd(self.twiddle2im, x16n);
         let temp_b2_2 = _mm_mul_pd(self.twiddle3im, x25n);
         let temp_b2_3 = _mm_mul_pd(self.twiddle1im, x34n);
-
         let temp_b3_1 = _mm_mul_pd(self.twiddle3im, x16n);
         let temp_b3_2 = _mm_mul_pd(self.twiddle1im, x25n);
         let temp_b3_3 = _mm_mul_pd(self.twiddle2im, x34n);
 
-        let temp_a1 = _mm_add_pd(_mm_add_pd(value0, temp_a1_1), _mm_add_pd(temp_a1_2, temp_a1_3));
-        let temp_a2 = _mm_add_pd(_mm_add_pd(value0, temp_a2_1), _mm_add_pd(temp_a2_2, temp_a2_3));
-        let temp_a3 = _mm_add_pd(_mm_add_pd(value0, temp_a3_1), _mm_add_pd(temp_a3_2, temp_a3_3));
+        let temp_a1 = _mm_add_pd(value0, _mm_add_pd(temp_a1_1, _mm_add_pd(temp_a1_2, temp_a1_3)));
+        let temp_a2 = _mm_add_pd(value0, _mm_add_pd(temp_a2_1, _mm_add_pd(temp_a2_2, temp_a2_3)));
+        let temp_a3 = _mm_add_pd(value0, _mm_add_pd(temp_a3_1, _mm_add_pd(temp_a3_2, temp_a3_3)));
 
         let temp_b1 = _mm_add_pd(temp_b1_1, _mm_add_pd(temp_b1_2, temp_b1_3));
         let temp_b2 = _mm_sub_pd(temp_b2_1, _mm_add_pd(temp_b2_2, temp_b2_3));
@@ -1546,7 +1508,8 @@ impl<T: FftNum> SseF64Butterfly7<T> {
         let temp_b1_rot = self.rotate.rotate(temp_b1);
         let temp_b2_rot = self.rotate.rotate(temp_b2);
         let temp_b3_rot = self.rotate.rotate(temp_b3);
-        let x0 = _mm_add_pd(_mm_add_pd(value0, x16p), _mm_add_pd(x25p, x34p));
+
+        let x0 = _mm_add_pd(value0, _mm_add_pd(x16p, _mm_add_pd(x25p, x34p)));
         let x1 = _mm_add_pd(temp_a1, temp_b1_rot);
         let x2 = _mm_add_pd(temp_a2, temp_b2_rot);
         let x3 = _mm_add_pd(temp_a3, temp_b3_rot);
@@ -1554,6 +1517,7 @@ impl<T: FftNum> SseF64Butterfly7<T> {
         let x5 = _mm_sub_pd(temp_a2, temp_b2_rot);
         let x6 = _mm_sub_pd(temp_a1, temp_b1_rot);
         [x0, x1, x2, x3, x4, x5, x6]
+
     }
 }
 
@@ -1849,6 +1813,226 @@ impl<T: FftNum> SseF64Butterfly8<T> {
         ]
     }
 }
+
+
+
+//   _ _            __   _  _   _     _ _   
+//  / / |          / /_ | || | | |__ (_) |_ 
+//  | | |  _____  | '_ \| || |_| '_ \| | __|
+//  | | | |_____| | (_) |__   _| |_) | | |_ 
+//  |_|_|          \___/   |_| |_.__/|_|\__|
+//                                          
+
+                                       
+
+pub struct SseF64Butterfly11<T> {
+    direction: FftDirection,
+    _phantom: std::marker::PhantomData<T>,
+    rotate: Rotate90F64,
+    twiddle1re: __m128d,
+    twiddle1im: __m128d,
+    twiddle2re: __m128d,
+    twiddle2im: __m128d,
+    twiddle3re: __m128d,
+    twiddle3im: __m128d,
+    twiddle4re: __m128d,
+    twiddle4im: __m128d,
+    twiddle5re: __m128d,
+    twiddle5im: __m128d,
+}
+
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly11, 11, |this: &SseF64Butterfly11<_>| this
+    .direction);
+boilerplate_fft_sse_common_butterfly!(SseF64Butterfly11, 11, |this: &SseF64Butterfly11<_>| this
+    .direction);
+impl<T: FftNum> SseF64Butterfly11<T> {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert_f64::<T>();
+        let rotate = Rotate90F64::new(true);
+        let tw1: Complex<f64> = twiddles::compute_twiddle(1, 11, direction);
+        let tw2: Complex<f64> = twiddles::compute_twiddle(2, 11, direction);
+        let tw3: Complex<f64> = twiddles::compute_twiddle(3, 11, direction);
+        let tw4: Complex<f64> = twiddles::compute_twiddle(4, 11, direction);
+        let tw5: Complex<f64> = twiddles::compute_twiddle(5, 11, direction);
+        let twiddle1re = unsafe { _mm_set_pd(tw1.re, tw1.re) };
+        let twiddle1im = unsafe { _mm_set_pd(tw1.im, tw1.im) };
+        let twiddle2re = unsafe { _mm_set_pd(tw2.re, tw2.re) };
+        let twiddle2im = unsafe { _mm_set_pd(tw2.im, tw2.im) };
+        let twiddle3re = unsafe { _mm_set_pd(tw3.re, tw3.re) };
+        let twiddle3im = unsafe { _mm_set_pd(tw3.im, tw3.im) };
+        let twiddle4re = unsafe { _mm_set_pd(tw4.re, tw4.re) };
+        let twiddle4im = unsafe { _mm_set_pd(tw4.im, tw4.im) };
+        let twiddle5re = unsafe { _mm_set_pd(tw5.re, tw5.re) };
+        let twiddle5im = unsafe { _mm_set_pd(tw5.im, tw5.im) };
+
+        Self {
+            direction,
+            _phantom: std::marker::PhantomData,
+            rotate,
+            twiddle1re,
+            twiddle1im,
+            twiddle2re,
+            twiddle2im,
+            twiddle3re,
+            twiddle3im,
+            twiddle4re,
+            twiddle4im,
+            twiddle5re,
+            twiddle5im,
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
+        let value0 = _mm_loadu_pd(input.as_ptr() as *const f64);
+        let value1 = _mm_loadu_pd(input.as_ptr().add(1) as *const f64);
+        let value2 = _mm_loadu_pd(input.as_ptr().add(2) as *const f64);
+        let value3 = _mm_loadu_pd(input.as_ptr().add(3) as *const f64);
+        let value4 = _mm_loadu_pd(input.as_ptr().add(4) as *const f64);
+        let value5 = _mm_loadu_pd(input.as_ptr().add(5) as *const f64);
+        let value6 = _mm_loadu_pd(input.as_ptr().add(6) as *const f64);
+        let value7 = _mm_loadu_pd(input.as_ptr().add(7) as *const f64);
+        let value8 = _mm_loadu_pd(input.as_ptr().add(8) as *const f64);
+        let value9 = _mm_loadu_pd(input.as_ptr().add(9) as *const f64);
+        let value10 = _mm_loadu_pd(input.as_ptr().add(10) as *const f64);
+
+        let out = self.perform_fft_direct(value0, value1, value2, value3, value4, value5, value6, value7, value8, value9, value10);
+
+        let val = std::mem::transmute::<[__m128d; 11], [Complex<f64>; 11]>(out);
+
+        let output_slice = output.as_mut_ptr() as *mut Complex<f64>;
+        *output_slice.add(0) = val[0];
+        *output_slice.add(1) = val[1];
+        *output_slice.add(2) = val[2];
+        *output_slice.add(3) = val[3];
+        *output_slice.add(4) = val[4];
+        *output_slice.add(5) = val[5];
+        *output_slice.add(6) = val[6];
+        *output_slice.add(7) = val[7];
+        *output_slice.add(8) = val[8];
+        *output_slice.add(9) = val[9];
+        *output_slice.add(10) = val[10];
+    }
+
+    // length 7 fft of a, given as a0, a1, a2, a3, a4, a5, a6.
+    // result is [A0, A1, A2, A3, A4, A5, A6]
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_direct(
+        &self,
+        value0: __m128d,
+        value1: __m128d,
+        value2: __m128d,
+        value3: __m128d,
+        value4: __m128d,
+        value5: __m128d,
+        value6: __m128d,
+        value7: __m128d,
+        value8: __m128d,
+        value9: __m128d,
+        value10: __m128d,
+    ) -> [__m128d; 11] {
+        // This is a SSE translation of the scalar 11-point butterfly 
+        let x110p = _mm_add_pd(value1, value10);
+        let x110n = _mm_sub_pd(value1, value10);
+        let x29p = _mm_add_pd(value2, value9);
+        let x29n = _mm_sub_pd(value2, value9);
+        let x38p = _mm_add_pd(value3, value8);
+        let x38n = _mm_sub_pd(value3, value8);
+        let x47p = _mm_add_pd(value4, value7);
+        let x47n = _mm_sub_pd(value4, value7);
+        let x56p = _mm_add_pd(value5, value6);
+        let x56n = _mm_sub_pd(value5, value6);
+
+        let temp_a1_1 = _mm_mul_pd(self.twiddle1re, x110p);
+        let temp_a1_2 = _mm_mul_pd(self.twiddle2re, x29p);
+        let temp_a1_3 = _mm_mul_pd(self.twiddle3re, x38p);
+        let temp_a1_4 = _mm_mul_pd(self.twiddle4re, x47p);
+        let temp_a1_5 = _mm_mul_pd(self.twiddle5re, x56p);
+        let temp_a2_1 = _mm_mul_pd(self.twiddle2re, x110p);
+        let temp_a2_2 = _mm_mul_pd(self.twiddle4re, x29p);
+        let temp_a2_3 = _mm_mul_pd(self.twiddle5re, x38p);
+        let temp_a2_4 = _mm_mul_pd(self.twiddle3re, x47p);
+        let temp_a2_5 = _mm_mul_pd(self.twiddle1re, x56p);
+        let temp_a3_1 = _mm_mul_pd(self.twiddle3re, x110p);
+        let temp_a3_2 = _mm_mul_pd(self.twiddle5re, x29p);
+        let temp_a3_3 = _mm_mul_pd(self.twiddle2re, x38p);
+        let temp_a3_4 = _mm_mul_pd(self.twiddle1re, x47p);
+        let temp_a3_5 = _mm_mul_pd(self.twiddle4re, x56p);
+        let temp_a4_1 = _mm_mul_pd(self.twiddle4re, x110p);
+        let temp_a4_2 = _mm_mul_pd(self.twiddle3re, x29p);
+        let temp_a4_3 = _mm_mul_pd(self.twiddle1re, x38p);
+        let temp_a4_4 = _mm_mul_pd(self.twiddle5re, x47p);
+        let temp_a4_5 = _mm_mul_pd(self.twiddle2re, x56p);
+        let temp_a5_1 = _mm_mul_pd(self.twiddle5re, x110p);
+        let temp_a5_2 = _mm_mul_pd(self.twiddle1re, x29p);
+        let temp_a5_3 = _mm_mul_pd(self.twiddle4re, x38p);
+        let temp_a5_4 = _mm_mul_pd(self.twiddle2re, x47p);
+        let temp_a5_5 = _mm_mul_pd(self.twiddle3re, x56p);
+
+        let temp_b1_1 = _mm_mul_pd(self.twiddle1im, x110n);
+        let temp_b1_2 = _mm_mul_pd(self.twiddle2im, x29n);
+        let temp_b1_3 = _mm_mul_pd(self.twiddle3im, x38n);
+        let temp_b1_4 = _mm_mul_pd(self.twiddle4im, x47n);
+        let temp_b1_5 = _mm_mul_pd(self.twiddle5im, x56n);
+        let temp_b2_1 = _mm_mul_pd(self.twiddle2im, x110n);
+        let temp_b2_2 = _mm_mul_pd(self.twiddle4im, x29n);
+        let temp_b2_3 = _mm_mul_pd(self.twiddle5im, x38n);
+        let temp_b2_4 = _mm_mul_pd(self.twiddle3im, x47n);
+        let temp_b2_5 = _mm_mul_pd(self.twiddle1im, x56n);
+        let temp_b3_1 = _mm_mul_pd(self.twiddle3im, x110n);
+        let temp_b3_2 = _mm_mul_pd(self.twiddle5im, x29n);
+        let temp_b3_3 = _mm_mul_pd(self.twiddle2im, x38n);
+        let temp_b3_4 = _mm_mul_pd(self.twiddle1im, x47n);
+        let temp_b3_5 = _mm_mul_pd(self.twiddle4im, x56n);
+        let temp_b4_1 = _mm_mul_pd(self.twiddle4im, x110n);
+        let temp_b4_2 = _mm_mul_pd(self.twiddle3im, x29n);
+        let temp_b4_3 = _mm_mul_pd(self.twiddle1im, x38n);
+        let temp_b4_4 = _mm_mul_pd(self.twiddle5im, x47n);
+        let temp_b4_5 = _mm_mul_pd(self.twiddle2im, x56n);
+        let temp_b5_1 = _mm_mul_pd(self.twiddle5im, x110n);
+        let temp_b5_2 = _mm_mul_pd(self.twiddle1im, x29n);
+        let temp_b5_3 = _mm_mul_pd(self.twiddle4im, x38n);
+        let temp_b5_4 = _mm_mul_pd(self.twiddle2im, x47n);
+        let temp_b5_5 = _mm_mul_pd(self.twiddle3im, x56n);
+
+        let temp_a1 = _mm_add_pd(value0, _mm_add_pd(temp_a1_1, _mm_add_pd(temp_a1_2, _mm_add_pd(temp_a1_3, _mm_add_pd(temp_a1_4, temp_a1_5)))));
+        let temp_a2 = _mm_add_pd(value0, _mm_add_pd(temp_a2_1, _mm_add_pd(temp_a2_2, _mm_add_pd(temp_a2_3, _mm_add_pd(temp_a2_4, temp_a2_5)))));
+        let temp_a3 = _mm_add_pd(value0, _mm_add_pd(temp_a3_1, _mm_add_pd(temp_a3_2, _mm_add_pd(temp_a3_3, _mm_add_pd(temp_a3_4, temp_a3_5)))));
+        let temp_a4 = _mm_add_pd(value0, _mm_add_pd(temp_a4_1, _mm_add_pd(temp_a4_2, _mm_add_pd(temp_a4_3, _mm_add_pd(temp_a4_4, temp_a4_5)))));
+        let temp_a5 = _mm_add_pd(value0, _mm_add_pd(temp_a5_1, _mm_add_pd(temp_a5_2, _mm_add_pd(temp_a5_3, _mm_add_pd(temp_a5_4, temp_a5_5)))));
+
+        let temp_b1 = _mm_add_pd(temp_b1_1, _mm_add_pd(temp_b1_2, _mm_add_pd(temp_b1_3, _mm_add_pd(temp_b1_4, temp_b1_5))));
+        let temp_b2 = _mm_add_pd(temp_b2_1, _mm_sub_pd(temp_b2_2, _mm_add_pd(temp_b2_3, _mm_add_pd(temp_b2_4, temp_b2_5))));
+        let temp_b3 = _mm_sub_pd(temp_b3_1, _mm_add_pd(temp_b3_2, _mm_sub_pd(temp_b3_3, _mm_add_pd(temp_b3_4, temp_b3_5))));
+        let temp_b4 = _mm_sub_pd(temp_b4_1, _mm_sub_pd(temp_b4_2, _mm_add_pd(temp_b4_3, _mm_sub_pd(temp_b4_4, temp_b4_5))));
+        let temp_b5 = _mm_sub_pd(temp_b5_1, _mm_sub_pd(temp_b5_2, _mm_sub_pd(temp_b5_3, _mm_sub_pd(temp_b5_4, temp_b5_5))));        
+
+        let temp_b1_rot = self.rotate.rotate(temp_b1);
+        let temp_b2_rot = self.rotate.rotate(temp_b2);
+        let temp_b3_rot = self.rotate.rotate(temp_b3);
+        let temp_b4_rot = self.rotate.rotate(temp_b4);
+        let temp_b5_rot = self.rotate.rotate(temp_b5);
+
+        let x0 = _mm_add_pd(value0, _mm_add_pd(x110p, _mm_add_pd(x29p, _mm_add_pd(x38p, _mm_add_pd(x47p, x56p)))));
+        let x1 = _mm_add_pd(temp_a1, temp_b1_rot);
+        let x2 = _mm_add_pd(temp_a2, temp_b2_rot);
+        let x3 = _mm_add_pd(temp_a3, temp_b3_rot);
+        let x4 = _mm_add_pd(temp_a4, temp_b4_rot);
+        let x5 = _mm_add_pd(temp_a5, temp_b5_rot);
+        let x6 = _mm_sub_pd(temp_a5, temp_b5_rot);
+        let x7 = _mm_sub_pd(temp_a4, temp_b4_rot);
+        let x8 = _mm_sub_pd(temp_a3, temp_b3_rot);
+        let x9 = _mm_sub_pd(temp_a2, temp_b2_rot);
+        let x10 = _mm_sub_pd(temp_a1, temp_b1_rot);
+        [x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10]
+    }
+}
+
 
 //   _  __             _________  _     _ _
 //  / |/ /_           |___ /___ \| |__ (_) |_
@@ -3173,6 +3357,7 @@ mod unit_tests {
     test_butterfly_64_func!(test_ssef64_butterfly5, SseF64Butterfly5, 5);
     test_butterfly_64_func!(test_ssef64_butterfly7, SseF64Butterfly7, 7);
     test_butterfly_64_func!(test_ssef64_butterfly8, SseF64Butterfly8, 8);
+    test_butterfly_64_func!(test_ssef64_butterfly11, SseF64Butterfly11, 11);
     test_butterfly_64_func!(test_ssef64_butterfly16, SseF64Butterfly16, 16);
     test_butterfly_64_func!(test_ssef64_butterfly32, SseF64Butterfly32, 32);
 
