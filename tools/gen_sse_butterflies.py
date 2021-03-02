@@ -69,8 +69,8 @@ fftlen = int(sys.argv[1])
 halflen = int((fftlen+1)/2)
 
 for n in range(1, halflen):
-    print(f"let x{n}{fftlen-n}p = _mm_add_pd(value{n}, value{fftlen-n});")
-    print(f"let x{n}{fftlen-n}n = _mm_sub_pd(value{n}, value{fftlen-n});")
+    print(f"let x{n}{fftlen-n}p = _mm_add_pd(values[{n}], values[{fftlen-n}]);")
+    print(f"let x{n}{fftlen-n}n = _mm_sub_pd(values[{n}], values[{fftlen-n}]);")
 
 
 
@@ -94,37 +94,12 @@ for m in range (1, halflen):
         
 
 print("")
-#let temp_a1 = _mm_add_ps(_mm_add_ps(value0, temp_a1_1), _mm_add_ps(temp_a1_2, temp_a1_3));
 for m in range(1, halflen):
-    items = ["value0"]
+    items = ["values[0]"]
     for n in range(1, halflen):
         items.append(f"temp_a{m}_{n}")
     print(f'let temp_a{m} = {stackfuncs("_mm_add_pd", items)};')
 
-
-# print("")
-# for m in range(1, halflen):
-#     items = [f"temp_b{m}_1"]
-#     funcs = []
-#     sign = 1
-#     for n in range(2, halflen):
-#         items.append(f"temp_b{m}_{n}")
-#         mn = (m*n)%fftlen
-#         if mn > fftlen/2:
-#             if sign > 0:
-#                 funcs.append("_mm_sub_pd")
-#                 sign = -1
-#             else: 
-#                 funcs.append("_mm_add_pd")
-#                 sign = -1
-#         else:
-#             if sign > 0:
-#                 funcs.append("_mm_add_pd")
-#                 #sign = -1
-#             else: 
-#                 funcs.append("_mm_sub_pd")
-#                 #sign = -1
-#     print(f'let temp_b{m} = {stackfuncs_flist(funcs, items)};')
 
 print("")
 for m in range(1, halflen):
@@ -147,24 +122,12 @@ for m in range(1, halflen):
             funcs.append("_mm_add_pd")
     print(f'let temp_b{m} = {stackfuncs_flist(funcs, items)};')
 
-# let temp_b1_rot = self.rotate.rotate(temp_b1);
-# let temp_b2_rot = self.rotate.rotate(temp_b2);
-# let temp_b3_rot = self.rotate.rotate(temp_b3);
-# let x0 = _mm_add_pd(_mm_add_pd(value0, x16p), _mm_add_pd(x25p, x34p));
-# let x1 = _mm_add_pd(temp_a1, temp_b1_rot);
-# let x2 = _mm_add_pd(temp_a2, temp_b2_rot);
-# let x3 = _mm_add_pd(temp_a3, temp_b3_rot);
-# let x4 = _mm_sub_pd(temp_a3, temp_b3_rot);
-# let x5 = _mm_sub_pd(temp_a2, temp_b2_rot);
-# let x6 = _mm_sub_pd(temp_a1, temp_b1_rot);
-
 print("")
-#let temp_a1 = _mm_add_ps(_mm_add_ps(value0, temp_a1_1), _mm_add_ps(temp_a1_2, temp_a1_3));
 for m in range(1, halflen):
     print(f'let temp_b{m}_rot = self.rotate.rotate(temp_b{m});')
 
 print("")
-items = ["value0"]
+items = ["values[0]"]
 for n in range(1, halflen):
     items.append(f"x{n}{fftlen-n}p")
 print(f'let x0 = {stackfuncs("_mm_add_pd", items)};')
