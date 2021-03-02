@@ -312,8 +312,24 @@ impl<T: FftNum> FftPlannerSse<T> {
                     panic!("Not f32 or f64");
                 }
             }
-            Recipe::Butterfly11 => Arc::new(Butterfly11::new(direction)) as Arc<dyn Fft<T>>,
-            Recipe::Butterfly13 => Arc::new(Butterfly13::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly11 => {
+                if id_t == id_f32 {
+                    Arc::new(Butterfly11::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(SseF64Butterfly11::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Butterfly13 => {
+                if id_t == id_f32 {
+                    Arc::new(Butterfly13::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(SseF64Butterfly13::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
             Recipe::Butterfly16 => {
                 if id_t == id_f32 {
                     Arc::new(SseF32Butterfly16::new(direction)) as Arc<dyn Fft<T>>
