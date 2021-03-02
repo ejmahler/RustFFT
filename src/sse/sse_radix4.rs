@@ -171,9 +171,10 @@ impl<T: FftNum> Sse32Radix4<T> {
         //let start = time::Instant::now();
         // copy the data into the spectrum vector
 
-        let signal_tm: &[Complex<f32>] = array_utils::workaround_transmute(signal);
-        let spectrum_tm: &mut [Complex<f32>] = array_utils::workaround_transmute_mut(spectrum);
-        prepare_radix4_sse32(signal.len(), self.base_len, signal_tm, spectrum_tm, 1);
+        //let signal_tm: &[Complex<f32>] = array_utils::workaround_transmute(signal);
+        //let spectrum_tm: &mut [Complex<f32>] = array_utils::workaround_transmute_mut(spectrum);
+        //prepare_radix4_sse32(signal.len(), self.base_len, signal_tm, spectrum_tm, 1);
+        prepare_radix4(signal.len(), self.base_len, signal, spectrum, 1);
 
         //prepare_radix4_32(signal.len(), self.base_len, signal, spectrum, 1);
         //let end = time::Instant::now();
@@ -226,6 +227,7 @@ boilerplate_fft_sse_oop!(Sse32Radix4, |this: &Sse32Radix4<_>| this.len);
 
 // after testing an iterative bit reversal algorithm, this recursive algorithm
 // was almost an order of magnitude faster at setting up
+/*
 fn prepare_radix4_32<T: FftNum>(
     size: usize,
     base_len: usize,
@@ -251,6 +253,7 @@ fn prepare_radix4_32<T: FftNum>(
         }
     }
 }
+*/
 
 // after testing an iterative bit reversal algorithm, this recursive algorithm
 // was almost an order of magnitude faster at setting up
@@ -451,10 +454,12 @@ impl<T: FftNum> Sse64Radix4<T> {
     ) {
         //let start = time::Instant::now();
         // copy the data into the spectrum vector
-        let signal_tm: &[Complex<f64>] = array_utils::workaround_transmute(signal);
-        let spectrum_tm: &mut [Complex<f64>] = array_utils::workaround_transmute_mut(spectrum);
-        prepare_radix4_sse64(signal.len(), self.base_len, signal_tm, spectrum_tm, 1);
+        //let signal_tm: &[Complex<f64>] = array_utils::workaround_transmute(signal);
+        //let spectrum_tm: &mut [Complex<f64>] = array_utils::workaround_transmute_mut(spectrum);
+        //prepare_radix4_sse64(signal.len(), self.base_len, signal_tm, spectrum_tm, 1);
+
         //prepare_radix4_64(signal.len(), self.base_len, signal, spectrum, 1);
+        prepare_radix4(signal.len(), self.base_len, signal, spectrum, 1);
         //let end = time::Instant::now();
         //println!("prepare: {} ns", end.duration_since(start).as_nanos());
 
@@ -504,6 +509,7 @@ boilerplate_fft_sse_oop!(Sse64Radix4, |this: &Sse64Radix4<_>| this.len);
 
 // after testing an iterative bit reversal algorithm, this recursive algorithm
 // was almost an order of magnitude faster at setting up
+/*
 fn prepare_radix4_64<T: FftNum>(
     size: usize,
     base_len: usize,
@@ -529,9 +535,11 @@ fn prepare_radix4_64<T: FftNum>(
         }
     }
 }
+*/
 
 // after testing an iterative bit reversal algorithm, this recursive algorithm
 // was almost an order of magnitude faster at setting up
+/*
 fn prepare_radix4_sse64(
     size: usize,
     base_len: usize,
@@ -543,7 +551,6 @@ fn prepare_radix4_sse64(
         unsafe {
             for i in 0..size {
                 _mm_storeu_pd(spectrum.as_mut_ptr().add(i) as *mut f64, _mm_loadu_pd(signal.as_ptr().add(i * stride) as *const f64));
-                //*spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stride);
             }
         }
     } else {
@@ -555,6 +562,57 @@ fn prepare_radix4_sse64(
                 &mut spectrum[i * (size / 4)..],
                 stride * 4,
             );
+        }
+    }
+}
+*/
+
+
+fn prepare_radix4<T: FftNum>(
+    size: usize,
+    base_len: usize,
+    signal: &[Complex<T>],
+    spectrum: &mut [Complex<T>],
+    stride: usize,
+) {
+    if size == (4*base_len) {
+        do_radix4_shuffle(size, signal, spectrum, stride);
+    } else if size == base_len {
+        unsafe {
+            for i in 0..size {
+                *spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stride);
+            }
+        }
+    } else {
+        for i in 0..4 {
+            prepare_radix4(
+                size / 4,
+                base_len,
+                &signal[i * stride..],
+                &mut spectrum[i * (size / 4)..],
+                stride * 4,
+            );
+        }
+    }
+}
+
+
+fn do_radix4_shuffle<T: FftNum>(size: usize, signal: &[Complex<T>], spectrum: &mut [Complex<T>], stride: usize) {
+    let stepsize = size / 4;
+    let stepstride = stride * 4;
+    let signal_offset = stride;
+    let spectrum_offset = size / 4;
+    unsafe {
+        for i in 0..stepsize {
+            let val0 = *signal.get_unchecked(i * stepstride);
+            let val1 = *signal.get_unchecked(i * stepstride + signal_offset);
+            let val2 = *signal.get_unchecked(i * stepstride + 2*signal_offset);
+            let val3 = *signal.get_unchecked(i * stepstride + 3*signal_offset);
+            *spectrum.get_unchecked_mut(i) = val0;
+            *spectrum.get_unchecked_mut(i + spectrum_offset) = val1;
+            *spectrum.get_unchecked_mut(i + 2*spectrum_offset) = val2;
+            *spectrum.get_unchecked_mut(i + 3*spectrum_offset) = val3;
+
         }
     }
 }
@@ -612,7 +670,7 @@ mod unit_tests {
 
     #[test]
     fn test_sse_radix4_64() {
-        for pow in 0..12 {
+        for pow in 4..12 {
             let len = 1 << pow;
             test_sse_radix4_64_with_length(len, FftDirection::Forward);
             test_sse_radix4_64_with_length(len, FftDirection::Inverse);
@@ -680,15 +738,70 @@ mod unit_tests {
         }
     }
 
+    fn prepare_radix4_unroll(
+        size: usize,
+        base_len: usize,
+        signal: &[f32],
+        spectrum: &mut [f32],
+        stride: usize,
+    ) {
+        let size_bits = size.trailing_zeros();
+        let base_bits = base_len.trailing_zeros();
+        assert!(size_bits%2 == base_bits%2);
+        if size == (4*base_len) {
+            do_shuffling(size, base_len, signal, spectrum, stride);
+        } else {
+            for i in 0..4 {
+                prepare_radix4_unroll(
+                    size / 4,
+                    base_len,
+                    &signal[i * stride..],
+                    &mut spectrum[i * (size / 4)..],
+                    stride * 4,
+                );
+            }
+        }
+    }
+
+
+    fn do_shuffling(size: usize, base_len: usize, signal: &[f32], spectrum: &mut [f32], stride: usize) {
+        let stepsize = size / 4;
+        let stepstride = stride * 4;
+        let signal_offset = stride;
+        let spectrum_offset = size / 4;
+        unsafe {
+            for i in 0..stepsize {
+                *spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stepstride);
+                *spectrum.get_unchecked_mut(i + spectrum_offset) = *signal.get_unchecked(i * stepstride + signal_offset);
+                *spectrum.get_unchecked_mut(i + 2*spectrum_offset) = *signal.get_unchecked(i * stepstride + 2*signal_offset);
+                *spectrum.get_unchecked_mut(i + 3*spectrum_offset) = *signal.get_unchecked(i * stepstride + 3*signal_offset);
+            }
+        }
+    }
+
     #[test]
     fn test_prepare() {
-        let len = 128;
+        let len = 256;
         let mut signal = vec![0.0; len];
         let mut spectrum = vec![0.0_f32; len];
         for n in 0..signal.len() {
             signal[n] = n as f32;
         }
-        prepare_radix4(signal.len(), 32, &signal[..], &mut spectrum[..], 1);
+        prepare_radix4(signal.len(), 16, &signal[..], &mut spectrum[..], 1);
+        println!("{:?}", spectrum);
+        assert!(false);
+    }
+
+
+    #[test]
+    fn test_prepare2() {
+        let len = 256;
+        let mut signal = vec![0.0; len];
+        let mut spectrum = vec![0.0_f32; len];
+        for n in 0..signal.len() {
+            signal[n] = n as f32;
+        }
+        prepare_radix4_unroll(signal.len(), 16, &signal[..], &mut spectrum[..], 1);
         println!("{:?}", spectrum);
         assert!(false);
     }
