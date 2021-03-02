@@ -883,7 +883,7 @@ impl<T: FftNum> SseF64Butterfly4<T> {
 
 
 
-pub struct Sse32Butterfly5<T> {
+pub struct SseF32Butterfly5<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     rotate: Rotate90F32,
@@ -897,11 +897,11 @@ pub struct Sse32Butterfly5<T> {
     twiddle2im: __m128,
 }
 
-boilerplate_fft_sse_f32_butterfly!(Sse32Butterfly5, 5, |this: &Sse32Butterfly5<_>| this
+boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly5, 5, |this: &SseF32Butterfly5<_>| this
     .direction);
-boilerplate_fft_sse_common_butterfly!(Sse32Butterfly5, 5, |this: &Sse32Butterfly5<_>| this
+boilerplate_fft_sse_common_butterfly!(SseF32Butterfly5, 5, |this: &SseF32Butterfly5<_>| this
     .direction);
-impl<T: FftNum> Sse32Butterfly5<T> {
+impl<T: FftNum> SseF32Butterfly5<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
@@ -1178,6 +1178,198 @@ impl<T: FftNum> SseF64Butterfly5<T> {
     }
 }
 
+
+
+
+//   _____           _________  _     _ _   
+//  |___  |         |___ /___ \| |__ (_) |_ 
+//     / /   _____    |_ \ __) | '_ \| | __|
+//    / /   |_____|  ___) / __/| |_) | | |_ 
+//   /_/            |____/_____|_.__/|_|\__|
+//                                          
+
+pub struct SseF32Butterfly7<T> {
+    direction: FftDirection,
+    _phantom: std::marker::PhantomData<T>,
+    rotate: Rotate90F32,
+    twiddle1re: __m128,
+    twiddle1im: __m128,
+    twiddle2re: __m128,
+    twiddle2im: __m128,
+    twiddle3re: __m128,
+    twiddle3im: __m128,
+}
+
+boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly7, 7, |this: &SseF32Butterfly7<_>| this
+    .direction);
+boilerplate_fft_sse_common_butterfly!(SseF32Butterfly7, 7, |this: &SseF32Butterfly7<_>| this
+    .direction);
+impl<T: FftNum> SseF32Butterfly7<T> {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert_f32::<T>();
+        let rotate = Rotate90F32::new(true);
+        let tw1: Complex<f32> = twiddles::compute_twiddle(1, 7, direction);
+        let tw2: Complex<f32> = twiddles::compute_twiddle(2, 7, direction);
+        let tw3: Complex<f32> = twiddles::compute_twiddle(3, 7, direction);
+        let twiddle1re = unsafe { _mm_set_ps(tw1.re, tw1.re, tw1.re, tw1.re) };
+        let twiddle1im = unsafe { _mm_set_ps(tw1.im, tw1.im, tw1.im, tw1.im) };
+        let twiddle2re = unsafe { _mm_set_ps(tw2.re, tw2.re, tw2.re, tw2.re) };
+        let twiddle2im = unsafe { _mm_set_ps(tw2.im, tw2.im, tw2.im, tw2.im) };
+        let twiddle3re = unsafe { _mm_set_ps(tw3.re, tw3.re, tw3.re, tw3.re) };
+        let twiddle3im = unsafe { _mm_set_ps(tw3.im, tw3.im, tw3.im, tw3.im) };
+
+        Self {
+            direction,
+            _phantom: std::marker::PhantomData,
+            rotate,
+            twiddle1re,
+            twiddle1im,
+            twiddle2re,
+            twiddle2im,
+            twiddle3re,
+            twiddle3im,
+        }
+    }
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
+        let value00 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr() as *const f64));
+        let value11 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(1) as *const f64));
+        let value22 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(2) as *const f64));
+        let value33 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(3) as *const f64));
+        let value44 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(4) as *const f64));
+        let value55 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(5) as *const f64));
+        let value66 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(6) as *const f64));
+
+
+        let temp = self.perform_dual_fft_direct(value00, value11, value22, value33, value44, value55, value66);
+
+        let array = std::mem::transmute::<[__m128; 7], [Complex<f32>; 14]>(temp);
+
+        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
+
+        *output_slice.add(0) = array[0];
+        *output_slice.add(1) = array[2];
+        *output_slice.add(2) = array[4];
+        *output_slice.add(3) = array[6];
+        *output_slice.add(4) = array[8];
+        *output_slice.add(5) = array[10];
+        *output_slice.add(6) = array[12];
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_dual_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
+        let valuea0a1 = _mm_loadu_ps(input.as_ptr() as *const f32);
+        let valuea2a3 = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
+        let valuea4a5 = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
+        let valuea6b0 = _mm_loadu_ps(input.as_ptr().add(6) as *const f32);
+        let valueb1b2 = _mm_loadu_ps(input.as_ptr().add(8) as *const f32);
+        let valueb3b4 = _mm_loadu_ps(input.as_ptr().add(10) as *const f32);
+        let valueb5b6 = _mm_loadu_ps(input.as_ptr().add(12) as *const f32);
+
+        let value0 = pack_1and2_f32(valuea0a1, valuea6b0);
+        let value1 = pack_2and1_f32(valuea0a1, valueb1b2);
+        let value2 = pack_1and2_f32(valuea2a3, valueb1b2);
+        let value3 = pack_2and1_f32(valuea2a3, valueb3b4);
+        let value4 = pack_1and2_f32(valuea4a5, valueb3b4);
+        let value5 = pack_2and1_f32(valuea4a5, valueb5b6);
+        let value6 = pack_1and2_f32(valuea6b0, valueb5b6);
+
+        let out = self.perform_dual_fft_direct(value0, value1, value2, value3, value4, value5, value6);
+
+        let val = std::mem::transmute::<[__m128; 7], [Complex<f32>; 14]>(out);
+
+        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
+        *output_slice.add(0) = val[0];
+        *output_slice.add(1) = val[2];
+        *output_slice.add(2) = val[4];
+        *output_slice.add(3) = val[6];
+        *output_slice.add(4) = val[8];
+        *output_slice.add(5) = val[10];
+        *output_slice.add(6) = val[12];
+        *output_slice.add(7) = val[1];
+        *output_slice.add(8) = val[3];
+        *output_slice.add(9) = val[5];
+        *output_slice.add(10) = val[7];
+        *output_slice.add(11) = val[9];
+        *output_slice.add(12) = val[11];
+        *output_slice.add(13) = val[13];
+    }
+
+    // length 3 dual fft of a, given as (a0, b0), (a1, b1), (a2, b2).
+    // result is [(A0, B0), (A1, B1), (A2, B2)]
+    #[inline(always)]
+    pub(crate) unsafe fn perform_dual_fft_direct(
+        &self,
+        value0: __m128,
+        value1: __m128,
+        value2: __m128,
+        value3: __m128,
+        value4: __m128,
+        value5: __m128,
+        value6: __m128,
+    ) -> [__m128; 7] {
+        // This is a SSE translation of the scalar 7-point butterfly 
+        let x16p = _mm_add_ps(value1, value6);
+        let x16n = _mm_sub_ps(value1, value6);
+        let x25p = _mm_add_ps(value2, value5);
+        let x25n = _mm_sub_ps(value2, value5);
+        let x34p = _mm_add_ps(value3, value4);
+        let x34n = _mm_sub_ps(value3, value4);
+
+        let temp_a1_1 = _mm_mul_ps(self.twiddle1re, x16p);
+        let temp_a1_2 = _mm_mul_ps(self.twiddle2re, x25p);
+        let temp_a1_3 = _mm_mul_ps(self.twiddle3re, x34p);
+
+        let temp_a2_1 = _mm_mul_ps(self.twiddle1re, x34p);
+        let temp_a2_2 = _mm_mul_ps(self.twiddle2re, x16p);
+        let temp_a2_3 = _mm_mul_ps(self.twiddle3re, x25p);
+
+        let temp_a3_1 = _mm_mul_ps(self.twiddle1re, x25p);
+        let temp_a3_2 = _mm_mul_ps(self.twiddle2re, x34p);
+        let temp_a3_3 = _mm_mul_ps(self.twiddle3re, x16p);
+
+        let temp_b1_1 = _mm_mul_ps(self.twiddle1im, x16n);
+        let temp_b1_2 = _mm_mul_ps(self.twiddle2im, x25n);
+        let temp_b1_3 = _mm_mul_ps(self.twiddle3im, x34n);
+
+        let temp_b2_1 = _mm_mul_ps(self.twiddle2im, x16n);
+        let temp_b2_2 = _mm_mul_ps(self.twiddle3im, x25n);
+        let temp_b2_3 = _mm_mul_ps(self.twiddle1im, x34n);
+
+        let temp_b3_1 = _mm_mul_ps(self.twiddle3im, x16n);
+        let temp_b3_2 = _mm_mul_ps(self.twiddle1im, x25n);
+        let temp_b3_3 = _mm_mul_ps(self.twiddle2im, x34n);
+
+        let temp_a1 = _mm_add_ps(_mm_add_ps(value0, temp_a1_1), _mm_add_ps(temp_a1_2, temp_a1_3));
+        let temp_a2 = _mm_add_ps(_mm_add_ps(value0, temp_a2_1), _mm_add_ps(temp_a2_2, temp_a2_3));
+        let temp_a3 = _mm_add_ps(_mm_add_ps(value0, temp_a3_1), _mm_add_ps(temp_a3_2, temp_a3_3));
+
+        let temp_b1 = _mm_add_ps(temp_b1_1, _mm_add_ps(temp_b1_2, temp_b1_3));
+        let temp_b2 = _mm_sub_ps(temp_b2_1, _mm_add_ps(temp_b2_2, temp_b2_3));
+        let temp_b3 = _mm_sub_ps(temp_b3_1, _mm_sub_ps(temp_b3_2, temp_b3_3));
+
+        let temp_b1_rot = self.rotate.rotate_both(temp_b1);
+        let temp_b2_rot = self.rotate.rotate_both(temp_b2);
+        let temp_b3_rot = self.rotate.rotate_both(temp_b3);
+        let x0 = _mm_add_ps(_mm_add_ps(value0, x16p), _mm_add_ps(x25p, x34p));
+        let x1 = _mm_add_ps(temp_a1, temp_b1_rot);
+        let x2 = _mm_add_ps(temp_a2, temp_b2_rot);
+        let x3 = _mm_add_ps(temp_a3, temp_b3_rot);
+        let x4 = _mm_sub_ps(temp_a3, temp_b3_rot);
+        let x5 = _mm_sub_ps(temp_a2, temp_b2_rot);
+        let x6 = _mm_sub_ps(temp_a1, temp_b1_rot);
+        [x0, x1, x2, x3, x4, x5, x6]
+    }
+}
 
 
 //   _____            __   _  _   _     _ _   
@@ -2955,7 +3147,8 @@ mod unit_tests {
     test_butterfly_32_func!(test_ssef32_butterfly2, SseF32Butterfly2, 2);
     test_butterfly_32_func!(test_ssef32_butterfly3, SseF32Butterfly3, 3);
     test_butterfly_32_func!(test_ssef32_butterfly4, SseF32Butterfly4, 4);
-    test_butterfly_32_func!(test_ssef32_butterfly5, Sse32Butterfly5, 5);
+    test_butterfly_32_func!(test_ssef32_butterfly5, SseF32Butterfly5, 5);
+    test_butterfly_32_func!(test_ssef32_butterfly7, SseF32Butterfly7, 7);
     test_butterfly_32_func!(test_ssef32_butterfly8, SseF32Butterfly8, 8);
     test_butterfly_32_func!(test_ssef32_butterfly16, SseF32Butterfly16, 16);
     test_butterfly_32_func!(test_ssef32_butterfly32, SseF32Butterfly32, 32);
