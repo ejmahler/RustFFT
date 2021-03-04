@@ -1202,6 +1202,146 @@ impl<T: FftNum> SseF64Butterfly5<T> {
 //                                         
 
 
+pub struct SseF32Butterfly6<T> {
+    direction: FftDirection,
+    _phantom: std::marker::PhantomData<T>,
+    bf3: SseF32Butterfly3<T>,
+}
+
+boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly6, 6, |this: &SseF32Butterfly6<_>| this
+    .direction);
+boilerplate_fft_sse_common_butterfly!(SseF32Butterfly6, 6, |this: &SseF32Butterfly6<_>| this
+    .direction);
+impl<T: FftNum> SseF32Butterfly6<T> {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert_f32::<T>();
+        let bf3 = SseF32Butterfly3::new(direction);
+
+        Self {
+            direction,
+            _phantom: std::marker::PhantomData,
+            bf3,
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
+        let value01 = _mm_loadu_ps(input.as_ptr() as *const f32);
+        let value23 = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
+        let value45 = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
+
+        let temp = self.perform_fft_direct(value01, value23, value45);
+
+        let array = std::mem::transmute::<[__m128; 3], [Complex<f32>; 6]>(temp);
+
+        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
+
+        *output_slice.add(0) = array[0];
+        *output_slice.add(1) = array[1];
+        *output_slice.add(2) = array[2];
+        *output_slice.add(3) = array[3];
+        *output_slice.add(4) = array[4];
+        *output_slice.add(5) = array[5];
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_dual_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
+        let valuea01 = _mm_loadu_ps(input.as_ptr() as *const f32);
+        let valuea23 = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
+        let valuea45 = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
+        let valueb01 = _mm_loadu_ps(input.as_ptr().add(6) as *const f32);
+        let valueb23 = _mm_loadu_ps(input.as_ptr().add(8) as *const f32);
+        let valueb45 = _mm_loadu_ps(input.as_ptr().add(10) as *const f32);
+
+        let value0 = pack_1st_f32(valuea01, valueb01);
+        let value1 = pack_2nd_f32(valuea01, valueb01);
+        let value2 = pack_1st_f32(valuea23, valueb23);
+        let value3 = pack_2nd_f32(valuea23, valueb23);
+        let value4 = pack_1st_f32(valuea45, valueb45);
+        let value5 = pack_2nd_f32(valuea45, valueb45);
+
+        let out = self.perform_dual_fft_direct(value0, value1, value2, value3, value4, value5);
+
+        let val = std::mem::transmute::<[__m128; 6], [Complex<f32>; 12]>(out);
+
+        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
+        *output_slice.add(0) = val[0];
+        *output_slice.add(1) = val[2];
+        *output_slice.add(2) = val[4];
+        *output_slice.add(3) = val[6];
+        *output_slice.add(4) = val[8];
+        *output_slice.add(5) = val[10];
+        *output_slice.add(6) = val[1];
+        *output_slice.add(7) = val[3];
+        *output_slice.add(8) = val[5];
+        *output_slice.add(9) = val[7];
+        *output_slice.add(10) = val[9];
+        *output_slice.add(11) = val[11];
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_direct(
+        &self,
+        value01: __m128,
+        value23: __m128,
+        value45: __m128,
+    ) -> [__m128; 3] {
+        // Algorithm: 3x2 good-thomas
+
+        // Size-3 FFTs down the columns of our reordered array
+        let reord0 = pack_1and2_f32(value01, value23);
+        let reord1 = pack_1and2_f32(value23, value45);
+        let reord2 = pack_1and2_f32(value45, value01);
+
+        let mid = self.bf3.perform_dual_fft_direct(reord0, reord1, reord2);
+
+        // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
+
+        // Transpose the data and do size-2 FFTs down the columns
+        let [output0, output1] = dual_fft2_contiguous_f32(mid[0], mid[1]);
+        let output2 = solo_fft2_f32(mid[2]);
+
+        // Reorder into output
+        [pack_1and2_f32(output0, output1), pack_1st_f32(output2, output1), pack_2nd_f32(output0, output2)]
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_dual_fft_direct(
+        &self,
+        value0: __m128,
+        value1: __m128,
+        value2: __m128,
+        value3: __m128,
+        value4: __m128,
+        value5: __m128,
+    ) -> [__m128; 6] {
+        // Algorithm: 3x2 good-thomas
+
+        // Size-3 FFTs down the columns of our reordered array
+        let mid0 = self.bf3.perform_dual_fft_direct(value0, value2, value4);
+        let mid1 = self.bf3.perform_dual_fft_direct(value3, value5, value1);
+
+        // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
+
+        // Transpose the data and do size-2 FFTs down the columns
+        let [output0, output1] = dual_fft2_interleaved_f32(mid0[0], mid1[0]);
+        let [output2, output3] = dual_fft2_interleaved_f32(mid0[1], mid1[1]);
+        let [output4, output5] = dual_fft2_interleaved_f32(mid0[2], mid1[2]);
+
+        // Reorder into output
+        [output0, output3, output4, output1, output2, output5]
+    }
+}
+
 
 
 //    __              __   _  _   _     _ _   
@@ -3343,6 +3483,7 @@ mod unit_tests {
     test_butterfly_32_func!(test_ssef32_butterfly3, SseF32Butterfly3, 3);
     test_butterfly_32_func!(test_ssef32_butterfly4, SseF32Butterfly4, 4);
     test_butterfly_32_func!(test_ssef32_butterfly5, SseF32Butterfly5, 5);
+    test_butterfly_32_func!(test_ssef32_butterfly6, SseF32Butterfly6, 6);
     test_butterfly_32_func!(test_ssef32_butterfly8, SseF32Butterfly8, 8);
     test_butterfly_32_func!(test_ssef32_butterfly16, SseF32Butterfly16, 16);
     test_butterfly_32_func!(test_ssef32_butterfly32, SseF32Butterfly32, 32);
