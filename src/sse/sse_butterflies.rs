@@ -1194,6 +1194,105 @@ impl<T: FftNum> SseF64Butterfly5<T> {
 
 
 
+//    __             _________  _     _ _   
+//   / /_           |___ /___ \| |__ (_) |_ 
+//  | '_ \   _____    |_ \ __) | '_ \| | __|
+//  | (_) | |_____|  ___) / __/| |_) | | |_ 
+//   \___/          |____/_____|_.__/|_|\__|
+//                                         
+
+
+
+
+//    __              __   _  _   _     _ _   
+//   / /_            / /_ | || | | |__ (_) |_ 
+//  | '_ \   _____  | '_ \| || |_| '_ \| | __|
+//  | (_) | |_____| | (_) |__   _| |_) | | |_ 
+//   \___/           \___/   |_| |_.__/|_|\__|
+//                                           
+
+
+
+pub struct SseF64Butterfly6<T> {
+    direction: FftDirection,
+    _phantom: std::marker::PhantomData<T>,
+    bf3: SseF64Butterfly3<T>,
+}
+
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly6, 6, |this: &SseF64Butterfly6<_>| this
+    .direction);
+boilerplate_fft_sse_common_butterfly!(SseF64Butterfly6, 6, |this: &SseF64Butterfly6<_>| this
+    .direction);
+impl<T: FftNum> SseF64Butterfly6<T> {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert_f64::<T>();
+        let bf3 = SseF64Butterfly3::new(direction);
+
+        Self {
+            direction,
+            _phantom: std::marker::PhantomData,
+            bf3,
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
+        let value0 = _mm_loadu_pd(input.as_ptr() as *const f64);
+        let value1 = _mm_loadu_pd(input.as_ptr().add(1) as *const f64);
+        let value2 = _mm_loadu_pd(input.as_ptr().add(2) as *const f64);
+        let value3 = _mm_loadu_pd(input.as_ptr().add(3) as *const f64);
+        let value4 = _mm_loadu_pd(input.as_ptr().add(4) as *const f64);
+        let value5 = _mm_loadu_pd(input.as_ptr().add(5) as *const f64);
+
+        let out = self.perform_fft_direct(value0, value1, value2, value3, value4, value5);
+
+        let val = std::mem::transmute::<[__m128d; 6], [Complex<f64>; 6]>(out);
+
+        let output_slice = output.as_mut_ptr() as *mut Complex<f64>;
+        *output_slice.add(0) = val[0];
+        *output_slice.add(1) = val[1];
+        *output_slice.add(2) = val[2];
+        *output_slice.add(3) = val[3];
+        *output_slice.add(4) = val[4];
+        *output_slice.add(5) = val[5];
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_direct(
+        &self,
+        value0: __m128d,
+        value1: __m128d,
+        value2: __m128d,
+        value3: __m128d,
+        value4: __m128d,
+        value5: __m128d,
+    ) -> [__m128d; 6] {
+        // Algorithm: 3x2 good-thomas
+
+        // Size-3 FFTs down the columns of our reordered array
+        let mid0 = self.bf3.perform_fft_direct(value0, value2, value4);
+        let mid1 = self.bf3.perform_fft_direct(value3, value5, value1);
+
+        // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
+
+        // Transpose the data and do size-2 FFTs down the columns
+        let [output0, output1] = solo_fft2_f64(mid0[0], mid1[0]);
+        let [output2, output3] = solo_fft2_f64(mid0[1], mid1[1]);
+        let [output4, output5] = solo_fft2_f64(mid0[2], mid1[2]);
+
+        // Reorder into output
+        [output0, output3, output4, output1, output2, output5]
+    }
+}
+
+
+
+
 //    ___            _________  _     _ _
 //   ( _ )          |___ /___ \| |__ (_) |_
 //   / _ \   _____    |_ \ __) | '_ \| | __|
@@ -1482,6 +1581,465 @@ impl<T: FftNum> SseF64Butterfly8<T> {
         // step 6: rearrange and copy to buffer
         [
             out0[0], out1[0], out2[0], out3[0], out0[1], out1[1], out2[1], out3[1],
+        ]
+    }
+}
+
+
+
+//    ___            _________  _     _ _   
+//   / _ \          |___ /___ \| |__ (_) |_ 
+//  | (_) |  _____    |_ \ __) | '_ \| | __|
+//   \__, | |_____|  ___) / __/| |_) | | |_ 
+//     /_/          |____/_____|_.__/|_|\__|
+//                                         
+
+
+
+//    ___             __   _  _   _     _ _   
+//   / _ \           / /_ | || | | |__ (_) |_ 
+//  | (_) |  _____  | '_ \| || |_| '_ \| | __|
+//   \__, | |_____| | (_) |__   _| |_) | | |_ 
+//     /_/           \___/   |_| |_.__/|_|\__|
+//                                            
+
+pub struct SseF64Butterfly9<T> {
+    direction: FftDirection,
+    _phantom: std::marker::PhantomData<T>,
+    bf3: SseF64Butterfly3<T>,
+    twiddle1: __m128d,
+    twiddle2: __m128d,
+    twiddle4: __m128d,
+}
+
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly9, 9, |this: &SseF64Butterfly9<_>| this
+    .direction);
+boilerplate_fft_sse_common_butterfly!(SseF64Butterfly9, 9, |this: &SseF64Butterfly9<_>| this
+    .direction);
+impl<T: FftNum> SseF64Butterfly9<T> {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert_f64::<T>();
+        let bf3 = SseF64Butterfly3::new(direction);
+        let tw1: Complex<f64> = twiddles::compute_twiddle(1, 9, direction);
+        let tw2: Complex<f64> = twiddles::compute_twiddle(2, 9, direction);
+        let tw4: Complex<f64> = twiddles::compute_twiddle(4, 9, direction);
+        let twiddle1 = unsafe { _mm_set_pd(tw1.im, tw1.re) };
+        let twiddle2 = unsafe { _mm_set_pd(tw2.im, tw2.re) };
+        let twiddle4 = unsafe { _mm_set_pd(tw4.im, tw4.re) };
+        Self {
+            direction,
+            _phantom: std::marker::PhantomData,
+            bf3,
+            twiddle1,
+            twiddle2,
+            twiddle4,
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
+        let v0 = _mm_loadu_pd(input.as_ptr() as *const f64);
+        let v1 = _mm_loadu_pd(input.as_ptr().add(1) as *const f64);
+        let v2 = _mm_loadu_pd(input.as_ptr().add(2) as *const f64);
+        let v3 = _mm_loadu_pd(input.as_ptr().add(3) as *const f64);
+        let v4 = _mm_loadu_pd(input.as_ptr().add(4) as *const f64);
+        let v5 = _mm_loadu_pd(input.as_ptr().add(5) as *const f64);
+        let v6 = _mm_loadu_pd(input.as_ptr().add(6) as *const f64);
+        let v7 = _mm_loadu_pd(input.as_ptr().add(7) as *const f64);
+        let v8 = _mm_loadu_pd(input.as_ptr().add(8) as *const f64);
+
+        let out = self.perform_fft_direct([v0, v1, v2, v3, v4, v5,v6, v7, v8]);
+
+        let val = std::mem::transmute::<[__m128d; 9], [Complex<f64>; 9]>(out);
+
+        let output_slice = output.as_mut_ptr() as *mut Complex<f64>;
+        *output_slice.add(0) = val[0];
+        *output_slice.add(1) = val[1];
+        *output_slice.add(2) = val[2];
+        *output_slice.add(3) = val[3];
+        *output_slice.add(4) = val[4];
+        *output_slice.add(5) = val[5];
+        *output_slice.add(6) = val[6];
+        *output_slice.add(7) = val[7];
+        *output_slice.add(8) = val[8];
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_direct(
+        &self,
+        values: [__m128d; 9],
+    ) -> [__m128d; 9] {
+        // Algorithm: 3x3 mixed radix
+
+        // Size-3 FFTs down the columns
+        let mid0 = self.bf3.perform_fft_direct(values[0], values[3], values[6]);
+        let mut mid1 = self.bf3.perform_fft_direct(values[1], values[4], values[7]);
+        let mut mid2 = self.bf3.perform_fft_direct(values[2], values[5], values[8]);
+ 
+        // Apply twiddle factors. Note that we're re-using twiddle2
+        mid1[1] = complex_mul_f64(self.twiddle1, mid1[1]);
+        mid1[2] = complex_mul_f64(self.twiddle2, mid1[2]);
+        mid2[1] = complex_mul_f64(self.twiddle2, mid2[1]);
+        mid2[2] = complex_mul_f64(self.twiddle4, mid2[2]);
+
+        let [output0, output1, output2] =
+            self.bf3.perform_fft_direct(mid0[0], mid1[0], mid2[0]);
+        let [output3, output4, output5] =
+            self.bf3.perform_fft_direct(mid0[1], mid1[1], mid2[1]);
+        let [output6, output7, output8] =
+            self.bf3.perform_fft_direct(mid0[2], mid1[2], mid2[2]);
+
+        [
+            output0, output3, output6, output1, output4, output7, output2, output5, output8,
+        ]
+    }
+}
+
+
+
+
+//   _  ___            _________  _     _ _   
+//  / |/ _ \          |___ /___ \| |__ (_) |_ 
+//  | | | | |  _____    |_ \ __) | '_ \| | __|
+//  | | |_| | |_____|  ___) / __/| |_) | | |_ 
+//  |_|\___/          |____/_____|_.__/|_|\__|
+//                                            
+
+
+
+//   _  ___             __   _  _   _     _ _   
+//  / |/ _ \           / /_ | || | | |__ (_) |_ 
+//  | | | | |  _____  | '_ \| || |_| '_ \| | __|
+//  | | |_| | |_____| | (_) |__   _| |_) | | |_ 
+//  |_|\___/           \___/   |_| |_.__/|_|\__|
+//                                              
+
+
+
+pub struct SseF64Butterfly10<T> {
+    direction: FftDirection,
+    _phantom: std::marker::PhantomData<T>,
+    bf2: SseF64Butterfly2<T>,
+    bf5: SseF64Butterfly5<T>,
+}
+
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly10, 10, |this: &SseF64Butterfly10<_>| this
+    .direction);
+boilerplate_fft_sse_common_butterfly!(SseF64Butterfly10, 10, |this: &SseF64Butterfly10<_>| this
+    .direction);
+impl<T: FftNum> SseF64Butterfly10<T> {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert_f64::<T>();
+        let bf2 = SseF64Butterfly2::new(direction);
+        let bf5 = SseF64Butterfly5::new(direction);
+        Self {
+            direction,
+            _phantom: std::marker::PhantomData,
+            bf2,
+            bf5,
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
+        let v0 = _mm_loadu_pd(input.as_ptr() as *const f64);
+        let v1 = _mm_loadu_pd(input.as_ptr().add(1) as *const f64);
+        let v2 = _mm_loadu_pd(input.as_ptr().add(2) as *const f64);
+        let v3 = _mm_loadu_pd(input.as_ptr().add(3) as *const f64);
+        let v4 = _mm_loadu_pd(input.as_ptr().add(4) as *const f64);
+        let v5 = _mm_loadu_pd(input.as_ptr().add(5) as *const f64);
+        let v6 = _mm_loadu_pd(input.as_ptr().add(6) as *const f64);
+        let v7 = _mm_loadu_pd(input.as_ptr().add(7) as *const f64);
+        let v8 = _mm_loadu_pd(input.as_ptr().add(8) as *const f64);
+        let v9 = _mm_loadu_pd(input.as_ptr().add(9) as *const f64);
+
+        let out = self.perform_fft_direct([v0, v1, v2, v3, v4, v5,v6, v7, v8, v9]);
+
+        let val = std::mem::transmute::<[__m128d; 10], [Complex<f64>; 10]>(out);
+
+        let output_slice = output.as_mut_ptr() as *mut Complex<f64>;
+        *output_slice.add(0) = val[0];
+        *output_slice.add(1) = val[1];
+        *output_slice.add(2) = val[2];
+        *output_slice.add(3) = val[3];
+        *output_slice.add(4) = val[4];
+        *output_slice.add(5) = val[5];
+        *output_slice.add(6) = val[6];
+        *output_slice.add(7) = val[7];
+        *output_slice.add(8) = val[8];
+        *output_slice.add(9) = val[9];
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_direct(
+        &self,
+        values: [__m128d; 10],
+    ) -> [__m128d; 10] {
+        // Algorithm: 5x2 good-thomas
+
+        // Size-4 FFTs down the columns of our reordered array
+        let mid0 = self.bf5.perform_fft_direct(values[0], values[2], values[4], values[6], values[8]);
+        let mid1 = self.bf5.perform_fft_direct(values[5], values[7], values[9], values[1], values[3]);
+
+        // Since this is good-thomas algorithm, we don't need twiddle factors
+
+        // Transpose the data and do size-3 FFTs down the columns
+        let [output0, output1] =
+            self.bf2.perform_fft_direct(mid0[0], mid1[0]);
+        let [output2, output3] =
+            self.bf2.perform_fft_direct(mid0[1], mid1[1]);
+        let [output4, output5] =
+            self.bf2.perform_fft_direct(mid0[2], mid1[2]);
+        let [output6, output7] =
+            self.bf2.perform_fft_direct(mid0[3], mid1[3]);
+        let [output8, output9] =
+            self.bf2.perform_fft_direct(mid0[4], mid1[4]);
+        [
+            output0, output3, output4, output7, output8, output1, output2, output5, output6, output9
+        ]
+    }
+}
+
+
+//   _ ____            _________  _     _ _   
+//  / |___ \          |___ /___ \| |__ (_) |_ 
+//  | | __) |  _____    |_ \ __) | '_ \| | __|
+//  | |/ __/  |_____|  ___) / __/| |_) | | |_ 
+//  |_|_____|         |____/_____|_.__/|_|\__|
+//      
+
+//   _ ____             __   _  _   _     _ _   
+//  / |___ \           / /_ | || | | |__ (_) |_ 
+//  | | __) |  _____  | '_ \| || |_| '_ \| | __|
+//  | |/ __/  |_____| | (_) |__   _| |_) | | |_ 
+//  |_|_____|          \___/   |_| |_.__/|_|\__|
+//                                              
+   
+
+pub struct SseF64Butterfly12<T> {
+    direction: FftDirection,
+    _phantom: std::marker::PhantomData<T>,
+    bf3: SseF64Butterfly3<T>,
+    bf4: SseF64Butterfly4<T>,
+}
+
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly12, 12, |this: &SseF64Butterfly12<_>| this
+    .direction);
+boilerplate_fft_sse_common_butterfly!(SseF64Butterfly12, 12, |this: &SseF64Butterfly12<_>| this
+    .direction);
+impl<T: FftNum> SseF64Butterfly12<T> {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert_f64::<T>();
+        let bf3 = SseF64Butterfly3::new(direction);
+        let bf4 = SseF64Butterfly4::new(direction);
+        Self {
+            direction,
+            _phantom: std::marker::PhantomData,
+            bf3,
+            bf4,
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
+        let v0 = _mm_loadu_pd(input.as_ptr() as *const f64);
+        let v1 = _mm_loadu_pd(input.as_ptr().add(1) as *const f64);
+        let v2 = _mm_loadu_pd(input.as_ptr().add(2) as *const f64);
+        let v3 = _mm_loadu_pd(input.as_ptr().add(3) as *const f64);
+        let v4 = _mm_loadu_pd(input.as_ptr().add(4) as *const f64);
+        let v5 = _mm_loadu_pd(input.as_ptr().add(5) as *const f64);
+        let v6 = _mm_loadu_pd(input.as_ptr().add(6) as *const f64);
+        let v7 = _mm_loadu_pd(input.as_ptr().add(7) as *const f64);
+        let v8 = _mm_loadu_pd(input.as_ptr().add(8) as *const f64);
+        let v9 = _mm_loadu_pd(input.as_ptr().add(9) as *const f64);
+        let v10 = _mm_loadu_pd(input.as_ptr().add(10) as *const f64);
+        let v11 = _mm_loadu_pd(input.as_ptr().add(11) as *const f64);
+
+        let out = self.perform_fft_direct([v0, v1, v2, v3, v4, v5,v6, v7, v8, v9, v10, v11]);
+
+        let val = std::mem::transmute::<[__m128d; 12], [Complex<f64>; 12]>(out);
+
+        let output_slice = output.as_mut_ptr() as *mut Complex<f64>;
+        *output_slice.add(0) = val[0];
+        *output_slice.add(1) = val[1];
+        *output_slice.add(2) = val[2];
+        *output_slice.add(3) = val[3];
+        *output_slice.add(4) = val[4];
+        *output_slice.add(5) = val[5];
+        *output_slice.add(6) = val[6];
+        *output_slice.add(7) = val[7];
+        *output_slice.add(8) = val[8];
+        *output_slice.add(9) = val[9];
+        *output_slice.add(10) = val[10];
+        *output_slice.add(11) = val[11];
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_direct(
+        &self,
+        values: [__m128d; 12],
+    ) -> [__m128d; 12] {
+        // Algorithm: 4x3 good-thomas
+
+        // Size-4 FFTs down the columns of our reordered array
+        let mid0 = self.bf4.perform_fft_direct(values[0], values[3], values[6], values[9]);
+        let mid1 = self.bf4.perform_fft_direct(values[4], values[7], values[10], values[1]);
+        let mid2 = self.bf4.perform_fft_direct(values[8], values[11], values[2], values[5]);
+
+
+        // Since this is good-thomas algorithm, we don't need twiddle factors
+
+        // Transpose the data and do size-3 FFTs down the columns
+        let [output0, output1, output2] =
+            self.bf3.perform_fft_direct(mid0[0], mid1[0], mid2[0]);
+        let [output3, output4, output5] =
+            self.bf3.perform_fft_direct(mid0[1], mid1[1], mid2[1]);
+        let [output6, output7, output8] =
+            self.bf3.perform_fft_direct(mid0[2], mid1[2], mid2[2]);
+        let [output9, output10, output11] =
+            self.bf3.perform_fft_direct(mid0[3], mid1[3], mid2[3]);
+
+        [
+            output0, output4, output8, output9, output1, output5, output6, output10, output2,
+            output3, output7, output11,
+        ]
+    }
+}
+
+
+
+//   _ ____            _________  _     _ _   
+//  / | ___|          |___ /___ \| |__ (_) |_ 
+//  | |___ \   _____    |_ \ __) | '_ \| | __|
+//  | |___) | |_____|  ___) / __/| |_) | | |_ 
+//  |_|____/          |____/_____|_.__/|_|\__|
+//                                            
+
+
+
+//   _ ____             __   _  _   _     _ _   
+//  / | ___|           / /_ | || | | |__ (_) |_ 
+//  | |___ \   _____  | '_ \| || |_| '_ \| | __|
+//  | |___) | |_____| | (_) |__   _| |_) | | |_ 
+//  |_|____/           \___/   |_| |_.__/|_|\__|
+//                                              
+
+
+
+pub struct SseF64Butterfly15<T> {
+    direction: FftDirection,
+    _phantom: std::marker::PhantomData<T>,
+    bf3: SseF64Butterfly3<T>,
+    bf5: SseF64Butterfly5<T>,
+}
+
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly15, 15, |this: &SseF64Butterfly15<_>| this
+    .direction);
+boilerplate_fft_sse_common_butterfly!(SseF64Butterfly15, 15, |this: &SseF64Butterfly15<_>| this
+    .direction);
+impl<T: FftNum> SseF64Butterfly15<T> {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert_f64::<T>();
+        let bf3 = SseF64Butterfly3::new(direction);
+        let bf5 = SseF64Butterfly5::new(direction);
+        Self {
+            direction,
+            _phantom: std::marker::PhantomData,
+            bf3,
+            bf5,
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
+        let v0 = _mm_loadu_pd(input.as_ptr() as *const f64);
+        let v1 = _mm_loadu_pd(input.as_ptr().add(1) as *const f64);
+        let v2 = _mm_loadu_pd(input.as_ptr().add(2) as *const f64);
+        let v3 = _mm_loadu_pd(input.as_ptr().add(3) as *const f64);
+        let v4 = _mm_loadu_pd(input.as_ptr().add(4) as *const f64);
+        let v5 = _mm_loadu_pd(input.as_ptr().add(5) as *const f64);
+        let v6 = _mm_loadu_pd(input.as_ptr().add(6) as *const f64);
+        let v7 = _mm_loadu_pd(input.as_ptr().add(7) as *const f64);
+        let v8 = _mm_loadu_pd(input.as_ptr().add(8) as *const f64);
+        let v9 = _mm_loadu_pd(input.as_ptr().add(9) as *const f64);
+        let v10 = _mm_loadu_pd(input.as_ptr().add(10) as *const f64);
+        let v11 = _mm_loadu_pd(input.as_ptr().add(11) as *const f64);
+        let v12 = _mm_loadu_pd(input.as_ptr().add(12) as *const f64);
+        let v13 = _mm_loadu_pd(input.as_ptr().add(13) as *const f64);
+        let v14 = _mm_loadu_pd(input.as_ptr().add(14) as *const f64);
+
+        let out = self.perform_fft_direct([v0, v1, v2, v3, v4, v5,v6, v7, v8, v9, v10, v11, v12, v13, v14]);
+
+        let val = std::mem::transmute::<[__m128d; 15], [Complex<f64>; 15]>(out);
+
+        let output_slice = output.as_mut_ptr() as *mut Complex<f64>;
+        *output_slice.add(0) = val[0];
+        *output_slice.add(1) = val[1];
+        *output_slice.add(2) = val[2];
+        *output_slice.add(3) = val[3];
+        *output_slice.add(4) = val[4];
+        *output_slice.add(5) = val[5];
+        *output_slice.add(6) = val[6];
+        *output_slice.add(7) = val[7];
+        *output_slice.add(8) = val[8];
+        *output_slice.add(9) = val[9];
+        *output_slice.add(10) = val[10];
+        *output_slice.add(11) = val[11];
+        *output_slice.add(12) = val[12];
+        *output_slice.add(13) = val[13];
+        *output_slice.add(14) = val[14];
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_direct(
+        &self,
+        values: [__m128d; 15],
+    ) -> [__m128d; 15] {
+        // Algorithm: 5x3 good-thomas
+
+        // Size-5 FFTs down the columns of our reordered array
+        let mid0 = self.bf5.perform_fft_direct(values[0], values[3], values[6], values[9], values[12]);
+        let mid1 = self.bf5.perform_fft_direct(values[5], values[8], values[11], values[14], values[2]);
+        let mid2 = self.bf5.perform_fft_direct(values[10], values[13], values[1], values[4], values[7]);
+
+
+        // Since this is good-thomas algorithm, we don't need twiddle factors
+
+        // Transpose the data and do size-3 FFTs down the columns
+        let [output0, output1, output2] =
+            self.bf3.perform_fft_direct(mid0[0], mid1[0], mid2[0]);
+        let [output3, output4, output5] =
+            self.bf3.perform_fft_direct(mid0[1], mid1[1], mid2[1]);
+        let [output6, output7, output8] =
+            self.bf3.perform_fft_direct(mid0[2], mid1[2], mid2[2]);
+        let [output9, output10, output11] =
+            self.bf3.perform_fft_direct(mid0[3], mid1[3], mid2[3]);
+        let [output12, output13, output14] =
+            self.bf3.perform_fft_direct(mid0[4], mid1[4], mid2[4]);
+
+        [
+            output0, output4, output8, output9, output13, output2, output3, output7, output11,
+            output12, output1, output5, output6, output10, output14
         ]
     }
 }
@@ -2807,7 +3365,12 @@ mod unit_tests {
     test_butterfly_64_func!(test_ssef64_butterfly3, SseF64Butterfly3, 3);
     test_butterfly_64_func!(test_ssef64_butterfly4, SseF64Butterfly4, 4);
     test_butterfly_64_func!(test_ssef64_butterfly5, SseF64Butterfly5, 5);
+    test_butterfly_64_func!(test_ssef64_butterfly6, SseF64Butterfly6, 6);
     test_butterfly_64_func!(test_ssef64_butterfly8, SseF64Butterfly8, 8);
+    test_butterfly_64_func!(test_ssef64_butterfly9, SseF64Butterfly9, 9);
+    test_butterfly_64_func!(test_ssef64_butterfly10, SseF64Butterfly10, 10);
+    test_butterfly_64_func!(test_ssef64_butterfly12, SseF64Butterfly12, 12);
+    test_butterfly_64_func!(test_ssef64_butterfly15, SseF64Butterfly15, 15);
     test_butterfly_64_func!(test_ssef64_butterfly16, SseF64Butterfly16, 16);
     test_butterfly_64_func!(test_ssef64_butterfly32, SseF64Butterfly32, 32);
 
