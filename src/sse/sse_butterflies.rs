@@ -19,15 +19,18 @@ macro_rules! boilerplate_fft_sse_f32_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> $struct_name<T> {
             #[target_feature(enable = "sse3")]
+            //#[inline(always)]
             pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
                 self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
             }
 
             #[target_feature(enable = "sse3")]
+            //#[inline(always)]
             pub(crate) unsafe fn perform_dual_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
                 self.perform_dual_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
             }
 
+            // Do multiple ffts over a longer vector inplace, called from "process_with_scratch" of Fft trait 
             #[target_feature(enable = "sse3")]
             pub(crate) unsafe fn perform_fft_butterfly_multi(
                 &self,
@@ -43,18 +46,21 @@ macro_rules! boilerplate_fft_sse_f32_butterfly {
                 Ok(())
             }
 
+            // Do multiple ffts over a longer vector outofplace, called from "process_outofplace_with_scratch" of Fft trait 
             #[target_feature(enable = "sse3")]
             pub(crate) unsafe fn perform_oop_fft_butterfly_multi(
                 &self,
                 input: &mut [Complex<T>],
                 output: &mut [Complex<T>],
             ) -> Result<(), ()> {
-                array_utils::iter_chunks_zipped(input, output, self.len(), |in_chunk, out_chunk| {
-                    self.perform_fft_contiguous(
-                        RawSlice::new(in_chunk),
-                        RawSliceMut::new(out_chunk),
-                    )
-                })
+                let len = input.len();
+                let alldone = array_utils::iter_chunks_zipped(input, output, 2*self.len(), |in_chunk, out_chunk| {
+                    self.perform_dual_fft_contiguous(RawSlice::new(in_chunk), RawSliceMut::new(out_chunk))
+                });
+                if alldone.is_err() && input.len()>=self.len()  {
+                    self.perform_fft_contiguous(RawSlice::new(&input[len-self.len() ..]), RawSliceMut::new(&mut output[len-self.len() ..]), );
+                }
+                Ok(())
             }
         }
     }
@@ -63,11 +69,13 @@ macro_rules! boilerplate_fft_sse_f32_butterfly {
 macro_rules! boilerplate_fft_sse_f64_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> $struct_name<T> {
+            // Do a single fft
             #[target_feature(enable = "sse3")]
             pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
                 self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
             }
 
+            // Do multiple ffts over a longer vector inplace, called from "process_with_scratch" of Fft trait 
             #[target_feature(enable = "sse3")]
             pub(crate) unsafe fn perform_fft_butterfly_multi(
                 &self,
@@ -78,6 +86,7 @@ macro_rules! boilerplate_fft_sse_f64_butterfly {
                 })
             }
 
+            // Do multiple ffts over a longer vector outofplace, called from "process_outofplace_with_scratch" of Fft trait 
             #[target_feature(enable = "sse3")]
             pub(crate) unsafe fn perform_oop_fft_butterfly_multi(
                 &self,
