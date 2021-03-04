@@ -5697,7 +5697,924 @@ impl<T: FftNum> SseF64Butterfly29<T> {
 //   ___) | | |_____|  ___) / __/| |_) | | |_ 
 //  |____/|_|         |____/_____|_.__/|_|\__|
 //                                            
+pub struct SseF32Butterfly31<T> {
+    direction: FftDirection,
+    _phantom: std::marker::PhantomData<T>,
+    rotate: Rotate90F32,
+    twiddle1re: __m128,
+    twiddle1im: __m128,
+    twiddle2re: __m128,
+    twiddle2im: __m128,
+    twiddle3re: __m128,
+    twiddle3im: __m128,
+    twiddle4re: __m128,
+    twiddle4im: __m128,
+    twiddle5re: __m128,
+    twiddle5im: __m128,
+    twiddle6re: __m128,
+    twiddle6im: __m128,
+    twiddle7re: __m128,
+    twiddle7im: __m128,
+    twiddle8re: __m128,
+    twiddle8im: __m128,
+    twiddle9re: __m128,
+    twiddle9im: __m128,
+    twiddle10re: __m128,
+    twiddle10im: __m128,
+    twiddle11re: __m128,
+    twiddle11im: __m128,
+    twiddle12re: __m128,
+    twiddle12im: __m128,
+    twiddle13re: __m128,
+    twiddle13im: __m128,
+    twiddle14re: __m128,
+    twiddle14im: __m128,
+    twiddle15re: __m128,
+    twiddle15im: __m128,
+}
 
+boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly31, 31, |this: &SseF32Butterfly31<_>| this
+    .direction);
+boilerplate_fft_sse_common_butterfly!(SseF32Butterfly31, 31, |this: &SseF32Butterfly31<_>| this
+    .direction);
+impl<T: FftNum> SseF32Butterfly31<T> {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert_f32::<T>();
+        let rotate = Rotate90F32::new(true);
+        let tw1: Complex<f32> = twiddles::compute_twiddle(1, 31, direction);
+        let tw2: Complex<f32> = twiddles::compute_twiddle(2, 31, direction);
+        let tw3: Complex<f32> = twiddles::compute_twiddle(3, 31, direction);
+        let tw4: Complex<f32> = twiddles::compute_twiddle(4, 31, direction);
+        let tw5: Complex<f32> = twiddles::compute_twiddle(5, 31, direction);
+        let tw6: Complex<f32> = twiddles::compute_twiddle(6, 31, direction);
+        let tw7: Complex<f32> = twiddles::compute_twiddle(7, 31, direction);
+        let tw8: Complex<f32> = twiddles::compute_twiddle(8, 31, direction);
+        let tw9: Complex<f32> = twiddles::compute_twiddle(9, 31, direction);
+        let tw10: Complex<f32> = twiddles::compute_twiddle(10, 31, direction);
+        let tw11: Complex<f32> = twiddles::compute_twiddle(11, 31, direction);
+        let tw12: Complex<f32> = twiddles::compute_twiddle(12, 31, direction);
+        let tw13: Complex<f32> = twiddles::compute_twiddle(13, 31, direction);
+        let tw14: Complex<f32> = twiddles::compute_twiddle(14, 31, direction);
+        let tw15: Complex<f32> = twiddles::compute_twiddle(15, 31, direction);
+        let twiddle1re = unsafe { _mm_load1_ps(&tw1.re) };
+        let twiddle1im = unsafe { _mm_load1_ps(&tw1.im) };
+        let twiddle2re = unsafe { _mm_load1_ps(&tw2.re) };
+        let twiddle2im = unsafe { _mm_load1_ps(&tw2.im) };
+        let twiddle3re = unsafe { _mm_load1_ps(&tw3.re) };
+        let twiddle3im = unsafe { _mm_load1_ps(&tw3.im) };
+        let twiddle4re = unsafe { _mm_load1_ps(&tw4.re) };
+        let twiddle4im = unsafe { _mm_load1_ps(&tw4.im) };
+        let twiddle5re = unsafe { _mm_load1_ps(&tw5.re) };
+        let twiddle5im = unsafe { _mm_load1_ps(&tw5.im) };
+        let twiddle6re = unsafe { _mm_load1_ps(&tw6.re) };
+        let twiddle6im = unsafe { _mm_load1_ps(&tw6.im) };
+        let twiddle7re = unsafe { _mm_load1_ps(&tw7.re) };
+        let twiddle7im = unsafe { _mm_load1_ps(&tw7.im) };
+        let twiddle8re = unsafe { _mm_load1_ps(&tw8.re) };
+        let twiddle8im = unsafe { _mm_load1_ps(&tw8.im) };
+        let twiddle9re = unsafe { _mm_load1_ps(&tw9.re) };
+        let twiddle9im = unsafe { _mm_load1_ps(&tw9.im) };
+        let twiddle10re = unsafe { _mm_load1_ps(&tw10.re) };
+        let twiddle10im = unsafe { _mm_load1_ps(&tw10.im) };
+        let twiddle11re = unsafe { _mm_load1_ps(&tw11.re) };
+        let twiddle11im = unsafe { _mm_load1_ps(&tw11.im) };
+        let twiddle12re = unsafe { _mm_load1_ps(&tw12.re) };
+        let twiddle12im = unsafe { _mm_load1_ps(&tw12.im) };
+        let twiddle13re = unsafe { _mm_load1_ps(&tw13.re) };
+        let twiddle13im = unsafe { _mm_load1_ps(&tw13.im) };
+        let twiddle14re = unsafe { _mm_load1_ps(&tw14.re) };
+        let twiddle14im = unsafe { _mm_load1_ps(&tw14.im) };
+        let twiddle15re = unsafe { _mm_load1_ps(&tw15.re) };
+        let twiddle15im = unsafe { _mm_load1_ps(&tw15.im) };
+
+        Self {
+            direction,
+            _phantom: std::marker::PhantomData,
+            rotate,
+            twiddle1re,
+            twiddle1im,
+            twiddle2re,
+            twiddle2im,
+            twiddle3re,
+            twiddle3im,
+            twiddle4re,
+            twiddle4im,
+            twiddle5re,
+            twiddle5im,
+            twiddle6re,
+            twiddle6im,
+            twiddle7re,
+            twiddle7im,
+            twiddle8re,
+            twiddle8im,
+            twiddle9re,
+            twiddle9im,
+            twiddle10re,
+            twiddle10im,
+            twiddle11re,
+            twiddle11im,
+            twiddle12re,
+            twiddle12im,
+            twiddle13re,
+            twiddle13im,
+            twiddle14re,
+            twiddle14im,
+            twiddle15re,
+            twiddle15im,
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
+        let v0 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr() as *const f64));
+        let v1 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(1) as *const f64));
+        let v2 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(2) as *const f64));
+        let v3 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(3) as *const f64));
+        let v4 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(4) as *const f64));
+        let v5 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(5) as *const f64));
+        let v6 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(6) as *const f64));
+        let v7 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(7) as *const f64));
+        let v8 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(8) as *const f64));
+        let v9 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(9) as *const f64));
+        let v10 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(10) as *const f64));
+        let v11 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(11) as *const f64));
+        let v12 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(12) as *const f64));
+        let v13 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(13) as *const f64));
+        let v14 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(14) as *const f64));
+        let v15 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(15) as *const f64));
+        let v16 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(16) as *const f64));
+        let v17 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(17) as *const f64));
+        let v18 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(18) as *const f64));
+        let v19 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(19) as *const f64));
+        let v20 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(20) as *const f64));
+        let v21 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(21) as *const f64));
+        let v22 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(22) as *const f64));
+        let v23 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(23) as *const f64));
+        let v24 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(24) as *const f64));
+        let v25 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(25) as *const f64));
+        let v26 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(26) as *const f64));
+        let v27 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(27) as *const f64));
+        let v28 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(28) as *const f64));
+        let v29 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(29) as *const f64));
+        let v30 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(30) as *const f64));
+
+        let out = self.perform_dual_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26, v27, v28, v29, v30]);
+
+        let val = std::mem::transmute::<[__m128; 31], [Complex<f32>; 62]>(out);
+
+        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
+        *output_slice.add(0) = val[0];
+        *output_slice.add(1) = val[2];
+        *output_slice.add(2) = val[4];
+        *output_slice.add(3) = val[6];
+        *output_slice.add(4) = val[8];
+        *output_slice.add(5) = val[10];
+        *output_slice.add(6) = val[12];
+        *output_slice.add(7) = val[14];
+        *output_slice.add(8) = val[16];
+        *output_slice.add(9) = val[18];
+        *output_slice.add(10) = val[20];
+        *output_slice.add(11) = val[22];
+        *output_slice.add(12) = val[24];
+        *output_slice.add(13) = val[26];
+        *output_slice.add(14) = val[28];
+        *output_slice.add(15) = val[30];
+        *output_slice.add(16) = val[32];
+        *output_slice.add(17) = val[34];
+        *output_slice.add(18) = val[36];
+        *output_slice.add(19) = val[38];
+        *output_slice.add(20) = val[40];
+        *output_slice.add(21) = val[42];
+        *output_slice.add(22) = val[44];
+        *output_slice.add(23) = val[46];
+        *output_slice.add(24) = val[48];
+        *output_slice.add(25) = val[50];
+        *output_slice.add(26) = val[52];
+        *output_slice.add(27) = val[54];
+        *output_slice.add(28) = val[56];
+        *output_slice.add(29) = val[58];
+        *output_slice.add(30) = val[60];
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_dual_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
+        let valuea0a1 = _mm_loadu_ps(input.as_ptr() as *const f32);
+        let valuea2a3 = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
+        let valuea4a5 = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
+        let valuea6a7 = _mm_loadu_ps(input.as_ptr().add(6) as *const f32);
+        let valuea8a9 = _mm_loadu_ps(input.as_ptr().add(8) as *const f32);
+        let valuea10a11 = _mm_loadu_ps(input.as_ptr().add(10) as *const f32);
+        let valuea12a13 = _mm_loadu_ps(input.as_ptr().add(12) as *const f32);
+        let valuea14a15 = _mm_loadu_ps(input.as_ptr().add(14) as *const f32);
+        let valuea16a17 = _mm_loadu_ps(input.as_ptr().add(16) as *const f32);
+        let valuea18a19 = _mm_loadu_ps(input.as_ptr().add(18) as *const f32);
+        let valuea20a21 = _mm_loadu_ps(input.as_ptr().add(20) as *const f32);
+        let valuea22a23 = _mm_loadu_ps(input.as_ptr().add(22) as *const f32);
+        let valuea24a25 = _mm_loadu_ps(input.as_ptr().add(24) as *const f32);
+        let valuea26a27 = _mm_loadu_ps(input.as_ptr().add(26) as *const f32);
+        let valuea28a29 = _mm_loadu_ps(input.as_ptr().add(28) as *const f32);
+        let valuea30b0 = _mm_loadu_ps(input.as_ptr().add(30) as *const f32);
+        let valueb1b2 = _mm_loadu_ps(input.as_ptr().add(32) as *const f32);
+        let valueb3b4 = _mm_loadu_ps(input.as_ptr().add(34) as *const f32);
+        let valueb5b6 = _mm_loadu_ps(input.as_ptr().add(36) as *const f32);
+        let valueb7b8 = _mm_loadu_ps(input.as_ptr().add(38) as *const f32);
+        let valueb9b10 = _mm_loadu_ps(input.as_ptr().add(40) as *const f32);
+        let valueb11b12 = _mm_loadu_ps(input.as_ptr().add(42) as *const f32);
+        let valueb13b14 = _mm_loadu_ps(input.as_ptr().add(44) as *const f32);
+        let valueb15b16 = _mm_loadu_ps(input.as_ptr().add(46) as *const f32);
+        let valueb17b18 = _mm_loadu_ps(input.as_ptr().add(48) as *const f32);
+        let valueb19b20 = _mm_loadu_ps(input.as_ptr().add(50) as *const f32);
+        let valueb21b22 = _mm_loadu_ps(input.as_ptr().add(52) as *const f32);
+        let valueb23b24 = _mm_loadu_ps(input.as_ptr().add(54) as *const f32);
+        let valueb25b26 = _mm_loadu_ps(input.as_ptr().add(56) as *const f32);
+        let valueb27b28 = _mm_loadu_ps(input.as_ptr().add(58) as *const f32);
+        let valueb29b30 = _mm_loadu_ps(input.as_ptr().add(60) as *const f32);
+
+        let v0 = pack_1and2_f32(valuea0a1, valuea30b0);
+        let v1 = pack_2and1_f32(valuea0a1, valueb1b2);
+        let v2 = pack_1and2_f32(valuea2a3, valueb1b2);
+        let v3 = pack_2and1_f32(valuea2a3, valueb3b4);
+        let v4 = pack_1and2_f32(valuea4a5, valueb3b4);
+        let v5 = pack_2and1_f32(valuea4a5, valueb5b6);
+        let v6 = pack_1and2_f32(valuea6a7, valueb5b6);
+        let v7 = pack_2and1_f32(valuea6a7, valueb7b8);
+        let v8 = pack_1and2_f32(valuea8a9, valueb7b8);
+        let v9 = pack_2and1_f32(valuea8a9, valueb9b10);
+        let v10 = pack_1and2_f32(valuea10a11, valueb9b10);
+        let v11 = pack_2and1_f32(valuea10a11, valueb11b12);
+        let v12 = pack_1and2_f32(valuea12a13, valueb11b12);
+        let v13 = pack_2and1_f32(valuea12a13, valueb13b14);
+        let v14 = pack_1and2_f32(valuea14a15, valueb13b14);
+        let v15 = pack_2and1_f32(valuea14a15, valueb15b16);
+        let v16 = pack_1and2_f32(valuea16a17, valueb15b16);
+        let v17 = pack_2and1_f32(valuea16a17, valueb17b18);
+        let v18 = pack_1and2_f32(valuea18a19, valueb17b18);
+        let v19 = pack_2and1_f32(valuea18a19, valueb19b20);
+        let v20 = pack_1and2_f32(valuea20a21, valueb19b20);
+        let v21 = pack_2and1_f32(valuea20a21, valueb21b22);
+        let v22 = pack_1and2_f32(valuea22a23, valueb21b22);
+        let v23 = pack_2and1_f32(valuea22a23, valueb23b24);
+        let v24 = pack_1and2_f32(valuea24a25, valueb23b24);
+        let v25 = pack_2and1_f32(valuea24a25, valueb25b26);
+        let v26 = pack_1and2_f32(valuea26a27, valueb25b26);
+        let v27 = pack_2and1_f32(valuea26a27, valueb27b28);
+        let v28 = pack_1and2_f32(valuea28a29, valueb27b28);
+        let v29 = pack_2and1_f32(valuea28a29, valueb29b30);
+        let v30 = pack_1and2_f32(valuea30b0, valueb29b30);
+        
+
+        let out = self.perform_dual_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26, v27, v28, v29, v30]);
+
+        let val = std::mem::transmute::<[__m128; 31], [Complex<f32>; 62]>(out);
+
+        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
+        *output_slice.add(0) = val[0];
+        *output_slice.add(1) = val[2];
+        *output_slice.add(2) = val[4];
+        *output_slice.add(3) = val[6];
+        *output_slice.add(4) = val[8];
+        *output_slice.add(5) = val[10];
+        *output_slice.add(6) = val[12];
+        *output_slice.add(7) = val[14];
+        *output_slice.add(8) = val[16];
+        *output_slice.add(9) = val[18];
+        *output_slice.add(10) = val[20];
+        *output_slice.add(11) = val[22];
+        *output_slice.add(12) = val[24];
+        *output_slice.add(13) = val[26];
+        *output_slice.add(14) = val[28];
+        *output_slice.add(15) = val[30];
+        *output_slice.add(16) = val[32];
+        *output_slice.add(17) = val[34];
+        *output_slice.add(18) = val[36];
+        *output_slice.add(19) = val[38];
+        *output_slice.add(20) = val[40];
+        *output_slice.add(21) = val[42];
+        *output_slice.add(22) = val[44];
+        *output_slice.add(23) = val[46];
+        *output_slice.add(24) = val[48];
+        *output_slice.add(25) = val[50];
+        *output_slice.add(26) = val[52];
+        *output_slice.add(27) = val[54];
+        *output_slice.add(28) = val[56];
+        *output_slice.add(29) = val[58];
+        *output_slice.add(30) = val[60];
+        *output_slice.add(31) = val[1];
+        *output_slice.add(32) = val[3];
+        *output_slice.add(33) = val[5];
+        *output_slice.add(34) = val[7];
+        *output_slice.add(35) = val[9];
+        *output_slice.add(36) = val[11];
+        *output_slice.add(37) = val[13];
+        *output_slice.add(38) = val[15];
+        *output_slice.add(39) = val[17];
+        *output_slice.add(40) = val[19];
+        *output_slice.add(41) = val[21];
+        *output_slice.add(42) = val[23];
+        *output_slice.add(43) = val[25];
+        *output_slice.add(44) = val[27];
+        *output_slice.add(45) = val[29];
+        *output_slice.add(46) = val[31];
+        *output_slice.add(47) = val[33];
+        *output_slice.add(48) = val[35];
+        *output_slice.add(49) = val[37];
+        *output_slice.add(50) = val[39];
+        *output_slice.add(51) = val[41];
+        *output_slice.add(52) = val[43];
+        *output_slice.add(53) = val[45];
+        *output_slice.add(54) = val[47];
+        *output_slice.add(55) = val[49];
+        *output_slice.add(56) = val[51];
+        *output_slice.add(57) = val[53];
+        *output_slice.add(58) = val[55];
+        *output_slice.add(59) = val[57];
+        *output_slice.add(60) = val[59];
+        *output_slice.add(61) = val[61];
+    }
+
+    // length 7 fft of a, given as a0, a1, a2, a3, a4, a5, a6.
+    // result is [A0, A1, A2, A3, A4, A5, A6]
+    #[inline(always)]
+    pub(crate) unsafe fn perform_dual_fft_direct(
+        &self,
+        values: [__m128; 31],
+    ) -> [__m128; 31] {
+        // This is a SSE translation of the scalar 17-point butterfly 
+        let x130p = _mm_add_ps(values[1], values[30]);
+        let x130n = _mm_sub_ps(values[1], values[30]);
+        let x229p = _mm_add_ps(values[2], values[29]);
+        let x229n = _mm_sub_ps(values[2], values[29]);
+        let x328p = _mm_add_ps(values[3], values[28]);
+        let x328n = _mm_sub_ps(values[3], values[28]);
+        let x427p = _mm_add_ps(values[4], values[27]);
+        let x427n = _mm_sub_ps(values[4], values[27]);
+        let x526p = _mm_add_ps(values[5], values[26]);
+        let x526n = _mm_sub_ps(values[5], values[26]);
+        let x625p = _mm_add_ps(values[6], values[25]);
+        let x625n = _mm_sub_ps(values[6], values[25]);
+        let x724p = _mm_add_ps(values[7], values[24]);
+        let x724n = _mm_sub_ps(values[7], values[24]);
+        let x823p = _mm_add_ps(values[8], values[23]);
+        let x823n = _mm_sub_ps(values[8], values[23]);
+        let x922p = _mm_add_ps(values[9], values[22]);
+        let x922n = _mm_sub_ps(values[9], values[22]);
+        let x1021p = _mm_add_ps(values[10], values[21]);
+        let x1021n = _mm_sub_ps(values[10], values[21]);
+        let x1120p = _mm_add_ps(values[11], values[20]);
+        let x1120n = _mm_sub_ps(values[11], values[20]);
+        let x1219p = _mm_add_ps(values[12], values[19]);
+        let x1219n = _mm_sub_ps(values[12], values[19]);
+        let x1318p = _mm_add_ps(values[13], values[18]);
+        let x1318n = _mm_sub_ps(values[13], values[18]);
+        let x1417p = _mm_add_ps(values[14], values[17]);
+        let x1417n = _mm_sub_ps(values[14], values[17]);
+        let x1516p = _mm_add_ps(values[15], values[16]);
+        let x1516n = _mm_sub_ps(values[15], values[16]);
+
+        let temp_a1_1 = _mm_mul_ps(self.twiddle1re, x130p);
+        let temp_a1_2 = _mm_mul_ps(self.twiddle2re, x229p);
+        let temp_a1_3 = _mm_mul_ps(self.twiddle3re, x328p);
+        let temp_a1_4 = _mm_mul_ps(self.twiddle4re, x427p);
+        let temp_a1_5 = _mm_mul_ps(self.twiddle5re, x526p);
+        let temp_a1_6 = _mm_mul_ps(self.twiddle6re, x625p);
+        let temp_a1_7 = _mm_mul_ps(self.twiddle7re, x724p);
+        let temp_a1_8 = _mm_mul_ps(self.twiddle8re, x823p);
+        let temp_a1_9 = _mm_mul_ps(self.twiddle9re, x922p);
+        let temp_a1_10 = _mm_mul_ps(self.twiddle10re, x1021p);
+        let temp_a1_11 = _mm_mul_ps(self.twiddle11re, x1120p);
+        let temp_a1_12 = _mm_mul_ps(self.twiddle12re, x1219p);
+        let temp_a1_13 = _mm_mul_ps(self.twiddle13re, x1318p);
+        let temp_a1_14 = _mm_mul_ps(self.twiddle14re, x1417p);
+        let temp_a1_15 = _mm_mul_ps(self.twiddle15re, x1516p);
+        let temp_a2_1 = _mm_mul_ps(self.twiddle2re, x130p);
+        let temp_a2_2 = _mm_mul_ps(self.twiddle4re, x229p);
+        let temp_a2_3 = _mm_mul_ps(self.twiddle6re, x328p);
+        let temp_a2_4 = _mm_mul_ps(self.twiddle8re, x427p);
+        let temp_a2_5 = _mm_mul_ps(self.twiddle10re, x526p);
+        let temp_a2_6 = _mm_mul_ps(self.twiddle12re, x625p);
+        let temp_a2_7 = _mm_mul_ps(self.twiddle14re, x724p);
+        let temp_a2_8 = _mm_mul_ps(self.twiddle15re, x823p);
+        let temp_a2_9 = _mm_mul_ps(self.twiddle13re, x922p);
+        let temp_a2_10 = _mm_mul_ps(self.twiddle11re, x1021p);
+        let temp_a2_11 = _mm_mul_ps(self.twiddle9re, x1120p);
+        let temp_a2_12 = _mm_mul_ps(self.twiddle7re, x1219p);
+        let temp_a2_13 = _mm_mul_ps(self.twiddle5re, x1318p);
+        let temp_a2_14 = _mm_mul_ps(self.twiddle3re, x1417p);
+        let temp_a2_15 = _mm_mul_ps(self.twiddle1re, x1516p);
+        let temp_a3_1 = _mm_mul_ps(self.twiddle3re, x130p);
+        let temp_a3_2 = _mm_mul_ps(self.twiddle6re, x229p);
+        let temp_a3_3 = _mm_mul_ps(self.twiddle9re, x328p);
+        let temp_a3_4 = _mm_mul_ps(self.twiddle12re, x427p);
+        let temp_a3_5 = _mm_mul_ps(self.twiddle15re, x526p);
+        let temp_a3_6 = _mm_mul_ps(self.twiddle13re, x625p);
+        let temp_a3_7 = _mm_mul_ps(self.twiddle10re, x724p);
+        let temp_a3_8 = _mm_mul_ps(self.twiddle7re, x823p);
+        let temp_a3_9 = _mm_mul_ps(self.twiddle4re, x922p);
+        let temp_a3_10 = _mm_mul_ps(self.twiddle1re, x1021p);
+        let temp_a3_11 = _mm_mul_ps(self.twiddle2re, x1120p);
+        let temp_a3_12 = _mm_mul_ps(self.twiddle5re, x1219p);
+        let temp_a3_13 = _mm_mul_ps(self.twiddle8re, x1318p);
+        let temp_a3_14 = _mm_mul_ps(self.twiddle11re, x1417p);
+        let temp_a3_15 = _mm_mul_ps(self.twiddle14re, x1516p);
+        let temp_a4_1 = _mm_mul_ps(self.twiddle4re, x130p);
+        let temp_a4_2 = _mm_mul_ps(self.twiddle8re, x229p);
+        let temp_a4_3 = _mm_mul_ps(self.twiddle12re, x328p);
+        let temp_a4_4 = _mm_mul_ps(self.twiddle15re, x427p);
+        let temp_a4_5 = _mm_mul_ps(self.twiddle11re, x526p);
+        let temp_a4_6 = _mm_mul_ps(self.twiddle7re, x625p);
+        let temp_a4_7 = _mm_mul_ps(self.twiddle3re, x724p);
+        let temp_a4_8 = _mm_mul_ps(self.twiddle1re, x823p);
+        let temp_a4_9 = _mm_mul_ps(self.twiddle5re, x922p);
+        let temp_a4_10 = _mm_mul_ps(self.twiddle9re, x1021p);
+        let temp_a4_11 = _mm_mul_ps(self.twiddle13re, x1120p);
+        let temp_a4_12 = _mm_mul_ps(self.twiddle14re, x1219p);
+        let temp_a4_13 = _mm_mul_ps(self.twiddle10re, x1318p);
+        let temp_a4_14 = _mm_mul_ps(self.twiddle6re, x1417p);
+        let temp_a4_15 = _mm_mul_ps(self.twiddle2re, x1516p);
+        let temp_a5_1 = _mm_mul_ps(self.twiddle5re, x130p);
+        let temp_a5_2 = _mm_mul_ps(self.twiddle10re, x229p);
+        let temp_a5_3 = _mm_mul_ps(self.twiddle15re, x328p);
+        let temp_a5_4 = _mm_mul_ps(self.twiddle11re, x427p);
+        let temp_a5_5 = _mm_mul_ps(self.twiddle6re, x526p);
+        let temp_a5_6 = _mm_mul_ps(self.twiddle1re, x625p);
+        let temp_a5_7 = _mm_mul_ps(self.twiddle4re, x724p);
+        let temp_a5_8 = _mm_mul_ps(self.twiddle9re, x823p);
+        let temp_a5_9 = _mm_mul_ps(self.twiddle14re, x922p);
+        let temp_a5_10 = _mm_mul_ps(self.twiddle12re, x1021p);
+        let temp_a5_11 = _mm_mul_ps(self.twiddle7re, x1120p);
+        let temp_a5_12 = _mm_mul_ps(self.twiddle2re, x1219p);
+        let temp_a5_13 = _mm_mul_ps(self.twiddle3re, x1318p);
+        let temp_a5_14 = _mm_mul_ps(self.twiddle8re, x1417p);
+        let temp_a5_15 = _mm_mul_ps(self.twiddle13re, x1516p);
+        let temp_a6_1 = _mm_mul_ps(self.twiddle6re, x130p);
+        let temp_a6_2 = _mm_mul_ps(self.twiddle12re, x229p);
+        let temp_a6_3 = _mm_mul_ps(self.twiddle13re, x328p);
+        let temp_a6_4 = _mm_mul_ps(self.twiddle7re, x427p);
+        let temp_a6_5 = _mm_mul_ps(self.twiddle1re, x526p);
+        let temp_a6_6 = _mm_mul_ps(self.twiddle5re, x625p);
+        let temp_a6_7 = _mm_mul_ps(self.twiddle11re, x724p);
+        let temp_a6_8 = _mm_mul_ps(self.twiddle14re, x823p);
+        let temp_a6_9 = _mm_mul_ps(self.twiddle8re, x922p);
+        let temp_a6_10 = _mm_mul_ps(self.twiddle2re, x1021p);
+        let temp_a6_11 = _mm_mul_ps(self.twiddle4re, x1120p);
+        let temp_a6_12 = _mm_mul_ps(self.twiddle10re, x1219p);
+        let temp_a6_13 = _mm_mul_ps(self.twiddle15re, x1318p);
+        let temp_a6_14 = _mm_mul_ps(self.twiddle9re, x1417p);
+        let temp_a6_15 = _mm_mul_ps(self.twiddle3re, x1516p);
+        let temp_a7_1 = _mm_mul_ps(self.twiddle7re, x130p);
+        let temp_a7_2 = _mm_mul_ps(self.twiddle14re, x229p);
+        let temp_a7_3 = _mm_mul_ps(self.twiddle10re, x328p);
+        let temp_a7_4 = _mm_mul_ps(self.twiddle3re, x427p);
+        let temp_a7_5 = _mm_mul_ps(self.twiddle4re, x526p);
+        let temp_a7_6 = _mm_mul_ps(self.twiddle11re, x625p);
+        let temp_a7_7 = _mm_mul_ps(self.twiddle13re, x724p);
+        let temp_a7_8 = _mm_mul_ps(self.twiddle6re, x823p);
+        let temp_a7_9 = _mm_mul_ps(self.twiddle1re, x922p);
+        let temp_a7_10 = _mm_mul_ps(self.twiddle8re, x1021p);
+        let temp_a7_11 = _mm_mul_ps(self.twiddle15re, x1120p);
+        let temp_a7_12 = _mm_mul_ps(self.twiddle9re, x1219p);
+        let temp_a7_13 = _mm_mul_ps(self.twiddle2re, x1318p);
+        let temp_a7_14 = _mm_mul_ps(self.twiddle5re, x1417p);
+        let temp_a7_15 = _mm_mul_ps(self.twiddle12re, x1516p);
+        let temp_a8_1 = _mm_mul_ps(self.twiddle8re, x130p);
+        let temp_a8_2 = _mm_mul_ps(self.twiddle15re, x229p);
+        let temp_a8_3 = _mm_mul_ps(self.twiddle7re, x328p);
+        let temp_a8_4 = _mm_mul_ps(self.twiddle1re, x427p);
+        let temp_a8_5 = _mm_mul_ps(self.twiddle9re, x526p);
+        let temp_a8_6 = _mm_mul_ps(self.twiddle14re, x625p);
+        let temp_a8_7 = _mm_mul_ps(self.twiddle6re, x724p);
+        let temp_a8_8 = _mm_mul_ps(self.twiddle2re, x823p);
+        let temp_a8_9 = _mm_mul_ps(self.twiddle10re, x922p);
+        let temp_a8_10 = _mm_mul_ps(self.twiddle13re, x1021p);
+        let temp_a8_11 = _mm_mul_ps(self.twiddle5re, x1120p);
+        let temp_a8_12 = _mm_mul_ps(self.twiddle3re, x1219p);
+        let temp_a8_13 = _mm_mul_ps(self.twiddle11re, x1318p);
+        let temp_a8_14 = _mm_mul_ps(self.twiddle12re, x1417p);
+        let temp_a8_15 = _mm_mul_ps(self.twiddle4re, x1516p);
+        let temp_a9_1 = _mm_mul_ps(self.twiddle9re, x130p);
+        let temp_a9_2 = _mm_mul_ps(self.twiddle13re, x229p);
+        let temp_a9_3 = _mm_mul_ps(self.twiddle4re, x328p);
+        let temp_a9_4 = _mm_mul_ps(self.twiddle5re, x427p);
+        let temp_a9_5 = _mm_mul_ps(self.twiddle14re, x526p);
+        let temp_a9_6 = _mm_mul_ps(self.twiddle8re, x625p);
+        let temp_a9_7 = _mm_mul_ps(self.twiddle1re, x724p);
+        let temp_a9_8 = _mm_mul_ps(self.twiddle10re, x823p);
+        let temp_a9_9 = _mm_mul_ps(self.twiddle12re, x922p);
+        let temp_a9_10 = _mm_mul_ps(self.twiddle3re, x1021p);
+        let temp_a9_11 = _mm_mul_ps(self.twiddle6re, x1120p);
+        let temp_a9_12 = _mm_mul_ps(self.twiddle15re, x1219p);
+        let temp_a9_13 = _mm_mul_ps(self.twiddle7re, x1318p);
+        let temp_a9_14 = _mm_mul_ps(self.twiddle2re, x1417p);
+        let temp_a9_15 = _mm_mul_ps(self.twiddle11re, x1516p);
+        let temp_a10_1 = _mm_mul_ps(self.twiddle10re, x130p);
+        let temp_a10_2 = _mm_mul_ps(self.twiddle11re, x229p);
+        let temp_a10_3 = _mm_mul_ps(self.twiddle1re, x328p);
+        let temp_a10_4 = _mm_mul_ps(self.twiddle9re, x427p);
+        let temp_a10_5 = _mm_mul_ps(self.twiddle12re, x526p);
+        let temp_a10_6 = _mm_mul_ps(self.twiddle2re, x625p);
+        let temp_a10_7 = _mm_mul_ps(self.twiddle8re, x724p);
+        let temp_a10_8 = _mm_mul_ps(self.twiddle13re, x823p);
+        let temp_a10_9 = _mm_mul_ps(self.twiddle3re, x922p);
+        let temp_a10_10 = _mm_mul_ps(self.twiddle7re, x1021p);
+        let temp_a10_11 = _mm_mul_ps(self.twiddle14re, x1120p);
+        let temp_a10_12 = _mm_mul_ps(self.twiddle4re, x1219p);
+        let temp_a10_13 = _mm_mul_ps(self.twiddle6re, x1318p);
+        let temp_a10_14 = _mm_mul_ps(self.twiddle15re, x1417p);
+        let temp_a10_15 = _mm_mul_ps(self.twiddle5re, x1516p);
+        let temp_a11_1 = _mm_mul_ps(self.twiddle11re, x130p);
+        let temp_a11_2 = _mm_mul_ps(self.twiddle9re, x229p);
+        let temp_a11_3 = _mm_mul_ps(self.twiddle2re, x328p);
+        let temp_a11_4 = _mm_mul_ps(self.twiddle13re, x427p);
+        let temp_a11_5 = _mm_mul_ps(self.twiddle7re, x526p);
+        let temp_a11_6 = _mm_mul_ps(self.twiddle4re, x625p);
+        let temp_a11_7 = _mm_mul_ps(self.twiddle15re, x724p);
+        let temp_a11_8 = _mm_mul_ps(self.twiddle5re, x823p);
+        let temp_a11_9 = _mm_mul_ps(self.twiddle6re, x922p);
+        let temp_a11_10 = _mm_mul_ps(self.twiddle14re, x1021p);
+        let temp_a11_11 = _mm_mul_ps(self.twiddle3re, x1120p);
+        let temp_a11_12 = _mm_mul_ps(self.twiddle8re, x1219p);
+        let temp_a11_13 = _mm_mul_ps(self.twiddle12re, x1318p);
+        let temp_a11_14 = _mm_mul_ps(self.twiddle1re, x1417p);
+        let temp_a11_15 = _mm_mul_ps(self.twiddle10re, x1516p);
+        let temp_a12_1 = _mm_mul_ps(self.twiddle12re, x130p);
+        let temp_a12_2 = _mm_mul_ps(self.twiddle7re, x229p);
+        let temp_a12_3 = _mm_mul_ps(self.twiddle5re, x328p);
+        let temp_a12_4 = _mm_mul_ps(self.twiddle14re, x427p);
+        let temp_a12_5 = _mm_mul_ps(self.twiddle2re, x526p);
+        let temp_a12_6 = _mm_mul_ps(self.twiddle10re, x625p);
+        let temp_a12_7 = _mm_mul_ps(self.twiddle9re, x724p);
+        let temp_a12_8 = _mm_mul_ps(self.twiddle3re, x823p);
+        let temp_a12_9 = _mm_mul_ps(self.twiddle15re, x922p);
+        let temp_a12_10 = _mm_mul_ps(self.twiddle4re, x1021p);
+        let temp_a12_11 = _mm_mul_ps(self.twiddle8re, x1120p);
+        let temp_a12_12 = _mm_mul_ps(self.twiddle11re, x1219p);
+        let temp_a12_13 = _mm_mul_ps(self.twiddle1re, x1318p);
+        let temp_a12_14 = _mm_mul_ps(self.twiddle13re, x1417p);
+        let temp_a12_15 = _mm_mul_ps(self.twiddle6re, x1516p);
+        let temp_a13_1 = _mm_mul_ps(self.twiddle13re, x130p);
+        let temp_a13_2 = _mm_mul_ps(self.twiddle5re, x229p);
+        let temp_a13_3 = _mm_mul_ps(self.twiddle8re, x328p);
+        let temp_a13_4 = _mm_mul_ps(self.twiddle10re, x427p);
+        let temp_a13_5 = _mm_mul_ps(self.twiddle3re, x526p);
+        let temp_a13_6 = _mm_mul_ps(self.twiddle15re, x625p);
+        let temp_a13_7 = _mm_mul_ps(self.twiddle2re, x724p);
+        let temp_a13_8 = _mm_mul_ps(self.twiddle11re, x823p);
+        let temp_a13_9 = _mm_mul_ps(self.twiddle7re, x922p);
+        let temp_a13_10 = _mm_mul_ps(self.twiddle6re, x1021p);
+        let temp_a13_11 = _mm_mul_ps(self.twiddle12re, x1120p);
+        let temp_a13_12 = _mm_mul_ps(self.twiddle1re, x1219p);
+        let temp_a13_13 = _mm_mul_ps(self.twiddle14re, x1318p);
+        let temp_a13_14 = _mm_mul_ps(self.twiddle4re, x1417p);
+        let temp_a13_15 = _mm_mul_ps(self.twiddle9re, x1516p);
+        let temp_a14_1 = _mm_mul_ps(self.twiddle14re, x130p);
+        let temp_a14_2 = _mm_mul_ps(self.twiddle3re, x229p);
+        let temp_a14_3 = _mm_mul_ps(self.twiddle11re, x328p);
+        let temp_a14_4 = _mm_mul_ps(self.twiddle6re, x427p);
+        let temp_a14_5 = _mm_mul_ps(self.twiddle8re, x526p);
+        let temp_a14_6 = _mm_mul_ps(self.twiddle9re, x625p);
+        let temp_a14_7 = _mm_mul_ps(self.twiddle5re, x724p);
+        let temp_a14_8 = _mm_mul_ps(self.twiddle12re, x823p);
+        let temp_a14_9 = _mm_mul_ps(self.twiddle2re, x922p);
+        let temp_a14_10 = _mm_mul_ps(self.twiddle15re, x1021p);
+        let temp_a14_11 = _mm_mul_ps(self.twiddle1re, x1120p);
+        let temp_a14_12 = _mm_mul_ps(self.twiddle13re, x1219p);
+        let temp_a14_13 = _mm_mul_ps(self.twiddle4re, x1318p);
+        let temp_a14_14 = _mm_mul_ps(self.twiddle10re, x1417p);
+        let temp_a14_15 = _mm_mul_ps(self.twiddle7re, x1516p);
+        let temp_a15_1 = _mm_mul_ps(self.twiddle15re, x130p);
+        let temp_a15_2 = _mm_mul_ps(self.twiddle1re, x229p);
+        let temp_a15_3 = _mm_mul_ps(self.twiddle14re, x328p);
+        let temp_a15_4 = _mm_mul_ps(self.twiddle2re, x427p);
+        let temp_a15_5 = _mm_mul_ps(self.twiddle13re, x526p);
+        let temp_a15_6 = _mm_mul_ps(self.twiddle3re, x625p);
+        let temp_a15_7 = _mm_mul_ps(self.twiddle12re, x724p);
+        let temp_a15_8 = _mm_mul_ps(self.twiddle4re, x823p);
+        let temp_a15_9 = _mm_mul_ps(self.twiddle11re, x922p);
+        let temp_a15_10 = _mm_mul_ps(self.twiddle5re, x1021p);
+        let temp_a15_11 = _mm_mul_ps(self.twiddle10re, x1120p);
+        let temp_a15_12 = _mm_mul_ps(self.twiddle6re, x1219p);
+        let temp_a15_13 = _mm_mul_ps(self.twiddle9re, x1318p);
+        let temp_a15_14 = _mm_mul_ps(self.twiddle7re, x1417p);
+        let temp_a15_15 = _mm_mul_ps(self.twiddle8re, x1516p);
+
+        let temp_b1_1 = _mm_mul_ps(self.twiddle1im, x130n);
+        let temp_b1_2 = _mm_mul_ps(self.twiddle2im, x229n);
+        let temp_b1_3 = _mm_mul_ps(self.twiddle3im, x328n);
+        let temp_b1_4 = _mm_mul_ps(self.twiddle4im, x427n);
+        let temp_b1_5 = _mm_mul_ps(self.twiddle5im, x526n);
+        let temp_b1_6 = _mm_mul_ps(self.twiddle6im, x625n);
+        let temp_b1_7 = _mm_mul_ps(self.twiddle7im, x724n);
+        let temp_b1_8 = _mm_mul_ps(self.twiddle8im, x823n);
+        let temp_b1_9 = _mm_mul_ps(self.twiddle9im, x922n);
+        let temp_b1_10 = _mm_mul_ps(self.twiddle10im, x1021n);
+        let temp_b1_11 = _mm_mul_ps(self.twiddle11im, x1120n);
+        let temp_b1_12 = _mm_mul_ps(self.twiddle12im, x1219n);
+        let temp_b1_13 = _mm_mul_ps(self.twiddle13im, x1318n);
+        let temp_b1_14 = _mm_mul_ps(self.twiddle14im, x1417n);
+        let temp_b1_15 = _mm_mul_ps(self.twiddle15im, x1516n);
+        let temp_b2_1 = _mm_mul_ps(self.twiddle2im, x130n);
+        let temp_b2_2 = _mm_mul_ps(self.twiddle4im, x229n);
+        let temp_b2_3 = _mm_mul_ps(self.twiddle6im, x328n);
+        let temp_b2_4 = _mm_mul_ps(self.twiddle8im, x427n);
+        let temp_b2_5 = _mm_mul_ps(self.twiddle10im, x526n);
+        let temp_b2_6 = _mm_mul_ps(self.twiddle12im, x625n);
+        let temp_b2_7 = _mm_mul_ps(self.twiddle14im, x724n);
+        let temp_b2_8 = _mm_mul_ps(self.twiddle15im, x823n);
+        let temp_b2_9 = _mm_mul_ps(self.twiddle13im, x922n);
+        let temp_b2_10 = _mm_mul_ps(self.twiddle11im, x1021n);
+        let temp_b2_11 = _mm_mul_ps(self.twiddle9im, x1120n);
+        let temp_b2_12 = _mm_mul_ps(self.twiddle7im, x1219n);
+        let temp_b2_13 = _mm_mul_ps(self.twiddle5im, x1318n);
+        let temp_b2_14 = _mm_mul_ps(self.twiddle3im, x1417n);
+        let temp_b2_15 = _mm_mul_ps(self.twiddle1im, x1516n);
+        let temp_b3_1 = _mm_mul_ps(self.twiddle3im, x130n);
+        let temp_b3_2 = _mm_mul_ps(self.twiddle6im, x229n);
+        let temp_b3_3 = _mm_mul_ps(self.twiddle9im, x328n);
+        let temp_b3_4 = _mm_mul_ps(self.twiddle12im, x427n);
+        let temp_b3_5 = _mm_mul_ps(self.twiddle15im, x526n);
+        let temp_b3_6 = _mm_mul_ps(self.twiddle13im, x625n);
+        let temp_b3_7 = _mm_mul_ps(self.twiddle10im, x724n);
+        let temp_b3_8 = _mm_mul_ps(self.twiddle7im, x823n);
+        let temp_b3_9 = _mm_mul_ps(self.twiddle4im, x922n);
+        let temp_b3_10 = _mm_mul_ps(self.twiddle1im, x1021n);
+        let temp_b3_11 = _mm_mul_ps(self.twiddle2im, x1120n);
+        let temp_b3_12 = _mm_mul_ps(self.twiddle5im, x1219n);
+        let temp_b3_13 = _mm_mul_ps(self.twiddle8im, x1318n);
+        let temp_b3_14 = _mm_mul_ps(self.twiddle11im, x1417n);
+        let temp_b3_15 = _mm_mul_ps(self.twiddle14im, x1516n);
+        let temp_b4_1 = _mm_mul_ps(self.twiddle4im, x130n);
+        let temp_b4_2 = _mm_mul_ps(self.twiddle8im, x229n);
+        let temp_b4_3 = _mm_mul_ps(self.twiddle12im, x328n);
+        let temp_b4_4 = _mm_mul_ps(self.twiddle15im, x427n);
+        let temp_b4_5 = _mm_mul_ps(self.twiddle11im, x526n);
+        let temp_b4_6 = _mm_mul_ps(self.twiddle7im, x625n);
+        let temp_b4_7 = _mm_mul_ps(self.twiddle3im, x724n);
+        let temp_b4_8 = _mm_mul_ps(self.twiddle1im, x823n);
+        let temp_b4_9 = _mm_mul_ps(self.twiddle5im, x922n);
+        let temp_b4_10 = _mm_mul_ps(self.twiddle9im, x1021n);
+        let temp_b4_11 = _mm_mul_ps(self.twiddle13im, x1120n);
+        let temp_b4_12 = _mm_mul_ps(self.twiddle14im, x1219n);
+        let temp_b4_13 = _mm_mul_ps(self.twiddle10im, x1318n);
+        let temp_b4_14 = _mm_mul_ps(self.twiddle6im, x1417n);
+        let temp_b4_15 = _mm_mul_ps(self.twiddle2im, x1516n);
+        let temp_b5_1 = _mm_mul_ps(self.twiddle5im, x130n);
+        let temp_b5_2 = _mm_mul_ps(self.twiddle10im, x229n);
+        let temp_b5_3 = _mm_mul_ps(self.twiddle15im, x328n);
+        let temp_b5_4 = _mm_mul_ps(self.twiddle11im, x427n);
+        let temp_b5_5 = _mm_mul_ps(self.twiddle6im, x526n);
+        let temp_b5_6 = _mm_mul_ps(self.twiddle1im, x625n);
+        let temp_b5_7 = _mm_mul_ps(self.twiddle4im, x724n);
+        let temp_b5_8 = _mm_mul_ps(self.twiddle9im, x823n);
+        let temp_b5_9 = _mm_mul_ps(self.twiddle14im, x922n);
+        let temp_b5_10 = _mm_mul_ps(self.twiddle12im, x1021n);
+        let temp_b5_11 = _mm_mul_ps(self.twiddle7im, x1120n);
+        let temp_b5_12 = _mm_mul_ps(self.twiddle2im, x1219n);
+        let temp_b5_13 = _mm_mul_ps(self.twiddle3im, x1318n);
+        let temp_b5_14 = _mm_mul_ps(self.twiddle8im, x1417n);
+        let temp_b5_15 = _mm_mul_ps(self.twiddle13im, x1516n);
+        let temp_b6_1 = _mm_mul_ps(self.twiddle6im, x130n);
+        let temp_b6_2 = _mm_mul_ps(self.twiddle12im, x229n);
+        let temp_b6_3 = _mm_mul_ps(self.twiddle13im, x328n);
+        let temp_b6_4 = _mm_mul_ps(self.twiddle7im, x427n);
+        let temp_b6_5 = _mm_mul_ps(self.twiddle1im, x526n);
+        let temp_b6_6 = _mm_mul_ps(self.twiddle5im, x625n);
+        let temp_b6_7 = _mm_mul_ps(self.twiddle11im, x724n);
+        let temp_b6_8 = _mm_mul_ps(self.twiddle14im, x823n);
+        let temp_b6_9 = _mm_mul_ps(self.twiddle8im, x922n);
+        let temp_b6_10 = _mm_mul_ps(self.twiddle2im, x1021n);
+        let temp_b6_11 = _mm_mul_ps(self.twiddle4im, x1120n);
+        let temp_b6_12 = _mm_mul_ps(self.twiddle10im, x1219n);
+        let temp_b6_13 = _mm_mul_ps(self.twiddle15im, x1318n);
+        let temp_b6_14 = _mm_mul_ps(self.twiddle9im, x1417n);
+        let temp_b6_15 = _mm_mul_ps(self.twiddle3im, x1516n);
+        let temp_b7_1 = _mm_mul_ps(self.twiddle7im, x130n);
+        let temp_b7_2 = _mm_mul_ps(self.twiddle14im, x229n);
+        let temp_b7_3 = _mm_mul_ps(self.twiddle10im, x328n);
+        let temp_b7_4 = _mm_mul_ps(self.twiddle3im, x427n);
+        let temp_b7_5 = _mm_mul_ps(self.twiddle4im, x526n);
+        let temp_b7_6 = _mm_mul_ps(self.twiddle11im, x625n);
+        let temp_b7_7 = _mm_mul_ps(self.twiddle13im, x724n);
+        let temp_b7_8 = _mm_mul_ps(self.twiddle6im, x823n);
+        let temp_b7_9 = _mm_mul_ps(self.twiddle1im, x922n);
+        let temp_b7_10 = _mm_mul_ps(self.twiddle8im, x1021n);
+        let temp_b7_11 = _mm_mul_ps(self.twiddle15im, x1120n);
+        let temp_b7_12 = _mm_mul_ps(self.twiddle9im, x1219n);
+        let temp_b7_13 = _mm_mul_ps(self.twiddle2im, x1318n);
+        let temp_b7_14 = _mm_mul_ps(self.twiddle5im, x1417n);
+        let temp_b7_15 = _mm_mul_ps(self.twiddle12im, x1516n);
+        let temp_b8_1 = _mm_mul_ps(self.twiddle8im, x130n);
+        let temp_b8_2 = _mm_mul_ps(self.twiddle15im, x229n);
+        let temp_b8_3 = _mm_mul_ps(self.twiddle7im, x328n);
+        let temp_b8_4 = _mm_mul_ps(self.twiddle1im, x427n);
+        let temp_b8_5 = _mm_mul_ps(self.twiddle9im, x526n);
+        let temp_b8_6 = _mm_mul_ps(self.twiddle14im, x625n);
+        let temp_b8_7 = _mm_mul_ps(self.twiddle6im, x724n);
+        let temp_b8_8 = _mm_mul_ps(self.twiddle2im, x823n);
+        let temp_b8_9 = _mm_mul_ps(self.twiddle10im, x922n);
+        let temp_b8_10 = _mm_mul_ps(self.twiddle13im, x1021n);
+        let temp_b8_11 = _mm_mul_ps(self.twiddle5im, x1120n);
+        let temp_b8_12 = _mm_mul_ps(self.twiddle3im, x1219n);
+        let temp_b8_13 = _mm_mul_ps(self.twiddle11im, x1318n);
+        let temp_b8_14 = _mm_mul_ps(self.twiddle12im, x1417n);
+        let temp_b8_15 = _mm_mul_ps(self.twiddle4im, x1516n);
+        let temp_b9_1 = _mm_mul_ps(self.twiddle9im, x130n);
+        let temp_b9_2 = _mm_mul_ps(self.twiddle13im, x229n);
+        let temp_b9_3 = _mm_mul_ps(self.twiddle4im, x328n);
+        let temp_b9_4 = _mm_mul_ps(self.twiddle5im, x427n);
+        let temp_b9_5 = _mm_mul_ps(self.twiddle14im, x526n);
+        let temp_b9_6 = _mm_mul_ps(self.twiddle8im, x625n);
+        let temp_b9_7 = _mm_mul_ps(self.twiddle1im, x724n);
+        let temp_b9_8 = _mm_mul_ps(self.twiddle10im, x823n);
+        let temp_b9_9 = _mm_mul_ps(self.twiddle12im, x922n);
+        let temp_b9_10 = _mm_mul_ps(self.twiddle3im, x1021n);
+        let temp_b9_11 = _mm_mul_ps(self.twiddle6im, x1120n);
+        let temp_b9_12 = _mm_mul_ps(self.twiddle15im, x1219n);
+        let temp_b9_13 = _mm_mul_ps(self.twiddle7im, x1318n);
+        let temp_b9_14 = _mm_mul_ps(self.twiddle2im, x1417n);
+        let temp_b9_15 = _mm_mul_ps(self.twiddle11im, x1516n);
+        let temp_b10_1 = _mm_mul_ps(self.twiddle10im, x130n);
+        let temp_b10_2 = _mm_mul_ps(self.twiddle11im, x229n);
+        let temp_b10_3 = _mm_mul_ps(self.twiddle1im, x328n);
+        let temp_b10_4 = _mm_mul_ps(self.twiddle9im, x427n);
+        let temp_b10_5 = _mm_mul_ps(self.twiddle12im, x526n);
+        let temp_b10_6 = _mm_mul_ps(self.twiddle2im, x625n);
+        let temp_b10_7 = _mm_mul_ps(self.twiddle8im, x724n);
+        let temp_b10_8 = _mm_mul_ps(self.twiddle13im, x823n);
+        let temp_b10_9 = _mm_mul_ps(self.twiddle3im, x922n);
+        let temp_b10_10 = _mm_mul_ps(self.twiddle7im, x1021n);
+        let temp_b10_11 = _mm_mul_ps(self.twiddle14im, x1120n);
+        let temp_b10_12 = _mm_mul_ps(self.twiddle4im, x1219n);
+        let temp_b10_13 = _mm_mul_ps(self.twiddle6im, x1318n);
+        let temp_b10_14 = _mm_mul_ps(self.twiddle15im, x1417n);
+        let temp_b10_15 = _mm_mul_ps(self.twiddle5im, x1516n);
+        let temp_b11_1 = _mm_mul_ps(self.twiddle11im, x130n);
+        let temp_b11_2 = _mm_mul_ps(self.twiddle9im, x229n);
+        let temp_b11_3 = _mm_mul_ps(self.twiddle2im, x328n);
+        let temp_b11_4 = _mm_mul_ps(self.twiddle13im, x427n);
+        let temp_b11_5 = _mm_mul_ps(self.twiddle7im, x526n);
+        let temp_b11_6 = _mm_mul_ps(self.twiddle4im, x625n);
+        let temp_b11_7 = _mm_mul_ps(self.twiddle15im, x724n);
+        let temp_b11_8 = _mm_mul_ps(self.twiddle5im, x823n);
+        let temp_b11_9 = _mm_mul_ps(self.twiddle6im, x922n);
+        let temp_b11_10 = _mm_mul_ps(self.twiddle14im, x1021n);
+        let temp_b11_11 = _mm_mul_ps(self.twiddle3im, x1120n);
+        let temp_b11_12 = _mm_mul_ps(self.twiddle8im, x1219n);
+        let temp_b11_13 = _mm_mul_ps(self.twiddle12im, x1318n);
+        let temp_b11_14 = _mm_mul_ps(self.twiddle1im, x1417n);
+        let temp_b11_15 = _mm_mul_ps(self.twiddle10im, x1516n);
+        let temp_b12_1 = _mm_mul_ps(self.twiddle12im, x130n);
+        let temp_b12_2 = _mm_mul_ps(self.twiddle7im, x229n);
+        let temp_b12_3 = _mm_mul_ps(self.twiddle5im, x328n);
+        let temp_b12_4 = _mm_mul_ps(self.twiddle14im, x427n);
+        let temp_b12_5 = _mm_mul_ps(self.twiddle2im, x526n);
+        let temp_b12_6 = _mm_mul_ps(self.twiddle10im, x625n);
+        let temp_b12_7 = _mm_mul_ps(self.twiddle9im, x724n);
+        let temp_b12_8 = _mm_mul_ps(self.twiddle3im, x823n);
+        let temp_b12_9 = _mm_mul_ps(self.twiddle15im, x922n);
+        let temp_b12_10 = _mm_mul_ps(self.twiddle4im, x1021n);
+        let temp_b12_11 = _mm_mul_ps(self.twiddle8im, x1120n);
+        let temp_b12_12 = _mm_mul_ps(self.twiddle11im, x1219n);
+        let temp_b12_13 = _mm_mul_ps(self.twiddle1im, x1318n);
+        let temp_b12_14 = _mm_mul_ps(self.twiddle13im, x1417n);
+        let temp_b12_15 = _mm_mul_ps(self.twiddle6im, x1516n);
+        let temp_b13_1 = _mm_mul_ps(self.twiddle13im, x130n);
+        let temp_b13_2 = _mm_mul_ps(self.twiddle5im, x229n);
+        let temp_b13_3 = _mm_mul_ps(self.twiddle8im, x328n);
+        let temp_b13_4 = _mm_mul_ps(self.twiddle10im, x427n);
+        let temp_b13_5 = _mm_mul_ps(self.twiddle3im, x526n);
+        let temp_b13_6 = _mm_mul_ps(self.twiddle15im, x625n);
+        let temp_b13_7 = _mm_mul_ps(self.twiddle2im, x724n);
+        let temp_b13_8 = _mm_mul_ps(self.twiddle11im, x823n);
+        let temp_b13_9 = _mm_mul_ps(self.twiddle7im, x922n);
+        let temp_b13_10 = _mm_mul_ps(self.twiddle6im, x1021n);
+        let temp_b13_11 = _mm_mul_ps(self.twiddle12im, x1120n);
+        let temp_b13_12 = _mm_mul_ps(self.twiddle1im, x1219n);
+        let temp_b13_13 = _mm_mul_ps(self.twiddle14im, x1318n);
+        let temp_b13_14 = _mm_mul_ps(self.twiddle4im, x1417n);
+        let temp_b13_15 = _mm_mul_ps(self.twiddle9im, x1516n);
+        let temp_b14_1 = _mm_mul_ps(self.twiddle14im, x130n);
+        let temp_b14_2 = _mm_mul_ps(self.twiddle3im, x229n);
+        let temp_b14_3 = _mm_mul_ps(self.twiddle11im, x328n);
+        let temp_b14_4 = _mm_mul_ps(self.twiddle6im, x427n);
+        let temp_b14_5 = _mm_mul_ps(self.twiddle8im, x526n);
+        let temp_b14_6 = _mm_mul_ps(self.twiddle9im, x625n);
+        let temp_b14_7 = _mm_mul_ps(self.twiddle5im, x724n);
+        let temp_b14_8 = _mm_mul_ps(self.twiddle12im, x823n);
+        let temp_b14_9 = _mm_mul_ps(self.twiddle2im, x922n);
+        let temp_b14_10 = _mm_mul_ps(self.twiddle15im, x1021n);
+        let temp_b14_11 = _mm_mul_ps(self.twiddle1im, x1120n);
+        let temp_b14_12 = _mm_mul_ps(self.twiddle13im, x1219n);
+        let temp_b14_13 = _mm_mul_ps(self.twiddle4im, x1318n);
+        let temp_b14_14 = _mm_mul_ps(self.twiddle10im, x1417n);
+        let temp_b14_15 = _mm_mul_ps(self.twiddle7im, x1516n);
+        let temp_b15_1 = _mm_mul_ps(self.twiddle15im, x130n);
+        let temp_b15_2 = _mm_mul_ps(self.twiddle1im, x229n);
+        let temp_b15_3 = _mm_mul_ps(self.twiddle14im, x328n);
+        let temp_b15_4 = _mm_mul_ps(self.twiddle2im, x427n);
+        let temp_b15_5 = _mm_mul_ps(self.twiddle13im, x526n);
+        let temp_b15_6 = _mm_mul_ps(self.twiddle3im, x625n);
+        let temp_b15_7 = _mm_mul_ps(self.twiddle12im, x724n);
+        let temp_b15_8 = _mm_mul_ps(self.twiddle4im, x823n);
+        let temp_b15_9 = _mm_mul_ps(self.twiddle11im, x922n);
+        let temp_b15_10 = _mm_mul_ps(self.twiddle5im, x1021n);
+        let temp_b15_11 = _mm_mul_ps(self.twiddle10im, x1120n);
+        let temp_b15_12 = _mm_mul_ps(self.twiddle6im, x1219n);
+        let temp_b15_13 = _mm_mul_ps(self.twiddle9im, x1318n);
+        let temp_b15_14 = _mm_mul_ps(self.twiddle7im, x1417n);
+        let temp_b15_15 = _mm_mul_ps(self.twiddle8im, x1516n);
+
+        let temp_a1 = _mm_add_ps(values[0], _mm_add_ps(temp_a1_1, _mm_add_ps(temp_a1_2, _mm_add_ps(temp_a1_3, _mm_add_ps(temp_a1_4, _mm_add_ps(temp_a1_5, _mm_add_ps(temp_a1_6, _mm_add_ps(temp_a1_7, _mm_add_ps(temp_a1_8, _mm_add_ps(temp_a1_9, _mm_add_ps(temp_a1_10, _mm_add_ps(temp_a1_11, _mm_add_ps(temp_a1_12, _mm_add_ps(temp_a1_13, _mm_add_ps(temp_a1_14, temp_a1_15)))))))))))))));
+        let temp_a2 = _mm_add_ps(values[0], _mm_add_ps(temp_a2_1, _mm_add_ps(temp_a2_2, _mm_add_ps(temp_a2_3, _mm_add_ps(temp_a2_4, _mm_add_ps(temp_a2_5, _mm_add_ps(temp_a2_6, _mm_add_ps(temp_a2_7, _mm_add_ps(temp_a2_8, _mm_add_ps(temp_a2_9, _mm_add_ps(temp_a2_10, _mm_add_ps(temp_a2_11, _mm_add_ps(temp_a2_12, _mm_add_ps(temp_a2_13, _mm_add_ps(temp_a2_14, temp_a2_15)))))))))))))));
+        let temp_a3 = _mm_add_ps(values[0], _mm_add_ps(temp_a3_1, _mm_add_ps(temp_a3_2, _mm_add_ps(temp_a3_3, _mm_add_ps(temp_a3_4, _mm_add_ps(temp_a3_5, _mm_add_ps(temp_a3_6, _mm_add_ps(temp_a3_7, _mm_add_ps(temp_a3_8, _mm_add_ps(temp_a3_9, _mm_add_ps(temp_a3_10, _mm_add_ps(temp_a3_11, _mm_add_ps(temp_a3_12, _mm_add_ps(temp_a3_13, _mm_add_ps(temp_a3_14, temp_a3_15)))))))))))))));
+        let temp_a4 = _mm_add_ps(values[0], _mm_add_ps(temp_a4_1, _mm_add_ps(temp_a4_2, _mm_add_ps(temp_a4_3, _mm_add_ps(temp_a4_4, _mm_add_ps(temp_a4_5, _mm_add_ps(temp_a4_6, _mm_add_ps(temp_a4_7, _mm_add_ps(temp_a4_8, _mm_add_ps(temp_a4_9, _mm_add_ps(temp_a4_10, _mm_add_ps(temp_a4_11, _mm_add_ps(temp_a4_12, _mm_add_ps(temp_a4_13, _mm_add_ps(temp_a4_14, temp_a4_15)))))))))))))));
+        let temp_a5 = _mm_add_ps(values[0], _mm_add_ps(temp_a5_1, _mm_add_ps(temp_a5_2, _mm_add_ps(temp_a5_3, _mm_add_ps(temp_a5_4, _mm_add_ps(temp_a5_5, _mm_add_ps(temp_a5_6, _mm_add_ps(temp_a5_7, _mm_add_ps(temp_a5_8, _mm_add_ps(temp_a5_9, _mm_add_ps(temp_a5_10, _mm_add_ps(temp_a5_11, _mm_add_ps(temp_a5_12, _mm_add_ps(temp_a5_13, _mm_add_ps(temp_a5_14, temp_a5_15)))))))))))))));
+        let temp_a6 = _mm_add_ps(values[0], _mm_add_ps(temp_a6_1, _mm_add_ps(temp_a6_2, _mm_add_ps(temp_a6_3, _mm_add_ps(temp_a6_4, _mm_add_ps(temp_a6_5, _mm_add_ps(temp_a6_6, _mm_add_ps(temp_a6_7, _mm_add_ps(temp_a6_8, _mm_add_ps(temp_a6_9, _mm_add_ps(temp_a6_10, _mm_add_ps(temp_a6_11, _mm_add_ps(temp_a6_12, _mm_add_ps(temp_a6_13, _mm_add_ps(temp_a6_14, temp_a6_15)))))))))))))));
+        let temp_a7 = _mm_add_ps(values[0], _mm_add_ps(temp_a7_1, _mm_add_ps(temp_a7_2, _mm_add_ps(temp_a7_3, _mm_add_ps(temp_a7_4, _mm_add_ps(temp_a7_5, _mm_add_ps(temp_a7_6, _mm_add_ps(temp_a7_7, _mm_add_ps(temp_a7_8, _mm_add_ps(temp_a7_9, _mm_add_ps(temp_a7_10, _mm_add_ps(temp_a7_11, _mm_add_ps(temp_a7_12, _mm_add_ps(temp_a7_13, _mm_add_ps(temp_a7_14, temp_a7_15)))))))))))))));
+        let temp_a8 = _mm_add_ps(values[0], _mm_add_ps(temp_a8_1, _mm_add_ps(temp_a8_2, _mm_add_ps(temp_a8_3, _mm_add_ps(temp_a8_4, _mm_add_ps(temp_a8_5, _mm_add_ps(temp_a8_6, _mm_add_ps(temp_a8_7, _mm_add_ps(temp_a8_8, _mm_add_ps(temp_a8_9, _mm_add_ps(temp_a8_10, _mm_add_ps(temp_a8_11, _mm_add_ps(temp_a8_12, _mm_add_ps(temp_a8_13, _mm_add_ps(temp_a8_14, temp_a8_15)))))))))))))));
+        let temp_a9 = _mm_add_ps(values[0], _mm_add_ps(temp_a9_1, _mm_add_ps(temp_a9_2, _mm_add_ps(temp_a9_3, _mm_add_ps(temp_a9_4, _mm_add_ps(temp_a9_5, _mm_add_ps(temp_a9_6, _mm_add_ps(temp_a9_7, _mm_add_ps(temp_a9_8, _mm_add_ps(temp_a9_9, _mm_add_ps(temp_a9_10, _mm_add_ps(temp_a9_11, _mm_add_ps(temp_a9_12, _mm_add_ps(temp_a9_13, _mm_add_ps(temp_a9_14, temp_a9_15)))))))))))))));
+        let temp_a10 = _mm_add_ps(values[0], _mm_add_ps(temp_a10_1, _mm_add_ps(temp_a10_2, _mm_add_ps(temp_a10_3, _mm_add_ps(temp_a10_4, _mm_add_ps(temp_a10_5, _mm_add_ps(temp_a10_6, _mm_add_ps(temp_a10_7, _mm_add_ps(temp_a10_8, _mm_add_ps(temp_a10_9, _mm_add_ps(temp_a10_10, _mm_add_ps(temp_a10_11, _mm_add_ps(temp_a10_12, _mm_add_ps(temp_a10_13, _mm_add_ps(temp_a10_14, temp_a10_15)))))))))))))));
+        let temp_a11 = _mm_add_ps(values[0], _mm_add_ps(temp_a11_1, _mm_add_ps(temp_a11_2, _mm_add_ps(temp_a11_3, _mm_add_ps(temp_a11_4, _mm_add_ps(temp_a11_5, _mm_add_ps(temp_a11_6, _mm_add_ps(temp_a11_7, _mm_add_ps(temp_a11_8, _mm_add_ps(temp_a11_9, _mm_add_ps(temp_a11_10, _mm_add_ps(temp_a11_11, _mm_add_ps(temp_a11_12, _mm_add_ps(temp_a11_13, _mm_add_ps(temp_a11_14, temp_a11_15)))))))))))))));
+        let temp_a12 = _mm_add_ps(values[0], _mm_add_ps(temp_a12_1, _mm_add_ps(temp_a12_2, _mm_add_ps(temp_a12_3, _mm_add_ps(temp_a12_4, _mm_add_ps(temp_a12_5, _mm_add_ps(temp_a12_6, _mm_add_ps(temp_a12_7, _mm_add_ps(temp_a12_8, _mm_add_ps(temp_a12_9, _mm_add_ps(temp_a12_10, _mm_add_ps(temp_a12_11, _mm_add_ps(temp_a12_12, _mm_add_ps(temp_a12_13, _mm_add_ps(temp_a12_14, temp_a12_15)))))))))))))));
+        let temp_a13 = _mm_add_ps(values[0], _mm_add_ps(temp_a13_1, _mm_add_ps(temp_a13_2, _mm_add_ps(temp_a13_3, _mm_add_ps(temp_a13_4, _mm_add_ps(temp_a13_5, _mm_add_ps(temp_a13_6, _mm_add_ps(temp_a13_7, _mm_add_ps(temp_a13_8, _mm_add_ps(temp_a13_9, _mm_add_ps(temp_a13_10, _mm_add_ps(temp_a13_11, _mm_add_ps(temp_a13_12, _mm_add_ps(temp_a13_13, _mm_add_ps(temp_a13_14, temp_a13_15)))))))))))))));
+        let temp_a14 = _mm_add_ps(values[0], _mm_add_ps(temp_a14_1, _mm_add_ps(temp_a14_2, _mm_add_ps(temp_a14_3, _mm_add_ps(temp_a14_4, _mm_add_ps(temp_a14_5, _mm_add_ps(temp_a14_6, _mm_add_ps(temp_a14_7, _mm_add_ps(temp_a14_8, _mm_add_ps(temp_a14_9, _mm_add_ps(temp_a14_10, _mm_add_ps(temp_a14_11, _mm_add_ps(temp_a14_12, _mm_add_ps(temp_a14_13, _mm_add_ps(temp_a14_14, temp_a14_15)))))))))))))));
+        let temp_a15 = _mm_add_ps(values[0], _mm_add_ps(temp_a15_1, _mm_add_ps(temp_a15_2, _mm_add_ps(temp_a15_3, _mm_add_ps(temp_a15_4, _mm_add_ps(temp_a15_5, _mm_add_ps(temp_a15_6, _mm_add_ps(temp_a15_7, _mm_add_ps(temp_a15_8, _mm_add_ps(temp_a15_9, _mm_add_ps(temp_a15_10, _mm_add_ps(temp_a15_11, _mm_add_ps(temp_a15_12, _mm_add_ps(temp_a15_13, _mm_add_ps(temp_a15_14, temp_a15_15)))))))))))))));
+
+        let temp_b1 = _mm_add_ps(temp_b1_1, _mm_add_ps(temp_b1_2, _mm_add_ps(temp_b1_3, _mm_add_ps(temp_b1_4, _mm_add_ps(temp_b1_5, _mm_add_ps(temp_b1_6, _mm_add_ps(temp_b1_7, _mm_add_ps(temp_b1_8, _mm_add_ps(temp_b1_9, _mm_add_ps(temp_b1_10, _mm_add_ps(temp_b1_11, _mm_add_ps(temp_b1_12, _mm_add_ps(temp_b1_13, _mm_add_ps(temp_b1_14, temp_b1_15))))))))))))));
+        let temp_b2 = _mm_add_ps(temp_b2_1, _mm_add_ps(temp_b2_2, _mm_add_ps(temp_b2_3, _mm_add_ps(temp_b2_4, _mm_add_ps(temp_b2_5, _mm_add_ps(temp_b2_6, _mm_sub_ps(temp_b2_7, _mm_add_ps(temp_b2_8, _mm_add_ps(temp_b2_9, _mm_add_ps(temp_b2_10, _mm_add_ps(temp_b2_11, _mm_add_ps(temp_b2_12, _mm_add_ps(temp_b2_13, _mm_add_ps(temp_b2_14, temp_b2_15))))))))))))));
+        let temp_b3 = _mm_add_ps(temp_b3_1, _mm_add_ps(temp_b3_2, _mm_add_ps(temp_b3_3, _mm_add_ps(temp_b3_4, _mm_sub_ps(temp_b3_5, _mm_add_ps(temp_b3_6, _mm_add_ps(temp_b3_7, _mm_add_ps(temp_b3_8, _mm_add_ps(temp_b3_9, _mm_sub_ps(temp_b3_10, _mm_add_ps(temp_b3_11, _mm_add_ps(temp_b3_12, _mm_add_ps(temp_b3_13, _mm_add_ps(temp_b3_14, temp_b3_15))))))))))))));
+        let temp_b4 = _mm_add_ps(temp_b4_1, _mm_add_ps(temp_b4_2, _mm_sub_ps(temp_b4_3, _mm_add_ps(temp_b4_4, _mm_add_ps(temp_b4_5, _mm_add_ps(temp_b4_6, _mm_sub_ps(temp_b4_7, _mm_add_ps(temp_b4_8, _mm_add_ps(temp_b4_9, _mm_add_ps(temp_b4_10, _mm_sub_ps(temp_b4_11, _mm_add_ps(temp_b4_12, _mm_add_ps(temp_b4_13, _mm_add_ps(temp_b4_14, temp_b4_15))))))))))))));
+        let temp_b5 = _mm_add_ps(temp_b5_1, _mm_add_ps(temp_b5_2, _mm_sub_ps(temp_b5_3, _mm_add_ps(temp_b5_4, _mm_add_ps(temp_b5_5, _mm_sub_ps(temp_b5_6, _mm_add_ps(temp_b5_7, _mm_add_ps(temp_b5_8, _mm_sub_ps(temp_b5_9, _mm_add_ps(temp_b5_10, _mm_add_ps(temp_b5_11, _mm_sub_ps(temp_b5_12, _mm_add_ps(temp_b5_13, _mm_add_ps(temp_b5_14, temp_b5_15))))))))))))));
+        let temp_b6 = _mm_add_ps(temp_b6_1, _mm_sub_ps(temp_b6_2, _mm_add_ps(temp_b6_3, _mm_add_ps(temp_b6_4, _mm_sub_ps(temp_b6_5, _mm_add_ps(temp_b6_6, _mm_sub_ps(temp_b6_7, _mm_add_ps(temp_b6_8, _mm_add_ps(temp_b6_9, _mm_sub_ps(temp_b6_10, _mm_add_ps(temp_b6_11, _mm_sub_ps(temp_b6_12, _mm_add_ps(temp_b6_13, _mm_add_ps(temp_b6_14, temp_b6_15))))))))))))));
+        let temp_b7 = _mm_add_ps(temp_b7_1, _mm_sub_ps(temp_b7_2, _mm_add_ps(temp_b7_3, _mm_sub_ps(temp_b7_4, _mm_add_ps(temp_b7_5, _mm_sub_ps(temp_b7_6, _mm_add_ps(temp_b7_7, _mm_sub_ps(temp_b7_8, _mm_add_ps(temp_b7_9, _mm_add_ps(temp_b7_10, _mm_sub_ps(temp_b7_11, _mm_add_ps(temp_b7_12, _mm_sub_ps(temp_b7_13, _mm_add_ps(temp_b7_14, temp_b7_15))))))))))))));
+        let temp_b8 = _mm_sub_ps(temp_b8_1, _mm_add_ps(temp_b8_2, _mm_sub_ps(temp_b8_3, _mm_add_ps(temp_b8_4, _mm_sub_ps(temp_b8_5, _mm_add_ps(temp_b8_6, _mm_sub_ps(temp_b8_7, _mm_add_ps(temp_b8_8, _mm_sub_ps(temp_b8_9, _mm_add_ps(temp_b8_10, _mm_sub_ps(temp_b8_11, _mm_add_ps(temp_b8_12, _mm_sub_ps(temp_b8_13, _mm_add_ps(temp_b8_14, temp_b8_15))))))))))))));
+        let temp_b9 = _mm_sub_ps(temp_b9_1, _mm_add_ps(temp_b9_2, _mm_sub_ps(temp_b9_3, _mm_add_ps(temp_b9_4, _mm_sub_ps(temp_b9_5, _mm_sub_ps(temp_b9_6, _mm_add_ps(temp_b9_7, _mm_sub_ps(temp_b9_8, _mm_add_ps(temp_b9_9, _mm_sub_ps(temp_b9_10, _mm_add_ps(temp_b9_11, _mm_sub_ps(temp_b9_12, _mm_sub_ps(temp_b9_13, _mm_add_ps(temp_b9_14, temp_b9_15))))))))))))));
+        let temp_b10 = _mm_sub_ps(temp_b10_1, _mm_add_ps(temp_b10_2, _mm_sub_ps(temp_b10_3, _mm_sub_ps(temp_b10_4, _mm_add_ps(temp_b10_5, _mm_sub_ps(temp_b10_6, _mm_sub_ps(temp_b10_7, _mm_add_ps(temp_b10_8, _mm_sub_ps(temp_b10_9, _mm_sub_ps(temp_b10_10, _mm_add_ps(temp_b10_11, _mm_sub_ps(temp_b10_12, _mm_sub_ps(temp_b10_13, _mm_add_ps(temp_b10_14, temp_b10_15))))))))))))));
+        let temp_b11 = _mm_sub_ps(temp_b11_1, _mm_sub_ps(temp_b11_2, _mm_add_ps(temp_b11_3, _mm_sub_ps(temp_b11_4, _mm_sub_ps(temp_b11_5, _mm_add_ps(temp_b11_6, _mm_sub_ps(temp_b11_7, _mm_sub_ps(temp_b11_8, _mm_sub_ps(temp_b11_9, _mm_add_ps(temp_b11_10, _mm_sub_ps(temp_b11_11, _mm_sub_ps(temp_b11_12, _mm_add_ps(temp_b11_13, _mm_sub_ps(temp_b11_14, temp_b11_15))))))))))))));
+        let temp_b12 = _mm_sub_ps(temp_b12_1, _mm_sub_ps(temp_b12_2, _mm_sub_ps(temp_b12_3, _mm_add_ps(temp_b12_4, _mm_sub_ps(temp_b12_5, _mm_sub_ps(temp_b12_6, _mm_sub_ps(temp_b12_7, _mm_add_ps(temp_b12_8, _mm_sub_ps(temp_b12_9, _mm_sub_ps(temp_b12_10, _mm_sub_ps(temp_b12_11, _mm_sub_ps(temp_b12_12, _mm_add_ps(temp_b12_13, _mm_sub_ps(temp_b12_14, temp_b12_15))))))))))))));
+        let temp_b13 = _mm_sub_ps(temp_b13_1, _mm_sub_ps(temp_b13_2, _mm_sub_ps(temp_b13_3, _mm_sub_ps(temp_b13_4, _mm_sub_ps(temp_b13_5, _mm_add_ps(temp_b13_6, _mm_sub_ps(temp_b13_7, _mm_sub_ps(temp_b13_8, _mm_sub_ps(temp_b13_9, _mm_sub_ps(temp_b13_10, _mm_sub_ps(temp_b13_11, _mm_add_ps(temp_b13_12, _mm_sub_ps(temp_b13_13, _mm_sub_ps(temp_b13_14, temp_b13_15))))))))))))));
+        let temp_b14 = _mm_sub_ps(temp_b14_1, _mm_sub_ps(temp_b14_2, _mm_sub_ps(temp_b14_3, _mm_sub_ps(temp_b14_4, _mm_sub_ps(temp_b14_5, _mm_sub_ps(temp_b14_6, _mm_sub_ps(temp_b14_7, _mm_sub_ps(temp_b14_8, _mm_sub_ps(temp_b14_9, _mm_add_ps(temp_b14_10, _mm_sub_ps(temp_b14_11, _mm_sub_ps(temp_b14_12, _mm_sub_ps(temp_b14_13, _mm_sub_ps(temp_b14_14, temp_b14_15))))))))))))));
+        let temp_b15 = _mm_sub_ps(temp_b15_1, _mm_sub_ps(temp_b15_2, _mm_sub_ps(temp_b15_3, _mm_sub_ps(temp_b15_4, _mm_sub_ps(temp_b15_5, _mm_sub_ps(temp_b15_6, _mm_sub_ps(temp_b15_7, _mm_sub_ps(temp_b15_8, _mm_sub_ps(temp_b15_9, _mm_sub_ps(temp_b15_10, _mm_sub_ps(temp_b15_11, _mm_sub_ps(temp_b15_12, _mm_sub_ps(temp_b15_13, _mm_sub_ps(temp_b15_14, temp_b15_15))))))))))))));
+
+        let temp_b1_rot = self.rotate.rotate_both(temp_b1);
+        let temp_b2_rot = self.rotate.rotate_both(temp_b2);
+        let temp_b3_rot = self.rotate.rotate_both(temp_b3);
+        let temp_b4_rot = self.rotate.rotate_both(temp_b4);
+        let temp_b5_rot = self.rotate.rotate_both(temp_b5);
+        let temp_b6_rot = self.rotate.rotate_both(temp_b6);
+        let temp_b7_rot = self.rotate.rotate_both(temp_b7);
+        let temp_b8_rot = self.rotate.rotate_both(temp_b8);
+        let temp_b9_rot = self.rotate.rotate_both(temp_b9);
+        let temp_b10_rot = self.rotate.rotate_both(temp_b10);
+        let temp_b11_rot = self.rotate.rotate_both(temp_b11);
+        let temp_b12_rot = self.rotate.rotate_both(temp_b12);
+        let temp_b13_rot = self.rotate.rotate_both(temp_b13);
+        let temp_b14_rot = self.rotate.rotate_both(temp_b14);
+        let temp_b15_rot = self.rotate.rotate_both(temp_b15);
+
+        let x0 = _mm_add_ps(values[0], _mm_add_ps(x130p, _mm_add_ps(x229p, _mm_add_ps(x328p, _mm_add_ps(x427p, _mm_add_ps(x526p, _mm_add_ps(x625p, _mm_add_ps(x724p, _mm_add_ps(x823p, _mm_add_ps(x922p, _mm_add_ps(x1021p, _mm_add_ps(x1120p, _mm_add_ps(x1219p, _mm_add_ps(x1318p, _mm_add_ps(x1417p, x1516p)))))))))))))));
+        let x1 = _mm_add_ps(temp_a1, temp_b1_rot);
+        let x2 = _mm_add_ps(temp_a2, temp_b2_rot);
+        let x3 = _mm_add_ps(temp_a3, temp_b3_rot);
+        let x4 = _mm_add_ps(temp_a4, temp_b4_rot);
+        let x5 = _mm_add_ps(temp_a5, temp_b5_rot);
+        let x6 = _mm_add_ps(temp_a6, temp_b6_rot);
+        let x7 = _mm_add_ps(temp_a7, temp_b7_rot);
+        let x8 = _mm_add_ps(temp_a8, temp_b8_rot);
+        let x9 = _mm_add_ps(temp_a9, temp_b9_rot);
+        let x10 = _mm_add_ps(temp_a10, temp_b10_rot);
+        let x11 = _mm_add_ps(temp_a11, temp_b11_rot);
+        let x12 = _mm_add_ps(temp_a12, temp_b12_rot);
+        let x13 = _mm_add_ps(temp_a13, temp_b13_rot);
+        let x14 = _mm_add_ps(temp_a14, temp_b14_rot);
+        let x15 = _mm_add_ps(temp_a15, temp_b15_rot);
+        let x16 = _mm_sub_ps(temp_a15, temp_b15_rot);
+        let x17 = _mm_sub_ps(temp_a14, temp_b14_rot);
+        let x18 = _mm_sub_ps(temp_a13, temp_b13_rot);
+        let x19 = _mm_sub_ps(temp_a12, temp_b12_rot);
+        let x20 = _mm_sub_ps(temp_a11, temp_b11_rot);
+        let x21 = _mm_sub_ps(temp_a10, temp_b10_rot);
+        let x22 = _mm_sub_ps(temp_a9, temp_b9_rot);
+        let x23 = _mm_sub_ps(temp_a8, temp_b8_rot);
+        let x24 = _mm_sub_ps(temp_a7, temp_b7_rot);
+        let x25 = _mm_sub_ps(temp_a6, temp_b6_rot);
+        let x26 = _mm_sub_ps(temp_a5, temp_b5_rot);
+        let x27 = _mm_sub_ps(temp_a4, temp_b4_rot);
+        let x28 = _mm_sub_ps(temp_a3, temp_b3_rot);
+        let x29 = _mm_sub_ps(temp_a2, temp_b2_rot);
+        let x30 = _mm_sub_ps(temp_a1, temp_b1_rot);
+        [x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, x30]
+
+    }
+}
 
 
 //   _____ _            __   _  _   _     _ _   
@@ -6531,6 +7448,7 @@ mod unit_tests {
     test_butterfly_32_func!(test_ssef32_butterfly19, SseF32Butterfly19, 19);
     test_butterfly_32_func!(test_ssef32_butterfly23, SseF32Butterfly23, 23);
     test_butterfly_32_func!(test_ssef32_butterfly29, SseF32Butterfly29, 29);
+    test_butterfly_32_func!(test_ssef32_butterfly31, SseF32Butterfly31, 31);
 
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
