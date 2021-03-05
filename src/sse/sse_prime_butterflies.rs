@@ -15116,8 +15116,7 @@ impl<T: FftNum> SseF64Butterfly31<T> {
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use crate::test_utils::{check_fft_algorithm, compare_vectors};
-    use crate::{algorithm::Dft, Direction, FftNum, Length};
+    use crate::test_utils::check_fft_algorithm;
 
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro

@@ -1993,7 +1993,6 @@ impl<T: FftNum> SseF64Butterfly9<T> {
 pub struct SseF32Butterfly10<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    bf2: SseF32Butterfly2<T>,
     bf5: SseF32Butterfly5<T>,
 }
 
@@ -2005,12 +2004,10 @@ impl<T: FftNum> SseF32Butterfly10<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let bf2 = SseF32Butterfly2::new(direction);
         let bf5 = SseF32Butterfly5::new(direction);
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            bf2,
             bf5,
         }
     }
@@ -4134,7 +4131,7 @@ impl<T: FftNum> SseF64Butterfly32<T> {
 mod unit_tests {
     use super::*;
     use crate::test_utils::{check_fft_algorithm, compare_vectors};
-    use crate::{algorithm::Dft, Direction, FftNum, Length};
+    use crate::algorithm::Dft;
 
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
