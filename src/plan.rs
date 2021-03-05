@@ -701,6 +701,7 @@ mod unit_tests {
         fn is_send<T: Send>() {}
         is_send::<FftPlanner<T>>();
         is_send::<FftPlannerScalar<T>>();
+        is_send::<FftPlannerSse<T>>();
         is_send::<FftPlannerAvx<T>>();
     }
 }
