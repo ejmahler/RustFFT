@@ -8,7 +8,6 @@ use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
 
-
 #[allow(unused)]
 macro_rules! boilerplate_fft_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
@@ -236,7 +235,7 @@ impl<T: FftNum> Butterfly4<T> {
     ) {
         //we're going to hardcode a step of mixed radix
         //aka we're going to do the six step algorithm
-        
+
         // step 1: transpose, which we're skipping because we're just going to perform non-contiguous FFTs
         let mut value0 = input.load(0);
         let mut value1 = input.load(1);
@@ -5940,5 +5939,4 @@ mod unit_tests {
     //    butterfly.process_with_scratch(&mut input, &mut scratch);
     //    assert!(false);
     //}
-
 }

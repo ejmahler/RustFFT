@@ -33,8 +33,6 @@ fn bench_planned_64(b: &mut Bencher, len: usize) {
     });
 }
 
-
-
 // Create benches using functions taking one argument
 macro_rules! make_benches {
     ($name:ident, $fname:ident, { $($len:literal),* }) => {
@@ -53,7 +51,6 @@ macro_rules! make_benches {
         }
     }
 }
-
 
 make_benches!(from2to1024, planned, {2, 3, 4, 5, 6, 7, 8, 9 });
 make_benches!(from2to1024, planned, {10, 11, 12, 13, 14, 15, 16, 17, 18, 19 });
