@@ -233,6 +233,50 @@ fn bench_good_thomas_setup(b: &mut Bencher, width: usize, height: usize) {
 #[bench] fn good_thomas_setup_2048_3(b: &mut Bencher) { bench_good_thomas_setup(b,  2048, 3); }
 #[bench] fn good_thomas_setup_2048_2187(b: &mut Bencher) { bench_good_thomas_setup(b,  2048, 2187); }
 
+/// Times just the FFT setup (not execution)
+/// for a given length, specific to MixedRadix
+fn bench_mixed_radix_setup(b: &mut Bencher, width: usize, height: usize) {
+
+    let mut planner = rustfft::FftPlanner::new();
+    let width_fft = planner.plan_fft_forward(width);
+    let height_fft = planner.plan_fft_forward(height);
+
+    b.iter(|| { 
+        let fft : Arc<Fft<f32>> = Arc::new(MixedRadix::new(Arc::clone(&width_fft), Arc::clone(&height_fft)));
+        test::black_box(fft);
+    });
+}
+
+#[bench] fn setup_mixed_radix_0002_3(b: &mut Bencher) { bench_mixed_radix_setup(b,  2, 3); }
+#[bench] fn setup_mixed_radix_0003_4(b: &mut Bencher) { bench_mixed_radix_setup(b,  3, 4); }
+#[bench] fn setup_mixed_radix_0004_5(b: &mut Bencher) { bench_mixed_radix_setup(b,  4, 5); }
+#[bench] fn setup_mixed_radix_0007_32(b: &mut Bencher) { bench_mixed_radix_setup(b, 7, 32); }
+#[bench] fn setup_mixed_radix_0032_27(b: &mut Bencher) { bench_mixed_radix_setup(b,  32, 27); }
+#[bench] fn setup_mixed_radix_0256_243(b: &mut Bencher) { bench_mixed_radix_setup(b,  256, 243); }
+#[bench] fn setup_mixed_radix_2048_3(b: &mut Bencher) { bench_mixed_radix_setup(b,  2048, 3); }
+#[bench] fn setup_mixed_radix_2048_2187(b: &mut Bencher) { bench_mixed_radix_setup(b,  2048, 2187); }
+
+/// Times just the FFT setup (not execution)
+/// for a given length, specific to MixedRadix
+fn bench_small_mixed_radix_setup(b: &mut Bencher, width: usize, height: usize) {
+
+    let mut planner = rustfft::FftPlanner::new();
+    let width_fft = planner.plan_fft_forward(width);
+    let height_fft = planner.plan_fft_forward(height);
+
+    b.iter(|| { 
+        let fft : Arc<Fft<f32>> = Arc::new(MixedRadixSmall::new(Arc::clone(&width_fft), Arc::clone(&height_fft)));
+        test::black_box(fft);
+    });
+}
+
+#[bench] fn setup_small_mixed_radix_0002_3(b: &mut Bencher) { bench_small_mixed_radix_setup(b,  2, 3); }
+#[bench] fn setup_small_mixed_radix_0003_4(b: &mut Bencher) { bench_small_mixed_radix_setup(b,  3, 4); }
+#[bench] fn setup_small_mixed_radix_0004_5(b: &mut Bencher) { bench_small_mixed_radix_setup(b,  4, 5); }
+#[bench] fn setup_small_mixed_radix_0007_32(b: &mut Bencher) { bench_small_mixed_radix_setup(b, 7, 32); }
+#[bench] fn setup_small_mixed_radix_0032_27(b: &mut Bencher) { bench_small_mixed_radix_setup(b,  32, 27); }
+
+
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to the Mixed-Radix algorithm
 fn bench_mixed_radix(b: &mut Bencher, width: usize, height: usize) {

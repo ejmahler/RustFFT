@@ -128,8 +128,6 @@ impl<T: FftNum> RadersAlgorithm<T> {
         // The first output element is just the sum of all the input elements, and we need to store off the first input value
         let (output_first, output) = output.split_first_mut().unwrap();
         let (input_first, input) = input.split_first_mut().unwrap();
-        let first_input_val = *input_first;
-        *output_first = *input_first;
 
         // copy the inout into the output, reordering as we go. also compute a sum of all elements
         let mut input_index = 1;
@@ -137,7 +135,6 @@ impl<T: FftNum> RadersAlgorithm<T> {
             input_index = (input_index * self.primitive_root) % self.len;
 
             let input_element = input[input_index - 1];
-            *output_first = *output_first + input_element;
             *output_element = input_element;
         }
 
@@ -149,6 +146,9 @@ impl<T: FftNum> RadersAlgorithm<T> {
         };
         self.inner_fft.process_with_scratch(output, inner_scratch);
 
+        // output[0] now contains the sum of elements 1..len. We need the sum of all elements, so all we have to do is add the first input
+        *output_first = *input_first + output[0];
+
         // multiply the inner result with our cached setup data
         // also conjugate every entry. this sets us up to do an inverse FFT
         // (because an inverse FFT is equivalent to a normal FFT where you conjugate both the inputs and outputs)
@@ -159,6 +159,10 @@ impl<T: FftNum> RadersAlgorithm<T> {
         {
             *input_cell = (*output_cell * multiple).conj();
         }
+
+        // We need to add the first input value to all output values. We can accomplish this by adding it to the DC input of our inner ifft.
+        // Of course, we have to conjugate it, just like we conjugated the complex multiplied above
+        input[0] = input[0] + input_first.conj();
 
         // execute the second FFT
         let inner_scratch = if scratch.len() > 0 {
@@ -172,7 +176,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
         let mut output_index = 1;
         for input_element in input {
             output_index = (output_index * self.primitive_root_inverse) % self.len;
-            output[output_index - 1] = input_element.conj() + first_input_val;
+            output[output_index - 1] = input_element.conj();
         }
     }
     fn perform_fft_inplace(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
@@ -188,7 +192,6 @@ impl<T: FftNum> RadersAlgorithm<T> {
             input_index = (input_index * self.primitive_root) % self.len;
 
             let buffer_element = buffer[input_index - 1];
-            *buffer_first = *buffer_first + buffer_element;
             *scratch_element = buffer_element;
         }
 
@@ -200,12 +203,19 @@ impl<T: FftNum> RadersAlgorithm<T> {
         };
         self.inner_fft.process_with_scratch(scratch, inner_scratch);
 
+        // scratch[0] now contains the sum of elements 1..len. We need the sum of all elements, so all we have to do is add the first input
+        *buffer_first = *buffer_first + scratch[0];
+
         // multiply the inner result with our cached setup data
         // also conjugate every entry. this sets us up to do an inverse FFT
         // (because an inverse FFT is equivalent to a normal FFT where you conjugate both the inputs and outputs)
         for (scratch_cell, &twiddle) in scratch.iter_mut().zip(self.inner_fft_data.iter()) {
             *scratch_cell = (*scratch_cell * twiddle).conj();
         }
+
+        // We need to add the first input value to all output values. We can accomplish this by adding it to the DC input of our inner ifft.
+        // Of course, we have to conjugate it, just like we conjugated the complex multiplied above
+        scratch[0] = scratch[0] + buffer_first_val.conj();
 
         // execute the second FFT
         self.inner_fft.process_with_scratch(scratch, inner_scratch);
@@ -214,7 +224,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
         let mut output_index = 1;
         for scratch_element in scratch {
             output_index = (output_index * self.primitive_root_inverse) % self.len;
-            buffer[output_index - 1] = scratch_element.conj() + buffer_first_val;
+            buffer[output_index - 1] = scratch_element.conj();
         }
     }
 }
