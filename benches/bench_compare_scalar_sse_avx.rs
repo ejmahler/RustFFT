@@ -81,7 +81,6 @@ fn bench_avx_64(b: &mut Bencher, len: usize) {
     });
 }
 
-
 // Create benches using functions taking one argument
 macro_rules! make_benches {
     ($name:ident, { $($len:literal),* }) => {
@@ -121,8 +120,5 @@ macro_rules! make_benches {
     }
 }
 
-
 make_benches!(comparison, {16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768 });
 make_benches!(comparison, {65536, 131072, 262144, 524288, 1048576, 2097152, 4194304 });
-
-
