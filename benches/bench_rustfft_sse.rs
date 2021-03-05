@@ -1,16 +1,16 @@
 #![allow(bare_trait_objects)]
 #![allow(non_snake_case)]
 #![feature(test)]
-extern crate test;
 extern crate rustfft;
+extern crate test;
 
-use std::sync::Arc;
-use test::Bencher;
-use rustfft::{Direction, FftNum, Fft, FftDirection, Length};
+use rustfft::algorithm::butterflies::*;
+use rustfft::algorithm::*;
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
-use rustfft::algorithm::*;
-use rustfft::algorithm::butterflies::*;
+use rustfft::{Direction, Fft, FftDirection, FftNum, Length};
+use std::sync::Arc;
+use test::Bencher;
 
 struct Noop {
     len: usize,
@@ -18,21 +18,34 @@ struct Noop {
 }
 impl<T: FftNum> Fft<T> for Noop {
     fn process_with_scratch(&self, _buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {}
-    fn process_outofplace_with_scratch(&self, _input: &mut [Complex<T>], _output: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {}
-    fn get_inplace_scratch_len(&self) -> usize { self.len }
-    fn get_outofplace_scratch_len(&self) -> usize { 0 }
+    fn process_outofplace_with_scratch(
+        &self,
+        _input: &mut [Complex<T>],
+        _output: &mut [Complex<T>],
+        _scratch: &mut [Complex<T>],
+    ) {
+    }
+    fn get_inplace_scratch_len(&self) -> usize {
+        self.len
+    }
+    fn get_outofplace_scratch_len(&self) -> usize {
+        0
+    }
 }
 impl Length for Noop {
-    fn len(&self) -> usize { self.len }
+    fn len(&self) -> usize {
+        self.len
+    }
 }
 impl Direction for Noop {
-    fn fft_direction(&self) -> FftDirection { self.direction }
+    fn fft_direction(&self) -> FftDirection {
+        self.direction
+    }
 }
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
 fn bench_planned_f32(b: &mut Bencher, len: usize) {
-
     let mut planner = rustfft::FftPlannerSse::new().unwrap();
     let fft: Arc<dyn Fft<f32>> = planner.plan_fft_forward(len);
     assert_eq!(fft.len(), len);
@@ -40,24 +53,52 @@ fn bench_planned_f32(b: &mut Bencher, len: usize) {
     let mut buffer = vec![Complex::zero(); len];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
     b.iter(|| {
-        fft.process_with_scratch(&mut buffer, &mut scratch); 
+        fft.process_with_scratch(&mut buffer, &mut scratch);
     });
 }
 
-
 // Powers of 4
-#[bench] fn planned32_p2_00000064(b: &mut Bencher) { bench_planned_f32(b,       64); }
-#[bench] fn planned32_p2_00000128(b: &mut Bencher) { bench_planned_f32(b,      128); }
-#[bench] fn planned32_p2_00000256(b: &mut Bencher) { bench_planned_f32(b,      256); }
-#[bench] fn planned32_p2_00000512(b: &mut Bencher) { bench_planned_f32(b,      512); }
-#[bench] fn planned32_p2_00001024(b: &mut Bencher) { bench_planned_f32(b,     1024); }
-#[bench] fn planned32_p2_00002048(b: &mut Bencher) { bench_planned_f32(b,     2048); }
-#[bench] fn planned32_p2_00004096(b: &mut Bencher) { bench_planned_f32(b,     4096); }
-#[bench] fn planned32_p2_00016384(b: &mut Bencher) { bench_planned_f32(b,    16384); }
-#[bench] fn planned32_p2_00065536(b: &mut Bencher) { bench_planned_f32(b,    65536); }
-#[bench] fn planned32_p2_01048576(b: &mut Bencher) { bench_planned_f32(b,  1048576); }
+#[bench]
+fn planned32_p2_00000064(b: &mut Bencher) {
+    bench_planned_f32(b, 64);
+}
+#[bench]
+fn planned32_p2_00000128(b: &mut Bencher) {
+    bench_planned_f32(b, 128);
+}
+#[bench]
+fn planned32_p2_00000256(b: &mut Bencher) {
+    bench_planned_f32(b, 256);
+}
+#[bench]
+fn planned32_p2_00000512(b: &mut Bencher) {
+    bench_planned_f32(b, 512);
+}
+#[bench]
+fn planned32_p2_00001024(b: &mut Bencher) {
+    bench_planned_f32(b, 1024);
+}
+#[bench]
+fn planned32_p2_00002048(b: &mut Bencher) {
+    bench_planned_f32(b, 2048);
+}
+#[bench]
+fn planned32_p2_00004096(b: &mut Bencher) {
+    bench_planned_f32(b, 4096);
+}
+#[bench]
+fn planned32_p2_00016384(b: &mut Bencher) {
+    bench_planned_f32(b, 16384);
+}
+#[bench]
+fn planned32_p2_00065536(b: &mut Bencher) {
+    bench_planned_f32(b, 65536);
+}
+#[bench]
+fn planned32_p2_01048576(b: &mut Bencher) {
+    bench_planned_f32(b, 1048576);
+}
 //#[bench] fn planned32_p2_16777216(b: &mut Bencher) { bench_planned_f32(b, 16777216); }
-
 
 // Powers of 5
 //#[bench] fn planned32_p5_00125(b: &mut Bencher) { bench_planned_f32(b, 125); }
@@ -116,25 +157,56 @@ fn bench_planned_f32(b: &mut Bencher, len: usize) {
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
 fn bench_planned_f64(b: &mut Bencher, len: usize) {
-
     let mut planner = rustfft::FftPlannerSse::new().unwrap();
     let fft: Arc<dyn Fft<f64>> = planner.plan_fft_forward(len);
 
     let mut buffer = vec![Complex::zero(); len];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
-    b.iter(|| { fft.process_with_scratch(&mut buffer, &mut scratch); });
+    b.iter(|| {
+        fft.process_with_scratch(&mut buffer, &mut scratch);
+    });
 }
 
-#[bench] fn planned64_p2_00000064(b: &mut Bencher) { bench_planned_f64(b,       64); }
-#[bench] fn planned64_p2_00000128(b: &mut Bencher) { bench_planned_f64(b,      128); }
-#[bench] fn planned64_p2_00000256(b: &mut Bencher) { bench_planned_f64(b,      256); }
-#[bench] fn planned64_p2_00000512(b: &mut Bencher) { bench_planned_f64(b,      512); }
-#[bench] fn planned64_p2_00001024(b: &mut Bencher) { bench_planned_f64(b,     1024); }
-#[bench] fn planned64_p2_00002048(b: &mut Bencher) { bench_planned_f64(b,     2048); }
-#[bench] fn planned64_p2_00004096(b: &mut Bencher) { bench_planned_f64(b,     4096); }
-#[bench] fn planned64_p2_00016384(b: &mut Bencher) { bench_planned_f64(b,    16384); }
-#[bench] fn planned64_p2_00065536(b: &mut Bencher) { bench_planned_f64(b,    65536); }
-#[bench] fn planned64_p2_01048576(b: &mut Bencher) { bench_planned_f64(b,  1048576); }
+#[bench]
+fn planned64_p2_00000064(b: &mut Bencher) {
+    bench_planned_f64(b, 64);
+}
+#[bench]
+fn planned64_p2_00000128(b: &mut Bencher) {
+    bench_planned_f64(b, 128);
+}
+#[bench]
+fn planned64_p2_00000256(b: &mut Bencher) {
+    bench_planned_f64(b, 256);
+}
+#[bench]
+fn planned64_p2_00000512(b: &mut Bencher) {
+    bench_planned_f64(b, 512);
+}
+#[bench]
+fn planned64_p2_00001024(b: &mut Bencher) {
+    bench_planned_f64(b, 1024);
+}
+#[bench]
+fn planned64_p2_00002048(b: &mut Bencher) {
+    bench_planned_f64(b, 2048);
+}
+#[bench]
+fn planned64_p2_00004096(b: &mut Bencher) {
+    bench_planned_f64(b, 4096);
+}
+#[bench]
+fn planned64_p2_00016384(b: &mut Bencher) {
+    bench_planned_f64(b, 16384);
+}
+#[bench]
+fn planned64_p2_00065536(b: &mut Bencher) {
+    bench_planned_f64(b, 65536);
+}
+#[bench]
+fn planned64_p2_01048576(b: &mut Bencher) {
+    bench_planned_f64(b, 1048576);
+}
 //#[bench] fn planned64_p2_16777216(b: &mut Bencher) { bench_planned_f64(b, 16777216); }
 
 // Powers of 5
@@ -189,23 +261,39 @@ fn bench_planned_f64(b: &mut Bencher, len: usize) {
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to the Good-Thomas algorithm
 fn bench_good_thomas(b: &mut Bencher, width: usize, height: usize) {
-
     let mut planner = rustfft::FftPlannerSse::new().unwrap();
     let width_fft = planner.plan_fft_forward(width);
     let height_fft = planner.plan_fft_forward(height);
 
-    let fft : Arc<Fft<f32>> = Arc::new(GoodThomasAlgorithm::new(width_fft, height_fft));
+    let fft: Arc<Fft<f32>> = Arc::new(GoodThomasAlgorithm::new(width_fft, height_fft));
 
     let mut buffer = vec![Complex::zero(); width * height];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
-    b.iter(|| {fft.process_with_scratch(&mut buffer, &mut scratch);} );
+    b.iter(|| {
+        fft.process_with_scratch(&mut buffer, &mut scratch);
+    });
 }
 
-#[bench] fn good_thomas_0002_3(b: &mut Bencher) { bench_good_thomas(b,  2, 3); }
-#[bench] fn good_thomas_0003_4(b: &mut Bencher) { bench_good_thomas(b,  3, 4); }
-#[bench] fn good_thomas_0004_5(b: &mut Bencher) { bench_good_thomas(b,  4, 5); }
-#[bench] fn good_thomas_0007_32(b: &mut Bencher) { bench_good_thomas(b, 7, 32); }
-#[bench] fn good_thomas_0032_27(b: &mut Bencher) { bench_good_thomas(b,  32, 27); }
+#[bench]
+fn good_thomas_0002_3(b: &mut Bencher) {
+    bench_good_thomas(b, 2, 3);
+}
+#[bench]
+fn good_thomas_0003_4(b: &mut Bencher) {
+    bench_good_thomas(b, 3, 4);
+}
+#[bench]
+fn good_thomas_0004_5(b: &mut Bencher) {
+    bench_good_thomas(b, 4, 5);
+}
+#[bench]
+fn good_thomas_0007_32(b: &mut Bencher) {
+    bench_good_thomas(b, 7, 32);
+}
+#[bench]
+fn good_thomas_0032_27(b: &mut Bencher) {
+    bench_good_thomas(b, 32, 27);
+}
 //#[bench] fn good_thomas_0256_243(b: &mut Bencher) { bench_good_thomas(b,  256, 243); }
 //#[bench] fn good_thomas_2048_3(b: &mut Bencher) { bench_good_thomas(b,  2048, 3); }
 //#[bench] fn good_thomas_2048_2187(b: &mut Bencher) { bench_good_thomas(b,  2048, 2187); }
@@ -213,46 +301,100 @@ fn bench_good_thomas(b: &mut Bencher, width: usize, height: usize) {
 /// Times just the FFT setup (not execution)
 /// for a given length, specific to the Good-Thomas algorithm
 fn bench_good_thomas_setup(b: &mut Bencher, width: usize, height: usize) {
-
     let mut planner = rustfft::FftPlannerSse::new().unwrap();
     let width_fft = planner.plan_fft_forward(width);
     let height_fft = planner.plan_fft_forward(height);
 
-    b.iter(|| { 
-        let fft : Arc<Fft<f32>> = Arc::new(GoodThomasAlgorithm::new(Arc::clone(&width_fft), Arc::clone(&height_fft)));
+    b.iter(|| {
+        let fft: Arc<Fft<f32>> = Arc::new(GoodThomasAlgorithm::new(
+            Arc::clone(&width_fft),
+            Arc::clone(&height_fft),
+        ));
         test::black_box(fft);
     });
 }
 
-#[bench] fn good_thomas_setup_0002_3(b: &mut Bencher) { bench_good_thomas_setup(b,  2, 3); }
-#[bench] fn good_thomas_setup_0003_4(b: &mut Bencher) { bench_good_thomas_setup(b,  3, 4); }
-#[bench] fn good_thomas_setup_0004_5(b: &mut Bencher) { bench_good_thomas_setup(b,  4, 5); }
-#[bench] fn good_thomas_setup_0007_32(b: &mut Bencher) { bench_good_thomas_setup(b, 7, 32); }
-#[bench] fn good_thomas_setup_0032_27(b: &mut Bencher) { bench_good_thomas_setup(b,  32, 27); }
-#[bench] fn good_thomas_setup_0256_243(b: &mut Bencher) { bench_good_thomas_setup(b,  256, 243); }
-#[bench] fn good_thomas_setup_2048_3(b: &mut Bencher) { bench_good_thomas_setup(b,  2048, 3); }
-#[bench] fn good_thomas_setup_2048_2187(b: &mut Bencher) { bench_good_thomas_setup(b,  2048, 2187); }
+#[bench]
+fn good_thomas_setup_0002_3(b: &mut Bencher) {
+    bench_good_thomas_setup(b, 2, 3);
+}
+#[bench]
+fn good_thomas_setup_0003_4(b: &mut Bencher) {
+    bench_good_thomas_setup(b, 3, 4);
+}
+#[bench]
+fn good_thomas_setup_0004_5(b: &mut Bencher) {
+    bench_good_thomas_setup(b, 4, 5);
+}
+#[bench]
+fn good_thomas_setup_0007_32(b: &mut Bencher) {
+    bench_good_thomas_setup(b, 7, 32);
+}
+#[bench]
+fn good_thomas_setup_0032_27(b: &mut Bencher) {
+    bench_good_thomas_setup(b, 32, 27);
+}
+#[bench]
+fn good_thomas_setup_0256_243(b: &mut Bencher) {
+    bench_good_thomas_setup(b, 256, 243);
+}
+#[bench]
+fn good_thomas_setup_2048_3(b: &mut Bencher) {
+    bench_good_thomas_setup(b, 2048, 3);
+}
+#[bench]
+fn good_thomas_setup_2048_2187(b: &mut Bencher) {
+    bench_good_thomas_setup(b, 2048, 2187);
+}
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to the Mixed-Radix algorithm
 fn bench_mixed_radix(b: &mut Bencher, width: usize, height: usize) {
-
     let mut planner = rustfft::FftPlannerSse::new().unwrap();
     let width_fft = planner.plan_fft_forward(width);
     let height_fft = planner.plan_fft_forward(height);
 
-    let fft : Arc<Fft<_>> = Arc::new(MixedRadix::new(width_fft, height_fft));
+    let fft: Arc<Fft<_>> = Arc::new(MixedRadix::new(width_fft, height_fft));
 
-    let mut buffer = vec![Complex{re: 0_f32, im: 0_f32}; fft.len()];
-    let mut scratch = vec![Complex{re: 0_f32, im: 0_f32}; fft.get_inplace_scratch_len()];
-    b.iter(|| {fft.process_with_scratch(&mut buffer, &mut scratch);} );
+    let mut buffer = vec![
+        Complex {
+            re: 0_f32,
+            im: 0_f32
+        };
+        fft.len()
+    ];
+    let mut scratch = vec![
+        Complex {
+            re: 0_f32,
+            im: 0_f32
+        };
+        fft.get_inplace_scratch_len()
+    ];
+    b.iter(|| {
+        fft.process_with_scratch(&mut buffer, &mut scratch);
+    });
 }
 
-#[bench] fn mixed_radix_0002_3(b: &mut Bencher) { bench_mixed_radix(b,  2, 3); }
-#[bench] fn mixed_radix_0003_4(b: &mut Bencher) { bench_mixed_radix(b,  3, 4); }
-#[bench] fn mixed_radix_0004_5(b: &mut Bencher) { bench_mixed_radix(b,  4, 5); }
-#[bench] fn mixed_radix_0007_32(b: &mut Bencher) { bench_mixed_radix(b, 7, 32); }
-#[bench] fn mixed_radix_0032_27(b: &mut Bencher) { bench_mixed_radix(b,  32, 27); }
+#[bench]
+fn mixed_radix_0002_3(b: &mut Bencher) {
+    bench_mixed_radix(b, 2, 3);
+}
+#[bench]
+fn mixed_radix_0003_4(b: &mut Bencher) {
+    bench_mixed_radix(b, 3, 4);
+}
+#[bench]
+fn mixed_radix_0004_5(b: &mut Bencher) {
+    bench_mixed_radix(b, 4, 5);
+}
+#[bench]
+fn mixed_radix_0007_32(b: &mut Bencher) {
+    bench_mixed_radix(b, 7, 32);
+}
+#[bench]
+fn mixed_radix_0032_27(b: &mut Bencher) {
+    bench_mixed_radix(b, 32, 27);
+}
 //#[bench] fn mixed_radix_0256_243(b: &mut Bencher) { bench_mixed_radix(b,  256, 243); }
 //#[bench] fn mixed_radix_2048_3(b: &mut Bencher) { bench_mixed_radix(b,  2048, 3); }
 //#[bench] fn mixed_radix_2048_2187(b: &mut Bencher) { bench_mixed_radix(b,  2048, 2187); }
@@ -275,54 +417,104 @@ fn plan_butterfly_fft(len: usize) -> Arc<Fft<f32>> {
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to the MixedRadixSmall algorithm
 fn bench_mixed_radix_small(b: &mut Bencher, width: usize, height: usize) {
-
     let width_fft = plan_butterfly_fft(width);
     let height_fft = plan_butterfly_fft(height);
 
-    let fft : Arc<Fft<_>> = Arc::new(MixedRadixSmall::new(width_fft, height_fft));
+    let fft: Arc<Fft<_>> = Arc::new(MixedRadixSmall::new(width_fft, height_fft));
 
-    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; width * height];
+    let mut signal = vec![
+        Complex {
+            re: 0_f32,
+            im: 0_f32
+        };
+        width * height
+    ];
     let mut spectrum = signal.clone();
-    b.iter(|| {fft.process_with_scratch(&mut signal, &mut spectrum);} );
+    b.iter(|| {
+        fft.process_with_scratch(&mut signal, &mut spectrum);
+    });
 }
 
-#[bench] fn mixed_radix_small_0002_3(b: &mut Bencher) { bench_mixed_radix_small(b,  2, 3); }
-#[bench] fn mixed_radix_small_0003_4(b: &mut Bencher) { bench_mixed_radix_small(b,  3, 4); }
-#[bench] fn mixed_radix_small_0004_5(b: &mut Bencher) { bench_mixed_radix_small(b,  4, 5); }
-#[bench] fn mixed_radix_small_0007_32(b: &mut Bencher) { bench_mixed_radix_small(b, 7, 32); }
+#[bench]
+fn mixed_radix_small_0002_3(b: &mut Bencher) {
+    bench_mixed_radix_small(b, 2, 3);
+}
+#[bench]
+fn mixed_radix_small_0003_4(b: &mut Bencher) {
+    bench_mixed_radix_small(b, 3, 4);
+}
+#[bench]
+fn mixed_radix_small_0004_5(b: &mut Bencher) {
+    bench_mixed_radix_small(b, 4, 5);
+}
+#[bench]
+fn mixed_radix_small_0007_32(b: &mut Bencher) {
+    bench_mixed_radix_small(b, 7, 32);
+}
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to the Mixed-Radix Double Butterfly algorithm
 fn bench_good_thomas_small(b: &mut Bencher, width: usize, height: usize) {
-
     let width_fft = plan_butterfly_fft(width);
     let height_fft = plan_butterfly_fft(height);
 
-    let fft : Arc<Fft<_>> = Arc::new(GoodThomasAlgorithmSmall::new(width_fft, height_fft));
+    let fft: Arc<Fft<_>> = Arc::new(GoodThomasAlgorithmSmall::new(width_fft, height_fft));
 
-    let mut signal = vec![Complex{re: 0_f32, im: 0_f32}; width * height];
+    let mut signal = vec![
+        Complex {
+            re: 0_f32,
+            im: 0_f32
+        };
+        width * height
+    ];
     let mut spectrum = signal.clone();
-    b.iter(|| {fft.process_with_scratch(&mut signal, &mut spectrum);} );
+    b.iter(|| {
+        fft.process_with_scratch(&mut signal, &mut spectrum);
+    });
 }
 
-#[bench] fn good_thomas_small_0002_3(b: &mut Bencher) { bench_good_thomas_small(b,  2, 3); }
-#[bench] fn good_thomas_small_0003_4(b: &mut Bencher) { bench_good_thomas_small(b,  3, 4); }
-#[bench] fn good_thomas_small_0004_5(b: &mut Bencher) { bench_good_thomas_small(b,  4, 5); }
-#[bench] fn good_thomas_small_0007_32(b: &mut Bencher) { bench_good_thomas_small(b, 7, 32); }
-
+#[bench]
+fn good_thomas_small_0002_3(b: &mut Bencher) {
+    bench_good_thomas_small(b, 2, 3);
+}
+#[bench]
+fn good_thomas_small_0003_4(b: &mut Bencher) {
+    bench_good_thomas_small(b, 3, 4);
+}
+#[bench]
+fn good_thomas_small_0004_5(b: &mut Bencher) {
+    bench_good_thomas_small(b, 4, 5);
+}
+#[bench]
+fn good_thomas_small_0007_32(b: &mut Bencher) {
+    bench_good_thomas_small(b, 7, 32);
+}
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to Rader's algorithm
 fn bench_raders_scalar(b: &mut Bencher, len: usize) {
-
     let mut planner = rustfft::FftPlannerSse::new().unwrap();
     let inner_fft = planner.plan_fft_forward(len - 1);
 
-    let fft : Arc<Fft<_>> = Arc::new(RadersAlgorithm::new(inner_fft));
+    let fft: Arc<Fft<_>> = Arc::new(RadersAlgorithm::new(inner_fft));
 
-    let mut buffer = vec![Complex{re: 0_f32, im: 0_f32}; len];
-    let mut scratch = vec![Complex{re: 0_f32, im: 0_f32}; fft.get_inplace_scratch_len()];
-    b.iter(|| {fft.process_with_scratch(&mut buffer, &mut scratch);} );
+    let mut buffer = vec![
+        Complex {
+            re: 0_f32,
+            im: 0_f32
+        };
+        len
+    ];
+    let mut scratch = vec![
+        Complex {
+            re: 0_f32,
+            im: 0_f32
+        };
+        fft.get_inplace_scratch_len()
+    ];
+    b.iter(|| {
+        fft.process_with_scratch(&mut buffer, &mut scratch);
+    });
 }
 
 //#[bench] fn raders_fft_scalar_prime_0005(b: &mut Bencher) { bench_raders_scalar(b,  5); }
@@ -340,17 +532,18 @@ fn bench_raders_scalar(b: &mut Bencher, len: usize) {
 //#[bench] fn raders_fft_scalar_prime_746483(b: &mut Bencher) { bench_raders_scalar(b,746483); }
 //#[bench] fn raders_fft_scalar_prime_746497(b: &mut Bencher) { bench_raders_scalar(b,746497); }
 
-
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to Bluestein's Algorithm
 fn bench_bluesteins_scalar_prime(b: &mut Bencher, len: usize) {
     let mut planner = rustfft::FftPlannerSse::new().unwrap();
     let inner_fft = planner.plan_fft_forward((len * 2 - 1).checked_next_power_of_two().unwrap());
-    let fft : Arc<Fft<f32>> = Arc::new(BluesteinsAlgorithm::new(len, inner_fft));
+    let fft: Arc<Fft<f32>> = Arc::new(BluesteinsAlgorithm::new(len, inner_fft));
 
     let mut buffer = vec![Zero::zero(); len];
     let mut scratch = vec![Zero::zero(); fft.get_inplace_scratch_len()];
-    b.iter(|| { fft.process_with_scratch(&mut buffer, &mut scratch);} );
+    b.iter(|| {
+        fft.process_with_scratch(&mut buffer, &mut scratch);
+    });
 }
 
 //#[bench] fn bench_bluesteins_scalar_prime_0005(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  5); }
@@ -367,10 +560,9 @@ fn bench_bluesteins_scalar_prime(b: &mut Bencher, len: usize) {
 //#[bench] fn bench_bluesteins_scalar_prime_746483(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,746483); }
 //#[bench] fn bench_bluesteins_scalar_prime_746497(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,746497); }
 
-
 fn get_mixed_radix_power2(len: usize) -> Arc<dyn Fft<f32>> {
     match len {
-        8 => Arc::new(Butterfly8::new( FftDirection::Forward)),
+        8 => Arc::new(Butterfly8::new(FftDirection::Forward)),
         16 => Arc::new(Butterfly16::new(FftDirection::Forward)),
         32 => Arc::new(Butterfly32::new(FftDirection::Forward)),
         _ => {
@@ -395,17 +587,28 @@ fn bench_mixed_radix_power2(b: &mut Bencher, len: usize) {
     });
 }
 
-#[bench] fn mixed_radix_power2__00000256(b: &mut Bencher) { bench_mixed_radix_power2(b, 256); }
-#[bench] fn mixed_radix_power2__00001024(b: &mut Bencher) { bench_mixed_radix_power2(b, 1024); }
-#[bench] fn mixed_radix_power2__00004096(b: &mut Bencher) { bench_mixed_radix_power2(b, 4096); }
-#[bench] fn mixed_radix_power2__00065536(b: &mut Bencher) { bench_mixed_radix_power2(b, 65536); }
+#[bench]
+fn mixed_radix_power2__00000256(b: &mut Bencher) {
+    bench_mixed_radix_power2(b, 256);
+}
+#[bench]
+fn mixed_radix_power2__00001024(b: &mut Bencher) {
+    bench_mixed_radix_power2(b, 1024);
+}
+#[bench]
+fn mixed_radix_power2__00004096(b: &mut Bencher) {
+    bench_mixed_radix_power2(b, 4096);
+}
+#[bench]
+fn mixed_radix_power2__00065536(b: &mut Bencher) {
+    bench_mixed_radix_power2(b, 65536);
+}
 //#[bench] fn mixed_radix_power2__01048576(b: &mut Bencher) { bench_mixed_radix_power2(b, 1048576); }
 //#[bench] fn mixed_radix_power2__16777216(b: &mut Bencher) { bench_mixed_radix_power2(b, 16777216); }
 
-
 fn get_mixed_radix_inline_power2(len: usize) -> Arc<dyn Fft<f32>> {
     match len {
-        8 => Arc::new(Butterfly8::new( FftDirection::Forward)),
+        8 => Arc::new(Butterfly8::new(FftDirection::Forward)),
         16 => Arc::new(Butterfly16::new(FftDirection::Forward)),
         32 => Arc::new(Butterfly32::new(FftDirection::Forward)),
         _ => {
@@ -430,36 +633,79 @@ fn bench_mixed_radix_inline_power2(b: &mut Bencher, len: usize) {
     });
 }
 
-#[bench] fn mixed_radix_power2_inline__00000256(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 256); }
-#[bench] fn mixed_radix_power2_inline__00001024(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 1024); }
-#[bench] fn mixed_radix_power2_inline__00004096(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 4096); }
-#[bench] fn mixed_radix_power2_inline__00065536(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 65536); }
+#[bench]
+fn mixed_radix_power2_inline__00000256(b: &mut Bencher) {
+    bench_mixed_radix_inline_power2(b, 256);
+}
+#[bench]
+fn mixed_radix_power2_inline__00001024(b: &mut Bencher) {
+    bench_mixed_radix_inline_power2(b, 1024);
+}
+#[bench]
+fn mixed_radix_power2_inline__00004096(b: &mut Bencher) {
+    bench_mixed_radix_inline_power2(b, 4096);
+}
+#[bench]
+fn mixed_radix_power2_inline__00065536(b: &mut Bencher) {
+    bench_mixed_radix_inline_power2(b, 65536);
+}
 //#[bench] fn mixed_radix_power2_inline__01048576(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 1048576); }
 //#[bench] fn mixed_radix_power2_inline__16777216(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 16777216); }
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
 fn bench_butterfly32(b: &mut Bencher, len: usize) {
-
     let mut planner = rustfft::FftPlannerSse::new().unwrap();
     let fft: Arc<dyn Fft<f32>> = planner.plan_fft_forward(len);
 
     let mut buffer = vec![Complex::zero(); len * 10];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
-    b.iter(|| { fft.process_with_scratch(&mut buffer, &mut scratch); });
+    b.iter(|| {
+        fft.process_with_scratch(&mut buffer, &mut scratch);
+    });
 }
 
-#[bench] fn butterfly32_02(b: &mut Bencher) { bench_butterfly32(b, 2); }
-#[bench] fn butterfly32_03(b: &mut Bencher) { bench_butterfly32(b, 3); }
-#[bench] fn butterfly32_04(b: &mut Bencher) { bench_butterfly32(b, 4); }
-#[bench] fn butterfly32_05(b: &mut Bencher) { bench_butterfly32(b, 5); }
-#[bench] fn butterfly32_06(b: &mut Bencher) { bench_butterfly32(b, 6); }
-#[bench] fn butterfly32_07(b: &mut Bencher) { bench_butterfly32(b, 7); }
-#[bench] fn butterfly32_08(b: &mut Bencher) { bench_butterfly32(b, 8); }
-#[bench] fn butterfly32_09(b: &mut Bencher) { bench_butterfly32(b, 9); }
-#[bench] fn butterfly32_11(b: &mut Bencher) { bench_butterfly32(b, 11); }
+#[bench]
+fn butterfly32_02(b: &mut Bencher) {
+    bench_butterfly32(b, 2);
+}
+#[bench]
+fn butterfly32_03(b: &mut Bencher) {
+    bench_butterfly32(b, 3);
+}
+#[bench]
+fn butterfly32_04(b: &mut Bencher) {
+    bench_butterfly32(b, 4);
+}
+#[bench]
+fn butterfly32_05(b: &mut Bencher) {
+    bench_butterfly32(b, 5);
+}
+#[bench]
+fn butterfly32_06(b: &mut Bencher) {
+    bench_butterfly32(b, 6);
+}
+#[bench]
+fn butterfly32_07(b: &mut Bencher) {
+    bench_butterfly32(b, 7);
+}
+#[bench]
+fn butterfly32_08(b: &mut Bencher) {
+    bench_butterfly32(b, 8);
+}
+#[bench]
+fn butterfly32_09(b: &mut Bencher) {
+    bench_butterfly32(b, 9);
+}
+#[bench]
+fn butterfly32_11(b: &mut Bencher) {
+    bench_butterfly32(b, 11);
+}
 //#[bench] fn butterfly32_12(b: &mut Bencher) { bench_butterfly32(b, 12); }
-#[bench] fn butterfly32_16(b: &mut Bencher) { bench_butterfly32(b, 16); }
+#[bench]
+fn butterfly32_16(b: &mut Bencher) {
+    bench_butterfly32(b, 16);
+}
 //#[bench] fn butterfly32_24(b: &mut Bencher) { bench_butterfly32(b, 24); }
 //#[bench] fn butterfly32_27(b: &mut Bencher) { bench_butterfly32(b, 27); }
 //#[bench] fn butterfly32_32(b: &mut Bencher) { bench_butterfly32(b, 32); }
@@ -475,26 +721,57 @@ fn bench_butterfly32(b: &mut Bencher, len: usize) {
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
 fn bench_butterfly64(b: &mut Bencher, len: usize) {
-
     let mut planner = rustfft::FftPlannerSse::new().unwrap();
     let fft: Arc<dyn Fft<f64>> = planner.plan_fft_forward(len);
 
     let mut buffer = vec![Complex::zero(); len * 10];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
-    b.iter(|| { fft.process_with_scratch(&mut buffer, &mut scratch); });
+    b.iter(|| {
+        fft.process_with_scratch(&mut buffer, &mut scratch);
+    });
 }
 
-#[bench] fn butterfly64_02(b: &mut Bencher) { bench_butterfly64(b, 2); }
-#[bench] fn butterfly64_03(b: &mut Bencher) { bench_butterfly64(b, 3); }
-#[bench] fn butterfly64_04(b: &mut Bencher) { bench_butterfly64(b, 4); }
-#[bench] fn butterfly64_05(b: &mut Bencher) { bench_butterfly64(b, 5); }
-#[bench] fn butterfly64_06(b: &mut Bencher) { bench_butterfly64(b, 6); }
-#[bench] fn butterfly64_07(b: &mut Bencher) { bench_butterfly64(b, 7); }
-#[bench] fn butterfly64_08(b: &mut Bencher) { bench_butterfly64(b, 8); }
-#[bench] fn butterfly64_09(b: &mut Bencher) { bench_butterfly64(b, 9); }
-#[bench] fn butterfly64_11(b: &mut Bencher) { bench_butterfly64(b, 11); }
+#[bench]
+fn butterfly64_02(b: &mut Bencher) {
+    bench_butterfly64(b, 2);
+}
+#[bench]
+fn butterfly64_03(b: &mut Bencher) {
+    bench_butterfly64(b, 3);
+}
+#[bench]
+fn butterfly64_04(b: &mut Bencher) {
+    bench_butterfly64(b, 4);
+}
+#[bench]
+fn butterfly64_05(b: &mut Bencher) {
+    bench_butterfly64(b, 5);
+}
+#[bench]
+fn butterfly64_06(b: &mut Bencher) {
+    bench_butterfly64(b, 6);
+}
+#[bench]
+fn butterfly64_07(b: &mut Bencher) {
+    bench_butterfly64(b, 7);
+}
+#[bench]
+fn butterfly64_08(b: &mut Bencher) {
+    bench_butterfly64(b, 8);
+}
+#[bench]
+fn butterfly64_09(b: &mut Bencher) {
+    bench_butterfly64(b, 9);
+}
+#[bench]
+fn butterfly64_11(b: &mut Bencher) {
+    bench_butterfly64(b, 11);
+}
 //#[bench] fn butterfly64_12(b: &mut Bencher) { bench_butterfly64(b, 12); }
-#[bench] fn butterfly64_16(b: &mut Bencher) { bench_butterfly64(b, 16); }
+#[bench]
+fn butterfly64_16(b: &mut Bencher) {
+    bench_butterfly64(b, 16);
+}
 //#[bench] fn butterfly64_18(b: &mut Bencher) { bench_butterfly64(b, 18); }
 //#[bench] fn butterfly64_24(b: &mut Bencher) { bench_butterfly64(b, 24); }
 //#[bench] fn butterfly64_27(b: &mut Bencher) { bench_butterfly64(b, 27); }

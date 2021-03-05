@@ -101,7 +101,7 @@ impl<T: FftNum> Sse32Radix4<T> {
         let mut twiddle_factors = Vec::with_capacity(len * 2);
         while twiddle_stride > 0 {
             let num_rows = len / (twiddle_stride * 4);
-            for i in 0..num_rows/2 {
+            for i in 0..num_rows / 2 {
                 // //for k in 1..4 {
                 // unsafe {
                 //     let twiddle1a = twiddles::compute_twiddle(2*i * twiddle_stride, len, direction);
@@ -121,10 +121,14 @@ impl<T: FftNum> Sse32Radix4<T> {
                 for k in 1..4 {
                     unsafe {
                         let twiddle_a =
-                            twiddles::compute_twiddle(2*i * k * twiddle_stride, len, direction);
-                        let twiddle_b =
-                            twiddles::compute_twiddle((2*i + 1) * k * twiddle_stride, len, direction);
-                        let twiddles_packed = _mm_set_ps(twiddle_b.im, twiddle_b.re, twiddle_a.im, twiddle_a.re);
+                            twiddles::compute_twiddle(2 * i * k * twiddle_stride, len, direction);
+                        let twiddle_b = twiddles::compute_twiddle(
+                            (2 * i + 1) * k * twiddle_stride,
+                            len,
+                            direction,
+                        );
+                        let twiddles_packed =
+                            _mm_set_ps(twiddle_b.im, twiddle_b.re, twiddle_a.im, twiddle_a.re);
                         twiddle_factors.push(twiddles_packed);
                     }
                 }
@@ -146,7 +150,6 @@ impl<T: FftNum> Sse32Radix4<T> {
         //     }
         //     twiddle_stride >>= 2;
         // }
-
 
         Self {
             twiddles: twiddle_factors.into_boxed_slice(),
@@ -176,14 +179,22 @@ impl<T: FftNum> Sse32Radix4<T> {
         //prepare_radix4_sse32(signal.len(), self.base_len, signal_tm, spectrum_tm, 1);
         //prepare_radix4(signal.len(), self.base_len, signal, spectrum, 1);
 
-        let mut num_chunks = signal.len()/16384;
+        let mut num_chunks = signal.len() / 16384;
         if num_chunks == 0 {
             num_chunks = 1;
         } else if num_chunks > self.base_len {
             num_chunks = self.base_len;
         }
         for n in 0..num_chunks {
-            prepare_radix4(signal.len(), self.base_len, signal, spectrum, 1, n, num_chunks);
+            prepare_radix4(
+                signal.len(),
+                self.base_len,
+                signal,
+                spectrum,
+                1,
+                n,
+                num_chunks,
+            );
         }
 
         //prepare_radix4_32(signal.len(), self.base_len, signal, spectrum, 1);
@@ -277,7 +288,10 @@ fn prepare_radix4_sse32(
     if size == base_len {
         unsafe {
             for i in 0..size {
-                _mm_storel_pd(spectrum.as_mut_ptr().add(i) as *mut f64, _mm_load1_pd(signal.as_ptr().add(i * stride) as *const f64));
+                _mm_storel_pd(
+                    spectrum.as_mut_ptr().add(i) as *mut f64,
+                    _mm_load1_pd(signal.as_ptr().add(i * stride) as *const f64),
+                );
                 //*spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stride);
             }
         }
@@ -341,18 +355,18 @@ unsafe fn butterfly_4_32<T: FftNum>(
         tw_idx += 2;
         idx += 1;
     } */
-    for _ in 0..num_ffts/4 {
+    for _ in 0..num_ffts / 4 {
         let scratch0 = _mm_loadu_ps(output_slice.add(idx) as *const f32);
-        let scratch0b = _mm_loadu_ps(output_slice.add(idx+2) as *const f32);
-        
+        let scratch0b = _mm_loadu_ps(output_slice.add(idx + 2) as *const f32);
+
         let mut scratch1 = _mm_loadu_ps(output_slice.add(idx + 1 * num_ffts) as *const f32);
-        let mut scratch1b = _mm_loadu_ps(output_slice.add(idx+2 + 1 * num_ffts) as *const f32);
+        let mut scratch1b = _mm_loadu_ps(output_slice.add(idx + 2 + 1 * num_ffts) as *const f32);
 
         let mut scratch2 = _mm_loadu_ps(output_slice.add(idx + 2 * num_ffts) as *const f32);
-        let mut scratch2b = _mm_loadu_ps(output_slice.add(idx+2 + 2 * num_ffts) as *const f32);
+        let mut scratch2b = _mm_loadu_ps(output_slice.add(idx + 2 + 2 * num_ffts) as *const f32);
 
         let mut scratch3 = _mm_loadu_ps(output_slice.add(idx + 3 * num_ffts) as *const f32);
-        let mut scratch3b = _mm_loadu_ps(output_slice.add(idx+2 + 3 * num_ffts) as *const f32);
+        let mut scratch3b = _mm_loadu_ps(output_slice.add(idx + 2 + 3 * num_ffts) as *const f32);
 
         scratch1 = complex_dual_mul_f32(scratch1, twiddles[tw_idx]);
         scratch2 = complex_dual_mul_f32(scratch2, twiddles[tw_idx + 1]);
@@ -365,16 +379,25 @@ unsafe fn butterfly_4_32<T: FftNum>(
         let scratchb = bf4.perform_dual_fft_direct(scratch0b, scratch1b, scratch2b, scratch3b);
 
         _mm_storeu_ps(output_slice.add(idx) as *mut f32, scratch[0]);
-        _mm_storeu_ps(output_slice.add(idx+2) as *mut f32, scratchb[0]);
+        _mm_storeu_ps(output_slice.add(idx + 2) as *mut f32, scratchb[0]);
 
         _mm_storeu_ps(output_slice.add(idx + 1 * num_ffts) as *mut f32, scratch[1]);
-        _mm_storeu_ps(output_slice.add(idx+2 + 1 * num_ffts) as *mut f32, scratchb[1]);
+        _mm_storeu_ps(
+            output_slice.add(idx + 2 + 1 * num_ffts) as *mut f32,
+            scratchb[1],
+        );
 
         _mm_storeu_ps(output_slice.add(idx + 2 * num_ffts) as *mut f32, scratch[2]);
-        _mm_storeu_ps(output_slice.add(idx+2 + 2 * num_ffts) as *mut f32, scratchb[2]);
+        _mm_storeu_ps(
+            output_slice.add(idx + 2 + 2 * num_ffts) as *mut f32,
+            scratchb[2],
+        );
 
         _mm_storeu_ps(output_slice.add(idx + 3 * num_ffts) as *mut f32, scratch[3]);
-        _mm_storeu_ps(output_slice.add(idx+2 + 3 * num_ffts) as *mut f32, scratchb[3]);
+        _mm_storeu_ps(
+            output_slice.add(idx + 2 + 3 * num_ffts) as *mut f32,
+            scratchb[3],
+        );
         tw_idx += 6;
         idx += 4;
         // tw_idx += 3;
@@ -470,14 +493,22 @@ impl<T: FftNum> Sse64Radix4<T> {
 
         //prepare_radix4_64(signal.len(), self.base_len, signal, spectrum, 1);
         //prepare_radix4(signal.len(), self.base_len, signal, spectrum, 1);
-        let mut num_chunks = signal.len()/8192;
+        let mut num_chunks = signal.len() / 8192;
         if num_chunks == 0 {
             num_chunks = 1;
         } else if num_chunks > self.base_len {
             num_chunks = self.base_len;
         }
         for n in 0..num_chunks {
-            prepare_radix4(signal.len(), self.base_len, signal, spectrum, 1, n, num_chunks);
+            prepare_radix4(
+                signal.len(),
+                self.base_len,
+                signal,
+                spectrum,
+                1,
+                n,
+                num_chunks,
+            );
         }
 
         //let end = time::Instant::now();
@@ -587,7 +618,6 @@ fn prepare_radix4_sse64(
 }
 */
 
-
 fn prepare_radix4_off<T: FftNum>(
     size: usize,
     base_len: usize,
@@ -595,7 +625,7 @@ fn prepare_radix4_off<T: FftNum>(
     spectrum: &mut [Complex<T>],
     stride: usize,
 ) {
-    if size == (4*base_len) {
+    if size == (4 * base_len) {
         do_radix4_shuffle_off(size, signal, spectrum, stride);
     } else if size == base_len {
         unsafe {
@@ -616,8 +646,12 @@ fn prepare_radix4_off<T: FftNum>(
     }
 }
 
-
-fn do_radix4_shuffle_off<T: FftNum>(size: usize, signal: &[Complex<T>], spectrum: &mut [Complex<T>], stride: usize) {
+fn do_radix4_shuffle_off<T: FftNum>(
+    size: usize,
+    signal: &[Complex<T>],
+    spectrum: &mut [Complex<T>],
+    stride: usize,
+) {
     let stepsize = size / 4;
     let stepstride = stride * 4;
     let signal_offset = stride;
@@ -626,13 +660,12 @@ fn do_radix4_shuffle_off<T: FftNum>(size: usize, signal: &[Complex<T>], spectrum
         for i in 0..stepsize {
             let val0 = *signal.get_unchecked(i * stepstride);
             let val1 = *signal.get_unchecked(i * stepstride + signal_offset);
-            let val2 = *signal.get_unchecked(i * stepstride + 2*signal_offset);
-            let val3 = *signal.get_unchecked(i * stepstride + 3*signal_offset);
+            let val2 = *signal.get_unchecked(i * stepstride + 2 * signal_offset);
+            let val3 = *signal.get_unchecked(i * stepstride + 3 * signal_offset);
             *spectrum.get_unchecked_mut(i) = val0;
             *spectrum.get_unchecked_mut(i + spectrum_offset) = val1;
-            *spectrum.get_unchecked_mut(i + 2*spectrum_offset) = val2;
-            *spectrum.get_unchecked_mut(i + 3*spectrum_offset) = val3;
-
+            *spectrum.get_unchecked_mut(i + 2 * spectrum_offset) = val2;
+            *spectrum.get_unchecked_mut(i + 3 * spectrum_offset) = val3;
         }
     }
 }
@@ -646,11 +679,11 @@ fn prepare_radix4<T: FftNum>(
     chunk: usize,
     nbr_chunks: usize,
 ) {
-    if size == (4*base_len) {
+    if size == (4 * base_len) {
         do_radix4_shuffle(size, signal, spectrum, stride, chunk, nbr_chunks);
-    } else if size == base_len { 
+    } else if size == base_len {
         unsafe {
-            for i in (chunk*base_len/nbr_chunks)..((chunk+1)*base_len/nbr_chunks) {
+            for i in (chunk * base_len / nbr_chunks)..((chunk + 1) * base_len / nbr_chunks) {
                 *spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stride);
             }
         }
@@ -669,27 +702,31 @@ fn prepare_radix4<T: FftNum>(
     }
 }
 
-
-fn do_radix4_shuffle<T: FftNum>(size: usize, signal: &[Complex<T>], spectrum: &mut [Complex<T>], stride: usize, chunk: usize, nbr_chunks: usize) {
+fn do_radix4_shuffle<T: FftNum>(
+    size: usize,
+    signal: &[Complex<T>],
+    spectrum: &mut [Complex<T>],
+    stride: usize,
+    chunk: usize,
+    nbr_chunks: usize,
+) {
     let stepsize = size / 4;
     let stepstride = stride * 4;
     let signal_offset = stride;
     let spectrum_offset = size / 4;
     unsafe {
-        for i in (chunk*stepsize/nbr_chunks)..((chunk+1)*stepsize/nbr_chunks) {
+        for i in (chunk * stepsize / nbr_chunks)..((chunk + 1) * stepsize / nbr_chunks) {
             let val0 = *signal.get_unchecked(i * stepstride);
             let val1 = *signal.get_unchecked(i * stepstride + signal_offset);
-            let val2 = *signal.get_unchecked(i * stepstride + 2*signal_offset);
-            let val3 = *signal.get_unchecked(i * stepstride + 3*signal_offset);
+            let val2 = *signal.get_unchecked(i * stepstride + 2 * signal_offset);
+            let val3 = *signal.get_unchecked(i * stepstride + 3 * signal_offset);
             *spectrum.get_unchecked_mut(i) = val0;
             *spectrum.get_unchecked_mut(i + spectrum_offset) = val1;
-            *spectrum.get_unchecked_mut(i + 2*spectrum_offset) = val2;
-            *spectrum.get_unchecked_mut(i + 3*spectrum_offset) = val3;
-
+            *spectrum.get_unchecked_mut(i + 2 * spectrum_offset) = val2;
+            *spectrum.get_unchecked_mut(i + 3 * spectrum_offset) = val3;
         }
     }
 }
-
 
 #[target_feature(enable = "sse3")]
 unsafe fn butterfly_4_64<T: FftNum>(
@@ -701,15 +738,15 @@ unsafe fn butterfly_4_64<T: FftNum>(
     let mut idx = 0usize;
     let mut tw_idx = 0usize;
     let output_slice = data.as_mut_ptr() as *mut Complex<f64>;
-    for _ in 0..num_ffts/2 {
+    for _ in 0..num_ffts / 2 {
         let scratch0 = _mm_loadu_pd(output_slice.add(idx) as *const f64);
-        let scratch0b = _mm_loadu_pd(output_slice.add(idx+1) as *const f64);
+        let scratch0b = _mm_loadu_pd(output_slice.add(idx + 1) as *const f64);
         let mut scratch1 = _mm_loadu_pd(output_slice.add(idx + 1 * num_ffts) as *const f64);
-        let mut scratch1b = _mm_loadu_pd(output_slice.add(idx+1 + 1 * num_ffts) as *const f64);
+        let mut scratch1b = _mm_loadu_pd(output_slice.add(idx + 1 + 1 * num_ffts) as *const f64);
         let mut scratch2 = _mm_loadu_pd(output_slice.add(idx + 2 * num_ffts) as *const f64);
-        let mut scratch2b = _mm_loadu_pd(output_slice.add(idx+1 + 2 * num_ffts) as *const f64);
+        let mut scratch2b = _mm_loadu_pd(output_slice.add(idx + 1 + 2 * num_ffts) as *const f64);
         let mut scratch3 = _mm_loadu_pd(output_slice.add(idx + 3 * num_ffts) as *const f64);
-        let mut scratch3b = _mm_loadu_pd(output_slice.add(idx+1 + 3 * num_ffts) as *const f64);
+        let mut scratch3b = _mm_loadu_pd(output_slice.add(idx + 1 + 3 * num_ffts) as *const f64);
 
         scratch1 = complex_mul_f64(scratch1, twiddles[tw_idx]);
         scratch2 = complex_mul_f64(scratch2, twiddles[tw_idx + 1]);
@@ -722,13 +759,22 @@ unsafe fn butterfly_4_64<T: FftNum>(
         let scratchb = bf4.perform_fft_direct(scratch0b, scratch1b, scratch2b, scratch3b);
 
         _mm_storeu_pd(output_slice.add(idx) as *mut f64, scratch[0]);
-        _mm_storeu_pd(output_slice.add(idx+1) as *mut f64, scratchb[0]);
+        _mm_storeu_pd(output_slice.add(idx + 1) as *mut f64, scratchb[0]);
         _mm_storeu_pd(output_slice.add(idx + 1 * num_ffts) as *mut f64, scratch[1]);
-        _mm_storeu_pd(output_slice.add(idx+1 + 1 * num_ffts) as *mut f64, scratchb[1]);
+        _mm_storeu_pd(
+            output_slice.add(idx + 1 + 1 * num_ffts) as *mut f64,
+            scratchb[1],
+        );
         _mm_storeu_pd(output_slice.add(idx + 2 * num_ffts) as *mut f64, scratch[2]);
-        _mm_storeu_pd(output_slice.add(idx+1 + 2 * num_ffts) as *mut f64, scratchb[2]);
+        _mm_storeu_pd(
+            output_slice.add(idx + 1 + 2 * num_ffts) as *mut f64,
+            scratchb[2],
+        );
         _mm_storeu_pd(output_slice.add(idx + 3 * num_ffts) as *mut f64, scratch[3]);
-        _mm_storeu_pd(output_slice.add(idx+1 + 3 * num_ffts) as *mut f64, scratchb[3]);
+        _mm_storeu_pd(
+            output_slice.add(idx + 1 + 3 * num_ffts) as *mut f64,
+            scratchb[3],
+        );
 
         tw_idx += 6;
         idx += 2;
@@ -818,7 +864,7 @@ mod unit_tests {
         spectrum: &mut [f32],
         stride: usize,
     ) {
-        transpose::transpose(signal, spectrum, base_len, size/base_len);
+        transpose::transpose(signal, spectrum, base_len, size / base_len);
         if size > base_len {
             for i in 0..4 {
                 prepare_transposed_radix4(
@@ -832,7 +878,7 @@ mod unit_tests {
         }
     }
 
-    fn prepare_transposed_radix4 (
+    fn prepare_transposed_radix4(
         size: usize,
         base_len: usize,
         signal: &[f32],
@@ -852,7 +898,6 @@ mod unit_tests {
         }
     }
 
-
     //fn swap_rows(
     //    base_len: usize,
     //    spectrum: &mut [f32],
@@ -867,7 +912,7 @@ mod unit_tests {
     //        *spectrum.get_unchecked_mut(offset_a + n) = temp;
     //    }
     //}
-//
+    //
     fn prepare_radix4_unroll(
         size: usize,
         base_len: usize,
@@ -877,8 +922,8 @@ mod unit_tests {
     ) {
         let size_bits = size.trailing_zeros();
         let base_bits = base_len.trailing_zeros();
-        assert!(size_bits%2 == base_bits%2);
-        if size == (4*base_len) {
+        assert!(size_bits % 2 == base_bits % 2);
+        if size == (4 * base_len) {
             do_shuffling(size, base_len, signal, spectrum, stride);
         } else {
             for i in 0..4 {
@@ -893,8 +938,13 @@ mod unit_tests {
         }
     }
 
-
-    fn do_shuffling(size: usize, base_len: usize, signal: &[f32], spectrum: &mut [f32], stride: usize) {
+    fn do_shuffling(
+        size: usize,
+        base_len: usize,
+        signal: &[f32],
+        spectrum: &mut [f32],
+        stride: usize,
+    ) {
         let stepsize = size / 4;
         let stepstride = stride * 4;
         let signal_offset = stride;
@@ -902,9 +952,12 @@ mod unit_tests {
         unsafe {
             for i in 0..stepsize {
                 *spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stepstride);
-                *spectrum.get_unchecked_mut(i + spectrum_offset) = *signal.get_unchecked(i * stepstride + signal_offset);
-                *spectrum.get_unchecked_mut(i + 2*spectrum_offset) = *signal.get_unchecked(i * stepstride + 2*signal_offset);
-                *spectrum.get_unchecked_mut(i + 3*spectrum_offset) = *signal.get_unchecked(i * stepstride + 3*signal_offset);
+                *spectrum.get_unchecked_mut(i + spectrum_offset) =
+                    *signal.get_unchecked(i * stepstride + signal_offset);
+                *spectrum.get_unchecked_mut(i + 2 * spectrum_offset) =
+                    *signal.get_unchecked(i * stepstride + 2 * signal_offset);
+                *spectrum.get_unchecked_mut(i + 3 * spectrum_offset) =
+                    *signal.get_unchecked(i * stepstride + 3 * signal_offset);
             }
         }
     }
@@ -921,7 +974,6 @@ mod unit_tests {
         println!("{:?}", spectrum);
         assert!(false);
     }
-
 
     #[test]
     fn test_prepare2() {

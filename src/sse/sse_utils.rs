@@ -63,8 +63,8 @@ impl Rotate90F32 {
     }
 }
 
-// Pack 1st complex 
-// left: r1.re + r1.im, r2.re, r2.im 
+// Pack 1st complex
+// left: r1.re + r1.im, r2.re, r2.im
 // right: l1.re + l1.im, l2.re, l2.im
 // --> r1.re, r1.im, l1.re + l1.im
 #[inline(always)]
@@ -72,8 +72,8 @@ pub unsafe fn pack_1st_f32(left: __m128, right: __m128) -> __m128 {
     _mm_shuffle_ps(left, right, 0x44)
 }
 
-// Pack 2nd complex 
-// left: r1.re + r1.im, r2.re, r2.im 
+// Pack 2nd complex
+// left: r1.re + r1.im, r2.re, r2.im
 // right: l1.re + l1.im, l2.re, l2.im
 // --> r2.re, r2.im, l2.re + l2.im
 #[inline(always)]
@@ -81,8 +81,8 @@ pub unsafe fn pack_2nd_f32(left: __m128, right: __m128) -> __m128 {
     _mm_shuffle_ps(left, right, 0xEE)
 }
 
-// Pack 1st and 2nd complex 
-// left: r1.re + r1.im, r2.re, r2.im 
+// Pack 1st and 2nd complex
+// left: r1.re + r1.im, r2.re, r2.im
 // right: l1.re + l1.im, l2.re, l2.im
 // --> r1.re, r1.im, l2.re + l2.im
 #[inline(always)]
@@ -90,8 +90,8 @@ pub unsafe fn pack_1and2_f32(left: __m128, right: __m128) -> __m128 {
     _mm_shuffle_ps(left, right, 0xE4)
 }
 
-// Pack 1st and 2nd complex 
-// left: r1.re + r1.im, r2.re, r2.im 
+// Pack 1st and 2nd complex
+// left: r1.re + r1.im, r2.re, r2.im
 // right: l1.re + l1.im, l2.re, l2.im
 // --> r1.re, r1.im, l2.re + l2.im
 #[inline(always)]
@@ -99,32 +99,32 @@ pub unsafe fn pack_2and1_f32(left: __m128, right: __m128) -> __m128 {
     _mm_shuffle_ps(left, right, 0x4E)
 }
 
-// Reverse complex 
-// values: a.re + a.im, b.re, b.im 
+// Reverse complex
+// values: a.re + a.im, b.re, b.im
 // --> b.re, b.im, a.re + a.im
 #[inline(always)]
 pub unsafe fn reverse_f32(values: __m128) -> __m128 {
     _mm_shuffle_ps(values, values, 0x4E)
 }
 
-// Invert sign of 2nd complex 
-// values: a.re + a.im, b.re, b.im 
+// Invert sign of 2nd complex
+// values: a.re + a.im, b.re, b.im
 // -->  a.re + a.im, -b.re, -b.im
 #[inline(always)]
 pub unsafe fn invert_2nd_f32(values: __m128) -> __m128 {
     _mm_xor_ps(values, _mm_set_ps(-0.0, -0.0, 0.0, 0.0))
 }
 
-// Duplicate 1st complex 
-// values: a.re + a.im, b.re, b.im 
+// Duplicate 1st complex
+// values: a.re + a.im, b.re, b.im
 // --> a.re + a.im, a.re + a.im
 #[inline(always)]
 pub unsafe fn duplicate_1st_f32(values: __m128) -> __m128 {
     _mm_shuffle_ps(values, values, 0x44)
 }
 
-// Duplicate 2nd complex 
-// values: a.re + a.im, b.re, b.im 
+// Duplicate 2nd complex
+// values: a.re + a.im, b.re, b.im
 // --> b.re + b.im, b.re + b.im
 #[inline(always)]
 pub unsafe fn duplicate_2nd_f32(values: __m128) -> __m128 {

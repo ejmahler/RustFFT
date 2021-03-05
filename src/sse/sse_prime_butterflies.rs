@@ -14,15 +14,12 @@ use crate::{Direction, Fft, Length};
 use super::sse_common::{assert_f32, assert_f64};
 use super::sse_utils::*;
 
-
-
-
-//   _____           _________  _     _ _   
-//  |___  |         |___ /___ \| |__ (_) |_ 
+//   _____           _________  _     _ _
+//  |___  |         |___ /___ \| |__ (_) |_
 //     / /   _____    |_ \ __) | '_ \| | __|
-//    / /   |_____|  ___) / __/| |_) | | |_ 
+//    / /   |_____|  ___) / __/| |_) | | |_
 //   /_/            |____/_____|_.__/|_|\__|
-//                                          
+//
 
 pub struct SseF32Butterfly7<T> {
     direction: FftDirection,
@@ -80,7 +77,6 @@ impl<T: FftNum> SseF32Butterfly7<T> {
         let v4 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(4) as *const f64));
         let v5 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(5) as *const f64));
         let v6 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(6) as *const f64));
-
 
         let temp = self.perform_dual_fft_direct([v0, v1, v2, v3, v4, v5, v6]);
 
@@ -143,11 +139,8 @@ impl<T: FftNum> SseF32Butterfly7<T> {
     // length 3 dual fft of a, given as (a0, b0), (a1, b1), (a2, b2).
     // result is [(A0, B0), (A1, B1), (A2, B2)]
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_direct(
-        &self,
-        values: [__m128; 7],
-    ) -> [__m128; 7] {
-        // This is a SSE translation of the scalar 7-point butterfly 
+    pub(crate) unsafe fn perform_dual_fft_direct(&self, values: [__m128; 7]) -> [__m128; 7] {
+        // This is a SSE translation of the scalar 7-point butterfly
         let x16p = _mm_add_ps(values[1], values[6]);
         let x16n = _mm_sub_ps(values[1], values[6]);
         let x25p = _mm_add_ps(values[2], values[5]);
@@ -179,9 +172,18 @@ impl<T: FftNum> SseF32Butterfly7<T> {
         let temp_b3_2 = _mm_mul_ps(self.twiddle1im, x25n);
         let temp_b3_3 = _mm_mul_ps(self.twiddle2im, x34n);
 
-        let temp_a1 = _mm_add_ps(_mm_add_ps(values[0], temp_a1_1), _mm_add_ps(temp_a1_2, temp_a1_3));
-        let temp_a2 = _mm_add_ps(_mm_add_ps(values[0], temp_a2_1), _mm_add_ps(temp_a2_2, temp_a2_3));
-        let temp_a3 = _mm_add_ps(_mm_add_ps(values[0], temp_a3_1), _mm_add_ps(temp_a3_2, temp_a3_3));
+        let temp_a1 = _mm_add_ps(
+            _mm_add_ps(values[0], temp_a1_1),
+            _mm_add_ps(temp_a1_2, temp_a1_3),
+        );
+        let temp_a2 = _mm_add_ps(
+            _mm_add_ps(values[0], temp_a2_1),
+            _mm_add_ps(temp_a2_2, temp_a2_3),
+        );
+        let temp_a3 = _mm_add_ps(
+            _mm_add_ps(values[0], temp_a3_1),
+            _mm_add_ps(temp_a3_2, temp_a3_3),
+        );
 
         let temp_b1 = _mm_add_ps(temp_b1_1, _mm_add_ps(temp_b1_2, temp_b1_3));
         let temp_b2 = _mm_sub_ps(temp_b2_1, _mm_add_ps(temp_b2_2, temp_b2_3));
@@ -201,13 +203,12 @@ impl<T: FftNum> SseF32Butterfly7<T> {
     }
 }
 
-
-//   _____            __   _  _   _     _ _   
-//  |___  |          / /_ | || | | |__ (_) |_ 
+//   _____            __   _  _   _     _ _
+//  |___  |          / /_ | || | | |__ (_) |_
 //     / /   _____  | '_ \| || |_| '_ \| | __|
-//    / /   |_____| | (_) |__   _| |_) | | |_ 
+//    / /   |_____| | (_) |__   _| |_) | | |_
 //   /_/             \___/   |_| |_.__/|_|\__|
-//                                            
+//
 
 pub struct SseF64Butterfly7<T> {
     direction: FftDirection,
@@ -284,11 +285,8 @@ impl<T: FftNum> SseF64Butterfly7<T> {
     // length 7 fft of a, given as a0, a1, a2, a3, a4, a5, a6.
     // result is [A0, A1, A2, A3, A4, A5, A6]
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(
-        &self,
-        values: [__m128d; 7]
-    ) -> [__m128d; 7] {
-        // This is a SSE translation of the scalar 7-point butterfly 
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 7]) -> [__m128d; 7] {
+        // This is a SSE translation of the scalar 7-point butterfly
         let x16p = _mm_add_pd(values[1], values[6]);
         let x16n = _mm_sub_pd(values[1], values[6]);
         let x25p = _mm_add_pd(values[2], values[5]);
@@ -316,9 +314,18 @@ impl<T: FftNum> SseF64Butterfly7<T> {
         let temp_b3_2 = _mm_mul_pd(self.twiddle1im, x25n);
         let temp_b3_3 = _mm_mul_pd(self.twiddle2im, x34n);
 
-        let temp_a1 = _mm_add_pd(values[0], _mm_add_pd(temp_a1_1, _mm_add_pd(temp_a1_2, temp_a1_3)));
-        let temp_a2 = _mm_add_pd(values[0], _mm_add_pd(temp_a2_1, _mm_add_pd(temp_a2_2, temp_a2_3)));
-        let temp_a3 = _mm_add_pd(values[0], _mm_add_pd(temp_a3_1, _mm_add_pd(temp_a3_2, temp_a3_3)));
+        let temp_a1 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(temp_a1_1, _mm_add_pd(temp_a1_2, temp_a1_3)),
+        );
+        let temp_a2 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(temp_a2_1, _mm_add_pd(temp_a2_2, temp_a2_3)),
+        );
+        let temp_a3 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(temp_a3_1, _mm_add_pd(temp_a3_2, temp_a3_3)),
+        );
 
         let temp_b1 = _mm_add_pd(temp_b1_1, _mm_add_pd(temp_b1_2, temp_b1_3));
         let temp_b2 = _mm_sub_pd(temp_b2_1, _mm_add_pd(temp_b2_2, temp_b2_3));
@@ -336,20 +343,15 @@ impl<T: FftNum> SseF64Butterfly7<T> {
         let x5 = _mm_sub_pd(temp_a2, temp_b2_rot);
         let x6 = _mm_sub_pd(temp_a1, temp_b1_rot);
         [x0, x1, x2, x3, x4, x5, x6]
-
     }
 }
 
-
-
-
-//   _ _           _________  _     _ _   
-//  / / |         |___ /___ \| |__ (_) |_ 
+//   _ _           _________  _     _ _
+//  / / |         |___ /___ \| |__ (_) |_
 //  | | |  _____    |_ \ __) | '_ \| | __|
-//  | | | |_____|  ___) / __/| |_) | | |_ 
+//  | | | |_____|  ___) / __/| |_) | | |_
 //  |_|_|         |____/_____|_.__/|_|\__|
-//                                        
-                                  
+//
 
 pub struct SseF32Butterfly11<T> {
     direction: FftDirection,
@@ -507,11 +509,8 @@ impl<T: FftNum> SseF32Butterfly11<T> {
     // length 7 fft of a, given as a0, a1, a2, a3, a4, a5, a6.
     // result is [A0, A1, A2, A3, A4, A5, A6]
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_direct(
-        &self,
-        values: [__m128; 11],
-    ) -> [__m128; 11] {
-        // This is a SSE translation of the scalar 11-point butterfly 
+    pub(crate) unsafe fn perform_dual_fft_direct(&self, values: [__m128; 11]) -> [__m128; 11] {
+        // This is a SSE translation of the scalar 11-point butterfly
         let x110p = _mm_add_ps(values[1], values[10]);
         let x110n = _mm_sub_ps(values[1], values[10]);
         let x29p = _mm_add_ps(values[2], values[9]);
@@ -575,17 +574,92 @@ impl<T: FftNum> SseF32Butterfly11<T> {
         let temp_b5_4 = _mm_mul_ps(self.twiddle2im, x47n);
         let temp_b5_5 = _mm_mul_ps(self.twiddle3im, x56n);
 
-        let temp_a1 = _mm_add_ps(values[0], _mm_add_ps(temp_a1_1, _mm_add_ps(temp_a1_2, _mm_add_ps(temp_a1_3, _mm_add_ps(temp_a1_4, temp_a1_5)))));
-        let temp_a2 = _mm_add_ps(values[0], _mm_add_ps(temp_a2_1, _mm_add_ps(temp_a2_2, _mm_add_ps(temp_a2_3, _mm_add_ps(temp_a2_4, temp_a2_5)))));
-        let temp_a3 = _mm_add_ps(values[0], _mm_add_ps(temp_a3_1, _mm_add_ps(temp_a3_2, _mm_add_ps(temp_a3_3, _mm_add_ps(temp_a3_4, temp_a3_5)))));
-        let temp_a4 = _mm_add_ps(values[0], _mm_add_ps(temp_a4_1, _mm_add_ps(temp_a4_2, _mm_add_ps(temp_a4_3, _mm_add_ps(temp_a4_4, temp_a4_5)))));
-        let temp_a5 = _mm_add_ps(values[0], _mm_add_ps(temp_a5_1, _mm_add_ps(temp_a5_2, _mm_add_ps(temp_a5_3, _mm_add_ps(temp_a5_4, temp_a5_5)))));
+        let temp_a1 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a1_1,
+                _mm_add_ps(
+                    temp_a1_2,
+                    _mm_add_ps(temp_a1_3, _mm_add_ps(temp_a1_4, temp_a1_5)),
+                ),
+            ),
+        );
+        let temp_a2 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a2_1,
+                _mm_add_ps(
+                    temp_a2_2,
+                    _mm_add_ps(temp_a2_3, _mm_add_ps(temp_a2_4, temp_a2_5)),
+                ),
+            ),
+        );
+        let temp_a3 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a3_1,
+                _mm_add_ps(
+                    temp_a3_2,
+                    _mm_add_ps(temp_a3_3, _mm_add_ps(temp_a3_4, temp_a3_5)),
+                ),
+            ),
+        );
+        let temp_a4 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a4_1,
+                _mm_add_ps(
+                    temp_a4_2,
+                    _mm_add_ps(temp_a4_3, _mm_add_ps(temp_a4_4, temp_a4_5)),
+                ),
+            ),
+        );
+        let temp_a5 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a5_1,
+                _mm_add_ps(
+                    temp_a5_2,
+                    _mm_add_ps(temp_a5_3, _mm_add_ps(temp_a5_4, temp_a5_5)),
+                ),
+            ),
+        );
 
-        let temp_b1 = _mm_add_ps(temp_b1_1, _mm_add_ps(temp_b1_2, _mm_add_ps(temp_b1_3, _mm_add_ps(temp_b1_4, temp_b1_5))));
-        let temp_b2 = _mm_add_ps(temp_b2_1, _mm_sub_ps(temp_b2_2, _mm_add_ps(temp_b2_3, _mm_add_ps(temp_b2_4, temp_b2_5))));
-        let temp_b3 = _mm_sub_ps(temp_b3_1, _mm_add_ps(temp_b3_2, _mm_sub_ps(temp_b3_3, _mm_add_ps(temp_b3_4, temp_b3_5))));
-        let temp_b4 = _mm_sub_ps(temp_b4_1, _mm_sub_ps(temp_b4_2, _mm_add_ps(temp_b4_3, _mm_sub_ps(temp_b4_4, temp_b4_5))));
-        let temp_b5 = _mm_sub_ps(temp_b5_1, _mm_sub_ps(temp_b5_2, _mm_sub_ps(temp_b5_3, _mm_sub_ps(temp_b5_4, temp_b5_5))));
+        let temp_b1 = _mm_add_ps(
+            temp_b1_1,
+            _mm_add_ps(
+                temp_b1_2,
+                _mm_add_ps(temp_b1_3, _mm_add_ps(temp_b1_4, temp_b1_5)),
+            ),
+        );
+        let temp_b2 = _mm_add_ps(
+            temp_b2_1,
+            _mm_sub_ps(
+                temp_b2_2,
+                _mm_add_ps(temp_b2_3, _mm_add_ps(temp_b2_4, temp_b2_5)),
+            ),
+        );
+        let temp_b3 = _mm_sub_ps(
+            temp_b3_1,
+            _mm_add_ps(
+                temp_b3_2,
+                _mm_sub_ps(temp_b3_3, _mm_add_ps(temp_b3_4, temp_b3_5)),
+            ),
+        );
+        let temp_b4 = _mm_sub_ps(
+            temp_b4_1,
+            _mm_sub_ps(
+                temp_b4_2,
+                _mm_add_ps(temp_b4_3, _mm_sub_ps(temp_b4_4, temp_b4_5)),
+            ),
+        );
+        let temp_b5 = _mm_sub_ps(
+            temp_b5_1,
+            _mm_sub_ps(
+                temp_b5_2,
+                _mm_sub_ps(temp_b5_3, _mm_sub_ps(temp_b5_4, temp_b5_5)),
+            ),
+        );
 
         let temp_b1_rot = self.rotate.rotate_both(temp_b1);
         let temp_b2_rot = self.rotate.rotate_both(temp_b2);
@@ -593,7 +667,13 @@ impl<T: FftNum> SseF32Butterfly11<T> {
         let temp_b4_rot = self.rotate.rotate_both(temp_b4);
         let temp_b5_rot = self.rotate.rotate_both(temp_b5);
 
-        let x0 = _mm_add_ps(values[0], _mm_add_ps(x110p, _mm_add_ps(x29p, _mm_add_ps(x38p, _mm_add_ps(x47p, x56p)))));
+        let x0 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                x110p,
+                _mm_add_ps(x29p, _mm_add_ps(x38p, _mm_add_ps(x47p, x56p))),
+            ),
+        );
         let x1 = _mm_add_ps(temp_a1, temp_b1_rot);
         let x2 = _mm_add_ps(temp_a2, temp_b2_rot);
         let x3 = _mm_add_ps(temp_a3, temp_b3_rot);
@@ -608,15 +688,12 @@ impl<T: FftNum> SseF32Butterfly11<T> {
     }
 }
 
-
-//   _ _            __   _  _   _     _ _   
-//  / / |          / /_ | || | | |__ (_) |_ 
+//   _ _            __   _  _   _     _ _
+//  / / |          / /_ | || | | |__ (_) |_
 //  | | |  _____  | '_ \| || |_| '_ \| | __|
-//  | | | |_____| | (_) |__   _| |_) | | |_ 
+//  | | | |_____| | (_) |__   _| |_) | | |_
 //  |_|_|          \___/   |_| |_.__/|_|\__|
-//                                          
-
-                                       
+//
 
 pub struct SseF64Butterfly11<T> {
     direction: FftDirection,
@@ -715,11 +792,8 @@ impl<T: FftNum> SseF64Butterfly11<T> {
     // length 7 fft of a, given as a0, a1, a2, a3, a4, a5, a6.
     // result is [A0, A1, A2, A3, A4, A5, A6]
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(
-        &self,
-        values: [__m128d; 11],
-    ) -> [__m128d; 11] {
-        // This is a SSE translation of the scalar 11-point butterfly 
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 11]) -> [__m128d; 11] {
+        // This is a SSE translation of the scalar 11-point butterfly
         let x110p = _mm_add_pd(values[1], values[10]);
         let x110n = _mm_sub_pd(values[1], values[10]);
         let x29p = _mm_add_pd(values[2], values[9]);
@@ -783,17 +857,92 @@ impl<T: FftNum> SseF64Butterfly11<T> {
         let temp_b5_4 = _mm_mul_pd(self.twiddle2im, x47n);
         let temp_b5_5 = _mm_mul_pd(self.twiddle3im, x56n);
 
-        let temp_a1 = _mm_add_pd(values[0], _mm_add_pd(temp_a1_1, _mm_add_pd(temp_a1_2, _mm_add_pd(temp_a1_3, _mm_add_pd(temp_a1_4, temp_a1_5)))));
-        let temp_a2 = _mm_add_pd(values[0], _mm_add_pd(temp_a2_1, _mm_add_pd(temp_a2_2, _mm_add_pd(temp_a2_3, _mm_add_pd(temp_a2_4, temp_a2_5)))));
-        let temp_a3 = _mm_add_pd(values[0], _mm_add_pd(temp_a3_1, _mm_add_pd(temp_a3_2, _mm_add_pd(temp_a3_3, _mm_add_pd(temp_a3_4, temp_a3_5)))));
-        let temp_a4 = _mm_add_pd(values[0], _mm_add_pd(temp_a4_1, _mm_add_pd(temp_a4_2, _mm_add_pd(temp_a4_3, _mm_add_pd(temp_a4_4, temp_a4_5)))));
-        let temp_a5 = _mm_add_pd(values[0], _mm_add_pd(temp_a5_1, _mm_add_pd(temp_a5_2, _mm_add_pd(temp_a5_3, _mm_add_pd(temp_a5_4, temp_a5_5)))));
+        let temp_a1 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a1_1,
+                _mm_add_pd(
+                    temp_a1_2,
+                    _mm_add_pd(temp_a1_3, _mm_add_pd(temp_a1_4, temp_a1_5)),
+                ),
+            ),
+        );
+        let temp_a2 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a2_1,
+                _mm_add_pd(
+                    temp_a2_2,
+                    _mm_add_pd(temp_a2_3, _mm_add_pd(temp_a2_4, temp_a2_5)),
+                ),
+            ),
+        );
+        let temp_a3 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a3_1,
+                _mm_add_pd(
+                    temp_a3_2,
+                    _mm_add_pd(temp_a3_3, _mm_add_pd(temp_a3_4, temp_a3_5)),
+                ),
+            ),
+        );
+        let temp_a4 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a4_1,
+                _mm_add_pd(
+                    temp_a4_2,
+                    _mm_add_pd(temp_a4_3, _mm_add_pd(temp_a4_4, temp_a4_5)),
+                ),
+            ),
+        );
+        let temp_a5 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a5_1,
+                _mm_add_pd(
+                    temp_a5_2,
+                    _mm_add_pd(temp_a5_3, _mm_add_pd(temp_a5_4, temp_a5_5)),
+                ),
+            ),
+        );
 
-        let temp_b1 = _mm_add_pd(temp_b1_1, _mm_add_pd(temp_b1_2, _mm_add_pd(temp_b1_3, _mm_add_pd(temp_b1_4, temp_b1_5))));
-        let temp_b2 = _mm_add_pd(temp_b2_1, _mm_sub_pd(temp_b2_2, _mm_add_pd(temp_b2_3, _mm_add_pd(temp_b2_4, temp_b2_5))));
-        let temp_b3 = _mm_sub_pd(temp_b3_1, _mm_add_pd(temp_b3_2, _mm_sub_pd(temp_b3_3, _mm_add_pd(temp_b3_4, temp_b3_5))));
-        let temp_b4 = _mm_sub_pd(temp_b4_1, _mm_sub_pd(temp_b4_2, _mm_add_pd(temp_b4_3, _mm_sub_pd(temp_b4_4, temp_b4_5))));
-        let temp_b5 = _mm_sub_pd(temp_b5_1, _mm_sub_pd(temp_b5_2, _mm_sub_pd(temp_b5_3, _mm_sub_pd(temp_b5_4, temp_b5_5))));
+        let temp_b1 = _mm_add_pd(
+            temp_b1_1,
+            _mm_add_pd(
+                temp_b1_2,
+                _mm_add_pd(temp_b1_3, _mm_add_pd(temp_b1_4, temp_b1_5)),
+            ),
+        );
+        let temp_b2 = _mm_add_pd(
+            temp_b2_1,
+            _mm_sub_pd(
+                temp_b2_2,
+                _mm_add_pd(temp_b2_3, _mm_add_pd(temp_b2_4, temp_b2_5)),
+            ),
+        );
+        let temp_b3 = _mm_sub_pd(
+            temp_b3_1,
+            _mm_add_pd(
+                temp_b3_2,
+                _mm_sub_pd(temp_b3_3, _mm_add_pd(temp_b3_4, temp_b3_5)),
+            ),
+        );
+        let temp_b4 = _mm_sub_pd(
+            temp_b4_1,
+            _mm_sub_pd(
+                temp_b4_2,
+                _mm_add_pd(temp_b4_3, _mm_sub_pd(temp_b4_4, temp_b4_5)),
+            ),
+        );
+        let temp_b5 = _mm_sub_pd(
+            temp_b5_1,
+            _mm_sub_pd(
+                temp_b5_2,
+                _mm_sub_pd(temp_b5_3, _mm_sub_pd(temp_b5_4, temp_b5_5)),
+            ),
+        );
 
         let temp_b1_rot = self.rotate.rotate(temp_b1);
         let temp_b2_rot = self.rotate.rotate(temp_b2);
@@ -801,7 +950,13 @@ impl<T: FftNum> SseF64Butterfly11<T> {
         let temp_b4_rot = self.rotate.rotate(temp_b4);
         let temp_b5_rot = self.rotate.rotate(temp_b5);
 
-        let x0 = _mm_add_pd(values[0], _mm_add_pd(x110p, _mm_add_pd(x29p, _mm_add_pd(x38p, _mm_add_pd(x47p, x56p)))));
+        let x0 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                x110p,
+                _mm_add_pd(x29p, _mm_add_pd(x38p, _mm_add_pd(x47p, x56p))),
+            ),
+        );
         let x1 = _mm_add_pd(temp_a1, temp_b1_rot);
         let x2 = _mm_add_pd(temp_a2, temp_b2_rot);
         let x3 = _mm_add_pd(temp_a3, temp_b3_rot);
@@ -816,14 +971,12 @@ impl<T: FftNum> SseF64Butterfly11<T> {
     }
 }
 
-
-
-//   _ _____           _________  _     _ _   
-//  / |___ /          |___ /___ \| |__ (_) |_ 
+//   _ _____           _________  _     _ _
+//  / |___ /          |___ /___ \| |__ (_) |_
 //  | | |_ \   _____    |_ \ __) | '_ \| | __|
-//  | |___) | |_____|  ___) / __/| |_) | | |_ 
+//  | |___) | |_____|  ___) / __/| |_) | | |_
 //  |_|____/          |____/_____|_.__/|_|\__|
-//                                            
+//
 
 pub struct SseF32Butterfly13<T> {
     direction: FftDirection,
@@ -910,7 +1063,8 @@ impl<T: FftNum> SseF32Butterfly13<T> {
         let v11 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(11) as *const f64));
         let v12 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(12) as *const f64));
 
-        let out = self.perform_dual_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12]);
+        let out =
+            self.perform_dual_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12]);
 
         let val = std::mem::transmute::<[__m128; 13], [Complex<f32>; 26]>(out);
 
@@ -964,7 +1118,8 @@ impl<T: FftNum> SseF32Butterfly13<T> {
         let v11 = pack_2and1_f32(valuea10a11, valueb11b12);
         let v12 = pack_1and2_f32(valuea12b0, valueb11b12);
 
-        let out = self.perform_dual_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12]);
+        let out =
+            self.perform_dual_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12]);
 
         let val = std::mem::transmute::<[__m128; 13], [Complex<f32>; 26]>(out);
 
@@ -1000,11 +1155,8 @@ impl<T: FftNum> SseF32Butterfly13<T> {
     // length 7 fft of a, given as a0, a1, a2, a3, a4, a5, a6.
     // result is [A0, A1, A2, A3, A4, A5, A6]
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_direct(
-        &self,
-        values: [__m128; 13],
-    ) -> [__m128; 13] {
-        // This is a SSE translation of the scalar 13-point butterfly 
+    pub(crate) unsafe fn perform_dual_fft_direct(&self, values: [__m128; 13]) -> [__m128; 13] {
+        // This is a SSE translation of the scalar 13-point butterfly
         let x112p = _mm_add_ps(values[1], values[12]);
         let x112n = _mm_sub_ps(values[1], values[12]);
         let x211p = _mm_add_ps(values[2], values[11]);
@@ -1017,7 +1169,7 @@ impl<T: FftNum> SseF32Butterfly13<T> {
         let x58n = _mm_sub_ps(values[5], values[8]);
         let x67p = _mm_add_ps(values[6], values[7]);
         let x67n = _mm_sub_ps(values[6], values[7]);
-        
+
         let temp_a1_1 = _mm_mul_ps(self.twiddle1re, x112p);
         let temp_a1_2 = _mm_mul_ps(self.twiddle2re, x211p);
         let temp_a1_3 = _mm_mul_ps(self.twiddle3re, x310p);
@@ -1054,7 +1206,7 @@ impl<T: FftNum> SseF32Butterfly13<T> {
         let temp_a6_4 = _mm_mul_ps(self.twiddle2re, x49p);
         let temp_a6_5 = _mm_mul_ps(self.twiddle4re, x58p);
         let temp_a6_6 = _mm_mul_ps(self.twiddle3re, x67p);
-        
+
         let temp_b1_1 = _mm_mul_ps(self.twiddle1im, x112n);
         let temp_b1_2 = _mm_mul_ps(self.twiddle2im, x211n);
         let temp_b1_3 = _mm_mul_ps(self.twiddle3im, x310n);
@@ -1091,29 +1243,164 @@ impl<T: FftNum> SseF32Butterfly13<T> {
         let temp_b6_4 = _mm_mul_ps(self.twiddle2im, x49n);
         let temp_b6_5 = _mm_mul_ps(self.twiddle4im, x58n);
         let temp_b6_6 = _mm_mul_ps(self.twiddle3im, x67n);
-        
-        let temp_a1 = _mm_add_ps(values[0], _mm_add_ps(temp_a1_1, _mm_add_ps(temp_a1_2, _mm_add_ps(temp_a1_3, _mm_add_ps(temp_a1_4, _mm_add_ps(temp_a1_5, temp_a1_6))))));
-        let temp_a2 = _mm_add_ps(values[0], _mm_add_ps(temp_a2_1, _mm_add_ps(temp_a2_2, _mm_add_ps(temp_a2_3, _mm_add_ps(temp_a2_4, _mm_add_ps(temp_a2_5, temp_a2_6))))));
-        let temp_a3 = _mm_add_ps(values[0], _mm_add_ps(temp_a3_1, _mm_add_ps(temp_a3_2, _mm_add_ps(temp_a3_3, _mm_add_ps(temp_a3_4, _mm_add_ps(temp_a3_5, temp_a3_6))))));
-        let temp_a4 = _mm_add_ps(values[0], _mm_add_ps(temp_a4_1, _mm_add_ps(temp_a4_2, _mm_add_ps(temp_a4_3, _mm_add_ps(temp_a4_4, _mm_add_ps(temp_a4_5, temp_a4_6))))));
-        let temp_a5 = _mm_add_ps(values[0], _mm_add_ps(temp_a5_1, _mm_add_ps(temp_a5_2, _mm_add_ps(temp_a5_3, _mm_add_ps(temp_a5_4, _mm_add_ps(temp_a5_5, temp_a5_6))))));
-        let temp_a6 = _mm_add_ps(values[0], _mm_add_ps(temp_a6_1, _mm_add_ps(temp_a6_2, _mm_add_ps(temp_a6_3, _mm_add_ps(temp_a6_4, _mm_add_ps(temp_a6_5, temp_a6_6))))));
-        
-        let temp_b1 = _mm_add_ps(temp_b1_1, _mm_add_ps(temp_b1_2, _mm_add_ps(temp_b1_3, _mm_add_ps(temp_b1_4, _mm_add_ps(temp_b1_5, temp_b1_6)))));
-        let temp_b2 = _mm_add_ps(temp_b2_1, _mm_add_ps(temp_b2_2, _mm_sub_ps(temp_b2_3, _mm_add_ps(temp_b2_4, _mm_add_ps(temp_b2_5, temp_b2_6)))));
-        let temp_b3 = _mm_add_ps(temp_b3_1, _mm_sub_ps(temp_b3_2, _mm_add_ps(temp_b3_3, _mm_sub_ps(temp_b3_4, _mm_add_ps(temp_b3_5, temp_b3_6)))));
-        let temp_b4 = _mm_sub_ps(temp_b4_1, _mm_add_ps(temp_b4_2, _mm_sub_ps(temp_b4_3, _mm_sub_ps(temp_b4_4, _mm_add_ps(temp_b4_5, temp_b4_6)))));
-        let temp_b5 = _mm_sub_ps(temp_b5_1, _mm_sub_ps(temp_b5_2, _mm_sub_ps(temp_b5_3, _mm_add_ps(temp_b5_4, _mm_sub_ps(temp_b5_5, temp_b5_6)))));
-        let temp_b6 = _mm_sub_ps(temp_b6_1, _mm_sub_ps(temp_b6_2, _mm_sub_ps(temp_b6_3, _mm_sub_ps(temp_b6_4, _mm_sub_ps(temp_b6_5, temp_b6_6)))));
-        
+
+        let temp_a1 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a1_1,
+                _mm_add_ps(
+                    temp_a1_2,
+                    _mm_add_ps(
+                        temp_a1_3,
+                        _mm_add_ps(temp_a1_4, _mm_add_ps(temp_a1_5, temp_a1_6)),
+                    ),
+                ),
+            ),
+        );
+        let temp_a2 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a2_1,
+                _mm_add_ps(
+                    temp_a2_2,
+                    _mm_add_ps(
+                        temp_a2_3,
+                        _mm_add_ps(temp_a2_4, _mm_add_ps(temp_a2_5, temp_a2_6)),
+                    ),
+                ),
+            ),
+        );
+        let temp_a3 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a3_1,
+                _mm_add_ps(
+                    temp_a3_2,
+                    _mm_add_ps(
+                        temp_a3_3,
+                        _mm_add_ps(temp_a3_4, _mm_add_ps(temp_a3_5, temp_a3_6)),
+                    ),
+                ),
+            ),
+        );
+        let temp_a4 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a4_1,
+                _mm_add_ps(
+                    temp_a4_2,
+                    _mm_add_ps(
+                        temp_a4_3,
+                        _mm_add_ps(temp_a4_4, _mm_add_ps(temp_a4_5, temp_a4_6)),
+                    ),
+                ),
+            ),
+        );
+        let temp_a5 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a5_1,
+                _mm_add_ps(
+                    temp_a5_2,
+                    _mm_add_ps(
+                        temp_a5_3,
+                        _mm_add_ps(temp_a5_4, _mm_add_ps(temp_a5_5, temp_a5_6)),
+                    ),
+                ),
+            ),
+        );
+        let temp_a6 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a6_1,
+                _mm_add_ps(
+                    temp_a6_2,
+                    _mm_add_ps(
+                        temp_a6_3,
+                        _mm_add_ps(temp_a6_4, _mm_add_ps(temp_a6_5, temp_a6_6)),
+                    ),
+                ),
+            ),
+        );
+
+        let temp_b1 = _mm_add_ps(
+            temp_b1_1,
+            _mm_add_ps(
+                temp_b1_2,
+                _mm_add_ps(
+                    temp_b1_3,
+                    _mm_add_ps(temp_b1_4, _mm_add_ps(temp_b1_5, temp_b1_6)),
+                ),
+            ),
+        );
+        let temp_b2 = _mm_add_ps(
+            temp_b2_1,
+            _mm_add_ps(
+                temp_b2_2,
+                _mm_sub_ps(
+                    temp_b2_3,
+                    _mm_add_ps(temp_b2_4, _mm_add_ps(temp_b2_5, temp_b2_6)),
+                ),
+            ),
+        );
+        let temp_b3 = _mm_add_ps(
+            temp_b3_1,
+            _mm_sub_ps(
+                temp_b3_2,
+                _mm_add_ps(
+                    temp_b3_3,
+                    _mm_sub_ps(temp_b3_4, _mm_add_ps(temp_b3_5, temp_b3_6)),
+                ),
+            ),
+        );
+        let temp_b4 = _mm_sub_ps(
+            temp_b4_1,
+            _mm_add_ps(
+                temp_b4_2,
+                _mm_sub_ps(
+                    temp_b4_3,
+                    _mm_sub_ps(temp_b4_4, _mm_add_ps(temp_b4_5, temp_b4_6)),
+                ),
+            ),
+        );
+        let temp_b5 = _mm_sub_ps(
+            temp_b5_1,
+            _mm_sub_ps(
+                temp_b5_2,
+                _mm_sub_ps(
+                    temp_b5_3,
+                    _mm_add_ps(temp_b5_4, _mm_sub_ps(temp_b5_5, temp_b5_6)),
+                ),
+            ),
+        );
+        let temp_b6 = _mm_sub_ps(
+            temp_b6_1,
+            _mm_sub_ps(
+                temp_b6_2,
+                _mm_sub_ps(
+                    temp_b6_3,
+                    _mm_sub_ps(temp_b6_4, _mm_sub_ps(temp_b6_5, temp_b6_6)),
+                ),
+            ),
+        );
+
         let temp_b1_rot = self.rotate.rotate_both(temp_b1);
         let temp_b2_rot = self.rotate.rotate_both(temp_b2);
         let temp_b3_rot = self.rotate.rotate_both(temp_b3);
         let temp_b4_rot = self.rotate.rotate_both(temp_b4);
         let temp_b5_rot = self.rotate.rotate_both(temp_b5);
         let temp_b6_rot = self.rotate.rotate_both(temp_b6);
-        
-        let x0 = _mm_add_ps(values[0], _mm_add_ps(x112p, _mm_add_ps(x211p, _mm_add_ps(x310p, _mm_add_ps(x49p, _mm_add_ps(x58p, x67p))))));
+
+        let x0 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                x112p,
+                _mm_add_ps(
+                    x211p,
+                    _mm_add_ps(x310p, _mm_add_ps(x49p, _mm_add_ps(x58p, x67p))),
+                ),
+            ),
+        );
         let x1 = _mm_add_ps(temp_a1, temp_b1_rot);
         let x2 = _mm_add_ps(temp_a2, temp_b2_rot);
         let x3 = _mm_add_ps(temp_a3, temp_b3_rot);
@@ -1130,14 +1417,12 @@ impl<T: FftNum> SseF32Butterfly13<T> {
     }
 }
 
-
-//   _ _____            __   _  _   _     _ _   
-//  / |___ /           / /_ | || | | |__ (_) |_ 
+//   _ _____            __   _  _   _     _ _
+//  / |___ /           / /_ | || | | |__ (_) |_
 //  | | |_ \   _____  | '_ \| || |_| '_ \| | __|
-//  | |___) | |_____| | (_) |__   _| |_) | | |_ 
+//  | |___) | |_____| | (_) |__   _| |_) | | |_
 //  |_|____/           \___/   |_| |_.__/|_|\__|
-//                                              
-
+//
 
 pub struct SseF64Butterfly13<T> {
     direction: FftDirection,
@@ -1247,11 +1532,8 @@ impl<T: FftNum> SseF64Butterfly13<T> {
     // length 7 fft of a, given as a0, a1, a2, a3, a4, a5, a6.
     // result is [A0, A1, A2, A3, A4, A5, A6]
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(
-        &self,
-        values: [__m128d; 13],
-    ) -> [__m128d; 13] {
-        // This is a SSE translation of the scalar 13-point butterfly 
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 13]) -> [__m128d; 13] {
+        // This is a SSE translation of the scalar 13-point butterfly
         let x112p = _mm_add_pd(values[1], values[12]);
         let x112n = _mm_sub_pd(values[1], values[12]);
         let x211p = _mm_add_pd(values[2], values[11]);
@@ -1264,7 +1546,7 @@ impl<T: FftNum> SseF64Butterfly13<T> {
         let x58n = _mm_sub_pd(values[5], values[8]);
         let x67p = _mm_add_pd(values[6], values[7]);
         let x67n = _mm_sub_pd(values[6], values[7]);
-        
+
         let temp_a1_1 = _mm_mul_pd(self.twiddle1re, x112p);
         let temp_a1_2 = _mm_mul_pd(self.twiddle2re, x211p);
         let temp_a1_3 = _mm_mul_pd(self.twiddle3re, x310p);
@@ -1301,7 +1583,7 @@ impl<T: FftNum> SseF64Butterfly13<T> {
         let temp_a6_4 = _mm_mul_pd(self.twiddle2re, x49p);
         let temp_a6_5 = _mm_mul_pd(self.twiddle4re, x58p);
         let temp_a6_6 = _mm_mul_pd(self.twiddle3re, x67p);
-        
+
         let temp_b1_1 = _mm_mul_pd(self.twiddle1im, x112n);
         let temp_b1_2 = _mm_mul_pd(self.twiddle2im, x211n);
         let temp_b1_3 = _mm_mul_pd(self.twiddle3im, x310n);
@@ -1338,29 +1620,164 @@ impl<T: FftNum> SseF64Butterfly13<T> {
         let temp_b6_4 = _mm_mul_pd(self.twiddle2im, x49n);
         let temp_b6_5 = _mm_mul_pd(self.twiddle4im, x58n);
         let temp_b6_6 = _mm_mul_pd(self.twiddle3im, x67n);
-        
-        let temp_a1 = _mm_add_pd(values[0], _mm_add_pd(temp_a1_1, _mm_add_pd(temp_a1_2, _mm_add_pd(temp_a1_3, _mm_add_pd(temp_a1_4, _mm_add_pd(temp_a1_5, temp_a1_6))))));
-        let temp_a2 = _mm_add_pd(values[0], _mm_add_pd(temp_a2_1, _mm_add_pd(temp_a2_2, _mm_add_pd(temp_a2_3, _mm_add_pd(temp_a2_4, _mm_add_pd(temp_a2_5, temp_a2_6))))));
-        let temp_a3 = _mm_add_pd(values[0], _mm_add_pd(temp_a3_1, _mm_add_pd(temp_a3_2, _mm_add_pd(temp_a3_3, _mm_add_pd(temp_a3_4, _mm_add_pd(temp_a3_5, temp_a3_6))))));
-        let temp_a4 = _mm_add_pd(values[0], _mm_add_pd(temp_a4_1, _mm_add_pd(temp_a4_2, _mm_add_pd(temp_a4_3, _mm_add_pd(temp_a4_4, _mm_add_pd(temp_a4_5, temp_a4_6))))));
-        let temp_a5 = _mm_add_pd(values[0], _mm_add_pd(temp_a5_1, _mm_add_pd(temp_a5_2, _mm_add_pd(temp_a5_3, _mm_add_pd(temp_a5_4, _mm_add_pd(temp_a5_5, temp_a5_6))))));
-        let temp_a6 = _mm_add_pd(values[0], _mm_add_pd(temp_a6_1, _mm_add_pd(temp_a6_2, _mm_add_pd(temp_a6_3, _mm_add_pd(temp_a6_4, _mm_add_pd(temp_a6_5, temp_a6_6))))));
-        
-        let temp_b1 = _mm_add_pd(temp_b1_1, _mm_add_pd(temp_b1_2, _mm_add_pd(temp_b1_3, _mm_add_pd(temp_b1_4, _mm_add_pd(temp_b1_5, temp_b1_6)))));
-        let temp_b2 = _mm_add_pd(temp_b2_1, _mm_add_pd(temp_b2_2, _mm_sub_pd(temp_b2_3, _mm_add_pd(temp_b2_4, _mm_add_pd(temp_b2_5, temp_b2_6)))));
-        let temp_b3 = _mm_add_pd(temp_b3_1, _mm_sub_pd(temp_b3_2, _mm_add_pd(temp_b3_3, _mm_sub_pd(temp_b3_4, _mm_add_pd(temp_b3_5, temp_b3_6)))));
-        let temp_b4 = _mm_sub_pd(temp_b4_1, _mm_add_pd(temp_b4_2, _mm_sub_pd(temp_b4_3, _mm_sub_pd(temp_b4_4, _mm_add_pd(temp_b4_5, temp_b4_6)))));
-        let temp_b5 = _mm_sub_pd(temp_b5_1, _mm_sub_pd(temp_b5_2, _mm_sub_pd(temp_b5_3, _mm_add_pd(temp_b5_4, _mm_sub_pd(temp_b5_5, temp_b5_6)))));
-        let temp_b6 = _mm_sub_pd(temp_b6_1, _mm_sub_pd(temp_b6_2, _mm_sub_pd(temp_b6_3, _mm_sub_pd(temp_b6_4, _mm_sub_pd(temp_b6_5, temp_b6_6)))));
-        
+
+        let temp_a1 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a1_1,
+                _mm_add_pd(
+                    temp_a1_2,
+                    _mm_add_pd(
+                        temp_a1_3,
+                        _mm_add_pd(temp_a1_4, _mm_add_pd(temp_a1_5, temp_a1_6)),
+                    ),
+                ),
+            ),
+        );
+        let temp_a2 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a2_1,
+                _mm_add_pd(
+                    temp_a2_2,
+                    _mm_add_pd(
+                        temp_a2_3,
+                        _mm_add_pd(temp_a2_4, _mm_add_pd(temp_a2_5, temp_a2_6)),
+                    ),
+                ),
+            ),
+        );
+        let temp_a3 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a3_1,
+                _mm_add_pd(
+                    temp_a3_2,
+                    _mm_add_pd(
+                        temp_a3_3,
+                        _mm_add_pd(temp_a3_4, _mm_add_pd(temp_a3_5, temp_a3_6)),
+                    ),
+                ),
+            ),
+        );
+        let temp_a4 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a4_1,
+                _mm_add_pd(
+                    temp_a4_2,
+                    _mm_add_pd(
+                        temp_a4_3,
+                        _mm_add_pd(temp_a4_4, _mm_add_pd(temp_a4_5, temp_a4_6)),
+                    ),
+                ),
+            ),
+        );
+        let temp_a5 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a5_1,
+                _mm_add_pd(
+                    temp_a5_2,
+                    _mm_add_pd(
+                        temp_a5_3,
+                        _mm_add_pd(temp_a5_4, _mm_add_pd(temp_a5_5, temp_a5_6)),
+                    ),
+                ),
+            ),
+        );
+        let temp_a6 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a6_1,
+                _mm_add_pd(
+                    temp_a6_2,
+                    _mm_add_pd(
+                        temp_a6_3,
+                        _mm_add_pd(temp_a6_4, _mm_add_pd(temp_a6_5, temp_a6_6)),
+                    ),
+                ),
+            ),
+        );
+
+        let temp_b1 = _mm_add_pd(
+            temp_b1_1,
+            _mm_add_pd(
+                temp_b1_2,
+                _mm_add_pd(
+                    temp_b1_3,
+                    _mm_add_pd(temp_b1_4, _mm_add_pd(temp_b1_5, temp_b1_6)),
+                ),
+            ),
+        );
+        let temp_b2 = _mm_add_pd(
+            temp_b2_1,
+            _mm_add_pd(
+                temp_b2_2,
+                _mm_sub_pd(
+                    temp_b2_3,
+                    _mm_add_pd(temp_b2_4, _mm_add_pd(temp_b2_5, temp_b2_6)),
+                ),
+            ),
+        );
+        let temp_b3 = _mm_add_pd(
+            temp_b3_1,
+            _mm_sub_pd(
+                temp_b3_2,
+                _mm_add_pd(
+                    temp_b3_3,
+                    _mm_sub_pd(temp_b3_4, _mm_add_pd(temp_b3_5, temp_b3_6)),
+                ),
+            ),
+        );
+        let temp_b4 = _mm_sub_pd(
+            temp_b4_1,
+            _mm_add_pd(
+                temp_b4_2,
+                _mm_sub_pd(
+                    temp_b4_3,
+                    _mm_sub_pd(temp_b4_4, _mm_add_pd(temp_b4_5, temp_b4_6)),
+                ),
+            ),
+        );
+        let temp_b5 = _mm_sub_pd(
+            temp_b5_1,
+            _mm_sub_pd(
+                temp_b5_2,
+                _mm_sub_pd(
+                    temp_b5_3,
+                    _mm_add_pd(temp_b5_4, _mm_sub_pd(temp_b5_5, temp_b5_6)),
+                ),
+            ),
+        );
+        let temp_b6 = _mm_sub_pd(
+            temp_b6_1,
+            _mm_sub_pd(
+                temp_b6_2,
+                _mm_sub_pd(
+                    temp_b6_3,
+                    _mm_sub_pd(temp_b6_4, _mm_sub_pd(temp_b6_5, temp_b6_6)),
+                ),
+            ),
+        );
+
         let temp_b1_rot = self.rotate.rotate(temp_b1);
         let temp_b2_rot = self.rotate.rotate(temp_b2);
         let temp_b3_rot = self.rotate.rotate(temp_b3);
         let temp_b4_rot = self.rotate.rotate(temp_b4);
         let temp_b5_rot = self.rotate.rotate(temp_b5);
         let temp_b6_rot = self.rotate.rotate(temp_b6);
-        
-        let x0 = _mm_add_pd(values[0], _mm_add_pd(x112p, _mm_add_pd(x211p, _mm_add_pd(x310p, _mm_add_pd(x49p, _mm_add_pd(x58p, x67p))))));
+
+        let x0 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                x112p,
+                _mm_add_pd(
+                    x211p,
+                    _mm_add_pd(x310p, _mm_add_pd(x49p, _mm_add_pd(x58p, x67p))),
+                ),
+            ),
+        );
         let x1 = _mm_add_pd(temp_a1, temp_b1_rot);
         let x2 = _mm_add_pd(temp_a2, temp_b2_rot);
         let x3 = _mm_add_pd(temp_a3, temp_b3_rot);
@@ -1377,17 +1794,12 @@ impl<T: FftNum> SseF64Butterfly13<T> {
     }
 }
 
-
-
-
-
-//   _ _____           _________  _     _ _   
-//  / |___  |         |___ /___ \| |__ (_) |_ 
+//   _ _____           _________  _     _ _
+//  / |___  |         |___ /___ \| |__ (_) |_
 //  | |  / /   _____    |_ \ __) | '_ \| | __|
-//  | | / /   |_____|  ___) / __/| |_) | | |_ 
+//  | | / /   |_____|  ___) / __/| |_) | | |_
 //  |_|/_/            |____/_____|_.__/|_|\__|
-//                                            
-
+//
 
 pub struct SseF32Butterfly17<T> {
     direction: FftDirection,
@@ -1492,7 +1904,9 @@ impl<T: FftNum> SseF32Butterfly17<T> {
         let v15 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(15) as *const f64));
         let v16 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(16) as *const f64));
 
-        let out = self.perform_dual_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16]);
+        let out = self.perform_dual_fft_direct([
+            v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16,
+        ]);
 
         let val = std::mem::transmute::<[__m128; 17], [Complex<f32>; 34]>(out);
 
@@ -1558,7 +1972,9 @@ impl<T: FftNum> SseF32Butterfly17<T> {
         let v15 = pack_2and1_f32(valuea14a15, valueb15b16);
         let v16 = pack_1and2_f32(valuea16b0, valueb15b16);
 
-        let out = self.perform_dual_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16]);
+        let out = self.perform_dual_fft_direct([
+            v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16,
+        ]);
 
         let val = std::mem::transmute::<[__m128; 17], [Complex<f32>; 34]>(out);
 
@@ -1602,11 +2018,8 @@ impl<T: FftNum> SseF32Butterfly17<T> {
     // length 7 fft of a, given as a0, a1, a2, a3, a4, a5, a6.
     // result is [A0, A1, A2, A3, A4, A5, A6]
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_direct(
-        &self,
-        values: [__m128; 17],
-    ) -> [__m128; 17] {
-        // This is a SSE translation of the scalar 17-point butterfly 
+    pub(crate) unsafe fn perform_dual_fft_direct(&self, values: [__m128; 17]) -> [__m128; 17] {
+        // This is a SSE translation of the scalar 17-point butterfly
         let x116p = _mm_add_ps(values[1], values[16]);
         let x116n = _mm_sub_ps(values[1], values[16]);
         let x215p = _mm_add_ps(values[2], values[15]);
@@ -1623,7 +2036,7 @@ impl<T: FftNum> SseF32Butterfly17<T> {
         let x710n = _mm_sub_ps(values[7], values[10]);
         let x89p = _mm_add_ps(values[8], values[9]);
         let x89n = _mm_sub_ps(values[8], values[9]);
-        
+
         let temp_a1_1 = _mm_mul_ps(self.twiddle1re, x116p);
         let temp_a1_2 = _mm_mul_ps(self.twiddle2re, x215p);
         let temp_a1_3 = _mm_mul_ps(self.twiddle3re, x314p);
@@ -1688,7 +2101,7 @@ impl<T: FftNum> SseF32Butterfly17<T> {
         let temp_a8_6 = _mm_mul_ps(self.twiddle3re, x611p);
         let temp_a8_7 = _mm_mul_ps(self.twiddle5re, x710p);
         let temp_a8_8 = _mm_mul_ps(self.twiddle4re, x89p);
-        
+
         let temp_b1_1 = _mm_mul_ps(self.twiddle1im, x116n);
         let temp_b1_2 = _mm_mul_ps(self.twiddle2im, x215n);
         let temp_b1_3 = _mm_mul_ps(self.twiddle3im, x314n);
@@ -1753,25 +2166,289 @@ impl<T: FftNum> SseF32Butterfly17<T> {
         let temp_b8_6 = _mm_mul_ps(self.twiddle3im, x611n);
         let temp_b8_7 = _mm_mul_ps(self.twiddle5im, x710n);
         let temp_b8_8 = _mm_mul_ps(self.twiddle4im, x89n);
-        
-        let temp_a1 = _mm_add_ps(values[0], _mm_add_ps(temp_a1_1, _mm_add_ps(temp_a1_2, _mm_add_ps(temp_a1_3, _mm_add_ps(temp_a1_4, _mm_add_ps(temp_a1_5, _mm_add_ps(temp_a1_6, _mm_add_ps(temp_a1_7, temp_a1_8))))))));
-        let temp_a2 = _mm_add_ps(values[0], _mm_add_ps(temp_a2_1, _mm_add_ps(temp_a2_2, _mm_add_ps(temp_a2_3, _mm_add_ps(temp_a2_4, _mm_add_ps(temp_a2_5, _mm_add_ps(temp_a2_6, _mm_add_ps(temp_a2_7, temp_a2_8))))))));
-        let temp_a3 = _mm_add_ps(values[0], _mm_add_ps(temp_a3_1, _mm_add_ps(temp_a3_2, _mm_add_ps(temp_a3_3, _mm_add_ps(temp_a3_4, _mm_add_ps(temp_a3_5, _mm_add_ps(temp_a3_6, _mm_add_ps(temp_a3_7, temp_a3_8))))))));
-        let temp_a4 = _mm_add_ps(values[0], _mm_add_ps(temp_a4_1, _mm_add_ps(temp_a4_2, _mm_add_ps(temp_a4_3, _mm_add_ps(temp_a4_4, _mm_add_ps(temp_a4_5, _mm_add_ps(temp_a4_6, _mm_add_ps(temp_a4_7, temp_a4_8))))))));
-        let temp_a5 = _mm_add_ps(values[0], _mm_add_ps(temp_a5_1, _mm_add_ps(temp_a5_2, _mm_add_ps(temp_a5_3, _mm_add_ps(temp_a5_4, _mm_add_ps(temp_a5_5, _mm_add_ps(temp_a5_6, _mm_add_ps(temp_a5_7, temp_a5_8))))))));
-        let temp_a6 = _mm_add_ps(values[0], _mm_add_ps(temp_a6_1, _mm_add_ps(temp_a6_2, _mm_add_ps(temp_a6_3, _mm_add_ps(temp_a6_4, _mm_add_ps(temp_a6_5, _mm_add_ps(temp_a6_6, _mm_add_ps(temp_a6_7, temp_a6_8))))))));
-        let temp_a7 = _mm_add_ps(values[0], _mm_add_ps(temp_a7_1, _mm_add_ps(temp_a7_2, _mm_add_ps(temp_a7_3, _mm_add_ps(temp_a7_4, _mm_add_ps(temp_a7_5, _mm_add_ps(temp_a7_6, _mm_add_ps(temp_a7_7, temp_a7_8))))))));
-        let temp_a8 = _mm_add_ps(values[0], _mm_add_ps(temp_a8_1, _mm_add_ps(temp_a8_2, _mm_add_ps(temp_a8_3, _mm_add_ps(temp_a8_4, _mm_add_ps(temp_a8_5, _mm_add_ps(temp_a8_6, _mm_add_ps(temp_a8_7, temp_a8_8))))))));
-        
-        let temp_b1 = _mm_add_ps(temp_b1_1, _mm_add_ps(temp_b1_2, _mm_add_ps(temp_b1_3, _mm_add_ps(temp_b1_4, _mm_add_ps(temp_b1_5, _mm_add_ps(temp_b1_6, _mm_add_ps(temp_b1_7, temp_b1_8)))))));
-        let temp_b2 = _mm_add_ps(temp_b2_1, _mm_add_ps(temp_b2_2, _mm_add_ps(temp_b2_3, _mm_sub_ps(temp_b2_4, _mm_add_ps(temp_b2_5, _mm_add_ps(temp_b2_6, _mm_add_ps(temp_b2_7, temp_b2_8)))))));
-        let temp_b3 = _mm_add_ps(temp_b3_1, _mm_sub_ps(temp_b3_2, _mm_add_ps(temp_b3_3, _mm_add_ps(temp_b3_4, _mm_sub_ps(temp_b3_5, _mm_add_ps(temp_b3_6, _mm_add_ps(temp_b3_7, temp_b3_8)))))));
-        let temp_b4 = _mm_add_ps(temp_b4_1, _mm_sub_ps(temp_b4_2, _mm_add_ps(temp_b4_3, _mm_sub_ps(temp_b4_4, _mm_add_ps(temp_b4_5, _mm_sub_ps(temp_b4_6, _mm_add_ps(temp_b4_7, temp_b4_8)))))));
-        let temp_b5 = _mm_sub_ps(temp_b5_1, _mm_add_ps(temp_b5_2, _mm_sub_ps(temp_b5_3, _mm_add_ps(temp_b5_4, _mm_sub_ps(temp_b5_5, _mm_sub_ps(temp_b5_6, _mm_add_ps(temp_b5_7, temp_b5_8)))))));
-        let temp_b6 = _mm_sub_ps(temp_b6_1, _mm_sub_ps(temp_b6_2, _mm_add_ps(temp_b6_3, _mm_sub_ps(temp_b6_4, _mm_sub_ps(temp_b6_5, _mm_add_ps(temp_b6_6, _mm_sub_ps(temp_b6_7, temp_b6_8)))))));
-        let temp_b7 = _mm_sub_ps(temp_b7_1, _mm_sub_ps(temp_b7_2, _mm_sub_ps(temp_b7_3, _mm_sub_ps(temp_b7_4, _mm_add_ps(temp_b7_5, _mm_sub_ps(temp_b7_6, _mm_sub_ps(temp_b7_7, temp_b7_8)))))));
-        let temp_b8 = _mm_sub_ps(temp_b8_1, _mm_sub_ps(temp_b8_2, _mm_sub_ps(temp_b8_3, _mm_sub_ps(temp_b8_4, _mm_sub_ps(temp_b8_5, _mm_sub_ps(temp_b8_6, _mm_sub_ps(temp_b8_7, temp_b8_8)))))));
-        
+
+        let temp_a1 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a1_1,
+                _mm_add_ps(
+                    temp_a1_2,
+                    _mm_add_ps(
+                        temp_a1_3,
+                        _mm_add_ps(
+                            temp_a1_4,
+                            _mm_add_ps(
+                                temp_a1_5,
+                                _mm_add_ps(temp_a1_6, _mm_add_ps(temp_a1_7, temp_a1_8)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a2 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a2_1,
+                _mm_add_ps(
+                    temp_a2_2,
+                    _mm_add_ps(
+                        temp_a2_3,
+                        _mm_add_ps(
+                            temp_a2_4,
+                            _mm_add_ps(
+                                temp_a2_5,
+                                _mm_add_ps(temp_a2_6, _mm_add_ps(temp_a2_7, temp_a2_8)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a3 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a3_1,
+                _mm_add_ps(
+                    temp_a3_2,
+                    _mm_add_ps(
+                        temp_a3_3,
+                        _mm_add_ps(
+                            temp_a3_4,
+                            _mm_add_ps(
+                                temp_a3_5,
+                                _mm_add_ps(temp_a3_6, _mm_add_ps(temp_a3_7, temp_a3_8)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a4 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a4_1,
+                _mm_add_ps(
+                    temp_a4_2,
+                    _mm_add_ps(
+                        temp_a4_3,
+                        _mm_add_ps(
+                            temp_a4_4,
+                            _mm_add_ps(
+                                temp_a4_5,
+                                _mm_add_ps(temp_a4_6, _mm_add_ps(temp_a4_7, temp_a4_8)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a5 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a5_1,
+                _mm_add_ps(
+                    temp_a5_2,
+                    _mm_add_ps(
+                        temp_a5_3,
+                        _mm_add_ps(
+                            temp_a5_4,
+                            _mm_add_ps(
+                                temp_a5_5,
+                                _mm_add_ps(temp_a5_6, _mm_add_ps(temp_a5_7, temp_a5_8)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a6 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a6_1,
+                _mm_add_ps(
+                    temp_a6_2,
+                    _mm_add_ps(
+                        temp_a6_3,
+                        _mm_add_ps(
+                            temp_a6_4,
+                            _mm_add_ps(
+                                temp_a6_5,
+                                _mm_add_ps(temp_a6_6, _mm_add_ps(temp_a6_7, temp_a6_8)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a7 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a7_1,
+                _mm_add_ps(
+                    temp_a7_2,
+                    _mm_add_ps(
+                        temp_a7_3,
+                        _mm_add_ps(
+                            temp_a7_4,
+                            _mm_add_ps(
+                                temp_a7_5,
+                                _mm_add_ps(temp_a7_6, _mm_add_ps(temp_a7_7, temp_a7_8)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a8 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a8_1,
+                _mm_add_ps(
+                    temp_a8_2,
+                    _mm_add_ps(
+                        temp_a8_3,
+                        _mm_add_ps(
+                            temp_a8_4,
+                            _mm_add_ps(
+                                temp_a8_5,
+                                _mm_add_ps(temp_a8_6, _mm_add_ps(temp_a8_7, temp_a8_8)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+
+        let temp_b1 = _mm_add_ps(
+            temp_b1_1,
+            _mm_add_ps(
+                temp_b1_2,
+                _mm_add_ps(
+                    temp_b1_3,
+                    _mm_add_ps(
+                        temp_b1_4,
+                        _mm_add_ps(
+                            temp_b1_5,
+                            _mm_add_ps(temp_b1_6, _mm_add_ps(temp_b1_7, temp_b1_8)),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b2 = _mm_add_ps(
+            temp_b2_1,
+            _mm_add_ps(
+                temp_b2_2,
+                _mm_add_ps(
+                    temp_b2_3,
+                    _mm_sub_ps(
+                        temp_b2_4,
+                        _mm_add_ps(
+                            temp_b2_5,
+                            _mm_add_ps(temp_b2_6, _mm_add_ps(temp_b2_7, temp_b2_8)),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b3 = _mm_add_ps(
+            temp_b3_1,
+            _mm_sub_ps(
+                temp_b3_2,
+                _mm_add_ps(
+                    temp_b3_3,
+                    _mm_add_ps(
+                        temp_b3_4,
+                        _mm_sub_ps(
+                            temp_b3_5,
+                            _mm_add_ps(temp_b3_6, _mm_add_ps(temp_b3_7, temp_b3_8)),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b4 = _mm_add_ps(
+            temp_b4_1,
+            _mm_sub_ps(
+                temp_b4_2,
+                _mm_add_ps(
+                    temp_b4_3,
+                    _mm_sub_ps(
+                        temp_b4_4,
+                        _mm_add_ps(
+                            temp_b4_5,
+                            _mm_sub_ps(temp_b4_6, _mm_add_ps(temp_b4_7, temp_b4_8)),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b5 = _mm_sub_ps(
+            temp_b5_1,
+            _mm_add_ps(
+                temp_b5_2,
+                _mm_sub_ps(
+                    temp_b5_3,
+                    _mm_add_ps(
+                        temp_b5_4,
+                        _mm_sub_ps(
+                            temp_b5_5,
+                            _mm_sub_ps(temp_b5_6, _mm_add_ps(temp_b5_7, temp_b5_8)),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b6 = _mm_sub_ps(
+            temp_b6_1,
+            _mm_sub_ps(
+                temp_b6_2,
+                _mm_add_ps(
+                    temp_b6_3,
+                    _mm_sub_ps(
+                        temp_b6_4,
+                        _mm_sub_ps(
+                            temp_b6_5,
+                            _mm_add_ps(temp_b6_6, _mm_sub_ps(temp_b6_7, temp_b6_8)),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b7 = _mm_sub_ps(
+            temp_b7_1,
+            _mm_sub_ps(
+                temp_b7_2,
+                _mm_sub_ps(
+                    temp_b7_3,
+                    _mm_sub_ps(
+                        temp_b7_4,
+                        _mm_add_ps(
+                            temp_b7_5,
+                            _mm_sub_ps(temp_b7_6, _mm_sub_ps(temp_b7_7, temp_b7_8)),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b8 = _mm_sub_ps(
+            temp_b8_1,
+            _mm_sub_ps(
+                temp_b8_2,
+                _mm_sub_ps(
+                    temp_b8_3,
+                    _mm_sub_ps(
+                        temp_b8_4,
+                        _mm_sub_ps(
+                            temp_b8_5,
+                            _mm_sub_ps(temp_b8_6, _mm_sub_ps(temp_b8_7, temp_b8_8)),
+                        ),
+                    ),
+                ),
+            ),
+        );
+
         let temp_b1_rot = self.rotate.rotate_both(temp_b1);
         let temp_b2_rot = self.rotate.rotate_both(temp_b2);
         let temp_b3_rot = self.rotate.rotate_both(temp_b3);
@@ -1780,8 +2457,23 @@ impl<T: FftNum> SseF32Butterfly17<T> {
         let temp_b6_rot = self.rotate.rotate_both(temp_b6);
         let temp_b7_rot = self.rotate.rotate_both(temp_b7);
         let temp_b8_rot = self.rotate.rotate_both(temp_b8);
-        
-        let x0 = _mm_add_ps(values[0], _mm_add_ps(x116p, _mm_add_ps(x215p, _mm_add_ps(x314p, _mm_add_ps(x413p, _mm_add_ps(x512p, _mm_add_ps(x611p, _mm_add_ps(x710p, x89p))))))));
+
+        let x0 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                x116p,
+                _mm_add_ps(
+                    x215p,
+                    _mm_add_ps(
+                        x314p,
+                        _mm_add_ps(
+                            x413p,
+                            _mm_add_ps(x512p, _mm_add_ps(x611p, _mm_add_ps(x710p, x89p))),
+                        ),
+                    ),
+                ),
+            ),
+        );
         let x1 = _mm_add_ps(temp_a1, temp_b1_rot);
         let x2 = _mm_add_ps(temp_a2, temp_b2_rot);
         let x3 = _mm_add_ps(temp_a3, temp_b3_rot);
@@ -1798,19 +2490,18 @@ impl<T: FftNum> SseF32Butterfly17<T> {
         let x14 = _mm_sub_ps(temp_a3, temp_b3_rot);
         let x15 = _mm_sub_ps(temp_a2, temp_b2_rot);
         let x16 = _mm_sub_ps(temp_a1, temp_b1_rot);
-        [x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16]
+        [
+            x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16,
+        ]
     }
 }
 
-//   _ _____            __   _  _   _     _ _   
-//  / |___  |          / /_ | || | | |__ (_) |_ 
+//   _ _____            __   _  _   _     _ _
+//  / |___  |          / /_ | || | | |__ (_) |_
 //  | |  / /   _____  | '_ \| || |_| '_ \| | __|
-//  | | / /   |_____| | (_) |__   _| |_) | | |_ 
+//  | | / /   |_____| | (_) |__   _| |_) | | |_
 //  |_|/_/             \___/   |_| |_.__/|_|\__|
-//                                              
-
-                                      
-
+//
 
 pub struct SseF64Butterfly17<T> {
     direction: FftDirection,
@@ -1915,7 +2606,9 @@ impl<T: FftNum> SseF64Butterfly17<T> {
         let v15 = _mm_loadu_pd(input.as_ptr().add(15) as *const f64);
         let v16 = _mm_loadu_pd(input.as_ptr().add(16) as *const f64);
 
-        let out = self.perform_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16]);
+        let out = self.perform_fft_direct([
+            v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16,
+        ]);
 
         let val = std::mem::transmute::<[__m128d; 17], [Complex<f64>; 17]>(out);
 
@@ -1942,11 +2635,8 @@ impl<T: FftNum> SseF64Butterfly17<T> {
     // length 7 fft of a, given as a0, a1, a2, a3, a4, a5, a6.
     // result is [A0, A1, A2, A3, A4, A5, A6]
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(
-        &self,
-        values: [__m128d; 17],
-    ) -> [__m128d; 17] {
-        // This is a SSE translation of the scalar 17-point butterfly 
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 17]) -> [__m128d; 17] {
+        // This is a SSE translation of the scalar 17-point butterfly
         let x116p = _mm_add_pd(values[1], values[16]);
         let x116n = _mm_sub_pd(values[1], values[16]);
         let x215p = _mm_add_pd(values[2], values[15]);
@@ -1963,7 +2653,7 @@ impl<T: FftNum> SseF64Butterfly17<T> {
         let x710n = _mm_sub_pd(values[7], values[10]);
         let x89p = _mm_add_pd(values[8], values[9]);
         let x89n = _mm_sub_pd(values[8], values[9]);
-        
+
         let temp_a1_1 = _mm_mul_pd(self.twiddle1re, x116p);
         let temp_a1_2 = _mm_mul_pd(self.twiddle2re, x215p);
         let temp_a1_3 = _mm_mul_pd(self.twiddle3re, x314p);
@@ -2028,7 +2718,7 @@ impl<T: FftNum> SseF64Butterfly17<T> {
         let temp_a8_6 = _mm_mul_pd(self.twiddle3re, x611p);
         let temp_a8_7 = _mm_mul_pd(self.twiddle5re, x710p);
         let temp_a8_8 = _mm_mul_pd(self.twiddle4re, x89p);
-        
+
         let temp_b1_1 = _mm_mul_pd(self.twiddle1im, x116n);
         let temp_b1_2 = _mm_mul_pd(self.twiddle2im, x215n);
         let temp_b1_3 = _mm_mul_pd(self.twiddle3im, x314n);
@@ -2093,25 +2783,289 @@ impl<T: FftNum> SseF64Butterfly17<T> {
         let temp_b8_6 = _mm_mul_pd(self.twiddle3im, x611n);
         let temp_b8_7 = _mm_mul_pd(self.twiddle5im, x710n);
         let temp_b8_8 = _mm_mul_pd(self.twiddle4im, x89n);
-        
-        let temp_a1 = _mm_add_pd(values[0], _mm_add_pd(temp_a1_1, _mm_add_pd(temp_a1_2, _mm_add_pd(temp_a1_3, _mm_add_pd(temp_a1_4, _mm_add_pd(temp_a1_5, _mm_add_pd(temp_a1_6, _mm_add_pd(temp_a1_7, temp_a1_8))))))));
-        let temp_a2 = _mm_add_pd(values[0], _mm_add_pd(temp_a2_1, _mm_add_pd(temp_a2_2, _mm_add_pd(temp_a2_3, _mm_add_pd(temp_a2_4, _mm_add_pd(temp_a2_5, _mm_add_pd(temp_a2_6, _mm_add_pd(temp_a2_7, temp_a2_8))))))));
-        let temp_a3 = _mm_add_pd(values[0], _mm_add_pd(temp_a3_1, _mm_add_pd(temp_a3_2, _mm_add_pd(temp_a3_3, _mm_add_pd(temp_a3_4, _mm_add_pd(temp_a3_5, _mm_add_pd(temp_a3_6, _mm_add_pd(temp_a3_7, temp_a3_8))))))));
-        let temp_a4 = _mm_add_pd(values[0], _mm_add_pd(temp_a4_1, _mm_add_pd(temp_a4_2, _mm_add_pd(temp_a4_3, _mm_add_pd(temp_a4_4, _mm_add_pd(temp_a4_5, _mm_add_pd(temp_a4_6, _mm_add_pd(temp_a4_7, temp_a4_8))))))));
-        let temp_a5 = _mm_add_pd(values[0], _mm_add_pd(temp_a5_1, _mm_add_pd(temp_a5_2, _mm_add_pd(temp_a5_3, _mm_add_pd(temp_a5_4, _mm_add_pd(temp_a5_5, _mm_add_pd(temp_a5_6, _mm_add_pd(temp_a5_7, temp_a5_8))))))));
-        let temp_a6 = _mm_add_pd(values[0], _mm_add_pd(temp_a6_1, _mm_add_pd(temp_a6_2, _mm_add_pd(temp_a6_3, _mm_add_pd(temp_a6_4, _mm_add_pd(temp_a6_5, _mm_add_pd(temp_a6_6, _mm_add_pd(temp_a6_7, temp_a6_8))))))));
-        let temp_a7 = _mm_add_pd(values[0], _mm_add_pd(temp_a7_1, _mm_add_pd(temp_a7_2, _mm_add_pd(temp_a7_3, _mm_add_pd(temp_a7_4, _mm_add_pd(temp_a7_5, _mm_add_pd(temp_a7_6, _mm_add_pd(temp_a7_7, temp_a7_8))))))));
-        let temp_a8 = _mm_add_pd(values[0], _mm_add_pd(temp_a8_1, _mm_add_pd(temp_a8_2, _mm_add_pd(temp_a8_3, _mm_add_pd(temp_a8_4, _mm_add_pd(temp_a8_5, _mm_add_pd(temp_a8_6, _mm_add_pd(temp_a8_7, temp_a8_8))))))));
-        
-        let temp_b1 = _mm_add_pd(temp_b1_1, _mm_add_pd(temp_b1_2, _mm_add_pd(temp_b1_3, _mm_add_pd(temp_b1_4, _mm_add_pd(temp_b1_5, _mm_add_pd(temp_b1_6, _mm_add_pd(temp_b1_7, temp_b1_8)))))));
-        let temp_b2 = _mm_add_pd(temp_b2_1, _mm_add_pd(temp_b2_2, _mm_add_pd(temp_b2_3, _mm_sub_pd(temp_b2_4, _mm_add_pd(temp_b2_5, _mm_add_pd(temp_b2_6, _mm_add_pd(temp_b2_7, temp_b2_8)))))));
-        let temp_b3 = _mm_add_pd(temp_b3_1, _mm_sub_pd(temp_b3_2, _mm_add_pd(temp_b3_3, _mm_add_pd(temp_b3_4, _mm_sub_pd(temp_b3_5, _mm_add_pd(temp_b3_6, _mm_add_pd(temp_b3_7, temp_b3_8)))))));
-        let temp_b4 = _mm_add_pd(temp_b4_1, _mm_sub_pd(temp_b4_2, _mm_add_pd(temp_b4_3, _mm_sub_pd(temp_b4_4, _mm_add_pd(temp_b4_5, _mm_sub_pd(temp_b4_6, _mm_add_pd(temp_b4_7, temp_b4_8)))))));
-        let temp_b5 = _mm_sub_pd(temp_b5_1, _mm_add_pd(temp_b5_2, _mm_sub_pd(temp_b5_3, _mm_add_pd(temp_b5_4, _mm_sub_pd(temp_b5_5, _mm_sub_pd(temp_b5_6, _mm_add_pd(temp_b5_7, temp_b5_8)))))));
-        let temp_b6 = _mm_sub_pd(temp_b6_1, _mm_sub_pd(temp_b6_2, _mm_add_pd(temp_b6_3, _mm_sub_pd(temp_b6_4, _mm_sub_pd(temp_b6_5, _mm_add_pd(temp_b6_6, _mm_sub_pd(temp_b6_7, temp_b6_8)))))));
-        let temp_b7 = _mm_sub_pd(temp_b7_1, _mm_sub_pd(temp_b7_2, _mm_sub_pd(temp_b7_3, _mm_sub_pd(temp_b7_4, _mm_add_pd(temp_b7_5, _mm_sub_pd(temp_b7_6, _mm_sub_pd(temp_b7_7, temp_b7_8)))))));
-        let temp_b8 = _mm_sub_pd(temp_b8_1, _mm_sub_pd(temp_b8_2, _mm_sub_pd(temp_b8_3, _mm_sub_pd(temp_b8_4, _mm_sub_pd(temp_b8_5, _mm_sub_pd(temp_b8_6, _mm_sub_pd(temp_b8_7, temp_b8_8)))))));
-        
+
+        let temp_a1 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a1_1,
+                _mm_add_pd(
+                    temp_a1_2,
+                    _mm_add_pd(
+                        temp_a1_3,
+                        _mm_add_pd(
+                            temp_a1_4,
+                            _mm_add_pd(
+                                temp_a1_5,
+                                _mm_add_pd(temp_a1_6, _mm_add_pd(temp_a1_7, temp_a1_8)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a2 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a2_1,
+                _mm_add_pd(
+                    temp_a2_2,
+                    _mm_add_pd(
+                        temp_a2_3,
+                        _mm_add_pd(
+                            temp_a2_4,
+                            _mm_add_pd(
+                                temp_a2_5,
+                                _mm_add_pd(temp_a2_6, _mm_add_pd(temp_a2_7, temp_a2_8)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a3 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a3_1,
+                _mm_add_pd(
+                    temp_a3_2,
+                    _mm_add_pd(
+                        temp_a3_3,
+                        _mm_add_pd(
+                            temp_a3_4,
+                            _mm_add_pd(
+                                temp_a3_5,
+                                _mm_add_pd(temp_a3_6, _mm_add_pd(temp_a3_7, temp_a3_8)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a4 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a4_1,
+                _mm_add_pd(
+                    temp_a4_2,
+                    _mm_add_pd(
+                        temp_a4_3,
+                        _mm_add_pd(
+                            temp_a4_4,
+                            _mm_add_pd(
+                                temp_a4_5,
+                                _mm_add_pd(temp_a4_6, _mm_add_pd(temp_a4_7, temp_a4_8)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a5 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a5_1,
+                _mm_add_pd(
+                    temp_a5_2,
+                    _mm_add_pd(
+                        temp_a5_3,
+                        _mm_add_pd(
+                            temp_a5_4,
+                            _mm_add_pd(
+                                temp_a5_5,
+                                _mm_add_pd(temp_a5_6, _mm_add_pd(temp_a5_7, temp_a5_8)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a6 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a6_1,
+                _mm_add_pd(
+                    temp_a6_2,
+                    _mm_add_pd(
+                        temp_a6_3,
+                        _mm_add_pd(
+                            temp_a6_4,
+                            _mm_add_pd(
+                                temp_a6_5,
+                                _mm_add_pd(temp_a6_6, _mm_add_pd(temp_a6_7, temp_a6_8)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a7 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a7_1,
+                _mm_add_pd(
+                    temp_a7_2,
+                    _mm_add_pd(
+                        temp_a7_3,
+                        _mm_add_pd(
+                            temp_a7_4,
+                            _mm_add_pd(
+                                temp_a7_5,
+                                _mm_add_pd(temp_a7_6, _mm_add_pd(temp_a7_7, temp_a7_8)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a8 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a8_1,
+                _mm_add_pd(
+                    temp_a8_2,
+                    _mm_add_pd(
+                        temp_a8_3,
+                        _mm_add_pd(
+                            temp_a8_4,
+                            _mm_add_pd(
+                                temp_a8_5,
+                                _mm_add_pd(temp_a8_6, _mm_add_pd(temp_a8_7, temp_a8_8)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+
+        let temp_b1 = _mm_add_pd(
+            temp_b1_1,
+            _mm_add_pd(
+                temp_b1_2,
+                _mm_add_pd(
+                    temp_b1_3,
+                    _mm_add_pd(
+                        temp_b1_4,
+                        _mm_add_pd(
+                            temp_b1_5,
+                            _mm_add_pd(temp_b1_6, _mm_add_pd(temp_b1_7, temp_b1_8)),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b2 = _mm_add_pd(
+            temp_b2_1,
+            _mm_add_pd(
+                temp_b2_2,
+                _mm_add_pd(
+                    temp_b2_3,
+                    _mm_sub_pd(
+                        temp_b2_4,
+                        _mm_add_pd(
+                            temp_b2_5,
+                            _mm_add_pd(temp_b2_6, _mm_add_pd(temp_b2_7, temp_b2_8)),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b3 = _mm_add_pd(
+            temp_b3_1,
+            _mm_sub_pd(
+                temp_b3_2,
+                _mm_add_pd(
+                    temp_b3_3,
+                    _mm_add_pd(
+                        temp_b3_4,
+                        _mm_sub_pd(
+                            temp_b3_5,
+                            _mm_add_pd(temp_b3_6, _mm_add_pd(temp_b3_7, temp_b3_8)),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b4 = _mm_add_pd(
+            temp_b4_1,
+            _mm_sub_pd(
+                temp_b4_2,
+                _mm_add_pd(
+                    temp_b4_3,
+                    _mm_sub_pd(
+                        temp_b4_4,
+                        _mm_add_pd(
+                            temp_b4_5,
+                            _mm_sub_pd(temp_b4_6, _mm_add_pd(temp_b4_7, temp_b4_8)),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b5 = _mm_sub_pd(
+            temp_b5_1,
+            _mm_add_pd(
+                temp_b5_2,
+                _mm_sub_pd(
+                    temp_b5_3,
+                    _mm_add_pd(
+                        temp_b5_4,
+                        _mm_sub_pd(
+                            temp_b5_5,
+                            _mm_sub_pd(temp_b5_6, _mm_add_pd(temp_b5_7, temp_b5_8)),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b6 = _mm_sub_pd(
+            temp_b6_1,
+            _mm_sub_pd(
+                temp_b6_2,
+                _mm_add_pd(
+                    temp_b6_3,
+                    _mm_sub_pd(
+                        temp_b6_4,
+                        _mm_sub_pd(
+                            temp_b6_5,
+                            _mm_add_pd(temp_b6_6, _mm_sub_pd(temp_b6_7, temp_b6_8)),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b7 = _mm_sub_pd(
+            temp_b7_1,
+            _mm_sub_pd(
+                temp_b7_2,
+                _mm_sub_pd(
+                    temp_b7_3,
+                    _mm_sub_pd(
+                        temp_b7_4,
+                        _mm_add_pd(
+                            temp_b7_5,
+                            _mm_sub_pd(temp_b7_6, _mm_sub_pd(temp_b7_7, temp_b7_8)),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b8 = _mm_sub_pd(
+            temp_b8_1,
+            _mm_sub_pd(
+                temp_b8_2,
+                _mm_sub_pd(
+                    temp_b8_3,
+                    _mm_sub_pd(
+                        temp_b8_4,
+                        _mm_sub_pd(
+                            temp_b8_5,
+                            _mm_sub_pd(temp_b8_6, _mm_sub_pd(temp_b8_7, temp_b8_8)),
+                        ),
+                    ),
+                ),
+            ),
+        );
+
         let temp_b1_rot = self.rotate.rotate(temp_b1);
         let temp_b2_rot = self.rotate.rotate(temp_b2);
         let temp_b3_rot = self.rotate.rotate(temp_b3);
@@ -2120,8 +3074,23 @@ impl<T: FftNum> SseF64Butterfly17<T> {
         let temp_b6_rot = self.rotate.rotate(temp_b6);
         let temp_b7_rot = self.rotate.rotate(temp_b7);
         let temp_b8_rot = self.rotate.rotate(temp_b8);
-        
-        let x0 = _mm_add_pd(values[0], _mm_add_pd(x116p, _mm_add_pd(x215p, _mm_add_pd(x314p, _mm_add_pd(x413p, _mm_add_pd(x512p, _mm_add_pd(x611p, _mm_add_pd(x710p, x89p))))))));
+
+        let x0 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                x116p,
+                _mm_add_pd(
+                    x215p,
+                    _mm_add_pd(
+                        x314p,
+                        _mm_add_pd(
+                            x413p,
+                            _mm_add_pd(x512p, _mm_add_pd(x611p, _mm_add_pd(x710p, x89p))),
+                        ),
+                    ),
+                ),
+            ),
+        );
         let x1 = _mm_add_pd(temp_a1, temp_b1_rot);
         let x2 = _mm_add_pd(temp_a2, temp_b2_rot);
         let x3 = _mm_add_pd(temp_a3, temp_b3_rot);
@@ -2138,18 +3107,18 @@ impl<T: FftNum> SseF64Butterfly17<T> {
         let x14 = _mm_sub_pd(temp_a3, temp_b3_rot);
         let x15 = _mm_sub_pd(temp_a2, temp_b2_rot);
         let x16 = _mm_sub_pd(temp_a1, temp_b1_rot);
-        [x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16]
+        [
+            x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16,
+        ]
     }
 }
 
-
-
-//   _  ___            _________  _     _ _   
-//  / |/ _ \          |___ /___ \| |__ (_) |_ 
+//   _  ___            _________  _     _ _
+//  / |/ _ \          |___ /___ \| |__ (_) |_
 //  | | (_) |  _____    |_ \ __) | '_ \| | __|
-//  | |\__, | |_____|  ___) / __/| |_) | | |_ 
+//  | |\__, | |_____|  ___) / __/| |_) | | |_
 //  |_|  /_/          |____/_____|_.__/|_|\__|
-//                                            
+//
 pub struct SseF32Butterfly19<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
@@ -2262,7 +3231,9 @@ impl<T: FftNum> SseF32Butterfly19<T> {
         let v17 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(17) as *const f64));
         let v18 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(18) as *const f64));
 
-        let out = self.perform_dual_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18]);
+        let out = self.perform_dual_fft_direct([
+            v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18,
+        ]);
 
         let val = std::mem::transmute::<[__m128; 19], [Complex<f32>; 38]>(out);
 
@@ -2334,7 +3305,9 @@ impl<T: FftNum> SseF32Butterfly19<T> {
         let v17 = pack_2and1_f32(valuea16a17, valueb17b18);
         let v18 = pack_1and2_f32(valuea18b0, valueb17b18);
 
-        let out = self.perform_dual_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18]);
+        let out = self.perform_dual_fft_direct([
+            v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18,
+        ]);
 
         let val = std::mem::transmute::<[__m128; 19], [Complex<f32>; 38]>(out);
 
@@ -2382,11 +3355,8 @@ impl<T: FftNum> SseF32Butterfly19<T> {
     // length 7 fft of a, given as a0, a1, a2, a3, a4, a5, a6.
     // result is [A0, A1, A2, A3, A4, A5, A6]
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_direct(
-        &self,
-        values: [__m128; 19],
-    ) -> [__m128; 19] {
-        // This is a SSE translation of the scalar 19-point butterfly 
+    pub(crate) unsafe fn perform_dual_fft_direct(&self, values: [__m128; 19]) -> [__m128; 19] {
+        // This is a SSE translation of the scalar 19-point butterfly
         let x118p = _mm_add_ps(values[1], values[18]);
         let x118n = _mm_sub_ps(values[1], values[18]);
         let x217p = _mm_add_ps(values[2], values[17]);
@@ -2570,25 +3540,376 @@ impl<T: FftNum> SseF32Butterfly19<T> {
         let temp_b9_8 = _mm_mul_ps(self.twiddle4im, x811n);
         let temp_b9_9 = _mm_mul_ps(self.twiddle5im, x910n);
 
-        let temp_a1 = _mm_add_ps(values[0], _mm_add_ps(temp_a1_1, _mm_add_ps(temp_a1_2, _mm_add_ps(temp_a1_3, _mm_add_ps(temp_a1_4, _mm_add_ps(temp_a1_5, _mm_add_ps(temp_a1_6, _mm_add_ps(temp_a1_7, _mm_add_ps(temp_a1_8, temp_a1_9)))))))));
-        let temp_a2 = _mm_add_ps(values[0], _mm_add_ps(temp_a2_1, _mm_add_ps(temp_a2_2, _mm_add_ps(temp_a2_3, _mm_add_ps(temp_a2_4, _mm_add_ps(temp_a2_5, _mm_add_ps(temp_a2_6, _mm_add_ps(temp_a2_7, _mm_add_ps(temp_a2_8, temp_a2_9)))))))));
-        let temp_a3 = _mm_add_ps(values[0], _mm_add_ps(temp_a3_1, _mm_add_ps(temp_a3_2, _mm_add_ps(temp_a3_3, _mm_add_ps(temp_a3_4, _mm_add_ps(temp_a3_5, _mm_add_ps(temp_a3_6, _mm_add_ps(temp_a3_7, _mm_add_ps(temp_a3_8, temp_a3_9)))))))));
-        let temp_a4 = _mm_add_ps(values[0], _mm_add_ps(temp_a4_1, _mm_add_ps(temp_a4_2, _mm_add_ps(temp_a4_3, _mm_add_ps(temp_a4_4, _mm_add_ps(temp_a4_5, _mm_add_ps(temp_a4_6, _mm_add_ps(temp_a4_7, _mm_add_ps(temp_a4_8, temp_a4_9)))))))));
-        let temp_a5 = _mm_add_ps(values[0], _mm_add_ps(temp_a5_1, _mm_add_ps(temp_a5_2, _mm_add_ps(temp_a5_3, _mm_add_ps(temp_a5_4, _mm_add_ps(temp_a5_5, _mm_add_ps(temp_a5_6, _mm_add_ps(temp_a5_7, _mm_add_ps(temp_a5_8, temp_a5_9)))))))));
-        let temp_a6 = _mm_add_ps(values[0], _mm_add_ps(temp_a6_1, _mm_add_ps(temp_a6_2, _mm_add_ps(temp_a6_3, _mm_add_ps(temp_a6_4, _mm_add_ps(temp_a6_5, _mm_add_ps(temp_a6_6, _mm_add_ps(temp_a6_7, _mm_add_ps(temp_a6_8, temp_a6_9)))))))));
-        let temp_a7 = _mm_add_ps(values[0], _mm_add_ps(temp_a7_1, _mm_add_ps(temp_a7_2, _mm_add_ps(temp_a7_3, _mm_add_ps(temp_a7_4, _mm_add_ps(temp_a7_5, _mm_add_ps(temp_a7_6, _mm_add_ps(temp_a7_7, _mm_add_ps(temp_a7_8, temp_a7_9)))))))));
-        let temp_a8 = _mm_add_ps(values[0], _mm_add_ps(temp_a8_1, _mm_add_ps(temp_a8_2, _mm_add_ps(temp_a8_3, _mm_add_ps(temp_a8_4, _mm_add_ps(temp_a8_5, _mm_add_ps(temp_a8_6, _mm_add_ps(temp_a8_7, _mm_add_ps(temp_a8_8, temp_a8_9)))))))));
-        let temp_a9 = _mm_add_ps(values[0], _mm_add_ps(temp_a9_1, _mm_add_ps(temp_a9_2, _mm_add_ps(temp_a9_3, _mm_add_ps(temp_a9_4, _mm_add_ps(temp_a9_5, _mm_add_ps(temp_a9_6, _mm_add_ps(temp_a9_7, _mm_add_ps(temp_a9_8, temp_a9_9)))))))));
+        let temp_a1 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a1_1,
+                _mm_add_ps(
+                    temp_a1_2,
+                    _mm_add_ps(
+                        temp_a1_3,
+                        _mm_add_ps(
+                            temp_a1_4,
+                            _mm_add_ps(
+                                temp_a1_5,
+                                _mm_add_ps(
+                                    temp_a1_6,
+                                    _mm_add_ps(temp_a1_7, _mm_add_ps(temp_a1_8, temp_a1_9)),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a2 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a2_1,
+                _mm_add_ps(
+                    temp_a2_2,
+                    _mm_add_ps(
+                        temp_a2_3,
+                        _mm_add_ps(
+                            temp_a2_4,
+                            _mm_add_ps(
+                                temp_a2_5,
+                                _mm_add_ps(
+                                    temp_a2_6,
+                                    _mm_add_ps(temp_a2_7, _mm_add_ps(temp_a2_8, temp_a2_9)),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a3 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a3_1,
+                _mm_add_ps(
+                    temp_a3_2,
+                    _mm_add_ps(
+                        temp_a3_3,
+                        _mm_add_ps(
+                            temp_a3_4,
+                            _mm_add_ps(
+                                temp_a3_5,
+                                _mm_add_ps(
+                                    temp_a3_6,
+                                    _mm_add_ps(temp_a3_7, _mm_add_ps(temp_a3_8, temp_a3_9)),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a4 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a4_1,
+                _mm_add_ps(
+                    temp_a4_2,
+                    _mm_add_ps(
+                        temp_a4_3,
+                        _mm_add_ps(
+                            temp_a4_4,
+                            _mm_add_ps(
+                                temp_a4_5,
+                                _mm_add_ps(
+                                    temp_a4_6,
+                                    _mm_add_ps(temp_a4_7, _mm_add_ps(temp_a4_8, temp_a4_9)),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a5 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a5_1,
+                _mm_add_ps(
+                    temp_a5_2,
+                    _mm_add_ps(
+                        temp_a5_3,
+                        _mm_add_ps(
+                            temp_a5_4,
+                            _mm_add_ps(
+                                temp_a5_5,
+                                _mm_add_ps(
+                                    temp_a5_6,
+                                    _mm_add_ps(temp_a5_7, _mm_add_ps(temp_a5_8, temp_a5_9)),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a6 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a6_1,
+                _mm_add_ps(
+                    temp_a6_2,
+                    _mm_add_ps(
+                        temp_a6_3,
+                        _mm_add_ps(
+                            temp_a6_4,
+                            _mm_add_ps(
+                                temp_a6_5,
+                                _mm_add_ps(
+                                    temp_a6_6,
+                                    _mm_add_ps(temp_a6_7, _mm_add_ps(temp_a6_8, temp_a6_9)),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a7 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a7_1,
+                _mm_add_ps(
+                    temp_a7_2,
+                    _mm_add_ps(
+                        temp_a7_3,
+                        _mm_add_ps(
+                            temp_a7_4,
+                            _mm_add_ps(
+                                temp_a7_5,
+                                _mm_add_ps(
+                                    temp_a7_6,
+                                    _mm_add_ps(temp_a7_7, _mm_add_ps(temp_a7_8, temp_a7_9)),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a8 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a8_1,
+                _mm_add_ps(
+                    temp_a8_2,
+                    _mm_add_ps(
+                        temp_a8_3,
+                        _mm_add_ps(
+                            temp_a8_4,
+                            _mm_add_ps(
+                                temp_a8_5,
+                                _mm_add_ps(
+                                    temp_a8_6,
+                                    _mm_add_ps(temp_a8_7, _mm_add_ps(temp_a8_8, temp_a8_9)),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a9 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a9_1,
+                _mm_add_ps(
+                    temp_a9_2,
+                    _mm_add_ps(
+                        temp_a9_3,
+                        _mm_add_ps(
+                            temp_a9_4,
+                            _mm_add_ps(
+                                temp_a9_5,
+                                _mm_add_ps(
+                                    temp_a9_6,
+                                    _mm_add_ps(temp_a9_7, _mm_add_ps(temp_a9_8, temp_a9_9)),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
 
-        let temp_b1 = _mm_add_ps(temp_b1_1, _mm_add_ps(temp_b1_2, _mm_add_ps(temp_b1_3, _mm_add_ps(temp_b1_4, _mm_add_ps(temp_b1_5, _mm_add_ps(temp_b1_6, _mm_add_ps(temp_b1_7, _mm_add_ps(temp_b1_8, temp_b1_9))))))));
-        let temp_b2 = _mm_add_ps(temp_b2_1, _mm_add_ps(temp_b2_2, _mm_add_ps(temp_b2_3, _mm_sub_ps(temp_b2_4, _mm_add_ps(temp_b2_5, _mm_add_ps(temp_b2_6, _mm_add_ps(temp_b2_7, _mm_add_ps(temp_b2_8, temp_b2_9))))))));
-        let temp_b3 = _mm_add_ps(temp_b3_1, _mm_add_ps(temp_b3_2, _mm_sub_ps(temp_b3_3, _mm_add_ps(temp_b3_4, _mm_add_ps(temp_b3_5, _mm_sub_ps(temp_b3_6, _mm_add_ps(temp_b3_7, _mm_add_ps(temp_b3_8, temp_b3_9))))))));
-        let temp_b4 = _mm_add_ps(temp_b4_1, _mm_sub_ps(temp_b4_2, _mm_add_ps(temp_b4_3, _mm_sub_ps(temp_b4_4, _mm_add_ps(temp_b4_5, _mm_add_ps(temp_b4_6, _mm_sub_ps(temp_b4_7, _mm_add_ps(temp_b4_8, temp_b4_9))))))));
-        let temp_b5 = _mm_sub_ps(temp_b5_1, _mm_add_ps(temp_b5_2, _mm_sub_ps(temp_b5_3, _mm_add_ps(temp_b5_4, _mm_sub_ps(temp_b5_5, _mm_add_ps(temp_b5_6, _mm_sub_ps(temp_b5_7, _mm_add_ps(temp_b5_8, temp_b5_9))))))));
-        let temp_b6 = _mm_sub_ps(temp_b6_1, _mm_add_ps(temp_b6_2, _mm_sub_ps(temp_b6_3, _mm_sub_ps(temp_b6_4, _mm_add_ps(temp_b6_5, _mm_sub_ps(temp_b6_6, _mm_sub_ps(temp_b6_7, _mm_add_ps(temp_b6_8, temp_b6_9))))))));
-        let temp_b7 = _mm_sub_ps(temp_b7_1, _mm_sub_ps(temp_b7_2, _mm_add_ps(temp_b7_3, _mm_sub_ps(temp_b7_4, _mm_sub_ps(temp_b7_5, _mm_sub_ps(temp_b7_6, _mm_add_ps(temp_b7_7, _mm_sub_ps(temp_b7_8, temp_b7_9))))))));
-        let temp_b8 = _mm_sub_ps(temp_b8_1, _mm_sub_ps(temp_b8_2, _mm_sub_ps(temp_b8_3, _mm_sub_ps(temp_b8_4, _mm_sub_ps(temp_b8_5, _mm_add_ps(temp_b8_6, _mm_sub_ps(temp_b8_7, _mm_sub_ps(temp_b8_8, temp_b8_9))))))));
-        let temp_b9 = _mm_sub_ps(temp_b9_1, _mm_sub_ps(temp_b9_2, _mm_sub_ps(temp_b9_3, _mm_sub_ps(temp_b9_4, _mm_sub_ps(temp_b9_5, _mm_sub_ps(temp_b9_6, _mm_sub_ps(temp_b9_7, _mm_sub_ps(temp_b9_8, temp_b9_9))))))));
+        let temp_b1 = _mm_add_ps(
+            temp_b1_1,
+            _mm_add_ps(
+                temp_b1_2,
+                _mm_add_ps(
+                    temp_b1_3,
+                    _mm_add_ps(
+                        temp_b1_4,
+                        _mm_add_ps(
+                            temp_b1_5,
+                            _mm_add_ps(
+                                temp_b1_6,
+                                _mm_add_ps(temp_b1_7, _mm_add_ps(temp_b1_8, temp_b1_9)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b2 = _mm_add_ps(
+            temp_b2_1,
+            _mm_add_ps(
+                temp_b2_2,
+                _mm_add_ps(
+                    temp_b2_3,
+                    _mm_sub_ps(
+                        temp_b2_4,
+                        _mm_add_ps(
+                            temp_b2_5,
+                            _mm_add_ps(
+                                temp_b2_6,
+                                _mm_add_ps(temp_b2_7, _mm_add_ps(temp_b2_8, temp_b2_9)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b3 = _mm_add_ps(
+            temp_b3_1,
+            _mm_add_ps(
+                temp_b3_2,
+                _mm_sub_ps(
+                    temp_b3_3,
+                    _mm_add_ps(
+                        temp_b3_4,
+                        _mm_add_ps(
+                            temp_b3_5,
+                            _mm_sub_ps(
+                                temp_b3_6,
+                                _mm_add_ps(temp_b3_7, _mm_add_ps(temp_b3_8, temp_b3_9)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b4 = _mm_add_ps(
+            temp_b4_1,
+            _mm_sub_ps(
+                temp_b4_2,
+                _mm_add_ps(
+                    temp_b4_3,
+                    _mm_sub_ps(
+                        temp_b4_4,
+                        _mm_add_ps(
+                            temp_b4_5,
+                            _mm_add_ps(
+                                temp_b4_6,
+                                _mm_sub_ps(temp_b4_7, _mm_add_ps(temp_b4_8, temp_b4_9)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b5 = _mm_sub_ps(
+            temp_b5_1,
+            _mm_add_ps(
+                temp_b5_2,
+                _mm_sub_ps(
+                    temp_b5_3,
+                    _mm_add_ps(
+                        temp_b5_4,
+                        _mm_sub_ps(
+                            temp_b5_5,
+                            _mm_add_ps(
+                                temp_b5_6,
+                                _mm_sub_ps(temp_b5_7, _mm_add_ps(temp_b5_8, temp_b5_9)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b6 = _mm_sub_ps(
+            temp_b6_1,
+            _mm_add_ps(
+                temp_b6_2,
+                _mm_sub_ps(
+                    temp_b6_3,
+                    _mm_sub_ps(
+                        temp_b6_4,
+                        _mm_add_ps(
+                            temp_b6_5,
+                            _mm_sub_ps(
+                                temp_b6_6,
+                                _mm_sub_ps(temp_b6_7, _mm_add_ps(temp_b6_8, temp_b6_9)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b7 = _mm_sub_ps(
+            temp_b7_1,
+            _mm_sub_ps(
+                temp_b7_2,
+                _mm_add_ps(
+                    temp_b7_3,
+                    _mm_sub_ps(
+                        temp_b7_4,
+                        _mm_sub_ps(
+                            temp_b7_5,
+                            _mm_sub_ps(
+                                temp_b7_6,
+                                _mm_add_ps(temp_b7_7, _mm_sub_ps(temp_b7_8, temp_b7_9)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b8 = _mm_sub_ps(
+            temp_b8_1,
+            _mm_sub_ps(
+                temp_b8_2,
+                _mm_sub_ps(
+                    temp_b8_3,
+                    _mm_sub_ps(
+                        temp_b8_4,
+                        _mm_sub_ps(
+                            temp_b8_5,
+                            _mm_add_ps(
+                                temp_b8_6,
+                                _mm_sub_ps(temp_b8_7, _mm_sub_ps(temp_b8_8, temp_b8_9)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b9 = _mm_sub_ps(
+            temp_b9_1,
+            _mm_sub_ps(
+                temp_b9_2,
+                _mm_sub_ps(
+                    temp_b9_3,
+                    _mm_sub_ps(
+                        temp_b9_4,
+                        _mm_sub_ps(
+                            temp_b9_5,
+                            _mm_sub_ps(
+                                temp_b9_6,
+                                _mm_sub_ps(temp_b9_7, _mm_sub_ps(temp_b9_8, temp_b9_9)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
 
         let temp_b1_rot = self.rotate.rotate_both(temp_b1);
         let temp_b2_rot = self.rotate.rotate_both(temp_b2);
@@ -2600,7 +3921,25 @@ impl<T: FftNum> SseF32Butterfly19<T> {
         let temp_b8_rot = self.rotate.rotate_both(temp_b8);
         let temp_b9_rot = self.rotate.rotate_both(temp_b9);
 
-        let x0 = _mm_add_ps(values[0], _mm_add_ps(x118p, _mm_add_ps(x217p, _mm_add_ps(x316p, _mm_add_ps(x415p, _mm_add_ps(x514p, _mm_add_ps(x613p, _mm_add_ps(x712p, _mm_add_ps(x811p, x910p)))))))));
+        let x0 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                x118p,
+                _mm_add_ps(
+                    x217p,
+                    _mm_add_ps(
+                        x316p,
+                        _mm_add_ps(
+                            x415p,
+                            _mm_add_ps(
+                                x514p,
+                                _mm_add_ps(x613p, _mm_add_ps(x712p, _mm_add_ps(x811p, x910p))),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
         let x1 = _mm_add_ps(temp_a1, temp_b1_rot);
         let x2 = _mm_add_ps(temp_a2, temp_b2_rot);
         let x3 = _mm_add_ps(temp_a3, temp_b3_rot);
@@ -2619,18 +3958,18 @@ impl<T: FftNum> SseF32Butterfly19<T> {
         let x16 = _mm_sub_ps(temp_a3, temp_b3_rot);
         let x17 = _mm_sub_ps(temp_a2, temp_b2_rot);
         let x18 = _mm_sub_ps(temp_a1, temp_b1_rot);
-        [x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18]
-
+        [
+            x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18,
+        ]
     }
 }
 
-
-//   _  ___             __   _  _   _     _ _   
-//  / |/ _ \           / /_ | || | | |__ (_) |_ 
+//   _  ___             __   _  _   _     _ _
+//  / |/ _ \           / /_ | || | | |__ (_) |_
 //  | | (_) |  _____  | '_ \| || |_| '_ \| | __|
-//  | |\__, | |_____| | (_) |__   _| |_) | | |_ 
+//  | |\__, | |_____| | (_) |__   _| |_) | | |_
 //  |_|  /_/           \___/   |_| |_.__/|_|\__|
-//                                              
+//
 
 pub struct SseF64Butterfly19<T> {
     direction: FftDirection,
@@ -2744,7 +4083,9 @@ impl<T: FftNum> SseF64Butterfly19<T> {
         let v17 = _mm_loadu_pd(input.as_ptr().add(17) as *const f64);
         let v18 = _mm_loadu_pd(input.as_ptr().add(18) as *const f64);
 
-        let out = self.perform_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18]);
+        let out = self.perform_fft_direct([
+            v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18,
+        ]);
 
         let val = std::mem::transmute::<[__m128d; 19], [Complex<f64>; 19]>(out);
 
@@ -2773,11 +4114,8 @@ impl<T: FftNum> SseF64Butterfly19<T> {
     // length 7 fft of a, given as a0, a1, a2, a3, a4, a5, a6.
     // result is [A0, A1, A2, A3, A4, A5, A6]
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(
-        &self,
-        values: [__m128d; 19],
-    ) -> [__m128d; 19] {
-        // This is a SSE translation of the scalar 19-point butterfly 
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 19]) -> [__m128d; 19] {
+        // This is a SSE translation of the scalar 19-point butterfly
         let x118p = _mm_add_pd(values[1], values[18]);
         let x118n = _mm_sub_pd(values[1], values[18]);
         let x217p = _mm_add_pd(values[2], values[17]);
@@ -2961,25 +4299,376 @@ impl<T: FftNum> SseF64Butterfly19<T> {
         let temp_b9_8 = _mm_mul_pd(self.twiddle4im, x811n);
         let temp_b9_9 = _mm_mul_pd(self.twiddle5im, x910n);
 
-        let temp_a1 = _mm_add_pd(values[0], _mm_add_pd(temp_a1_1, _mm_add_pd(temp_a1_2, _mm_add_pd(temp_a1_3, _mm_add_pd(temp_a1_4, _mm_add_pd(temp_a1_5, _mm_add_pd(temp_a1_6, _mm_add_pd(temp_a1_7, _mm_add_pd(temp_a1_8, temp_a1_9)))))))));
-        let temp_a2 = _mm_add_pd(values[0], _mm_add_pd(temp_a2_1, _mm_add_pd(temp_a2_2, _mm_add_pd(temp_a2_3, _mm_add_pd(temp_a2_4, _mm_add_pd(temp_a2_5, _mm_add_pd(temp_a2_6, _mm_add_pd(temp_a2_7, _mm_add_pd(temp_a2_8, temp_a2_9)))))))));
-        let temp_a3 = _mm_add_pd(values[0], _mm_add_pd(temp_a3_1, _mm_add_pd(temp_a3_2, _mm_add_pd(temp_a3_3, _mm_add_pd(temp_a3_4, _mm_add_pd(temp_a3_5, _mm_add_pd(temp_a3_6, _mm_add_pd(temp_a3_7, _mm_add_pd(temp_a3_8, temp_a3_9)))))))));
-        let temp_a4 = _mm_add_pd(values[0], _mm_add_pd(temp_a4_1, _mm_add_pd(temp_a4_2, _mm_add_pd(temp_a4_3, _mm_add_pd(temp_a4_4, _mm_add_pd(temp_a4_5, _mm_add_pd(temp_a4_6, _mm_add_pd(temp_a4_7, _mm_add_pd(temp_a4_8, temp_a4_9)))))))));
-        let temp_a5 = _mm_add_pd(values[0], _mm_add_pd(temp_a5_1, _mm_add_pd(temp_a5_2, _mm_add_pd(temp_a5_3, _mm_add_pd(temp_a5_4, _mm_add_pd(temp_a5_5, _mm_add_pd(temp_a5_6, _mm_add_pd(temp_a5_7, _mm_add_pd(temp_a5_8, temp_a5_9)))))))));
-        let temp_a6 = _mm_add_pd(values[0], _mm_add_pd(temp_a6_1, _mm_add_pd(temp_a6_2, _mm_add_pd(temp_a6_3, _mm_add_pd(temp_a6_4, _mm_add_pd(temp_a6_5, _mm_add_pd(temp_a6_6, _mm_add_pd(temp_a6_7, _mm_add_pd(temp_a6_8, temp_a6_9)))))))));
-        let temp_a7 = _mm_add_pd(values[0], _mm_add_pd(temp_a7_1, _mm_add_pd(temp_a7_2, _mm_add_pd(temp_a7_3, _mm_add_pd(temp_a7_4, _mm_add_pd(temp_a7_5, _mm_add_pd(temp_a7_6, _mm_add_pd(temp_a7_7, _mm_add_pd(temp_a7_8, temp_a7_9)))))))));
-        let temp_a8 = _mm_add_pd(values[0], _mm_add_pd(temp_a8_1, _mm_add_pd(temp_a8_2, _mm_add_pd(temp_a8_3, _mm_add_pd(temp_a8_4, _mm_add_pd(temp_a8_5, _mm_add_pd(temp_a8_6, _mm_add_pd(temp_a8_7, _mm_add_pd(temp_a8_8, temp_a8_9)))))))));
-        let temp_a9 = _mm_add_pd(values[0], _mm_add_pd(temp_a9_1, _mm_add_pd(temp_a9_2, _mm_add_pd(temp_a9_3, _mm_add_pd(temp_a9_4, _mm_add_pd(temp_a9_5, _mm_add_pd(temp_a9_6, _mm_add_pd(temp_a9_7, _mm_add_pd(temp_a9_8, temp_a9_9)))))))));
+        let temp_a1 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a1_1,
+                _mm_add_pd(
+                    temp_a1_2,
+                    _mm_add_pd(
+                        temp_a1_3,
+                        _mm_add_pd(
+                            temp_a1_4,
+                            _mm_add_pd(
+                                temp_a1_5,
+                                _mm_add_pd(
+                                    temp_a1_6,
+                                    _mm_add_pd(temp_a1_7, _mm_add_pd(temp_a1_8, temp_a1_9)),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a2 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a2_1,
+                _mm_add_pd(
+                    temp_a2_2,
+                    _mm_add_pd(
+                        temp_a2_3,
+                        _mm_add_pd(
+                            temp_a2_4,
+                            _mm_add_pd(
+                                temp_a2_5,
+                                _mm_add_pd(
+                                    temp_a2_6,
+                                    _mm_add_pd(temp_a2_7, _mm_add_pd(temp_a2_8, temp_a2_9)),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a3 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a3_1,
+                _mm_add_pd(
+                    temp_a3_2,
+                    _mm_add_pd(
+                        temp_a3_3,
+                        _mm_add_pd(
+                            temp_a3_4,
+                            _mm_add_pd(
+                                temp_a3_5,
+                                _mm_add_pd(
+                                    temp_a3_6,
+                                    _mm_add_pd(temp_a3_7, _mm_add_pd(temp_a3_8, temp_a3_9)),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a4 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a4_1,
+                _mm_add_pd(
+                    temp_a4_2,
+                    _mm_add_pd(
+                        temp_a4_3,
+                        _mm_add_pd(
+                            temp_a4_4,
+                            _mm_add_pd(
+                                temp_a4_5,
+                                _mm_add_pd(
+                                    temp_a4_6,
+                                    _mm_add_pd(temp_a4_7, _mm_add_pd(temp_a4_8, temp_a4_9)),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a5 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a5_1,
+                _mm_add_pd(
+                    temp_a5_2,
+                    _mm_add_pd(
+                        temp_a5_3,
+                        _mm_add_pd(
+                            temp_a5_4,
+                            _mm_add_pd(
+                                temp_a5_5,
+                                _mm_add_pd(
+                                    temp_a5_6,
+                                    _mm_add_pd(temp_a5_7, _mm_add_pd(temp_a5_8, temp_a5_9)),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a6 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a6_1,
+                _mm_add_pd(
+                    temp_a6_2,
+                    _mm_add_pd(
+                        temp_a6_3,
+                        _mm_add_pd(
+                            temp_a6_4,
+                            _mm_add_pd(
+                                temp_a6_5,
+                                _mm_add_pd(
+                                    temp_a6_6,
+                                    _mm_add_pd(temp_a6_7, _mm_add_pd(temp_a6_8, temp_a6_9)),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a7 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a7_1,
+                _mm_add_pd(
+                    temp_a7_2,
+                    _mm_add_pd(
+                        temp_a7_3,
+                        _mm_add_pd(
+                            temp_a7_4,
+                            _mm_add_pd(
+                                temp_a7_5,
+                                _mm_add_pd(
+                                    temp_a7_6,
+                                    _mm_add_pd(temp_a7_7, _mm_add_pd(temp_a7_8, temp_a7_9)),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a8 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a8_1,
+                _mm_add_pd(
+                    temp_a8_2,
+                    _mm_add_pd(
+                        temp_a8_3,
+                        _mm_add_pd(
+                            temp_a8_4,
+                            _mm_add_pd(
+                                temp_a8_5,
+                                _mm_add_pd(
+                                    temp_a8_6,
+                                    _mm_add_pd(temp_a8_7, _mm_add_pd(temp_a8_8, temp_a8_9)),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a9 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a9_1,
+                _mm_add_pd(
+                    temp_a9_2,
+                    _mm_add_pd(
+                        temp_a9_3,
+                        _mm_add_pd(
+                            temp_a9_4,
+                            _mm_add_pd(
+                                temp_a9_5,
+                                _mm_add_pd(
+                                    temp_a9_6,
+                                    _mm_add_pd(temp_a9_7, _mm_add_pd(temp_a9_8, temp_a9_9)),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
 
-        let temp_b1 = _mm_add_pd(temp_b1_1, _mm_add_pd(temp_b1_2, _mm_add_pd(temp_b1_3, _mm_add_pd(temp_b1_4, _mm_add_pd(temp_b1_5, _mm_add_pd(temp_b1_6, _mm_add_pd(temp_b1_7, _mm_add_pd(temp_b1_8, temp_b1_9))))))));
-        let temp_b2 = _mm_add_pd(temp_b2_1, _mm_add_pd(temp_b2_2, _mm_add_pd(temp_b2_3, _mm_sub_pd(temp_b2_4, _mm_add_pd(temp_b2_5, _mm_add_pd(temp_b2_6, _mm_add_pd(temp_b2_7, _mm_add_pd(temp_b2_8, temp_b2_9))))))));
-        let temp_b3 = _mm_add_pd(temp_b3_1, _mm_add_pd(temp_b3_2, _mm_sub_pd(temp_b3_3, _mm_add_pd(temp_b3_4, _mm_add_pd(temp_b3_5, _mm_sub_pd(temp_b3_6, _mm_add_pd(temp_b3_7, _mm_add_pd(temp_b3_8, temp_b3_9))))))));
-        let temp_b4 = _mm_add_pd(temp_b4_1, _mm_sub_pd(temp_b4_2, _mm_add_pd(temp_b4_3, _mm_sub_pd(temp_b4_4, _mm_add_pd(temp_b4_5, _mm_add_pd(temp_b4_6, _mm_sub_pd(temp_b4_7, _mm_add_pd(temp_b4_8, temp_b4_9))))))));
-        let temp_b5 = _mm_sub_pd(temp_b5_1, _mm_add_pd(temp_b5_2, _mm_sub_pd(temp_b5_3, _mm_add_pd(temp_b5_4, _mm_sub_pd(temp_b5_5, _mm_add_pd(temp_b5_6, _mm_sub_pd(temp_b5_7, _mm_add_pd(temp_b5_8, temp_b5_9))))))));
-        let temp_b6 = _mm_sub_pd(temp_b6_1, _mm_add_pd(temp_b6_2, _mm_sub_pd(temp_b6_3, _mm_sub_pd(temp_b6_4, _mm_add_pd(temp_b6_5, _mm_sub_pd(temp_b6_6, _mm_sub_pd(temp_b6_7, _mm_add_pd(temp_b6_8, temp_b6_9))))))));
-        let temp_b7 = _mm_sub_pd(temp_b7_1, _mm_sub_pd(temp_b7_2, _mm_add_pd(temp_b7_3, _mm_sub_pd(temp_b7_4, _mm_sub_pd(temp_b7_5, _mm_sub_pd(temp_b7_6, _mm_add_pd(temp_b7_7, _mm_sub_pd(temp_b7_8, temp_b7_9))))))));
-        let temp_b8 = _mm_sub_pd(temp_b8_1, _mm_sub_pd(temp_b8_2, _mm_sub_pd(temp_b8_3, _mm_sub_pd(temp_b8_4, _mm_sub_pd(temp_b8_5, _mm_add_pd(temp_b8_6, _mm_sub_pd(temp_b8_7, _mm_sub_pd(temp_b8_8, temp_b8_9))))))));
-        let temp_b9 = _mm_sub_pd(temp_b9_1, _mm_sub_pd(temp_b9_2, _mm_sub_pd(temp_b9_3, _mm_sub_pd(temp_b9_4, _mm_sub_pd(temp_b9_5, _mm_sub_pd(temp_b9_6, _mm_sub_pd(temp_b9_7, _mm_sub_pd(temp_b9_8, temp_b9_9))))))));
+        let temp_b1 = _mm_add_pd(
+            temp_b1_1,
+            _mm_add_pd(
+                temp_b1_2,
+                _mm_add_pd(
+                    temp_b1_3,
+                    _mm_add_pd(
+                        temp_b1_4,
+                        _mm_add_pd(
+                            temp_b1_5,
+                            _mm_add_pd(
+                                temp_b1_6,
+                                _mm_add_pd(temp_b1_7, _mm_add_pd(temp_b1_8, temp_b1_9)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b2 = _mm_add_pd(
+            temp_b2_1,
+            _mm_add_pd(
+                temp_b2_2,
+                _mm_add_pd(
+                    temp_b2_3,
+                    _mm_sub_pd(
+                        temp_b2_4,
+                        _mm_add_pd(
+                            temp_b2_5,
+                            _mm_add_pd(
+                                temp_b2_6,
+                                _mm_add_pd(temp_b2_7, _mm_add_pd(temp_b2_8, temp_b2_9)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b3 = _mm_add_pd(
+            temp_b3_1,
+            _mm_add_pd(
+                temp_b3_2,
+                _mm_sub_pd(
+                    temp_b3_3,
+                    _mm_add_pd(
+                        temp_b3_4,
+                        _mm_add_pd(
+                            temp_b3_5,
+                            _mm_sub_pd(
+                                temp_b3_6,
+                                _mm_add_pd(temp_b3_7, _mm_add_pd(temp_b3_8, temp_b3_9)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b4 = _mm_add_pd(
+            temp_b4_1,
+            _mm_sub_pd(
+                temp_b4_2,
+                _mm_add_pd(
+                    temp_b4_3,
+                    _mm_sub_pd(
+                        temp_b4_4,
+                        _mm_add_pd(
+                            temp_b4_5,
+                            _mm_add_pd(
+                                temp_b4_6,
+                                _mm_sub_pd(temp_b4_7, _mm_add_pd(temp_b4_8, temp_b4_9)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b5 = _mm_sub_pd(
+            temp_b5_1,
+            _mm_add_pd(
+                temp_b5_2,
+                _mm_sub_pd(
+                    temp_b5_3,
+                    _mm_add_pd(
+                        temp_b5_4,
+                        _mm_sub_pd(
+                            temp_b5_5,
+                            _mm_add_pd(
+                                temp_b5_6,
+                                _mm_sub_pd(temp_b5_7, _mm_add_pd(temp_b5_8, temp_b5_9)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b6 = _mm_sub_pd(
+            temp_b6_1,
+            _mm_add_pd(
+                temp_b6_2,
+                _mm_sub_pd(
+                    temp_b6_3,
+                    _mm_sub_pd(
+                        temp_b6_4,
+                        _mm_add_pd(
+                            temp_b6_5,
+                            _mm_sub_pd(
+                                temp_b6_6,
+                                _mm_sub_pd(temp_b6_7, _mm_add_pd(temp_b6_8, temp_b6_9)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b7 = _mm_sub_pd(
+            temp_b7_1,
+            _mm_sub_pd(
+                temp_b7_2,
+                _mm_add_pd(
+                    temp_b7_3,
+                    _mm_sub_pd(
+                        temp_b7_4,
+                        _mm_sub_pd(
+                            temp_b7_5,
+                            _mm_sub_pd(
+                                temp_b7_6,
+                                _mm_add_pd(temp_b7_7, _mm_sub_pd(temp_b7_8, temp_b7_9)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b8 = _mm_sub_pd(
+            temp_b8_1,
+            _mm_sub_pd(
+                temp_b8_2,
+                _mm_sub_pd(
+                    temp_b8_3,
+                    _mm_sub_pd(
+                        temp_b8_4,
+                        _mm_sub_pd(
+                            temp_b8_5,
+                            _mm_add_pd(
+                                temp_b8_6,
+                                _mm_sub_pd(temp_b8_7, _mm_sub_pd(temp_b8_8, temp_b8_9)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b9 = _mm_sub_pd(
+            temp_b9_1,
+            _mm_sub_pd(
+                temp_b9_2,
+                _mm_sub_pd(
+                    temp_b9_3,
+                    _mm_sub_pd(
+                        temp_b9_4,
+                        _mm_sub_pd(
+                            temp_b9_5,
+                            _mm_sub_pd(
+                                temp_b9_6,
+                                _mm_sub_pd(temp_b9_7, _mm_sub_pd(temp_b9_8, temp_b9_9)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
 
         let temp_b1_rot = self.rotate.rotate(temp_b1);
         let temp_b2_rot = self.rotate.rotate(temp_b2);
@@ -2991,7 +4680,25 @@ impl<T: FftNum> SseF64Butterfly19<T> {
         let temp_b8_rot = self.rotate.rotate(temp_b8);
         let temp_b9_rot = self.rotate.rotate(temp_b9);
 
-        let x0 = _mm_add_pd(values[0], _mm_add_pd(x118p, _mm_add_pd(x217p, _mm_add_pd(x316p, _mm_add_pd(x415p, _mm_add_pd(x514p, _mm_add_pd(x613p, _mm_add_pd(x712p, _mm_add_pd(x811p, x910p)))))))));
+        let x0 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                x118p,
+                _mm_add_pd(
+                    x217p,
+                    _mm_add_pd(
+                        x316p,
+                        _mm_add_pd(
+                            x415p,
+                            _mm_add_pd(
+                                x514p,
+                                _mm_add_pd(x613p, _mm_add_pd(x712p, _mm_add_pd(x811p, x910p))),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
         let x1 = _mm_add_pd(temp_a1, temp_b1_rot);
         let x2 = _mm_add_pd(temp_a2, temp_b2_rot);
         let x3 = _mm_add_pd(temp_a3, temp_b3_rot);
@@ -3010,18 +4717,18 @@ impl<T: FftNum> SseF64Butterfly19<T> {
         let x16 = _mm_sub_pd(temp_a3, temp_b3_rot);
         let x17 = _mm_sub_pd(temp_a2, temp_b2_rot);
         let x18 = _mm_sub_pd(temp_a1, temp_b1_rot);
-        [x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18]
-
+        [
+            x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18,
+        ]
     }
 }
 
-
-//   ____  _____           _________  _     _ _   
-//  |___ \|___ /          |___ /___ \| |__ (_) |_ 
+//   ____  _____           _________  _     _ _
+//  |___ \|___ /          |___ /___ \| |__ (_) |_
 //    __) | |_ \   _____    |_ \ __) | '_ \| | __|
-//   / __/ ___) | |_____|  ___) / __/| |_) | | |_ 
+//   / __/ ___) | |_____|  ___) / __/| |_) | | |_
 //  |_____|____/          |____/_____|_.__/|_|\__|
-//                                                
+//
 
 pub struct SseF32Butterfly23<T> {
     direction: FftDirection,
@@ -3153,7 +4860,10 @@ impl<T: FftNum> SseF32Butterfly23<T> {
         let v21 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(21) as *const f64));
         let v22 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(22) as *const f64));
 
-        let out = self.perform_dual_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22]);
+        let out = self.perform_dual_fft_direct([
+            v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18,
+            v19, v20, v21, v22,
+        ]);
 
         let val = std::mem::transmute::<[__m128; 23], [Complex<f32>; 46]>(out);
 
@@ -3237,7 +4947,10 @@ impl<T: FftNum> SseF32Butterfly23<T> {
         let v21 = pack_2and1_f32(valuea20a21, valueb21b22);
         let v22 = pack_1and2_f32(valuea22b0, valueb21b22);
 
-        let out = self.perform_dual_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22]);
+        let out = self.perform_dual_fft_direct([
+            v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18,
+            v19, v20, v21, v22,
+        ]);
 
         let val = std::mem::transmute::<[__m128; 23], [Complex<f32>; 46]>(out);
 
@@ -3290,15 +5003,11 @@ impl<T: FftNum> SseF32Butterfly23<T> {
         *output_slice.add(45) = val[45];
     }
 
-
     // length 7 fft of a, given as a0, a1, a2, a3, a4, a5, a6.
     // result is [A0, A1, A2, A3, A4, A5, A6]
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_direct(
-        &self,
-        values: [__m128; 23],
-    ) -> [__m128; 23] {
-        // This is a SSE translation of the scalar 17-point butterfly 
+    pub(crate) unsafe fn perform_dual_fft_direct(&self, values: [__m128; 23]) -> [__m128; 23] {
+        // This is a SSE translation of the scalar 17-point butterfly
         let x122p = _mm_add_ps(values[1], values[22]);
         let x122n = _mm_sub_ps(values[1], values[22]);
         let x221p = _mm_add_ps(values[2], values[21]);
@@ -3566,29 +5275,629 @@ impl<T: FftNum> SseF32Butterfly23<T> {
         let temp_b11_10 = _mm_mul_ps(self.twiddle5im, x1013n);
         let temp_b11_11 = _mm_mul_ps(self.twiddle6im, x1112n);
 
-        let temp_a1 = _mm_add_ps(values[0], _mm_add_ps(temp_a1_1, _mm_add_ps(temp_a1_2, _mm_add_ps(temp_a1_3, _mm_add_ps(temp_a1_4, _mm_add_ps(temp_a1_5, _mm_add_ps(temp_a1_6, _mm_add_ps(temp_a1_7, _mm_add_ps(temp_a1_8, _mm_add_ps(temp_a1_9, _mm_add_ps(temp_a1_10, temp_a1_11)))))))))));
-        let temp_a2 = _mm_add_ps(values[0], _mm_add_ps(temp_a2_1, _mm_add_ps(temp_a2_2, _mm_add_ps(temp_a2_3, _mm_add_ps(temp_a2_4, _mm_add_ps(temp_a2_5, _mm_add_ps(temp_a2_6, _mm_add_ps(temp_a2_7, _mm_add_ps(temp_a2_8, _mm_add_ps(temp_a2_9, _mm_add_ps(temp_a2_10, temp_a2_11)))))))))));
-        let temp_a3 = _mm_add_ps(values[0], _mm_add_ps(temp_a3_1, _mm_add_ps(temp_a3_2, _mm_add_ps(temp_a3_3, _mm_add_ps(temp_a3_4, _mm_add_ps(temp_a3_5, _mm_add_ps(temp_a3_6, _mm_add_ps(temp_a3_7, _mm_add_ps(temp_a3_8, _mm_add_ps(temp_a3_9, _mm_add_ps(temp_a3_10, temp_a3_11)))))))))));
-        let temp_a4 = _mm_add_ps(values[0], _mm_add_ps(temp_a4_1, _mm_add_ps(temp_a4_2, _mm_add_ps(temp_a4_3, _mm_add_ps(temp_a4_4, _mm_add_ps(temp_a4_5, _mm_add_ps(temp_a4_6, _mm_add_ps(temp_a4_7, _mm_add_ps(temp_a4_8, _mm_add_ps(temp_a4_9, _mm_add_ps(temp_a4_10, temp_a4_11)))))))))));
-        let temp_a5 = _mm_add_ps(values[0], _mm_add_ps(temp_a5_1, _mm_add_ps(temp_a5_2, _mm_add_ps(temp_a5_3, _mm_add_ps(temp_a5_4, _mm_add_ps(temp_a5_5, _mm_add_ps(temp_a5_6, _mm_add_ps(temp_a5_7, _mm_add_ps(temp_a5_8, _mm_add_ps(temp_a5_9, _mm_add_ps(temp_a5_10, temp_a5_11)))))))))));
-        let temp_a6 = _mm_add_ps(values[0], _mm_add_ps(temp_a6_1, _mm_add_ps(temp_a6_2, _mm_add_ps(temp_a6_3, _mm_add_ps(temp_a6_4, _mm_add_ps(temp_a6_5, _mm_add_ps(temp_a6_6, _mm_add_ps(temp_a6_7, _mm_add_ps(temp_a6_8, _mm_add_ps(temp_a6_9, _mm_add_ps(temp_a6_10, temp_a6_11)))))))))));
-        let temp_a7 = _mm_add_ps(values[0], _mm_add_ps(temp_a7_1, _mm_add_ps(temp_a7_2, _mm_add_ps(temp_a7_3, _mm_add_ps(temp_a7_4, _mm_add_ps(temp_a7_5, _mm_add_ps(temp_a7_6, _mm_add_ps(temp_a7_7, _mm_add_ps(temp_a7_8, _mm_add_ps(temp_a7_9, _mm_add_ps(temp_a7_10, temp_a7_11)))))))))));
-        let temp_a8 = _mm_add_ps(values[0], _mm_add_ps(temp_a8_1, _mm_add_ps(temp_a8_2, _mm_add_ps(temp_a8_3, _mm_add_ps(temp_a8_4, _mm_add_ps(temp_a8_5, _mm_add_ps(temp_a8_6, _mm_add_ps(temp_a8_7, _mm_add_ps(temp_a8_8, _mm_add_ps(temp_a8_9, _mm_add_ps(temp_a8_10, temp_a8_11)))))))))));
-        let temp_a9 = _mm_add_ps(values[0], _mm_add_ps(temp_a9_1, _mm_add_ps(temp_a9_2, _mm_add_ps(temp_a9_3, _mm_add_ps(temp_a9_4, _mm_add_ps(temp_a9_5, _mm_add_ps(temp_a9_6, _mm_add_ps(temp_a9_7, _mm_add_ps(temp_a9_8, _mm_add_ps(temp_a9_9, _mm_add_ps(temp_a9_10, temp_a9_11)))))))))));
-        let temp_a10 = _mm_add_ps(values[0], _mm_add_ps(temp_a10_1, _mm_add_ps(temp_a10_2, _mm_add_ps(temp_a10_3, _mm_add_ps(temp_a10_4, _mm_add_ps(temp_a10_5, _mm_add_ps(temp_a10_6, _mm_add_ps(temp_a10_7, _mm_add_ps(temp_a10_8, _mm_add_ps(temp_a10_9, _mm_add_ps(temp_a10_10, temp_a10_11)))))))))));
-        let temp_a11 = _mm_add_ps(values[0], _mm_add_ps(temp_a11_1, _mm_add_ps(temp_a11_2, _mm_add_ps(temp_a11_3, _mm_add_ps(temp_a11_4, _mm_add_ps(temp_a11_5, _mm_add_ps(temp_a11_6, _mm_add_ps(temp_a11_7, _mm_add_ps(temp_a11_8, _mm_add_ps(temp_a11_9, _mm_add_ps(temp_a11_10, temp_a11_11)))))))))));
+        let temp_a1 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a1_1,
+                _mm_add_ps(
+                    temp_a1_2,
+                    _mm_add_ps(
+                        temp_a1_3,
+                        _mm_add_ps(
+                            temp_a1_4,
+                            _mm_add_ps(
+                                temp_a1_5,
+                                _mm_add_ps(
+                                    temp_a1_6,
+                                    _mm_add_ps(
+                                        temp_a1_7,
+                                        _mm_add_ps(
+                                            temp_a1_8,
+                                            _mm_add_ps(
+                                                temp_a1_9,
+                                                _mm_add_ps(temp_a1_10, temp_a1_11),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a2 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a2_1,
+                _mm_add_ps(
+                    temp_a2_2,
+                    _mm_add_ps(
+                        temp_a2_3,
+                        _mm_add_ps(
+                            temp_a2_4,
+                            _mm_add_ps(
+                                temp_a2_5,
+                                _mm_add_ps(
+                                    temp_a2_6,
+                                    _mm_add_ps(
+                                        temp_a2_7,
+                                        _mm_add_ps(
+                                            temp_a2_8,
+                                            _mm_add_ps(
+                                                temp_a2_9,
+                                                _mm_add_ps(temp_a2_10, temp_a2_11),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a3 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a3_1,
+                _mm_add_ps(
+                    temp_a3_2,
+                    _mm_add_ps(
+                        temp_a3_3,
+                        _mm_add_ps(
+                            temp_a3_4,
+                            _mm_add_ps(
+                                temp_a3_5,
+                                _mm_add_ps(
+                                    temp_a3_6,
+                                    _mm_add_ps(
+                                        temp_a3_7,
+                                        _mm_add_ps(
+                                            temp_a3_8,
+                                            _mm_add_ps(
+                                                temp_a3_9,
+                                                _mm_add_ps(temp_a3_10, temp_a3_11),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a4 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a4_1,
+                _mm_add_ps(
+                    temp_a4_2,
+                    _mm_add_ps(
+                        temp_a4_3,
+                        _mm_add_ps(
+                            temp_a4_4,
+                            _mm_add_ps(
+                                temp_a4_5,
+                                _mm_add_ps(
+                                    temp_a4_6,
+                                    _mm_add_ps(
+                                        temp_a4_7,
+                                        _mm_add_ps(
+                                            temp_a4_8,
+                                            _mm_add_ps(
+                                                temp_a4_9,
+                                                _mm_add_ps(temp_a4_10, temp_a4_11),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a5 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a5_1,
+                _mm_add_ps(
+                    temp_a5_2,
+                    _mm_add_ps(
+                        temp_a5_3,
+                        _mm_add_ps(
+                            temp_a5_4,
+                            _mm_add_ps(
+                                temp_a5_5,
+                                _mm_add_ps(
+                                    temp_a5_6,
+                                    _mm_add_ps(
+                                        temp_a5_7,
+                                        _mm_add_ps(
+                                            temp_a5_8,
+                                            _mm_add_ps(
+                                                temp_a5_9,
+                                                _mm_add_ps(temp_a5_10, temp_a5_11),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a6 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a6_1,
+                _mm_add_ps(
+                    temp_a6_2,
+                    _mm_add_ps(
+                        temp_a6_3,
+                        _mm_add_ps(
+                            temp_a6_4,
+                            _mm_add_ps(
+                                temp_a6_5,
+                                _mm_add_ps(
+                                    temp_a6_6,
+                                    _mm_add_ps(
+                                        temp_a6_7,
+                                        _mm_add_ps(
+                                            temp_a6_8,
+                                            _mm_add_ps(
+                                                temp_a6_9,
+                                                _mm_add_ps(temp_a6_10, temp_a6_11),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a7 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a7_1,
+                _mm_add_ps(
+                    temp_a7_2,
+                    _mm_add_ps(
+                        temp_a7_3,
+                        _mm_add_ps(
+                            temp_a7_4,
+                            _mm_add_ps(
+                                temp_a7_5,
+                                _mm_add_ps(
+                                    temp_a7_6,
+                                    _mm_add_ps(
+                                        temp_a7_7,
+                                        _mm_add_ps(
+                                            temp_a7_8,
+                                            _mm_add_ps(
+                                                temp_a7_9,
+                                                _mm_add_ps(temp_a7_10, temp_a7_11),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a8 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a8_1,
+                _mm_add_ps(
+                    temp_a8_2,
+                    _mm_add_ps(
+                        temp_a8_3,
+                        _mm_add_ps(
+                            temp_a8_4,
+                            _mm_add_ps(
+                                temp_a8_5,
+                                _mm_add_ps(
+                                    temp_a8_6,
+                                    _mm_add_ps(
+                                        temp_a8_7,
+                                        _mm_add_ps(
+                                            temp_a8_8,
+                                            _mm_add_ps(
+                                                temp_a8_9,
+                                                _mm_add_ps(temp_a8_10, temp_a8_11),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a9 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a9_1,
+                _mm_add_ps(
+                    temp_a9_2,
+                    _mm_add_ps(
+                        temp_a9_3,
+                        _mm_add_ps(
+                            temp_a9_4,
+                            _mm_add_ps(
+                                temp_a9_5,
+                                _mm_add_ps(
+                                    temp_a9_6,
+                                    _mm_add_ps(
+                                        temp_a9_7,
+                                        _mm_add_ps(
+                                            temp_a9_8,
+                                            _mm_add_ps(
+                                                temp_a9_9,
+                                                _mm_add_ps(temp_a9_10, temp_a9_11),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a10 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a10_1,
+                _mm_add_ps(
+                    temp_a10_2,
+                    _mm_add_ps(
+                        temp_a10_3,
+                        _mm_add_ps(
+                            temp_a10_4,
+                            _mm_add_ps(
+                                temp_a10_5,
+                                _mm_add_ps(
+                                    temp_a10_6,
+                                    _mm_add_ps(
+                                        temp_a10_7,
+                                        _mm_add_ps(
+                                            temp_a10_8,
+                                            _mm_add_ps(
+                                                temp_a10_9,
+                                                _mm_add_ps(temp_a10_10, temp_a10_11),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a11 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a11_1,
+                _mm_add_ps(
+                    temp_a11_2,
+                    _mm_add_ps(
+                        temp_a11_3,
+                        _mm_add_ps(
+                            temp_a11_4,
+                            _mm_add_ps(
+                                temp_a11_5,
+                                _mm_add_ps(
+                                    temp_a11_6,
+                                    _mm_add_ps(
+                                        temp_a11_7,
+                                        _mm_add_ps(
+                                            temp_a11_8,
+                                            _mm_add_ps(
+                                                temp_a11_9,
+                                                _mm_add_ps(temp_a11_10, temp_a11_11),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
 
-        let temp_b1 = _mm_add_ps(temp_b1_1, _mm_add_ps(temp_b1_2, _mm_add_ps(temp_b1_3, _mm_add_ps(temp_b1_4, _mm_add_ps(temp_b1_5, _mm_add_ps(temp_b1_6, _mm_add_ps(temp_b1_7, _mm_add_ps(temp_b1_8, _mm_add_ps(temp_b1_9, _mm_add_ps(temp_b1_10, temp_b1_11))))))))));
-        let temp_b2 = _mm_add_ps(temp_b2_1, _mm_add_ps(temp_b2_2, _mm_add_ps(temp_b2_3, _mm_add_ps(temp_b2_4, _mm_sub_ps(temp_b2_5, _mm_add_ps(temp_b2_6, _mm_add_ps(temp_b2_7, _mm_add_ps(temp_b2_8, _mm_add_ps(temp_b2_9, _mm_add_ps(temp_b2_10, temp_b2_11))))))))));
-        let temp_b3 = _mm_add_ps(temp_b3_1, _mm_add_ps(temp_b3_2, _mm_sub_ps(temp_b3_3, _mm_add_ps(temp_b3_4, _mm_add_ps(temp_b3_5, _mm_add_ps(temp_b3_6, _mm_sub_ps(temp_b3_7, _mm_add_ps(temp_b3_8, _mm_add_ps(temp_b3_9, _mm_add_ps(temp_b3_10, temp_b3_11))))))))));
-        let temp_b4 = _mm_add_ps(temp_b4_1, _mm_sub_ps(temp_b4_2, _mm_add_ps(temp_b4_3, _mm_add_ps(temp_b4_4, _mm_sub_ps(temp_b4_5, _mm_add_ps(temp_b4_6, _mm_add_ps(temp_b4_7, _mm_sub_ps(temp_b4_8, _mm_add_ps(temp_b4_9, _mm_add_ps(temp_b4_10, temp_b4_11))))))))));
-        let temp_b5 = _mm_add_ps(temp_b5_1, _mm_sub_ps(temp_b5_2, _mm_add_ps(temp_b5_3, _mm_sub_ps(temp_b5_4, _mm_add_ps(temp_b5_5, _mm_sub_ps(temp_b5_6, _mm_add_ps(temp_b5_7, _mm_add_ps(temp_b5_8, _mm_sub_ps(temp_b5_9, _mm_add_ps(temp_b5_10, temp_b5_11))))))))));
-        let temp_b6 = _mm_sub_ps(temp_b6_1, _mm_add_ps(temp_b6_2, _mm_sub_ps(temp_b6_3, _mm_add_ps(temp_b6_4, _mm_sub_ps(temp_b6_5, _mm_add_ps(temp_b6_6, _mm_sub_ps(temp_b6_7, _mm_add_ps(temp_b6_8, _mm_sub_ps(temp_b6_9, _mm_add_ps(temp_b6_10, temp_b6_11))))))))));
-        let temp_b7 = _mm_sub_ps(temp_b7_1, _mm_add_ps(temp_b7_2, _mm_sub_ps(temp_b7_3, _mm_sub_ps(temp_b7_4, _mm_add_ps(temp_b7_5, _mm_sub_ps(temp_b7_6, _mm_add_ps(temp_b7_7, _mm_sub_ps(temp_b7_8, _mm_sub_ps(temp_b7_9, _mm_add_ps(temp_b7_10, temp_b7_11))))))))));
-        let temp_b8 = _mm_sub_ps(temp_b8_1, _mm_sub_ps(temp_b8_2, _mm_add_ps(temp_b8_3, _mm_sub_ps(temp_b8_4, _mm_sub_ps(temp_b8_5, _mm_add_ps(temp_b8_6, _mm_sub_ps(temp_b8_7, _mm_sub_ps(temp_b8_8, _mm_add_ps(temp_b8_9, _mm_sub_ps(temp_b8_10, temp_b8_11))))))))));
-        let temp_b9 = _mm_sub_ps(temp_b9_1, _mm_sub_ps(temp_b9_2, _mm_sub_ps(temp_b9_3, _mm_add_ps(temp_b9_4, _mm_sub_ps(temp_b9_5, _mm_sub_ps(temp_b9_6, _mm_sub_ps(temp_b9_7, _mm_sub_ps(temp_b9_8, _mm_add_ps(temp_b9_9, _mm_sub_ps(temp_b9_10, temp_b9_11))))))))));
-        let temp_b10 = _mm_sub_ps(temp_b10_1, _mm_sub_ps(temp_b10_2, _mm_sub_ps(temp_b10_3, _mm_sub_ps(temp_b10_4, _mm_sub_ps(temp_b10_5, _mm_sub_ps(temp_b10_6, _mm_add_ps(temp_b10_7, _mm_sub_ps(temp_b10_8, _mm_sub_ps(temp_b10_9, _mm_sub_ps(temp_b10_10, temp_b10_11))))))))));
-        let temp_b11 = _mm_sub_ps(temp_b11_1, _mm_sub_ps(temp_b11_2, _mm_sub_ps(temp_b11_3, _mm_sub_ps(temp_b11_4, _mm_sub_ps(temp_b11_5, _mm_sub_ps(temp_b11_6, _mm_sub_ps(temp_b11_7, _mm_sub_ps(temp_b11_8, _mm_sub_ps(temp_b11_9, _mm_sub_ps(temp_b11_10, temp_b11_11))))))))));
+        let temp_b1 = _mm_add_ps(
+            temp_b1_1,
+            _mm_add_ps(
+                temp_b1_2,
+                _mm_add_ps(
+                    temp_b1_3,
+                    _mm_add_ps(
+                        temp_b1_4,
+                        _mm_add_ps(
+                            temp_b1_5,
+                            _mm_add_ps(
+                                temp_b1_6,
+                                _mm_add_ps(
+                                    temp_b1_7,
+                                    _mm_add_ps(
+                                        temp_b1_8,
+                                        _mm_add_ps(temp_b1_9, _mm_add_ps(temp_b1_10, temp_b1_11)),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b2 = _mm_add_ps(
+            temp_b2_1,
+            _mm_add_ps(
+                temp_b2_2,
+                _mm_add_ps(
+                    temp_b2_3,
+                    _mm_add_ps(
+                        temp_b2_4,
+                        _mm_sub_ps(
+                            temp_b2_5,
+                            _mm_add_ps(
+                                temp_b2_6,
+                                _mm_add_ps(
+                                    temp_b2_7,
+                                    _mm_add_ps(
+                                        temp_b2_8,
+                                        _mm_add_ps(temp_b2_9, _mm_add_ps(temp_b2_10, temp_b2_11)),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b3 = _mm_add_ps(
+            temp_b3_1,
+            _mm_add_ps(
+                temp_b3_2,
+                _mm_sub_ps(
+                    temp_b3_3,
+                    _mm_add_ps(
+                        temp_b3_4,
+                        _mm_add_ps(
+                            temp_b3_5,
+                            _mm_add_ps(
+                                temp_b3_6,
+                                _mm_sub_ps(
+                                    temp_b3_7,
+                                    _mm_add_ps(
+                                        temp_b3_8,
+                                        _mm_add_ps(temp_b3_9, _mm_add_ps(temp_b3_10, temp_b3_11)),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b4 = _mm_add_ps(
+            temp_b4_1,
+            _mm_sub_ps(
+                temp_b4_2,
+                _mm_add_ps(
+                    temp_b4_3,
+                    _mm_add_ps(
+                        temp_b4_4,
+                        _mm_sub_ps(
+                            temp_b4_5,
+                            _mm_add_ps(
+                                temp_b4_6,
+                                _mm_add_ps(
+                                    temp_b4_7,
+                                    _mm_sub_ps(
+                                        temp_b4_8,
+                                        _mm_add_ps(temp_b4_9, _mm_add_ps(temp_b4_10, temp_b4_11)),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b5 = _mm_add_ps(
+            temp_b5_1,
+            _mm_sub_ps(
+                temp_b5_2,
+                _mm_add_ps(
+                    temp_b5_3,
+                    _mm_sub_ps(
+                        temp_b5_4,
+                        _mm_add_ps(
+                            temp_b5_5,
+                            _mm_sub_ps(
+                                temp_b5_6,
+                                _mm_add_ps(
+                                    temp_b5_7,
+                                    _mm_add_ps(
+                                        temp_b5_8,
+                                        _mm_sub_ps(temp_b5_9, _mm_add_ps(temp_b5_10, temp_b5_11)),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b6 = _mm_sub_ps(
+            temp_b6_1,
+            _mm_add_ps(
+                temp_b6_2,
+                _mm_sub_ps(
+                    temp_b6_3,
+                    _mm_add_ps(
+                        temp_b6_4,
+                        _mm_sub_ps(
+                            temp_b6_5,
+                            _mm_add_ps(
+                                temp_b6_6,
+                                _mm_sub_ps(
+                                    temp_b6_7,
+                                    _mm_add_ps(
+                                        temp_b6_8,
+                                        _mm_sub_ps(temp_b6_9, _mm_add_ps(temp_b6_10, temp_b6_11)),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b7 = _mm_sub_ps(
+            temp_b7_1,
+            _mm_add_ps(
+                temp_b7_2,
+                _mm_sub_ps(
+                    temp_b7_3,
+                    _mm_sub_ps(
+                        temp_b7_4,
+                        _mm_add_ps(
+                            temp_b7_5,
+                            _mm_sub_ps(
+                                temp_b7_6,
+                                _mm_add_ps(
+                                    temp_b7_7,
+                                    _mm_sub_ps(
+                                        temp_b7_8,
+                                        _mm_sub_ps(temp_b7_9, _mm_add_ps(temp_b7_10, temp_b7_11)),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b8 = _mm_sub_ps(
+            temp_b8_1,
+            _mm_sub_ps(
+                temp_b8_2,
+                _mm_add_ps(
+                    temp_b8_3,
+                    _mm_sub_ps(
+                        temp_b8_4,
+                        _mm_sub_ps(
+                            temp_b8_5,
+                            _mm_add_ps(
+                                temp_b8_6,
+                                _mm_sub_ps(
+                                    temp_b8_7,
+                                    _mm_sub_ps(
+                                        temp_b8_8,
+                                        _mm_add_ps(temp_b8_9, _mm_sub_ps(temp_b8_10, temp_b8_11)),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b9 = _mm_sub_ps(
+            temp_b9_1,
+            _mm_sub_ps(
+                temp_b9_2,
+                _mm_sub_ps(
+                    temp_b9_3,
+                    _mm_add_ps(
+                        temp_b9_4,
+                        _mm_sub_ps(
+                            temp_b9_5,
+                            _mm_sub_ps(
+                                temp_b9_6,
+                                _mm_sub_ps(
+                                    temp_b9_7,
+                                    _mm_sub_ps(
+                                        temp_b9_8,
+                                        _mm_add_ps(temp_b9_9, _mm_sub_ps(temp_b9_10, temp_b9_11)),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b10 = _mm_sub_ps(
+            temp_b10_1,
+            _mm_sub_ps(
+                temp_b10_2,
+                _mm_sub_ps(
+                    temp_b10_3,
+                    _mm_sub_ps(
+                        temp_b10_4,
+                        _mm_sub_ps(
+                            temp_b10_5,
+                            _mm_sub_ps(
+                                temp_b10_6,
+                                _mm_add_ps(
+                                    temp_b10_7,
+                                    _mm_sub_ps(
+                                        temp_b10_8,
+                                        _mm_sub_ps(
+                                            temp_b10_9,
+                                            _mm_sub_ps(temp_b10_10, temp_b10_11),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b11 = _mm_sub_ps(
+            temp_b11_1,
+            _mm_sub_ps(
+                temp_b11_2,
+                _mm_sub_ps(
+                    temp_b11_3,
+                    _mm_sub_ps(
+                        temp_b11_4,
+                        _mm_sub_ps(
+                            temp_b11_5,
+                            _mm_sub_ps(
+                                temp_b11_6,
+                                _mm_sub_ps(
+                                    temp_b11_7,
+                                    _mm_sub_ps(
+                                        temp_b11_8,
+                                        _mm_sub_ps(
+                                            temp_b11_9,
+                                            _mm_sub_ps(temp_b11_10, temp_b11_11),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
 
         let temp_b1_rot = self.rotate.rotate_both(temp_b1);
         let temp_b2_rot = self.rotate.rotate_both(temp_b2);
@@ -3602,7 +5911,34 @@ impl<T: FftNum> SseF32Butterfly23<T> {
         let temp_b10_rot = self.rotate.rotate_both(temp_b10);
         let temp_b11_rot = self.rotate.rotate_both(temp_b11);
 
-        let x0 = _mm_add_ps(values[0], _mm_add_ps(x122p, _mm_add_ps(x221p, _mm_add_ps(x320p, _mm_add_ps(x419p, _mm_add_ps(x518p, _mm_add_ps(x617p, _mm_add_ps(x716p, _mm_add_ps(x815p, _mm_add_ps(x914p, _mm_add_ps(x1013p, x1112p)))))))))));
+        let x0 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                x122p,
+                _mm_add_ps(
+                    x221p,
+                    _mm_add_ps(
+                        x320p,
+                        _mm_add_ps(
+                            x419p,
+                            _mm_add_ps(
+                                x518p,
+                                _mm_add_ps(
+                                    x617p,
+                                    _mm_add_ps(
+                                        x716p,
+                                        _mm_add_ps(
+                                            x815p,
+                                            _mm_add_ps(x914p, _mm_add_ps(x1013p, x1112p)),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
         let x1 = _mm_add_ps(temp_a1, temp_b1_rot);
         let x2 = _mm_add_ps(temp_a2, temp_b2_rot);
         let x3 = _mm_add_ps(temp_a3, temp_b3_rot);
@@ -3625,17 +5961,19 @@ impl<T: FftNum> SseF32Butterfly23<T> {
         let x20 = _mm_sub_ps(temp_a3, temp_b3_rot);
         let x21 = _mm_sub_ps(temp_a2, temp_b2_rot);
         let x22 = _mm_sub_ps(temp_a1, temp_b1_rot);
-        [x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18, x19, x20, x21, x22]
-
+        [
+            x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18,
+            x19, x20, x21, x22,
+        ]
     }
 }
 
-//   ____  _____            __   _  _   _     _ _   
-//  |___ \|___ /           / /_ | || | | |__ (_) |_ 
+//   ____  _____            __   _  _   _     _ _
+//  |___ \|___ /           / /_ | || | | |__ (_) |_
 //    __) | |_ \   _____  | '_ \| || |_| '_ \| | __|
-//   / __/ ___) | |_____| | (_) |__   _| |_) | | |_ 
+//   / __/ ___) | |_____| | (_) |__   _| |_) | | |_
 //  |_____|____/           \___/   |_| |_.__/|_|\__|
-//                                                  
+//
 
 pub struct SseF64Butterfly23<T> {
     direction: FftDirection,
@@ -3767,7 +6105,10 @@ impl<T: FftNum> SseF64Butterfly23<T> {
         let v21 = _mm_loadu_pd(input.as_ptr().add(21) as *const f64);
         let v22 = _mm_loadu_pd(input.as_ptr().add(22) as *const f64);
 
-        let out = self.perform_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22]);
+        let out = self.perform_fft_direct([
+            v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18,
+            v19, v20, v21, v22,
+        ]);
 
         let val = std::mem::transmute::<[__m128d; 23], [Complex<f64>; 23]>(out);
 
@@ -3800,11 +6141,8 @@ impl<T: FftNum> SseF64Butterfly23<T> {
     // length 7 fft of a, given as a0, a1, a2, a3, a4, a5, a6.
     // result is [A0, A1, A2, A3, A4, A5, A6]
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(
-        &self,
-        values: [__m128d; 23],
-    ) -> [__m128d; 23] {
-        // This is a SSE translation of the scalar 17-point butterfly 
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 23]) -> [__m128d; 23] {
+        // This is a SSE translation of the scalar 17-point butterfly
         let x122p = _mm_add_pd(values[1], values[22]);
         let x122n = _mm_sub_pd(values[1], values[22]);
         let x221p = _mm_add_pd(values[2], values[21]);
@@ -4072,29 +6410,629 @@ impl<T: FftNum> SseF64Butterfly23<T> {
         let temp_b11_10 = _mm_mul_pd(self.twiddle5im, x1013n);
         let temp_b11_11 = _mm_mul_pd(self.twiddle6im, x1112n);
 
-        let temp_a1 = _mm_add_pd(values[0], _mm_add_pd(temp_a1_1, _mm_add_pd(temp_a1_2, _mm_add_pd(temp_a1_3, _mm_add_pd(temp_a1_4, _mm_add_pd(temp_a1_5, _mm_add_pd(temp_a1_6, _mm_add_pd(temp_a1_7, _mm_add_pd(temp_a1_8, _mm_add_pd(temp_a1_9, _mm_add_pd(temp_a1_10, temp_a1_11)))))))))));
-        let temp_a2 = _mm_add_pd(values[0], _mm_add_pd(temp_a2_1, _mm_add_pd(temp_a2_2, _mm_add_pd(temp_a2_3, _mm_add_pd(temp_a2_4, _mm_add_pd(temp_a2_5, _mm_add_pd(temp_a2_6, _mm_add_pd(temp_a2_7, _mm_add_pd(temp_a2_8, _mm_add_pd(temp_a2_9, _mm_add_pd(temp_a2_10, temp_a2_11)))))))))));
-        let temp_a3 = _mm_add_pd(values[0], _mm_add_pd(temp_a3_1, _mm_add_pd(temp_a3_2, _mm_add_pd(temp_a3_3, _mm_add_pd(temp_a3_4, _mm_add_pd(temp_a3_5, _mm_add_pd(temp_a3_6, _mm_add_pd(temp_a3_7, _mm_add_pd(temp_a3_8, _mm_add_pd(temp_a3_9, _mm_add_pd(temp_a3_10, temp_a3_11)))))))))));
-        let temp_a4 = _mm_add_pd(values[0], _mm_add_pd(temp_a4_1, _mm_add_pd(temp_a4_2, _mm_add_pd(temp_a4_3, _mm_add_pd(temp_a4_4, _mm_add_pd(temp_a4_5, _mm_add_pd(temp_a4_6, _mm_add_pd(temp_a4_7, _mm_add_pd(temp_a4_8, _mm_add_pd(temp_a4_9, _mm_add_pd(temp_a4_10, temp_a4_11)))))))))));
-        let temp_a5 = _mm_add_pd(values[0], _mm_add_pd(temp_a5_1, _mm_add_pd(temp_a5_2, _mm_add_pd(temp_a5_3, _mm_add_pd(temp_a5_4, _mm_add_pd(temp_a5_5, _mm_add_pd(temp_a5_6, _mm_add_pd(temp_a5_7, _mm_add_pd(temp_a5_8, _mm_add_pd(temp_a5_9, _mm_add_pd(temp_a5_10, temp_a5_11)))))))))));
-        let temp_a6 = _mm_add_pd(values[0], _mm_add_pd(temp_a6_1, _mm_add_pd(temp_a6_2, _mm_add_pd(temp_a6_3, _mm_add_pd(temp_a6_4, _mm_add_pd(temp_a6_5, _mm_add_pd(temp_a6_6, _mm_add_pd(temp_a6_7, _mm_add_pd(temp_a6_8, _mm_add_pd(temp_a6_9, _mm_add_pd(temp_a6_10, temp_a6_11)))))))))));
-        let temp_a7 = _mm_add_pd(values[0], _mm_add_pd(temp_a7_1, _mm_add_pd(temp_a7_2, _mm_add_pd(temp_a7_3, _mm_add_pd(temp_a7_4, _mm_add_pd(temp_a7_5, _mm_add_pd(temp_a7_6, _mm_add_pd(temp_a7_7, _mm_add_pd(temp_a7_8, _mm_add_pd(temp_a7_9, _mm_add_pd(temp_a7_10, temp_a7_11)))))))))));
-        let temp_a8 = _mm_add_pd(values[0], _mm_add_pd(temp_a8_1, _mm_add_pd(temp_a8_2, _mm_add_pd(temp_a8_3, _mm_add_pd(temp_a8_4, _mm_add_pd(temp_a8_5, _mm_add_pd(temp_a8_6, _mm_add_pd(temp_a8_7, _mm_add_pd(temp_a8_8, _mm_add_pd(temp_a8_9, _mm_add_pd(temp_a8_10, temp_a8_11)))))))))));
-        let temp_a9 = _mm_add_pd(values[0], _mm_add_pd(temp_a9_1, _mm_add_pd(temp_a9_2, _mm_add_pd(temp_a9_3, _mm_add_pd(temp_a9_4, _mm_add_pd(temp_a9_5, _mm_add_pd(temp_a9_6, _mm_add_pd(temp_a9_7, _mm_add_pd(temp_a9_8, _mm_add_pd(temp_a9_9, _mm_add_pd(temp_a9_10, temp_a9_11)))))))))));
-        let temp_a10 = _mm_add_pd(values[0], _mm_add_pd(temp_a10_1, _mm_add_pd(temp_a10_2, _mm_add_pd(temp_a10_3, _mm_add_pd(temp_a10_4, _mm_add_pd(temp_a10_5, _mm_add_pd(temp_a10_6, _mm_add_pd(temp_a10_7, _mm_add_pd(temp_a10_8, _mm_add_pd(temp_a10_9, _mm_add_pd(temp_a10_10, temp_a10_11)))))))))));
-        let temp_a11 = _mm_add_pd(values[0], _mm_add_pd(temp_a11_1, _mm_add_pd(temp_a11_2, _mm_add_pd(temp_a11_3, _mm_add_pd(temp_a11_4, _mm_add_pd(temp_a11_5, _mm_add_pd(temp_a11_6, _mm_add_pd(temp_a11_7, _mm_add_pd(temp_a11_8, _mm_add_pd(temp_a11_9, _mm_add_pd(temp_a11_10, temp_a11_11)))))))))));
+        let temp_a1 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a1_1,
+                _mm_add_pd(
+                    temp_a1_2,
+                    _mm_add_pd(
+                        temp_a1_3,
+                        _mm_add_pd(
+                            temp_a1_4,
+                            _mm_add_pd(
+                                temp_a1_5,
+                                _mm_add_pd(
+                                    temp_a1_6,
+                                    _mm_add_pd(
+                                        temp_a1_7,
+                                        _mm_add_pd(
+                                            temp_a1_8,
+                                            _mm_add_pd(
+                                                temp_a1_9,
+                                                _mm_add_pd(temp_a1_10, temp_a1_11),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a2 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a2_1,
+                _mm_add_pd(
+                    temp_a2_2,
+                    _mm_add_pd(
+                        temp_a2_3,
+                        _mm_add_pd(
+                            temp_a2_4,
+                            _mm_add_pd(
+                                temp_a2_5,
+                                _mm_add_pd(
+                                    temp_a2_6,
+                                    _mm_add_pd(
+                                        temp_a2_7,
+                                        _mm_add_pd(
+                                            temp_a2_8,
+                                            _mm_add_pd(
+                                                temp_a2_9,
+                                                _mm_add_pd(temp_a2_10, temp_a2_11),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a3 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a3_1,
+                _mm_add_pd(
+                    temp_a3_2,
+                    _mm_add_pd(
+                        temp_a3_3,
+                        _mm_add_pd(
+                            temp_a3_4,
+                            _mm_add_pd(
+                                temp_a3_5,
+                                _mm_add_pd(
+                                    temp_a3_6,
+                                    _mm_add_pd(
+                                        temp_a3_7,
+                                        _mm_add_pd(
+                                            temp_a3_8,
+                                            _mm_add_pd(
+                                                temp_a3_9,
+                                                _mm_add_pd(temp_a3_10, temp_a3_11),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a4 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a4_1,
+                _mm_add_pd(
+                    temp_a4_2,
+                    _mm_add_pd(
+                        temp_a4_3,
+                        _mm_add_pd(
+                            temp_a4_4,
+                            _mm_add_pd(
+                                temp_a4_5,
+                                _mm_add_pd(
+                                    temp_a4_6,
+                                    _mm_add_pd(
+                                        temp_a4_7,
+                                        _mm_add_pd(
+                                            temp_a4_8,
+                                            _mm_add_pd(
+                                                temp_a4_9,
+                                                _mm_add_pd(temp_a4_10, temp_a4_11),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a5 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a5_1,
+                _mm_add_pd(
+                    temp_a5_2,
+                    _mm_add_pd(
+                        temp_a5_3,
+                        _mm_add_pd(
+                            temp_a5_4,
+                            _mm_add_pd(
+                                temp_a5_5,
+                                _mm_add_pd(
+                                    temp_a5_6,
+                                    _mm_add_pd(
+                                        temp_a5_7,
+                                        _mm_add_pd(
+                                            temp_a5_8,
+                                            _mm_add_pd(
+                                                temp_a5_9,
+                                                _mm_add_pd(temp_a5_10, temp_a5_11),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a6 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a6_1,
+                _mm_add_pd(
+                    temp_a6_2,
+                    _mm_add_pd(
+                        temp_a6_3,
+                        _mm_add_pd(
+                            temp_a6_4,
+                            _mm_add_pd(
+                                temp_a6_5,
+                                _mm_add_pd(
+                                    temp_a6_6,
+                                    _mm_add_pd(
+                                        temp_a6_7,
+                                        _mm_add_pd(
+                                            temp_a6_8,
+                                            _mm_add_pd(
+                                                temp_a6_9,
+                                                _mm_add_pd(temp_a6_10, temp_a6_11),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a7 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a7_1,
+                _mm_add_pd(
+                    temp_a7_2,
+                    _mm_add_pd(
+                        temp_a7_3,
+                        _mm_add_pd(
+                            temp_a7_4,
+                            _mm_add_pd(
+                                temp_a7_5,
+                                _mm_add_pd(
+                                    temp_a7_6,
+                                    _mm_add_pd(
+                                        temp_a7_7,
+                                        _mm_add_pd(
+                                            temp_a7_8,
+                                            _mm_add_pd(
+                                                temp_a7_9,
+                                                _mm_add_pd(temp_a7_10, temp_a7_11),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a8 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a8_1,
+                _mm_add_pd(
+                    temp_a8_2,
+                    _mm_add_pd(
+                        temp_a8_3,
+                        _mm_add_pd(
+                            temp_a8_4,
+                            _mm_add_pd(
+                                temp_a8_5,
+                                _mm_add_pd(
+                                    temp_a8_6,
+                                    _mm_add_pd(
+                                        temp_a8_7,
+                                        _mm_add_pd(
+                                            temp_a8_8,
+                                            _mm_add_pd(
+                                                temp_a8_9,
+                                                _mm_add_pd(temp_a8_10, temp_a8_11),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a9 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a9_1,
+                _mm_add_pd(
+                    temp_a9_2,
+                    _mm_add_pd(
+                        temp_a9_3,
+                        _mm_add_pd(
+                            temp_a9_4,
+                            _mm_add_pd(
+                                temp_a9_5,
+                                _mm_add_pd(
+                                    temp_a9_6,
+                                    _mm_add_pd(
+                                        temp_a9_7,
+                                        _mm_add_pd(
+                                            temp_a9_8,
+                                            _mm_add_pd(
+                                                temp_a9_9,
+                                                _mm_add_pd(temp_a9_10, temp_a9_11),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a10 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a10_1,
+                _mm_add_pd(
+                    temp_a10_2,
+                    _mm_add_pd(
+                        temp_a10_3,
+                        _mm_add_pd(
+                            temp_a10_4,
+                            _mm_add_pd(
+                                temp_a10_5,
+                                _mm_add_pd(
+                                    temp_a10_6,
+                                    _mm_add_pd(
+                                        temp_a10_7,
+                                        _mm_add_pd(
+                                            temp_a10_8,
+                                            _mm_add_pd(
+                                                temp_a10_9,
+                                                _mm_add_pd(temp_a10_10, temp_a10_11),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a11 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a11_1,
+                _mm_add_pd(
+                    temp_a11_2,
+                    _mm_add_pd(
+                        temp_a11_3,
+                        _mm_add_pd(
+                            temp_a11_4,
+                            _mm_add_pd(
+                                temp_a11_5,
+                                _mm_add_pd(
+                                    temp_a11_6,
+                                    _mm_add_pd(
+                                        temp_a11_7,
+                                        _mm_add_pd(
+                                            temp_a11_8,
+                                            _mm_add_pd(
+                                                temp_a11_9,
+                                                _mm_add_pd(temp_a11_10, temp_a11_11),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
 
-        let temp_b1 = _mm_add_pd(temp_b1_1, _mm_add_pd(temp_b1_2, _mm_add_pd(temp_b1_3, _mm_add_pd(temp_b1_4, _mm_add_pd(temp_b1_5, _mm_add_pd(temp_b1_6, _mm_add_pd(temp_b1_7, _mm_add_pd(temp_b1_8, _mm_add_pd(temp_b1_9, _mm_add_pd(temp_b1_10, temp_b1_11))))))))));
-        let temp_b2 = _mm_add_pd(temp_b2_1, _mm_add_pd(temp_b2_2, _mm_add_pd(temp_b2_3, _mm_add_pd(temp_b2_4, _mm_sub_pd(temp_b2_5, _mm_add_pd(temp_b2_6, _mm_add_pd(temp_b2_7, _mm_add_pd(temp_b2_8, _mm_add_pd(temp_b2_9, _mm_add_pd(temp_b2_10, temp_b2_11))))))))));
-        let temp_b3 = _mm_add_pd(temp_b3_1, _mm_add_pd(temp_b3_2, _mm_sub_pd(temp_b3_3, _mm_add_pd(temp_b3_4, _mm_add_pd(temp_b3_5, _mm_add_pd(temp_b3_6, _mm_sub_pd(temp_b3_7, _mm_add_pd(temp_b3_8, _mm_add_pd(temp_b3_9, _mm_add_pd(temp_b3_10, temp_b3_11))))))))));
-        let temp_b4 = _mm_add_pd(temp_b4_1, _mm_sub_pd(temp_b4_2, _mm_add_pd(temp_b4_3, _mm_add_pd(temp_b4_4, _mm_sub_pd(temp_b4_5, _mm_add_pd(temp_b4_6, _mm_add_pd(temp_b4_7, _mm_sub_pd(temp_b4_8, _mm_add_pd(temp_b4_9, _mm_add_pd(temp_b4_10, temp_b4_11))))))))));
-        let temp_b5 = _mm_add_pd(temp_b5_1, _mm_sub_pd(temp_b5_2, _mm_add_pd(temp_b5_3, _mm_sub_pd(temp_b5_4, _mm_add_pd(temp_b5_5, _mm_sub_pd(temp_b5_6, _mm_add_pd(temp_b5_7, _mm_add_pd(temp_b5_8, _mm_sub_pd(temp_b5_9, _mm_add_pd(temp_b5_10, temp_b5_11))))))))));
-        let temp_b6 = _mm_sub_pd(temp_b6_1, _mm_add_pd(temp_b6_2, _mm_sub_pd(temp_b6_3, _mm_add_pd(temp_b6_4, _mm_sub_pd(temp_b6_5, _mm_add_pd(temp_b6_6, _mm_sub_pd(temp_b6_7, _mm_add_pd(temp_b6_8, _mm_sub_pd(temp_b6_9, _mm_add_pd(temp_b6_10, temp_b6_11))))))))));
-        let temp_b7 = _mm_sub_pd(temp_b7_1, _mm_add_pd(temp_b7_2, _mm_sub_pd(temp_b7_3, _mm_sub_pd(temp_b7_4, _mm_add_pd(temp_b7_5, _mm_sub_pd(temp_b7_6, _mm_add_pd(temp_b7_7, _mm_sub_pd(temp_b7_8, _mm_sub_pd(temp_b7_9, _mm_add_pd(temp_b7_10, temp_b7_11))))))))));
-        let temp_b8 = _mm_sub_pd(temp_b8_1, _mm_sub_pd(temp_b8_2, _mm_add_pd(temp_b8_3, _mm_sub_pd(temp_b8_4, _mm_sub_pd(temp_b8_5, _mm_add_pd(temp_b8_6, _mm_sub_pd(temp_b8_7, _mm_sub_pd(temp_b8_8, _mm_add_pd(temp_b8_9, _mm_sub_pd(temp_b8_10, temp_b8_11))))))))));
-        let temp_b9 = _mm_sub_pd(temp_b9_1, _mm_sub_pd(temp_b9_2, _mm_sub_pd(temp_b9_3, _mm_add_pd(temp_b9_4, _mm_sub_pd(temp_b9_5, _mm_sub_pd(temp_b9_6, _mm_sub_pd(temp_b9_7, _mm_sub_pd(temp_b9_8, _mm_add_pd(temp_b9_9, _mm_sub_pd(temp_b9_10, temp_b9_11))))))))));
-        let temp_b10 = _mm_sub_pd(temp_b10_1, _mm_sub_pd(temp_b10_2, _mm_sub_pd(temp_b10_3, _mm_sub_pd(temp_b10_4, _mm_sub_pd(temp_b10_5, _mm_sub_pd(temp_b10_6, _mm_add_pd(temp_b10_7, _mm_sub_pd(temp_b10_8, _mm_sub_pd(temp_b10_9, _mm_sub_pd(temp_b10_10, temp_b10_11))))))))));
-        let temp_b11 = _mm_sub_pd(temp_b11_1, _mm_sub_pd(temp_b11_2, _mm_sub_pd(temp_b11_3, _mm_sub_pd(temp_b11_4, _mm_sub_pd(temp_b11_5, _mm_sub_pd(temp_b11_6, _mm_sub_pd(temp_b11_7, _mm_sub_pd(temp_b11_8, _mm_sub_pd(temp_b11_9, _mm_sub_pd(temp_b11_10, temp_b11_11))))))))));
+        let temp_b1 = _mm_add_pd(
+            temp_b1_1,
+            _mm_add_pd(
+                temp_b1_2,
+                _mm_add_pd(
+                    temp_b1_3,
+                    _mm_add_pd(
+                        temp_b1_4,
+                        _mm_add_pd(
+                            temp_b1_5,
+                            _mm_add_pd(
+                                temp_b1_6,
+                                _mm_add_pd(
+                                    temp_b1_7,
+                                    _mm_add_pd(
+                                        temp_b1_8,
+                                        _mm_add_pd(temp_b1_9, _mm_add_pd(temp_b1_10, temp_b1_11)),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b2 = _mm_add_pd(
+            temp_b2_1,
+            _mm_add_pd(
+                temp_b2_2,
+                _mm_add_pd(
+                    temp_b2_3,
+                    _mm_add_pd(
+                        temp_b2_4,
+                        _mm_sub_pd(
+                            temp_b2_5,
+                            _mm_add_pd(
+                                temp_b2_6,
+                                _mm_add_pd(
+                                    temp_b2_7,
+                                    _mm_add_pd(
+                                        temp_b2_8,
+                                        _mm_add_pd(temp_b2_9, _mm_add_pd(temp_b2_10, temp_b2_11)),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b3 = _mm_add_pd(
+            temp_b3_1,
+            _mm_add_pd(
+                temp_b3_2,
+                _mm_sub_pd(
+                    temp_b3_3,
+                    _mm_add_pd(
+                        temp_b3_4,
+                        _mm_add_pd(
+                            temp_b3_5,
+                            _mm_add_pd(
+                                temp_b3_6,
+                                _mm_sub_pd(
+                                    temp_b3_7,
+                                    _mm_add_pd(
+                                        temp_b3_8,
+                                        _mm_add_pd(temp_b3_9, _mm_add_pd(temp_b3_10, temp_b3_11)),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b4 = _mm_add_pd(
+            temp_b4_1,
+            _mm_sub_pd(
+                temp_b4_2,
+                _mm_add_pd(
+                    temp_b4_3,
+                    _mm_add_pd(
+                        temp_b4_4,
+                        _mm_sub_pd(
+                            temp_b4_5,
+                            _mm_add_pd(
+                                temp_b4_6,
+                                _mm_add_pd(
+                                    temp_b4_7,
+                                    _mm_sub_pd(
+                                        temp_b4_8,
+                                        _mm_add_pd(temp_b4_9, _mm_add_pd(temp_b4_10, temp_b4_11)),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b5 = _mm_add_pd(
+            temp_b5_1,
+            _mm_sub_pd(
+                temp_b5_2,
+                _mm_add_pd(
+                    temp_b5_3,
+                    _mm_sub_pd(
+                        temp_b5_4,
+                        _mm_add_pd(
+                            temp_b5_5,
+                            _mm_sub_pd(
+                                temp_b5_6,
+                                _mm_add_pd(
+                                    temp_b5_7,
+                                    _mm_add_pd(
+                                        temp_b5_8,
+                                        _mm_sub_pd(temp_b5_9, _mm_add_pd(temp_b5_10, temp_b5_11)),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b6 = _mm_sub_pd(
+            temp_b6_1,
+            _mm_add_pd(
+                temp_b6_2,
+                _mm_sub_pd(
+                    temp_b6_3,
+                    _mm_add_pd(
+                        temp_b6_4,
+                        _mm_sub_pd(
+                            temp_b6_5,
+                            _mm_add_pd(
+                                temp_b6_6,
+                                _mm_sub_pd(
+                                    temp_b6_7,
+                                    _mm_add_pd(
+                                        temp_b6_8,
+                                        _mm_sub_pd(temp_b6_9, _mm_add_pd(temp_b6_10, temp_b6_11)),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b7 = _mm_sub_pd(
+            temp_b7_1,
+            _mm_add_pd(
+                temp_b7_2,
+                _mm_sub_pd(
+                    temp_b7_3,
+                    _mm_sub_pd(
+                        temp_b7_4,
+                        _mm_add_pd(
+                            temp_b7_5,
+                            _mm_sub_pd(
+                                temp_b7_6,
+                                _mm_add_pd(
+                                    temp_b7_7,
+                                    _mm_sub_pd(
+                                        temp_b7_8,
+                                        _mm_sub_pd(temp_b7_9, _mm_add_pd(temp_b7_10, temp_b7_11)),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b8 = _mm_sub_pd(
+            temp_b8_1,
+            _mm_sub_pd(
+                temp_b8_2,
+                _mm_add_pd(
+                    temp_b8_3,
+                    _mm_sub_pd(
+                        temp_b8_4,
+                        _mm_sub_pd(
+                            temp_b8_5,
+                            _mm_add_pd(
+                                temp_b8_6,
+                                _mm_sub_pd(
+                                    temp_b8_7,
+                                    _mm_sub_pd(
+                                        temp_b8_8,
+                                        _mm_add_pd(temp_b8_9, _mm_sub_pd(temp_b8_10, temp_b8_11)),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b9 = _mm_sub_pd(
+            temp_b9_1,
+            _mm_sub_pd(
+                temp_b9_2,
+                _mm_sub_pd(
+                    temp_b9_3,
+                    _mm_add_pd(
+                        temp_b9_4,
+                        _mm_sub_pd(
+                            temp_b9_5,
+                            _mm_sub_pd(
+                                temp_b9_6,
+                                _mm_sub_pd(
+                                    temp_b9_7,
+                                    _mm_sub_pd(
+                                        temp_b9_8,
+                                        _mm_add_pd(temp_b9_9, _mm_sub_pd(temp_b9_10, temp_b9_11)),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b10 = _mm_sub_pd(
+            temp_b10_1,
+            _mm_sub_pd(
+                temp_b10_2,
+                _mm_sub_pd(
+                    temp_b10_3,
+                    _mm_sub_pd(
+                        temp_b10_4,
+                        _mm_sub_pd(
+                            temp_b10_5,
+                            _mm_sub_pd(
+                                temp_b10_6,
+                                _mm_add_pd(
+                                    temp_b10_7,
+                                    _mm_sub_pd(
+                                        temp_b10_8,
+                                        _mm_sub_pd(
+                                            temp_b10_9,
+                                            _mm_sub_pd(temp_b10_10, temp_b10_11),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b11 = _mm_sub_pd(
+            temp_b11_1,
+            _mm_sub_pd(
+                temp_b11_2,
+                _mm_sub_pd(
+                    temp_b11_3,
+                    _mm_sub_pd(
+                        temp_b11_4,
+                        _mm_sub_pd(
+                            temp_b11_5,
+                            _mm_sub_pd(
+                                temp_b11_6,
+                                _mm_sub_pd(
+                                    temp_b11_7,
+                                    _mm_sub_pd(
+                                        temp_b11_8,
+                                        _mm_sub_pd(
+                                            temp_b11_9,
+                                            _mm_sub_pd(temp_b11_10, temp_b11_11),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
 
         let temp_b1_rot = self.rotate.rotate(temp_b1);
         let temp_b2_rot = self.rotate.rotate(temp_b2);
@@ -4108,7 +7046,34 @@ impl<T: FftNum> SseF64Butterfly23<T> {
         let temp_b10_rot = self.rotate.rotate(temp_b10);
         let temp_b11_rot = self.rotate.rotate(temp_b11);
 
-        let x0 = _mm_add_pd(values[0], _mm_add_pd(x122p, _mm_add_pd(x221p, _mm_add_pd(x320p, _mm_add_pd(x419p, _mm_add_pd(x518p, _mm_add_pd(x617p, _mm_add_pd(x716p, _mm_add_pd(x815p, _mm_add_pd(x914p, _mm_add_pd(x1013p, x1112p)))))))))));
+        let x0 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                x122p,
+                _mm_add_pd(
+                    x221p,
+                    _mm_add_pd(
+                        x320p,
+                        _mm_add_pd(
+                            x419p,
+                            _mm_add_pd(
+                                x518p,
+                                _mm_add_pd(
+                                    x617p,
+                                    _mm_add_pd(
+                                        x716p,
+                                        _mm_add_pd(
+                                            x815p,
+                                            _mm_add_pd(x914p, _mm_add_pd(x1013p, x1112p)),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
         let x1 = _mm_add_pd(temp_a1, temp_b1_rot);
         let x2 = _mm_add_pd(temp_a2, temp_b2_rot);
         let x3 = _mm_add_pd(temp_a3, temp_b3_rot);
@@ -4131,18 +7096,19 @@ impl<T: FftNum> SseF64Butterfly23<T> {
         let x20 = _mm_sub_pd(temp_a3, temp_b3_rot);
         let x21 = _mm_sub_pd(temp_a2, temp_b2_rot);
         let x22 = _mm_sub_pd(temp_a1, temp_b1_rot);
-        [x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18, x19, x20, x21, x22]
-
+        [
+            x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18,
+            x19, x20, x21, x22,
+        ]
     }
 }
 
-
-//   ____   ___            _________  _     _ _   
-//  |___ \ / _ \          |___ /___ \| |__ (_) |_ 
+//   ____   ___            _________  _     _ _
+//  |___ \ / _ \          |___ /___ \| |__ (_) |_
 //    __) | (_) |  _____    |_ \ __) | '_ \| | __|
-//   / __/ \__, | |_____|  ___) / __/| |_) | | |_ 
+//   / __/ \__, | |_____|  ___) / __/| |_) | | |_
 //  |_____|  /_/          |____/_____|_.__/|_|\__|
-//                                                
+//
 
 pub struct SseF32Butterfly29<T> {
     direction: FftDirection,
@@ -4301,7 +7267,10 @@ impl<T: FftNum> SseF32Butterfly29<T> {
         let v27 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(27) as *const f64));
         let v28 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(28) as *const f64));
 
-        let out = self.perform_dual_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26, v27, v28]);
+        let out = self.perform_dual_fft_direct([
+            v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18,
+            v19, v20, v21, v22, v23, v24, v25, v26, v27, v28,
+        ]);
 
         let val = std::mem::transmute::<[__m128; 29], [Complex<f32>; 58]>(out);
 
@@ -4402,9 +7371,11 @@ impl<T: FftNum> SseF32Butterfly29<T> {
         let v26 = pack_1and2_f32(valuea26a27, valueb25b26);
         let v27 = pack_2and1_f32(valuea26a27, valueb27b28);
         let v28 = pack_1and2_f32(valuea28b0, valueb27b28);
-        
 
-        let out = self.perform_dual_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26, v27, v28]);
+        let out = self.perform_dual_fft_direct([
+            v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18,
+            v19, v20, v21, v22, v23, v24, v25, v26, v27, v28,
+        ]);
 
         let val = std::mem::transmute::<[__m128; 29], [Complex<f32>; 58]>(out);
 
@@ -4472,11 +7443,8 @@ impl<T: FftNum> SseF32Butterfly29<T> {
     // length 7 fft of a, given as a0, a1, a2, a3, a4, a5, a6.
     // result is [A0, A1, A2, A3, A4, A5, A6]
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_direct(
-        &self,
-        values: [__m128; 29],
-    ) -> [__m128; 29] {
-        // This is a SSE translation of the scalar 17-point butterfly 
+    pub(crate) unsafe fn perform_dual_fft_direct(&self, values: [__m128; 29]) -> [__m128; 29] {
+        // This is a SSE translation of the scalar 17-point butterfly
         let x128p = _mm_add_ps(values[1], values[28]);
         let x128n = _mm_sub_ps(values[1], values[28]);
         let x227p = _mm_add_ps(values[2], values[27]);
@@ -4900,35 +7868,1085 @@ impl<T: FftNum> SseF32Butterfly29<T> {
         let temp_b14_13 = _mm_mul_ps(self.twiddle8im, x1316n);
         let temp_b14_14 = _mm_mul_ps(self.twiddle7im, x1415n);
 
-        let temp_a1 = _mm_add_ps(values[0], _mm_add_ps(temp_a1_1, _mm_add_ps(temp_a1_2, _mm_add_ps(temp_a1_3, _mm_add_ps(temp_a1_4, _mm_add_ps(temp_a1_5, _mm_add_ps(temp_a1_6, _mm_add_ps(temp_a1_7, _mm_add_ps(temp_a1_8, _mm_add_ps(temp_a1_9, _mm_add_ps(temp_a1_10, _mm_add_ps(temp_a1_11, _mm_add_ps(temp_a1_12, _mm_add_ps(temp_a1_13, temp_a1_14))))))))))))));
-        let temp_a2 = _mm_add_ps(values[0], _mm_add_ps(temp_a2_1, _mm_add_ps(temp_a2_2, _mm_add_ps(temp_a2_3, _mm_add_ps(temp_a2_4, _mm_add_ps(temp_a2_5, _mm_add_ps(temp_a2_6, _mm_add_ps(temp_a2_7, _mm_add_ps(temp_a2_8, _mm_add_ps(temp_a2_9, _mm_add_ps(temp_a2_10, _mm_add_ps(temp_a2_11, _mm_add_ps(temp_a2_12, _mm_add_ps(temp_a2_13, temp_a2_14))))))))))))));
-        let temp_a3 = _mm_add_ps(values[0], _mm_add_ps(temp_a3_1, _mm_add_ps(temp_a3_2, _mm_add_ps(temp_a3_3, _mm_add_ps(temp_a3_4, _mm_add_ps(temp_a3_5, _mm_add_ps(temp_a3_6, _mm_add_ps(temp_a3_7, _mm_add_ps(temp_a3_8, _mm_add_ps(temp_a3_9, _mm_add_ps(temp_a3_10, _mm_add_ps(temp_a3_11, _mm_add_ps(temp_a3_12, _mm_add_ps(temp_a3_13, temp_a3_14))))))))))))));
-        let temp_a4 = _mm_add_ps(values[0], _mm_add_ps(temp_a4_1, _mm_add_ps(temp_a4_2, _mm_add_ps(temp_a4_3, _mm_add_ps(temp_a4_4, _mm_add_ps(temp_a4_5, _mm_add_ps(temp_a4_6, _mm_add_ps(temp_a4_7, _mm_add_ps(temp_a4_8, _mm_add_ps(temp_a4_9, _mm_add_ps(temp_a4_10, _mm_add_ps(temp_a4_11, _mm_add_ps(temp_a4_12, _mm_add_ps(temp_a4_13, temp_a4_14))))))))))))));
-        let temp_a5 = _mm_add_ps(values[0], _mm_add_ps(temp_a5_1, _mm_add_ps(temp_a5_2, _mm_add_ps(temp_a5_3, _mm_add_ps(temp_a5_4, _mm_add_ps(temp_a5_5, _mm_add_ps(temp_a5_6, _mm_add_ps(temp_a5_7, _mm_add_ps(temp_a5_8, _mm_add_ps(temp_a5_9, _mm_add_ps(temp_a5_10, _mm_add_ps(temp_a5_11, _mm_add_ps(temp_a5_12, _mm_add_ps(temp_a5_13, temp_a5_14))))))))))))));
-        let temp_a6 = _mm_add_ps(values[0], _mm_add_ps(temp_a6_1, _mm_add_ps(temp_a6_2, _mm_add_ps(temp_a6_3, _mm_add_ps(temp_a6_4, _mm_add_ps(temp_a6_5, _mm_add_ps(temp_a6_6, _mm_add_ps(temp_a6_7, _mm_add_ps(temp_a6_8, _mm_add_ps(temp_a6_9, _mm_add_ps(temp_a6_10, _mm_add_ps(temp_a6_11, _mm_add_ps(temp_a6_12, _mm_add_ps(temp_a6_13, temp_a6_14))))))))))))));
-        let temp_a7 = _mm_add_ps(values[0], _mm_add_ps(temp_a7_1, _mm_add_ps(temp_a7_2, _mm_add_ps(temp_a7_3, _mm_add_ps(temp_a7_4, _mm_add_ps(temp_a7_5, _mm_add_ps(temp_a7_6, _mm_add_ps(temp_a7_7, _mm_add_ps(temp_a7_8, _mm_add_ps(temp_a7_9, _mm_add_ps(temp_a7_10, _mm_add_ps(temp_a7_11, _mm_add_ps(temp_a7_12, _mm_add_ps(temp_a7_13, temp_a7_14))))))))))))));
-        let temp_a8 = _mm_add_ps(values[0], _mm_add_ps(temp_a8_1, _mm_add_ps(temp_a8_2, _mm_add_ps(temp_a8_3, _mm_add_ps(temp_a8_4, _mm_add_ps(temp_a8_5, _mm_add_ps(temp_a8_6, _mm_add_ps(temp_a8_7, _mm_add_ps(temp_a8_8, _mm_add_ps(temp_a8_9, _mm_add_ps(temp_a8_10, _mm_add_ps(temp_a8_11, _mm_add_ps(temp_a8_12, _mm_add_ps(temp_a8_13, temp_a8_14))))))))))))));
-        let temp_a9 = _mm_add_ps(values[0], _mm_add_ps(temp_a9_1, _mm_add_ps(temp_a9_2, _mm_add_ps(temp_a9_3, _mm_add_ps(temp_a9_4, _mm_add_ps(temp_a9_5, _mm_add_ps(temp_a9_6, _mm_add_ps(temp_a9_7, _mm_add_ps(temp_a9_8, _mm_add_ps(temp_a9_9, _mm_add_ps(temp_a9_10, _mm_add_ps(temp_a9_11, _mm_add_ps(temp_a9_12, _mm_add_ps(temp_a9_13, temp_a9_14))))))))))))));
-        let temp_a10 = _mm_add_ps(values[0], _mm_add_ps(temp_a10_1, _mm_add_ps(temp_a10_2, _mm_add_ps(temp_a10_3, _mm_add_ps(temp_a10_4, _mm_add_ps(temp_a10_5, _mm_add_ps(temp_a10_6, _mm_add_ps(temp_a10_7, _mm_add_ps(temp_a10_8, _mm_add_ps(temp_a10_9, _mm_add_ps(temp_a10_10, _mm_add_ps(temp_a10_11, _mm_add_ps(temp_a10_12, _mm_add_ps(temp_a10_13, temp_a10_14))))))))))))));
-        let temp_a11 = _mm_add_ps(values[0], _mm_add_ps(temp_a11_1, _mm_add_ps(temp_a11_2, _mm_add_ps(temp_a11_3, _mm_add_ps(temp_a11_4, _mm_add_ps(temp_a11_5, _mm_add_ps(temp_a11_6, _mm_add_ps(temp_a11_7, _mm_add_ps(temp_a11_8, _mm_add_ps(temp_a11_9, _mm_add_ps(temp_a11_10, _mm_add_ps(temp_a11_11, _mm_add_ps(temp_a11_12, _mm_add_ps(temp_a11_13, temp_a11_14))))))))))))));
-        let temp_a12 = _mm_add_ps(values[0], _mm_add_ps(temp_a12_1, _mm_add_ps(temp_a12_2, _mm_add_ps(temp_a12_3, _mm_add_ps(temp_a12_4, _mm_add_ps(temp_a12_5, _mm_add_ps(temp_a12_6, _mm_add_ps(temp_a12_7, _mm_add_ps(temp_a12_8, _mm_add_ps(temp_a12_9, _mm_add_ps(temp_a12_10, _mm_add_ps(temp_a12_11, _mm_add_ps(temp_a12_12, _mm_add_ps(temp_a12_13, temp_a12_14))))))))))))));
-        let temp_a13 = _mm_add_ps(values[0], _mm_add_ps(temp_a13_1, _mm_add_ps(temp_a13_2, _mm_add_ps(temp_a13_3, _mm_add_ps(temp_a13_4, _mm_add_ps(temp_a13_5, _mm_add_ps(temp_a13_6, _mm_add_ps(temp_a13_7, _mm_add_ps(temp_a13_8, _mm_add_ps(temp_a13_9, _mm_add_ps(temp_a13_10, _mm_add_ps(temp_a13_11, _mm_add_ps(temp_a13_12, _mm_add_ps(temp_a13_13, temp_a13_14))))))))))))));
-        let temp_a14 = _mm_add_ps(values[0], _mm_add_ps(temp_a14_1, _mm_add_ps(temp_a14_2, _mm_add_ps(temp_a14_3, _mm_add_ps(temp_a14_4, _mm_add_ps(temp_a14_5, _mm_add_ps(temp_a14_6, _mm_add_ps(temp_a14_7, _mm_add_ps(temp_a14_8, _mm_add_ps(temp_a14_9, _mm_add_ps(temp_a14_10, _mm_add_ps(temp_a14_11, _mm_add_ps(temp_a14_12, _mm_add_ps(temp_a14_13, temp_a14_14))))))))))))));
+        let temp_a1 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a1_1,
+                _mm_add_ps(
+                    temp_a1_2,
+                    _mm_add_ps(
+                        temp_a1_3,
+                        _mm_add_ps(
+                            temp_a1_4,
+                            _mm_add_ps(
+                                temp_a1_5,
+                                _mm_add_ps(
+                                    temp_a1_6,
+                                    _mm_add_ps(
+                                        temp_a1_7,
+                                        _mm_add_ps(
+                                            temp_a1_8,
+                                            _mm_add_ps(
+                                                temp_a1_9,
+                                                _mm_add_ps(
+                                                    temp_a1_10,
+                                                    _mm_add_ps(
+                                                        temp_a1_11,
+                                                        _mm_add_ps(
+                                                            temp_a1_12,
+                                                            _mm_add_ps(temp_a1_13, temp_a1_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a2 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a2_1,
+                _mm_add_ps(
+                    temp_a2_2,
+                    _mm_add_ps(
+                        temp_a2_3,
+                        _mm_add_ps(
+                            temp_a2_4,
+                            _mm_add_ps(
+                                temp_a2_5,
+                                _mm_add_ps(
+                                    temp_a2_6,
+                                    _mm_add_ps(
+                                        temp_a2_7,
+                                        _mm_add_ps(
+                                            temp_a2_8,
+                                            _mm_add_ps(
+                                                temp_a2_9,
+                                                _mm_add_ps(
+                                                    temp_a2_10,
+                                                    _mm_add_ps(
+                                                        temp_a2_11,
+                                                        _mm_add_ps(
+                                                            temp_a2_12,
+                                                            _mm_add_ps(temp_a2_13, temp_a2_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a3 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a3_1,
+                _mm_add_ps(
+                    temp_a3_2,
+                    _mm_add_ps(
+                        temp_a3_3,
+                        _mm_add_ps(
+                            temp_a3_4,
+                            _mm_add_ps(
+                                temp_a3_5,
+                                _mm_add_ps(
+                                    temp_a3_6,
+                                    _mm_add_ps(
+                                        temp_a3_7,
+                                        _mm_add_ps(
+                                            temp_a3_8,
+                                            _mm_add_ps(
+                                                temp_a3_9,
+                                                _mm_add_ps(
+                                                    temp_a3_10,
+                                                    _mm_add_ps(
+                                                        temp_a3_11,
+                                                        _mm_add_ps(
+                                                            temp_a3_12,
+                                                            _mm_add_ps(temp_a3_13, temp_a3_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a4 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a4_1,
+                _mm_add_ps(
+                    temp_a4_2,
+                    _mm_add_ps(
+                        temp_a4_3,
+                        _mm_add_ps(
+                            temp_a4_4,
+                            _mm_add_ps(
+                                temp_a4_5,
+                                _mm_add_ps(
+                                    temp_a4_6,
+                                    _mm_add_ps(
+                                        temp_a4_7,
+                                        _mm_add_ps(
+                                            temp_a4_8,
+                                            _mm_add_ps(
+                                                temp_a4_9,
+                                                _mm_add_ps(
+                                                    temp_a4_10,
+                                                    _mm_add_ps(
+                                                        temp_a4_11,
+                                                        _mm_add_ps(
+                                                            temp_a4_12,
+                                                            _mm_add_ps(temp_a4_13, temp_a4_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a5 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a5_1,
+                _mm_add_ps(
+                    temp_a5_2,
+                    _mm_add_ps(
+                        temp_a5_3,
+                        _mm_add_ps(
+                            temp_a5_4,
+                            _mm_add_ps(
+                                temp_a5_5,
+                                _mm_add_ps(
+                                    temp_a5_6,
+                                    _mm_add_ps(
+                                        temp_a5_7,
+                                        _mm_add_ps(
+                                            temp_a5_8,
+                                            _mm_add_ps(
+                                                temp_a5_9,
+                                                _mm_add_ps(
+                                                    temp_a5_10,
+                                                    _mm_add_ps(
+                                                        temp_a5_11,
+                                                        _mm_add_ps(
+                                                            temp_a5_12,
+                                                            _mm_add_ps(temp_a5_13, temp_a5_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a6 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a6_1,
+                _mm_add_ps(
+                    temp_a6_2,
+                    _mm_add_ps(
+                        temp_a6_3,
+                        _mm_add_ps(
+                            temp_a6_4,
+                            _mm_add_ps(
+                                temp_a6_5,
+                                _mm_add_ps(
+                                    temp_a6_6,
+                                    _mm_add_ps(
+                                        temp_a6_7,
+                                        _mm_add_ps(
+                                            temp_a6_8,
+                                            _mm_add_ps(
+                                                temp_a6_9,
+                                                _mm_add_ps(
+                                                    temp_a6_10,
+                                                    _mm_add_ps(
+                                                        temp_a6_11,
+                                                        _mm_add_ps(
+                                                            temp_a6_12,
+                                                            _mm_add_ps(temp_a6_13, temp_a6_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a7 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a7_1,
+                _mm_add_ps(
+                    temp_a7_2,
+                    _mm_add_ps(
+                        temp_a7_3,
+                        _mm_add_ps(
+                            temp_a7_4,
+                            _mm_add_ps(
+                                temp_a7_5,
+                                _mm_add_ps(
+                                    temp_a7_6,
+                                    _mm_add_ps(
+                                        temp_a7_7,
+                                        _mm_add_ps(
+                                            temp_a7_8,
+                                            _mm_add_ps(
+                                                temp_a7_9,
+                                                _mm_add_ps(
+                                                    temp_a7_10,
+                                                    _mm_add_ps(
+                                                        temp_a7_11,
+                                                        _mm_add_ps(
+                                                            temp_a7_12,
+                                                            _mm_add_ps(temp_a7_13, temp_a7_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a8 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a8_1,
+                _mm_add_ps(
+                    temp_a8_2,
+                    _mm_add_ps(
+                        temp_a8_3,
+                        _mm_add_ps(
+                            temp_a8_4,
+                            _mm_add_ps(
+                                temp_a8_5,
+                                _mm_add_ps(
+                                    temp_a8_6,
+                                    _mm_add_ps(
+                                        temp_a8_7,
+                                        _mm_add_ps(
+                                            temp_a8_8,
+                                            _mm_add_ps(
+                                                temp_a8_9,
+                                                _mm_add_ps(
+                                                    temp_a8_10,
+                                                    _mm_add_ps(
+                                                        temp_a8_11,
+                                                        _mm_add_ps(
+                                                            temp_a8_12,
+                                                            _mm_add_ps(temp_a8_13, temp_a8_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a9 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a9_1,
+                _mm_add_ps(
+                    temp_a9_2,
+                    _mm_add_ps(
+                        temp_a9_3,
+                        _mm_add_ps(
+                            temp_a9_4,
+                            _mm_add_ps(
+                                temp_a9_5,
+                                _mm_add_ps(
+                                    temp_a9_6,
+                                    _mm_add_ps(
+                                        temp_a9_7,
+                                        _mm_add_ps(
+                                            temp_a9_8,
+                                            _mm_add_ps(
+                                                temp_a9_9,
+                                                _mm_add_ps(
+                                                    temp_a9_10,
+                                                    _mm_add_ps(
+                                                        temp_a9_11,
+                                                        _mm_add_ps(
+                                                            temp_a9_12,
+                                                            _mm_add_ps(temp_a9_13, temp_a9_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a10 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a10_1,
+                _mm_add_ps(
+                    temp_a10_2,
+                    _mm_add_ps(
+                        temp_a10_3,
+                        _mm_add_ps(
+                            temp_a10_4,
+                            _mm_add_ps(
+                                temp_a10_5,
+                                _mm_add_ps(
+                                    temp_a10_6,
+                                    _mm_add_ps(
+                                        temp_a10_7,
+                                        _mm_add_ps(
+                                            temp_a10_8,
+                                            _mm_add_ps(
+                                                temp_a10_9,
+                                                _mm_add_ps(
+                                                    temp_a10_10,
+                                                    _mm_add_ps(
+                                                        temp_a10_11,
+                                                        _mm_add_ps(
+                                                            temp_a10_12,
+                                                            _mm_add_ps(temp_a10_13, temp_a10_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a11 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a11_1,
+                _mm_add_ps(
+                    temp_a11_2,
+                    _mm_add_ps(
+                        temp_a11_3,
+                        _mm_add_ps(
+                            temp_a11_4,
+                            _mm_add_ps(
+                                temp_a11_5,
+                                _mm_add_ps(
+                                    temp_a11_6,
+                                    _mm_add_ps(
+                                        temp_a11_7,
+                                        _mm_add_ps(
+                                            temp_a11_8,
+                                            _mm_add_ps(
+                                                temp_a11_9,
+                                                _mm_add_ps(
+                                                    temp_a11_10,
+                                                    _mm_add_ps(
+                                                        temp_a11_11,
+                                                        _mm_add_ps(
+                                                            temp_a11_12,
+                                                            _mm_add_ps(temp_a11_13, temp_a11_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a12 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a12_1,
+                _mm_add_ps(
+                    temp_a12_2,
+                    _mm_add_ps(
+                        temp_a12_3,
+                        _mm_add_ps(
+                            temp_a12_4,
+                            _mm_add_ps(
+                                temp_a12_5,
+                                _mm_add_ps(
+                                    temp_a12_6,
+                                    _mm_add_ps(
+                                        temp_a12_7,
+                                        _mm_add_ps(
+                                            temp_a12_8,
+                                            _mm_add_ps(
+                                                temp_a12_9,
+                                                _mm_add_ps(
+                                                    temp_a12_10,
+                                                    _mm_add_ps(
+                                                        temp_a12_11,
+                                                        _mm_add_ps(
+                                                            temp_a12_12,
+                                                            _mm_add_ps(temp_a12_13, temp_a12_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a13 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a13_1,
+                _mm_add_ps(
+                    temp_a13_2,
+                    _mm_add_ps(
+                        temp_a13_3,
+                        _mm_add_ps(
+                            temp_a13_4,
+                            _mm_add_ps(
+                                temp_a13_5,
+                                _mm_add_ps(
+                                    temp_a13_6,
+                                    _mm_add_ps(
+                                        temp_a13_7,
+                                        _mm_add_ps(
+                                            temp_a13_8,
+                                            _mm_add_ps(
+                                                temp_a13_9,
+                                                _mm_add_ps(
+                                                    temp_a13_10,
+                                                    _mm_add_ps(
+                                                        temp_a13_11,
+                                                        _mm_add_ps(
+                                                            temp_a13_12,
+                                                            _mm_add_ps(temp_a13_13, temp_a13_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a14 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a14_1,
+                _mm_add_ps(
+                    temp_a14_2,
+                    _mm_add_ps(
+                        temp_a14_3,
+                        _mm_add_ps(
+                            temp_a14_4,
+                            _mm_add_ps(
+                                temp_a14_5,
+                                _mm_add_ps(
+                                    temp_a14_6,
+                                    _mm_add_ps(
+                                        temp_a14_7,
+                                        _mm_add_ps(
+                                            temp_a14_8,
+                                            _mm_add_ps(
+                                                temp_a14_9,
+                                                _mm_add_ps(
+                                                    temp_a14_10,
+                                                    _mm_add_ps(
+                                                        temp_a14_11,
+                                                        _mm_add_ps(
+                                                            temp_a14_12,
+                                                            _mm_add_ps(temp_a14_13, temp_a14_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
 
-        let temp_b1 = _mm_add_ps(temp_b1_1, _mm_add_ps(temp_b1_2, _mm_add_ps(temp_b1_3, _mm_add_ps(temp_b1_4, _mm_add_ps(temp_b1_5, _mm_add_ps(temp_b1_6, _mm_add_ps(temp_b1_7, _mm_add_ps(temp_b1_8, _mm_add_ps(temp_b1_9, _mm_add_ps(temp_b1_10, _mm_add_ps(temp_b1_11, _mm_add_ps(temp_b1_12, _mm_add_ps(temp_b1_13, temp_b1_14)))))))))))));
-        let temp_b2 = _mm_add_ps(temp_b2_1, _mm_add_ps(temp_b2_2, _mm_add_ps(temp_b2_3, _mm_add_ps(temp_b2_4, _mm_add_ps(temp_b2_5, _mm_add_ps(temp_b2_6, _mm_sub_ps(temp_b2_7, _mm_add_ps(temp_b2_8, _mm_add_ps(temp_b2_9, _mm_add_ps(temp_b2_10, _mm_add_ps(temp_b2_11, _mm_add_ps(temp_b2_12, _mm_add_ps(temp_b2_13, temp_b2_14)))))))))))));
-        let temp_b3 = _mm_add_ps(temp_b3_1, _mm_add_ps(temp_b3_2, _mm_add_ps(temp_b3_3, _mm_sub_ps(temp_b3_4, _mm_add_ps(temp_b3_5, _mm_add_ps(temp_b3_6, _mm_add_ps(temp_b3_7, _mm_add_ps(temp_b3_8, _mm_sub_ps(temp_b3_9, _mm_add_ps(temp_b3_10, _mm_add_ps(temp_b3_11, _mm_add_ps(temp_b3_12, _mm_add_ps(temp_b3_13, temp_b3_14)))))))))))));
-        let temp_b4 = _mm_add_ps(temp_b4_1, _mm_add_ps(temp_b4_2, _mm_sub_ps(temp_b4_3, _mm_add_ps(temp_b4_4, _mm_add_ps(temp_b4_5, _mm_add_ps(temp_b4_6, _mm_sub_ps(temp_b4_7, _mm_add_ps(temp_b4_8, _mm_add_ps(temp_b4_9, _mm_sub_ps(temp_b4_10, _mm_add_ps(temp_b4_11, _mm_add_ps(temp_b4_12, _mm_add_ps(temp_b4_13, temp_b4_14)))))))))))));
-        let temp_b5 = _mm_add_ps(temp_b5_1, _mm_sub_ps(temp_b5_2, _mm_add_ps(temp_b5_3, _mm_add_ps(temp_b5_4, _mm_sub_ps(temp_b5_5, _mm_add_ps(temp_b5_6, _mm_add_ps(temp_b5_7, _mm_sub_ps(temp_b5_8, _mm_add_ps(temp_b5_9, _mm_add_ps(temp_b5_10, _mm_sub_ps(temp_b5_11, _mm_add_ps(temp_b5_12, _mm_add_ps(temp_b5_13, temp_b5_14)))))))))))));
-        let temp_b6 = _mm_add_ps(temp_b6_1, _mm_sub_ps(temp_b6_2, _mm_add_ps(temp_b6_3, _mm_sub_ps(temp_b6_4, _mm_add_ps(temp_b6_5, _mm_add_ps(temp_b6_6, _mm_sub_ps(temp_b6_7, _mm_add_ps(temp_b6_8, _mm_sub_ps(temp_b6_9, _mm_add_ps(temp_b6_10, _mm_add_ps(temp_b6_11, _mm_sub_ps(temp_b6_12, _mm_add_ps(temp_b6_13, temp_b6_14)))))))))))));
-        let temp_b7 = _mm_add_ps(temp_b7_1, _mm_sub_ps(temp_b7_2, _mm_add_ps(temp_b7_3, _mm_sub_ps(temp_b7_4, _mm_add_ps(temp_b7_5, _mm_sub_ps(temp_b7_6, _mm_add_ps(temp_b7_7, _mm_sub_ps(temp_b7_8, _mm_add_ps(temp_b7_9, _mm_sub_ps(temp_b7_10, _mm_add_ps(temp_b7_11, _mm_sub_ps(temp_b7_12, _mm_add_ps(temp_b7_13, temp_b7_14)))))))))))));
-        let temp_b8 = _mm_sub_ps(temp_b8_1, _mm_add_ps(temp_b8_2, _mm_sub_ps(temp_b8_3, _mm_add_ps(temp_b8_4, _mm_sub_ps(temp_b8_5, _mm_add_ps(temp_b8_6, _mm_sub_ps(temp_b8_7, _mm_add_ps(temp_b8_8, _mm_sub_ps(temp_b8_9, _mm_sub_ps(temp_b8_10, _mm_add_ps(temp_b8_11, _mm_sub_ps(temp_b8_12, _mm_add_ps(temp_b8_13, temp_b8_14)))))))))))));
-        let temp_b9 = _mm_sub_ps(temp_b9_1, _mm_add_ps(temp_b9_2, _mm_sub_ps(temp_b9_3, _mm_sub_ps(temp_b9_4, _mm_add_ps(temp_b9_5, _mm_sub_ps(temp_b9_6, _mm_add_ps(temp_b9_7, _mm_sub_ps(temp_b9_8, _mm_sub_ps(temp_b9_9, _mm_add_ps(temp_b9_10, _mm_sub_ps(temp_b9_11, _mm_sub_ps(temp_b9_12, _mm_add_ps(temp_b9_13, temp_b9_14)))))))))))));
-        let temp_b10 = _mm_sub_ps(temp_b10_1, _mm_sub_ps(temp_b10_2, _mm_add_ps(temp_b10_3, _mm_sub_ps(temp_b10_4, _mm_sub_ps(temp_b10_5, _mm_add_ps(temp_b10_6, _mm_sub_ps(temp_b10_7, _mm_sub_ps(temp_b10_8, _mm_add_ps(temp_b10_9, _mm_sub_ps(temp_b10_10, _mm_sub_ps(temp_b10_11, _mm_add_ps(temp_b10_12, _mm_sub_ps(temp_b10_13, temp_b10_14)))))))))))));
-        let temp_b11 = _mm_sub_ps(temp_b11_1, _mm_sub_ps(temp_b11_2, _mm_sub_ps(temp_b11_3, _mm_add_ps(temp_b11_4, _mm_sub_ps(temp_b11_5, _mm_sub_ps(temp_b11_6, _mm_sub_ps(temp_b11_7, _mm_add_ps(temp_b11_8, _mm_sub_ps(temp_b11_9, _mm_sub_ps(temp_b11_10, _mm_sub_ps(temp_b11_11, _mm_add_ps(temp_b11_12, _mm_sub_ps(temp_b11_13, temp_b11_14)))))))))))));
-        let temp_b12 = _mm_sub_ps(temp_b12_1, _mm_sub_ps(temp_b12_2, _mm_sub_ps(temp_b12_3, _mm_sub_ps(temp_b12_4, _mm_add_ps(temp_b12_5, _mm_sub_ps(temp_b12_6, _mm_sub_ps(temp_b12_7, _mm_sub_ps(temp_b12_8, _mm_sub_ps(temp_b12_9, _mm_sub_ps(temp_b12_10, _mm_add_ps(temp_b12_11, _mm_sub_ps(temp_b12_12, _mm_sub_ps(temp_b12_13, temp_b12_14)))))))))))));
-        let temp_b13 = _mm_sub_ps(temp_b13_1, _mm_sub_ps(temp_b13_2, _mm_sub_ps(temp_b13_3, _mm_sub_ps(temp_b13_4, _mm_sub_ps(temp_b13_5, _mm_sub_ps(temp_b13_6, _mm_sub_ps(temp_b13_7, _mm_sub_ps(temp_b13_8, _mm_add_ps(temp_b13_9, _mm_sub_ps(temp_b13_10, _mm_sub_ps(temp_b13_11, _mm_sub_ps(temp_b13_12, _mm_sub_ps(temp_b13_13, temp_b13_14)))))))))))));
-        let temp_b14 = _mm_sub_ps(temp_b14_1, _mm_sub_ps(temp_b14_2, _mm_sub_ps(temp_b14_3, _mm_sub_ps(temp_b14_4, _mm_sub_ps(temp_b14_5, _mm_sub_ps(temp_b14_6, _mm_sub_ps(temp_b14_7, _mm_sub_ps(temp_b14_8, _mm_sub_ps(temp_b14_9, _mm_sub_ps(temp_b14_10, _mm_sub_ps(temp_b14_11, _mm_sub_ps(temp_b14_12, _mm_sub_ps(temp_b14_13, temp_b14_14)))))))))))));
+        let temp_b1 = _mm_add_ps(
+            temp_b1_1,
+            _mm_add_ps(
+                temp_b1_2,
+                _mm_add_ps(
+                    temp_b1_3,
+                    _mm_add_ps(
+                        temp_b1_4,
+                        _mm_add_ps(
+                            temp_b1_5,
+                            _mm_add_ps(
+                                temp_b1_6,
+                                _mm_add_ps(
+                                    temp_b1_7,
+                                    _mm_add_ps(
+                                        temp_b1_8,
+                                        _mm_add_ps(
+                                            temp_b1_9,
+                                            _mm_add_ps(
+                                                temp_b1_10,
+                                                _mm_add_ps(
+                                                    temp_b1_11,
+                                                    _mm_add_ps(
+                                                        temp_b1_12,
+                                                        _mm_add_ps(temp_b1_13, temp_b1_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b2 = _mm_add_ps(
+            temp_b2_1,
+            _mm_add_ps(
+                temp_b2_2,
+                _mm_add_ps(
+                    temp_b2_3,
+                    _mm_add_ps(
+                        temp_b2_4,
+                        _mm_add_ps(
+                            temp_b2_5,
+                            _mm_add_ps(
+                                temp_b2_6,
+                                _mm_sub_ps(
+                                    temp_b2_7,
+                                    _mm_add_ps(
+                                        temp_b2_8,
+                                        _mm_add_ps(
+                                            temp_b2_9,
+                                            _mm_add_ps(
+                                                temp_b2_10,
+                                                _mm_add_ps(
+                                                    temp_b2_11,
+                                                    _mm_add_ps(
+                                                        temp_b2_12,
+                                                        _mm_add_ps(temp_b2_13, temp_b2_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b3 = _mm_add_ps(
+            temp_b3_1,
+            _mm_add_ps(
+                temp_b3_2,
+                _mm_add_ps(
+                    temp_b3_3,
+                    _mm_sub_ps(
+                        temp_b3_4,
+                        _mm_add_ps(
+                            temp_b3_5,
+                            _mm_add_ps(
+                                temp_b3_6,
+                                _mm_add_ps(
+                                    temp_b3_7,
+                                    _mm_add_ps(
+                                        temp_b3_8,
+                                        _mm_sub_ps(
+                                            temp_b3_9,
+                                            _mm_add_ps(
+                                                temp_b3_10,
+                                                _mm_add_ps(
+                                                    temp_b3_11,
+                                                    _mm_add_ps(
+                                                        temp_b3_12,
+                                                        _mm_add_ps(temp_b3_13, temp_b3_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b4 = _mm_add_ps(
+            temp_b4_1,
+            _mm_add_ps(
+                temp_b4_2,
+                _mm_sub_ps(
+                    temp_b4_3,
+                    _mm_add_ps(
+                        temp_b4_4,
+                        _mm_add_ps(
+                            temp_b4_5,
+                            _mm_add_ps(
+                                temp_b4_6,
+                                _mm_sub_ps(
+                                    temp_b4_7,
+                                    _mm_add_ps(
+                                        temp_b4_8,
+                                        _mm_add_ps(
+                                            temp_b4_9,
+                                            _mm_sub_ps(
+                                                temp_b4_10,
+                                                _mm_add_ps(
+                                                    temp_b4_11,
+                                                    _mm_add_ps(
+                                                        temp_b4_12,
+                                                        _mm_add_ps(temp_b4_13, temp_b4_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b5 = _mm_add_ps(
+            temp_b5_1,
+            _mm_sub_ps(
+                temp_b5_2,
+                _mm_add_ps(
+                    temp_b5_3,
+                    _mm_add_ps(
+                        temp_b5_4,
+                        _mm_sub_ps(
+                            temp_b5_5,
+                            _mm_add_ps(
+                                temp_b5_6,
+                                _mm_add_ps(
+                                    temp_b5_7,
+                                    _mm_sub_ps(
+                                        temp_b5_8,
+                                        _mm_add_ps(
+                                            temp_b5_9,
+                                            _mm_add_ps(
+                                                temp_b5_10,
+                                                _mm_sub_ps(
+                                                    temp_b5_11,
+                                                    _mm_add_ps(
+                                                        temp_b5_12,
+                                                        _mm_add_ps(temp_b5_13, temp_b5_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b6 = _mm_add_ps(
+            temp_b6_1,
+            _mm_sub_ps(
+                temp_b6_2,
+                _mm_add_ps(
+                    temp_b6_3,
+                    _mm_sub_ps(
+                        temp_b6_4,
+                        _mm_add_ps(
+                            temp_b6_5,
+                            _mm_add_ps(
+                                temp_b6_6,
+                                _mm_sub_ps(
+                                    temp_b6_7,
+                                    _mm_add_ps(
+                                        temp_b6_8,
+                                        _mm_sub_ps(
+                                            temp_b6_9,
+                                            _mm_add_ps(
+                                                temp_b6_10,
+                                                _mm_add_ps(
+                                                    temp_b6_11,
+                                                    _mm_sub_ps(
+                                                        temp_b6_12,
+                                                        _mm_add_ps(temp_b6_13, temp_b6_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b7 = _mm_add_ps(
+            temp_b7_1,
+            _mm_sub_ps(
+                temp_b7_2,
+                _mm_add_ps(
+                    temp_b7_3,
+                    _mm_sub_ps(
+                        temp_b7_4,
+                        _mm_add_ps(
+                            temp_b7_5,
+                            _mm_sub_ps(
+                                temp_b7_6,
+                                _mm_add_ps(
+                                    temp_b7_7,
+                                    _mm_sub_ps(
+                                        temp_b7_8,
+                                        _mm_add_ps(
+                                            temp_b7_9,
+                                            _mm_sub_ps(
+                                                temp_b7_10,
+                                                _mm_add_ps(
+                                                    temp_b7_11,
+                                                    _mm_sub_ps(
+                                                        temp_b7_12,
+                                                        _mm_add_ps(temp_b7_13, temp_b7_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b8 = _mm_sub_ps(
+            temp_b8_1,
+            _mm_add_ps(
+                temp_b8_2,
+                _mm_sub_ps(
+                    temp_b8_3,
+                    _mm_add_ps(
+                        temp_b8_4,
+                        _mm_sub_ps(
+                            temp_b8_5,
+                            _mm_add_ps(
+                                temp_b8_6,
+                                _mm_sub_ps(
+                                    temp_b8_7,
+                                    _mm_add_ps(
+                                        temp_b8_8,
+                                        _mm_sub_ps(
+                                            temp_b8_9,
+                                            _mm_sub_ps(
+                                                temp_b8_10,
+                                                _mm_add_ps(
+                                                    temp_b8_11,
+                                                    _mm_sub_ps(
+                                                        temp_b8_12,
+                                                        _mm_add_ps(temp_b8_13, temp_b8_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b9 = _mm_sub_ps(
+            temp_b9_1,
+            _mm_add_ps(
+                temp_b9_2,
+                _mm_sub_ps(
+                    temp_b9_3,
+                    _mm_sub_ps(
+                        temp_b9_4,
+                        _mm_add_ps(
+                            temp_b9_5,
+                            _mm_sub_ps(
+                                temp_b9_6,
+                                _mm_add_ps(
+                                    temp_b9_7,
+                                    _mm_sub_ps(
+                                        temp_b9_8,
+                                        _mm_sub_ps(
+                                            temp_b9_9,
+                                            _mm_add_ps(
+                                                temp_b9_10,
+                                                _mm_sub_ps(
+                                                    temp_b9_11,
+                                                    _mm_sub_ps(
+                                                        temp_b9_12,
+                                                        _mm_add_ps(temp_b9_13, temp_b9_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b10 = _mm_sub_ps(
+            temp_b10_1,
+            _mm_sub_ps(
+                temp_b10_2,
+                _mm_add_ps(
+                    temp_b10_3,
+                    _mm_sub_ps(
+                        temp_b10_4,
+                        _mm_sub_ps(
+                            temp_b10_5,
+                            _mm_add_ps(
+                                temp_b10_6,
+                                _mm_sub_ps(
+                                    temp_b10_7,
+                                    _mm_sub_ps(
+                                        temp_b10_8,
+                                        _mm_add_ps(
+                                            temp_b10_9,
+                                            _mm_sub_ps(
+                                                temp_b10_10,
+                                                _mm_sub_ps(
+                                                    temp_b10_11,
+                                                    _mm_add_ps(
+                                                        temp_b10_12,
+                                                        _mm_sub_ps(temp_b10_13, temp_b10_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b11 = _mm_sub_ps(
+            temp_b11_1,
+            _mm_sub_ps(
+                temp_b11_2,
+                _mm_sub_ps(
+                    temp_b11_3,
+                    _mm_add_ps(
+                        temp_b11_4,
+                        _mm_sub_ps(
+                            temp_b11_5,
+                            _mm_sub_ps(
+                                temp_b11_6,
+                                _mm_sub_ps(
+                                    temp_b11_7,
+                                    _mm_add_ps(
+                                        temp_b11_8,
+                                        _mm_sub_ps(
+                                            temp_b11_9,
+                                            _mm_sub_ps(
+                                                temp_b11_10,
+                                                _mm_sub_ps(
+                                                    temp_b11_11,
+                                                    _mm_add_ps(
+                                                        temp_b11_12,
+                                                        _mm_sub_ps(temp_b11_13, temp_b11_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b12 = _mm_sub_ps(
+            temp_b12_1,
+            _mm_sub_ps(
+                temp_b12_2,
+                _mm_sub_ps(
+                    temp_b12_3,
+                    _mm_sub_ps(
+                        temp_b12_4,
+                        _mm_add_ps(
+                            temp_b12_5,
+                            _mm_sub_ps(
+                                temp_b12_6,
+                                _mm_sub_ps(
+                                    temp_b12_7,
+                                    _mm_sub_ps(
+                                        temp_b12_8,
+                                        _mm_sub_ps(
+                                            temp_b12_9,
+                                            _mm_sub_ps(
+                                                temp_b12_10,
+                                                _mm_add_ps(
+                                                    temp_b12_11,
+                                                    _mm_sub_ps(
+                                                        temp_b12_12,
+                                                        _mm_sub_ps(temp_b12_13, temp_b12_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b13 = _mm_sub_ps(
+            temp_b13_1,
+            _mm_sub_ps(
+                temp_b13_2,
+                _mm_sub_ps(
+                    temp_b13_3,
+                    _mm_sub_ps(
+                        temp_b13_4,
+                        _mm_sub_ps(
+                            temp_b13_5,
+                            _mm_sub_ps(
+                                temp_b13_6,
+                                _mm_sub_ps(
+                                    temp_b13_7,
+                                    _mm_sub_ps(
+                                        temp_b13_8,
+                                        _mm_add_ps(
+                                            temp_b13_9,
+                                            _mm_sub_ps(
+                                                temp_b13_10,
+                                                _mm_sub_ps(
+                                                    temp_b13_11,
+                                                    _mm_sub_ps(
+                                                        temp_b13_12,
+                                                        _mm_sub_ps(temp_b13_13, temp_b13_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b14 = _mm_sub_ps(
+            temp_b14_1,
+            _mm_sub_ps(
+                temp_b14_2,
+                _mm_sub_ps(
+                    temp_b14_3,
+                    _mm_sub_ps(
+                        temp_b14_4,
+                        _mm_sub_ps(
+                            temp_b14_5,
+                            _mm_sub_ps(
+                                temp_b14_6,
+                                _mm_sub_ps(
+                                    temp_b14_7,
+                                    _mm_sub_ps(
+                                        temp_b14_8,
+                                        _mm_sub_ps(
+                                            temp_b14_9,
+                                            _mm_sub_ps(
+                                                temp_b14_10,
+                                                _mm_sub_ps(
+                                                    temp_b14_11,
+                                                    _mm_sub_ps(
+                                                        temp_b14_12,
+                                                        _mm_sub_ps(temp_b14_13, temp_b14_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
 
         let temp_b1_rot = self.rotate.rotate_both(temp_b1);
         let temp_b2_rot = self.rotate.rotate_both(temp_b2);
@@ -4945,7 +8963,46 @@ impl<T: FftNum> SseF32Butterfly29<T> {
         let temp_b13_rot = self.rotate.rotate_both(temp_b13);
         let temp_b14_rot = self.rotate.rotate_both(temp_b14);
 
-        let x0 = _mm_add_ps(values[0], _mm_add_ps(x128p, _mm_add_ps(x227p, _mm_add_ps(x326p, _mm_add_ps(x425p, _mm_add_ps(x524p, _mm_add_ps(x623p, _mm_add_ps(x722p, _mm_add_ps(x821p, _mm_add_ps(x920p, _mm_add_ps(x1019p, _mm_add_ps(x1118p, _mm_add_ps(x1217p, _mm_add_ps(x1316p, x1415p))))))))))))));
+        let x0 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                x128p,
+                _mm_add_ps(
+                    x227p,
+                    _mm_add_ps(
+                        x326p,
+                        _mm_add_ps(
+                            x425p,
+                            _mm_add_ps(
+                                x524p,
+                                _mm_add_ps(
+                                    x623p,
+                                    _mm_add_ps(
+                                        x722p,
+                                        _mm_add_ps(
+                                            x821p,
+                                            _mm_add_ps(
+                                                x920p,
+                                                _mm_add_ps(
+                                                    x1019p,
+                                                    _mm_add_ps(
+                                                        x1118p,
+                                                        _mm_add_ps(
+                                                            x1217p,
+                                                            _mm_add_ps(x1316p, x1415p),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
         let x1 = _mm_add_ps(temp_a1, temp_b1_rot);
         let x2 = _mm_add_ps(temp_a2, temp_b2_rot);
         let x3 = _mm_add_ps(temp_a3, temp_b3_rot);
@@ -4974,17 +9031,19 @@ impl<T: FftNum> SseF32Butterfly29<T> {
         let x26 = _mm_sub_ps(temp_a3, temp_b3_rot);
         let x27 = _mm_sub_ps(temp_a2, temp_b2_rot);
         let x28 = _mm_sub_ps(temp_a1, temp_b1_rot);
-        [x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28]
-
+        [
+            x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18,
+            x19, x20, x21, x22, x23, x24, x25, x26, x27, x28,
+        ]
     }
 }
 
-//   ____   ___             __   _  _   _     _ _   
-//  |___ \ / _ \           / /_ | || | | |__ (_) |_ 
+//   ____   ___             __   _  _   _     _ _
+//  |___ \ / _ \           / /_ | || | | |__ (_) |_
 //    __) | (_) |  _____  | '_ \| || |_| '_ \| | __|
-//   / __/ \__, | |_____| | (_) |__   _| |_) | | |_ 
+//   / __/ \__, | |_____| | (_) |__   _| |_) | | |_
 //  |_____|  /_/           \___/   |_| |_.__/|_|\__|
-//                                                  
+//
 
 pub struct SseF64Butterfly29<T> {
     direction: FftDirection,
@@ -5143,7 +9202,10 @@ impl<T: FftNum> SseF64Butterfly29<T> {
         let v27 = _mm_loadu_pd(input.as_ptr().add(27) as *const f64);
         let v28 = _mm_loadu_pd(input.as_ptr().add(28) as *const f64);
 
-        let out = self.perform_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26, v27, v28]);
+        let out = self.perform_fft_direct([
+            v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18,
+            v19, v20, v21, v22, v23, v24, v25, v26, v27, v28,
+        ]);
 
         let val = std::mem::transmute::<[__m128d; 29], [Complex<f64>; 29]>(out);
 
@@ -5182,11 +9244,8 @@ impl<T: FftNum> SseF64Butterfly29<T> {
     // length 7 fft of a, given as a0, a1, a2, a3, a4, a5, a6.
     // result is [A0, A1, A2, A3, A4, A5, A6]
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(
-        &self,
-        values: [__m128d; 29],
-    ) -> [__m128d; 29] {
-        // This is a SSE translation of the scalar 17-point butterfly 
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 29]) -> [__m128d; 29] {
+        // This is a SSE translation of the scalar 17-point butterfly
         let x128p = _mm_add_pd(values[1], values[28]);
         let x128n = _mm_sub_pd(values[1], values[28]);
         let x227p = _mm_add_pd(values[2], values[27]);
@@ -5610,35 +9669,1085 @@ impl<T: FftNum> SseF64Butterfly29<T> {
         let temp_b14_13 = _mm_mul_pd(self.twiddle8im, x1316n);
         let temp_b14_14 = _mm_mul_pd(self.twiddle7im, x1415n);
 
-        let temp_a1 = _mm_add_pd(values[0], _mm_add_pd(temp_a1_1, _mm_add_pd(temp_a1_2, _mm_add_pd(temp_a1_3, _mm_add_pd(temp_a1_4, _mm_add_pd(temp_a1_5, _mm_add_pd(temp_a1_6, _mm_add_pd(temp_a1_7, _mm_add_pd(temp_a1_8, _mm_add_pd(temp_a1_9, _mm_add_pd(temp_a1_10, _mm_add_pd(temp_a1_11, _mm_add_pd(temp_a1_12, _mm_add_pd(temp_a1_13, temp_a1_14))))))))))))));
-        let temp_a2 = _mm_add_pd(values[0], _mm_add_pd(temp_a2_1, _mm_add_pd(temp_a2_2, _mm_add_pd(temp_a2_3, _mm_add_pd(temp_a2_4, _mm_add_pd(temp_a2_5, _mm_add_pd(temp_a2_6, _mm_add_pd(temp_a2_7, _mm_add_pd(temp_a2_8, _mm_add_pd(temp_a2_9, _mm_add_pd(temp_a2_10, _mm_add_pd(temp_a2_11, _mm_add_pd(temp_a2_12, _mm_add_pd(temp_a2_13, temp_a2_14))))))))))))));
-        let temp_a3 = _mm_add_pd(values[0], _mm_add_pd(temp_a3_1, _mm_add_pd(temp_a3_2, _mm_add_pd(temp_a3_3, _mm_add_pd(temp_a3_4, _mm_add_pd(temp_a3_5, _mm_add_pd(temp_a3_6, _mm_add_pd(temp_a3_7, _mm_add_pd(temp_a3_8, _mm_add_pd(temp_a3_9, _mm_add_pd(temp_a3_10, _mm_add_pd(temp_a3_11, _mm_add_pd(temp_a3_12, _mm_add_pd(temp_a3_13, temp_a3_14))))))))))))));
-        let temp_a4 = _mm_add_pd(values[0], _mm_add_pd(temp_a4_1, _mm_add_pd(temp_a4_2, _mm_add_pd(temp_a4_3, _mm_add_pd(temp_a4_4, _mm_add_pd(temp_a4_5, _mm_add_pd(temp_a4_6, _mm_add_pd(temp_a4_7, _mm_add_pd(temp_a4_8, _mm_add_pd(temp_a4_9, _mm_add_pd(temp_a4_10, _mm_add_pd(temp_a4_11, _mm_add_pd(temp_a4_12, _mm_add_pd(temp_a4_13, temp_a4_14))))))))))))));
-        let temp_a5 = _mm_add_pd(values[0], _mm_add_pd(temp_a5_1, _mm_add_pd(temp_a5_2, _mm_add_pd(temp_a5_3, _mm_add_pd(temp_a5_4, _mm_add_pd(temp_a5_5, _mm_add_pd(temp_a5_6, _mm_add_pd(temp_a5_7, _mm_add_pd(temp_a5_8, _mm_add_pd(temp_a5_9, _mm_add_pd(temp_a5_10, _mm_add_pd(temp_a5_11, _mm_add_pd(temp_a5_12, _mm_add_pd(temp_a5_13, temp_a5_14))))))))))))));
-        let temp_a6 = _mm_add_pd(values[0], _mm_add_pd(temp_a6_1, _mm_add_pd(temp_a6_2, _mm_add_pd(temp_a6_3, _mm_add_pd(temp_a6_4, _mm_add_pd(temp_a6_5, _mm_add_pd(temp_a6_6, _mm_add_pd(temp_a6_7, _mm_add_pd(temp_a6_8, _mm_add_pd(temp_a6_9, _mm_add_pd(temp_a6_10, _mm_add_pd(temp_a6_11, _mm_add_pd(temp_a6_12, _mm_add_pd(temp_a6_13, temp_a6_14))))))))))))));
-        let temp_a7 = _mm_add_pd(values[0], _mm_add_pd(temp_a7_1, _mm_add_pd(temp_a7_2, _mm_add_pd(temp_a7_3, _mm_add_pd(temp_a7_4, _mm_add_pd(temp_a7_5, _mm_add_pd(temp_a7_6, _mm_add_pd(temp_a7_7, _mm_add_pd(temp_a7_8, _mm_add_pd(temp_a7_9, _mm_add_pd(temp_a7_10, _mm_add_pd(temp_a7_11, _mm_add_pd(temp_a7_12, _mm_add_pd(temp_a7_13, temp_a7_14))))))))))))));
-        let temp_a8 = _mm_add_pd(values[0], _mm_add_pd(temp_a8_1, _mm_add_pd(temp_a8_2, _mm_add_pd(temp_a8_3, _mm_add_pd(temp_a8_4, _mm_add_pd(temp_a8_5, _mm_add_pd(temp_a8_6, _mm_add_pd(temp_a8_7, _mm_add_pd(temp_a8_8, _mm_add_pd(temp_a8_9, _mm_add_pd(temp_a8_10, _mm_add_pd(temp_a8_11, _mm_add_pd(temp_a8_12, _mm_add_pd(temp_a8_13, temp_a8_14))))))))))))));
-        let temp_a9 = _mm_add_pd(values[0], _mm_add_pd(temp_a9_1, _mm_add_pd(temp_a9_2, _mm_add_pd(temp_a9_3, _mm_add_pd(temp_a9_4, _mm_add_pd(temp_a9_5, _mm_add_pd(temp_a9_6, _mm_add_pd(temp_a9_7, _mm_add_pd(temp_a9_8, _mm_add_pd(temp_a9_9, _mm_add_pd(temp_a9_10, _mm_add_pd(temp_a9_11, _mm_add_pd(temp_a9_12, _mm_add_pd(temp_a9_13, temp_a9_14))))))))))))));
-        let temp_a10 = _mm_add_pd(values[0], _mm_add_pd(temp_a10_1, _mm_add_pd(temp_a10_2, _mm_add_pd(temp_a10_3, _mm_add_pd(temp_a10_4, _mm_add_pd(temp_a10_5, _mm_add_pd(temp_a10_6, _mm_add_pd(temp_a10_7, _mm_add_pd(temp_a10_8, _mm_add_pd(temp_a10_9, _mm_add_pd(temp_a10_10, _mm_add_pd(temp_a10_11, _mm_add_pd(temp_a10_12, _mm_add_pd(temp_a10_13, temp_a10_14))))))))))))));
-        let temp_a11 = _mm_add_pd(values[0], _mm_add_pd(temp_a11_1, _mm_add_pd(temp_a11_2, _mm_add_pd(temp_a11_3, _mm_add_pd(temp_a11_4, _mm_add_pd(temp_a11_5, _mm_add_pd(temp_a11_6, _mm_add_pd(temp_a11_7, _mm_add_pd(temp_a11_8, _mm_add_pd(temp_a11_9, _mm_add_pd(temp_a11_10, _mm_add_pd(temp_a11_11, _mm_add_pd(temp_a11_12, _mm_add_pd(temp_a11_13, temp_a11_14))))))))))))));
-        let temp_a12 = _mm_add_pd(values[0], _mm_add_pd(temp_a12_1, _mm_add_pd(temp_a12_2, _mm_add_pd(temp_a12_3, _mm_add_pd(temp_a12_4, _mm_add_pd(temp_a12_5, _mm_add_pd(temp_a12_6, _mm_add_pd(temp_a12_7, _mm_add_pd(temp_a12_8, _mm_add_pd(temp_a12_9, _mm_add_pd(temp_a12_10, _mm_add_pd(temp_a12_11, _mm_add_pd(temp_a12_12, _mm_add_pd(temp_a12_13, temp_a12_14))))))))))))));
-        let temp_a13 = _mm_add_pd(values[0], _mm_add_pd(temp_a13_1, _mm_add_pd(temp_a13_2, _mm_add_pd(temp_a13_3, _mm_add_pd(temp_a13_4, _mm_add_pd(temp_a13_5, _mm_add_pd(temp_a13_6, _mm_add_pd(temp_a13_7, _mm_add_pd(temp_a13_8, _mm_add_pd(temp_a13_9, _mm_add_pd(temp_a13_10, _mm_add_pd(temp_a13_11, _mm_add_pd(temp_a13_12, _mm_add_pd(temp_a13_13, temp_a13_14))))))))))))));
-        let temp_a14 = _mm_add_pd(values[0], _mm_add_pd(temp_a14_1, _mm_add_pd(temp_a14_2, _mm_add_pd(temp_a14_3, _mm_add_pd(temp_a14_4, _mm_add_pd(temp_a14_5, _mm_add_pd(temp_a14_6, _mm_add_pd(temp_a14_7, _mm_add_pd(temp_a14_8, _mm_add_pd(temp_a14_9, _mm_add_pd(temp_a14_10, _mm_add_pd(temp_a14_11, _mm_add_pd(temp_a14_12, _mm_add_pd(temp_a14_13, temp_a14_14))))))))))))));
+        let temp_a1 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a1_1,
+                _mm_add_pd(
+                    temp_a1_2,
+                    _mm_add_pd(
+                        temp_a1_3,
+                        _mm_add_pd(
+                            temp_a1_4,
+                            _mm_add_pd(
+                                temp_a1_5,
+                                _mm_add_pd(
+                                    temp_a1_6,
+                                    _mm_add_pd(
+                                        temp_a1_7,
+                                        _mm_add_pd(
+                                            temp_a1_8,
+                                            _mm_add_pd(
+                                                temp_a1_9,
+                                                _mm_add_pd(
+                                                    temp_a1_10,
+                                                    _mm_add_pd(
+                                                        temp_a1_11,
+                                                        _mm_add_pd(
+                                                            temp_a1_12,
+                                                            _mm_add_pd(temp_a1_13, temp_a1_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a2 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a2_1,
+                _mm_add_pd(
+                    temp_a2_2,
+                    _mm_add_pd(
+                        temp_a2_3,
+                        _mm_add_pd(
+                            temp_a2_4,
+                            _mm_add_pd(
+                                temp_a2_5,
+                                _mm_add_pd(
+                                    temp_a2_6,
+                                    _mm_add_pd(
+                                        temp_a2_7,
+                                        _mm_add_pd(
+                                            temp_a2_8,
+                                            _mm_add_pd(
+                                                temp_a2_9,
+                                                _mm_add_pd(
+                                                    temp_a2_10,
+                                                    _mm_add_pd(
+                                                        temp_a2_11,
+                                                        _mm_add_pd(
+                                                            temp_a2_12,
+                                                            _mm_add_pd(temp_a2_13, temp_a2_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a3 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a3_1,
+                _mm_add_pd(
+                    temp_a3_2,
+                    _mm_add_pd(
+                        temp_a3_3,
+                        _mm_add_pd(
+                            temp_a3_4,
+                            _mm_add_pd(
+                                temp_a3_5,
+                                _mm_add_pd(
+                                    temp_a3_6,
+                                    _mm_add_pd(
+                                        temp_a3_7,
+                                        _mm_add_pd(
+                                            temp_a3_8,
+                                            _mm_add_pd(
+                                                temp_a3_9,
+                                                _mm_add_pd(
+                                                    temp_a3_10,
+                                                    _mm_add_pd(
+                                                        temp_a3_11,
+                                                        _mm_add_pd(
+                                                            temp_a3_12,
+                                                            _mm_add_pd(temp_a3_13, temp_a3_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a4 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a4_1,
+                _mm_add_pd(
+                    temp_a4_2,
+                    _mm_add_pd(
+                        temp_a4_3,
+                        _mm_add_pd(
+                            temp_a4_4,
+                            _mm_add_pd(
+                                temp_a4_5,
+                                _mm_add_pd(
+                                    temp_a4_6,
+                                    _mm_add_pd(
+                                        temp_a4_7,
+                                        _mm_add_pd(
+                                            temp_a4_8,
+                                            _mm_add_pd(
+                                                temp_a4_9,
+                                                _mm_add_pd(
+                                                    temp_a4_10,
+                                                    _mm_add_pd(
+                                                        temp_a4_11,
+                                                        _mm_add_pd(
+                                                            temp_a4_12,
+                                                            _mm_add_pd(temp_a4_13, temp_a4_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a5 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a5_1,
+                _mm_add_pd(
+                    temp_a5_2,
+                    _mm_add_pd(
+                        temp_a5_3,
+                        _mm_add_pd(
+                            temp_a5_4,
+                            _mm_add_pd(
+                                temp_a5_5,
+                                _mm_add_pd(
+                                    temp_a5_6,
+                                    _mm_add_pd(
+                                        temp_a5_7,
+                                        _mm_add_pd(
+                                            temp_a5_8,
+                                            _mm_add_pd(
+                                                temp_a5_9,
+                                                _mm_add_pd(
+                                                    temp_a5_10,
+                                                    _mm_add_pd(
+                                                        temp_a5_11,
+                                                        _mm_add_pd(
+                                                            temp_a5_12,
+                                                            _mm_add_pd(temp_a5_13, temp_a5_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a6 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a6_1,
+                _mm_add_pd(
+                    temp_a6_2,
+                    _mm_add_pd(
+                        temp_a6_3,
+                        _mm_add_pd(
+                            temp_a6_4,
+                            _mm_add_pd(
+                                temp_a6_5,
+                                _mm_add_pd(
+                                    temp_a6_6,
+                                    _mm_add_pd(
+                                        temp_a6_7,
+                                        _mm_add_pd(
+                                            temp_a6_8,
+                                            _mm_add_pd(
+                                                temp_a6_9,
+                                                _mm_add_pd(
+                                                    temp_a6_10,
+                                                    _mm_add_pd(
+                                                        temp_a6_11,
+                                                        _mm_add_pd(
+                                                            temp_a6_12,
+                                                            _mm_add_pd(temp_a6_13, temp_a6_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a7 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a7_1,
+                _mm_add_pd(
+                    temp_a7_2,
+                    _mm_add_pd(
+                        temp_a7_3,
+                        _mm_add_pd(
+                            temp_a7_4,
+                            _mm_add_pd(
+                                temp_a7_5,
+                                _mm_add_pd(
+                                    temp_a7_6,
+                                    _mm_add_pd(
+                                        temp_a7_7,
+                                        _mm_add_pd(
+                                            temp_a7_8,
+                                            _mm_add_pd(
+                                                temp_a7_9,
+                                                _mm_add_pd(
+                                                    temp_a7_10,
+                                                    _mm_add_pd(
+                                                        temp_a7_11,
+                                                        _mm_add_pd(
+                                                            temp_a7_12,
+                                                            _mm_add_pd(temp_a7_13, temp_a7_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a8 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a8_1,
+                _mm_add_pd(
+                    temp_a8_2,
+                    _mm_add_pd(
+                        temp_a8_3,
+                        _mm_add_pd(
+                            temp_a8_4,
+                            _mm_add_pd(
+                                temp_a8_5,
+                                _mm_add_pd(
+                                    temp_a8_6,
+                                    _mm_add_pd(
+                                        temp_a8_7,
+                                        _mm_add_pd(
+                                            temp_a8_8,
+                                            _mm_add_pd(
+                                                temp_a8_9,
+                                                _mm_add_pd(
+                                                    temp_a8_10,
+                                                    _mm_add_pd(
+                                                        temp_a8_11,
+                                                        _mm_add_pd(
+                                                            temp_a8_12,
+                                                            _mm_add_pd(temp_a8_13, temp_a8_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a9 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a9_1,
+                _mm_add_pd(
+                    temp_a9_2,
+                    _mm_add_pd(
+                        temp_a9_3,
+                        _mm_add_pd(
+                            temp_a9_4,
+                            _mm_add_pd(
+                                temp_a9_5,
+                                _mm_add_pd(
+                                    temp_a9_6,
+                                    _mm_add_pd(
+                                        temp_a9_7,
+                                        _mm_add_pd(
+                                            temp_a9_8,
+                                            _mm_add_pd(
+                                                temp_a9_9,
+                                                _mm_add_pd(
+                                                    temp_a9_10,
+                                                    _mm_add_pd(
+                                                        temp_a9_11,
+                                                        _mm_add_pd(
+                                                            temp_a9_12,
+                                                            _mm_add_pd(temp_a9_13, temp_a9_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a10 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a10_1,
+                _mm_add_pd(
+                    temp_a10_2,
+                    _mm_add_pd(
+                        temp_a10_3,
+                        _mm_add_pd(
+                            temp_a10_4,
+                            _mm_add_pd(
+                                temp_a10_5,
+                                _mm_add_pd(
+                                    temp_a10_6,
+                                    _mm_add_pd(
+                                        temp_a10_7,
+                                        _mm_add_pd(
+                                            temp_a10_8,
+                                            _mm_add_pd(
+                                                temp_a10_9,
+                                                _mm_add_pd(
+                                                    temp_a10_10,
+                                                    _mm_add_pd(
+                                                        temp_a10_11,
+                                                        _mm_add_pd(
+                                                            temp_a10_12,
+                                                            _mm_add_pd(temp_a10_13, temp_a10_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a11 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a11_1,
+                _mm_add_pd(
+                    temp_a11_2,
+                    _mm_add_pd(
+                        temp_a11_3,
+                        _mm_add_pd(
+                            temp_a11_4,
+                            _mm_add_pd(
+                                temp_a11_5,
+                                _mm_add_pd(
+                                    temp_a11_6,
+                                    _mm_add_pd(
+                                        temp_a11_7,
+                                        _mm_add_pd(
+                                            temp_a11_8,
+                                            _mm_add_pd(
+                                                temp_a11_9,
+                                                _mm_add_pd(
+                                                    temp_a11_10,
+                                                    _mm_add_pd(
+                                                        temp_a11_11,
+                                                        _mm_add_pd(
+                                                            temp_a11_12,
+                                                            _mm_add_pd(temp_a11_13, temp_a11_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a12 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a12_1,
+                _mm_add_pd(
+                    temp_a12_2,
+                    _mm_add_pd(
+                        temp_a12_3,
+                        _mm_add_pd(
+                            temp_a12_4,
+                            _mm_add_pd(
+                                temp_a12_5,
+                                _mm_add_pd(
+                                    temp_a12_6,
+                                    _mm_add_pd(
+                                        temp_a12_7,
+                                        _mm_add_pd(
+                                            temp_a12_8,
+                                            _mm_add_pd(
+                                                temp_a12_9,
+                                                _mm_add_pd(
+                                                    temp_a12_10,
+                                                    _mm_add_pd(
+                                                        temp_a12_11,
+                                                        _mm_add_pd(
+                                                            temp_a12_12,
+                                                            _mm_add_pd(temp_a12_13, temp_a12_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a13 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a13_1,
+                _mm_add_pd(
+                    temp_a13_2,
+                    _mm_add_pd(
+                        temp_a13_3,
+                        _mm_add_pd(
+                            temp_a13_4,
+                            _mm_add_pd(
+                                temp_a13_5,
+                                _mm_add_pd(
+                                    temp_a13_6,
+                                    _mm_add_pd(
+                                        temp_a13_7,
+                                        _mm_add_pd(
+                                            temp_a13_8,
+                                            _mm_add_pd(
+                                                temp_a13_9,
+                                                _mm_add_pd(
+                                                    temp_a13_10,
+                                                    _mm_add_pd(
+                                                        temp_a13_11,
+                                                        _mm_add_pd(
+                                                            temp_a13_12,
+                                                            _mm_add_pd(temp_a13_13, temp_a13_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a14 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a14_1,
+                _mm_add_pd(
+                    temp_a14_2,
+                    _mm_add_pd(
+                        temp_a14_3,
+                        _mm_add_pd(
+                            temp_a14_4,
+                            _mm_add_pd(
+                                temp_a14_5,
+                                _mm_add_pd(
+                                    temp_a14_6,
+                                    _mm_add_pd(
+                                        temp_a14_7,
+                                        _mm_add_pd(
+                                            temp_a14_8,
+                                            _mm_add_pd(
+                                                temp_a14_9,
+                                                _mm_add_pd(
+                                                    temp_a14_10,
+                                                    _mm_add_pd(
+                                                        temp_a14_11,
+                                                        _mm_add_pd(
+                                                            temp_a14_12,
+                                                            _mm_add_pd(temp_a14_13, temp_a14_14),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
 
-        let temp_b1 = _mm_add_pd(temp_b1_1, _mm_add_pd(temp_b1_2, _mm_add_pd(temp_b1_3, _mm_add_pd(temp_b1_4, _mm_add_pd(temp_b1_5, _mm_add_pd(temp_b1_6, _mm_add_pd(temp_b1_7, _mm_add_pd(temp_b1_8, _mm_add_pd(temp_b1_9, _mm_add_pd(temp_b1_10, _mm_add_pd(temp_b1_11, _mm_add_pd(temp_b1_12, _mm_add_pd(temp_b1_13, temp_b1_14)))))))))))));
-        let temp_b2 = _mm_add_pd(temp_b2_1, _mm_add_pd(temp_b2_2, _mm_add_pd(temp_b2_3, _mm_add_pd(temp_b2_4, _mm_add_pd(temp_b2_5, _mm_add_pd(temp_b2_6, _mm_sub_pd(temp_b2_7, _mm_add_pd(temp_b2_8, _mm_add_pd(temp_b2_9, _mm_add_pd(temp_b2_10, _mm_add_pd(temp_b2_11, _mm_add_pd(temp_b2_12, _mm_add_pd(temp_b2_13, temp_b2_14)))))))))))));
-        let temp_b3 = _mm_add_pd(temp_b3_1, _mm_add_pd(temp_b3_2, _mm_add_pd(temp_b3_3, _mm_sub_pd(temp_b3_4, _mm_add_pd(temp_b3_5, _mm_add_pd(temp_b3_6, _mm_add_pd(temp_b3_7, _mm_add_pd(temp_b3_8, _mm_sub_pd(temp_b3_9, _mm_add_pd(temp_b3_10, _mm_add_pd(temp_b3_11, _mm_add_pd(temp_b3_12, _mm_add_pd(temp_b3_13, temp_b3_14)))))))))))));
-        let temp_b4 = _mm_add_pd(temp_b4_1, _mm_add_pd(temp_b4_2, _mm_sub_pd(temp_b4_3, _mm_add_pd(temp_b4_4, _mm_add_pd(temp_b4_5, _mm_add_pd(temp_b4_6, _mm_sub_pd(temp_b4_7, _mm_add_pd(temp_b4_8, _mm_add_pd(temp_b4_9, _mm_sub_pd(temp_b4_10, _mm_add_pd(temp_b4_11, _mm_add_pd(temp_b4_12, _mm_add_pd(temp_b4_13, temp_b4_14)))))))))))));
-        let temp_b5 = _mm_add_pd(temp_b5_1, _mm_sub_pd(temp_b5_2, _mm_add_pd(temp_b5_3, _mm_add_pd(temp_b5_4, _mm_sub_pd(temp_b5_5, _mm_add_pd(temp_b5_6, _mm_add_pd(temp_b5_7, _mm_sub_pd(temp_b5_8, _mm_add_pd(temp_b5_9, _mm_add_pd(temp_b5_10, _mm_sub_pd(temp_b5_11, _mm_add_pd(temp_b5_12, _mm_add_pd(temp_b5_13, temp_b5_14)))))))))))));
-        let temp_b6 = _mm_add_pd(temp_b6_1, _mm_sub_pd(temp_b6_2, _mm_add_pd(temp_b6_3, _mm_sub_pd(temp_b6_4, _mm_add_pd(temp_b6_5, _mm_add_pd(temp_b6_6, _mm_sub_pd(temp_b6_7, _mm_add_pd(temp_b6_8, _mm_sub_pd(temp_b6_9, _mm_add_pd(temp_b6_10, _mm_add_pd(temp_b6_11, _mm_sub_pd(temp_b6_12, _mm_add_pd(temp_b6_13, temp_b6_14)))))))))))));
-        let temp_b7 = _mm_add_pd(temp_b7_1, _mm_sub_pd(temp_b7_2, _mm_add_pd(temp_b7_3, _mm_sub_pd(temp_b7_4, _mm_add_pd(temp_b7_5, _mm_sub_pd(temp_b7_6, _mm_add_pd(temp_b7_7, _mm_sub_pd(temp_b7_8, _mm_add_pd(temp_b7_9, _mm_sub_pd(temp_b7_10, _mm_add_pd(temp_b7_11, _mm_sub_pd(temp_b7_12, _mm_add_pd(temp_b7_13, temp_b7_14)))))))))))));
-        let temp_b8 = _mm_sub_pd(temp_b8_1, _mm_add_pd(temp_b8_2, _mm_sub_pd(temp_b8_3, _mm_add_pd(temp_b8_4, _mm_sub_pd(temp_b8_5, _mm_add_pd(temp_b8_6, _mm_sub_pd(temp_b8_7, _mm_add_pd(temp_b8_8, _mm_sub_pd(temp_b8_9, _mm_sub_pd(temp_b8_10, _mm_add_pd(temp_b8_11, _mm_sub_pd(temp_b8_12, _mm_add_pd(temp_b8_13, temp_b8_14)))))))))))));
-        let temp_b9 = _mm_sub_pd(temp_b9_1, _mm_add_pd(temp_b9_2, _mm_sub_pd(temp_b9_3, _mm_sub_pd(temp_b9_4, _mm_add_pd(temp_b9_5, _mm_sub_pd(temp_b9_6, _mm_add_pd(temp_b9_7, _mm_sub_pd(temp_b9_8, _mm_sub_pd(temp_b9_9, _mm_add_pd(temp_b9_10, _mm_sub_pd(temp_b9_11, _mm_sub_pd(temp_b9_12, _mm_add_pd(temp_b9_13, temp_b9_14)))))))))))));
-        let temp_b10 = _mm_sub_pd(temp_b10_1, _mm_sub_pd(temp_b10_2, _mm_add_pd(temp_b10_3, _mm_sub_pd(temp_b10_4, _mm_sub_pd(temp_b10_5, _mm_add_pd(temp_b10_6, _mm_sub_pd(temp_b10_7, _mm_sub_pd(temp_b10_8, _mm_add_pd(temp_b10_9, _mm_sub_pd(temp_b10_10, _mm_sub_pd(temp_b10_11, _mm_add_pd(temp_b10_12, _mm_sub_pd(temp_b10_13, temp_b10_14)))))))))))));
-        let temp_b11 = _mm_sub_pd(temp_b11_1, _mm_sub_pd(temp_b11_2, _mm_sub_pd(temp_b11_3, _mm_add_pd(temp_b11_4, _mm_sub_pd(temp_b11_5, _mm_sub_pd(temp_b11_6, _mm_sub_pd(temp_b11_7, _mm_add_pd(temp_b11_8, _mm_sub_pd(temp_b11_9, _mm_sub_pd(temp_b11_10, _mm_sub_pd(temp_b11_11, _mm_add_pd(temp_b11_12, _mm_sub_pd(temp_b11_13, temp_b11_14)))))))))))));
-        let temp_b12 = _mm_sub_pd(temp_b12_1, _mm_sub_pd(temp_b12_2, _mm_sub_pd(temp_b12_3, _mm_sub_pd(temp_b12_4, _mm_add_pd(temp_b12_5, _mm_sub_pd(temp_b12_6, _mm_sub_pd(temp_b12_7, _mm_sub_pd(temp_b12_8, _mm_sub_pd(temp_b12_9, _mm_sub_pd(temp_b12_10, _mm_add_pd(temp_b12_11, _mm_sub_pd(temp_b12_12, _mm_sub_pd(temp_b12_13, temp_b12_14)))))))))))));
-        let temp_b13 = _mm_sub_pd(temp_b13_1, _mm_sub_pd(temp_b13_2, _mm_sub_pd(temp_b13_3, _mm_sub_pd(temp_b13_4, _mm_sub_pd(temp_b13_5, _mm_sub_pd(temp_b13_6, _mm_sub_pd(temp_b13_7, _mm_sub_pd(temp_b13_8, _mm_add_pd(temp_b13_9, _mm_sub_pd(temp_b13_10, _mm_sub_pd(temp_b13_11, _mm_sub_pd(temp_b13_12, _mm_sub_pd(temp_b13_13, temp_b13_14)))))))))))));
-        let temp_b14 = _mm_sub_pd(temp_b14_1, _mm_sub_pd(temp_b14_2, _mm_sub_pd(temp_b14_3, _mm_sub_pd(temp_b14_4, _mm_sub_pd(temp_b14_5, _mm_sub_pd(temp_b14_6, _mm_sub_pd(temp_b14_7, _mm_sub_pd(temp_b14_8, _mm_sub_pd(temp_b14_9, _mm_sub_pd(temp_b14_10, _mm_sub_pd(temp_b14_11, _mm_sub_pd(temp_b14_12, _mm_sub_pd(temp_b14_13, temp_b14_14)))))))))))));
+        let temp_b1 = _mm_add_pd(
+            temp_b1_1,
+            _mm_add_pd(
+                temp_b1_2,
+                _mm_add_pd(
+                    temp_b1_3,
+                    _mm_add_pd(
+                        temp_b1_4,
+                        _mm_add_pd(
+                            temp_b1_5,
+                            _mm_add_pd(
+                                temp_b1_6,
+                                _mm_add_pd(
+                                    temp_b1_7,
+                                    _mm_add_pd(
+                                        temp_b1_8,
+                                        _mm_add_pd(
+                                            temp_b1_9,
+                                            _mm_add_pd(
+                                                temp_b1_10,
+                                                _mm_add_pd(
+                                                    temp_b1_11,
+                                                    _mm_add_pd(
+                                                        temp_b1_12,
+                                                        _mm_add_pd(temp_b1_13, temp_b1_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b2 = _mm_add_pd(
+            temp_b2_1,
+            _mm_add_pd(
+                temp_b2_2,
+                _mm_add_pd(
+                    temp_b2_3,
+                    _mm_add_pd(
+                        temp_b2_4,
+                        _mm_add_pd(
+                            temp_b2_5,
+                            _mm_add_pd(
+                                temp_b2_6,
+                                _mm_sub_pd(
+                                    temp_b2_7,
+                                    _mm_add_pd(
+                                        temp_b2_8,
+                                        _mm_add_pd(
+                                            temp_b2_9,
+                                            _mm_add_pd(
+                                                temp_b2_10,
+                                                _mm_add_pd(
+                                                    temp_b2_11,
+                                                    _mm_add_pd(
+                                                        temp_b2_12,
+                                                        _mm_add_pd(temp_b2_13, temp_b2_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b3 = _mm_add_pd(
+            temp_b3_1,
+            _mm_add_pd(
+                temp_b3_2,
+                _mm_add_pd(
+                    temp_b3_3,
+                    _mm_sub_pd(
+                        temp_b3_4,
+                        _mm_add_pd(
+                            temp_b3_5,
+                            _mm_add_pd(
+                                temp_b3_6,
+                                _mm_add_pd(
+                                    temp_b3_7,
+                                    _mm_add_pd(
+                                        temp_b3_8,
+                                        _mm_sub_pd(
+                                            temp_b3_9,
+                                            _mm_add_pd(
+                                                temp_b3_10,
+                                                _mm_add_pd(
+                                                    temp_b3_11,
+                                                    _mm_add_pd(
+                                                        temp_b3_12,
+                                                        _mm_add_pd(temp_b3_13, temp_b3_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b4 = _mm_add_pd(
+            temp_b4_1,
+            _mm_add_pd(
+                temp_b4_2,
+                _mm_sub_pd(
+                    temp_b4_3,
+                    _mm_add_pd(
+                        temp_b4_4,
+                        _mm_add_pd(
+                            temp_b4_5,
+                            _mm_add_pd(
+                                temp_b4_6,
+                                _mm_sub_pd(
+                                    temp_b4_7,
+                                    _mm_add_pd(
+                                        temp_b4_8,
+                                        _mm_add_pd(
+                                            temp_b4_9,
+                                            _mm_sub_pd(
+                                                temp_b4_10,
+                                                _mm_add_pd(
+                                                    temp_b4_11,
+                                                    _mm_add_pd(
+                                                        temp_b4_12,
+                                                        _mm_add_pd(temp_b4_13, temp_b4_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b5 = _mm_add_pd(
+            temp_b5_1,
+            _mm_sub_pd(
+                temp_b5_2,
+                _mm_add_pd(
+                    temp_b5_3,
+                    _mm_add_pd(
+                        temp_b5_4,
+                        _mm_sub_pd(
+                            temp_b5_5,
+                            _mm_add_pd(
+                                temp_b5_6,
+                                _mm_add_pd(
+                                    temp_b5_7,
+                                    _mm_sub_pd(
+                                        temp_b5_8,
+                                        _mm_add_pd(
+                                            temp_b5_9,
+                                            _mm_add_pd(
+                                                temp_b5_10,
+                                                _mm_sub_pd(
+                                                    temp_b5_11,
+                                                    _mm_add_pd(
+                                                        temp_b5_12,
+                                                        _mm_add_pd(temp_b5_13, temp_b5_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b6 = _mm_add_pd(
+            temp_b6_1,
+            _mm_sub_pd(
+                temp_b6_2,
+                _mm_add_pd(
+                    temp_b6_3,
+                    _mm_sub_pd(
+                        temp_b6_4,
+                        _mm_add_pd(
+                            temp_b6_5,
+                            _mm_add_pd(
+                                temp_b6_6,
+                                _mm_sub_pd(
+                                    temp_b6_7,
+                                    _mm_add_pd(
+                                        temp_b6_8,
+                                        _mm_sub_pd(
+                                            temp_b6_9,
+                                            _mm_add_pd(
+                                                temp_b6_10,
+                                                _mm_add_pd(
+                                                    temp_b6_11,
+                                                    _mm_sub_pd(
+                                                        temp_b6_12,
+                                                        _mm_add_pd(temp_b6_13, temp_b6_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b7 = _mm_add_pd(
+            temp_b7_1,
+            _mm_sub_pd(
+                temp_b7_2,
+                _mm_add_pd(
+                    temp_b7_3,
+                    _mm_sub_pd(
+                        temp_b7_4,
+                        _mm_add_pd(
+                            temp_b7_5,
+                            _mm_sub_pd(
+                                temp_b7_6,
+                                _mm_add_pd(
+                                    temp_b7_7,
+                                    _mm_sub_pd(
+                                        temp_b7_8,
+                                        _mm_add_pd(
+                                            temp_b7_9,
+                                            _mm_sub_pd(
+                                                temp_b7_10,
+                                                _mm_add_pd(
+                                                    temp_b7_11,
+                                                    _mm_sub_pd(
+                                                        temp_b7_12,
+                                                        _mm_add_pd(temp_b7_13, temp_b7_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b8 = _mm_sub_pd(
+            temp_b8_1,
+            _mm_add_pd(
+                temp_b8_2,
+                _mm_sub_pd(
+                    temp_b8_3,
+                    _mm_add_pd(
+                        temp_b8_4,
+                        _mm_sub_pd(
+                            temp_b8_5,
+                            _mm_add_pd(
+                                temp_b8_6,
+                                _mm_sub_pd(
+                                    temp_b8_7,
+                                    _mm_add_pd(
+                                        temp_b8_8,
+                                        _mm_sub_pd(
+                                            temp_b8_9,
+                                            _mm_sub_pd(
+                                                temp_b8_10,
+                                                _mm_add_pd(
+                                                    temp_b8_11,
+                                                    _mm_sub_pd(
+                                                        temp_b8_12,
+                                                        _mm_add_pd(temp_b8_13, temp_b8_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b9 = _mm_sub_pd(
+            temp_b9_1,
+            _mm_add_pd(
+                temp_b9_2,
+                _mm_sub_pd(
+                    temp_b9_3,
+                    _mm_sub_pd(
+                        temp_b9_4,
+                        _mm_add_pd(
+                            temp_b9_5,
+                            _mm_sub_pd(
+                                temp_b9_6,
+                                _mm_add_pd(
+                                    temp_b9_7,
+                                    _mm_sub_pd(
+                                        temp_b9_8,
+                                        _mm_sub_pd(
+                                            temp_b9_9,
+                                            _mm_add_pd(
+                                                temp_b9_10,
+                                                _mm_sub_pd(
+                                                    temp_b9_11,
+                                                    _mm_sub_pd(
+                                                        temp_b9_12,
+                                                        _mm_add_pd(temp_b9_13, temp_b9_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b10 = _mm_sub_pd(
+            temp_b10_1,
+            _mm_sub_pd(
+                temp_b10_2,
+                _mm_add_pd(
+                    temp_b10_3,
+                    _mm_sub_pd(
+                        temp_b10_4,
+                        _mm_sub_pd(
+                            temp_b10_5,
+                            _mm_add_pd(
+                                temp_b10_6,
+                                _mm_sub_pd(
+                                    temp_b10_7,
+                                    _mm_sub_pd(
+                                        temp_b10_8,
+                                        _mm_add_pd(
+                                            temp_b10_9,
+                                            _mm_sub_pd(
+                                                temp_b10_10,
+                                                _mm_sub_pd(
+                                                    temp_b10_11,
+                                                    _mm_add_pd(
+                                                        temp_b10_12,
+                                                        _mm_sub_pd(temp_b10_13, temp_b10_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b11 = _mm_sub_pd(
+            temp_b11_1,
+            _mm_sub_pd(
+                temp_b11_2,
+                _mm_sub_pd(
+                    temp_b11_3,
+                    _mm_add_pd(
+                        temp_b11_4,
+                        _mm_sub_pd(
+                            temp_b11_5,
+                            _mm_sub_pd(
+                                temp_b11_6,
+                                _mm_sub_pd(
+                                    temp_b11_7,
+                                    _mm_add_pd(
+                                        temp_b11_8,
+                                        _mm_sub_pd(
+                                            temp_b11_9,
+                                            _mm_sub_pd(
+                                                temp_b11_10,
+                                                _mm_sub_pd(
+                                                    temp_b11_11,
+                                                    _mm_add_pd(
+                                                        temp_b11_12,
+                                                        _mm_sub_pd(temp_b11_13, temp_b11_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b12 = _mm_sub_pd(
+            temp_b12_1,
+            _mm_sub_pd(
+                temp_b12_2,
+                _mm_sub_pd(
+                    temp_b12_3,
+                    _mm_sub_pd(
+                        temp_b12_4,
+                        _mm_add_pd(
+                            temp_b12_5,
+                            _mm_sub_pd(
+                                temp_b12_6,
+                                _mm_sub_pd(
+                                    temp_b12_7,
+                                    _mm_sub_pd(
+                                        temp_b12_8,
+                                        _mm_sub_pd(
+                                            temp_b12_9,
+                                            _mm_sub_pd(
+                                                temp_b12_10,
+                                                _mm_add_pd(
+                                                    temp_b12_11,
+                                                    _mm_sub_pd(
+                                                        temp_b12_12,
+                                                        _mm_sub_pd(temp_b12_13, temp_b12_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b13 = _mm_sub_pd(
+            temp_b13_1,
+            _mm_sub_pd(
+                temp_b13_2,
+                _mm_sub_pd(
+                    temp_b13_3,
+                    _mm_sub_pd(
+                        temp_b13_4,
+                        _mm_sub_pd(
+                            temp_b13_5,
+                            _mm_sub_pd(
+                                temp_b13_6,
+                                _mm_sub_pd(
+                                    temp_b13_7,
+                                    _mm_sub_pd(
+                                        temp_b13_8,
+                                        _mm_add_pd(
+                                            temp_b13_9,
+                                            _mm_sub_pd(
+                                                temp_b13_10,
+                                                _mm_sub_pd(
+                                                    temp_b13_11,
+                                                    _mm_sub_pd(
+                                                        temp_b13_12,
+                                                        _mm_sub_pd(temp_b13_13, temp_b13_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b14 = _mm_sub_pd(
+            temp_b14_1,
+            _mm_sub_pd(
+                temp_b14_2,
+                _mm_sub_pd(
+                    temp_b14_3,
+                    _mm_sub_pd(
+                        temp_b14_4,
+                        _mm_sub_pd(
+                            temp_b14_5,
+                            _mm_sub_pd(
+                                temp_b14_6,
+                                _mm_sub_pd(
+                                    temp_b14_7,
+                                    _mm_sub_pd(
+                                        temp_b14_8,
+                                        _mm_sub_pd(
+                                            temp_b14_9,
+                                            _mm_sub_pd(
+                                                temp_b14_10,
+                                                _mm_sub_pd(
+                                                    temp_b14_11,
+                                                    _mm_sub_pd(
+                                                        temp_b14_12,
+                                                        _mm_sub_pd(temp_b14_13, temp_b14_14),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
 
         let temp_b1_rot = self.rotate.rotate(temp_b1);
         let temp_b2_rot = self.rotate.rotate(temp_b2);
@@ -5655,7 +10764,46 @@ impl<T: FftNum> SseF64Butterfly29<T> {
         let temp_b13_rot = self.rotate.rotate(temp_b13);
         let temp_b14_rot = self.rotate.rotate(temp_b14);
 
-        let x0 = _mm_add_pd(values[0], _mm_add_pd(x128p, _mm_add_pd(x227p, _mm_add_pd(x326p, _mm_add_pd(x425p, _mm_add_pd(x524p, _mm_add_pd(x623p, _mm_add_pd(x722p, _mm_add_pd(x821p, _mm_add_pd(x920p, _mm_add_pd(x1019p, _mm_add_pd(x1118p, _mm_add_pd(x1217p, _mm_add_pd(x1316p, x1415p))))))))))))));
+        let x0 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                x128p,
+                _mm_add_pd(
+                    x227p,
+                    _mm_add_pd(
+                        x326p,
+                        _mm_add_pd(
+                            x425p,
+                            _mm_add_pd(
+                                x524p,
+                                _mm_add_pd(
+                                    x623p,
+                                    _mm_add_pd(
+                                        x722p,
+                                        _mm_add_pd(
+                                            x821p,
+                                            _mm_add_pd(
+                                                x920p,
+                                                _mm_add_pd(
+                                                    x1019p,
+                                                    _mm_add_pd(
+                                                        x1118p,
+                                                        _mm_add_pd(
+                                                            x1217p,
+                                                            _mm_add_pd(x1316p, x1415p),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
         let x1 = _mm_add_pd(temp_a1, temp_b1_rot);
         let x2 = _mm_add_pd(temp_a2, temp_b2_rot);
         let x3 = _mm_add_pd(temp_a3, temp_b3_rot);
@@ -5684,19 +10832,19 @@ impl<T: FftNum> SseF64Butterfly29<T> {
         let x26 = _mm_sub_pd(temp_a3, temp_b3_rot);
         let x27 = _mm_sub_pd(temp_a2, temp_b2_rot);
         let x28 = _mm_sub_pd(temp_a1, temp_b1_rot);
-        [x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28]
-
+        [
+            x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18,
+            x19, x20, x21, x22, x23, x24, x25, x26, x27, x28,
+        ]
     }
 }
 
-
-
-//   _____ _           _________  _     _ _   
-//  |___ // |         |___ /___ \| |__ (_) |_ 
+//   _____ _           _________  _     _ _
+//  |___ // |         |___ /___ \| |__ (_) |_
 //    |_ \| |  _____    |_ \ __) | '_ \| | __|
-//   ___) | | |_____|  ___) / __/| |_) | | |_ 
+//   ___) | | |_____|  ___) / __/| |_) | | |_
 //  |____/|_|         |____/_____|_.__/|_|\__|
-//                                            
+//
 pub struct SseF32Butterfly31<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
@@ -5863,7 +11011,10 @@ impl<T: FftNum> SseF32Butterfly31<T> {
         let v29 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(29) as *const f64));
         let v30 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(30) as *const f64));
 
-        let out = self.perform_dual_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26, v27, v28, v29, v30]);
+        let out = self.perform_dual_fft_direct([
+            v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18,
+            v19, v20, v21, v22, v23, v24, v25, v26, v27, v28, v29, v30,
+        ]);
 
         let val = std::mem::transmute::<[__m128; 31], [Complex<f32>; 62]>(out);
 
@@ -5970,9 +11121,11 @@ impl<T: FftNum> SseF32Butterfly31<T> {
         let v28 = pack_1and2_f32(valuea28a29, valueb27b28);
         let v29 = pack_2and1_f32(valuea28a29, valueb29b30);
         let v30 = pack_1and2_f32(valuea30b0, valueb29b30);
-        
 
-        let out = self.perform_dual_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26, v27, v28, v29, v30]);
+        let out = self.perform_dual_fft_direct([
+            v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18,
+            v19, v20, v21, v22, v23, v24, v25, v26, v27, v28, v29, v30,
+        ]);
 
         let val = std::mem::transmute::<[__m128; 31], [Complex<f32>; 62]>(out);
 
@@ -6044,11 +11197,8 @@ impl<T: FftNum> SseF32Butterfly31<T> {
     // length 7 fft of a, given as a0, a1, a2, a3, a4, a5, a6.
     // result is [A0, A1, A2, A3, A4, A5, A6]
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_direct(
-        &self,
-        values: [__m128; 31],
-    ) -> [__m128; 31] {
-        // This is a SSE translation of the scalar 17-point butterfly 
+    pub(crate) unsafe fn perform_dual_fft_direct(&self, values: [__m128; 31]) -> [__m128; 31] {
+        // This is a SSE translation of the scalar 17-point butterfly
         let x130p = _mm_add_ps(values[1], values[30]);
         let x130n = _mm_sub_ps(values[1], values[30]);
         let x229p = _mm_add_ps(values[2], values[29]);
@@ -6532,37 +11682,1270 @@ impl<T: FftNum> SseF32Butterfly31<T> {
         let temp_b15_14 = _mm_mul_ps(self.twiddle7im, x1417n);
         let temp_b15_15 = _mm_mul_ps(self.twiddle8im, x1516n);
 
-        let temp_a1 = _mm_add_ps(values[0], _mm_add_ps(temp_a1_1, _mm_add_ps(temp_a1_2, _mm_add_ps(temp_a1_3, _mm_add_ps(temp_a1_4, _mm_add_ps(temp_a1_5, _mm_add_ps(temp_a1_6, _mm_add_ps(temp_a1_7, _mm_add_ps(temp_a1_8, _mm_add_ps(temp_a1_9, _mm_add_ps(temp_a1_10, _mm_add_ps(temp_a1_11, _mm_add_ps(temp_a1_12, _mm_add_ps(temp_a1_13, _mm_add_ps(temp_a1_14, temp_a1_15)))))))))))))));
-        let temp_a2 = _mm_add_ps(values[0], _mm_add_ps(temp_a2_1, _mm_add_ps(temp_a2_2, _mm_add_ps(temp_a2_3, _mm_add_ps(temp_a2_4, _mm_add_ps(temp_a2_5, _mm_add_ps(temp_a2_6, _mm_add_ps(temp_a2_7, _mm_add_ps(temp_a2_8, _mm_add_ps(temp_a2_9, _mm_add_ps(temp_a2_10, _mm_add_ps(temp_a2_11, _mm_add_ps(temp_a2_12, _mm_add_ps(temp_a2_13, _mm_add_ps(temp_a2_14, temp_a2_15)))))))))))))));
-        let temp_a3 = _mm_add_ps(values[0], _mm_add_ps(temp_a3_1, _mm_add_ps(temp_a3_2, _mm_add_ps(temp_a3_3, _mm_add_ps(temp_a3_4, _mm_add_ps(temp_a3_5, _mm_add_ps(temp_a3_6, _mm_add_ps(temp_a3_7, _mm_add_ps(temp_a3_8, _mm_add_ps(temp_a3_9, _mm_add_ps(temp_a3_10, _mm_add_ps(temp_a3_11, _mm_add_ps(temp_a3_12, _mm_add_ps(temp_a3_13, _mm_add_ps(temp_a3_14, temp_a3_15)))))))))))))));
-        let temp_a4 = _mm_add_ps(values[0], _mm_add_ps(temp_a4_1, _mm_add_ps(temp_a4_2, _mm_add_ps(temp_a4_3, _mm_add_ps(temp_a4_4, _mm_add_ps(temp_a4_5, _mm_add_ps(temp_a4_6, _mm_add_ps(temp_a4_7, _mm_add_ps(temp_a4_8, _mm_add_ps(temp_a4_9, _mm_add_ps(temp_a4_10, _mm_add_ps(temp_a4_11, _mm_add_ps(temp_a4_12, _mm_add_ps(temp_a4_13, _mm_add_ps(temp_a4_14, temp_a4_15)))))))))))))));
-        let temp_a5 = _mm_add_ps(values[0], _mm_add_ps(temp_a5_1, _mm_add_ps(temp_a5_2, _mm_add_ps(temp_a5_3, _mm_add_ps(temp_a5_4, _mm_add_ps(temp_a5_5, _mm_add_ps(temp_a5_6, _mm_add_ps(temp_a5_7, _mm_add_ps(temp_a5_8, _mm_add_ps(temp_a5_9, _mm_add_ps(temp_a5_10, _mm_add_ps(temp_a5_11, _mm_add_ps(temp_a5_12, _mm_add_ps(temp_a5_13, _mm_add_ps(temp_a5_14, temp_a5_15)))))))))))))));
-        let temp_a6 = _mm_add_ps(values[0], _mm_add_ps(temp_a6_1, _mm_add_ps(temp_a6_2, _mm_add_ps(temp_a6_3, _mm_add_ps(temp_a6_4, _mm_add_ps(temp_a6_5, _mm_add_ps(temp_a6_6, _mm_add_ps(temp_a6_7, _mm_add_ps(temp_a6_8, _mm_add_ps(temp_a6_9, _mm_add_ps(temp_a6_10, _mm_add_ps(temp_a6_11, _mm_add_ps(temp_a6_12, _mm_add_ps(temp_a6_13, _mm_add_ps(temp_a6_14, temp_a6_15)))))))))))))));
-        let temp_a7 = _mm_add_ps(values[0], _mm_add_ps(temp_a7_1, _mm_add_ps(temp_a7_2, _mm_add_ps(temp_a7_3, _mm_add_ps(temp_a7_4, _mm_add_ps(temp_a7_5, _mm_add_ps(temp_a7_6, _mm_add_ps(temp_a7_7, _mm_add_ps(temp_a7_8, _mm_add_ps(temp_a7_9, _mm_add_ps(temp_a7_10, _mm_add_ps(temp_a7_11, _mm_add_ps(temp_a7_12, _mm_add_ps(temp_a7_13, _mm_add_ps(temp_a7_14, temp_a7_15)))))))))))))));
-        let temp_a8 = _mm_add_ps(values[0], _mm_add_ps(temp_a8_1, _mm_add_ps(temp_a8_2, _mm_add_ps(temp_a8_3, _mm_add_ps(temp_a8_4, _mm_add_ps(temp_a8_5, _mm_add_ps(temp_a8_6, _mm_add_ps(temp_a8_7, _mm_add_ps(temp_a8_8, _mm_add_ps(temp_a8_9, _mm_add_ps(temp_a8_10, _mm_add_ps(temp_a8_11, _mm_add_ps(temp_a8_12, _mm_add_ps(temp_a8_13, _mm_add_ps(temp_a8_14, temp_a8_15)))))))))))))));
-        let temp_a9 = _mm_add_ps(values[0], _mm_add_ps(temp_a9_1, _mm_add_ps(temp_a9_2, _mm_add_ps(temp_a9_3, _mm_add_ps(temp_a9_4, _mm_add_ps(temp_a9_5, _mm_add_ps(temp_a9_6, _mm_add_ps(temp_a9_7, _mm_add_ps(temp_a9_8, _mm_add_ps(temp_a9_9, _mm_add_ps(temp_a9_10, _mm_add_ps(temp_a9_11, _mm_add_ps(temp_a9_12, _mm_add_ps(temp_a9_13, _mm_add_ps(temp_a9_14, temp_a9_15)))))))))))))));
-        let temp_a10 = _mm_add_ps(values[0], _mm_add_ps(temp_a10_1, _mm_add_ps(temp_a10_2, _mm_add_ps(temp_a10_3, _mm_add_ps(temp_a10_4, _mm_add_ps(temp_a10_5, _mm_add_ps(temp_a10_6, _mm_add_ps(temp_a10_7, _mm_add_ps(temp_a10_8, _mm_add_ps(temp_a10_9, _mm_add_ps(temp_a10_10, _mm_add_ps(temp_a10_11, _mm_add_ps(temp_a10_12, _mm_add_ps(temp_a10_13, _mm_add_ps(temp_a10_14, temp_a10_15)))))))))))))));
-        let temp_a11 = _mm_add_ps(values[0], _mm_add_ps(temp_a11_1, _mm_add_ps(temp_a11_2, _mm_add_ps(temp_a11_3, _mm_add_ps(temp_a11_4, _mm_add_ps(temp_a11_5, _mm_add_ps(temp_a11_6, _mm_add_ps(temp_a11_7, _mm_add_ps(temp_a11_8, _mm_add_ps(temp_a11_9, _mm_add_ps(temp_a11_10, _mm_add_ps(temp_a11_11, _mm_add_ps(temp_a11_12, _mm_add_ps(temp_a11_13, _mm_add_ps(temp_a11_14, temp_a11_15)))))))))))))));
-        let temp_a12 = _mm_add_ps(values[0], _mm_add_ps(temp_a12_1, _mm_add_ps(temp_a12_2, _mm_add_ps(temp_a12_3, _mm_add_ps(temp_a12_4, _mm_add_ps(temp_a12_5, _mm_add_ps(temp_a12_6, _mm_add_ps(temp_a12_7, _mm_add_ps(temp_a12_8, _mm_add_ps(temp_a12_9, _mm_add_ps(temp_a12_10, _mm_add_ps(temp_a12_11, _mm_add_ps(temp_a12_12, _mm_add_ps(temp_a12_13, _mm_add_ps(temp_a12_14, temp_a12_15)))))))))))))));
-        let temp_a13 = _mm_add_ps(values[0], _mm_add_ps(temp_a13_1, _mm_add_ps(temp_a13_2, _mm_add_ps(temp_a13_3, _mm_add_ps(temp_a13_4, _mm_add_ps(temp_a13_5, _mm_add_ps(temp_a13_6, _mm_add_ps(temp_a13_7, _mm_add_ps(temp_a13_8, _mm_add_ps(temp_a13_9, _mm_add_ps(temp_a13_10, _mm_add_ps(temp_a13_11, _mm_add_ps(temp_a13_12, _mm_add_ps(temp_a13_13, _mm_add_ps(temp_a13_14, temp_a13_15)))))))))))))));
-        let temp_a14 = _mm_add_ps(values[0], _mm_add_ps(temp_a14_1, _mm_add_ps(temp_a14_2, _mm_add_ps(temp_a14_3, _mm_add_ps(temp_a14_4, _mm_add_ps(temp_a14_5, _mm_add_ps(temp_a14_6, _mm_add_ps(temp_a14_7, _mm_add_ps(temp_a14_8, _mm_add_ps(temp_a14_9, _mm_add_ps(temp_a14_10, _mm_add_ps(temp_a14_11, _mm_add_ps(temp_a14_12, _mm_add_ps(temp_a14_13, _mm_add_ps(temp_a14_14, temp_a14_15)))))))))))))));
-        let temp_a15 = _mm_add_ps(values[0], _mm_add_ps(temp_a15_1, _mm_add_ps(temp_a15_2, _mm_add_ps(temp_a15_3, _mm_add_ps(temp_a15_4, _mm_add_ps(temp_a15_5, _mm_add_ps(temp_a15_6, _mm_add_ps(temp_a15_7, _mm_add_ps(temp_a15_8, _mm_add_ps(temp_a15_9, _mm_add_ps(temp_a15_10, _mm_add_ps(temp_a15_11, _mm_add_ps(temp_a15_12, _mm_add_ps(temp_a15_13, _mm_add_ps(temp_a15_14, temp_a15_15)))))))))))))));
+        let temp_a1 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a1_1,
+                _mm_add_ps(
+                    temp_a1_2,
+                    _mm_add_ps(
+                        temp_a1_3,
+                        _mm_add_ps(
+                            temp_a1_4,
+                            _mm_add_ps(
+                                temp_a1_5,
+                                _mm_add_ps(
+                                    temp_a1_6,
+                                    _mm_add_ps(
+                                        temp_a1_7,
+                                        _mm_add_ps(
+                                            temp_a1_8,
+                                            _mm_add_ps(
+                                                temp_a1_9,
+                                                _mm_add_ps(
+                                                    temp_a1_10,
+                                                    _mm_add_ps(
+                                                        temp_a1_11,
+                                                        _mm_add_ps(
+                                                            temp_a1_12,
+                                                            _mm_add_ps(
+                                                                temp_a1_13,
+                                                                _mm_add_ps(temp_a1_14, temp_a1_15),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a2 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a2_1,
+                _mm_add_ps(
+                    temp_a2_2,
+                    _mm_add_ps(
+                        temp_a2_3,
+                        _mm_add_ps(
+                            temp_a2_4,
+                            _mm_add_ps(
+                                temp_a2_5,
+                                _mm_add_ps(
+                                    temp_a2_6,
+                                    _mm_add_ps(
+                                        temp_a2_7,
+                                        _mm_add_ps(
+                                            temp_a2_8,
+                                            _mm_add_ps(
+                                                temp_a2_9,
+                                                _mm_add_ps(
+                                                    temp_a2_10,
+                                                    _mm_add_ps(
+                                                        temp_a2_11,
+                                                        _mm_add_ps(
+                                                            temp_a2_12,
+                                                            _mm_add_ps(
+                                                                temp_a2_13,
+                                                                _mm_add_ps(temp_a2_14, temp_a2_15),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a3 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a3_1,
+                _mm_add_ps(
+                    temp_a3_2,
+                    _mm_add_ps(
+                        temp_a3_3,
+                        _mm_add_ps(
+                            temp_a3_4,
+                            _mm_add_ps(
+                                temp_a3_5,
+                                _mm_add_ps(
+                                    temp_a3_6,
+                                    _mm_add_ps(
+                                        temp_a3_7,
+                                        _mm_add_ps(
+                                            temp_a3_8,
+                                            _mm_add_ps(
+                                                temp_a3_9,
+                                                _mm_add_ps(
+                                                    temp_a3_10,
+                                                    _mm_add_ps(
+                                                        temp_a3_11,
+                                                        _mm_add_ps(
+                                                            temp_a3_12,
+                                                            _mm_add_ps(
+                                                                temp_a3_13,
+                                                                _mm_add_ps(temp_a3_14, temp_a3_15),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a4 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a4_1,
+                _mm_add_ps(
+                    temp_a4_2,
+                    _mm_add_ps(
+                        temp_a4_3,
+                        _mm_add_ps(
+                            temp_a4_4,
+                            _mm_add_ps(
+                                temp_a4_5,
+                                _mm_add_ps(
+                                    temp_a4_6,
+                                    _mm_add_ps(
+                                        temp_a4_7,
+                                        _mm_add_ps(
+                                            temp_a4_8,
+                                            _mm_add_ps(
+                                                temp_a4_9,
+                                                _mm_add_ps(
+                                                    temp_a4_10,
+                                                    _mm_add_ps(
+                                                        temp_a4_11,
+                                                        _mm_add_ps(
+                                                            temp_a4_12,
+                                                            _mm_add_ps(
+                                                                temp_a4_13,
+                                                                _mm_add_ps(temp_a4_14, temp_a4_15),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a5 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a5_1,
+                _mm_add_ps(
+                    temp_a5_2,
+                    _mm_add_ps(
+                        temp_a5_3,
+                        _mm_add_ps(
+                            temp_a5_4,
+                            _mm_add_ps(
+                                temp_a5_5,
+                                _mm_add_ps(
+                                    temp_a5_6,
+                                    _mm_add_ps(
+                                        temp_a5_7,
+                                        _mm_add_ps(
+                                            temp_a5_8,
+                                            _mm_add_ps(
+                                                temp_a5_9,
+                                                _mm_add_ps(
+                                                    temp_a5_10,
+                                                    _mm_add_ps(
+                                                        temp_a5_11,
+                                                        _mm_add_ps(
+                                                            temp_a5_12,
+                                                            _mm_add_ps(
+                                                                temp_a5_13,
+                                                                _mm_add_ps(temp_a5_14, temp_a5_15),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a6 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a6_1,
+                _mm_add_ps(
+                    temp_a6_2,
+                    _mm_add_ps(
+                        temp_a6_3,
+                        _mm_add_ps(
+                            temp_a6_4,
+                            _mm_add_ps(
+                                temp_a6_5,
+                                _mm_add_ps(
+                                    temp_a6_6,
+                                    _mm_add_ps(
+                                        temp_a6_7,
+                                        _mm_add_ps(
+                                            temp_a6_8,
+                                            _mm_add_ps(
+                                                temp_a6_9,
+                                                _mm_add_ps(
+                                                    temp_a6_10,
+                                                    _mm_add_ps(
+                                                        temp_a6_11,
+                                                        _mm_add_ps(
+                                                            temp_a6_12,
+                                                            _mm_add_ps(
+                                                                temp_a6_13,
+                                                                _mm_add_ps(temp_a6_14, temp_a6_15),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a7 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a7_1,
+                _mm_add_ps(
+                    temp_a7_2,
+                    _mm_add_ps(
+                        temp_a7_3,
+                        _mm_add_ps(
+                            temp_a7_4,
+                            _mm_add_ps(
+                                temp_a7_5,
+                                _mm_add_ps(
+                                    temp_a7_6,
+                                    _mm_add_ps(
+                                        temp_a7_7,
+                                        _mm_add_ps(
+                                            temp_a7_8,
+                                            _mm_add_ps(
+                                                temp_a7_9,
+                                                _mm_add_ps(
+                                                    temp_a7_10,
+                                                    _mm_add_ps(
+                                                        temp_a7_11,
+                                                        _mm_add_ps(
+                                                            temp_a7_12,
+                                                            _mm_add_ps(
+                                                                temp_a7_13,
+                                                                _mm_add_ps(temp_a7_14, temp_a7_15),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a8 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a8_1,
+                _mm_add_ps(
+                    temp_a8_2,
+                    _mm_add_ps(
+                        temp_a8_3,
+                        _mm_add_ps(
+                            temp_a8_4,
+                            _mm_add_ps(
+                                temp_a8_5,
+                                _mm_add_ps(
+                                    temp_a8_6,
+                                    _mm_add_ps(
+                                        temp_a8_7,
+                                        _mm_add_ps(
+                                            temp_a8_8,
+                                            _mm_add_ps(
+                                                temp_a8_9,
+                                                _mm_add_ps(
+                                                    temp_a8_10,
+                                                    _mm_add_ps(
+                                                        temp_a8_11,
+                                                        _mm_add_ps(
+                                                            temp_a8_12,
+                                                            _mm_add_ps(
+                                                                temp_a8_13,
+                                                                _mm_add_ps(temp_a8_14, temp_a8_15),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a9 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a9_1,
+                _mm_add_ps(
+                    temp_a9_2,
+                    _mm_add_ps(
+                        temp_a9_3,
+                        _mm_add_ps(
+                            temp_a9_4,
+                            _mm_add_ps(
+                                temp_a9_5,
+                                _mm_add_ps(
+                                    temp_a9_6,
+                                    _mm_add_ps(
+                                        temp_a9_7,
+                                        _mm_add_ps(
+                                            temp_a9_8,
+                                            _mm_add_ps(
+                                                temp_a9_9,
+                                                _mm_add_ps(
+                                                    temp_a9_10,
+                                                    _mm_add_ps(
+                                                        temp_a9_11,
+                                                        _mm_add_ps(
+                                                            temp_a9_12,
+                                                            _mm_add_ps(
+                                                                temp_a9_13,
+                                                                _mm_add_ps(temp_a9_14, temp_a9_15),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a10 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a10_1,
+                _mm_add_ps(
+                    temp_a10_2,
+                    _mm_add_ps(
+                        temp_a10_3,
+                        _mm_add_ps(
+                            temp_a10_4,
+                            _mm_add_ps(
+                                temp_a10_5,
+                                _mm_add_ps(
+                                    temp_a10_6,
+                                    _mm_add_ps(
+                                        temp_a10_7,
+                                        _mm_add_ps(
+                                            temp_a10_8,
+                                            _mm_add_ps(
+                                                temp_a10_9,
+                                                _mm_add_ps(
+                                                    temp_a10_10,
+                                                    _mm_add_ps(
+                                                        temp_a10_11,
+                                                        _mm_add_ps(
+                                                            temp_a10_12,
+                                                            _mm_add_ps(
+                                                                temp_a10_13,
+                                                                _mm_add_ps(
+                                                                    temp_a10_14,
+                                                                    temp_a10_15,
+                                                                ),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a11 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a11_1,
+                _mm_add_ps(
+                    temp_a11_2,
+                    _mm_add_ps(
+                        temp_a11_3,
+                        _mm_add_ps(
+                            temp_a11_4,
+                            _mm_add_ps(
+                                temp_a11_5,
+                                _mm_add_ps(
+                                    temp_a11_6,
+                                    _mm_add_ps(
+                                        temp_a11_7,
+                                        _mm_add_ps(
+                                            temp_a11_8,
+                                            _mm_add_ps(
+                                                temp_a11_9,
+                                                _mm_add_ps(
+                                                    temp_a11_10,
+                                                    _mm_add_ps(
+                                                        temp_a11_11,
+                                                        _mm_add_ps(
+                                                            temp_a11_12,
+                                                            _mm_add_ps(
+                                                                temp_a11_13,
+                                                                _mm_add_ps(
+                                                                    temp_a11_14,
+                                                                    temp_a11_15,
+                                                                ),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a12 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a12_1,
+                _mm_add_ps(
+                    temp_a12_2,
+                    _mm_add_ps(
+                        temp_a12_3,
+                        _mm_add_ps(
+                            temp_a12_4,
+                            _mm_add_ps(
+                                temp_a12_5,
+                                _mm_add_ps(
+                                    temp_a12_6,
+                                    _mm_add_ps(
+                                        temp_a12_7,
+                                        _mm_add_ps(
+                                            temp_a12_8,
+                                            _mm_add_ps(
+                                                temp_a12_9,
+                                                _mm_add_ps(
+                                                    temp_a12_10,
+                                                    _mm_add_ps(
+                                                        temp_a12_11,
+                                                        _mm_add_ps(
+                                                            temp_a12_12,
+                                                            _mm_add_ps(
+                                                                temp_a12_13,
+                                                                _mm_add_ps(
+                                                                    temp_a12_14,
+                                                                    temp_a12_15,
+                                                                ),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a13 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a13_1,
+                _mm_add_ps(
+                    temp_a13_2,
+                    _mm_add_ps(
+                        temp_a13_3,
+                        _mm_add_ps(
+                            temp_a13_4,
+                            _mm_add_ps(
+                                temp_a13_5,
+                                _mm_add_ps(
+                                    temp_a13_6,
+                                    _mm_add_ps(
+                                        temp_a13_7,
+                                        _mm_add_ps(
+                                            temp_a13_8,
+                                            _mm_add_ps(
+                                                temp_a13_9,
+                                                _mm_add_ps(
+                                                    temp_a13_10,
+                                                    _mm_add_ps(
+                                                        temp_a13_11,
+                                                        _mm_add_ps(
+                                                            temp_a13_12,
+                                                            _mm_add_ps(
+                                                                temp_a13_13,
+                                                                _mm_add_ps(
+                                                                    temp_a13_14,
+                                                                    temp_a13_15,
+                                                                ),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a14 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a14_1,
+                _mm_add_ps(
+                    temp_a14_2,
+                    _mm_add_ps(
+                        temp_a14_3,
+                        _mm_add_ps(
+                            temp_a14_4,
+                            _mm_add_ps(
+                                temp_a14_5,
+                                _mm_add_ps(
+                                    temp_a14_6,
+                                    _mm_add_ps(
+                                        temp_a14_7,
+                                        _mm_add_ps(
+                                            temp_a14_8,
+                                            _mm_add_ps(
+                                                temp_a14_9,
+                                                _mm_add_ps(
+                                                    temp_a14_10,
+                                                    _mm_add_ps(
+                                                        temp_a14_11,
+                                                        _mm_add_ps(
+                                                            temp_a14_12,
+                                                            _mm_add_ps(
+                                                                temp_a14_13,
+                                                                _mm_add_ps(
+                                                                    temp_a14_14,
+                                                                    temp_a14_15,
+                                                                ),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a15 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                temp_a15_1,
+                _mm_add_ps(
+                    temp_a15_2,
+                    _mm_add_ps(
+                        temp_a15_3,
+                        _mm_add_ps(
+                            temp_a15_4,
+                            _mm_add_ps(
+                                temp_a15_5,
+                                _mm_add_ps(
+                                    temp_a15_6,
+                                    _mm_add_ps(
+                                        temp_a15_7,
+                                        _mm_add_ps(
+                                            temp_a15_8,
+                                            _mm_add_ps(
+                                                temp_a15_9,
+                                                _mm_add_ps(
+                                                    temp_a15_10,
+                                                    _mm_add_ps(
+                                                        temp_a15_11,
+                                                        _mm_add_ps(
+                                                            temp_a15_12,
+                                                            _mm_add_ps(
+                                                                temp_a15_13,
+                                                                _mm_add_ps(
+                                                                    temp_a15_14,
+                                                                    temp_a15_15,
+                                                                ),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
 
-        let temp_b1 = _mm_add_ps(temp_b1_1, _mm_add_ps(temp_b1_2, _mm_add_ps(temp_b1_3, _mm_add_ps(temp_b1_4, _mm_add_ps(temp_b1_5, _mm_add_ps(temp_b1_6, _mm_add_ps(temp_b1_7, _mm_add_ps(temp_b1_8, _mm_add_ps(temp_b1_9, _mm_add_ps(temp_b1_10, _mm_add_ps(temp_b1_11, _mm_add_ps(temp_b1_12, _mm_add_ps(temp_b1_13, _mm_add_ps(temp_b1_14, temp_b1_15))))))))))))));
-        let temp_b2 = _mm_add_ps(temp_b2_1, _mm_add_ps(temp_b2_2, _mm_add_ps(temp_b2_3, _mm_add_ps(temp_b2_4, _mm_add_ps(temp_b2_5, _mm_add_ps(temp_b2_6, _mm_sub_ps(temp_b2_7, _mm_add_ps(temp_b2_8, _mm_add_ps(temp_b2_9, _mm_add_ps(temp_b2_10, _mm_add_ps(temp_b2_11, _mm_add_ps(temp_b2_12, _mm_add_ps(temp_b2_13, _mm_add_ps(temp_b2_14, temp_b2_15))))))))))))));
-        let temp_b3 = _mm_add_ps(temp_b3_1, _mm_add_ps(temp_b3_2, _mm_add_ps(temp_b3_3, _mm_add_ps(temp_b3_4, _mm_sub_ps(temp_b3_5, _mm_add_ps(temp_b3_6, _mm_add_ps(temp_b3_7, _mm_add_ps(temp_b3_8, _mm_add_ps(temp_b3_9, _mm_sub_ps(temp_b3_10, _mm_add_ps(temp_b3_11, _mm_add_ps(temp_b3_12, _mm_add_ps(temp_b3_13, _mm_add_ps(temp_b3_14, temp_b3_15))))))))))))));
-        let temp_b4 = _mm_add_ps(temp_b4_1, _mm_add_ps(temp_b4_2, _mm_sub_ps(temp_b4_3, _mm_add_ps(temp_b4_4, _mm_add_ps(temp_b4_5, _mm_add_ps(temp_b4_6, _mm_sub_ps(temp_b4_7, _mm_add_ps(temp_b4_8, _mm_add_ps(temp_b4_9, _mm_add_ps(temp_b4_10, _mm_sub_ps(temp_b4_11, _mm_add_ps(temp_b4_12, _mm_add_ps(temp_b4_13, _mm_add_ps(temp_b4_14, temp_b4_15))))))))))))));
-        let temp_b5 = _mm_add_ps(temp_b5_1, _mm_add_ps(temp_b5_2, _mm_sub_ps(temp_b5_3, _mm_add_ps(temp_b5_4, _mm_add_ps(temp_b5_5, _mm_sub_ps(temp_b5_6, _mm_add_ps(temp_b5_7, _mm_add_ps(temp_b5_8, _mm_sub_ps(temp_b5_9, _mm_add_ps(temp_b5_10, _mm_add_ps(temp_b5_11, _mm_sub_ps(temp_b5_12, _mm_add_ps(temp_b5_13, _mm_add_ps(temp_b5_14, temp_b5_15))))))))))))));
-        let temp_b6 = _mm_add_ps(temp_b6_1, _mm_sub_ps(temp_b6_2, _mm_add_ps(temp_b6_3, _mm_add_ps(temp_b6_4, _mm_sub_ps(temp_b6_5, _mm_add_ps(temp_b6_6, _mm_sub_ps(temp_b6_7, _mm_add_ps(temp_b6_8, _mm_add_ps(temp_b6_9, _mm_sub_ps(temp_b6_10, _mm_add_ps(temp_b6_11, _mm_sub_ps(temp_b6_12, _mm_add_ps(temp_b6_13, _mm_add_ps(temp_b6_14, temp_b6_15))))))))))))));
-        let temp_b7 = _mm_add_ps(temp_b7_1, _mm_sub_ps(temp_b7_2, _mm_add_ps(temp_b7_3, _mm_sub_ps(temp_b7_4, _mm_add_ps(temp_b7_5, _mm_sub_ps(temp_b7_6, _mm_add_ps(temp_b7_7, _mm_sub_ps(temp_b7_8, _mm_add_ps(temp_b7_9, _mm_add_ps(temp_b7_10, _mm_sub_ps(temp_b7_11, _mm_add_ps(temp_b7_12, _mm_sub_ps(temp_b7_13, _mm_add_ps(temp_b7_14, temp_b7_15))))))))))))));
-        let temp_b8 = _mm_sub_ps(temp_b8_1, _mm_add_ps(temp_b8_2, _mm_sub_ps(temp_b8_3, _mm_add_ps(temp_b8_4, _mm_sub_ps(temp_b8_5, _mm_add_ps(temp_b8_6, _mm_sub_ps(temp_b8_7, _mm_add_ps(temp_b8_8, _mm_sub_ps(temp_b8_9, _mm_add_ps(temp_b8_10, _mm_sub_ps(temp_b8_11, _mm_add_ps(temp_b8_12, _mm_sub_ps(temp_b8_13, _mm_add_ps(temp_b8_14, temp_b8_15))))))))))))));
-        let temp_b9 = _mm_sub_ps(temp_b9_1, _mm_add_ps(temp_b9_2, _mm_sub_ps(temp_b9_3, _mm_add_ps(temp_b9_4, _mm_sub_ps(temp_b9_5, _mm_sub_ps(temp_b9_6, _mm_add_ps(temp_b9_7, _mm_sub_ps(temp_b9_8, _mm_add_ps(temp_b9_9, _mm_sub_ps(temp_b9_10, _mm_add_ps(temp_b9_11, _mm_sub_ps(temp_b9_12, _mm_sub_ps(temp_b9_13, _mm_add_ps(temp_b9_14, temp_b9_15))))))))))))));
-        let temp_b10 = _mm_sub_ps(temp_b10_1, _mm_add_ps(temp_b10_2, _mm_sub_ps(temp_b10_3, _mm_sub_ps(temp_b10_4, _mm_add_ps(temp_b10_5, _mm_sub_ps(temp_b10_6, _mm_sub_ps(temp_b10_7, _mm_add_ps(temp_b10_8, _mm_sub_ps(temp_b10_9, _mm_sub_ps(temp_b10_10, _mm_add_ps(temp_b10_11, _mm_sub_ps(temp_b10_12, _mm_sub_ps(temp_b10_13, _mm_add_ps(temp_b10_14, temp_b10_15))))))))))))));
-        let temp_b11 = _mm_sub_ps(temp_b11_1, _mm_sub_ps(temp_b11_2, _mm_add_ps(temp_b11_3, _mm_sub_ps(temp_b11_4, _mm_sub_ps(temp_b11_5, _mm_add_ps(temp_b11_6, _mm_sub_ps(temp_b11_7, _mm_sub_ps(temp_b11_8, _mm_sub_ps(temp_b11_9, _mm_add_ps(temp_b11_10, _mm_sub_ps(temp_b11_11, _mm_sub_ps(temp_b11_12, _mm_add_ps(temp_b11_13, _mm_sub_ps(temp_b11_14, temp_b11_15))))))))))))));
-        let temp_b12 = _mm_sub_ps(temp_b12_1, _mm_sub_ps(temp_b12_2, _mm_sub_ps(temp_b12_3, _mm_add_ps(temp_b12_4, _mm_sub_ps(temp_b12_5, _mm_sub_ps(temp_b12_6, _mm_sub_ps(temp_b12_7, _mm_add_ps(temp_b12_8, _mm_sub_ps(temp_b12_9, _mm_sub_ps(temp_b12_10, _mm_sub_ps(temp_b12_11, _mm_sub_ps(temp_b12_12, _mm_add_ps(temp_b12_13, _mm_sub_ps(temp_b12_14, temp_b12_15))))))))))))));
-        let temp_b13 = _mm_sub_ps(temp_b13_1, _mm_sub_ps(temp_b13_2, _mm_sub_ps(temp_b13_3, _mm_sub_ps(temp_b13_4, _mm_sub_ps(temp_b13_5, _mm_add_ps(temp_b13_6, _mm_sub_ps(temp_b13_7, _mm_sub_ps(temp_b13_8, _mm_sub_ps(temp_b13_9, _mm_sub_ps(temp_b13_10, _mm_sub_ps(temp_b13_11, _mm_add_ps(temp_b13_12, _mm_sub_ps(temp_b13_13, _mm_sub_ps(temp_b13_14, temp_b13_15))))))))))))));
-        let temp_b14 = _mm_sub_ps(temp_b14_1, _mm_sub_ps(temp_b14_2, _mm_sub_ps(temp_b14_3, _mm_sub_ps(temp_b14_4, _mm_sub_ps(temp_b14_5, _mm_sub_ps(temp_b14_6, _mm_sub_ps(temp_b14_7, _mm_sub_ps(temp_b14_8, _mm_sub_ps(temp_b14_9, _mm_add_ps(temp_b14_10, _mm_sub_ps(temp_b14_11, _mm_sub_ps(temp_b14_12, _mm_sub_ps(temp_b14_13, _mm_sub_ps(temp_b14_14, temp_b14_15))))))))))))));
-        let temp_b15 = _mm_sub_ps(temp_b15_1, _mm_sub_ps(temp_b15_2, _mm_sub_ps(temp_b15_3, _mm_sub_ps(temp_b15_4, _mm_sub_ps(temp_b15_5, _mm_sub_ps(temp_b15_6, _mm_sub_ps(temp_b15_7, _mm_sub_ps(temp_b15_8, _mm_sub_ps(temp_b15_9, _mm_sub_ps(temp_b15_10, _mm_sub_ps(temp_b15_11, _mm_sub_ps(temp_b15_12, _mm_sub_ps(temp_b15_13, _mm_sub_ps(temp_b15_14, temp_b15_15))))))))))))));
+        let temp_b1 = _mm_add_ps(
+            temp_b1_1,
+            _mm_add_ps(
+                temp_b1_2,
+                _mm_add_ps(
+                    temp_b1_3,
+                    _mm_add_ps(
+                        temp_b1_4,
+                        _mm_add_ps(
+                            temp_b1_5,
+                            _mm_add_ps(
+                                temp_b1_6,
+                                _mm_add_ps(
+                                    temp_b1_7,
+                                    _mm_add_ps(
+                                        temp_b1_8,
+                                        _mm_add_ps(
+                                            temp_b1_9,
+                                            _mm_add_ps(
+                                                temp_b1_10,
+                                                _mm_add_ps(
+                                                    temp_b1_11,
+                                                    _mm_add_ps(
+                                                        temp_b1_12,
+                                                        _mm_add_ps(
+                                                            temp_b1_13,
+                                                            _mm_add_ps(temp_b1_14, temp_b1_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b2 = _mm_add_ps(
+            temp_b2_1,
+            _mm_add_ps(
+                temp_b2_2,
+                _mm_add_ps(
+                    temp_b2_3,
+                    _mm_add_ps(
+                        temp_b2_4,
+                        _mm_add_ps(
+                            temp_b2_5,
+                            _mm_add_ps(
+                                temp_b2_6,
+                                _mm_sub_ps(
+                                    temp_b2_7,
+                                    _mm_add_ps(
+                                        temp_b2_8,
+                                        _mm_add_ps(
+                                            temp_b2_9,
+                                            _mm_add_ps(
+                                                temp_b2_10,
+                                                _mm_add_ps(
+                                                    temp_b2_11,
+                                                    _mm_add_ps(
+                                                        temp_b2_12,
+                                                        _mm_add_ps(
+                                                            temp_b2_13,
+                                                            _mm_add_ps(temp_b2_14, temp_b2_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b3 = _mm_add_ps(
+            temp_b3_1,
+            _mm_add_ps(
+                temp_b3_2,
+                _mm_add_ps(
+                    temp_b3_3,
+                    _mm_add_ps(
+                        temp_b3_4,
+                        _mm_sub_ps(
+                            temp_b3_5,
+                            _mm_add_ps(
+                                temp_b3_6,
+                                _mm_add_ps(
+                                    temp_b3_7,
+                                    _mm_add_ps(
+                                        temp_b3_8,
+                                        _mm_add_ps(
+                                            temp_b3_9,
+                                            _mm_sub_ps(
+                                                temp_b3_10,
+                                                _mm_add_ps(
+                                                    temp_b3_11,
+                                                    _mm_add_ps(
+                                                        temp_b3_12,
+                                                        _mm_add_ps(
+                                                            temp_b3_13,
+                                                            _mm_add_ps(temp_b3_14, temp_b3_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b4 = _mm_add_ps(
+            temp_b4_1,
+            _mm_add_ps(
+                temp_b4_2,
+                _mm_sub_ps(
+                    temp_b4_3,
+                    _mm_add_ps(
+                        temp_b4_4,
+                        _mm_add_ps(
+                            temp_b4_5,
+                            _mm_add_ps(
+                                temp_b4_6,
+                                _mm_sub_ps(
+                                    temp_b4_7,
+                                    _mm_add_ps(
+                                        temp_b4_8,
+                                        _mm_add_ps(
+                                            temp_b4_9,
+                                            _mm_add_ps(
+                                                temp_b4_10,
+                                                _mm_sub_ps(
+                                                    temp_b4_11,
+                                                    _mm_add_ps(
+                                                        temp_b4_12,
+                                                        _mm_add_ps(
+                                                            temp_b4_13,
+                                                            _mm_add_ps(temp_b4_14, temp_b4_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b5 = _mm_add_ps(
+            temp_b5_1,
+            _mm_add_ps(
+                temp_b5_2,
+                _mm_sub_ps(
+                    temp_b5_3,
+                    _mm_add_ps(
+                        temp_b5_4,
+                        _mm_add_ps(
+                            temp_b5_5,
+                            _mm_sub_ps(
+                                temp_b5_6,
+                                _mm_add_ps(
+                                    temp_b5_7,
+                                    _mm_add_ps(
+                                        temp_b5_8,
+                                        _mm_sub_ps(
+                                            temp_b5_9,
+                                            _mm_add_ps(
+                                                temp_b5_10,
+                                                _mm_add_ps(
+                                                    temp_b5_11,
+                                                    _mm_sub_ps(
+                                                        temp_b5_12,
+                                                        _mm_add_ps(
+                                                            temp_b5_13,
+                                                            _mm_add_ps(temp_b5_14, temp_b5_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b6 = _mm_add_ps(
+            temp_b6_1,
+            _mm_sub_ps(
+                temp_b6_2,
+                _mm_add_ps(
+                    temp_b6_3,
+                    _mm_add_ps(
+                        temp_b6_4,
+                        _mm_sub_ps(
+                            temp_b6_5,
+                            _mm_add_ps(
+                                temp_b6_6,
+                                _mm_sub_ps(
+                                    temp_b6_7,
+                                    _mm_add_ps(
+                                        temp_b6_8,
+                                        _mm_add_ps(
+                                            temp_b6_9,
+                                            _mm_sub_ps(
+                                                temp_b6_10,
+                                                _mm_add_ps(
+                                                    temp_b6_11,
+                                                    _mm_sub_ps(
+                                                        temp_b6_12,
+                                                        _mm_add_ps(
+                                                            temp_b6_13,
+                                                            _mm_add_ps(temp_b6_14, temp_b6_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b7 = _mm_add_ps(
+            temp_b7_1,
+            _mm_sub_ps(
+                temp_b7_2,
+                _mm_add_ps(
+                    temp_b7_3,
+                    _mm_sub_ps(
+                        temp_b7_4,
+                        _mm_add_ps(
+                            temp_b7_5,
+                            _mm_sub_ps(
+                                temp_b7_6,
+                                _mm_add_ps(
+                                    temp_b7_7,
+                                    _mm_sub_ps(
+                                        temp_b7_8,
+                                        _mm_add_ps(
+                                            temp_b7_9,
+                                            _mm_add_ps(
+                                                temp_b7_10,
+                                                _mm_sub_ps(
+                                                    temp_b7_11,
+                                                    _mm_add_ps(
+                                                        temp_b7_12,
+                                                        _mm_sub_ps(
+                                                            temp_b7_13,
+                                                            _mm_add_ps(temp_b7_14, temp_b7_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b8 = _mm_sub_ps(
+            temp_b8_1,
+            _mm_add_ps(
+                temp_b8_2,
+                _mm_sub_ps(
+                    temp_b8_3,
+                    _mm_add_ps(
+                        temp_b8_4,
+                        _mm_sub_ps(
+                            temp_b8_5,
+                            _mm_add_ps(
+                                temp_b8_6,
+                                _mm_sub_ps(
+                                    temp_b8_7,
+                                    _mm_add_ps(
+                                        temp_b8_8,
+                                        _mm_sub_ps(
+                                            temp_b8_9,
+                                            _mm_add_ps(
+                                                temp_b8_10,
+                                                _mm_sub_ps(
+                                                    temp_b8_11,
+                                                    _mm_add_ps(
+                                                        temp_b8_12,
+                                                        _mm_sub_ps(
+                                                            temp_b8_13,
+                                                            _mm_add_ps(temp_b8_14, temp_b8_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b9 = _mm_sub_ps(
+            temp_b9_1,
+            _mm_add_ps(
+                temp_b9_2,
+                _mm_sub_ps(
+                    temp_b9_3,
+                    _mm_add_ps(
+                        temp_b9_4,
+                        _mm_sub_ps(
+                            temp_b9_5,
+                            _mm_sub_ps(
+                                temp_b9_6,
+                                _mm_add_ps(
+                                    temp_b9_7,
+                                    _mm_sub_ps(
+                                        temp_b9_8,
+                                        _mm_add_ps(
+                                            temp_b9_9,
+                                            _mm_sub_ps(
+                                                temp_b9_10,
+                                                _mm_add_ps(
+                                                    temp_b9_11,
+                                                    _mm_sub_ps(
+                                                        temp_b9_12,
+                                                        _mm_sub_ps(
+                                                            temp_b9_13,
+                                                            _mm_add_ps(temp_b9_14, temp_b9_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b10 = _mm_sub_ps(
+            temp_b10_1,
+            _mm_add_ps(
+                temp_b10_2,
+                _mm_sub_ps(
+                    temp_b10_3,
+                    _mm_sub_ps(
+                        temp_b10_4,
+                        _mm_add_ps(
+                            temp_b10_5,
+                            _mm_sub_ps(
+                                temp_b10_6,
+                                _mm_sub_ps(
+                                    temp_b10_7,
+                                    _mm_add_ps(
+                                        temp_b10_8,
+                                        _mm_sub_ps(
+                                            temp_b10_9,
+                                            _mm_sub_ps(
+                                                temp_b10_10,
+                                                _mm_add_ps(
+                                                    temp_b10_11,
+                                                    _mm_sub_ps(
+                                                        temp_b10_12,
+                                                        _mm_sub_ps(
+                                                            temp_b10_13,
+                                                            _mm_add_ps(temp_b10_14, temp_b10_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b11 = _mm_sub_ps(
+            temp_b11_1,
+            _mm_sub_ps(
+                temp_b11_2,
+                _mm_add_ps(
+                    temp_b11_3,
+                    _mm_sub_ps(
+                        temp_b11_4,
+                        _mm_sub_ps(
+                            temp_b11_5,
+                            _mm_add_ps(
+                                temp_b11_6,
+                                _mm_sub_ps(
+                                    temp_b11_7,
+                                    _mm_sub_ps(
+                                        temp_b11_8,
+                                        _mm_sub_ps(
+                                            temp_b11_9,
+                                            _mm_add_ps(
+                                                temp_b11_10,
+                                                _mm_sub_ps(
+                                                    temp_b11_11,
+                                                    _mm_sub_ps(
+                                                        temp_b11_12,
+                                                        _mm_add_ps(
+                                                            temp_b11_13,
+                                                            _mm_sub_ps(temp_b11_14, temp_b11_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b12 = _mm_sub_ps(
+            temp_b12_1,
+            _mm_sub_ps(
+                temp_b12_2,
+                _mm_sub_ps(
+                    temp_b12_3,
+                    _mm_add_ps(
+                        temp_b12_4,
+                        _mm_sub_ps(
+                            temp_b12_5,
+                            _mm_sub_ps(
+                                temp_b12_6,
+                                _mm_sub_ps(
+                                    temp_b12_7,
+                                    _mm_add_ps(
+                                        temp_b12_8,
+                                        _mm_sub_ps(
+                                            temp_b12_9,
+                                            _mm_sub_ps(
+                                                temp_b12_10,
+                                                _mm_sub_ps(
+                                                    temp_b12_11,
+                                                    _mm_sub_ps(
+                                                        temp_b12_12,
+                                                        _mm_add_ps(
+                                                            temp_b12_13,
+                                                            _mm_sub_ps(temp_b12_14, temp_b12_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b13 = _mm_sub_ps(
+            temp_b13_1,
+            _mm_sub_ps(
+                temp_b13_2,
+                _mm_sub_ps(
+                    temp_b13_3,
+                    _mm_sub_ps(
+                        temp_b13_4,
+                        _mm_sub_ps(
+                            temp_b13_5,
+                            _mm_add_ps(
+                                temp_b13_6,
+                                _mm_sub_ps(
+                                    temp_b13_7,
+                                    _mm_sub_ps(
+                                        temp_b13_8,
+                                        _mm_sub_ps(
+                                            temp_b13_9,
+                                            _mm_sub_ps(
+                                                temp_b13_10,
+                                                _mm_sub_ps(
+                                                    temp_b13_11,
+                                                    _mm_add_ps(
+                                                        temp_b13_12,
+                                                        _mm_sub_ps(
+                                                            temp_b13_13,
+                                                            _mm_sub_ps(temp_b13_14, temp_b13_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b14 = _mm_sub_ps(
+            temp_b14_1,
+            _mm_sub_ps(
+                temp_b14_2,
+                _mm_sub_ps(
+                    temp_b14_3,
+                    _mm_sub_ps(
+                        temp_b14_4,
+                        _mm_sub_ps(
+                            temp_b14_5,
+                            _mm_sub_ps(
+                                temp_b14_6,
+                                _mm_sub_ps(
+                                    temp_b14_7,
+                                    _mm_sub_ps(
+                                        temp_b14_8,
+                                        _mm_sub_ps(
+                                            temp_b14_9,
+                                            _mm_add_ps(
+                                                temp_b14_10,
+                                                _mm_sub_ps(
+                                                    temp_b14_11,
+                                                    _mm_sub_ps(
+                                                        temp_b14_12,
+                                                        _mm_sub_ps(
+                                                            temp_b14_13,
+                                                            _mm_sub_ps(temp_b14_14, temp_b14_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b15 = _mm_sub_ps(
+            temp_b15_1,
+            _mm_sub_ps(
+                temp_b15_2,
+                _mm_sub_ps(
+                    temp_b15_3,
+                    _mm_sub_ps(
+                        temp_b15_4,
+                        _mm_sub_ps(
+                            temp_b15_5,
+                            _mm_sub_ps(
+                                temp_b15_6,
+                                _mm_sub_ps(
+                                    temp_b15_7,
+                                    _mm_sub_ps(
+                                        temp_b15_8,
+                                        _mm_sub_ps(
+                                            temp_b15_9,
+                                            _mm_sub_ps(
+                                                temp_b15_10,
+                                                _mm_sub_ps(
+                                                    temp_b15_11,
+                                                    _mm_sub_ps(
+                                                        temp_b15_12,
+                                                        _mm_sub_ps(
+                                                            temp_b15_13,
+                                                            _mm_sub_ps(temp_b15_14, temp_b15_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
 
         let temp_b1_rot = self.rotate.rotate_both(temp_b1);
         let temp_b2_rot = self.rotate.rotate_both(temp_b2);
@@ -6580,7 +12963,49 @@ impl<T: FftNum> SseF32Butterfly31<T> {
         let temp_b14_rot = self.rotate.rotate_both(temp_b14);
         let temp_b15_rot = self.rotate.rotate_both(temp_b15);
 
-        let x0 = _mm_add_ps(values[0], _mm_add_ps(x130p, _mm_add_ps(x229p, _mm_add_ps(x328p, _mm_add_ps(x427p, _mm_add_ps(x526p, _mm_add_ps(x625p, _mm_add_ps(x724p, _mm_add_ps(x823p, _mm_add_ps(x922p, _mm_add_ps(x1021p, _mm_add_ps(x1120p, _mm_add_ps(x1219p, _mm_add_ps(x1318p, _mm_add_ps(x1417p, x1516p)))))))))))))));
+        let x0 = _mm_add_ps(
+            values[0],
+            _mm_add_ps(
+                x130p,
+                _mm_add_ps(
+                    x229p,
+                    _mm_add_ps(
+                        x328p,
+                        _mm_add_ps(
+                            x427p,
+                            _mm_add_ps(
+                                x526p,
+                                _mm_add_ps(
+                                    x625p,
+                                    _mm_add_ps(
+                                        x724p,
+                                        _mm_add_ps(
+                                            x823p,
+                                            _mm_add_ps(
+                                                x922p,
+                                                _mm_add_ps(
+                                                    x1021p,
+                                                    _mm_add_ps(
+                                                        x1120p,
+                                                        _mm_add_ps(
+                                                            x1219p,
+                                                            _mm_add_ps(
+                                                                x1318p,
+                                                                _mm_add_ps(x1417p, x1516p),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
         let x1 = _mm_add_ps(temp_a1, temp_b1_rot);
         let x2 = _mm_add_ps(temp_a2, temp_b2_rot);
         let x3 = _mm_add_ps(temp_a3, temp_b3_rot);
@@ -6611,18 +13036,19 @@ impl<T: FftNum> SseF32Butterfly31<T> {
         let x28 = _mm_sub_ps(temp_a3, temp_b3_rot);
         let x29 = _mm_sub_ps(temp_a2, temp_b2_rot);
         let x30 = _mm_sub_ps(temp_a1, temp_b1_rot);
-        [x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, x30]
-
+        [
+            x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18,
+            x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, x30,
+        ]
     }
 }
 
-
-//   _____ _            __   _  _   _     _ _   
-//  |___ // |          / /_ | || | | |__ (_) |_ 
+//   _____ _            __   _  _   _     _ _
+//  |___ // |          / /_ | || | | |__ (_) |_
 //    |_ \| |  _____  | '_ \| || |_| '_ \| | __|
-//   ___) | | |_____| | (_) |__   _| |_) | | |_ 
+//   ___) | | |_____| | (_) |__   _| |_) | | |_
 //  |____/|_|          \___/   |_| |_.__/|_|\__|
-//                                              
+//
 
 pub struct SseF64Butterfly31<T> {
     direction: FftDirection,
@@ -6790,7 +13216,10 @@ impl<T: FftNum> SseF64Butterfly31<T> {
         let v29 = _mm_loadu_pd(input.as_ptr().add(29) as *const f64);
         let v30 = _mm_loadu_pd(input.as_ptr().add(30) as *const f64);
 
-        let out = self.perform_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26, v27, v28, v29, v30]);
+        let out = self.perform_fft_direct([
+            v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18,
+            v19, v20, v21, v22, v23, v24, v25, v26, v27, v28, v29, v30,
+        ]);
 
         let val = std::mem::transmute::<[__m128d; 31], [Complex<f64>; 31]>(out);
 
@@ -6831,11 +13260,8 @@ impl<T: FftNum> SseF64Butterfly31<T> {
     // length 7 fft of a, given as a0, a1, a2, a3, a4, a5, a6.
     // result is [A0, A1, A2, A3, A4, A5, A6]
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(
-        &self,
-        values: [__m128d; 31],
-    ) -> [__m128d; 31] {
-        // This is a SSE translation of the scalar 17-point butterfly 
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 31]) -> [__m128d; 31] {
+        // This is a SSE translation of the scalar 17-point butterfly
         let x130p = _mm_add_pd(values[1], values[30]);
         let x130n = _mm_sub_pd(values[1], values[30]);
         let x229p = _mm_add_pd(values[2], values[29]);
@@ -7319,37 +13745,1270 @@ impl<T: FftNum> SseF64Butterfly31<T> {
         let temp_b15_14 = _mm_mul_pd(self.twiddle7im, x1417n);
         let temp_b15_15 = _mm_mul_pd(self.twiddle8im, x1516n);
 
-        let temp_a1 = _mm_add_pd(values[0], _mm_add_pd(temp_a1_1, _mm_add_pd(temp_a1_2, _mm_add_pd(temp_a1_3, _mm_add_pd(temp_a1_4, _mm_add_pd(temp_a1_5, _mm_add_pd(temp_a1_6, _mm_add_pd(temp_a1_7, _mm_add_pd(temp_a1_8, _mm_add_pd(temp_a1_9, _mm_add_pd(temp_a1_10, _mm_add_pd(temp_a1_11, _mm_add_pd(temp_a1_12, _mm_add_pd(temp_a1_13, _mm_add_pd(temp_a1_14, temp_a1_15)))))))))))))));
-        let temp_a2 = _mm_add_pd(values[0], _mm_add_pd(temp_a2_1, _mm_add_pd(temp_a2_2, _mm_add_pd(temp_a2_3, _mm_add_pd(temp_a2_4, _mm_add_pd(temp_a2_5, _mm_add_pd(temp_a2_6, _mm_add_pd(temp_a2_7, _mm_add_pd(temp_a2_8, _mm_add_pd(temp_a2_9, _mm_add_pd(temp_a2_10, _mm_add_pd(temp_a2_11, _mm_add_pd(temp_a2_12, _mm_add_pd(temp_a2_13, _mm_add_pd(temp_a2_14, temp_a2_15)))))))))))))));
-        let temp_a3 = _mm_add_pd(values[0], _mm_add_pd(temp_a3_1, _mm_add_pd(temp_a3_2, _mm_add_pd(temp_a3_3, _mm_add_pd(temp_a3_4, _mm_add_pd(temp_a3_5, _mm_add_pd(temp_a3_6, _mm_add_pd(temp_a3_7, _mm_add_pd(temp_a3_8, _mm_add_pd(temp_a3_9, _mm_add_pd(temp_a3_10, _mm_add_pd(temp_a3_11, _mm_add_pd(temp_a3_12, _mm_add_pd(temp_a3_13, _mm_add_pd(temp_a3_14, temp_a3_15)))))))))))))));
-        let temp_a4 = _mm_add_pd(values[0], _mm_add_pd(temp_a4_1, _mm_add_pd(temp_a4_2, _mm_add_pd(temp_a4_3, _mm_add_pd(temp_a4_4, _mm_add_pd(temp_a4_5, _mm_add_pd(temp_a4_6, _mm_add_pd(temp_a4_7, _mm_add_pd(temp_a4_8, _mm_add_pd(temp_a4_9, _mm_add_pd(temp_a4_10, _mm_add_pd(temp_a4_11, _mm_add_pd(temp_a4_12, _mm_add_pd(temp_a4_13, _mm_add_pd(temp_a4_14, temp_a4_15)))))))))))))));
-        let temp_a5 = _mm_add_pd(values[0], _mm_add_pd(temp_a5_1, _mm_add_pd(temp_a5_2, _mm_add_pd(temp_a5_3, _mm_add_pd(temp_a5_4, _mm_add_pd(temp_a5_5, _mm_add_pd(temp_a5_6, _mm_add_pd(temp_a5_7, _mm_add_pd(temp_a5_8, _mm_add_pd(temp_a5_9, _mm_add_pd(temp_a5_10, _mm_add_pd(temp_a5_11, _mm_add_pd(temp_a5_12, _mm_add_pd(temp_a5_13, _mm_add_pd(temp_a5_14, temp_a5_15)))))))))))))));
-        let temp_a6 = _mm_add_pd(values[0], _mm_add_pd(temp_a6_1, _mm_add_pd(temp_a6_2, _mm_add_pd(temp_a6_3, _mm_add_pd(temp_a6_4, _mm_add_pd(temp_a6_5, _mm_add_pd(temp_a6_6, _mm_add_pd(temp_a6_7, _mm_add_pd(temp_a6_8, _mm_add_pd(temp_a6_9, _mm_add_pd(temp_a6_10, _mm_add_pd(temp_a6_11, _mm_add_pd(temp_a6_12, _mm_add_pd(temp_a6_13, _mm_add_pd(temp_a6_14, temp_a6_15)))))))))))))));
-        let temp_a7 = _mm_add_pd(values[0], _mm_add_pd(temp_a7_1, _mm_add_pd(temp_a7_2, _mm_add_pd(temp_a7_3, _mm_add_pd(temp_a7_4, _mm_add_pd(temp_a7_5, _mm_add_pd(temp_a7_6, _mm_add_pd(temp_a7_7, _mm_add_pd(temp_a7_8, _mm_add_pd(temp_a7_9, _mm_add_pd(temp_a7_10, _mm_add_pd(temp_a7_11, _mm_add_pd(temp_a7_12, _mm_add_pd(temp_a7_13, _mm_add_pd(temp_a7_14, temp_a7_15)))))))))))))));
-        let temp_a8 = _mm_add_pd(values[0], _mm_add_pd(temp_a8_1, _mm_add_pd(temp_a8_2, _mm_add_pd(temp_a8_3, _mm_add_pd(temp_a8_4, _mm_add_pd(temp_a8_5, _mm_add_pd(temp_a8_6, _mm_add_pd(temp_a8_7, _mm_add_pd(temp_a8_8, _mm_add_pd(temp_a8_9, _mm_add_pd(temp_a8_10, _mm_add_pd(temp_a8_11, _mm_add_pd(temp_a8_12, _mm_add_pd(temp_a8_13, _mm_add_pd(temp_a8_14, temp_a8_15)))))))))))))));
-        let temp_a9 = _mm_add_pd(values[0], _mm_add_pd(temp_a9_1, _mm_add_pd(temp_a9_2, _mm_add_pd(temp_a9_3, _mm_add_pd(temp_a9_4, _mm_add_pd(temp_a9_5, _mm_add_pd(temp_a9_6, _mm_add_pd(temp_a9_7, _mm_add_pd(temp_a9_8, _mm_add_pd(temp_a9_9, _mm_add_pd(temp_a9_10, _mm_add_pd(temp_a9_11, _mm_add_pd(temp_a9_12, _mm_add_pd(temp_a9_13, _mm_add_pd(temp_a9_14, temp_a9_15)))))))))))))));
-        let temp_a10 = _mm_add_pd(values[0], _mm_add_pd(temp_a10_1, _mm_add_pd(temp_a10_2, _mm_add_pd(temp_a10_3, _mm_add_pd(temp_a10_4, _mm_add_pd(temp_a10_5, _mm_add_pd(temp_a10_6, _mm_add_pd(temp_a10_7, _mm_add_pd(temp_a10_8, _mm_add_pd(temp_a10_9, _mm_add_pd(temp_a10_10, _mm_add_pd(temp_a10_11, _mm_add_pd(temp_a10_12, _mm_add_pd(temp_a10_13, _mm_add_pd(temp_a10_14, temp_a10_15)))))))))))))));
-        let temp_a11 = _mm_add_pd(values[0], _mm_add_pd(temp_a11_1, _mm_add_pd(temp_a11_2, _mm_add_pd(temp_a11_3, _mm_add_pd(temp_a11_4, _mm_add_pd(temp_a11_5, _mm_add_pd(temp_a11_6, _mm_add_pd(temp_a11_7, _mm_add_pd(temp_a11_8, _mm_add_pd(temp_a11_9, _mm_add_pd(temp_a11_10, _mm_add_pd(temp_a11_11, _mm_add_pd(temp_a11_12, _mm_add_pd(temp_a11_13, _mm_add_pd(temp_a11_14, temp_a11_15)))))))))))))));
-        let temp_a12 = _mm_add_pd(values[0], _mm_add_pd(temp_a12_1, _mm_add_pd(temp_a12_2, _mm_add_pd(temp_a12_3, _mm_add_pd(temp_a12_4, _mm_add_pd(temp_a12_5, _mm_add_pd(temp_a12_6, _mm_add_pd(temp_a12_7, _mm_add_pd(temp_a12_8, _mm_add_pd(temp_a12_9, _mm_add_pd(temp_a12_10, _mm_add_pd(temp_a12_11, _mm_add_pd(temp_a12_12, _mm_add_pd(temp_a12_13, _mm_add_pd(temp_a12_14, temp_a12_15)))))))))))))));
-        let temp_a13 = _mm_add_pd(values[0], _mm_add_pd(temp_a13_1, _mm_add_pd(temp_a13_2, _mm_add_pd(temp_a13_3, _mm_add_pd(temp_a13_4, _mm_add_pd(temp_a13_5, _mm_add_pd(temp_a13_6, _mm_add_pd(temp_a13_7, _mm_add_pd(temp_a13_8, _mm_add_pd(temp_a13_9, _mm_add_pd(temp_a13_10, _mm_add_pd(temp_a13_11, _mm_add_pd(temp_a13_12, _mm_add_pd(temp_a13_13, _mm_add_pd(temp_a13_14, temp_a13_15)))))))))))))));
-        let temp_a14 = _mm_add_pd(values[0], _mm_add_pd(temp_a14_1, _mm_add_pd(temp_a14_2, _mm_add_pd(temp_a14_3, _mm_add_pd(temp_a14_4, _mm_add_pd(temp_a14_5, _mm_add_pd(temp_a14_6, _mm_add_pd(temp_a14_7, _mm_add_pd(temp_a14_8, _mm_add_pd(temp_a14_9, _mm_add_pd(temp_a14_10, _mm_add_pd(temp_a14_11, _mm_add_pd(temp_a14_12, _mm_add_pd(temp_a14_13, _mm_add_pd(temp_a14_14, temp_a14_15)))))))))))))));
-        let temp_a15 = _mm_add_pd(values[0], _mm_add_pd(temp_a15_1, _mm_add_pd(temp_a15_2, _mm_add_pd(temp_a15_3, _mm_add_pd(temp_a15_4, _mm_add_pd(temp_a15_5, _mm_add_pd(temp_a15_6, _mm_add_pd(temp_a15_7, _mm_add_pd(temp_a15_8, _mm_add_pd(temp_a15_9, _mm_add_pd(temp_a15_10, _mm_add_pd(temp_a15_11, _mm_add_pd(temp_a15_12, _mm_add_pd(temp_a15_13, _mm_add_pd(temp_a15_14, temp_a15_15)))))))))))))));
+        let temp_a1 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a1_1,
+                _mm_add_pd(
+                    temp_a1_2,
+                    _mm_add_pd(
+                        temp_a1_3,
+                        _mm_add_pd(
+                            temp_a1_4,
+                            _mm_add_pd(
+                                temp_a1_5,
+                                _mm_add_pd(
+                                    temp_a1_6,
+                                    _mm_add_pd(
+                                        temp_a1_7,
+                                        _mm_add_pd(
+                                            temp_a1_8,
+                                            _mm_add_pd(
+                                                temp_a1_9,
+                                                _mm_add_pd(
+                                                    temp_a1_10,
+                                                    _mm_add_pd(
+                                                        temp_a1_11,
+                                                        _mm_add_pd(
+                                                            temp_a1_12,
+                                                            _mm_add_pd(
+                                                                temp_a1_13,
+                                                                _mm_add_pd(temp_a1_14, temp_a1_15),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a2 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a2_1,
+                _mm_add_pd(
+                    temp_a2_2,
+                    _mm_add_pd(
+                        temp_a2_3,
+                        _mm_add_pd(
+                            temp_a2_4,
+                            _mm_add_pd(
+                                temp_a2_5,
+                                _mm_add_pd(
+                                    temp_a2_6,
+                                    _mm_add_pd(
+                                        temp_a2_7,
+                                        _mm_add_pd(
+                                            temp_a2_8,
+                                            _mm_add_pd(
+                                                temp_a2_9,
+                                                _mm_add_pd(
+                                                    temp_a2_10,
+                                                    _mm_add_pd(
+                                                        temp_a2_11,
+                                                        _mm_add_pd(
+                                                            temp_a2_12,
+                                                            _mm_add_pd(
+                                                                temp_a2_13,
+                                                                _mm_add_pd(temp_a2_14, temp_a2_15),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a3 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a3_1,
+                _mm_add_pd(
+                    temp_a3_2,
+                    _mm_add_pd(
+                        temp_a3_3,
+                        _mm_add_pd(
+                            temp_a3_4,
+                            _mm_add_pd(
+                                temp_a3_5,
+                                _mm_add_pd(
+                                    temp_a3_6,
+                                    _mm_add_pd(
+                                        temp_a3_7,
+                                        _mm_add_pd(
+                                            temp_a3_8,
+                                            _mm_add_pd(
+                                                temp_a3_9,
+                                                _mm_add_pd(
+                                                    temp_a3_10,
+                                                    _mm_add_pd(
+                                                        temp_a3_11,
+                                                        _mm_add_pd(
+                                                            temp_a3_12,
+                                                            _mm_add_pd(
+                                                                temp_a3_13,
+                                                                _mm_add_pd(temp_a3_14, temp_a3_15),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a4 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a4_1,
+                _mm_add_pd(
+                    temp_a4_2,
+                    _mm_add_pd(
+                        temp_a4_3,
+                        _mm_add_pd(
+                            temp_a4_4,
+                            _mm_add_pd(
+                                temp_a4_5,
+                                _mm_add_pd(
+                                    temp_a4_6,
+                                    _mm_add_pd(
+                                        temp_a4_7,
+                                        _mm_add_pd(
+                                            temp_a4_8,
+                                            _mm_add_pd(
+                                                temp_a4_9,
+                                                _mm_add_pd(
+                                                    temp_a4_10,
+                                                    _mm_add_pd(
+                                                        temp_a4_11,
+                                                        _mm_add_pd(
+                                                            temp_a4_12,
+                                                            _mm_add_pd(
+                                                                temp_a4_13,
+                                                                _mm_add_pd(temp_a4_14, temp_a4_15),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a5 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a5_1,
+                _mm_add_pd(
+                    temp_a5_2,
+                    _mm_add_pd(
+                        temp_a5_3,
+                        _mm_add_pd(
+                            temp_a5_4,
+                            _mm_add_pd(
+                                temp_a5_5,
+                                _mm_add_pd(
+                                    temp_a5_6,
+                                    _mm_add_pd(
+                                        temp_a5_7,
+                                        _mm_add_pd(
+                                            temp_a5_8,
+                                            _mm_add_pd(
+                                                temp_a5_9,
+                                                _mm_add_pd(
+                                                    temp_a5_10,
+                                                    _mm_add_pd(
+                                                        temp_a5_11,
+                                                        _mm_add_pd(
+                                                            temp_a5_12,
+                                                            _mm_add_pd(
+                                                                temp_a5_13,
+                                                                _mm_add_pd(temp_a5_14, temp_a5_15),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a6 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a6_1,
+                _mm_add_pd(
+                    temp_a6_2,
+                    _mm_add_pd(
+                        temp_a6_3,
+                        _mm_add_pd(
+                            temp_a6_4,
+                            _mm_add_pd(
+                                temp_a6_5,
+                                _mm_add_pd(
+                                    temp_a6_6,
+                                    _mm_add_pd(
+                                        temp_a6_7,
+                                        _mm_add_pd(
+                                            temp_a6_8,
+                                            _mm_add_pd(
+                                                temp_a6_9,
+                                                _mm_add_pd(
+                                                    temp_a6_10,
+                                                    _mm_add_pd(
+                                                        temp_a6_11,
+                                                        _mm_add_pd(
+                                                            temp_a6_12,
+                                                            _mm_add_pd(
+                                                                temp_a6_13,
+                                                                _mm_add_pd(temp_a6_14, temp_a6_15),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a7 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a7_1,
+                _mm_add_pd(
+                    temp_a7_2,
+                    _mm_add_pd(
+                        temp_a7_3,
+                        _mm_add_pd(
+                            temp_a7_4,
+                            _mm_add_pd(
+                                temp_a7_5,
+                                _mm_add_pd(
+                                    temp_a7_6,
+                                    _mm_add_pd(
+                                        temp_a7_7,
+                                        _mm_add_pd(
+                                            temp_a7_8,
+                                            _mm_add_pd(
+                                                temp_a7_9,
+                                                _mm_add_pd(
+                                                    temp_a7_10,
+                                                    _mm_add_pd(
+                                                        temp_a7_11,
+                                                        _mm_add_pd(
+                                                            temp_a7_12,
+                                                            _mm_add_pd(
+                                                                temp_a7_13,
+                                                                _mm_add_pd(temp_a7_14, temp_a7_15),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a8 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a8_1,
+                _mm_add_pd(
+                    temp_a8_2,
+                    _mm_add_pd(
+                        temp_a8_3,
+                        _mm_add_pd(
+                            temp_a8_4,
+                            _mm_add_pd(
+                                temp_a8_5,
+                                _mm_add_pd(
+                                    temp_a8_6,
+                                    _mm_add_pd(
+                                        temp_a8_7,
+                                        _mm_add_pd(
+                                            temp_a8_8,
+                                            _mm_add_pd(
+                                                temp_a8_9,
+                                                _mm_add_pd(
+                                                    temp_a8_10,
+                                                    _mm_add_pd(
+                                                        temp_a8_11,
+                                                        _mm_add_pd(
+                                                            temp_a8_12,
+                                                            _mm_add_pd(
+                                                                temp_a8_13,
+                                                                _mm_add_pd(temp_a8_14, temp_a8_15),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a9 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a9_1,
+                _mm_add_pd(
+                    temp_a9_2,
+                    _mm_add_pd(
+                        temp_a9_3,
+                        _mm_add_pd(
+                            temp_a9_4,
+                            _mm_add_pd(
+                                temp_a9_5,
+                                _mm_add_pd(
+                                    temp_a9_6,
+                                    _mm_add_pd(
+                                        temp_a9_7,
+                                        _mm_add_pd(
+                                            temp_a9_8,
+                                            _mm_add_pd(
+                                                temp_a9_9,
+                                                _mm_add_pd(
+                                                    temp_a9_10,
+                                                    _mm_add_pd(
+                                                        temp_a9_11,
+                                                        _mm_add_pd(
+                                                            temp_a9_12,
+                                                            _mm_add_pd(
+                                                                temp_a9_13,
+                                                                _mm_add_pd(temp_a9_14, temp_a9_15),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a10 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a10_1,
+                _mm_add_pd(
+                    temp_a10_2,
+                    _mm_add_pd(
+                        temp_a10_3,
+                        _mm_add_pd(
+                            temp_a10_4,
+                            _mm_add_pd(
+                                temp_a10_5,
+                                _mm_add_pd(
+                                    temp_a10_6,
+                                    _mm_add_pd(
+                                        temp_a10_7,
+                                        _mm_add_pd(
+                                            temp_a10_8,
+                                            _mm_add_pd(
+                                                temp_a10_9,
+                                                _mm_add_pd(
+                                                    temp_a10_10,
+                                                    _mm_add_pd(
+                                                        temp_a10_11,
+                                                        _mm_add_pd(
+                                                            temp_a10_12,
+                                                            _mm_add_pd(
+                                                                temp_a10_13,
+                                                                _mm_add_pd(
+                                                                    temp_a10_14,
+                                                                    temp_a10_15,
+                                                                ),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a11 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a11_1,
+                _mm_add_pd(
+                    temp_a11_2,
+                    _mm_add_pd(
+                        temp_a11_3,
+                        _mm_add_pd(
+                            temp_a11_4,
+                            _mm_add_pd(
+                                temp_a11_5,
+                                _mm_add_pd(
+                                    temp_a11_6,
+                                    _mm_add_pd(
+                                        temp_a11_7,
+                                        _mm_add_pd(
+                                            temp_a11_8,
+                                            _mm_add_pd(
+                                                temp_a11_9,
+                                                _mm_add_pd(
+                                                    temp_a11_10,
+                                                    _mm_add_pd(
+                                                        temp_a11_11,
+                                                        _mm_add_pd(
+                                                            temp_a11_12,
+                                                            _mm_add_pd(
+                                                                temp_a11_13,
+                                                                _mm_add_pd(
+                                                                    temp_a11_14,
+                                                                    temp_a11_15,
+                                                                ),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a12 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a12_1,
+                _mm_add_pd(
+                    temp_a12_2,
+                    _mm_add_pd(
+                        temp_a12_3,
+                        _mm_add_pd(
+                            temp_a12_4,
+                            _mm_add_pd(
+                                temp_a12_5,
+                                _mm_add_pd(
+                                    temp_a12_6,
+                                    _mm_add_pd(
+                                        temp_a12_7,
+                                        _mm_add_pd(
+                                            temp_a12_8,
+                                            _mm_add_pd(
+                                                temp_a12_9,
+                                                _mm_add_pd(
+                                                    temp_a12_10,
+                                                    _mm_add_pd(
+                                                        temp_a12_11,
+                                                        _mm_add_pd(
+                                                            temp_a12_12,
+                                                            _mm_add_pd(
+                                                                temp_a12_13,
+                                                                _mm_add_pd(
+                                                                    temp_a12_14,
+                                                                    temp_a12_15,
+                                                                ),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a13 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a13_1,
+                _mm_add_pd(
+                    temp_a13_2,
+                    _mm_add_pd(
+                        temp_a13_3,
+                        _mm_add_pd(
+                            temp_a13_4,
+                            _mm_add_pd(
+                                temp_a13_5,
+                                _mm_add_pd(
+                                    temp_a13_6,
+                                    _mm_add_pd(
+                                        temp_a13_7,
+                                        _mm_add_pd(
+                                            temp_a13_8,
+                                            _mm_add_pd(
+                                                temp_a13_9,
+                                                _mm_add_pd(
+                                                    temp_a13_10,
+                                                    _mm_add_pd(
+                                                        temp_a13_11,
+                                                        _mm_add_pd(
+                                                            temp_a13_12,
+                                                            _mm_add_pd(
+                                                                temp_a13_13,
+                                                                _mm_add_pd(
+                                                                    temp_a13_14,
+                                                                    temp_a13_15,
+                                                                ),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a14 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a14_1,
+                _mm_add_pd(
+                    temp_a14_2,
+                    _mm_add_pd(
+                        temp_a14_3,
+                        _mm_add_pd(
+                            temp_a14_4,
+                            _mm_add_pd(
+                                temp_a14_5,
+                                _mm_add_pd(
+                                    temp_a14_6,
+                                    _mm_add_pd(
+                                        temp_a14_7,
+                                        _mm_add_pd(
+                                            temp_a14_8,
+                                            _mm_add_pd(
+                                                temp_a14_9,
+                                                _mm_add_pd(
+                                                    temp_a14_10,
+                                                    _mm_add_pd(
+                                                        temp_a14_11,
+                                                        _mm_add_pd(
+                                                            temp_a14_12,
+                                                            _mm_add_pd(
+                                                                temp_a14_13,
+                                                                _mm_add_pd(
+                                                                    temp_a14_14,
+                                                                    temp_a14_15,
+                                                                ),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_a15 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                temp_a15_1,
+                _mm_add_pd(
+                    temp_a15_2,
+                    _mm_add_pd(
+                        temp_a15_3,
+                        _mm_add_pd(
+                            temp_a15_4,
+                            _mm_add_pd(
+                                temp_a15_5,
+                                _mm_add_pd(
+                                    temp_a15_6,
+                                    _mm_add_pd(
+                                        temp_a15_7,
+                                        _mm_add_pd(
+                                            temp_a15_8,
+                                            _mm_add_pd(
+                                                temp_a15_9,
+                                                _mm_add_pd(
+                                                    temp_a15_10,
+                                                    _mm_add_pd(
+                                                        temp_a15_11,
+                                                        _mm_add_pd(
+                                                            temp_a15_12,
+                                                            _mm_add_pd(
+                                                                temp_a15_13,
+                                                                _mm_add_pd(
+                                                                    temp_a15_14,
+                                                                    temp_a15_15,
+                                                                ),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
 
-        let temp_b1 = _mm_add_pd(temp_b1_1, _mm_add_pd(temp_b1_2, _mm_add_pd(temp_b1_3, _mm_add_pd(temp_b1_4, _mm_add_pd(temp_b1_5, _mm_add_pd(temp_b1_6, _mm_add_pd(temp_b1_7, _mm_add_pd(temp_b1_8, _mm_add_pd(temp_b1_9, _mm_add_pd(temp_b1_10, _mm_add_pd(temp_b1_11, _mm_add_pd(temp_b1_12, _mm_add_pd(temp_b1_13, _mm_add_pd(temp_b1_14, temp_b1_15))))))))))))));
-        let temp_b2 = _mm_add_pd(temp_b2_1, _mm_add_pd(temp_b2_2, _mm_add_pd(temp_b2_3, _mm_add_pd(temp_b2_4, _mm_add_pd(temp_b2_5, _mm_add_pd(temp_b2_6, _mm_sub_pd(temp_b2_7, _mm_add_pd(temp_b2_8, _mm_add_pd(temp_b2_9, _mm_add_pd(temp_b2_10, _mm_add_pd(temp_b2_11, _mm_add_pd(temp_b2_12, _mm_add_pd(temp_b2_13, _mm_add_pd(temp_b2_14, temp_b2_15))))))))))))));
-        let temp_b3 = _mm_add_pd(temp_b3_1, _mm_add_pd(temp_b3_2, _mm_add_pd(temp_b3_3, _mm_add_pd(temp_b3_4, _mm_sub_pd(temp_b3_5, _mm_add_pd(temp_b3_6, _mm_add_pd(temp_b3_7, _mm_add_pd(temp_b3_8, _mm_add_pd(temp_b3_9, _mm_sub_pd(temp_b3_10, _mm_add_pd(temp_b3_11, _mm_add_pd(temp_b3_12, _mm_add_pd(temp_b3_13, _mm_add_pd(temp_b3_14, temp_b3_15))))))))))))));
-        let temp_b4 = _mm_add_pd(temp_b4_1, _mm_add_pd(temp_b4_2, _mm_sub_pd(temp_b4_3, _mm_add_pd(temp_b4_4, _mm_add_pd(temp_b4_5, _mm_add_pd(temp_b4_6, _mm_sub_pd(temp_b4_7, _mm_add_pd(temp_b4_8, _mm_add_pd(temp_b4_9, _mm_add_pd(temp_b4_10, _mm_sub_pd(temp_b4_11, _mm_add_pd(temp_b4_12, _mm_add_pd(temp_b4_13, _mm_add_pd(temp_b4_14, temp_b4_15))))))))))))));
-        let temp_b5 = _mm_add_pd(temp_b5_1, _mm_add_pd(temp_b5_2, _mm_sub_pd(temp_b5_3, _mm_add_pd(temp_b5_4, _mm_add_pd(temp_b5_5, _mm_sub_pd(temp_b5_6, _mm_add_pd(temp_b5_7, _mm_add_pd(temp_b5_8, _mm_sub_pd(temp_b5_9, _mm_add_pd(temp_b5_10, _mm_add_pd(temp_b5_11, _mm_sub_pd(temp_b5_12, _mm_add_pd(temp_b5_13, _mm_add_pd(temp_b5_14, temp_b5_15))))))))))))));
-        let temp_b6 = _mm_add_pd(temp_b6_1, _mm_sub_pd(temp_b6_2, _mm_add_pd(temp_b6_3, _mm_add_pd(temp_b6_4, _mm_sub_pd(temp_b6_5, _mm_add_pd(temp_b6_6, _mm_sub_pd(temp_b6_7, _mm_add_pd(temp_b6_8, _mm_add_pd(temp_b6_9, _mm_sub_pd(temp_b6_10, _mm_add_pd(temp_b6_11, _mm_sub_pd(temp_b6_12, _mm_add_pd(temp_b6_13, _mm_add_pd(temp_b6_14, temp_b6_15))))))))))))));
-        let temp_b7 = _mm_add_pd(temp_b7_1, _mm_sub_pd(temp_b7_2, _mm_add_pd(temp_b7_3, _mm_sub_pd(temp_b7_4, _mm_add_pd(temp_b7_5, _mm_sub_pd(temp_b7_6, _mm_add_pd(temp_b7_7, _mm_sub_pd(temp_b7_8, _mm_add_pd(temp_b7_9, _mm_add_pd(temp_b7_10, _mm_sub_pd(temp_b7_11, _mm_add_pd(temp_b7_12, _mm_sub_pd(temp_b7_13, _mm_add_pd(temp_b7_14, temp_b7_15))))))))))))));
-        let temp_b8 = _mm_sub_pd(temp_b8_1, _mm_add_pd(temp_b8_2, _mm_sub_pd(temp_b8_3, _mm_add_pd(temp_b8_4, _mm_sub_pd(temp_b8_5, _mm_add_pd(temp_b8_6, _mm_sub_pd(temp_b8_7, _mm_add_pd(temp_b8_8, _mm_sub_pd(temp_b8_9, _mm_add_pd(temp_b8_10, _mm_sub_pd(temp_b8_11, _mm_add_pd(temp_b8_12, _mm_sub_pd(temp_b8_13, _mm_add_pd(temp_b8_14, temp_b8_15))))))))))))));
-        let temp_b9 = _mm_sub_pd(temp_b9_1, _mm_add_pd(temp_b9_2, _mm_sub_pd(temp_b9_3, _mm_add_pd(temp_b9_4, _mm_sub_pd(temp_b9_5, _mm_sub_pd(temp_b9_6, _mm_add_pd(temp_b9_7, _mm_sub_pd(temp_b9_8, _mm_add_pd(temp_b9_9, _mm_sub_pd(temp_b9_10, _mm_add_pd(temp_b9_11, _mm_sub_pd(temp_b9_12, _mm_sub_pd(temp_b9_13, _mm_add_pd(temp_b9_14, temp_b9_15))))))))))))));
-        let temp_b10 = _mm_sub_pd(temp_b10_1, _mm_add_pd(temp_b10_2, _mm_sub_pd(temp_b10_3, _mm_sub_pd(temp_b10_4, _mm_add_pd(temp_b10_5, _mm_sub_pd(temp_b10_6, _mm_sub_pd(temp_b10_7, _mm_add_pd(temp_b10_8, _mm_sub_pd(temp_b10_9, _mm_sub_pd(temp_b10_10, _mm_add_pd(temp_b10_11, _mm_sub_pd(temp_b10_12, _mm_sub_pd(temp_b10_13, _mm_add_pd(temp_b10_14, temp_b10_15))))))))))))));
-        let temp_b11 = _mm_sub_pd(temp_b11_1, _mm_sub_pd(temp_b11_2, _mm_add_pd(temp_b11_3, _mm_sub_pd(temp_b11_4, _mm_sub_pd(temp_b11_5, _mm_add_pd(temp_b11_6, _mm_sub_pd(temp_b11_7, _mm_sub_pd(temp_b11_8, _mm_sub_pd(temp_b11_9, _mm_add_pd(temp_b11_10, _mm_sub_pd(temp_b11_11, _mm_sub_pd(temp_b11_12, _mm_add_pd(temp_b11_13, _mm_sub_pd(temp_b11_14, temp_b11_15))))))))))))));
-        let temp_b12 = _mm_sub_pd(temp_b12_1, _mm_sub_pd(temp_b12_2, _mm_sub_pd(temp_b12_3, _mm_add_pd(temp_b12_4, _mm_sub_pd(temp_b12_5, _mm_sub_pd(temp_b12_6, _mm_sub_pd(temp_b12_7, _mm_add_pd(temp_b12_8, _mm_sub_pd(temp_b12_9, _mm_sub_pd(temp_b12_10, _mm_sub_pd(temp_b12_11, _mm_sub_pd(temp_b12_12, _mm_add_pd(temp_b12_13, _mm_sub_pd(temp_b12_14, temp_b12_15))))))))))))));
-        let temp_b13 = _mm_sub_pd(temp_b13_1, _mm_sub_pd(temp_b13_2, _mm_sub_pd(temp_b13_3, _mm_sub_pd(temp_b13_4, _mm_sub_pd(temp_b13_5, _mm_add_pd(temp_b13_6, _mm_sub_pd(temp_b13_7, _mm_sub_pd(temp_b13_8, _mm_sub_pd(temp_b13_9, _mm_sub_pd(temp_b13_10, _mm_sub_pd(temp_b13_11, _mm_add_pd(temp_b13_12, _mm_sub_pd(temp_b13_13, _mm_sub_pd(temp_b13_14, temp_b13_15))))))))))))));
-        let temp_b14 = _mm_sub_pd(temp_b14_1, _mm_sub_pd(temp_b14_2, _mm_sub_pd(temp_b14_3, _mm_sub_pd(temp_b14_4, _mm_sub_pd(temp_b14_5, _mm_sub_pd(temp_b14_6, _mm_sub_pd(temp_b14_7, _mm_sub_pd(temp_b14_8, _mm_sub_pd(temp_b14_9, _mm_add_pd(temp_b14_10, _mm_sub_pd(temp_b14_11, _mm_sub_pd(temp_b14_12, _mm_sub_pd(temp_b14_13, _mm_sub_pd(temp_b14_14, temp_b14_15))))))))))))));
-        let temp_b15 = _mm_sub_pd(temp_b15_1, _mm_sub_pd(temp_b15_2, _mm_sub_pd(temp_b15_3, _mm_sub_pd(temp_b15_4, _mm_sub_pd(temp_b15_5, _mm_sub_pd(temp_b15_6, _mm_sub_pd(temp_b15_7, _mm_sub_pd(temp_b15_8, _mm_sub_pd(temp_b15_9, _mm_sub_pd(temp_b15_10, _mm_sub_pd(temp_b15_11, _mm_sub_pd(temp_b15_12, _mm_sub_pd(temp_b15_13, _mm_sub_pd(temp_b15_14, temp_b15_15))))))))))))));
+        let temp_b1 = _mm_add_pd(
+            temp_b1_1,
+            _mm_add_pd(
+                temp_b1_2,
+                _mm_add_pd(
+                    temp_b1_3,
+                    _mm_add_pd(
+                        temp_b1_4,
+                        _mm_add_pd(
+                            temp_b1_5,
+                            _mm_add_pd(
+                                temp_b1_6,
+                                _mm_add_pd(
+                                    temp_b1_7,
+                                    _mm_add_pd(
+                                        temp_b1_8,
+                                        _mm_add_pd(
+                                            temp_b1_9,
+                                            _mm_add_pd(
+                                                temp_b1_10,
+                                                _mm_add_pd(
+                                                    temp_b1_11,
+                                                    _mm_add_pd(
+                                                        temp_b1_12,
+                                                        _mm_add_pd(
+                                                            temp_b1_13,
+                                                            _mm_add_pd(temp_b1_14, temp_b1_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b2 = _mm_add_pd(
+            temp_b2_1,
+            _mm_add_pd(
+                temp_b2_2,
+                _mm_add_pd(
+                    temp_b2_3,
+                    _mm_add_pd(
+                        temp_b2_4,
+                        _mm_add_pd(
+                            temp_b2_5,
+                            _mm_add_pd(
+                                temp_b2_6,
+                                _mm_sub_pd(
+                                    temp_b2_7,
+                                    _mm_add_pd(
+                                        temp_b2_8,
+                                        _mm_add_pd(
+                                            temp_b2_9,
+                                            _mm_add_pd(
+                                                temp_b2_10,
+                                                _mm_add_pd(
+                                                    temp_b2_11,
+                                                    _mm_add_pd(
+                                                        temp_b2_12,
+                                                        _mm_add_pd(
+                                                            temp_b2_13,
+                                                            _mm_add_pd(temp_b2_14, temp_b2_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b3 = _mm_add_pd(
+            temp_b3_1,
+            _mm_add_pd(
+                temp_b3_2,
+                _mm_add_pd(
+                    temp_b3_3,
+                    _mm_add_pd(
+                        temp_b3_4,
+                        _mm_sub_pd(
+                            temp_b3_5,
+                            _mm_add_pd(
+                                temp_b3_6,
+                                _mm_add_pd(
+                                    temp_b3_7,
+                                    _mm_add_pd(
+                                        temp_b3_8,
+                                        _mm_add_pd(
+                                            temp_b3_9,
+                                            _mm_sub_pd(
+                                                temp_b3_10,
+                                                _mm_add_pd(
+                                                    temp_b3_11,
+                                                    _mm_add_pd(
+                                                        temp_b3_12,
+                                                        _mm_add_pd(
+                                                            temp_b3_13,
+                                                            _mm_add_pd(temp_b3_14, temp_b3_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b4 = _mm_add_pd(
+            temp_b4_1,
+            _mm_add_pd(
+                temp_b4_2,
+                _mm_sub_pd(
+                    temp_b4_3,
+                    _mm_add_pd(
+                        temp_b4_4,
+                        _mm_add_pd(
+                            temp_b4_5,
+                            _mm_add_pd(
+                                temp_b4_6,
+                                _mm_sub_pd(
+                                    temp_b4_7,
+                                    _mm_add_pd(
+                                        temp_b4_8,
+                                        _mm_add_pd(
+                                            temp_b4_9,
+                                            _mm_add_pd(
+                                                temp_b4_10,
+                                                _mm_sub_pd(
+                                                    temp_b4_11,
+                                                    _mm_add_pd(
+                                                        temp_b4_12,
+                                                        _mm_add_pd(
+                                                            temp_b4_13,
+                                                            _mm_add_pd(temp_b4_14, temp_b4_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b5 = _mm_add_pd(
+            temp_b5_1,
+            _mm_add_pd(
+                temp_b5_2,
+                _mm_sub_pd(
+                    temp_b5_3,
+                    _mm_add_pd(
+                        temp_b5_4,
+                        _mm_add_pd(
+                            temp_b5_5,
+                            _mm_sub_pd(
+                                temp_b5_6,
+                                _mm_add_pd(
+                                    temp_b5_7,
+                                    _mm_add_pd(
+                                        temp_b5_8,
+                                        _mm_sub_pd(
+                                            temp_b5_9,
+                                            _mm_add_pd(
+                                                temp_b5_10,
+                                                _mm_add_pd(
+                                                    temp_b5_11,
+                                                    _mm_sub_pd(
+                                                        temp_b5_12,
+                                                        _mm_add_pd(
+                                                            temp_b5_13,
+                                                            _mm_add_pd(temp_b5_14, temp_b5_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b6 = _mm_add_pd(
+            temp_b6_1,
+            _mm_sub_pd(
+                temp_b6_2,
+                _mm_add_pd(
+                    temp_b6_3,
+                    _mm_add_pd(
+                        temp_b6_4,
+                        _mm_sub_pd(
+                            temp_b6_5,
+                            _mm_add_pd(
+                                temp_b6_6,
+                                _mm_sub_pd(
+                                    temp_b6_7,
+                                    _mm_add_pd(
+                                        temp_b6_8,
+                                        _mm_add_pd(
+                                            temp_b6_9,
+                                            _mm_sub_pd(
+                                                temp_b6_10,
+                                                _mm_add_pd(
+                                                    temp_b6_11,
+                                                    _mm_sub_pd(
+                                                        temp_b6_12,
+                                                        _mm_add_pd(
+                                                            temp_b6_13,
+                                                            _mm_add_pd(temp_b6_14, temp_b6_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b7 = _mm_add_pd(
+            temp_b7_1,
+            _mm_sub_pd(
+                temp_b7_2,
+                _mm_add_pd(
+                    temp_b7_3,
+                    _mm_sub_pd(
+                        temp_b7_4,
+                        _mm_add_pd(
+                            temp_b7_5,
+                            _mm_sub_pd(
+                                temp_b7_6,
+                                _mm_add_pd(
+                                    temp_b7_7,
+                                    _mm_sub_pd(
+                                        temp_b7_8,
+                                        _mm_add_pd(
+                                            temp_b7_9,
+                                            _mm_add_pd(
+                                                temp_b7_10,
+                                                _mm_sub_pd(
+                                                    temp_b7_11,
+                                                    _mm_add_pd(
+                                                        temp_b7_12,
+                                                        _mm_sub_pd(
+                                                            temp_b7_13,
+                                                            _mm_add_pd(temp_b7_14, temp_b7_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b8 = _mm_sub_pd(
+            temp_b8_1,
+            _mm_add_pd(
+                temp_b8_2,
+                _mm_sub_pd(
+                    temp_b8_3,
+                    _mm_add_pd(
+                        temp_b8_4,
+                        _mm_sub_pd(
+                            temp_b8_5,
+                            _mm_add_pd(
+                                temp_b8_6,
+                                _mm_sub_pd(
+                                    temp_b8_7,
+                                    _mm_add_pd(
+                                        temp_b8_8,
+                                        _mm_sub_pd(
+                                            temp_b8_9,
+                                            _mm_add_pd(
+                                                temp_b8_10,
+                                                _mm_sub_pd(
+                                                    temp_b8_11,
+                                                    _mm_add_pd(
+                                                        temp_b8_12,
+                                                        _mm_sub_pd(
+                                                            temp_b8_13,
+                                                            _mm_add_pd(temp_b8_14, temp_b8_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b9 = _mm_sub_pd(
+            temp_b9_1,
+            _mm_add_pd(
+                temp_b9_2,
+                _mm_sub_pd(
+                    temp_b9_3,
+                    _mm_add_pd(
+                        temp_b9_4,
+                        _mm_sub_pd(
+                            temp_b9_5,
+                            _mm_sub_pd(
+                                temp_b9_6,
+                                _mm_add_pd(
+                                    temp_b9_7,
+                                    _mm_sub_pd(
+                                        temp_b9_8,
+                                        _mm_add_pd(
+                                            temp_b9_9,
+                                            _mm_sub_pd(
+                                                temp_b9_10,
+                                                _mm_add_pd(
+                                                    temp_b9_11,
+                                                    _mm_sub_pd(
+                                                        temp_b9_12,
+                                                        _mm_sub_pd(
+                                                            temp_b9_13,
+                                                            _mm_add_pd(temp_b9_14, temp_b9_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b10 = _mm_sub_pd(
+            temp_b10_1,
+            _mm_add_pd(
+                temp_b10_2,
+                _mm_sub_pd(
+                    temp_b10_3,
+                    _mm_sub_pd(
+                        temp_b10_4,
+                        _mm_add_pd(
+                            temp_b10_5,
+                            _mm_sub_pd(
+                                temp_b10_6,
+                                _mm_sub_pd(
+                                    temp_b10_7,
+                                    _mm_add_pd(
+                                        temp_b10_8,
+                                        _mm_sub_pd(
+                                            temp_b10_9,
+                                            _mm_sub_pd(
+                                                temp_b10_10,
+                                                _mm_add_pd(
+                                                    temp_b10_11,
+                                                    _mm_sub_pd(
+                                                        temp_b10_12,
+                                                        _mm_sub_pd(
+                                                            temp_b10_13,
+                                                            _mm_add_pd(temp_b10_14, temp_b10_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b11 = _mm_sub_pd(
+            temp_b11_1,
+            _mm_sub_pd(
+                temp_b11_2,
+                _mm_add_pd(
+                    temp_b11_3,
+                    _mm_sub_pd(
+                        temp_b11_4,
+                        _mm_sub_pd(
+                            temp_b11_5,
+                            _mm_add_pd(
+                                temp_b11_6,
+                                _mm_sub_pd(
+                                    temp_b11_7,
+                                    _mm_sub_pd(
+                                        temp_b11_8,
+                                        _mm_sub_pd(
+                                            temp_b11_9,
+                                            _mm_add_pd(
+                                                temp_b11_10,
+                                                _mm_sub_pd(
+                                                    temp_b11_11,
+                                                    _mm_sub_pd(
+                                                        temp_b11_12,
+                                                        _mm_add_pd(
+                                                            temp_b11_13,
+                                                            _mm_sub_pd(temp_b11_14, temp_b11_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b12 = _mm_sub_pd(
+            temp_b12_1,
+            _mm_sub_pd(
+                temp_b12_2,
+                _mm_sub_pd(
+                    temp_b12_3,
+                    _mm_add_pd(
+                        temp_b12_4,
+                        _mm_sub_pd(
+                            temp_b12_5,
+                            _mm_sub_pd(
+                                temp_b12_6,
+                                _mm_sub_pd(
+                                    temp_b12_7,
+                                    _mm_add_pd(
+                                        temp_b12_8,
+                                        _mm_sub_pd(
+                                            temp_b12_9,
+                                            _mm_sub_pd(
+                                                temp_b12_10,
+                                                _mm_sub_pd(
+                                                    temp_b12_11,
+                                                    _mm_sub_pd(
+                                                        temp_b12_12,
+                                                        _mm_add_pd(
+                                                            temp_b12_13,
+                                                            _mm_sub_pd(temp_b12_14, temp_b12_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b13 = _mm_sub_pd(
+            temp_b13_1,
+            _mm_sub_pd(
+                temp_b13_2,
+                _mm_sub_pd(
+                    temp_b13_3,
+                    _mm_sub_pd(
+                        temp_b13_4,
+                        _mm_sub_pd(
+                            temp_b13_5,
+                            _mm_add_pd(
+                                temp_b13_6,
+                                _mm_sub_pd(
+                                    temp_b13_7,
+                                    _mm_sub_pd(
+                                        temp_b13_8,
+                                        _mm_sub_pd(
+                                            temp_b13_9,
+                                            _mm_sub_pd(
+                                                temp_b13_10,
+                                                _mm_sub_pd(
+                                                    temp_b13_11,
+                                                    _mm_add_pd(
+                                                        temp_b13_12,
+                                                        _mm_sub_pd(
+                                                            temp_b13_13,
+                                                            _mm_sub_pd(temp_b13_14, temp_b13_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b14 = _mm_sub_pd(
+            temp_b14_1,
+            _mm_sub_pd(
+                temp_b14_2,
+                _mm_sub_pd(
+                    temp_b14_3,
+                    _mm_sub_pd(
+                        temp_b14_4,
+                        _mm_sub_pd(
+                            temp_b14_5,
+                            _mm_sub_pd(
+                                temp_b14_6,
+                                _mm_sub_pd(
+                                    temp_b14_7,
+                                    _mm_sub_pd(
+                                        temp_b14_8,
+                                        _mm_sub_pd(
+                                            temp_b14_9,
+                                            _mm_add_pd(
+                                                temp_b14_10,
+                                                _mm_sub_pd(
+                                                    temp_b14_11,
+                                                    _mm_sub_pd(
+                                                        temp_b14_12,
+                                                        _mm_sub_pd(
+                                                            temp_b14_13,
+                                                            _mm_sub_pd(temp_b14_14, temp_b14_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
+        let temp_b15 = _mm_sub_pd(
+            temp_b15_1,
+            _mm_sub_pd(
+                temp_b15_2,
+                _mm_sub_pd(
+                    temp_b15_3,
+                    _mm_sub_pd(
+                        temp_b15_4,
+                        _mm_sub_pd(
+                            temp_b15_5,
+                            _mm_sub_pd(
+                                temp_b15_6,
+                                _mm_sub_pd(
+                                    temp_b15_7,
+                                    _mm_sub_pd(
+                                        temp_b15_8,
+                                        _mm_sub_pd(
+                                            temp_b15_9,
+                                            _mm_sub_pd(
+                                                temp_b15_10,
+                                                _mm_sub_pd(
+                                                    temp_b15_11,
+                                                    _mm_sub_pd(
+                                                        temp_b15_12,
+                                                        _mm_sub_pd(
+                                                            temp_b15_13,
+                                                            _mm_sub_pd(temp_b15_14, temp_b15_15),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
 
         let temp_b1_rot = self.rotate.rotate(temp_b1);
         let temp_b2_rot = self.rotate.rotate(temp_b2);
@@ -7367,7 +15026,49 @@ impl<T: FftNum> SseF64Butterfly31<T> {
         let temp_b14_rot = self.rotate.rotate(temp_b14);
         let temp_b15_rot = self.rotate.rotate(temp_b15);
 
-        let x0 = _mm_add_pd(values[0], _mm_add_pd(x130p, _mm_add_pd(x229p, _mm_add_pd(x328p, _mm_add_pd(x427p, _mm_add_pd(x526p, _mm_add_pd(x625p, _mm_add_pd(x724p, _mm_add_pd(x823p, _mm_add_pd(x922p, _mm_add_pd(x1021p, _mm_add_pd(x1120p, _mm_add_pd(x1219p, _mm_add_pd(x1318p, _mm_add_pd(x1417p, x1516p)))))))))))))));
+        let x0 = _mm_add_pd(
+            values[0],
+            _mm_add_pd(
+                x130p,
+                _mm_add_pd(
+                    x229p,
+                    _mm_add_pd(
+                        x328p,
+                        _mm_add_pd(
+                            x427p,
+                            _mm_add_pd(
+                                x526p,
+                                _mm_add_pd(
+                                    x625p,
+                                    _mm_add_pd(
+                                        x724p,
+                                        _mm_add_pd(
+                                            x823p,
+                                            _mm_add_pd(
+                                                x922p,
+                                                _mm_add_pd(
+                                                    x1021p,
+                                                    _mm_add_pd(
+                                                        x1120p,
+                                                        _mm_add_pd(
+                                                            x1219p,
+                                                            _mm_add_pd(
+                                                                x1318p,
+                                                                _mm_add_pd(x1417p, x1516p),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        );
         let x1 = _mm_add_pd(temp_a1, temp_b1_rot);
         let x2 = _mm_add_pd(temp_a2, temp_b2_rot);
         let x3 = _mm_add_pd(temp_a3, temp_b3_rot);
@@ -7398,28 +15099,19 @@ impl<T: FftNum> SseF64Butterfly31<T> {
         let x28 = _mm_sub_pd(temp_a3, temp_b3_rot);
         let x29 = _mm_sub_pd(temp_a2, temp_b2_rot);
         let x30 = _mm_sub_pd(temp_a1, temp_b1_rot);
-        [x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, x30]
-
-
-
-
-
-
-
+        [
+            x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18,
+            x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, x30,
+        ]
     }
 }
 
-
-
-
-//   _____ _____ ____ _____ ____  
-//  |_   _| ____/ ___|_   _/ ___| 
-//    | | |  _| \___ \ | | \___ \ 
+//   _____ _____ ____ _____ ____
+//  |_   _| ____/ ___|_   _/ ___|
+//    | | |  _| \___ \ | | \___ \
 //    | | | |___ ___) || |  ___) |
-//    |_| |_____|____/ |_| |____/ 
-//                                
-
-
+//    |_| |_____|____/ |_| |____/
+//
 
 #[cfg(test)]
 mod unit_tests {
@@ -7472,5 +15164,4 @@ mod unit_tests {
     test_butterfly_64_func!(test_ssef64_butterfly23, SseF64Butterfly23, 23);
     test_butterfly_64_func!(test_ssef64_butterfly29, SseF64Butterfly29, 29);
     test_butterfly_64_func!(test_ssef64_butterfly31, SseF64Butterfly31, 31);
-
 }
