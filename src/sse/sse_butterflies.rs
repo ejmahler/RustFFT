@@ -1551,10 +1551,10 @@ impl<T: FftNum> SseF32Butterfly8<T> {
     unsafe fn perform_fft_direct(&self, values: [__m128; 4]) -> [__m128; 4] {
         // we're going to hardcode a step of split radix
         // step 1: copy and reorder the input into the scratch
-        let in02 = _mm_shuffle_ps(values[0], values[1], 0x44);
-        let in13 = _mm_shuffle_ps(values[0], values[1], 0xEE);
-        let in46 = _mm_shuffle_ps(values[2], values[3], 0x44);
-        let in57 = _mm_shuffle_ps(values[2], values[3], 0xEE);
+        let in02 = pack_1st_f32(values[0], values[1]);
+        let in13 = pack_2nd_f32(values[0], values[1]);
+        let in46 = pack_1st_f32(values[2], values[3]);
+        let in57 = pack_2nd_f32(values[2], values[3]);
 
         // step 2: column FFTs
         let val0 = self.bf4.perform_fft_direct(in02, in46);
@@ -1564,12 +1564,12 @@ impl<T: FftNum> SseF32Butterfly8<T> {
         let val2b = self.rotate90.rotate_2nd(val2[0]);
         let val2c = _mm_add_ps(val2b, val2[0]);
         let val2d = _mm_mul_ps(val2c, self.root2);
-        val2[0] = _mm_shuffle_ps(val2[0], val2d, 0xE4);
+        val2[0] = pack_1and2_f32(val2[0], val2d);
 
         let val3b = self.rotate90.rotate_both(val2[1]);
         let val3c = _mm_sub_ps(val3b, val2[1]);
         let val3d = _mm_mul_ps(val3c, self.root2);
-        val2[1] = _mm_shuffle_ps(val3b, val3d, 0xE4);
+        val2[1] = pack_1and2_f32(val3b, val3d);
 
         // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
 
@@ -4130,8 +4130,8 @@ impl<T: FftNum> SseF64Butterfly32<T> {
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use crate::test_utils::{check_fft_algorithm, compare_vectors};
     use crate::algorithm::Dft;
+    use crate::test_utils::{check_fft_algorithm, compare_vectors};
 
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro

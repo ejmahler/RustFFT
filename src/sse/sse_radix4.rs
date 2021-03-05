@@ -246,7 +246,6 @@ impl<T: FftNum> Sse32Radix4<T> {
 }
 boilerplate_fft_sse_oop!(Sse32Radix4, |this: &Sse32Radix4<_>| this.len);
 
-
 #[target_feature(enable = "sse3")]
 unsafe fn butterfly_4_32<T: FftNum>(
     data: &mut [Complex<T>],
@@ -496,7 +495,6 @@ impl<T: FftNum> Sse64Radix4<T> {
     }
 }
 boilerplate_fft_sse_oop!(Sse64Radix4, |this: &Sse64Radix4<_>| this.len);
-
 
 fn prepare_radix4<T: FftNum>(
     size: usize,

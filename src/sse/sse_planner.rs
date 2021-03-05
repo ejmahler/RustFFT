@@ -742,7 +742,7 @@ mod unit_tests {
     #[test]
     fn test_plan_sse_goodthomasbutterfly() {
         let mut planner = FftPlannerSse::<f64>::new().unwrap();
-        for len in [3 * 7, 5 * 7, 11 * 13, 2*29, 5*32].iter() {
+        for len in [3 * 7, 5 * 7, 11 * 13, 2 * 29, 5 * 32].iter() {
             let plan = planner.design_fft_for_len(*len);
             assert!(
                 is_goodthomassmall(&plan),
@@ -812,6 +812,9 @@ mod unit_tests {
         let mut planner = FftPlannerSse::<f64>::new().unwrap();
         let fft_a = planner.design_fft_for_len(1234);
         let fft_b = planner.design_fft_for_len(1234);
-        assert!(Arc::ptr_eq(&fft_a, &fft_b), "Existing recipe was not reused");
+        assert!(
+            Arc::ptr_eq(&fft_a, &fft_b),
+            "Existing recipe was not reused"
+        );
     }
 }
