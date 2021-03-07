@@ -157,6 +157,9 @@ pub struct FftPlannerSse<T: FftNum> {
 
 impl<T: FftNum> FftPlannerSse<T> {
     /// Creates a new `FftPlannerSse` instance.
+    ///
+    /// Returns `Ok(planner_instance)` if this machine has the required instruction sets.
+    /// Returns `Err(())` if some instruction sets are missing.
     pub fn new() -> Result<Self, ()> {
         if is_x86_feature_detected!("sse3") {
             // Ideally, we would implement the planner with specialization.
@@ -186,7 +189,7 @@ impl<T: FftNum> FftPlannerSse<T> {
         Err(())
     }
 
-    /// Returns a `Fft` instance which computes FFTs of size `len`.
+    /// Returns a `Fft` instance which uses SSE3 instructions to compute FFTs of size `len`.
     ///
     /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
     ///
@@ -199,14 +202,14 @@ impl<T: FftNum> FftPlannerSse<T> {
         self.build_fft(&recipe, direction)
     }
 
-    /// Returns a `Fft` instance which computes forward FFTs of size `len`
+    /// Returns a `Fft` instance which uses SSE3 instructions to compute forward FFTs of size `len`
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft_forward(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         self.plan_fft(len, FftDirection::Forward)
     }
 
-    /// Returns a `Fft` instance which computes inverse FFTs of size `len`
+    /// Returns a `Fft` instance which uses SSE3 instructions to compute inverse FFTs of size `len.
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft_inverse(&mut self, len: usize) -> Arc<dyn Fft<T>> {
@@ -512,15 +515,17 @@ impl<T: FftNum> FftPlannerSse<T> {
             // Loop through and find all combinations
             // If more than one is found, keep the one where the factors are closer together.
             // For example length 20 where 10x2 and 5x4 are possible, we use 5x4.
-            let butterflies: [usize; 20] = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 19, 23, 29, 31, 32];
+            let butterflies: [usize; 20] = [
+                2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 19, 23, 29, 31, 32,
+            ];
             let mut bf_left = 0;
             let mut bf_right = 0;
             // If the length is below 14, or over 1024 we don't need to try this.
             if len > 13 && len <= 1024 {
                 for (n, bf_l) in butterflies.iter().enumerate() {
-                    if len%bf_l == 0 {
-                        let bf_r = len/bf_l;
-                        if butterflies.iter().skip(n).any(|&m| m==bf_r) {
+                    if len % bf_l == 0 {
+                        let bf_r = len / bf_l;
+                        if butterflies.iter().skip(n).any(|&m| m == bf_r) {
                             bf_left = *bf_l;
                             bf_right = bf_r;
                         }
@@ -530,7 +535,7 @@ impl<T: FftNum> FftPlannerSse<T> {
                     let fact_l = PrimeFactors::compute(bf_left);
                     let fact_r = PrimeFactors::compute(bf_right);
                     return self.design_mixed_radix(fact_l, fact_r);
-                } 
+                }
             }
             // Not possible with just butterflies, go with the general solution.
             let (left_factors, right_factors) = factors.partition_factors();
@@ -767,7 +772,7 @@ mod unit_tests {
     #[test]
     fn test_plan_sse_goodthomasbutterfly() {
         let mut planner = FftPlannerSse::<f64>::new().unwrap();
-        for len in [3 * 7, 5 * 7, 11 * 13, 2 * 29, 5 * 32].iter() {
+        for len in [3 * 7, 5 * 7, 11 * 13, 2 * 29].iter() {
             let plan = planner.design_fft_for_len(*len);
             assert!(
                 is_goodthomassmall(&plan),

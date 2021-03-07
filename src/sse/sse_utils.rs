@@ -15,6 +15,7 @@ pub struct Rotate90F32 {
 
 impl Rotate90F32 {
     pub fn new(positive: bool) -> Self {
+        // There doesn't seem to be any need for rotating just the first element, but let's keep the code just in case
         //let sign_1st = unsafe {
         //    if positive {
         //        _mm_set_ps(0.0, 0.0, 0.0, -0.0)
@@ -50,6 +51,7 @@ impl Rotate90F32 {
         _mm_xor_ps(temp, self.sign_2nd)
     }
 
+    // There doesn't seem to be any need for rotating just the first element, but let's keep the code just in case
     //#[inline(always)]
     //pub unsafe fn rotate_1st(&self, values: __m128) -> __m128 {
     //    let temp = _mm_shuffle_ps(values, values, 0xE1);
@@ -90,10 +92,10 @@ pub unsafe fn pack_1and2_f32(left: __m128, right: __m128) -> __m128 {
     _mm_shuffle_ps(left, right, 0xE4)
 }
 
-// Pack 1st and 2nd complex
+// Pack 2nd and 1st complex
 // left: r1.re + r1.im, r2.re, r2.im
 // right: l1.re + l1.im, l2.re, l2.im
-// --> r1.re, r1.im, l2.re + l2.im
+// --> r2.re, r2.im, l1.re + l1.im
 #[inline(always)]
 pub unsafe fn pack_2and1_f32(left: __m128, right: __m128) -> __m128 {
     _mm_shuffle_ps(left, right, 0x4E)
@@ -133,7 +135,7 @@ pub unsafe fn duplicate_2nd_f32(values: __m128) -> __m128 {
 
 #[inline(always)]
 pub unsafe fn complex_dual_mul_f32(left: __m128, right: __m128) -> __m128 {
-    //SSE3, from Intel performance manual
+    //SSE3, taken from Intel performance manual
     let mut temp1 = _mm_shuffle_ps(right, right, 0xA0);
     let mut temp2 = _mm_shuffle_ps(right, right, 0xF5);
     temp1 = _mm_mul_ps(temp1, left);
@@ -174,17 +176,7 @@ impl Rotate90F64 {
 
 #[inline(always)]
 pub unsafe fn complex_mul_f64(left: __m128d, right: __m128d) -> __m128d {
-    // SSE2
-    //let mul1 = _mm_mul_pd(left, right);
-    //let right_flipped = _mm_shuffle_pd(right, right, 0x01);
-    //let mul2 = _mm_mul_pd(left, right_flipped);
-    //let sign = _mm_set_pd(-0.0, 0.0);
-    //let mul1 = _mm_xor_pd(mul1, sign);
-    //let temp1 = _mm_shuffle_pd(mul1, mul2, 0x00);
-    //let temp2 = _mm_shuffle_pd(mul1, mul2, 0x03);
-    //_mm_add_pd(temp1, temp2)
-
-    // SSE3
+    // SSE3, taken from Intel performance manual
     let mut temp1 = _mm_unpacklo_pd(right, right);
     let mut temp2 = _mm_unpackhi_pd(right, right);
     temp1 = _mm_mul_pd(temp1, left);
@@ -215,10 +207,7 @@ mod unit_tests {
         unsafe {
             let right = _mm_set_pd(1.0, 2.0);
             let left = _mm_set_pd(5.0, 7.0);
-            println!("left: {:?}", left);
-            println!("right: {:?}", right);
             let res = complex_mul_f64(left, right);
-            println!("res: {:?}", res);
             let expected = _mm_set_pd(2.0 * 5.0 + 1.0 * 7.0, 2.0 * 7.0 - 1.0 * 5.0);
             assert_eq!(
                 std::mem::transmute::<__m128d, Complex<f64>>(res),
@@ -237,11 +226,8 @@ mod unit_tests {
 
             let nbr2 = _mm_set_ps(val4.im, val4.re, val3.im, val3.re);
             let nbr1 = _mm_set_ps(val2.im, val2.re, val1.im, val1.re);
-            println!("left: {:?}", nbr1);
-            println!("right: {:?}", nbr2);
             let res = complex_dual_mul_f32(nbr1, nbr2);
             let res = std::mem::transmute::<__m128, [Complex<f32>; 2]>(res);
-            println!("res: {:?}", res);
             let expected = [val1 * val3, val2 * val4];
             assert_eq!(res, expected);
         }
@@ -252,12 +238,8 @@ mod unit_tests {
         unsafe {
             let nbr2 = _mm_set_ps(8.0, 7.0, 6.0, 5.0);
             let nbr1 = _mm_set_ps(4.0, 3.0, 2.0, 1.0);
-            println!("nbr1: {:?}", nbr1);
-            println!("nbr2: {:?}", nbr2);
             let first = pack_1st_f32(nbr1, nbr2);
             let second = pack_2nd_f32(nbr1, nbr2);
-            println!("first: {:?}", first);
-            println!("second: {:?}", first);
             let first = std::mem::transmute::<__m128, [Complex<f32>; 2]>(first);
             let second = std::mem::transmute::<__m128, [Complex<f32>; 2]>(second);
             let first_expected = [Complex::new(1.0, 2.0), Complex::new(5.0, 6.0)];

@@ -12,30 +12,14 @@ use crate::sse::sse_butterflies::{
     SseF64Butterfly1, SseF64Butterfly16, SseF64Butterfly2, SseF64Butterfly32, SseF64Butterfly4,
     SseF64Butterfly8,
 };
-use crate::{
-    //array_utils::{RawSlice, RawSliceMut},
-    common::FftNum,
-    twiddles,
-    FftDirection,
-};
+use crate::{common::FftNum, twiddles, FftDirection};
 use crate::{Direction, Fft, Length};
 
 use super::sse_common::{assert_f32, assert_f64};
 use super::sse_utils::*;
 
-/// FFT algorithm optimized for power-of-two sizes
-///
-/// ~~~
-/// // Computes a forward FFT of size 4096
-/// use rustfft::algorithm::Radix4;
-/// use rustfft::{Fft, FftDirection};
-/// use rustfft::num_complex::Complex;
-///
-/// let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 4096];
-///
-/// let fft = Radix4::new(4096, FftDirection::Forward);
-/// fft.process(&mut buffer);
-/// ~~~
+/// FFT algorithm optimized for power-of-two sizes, SSE accelerated version.
+/// This is designed to be used via a Planner, and not created directly.
 
 enum Sse32Butterfly<T> {
     Len1(SseF32Butterfly1<T>),
@@ -102,22 +86,6 @@ impl<T: FftNum> Sse32Radix4<T> {
         while twiddle_stride > 0 {
             let num_rows = len / (twiddle_stride * 4);
             for i in 0..num_rows / 2 {
-                // //for k in 1..4 {
-                // unsafe {
-                //     let twiddle1a = twiddles::compute_twiddle(2*i * twiddle_stride, len, direction);
-                //     let twiddle2a = twiddles::compute_twiddle(2*i * 2 * twiddle_stride, len, direction);
-                //     let twiddle3a = twiddles::compute_twiddle(2*i * 3 * twiddle_stride, len, direction);
-                //     let twiddle1b = twiddles::compute_twiddle((2*i+1) * twiddle_stride, len, direction);
-                //     let twiddle2b = twiddles::compute_twiddle((2*i+1) * 2 * twiddle_stride, len, direction);
-                //     let twiddle3b = twiddles::compute_twiddle((2*i+1) * 3 * twiddle_stride, len, direction);
-                //     let twiddle1_packed = _mm_set_ps(twiddle1b.im, twiddle1b.re, twiddle1a.im, twiddle1a.re);
-                //     let twiddle2_packed = _mm_set_ps(twiddle2b.im, twiddle2b.re, twiddle2a.im, twiddle2a.re);
-                //     let twiddle3_packed = _mm_set_ps(twiddle3b.im, twiddle3b.re, twiddle3a.im, twiddle3a.re);
-                //     twiddle_factors.push(twiddle1_packed);
-                //     twiddle_factors.push(twiddle2_packed);
-                //     twiddle_factors.push(twiddle3_packed);
-                // }
-                // //}
                 for k in 1..4 {
                     unsafe {
                         let twiddle_a =
@@ -135,21 +103,6 @@ impl<T: FftNum> Sse32Radix4<T> {
             }
             twiddle_stride >>= 2;
         }
-
-        // while twiddle_stride > 0 {
-        //     let num_rows = len / (twiddle_stride * 4);
-        //     for i in 0..num_rows {
-        //         for k in 1..4 {
-        //             unsafe {
-        //                 let twiddle =
-        //                     twiddles::compute_twiddle(i * k * twiddle_stride, len, direction);
-        //                 let twiddle_packed = _mm_set_pd(twiddle.im, twiddle.re);
-        //                 twiddle_factors.push(twiddle_packed);
-        //             }
-        //         }
-        //     }
-        //     twiddle_stride >>= 2;
-        // }
 
         Self {
             twiddles: twiddle_factors.into_boxed_slice(),
@@ -171,14 +124,7 @@ impl<T: FftNum> Sse32Radix4<T> {
         spectrum: &mut [Complex<T>],
         _scratch: &mut [Complex<T>],
     ) {
-        //let start = time::Instant::now();
-        // copy the data into the spectrum vector
-
-        //let signal_tm: &[Complex<f32>] = array_utils::workaround_transmute(signal);
-        //let spectrum_tm: &mut [Complex<f32>] = array_utils::workaround_transmute_mut(spectrum);
-        //prepare_radix4_sse32(signal.len(), self.base_len, signal_tm, spectrum_tm, 1);
-        //prepare_radix4(signal.len(), self.base_len, signal, spectrum, 1);
-
+        // copy the data into the spectrum vector, split the copying up into chunks to make it more cache friendly
         let mut num_chunks = signal.len() / 16384;
         if num_chunks == 0 {
             num_chunks = 1;
@@ -197,10 +143,6 @@ impl<T: FftNum> Sse32Radix4<T> {
             );
         }
 
-        //prepare_radix4_32(signal.len(), self.base_len, signal, spectrum, 1);
-        //let end = time::Instant::now();
-        //println!("prepare: {} ns", end.duration_since(start).as_nanos());
-        //let start = time::Instant::now();
         // Base-level FFTs
         match &self.base_fft {
             Sse32Butterfly::Len1(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
@@ -209,13 +151,7 @@ impl<T: FftNum> Sse32Radix4<T> {
             Sse32Butterfly::Len8(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
             Sse32Butterfly::Len16(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
             Sse32Butterfly::Len32(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
-        }
-
-        //let end = time::Instant::now();
-        //println!("base fft: {} ns", end.duration_since(start).as_nanos());
-
-        //let start = time::Instant::now();
-        //self.base_fft.perform_fft_butterfly(spectrum); //, &mut []);
+        };
 
         // cross-FFTs
         let mut current_size = self.base_len * 4;
@@ -235,13 +171,10 @@ impl<T: FftNum> Sse32Radix4<T> {
 
             //skip past all the twiddle factors used in this layer
             let twiddle_offset = (current_size * 3) / 8;
-            //let twiddle_offset = current_size / 4;
             layer_twiddles = &layer_twiddles[twiddle_offset..];
 
             current_size *= 4;
         }
-        //let end = time::Instant::now();
-        //println!("cross fft: {} ns", end.duration_since(start).as_nanos());
     }
 }
 boilerplate_fft_sse_oop!(Sse32Radix4, |this: &Sse32Radix4<_>| this.len);
@@ -256,43 +189,6 @@ unsafe fn butterfly_4_32<T: FftNum>(
     let mut idx = 0usize;
     let mut tw_idx = 0usize;
     let output_slice = data.as_mut_ptr() as *mut Complex<f32>;
-    /*
-    for _ in 0..num_ffts {
-        // There is no intrinsic to load the lower or upper two singles. Instead we load them as a double and the cast the __m128d to a __m128.
-        let scratch0 = _mm_load_sd(output_slice.add(idx) as *const f64);
-        let mut scratch0 = _mm_castpd_ps(_mm_loadh_pd(
-            scratch0,
-            output_slice.add(idx + 1 * num_ffts) as *const f64,
-        ));
-        let scratch2 = _mm_load_sd(output_slice.add(idx + 2 * num_ffts) as *const f64);
-        let mut scratch2 = _mm_castpd_ps(_mm_loadh_pd(
-            scratch2,
-            output_slice.add(idx + 3 * num_ffts) as *const f64,
-        ));
-
-        scratch0 = complex_dual_mul_f32(scratch0, twiddles[tw_idx]);
-        scratch2 = complex_dual_mul_f32(scratch2, twiddles[tw_idx + 1]);
-
-        let scratch = bf4.perform_fft_direct(scratch0, scratch2);
-
-        // There is no intrinsic to store the lower or upper two elements of a __m128. Instead we cast the __m128d to a __m128 and store them as single f64.
-        _mm_storel_pd(output_slice.add(idx) as *mut f64, _mm_castps_pd(scratch[0]));
-        _mm_storeh_pd(
-            output_slice.add(idx + 1 * num_ffts) as *mut f64,
-            _mm_castps_pd(scratch[0]),
-        );
-        _mm_storel_pd(
-            output_slice.add(idx + 2 * num_ffts) as *mut f64,
-            _mm_castps_pd(scratch[1]),
-        );
-        _mm_storeh_pd(
-            output_slice.add(idx + 3 * num_ffts) as *mut f64,
-            _mm_castps_pd(scratch[1]),
-        );
-
-        tw_idx += 2;
-        idx += 1;
-    } */
     for _ in 0..num_ffts / 4 {
         let scratch0 = _mm_loadu_ps(output_slice.add(idx) as *const f32);
         let scratch0b = _mm_loadu_ps(output_slice.add(idx + 2) as *const f32);
@@ -338,8 +234,6 @@ unsafe fn butterfly_4_32<T: FftNum>(
         );
         tw_idx += 6;
         idx += 4;
-        // tw_idx += 3;
-        // idx += 2;
     }
 }
 
@@ -423,14 +317,7 @@ impl<T: FftNum> Sse64Radix4<T> {
         spectrum: &mut [Complex<T>],
         _scratch: &mut [Complex<T>],
     ) {
-        //let start = time::Instant::now();
-        // copy the data into the spectrum vector
-        //let signal_tm: &[Complex<f64>] = array_utils::workaround_transmute(signal);
-        //let spectrum_tm: &mut [Complex<f64>] = array_utils::workaround_transmute_mut(spectrum);
-        //prepare_radix4_sse64(signal.len(), self.base_len, signal_tm, spectrum_tm, 1);
-
-        //prepare_radix4_64(signal.len(), self.base_len, signal, spectrum, 1);
-        //prepare_radix4(signal.len(), self.base_len, signal, spectrum, 1);
+        // copy the data into the spectrum vector, split the copying up into chunks to make it more cache friendly
         let mut num_chunks = signal.len() / 8192;
         if num_chunks == 0 {
             num_chunks = 1;
@@ -449,12 +336,7 @@ impl<T: FftNum> Sse64Radix4<T> {
             );
         }
 
-        //let end = time::Instant::now();
-        //println!("prepare: {} ns", end.duration_since(start).as_nanos());
-
-        //let start = time::Instant::now();
         // Base-level FFTs
-        //self.base_fft.process_with_scratch(spectrum, &mut []);
         match &self.base_fft {
             Sse64Butterfly::Len1(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
             Sse64Butterfly::Len2(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
@@ -464,10 +346,6 @@ impl<T: FftNum> Sse64Radix4<T> {
             Sse64Butterfly::Len32(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
         }
 
-        //let end = time::Instant::now();
-        //println!("base fft: {} ns", end.duration_since(start).as_nanos());
-        //
-        //let start = time::Instant::now();
         // cross-FFTs
         let mut current_size = self.base_len * 4;
         let mut layer_twiddles: &[__m128d] = &self.twiddles;
@@ -490,8 +368,6 @@ impl<T: FftNum> Sse64Radix4<T> {
 
             current_size *= 4;
         }
-        //let end = time::Instant::now();
-        //println!("cross fft: {} ns", end.duration_since(start).as_nanos());
     }
 }
 boilerplate_fft_sse_oop!(Sse64Radix4, |this: &Sse64Radix4<_>| this.len);
@@ -625,22 +501,6 @@ mod unit_tests {
         let fft = Sse64Radix4::new(len, direction);
         check_fft_algorithm::<f64>(&fft, len, direction);
     }
-
-    //#[test]
-    //fn test_dummy_radix4_64() {
-    //    let fft = Sse64Radix4::<f64>::new(65536, FftDirection::Forward);
-    //    let mut data = vec![Complex::from(0.0); 65536];
-    //    fft.process(&mut data);
-    //    assert!(false);
-    //}
-    //
-    //#[test]
-    //fn test_dummy_radix4_32() {
-    //    let fft = Sse32Radix4::<f32>::new(65536, FftDirection::Forward);
-    //    let mut data = vec![Complex::<f32>::from(0.0); 65536];
-    //    fft.process(&mut data);
-    //    assert!(false);
-    //}
 
     #[test]
     fn test_sse_radix4_32() {

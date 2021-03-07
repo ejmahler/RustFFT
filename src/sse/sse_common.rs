@@ -1,11 +1,13 @@
 use std::any::TypeId;
 
+// Helper function to assert we have the right float type
 pub fn assert_f32<T: 'static>() {
     let id_f32 = TypeId::of::<f32>();
     let id_t = TypeId::of::<T>();
     assert!(id_t == id_f32, "Wrong float type, must be f32");
 }
 
+// Helper function to assert we have the right float type
 pub fn assert_f64<T: 'static>() {
     let id_f64 = TypeId::of::<f64>();
     let id_t = TypeId::of::<T>();

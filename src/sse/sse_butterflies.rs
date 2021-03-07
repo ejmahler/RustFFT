@@ -1,7 +1,5 @@
 use core::arch::x86_64::*;
 use num_complex::Complex;
-//use std::mem::transmute;
-//use std::time::{Duration, Instant};
 
 use crate::{common::FftNum, FftDirection};
 
@@ -145,9 +143,6 @@ macro_rules! boilerplate_fft_sse_common_butterfly {
                     return; // Unreachable, because fft_error_inplace asserts, but it helps codegen to put it here
                 }
 
-                //let result = array_utils::iter_chunks(buffer, self.len(), |chunk| unsafe {
-                //    self.perform_fft_butterfly(chunk)
-                //});
                 let result = unsafe { self.perform_fft_butterfly_multi(buffer) };
 
                 if result.is_err() {
@@ -220,14 +215,6 @@ impl<T: FftNum> SseF32Butterfly1<T> {
         _output: RawSliceMut<Complex<T>>,
     ) {
     }
-
-    //#[inline(always)]
-    //pub(crate) unsafe fn perform_fft_direct(
-    //    &self,
-    //    values: __m128,
-    //) -> __m128 {
-    //    values
-    //}
 }
 
 //   _             __   _  _   _     _ _
@@ -262,14 +249,6 @@ impl<T: FftNum> SseF64Butterfly1<T> {
         _output: RawSliceMut<Complex<T>>,
     ) {
     }
-
-    //#[inline(always)]
-    //pub(crate) unsafe fn perform_fft_direct(
-    //    &self,
-    //    values: __m128d,
-    //) -> __m128d {
-    //    values
-    //}
 }
 
 //   ____            _________  _     _ _
@@ -336,27 +315,27 @@ impl<T: FftNum> SseF32Butterfly2<T> {
         *output_slice.add(3) = array[3];
     }
 
-    // length 2 fft of a, given as [a0, a1]
-    // result is [A0, A1]
+    // length 2 fft of x, given as [x0, x1]
+    // result is [X0, X1]
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(&self, values: __m128) -> __m128 {
         solo_fft2_f32(values)
     }
 
-    // dual length 2 fft of a, given as [a0, a1]
-    // result is [A0, A1]
+    // dual length 2 fft of x and y, given as [x0, x1], [y0, y1]
+    // result is [X0, Y0], [X1, Y1]
     #[inline(always)]
     pub(crate) unsafe fn perform_dual_fft_direct(
         &self,
-        values_a: __m128,
-        values_b: __m128,
+        values_x: __m128,
+        values_y: __m128,
     ) -> [__m128; 2] {
-        dual_fft2_contiguous_f32(values_a, values_b)
+        dual_fft2_contiguous_f32(values_x, values_y)
     }
 }
 
-// double lenth 2 fft of a and b, given as [a0, b0], [a1, b1]
-// result is [A0, B0], [A1, B1]
+// double lenth 2 fft of a and b, given as [x0, y0], [x1, y1]
+// result is [X0, Y0], [X1, Y1]
 #[inline(always)]
 unsafe fn dual_fft2_interleaved_f32(val02: __m128, val13: __m128) -> [__m128; 2] {
     let temp0 = _mm_add_ps(val02, val13);
@@ -364,8 +343,8 @@ unsafe fn dual_fft2_interleaved_f32(val02: __m128, val13: __m128) -> [__m128; 2]
     [temp0, temp1]
 }
 
-// double lenth 2 fft of a and b, given as [a0, a1], [b0, b1]
-// result is [A0, B0], [A1, B1]
+// double lenth 2 fft of a and b, given as [x0, x1], [y0, y1]
+// result is [X0, Y0], [X1, Y1]
 #[inline(always)]
 unsafe fn dual_fft2_contiguous_f32(left: __m128, right: __m128) -> [__m128; 2] {
     let temp02 = _mm_shuffle_ps(left, right, 0x44);
@@ -375,8 +354,8 @@ unsafe fn dual_fft2_contiguous_f32(left: __m128, right: __m128) -> [__m128; 2] {
     [temp0, temp1]
 }
 
-// length 2 fft of a, given as [a0, a1]
-// result is [A0, A1]
+// length 2 fft of x, given as [x0, x1]
+// result is [X0, X1]
 #[inline(always)]
 unsafe fn solo_fft2_f32(values: __m128) -> __m128 {
     let temp = _mm_shuffle_ps(values, values, 0x4E);
@@ -531,16 +510,16 @@ impl<T: FftNum> SseF32Butterfly3<T> {
         *output_slice.add(5) = val[5];
     }
 
-    // length 3 fft of a, given as [a0, 0.0], [a1, a2]
-    // result is [A0, X], [A1, A2]
-    // The value X should be discarded.
+    // length 3 fft of a, given as [x0, 0.0], [x1, x2]
+    // result is [X0, Z], [X1, X2]
+    // The value Z should be discarded.
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
         &self,
         value0x: __m128,
         value12: __m128,
     ) -> [__m128; 2] {
-        // This is a SSE translation of the scalar 5-point butterfly
+        // This is a SSE translation of the scalar 3-point butterfly
         let rev12 = invert_2nd_f32(reverse_f32(value12));
         let temp12pn = self.rotate.rotate_2nd(_mm_add_ps(value12, rev12));
         let twiddled = _mm_mul_ps(temp12pn, self.twiddle);
@@ -550,8 +529,8 @@ impl<T: FftNum> SseF32Butterfly3<T> {
         [out0x, out12]
     }
 
-    // length 3 dual fft of a, given as (a0, b0), (a1, b1), (a2, b2).
-    // result is [(A0, B0), (A1, B1), (A2, B2)]
+    // length 3 dual fft of a, given as (x0, y0), (x1, y1), (x2, y2).
+    // result is [(X0, Y0), (X1, Y1), (X2, Y2)]
     #[inline(always)]
     pub(crate) unsafe fn perform_dual_fft_direct(
         &self,
@@ -633,8 +612,8 @@ impl<T: FftNum> SseF64Butterfly3<T> {
         *output_slice.add(2) = val[2];
     }
 
-    // length 3 fft of a, given as a0, a1, a2.
-    // result is [A0, A1, A2]
+    // length 3 fft of x, given as x0, x1, x2.
+    // result is [X0, X1, X2]
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
         &self,
@@ -744,8 +723,8 @@ impl<T: FftNum> SseF32Butterfly4<T> {
         *output_slice.add(7) = array[7];
     }
 
-    // length 4 fft of a, given as [a0, a1], [a2, a3]
-    // result is [[A0, A1], [A2, A3]]
+    // length 4 fft of a, given as [x0, x1], [x2, x3]
+    // result is [[X0, X1], [X2, X3]]
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
         &self,
@@ -1002,9 +981,9 @@ impl<T: FftNum> SseF32Butterfly5<T> {
         *output_slice.add(9) = val[9];
     }
 
-    // length 5 fft of a, given as [a0, a0], [a1, a2], [a3, a4].
-    // result is [[A0, X], [A1, A2], [A3, A4]]
-    // Note that X should not be used, and A4 and A3 are returned in reversed order.
+    // length 5 fft of a, given as [x0, x0], [x1, x2], [x3, x4].
+    // result is [[X0, Z], [X1, X2], [X3, X4]]
+    // Note that Z should not be used.
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
         &self,
@@ -1042,8 +1021,8 @@ impl<T: FftNum> SseF32Butterfly5<T> {
         [x00, x12, x34]
     }
 
-    // length 3 dual fft of a, given as (a0, b0), (a1, b1), (a2, b2).
-    // result is [(A0, B0), (A1, B1), (A2, B2)]
+    // length 5 dual fft of x and y, given as (x0, y0), (x1, y1) ... (x4, y4).
+    // result is [(X0, Y0), (X1, Y1) ... (X2, Y2)]
     #[inline(always)]
     pub(crate) unsafe fn perform_dual_fft_direct(
         &self,
@@ -1150,8 +1129,8 @@ impl<T: FftNum> SseF64Butterfly5<T> {
         *output_slice.add(4) = val[4];
     }
 
-    // length 5 fft of a, given as a0, a1, a2, a3, a4.
-    // result is [A0, A1, A2, A3, A4]
+    // length 5 fft of x, given as x0, x1, x2, x3, x4.
+    // result is [X0, X1, X2, X3, X4]
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
         &self,
@@ -1849,8 +1828,6 @@ impl<T: FftNum> SseF32Butterfly9<T> {
         *output_slice.add(17) = val[17];
     }
 
-    // length 3 dual fft of a, given as (a0, b0), (a1, b1), (a2, b2).
-    // result is [(A0, B0), (A1, B1), (A2, B2)]
     #[inline(always)]
     pub(crate) unsafe fn perform_dual_fft_direct(&self, values: [__m128; 9]) -> [__m128; 9] {
         // Algorithm: 3x3 mixed radix
@@ -2108,8 +2085,6 @@ impl<T: FftNum> SseF32Butterfly10<T> {
         let reord4 = pack_1and2_f32(values[4], values[1]);
 
         // Size-4 FFTs down the columns of our reordered array
-        //let mid0 = self.bf5.perform_fft_direct(values[0], values[2], values[4], values[6], values[8]);
-        //let mid1 = self.bf5.perform_fft_direct(values[5], values[7], values[9], values[1], values[3]);
         let mids = self
             .bf5
             .perform_dual_fft_direct(reord0, reord1, reord2, reord3, reord4);
@@ -2382,16 +2357,8 @@ impl<T: FftNum> SseF32Butterfly12<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128; 6]) -> [__m128; 6] {
         // Algorithm: 4x3 good-thomas
-        // Reorder and pack
-        // let packed04 = pack_1st_f32(values[0], values[2]);
-        // let packed37 = pack_2nd_f32(values[1], values[3]);
-        // let packed610 = pack_1st_f32(values[3], values[5]);
-        // let packed91 = pack_2nd_f32(values[4], values[0]);
-        // let packed811 = pack_1and2_f32(values[4], values[5]);
-        // let packed25 = pack_1and2_f32(values[1], values[2]);
 
-        // // Size-4 FFTs down the columns of our reordered array
-        // let mid01 = self.bf4.perform_dual_fft_direct(packed04, packed37, packed610, packed91);
+        // Reorder and pack
         let packed03 = pack_1and2_f32(values[0], values[1]);
         let packed47 = pack_1and2_f32(values[2], values[3]);
         let packed69 = pack_1and2_f32(values[3], values[4]);
@@ -3274,6 +3241,7 @@ impl<T: FftNum> SseF64Butterfly16<T> {
     #[inline(always)]
     unsafe fn perform_fft_direct(&self, input: [__m128d; 16]) -> [__m128d; 16] {
         // we're going to hardcode a step of split radix
+
         // step 1: copy and reorder the  input into the scratch
         // and
         // step 2: column FFTs
@@ -3662,6 +3630,7 @@ impl<T: FftNum> SseF32Butterfly32<T> {
     #[inline(always)]
     unsafe fn perform_fft_direct(&self, input: [__m128; 16]) -> [__m128; 16] {
         // we're going to hardcode a step of split radix
+
         // step 1: copy and reorder the input into the scratch
         let in0002 = pack_1st_f32(input[0], input[1]);
         let in0406 = pack_1st_f32(input[2], input[3]);
@@ -3747,7 +3716,9 @@ impl<T: FftNum> SseF32Butterfly32<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_dual_fft_direct(&self, input: [__m128; 32]) -> [__m128; 32] {
         // we're going to hardcode a step of split radix
+
         // step 1: copy and reorder the  input into the scratch
+        // and
         // step 2: column FFTs
         let evens = self.bf16.perform_dual_fft_direct([
             input[0], input[2], input[4], input[6], input[8], input[10], input[12], input[14],
@@ -4030,7 +4001,9 @@ impl<T: FftNum> SseF64Butterfly32<T> {
     #[inline(always)]
     unsafe fn perform_fft_direct(&self, input: [__m128d; 32]) -> [__m128d; 32] {
         // we're going to hardcode a step of split radix
+
         // step 1: copy and reorder the  input into the scratch
+        // and
         // step 2: column FFTs
         let evens = self.bf16.perform_fft_direct([
             input[0], input[2], input[4], input[6], input[8], input[10], input[12], input[14],
@@ -4187,75 +4160,12 @@ mod unit_tests {
     test_butterfly_64_func!(test_ssef64_butterfly16, SseF64Butterfly16, 16);
     test_butterfly_64_func!(test_ssef64_butterfly32, SseF64Butterfly32, 32);
 
-    //#[test]
-    //fn check_type() {
-    //    let butterfly = Butterfly4::new(FftDirection::Forward);
-    //    let mut input = vec![Complex::<f64>::new(1.0, 1.5),Complex::<f64>::new(2.0, 2.4),Complex::<f64>::new(7.0, 9.5),Complex::<f64>::new(-4.0, -4.5)];
-    //    let mut scratch = vec![Complex::<f64>::from(0.0); 0];
-    //    butterfly.process_with_scratch(&mut input, &mut scratch);
-    //    assert!(false);
-    //}
-    //
-    //#[test]
-    //fn check_type_32() {
-    //    let butterfly = Butterfly4::new(FftDirection::Forward);
-    //    let mut input = vec![Complex::<f32>::new(1.0, 1.5),Complex::<f32>::new(2.0, 2.4),Complex::<f32>::new(7.0, 9.5),Complex::<f32>::new(-4.0, -4.5)];
-    //    let mut scratch = vec![Complex::<f32>::from(0.0); 0];
-    //    butterfly.process_with_scratch(&mut input, &mut scratch);
-    //    assert!(false);
-    //}
-
-    //#[test]
-    //fn check_scalar_dummy() {
-    //    let butterfly = SseF64Butterfly16::new(FftDirection::Forward);
-    //    let mut input = vec![Complex::new(1.0, 1.5), Complex::new(2.0, 2.4),Complex::new(7.0, 9.5),Complex::new(-4.0, -4.5),
-    //                        Complex::new(-1.0, 5.5), Complex::new(3.3, 2.8),Complex::new(7.5, 3.5),Complex::new(-14.0, -6.5),
-    //                        Complex::new(-7.6, 53.5), Complex::new(-4.3, 2.2),Complex::new(8.1, 1.123),Complex::new(-24.0, -16.5),
-    //                        Complex::new(-11.0, 55.0), Complex::new(33.3, 62.8),Complex::new(17.2, 23.5),Complex::new(-54.0, -3.8)];
-    //    let mut scratch = vec![Complex::<f64>::from(0.0); 0];
-    //    butterfly.process_with_scratch(&mut input, &mut scratch);
-    //    assert!(false);
-    //}
-    //
-    //#[test]
-    //fn check_scalar_dummy32() {
-    //    let butterfly = SseF32Butterfly16::new(FftDirection::Forward);
-    //    let mut input = vec![Complex::new(1.0, 1.5), Complex::new(2.0, 2.4),Complex::new(7.0, 9.5),Complex::new(-4.0, -4.5),
-    //                    Complex::new(-1.0, 5.5), Complex::new(3.3, 2.8),Complex::new(7.5, 3.5),Complex::new(-14.0, -6.5),
-    //                    Complex::new(-7.6, 53.5), Complex::new(-4.3, 2.2),Complex::new(8.1, 1.123),Complex::new(-24.0, -16.5),
-    //                    Complex::new(-11.0, 55.0), Complex::new(33.3, 62.8),Complex::new(17.2, 23.5),Complex::new(-54.0, -3.8)];
-    //    let mut scratch = vec![Complex::<f32>::from(0.0); 0];
-    //    butterfly.process_with_scratch(&mut input, &mut scratch);
-    //    assert!(false);
-    //}
-
-    //#[test]
-    //fn check_3_dummy() {
-    //    let butterfly = SseF64Butterfly3::new(FftDirection::Forward);
-    //    let mut input = vec![Complex::new(1.0, 1.5), Complex::new(2.0, 2.4),Complex::new(7.0, 9.5)];
-    //    let mut scratch = vec![Complex::<f64>::from(0.0); 0];
-    //    butterfly.process_with_scratch(&mut input, &mut scratch);
-    //    assert!(false);
-    //}
-    //
-    //#[test]
-    //fn check_3_dummy32() {
-    //    let butterfly = SseF32Butterfly3::new(FftDirection::Forward);
-    //    let mut input = vec![Complex::new(1.0, 1.5), Complex::new(2.0, 2.4),Complex::new(7.0, 9.5)];
-    //    let mut scratch = vec![Complex::<f32>::from(0.0); 0];
-    //    butterfly.process_with_scratch(&mut input, &mut scratch);
-    //    assert!(false);
-    //}
-
     #[test]
     fn test_complex_mul_f64() {
         unsafe {
             let right = _mm_set_pd(1.0, 2.0);
             let left = _mm_set_pd(5.0, 7.0);
-            println!("left: {:?}", left);
-            println!("right: {:?}", right);
             let res = complex_mul_f64(left, right);
-            println!("res: {:?}", res);
             let expected = _mm_set_pd(2.0 * 5.0 + 1.0 * 7.0, 2.0 * 7.0 - 1.0 * 5.0);
             assert_eq!(
                 std::mem::transmute::<__m128d, Complex<f64>>(res),
@@ -4274,11 +4184,8 @@ mod unit_tests {
 
             let nbr2 = _mm_set_ps(val4.im, val4.re, val3.im, val3.re);
             let nbr1 = _mm_set_ps(val2.im, val2.re, val1.im, val1.re);
-            println!("left: {:?}", nbr1);
-            println!("right: {:?}", nbr2);
             let res = complex_dual_mul_f32(nbr1, nbr2);
             let res = std::mem::transmute::<__m128, [Complex<f32>; 2]>(res);
-            println!("res: {:?}", res);
             let expected = [val1 * val3, val2 * val4];
             assert_eq!(res, expected);
         }
@@ -4309,16 +4216,11 @@ mod unit_tests {
 
             let bf4 = SseF32Butterfly4::<f32>::new(FftDirection::Forward);
 
-            //println!("left: {:?}", nbr1);
-            //println!("right: {:?}", nbr2);
             dft.process(&mut val_a);
             dft.process(&mut val_b);
             let res_both = bf4.perform_dual_fft_direct(p1, p2, p3, p4);
 
             let res = std::mem::transmute::<[__m128; 4], [Complex<f32>; 8]>(res_both);
-            println!("sse: {:?}", res);
-            println!("dft a: {:?}", val_a);
-            println!("dft b: {:?}", val_b);
             let sse_res_a = [res[0], res[2], res[4], res[6]];
             let sse_res_b = [res[1], res[3], res[5], res[7]];
             assert!(compare_vectors(&val_a, &sse_res_a));
@@ -4331,12 +4233,8 @@ mod unit_tests {
         unsafe {
             let nbr2 = _mm_set_ps(8.0, 7.0, 6.0, 5.0);
             let nbr1 = _mm_set_ps(4.0, 3.0, 2.0, 1.0);
-            println!("nbr1: {:?}", nbr1);
-            println!("nbr2: {:?}", nbr2);
             let first = pack_1st_f32(nbr1, nbr2);
             let second = pack_2nd_f32(nbr1, nbr2);
-            println!("first: {:?}", first);
-            println!("second: {:?}", first);
             let first = std::mem::transmute::<__m128, [Complex<f32>; 2]>(first);
             let second = std::mem::transmute::<__m128, [Complex<f32>; 2]>(second);
             let first_expected = [Complex::new(1.0, 2.0), Complex::new(5.0, 6.0)];
