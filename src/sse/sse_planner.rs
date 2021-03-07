@@ -508,6 +508,31 @@ impl<T: FftNum> FftPlannerSse<T> {
                 self.design_mixed_radix(power_of_two, non_power_of_two)
             }
         } else {
+            // Can we do this as a mixed radix with just two butterflies?
+            // Loop through and find all combinations
+            // If more than one is found, keep the one where the factors are closer together.
+            // For example length 20 where 10x2 and 5x4 are possible, we use 5x4.
+            let butterflies: [usize; 20] = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 19, 23, 29, 31, 32];
+            let mut bf_left = 0;
+            let mut bf_right = 0;
+            // If the length is below 14, or over 1024 we don't need to try this.
+            if len > 13 && len <= 1024 {
+                for (n, bf_l) in butterflies.iter().enumerate() {
+                    if len%bf_l == 0 {
+                        let bf_r = len/bf_l;
+                        if butterflies.iter().skip(n).any(|&m| m==bf_r) {
+                            bf_left = *bf_l;
+                            bf_right = bf_r;
+                        }
+                    }
+                }
+                if bf_left > 0 {
+                    let fact_l = PrimeFactors::compute(bf_left);
+                    let fact_r = PrimeFactors::compute(bf_right);
+                    return self.design_mixed_radix(fact_l, fact_r);
+                } 
+            }
+            // Not possible with just butterflies, go with the general solution.
             let (left_factors, right_factors) = factors.partition_factors();
             self.design_mixed_radix(left_factors, right_factors)
         }
