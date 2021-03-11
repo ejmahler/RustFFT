@@ -520,7 +520,7 @@ impl<T: FftNum> SseF32Butterfly3<T> {
         value12: __m128,
     ) -> [__m128; 2] {
         // This is a SSE translation of the scalar 3-point butterfly
-        let rev12 = invert_2nd_f32(reverse_f32(value12));
+        let rev12 = negate_2nd_f32(reverse_f32(value12));
         let temp12pn = self.rotate.rotate_2nd(_mm_add_ps(value12, rev12));
         let twiddled = _mm_mul_ps(temp12pn, self.twiddle);
         let temp = _mm_add_ps(value0x, twiddled);

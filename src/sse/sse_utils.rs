@@ -113,7 +113,7 @@ pub unsafe fn reverse_f32(values: __m128) -> __m128 {
 // values: a.re + a.im, b.re, b.im
 // -->  a.re + a.im, -b.re, -b.im
 #[inline(always)]
-pub unsafe fn invert_2nd_f32(values: __m128) -> __m128 {
+pub unsafe fn negate_2nd_f32(values: __m128) -> __m128 {
     _mm_xor_ps(values, _mm_set_ps(-0.0, -0.0, 0.0, 0.0))
 }
 
