@@ -2084,14 +2084,14 @@ impl<T: FftNum> SseF32Butterfly10<T> {
         let reord3 = pack_1and2_f32(values[3], values[0]);
         let reord4 = pack_1and2_f32(values[4], values[1]);
 
-        // Size-4 FFTs down the columns of our reordered array
+        // Size-5 FFTs down the columns of our reordered array
         let mids = self
             .bf5
             .perform_dual_fft_direct(reord0, reord1, reord2, reord3, reord4);
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
 
-        // Transpose the data and do size-3 FFTs down the columns
+        // Transpose the data and do size-2 FFTs down the columns
         let [temp01, temp23] = dual_fft2_contiguous_f32(mids[0], mids[1]);
         let [temp45, temp67] = dual_fft2_contiguous_f32(mids[2], mids[3]);
         let temp89 = solo_fft2_f32(mids[4]);
@@ -2110,7 +2110,7 @@ impl<T: FftNum> SseF32Butterfly10<T> {
     pub(crate) unsafe fn perform_dual_fft_direct(&self, values: [__m128; 10]) -> [__m128; 10] {
         // Algorithm: 5x2 good-thomas
 
-        // Size-4 FFTs down the columns of our reordered array
+        // Size-5 FFTs down the columns of our reordered array
         let mid0 = self
             .bf5
             .perform_dual_fft_direct(values[0], values[2], values[4], values[6], values[8]);
@@ -2120,7 +2120,7 @@ impl<T: FftNum> SseF32Butterfly10<T> {
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
 
-        // Transpose the data and do size-3 FFTs down the columns
+        // Transpose the data and do size-2 FFTs down the columns
         let [output0, output1] = dual_fft2_interleaved_f32(mid0[0], mid1[0]);
         let [output2, output3] = dual_fft2_interleaved_f32(mid0[1], mid1[1]);
         let [output4, output5] = dual_fft2_interleaved_f32(mid0[2], mid1[2]);
@@ -2203,7 +2203,7 @@ impl<T: FftNum> SseF64Butterfly10<T> {
     pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 10]) -> [__m128d; 10] {
         // Algorithm: 5x2 good-thomas
 
-        // Size-4 FFTs down the columns of our reordered array
+        // Size-5 FFTs down the columns of our reordered array
         let mid0 = self
             .bf5
             .perform_fft_direct(values[0], values[2], values[4], values[6], values[8]);
@@ -2213,7 +2213,7 @@ impl<T: FftNum> SseF64Butterfly10<T> {
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
 
-        // Transpose the data and do size-3 FFTs down the columns
+        // Transpose the data and do size-2 FFTs down the columns
         let [output0, output1] = self.bf2.perform_fft_direct(mid0[0], mid1[0]);
         let [output2, output3] = self.bf2.perform_fft_direct(mid0[1], mid1[1]);
         let [output4, output5] = self.bf2.perform_fft_direct(mid0[2], mid1[2]);
