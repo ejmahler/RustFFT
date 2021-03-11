@@ -520,7 +520,7 @@ impl<T: FftNum> SseF32Butterfly3<T> {
         value12: __m128,
     ) -> [__m128; 2] {
         // This is a SSE translation of the scalar 3-point butterfly
-        let rev12 = negate_2nd_f32(reverse_f32(value12));
+        let rev12 = negate_2nd_f32(reverse_complex_elements_f32(value12));
         let temp12pn = self.rotate.rotate_2nd(_mm_add_ps(value12, rev12));
         let twiddled = _mm_mul_ps(temp12pn, self.twiddle);
         let temp = _mm_add_ps(value0x, twiddled);
@@ -992,7 +992,7 @@ impl<T: FftNum> SseF32Butterfly5<T> {
         value34: __m128,
     ) -> [__m128; 3] {
         // This is a SSE translation of the scalar 5-point butterfly
-        let temp43 = reverse_f32(value34);
+        let temp43 = reverse_complex_elements_f32(value34);
         let x1423p = _mm_add_ps(value12, temp43);
         let x1423n = _mm_sub_ps(value12, temp43);
 
@@ -1017,7 +1017,7 @@ impl<T: FftNum> SseF32Butterfly5<T> {
         let x00 = _mm_add_ps(value00, _mm_add_ps(x1414p, x2323p));
 
         let x12 = _mm_add_ps(temp_a, b_rot);
-        let x34 = reverse_f32(_mm_sub_ps(temp_a, b_rot));
+        let x34 = reverse_complex_elements_f32(_mm_sub_ps(temp_a, b_rot));
         [x00, x12, x34]
     }
 
@@ -1844,10 +1844,10 @@ impl<T: FftNum> SseF32Butterfly9<T> {
             .perform_dual_fft_direct(values[2], values[5], values[8]);
 
         // Apply twiddle factors. Note that we're re-using twiddle2
-        mid1[1] = complex_dual_mul_f32(self.twiddle1, mid1[1]);
-        mid1[2] = complex_dual_mul_f32(self.twiddle2, mid1[2]);
-        mid2[1] = complex_dual_mul_f32(self.twiddle2, mid2[1]);
-        mid2[2] = complex_dual_mul_f32(self.twiddle4, mid2[2]);
+        mid1[1] = mul_complex_f32(self.twiddle1, mid1[1]);
+        mid1[2] = mul_complex_f32(self.twiddle2, mid1[2]);
+        mid2[1] = mul_complex_f32(self.twiddle2, mid2[1]);
+        mid2[2] = mul_complex_f32(self.twiddle4, mid2[2]);
 
         let [output0, output1, output2] =
             self.bf3.perform_dual_fft_direct(mid0[0], mid1[0], mid2[0]);
@@ -1945,10 +1945,10 @@ impl<T: FftNum> SseF64Butterfly9<T> {
         let mut mid2 = self.bf3.perform_fft_direct(values[2], values[5], values[8]);
 
         // Apply twiddle factors. Note that we're re-using twiddle2
-        mid1[1] = complex_mul_f64(self.twiddle1, mid1[1]);
-        mid1[2] = complex_mul_f64(self.twiddle2, mid1[2]);
-        mid2[1] = complex_mul_f64(self.twiddle2, mid2[1]);
-        mid2[2] = complex_mul_f64(self.twiddle4, mid2[2]);
+        mid1[1] = mul_complex_f64(self.twiddle1, mid1[1]);
+        mid1[2] = mul_complex_f64(self.twiddle2, mid1[2]);
+        mid2[1] = mul_complex_f64(self.twiddle2, mid2[1]);
+        mid2[2] = mul_complex_f64(self.twiddle4, mid2[2]);
 
         let [output0, output1, output2] = self.bf3.perform_fft_direct(mid0[0], mid1[0], mid2[0]);
         let [output3, output4, output5] = self.bf3.perform_fft_direct(mid0[1], mid1[1], mid2[1]);
@@ -3035,11 +3035,11 @@ impl<T: FftNum> SseF32Butterfly16<T> {
         let mut odds3 = self.bf4.perform_fft_direct(in1503, in0711);
 
         // step 3: apply twiddle factors
-        odds1[0] = complex_dual_mul_f32(odds1[0], self.twiddle01);
-        odds3[0] = complex_dual_mul_f32(odds3[0], self.twiddle01conj);
+        odds1[0] = mul_complex_f32(odds1[0], self.twiddle01);
+        odds3[0] = mul_complex_f32(odds3[0], self.twiddle01conj);
 
-        odds1[1] = complex_dual_mul_f32(odds1[1], self.twiddle23);
-        odds3[1] = complex_dual_mul_f32(odds3[1], self.twiddle23conj);
+        odds1[1] = mul_complex_f32(odds1[1], self.twiddle23);
+        odds3[1] = mul_complex_f32(odds3[1], self.twiddle23conj);
 
         // step 4: cross FFTs
         let mut temp0 = dual_fft2_interleaved_f32(odds1[0], odds3[0]);
@@ -3079,14 +3079,14 @@ impl<T: FftNum> SseF32Butterfly16<T> {
             .perform_dual_fft_direct(input[15], input[3], input[7], input[11]);
 
         // step 3: apply twiddle factors
-        odds1[1] = complex_dual_mul_f32(odds1[1], self.twiddle1);
-        odds3[1] = complex_dual_mul_f32(odds3[1], self.twiddle1c);
+        odds1[1] = mul_complex_f32(odds1[1], self.twiddle1);
+        odds3[1] = mul_complex_f32(odds3[1], self.twiddle1c);
 
-        odds1[2] = complex_dual_mul_f32(odds1[2], self.twiddle2);
-        odds3[2] = complex_dual_mul_f32(odds3[2], self.twiddle2c);
+        odds1[2] = mul_complex_f32(odds1[2], self.twiddle2);
+        odds3[2] = mul_complex_f32(odds3[2], self.twiddle2c);
 
-        odds1[3] = complex_dual_mul_f32(odds1[3], self.twiddle3);
-        odds3[3] = complex_dual_mul_f32(odds3[3], self.twiddle3c);
+        odds1[3] = mul_complex_f32(odds1[3], self.twiddle3);
+        odds3[3] = mul_complex_f32(odds3[3], self.twiddle3c);
 
         // step 4: cross FFTs
         let mut temp0 = dual_fft2_interleaved_f32(odds1[0], odds3[0]);
@@ -3256,14 +3256,14 @@ impl<T: FftNum> SseF64Butterfly16<T> {
             .perform_fft_direct(input[15], input[3], input[7], input[11]);
 
         // step 3: apply twiddle factors
-        odds1[1] = complex_mul_f64(odds1[1], self.twiddle1);
-        odds3[1] = complex_mul_f64(odds3[1], self.twiddle1c);
+        odds1[1] = mul_complex_f64(odds1[1], self.twiddle1);
+        odds3[1] = mul_complex_f64(odds3[1], self.twiddle1c);
 
-        odds1[2] = complex_mul_f64(odds1[2], self.twiddle2);
-        odds3[2] = complex_mul_f64(odds3[2], self.twiddle2c);
+        odds1[2] = mul_complex_f64(odds1[2], self.twiddle2);
+        odds3[2] = mul_complex_f64(odds3[2], self.twiddle2c);
 
-        odds1[3] = complex_mul_f64(odds1[3], self.twiddle3);
-        odds3[3] = complex_mul_f64(odds3[3], self.twiddle3c);
+        odds1[3] = mul_complex_f64(odds1[3], self.twiddle3);
+        odds3[3] = mul_complex_f64(odds3[3], self.twiddle3c);
 
         // step 4: cross FFTs
         let mut temp0 = solo_fft2_f64(odds1[0], odds3[0]);
@@ -3665,17 +3665,17 @@ impl<T: FftNum> SseF32Butterfly32<T> {
             .perform_fft_direct([in3103, in0711, in1519, in2327]);
 
         // step 3: apply twiddle factors
-        odds1[0] = complex_dual_mul_f32(odds1[0], self.twiddle01);
-        odds3[0] = complex_dual_mul_f32(odds3[0], self.twiddle01conj);
+        odds1[0] = mul_complex_f32(odds1[0], self.twiddle01);
+        odds3[0] = mul_complex_f32(odds3[0], self.twiddle01conj);
 
-        odds1[1] = complex_dual_mul_f32(odds1[1], self.twiddle23);
-        odds3[1] = complex_dual_mul_f32(odds3[1], self.twiddle23conj);
+        odds1[1] = mul_complex_f32(odds1[1], self.twiddle23);
+        odds3[1] = mul_complex_f32(odds3[1], self.twiddle23conj);
 
-        odds1[2] = complex_dual_mul_f32(odds1[2], self.twiddle45);
-        odds3[2] = complex_dual_mul_f32(odds3[2], self.twiddle45conj);
+        odds1[2] = mul_complex_f32(odds1[2], self.twiddle45);
+        odds3[2] = mul_complex_f32(odds3[2], self.twiddle45conj);
 
-        odds1[3] = complex_dual_mul_f32(odds1[3], self.twiddle67);
-        odds3[3] = complex_dual_mul_f32(odds3[3], self.twiddle67conj);
+        odds1[3] = mul_complex_f32(odds1[3], self.twiddle67);
+        odds3[3] = mul_complex_f32(odds3[3], self.twiddle67conj);
 
         // step 4: cross FFTs
         let mut temp0 = dual_fft2_interleaved_f32(odds1[0], odds3[0]);
@@ -3732,26 +3732,26 @@ impl<T: FftNum> SseF32Butterfly32<T> {
         ]);
 
         // step 3: apply twiddle factors
-        odds1[1] = complex_dual_mul_f32(odds1[1], self.twiddle1);
-        odds3[1] = complex_dual_mul_f32(odds3[1], self.twiddle1c);
+        odds1[1] = mul_complex_f32(odds1[1], self.twiddle1);
+        odds3[1] = mul_complex_f32(odds3[1], self.twiddle1c);
 
-        odds1[2] = complex_dual_mul_f32(odds1[2], self.twiddle2);
-        odds3[2] = complex_dual_mul_f32(odds3[2], self.twiddle2c);
+        odds1[2] = mul_complex_f32(odds1[2], self.twiddle2);
+        odds3[2] = mul_complex_f32(odds3[2], self.twiddle2c);
 
-        odds1[3] = complex_dual_mul_f32(odds1[3], self.twiddle3);
-        odds3[3] = complex_dual_mul_f32(odds3[3], self.twiddle3c);
+        odds1[3] = mul_complex_f32(odds1[3], self.twiddle3);
+        odds3[3] = mul_complex_f32(odds3[3], self.twiddle3c);
 
-        odds1[4] = complex_dual_mul_f32(odds1[4], self.twiddle4);
-        odds3[4] = complex_dual_mul_f32(odds3[4], self.twiddle4c);
+        odds1[4] = mul_complex_f32(odds1[4], self.twiddle4);
+        odds3[4] = mul_complex_f32(odds3[4], self.twiddle4c);
 
-        odds1[5] = complex_dual_mul_f32(odds1[5], self.twiddle5);
-        odds3[5] = complex_dual_mul_f32(odds3[5], self.twiddle5c);
+        odds1[5] = mul_complex_f32(odds1[5], self.twiddle5);
+        odds3[5] = mul_complex_f32(odds3[5], self.twiddle5c);
 
-        odds1[6] = complex_dual_mul_f32(odds1[6], self.twiddle6);
-        odds3[6] = complex_dual_mul_f32(odds3[6], self.twiddle6c);
+        odds1[6] = mul_complex_f32(odds1[6], self.twiddle6);
+        odds3[6] = mul_complex_f32(odds3[6], self.twiddle6c);
 
-        odds1[7] = complex_dual_mul_f32(odds1[7], self.twiddle7);
-        odds3[7] = complex_dual_mul_f32(odds3[7], self.twiddle7c);
+        odds1[7] = mul_complex_f32(odds1[7], self.twiddle7);
+        odds3[7] = mul_complex_f32(odds3[7], self.twiddle7c);
 
         // step 4: cross FFTs
         let mut temp0 = dual_fft2_interleaved_f32(odds1[0], odds3[0]);
@@ -4017,26 +4017,26 @@ impl<T: FftNum> SseF64Butterfly32<T> {
         ]);
 
         // step 3: apply twiddle factors
-        odds1[1] = complex_mul_f64(odds1[1], self.twiddle1);
-        odds3[1] = complex_mul_f64(odds3[1], self.twiddle1c);
+        odds1[1] = mul_complex_f64(odds1[1], self.twiddle1);
+        odds3[1] = mul_complex_f64(odds3[1], self.twiddle1c);
 
-        odds1[2] = complex_mul_f64(odds1[2], self.twiddle2);
-        odds3[2] = complex_mul_f64(odds3[2], self.twiddle2c);
+        odds1[2] = mul_complex_f64(odds1[2], self.twiddle2);
+        odds3[2] = mul_complex_f64(odds3[2], self.twiddle2c);
 
-        odds1[3] = complex_mul_f64(odds1[3], self.twiddle3);
-        odds3[3] = complex_mul_f64(odds3[3], self.twiddle3c);
+        odds1[3] = mul_complex_f64(odds1[3], self.twiddle3);
+        odds3[3] = mul_complex_f64(odds3[3], self.twiddle3c);
 
-        odds1[4] = complex_mul_f64(odds1[4], self.twiddle4);
-        odds3[4] = complex_mul_f64(odds3[4], self.twiddle4c);
+        odds1[4] = mul_complex_f64(odds1[4], self.twiddle4);
+        odds3[4] = mul_complex_f64(odds3[4], self.twiddle4c);
 
-        odds1[5] = complex_mul_f64(odds1[5], self.twiddle5);
-        odds3[5] = complex_mul_f64(odds3[5], self.twiddle5c);
+        odds1[5] = mul_complex_f64(odds1[5], self.twiddle5);
+        odds3[5] = mul_complex_f64(odds3[5], self.twiddle5c);
 
-        odds1[6] = complex_mul_f64(odds1[6], self.twiddle6);
-        odds3[6] = complex_mul_f64(odds3[6], self.twiddle6c);
+        odds1[6] = mul_complex_f64(odds1[6], self.twiddle6);
+        odds3[6] = mul_complex_f64(odds3[6], self.twiddle6c);
 
-        odds1[7] = complex_mul_f64(odds1[7], self.twiddle7);
-        odds3[7] = complex_mul_f64(odds3[7], self.twiddle7c);
+        odds1[7] = mul_complex_f64(odds1[7], self.twiddle7);
+        odds3[7] = mul_complex_f64(odds3[7], self.twiddle7c);
 
         // step 4: cross FFTs
         let mut temp0 = solo_fft2_f64(odds1[0], odds3[0]);
@@ -4161,11 +4161,11 @@ mod unit_tests {
     test_butterfly_64_func!(test_ssef64_butterfly32, SseF64Butterfly32, 32);
 
     #[test]
-    fn test_complex_mul_f64() {
+    fn test_mul_complex_f64() {
         unsafe {
             let right = _mm_set_pd(1.0, 2.0);
             let left = _mm_set_pd(5.0, 7.0);
-            let res = complex_mul_f64(left, right);
+            let res = mul_complex_f64(left, right);
             let expected = _mm_set_pd(2.0 * 5.0 + 1.0 * 7.0, 2.0 * 7.0 - 1.0 * 5.0);
             assert_eq!(
                 std::mem::transmute::<__m128d, Complex<f64>>(res),
@@ -4175,7 +4175,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_complex_dual_mul_f32() {
+    fn test_mul_complex_f32() {
         unsafe {
             let val1 = Complex::<f32>::new(1.0, 2.5);
             let val2 = Complex::<f32>::new(3.2, 4.2);
@@ -4184,7 +4184,7 @@ mod unit_tests {
 
             let nbr2 = _mm_set_ps(val4.im, val4.re, val3.im, val3.re);
             let nbr1 = _mm_set_ps(val2.im, val2.re, val1.im, val1.re);
-            let res = complex_dual_mul_f32(nbr1, nbr2);
+            let res = mul_complex_f32(nbr1, nbr2);
             let res = std::mem::transmute::<__m128, [Complex<f32>; 2]>(res);
             let expected = [val1 * val3, val2 * val4];
             assert_eq!(res, expected);

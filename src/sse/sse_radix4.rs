@@ -202,12 +202,12 @@ unsafe fn butterfly_4_32<T: FftNum>(
         let mut scratch3 = _mm_loadu_ps(output_slice.add(idx + 3 * num_ffts) as *const f32);
         let mut scratch3b = _mm_loadu_ps(output_slice.add(idx + 2 + 3 * num_ffts) as *const f32);
 
-        scratch1 = complex_dual_mul_f32(scratch1, twiddles[tw_idx]);
-        scratch2 = complex_dual_mul_f32(scratch2, twiddles[tw_idx + 1]);
-        scratch3 = complex_dual_mul_f32(scratch3, twiddles[tw_idx + 2]);
-        scratch1b = complex_dual_mul_f32(scratch1b, twiddles[tw_idx + 3]);
-        scratch2b = complex_dual_mul_f32(scratch2b, twiddles[tw_idx + 4]);
-        scratch3b = complex_dual_mul_f32(scratch3b, twiddles[tw_idx + 5]);
+        scratch1 = mul_complex_f32(scratch1, twiddles[tw_idx]);
+        scratch2 = mul_complex_f32(scratch2, twiddles[tw_idx + 1]);
+        scratch3 = mul_complex_f32(scratch3, twiddles[tw_idx + 2]);
+        scratch1b = mul_complex_f32(scratch1b, twiddles[tw_idx + 3]);
+        scratch2b = mul_complex_f32(scratch2b, twiddles[tw_idx + 4]);
+        scratch3b = mul_complex_f32(scratch3b, twiddles[tw_idx + 5]);
 
         let scratch = bf4.perform_dual_fft_direct(scratch0, scratch1, scratch2, scratch3);
         let scratchb = bf4.perform_dual_fft_direct(scratch0b, scratch1b, scratch2b, scratch3b);
@@ -450,12 +450,12 @@ unsafe fn butterfly_4_64<T: FftNum>(
         let mut scratch3 = _mm_loadu_pd(output_slice.add(idx + 3 * num_ffts) as *const f64);
         let mut scratch3b = _mm_loadu_pd(output_slice.add(idx + 1 + 3 * num_ffts) as *const f64);
 
-        scratch1 = complex_mul_f64(scratch1, twiddles[tw_idx]);
-        scratch2 = complex_mul_f64(scratch2, twiddles[tw_idx + 1]);
-        scratch3 = complex_mul_f64(scratch3, twiddles[tw_idx + 2]);
-        scratch1b = complex_mul_f64(scratch1b, twiddles[tw_idx + 3]);
-        scratch2b = complex_mul_f64(scratch2b, twiddles[tw_idx + 4]);
-        scratch3b = complex_mul_f64(scratch3b, twiddles[tw_idx + 5]);
+        scratch1 = mul_complex_f64(scratch1, twiddles[tw_idx]);
+        scratch2 = mul_complex_f64(scratch2, twiddles[tw_idx + 1]);
+        scratch3 = mul_complex_f64(scratch3, twiddles[tw_idx + 2]);
+        scratch1b = mul_complex_f64(scratch1b, twiddles[tw_idx + 3]);
+        scratch2b = mul_complex_f64(scratch2b, twiddles[tw_idx + 4]);
+        scratch3b = mul_complex_f64(scratch3b, twiddles[tw_idx + 5]);
 
         let scratch = bf4.perform_fft_direct(scratch0, scratch1, scratch2, scratch3);
         let scratchb = bf4.perform_fft_direct(scratch0b, scratch1b, scratch2b, scratch3b);
