@@ -11,6 +11,70 @@ use crate::{Direction, Fft, Length};
 
 use super::sse_common::{assert_f32, assert_f64};
 use super::sse_utils::*;
+use super::sse_vector::{SseVector, SseVectorMut};
+
+#[allow(unused)]
+macro_rules! test_boilerplate_fft_sse_f32_butterfly {
+    ($struct_name:ident, $len:expr, $direction_fn:expr) => {
+        impl<T: FftNum> $struct_name<T> {
+            #[target_feature(enable = "sse3")]
+            //#[inline(always)]
+            pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
+                self.perform_fft_contiguous(RawSlice::new_transmuted(buffer), RawSliceMut::new_transmuted(buffer));
+            }
+
+            #[target_feature(enable = "sse3")]
+            //#[inline(always)]
+            pub(crate) unsafe fn perform_dual_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
+                self.perform_dual_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
+            }
+
+            // Do multiple ffts over a longer vector inplace, called from "process_with_scratch" of Fft trait
+            #[target_feature(enable = "sse3")]
+            pub(crate) unsafe fn perform_fft_butterfly_multi(
+                &self,
+                buffer: &mut [Complex<T>],
+            ) -> Result<(), ()> {
+                let len = buffer.len();
+                let alldone = array_utils::iter_chunks(buffer, 2 * self.len(), |chunk| {
+                    self.perform_dual_fft_butterfly(chunk)
+                });
+                if alldone.is_err() && buffer.len() >= self.len() {
+                    self.perform_fft_butterfly(&mut buffer[len - self.len()..]);
+                }
+                Ok(())
+            }
+
+            // Do multiple ffts over a longer vector outofplace, called from "process_outofplace_with_scratch" of Fft trait
+            #[target_feature(enable = "sse3")]
+            pub(crate) unsafe fn perform_oop_fft_butterfly_multi(
+                &self,
+                input: &mut [Complex<T>],
+                output: &mut [Complex<T>],
+            ) -> Result<(), ()> {
+                let len = input.len();
+                let alldone = array_utils::iter_chunks_zipped(
+                    input,
+                    output,
+                    2 * self.len(),
+                    |in_chunk, out_chunk| {
+                        self.perform_dual_fft_contiguous(
+                            RawSlice::new(in_chunk),
+                            RawSliceMut::new(out_chunk),
+                        )
+                    },
+                );
+                if alldone.is_err() && input.len() >= self.len() {
+                    self.perform_fft_contiguous(
+                        RawSlice::new_transmuted(&input[len - self.len()..]),
+                        RawSliceMut::new_transmuted(&mut output[len - self.len()..]),
+                    );
+                }
+                Ok(())
+            }
+        }
+    };
+}
 
 #[allow(unused)]
 macro_rules! boilerplate_fft_sse_f32_butterfly {
@@ -263,7 +327,7 @@ pub struct SseF32Butterfly2<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly2, 2, |this: &SseF32Butterfly2<_>| this
+test_boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly2, 2, |this: &SseF32Butterfly2<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly2, 2, |this: &SseF32Butterfly2<_>| this
     .direction);
@@ -279,19 +343,21 @@ impl<T: FftNum> SseF32Butterfly2<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
-        let values = _mm_loadu_ps(input.as_ptr() as *const f32);
+        let values = input.load_complex(0);
+
 
         let temp = self.perform_fft_direct(values);
 
-        let array = std::mem::transmute::<__m128, [Complex<f32>; 2]>(temp);
+        //let array = std::mem::transmute::<__m128, [Complex<f32>; 2]>(temp);
 
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
+        //let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
 
-        *output_slice.add(0) = array[0];
-        *output_slice.add(1) = array[1];
+        //*output_slice.add(0) = array[0];
+        //*output_slice.add(1) = array[1];
+        output.store_complex(temp, 0);
     }
 
     #[inline(always)]
