@@ -71,7 +71,8 @@ impl Rotate90F32 {
 // --> r1.re, r1.im, l1.re + l1.im
 #[inline(always)]
 pub unsafe fn pack_1st_f32(left: __m128, right: __m128) -> __m128 {
-    _mm_shuffle_ps(left, right, 0x44)
+    //_mm_shuffle_ps(left, right, 0x44)
+    _mm_castpd_ps(_mm_unpacklo_pd(_mm_castps_pd(left),_mm_castps_pd(right)))
 }
 
 // Pack 2nd complex
@@ -80,7 +81,8 @@ pub unsafe fn pack_1st_f32(left: __m128, right: __m128) -> __m128 {
 // --> r2.re, r2.im, l2.re + l2.im
 #[inline(always)]
 pub unsafe fn pack_2nd_f32(left: __m128, right: __m128) -> __m128 {
-    _mm_shuffle_ps(left, right, 0xEE)
+    //_mm_shuffle_ps(left, right, 0xEE)
+    _mm_castpd_ps(_mm_unpackhi_pd(_mm_castps_pd(left),_mm_castps_pd(right)))
 }
 
 // Pack 1st and 2nd complex
@@ -89,7 +91,8 @@ pub unsafe fn pack_2nd_f32(left: __m128, right: __m128) -> __m128 {
 // --> r1.re, r1.im, l2.re + l2.im
 #[inline(always)]
 pub unsafe fn pack_1and2_f32(left: __m128, right: __m128) -> __m128 {
-    _mm_shuffle_ps(left, right, 0xE4)
+    //_mm_shuffle_ps(left, right, 0xE4)
+    _mm_blend_ps(left, right, 0x0C)
 }
 
 // Pack 2nd and 1st complex

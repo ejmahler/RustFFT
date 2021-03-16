@@ -117,7 +117,7 @@ impl<T: FftNum> Sse32Radix4<T> {
         }
     }
 
-    #[target_feature(enable = "sse3")]
+    #[target_feature(enable = "sse4.1")]
     unsafe fn perform_fft_out_of_place(
         &self,
         signal: &[Complex<T>],
@@ -179,7 +179,7 @@ impl<T: FftNum> Sse32Radix4<T> {
 }
 boilerplate_fft_sse_oop!(Sse32Radix4, |this: &Sse32Radix4<_>| this.len);
 
-#[target_feature(enable = "sse3")]
+#[target_feature(enable = "sse4.1")]
 unsafe fn butterfly_4_32<T: FftNum>(
     data: &mut [Complex<T>],
     twiddles: &[__m128],
@@ -310,7 +310,7 @@ impl<T: FftNum> Sse64Radix4<T> {
         }
     }
 
-    #[target_feature(enable = "sse3")]
+    #[target_feature(enable = "sse4.1")]
     unsafe fn perform_fft_out_of_place(
         &self,
         signal: &[Complex<T>],
@@ -430,7 +430,7 @@ fn do_radix4_shuffle<T: FftNum>(
     }
 }
 
-#[target_feature(enable = "sse3")]
+#[target_feature(enable = "sse4.1")]
 unsafe fn butterfly_4_64<T: FftNum>(
     data: &mut [Complex<T>],
     twiddles: &[__m128d],

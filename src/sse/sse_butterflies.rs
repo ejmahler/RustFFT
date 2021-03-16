@@ -17,20 +17,20 @@ use super::sse_vector::{SseArray, SseArrayMut};
 macro_rules! test_boilerplate_fft_sse_f32_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> $struct_name<T> {
-            #[target_feature(enable = "sse3")]
+            #[target_feature(enable = "sse4.1")]
             //#[inline(always)]
             pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
                 self.perform_fft_contiguous(RawSlice::new_transmuted(buffer), RawSliceMut::new_transmuted(buffer));
             }
 
-            #[target_feature(enable = "sse3")]
+            #[target_feature(enable = "sse4.1")]
             //#[inline(always)]
             pub(crate) unsafe fn perform_dual_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
                 self.perform_dual_fft_contiguous(RawSlice::new_transmuted(buffer), RawSliceMut::new_transmuted(buffer));
             }
 
             // Do multiple ffts over a longer vector inplace, called from "process_with_scratch" of Fft trait
-            #[target_feature(enable = "sse3")]
+            #[target_feature(enable = "sse4.1")]
             pub(crate) unsafe fn perform_fft_butterfly_multi(
                 &self,
                 buffer: &mut [Complex<T>],
@@ -46,7 +46,7 @@ macro_rules! test_boilerplate_fft_sse_f32_butterfly {
             }
 
             // Do multiple ffts over a longer vector outofplace, called from "process_outofplace_with_scratch" of Fft trait
-            #[target_feature(enable = "sse3")]
+            #[target_feature(enable = "sse4.1")]
             pub(crate) unsafe fn perform_oop_fft_butterfly_multi(
                 &self,
                 input: &mut [Complex<T>],
@@ -80,20 +80,20 @@ macro_rules! test_boilerplate_fft_sse_f32_butterfly {
 macro_rules! boilerplate_fft_sse_f32_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> $struct_name<T> {
-            #[target_feature(enable = "sse3")]
+            #[target_feature(enable = "sse4.1")]
             //#[inline(always)]
             pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
                 self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
             }
 
-            #[target_feature(enable = "sse3")]
+            #[target_feature(enable = "sse4.1")]
             //#[inline(always)]
             pub(crate) unsafe fn perform_dual_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
                 self.perform_dual_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
             }
 
             // Do multiple ffts over a longer vector inplace, called from "process_with_scratch" of Fft trait
-            #[target_feature(enable = "sse3")]
+            #[target_feature(enable = "sse4.1")]
             pub(crate) unsafe fn perform_fft_butterfly_multi(
                 &self,
                 buffer: &mut [Complex<T>],
@@ -109,7 +109,7 @@ macro_rules! boilerplate_fft_sse_f32_butterfly {
             }
 
             // Do multiple ffts over a longer vector outofplace, called from "process_outofplace_with_scratch" of Fft trait
-            #[target_feature(enable = "sse3")]
+            #[target_feature(enable = "sse4.1")]
             pub(crate) unsafe fn perform_oop_fft_butterfly_multi(
                 &self,
                 input: &mut [Complex<T>],
@@ -143,13 +143,13 @@ macro_rules! boilerplate_fft_sse_f64_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> $struct_name<T> {
             // Do a single fft
-            #[target_feature(enable = "sse3")]
+            #[target_feature(enable = "sse4.1")]
             pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
                 self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
             }
 
             // Do multiple ffts over a longer vector inplace, called from "process_with_scratch" of Fft trait
-            #[target_feature(enable = "sse3")]
+            #[target_feature(enable = "sse4.1")]
             pub(crate) unsafe fn perform_fft_butterfly_multi(
                 &self,
                 buffer: &mut [Complex<T>],
@@ -160,7 +160,7 @@ macro_rules! boilerplate_fft_sse_f64_butterfly {
             }
 
             // Do multiple ffts over a longer vector outofplace, called from "process_outofplace_with_scratch" of Fft trait
-            #[target_feature(enable = "sse3")]
+            #[target_feature(enable = "sse4.1")]
             pub(crate) unsafe fn perform_oop_fft_butterfly_multi(
                 &self,
                 input: &mut [Complex<T>],
@@ -181,13 +181,13 @@ macro_rules! test_boilerplate_fft_sse_f64_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> $struct_name<T> {
             // Do a single fft
-            #[target_feature(enable = "sse3")]
+            #[target_feature(enable = "sse4.1")]
             pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
                 self.perform_fft_contiguous(RawSlice::new_transmuted(buffer), RawSliceMut::new_transmuted(buffer));
             }
 
             // Do multiple ffts over a longer vector inplace, called from "process_with_scratch" of Fft trait
-            #[target_feature(enable = "sse3")]
+            #[target_feature(enable = "sse4.1")]
             pub(crate) unsafe fn perform_fft_butterfly_multi(
                 &self,
                 buffer: &mut [Complex<T>],
@@ -198,7 +198,7 @@ macro_rules! test_boilerplate_fft_sse_f64_butterfly {
             }
 
             // Do multiple ffts over a longer vector outofplace, called from "process_outofplace_with_scratch" of Fft trait
-            #[target_feature(enable = "sse3")]
+            #[target_feature(enable = "sse4.1")]
             pub(crate) unsafe fn perform_oop_fft_butterfly_multi(
                 &self,
                 input: &mut [Complex<T>],
@@ -440,8 +440,8 @@ unsafe fn dual_fft2_interleaved_f32(val02: __m128, val13: __m128) -> [__m128; 2]
 // result is [X0, Y0], [X1, Y1]
 #[inline(always)]
 unsafe fn dual_fft2_contiguous_f32(left: __m128, right: __m128) -> [__m128; 2] {
-    let temp02 = _mm_shuffle_ps(left, right, 0x44);
-    let temp13 = _mm_shuffle_ps(left, right, 0xEE);
+    let temp02 = pack_1st_f32(left, right);
+    let temp13 = pack_2nd_f32(left, right);
     let temp0 = _mm_add_ps(temp02, temp13);
     let temp1 = _mm_sub_ps(temp02, temp13);
     [temp0, temp1]
@@ -451,7 +451,7 @@ unsafe fn dual_fft2_contiguous_f32(left: __m128, right: __m128) -> [__m128; 2] {
 // result is [X0, X1]
 #[inline(always)]
 unsafe fn solo_fft2_f32(values: __m128) -> __m128 {
-    let temp = _mm_shuffle_ps(values, values, 0x4E);
+    let temp = reverse_complex_elements_f32(values);
     let sign = _mm_set_ps(-0.0, -0.0, 0.0, 0.0);
     let temp2 = _mm_xor_ps(values, sign);
     _mm_add_ps(temp2, temp)
