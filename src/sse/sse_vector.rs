@@ -1,9 +1,6 @@
 use core::arch::x86_64::*;
 use num_complex::Complex;
 
-use crate::{common::FftNum, FftDirection};
-
-use crate::array_utils;
 use crate::array_utils::{RawSlice, RawSliceMut};
 
 
@@ -63,7 +60,7 @@ impl SseArray for RawSlice<Complex<f64>> {
     #[inline(always)]
     unsafe fn load_partial1_complex(
         &self,
-        index: usize,
+        _index: usize,
     ) -> Self::VectorType {
         unimplemented!("Impossible to do a partial load of complex f64's");
     }
@@ -71,7 +68,7 @@ impl SseArray for RawSlice<Complex<f64>> {
     #[inline(always)]
     unsafe fn load1_complex(
         &self,
-        index: usize,
+        _index: usize,
     ) -> Self::VectorType {
         unimplemented!("Impossible to do a partial load of complex f64's");
     }
@@ -137,16 +134,16 @@ impl SseArrayMut for RawSliceMut<Complex<f64>> {
     #[inline(always)]
     unsafe fn store_partial_hi_complex(
         &self,
-        vector: Self::VectorType,
-        index: usize,
+        _vector: Self::VectorType,
+        _index: usize,
     ) {
         unimplemented!("Impossible to do a partial store of complex f64's");
     }
     #[inline(always)]
     unsafe fn store_partial_lo_complex(
         &self,
-        vector: Self::VectorType,
-        index: usize,
+        _vector: Self::VectorType,
+        _index: usize,
     ) {
         unimplemented!("Impossible to do a partial store of complex f64's");
     }
