@@ -7,7 +7,7 @@ use crate::array_utils;
 use crate::array_utils::{RawSlice, RawSliceMut};
 
 
-pub trait SseVector {
+pub trait SseArray {
     type VectorType;
     const COMPLEX_PER_VECTOR: usize;
     unsafe fn load_complex(&self, index: usize) -> Self::VectorType;
@@ -15,9 +15,13 @@ pub trait SseVector {
         &self,
         index: usize,
     ) -> Self::VectorType;
+    unsafe fn load1_complex(
+        &self,
+        index: usize,
+    ) -> Self::VectorType;
 }
 
-impl SseVector for RawSlice<Complex<f32>> {
+impl SseArray for RawSlice<Complex<f32>> {
     type VectorType = __m128;
     const COMPLEX_PER_VECTOR: usize = 2;
     
@@ -33,11 +37,20 @@ impl SseVector for RawSlice<Complex<f32>> {
         index: usize,
     ) -> Self::VectorType {
         debug_assert!(self.len() >= index + 1);
+        _mm_castpd_ps(_mm_load_sd(self.as_ptr().add(index) as *const f64))
+    }
+
+    #[inline(always)]
+    unsafe fn load1_complex(
+        &self,
+        index: usize,
+    ) -> Self::VectorType {
+        debug_assert!(self.len() >= index + 1);
         _mm_castpd_ps(_mm_load1_pd(self.as_ptr().add(index) as *const f64))
     }
 }
 
-impl SseVector for RawSlice<Complex<f64>> {
+impl SseArray for RawSlice<Complex<f64>> {
     type VectorType = __m128d;
     const COMPLEX_PER_VECTOR: usize = 1;
     
@@ -54,10 +67,18 @@ impl SseVector for RawSlice<Complex<f64>> {
     ) -> Self::VectorType {
         unimplemented!("Impossible to do a partial load of complex f64's");
     }
+
+    #[inline(always)]
+    unsafe fn load1_complex(
+        &self,
+        index: usize,
+    ) -> Self::VectorType {
+        unimplemented!("Impossible to do a partial load of complex f64's");
+    }
 }
 
 
-pub trait SseVectorMut {
+pub trait SseArrayMut {
     type VectorType;
     const COMPLEX_PER_VECTOR: usize;
     unsafe fn store_complex(&self, vector: Self::VectorType, index: usize);
@@ -73,7 +94,7 @@ pub trait SseVectorMut {
     );
 }
 
-impl SseVectorMut for RawSliceMut<Complex<f32>> {
+impl SseArrayMut for RawSliceMut<Complex<f32>> {
     type VectorType = __m128;
     const COMPLEX_PER_VECTOR: usize = 2;
     
@@ -99,11 +120,11 @@ impl SseVectorMut for RawSliceMut<Complex<f32>> {
         index: usize,
     ) {
         debug_assert!(self.len() >= index + 1);
-        _mm_storeh_pd(self.as_mut_ptr().add(index) as *mut f64, _mm_castps_pd(vector));
+        _mm_storel_pd(self.as_mut_ptr().add(index) as *mut f64, _mm_castps_pd(vector));
     }
 }
 
-impl SseVectorMut for RawSliceMut<Complex<f64>> {
+impl SseArrayMut for RawSliceMut<Complex<f64>> {
     type VectorType = __m128d;
     const COMPLEX_PER_VECTOR: usize = 1;
     

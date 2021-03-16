@@ -11,7 +11,42 @@ use crate::{Direction, Fft, Length};
 
 use super::sse_common::{assert_f32, assert_f64};
 use super::sse_utils::*;
-use super::sse_vector::{SseVector, SseVectorMut};
+use super::sse_vector::{SseArray, SseArrayMut};
+
+// Read these indexes to an array
+macro_rules! read_complex_to_array {
+    ($input:ident, { $($idx:literal),* }) => {
+        [
+        $(
+            $input.load_complex($idx),
+        )*
+        ]
+    }
+}
+
+// Read these indexes to an array
+macro_rules! read_partial1_complex_to_array {
+    ($input:ident, { $($idx:literal),* }) => {
+        [
+        $(
+            $input.load1_complex($idx),
+        )*
+        ]
+    }
+}
+
+// Interleave
+macro_rules! interleave_complex_f32 {
+    ($input:ident, $offset:literal, { $($idx:literal),* }) => {
+        [
+        $(
+            pack_1st_f32($input[$idx], $input[$idx+$offset]),
+            pack_2nd_f32($input[$idx], $input[$idx+$offset]),
+        )*
+        ]
+    }
+}
+
 
 #[allow(unused)]
 macro_rules! test_boilerplate_fft_sse_f32_butterfly {
@@ -26,7 +61,7 @@ macro_rules! test_boilerplate_fft_sse_f32_butterfly {
             #[target_feature(enable = "sse3")]
             //#[inline(always)]
             pub(crate) unsafe fn perform_dual_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
-                self.perform_dual_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
+                self.perform_dual_fft_contiguous(RawSlice::new_transmuted(buffer), RawSliceMut::new_transmuted(buffer));
             }
 
             // Do multiple ffts over a longer vector inplace, called from "process_with_scratch" of Fft trait
@@ -59,8 +94,8 @@ macro_rules! test_boilerplate_fft_sse_f32_butterfly {
                     2 * self.len(),
                     |in_chunk, out_chunk| {
                         self.perform_dual_fft_contiguous(
-                            RawSlice::new(in_chunk),
-                            RawSliceMut::new(out_chunk),
+                            RawSlice::new_transmuted(in_chunk),
+                            RawSliceMut::new_transmuted(out_chunk),
                         )
                     },
                 );
@@ -251,7 +286,7 @@ pub struct SseF32Butterfly1<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly1, 1, |this: &SseF32Butterfly1<_>| this
+test_boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly1, 1, |this: &SseF32Butterfly1<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly1, 1, |this: &SseF32Butterfly1<_>| this
     .direction);
@@ -267,16 +302,16 @@ impl<T: FftNum> SseF32Butterfly1<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
-        _input: RawSlice<Complex<T>>,
-        _output: RawSliceMut<Complex<T>>,
+        _input: RawSlice<Complex<f32>>,
+        _output: RawSliceMut<Complex<f32>>,
     ) {
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_dual_fft_contiguous(
         &self,
-        _input: RawSlice<Complex<T>>,
-        _output: RawSliceMut<Complex<T>>,
+        _input: RawSlice<Complex<f32>>,
+        _output: RawSliceMut<Complex<f32>>,
     ) {
     }
 }
@@ -348,37 +383,26 @@ impl<T: FftNum> SseF32Butterfly2<T> {
     ) {
         let values = input.load_complex(0);
 
-
         let temp = self.perform_fft_direct(values);
 
-        //let array = std::mem::transmute::<__m128, [Complex<f32>; 2]>(temp);
-
-        //let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-
-        //*output_slice.add(0) = array[0];
-        //*output_slice.add(1) = array[1];
         output.store_complex(temp, 0);
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_dual_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
-        let values_a = _mm_loadu_ps(input.as_ptr() as *const f32);
-        let values_b = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
+        let values_a = input.load_complex(0);
+        let values_b = input.load_complex(2);
 
-        let temp = self.perform_dual_fft_direct(values_a, values_b);
+        let out = self.perform_dual_fft_direct(values_a, values_b);
 
-        let array = std::mem::transmute::<[__m128; 2], [Complex<f32>; 4]>(temp);
-
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-
-        *output_slice.add(0) = array[0];
-        *output_slice.add(1) = array[2];
-        *output_slice.add(2) = array[1];
-        *output_slice.add(3) = array[3];
+        let out02 = pack_1st_f32(out[0], out[1]);
+        let out13 = pack_2nd_f32(out[0], out[1]);
+        output.store_complex(out02, 0);
+        output.store_complex(out13, 2);
     }
 
     // length 2 fft of x, given as [x0, x1]
@@ -507,7 +531,7 @@ pub struct SseF32Butterfly3<T> {
     twiddle1im: __m128,
 }
 
-boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly3, 3, |this: &SseF32Butterfly3<_>| this
+test_boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly3, 3, |this: &SseF32Butterfly3<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly3, 3, |this: &SseF32Butterfly3<_>| this
     .direction);
@@ -532,32 +556,27 @@ impl<T: FftNum> SseF32Butterfly3<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
-        let value0x = _mm_castpd_ps(_mm_load_sd(input.as_ptr() as *const f64));
-        let value12 = _mm_loadu_ps(input.as_ptr().add(1) as *const f32);
+        let value0x = input.load_partial1_complex(0);
+        let value12 = input.load_complex(1);
 
-        let temp = self.perform_fft_direct(value0x, value12);
+        let out = self.perform_fft_direct(value0x, value12);
 
-        let array = std::mem::transmute::<[__m128; 2], [Complex<f32>; 4]>(temp);
-
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-
-        *output_slice.add(0) = array[0];
-        *output_slice.add(1) = array[2];
-        *output_slice.add(2) = array[3];
+        output.store_partial_lo_complex(out[0], 0);
+        output.store_complex(out[1], 1);
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_dual_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
-        let valuea0a1 = _mm_loadu_ps(input.as_ptr() as *const f32);
-        let valuea2b0 = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
-        let valueb1b2 = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
+        let valuea0a1 = input.load_complex(0);
+        let valuea2b0 = input.load_complex(2);
+        let valueb1b2 = input.load_complex(4);
 
         let value0 = pack_1and2_f32(valuea0a1, valuea2b0);
         let value1 = pack_2and1_f32(valuea0a1, valueb1b2);
@@ -565,15 +584,13 @@ impl<T: FftNum> SseF32Butterfly3<T> {
 
         let out = self.perform_dual_fft_direct(value0, value1, value2);
 
-        let val = std::mem::transmute::<[__m128; 3], [Complex<f32>; 6]>(out);
+        let out0 = pack_1st_f32(out[0], out[1]);
+        let out1 = pack_1and2_f32(out[2], out[0]);
+        let out2 = pack_2nd_f32(out[1], out[2]);
 
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-        *output_slice.add(0) = val[0];
-        *output_slice.add(1) = val[2];
-        *output_slice.add(2) = val[4];
-        *output_slice.add(3) = val[1];
-        *output_slice.add(4) = val[3];
-        *output_slice.add(5) = val[5];
+        output.store_complex(out0, 0);
+        output.store_complex(out1, 2);
+        output.store_complex(out2, 4);
     }
 
     // length 3 fft of a, given as [x0, 0.0], [x1, x2]
@@ -717,7 +734,7 @@ pub struct SseF32Butterfly4<T> {
     rotate: Rotate90F32,
 }
 
-boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly4, 4, |this: &SseF32Butterfly4<_>| this
+test_boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly4, 4, |this: &SseF32Butterfly4<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly4, 4, |this: &SseF32Butterfly4<_>| this
     .direction);
@@ -739,54 +756,40 @@ impl<T: FftNum> SseF32Butterfly4<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
-        let value01 = _mm_loadu_ps(input.as_ptr() as *const f32);
-        let value23 = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
+        let value01 = input.load_complex(0);
+        let value23 = input.load_complex(2);
 
-        let temp = self.perform_fft_direct(value01, value23);
+        let out = self.perform_fft_direct(value01, value23);
 
-        let array = std::mem::transmute::<[__m128; 2], [Complex<f32>; 4]>(temp);
-
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-
-        *output_slice.add(0) = array[0];
-        *output_slice.add(1) = array[1];
-        *output_slice.add(2) = array[2];
-        *output_slice.add(3) = array[3];
+        output.store_complex(out[0], 0);
+        output.store_complex(out[1], 2);
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_dual_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
-        let value01a = _mm_loadu_ps(input.as_ptr() as *const f32);
-        let value23a = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
-        let value01b = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
-        let value23b = _mm_loadu_ps(input.as_ptr().add(6) as *const f32);
+        let value01a = input.load_complex(0);
+        let value23a = input.load_complex(2);
+        let value01b = input.load_complex(4);
+        let value23b = input.load_complex(6);
 
         let value0ab = pack_1st_f32(value01a, value01b);
         let value1ab = pack_2nd_f32(value01a, value01b);
         let value2ab = pack_1st_f32(value23a, value23b);
         let value3ab = pack_2nd_f32(value23a, value23b);
 
-        let temp = self.perform_dual_fft_direct(value0ab, value1ab, value2ab, value3ab);
+        let out = self.perform_dual_fft_direct(value0ab, value1ab, value2ab, value3ab);
 
-        let array = std::mem::transmute::<[__m128; 4], [Complex<f32>; 8]>(temp);
-
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-
-        *output_slice.add(0) = array[0];
-        *output_slice.add(1) = array[2];
-        *output_slice.add(2) = array[4];
-        *output_slice.add(3) = array[6];
-        *output_slice.add(4) = array[1];
-        *output_slice.add(5) = array[3];
-        *output_slice.add(6) = array[5];
-        *output_slice.add(7) = array[7];
+        for n in 0..2 {
+            output.store_complex(pack_1st_f32(out[2*n], out[2*n+1]), 2*n);
+            output.store_complex(pack_2nd_f32(out[2*n], out[2*n+1]), 4 + 2*n);
+        }
     }
 
     // length 4 fft of a, given as [x0, x1], [x2, x3]
@@ -955,7 +958,7 @@ pub struct SseF32Butterfly5<T> {
     twiddle2im: __m128,
 }
 
-boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly5, 5, |this: &SseF32Butterfly5<_>| this
+test_boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly5, 5, |this: &SseF32Butterfly5<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly5, 5, |this: &SseF32Butterfly5<_>| this
     .direction);
@@ -992,37 +995,31 @@ impl<T: FftNum> SseF32Butterfly5<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
-        let value00 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr() as *const f64));
-        let value12 = _mm_loadu_ps(input.as_ptr().add(1) as *const f32);
-        let value34 = _mm_loadu_ps(input.as_ptr().add(3) as *const f32);
+        let value00 = input.load1_complex(0);
+        let value12 = input.load_complex(1);
+        let value34 = input.load_complex(3);
 
-        let temp = self.perform_fft_direct(value00, value12, value34);
+        let out = self.perform_fft_direct(value00, value12, value34);
 
-        let array = std::mem::transmute::<[__m128; 3], [Complex<f32>; 6]>(temp);
-
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-
-        *output_slice.add(0) = array[0];
-        *output_slice.add(1) = array[2];
-        *output_slice.add(2) = array[3];
-        *output_slice.add(3) = array[4];
-        *output_slice.add(4) = array[5];
+        output.store_partial_lo_complex(out[0], 0);
+        output.store_complex(out[1], 1);
+        output.store_complex(out[2], 3);
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_dual_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
-        let valuea0a1 = _mm_loadu_ps(input.as_ptr() as *const f32);
-        let valuea2a3 = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
-        let valuea4b0 = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
-        let valueb1b2 = _mm_loadu_ps(input.as_ptr().add(6) as *const f32);
-        let valueb3b4 = _mm_loadu_ps(input.as_ptr().add(8) as *const f32);
+        let valuea0a1 = input.load_complex(0);
+        let valuea2a3 = input.load_complex(2);
+        let valuea4b0 = input.load_complex(4);
+        let valueb1b2 = input.load_complex(6);
+        let valueb3b4 = input.load_complex(8);
 
         let value0 = pack_1and2_f32(valuea0a1, valuea4b0);
         let value1 = pack_2and1_f32(valuea0a1, valueb1b2);
@@ -1032,19 +1029,17 @@ impl<T: FftNum> SseF32Butterfly5<T> {
 
         let out = self.perform_dual_fft_direct(value0, value1, value2, value3, value4);
 
-        let val = std::mem::transmute::<[__m128; 5], [Complex<f32>; 10]>(out);
+        let out_packed = [
+            pack_1st_f32(out[0], out[1]),
+            pack_1st_f32(out[2], out[3]),
+            pack_1and2_f32(out[4], out[0]),
+            pack_2nd_f32(out[1], out[2]),
+            pack_2nd_f32(out[3], out[4]),
+        ];
 
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-        *output_slice.add(0) = val[0];
-        *output_slice.add(1) = val[2];
-        *output_slice.add(2) = val[4];
-        *output_slice.add(3) = val[6];
-        *output_slice.add(4) = val[8];
-        *output_slice.add(5) = val[1];
-        *output_slice.add(6) = val[3];
-        *output_slice.add(7) = val[5];
-        *output_slice.add(8) = val[7];
-        *output_slice.add(9) = val[9];
+        for n in 0..5 {
+            output.store_complex(out_packed[n], 2*n);
+        }
     }
 
     // length 5 fft of a, given as [x0, x0], [x1, x2], [x3, x4].
@@ -1253,7 +1248,7 @@ pub struct SseF32Butterfly6<T> {
     bf3: SseF32Butterfly3<T>,
 }
 
-boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly6, 6, |this: &SseF32Butterfly6<_>| this
+test_boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly6, 6, |this: &SseF32Butterfly6<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly6, 6, |this: &SseF32Butterfly6<_>| this
     .direction);
@@ -1273,39 +1268,32 @@ impl<T: FftNum> SseF32Butterfly6<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
-        let value01 = _mm_loadu_ps(input.as_ptr() as *const f32);
-        let value23 = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
-        let value45 = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
+        let value01 = input.load_complex(0);
+        let value23 = input.load_complex(2);
+        let value45 = input.load_complex(4);
 
-        let temp = self.perform_fft_direct(value01, value23, value45);
+        let out = self.perform_fft_direct(value01, value23, value45);
 
-        let array = std::mem::transmute::<[__m128; 3], [Complex<f32>; 6]>(temp);
-
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-
-        *output_slice.add(0) = array[0];
-        *output_slice.add(1) = array[1];
-        *output_slice.add(2) = array[2];
-        *output_slice.add(3) = array[3];
-        *output_slice.add(4) = array[4];
-        *output_slice.add(5) = array[5];
+        output.store_complex(out[0], 0);
+        output.store_complex(out[1], 2);
+        output.store_complex(out[2], 4);
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_dual_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
-        let valuea01 = _mm_loadu_ps(input.as_ptr() as *const f32);
-        let valuea23 = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
-        let valuea45 = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
-        let valueb01 = _mm_loadu_ps(input.as_ptr().add(6) as *const f32);
-        let valueb23 = _mm_loadu_ps(input.as_ptr().add(8) as *const f32);
-        let valueb45 = _mm_loadu_ps(input.as_ptr().add(10) as *const f32);
+        let valuea01 = input.load_complex(0);
+        let valuea23 = input.load_complex(2);
+        let valuea45 = input.load_complex(4);
+        let valueb01 = input.load_complex(6);
+        let valueb23 = input.load_complex(8);
+        let valueb45 = input.load_complex(10);
 
         let value0 = pack_1st_f32(valuea01, valueb01);
         let value1 = pack_2nd_f32(valuea01, valueb01);
@@ -1316,21 +1304,11 @@ impl<T: FftNum> SseF32Butterfly6<T> {
 
         let out = self.perform_dual_fft_direct(value0, value1, value2, value3, value4, value5);
 
-        let val = std::mem::transmute::<[__m128; 6], [Complex<f32>; 12]>(out);
+        for n in 0..3 {
+            output.store_complex(pack_1st_f32(out[2*n], out[2*n+1]), 2*n);
+            output.store_complex(pack_2nd_f32(out[2*n], out[2*n+1]), 6 + 2*n);
+        }
 
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-        *output_slice.add(0) = val[0];
-        *output_slice.add(1) = val[2];
-        *output_slice.add(2) = val[4];
-        *output_slice.add(3) = val[6];
-        *output_slice.add(4) = val[8];
-        *output_slice.add(5) = val[10];
-        *output_slice.add(6) = val[1];
-        *output_slice.add(7) = val[3];
-        *output_slice.add(8) = val[5];
-        *output_slice.add(9) = val[7];
-        *output_slice.add(10) = val[9];
-        *output_slice.add(11) = val[11];
     }
 
     #[inline(always)]
@@ -1490,7 +1468,7 @@ pub struct SseF32Butterfly8<T> {
     rotate90: Rotate90F32,
 }
 
-boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly8, 8, |this: &SseF32Butterfly8<_>| this
+test_boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly8, 8, |this: &SseF32Butterfly8<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly8, 8, |this: &SseF32Butterfly8<_>| this
     .direction);
@@ -1518,78 +1496,34 @@ impl<T: FftNum> SseF32Butterfly8<T> {
     #[inline(always)]
     unsafe fn perform_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
-        let in01 = _mm_loadu_ps(input.as_ptr() as *const f32);
-        let in23 = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
-        let in45 = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
-        let in67 = _mm_loadu_ps(input.as_ptr().add(6) as *const f32);
+        let input_packed = read_complex_to_array!(input, {0, 2, 4, 6});
 
-        let out = self.perform_fft_direct([in01, in23, in45, in67]);
+        let out = self.perform_fft_direct(input_packed);
 
-        let outvals = std::mem::transmute::<[__m128; 4], [Complex<f32>; 8]>(out);
-
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-
-        *output_slice.add(0) = outvals[0];
-        *output_slice.add(1) = outvals[1];
-        *output_slice.add(2) = outvals[2];
-        *output_slice.add(3) = outvals[3];
-        *output_slice.add(4) = outvals[4];
-        *output_slice.add(5) = outvals[5];
-        *output_slice.add(6) = outvals[6];
-        *output_slice.add(7) = outvals[7];
+        for n in 0..4 {
+            output.store_complex(out[n], 2*n);
+        }
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_dual_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
-        let value01a = _mm_loadu_ps(input.as_ptr() as *const f32);
-        let value23a = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
-        let value45a = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
-        let value67a = _mm_loadu_ps(input.as_ptr().add(6) as *const f32);
-        let value01b = _mm_loadu_ps(input.as_ptr().add(8) as *const f32);
-        let value23b = _mm_loadu_ps(input.as_ptr().add(10) as *const f32);
-        let value45b = _mm_loadu_ps(input.as_ptr().add(12) as *const f32);
-        let value67b = _mm_loadu_ps(input.as_ptr().add(14) as *const f32);
+        let input_packed = read_complex_to_array!(input, {0, 2, 4, 6, 8, 10, 12, 14});
 
-        let values0 = pack_1st_f32(value01a, value01b);
-        let values1 = pack_2nd_f32(value01a, value01b);
-        let values2 = pack_1st_f32(value23a, value23b);
-        let values3 = pack_2nd_f32(value23a, value23b);
-        let values4 = pack_1st_f32(value45a, value45b);
-        let values5 = pack_2nd_f32(value45a, value45b);
-        let values6 = pack_1st_f32(value67a, value67b);
-        let values7 = pack_2nd_f32(value67a, value67b);
+        let values = interleave_complex_f32!(input_packed, 4, {0, 1, 2, 3});
 
-        let temp = self.perform_dual_fft_direct([
-            values0, values1, values2, values3, values4, values5, values6, values7,
-        ]);
+        let out = self.perform_dual_fft_direct(values);
 
-        let array = std::mem::transmute::<[__m128; 8], [Complex<f32>; 16]>(temp);
-
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-
-        *output_slice.add(0) = array[0];
-        *output_slice.add(1) = array[2];
-        *output_slice.add(2) = array[4];
-        *output_slice.add(3) = array[6];
-        *output_slice.add(4) = array[8];
-        *output_slice.add(5) = array[10];
-        *output_slice.add(6) = array[12];
-        *output_slice.add(7) = array[14];
-        *output_slice.add(8) = array[1];
-        *output_slice.add(9) = array[3];
-        *output_slice.add(10) = array[5];
-        *output_slice.add(11) = array[7];
-        *output_slice.add(12) = array[9];
-        *output_slice.add(13) = array[11];
-        *output_slice.add(14) = array[13];
-        *output_slice.add(15) = array[15];
+        for n in 0..4 {
+            output.store_complex(pack_1st_f32(out[2*n], out[2*n+1]), 2*n);
+            output.store_complex(pack_2nd_f32(out[2*n], out[2*n+1]), 8 + 2*n);
+        }
     }
 
     #[inline(always)]
@@ -1783,7 +1717,7 @@ pub struct SseF32Butterfly9<T> {
     twiddle4: __m128,
 }
 
-boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly9, 9, |this: &SseF32Butterfly9<_>| this
+test_boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly9, 9, |this: &SseF32Butterfly9<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly9, 9, |this: &SseF32Butterfly9<_>| this
     .direction);
@@ -1811,51 +1745,34 @@ impl<T: FftNum> SseF32Butterfly9<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
         // A single Sse 9-point will need a lot of shuffling, let's just reuse the dual one
-        let v0 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr() as *const f64));
-        let v1 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(1) as *const f64));
-        let v2 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(2) as *const f64));
-        let v3 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(3) as *const f64));
-        let v4 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(4) as *const f64));
-        let v5 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(5) as *const f64));
-        let v6 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(6) as *const f64));
-        let v7 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(7) as *const f64));
-        let v8 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(8) as *const f64));
+        let values = read_partial1_complex_to_array!(input, {0,1,2,3,4,5,6,7,8});
 
-        let out = self.perform_dual_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8]);
+        let out = self.perform_dual_fft_direct(values);
 
-        let val = std::mem::transmute::<[__m128; 9], [Complex<f32>; 18]>(out);
-
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-        *output_slice.add(0) = val[0];
-        *output_slice.add(1) = val[2];
-        *output_slice.add(2) = val[4];
-        *output_slice.add(3) = val[6];
-        *output_slice.add(4) = val[8];
-        *output_slice.add(5) = val[10];
-        *output_slice.add(6) = val[12];
-        *output_slice.add(7) = val[14];
-        *output_slice.add(8) = val[16];
+        for n in 0..9 {
+            output.store_partial_lo_complex(out[n], n);
+        }
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_dual_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
-        let valuea0a1 = _mm_loadu_ps(input.as_ptr() as *const f32);
-        let valuea2a3 = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
-        let valuea4a5 = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
-        let valuea6a7 = _mm_loadu_ps(input.as_ptr().add(6) as *const f32);
-        let valuea8b0 = _mm_loadu_ps(input.as_ptr().add(8) as *const f32);
-        let valueb1b2 = _mm_loadu_ps(input.as_ptr().add(10) as *const f32);
-        let valueb3b4 = _mm_loadu_ps(input.as_ptr().add(12) as *const f32);
-        let valueb5b6 = _mm_loadu_ps(input.as_ptr().add(14) as *const f32);
-        let valueb7b8 = _mm_loadu_ps(input.as_ptr().add(16) as *const f32);
+        let valuea0a1 = input.load_complex(0);
+        let valuea2a3 = input.load_complex(2);
+        let valuea4a5 = input.load_complex(4);
+        let valuea6a7 = input.load_complex(6);
+        let valuea8b0 = input.load_complex(8);
+        let valueb1b2 = input.load_complex(10);
+        let valueb3b4 = input.load_complex(12);
+        let valueb5b6 = input.load_complex(14);
+        let valueb7b8 = input.load_complex(16);
 
         let value0 = pack_1and2_f32(valuea0a1, valuea8b0);
         let value1 = pack_2and1_f32(valuea0a1, valueb1b2);
@@ -1871,27 +1788,21 @@ impl<T: FftNum> SseF32Butterfly9<T> {
             value0, value1, value2, value3, value4, value5, value6, value7, value8,
         ]);
 
-        let val = std::mem::transmute::<[__m128; 9], [Complex<f32>; 18]>(out);
+        let out_packed = [
+            pack_1st_f32(out[0], out[1]),
+            pack_1st_f32(out[2], out[3]),
+            pack_1st_f32(out[4], out[5]),
+            pack_1st_f32(out[6], out[7]),
+            pack_1and2_f32(out[8], out[0]),
+            pack_2nd_f32(out[1], out[2]),
+            pack_2nd_f32(out[3], out[4]),
+            pack_2nd_f32(out[5], out[6]),
+            pack_2nd_f32(out[7], out[8]),
+        ];
 
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-        *output_slice.add(0) = val[0];
-        *output_slice.add(1) = val[2];
-        *output_slice.add(2) = val[4];
-        *output_slice.add(3) = val[6];
-        *output_slice.add(4) = val[8];
-        *output_slice.add(5) = val[10];
-        *output_slice.add(6) = val[12];
-        *output_slice.add(7) = val[14];
-        *output_slice.add(8) = val[16];
-        *output_slice.add(9) = val[1];
-        *output_slice.add(10) = val[3];
-        *output_slice.add(11) = val[5];
-        *output_slice.add(12) = val[7];
-        *output_slice.add(13) = val[9];
-        *output_slice.add(14) = val[11];
-        *output_slice.add(15) = val[13];
-        *output_slice.add(16) = val[15];
-        *output_slice.add(17) = val[17];
+        for n in 0..9 {
+            output.store_complex(out_packed[n], 2*n);
+        }
     }
 
     #[inline(always)]
@@ -2039,7 +1950,7 @@ pub struct SseF32Butterfly10<T> {
     bf5: SseF32Butterfly5<T>,
 }
 
-boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly10, 10, |this: &SseF32Butterfly10<_>| this
+test_boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly10, 10, |this: &SseF32Butterfly10<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly10, 10, |this: &SseF32Butterfly10<_>| this
     .direction);
@@ -2058,86 +1969,34 @@ impl<T: FftNum> SseF32Butterfly10<T> {
     #[inline(always)]
     unsafe fn perform_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
-        let in01 = _mm_loadu_ps(input.as_ptr() as *const f32);
-        let in23 = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
-        let in45 = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
-        let in67 = _mm_loadu_ps(input.as_ptr().add(6) as *const f32);
-        let in89 = _mm_loadu_ps(input.as_ptr().add(8) as *const f32);
+        let input_packed = read_complex_to_array!(input, {0, 2, 4, 6, 8});
 
-        let out = self.perform_fft_direct([in01, in23, in45, in67, in89]);
+        let out = self.perform_fft_direct(input_packed);
 
-        let outvals = std::mem::transmute::<[__m128; 5], [Complex<f32>; 10]>(out);
-
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-
-        *output_slice.add(0) = outvals[0];
-        *output_slice.add(1) = outvals[1];
-        *output_slice.add(2) = outvals[2];
-        *output_slice.add(3) = outvals[3];
-        *output_slice.add(4) = outvals[4];
-        *output_slice.add(5) = outvals[5];
-        *output_slice.add(6) = outvals[6];
-        *output_slice.add(7) = outvals[7];
-        *output_slice.add(8) = outvals[8];
-        *output_slice.add(9) = outvals[9];
+        for n in 0..5 {
+            output.store_complex(out[n], 2*n);
+        }
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_dual_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
-        let v01a = _mm_loadu_ps(input.as_ptr() as *const f32);
-        let v23a = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
-        let v45a = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
-        let v67a = _mm_loadu_ps(input.as_ptr().add(6) as *const f32);
-        let v89a = _mm_loadu_ps(input.as_ptr().add(8) as *const f32);
-        let v01b = _mm_loadu_ps(input.as_ptr().add(10) as *const f32);
-        let v23b = _mm_loadu_ps(input.as_ptr().add(12) as *const f32);
-        let v45b = _mm_loadu_ps(input.as_ptr().add(14) as *const f32);
-        let v67b = _mm_loadu_ps(input.as_ptr().add(16) as *const f32);
-        let v89b = _mm_loadu_ps(input.as_ptr().add(18) as *const f32);
+        let input_packed = read_complex_to_array!(input, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18});
 
-        let v0 = pack_1st_f32(v01a, v01b);
-        let v1 = pack_2nd_f32(v01a, v01b);
-        let v2 = pack_1st_f32(v23a, v23b);
-        let v3 = pack_2nd_f32(v23a, v23b);
-        let v4 = pack_1st_f32(v45a, v45b);
-        let v5 = pack_2nd_f32(v45a, v45b);
-        let v6 = pack_1st_f32(v67a, v67b);
-        let v7 = pack_2nd_f32(v67a, v67b);
-        let v8 = pack_1st_f32(v89a, v89b);
-        let v9 = pack_2nd_f32(v89a, v89b);
+        let values = interleave_complex_f32!(input_packed, 5, {0, 1, 2, 3, 4});
 
-        let out = self.perform_dual_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9]);
+        let out = self.perform_dual_fft_direct(values);
 
-        let val = std::mem::transmute::<[__m128; 10], [Complex<f32>; 20]>(out);
-
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-        *output_slice.add(0) = val[0];
-        *output_slice.add(1) = val[2];
-        *output_slice.add(2) = val[4];
-        *output_slice.add(3) = val[6];
-        *output_slice.add(4) = val[8];
-        *output_slice.add(5) = val[10];
-        *output_slice.add(6) = val[12];
-        *output_slice.add(7) = val[14];
-        *output_slice.add(8) = val[16];
-        *output_slice.add(9) = val[18];
-        *output_slice.add(10) = val[1];
-        *output_slice.add(11) = val[3];
-        *output_slice.add(12) = val[5];
-        *output_slice.add(13) = val[7];
-        *output_slice.add(14) = val[9];
-        *output_slice.add(15) = val[11];
-        *output_slice.add(16) = val[13];
-        *output_slice.add(17) = val[15];
-        *output_slice.add(18) = val[17];
-        *output_slice.add(19) = val[19];
+        for n in 0..5 {
+            output.store_complex(pack_1st_f32(out[2*n], out[2*n+1]), 2*n);
+            output.store_complex(pack_2nd_f32(out[2*n], out[2*n+1]), 10 + 2*n);
+        }
     }
 
     #[inline(always)]
@@ -2192,6 +2051,8 @@ impl<T: FftNum> SseF32Butterfly10<T> {
         let [output4, output5] = dual_fft2_interleaved_f32(mid0[2], mid1[2]);
         let [output6, output7] = dual_fft2_interleaved_f32(mid0[3], mid1[3]);
         let [output8, output9] = dual_fft2_interleaved_f32(mid0[4], mid1[4]);
+
+        // Reorder and return
         [
             output0, output3, output4, output7, output8, output1, output2, output5, output6,
             output9,
@@ -2285,6 +2146,8 @@ impl<T: FftNum> SseF64Butterfly10<T> {
         let [output4, output5] = self.bf2.perform_fft_direct(mid0[2], mid1[2]);
         let [output6, output7] = self.bf2.perform_fft_direct(mid0[3], mid1[3]);
         let [output8, output9] = self.bf2.perform_fft_direct(mid0[4], mid1[4]);
+
+        // Reorder and return
         [
             output0, output3, output4, output7, output8, output1, output2, output5, output6,
             output9,
@@ -2306,7 +2169,7 @@ pub struct SseF32Butterfly12<T> {
     bf4: SseF32Butterfly4<T>,
 }
 
-boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly12, 12, |this: &SseF32Butterfly12<_>| this
+test_boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly12, 12, |this: &SseF32Butterfly12<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly12, 12, |this: &SseF32Butterfly12<_>| this
     .direction);
@@ -2327,97 +2190,34 @@ impl<T: FftNum> SseF32Butterfly12<T> {
     #[inline(always)]
     unsafe fn perform_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
-        let in01 = _mm_loadu_ps(input.as_ptr() as *const f32);
-        let in23 = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
-        let in45 = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
-        let in67 = _mm_loadu_ps(input.as_ptr().add(6) as *const f32);
-        let in89 = _mm_loadu_ps(input.as_ptr().add(8) as *const f32);
-        let in1011 = _mm_loadu_ps(input.as_ptr().add(10) as *const f32);
+        let input_packed = read_complex_to_array!(input, {0, 2, 4, 6, 8, 10 });
 
-        let out = self.perform_fft_direct([in01, in23, in45, in67, in89, in1011]);
+        let out = self.perform_fft_direct(input_packed);
 
-        let outvals = std::mem::transmute::<[__m128; 6], [Complex<f32>; 12]>(out);
-
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-
-        *output_slice.add(0) = outvals[0];
-        *output_slice.add(1) = outvals[1];
-        *output_slice.add(2) = outvals[2];
-        *output_slice.add(3) = outvals[3];
-        *output_slice.add(4) = outvals[4];
-        *output_slice.add(5) = outvals[5];
-        *output_slice.add(6) = outvals[6];
-        *output_slice.add(7) = outvals[7];
-        *output_slice.add(8) = outvals[8];
-        *output_slice.add(9) = outvals[9];
-        *output_slice.add(10) = outvals[10];
-        *output_slice.add(11) = outvals[11];
+        for n in 0..6 {
+            output.store_complex(out[n], 2*n);
+        }
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_dual_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
-        let v01a = _mm_loadu_ps(input.as_ptr() as *const f32);
-        let v23a = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
-        let v45a = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
-        let v67a = _mm_loadu_ps(input.as_ptr().add(6) as *const f32);
-        let v89a = _mm_loadu_ps(input.as_ptr().add(8) as *const f32);
-        let v1011a = _mm_loadu_ps(input.as_ptr().add(10) as *const f32);
-        let v01b = _mm_loadu_ps(input.as_ptr().add(12) as *const f32);
-        let v23b = _mm_loadu_ps(input.as_ptr().add(14) as *const f32);
-        let v45b = _mm_loadu_ps(input.as_ptr().add(16) as *const f32);
-        let v67b = _mm_loadu_ps(input.as_ptr().add(18) as *const f32);
-        let v89b = _mm_loadu_ps(input.as_ptr().add(20) as *const f32);
-        let v1011b = _mm_loadu_ps(input.as_ptr().add(22) as *const f32);
+        let input_packed = read_complex_to_array!(input, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22});
 
-        let v0 = pack_1st_f32(v01a, v01b);
-        let v1 = pack_2nd_f32(v01a, v01b);
-        let v2 = pack_1st_f32(v23a, v23b);
-        let v3 = pack_2nd_f32(v23a, v23b);
-        let v4 = pack_1st_f32(v45a, v45b);
-        let v5 = pack_2nd_f32(v45a, v45b);
-        let v6 = pack_1st_f32(v67a, v67b);
-        let v7 = pack_2nd_f32(v67a, v67b);
-        let v8 = pack_1st_f32(v89a, v89b);
-        let v9 = pack_2nd_f32(v89a, v89b);
-        let v10 = pack_1st_f32(v1011a, v1011b);
-        let v11 = pack_2nd_f32(v1011a, v1011b);
+        let values = interleave_complex_f32!(input_packed, 6, {0, 1, 2, 3, 4, 5});
 
-        let out = self.perform_dual_fft_direct([v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11]);
+        let out = self.perform_dual_fft_direct(values);
 
-        let val = std::mem::transmute::<[__m128; 12], [Complex<f32>; 24]>(out);
-
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-        *output_slice.add(0) = val[0];
-        *output_slice.add(1) = val[2];
-        *output_slice.add(2) = val[4];
-        *output_slice.add(3) = val[6];
-        *output_slice.add(4) = val[8];
-        *output_slice.add(5) = val[10];
-        *output_slice.add(6) = val[12];
-        *output_slice.add(7) = val[14];
-        *output_slice.add(8) = val[16];
-        *output_slice.add(9) = val[18];
-        *output_slice.add(10) = val[20];
-        *output_slice.add(11) = val[22];
-        *output_slice.add(12) = val[1];
-        *output_slice.add(13) = val[3];
-        *output_slice.add(14) = val[5];
-        *output_slice.add(15) = val[7];
-        *output_slice.add(16) = val[9];
-        *output_slice.add(17) = val[11];
-        *output_slice.add(18) = val[13];
-        *output_slice.add(19) = val[15];
-        *output_slice.add(20) = val[17];
-        *output_slice.add(21) = val[19];
-        *output_slice.add(22) = val[21];
-        *output_slice.add(23) = val[23];
+        for n in 0..6 {
+            output.store_complex(pack_1st_f32(out[2*n], out[2*n+1]), 2*n);
+            output.store_complex(pack_2nd_f32(out[2*n], out[2*n+1]), 12 + 2*n);
+        }
     }
 
     #[inline(always)]
@@ -2444,14 +2244,15 @@ impl<T: FftNum> SseF32Butterfly12<T> {
         let [temp69, temp710, temp811] =
             self.bf3.perform_dual_fft_direct(mid0[1], mid1[1], mid2[1]);
 
-        let output04 = pack_1and2_f32(temp03, temp14);
-        let output89 = pack_1and2_f32(temp811, temp69);
-        let output15 = pack_1and2_f32(temp14, temp25);
-        let output610 = pack_1and2_f32(temp69, temp710);
-        let output23 = pack_1and2_f32(temp25, temp03);
-        let output711 = pack_1and2_f32(temp710, temp811);
-
-        [output04, output89, output15, output610, output23, output711]
+        // Reorder and return
+        [
+            pack_1and2_f32(temp03, temp14),
+            pack_1and2_f32(temp811, temp69),
+            pack_1and2_f32(temp14, temp25),
+            pack_1and2_f32(temp69, temp710),
+            pack_1and2_f32(temp25, temp03),
+            pack_1and2_f32(temp710, temp811),
+        ]
     }
 
     #[inline(always)]
@@ -2481,6 +2282,7 @@ impl<T: FftNum> SseF32Butterfly12<T> {
         let [output9, output10, output11] =
             self.bf3.perform_dual_fft_direct(mid0[3], mid1[3], mid2[3]);
 
+        // Reorder and return
         [
             output0, output4, output8, output9, output1, output5, output6, output10, output2,
             output3, output7, output11,
@@ -2601,7 +2403,7 @@ pub struct SseF32Butterfly15<T> {
     bf5: SseF32Butterfly5<T>,
 }
 
-boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly15, 15, |this: &SseF32Butterfly15<_>| this
+test_boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly15, 15, |this: &SseF32Butterfly15<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly15, 15, |this: &SseF32Butterfly15<_>| this
     .direction);
@@ -2622,71 +2424,41 @@ impl<T: FftNum> SseF32Butterfly15<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
         // A single Sse 15-point will need a lot of shuffling, let's just reuse the dual one
-        let v0 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr() as *const f64));
-        let v1 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(1) as *const f64));
-        let v2 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(2) as *const f64));
-        let v3 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(3) as *const f64));
-        let v4 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(4) as *const f64));
-        let v5 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(5) as *const f64));
-        let v6 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(6) as *const f64));
-        let v7 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(7) as *const f64));
-        let v8 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(8) as *const f64));
-        let v9 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(9) as *const f64));
-        let v10 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(10) as *const f64));
-        let v11 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(11) as *const f64));
-        let v12 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(12) as *const f64));
-        let v13 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(13) as *const f64));
-        let v14 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr().add(14) as *const f64));
+        // A single Sse 9-point will need a lot of shuffling, let's just reuse the dual one
+        let values = read_partial1_complex_to_array!(input, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14});
 
-        let out = self.perform_dual_fft_direct([
-            v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14,
-        ]);
+        let out = self.perform_dual_fft_direct(values);
 
-        let val = std::mem::transmute::<[__m128; 15], [Complex<f32>; 30]>(out);
-
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-        *output_slice.add(0) = val[0];
-        *output_slice.add(1) = val[2];
-        *output_slice.add(2) = val[4];
-        *output_slice.add(3) = val[6];
-        *output_slice.add(4) = val[8];
-        *output_slice.add(5) = val[10];
-        *output_slice.add(6) = val[12];
-        *output_slice.add(7) = val[14];
-        *output_slice.add(8) = val[16];
-        *output_slice.add(9) = val[18];
-        *output_slice.add(10) = val[20];
-        *output_slice.add(11) = val[22];
-        *output_slice.add(12) = val[24];
-        *output_slice.add(13) = val[26];
-        *output_slice.add(14) = val[28];
+        for n in 0..15 {
+            output.store_partial_lo_complex(out[n], n);
+        }
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_dual_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
-        let valuea0a1 = _mm_loadu_ps(input.as_ptr() as *const f32);
-        let valuea2a3 = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
-        let valuea4a5 = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
-        let valuea6a7 = _mm_loadu_ps(input.as_ptr().add(6) as *const f32);
-        let valuea8a9 = _mm_loadu_ps(input.as_ptr().add(8) as *const f32);
-        let valuea10a11 = _mm_loadu_ps(input.as_ptr().add(10) as *const f32);
-        let valuea12a13 = _mm_loadu_ps(input.as_ptr().add(12) as *const f32);
-        let valuea14b0 = _mm_loadu_ps(input.as_ptr().add(14) as *const f32);
-        let valueb1b2 = _mm_loadu_ps(input.as_ptr().add(16) as *const f32);
-        let valueb3b4 = _mm_loadu_ps(input.as_ptr().add(18) as *const f32);
-        let valueb5b6 = _mm_loadu_ps(input.as_ptr().add(20) as *const f32);
-        let valueb7b8 = _mm_loadu_ps(input.as_ptr().add(22) as *const f32);
-        let valueb9b10 = _mm_loadu_ps(input.as_ptr().add(24) as *const f32);
-        let valueb11b12 = _mm_loadu_ps(input.as_ptr().add(26) as *const f32);
-        let valueb13b14 = _mm_loadu_ps(input.as_ptr().add(28) as *const f32);
+        let valuea0a1 = input.load_complex(0);
+        let valuea2a3 = input.load_complex(2);
+        let valuea4a5 = input.load_complex(4);
+        let valuea6a7 = input.load_complex(6);
+        let valuea8a9 = input.load_complex(8);
+        let valuea10a11 = input.load_complex(10);
+        let valuea12a13 = input.load_complex(12);
+        let valuea14b0 = input.load_complex(14);
+        let valueb1b2 = input.load_complex(16);
+        let valueb3b4 = input.load_complex(18);
+        let valueb5b6 = input.load_complex(20);
+        let valueb7b8 = input.load_complex(22);
+        let valueb9b10 = input.load_complex(24);
+        let valueb11b12 = input.load_complex(26);
+        let valueb13b14 = input.load_complex(28);
 
         let v0 = pack_1and2_f32(valuea0a1, valuea14b0);
         let v1 = pack_2and1_f32(valuea0a1, valueb1b2);
@@ -2708,39 +2480,27 @@ impl<T: FftNum> SseF32Butterfly15<T> {
             v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14,
         ]);
 
-        let val = std::mem::transmute::<[__m128; 15], [Complex<f32>; 30]>(out);
+        let out_packed = [
+            pack_1st_f32(out[0], out[1]),
+            pack_1st_f32(out[2], out[3]),
+            pack_1st_f32(out[4], out[5]),
+            pack_1st_f32(out[6], out[7]),
+            pack_1st_f32(out[8], out[9]),
+            pack_1st_f32(out[10], out[11]),
+            pack_1st_f32(out[12], out[13]),
+            pack_1and2_f32(out[14], out[0]),
+            pack_2nd_f32(out[1], out[2]),
+            pack_2nd_f32(out[3], out[4]),
+            pack_2nd_f32(out[5], out[6]),
+            pack_2nd_f32(out[7], out[8]),
+            pack_2nd_f32(out[9], out[10]),
+            pack_2nd_f32(out[11], out[12]),
+            pack_2nd_f32(out[13], out[14]),
+        ];
 
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-        *output_slice.add(0) = val[0];
-        *output_slice.add(1) = val[2];
-        *output_slice.add(2) = val[4];
-        *output_slice.add(3) = val[6];
-        *output_slice.add(4) = val[8];
-        *output_slice.add(5) = val[10];
-        *output_slice.add(6) = val[12];
-        *output_slice.add(7) = val[14];
-        *output_slice.add(8) = val[16];
-        *output_slice.add(9) = val[18];
-        *output_slice.add(10) = val[20];
-        *output_slice.add(11) = val[22];
-        *output_slice.add(12) = val[24];
-        *output_slice.add(13) = val[26];
-        *output_slice.add(14) = val[28];
-        *output_slice.add(15) = val[1];
-        *output_slice.add(16) = val[3];
-        *output_slice.add(17) = val[5];
-        *output_slice.add(18) = val[7];
-        *output_slice.add(19) = val[9];
-        *output_slice.add(20) = val[11];
-        *output_slice.add(21) = val[13];
-        *output_slice.add(22) = val[15];
-        *output_slice.add(23) = val[17];
-        *output_slice.add(24) = val[19];
-        *output_slice.add(25) = val[21];
-        *output_slice.add(26) = val[23];
-        *output_slice.add(27) = val[25];
-        *output_slice.add(28) = val[27];
-        *output_slice.add(29) = val[29];
+        for n in 0..15 {
+            output.store_complex(out_packed[n], 2*n);
+        }
     }
 
     #[inline(always)]
@@ -2912,7 +2672,7 @@ pub struct SseF32Butterfly16<T> {
     twiddle3c: __m128,
 }
 
-boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly16, 16, |this: &SseF32Butterfly16<_>| this
+test_boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly16, 16, |this: &SseF32Butterfly16<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly16, 16, |this: &SseF32Butterfly16<_>| this
     .direction);
@@ -2961,122 +2721,34 @@ impl<T: FftNum> SseF32Butterfly16<T> {
     #[inline(always)]
     unsafe fn perform_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
-        let in0 = _mm_loadu_ps(input.as_ptr() as *const f32);
-        let in2 = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
-        let in4 = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
-        let in6 = _mm_loadu_ps(input.as_ptr().add(6) as *const f32);
-        let in8 = _mm_loadu_ps(input.as_ptr().add(8) as *const f32);
-        let in10 = _mm_loadu_ps(input.as_ptr().add(10) as *const f32);
-        let in12 = _mm_loadu_ps(input.as_ptr().add(12) as *const f32);
-        let in14 = _mm_loadu_ps(input.as_ptr().add(14) as *const f32);
+        let input_packed = read_complex_to_array!(input, {0, 2, 4, 6, 8, 10, 12, 14 });
 
-        let result = self.perform_fft_direct([in0, in2, in4, in6, in8, in10, in12, in14]);
+        let out = self.perform_fft_direct(input_packed);
 
-        let values = std::mem::transmute::<[__m128; 8], [Complex<f32>; 16]>(result);
-
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-        *output_slice.add(0) = values[0];
-        *output_slice.add(1) = values[1];
-        *output_slice.add(2) = values[2];
-        *output_slice.add(3) = values[3];
-        *output_slice.add(4) = values[4];
-        *output_slice.add(5) = values[5];
-        *output_slice.add(6) = values[6];
-        *output_slice.add(7) = values[7];
-        *output_slice.add(8) = values[8];
-        *output_slice.add(9) = values[9];
-        *output_slice.add(10) = values[10];
-        *output_slice.add(11) = values[11];
-        *output_slice.add(12) = values[12];
-        *output_slice.add(13) = values[13];
-        *output_slice.add(14) = values[14];
-        *output_slice.add(15) = values[15];
+        for n in 0..8 {
+            output.store_complex(out[n], 2*n);
+        }
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_dual_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
-        let value01a = _mm_loadu_ps(input.as_ptr() as *const f32);
-        let value23a = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
-        let value45a = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
-        let value67a = _mm_loadu_ps(input.as_ptr().add(6) as *const f32);
-        let value89a = _mm_loadu_ps(input.as_ptr().add(8) as *const f32);
-        let value1011a = _mm_loadu_ps(input.as_ptr().add(10) as *const f32);
-        let value1213a = _mm_loadu_ps(input.as_ptr().add(12) as *const f32);
-        let value1415a = _mm_loadu_ps(input.as_ptr().add(14) as *const f32);
-        let value01b = _mm_loadu_ps(input.as_ptr().add(16) as *const f32);
-        let value23b = _mm_loadu_ps(input.as_ptr().add(18) as *const f32);
-        let value45b = _mm_loadu_ps(input.as_ptr().add(20) as *const f32);
-        let value67b = _mm_loadu_ps(input.as_ptr().add(22) as *const f32);
-        let value89b = _mm_loadu_ps(input.as_ptr().add(24) as *const f32);
-        let value1011b = _mm_loadu_ps(input.as_ptr().add(26) as *const f32);
-        let value1213b = _mm_loadu_ps(input.as_ptr().add(28) as *const f32);
-        let value1415b = _mm_loadu_ps(input.as_ptr().add(30) as *const f32);
+        let input_packed = read_complex_to_array!(input, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30});
 
-        let values0 = pack_1st_f32(value01a, value01b);
-        let values1 = pack_2nd_f32(value01a, value01b);
-        let values2 = pack_1st_f32(value23a, value23b);
-        let values3 = pack_2nd_f32(value23a, value23b);
-        let values4 = pack_1st_f32(value45a, value45b);
-        let values5 = pack_2nd_f32(value45a, value45b);
-        let values6 = pack_1st_f32(value67a, value67b);
-        let values7 = pack_2nd_f32(value67a, value67b);
-        let values8 = pack_1st_f32(value89a, value89b);
-        let values9 = pack_2nd_f32(value89a, value89b);
-        let values10 = pack_1st_f32(value1011a, value1011b);
-        let values11 = pack_2nd_f32(value1011a, value1011b);
-        let values12 = pack_1st_f32(value1213a, value1213b);
-        let values13 = pack_2nd_f32(value1213a, value1213b);
-        let values14 = pack_1st_f32(value1415a, value1415b);
-        let values15 = pack_2nd_f32(value1415a, value1415b);
+        let values = interleave_complex_f32!(input_packed, 8, {0, 1, 2, 3 ,4 ,5 ,6 ,7});
 
-        let temp = self.perform_dual_fft_direct([
-            values0, values1, values2, values3, values4, values5, values6, values7, values8,
-            values9, values10, values11, values12, values13, values14, values15,
-        ]);
+        let out = self.perform_dual_fft_direct(values);
 
-        let array = std::mem::transmute::<[__m128; 16], [Complex<f32>; 32]>(temp);
-
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-
-        *output_slice.add(0) = array[0];
-        *output_slice.add(1) = array[2];
-        *output_slice.add(2) = array[4];
-        *output_slice.add(3) = array[6];
-        *output_slice.add(4) = array[8];
-        *output_slice.add(5) = array[10];
-        *output_slice.add(6) = array[12];
-        *output_slice.add(7) = array[14];
-        *output_slice.add(8) = array[16];
-        *output_slice.add(9) = array[18];
-        *output_slice.add(10) = array[20];
-        *output_slice.add(11) = array[22];
-        *output_slice.add(12) = array[24];
-        *output_slice.add(13) = array[26];
-        *output_slice.add(14) = array[28];
-        *output_slice.add(15) = array[30];
-        *output_slice.add(16) = array[1];
-        *output_slice.add(17) = array[3];
-        *output_slice.add(18) = array[5];
-        *output_slice.add(19) = array[7];
-        *output_slice.add(20) = array[9];
-        *output_slice.add(21) = array[11];
-        *output_slice.add(22) = array[13];
-        *output_slice.add(23) = array[15];
-        *output_slice.add(24) = array[17];
-        *output_slice.add(25) = array[19];
-        *output_slice.add(26) = array[21];
-        *output_slice.add(27) = array[23];
-        *output_slice.add(28) = array[25];
-        *output_slice.add(29) = array[27];
-        *output_slice.add(30) = array[29];
-        *output_slice.add(31) = array[31];
+        for n in 0..8 {
+            output.store_complex(pack_1st_f32(out[2*n], out[2*n+1]), 2*n);
+            output.store_complex(pack_2nd_f32(out[2*n], out[2*n+1]), 16 + 2*n);
+        }
     }
 
     #[inline(always)]
@@ -3116,16 +2788,16 @@ impl<T: FftNum> SseF32Butterfly16<T> {
         temp1[1] = self.rotate90.rotate_both(temp1[1]);
 
         //step 5: copy/add/subtract data back to buffer
-        let out0 = _mm_add_ps(evens[0], temp0[0]);
-        let out1 = _mm_add_ps(evens[1], temp1[0]);
-        let out2 = _mm_add_ps(evens[2], temp0[1]);
-        let out3 = _mm_add_ps(evens[3], temp1[1]);
-        let out4 = _mm_sub_ps(evens[0], temp0[0]);
-        let out5 = _mm_sub_ps(evens[1], temp1[0]);
-        let out6 = _mm_sub_ps(evens[2], temp0[1]);
-        let out7 = _mm_sub_ps(evens[3], temp1[1]);
-
-        [out0, out1, out2, out3, out4, out5, out6, out7]
+        [
+            _mm_add_ps(evens[0], temp0[0]),
+            _mm_add_ps(evens[1], temp1[0]),
+            _mm_add_ps(evens[2], temp0[1]),
+            _mm_add_ps(evens[3], temp1[1]),
+            _mm_sub_ps(evens[0], temp0[0]),
+            _mm_sub_ps(evens[1], temp1[0]),
+            _mm_sub_ps(evens[2], temp0[1]),
+            _mm_sub_ps(evens[3], temp1[1]),
+        ]
     }
 
     #[inline(always)]
@@ -3404,7 +3076,7 @@ pub struct SseF32Butterfly32<T> {
     twiddle7c: __m128,
 }
 
-boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly32, 32, |this: &SseF32Butterfly32<_>| this
+test_boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly32, 32, |this: &SseF32Butterfly32<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly32, 32, |this: &SseF32Butterfly32<_>| this
     .direction);
@@ -3481,216 +3153,34 @@ impl<T: FftNum> SseF32Butterfly32<T> {
     #[inline(always)]
     unsafe fn perform_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
-        let in0 = _mm_loadu_ps(input.as_ptr() as *const f32);
-        let in2 = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
-        let in4 = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
-        let in6 = _mm_loadu_ps(input.as_ptr().add(6) as *const f32);
-        let in8 = _mm_loadu_ps(input.as_ptr().add(8) as *const f32);
-        let in10 = _mm_loadu_ps(input.as_ptr().add(10) as *const f32);
-        let in12 = _mm_loadu_ps(input.as_ptr().add(12) as *const f32);
-        let in14 = _mm_loadu_ps(input.as_ptr().add(14) as *const f32);
-        let in16 = _mm_loadu_ps(input.as_ptr().add(16) as *const f32);
-        let in18 = _mm_loadu_ps(input.as_ptr().add(18) as *const f32);
-        let in20 = _mm_loadu_ps(input.as_ptr().add(20) as *const f32);
-        let in22 = _mm_loadu_ps(input.as_ptr().add(22) as *const f32);
-        let in24 = _mm_loadu_ps(input.as_ptr().add(24) as *const f32);
-        let in26 = _mm_loadu_ps(input.as_ptr().add(26) as *const f32);
-        let in28 = _mm_loadu_ps(input.as_ptr().add(28) as *const f32);
-        let in30 = _mm_loadu_ps(input.as_ptr().add(30) as *const f32);
+        let input_packed = read_complex_to_array!(input, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30 });
 
-        let result = self.perform_fft_direct([
-            in0, in2, in4, in6, in8, in10, in12, in14, in16, in18, in20, in22, in24, in26, in28,
-            in30,
-        ]);
+        let out = self.perform_fft_direct(input_packed);
 
-        let values = std::mem::transmute::<[__m128; 16], [Complex<f32>; 32]>(result);
-
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-        *output_slice.add(0) = values[0];
-        *output_slice.add(1) = values[1];
-        *output_slice.add(2) = values[2];
-        *output_slice.add(3) = values[3];
-        *output_slice.add(4) = values[4];
-        *output_slice.add(5) = values[5];
-        *output_slice.add(6) = values[6];
-        *output_slice.add(7) = values[7];
-        *output_slice.add(8) = values[8];
-        *output_slice.add(9) = values[9];
-        *output_slice.add(10) = values[10];
-        *output_slice.add(11) = values[11];
-        *output_slice.add(12) = values[12];
-        *output_slice.add(13) = values[13];
-        *output_slice.add(14) = values[14];
-        *output_slice.add(15) = values[15];
-        *output_slice.add(16) = values[16];
-        *output_slice.add(17) = values[17];
-        *output_slice.add(18) = values[18];
-        *output_slice.add(19) = values[19];
-        *output_slice.add(20) = values[20];
-        *output_slice.add(21) = values[21];
-        *output_slice.add(22) = values[22];
-        *output_slice.add(23) = values[23];
-        *output_slice.add(24) = values[24];
-        *output_slice.add(25) = values[25];
-        *output_slice.add(26) = values[26];
-        *output_slice.add(27) = values[27];
-        *output_slice.add(28) = values[28];
-        *output_slice.add(29) = values[29];
-        *output_slice.add(30) = values[30];
-        *output_slice.add(31) = values[31];
+        for n in 0..16 {
+            output.store_complex(out[n], 2*n);
+        }
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_dual_fft_contiguous(
         &self,
-        input: RawSlice<Complex<T>>,
-        output: RawSliceMut<Complex<T>>,
+        input: RawSlice<Complex<f32>>,
+        output: RawSliceMut<Complex<f32>>,
     ) {
-        let value01a = _mm_loadu_ps(input.as_ptr() as *const f32);
-        let value23a = _mm_loadu_ps(input.as_ptr().add(2) as *const f32);
-        let value45a = _mm_loadu_ps(input.as_ptr().add(4) as *const f32);
-        let value67a = _mm_loadu_ps(input.as_ptr().add(6) as *const f32);
-        let value89a = _mm_loadu_ps(input.as_ptr().add(8) as *const f32);
-        let value1011a = _mm_loadu_ps(input.as_ptr().add(10) as *const f32);
-        let value1213a = _mm_loadu_ps(input.as_ptr().add(12) as *const f32);
-        let value1415a = _mm_loadu_ps(input.as_ptr().add(14) as *const f32);
-        let value1617a = _mm_loadu_ps(input.as_ptr().add(16) as *const f32);
-        let value1819a = _mm_loadu_ps(input.as_ptr().add(18) as *const f32);
-        let value2021a = _mm_loadu_ps(input.as_ptr().add(20) as *const f32);
-        let value2223a = _mm_loadu_ps(input.as_ptr().add(22) as *const f32);
-        let value2425a = _mm_loadu_ps(input.as_ptr().add(24) as *const f32);
-        let value2627a = _mm_loadu_ps(input.as_ptr().add(26) as *const f32);
-        let value2829a = _mm_loadu_ps(input.as_ptr().add(28) as *const f32);
-        let value3031a = _mm_loadu_ps(input.as_ptr().add(30) as *const f32);
-        let value01b = _mm_loadu_ps(input.as_ptr().add(32) as *const f32);
-        let value23b = _mm_loadu_ps(input.as_ptr().add(34) as *const f32);
-        let value45b = _mm_loadu_ps(input.as_ptr().add(36) as *const f32);
-        let value67b = _mm_loadu_ps(input.as_ptr().add(38) as *const f32);
-        let value89b = _mm_loadu_ps(input.as_ptr().add(40) as *const f32);
-        let value1011b = _mm_loadu_ps(input.as_ptr().add(42) as *const f32);
-        let value1213b = _mm_loadu_ps(input.as_ptr().add(44) as *const f32);
-        let value1415b = _mm_loadu_ps(input.as_ptr().add(46) as *const f32);
-        let value1617b = _mm_loadu_ps(input.as_ptr().add(48) as *const f32);
-        let value1819b = _mm_loadu_ps(input.as_ptr().add(50) as *const f32);
-        let value2021b = _mm_loadu_ps(input.as_ptr().add(52) as *const f32);
-        let value2223b = _mm_loadu_ps(input.as_ptr().add(54) as *const f32);
-        let value2425b = _mm_loadu_ps(input.as_ptr().add(56) as *const f32);
-        let value2627b = _mm_loadu_ps(input.as_ptr().add(58) as *const f32);
-        let value2829b = _mm_loadu_ps(input.as_ptr().add(60) as *const f32);
-        let value3031b = _mm_loadu_ps(input.as_ptr().add(62) as *const f32);
+        let input_packed = read_complex_to_array!(input, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62});
 
-        let values0 = pack_1st_f32(value01a, value01b);
-        let values1 = pack_2nd_f32(value01a, value01b);
-        let values2 = pack_1st_f32(value23a, value23b);
-        let values3 = pack_2nd_f32(value23a, value23b);
-        let values4 = pack_1st_f32(value45a, value45b);
-        let values5 = pack_2nd_f32(value45a, value45b);
-        let values6 = pack_1st_f32(value67a, value67b);
-        let values7 = pack_2nd_f32(value67a, value67b);
-        let values8 = pack_1st_f32(value89a, value89b);
-        let values9 = pack_2nd_f32(value89a, value89b);
-        let values10 = pack_1st_f32(value1011a, value1011b);
-        let values11 = pack_2nd_f32(value1011a, value1011b);
-        let values12 = pack_1st_f32(value1213a, value1213b);
-        let values13 = pack_2nd_f32(value1213a, value1213b);
-        let values14 = pack_1st_f32(value1415a, value1415b);
-        let values15 = pack_2nd_f32(value1415a, value1415b);
-        let values16 = pack_1st_f32(value1617a, value1617b);
-        let values17 = pack_2nd_f32(value1617a, value1617b);
-        let values18 = pack_1st_f32(value1819a, value1819b);
-        let values19 = pack_2nd_f32(value1819a, value1819b);
-        let values20 = pack_1st_f32(value2021a, value2021b);
-        let values21 = pack_2nd_f32(value2021a, value2021b);
-        let values22 = pack_1st_f32(value2223a, value2223b);
-        let values23 = pack_2nd_f32(value2223a, value2223b);
-        let values24 = pack_1st_f32(value2425a, value2425b);
-        let values25 = pack_2nd_f32(value2425a, value2425b);
-        let values26 = pack_1st_f32(value2627a, value2627b);
-        let values27 = pack_2nd_f32(value2627a, value2627b);
-        let values28 = pack_1st_f32(value2829a, value2829b);
-        let values29 = pack_2nd_f32(value2829a, value2829b);
-        let values30 = pack_1st_f32(value3031a, value3031b);
-        let values31 = pack_2nd_f32(value3031a, value3031b);
+        let values = interleave_complex_f32!(input_packed, 16, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15});
 
-        let temp = self.perform_dual_fft_direct([
-            values0, values1, values2, values3, values4, values5, values6, values7, values8,
-            values9, values10, values11, values12, values13, values14, values15, values16,
-            values17, values18, values19, values20, values21, values22, values23, values24,
-            values25, values26, values27, values28, values29, values30, values31,
-        ]);
+        let out = self.perform_dual_fft_direct(values);
 
-        let array = std::mem::transmute::<[__m128; 32], [Complex<f32>; 64]>(temp);
-
-        let output_slice = output.as_mut_ptr() as *mut Complex<f32>;
-
-        *output_slice.add(0) = array[0];
-        *output_slice.add(1) = array[2];
-        *output_slice.add(2) = array[4];
-        *output_slice.add(3) = array[6];
-        *output_slice.add(4) = array[8];
-        *output_slice.add(5) = array[10];
-        *output_slice.add(6) = array[12];
-        *output_slice.add(7) = array[14];
-        *output_slice.add(8) = array[16];
-        *output_slice.add(9) = array[18];
-        *output_slice.add(10) = array[20];
-        *output_slice.add(11) = array[22];
-        *output_slice.add(12) = array[24];
-        *output_slice.add(13) = array[26];
-        *output_slice.add(14) = array[28];
-        *output_slice.add(15) = array[30];
-        *output_slice.add(16) = array[32];
-        *output_slice.add(17) = array[34];
-        *output_slice.add(18) = array[36];
-        *output_slice.add(19) = array[38];
-        *output_slice.add(20) = array[40];
-        *output_slice.add(21) = array[42];
-        *output_slice.add(22) = array[44];
-        *output_slice.add(23) = array[46];
-        *output_slice.add(24) = array[48];
-        *output_slice.add(25) = array[50];
-        *output_slice.add(26) = array[52];
-        *output_slice.add(27) = array[54];
-        *output_slice.add(28) = array[56];
-        *output_slice.add(29) = array[58];
-        *output_slice.add(30) = array[60];
-        *output_slice.add(31) = array[62];
-
-        *output_slice.add(32) = array[1];
-        *output_slice.add(33) = array[3];
-        *output_slice.add(34) = array[5];
-        *output_slice.add(35) = array[7];
-        *output_slice.add(36) = array[9];
-        *output_slice.add(37) = array[11];
-        *output_slice.add(38) = array[13];
-        *output_slice.add(39) = array[15];
-        *output_slice.add(40) = array[17];
-        *output_slice.add(41) = array[19];
-        *output_slice.add(42) = array[21];
-        *output_slice.add(43) = array[23];
-        *output_slice.add(44) = array[25];
-        *output_slice.add(45) = array[27];
-        *output_slice.add(46) = array[29];
-        *output_slice.add(47) = array[31];
-        *output_slice.add(48) = array[33];
-        *output_slice.add(49) = array[35];
-        *output_slice.add(50) = array[37];
-        *output_slice.add(51) = array[39];
-        *output_slice.add(52) = array[41];
-        *output_slice.add(53) = array[43];
-        *output_slice.add(54) = array[45];
-        *output_slice.add(55) = array[47];
-        *output_slice.add(56) = array[49];
-        *output_slice.add(57) = array[51];
-        *output_slice.add(58) = array[53];
-        *output_slice.add(59) = array[55];
-        *output_slice.add(60) = array[57];
-        *output_slice.add(61) = array[59];
-        *output_slice.add(62) = array[61];
-        *output_slice.add(63) = array[63];
+        for n in 0..16 {
+            output.store_complex(pack_1st_f32(out[2*n], out[2*n+1]), 2*n);
+            output.store_complex(pack_2nd_f32(out[2*n], out[2*n+1]), 32 + 2*n);
+        }
     }
 
     #[inline(always)]
@@ -3840,43 +3330,39 @@ impl<T: FftNum> SseF32Butterfly32<T> {
         temp7[1] = self.rotate90.rotate_both(temp7[1]);
 
         //step 5: copy/add/subtract data back to buffer
-        let out0 = _mm_add_ps(evens[0], temp0[0]);
-        let out1 = _mm_add_ps(evens[1], temp1[0]);
-        let out2 = _mm_add_ps(evens[2], temp2[0]);
-        let out3 = _mm_add_ps(evens[3], temp3[0]);
-        let out4 = _mm_add_ps(evens[4], temp4[0]);
-        let out5 = _mm_add_ps(evens[5], temp5[0]);
-        let out6 = _mm_add_ps(evens[6], temp6[0]);
-        let out7 = _mm_add_ps(evens[7], temp7[0]);
-        let out8 = _mm_add_ps(evens[8], temp0[1]);
-        let out9 = _mm_add_ps(evens[9], temp1[1]);
-        let out10 = _mm_add_ps(evens[10], temp2[1]);
-        let out11 = _mm_add_ps(evens[11], temp3[1]);
-        let out12 = _mm_add_ps(evens[12], temp4[1]);
-        let out13 = _mm_add_ps(evens[13], temp5[1]);
-        let out14 = _mm_add_ps(evens[14], temp6[1]);
-        let out15 = _mm_add_ps(evens[15], temp7[1]);
-        let out16 = _mm_sub_ps(evens[0], temp0[0]);
-        let out17 = _mm_sub_ps(evens[1], temp1[0]);
-        let out18 = _mm_sub_ps(evens[2], temp2[0]);
-        let out19 = _mm_sub_ps(evens[3], temp3[0]);
-        let out20 = _mm_sub_ps(evens[4], temp4[0]);
-        let out21 = _mm_sub_ps(evens[5], temp5[0]);
-        let out22 = _mm_sub_ps(evens[6], temp6[0]);
-        let out23 = _mm_sub_ps(evens[7], temp7[0]);
-        let out24 = _mm_sub_ps(evens[8], temp0[1]);
-        let out25 = _mm_sub_ps(evens[9], temp1[1]);
-        let out26 = _mm_sub_ps(evens[10], temp2[1]);
-        let out27 = _mm_sub_ps(evens[11], temp3[1]);
-        let out28 = _mm_sub_ps(evens[12], temp4[1]);
-        let out29 = _mm_sub_ps(evens[13], temp5[1]);
-        let out30 = _mm_sub_ps(evens[14], temp6[1]);
-        let out31 = _mm_sub_ps(evens[15], temp7[1]);
-
         [
-            out0, out1, out2, out3, out4, out5, out6, out7, out8, out9, out10, out11, out12, out13,
-            out14, out15, out16, out17, out18, out19, out20, out21, out22, out23, out24, out25,
-            out26, out27, out28, out29, out30, out31,
+            _mm_add_ps(evens[0], temp0[0]),
+            _mm_add_ps(evens[1], temp1[0]),
+            _mm_add_ps(evens[2], temp2[0]),
+            _mm_add_ps(evens[3], temp3[0]),
+            _mm_add_ps(evens[4], temp4[0]),
+            _mm_add_ps(evens[5], temp5[0]),
+            _mm_add_ps(evens[6], temp6[0]),
+            _mm_add_ps(evens[7], temp7[0]),
+            _mm_add_ps(evens[8], temp0[1]),
+            _mm_add_ps(evens[9], temp1[1]),
+            _mm_add_ps(evens[10], temp2[1]),
+            _mm_add_ps(evens[11], temp3[1]),
+            _mm_add_ps(evens[12], temp4[1]),
+            _mm_add_ps(evens[13], temp5[1]),
+            _mm_add_ps(evens[14], temp6[1]),
+            _mm_add_ps(evens[15], temp7[1]),
+            _mm_sub_ps(evens[0], temp0[0]),
+            _mm_sub_ps(evens[1], temp1[0]),
+            _mm_sub_ps(evens[2], temp2[0]),
+            _mm_sub_ps(evens[3], temp3[0]),
+            _mm_sub_ps(evens[4], temp4[0]),
+            _mm_sub_ps(evens[5], temp5[0]),
+            _mm_sub_ps(evens[6], temp6[0]),
+            _mm_sub_ps(evens[7], temp7[0]),
+            _mm_sub_ps(evens[8], temp0[1]),
+            _mm_sub_ps(evens[9], temp1[1]),
+            _mm_sub_ps(evens[10], temp2[1]),
+            _mm_sub_ps(evens[11], temp3[1]),
+            _mm_sub_ps(evens[12], temp4[1]),
+            _mm_sub_ps(evens[13], temp5[1]),
+            _mm_sub_ps(evens[14], temp6[1]),
+            _mm_sub_ps(evens[15], temp7[1]),
         ]
     }
 }
