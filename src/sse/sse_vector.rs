@@ -4,6 +4,69 @@ use num_complex::Complex;
 use crate::array_utils::{RawSlice, RawSliceMut};
 
 
+// Read these indexes from an SseArray and build an array of simd vectors.
+// Takes a name of a vector to read from, and a list of indexes to read.
+// This statement:
+// ```
+// let values = read_complex_to_array(input, {0, 1, 2, 3});
+// ```
+// is equivalent to:
+// ```
+// let values = [
+//     input.load_complex(0),
+//     input.load_complex(1),
+//     input.load_complex(2),
+//     input.load_complex(3),
+// ];
+// ```
+macro_rules! read_complex_to_array {
+    ($input:ident, { $($idx:literal),* }) => {
+        [
+        $(
+            $input.load_complex($idx),
+        )*
+        ]
+    }
+}
+
+// Read these indexes from an SseArray and build an array or partially filled simd vectors.
+// Takes a name of a vector to read from, and a list of indexes to read.
+// This statement:
+// ```
+// let values = read_partial1_complex_to_array(input, {0, 1, 2, 3});
+// ```
+// is equivalent to:
+// ```
+// let values = [
+//     input.load1_complex(0),
+//     input.load1_complex(1),
+//     input.load1_complex(2),
+//     input.load1_complex(3),
+// ];
+// ```
+macro_rules! read_partial1_complex_to_array {
+    ($input:ident, { $($idx:literal),* }) => {
+        [
+        $(
+            $input.load1_complex($idx),
+        )*
+        ]
+    }
+}
+
+// Shuffle elements to interleave two contiguous sets of f32, from an array of simd vectors to a new array of simd vectors
+macro_rules! interleave_complex_f32 {
+    ($input:ident, $offset:literal, { $($idx:literal),* }) => {
+        [
+        $(
+            pack_1st_f32($input[$idx], $input[$idx+$offset]),
+            pack_2nd_f32($input[$idx], $input[$idx+$offset]),
+        )*
+        ]
+    }
+}
+
+
 pub trait SseArray {
     type VectorType;
     const COMPLEX_PER_VECTOR: usize;

@@ -13,69 +13,6 @@ use super::sse_common::{assert_f32, assert_f64};
 use super::sse_utils::*;
 use super::sse_vector::{SseArray, SseArrayMut};
 
-// Read these indexes to an array
-macro_rules! read_complex_to_array {
-    ($input:ident, { $($idx:literal),* }) => {
-        [
-        $(
-            $input.load_complex($idx),
-        )*
-        ]
-    }
-}
-
-// Read these indexes to an array
-macro_rules! read_partial1_complex_to_array {
-    ($input:ident, { $($idx:literal),* }) => {
-        [
-        $(
-            $input.load1_complex($idx),
-        )*
-        ]
-    }
-}
-
-// Interleave
-macro_rules! interleave_complex_f32 {
-    ($input:ident, $offset:literal, { $($idx:literal),* }) => {
-        [
-        $(
-            pack_1st_f32($input[$idx], $input[$idx+$offset]),
-            pack_2nd_f32($input[$idx], $input[$idx+$offset]),
-        )*
-        ]
-    }
-}
-
-/*
-// Read these indexes to an array
-macro_rules! read_complex_to_odd_array {
-    ($input:ident, $len:literal, { $($idx:literal),* }) => {
-        [
-        $(
-            $input.load_complex($idx),
-            $input.load_complex($idx+$len),
-        )*
-        $input.load1_complex($len-1),
-        $input.load1_complex(2*$len-1),
-        ]
-    }
-}
-
-// Interleave
-macro_rules! interleave_complex_odd_f32 {
-    ($input:ident, $len:literal, { $($idx:literal),* }) => {
-        [
-        $(
-            pack_1st_f32($input[$idx], $input[$idx+1]),
-            pack_2nd_f32($input[$idx], $input[$idx+1]),
-        )*
-        pack_1st_f32($input[$len-1], $input[$len]),
-        ]
-    }
-}
-*/
-
 #[allow(unused)]
 macro_rules! test_boilerplate_fft_sse_f32_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
@@ -1166,12 +1103,13 @@ impl<T: FftNum> SseF32Butterfly5<T> {
         let temp_a2 = _mm_add_ps(value0, _mm_add_ps(temp_a2_1, temp_a2_2));
         let temp_b2 = _mm_sub_ps(temp_b2_1, temp_b2_2);
 
-        let x0 = _mm_add_ps(value0, _mm_add_ps(x14p, x23p));
-        let x1 = _mm_add_ps(temp_a1, self.rotate.rotate_both(temp_b1));
-        let x2 = _mm_add_ps(temp_a2, self.rotate.rotate_both(temp_b2));
-        let x3 = _mm_sub_ps(temp_a2, self.rotate.rotate_both(temp_b2));
-        let x4 = _mm_sub_ps(temp_a1, self.rotate.rotate_both(temp_b1));
-        [x0, x1, x2, x3, x4]
+        [
+            _mm_add_ps(value0, _mm_add_ps(x14p, x23p)),
+            _mm_add_ps(temp_a1, self.rotate.rotate_both(temp_b1)),
+            _mm_add_ps(temp_a2, self.rotate.rotate_both(temp_b2)),
+            _mm_sub_ps(temp_a2, self.rotate.rotate_both(temp_b2)),
+            _mm_sub_ps(temp_a1, self.rotate.rotate_both(temp_b1)),
+        ]
     }
 }
 
@@ -1275,13 +1213,13 @@ impl<T: FftNum> SseF64Butterfly5<T> {
 
         let temp_b1_rot = self.rotate.rotate(temp_b1);
         let temp_b2_rot = self.rotate.rotate(temp_b2);
-
-        let x0 = _mm_add_pd(value0, _mm_add_pd(x14p, x23p));
-        let x1 = _mm_add_pd(temp_a1, temp_b1_rot);
-        let x2 = _mm_add_pd(temp_a2, temp_b2_rot);
-        let x3 = _mm_sub_pd(temp_a2, temp_b2_rot);
-        let x4 = _mm_sub_pd(temp_a1, temp_b1_rot);
-        [x0, x1, x2, x3, x4]
+        [
+            _mm_add_pd(value0, _mm_add_pd(x14p, x23p)),
+            _mm_add_pd(temp_a1, temp_b1_rot),
+            _mm_add_pd(temp_a2, temp_b2_rot),
+            _mm_sub_pd(temp_a2, temp_b2_rot),
+            _mm_sub_pd(temp_a1, temp_b1_rot),
+        ]
     }
 }
 
@@ -2748,26 +2686,23 @@ impl<T: FftNum> SseF32Butterfly16<T> {
         temp3[1] = self.rotate90.rotate_both(temp3[1]);
 
         //step 5: copy/add/subtract data back to buffer
-        let out0 = _mm_add_ps(evens[0], temp0[0]);
-        let out1 = _mm_add_ps(evens[1], temp1[0]);
-        let out2 = _mm_add_ps(evens[2], temp2[0]);
-        let out3 = _mm_add_ps(evens[3], temp3[0]);
-        let out4 = _mm_add_ps(evens[4], temp0[1]);
-        let out5 = _mm_add_ps(evens[5], temp1[1]);
-        let out6 = _mm_add_ps(evens[6], temp2[1]);
-        let out7 = _mm_add_ps(evens[7], temp3[1]);
-        let out8 = _mm_sub_ps(evens[0], temp0[0]);
-        let out9 = _mm_sub_ps(evens[1], temp1[0]);
-        let out10 = _mm_sub_ps(evens[2], temp2[0]);
-        let out11 = _mm_sub_ps(evens[3], temp3[0]);
-        let out12 = _mm_sub_ps(evens[4], temp0[1]);
-        let out13 = _mm_sub_ps(evens[5], temp1[1]);
-        let out14 = _mm_sub_ps(evens[6], temp2[1]);
-        let out15 = _mm_sub_ps(evens[7], temp3[1]);
-
         [
-            out0, out1, out2, out3, out4, out5, out6, out7, out8, out9, out10, out11, out12, out13,
-            out14, out15,
+            _mm_add_ps(evens[0], temp0[0]),
+            _mm_add_ps(evens[1], temp1[0]),
+            _mm_add_ps(evens[2], temp2[0]),
+            _mm_add_ps(evens[3], temp3[0]),
+            _mm_add_ps(evens[4], temp0[1]),
+            _mm_add_ps(evens[5], temp1[1]),
+            _mm_add_ps(evens[6], temp2[1]),
+            _mm_add_ps(evens[7], temp3[1]),
+            _mm_sub_ps(evens[0], temp0[0]),
+            _mm_sub_ps(evens[1], temp1[0]),
+            _mm_sub_ps(evens[2], temp2[0]),
+            _mm_sub_ps(evens[3], temp3[0]),
+            _mm_sub_ps(evens[4], temp0[1]),
+            _mm_sub_ps(evens[5], temp1[1]),
+            _mm_sub_ps(evens[6], temp2[1]),
+            _mm_sub_ps(evens[7], temp3[1]),
         ]
     }
 }
@@ -3119,26 +3054,23 @@ impl<T: FftNum> SseF32Butterfly32<T> {
         temp3[1] = self.rotate90.rotate_both(temp3[1]);
 
         //step 5: copy/add/subtract data back to buffer
-        let out0 = _mm_add_ps(evens[0], temp0[0]);
-        let out1 = _mm_add_ps(evens[1], temp1[0]);
-        let out2 = _mm_add_ps(evens[2], temp2[0]);
-        let out3 = _mm_add_ps(evens[3], temp3[0]);
-        let out4 = _mm_add_ps(evens[4], temp0[1]);
-        let out5 = _mm_add_ps(evens[5], temp1[1]);
-        let out6 = _mm_add_ps(evens[6], temp2[1]);
-        let out7 = _mm_add_ps(evens[7], temp3[1]);
-        let out8 = _mm_sub_ps(evens[0], temp0[0]);
-        let out9 = _mm_sub_ps(evens[1], temp1[0]);
-        let out10 = _mm_sub_ps(evens[2], temp2[0]);
-        let out11 = _mm_sub_ps(evens[3], temp3[0]);
-        let out12 = _mm_sub_ps(evens[4], temp0[1]);
-        let out13 = _mm_sub_ps(evens[5], temp1[1]);
-        let out14 = _mm_sub_ps(evens[6], temp2[1]);
-        let out15 = _mm_sub_ps(evens[7], temp3[1]);
-
         [
-            out0, out1, out2, out3, out4, out5, out6, out7, out8, out9, out10, out11, out12, out13,
-            out14, out15,
+            _mm_add_ps(evens[0], temp0[0]),
+            _mm_add_ps(evens[1], temp1[0]),
+            _mm_add_ps(evens[2], temp2[0]),
+            _mm_add_ps(evens[3], temp3[0]),
+            _mm_add_ps(evens[4], temp0[1]),
+            _mm_add_ps(evens[5], temp1[1]),
+            _mm_add_ps(evens[6], temp2[1]),
+            _mm_add_ps(evens[7], temp3[1]),
+            _mm_sub_ps(evens[0], temp0[0]),
+            _mm_sub_ps(evens[1], temp1[0]),
+            _mm_sub_ps(evens[2], temp2[0]),
+            _mm_sub_ps(evens[3], temp3[0]),
+            _mm_sub_ps(evens[4], temp0[1]),
+            _mm_sub_ps(evens[5], temp1[1]),
+            _mm_sub_ps(evens[6], temp2[1]),
+            _mm_sub_ps(evens[7], temp3[1]),
         ]
     }
 
