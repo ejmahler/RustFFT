@@ -145,44 +145,6 @@ macro_rules! boilerplate_fft_sse_f64_butterfly {
             // Do a single fft
             #[target_feature(enable = "sse4.1")]
             pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
-                self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
-            }
-
-            // Do multiple ffts over a longer vector inplace, called from "process_with_scratch" of Fft trait
-            #[target_feature(enable = "sse4.1")]
-            pub(crate) unsafe fn perform_fft_butterfly_multi(
-                &self,
-                buffer: &mut [Complex<T>],
-            ) -> Result<(), ()> {
-                array_utils::iter_chunks(buffer, self.len(), |chunk| {
-                    self.perform_fft_butterfly(chunk)
-                })
-            }
-
-            // Do multiple ffts over a longer vector outofplace, called from "process_outofplace_with_scratch" of Fft trait
-            #[target_feature(enable = "sse4.1")]
-            pub(crate) unsafe fn perform_oop_fft_butterfly_multi(
-                &self,
-                input: &mut [Complex<T>],
-                output: &mut [Complex<T>],
-            ) -> Result<(), ()> {
-                array_utils::iter_chunks_zipped(input, output, self.len(), |in_chunk, out_chunk| {
-                    self.perform_fft_contiguous(
-                        RawSlice::new(in_chunk),
-                        RawSliceMut::new(out_chunk),
-                    )
-                })
-            }
-        }
-    };
-}
-
-macro_rules! test_boilerplate_fft_sse_f64_butterfly {
-    ($struct_name:ident, $len:expr, $direction_fn:expr) => {
-        impl<T: FftNum> $struct_name<T> {
-            // Do a single fft
-            #[target_feature(enable = "sse4.1")]
-            pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
                 self.perform_fft_contiguous(RawSlice::new_transmuted(buffer), RawSliceMut::new_transmuted(buffer));
             }
 
@@ -331,7 +293,7 @@ pub struct SseF64Butterfly1<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-test_boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly1, 1, |this: &SseF64Butterfly1<_>| this
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly1, 1, |this: &SseF64Butterfly1<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly1, 1, |this: &SseF64Butterfly1<_>| this
     .direction);
@@ -469,7 +431,7 @@ pub struct SseF64Butterfly2<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-test_boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly2, 2, |this: &SseF64Butterfly2<_>| this
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly2, 2, |this: &SseF64Butterfly2<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly2, 2, |this: &SseF64Butterfly2<_>| this
     .direction);
@@ -653,7 +615,7 @@ pub struct SseF64Butterfly3<T> {
     twiddle1im: __m128d,
 }
 
-test_boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly3, 3, |this: &SseF64Butterfly3<_>| this
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly3, 3, |this: &SseF64Butterfly3<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly3, 3, |this: &SseF64Butterfly3<_>| this
     .direction);
@@ -860,7 +822,7 @@ pub struct SseF64Butterfly4<T> {
     rotate: Rotate90F64,
 }
 
-test_boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly4, 4, |this: &SseF64Butterfly4<_>| this
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly4, 4, |this: &SseF64Butterfly4<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly4, 4, |this: &SseF64Butterfly4<_>| this
     .direction);
@@ -1128,7 +1090,7 @@ pub struct SseF64Butterfly5<T> {
     twiddle2im: __m128d,
 }
 
-test_boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly5, 5, |this: &SseF64Butterfly5<_>| this
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly5, 5, |this: &SseF64Butterfly5<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly5, 5, |this: &SseF64Butterfly5<_>| this
     .direction);
@@ -1356,7 +1318,7 @@ pub struct SseF64Butterfly6<T> {
     bf3: SseF64Butterfly3<T>,
 }
 
-test_boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly6, 6, |this: &SseF64Butterfly6<_>| this
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly6, 6, |this: &SseF64Butterfly6<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly6, 6, |this: &SseF64Butterfly6<_>| this
     .direction);
@@ -1582,7 +1544,7 @@ pub struct SseF64Butterfly8<T> {
     rotate90: Rotate90F64,
 }
 
-test_boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly8, 8, |this: &SseF64Butterfly8<_>| this
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly8, 8, |this: &SseF64Butterfly8<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly8, 8, |this: &SseF64Butterfly8<_>| this
     .direction);
@@ -1798,7 +1760,7 @@ pub struct SseF64Butterfly9<T> {
     twiddle4: __m128d,
 }
 
-test_boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly9, 9, |this: &SseF64Butterfly9<_>| this
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly9, 9, |this: &SseF64Butterfly9<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly9, 9, |this: &SseF64Butterfly9<_>| this
     .direction);
@@ -1995,7 +1957,7 @@ pub struct SseF64Butterfly10<T> {
     bf5: SseF64Butterfly5<T>,
 }
 
-test_boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly10, 10, |this: &SseF64Butterfly10<_>| this
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly10, 10, |this: &SseF64Butterfly10<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly10, 10, |this: &SseF64Butterfly10<_>| this
     .direction);
@@ -2201,7 +2163,7 @@ pub struct SseF64Butterfly12<T> {
     bf4: SseF64Butterfly4<T>,
 }
 
-test_boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly12, 12, |this: &SseF64Butterfly12<_>| this
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly12, 12, |this: &SseF64Butterfly12<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly12, 12, |this: &SseF64Butterfly12<_>| this
     .direction);
@@ -2410,7 +2372,7 @@ pub struct SseF64Butterfly15<T> {
     bf5: SseF64Butterfly5<T>,
 }
 
-test_boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly15, 15, |this: &SseF64Butterfly15<_>| this
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly15, 15, |this: &SseF64Butterfly15<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly15, 15, |this: &SseF64Butterfly15<_>| this
     .direction);
@@ -2702,7 +2664,7 @@ pub struct SseF64Butterfly16<T> {
     twiddle3c: __m128d,
 }
 
-test_boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly16, 16, |this: &SseF64Butterfly16<_>| this
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly16, 16, |this: &SseF64Butterfly16<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly16, 16, |this: &SseF64Butterfly16<_>| this
     .direction);
@@ -3172,7 +3134,7 @@ pub struct SseF64Butterfly32<T> {
     twiddle7c: __m128d,
 }
 
-test_boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly32, 32, |this: &SseF64Butterfly32<_>| this
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly32, 32, |this: &SseF64Butterfly32<_>| this
     .direction);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly32, 32, |this: &SseF64Butterfly32<_>| this
     .direction);
