@@ -8,7 +8,7 @@ use crate::array_utils::{RawSlice, RawSliceMut};
 // Takes a name of a vector to read from, and a list of indexes to read.
 // This statement:
 // ```
-// let values = read_complex_to_array(input, {0, 1, 2, 3});
+// let values = read_complex_to_array!(input, {0, 1, 2, 3});
 // ```
 // is equivalent to:
 // ```
@@ -33,7 +33,7 @@ macro_rules! read_complex_to_array {
 // Takes a name of a vector to read from, and a list of indexes to read.
 // This statement:
 // ```
-// let values = read_partial1_complex_to_array(input, {0, 1, 2, 3});
+// let values = read_partial1_complex_to_array!(input, {0, 1, 2, 3});
 // ```
 // is equivalent to:
 // ```
@@ -54,18 +54,51 @@ macro_rules! read_partial1_complex_to_array {
     }
 }
 
-// Shuffle elements to interleave two contiguous sets of f32, from an array of simd vectors to a new array of simd vectors
-macro_rules! interleave_complex_f32 {
-    ($input:ident, $offset:literal, { $($idx:literal),* }) => {
-        [
+// Write these indexes of an array of simd vectors to the same indexes of an SseArray.
+// Takes a name of a vector to read from, one to write to, and a list of indexes.
+// This statement:
+// ```
+// let values = write_complex_to_array!(input, output, {0, 1, 2, 3});
+// ```
+// is equivalent to:
+// ```
+// let values = [
+//     output.store_complex(input[0], 0),
+//     output.store_complex(input[1], 1),
+//     output.store_complex(input[2], 2),
+//     output.store_complex(input[3], 3),
+// ];
+// ```
+macro_rules! write_complex_to_array {
+    ($input:ident, $output:ident, { $($idx:literal),* }) => {
         $(
-            pack_1st_f32($input[$idx], $input[$idx+$offset]),
-            pack_2nd_f32($input[$idx], $input[$idx+$offset]),
+            $output.store_complex($input[$idx], $idx);
         )*
-        ]
     }
 }
 
+// Write these indexes of an array of simd vectors to the same indexes, multiplied by a stride, of an SseArray.
+// Takes a name of a vector to read from, one to write to, an integer stride, and a list of indexes.
+// This statement:
+// ```
+// let values = write_complex_to_array_separate!(input, output, {0, 1, 2, 3});
+// ```
+// is equivalent to:
+// ```
+// let values = [
+//     output.store_complex(input[0], 0),
+//     output.store_complex(input[1], 2),
+//     output.store_complex(input[2], 4),
+//     output.store_complex(input[3], 6),
+// ];
+// ```
+macro_rules! write_complex_to_array_strided {
+    ($input:ident, $output:ident, $stride:literal, { $($idx:literal),* }) => {
+        $(
+            $output.store_complex($input[$idx], $idx*$stride);
+        )*
+    }
+}
 
 pub trait SseArray {
     type VectorType;

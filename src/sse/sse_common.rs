@@ -14,6 +14,47 @@ pub fn assert_f64<T: 'static>() {
     assert!(id_t == id_f64, "Wrong float type, must be f64");
 }
 
+// Shuffle elements to interleave two contiguous sets of f32, from an array of simd vectors to a new array of simd vectors
+macro_rules! interleave_complex_f32 {
+    ($input:ident, $offset:literal, { $($idx:literal),* }) => {
+        [
+        $(
+            pack_1st_f32($input[$idx], $input[$idx+$offset]),
+            pack_2nd_f32($input[$idx], $input[$idx+$offset]),
+        )*
+        ]
+    }
+}
+
+// Shuffle elements to interleave two contiguous sets of f32, from an array of simd vectors to a new array of simd vectors
+// This statement:
+// ```
+// let values = separate_interleaved_complex_f32!(input, {0, 2, 4});
+// ```
+// is equivalent to:
+// ```
+// let values = [
+//    pack_1st_f32(input[0], input[1]),
+//    pack_1st_f32(input[2], input[3]),
+//    pack_1st_f32(input[4], input[5]),
+//    pack_2nd_f32(input[0], input[1]),
+//    pack_2nd_f32(input[2], input[3]),
+//    pack_2nd_f32(input[4], input[5]),
+// ];
+macro_rules! separate_interleaved_complex_f32 {
+    ($input:ident, { $($idx:literal),* }) => {
+        [
+        $(
+            pack_1st_f32($input[$idx], $input[$idx+1]),
+        )*
+        $(
+            pack_2nd_f32($input[$idx], $input[$idx+1]),
+        )*
+        ]
+    }
+}
+
+
 macro_rules! boilerplate_fft_sse_oop {
     ($struct_name:ident, $len_fn:expr) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {

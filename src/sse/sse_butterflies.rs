@@ -783,10 +783,10 @@ impl<T: FftNum> SseF32Butterfly4<T> {
 
         let out = self.perform_dual_fft_direct(value0ab, value1ab, value2ab, value3ab);
 
-        for n in 0..2 {
-            output.store_complex(pack_1st_f32(out[2*n], out[2*n+1]), 2*n);
-            output.store_complex(pack_2nd_f32(out[2*n], out[2*n+1]), 4 + 2*n);
-        }
+        output.store_complex(pack_1st_f32(out[0], out[1]), 0);
+        output.store_complex(pack_2nd_f32(out[0], out[1]), 4);
+        output.store_complex(pack_1st_f32(out[2], out[3]), 2);
+        output.store_complex(pack_2nd_f32(out[2], out[3]), 6);
     }
 
     // length 4 fft of a, given as [x0, x1], [x2, x3]
@@ -1027,9 +1027,7 @@ impl<T: FftNum> SseF32Butterfly5<T> {
             pack_2nd_f32(out[3], out[4]),
         ];
 
-        for n in 0..5 {
-            output.store_complex(out_packed[n], 2*n);
-        }
+        write_complex_to_array_strided!(out_packed, output, 2, {0, 1, 2, 3, 4});
     }
 
     // length 5 fft of a, given as [x0, x0], [x1, x2], [x3, x4].
@@ -1282,10 +1280,8 @@ impl<T: FftNum> SseF32Butterfly6<T> {
 
         let out = self.perform_dual_fft_direct(values[0], values[1], values[2], values[3], values[4], values[5]);
 
-        for n in 0..3 {
-            output.store_complex(pack_1st_f32(out[2*n], out[2*n+1]), 2*n);
-            output.store_complex(pack_2nd_f32(out[2*n], out[2*n+1]), 6 + 2*n);
-        }
+        let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4});
+        write_complex_to_array_strided!(out_sorted, output, 2, {0, 1, 2, 3, 4, 5});
 
     }
 
@@ -1481,6 +1477,7 @@ impl<T: FftNum> SseF32Butterfly8<T> {
         for n in 0..4 {
             output.store_complex(out[n], 2*n);
         }
+        write_complex_to_array_strided!(out, output, 2, {0,1,2,3});
     }
 
     #[inline(always)]
@@ -1495,10 +1492,9 @@ impl<T: FftNum> SseF32Butterfly8<T> {
 
         let out = self.perform_dual_fft_direct(values);
 
-        for n in 0..4 {
-            output.store_complex(pack_1st_f32(out[2*n], out[2*n+1]), 2*n);
-            output.store_complex(pack_2nd_f32(out[2*n], out[2*n+1]), 8 + 2*n);
-        }
+        let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6});
+
+        write_complex_to_array_strided!(out_sorted, output, 2, {0,1,2,3,4,5,6,7});
     }
 
     #[inline(always)]
@@ -1619,9 +1615,7 @@ impl<T: FftNum> SseF64Butterfly8<T> {
 
         let out = self.perform_fft_direct(values);
 
-        for n in 0..8 {
-            output.store_complex(out[n], n);
-        }
+        write_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6, 7});
     }
 
     #[inline(always)]
@@ -1751,9 +1745,7 @@ impl<T: FftNum> SseF32Butterfly9<T> {
             pack_2nd_f32(out[7], out[8]),
         ];
 
-        for n in 0..9 {
-            output.store_complex(out_packed[n], 2*n);
-        }
+        write_complex_to_array_strided!(out_packed, output, 2, {0,1,2,3,4,5,6,7,8});
     }
 
     #[inline(always)]
@@ -1841,9 +1833,7 @@ impl<T: FftNum> SseF64Butterfly9<T> {
 
         let out = self.perform_fft_direct(values);
 
-        for n in 0..9 {
-            output.store_complex(out[n], n);
-        }
+        write_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6, 7, 8});
     }
 
     #[inline(always)]
@@ -1910,9 +1900,7 @@ impl<T: FftNum> SseF32Butterfly10<T> {
 
         let out = self.perform_fft_direct(input_packed);
 
-        for n in 0..5 {
-            output.store_complex(out[n], 2*n);
-        }
+        write_complex_to_array_strided!(out, output, 2, {0,1,2,3,4});
     }
 
     #[inline(always)]
@@ -1927,10 +1915,9 @@ impl<T: FftNum> SseF32Butterfly10<T> {
 
         let out = self.perform_dual_fft_direct(values);
 
-        for n in 0..5 {
-            output.store_complex(pack_1st_f32(out[2*n], out[2*n+1]), 2*n);
-            output.store_complex(pack_2nd_f32(out[2*n], out[2*n+1]), 10 + 2*n);
-        }
+        let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6, 8});
+
+        write_complex_to_array_strided!(out_sorted, output, 2, {0,1,2,3,4,5,6,7,8,9});
     }
 
     #[inline(always)]
@@ -2036,9 +2023,7 @@ impl<T: FftNum> SseF64Butterfly10<T> {
 
         let out = self.perform_fft_direct(values);
 
-        for n in 0..10 {
-            output.store_complex(out[n], n);
-        }
+        write_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
     }
 
     #[inline(always)]
@@ -2112,9 +2097,7 @@ impl<T: FftNum> SseF32Butterfly12<T> {
 
         let out = self.perform_fft_direct(input_packed);
 
-        for n in 0..6 {
-            output.store_complex(out[n], 2*n);
-        }
+        write_complex_to_array_strided!(out, output, 2, {0,1,2,3,4,5});
     }
 
     #[inline(always)]
@@ -2129,10 +2112,9 @@ impl<T: FftNum> SseF32Butterfly12<T> {
 
         let out = self.perform_dual_fft_direct(values);
 
-        for n in 0..6 {
-            output.store_complex(pack_1st_f32(out[2*n], out[2*n+1]), 2*n);
-            output.store_complex(pack_2nd_f32(out[2*n], out[2*n+1]), 12 + 2*n);
-        }
+        let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6, 8, 10});
+
+        write_complex_to_array_strided!(out_sorted, output, 2, {0,1,2,3,4,5,6,7,8,9, 10, 11});
     }
 
     #[inline(always)]
@@ -2247,9 +2229,8 @@ impl<T: FftNum> SseF64Butterfly12<T> {
 
         let out = self.perform_fft_direct(values);
 
-        for n in 0..12 {
-            output.store_complex(out[n], n);
-        }
+        write_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11});
+
     }
 
     #[inline(always)]
@@ -2376,9 +2357,7 @@ impl<T: FftNum> SseF32Butterfly15<T> {
             pack_2nd_f32(out[13], out[14]),
         ];
 
-        for n in 0..15 {
-            output.store_complex(out_packed[n], 2*n);
-        }
+        write_complex_to_array_strided!(out_packed, output, 2, {0,1,2,3,4,5,6,7,8,9, 10, 11, 12, 13, 14});
     }
 
     #[inline(always)]
@@ -2459,9 +2438,8 @@ impl<T: FftNum> SseF64Butterfly15<T> {
 
         let out = self.perform_fft_direct(values);
 
-        for n in 0..15 {
-            output.store_complex(out[n], n);
-        }
+        write_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
+
     }
 
     #[inline(always)]
@@ -2575,9 +2553,7 @@ impl<T: FftNum> SseF32Butterfly16<T> {
 
         let out = self.perform_fft_direct(input_packed);
 
-        for n in 0..8 {
-            output.store_complex(out[n], 2*n);
-        }
+        write_complex_to_array_strided!(out, output, 2, {0,1,2,3,4,5,6,7});
     }
 
     #[inline(always)]
@@ -2592,10 +2568,9 @@ impl<T: FftNum> SseF32Butterfly16<T> {
 
         let out = self.perform_dual_fft_direct(values);
 
-        for n in 0..8 {
-            output.store_complex(pack_1st_f32(out[2*n], out[2*n+1]), 2*n);
-            output.store_complex(pack_2nd_f32(out[2*n], out[2*n+1]), 16 + 2*n);
-        }
+        let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6, 8, 10, 12, 14});
+
+        write_complex_to_array_strided!(out_sorted, output, 2, {0,1,2,3,4,5,6,7,8,9, 10, 11,12,13,14, 15});
     }
 
     #[inline(always)]
@@ -2782,9 +2757,7 @@ impl<T: FftNum> SseF64Butterfly16<T> {
 
         let out = self.perform_fft_direct(values);
 
-        for n in 0..16 {
-            output.store_complex(out[n], n);
-        }
+        write_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15});
     }
 
     #[inline(always)]
@@ -2985,10 +2958,9 @@ impl<T: FftNum> SseF32Butterfly32<T> {
 
         let out = self.perform_dual_fft_direct(values);
 
-        for n in 0..16 {
-            output.store_complex(pack_1st_f32(out[2*n], out[2*n+1]), 2*n);
-            output.store_complex(pack_2nd_f32(out[2*n], out[2*n+1]), 32 + 2*n);
-        }
+        let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30});
+
+        write_complex_to_array_strided!(out_sorted, output, 2, {0,1,2,3,4,5,6,7,8,9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31 });
     }
 
     #[inline(always)]
@@ -3283,9 +3255,7 @@ impl<T: FftNum> SseF64Butterfly32<T> {
 
         let out = self.perform_fft_direct(values);
 
-        for n in 0..32 {
-            output.store_complex(out[n], n);
-        }
+        write_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31});
     }
 
     #[inline(always)]
