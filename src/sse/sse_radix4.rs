@@ -18,6 +18,9 @@ use crate::{Direction, Fft, Length};
 use super::sse_common::{assert_f32, assert_f64};
 use super::sse_utils::*;
 
+use crate::array_utils::{RawSlice, RawSliceMut};
+use super::sse_vector::{SseArray, SseArrayMut};
+
 /// FFT algorithm optimized for power-of-two sizes, SSE accelerated version.
 /// This is designed to be used via a Planner, and not created directly.
 
@@ -187,52 +190,37 @@ unsafe fn butterfly_4_32<T: FftNum>(
     bf4: &SseF32Butterfly4<T>,
 ) {
     let mut idx = 0usize;
-    let mut tw_idx = 0usize;
-    let output_slice = data.as_mut_ptr() as *mut Complex<f32>;
-    for _ in 0..num_ffts / 4 {
-        let scratch0 = _mm_loadu_ps(output_slice.add(idx) as *const f32);
-        let scratch0b = _mm_loadu_ps(output_slice.add(idx + 2) as *const f32);
+    let input: RawSlice<Complex<f32>> = RawSlice::new_transmuted(data);
+    let output: RawSliceMut<Complex<f32>> = RawSliceMut::new_transmuted(data);
+    for tw in twiddles.chunks_exact(6).take(num_ffts/4) {
+        let scratch0 = input.load_complex(idx);
+        let scratch0b = input.load_complex(idx+2);
+        let mut scratch1 = input.load_complex(idx + 1 * num_ffts);
+        let mut scratch1b = input.load_complex(idx + 2 + 1 * num_ffts);
+        let mut scratch2 = input.load_complex(idx + 2 * num_ffts);
+        let mut scratch2b = input.load_complex(idx + 2 + 2 * num_ffts);
+        let mut scratch3 = input.load_complex(idx + 3 * num_ffts);
+        let mut scratch3b = input.load_complex(idx + 2 + 3 * num_ffts);
 
-        let mut scratch1 = _mm_loadu_ps(output_slice.add(idx + 1 * num_ffts) as *const f32);
-        let mut scratch1b = _mm_loadu_ps(output_slice.add(idx + 2 + 1 * num_ffts) as *const f32);
-
-        let mut scratch2 = _mm_loadu_ps(output_slice.add(idx + 2 * num_ffts) as *const f32);
-        let mut scratch2b = _mm_loadu_ps(output_slice.add(idx + 2 + 2 * num_ffts) as *const f32);
-
-        let mut scratch3 = _mm_loadu_ps(output_slice.add(idx + 3 * num_ffts) as *const f32);
-        let mut scratch3b = _mm_loadu_ps(output_slice.add(idx + 2 + 3 * num_ffts) as *const f32);
-
-        scratch1 = mul_complex_f32(scratch1, twiddles[tw_idx]);
-        scratch2 = mul_complex_f32(scratch2, twiddles[tw_idx + 1]);
-        scratch3 = mul_complex_f32(scratch3, twiddles[tw_idx + 2]);
-        scratch1b = mul_complex_f32(scratch1b, twiddles[tw_idx + 3]);
-        scratch2b = mul_complex_f32(scratch2b, twiddles[tw_idx + 4]);
-        scratch3b = mul_complex_f32(scratch3b, twiddles[tw_idx + 5]);
+        scratch1 = mul_complex_f32(scratch1, tw[0]);
+        scratch2 = mul_complex_f32(scratch2, tw[1]);
+        scratch3 = mul_complex_f32(scratch3, tw[2]);
+        scratch1b = mul_complex_f32(scratch1b, tw[3]);
+        scratch2b = mul_complex_f32(scratch2b, tw[4]);
+        scratch3b = mul_complex_f32(scratch3b, tw[5]);
 
         let scratch = bf4.perform_dual_fft_direct(scratch0, scratch1, scratch2, scratch3);
         let scratchb = bf4.perform_dual_fft_direct(scratch0b, scratch1b, scratch2b, scratch3b);
 
-        _mm_storeu_ps(output_slice.add(idx) as *mut f32, scratch[0]);
-        _mm_storeu_ps(output_slice.add(idx + 2) as *mut f32, scratchb[0]);
+        output.store_complex(scratch[0], idx);
+        output.store_complex(scratchb[0], idx+2);
+        output.store_complex(scratch[1], idx + 1 * num_ffts);
+        output.store_complex(scratchb[1], idx + 2 + 1 * num_ffts);
+        output.store_complex(scratch[2], idx + 2 * num_ffts);
+        output.store_complex(scratchb[2], idx + 2 + 2 * num_ffts);
+        output.store_complex(scratch[3], idx + 3 * num_ffts);
+        output.store_complex(scratchb[3], idx + 2 + 3 * num_ffts);
 
-        _mm_storeu_ps(output_slice.add(idx + 1 * num_ffts) as *mut f32, scratch[1]);
-        _mm_storeu_ps(
-            output_slice.add(idx + 2 + 1 * num_ffts) as *mut f32,
-            scratchb[1],
-        );
-
-        _mm_storeu_ps(output_slice.add(idx + 2 * num_ffts) as *mut f32, scratch[2]);
-        _mm_storeu_ps(
-            output_slice.add(idx + 2 + 2 * num_ffts) as *mut f32,
-            scratchb[2],
-        );
-
-        _mm_storeu_ps(output_slice.add(idx + 3 * num_ffts) as *mut f32, scratch[3]);
-        _mm_storeu_ps(
-            output_slice.add(idx + 2 + 3 * num_ffts) as *mut f32,
-            scratchb[3],
-        );
-        tw_idx += 6;
         idx += 4;
     }
 }
@@ -438,47 +426,37 @@ unsafe fn butterfly_4_64<T: FftNum>(
     bf4: &SseF64Butterfly4<T>,
 ) {
     let mut idx = 0usize;
-    let mut tw_idx = 0usize;
-    let output_slice = data.as_mut_ptr() as *mut Complex<f64>;
-    for _ in 0..num_ffts / 2 {
-        let scratch0 = _mm_loadu_pd(output_slice.add(idx) as *const f64);
-        let scratch0b = _mm_loadu_pd(output_slice.add(idx + 1) as *const f64);
-        let mut scratch1 = _mm_loadu_pd(output_slice.add(idx + 1 * num_ffts) as *const f64);
-        let mut scratch1b = _mm_loadu_pd(output_slice.add(idx + 1 + 1 * num_ffts) as *const f64);
-        let mut scratch2 = _mm_loadu_pd(output_slice.add(idx + 2 * num_ffts) as *const f64);
-        let mut scratch2b = _mm_loadu_pd(output_slice.add(idx + 1 + 2 * num_ffts) as *const f64);
-        let mut scratch3 = _mm_loadu_pd(output_slice.add(idx + 3 * num_ffts) as *const f64);
-        let mut scratch3b = _mm_loadu_pd(output_slice.add(idx + 1 + 3 * num_ffts) as *const f64);
+    let input: RawSlice<Complex<f64>> = RawSlice::new_transmuted(data);
+    let output: RawSliceMut<Complex<f64>> = RawSliceMut::new_transmuted(data);
+    for tw in twiddles.chunks_exact(6).take(num_ffts/2) {
+        let scratch0 = input.load_complex(idx);
+        let scratch0b = input.load_complex(idx+1);
+        let mut scratch1 = input.load_complex(idx + 1 * num_ffts);
+        let mut scratch1b = input.load_complex(idx + 1 + 1 * num_ffts);
+        let mut scratch2 = input.load_complex(idx + 2 * num_ffts);
+        let mut scratch2b = input.load_complex(idx + 1 + 2 * num_ffts);
+        let mut scratch3 = input.load_complex(idx + 3 * num_ffts);
+        let mut scratch3b = input.load_complex(idx + 1 + 3 * num_ffts);
 
-        scratch1 = mul_complex_f64(scratch1, twiddles[tw_idx]);
-        scratch2 = mul_complex_f64(scratch2, twiddles[tw_idx + 1]);
-        scratch3 = mul_complex_f64(scratch3, twiddles[tw_idx + 2]);
-        scratch1b = mul_complex_f64(scratch1b, twiddles[tw_idx + 3]);
-        scratch2b = mul_complex_f64(scratch2b, twiddles[tw_idx + 4]);
-        scratch3b = mul_complex_f64(scratch3b, twiddles[tw_idx + 5]);
+        scratch1 = mul_complex_f64(scratch1, tw[0]);
+        scratch2 = mul_complex_f64(scratch2, tw[1]);
+        scratch3 = mul_complex_f64(scratch3, tw[2]);
+        scratch1b = mul_complex_f64(scratch1b, tw[3]);
+        scratch2b = mul_complex_f64(scratch2b, tw[4]);
+        scratch3b = mul_complex_f64(scratch3b, tw[5]);
 
         let scratch = bf4.perform_fft_direct(scratch0, scratch1, scratch2, scratch3);
         let scratchb = bf4.perform_fft_direct(scratch0b, scratch1b, scratch2b, scratch3b);
 
-        _mm_storeu_pd(output_slice.add(idx) as *mut f64, scratch[0]);
-        _mm_storeu_pd(output_slice.add(idx + 1) as *mut f64, scratchb[0]);
-        _mm_storeu_pd(output_slice.add(idx + 1 * num_ffts) as *mut f64, scratch[1]);
-        _mm_storeu_pd(
-            output_slice.add(idx + 1 + 1 * num_ffts) as *mut f64,
-            scratchb[1],
-        );
-        _mm_storeu_pd(output_slice.add(idx + 2 * num_ffts) as *mut f64, scratch[2]);
-        _mm_storeu_pd(
-            output_slice.add(idx + 1 + 2 * num_ffts) as *mut f64,
-            scratchb[2],
-        );
-        _mm_storeu_pd(output_slice.add(idx + 3 * num_ffts) as *mut f64, scratch[3]);
-        _mm_storeu_pd(
-            output_slice.add(idx + 1 + 3 * num_ffts) as *mut f64,
-            scratchb[3],
-        );
+        output.store_complex(scratch[0], idx);
+        output.store_complex(scratchb[0], idx+1);
+        output.store_complex(scratch[1], idx + 1 * num_ffts);
+        output.store_complex(scratchb[1], idx + 1 + 1 * num_ffts);
+        output.store_complex(scratch[2], idx + 2 * num_ffts);
+        output.store_complex(scratchb[2], idx + 1 + 2 * num_ffts);
+        output.store_complex(scratch[3], idx + 3 * num_ffts);
+        output.store_complex(scratchb[3], idx + 1 + 3 * num_ffts);
 
-        tw_idx += 6;
         idx += 2;
     }
 }
