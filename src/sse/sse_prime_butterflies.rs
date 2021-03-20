@@ -469,21 +469,11 @@ impl<T: FftNum> SseF32Butterfly11<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_dual_fft_direct(&self, values: [__m128; 11]) -> [__m128; 11] {
-        // let x110p = _mm_add_ps(values[1], values[10]);
-        // let x110n = _mm_sub_ps(values[1], values[10]);
         let [x110p, x110n] = dual_fft2_interleaved_f32(values[1], values[10]);
         let [x29p, x29n] = dual_fft2_interleaved_f32(values[2], values[9]);
         let [x38p, x38n] = dual_fft2_interleaved_f32(values[3], values[8]);
         let [x47p, x47n] = dual_fft2_interleaved_f32(values[4], values[7]);
         let [x56p, x56n] = dual_fft2_interleaved_f32(values[5], values[6]);
-        // let x29p = _mm_add_ps(values[2], values[9]);
-        // let x29n = _mm_sub_ps(values[2], values[9]);
-        // let x38p = _mm_add_ps(values[3], values[8]);
-        // let x38n = _mm_sub_ps(values[3], values[8]);
-        // let x47p = _mm_add_ps(values[4], values[7]);
-        // let x47n = _mm_sub_ps(values[4], values[7]);
-        // let x56p = _mm_add_ps(values[5], values[6]);
-        // let x56n = _mm_sub_ps(values[5], values[6]);
 
         let temp_a1_1 = _mm_mul_ps(self.twiddle1re, x110p);
         let temp_a1_2 = _mm_mul_ps(self.twiddle2re, x29p);
@@ -537,16 +527,6 @@ impl<T: FftNum> SseF32Butterfly11<T> {
         let temp_b5_4 = _mm_mul_ps(self.twiddle2im, x47n);
         let temp_b5_5 = _mm_mul_ps(self.twiddle3im, x56n);
 
-        // let temp_a1 = _mm_add_ps(
-        //     values[0],
-        //     _mm_add_ps(
-        //         temp_a1_1,
-        //         _mm_add_ps(
-        //             temp_a1_2,
-        //             _mm_add_ps(temp_a1_3, _mm_add_ps(temp_a1_4, temp_a1_5)),
-        //         ),
-        //     ),
-        // );
         let value0 = values[0];
         let temp_a1 = calc_f32!(value0 + temp_a1_1 + temp_a1_2 + temp_a1_3 + temp_a1_4 + temp_a1_5);
         let temp_a2 = calc_f32!(value0 + temp_a2_1 + temp_a2_2 + temp_a2_3 + temp_a2_4 + temp_a2_5);
@@ -554,87 +534,11 @@ impl<T: FftNum> SseF32Butterfly11<T> {
         let temp_a4 = calc_f32!(value0 + temp_a4_1 + temp_a4_2 + temp_a4_3 + temp_a4_4 + temp_a4_5);
         let temp_a5 = calc_f32!(value0 + temp_a5_1 + temp_a5_2 + temp_a5_3 + temp_a5_4 + temp_a5_5);
 
-        // let temp_a2 = _mm_add_ps(
-        //     values[0],
-        //     _mm_add_ps(
-        //         temp_a2_1,
-        //         _mm_add_ps(
-        //             temp_a2_2,
-        //             _mm_add_ps(temp_a2_3, _mm_add_ps(temp_a2_4, temp_a2_5)),
-        //         ),
-        //     ),
-        // );
-        // let temp_a3 = _mm_add_ps(
-        //     values[0],
-        //     _mm_add_ps(
-        //         temp_a3_1,
-        //         _mm_add_ps(
-        //             temp_a3_2,
-        //             _mm_add_ps(temp_a3_3, _mm_add_ps(temp_a3_4, temp_a3_5)),
-        //         ),
-        //     ),
-        // );
-        // let temp_a4 = _mm_add_ps(
-        //     values[0],
-        //     _mm_add_ps(
-        //         temp_a4_1,
-        //         _mm_add_ps(
-        //             temp_a4_2,
-        //             _mm_add_ps(temp_a4_3, _mm_add_ps(temp_a4_4, temp_a4_5)),
-        //         ),
-        //     ),
-        // );
-        // let temp_a5 = _mm_add_ps(
-        //     values[0],
-        //     _mm_add_ps(
-        //         temp_a5_1,
-        //         _mm_add_ps(
-        //             temp_a5_2,
-        //             _mm_add_ps(temp_a5_3, _mm_add_ps(temp_a5_4, temp_a5_5)),
-        //         ),
-        //     ),
-        // );
-
         let temp_b1 = calc_f32!(temp_b1_1 + temp_b1_2 + temp_b1_3 + temp_b1_4 + temp_b1_5);
         let temp_b2 = calc_f32!(temp_b2_1 + temp_b2_2 - temp_b2_3 - temp_b2_4 - temp_b2_5);
         let temp_b3 = calc_f32!(temp_b3_1 - temp_b3_2 - temp_b3_3 + temp_b3_4 + temp_b3_5);
         let temp_b4 = calc_f32!(temp_b4_1 - temp_b4_2 + temp_b4_3 + temp_b4_4 - temp_b4_5);
         let temp_b5 = calc_f32!(temp_b5_1 - temp_b5_2 + temp_b5_3 - temp_b5_4 + temp_b5_5);
-        // let temp_b1 = _mm_add_ps(
-        //     temp_b1_1,
-        //     _mm_add_ps(
-        //         temp_b1_2,
-        //         _mm_add_ps(temp_b1_3, _mm_add_ps(temp_b1_4, temp_b1_5)),
-        //     ),
-        // );
-        // let temp_b2 = _mm_add_ps(
-        //     temp_b2_1,
-        //     _mm_sub_ps(
-        //         temp_b2_2,
-        //         _mm_add_ps(temp_b2_3, _mm_add_ps(temp_b2_4, temp_b2_5)),
-        //     ),
-        // );
-        // let temp_b3 = _mm_sub_ps(
-        //     temp_b3_1,
-        //     _mm_add_ps(
-        //         temp_b3_2,
-        //         _mm_sub_ps(temp_b3_3, _mm_add_ps(temp_b3_4, temp_b3_5)),
-        //     ),
-        // );
-        // let temp_b4 = _mm_sub_ps(
-        //     temp_b4_1,
-        //     _mm_sub_ps(
-        //         temp_b4_2,
-        //         _mm_add_ps(temp_b4_3, _mm_sub_ps(temp_b4_4, temp_b4_5)),
-        //     ),
-        // );
-        // let temp_b5 = _mm_sub_ps(
-        //     temp_b5_1,
-        //     _mm_sub_ps(
-        //         temp_b5_2,
-        //         _mm_sub_ps(temp_b5_3, _mm_sub_ps(temp_b5_4, temp_b5_5)),
-        //     ),
-        // );
 
         let temp_b1_rot = self.rotate.rotate_both(temp_b1);
         let temp_b2_rot = self.rotate.rotate_both(temp_b2);
@@ -642,13 +546,6 @@ impl<T: FftNum> SseF32Butterfly11<T> {
         let temp_b4_rot = self.rotate.rotate_both(temp_b4);
         let temp_b5_rot = self.rotate.rotate_both(temp_b5);
 
-        // let x0 = _mm_add_ps(
-        //     values[0],
-        //     _mm_add_ps(
-        //         x110p,
-        //         _mm_add_ps(x29p, _mm_add_ps(x38p, _mm_add_ps(x47p, x56p))),
-        //     ),
-        // );
         let x0 = calc_f32!(value0 + x110p + x29p + x38p + x47p + x56p);
 
         let [x1, x10] = dual_fft2_interleaved_f32(temp_a1, temp_b1_rot);
@@ -657,16 +554,6 @@ impl<T: FftNum> SseF32Butterfly11<T> {
         let [x4, x7] = dual_fft2_interleaved_f32(temp_a4, temp_b4_rot);
         let [x5, x6] = dual_fft2_interleaved_f32(temp_a5, temp_b5_rot);
 
-        // let x1 = _mm_add_ps(temp_a1, temp_b1_rot);
-        // let x2 = _mm_add_ps(temp_a2, temp_b2_rot);
-        // let x3 = _mm_add_ps(temp_a3, temp_b3_rot);
-        // let x4 = _mm_add_ps(temp_a4, temp_b4_rot);
-        // let x5 = _mm_add_ps(temp_a5, temp_b5_rot);
-        // let x6 = _mm_sub_ps(temp_a5, temp_b5_rot);
-        // let x7 = _mm_sub_ps(temp_a4, temp_b4_rot);
-        // let x8 = _mm_sub_ps(temp_a3, temp_b3_rot);
-        // let x9 = _mm_sub_ps(temp_a2, temp_b2_rot);
-        // let x10 = _mm_sub_ps(temp_a1, temp_b1_rot);
         [x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10]
     }
 }
