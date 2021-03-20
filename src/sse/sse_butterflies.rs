@@ -364,8 +364,8 @@ impl<T: FftNum> SseF32Butterfly2<T> {
 
         let out = self.perform_dual_fft_direct(values_a, values_b);
 
-        let out02 = pack_1st_f32(out[0], out[1]);
-        let out13 = pack_2nd_f32(out[0], out[1]);
+        let [out02, out13] = transpose_complex_2x2_f32(out[0], out[1]);
+
         output.store_complex(out02, 0);
         output.store_complex(out13, 2);
     }
@@ -392,7 +392,7 @@ impl<T: FftNum> SseF32Butterfly2<T> {
 // double lenth 2 fft of a and b, given as [x0, y0], [x1, y1]
 // result is [X0, Y0], [X1, Y1]
 #[inline(always)]
-unsafe fn dual_fft2_interleaved_f32(val02: __m128, val13: __m128) -> [__m128; 2] {
+pub(crate) unsafe fn dual_fft2_interleaved_f32(val02: __m128, val13: __m128) -> [__m128; 2] {
     let temp0 = _mm_add_ps(val02, val13);
     let temp1 = _mm_sub_ps(val02, val13);
     [temp0, temp1]
@@ -402,11 +402,8 @@ unsafe fn dual_fft2_interleaved_f32(val02: __m128, val13: __m128) -> [__m128; 2]
 // result is [X0, Y0], [X1, Y1]
 #[inline(always)]
 unsafe fn dual_fft2_contiguous_f32(left: __m128, right: __m128) -> [__m128; 2] {
-    let temp02 = pack_1st_f32(left, right);
-    let temp13 = pack_2nd_f32(left, right);
-    let temp0 = _mm_add_ps(temp02, temp13);
-    let temp1 = _mm_sub_ps(temp02, temp13);
-    [temp0, temp1]
+    let [temp02, temp13] = transpose_complex_2x2_f32(left, right);
+    dual_fft2_interleaved_f32(temp02, temp13)
 }
 
 // length 2 fft of x, given as [x0, x1]
@@ -414,8 +411,7 @@ unsafe fn dual_fft2_contiguous_f32(left: __m128, right: __m128) -> [__m128; 2] {
 #[inline(always)]
 unsafe fn solo_fft2_f32(values: __m128) -> __m128 {
     let temp = reverse_complex_elements_f32(values);
-    let sign = _mm_set_ps(-0.0, -0.0, 0.0, 0.0);
-    let temp2 = _mm_xor_ps(values, sign);
+    let temp2 = negate_2nd_f32(values);
     _mm_add_ps(temp2, temp)
 }
 
@@ -738,17 +734,18 @@ impl<T: FftNum> SseF32Butterfly4<T> {
         let value01b = input.load_complex(4);
         let value23b = input.load_complex(6);
 
-        let value0ab = pack_1st_f32(value01a, value01b);
-        let value1ab = pack_2nd_f32(value01a, value01b);
-        let value2ab = pack_1st_f32(value23a, value23b);
-        let value3ab = pack_2nd_f32(value23a, value23b);
+        let [value0ab, value1ab] = transpose_complex_2x2_f32(value01a, value01b);
+        let [value2ab, value3ab] = transpose_complex_2x2_f32(value23a, value23b);
 
         let out = self.perform_dual_fft_direct(value0ab, value1ab, value2ab, value3ab);
 
-        output.store_complex(pack_1st_f32(out[0], out[1]), 0);
-        output.store_complex(pack_2nd_f32(out[0], out[1]), 4);
-        output.store_complex(pack_1st_f32(out[2], out[3]), 2);
-        output.store_complex(pack_2nd_f32(out[2], out[3]), 6);
+        let [out0, out1] = transpose_complex_2x2_f32(out[0], out[1]);
+        let [out2, out3] = transpose_complex_2x2_f32(out[2], out[3]);
+
+        output.store_complex(out0, 0);
+        output.store_complex(out1, 4);
+        output.store_complex(out2, 2);
+        output.store_complex(out3, 6);
     }
 
     // length 4 fft of a, given as [x0, x1], [x2, x3]
@@ -1020,12 +1017,16 @@ impl<T: FftNum> SseF32Butterfly5<T> {
 
         let temp_a = _mm_add_ps(temp_a1, temp_a2);
         let temp_a = _mm_add_ps(value00, temp_a);
+        // let mut temp_a;
+        // calc_f32!(temp_a, value00 + temp_a1 + temp_a2);
 
         let temp_b = _mm_add_ps(temp_b1, temp_b2);
 
         let b_rot = self.rotate.rotate_both(temp_b);
 
         let x00 = _mm_add_ps(value00, _mm_add_ps(x1414p, x2323p));
+        // let mut x00;
+        // calc_f32!(x00, value00 + x1414p + x2323p);
 
         let x12 = _mm_add_ps(temp_a, b_rot);
         let x34 = reverse_complex_elements_f32(_mm_sub_ps(temp_a, b_rot));
@@ -1463,10 +1464,8 @@ impl<T: FftNum> SseF32Butterfly8<T> {
     unsafe fn perform_fft_direct(&self, values: [__m128; 4]) -> [__m128; 4] {
         // we're going to hardcode a step of split radix
         // step 1: copy and reorder the input into the scratch
-        let in02 = pack_1st_f32(values[0], values[1]);
-        let in13 = pack_2nd_f32(values[0], values[1]);
-        let in46 = pack_1st_f32(values[2], values[3]);
-        let in57 = pack_2nd_f32(values[2], values[3]);
+        let [in02, in13] = transpose_complex_2x2_f32(values[0], values[1]);
+        let [in46, in57] = transpose_complex_2x2_f32(values[2], values[3]);
 
         // step 2: column FFTs
         let val0 = self.bf4.perform_fft_direct(in02, in46);

@@ -7,6 +7,7 @@ use core::arch::x86_64::*;
 // |_|  |_|\__,_|\__|_| |_|         |____/_____|_.__/|_|\__|
 //
 
+
 pub struct Rotate90F32 {
     //sign_1st: __m128,
     sign_2nd: __m128,
@@ -134,6 +135,15 @@ pub unsafe fn duplicate_1st_f32(values: __m128) -> __m128 {
 #[inline(always)]
 pub unsafe fn duplicate_2nd_f32(values: __m128) -> __m128 {
     _mm_shuffle_ps(values, values, 0xEE)
+}
+
+// transpose a 2x2 complex matrix given as [x0, x1], [x2, x3]
+// result is [x0, x2], [x1, x3]
+#[inline(always)]
+pub unsafe fn transpose_complex_2x2_f32(left: __m128, right: __m128) -> [__m128; 2] {
+    let temp02 = pack_1st_f32(left, right);
+    let temp13 = pack_2nd_f32(left, right);
+    [temp02, temp13]
 }
 
 // Complex multiplication.

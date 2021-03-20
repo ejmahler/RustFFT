@@ -1,4 +1,60 @@
 use std::any::TypeId;
+use core::arch::x86_64::*;
+
+// Calculate the sum of an expression consisting of just plus and minus, like a + b - c + d 
+macro_rules! calc_f32 {
+    (+ $acc:tt + $($rest:tt)*)=> {
+        _mm_add_ps($acc, calc_f32!(+ $($rest)*))
+    };
+    (+ $acc:tt - $($rest:tt)*)=> {
+        _mm_sub_ps($acc, calc_f32!(- $($rest)*))
+    };
+    (- $acc:tt + $($rest:tt)*)=> {
+        _mm_sub_ps($acc, calc_f32!(+ $($rest)*))
+    };
+    (- $acc:tt - $($rest:tt)*)=> {
+        _mm_add_ps($acc, calc_f32!(- $($rest)*))
+    };
+    ($acc:tt + $($rest:tt)*)=> {
+        _mm_add_ps($acc, calc_f32!(+ $($rest)*))
+    };
+    ($acc:tt - $($rest:tt)*)=> {
+        _mm_sub_ps($acc, calc_f32!(- $($rest)*))
+    };
+    (+ $val:tt) => {$val};
+    (- $val:tt) => {$val};
+}
+
+// macro_rules! math_op_f32 {
+//     ($acc:ident + $val:ident ) => { $acc = _mm_add_ps($acc, $val); };
+//     ($acc:ident - $val:ident ) => { $acc = _mm_sub_ps($acc, $val); };
+// }
+
+// // Calculate the sum of an expression consisting of just plus and minus, like a + b - c + d 
+// macro_rules! calc_f32 {
+//     ($acc:ident, $first:ident $($op:tt $val:ident)* ) => { 
+//         $acc = $first;
+//         $(
+//             math_op_f32!($acc $op $val);
+//         )*
+//     }
+// }
+
+
+macro_rules! math_op_f64 {
+    ($acc:ident + $val:ident ) => { $acc = _mm_add_pd($acc, $val); };
+    ($acc:ident - $val:ident ) => { $acc = _mm_sub_pd($acc, $val); };
+}
+
+// Calculate the sum of an expression consisting of just plus and minus, like a + b - c + d 
+macro_rules! calc_f64 {
+    ($acc:ident, $first:ident $($op:tt $val:ident)* ) => { 
+        $acc = $first;
+        $(
+            math_op_f64!($acc $op $val);
+        )*
+    }
+}
 
 // Helper function to assert we have the right float type
 pub fn assert_f32<T: 'static>() {
@@ -259,3 +315,32 @@ macro_rules! boilerplate_sse_fft {
     };
 }
 */
+
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+    use core::arch::x86_64::*;
+
+    #[test]
+    fn test_calc_f32() {
+        unsafe {
+            let a = _mm_set_ps(1.0, 1.0, 1.0, 1.0);
+            let b = _mm_set_ps(2.0, 2.0, 2.0, 2.0);
+            let c = _mm_set_ps(3.0, 3.0, 3.0, 3.0);
+            let d = _mm_set_ps(4.0, 4.0, 4.0, 4.0);
+            let e = _mm_set_ps(5.0, 5.0, 5.0, 5.0);
+            let f = _mm_set_ps(6.0, 6.0, 6.0, 6.0);
+            let g = _mm_set_ps(7.0, 7.0, 7.0, 7.0);
+            let h = _mm_set_ps(8.0, 8.0, 8.0, 8.0);
+            let i = _mm_set_ps(9.0, 9.0, 9.0, 9.0);
+            let expected: f32 = 1.0 + 2.0 - 3.0 + 4.0 - 5.0 + 6.0 -7.0 - 8.0 + 9.0;
+            let res = calc_f32!(a + b - c + d - e + f - g - h + i);
+            let sum = std::mem::transmute::<__m128, [f32; 4]>(res);
+            assert_eq!(sum[0], expected);
+            assert_eq!(sum[1], expected);
+            assert_eq!(sum[2], expected);
+            assert_eq!(sum[3], expected);
+        }
+    }
+}
+
