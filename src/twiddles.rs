@@ -6,12 +6,12 @@ pub fn compute_twiddle<T: FftNum>(
     fft_len: usize,
     direction: FftDirection,
 ) -> Complex<T> {
-    let constant = -2f64 * std::f64::consts::PI / fft_len as f64;
-    let angle = constant * index as f64;
+    let constant = -T::TAU() / T::from_usize(fft_len).unwrap();
+    let angle = constant * T::from_usize(index).unwrap();
 
     let result = Complex {
-        re: T::from_f64(angle.cos()).unwrap(),
-        im: T::from_f64(angle.sin()).unwrap(),
+        re: angle.cos(),
+        im: angle.sin(),
     };
 
     match direction {
@@ -21,16 +21,16 @@ pub fn compute_twiddle<T: FftNum>(
 }
 
 pub fn compute_twiddle_floatindex<T: FftNum>(
-    index: f64,
+    index: T,
     fft_len: usize,
     direction: FftDirection,
 ) -> Complex<T> {
-    let constant = -2f64 * std::f64::consts::PI / fft_len as f64;
+    let constant = -T::TAU() / T::from_usize(fft_len).unwrap();
     let angle = constant * index;
 
     let result = Complex {
-        re: T::from_f64(angle.cos()).unwrap(),
-        im: T::from_f64(angle.sin()).unwrap(),
+        re: angle.cos(),
+        im: angle.sin(),
     };
 
     match direction {

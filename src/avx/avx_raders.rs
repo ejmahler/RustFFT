@@ -161,7 +161,7 @@ impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
         } as usize;
 
         // precompute the coefficients to use inside the process method
-        let unity_scale = T::from_f64(1f64 / inner_fft_len as f64).unwrap();
+        let unity_scale = T::from_usize(inner_fft_len).unwrap().recip();
         let mut inner_fft_input = vec![Complex::zero(); inner_fft_len];
         let mut twiddle_input = 1;
         for input_cell in &mut inner_fft_input {

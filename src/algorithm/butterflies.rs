@@ -680,7 +680,7 @@ impl<T: FftNum> Butterfly8<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
-            root2: T::from_f64(0.5f64.sqrt()).unwrap(),
+            root2: T::FRAC_1_SQRT_2(),
             direction,
         }
     }

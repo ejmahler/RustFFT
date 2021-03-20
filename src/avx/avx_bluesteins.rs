@@ -34,7 +34,7 @@ boilerplate_avx_fft_commondata!(BluesteinsAvx);
 
 impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
     fn compute_bluesteins_twiddle(index: usize, len: usize, direction: FftDirection) -> Complex<A> {
-        let index_float = index as f64;
+        let index_float = A::from_usize(index).unwrap();
         let index_squared = index_float * index_float;
 
         twiddles::compute_twiddle_floatindex(index_squared, len * 2, direction.opposite_direction())

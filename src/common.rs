@@ -1,10 +1,10 @@
-use num_traits::{FromPrimitive, Signed};
+use num_traits::{FromPrimitive, Signed, Float, FloatConst};
 use std::fmt::Debug;
 
 /// Generic floating point number, implemented for f32 and f64
-pub trait FftNum: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {}
+pub trait FftNum: Copy + FromPrimitive + Signed + Sync + Send + Debug + Float + FloatConst + 'static {}
 
-impl<T> FftNum for T where T: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {}
+impl<T> FftNum for T where T: Copy + FromPrimitive + Signed + Sync + Send + Debug + Float + FloatConst + 'static {}
 
 // Prints an error raised by an in-place FFT algorithm's `process_inplace` method
 // Marked cold and inline never to keep all formatting code out of the many monomorphized process_inplace methods

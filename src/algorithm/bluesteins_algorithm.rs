@@ -50,7 +50,7 @@ pub struct BluesteinsAlgorithm<T> {
 
 impl<T: FftNum> BluesteinsAlgorithm<T> {
     fn compute_bluesteins_twiddle(index: usize, len: usize, direction: FftDirection) -> Complex<T> {
-        let index_float = index as f64;
+        let index_float = T::from_usize(index).unwrap();
         let index_squared = index_float * index_float;
 
         twiddles::compute_twiddle_floatindex(index_squared, len * 2, direction.opposite_direction())
