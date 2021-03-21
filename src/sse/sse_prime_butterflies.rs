@@ -20,9 +20,9 @@ use super::sse_butterflies::{dual_fft2_interleaved_f32, solo_fft2_f64};
 // The algorithm is derived directly from the definition of the DFT, by eliminating any repeated calculations.
 // See the comments in src/algorithm/butterflies.rs for a detailed description.
 //
-// The script generates the code for performing a single f64 fft.
-// This is then copied to the f32 version, and modified by replacing the "perform_fft_direct" calls
-// of the inner ffts by "perform_dual_fft_direct", and the rotations from "rotate" to "rotate_both"
+// The script generates the code for performing a single f64 fft, as well as dual f32 fft.
+// It also generates the code for reading and writing the input and output.
+// The single 32-bit ffts reuse the dual ffts.
 
 //   _____           _________  _     _ _
 //  |___  |         |___ /___ \| |__ (_) |_
