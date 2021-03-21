@@ -963,16 +963,12 @@ impl<T: FftNum> SseF32Butterfly5<T> {
 
         let temp_a = _mm_add_ps(temp_a1, temp_a2);
         let temp_a = _mm_add_ps(value00, temp_a);
-        // let mut temp_a;
-        // calc_f32!(temp_a, value00 + temp_a1 + temp_a2);
 
         let temp_b = _mm_add_ps(temp_b1, temp_b2);
 
         let b_rot = self.rotate.rotate_both(temp_b);
 
         let x00 = _mm_add_ps(value00, _mm_add_ps(x1414p, x2323p));
-        // let mut x00;
-        // calc_f32!(x00, value00 + x1414p + x2323p);
 
         let x12 = _mm_add_ps(temp_a, b_rot);
         let x34 = reverse_complex_elements_f32(_mm_sub_ps(temp_a, b_rot));
