@@ -7,7 +7,6 @@ use core::arch::x86_64::*;
 // |_|  |_|\__,_|\__|_| |_|         |____/_____|_.__/|_|\__|
 //
 
-
 pub struct Rotate90F32 {
     //sign_1st: __m128,
     sign_2nd: __m128,
@@ -73,7 +72,7 @@ impl Rotate90F32 {
 #[inline(always)]
 pub unsafe fn pack_1st_f32(left: __m128, right: __m128) -> __m128 {
     //_mm_shuffle_ps(left, right, 0x44)
-    _mm_castpd_ps(_mm_unpacklo_pd(_mm_castps_pd(left),_mm_castps_pd(right)))
+    _mm_castpd_ps(_mm_unpacklo_pd(_mm_castps_pd(left), _mm_castps_pd(right)))
 }
 
 // Pack 2nd complex
@@ -83,7 +82,7 @@ pub unsafe fn pack_1st_f32(left: __m128, right: __m128) -> __m128 {
 #[inline(always)]
 pub unsafe fn pack_2nd_f32(left: __m128, right: __m128) -> __m128 {
     //_mm_shuffle_ps(left, right, 0xEE)
-    _mm_castpd_ps(_mm_unpackhi_pd(_mm_castps_pd(left),_mm_castps_pd(right)))
+    _mm_castpd_ps(_mm_unpackhi_pd(_mm_castps_pd(left), _mm_castps_pd(right)))
 }
 
 // Pack 1st and 2nd complex

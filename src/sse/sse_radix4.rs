@@ -18,8 +18,8 @@ use crate::{Direction, Fft, Length};
 use super::sse_common::{assert_f32, assert_f64};
 use super::sse_utils::*;
 
-use crate::array_utils::{RawSlice, RawSliceMut};
 use super::sse_vector::{SseArray, SseArrayMut};
+use crate::array_utils::{RawSlice, RawSliceMut};
 
 /// FFT algorithm optimized for power-of-two sizes, SSE accelerated version.
 /// This is designed to be used via a Planner, and not created directly.
@@ -192,9 +192,9 @@ unsafe fn butterfly_4_32<T: FftNum>(
     let mut idx = 0usize;
     let input: RawSlice<Complex<f32>> = RawSlice::new_transmuted(data);
     let output: RawSliceMut<Complex<f32>> = RawSliceMut::new_transmuted(data);
-    for tw in twiddles.chunks_exact(6).take(num_ffts/4) {
+    for tw in twiddles.chunks_exact(6).take(num_ffts / 4) {
         let scratch0 = input.load_complex(idx);
-        let scratch0b = input.load_complex(idx+2);
+        let scratch0b = input.load_complex(idx + 2);
         let mut scratch1 = input.load_complex(idx + 1 * num_ffts);
         let mut scratch1b = input.load_complex(idx + 2 + 1 * num_ffts);
         let mut scratch2 = input.load_complex(idx + 2 * num_ffts);
@@ -213,7 +213,7 @@ unsafe fn butterfly_4_32<T: FftNum>(
         let scratchb = bf4.perform_dual_fft_direct(scratch0b, scratch1b, scratch2b, scratch3b);
 
         output.store_complex(scratch[0], idx);
-        output.store_complex(scratchb[0], idx+2);
+        output.store_complex(scratchb[0], idx + 2);
         output.store_complex(scratch[1], idx + 1 * num_ffts);
         output.store_complex(scratchb[1], idx + 2 + 1 * num_ffts);
         output.store_complex(scratch[2], idx + 2 * num_ffts);
@@ -428,9 +428,9 @@ unsafe fn butterfly_4_64<T: FftNum>(
     let mut idx = 0usize;
     let input: RawSlice<Complex<f64>> = RawSlice::new_transmuted(data);
     let output: RawSliceMut<Complex<f64>> = RawSliceMut::new_transmuted(data);
-    for tw in twiddles.chunks_exact(6).take(num_ffts/2) {
+    for tw in twiddles.chunks_exact(6).take(num_ffts / 2) {
         let scratch0 = input.load_complex(idx);
-        let scratch0b = input.load_complex(idx+1);
+        let scratch0b = input.load_complex(idx + 1);
         let mut scratch1 = input.load_complex(idx + 1 * num_ffts);
         let mut scratch1b = input.load_complex(idx + 1 + 1 * num_ffts);
         let mut scratch2 = input.load_complex(idx + 2 * num_ffts);
@@ -449,7 +449,7 @@ unsafe fn butterfly_4_64<T: FftNum>(
         let scratchb = bf4.perform_fft_direct(scratch0b, scratch1b, scratch2b, scratch3b);
 
         output.store_complex(scratch[0], idx);
-        output.store_complex(scratchb[0], idx+1);
+        output.store_complex(scratchb[0], idx + 1);
         output.store_complex(scratch[1], idx + 1 * num_ffts);
         output.store_complex(scratchb[1], idx + 1 + 1 * num_ffts);
         output.store_complex(scratch[2], idx + 2 * num_ffts);

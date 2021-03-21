@@ -20,13 +20,19 @@ macro_rules! boilerplate_fft_sse_f32_butterfly {
             #[target_feature(enable = "sse4.1")]
             //#[inline(always)]
             pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
-                self.perform_fft_contiguous(RawSlice::new_transmuted(buffer), RawSliceMut::new_transmuted(buffer));
+                self.perform_fft_contiguous(
+                    RawSlice::new_transmuted(buffer),
+                    RawSliceMut::new_transmuted(buffer),
+                );
             }
 
             #[target_feature(enable = "sse4.1")]
             //#[inline(always)]
             pub(crate) unsafe fn perform_dual_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
-                self.perform_dual_fft_contiguous(RawSlice::new_transmuted(buffer), RawSliceMut::new_transmuted(buffer));
+                self.perform_dual_fft_contiguous(
+                    RawSlice::new_transmuted(buffer),
+                    RawSliceMut::new_transmuted(buffer),
+                );
             }
 
             // Do multiple ffts over a longer vector inplace, called from "process_with_scratch" of Fft trait
@@ -82,7 +88,10 @@ macro_rules! boilerplate_fft_sse_f64_butterfly {
             // Do a single fft
             #[target_feature(enable = "sse4.1")]
             pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
-                self.perform_fft_contiguous(RawSlice::new_transmuted(buffer), RawSliceMut::new_transmuted(buffer));
+                self.perform_fft_contiguous(
+                    RawSlice::new_transmuted(buffer),
+                    RawSliceMut::new_transmuted(buffer),
+                );
             }
 
             // Do multiple ffts over a longer vector inplace, called from "process_with_scratch" of Fft trait
@@ -1178,11 +1187,12 @@ impl<T: FftNum> SseF32Butterfly6<T> {
 
         let values = interleave_complex_f32!(input_packed, 3, {0, 1, 2});
 
-        let out = self.perform_dual_fft_direct(values[0], values[1], values[2], values[3], values[4], values[5]);
+        let out = self.perform_dual_fft_direct(
+            values[0], values[1], values[2], values[3], values[4], values[5],
+        );
 
         let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4});
         write_complex_to_array_strided!(out_sorted, output, 2, {0, 1, 2, 3, 4, 5});
-
     }
 
     #[inline(always)]
@@ -1375,7 +1385,7 @@ impl<T: FftNum> SseF32Butterfly8<T> {
         let out = self.perform_fft_direct(input_packed);
 
         for n in 0..4 {
-            output.store_complex(out[n], 2*n);
+            output.store_complex(out[n], 2 * n);
         }
         write_complex_to_array_strided!(out, output, 2, {0,1,2,3});
     }
@@ -2004,7 +2014,8 @@ impl<T: FftNum> SseF32Butterfly12<T> {
         input: RawSlice<Complex<f32>>,
         output: RawSliceMut<Complex<f32>>,
     ) {
-        let input_packed = read_complex_to_array!(input, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22});
+        let input_packed =
+            read_complex_to_array!(input, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22});
 
         let values = interleave_complex_f32!(input_packed, 6, {0, 1, 2, 3, 4, 5});
 
@@ -2128,7 +2139,6 @@ impl<T: FftNum> SseF64Butterfly12<T> {
         let out = self.perform_fft_direct(values);
 
         write_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11});
-
     }
 
     #[inline(always)]
@@ -2214,7 +2224,8 @@ impl<T: FftNum> SseF32Butterfly15<T> {
         input: RawSlice<Complex<f32>>,
         output: RawSliceMut<Complex<f32>>,
     ) {
-        let input_packed = read_complex_to_array!(input, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28});
+        let input_packed =
+            read_complex_to_array!(input, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28});
 
         let values = [
             pack_1and2_f32(input_packed[0], input_packed[7]),
@@ -2233,7 +2244,6 @@ impl<T: FftNum> SseF32Butterfly15<T> {
             pack_2and1_f32(input_packed[6], input_packed[14]),
             pack_1and2_f32(input_packed[7], input_packed[14]),
         ];
-
 
         let out = self.perform_dual_fft_direct(values);
 
@@ -2332,12 +2342,12 @@ impl<T: FftNum> SseF64Butterfly15<T> {
         input: RawSlice<Complex<f64>>,
         output: RawSliceMut<Complex<f64>>,
     ) {
-        let values = read_complex_to_array!(input, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
+        let values =
+            read_complex_to_array!(input, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
 
         let out = self.perform_fft_direct(values);
 
         write_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
-
     }
 
     #[inline(always)]
@@ -2651,7 +2661,8 @@ impl<T: FftNum> SseF64Butterfly16<T> {
         input: RawSlice<Complex<f64>>,
         output: RawSliceMut<Complex<f64>>,
     ) {
-        let values = read_complex_to_array!(input, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15});
+        let values =
+            read_complex_to_array!(input, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15});
 
         let out = self.perform_fft_direct(values);
 
@@ -2840,7 +2851,7 @@ impl<T: FftNum> SseF32Butterfly32<T> {
         let out = self.perform_fft_direct(input_packed);
 
         for n in 0..16 {
-            output.store_complex(out[n], 2*n);
+            output.store_complex(out[n], 2 * n);
         }
     }
 
