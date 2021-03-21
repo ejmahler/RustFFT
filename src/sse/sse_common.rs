@@ -1,60 +1,46 @@
 use std::any::TypeId;
 use core::arch::x86_64::*;
 
-// Calculate the sum of an expression consisting of just plus and minus, like a + b - c + d 
-macro_rules! calc_f32 {
-    (+ $acc:tt + $($rest:tt)*)=> {
-        _mm_add_ps($acc, calc_f32!(+ $($rest)*))
+// Calculate the sum of an expression consisting of just plus and minus, like `value = a + b - c + d`.
+// The expression is rewritten to `value = a + (b - (c - d))` (note the flipped sign on d).
+// After this the `$add` and `$sub` functions are used to make the calculation.
+// For f32 using `_mm_add_ps` and `_mm_sub_ps`, the expression `value = a + b - c + d` becomes:
+// ```let value = _mm_add_ps(a, _mm_sub_ps(b, _mm_sub_ps(c, d)));```
+// Only plus and minus are supported, and all the terms must be plain scalar variables. 
+// Using array indices, like `value = temp[0] + temp[1]` is not supported.
+macro_rules! calc_sum {
+    ($add:ident, $sub:ident, + $acc:tt + $($rest:tt)*)=> {
+        $add($acc, calc_sum!($add, $sub, + $($rest)*))
     };
-    (+ $acc:tt - $($rest:tt)*)=> {
-        _mm_sub_ps($acc, calc_f32!(- $($rest)*))
+    ($add:ident, $sub:ident, + $acc:tt - $($rest:tt)*)=> {
+        $sub($acc, calc_sum!($add, $sub, - $($rest)*))
     };
-    (- $acc:tt + $($rest:tt)*)=> {
-        _mm_sub_ps($acc, calc_f32!(+ $($rest)*))
+    ($add:ident, $sub:ident, - $acc:tt + $($rest:tt)*)=> {
+        $sub($acc, calc_sum!($add, $sub, + $($rest)*))
     };
-    (- $acc:tt - $($rest:tt)*)=> {
-        _mm_add_ps($acc, calc_f32!(- $($rest)*))
+    ($add:ident, $sub:ident, - $acc:tt - $($rest:tt)*)=> {
+        $add($acc, calc_sum!($add, $sub, - $($rest)*))
     };
-    ($acc:tt + $($rest:tt)*)=> {
-        _mm_add_ps($acc, calc_f32!(+ $($rest)*))
+    ($add:ident, $sub:ident, $acc:tt + $($rest:tt)*)=> {
+        $add($acc, calc_sum!($add, $sub, + $($rest)*))
     };
-    ($acc:tt - $($rest:tt)*)=> {
-        _mm_sub_ps($acc, calc_f32!(- $($rest)*))
+    ($add:ident, $sub:ident, $acc:tt - $($rest:tt)*)=> {
+        $sub($acc, calc_sum!($add, $sub, - $($rest)*))
     };
-    (+ $val:tt) => {$val};
-    (- $val:tt) => {$val};
+    ($add:ident, $sub:ident, + $val:tt) => {$val};
+    ($add:ident, $sub:ident, - $val:tt) => {$val};
 }
 
-// macro_rules! math_op_f32 {
-//     ($acc:ident + $val:ident ) => { $acc = _mm_add_ps($acc, $val); };
-//     ($acc:ident - $val:ident ) => { $acc = _mm_sub_ps($acc, $val); };
-// }
-
-// // Calculate the sum of an expression consisting of just plus and minus, like a + b - c + d 
-// macro_rules! calc_f32 {
-//     ($acc:ident, $first:ident $($op:tt $val:ident)* ) => { 
-//         $acc = $first;
-//         $(
-//             math_op_f32!($acc $op $val);
-//         )*
-//     }
-// }
-
-
-macro_rules! math_op_f64 {
-    ($acc:ident + $val:ident ) => { $acc = _mm_add_pd($acc, $val); };
-    ($acc:ident - $val:ident ) => { $acc = _mm_sub_pd($acc, $val); };
+// Calculate the sum of an expression consisting of just plus and minus, like a + b - c + d 
+macro_rules! calc_f32 {
+    ($($tokens:tt)*) => { calc_sum!(_mm_add_ps, _mm_sub_ps, $($tokens)*)};
 }
 
 // Calculate the sum of an expression consisting of just plus and minus, like a + b - c + d 
 macro_rules! calc_f64 {
-    ($acc:ident, $first:ident $($op:tt $val:ident)* ) => { 
-        $acc = $first;
-        $(
-            math_op_f64!($acc $op $val);
-        )*
-    }
+    ($($tokens:tt)*) => { calc_sum!(_mm_add_pd, _mm_sub_pd, $($tokens)*)};
 }
+
 
 // Helper function to assert we have the right float type
 pub fn assert_f32<T: 'static>() {
@@ -340,6 +326,25 @@ mod unit_tests {
             assert_eq!(sum[1], expected);
             assert_eq!(sum[2], expected);
             assert_eq!(sum[3], expected);
+        }
+    }
+    #[test]
+    fn test_calc_f64() {
+        unsafe {
+            let a = _mm_set_pd(1.0, 1.0);
+            let b = _mm_set_pd(2.0, 2.0);
+            let c = _mm_set_pd(3.0, 3.0);
+            let d = _mm_set_pd(4.0, 4.0);
+            let e = _mm_set_pd(5.0, 5.0);
+            let f = _mm_set_pd(6.0, 6.0);
+            let g = _mm_set_pd(7.0, 7.0);
+            let h = _mm_set_pd(8.0, 8.0);
+            let i = _mm_set_pd(9.0, 9.0);
+            let expected: f64 = 1.0 + 2.0 - 3.0 + 4.0 - 5.0 + 6.0 -7.0 - 8.0 + 9.0;
+            let res = calc_f64!(a + b - c + d - e + f - g - h + i);
+            let sum = std::mem::transmute::<__m128d, [f64; 2]>(res);
+            assert_eq!(sum[0], expected);
+            assert_eq!(sum[1], expected);
         }
     }
 }
