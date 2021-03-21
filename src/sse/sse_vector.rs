@@ -77,6 +77,29 @@ macro_rules! write_complex_to_array {
     }
 }
 
+// Write the low half of these indexes of an array of simd vectors to the same indexes of an SseArray.
+// Takes a name of a vector to read from, one to write to, and a list of indexes.
+// This statement:
+// ```
+// let values = write_partial_lo_complex_to_array!(input, output, {0, 1, 2, 3});
+// ```
+// is equivalent to:
+// ```
+// let values = [
+//     output.store_partial_lo_complex(input[0], 0),
+//     output.store_partial_lo_complex(input[1], 1),
+//     output.store_partial_lo_complex(input[2], 2),
+//     output.store_partial_lo_complex(input[3], 3),
+// ];
+// ```
+macro_rules! write_partial_lo_complex_to_array {
+    ($input:ident, $output:ident, { $($idx:literal),* }) => {
+        $(
+            $output.store_partial_lo_complex($input[$idx], $idx);
+        )*
+    }
+}
+
 // Write these indexes of an array of simd vectors to the same indexes, multiplied by a stride, of an SseArray.
 // Takes a name of a vector to read from, one to write to, an integer stride, and a list of indexes.
 // This statement:
@@ -244,122 +267,3 @@ impl SseArrayMut for RawSliceMut<Complex<f64>> {
         unimplemented!("Impossible to do a partial store of complex f64's");
     }
 }
-
-
-// RawSlice<Complex<f32>>
-
-/*
-impl<T: FftNum> SseArray<T> for RawSlice<Complex<f32>> {
-    #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> T::VectorType {
-        debug_assert!(self.len() >= index + T::COMPLEX_PER_VECTOR);
-        T::VectorType::load_complex(self.as_ptr().add(index))
-    }
-    #[inline(always)]
-    unsafe fn load_partial1_complex(
-        &self,
-        index: usize,
-    ) -> <T::VectorType as AvxVector256>::HalfVector {
-        debug_assert!(self.len() >= index + 1);
-        T::VectorType::load_partial1_complex(self.as_ptr().add(index))
-    }
-}
-impl<T: AvxNum> AvxArray<T> for RawSlice<Complex<T>> {
-    #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> T::VectorType {
-        debug_assert!(self.len() >= index + T::VectorType::COMPLEX_PER_VECTOR);
-        T::VectorType::load_complex(self.as_ptr().add(index))
-    }
-    #[inline(always)]
-    unsafe fn load_partial1_complex(
-        &self,
-        index: usize,
-    ) -> <T::VectorType as AvxVector256>::HalfVector {
-        debug_assert!(self.len() >= index + 1);
-        T::VectorType::load_partial1_complex(self.as_ptr().add(index))
-    }
-}
-
-impl<T: AvxNum> AvxArrayMut<T> for [Complex<T>] {
-    #[inline(always)]
-    unsafe fn store_complex(&mut self, data: T::VectorType, index: usize) {
-        debug_assert!(self.len() >= index + T::VectorType::COMPLEX_PER_VECTOR);
-        T::VectorType::store_complex(self.as_mut_ptr().add(index), data);
-    }
-    #[inline(always)]
-    unsafe fn store_partial1_complex(
-        &mut self,
-        data: <T::VectorType as AvxVector256>::HalfVector,
-        index: usize,
-    ) {
-        debug_assert!(self.len() >= index + 1);
-        T::VectorType::store_partial1_complex(self.as_mut_ptr().add(index), data)
-    }
-}
-impl<T: AvxNum> AvxArrayMut<T> for RawSliceMut<Complex<T>> {
-    #[inline(always)]
-    unsafe fn store_complex(&mut self, data: T::VectorType, index: usize) {
-        debug_assert!(self.len() >= index + T::VectorType::COMPLEX_PER_VECTOR);
-        T::VectorType::store_complex(self.as_mut_ptr().add(index), data);
-    }
-    #[inline(always)]
-    unsafe fn store_partial1_complex(
-        &mut self,
-        data: <T::VectorType as AvxVector256>::HalfVector,
-        index: usize,
-    ) {
-        debug_assert!(self.len() >= index + 1);
-        T::VectorType::store_partial1_complex(self.as_mut_ptr().add(index), data)
-    }
-}
-*/
-
-/*
-    #[inline(always)]
-    unsafe fn load_partial1_complex(ptr: *const Complex<Self::ScalarType>) -> Self::HalfVector {
-        let data = _mm_load_sd(ptr as *const f64);
-        _mm_castpd_ps(data)
-    }
-    #[inline(always)]
-    unsafe fn load_partial2_complex(ptr: *const Complex<Self::ScalarType>) -> Self::HalfVector {
-        _mm_loadu_ps(ptr as *const f32)
-    }
-    #[inline(always)]
-    unsafe fn load_partial3_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
-        let lo = Self::load_partial2_complex(ptr);
-        let hi = Self::load_partial1_complex(ptr.add(2));
-        Self::merge(lo, hi)
-    }
-    #[inline(always)]
-    unsafe fn store_partial1_complex(ptr: *mut Complex<Self::ScalarType>, data: Self::HalfVector) {
-        _mm_store_sd(ptr as *mut f64, _mm_castps_pd(data));
-    }
-    #[inline(always)]
-    unsafe fn store_partial2_complex(ptr: *mut Complex<Self::ScalarType>, data: Self::HalfVector) {
-        _mm_storeu_ps(ptr as *mut f32, data);
-    }
-    #[inline(always)]
-    unsafe fn store_partial3_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
-        Self::store_partial2_complex(ptr, data.lo());
-        Self::store_partial1_complex(ptr.add(2), data.hi());
-    }
-
-    #[inline(always)]
-    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
-        _mm256_loadu_ps(ptr as *const Self::ScalarType)
-    }
-    #[inline(always)]
-    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
-        _mm256_storeu_ps(ptr as *mut Self::ScalarType, data)
-    }
-
-    #[inline(always)]
-    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
-        _mm256_loadu_pd(ptr as *const Self::ScalarType)
-    }
-    #[inline(always)]
-    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
-        _mm256_storeu_pd(ptr as *mut Self::ScalarType, data)
-    }
-
-    */

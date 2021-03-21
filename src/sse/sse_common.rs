@@ -1,5 +1,4 @@
 use std::any::TypeId;
-use core::arch::x86_64::*;
 
 // Calculate the sum of an expression consisting of just plus and minus, like `value = a + b - c + d`.
 // The expression is rewritten to `value = a + (b - (c - d))` (note the flipped sign on d).
@@ -304,7 +303,6 @@ macro_rules! boilerplate_sse_fft {
 
 #[cfg(test)]
 mod unit_tests {
-    use super::*;
     use core::arch::x86_64::*;
 
     #[test]
