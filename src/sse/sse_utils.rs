@@ -72,7 +72,7 @@ impl Rotate90F32 {
 #[inline(always)]
 pub unsafe fn pack_1st_f32(left: __m128, right: __m128) -> __m128 {
     //_mm_shuffle_ps(left, right, 0x44)
-    _mm_castpd_ps(_mm_unpacklo_pd(_mm_castps_pd(left),_mm_castps_pd(right)))
+    _mm_castpd_ps(_mm_unpacklo_pd(_mm_castps_pd(left), _mm_castps_pd(right)))
 }
 
 // Pack 2nd complex
@@ -82,7 +82,7 @@ pub unsafe fn pack_1st_f32(left: __m128, right: __m128) -> __m128 {
 #[inline(always)]
 pub unsafe fn pack_2nd_f32(left: __m128, right: __m128) -> __m128 {
     //_mm_shuffle_ps(left, right, 0xEE)
-    _mm_castpd_ps(_mm_unpackhi_pd(_mm_castps_pd(left),_mm_castps_pd(right)))
+    _mm_castpd_ps(_mm_unpackhi_pd(_mm_castps_pd(left), _mm_castps_pd(right)))
 }
 
 // Pack 1st and 2nd complex
@@ -134,6 +134,15 @@ pub unsafe fn duplicate_1st_f32(values: __m128) -> __m128 {
 #[inline(always)]
 pub unsafe fn duplicate_2nd_f32(values: __m128) -> __m128 {
     _mm_shuffle_ps(values, values, 0xEE)
+}
+
+// transpose a 2x2 complex matrix given as [x0, x1], [x2, x3]
+// result is [x0, x2], [x1, x3]
+#[inline(always)]
+pub unsafe fn transpose_complex_2x2_f32(left: __m128, right: __m128) -> [__m128; 2] {
+    let temp02 = pack_1st_f32(left, right);
+    let temp13 = pack_2nd_f32(left, right);
+    [temp02, temp13]
 }
 
 // Complex multiplication.
