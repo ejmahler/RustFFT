@@ -60,12 +60,12 @@ def make_shuffling_single_f32(len):
     inputs =  ", ".join([str(n) for n in range(len)])
     print(f"let values = read_partial1_complex_to_array!(input, {{{inputs}}});")
     print("")
-    print("let out = self.perform_dual_fft_direct(values);")
+    print("let out = self.perform_parallel_fft_direct(values);")
     print("")
     print(f"write_partial_lo_complex_to_array!(out, output, {{{inputs}}});")
 
 
-def make_shuffling_dual_f32(len):
+def make_shuffling_parallel_f32(len):
     inputs =  ", ".join([str(2*n) for n in range(len)])
     outputs =  ", ".join([str(n) for n in range(len)])
     print(f"let input_packed = read_complex_to_array!(input, {{{inputs}}});")
@@ -77,7 +77,7 @@ def make_shuffling_dual_f32(len):
     print(f"    pack_1and2_f32(input_packed[{int(len/2)}], input_packed[{int(len-1)}]),")
     print("];")
     print("")
-    print("let out = self.perform_dual_fft_direct(values);")
+    print("let out = self.perform_parallel_fft_direct(values);")
     print("")
     print("let out_packed = [")
     for n in range(int(len/2)):
@@ -166,13 +166,13 @@ if __name__ == "__main__":
     print("\n\n--------------- f32 ---------------")
     print("\n ----- perform_fft_contiguous -----")
     make_shuffling_single_f32(fftlen)
-    print("\n ----- perform_dual_fft_contiguous -----")
-    make_shuffling_dual_f32(fftlen)
-    print("\n ----- perform_dual_fft_direct -----")
-    make_butterfly(fftlen, "dual_fft2_interleaved_f32", "calc_f32!", "_mm_mul_ps", "rotate_both")
+    print("\n ----- perform_parallel_fft_contiguous -----")
+    make_shuffling_parallel_f32(fftlen)
+    print("\n ----- perform_parallel_fft_direct -----")
+    make_butterfly(fftlen, "parallel_fft2_interleaved_f32", "calc_f32!", "_mm_mul_ps", "rotate_both")
 
     print("\n\n--------------- f64 ---------------")
     print("\n ----- perform_fft_contiguous -----")
     make_shuffling_single_f64(fftlen)
-    print("\n ----- perform_dual_fft_direct -----")
+    print("\n ----- perform_parallel_fft_direct -----")
     make_butterfly(fftlen, "solo_fft2_f64", "calc_f64!", "_mm_mul_pd", "rotate")
