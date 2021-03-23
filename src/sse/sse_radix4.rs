@@ -209,8 +209,8 @@ unsafe fn butterfly_4_32<T: FftNum>(
         scratch2b = mul_complex_f32(scratch2b, tw[4]);
         scratch3b = mul_complex_f32(scratch3b, tw[5]);
 
-        let scratch = bf4.perform_dual_fft_direct(scratch0, scratch1, scratch2, scratch3);
-        let scratchb = bf4.perform_dual_fft_direct(scratch0b, scratch1b, scratch2b, scratch3b);
+        let scratch = bf4.perform_parallel_fft_direct(scratch0, scratch1, scratch2, scratch3);
+        let scratchb = bf4.perform_parallel_fft_direct(scratch0b, scratch1b, scratch2b, scratch3b);
 
         output.store_complex(scratch[0], idx);
         output.store_complex(scratchb[0], idx + 2);

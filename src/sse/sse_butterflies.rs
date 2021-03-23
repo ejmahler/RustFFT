@@ -28,8 +28,8 @@ macro_rules! boilerplate_fft_sse_f32_butterfly {
 
             #[target_feature(enable = "sse4.1")]
             //#[inline(always)]
-            pub(crate) unsafe fn perform_dual_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
-                self.perform_dual_fft_contiguous(
+            pub(crate) unsafe fn perform_parallel_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
+                self.perform_parallel_fft_contiguous(
                     RawSlice::new_transmuted(buffer),
                     RawSliceMut::new_transmuted(buffer),
                 );
@@ -43,7 +43,7 @@ macro_rules! boilerplate_fft_sse_f32_butterfly {
             ) -> Result<(), ()> {
                 let len = buffer.len();
                 let alldone = array_utils::iter_chunks(buffer, 2 * self.len(), |chunk| {
-                    self.perform_dual_fft_butterfly(chunk)
+                    self.perform_parallel_fft_butterfly(chunk)
                 });
                 if alldone.is_err() && buffer.len() >= self.len() {
                     self.perform_fft_butterfly(&mut buffer[len - self.len()..]);
@@ -64,7 +64,7 @@ macro_rules! boilerplate_fft_sse_f32_butterfly {
                     output,
                     2 * self.len(),
                     |in_chunk, out_chunk| {
-                        self.perform_dual_fft_contiguous(
+                        self.perform_parallel_fft_contiguous(
                             RawSlice::new_transmuted(in_chunk),
                             RawSliceMut::new_transmuted(out_chunk),
                         )
@@ -219,7 +219,7 @@ impl<T: FftNum> SseF32Butterfly1<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_contiguous(
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         _input: RawSlice<Complex<f32>>,
         _output: RawSliceMut<Complex<f32>>,
@@ -300,7 +300,7 @@ impl<T: FftNum> SseF32Butterfly2<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_contiguous(
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         input: RawSlice<Complex<f32>>,
         output: RawSliceMut<Complex<f32>>,
@@ -308,7 +308,7 @@ impl<T: FftNum> SseF32Butterfly2<T> {
         let values_a = input.load_complex(0);
         let values_b = input.load_complex(2);
 
-        let out = self.perform_dual_fft_direct(values_a, values_b);
+        let out = self.perform_parallel_fft_direct(values_a, values_b);
 
         let [out02, out13] = transpose_complex_2x2_f32(out[0], out[1]);
 
@@ -326,19 +326,19 @@ impl<T: FftNum> SseF32Butterfly2<T> {
     // dual length 2 fft of x and y, given as [x0, x1], [y0, y1]
     // result is [X0, Y0], [X1, Y1]
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_direct(
+    pub(crate) unsafe fn perform_parallel_fft_direct(
         &self,
         values_x: __m128,
         values_y: __m128,
     ) -> [__m128; 2] {
-        dual_fft2_contiguous_f32(values_x, values_y)
+        parallel_fft2_contiguous_f32(values_x, values_y)
     }
 }
 
 // double lenth 2 fft of a and b, given as [x0, y0], [x1, y1]
 // result is [X0, Y0], [X1, Y1]
 #[inline(always)]
-pub(crate) unsafe fn dual_fft2_interleaved_f32(val02: __m128, val13: __m128) -> [__m128; 2] {
+pub(crate) unsafe fn parallel_fft2_interleaved_f32(val02: __m128, val13: __m128) -> [__m128; 2] {
     let temp0 = _mm_add_ps(val02, val13);
     let temp1 = _mm_sub_ps(val02, val13);
     [temp0, temp1]
@@ -347,9 +347,9 @@ pub(crate) unsafe fn dual_fft2_interleaved_f32(val02: __m128, val13: __m128) -> 
 // double lenth 2 fft of a and b, given as [x0, x1], [y0, y1]
 // result is [X0, Y0], [X1, Y1]
 #[inline(always)]
-unsafe fn dual_fft2_contiguous_f32(left: __m128, right: __m128) -> [__m128; 2] {
+unsafe fn parallel_fft2_contiguous_f32(left: __m128, right: __m128) -> [__m128; 2] {
     let [temp02, temp13] = transpose_complex_2x2_f32(left, right);
-    dual_fft2_interleaved_f32(temp02, temp13)
+    parallel_fft2_interleaved_f32(temp02, temp13)
 }
 
 // length 2 fft of x, given as [x0, x1]
@@ -473,7 +473,7 @@ impl<T: FftNum> SseF32Butterfly3<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_contiguous(
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         input: RawSlice<Complex<f32>>,
         output: RawSliceMut<Complex<f32>>,
@@ -486,7 +486,7 @@ impl<T: FftNum> SseF32Butterfly3<T> {
         let value1 = pack_2and1_f32(valuea0a1, valueb1b2);
         let value2 = pack_1and2_f32(valuea2b0, valueb1b2);
 
-        let out = self.perform_dual_fft_direct(value0, value1, value2);
+        let out = self.perform_parallel_fft_direct(value0, value1, value2);
 
         let out0 = pack_1st_f32(out[0], out[1]);
         let out1 = pack_1and2_f32(out[2], out[0]);
@@ -519,7 +519,7 @@ impl<T: FftNum> SseF32Butterfly3<T> {
     // length 3 dual fft of a, given as (x0, y0), (x1, y1), (x2, y2).
     // result is [(X0, Y0), (X1, Y1), (X2, Y2)]
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_direct(
+    pub(crate) unsafe fn perform_parallel_fft_direct(
         &self,
         value0: __m128,
         value1: __m128,
@@ -670,7 +670,7 @@ impl<T: FftNum> SseF32Butterfly4<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_contiguous(
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         input: RawSlice<Complex<f32>>,
         output: RawSliceMut<Complex<f32>>,
@@ -683,7 +683,7 @@ impl<T: FftNum> SseF32Butterfly4<T> {
         let [value0ab, value1ab] = transpose_complex_2x2_f32(value01a, value01b);
         let [value2ab, value3ab] = transpose_complex_2x2_f32(value23a, value23b);
 
-        let out = self.perform_dual_fft_direct(value0ab, value1ab, value2ab, value3ab);
+        let out = self.perform_parallel_fft_direct(value0ab, value1ab, value2ab, value3ab);
 
         let [out0, out1] = transpose_complex_2x2_f32(out[0], out[1]);
         let [out2, out3] = transpose_complex_2x2_f32(out[2], out[3]);
@@ -708,7 +708,7 @@ impl<T: FftNum> SseF32Butterfly4<T> {
         // step 1: transpose
         // and
         // step 2: column FFTs
-        let mut temp = dual_fft2_interleaved_f32(value01, value23);
+        let mut temp = parallel_fft2_interleaved_f32(value01, value23);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
         temp[1] = self.rotate.rotate_2nd(temp[1]);
@@ -718,11 +718,11 @@ impl<T: FftNum> SseF32Butterfly4<T> {
         // step 5: row FFTs
         // and
         // step 6: transpose by swapping index 1 and 2
-        dual_fft2_contiguous_f32(temp[0], temp[1])
+        parallel_fft2_contiguous_f32(temp[0], temp[1])
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_direct(
+    pub(crate) unsafe fn perform_parallel_fft_direct(
         &self,
         values0: __m128,
         values1: __m128,
@@ -735,8 +735,8 @@ impl<T: FftNum> SseF32Butterfly4<T> {
         // step 1: transpose
         // and
         // step 2: column FFTs
-        let temp0 = dual_fft2_interleaved_f32(values0, values2);
-        let mut temp1 = dual_fft2_interleaved_f32(values1, values3);
+        let temp0 = parallel_fft2_interleaved_f32(values0, values2);
+        let mut temp1 = parallel_fft2_interleaved_f32(values1, values3);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
         temp1[1] = self.rotate.rotate_both(temp1[1]);
@@ -744,8 +744,8 @@ impl<T: FftNum> SseF32Butterfly4<T> {
         // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
         // step 5: row FFTs
-        let out0 = dual_fft2_interleaved_f32(temp0[0], temp1[0]);
-        let out2 = dual_fft2_interleaved_f32(temp0[1], temp1[1]);
+        let out0 = parallel_fft2_interleaved_f32(temp0[0], temp1[0]);
+        let out2 = parallel_fft2_interleaved_f32(temp0[1], temp1[1]);
 
         // step 6: transpose by swapping index 1 and 2
         [out0[0], out2[0], out0[1], out2[1]]
@@ -909,7 +909,7 @@ impl<T: FftNum> SseF32Butterfly5<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_contiguous(
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         input: RawSlice<Complex<f32>>,
         output: RawSliceMut<Complex<f32>>,
@@ -922,7 +922,7 @@ impl<T: FftNum> SseF32Butterfly5<T> {
         let value3 = pack_2and1_f32(input_packed[1], input_packed[4]);
         let value4 = pack_1and2_f32(input_packed[2], input_packed[4]);
 
-        let out = self.perform_dual_fft_direct(value0, value1, value2, value3, value4);
+        let out = self.perform_parallel_fft_direct(value0, value1, value2, value3, value4);
 
         let out_packed = [
             pack_1st_f32(out[0], out[1]),
@@ -978,7 +978,7 @@ impl<T: FftNum> SseF32Butterfly5<T> {
     // length 5 dual fft of x and y, given as (x0, y0), (x1, y1) ... (x4, y4).
     // result is [(X0, Y0), (X1, Y1) ... (X2, Y2)]
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_direct(
+    pub(crate) unsafe fn perform_parallel_fft_direct(
         &self,
         value0: __m128,
         value1: __m128,
@@ -1174,7 +1174,7 @@ impl<T: FftNum> SseF32Butterfly6<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_contiguous(
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         input: RawSlice<Complex<f32>>,
         output: RawSliceMut<Complex<f32>>,
@@ -1183,7 +1183,7 @@ impl<T: FftNum> SseF32Butterfly6<T> {
 
         let values = interleave_complex_f32!(input_packed, 3, {0, 1, 2});
 
-        let out = self.perform_dual_fft_direct(
+        let out = self.perform_parallel_fft_direct(
             values[0], values[1], values[2], values[3], values[4], values[5],
         );
 
@@ -1205,12 +1205,12 @@ impl<T: FftNum> SseF32Butterfly6<T> {
         let reord1 = pack_1and2_f32(value23, value45);
         let reord2 = pack_1and2_f32(value45, value01);
 
-        let mid = self.bf3.perform_dual_fft_direct(reord0, reord1, reord2);
+        let mid = self.bf3.perform_parallel_fft_direct(reord0, reord1, reord2);
 
         // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
 
         // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = dual_fft2_contiguous_f32(mid[0], mid[1]);
+        let [output0, output1] = parallel_fft2_contiguous_f32(mid[0], mid[1]);
         let output2 = solo_fft2_f32(mid[2]);
 
         // Reorder into output
@@ -1222,7 +1222,7 @@ impl<T: FftNum> SseF32Butterfly6<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_direct(
+    pub(crate) unsafe fn perform_parallel_fft_direct(
         &self,
         value0: __m128,
         value1: __m128,
@@ -1234,15 +1234,15 @@ impl<T: FftNum> SseF32Butterfly6<T> {
         // Algorithm: 3x2 good-thomas
 
         // Size-3 FFTs down the columns of our reordered array
-        let mid0 = self.bf3.perform_dual_fft_direct(value0, value2, value4);
-        let mid1 = self.bf3.perform_dual_fft_direct(value3, value5, value1);
+        let mid0 = self.bf3.perform_parallel_fft_direct(value0, value2, value4);
+        let mid1 = self.bf3.perform_parallel_fft_direct(value3, value5, value1);
 
         // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
 
         // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = dual_fft2_interleaved_f32(mid0[0], mid1[0]);
-        let [output2, output3] = dual_fft2_interleaved_f32(mid0[1], mid1[1]);
-        let [output4, output5] = dual_fft2_interleaved_f32(mid0[2], mid1[2]);
+        let [output0, output1] = parallel_fft2_interleaved_f32(mid0[0], mid1[0]);
+        let [output2, output3] = parallel_fft2_interleaved_f32(mid0[1], mid1[1]);
+        let [output4, output5] = parallel_fft2_interleaved_f32(mid0[2], mid1[2]);
 
         // Reorder into output
         [output0, output3, output4, output1, output2, output5]
@@ -1387,7 +1387,7 @@ impl<T: FftNum> SseF32Butterfly8<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_contiguous(
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         input: RawSlice<Complex<f32>>,
         output: RawSliceMut<Complex<f32>>,
@@ -1396,7 +1396,7 @@ impl<T: FftNum> SseF32Butterfly8<T> {
 
         let values = interleave_complex_f32!(input_packed, 4, {0, 1, 2, 3});
 
-        let out = self.perform_dual_fft_direct(values);
+        let out = self.perform_parallel_fft_direct(values);
 
         let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6});
 
@@ -1428,25 +1428,25 @@ impl<T: FftNum> SseF32Butterfly8<T> {
         // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
 
         // step 5: row FFTs
-        let out0 = dual_fft2_interleaved_f32(val0[0], val2[0]);
-        let out1 = dual_fft2_interleaved_f32(val0[1], val2[1]);
+        let out0 = parallel_fft2_interleaved_f32(val0[0], val2[0]);
+        let out1 = parallel_fft2_interleaved_f32(val0[1], val2[1]);
 
         // step 6: rearrange and copy to buffer
         [out0[0], out1[0], out0[1], out1[1]]
     }
 
     #[inline(always)]
-    unsafe fn perform_dual_fft_direct(&self, values: [__m128; 8]) -> [__m128; 8] {
+    unsafe fn perform_parallel_fft_direct(&self, values: [__m128; 8]) -> [__m128; 8] {
         // we're going to hardcode a step of split radix
         // step 1: copy and reorder the input into the scratch
         // and
         // step 2: column FFTs
         let val03 = self
             .bf4
-            .perform_dual_fft_direct(values[0], values[2], values[4], values[6]);
+            .perform_parallel_fft_direct(values[0], values[2], values[4], values[6]);
         let mut val47 = self
             .bf4
-            .perform_dual_fft_direct(values[1], values[3], values[5], values[7]);
+            .perform_parallel_fft_direct(values[1], values[3], values[5], values[7]);
 
         // step 3: apply twiddle factors
         let val5b = self.rotate90.rotate_both(val47[1]);
@@ -1460,10 +1460,10 @@ impl<T: FftNum> SseF32Butterfly8<T> {
         // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
 
         // step 5: row FFTs
-        let out0 = dual_fft2_interleaved_f32(val03[0], val47[0]);
-        let out1 = dual_fft2_interleaved_f32(val03[1], val47[1]);
-        let out2 = dual_fft2_interleaved_f32(val03[2], val47[2]);
-        let out3 = dual_fft2_interleaved_f32(val03[3], val47[3]);
+        let out0 = parallel_fft2_interleaved_f32(val03[0], val47[0]);
+        let out1 = parallel_fft2_interleaved_f32(val03[1], val47[1]);
+        let out2 = parallel_fft2_interleaved_f32(val03[2], val47[2]);
+        let out3 = parallel_fft2_interleaved_f32(val03[3], val47[3]);
 
         // step 6: rearrange and copy to buffer
         [
@@ -1608,7 +1608,7 @@ impl<T: FftNum> SseF32Butterfly9<T> {
         // A single Sse 9-point will need a lot of shuffling, let's just reuse the dual one
         let values = read_partial1_complex_to_array!(input, {0,1,2,3,4,5,6,7,8});
 
-        let out = self.perform_dual_fft_direct(values);
+        let out = self.perform_parallel_fft_direct(values);
 
         for n in 0..9 {
             output.store_partial_lo_complex(out[n], n);
@@ -1616,7 +1616,7 @@ impl<T: FftNum> SseF32Butterfly9<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_contiguous(
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         input: RawSlice<Complex<f32>>,
         output: RawSliceMut<Complex<f32>>,
@@ -1635,7 +1635,7 @@ impl<T: FftNum> SseF32Butterfly9<T> {
             pack_1and2_f32(input_packed[4], input_packed[8]),
         ];
 
-        let out = self.perform_dual_fft_direct(values);
+        let out = self.perform_parallel_fft_direct(values);
 
         let out_packed = [
             pack_1st_f32(out[0], out[1]),
@@ -1653,19 +1653,19 @@ impl<T: FftNum> SseF32Butterfly9<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_direct(&self, values: [__m128; 9]) -> [__m128; 9] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [__m128; 9]) -> [__m128; 9] {
         // Algorithm: 3x3 mixed radix
 
         // Size-3 FFTs down the columns
         let mid0 = self
             .bf3
-            .perform_dual_fft_direct(values[0], values[3], values[6]);
+            .perform_parallel_fft_direct(values[0], values[3], values[6]);
         let mut mid1 = self
             .bf3
-            .perform_dual_fft_direct(values[1], values[4], values[7]);
+            .perform_parallel_fft_direct(values[1], values[4], values[7]);
         let mut mid2 = self
             .bf3
-            .perform_dual_fft_direct(values[2], values[5], values[8]);
+            .perform_parallel_fft_direct(values[2], values[5], values[8]);
 
         // Apply twiddle factors. Note that we're re-using twiddle2
         mid1[1] = mul_complex_f32(self.twiddle1, mid1[1]);
@@ -1673,12 +1673,15 @@ impl<T: FftNum> SseF32Butterfly9<T> {
         mid2[1] = mul_complex_f32(self.twiddle2, mid2[1]);
         mid2[2] = mul_complex_f32(self.twiddle4, mid2[2]);
 
-        let [output0, output1, output2] =
-            self.bf3.perform_dual_fft_direct(mid0[0], mid1[0], mid2[0]);
-        let [output3, output4, output5] =
-            self.bf3.perform_dual_fft_direct(mid0[1], mid1[1], mid2[1]);
-        let [output6, output7, output8] =
-            self.bf3.perform_dual_fft_direct(mid0[2], mid1[2], mid2[2]);
+        let [output0, output1, output2] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[0], mid1[0], mid2[0]);
+        let [output3, output4, output5] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[1], mid1[1], mid2[1]);
+        let [output6, output7, output8] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[2], mid1[2], mid2[2]);
 
         [
             output0, output3, output6, output1, output4, output7, output2, output5, output8,
@@ -1808,7 +1811,7 @@ impl<T: FftNum> SseF32Butterfly10<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_contiguous(
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         input: RawSlice<Complex<f32>>,
         output: RawSliceMut<Complex<f32>>,
@@ -1817,7 +1820,7 @@ impl<T: FftNum> SseF32Butterfly10<T> {
 
         let values = interleave_complex_f32!(input_packed, 5, {0, 1, 2, 3, 4});
 
-        let out = self.perform_dual_fft_direct(values);
+        let out = self.perform_parallel_fft_direct(values);
 
         let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6, 8});
 
@@ -1837,13 +1840,13 @@ impl<T: FftNum> SseF32Butterfly10<T> {
         // Size-5 FFTs down the columns of our reordered array
         let mids = self
             .bf5
-            .perform_dual_fft_direct(reord0, reord1, reord2, reord3, reord4);
+            .perform_parallel_fft_direct(reord0, reord1, reord2, reord3, reord4);
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
 
         // Transpose the data and do size-2 FFTs down the columns
-        let [temp01, temp23] = dual_fft2_contiguous_f32(mids[0], mids[1]);
-        let [temp45, temp67] = dual_fft2_contiguous_f32(mids[2], mids[3]);
+        let [temp01, temp23] = parallel_fft2_contiguous_f32(mids[0], mids[1]);
+        let [temp45, temp67] = parallel_fft2_contiguous_f32(mids[2], mids[3]);
         let temp89 = solo_fft2_f32(mids[4]);
 
         // Reorder
@@ -1857,25 +1860,25 @@ impl<T: FftNum> SseF32Butterfly10<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_direct(&self, values: [__m128; 10]) -> [__m128; 10] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [__m128; 10]) -> [__m128; 10] {
         // Algorithm: 5x2 good-thomas
 
         // Size-5 FFTs down the columns of our reordered array
         let mid0 = self
             .bf5
-            .perform_dual_fft_direct(values[0], values[2], values[4], values[6], values[8]);
+            .perform_parallel_fft_direct(values[0], values[2], values[4], values[6], values[8]);
         let mid1 = self
             .bf5
-            .perform_dual_fft_direct(values[5], values[7], values[9], values[1], values[3]);
+            .perform_parallel_fft_direct(values[5], values[7], values[9], values[1], values[3]);
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
 
         // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = dual_fft2_interleaved_f32(mid0[0], mid1[0]);
-        let [output2, output3] = dual_fft2_interleaved_f32(mid0[1], mid1[1]);
-        let [output4, output5] = dual_fft2_interleaved_f32(mid0[2], mid1[2]);
-        let [output6, output7] = dual_fft2_interleaved_f32(mid0[3], mid1[3]);
-        let [output8, output9] = dual_fft2_interleaved_f32(mid0[4], mid1[4]);
+        let [output0, output1] = parallel_fft2_interleaved_f32(mid0[0], mid1[0]);
+        let [output2, output3] = parallel_fft2_interleaved_f32(mid0[1], mid1[1]);
+        let [output4, output5] = parallel_fft2_interleaved_f32(mid0[2], mid1[2]);
+        let [output6, output7] = parallel_fft2_interleaved_f32(mid0[3], mid1[3]);
+        let [output8, output9] = parallel_fft2_interleaved_f32(mid0[4], mid1[4]);
 
         // Reorder and return
         [
@@ -2005,7 +2008,7 @@ impl<T: FftNum> SseF32Butterfly12<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_contiguous(
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         input: RawSlice<Complex<f32>>,
         output: RawSliceMut<Complex<f32>>,
@@ -2015,7 +2018,7 @@ impl<T: FftNum> SseF32Butterfly12<T> {
 
         let values = interleave_complex_f32!(input_packed, 6, {0, 1, 2, 3, 4, 5});
 
-        let out = self.perform_dual_fft_direct(values);
+        let out = self.perform_parallel_fft_direct(values);
 
         let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6, 8, 10});
 
@@ -2042,9 +2045,12 @@ impl<T: FftNum> SseF32Butterfly12<T> {
         // Since this is good-thomas algorithm, we don't need twiddle factors
 
         // Transpose the data and do size-3 FFTs down the columns
-        let [temp03, temp14, temp25] = self.bf3.perform_dual_fft_direct(mid0[0], mid1[0], mid2[0]);
-        let [temp69, temp710, temp811] =
-            self.bf3.perform_dual_fft_direct(mid0[1], mid1[1], mid2[1]);
+        let [temp03, temp14, temp25] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[0], mid1[0], mid2[0]);
+        let [temp69, temp710, temp811] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[1], mid1[1], mid2[1]);
 
         // Reorder and return
         [
@@ -2058,31 +2064,35 @@ impl<T: FftNum> SseF32Butterfly12<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_direct(&self, values: [__m128; 12]) -> [__m128; 12] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [__m128; 12]) -> [__m128; 12] {
         // Algorithm: 4x3 good-thomas
 
         // Size-4 FFTs down the columns of our reordered array
         let mid0 = self
             .bf4
-            .perform_dual_fft_direct(values[0], values[3], values[6], values[9]);
+            .perform_parallel_fft_direct(values[0], values[3], values[6], values[9]);
         let mid1 = self
             .bf4
-            .perform_dual_fft_direct(values[4], values[7], values[10], values[1]);
+            .perform_parallel_fft_direct(values[4], values[7], values[10], values[1]);
         let mid2 = self
             .bf4
-            .perform_dual_fft_direct(values[8], values[11], values[2], values[5]);
+            .perform_parallel_fft_direct(values[8], values[11], values[2], values[5]);
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
 
         // Transpose the data and do size-3 FFTs down the columns
-        let [output0, output1, output2] =
-            self.bf3.perform_dual_fft_direct(mid0[0], mid1[0], mid2[0]);
-        let [output3, output4, output5] =
-            self.bf3.perform_dual_fft_direct(mid0[1], mid1[1], mid2[1]);
-        let [output6, output7, output8] =
-            self.bf3.perform_dual_fft_direct(mid0[2], mid1[2], mid2[2]);
-        let [output9, output10, output11] =
-            self.bf3.perform_dual_fft_direct(mid0[3], mid1[3], mid2[3]);
+        let [output0, output1, output2] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[0], mid1[0], mid2[0]);
+        let [output3, output4, output5] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[1], mid1[1], mid2[1]);
+        let [output6, output7, output8] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[2], mid1[2], mid2[2]);
+        let [output9, output10, output11] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[3], mid1[3], mid2[3]);
 
         // Reorder and return
         [
@@ -2207,7 +2217,7 @@ impl<T: FftNum> SseF32Butterfly15<T> {
         // A single Sse 15-point will need a lot of shuffling, let's just reuse the dual one
         let values = read_partial1_complex_to_array!(input, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14});
 
-        let out = self.perform_dual_fft_direct(values);
+        let out = self.perform_parallel_fft_direct(values);
 
         for n in 0..15 {
             output.store_partial_lo_complex(out[n], n);
@@ -2215,7 +2225,7 @@ impl<T: FftNum> SseF32Butterfly15<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_contiguous(
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         input: RawSlice<Complex<f32>>,
         output: RawSliceMut<Complex<f32>>,
@@ -2241,7 +2251,7 @@ impl<T: FftNum> SseF32Butterfly15<T> {
             pack_1and2_f32(input_packed[7], input_packed[14]),
         ];
 
-        let out = self.perform_dual_fft_direct(values);
+        let out = self.perform_parallel_fft_direct(values);
 
         let out_packed = [
             pack_1st_f32(out[0], out[1]),
@@ -2265,33 +2275,38 @@ impl<T: FftNum> SseF32Butterfly15<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_direct(&self, values: [__m128; 15]) -> [__m128; 15] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [__m128; 15]) -> [__m128; 15] {
         // Algorithm: 5x3 good-thomas
 
         // Size-5 FFTs down the columns of our reordered array
         let mid0 = self
             .bf5
-            .perform_dual_fft_direct(values[0], values[3], values[6], values[9], values[12]);
+            .perform_parallel_fft_direct(values[0], values[3], values[6], values[9], values[12]);
         let mid1 = self
             .bf5
-            .perform_dual_fft_direct(values[5], values[8], values[11], values[14], values[2]);
+            .perform_parallel_fft_direct(values[5], values[8], values[11], values[14], values[2]);
         let mid2 = self
             .bf5
-            .perform_dual_fft_direct(values[10], values[13], values[1], values[4], values[7]);
+            .perform_parallel_fft_direct(values[10], values[13], values[1], values[4], values[7]);
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
 
         // Transpose the data and do size-3 FFTs down the columns
-        let [output0, output1, output2] =
-            self.bf3.perform_dual_fft_direct(mid0[0], mid1[0], mid2[0]);
-        let [output3, output4, output5] =
-            self.bf3.perform_dual_fft_direct(mid0[1], mid1[1], mid2[1]);
-        let [output6, output7, output8] =
-            self.bf3.perform_dual_fft_direct(mid0[2], mid1[2], mid2[2]);
-        let [output9, output10, output11] =
-            self.bf3.perform_dual_fft_direct(mid0[3], mid1[3], mid2[3]);
-        let [output12, output13, output14] =
-            self.bf3.perform_dual_fft_direct(mid0[4], mid1[4], mid2[4]);
+        let [output0, output1, output2] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[0], mid1[0], mid2[0]);
+        let [output3, output4, output5] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[1], mid1[1], mid2[1]);
+        let [output6, output7, output8] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[2], mid1[2], mid2[2]);
+        let [output9, output10, output11] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[3], mid1[3], mid2[3]);
+        let [output12, output13, output14] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[4], mid1[4], mid2[4]);
 
         [
             output0, output4, output8, output9, output13, output2, output3, output7, output11,
@@ -2461,7 +2476,7 @@ impl<T: FftNum> SseF32Butterfly16<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_contiguous(
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         input: RawSlice<Complex<f32>>,
         output: RawSliceMut<Complex<f32>>,
@@ -2470,7 +2485,7 @@ impl<T: FftNum> SseF32Butterfly16<T> {
 
         let values = interleave_complex_f32!(input_packed, 8, {0, 1, 2, 3 ,4 ,5 ,6 ,7});
 
-        let out = self.perform_dual_fft_direct(values);
+        let out = self.perform_parallel_fft_direct(values);
 
         let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6, 8, 10, 12, 14});
 
@@ -2506,8 +2521,8 @@ impl<T: FftNum> SseF32Butterfly16<T> {
         odds3[1] = mul_complex_f32(odds3[1], self.twiddle23conj);
 
         // step 4: cross FFTs
-        let mut temp0 = dual_fft2_interleaved_f32(odds1[0], odds3[0]);
-        let mut temp1 = dual_fft2_interleaved_f32(odds1[1], odds3[1]);
+        let mut temp0 = parallel_fft2_interleaved_f32(odds1[0], odds3[0]);
+        let mut temp1 = parallel_fft2_interleaved_f32(odds1[1], odds3[1]);
 
         // apply the butterfly 4 twiddle factor, which is just a rotation
         temp0[1] = self.rotate90.rotate_both(temp0[1]);
@@ -2527,20 +2542,20 @@ impl<T: FftNum> SseF32Butterfly16<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_dual_fft_direct(&self, input: [__m128; 16]) -> [__m128; 16] {
+    unsafe fn perform_parallel_fft_direct(&self, input: [__m128; 16]) -> [__m128; 16] {
         // we're going to hardcode a step of split radix
         // step 1: copy and reorder the  input into the scratch
         // and
         // step 2: column FFTs
-        let evens = self.bf8.perform_dual_fft_direct([
+        let evens = self.bf8.perform_parallel_fft_direct([
             input[0], input[2], input[4], input[6], input[8], input[10], input[12], input[14],
         ]);
         let mut odds1 = self
             .bf4
-            .perform_dual_fft_direct(input[1], input[5], input[9], input[13]);
+            .perform_parallel_fft_direct(input[1], input[5], input[9], input[13]);
         let mut odds3 = self
             .bf4
-            .perform_dual_fft_direct(input[15], input[3], input[7], input[11]);
+            .perform_parallel_fft_direct(input[15], input[3], input[7], input[11]);
 
         // step 3: apply twiddle factors
         odds1[1] = mul_complex_f32(odds1[1], self.twiddle1);
@@ -2553,10 +2568,10 @@ impl<T: FftNum> SseF32Butterfly16<T> {
         odds3[3] = mul_complex_f32(odds3[3], self.twiddle3c);
 
         // step 4: cross FFTs
-        let mut temp0 = dual_fft2_interleaved_f32(odds1[0], odds3[0]);
-        let mut temp1 = dual_fft2_interleaved_f32(odds1[1], odds3[1]);
-        let mut temp2 = dual_fft2_interleaved_f32(odds1[2], odds3[2]);
-        let mut temp3 = dual_fft2_interleaved_f32(odds1[3], odds3[3]);
+        let mut temp0 = parallel_fft2_interleaved_f32(odds1[0], odds3[0]);
+        let mut temp1 = parallel_fft2_interleaved_f32(odds1[1], odds3[1]);
+        let mut temp2 = parallel_fft2_interleaved_f32(odds1[2], odds3[2]);
+        let mut temp3 = parallel_fft2_interleaved_f32(odds1[3], odds3[3]);
 
         // apply the butterfly 4 twiddle factor, which is just a rotation
         temp0[1] = self.rotate90.rotate_both(temp0[1]);
@@ -2852,7 +2867,7 @@ impl<T: FftNum> SseF32Butterfly32<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_contiguous(
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         input: RawSlice<Complex<f32>>,
         output: RawSliceMut<Complex<f32>>,
@@ -2861,7 +2876,7 @@ impl<T: FftNum> SseF32Butterfly32<T> {
 
         let values = interleave_complex_f32!(input_packed, 16, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15});
 
-        let out = self.perform_dual_fft_direct(values);
+        let out = self.perform_parallel_fft_direct(values);
 
         let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30});
 
@@ -2919,10 +2934,10 @@ impl<T: FftNum> SseF32Butterfly32<T> {
         odds3[3] = mul_complex_f32(odds3[3], self.twiddle67conj);
 
         // step 4: cross FFTs
-        let mut temp0 = dual_fft2_interleaved_f32(odds1[0], odds3[0]);
-        let mut temp1 = dual_fft2_interleaved_f32(odds1[1], odds3[1]);
-        let mut temp2 = dual_fft2_interleaved_f32(odds1[2], odds3[2]);
-        let mut temp3 = dual_fft2_interleaved_f32(odds1[3], odds3[3]);
+        let mut temp0 = parallel_fft2_interleaved_f32(odds1[0], odds3[0]);
+        let mut temp1 = parallel_fft2_interleaved_f32(odds1[1], odds3[1]);
+        let mut temp2 = parallel_fft2_interleaved_f32(odds1[2], odds3[2]);
+        let mut temp3 = parallel_fft2_interleaved_f32(odds1[3], odds3[3]);
 
         // apply the butterfly 4 twiddle factor, which is just a rotation
         temp0[1] = self.rotate90.rotate_both(temp0[1]);
@@ -2952,20 +2967,20 @@ impl<T: FftNum> SseF32Butterfly32<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_dual_fft_direct(&self, input: [__m128; 32]) -> [__m128; 32] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(&self, input: [__m128; 32]) -> [__m128; 32] {
         // we're going to hardcode a step of split radix
 
         // step 1: copy and reorder the  input into the scratch
         // and
         // step 2: column FFTs
-        let evens = self.bf16.perform_dual_fft_direct([
+        let evens = self.bf16.perform_parallel_fft_direct([
             input[0], input[2], input[4], input[6], input[8], input[10], input[12], input[14],
             input[16], input[18], input[20], input[22], input[24], input[26], input[28], input[30],
         ]);
-        let mut odds1 = self.bf8.perform_dual_fft_direct([
+        let mut odds1 = self.bf8.perform_parallel_fft_direct([
             input[1], input[5], input[9], input[13], input[17], input[21], input[25], input[29],
         ]);
-        let mut odds3 = self.bf8.perform_dual_fft_direct([
+        let mut odds3 = self.bf8.perform_parallel_fft_direct([
             input[31], input[3], input[7], input[11], input[15], input[19], input[23], input[27],
         ]);
 
@@ -2992,14 +3007,14 @@ impl<T: FftNum> SseF32Butterfly32<T> {
         odds3[7] = mul_complex_f32(odds3[7], self.twiddle7c);
 
         // step 4: cross FFTs
-        let mut temp0 = dual_fft2_interleaved_f32(odds1[0], odds3[0]);
-        let mut temp1 = dual_fft2_interleaved_f32(odds1[1], odds3[1]);
-        let mut temp2 = dual_fft2_interleaved_f32(odds1[2], odds3[2]);
-        let mut temp3 = dual_fft2_interleaved_f32(odds1[3], odds3[3]);
-        let mut temp4 = dual_fft2_interleaved_f32(odds1[4], odds3[4]);
-        let mut temp5 = dual_fft2_interleaved_f32(odds1[5], odds3[5]);
-        let mut temp6 = dual_fft2_interleaved_f32(odds1[6], odds3[6]);
-        let mut temp7 = dual_fft2_interleaved_f32(odds1[7], odds3[7]);
+        let mut temp0 = parallel_fft2_interleaved_f32(odds1[0], odds3[0]);
+        let mut temp1 = parallel_fft2_interleaved_f32(odds1[1], odds3[1]);
+        let mut temp2 = parallel_fft2_interleaved_f32(odds1[2], odds3[2]);
+        let mut temp3 = parallel_fft2_interleaved_f32(odds1[3], odds3[3]);
+        let mut temp4 = parallel_fft2_interleaved_f32(odds1[4], odds3[4]);
+        let mut temp5 = parallel_fft2_interleaved_f32(odds1[5], odds3[5]);
+        let mut temp6 = parallel_fft2_interleaved_f32(odds1[6], odds3[6]);
+        let mut temp7 = parallel_fft2_interleaved_f32(odds1[7], odds3[7]);
 
         // apply the butterfly 4 twiddle factor, which is just a rotation
         temp0[1] = self.rotate90.rotate_both(temp0[1]);
@@ -3353,7 +3368,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_dual_fft4_32() {
+    fn test_parallel_fft4_32() {
         unsafe {
             let val_a1 = Complex::<f32>::new(1.0, 2.5);
             let val_a2 = Complex::<f32>::new(3.2, 4.2);
@@ -3379,7 +3394,7 @@ mod unit_tests {
 
             dft.process(&mut val_a);
             dft.process(&mut val_b);
-            let res_both = bf4.perform_dual_fft_direct(p1, p2, p3, p4);
+            let res_both = bf4.perform_parallel_fft_direct(p1, p2, p3, p4);
 
             let res = std::mem::transmute::<[__m128; 4], [Complex<f32>; 8]>(res_both);
             let sse_res_a = [res[0], res[2], res[4], res[6]];
