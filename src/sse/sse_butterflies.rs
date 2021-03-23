@@ -1673,12 +1673,15 @@ impl<T: FftNum> SseF32Butterfly9<T> {
         mid2[1] = mul_complex_f32(self.twiddle2, mid2[1]);
         mid2[2] = mul_complex_f32(self.twiddle4, mid2[2]);
 
-        let [output0, output1, output2] =
-            self.bf3.perform_parallel_fft_direct(mid0[0], mid1[0], mid2[0]);
-        let [output3, output4, output5] =
-            self.bf3.perform_parallel_fft_direct(mid0[1], mid1[1], mid2[1]);
-        let [output6, output7, output8] =
-            self.bf3.perform_parallel_fft_direct(mid0[2], mid1[2], mid2[2]);
+        let [output0, output1, output2] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[0], mid1[0], mid2[0]);
+        let [output3, output4, output5] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[1], mid1[1], mid2[1]);
+        let [output6, output7, output8] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[2], mid1[2], mid2[2]);
 
         [
             output0, output3, output6, output1, output4, output7, output2, output5, output8,
@@ -2042,9 +2045,12 @@ impl<T: FftNum> SseF32Butterfly12<T> {
         // Since this is good-thomas algorithm, we don't need twiddle factors
 
         // Transpose the data and do size-3 FFTs down the columns
-        let [temp03, temp14, temp25] = self.bf3.perform_parallel_fft_direct(mid0[0], mid1[0], mid2[0]);
-        let [temp69, temp710, temp811] =
-            self.bf3.perform_parallel_fft_direct(mid0[1], mid1[1], mid2[1]);
+        let [temp03, temp14, temp25] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[0], mid1[0], mid2[0]);
+        let [temp69, temp710, temp811] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[1], mid1[1], mid2[1]);
 
         // Reorder and return
         [
@@ -2075,14 +2081,18 @@ impl<T: FftNum> SseF32Butterfly12<T> {
         // Since this is good-thomas algorithm, we don't need twiddle factors
 
         // Transpose the data and do size-3 FFTs down the columns
-        let [output0, output1, output2] =
-            self.bf3.perform_parallel_fft_direct(mid0[0], mid1[0], mid2[0]);
-        let [output3, output4, output5] =
-            self.bf3.perform_parallel_fft_direct(mid0[1], mid1[1], mid2[1]);
-        let [output6, output7, output8] =
-            self.bf3.perform_parallel_fft_direct(mid0[2], mid1[2], mid2[2]);
-        let [output9, output10, output11] =
-            self.bf3.perform_parallel_fft_direct(mid0[3], mid1[3], mid2[3]);
+        let [output0, output1, output2] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[0], mid1[0], mid2[0]);
+        let [output3, output4, output5] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[1], mid1[1], mid2[1]);
+        let [output6, output7, output8] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[2], mid1[2], mid2[2]);
+        let [output9, output10, output11] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[3], mid1[3], mid2[3]);
 
         // Reorder and return
         [
@@ -2282,16 +2292,21 @@ impl<T: FftNum> SseF32Butterfly15<T> {
         // Since this is good-thomas algorithm, we don't need twiddle factors
 
         // Transpose the data and do size-3 FFTs down the columns
-        let [output0, output1, output2] =
-            self.bf3.perform_parallel_fft_direct(mid0[0], mid1[0], mid2[0]);
-        let [output3, output4, output5] =
-            self.bf3.perform_parallel_fft_direct(mid0[1], mid1[1], mid2[1]);
-        let [output6, output7, output8] =
-            self.bf3.perform_parallel_fft_direct(mid0[2], mid1[2], mid2[2]);
-        let [output9, output10, output11] =
-            self.bf3.perform_parallel_fft_direct(mid0[3], mid1[3], mid2[3]);
-        let [output12, output13, output14] =
-            self.bf3.perform_parallel_fft_direct(mid0[4], mid1[4], mid2[4]);
+        let [output0, output1, output2] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[0], mid1[0], mid2[0]);
+        let [output3, output4, output5] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[1], mid1[1], mid2[1]);
+        let [output6, output7, output8] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[2], mid1[2], mid2[2]);
+        let [output9, output10, output11] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[3], mid1[3], mid2[3]);
+        let [output12, output13, output14] = self
+            .bf3
+            .perform_parallel_fft_direct(mid0[4], mid1[4], mid2[4]);
 
         [
             output0, output4, output8, output9, output13, output2, output3, output7, output11,
