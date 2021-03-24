@@ -10,7 +10,7 @@ RustFFT is a high-performance FFT library written in pure Rust. It can compute F
 
 RustFFT supports the AVX instruction set for increased performance. No special code is needed to activate AVX: Simply plan a FFT using the FftPlanner on a machine that supports the `avx` and `fma` CPU features, and RustFFT will automatically switch to faster AVX-accelerated algorithms.
 
-For machines that do not have AVX, it also supports the SSE3 instruction set. As for AVX, this is enabled automatically when using the FftPlanner.
+For machines that do not have AVX, it also supports the SSE4.1 instruction set. As for AVX, this is enabled automatically when using the FftPlanner.
 
 Unlike previous major versions, RustFFT 5.0 has several breaking changes compared to RustFFT 4.0. Check out the [Upgrade Guide](/UpgradeGuide4to5.md) for a walkthrough of the changes RustFFT 5.0 requires.
 
@@ -32,6 +32,14 @@ fft.process(&mut buffer);
 
 RustFFT requires rustc 1.37 or newer. Minor releases of RustFFT may upgrade the MSRV(minimum supported Rust version) to a newer version of rustc.
 However, if we need to increase the MSRV, the new Rust version must have been released at least six months ago.
+
+## Features
+
+The features `avx` and `sse` are enabled by default. On x86_64, these features enable compilation of the AVX and SSE accelerated code. 
+
+Disabling them reduces compile time and binary size.
+
+On other platform than x86_64, these features do nothing and RustFFT will behave like they are not set.
 
 ## Stability/Future Breaking Changes
 

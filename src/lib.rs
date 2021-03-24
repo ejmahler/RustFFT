@@ -308,12 +308,12 @@ mod avx {
 pub use self::avx::avx_planner::FftPlannerAvx;
 
 // Algorithms implemented to use SSE3 instructions. Only compiled on x86_64.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", feature = "sse"))]
 mod sse;
 
 // If we're not on x86_64, keep a stub implementation around that has the same API, but does nothing
 // That way, users can write code using the SSE planner and compile it on any platform
-#[cfg(not(target_arch = "x86_64"))]
+#[cfg(not(all(target_arch = "x86_64", feature = "sse")))]
 mod sse {
     pub mod sse_planner {
         use crate::{Fft, FftDirection, FftNum};
