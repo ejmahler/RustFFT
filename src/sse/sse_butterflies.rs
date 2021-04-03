@@ -357,7 +357,7 @@ unsafe fn parallel_fft2_contiguous_f32(left: __m128, right: __m128) -> [__m128; 
 #[inline(always)]
 unsafe fn solo_fft2_f32(values: __m128) -> __m128 {
     let temp = reverse_complex_elements_f32(values);
-    let temp2 = negate_2nd_f32(values);
+    let temp2 = negate_hi_f32(values);
     _mm_add_ps(temp2, temp)
 }
 
@@ -482,15 +482,15 @@ impl<T: FftNum> SseF32Butterfly3<T> {
         let valuea2b0 = input.load_complex(2);
         let valueb1b2 = input.load_complex(4);
 
-        let value0 = pack_1and2_f32(valuea0a1, valuea2b0);
-        let value1 = pack_2and1_f32(valuea0a1, valueb1b2);
-        let value2 = pack_1and2_f32(valuea2b0, valueb1b2);
+        let value0 = extract_lo_hi_f32(valuea0a1, valuea2b0);
+        let value1 = extract_hi_lo_f32(valuea0a1, valueb1b2);
+        let value2 = extract_lo_hi_f32(valuea2b0, valueb1b2);
 
         let out = self.perform_parallel_fft_direct(value0, value1, value2);
 
-        let out0 = pack_1st_f32(out[0], out[1]);
-        let out1 = pack_1and2_f32(out[2], out[0]);
-        let out2 = pack_2nd_f32(out[1], out[2]);
+        let out0 = extract_lo_lo_f32(out[0], out[1]);
+        let out1 = extract_lo_hi_f32(out[2], out[0]);
+        let out2 = extract_hi_hi_f32(out[1], out[2]);
 
         output.store_complex(out0, 0);
         output.store_complex(out1, 2);
@@ -507,8 +507,8 @@ impl<T: FftNum> SseF32Butterfly3<T> {
         value12: __m128,
     ) -> [__m128; 2] {
         // This is a SSE translation of the scalar 3-point butterfly
-        let rev12 = negate_2nd_f32(reverse_complex_elements_f32(value12));
-        let temp12pn = self.rotate.rotate_2nd(_mm_add_ps(value12, rev12));
+        let rev12 = negate_hi_f32(reverse_complex_elements_f32(value12));
+        let temp12pn = self.rotate.rotate_hi(_mm_add_ps(value12, rev12));
         let twiddled = _mm_mul_ps(temp12pn, self.twiddle);
         let temp = _mm_add_ps(value0x, twiddled);
         let out12 = solo_fft2_f32(temp);
@@ -711,7 +711,7 @@ impl<T: FftNum> SseF32Butterfly4<T> {
         let mut temp = parallel_fft2_interleaved_f32(value01, value23);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-        temp[1] = self.rotate.rotate_2nd(temp[1]);
+        temp[1] = self.rotate.rotate_hi(temp[1]);
 
         // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
@@ -916,20 +916,20 @@ impl<T: FftNum> SseF32Butterfly5<T> {
     ) {
         let input_packed = read_complex_to_array!(input, {0, 2, 4 ,6, 8});
 
-        let value0 = pack_1and2_f32(input_packed[0], input_packed[2]);
-        let value1 = pack_2and1_f32(input_packed[0], input_packed[3]);
-        let value2 = pack_1and2_f32(input_packed[1], input_packed[3]);
-        let value3 = pack_2and1_f32(input_packed[1], input_packed[4]);
-        let value4 = pack_1and2_f32(input_packed[2], input_packed[4]);
+        let value0 = extract_lo_hi_f32(input_packed[0], input_packed[2]);
+        let value1 = extract_hi_lo_f32(input_packed[0], input_packed[3]);
+        let value2 = extract_lo_hi_f32(input_packed[1], input_packed[3]);
+        let value3 = extract_hi_lo_f32(input_packed[1], input_packed[4]);
+        let value4 = extract_lo_hi_f32(input_packed[2], input_packed[4]);
 
         let out = self.perform_parallel_fft_direct(value0, value1, value2, value3, value4);
 
         let out_packed = [
-            pack_1st_f32(out[0], out[1]),
-            pack_1st_f32(out[2], out[3]),
-            pack_1and2_f32(out[4], out[0]),
-            pack_2nd_f32(out[1], out[2]),
-            pack_2nd_f32(out[3], out[4]),
+            extract_lo_lo_f32(out[0], out[1]),
+            extract_lo_lo_f32(out[2], out[3]),
+            extract_lo_hi_f32(out[4], out[0]),
+            extract_hi_hi_f32(out[1], out[2]),
+            extract_hi_hi_f32(out[3], out[4]),
         ];
 
         write_complex_to_array_strided!(out_packed, output, 2, {0, 1, 2, 3, 4});
@@ -950,10 +950,10 @@ impl<T: FftNum> SseF32Butterfly5<T> {
         let x1423p = _mm_add_ps(value12, temp43);
         let x1423n = _mm_sub_ps(value12, temp43);
 
-        let x1414p = duplicate_1st_f32(x1423p);
-        let x2323p = duplicate_2nd_f32(x1423p);
-        let x1414n = duplicate_1st_f32(x1423n);
-        let x2323n = duplicate_2nd_f32(x1423n);
+        let x1414p = duplicate_lo_f32(x1423p);
+        let x2323p = duplicate_hi_f32(x1423p);
+        let x1414n = duplicate_lo_f32(x1423n);
+        let x2323n = duplicate_hi_f32(x1423n);
 
         let temp_a1 = _mm_mul_ps(self.twiddle12re, x1414p);
         let temp_a2 = _mm_mul_ps(self.twiddle21re, x2323p);
@@ -1201,9 +1201,9 @@ impl<T: FftNum> SseF32Butterfly6<T> {
         // Algorithm: 3x2 good-thomas
 
         // Size-3 FFTs down the columns of our reordered array
-        let reord0 = pack_1and2_f32(value01, value23);
-        let reord1 = pack_1and2_f32(value23, value45);
-        let reord2 = pack_1and2_f32(value45, value01);
+        let reord0 = extract_lo_hi_f32(value01, value23);
+        let reord1 = extract_lo_hi_f32(value23, value45);
+        let reord2 = extract_lo_hi_f32(value45, value01);
 
         let mid = self.bf3.perform_parallel_fft_direct(reord0, reord1, reord2);
 
@@ -1215,9 +1215,9 @@ impl<T: FftNum> SseF32Butterfly6<T> {
 
         // Reorder into output
         [
-            pack_1and2_f32(output0, output1),
-            pack_1st_f32(output2, output1),
-            pack_2nd_f32(output0, output2),
+            extract_lo_hi_f32(output0, output1),
+            extract_lo_lo_f32(output2, output1),
+            extract_hi_hi_f32(output0, output2),
         ]
     }
 
@@ -1415,15 +1415,15 @@ impl<T: FftNum> SseF32Butterfly8<T> {
         let mut val2 = self.bf4.perform_fft_direct(in13, in57);
 
         // step 3: apply twiddle factors
-        let val2b = self.rotate90.rotate_2nd(val2[0]);
+        let val2b = self.rotate90.rotate_hi(val2[0]);
         let val2c = _mm_add_ps(val2b, val2[0]);
         let val2d = _mm_mul_ps(val2c, self.root2);
-        val2[0] = pack_1and2_f32(val2[0], val2d);
+        val2[0] = extract_lo_hi_f32(val2[0], val2d);
 
         let val3b = self.rotate90.rotate_both(val2[1]);
         let val3c = _mm_sub_ps(val3b, val2[1]);
         let val3d = _mm_mul_ps(val3c, self.root2);
-        val2[1] = pack_1and2_f32(val3b, val3d);
+        val2[1] = extract_lo_hi_f32(val3b, val3d);
 
         // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
 
@@ -1624,29 +1624,29 @@ impl<T: FftNum> SseF32Butterfly9<T> {
         let input_packed = read_complex_to_array!(input, {0, 2, 4, 6, 8, 10, 12, 14, 16});
 
         let values = [
-            pack_1and2_f32(input_packed[0], input_packed[4]),
-            pack_2and1_f32(input_packed[0], input_packed[5]),
-            pack_1and2_f32(input_packed[1], input_packed[5]),
-            pack_2and1_f32(input_packed[1], input_packed[6]),
-            pack_1and2_f32(input_packed[2], input_packed[6]),
-            pack_2and1_f32(input_packed[2], input_packed[7]),
-            pack_1and2_f32(input_packed[3], input_packed[7]),
-            pack_2and1_f32(input_packed[3], input_packed[8]),
-            pack_1and2_f32(input_packed[4], input_packed[8]),
+            extract_lo_hi_f32(input_packed[0], input_packed[4]),
+            extract_hi_lo_f32(input_packed[0], input_packed[5]),
+            extract_lo_hi_f32(input_packed[1], input_packed[5]),
+            extract_hi_lo_f32(input_packed[1], input_packed[6]),
+            extract_lo_hi_f32(input_packed[2], input_packed[6]),
+            extract_hi_lo_f32(input_packed[2], input_packed[7]),
+            extract_lo_hi_f32(input_packed[3], input_packed[7]),
+            extract_hi_lo_f32(input_packed[3], input_packed[8]),
+            extract_lo_hi_f32(input_packed[4], input_packed[8]),
         ];
 
         let out = self.perform_parallel_fft_direct(values);
 
         let out_packed = [
-            pack_1st_f32(out[0], out[1]),
-            pack_1st_f32(out[2], out[3]),
-            pack_1st_f32(out[4], out[5]),
-            pack_1st_f32(out[6], out[7]),
-            pack_1and2_f32(out[8], out[0]),
-            pack_2nd_f32(out[1], out[2]),
-            pack_2nd_f32(out[3], out[4]),
-            pack_2nd_f32(out[5], out[6]),
-            pack_2nd_f32(out[7], out[8]),
+            extract_lo_lo_f32(out[0], out[1]),
+            extract_lo_lo_f32(out[2], out[3]),
+            extract_lo_lo_f32(out[4], out[5]),
+            extract_lo_lo_f32(out[6], out[7]),
+            extract_lo_hi_f32(out[8], out[0]),
+            extract_hi_hi_f32(out[1], out[2]),
+            extract_hi_hi_f32(out[3], out[4]),
+            extract_hi_hi_f32(out[5], out[6]),
+            extract_hi_hi_f32(out[7], out[8]),
         ];
 
         write_complex_to_array_strided!(out_packed, output, 2, {0,1,2,3,4,5,6,7,8});
@@ -1831,11 +1831,11 @@ impl<T: FftNum> SseF32Butterfly10<T> {
     pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128; 5]) -> [__m128; 5] {
         // Algorithm: 5x2 good-thomas
         // Reorder and pack
-        let reord0 = pack_1and2_f32(values[0], values[2]);
-        let reord1 = pack_1and2_f32(values[1], values[3]);
-        let reord2 = pack_1and2_f32(values[2], values[4]);
-        let reord3 = pack_1and2_f32(values[3], values[0]);
-        let reord4 = pack_1and2_f32(values[4], values[1]);
+        let reord0 = extract_lo_hi_f32(values[0], values[2]);
+        let reord1 = extract_lo_hi_f32(values[1], values[3]);
+        let reord2 = extract_lo_hi_f32(values[2], values[4]);
+        let reord3 = extract_lo_hi_f32(values[3], values[0]);
+        let reord4 = extract_lo_hi_f32(values[4], values[1]);
 
         // Size-5 FFTs down the columns of our reordered array
         let mids = self
@@ -1850,11 +1850,11 @@ impl<T: FftNum> SseF32Butterfly10<T> {
         let temp89 = solo_fft2_f32(mids[4]);
 
         // Reorder
-        let out01 = pack_1and2_f32(temp01, temp23);
-        let out23 = pack_1and2_f32(temp45, temp67);
-        let out45 = pack_1st_f32(temp89, temp23);
-        let out67 = pack_2and1_f32(temp01, temp67);
-        let out89 = pack_2nd_f32(temp45, temp89);
+        let out01 = extract_lo_hi_f32(temp01, temp23);
+        let out23 = extract_lo_hi_f32(temp45, temp67);
+        let out45 = extract_lo_lo_f32(temp89, temp23);
+        let out67 = extract_hi_lo_f32(temp01, temp67);
+        let out89 = extract_hi_hi_f32(temp45, temp89);
 
         [out01, out23, out45, out67, out89]
     }
@@ -2030,12 +2030,12 @@ impl<T: FftNum> SseF32Butterfly12<T> {
         // Algorithm: 4x3 good-thomas
 
         // Reorder and pack
-        let packed03 = pack_1and2_f32(values[0], values[1]);
-        let packed47 = pack_1and2_f32(values[2], values[3]);
-        let packed69 = pack_1and2_f32(values[3], values[4]);
-        let packed101 = pack_1and2_f32(values[5], values[0]);
-        let packed811 = pack_1and2_f32(values[4], values[5]);
-        let packed25 = pack_1and2_f32(values[1], values[2]);
+        let packed03 = extract_lo_hi_f32(values[0], values[1]);
+        let packed47 = extract_lo_hi_f32(values[2], values[3]);
+        let packed69 = extract_lo_hi_f32(values[3], values[4]);
+        let packed101 = extract_lo_hi_f32(values[5], values[0]);
+        let packed811 = extract_lo_hi_f32(values[4], values[5]);
+        let packed25 = extract_lo_hi_f32(values[1], values[2]);
 
         // Size-4 FFTs down the columns of our reordered array
         let mid0 = self.bf4.perform_fft_direct(packed03, packed69);
@@ -2054,12 +2054,12 @@ impl<T: FftNum> SseF32Butterfly12<T> {
 
         // Reorder and return
         [
-            pack_1and2_f32(temp03, temp14),
-            pack_1and2_f32(temp811, temp69),
-            pack_1and2_f32(temp14, temp25),
-            pack_1and2_f32(temp69, temp710),
-            pack_1and2_f32(temp25, temp03),
-            pack_1and2_f32(temp710, temp811),
+            extract_lo_hi_f32(temp03, temp14),
+            extract_lo_hi_f32(temp811, temp69),
+            extract_lo_hi_f32(temp14, temp25),
+            extract_lo_hi_f32(temp69, temp710),
+            extract_lo_hi_f32(temp25, temp03),
+            extract_lo_hi_f32(temp710, temp811),
         ]
     }
 
@@ -2234,41 +2234,41 @@ impl<T: FftNum> SseF32Butterfly15<T> {
             read_complex_to_array!(input, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28});
 
         let values = [
-            pack_1and2_f32(input_packed[0], input_packed[7]),
-            pack_2and1_f32(input_packed[0], input_packed[8]),
-            pack_1and2_f32(input_packed[1], input_packed[8]),
-            pack_2and1_f32(input_packed[1], input_packed[9]),
-            pack_1and2_f32(input_packed[2], input_packed[9]),
-            pack_2and1_f32(input_packed[2], input_packed[10]),
-            pack_1and2_f32(input_packed[3], input_packed[10]),
-            pack_2and1_f32(input_packed[3], input_packed[11]),
-            pack_1and2_f32(input_packed[4], input_packed[11]),
-            pack_2and1_f32(input_packed[4], input_packed[12]),
-            pack_1and2_f32(input_packed[5], input_packed[12]),
-            pack_2and1_f32(input_packed[5], input_packed[13]),
-            pack_1and2_f32(input_packed[6], input_packed[13]),
-            pack_2and1_f32(input_packed[6], input_packed[14]),
-            pack_1and2_f32(input_packed[7], input_packed[14]),
+            extract_lo_hi_f32(input_packed[0], input_packed[7]),
+            extract_hi_lo_f32(input_packed[0], input_packed[8]),
+            extract_lo_hi_f32(input_packed[1], input_packed[8]),
+            extract_hi_lo_f32(input_packed[1], input_packed[9]),
+            extract_lo_hi_f32(input_packed[2], input_packed[9]),
+            extract_hi_lo_f32(input_packed[2], input_packed[10]),
+            extract_lo_hi_f32(input_packed[3], input_packed[10]),
+            extract_hi_lo_f32(input_packed[3], input_packed[11]),
+            extract_lo_hi_f32(input_packed[4], input_packed[11]),
+            extract_hi_lo_f32(input_packed[4], input_packed[12]),
+            extract_lo_hi_f32(input_packed[5], input_packed[12]),
+            extract_hi_lo_f32(input_packed[5], input_packed[13]),
+            extract_lo_hi_f32(input_packed[6], input_packed[13]),
+            extract_hi_lo_f32(input_packed[6], input_packed[14]),
+            extract_lo_hi_f32(input_packed[7], input_packed[14]),
         ];
 
         let out = self.perform_parallel_fft_direct(values);
 
         let out_packed = [
-            pack_1st_f32(out[0], out[1]),
-            pack_1st_f32(out[2], out[3]),
-            pack_1st_f32(out[4], out[5]),
-            pack_1st_f32(out[6], out[7]),
-            pack_1st_f32(out[8], out[9]),
-            pack_1st_f32(out[10], out[11]),
-            pack_1st_f32(out[12], out[13]),
-            pack_1and2_f32(out[14], out[0]),
-            pack_2nd_f32(out[1], out[2]),
-            pack_2nd_f32(out[3], out[4]),
-            pack_2nd_f32(out[5], out[6]),
-            pack_2nd_f32(out[7], out[8]),
-            pack_2nd_f32(out[9], out[10]),
-            pack_2nd_f32(out[11], out[12]),
-            pack_2nd_f32(out[13], out[14]),
+            extract_lo_lo_f32(out[0], out[1]),
+            extract_lo_lo_f32(out[2], out[3]),
+            extract_lo_lo_f32(out[4], out[5]),
+            extract_lo_lo_f32(out[6], out[7]),
+            extract_lo_lo_f32(out[8], out[9]),
+            extract_lo_lo_f32(out[10], out[11]),
+            extract_lo_lo_f32(out[12], out[13]),
+            extract_lo_hi_f32(out[14], out[0]),
+            extract_hi_hi_f32(out[1], out[2]),
+            extract_hi_hi_f32(out[3], out[4]),
+            extract_hi_hi_f32(out[5], out[6]),
+            extract_hi_hi_f32(out[7], out[8]),
+            extract_hi_hi_f32(out[9], out[10]),
+            extract_hi_hi_f32(out[11], out[12]),
+            extract_hi_hi_f32(out[13], out[14]),
         ];
 
         write_complex_to_array_strided!(out_packed, output, 2, {0,1,2,3,4,5,6,7,8,9, 10, 11, 12, 13, 14});
@@ -2496,15 +2496,15 @@ impl<T: FftNum> SseF32Butterfly16<T> {
     unsafe fn perform_fft_direct(&self, input: [__m128; 8]) -> [__m128; 8] {
         // we're going to hardcode a step of split radix
         // step 1: copy and reorder the input into the scratch
-        let in0002 = pack_1st_f32(input[0], input[1]);
-        let in0406 = pack_1st_f32(input[2], input[3]);
-        let in0810 = pack_1st_f32(input[4], input[5]);
-        let in1214 = pack_1st_f32(input[6], input[7]);
+        let in0002 = extract_lo_lo_f32(input[0], input[1]);
+        let in0406 = extract_lo_lo_f32(input[2], input[3]);
+        let in0810 = extract_lo_lo_f32(input[4], input[5]);
+        let in1214 = extract_lo_lo_f32(input[6], input[7]);
 
-        let in0105 = pack_2nd_f32(input[0], input[2]);
-        let in0913 = pack_2nd_f32(input[4], input[6]);
-        let in1503 = pack_2nd_f32(input[7], input[1]);
-        let in0711 = pack_2nd_f32(input[3], input[5]);
+        let in0105 = extract_hi_hi_f32(input[0], input[2]);
+        let in0913 = extract_hi_hi_f32(input[4], input[6]);
+        let in1503 = extract_hi_hi_f32(input[7], input[1]);
+        let in0711 = extract_hi_hi_f32(input[3], input[5]);
 
         let in_evens = [in0002, in0406, in0810, in1214];
 
@@ -2888,24 +2888,24 @@ impl<T: FftNum> SseF32Butterfly32<T> {
         // we're going to hardcode a step of split radix
 
         // step 1: copy and reorder the input into the scratch
-        let in0002 = pack_1st_f32(input[0], input[1]);
-        let in0406 = pack_1st_f32(input[2], input[3]);
-        let in0810 = pack_1st_f32(input[4], input[5]);
-        let in1214 = pack_1st_f32(input[6], input[7]);
-        let in1618 = pack_1st_f32(input[8], input[9]);
-        let in2022 = pack_1st_f32(input[10], input[11]);
-        let in2426 = pack_1st_f32(input[12], input[13]);
-        let in2830 = pack_1st_f32(input[14], input[15]);
+        let in0002 = extract_lo_lo_f32(input[0], input[1]);
+        let in0406 = extract_lo_lo_f32(input[2], input[3]);
+        let in0810 = extract_lo_lo_f32(input[4], input[5]);
+        let in1214 = extract_lo_lo_f32(input[6], input[7]);
+        let in1618 = extract_lo_lo_f32(input[8], input[9]);
+        let in2022 = extract_lo_lo_f32(input[10], input[11]);
+        let in2426 = extract_lo_lo_f32(input[12], input[13]);
+        let in2830 = extract_lo_lo_f32(input[14], input[15]);
 
-        let in0105 = pack_2nd_f32(input[0], input[2]);
-        let in0913 = pack_2nd_f32(input[4], input[6]);
-        let in1721 = pack_2nd_f32(input[8], input[10]);
-        let in2529 = pack_2nd_f32(input[12], input[14]);
+        let in0105 = extract_hi_hi_f32(input[0], input[2]);
+        let in0913 = extract_hi_hi_f32(input[4], input[6]);
+        let in1721 = extract_hi_hi_f32(input[8], input[10]);
+        let in2529 = extract_hi_hi_f32(input[12], input[14]);
 
-        let in3103 = pack_2nd_f32(input[15], input[1]);
-        let in0711 = pack_2nd_f32(input[3], input[5]);
-        let in1519 = pack_2nd_f32(input[7], input[9]);
-        let in2327 = pack_2nd_f32(input[11], input[13]);
+        let in3103 = extract_hi_hi_f32(input[15], input[1]);
+        let in0711 = extract_hi_hi_f32(input[3], input[5]);
+        let in1519 = extract_hi_hi_f32(input[7], input[9]);
+        let in2327 = extract_hi_hi_f32(input[11], input[13]);
 
         let in_evens = [
             in0002, in0406, in0810, in1214, in1618, in2022, in2426, in2830,
@@ -3409,8 +3409,8 @@ mod unit_tests {
         unsafe {
             let nbr2 = _mm_set_ps(8.0, 7.0, 6.0, 5.0);
             let nbr1 = _mm_set_ps(4.0, 3.0, 2.0, 1.0);
-            let first = pack_1st_f32(nbr1, nbr2);
-            let second = pack_2nd_f32(nbr1, nbr2);
+            let first = extract_lo_lo_f32(nbr1, nbr2);
+            let second = extract_hi_hi_f32(nbr1, nbr2);
             let first = std::mem::transmute::<__m128, [Complex<f32>; 2]>(first);
             let second = std::mem::transmute::<__m128, [Complex<f32>; 2]>(second);
             let first_expected = [Complex::new(1.0, 2.0), Complex::new(5.0, 6.0)];

@@ -15,7 +15,7 @@ use crate::Fft;
 use crate::math_utils::{PrimeFactor, PrimeFactors};
 
 const MIN_RADIX4_BITS: u32 = 6; // smallest size to consider radix 4 an option is 2^6 = 64
-const MAX_RADIX4_BITS: u32 = 18; // largest size to consider radix 4 an option is 2^18
+const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option is 2^16
 const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
 const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the inner fft of Bluestein if length is larger than this
 
@@ -685,9 +685,9 @@ mod unit_tests {
 
     #[test]
     fn test_plan_sse_mediumpoweroftwo() {
-        // Powers of 2 between 64 and 32768 should use Radix4
+        // Powers of 2 between 6 and 16 should use Radix4
         let mut planner = FftPlannerSse::<f64>::new().unwrap();
-        for pow in 6..18 {
+        for pow in 6..17 {
             let len = 1 << pow;
             let plan = planner.design_fft_for_len(len);
             assert_eq!(*plan, Recipe::Radix4(len));

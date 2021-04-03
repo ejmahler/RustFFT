@@ -8,15 +8,15 @@ use core::arch::x86_64::*;
 //
 
 pub struct Rotate90F32 {
-    //sign_1st: __m128,
-    sign_2nd: __m128,
+    //sign_lo: __m128,
+    sign_hi: __m128,
     sign_both: __m128,
 }
 
 impl Rotate90F32 {
     pub fn new(positive: bool) -> Self {
         // There doesn't seem to be any need for rotating just the first element, but let's keep the code just in case
-        //let sign_1st = unsafe {
+        //let sign_lo = unsafe {
         //    if positive {
         //        _mm_set_ps(0.0, 0.0, 0.0, -0.0)
         //    }
@@ -24,7 +24,7 @@ impl Rotate90F32 {
         //        _mm_set_ps(0.0, 0.0, -0.0, 0.0)
         //    }
         //};
-        let sign_2nd = unsafe {
+        let sign_hi = unsafe {
             if positive {
                 _mm_set_ps(0.0, -0.0, 0.0, 0.0)
             } else {
@@ -39,23 +39,23 @@ impl Rotate90F32 {
             }
         };
         Self {
-            //sign_1st,
-            sign_2nd,
+            //sign_lo,
+            sign_hi,
             sign_both,
         }
     }
 
     #[inline(always)]
-    pub unsafe fn rotate_2nd(&self, values: __m128) -> __m128 {
+    pub unsafe fn rotate_hi(&self, values: __m128) -> __m128 {
         let temp = _mm_shuffle_ps(values, values, 0xB4);
-        _mm_xor_ps(temp, self.sign_2nd)
+        _mm_xor_ps(temp, self.sign_hi)
     }
 
     // There doesn't seem to be any need for rotating just the first element, but let's keep the code just in case
     //#[inline(always)]
-    //pub unsafe fn rotate_1st(&self, values: __m128) -> __m128 {
+    //pub unsafe fn rotate_lo(&self, values: __m128) -> __m128 {
     //    let temp = _mm_shuffle_ps(values, values, 0xE1);
-    //    _mm_xor_ps(temp, self.sign_1st)
+    //    _mm_xor_ps(temp, self.sign_lo)
     //}
 
     #[inline(always)]
@@ -65,42 +65,42 @@ impl Rotate90F32 {
     }
 }
 
-// Pack 1st complex
+// Pack low (1st) complex
 // left: r1.re, r1.im, r2.re, r2.im
 // right: l1.re, l1.im, l2.re, l2.im
 // --> r1.re, r1.im, l1.re + l1.im
 #[inline(always)]
-pub unsafe fn pack_1st_f32(left: __m128, right: __m128) -> __m128 {
+pub unsafe fn extract_lo_lo_f32(left: __m128, right: __m128) -> __m128 {
     //_mm_shuffle_ps(left, right, 0x44)
     _mm_castpd_ps(_mm_unpacklo_pd(_mm_castps_pd(left), _mm_castps_pd(right)))
 }
 
-// Pack 2nd complex
+// Pack high (2nd) complex
 // left: r1.re, r1.im, r2.re, r2.im
 // right: l1.re, l1.im, l2.re, l2.im
 // --> r2.re, r2.im, l2.re + l2.im
 #[inline(always)]
-pub unsafe fn pack_2nd_f32(left: __m128, right: __m128) -> __m128 {
+pub unsafe fn extract_hi_hi_f32(left: __m128, right: __m128) -> __m128 {
     //_mm_shuffle_ps(left, right, 0xEE)
     _mm_castpd_ps(_mm_unpackhi_pd(_mm_castps_pd(left), _mm_castps_pd(right)))
 }
 
-// Pack 1st and 2nd complex
+// Pack low (1st) and high (2nd) complex
 // left: r1.re, r1.im, r2.re, r2.im
 // right: l1.re, l1.im, l2.re, l2.im
 // --> r1.re, r1.im, l2.re + l2.im
 #[inline(always)]
-pub unsafe fn pack_1and2_f32(left: __m128, right: __m128) -> __m128 {
+pub unsafe fn extract_lo_hi_f32(left: __m128, right: __m128) -> __m128 {
     //_mm_shuffle_ps(left, right, 0xE4)
     _mm_blend_ps(left, right, 0x0C)
 }
 
-// Pack 2nd and 1st complex
+// Pack  high (2nd) and low (1st) complex
 // left: r1.re, r1.im, r2.re, r2.im
 // right: l1.re, l1.im, l2.re, l2.im
 // --> r2.re, r2.im, l1.re + l1.im
 #[inline(always)]
-pub unsafe fn pack_2and1_f32(left: __m128, right: __m128) -> __m128 {
+pub unsafe fn extract_hi_lo_f32(left: __m128, right: __m128) -> __m128 {
     _mm_shuffle_ps(left, right, 0x4E)
 }
 
@@ -112,27 +112,27 @@ pub unsafe fn reverse_complex_elements_f32(values: __m128) -> __m128 {
     _mm_shuffle_ps(values, values, 0x4E)
 }
 
-// Invert sign of 2nd complex
+// Invert sign of high (2nd) complex
 // values: a.re, a.im, b.re, b.im
 // -->  a.re, a.im, -b.re, -b.im
 #[inline(always)]
-pub unsafe fn negate_2nd_f32(values: __m128) -> __m128 {
+pub unsafe fn negate_hi_f32(values: __m128) -> __m128 {
     _mm_xor_ps(values, _mm_set_ps(-0.0, -0.0, 0.0, 0.0))
 }
 
-// Duplicate 1st complex
+// Duplicate low (1st) complex
 // values: a.re, a.im, b.re, b.im
 // --> a.re, a.im, a.re + a.im
 #[inline(always)]
-pub unsafe fn duplicate_1st_f32(values: __m128) -> __m128 {
+pub unsafe fn duplicate_lo_f32(values: __m128) -> __m128 {
     _mm_shuffle_ps(values, values, 0x44)
 }
 
-// Duplicate 2nd complex
+// Duplicate high (2nd) complex
 // values: a.re, a.im, b.re, b.im
 // --> b.re, b.im, b.re + b.im
 #[inline(always)]
-pub unsafe fn duplicate_2nd_f32(values: __m128) -> __m128 {
+pub unsafe fn duplicate_hi_f32(values: __m128) -> __m128 {
     _mm_shuffle_ps(values, values, 0xEE)
 }
 
@@ -140,8 +140,8 @@ pub unsafe fn duplicate_2nd_f32(values: __m128) -> __m128 {
 // result is [x0, x2], [x1, x3]
 #[inline(always)]
 pub unsafe fn transpose_complex_2x2_f32(left: __m128, right: __m128) -> [__m128; 2] {
-    let temp02 = pack_1st_f32(left, right);
-    let temp13 = pack_2nd_f32(left, right);
+    let temp02 = extract_lo_lo_f32(left, right);
+    let temp13 = extract_hi_hi_f32(left, right);
     [temp02, temp13]
 }
 
@@ -252,8 +252,8 @@ mod unit_tests {
         unsafe {
             let nbr2 = _mm_set_ps(8.0, 7.0, 6.0, 5.0);
             let nbr1 = _mm_set_ps(4.0, 3.0, 2.0, 1.0);
-            let first = pack_1st_f32(nbr1, nbr2);
-            let second = pack_2nd_f32(nbr1, nbr2);
+            let first = extract_lo_lo_f32(nbr1, nbr2);
+            let second = extract_hi_hi_f32(nbr1, nbr2);
             let first = std::mem::transmute::<__m128, [Complex<f32>; 2]>(first);
             let second = std::mem::transmute::<__m128, [Complex<f32>; 2]>(second);
             let first_expected = [Complex::new(1.0, 2.0), Complex::new(5.0, 6.0)];
