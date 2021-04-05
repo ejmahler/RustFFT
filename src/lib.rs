@@ -229,7 +229,7 @@ pub trait Fft<T: FftNum>: Length + Direction + Sync + Send {
 #[cfg(all(target_arch = "x86_64", feature = "avx"))]
 mod avx;
 
-// If we're not on x86_64, or if the avx feature was disabled, keep a stub implementation around that has the same API, but does nothing
+// If we're not on x86_64, or if the "avx" feature was disabled, keep a stub implementation around that has the same API, but does nothing
 // That way, users can write code using the AVX planner and compile it on any platform
 #[cfg(not(all(target_arch = "x86_64", feature = "avx")))]
 mod avx {
@@ -307,11 +307,11 @@ mod avx {
 
 pub use self::avx::avx_planner::FftPlannerAvx;
 
-// Algorithms implemented to use SSE3 instructions. Only compiled on x86_64.
+// Algorithms implemented to use SSE4.1 instructions. Only compiled on x86_64, and only compiled if the "sse" feature flag is set.
 #[cfg(all(target_arch = "x86_64", feature = "sse"))]
 mod sse;
 
-// If we're not on x86_64, keep a stub implementation around that has the same API, but does nothing
+// If we're not on x86_64, or if the "sse" feature was disabled, keep a stub implementation around that has the same API, but does nothing
 // That way, users can write code using the SSE planner and compile it on any platform
 #[cfg(not(all(target_arch = "x86_64", feature = "sse")))]
 mod sse {
@@ -320,7 +320,7 @@ mod sse {
         use std::sync::Arc;
 
         /// The SSE FFT planner creates new FFT algorithm instances using a mix of scalar and SSE accelerated algorithms.
-        /// It requires at least SSE3, which is available on all reasonably recent x86_64 cpus.
+        /// It requires at least SSE4.1, which is available on all reasonably recent x86_64 cpus.
         ///
         /// RustFFT has several FFT algorithms available. For a given FFT size, the `FftPlannerSse` decides which of the
         /// available FFT algorithms to use and then initializes them.

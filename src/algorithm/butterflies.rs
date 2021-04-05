@@ -5929,14 +5929,4 @@ mod unit_tests {
     test_butterfly_func!(test_butterfly29, Butterfly29, 29);
     test_butterfly_func!(test_butterfly31, Butterfly31, 31);
     test_butterfly_func!(test_butterfly32, Butterfly32, 32);
-
-    //#[test]
-    //fn check_scalar_dummy() {
-    //    let butterfly = Butterfly8::new(FftDirection::Forward);
-    //    let mut input = vec![Complex::<f64>::new(1.0, 1.5), Complex::<f64>::new(2.0, 2.4),Complex::<f64>::new(7.0, 9.5),Complex::<f64>::new(-4.0, -4.5),
-    //                    Complex::<f64>::new(-1.0, 5.5), Complex::<f64>::new(3.3, 2.8),Complex::<f64>::new(7.5, 3.5),Complex::<f64>::new(-14.0, -6.5)];
-    //    let mut scratch = vec![Complex::<f64>::from(0.0); 0];
-    //    butterfly.process_with_scratch(&mut input, &mut scratch);
-    //    assert!(false);
-    //}
 }

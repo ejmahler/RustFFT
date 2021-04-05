@@ -122,11 +122,17 @@ macro_rules! write_complex_to_array_strided {
     }
 }
 
+// A trait to handle reading from an array of complex floats into SSE vectors.
+// SSE works with 128-bit vectors, meaning a vector can hold two complex f32,
+// or a single complex f64.
 pub trait SseArray {
     type VectorType;
     const COMPLEX_PER_VECTOR: usize;
+    // Load complex numbers from the array to fill a SSE vector.
     unsafe fn load_complex(&self, index: usize) -> Self::VectorType;
+    // Load a single complex number from the array into a SSE vector, setting the unused elements to zero.
     unsafe fn load_partial1_complex(&self, index: usize) -> Self::VectorType;
+    // Load a single complex number from the array, and copy it to all elements of a SSE vector.
     unsafe fn load1_complex(&self, index: usize) -> Self::VectorType;
 }
 
@@ -174,11 +180,17 @@ impl SseArray for RawSlice<Complex<f64>> {
     }
 }
 
+// A trait to handle writing to an array of complex floats from SSE vectors.
+// SSE works with 128-bit vectors, meaning a vector can hold two complex f32,
+// or a single complex f64.
 pub trait SseArrayMut {
     type VectorType;
     const COMPLEX_PER_VECTOR: usize;
+    // Store all complex numbers from a SSE vector to the array.
     unsafe fn store_complex(&self, vector: Self::VectorType, index: usize);
+    // Store the low complex number from a SSE vector to the array.
     unsafe fn store_partial_lo_complex(&self, vector: Self::VectorType, index: usize);
+    // Store the high complex number from a SSE vector to the array.
     unsafe fn store_partial_hi_complex(&self, vector: Self::VectorType, index: usize);
 }
 

@@ -161,7 +161,7 @@ impl<T: FftNum> FftPlannerSse<T> {
     /// Returns `Ok(planner_instance)` if this machine has the required instruction sets.
     /// Returns `Err(())` if some instruction sets are missing.
     pub fn new() -> Result<Self, ()> {
-        if is_x86_feature_detected!("sse3") {
+        if is_x86_feature_detected!("sse4.1") {
             // Ideally, we would implement the planner with specialization.
             // Specialization won't be on stable rust for a long time though, so in the meantime, we can hack around it.
             //
@@ -202,14 +202,14 @@ impl<T: FftNum> FftPlannerSse<T> {
         self.build_fft(&recipe, direction)
     }
 
-    /// Returns a `Fft` instance which uses SSE3 instructions to compute forward FFTs of size `len`
+    /// Returns a `Fft` instance which uses SSE4.1 instructions to compute forward FFTs of size `len`
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft_forward(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         self.plan_fft(len, FftDirection::Forward)
     }
 
-    /// Returns a `Fft` instance which uses SSE3 instructions to compute inverse FFTs of size `len.
+    /// Returns a `Fft` instance which uses SSE4.1 instructions to compute inverse FFTs of size `len.
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft_inverse(&mut self, len: usize) -> Arc<dyn Fft<T>> {

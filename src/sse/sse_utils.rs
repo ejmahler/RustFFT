@@ -68,7 +68,7 @@ impl Rotate90F32 {
 // Pack low (1st) complex
 // left: r1.re, r1.im, r2.re, r2.im
 // right: l1.re, l1.im, l2.re, l2.im
-// --> r1.re, r1.im, l1.re + l1.im
+// --> r1.re, r1.im, l1.re, l1.im
 #[inline(always)]
 pub unsafe fn extract_lo_lo_f32(left: __m128, right: __m128) -> __m128 {
     //_mm_shuffle_ps(left, right, 0x44)
@@ -78,27 +78,25 @@ pub unsafe fn extract_lo_lo_f32(left: __m128, right: __m128) -> __m128 {
 // Pack high (2nd) complex
 // left: r1.re, r1.im, r2.re, r2.im
 // right: l1.re, l1.im, l2.re, l2.im
-// --> r2.re, r2.im, l2.re + l2.im
+// --> r2.re, r2.im, l2.re, l2.im
 #[inline(always)]
 pub unsafe fn extract_hi_hi_f32(left: __m128, right: __m128) -> __m128 {
-    //_mm_shuffle_ps(left, right, 0xEE)
     _mm_castpd_ps(_mm_unpackhi_pd(_mm_castps_pd(left), _mm_castps_pd(right)))
 }
 
 // Pack low (1st) and high (2nd) complex
 // left: r1.re, r1.im, r2.re, r2.im
 // right: l1.re, l1.im, l2.re, l2.im
-// --> r1.re, r1.im, l2.re + l2.im
+// --> r1.re, r1.im, l2.re, l2.im
 #[inline(always)]
 pub unsafe fn extract_lo_hi_f32(left: __m128, right: __m128) -> __m128 {
-    //_mm_shuffle_ps(left, right, 0xE4)
     _mm_blend_ps(left, right, 0x0C)
 }
 
 // Pack  high (2nd) and low (1st) complex
 // left: r1.re, r1.im, r2.re, r2.im
 // right: l1.re, l1.im, l2.re, l2.im
-// --> r2.re, r2.im, l1.re + l1.im
+// --> r2.re, r2.im, l1.re, l1.im
 #[inline(always)]
 pub unsafe fn extract_hi_lo_f32(left: __m128, right: __m128) -> __m128 {
     _mm_shuffle_ps(left, right, 0x4E)
@@ -106,7 +104,7 @@ pub unsafe fn extract_hi_lo_f32(left: __m128, right: __m128) -> __m128 {
 
 // Reverse complex
 // values: a.re, a.im, b.re, b.im
-// --> b.re, b.im, a.re + a.im
+// --> b.re, b.im, a.re, a.im
 #[inline(always)]
 pub unsafe fn reverse_complex_elements_f32(values: __m128) -> __m128 {
     _mm_shuffle_ps(values, values, 0x4E)
@@ -122,7 +120,7 @@ pub unsafe fn negate_hi_f32(values: __m128) -> __m128 {
 
 // Duplicate low (1st) complex
 // values: a.re, a.im, b.re, b.im
-// --> a.re, a.im, a.re + a.im
+// --> a.re, a.im, a.re, a.im
 #[inline(always)]
 pub unsafe fn duplicate_lo_f32(values: __m128) -> __m128 {
     _mm_shuffle_ps(values, values, 0x44)
@@ -130,7 +128,7 @@ pub unsafe fn duplicate_lo_f32(values: __m128) -> __m128 {
 
 // Duplicate high (2nd) complex
 // values: a.re, a.im, b.re, b.im
-// --> b.re, b.im, b.re + b.im
+// --> b.re, b.im, b.re, b.im
 #[inline(always)]
 pub unsafe fn duplicate_hi_f32(values: __m128) -> __m128 {
     _mm_shuffle_ps(values, values, 0xEE)
@@ -203,18 +201,6 @@ pub unsafe fn mul_complex_f64(left: __m128d, right: __m128d) -> __m128d {
 mod unit_tests {
     use super::*;
     use num_complex::Complex;
-
-    #[inline(always)]
-    unsafe fn mul_complex_f64(left: __m128d, right: __m128d) -> __m128d {
-        let mul1 = _mm_mul_pd(left, right);
-        let right_flipped = _mm_shuffle_pd(right, right, 0x01);
-        let mul2 = _mm_mul_pd(left, right_flipped);
-        let sign = _mm_set_pd(-0.0, 0.0);
-        let mul1 = _mm_xor_pd(mul1, sign);
-        let temp1 = _mm_shuffle_pd(mul1, mul2, 0x00);
-        let temp2 = _mm_shuffle_pd(mul1, mul2, 0x03);
-        _mm_add_pd(temp1, temp2)
-    }
 
     #[test]
     fn test_mul_complex_f64() {
