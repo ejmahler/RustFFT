@@ -1380,9 +1380,6 @@ impl<T: FftNum> SseF32Butterfly8<T> {
 
         let out = self.perform_fft_direct(input_packed);
 
-        for n in 0..4 {
-            output.store_complex(out[n], 2 * n);
-        }
         write_complex_to_array_strided!(out, output, 2, {0,1,2,3});
     }
 
@@ -1437,7 +1434,7 @@ impl<T: FftNum> SseF32Butterfly8<T> {
 
     #[inline(always)]
     unsafe fn perform_parallel_fft_direct(&self, values: [__m128; 8]) -> [__m128; 8] {
-        // we're going to hardcode a step of split radix
+        // we're going to hardcode a step of mixed radix
         // step 1: copy and reorder the input into the scratch
         // and
         // step 2: column FFTs
@@ -1524,7 +1521,7 @@ impl<T: FftNum> SseF64Butterfly8<T> {
 
     #[inline(always)]
     unsafe fn perform_fft_direct(&self, values: [__m128d; 8]) -> [__m128d; 8] {
-        // we're going to hardcode a step of split radix
+        // we're going to hardcode a step of mixed radix
         // step 1: copy and reorder the input into the scratch
         // and
         // step 2: column FFTs
@@ -2861,9 +2858,7 @@ impl<T: FftNum> SseF32Butterfly32<T> {
 
         let out = self.perform_fft_direct(input_packed);
 
-        for n in 0..16 {
-            output.store_complex(out[n], 2 * n);
-        }
+        write_complex_to_array_strided!(out, output, 2, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15});
     }
 
     #[inline(always)]
