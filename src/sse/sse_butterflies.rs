@@ -1402,7 +1402,7 @@ impl<T: FftNum> SseF32Butterfly8<T> {
 
     #[inline(always)]
     unsafe fn perform_fft_direct(&self, values: [__m128; 4]) -> [__m128; 4] {
-        // we're going to hardcode a step of split radix
+        // we're going to hardcode a step of mixed radix
         // step 1: copy and reorder the input into the scratch
         let [in02, in13] = transpose_complex_2x2_f32(values[0], values[1]);
         let [in46, in57] = transpose_complex_2x2_f32(values[2], values[3]);

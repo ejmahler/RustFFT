@@ -121,7 +121,7 @@ impl Recipe {
 }
 
 /// The SSE FFT planner creates new FFT algorithm instances using a mix of scalar and SSE accelerated algorithms.
-/// It requires at least SSE3, which is available on all reasonably recent x86_64 cpus.
+/// It requires at least SSE4.1, which is available on all reasonably recent x86_64 cpus.
 ///
 /// RustFFT has several FFT algorithms available. For a given FFT size, the `FftPlannerSse` decides which of the
 /// available FFT algorithms to use and then initializes them.
@@ -189,7 +189,7 @@ impl<T: FftNum> FftPlannerSse<T> {
         Err(())
     }
 
-    /// Returns a `Fft` instance which uses SSE3 instructions to compute FFTs of size `len`.
+    /// Returns a `Fft` instance which uses SSE4.1 instructions to compute FFTs of size `len`.
     ///
     /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
     ///
