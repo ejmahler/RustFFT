@@ -2,6 +2,7 @@ use num_complex::Complex;
 
 use core::arch::x86_64::*;
 
+use crate::algorithm::{bitreversed_transpose, reverse_bits};
 use crate::array_utils;
 use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::sse::sse_butterflies::{
@@ -12,7 +13,6 @@ use crate::sse::sse_butterflies::{
     SseF64Butterfly1, SseF64Butterfly16, SseF64Butterfly2, SseF64Butterfly32, SseF64Butterfly4,
     SseF64Butterfly8,
 };
-use crate::algorithm::{bitreversed_transpose, reverse_bits};
 use crate::{common::FftNum, twiddles, FftDirection};
 use crate::{Direction, Fft, Length};
 
@@ -146,11 +146,8 @@ impl<T: FftNum> Sse32Radix4<T> {
         _scratch: &mut [Complex<T>],
     ) {
         // copy the data into the spectrum vector
-        //prepare_radix4(signal.len(), self.base_len, signal, spectrum, 1);
-        // copy the data into the spectrum vector
         if self.shuffle_map.len() < 4 {
             spectrum.copy_from_slice(signal);
-            //bitreversed_transpose_simple(self.base_len, signal, spectrum, &self.shuffle_map);
         } else {
             bitreversed_transpose(self.base_len, signal, spectrum, &self.shuffle_map);
         }
@@ -330,10 +327,8 @@ impl<T: FftNum> Sse64Radix4<T> {
         _scratch: &mut [Complex<T>],
     ) {
         // copy the data into the spectrum vector
-        //prepare_radix4(signal.len(), self.base_len, signal, spectrum, 1);
         if self.shuffle_map.len() < 4 {
             spectrum.copy_from_slice(signal);
-            //bitreversed_transpose_simple(self.base_len, signal, spectrum, &self.shuffle_map);
         } else {
             bitreversed_transpose(self.base_len, signal, spectrum, &self.shuffle_map);
         }
@@ -373,34 +368,6 @@ impl<T: FftNum> Sse64Radix4<T> {
     }
 }
 boilerplate_fft_sse_oop!(Sse64Radix4, |this: &Sse64Radix4<_>| this.len);
-
-// after testing an iterative bit reversal algorithm, this recursive algorithm
-// was almost an order of magnitude faster at setting up
-fn prepare_radix4<T: FftNum>(
-    size: usize,
-    base_len: usize,
-    signal: &[Complex<T>],
-    spectrum: &mut [Complex<T>],
-    stride: usize,
-) {
-    if size == base_len {
-        unsafe {
-            for i in 0..size {
-                *spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stride);
-            }
-        }
-    } else {
-        for i in 0..4 {
-            prepare_radix4(
-                size / 4,
-                base_len,
-                &signal[i * stride..],
-                &mut spectrum[i * (size / 4)..],
-                stride * 4,
-            );
-        }
-    }
-}
 
 #[target_feature(enable = "sse4.1")]
 unsafe fn butterfly_4_64<T: FftNum>(
