@@ -25,6 +25,8 @@ use crate::array_utils::{RawSlice, RawSliceMut};
 /// FFT algorithm optimized for power-of-two sizes, SSE accelerated version.
 /// This is designed to be used via a Planner, and not created directly.
 
+const USE_BUTTERFLY32_FROM: usize = 262144; // Use length 32 butterfly starting from this length
+
 enum Sse32Butterfly<T> {
     Len1(SseF32Butterfly1<T>),
     Len2(SseF32Butterfly2<T>),
@@ -76,7 +78,11 @@ impl<T: FftNum> Sse32Radix4<T> {
             3 => (len, Sse32Butterfly::Len8(SseF32Butterfly8::new(direction))),
             _ => {
                 if num_bits % 2 == 1 {
-                    (32, Sse32Butterfly::Len32(SseF32Butterfly32::new(direction)))
+                    if len < USE_BUTTERFLY32_FROM {
+                        (8, Sse32Butterfly::Len8(SseF32Butterfly8::new(direction)))
+                    } else {
+                        (32, Sse32Butterfly::Len32(SseF32Butterfly32::new(direction)))
+                    }
                 } else {
                     (16, Sse32Butterfly::Len16(SseF32Butterfly16::new(direction)))
                 }
@@ -262,7 +268,11 @@ impl<T: FftNum> Sse64Radix4<T> {
             3 => (len, Sse64Butterfly::Len8(SseF64Butterfly8::new(direction))),
             _ => {
                 if num_bits % 2 == 1 {
-                    (32, Sse64Butterfly::Len32(SseF64Butterfly32::new(direction)))
+                    if len < USE_BUTTERFLY32_FROM {
+                        (8, Sse64Butterfly::Len8(SseF64Butterfly8::new(direction)))
+                    } else {
+                        (32, Sse64Butterfly::Len32(SseF64Butterfly32::new(direction)))
+                    }
                 } else {
                     (16, Sse64Butterfly::Len16(SseF64Butterfly16::new(direction)))
                 }

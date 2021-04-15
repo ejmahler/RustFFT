@@ -496,7 +496,8 @@ impl<T: FftNum> FftPlannerSse<T> {
             fft_instance
         } else if factors.is_prime() {
             self.design_prime(len)
-        } else if len.trailing_zeros() <= MAX_RADIX4_BITS && len.trailing_zeros() >= MIN_RADIX4_BITS
+        //} else if len.trailing_zeros() <= MAX_RADIX4_BITS && len.trailing_zeros() >= MIN_RADIX4_BITS
+        } else if len.trailing_zeros() >= MIN_RADIX4_BITS
         {
             if len.is_power_of_two() {
                 Arc::new(Recipe::Radix4(len))
