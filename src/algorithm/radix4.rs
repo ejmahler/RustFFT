@@ -110,9 +110,7 @@ impl<T: FftNum> Radix4<T> {
         if self.shuffle_map.len() < 4 {
             spectrum.copy_from_slice(signal);
         } else {
-            unsafe {
-                bitreversed_transpose(self.base_len, signal, spectrum, &self.shuffle_map);
-            }
+            bitreversed_transpose(self.base_len, signal, spectrum, &self.shuffle_map);
         }
 
         // Base-level FFTs
@@ -149,7 +147,7 @@ boilerplate_fft_oop!(Radix4, |this: &Radix4<_>| this.len);
 // Preparing for radix 4 is similar to a transpose, where the column index is bit reversed.
 // Use a lookup table to avoid repeating the slow bit reverse operations.
 // Unrolling the outer loop by a factor 4 helps speed things up.
-pub unsafe fn bitreversed_transpose<T: Copy>(
+pub fn bitreversed_transpose<T: Copy>(
     height: usize,
     input: &[T],
     output: &mut [T],
@@ -183,15 +181,17 @@ pub unsafe fn bitreversed_transpose<T: Copy>(
             let output_index2 = y + x_rev[2] * height;
             let output_index3 = y + x_rev[3] * height;
 
-            let temp0 = *input.get_unchecked(input_index0);
-            let temp1 = *input.get_unchecked(input_index1);
-            let temp2 = *input.get_unchecked(input_index2);
-            let temp3 = *input.get_unchecked(input_index3);
+            unsafe {
+                let temp0 = *input.get_unchecked(input_index0);
+                let temp1 = *input.get_unchecked(input_index1);
+                let temp2 = *input.get_unchecked(input_index2);
+                let temp3 = *input.get_unchecked(input_index3);
 
-            *output.get_unchecked_mut(output_index0) = temp0;
-            *output.get_unchecked_mut(output_index1) = temp1;
-            *output.get_unchecked_mut(output_index2) = temp2;
-            *output.get_unchecked_mut(output_index3) = temp3;
+                *output.get_unchecked_mut(output_index0) = temp0;
+                *output.get_unchecked_mut(output_index1) = temp1;
+                *output.get_unchecked_mut(output_index2) = temp2;
+                *output.get_unchecked_mut(output_index3) = temp3;
+            }
         }
     }
 }
