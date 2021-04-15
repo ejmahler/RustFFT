@@ -52,8 +52,16 @@
 //! * `avx` (Enabled by default)
 //!
 //!     On x86_64, the `avx` feature enables compilation of AVX-accelerated code. Enabling it greatly improves performance if the
-//!     client CPU supports AVX, while disabling it reduces compile time and binary size.
-//!     On every other platform, this feature does nothing, and RustFFT will behave like it's not set.
+//!     client CPU supports AVX and FMA, while disabling it reduces compile time and binary size.
+//!
+//!     On every platform besides x86_64, this feature does nothing, and RustFFT will behave like it's not set.
+//! * `sse` (Enabled by default)
+//!
+//!     On x86_64, the `sse` feature enables compilation of SSE4.1-accelerated code. Enabling it improves performance
+//!     if the client CPU supports SSE4.1, while disabling it reduces compile time and binary size. If AVX is also
+//!     supported and its feature flag is enabled, RustFFT will use AVX instead of SSE4.1.
+//!
+//!     On every platform besides x86_64, this feature does nothing, and RustFFT will behave like it's not set.
 //!
 //! ### Normalization
 //!
