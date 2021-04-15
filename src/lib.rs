@@ -6,7 +6,7 @@
 //! Simply plan a FFT using the FftPlanner on a machine that supports the `avx` and `fma` CPU features, and RustFFT
 //! will automatically switch to faster AVX-accelerated algorithms.
 //!
-//! For machines that do not have AVX, it also supports the SSE3 instruction set.
+//! For machines that do not have AVX, RustFFT also supports the SSE4.1 instruction set.
 //! As for AVX, this is enabled automatically when using the FftPlanner.
 //!
 //! ### Usage
@@ -360,7 +360,7 @@ mod sse {
             pub fn new() -> Result<Self, ()> {
                 Err(())
             }
-            /// Returns a `Fft` instance which uses SSE3 instructions to compute FFTs of size `len`.
+            /// Returns a `Fft` instance which uses SSE4.1 instructions to compute FFTs of size `len`.
             ///
             /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
             ///
@@ -368,13 +368,13 @@ mod sse {
             pub fn plan_fft(&mut self, _len: usize, _direction: FftDirection) -> Arc<dyn Fft<T>> {
                 unreachable!()
             }
-            /// Returns a `Fft` instance which uses SSE3 instructions to compute forward FFTs of size `len`.
+            /// Returns a `Fft` instance which uses SSE4.1 instructions to compute forward FFTs of size `len`.
             ///
             /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
             pub fn plan_fft_forward(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
                 unreachable!()
             }
-            /// Returns a `Fft` instance which uses SSE3 instructions to compute inverse FFTs of size `len.
+            /// Returns a `Fft` instance which uses SSE4.1 instructions to compute inverse FFTs of size `len.
             ///
             /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
             pub fn plan_fft_inverse(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
