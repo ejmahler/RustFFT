@@ -156,24 +156,32 @@ pub unsafe fn bitreversed_transpose<T: Copy>(
     shuffle_map: &[usize],
 ) {
     let width = shuffle_map.len();
-    for x in 0..width / 4 {
+    // Let's make sure the arguments are ok
+    assert!(input.len() == output.len());
+    assert!(input.len() == height*width);
+    for (x, x_rev) in shuffle_map.chunks_exact(4).enumerate() {
         let x0 = 4 * x;
         let x1 = 4 * x + 1;
         let x2 = 4 * x + 2;
         let x3 = 4 * x + 3;
-        let x_rev0 = shuffle_map.get_unchecked(x0);
-        let x_rev1 = shuffle_map.get_unchecked(x1);
-        let x_rev2 = shuffle_map.get_unchecked(x2);
-        let x_rev3 = shuffle_map.get_unchecked(x3);
+
+        // Assert that the the bit reversed indices will not exceed the length of the output.
+        // The highest index the loop reaches is: (x_rev[n] + 1)*height - 1
+        // The last element of the data is at index: width*height - 1
+        // Thus it is sufficient to assert that x_rev[n]<width.
+        assert!(x_rev[0]<width);
+        assert!(x_rev[1]<width);
+        assert!(x_rev[2]<width);
+        assert!(x_rev[3]<width);
         for y in 0..height {
             let input_index0 = x0 + y * width;
             let input_index1 = x1 + y * width;
             let input_index2 = x2 + y * width;
             let input_index3 = x3 + y * width;
-            let output_index0 = y + x_rev0 * height;
-            let output_index1 = y + x_rev1 * height;
-            let output_index2 = y + x_rev2 * height;
-            let output_index3 = y + x_rev3 * height;
+            let output_index0 = y + x_rev[0] * height;
+            let output_index1 = y + x_rev[1] * height;
+            let output_index2 = y + x_rev[2] * height;
+            let output_index3 = y + x_rev[3] * height;
 
             let temp0 = *input.get_unchecked(input_index0);
             let temp1 = *input.get_unchecked(input_index1);
