@@ -152,22 +152,22 @@ boilerplate_fft_oop!(Radix4, |this: &Radix4<_>| this.len);
 // Preparing for radix 4 is similar to a transpose, where the column index is bit reversed.
 // Use a lookup table to avoid repeating the slow bit reverse operations.
 // Unrolling the outer loop by a factor 4 helps speed things up.
-pub(crate) unsafe fn bitreversed_transpose<T: Copy>(
+pub unsafe fn bitreversed_transpose<T: Copy>(
     height: usize,
     input: &[T],
     output: &mut [T],
-    shuffled: &[usize],
+    shuffle_map: &[usize],
 ) {
-    let width = shuffled.len();
+    let width = shuffle_map.len();
     for x in 0..width / 4 {
         let x0 = 4 * x;
         let x1 = 4 * x + 1;
         let x2 = 4 * x + 2;
         let x3 = 4 * x + 3;
-        let x_rev0 = shuffled.get_unchecked(x0);
-        let x_rev1 = shuffled.get_unchecked(x1);
-        let x_rev2 = shuffled.get_unchecked(x2);
-        let x_rev3 = shuffled.get_unchecked(x3);
+        let x_rev0 = shuffle_map.get_unchecked(x0);
+        let x_rev1 = shuffle_map.get_unchecked(x1);
+        let x_rev2 = shuffle_map.get_unchecked(x2);
+        let x_rev3 = shuffle_map.get_unchecked(x3);
         for y in 0..height {
             let input_index0 = x0 + y * width;
             let input_index1 = x1 + y * width;
@@ -193,7 +193,7 @@ pub(crate) unsafe fn bitreversed_transpose<T: Copy>(
 
 // Reverse bits of value, in pairs.
 // For 8 bits: abcdefgh -> ghefcdab
-pub(crate) fn reverse_bits(value: usize, bitpairs: usize) -> usize {
+pub fn reverse_bits(value: usize, bitpairs: usize) -> usize {
     let mut result: usize = 0;
     let mut value = value;
     for _ in 0..bitpairs {
