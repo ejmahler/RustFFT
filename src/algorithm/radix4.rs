@@ -107,11 +107,8 @@ impl<T: FftNum> Radix4<T> {
         _scratch: &mut [Complex<T>],
     ) {
         // copy the data into the spectrum vector
-        //prepare_radix4(signal.len(), self.base_len, signal, spectrum, 1);
-        // copy the data into the spectrum vector
         if self.shuffle_map.len() < 4 {
             spectrum.copy_from_slice(signal);
-            //bitreversed_transpose_simple(self.base_len, signal, spectrum, &self.shuffle_map);
         } else {
             unsafe {
                 bitreversed_transpose(self.base_len, signal, spectrum, &self.shuffle_map);
