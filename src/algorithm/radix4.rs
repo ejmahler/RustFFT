@@ -158,7 +158,7 @@ pub unsafe fn bitreversed_transpose<T: Copy>(
     let width = shuffle_map.len();
     // Let's make sure the arguments are ok
     assert!(input.len() == output.len());
-    assert!(input.len() == height*width);
+    assert!(input.len() == height * width);
     for (x, x_rev) in shuffle_map.chunks_exact(4).enumerate() {
         let x0 = 4 * x;
         let x1 = 4 * x + 1;
@@ -169,10 +169,10 @@ pub unsafe fn bitreversed_transpose<T: Copy>(
         // The highest index the loop reaches is: (x_rev[n] + 1)*height - 1
         // The last element of the data is at index: width*height - 1
         // Thus it is sufficient to assert that x_rev[n]<width.
-        assert!(x_rev[0]<width);
-        assert!(x_rev[1]<width);
-        assert!(x_rev[2]<width);
-        assert!(x_rev[3]<width);
+        assert!(x_rev[0] < width);
+        assert!(x_rev[1] < width);
+        assert!(x_rev[2] < width);
+        assert!(x_rev[3] < width);
         for y in 0..height {
             let input_index0 = x0 + y * width;
             let input_index1 = x1 + y * width;
