@@ -70,7 +70,7 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
         "Algorithm reported incorrect FFT direction"
     );
 
-    let n = 1;
+    let n = 3;
 
     //test the forward direction
     let dft = Dft::new(len, direction);
@@ -91,9 +91,11 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
 
         assert!(
             compare_vectors(&expected_output, &buffer),
-            "process() failed, length = {}, direction = {}",
+            "process() failed, length = {}, direction = {}, result = {:?}, expected = {:?}",
             len,
-            direction
+            direction,
+            buffer,
+            expected_output
         );
     }
 

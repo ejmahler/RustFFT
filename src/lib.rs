@@ -6,6 +6,9 @@
 //! Simply plan a FFT using the FftPlanner on a machine that supports the `avx` and `fma` CPU features, and RustFFT
 //! will automatically switch to faster AVX-accelerated algorithms.
 //!
+//! For machines that do not have AVX, RustFFT also supports the SSE4.1 instruction set.
+//! As for AVX, this is enabled automatically when using the FftPlanner.
+//!
 //! ### Usage
 //!
 //! The recommended way to use RustFFT is to create a [`FftPlanner`](crate::FftPlanner) instance and then call its
@@ -42,15 +45,23 @@
 //! advanced users may have better insight than the planner into which algorithms are best for a specific size. See the
 //! [`algorithm`](crate::algorithm) module for a complete list of scalar algorithms implemented by RustFFT.
 //!
-//! Users should beware, however, that bypassing the planner will disable all AVX optimizations.
+//! Users should beware, however, that bypassing the planner will disable all AVX and SSE optimizations.
 //!
 //! ### Feature Flags
 //!
 //! * `avx` (Enabled by default)
 //!
 //!     On x86_64, the `avx` feature enables compilation of AVX-accelerated code. Enabling it greatly improves performance if the
-//!     client CPU supports AVX, while disabling it reduces compile time and binary size.
-//!     On every other platform, this feature does nothing, and RustFFT will behave like it's not set.
+//!     client CPU supports AVX and FMA, while disabling it reduces compile time and binary size.
+//!
+//!     On every platform besides x86_64, this feature does nothing, and RustFFT will behave like it's not set.
+//! * `sse` (Enabled by default)
+//!
+//!     On x86_64, the `sse` feature enables compilation of SSE4.1-accelerated code. Enabling it improves performance
+//!     if the client CPU supports SSE4.1, while disabling it reduces compile time and binary size. If AVX is also
+//!     supported and its feature flag is enabled, RustFFT will use AVX instead of SSE4.1.
+//!
+//!     On every platform besides x86_64, this feature does nothing, and RustFFT will behave like it's not set.
 //!
 //! ### Normalization
 //!
@@ -226,7 +237,7 @@ pub trait Fft<T: FftNum>: Length + Direction + Sync + Send {
 #[cfg(all(target_arch = "x86_64", feature = "avx"))]
 mod avx;
 
-// If we're not on x86_64, or if the avx feature was disabled, keep a stub implementation around that has the same API, but does nothing
+// If we're not on x86_64, or if the "avx" feature was disabled, keep a stub implementation around that has the same API, but does nothing
 // That way, users can write code using the AVX planner and compile it on any platform
 #[cfg(not(all(target_arch = "x86_64", feature = "avx")))]
 mod avx {
@@ -303,6 +314,85 @@ mod avx {
 }
 
 pub use self::avx::avx_planner::FftPlannerAvx;
+
+// Algorithms implemented to use SSE4.1 instructions. Only compiled on x86_64, and only compiled if the "sse" feature flag is set.
+#[cfg(all(target_arch = "x86_64", feature = "sse"))]
+mod sse;
+
+// If we're not on x86_64, or if the "sse" feature was disabled, keep a stub implementation around that has the same API, but does nothing
+// That way, users can write code using the SSE planner and compile it on any platform
+#[cfg(not(all(target_arch = "x86_64", feature = "sse")))]
+mod sse {
+    pub mod sse_planner {
+        use crate::{Fft, FftDirection, FftNum};
+        use std::sync::Arc;
+
+        /// The SSE FFT planner creates new FFT algorithm instances using a mix of scalar and SSE accelerated algorithms.
+        /// It requires at least SSE4.1, which is available on all reasonably recent x86_64 cpus.
+        ///
+        /// RustFFT has several FFT algorithms available. For a given FFT size, the `FftPlannerSse` decides which of the
+        /// available FFT algorithms to use and then initializes them.
+        ///
+        /// ~~~
+        /// // Perform a forward Fft of size 1234
+        /// use std::sync::Arc;
+        /// use rustfft::{FftPlannerSse, num_complex::Complex};
+        ///
+        /// if let Ok(mut planner) = FftPlannerSse::new() {
+        ///   let fft = planner.plan_fft_forward(1234);
+        ///
+        ///   let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1234];
+        ///   fft.process(&mut buffer);
+        ///
+        ///   // The FFT instance returned by the planner has the type `Arc<dyn Fft<T>>`,
+        ///   // where T is the numeric type, ie f32 or f64, so it's cheap to clone
+        ///   let fft_clone = Arc::clone(&fft);
+        /// }
+        /// ~~~
+        ///
+        /// If you plan on creating multiple FFT instances, it is recommended to reuse the same planner for all of them. This
+        /// is because the planner re-uses internal data across FFT instances wherever possible, saving memory and reducing
+        /// setup time. (FFT instances created with one planner will never re-use data and buffers with FFT instances created
+        /// by a different planner)
+        ///
+        /// Each FFT instance owns [`Arc`s](std::sync::Arc) to its internal data, rather than borrowing it from the planner, so it's perfectly
+        /// safe to drop the planner after creating Fft instances.
+        pub struct FftPlannerSse<T: FftNum> {
+            _phantom: std::marker::PhantomData<T>,
+        }
+        impl<T: FftNum> FftPlannerSse<T> {
+            /// Creates a new `FftPlannerSse` instance.
+            ///
+            /// Returns `Ok(planner_instance)` if this machine has the required instruction sets.
+            /// Returns `Err(())` if some instruction sets are missing.
+            pub fn new() -> Result<Self, ()> {
+                Err(())
+            }
+            /// Returns a `Fft` instance which uses SSE4.1 instructions to compute FFTs of size `len`.
+            ///
+            /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
+            ///
+            /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+            pub fn plan_fft(&mut self, _len: usize, _direction: FftDirection) -> Arc<dyn Fft<T>> {
+                unreachable!()
+            }
+            /// Returns a `Fft` instance which uses SSE4.1 instructions to compute forward FFTs of size `len`.
+            ///
+            /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+            pub fn plan_fft_forward(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
+                unreachable!()
+            }
+            /// Returns a `Fft` instance which uses SSE4.1 instructions to compute inverse FFTs of size `len.
+            ///
+            /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+            pub fn plan_fft_inverse(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
+                unreachable!()
+            }
+        }
+    }
+}
+
+pub use self::sse::sse_planner::FftPlannerSse;
 
 #[cfg(test)]
 mod test_utils;
