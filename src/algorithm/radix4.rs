@@ -35,6 +35,8 @@ pub struct Radix4<T> {
 
     len: usize,
     direction: FftDirection,
+
+    shuffle_map: Box<[usize]>,
 }
 
 impl<T: FftNum> Radix4<T> {
@@ -78,6 +80,13 @@ impl<T: FftNum> Radix4<T> {
             twiddle_stride >>= 2;
         }
 
+        // make a lookup table for the bit reverse shuffling
+        let rest_len = len / base_len;
+        let bitpairs = (rest_len.trailing_zeros() / 2) as usize;
+        let shuffle_map = (0..rest_len)
+            .map(|val| reverse_bits(val, bitpairs))
+            .collect::<Vec<usize>>();
+
         Self {
             twiddles: twiddle_factors.into_boxed_slice(),
 
@@ -86,6 +95,8 @@ impl<T: FftNum> Radix4<T> {
 
             len,
             direction,
+
+            shuffle_map: shuffle_map.into_boxed_slice(),
         }
     }
 
@@ -96,7 +107,11 @@ impl<T: FftNum> Radix4<T> {
         _scratch: &mut [Complex<T>],
     ) {
         // copy the data into the spectrum vector
-        prepare_radix4(signal.len(), self.base_len, signal, spectrum, 1);
+        if self.shuffle_map.len() < 4 {
+            spectrum.copy_from_slice(signal);
+        } else {
+            bitreversed_transpose(self.base_len, signal, spectrum, &self.shuffle_map);
+        }
 
         // Base-level FFTs
         self.base_fft.process_with_scratch(spectrum, &mut []);
@@ -129,32 +144,68 @@ impl<T: FftNum> Radix4<T> {
 }
 boilerplate_fft_oop!(Radix4, |this: &Radix4<_>| this.len);
 
-// after testing an iterative bit reversal algorithm, this recursive algorithm
-// was almost an order of magnitude faster at setting up
-fn prepare_radix4<T: FftNum>(
-    size: usize,
-    base_len: usize,
-    signal: &[Complex<T>],
-    spectrum: &mut [Complex<T>],
-    stride: usize,
+// Preparing for radix 4 is similar to a transpose, where the column index is bit reversed.
+// Use a lookup table to avoid repeating the slow bit reverse operations.
+// Unrolling the outer loop by a factor 4 helps speed things up.
+pub fn bitreversed_transpose<T: Copy>(
+    height: usize,
+    input: &[T],
+    output: &mut [T],
+    shuffle_map: &[usize],
 ) {
-    if size == base_len {
-        unsafe {
-            for i in 0..size {
-                *spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stride);
+    let width = shuffle_map.len();
+    // Let's make sure the arguments are ok
+    assert!(input.len() == output.len());
+    assert!(input.len() == height * width);
+    for (x, x_rev) in shuffle_map.chunks_exact(4).enumerate() {
+        let x0 = 4 * x;
+        let x1 = 4 * x + 1;
+        let x2 = 4 * x + 2;
+        let x3 = 4 * x + 3;
+
+        // Assert that the the bit reversed indices will not exceed the length of the output.
+        // The highest index the loop reaches is: (x_rev[n] + 1)*height - 1
+        // The last element of the data is at index: width*height - 1
+        // Thus it is sufficient to assert that x_rev[n]<width.
+        assert!(x_rev[0] < width);
+        assert!(x_rev[1] < width);
+        assert!(x_rev[2] < width);
+        assert!(x_rev[3] < width);
+        for y in 0..height {
+            let input_index0 = x0 + y * width;
+            let input_index1 = x1 + y * width;
+            let input_index2 = x2 + y * width;
+            let input_index3 = x3 + y * width;
+            let output_index0 = y + x_rev[0] * height;
+            let output_index1 = y + x_rev[1] * height;
+            let output_index2 = y + x_rev[2] * height;
+            let output_index3 = y + x_rev[3] * height;
+
+            unsafe {
+                let temp0 = *input.get_unchecked(input_index0);
+                let temp1 = *input.get_unchecked(input_index1);
+                let temp2 = *input.get_unchecked(input_index2);
+                let temp3 = *input.get_unchecked(input_index3);
+
+                *output.get_unchecked_mut(output_index0) = temp0;
+                *output.get_unchecked_mut(output_index1) = temp1;
+                *output.get_unchecked_mut(output_index2) = temp2;
+                *output.get_unchecked_mut(output_index3) = temp3;
             }
         }
-    } else {
-        for i in 0..4 {
-            prepare_radix4(
-                size / 4,
-                base_len,
-                &signal[i * stride..],
-                &mut spectrum[i * (size / 4)..],
-                stride * 4,
-            );
-        }
     }
+}
+
+// Reverse bits of value, in pairs.
+// For 8 bits: abcdefgh -> ghefcdab
+pub fn reverse_bits(value: usize, bitpairs: usize) -> usize {
+    let mut result: usize = 0;
+    let mut value = value;
+    for _ in 0..bitpairs {
+        result = (result << 2) + (value & 0x03);
+        value = value >> 2;
+    }
+    result
 }
 
 unsafe fn butterfly_4<T: FftNum>(

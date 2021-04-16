@@ -105,7 +105,6 @@ impl<T: FftNum> FftPlanner<T> {
 }
 
 const MIN_RADIX4_BITS: u32 = 5; // smallest size to consider radix 4 an option is 2^5 = 32
-const MAX_RADIX4_BITS: u32 = 16; // largest size to consider radix 4 an option is 2^16 = 65536
 const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
 const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the inner fft of Bluestein if length is larger than this
 
@@ -366,8 +365,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
             fft_instance
         } else if factors.is_prime() {
             self.design_prime(len)
-        } else if len.trailing_zeros() <= MAX_RADIX4_BITS && len.trailing_zeros() >= MIN_RADIX4_BITS
-        {
+        } else if len.trailing_zeros() >= MIN_RADIX4_BITS {
             if len.is_power_of_two() {
                 Arc::new(Recipe::Radix4(len))
             } else {
@@ -522,25 +520,13 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_plan_scalar_mediumpoweroftwo() {
-        // Powers of 2 between 64 and 32768 should use Radix4
+    fn test_plan_scalar_largepoweroftwo() {
+        // Powers of 2 above 64 should use Radix4
         let mut planner = FftPlannerScalar::<f64>::new();
-        for pow in 6..16 {
+        for pow in 6..32 {
             let len = 1 << pow;
             let plan = planner.design_fft_for_len(len);
             assert_eq!(*plan, Recipe::Radix4(len));
-            assert_eq!(plan.len(), len, "Recipe reports wrong length");
-        }
-    }
-
-    #[test]
-    fn test_plan_scalar_largepoweroftwo() {
-        // Powers of 2 from 65536 and up should use MixedRadix
-        let mut planner = FftPlannerScalar::<f64>::new();
-        for pow in 17..32 {
-            let len = 1 << pow;
-            let plan = planner.design_fft_for_len(len);
-            assert!(is_mixedradix(&plan), "Expected MixedRadix, got {:?}", plan);
             assert_eq!(plan.len(), len, "Recipe reports wrong length");
         }
     }

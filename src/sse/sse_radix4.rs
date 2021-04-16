@@ -2,6 +2,7 @@ use num_complex::Complex;
 
 use core::arch::x86_64::*;
 
+use crate::algorithm::{bitreversed_transpose, reverse_bits};
 use crate::array_utils;
 use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::sse::sse_butterflies::{
@@ -23,6 +24,8 @@ use crate::array_utils::{RawSlice, RawSliceMut};
 
 /// FFT algorithm optimized for power-of-two sizes, SSE accelerated version.
 /// This is designed to be used via a Planner, and not created directly.
+
+const USE_BUTTERFLY32_FROM: usize = 262144; // Use length 32 butterfly starting from this length
 
 enum Sse32Butterfly<T> {
     Len1(SseF32Butterfly1<T>),
@@ -52,6 +55,8 @@ pub struct Sse32Radix4<T> {
     len: usize,
     direction: FftDirection,
     bf4: SseF32Butterfly4<T>,
+
+    shuffle_map: Box<[usize]>,
 }
 
 impl<T: FftNum> Sse32Radix4<T> {
@@ -73,7 +78,11 @@ impl<T: FftNum> Sse32Radix4<T> {
             3 => (len, Sse32Butterfly::Len8(SseF32Butterfly8::new(direction))),
             _ => {
                 if num_bits % 2 == 1 {
-                    (32, Sse32Butterfly::Len32(SseF32Butterfly32::new(direction)))
+                    if len < USE_BUTTERFLY32_FROM {
+                        (8, Sse32Butterfly::Len8(SseF32Butterfly8::new(direction)))
+                    } else {
+                        (32, Sse32Butterfly::Len32(SseF32Butterfly32::new(direction)))
+                    }
                 } else {
                     (16, Sse32Butterfly::Len16(SseF32Butterfly16::new(direction)))
                 }
@@ -107,6 +116,13 @@ impl<T: FftNum> Sse32Radix4<T> {
             twiddle_stride >>= 2;
         }
 
+        // make a lookup table for the bit reverse shuffling
+        let rest_len = len / base_len;
+        let bitpairs = (rest_len.trailing_zeros() / 2) as usize;
+        let shuffle_map = (0..rest_len)
+            .map(|val| reverse_bits(val, bitpairs))
+            .collect::<Vec<usize>>();
+
         Self {
             twiddles: twiddle_factors.into_boxed_slice(),
 
@@ -117,6 +133,8 @@ impl<T: FftNum> Sse32Radix4<T> {
             direction,
             _phantom: std::marker::PhantomData,
             bf4: SseF32Butterfly4::<T>::new(direction),
+
+            shuffle_map: shuffle_map.into_boxed_slice(),
         }
     }
 
@@ -128,7 +146,11 @@ impl<T: FftNum> Sse32Radix4<T> {
         _scratch: &mut [Complex<T>],
     ) {
         // copy the data into the spectrum vector
-        prepare_radix4(signal.len(), self.base_len, signal, spectrum, 1);
+        if self.shuffle_map.len() < 4 {
+            spectrum.copy_from_slice(signal);
+        } else {
+            bitreversed_transpose(self.base_len, signal, spectrum, &self.shuffle_map);
+        }
 
         // Base-level FFTs
         match &self.base_fft {
@@ -219,6 +241,8 @@ pub struct Sse64Radix4<T> {
     len: usize,
     direction: FftDirection,
     bf4: SseF64Butterfly4<T>,
+
+    shuffle_map: Box<[usize]>,
 }
 
 impl<T: FftNum> Sse64Radix4<T> {
@@ -241,7 +265,11 @@ impl<T: FftNum> Sse64Radix4<T> {
             3 => (len, Sse64Butterfly::Len8(SseF64Butterfly8::new(direction))),
             _ => {
                 if num_bits % 2 == 1 {
-                    (32, Sse64Butterfly::Len32(SseF64Butterfly32::new(direction)))
+                    if len < USE_BUTTERFLY32_FROM {
+                        (8, Sse64Butterfly::Len8(SseF64Butterfly8::new(direction)))
+                    } else {
+                        (32, Sse64Butterfly::Len32(SseF64Butterfly32::new(direction)))
+                    }
                 } else {
                     (16, Sse64Butterfly::Len16(SseF64Butterfly16::new(direction)))
                 }
@@ -269,6 +297,13 @@ impl<T: FftNum> Sse64Radix4<T> {
             twiddle_stride >>= 2;
         }
 
+        // make a lookup table for the bit reverse shuffling
+        let rest_len = len / base_len;
+        let bitpairs = (rest_len.trailing_zeros() / 2) as usize;
+        let shuffle_map = (0..rest_len)
+            .map(|val| reverse_bits(val, bitpairs))
+            .collect::<Vec<usize>>();
+
         Self {
             twiddles: twiddle_factors.into_boxed_slice(),
 
@@ -279,6 +314,8 @@ impl<T: FftNum> Sse64Radix4<T> {
             direction,
             _phantom: std::marker::PhantomData,
             bf4: SseF64Butterfly4::<T>::new(direction),
+
+            shuffle_map: shuffle_map.into_boxed_slice(),
         }
     }
 
@@ -290,7 +327,11 @@ impl<T: FftNum> Sse64Radix4<T> {
         _scratch: &mut [Complex<T>],
     ) {
         // copy the data into the spectrum vector
-        prepare_radix4(signal.len(), self.base_len, signal, spectrum, 1);
+        if self.shuffle_map.len() < 4 {
+            spectrum.copy_from_slice(signal);
+        } else {
+            bitreversed_transpose(self.base_len, signal, spectrum, &self.shuffle_map);
+        }
 
         // Base-level FFTs
         match &self.base_fft {
@@ -327,34 +368,6 @@ impl<T: FftNum> Sse64Radix4<T> {
     }
 }
 boilerplate_fft_sse_oop!(Sse64Radix4, |this: &Sse64Radix4<_>| this.len);
-
-// after testing an iterative bit reversal algorithm, this recursive algorithm
-// was almost an order of magnitude faster at setting up
-fn prepare_radix4<T: FftNum>(
-    size: usize,
-    base_len: usize,
-    signal: &[Complex<T>],
-    spectrum: &mut [Complex<T>],
-    stride: usize,
-) {
-    if size == base_len {
-        unsafe {
-            for i in 0..size {
-                *spectrum.get_unchecked_mut(i) = *signal.get_unchecked(i * stride);
-            }
-        }
-    } else {
-        for i in 0..4 {
-            prepare_radix4(
-                size / 4,
-                base_len,
-                &signal[i * stride..],
-                &mut spectrum[i * (size / 4)..],
-                stride * 4,
-            );
-        }
-    }
-}
 
 #[target_feature(enable = "sse4.1")]
 unsafe fn butterfly_4_64<T: FftNum>(
