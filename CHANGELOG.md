@@ -2,6 +2,7 @@
 Released 16 April 2021
 ### Added
  - Implemented a code path for SSE-optimized FFTs (Thanks to Henrik Enquist!) (#60)
+     - Plan a FFT using the `FftPlanner` (or the new `FftPlannerSse`) on a machine that supports SSE4.1 (but not AVX) and you'll see a 2-3x performance improvement over the default scalar code.
 ### Fixed
  - Fixed underflow when planning an AVX FFT of size zero (#56)
  - Fixed the FFT planner not being Send, due to internal use of Rc<> (#55)
