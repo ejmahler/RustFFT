@@ -8,6 +8,7 @@ use rustfft::algorithm::butterflies::*;
 use rustfft::algorithm::*;
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
+use rustfft::FftPlannerScalar;
 use rustfft::{Direction, Fft, FftDirection, FftNum, Length};
 use std::sync::Arc;
 use test::Bencher;
@@ -492,6 +493,7 @@ fn good_thomas_small_0007_32(b: &mut Bencher) {
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to Rader's algorithm
+#[allow(dead_code)]
 fn bench_raders_scalar(b: &mut Bencher, len: usize) {
     let mut planner = rustfft::FftPlannerScalar::new();
     let inner_fft = planner.plan_fft_forward(len - 1);
@@ -534,6 +536,7 @@ fn bench_raders_scalar(b: &mut Bencher, len: usize) {
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to Bluestein's Algorithm
+#[allow(dead_code)]
 fn bench_bluesteins_scalar_prime(b: &mut Bencher, len: usize) {
     let mut planner = rustfft::FftPlannerScalar::new();
     let inner_fft = planner.plan_fft_forward((len * 2 - 1).checked_next_power_of_two().unwrap());
@@ -865,3 +868,37 @@ fn butterfly64_16(b: &mut Bencher) {
 //#[bench] fn butterfly64_128(b: &mut Bencher) { bench_butterfly64(b, 128); }
 //#[bench] fn butterfly64_256(b: &mut Bencher) { bench_butterfly64(b, 256); }
 //#[bench] fn butterfly64_512(b: &mut Bencher) { bench_butterfly64(b, 512); }
+
+fn bench_bluesteins_setup(b: &mut Bencher, len: usize) {
+    let inner_len = (len * 2 - 1).next_power_of_two();
+    let inner_fft = FftPlannerScalar::<f32>::new().plan_fft_forward(inner_len);
+
+    b.iter(|| {
+        test::black_box(BluesteinsAlgorithm::new(len, Arc::clone(&inner_fft)));
+    });
+}
+
+#[bench]
+fn setup_bluesteins_0017(b: &mut Bencher) {
+    bench_bluesteins_setup(b, 17);
+}
+#[bench]
+fn setup_bluesteins_0055(b: &mut Bencher) {
+    bench_bluesteins_setup(b, 55);
+}
+#[bench]
+fn setup_bluesteins_0117(b: &mut Bencher) {
+    bench_bluesteins_setup(b, 117);
+}
+#[bench]
+fn setup_bluesteins_0555(b: &mut Bencher) {
+    bench_bluesteins_setup(b, 555);
+}
+#[bench]
+fn setup_bluesteins_1117(b: &mut Bencher) {
+    bench_bluesteins_setup(b, 1117);
+}
+#[bench]
+fn setup_bluesteins_5555(b: &mut Bencher) {
+    bench_bluesteins_setup(b, 5555);
+}

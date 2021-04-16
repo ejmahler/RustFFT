@@ -49,13 +49,6 @@ pub struct BluesteinsAlgorithm<T> {
 }
 
 impl<T: FftNum> BluesteinsAlgorithm<T> {
-    fn compute_bluesteins_twiddle(index: usize, len: usize, direction: FftDirection) -> Complex<T> {
-        let index_float = index as f64;
-        let index_squared = index_float * index_float;
-
-        twiddles::compute_twiddle_floatindex(index_squared, len * 2, direction.opposite_direction())
-    }
-
     /// Creates a FFT instance which will process inputs/outputs of size `len`. `inner_fft.len()` must be >= `len * 2 - 1`
     ///
     /// Note that this constructor is quite expensive to run; This algorithm must compute a FFT using `inner_fft` within the
@@ -69,17 +62,22 @@ impl<T: FftNum> BluesteinsAlgorithm<T> {
         assert!(len * 2 - 1 <= inner_fft_len, "Bluestein's algorithm requires inner_fft.len() >= self.len() * 2 - 1. Expected >= {}, got {}", len * 2 - 1, inner_fft_len);
 
         // when computing FFTs, we're going to run our inner multiply pairise by some precomputed data, then run an inverse inner FFT. We need to precompute that inner data here
-        let inner_len_float = T::from_usize(inner_fft_len).unwrap();
+        let inner_fft_scale = T::one() / T::from_usize(inner_fft_len).unwrap();
         let direction = inner_fft.fft_direction();
 
         // Compute twiddle factors that we'll run our inner FFT on
         let mut inner_fft_input = vec![Complex::zero(); inner_fft_len];
-        for i in 0..len {
-            inner_fft_input[i] =
-                Self::compute_bluesteins_twiddle(i, len, direction) / inner_len_float;
-        }
+        twiddles::fill_bluesteins_twiddles(
+            &mut inner_fft_input[..len],
+            direction.opposite_direction(),
+        );
+
+        // Scale the computed twiddles and copy them to the end of the array
+        inner_fft_input[0] = inner_fft_input[0] * inner_fft_scale;
         for i in 1..len {
-            inner_fft_input[inner_fft_len - i] = inner_fft_input[i];
+            let twiddle = inner_fft_input[i] * inner_fft_scale;
+            inner_fft_input[i] = twiddle;
+            inner_fft_input[inner_fft_len - i] = twiddle;
         }
 
         //Compute the inner fft
@@ -87,9 +85,8 @@ impl<T: FftNum> BluesteinsAlgorithm<T> {
         inner_fft.process_with_scratch(&mut inner_fft_input, &mut inner_fft_scratch);
 
         // also compute some more mundane twiddle factors to start and end with
-        let twiddles: Vec<_> = (0..len)
-            .map(|i| Self::compute_bluesteins_twiddle(i, len, direction.opposite_direction()))
-            .collect();
+        let mut twiddles = vec![Complex::zero(); len];
+        twiddles::fill_bluesteins_twiddles(&mut twiddles, direction);
 
         Self {
             inner_fft: inner_fft,
@@ -200,7 +197,7 @@ mod unit_tests {
     use std::sync::Arc;
 
     #[test]
-    fn test_bluesteins() {
+    fn test_bluesteins_scalar() {
         for &len in &[3, 5, 7, 11, 13] {
             test_bluesteins_with_length(len, FftDirection::Forward);
             test_bluesteins_with_length(len, FftDirection::Inverse);

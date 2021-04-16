@@ -1,6 +1,8 @@
 use crate::{common::FftNum, FftDirection};
 use num_complex::Complex;
 
+use strength_reduce::{StrengthReducedU128, StrengthReducedU64};
+
 pub fn compute_twiddle<T: FftNum>(
     index: usize,
     fft_len: usize,
@@ -20,22 +22,37 @@ pub fn compute_twiddle<T: FftNum>(
     }
 }
 
-pub fn compute_twiddle_floatindex<T: FftNum>(
-    index: f64,
-    fft_len: usize,
+pub fn fill_bluesteins_twiddles<T: FftNum>(
+    destination: &mut [Complex<T>],
     direction: FftDirection,
-) -> Complex<T> {
-    let constant = -2f64 * std::f64::consts::PI / fft_len as f64;
-    let angle = constant * index;
+) {
+    let twice_len = destination.len() * 2;
 
-    let result = Complex {
-        re: T::from_f64(angle.cos()).unwrap(),
-        im: T::from_f64(angle.sin()).unwrap(),
-    };
+    // Standard bluestein's twiddle computation requires us to square the index before usingit to compute a twiddle factor
+    // And since twiddle factors are cyclic, we can improve precision once the squared index gets converted to floating point by taking a modulo
+    // Modulo is expensive, so we're going to use strength-reduction to keep it manageable
 
-    match direction {
-        FftDirection::Forward => result,
-        FftDirection::Inverse => result.conj(),
+    // Strength-reduced u128s are very heavy, so we only want to use them if we need them - and we only need them if
+    // len * len doesn't fit in a u64, AKA if len doesn't fit in a u32
+    if destination.len() < std::u32::MAX as usize {
+        let twice_len_reduced = StrengthReducedU64::new(twice_len as u64);
+
+        for (i, e) in destination.iter_mut().enumerate() {
+            let i_squared = i as u64 * i as u64;
+            let i_mod = i_squared % twice_len_reduced;
+            *e = compute_twiddle(i_mod as usize, twice_len, direction);
+        }
+    } else {
+        // Sadly, the len doesn't fit in a u64, so we have to crank it up to u128 arithmetic
+        let twice_len_reduced = StrengthReducedU128::new(twice_len as u128);
+
+        for (i, e) in destination.iter_mut().enumerate() {
+            // Standard bluestein's twiddle computation requires us to square the index before usingit to compute a twiddle factor
+            // And since twiddle factors are cyclic, we can improve precision once the squared index gets converted to floating point by taking a modulo
+            let i_squared = i as u128 * i as u128;
+            let i_mod = i_squared % twice_len_reduced;
+            *e = compute_twiddle(i_mod as usize, twice_len, direction);
+        }
     }
 }
 
