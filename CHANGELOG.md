@@ -6,7 +6,6 @@ Released 16 April 2021
  - Fixed underflow when planning an AVX FFT of size zero (#56)
  - Fixed the FFT planner not being Send, due to internal use of Rc<> (#55)
  - Fixed typo in documentation (#54)
- - Fixed the FFT planner not being Send, due to internal use of Rc<> (#55)
  - Slightly improved numerical precision of Rader's Algorithm and Bluestein's Algorithm (#66, #68)
  - Minor optimizations to Rader's Algorithm and Bluestein's Algorithm (#59)
  - Minor optimizations to MixedRadix setup time (#57)
