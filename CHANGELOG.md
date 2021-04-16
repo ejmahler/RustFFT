@@ -1,3 +1,17 @@
+## [5.1.0]
+Released 16 April 2021
+### Added
+ - Implemented a code path for SSE-optimized FFTs (Thanks to Henrik Enquist!) (#60)
+### Fixed
+ - Fixed underflow when planning an AVX FFT of size zero (#56)
+ - Fixed the FFT planner not being Send, due to internal use of Rc<> (#55)
+ - Fixed typo in documentation (#54)
+ - Fixed the FFT planner not being Send, due to internal use of Rc<> (#55)
+ - Slightly improved numerical precision of Rader's Algorithm and Bluestein's Algorithm (#66, #68)
+ - Minor optimizations to Rader's Algorithm and Bluestein's Algorithm (#59)
+ - Minor optimizations to MixedRadix setup time (#57)
+ - Optimized performance of Radix4 (#65)
+
 ## [5.0.1]
 Released 8 January 2021
 ### Fixed
