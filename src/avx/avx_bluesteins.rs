@@ -33,13 +33,6 @@ pub struct BluesteinsAvx<A: AvxNum, T> {
 boilerplate_avx_fft_commondata!(BluesteinsAvx);
 
 impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
-    fn compute_bluesteins_twiddle(index: usize, len: usize, direction: FftDirection) -> Complex<A> {
-        let index_float = index as f64;
-        let index_squared = index_float * index_float;
-
-        twiddles::compute_twiddle_floatindex(index_squared, len * 2, direction.opposite_direction())
-    }
-
     /// Pairwise multiply the complex numbers in `left` with the complex numbers in `right`.
     /// This is exactly the same as `mul_complex` in `AvxVector`, but this implementation also conjugates the `left` input before multiplying
     #[inline(always)]
@@ -86,17 +79,22 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
         assert_eq!(inner_fft_len % A::VectorType::COMPLEX_PER_VECTOR, 0, "BluesteinsAvx requires its inner_fft.len() to be a multiple of {} (IE the number of complex numbers in a single vector) inner_fft.len() = {}", A::VectorType::COMPLEX_PER_VECTOR, inner_fft_len);
 
         // when computing FFTs, we're going to run our inner multiply pairwise by some precomputed data, then run an inverse inner FFT. We need to precompute that inner data here
-        let inner_len_float = A::from_usize(inner_fft_len).unwrap();
+        let inner_fft_scale = A::one() / A::from_usize(inner_fft_len).unwrap();
         let direction = inner_fft.fft_direction();
 
         // Compute twiddle factors that we'll run our inner FFT on
         let mut inner_fft_input = vec![Complex::zero(); inner_fft_len];
-        for i in 0..len {
-            inner_fft_input[i] =
-                Self::compute_bluesteins_twiddle(i, len, direction) / inner_len_float;
-        }
+        twiddles::fill_bluesteins_twiddles(
+            &mut inner_fft_input[..len],
+            direction.opposite_direction(),
+        );
+
+        // Scale the computed twiddles and copy them to the end of the array
+        inner_fft_input[0] = inner_fft_input[0] * inner_fft_scale;
         for i in 1..len {
-            inner_fft_input[inner_fft_len - i] = inner_fft_input[i];
+            let twiddle = inner_fft_input[i] * inner_fft_scale;
+            inner_fft_input[i] = twiddle;
+            inner_fft_input[inner_fft_len - i] = twiddle;
         }
 
         //Compute the inner fft
@@ -124,19 +122,14 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
 
         // also compute some more mundane twiddle factors to start and end with.
         let chunk_count = div_ceil(len, A::VectorType::COMPLEX_PER_VECTOR);
-        let twiddles: Vec<_> = (0..chunk_count)
-            .map(|x| {
-                let mut twiddle_chunk = [Complex::zero(); 4]; // can't give this a length of A::VectorType::COMPLEX_PER_VECTOR because arrays obnoxiously can't have generic lengths
+        let twiddle_count = chunk_count * A::VectorType::COMPLEX_PER_VECTOR;
+        let mut twiddles_scalar: Vec<Complex<A>> = vec![Complex::zero(); twiddle_count];
+        twiddles::fill_bluesteins_twiddles(&mut twiddles_scalar[..len], direction);
 
-                for i in 0..A::VectorType::COMPLEX_PER_VECTOR {
-                    twiddle_chunk[i] = Self::compute_bluesteins_twiddle(
-                        x * A::VectorType::COMPLEX_PER_VECTOR + i,
-                        len,
-                        direction.opposite_direction(),
-                    );
-                }
-                twiddle_chunk.load_complex(0)
-            })
+        // We have the twiddles in scalar format, last step is to copy them over to AVX vectors
+        let twiddles: Vec<_> = twiddles_scalar
+            .chunks_exact(A::VectorType::COMPLEX_PER_VECTOR)
+            .map(|chunk| chunk.load_complex(0))
             .collect();
 
         let required_scratch = inner_fft_input.len() + inner_fft_scratch.len();
