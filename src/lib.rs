@@ -137,6 +137,7 @@ impl FftDirection {
     ///
     ///  - If `self` is `FftDirection::Forward`, returns `FftDirection::Inverse`
     ///  - If `self` is `FftDirection::Inverse`, returns `FftDirection::Forward`
+    #[inline]
     pub fn opposite_direction(&self) -> FftDirection {
         match self {
             Self::Forward => Self::Inverse,
