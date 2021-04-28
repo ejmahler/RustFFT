@@ -29,7 +29,7 @@ sse = []
 num-complex = "0.4"
 num-traits = "0.2"
 num-integer = "^0.1.40"
-strength_reduce = "^0.2.1"
+strength_reduce = "0.2.3"
 transpose = "0.2"
 primal-check = "0.3.1"
 
