@@ -13,6 +13,12 @@ Released 16 April 2021
     - See the [num-complex changelog](https://github.com/rust-num/num-complex/blob/master/RELEASES.md) for a list of breaking changes in num-complex 0.4
     - As a high-level summary, most users will not need to do anything to upgrade to RustFFT 6.0: num-complex 0.4 re-exports a newer version of `rand`, and that's num-complex's only documented breaking change.
 
+## [5.1.1]
+Released 10 May 2021
+### Fixed
+ - Fixed a compile-time divide by zero error on nightly Rust in `stdarch\crates\core_arch\src\macros.rs` (Backported from v6.0.1)
+ - Increased the minimum version of `strength_reduce` to 0.2.3  (Backported from v6.0.1)
+
 ## [5.1.0]
 Released 16 April 2021
 ### Added
