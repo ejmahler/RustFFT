@@ -1,3 +1,10 @@
+## [6.0.1]
+Released 10 May 2021
+### Fixed
+ - Fixed a compile-time divide by zero error on nightly Rust in `stdarch\crates\core_arch\src\macros.rs` (#75)
+ - Increased the minimum version of `strength_reduce` to 0.2.3
+
+
 ## [6.0.0]
 Released 16 April 2021
 ### Breaking Changes
