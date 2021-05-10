@@ -1311,7 +1311,7 @@ impl AvxVector for __m128 {
     #[inline(always)]
     unsafe fn transpose3_packed(rows: [Self; 3]) -> [Self; 3] {
         let unpacked0 = Self::unpacklo_complex([rows[0], rows[1]]);
-        let blended = _mm_blend_ps(rows[0], rows[2], 0x33);
+        let blended = _mm_blend_ps(rows[0], rows[2], 0x03);
         let unpacked2 = Self::unpackhi_complex([rows[1], rows[2]]);
 
         [unpacked0, blended, unpacked2]
@@ -1328,7 +1328,7 @@ impl AvxVector for __m128 {
         [
             Self::unpacklo_complex([rows[0], rows[1]]),
             Self::unpacklo_complex([rows[2], rows[3]]),
-            _mm_blend_ps(rows[0], rows[4], 0x33),
+            _mm_blend_ps(rows[0], rows[4], 0x03),
             Self::unpackhi_complex([rows[1], rows[2]]),
             Self::unpackhi_complex([rows[3], rows[4]]),
         ]
@@ -1576,7 +1576,7 @@ impl AvxVector for __m256d {
     #[inline(always)]
     unsafe fn transpose3_packed(rows: [Self; 3]) -> [Self; 3] {
         let unpacked0 = Self::unpacklo_complex([rows[0], rows[1]]);
-        let blended = _mm256_blend_pd(rows[0], rows[2], 0x33);
+        let blended = _mm256_blend_pd(rows[0], rows[2], 0x03);
         let unpacked2 = Self::unpackhi_complex([rows[1], rows[2]]);
 
         [unpacked0, blended, unpacked2]
@@ -1593,7 +1593,7 @@ impl AvxVector for __m256d {
         [
             Self::unpacklo_complex([rows[0], rows[1]]),
             Self::unpacklo_complex([rows[2], rows[3]]),
-            _mm256_blend_pd(rows[0], rows[4], 0x33),
+            _mm256_blend_pd(rows[0], rows[4], 0x03),
             Self::unpackhi_complex([rows[1], rows[2]]),
             Self::unpackhi_complex([rows[3], rows[4]]),
         ]
@@ -1614,7 +1614,7 @@ impl AvxVector for __m256d {
             Self::unpacklo_complex([rows[0], rows[1]]),
             Self::unpacklo_complex([rows[2], rows[3]]),
             Self::unpacklo_complex([rows[4], rows[5]]),
-            _mm256_blend_pd(rows[0], rows[6], 0x33),
+            _mm256_blend_pd(rows[0], rows[6], 0x03),
             Self::unpackhi_complex([rows[1], rows[2]]),
             Self::unpackhi_complex([rows[3], rows[4]]),
             Self::unpackhi_complex([rows[5], rows[6]]),
@@ -1856,11 +1856,11 @@ impl AvxVector for __m128d {
 
     #[inline(always)]
     unsafe fn swap_complex_components(self) -> Self {
-        _mm_permute_pd(self, 0x05)
+        _mm_permute_pd(self, 0x01)
     }
     #[inline(always)]
     unsafe fn duplicate_complex_components(self) -> (Self, Self) {
-        (_mm_movedup_pd(self), _mm_permute_pd(self, 0x0F))
+        (_mm_movedup_pd(self), _mm_permute_pd(self, 0x03))
     }
 
     #[inline(always)]
