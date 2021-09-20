@@ -1,4 +1,5 @@
 use core::arch::aarch64::*;
+use core::ptr::copy_nonoverlapping;
 use num_complex::Complex;
 
 use crate::array_utils::{RawSlice, RawSliceMut};
@@ -122,6 +123,38 @@ macro_rules! write_complex_to_array_strided {
     }
 }
 
+/// Workaround since these intrinsics are broken
+#[inline(always)]
+#[allow(clippy::cast_ptr_alignment)]
+unsafe fn temp_vst1q_f64(ptr: *mut f64, a: float64x2_t) {
+    copy_nonoverlapping(
+        &a as *const float64x2_t as *const f64,
+        ptr as *mut f64,
+        2,
+    )
+}
+
+#[inline(always)]
+#[allow(clippy::cast_ptr_alignment)]
+unsafe fn temp_vst1_f32(ptr: *mut f32, a: float32x2_t) {
+    copy_nonoverlapping(
+        &a as *const float32x2_t as *const f32,
+        ptr as *mut f32,
+        2,
+    )
+}
+
+#[inline(always)]
+#[allow(clippy::cast_ptr_alignment)]
+unsafe fn temp_vst1q_f32(ptr: *mut f32, a: float32x4_t) {
+    copy_nonoverlapping(
+        &a as *const float32x4_t as *const f32,
+        ptr as *mut f32,
+        4,
+    )
+}
+
+
 // A trait to handle reading from an array of complex floats into SSE vectors.
 // SSE works with 128-bit vectors, meaning a vector can hold two complex f32,
 // or a single complex f64.
@@ -204,21 +237,21 @@ impl NeonArrayMut for RawSliceMut<Complex<f32>> {
     #[inline(always)]
     unsafe fn store_complex(&self, vector: Self::VectorType, index: usize) {
         debug_assert!(self.len() >= index + Self::COMPLEX_PER_VECTOR);
-        vst1q_f32(self.as_mut_ptr().add(index) as *mut f32, vector);
+        temp_vst1q_f32(self.as_mut_ptr().add(index) as *mut f32, vector);
     }
 
     #[inline(always)]
     unsafe fn store_partial_hi_complex(&self, vector: Self::VectorType, index: usize) {
         debug_assert!(self.len() >= index + 1);
         let high = vget_high_f32(vector);
-        vst1_f32(self.as_mut_ptr().add(index) as *mut f32, high);
+        temp_vst1_f32(self.as_mut_ptr().add(index) as *mut f32, high);
     }
 
     #[inline(always)]
     unsafe fn store_partial_lo_complex(&self, vector: Self::VectorType, index: usize) {
         debug_assert!(self.len() >= index + 1);
         let low = vget_low_f32(vector);
-        vst1_f32(self.as_mut_ptr().add(index) as *mut f32, low);
+        temp_vst1_f32(self.as_mut_ptr().add(index) as *mut f32, low);
     }
 }
 
@@ -230,7 +263,7 @@ impl NeonArrayMut for RawSliceMut<Complex<f64>> {
     #[inline(always)]
     unsafe fn store_complex(&self, vector: Self::VectorType, index: usize) {
         debug_assert!(self.len() >= index + Self::COMPLEX_PER_VECTOR);
-        vst1q_f64(self.as_mut_ptr().add(index) as *mut f64, vector);
+        temp_vst1q_f64(self.as_mut_ptr().add(index) as *mut f64, vector);
     }
 
     #[inline(always)]
@@ -240,5 +273,61 @@ impl NeonArrayMut for RawSliceMut<Complex<f64>> {
     #[inline(always)]
     unsafe fn store_partial_lo_complex(&self, _vector: Self::VectorType, _index: usize) {
         unimplemented!("Impossible to do a partial store of complex f64's");
+    }
+}
+
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+    use core::arch::aarch64::*;
+
+    use num_complex::Complex;
+
+    use crate::array_utils::{RawSlice, RawSliceMut};
+
+    #[test]
+    fn test_load_f64() {
+        unsafe {
+            let val1: Complex<f64> = Complex::new(1.0, 2.0);
+            let val2: Complex<f64> = Complex::new(3.0, 4.0);
+            let val3: Complex<f64> = Complex::new(5.0, 6.0);
+            let val4: Complex<f64> = Complex::new(7.0, 8.0);
+            let values = vec![val1, val2, val3, val4];
+            let slice = RawSlice::new(&values);
+            let load1 = slice.load_complex(0);
+            let load2 = slice.load_complex(1);
+            let load3 = slice.load_complex(2);
+            let load4 = slice.load_complex(3);
+            assert_eq!(val1, std::mem::transmute::<float64x2_t, Complex<f64>>(load1));
+            assert_eq!(val2, std::mem::transmute::<float64x2_t, Complex<f64>>(load2));
+            assert_eq!(val3, std::mem::transmute::<float64x2_t, Complex<f64>>(load3));
+            assert_eq!(val4, std::mem::transmute::<float64x2_t, Complex<f64>>(load4));
+        }
+    }
+
+    #[test]
+    fn test_store_f64() {
+        unsafe {
+            let val1: Complex<f64> = Complex::new(1.0, 2.0);
+            let val2: Complex<f64> = Complex::new(3.0, 4.0);
+            let val3: Complex<f64> = Complex::new(5.0, 6.0);
+            let val4: Complex<f64> = Complex::new(7.0, 8.0);
+
+            let nbr1 = vld1q_f64(&val1 as *const _ as *const f64);
+            let nbr2 = vld1q_f64(&val2 as *const _ as *const f64);
+            let nbr3 = vld1q_f64(&val3 as *const _ as *const f64);
+            let nbr4 = vld1q_f64(&val4 as *const _ as *const f64);
+
+            let mut values: Vec<Complex<f64>> = vec![Complex::new(0.0, 0.0); 4];
+            let slice: RawSliceMut<Complex<f64>> = RawSliceMut::new_transmuted(&mut values);
+            slice.store_complex(nbr1, 0);
+            slice.store_complex(nbr2, 1);
+            slice.store_complex(nbr3, 2);
+            slice.store_complex(nbr4, 3);
+            assert_eq!(val1, values[0]);
+            assert_eq!(val2, values[1]);
+            assert_eq!(val3, values[2]);
+            assert_eq!(val4, values[3]);
+        }
     }
 }

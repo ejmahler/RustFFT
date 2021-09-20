@@ -26,9 +26,9 @@ impl Rotate90F32 {
         //};
         let sign_hi = unsafe {
             if positive {
-                vld1q_f32([-0.0, 0.0, 0.0, 0.0].as_ptr())
+                vld1q_f32([0.0, 0.0, -0.0, 0.0].as_ptr())
             } else {
-                vld1q_f32([0.0, -0.0, 0.0, 0.0].as_ptr())
+                vld1q_f32([0.0, 0.0, 0.0, -0.0].as_ptr())
             }
         };
         let sign_both = unsafe {
@@ -66,15 +66,14 @@ impl Rotate90F32 {
     }
 }
 
-/*
 // Pack low (1st) complex
 // left: r1.re, r1.im, r2.re, r2.im
 // right: l1.re, l1.im, l2.re, l2.im
 // --> r1.re, r1.im, l1.re, l1.im
 #[inline(always)]
-pub unsafe fn extract_lo_lo_f32(left: __m128, right: __m128) -> __m128 {
+pub unsafe fn extract_lo_lo_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t {
     //_mm_shuffle_ps(left, right, 0x44)
-    _mm_castpd_ps(_mm_unpacklo_pd(_mm_castps_pd(left), _mm_castps_pd(right)))
+    vreinterpretq_f32_f64(vtrn1q_f64(vreinterpretq_f64_f32(left), vreinterpretq_f64_f32(right)))
 }
 
 // Pack high (2nd) complex
@@ -82,8 +81,8 @@ pub unsafe fn extract_lo_lo_f32(left: __m128, right: __m128) -> __m128 {
 // right: l1.re, l1.im, l2.re, l2.im
 // --> r2.re, r2.im, l2.re, l2.im
 #[inline(always)]
-pub unsafe fn extract_hi_hi_f32(left: __m128, right: __m128) -> __m128 {
-    _mm_castpd_ps(_mm_unpackhi_pd(_mm_castps_pd(left), _mm_castps_pd(right)))
+pub unsafe fn extract_hi_hi_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t {
+    vreinterpretq_f32_f64(vtrn2q_f64(vreinterpretq_f64_f32(left), vreinterpretq_f64_f32(right)))
 }
 
 // Pack low (1st) and high (2nd) complex
@@ -91,60 +90,63 @@ pub unsafe fn extract_hi_hi_f32(left: __m128, right: __m128) -> __m128 {
 // right: l1.re, l1.im, l2.re, l2.im
 // --> r1.re, r1.im, l2.re, l2.im
 #[inline(always)]
-pub unsafe fn extract_lo_hi_f32(left: __m128, right: __m128) -> __m128 {
-    _mm_blend_ps(left, right, 0x0C)
+pub unsafe fn extract_lo_hi_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t {
+    let idx = vld1q_u8([0, 1, 2, 3, 4 ,5, 6, 7, 24, 25, 26, 27, 28, 29, 30, 31].as_ptr());
+    vreinterpretq_f32_u8(vqtbl2q_u8(uint8x16x2_t(vreinterpretq_u8_f32(left), vreinterpretq_u8_f32(right)), idx))
 }
+
 
 // Pack  high (2nd) and low (1st) complex
 // left: r1.re, r1.im, r2.re, r2.im
 // right: l1.re, l1.im, l2.re, l2.im
 // --> r2.re, r2.im, l1.re, l1.im
 #[inline(always)]
-pub unsafe fn extract_hi_lo_f32(left: __m128, right: __m128) -> __m128 {
-    _mm_shuffle_ps(left, right, 0x4E)
+pub unsafe fn extract_hi_lo_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t {
+    vextq_f32::<2>(left, right)
 }
 
 // Reverse complex
 // values: a.re, a.im, b.re, b.im
 // --> b.re, b.im, a.re, a.im
 #[inline(always)]
-pub unsafe fn reverse_complex_elements_f32(values: __m128) -> __m128 {
-    _mm_shuffle_ps(values, values, 0x4E)
+pub unsafe fn reverse_complex_elements_f32(values: float32x4_t) -> float32x4_t {
+    vextq_f32::<2>(values, values)
 }
 
 // Invert sign of high (2nd) complex
 // values: a.re, a.im, b.re, b.im
 // -->  a.re, a.im, -b.re, -b.im
 #[inline(always)]
-pub unsafe fn negate_hi_f32(values: __m128) -> __m128 {
-    _mm_xor_ps(values, _mm_set_ps(-0.0, -0.0, 0.0, 0.0))
+pub unsafe fn negate_hi_f32(values: float32x4_t) -> float32x4_t {
+    let neg = vld1q_f32([0.0, 0.0, -0.0, -0.0].as_ptr());
+    vreinterpretq_f32_u32(veorq_u32(vreinterpretq_u32_f32(values), vreinterpretq_u32_f32(neg)))
 }
 
 // Duplicate low (1st) complex
 // values: a.re, a.im, b.re, b.im
 // --> a.re, a.im, a.re, a.im
 #[inline(always)]
-pub unsafe fn duplicate_lo_f32(values: __m128) -> __m128 {
-    _mm_shuffle_ps(values, values, 0x44)
+pub unsafe fn duplicate_lo_f32(values: float32x4_t) -> float32x4_t {
+    vreinterpretq_f32_f64(vtrn1q_f64(vreinterpretq_f64_f32(values), vreinterpretq_f64_f32(values)))
 }
 
 // Duplicate high (2nd) complex
 // values: a.re, a.im, b.re, b.im
 // --> b.re, b.im, b.re, b.im
 #[inline(always)]
-pub unsafe fn duplicate_hi_f32(values: __m128) -> __m128 {
-    _mm_shuffle_ps(values, values, 0xEE)
+pub unsafe fn duplicate_hi_f32(values: float32x4_t) -> float32x4_t {
+    vreinterpretq_f32_f64(vtrn2q_f64(vreinterpretq_f64_f32(values), vreinterpretq_f64_f32(values)))
 }
 
 // transpose a 2x2 complex matrix given as [x0, x1], [x2, x3]
 // result is [x0, x2], [x1, x3]
 #[inline(always)]
-pub unsafe fn transpose_complex_2x2_f32(left: __m128, right: __m128) -> [__m128; 2] {
+pub unsafe fn transpose_complex_2x2_f32(left: float32x4_t, right: float32x4_t) -> [float32x4_t; 2] {
     let temp02 = extract_lo_lo_f32(left, right);
     let temp13 = extract_hi_hi_f32(left, right);
     [temp02, temp13]
 }
-*/
+
 // Complex multiplication.
 // Each input contains two complex values, which are multiplied in parallel.
 #[inline(always)]
@@ -241,21 +243,21 @@ mod unit_tests {
         }
     }
 
-/*
+
     #[test]
     fn test_pack() {
         unsafe {
-            let nbr2 = _mm_set_ps(8.0, 7.0, 6.0, 5.0);
-            let nbr1 = _mm_set_ps(4.0, 3.0, 2.0, 1.0);
+            let nbr2 = vld1q_f32([5.0, 6.0, 7.0, 8.0].as_ptr());
+            let nbr1 = vld1q_f32([1.0, 2.0, 3.0, 4.0].as_ptr());
             let first = extract_lo_lo_f32(nbr1, nbr2);
             let second = extract_hi_hi_f32(nbr1, nbr2);
-            let first = std::mem::transmute::<__m128, [Complex<f32>; 2]>(first);
-            let second = std::mem::transmute::<__m128, [Complex<f32>; 2]>(second);
+            let first = std::mem::transmute::<float32x4_t, [Complex<f32>; 2]>(first);
+            let second = std::mem::transmute::<float32x4_t, [Complex<f32>; 2]>(second);
             let first_expected = [Complex::new(1.0, 2.0), Complex::new(5.0, 6.0)];
             let second_expected = [Complex::new(3.0, 4.0), Complex::new(7.0, 8.0)];
             assert_eq!(first, first_expected);
             assert_eq!(second, second_expected);
         }
     }
-*/
+
 }
