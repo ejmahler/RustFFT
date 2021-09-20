@@ -23,6 +23,7 @@ default = ["avx", "sse"]
 # On every other platform, these features do nothing, and RustFFT will behave like they are not set.
 avx = []
 sse = []
+neon = []
 
 
 [dependencies]

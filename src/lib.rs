@@ -1,5 +1,9 @@
 #![cfg_attr(all(feature = "bench", test), feature(test))]
 
+
+#![cfg_attr(feature = "neon", feature(aarch64_target_feature))]
+#![cfg_attr(feature = "neon", feature(stdsimd))]
+
 //! RustFFT is a high-performance FFT library written in pure Rust.
 //!
 //! RustFFT supports the AVX instruction set for increased performance. No special code is needed to activate AVX:
@@ -394,6 +398,11 @@ mod sse {
 }
 
 pub use self::sse::sse_planner::FftPlannerSse;
+
+
+// Algorithms implemented to use SSE4.1 instructions. Only compiled on x86_64, and only compiled if the "sse" feature flag is set.
+#[cfg(all(target_arch = "aarch64", feature = "neon"))]
+mod neon;
 
 #[cfg(test)]
 mod test_utils;
