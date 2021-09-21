@@ -197,14 +197,13 @@ impl Rotate90F64 {
 #[inline(always)]
 pub unsafe fn mul_complex_f64(left: float64x2_t, right: float64x2_t) -> float64x2_t {
     // Workaround since vcmulq_f64 and vcmlaq_f64 intrinsics are not yet available.
-    let mut temp1 = vtrn1q_f64(right, right);
-    let mut temp2 = vtrn2q_f64(right, right);
-    temp1 = vmulq_f64(temp1, left);
-    temp2 = vmulq_f64(temp2, left);
-    temp2 = vextq_f64(temp2, temp2, 0x01);
-    let flip = vld1q_f64([-0.0, 0.0].as_ptr());
-    temp2 = vreinterpretq_f64_u64(veorq_u64(vreinterpretq_u64_f64(temp2), vreinterpretq_u64_f64(flip)));
-    vaddq_f64(temp1, temp2)
+    let temp1 = vtrn1q_f64(right, right);
+    let temp2 = vtrn2q_f64(right, right);
+    let temp1 = vmulq_f64(temp1, left);
+    let temp2 = vmulq_f64(temp2, left);
+    let temp2n = vnegq_f64(temp2);
+    let temp3 = vextq_f64(temp2n, temp2, 1);
+    vaddq_f64(temp1, temp3)
 }
 
 #[cfg(test)]

@@ -279,7 +279,6 @@ impl NeonArrayMut for RawSliceMut<Complex<f64>> {
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use core::arch::aarch64::*;
 
     use num_complex::Complex;
 
