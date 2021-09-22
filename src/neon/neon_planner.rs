@@ -8,7 +8,7 @@ use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
 
 use crate::algorithm::*;
 use crate::neon::neon_butterflies::*;
-//use crate::neon::neon_prime_butterflies::*;
+use crate::neon::neon_prime_butterflies::*;
 use crate::neon::neon_radix4::*;
 use crate::Fft;
 
@@ -313,14 +313,13 @@ impl<T: FftNum> FftPlannerNeon<T> {
                 }
             }
             Recipe::Butterfly7 => {
-                unimplemented!("soon");
-                //if id_t == id_f32 {
-                //    Arc::new(NeonF32Butterfly7::new(direction)) as Arc<dyn Fft<T>>
-                //} else if id_t == id_f64 {
-                //    Arc::new(NeonF64Butterfly7::new(direction)) as Arc<dyn Fft<T>>
-                //} else {
-                //    panic!("Not f32 or f64");
-                //}
+                if id_t == id_f32 {
+                    Arc::new(NeonF32Butterfly7::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(NeonF64Butterfly7::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
             }
             Recipe::Butterfly8 => {
                 if id_t == id_f32 {
@@ -350,14 +349,13 @@ impl<T: FftNum> FftPlannerNeon<T> {
                 }
             }
             Recipe::Butterfly11 => {
-                unimplemented!("soon");
-                //if id_t == id_f32 {
-                //    Arc::new(NeonF32Butterfly11::new(direction)) as Arc<dyn Fft<T>>
-                //} else if id_t == id_f64 {
-                //    Arc::new(NeonF64Butterfly11::new(direction)) as Arc<dyn Fft<T>>
-                //} else {
-                //    panic!("Not f32 or f64");
-                //}
+                if id_t == id_f32 {
+                    Arc::new(NeonF32Butterfly11::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(NeonF64Butterfly11::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
             }
             Recipe::Butterfly12 => {
                 if id_t == id_f32 {
@@ -369,14 +367,13 @@ impl<T: FftNum> FftPlannerNeon<T> {
                 }
             }
             Recipe::Butterfly13 => {
-                unimplemented!("soon");
-                //if id_t == id_f32 {
-                //    Arc::new(NeonF32Butterfly13::new(direction)) as Arc<dyn Fft<T>>
-                //} else if id_t == id_f64 {
-                //    Arc::new(NeonF64Butterfly13::new(direction)) as Arc<dyn Fft<T>>
-                //} else {
-                //    panic!("Not f32 or f64");
-                //}
+                if id_t == id_f32 {
+                    Arc::new(NeonF32Butterfly13::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(NeonF64Butterfly13::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
             }
             Recipe::Butterfly15 => {
                 if id_t == id_f32 {
@@ -397,54 +394,49 @@ impl<T: FftNum> FftPlannerNeon<T> {
                 }
             }
             Recipe::Butterfly17 => {
-                unimplemented!("soon");
-                //if id_t == id_f32 {
-                //    Arc::new(NeonF32Butterfly17::new(direction)) as Arc<dyn Fft<T>>
-                //} else if id_t == id_f64 {
-                //    Arc::new(NeonF64Butterfly17::new(direction)) as Arc<dyn Fft<T>>
-                //} else {
-                //    panic!("Not f32 or f64");
-                //}
+                if id_t == id_f32 {
+                    Arc::new(NeonF32Butterfly17::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(NeonF64Butterfly17::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
             }
             Recipe::Butterfly19 => {
-                unimplemented!("soon");
-                //if id_t == id_f32 {
-                //    Arc::new(NeonF32Butterfly19::new(direction)) as Arc<dyn Fft<T>>
-                //} else if id_t == id_f64 {
-                //    Arc::new(NeonF64Butterfly19::new(direction)) as Arc<dyn Fft<T>>
-                //} else {
-                //    panic!("Not f32 or f64");
-                //}
+                if id_t == id_f32 {
+                    Arc::new(NeonF32Butterfly19::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(NeonF64Butterfly19::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
             }
             Recipe::Butterfly23 => {
-                unimplemented!("soon");
-                //if id_t == id_f32 {
-                //    Arc::new(NeonF32Butterfly23::new(direction)) as Arc<dyn Fft<T>>
-                //} else if id_t == id_f64 {
-                //    Arc::new(NeonF64Butterfly23::new(direction)) as Arc<dyn Fft<T>>
-                //} else {
-                //    panic!("Not f32 or f64");
-                //}
+                if id_t == id_f32 {
+                    Arc::new(NeonF32Butterfly23::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(NeonF64Butterfly23::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
             }
             Recipe::Butterfly29 => {
-                unimplemented!("soon");
-                //if id_t == id_f32 {
-                //    Arc::new(NeonF32Butterfly29::new(direction)) as Arc<dyn Fft<T>>
-                //} else if id_t == id_f64 {
-                //    Arc::new(NeonF64Butterfly29::new(direction)) as Arc<dyn Fft<T>>
-                //} else {
-                //    panic!("Not f32 or f64");
-                //}
+                if id_t == id_f32 {
+                    Arc::new(NeonF32Butterfly29::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(NeonF64Butterfly29::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
             }
             Recipe::Butterfly31 => {
-                unimplemented!("soon");
-                //if id_t == id_f32 {
-                //    Arc::new(NeonF32Butterfly31::new(direction)) as Arc<dyn Fft<T>>
-                //} else if id_t == id_f64 {
-                //    Arc::new(NeonF64Butterfly31::new(direction)) as Arc<dyn Fft<T>>
-                //} else {
-                //    panic!("Not f32 or f64");
-                //}
+                if id_t == id_f32 {
+                    Arc::new(NeonF32Butterfly31::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(NeonF64Butterfly31::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
             }
             Recipe::Butterfly32 => {
                 if id_t == id_f32 {

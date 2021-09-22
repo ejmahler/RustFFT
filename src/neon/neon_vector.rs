@@ -237,21 +237,21 @@ impl NeonArrayMut for RawSliceMut<Complex<f32>> {
     #[inline(always)]
     unsafe fn store_complex(&self, vector: Self::VectorType, index: usize) {
         debug_assert!(self.len() >= index + Self::COMPLEX_PER_VECTOR);
-        temp_vst1q_f32(self.as_mut_ptr().add(index) as *mut f32, vector);
+        vst1q_f32(self.as_mut_ptr().add(index) as *mut f32, vector);
     }
 
     #[inline(always)]
     unsafe fn store_partial_hi_complex(&self, vector: Self::VectorType, index: usize) {
         debug_assert!(self.len() >= index + 1);
         let high = vget_high_f32(vector);
-        temp_vst1_f32(self.as_mut_ptr().add(index) as *mut f32, high);
+        vst1_f32(self.as_mut_ptr().add(index) as *mut f32, high);
     }
 
     #[inline(always)]
     unsafe fn store_partial_lo_complex(&self, vector: Self::VectorType, index: usize) {
         debug_assert!(self.len() >= index + 1);
         let low = vget_low_f32(vector);
-        temp_vst1_f32(self.as_mut_ptr().add(index) as *mut f32, low);
+        vst1_f32(self.as_mut_ptr().add(index) as *mut f32, low);
     }
 }
 
@@ -263,7 +263,7 @@ impl NeonArrayMut for RawSliceMut<Complex<f64>> {
     #[inline(always)]
     unsafe fn store_complex(&self, vector: Self::VectorType, index: usize) {
         debug_assert!(self.len() >= index + Self::COMPLEX_PER_VECTOR);
-        temp_vst1q_f64(self.as_mut_ptr().add(index) as *mut f64, vector);
+        vst1q_f64(self.as_mut_ptr().add(index) as *mut f64, vector);
     }
 
     #[inline(always)]
