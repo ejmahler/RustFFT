@@ -356,9 +356,9 @@ unsafe fn parallel_fft2_contiguous_f32(left: float32x4_t, right: float32x4_t) ->
 // result is [X0, X1]
 #[inline(always)]
 unsafe fn solo_fft2_f32(values: float32x4_t) -> float32x4_t {
-    let temp = reverse_complex_elements_f32(values);
-    let temp2 = negate_hi_f32(values);
-    vaddq_f32(temp2, temp)
+    let high = vget_high_f32(values);
+    let low = vget_low_f32(values);
+    vcombine_f32(vadd_f32(low, high), vsub_f32(low, high))
 }
 
 
@@ -507,11 +507,12 @@ impl<T: FftNum> NeonF32Butterfly3<T> {
         value0x: float32x4_t,
         value12: float32x4_t,
     ) -> [float32x4_t; 2] {
-        // This is a SSE translation of the scalar 3-point butterfly
-        let rev12 = negate_hi_f32(reverse_complex_elements_f32(value12));
+        // This is a Neon translation of the scalar 3-point butterfly
+        let rev12 = reverse_complex_and_negate_hi_f32(value12);
         let temp12pn = self.rotate.rotate_hi(vaddq_f32(value12, rev12));
         let twiddled = vmulq_f32(temp12pn, self.twiddle);
         let temp = vaddq_f32(value0x, twiddled);
+
         let out12 = solo_fft2_f32(temp);
         let out0x = vaddq_f32(value0x, temp12pn);
         [out0x, out12]
@@ -611,8 +612,7 @@ impl<T: FftNum> NeonF64Butterfly3<T> {
         let x12n = vsubq_f64(value1, value2);
         let sum = vaddq_f64(value0, x12p);
 
-        let temp_a = vmulq_f64(self.twiddle1re, x12p);
-        let temp_a = vaddq_f64(temp_a, value0);
+        let temp_a = vfmaq_f64(value0, self.twiddle1re, x12p);
 
         let n_rot = self.rotate.rotate(x12n);
         let temp_b = vmulq_f64(self.twiddle1im, n_rot);
@@ -957,15 +957,11 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
         let x2323n = duplicate_hi_f32(x1423n);
 
         let temp_a1 = vmulq_f32(self.twiddle12re, x1414p);
-        let temp_a2 = vmulq_f32(self.twiddle21re, x2323p);
-
         let temp_b1 = vmulq_f32(self.twiddle12im, x1414n);
-        let temp_b2 = vmulq_f32(self.twiddle21im, x2323n);
 
-        let temp_a = vaddq_f32(temp_a1, temp_a2);
+        let temp_a = vfmaq_f32(temp_a1, self.twiddle21re, x2323p);
         let temp_a = vaddq_f32(value00, temp_a);
-
-        let temp_b = vaddq_f32(temp_b1, temp_b2);
+        let temp_b = vfmaq_f32(temp_b1, self.twiddle21im, x2323n);
 
         let b_rot = self.rotate.rotate_both(temp_b);
 
@@ -987,7 +983,7 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
         value3: float32x4_t,
         value4: float32x4_t,
     ) -> [float32x4_t; 5] {
-        // This is a SSE translation of the scalar 3-point butterfly
+        // This is a Neon translation of the scalar 3-point butterfly
         let x14p = vaddq_f32(value1, value4);
         let x14n = vsubq_f32(value1, value4);
         let x23p = vaddq_f32(value2, value3);

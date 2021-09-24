@@ -2,7 +2,7 @@
 mod neon_common;
 #[macro_use]
 mod neon_vector;
-//
+
 #[macro_use]
 pub mod neon_butterflies;
 pub mod neon_prime_butterflies;

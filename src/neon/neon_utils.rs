@@ -113,7 +113,7 @@ pub unsafe fn extract_lo_hi_f32(left: float32x4_t, right: float32x4_t) -> float3
 // --> r2.re, r2.im, l1.re, l1.im
 #[inline(always)]
 pub unsafe fn extract_hi_lo_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t {
-    vextq_f32::<2>(left, right)
+    vcombine_f32(vget_high_f32(left), vget_low_f32(right))
 }
 
 // Reverse complex
@@ -121,16 +121,24 @@ pub unsafe fn extract_hi_lo_f32(left: float32x4_t, right: float32x4_t) -> float3
 // --> b.re, b.im, a.re, a.im
 #[inline(always)]
 pub unsafe fn reverse_complex_elements_f32(values: float32x4_t) -> float32x4_t {
-    vextq_f32::<2>(values, values)
+    vcombine_f32(vget_high_f32(values), vget_low_f32(values))
+}
+
+// Reverse complex and then negate hi complex
+// values: a.re, a.im, b.re, b.im
+// --> b.re, b.im, -a.re, -a.im
+#[inline(always)]
+pub unsafe fn reverse_complex_and_negate_hi_f32(values: float32x4_t) -> float32x4_t {
+    vcombine_f32(vget_high_f32(values), vneg_f32(vget_low_f32(values)))
 }
 
 // Invert sign of high (2nd) complex
 // values: a.re, a.im, b.re, b.im
 // -->  a.re, a.im, -b.re, -b.im
-#[inline(always)]
-pub unsafe fn negate_hi_f32(values: float32x4_t) -> float32x4_t {
-    vcombine_f32(vget_low_f32(values), vneg_f32(vget_high_f32(values)))
-}
+//#[inline(always)]
+//pub unsafe fn negate_hi_f32(values: float32x4_t) -> float32x4_t {
+//    vcombine_f32(vget_low_f32(values), vneg_f32(vget_high_f32(values)))
+//}
 
 // Duplicate low (1st) complex
 // values: a.re, a.im, b.re, b.im
@@ -200,7 +208,7 @@ impl Rotate90F64 {
 
     #[inline(always)]
     pub unsafe fn rotate(&self, values: float64x2_t) -> float64x2_t {
-        let temp = vextq_f64(values, values, 0x01);
+        let temp = vcombine_f64(vget_high_f64(values), vget_low_f64(values));
         vreinterpretq_f64_u64(veorq_u64(
             vreinterpretq_u64_f64(temp),
             vreinterpretq_u64_f64(self.sign),
