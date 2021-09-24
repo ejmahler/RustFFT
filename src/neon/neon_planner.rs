@@ -120,7 +120,7 @@ impl Recipe {
 }
 
 /// The Neon FFT planner creates new FFT algorithm instances using a mix of scalar and Neon accelerated algorithms.
-/// It is supported when using the 64-bit AArch64 instruction set. 
+/// It is supported when using the 64-bit AArch64 instruction set.
 ///
 /// RustFFT has several FFT algorithms available. For a given FFT size, the `FftPlannerNeon` decides which of the
 /// available FFT algorithms to use and then initializes them.

@@ -338,7 +338,10 @@ impl<T: FftNum> NeonF32Butterfly2<T> {
 // double lenth 2 fft of a and b, given as [x0, y0], [x1, y1]
 // result is [X0, Y0], [X1, Y1]
 #[inline(always)]
-pub(crate) unsafe fn parallel_fft2_interleaved_f32(val02: float32x4_t, val13: float32x4_t) -> [float32x4_t; 2] {
+pub(crate) unsafe fn parallel_fft2_interleaved_f32(
+    val02: float32x4_t,
+    val13: float32x4_t,
+) -> [float32x4_t; 2] {
     let temp0 = vaddq_f32(val02, val13);
     let temp1 = vsubq_f32(val02, val13);
     [temp0, temp1]
@@ -360,7 +363,6 @@ unsafe fn solo_fft2_f32(values: float32x4_t) -> float32x4_t {
     let low = vget_low_f32(values);
     vcombine_f32(vadd_f32(low, high), vsub_f32(low, high))
 }
-
 
 //   ____             __   _  _   _     _ _
 //  |___ \           / /_ | || | | |__ (_) |_
@@ -1351,7 +1353,8 @@ impl<T: FftNum> NeonF32Butterfly8<T> {
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let bf4 = NeonF32Butterfly4::new(direction);
-        let root2 = unsafe { vld1q_f32([1.0, 1.0, 0.5f32.sqrt(), 0.5f32.sqrt(), 1.0, 1.0].as_ptr()) };
+        let root2 =
+            unsafe { vld1q_f32([1.0, 1.0, 0.5f32.sqrt(), 0.5f32.sqrt(), 1.0, 1.0].as_ptr()) };
         let root2_dual = unsafe { vmovq_n_f32(0.5f32.sqrt()) };
         let rotate90 = if direction == FftDirection::Inverse {
             Rotate90F32::new(true)
@@ -1648,7 +1651,10 @@ impl<T: FftNum> NeonF32Butterfly9<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [float32x4_t; 9]) -> [float32x4_t; 9] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(
+        &self,
+        values: [float32x4_t; 9],
+    ) -> [float32x4_t; 9] {
         // Algorithm: 3x3 mixed radix
 
         // Size-3 FFTs down the columns
@@ -1856,7 +1862,10 @@ impl<T: FftNum> NeonF32Butterfly10<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [float32x4_t; 10]) -> [float32x4_t; 10] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(
+        &self,
+        values: [float32x4_t; 10],
+    ) -> [float32x4_t; 10] {
         // Algorithm: 5x2 good-thomas
 
         // Size-5 FFTs down the columns of our reordered array
@@ -2060,7 +2069,10 @@ impl<T: FftNum> NeonF32Butterfly12<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [float32x4_t; 12]) -> [float32x4_t; 12] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(
+        &self,
+        values: [float32x4_t; 12],
+    ) -> [float32x4_t; 12] {
         // Algorithm: 4x3 good-thomas
 
         // Size-4 FFTs down the columns of our reordered array
@@ -2271,7 +2283,10 @@ impl<T: FftNum> NeonF32Butterfly15<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [float32x4_t; 15]) -> [float32x4_t; 15] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(
+        &self,
+        values: [float32x4_t; 15],
+    ) -> [float32x4_t; 15] {
         // Algorithm: 5x3 good-thomas
 
         // Size-5 FFTs down the columns of our reordered array
@@ -2632,20 +2647,32 @@ impl<T: FftNum> NeonF64Butterfly16<T> {
         } else {
             Rotate90F64::new(false)
         };
-        let twiddle1 =
-            unsafe { vld1q_f64(&twiddles::compute_twiddle::<f64>(1, 16, direction) as *const _ as *const f64) };
-        let twiddle2 =
-            unsafe { vld1q_f64(&twiddles::compute_twiddle::<f64>(2, 16, direction) as *const _ as *const f64) };
-        let twiddle3 =
-            unsafe { vld1q_f64(&twiddles::compute_twiddle::<f64>(3, 16, direction) as *const _ as *const f64) };
+        let twiddle1 = unsafe {
+            vld1q_f64(&twiddles::compute_twiddle::<f64>(1, 16, direction) as *const _ as *const f64)
+        };
+        let twiddle2 = unsafe {
+            vld1q_f64(&twiddles::compute_twiddle::<f64>(2, 16, direction) as *const _ as *const f64)
+        };
+        let twiddle3 = unsafe {
+            vld1q_f64(&twiddles::compute_twiddle::<f64>(3, 16, direction) as *const _ as *const f64)
+        };
         let twiddle1c = unsafe {
-            vld1q_f64(&twiddles::compute_twiddle::<f64>(1, 16, direction).conj() as *const _ as *const f64)
+            vld1q_f64(
+                &twiddles::compute_twiddle::<f64>(1, 16, direction).conj() as *const _
+                    as *const f64,
+            )
         };
         let twiddle2c = unsafe {
-            vld1q_f64(&twiddles::compute_twiddle::<f64>(2, 16, direction).conj() as *const _ as *const f64)
+            vld1q_f64(
+                &twiddles::compute_twiddle::<f64>(2, 16, direction).conj() as *const _
+                    as *const f64,
+            )
         };
         let twiddle3c = unsafe {
-            vld1q_f64(&twiddles::compute_twiddle::<f64>(3, 16, direction).conj() as *const _ as *const f64)
+            vld1q_f64(
+                &twiddles::compute_twiddle::<f64>(3, 16, direction).conj() as *const _
+                    as *const f64,
+            )
         };
 
         Self {
@@ -2961,7 +2988,10 @@ impl<T: FftNum> NeonF32Butterfly32<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_direct(&self, input: [float32x4_t; 32]) -> [float32x4_t; 32] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(
+        &self,
+        input: [float32x4_t; 32],
+    ) -> [float32x4_t; 32] {
         // we're going to hardcode a step of split radix
 
         // step 1: copy and reorder the  input into the scratch
@@ -3101,40 +3131,68 @@ impl<T: FftNum> NeonF64Butterfly32<T> {
         } else {
             Rotate90F64::new(false)
         };
-        let twiddle1 =
-            unsafe { vld1q_f64(&twiddles::compute_twiddle::<f64>(1, 32, direction) as *const _ as *const f64) };
-        let twiddle2 =
-            unsafe { vld1q_f64(&twiddles::compute_twiddle::<f64>(2, 32, direction) as *const _ as *const f64) };
-        let twiddle3 =
-            unsafe { vld1q_f64(&twiddles::compute_twiddle::<f64>(3, 32, direction) as *const _ as *const f64) };
-        let twiddle4 =
-            unsafe { vld1q_f64(&twiddles::compute_twiddle::<f64>(4, 32, direction) as *const _ as *const f64) };
-        let twiddle5 =
-            unsafe { vld1q_f64(&twiddles::compute_twiddle::<f64>(5, 32, direction) as *const _ as *const f64) };
-        let twiddle6 =
-            unsafe { vld1q_f64(&twiddles::compute_twiddle::<f64>(6, 32, direction) as *const _ as *const f64) };
-        let twiddle7 =
-            unsafe { vld1q_f64(&twiddles::compute_twiddle::<f64>(7, 32, direction) as *const _ as *const f64) };
+        let twiddle1 = unsafe {
+            vld1q_f64(&twiddles::compute_twiddle::<f64>(1, 32, direction) as *const _ as *const f64)
+        };
+        let twiddle2 = unsafe {
+            vld1q_f64(&twiddles::compute_twiddle::<f64>(2, 32, direction) as *const _ as *const f64)
+        };
+        let twiddle3 = unsafe {
+            vld1q_f64(&twiddles::compute_twiddle::<f64>(3, 32, direction) as *const _ as *const f64)
+        };
+        let twiddle4 = unsafe {
+            vld1q_f64(&twiddles::compute_twiddle::<f64>(4, 32, direction) as *const _ as *const f64)
+        };
+        let twiddle5 = unsafe {
+            vld1q_f64(&twiddles::compute_twiddle::<f64>(5, 32, direction) as *const _ as *const f64)
+        };
+        let twiddle6 = unsafe {
+            vld1q_f64(&twiddles::compute_twiddle::<f64>(6, 32, direction) as *const _ as *const f64)
+        };
+        let twiddle7 = unsafe {
+            vld1q_f64(&twiddles::compute_twiddle::<f64>(7, 32, direction) as *const _ as *const f64)
+        };
         let twiddle1c = unsafe {
-            vld1q_f64(&twiddles::compute_twiddle::<f64>(1, 32, direction).conj() as *const _ as *const f64)
+            vld1q_f64(
+                &twiddles::compute_twiddle::<f64>(1, 32, direction).conj() as *const _
+                    as *const f64,
+            )
         };
         let twiddle2c = unsafe {
-            vld1q_f64(&twiddles::compute_twiddle::<f64>(2, 32, direction).conj() as *const _ as *const f64)
+            vld1q_f64(
+                &twiddles::compute_twiddle::<f64>(2, 32, direction).conj() as *const _
+                    as *const f64,
+            )
         };
         let twiddle3c = unsafe {
-            vld1q_f64(&twiddles::compute_twiddle::<f64>(3, 32, direction).conj() as *const _ as *const f64)
+            vld1q_f64(
+                &twiddles::compute_twiddle::<f64>(3, 32, direction).conj() as *const _
+                    as *const f64,
+            )
         };
         let twiddle4c = unsafe {
-            vld1q_f64(&twiddles::compute_twiddle::<f64>(4, 32, direction).conj() as *const _ as *const f64)
+            vld1q_f64(
+                &twiddles::compute_twiddle::<f64>(4, 32, direction).conj() as *const _
+                    as *const f64,
+            )
         };
         let twiddle5c = unsafe {
-            vld1q_f64(&twiddles::compute_twiddle::<f64>(5, 32, direction).conj() as *const _ as *const f64)
+            vld1q_f64(
+                &twiddles::compute_twiddle::<f64>(5, 32, direction).conj() as *const _
+                    as *const f64,
+            )
         };
         let twiddle6c = unsafe {
-            vld1q_f64(&twiddles::compute_twiddle::<f64>(6, 32, direction).conj() as *const _ as *const f64)
+            vld1q_f64(
+                &twiddles::compute_twiddle::<f64>(6, 32, direction).conj() as *const _
+                    as *const f64,
+            )
         };
         let twiddle7c = unsafe {
-            vld1q_f64(&twiddles::compute_twiddle::<f64>(7, 32, direction).conj() as *const _ as *const f64)
+            vld1q_f64(
+                &twiddles::compute_twiddle::<f64>(7, 32, direction).conj() as *const _
+                    as *const f64,
+            )
         };
 
         Self {
@@ -3335,7 +3393,6 @@ mod unit_tests {
         unsafe {
             let val1 = Complex::<f32>::new(1.0, 2.5);
             let val2 = Complex::<f32>::new(3.2, 4.2);
-
 
             let mut val = vec![val1, val2];
 

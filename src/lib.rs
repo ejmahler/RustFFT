@@ -11,7 +11,7 @@
 //! For machines that do not have AVX, RustFFT also supports the SSE4.1 instruction set.
 //! As for AVX, this is enabled automatically when using the FftPlanner.
 //!
-//! Additionally, there is (optional) experimental support for the Neon instructions on AArch64. 
+//! Additionally, there is (optional) experimental support for the Neon instructions on AArch64.
 //! Using this requires a very recent nightly compiler.
 //!
 //! ### Usage
@@ -71,8 +71,8 @@
 //!
 //!     On AArch64 (64-bit ARM) the `neon` feature enables compilation of Neon-accelerated code. Enabling it improves
 //!     performance, while disabling it reduces compile time and binary size.
-//!     Note that the Neon support of Rust is very new, and the `neon` feature must use a nightly compiler. 
-//!     It's recommended to always use the latest available. 
+//!     Note that the Neon support of Rust is very new, and the `neon` feature must use a nightly compiler.
+//!     It's recommended to always use the latest available.
 //!
 //! ### Normalization
 //!
