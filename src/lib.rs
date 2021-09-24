@@ -11,6 +11,9 @@
 //! For machines that do not have AVX, RustFFT also supports the SSE4.1 instruction set.
 //! As for AVX, this is enabled automatically when using the FftPlanner.
 //!
+//! Additionally, there is (optional) experimental support for the Neon instructions on AArch64. 
+//! Using this requires a very recent nightly compiler.
+//!
 //! ### Usage
 //!
 //! The recommended way to use RustFFT is to create a [`FftPlanner`](crate::FftPlanner) instance and then call its
@@ -47,7 +50,7 @@
 //! advanced users may have better insight than the planner into which algorithms are best for a specific size. See the
 //! [`algorithm`](crate::algorithm) module for a complete list of scalar algorithms implemented by RustFFT.
 //!
-//! Users should beware, however, that bypassing the planner will disable all AVX and SSE optimizations.
+//! Users should beware, however, that bypassing the planner will disable all AVX, SSE and Neon optimizations.
 //!
 //! ### Feature Flags
 //!
@@ -64,6 +67,12 @@
 //!     supported and its feature flag is enabled, RustFFT will use AVX instead of SSE4.1.
 //!
 //!     On every platform besides x86_64, this feature does nothing, and RustFFT will behave like it's not set.
+//! * `neon` (Experimental, disabled by default)
+//!
+//!     On AArch64 (64-bit ARM) the `neon` feature enables compilation of Neon-accelerated code. Enabling it improves
+//!     performance, while disabling it reduces compile time and binary size.
+//!     Note that the Neon support of Rust is very new, and the `neon` feature must use a nightly compiler. 
+//!     It's recommended to always use the latest available. 
 //!
 //! ### Normalization
 //!
@@ -397,12 +406,12 @@ mod sse {
 
 pub use self::sse::sse_planner::FftPlannerSse;
 
-// Algorithms implemented to use SSE4.1 instructions. Only compiled on x86_64, and only compiled if the "sse" feature flag is set.
+// Algorithms implemented to use Neon instructions. Only compiled on AArch64, and only compiled if the "neon" feature flag is set.
 #[cfg(all(target_arch = "aarch64", feature = "neon"))]
 mod neon;
 
-// If we're not on x86_64, or if the "sse" feature was disabled, keep a stub implementation around that has the same API, but does nothing
-// That way, users can write code using the SSE planner and compile it on any platform
+// If we're not on AArch64, or if the "neon" feature was disabled, keep a stub implementation around that has the same API, but does nothing
+// That way, users can write code using the Neon planner and compile it on any platform
 #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
 mod neon {
     pub mod neon_planner {
@@ -410,17 +419,17 @@ mod neon {
         use std::sync::Arc;
 
         /// The Neon FFT planner creates new FFT algorithm instances using a mix of scalar and SSE accelerated algorithms.
-        /// It requires at least SSE4.1, which is available on all reasonably recent x86_64 cpus.
+        /// It is supported when using the 64-bit AArch64 instruction set.
         ///
-        /// RustFFT has several FFT algorithms available. For a given FFT size, the `FftPlannerSse` decides which of the
+        /// RustFFT has several FFT algorithms available. For a given FFT size, the `FftPlannerNeon` decides which of the
         /// available FFT algorithms to use and then initializes them.
         ///
         /// ~~~
         /// // Perform a forward Fft of size 1234
         /// use std::sync::Arc;
-        /// use rustfft::{FftPlannerSse, num_complex::Complex};
+        /// use rustfft::{FftPlannerNeon, num_complex::Complex};
         ///
-        /// if let Ok(mut planner) = FftPlannerSse::new() {
+        /// if let Ok(mut planner) = FftPlannerNeon::new() {
         ///   let fft = planner.plan_fft_forward(1234);
         ///
         ///   let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1234];
@@ -443,14 +452,14 @@ mod neon {
             _phantom: std::marker::PhantomData<T>,
         }
         impl<T: FftNum> FftPlannerNeon<T> {
-            /// Creates a new `FftPlannerSse` instance.
+            /// Creates a new `FftPlannerNeon` instance.
             ///
             /// Returns `Ok(planner_instance)` if this machine has the required instruction sets.
             /// Returns `Err(())` if some instruction sets are missing.
             pub fn new() -> Result<Self, ()> {
                 Err(())
             }
-            /// Returns a `Fft` instance which uses SSE4.1 instructions to compute FFTs of size `len`.
+            /// Returns a `Fft` instance which uses Neon instructions to compute FFTs of size `len`.
             ///
             /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
             ///
@@ -458,13 +467,13 @@ mod neon {
             pub fn plan_fft(&mut self, _len: usize, _direction: FftDirection) -> Arc<dyn Fft<T>> {
                 unreachable!()
             }
-            /// Returns a `Fft` instance which uses SSE4.1 instructions to compute forward FFTs of size `len`.
+            /// Returns a `Fft` instance which uses Neon instructions to compute forward FFTs of size `len`.
             ///
             /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
             pub fn plan_fft_forward(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
                 unreachable!()
             }
-            /// Returns a `Fft` instance which uses SSE4.1 instructions to compute inverse FFTs of size `len.
+            /// Returns a `Fft` instance which uses Neon instructions to compute inverse FFTs of size `len.
             ///
             /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
             pub fn plan_fft_inverse(&mut self, _len: usize) -> Arc<dyn Fft<T>> {

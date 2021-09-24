@@ -22,7 +22,7 @@ use super::neon_utils::*;
 use super::neon_vector::{NeonArray, NeonArrayMut};
 use crate::array_utils::{RawSlice, RawSliceMut};
 
-/// FFT algorithm optimized for power-of-two sizes, SSE accelerated version.
+/// FFT algorithm optimized for power-of-two sizes, Neon accelerated version.
 /// This is designed to be used via a Planner, and not created directly.
 
 const USE_BUTTERFLY32_FROM: usize = 262144; // Use length 32 butterfly starting from this length

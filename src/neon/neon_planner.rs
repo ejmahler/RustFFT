@@ -119,8 +119,8 @@ impl Recipe {
     }
 }
 
-/// The SSE FFT planner creates new FFT algorithm instances using a mix of scalar and SSE accelerated algorithms.
-/// It requires at least SSE4.1, which is available on all reasonably recent x86_64 cpus.
+/// The Neon FFT planner creates new FFT algorithm instances using a mix of scalar and Neon accelerated algorithms.
+/// It is supported when using the 64-bit AArch64 instruction set. 
 ///
 /// RustFFT has several FFT algorithms available. For a given FFT size, the `FftPlannerNeon` decides which of the
 /// available FFT algorithms to use and then initializes them.
@@ -164,10 +164,10 @@ impl<T: FftNum> FftPlannerNeon<T> {
             // Ideally, we would implement the planner with specialization.
             // Specialization won't be on stable rust for a long time though, so in the meantime, we can hack around it.
             //
-            // We use TypeID to determine if T is f32, f64, or neither. If neither, we don't want to do any SSE acceleration
-            // If it's f32 or f64, then construct and return a SSE planner instance.
+            // We use TypeID to determine if T is f32, f64, or neither. If neither, we don't want to do any Neon acceleration
+            // If it's f32 or f64, then construct and return a Neon planner instance.
             //
-            // All SSE accelerated algorithms come in separate versions for f32 and f64. The type is checked when a new one is created, and if it does not
+            // All Neon accelerated algorithms come in separate versions for f32 and f64. The type is checked when a new one is created, and if it does not
             // match the type the FFT is meant for, it will panic. This will never be a problem if using a planner to construct the FFTs.
             //
             // An annoying snag with this setup is that we frequently have to transmute buffers from &mut [Complex<T>] to &mut [Complex<f32 or f64>] or vice versa.
@@ -188,7 +188,7 @@ impl<T: FftNum> FftPlannerNeon<T> {
         Err(())
     }
 
-    /// Returns a `Fft` instance which uses SSE4.1 instructions to compute FFTs of size `len`.
+    /// Returns a `Fft` instance which uses Neon instructions to compute FFTs of size `len`.
     ///
     /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
     ///
@@ -201,14 +201,14 @@ impl<T: FftNum> FftPlannerNeon<T> {
         self.build_fft(&recipe, direction)
     }
 
-    /// Returns a `Fft` instance which uses SSE4.1 instructions to compute forward FFTs of size `len`
+    /// Returns a `Fft` instance which uses Neon instructions to compute forward FFTs of size `len`
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft_forward(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         self.plan_fft(len, FftDirection::Forward)
     }
 
-    /// Returns a `Fft` instance which uses SSE4.1 instructions to compute inverse FFTs of size `len.
+    /// Returns a `Fft` instance which uses Neon instructions to compute inverse FFTs of size `len.
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft_inverse(&mut self, len: usize) -> Arc<dyn Fft<T>> {

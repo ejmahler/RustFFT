@@ -3,7 +3,7 @@ use num_complex::Complex;
 
 use crate::array_utils::{RawSlice, RawSliceMut};
 
-// Read these indexes from an SseArray and build an array of simd vectors.
+// Read these indexes from an NeonArray and build an array of simd vectors.
 // Takes a name of a vector to read from, and a list of indexes to read.
 // This statement:
 // ```
@@ -28,7 +28,7 @@ macro_rules! read_complex_to_array {
     }
 }
 
-// Read these indexes from an SseArray and build an array or partially filled simd vectors.
+// Read these indexes from an NeonArray and build an array or partially filled simd vectors.
 // Takes a name of a vector to read from, and a list of indexes to read.
 // This statement:
 // ```
@@ -53,7 +53,7 @@ macro_rules! read_partial1_complex_to_array {
     }
 }
 
-// Write these indexes of an array of simd vectors to the same indexes of an SseArray.
+// Write these indexes of an array of simd vectors to the same indexes of an NeonArray.
 // Takes a name of a vector to read from, one to write to, and a list of indexes.
 // This statement:
 // ```
@@ -76,7 +76,7 @@ macro_rules! write_complex_to_array {
     }
 }
 
-// Write the low half of these indexes of an array of simd vectors to the same indexes of an SseArray.
+// Write the low half of these indexes of an array of simd vectors to the same indexes of an NeonArray.
 // Takes a name of a vector to read from, one to write to, and a list of indexes.
 // This statement:
 // ```
@@ -99,7 +99,7 @@ macro_rules! write_partial_lo_complex_to_array {
     }
 }
 
-// Write these indexes of an array of simd vectors to the same indexes, multiplied by a stride, of an SseArray.
+// Write these indexes of an array of simd vectors to the same indexes, multiplied by a stride, of an NeonArray.
 // Takes a name of a vector to read from, one to write to, an integer stride, and a list of indexes.
 // This statement:
 // ```

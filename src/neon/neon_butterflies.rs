@@ -607,7 +607,7 @@ impl<T: FftNum> NeonF64Butterfly3<T> {
         value1: float64x2_t,
         value2: float64x2_t,
     ) -> [float64x2_t; 3] {
-        // This is a SSE translation of the scalar 3-point butterfly
+        // This is a Neon translation of the scalar 3-point butterfly
         let x12p = vaddq_f64(value1, value2);
         let x12n = vsubq_f64(value1, value2);
         let sum = vaddq_f64(value0, x12p);
@@ -946,7 +946,7 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
         value12: float32x4_t,
         value34: float32x4_t,
     ) -> [float32x4_t; 3] {
-        // This is a SSE translation of the scalar 5-point butterfly
+        // This is a Neon translation of the scalar 5-point butterfly
         let temp43 = reverse_complex_elements_f32(value34);
         let x1423p = vaddq_f32(value12, temp43);
         let x1423n = vsubq_f32(value12, temp43);
@@ -1089,7 +1089,7 @@ impl<T: FftNum> NeonF64Butterfly5<T> {
         value3: float64x2_t,
         value4: float64x2_t,
     ) -> [float64x2_t; 5] {
-        // This is a SSE translation of the scalar 5-point butterfly
+        // This is a Neon translation of the scalar 5-point butterfly
         let x14p = vaddq_f64(value1, value4);
         let x14n = vsubq_f64(value1, value4);
         let x23p = vaddq_f64(value2, value3);
@@ -3329,45 +3329,6 @@ mod unit_tests {
     test_butterfly_64_func!(test_neonf64_butterfly15, NeonF64Butterfly15, 15);
     test_butterfly_64_func!(test_neonf64_butterfly16, NeonF64Butterfly16, 16);
     test_butterfly_64_func!(test_neonf64_butterfly32, NeonF64Butterfly32, 32);
-
-    /*
-    #[test]
-    fn test_parallel_fft4_32() {
-        unsafe {
-            let val_a1 = Complex::<f32>::new(1.0, 2.5);
-            let val_a2 = Complex::<f32>::new(3.2, 4.2);
-            let val_a3 = Complex::<f32>::new(5.6, 6.2);
-            let val_a4 = Complex::<f32>::new(7.4, 8.3);
-
-            let val_b1 = Complex::<f32>::new(6.0, 24.5);
-            let val_b2 = Complex::<f32>::new(4.2, 34.2);
-            let val_b3 = Complex::<f32>::new(9.6, 61.2);
-            let val_b4 = Complex::<f32>::new(17.4, 81.3);
-
-            let p1 = _mm_set_ps(val_b1.im, val_b1.re, val_a1.im, val_a1.re);
-            let p2 = _mm_set_ps(val_b2.im, val_b2.re, val_a2.im, val_a2.re);
-            let p3 = _mm_set_ps(val_b3.im, val_b3.re, val_a3.im, val_a3.re);
-            let p4 = _mm_set_ps(val_b4.im, val_b4.re, val_a4.im, val_a4.re);
-
-            let mut val_a = vec![val_a1, val_a2, val_a3, val_a4];
-            let mut val_b = vec![val_b1, val_b2, val_b3, val_b4];
-
-            let dft = Dft::new(4, FftDirection::Forward);
-
-            let bf4 = NeonF32Butterfly4::<f32>::new(FftDirection::Forward);
-
-            dft.process(&mut val_a);
-            dft.process(&mut val_b);
-            let res_both = bf4.perform_parallel_fft_direct(p1, p2, p3, p4);
-
-            let res = std::mem::transmute::<[float32x4_t; 4], [Complex<f32>; 8]>(res_both);
-            let sse_res_a = [res[0], res[2], res[4], res[6]];
-            let sse_res_b = [res[1], res[3], res[5], res[7]];
-            assert!(compare_vectors(&val_a, &sse_res_a));
-            assert!(compare_vectors(&val_b, &sse_res_b));
-        }
-    }
-    */
 
     #[test]
     fn test_solo_fft2_32() {
