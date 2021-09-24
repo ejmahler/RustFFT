@@ -6,12 +6,12 @@ use crate::algorithm::{bitreversed_transpose, reverse_bits};
 use crate::array_utils;
 use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::neon::neon_butterflies::{
-    NeonF32Butterfly1, NeonF32Butterfly16, NeonF32Butterfly2, NeonF32Butterfly32, NeonF32Butterfly4,
-    NeonF32Butterfly8,
+    NeonF32Butterfly1, NeonF32Butterfly16, NeonF32Butterfly2, NeonF32Butterfly32,
+    NeonF32Butterfly4, NeonF32Butterfly8,
 };
 use crate::neon::neon_butterflies::{
-    NeonF64Butterfly1, NeonF64Butterfly16, NeonF64Butterfly2, NeonF64Butterfly32, NeonF64Butterfly4,
-    NeonF64Butterfly8,
+    NeonF64Butterfly1, NeonF64Butterfly16, NeonF64Butterfly2, NeonF64Butterfly32,
+    NeonF64Butterfly4, NeonF64Butterfly8,
 };
 use crate::{common::FftNum, twiddles, FftDirection};
 use crate::{Direction, Fft, Length};
@@ -72,19 +72,37 @@ impl<T: FftNum> Neon32Radix4<T> {
         // figure out which base length we're going to use
         let num_bits = len.trailing_zeros();
         let (base_len, base_fft) = match num_bits {
-            0 => (len, Neon32Butterfly::Len1(NeonF32Butterfly1::new(direction))),
-            1 => (len, Neon32Butterfly::Len2(NeonF32Butterfly2::new(direction))),
-            2 => (len, Neon32Butterfly::Len4(NeonF32Butterfly4::new(direction))),
-            3 => (len, Neon32Butterfly::Len8(NeonF32Butterfly8::new(direction))),
+            0 => (
+                len,
+                Neon32Butterfly::Len1(NeonF32Butterfly1::new(direction)),
+            ),
+            1 => (
+                len,
+                Neon32Butterfly::Len2(NeonF32Butterfly2::new(direction)),
+            ),
+            2 => (
+                len,
+                Neon32Butterfly::Len4(NeonF32Butterfly4::new(direction)),
+            ),
+            3 => (
+                len,
+                Neon32Butterfly::Len8(NeonF32Butterfly8::new(direction)),
+            ),
             _ => {
                 if num_bits % 2 == 1 {
                     if len < USE_BUTTERFLY32_FROM {
                         (8, Neon32Butterfly::Len8(NeonF32Butterfly8::new(direction)))
                     } else {
-                        (32, Neon32Butterfly::Len32(NeonF32Butterfly32::new(direction)))
+                        (
+                            32,
+                            Neon32Butterfly::Len32(NeonF32Butterfly32::new(direction)),
+                        )
                     }
                 } else {
-                    (16, Neon32Butterfly::Len16(NeonF32Butterfly16::new(direction)))
+                    (
+                        16,
+                        Neon32Butterfly::Len16(NeonF32Butterfly16::new(direction)),
+                    )
                 }
             }
         };
@@ -100,15 +118,18 @@ impl<T: FftNum> Neon32Radix4<T> {
             for i in 0..num_rows / 2 {
                 for k in 1..4 {
                     unsafe {
-                        let twiddle_a =
-                            twiddles::compute_twiddle::<f32>(2 * i * k * twiddle_stride, len, direction);
+                        let twiddle_a = twiddles::compute_twiddle::<f32>(
+                            2 * i * k * twiddle_stride,
+                            len,
+                            direction,
+                        );
                         let twiddle_b = twiddles::compute_twiddle::<f32>(
                             (2 * i + 1) * k * twiddle_stride,
                             len,
                             direction,
                         );
                         let twiddles_packed =
-                        vld1q_f32(&[twiddle_a, twiddle_b] as *const _ as *const f32);
+                            vld1q_f32(&[twiddle_a, twiddle_b] as *const _ as *const f32);
                         twiddle_factors.push(twiddles_packed);
                     }
                 }
@@ -138,7 +159,7 @@ impl<T: FftNum> Neon32Radix4<T> {
         }
     }
 
-    #[target_feature(enable = "neon")]
+    //#[target_feature(enable = "neon")]
     unsafe fn perform_fft_out_of_place(
         &self,
         signal: &[Complex<T>],
@@ -188,7 +209,7 @@ impl<T: FftNum> Neon32Radix4<T> {
 }
 boilerplate_fft_neon_oop!(Neon32Radix4, |this: &Neon32Radix4<_>| this.len);
 
-#[target_feature(enable = "neon")]
+//#[target_feature(enable = "neon")]
 unsafe fn butterfly_4_32<T: FftNum>(
     data: &mut [Complex<T>],
     twiddles: &[float32x4_t],
@@ -259,19 +280,37 @@ impl<T: FftNum> Neon64Radix4<T> {
         // figure out which base length we're going to use
         let num_bits = len.trailing_zeros();
         let (base_len, base_fft) = match num_bits {
-            0 => (len, Neon64Butterfly::Len1(NeonF64Butterfly1::new(direction))),
-            1 => (len, Neon64Butterfly::Len2(NeonF64Butterfly2::new(direction))),
-            2 => (len, Neon64Butterfly::Len4(NeonF64Butterfly4::new(direction))),
-            3 => (len, Neon64Butterfly::Len8(NeonF64Butterfly8::new(direction))),
+            0 => (
+                len,
+                Neon64Butterfly::Len1(NeonF64Butterfly1::new(direction)),
+            ),
+            1 => (
+                len,
+                Neon64Butterfly::Len2(NeonF64Butterfly2::new(direction)),
+            ),
+            2 => (
+                len,
+                Neon64Butterfly::Len4(NeonF64Butterfly4::new(direction)),
+            ),
+            3 => (
+                len,
+                Neon64Butterfly::Len8(NeonF64Butterfly8::new(direction)),
+            ),
             _ => {
                 if num_bits % 2 == 1 {
                     if len < USE_BUTTERFLY32_FROM {
                         (8, Neon64Butterfly::Len8(NeonF64Butterfly8::new(direction)))
                     } else {
-                        (32, Neon64Butterfly::Len32(NeonF64Butterfly32::new(direction)))
+                        (
+                            32,
+                            Neon64Butterfly::Len32(NeonF64Butterfly32::new(direction)),
+                        )
                     }
                 } else {
-                    (16, Neon64Butterfly::Len16(NeonF64Butterfly16::new(direction)))
+                    (
+                        16,
+                        Neon64Butterfly::Len16(NeonF64Butterfly16::new(direction)),
+                    )
                 }
             }
         };
@@ -287,8 +326,11 @@ impl<T: FftNum> Neon64Radix4<T> {
             for i in 0..num_rows {
                 for k in 1..4 {
                     unsafe {
-                        let twiddle =
-                            twiddles::compute_twiddle::<f64>(i * k * twiddle_stride, len, direction);
+                        let twiddle = twiddles::compute_twiddle::<f64>(
+                            i * k * twiddle_stride,
+                            len,
+                            direction,
+                        );
                         let twiddle_packed = vld1q_f64(&twiddle as *const _ as *const f64);
                         twiddle_factors.push(twiddle_packed);
                     }
@@ -319,7 +361,7 @@ impl<T: FftNum> Neon64Radix4<T> {
         }
     }
 
-    #[target_feature(enable = "neon")]
+    //#[target_feature(enable = "neon")]
     unsafe fn perform_fft_out_of_place(
         &self,
         signal: &[Complex<T>],
@@ -369,7 +411,7 @@ impl<T: FftNum> Neon64Radix4<T> {
 }
 boilerplate_fft_neon_oop!(Neon64Radix4, |this: &Neon64Radix4<_>| this.len);
 
-#[target_feature(enable = "neon")]
+//#[target_feature(enable = "neon")]
 unsafe fn butterfly_4_64<T: FftNum>(
     data: &mut [Complex<T>],
     twiddles: &[float64x2_t],

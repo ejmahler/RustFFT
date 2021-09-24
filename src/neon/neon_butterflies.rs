@@ -17,7 +17,7 @@ use super::neon_vector::{NeonArray, NeonArrayMut};
 macro_rules! boilerplate_fft_neon_f32_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> $struct_name<T> {
-            #[target_feature(enable = "neon")]
+            //#[target_feature(enable = "neon")]
             //#[inline(always)]
             pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
                 self.perform_fft_contiguous(
@@ -26,7 +26,7 @@ macro_rules! boilerplate_fft_neon_f32_butterfly {
                 );
             }
 
-            #[target_feature(enable = "neon")]
+            //#[target_feature(enable = "neon")]
             //#[inline(always)]
             pub(crate) unsafe fn perform_parallel_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
                 self.perform_parallel_fft_contiguous(
@@ -36,7 +36,7 @@ macro_rules! boilerplate_fft_neon_f32_butterfly {
             }
 
             // Do multiple ffts over a longer vector inplace, called from "process_with_scratch" of Fft trait
-            #[target_feature(enable = "neon")]
+            //#[target_feature(enable = "neon")]
             pub(crate) unsafe fn perform_fft_butterfly_multi(
                 &self,
                 buffer: &mut [Complex<T>],
@@ -52,7 +52,7 @@ macro_rules! boilerplate_fft_neon_f32_butterfly {
             }
 
             // Do multiple ffts over a longer vector outofplace, called from "process_outofplace_with_scratch" of Fft trait
-            #[target_feature(enable = "neon")]
+            //#[target_feature(enable = "neon")]
             pub(crate) unsafe fn perform_oop_fft_butterfly_multi(
                 &self,
                 input: &mut [Complex<T>],
@@ -86,7 +86,7 @@ macro_rules! boilerplate_fft_neon_f64_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> $struct_name<T> {
             // Do a single fft
-            #[target_feature(enable = "neon")]
+            //#[target_feature(enable = "neon")]
             pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
                 self.perform_fft_contiguous(
                     RawSlice::new_transmuted(buffer),
@@ -95,7 +95,7 @@ macro_rules! boilerplate_fft_neon_f64_butterfly {
             }
 
             // Do multiple ffts over a longer vector inplace, called from "process_with_scratch" of Fft trait
-            #[target_feature(enable = "neon")]
+            //#[target_feature(enable = "neon")]
             pub(crate) unsafe fn perform_fft_butterfly_multi(
                 &self,
                 buffer: &mut [Complex<T>],
@@ -106,7 +106,7 @@ macro_rules! boilerplate_fft_neon_f64_butterfly {
             }
 
             // Do multiple ffts over a longer vector outofplace, called from "process_outofplace_with_scratch" of Fft trait
-            #[target_feature(enable = "neon")]
+            //#[target_feature(enable = "neon")]
             pub(crate) unsafe fn perform_oop_fft_butterfly_multi(
                 &self,
                 input: &mut [Complex<T>],

@@ -1,9 +1,8 @@
 use core::arch::aarch64::*;
-use core::ptr::copy_nonoverlapping;
 use num_complex::Complex;
 
 use crate::array_utils::{RawSlice, RawSliceMut};
- 
+
 // Read these indexes from an SseArray and build an array of simd vectors.
 // Takes a name of a vector to read from, and a list of indexes to read.
 // This statement:
@@ -123,49 +122,17 @@ macro_rules! write_complex_to_array_strided {
     }
 }
 
-/// Workaround since these intrinsics are broken
-#[inline(always)]
-#[allow(clippy::cast_ptr_alignment)]
-unsafe fn temp_vst1q_f64(ptr: *mut f64, a: float64x2_t) {
-    copy_nonoverlapping(
-        &a as *const float64x2_t as *const f64,
-        ptr as *mut f64,
-        2,
-    )
-}
-
-#[inline(always)]
-#[allow(clippy::cast_ptr_alignment)]
-unsafe fn temp_vst1_f32(ptr: *mut f32, a: float32x2_t) {
-    copy_nonoverlapping(
-        &a as *const float32x2_t as *const f32,
-        ptr as *mut f32,
-        2,
-    )
-}
-
-#[inline(always)]
-#[allow(clippy::cast_ptr_alignment)]
-unsafe fn temp_vst1q_f32(ptr: *mut f32, a: float32x4_t) {
-    copy_nonoverlapping(
-        &a as *const float32x4_t as *const f32,
-        ptr as *mut f32,
-        4,
-    )
-}
-
-
-// A trait to handle reading from an array of complex floats into SSE vectors.
-// SSE works with 128-bit vectors, meaning a vector can hold two complex f32,
+// A trait to handle reading from an array of complex floats into Neon vectors.
+// Neon works with 128-bit vectors, meaning a vector can hold two complex f32,
 // or a single complex f64.
 pub trait NeonArray {
     type VectorType;
     const COMPLEX_PER_VECTOR: usize;
-    // Load complex numbers from the array to fill a SSE vector.
+    // Load complex numbers from the array to fill a Neon vector.
     unsafe fn load_complex(&self, index: usize) -> Self::VectorType;
-    // Load a single complex number from the array into a SSE vector, setting the unused elements to zero.
+    // Load a single complex number from the array into a Neon vector, setting the unused elements to zero.
     unsafe fn load_partial1_complex(&self, index: usize) -> Self::VectorType;
-    // Load a single complex number from the array, and copy it to all elements of a SSE vector.
+    // Load a single complex number from the array, and copy it to all elements of a Neon vector.
     unsafe fn load1_complex(&self, index: usize) -> Self::VectorType;
 }
 
@@ -183,7 +150,10 @@ impl NeonArray for RawSlice<Complex<f32>> {
     unsafe fn load_partial1_complex(&self, index: usize) -> Self::VectorType {
         debug_assert!(self.len() >= index + 1);
         let temp = vmovq_n_f32(0.0);
-        vreinterpretq_f32_u64(vld1q_lane_u64::<0>(self.as_ptr().add(index) as *const u64, vreinterpretq_u64_f32(temp)))
+        vreinterpretq_f32_u64(vld1q_lane_u64::<0>(
+            self.as_ptr().add(index) as *const u64,
+            vreinterpretq_u64_f32(temp),
+        ))
     }
 
     #[inline(always)]
@@ -214,21 +184,19 @@ impl NeonArray for RawSlice<Complex<f64>> {
     }
 }
 
-
-// A trait to handle writing to an array of complex floats from SSE vectors.
-// SSE works with 128-bit vectors, meaning a vector can hold two complex f32,
+// A trait to handle writing to an array of complex floats from Neon vectors.
+// Neon works with 128-bit vectors, meaning a vector can hold two complex f32,
 // or a single complex f64.
 pub trait NeonArrayMut {
     type VectorType;
     const COMPLEX_PER_VECTOR: usize;
-    // Store all complex numbers from a SSE vector to the array.
+    // Store all complex numbers from a Neon vector to the array.
     unsafe fn store_complex(&self, vector: Self::VectorType, index: usize);
-    // Store the low complex number from a SSE vector to the array.
+    // Store the low complex number from a Neon vector to the array.
     unsafe fn store_partial_lo_complex(&self, vector: Self::VectorType, index: usize);
-    // Store the high complex number from a SSE vector to the array.
+    // Store the high complex number from a Neon vector to the array.
     unsafe fn store_partial_hi_complex(&self, vector: Self::VectorType, index: usize);
 }
-
 
 impl NeonArrayMut for RawSliceMut<Complex<f32>> {
     type VectorType = float32x4_t;
@@ -254,7 +222,6 @@ impl NeonArrayMut for RawSliceMut<Complex<f32>> {
         vst1_f32(self.as_mut_ptr().add(index) as *mut f32, low);
     }
 }
-
 
 impl NeonArrayMut for RawSliceMut<Complex<f64>> {
     type VectorType = float64x2_t;
@@ -297,10 +264,22 @@ mod unit_tests {
             let load2 = slice.load_complex(1);
             let load3 = slice.load_complex(2);
             let load4 = slice.load_complex(3);
-            assert_eq!(val1, std::mem::transmute::<float64x2_t, Complex<f64>>(load1));
-            assert_eq!(val2, std::mem::transmute::<float64x2_t, Complex<f64>>(load2));
-            assert_eq!(val3, std::mem::transmute::<float64x2_t, Complex<f64>>(load3));
-            assert_eq!(val4, std::mem::transmute::<float64x2_t, Complex<f64>>(load4));
+            assert_eq!(
+                val1,
+                std::mem::transmute::<float64x2_t, Complex<f64>>(load1)
+            );
+            assert_eq!(
+                val2,
+                std::mem::transmute::<float64x2_t, Complex<f64>>(load2)
+            );
+            assert_eq!(
+                val3,
+                std::mem::transmute::<float64x2_t, Complex<f64>>(load3)
+            );
+            assert_eq!(
+                val4,
+                std::mem::transmute::<float64x2_t, Complex<f64>>(load4)
+            );
         }
     }
 

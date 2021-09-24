@@ -98,7 +98,7 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
             expected_output
         );
     }
-    
+
     // test process_with_scratch()
     {
         let mut buffer = reference_input.clone();
