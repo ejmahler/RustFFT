@@ -9,7 +9,7 @@ use core::arch::aarch64::*;
 
 pub struct Rotate90F32 {
     //sign_lo: float32x4_t,
-    sign_hi: float32x4_t,
+    sign_hi: float32x2_t,
     sign_both: float32x4_t,
 }
 
@@ -26,9 +26,9 @@ impl Rotate90F32 {
         //};
         let sign_hi = unsafe {
             if positive {
-                vld1q_f32([0.0, 0.0, -0.0, 0.0].as_ptr())
+                vld1_f32([-0.0, 0.0].as_ptr())
             } else {
-                vld1q_f32([0.0, 0.0, 0.0, -0.0].as_ptr())
+                vld1_f32([0.0, -0.0].as_ptr())
             }
         };
         let sign_both = unsafe {
@@ -47,9 +47,7 @@ impl Rotate90F32 {
 
     #[inline(always)]
     pub unsafe fn rotate_hi(&self, values: float32x4_t) -> float32x4_t {
-        let idx = vld1q_u8([0, 1, 2, 3, 4 ,5, 6, 7, 12, 13, 14, 15, 8, 9, 10, 11].as_ptr());
-        let temp = vreinterpretq_f32_u8(vqtbl1q_u8(vreinterpretq_u8_f32(values), idx));
-        vreinterpretq_f32_u32(veorq_u32(vreinterpretq_u32_f32(temp), vreinterpretq_u32_f32(self.sign_hi)))
+        vcombine_f32(vget_low_f32(values), vreinterpret_f32_u32(veor_u32(vrev64_u32(vreinterpret_u32_f32(vget_high_f32(values))), vreinterpret_u32_f32(self.sign_hi))))
     }
 
     // There doesn't seem to be any need for rotating just the first element, but let's keep the code just in case
@@ -91,8 +89,7 @@ pub unsafe fn extract_hi_hi_f32(left: float32x4_t, right: float32x4_t) -> float3
 // --> r1.re, r1.im, l2.re, l2.im
 #[inline(always)]
 pub unsafe fn extract_lo_hi_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t {
-    let idx = vld1q_u8([0, 1, 2, 3, 4 ,5, 6, 7, 24, 25, 26, 27, 28, 29, 30, 31].as_ptr());
-    vreinterpretq_f32_u8(vqtbl2q_u8(uint8x16x2_t(vreinterpretq_u8_f32(left), vreinterpretq_u8_f32(right)), idx))
+    vcombine_f32(vget_low_f32(left), vget_high_f32(right))
 }
 
 
@@ -118,8 +115,7 @@ pub unsafe fn reverse_complex_elements_f32(values: float32x4_t) -> float32x4_t {
 // -->  a.re, a.im, -b.re, -b.im
 #[inline(always)]
 pub unsafe fn negate_hi_f32(values: float32x4_t) -> float32x4_t {
-    let neg = vld1q_f32([0.0, 0.0, -0.0, -0.0].as_ptr());
-    vreinterpretq_f32_u32(veorq_u32(vreinterpretq_u32_f32(values), vreinterpretq_u32_f32(neg)))
+    vcombine_f32(vget_low_f32(values), vneg_f32(vget_high_f32(values)))
 }
 
 // Duplicate low (1st) complex
@@ -151,15 +147,12 @@ pub unsafe fn transpose_complex_2x2_f32(left: float32x4_t, right: float32x4_t) -
 // Each input contains two complex values, which are multiplied in parallel.
 #[inline(always)]
 pub unsafe fn mul_complex_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t {
-    // Workaround since vcmulq_f32 and vcmlaq_f32 intrinsics are not yet available.
-    let mut temp1 = vtrn1q_f32(right, right);
-    let mut temp2 = vtrn2q_f32(right, right);
-    temp1 = vmulq_f32(temp1, left);
-    temp2 = vmulq_f32(temp2, left);
-    temp2 = vrev64q_f32(temp2);
-    let flip = vld1q_f32([-0.0, 0.0, -0.0, 0.0].as_ptr());
-    temp2 = vreinterpretq_f32_u32(veorq_u32(vreinterpretq_u32_f32(temp2), vreinterpretq_u32_f32(flip)));
-    vaddq_f32(temp1, temp2)
+    // ARMv8.2-A introduced vcmulq_f32 and vcmlaq_f32 for complex multiplication, these intrinsics are not yet available.
+    let temp1 = vtrn1q_f32(right, right);
+    let temp2 = vtrn2q_f32(right, vnegq_f32(right));
+    let temp3 = vmulq_f32(temp2, left);
+    let temp4 = vrev64q_f32(temp3);
+    vfmaq_f32(temp4, temp1, left)
 }
 
 
@@ -196,14 +189,10 @@ impl Rotate90F64 {
 
 #[inline(always)]
 pub unsafe fn mul_complex_f64(left: float64x2_t, right: float64x2_t) -> float64x2_t {
-    // Workaround since vcmulq_f64 and vcmlaq_f64 intrinsics are not yet available.
-    let temp1 = vtrn1q_f64(right, right);
-    let temp2 = vtrn2q_f64(right, right);
-    let temp1 = vmulq_f64(temp1, left);
-    let temp2 = vmulq_f64(temp2, left);
-    let temp2n = vnegq_f64(temp2);
-    let temp3 = vextq_f64(temp2n, temp2, 1);
-    vaddq_f64(temp1, temp3)
+    // ARMv8.2-A introduced vcmulq_f64 and vcmlaq_f64 for complex multiplication, these intrinsics are not yet available.
+    let temp = vcombine_f64(vneg_f64(vget_high_f64(left)), vget_low_f64(left));
+    let sum = vmulq_laneq_f64::<0>(left, right);
+    vfmaq_laneq_f64::<1>(sum, temp, right)
 }
 
 #[cfg(test)]

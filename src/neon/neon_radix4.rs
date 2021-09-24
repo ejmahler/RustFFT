@@ -138,7 +138,7 @@ impl<T: FftNum> Neon32Radix4<T> {
         }
     }
 
-    #[target_feature(enable = "neon")]
+    //#[target_feature(enable = "neon")]
     unsafe fn perform_fft_out_of_place(
         &self,
         signal: &[Complex<T>],
@@ -188,7 +188,7 @@ impl<T: FftNum> Neon32Radix4<T> {
 }
 boilerplate_fft_neon_oop!(Neon32Radix4, |this: &Neon32Radix4<_>| this.len);
 
-#[target_feature(enable = "neon")]
+//#[target_feature(enable = "neon")]
 unsafe fn butterfly_4_32<T: FftNum>(
     data: &mut [Complex<T>],
     twiddles: &[float32x4_t],
@@ -319,7 +319,7 @@ impl<T: FftNum> Neon64Radix4<T> {
         }
     }
 
-    #[target_feature(enable = "neon")]
+    //#[target_feature(enable = "neon")]
     unsafe fn perform_fft_out_of_place(
         &self,
         signal: &[Complex<T>],
@@ -369,7 +369,7 @@ impl<T: FftNum> Neon64Radix4<T> {
 }
 boilerplate_fft_neon_oop!(Neon64Radix4, |this: &Neon64Radix4<_>| this.len);
 
-#[target_feature(enable = "neon")]
+//#[target_feature(enable = "neon")]
 unsafe fn butterfly_4_64<T: FftNum>(
     data: &mut [Complex<T>],
     twiddles: &[float64x2_t],
