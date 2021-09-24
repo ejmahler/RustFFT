@@ -2,7 +2,7 @@ use core::arch::aarch64::*;
 use num_complex::Complex;
 
 use crate::array_utils::{RawSlice, RawSliceMut};
- 
+
 // Read these indexes from an SseArray and build an array of simd vectors.
 // Takes a name of a vector to read from, and a list of indexes to read.
 // This statement:
@@ -122,7 +122,6 @@ macro_rules! write_complex_to_array_strided {
     }
 }
 
-
 // A trait to handle reading from an array of complex floats into Neon vectors.
 // Neon works with 128-bit vectors, meaning a vector can hold two complex f32,
 // or a single complex f64.
@@ -151,7 +150,10 @@ impl NeonArray for RawSlice<Complex<f32>> {
     unsafe fn load_partial1_complex(&self, index: usize) -> Self::VectorType {
         debug_assert!(self.len() >= index + 1);
         let temp = vmovq_n_f32(0.0);
-        vreinterpretq_f32_u64(vld1q_lane_u64::<0>(self.as_ptr().add(index) as *const u64, vreinterpretq_u64_f32(temp)))
+        vreinterpretq_f32_u64(vld1q_lane_u64::<0>(
+            self.as_ptr().add(index) as *const u64,
+            vreinterpretq_u64_f32(temp),
+        ))
     }
 
     #[inline(always)]
@@ -182,7 +184,6 @@ impl NeonArray for RawSlice<Complex<f64>> {
     }
 }
 
-
 // A trait to handle writing to an array of complex floats from Neon vectors.
 // Neon works with 128-bit vectors, meaning a vector can hold two complex f32,
 // or a single complex f64.
@@ -196,7 +197,6 @@ pub trait NeonArrayMut {
     // Store the high complex number from a Neon vector to the array.
     unsafe fn store_partial_hi_complex(&self, vector: Self::VectorType, index: usize);
 }
-
 
 impl NeonArrayMut for RawSliceMut<Complex<f32>> {
     type VectorType = float32x4_t;
@@ -222,7 +222,6 @@ impl NeonArrayMut for RawSliceMut<Complex<f32>> {
         vst1_f32(self.as_mut_ptr().add(index) as *mut f32, low);
     }
 }
-
 
 impl NeonArrayMut for RawSliceMut<Complex<f64>> {
     type VectorType = float64x2_t;
@@ -265,10 +264,22 @@ mod unit_tests {
             let load2 = slice.load_complex(1);
             let load3 = slice.load_complex(2);
             let load4 = slice.load_complex(3);
-            assert_eq!(val1, std::mem::transmute::<float64x2_t, Complex<f64>>(load1));
-            assert_eq!(val2, std::mem::transmute::<float64x2_t, Complex<f64>>(load2));
-            assert_eq!(val3, std::mem::transmute::<float64x2_t, Complex<f64>>(load3));
-            assert_eq!(val4, std::mem::transmute::<float64x2_t, Complex<f64>>(load4));
+            assert_eq!(
+                val1,
+                std::mem::transmute::<float64x2_t, Complex<f64>>(load1)
+            );
+            assert_eq!(
+                val2,
+                std::mem::transmute::<float64x2_t, Complex<f64>>(load2)
+            );
+            assert_eq!(
+                val3,
+                std::mem::transmute::<float64x2_t, Complex<f64>>(load3)
+            );
+            assert_eq!(
+                val4,
+                std::mem::transmute::<float64x2_t, Complex<f64>>(load4)
+            );
         }
     }
 

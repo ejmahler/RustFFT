@@ -47,7 +47,13 @@ impl Rotate90F32 {
 
     #[inline(always)]
     pub unsafe fn rotate_hi(&self, values: float32x4_t) -> float32x4_t {
-        vcombine_f32(vget_low_f32(values), vreinterpret_f32_u32(veor_u32(vrev64_u32(vreinterpret_u32_f32(vget_high_f32(values))), vreinterpret_u32_f32(self.sign_hi))))
+        vcombine_f32(
+            vget_low_f32(values),
+            vreinterpret_f32_u32(veor_u32(
+                vrev64_u32(vreinterpret_u32_f32(vget_high_f32(values))),
+                vreinterpret_u32_f32(self.sign_hi),
+            )),
+        )
     }
 
     // There doesn't seem to be any need for rotating just the first element, but let's keep the code just in case
@@ -60,7 +66,10 @@ impl Rotate90F32 {
     #[inline(always)]
     pub unsafe fn rotate_both(&self, values: float32x4_t) -> float32x4_t {
         let temp = vrev64q_f32(values);
-        vreinterpretq_f32_u32(veorq_u32(vreinterpretq_u32_f32(temp), vreinterpretq_u32_f32(self.sign_both)))
+        vreinterpretq_f32_u32(veorq_u32(
+            vreinterpretq_u32_f32(temp),
+            vreinterpretq_u32_f32(self.sign_both),
+        ))
     }
 }
 
@@ -71,7 +80,10 @@ impl Rotate90F32 {
 #[inline(always)]
 pub unsafe fn extract_lo_lo_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t {
     //_mm_shuffle_ps(left, right, 0x44)
-    vreinterpretq_f32_f64(vtrn1q_f64(vreinterpretq_f64_f32(left), vreinterpretq_f64_f32(right)))
+    vreinterpretq_f32_f64(vtrn1q_f64(
+        vreinterpretq_f64_f32(left),
+        vreinterpretq_f64_f32(right),
+    ))
 }
 
 // Pack high (2nd) complex
@@ -80,7 +92,10 @@ pub unsafe fn extract_lo_lo_f32(left: float32x4_t, right: float32x4_t) -> float3
 // --> r2.re, r2.im, l2.re, l2.im
 #[inline(always)]
 pub unsafe fn extract_hi_hi_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t {
-    vreinterpretq_f32_f64(vtrn2q_f64(vreinterpretq_f64_f32(left), vreinterpretq_f64_f32(right)))
+    vreinterpretq_f32_f64(vtrn2q_f64(
+        vreinterpretq_f64_f32(left),
+        vreinterpretq_f64_f32(right),
+    ))
 }
 
 // Pack low (1st) and high (2nd) complex
@@ -91,7 +106,6 @@ pub unsafe fn extract_hi_hi_f32(left: float32x4_t, right: float32x4_t) -> float3
 pub unsafe fn extract_lo_hi_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t {
     vcombine_f32(vget_low_f32(left), vget_high_f32(right))
 }
-
 
 // Pack  high (2nd) and low (1st) complex
 // left: r1.re, r1.im, r2.re, r2.im
@@ -123,7 +137,10 @@ pub unsafe fn negate_hi_f32(values: float32x4_t) -> float32x4_t {
 // --> a.re, a.im, a.re, a.im
 #[inline(always)]
 pub unsafe fn duplicate_lo_f32(values: float32x4_t) -> float32x4_t {
-    vreinterpretq_f32_f64(vtrn1q_f64(vreinterpretq_f64_f32(values), vreinterpretq_f64_f32(values)))
+    vreinterpretq_f32_f64(vtrn1q_f64(
+        vreinterpretq_f64_f32(values),
+        vreinterpretq_f64_f32(values),
+    ))
 }
 
 // Duplicate high (2nd) complex
@@ -131,7 +148,10 @@ pub unsafe fn duplicate_lo_f32(values: float32x4_t) -> float32x4_t {
 // --> b.re, b.im, b.re, b.im
 #[inline(always)]
 pub unsafe fn duplicate_hi_f32(values: float32x4_t) -> float32x4_t {
-    vreinterpretq_f32_f64(vtrn2q_f64(vreinterpretq_f64_f32(values), vreinterpretq_f64_f32(values)))
+    vreinterpretq_f32_f64(vtrn2q_f64(
+        vreinterpretq_f64_f32(values),
+        vreinterpretq_f64_f32(values),
+    ))
 }
 
 // transpose a 2x2 complex matrix given as [x0, x1], [x2, x3]
@@ -155,14 +175,12 @@ pub unsafe fn mul_complex_f32(left: float32x4_t, right: float32x4_t) -> float32x
     vfmaq_f32(temp4, temp1, left)
 }
 
-
 //  __  __       _   _                __   _  _   _     _ _
 // |  \/  | __ _| |_| |__            / /_ | || | | |__ (_) |_
 // | |\/| |/ _` | __| '_ \   _____  | '_ \| || |_| '_ \| | __|
 // | |  | | (_| | |_| | | | |_____| | (_) |__   _| |_) | | |_
 // |_|  |_|\__,_|\__|_| |_|          \___/   |_| |_.__/|_|\__|
 //
-
 
 pub(crate) struct Rotate90F64 {
     sign: float64x2_t,
@@ -183,7 +201,10 @@ impl Rotate90F64 {
     #[inline(always)]
     pub unsafe fn rotate(&self, values: float64x2_t) -> float64x2_t {
         let temp = vextq_f64(values, values, 0x01);
-        vreinterpretq_f64_u64(veorq_u64(vreinterpretq_u64_f64(temp), vreinterpretq_u64_f64(self.sign)))
+        vreinterpretq_f64_u64(veorq_u64(
+            vreinterpretq_u64_f64(temp),
+            vreinterpretq_u64_f64(self.sign),
+        ))
     }
 }
 
@@ -231,7 +252,6 @@ mod unit_tests {
         }
     }
 
-
     #[test]
     fn test_pack() {
         unsafe {
@@ -247,5 +267,4 @@ mod unit_tests {
             assert_eq!(second, second_expected);
         }
     }
-
 }

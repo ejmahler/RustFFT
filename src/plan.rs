@@ -9,8 +9,8 @@ use crate::algorithm::*;
 use crate::Fft;
 
 use crate::FftPlannerAvx;
-use crate::FftPlannerSse;
 use crate::FftPlannerNeon;
+use crate::FftPlannerSse;
 
 use crate::math_utils::{PrimeFactor, PrimeFactors};
 
