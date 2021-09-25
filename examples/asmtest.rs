@@ -10,19 +10,19 @@
 //! - Ask rustc to output assembly code:
 //!   `cargo rustc --release --features sse --example asmtest -- --emit=asm`
 //! - This will create a file at `target/release/examples/asmtest-0123456789abcdef.s` (with a random number in the filename).
-//! - OPen this file and search for the function.
+//! - Open this file and search for the function.
 
 
 use rustfft::num_complex::Complex32;
 //use rustfft::num_complex::Complex64;
 //use rustfft::FftPlannerScalar;
-//use rustfft::FftPlannerSse;
-use rustfft::FftPlannerNeon;
+use rustfft::FftPlannerSse;
+//use rustfft::FftPlannerNeon;
 
 fn main() {
     //let mut planner = FftPlannerScalar::new();
-    //let mut planner = FftPlannerSse::new();
-    let mut planner = FftPlannerNeon::new().unwrap();
+    let mut planner = FftPlannerSse::new().unwrap();
+    //let mut planner = FftPlannerNeon::new().unwrap();
     let fft = planner.plan_fft_forward(4);
 
     let mut buffer = vec![Complex32::new(0.0, 0.0); 100];
