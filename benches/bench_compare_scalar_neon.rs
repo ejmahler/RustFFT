@@ -34,7 +34,7 @@ fn bench_scalar_64(b: &mut Bencher, len: usize) {
 }
 
 // Make fft using sse planner
-fn bench_sse_32(b: &mut Bencher, len: usize) {
+fn bench_neon_32(b: &mut Bencher, len: usize) {
     let mut planner = rustfft::FftPlannerNeon::new().unwrap();
     let fft: Arc<dyn Fft<f32>> = planner.plan_fft_forward(len);
 
@@ -46,7 +46,7 @@ fn bench_sse_32(b: &mut Bencher, len: usize) {
 }
 
 // Make fft using sse planner
-fn bench_sse_64(b: &mut Bencher, len: usize) {
+fn bench_neon_64(b: &mut Bencher, len: usize) {
     let mut planner = rustfft::FftPlannerNeon::new().unwrap();
     let fft: Arc<dyn Fft<f64>> = planner.plan_fft_forward(len);
 
@@ -75,12 +75,12 @@ macro_rules! make_benches {
 
                 #[bench]
                 fn [<$name _ $len _f32_neon>](b: &mut Bencher)  {
-                    [<bench_sse_32>](b, $len);
+                    [<bench_neon_32>](b, $len);
                 }
 
                 #[bench]
                 fn [<$name _ $len _f64_neon>](b: &mut Bencher)  {
-                    [<bench_sse_64>](b, $len);
+                    [<bench_neon_64>](b, $len);
                 }
             )*
         }
@@ -88,4 +88,4 @@ macro_rules! make_benches {
 }
 
 make_benches!(neoncomparison, {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072});
-//make_benches!(neoncomparison, { 262144, 524288, 1048576, 2097152, 4194304 });
+make_benches!(neoncomparison, { 262144, 524288, 1048576, 2097152, 4194304 });
