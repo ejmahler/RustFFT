@@ -247,9 +247,9 @@ mod unit_tests {
     fn test_mul_complex_f32() {
         unsafe {
             let val1 = Complex::<f32>::new(1.0, 2.5);
-            let val2 = Complex::<f32>::new(3.2, 4.2);
-            let val3 = Complex::<f32>::new(5.6, 6.2);
-            let val4 = Complex::<f32>::new(7.4, 8.3);
+            let val2 = Complex::<f32>::new(3.2, 4.75);
+            let val3 = Complex::<f32>::new(5.75, 6.25);
+            let val4 = Complex::<f32>::new(7.4, 8.5);
 
             let nbr2 = vld1q_f32([val3, val4].as_ptr() as *const f32);
             let nbr1 = vld1q_f32([val1, val2].as_ptr() as *const f32);
