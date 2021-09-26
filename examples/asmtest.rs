@@ -12,7 +12,6 @@
 //! - This will create a file at `target/release/examples/asmtest-0123456789abcdef.s` (with a random number in the filename).
 //! - Open this file and search for the function.
 
-
 use rustfft::num_complex::Complex32;
 //use rustfft::num_complex::Complex64;
 //use rustfft::FftPlannerScalar;
