@@ -1,6 +1,6 @@
 #![cfg_attr(all(feature = "bench", test), feature(test))]
-#![cfg_attr(feature = "neon", feature(aarch64_target_feature))]
-#![cfg_attr(feature = "neon", feature(stdsimd))]
+#![cfg_attr(all(feature = "neon", target_arch = "aarch64"), feature(aarch64_target_feature))]
+#![cfg_attr(all(feature = "neon", target_arch = "aarch64"), feature(stdsimd))]
 
 //! RustFFT is a high-performance FFT library written in pure Rust.
 //!

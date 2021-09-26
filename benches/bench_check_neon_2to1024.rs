@@ -11,7 +11,7 @@ use test::Bencher;
 
 // Make fft using planner
 fn bench_planned_32(b: &mut Bencher, len: usize) {
-    let mut planner = rustfft::FftPlannerSse::new().unwrap();
+    let mut planner = rustfft::FftPlannerNeon::new().unwrap();
     let fft: Arc<dyn Fft<f32>> = planner.plan_fft_forward(len);
 
     let mut buffer: Vec<Complex<f32>> = vec![Complex::zero(); len];
@@ -23,7 +23,7 @@ fn bench_planned_32(b: &mut Bencher, len: usize) {
 
 // Make fft using planner
 fn bench_planned_64(b: &mut Bencher, len: usize) {
-    let mut planner = rustfft::FftPlannerSse::new().unwrap();
+    let mut planner = rustfft::FftPlannerNeon::new().unwrap();
     let fft: Arc<dyn Fft<f64>> = planner.plan_fft_forward(len);
 
     let mut buffer: Vec<Complex<f64>> = vec![Complex::zero(); len];
