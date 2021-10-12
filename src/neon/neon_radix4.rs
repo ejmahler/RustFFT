@@ -117,21 +117,19 @@ impl<T: FftNum> Neon32Radix4<T> {
             let num_rows = len / (twiddle_stride * 4);
             for i in 0..num_rows / 2 {
                 for k in 1..4 {
-                    unsafe {
-                        let twiddle_a = twiddles::compute_twiddle::<f32>(
-                            2 * i * k * twiddle_stride,
-                            len,
-                            direction,
-                        );
-                        let twiddle_b = twiddles::compute_twiddle::<f32>(
-                            (2 * i + 1) * k * twiddle_stride,
-                            len,
-                            direction,
-                        );
-                        let twiddles_packed =
-                            vld1q_f32(&[twiddle_a, twiddle_b] as *const _ as *const f32);
-                        twiddle_factors.push(twiddles_packed);
-                    }
+                    let twiddle_a = twiddles::compute_twiddle::<f32>(
+                        2 * i * k * twiddle_stride,
+                        len,
+                        direction,
+                    );
+                    let twiddle_b = twiddles::compute_twiddle::<f32>(
+                        (2 * i + 1) * k * twiddle_stride,
+                        len,
+                        direction,
+                    );
+                    let twiddles_packed = unsafe {
+                        RawSlice::new(&[twiddle_a, twiddle_b]).load_complex(0) };
+                    twiddle_factors.push(twiddles_packed);
                 }
             }
             twiddle_stride >>= 2;
@@ -325,15 +323,14 @@ impl<T: FftNum> Neon64Radix4<T> {
             let num_rows = len / (twiddle_stride * 4);
             for i in 0..num_rows {
                 for k in 1..4 {
-                    unsafe {
-                        let twiddle = twiddles::compute_twiddle::<f64>(
-                            i * k * twiddle_stride,
-                            len,
-                            direction,
-                        );
-                        let twiddle_packed = vld1q_f64(&twiddle as *const _ as *const f64);
-                        twiddle_factors.push(twiddle_packed);
-                    }
+                    let twiddle = twiddles::compute_twiddle::<f64>(
+                        i * k * twiddle_stride,
+                        len,
+                        direction,
+                    );
+                    let twiddle_packed = unsafe {
+                        RawSlice::new(&[twiddle]).load_complex(0) };
+                    twiddle_factors.push(twiddle_packed);
                 }
             }
             twiddle_stride >>= 2;

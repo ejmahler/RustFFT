@@ -14,7 +14,7 @@
 //! For machines that do not have AVX, RustFFT also supports the SSE4.1 instruction set.
 //! As for AVX, this is enabled automatically when using the FftPlanner.
 //!
-//! Additionally, there is (optional) experimental support for the Neon instructions on AArch64.
+//! Additionally, there is (opt-in, nightly-only) support for the Neon instructions on AArch64.
 //! Using this requires a very recent nightly compiler.
 //!
 //! ### Usage
@@ -74,8 +74,7 @@
 //!
 //!     On AArch64 (64-bit ARM) the `neon` feature enables compilation of Neon-accelerated code. Enabling it improves
 //!     performance, while disabling it reduces compile time and binary size.
-//!     Note that the Neon support of Rust is very new, and the `neon` feature must use a nightly compiler.
-//!     It's recommended to always use the latest available.
+//!     Note that Rust's Neon support is very new, and the `neon` feature must use a nightly compiler.
 //!
 //! ### Normalization
 //!
@@ -421,7 +420,7 @@ mod neon {
         use crate::{Fft, FftDirection, FftNum};
         use std::sync::Arc;
 
-        /// The Neon FFT planner creates new FFT algorithm instances using a mix of scalar and SSE accelerated algorithms.
+        /// The Neon FFT planner creates new FFT algorithm instances using a mix of scalar and Neon accelerated algorithms.
         /// It is supported when using the 64-bit AArch64 instruction set.
         ///
         /// RustFFT has several FFT algorithms available. For a given FFT size, the `FftPlannerNeon` decides which of the
