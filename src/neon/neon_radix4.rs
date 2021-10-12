@@ -127,8 +127,8 @@ impl<T: FftNum> Neon32Radix4<T> {
                         len,
                         direction,
                     );
-                    let twiddles_packed = unsafe {
-                        RawSlice::new(&[twiddle_a, twiddle_b]).load_complex(0) };
+                    let twiddles_packed =
+                        unsafe { RawSlice::new(&[twiddle_a, twiddle_b]).load_complex(0) };
                     twiddle_factors.push(twiddles_packed);
                 }
             }
@@ -323,13 +323,9 @@ impl<T: FftNum> Neon64Radix4<T> {
             let num_rows = len / (twiddle_stride * 4);
             for i in 0..num_rows {
                 for k in 1..4 {
-                    let twiddle = twiddles::compute_twiddle::<f64>(
-                        i * k * twiddle_stride,
-                        len,
-                        direction,
-                    );
-                    let twiddle_packed = unsafe {
-                        RawSlice::new(&[twiddle]).load_complex(0) };
+                    let twiddle =
+                        twiddles::compute_twiddle::<f64>(i * k * twiddle_stride, len, direction);
+                    let twiddle_packed = unsafe { RawSlice::new(&[twiddle]).load_complex(0) };
                     twiddle_factors.push(twiddle_packed);
                 }
             }
