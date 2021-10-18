@@ -41,6 +41,8 @@ Disabling them reduces compile time and binary size.
 
 On other platform than x86_64, these features do nothing and RustFFT will behave like they are not set.
 
+On AArch64, the `neon-nightly` feature enables compilation of Neon-accelerated code. It requires a nightly compiler, and is disabled by default. Be warned that new nightly versions may break RustFFT's Neon support.
+
 ## Stability/Future Breaking Changes
 
 Version 5.0 contains several breaking API changes. In the interest of stability, we're committing to making no more breaking changes for 3 years, aka until 2024.

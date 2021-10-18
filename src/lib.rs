@@ -1,4 +1,12 @@
 #![cfg_attr(all(feature = "bench", test), feature(test))]
+#![cfg_attr(
+    all(feature = "neon-nightly", target_arch = "aarch64"),
+    feature(aarch64_target_feature)
+)]
+#![cfg_attr(
+    all(feature = "neon-nightly", target_arch = "aarch64"),
+    feature(stdsimd)
+)]
 
 //! RustFFT is a high-performance FFT library written in pure Rust.
 //!
@@ -8,6 +16,8 @@
 //!
 //! For machines that do not have AVX, RustFFT also supports the SSE4.1 instruction set.
 //! As for AVX, this is enabled automatically when using the FftPlanner.
+//!
+//! Additionally, there is (opt-in, nightly-only) support for the Neon instruction set on AArch64.
 //!
 //! ### Usage
 //!
@@ -45,7 +55,7 @@
 //! advanced users may have better insight than the planner into which algorithms are best for a specific size. See the
 //! [`algorithm`](crate::algorithm) module for a complete list of scalar algorithms implemented by RustFFT.
 //!
-//! Users should beware, however, that bypassing the planner will disable all AVX and SSE optimizations.
+//! Users should beware, however, that bypassing the planner will disable all AVX, SSE and Neon optimizations.
 //!
 //! ### Feature Flags
 //!
@@ -62,6 +72,11 @@
 //!     supported and its feature flag is enabled, RustFFT will use AVX instead of SSE4.1.
 //!
 //!     On every platform besides x86_64, this feature does nothing, and RustFFT will behave like it's not set.
+//! * `neon` (Experimental, disabled by default)
+//!
+//!     On AArch64 (64-bit ARM) the `neon` feature enables compilation of Neon-accelerated code. Enabling it improves
+//!     performance, while disabling it reduces compile time and binary size.
+//!     Note that Rust's Neon support is very new, and the `neon` feature must use a nightly compiler.
 //!
 //! ### Normalization
 //!
@@ -264,7 +279,7 @@ mod avx {
         ///     let fft = planner.plan_fft_forward(1234);
         ///
         ///     let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1234];
-        ///     fft.process_inplace(&mut buffer);
+        ///     fft.process(&mut buffer);
         ///
         ///     // The FFT instance returned by the planner has the type `Arc<dyn Fft<T>>`,
         ///     // where T is the numeric type, ie f32 or f64, so it's cheap to clone
@@ -394,6 +409,85 @@ mod sse {
 }
 
 pub use self::sse::sse_planner::FftPlannerSse;
+
+// Algorithms implemented to use Neon instructions. Only compiled on AArch64, and only compiled if the "neon-nightly" feature flag is set.
+#[cfg(all(target_arch = "aarch64", feature = "neon-nightly"))]
+mod neon;
+
+// If we're not on AArch64, or if the "neon-nightly" feature was disabled, keep a stub implementation around that has the same API, but does nothing
+// That way, users can write code using the Neon planner and compile it on any platform
+#[cfg(not(all(target_arch = "aarch64", feature = "neon-nightly")))]
+mod neon {
+    pub mod neon_planner {
+        use crate::{Fft, FftDirection, FftNum};
+        use std::sync::Arc;
+
+        /// The Neon FFT planner creates new FFT algorithm instances using a mix of scalar and Neon accelerated algorithms.
+        /// It is supported when using the 64-bit AArch64 instruction set.
+        ///
+        /// RustFFT has several FFT algorithms available. For a given FFT size, the `FftPlannerNeon` decides which of the
+        /// available FFT algorithms to use and then initializes them.
+        ///
+        /// ~~~
+        /// // Perform a forward Fft of size 1234
+        /// use std::sync::Arc;
+        /// use rustfft::{FftPlannerNeon, num_complex::Complex};
+        ///
+        /// if let Ok(mut planner) = FftPlannerNeon::new() {
+        ///   let fft = planner.plan_fft_forward(1234);
+        ///
+        ///   let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1234];
+        ///   fft.process(&mut buffer);
+        ///
+        ///   // The FFT instance returned by the planner has the type `Arc<dyn Fft<T>>`,
+        ///   // where T is the numeric type, ie f32 or f64, so it's cheap to clone
+        ///   let fft_clone = Arc::clone(&fft);
+        /// }
+        /// ~~~
+        ///
+        /// If you plan on creating multiple FFT instances, it is recommended to reuse the same planner for all of them. This
+        /// is because the planner re-uses internal data across FFT instances wherever possible, saving memory and reducing
+        /// setup time. (FFT instances created with one planner will never re-use data and buffers with FFT instances created
+        /// by a different planner)
+        ///
+        /// Each FFT instance owns [`Arc`s](std::sync::Arc) to its internal data, rather than borrowing it from the planner, so it's perfectly
+        /// safe to drop the planner after creating Fft instances.
+        pub struct FftPlannerNeon<T: FftNum> {
+            _phantom: std::marker::PhantomData<T>,
+        }
+        impl<T: FftNum> FftPlannerNeon<T> {
+            /// Creates a new `FftPlannerNeon` instance.
+            ///
+            /// Returns `Ok(planner_instance)` if this machine has the required instruction sets.
+            /// Returns `Err(())` if some instruction sets are missing.
+            pub fn new() -> Result<Self, ()> {
+                Err(())
+            }
+            /// Returns a `Fft` instance which uses Neon instructions to compute FFTs of size `len`.
+            ///
+            /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
+            ///
+            /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+            pub fn plan_fft(&mut self, _len: usize, _direction: FftDirection) -> Arc<dyn Fft<T>> {
+                unreachable!()
+            }
+            /// Returns a `Fft` instance which uses Neon instructions to compute forward FFTs of size `len`.
+            ///
+            /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+            pub fn plan_fft_forward(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
+                unreachable!()
+            }
+            /// Returns a `Fft` instance which uses Neon instructions to compute inverse FFTs of size `len.
+            ///
+            /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+            pub fn plan_fft_inverse(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
+                unreachable!()
+            }
+        }
+    }
+}
+
+pub use self::neon::neon_planner::FftPlannerNeon;
 
 #[cfg(test)]
 mod test_utils;
