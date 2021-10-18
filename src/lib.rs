@@ -1,9 +1,12 @@
 #![cfg_attr(all(feature = "bench", test), feature(test))]
 #![cfg_attr(
-    all(feature = "neon", target_arch = "aarch64"),
+    all(feature = "neon-nightly", target_arch = "aarch64"),
     feature(aarch64_target_feature)
 )]
-#![cfg_attr(all(feature = "neon", target_arch = "aarch64"), feature(stdsimd))]
+#![cfg_attr(
+    all(feature = "neon-nightly", target_arch = "aarch64"),
+    feature(stdsimd)
+)]
 
 //! RustFFT is a high-performance FFT library written in pure Rust.
 //!
@@ -14,8 +17,7 @@
 //! For machines that do not have AVX, RustFFT also supports the SSE4.1 instruction set.
 //! As for AVX, this is enabled automatically when using the FftPlanner.
 //!
-//! Additionally, there is (opt-in, nightly-only) support for the Neon instructions on AArch64.
-//! Using this requires a very recent nightly compiler.
+//! Additionally, there is (opt-in, nightly-only) support for the Neon instruction set on AArch64.
 //!
 //! ### Usage
 //!
@@ -408,13 +410,13 @@ mod sse {
 
 pub use self::sse::sse_planner::FftPlannerSse;
 
-// Algorithms implemented to use Neon instructions. Only compiled on AArch64, and only compiled if the "neon" feature flag is set.
-#[cfg(all(target_arch = "aarch64", feature = "neon"))]
+// Algorithms implemented to use Neon instructions. Only compiled on AArch64, and only compiled if the "neon-nightly" feature flag is set.
+#[cfg(all(target_arch = "aarch64", feature = "neon-nightly"))]
 mod neon;
 
-// If we're not on AArch64, or if the "neon" feature was disabled, keep a stub implementation around that has the same API, but does nothing
+// If we're not on AArch64, or if the "neon-nightly" feature was disabled, keep a stub implementation around that has the same API, but does nothing
 // That way, users can write code using the Neon planner and compile it on any platform
-#[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+#[cfg(not(all(target_arch = "aarch64", feature = "neon-nightly")))]
 mod neon {
     pub mod neon_planner {
         use crate::{Fft, FftDirection, FftNum};

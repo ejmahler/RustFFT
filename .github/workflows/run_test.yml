@@ -109,14 +109,14 @@ jobs:
         with:
           command: check
           use-cross: true
-          args: --features neon --target aarch64-unknown-linux-gnu
+          args: --features neon-nightly --target aarch64-unknown-linux-gnu
 
       - name: Run cargo test for arm
         uses: actions-rs/cargo@v1
         with:
           command: test
           use-cross: true
-          args: --release --features neon --target aarch64-unknown-linux-gnu
+          args: --release --features neon-nightly --target aarch64-unknown-linux-gnu
 
   check_x86:
     name: Check and test Linux x86 32bit

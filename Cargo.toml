@@ -21,9 +21,11 @@ default = ["avx", "sse"]
 # If both are enabled, RustFFT will use AVX if the CPU supports it. If not, it will check for SSE4.1.
 # If neither instruction set is available, it will fall back to the scalar code.  
 # On every other platform, these features do nothing, and RustFFT will behave like they are not set.
+#
+# On AArch64, the "neon-nightly" feature enables compilation of Neon-accelerated code. It requires a nightly compiler, and is disabled by default.
 avx = []
 sse = []
-neon = []
+neon-nightly = []
 
 
 [dependencies]
