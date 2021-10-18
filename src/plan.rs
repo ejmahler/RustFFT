@@ -112,6 +112,7 @@ impl<T: FftNum> FftPlanner<T> {
 }
 
 const MIN_RADIX4_BITS: u32 = 5; // smallest size to consider radix 4 an option is 2^5 = 32
+const MIN_RADIX3_FACTORS: u32 = 4; // smallest number of factors of 3 to consider radix 4 an option is 3^4=81. any smaller and we want to use butterflies directly.
 const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
 const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the inner fft of Bluestein if length is larger than this
 
@@ -144,6 +145,7 @@ pub enum Recipe {
         len: usize,
         inner_fft: Arc<Recipe>,
     },
+    Radix3(usize),
     Radix4(usize),
     Butterfly2,
     Butterfly3,
@@ -152,12 +154,14 @@ pub enum Recipe {
     Butterfly6,
     Butterfly7,
     Butterfly8,
+    Butterfly9,
     Butterfly11,
     Butterfly13,
     Butterfly16,
     Butterfly17,
     Butterfly19,
     Butterfly23,
+    Butterfly27,
     Butterfly29,
     Butterfly31,
     Butterfly32,
@@ -167,6 +171,7 @@ impl Recipe {
     pub fn len(&self) -> usize {
         match self {
             Recipe::Dft(length) => *length,
+            Recipe::Radix3(length) => *length,
             Recipe::Radix4(length) => *length,
             Recipe::Butterfly2 => 2,
             Recipe::Butterfly3 => 3,
@@ -175,12 +180,14 @@ impl Recipe {
             Recipe::Butterfly6 => 6,
             Recipe::Butterfly7 => 7,
             Recipe::Butterfly8 => 8,
+            Recipe::Butterfly9 => 9,
             Recipe::Butterfly11 => 11,
             Recipe::Butterfly13 => 13,
             Recipe::Butterfly16 => 16,
             Recipe::Butterfly17 => 17,
             Recipe::Butterfly19 => 19,
             Recipe::Butterfly23 => 23,
+            Recipe::Butterfly27 => 27,
             Recipe::Butterfly29 => 29,
             Recipe::Butterfly31 => 31,
             Recipe::Butterfly32 => 32,
@@ -307,6 +314,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
     fn build_new_fft(&mut self, recipe: &Recipe, direction: FftDirection) -> Arc<dyn Fft<T>> {
         match recipe {
             Recipe::Dft(len) => Arc::new(Dft::new(*len, direction)) as Arc<dyn Fft<T>>,
+            Recipe::Radix3(len) => Arc::new(Radix3::new(*len, direction)) as Arc<dyn Fft<T>>,
             Recipe::Radix4(len) => Arc::new(Radix4::new(*len, direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly2 => Arc::new(Butterfly2::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly3 => Arc::new(Butterfly3::new(direction)) as Arc<dyn Fft<T>>,
@@ -315,12 +323,14 @@ impl<T: FftNum> FftPlannerScalar<T> {
             Recipe::Butterfly6 => Arc::new(Butterfly6::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly7 => Arc::new(Butterfly7::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly8 => Arc::new(Butterfly8::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly9 => Arc::new(Butterfly9::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly11 => Arc::new(Butterfly11::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly13 => Arc::new(Butterfly13::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly16 => Arc::new(Butterfly16::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly17 => Arc::new(Butterfly17::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly19 => Arc::new(Butterfly19::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly23 => Arc::new(Butterfly23::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly27 => Arc::new(Butterfly27::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly29 => Arc::new(Butterfly29::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly31 => Arc::new(Butterfly31::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly32 => Arc::new(Butterfly32::new(direction)) as Arc<dyn Fft<T>>,
@@ -385,6 +395,20 @@ impl<T: FftNum> FftPlannerScalar<T> {
                 let power_of_two = PrimeFactors::compute(1 << len.trailing_zeros());
                 self.design_mixed_radix(power_of_two, non_power_of_two)
             }
+        } else if factors.get_power_of_three() >= MIN_RADIX3_FACTORS {
+            if factors.is_power_of_three() {
+                Arc::new(Recipe::Radix3(len))
+            } else {
+                let power3 = factors.get_power_of_three();
+                let non_power_of_three = factors
+                    .remove_factors(PrimeFactor {
+                        value: 3,
+                        count: power3,
+                    })
+                    .unwrap();
+                let power_of_three = PrimeFactors::compute(3usize.pow(power3));
+                self.design_mixed_radix(power_of_three, non_power_of_three)
+            }
         } else {
             let (left_factors, right_factors) = factors.partition_factors();
             self.design_mixed_radix(left_factors, right_factors)
@@ -435,12 +459,14 @@ impl<T: FftNum> FftPlannerScalar<T> {
             6 => Some(Arc::new(Recipe::Butterfly6)),
             7 => Some(Arc::new(Recipe::Butterfly7)),
             8 => Some(Arc::new(Recipe::Butterfly8)),
+            9 => Some(Arc::new(Recipe::Butterfly9)),
             11 => Some(Arc::new(Recipe::Butterfly11)),
             13 => Some(Arc::new(Recipe::Butterfly13)),
             16 => Some(Arc::new(Recipe::Butterfly16)),
             17 => Some(Arc::new(Recipe::Butterfly17)),
             19 => Some(Arc::new(Recipe::Butterfly19)),
             23 => Some(Arc::new(Recipe::Butterfly23)),
+            27 => Some(Arc::new(Recipe::Butterfly27)),
             29 => Some(Arc::new(Recipe::Butterfly29)),
             31 => Some(Arc::new(Recipe::Butterfly31)),
             32 => Some(Arc::new(Recipe::Butterfly32)),

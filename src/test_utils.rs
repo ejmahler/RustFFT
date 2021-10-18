@@ -89,14 +89,15 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
 
         fft.process(&mut buffer);
 
-        assert!(
-            compare_vectors(&expected_output, &buffer),
-            "process() failed, length = {}, direction = {}, result = {:?}, expected = {:?}",
-            len,
-            direction,
-            buffer,
-            expected_output
-        );
+        if !compare_vectors(&expected_output, &buffer) {
+            dbg!(&expected_output);
+            dbg!(&buffer);
+
+            panic!(
+                "process() failed, length = {}, direction = {}",
+                len, direction
+            );
+        }
     }
 
     // test process_with_scratch()
