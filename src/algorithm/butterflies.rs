@@ -189,7 +189,32 @@ impl<T: FftNum> Butterfly3<T> {
         }
     }
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(
+    unsafe fn perform_fft_strided(
+        &self,
+        val0: &mut Complex<T>,
+        val1: &mut Complex<T>,
+        val2: &mut Complex<T>,
+    ) {
+        let xp = *val1 + *val2;
+        let xn = *val1 - *val2;
+        let sum = *val0 + xp;
+
+        let temp_a = *val0
+            + Complex {
+                re: self.twiddle.re * xp.re,
+                im: self.twiddle.re * xp.im,
+            };
+        let temp_b = Complex {
+            re: -self.twiddle.im * xn.im,
+            im: self.twiddle.im * xn.re,
+        };
+
+        *val0 = sum;
+        *val1 = temp_a + temp_b;
+        *val2 = temp_a - temp_b;
+    }
+    #[inline(always)]
+    pub unsafe fn perform_fft_contiguous(
         &self,
         input: RawSlice<Complex<T>>,
         output: RawSliceMut<Complex<T>>,
@@ -723,6 +748,72 @@ impl<T: FftNum> Butterfly8<T> {
         for i in 0..4 {
             output.store(scratch1[i], i + 4);
         }
+    }
+}
+
+pub struct Butterfly9<T> {
+    butterfly3: Butterfly3<T>,
+    twiddle1: Complex<T>,
+    twiddle2: Complex<T>,
+    twiddle4: Complex<T>,
+}
+boilerplate_fft_butterfly!(Butterfly9, 9, |this: &Butterfly9<_>| this
+    .butterfly3
+    .fft_direction());
+impl<T: FftNum> Butterfly9<T> {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        Self {
+            butterfly3: Butterfly3::new(direction),
+            twiddle1: twiddles::compute_twiddle(1, 9, direction),
+            twiddle2: twiddles::compute_twiddle(2, 9, direction),
+            twiddle4: twiddles::compute_twiddle(4, 9, direction),
+        }
+    }
+    #[inline(always)]
+    unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
+        // algorithm: mixed radix with width=3 and height=3
+
+        // step 1: transpose the input into the scratch
+        let mut scratch0 = [input.load(0), input.load(3), input.load(6)];
+        let mut scratch1 = [input.load(1), input.load(4), input.load(7)];
+        let mut scratch2 = [input.load(2), input.load(5), input.load(8)];
+
+        // step 2: column FFTs
+        self.butterfly3.perform_fft_butterfly(&mut scratch0);
+        self.butterfly3.perform_fft_butterfly(&mut scratch1);
+        self.butterfly3.perform_fft_butterfly(&mut scratch2);
+
+        // step 3: apply twiddle factors
+        scratch1[1] = scratch1[1] * self.twiddle1;
+        scratch1[2] = scratch1[2] * self.twiddle2;
+        scratch2[1] = scratch2[1] * self.twiddle2;
+        scratch2[2] = scratch2[2] * self.twiddle4;
+
+        // step 4: SKIPPED because the next FFTs will be non-contiguous
+
+        // step 5: row FFTs
+        self.butterfly3
+            .perform_fft_strided(&mut scratch0[0], &mut scratch1[0], &mut scratch2[0]);
+        self.butterfly3
+            .perform_fft_strided(&mut scratch0[1], &mut scratch1[1], &mut scratch2[1]);
+        self.butterfly3
+            .perform_fft_strided(&mut scratch0[2], &mut scratch1[2], &mut scratch2[2]);
+
+        // step 6: copy the result into the output. normally we'd need to do a transpose here, but we can skip it because we skipped the transpose in step 4
+        output.store(scratch0[0], 0);
+        output.store(scratch0[1], 1);
+        output.store(scratch0[2], 2);
+        output.store(scratch1[0], 3);
+        output.store(scratch1[1], 4);
+        output.store(scratch1[2], 5);
+        output.store(scratch2[0], 6);
+        output.store(scratch2[1], 7);
+        output.store(scratch2[2], 8);
     }
 }
 
@@ -3245,6 +3336,182 @@ impl<T: FftNum> Butterfly23<T> {
             },
             22,
         );
+    }
+}
+
+pub struct Butterfly27<T> {
+    butterfly9: Butterfly9<T>,
+    twiddles: [Complex<T>; 12],
+}
+boilerplate_fft_butterfly!(Butterfly27, 27, |this: &Butterfly27<_>| this
+    .butterfly9
+    .fft_direction());
+impl<T: FftNum> Butterfly27<T> {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        Self {
+            butterfly9: Butterfly9::new(direction),
+            twiddles: [
+                twiddles::compute_twiddle(1, 27, direction),
+                twiddles::compute_twiddle(2, 27, direction),
+                twiddles::compute_twiddle(3, 27, direction),
+                twiddles::compute_twiddle(4, 27, direction),
+                twiddles::compute_twiddle(5, 27, direction),
+                twiddles::compute_twiddle(6, 27, direction),
+                twiddles::compute_twiddle(7, 27, direction),
+                twiddles::compute_twiddle(8, 27, direction),
+                twiddles::compute_twiddle(10, 27, direction),
+                twiddles::compute_twiddle(12, 27, direction),
+                twiddles::compute_twiddle(14, 27, direction),
+                twiddles::compute_twiddle(16, 27, direction),
+            ],
+        }
+    }
+    #[inline(always)]
+    unsafe fn perform_fft_contiguous(
+        &self,
+        input: RawSlice<Complex<T>>,
+        output: RawSliceMut<Complex<T>>,
+    ) {
+        // algorithm: mixed radix with width=9 and height=3
+
+        // step 1: transpose the input into the scratch
+        let mut scratch0 = [
+            input.load(0),
+            input.load(3),
+            input.load(6),
+            input.load(9),
+            input.load(12),
+            input.load(15),
+            input.load(18),
+            input.load(21),
+            input.load(24),
+        ];
+        let mut scratch1 = [
+            input.load(1 + 0),
+            input.load(1 + 3),
+            input.load(1 + 6),
+            input.load(1 + 9),
+            input.load(1 + 12),
+            input.load(1 + 15),
+            input.load(1 + 18),
+            input.load(1 + 21),
+            input.load(1 + 24),
+        ];
+        let mut scratch2 = [
+            input.load(2 + 0),
+            input.load(2 + 3),
+            input.load(2 + 6),
+            input.load(2 + 9),
+            input.load(2 + 12),
+            input.load(2 + 15),
+            input.load(2 + 18),
+            input.load(2 + 21),
+            input.load(2 + 24),
+        ];
+
+        // step 2: column FFTs
+        self.butterfly9.perform_fft_butterfly(&mut scratch0);
+        self.butterfly9.perform_fft_butterfly(&mut scratch1);
+        self.butterfly9.perform_fft_butterfly(&mut scratch2);
+
+        // step 3: apply twiddle factors
+        scratch1[1] = scratch1[1] * self.twiddles[0];
+        scratch1[2] = scratch1[2] * self.twiddles[1];
+        scratch1[3] = scratch1[3] * self.twiddles[2];
+        scratch1[4] = scratch1[4] * self.twiddles[3];
+        scratch1[5] = scratch1[5] * self.twiddles[4];
+        scratch1[6] = scratch1[6] * self.twiddles[5];
+        scratch1[7] = scratch1[7] * self.twiddles[6];
+        scratch1[8] = scratch1[8] * self.twiddles[7];
+        scratch2[1] = scratch2[1] * self.twiddles[1];
+        scratch2[2] = scratch2[2] * self.twiddles[3];
+        scratch2[3] = scratch2[3] * self.twiddles[5];
+        scratch2[4] = scratch2[4] * self.twiddles[7];
+        scratch2[5] = scratch2[5] * self.twiddles[8];
+        scratch2[6] = scratch2[6] * self.twiddles[9];
+        scratch2[7] = scratch2[7] * self.twiddles[10];
+        scratch2[8] = scratch2[8] * self.twiddles[11];
+
+        // step 4: SKIPPED because the next FFTs will be non-contiguous
+
+        // step 5: row FFTs
+        self.butterfly9.butterfly3.perform_fft_strided(
+            &mut scratch0[0],
+            &mut scratch1[0],
+            &mut scratch2[0],
+        );
+        self.butterfly9.butterfly3.perform_fft_strided(
+            &mut scratch0[1],
+            &mut scratch1[1],
+            &mut scratch2[1],
+        );
+        self.butterfly9.butterfly3.perform_fft_strided(
+            &mut scratch0[2],
+            &mut scratch1[2],
+            &mut scratch2[2],
+        );
+        self.butterfly9.butterfly3.perform_fft_strided(
+            &mut scratch0[3],
+            &mut scratch1[3],
+            &mut scratch2[3],
+        );
+        self.butterfly9.butterfly3.perform_fft_strided(
+            &mut scratch0[4],
+            &mut scratch1[4],
+            &mut scratch2[4],
+        );
+        self.butterfly9.butterfly3.perform_fft_strided(
+            &mut scratch0[5],
+            &mut scratch1[5],
+            &mut scratch2[5],
+        );
+        self.butterfly9.butterfly3.perform_fft_strided(
+            &mut scratch0[6],
+            &mut scratch1[6],
+            &mut scratch2[6],
+        );
+        self.butterfly9.butterfly3.perform_fft_strided(
+            &mut scratch0[7],
+            &mut scratch1[7],
+            &mut scratch2[7],
+        );
+        self.butterfly9.butterfly3.perform_fft_strided(
+            &mut scratch0[8],
+            &mut scratch1[8],
+            &mut scratch2[8],
+        );
+
+        // step 6: copy the result into the output. normally we'd need to do a transpose here, but we can skip it because we skipped the transpose in step 4
+        output.store(scratch0[0], 0);
+        output.store(scratch0[1], 1);
+        output.store(scratch0[2], 2);
+        output.store(scratch0[3], 3);
+        output.store(scratch0[4], 4);
+        output.store(scratch0[5], 5);
+        output.store(scratch0[6], 6);
+        output.store(scratch0[7], 7);
+        output.store(scratch0[8], 8);
+
+        output.store(scratch1[0], 9 + 0);
+        output.store(scratch1[1], 9 + 1);
+        output.store(scratch1[2], 9 + 2);
+        output.store(scratch1[3], 9 + 3);
+        output.store(scratch1[4], 9 + 4);
+        output.store(scratch1[5], 9 + 5);
+        output.store(scratch1[6], 9 + 6);
+        output.store(scratch1[7], 9 + 7);
+        output.store(scratch1[8], 9 + 8);
+
+        output.store(scratch2[0], 18 + 0);
+        output.store(scratch2[1], 18 + 1);
+        output.store(scratch2[2], 18 + 2);
+        output.store(scratch2[3], 18 + 3);
+        output.store(scratch2[4], 18 + 4);
+        output.store(scratch2[5], 18 + 5);
+        output.store(scratch2[6], 18 + 6);
+        output.store(scratch2[7], 18 + 7);
+        output.store(scratch2[8], 18 + 8);
     }
 }
 
@@ -5920,12 +6187,14 @@ mod unit_tests {
     test_butterfly_func!(test_butterfly6, Butterfly6, 6);
     test_butterfly_func!(test_butterfly7, Butterfly7, 7);
     test_butterfly_func!(test_butterfly8, Butterfly8, 8);
+    test_butterfly_func!(test_butterfly9, Butterfly9, 9);
     test_butterfly_func!(test_butterfly11, Butterfly11, 11);
     test_butterfly_func!(test_butterfly13, Butterfly13, 13);
     test_butterfly_func!(test_butterfly16, Butterfly16, 16);
     test_butterfly_func!(test_butterfly17, Butterfly17, 17);
     test_butterfly_func!(test_butterfly19, Butterfly19, 19);
     test_butterfly_func!(test_butterfly23, Butterfly23, 23);
+    test_butterfly_func!(test_butterfly27, Butterfly27, 27);
     test_butterfly_func!(test_butterfly29, Butterfly29, 29);
     test_butterfly_func!(test_butterfly31, Butterfly31, 31);
     test_butterfly_func!(test_butterfly32, Butterfly32, 32);

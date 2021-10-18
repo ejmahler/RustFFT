@@ -5,7 +5,7 @@ extern crate test;
 use paste::paste;
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
-use rustfft::Fft;
+use rustfft::{Fft, FftDirection};
 use std::sync::Arc;
 use test::Bencher;
 
@@ -166,3 +166,28 @@ make_benches!(from2to1024, planned, {1000, 1001, 1002, 1003, 1004, 1005, 1006, 1
 make_benches!(from2to1024, planned, {1010, 1011, 1012, 1013, 1014, 1015, 1016, 1017, 1018, 1019 });
 make_benches!(from2to1024, planned, {1020, 1021, 1022, 1023, 1024 });
 */
+
+make_benches!(power3_planned_scalar, planned, {0000003, 0000009, 0000027, 0000081, 0000243, 0000729, 0002187, 0006561, 0019683, 0059049, 0177147, 0531441, 1594323, 4782969 });
+
+fn bench_radix3_32(b: &mut Bencher, len: usize) {
+    let fft: Arc<dyn Fft<f32>> =
+        Arc::new(rustfft::algorithm::Radix3::new(len, FftDirection::Forward));
+
+    let mut buffer: Vec<Complex<f32>> = vec![Complex::zero(); len];
+    let mut scratch: Vec<Complex<f32>> = vec![Complex::zero(); fft.get_inplace_scratch_len()];
+    b.iter(|| {
+        fft.process_with_scratch(&mut buffer, &mut scratch);
+    });
+}
+fn bench_radix3_64(b: &mut Bencher, len: usize) {
+    let fft: Arc<dyn Fft<f32>> =
+        Arc::new(rustfft::algorithm::Radix3::new(len, FftDirection::Forward));
+
+    let mut buffer: Vec<Complex<f32>> = vec![Complex::zero(); len];
+    let mut scratch: Vec<Complex<f32>> = vec![Complex::zero(); fft.get_inplace_scratch_len()];
+    b.iter(|| {
+        fft.process_with_scratch(&mut buffer, &mut scratch);
+    });
+}
+
+make_benches!(power3_radix3_scalar, radix3, {0000003, 0000009, 0000027, 0000081, 0000243, 0000729, 0002187, 0006561, 0019683, 0059049, 0177147, 0531441, 1594323, 4782969 });

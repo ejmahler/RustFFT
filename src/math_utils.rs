@@ -186,6 +186,10 @@ impl PrimeFactors {
         &self.other_factors
     }
 
+    pub fn is_power_of_three(&self) -> bool {
+        self.power_three > 0 && self.power_two == 0 && self.other_factors.len() == 0
+    }
+
     // Divides the number by the given prime factor. Returns None if the resulting number is one.
     pub fn remove_factors(mut self, factor: PrimeFactor) -> Option<Self> {
         if factor.count == 0 {
