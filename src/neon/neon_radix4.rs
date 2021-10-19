@@ -2,7 +2,7 @@ use num_complex::Complex;
 
 use core::arch::aarch64::*;
 
-use crate::algorithm::{bitreversed_transpose};
+use crate::algorithm::bitreversed_transpose;
 use crate::array_utils;
 use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::neon::neon_butterflies::{
