@@ -102,9 +102,6 @@ impl<T: FftNum> Radix4<T> {
             bitreversed_transpose(self.base_len, signal, spectrum);
         }
 
-        // Copy and reorder our data from the input to the output
-        bitreversed_transpose(self.base_len, signal, spectrum);
-
         // Base-level FFTs
         self.base_fft.process_with_scratch(spectrum, &mut []);
 
