@@ -36,8 +36,6 @@ pub struct Radix3<T> {
 
     len: usize,
     direction: FftDirection,
-
-    shuffle_map: Box<[usize]>,
 }
 
 impl<T: FftNum> Radix3<T> {
@@ -52,27 +50,11 @@ impl<T: FftNum> Radix3<T> {
         });
 
         // figure out which base length we're going to use
-        let (base_len, base_exponent, base_fft) = match exponent {
-            0 => (
-                len,
-                0,
-                Arc::new(Butterfly1::new(direction)) as Arc<dyn Fft<T>>,
-            ),
-            1 => (
-                len,
-                1,
-                Arc::new(Butterfly3::new(direction)) as Arc<dyn Fft<T>>,
-            ),
-            2 => (
-                len,
-                2,
-                Arc::new(Butterfly9::new(direction)) as Arc<dyn Fft<T>>,
-            ),
-            _ => (
-                27,
-                3,
-                Arc::new(Butterfly27::new(direction)) as Arc<dyn Fft<T>>,
-            ),
+        let (base_len, base_fft) = match exponent {
+            0 => (len, Arc::new(Butterfly1::new(direction)) as Arc<dyn Fft<T>>),
+            1 => (len, Arc::new(Butterfly3::new(direction)) as Arc<dyn Fft<T>>),
+            2 => (len, Arc::new(Butterfly9::new(direction)) as Arc<dyn Fft<T>>),
+            _ => (27, Arc::new(Butterfly27::new(direction)) as Arc<dyn Fft<T>>),
         };
 
         // precompute the twiddle factors this algorithm will use.
@@ -92,13 +74,6 @@ impl<T: FftNum> Radix3<T> {
             twiddle_stride /= 3;
         }
 
-        // make a lookup table for the bit reverse shuffling
-        let reversal_iters = exponent - base_exponent;
-        let num_reversals = 3usize.pow(reversal_iters as u32);
-        let shuffle_map = (0..num_reversals)
-            .map(|val| reverse_bits(val, reversal_iters))
-            .collect::<Vec<usize>>();
-
         Self {
             twiddles: twiddle_factors.into_boxed_slice(),
             butterfly3: Butterfly3::new(direction),
@@ -108,8 +83,6 @@ impl<T: FftNum> Radix3<T> {
 
             len,
             direction,
-
-            shuffle_map: shuffle_map.into_boxed_slice(),
         }
     }
 
@@ -120,10 +93,10 @@ impl<T: FftNum> Radix3<T> {
         _scratch: &mut [Complex<T>],
     ) {
         // copy the data into the spectrum vector
-        if self.shuffle_map.len() < 3 {
+        if self.len() == self.base_len {
             spectrum.copy_from_slice(signal);
         } else {
-            bitreversed_transpose(self.base_len, signal, spectrum, &self.shuffle_map);
+            bitreversed_transpose(self.base_len, signal, spectrum);
         }
 
         // Base-level FFTs
@@ -160,28 +133,31 @@ boilerplate_fft_oop!(Radix3, |this: &Radix3<_>| this.len);
 // Preparing for radix 3 is similar to a transpose, where the column index is bit reversed.
 // Use a lookup table to avoid repeating the slow bit reverse operations.
 // Unrolling the outer loop by a factor 4 helps speed things up.
-pub fn bitreversed_transpose<T: Copy>(
-    height: usize,
-    input: &[T],
-    output: &mut [T],
-    shuffle_map: &[usize],
-) {
-    let width = shuffle_map.len();
+pub fn bitreversed_transpose<T: Copy>(height: usize, input: &[T], output: &mut [T]) {
+    let width = input.len() / height;
+    let third_width = width / 3;
+
+    let rev_digits = compute_logarithm(width, 3).unwrap();
+
     // Let's make sure the arguments are ok
     assert!(input.len() == output.len());
-    assert!(input.len() == height * width);
-    for (x, x_rev) in shuffle_map.chunks_exact(3).enumerate() {
+    for x in 0..third_width {
         let x0 = 3 * x;
         let x1 = 3 * x + 1;
         let x2 = 3 * x + 2;
+
+        let x_rev = [
+            reverse_bits(x0, rev_digits),
+            reverse_bits(x1, rev_digits),
+            reverse_bits(x2, rev_digits),
+        ];
 
         // Assert that the the bit reversed indices will not exceed the length of the output.
         // The highest index the loop reaches is: (x_rev[n] + 1)*height - 1
         // The last element of the data is at index: width*height - 1
         // Thus it is sufficient to assert that x_rev[n]<width.
-        assert!(x_rev[0] < width);
-        assert!(x_rev[1] < width);
-        assert!(x_rev[2] < width);
+        assert!(x_rev[0] < width && x_rev[1] < width && x_rev[2] < width);
+
         for y in 0..height {
             let input_index0 = x0 + y * width;
             let input_index1 = x1 + y * width;
