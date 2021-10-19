@@ -55,8 +55,6 @@ pub struct Neon32Radix4<T> {
     len: usize,
     direction: FftDirection,
     bf4: NeonF32Butterfly4<T>,
-
-    shuffle_map: Box<[usize]>,
 }
 
 impl<T: FftNum> Neon32Radix4<T> {
@@ -135,13 +133,6 @@ impl<T: FftNum> Neon32Radix4<T> {
             twiddle_stride >>= 2;
         }
 
-        // make a lookup table for the bit reverse shuffling
-        let rest_len = len / base_len;
-        let bitpairs = (rest_len.trailing_zeros() / 2) as usize;
-        let shuffle_map = (0..rest_len)
-            .map(|val| reverse_bits(val, bitpairs))
-            .collect::<Vec<usize>>();
-
         Self {
             twiddles: twiddle_factors.into_boxed_slice(),
 
@@ -152,8 +143,6 @@ impl<T: FftNum> Neon32Radix4<T> {
             direction,
             _phantom: std::marker::PhantomData,
             bf4: NeonF32Butterfly4::<T>::new(direction),
-
-            shuffle_map: shuffle_map.into_boxed_slice(),
         }
     }
 
@@ -165,10 +154,10 @@ impl<T: FftNum> Neon32Radix4<T> {
         _scratch: &mut [Complex<T>],
     ) {
         // copy the data into the spectrum vector
-        if self.shuffle_map.len() < 4 {
+        if self.len() == self.base_len {
             spectrum.copy_from_slice(signal);
         } else {
-            bitreversed_transpose(self.base_len, signal, spectrum, &self.shuffle_map);
+            bitreversed_transpose(self.base_len, signal, spectrum);
         }
 
         // Base-level FFTs
@@ -260,8 +249,6 @@ pub struct Neon64Radix4<T> {
     len: usize,
     direction: FftDirection,
     bf4: NeonF64Butterfly4<T>,
-
-    shuffle_map: Box<[usize]>,
 }
 
 impl<T: FftNum> Neon64Radix4<T> {
@@ -332,13 +319,6 @@ impl<T: FftNum> Neon64Radix4<T> {
             twiddle_stride >>= 2;
         }
 
-        // make a lookup table for the bit reverse shuffling
-        let rest_len = len / base_len;
-        let bitpairs = (rest_len.trailing_zeros() / 2) as usize;
-        let shuffle_map = (0..rest_len)
-            .map(|val| reverse_bits(val, bitpairs))
-            .collect::<Vec<usize>>();
-
         Self {
             twiddles: twiddle_factors.into_boxed_slice(),
 
@@ -349,8 +329,6 @@ impl<T: FftNum> Neon64Radix4<T> {
             direction,
             _phantom: std::marker::PhantomData,
             bf4: NeonF64Butterfly4::<T>::new(direction),
-
-            shuffle_map: shuffle_map.into_boxed_slice(),
         }
     }
 
@@ -362,10 +340,10 @@ impl<T: FftNum> Neon64Radix4<T> {
         _scratch: &mut [Complex<T>],
     ) {
         // copy the data into the spectrum vector
-        if self.shuffle_map.len() < 4 {
+        if self.len() == self.base_len {
             spectrum.copy_from_slice(signal);
         } else {
-            bitreversed_transpose(self.base_len, signal, spectrum, &self.shuffle_map);
+            bitreversed_transpose(self.base_len, signal, spectrum);
         }
 
         // Base-level FFTs
