@@ -15,4 +15,4 @@ pub use self::good_thomas_algorithm::{GoodThomasAlgorithm, GoodThomasAlgorithmSm
 pub use self::mixed_radix::{MixedRadix, MixedRadixSmall};
 pub use self::raders_algorithm::RadersAlgorithm;
 pub use self::radix3::Radix3;
-pub use self::radix4::{bitreversed_transpose, reverse_bits, Radix4};
+pub use self::radix4::{bitreversed_transpose, Radix4};
