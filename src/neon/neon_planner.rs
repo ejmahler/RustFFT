@@ -160,7 +160,7 @@ impl<T: FftNum> FftPlannerNeon<T> {
     /// Returns `Ok(planner_instance)` if this machine has the required instruction sets.
     /// Returns `Err(())` if some instruction sets are missing.
     pub fn new() -> Result<Self, ()> {
-        if is_aarch64_feature_detected!("neon") {
+        if std::arch::is_aarch64_feature_detected!("neon") {
             // Ideally, we would implement the planner with specialization.
             // Specialization won't be on stable rust for a long time though, so in the meantime, we can hack around it.
             //
