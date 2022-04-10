@@ -63,15 +63,22 @@ jobs:
   check_arm64:
     name: Check and test Linux arm 64bit
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - beta
+          - nightly
+          - 1.37
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
 
-      - name: Install stable toolchain
+      - name: Install toolchain
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: stable
+          toolchain: ${{ matrix.rust }}
           target: aarch64-unknown-linux-gnu
           override: true
 
@@ -92,15 +99,22 @@ jobs:
   check_arm64_neon:
     name: Check and test Linux arm 64bit with neon
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - beta
+          - nightly
+          - 1.61
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
 
-      - name: Install nightly toolchain
+      - name: Install toolchain
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: nightly
+          toolchain: ${{ matrix.rust }}
           target: aarch64-unknown-linux-gnu
           override: true
 
