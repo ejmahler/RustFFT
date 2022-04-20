@@ -13,7 +13,7 @@ categories = ["algorithms", "compression", "multimedia::encoding", "science"]
 license = "MIT OR Apache-2.0"
 
 [features]
-default = ["avx", "sse"]
+default = ["avx", "neon", "sse"]
 
 # On x86_64, the "avx" feature enables compilation of AVX-acclerated code. 
 # Similarly, the "sse" feature enables SSE-accelerated code. 
@@ -25,7 +25,8 @@ default = ["avx", "sse"]
 # On AArch64, the "neon-nightly" feature enables compilation of Neon-accelerated code. It requires a nightly compiler, and is disabled by default.
 avx = []
 sse = []
-neon-nightly = []
+neon = []
+neon-nightly = ["neon"]
 
 
 [dependencies]

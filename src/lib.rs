@@ -410,13 +410,13 @@ mod sse {
 
 pub use self::sse::sse_planner::FftPlannerSse;
 
-// Algorithms implemented to use Neon instructions. Only compiled on AArch64, and only compiled if the "neon-nightly" feature flag is set.
-#[cfg(all(target_arch = "aarch64", feature = "neon-nightly"))]
+// Algorithms implemented to use Neon instructions. Only compiled on AArch64, and only compiled if the "neon" feature flag is set.
+#[cfg(all(target_arch = "aarch64", feature = "neon"))]
 mod neon;
 
-// If we're not on AArch64, or if the "neon-nightly" feature was disabled, keep a stub implementation around that has the same API, but does nothing
+// If we're not on AArch64, or if the "neon" feature was disabled, keep a stub implementation around that has the same API, but does nothing
 // That way, users can write code using the Neon planner and compile it on any platform
-#[cfg(not(all(target_arch = "aarch64", feature = "neon-nightly")))]
+#[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
 mod neon {
     pub mod neon_planner {
         use crate::{Fft, FftDirection, FftNum};
