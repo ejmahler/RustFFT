@@ -4,7 +4,7 @@ name: CI
 
 jobs:
   check:
-    name: Check+Test
+    name: Check+Test default features
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -60,8 +60,8 @@ jobs:
           command: fmt
           args: -- --check
 
-  check_arm64:
-    name: Check and test Linux arm 64bit
+  check_no_features:
+    name: Check+Test no features
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -79,22 +79,19 @@ jobs:
         with:
           profile: minimal
           toolchain: ${{ matrix.rust }}
-          target: aarch64-unknown-linux-gnu
           override: true
 
       - name: Run cargo check
         uses: actions-rs/cargo@v1
         with:
           command: check
-          use-cross: true
-          args: --target aarch64-unknown-linux-gnu
+          args: --no-default-features
 
-      - name: Run cargo test for arm
+      - name: Run cargo test
         uses: actions-rs/cargo@v1
         with:
           command: test
-          use-cross: true
-          args: --release --target aarch64-unknown-linux-gnu
+          args: --no-default-features
 
   check_arm64_neon:
     name: Check and test Linux arm 64bit with neon
