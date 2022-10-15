@@ -24,7 +24,6 @@ use crate::{Direction, Fft, Length};
 /// use rustfft::algorithm::GoodThomasAlgorithm;
 /// use rustfft::{Fft, FftPlanner};
 /// use rustfft::num_complex::Complex;
-/// use rustfft::num_traits::Zero;
 ///
 /// let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1200];
 ///

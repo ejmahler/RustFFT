@@ -116,7 +116,6 @@
 use std::fmt::Display;
 
 pub use num_complex;
-pub use num_traits;
 
 #[macro_use]
 mod common;
