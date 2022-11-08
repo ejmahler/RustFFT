@@ -29,7 +29,7 @@ RustFFT supports the AVX instruction set for increased performance. No special c
 For machines that do not have AVX, RustFFT also supports the SSE4.1 instruction set. As for AVX, this is enabled automatically when using the FftPlanner. If both AVX and SSE4.1 support are enabled, the planner will automatically choose the fastest available instruction set.
 
 ### AArch64
-RustFFT optionally supports the NEON instruction set in 64-bit Arm, AArch64. This optional feature requires a newer rustc version: Rustc 1.61. See [Features](#features) for more details.
+RustFFT optionally supports the NEON instruction set in 64-bit Arm, AArch64. This optional feature requires a newer rustc version: Rustc 1.61. See [Features](#Cargo Features) below for more details.
 
 ## Cargo Features
 ### x86_64
