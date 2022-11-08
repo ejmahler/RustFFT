@@ -4,7 +4,7 @@ name: CI
 
 jobs:
   check:
-    name: Check+Test
+    name: Check+Test default features
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -60,47 +60,58 @@ jobs:
           command: fmt
           args: -- --check
 
-  check_arm64:
-    name: Check and test Linux arm 64bit
+  check_no_features:
+    name: Check+Test no features
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - beta
+          - nightly
+          - 1.37
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
 
-      - name: Install stable toolchain
+      - name: Install toolchain
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: stable
-          target: aarch64-unknown-linux-gnu
+          toolchain: ${{ matrix.rust }}
           override: true
 
       - name: Run cargo check
         uses: actions-rs/cargo@v1
         with:
           command: check
-          use-cross: true
-          args: --target aarch64-unknown-linux-gnu
+          args: --no-default-features
 
-      - name: Run cargo test for arm
+      - name: Run cargo test
         uses: actions-rs/cargo@v1
         with:
           command: test
-          use-cross: true
-          args: --release --target aarch64-unknown-linux-gnu
+          args: --no-default-features
 
   check_arm64_neon:
     name: Check and test Linux arm 64bit with neon
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - beta
+          - nightly
+          - 1.61
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
 
-      - name: Install nightly toolchain
+      - name: Install toolchain
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: nightly
+          toolchain: ${{ matrix.rust }}
           target: aarch64-unknown-linux-gnu
           override: true
 
@@ -109,14 +120,14 @@ jobs:
         with:
           command: check
           use-cross: true
-          args: --features neon-nightly --target aarch64-unknown-linux-gnu
+          args: --features neon --target aarch64-unknown-linux-gnu
 
       - name: Run cargo test for arm
         uses: actions-rs/cargo@v1
         with:
           command: test
           use-cross: true
-          args: --release --features neon-nightly --target aarch64-unknown-linux-gnu
+          args: --release --features neon --target aarch64-unknown-linux-gnu
 
   check_x86:
     name: Check and test Linux x86 32bit

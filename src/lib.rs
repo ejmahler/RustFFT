@@ -1,12 +1,4 @@
 #![cfg_attr(all(feature = "bench", test), feature(test))]
-#![cfg_attr(
-    all(feature = "neon-nightly", target_arch = "aarch64"),
-    feature(aarch64_target_feature)
-)]
-#![cfg_attr(
-    all(feature = "neon-nightly", target_arch = "aarch64"),
-    feature(stdsimd)
-)]
 
 //! RustFFT is a high-performance FFT library written in pure Rust.
 //!
@@ -17,7 +9,7 @@
 //! For machines that do not have AVX, RustFFT also supports the SSE4.1 instruction set.
 //! As for AVX, this is enabled automatically when using the FftPlanner.
 //!
-//! Additionally, there is (opt-in, nightly-only) support for the Neon instruction set on AArch64.
+//! Additionally, there is (opt-in) support for the Neon instruction set on AArch64.
 //!
 //! ### Usage
 //!
@@ -72,11 +64,11 @@
 //!     supported and its feature flag is enabled, RustFFT will use AVX instead of SSE4.1.
 //!
 //!     On every platform besides x86_64, this feature does nothing, and RustFFT will behave like it's not set.
-//! * `neon` (Experimental, disabled by default)
+//! * `neon` (Disabled by default)
 //!
 //!     On AArch64 (64-bit ARM) the `neon` feature enables compilation of Neon-accelerated code. Enabling it improves
 //!     performance, while disabling it reduces compile time and binary size.
-//!     Note that Rust's Neon support is very new, and the `neon` feature must use a nightly compiler.
+//!     Note that Rust's Neon support requires using rustc 1.61 or newer.
 //!
 //! ### Normalization
 //!
@@ -410,13 +402,13 @@ mod sse {
 
 pub use self::sse::sse_planner::FftPlannerSse;
 
-// Algorithms implemented to use Neon instructions. Only compiled on AArch64, and only compiled if the "neon-nightly" feature flag is set.
-#[cfg(all(target_arch = "aarch64", feature = "neon-nightly"))]
+// Algorithms implemented to use Neon instructions. Only compiled on AArch64, and only compiled if the "neon" feature flag is set.
+#[cfg(all(target_arch = "aarch64", feature = "neon"))]
 mod neon;
 
-// If we're not on AArch64, or if the "neon-nightly" feature was disabled, keep a stub implementation around that has the same API, but does nothing
+// If we're not on AArch64, or if the "neon" feature was disabled, keep a stub implementation around that has the same API, but does nothing
 // That way, users can write code using the Neon planner and compile it on any platform
-#[cfg(not(all(target_arch = "aarch64", feature = "neon-nightly")))]
+#[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
 mod neon {
     pub mod neon_planner {
         use crate::{Fft, FftDirection, FftNum};
