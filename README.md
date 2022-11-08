@@ -6,7 +6,7 @@
 [![](https://docs.rs/rustfft/badge.svg)](https://docs.rs/rustfft/)
 ![minimum rustc 1.37](https://img.shields.io/badge/rustc-1.37+-red.svg)
 
-RustFFT is a high-performance FFT library written in pure Rust. It can compute FFTs of any size, including prime-number sizes, in O(nlogn) time.
+RustFFT is a high-performance, SIMD-accelerated FFT library written in pure Rust. It can compute FFTs of any size, including prime-number sizes, in O(nlogn) time.
 
 ## Usage
 
