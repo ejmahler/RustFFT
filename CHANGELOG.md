@@ -1,3 +1,11 @@
+## [6.1]
+Released 7th Novemeber 2022
+### Added
+ - Implemented a code path for Neon-optimized FFTs on AArch64 (Thanks to Henrik Enquist!) (#84 and #78)
+### Changed
+ - Improved performance of power-of-3 FFTs when not using SIMD-accelerated code paths (#80)
+ - Reduced memory usage for some FFT sizes (#81)
+
 ## [6.0.1]
 Released 10 May 2021
 ### Fixed
