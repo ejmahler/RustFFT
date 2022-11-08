@@ -8,18 +8,6 @@
 
 RustFFT is a high-performance FFT library written in pure Rust. It can compute FFTs of any size, including prime-number sizes, in O(nlogn) time.
 
-Unlike previous major versions, RustFFT 5.0 has several breaking changes compared to RustFFT 4.0. Check out the [Upgrade Guide](/UpgradeGuide4to5.md) for a walkthrough of the changes RustFFT 5.0 requires.
-
-## SIMD acceleration
-### x86_64
-RustFFT supports the AVX instruction set for increased performance. No special code is needed to activate AVX: Simply plan a FFT using the FftPlanner on a machine that supports the `avx` and `fma` CPU features, and RustFFT will automatically switch to faster AVX-accelerated algorithms.
-
-For machines that do not have AVX, it also supports the SSE4.1 instruction set. As for AVX, this is enabled automatically when using the FftPlanner.
-
-### AArch64
-RustFFT optionally supports the NEON instruction set in 64-bit Arm, AArch64. This optional feature requires a newer rustc version: Rustc 1.61. See [Features](#features) for more details.
-
-
 ## Usage
 
 ```rust
@@ -34,26 +22,38 @@ let mut buffer = vec![Complex{ re: 0.0, im: 0.0 }; 1234];
 fft.process(&mut buffer);
 ```
 
-## Supported Rust Version
+## SIMD acceleration
+### x86_64
+RustFFT supports the AVX instruction set for increased performance. No special code is needed to activate AVX: Simply plan a FFT using the FftPlanner on a machine that supports the `avx` and `fma` CPU features, and RustFFT will automatically switch to faster AVX-accelerated algorithms.
 
-RustFFT requires rustc 1.37 or newer. Minor releases of RustFFT may upgrade the MSRV(minimum supported Rust version) to a newer version of rustc.
-However, if we need to increase the MSRV, the new Rust version must have been released at least six months ago.
+For machines that do not have AVX, RustFFT also supports the SSE4.1 instruction set. As for AVX, this is enabled automatically when using the FftPlanner. If both AVX and SSE4.1 support are enabled, the planner will automatically choose the fastest available instruction set.
 
-## Features
+### AArch64
+RustFFT optionally supports the NEON instruction set in 64-bit Arm, AArch64. This optional feature requires a newer rustc version: Rustc 1.61. See [Features](#features) for more details.
 
+## Cargo Features
+### x86_64
 The features `avx` and `sse` are enabled by default. On x86_64, these features enable compilation of the AVX and SSE accelerated code. 
 
 Disabling them reduces compile time and binary size.
 
-On other platform than x86_64, these features do nothing and RustFFT will behave like they are not set.
+On other platforms than x86_64, these features do nothing and RustFFT will behave like they are not set.
 
+### AArch64
 On AArch64, the `neon` feature enables compilation of Neon-accelerated code. This requires rustc 1.61 or newer, and is enabled by default. If this feature is disabled, rustc 1.37 or newer is required.
+
+On other platforms than AArch64, this feature does nothing and RustFFT will behave like it is not set.
 
 ## Stability/Future Breaking Changes
 
-Version 5.0 contains several breaking API changes. In the interest of stability, we're committing to making no more breaking changes for 3 years, aka until 2024.
+Version 5.0 contains several breaking API changes. heck out the [Upgrade Guide](/UpgradeGuide4to5.md) for a walkthrough of the changes RustFFT 5.0 requires. In the interest of stability, we're committing to making no more breaking changes for 3 years, aka until 2024.
 
-This policy has one exception: We currently re-export pre-1.0 versions of the [num-complex](https://crates.io/crates/num-complex) and [num-traits](https://crates.io/crates/num-traits) crates. If those crates release new major versions, we will upgrade as soon as possible, which will require a major version change of our own. If this happens, the version increase of num-complex/num-traits will be the only breaking change.
+This policy has one exception: We currently re-export pre-1.0 versions of the [num-complex](https://crates.io/crates/num-complex) and [num-traits](https://crates.io/crates/num-traits) crates. In the interest of avoiding version fragmentation, we will keep up with these crates even if it requires major version bumps. When those crates release new major versions, we will upgrade as soon as possible, which will require a major version change of our own. In this situations, the version increase of num-complex/num-traits will be the only breaking change in the release.
+
+### Supported Rust Version
+
+RustFFT requires rustc 1.37 or newer. Minor releases of RustFFT may upgrade the MSRV(minimum supported Rust version) to a newer version of rustc.
+However, if we need to increase the MSRV, the new Rust version must have been released at least six months ago.
 
 ## License
 
