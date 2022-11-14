@@ -18,21 +18,16 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
-          override: true
 
       - name: Run cargo check
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
+        run: cargo check
 
       - name: Run cargo test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
+        run: cargo test
+
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
@@ -41,24 +36,15 @@ jobs:
         uses: actions/checkout@v2
       
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@nightly
         with:
-          profile: minimal
-          toolchain: nightly # required for the "ignore" entry in rustfmt.toml, switch to stable asap
-          override: true
           components: rustfmt
       
       - name: Print rustfmt version
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: -- --version
+        run: cargo fmt -- --version
       
       - name: Run cargo fmt
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: -- --check
+        run: cargo fmt -- --check
 
   check_no_features:
     name: Check+Test no features
@@ -75,23 +61,15 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
-          override: true
 
       - name: Run cargo check
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --no-default-features
+        run: cargo check --no-default-features
 
       - name: Run cargo test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --no-default-features
+        run: cargo test --no-default-features
 
   check_arm64_neon:
     name: Check and test Linux arm 64bit with neon
@@ -105,29 +83,22 @@ jobs:
           - 1.61
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
-          target: aarch64-unknown-linux-gnu
-          override: true
+          targets: aarch64-unknown-linux-gnu
 
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+      
       - name: Run cargo check
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-          use-cross: true
-          args: --features neon --target aarch64-unknown-linux-gnu
+        run: cross check --features neon --target aarch64-unknown-linux-gnu
 
       - name: Run cargo test for arm
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          use-cross: true
-          args: --release --features neon --target aarch64-unknown-linux-gnu
+        run: cross test --release --features neon --target aarch64-unknown-linux-gnu
 
   check_x86:
     name: Check and test Linux x86 32bit
@@ -137,24 +108,16 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          target: i586-unknown-linux-gnu
-          override: true
+          targets: i586-unknown-linux-gnu
+
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Run cargo check
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-          use-cross: true
-          args: --target i586-unknown-linux-gnu
+        run: cross check --target i586-unknown-linux-gnu
 
       - name: Run cargo test for i586
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          use-cross: true
-          args: --target i586-unknown-linux-gnu
+        run: cross test --target i586-unknown-linux-gnu
         
