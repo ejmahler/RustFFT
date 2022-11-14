@@ -15,7 +15,7 @@ jobs:
           - 1.37
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@master
@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@nightly
@@ -58,7 +58,7 @@ jobs:
           - 1.37
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@master
@@ -105,7 +105,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
