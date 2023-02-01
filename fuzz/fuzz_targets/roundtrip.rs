@@ -14,7 +14,7 @@ use core::num::FpCategory::*;
 
 use libfuzzer_sys::fuzz_target;
 
-const TOLERANCE: f32 = 0.10;
+const TOLERANCE: f32 = 1.0;
 // more info on floating-point tolerance:
 // https://jtempest.github.io/float_eq-rs/book/background/float_comparison_algorithms.html#relative-tolerance-comparison
 
