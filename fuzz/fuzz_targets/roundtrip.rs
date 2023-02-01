@@ -10,6 +10,7 @@ use float_eq::assert_float_eq;
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 use rustfft::Fft;
+use core::num::FpCategory::*;
 
 use libfuzzer_sys::fuzz_target;
 
@@ -17,10 +18,16 @@ const TOLERANCE: f32 = 0.10;
 // more info on floating-point tolerance:
 // https://jtempest.github.io/float_eq-rs/book/background/float_comparison_algorithms.html#relative-tolerance-comparison
 
-
 fuzz_target!(|data: Vec<f32>| {
     // convert raw input to Complex<f32>
-    let input: Vec<Complex<f32>> = data.chunks_exact(2).map(|pair| Complex { re: pair[0], im: pair[1] }).collect();
+    let input: Vec<Complex<f32>> = data.chunks_exact(2).filter_map(|pair|
+            // remove NaNs and inf from the input, otherwise the result will not roundtrip
+            match (pair[0].classify(), pair[1].classify()) {
+                (Nan | Infinite, _) => None,
+                (_, Nan | Infinite) => None,
+                _ => Some(Complex { re: pair[0], im: pair[1] }),
+            }
+        ).collect();
 
     // prepare
     let mut planner = rustfft::FftPlanner::new();
