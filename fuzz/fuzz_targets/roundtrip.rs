@@ -48,8 +48,8 @@ fuzz_target!(|data: Vec<f32>| {
 
     // compare results 
     for (orig, recovered) in input.iter().zip(result.iter()) {
-        assert_float_eq!(orig.re, recovered.re, rmax <= TOLERANCE);
-        assert_float_eq!(orig.im, recovered.im, rmax <= TOLERANCE);
+        assert_float_eq!(orig.re, recovered.re, rmax <= TOLERANCE, "Real part mismatch");
+        assert_float_eq!(orig.im, recovered.im, rmax <= TOLERANCE, "Imaginary part mismatch");
     }
     
 });
