@@ -10,6 +10,15 @@ use crate::{Direction, Fft, Length};
 #[allow(unused)]
 macro_rules! boilerplate_fft_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
+        impl<T: FftNum> $struct_name<T> {
+            #[inline(always)]
+            pub unsafe fn perform_fft_butterfly<U: LoadStore<Complex<T>> + ?Sized>(
+                &self,
+                buffer: &mut U,
+            ) {
+                self.perform_fft_contiguous(buffer);
+            }
+        }
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             fn process_outofplace_with_scratch(
                 &self,
@@ -149,7 +158,7 @@ impl<T: FftNum> Butterfly2<T> {
         *left = temp;
     }
     #[inline(always)]
-    unsafe fn perform_fft_butterfly<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
+    unsafe fn perform_fft_contiguous<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
         let value0 = buffer.load(0);
         let value1 = buffer.load(1);
         buffer.store(value0 + value1, 0);
@@ -204,10 +213,7 @@ impl<T: FftNum> Butterfly3<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_butterfly<U: LoadStore<Complex<T>> + ?Sized>(
-        &self,
-        buffer: &mut U,
-    ) {
+    unsafe fn perform_fft_contiguous<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
         let xp = buffer.load(1) + buffer.load(2);
         let xn = buffer.load(1) - buffer.load(2);
         let sum = buffer.load(0) + xp;
@@ -242,10 +248,7 @@ impl<T: FftNum> Butterfly4<T> {
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_butterfly<U: LoadStore<Complex<T>> + ?Sized>(
-        &self,
-        buffer: &mut U,
-    ) {
+    unsafe fn perform_fft_contiguous<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
         //we're going to hardcode a step of mixed radix
         //aka we're going to do the six step algorithm
 
@@ -292,7 +295,7 @@ impl<T: FftNum> Butterfly5<T> {
     }
 
     #[inline(never)] // refusing to inline this code reduces code size, and doesn't hurt performance
-    unsafe fn perform_fft_butterfly<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
+    unsafe fn perform_fft_contiguous<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
         // let mut outer = Butterfly2::perform_fft_array([buffer.load(1), buffer.load(4)]);
         // let mut inner = Butterfly2::perform_fft_array([buffer.load(2), buffer.load(3)]);
         // let input0 = buffer.load(0);
@@ -447,7 +450,7 @@ impl<T: FftNum> Butterfly6<T> {
         }
     }
     #[inline(always)]
-    unsafe fn perform_fft_butterfly<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
+    unsafe fn perform_fft_contiguous<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
         //since GCD(2,3) == 1 we're going to hardcode a step of the Good-Thomas algorithm to avoid twiddle factors
 
         // step 1: reorder the input directly into the scratch. normally there's a whole thing to compute this ordering
@@ -457,8 +460,8 @@ impl<T: FftNum> Butterfly6<T> {
         let mut scratch_b = [buffer.load(3), buffer.load(5), buffer.load(1)];
 
         // step 2: column FFTs
-        self.butterfly3.perform_fft_butterfly(&mut scratch_a);
-        self.butterfly3.perform_fft_butterfly(&mut scratch_b);
+        self.butterfly3.perform_fft_contiguous(&mut scratch_a);
+        self.butterfly3.perform_fft_contiguous(&mut scratch_b);
 
         // step 3: apply twiddle factors -- SKIPPED because good-thomas doesn't have twiddle factors :)
 
@@ -498,7 +501,7 @@ impl<T: FftNum> Butterfly7<T> {
         }
     }
     #[inline(never)]
-    unsafe fn perform_fft_butterfly<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
+    unsafe fn perform_fft_contiguous<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
         // let mut outer = Butterfly2::perform_fft_array([buffer.load(1), buffer.load(6)]);
         // let mut mid   = Butterfly2::perform_fft_array([buffer.load(2), buffer.load(5)]);
         // let mut inner = Butterfly2::perform_fft_array([buffer.load(3), buffer.load(4)]);
@@ -687,7 +690,7 @@ impl<T: FftNum> Butterfly8<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_butterfly<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
+    unsafe fn perform_fft_contiguous<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
         let butterfly4 = Butterfly4::new(self.direction);
 
         //we're going to hardcode a step of mixed radix
@@ -708,8 +711,8 @@ impl<T: FftNum> Butterfly8<T> {
         ];
 
         // step 2: column FFTs
-        butterfly4.perform_fft_butterfly(&mut scratch0);
-        butterfly4.perform_fft_butterfly(&mut scratch1);
+        butterfly4.perform_fft_contiguous(&mut scratch0);
+        butterfly4.perform_fft_contiguous(&mut scratch1);
 
         // step 3: apply twiddle factors
         scratch1[1] = (twiddles::rotate_90(scratch1[1], self.direction) + scratch1[1]) * self.root2;
@@ -753,7 +756,7 @@ impl<T: FftNum> Butterfly9<T> {
         }
     }
     #[inline(always)]
-    unsafe fn perform_fft_butterfly<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
+    unsafe fn perform_fft_contiguous<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
         // algorithm: mixed radix with width=3 and height=3
 
         // step 1: transpose the input into the scratch
@@ -762,9 +765,9 @@ impl<T: FftNum> Butterfly9<T> {
         let mut scratch2 = [buffer.load(2), buffer.load(5), buffer.load(8)];
 
         // step 2: column FFTs
-        self.butterfly3.perform_fft_butterfly(&mut scratch0);
-        self.butterfly3.perform_fft_butterfly(&mut scratch1);
-        self.butterfly3.perform_fft_butterfly(&mut scratch2);
+        self.butterfly3.perform_fft_contiguous(&mut scratch0);
+        self.butterfly3.perform_fft_contiguous(&mut scratch1);
+        self.butterfly3.perform_fft_contiguous(&mut scratch2);
 
         // step 3: apply twiddle factors
         scratch1[1] = scratch1[1] * self.twiddle1;
@@ -822,7 +825,7 @@ impl<T: FftNum> Butterfly11<T> {
     }
 
     #[inline(never)]
-    unsafe fn perform_fft_butterfly<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
+    unsafe fn perform_fft_contiguous<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
         // This function was derived in the same manner as the butterflies for length 3, 5 and 7.
         // However, instead of doing it by hand the actual code is autogenerated
         // with the `genbutterflies.py` script in the `tools` directory.
@@ -1074,7 +1077,7 @@ impl<T: FftNum> Butterfly13<T> {
     }
 
     #[inline(never)]
-    unsafe fn perform_fft_butterfly<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
+    unsafe fn perform_fft_contiguous<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
         // This function was derived in the same manner as the butterflies for length 3, 5 and 7.
         // However, instead of doing it by hand the actual code is autogenerated
         // with the `genbutterflies.py` script in the `tools` directory.
@@ -1382,7 +1385,7 @@ impl<T: FftNum> Butterfly16<T> {
     }
 
     #[inline(never)]
-    unsafe fn perform_fft_butterfly<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
+    unsafe fn perform_fft_contiguous<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
         let butterfly4 = Butterfly4::new(self.fft_direction());
 
         // we're going to hardcode a step of split radix
@@ -1412,9 +1415,9 @@ impl<T: FftNum> Butterfly16<T> {
         ];
 
         // step 2: column FFTs
-        self.butterfly8.perform_fft_butterfly(&mut scratch_evens);
-        butterfly4.perform_fft_butterfly(&mut scratch_odds_n1);
-        butterfly4.perform_fft_butterfly(&mut scratch_odds_n3);
+        self.butterfly8.perform_fft_contiguous(&mut scratch_evens);
+        butterfly4.perform_fft_contiguous(&mut scratch_odds_n1);
+        butterfly4.perform_fft_contiguous(&mut scratch_odds_n3);
 
         // step 3: apply twiddle factors
         scratch_odds_n1[1] = scratch_odds_n1[1] * self.twiddle1;
@@ -1494,7 +1497,7 @@ impl<T: FftNum> Butterfly17<T> {
     }
 
     #[inline(never)]
-    unsafe fn perform_fft_butterfly<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
+    unsafe fn perform_fft_contiguous<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
         // This function was derived in the same manner as the butterflies for length 3, 5 and 7.
         // However, instead of doing it by hand the actual code is autogenerated
         // with the `genbutterflies.py` script in the `tools` directory.
@@ -1976,7 +1979,7 @@ impl<T: FftNum> Butterfly19<T> {
     }
 
     #[inline(never)]
-    unsafe fn perform_fft_butterfly<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
+    unsafe fn perform_fft_contiguous<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
         // This function was derived in the same manner as the butterflies for length 3, 5 and 7.
         // However, instead of doing it by hand the actual code is autogenerated
         // with the `genbutterflies.py` script in the `tools` directory.
@@ -2555,7 +2558,7 @@ impl<T: FftNum> Butterfly23<T> {
     }
 
     #[inline(never)]
-    unsafe fn perform_fft_butterfly<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
+    unsafe fn perform_fft_contiguous<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
         // This function was derived in the same manner as the butterflies for length 3, 5 and 7.
         // However, instead of doing it by hand the actual code is autogenerated
         // with the `genbutterflies.py` script in the `tools` directory.
@@ -3333,7 +3336,7 @@ impl<T: FftNum> Butterfly27<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_butterfly<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
+    unsafe fn perform_fft_contiguous<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
         // algorithm: mixed radix with width=9 and height=3
 
         // step 1: transpose the input into the scratch
@@ -3372,9 +3375,9 @@ impl<T: FftNum> Butterfly27<T> {
         ];
 
         // step 2: column FFTs
-        self.butterfly9.perform_fft_butterfly(&mut scratch0);
-        self.butterfly9.perform_fft_butterfly(&mut scratch1);
-        self.butterfly9.perform_fft_butterfly(&mut scratch2);
+        self.butterfly9.perform_fft_contiguous(&mut scratch0);
+        self.butterfly9.perform_fft_contiguous(&mut scratch1);
+        self.butterfly9.perform_fft_contiguous(&mut scratch2);
 
         // step 3: apply twiddle factors
         scratch1[1] = scratch1[1] * self.twiddles[0];
@@ -3530,7 +3533,7 @@ impl<T: FftNum> Butterfly29<T> {
     }
 
     #[inline(never)]
-    unsafe fn perform_fft_butterfly<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
+    unsafe fn perform_fft_contiguous<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
         // This function was derived in the same manner as the butterflies for length 3, 5 and 7.
         // However, instead of doing it by hand the actual code is autogenerated
         // with the `genbutterflies.py` script in the `tools` directory.
@@ -4703,7 +4706,7 @@ impl<T: FftNum> Butterfly31<T> {
     }
 
     #[inline(never)]
-    unsafe fn perform_fft_butterfly<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
+    unsafe fn perform_fft_contiguous<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
         // This function was derived in the same manner as the butterflies for length 3, 5 and 7.
         // However, instead of doing it by hand the actual code is autogenerated
         // with the `genbutterflies.py` script in the `tools` directory.
@@ -5984,7 +5987,7 @@ impl<T: FftNum> Butterfly32<T> {
     }
 
     #[inline(never)]
-    unsafe fn perform_fft_butterfly<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
+    unsafe fn perform_fft_contiguous<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
         // we're going to hardcode a step of split radix
         // step 1: copy and reorder the  input into the scratch
         let mut scratch_evens = [
@@ -6028,9 +6031,9 @@ impl<T: FftNum> Butterfly32<T> {
         ];
 
         // step 2: column FFTs
-        self.butterfly16.perform_fft_butterfly(&mut scratch_evens);
-        self.butterfly8.perform_fft_butterfly(&mut scratch_odds_n1);
-        self.butterfly8.perform_fft_butterfly(&mut scratch_odds_n3);
+        self.butterfly16.perform_fft_contiguous(&mut scratch_evens);
+        self.butterfly8.perform_fft_contiguous(&mut scratch_odds_n1);
+        self.butterfly8.perform_fft_contiguous(&mut scratch_odds_n3);
 
         // step 3: apply twiddle factors
         scratch_odds_n1[1] = scratch_odds_n1[1] * self.twiddles[0];
