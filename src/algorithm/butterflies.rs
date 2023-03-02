@@ -8,17 +8,59 @@ use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
 
-trait LoadStore<T> {
+pub(crate) trait LoadStore<T> {
     unsafe fn load(&self, idx: usize) -> T;
     unsafe fn store(&mut self, val: T, idx: usize);
 }
 
 impl<T: Copy> LoadStore<T> for [T] {
+    #[inline(always)]
     unsafe fn load(&self, idx: usize) -> T {
         *self.get_unchecked(idx)
     }
+    #[inline(always)]
     unsafe fn store(&mut self, val: T, idx: usize) {
         *self.get_unchecked_mut(idx) = val;
+    }
+}
+impl<T: Copy, const N: usize> LoadStore<T> for [T; N] {
+    #[inline(always)]
+    unsafe fn load(&self, idx: usize) -> T {
+        *self.get_unchecked(idx)
+    }
+    #[inline(always)]
+    unsafe fn store(&mut self, val: T, idx: usize) {
+        *self.get_unchecked_mut(idx) = val;
+    }
+}
+
+struct InOut<'a, T> {
+    input: &'a [T],
+    output: &'a mut [T],
+}
+impl<'a, T: Copy> LoadStore<T> for InOut<'a, T> {
+    #[inline(always)]
+    unsafe fn load(&self, idx: usize) -> T {
+        *self.input.get_unchecked(idx)
+    }
+    #[inline(always)]
+    unsafe fn store(&mut self, val: T, idx: usize) {
+        *self.output.get_unchecked_mut(idx) = val;
+    }
+}
+
+struct InOutRaw<T> {
+    input: RawSlice<T>,
+    output: RawSliceMut<T>,
+}
+impl<T: Copy> LoadStore<T> for InOutRaw<T> {
+    #[inline(always)]
+    unsafe fn load(&self, idx: usize) -> T {
+        self.input.load(idx)
+    }
+    #[inline(always)]
+    unsafe fn store(&mut self, val: T, idx: usize) {
+        self.output.store(val, idx);
     }
 }
 
@@ -148,14 +190,6 @@ pub struct Butterfly2<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 boilerplate_fft_butterfly!(Butterfly2, 2, |this: &Butterfly2<_>| this.direction);
-macro_rules! butterfly2_contiguous {
-    ($input:ident, $output:ident) => {
-        let value0 = $input.load(0);
-        let value1 = $input.load(1);
-        $output.store(value0 + value1, 0);
-        $output.store(value0 - value1, 1);
-    };
-}
 impl<T: FftNum> Butterfly2<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -172,8 +206,11 @@ impl<T: FftNum> Butterfly2<T> {
         *left = temp;
     }
     #[inline(always)]
-    unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
-        butterfly2_contiguous!(buffer, buffer);
+    unsafe fn perform_fft_butterfly<U: LoadStore<Complex<T>> + ?Sized>(&self, buffer: &mut U) {
+        let value0 = buffer.load(0);
+        let value1 = buffer.load(1);
+        buffer.store(value0 + value1, 0);
+        buffer.store(value0 - value1, 1);
     }
     #[inline(always)]
     unsafe fn perform_fft_contiguous(
@@ -181,7 +218,7 @@ impl<T: FftNum> Butterfly2<T> {
         input: RawSlice<Complex<T>>,
         output: RawSliceMut<Complex<T>>,
     ) {
-        butterfly2_contiguous!(input, output);
+        self.perform_fft_butterfly(&mut InOutRaw { input, output });
     }
 }
 
@@ -190,27 +227,6 @@ pub struct Butterfly3<T> {
     direction: FftDirection,
 }
 boilerplate_fft_butterfly!(Butterfly3, 3, |this: &Butterfly3<_>| this.direction);
-macro_rules! butterfly3_contiguous {
-    ($self:ident, $input:ident, $output:ident) => {
-        let xp = $input.load(1) + $input.load(2);
-        let xn = $input.load(1) - $input.load(2);
-        let sum = $input.load(0) + xp;
-
-        let temp_a = $input.load(0)
-            + Complex {
-                re: $self.twiddle.re * xp.re,
-                im: $self.twiddle.re * xp.im,
-            };
-        let temp_b = Complex {
-            re: -$self.twiddle.im * xn.im,
-            im: $self.twiddle.im * xn.re,
-        };
-
-        $output.store(sum, 0);
-        $output.store(temp_a + temp_b, 1);
-        $output.store(temp_a - temp_b, 2);
-    };
-}
 impl<T: FftNum> Butterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -253,8 +269,27 @@ impl<T: FftNum> Butterfly3<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
-        butterfly3_contiguous!(self, buffer, buffer);
+    pub(crate) unsafe fn perform_fft_butterfly<U: LoadStore<Complex<T>> + ?Sized>(
+        &self,
+        buffer: &mut U,
+    ) {
+        let xp = buffer.load(1) + buffer.load(2);
+        let xn = buffer.load(1) - buffer.load(2);
+        let sum = buffer.load(0) + xp;
+
+        let temp_a = buffer.load(0)
+            + Complex {
+                re: self.twiddle.re * xp.re,
+                im: self.twiddle.re * xp.im,
+            };
+        let temp_b = Complex {
+            re: -self.twiddle.im * xn.im,
+            im: self.twiddle.im * xn.re,
+        };
+
+        buffer.store(sum, 0);
+        buffer.store(temp_a + temp_b, 1);
+        buffer.store(temp_a - temp_b, 2);
     }
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(
@@ -262,7 +297,7 @@ impl<T: FftNum> Butterfly3<T> {
         input: RawSlice<Complex<T>>,
         output: RawSliceMut<Complex<T>>,
     ) {
-        butterfly3_contiguous!(self, input, output);
+        self.perform_fft_butterfly(&mut InOutRaw { input, output });
     }
 }
 
