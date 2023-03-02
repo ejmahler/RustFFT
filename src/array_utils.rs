@@ -25,6 +25,47 @@ pub unsafe fn workaround_transmute_mut<T, U>(slice: &mut [T]) -> &mut [U] {
     std::slice::from_raw_parts_mut(ptr, len)
 }
 
+pub(crate) trait LoadStore<T> {
+    unsafe fn load(&self, idx: usize) -> T;
+    unsafe fn store(&mut self, val: T, idx: usize);
+}
+
+impl<T: Copy> LoadStore<T> for [T] {
+    #[inline(always)]
+    unsafe fn load(&self, idx: usize) -> T {
+        *self.get_unchecked(idx)
+    }
+    #[inline(always)]
+    unsafe fn store(&mut self, val: T, idx: usize) {
+        *self.get_unchecked_mut(idx) = val;
+    }
+}
+impl<T: Copy, const N: usize> LoadStore<T> for [T; N] {
+    #[inline(always)]
+    unsafe fn load(&self, idx: usize) -> T {
+        *self.get_unchecked(idx)
+    }
+    #[inline(always)]
+    unsafe fn store(&mut self, val: T, idx: usize) {
+        *self.get_unchecked_mut(idx) = val;
+    }
+}
+
+pub(crate) struct InOut<'a, T> {
+    input: &'a [T],
+    output: &'a mut [T],
+}
+impl<'a, T: Copy> LoadStore<T> for InOut<'a, T> {
+    #[inline(always)]
+    unsafe fn load(&self, idx: usize) -> T {
+        *self.input.get_unchecked(idx)
+    }
+    #[inline(always)]
+    unsafe fn store(&mut self, val: T, idx: usize) {
+        *self.output.get_unchecked_mut(idx) = val;
+    }
+}
+
 #[derive(Copy, Clone)]
 pub struct RawSlice<T> {
     ptr: *const T,

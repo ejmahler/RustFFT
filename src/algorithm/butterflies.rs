@@ -2,51 +2,10 @@ use num_complex::Complex;
 
 use crate::{common::FftNum, FftDirection};
 
-use crate::array_utils;
+use crate::array_utils::{self, InOut, LoadStore};
 use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
-
-pub(crate) trait LoadStore<T> {
-    unsafe fn load(&self, idx: usize) -> T;
-    unsafe fn store(&mut self, val: T, idx: usize);
-}
-
-impl<T: Copy> LoadStore<T> for [T] {
-    #[inline(always)]
-    unsafe fn load(&self, idx: usize) -> T {
-        *self.get_unchecked(idx)
-    }
-    #[inline(always)]
-    unsafe fn store(&mut self, val: T, idx: usize) {
-        *self.get_unchecked_mut(idx) = val;
-    }
-}
-impl<T: Copy, const N: usize> LoadStore<T> for [T; N] {
-    #[inline(always)]
-    unsafe fn load(&self, idx: usize) -> T {
-        *self.get_unchecked(idx)
-    }
-    #[inline(always)]
-    unsafe fn store(&mut self, val: T, idx: usize) {
-        *self.get_unchecked_mut(idx) = val;
-    }
-}
-
-struct InOut<'a, T> {
-    input: &'a [T],
-    output: &'a mut [T],
-}
-impl<'a, T: Copy> LoadStore<T> for InOut<'a, T> {
-    #[inline(always)]
-    unsafe fn load(&self, idx: usize) -> T {
-        *self.input.get_unchecked(idx)
-    }
-    #[inline(always)]
-    unsafe fn store(&mut self, val: T, idx: usize) {
-        *self.output.get_unchecked_mut(idx) = val;
-    }
-}
 
 #[allow(unused)]
 macro_rules! boilerplate_fft_butterfly {
