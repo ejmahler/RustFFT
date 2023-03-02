@@ -8,15 +8,23 @@ use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
 
+trait LoadStore<T> {
+    unsafe fn load(&self, idx: usize) -> T;
+    unsafe fn store(&mut self, val: T, idx: usize);
+}
+
+impl<T: Copy> LoadStore<T> for [T] {
+    unsafe fn load(&self, idx: usize) -> T {
+        *self.get_unchecked(idx)
+    }
+    unsafe fn store(&mut self, val: T, idx: usize) {
+        *self.get_unchecked_mut(idx) = val;
+    }
+}
+
 #[allow(unused)]
 macro_rules! boilerplate_fft_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
-        impl<T: FftNum> $struct_name<T> {
-            #[inline(always)]
-            pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
-                self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
-            }
-        }
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             fn process_outofplace_with_scratch(
                 &self,
@@ -140,6 +148,14 @@ pub struct Butterfly2<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 boilerplate_fft_butterfly!(Butterfly2, 2, |this: &Butterfly2<_>| this.direction);
+macro_rules! butterfly2_contiguous {
+    ($input:ident, $output:ident) => {
+        let value0 = $input.load(0);
+        let value1 = $input.load(1);
+        $output.store(value0 + value1, 0);
+        $output.store(value0 - value1, 1);
+    };
+}
 impl<T: FftNum> Butterfly2<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -156,15 +172,16 @@ impl<T: FftNum> Butterfly2<T> {
         *left = temp;
     }
     #[inline(always)]
+    unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
+        butterfly2_contiguous!(buffer, buffer);
+    }
+    #[inline(always)]
     unsafe fn perform_fft_contiguous(
         &self,
         input: RawSlice<Complex<T>>,
         output: RawSliceMut<Complex<T>>,
     ) {
-        let value0 = input.load(0);
-        let value1 = input.load(1);
-        output.store(value0 + value1, 0);
-        output.store(value0 - value1, 1);
+        butterfly2_contiguous!(input, output);
     }
 }
 
@@ -173,6 +190,27 @@ pub struct Butterfly3<T> {
     direction: FftDirection,
 }
 boilerplate_fft_butterfly!(Butterfly3, 3, |this: &Butterfly3<_>| this.direction);
+macro_rules! butterfly3_contiguous {
+    ($self:ident, $input:ident, $output:ident) => {
+        let xp = $input.load(1) + $input.load(2);
+        let xn = $input.load(1) - $input.load(2);
+        let sum = $input.load(0) + xp;
+
+        let temp_a = $input.load(0)
+            + Complex {
+                re: $self.twiddle.re * xp.re,
+                im: $self.twiddle.re * xp.im,
+            };
+        let temp_b = Complex {
+            re: -$self.twiddle.im * xn.im,
+            im: $self.twiddle.im * xn.re,
+        };
+
+        $output.store(sum, 0);
+        $output.store(temp_a + temp_b, 1);
+        $output.store(temp_a - temp_b, 2);
+    };
+}
 impl<T: FftNum> Butterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -213,29 +251,18 @@ impl<T: FftNum> Butterfly3<T> {
         *val1 = temp_a + temp_b;
         *val2 = temp_a - temp_b;
     }
+
     #[inline(always)]
-    pub unsafe fn perform_fft_contiguous(
+    pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
+        butterfly3_contiguous!(self, buffer, buffer);
+    }
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         input: RawSlice<Complex<T>>,
         output: RawSliceMut<Complex<T>>,
     ) {
-        let xp = input.load(1) + input.load(2);
-        let xn = input.load(1) - input.load(2);
-        let sum = input.load(0) + xp;
-
-        let temp_a = input.load(0)
-            + Complex {
-                re: self.twiddle.re * xp.re,
-                im: self.twiddle.re * xp.im,
-            };
-        let temp_b = Complex {
-            re: -self.twiddle.im * xn.im,
-            im: self.twiddle.im * xn.re,
-        };
-
-        output.store(sum, 0);
-        output.store(temp_a + temp_b, 1);
-        output.store(temp_a - temp_b, 2);
+        butterfly3_contiguous!(self, input, output);
     }
 }
 
@@ -251,6 +278,10 @@ impl<T: FftNum> Butterfly4<T> {
             direction,
             _phantom: std::marker::PhantomData,
         }
+    }
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
+        self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
     }
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(
@@ -303,6 +334,10 @@ impl<T: FftNum> Butterfly5<T> {
         }
     }
 
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
+        self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
+    }
     #[inline(never)] // refusing to inline this code reduces code size, and doesn't hurt performance
     unsafe fn perform_fft_contiguous(
         &self,
@@ -463,6 +498,10 @@ impl<T: FftNum> Butterfly6<T> {
         }
     }
     #[inline(always)]
+    pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
+        self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
+    }
+    #[inline(always)]
     unsafe fn perform_fft_contiguous(
         &self,
         input: RawSlice<Complex<T>>,
@@ -516,6 +555,10 @@ impl<T: FftNum> Butterfly7<T> {
             twiddle3: twiddles::compute_twiddle(3, 7, direction),
             direction,
         }
+    }
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
+        self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
     }
     #[inline(never)]
     unsafe fn perform_fft_contiguous(
@@ -711,6 +754,10 @@ impl<T: FftNum> Butterfly8<T> {
     }
 
     #[inline(always)]
+    pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
+        self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
+    }
+    #[inline(always)]
     unsafe fn perform_fft_contiguous(
         &self,
         input: RawSlice<Complex<T>>,
@@ -769,6 +816,10 @@ impl<T: FftNum> Butterfly9<T> {
             twiddle2: twiddles::compute_twiddle(2, 9, direction),
             twiddle4: twiddles::compute_twiddle(4, 9, direction),
         }
+    }
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
+        self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
     }
     #[inline(always)]
     unsafe fn perform_fft_contiguous(
@@ -843,6 +894,10 @@ impl<T: FftNum> Butterfly11<T> {
         }
     }
 
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
+        self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
+    }
     #[inline(never)]
     unsafe fn perform_fft_contiguous(
         &self,
@@ -1099,6 +1154,10 @@ impl<T: FftNum> Butterfly13<T> {
         }
     }
 
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
+        self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
+    }
     #[inline(never)]
     unsafe fn perform_fft_contiguous(
         &self,
@@ -1411,6 +1470,10 @@ impl<T: FftNum> Butterfly16<T> {
         }
     }
 
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
+        self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
+    }
     #[inline(never)]
     unsafe fn perform_fft_contiguous(
         &self,
@@ -1517,6 +1580,10 @@ impl<T: FftNum> Butterfly17<T> {
         }
     }
 
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
+        self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
+    }
     #[inline(never)]
     unsafe fn perform_fft_contiguous(
         &self,
@@ -2003,6 +2070,10 @@ impl<T: FftNum> Butterfly19<T> {
         }
     }
 
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
+        self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
+    }
     #[inline(never)]
     unsafe fn perform_fft_contiguous(
         &self,
@@ -2586,6 +2657,10 @@ impl<T: FftNum> Butterfly23<T> {
         }
     }
 
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
+        self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
+    }
     #[inline(never)]
     unsafe fn perform_fft_contiguous(
         &self,
@@ -3367,6 +3442,11 @@ impl<T: FftNum> Butterfly27<T> {
             ],
         }
     }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
+        self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
+    }
     #[inline(always)]
     unsafe fn perform_fft_contiguous(
         &self,
@@ -3568,6 +3648,10 @@ impl<T: FftNum> Butterfly29<T> {
         }
     }
 
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
+        self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
+    }
     #[inline(never)]
     unsafe fn perform_fft_contiguous(
         &self,
@@ -4745,6 +4829,10 @@ impl<T: FftNum> Butterfly31<T> {
         }
     }
 
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
+        self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
+    }
     #[inline(never)]
     unsafe fn perform_fft_contiguous(
         &self,
@@ -6030,6 +6118,10 @@ impl<T: FftNum> Butterfly32<T> {
         }
     }
 
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
+        self.perform_fft_contiguous(RawSlice::new(buffer), RawSliceMut::new(buffer));
+    }
     #[inline(never)]
     unsafe fn perform_fft_contiguous(
         &self,
