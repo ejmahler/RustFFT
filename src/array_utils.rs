@@ -57,13 +57,6 @@ impl<T> RawSlice<T> {
         self.slice_len
     }
 }
-impl<T: Copy> RawSlice<T> {
-    #[inline(always)]
-    pub unsafe fn load(&self, index: usize) -> T {
-        debug_assert!(index < self.slice_len);
-        *self.ptr.add(index)
-    }
-}
 
 /// A RawSliceMut is a normal mutable slice, but aliasable. Its functionality is severely limited.
 #[derive(Copy, Clone)]
@@ -96,11 +89,6 @@ impl<T> RawSliceMut<T> {
     #[inline(always)]
     pub fn len(&self) -> usize {
         self.slice_len
-    }
-    #[inline(always)]
-    pub unsafe fn store(&self, value: T, index: usize) {
-        debug_assert!(index < self.slice_len);
-        *self.ptr.add(index) = value;
     }
 }
 
