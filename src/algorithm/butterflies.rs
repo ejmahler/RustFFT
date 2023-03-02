@@ -3,7 +3,6 @@ use num_complex::Complex;
 use crate::{common::FftNum, FftDirection};
 
 use crate::array_utils;
-use crate::array_utils::{RawSlice, RawSliceMut};
 use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
@@ -46,21 +45,6 @@ impl<'a, T: Copy> LoadStore<T> for InOut<'a, T> {
     #[inline(always)]
     unsafe fn store(&mut self, val: T, idx: usize) {
         *self.output.get_unchecked_mut(idx) = val;
-    }
-}
-
-struct InOutRaw<T> {
-    input: RawSlice<T>,
-    output: RawSliceMut<T>,
-}
-impl<T: Copy> LoadStore<T> for InOutRaw<T> {
-    #[inline(always)]
-    unsafe fn load(&self, idx: usize) -> T {
-        self.input.load(idx)
-    }
-    #[inline(always)]
-    unsafe fn store(&mut self, val: T, idx: usize) {
-        self.output.store(val, idx);
     }
 }
 
