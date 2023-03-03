@@ -129,7 +129,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
         let (output_first, output) = output.split_first_mut().unwrap();
         let (input_first, input) = input.split_first_mut().unwrap();
 
-        // copy the inout into the output, reordering as we go. also compute a sum of all elements
+        // copy the input into the output, reordering as we go. also compute a sum of all elements
         let mut input_index = 1;
         for output_element in output.iter_mut() {
             input_index = (input_index * self.primitive_root) % self.len;
