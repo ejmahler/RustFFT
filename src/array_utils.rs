@@ -51,11 +51,11 @@ impl<T: Copy, const N: usize> LoadStore<T> for [T; N] {
     }
 }
 
-pub(crate) struct InOut<'a, T> {
+pub(crate) struct DoubleBuff<'a, T> {
     pub input: &'a [T],
     pub output: &'a mut [T],
 }
-impl<'a, T: Copy> LoadStore<T> for InOut<'a, T> {
+impl<'a, T: Copy> LoadStore<T> for DoubleBuff<'a, T> {
     #[inline(always)]
     unsafe fn load(&self, idx: usize) -> T {
         *self.input.get_unchecked(idx)
