@@ -12,7 +12,7 @@ macro_rules! boilerplate_fft_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> $struct_name<T> {
             #[inline(always)]
-            pub unsafe fn perform_fft_butterfly<U: LoadStore<Complex<T>> + ?Sized>(
+            pub(crate) unsafe fn perform_fft_butterfly<U: LoadStore<Complex<T>> + ?Sized>(
                 &self,
                 buffer: &mut U,
             ) {

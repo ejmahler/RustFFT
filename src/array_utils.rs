@@ -52,8 +52,8 @@ impl<T: Copy, const N: usize> LoadStore<T> for [T; N] {
 }
 
 pub(crate) struct InOut<'a, T> {
-    input: &'a [T],
-    output: &'a mut [T],
+    pub input: &'a [T],
+    pub output: &'a mut [T],
 }
 impl<'a, T: Copy> LoadStore<T> for InOut<'a, T> {
     #[inline(always)]
