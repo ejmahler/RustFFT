@@ -53,16 +53,16 @@ len = int(sys.argv[1])
 halflen = int((len+1)/2)
 
 for n in range(1, halflen):
-    print(f"let x{n}{len-n}p = *buffer.get_unchecked({n}) + *buffer.get_unchecked({len-n});")
-    print(f"let x{n}{len-n}n = *buffer.get_unchecked({n}) - *buffer.get_unchecked({len-n});")
+    print(f"let x{n}{len-n}p = buffer.load({n}) + buffer.load({len-n});")
+    print(f"let x{n}{len-n}n = buffer.load({n}) - buffer.load({len-n});")
 
-row = ["let sum = *buffer.get_unchecked(0)"]
+row = ["let sum = buffer.load(0)"]
 for n in range(1, halflen):
     row.append(f"x{n}{len-n}p")
 print(" + ".join(row) + ";")
 
 for n in range(1, halflen):
-    row = [f"let b{n}{len-n}re_a = buffer.get_unchecked(0).re"]
+    row = [f"let b{n}{len-n}re_a = buffer.load(0).re"]
     for m in range(1, halflen):
         mn = (m*n)%len
         if mn > len/2:
@@ -81,7 +81,7 @@ for n in range(1, halflen):
 print("")
 
 for n in range(1, halflen):
-    row = [f"let b{n}{len-n}im_a = buffer.get_unchecked(0).im"]
+    row = [f"let b{n}{len-n}im_a = buffer.load(0).im"]
     for m in range(1, halflen):
         mn = (m*n)%len
         if mn > len/2:
@@ -110,6 +110,6 @@ for n in range(1,len):
     print(f"let out{n}re = b{nfold}{len-nfold}re_a {sign_re} b{nfold}{len-nfold}re_b;")
     print(f"let out{n}im = b{nfold}{len-nfold}im_a {sign_im} b{nfold}{len-nfold}im_b;")
 
-print("*buffer.get_unchecked_mut(0) = sum;")
+print("buffer.store(sum, 0);")
 for n in range(1,len):
-    print(f"*buffer.get_unchecked_mut({n}) = Complex{{ re: out{n}re, im: out{n}im }};")
+    print(f"buffer.store(Complex{{ re: out{n}re, im: out{n}im }}, {n})")
