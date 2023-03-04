@@ -1,3 +1,6 @@
+use crate::Complex;
+use std::ops::DerefMut;
+
 /// Given an array of size width * height, representing a flattened 2D array,
 /// transpose the rows and columns of that 2D array into the output
 /// benchmarking shows that loop tiling isn't effective for small arrays (in the range of 50x50 or smaller)
@@ -25,28 +28,40 @@ pub unsafe fn workaround_transmute_mut<T, U>(slice: &mut [T]) -> &mut [U] {
     std::slice::from_raw_parts_mut(ptr, len)
 }
 
-pub(crate) trait LoadStore<T> {
+pub(crate) trait LoadStoreFns<T> {
     unsafe fn load(&self, idx: usize) -> T;
     unsafe fn store(&mut self, val: T, idx: usize);
 }
 
-impl<T: Copy> LoadStore<T> for [T] {
+pub(crate) trait LoadStore<T>: LoadStoreFns<Complex<T>> + DerefMut {}
+impl<T, U> LoadStore<T> for U
+where
+    T: Copy,
+    U: LoadStoreFns<Complex<T>> + DerefMut,
+{
+}
+
+impl<T: Copy> LoadStoreFns<T> for &mut [T] {
     #[inline(always)]
     unsafe fn load(&self, idx: usize) -> T {
+        debug_assert!(idx < self.len());
         *self.get_unchecked(idx)
     }
     #[inline(always)]
     unsafe fn store(&mut self, val: T, idx: usize) {
+        debug_assert!(idx < self.len());
         *self.get_unchecked_mut(idx) = val;
     }
 }
-impl<T: Copy, const N: usize> LoadStore<T> for [T; N] {
+impl<T: Copy, const N: usize> LoadStoreFns<T> for &mut [T; N] {
     #[inline(always)]
     unsafe fn load(&self, idx: usize) -> T {
+        debug_assert!(idx < self.len());
         *self.get_unchecked(idx)
     }
     #[inline(always)]
     unsafe fn store(&mut self, val: T, idx: usize) {
+        debug_assert!(idx < self.len());
         *self.get_unchecked_mut(idx) = val;
     }
 }
@@ -55,13 +70,15 @@ pub(crate) struct DoubleBuff<'a, T> {
     pub input: &'a [T],
     pub output: &'a mut [T],
 }
-impl<'a, T: Copy> LoadStore<T> for DoubleBuff<'a, T> {
+impl<'a, T: Copy> LoadStoreFns<T> for &mut DoubleBuff<'a, T> {
     #[inline(always)]
     unsafe fn load(&self, idx: usize) -> T {
+        debug_assert!(idx < self.input.len());
         *self.input.get_unchecked(idx)
     }
     #[inline(always)]
     unsafe fn store(&mut self, val: T, idx: usize) {
+        debug_assert!(idx < self.output.len());
         *self.output.get_unchecked_mut(idx) = val;
     }
 }
