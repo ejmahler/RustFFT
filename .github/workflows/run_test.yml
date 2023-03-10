@@ -55,7 +55,7 @@ jobs:
           - stable
           - beta
           - nightly
-          - 1.37
+          - 1.61
     steps:
       - name: Checkout sources
         uses: actions/checkout@v3
@@ -92,7 +92,7 @@ jobs:
           targets: aarch64-unknown-linux-gnu
 
       - name: Install cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
+        run: cargo install cross --version 0.2.5 --locked
       
       - name: Run cargo check
         run: cross check --features neon --target aarch64-unknown-linux-gnu
@@ -113,7 +113,7 @@ jobs:
           targets: i586-unknown-linux-gnu
 
       - name: Install cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
+        run: cargo install cross --version 0.2.5 --locked
 
       - name: Run cargo check
         run: cross check --target i586-unknown-linux-gnu
