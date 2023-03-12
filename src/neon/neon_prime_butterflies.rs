@@ -4,14 +4,15 @@ use num_complex::Complex;
 use crate::{common::FftNum, FftDirection};
 
 use crate::array_utils;
-use crate::array_utils::{RawSlice, RawSliceMut};
+use crate::array_utils::workaround_transmute_mut;
+use crate::array_utils::DoubleBuff;
 use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
 
 use super::neon_common::{assert_f32, assert_f64};
 use super::neon_utils::*;
-use super::neon_vector::{NeonArray, NeonArrayMut};
+use super::neon_vector::{NeonArrayMut};
 use super::neon_butterflies::{parallel_fft2_interleaved_f32, solo_fft2_f64};
 
 // Auto-generated prime length butterflies
@@ -75,25 +76,17 @@ impl<T: FftNum> NeonF32Butterfly7<T> {
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        output: RawSliceMut<Complex<f32>>,
-    ) {
-        let values = read_partial1_complex_to_array!(input, {0, 1, 2, 3, 4, 5, 6});
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+        let values = read_partial1_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6});
 
         let out = self.perform_parallel_fft_direct(values);
         
-        write_partial_lo_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6}); 
+        write_partial_lo_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6}); 
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        output: RawSliceMut<Complex<f32>>,
-    ) {
-        let input_packed = read_complex_to_array!(input, {0, 2, 4, 6, 8, 10, 12});
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12});
 
         let values = [
             extract_lo_hi_f32(input_packed[0], input_packed[3]),
@@ -117,7 +110,7 @@ impl<T: FftNum> NeonF32Butterfly7<T> {
             extract_hi_hi_f32(out[5], out[6]),
         ];
 
-        write_complex_to_array_strided!(out_packed, output, 2, {0,1,2,3,4,5,6});
+        write_complex_to_array_strided!(out_packed, buffer, 2, {0,1,2,3,4,5,6});
     }
 
     #[inline(always)]
@@ -219,16 +212,12 @@ impl<T: FftNum> NeonF64Butterfly7<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f64>>,
-        output: RawSliceMut<Complex<f64>>,
-    ) {
-        let values = read_complex_to_array!(input, {0, 1, 2, 3, 4, 5, 6});
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+        let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6});
 
         let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6});
+        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6});
     }
 
     #[inline(always)]
@@ -345,25 +334,17 @@ impl<T: FftNum> NeonF32Butterfly11<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        output: RawSliceMut<Complex<f32>>,
-    ) {
-        let values = read_partial1_complex_to_array!(input, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+        let values = read_partial1_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
 
         let out = self.perform_parallel_fft_direct(values);
         
-        write_partial_lo_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+        write_partial_lo_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        output: RawSliceMut<Complex<f32>>,
-    ) {
-        let input_packed = read_complex_to_array!(input, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20});
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20});
 
         let values = [
             extract_lo_hi_f32(input_packed[0], input_packed[5]),
@@ -395,7 +376,7 @@ impl<T: FftNum> NeonF32Butterfly11<T> {
             extract_hi_hi_f32(out[9], out[10]),
         ];        
 
-        write_complex_to_array_strided!(out_packed, output, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+        write_complex_to_array_strided!(out_packed, buffer, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
     }
 
     #[inline(always)]
@@ -554,16 +535,12 @@ impl<T: FftNum> NeonF64Butterfly11<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f64>>,
-        output: RawSliceMut<Complex<f64>>,
-    ) {
-        let values = read_complex_to_array!(input, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+        let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
 
         let out = self.perform_fft_direct(values);
         
-        write_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});        
+        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});        
     }
 
     #[inline(always)]
@@ -728,25 +705,17 @@ impl<T: FftNum> NeonF32Butterfly13<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        output: RawSliceMut<Complex<f32>>,
-    ) {
-        let values = read_partial1_complex_to_array!(input, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+        let values = read_partial1_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
 
         let out = self.perform_parallel_fft_direct(values);
 
-        write_partial_lo_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
+        write_partial_lo_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        output: RawSliceMut<Complex<f32>>,
-    ) {
-        let input_packed = read_complex_to_array!(input, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24});
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24});
 
         let values = [
             extract_lo_hi_f32(input_packed[0], input_packed[6]),
@@ -782,7 +751,7 @@ impl<T: FftNum> NeonF32Butterfly13<T> {
             extract_hi_hi_f32(out[11], out[12]),
         ];
 
-        write_complex_to_array_strided!(out_packed, output, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
+        write_complex_to_array_strided!(out_packed, buffer, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
     }
 
     #[inline(always)]
@@ -974,16 +943,12 @@ impl<T: FftNum> NeonF64Butterfly13<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f64>>,
-        output: RawSliceMut<Complex<f64>>,
-    ) {
-        let values = read_complex_to_array!(input, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+        let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
 
         let out = self.perform_fft_direct(values);
         
-        write_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});        
+        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});        
     }
 
     #[inline(always)]
@@ -1189,25 +1154,17 @@ impl<T: FftNum> NeonF32Butterfly17<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        output: RawSliceMut<Complex<f32>>,
-    ) {
-        let values = read_partial1_complex_to_array!(input, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+        let values = read_partial1_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});
 
         let out = self.perform_parallel_fft_direct(values);
 
-        write_partial_lo_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});
+        write_partial_lo_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        output: RawSliceMut<Complex<f32>>,
-    ) {
-        let input_packed = read_complex_to_array!(input, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32});
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32});
 
         let values = [
             extract_lo_hi_f32(input_packed[0], input_packed[8]),
@@ -1251,7 +1208,7 @@ impl<T: FftNum> NeonF32Butterfly17<T> {
             extract_hi_hi_f32(out[15], out[16]),
         ];
 
-        write_complex_to_array_strided!(out_packed, output, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});
+        write_complex_to_array_strided!(out_packed, buffer, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});
     }
 
     #[inline(always)]
@@ -1523,16 +1480,12 @@ impl<T: FftNum> NeonF64Butterfly17<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f64>>,
-        output: RawSliceMut<Complex<f64>>,
-    ) {
-        let values = read_complex_to_array!(input, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+        let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});
 
         let out = self.perform_fft_direct(values);
         
-        write_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});        
+        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});        
     }
 
     #[inline(always)]
@@ -1810,25 +1763,17 @@ impl<T: FftNum> NeonF32Butterfly19<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        output: RawSliceMut<Complex<f32>>,
-    ) {
-        let values = read_partial1_complex_to_array!(input, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18});
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+        let values = read_partial1_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18});
 
         let out = self.perform_parallel_fft_direct(values);
         
-        write_partial_lo_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18});
+        write_partial_lo_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18});
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        output: RawSliceMut<Complex<f32>>,
-    ) {
-        let input_packed = read_complex_to_array!(input, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36});
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36});
 
         let values = [
             extract_lo_hi_f32(input_packed[0], input_packed[9]),
@@ -1876,7 +1821,7 @@ impl<T: FftNum> NeonF32Butterfly19<T> {
             extract_hi_hi_f32(out[17], out[18]),
         ];
 
-        write_complex_to_array_strided!(out_packed, output, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18});
+        write_complex_to_array_strided!(out_packed, buffer, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18});
     }
 
     #[inline(always)]
@@ -2194,16 +2139,12 @@ impl<T: FftNum> NeonF64Butterfly19<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f64>>,
-        output: RawSliceMut<Complex<f64>>,
-    ) {
-        let values = read_complex_to_array!(input, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18});
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+        let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18});
 
         let out = self.perform_fft_direct(values);
         
-        write_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18});        
+        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18});        
     }
 
     #[inline(always)]
@@ -2535,25 +2476,17 @@ impl<T: FftNum> NeonF32Butterfly23<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        output: RawSliceMut<Complex<f32>>,
-    ) {
-        let values = read_partial1_complex_to_array!(input, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22});
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+        let values = read_partial1_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22});
 
         let out = self.perform_parallel_fft_direct(values);
 
-        write_partial_lo_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22});
+        write_partial_lo_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22});
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        output: RawSliceMut<Complex<f32>>,
-    ) {
-        let input_packed = read_complex_to_array!(input, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44});
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44});
 
         let values = [
             extract_lo_hi_f32(input_packed[0], input_packed[11]),
@@ -2609,7 +2542,7 @@ impl<T: FftNum> NeonF32Butterfly23<T> {
             extract_hi_hi_f32(out[21], out[22]),
         ];
 
-        write_complex_to_array_strided!(out_packed, output, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22});
+        write_complex_to_array_strided!(out_packed, buffer, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22});
     }
 
     #[inline(always)]
@@ -3031,16 +2964,12 @@ impl<T: FftNum> NeonF64Butterfly23<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f64>>,
-        output: RawSliceMut<Complex<f64>>,
-    ) {
-        let values = read_complex_to_array!(input, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22});
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+        let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22});
 
         let out = self.perform_fft_direct(values);
         
-        write_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22});        
+        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22});        
     }
 
     #[inline(always)]
@@ -3483,26 +3412,18 @@ impl<T: FftNum> NeonF32Butterfly29<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        output: RawSliceMut<Complex<f32>>,
-    ) {
-        let values = read_partial1_complex_to_array!(input, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28});
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+        let values = read_partial1_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28});
 
         let out = self.perform_parallel_fft_direct(values);
 
-        write_partial_lo_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28});
+        write_partial_lo_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28});
 
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        output: RawSliceMut<Complex<f32>>,
-    ) {
-        let input_packed = read_complex_to_array!(input, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56});
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56});
 
         let values = [
             extract_lo_hi_f32(input_packed[0], input_packed[14]),
@@ -3570,7 +3491,7 @@ impl<T: FftNum> NeonF32Butterfly29<T> {
             extract_hi_hi_f32(out[27], out[28]),
         ];
 
-        write_complex_to_array_strided!(out_packed, output, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28});
+        write_complex_to_array_strided!(out_packed, buffer, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28});
     }
 
     #[inline(always)]
@@ -4178,16 +4099,12 @@ impl<T: FftNum> NeonF64Butterfly29<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f64>>,
-        output: RawSliceMut<Complex<f64>>,
-    ) {
-        let values = read_complex_to_array!(input, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28});
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+        let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28});
 
         let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28});
+        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28});
     }
 
     #[inline(always)]
@@ -4801,25 +4718,17 @@ impl<T: FftNum> NeonF32Butterfly31<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        output: RawSliceMut<Complex<f32>>,
-    ) {
-        let values = read_partial1_complex_to_array!(input, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30});
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+        let values = read_partial1_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30});
 
         let out = self.perform_parallel_fft_direct(values);
 
-        write_partial_lo_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30});
+        write_partial_lo_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30});
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        output: RawSliceMut<Complex<f32>>,
-    ) {
-        let input_packed = read_complex_to_array!(input, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60});
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60});
 
         let values = [
             extract_lo_hi_f32(input_packed[0], input_packed[15]),
@@ -4891,7 +4800,7 @@ impl<T: FftNum> NeonF32Butterfly31<T> {
             extract_hi_hi_f32(out[29], out[30]),
         ];
 
-        write_complex_to_array_strided!(out_packed, output, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30});
+        write_complex_to_array_strided!(out_packed, buffer, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30});
     }
 
     #[inline(always)]
@@ -5569,16 +5478,12 @@ impl<T: FftNum> NeonF64Butterfly31<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(
-        &self,
-        input: RawSlice<Complex<f64>>,
-        output: RawSliceMut<Complex<f64>>,
-    ) {
-        let values = read_complex_to_array!(input, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30});
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+        let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30});
 
         let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, output, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30});
+        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30});
     }
 
     #[inline(always)]

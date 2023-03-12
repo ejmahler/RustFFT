@@ -50,25 +50,25 @@ import sys
 
 def make_shuffling_single_f64(len):
     inputs =  ", ".join([str(n) for n in range(len)])
-    print(f"let values = read_complex_to_array!(input, {{{inputs}}});")
+    print(f"let values = read_complex_to_array!(buffer, {{{inputs}}});")
     print("")
     print("let out = self.perform_fft_direct(values);")
     print("")
-    print(f"write_complex_to_array!(out, output, {{{inputs}}});")
+    print(f"write_complex_to_array!(out, buffer, {{{inputs}}});")
 
 def make_shuffling_single_f32(len):
     inputs =  ", ".join([str(n) for n in range(len)])
-    print(f"let values = read_partial1_complex_to_array!(input, {{{inputs}}});")
+    print(f"let values = read_partial1_complex_to_array!(buffer, {{{inputs}}});")
     print("")
     print("let out = self.perform_parallel_fft_direct(values);")
     print("")
-    print(f"write_partial_lo_complex_to_array!(out, output, {{{inputs}}});")
+    print(f"write_partial_lo_complex_to_array!(out, buffer, {{{inputs}}});")
 
 
 def make_shuffling_parallel_f32(len):
     inputs =  ", ".join([str(2*n) for n in range(len)])
     outputs =  ", ".join([str(n) for n in range(len)])
-    print(f"let input_packed = read_complex_to_array!(input, {{{inputs}}});")
+    print(f"let input_packed = read_complex_to_array!(buffer, {{{inputs}}});")
     print("")
     print("let values = [")
     for n in range(int(len/2)):
@@ -87,7 +87,7 @@ def make_shuffling_parallel_f32(len):
         print(f"    extract_hi_hi_f32(out[{int(2*n+1)}], out[{int(2*n+2)}]),")
     print("];")
     print("")
-    print(f"write_complex_to_array_strided!(out_packed, output, 2, {{{outputs}}});")
+    print(f"write_complex_to_array_strided!(out_packed, buffer, 2, {{{outputs}}});")
 
 
 def make_butterfly(len, fft2func, calcfunc, mulfunc, rotatefunc):

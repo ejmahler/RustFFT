@@ -1,3 +1,7 @@
+use crate::Complex;
+use crate::FftNum;
+use std::ops::DerefMut;
+
 /// Given an array of size width * height, representing a flattened 2D array,
 /// transpose the rows and columns of that 2D array into the output
 /// benchmarking shows that loop tiling isn't effective for small arrays (in the range of 50x50 or smaller)
@@ -25,82 +29,50 @@ pub unsafe fn workaround_transmute_mut<T, U>(slice: &mut [T]) -> &mut [U] {
     std::slice::from_raw_parts_mut(ptr, len)
 }
 
-#[derive(Copy, Clone)]
-pub struct RawSlice<T> {
-    ptr: *const T,
-    slice_len: usize,
+pub(crate) trait LoadStore<T: FftNum>: DerefMut {
+    unsafe fn load(&self, idx: usize) -> Complex<T>;
+    unsafe fn store(&mut self, val: Complex<T>, idx: usize);
 }
-impl<T> RawSlice<T> {
+
+impl<T: FftNum> LoadStore<T> for &mut [Complex<T>] {
     #[inline(always)]
-    pub fn new(slice: &[T]) -> Self {
-        Self {
-            ptr: slice.as_ptr(),
-            slice_len: slice.len(),
-        }
+    unsafe fn load(&self, idx: usize) -> Complex<T> {
+        debug_assert!(idx < self.len());
+        *self.get_unchecked(idx)
     }
-    #[allow(unused)]
     #[inline(always)]
-    pub unsafe fn new_transmuted<U>(slice: &[U]) -> Self {
-        Self {
-            ptr: slice.as_ptr() as *const T,
-            slice_len: slice.len(),
-        }
-    }
-    #[allow(unused)]
-    #[inline(always)]
-    pub fn as_ptr(&self) -> *const T {
-        self.ptr
-    }
-    #[allow(unused)]
-    #[inline(always)]
-    pub fn len(&self) -> usize {
-        self.slice_len
+    unsafe fn store(&mut self, val: Complex<T>, idx: usize) {
+        debug_assert!(idx < self.len());
+        *self.get_unchecked_mut(idx) = val;
     }
 }
-impl<T: Copy> RawSlice<T> {
+impl<T: FftNum, const N: usize> LoadStore<T> for &mut [Complex<T>; N] {
     #[inline(always)]
-    pub unsafe fn load(&self, index: usize) -> T {
-        debug_assert!(index < self.slice_len);
-        *self.ptr.add(index)
+    unsafe fn load(&self, idx: usize) -> Complex<T> {
+        debug_assert!(idx < self.len());
+        *self.get_unchecked(idx)
+    }
+    #[inline(always)]
+    unsafe fn store(&mut self, val: Complex<T>, idx: usize) {
+        debug_assert!(idx < self.len());
+        *self.get_unchecked_mut(idx) = val;
     }
 }
 
-/// A RawSliceMut is a normal mutable slice, but aliasable. Its functionality is severely limited.
-#[derive(Copy, Clone)]
-pub struct RawSliceMut<T> {
-    ptr: *mut T,
-    slice_len: usize,
+pub(crate) struct DoubleBuff<'a, T> {
+    pub input: &'a [Complex<T>],
+    pub output: &'a mut [Complex<T>],
 }
-impl<T> RawSliceMut<T> {
+impl<'a, T: FftNum> LoadStore<T> for &mut DoubleBuff<'a, T> {
     #[inline(always)]
-    pub fn new(slice: &mut [T]) -> Self {
-        Self {
-            ptr: slice.as_mut_ptr(),
-            slice_len: slice.len(),
-        }
-    }
-    #[allow(unused)]
-    #[inline(always)]
-    pub unsafe fn new_transmuted<U>(slice: &mut [U]) -> Self {
-        Self {
-            ptr: slice.as_mut_ptr() as *mut T,
-            slice_len: slice.len(),
-        }
-    }
-    #[allow(unused)]
-    #[inline(always)]
-    pub fn as_mut_ptr(&self) -> *mut T {
-        self.ptr
-    }
-    #[allow(unused)]
-    #[inline(always)]
-    pub fn len(&self) -> usize {
-        self.slice_len
+    unsafe fn load(&self, idx: usize) -> Complex<T> {
+        debug_assert!(idx < self.input.len());
+        *self.input.get_unchecked(idx)
     }
     #[inline(always)]
-    pub unsafe fn store(&self, value: T, index: usize) {
-        debug_assert!(index < self.slice_len);
-        *self.ptr.add(index) = value;
+    unsafe fn store(&mut self, val: Complex<T>, idx: usize) {
+        debug_assert!(idx < self.output.len());
+        *self.output.get_unchecked_mut(idx) = val;
     }
 }
 

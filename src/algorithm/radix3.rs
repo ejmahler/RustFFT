@@ -6,11 +6,7 @@ use num_traits::Zero;
 use crate::algorithm::butterflies::{Butterfly1, Butterfly27, Butterfly3, Butterfly9};
 use crate::array_utils;
 use crate::common::{fft_error_inplace, fft_error_outofplace};
-use crate::{
-    array_utils::{RawSlice, RawSliceMut},
-    common::FftNum,
-    twiddles, FftDirection,
-};
+use crate::{common::FftNum, twiddles, FftDirection};
 use crate::{Direction, Fft, Length};
 
 /// FFT algorithm optimized for power-of-three sizes
@@ -229,7 +225,7 @@ unsafe fn butterfly_3<T: FftNum>(
         scratch[1] = *data.get_unchecked(idx + 1 * num_ffts) * twiddles[tw_idx];
         scratch[2] = *data.get_unchecked(idx + 2 * num_ffts) * twiddles[tw_idx + 1];
 
-        butterfly3.perform_fft_contiguous(RawSlice::new(&scratch), RawSliceMut::new(&mut scratch));
+        butterfly3.perform_fft_butterfly(&mut scratch);
 
         *data.get_unchecked_mut(idx) = scratch[0];
         *data.get_unchecked_mut(idx + 1 * num_ffts) = scratch[1];

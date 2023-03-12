@@ -230,14 +230,14 @@ macro_rules! mixedradix_column_butterflies {
                     if partial_remainder == 1 {
                         for i in 0..ROW_COUNT {
                             columns[i] = AvxArray::<A>::load_partial1_complex(
-                                buffer,
+                                &buffer,
                                 partial_remainder_base + len_per_row * i,
                             );
                         }
                     } else {
                         for i in 0..ROW_COUNT {
                             columns[i] = AvxArray::<A>::load_partial2_complex(
-                                buffer,
+                                &buffer,
                                 partial_remainder_base + len_per_row * i,
                             );
                         }
@@ -330,7 +330,7 @@ macro_rules! mixedradix_transpose{
             // If the partial remainder is 2, use the provided transpose_lo function to do a transpose on half-vectors
             let mut rows = [AvxVector::zero(); ROW_COUNT];
             for i in 0..ROW_COUNT {
-                rows[i] = AvxArray::<A>::load_partial2_complex(input, input_index_base + len_per_row*i);
+                rows[i] = AvxArray::<A>::load_partial2_complex(&input, input_index_base + len_per_row*i);
             }
 
             let transposed = $transpose_fn_lo(rows);
