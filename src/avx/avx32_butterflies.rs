@@ -5,14 +5,15 @@ use std::mem::MaybeUninit;
 use num_complex::Complex;
 
 use crate::array_utils;
+use crate::array_utils::workaround_transmute_mut;
+use crate::array_utils::DoubleBuff;
 use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::{common::FftNum, twiddles};
 use crate::{Direction, Fft, FftDirection, Length};
 
 use super::avx32_utils;
-use super::avx_vector;
-use super::avx_vector::{AvxArray, AvxArrayMut, AvxVector, AvxVector128, AvxVector256, Rotation90};
-use crate::array_utils::{RawSlice, RawSliceMut};
+use super::avx_vector::{self, AvxArray};
+use super::avx_vector::{AvxArrayMut, AvxVector, AvxVector128, AvxVector256, Rotation90};
 
 // Safety: This macro will call `self::perform_fft_f32()` which probably has a #[target_feature(enable = "...")] annotation on it.
 // Calling functions with that annotation is unsafe, because it doesn't actually check if the CPU has the required features.
@@ -55,10 +56,12 @@ macro_rules! boilerplate_fft_simd_butterfly {
                     |in_chunk, out_chunk| {
                         unsafe {
                             // Specialization workaround: See the comments in FftPlannerAvx::new() for why we have to transmute these slices
-                            let input_slice = RawSlice::<Complex<f32>>::new_transmuted(in_chunk);
-                            let output_slice =
-                                RawSliceMut::<Complex<f32>>::new_transmuted(out_chunk);
-                            self.perform_fft_f32(input_slice, output_slice);
+                            let input_slice = workaround_transmute_mut(in_chunk);
+                            let output_slice = workaround_transmute_mut(out_chunk);
+                            self.perform_fft_f32(&mut DoubleBuff {
+                                input: input_slice,
+                                output: output_slice,
+                            });
                         }
                     },
                 );
@@ -79,9 +82,7 @@ macro_rules! boilerplate_fft_simd_butterfly {
                 let result = array_utils::iter_chunks(buffer, self.len(), |chunk| {
                     unsafe {
                         // Specialization workaround: See the comments in FftPlannerAvx::new() for why we have to transmute these slices
-                        let input_slice = RawSlice::<Complex<f32>>::new_transmuted(chunk);
-                        let output_slice = RawSliceMut::<Complex<f32>>::new_transmuted(chunk);
-                        self.perform_fft_f32(input_slice, output_slice);
+                        self.perform_fft_f32(workaround_transmute_mut::<_, Complex<f32>>(chunk));
                     }
                 });
 
@@ -146,7 +147,12 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
 
                 // process the row FFTs, and copy from the scratch back to the buffer as we go
                 // Safety: self.transpose() requres the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
-                unsafe { self.row_butterflies(RawSlice::new(scratch), RawSliceMut::new(buffer)) };
+                unsafe {
+                    self.row_butterflies(&mut DoubleBuff {
+                        input: scratch,
+                        output: buffer,
+                    })
+                };
             }
 
             #[inline]
@@ -161,7 +167,7 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
 
                 // process the row FFTs in-place in the output buffer
                 // Safety: self.transpose() requres the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
-                unsafe { self.row_butterflies(RawSlice::new(output), RawSliceMut::new(output)) };
+                unsafe { self.row_butterflies(output) };
             }
         }
         impl<T: FftNum> Fft<T> for $struct_name<f32> {
@@ -304,14 +310,10 @@ impl Butterfly5Avx<f32> {
 }
 impl<T> Butterfly5Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        mut output: RawSliceMut<Complex<f32>>,
-    ) {
-        let input0 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr() as *const f64)); // load the first element of the input, and duplicate it into both complex number slots of input0
-        let input12 = input.load_partial2_complex(1);
-        let input34 = input.load_partial2_complex(3);
+    unsafe fn perform_fft_f32(&self, mut buffer: impl AvxArrayMut<f32>) {
+        let input0 = _mm_castpd_ps(_mm_load1_pd(buffer.input_ptr() as *const f64)); // load the first element of the input, and duplicate it into both complex number slots of input0
+        let input12 = buffer.load_partial2_complex(1);
+        let input34 = buffer.load_partial2_complex(3);
 
         // swap elements for inputs 3 and 4
         let input43 = AvxVector::reverse_complex_elements(input34);
@@ -343,9 +345,9 @@ impl<T> Butterfly5Avx<T> {
         let output34 = AvxVector::reverse_complex_elements(output43);
         let final34 = AvxVector::add(input0, output34);
 
-        output.store_partial1_complex(output0, 0);
-        output.store_partial2_complex(final12, 1);
-        output.store_partial2_complex(final34, 3);
+        buffer.store_partial1_complex(output0, 0);
+        buffer.store_partial2_complex(final12, 1);
+        buffer.store_partial2_complex(final34, 3);
     }
 }
 
@@ -376,17 +378,15 @@ impl Butterfly7Avx<f32> {
 }
 impl<T> Butterfly7Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        mut output: RawSliceMut<Complex<f32>>,
-    ) {
-        let input0 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr() as *const f64)); // load the first element of the input, and duplicate it into both complex number slots of input0
-                                                                                // we want to load 3 elements into 123 and 3 elements into 456, but we can only load 4, so we're going to do slightly overlapping reads here
-                                                                                // we have to reverse 456 immediately after loading, and that'll be easiest if we load the 456 into the latter 3 slots of the register, rather than the front 3 slots
-                                                                                // as a bonus, that also means we don't need masked reads or anything
-        let input123 = input.load_complex(1);
-        let input456 = input.load_complex(3);
+    unsafe fn perform_fft_f32(&self, mut buffer: impl AvxArrayMut<f32>) {
+        // load the first element of the input, and duplicate it into both complex number slots of input0
+        let input0 = _mm_castpd_ps(_mm_load1_pd(buffer.input_ptr() as *const f64));
+
+        // we want to load 3 elements into 123 and 3 elements into 456, but we can only load 4, so we're going to do slightly overlapping reads here
+        // we have to reverse 456 immediately after loading, and that'll be easiest if we load the 456 into the latter 3 slots of the register, rather than the front 3 slots
+        // as a bonus, that also means we don't need masked reads or anything
+        let input123 = buffer.load_complex(1);
+        let input456 = buffer.load_complex(3);
 
         // reverse the order of input456
         let input654 = AvxVector::reverse_complex_elements(input456);
@@ -406,7 +406,7 @@ impl<T> Butterfly7Avx<T> {
         let output0_left = AvxVector::add(mid16, mid25);
         let output0_right = AvxVector::add(input0, mid34);
         let output0 = AvxVector::add(output0_left, output0_right);
-        output.store_partial1_complex(output0, 0);
+        buffer.store_partial1_complex(output0, 0);
 
         _mm256_zeroupper();
 
@@ -437,10 +437,10 @@ impl<T> Butterfly7Avx<T> {
         let [output033, output044] = AvxVector::column_butterfly2([twiddled033, twiddled44]);
         let output56 = AvxVector::reverse_complex_elements(output65);
 
-        output.store_partial2_complex(AvxVector::add(output12, input0), 1);
-        output.store_partial1_complex(output033, 3);
-        output.store_partial1_complex(output044, 4);
-        output.store_partial2_complex(AvxVector::add(output56, input0), 5);
+        buffer.store_partial2_complex(AvxVector::add(output12, input0), 1);
+        buffer.store_partial1_complex(output033, 3);
+        buffer.store_partial1_complex(output044, 4);
+        buffer.store_partial2_complex(AvxVector::add(output56, input0), 5);
     }
 }
 
@@ -502,15 +502,11 @@ impl Butterfly11Avx<f32> {
 }
 impl<T> Butterfly11Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        mut output: RawSliceMut<Complex<f32>>,
-    ) {
-        let input0 = _mm_castpd_ps(_mm_load1_pd(input.as_ptr() as *const f64)); // load the first element of the input, and duplicate it into both complex number slots of input0
-        let input1234 = input.load_complex(1);
-        let input56 = input.load_partial2_complex(5);
-        let input78910 = input.load_complex(7);
+    unsafe fn perform_fft_f32(&self, mut buffer: impl AvxArrayMut<f32>) {
+        let input0 = _mm_castpd_ps(_mm_load1_pd(buffer.input_ptr() as *const f64)); // load the first element of the input, and duplicate it into both complex number slots of input0
+        let input1234 = buffer.load_complex(1);
+        let input56 = buffer.load_partial2_complex(5);
+        let input78910 = buffer.load_complex(7);
 
         // reverse the order of input78910, and separate
         let [input55, input66] = AvxVector::unpack_complex([input56, input56]);
@@ -540,7 +536,7 @@ impl<T> Butterfly11Avx<T> {
         let output0_left = AvxVector::add(input0, mid56.lo());
         let output0_right = AvxVector::add(mid12910, mid3478);
         let output0 = AvxVector::add(output0_left, output0_right);
-        output.store_partial1_complex(output0, 0);
+        buffer.store_partial1_complex(output0, 0);
 
         // we need to add the first input to each of our 5 twiddles values -- but right now, input0 is duplicated into both slots
         // but we only want to add it once, so zero the second element
@@ -578,10 +574,10 @@ impl<T> Butterfly11Avx<T> {
         let [output55, output66] = AvxVector::column_butterfly2([twiddled55, twiddled66]);
         let output78910 = AvxVector::reverse_complex_elements(output10987);
 
-        output.store_complex(output1234, 1);
-        output.store_partial1_complex(output55, 5);
-        output.store_partial1_complex(output66, 6);
-        output.store_complex(output78910, 7);
+        buffer.store_complex(output1234, 1);
+        buffer.store_partial1_complex(output55, 5);
+        buffer.store_partial1_complex(output66, 6);
+        buffer.store_complex(output78910, 7);
     }
 }
 
@@ -604,6 +600,7 @@ impl Butterfly8Avx<f32> {
                     Complex::new(0.0, 0.0),
                     Complex::new(0.0, -0.0),
                 ]
+                .as_slice()
                 .load_complex(0),
                 FftDirection::Inverse => [
                     Complex::new(0.0f32, 0.0),
@@ -611,6 +608,7 @@ impl Butterfly8Avx<f32> {
                     Complex::new(0.0, 0.0),
                     Complex::new(-0.0, 0.0),
                 ]
+                .as_slice()
                 .load_complex(0),
             },
             direction,
@@ -620,13 +618,9 @@ impl Butterfly8Avx<f32> {
 }
 impl<T> Butterfly8Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        mut output: RawSliceMut<Complex<f32>>,
-    ) {
-        let row0 = input.load_complex(0);
-        let row1 = input.load_complex(4);
+    unsafe fn perform_fft_f32(&self, mut buffer: impl AvxArrayMut<f32>) {
+        let row0 = buffer.load_complex(0);
+        let row1 = buffer.load_complex(4);
 
         // Do our butterfly 2's down the columns
         let [intermediate0, intermediate1_pretwiddle] = AvxVector::column_butterfly2([row0, row1]);
@@ -658,8 +652,8 @@ impl<T> Butterfly8Avx<T> {
 
         let [output0, output1] = AvxVector::column_butterfly2(unpacked);
 
-        output.store_complex(output0, 0);
-        output.store_complex(output1, 4);
+        buffer.store_complex(output0, 0);
+        buffer.store_complex(output1, 4);
     }
 }
 
@@ -680,7 +674,7 @@ impl Butterfly9Avx<f32> {
             twiddles::compute_twiddle(4, 9, direction),
         ];
         Self {
-            twiddles: twiddles.load_complex(0),
+            twiddles: twiddles.as_slice().load_complex(0),
             twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, direction),
             direction,
             _phantom_t: PhantomData,
@@ -689,19 +683,15 @@ impl Butterfly9Avx<f32> {
 }
 impl<T> Butterfly9Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        mut output: RawSliceMut<Complex<f32>>,
-    ) {
+    unsafe fn perform_fft_f32(&self, mut buffer: impl AvxArrayMut<f32>) {
         // we're going to load these elements in a peculiar way. instead of loading a row into the first 3 element of each register and leaving the last element empty
         // we're leaving the first element empty and putting the data in the last 3 elements. this will let us do 3 total complex multiplies instead of 4.
 
-        let input0_lo = _mm_castpd_ps(_mm_load1_pd(input.as_ptr() as *const f64));
-        let input0_hi = input.load_partial2_complex(1);
+        let input0_lo = _mm_castpd_ps(_mm_load1_pd(buffer.input_ptr() as *const f64));
+        let input0_hi = buffer.load_partial2_complex(1);
         let input0 = AvxVector256::merge(input0_lo, input0_hi);
-        let input1 = input.load_complex(2);
-        let input2 = input.load_complex(5);
+        let input1 = buffer.load_complex(2);
+        let input2 = buffer.load_complex(5);
 
         // We're going to treat our input as a 3x3 2d array. First, do 3 butterfly 3's down the columns of that array.
         let [mid0, mid1, mid2] =
@@ -731,15 +721,15 @@ impl<T> Butterfly9Avx<T> {
         // the elements of row 1 are in pretty much the worst possible order, thankfully we can fix that with just a couple instructions
         let swapped1 = _mm256_permute_ps(output_rows[1], 0x4E); // swap even and odd complex numbers
         let packed1 = _mm256_permute2f128_ps(swapped1, output_rows[2], 0x21);
-        output.store_complex(packed1, 4);
+        buffer.store_complex(packed1, 4);
 
         // merge just the high element of swapped_lo into the high element of row 0
         let zero_swapped1_lo = AvxVector256::merge(AvxVector::zero(), swapped1.lo());
         let packed0 = _mm256_blend_ps(output_rows[0], zero_swapped1_lo, 0xC0);
-        output.store_complex(packed0, 0);
+        buffer.store_complex(packed0, 0);
 
         // The last element can just be written on its own
-        output.store_partial1_complex(output_rows[2].hi(), 8);
+        buffer.store_partial1_complex(output_rows[2].hi(), 8);
     }
 }
 
@@ -769,7 +759,10 @@ impl Butterfly12Avx<f32> {
             twiddles::compute_twiddle(6, 12, direction),
         ];
         Self {
-            twiddles: [twiddles.load_complex(0), twiddles.load_complex(4)],
+            twiddles: [
+                twiddles.as_slice().load_complex(0),
+                twiddles.as_slice().load_complex(4),
+            ],
             twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, direction),
             twiddles_butterfly4: AvxVector::make_rotation90(direction),
             direction,
@@ -779,22 +772,18 @@ impl Butterfly12Avx<f32> {
 }
 impl<T> Butterfly12Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        mut output: RawSliceMut<Complex<f32>>,
-    ) {
+    unsafe fn perform_fft_f32(&self, mut buffer: impl AvxArrayMut<f32>) {
         // we're going to load these elements in a peculiar way. instead of loading a row into the first 3 element of each register and leaving the last element empty
         // we're leaving the first element empty and putting the data in the last 3 elements. this will save us a complex multiply.
 
         // for everything but the first element, we can do overlapping reads. for the first element, an "overlapping read" would have us reading from index -1, so instead we have to shuffle some data around
-        let input0_lo = _mm_castpd_ps(_mm_load1_pd(input.as_ptr() as *const f64));
-        let input0_hi = input.load_partial2_complex(1);
+        let input0_lo = _mm_castpd_ps(_mm_load1_pd(buffer.input_ptr() as *const f64));
+        let input0_hi = buffer.load_partial2_complex(1);
         let input_rows = [
             AvxVector256::merge(input0_lo, input0_hi),
-            input.load_complex(2),
-            input.load_complex(5),
-            input.load_complex(8),
+            buffer.load_complex(2),
+            buffer.load_complex(5),
+            buffer.load_complex(8),
         ];
 
         // 3 butterfly 4's down the columns
@@ -823,9 +812,9 @@ impl<T> Butterfly12Avx<T> {
         // Do 4 butterfly 3's down the columns of our transposed array
         let output_rows = AvxVector::column_butterfly3(transposed, self.twiddles_butterfly3);
 
-        output.store_complex(output_rows[0], 0);
-        output.store_complex(output_rows[1], 4);
-        output.store_complex(output_rows[2], 8);
+        buffer.store_complex(output_rows[0], 0);
+        buffer.store_complex(output_rows[1], 4);
+        buffer.store_complex(output_rows[2], 8);
     }
 }
 
@@ -849,17 +838,13 @@ impl Butterfly16Avx<f32> {
 }
 impl<T> Butterfly16Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        mut output: RawSliceMut<Complex<f32>>,
-    ) {
+    unsafe fn perform_fft_f32(&self, mut buffer: impl AvxArrayMut<f32>) {
         // Manually unrolling this loop because writing a "for r in 0..4" loop results in slow codegen that makes the whole thing take 1.5x longer :(
         let rows = [
-            input.load_complex(0),
-            input.load_complex(4),
-            input.load_complex(8),
-            input.load_complex(12),
+            buffer.load_complex(0),
+            buffer.load_complex(4),
+            buffer.load_complex(8),
+            buffer.load_complex(12),
         ];
 
         // We're going to treat our input as a 4x4 2d array. First, do 4 butterfly 4's down the columns of that array.
@@ -877,10 +862,10 @@ impl<T> Butterfly16Avx<T> {
         let output_rows = AvxVector::column_butterfly4(transposed, self.twiddles_butterfly4);
 
         // Manually unrolling this loop because writing a "for r in 0..4" loop results in slow codegen that makes the whole thing take 1.5x longer :(
-        output.store_complex(output_rows[0], 0);
-        output.store_complex(output_rows[1], 4);
-        output.store_complex(output_rows[2], 8);
-        output.store_complex(output_rows[3], 12);
+        buffer.store_complex(output_rows[0], 0);
+        buffer.store_complex(output_rows[1], 4);
+        buffer.store_complex(output_rows[2], 8);
+        buffer.store_complex(output_rows[3], 12);
     }
 }
 
@@ -906,19 +891,15 @@ impl Butterfly24Avx<f32> {
 }
 impl<T> Butterfly24Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        mut output: RawSliceMut<Complex<f32>>,
-    ) {
+    unsafe fn perform_fft_f32(&self, mut buffer: impl AvxArrayMut<f32>) {
         // Manually unrolling this loop because writing a "for r in 0..6" loop results in slow codegen that makes the whole thing take 1.5x longer :(
         let rows = [
-            input.load_complex(0),
-            input.load_complex(4),
-            input.load_complex(8),
-            input.load_complex(12),
-            input.load_complex(16),
-            input.load_complex(20),
+            buffer.load_complex(0),
+            buffer.load_complex(4),
+            buffer.load_complex(8),
+            buffer.load_complex(12),
+            buffer.load_complex(16),
+            buffer.load_complex(20),
         ];
 
         // We're going to treat our input as a 4x6 2d array. First, do 4 butterfly 6's down the columns of that array.
@@ -938,8 +919,8 @@ impl<T> Butterfly24Avx<T> {
 
         // the upper two elements of output1 are empty, so only store half the data for it
         for r in 0..4 {
-            output.store_complex(output0[r], 6 * r);
-            output.store_partial2_complex(output1[r].lo(), r * 6 + 4);
+            buffer.store_complex(output0[r], 6 * r);
+            buffer.store_partial2_complex(output1[r].lo(), r * 6 + 4);
         }
     }
 }
@@ -970,20 +951,16 @@ impl Butterfly27Avx<f32> {
 }
 impl<T> Butterfly27Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        mut output: RawSliceMut<Complex<f32>>,
-    ) {
+    unsafe fn perform_fft_f32(&self, mut buffer: impl AvxArrayMut<f32>) {
         // we're going to load our data in a peculiar way. we're going to load the first column on its own as a column of __m128.
         // it's faster to just load the first 2 columns into these m128s than trying to worry about masks, etc, so the second column will piggyback along and we just won't use it
         let mut rows0 = [AvxVector::zero(); 3];
         let mut rows1 = [AvxVector::zero(); 3];
         let mut rows2 = [AvxVector::zero(); 3];
         for r in 0..3 {
-            rows0[r] = input.load_partial2_complex(r * 9);
-            rows1[r] = input.load_complex(r * 9 + 1);
-            rows2[r] = input.load_complex(r * 9 + 5);
+            rows0[r] = buffer.load_partial2_complex(r * 9);
+            rows1[r] = buffer.load_complex(r * 9 + 1);
+            rows2[r] = buffer.load_complex(r * 9 + 5);
         }
 
         // butterfly 3s down the columns
@@ -1008,15 +985,15 @@ impl<T> Butterfly27Avx<T> {
         );
 
         // Our last column is empty, so it's a bit awkward to write out to memory. We could pack it in fewer vectors, but benchmarking shows it's simpler and just as fast to just brute-force it with partial writes
-        output.store_partial3_complex(output_rows[0], 0);
-        output.store_partial3_complex(output_rows[1], 3);
-        output.store_partial3_complex(output_rows[2], 6);
-        output.store_partial3_complex(output_rows[3], 9);
-        output.store_partial3_complex(output_rows[4], 12);
-        output.store_partial3_complex(output_rows[5], 15);
-        output.store_partial3_complex(output_rows[6], 18);
-        output.store_partial3_complex(output_rows[7], 21);
-        output.store_partial3_complex(output_rows[8], 24);
+        buffer.store_partial3_complex(output_rows[0], 0);
+        buffer.store_partial3_complex(output_rows[1], 3);
+        buffer.store_partial3_complex(output_rows[2], 6);
+        buffer.store_partial3_complex(output_rows[3], 9);
+        buffer.store_partial3_complex(output_rows[4], 12);
+        buffer.store_partial3_complex(output_rows[5], 15);
+        buffer.store_partial3_complex(output_rows[6], 18);
+        buffer.store_partial3_complex(output_rows[7], 21);
+        buffer.store_partial3_complex(output_rows[8], 24);
     }
 }
 
@@ -1040,16 +1017,12 @@ impl Butterfly32Avx<f32> {
 }
 impl<T> Butterfly32Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        mut output: RawSliceMut<Complex<f32>>,
-    ) {
+    unsafe fn perform_fft_f32(&self, mut buffer: impl AvxArrayMut<f32>) {
         let mut rows0 = [AvxVector::zero(); 4];
         let mut rows1 = [AvxVector::zero(); 4];
         for r in 0..4 {
-            rows0[r] = input.load_complex(8 * r);
-            rows1[r] = input.load_complex(8 * r + 4);
+            rows0[r] = buffer.load_complex(8 * r);
+            rows1[r] = buffer.load_complex(8 * r + 4);
         }
 
         // We're going to treat our input as a 8x4 2d array. First, do 8 butterfly 4's down the columns of that array.
@@ -1069,14 +1042,14 @@ impl<T> Butterfly32Avx<T> {
         let output_rows = AvxVector::column_butterfly8(transposed, self.twiddles_butterfly4);
 
         // Manually unrolling this loop because writing a "for r in 0..8" loop results in slow codegen that makes the whole thing take 1.5x longer :(
-        output.store_complex(output_rows[0], 0);
-        output.store_complex(output_rows[1], 1 * 4);
-        output.store_complex(output_rows[2], 2 * 4);
-        output.store_complex(output_rows[3], 3 * 4);
-        output.store_complex(output_rows[4], 4 * 4);
-        output.store_complex(output_rows[5], 5 * 4);
-        output.store_complex(output_rows[6], 6 * 4);
-        output.store_complex(output_rows[7], 7 * 4);
+        buffer.store_complex(output_rows[0], 0);
+        buffer.store_complex(output_rows[1], 1 * 4);
+        buffer.store_complex(output_rows[2], 2 * 4);
+        buffer.store_complex(output_rows[3], 3 * 4);
+        buffer.store_complex(output_rows[4], 4 * 4);
+        buffer.store_complex(output_rows[5], 5 * 4);
+        buffer.store_complex(output_rows[6], 6 * 4);
+        buffer.store_complex(output_rows[7], 7 * 4);
     }
 }
 
@@ -1108,20 +1081,16 @@ impl Butterfly36Avx<f32> {
 }
 impl<T> Butterfly36Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        mut output: RawSliceMut<Complex<f32>>,
-    ) {
+    unsafe fn perform_fft_f32(&self, mut buffer: impl AvxArrayMut<f32>) {
         // we're going to load our data in a peculiar way. we're going to load the first column on its own as a column of __m128.
         // it's faster to just load the first 2 columns into these m128s than trying to worry about masks, etc, so the second column will piggyback along and we just won't use it
         let mut rows0 = [AvxVector::zero(); 4];
         let mut rows1 = [AvxVector::zero(); 4];
         let mut rows2 = [AvxVector::zero(); 4];
         for r in 0..4 {
-            rows0[r] = input.load_partial2_complex(r * 9);
-            rows1[r] = input.load_complex(r * 9 + 1);
-            rows2[r] = input.load_complex(r * 9 + 5);
+            rows0[r] = buffer.load_partial2_complex(r * 9);
+            rows1[r] = buffer.load_complex(r * 9 + 1);
+            rows2[r] = buffer.load_complex(r * 9 + 5);
         }
 
         // butterfly 4s down the columns
@@ -1146,9 +1115,9 @@ impl<T> Butterfly36Avx<T> {
         );
 
         for r in 0..3 {
-            output.store_complex(output_rows[r * 3], r * 12);
-            output.store_complex(output_rows[r * 3 + 1], r * 12 + 4);
-            output.store_complex(output_rows[r * 3 + 2], r * 12 + 8);
+            buffer.store_complex(output_rows[r * 3], r * 12);
+            buffer.store_complex(output_rows[r * 3 + 1], r * 12 + 4);
+            buffer.store_complex(output_rows[r * 3 + 2], r * 12 + 8);
         }
     }
 }
@@ -1175,18 +1144,14 @@ impl Butterfly48Avx<f32> {
 }
 impl<T> Butterfly48Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        mut output: RawSliceMut<Complex<f32>>,
-    ) {
+    unsafe fn perform_fft_f32(&self, mut buffer: impl AvxArrayMut<f32>) {
         let mut rows0 = [AvxVector::zero(); 4];
         let mut rows1 = [AvxVector::zero(); 4];
         let mut rows2 = [AvxVector::zero(); 4];
         for r in 0..4 {
-            rows0[r] = input.load_complex(12 * r);
-            rows1[r] = input.load_complex(12 * r + 4);
-            rows2[r] = input.load_complex(12 * r + 8);
+            rows0[r] = buffer.load_complex(12 * r);
+            rows1[r] = buffer.load_complex(12 * r + 4);
+            rows2[r] = buffer.load_complex(12 * r + 8);
         }
 
         // We're going to treat our input as a 12x4 2d array. First, do 12 butterfly 4's down the columns of that array.
@@ -1212,18 +1177,18 @@ impl<T> Butterfly48Avx<T> {
         );
 
         // Manually unrolling this loop because writing a "for r in 0..12" loop results in slow codegen that makes the whole thing take 1.5x longer :(
-        output.store_complex(output_rows[0], 0);
-        output.store_complex(output_rows[1], 4);
-        output.store_complex(output_rows[2], 8);
-        output.store_complex(output_rows[3], 12);
-        output.store_complex(output_rows[4], 16);
-        output.store_complex(output_rows[5], 20);
-        output.store_complex(output_rows[6], 24);
-        output.store_complex(output_rows[7], 28);
-        output.store_complex(output_rows[8], 32);
-        output.store_complex(output_rows[9], 36);
-        output.store_complex(output_rows[10], 40);
-        output.store_complex(output_rows[11], 44);
+        buffer.store_complex(output_rows[0], 0);
+        buffer.store_complex(output_rows[1], 4);
+        buffer.store_complex(output_rows[2], 8);
+        buffer.store_complex(output_rows[3], 12);
+        buffer.store_complex(output_rows[4], 16);
+        buffer.store_complex(output_rows[5], 20);
+        buffer.store_complex(output_rows[6], 24);
+        buffer.store_complex(output_rows[7], 28);
+        buffer.store_complex(output_rows[8], 32);
+        buffer.store_complex(output_rows[9], 36);
+        buffer.store_complex(output_rows[10], 40);
+        buffer.store_complex(output_rows[11], 44);
     }
 }
 
@@ -1262,27 +1227,23 @@ impl Butterfly54Avx<f32> {
 }
 impl<T> Butterfly54Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        mut output: RawSliceMut<Complex<f32>>,
-    ) {
+    unsafe fn perform_fft_f32(&self, mut buffer: impl AvxArrayMut<f32>) {
         // we're going to load our data in a peculiar way. we're going to load the first column on its own as a column of __m128.
         // it's faster to just load the first 2 columns into these m128s than trying to worry about masks, etc, so the second column will piggyback along and we just won't use it
         //
         // we have too much data to fit into registers all at once, so split up our data processing so that we entirely finish with one "rows_" array before moving to the next
         let mut rows0 = [AvxVector::zero(); 6];
         for r in 0..3 {
-            rows0[r * 2] = input.load_partial2_complex(r * 18);
-            rows0[r * 2 + 1] = input.load_partial2_complex(r * 18 + 9);
+            rows0[r * 2] = buffer.load_partial2_complex(r * 18);
+            rows0[r * 2 + 1] = buffer.load_partial2_complex(r * 18 + 9);
         }
         let mid0 = AvxVector128::column_butterfly6(rows0, self.twiddles_butterfly3);
 
         // next set of butterfly 6's
         let mut rows1 = [AvxVector::zero(); 6];
         for r in 0..3 {
-            rows1[r * 2] = input.load_complex(r * 18 + 1);
-            rows1[r * 2 + 1] = input.load_complex(r * 18 + 10);
+            rows1[r * 2] = buffer.load_complex(r * 18 + 1);
+            rows1[r * 2 + 1] = buffer.load_complex(r * 18 + 10);
         }
         let mut mid1 = AvxVector256::column_butterfly6(rows1, self.twiddles_butterfly3);
         for r in 1..6 {
@@ -1292,8 +1253,8 @@ impl<T> Butterfly54Avx<T> {
         // final set of butterfly 6's
         let mut rows2 = [AvxVector::zero(); 6];
         for r in 0..3 {
-            rows2[r * 2] = input.load_complex(r * 18 + 5);
-            rows2[r * 2 + 1] = input.load_complex(r * 18 + 14);
+            rows2[r * 2] = buffer.load_complex(r * 18 + 5);
+            rows2[r * 2 + 1] = buffer.load_complex(r * 18 + 14);
         }
         let mut mid2 = AvxVector256::column_butterfly6(rows2, self.twiddles_butterfly3);
         for r in 1..6 {
@@ -1312,7 +1273,7 @@ impl<T> Butterfly54Avx<T> {
             self.twiddles_butterfly3,
         );
         for r in 0..9 {
-            output.store_partial2_complex(output_rows1[r], r * 6 + 4);
+            buffer.store_partial2_complex(output_rows1[r], r * 6 + 4);
         }
 
         // we have too much data to fit into registers all at once, do one set of butterfly 9's and output them before even starting on the others, to make it easier for the compiler to figure out what to spill
@@ -1322,7 +1283,7 @@ impl<T> Butterfly54Avx<T> {
             self.twiddles_butterfly3,
         );
         for r in 0..9 {
-            output.store_complex(output_rows0[r], r * 6);
+            buffer.store_complex(output_rows0[r], r * 6);
         }
     }
 }
@@ -1347,17 +1308,13 @@ impl Butterfly64Avx<f32> {
 }
 impl<T> Butterfly64Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        mut output: RawSliceMut<Complex<f32>>,
-    ) {
+    unsafe fn perform_fft_f32(&self, mut buffer: impl AvxArrayMut<f32>) {
         // We're going to treat our input as a 8x8 2d array. First, do 8 butterfly 8's down the columns of that array.
         // We can't fit the whole problem into AVX registers at once, so we'll have to spill some things.
         // By computing a sizeable chunk and not referencing any of it for a while, we're making it easy for the compiler to decide what to spill
         let mut rows0 = [AvxVector::zero(); 8];
         for r in 0..8 {
-            rows0[r] = input.load_complex(8 * r);
+            rows0[r] = buffer.load_complex(8 * r);
         }
         let mut mid0 = AvxVector::column_butterfly8(rows0, self.twiddles_butterfly4);
         for r in 1..8 {
@@ -1367,7 +1324,7 @@ impl<T> Butterfly64Avx<T> {
         // One half is done, so the compiler can spill everything above this. Now do the other set of columns
         let mut rows1 = [AvxVector::zero(); 8];
         for r in 0..8 {
-            rows1[r] = input.load_complex(8 * r + 4);
+            rows1[r] = buffer.load_complex(8 * r + 4);
         }
         let mut mid1 = AvxVector::column_butterfly8(rows1, self.twiddles_butterfly4);
         for r in 1..8 {
@@ -1381,12 +1338,12 @@ impl<T> Butterfly64Avx<T> {
         // Same thing as above - Do the half of the butterfly 8's separately to give the compiler a better hint about what to spill
         let output0 = AvxVector::column_butterfly8(transposed0, self.twiddles_butterfly4);
         for r in 0..8 {
-            output.store_complex(output0[r], 8 * r);
+            buffer.store_complex(output0[r], 8 * r);
         }
 
         let output1 = AvxVector::column_butterfly8(transposed1, self.twiddles_butterfly4);
         for r in 0..8 {
-            output.store_complex(output1[r], 8 * r + 4);
+            buffer.store_complex(output1[r], 8 * r + 4);
         }
     }
 }
@@ -1413,17 +1370,13 @@ impl Butterfly72Avx<f32> {
 }
 impl<T> Butterfly72Avx<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f32(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        mut output: RawSliceMut<Complex<f32>>,
-    ) {
+    unsafe fn perform_fft_f32(&self, mut buffer: impl AvxArrayMut<f32>) {
         // We're going to treat our input as a 12x6 2d array. First, do butterfly 6's down the columns of that array.
         // We can't fit the whole problem into AVX registers at once, so we'll have to spill some things.
         // By computing a sizeable chunk and not referencing any of it for a while, we're making it easy for the compiler to decide what to spill
         let mut rows0 = [AvxVector::zero(); 6];
         for r in 0..6 {
-            rows0[r] = input.load_complex(12 * r);
+            rows0[r] = buffer.load_complex(12 * r);
         }
         let mut mid0 = AvxVector256::column_butterfly6(rows0, self.twiddles_butterfly3);
         for r in 1..6 {
@@ -1433,7 +1386,7 @@ impl<T> Butterfly72Avx<T> {
         // One third is done, so the compiler can spill everything above this. Now do the middle set of columns
         let mut rows1 = [AvxVector::zero(); 6];
         for r in 0..6 {
-            rows1[r] = input.load_complex(12 * r + 4);
+            rows1[r] = buffer.load_complex(12 * r + 4);
         }
         let mut mid1 = AvxVector256::column_butterfly6(rows1, self.twiddles_butterfly3);
         for r in 1..6 {
@@ -1443,7 +1396,7 @@ impl<T> Butterfly72Avx<T> {
         // two thirds are done, so the compiler can spill everything above this. Now do the final set of columns
         let mut rows2 = [AvxVector::zero(); 6];
         for r in 0..6 {
-            rows2[r] = input.load_complex(12 * r + 8);
+            rows2[r] = buffer.load_complex(12 * r + 8);
         }
         let mut mid2 = AvxVector256::column_butterfly6(rows2, self.twiddles_butterfly3);
         for r in 1..6 {
@@ -1461,7 +1414,7 @@ impl<T> Butterfly72Avx<T> {
             self.twiddles_butterfly4,
         );
         for r in 0..12 {
-            output.store_partial2_complex(output0[r], 6 * r);
+            buffer.store_partial2_complex(output0[r], 6 * r);
         }
 
         let output1 = AvxVector256::column_butterfly12(
@@ -1470,7 +1423,7 @@ impl<T> Butterfly72Avx<T> {
             self.twiddles_butterfly4,
         );
         for r in 0..12 {
-            output.store_complex(output1[r], 6 * r + 2);
+            buffer.store_complex(output1[r], 6 * r + 2);
         }
     }
 }
@@ -1536,18 +1489,14 @@ impl<T> Butterfly128Avx<T> {
     }
 
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn row_butterflies(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        mut output: RawSliceMut<Complex<f32>>,
-    ) {
+    unsafe fn row_butterflies(&self, mut buffer: impl AvxArrayMut<f32>) {
         // Second phase: Butterfly 16's down the columns of our transposed array.
         // Thankfully, during the first phase, we set everything up so that all we have to do here is compute the size-16 FFT columns and write them back out where we got them
         // We're also using a customized butterfly16 function that is smarter about when it loads/stores data, to reduce register spilling
         for columnset in 0usize..2 {
             column_butterfly16_loadfn!(
-                |index: usize| input.load_complex(columnset * 4 + index * 8),
-                |data, index| output.store_complex(data, columnset * 4 + index * 8),
+                |index: usize| buffer.load_complex(columnset * 4 + index * 8),
+                |data, index| buffer.store_complex(data, columnset * 4 + index * 8),
                 self.twiddles_butterfly16,
                 self.twiddles_butterfly4
             );
@@ -1617,18 +1566,14 @@ impl<T> Butterfly256Avx<T> {
     }
 
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn row_butterflies(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        mut output: RawSliceMut<Complex<f32>>,
-    ) {
+    unsafe fn row_butterflies(&self, mut buffer: impl AvxArrayMut<f32>) {
         // Second phase: Butterfly 32's down the columns of our transposed array.
         // Thankfully, during the first phase, we set everything up so that all we have to do here is compute the size-32 FFT columns and write them back out where we got them
         // We're also using a customized butterfly32 function that is smarter about when it loads/stores data, to reduce register spilling
         for columnset in 0..2 {
             column_butterfly32_loadfn!(
-                |index: usize| input.load_complex(columnset * 4 + index * 8),
-                |data, index| output.store_complex(data, columnset * 4 + index * 8),
+                |index: usize| buffer.load_complex(columnset * 4 + index * 8),
+                |data, index| buffer.store_complex(data, columnset * 4 + index * 8),
                 self.twiddles_butterfly32,
                 self.twiddles_butterfly4
             );
@@ -1736,18 +1681,14 @@ impl<T> Butterfly512Avx<T> {
     }
 
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn row_butterflies(
-        &self,
-        input: RawSlice<Complex<f32>>,
-        mut output: RawSliceMut<Complex<f32>>,
-    ) {
+    unsafe fn row_butterflies(&self, mut buffer: impl AvxArrayMut<f32>) {
         // Second phase: Butterfly 32's down the columns of our transposed array.
         // Thankfully, during the first phase, we set everything up so that all we have to do here is compute the size-32 FFT columns and write them back out where we got them
         // We're also using a customized butterfly32 function that is smarter about when it loads/stores data, to reduce register spilling
         for columnset in 0..4 {
             column_butterfly32_loadfn!(
-                |index: usize| input.load_complex(columnset * 4 + index * 16),
-                |data, index| output.store_complex(data, columnset * 4 + index * 16),
+                |index: usize| buffer.load_complex(columnset * 4 + index * 16),
+                |data, index| buffer.store_complex(data, columnset * 4 + index * 16),
                 self.twiddles_butterfly32,
                 self.twiddles_butterfly4
             );
