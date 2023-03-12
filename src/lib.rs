@@ -64,7 +64,7 @@
 //!     supported and its feature flag is enabled, RustFFT will use AVX instead of SSE4.1.
 //!
 //!     On every platform besides x86_64, this feature does nothing, and RustFFT will behave like it's not set.
-//! * `neon` (Disabled by default)
+//! * `neon` (Enabled by default)
 //!
 //!     On AArch64 (64-bit ARM) the `neon` feature enables compilation of Neon-accelerated code. Enabling it improves
 //!     performance, while disabling it reduces compile time and binary size.
