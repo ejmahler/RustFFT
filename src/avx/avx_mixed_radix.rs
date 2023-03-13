@@ -77,7 +77,7 @@ macro_rules! boilerplate_mixedradix {
             scratch: &mut [Complex<T>],
         ) {
             // Perform the column FFTs
-            // Safety: self.perform_column_butterflies() requres the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't avaiable
+            // Safety: self.perform_column_butterflies() requires the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't available
             unsafe {
                 // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
                 let transmuted_input: &mut [Complex<A>] =
@@ -97,7 +97,7 @@ macro_rules! boilerplate_mixedradix {
                 .process_with_scratch(input, inner_scratch);
 
             // Transpose
-            // Safety: self.transpose() requres the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
+            // Safety: self.transpose() requires the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
             unsafe {
                 // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
                 let transmuted_input: &mut [Complex<A>] =
@@ -153,7 +153,7 @@ macro_rules! mixedradix_gen_data {
 macro_rules! mixedradix_column_butterflies {
     ($row_count: expr, $butterfly_fn: expr, $butterfly_fn_lo: expr) => {
         #[target_feature(enable = "avx", enable = "fma")]
-        unsafe fn perform_column_butterflies(&self, buffer: &mut [Complex<A>]) {
+        unsafe fn perform_column_butterflies(&self, mut buffer: impl AvxArrayMut<A>) {
             // How many rows this FFT has, ie 2 for 2xn, 4 for 4xn, etc
             const ROW_COUNT: usize = $row_count;
             const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
@@ -202,7 +202,7 @@ macro_rules! mixedradix_column_butterflies {
                     &self.common_data.twiddles[partial_remainder_twiddle_base..];
 
                 if partial_remainder > 2 {
-                    // Load 3 columns into full AVX vectors to preocess our remainder
+                    // Load 3 columns into full AVX vectors to process our remainder
                     let mut columns = [AvxVector::zero(); ROW_COUNT];
                     for i in 0..ROW_COUNT {
                         columns[i] =
@@ -229,17 +229,13 @@ macro_rules! mixedradix_column_butterflies {
                     let mut columns = [AvxVector::zero(); ROW_COUNT];
                     if partial_remainder == 1 {
                         for i in 0..ROW_COUNT {
-                            columns[i] = AvxArray::<A>::load_partial1_complex(
-                                &buffer,
-                                partial_remainder_base + len_per_row * i,
-                            );
+                            columns[i] = buffer
+                                .load_partial1_complex(partial_remainder_base + len_per_row * i);
                         }
                     } else {
                         for i in 0..ROW_COUNT {
-                            columns[i] = AvxArray::<A>::load_partial2_complex(
-                                &buffer,
-                                partial_remainder_base + len_per_row * i,
-                            );
+                            columns[i] = buffer
+                                .load_partial2_complex(partial_remainder_base + len_per_row * i);
                         }
                     }
 
@@ -254,16 +250,14 @@ macro_rules! mixedradix_column_butterflies {
                     // store output
                     if partial_remainder == 1 {
                         for i in 0..ROW_COUNT {
-                            AvxArrayMut::<A>::store_partial1_complex(
-                                buffer,
+                            buffer.store_partial1_complex(
                                 mid[i],
                                 partial_remainder_base + len_per_row * i,
                             );
                         }
                     } else {
                         for i in 0..ROW_COUNT {
-                            AvxArrayMut::<A>::store_partial2_complex(
-                                buffer,
+                            buffer.store_partial2_complex(
                                 mid[i],
                                 partial_remainder_base + len_per_row * i,
                             );
@@ -330,14 +324,14 @@ macro_rules! mixedradix_transpose{
             // If the partial remainder is 2, use the provided transpose_lo function to do a transpose on half-vectors
             let mut rows = [AvxVector::zero(); ROW_COUNT];
             for i in 0..ROW_COUNT {
-                rows[i] = AvxArray::<A>::load_partial2_complex(&input, input_index_base + len_per_row*i);
+                rows[i] = input.load_partial2_complex(input_index_base + len_per_row*i);
             }
 
             let transposed = $transpose_fn_lo(rows);
 
             // use the same macro hack as above to unroll the loop
             $(
-                AvxArrayMut::<A>::store_partial2_complex(output, transposed[$unroll_workaround_index], output_index_base + <A::VectorType as AvxVector256>::HalfVector::COMPLEX_PER_VECTOR * $unroll_workaround_index);
+                output.store_partial2_complex(transposed[$unroll_workaround_index], output_index_base + <A::VectorType as AvxVector256>::HalfVector::COMPLEX_PER_VECTOR * $unroll_workaround_index);
             )*
         }
         else if partial_remainder == 3 {
@@ -369,9 +363,9 @@ macro_rules! mixedradix_transpose{
             // write out our partial vector. again, this is a compile-time constant, even if we can't represent that within rust yet
             match final_remainder_count {
                 0 => {},
-                1 => AvxArrayMut::<A>::store_partial1_complex(output, transposed[full_vector_count].lo(), output_index_base + full_vector_count * A::VectorType::COMPLEX_PER_VECTOR),
-                2 => AvxArrayMut::<A>::store_partial2_complex(output, transposed[full_vector_count].lo(), output_index_base + full_vector_count * A::VectorType::COMPLEX_PER_VECTOR),
-                3 => AvxArrayMut::<A>::store_partial3_complex(output, transposed[full_vector_count], output_index_base + full_vector_count * A::VectorType::COMPLEX_PER_VECTOR),
+                1 => output.store_partial1_complex(transposed[full_vector_count].lo(), output_index_base + full_vector_count * A::VectorType::COMPLEX_PER_VECTOR),
+                2 => output.store_partial2_complex(transposed[full_vector_count].lo(), output_index_base + full_vector_count * A::VectorType::COMPLEX_PER_VECTOR),
+                3 => output.store_partial3_complex(transposed[full_vector_count], output_index_base + full_vector_count * A::VectorType::COMPLEX_PER_VECTOR),
                 _ => unreachable!(),
             }
         }
