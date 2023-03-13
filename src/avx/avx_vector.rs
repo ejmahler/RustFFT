@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use crate::{array_utils::DoubleBuff, twiddles, FftDirection};
+use crate::{array_utils::DoubleBuf, twiddles, FftDirection};
 
 use super::AvxNum;
 
@@ -2106,7 +2106,7 @@ impl<T: AvxNum> AvxArray<T> for &mut [Complex<T>] {
         self.as_ptr()
     }
 }
-impl<T: AvxNum> AvxArray<T> for &mut DoubleBuff<'_, T> {
+impl<T: AvxNum> AvxArray<T> for &mut DoubleBuf<'_, T> {
     #[inline(always)]
     unsafe fn load_complex(&self, index: usize) -> T::VectorType {
         debug_assert!(self.input.len() >= index + T::VectorType::COMPLEX_PER_VECTOR);
@@ -2207,7 +2207,7 @@ impl<T: AvxNum> AvxArrayMut<T> for &mut [Complex<T>] {
         self.as_mut_ptr()
     }
 }
-impl<T: AvxNum> AvxArrayMut<T> for &mut DoubleBuff<'_, T> {
+impl<T: AvxNum> AvxArrayMut<T> for &mut DoubleBuf<'_, T> {
     #[inline(always)]
     unsafe fn store_complex(&mut self, data: T::VectorType, index: usize) {
         debug_assert!(self.output.len() >= index + T::VectorType::COMPLEX_PER_VECTOR);

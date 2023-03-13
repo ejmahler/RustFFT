@@ -1,7 +1,7 @@
 use core::arch::aarch64::*;
 use num_complex::Complex;
 
-use crate::array_utils::DoubleBuff;
+use crate::array_utils::DoubleBuf;
 
 // Read these indexes from an NeonArray and build an array of simd vectors.
 // Takes a name of a vector to read from, and a list of indexes to read.
@@ -195,7 +195,7 @@ impl NeonArray<f32> for &mut [Complex<f32>] {
     }
 }
 
-impl NeonArray<f32> for &mut DoubleBuff<'_, f32> {
+impl NeonArray<f32> for &mut DoubleBuf<'_, f32> {
     #[inline(always)]
     unsafe fn load_complex(&self, index: usize) -> <f32 as NeonNum>::VectorType {
         debug_assert!(self.input.len() >= index + <f32 as NeonNum>::COMPLEX_PER_VECTOR);
@@ -255,7 +255,7 @@ impl NeonArray<f64> for &mut [Complex<f64>] {
     }
 }
 
-impl NeonArray<f64> for &mut DoubleBuff<'_, f64> {
+impl NeonArray<f64> for &mut DoubleBuf<'_, f64> {
     #[inline(always)]
     unsafe fn load_complex(&self, index: usize) -> <f64 as NeonNum>::VectorType {
         debug_assert!(self.input.len() >= index + <f64 as NeonNum>::COMPLEX_PER_VECTOR);
@@ -315,7 +315,7 @@ impl NeonArrayMut<f32> for &mut [Complex<f32>] {
     }
 }
 
-impl NeonArrayMut<f32> for &mut DoubleBuff<'_, f32> {
+impl NeonArrayMut<f32> for &mut DoubleBuf<'_, f32> {
     #[inline(always)]
     unsafe fn store_complex(&mut self, vector: <f32 as NeonNum>::VectorType, index: usize) {
         debug_assert!(self.output.len() >= index + <f32 as NeonNum>::COMPLEX_PER_VECTOR);
@@ -370,7 +370,7 @@ impl NeonArrayMut<f64> for &mut [Complex<f64>] {
     }
 }
 
-impl NeonArrayMut<f64> for &mut DoubleBuff<'_, f64> {
+impl NeonArrayMut<f64> for &mut DoubleBuf<'_, f64> {
     #[inline(always)]
     unsafe fn store_complex(&mut self, vector: <f64 as NeonNum>::VectorType, index: usize) {
         debug_assert!(self.output.len() >= index + <f64 as NeonNum>::COMPLEX_PER_VECTOR);

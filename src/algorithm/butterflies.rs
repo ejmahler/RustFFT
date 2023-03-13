@@ -2,7 +2,7 @@ use num_complex::Complex;
 
 use crate::{common::FftNum, FftDirection};
 
-use crate::array_utils::{self, DoubleBuff, LoadStore};
+use crate::array_utils::{self, DoubleBuf, LoadStore};
 use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
@@ -35,7 +35,7 @@ macro_rules! boilerplate_fft_butterfly {
                     self.len(),
                     |in_chunk, out_chunk| {
                         unsafe {
-                            self.perform_fft_butterfly(&mut DoubleBuff {
+                            self.perform_fft_butterfly(&mut DoubleBuf {
                                 input: in_chunk,
                                 output: out_chunk,
                             })

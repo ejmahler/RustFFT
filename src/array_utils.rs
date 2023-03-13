@@ -59,11 +59,11 @@ impl<T: FftNum, const N: usize> LoadStore<T> for &mut [Complex<T>; N] {
     }
 }
 
-pub(crate) struct DoubleBuff<'a, T> {
+pub(crate) struct DoubleBuf<'a, T> {
     pub input: &'a [Complex<T>],
     pub output: &'a mut [Complex<T>],
 }
-impl<'a, T: FftNum> LoadStore<T> for &mut DoubleBuff<'a, T> {
+impl<'a, T: FftNum> LoadStore<T> for &mut DoubleBuf<'a, T> {
     #[inline(always)]
     unsafe fn load(&self, idx: usize) -> Complex<T> {
         debug_assert!(idx < self.input.len());

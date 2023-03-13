@@ -1,7 +1,7 @@
 use core::arch::x86_64::*;
 use num_complex::Complex;
 
-use crate::array_utils::DoubleBuff;
+use crate::array_utils::DoubleBuf;
 
 // Read these indexes from an SseArray and build an array of simd vectors.
 // Takes a name of a vector to read from, and a list of indexes to read.
@@ -223,7 +223,7 @@ impl SseArray<f64> for &mut [Complex<f64>] {
     }
 }
 
-impl SseArray<f32> for &mut DoubleBuff<'_, f32> {
+impl SseArray<f32> for &mut DoubleBuf<'_, f32> {
     #[inline(always)]
     unsafe fn load_complex(&self, index: usize) -> <f32 as SseNum>::VectorType {
         debug_assert!(self.input.len() >= index + <f32 as SseNum>::COMPLEX_PER_VECTOR);
@@ -242,7 +242,7 @@ impl SseArray<f32> for &mut DoubleBuff<'_, f32> {
         _mm_castpd_ps(_mm_load1_pd(self.input.as_ptr().add(index) as *const f64))
     }
 }
-impl SseArray<f64> for &mut DoubleBuff<'_, f64> {
+impl SseArray<f64> for &mut DoubleBuf<'_, f64> {
     #[inline(always)]
     unsafe fn load_complex(&self, index: usize) -> <f64 as SseNum>::VectorType {
         debug_assert!(self.input.len() >= index + <f64 as SseNum>::COMPLEX_PER_VECTOR);
@@ -330,7 +330,7 @@ impl SseArrayMut<f64> for &mut [Complex<f64>] {
     }
 }
 
-impl SseArrayMut<f32> for &mut DoubleBuff<'_, f32> {
+impl SseArrayMut<f32> for &mut DoubleBuf<'_, f32> {
     #[inline(always)]
     unsafe fn store_complex(&mut self, vector: <f32 as SseNum>::VectorType, index: usize) {
         debug_assert!(self.output.len() >= index + <f32 as SseNum>::COMPLEX_PER_VECTOR);
@@ -363,7 +363,7 @@ impl SseArrayMut<f32> for &mut DoubleBuff<'_, f32> {
     }
 }
 
-impl SseArrayMut<f64> for &mut DoubleBuff<'_, f64> {
+impl SseArrayMut<f64> for &mut DoubleBuf<'_, f64> {
     #[inline(always)]
     unsafe fn store_complex(&mut self, vector: <f64 as SseNum>::VectorType, index: usize) {
         debug_assert!(self.output.len() >= index + <f64 as SseNum>::COMPLEX_PER_VECTOR);
