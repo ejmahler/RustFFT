@@ -1,5 +1,6 @@
 use core::arch::x86_64::*;
 use num_complex::Complex;
+use std::ops::{Deref, DerefMut};
 
 use crate::array_utils::DoubleBuf;
 
@@ -140,7 +141,7 @@ impl SseNum for f64 {
 // A trait to handle reading from an array of complex floats into SSE vectors.
 // SSE works with 128-bit vectors, meaning a vector can hold two complex f32,
 // or a single complex f64.
-pub trait SseArray<T: SseNum> {
+pub trait SseArray<T: SseNum>: Deref {
     // Load complex numbers from the array to fill a SSE vector.
     unsafe fn load_complex(&self, index: usize) -> T::VectorType;
     // Load a single complex number from the array into a SSE vector, setting the unused elements to zero.
@@ -244,7 +245,7 @@ where
 // A trait to handle writing to an array of complex floats from SSE vectors.
 // SSE works with 128-bit vectors, meaning a vector can hold two complex f32,
 // or a single complex f64.
-pub trait SseArrayMut<T: SseNum>: SseArray<T> {
+pub trait SseArrayMut<T: SseNum>: SseArray<T> + DerefMut {
     // Store all complex numbers from a SSE vector to the array.
     unsafe fn store_complex(&mut self, vector: T::VectorType, index: usize);
     // Store the low complex number from a SSE vector to the array.

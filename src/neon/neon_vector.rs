@@ -1,5 +1,6 @@
 use core::arch::aarch64::*;
 use num_complex::Complex;
+use std::ops::{Deref, DerefMut};
 
 use crate::array_utils::DoubleBuf;
 
@@ -138,7 +139,7 @@ impl NeonNum for f64 {
 // A trait to handle reading from an array of complex floats into Neon vectors.
 // Neon works with 128-bit vectors, meaning a vector can hold two complex f32,
 // or a single complex f64.
-pub trait NeonArray<T: NeonNum> {
+pub trait NeonArray<T: NeonNum>: Deref {
     // Load complex numbers from the array to fill a Neon vector.
     unsafe fn load_complex(&self, index: usize) -> T::VectorType;
     // Load a single complex number from the array into a Neon vector, setting the unused elements to zero.
@@ -252,7 +253,7 @@ where
 // A trait to handle writing to an array of complex floats from Neon vectors.
 // Neon works with 128-bit vectors, meaning a vector can hold two complex f32,
 // or a single complex f64.
-pub trait NeonArrayMut<T: NeonNum>: NeonArray<T> {
+pub trait NeonArrayMut<T: NeonNum>: NeonArray<T> + DerefMut {
     // Store all complex numbers from a Neon vector to the array.
     unsafe fn store_complex(&mut self, vector: T::VectorType, index: usize);
     // Store the low complex number from a Neon vector to the array.
