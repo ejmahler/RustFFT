@@ -223,40 +223,21 @@ impl SseArray<f64> for &mut [Complex<f64>] {
     }
 }
 
-impl SseArray<f32> for &mut DoubleBuf<'_, f32> {
+impl<'a, T: SseNum> SseArray<T> for &mut DoubleBuf<'a, T>
+where
+    &'a [Complex<T>]: SseArray<T>,
+{
     #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> <f32 as SseNum>::VectorType {
-        debug_assert!(self.input.len() >= index + <f32 as SseNum>::COMPLEX_PER_VECTOR);
-        _mm_loadu_ps(self.input.as_ptr().add(index) as *const f32)
+    unsafe fn load_complex(&self, index: usize) -> T::VectorType {
+        self.input.load_complex(index)
     }
-
     #[inline(always)]
-    unsafe fn load_partial1_complex(&self, index: usize) -> <f32 as SseNum>::VectorType {
-        debug_assert!(self.input.len() >= index + 1);
-        _mm_castpd_ps(_mm_load_sd(self.input.as_ptr().add(index) as *const f64))
+    unsafe fn load_partial1_complex(&self, index: usize) -> T::VectorType {
+        self.input.load_partial1_complex(index)
     }
-
     #[inline(always)]
-    unsafe fn load1_complex(&self, index: usize) -> <f32 as SseNum>::VectorType {
-        debug_assert!(self.input.len() >= index + 1);
-        _mm_castpd_ps(_mm_load1_pd(self.input.as_ptr().add(index) as *const f64))
-    }
-}
-impl SseArray<f64> for &mut DoubleBuf<'_, f64> {
-    #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> <f64 as SseNum>::VectorType {
-        debug_assert!(self.input.len() >= index + <f64 as SseNum>::COMPLEX_PER_VECTOR);
-        _mm_loadu_pd(self.input.as_ptr().add(index) as *const f64)
-    }
-
-    #[inline(always)]
-    unsafe fn load_partial1_complex(&self, _index: usize) -> <f64 as SseNum>::VectorType {
-        unimplemented!("Impossible to do a partial load of complex f64's");
-    }
-
-    #[inline(always)]
-    unsafe fn load1_complex(&self, _index: usize) -> <f64 as SseNum>::VectorType {
-        unimplemented!("Impossible to do a partial load of complex f64's");
+    unsafe fn load1_complex(&self, index: usize) -> T::VectorType {
+        self.input.load1_complex(index)
     }
 }
 
@@ -330,59 +311,21 @@ impl SseArrayMut<f64> for &mut [Complex<f64>] {
     }
 }
 
-impl SseArrayMut<f32> for &mut DoubleBuf<'_, f32> {
+impl<'a, T: SseNum> SseArrayMut<T> for &mut DoubleBuf<'a, T>
+where
+    Self: SseArray<T>,
+    &'a mut [Complex<T>]: SseArrayMut<T>,
+{
     #[inline(always)]
-    unsafe fn store_complex(&mut self, vector: <f32 as SseNum>::VectorType, index: usize) {
-        debug_assert!(self.output.len() >= index + <f32 as SseNum>::COMPLEX_PER_VECTOR);
-        _mm_storeu_ps(self.output.as_mut_ptr().add(index) as *mut f32, vector);
-    }
-
-    #[inline(always)]
-    unsafe fn store_partial_hi_complex(
-        &mut self,
-        vector: <f32 as SseNum>::VectorType,
-        index: usize,
-    ) {
-        debug_assert!(self.output.len() >= index + 1);
-        _mm_storeh_pd(
-            self.output.as_mut_ptr().add(index) as *mut f64,
-            _mm_castps_pd(vector),
-        );
+    unsafe fn store_complex(&mut self, vector: T::VectorType, index: usize) {
+        self.output.store_complex(vector, index);
     }
     #[inline(always)]
-    unsafe fn store_partial_lo_complex(
-        &mut self,
-        vector: <f32 as SseNum>::VectorType,
-        index: usize,
-    ) {
-        debug_assert!(self.output.len() >= index + 1);
-        _mm_storel_pd(
-            self.output.as_mut_ptr().add(index) as *mut f64,
-            _mm_castps_pd(vector),
-        );
-    }
-}
-
-impl SseArrayMut<f64> for &mut DoubleBuf<'_, f64> {
-    #[inline(always)]
-    unsafe fn store_complex(&mut self, vector: <f64 as SseNum>::VectorType, index: usize) {
-        debug_assert!(self.output.len() >= index + <f64 as SseNum>::COMPLEX_PER_VECTOR);
-        _mm_storeu_pd(self.output.as_mut_ptr().add(index) as *mut f64, vector);
-    }
-
-    #[inline(always)]
-    unsafe fn store_partial_hi_complex(
-        &mut self,
-        _vector: <f64 as SseNum>::VectorType,
-        _index: usize,
-    ) {
-        unimplemented!("Impossible to do a partial store of complex f64's");
+    unsafe fn store_partial_lo_complex(&mut self, vector: T::VectorType, index: usize) {
+        self.output.store_partial_lo_complex(vector, index);
     }
     #[inline(always)]
-    unsafe fn store_partial_lo_complex(
-        &mut self,
-        _vector: <f64 as SseNum>::VectorType,
-        _index: usize,
-    ) {
+    unsafe fn store_partial_hi_complex(&mut self, vector: T::VectorType, index: usize) {
+        self.output.store_partial_hi_complex(vector, index);
     }
 }
