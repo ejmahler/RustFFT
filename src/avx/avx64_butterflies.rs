@@ -1170,7 +1170,7 @@ impl<T> Butterfly64Avx64<T> {
     unsafe fn column_butterflies_and_transpose(
         &self,
         input: &[Complex<f64>],
-        output: &mut [Complex<f64>],
+        mut output: &mut [Complex<f64>],
     ) {
         // A size-64 FFT is way too big to fit in registers, so instead we're going to compute it in two phases, storing in scratch in between.
 
@@ -1247,7 +1247,7 @@ impl<T> Butterfly128Avx64<T> {
     unsafe fn column_butterflies_and_transpose(
         &self,
         input: &[Complex<f64>],
-        output: &mut [Complex<f64>],
+        mut output: &mut [Complex<f64>],
     ) {
         // A size-128 FFT is way too big to fit in registers, so instead we're going to compute it in two phases, storing in scratch in between.
 
@@ -1327,7 +1327,7 @@ impl<T> Butterfly256Avx64<T> {
     unsafe fn column_butterflies_and_transpose(
         &self,
         input: &[Complex<f64>],
-        output: &mut [Complex<f64>],
+        mut output: &mut [Complex<f64>],
     ) {
         // A size-256 FFT is way too big to fit in registers, so instead we're going to compute it in two phases, storing in scratch in between.
 
@@ -1412,7 +1412,7 @@ impl<T> Butterfly512Avx64<T> {
     unsafe fn column_butterflies_and_transpose(
         &self,
         input: &[Complex<f64>],
-        output: &mut [Complex<f64>],
+        mut output: &mut [Complex<f64>],
     ) {
         // A size-512 FFT is way too big to fit in registers, so instead we're going to compute it in two phases, storing in scratch in between.
 

@@ -1,5 +1,6 @@
 use std::arch::x86_64::*;
 use std::fmt::Debug;
+use std::ops::{Deref, DerefMut};
 
 use num_complex::Complex;
 use num_traits::Zero;
@@ -1977,7 +1978,7 @@ impl AvxVector128 for __m128d {
     }
 }
 
-pub trait AvxArray<T: AvxNum> {
+pub trait AvxArray<T: AvxNum>: Deref {
     unsafe fn load_complex(&self, index: usize) -> T::VectorType;
     unsafe fn load_partial1_complex(
         &self,
@@ -1992,7 +1993,7 @@ pub trait AvxArray<T: AvxNum> {
     // some avx operations need bespoke one-off things that don't fit into the methods above, so we should provide an escape hatch for them
     fn input_ptr(&self) -> *const Complex<T>;
 }
-pub trait AvxArrayMut<T: AvxNum>: AvxArray<T> {
+pub trait AvxArrayMut<T: AvxNum>: AvxArray<T> + DerefMut {
     unsafe fn store_complex(&mut self, data: T::VectorType, index: usize);
     unsafe fn store_partial1_complex(
         &mut self,
@@ -2011,38 +2012,6 @@ pub trait AvxArrayMut<T: AvxNum>: AvxArray<T> {
 }
 
 impl<T: AvxNum> AvxArray<T> for &[Complex<T>] {
-    #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> T::VectorType {
-        debug_assert!(self.len() >= index + T::VectorType::COMPLEX_PER_VECTOR);
-        T::VectorType::load_complex(self.as_ptr().add(index))
-    }
-    #[inline(always)]
-    unsafe fn load_partial1_complex(
-        &self,
-        index: usize,
-    ) -> <T::VectorType as AvxVector256>::HalfVector {
-        debug_assert!(self.len() >= index + 1);
-        T::VectorType::load_partial1_complex(self.as_ptr().add(index))
-    }
-    #[inline(always)]
-    unsafe fn load_partial2_complex(
-        &self,
-        index: usize,
-    ) -> <T::VectorType as AvxVector256>::HalfVector {
-        debug_assert!(self.len() >= index + 2);
-        T::VectorType::load_partial2_complex(self.as_ptr().add(index))
-    }
-    #[inline(always)]
-    unsafe fn load_partial3_complex(&self, index: usize) -> T::VectorType {
-        debug_assert!(self.len() >= index + 3);
-        T::VectorType::load_partial3_complex(self.as_ptr().add(index))
-    }
-    #[inline(always)]
-    fn input_ptr(&self) -> *const Complex<T> {
-        self.as_ptr()
-    }
-}
-impl<T: AvxNum> AvxArray<T> for [Complex<T>] {
     #[inline(always)]
     unsafe fn load_complex(&self, index: usize) -> T::VectorType {
         debug_assert!(self.len() >= index + T::VectorType::COMPLEX_PER_VECTOR);
@@ -2138,40 +2107,6 @@ where
     }
 }
 
-impl<T: AvxNum> AvxArrayMut<T> for [Complex<T>] {
-    #[inline(always)]
-    unsafe fn store_complex(&mut self, data: T::VectorType, index: usize) {
-        debug_assert!(self.len() >= index + T::VectorType::COMPLEX_PER_VECTOR);
-        T::VectorType::store_complex(self.as_mut_ptr().add(index), data);
-    }
-    #[inline(always)]
-    unsafe fn store_partial1_complex(
-        &mut self,
-        data: <T::VectorType as AvxVector256>::HalfVector,
-        index: usize,
-    ) {
-        debug_assert!(self.len() >= index + 1);
-        T::VectorType::store_partial1_complex(self.as_mut_ptr().add(index), data);
-    }
-    #[inline(always)]
-    unsafe fn store_partial2_complex(
-        &mut self,
-        data: <T::VectorType as AvxVector256>::HalfVector,
-        index: usize,
-    ) {
-        debug_assert!(self.len() >= index + 2);
-        T::VectorType::store_partial2_complex(self.as_mut_ptr().add(index), data);
-    }
-    #[inline(always)]
-    unsafe fn store_partial3_complex(&mut self, data: T::VectorType, index: usize) {
-        debug_assert!(self.len() >= index + 3);
-        T::VectorType::store_partial3_complex(self.as_mut_ptr().add(index), data);
-    }
-    #[inline(always)]
-    fn output_ptr(&mut self) -> *mut Complex<T> {
-        self.as_mut_ptr()
-    }
-}
 impl<T: AvxNum> AvxArrayMut<T> for &mut [Complex<T>] {
     #[inline(always)]
     unsafe fn store_complex(&mut self, data: T::VectorType, index: usize) {
@@ -2379,12 +2314,12 @@ unsafe fn mul_complex_conjugated<V: AvxVector>(left: V, right: V) -> V {
 // compute buffer[i] = buffer[i].conj() * multiplier[i] pairwise complex multiplication for each element.
 #[target_feature(enable = "avx", enable = "fma")]
 pub unsafe fn pairwise_complex_mul_assign_conjugated<T: AvxNum>(
-    buffer: &mut [Complex<T>],
+    mut buffer: &mut [Complex<T>],
     multiplier: &[T::VectorType],
 ) {
     assert!(multiplier.len() * T::VectorType::COMPLEX_PER_VECTOR >= buffer.len()); // Assert to convince the compiler to omit bounds checks inside the loop
 
-    for (i, buffer_chunk) in buffer
+    for (i, mut buffer_chunk) in buffer
         .chunks_exact_mut(T::VectorType::COMPLEX_PER_VECTOR)
         .enumerate()
     {
@@ -2427,7 +2362,7 @@ pub unsafe fn pairwise_complex_mul_assign_conjugated<T: AvxNum>(
 #[target_feature(enable = "avx", enable = "fma")]
 pub unsafe fn pairwise_complex_mul_conjugated<T: AvxNum>(
     input: &[Complex<T>],
-    output: &mut [Complex<T>],
+    mut output: &mut [Complex<T>],
     multiplier: &[T::VectorType],
 ) {
     assert!(

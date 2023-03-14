@@ -153,7 +153,11 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
 
     // Do the necessary setup for bluestein's algorithm: copy the data to the inner buffers, apply some twiddle factors, zero out the rest of the inner buffer
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn prepare_bluesteins(&self, input: &[Complex<A>], inner_fft_buffer: &mut [Complex<A>]) {
+    unsafe fn prepare_bluesteins(
+        &self,
+        input: &[Complex<A>],
+        mut inner_fft_buffer: &mut [Complex<A>],
+    ) {
         let chunk_count = self.common_data.twiddles.len() - 1;
         let remainder = self.len() - chunk_count * A::VectorType::COMPLEX_PER_VECTOR;
 
@@ -202,7 +206,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
     unsafe fn finalize_bluesteins(
         &self,
         inner_fft_buffer: &[Complex<A>],
-        output: &mut [Complex<A>],
+        mut output: &mut [Complex<A>],
     ) {
         let chunk_count = self.common_data.twiddles.len() - 1;
         let remainder = self.len() - chunk_count * A::VectorType::COMPLEX_PER_VECTOR;
@@ -242,7 +246,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
     // compute buffer[i] = buffer[i].conj() * multiplier[i] pairwise complex multiplication for each element.
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn pairwise_complex_multiply_conjugated(
-        buffer: &mut [Complex<A>],
+        mut buffer: impl AvxArrayMut<A>,
         multiplier: &[A::VectorType],
     ) {
         for (i, right) in multiplier.iter().enumerate() {

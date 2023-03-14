@@ -274,7 +274,7 @@ macro_rules! mixedradix_transpose{
 
     // Transpose the input (treated as a nxc array) into the output (as a cxn array)
     #[target_feature(enable = "avx")]
-    unsafe fn transpose(&self, input: &[Complex<A>], output: &mut [Complex<A>]) {
+    unsafe fn transpose(&self, input: &[Complex<A>], mut output: &mut [Complex<A>]) {
         const ROW_COUNT : usize = $row_count;
 
         let len_per_row = self.len() / ROW_COUNT;
@@ -758,7 +758,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix16xnAvx<A, T> {
     }
 
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_column_butterflies(&self, buffer: &mut [Complex<A>]) {
+    unsafe fn perform_column_butterflies(&self, mut buffer: impl AvxArrayMut<A>) {
         // How many rows this FFT has, ie 2 for 2xn, 4 for 4xn, etc
         const ROW_COUNT: usize = 16;
         const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
