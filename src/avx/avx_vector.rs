@@ -2075,7 +2075,7 @@ impl<T: AvxNum> AvxArray<T> for &mut [Complex<T>] {
         self.as_ptr()
     }
 }
-impl<'a, T: AvxNum> AvxArray<T> for &mut DoubleBuf<'a, T>
+impl<'a, T: AvxNum> AvxArray<T> for DoubleBuf<'a, T>
 where
     &'a [Complex<T>]: AvxArray<T>,
 {
@@ -2141,7 +2141,7 @@ impl<T: AvxNum> AvxArrayMut<T> for &mut [Complex<T>] {
         self.as_mut_ptr()
     }
 }
-impl<'a, T: AvxNum> AvxArrayMut<T> for &mut DoubleBuf<'a, T>
+impl<'a, T: AvxNum> AvxArrayMut<T> for DoubleBuf<'a, T>
 where
     Self: AvxArray<T>,
     &'a mut [Complex<T>]: AvxArrayMut<T>,

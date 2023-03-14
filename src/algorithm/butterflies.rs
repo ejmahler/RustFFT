@@ -35,7 +35,7 @@ macro_rules! boilerplate_fft_butterfly {
                     self.len(),
                     |in_chunk, out_chunk| {
                         unsafe {
-                            self.perform_fft_butterfly(&mut DoubleBuf {
+                            self.perform_fft_butterfly(DoubleBuf {
                                 input: in_chunk,
                                 output: out_chunk,
                             })

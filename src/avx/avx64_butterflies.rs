@@ -56,7 +56,7 @@ macro_rules! boilerplate_fft_simd_butterfly {
                             // Specialization workaround: See the comments in FftPlannerAvx::new() for why we have to transmute these slices
                             let input_slice = workaround_transmute_mut(in_chunk);
                             let output_slice = workaround_transmute_mut(out_chunk);
-                            self.perform_fft_f64(&mut DoubleBuf {
+                            self.perform_fft_f64(DoubleBuf {
                                 input: input_slice,
                                 output: output_slice,
                             });
@@ -148,7 +148,7 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                 // process the row FFTs, and copy from the scratch back to the buffer as we go
                 // Safety: self.transpose() requres the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
                 unsafe {
-                    self.row_butterflies(&mut DoubleBuf {
+                    self.row_butterflies(DoubleBuf {
                         input: scratch,
                         output: buffer,
                     })

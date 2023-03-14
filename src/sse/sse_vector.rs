@@ -224,7 +224,7 @@ impl SseArray<f64> for &mut [Complex<f64>] {
     }
 }
 
-impl<'a, T: SseNum> SseArray<T> for &mut DoubleBuf<'a, T>
+impl<'a, T: SseNum> SseArray<T> for DoubleBuf<'a, T>
 where
     &'a [Complex<T>]: SseArray<T>,
 {
@@ -312,7 +312,7 @@ impl SseArrayMut<f64> for &mut [Complex<f64>] {
     }
 }
 
-impl<'a, T: SseNum> SseArrayMut<T> for &mut DoubleBuf<'a, T>
+impl<'a, T: SseNum> SseArrayMut<T> for DoubleBuf<'a, T>
 where
     Self: SseArray<T>,
     &'a mut [Complex<T>]: SseArrayMut<T>,

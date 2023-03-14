@@ -1,6 +1,6 @@
 use crate::Complex;
 use crate::FftNum;
-use std::ops::DerefMut;
+use std::ops::{Deref, DerefMut};
 
 /// Given an array of size width * height, representing a flattened 2D array,
 /// transpose the rows and columns of that 2D array into the output
@@ -63,7 +63,18 @@ pub(crate) struct DoubleBuf<'a, T> {
     pub input: &'a [Complex<T>],
     pub output: &'a mut [Complex<T>],
 }
-impl<'a, T: FftNum> LoadStore<T> for &mut DoubleBuf<'a, T> {
+impl<'a, T> Deref for DoubleBuf<'a, T> {
+    type Target = [Complex<T>];
+    fn deref(&self) -> &Self::Target {
+        self.input
+    }
+}
+impl<'a, T> DerefMut for DoubleBuf<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.output
+    }
+}
+impl<'a, T: FftNum> LoadStore<T> for DoubleBuf<'a, T> {
     #[inline(always)]
     unsafe fn load(&self, idx: usize) -> Complex<T> {
         debug_assert!(idx < self.input.len());

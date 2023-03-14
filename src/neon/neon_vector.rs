@@ -232,7 +232,7 @@ impl NeonArray<f64> for &mut [Complex<f64>] {
     }
 }
 
-impl<'a, T: NeonNum> NeonArray<T> for &mut DoubleBuf<'a, T>
+impl<'a, T: NeonNum> NeonArray<T> for DoubleBuf<'a, T>
 where
     &'a [Complex<T>]: NeonArray<T>,
 {
@@ -317,7 +317,7 @@ impl NeonArrayMut<f64> for &mut [Complex<f64>] {
     }
 }
 
-impl<'a, T: NeonNum> NeonArrayMut<T> for &mut DoubleBuf<'a, T>
+impl<'a, T: NeonNum> NeonArrayMut<T> for DoubleBuf<'a, T>
 where
     Self: NeonArray<T>,
     &'a mut [Complex<T>]: NeonArrayMut<T>,
