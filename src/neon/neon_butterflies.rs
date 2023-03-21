@@ -5,7 +5,7 @@ use crate::{common::FftNum, FftDirection};
 
 use crate::array_utils;
 use crate::array_utils::workaround_transmute_mut;
-use crate::array_utils::DoubleBuff;
+use crate::array_utils::DoubleBuf;
 use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
@@ -57,7 +57,7 @@ macro_rules! boilerplate_fft_neon_f32_butterfly {
                     |in_chunk, out_chunk| {
                         let input_slice = workaround_transmute_mut(in_chunk);
                         let output_slice = workaround_transmute_mut(out_chunk);
-                        self.perform_parallel_fft_contiguous(&mut DoubleBuff {
+                        self.perform_parallel_fft_contiguous(DoubleBuf {
                             input: input_slice,
                             output: output_slice,
                         })
@@ -66,7 +66,7 @@ macro_rules! boilerplate_fft_neon_f32_butterfly {
                 if alldone.is_err() && input.len() >= self.len() {
                     let input_slice = workaround_transmute_mut(input);
                     let output_slice = workaround_transmute_mut(output);
-                    self.perform_fft_contiguous(&mut DoubleBuff {
+                    self.perform_fft_contiguous(DoubleBuf {
                         input: &mut input_slice[len - self.len()..],
                         output: &mut output_slice[len - self.len()..],
                     })
@@ -107,7 +107,7 @@ macro_rules! boilerplate_fft_neon_f64_butterfly {
                 array_utils::iter_chunks_zipped(input, output, self.len(), |in_chunk, out_chunk| {
                     let input_slice = workaround_transmute_mut(in_chunk);
                     let output_slice = workaround_transmute_mut(out_chunk);
-                    self.perform_fft_contiguous(&mut DoubleBuff {
+                    self.perform_fft_contiguous(DoubleBuf {
                         input: input_slice,
                         output: output_slice,
                     })

@@ -1,7 +1,8 @@
 use core::arch::aarch64::*;
 use num_complex::Complex;
+use std::ops::{Deref, DerefMut};
 
-use crate::array_utils::DoubleBuff;
+use crate::array_utils::DoubleBuf;
 
 // Read these indexes from an NeonArray and build an array of simd vectors.
 // Takes a name of a vector to read from, and a list of indexes to read.
@@ -138,7 +139,7 @@ impl NeonNum for f64 {
 // A trait to handle reading from an array of complex floats into Neon vectors.
 // Neon works with 128-bit vectors, meaning a vector can hold two complex f32,
 // or a single complex f64.
-pub trait NeonArray<T: NeonNum> {
+pub trait NeonArray<T: NeonNum>: Deref {
     // Load complex numbers from the array to fill a Neon vector.
     unsafe fn load_complex(&self, index: usize) -> T::VectorType;
     // Load a single complex number from the array into a Neon vector, setting the unused elements to zero.
@@ -195,30 +196,6 @@ impl NeonArray<f32> for &mut [Complex<f32>] {
     }
 }
 
-impl NeonArray<f32> for &mut DoubleBuff<'_, f32> {
-    #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> <f32 as NeonNum>::VectorType {
-        debug_assert!(self.input.len() >= index + <f32 as NeonNum>::COMPLEX_PER_VECTOR);
-        vld1q_f32(self.input.as_ptr().add(index) as *const f32)
-    }
-
-    #[inline(always)]
-    unsafe fn load_partial1_complex(&self, index: usize) -> <f32 as NeonNum>::VectorType {
-        debug_assert!(self.input.len() >= index + 1);
-        let temp = vmovq_n_f32(0.0);
-        vreinterpretq_f32_u64(vld1q_lane_u64::<0>(
-            self.input.as_ptr().add(index) as *const u64,
-            vreinterpretq_u64_f32(temp),
-        ))
-    }
-
-    #[inline(always)]
-    unsafe fn load1_complex(&self, index: usize) -> <f32 as NeonNum>::VectorType {
-        debug_assert!(self.input.len() >= index + 1);
-        vreinterpretq_f32_u64(vld1q_dup_u64(self.input.as_ptr().add(index) as *const u64))
-    }
-}
-
 impl NeonArray<f64> for &[Complex<f64>] {
     #[inline(always)]
     unsafe fn load_complex(&self, index: usize) -> <f64 as NeonNum>::VectorType {
@@ -255,28 +232,28 @@ impl NeonArray<f64> for &mut [Complex<f64>] {
     }
 }
 
-impl NeonArray<f64> for &mut DoubleBuff<'_, f64> {
+impl<'a, T: NeonNum> NeonArray<T> for DoubleBuf<'a, T>
+where
+    &'a [Complex<T>]: NeonArray<T>,
+{
     #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> <f64 as NeonNum>::VectorType {
-        debug_assert!(self.input.len() >= index + <f64 as NeonNum>::COMPLEX_PER_VECTOR);
-        vld1q_f64(self.input.as_ptr().add(index) as *const f64)
+    unsafe fn load_complex(&self, index: usize) -> T::VectorType {
+        self.input.load_complex(index)
     }
-
     #[inline(always)]
-    unsafe fn load_partial1_complex(&self, _index: usize) -> <f64 as NeonNum>::VectorType {
-        unimplemented!("Impossible to do a partial load of complex f64's");
+    unsafe fn load_partial1_complex(&self, index: usize) -> T::VectorType {
+        self.input.load_partial1_complex(index)
     }
-
     #[inline(always)]
-    unsafe fn load1_complex(&self, _index: usize) -> <f64 as NeonNum>::VectorType {
-        unimplemented!("Impossible to do a partial load of complex f64's");
+    unsafe fn load1_complex(&self, index: usize) -> T::VectorType {
+        self.input.load1_complex(index)
     }
 }
 
 // A trait to handle writing to an array of complex floats from Neon vectors.
 // Neon works with 128-bit vectors, meaning a vector can hold two complex f32,
 // or a single complex f64.
-pub trait NeonArrayMut<T: NeonNum>: NeonArray<T> {
+pub trait NeonArrayMut<T: NeonNum>: NeonArray<T> + DerefMut {
     // Store all complex numbers from a Neon vector to the array.
     unsafe fn store_complex(&mut self, vector: T::VectorType, index: usize);
     // Store the low complex number from a Neon vector to the array.
@@ -315,36 +292,6 @@ impl NeonArrayMut<f32> for &mut [Complex<f32>] {
     }
 }
 
-impl NeonArrayMut<f32> for &mut DoubleBuff<'_, f32> {
-    #[inline(always)]
-    unsafe fn store_complex(&mut self, vector: <f32 as NeonNum>::VectorType, index: usize) {
-        debug_assert!(self.output.len() >= index + <f32 as NeonNum>::COMPLEX_PER_VECTOR);
-        vst1q_f32(self.output.as_mut_ptr().add(index) as *mut f32, vector);
-    }
-
-    #[inline(always)]
-    unsafe fn store_partial_hi_complex(
-        &mut self,
-        vector: <f32 as NeonNum>::VectorType,
-        index: usize,
-    ) {
-        debug_assert!(self.output.len() >= index + 1);
-        let high = vget_high_f32(vector);
-        vst1_f32(self.output.as_mut_ptr().add(index) as *mut f32, high);
-    }
-
-    #[inline(always)]
-    unsafe fn store_partial_lo_complex(
-        &mut self,
-        vector: <f32 as NeonNum>::VectorType,
-        index: usize,
-    ) {
-        debug_assert!(self.output.len() >= index + 1);
-        let low = vget_low_f32(vector);
-        vst1_f32(self.output.as_mut_ptr().add(index) as *mut f32, low);
-    }
-}
-
 impl NeonArrayMut<f64> for &mut [Complex<f64>] {
     #[inline(always)]
     unsafe fn store_complex(&mut self, vector: <f64 as NeonNum>::VectorType, index: usize) {
@@ -370,28 +317,22 @@ impl NeonArrayMut<f64> for &mut [Complex<f64>] {
     }
 }
 
-impl NeonArrayMut<f64> for &mut DoubleBuff<'_, f64> {
+impl<'a, T: NeonNum> NeonArrayMut<T> for DoubleBuf<'a, T>
+where
+    Self: NeonArray<T>,
+    &'a mut [Complex<T>]: NeonArrayMut<T>,
+{
     #[inline(always)]
-    unsafe fn store_complex(&mut self, vector: <f64 as NeonNum>::VectorType, index: usize) {
-        debug_assert!(self.output.len() >= index + <f64 as NeonNum>::COMPLEX_PER_VECTOR);
-        vst1q_f64(self.output.as_mut_ptr().add(index) as *mut f64, vector);
-    }
-
-    #[inline(always)]
-    unsafe fn store_partial_hi_complex(
-        &mut self,
-        _vector: <f64 as NeonNum>::VectorType,
-        _index: usize,
-    ) {
-        unimplemented!("Impossible to do a partial store of complex f64's");
+    unsafe fn store_complex(&mut self, vector: T::VectorType, index: usize) {
+        self.output.store_complex(vector, index);
     }
     #[inline(always)]
-    unsafe fn store_partial_lo_complex(
-        &mut self,
-        _vector: <f64 as NeonNum>::VectorType,
-        _index: usize,
-    ) {
-        unimplemented!("Impossible to do a partial store of complex f64's");
+    unsafe fn store_partial_hi_complex(&mut self, vector: T::VectorType, index: usize) {
+        self.output.store_partial_hi_complex(vector, index);
+    }
+    #[inline(always)]
+    unsafe fn store_partial_lo_complex(&mut self, vector: T::VectorType, index: usize) {
+        self.output.store_partial_lo_complex(vector, index);
     }
 }
 

@@ -1,7 +1,8 @@
 use core::arch::x86_64::*;
 use num_complex::Complex;
+use std::ops::{Deref, DerefMut};
 
-use crate::array_utils::DoubleBuff;
+use crate::array_utils::DoubleBuf;
 
 // Read these indexes from an SseArray and build an array of simd vectors.
 // Takes a name of a vector to read from, and a list of indexes to read.
@@ -140,7 +141,7 @@ impl SseNum for f64 {
 // A trait to handle reading from an array of complex floats into SSE vectors.
 // SSE works with 128-bit vectors, meaning a vector can hold two complex f32,
 // or a single complex f64.
-pub trait SseArray<T: SseNum> {
+pub trait SseArray<T: SseNum>: Deref {
     // Load complex numbers from the array to fill a SSE vector.
     unsafe fn load_complex(&self, index: usize) -> T::VectorType;
     // Load a single complex number from the array into a SSE vector, setting the unused elements to zero.
@@ -223,47 +224,28 @@ impl SseArray<f64> for &mut [Complex<f64>] {
     }
 }
 
-impl SseArray<f32> for &mut DoubleBuff<'_, f32> {
+impl<'a, T: SseNum> SseArray<T> for DoubleBuf<'a, T>
+where
+    &'a [Complex<T>]: SseArray<T>,
+{
     #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> <f32 as SseNum>::VectorType {
-        debug_assert!(self.input.len() >= index + <f32 as SseNum>::COMPLEX_PER_VECTOR);
-        _mm_loadu_ps(self.input.as_ptr().add(index) as *const f32)
+    unsafe fn load_complex(&self, index: usize) -> T::VectorType {
+        self.input.load_complex(index)
     }
-
     #[inline(always)]
-    unsafe fn load_partial1_complex(&self, index: usize) -> <f32 as SseNum>::VectorType {
-        debug_assert!(self.input.len() >= index + 1);
-        _mm_castpd_ps(_mm_load_sd(self.input.as_ptr().add(index) as *const f64))
+    unsafe fn load_partial1_complex(&self, index: usize) -> T::VectorType {
+        self.input.load_partial1_complex(index)
     }
-
     #[inline(always)]
-    unsafe fn load1_complex(&self, index: usize) -> <f32 as SseNum>::VectorType {
-        debug_assert!(self.input.len() >= index + 1);
-        _mm_castpd_ps(_mm_load1_pd(self.input.as_ptr().add(index) as *const f64))
-    }
-}
-impl SseArray<f64> for &mut DoubleBuff<'_, f64> {
-    #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> <f64 as SseNum>::VectorType {
-        debug_assert!(self.input.len() >= index + <f64 as SseNum>::COMPLEX_PER_VECTOR);
-        _mm_loadu_pd(self.input.as_ptr().add(index) as *const f64)
-    }
-
-    #[inline(always)]
-    unsafe fn load_partial1_complex(&self, _index: usize) -> <f64 as SseNum>::VectorType {
-        unimplemented!("Impossible to do a partial load of complex f64's");
-    }
-
-    #[inline(always)]
-    unsafe fn load1_complex(&self, _index: usize) -> <f64 as SseNum>::VectorType {
-        unimplemented!("Impossible to do a partial load of complex f64's");
+    unsafe fn load1_complex(&self, index: usize) -> T::VectorType {
+        self.input.load1_complex(index)
     }
 }
 
 // A trait to handle writing to an array of complex floats from SSE vectors.
 // SSE works with 128-bit vectors, meaning a vector can hold two complex f32,
 // or a single complex f64.
-pub trait SseArrayMut<T: SseNum>: SseArray<T> {
+pub trait SseArrayMut<T: SseNum>: SseArray<T> + DerefMut {
     // Store all complex numbers from a SSE vector to the array.
     unsafe fn store_complex(&mut self, vector: T::VectorType, index: usize);
     // Store the low complex number from a SSE vector to the array.
@@ -330,59 +312,21 @@ impl SseArrayMut<f64> for &mut [Complex<f64>] {
     }
 }
 
-impl SseArrayMut<f32> for &mut DoubleBuff<'_, f32> {
+impl<'a, T: SseNum> SseArrayMut<T> for DoubleBuf<'a, T>
+where
+    Self: SseArray<T>,
+    &'a mut [Complex<T>]: SseArrayMut<T>,
+{
     #[inline(always)]
-    unsafe fn store_complex(&mut self, vector: <f32 as SseNum>::VectorType, index: usize) {
-        debug_assert!(self.output.len() >= index + <f32 as SseNum>::COMPLEX_PER_VECTOR);
-        _mm_storeu_ps(self.output.as_mut_ptr().add(index) as *mut f32, vector);
-    }
-
-    #[inline(always)]
-    unsafe fn store_partial_hi_complex(
-        &mut self,
-        vector: <f32 as SseNum>::VectorType,
-        index: usize,
-    ) {
-        debug_assert!(self.output.len() >= index + 1);
-        _mm_storeh_pd(
-            self.output.as_mut_ptr().add(index) as *mut f64,
-            _mm_castps_pd(vector),
-        );
+    unsafe fn store_complex(&mut self, vector: T::VectorType, index: usize) {
+        self.output.store_complex(vector, index);
     }
     #[inline(always)]
-    unsafe fn store_partial_lo_complex(
-        &mut self,
-        vector: <f32 as SseNum>::VectorType,
-        index: usize,
-    ) {
-        debug_assert!(self.output.len() >= index + 1);
-        _mm_storel_pd(
-            self.output.as_mut_ptr().add(index) as *mut f64,
-            _mm_castps_pd(vector),
-        );
-    }
-}
-
-impl SseArrayMut<f64> for &mut DoubleBuff<'_, f64> {
-    #[inline(always)]
-    unsafe fn store_complex(&mut self, vector: <f64 as SseNum>::VectorType, index: usize) {
-        debug_assert!(self.output.len() >= index + <f64 as SseNum>::COMPLEX_PER_VECTOR);
-        _mm_storeu_pd(self.output.as_mut_ptr().add(index) as *mut f64, vector);
-    }
-
-    #[inline(always)]
-    unsafe fn store_partial_hi_complex(
-        &mut self,
-        _vector: <f64 as SseNum>::VectorType,
-        _index: usize,
-    ) {
-        unimplemented!("Impossible to do a partial store of complex f64's");
+    unsafe fn store_partial_lo_complex(&mut self, vector: T::VectorType, index: usize) {
+        self.output.store_partial_lo_complex(vector, index);
     }
     #[inline(always)]
-    unsafe fn store_partial_lo_complex(
-        &mut self,
-        _vector: <f64 as SseNum>::VectorType,
-        _index: usize,
-    ) {
+    unsafe fn store_partial_hi_complex(&mut self, vector: T::VectorType, index: usize) {
+        self.output.store_partial_hi_complex(vector, index);
     }
 }

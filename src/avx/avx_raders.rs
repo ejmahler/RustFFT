@@ -296,7 +296,7 @@ impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
         // loop over the output array and use AVX gathers to reorder data from the input
         let mut chunks_iter =
             (&mut output[1..]).chunks_exact_mut(A::VectorType::COMPLEX_PER_VECTOR);
-        for chunk in chunks_iter.by_ref() {
+        for mut chunk in chunks_iter.by_ref() {
             let gathered_elements =
                 A::VectorType::gather_complex_avx2_index64(input.as_ptr(), indexes);
 
@@ -308,7 +308,7 @@ impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
         }
 
         // at this point, we either have 0 or 2 remaining elements to gather. because we know our length ends in 1 or 3. so when we subtract 1 for the inner FFT, that gives us 0 or 2
-        let output_remainder = chunks_iter.into_remainder();
+        let mut output_remainder = chunks_iter.into_remainder();
         if output_remainder.len() == 2 {
             let half_data = AvxVector128::gather64_complex_avx2(
                 input.as_ptr(),
@@ -329,7 +329,7 @@ impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
 
         let mut chunks_iter =
             (&mut output[1..]).chunks_exact_mut(A::VectorType::COMPLEX_PER_VECTOR);
-        for (i, chunk) in chunks_iter.by_ref().enumerate() {
+        for (i, mut chunk) in chunks_iter.by_ref().enumerate() {
             let index_chunk = *self.output_index_mapping.get_unchecked(i);
             let gathered_elements =
                 A::VectorType::gather_complex_avx2_index32(input.as_ptr(), index_chunk);
@@ -339,7 +339,7 @@ impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
         }
 
         // at this point, we either have 0 or 2 remaining elements to gather. because we know our length ends in 1 or 3. so when we subtract 1 for the inner FFT, that gives us 0 or 2
-        let output_remainder = chunks_iter.into_remainder();
+        let mut output_remainder = chunks_iter.into_remainder();
         if output_remainder.len() == 2 {
             let index_chunk = *self
                 .output_index_mapping
