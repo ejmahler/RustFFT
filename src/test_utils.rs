@@ -131,7 +131,7 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
     {
         let mut input = reference_input.clone();
         let mut scratch = vec![Zero::zero(); fft.get_outofplace_scratch_len()];
-        let mut output = expected_output.clone();
+        let mut output = vec![Zero::zero(); n * len];
 
         fft.process_outofplace_with_scratch(&mut input, &mut output, &mut scratch);
 
