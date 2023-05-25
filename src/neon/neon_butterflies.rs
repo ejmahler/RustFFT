@@ -211,7 +211,10 @@ impl<T: FftNum> NeonF32Butterfly1<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(
+        &self,
+        mut buffer: impl NeonArrayMut<f32>,
+    ) {
         let value = buffer.load_complex(0);
         buffer.store_complex(value, 0);
     }
