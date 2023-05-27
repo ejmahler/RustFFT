@@ -2,6 +2,7 @@ use num_integer::gcd;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::wasm_simd::wasm_simd_planner::FftPlannerWasmSimd;
 use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
 
 use crate::algorithm::butterflies::*;
@@ -19,6 +20,7 @@ enum ChosenFftPlanner<T: FftNum> {
     Avx(FftPlannerAvx<T>),
     Sse(FftPlannerSse<T>),
     Neon(FftPlannerNeon<T>),
+    WasmSimd(FftPlannerWasmSimd<T>),
     // todo: If we add NEON, avx-512 etc support, add more enum variants for them here
 }
 
@@ -75,6 +77,10 @@ impl<T: FftNum> FftPlanner<T> {
             Self {
                 chosen_planner: ChosenFftPlanner::Neon(neon_planner),
             }
+        } else if let Ok(wasm_simd_planner) = FftPlannerWasmSimd::new() {
+            Self {
+                chosen_planner: ChosenFftPlanner::WasmSimd(wasm_simd_planner),
+            }
         } else {
             Self {
                 chosen_planner: ChosenFftPlanner::Scalar(FftPlannerScalar::new()),
@@ -93,6 +99,9 @@ impl<T: FftNum> FftPlanner<T> {
             ChosenFftPlanner::Avx(avx_planner) => avx_planner.plan_fft(len, direction),
             ChosenFftPlanner::Sse(sse_planner) => sse_planner.plan_fft(len, direction),
             ChosenFftPlanner::Neon(neon_planner) => neon_planner.plan_fft(len, direction),
+            ChosenFftPlanner::WasmSimd(wasm_simd_planner) => {
+                wasm_simd_planner.plan_fft(len, direction)
+            }
         }
     }
 

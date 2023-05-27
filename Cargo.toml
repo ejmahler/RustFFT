@@ -26,6 +26,7 @@ default = ["avx", "sse", "neon"]
 avx = []
 sse = []
 neon = []
+wasm128 = []
 
 
 [dependencies]
