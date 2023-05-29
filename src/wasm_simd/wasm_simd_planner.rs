@@ -218,6 +218,7 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
 #[cfg(test)]
 mod unit_tests {
     use super::*;
+    use wasm_bindgen_test::*;
 
     fn is_mixedradix(plan: &Recipe) -> bool {
         match plan {
@@ -254,7 +255,7 @@ mod unit_tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn test_plan_sse_trivial() {
         // Length 0 and 1 should use Dft
         let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
@@ -265,7 +266,7 @@ mod unit_tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn test_plan_sse_largepoweroftwo() {
         // Powers of 2 above 6 should use Radix4
         let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
@@ -277,7 +278,7 @@ mod unit_tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn test_plan_sse_butterflies() {
         // Check that all butterflies are used
         let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
@@ -303,7 +304,7 @@ mod unit_tests {
         assert_eq!(*planner.design_fft_for_len(32), Recipe::Butterfly32);
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn test_plan_sse_mixedradix() {
         // Products of several different primes should become MixedRadix
         let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
@@ -324,7 +325,7 @@ mod unit_tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn test_plan_sse_mixedradixsmall() {
         // Products of two "small" lengths < 31 that have a common divisor >1, and isn't a power of 2 should be MixedRadixSmall
         let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
@@ -339,7 +340,7 @@ mod unit_tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn test_plan_sse_goodthomasbutterfly() {
         let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
         for len in [3 * 7, 5 * 7, 11 * 13, 2 * 29].iter() {
@@ -353,7 +354,7 @@ mod unit_tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn test_plan_sse_bluestein_vs_rader() {
         let difficultprimes: [usize; 11] = [59, 83, 107, 149, 167, 173, 179, 359, 719, 1439, 2879];
         let easyprimes: [usize; 24] = [
@@ -378,7 +379,7 @@ mod unit_tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn test_sse_fft_cache() {
         {
             // Check that FFTs are reused if they're both forward
@@ -406,7 +407,7 @@ mod unit_tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn test_sse_recipe_cache() {
         // Check that all butterflies are used
         let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
