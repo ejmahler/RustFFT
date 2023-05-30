@@ -211,10 +211,16 @@ impl<T: FftNum> SseF32Butterfly1<T> {
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, _buffer: impl SseArrayMut<f32>) {}
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SseArrayMut<f32>) {
+        let value = buffer.load_partial1_complex(0);
+        buffer.store_partial_lo_complex(value, 0);
+    }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, _buffer: impl SseArrayMut<f32>) {}
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SseArrayMut<f32>) {
+        let value = buffer.load_complex(0);
+        buffer.store_complex(value, 0);
+    }
 }
 
 //   _             __   _  _   _     _ _
@@ -243,7 +249,10 @@ impl<T: FftNum> SseF64Butterfly1<T> {
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, _buffer: impl SseArrayMut<f64>) {}
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SseArrayMut<f64>) {
+        let value = buffer.load_complex(0);
+        buffer.store_complex(value, 0);
+    }
 }
 
 //   ____            _________  _     _ _
@@ -3132,6 +3141,7 @@ mod unit_tests {
             }
         };
     }
+    test_butterfly_32_func!(test_ssef32_butterfly1, SseF32Butterfly1, 1);
     test_butterfly_32_func!(test_ssef32_butterfly2, SseF32Butterfly2, 2);
     test_butterfly_32_func!(test_ssef32_butterfly3, SseF32Butterfly3, 3);
     test_butterfly_32_func!(test_ssef32_butterfly4, SseF32Butterfly4, 4);
@@ -3159,6 +3169,7 @@ mod unit_tests {
             }
         };
     }
+    test_butterfly_64_func!(test_ssef64_butterfly1, SseF64Butterfly1, 1);
     test_butterfly_64_func!(test_ssef64_butterfly2, SseF64Butterfly2, 2);
     test_butterfly_64_func!(test_ssef64_butterfly3, SseF64Butterfly3, 3);
     test_butterfly_64_func!(test_ssef64_butterfly4, SseF64Butterfly4, 4);
