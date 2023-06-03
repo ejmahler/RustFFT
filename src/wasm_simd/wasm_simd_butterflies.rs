@@ -12,7 +12,7 @@ use crate::{Direction, Fft, Length};
 
 use super::wasm_simd_common::{assert_f32, assert_f64};
 use super::wasm_simd_utils::*;
-use super::wasm_simd_vector::NeonArrayMut;
+use super::wasm_simd_vector::WasmSimdArrayMut;
 
 #[allow(unused)]
 macro_rules! boilerplate_fft_neon_f32_butterfly {
@@ -186,16 +186,18 @@ macro_rules! boilerplate_fft_neon_common_butterfly {
 //  |_|          |____/_____|_.__/|_|\__|
 //
 
-pub struct NeonF32Butterfly1<T> {
+pub struct WasmSimdF32Butterfly1<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly1, 1, |this: &NeonF32Butterfly1<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly1, 1, |this: &NeonF32Butterfly1<_>| this
-    .direction);
-impl<T: FftNum> NeonF32Butterfly1<T> {
+boilerplate_fft_neon_f32_butterfly!(WasmSimdF32Butterfly1, 1, |this: &WasmSimdF32Butterfly1<
+    _,
+>| this.direction);
+boilerplate_fft_neon_common_butterfly!(WasmSimdF32Butterfly1, 1, |this: &WasmSimdF32Butterfly1<
+    _,
+>| this.direction);
+impl<T: FftNum> WasmSimdF32Butterfly1<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
@@ -205,10 +207,14 @@ impl<T: FftNum> NeonF32Butterfly1<T> {
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, _buffer: impl NeonArrayMut<f32>) {}
+    pub(crate) unsafe fn perform_fft_contiguous(&self, _buffer: impl WasmSimdArrayMut<f32>) {}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, _buffer: impl NeonArrayMut<f32>) {}
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(
+        &self,
+        _buffer: impl WasmSimdArrayMut<f32>,
+    ) {
+    }
 }
 
 //   _             __   _  _   _     _ _
@@ -218,16 +224,18 @@ impl<T: FftNum> NeonF32Butterfly1<T> {
 //  |_|           \___/   |_| |_.__/|_|\__|
 //
 
-pub struct NeonF64Butterfly1<T> {
+pub struct WasmSimdF64Butterfly1<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly1, 1, |this: &NeonF64Butterfly1<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly1, 1, |this: &NeonF64Butterfly1<_>| this
-    .direction);
-impl<T: FftNum> NeonF64Butterfly1<T> {
+boilerplate_fft_neon_f64_butterfly!(WasmSimdF64Butterfly1, 1, |this: &WasmSimdF64Butterfly1<
+    _,
+>| this.direction);
+boilerplate_fft_neon_common_butterfly!(WasmSimdF64Butterfly1, 1, |this: &WasmSimdF64Butterfly1<
+    _,
+>| this.direction);
+impl<T: FftNum> WasmSimdF64Butterfly1<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
@@ -237,7 +245,7 @@ impl<T: FftNum> NeonF64Butterfly1<T> {
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, _buffer: impl NeonArrayMut<f64>) {}
+    pub(crate) unsafe fn perform_fft_contiguous(&self, _buffer: impl WasmSimdArrayMut<f64>) {}
 }
 
 //   ____            _________  _     _ _
@@ -247,16 +255,18 @@ impl<T: FftNum> NeonF64Butterfly1<T> {
 //  |_____|         |____/_____|_.__/|_|\__|
 //
 
-pub struct NeonF32Butterfly2<T> {
+pub struct WasmSimdF32Butterfly2<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly2, 2, |this: &NeonF32Butterfly2<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly2, 2, |this: &NeonF32Butterfly2<_>| this
-    .direction);
-impl<T: FftNum> NeonF32Butterfly2<T> {
+boilerplate_fft_neon_f32_butterfly!(WasmSimdF32Butterfly2, 2, |this: &WasmSimdF32Butterfly2<
+    _,
+>| this.direction);
+boilerplate_fft_neon_common_butterfly!(WasmSimdF32Butterfly2, 2, |this: &WasmSimdF32Butterfly2<
+    _,
+>| this.direction);
+impl<T: FftNum> WasmSimdF32Butterfly2<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
@@ -266,7 +276,7 @@ impl<T: FftNum> NeonF32Butterfly2<T> {
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
         let values = buffer.load_complex(0);
 
         let temp = self.perform_fft_direct(values);
@@ -277,7 +287,7 @@ impl<T: FftNum> NeonF32Butterfly2<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
         let values_a = buffer.load_complex(0);
         let values_b = buffer.load_complex(2);
@@ -342,16 +352,18 @@ unsafe fn solo_fft2_f32(values: v128) -> v128 {
 //  |_____|          \___/   |_| |_.__/|_|\__|
 //
 
-pub struct NeonF64Butterfly2<T> {
+pub struct WasmSimdF64Butterfly2<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly2, 2, |this: &NeonF64Butterfly2<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly2, 2, |this: &NeonF64Butterfly2<_>| this
-    .direction);
-impl<T: FftNum> NeonF64Butterfly2<T> {
+boilerplate_fft_neon_f64_butterfly!(WasmSimdF64Butterfly2, 2, |this: &WasmSimdF64Butterfly2<
+    _,
+>| this.direction);
+boilerplate_fft_neon_common_butterfly!(WasmSimdF64Butterfly2, 2, |this: &WasmSimdF64Butterfly2<
+    _,
+>| this.direction);
+impl<T: FftNum> WasmSimdF64Butterfly2<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
@@ -362,7 +374,7 @@ impl<T: FftNum> NeonF64Butterfly2<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
         let value0 = buffer.load_complex(0);
         let value1 = buffer.load_complex(1);
 
@@ -396,7 +408,7 @@ pub(crate) unsafe fn solo_fft2_f64(left: float64x2_t, right: float64x2_t) -> [fl
 //  |____/           |____/_____|_.__/|_|\__|
 //
 
-pub struct NeonF32Butterfly3<T> {
+pub struct WasmSimdF32Butterfly3<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     rotate: Rotate90F32,
@@ -405,11 +417,13 @@ pub struct NeonF32Butterfly3<T> {
     twiddle1im: v128,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly3, 3, |this: &NeonF32Butterfly3<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly3, 3, |this: &NeonF32Butterfly3<_>| this
-    .direction);
-impl<T: FftNum> NeonF32Butterfly3<T> {
+boilerplate_fft_neon_f32_butterfly!(WasmSimdF32Butterfly3, 3, |this: &WasmSimdF32Butterfly3<
+    _,
+>| this.direction);
+boilerplate_fft_neon_common_butterfly!(WasmSimdF32Butterfly3, 3, |this: &WasmSimdF32Butterfly3<
+    _,
+>| this.direction);
+impl<T: FftNum> WasmSimdF32Butterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
@@ -428,7 +442,7 @@ impl<T: FftNum> NeonF32Butterfly3<T> {
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
         let value0x = buffer.load_partial1_complex(0);
         let value12 = buffer.load_complex(1);
 
@@ -441,7 +455,7 @@ impl<T: FftNum> NeonF32Butterfly3<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
         let valuea0a1 = buffer.load_complex(0);
         let valuea2b0 = buffer.load_complex(2);
@@ -467,7 +481,7 @@ impl<T: FftNum> NeonF32Butterfly3<T> {
     // The value Z should be discarded.
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(&self, value0x: v128, value12: v128) -> [v128; 2] {
-        // This is a Neon translation of the scalar 3-point butterfly
+        // This is a WasmSimd translation of the scalar 3-point butterfly
         let rev12 = reverse_complex_and_negate_hi_f32(value12);
         let temp12pn = self.rotate.rotate_hi(f32x4_add(value12, rev12));
         let twiddled = vmulq_f32(temp12pn, self.twiddle);
@@ -487,7 +501,7 @@ impl<T: FftNum> NeonF32Butterfly3<T> {
         value1: v128,
         value2: v128,
     ) -> [v128; 3] {
-        // This is a Neon translation of the scalar 3-point butterfly
+        // This is a WasmSimd translation of the scalar 3-point butterfly
         let x12p = f32x4_add(value1, value2);
         let x12n = f32x4_sub(value1, value2);
         let sum = f32x4_add(value0, x12p);
@@ -511,7 +525,7 @@ impl<T: FftNum> NeonF32Butterfly3<T> {
 //  |____/            \___/   |_| |_.__/|_|\__|
 //
 
-pub struct NeonF64Butterfly3<T> {
+pub struct WasmSimdF64Butterfly3<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     rotate: Rotate90F64,
@@ -519,11 +533,13 @@ pub struct NeonF64Butterfly3<T> {
     twiddle1im: float64x2_t,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly3, 3, |this: &NeonF64Butterfly3<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly3, 3, |this: &NeonF64Butterfly3<_>| this
-    .direction);
-impl<T: FftNum> NeonF64Butterfly3<T> {
+boilerplate_fft_neon_f64_butterfly!(WasmSimdF64Butterfly3, 3, |this: &WasmSimdF64Butterfly3<
+    _,
+>| this.direction);
+boilerplate_fft_neon_common_butterfly!(WasmSimdF64Butterfly3, 3, |this: &WasmSimdF64Butterfly3<
+    _,
+>| this.direction);
+impl<T: FftNum> WasmSimdF64Butterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
@@ -542,7 +558,7 @@ impl<T: FftNum> NeonF64Butterfly3<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
         let value0 = buffer.load_complex(0);
         let value1 = buffer.load_complex(1);
         let value2 = buffer.load_complex(2);
@@ -563,7 +579,7 @@ impl<T: FftNum> NeonF64Butterfly3<T> {
         value1: float64x2_t,
         value2: float64x2_t,
     ) -> [float64x2_t; 3] {
-        // This is a Neon translation of the scalar 3-point butterfly
+        // This is a WasmSimd translation of the scalar 3-point butterfly
         let x12p = vaddq_f64(value1, value2);
         let x12n = vsubq_f64(value1, value2);
         let sum = vaddq_f64(value0, x12p);
@@ -586,17 +602,19 @@ impl<T: FftNum> NeonF64Butterfly3<T> {
 //     |_|           |____/_____|_.__/|_|\__|
 //
 
-pub struct NeonF32Butterfly4<T> {
+pub struct WasmSimdF32Butterfly4<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     rotate: Rotate90F32,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly4, 4, |this: &NeonF32Butterfly4<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly4, 4, |this: &NeonF32Butterfly4<_>| this
-    .direction);
-impl<T: FftNum> NeonF32Butterfly4<T> {
+boilerplate_fft_neon_f32_butterfly!(WasmSimdF32Butterfly4, 4, |this: &WasmSimdF32Butterfly4<
+    _,
+>| this.direction);
+boilerplate_fft_neon_common_butterfly!(WasmSimdF32Butterfly4, 4, |this: &WasmSimdF32Butterfly4<
+    _,
+>| this.direction);
+impl<T: FftNum> WasmSimdF32Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
@@ -612,7 +630,7 @@ impl<T: FftNum> NeonF32Butterfly4<T> {
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
         let value01 = buffer.load_complex(0);
         let value23 = buffer.load_complex(2);
 
@@ -625,7 +643,7 @@ impl<T: FftNum> NeonF32Butterfly4<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
         let value01a = buffer.load_complex(0);
         let value23a = buffer.load_complex(2);
@@ -707,17 +725,19 @@ impl<T: FftNum> NeonF32Butterfly4<T> {
 //     |_|            \___/   |_| |_.__/|_|\__|
 //
 
-pub struct NeonF64Butterfly4<T> {
+pub struct WasmSimdF64Butterfly4<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     rotate: Rotate90F64,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly4, 4, |this: &NeonF64Butterfly4<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly4, 4, |this: &NeonF64Butterfly4<_>| this
-    .direction);
-impl<T: FftNum> NeonF64Butterfly4<T> {
+boilerplate_fft_neon_f64_butterfly!(WasmSimdF64Butterfly4, 4, |this: &WasmSimdF64Butterfly4<
+    _,
+>| this.direction);
+boilerplate_fft_neon_common_butterfly!(WasmSimdF64Butterfly4, 4, |this: &WasmSimdF64Butterfly4<
+    _,
+>| this.direction);
+impl<T: FftNum> WasmSimdF64Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
@@ -735,7 +755,7 @@ impl<T: FftNum> NeonF64Butterfly4<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
         let value0 = buffer.load_complex(0);
         let value1 = buffer.load_complex(1);
         let value2 = buffer.load_complex(2);
@@ -787,7 +807,7 @@ impl<T: FftNum> NeonF64Butterfly4<T> {
 //  |____/           |____/_____|_.__/|_|\__|
 //
 
-pub struct NeonF32Butterfly5<T> {
+pub struct WasmSimdF32Butterfly5<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     rotate: Rotate90F32,
@@ -801,11 +821,13 @@ pub struct NeonF32Butterfly5<T> {
     twiddle2im: v128,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly5, 5, |this: &NeonF32Butterfly5<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly5, 5, |this: &NeonF32Butterfly5<_>| this
-    .direction);
-impl<T: FftNum> NeonF32Butterfly5<T> {
+boilerplate_fft_neon_f32_butterfly!(WasmSimdF32Butterfly5, 5, |this: &WasmSimdF32Butterfly5<
+    _,
+>| this.direction);
+boilerplate_fft_neon_common_butterfly!(WasmSimdF32Butterfly5, 5, |this: &WasmSimdF32Butterfly5<
+    _,
+>| this.direction);
+impl<T: FftNum> WasmSimdF32Butterfly5<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
@@ -836,7 +858,7 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
         let value00 = buffer.load1_complex(0);
         let value12 = buffer.load_complex(1);
         let value34 = buffer.load_complex(3);
@@ -851,7 +873,7 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4 ,6, 8});
 
@@ -884,7 +906,7 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
         value12: v128,
         value34: v128,
     ) -> [v128; 3] {
-        // This is a Neon translation of the scalar 5-point butterfly
+        // This is a WasmSimd translation of the scalar 5-point butterfly
         let temp43 = reverse_complex_elements_f32(value34);
         let x1423p = f32x4_add(value12, temp43);
         let x1423n = f32x4_sub(value12, temp43);
@@ -921,7 +943,7 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
         value3: v128,
         value4: v128,
     ) -> [v128; 5] {
-        // This is a Neon translation of the scalar 3-point butterfly
+        // This is a WasmSimd translation of the scalar 3-point butterfly
         let x14p = f32x4_add(value1, value4);
         let x14n = f32x4_sub(value1, value4);
         let x23p = f32x4_add(value2, value3);
@@ -958,7 +980,7 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
 //  |____/            \___/   |_| |_.__/|_|\__|
 //
 
-pub struct NeonF64Butterfly5<T> {
+pub struct WasmSimdF64Butterfly5<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     rotate: Rotate90F64,
@@ -968,11 +990,13 @@ pub struct NeonF64Butterfly5<T> {
     twiddle2im: float64x2_t,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly5, 5, |this: &NeonF64Butterfly5<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly5, 5, |this: &NeonF64Butterfly5<_>| this
-    .direction);
-impl<T: FftNum> NeonF64Butterfly5<T> {
+boilerplate_fft_neon_f64_butterfly!(WasmSimdF64Butterfly5, 5, |this: &WasmSimdF64Butterfly5<
+    _,
+>| this.direction);
+boilerplate_fft_neon_common_butterfly!(WasmSimdF64Butterfly5, 5, |this: &WasmSimdF64Butterfly5<
+    _,
+>| this.direction);
+impl<T: FftNum> WasmSimdF64Butterfly5<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
@@ -996,7 +1020,7 @@ impl<T: FftNum> NeonF64Butterfly5<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
         let value0 = buffer.load_complex(0);
         let value1 = buffer.load_complex(1);
         let value2 = buffer.load_complex(2);
@@ -1023,7 +1047,7 @@ impl<T: FftNum> NeonF64Butterfly5<T> {
         value3: float64x2_t,
         value4: float64x2_t,
     ) -> [float64x2_t; 5] {
-        // This is a Neon translation of the scalar 5-point butterfly
+        // This is a WasmSimd translation of the scalar 5-point butterfly
         let x14p = vaddq_f64(value1, value4);
         let x14n = vsubq_f64(value1, value4);
         let x23p = vaddq_f64(value2, value3);
@@ -1064,21 +1088,23 @@ impl<T: FftNum> NeonF64Butterfly5<T> {
 //   \___/          |____/_____|_.__/|_|\__|
 //
 
-pub struct NeonF32Butterfly6<T> {
+pub struct WasmSimdF32Butterfly6<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    bf3: NeonF32Butterfly3<T>,
+    bf3: WasmSimdF32Butterfly3<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly6, 6, |this: &NeonF32Butterfly6<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly6, 6, |this: &NeonF32Butterfly6<_>| this
-    .direction);
-impl<T: FftNum> NeonF32Butterfly6<T> {
+boilerplate_fft_neon_f32_butterfly!(WasmSimdF32Butterfly6, 6, |this: &WasmSimdF32Butterfly6<
+    _,
+>| this.direction);
+boilerplate_fft_neon_common_butterfly!(WasmSimdF32Butterfly6, 6, |this: &WasmSimdF32Butterfly6<
+    _,
+>| this.direction);
+impl<T: FftNum> WasmSimdF32Butterfly6<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let bf3 = NeonF32Butterfly3::new(direction);
+        let bf3 = WasmSimdF32Butterfly3::new(direction);
 
         Self {
             direction,
@@ -1088,7 +1114,7 @@ impl<T: FftNum> NeonF32Butterfly6<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
         let value01 = buffer.load_complex(0);
         let value23 = buffer.load_complex(2);
         let value45 = buffer.load_complex(4);
@@ -1103,7 +1129,7 @@ impl<T: FftNum> NeonF32Butterfly6<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
         let input_packed = read_complex_to_array!(buffer,  {0, 2, 4, 6, 8, 10});
 
@@ -1182,21 +1208,23 @@ impl<T: FftNum> NeonF32Butterfly6<T> {
 //   \___/           \___/   |_| |_.__/|_|\__|
 //
 
-pub struct NeonF64Butterfly6<T> {
+pub struct WasmSimdF64Butterfly6<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    bf3: NeonF64Butterfly3<T>,
+    bf3: WasmSimdF64Butterfly3<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly6, 6, |this: &NeonF64Butterfly6<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly6, 6, |this: &NeonF64Butterfly6<_>| this
-    .direction);
-impl<T: FftNum> NeonF64Butterfly6<T> {
+boilerplate_fft_neon_f64_butterfly!(WasmSimdF64Butterfly6, 6, |this: &WasmSimdF64Butterfly6<
+    _,
+>| this.direction);
+boilerplate_fft_neon_common_butterfly!(WasmSimdF64Butterfly6, 6, |this: &WasmSimdF64Butterfly6<
+    _,
+>| this.direction);
+impl<T: FftNum> WasmSimdF64Butterfly6<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let bf3 = NeonF64Butterfly3::new(direction);
+        let bf3 = WasmSimdF64Butterfly3::new(direction);
 
         Self {
             direction,
@@ -1206,7 +1234,7 @@ impl<T: FftNum> NeonF64Butterfly6<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
         let value0 = buffer.load_complex(0);
         let value1 = buffer.load_complex(1);
         let value2 = buffer.load_complex(2);
@@ -1259,23 +1287,25 @@ impl<T: FftNum> NeonF64Butterfly6<T> {
 //   \___/          |____/_____|_.__/|_|\__|
 //
 
-pub struct NeonF32Butterfly8<T> {
+pub struct WasmSimdF32Butterfly8<T> {
     root2: v128,
     root2_dual: v128,
     direction: FftDirection,
-    bf4: NeonF32Butterfly4<T>,
+    bf4: WasmSimdF32Butterfly4<T>,
     rotate90: Rotate90F32,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly8, 8, |this: &NeonF32Butterfly8<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly8, 8, |this: &NeonF32Butterfly8<_>| this
-    .direction);
-impl<T: FftNum> NeonF32Butterfly8<T> {
+boilerplate_fft_neon_f32_butterfly!(WasmSimdF32Butterfly8, 8, |this: &WasmSimdF32Butterfly8<
+    _,
+>| this.direction);
+boilerplate_fft_neon_common_butterfly!(WasmSimdF32Butterfly8, 8, |this: &WasmSimdF32Butterfly8<
+    _,
+>| this.direction);
+impl<T: FftNum> WasmSimdF32Butterfly8<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let bf4 = NeonF32Butterfly4::new(direction);
+        let bf4 = WasmSimdF32Butterfly4::new(direction);
         let root2 =
             unsafe { vld1q_f32([1.0, 1.0, 0.5f32.sqrt(), 0.5f32.sqrt(), 1.0, 1.0].as_ptr()) };
         let root2_dual = unsafe { vmovq_n_f32(0.5f32.sqrt()) };
@@ -1294,7 +1324,7 @@ impl<T: FftNum> NeonF32Butterfly8<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6});
 
         let out = self.perform_fft_direct(input_packed);
@@ -1305,7 +1335,7 @@ impl<T: FftNum> NeonF32Butterfly8<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14});
 
@@ -1394,22 +1424,24 @@ impl<T: FftNum> NeonF32Butterfly8<T> {
 //   \___/           \___/   |_| |_.__/|_|\__|
 //
 
-pub struct NeonF64Butterfly8<T> {
+pub struct WasmSimdF64Butterfly8<T> {
     root2: float64x2_t,
     direction: FftDirection,
-    bf4: NeonF64Butterfly4<T>,
+    bf4: WasmSimdF64Butterfly4<T>,
     rotate90: Rotate90F64,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly8, 8, |this: &NeonF64Butterfly8<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly8, 8, |this: &NeonF64Butterfly8<_>| this
-    .direction);
-impl<T: FftNum> NeonF64Butterfly8<T> {
+boilerplate_fft_neon_f64_butterfly!(WasmSimdF64Butterfly8, 8, |this: &WasmSimdF64Butterfly8<
+    _,
+>| this.direction);
+boilerplate_fft_neon_common_butterfly!(WasmSimdF64Butterfly8, 8, |this: &WasmSimdF64Butterfly8<
+    _,
+>| this.direction);
+impl<T: FftNum> WasmSimdF64Butterfly8<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let bf4 = NeonF64Butterfly4::new(direction);
+        let bf4 = WasmSimdF64Butterfly4::new(direction);
         let root2 = unsafe { vmovq_n_f64(0.5f64.sqrt()) };
         let rotate90 = if direction == FftDirection::Inverse {
             Rotate90F64::new(true)
@@ -1425,7 +1457,7 @@ impl<T: FftNum> NeonF64Butterfly8<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
         let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7});
 
         let out = self.perform_fft_direct(values);
@@ -1476,24 +1508,26 @@ impl<T: FftNum> NeonF64Butterfly8<T> {
 //   \__, | |_____|  ___) / __/| |_) | | |_
 //     /_/          |____/_____|_.__/|_|\__|
 //
-pub struct NeonF32Butterfly9<T> {
+pub struct WasmSimdF32Butterfly9<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    bf3: NeonF32Butterfly3<T>,
+    bf3: WasmSimdF32Butterfly3<T>,
     twiddle1: v128,
     twiddle2: v128,
     twiddle4: v128,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly9, 9, |this: &NeonF32Butterfly9<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly9, 9, |this: &NeonF32Butterfly9<_>| this
-    .direction);
-impl<T: FftNum> NeonF32Butterfly9<T> {
+boilerplate_fft_neon_f32_butterfly!(WasmSimdF32Butterfly9, 9, |this: &WasmSimdF32Butterfly9<
+    _,
+>| this.direction);
+boilerplate_fft_neon_common_butterfly!(WasmSimdF32Butterfly9, 9, |this: &WasmSimdF32Butterfly9<
+    _,
+>| this.direction);
+impl<T: FftNum> WasmSimdF32Butterfly9<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let bf3 = NeonF32Butterfly3::new(direction);
+        let bf3 = WasmSimdF32Butterfly3::new(direction);
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 9, direction);
         let tw2: Complex<f32> = twiddles::compute_twiddle(2, 9, direction);
         let tw4: Complex<f32> = twiddles::compute_twiddle(4, 9, direction);
@@ -1512,8 +1546,8 @@ impl<T: FftNum> NeonF32Butterfly9<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
-        // A single Neon 9-point will need a lot of shuffling, let's just reuse the dual one
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
+        // A single WasmSimd 9-point will need a lot of shuffling, let's just reuse the dual one
         let values = read_partial1_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8});
 
         let out = self.perform_parallel_fft_direct(values);
@@ -1526,7 +1560,7 @@ impl<T: FftNum> NeonF32Butterfly9<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16});
 
@@ -1603,24 +1637,26 @@ impl<T: FftNum> NeonF32Butterfly9<T> {
 //     /_/           \___/   |_| |_.__/|_|\__|
 //
 
-pub struct NeonF64Butterfly9<T> {
+pub struct WasmSimdF64Butterfly9<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    bf3: NeonF64Butterfly3<T>,
+    bf3: WasmSimdF64Butterfly3<T>,
     twiddle1: float64x2_t,
     twiddle2: float64x2_t,
     twiddle4: float64x2_t,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly9, 9, |this: &NeonF64Butterfly9<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly9, 9, |this: &NeonF64Butterfly9<_>| this
-    .direction);
-impl<T: FftNum> NeonF64Butterfly9<T> {
+boilerplate_fft_neon_f64_butterfly!(WasmSimdF64Butterfly9, 9, |this: &WasmSimdF64Butterfly9<
+    _,
+>| this.direction);
+boilerplate_fft_neon_common_butterfly!(WasmSimdF64Butterfly9, 9, |this: &WasmSimdF64Butterfly9<
+    _,
+>| this.direction);
+impl<T: FftNum> WasmSimdF64Butterfly9<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let bf3 = NeonF64Butterfly3::new(direction);
+        let bf3 = WasmSimdF64Butterfly3::new(direction);
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 9, direction);
         let tw2: Complex<f64> = twiddles::compute_twiddle(2, 9, direction);
         let tw4: Complex<f64> = twiddles::compute_twiddle(4, 9, direction);
@@ -1639,7 +1675,7 @@ impl<T: FftNum> NeonF64Butterfly9<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
         let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8});
 
         let out = self.perform_fft_direct(values);
@@ -1679,21 +1715,27 @@ impl<T: FftNum> NeonF64Butterfly9<T> {
 //  |_|\___/          |____/_____|_.__/|_|\__|
 //
 
-pub struct NeonF32Butterfly10<T> {
+pub struct WasmSimdF32Butterfly10<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    bf5: NeonF32Butterfly5<T>,
+    bf5: WasmSimdF32Butterfly5<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly10, 10, |this: &NeonF32Butterfly10<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly10, 10, |this: &NeonF32Butterfly10<_>| this
-    .direction);
-impl<T: FftNum> NeonF32Butterfly10<T> {
+boilerplate_fft_neon_f32_butterfly!(
+    WasmSimdF32Butterfly10,
+    10,
+    |this: &WasmSimdF32Butterfly10<_>| this.direction
+);
+boilerplate_fft_neon_common_butterfly!(
+    WasmSimdF32Butterfly10,
+    10,
+    |this: &WasmSimdF32Butterfly10<_>| this.direction
+);
+impl<T: FftNum> WasmSimdF32Butterfly10<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let bf5 = NeonF32Butterfly5::new(direction);
+        let bf5 = WasmSimdF32Butterfly5::new(direction);
         Self {
             direction,
             _phantom: std::marker::PhantomData,
@@ -1702,7 +1744,7 @@ impl<T: FftNum> NeonF32Butterfly10<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8});
 
         let out = self.perform_fft_direct(input_packed);
@@ -1713,7 +1755,7 @@ impl<T: FftNum> NeonF32Butterfly10<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18});
 
@@ -1794,23 +1836,29 @@ impl<T: FftNum> NeonF32Butterfly10<T> {
 //  |_|\___/           \___/   |_| |_.__/|_|\__|
 //
 
-pub struct NeonF64Butterfly10<T> {
+pub struct WasmSimdF64Butterfly10<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    bf2: NeonF64Butterfly2<T>,
-    bf5: NeonF64Butterfly5<T>,
+    bf2: WasmSimdF64Butterfly2<T>,
+    bf5: WasmSimdF64Butterfly5<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly10, 10, |this: &NeonF64Butterfly10<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly10, 10, |this: &NeonF64Butterfly10<_>| this
-    .direction);
-impl<T: FftNum> NeonF64Butterfly10<T> {
+boilerplate_fft_neon_f64_butterfly!(
+    WasmSimdF64Butterfly10,
+    10,
+    |this: &WasmSimdF64Butterfly10<_>| this.direction
+);
+boilerplate_fft_neon_common_butterfly!(
+    WasmSimdF64Butterfly10,
+    10,
+    |this: &WasmSimdF64Butterfly10<_>| this.direction
+);
+impl<T: FftNum> WasmSimdF64Butterfly10<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let bf2 = NeonF64Butterfly2::new(direction);
-        let bf5 = NeonF64Butterfly5::new(direction);
+        let bf2 = WasmSimdF64Butterfly2::new(direction);
+        let bf5 = WasmSimdF64Butterfly5::new(direction);
         Self {
             direction,
             _phantom: std::marker::PhantomData,
@@ -1820,7 +1868,7 @@ impl<T: FftNum> NeonF64Butterfly10<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
         let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
 
         let out = self.perform_fft_direct(values);
@@ -1864,23 +1912,29 @@ impl<T: FftNum> NeonF64Butterfly10<T> {
 //  |_|_____|         |____/_____|_.__/|_|\__|
 //
 
-pub struct NeonF32Butterfly12<T> {
+pub struct WasmSimdF32Butterfly12<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    bf3: NeonF32Butterfly3<T>,
-    bf4: NeonF32Butterfly4<T>,
+    bf3: WasmSimdF32Butterfly3<T>,
+    bf4: WasmSimdF32Butterfly4<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly12, 12, |this: &NeonF32Butterfly12<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly12, 12, |this: &NeonF32Butterfly12<_>| this
-    .direction);
-impl<T: FftNum> NeonF32Butterfly12<T> {
+boilerplate_fft_neon_f32_butterfly!(
+    WasmSimdF32Butterfly12,
+    12,
+    |this: &WasmSimdF32Butterfly12<_>| this.direction
+);
+boilerplate_fft_neon_common_butterfly!(
+    WasmSimdF32Butterfly12,
+    12,
+    |this: &WasmSimdF32Butterfly12<_>| this.direction
+);
+impl<T: FftNum> WasmSimdF32Butterfly12<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let bf3 = NeonF32Butterfly3::new(direction);
-        let bf4 = NeonF32Butterfly4::new(direction);
+        let bf3 = WasmSimdF32Butterfly3::new(direction);
+        let bf4 = WasmSimdF32Butterfly4::new(direction);
         Self {
             direction,
             _phantom: std::marker::PhantomData,
@@ -1890,7 +1944,7 @@ impl<T: FftNum> NeonF32Butterfly12<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10 });
 
         let out = self.perform_fft_direct(input_packed);
@@ -1901,7 +1955,7 @@ impl<T: FftNum> NeonF32Butterfly12<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
         let input_packed =
             read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22});
@@ -1999,23 +2053,29 @@ impl<T: FftNum> NeonF32Butterfly12<T> {
 //  |_|_____|          \___/   |_| |_.__/|_|\__|
 //
 
-pub struct NeonF64Butterfly12<T> {
+pub struct WasmSimdF64Butterfly12<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    bf3: NeonF64Butterfly3<T>,
-    bf4: NeonF64Butterfly4<T>,
+    bf3: WasmSimdF64Butterfly3<T>,
+    bf4: WasmSimdF64Butterfly4<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly12, 12, |this: &NeonF64Butterfly12<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly12, 12, |this: &NeonF64Butterfly12<_>| this
-    .direction);
-impl<T: FftNum> NeonF64Butterfly12<T> {
+boilerplate_fft_neon_f64_butterfly!(
+    WasmSimdF64Butterfly12,
+    12,
+    |this: &WasmSimdF64Butterfly12<_>| this.direction
+);
+boilerplate_fft_neon_common_butterfly!(
+    WasmSimdF64Butterfly12,
+    12,
+    |this: &WasmSimdF64Butterfly12<_>| this.direction
+);
+impl<T: FftNum> WasmSimdF64Butterfly12<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let bf3 = NeonF64Butterfly3::new(direction);
-        let bf4 = NeonF64Butterfly4::new(direction);
+        let bf3 = WasmSimdF64Butterfly3::new(direction);
+        let bf4 = WasmSimdF64Butterfly4::new(direction);
         Self {
             direction,
             _phantom: std::marker::PhantomData,
@@ -2025,7 +2085,7 @@ impl<T: FftNum> NeonF64Butterfly12<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
         let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11});
 
         let out = self.perform_fft_direct(values);
@@ -2069,23 +2129,29 @@ impl<T: FftNum> NeonF64Butterfly12<T> {
 //  | |___) | |_____|  ___) / __/| |_) | | |_
 //  |_|____/          |____/_____|_.__/|_|\__|
 //
-pub struct NeonF32Butterfly15<T> {
+pub struct WasmSimdF32Butterfly15<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    bf3: NeonF32Butterfly3<T>,
-    bf5: NeonF32Butterfly5<T>,
+    bf3: WasmSimdF32Butterfly3<T>,
+    bf5: WasmSimdF32Butterfly5<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly15, 15, |this: &NeonF32Butterfly15<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly15, 15, |this: &NeonF32Butterfly15<_>| this
-    .direction);
-impl<T: FftNum> NeonF32Butterfly15<T> {
+boilerplate_fft_neon_f32_butterfly!(
+    WasmSimdF32Butterfly15,
+    15,
+    |this: &WasmSimdF32Butterfly15<_>| this.direction
+);
+boilerplate_fft_neon_common_butterfly!(
+    WasmSimdF32Butterfly15,
+    15,
+    |this: &WasmSimdF32Butterfly15<_>| this.direction
+);
+impl<T: FftNum> WasmSimdF32Butterfly15<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let bf3 = NeonF32Butterfly3::new(direction);
-        let bf5 = NeonF32Butterfly5::new(direction);
+        let bf3 = WasmSimdF32Butterfly3::new(direction);
+        let bf5 = WasmSimdF32Butterfly5::new(direction);
         Self {
             direction,
             _phantom: std::marker::PhantomData,
@@ -2095,8 +2161,8 @@ impl<T: FftNum> NeonF32Butterfly15<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
-        // A single Neon 15-point will need a lot of shuffling, let's just reuse the dual one
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
+        // A single WasmSimd 15-point will need a lot of shuffling, let's just reuse the dual one
         let values = read_partial1_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14});
 
         let out = self.perform_parallel_fft_direct(values);
@@ -2109,7 +2175,7 @@ impl<T: FftNum> NeonF32Butterfly15<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
         let input_packed =
             read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28});
@@ -2203,23 +2269,29 @@ impl<T: FftNum> NeonF32Butterfly15<T> {
 //  |_|____/           \___/   |_| |_.__/|_|\__|
 //
 
-pub struct NeonF64Butterfly15<T> {
+pub struct WasmSimdF64Butterfly15<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    bf3: NeonF64Butterfly3<T>,
-    bf5: NeonF64Butterfly5<T>,
+    bf3: WasmSimdF64Butterfly3<T>,
+    bf5: WasmSimdF64Butterfly5<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly15, 15, |this: &NeonF64Butterfly15<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly15, 15, |this: &NeonF64Butterfly15<_>| this
-    .direction);
-impl<T: FftNum> NeonF64Butterfly15<T> {
+boilerplate_fft_neon_f64_butterfly!(
+    WasmSimdF64Butterfly15,
+    15,
+    |this: &WasmSimdF64Butterfly15<_>| this.direction
+);
+boilerplate_fft_neon_common_butterfly!(
+    WasmSimdF64Butterfly15,
+    15,
+    |this: &WasmSimdF64Butterfly15<_>| this.direction
+);
+impl<T: FftNum> WasmSimdF64Butterfly15<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let bf3 = NeonF64Butterfly3::new(direction);
-        let bf5 = NeonF64Butterfly5::new(direction);
+        let bf3 = WasmSimdF64Butterfly3::new(direction);
+        let bf5 = WasmSimdF64Butterfly5::new(direction);
         Self {
             direction,
             _phantom: std::marker::PhantomData,
@@ -2229,7 +2301,7 @@ impl<T: FftNum> NeonF64Butterfly15<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
         let values =
             read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
 
@@ -2276,10 +2348,10 @@ impl<T: FftNum> NeonF64Butterfly15<T> {
 //  |_|\___/          |____/_____|_.__/|_|\__|
 //
 
-pub struct NeonF32Butterfly16<T> {
+pub struct WasmSimdF32Butterfly16<T> {
     direction: FftDirection,
-    bf4: NeonF32Butterfly4<T>,
-    bf8: NeonF32Butterfly8<T>,
+    bf4: WasmSimdF32Butterfly4<T>,
+    bf8: WasmSimdF32Butterfly8<T>,
     rotate90: Rotate90F32,
     twiddle01: v128,
     twiddle23: v128,
@@ -2293,16 +2365,22 @@ pub struct NeonF32Butterfly16<T> {
     twiddle3c: v128,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly16, 16, |this: &NeonF32Butterfly16<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly16, 16, |this: &NeonF32Butterfly16<_>| this
-    .direction);
-impl<T: FftNum> NeonF32Butterfly16<T> {
+boilerplate_fft_neon_f32_butterfly!(
+    WasmSimdF32Butterfly16,
+    16,
+    |this: &WasmSimdF32Butterfly16<_>| this.direction
+);
+boilerplate_fft_neon_common_butterfly!(
+    WasmSimdF32Butterfly16,
+    16,
+    |this: &WasmSimdF32Butterfly16<_>| this.direction
+);
+impl<T: FftNum> WasmSimdF32Butterfly16<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let bf8 = NeonF32Butterfly8::new(direction);
-        let bf4 = NeonF32Butterfly4::new(direction);
+        let bf8 = WasmSimdF32Butterfly8::new(direction);
+        let bf4 = WasmSimdF32Butterfly4::new(direction);
         let rotate90 = if direction == FftDirection::Inverse {
             Rotate90F32::new(true)
         } else {
@@ -2340,7 +2418,7 @@ impl<T: FftNum> NeonF32Butterfly16<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14 });
 
         let out = self.perform_fft_direct(input_packed);
@@ -2351,7 +2429,7 @@ impl<T: FftNum> NeonF32Butterfly16<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30});
 
@@ -2480,10 +2558,10 @@ impl<T: FftNum> NeonF32Butterfly16<T> {
 //  |_|\___/           \___/   |_| |_.__/|_|\__|
 //
 
-pub struct NeonF64Butterfly16<T> {
+pub struct WasmSimdF64Butterfly16<T> {
     direction: FftDirection,
-    bf4: NeonF64Butterfly4<T>,
-    bf8: NeonF64Butterfly8<T>,
+    bf4: WasmSimdF64Butterfly4<T>,
+    bf8: WasmSimdF64Butterfly8<T>,
     rotate90: Rotate90F64,
     twiddle1: float64x2_t,
     twiddle2: float64x2_t,
@@ -2493,16 +2571,22 @@ pub struct NeonF64Butterfly16<T> {
     twiddle3c: float64x2_t,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly16, 16, |this: &NeonF64Butterfly16<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly16, 16, |this: &NeonF64Butterfly16<_>| this
-    .direction);
-impl<T: FftNum> NeonF64Butterfly16<T> {
+boilerplate_fft_neon_f64_butterfly!(
+    WasmSimdF64Butterfly16,
+    16,
+    |this: &WasmSimdF64Butterfly16<_>| this.direction
+);
+boilerplate_fft_neon_common_butterfly!(
+    WasmSimdF64Butterfly16,
+    16,
+    |this: &WasmSimdF64Butterfly16<_>| this.direction
+);
+impl<T: FftNum> WasmSimdF64Butterfly16<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let bf8 = NeonF64Butterfly8::new(direction);
-        let bf4 = NeonF64Butterfly4::new(direction);
+        let bf8 = WasmSimdF64Butterfly8::new(direction);
+        let bf4 = WasmSimdF64Butterfly4::new(direction);
         let rotate90 = if direction == FftDirection::Inverse {
             Rotate90F64::new(true)
         } else {
@@ -2551,7 +2635,7 @@ impl<T: FftNum> NeonF64Butterfly16<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
         let values =
             read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15});
 
@@ -2628,10 +2712,10 @@ impl<T: FftNum> NeonF64Butterfly16<T> {
 //  |____/_____|         |____/_____|_.__/|_|\__|
 //
 
-pub struct NeonF32Butterfly32<T> {
+pub struct WasmSimdF32Butterfly32<T> {
     direction: FftDirection,
-    bf8: NeonF32Butterfly8<T>,
-    bf16: NeonF32Butterfly16<T>,
+    bf8: WasmSimdF32Butterfly8<T>,
+    bf16: WasmSimdF32Butterfly16<T>,
     rotate90: Rotate90F32,
     twiddle01: v128,
     twiddle23: v128,
@@ -2657,16 +2741,22 @@ pub struct NeonF32Butterfly32<T> {
     twiddle7c: v128,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly32, 32, |this: &NeonF32Butterfly32<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly32, 32, |this: &NeonF32Butterfly32<_>| this
-    .direction);
-impl<T: FftNum> NeonF32Butterfly32<T> {
+boilerplate_fft_neon_f32_butterfly!(
+    WasmSimdF32Butterfly32,
+    32,
+    |this: &WasmSimdF32Butterfly32<_>| this.direction
+);
+boilerplate_fft_neon_common_butterfly!(
+    WasmSimdF32Butterfly32,
+    32,
+    |this: &WasmSimdF32Butterfly32<_>| this.direction
+);
+impl<T: FftNum> WasmSimdF32Butterfly32<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let bf8 = NeonF32Butterfly8::new(direction);
-        let bf16 = NeonF32Butterfly16::new(direction);
+        let bf8 = WasmSimdF32Butterfly8::new(direction);
+        let bf16 = WasmSimdF32Butterfly16::new(direction);
         let rotate90 = if direction == FftDirection::Inverse {
             Rotate90F32::new(true)
         } else {
@@ -2732,7 +2822,7 @@ impl<T: FftNum> NeonF32Butterfly32<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30 });
 
         let out = self.perform_fft_direct(input_packed);
@@ -2743,7 +2833,7 @@ impl<T: FftNum> NeonF32Butterfly32<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62});
 
@@ -2944,10 +3034,10 @@ impl<T: FftNum> NeonF32Butterfly32<T> {
 //  |____/_____|          \___/   |_| |_.__/|_|\__|
 //
 
-pub struct NeonF64Butterfly32<T> {
+pub struct WasmSimdF64Butterfly32<T> {
     direction: FftDirection,
-    bf8: NeonF64Butterfly8<T>,
-    bf16: NeonF64Butterfly16<T>,
+    bf8: WasmSimdF64Butterfly8<T>,
+    bf16: WasmSimdF64Butterfly16<T>,
     rotate90: Rotate90F64,
     twiddle1: float64x2_t,
     twiddle2: float64x2_t,
@@ -2965,16 +3055,22 @@ pub struct NeonF64Butterfly32<T> {
     twiddle7c: float64x2_t,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly32, 32, |this: &NeonF64Butterfly32<_>| this
-    .direction);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly32, 32, |this: &NeonF64Butterfly32<_>| this
-    .direction);
-impl<T: FftNum> NeonF64Butterfly32<T> {
+boilerplate_fft_neon_f64_butterfly!(
+    WasmSimdF64Butterfly32,
+    32,
+    |this: &WasmSimdF64Butterfly32<_>| this.direction
+);
+boilerplate_fft_neon_common_butterfly!(
+    WasmSimdF64Butterfly32,
+    32,
+    |this: &WasmSimdF64Butterfly32<_>| this.direction
+);
+impl<T: FftNum> WasmSimdF64Butterfly32<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let bf8 = NeonF64Butterfly8::new(direction);
-        let bf16 = NeonF64Butterfly16::new(direction);
+        let bf8 = WasmSimdF64Butterfly8::new(direction);
+        let bf16 = WasmSimdF64Butterfly16::new(direction);
         let rotate90 = if direction == FftDirection::Inverse {
             Rotate90F64::new(true)
         } else {
@@ -3067,7 +3163,7 @@ impl<T: FftNum> NeonF64Butterfly32<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
         let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31});
 
         let out = self.perform_fft_direct(values);
@@ -3193,18 +3289,18 @@ mod unit_tests {
             }
         };
     }
-    test_butterfly_32_func!(test_neonf32_butterfly2, NeonF32Butterfly2, 2);
-    test_butterfly_32_func!(test_neonf32_butterfly3, NeonF32Butterfly3, 3);
-    test_butterfly_32_func!(test_neonf32_butterfly4, NeonF32Butterfly4, 4);
-    test_butterfly_32_func!(test_neonf32_butterfly5, NeonF32Butterfly5, 5);
-    test_butterfly_32_func!(test_neonf32_butterfly6, NeonF32Butterfly6, 6);
-    test_butterfly_32_func!(test_neonf32_butterfly8, NeonF32Butterfly8, 8);
-    test_butterfly_32_func!(test_neonf32_butterfly9, NeonF32Butterfly9, 9);
-    test_butterfly_32_func!(test_neonf32_butterfly10, NeonF32Butterfly10, 10);
-    test_butterfly_32_func!(test_neonf32_butterfly12, NeonF32Butterfly12, 12);
-    test_butterfly_32_func!(test_neonf32_butterfly15, NeonF32Butterfly15, 15);
-    test_butterfly_32_func!(test_neonf32_butterfly16, NeonF32Butterfly16, 16);
-    test_butterfly_32_func!(test_neonf32_butterfly32, NeonF32Butterfly32, 32);
+    test_butterfly_32_func!(test_neonf32_butterfly2, WasmSimdF32Butterfly2, 2);
+    test_butterfly_32_func!(test_neonf32_butterfly3, WasmSimdF32Butterfly3, 3);
+    test_butterfly_32_func!(test_neonf32_butterfly4, WasmSimdF32Butterfly4, 4);
+    test_butterfly_32_func!(test_neonf32_butterfly5, WasmSimdF32Butterfly5, 5);
+    test_butterfly_32_func!(test_neonf32_butterfly6, WasmSimdF32Butterfly6, 6);
+    test_butterfly_32_func!(test_neonf32_butterfly8, WasmSimdF32Butterfly8, 8);
+    test_butterfly_32_func!(test_neonf32_butterfly9, WasmSimdF32Butterfly9, 9);
+    test_butterfly_32_func!(test_neonf32_butterfly10, WasmSimdF32Butterfly10, 10);
+    test_butterfly_32_func!(test_neonf32_butterfly12, WasmSimdF32Butterfly12, 12);
+    test_butterfly_32_func!(test_neonf32_butterfly15, WasmSimdF32Butterfly15, 15);
+    test_butterfly_32_func!(test_neonf32_butterfly16, WasmSimdF32Butterfly16, 16);
+    test_butterfly_32_func!(test_neonf32_butterfly32, WasmSimdF32Butterfly32, 32);
 
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
@@ -3220,18 +3316,18 @@ mod unit_tests {
             }
         };
     }
-    test_butterfly_64_func!(test_neonf64_butterfly2, NeonF64Butterfly2, 2);
-    test_butterfly_64_func!(test_neonf64_butterfly3, NeonF64Butterfly3, 3);
-    test_butterfly_64_func!(test_neonf64_butterfly4, NeonF64Butterfly4, 4);
-    test_butterfly_64_func!(test_neonf64_butterfly5, NeonF64Butterfly5, 5);
-    test_butterfly_64_func!(test_neonf64_butterfly6, NeonF64Butterfly6, 6);
-    test_butterfly_64_func!(test_neonf64_butterfly8, NeonF64Butterfly8, 8);
-    test_butterfly_64_func!(test_neonf64_butterfly9, NeonF64Butterfly9, 9);
-    test_butterfly_64_func!(test_neonf64_butterfly10, NeonF64Butterfly10, 10);
-    test_butterfly_64_func!(test_neonf64_butterfly12, NeonF64Butterfly12, 12);
-    test_butterfly_64_func!(test_neonf64_butterfly15, NeonF64Butterfly15, 15);
-    test_butterfly_64_func!(test_neonf64_butterfly16, NeonF64Butterfly16, 16);
-    test_butterfly_64_func!(test_neonf64_butterfly32, NeonF64Butterfly32, 32);
+    test_butterfly_64_func!(test_neonf64_butterfly2, WasmSimdF64Butterfly2, 2);
+    test_butterfly_64_func!(test_neonf64_butterfly3, WasmSimdF64Butterfly3, 3);
+    test_butterfly_64_func!(test_neonf64_butterfly4, WasmSimdF64Butterfly4, 4);
+    test_butterfly_64_func!(test_neonf64_butterfly5, WasmSimdF64Butterfly5, 5);
+    test_butterfly_64_func!(test_neonf64_butterfly6, WasmSimdF64Butterfly6, 6);
+    test_butterfly_64_func!(test_neonf64_butterfly8, WasmSimdF64Butterfly8, 8);
+    test_butterfly_64_func!(test_neonf64_butterfly9, WasmSimdF64Butterfly9, 9);
+    test_butterfly_64_func!(test_neonf64_butterfly10, WasmSimdF64Butterfly10, 10);
+    test_butterfly_64_func!(test_neonf64_butterfly12, WasmSimdF64Butterfly12, 12);
+    test_butterfly_64_func!(test_neonf64_butterfly15, WasmSimdF64Butterfly15, 15);
+    test_butterfly_64_func!(test_neonf64_butterfly16, WasmSimdF64Butterfly16, 16);
+    test_butterfly_64_func!(test_neonf64_butterfly32, WasmSimdF64Butterfly32, 32);
 
     #[test]
     fn test_solo_fft2_32() {
@@ -3245,7 +3341,7 @@ mod unit_tests {
 
             let dft = Dft::new(2, FftDirection::Forward);
 
-            let bf2 = NeonF32Butterfly2::<f32>::new(FftDirection::Forward);
+            let bf2 = WasmSimdF32Butterfly2::<f32>::new(FftDirection::Forward);
 
             dft.process(&mut val);
             let res_packed = bf2.perform_fft_direct(in_packed);
@@ -3273,7 +3369,7 @@ mod unit_tests {
 
             let dft = Dft::new(2, FftDirection::Forward);
 
-            let bf2 = NeonF32Butterfly2::<f32>::new(FftDirection::Forward);
+            let bf2 = WasmSimdF32Butterfly2::<f32>::new(FftDirection::Forward);
 
             dft.process(&mut val_a);
             dft.process(&mut val_b);

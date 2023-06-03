@@ -8,7 +8,7 @@ mod wasm_simd_vector;
 // pub mod wasm_simd_prime_butterflies;
 // pub mod wasm_simd_radix4;
 
-// mod wasm_simd_utils;
+mod wasm_simd_utils;
 
 pub mod wasm_simd_planner;
 
