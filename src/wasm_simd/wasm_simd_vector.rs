@@ -153,24 +153,20 @@ impl WasmSimdArray<f32> for &[Complex<f32>] {
     #[inline(always)]
     unsafe fn load_complex(&self, index: usize) -> <f32 as WasmSimdNum>::VectorType {
         debug_assert!(self.len() >= index + <f32 as WasmSimdNum>::COMPLEX_PER_VECTOR);
-        let Complex { re: re1, im: im1 } = self[index];
-        let Complex { re: re2, im: im2 } = self[index + 1];
-        f32x4(re1, im1, re2, im2)
+        v128_load(self.as_ptr().add(index) as *const v128)
     }
 
     #[inline(always)]
     unsafe fn load_partial1_complex(&self, index: usize) -> <f32 as WasmSimdNum>::VectorType {
         debug_assert!(self.len() >= index + 1);
-        let Complex { re, im } = self[index];
-        f32x4(re, im, 0.0, 0.0)
+        v128_load64_lane::<0>(f32x4_splat(0.0), self.as_ptr().add(index) as *const u64)
     }
 
     #[inline(always)]
     unsafe fn load1_complex(&self, index: usize) -> <f32 as WasmSimdNum>::VectorType {
         debug_assert!(self.len() >= index + 1);
 
-        let Complex { re, im } = self[index];
-        f32x4(re, im, re, im)
+        v128_load64_splat(self.as_ptr().add(index) as *const u64)
     }
 }
 
@@ -178,23 +174,19 @@ impl WasmSimdArray<f32> for &mut [Complex<f32>] {
     #[inline(always)]
     unsafe fn load_complex(&self, index: usize) -> <f32 as WasmSimdNum>::VectorType {
         debug_assert!(self.len() >= index + <f32 as WasmSimdNum>::COMPLEX_PER_VECTOR);
-        let Complex { re: re1, im: im1 } = self[index];
-        let Complex { re: re2, im: im2 } = self[index + 1];
-        f32x4(re1, im1, re2, im2)
+        v128_load(self.as_ptr().add(index) as *const v128)
     }
 
     #[inline(always)]
     unsafe fn load_partial1_complex(&self, index: usize) -> <f32 as WasmSimdNum>::VectorType {
         debug_assert!(self.len() >= index + 1);
-        let Complex { re, im } = self[index];
-        f32x4(re, im, 0.0, 0.0)
+        v128_load64_lane::<0>(f32x4_splat(0.0), self.as_ptr().add(index) as *const u64)
     }
 
     #[inline(always)]
     unsafe fn load1_complex(&self, index: usize) -> <f32 as WasmSimdNum>::VectorType {
         debug_assert!(self.len() >= index + 1);
-        let Complex { re, im } = self[index];
-        f32x4(re, im, re, im)
+        v128_load64_splat(self.as_ptr().add(index) as *const u64)
     }
 }
 
@@ -202,8 +194,7 @@ impl WasmSimdArray<f64> for &[Complex<f64>] {
     #[inline(always)]
     unsafe fn load_complex(&self, index: usize) -> <f64 as WasmSimdNum>::VectorType {
         debug_assert!(self.len() >= index + <f64 as WasmSimdNum>::COMPLEX_PER_VECTOR);
-        let Complex { re, im } = self[index];
-        f64x2(re, im)
+        v128_load(self.as_ptr().add(index) as *const v128)
     }
 
     #[inline(always)]
@@ -221,8 +212,7 @@ impl WasmSimdArray<f64> for &mut [Complex<f64>] {
     #[inline(always)]
     unsafe fn load_complex(&self, index: usize) -> <f64 as WasmSimdNum>::VectorType {
         debug_assert!(self.len() >= index + <f64 as WasmSimdNum>::COMPLEX_PER_VECTOR);
-        let Complex { re, im } = self[index];
-        f64x2(re, im)
+        v128_load(self.as_ptr().add(index) as *const v128)
     }
 
     #[inline(always)]
@@ -270,9 +260,7 @@ impl WasmSimdArrayMut<f32> for &mut [Complex<f32>] {
     #[inline(always)]
     unsafe fn store_complex(&mut self, vector: <f32 as WasmSimdNum>::VectorType, index: usize) {
         debug_assert!(self.len() >= index + <f32 as WasmSimdNum>::COMPLEX_PER_VECTOR);
-        // vst1q_f32(self.as_mut_ptr().add(index) as *mut f32, vector);
-        v128_store64_lane::<0>(vector, self.as_mut_ptr().add(index) as *mut u64);
-        v128_store64_lane::<1>(vector, self.as_mut_ptr().add(index + 1) as *mut u64);
+        v128_store(self.as_mut_ptr().add(index) as *mut v128, vector);
     }
 
     #[inline(always)]

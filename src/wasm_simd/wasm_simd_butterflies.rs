@@ -15,7 +15,7 @@ use super::wasm_simd_utils::*;
 use super::wasm_simd_vector::WasmSimdArrayMut;
 
 #[allow(unused)]
-macro_rules! boilerplate_fft_neon_f32_butterfly {
+macro_rules! boilerplate_fft_wasm_simd_f32_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> $struct_name<T> {
             pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
@@ -77,7 +77,7 @@ macro_rules! boilerplate_fft_neon_f32_butterfly {
     };
 }
 
-macro_rules! boilerplate_fft_neon_f64_butterfly {
+macro_rules! boilerplate_fft_wasm_simd_f64_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> $struct_name<T> {
             // Do a single fft
@@ -118,7 +118,7 @@ macro_rules! boilerplate_fft_neon_f64_butterfly {
 }
 
 #[allow(unused)]
-macro_rules! boilerplate_fft_neon_common_butterfly {
+macro_rules! boilerplate_fft_wasm_simd_common_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             fn process_outofplace_with_scratch(
@@ -191,12 +191,16 @@ pub struct WasmSimdF32Butterfly1<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(WasmSimdF32Butterfly1, 1, |this: &WasmSimdF32Butterfly1<
-    _,
->| this.direction);
-boilerplate_fft_neon_common_butterfly!(WasmSimdF32Butterfly1, 1, |this: &WasmSimdF32Butterfly1<
-    _,
->| this.direction);
+boilerplate_fft_wasm_simd_f32_butterfly!(
+    WasmSimdF32Butterfly1,
+    1,
+    |this: &WasmSimdF32Butterfly1<_>| this.direction
+);
+boilerplate_fft_wasm_simd_common_butterfly!(
+    WasmSimdF32Butterfly1,
+    1,
+    |this: &WasmSimdF32Butterfly1<_>| this.direction
+);
 impl<T: FftNum> WasmSimdF32Butterfly1<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -207,13 +211,18 @@ impl<T: FftNum> WasmSimdF32Butterfly1<T> {
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, _buffer: impl WasmSimdArrayMut<f32>) {}
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
+        let value = buffer.load_partial1_complex(0);
+        buffer.store_partial_lo_complex(value, 0);
+    }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        _buffer: impl WasmSimdArrayMut<f32>,
+        mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
+        let value = buffer.load_complex(0);
+        buffer.store_complex(value, 0);
     }
 }
 
@@ -229,12 +238,16 @@ pub struct WasmSimdF64Butterfly1<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(WasmSimdF64Butterfly1, 1, |this: &WasmSimdF64Butterfly1<
-    _,
->| this.direction);
-boilerplate_fft_neon_common_butterfly!(WasmSimdF64Butterfly1, 1, |this: &WasmSimdF64Butterfly1<
-    _,
->| this.direction);
+boilerplate_fft_wasm_simd_f64_butterfly!(
+    WasmSimdF64Butterfly1,
+    1,
+    |this: &WasmSimdF64Butterfly1<_>| this.direction
+);
+boilerplate_fft_wasm_simd_common_butterfly!(
+    WasmSimdF64Butterfly1,
+    1,
+    |this: &WasmSimdF64Butterfly1<_>| this.direction
+);
 impl<T: FftNum> WasmSimdF64Butterfly1<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -245,7 +258,10 @@ impl<T: FftNum> WasmSimdF64Butterfly1<T> {
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, _buffer: impl WasmSimdArrayMut<f64>) {}
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
+        let value = buffer.load_complex(0);
+        buffer.store_complex(value, 0);
+    }
 }
 
 //   ____            _________  _     _ _
@@ -260,12 +276,16 @@ pub struct WasmSimdF32Butterfly2<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(WasmSimdF32Butterfly2, 2, |this: &WasmSimdF32Butterfly2<
-    _,
->| this.direction);
-boilerplate_fft_neon_common_butterfly!(WasmSimdF32Butterfly2, 2, |this: &WasmSimdF32Butterfly2<
-    _,
->| this.direction);
+boilerplate_fft_wasm_simd_f32_butterfly!(
+    WasmSimdF32Butterfly2,
+    2,
+    |this: &WasmSimdF32Butterfly2<_>| this.direction
+);
+boilerplate_fft_wasm_simd_common_butterfly!(
+    WasmSimdF32Butterfly2,
+    2,
+    |this: &WasmSimdF32Butterfly2<_>| this.direction
+);
 impl<T: FftNum> WasmSimdF32Butterfly2<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -340,9 +360,10 @@ unsafe fn parallel_fft2_contiguous_f32(left: v128, right: v128) -> [v128; 2] {
 // result is [X0, X1]
 #[inline(always)]
 unsafe fn solo_fft2_f32(values: v128) -> v128 {
-    let high = vget_high_f32(values);
-    let low = vget_low_f32(values);
-    vcombine_f32(vadd_f32(low, high), vsub_f32(low, high))
+    let high = u64x2_shuffle::<0, 0>(values, values);
+    let low = u64x2_shuffle::<1, 1>(values, values);
+    let low = f32x4_mul(low, f32x4(1.0, 1.0, -1.0, -1.0));
+    f32x4_add(high, low)
 }
 
 //   ____             __   _  _   _     _ _
@@ -357,12 +378,16 @@ pub struct WasmSimdF64Butterfly2<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(WasmSimdF64Butterfly2, 2, |this: &WasmSimdF64Butterfly2<
-    _,
->| this.direction);
-boilerplate_fft_neon_common_butterfly!(WasmSimdF64Butterfly2, 2, |this: &WasmSimdF64Butterfly2<
-    _,
->| this.direction);
+boilerplate_fft_wasm_simd_f64_butterfly!(
+    WasmSimdF64Butterfly2,
+    2,
+    |this: &WasmSimdF64Butterfly2<_>| this.direction
+);
+boilerplate_fft_wasm_simd_common_butterfly!(
+    WasmSimdF64Butterfly2,
+    2,
+    |this: &WasmSimdF64Butterfly2<_>| this.direction
+);
 impl<T: FftNum> WasmSimdF64Butterfly2<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -385,19 +410,15 @@ impl<T: FftNum> WasmSimdF64Butterfly2<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(
-        &self,
-        value0: float64x2_t,
-        value1: float64x2_t,
-    ) -> [float64x2_t; 2] {
+    pub(crate) unsafe fn perform_fft_direct(&self, value0: v128, value1: v128) -> [v128; 2] {
         solo_fft2_f64(value0, value1)
     }
 }
 
 #[inline(always)]
-pub(crate) unsafe fn solo_fft2_f64(left: float64x2_t, right: float64x2_t) -> [float64x2_t; 2] {
-    let temp0 = vaddq_f64(left, right);
-    let temp1 = vsubq_f64(left, right);
+pub(crate) unsafe fn solo_fft2_f64(left: v128, right: v128) -> [v128; 2] {
+    let temp0 = f64x2_add(left, right);
+    let temp1 = f64x2_sub(left, right);
     [temp0, temp1]
 }
 
@@ -417,21 +438,25 @@ pub struct WasmSimdF32Butterfly3<T> {
     twiddle1im: v128,
 }
 
-boilerplate_fft_neon_f32_butterfly!(WasmSimdF32Butterfly3, 3, |this: &WasmSimdF32Butterfly3<
-    _,
->| this.direction);
-boilerplate_fft_neon_common_butterfly!(WasmSimdF32Butterfly3, 3, |this: &WasmSimdF32Butterfly3<
-    _,
->| this.direction);
+boilerplate_fft_wasm_simd_f32_butterfly!(
+    WasmSimdF32Butterfly3,
+    3,
+    |this: &WasmSimdF32Butterfly3<_>| this.direction
+);
+boilerplate_fft_wasm_simd_common_butterfly!(
+    WasmSimdF32Butterfly3,
+    3,
+    |this: &WasmSimdF32Butterfly3<_>| this.direction
+);
 impl<T: FftNum> WasmSimdF32Butterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let rotate = Rotate90F32::new(true);
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 3, direction);
-        let twiddle = unsafe { vld1q_f32([tw1.re, tw1.re, -tw1.im, -tw1.im].as_ptr()) };
-        let twiddle1re = unsafe { vmovq_n_f32(tw1.re) };
-        let twiddle1im = unsafe { vmovq_n_f32(tw1.im) };
+        let twiddle = f32x4(tw1.re, tw1.re, -tw1.im, -tw1.im);
+        let twiddle1re = f32x4_splat(tw1.re);
+        let twiddle1im = f32x4_splat(tw1.im);
         Self {
             direction,
             _phantom: std::marker::PhantomData,
@@ -484,7 +509,7 @@ impl<T: FftNum> WasmSimdF32Butterfly3<T> {
         // This is a WasmSimd translation of the scalar 3-point butterfly
         let rev12 = reverse_complex_and_negate_hi_f32(value12);
         let temp12pn = self.rotate.rotate_hi(f32x4_add(value12, rev12));
-        let twiddled = vmulq_f32(temp12pn, self.twiddle);
+        let twiddled = f32x4_mul(temp12pn, self.twiddle);
         let temp = f32x4_add(value0x, twiddled);
 
         let out12 = solo_fft2_f32(temp);
@@ -506,11 +531,11 @@ impl<T: FftNum> WasmSimdF32Butterfly3<T> {
         let x12n = f32x4_sub(value1, value2);
         let sum = f32x4_add(value0, x12p);
 
-        let temp_a = vmulq_f32(self.twiddle1re, x12p);
+        let temp_a = f32x4_mul(self.twiddle1re, x12p);
         let temp_a = f32x4_add(temp_a, value0);
 
         let n_rot = self.rotate.rotate_both(x12n);
-        let temp_b = vmulq_f32(self.twiddle1im, n_rot);
+        let temp_b = f32x4_mul(self.twiddle1im, n_rot);
 
         let x1 = f32x4_add(temp_a, temp_b);
         let x2 = f32x4_sub(temp_a, temp_b);
@@ -529,24 +554,28 @@ pub struct WasmSimdF64Butterfly3<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     rotate: Rotate90F64,
-    twiddle1re: float64x2_t,
-    twiddle1im: float64x2_t,
+    twiddle1re: v128,
+    twiddle1im: v128,
 }
 
-boilerplate_fft_neon_f64_butterfly!(WasmSimdF64Butterfly3, 3, |this: &WasmSimdF64Butterfly3<
-    _,
->| this.direction);
-boilerplate_fft_neon_common_butterfly!(WasmSimdF64Butterfly3, 3, |this: &WasmSimdF64Butterfly3<
-    _,
->| this.direction);
+boilerplate_fft_wasm_simd_f64_butterfly!(
+    WasmSimdF64Butterfly3,
+    3,
+    |this: &WasmSimdF64Butterfly3<_>| this.direction
+);
+boilerplate_fft_wasm_simd_common_butterfly!(
+    WasmSimdF64Butterfly3,
+    3,
+    |this: &WasmSimdF64Butterfly3<_>| this.direction
+);
 impl<T: FftNum> WasmSimdF64Butterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let rotate = Rotate90F64::new(true);
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 3, direction);
-        let twiddle1re = unsafe { vmovq_n_f64(tw1.re) };
-        let twiddle1im = unsafe { vmovq_n_f64(tw1.im) };
+        let twiddle1re = f64x2_splat(tw1.re);
+        let twiddle1im = f64x2_splat(tw1.im);
 
         Self {
             direction,
@@ -575,22 +604,23 @@ impl<T: FftNum> WasmSimdF64Butterfly3<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
         &self,
-        value0: float64x2_t,
-        value1: float64x2_t,
-        value2: float64x2_t,
-    ) -> [float64x2_t; 3] {
+        value0: v128,
+        value1: v128,
+        value2: v128,
+    ) -> [v128; 3] {
         // This is a WasmSimd translation of the scalar 3-point butterfly
-        let x12p = vaddq_f64(value1, value2);
-        let x12n = vsubq_f64(value1, value2);
-        let sum = vaddq_f64(value0, x12p);
+        let x12p = f64x2_add(value1, value2);
+        let x12n = f64x2_sub(value1, value2);
+        let sum = f64x2_add(value0, x12p);
 
-        let temp_a = vfmaq_f64(value0, self.twiddle1re, x12p);
+        // let temp_a = vfmaq_f64(value0, self.twiddle1re, x12p);
+        let temp_a = f64x2_add(value0, f64x2_mul(self.twiddle1re, x12p));
 
         let n_rot = self.rotate.rotate(x12n);
-        let temp_b = vmulq_f64(self.twiddle1im, n_rot);
+        let temp_b = f64x2_mul(self.twiddle1im, n_rot);
 
-        let x1 = vaddq_f64(temp_a, temp_b);
-        let x2 = vsubq_f64(temp_a, temp_b);
+        let x1 = f64x2_add(temp_a, temp_b);
+        let x2 = f64x2_sub(temp_a, temp_b);
         [sum, x1, x2]
     }
 }
@@ -608,12 +638,16 @@ pub struct WasmSimdF32Butterfly4<T> {
     rotate: Rotate90F32,
 }
 
-boilerplate_fft_neon_f32_butterfly!(WasmSimdF32Butterfly4, 4, |this: &WasmSimdF32Butterfly4<
-    _,
->| this.direction);
-boilerplate_fft_neon_common_butterfly!(WasmSimdF32Butterfly4, 4, |this: &WasmSimdF32Butterfly4<
-    _,
->| this.direction);
+boilerplate_fft_wasm_simd_f32_butterfly!(
+    WasmSimdF32Butterfly4,
+    4,
+    |this: &WasmSimdF32Butterfly4<_>| this.direction
+);
+boilerplate_fft_wasm_simd_common_butterfly!(
+    WasmSimdF32Butterfly4,
+    4,
+    |this: &WasmSimdF32Butterfly4<_>| this.direction
+);
 impl<T: FftNum> WasmSimdF32Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -731,12 +765,16 @@ pub struct WasmSimdF64Butterfly4<T> {
     rotate: Rotate90F64,
 }
 
-boilerplate_fft_neon_f64_butterfly!(WasmSimdF64Butterfly4, 4, |this: &WasmSimdF64Butterfly4<
-    _,
->| this.direction);
-boilerplate_fft_neon_common_butterfly!(WasmSimdF64Butterfly4, 4, |this: &WasmSimdF64Butterfly4<
-    _,
->| this.direction);
+boilerplate_fft_wasm_simd_f64_butterfly!(
+    WasmSimdF64Butterfly4,
+    4,
+    |this: &WasmSimdF64Butterfly4<_>| this.direction
+);
+boilerplate_fft_wasm_simd_common_butterfly!(
+    WasmSimdF64Butterfly4,
+    4,
+    |this: &WasmSimdF64Butterfly4<_>| this.direction
+);
 impl<T: FftNum> WasmSimdF64Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -772,11 +810,11 @@ impl<T: FftNum> WasmSimdF64Butterfly4<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
         &self,
-        value0: float64x2_t,
-        value1: float64x2_t,
-        value2: float64x2_t,
-        value3: float64x2_t,
-    ) -> [float64x2_t; 4] {
+        value0: v128,
+        value1: v128,
+        value2: v128,
+        value3: v128,
+    ) -> [v128; 4] {
         //we're going to hardcode a step of mixed radix
         //aka we're going to do the six step algorithm
 
@@ -821,12 +859,16 @@ pub struct WasmSimdF32Butterfly5<T> {
     twiddle2im: v128,
 }
 
-boilerplate_fft_neon_f32_butterfly!(WasmSimdF32Butterfly5, 5, |this: &WasmSimdF32Butterfly5<
-    _,
->| this.direction);
-boilerplate_fft_neon_common_butterfly!(WasmSimdF32Butterfly5, 5, |this: &WasmSimdF32Butterfly5<
-    _,
->| this.direction);
+boilerplate_fft_wasm_simd_f32_butterfly!(
+    WasmSimdF32Butterfly5,
+    5,
+    |this: &WasmSimdF32Butterfly5<_>| this.direction
+);
+boilerplate_fft_wasm_simd_common_butterfly!(
+    WasmSimdF32Butterfly5,
+    5,
+    |this: &WasmSimdF32Butterfly5<_>| this.direction
+);
 impl<T: FftNum> WasmSimdF32Butterfly5<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -834,14 +876,14 @@ impl<T: FftNum> WasmSimdF32Butterfly5<T> {
         let rotate = Rotate90F32::new(true);
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 5, direction);
         let tw2: Complex<f32> = twiddles::compute_twiddle(2, 5, direction);
-        let twiddle12re = unsafe { vld1q_f32([tw1.re, tw1.re, tw2.re, tw2.re].as_ptr()) };
-        let twiddle21re = unsafe { vld1q_f32([tw2.re, tw2.re, tw1.re, tw1.re].as_ptr()) };
-        let twiddle12im = unsafe { vld1q_f32([tw1.im, tw1.im, tw2.im, tw2.im].as_ptr()) };
-        let twiddle21im = unsafe { vld1q_f32([tw2.im, tw2.im, -tw1.im, -tw1.im].as_ptr()) };
-        let twiddle1re = unsafe { vmovq_n_f32(tw1.re) };
-        let twiddle1im = unsafe { vmovq_n_f32(tw1.im) };
-        let twiddle2re = unsafe { vmovq_n_f32(tw2.re) };
-        let twiddle2im = unsafe { vmovq_n_f32(tw2.im) };
+        let twiddle12re = f32x4(tw1.re, tw1.re, tw2.re, tw2.re);
+        let twiddle21re = f32x4(tw2.re, tw2.re, tw1.re, tw1.re);
+        let twiddle12im = f32x4(tw1.im, tw1.im, tw2.im, tw2.im);
+        let twiddle21im = f32x4(tw2.im, tw2.im, -tw1.im, -tw1.im);
+        let twiddle1re = f32x4_splat(tw1.re);
+        let twiddle1im = f32x4_splat(tw1.im);
+        let twiddle2re = f32x4_splat(tw2.re);
+        let twiddle2im = f32x4_splat(tw2.im);
 
         Self {
             direction,
@@ -916,12 +958,12 @@ impl<T: FftNum> WasmSimdF32Butterfly5<T> {
         let x1414n = duplicate_lo_f32(x1423n);
         let x2323n = duplicate_hi_f32(x1423n);
 
-        let temp_a1 = vmulq_f32(self.twiddle12re, x1414p);
-        let temp_b1 = vmulq_f32(self.twiddle12im, x1414n);
+        let temp_a1 = f32x4_mul(self.twiddle12re, x1414p);
+        let temp_b1 = f32x4_mul(self.twiddle12im, x1414n);
 
-        let temp_a = vfmaq_f32(temp_a1, self.twiddle21re, x2323p);
+        let temp_a = f32x4_add(temp_a1, f32x4_mul(self.twiddle21re, x2323p));
         let temp_a = f32x4_add(value00, temp_a);
-        let temp_b = vfmaq_f32(temp_b1, self.twiddle21im, x2323n);
+        let temp_b = f32x4_add(temp_b1, f32x4_mul(self.twiddle21im, x2323n));
 
         let b_rot = self.rotate.rotate_both(temp_b);
 
@@ -949,14 +991,14 @@ impl<T: FftNum> WasmSimdF32Butterfly5<T> {
         let x23p = f32x4_add(value2, value3);
         let x23n = f32x4_sub(value2, value3);
 
-        let temp_a1_1 = vmulq_f32(self.twiddle1re, x14p);
-        let temp_a1_2 = vmulq_f32(self.twiddle2re, x23p);
-        let temp_b1_1 = vmulq_f32(self.twiddle1im, x14n);
-        let temp_b1_2 = vmulq_f32(self.twiddle2im, x23n);
-        let temp_a2_1 = vmulq_f32(self.twiddle1re, x23p);
-        let temp_a2_2 = vmulq_f32(self.twiddle2re, x14p);
-        let temp_b2_1 = vmulq_f32(self.twiddle2im, x14n);
-        let temp_b2_2 = vmulq_f32(self.twiddle1im, x23n);
+        let temp_a1_1 = f32x4_mul(self.twiddle1re, x14p);
+        let temp_a1_2 = f32x4_mul(self.twiddle2re, x23p);
+        let temp_b1_1 = f32x4_mul(self.twiddle1im, x14n);
+        let temp_b1_2 = f32x4_mul(self.twiddle2im, x23n);
+        let temp_a2_1 = f32x4_mul(self.twiddle1re, x23p);
+        let temp_a2_2 = f32x4_mul(self.twiddle2re, x14p);
+        let temp_b2_1 = f32x4_mul(self.twiddle2im, x14n);
+        let temp_b2_2 = f32x4_mul(self.twiddle1im, x23n);
 
         let temp_a1 = f32x4_add(value0, f32x4_add(temp_a1_1, temp_a1_2));
         let temp_b1 = f32x4_add(temp_b1_1, temp_b1_2);
@@ -984,18 +1026,22 @@ pub struct WasmSimdF64Butterfly5<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     rotate: Rotate90F64,
-    twiddle1re: float64x2_t,
-    twiddle1im: float64x2_t,
-    twiddle2re: float64x2_t,
-    twiddle2im: float64x2_t,
+    twiddle1re: v128,
+    twiddle1im: v128,
+    twiddle2re: v128,
+    twiddle2im: v128,
 }
 
-boilerplate_fft_neon_f64_butterfly!(WasmSimdF64Butterfly5, 5, |this: &WasmSimdF64Butterfly5<
-    _,
->| this.direction);
-boilerplate_fft_neon_common_butterfly!(WasmSimdF64Butterfly5, 5, |this: &WasmSimdF64Butterfly5<
-    _,
->| this.direction);
+boilerplate_fft_wasm_simd_f64_butterfly!(
+    WasmSimdF64Butterfly5,
+    5,
+    |this: &WasmSimdF64Butterfly5<_>| this.direction
+);
+boilerplate_fft_wasm_simd_common_butterfly!(
+    WasmSimdF64Butterfly5,
+    5,
+    |this: &WasmSimdF64Butterfly5<_>| this.direction
+);
 impl<T: FftNum> WasmSimdF64Butterfly5<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -1003,10 +1049,10 @@ impl<T: FftNum> WasmSimdF64Butterfly5<T> {
         let rotate = Rotate90F64::new(true);
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 5, direction);
         let tw2: Complex<f64> = twiddles::compute_twiddle(2, 5, direction);
-        let twiddle1re = unsafe { vmovq_n_f64(tw1.re) };
-        let twiddle1im = unsafe { vmovq_n_f64(tw1.im) };
-        let twiddle2re = unsafe { vmovq_n_f64(tw2.re) };
-        let twiddle2im = unsafe { vmovq_n_f64(tw2.im) };
+        let twiddle1re = unsafe { f64x2_splat(tw1.re) };
+        let twiddle1im = unsafe { f64x2_splat(tw1.im) };
+        let twiddle2re = unsafe { f64x2_splat(tw2.re) };
+        let twiddle2im = unsafe { f64x2_splat(tw2.im) };
 
         Self {
             direction,
@@ -1041,42 +1087,42 @@ impl<T: FftNum> WasmSimdF64Butterfly5<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
         &self,
-        value0: float64x2_t,
-        value1: float64x2_t,
-        value2: float64x2_t,
-        value3: float64x2_t,
-        value4: float64x2_t,
-    ) -> [float64x2_t; 5] {
+        value0: v128,
+        value1: v128,
+        value2: v128,
+        value3: v128,
+        value4: v128,
+    ) -> [v128; 5] {
         // This is a WasmSimd translation of the scalar 5-point butterfly
-        let x14p = vaddq_f64(value1, value4);
-        let x14n = vsubq_f64(value1, value4);
-        let x23p = vaddq_f64(value2, value3);
-        let x23n = vsubq_f64(value2, value3);
+        let x14p = f64x2_add(value1, value4);
+        let x14n = f64x2_sub(value1, value4);
+        let x23p = f64x2_add(value2, value3);
+        let x23n = f64x2_sub(value2, value3);
 
-        let temp_a1_1 = vmulq_f64(self.twiddle1re, x14p);
-        let temp_a1_2 = vmulq_f64(self.twiddle2re, x23p);
-        let temp_a2_1 = vmulq_f64(self.twiddle2re, x14p);
-        let temp_a2_2 = vmulq_f64(self.twiddle1re, x23p);
+        let temp_a1_1 = f64x2_mul(self.twiddle1re, x14p);
+        let temp_a1_2 = f64x2_mul(self.twiddle2re, x23p);
+        let temp_a2_1 = f64x2_mul(self.twiddle2re, x14p);
+        let temp_a2_2 = f64x2_mul(self.twiddle1re, x23p);
 
-        let temp_b1_1 = vmulq_f64(self.twiddle1im, x14n);
-        let temp_b1_2 = vmulq_f64(self.twiddle2im, x23n);
-        let temp_b2_1 = vmulq_f64(self.twiddle2im, x14n);
-        let temp_b2_2 = vmulq_f64(self.twiddle1im, x23n);
+        let temp_b1_1 = f64x2_mul(self.twiddle1im, x14n);
+        let temp_b1_2 = f64x2_mul(self.twiddle2im, x23n);
+        let temp_b2_1 = f64x2_mul(self.twiddle2im, x14n);
+        let temp_b2_2 = f64x2_mul(self.twiddle1im, x23n);
 
-        let temp_a1 = vaddq_f64(value0, vaddq_f64(temp_a1_1, temp_a1_2));
-        let temp_a2 = vaddq_f64(value0, vaddq_f64(temp_a2_1, temp_a2_2));
+        let temp_a1 = f64x2_add(value0, f64x2_add(temp_a1_1, temp_a1_2));
+        let temp_a2 = f64x2_add(value0, f64x2_add(temp_a2_1, temp_a2_2));
 
-        let temp_b1 = vaddq_f64(temp_b1_1, temp_b1_2);
-        let temp_b2 = vsubq_f64(temp_b2_1, temp_b2_2);
+        let temp_b1 = f64x2_add(temp_b1_1, temp_b1_2);
+        let temp_b2 = f64x2_sub(temp_b2_1, temp_b2_2);
 
         let temp_b1_rot = self.rotate.rotate(temp_b1);
         let temp_b2_rot = self.rotate.rotate(temp_b2);
         [
-            vaddq_f64(value0, vaddq_f64(x14p, x23p)),
-            vaddq_f64(temp_a1, temp_b1_rot),
-            vaddq_f64(temp_a2, temp_b2_rot),
-            vsubq_f64(temp_a2, temp_b2_rot),
-            vsubq_f64(temp_a1, temp_b1_rot),
+            f64x2_add(value0, f64x2_add(x14p, x23p)),
+            f64x2_add(temp_a1, temp_b1_rot),
+            f64x2_add(temp_a2, temp_b2_rot),
+            f64x2_sub(temp_a2, temp_b2_rot),
+            f64x2_sub(temp_a1, temp_b1_rot),
         ]
     }
 }
@@ -1094,12 +1140,16 @@ pub struct WasmSimdF32Butterfly6<T> {
     bf3: WasmSimdF32Butterfly3<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(WasmSimdF32Butterfly6, 6, |this: &WasmSimdF32Butterfly6<
-    _,
->| this.direction);
-boilerplate_fft_neon_common_butterfly!(WasmSimdF32Butterfly6, 6, |this: &WasmSimdF32Butterfly6<
-    _,
->| this.direction);
+boilerplate_fft_wasm_simd_f32_butterfly!(
+    WasmSimdF32Butterfly6,
+    6,
+    |this: &WasmSimdF32Butterfly6<_>| this.direction
+);
+boilerplate_fft_wasm_simd_common_butterfly!(
+    WasmSimdF32Butterfly6,
+    6,
+    |this: &WasmSimdF32Butterfly6<_>| this.direction
+);
 impl<T: FftNum> WasmSimdF32Butterfly6<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -1214,12 +1264,16 @@ pub struct WasmSimdF64Butterfly6<T> {
     bf3: WasmSimdF64Butterfly3<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(WasmSimdF64Butterfly6, 6, |this: &WasmSimdF64Butterfly6<
-    _,
->| this.direction);
-boilerplate_fft_neon_common_butterfly!(WasmSimdF64Butterfly6, 6, |this: &WasmSimdF64Butterfly6<
-    _,
->| this.direction);
+boilerplate_fft_wasm_simd_f64_butterfly!(
+    WasmSimdF64Butterfly6,
+    6,
+    |this: &WasmSimdF64Butterfly6<_>| this.direction
+);
+boilerplate_fft_wasm_simd_common_butterfly!(
+    WasmSimdF64Butterfly6,
+    6,
+    |this: &WasmSimdF64Butterfly6<_>| this.direction
+);
 impl<T: FftNum> WasmSimdF64Butterfly6<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -1255,13 +1309,13 @@ impl<T: FftNum> WasmSimdF64Butterfly6<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
         &self,
-        value0: float64x2_t,
-        value1: float64x2_t,
-        value2: float64x2_t,
-        value3: float64x2_t,
-        value4: float64x2_t,
-        value5: float64x2_t,
-    ) -> [float64x2_t; 6] {
+        value0: v128,
+        value1: v128,
+        value2: v128,
+        value3: v128,
+        value4: v128,
+        value5: v128,
+    ) -> [v128; 6] {
         // Algorithm: 3x2 good-thomas
 
         // Size-3 FFTs down the columns of our reordered array
@@ -1295,20 +1349,23 @@ pub struct WasmSimdF32Butterfly8<T> {
     rotate90: Rotate90F32,
 }
 
-boilerplate_fft_neon_f32_butterfly!(WasmSimdF32Butterfly8, 8, |this: &WasmSimdF32Butterfly8<
-    _,
->| this.direction);
-boilerplate_fft_neon_common_butterfly!(WasmSimdF32Butterfly8, 8, |this: &WasmSimdF32Butterfly8<
-    _,
->| this.direction);
+boilerplate_fft_wasm_simd_f32_butterfly!(
+    WasmSimdF32Butterfly8,
+    8,
+    |this: &WasmSimdF32Butterfly8<_>| this.direction
+);
+boilerplate_fft_wasm_simd_common_butterfly!(
+    WasmSimdF32Butterfly8,
+    8,
+    |this: &WasmSimdF32Butterfly8<_>| this.direction
+);
 impl<T: FftNum> WasmSimdF32Butterfly8<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let bf4 = WasmSimdF32Butterfly4::new(direction);
-        let root2 =
-            unsafe { vld1q_f32([1.0, 1.0, 0.5f32.sqrt(), 0.5f32.sqrt(), 1.0, 1.0].as_ptr()) };
-        let root2_dual = unsafe { vmovq_n_f32(0.5f32.sqrt()) };
+        let root2 = unsafe { f32x4(1.0, 1.0, 0.5f32.sqrt(), 0.5f32.sqrt()) };
+        let root2_dual = unsafe { f32x4_splat(0.5f32.sqrt()) };
         let rotate90 = if direction == FftDirection::Inverse {
             Rotate90F32::new(true)
         } else {
@@ -1362,12 +1419,12 @@ impl<T: FftNum> WasmSimdF32Butterfly8<T> {
         // step 3: apply twiddle factors
         let val2b = self.rotate90.rotate_hi(val2[0]);
         let val2c = f32x4_add(val2b, val2[0]);
-        let val2d = vmulq_f32(val2c, self.root2);
+        let val2d = f32x4_mul(val2c, self.root2);
         val2[0] = extract_lo_hi_f32(val2[0], val2d);
 
         let val3b = self.rotate90.rotate_both(val2[1]);
         let val3c = f32x4_sub(val3b, val2[1]);
-        let val3d = vmulq_f32(val3c, self.root2);
+        let val3d = f32x4_mul(val3c, self.root2);
         val2[1] = extract_lo_hi_f32(val3b, val3d);
 
         // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
@@ -1396,11 +1453,11 @@ impl<T: FftNum> WasmSimdF32Butterfly8<T> {
         // step 3: apply twiddle factors
         let val5b = self.rotate90.rotate_both(val47[1]);
         let val5c = f32x4_add(val5b, val47[1]);
-        val47[1] = vmulq_f32(val5c, self.root2_dual);
+        val47[1] = f32x4_mul(val5c, self.root2_dual);
         val47[2] = self.rotate90.rotate_both(val47[2]);
         let val7b = self.rotate90.rotate_both(val47[3]);
         let val7c = f32x4_sub(val7b, val47[3]);
-        val47[3] = vmulq_f32(val7c, self.root2_dual);
+        val47[3] = f32x4_mul(val7c, self.root2_dual);
 
         // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
 
@@ -1425,24 +1482,28 @@ impl<T: FftNum> WasmSimdF32Butterfly8<T> {
 //
 
 pub struct WasmSimdF64Butterfly8<T> {
-    root2: float64x2_t,
+    root2: v128,
     direction: FftDirection,
     bf4: WasmSimdF64Butterfly4<T>,
     rotate90: Rotate90F64,
 }
 
-boilerplate_fft_neon_f64_butterfly!(WasmSimdF64Butterfly8, 8, |this: &WasmSimdF64Butterfly8<
-    _,
->| this.direction);
-boilerplate_fft_neon_common_butterfly!(WasmSimdF64Butterfly8, 8, |this: &WasmSimdF64Butterfly8<
-    _,
->| this.direction);
+boilerplate_fft_wasm_simd_f64_butterfly!(
+    WasmSimdF64Butterfly8,
+    8,
+    |this: &WasmSimdF64Butterfly8<_>| this.direction
+);
+boilerplate_fft_wasm_simd_common_butterfly!(
+    WasmSimdF64Butterfly8,
+    8,
+    |this: &WasmSimdF64Butterfly8<_>| this.direction
+);
 impl<T: FftNum> WasmSimdF64Butterfly8<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let bf4 = WasmSimdF64Butterfly4::new(direction);
-        let root2 = unsafe { vmovq_n_f64(0.5f64.sqrt()) };
+        let root2 = f64x2_splat(0.5f64.sqrt());
         let rotate90 = if direction == FftDirection::Inverse {
             Rotate90F64::new(true)
         } else {
@@ -1466,7 +1527,7 @@ impl<T: FftNum> WasmSimdF64Butterfly8<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_direct(&self, values: [float64x2_t; 8]) -> [float64x2_t; 8] {
+    unsafe fn perform_fft_direct(&self, values: [v128; 8]) -> [v128; 8] {
         // we're going to hardcode a step of mixed radix
         // step 1: copy and reorder the input into the scratch
         // and
@@ -1480,12 +1541,12 @@ impl<T: FftNum> WasmSimdF64Butterfly8<T> {
 
         // step 3: apply twiddle factors
         let val5b = self.rotate90.rotate(val47[1]);
-        let val5c = vaddq_f64(val5b, val47[1]);
-        val47[1] = vmulq_f64(val5c, self.root2);
+        let val5c = f64x2_add(val5b, val47[1]);
+        val47[1] = f64x2_mul(val5c, self.root2);
         val47[2] = self.rotate90.rotate(val47[2]);
         let val7b = self.rotate90.rotate(val47[3]);
-        let val7c = vsubq_f64(val7b, val47[3]);
-        val47[3] = vmulq_f64(val7c, self.root2);
+        let val7c = f64x2_sub(val7b, val47[3]);
+        val47[3] = f64x2_mul(val7c, self.root2);
 
         // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
 
@@ -1517,12 +1578,16 @@ pub struct WasmSimdF32Butterfly9<T> {
     twiddle4: v128,
 }
 
-boilerplate_fft_neon_f32_butterfly!(WasmSimdF32Butterfly9, 9, |this: &WasmSimdF32Butterfly9<
-    _,
->| this.direction);
-boilerplate_fft_neon_common_butterfly!(WasmSimdF32Butterfly9, 9, |this: &WasmSimdF32Butterfly9<
-    _,
->| this.direction);
+boilerplate_fft_wasm_simd_f32_butterfly!(
+    WasmSimdF32Butterfly9,
+    9,
+    |this: &WasmSimdF32Butterfly9<_>| this.direction
+);
+boilerplate_fft_wasm_simd_common_butterfly!(
+    WasmSimdF32Butterfly9,
+    9,
+    |this: &WasmSimdF32Butterfly9<_>| this.direction
+);
 impl<T: FftNum> WasmSimdF32Butterfly9<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -1531,9 +1596,9 @@ impl<T: FftNum> WasmSimdF32Butterfly9<T> {
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 9, direction);
         let tw2: Complex<f32> = twiddles::compute_twiddle(2, 9, direction);
         let tw4: Complex<f32> = twiddles::compute_twiddle(4, 9, direction);
-        let twiddle1 = unsafe { vld1q_f32([tw1.re, tw1.im, tw1.re, tw1.im].as_ptr()) };
-        let twiddle2 = unsafe { vld1q_f32([tw2.re, tw2.im, tw2.re, tw2.im].as_ptr()) };
-        let twiddle4 = unsafe { vld1q_f32([tw4.re, tw4.im, tw4.re, tw4.im].as_ptr()) };
+        let twiddle1 = unsafe { f32x4(tw1.re, tw1.im, tw1.re, tw1.im) };
+        let twiddle2 = unsafe { f32x4(tw2.re, tw2.im, tw2.re, tw2.im) };
+        let twiddle4 = unsafe { f32x4(tw4.re, tw4.im, tw4.re, tw4.im) };
 
         Self {
             direction,
@@ -1641,17 +1706,21 @@ pub struct WasmSimdF64Butterfly9<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     bf3: WasmSimdF64Butterfly3<T>,
-    twiddle1: float64x2_t,
-    twiddle2: float64x2_t,
-    twiddle4: float64x2_t,
+    twiddle1: v128,
+    twiddle2: v128,
+    twiddle4: v128,
 }
 
-boilerplate_fft_neon_f64_butterfly!(WasmSimdF64Butterfly9, 9, |this: &WasmSimdF64Butterfly9<
-    _,
->| this.direction);
-boilerplate_fft_neon_common_butterfly!(WasmSimdF64Butterfly9, 9, |this: &WasmSimdF64Butterfly9<
-    _,
->| this.direction);
+boilerplate_fft_wasm_simd_f64_butterfly!(
+    WasmSimdF64Butterfly9,
+    9,
+    |this: &WasmSimdF64Butterfly9<_>| this.direction
+);
+boilerplate_fft_wasm_simd_common_butterfly!(
+    WasmSimdF64Butterfly9,
+    9,
+    |this: &WasmSimdF64Butterfly9<_>| this.direction
+);
 impl<T: FftNum> WasmSimdF64Butterfly9<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -1660,9 +1729,9 @@ impl<T: FftNum> WasmSimdF64Butterfly9<T> {
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 9, direction);
         let tw2: Complex<f64> = twiddles::compute_twiddle(2, 9, direction);
         let tw4: Complex<f64> = twiddles::compute_twiddle(4, 9, direction);
-        let twiddle1 = unsafe { vld1q_f64([tw1.re, tw1.im].as_ptr()) };
-        let twiddle2 = unsafe { vld1q_f64([tw2.re, tw2.im].as_ptr()) };
-        let twiddle4 = unsafe { vld1q_f64([tw4.re, tw4.im].as_ptr()) };
+        let twiddle1 = unsafe { f64x2(tw1.re, tw1.im) };
+        let twiddle2 = unsafe { f64x2(tw2.re, tw2.im) };
+        let twiddle4 = unsafe { f64x2(tw4.re, tw4.im) };
 
         Self {
             direction,
@@ -1684,7 +1753,7 @@ impl<T: FftNum> WasmSimdF64Butterfly9<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [float64x2_t; 9]) -> [float64x2_t; 9] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [v128; 9]) -> [v128; 9] {
         // Algorithm: 3x3 mixed radix
 
         // Size-3 FFTs down the columns
@@ -1721,12 +1790,12 @@ pub struct WasmSimdF32Butterfly10<T> {
     bf5: WasmSimdF32Butterfly5<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(
+boilerplate_fft_wasm_simd_f32_butterfly!(
     WasmSimdF32Butterfly10,
     10,
     |this: &WasmSimdF32Butterfly10<_>| this.direction
 );
-boilerplate_fft_neon_common_butterfly!(
+boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF32Butterfly10,
     10,
     |this: &WasmSimdF32Butterfly10<_>| this.direction
@@ -1843,12 +1912,12 @@ pub struct WasmSimdF64Butterfly10<T> {
     bf5: WasmSimdF64Butterfly5<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(
+boilerplate_fft_wasm_simd_f64_butterfly!(
     WasmSimdF64Butterfly10,
     10,
     |this: &WasmSimdF64Butterfly10<_>| this.direction
 );
-boilerplate_fft_neon_common_butterfly!(
+boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF64Butterfly10,
     10,
     |this: &WasmSimdF64Butterfly10<_>| this.direction
@@ -1877,7 +1946,7 @@ impl<T: FftNum> WasmSimdF64Butterfly10<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [float64x2_t; 10]) -> [float64x2_t; 10] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [v128; 10]) -> [v128; 10] {
         // Algorithm: 5x2 good-thomas
 
         // Size-5 FFTs down the columns of our reordered array
@@ -1919,12 +1988,12 @@ pub struct WasmSimdF32Butterfly12<T> {
     bf4: WasmSimdF32Butterfly4<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(
+boilerplate_fft_wasm_simd_f32_butterfly!(
     WasmSimdF32Butterfly12,
     12,
     |this: &WasmSimdF32Butterfly12<_>| this.direction
 );
-boilerplate_fft_neon_common_butterfly!(
+boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF32Butterfly12,
     12,
     |this: &WasmSimdF32Butterfly12<_>| this.direction
@@ -2060,12 +2129,12 @@ pub struct WasmSimdF64Butterfly12<T> {
     bf4: WasmSimdF64Butterfly4<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(
+boilerplate_fft_wasm_simd_f64_butterfly!(
     WasmSimdF64Butterfly12,
     12,
     |this: &WasmSimdF64Butterfly12<_>| this.direction
 );
-boilerplate_fft_neon_common_butterfly!(
+boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF64Butterfly12,
     12,
     |this: &WasmSimdF64Butterfly12<_>| this.direction
@@ -2094,7 +2163,7 @@ impl<T: FftNum> WasmSimdF64Butterfly12<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [float64x2_t; 12]) -> [float64x2_t; 12] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [v128; 12]) -> [v128; 12] {
         // Algorithm: 4x3 good-thomas
 
         // Size-4 FFTs down the columns of our reordered array
@@ -2136,12 +2205,12 @@ pub struct WasmSimdF32Butterfly15<T> {
     bf5: WasmSimdF32Butterfly5<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(
+boilerplate_fft_wasm_simd_f32_butterfly!(
     WasmSimdF32Butterfly15,
     15,
     |this: &WasmSimdF32Butterfly15<_>| this.direction
 );
-boilerplate_fft_neon_common_butterfly!(
+boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF32Butterfly15,
     15,
     |this: &WasmSimdF32Butterfly15<_>| this.direction
@@ -2276,12 +2345,12 @@ pub struct WasmSimdF64Butterfly15<T> {
     bf5: WasmSimdF64Butterfly5<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(
+boilerplate_fft_wasm_simd_f64_butterfly!(
     WasmSimdF64Butterfly15,
     15,
     |this: &WasmSimdF64Butterfly15<_>| this.direction
 );
-boilerplate_fft_neon_common_butterfly!(
+boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF64Butterfly15,
     15,
     |this: &WasmSimdF64Butterfly15<_>| this.direction
@@ -2311,7 +2380,7 @@ impl<T: FftNum> WasmSimdF64Butterfly15<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [float64x2_t; 15]) -> [float64x2_t; 15] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [v128; 15]) -> [v128; 15] {
         // Algorithm: 5x3 good-thomas
 
         // Size-5 FFTs down the columns of our reordered array
@@ -2365,12 +2434,12 @@ pub struct WasmSimdF32Butterfly16<T> {
     twiddle3c: v128,
 }
 
-boilerplate_fft_neon_f32_butterfly!(
+boilerplate_fft_wasm_simd_f32_butterfly!(
     WasmSimdF32Butterfly16,
     16,
     |this: &WasmSimdF32Butterfly16<_>| this.direction
 );
-boilerplate_fft_neon_common_butterfly!(
+boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF32Butterfly16,
     16,
     |this: &WasmSimdF32Butterfly16<_>| this.direction
@@ -2389,16 +2458,16 @@ impl<T: FftNum> WasmSimdF32Butterfly16<T> {
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 16, direction);
         let tw2: Complex<f32> = twiddles::compute_twiddle(2, 16, direction);
         let tw3: Complex<f32> = twiddles::compute_twiddle(3, 16, direction);
-        let twiddle01 = unsafe { vld1q_f32([1.0, 0.0, tw1.re, tw1.im].as_ptr()) };
-        let twiddle23 = unsafe { vld1q_f32([tw2.re, tw2.im, tw3.re, tw3.im].as_ptr()) };
-        let twiddle01conj = unsafe { vld1q_f32([1.0, 0.0, tw1.re, -tw1.im].as_ptr()) };
-        let twiddle23conj = unsafe { vld1q_f32([tw2.re, -tw2.im, tw3.re, -tw3.im].as_ptr()) };
-        let twiddle1 = unsafe { vld1q_f32([tw1.re, tw1.im, tw1.re, tw1.im].as_ptr()) };
-        let twiddle2 = unsafe { vld1q_f32([tw2.re, tw2.im, tw2.re, tw2.im].as_ptr()) };
-        let twiddle3 = unsafe { vld1q_f32([tw3.re, tw3.im, tw3.re, tw3.im].as_ptr()) };
-        let twiddle1c = unsafe { vld1q_f32([tw1.re, -tw1.im, tw1.re, -tw1.im].as_ptr()) };
-        let twiddle2c = unsafe { vld1q_f32([tw2.re, -tw2.im, tw2.re, -tw2.im].as_ptr()) };
-        let twiddle3c = unsafe { vld1q_f32([tw3.re, -tw3.im, tw3.re, -tw3.im].as_ptr()) };
+        let twiddle01 = unsafe { f32x4(1.0, 0.0, tw1.re, tw1.im) };
+        let twiddle23 = unsafe { f32x4(tw2.re, tw2.im, tw3.re, tw3.im) };
+        let twiddle01conj = unsafe { f32x4(1.0, 0.0, tw1.re, -tw1.im) };
+        let twiddle23conj = unsafe { f32x4(tw2.re, -tw2.im, tw3.re, -tw3.im) };
+        let twiddle1 = unsafe { f32x4(tw1.re, tw1.im, tw1.re, tw1.im) };
+        let twiddle2 = unsafe { f32x4(tw2.re, tw2.im, tw2.re, tw2.im) };
+        let twiddle3 = unsafe { f32x4(tw3.re, tw3.im, tw3.re, tw3.im) };
+        let twiddle1c = unsafe { f32x4(tw1.re, -tw1.im, tw1.re, -tw1.im) };
+        let twiddle2c = unsafe { f32x4(tw2.re, -tw2.im, tw2.re, -tw2.im) };
+        let twiddle3c = unsafe { f32x4(tw3.re, -tw3.im, tw3.re, -tw3.im) };
         Self {
             direction,
             bf4,
@@ -2563,20 +2632,20 @@ pub struct WasmSimdF64Butterfly16<T> {
     bf4: WasmSimdF64Butterfly4<T>,
     bf8: WasmSimdF64Butterfly8<T>,
     rotate90: Rotate90F64,
-    twiddle1: float64x2_t,
-    twiddle2: float64x2_t,
-    twiddle3: float64x2_t,
-    twiddle1c: float64x2_t,
-    twiddle2c: float64x2_t,
-    twiddle3c: float64x2_t,
+    twiddle1: v128,
+    twiddle2: v128,
+    twiddle3: v128,
+    twiddle1c: v128,
+    twiddle2c: v128,
+    twiddle3c: v128,
 }
 
-boilerplate_fft_neon_f64_butterfly!(
+boilerplate_fft_wasm_simd_f64_butterfly!(
     WasmSimdF64Butterfly16,
     16,
     |this: &WasmSimdF64Butterfly16<_>| this.direction
 );
-boilerplate_fft_neon_common_butterfly!(
+boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF64Butterfly16,
     16,
     |this: &WasmSimdF64Butterfly16<_>| this.direction
@@ -2593,30 +2662,36 @@ impl<T: FftNum> WasmSimdF64Butterfly16<T> {
             Rotate90F64::new(false)
         };
         let twiddle1 = unsafe {
-            vld1q_f64(&twiddles::compute_twiddle::<f64>(1, 16, direction) as *const _ as *const f64)
+            v128_load(
+                &twiddles::compute_twiddle::<f64>(1, 16, direction) as *const _ as *const v128,
+            )
         };
         let twiddle2 = unsafe {
-            vld1q_f64(&twiddles::compute_twiddle::<f64>(2, 16, direction) as *const _ as *const f64)
+            v128_load(
+                &twiddles::compute_twiddle::<f64>(2, 16, direction) as *const _ as *const v128,
+            )
         };
         let twiddle3 = unsafe {
-            vld1q_f64(&twiddles::compute_twiddle::<f64>(3, 16, direction) as *const _ as *const f64)
+            v128_load(
+                &twiddles::compute_twiddle::<f64>(3, 16, direction) as *const _ as *const v128,
+            )
         };
         let twiddle1c = unsafe {
-            vld1q_f64(
+            v128_load(
                 &twiddles::compute_twiddle::<f64>(1, 16, direction).conj() as *const _
-                    as *const f64,
+                    as *const v128,
             )
         };
         let twiddle2c = unsafe {
-            vld1q_f64(
+            v128_load(
                 &twiddles::compute_twiddle::<f64>(2, 16, direction).conj() as *const _
-                    as *const f64,
+                    as *const v128,
             )
         };
         let twiddle3c = unsafe {
-            vld1q_f64(
+            v128_load(
                 &twiddles::compute_twiddle::<f64>(3, 16, direction).conj() as *const _
-                    as *const f64,
+                    as *const v128,
             )
         };
 
@@ -2645,7 +2720,7 @@ impl<T: FftNum> WasmSimdF64Butterfly16<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_direct(&self, input: [float64x2_t; 16]) -> [float64x2_t; 16] {
+    unsafe fn perform_fft_direct(&self, input: [v128; 16]) -> [v128; 16] {
         // we're going to hardcode a step of split radix
 
         // step 1: copy and reorder the  input into the scratch
@@ -2685,22 +2760,22 @@ impl<T: FftNum> WasmSimdF64Butterfly16<T> {
 
         //step 5: copy/add/subtract data back to buffer
         [
-            vaddq_f64(evens[0], temp0[0]),
-            vaddq_f64(evens[1], temp1[0]),
-            vaddq_f64(evens[2], temp2[0]),
-            vaddq_f64(evens[3], temp3[0]),
-            vaddq_f64(evens[4], temp0[1]),
-            vaddq_f64(evens[5], temp1[1]),
-            vaddq_f64(evens[6], temp2[1]),
-            vaddq_f64(evens[7], temp3[1]),
-            vsubq_f64(evens[0], temp0[0]),
-            vsubq_f64(evens[1], temp1[0]),
-            vsubq_f64(evens[2], temp2[0]),
-            vsubq_f64(evens[3], temp3[0]),
-            vsubq_f64(evens[4], temp0[1]),
-            vsubq_f64(evens[5], temp1[1]),
-            vsubq_f64(evens[6], temp2[1]),
-            vsubq_f64(evens[7], temp3[1]),
+            f64x2_add(evens[0], temp0[0]),
+            f64x2_add(evens[1], temp1[0]),
+            f64x2_add(evens[2], temp2[0]),
+            f64x2_add(evens[3], temp3[0]),
+            f64x2_add(evens[4], temp0[1]),
+            f64x2_add(evens[5], temp1[1]),
+            f64x2_add(evens[6], temp2[1]),
+            f64x2_add(evens[7], temp3[1]),
+            f64x2_sub(evens[0], temp0[0]),
+            f64x2_sub(evens[1], temp1[0]),
+            f64x2_sub(evens[2], temp2[0]),
+            f64x2_sub(evens[3], temp3[0]),
+            f64x2_sub(evens[4], temp0[1]),
+            f64x2_sub(evens[5], temp1[1]),
+            f64x2_sub(evens[6], temp2[1]),
+            f64x2_sub(evens[7], temp3[1]),
         ]
     }
 }
@@ -2741,12 +2816,12 @@ pub struct WasmSimdF32Butterfly32<T> {
     twiddle7c: v128,
 }
 
-boilerplate_fft_neon_f32_butterfly!(
+boilerplate_fft_wasm_simd_f32_butterfly!(
     WasmSimdF32Butterfly32,
     32,
     |this: &WasmSimdF32Butterfly32<_>| this.direction
 );
-boilerplate_fft_neon_common_butterfly!(
+boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF32Butterfly32,
     32,
     |this: &WasmSimdF32Butterfly32<_>| this.direction
@@ -2769,28 +2844,28 @@ impl<T: FftNum> WasmSimdF32Butterfly32<T> {
         let tw5: Complex<f32> = twiddles::compute_twiddle(5, 32, direction);
         let tw6: Complex<f32> = twiddles::compute_twiddle(6, 32, direction);
         let tw7: Complex<f32> = twiddles::compute_twiddle(7, 32, direction);
-        let twiddle01 = unsafe { vld1q_f32([1.0, 0.0, tw1.re, tw1.im].as_ptr()) };
-        let twiddle23 = unsafe { vld1q_f32([tw2.re, tw2.im, tw3.re, tw3.im].as_ptr()) };
-        let twiddle45 = unsafe { vld1q_f32([tw4.re, tw4.im, tw5.re, tw5.im].as_ptr()) };
-        let twiddle67 = unsafe { vld1q_f32([tw6.re, tw6.im, tw7.re, tw7.im].as_ptr()) };
-        let twiddle01conj = unsafe { vld1q_f32([1.0, 0.0, tw1.re, -tw1.im].as_ptr()) };
-        let twiddle23conj = unsafe { vld1q_f32([tw2.re, -tw2.im, tw3.re, -tw3.im].as_ptr()) };
-        let twiddle45conj = unsafe { vld1q_f32([tw4.re, -tw4.im, tw5.re, -tw5.im].as_ptr()) };
-        let twiddle67conj = unsafe { vld1q_f32([tw6.re, -tw6.im, tw7.re, -tw7.im].as_ptr()) };
-        let twiddle1 = unsafe { vld1q_f32([tw1.re, tw1.im, tw1.re, tw1.im].as_ptr()) };
-        let twiddle2 = unsafe { vld1q_f32([tw2.re, tw2.im, tw2.re, tw2.im].as_ptr()) };
-        let twiddle3 = unsafe { vld1q_f32([tw3.re, tw3.im, tw3.re, tw3.im].as_ptr()) };
-        let twiddle4 = unsafe { vld1q_f32([tw4.re, tw4.im, tw4.re, tw4.im].as_ptr()) };
-        let twiddle5 = unsafe { vld1q_f32([tw5.re, tw5.im, tw5.re, tw5.im].as_ptr()) };
-        let twiddle6 = unsafe { vld1q_f32([tw6.re, tw6.im, tw6.re, tw6.im].as_ptr()) };
-        let twiddle7 = unsafe { vld1q_f32([tw7.re, tw7.im, tw7.re, tw7.im].as_ptr()) };
-        let twiddle1c = unsafe { vld1q_f32([tw1.re, -tw1.im, tw1.re, -tw1.im].as_ptr()) };
-        let twiddle2c = unsafe { vld1q_f32([tw2.re, -tw2.im, tw2.re, -tw2.im].as_ptr()) };
-        let twiddle3c = unsafe { vld1q_f32([tw3.re, -tw3.im, tw3.re, -tw3.im].as_ptr()) };
-        let twiddle4c = unsafe { vld1q_f32([tw4.re, -tw4.im, tw4.re, -tw4.im].as_ptr()) };
-        let twiddle5c = unsafe { vld1q_f32([tw5.re, -tw5.im, tw5.re, -tw5.im].as_ptr()) };
-        let twiddle6c = unsafe { vld1q_f32([tw6.re, -tw6.im, tw6.re, -tw6.im].as_ptr()) };
-        let twiddle7c = unsafe { vld1q_f32([tw7.re, -tw7.im, tw7.re, -tw7.im].as_ptr()) };
+        let twiddle01 = unsafe { f32x4(1.0, 0.0, tw1.re, tw1.im) };
+        let twiddle23 = unsafe { f32x4(tw2.re, tw2.im, tw3.re, tw3.im) };
+        let twiddle45 = unsafe { f32x4(tw4.re, tw4.im, tw5.re, tw5.im) };
+        let twiddle67 = unsafe { f32x4(tw6.re, tw6.im, tw7.re, tw7.im) };
+        let twiddle01conj = unsafe { f32x4(1.0, 0.0, tw1.re, -tw1.im) };
+        let twiddle23conj = unsafe { f32x4(tw2.re, -tw2.im, tw3.re, -tw3.im) };
+        let twiddle45conj = unsafe { f32x4(tw4.re, -tw4.im, tw5.re, -tw5.im) };
+        let twiddle67conj = unsafe { f32x4(tw6.re, -tw6.im, tw7.re, -tw7.im) };
+        let twiddle1 = unsafe { f32x4(tw1.re, tw1.im, tw1.re, tw1.im) };
+        let twiddle2 = unsafe { f32x4(tw2.re, tw2.im, tw2.re, tw2.im) };
+        let twiddle3 = unsafe { f32x4(tw3.re, tw3.im, tw3.re, tw3.im) };
+        let twiddle4 = unsafe { f32x4(tw4.re, tw4.im, tw4.re, tw4.im) };
+        let twiddle5 = unsafe { f32x4(tw5.re, tw5.im, tw5.re, tw5.im) };
+        let twiddle6 = unsafe { f32x4(tw6.re, tw6.im, tw6.re, tw6.im) };
+        let twiddle7 = unsafe { f32x4(tw7.re, tw7.im, tw7.re, tw7.im) };
+        let twiddle1c = unsafe { f32x4(tw1.re, -tw1.im, tw1.re, -tw1.im) };
+        let twiddle2c = unsafe { f32x4(tw2.re, -tw2.im, tw2.re, -tw2.im) };
+        let twiddle3c = unsafe { f32x4(tw3.re, -tw3.im, tw3.re, -tw3.im) };
+        let twiddle4c = unsafe { f32x4(tw4.re, -tw4.im, tw4.re, -tw4.im) };
+        let twiddle5c = unsafe { f32x4(tw5.re, -tw5.im, tw5.re, -tw5.im) };
+        let twiddle6c = unsafe { f32x4(tw6.re, -tw6.im, tw6.re, -tw6.im) };
+        let twiddle7c = unsafe { f32x4(tw7.re, -tw7.im, tw7.re, -tw7.im) };
         Self {
             direction,
             bf8,
@@ -3039,28 +3114,28 @@ pub struct WasmSimdF64Butterfly32<T> {
     bf8: WasmSimdF64Butterfly8<T>,
     bf16: WasmSimdF64Butterfly16<T>,
     rotate90: Rotate90F64,
-    twiddle1: float64x2_t,
-    twiddle2: float64x2_t,
-    twiddle3: float64x2_t,
-    twiddle4: float64x2_t,
-    twiddle5: float64x2_t,
-    twiddle6: float64x2_t,
-    twiddle7: float64x2_t,
-    twiddle1c: float64x2_t,
-    twiddle2c: float64x2_t,
-    twiddle3c: float64x2_t,
-    twiddle4c: float64x2_t,
-    twiddle5c: float64x2_t,
-    twiddle6c: float64x2_t,
-    twiddle7c: float64x2_t,
+    twiddle1: v128,
+    twiddle2: v128,
+    twiddle3: v128,
+    twiddle4: v128,
+    twiddle5: v128,
+    twiddle6: v128,
+    twiddle7: v128,
+    twiddle1c: v128,
+    twiddle2c: v128,
+    twiddle3c: v128,
+    twiddle4c: v128,
+    twiddle5c: v128,
+    twiddle6c: v128,
+    twiddle7c: v128,
 }
 
-boilerplate_fft_neon_f64_butterfly!(
+boilerplate_fft_wasm_simd_f64_butterfly!(
     WasmSimdF64Butterfly32,
     32,
     |this: &WasmSimdF64Butterfly32<_>| this.direction
 );
-boilerplate_fft_neon_common_butterfly!(
+boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF64Butterfly32,
     32,
     |this: &WasmSimdF64Butterfly32<_>| this.direction
@@ -3077,66 +3152,80 @@ impl<T: FftNum> WasmSimdF64Butterfly32<T> {
             Rotate90F64::new(false)
         };
         let twiddle1 = unsafe {
-            vld1q_f64(&twiddles::compute_twiddle::<f64>(1, 32, direction) as *const _ as *const f64)
+            v128_load(
+                &twiddles::compute_twiddle::<f64>(1, 32, direction) as *const _ as *const v128,
+            )
         };
         let twiddle2 = unsafe {
-            vld1q_f64(&twiddles::compute_twiddle::<f64>(2, 32, direction) as *const _ as *const f64)
+            v128_load(
+                &twiddles::compute_twiddle::<f64>(2, 32, direction) as *const _ as *const v128,
+            )
         };
         let twiddle3 = unsafe {
-            vld1q_f64(&twiddles::compute_twiddle::<f64>(3, 32, direction) as *const _ as *const f64)
+            v128_load(
+                &twiddles::compute_twiddle::<f64>(3, 32, direction) as *const _ as *const v128,
+            )
         };
         let twiddle4 = unsafe {
-            vld1q_f64(&twiddles::compute_twiddle::<f64>(4, 32, direction) as *const _ as *const f64)
+            v128_load(
+                &twiddles::compute_twiddle::<f64>(4, 32, direction) as *const _ as *const v128,
+            )
         };
         let twiddle5 = unsafe {
-            vld1q_f64(&twiddles::compute_twiddle::<f64>(5, 32, direction) as *const _ as *const f64)
+            v128_load(
+                &twiddles::compute_twiddle::<f64>(5, 32, direction) as *const _ as *const v128,
+            )
         };
         let twiddle6 = unsafe {
-            vld1q_f64(&twiddles::compute_twiddle::<f64>(6, 32, direction) as *const _ as *const f64)
+            v128_load(
+                &twiddles::compute_twiddle::<f64>(6, 32, direction) as *const _ as *const v128,
+            )
         };
         let twiddle7 = unsafe {
-            vld1q_f64(&twiddles::compute_twiddle::<f64>(7, 32, direction) as *const _ as *const f64)
+            v128_load(
+                &twiddles::compute_twiddle::<f64>(7, 32, direction) as *const _ as *const v128,
+            )
         };
         let twiddle1c = unsafe {
-            vld1q_f64(
+            v128_load(
                 &twiddles::compute_twiddle::<f64>(1, 32, direction).conj() as *const _
-                    as *const f64,
+                    as *const v128,
             )
         };
         let twiddle2c = unsafe {
-            vld1q_f64(
+            v128_load(
                 &twiddles::compute_twiddle::<f64>(2, 32, direction).conj() as *const _
-                    as *const f64,
+                    as *const v128,
             )
         };
         let twiddle3c = unsafe {
-            vld1q_f64(
+            v128_load(
                 &twiddles::compute_twiddle::<f64>(3, 32, direction).conj() as *const _
-                    as *const f64,
+                    as *const v128,
             )
         };
         let twiddle4c = unsafe {
-            vld1q_f64(
+            v128_load(
                 &twiddles::compute_twiddle::<f64>(4, 32, direction).conj() as *const _
-                    as *const f64,
+                    as *const v128,
             )
         };
         let twiddle5c = unsafe {
-            vld1q_f64(
+            v128_load(
                 &twiddles::compute_twiddle::<f64>(5, 32, direction).conj() as *const _
-                    as *const f64,
+                    as *const v128,
             )
         };
         let twiddle6c = unsafe {
-            vld1q_f64(
+            v128_load(
                 &twiddles::compute_twiddle::<f64>(6, 32, direction).conj() as *const _
-                    as *const f64,
+                    as *const v128,
             )
         };
         let twiddle7c = unsafe {
-            vld1q_f64(
+            v128_load(
                 &twiddles::compute_twiddle::<f64>(7, 32, direction).conj() as *const _
-                    as *const f64,
+                    as *const v128,
             )
         };
 
@@ -3172,7 +3261,7 @@ impl<T: FftNum> WasmSimdF64Butterfly32<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_direct(&self, input: [float64x2_t; 32]) -> [float64x2_t; 32] {
+    unsafe fn perform_fft_direct(&self, input: [v128; 32]) -> [v128; 32] {
         // we're going to hardcode a step of split radix
 
         // step 1: copy and reorder the  input into the scratch
@@ -3233,38 +3322,38 @@ impl<T: FftNum> WasmSimdF64Butterfly32<T> {
 
         //step 5: copy/add/subtract data back to buffer
         [
-            vaddq_f64(evens[0], temp0[0]),
-            vaddq_f64(evens[1], temp1[0]),
-            vaddq_f64(evens[2], temp2[0]),
-            vaddq_f64(evens[3], temp3[0]),
-            vaddq_f64(evens[4], temp4[0]),
-            vaddq_f64(evens[5], temp5[0]),
-            vaddq_f64(evens[6], temp6[0]),
-            vaddq_f64(evens[7], temp7[0]),
-            vaddq_f64(evens[8], temp0[1]),
-            vaddq_f64(evens[9], temp1[1]),
-            vaddq_f64(evens[10], temp2[1]),
-            vaddq_f64(evens[11], temp3[1]),
-            vaddq_f64(evens[12], temp4[1]),
-            vaddq_f64(evens[13], temp5[1]),
-            vaddq_f64(evens[14], temp6[1]),
-            vaddq_f64(evens[15], temp7[1]),
-            vsubq_f64(evens[0], temp0[0]),
-            vsubq_f64(evens[1], temp1[0]),
-            vsubq_f64(evens[2], temp2[0]),
-            vsubq_f64(evens[3], temp3[0]),
-            vsubq_f64(evens[4], temp4[0]),
-            vsubq_f64(evens[5], temp5[0]),
-            vsubq_f64(evens[6], temp6[0]),
-            vsubq_f64(evens[7], temp7[0]),
-            vsubq_f64(evens[8], temp0[1]),
-            vsubq_f64(evens[9], temp1[1]),
-            vsubq_f64(evens[10], temp2[1]),
-            vsubq_f64(evens[11], temp3[1]),
-            vsubq_f64(evens[12], temp4[1]),
-            vsubq_f64(evens[13], temp5[1]),
-            vsubq_f64(evens[14], temp6[1]),
-            vsubq_f64(evens[15], temp7[1]),
+            f64x2_add(evens[0], temp0[0]),
+            f64x2_add(evens[1], temp1[0]),
+            f64x2_add(evens[2], temp2[0]),
+            f64x2_add(evens[3], temp3[0]),
+            f64x2_add(evens[4], temp4[0]),
+            f64x2_add(evens[5], temp5[0]),
+            f64x2_add(evens[6], temp6[0]),
+            f64x2_add(evens[7], temp7[0]),
+            f64x2_add(evens[8], temp0[1]),
+            f64x2_add(evens[9], temp1[1]),
+            f64x2_add(evens[10], temp2[1]),
+            f64x2_add(evens[11], temp3[1]),
+            f64x2_add(evens[12], temp4[1]),
+            f64x2_add(evens[13], temp5[1]),
+            f64x2_add(evens[14], temp6[1]),
+            f64x2_add(evens[15], temp7[1]),
+            f64x2_sub(evens[0], temp0[0]),
+            f64x2_sub(evens[1], temp1[0]),
+            f64x2_sub(evens[2], temp2[0]),
+            f64x2_sub(evens[3], temp3[0]),
+            f64x2_sub(evens[4], temp4[0]),
+            f64x2_sub(evens[5], temp5[0]),
+            f64x2_sub(evens[6], temp6[0]),
+            f64x2_sub(evens[7], temp7[0]),
+            f64x2_sub(evens[8], temp0[1]),
+            f64x2_sub(evens[9], temp1[1]),
+            f64x2_sub(evens[10], temp2[1]),
+            f64x2_sub(evens[11], temp3[1]),
+            f64x2_sub(evens[12], temp4[1]),
+            f64x2_sub(evens[13], temp5[1]),
+            f64x2_sub(evens[14], temp6[1]),
+            f64x2_sub(evens[15], temp7[1]),
         ]
     }
 }
@@ -3274,12 +3363,13 @@ mod unit_tests {
     use super::*;
     use crate::algorithm::Dft;
     use crate::test_utils::{check_fft_algorithm, compare_vectors};
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
     macro_rules! test_butterfly_32_func {
         ($test_name:ident, $struct_name:ident, $size:expr) => {
-            #[test]
+            #[wasm_bindgen_test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
                 check_fft_algorithm::<f32>(&butterfly, $size, FftDirection::Forward);
@@ -3289,24 +3379,25 @@ mod unit_tests {
             }
         };
     }
+    test_butterfly_32_func!(test_neonf32_butterfly1, WasmSimdF32Butterfly1, 1);
     test_butterfly_32_func!(test_neonf32_butterfly2, WasmSimdF32Butterfly2, 2);
-    test_butterfly_32_func!(test_neonf32_butterfly3, WasmSimdF32Butterfly3, 3);
-    test_butterfly_32_func!(test_neonf32_butterfly4, WasmSimdF32Butterfly4, 4);
-    test_butterfly_32_func!(test_neonf32_butterfly5, WasmSimdF32Butterfly5, 5);
+    test_butterfly_32_func!(test_neonf32_butterfly3, WasmSimdF32Butterfly3, 3); // failed
+    test_butterfly_32_func!(test_neonf32_butterfly4, WasmSimdF32Butterfly4, 4); // failed
+    test_butterfly_32_func!(test_neonf32_butterfly5, WasmSimdF32Butterfly5, 5); // failed
     test_butterfly_32_func!(test_neonf32_butterfly6, WasmSimdF32Butterfly6, 6);
-    test_butterfly_32_func!(test_neonf32_butterfly8, WasmSimdF32Butterfly8, 8);
+    test_butterfly_32_func!(test_neonf32_butterfly8, WasmSimdF32Butterfly8, 8); // failed
     test_butterfly_32_func!(test_neonf32_butterfly9, WasmSimdF32Butterfly9, 9);
     test_butterfly_32_func!(test_neonf32_butterfly10, WasmSimdF32Butterfly10, 10);
-    test_butterfly_32_func!(test_neonf32_butterfly12, WasmSimdF32Butterfly12, 12);
+    test_butterfly_32_func!(test_neonf32_butterfly12, WasmSimdF32Butterfly12, 12); // failed
     test_butterfly_32_func!(test_neonf32_butterfly15, WasmSimdF32Butterfly15, 15);
-    test_butterfly_32_func!(test_neonf32_butterfly16, WasmSimdF32Butterfly16, 16);
-    test_butterfly_32_func!(test_neonf32_butterfly32, WasmSimdF32Butterfly32, 32);
+    test_butterfly_32_func!(test_neonf32_butterfly16, WasmSimdF32Butterfly16, 16); // failed
+    test_butterfly_32_func!(test_neonf32_butterfly32, WasmSimdF32Butterfly32, 32); // failed
 
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
     macro_rules! test_butterfly_64_func {
         ($test_name:ident, $struct_name:ident, $size:expr) => {
-            #[test]
+            #[wasm_bindgen_test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
                 check_fft_algorithm::<f64>(&butterfly, $size, FftDirection::Forward);
@@ -3316,20 +3407,21 @@ mod unit_tests {
             }
         };
     }
+    test_butterfly_64_func!(test_neonf64_butterfly1, WasmSimdF64Butterfly1, 1);
     test_butterfly_64_func!(test_neonf64_butterfly2, WasmSimdF64Butterfly2, 2);
-    test_butterfly_64_func!(test_neonf64_butterfly3, WasmSimdF64Butterfly3, 3);
+    test_butterfly_64_func!(test_neonf64_butterfly3, WasmSimdF64Butterfly3, 3); // Failed
     test_butterfly_64_func!(test_neonf64_butterfly4, WasmSimdF64Butterfly4, 4);
     test_butterfly_64_func!(test_neonf64_butterfly5, WasmSimdF64Butterfly5, 5);
-    test_butterfly_64_func!(test_neonf64_butterfly6, WasmSimdF64Butterfly6, 6);
+    test_butterfly_64_func!(test_neonf64_butterfly6, WasmSimdF64Butterfly6, 6); // Failed
     test_butterfly_64_func!(test_neonf64_butterfly8, WasmSimdF64Butterfly8, 8);
-    test_butterfly_64_func!(test_neonf64_butterfly9, WasmSimdF64Butterfly9, 9);
+    test_butterfly_64_func!(test_neonf64_butterfly9, WasmSimdF64Butterfly9, 9); // Failed
     test_butterfly_64_func!(test_neonf64_butterfly10, WasmSimdF64Butterfly10, 10);
-    test_butterfly_64_func!(test_neonf64_butterfly12, WasmSimdF64Butterfly12, 12);
-    test_butterfly_64_func!(test_neonf64_butterfly15, WasmSimdF64Butterfly15, 15);
+    test_butterfly_64_func!(test_neonf64_butterfly12, WasmSimdF64Butterfly12, 12); // Failed
+    test_butterfly_64_func!(test_neonf64_butterfly15, WasmSimdF64Butterfly15, 15); // Failed
     test_butterfly_64_func!(test_neonf64_butterfly16, WasmSimdF64Butterfly16, 16);
     test_butterfly_64_func!(test_neonf64_butterfly32, WasmSimdF64Butterfly32, 32);
 
-    #[test]
+    #[wasm_bindgen_test]
     fn test_solo_fft2_32() {
         unsafe {
             let val1 = Complex::<f32>::new(1.0, 2.5);
@@ -3337,7 +3429,7 @@ mod unit_tests {
 
             let mut val = vec![val1, val2];
 
-            let in_packed = vld1q_f32(val.as_ptr() as *const f32);
+            let in_packed = v128_load(val.as_ptr() as *const v128);
 
             let dft = Dft::new(2, FftDirection::Forward);
 
@@ -3352,7 +3444,7 @@ mod unit_tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn test_parallel_fft2_32() {
         unsafe {
             let val_a1 = Complex::<f32>::new(1.0, 2.5);
@@ -3364,8 +3456,8 @@ mod unit_tests {
             let mut val_a = vec![val_a1, val_a2];
             let mut val_b = vec![val_b1, val_b2];
 
-            let p1 = vld1q_f32(val_a.as_ptr() as *const f32);
-            let p2 = vld1q_f32(val_b.as_ptr() as *const f32);
+            let p1 = v128_load(val_a.as_ptr() as *const v128);
+            let p2 = v128_load(val_b.as_ptr() as *const v128);
 
             let dft = Dft::new(2, FftDirection::Forward);
 

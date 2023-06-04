@@ -1,7 +1,5 @@
 use core::arch::wasm32::*;
 
-use num_complex::Complex;
-
 //  __  __       _   _               _________  _     _ _
 // |  \/  | __ _| |_| |__           |___ /___ \| |__ (_) |_
 // | |\/| |/ _` | __| '_ \   _____    |_ \ __) | '_ \| | __|
@@ -19,9 +17,9 @@ pub struct Rotate90F32 {
 impl Rotate90F32 {
     pub fn new(positive: bool) -> Self {
         let sign_hi = if positive {
-            f32x4(-1.0, 1.0, 1.0, 1.0)
+            f32x4(1.0, 1.0, -1.0, 1.0)
         } else {
-            f32x4(1.0, -1.0, 1.0, 1.0)
+            f32x4(1.0, 1.0, 1.0, -1.0)
         };
         let sign_both = if positive {
             f32x4(-1.0, 1.0, -1.0, 1.0)
@@ -164,12 +162,10 @@ pub(crate) struct Rotate90F64 {
 
 impl Rotate90F64 {
     pub fn new(positive: bool) -> Self {
-        let sign = unsafe {
-            if positive {
-                f64x2(-1.0, 1.0)
-            } else {
-                f64x2(1.0, -1.0)
-            }
+        let sign = if positive {
+            f64x2(-1.0, 1.0)
+        } else {
+            f64x2(1.0, -1.0)
         };
         Self { sign }
     }
@@ -199,6 +195,89 @@ mod unit_tests {
     use super::*;
     use num_complex::Complex;
     use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    fn test_positive_rotation_f32() {
+        unsafe {
+            let rotate = Rotate90F32::new(true);
+            let input = f32x4(1.0, 2.0, 69.0, 420.0);
+            let actual_hi = rotate.rotate_hi(input);
+            let expected_hi = f32x4(1.0, 2.0, -420.0, 69.0);
+            assert_eq!(
+                std::mem::transmute::<v128, [Complex<f32>; 2]>(actual_hi),
+                std::mem::transmute::<v128, [Complex<f32>; 2]>(expected_hi)
+            );
+
+            let actual = rotate.rotate_both(input);
+            let expected = f32x4(-2.0, 1.0, -420.0, 69.0);
+            assert_eq!(
+                std::mem::transmute::<v128, [Complex<f32>; 2]>(actual),
+                std::mem::transmute::<v128, [Complex<f32>; 2]>(expected)
+            );
+        }
+    }
+
+    #[wasm_bindgen_test]
+    fn test_negative_rotation_f32() {
+        unsafe {
+            let rotate = Rotate90F32::new(false);
+            let input = f32x4(1.0, 2.0, 69.0, 420.0);
+            let actual_hi = rotate.rotate_hi(input);
+            let expected_hi = f32x4(1.0, 2.0, 420.0, -69.0);
+            assert_eq!(
+                std::mem::transmute::<v128, [Complex<f32>; 2]>(actual_hi),
+                std::mem::transmute::<v128, [Complex<f32>; 2]>(expected_hi)
+            );
+
+            let actual = rotate.rotate_both(input);
+            let expected = f32x4(2.0, -1.0, 420.0, -69.0);
+            assert_eq!(
+                std::mem::transmute::<v128, [Complex<f32>; 2]>(actual),
+                std::mem::transmute::<v128, [Complex<f32>; 2]>(expected)
+            );
+        }
+    }
+
+    #[wasm_bindgen_test]
+    fn test_negative_rotation_f64() {
+        unsafe {
+            let rotate = Rotate90F64::new(false);
+            let input = f64x2(69.0, 420.0);
+            let actual = rotate.rotate(input);
+            let expected = f64x2(420.0, -69.0);
+            assert_eq!(
+                std::mem::transmute::<v128, Complex<f64>>(actual),
+                std::mem::transmute::<v128, Complex<f64>>(expected)
+            );
+        }
+    }
+
+    #[wasm_bindgen_test]
+    fn test_positive_rotation_f64() {
+        unsafe {
+            let rotate = Rotate90F64::new(true);
+            let input = f64x2(69.0, 420.0);
+            let actual = rotate.rotate(input);
+            let expected = f64x2(-420.0, 69.0);
+            assert_eq!(
+                std::mem::transmute::<v128, Complex<f64>>(actual),
+                std::mem::transmute::<v128, Complex<f64>>(expected)
+            );
+        }
+    }
+
+    #[wasm_bindgen_test]
+    fn test_reverse_complex_number_f32() {
+        let input = f32x4(1.0, 5.0, 9.0, 13.0);
+        let actual = reverse_complex_elements_f32(input);
+        let expected = f32x4(9.0, 13.0, 1.0, 5.0);
+        unsafe {
+            assert_eq!(
+                std::mem::transmute::<v128, [Complex<f32>; 2]>(actual),
+                std::mem::transmute::<v128, [Complex<f32>; 2]>(expected)
+            );
+        }
+    }
 
     #[wasm_bindgen_test]
     fn test_mul_complex_f64() {

@@ -3,9 +3,9 @@ mod wasm_simd_common;
 #[macro_use]
 mod wasm_simd_vector;
 
-// #[macro_use]
-// pub mod wasm_simd_butterflies;
-// pub mod wasm_simd_prime_butterflies;
+#[macro_use]
+pub mod wasm_simd_butterflies;
+pub mod wasm_simd_prime_butterflies;
 // pub mod wasm_simd_radix4;
 
 mod wasm_simd_utils;
