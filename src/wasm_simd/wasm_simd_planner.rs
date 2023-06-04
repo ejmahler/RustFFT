@@ -1,4 +1,12 @@
+use num_integer::gcd;
+
+use crate::algorithm::{
+    BluesteinsAlgorithm, Dft, GoodThomasAlgorithm, GoodThomasAlgorithmSmall, MixedRadix,
+    MixedRadixSmall, RadersAlgorithm,
+};
+use crate::math_utils::PrimeFactor;
 // TODO: update docs
+use crate::wasm_simd::*;
 use crate::{fft_cache::FftCache, math_utils::PrimeFactors, Fft, FftDirection, FftNum};
 use std::{any::TypeId, collections::HashMap, sync::Arc};
 
@@ -142,7 +150,7 @@ pub struct FftPlannerWasmSimd<T: FftNum> {
     recipe_cache: HashMap<usize, Arc<Recipe>>,
 }
 impl<T: FftNum> FftPlannerWasmSimd<T> {
-    /// Creates a new `FftPlannerNeon` instance.
+    /// Creates a new `FftPlannerWasmSimd` instance.
     ///
     /// Returns `Ok(planner_instance)` if this machine has the required instruction sets.
     /// Returns `Err(())` if some instruction sets are missing.
@@ -166,7 +174,8 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft(&mut self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
-        unreachable!()
+        let recipe = self.design_fft_for_len(len);
+        self.build_fft(&recipe, direction)
     }
     /// Returns a `Fft` instance which uses WebAssembly SIMD instructions to compute forward FFTs of size `len`.
     ///
@@ -174,7 +183,7 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
     pub fn plan_fft_forward(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         self.plan_fft(len, FftDirection::Forward)
     }
-    /// Returns a `Fft` instance which uses Neon instructions to compute inverse FFTs of size `len.
+    /// Returns a `Fft` instance which uses WasmSimd instructions to compute inverse FFTs of size `len.
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft_inverse(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
@@ -208,215 +217,594 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
     }
 
     fn build_new_fft(&mut self, recipe: &Recipe, direction: FftDirection) -> Arc<dyn Fft<T>> {
-        todo!()
+        let id_f32 = TypeId::of::<f32>();
+        let id_f64 = TypeId::of::<f64>();
+        let id_t = TypeId::of::<T>();
+
+        match recipe {
+            Recipe::Dft(len) => Arc::new(Dft::new(*len, direction)) as Arc<dyn Fft<T>>,
+            Recipe::Radix4(len) => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimd32Radix4::new(*len, direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimd64Radix4::new(*len, direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Butterfly1 => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdF32Butterfly1::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdF64Butterfly1::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Butterfly2 => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdF32Butterfly2::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdF64Butterfly2::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Butterfly3 => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdF32Butterfly3::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdF64Butterfly3::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Butterfly4 => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdF32Butterfly4::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdF64Butterfly4::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Butterfly5 => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdF32Butterfly5::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdF64Butterfly5::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Butterfly6 => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdF32Butterfly6::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdF64Butterfly6::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Butterfly7 => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdF32Butterfly7::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdF64Butterfly7::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Butterfly8 => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdF32Butterfly8::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdF64Butterfly8::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Butterfly9 => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdF32Butterfly9::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdF64Butterfly9::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Butterfly10 => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdF32Butterfly10::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdF64Butterfly10::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Butterfly11 => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdF32Butterfly11::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdF64Butterfly11::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Butterfly12 => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdF32Butterfly12::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdF64Butterfly12::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Butterfly13 => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdF32Butterfly13::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdF64Butterfly13::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Butterfly15 => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdF32Butterfly15::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdF64Butterfly15::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Butterfly16 => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdF32Butterfly16::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdF64Butterfly16::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Butterfly17 => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdF32Butterfly17::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdF64Butterfly17::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Butterfly19 => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdF32Butterfly19::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdF64Butterfly19::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Butterfly23 => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdF32Butterfly23::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdF64Butterfly23::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Butterfly29 => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdF32Butterfly29::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdF64Butterfly29::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Butterfly31 => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdF32Butterfly31::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdF64Butterfly31::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::Butterfly32 => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdF32Butterfly32::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdF64Butterfly32::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
+            Recipe::MixedRadix {
+                left_fft,
+                right_fft,
+            } => {
+                let left_fft = self.build_fft(&left_fft, direction);
+                let right_fft = self.build_fft(&right_fft, direction);
+                Arc::new(MixedRadix::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
+            }
+            Recipe::GoodThomasAlgorithm {
+                left_fft,
+                right_fft,
+            } => {
+                let left_fft = self.build_fft(&left_fft, direction);
+                let right_fft = self.build_fft(&right_fft, direction);
+                Arc::new(GoodThomasAlgorithm::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
+            }
+            Recipe::MixedRadixSmall {
+                left_fft,
+                right_fft,
+            } => {
+                let left_fft = self.build_fft(&left_fft, direction);
+                let right_fft = self.build_fft(&right_fft, direction);
+                Arc::new(MixedRadixSmall::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
+            }
+            Recipe::GoodThomasAlgorithmSmall {
+                left_fft,
+                right_fft,
+            } => {
+                let left_fft = self.build_fft(&left_fft, direction);
+                let right_fft = self.build_fft(&right_fft, direction);
+                Arc::new(GoodThomasAlgorithmSmall::new(left_fft, right_fft)) as Arc<dyn Fft<T>>
+            }
+            Recipe::RadersAlgorithm { inner_fft } => {
+                let inner_fft = self.build_fft(&inner_fft, direction);
+                Arc::new(RadersAlgorithm::new(inner_fft)) as Arc<dyn Fft<T>>
+            }
+            Recipe::BluesteinsAlgorithm { len, inner_fft } => {
+                let inner_fft = self.build_fft(&inner_fft, direction);
+                Arc::new(BluesteinsAlgorithm::new(*len, inner_fft)) as Arc<dyn Fft<T>>
+            }
+        }
     }
 
     fn design_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Arc<Recipe> {
-        todo!()
+        if let Some(fft_instance) = self.design_butterfly_algorithm(len) {
+            fft_instance
+        } else if factors.is_prime() {
+            self.design_prime(len)
+        } else if len.trailing_zeros() >= MIN_RADIX4_BITS {
+            if len.is_power_of_two() {
+                Arc::new(Recipe::Radix4(len))
+            } else {
+                let non_power_of_two = factors
+                    .remove_factors(PrimeFactor {
+                        value: 2,
+                        count: len.trailing_zeros(),
+                    })
+                    .unwrap();
+                let power_of_two = PrimeFactors::compute(1 << len.trailing_zeros());
+                self.design_mixed_radix(power_of_two, non_power_of_two)
+            }
+        } else {
+            // Can we do this as a mixed radix with just two butterflies?
+            // Loop through and find all combinations
+            // If more than one is found, keep the one where the factors are closer together.
+            // For example length 20 where 10x2 and 5x4 are possible, we use 5x4.
+            let butterflies: [usize; 20] = [
+                2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 19, 23, 29, 31, 32,
+            ];
+            let mut bf_left = 0;
+            let mut bf_right = 0;
+            // If the length is below 14, or over 1024 we don't need to try this.
+            if len > 13 && len <= 1024 {
+                for (n, bf_l) in butterflies.iter().enumerate() {
+                    if len % bf_l == 0 {
+                        let bf_r = len / bf_l;
+                        if butterflies.iter().skip(n).any(|&m| m == bf_r) {
+                            bf_left = *bf_l;
+                            bf_right = bf_r;
+                        }
+                    }
+                }
+                if bf_left > 0 {
+                    let fact_l = PrimeFactors::compute(bf_left);
+                    let fact_r = PrimeFactors::compute(bf_right);
+                    return self.design_mixed_radix(fact_l, fact_r);
+                }
+            }
+            // Not possible with just butterflies, go with the general solution.
+            let (left_factors, right_factors) = factors.partition_factors();
+            self.design_mixed_radix(left_factors, right_factors)
+        }
+    }
+    fn design_mixed_radix(
+        &mut self,
+        left_factors: PrimeFactors,
+        right_factors: PrimeFactors,
+    ) -> Arc<Recipe> {
+        let left_len = left_factors.get_product();
+        let right_len = right_factors.get_product();
+
+        //neither size is a butterfly, so go with the normal algorithm
+        let left_fft = self.design_fft_with_factors(left_len, left_factors);
+        let right_fft = self.design_fft_with_factors(right_len, right_factors);
+
+        //if both left_len and right_len are small, use algorithms optimized for small FFTs
+        if left_len < 33 && right_len < 33 {
+            // for small FFTs, if gcd is 1, good-thomas is faster
+            if gcd(left_len, right_len) == 1 {
+                Arc::new(Recipe::GoodThomasAlgorithmSmall {
+                    left_fft,
+                    right_fft,
+                })
+            } else {
+                Arc::new(Recipe::MixedRadixSmall {
+                    left_fft,
+                    right_fft,
+                })
+            }
+        } else {
+            Arc::new(Recipe::MixedRadix {
+                left_fft,
+                right_fft,
+            })
+        }
+    }
+
+    // Returns Some(instance) if we have a butterfly available for this size. Returns None if there is no butterfly available for this size
+    fn design_butterfly_algorithm(&mut self, len: usize) -> Option<Arc<Recipe>> {
+        match len {
+            1 => Some(Arc::new(Recipe::Butterfly1)),
+            2 => Some(Arc::new(Recipe::Butterfly2)),
+            3 => Some(Arc::new(Recipe::Butterfly3)),
+            4 => Some(Arc::new(Recipe::Butterfly4)),
+            5 => Some(Arc::new(Recipe::Butterfly5)),
+            6 => Some(Arc::new(Recipe::Butterfly6)),
+            7 => Some(Arc::new(Recipe::Butterfly7)),
+            8 => Some(Arc::new(Recipe::Butterfly8)),
+            9 => Some(Arc::new(Recipe::Butterfly9)),
+            10 => Some(Arc::new(Recipe::Butterfly10)),
+            11 => Some(Arc::new(Recipe::Butterfly11)),
+            12 => Some(Arc::new(Recipe::Butterfly12)),
+            13 => Some(Arc::new(Recipe::Butterfly13)),
+            15 => Some(Arc::new(Recipe::Butterfly15)),
+            16 => Some(Arc::new(Recipe::Butterfly16)),
+            17 => Some(Arc::new(Recipe::Butterfly17)),
+            19 => Some(Arc::new(Recipe::Butterfly19)),
+            23 => Some(Arc::new(Recipe::Butterfly23)),
+            29 => Some(Arc::new(Recipe::Butterfly29)),
+            31 => Some(Arc::new(Recipe::Butterfly31)),
+            32 => Some(Arc::new(Recipe::Butterfly32)),
+            _ => None,
+        }
+    }
+
+    fn design_prime(&mut self, len: usize) -> Arc<Recipe> {
+        let inner_fft_len_rader = len - 1;
+        let raders_factors = PrimeFactors::compute(inner_fft_len_rader);
+        // If any of the prime factors is too large, Rader's gets slow and Bluestein's is the better choice
+        if raders_factors
+            .get_other_factors()
+            .iter()
+            .any(|val| val.value > MAX_RADER_PRIME_FACTOR)
+        {
+            let inner_fft_len_pow2 = (2 * len - 1).checked_next_power_of_two().unwrap();
+            // for long ffts a mixed radix inner fft is faster than a longer radix4
+            let min_inner_len = 2 * len - 1;
+            let mixed_radix_len = 3 * inner_fft_len_pow2 / 4;
+            let inner_fft =
+                if mixed_radix_len >= min_inner_len && len >= MIN_BLUESTEIN_MIXED_RADIX_LEN {
+                    let mixed_radix_factors = PrimeFactors::compute(mixed_radix_len);
+                    self.design_fft_with_factors(mixed_radix_len, mixed_radix_factors)
+                } else {
+                    Arc::new(Recipe::Radix4(inner_fft_len_pow2))
+                };
+            Arc::new(Recipe::BluesteinsAlgorithm { len, inner_fft })
+        } else {
+            let inner_fft = self.design_fft_with_factors(inner_fft_len_rader, raders_factors);
+            Arc::new(Recipe::RadersAlgorithm { inner_fft })
+        }
     }
 }
 
-// #[cfg(test)]
-// mod unit_tests {
-//     use super::*;
-//     use wasm_bindgen_test::*;
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
 
-//     fn is_mixedradix(plan: &Recipe) -> bool {
-//         match plan {
-//             &Recipe::MixedRadix { .. } => true,
-//             _ => false,
-//         }
-//     }
+    fn is_mixedradix(plan: &Recipe) -> bool {
+        match plan {
+            &Recipe::MixedRadix { .. } => true,
+            _ => false,
+        }
+    }
 
-//     fn is_mixedradixsmall(plan: &Recipe) -> bool {
-//         match plan {
-//             &Recipe::MixedRadixSmall { .. } => true,
-//             _ => false,
-//         }
-//     }
+    fn is_mixedradixsmall(plan: &Recipe) -> bool {
+        match plan {
+            &Recipe::MixedRadixSmall { .. } => true,
+            _ => false,
+        }
+    }
 
-//     fn is_goodthomassmall(plan: &Recipe) -> bool {
-//         match plan {
-//             &Recipe::GoodThomasAlgorithmSmall { .. } => true,
-//             _ => false,
-//         }
-//     }
+    fn is_goodthomassmall(plan: &Recipe) -> bool {
+        match plan {
+            &Recipe::GoodThomasAlgorithmSmall { .. } => true,
+            _ => false,
+        }
+    }
 
-//     fn is_raders(plan: &Recipe) -> bool {
-//         match plan {
-//             &Recipe::RadersAlgorithm { .. } => true,
-//             _ => false,
-//         }
-//     }
+    fn is_raders(plan: &Recipe) -> bool {
+        match plan {
+            &Recipe::RadersAlgorithm { .. } => true,
+            _ => false,
+        }
+    }
 
-//     fn is_bluesteins(plan: &Recipe) -> bool {
-//         match plan {
-//             &Recipe::BluesteinsAlgorithm { .. } => true,
-//             _ => false,
-//         }
-//     }
+    fn is_bluesteins(plan: &Recipe) -> bool {
+        match plan {
+            &Recipe::BluesteinsAlgorithm { .. } => true,
+            _ => false,
+        }
+    }
 
-//     #[wasm_bindgen_test]
-//     fn test_plan_sse_trivial() {
-//         // Length 0 and 1 should use Dft
-//         let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
-//         for len in 0..1 {
-//             let plan = planner.design_fft_for_len(len);
-//             assert_eq!(*plan, Recipe::Dft(len));
-//             assert_eq!(plan.len(), len, "Recipe reports wrong length");
-//         }
-//     }
+    #[wasm_bindgen_test]
+    fn test_plan_sse_trivial() {
+        // Length 0 and 1 should use Dft
+        let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
+        for len in 0..1 {
+            let plan = planner.design_fft_for_len(len);
+            assert_eq!(*plan, Recipe::Dft(len));
+            assert_eq!(plan.len(), len, "Recipe reports wrong length");
+        }
+    }
 
-//     #[wasm_bindgen_test]
-//     fn test_plan_sse_largepoweroftwo() {
-//         // Powers of 2 above 6 should use Radix4
-//         let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
-//         for pow in 6..32 {
-//             let len = 1 << pow;
-//             let plan = planner.design_fft_for_len(len);
-//             assert_eq!(*plan, Recipe::Radix4(len));
-//             assert_eq!(plan.len(), len, "Recipe reports wrong length");
-//         }
-//     }
+    #[wasm_bindgen_test]
+    fn test_plan_sse_largepoweroftwo() {
+        // Powers of 2 above 6 should use Radix4
+        let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
+        for pow in 6..32 {
+            let len = 1 << pow;
+            let plan = planner.design_fft_for_len(len);
+            assert_eq!(*plan, Recipe::Radix4(len));
+            assert_eq!(plan.len(), len, "Recipe reports wrong length");
+        }
+    }
 
-//     #[wasm_bindgen_test]
-//     fn test_plan_sse_butterflies() {
-//         // Check that all butterflies are used
-//         let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
-//         assert_eq!(*planner.design_fft_for_len(2), Recipe::Butterfly2);
-//         assert_eq!(*planner.design_fft_for_len(3), Recipe::Butterfly3);
-//         assert_eq!(*planner.design_fft_for_len(4), Recipe::Butterfly4);
-//         assert_eq!(*planner.design_fft_for_len(5), Recipe::Butterfly5);
-//         assert_eq!(*planner.design_fft_for_len(6), Recipe::Butterfly6);
-//         assert_eq!(*planner.design_fft_for_len(7), Recipe::Butterfly7);
-//         assert_eq!(*planner.design_fft_for_len(8), Recipe::Butterfly8);
-//         assert_eq!(*planner.design_fft_for_len(9), Recipe::Butterfly9);
-//         assert_eq!(*planner.design_fft_for_len(10), Recipe::Butterfly10);
-//         assert_eq!(*planner.design_fft_for_len(11), Recipe::Butterfly11);
-//         assert_eq!(*planner.design_fft_for_len(12), Recipe::Butterfly12);
-//         assert_eq!(*planner.design_fft_for_len(13), Recipe::Butterfly13);
-//         assert_eq!(*planner.design_fft_for_len(15), Recipe::Butterfly15);
-//         assert_eq!(*planner.design_fft_for_len(16), Recipe::Butterfly16);
-//         assert_eq!(*planner.design_fft_for_len(17), Recipe::Butterfly17);
-//         assert_eq!(*planner.design_fft_for_len(19), Recipe::Butterfly19);
-//         assert_eq!(*planner.design_fft_for_len(23), Recipe::Butterfly23);
-//         assert_eq!(*planner.design_fft_for_len(29), Recipe::Butterfly29);
-//         assert_eq!(*planner.design_fft_for_len(31), Recipe::Butterfly31);
-//         assert_eq!(*planner.design_fft_for_len(32), Recipe::Butterfly32);
-//     }
+    #[wasm_bindgen_test]
+    fn test_plan_sse_butterflies() {
+        // Check that all butterflies are used
+        let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
+        assert_eq!(*planner.design_fft_for_len(2), Recipe::Butterfly2);
+        assert_eq!(*planner.design_fft_for_len(3), Recipe::Butterfly3);
+        assert_eq!(*planner.design_fft_for_len(4), Recipe::Butterfly4);
+        assert_eq!(*planner.design_fft_for_len(5), Recipe::Butterfly5);
+        assert_eq!(*planner.design_fft_for_len(6), Recipe::Butterfly6);
+        assert_eq!(*planner.design_fft_for_len(7), Recipe::Butterfly7);
+        assert_eq!(*planner.design_fft_for_len(8), Recipe::Butterfly8);
+        assert_eq!(*planner.design_fft_for_len(9), Recipe::Butterfly9);
+        assert_eq!(*planner.design_fft_for_len(10), Recipe::Butterfly10);
+        assert_eq!(*planner.design_fft_for_len(11), Recipe::Butterfly11);
+        assert_eq!(*planner.design_fft_for_len(12), Recipe::Butterfly12);
+        assert_eq!(*planner.design_fft_for_len(13), Recipe::Butterfly13);
+        assert_eq!(*planner.design_fft_for_len(15), Recipe::Butterfly15);
+        assert_eq!(*planner.design_fft_for_len(16), Recipe::Butterfly16);
+        assert_eq!(*planner.design_fft_for_len(17), Recipe::Butterfly17);
+        assert_eq!(*planner.design_fft_for_len(19), Recipe::Butterfly19);
+        assert_eq!(*planner.design_fft_for_len(23), Recipe::Butterfly23);
+        assert_eq!(*planner.design_fft_for_len(29), Recipe::Butterfly29);
+        assert_eq!(*planner.design_fft_for_len(31), Recipe::Butterfly31);
+        assert_eq!(*planner.design_fft_for_len(32), Recipe::Butterfly32);
+    }
 
-//     #[wasm_bindgen_test]
-//     fn test_plan_sse_mixedradix() {
-//         // Products of several different primes should become MixedRadix
-//         let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
-//         for pow2 in 2..5 {
-//             for pow3 in 2..5 {
-//                 for pow5 in 2..5 {
-//                     for pow7 in 2..5 {
-//                         let len = 2usize.pow(pow2)
-//                             * 3usize.pow(pow3)
-//                             * 5usize.pow(pow5)
-//                             * 7usize.pow(pow7);
-//                         let plan = planner.design_fft_for_len(len);
-//                         assert!(is_mixedradix(&plan), "Expected MixedRadix, got {:?}", plan);
-//                         assert_eq!(plan.len(), len, "Recipe reports wrong length");
-//                     }
-//                 }
-//             }
-//         }
-//     }
+    #[wasm_bindgen_test]
+    fn test_plan_sse_mixedradix() {
+        // Products of several different primes should become MixedRadix
+        let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
+        for pow2 in 2..5 {
+            for pow3 in 2..5 {
+                for pow5 in 2..5 {
+                    for pow7 in 2..5 {
+                        let len = 2usize.pow(pow2)
+                            * 3usize.pow(pow3)
+                            * 5usize.pow(pow5)
+                            * 7usize.pow(pow7);
+                        let plan = planner.design_fft_for_len(len);
+                        assert!(is_mixedradix(&plan), "Expected MixedRadix, got {:?}", plan);
+                        assert_eq!(plan.len(), len, "Recipe reports wrong length");
+                    }
+                }
+            }
+        }
+    }
 
-//     #[wasm_bindgen_test]
-//     fn test_plan_sse_mixedradixsmall() {
-//         // Products of two "small" lengths < 31 that have a common divisor >1, and isn't a power of 2 should be MixedRadixSmall
-//         let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
-//         for len in [5 * 20, 5 * 25].iter() {
-//             let plan = planner.design_fft_for_len(*len);
-//             assert!(
-//                 is_mixedradixsmall(&plan),
-//                 "Expected MixedRadixSmall, got {:?}",
-//                 plan
-//             );
-//             assert_eq!(plan.len(), *len, "Recipe reports wrong length");
-//         }
-//     }
+    #[wasm_bindgen_test]
+    fn test_plan_sse_mixedradixsmall() {
+        // Products of two "small" lengths < 31 that have a common divisor >1, and isn't a power of 2 should be MixedRadixSmall
+        let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
+        for len in [5 * 20, 5 * 25].iter() {
+            let plan = planner.design_fft_for_len(*len);
+            assert!(
+                is_mixedradixsmall(&plan),
+                "Expected MixedRadixSmall, got {:?}",
+                plan
+            );
+            assert_eq!(plan.len(), *len, "Recipe reports wrong length");
+        }
+    }
 
-//     #[wasm_bindgen_test]
-//     fn test_plan_sse_goodthomasbutterfly() {
-//         let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
-//         for len in [3 * 7, 5 * 7, 11 * 13, 2 * 29].iter() {
-//             let plan = planner.design_fft_for_len(*len);
-//             assert!(
-//                 is_goodthomassmall(&plan),
-//                 "Expected GoodThomasAlgorithmSmall, got {:?}",
-//                 plan
-//             );
-//             assert_eq!(plan.len(), *len, "Recipe reports wrong length");
-//         }
-//     }
+    #[wasm_bindgen_test]
+    fn test_plan_sse_goodthomasbutterfly() {
+        let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
+        for len in [3 * 7, 5 * 7, 11 * 13, 2 * 29].iter() {
+            let plan = planner.design_fft_for_len(*len);
+            assert!(
+                is_goodthomassmall(&plan),
+                "Expected GoodThomasAlgorithmSmall, got {:?}",
+                plan
+            );
+            assert_eq!(plan.len(), *len, "Recipe reports wrong length");
+        }
+    }
 
-//     #[wasm_bindgen_test]
-//     fn test_plan_sse_bluestein_vs_rader() {
-//         let difficultprimes: [usize; 11] = [59, 83, 107, 149, 167, 173, 179, 359, 719, 1439, 2879];
-//         let easyprimes: [usize; 24] = [
-//             53, 61, 67, 71, 73, 79, 89, 97, 101, 103, 109, 113, 127, 131, 137, 139, 151, 157, 163,
-//             181, 191, 193, 197, 199,
-//         ];
+    #[wasm_bindgen_test]
+    fn test_plan_sse_bluestein_vs_rader() {
+        let difficultprimes: [usize; 11] = [59, 83, 107, 149, 167, 173, 179, 359, 719, 1439, 2879];
+        let easyprimes: [usize; 24] = [
+            53, 61, 67, 71, 73, 79, 89, 97, 101, 103, 109, 113, 127, 131, 137, 139, 151, 157, 163,
+            181, 191, 193, 197, 199,
+        ];
 
-//         let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
-//         for len in difficultprimes.iter() {
-//             let plan = planner.design_fft_for_len(*len);
-//             assert!(
-//                 is_bluesteins(&plan),
-//                 "Expected BluesteinsAlgorithm, got {:?}",
-//                 plan
-//             );
-//             assert_eq!(plan.len(), *len, "Recipe reports wrong length");
-//         }
-//         for len in easyprimes.iter() {
-//             let plan = planner.design_fft_for_len(*len);
-//             assert!(is_raders(&plan), "Expected RadersAlgorithm, got {:?}", plan);
-//             assert_eq!(plan.len(), *len, "Recipe reports wrong length");
-//         }
-//     }
+        let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
+        for len in difficultprimes.iter() {
+            let plan = planner.design_fft_for_len(*len);
+            assert!(
+                is_bluesteins(&plan),
+                "Expected BluesteinsAlgorithm, got {:?}",
+                plan
+            );
+            assert_eq!(plan.len(), *len, "Recipe reports wrong length");
+        }
+        for len in easyprimes.iter() {
+            let plan = planner.design_fft_for_len(*len);
+            assert!(is_raders(&plan), "Expected RadersAlgorithm, got {:?}", plan);
+            assert_eq!(plan.len(), *len, "Recipe reports wrong length");
+        }
+    }
 
-//     #[wasm_bindgen_test]
-//     fn test_sse_fft_cache() {
-//         {
-//             // Check that FFTs are reused if they're both forward
-//             let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
-//             let fft_a = planner.plan_fft(1234, FftDirection::Forward);
-//             let fft_b = planner.plan_fft(1234, FftDirection::Forward);
-//             assert!(Arc::ptr_eq(&fft_a, &fft_b), "Existing fft was not reused");
-//         }
-//         {
-//             // Check that FFTs are reused if they're both inverse
-//             let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
-//             let fft_a = planner.plan_fft(1234, FftDirection::Inverse);
-//             let fft_b = planner.plan_fft(1234, FftDirection::Inverse);
-//             assert!(Arc::ptr_eq(&fft_a, &fft_b), "Existing fft was not reused");
-//         }
-//         {
-//             // Check that FFTs are NOT resued if they don't both have the same direction
-//             let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
-//             let fft_a = planner.plan_fft(1234, FftDirection::Forward);
-//             let fft_b = planner.plan_fft(1234, FftDirection::Inverse);
-//             assert!(
-//                 !Arc::ptr_eq(&fft_a, &fft_b),
-//                 "Existing fft was reused, even though directions don't match"
-//             );
-//         }
-//     }
+    #[wasm_bindgen_test]
+    fn test_sse_fft_cache() {
+        {
+            // Check that FFTs are reused if they're both forward
+            let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
+            let fft_a = planner.plan_fft(1234, FftDirection::Forward);
+            let fft_b = planner.plan_fft(1234, FftDirection::Forward);
+            assert!(Arc::ptr_eq(&fft_a, &fft_b), "Existing fft was not reused");
+        }
+        {
+            // Check that FFTs are reused if they're both inverse
+            let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
+            let fft_a = planner.plan_fft(1234, FftDirection::Inverse);
+            let fft_b = planner.plan_fft(1234, FftDirection::Inverse);
+            assert!(Arc::ptr_eq(&fft_a, &fft_b), "Existing fft was not reused");
+        }
+        {
+            // Check that FFTs are NOT resued if they don't both have the same direction
+            let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
+            let fft_a = planner.plan_fft(1234, FftDirection::Forward);
+            let fft_b = planner.plan_fft(1234, FftDirection::Inverse);
+            assert!(
+                !Arc::ptr_eq(&fft_a, &fft_b),
+                "Existing fft was reused, even though directions don't match"
+            );
+        }
+    }
 
-//     #[wasm_bindgen_test]
-//     fn test_sse_recipe_cache() {
-//         // Check that all butterflies are used
-//         let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
-//         let fft_a = planner.design_fft_for_len(1234);
-//         let fft_b = planner.design_fft_for_len(1234);
-//         assert!(
-//             Arc::ptr_eq(&fft_a, &fft_b),
-//             "Existing recipe was not reused"
-//         );
-//     }
-// }
+    #[wasm_bindgen_test]
+    fn test_sse_recipe_cache() {
+        // Check that all butterflies are used
+        let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
+        let fft_a = planner.design_fft_for_len(1234);
+        let fft_b = planner.design_fft_for_len(1234);
+        assert!(
+            Arc::ptr_eq(&fft_a, &fft_b),
+            "Existing recipe was not reused"
+        );
+    }
+}
