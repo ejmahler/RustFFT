@@ -1,63 +1,63 @@
 use num_complex::Complex;
 
-use core::arch::aarch64::*;
+use core::arch::wasm32::*;
 
 use crate::algorithm::bitreversed_transpose;
 use crate::array_utils;
 use crate::array_utils::workaround_transmute_mut;
 use crate::common::{fft_error_inplace, fft_error_outofplace};
-use crate::neon::neon_butterflies::{
-    NeonF32Butterfly1, NeonF32Butterfly16, NeonF32Butterfly2, NeonF32Butterfly32,
-    NeonF32Butterfly4, NeonF32Butterfly8,
+use crate::wasm_simd::wasm_simd_butterflies::{
+    WasmSimdF32Butterfly1, WasmSimdF32Butterfly16, WasmSimdF32Butterfly2, WasmSimdF32Butterfly32,
+    WasmSimdF32Butterfly4, WasmSimdF32Butterfly8,
 };
-use crate::neon::neon_butterflies::{
-    NeonF64Butterfly1, NeonF64Butterfly16, NeonF64Butterfly2, NeonF64Butterfly32,
-    NeonF64Butterfly4, NeonF64Butterfly8,
+use crate::wasm_simd::wasm_simd_butterflies::{
+    WasmSimdF64Butterfly1, WasmSimdF64Butterfly16, WasmSimdF64Butterfly2, WasmSimdF64Butterfly32,
+    WasmSimdF64Butterfly4, WasmSimdF64Butterfly8,
 };
 use crate::{common::FftNum, twiddles, FftDirection};
 use crate::{Direction, Fft, Length};
 
-use super::neon_common::{assert_f32, assert_f64};
-use super::neon_utils::*;
+use super::wasm_simd_common::{assert_f32, assert_f64};
+use super::wasm_simd_utils::*;
 
-use super::neon_vector::{NeonArray, NeonArrayMut};
+use super::wasm_simd_vector::{WasmSimdArray, WasmSimdArrayMut};
 
-/// FFT algorithm optimized for power-of-two sizes, Neon accelerated version.
+/// FFT algorithm optimized for power-of-two sizes, WasmSimd accelerated version.
 /// This is designed to be used via a Planner, and not created directly.
 
 const USE_BUTTERFLY32_FROM: usize = 262144; // Use length 32 butterfly starting from this length
 
-enum Neon32Butterfly<T> {
-    Len1(NeonF32Butterfly1<T>),
-    Len2(NeonF32Butterfly2<T>),
-    Len4(NeonF32Butterfly4<T>),
-    Len8(NeonF32Butterfly8<T>),
-    Len16(NeonF32Butterfly16<T>),
-    Len32(NeonF32Butterfly32<T>),
+enum WasmSimd32Butterfly<T> {
+    Len1(WasmSimdF32Butterfly1<T>),
+    Len2(WasmSimdF32Butterfly2<T>),
+    Len4(WasmSimdF32Butterfly4<T>),
+    Len8(WasmSimdF32Butterfly8<T>),
+    Len16(WasmSimdF32Butterfly16<T>),
+    Len32(WasmSimdF32Butterfly32<T>),
 }
 
-enum Neon64Butterfly<T> {
-    Len1(NeonF64Butterfly1<T>),
-    Len2(NeonF64Butterfly2<T>),
-    Len4(NeonF64Butterfly4<T>),
-    Len8(NeonF64Butterfly8<T>),
-    Len16(NeonF64Butterfly16<T>),
-    Len32(NeonF64Butterfly32<T>),
+enum WasmSimd64Butterfly<T> {
+    Len1(WasmSimdF64Butterfly1<T>),
+    Len2(WasmSimdF64Butterfly2<T>),
+    Len4(WasmSimdF64Butterfly4<T>),
+    Len8(WasmSimdF64Butterfly8<T>),
+    Len16(WasmSimdF64Butterfly16<T>),
+    Len32(WasmSimdF64Butterfly32<T>),
 }
 
-pub struct Neon32Radix4<T> {
+pub struct WasmSimd32Radix4<T> {
     _phantom: std::marker::PhantomData<T>,
-    twiddles: Box<[float32x4_t]>,
+    twiddles: Box<[v128]>,
 
-    base_fft: Neon32Butterfly<T>,
+    base_fft: WasmSimd32Butterfly<T>,
     base_len: usize,
 
     len: usize,
     direction: FftDirection,
-    bf4: NeonF32Butterfly4<T>,
+    bf4: WasmSimdF32Butterfly4<T>,
 }
 
-impl<T: FftNum> Neon32Radix4<T> {
+impl<T: FftNum> WasmSimd32Radix4<T> {
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the power-of-two FFT
     pub fn new(len: usize, direction: FftDirection) -> Self {
         assert!(
@@ -72,34 +72,37 @@ impl<T: FftNum> Neon32Radix4<T> {
         let (base_len, base_fft) = match num_bits {
             0 => (
                 len,
-                Neon32Butterfly::Len1(NeonF32Butterfly1::new(direction)),
+                WasmSimd32Butterfly::Len1(WasmSimdF32Butterfly1::new(direction)),
             ),
             1 => (
                 len,
-                Neon32Butterfly::Len2(NeonF32Butterfly2::new(direction)),
+                WasmSimd32Butterfly::Len2(WasmSimdF32Butterfly2::new(direction)),
             ),
             2 => (
                 len,
-                Neon32Butterfly::Len4(NeonF32Butterfly4::new(direction)),
+                WasmSimd32Butterfly::Len4(WasmSimdF32Butterfly4::new(direction)),
             ),
             3 => (
                 len,
-                Neon32Butterfly::Len8(NeonF32Butterfly8::new(direction)),
+                WasmSimd32Butterfly::Len8(WasmSimdF32Butterfly8::new(direction)),
             ),
             _ => {
                 if num_bits % 2 == 1 {
                     if len < USE_BUTTERFLY32_FROM {
-                        (8, Neon32Butterfly::Len8(NeonF32Butterfly8::new(direction)))
+                        (
+                            8,
+                            WasmSimd32Butterfly::Len8(WasmSimdF32Butterfly8::new(direction)),
+                        )
                     } else {
                         (
                             32,
-                            Neon32Butterfly::Len32(NeonF32Butterfly32::new(direction)),
+                            WasmSimd32Butterfly::Len32(WasmSimdF32Butterfly32::new(direction)),
                         )
                     }
                 } else {
                     (
                         16,
-                        Neon32Butterfly::Len16(NeonF32Butterfly16::new(direction)),
+                        WasmSimd32Butterfly::Len16(WasmSimdF32Butterfly16::new(direction)),
                     )
                 }
             }
@@ -142,11 +145,11 @@ impl<T: FftNum> Neon32Radix4<T> {
             len,
             direction,
             _phantom: std::marker::PhantomData,
-            bf4: NeonF32Butterfly4::<T>::new(direction),
+            bf4: WasmSimdF32Butterfly4::<T>::new(direction),
         }
     }
 
-    //#[target_feature(enable = "neon")]
+    //#[target_feature(enable = "wasm_simd")]
     unsafe fn perform_fft_out_of_place(
         &self,
         signal: &[Complex<T>],
@@ -162,17 +165,17 @@ impl<T: FftNum> Neon32Radix4<T> {
 
         // Base-level FFTs
         match &self.base_fft {
-            Neon32Butterfly::Len1(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
-            Neon32Butterfly::Len2(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
-            Neon32Butterfly::Len4(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
-            Neon32Butterfly::Len8(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
-            Neon32Butterfly::Len16(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
-            Neon32Butterfly::Len32(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
+            WasmSimd32Butterfly::Len1(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
+            WasmSimd32Butterfly::Len2(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
+            WasmSimd32Butterfly::Len4(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
+            WasmSimd32Butterfly::Len8(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
+            WasmSimd32Butterfly::Len16(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
+            WasmSimd32Butterfly::Len32(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
         };
 
         // cross-FFTs
         let mut current_size = self.base_len * 4;
-        let mut layer_twiddles: &[float32x4_t] = &self.twiddles;
+        let mut layer_twiddles: &[v128] = &self.twiddles;
 
         while current_size <= signal.len() {
             let num_rows = signal.len() / current_size;
@@ -194,14 +197,14 @@ impl<T: FftNum> Neon32Radix4<T> {
         }
     }
 }
-boilerplate_fft_neon_oop!(Neon32Radix4, |this: &Neon32Radix4<_>| this.len);
+boilerplate_fft_wasm_simd_oop!(WasmSimd32Radix4, |this: &WasmSimd32Radix4<_>| this.len);
 
-//#[target_feature(enable = "neon")]
+//#[target_feature(enable = "wasm_simd")]
 unsafe fn butterfly_4_32<T: FftNum>(
     data: &mut [Complex<T>],
-    twiddles: &[float32x4_t],
+    twiddles: &[v128],
     num_ffts: usize,
-    bf4: &NeonF32Butterfly4<T>,
+    bf4: &WasmSimdF32Butterfly4<T>,
 ) {
     let mut idx = 0usize;
     let mut buffer: &mut [Complex<f32>] = workaround_transmute_mut(data);
@@ -238,19 +241,19 @@ unsafe fn butterfly_4_32<T: FftNum>(
     }
 }
 
-pub struct Neon64Radix4<T> {
+pub struct WasmSimd64Radix4<T> {
     _phantom: std::marker::PhantomData<T>,
-    twiddles: Box<[float64x2_t]>,
+    twiddles: Box<[v128]>,
 
-    base_fft: Neon64Butterfly<T>,
+    base_fft: WasmSimd64Butterfly<T>,
     base_len: usize,
 
     len: usize,
     direction: FftDirection,
-    bf4: NeonF64Butterfly4<T>,
+    bf4: WasmSimdF64Butterfly4<T>,
 }
 
-impl<T: FftNum> Neon64Radix4<T> {
+impl<T: FftNum> WasmSimd64Radix4<T> {
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the power-of-two FFT
     pub fn new(len: usize, direction: FftDirection) -> Self {
         assert!(
@@ -266,34 +269,37 @@ impl<T: FftNum> Neon64Radix4<T> {
         let (base_len, base_fft) = match num_bits {
             0 => (
                 len,
-                Neon64Butterfly::Len1(NeonF64Butterfly1::new(direction)),
+                WasmSimd64Butterfly::Len1(WasmSimdF64Butterfly1::new(direction)),
             ),
             1 => (
                 len,
-                Neon64Butterfly::Len2(NeonF64Butterfly2::new(direction)),
+                WasmSimd64Butterfly::Len2(WasmSimdF64Butterfly2::new(direction)),
             ),
             2 => (
                 len,
-                Neon64Butterfly::Len4(NeonF64Butterfly4::new(direction)),
+                WasmSimd64Butterfly::Len4(WasmSimdF64Butterfly4::new(direction)),
             ),
             3 => (
                 len,
-                Neon64Butterfly::Len8(NeonF64Butterfly8::new(direction)),
+                WasmSimd64Butterfly::Len8(WasmSimdF64Butterfly8::new(direction)),
             ),
             _ => {
                 if num_bits % 2 == 1 {
                     if len < USE_BUTTERFLY32_FROM {
-                        (8, Neon64Butterfly::Len8(NeonF64Butterfly8::new(direction)))
+                        (
+                            8,
+                            WasmSimd64Butterfly::Len8(WasmSimdF64Butterfly8::new(direction)),
+                        )
                     } else {
                         (
                             32,
-                            Neon64Butterfly::Len32(NeonF64Butterfly32::new(direction)),
+                            WasmSimd64Butterfly::Len32(WasmSimdF64Butterfly32::new(direction)),
                         )
                     }
                 } else {
                     (
                         16,
-                        Neon64Butterfly::Len16(NeonF64Butterfly16::new(direction)),
+                        WasmSimd64Butterfly::Len16(WasmSimdF64Butterfly16::new(direction)),
                     )
                 }
             }
@@ -327,11 +333,11 @@ impl<T: FftNum> Neon64Radix4<T> {
             len,
             direction,
             _phantom: std::marker::PhantomData,
-            bf4: NeonF64Butterfly4::<T>::new(direction),
+            bf4: WasmSimdF64Butterfly4::<T>::new(direction),
         }
     }
 
-    //#[target_feature(enable = "neon")]
+    //#[target_feature(enable = "wasm_simd")]
     unsafe fn perform_fft_out_of_place(
         &self,
         signal: &[Complex<T>],
@@ -347,17 +353,17 @@ impl<T: FftNum> Neon64Radix4<T> {
 
         // Base-level FFTs
         match &self.base_fft {
-            Neon64Butterfly::Len1(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
-            Neon64Butterfly::Len2(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
-            Neon64Butterfly::Len4(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
-            Neon64Butterfly::Len8(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
-            Neon64Butterfly::Len16(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
-            Neon64Butterfly::Len32(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
+            WasmSimd64Butterfly::Len1(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
+            WasmSimd64Butterfly::Len2(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
+            WasmSimd64Butterfly::Len4(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
+            WasmSimd64Butterfly::Len8(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
+            WasmSimd64Butterfly::Len16(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
+            WasmSimd64Butterfly::Len32(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
         }
 
         // cross-FFTs
         let mut current_size = self.base_len * 4;
-        let mut layer_twiddles: &[float64x2_t] = &self.twiddles;
+        let mut layer_twiddles: &[v128] = &self.twiddles;
 
         while current_size <= signal.len() {
             let num_rows = signal.len() / current_size;
@@ -379,14 +385,14 @@ impl<T: FftNum> Neon64Radix4<T> {
         }
     }
 }
-boilerplate_fft_neon_oop!(Neon64Radix4, |this: &Neon64Radix4<_>| this.len);
+boilerplate_fft_wasm_simd_oop!(WasmSimd64Radix4, |this: &WasmSimd64Radix4<_>| this.len);
 
-//#[target_feature(enable = "neon")]
+//#[target_feature(enable = "wasm_simd")]
 unsafe fn butterfly_4_64<T: FftNum>(
     data: &mut [Complex<T>],
-    twiddles: &[float64x2_t],
+    twiddles: &[v128],
     num_ffts: usize,
-    bf4: &NeonF64Butterfly4<T>,
+    bf4: &WasmSimdF64Butterfly4<T>,
 ) {
     let mut idx = 0usize;
     let mut buffer: &mut [Complex<f64>] = workaround_transmute_mut(data);
@@ -427,32 +433,33 @@ unsafe fn butterfly_4_64<T: FftNum>(
 mod unit_tests {
     use super::*;
     use crate::test_utils::check_fft_algorithm;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
-    fn test_neon_radix4_64() {
+    #[wasm_bindgen_test]
+    fn test_wasm_simd_radix4_64() {
         for pow in 4..12 {
             let len = 1 << pow;
-            test_neon_radix4_64_with_length(len, FftDirection::Forward);
-            test_neon_radix4_64_with_length(len, FftDirection::Inverse);
+            test_wasm_simd_radix4_64_with_length(len, FftDirection::Forward);
+            test_wasm_simd_radix4_64_with_length(len, FftDirection::Inverse);
         }
     }
 
-    fn test_neon_radix4_64_with_length(len: usize, direction: FftDirection) {
-        let fft = Neon64Radix4::new(len, direction);
+    fn test_wasm_simd_radix4_64_with_length(len: usize, direction: FftDirection) {
+        let fft = WasmSimd64Radix4::new(len, direction);
         check_fft_algorithm::<f64>(&fft, len, direction);
     }
 
-    #[test]
-    fn test_neon_radix4_32() {
+    #[wasm_bindgen_test]
+    fn test_wasm_simd_radix4_32() {
         for pow in 0..12 {
             let len = 1 << pow;
-            test_neon_radix4_32_with_length(len, FftDirection::Forward);
-            test_neon_radix4_32_with_length(len, FftDirection::Inverse);
+            test_wasm_simd_radix4_32_with_length(len, FftDirection::Forward);
+            test_wasm_simd_radix4_32_with_length(len, FftDirection::Inverse);
         }
     }
 
-    fn test_neon_radix4_32_with_length(len: usize, direction: FftDirection) {
-        let fft = Neon32Radix4::new(len, direction);
+    fn test_wasm_simd_radix4_32_with_length(len: usize, direction: FftDirection) {
+        let fft = WasmSimd32Radix4::new(len, direction);
         check_fft_algorithm::<f32>(&fft, len, direction);
     }
 }

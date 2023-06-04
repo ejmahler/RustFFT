@@ -94,7 +94,7 @@ macro_rules! separate_interleaved_complex_f32 {
     }
 }
 
-macro_rules! boilerplate_fft_neon_oop {
+macro_rules! boilerplate_fft_wasm_simd_oop {
     ($struct_name:ident, $len_fn:expr) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             fn process_outofplace_with_scratch(
