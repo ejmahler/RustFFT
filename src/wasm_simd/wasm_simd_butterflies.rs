@@ -1049,10 +1049,10 @@ impl<T: FftNum> WasmSimdF64Butterfly5<T> {
         let rotate = Rotate90F64::new(true);
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 5, direction);
         let tw2: Complex<f64> = twiddles::compute_twiddle(2, 5, direction);
-        let twiddle1re = unsafe { f64x2_splat(tw1.re) };
-        let twiddle1im = unsafe { f64x2_splat(tw1.im) };
-        let twiddle2re = unsafe { f64x2_splat(tw2.re) };
-        let twiddle2im = unsafe { f64x2_splat(tw2.im) };
+        let twiddle1re = f64x2_splat(tw1.re);
+        let twiddle1im = f64x2_splat(tw1.im);
+        let twiddle2re = f64x2_splat(tw2.re);
+        let twiddle2im = f64x2_splat(tw2.im);
 
         Self {
             direction,
@@ -1364,8 +1364,8 @@ impl<T: FftNum> WasmSimdF32Butterfly8<T> {
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let bf4 = WasmSimdF32Butterfly4::new(direction);
-        let root2 = unsafe { f32x4(1.0, 1.0, 0.5f32.sqrt(), 0.5f32.sqrt()) };
-        let root2_dual = unsafe { f32x4_splat(0.5f32.sqrt()) };
+        let root2 = f32x4(1.0, 1.0, 0.5f32.sqrt(), 0.5f32.sqrt());
+        let root2_dual = f32x4_splat(0.5f32.sqrt());
         let rotate90 = if direction == FftDirection::Inverse {
             Rotate90F32::new(true)
         } else {
@@ -1596,9 +1596,9 @@ impl<T: FftNum> WasmSimdF32Butterfly9<T> {
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 9, direction);
         let tw2: Complex<f32> = twiddles::compute_twiddle(2, 9, direction);
         let tw4: Complex<f32> = twiddles::compute_twiddle(4, 9, direction);
-        let twiddle1 = unsafe { f32x4(tw1.re, tw1.im, tw1.re, tw1.im) };
-        let twiddle2 = unsafe { f32x4(tw2.re, tw2.im, tw2.re, tw2.im) };
-        let twiddle4 = unsafe { f32x4(tw4.re, tw4.im, tw4.re, tw4.im) };
+        let twiddle1 = f32x4(tw1.re, tw1.im, tw1.re, tw1.im);
+        let twiddle2 = f32x4(tw2.re, tw2.im, tw2.re, tw2.im);
+        let twiddle4 = f32x4(tw4.re, tw4.im, tw4.re, tw4.im);
 
         Self {
             direction,
@@ -1729,9 +1729,9 @@ impl<T: FftNum> WasmSimdF64Butterfly9<T> {
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 9, direction);
         let tw2: Complex<f64> = twiddles::compute_twiddle(2, 9, direction);
         let tw4: Complex<f64> = twiddles::compute_twiddle(4, 9, direction);
-        let twiddle1 = unsafe { f64x2(tw1.re, tw1.im) };
-        let twiddle2 = unsafe { f64x2(tw2.re, tw2.im) };
-        let twiddle4 = unsafe { f64x2(tw4.re, tw4.im) };
+        let twiddle1 = f64x2(tw1.re, tw1.im);
+        let twiddle2 = f64x2(tw2.re, tw2.im);
+        let twiddle4 = f64x2(tw4.re, tw4.im);
 
         Self {
             direction,
@@ -2458,16 +2458,16 @@ impl<T: FftNum> WasmSimdF32Butterfly16<T> {
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 16, direction);
         let tw2: Complex<f32> = twiddles::compute_twiddle(2, 16, direction);
         let tw3: Complex<f32> = twiddles::compute_twiddle(3, 16, direction);
-        let twiddle01 = unsafe { f32x4(1.0, 0.0, tw1.re, tw1.im) };
-        let twiddle23 = unsafe { f32x4(tw2.re, tw2.im, tw3.re, tw3.im) };
-        let twiddle01conj = unsafe { f32x4(1.0, 0.0, tw1.re, -tw1.im) };
-        let twiddle23conj = unsafe { f32x4(tw2.re, -tw2.im, tw3.re, -tw3.im) };
-        let twiddle1 = unsafe { f32x4(tw1.re, tw1.im, tw1.re, tw1.im) };
-        let twiddle2 = unsafe { f32x4(tw2.re, tw2.im, tw2.re, tw2.im) };
-        let twiddle3 = unsafe { f32x4(tw3.re, tw3.im, tw3.re, tw3.im) };
-        let twiddle1c = unsafe { f32x4(tw1.re, -tw1.im, tw1.re, -tw1.im) };
-        let twiddle2c = unsafe { f32x4(tw2.re, -tw2.im, tw2.re, -tw2.im) };
-        let twiddle3c = unsafe { f32x4(tw3.re, -tw3.im, tw3.re, -tw3.im) };
+        let twiddle01 = f32x4(1.0, 0.0, tw1.re, tw1.im);
+        let twiddle23 = f32x4(tw2.re, tw2.im, tw3.re, tw3.im);
+        let twiddle01conj = f32x4(1.0, 0.0, tw1.re, -tw1.im);
+        let twiddle23conj = f32x4(tw2.re, -tw2.im, tw3.re, -tw3.im);
+        let twiddle1 = f32x4(tw1.re, tw1.im, tw1.re, tw1.im);
+        let twiddle2 = f32x4(tw2.re, tw2.im, tw2.re, tw2.im);
+        let twiddle3 = f32x4(tw3.re, tw3.im, tw3.re, tw3.im);
+        let twiddle1c = f32x4(tw1.re, -tw1.im, tw1.re, -tw1.im);
+        let twiddle2c = f32x4(tw2.re, -tw2.im, tw2.re, -tw2.im);
+        let twiddle3c = f32x4(tw3.re, -tw3.im, tw3.re, -tw3.im);
         Self {
             direction,
             bf4,
@@ -2844,28 +2844,28 @@ impl<T: FftNum> WasmSimdF32Butterfly32<T> {
         let tw5: Complex<f32> = twiddles::compute_twiddle(5, 32, direction);
         let tw6: Complex<f32> = twiddles::compute_twiddle(6, 32, direction);
         let tw7: Complex<f32> = twiddles::compute_twiddle(7, 32, direction);
-        let twiddle01 = unsafe { f32x4(1.0, 0.0, tw1.re, tw1.im) };
-        let twiddle23 = unsafe { f32x4(tw2.re, tw2.im, tw3.re, tw3.im) };
-        let twiddle45 = unsafe { f32x4(tw4.re, tw4.im, tw5.re, tw5.im) };
-        let twiddle67 = unsafe { f32x4(tw6.re, tw6.im, tw7.re, tw7.im) };
-        let twiddle01conj = unsafe { f32x4(1.0, 0.0, tw1.re, -tw1.im) };
-        let twiddle23conj = unsafe { f32x4(tw2.re, -tw2.im, tw3.re, -tw3.im) };
-        let twiddle45conj = unsafe { f32x4(tw4.re, -tw4.im, tw5.re, -tw5.im) };
-        let twiddle67conj = unsafe { f32x4(tw6.re, -tw6.im, tw7.re, -tw7.im) };
-        let twiddle1 = unsafe { f32x4(tw1.re, tw1.im, tw1.re, tw1.im) };
-        let twiddle2 = unsafe { f32x4(tw2.re, tw2.im, tw2.re, tw2.im) };
-        let twiddle3 = unsafe { f32x4(tw3.re, tw3.im, tw3.re, tw3.im) };
-        let twiddle4 = unsafe { f32x4(tw4.re, tw4.im, tw4.re, tw4.im) };
-        let twiddle5 = unsafe { f32x4(tw5.re, tw5.im, tw5.re, tw5.im) };
-        let twiddle6 = unsafe { f32x4(tw6.re, tw6.im, tw6.re, tw6.im) };
-        let twiddle7 = unsafe { f32x4(tw7.re, tw7.im, tw7.re, tw7.im) };
-        let twiddle1c = unsafe { f32x4(tw1.re, -tw1.im, tw1.re, -tw1.im) };
-        let twiddle2c = unsafe { f32x4(tw2.re, -tw2.im, tw2.re, -tw2.im) };
-        let twiddle3c = unsafe { f32x4(tw3.re, -tw3.im, tw3.re, -tw3.im) };
-        let twiddle4c = unsafe { f32x4(tw4.re, -tw4.im, tw4.re, -tw4.im) };
-        let twiddle5c = unsafe { f32x4(tw5.re, -tw5.im, tw5.re, -tw5.im) };
-        let twiddle6c = unsafe { f32x4(tw6.re, -tw6.im, tw6.re, -tw6.im) };
-        let twiddle7c = unsafe { f32x4(tw7.re, -tw7.im, tw7.re, -tw7.im) };
+        let twiddle01 = f32x4(1.0, 0.0, tw1.re, tw1.im);
+        let twiddle23 = f32x4(tw2.re, tw2.im, tw3.re, tw3.im);
+        let twiddle45 = f32x4(tw4.re, tw4.im, tw5.re, tw5.im);
+        let twiddle67 = f32x4(tw6.re, tw6.im, tw7.re, tw7.im);
+        let twiddle01conj = f32x4(1.0, 0.0, tw1.re, -tw1.im);
+        let twiddle23conj = f32x4(tw2.re, -tw2.im, tw3.re, -tw3.im);
+        let twiddle45conj = f32x4(tw4.re, -tw4.im, tw5.re, -tw5.im);
+        let twiddle67conj = f32x4(tw6.re, -tw6.im, tw7.re, -tw7.im);
+        let twiddle1 = f32x4(tw1.re, tw1.im, tw1.re, tw1.im);
+        let twiddle2 = f32x4(tw2.re, tw2.im, tw2.re, tw2.im);
+        let twiddle3 = f32x4(tw3.re, tw3.im, tw3.re, tw3.im);
+        let twiddle4 = f32x4(tw4.re, tw4.im, tw4.re, tw4.im);
+        let twiddle5 = f32x4(tw5.re, tw5.im, tw5.re, tw5.im);
+        let twiddle6 = f32x4(tw6.re, tw6.im, tw6.re, tw6.im);
+        let twiddle7 = f32x4(tw7.re, tw7.im, tw7.re, tw7.im);
+        let twiddle1c = f32x4(tw1.re, -tw1.im, tw1.re, -tw1.im);
+        let twiddle2c = f32x4(tw2.re, -tw2.im, tw2.re, -tw2.im);
+        let twiddle3c = f32x4(tw3.re, -tw3.im, tw3.re, -tw3.im);
+        let twiddle4c = f32x4(tw4.re, -tw4.im, tw4.re, -tw4.im);
+        let twiddle5c = f32x4(tw5.re, -tw5.im, tw5.re, -tw5.im);
+        let twiddle6c = f32x4(tw6.re, -tw6.im, tw6.re, -tw6.im);
+        let twiddle7c = f32x4(tw7.re, -tw7.im, tw7.re, -tw7.im);
         Self {
             direction,
             bf8,
