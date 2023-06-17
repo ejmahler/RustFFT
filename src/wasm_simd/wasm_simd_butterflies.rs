@@ -18,10 +18,12 @@ use super::wasm_simd_vector::WasmSimdArrayMut;
 macro_rules! boilerplate_fft_wasm_simd_f32_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> $struct_name<T> {
+            #[target_feature(enable = "simd128")]
             pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
                 self.perform_fft_contiguous(workaround_transmute_mut::<_, Complex<f32>>(buffer));
             }
 
+            #[target_feature(enable = "simd128")]
             pub(crate) unsafe fn perform_parallel_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
                 self.perform_parallel_fft_contiguous(workaround_transmute_mut::<_, Complex<f32>>(
                     buffer,
@@ -29,6 +31,7 @@ macro_rules! boilerplate_fft_wasm_simd_f32_butterfly {
             }
 
             // Do multiple ffts over a longer vector inplace, called from "process_with_scratch" of Fft trait
+            #[target_feature(enable = "simd128")]
             pub(crate) unsafe fn perform_fft_butterfly_multi(
                 &self,
                 buffer: &mut [Complex<T>],
@@ -44,6 +47,7 @@ macro_rules! boilerplate_fft_wasm_simd_f32_butterfly {
             }
 
             // Do multiple ffts over a longer vector outofplace, called from "process_outofplace_with_scratch" of Fft trait
+            #[target_feature(enable = "simd128")]
             pub(crate) unsafe fn perform_oop_fft_butterfly_multi(
                 &self,
                 input: &mut [Complex<T>],
@@ -81,13 +85,13 @@ macro_rules! boilerplate_fft_wasm_simd_f64_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> $struct_name<T> {
             // Do a single fft
-            //#[target_feature(enable = "neon")]
+            #[target_feature(enable = "simd128")]
             pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
                 self.perform_fft_contiguous(workaround_transmute_mut::<_, Complex<f64>>(buffer));
             }
 
             // Do multiple ffts over a longer vector inplace, called from "process_with_scratch" of Fft trait
-            //#[target_feature(enable = "neon")]
+            #[target_feature(enable = "simd128")]
             pub(crate) unsafe fn perform_fft_butterfly_multi(
                 &self,
                 buffer: &mut [Complex<T>],
@@ -98,7 +102,7 @@ macro_rules! boilerplate_fft_wasm_simd_f64_butterfly {
             }
 
             // Do multiple ffts over a longer vector outofplace, called from "process_outofplace_with_scratch" of Fft trait
-            //#[target_feature(enable = "neon")]
+            #[target_feature(enable = "simd128")]
             pub(crate) unsafe fn perform_oop_fft_butterfly_multi(
                 &self,
                 input: &mut [Complex<T>],

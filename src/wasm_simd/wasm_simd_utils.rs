@@ -17,33 +17,26 @@ pub struct Rotate90F32 {
 impl Rotate90F32 {
     pub fn new(positive: bool) -> Self {
         let sign_hi = if positive {
-            f32x4(1.0, 1.0, -1.0, 1.0)
+            f32x4(0.0, 0.0, -0.0, 0.0)
         } else {
-            f32x4(1.0, 1.0, 1.0, -1.0)
+            f32x4(0.0, 0.0, 0.0, -0.0)
         };
         let sign_both = if positive {
-            f32x4(-1.0, 1.0, -1.0, 1.0)
+            f32x4(-0.0, 0.0, -0.0, 0.0)
         } else {
-            f32x4(1.0, -1.0, 1.0, -1.0)
+            f32x4(0.0, -0.0, 0.0, -0.0)
         };
         Self { sign_hi, sign_both }
     }
 
     #[inline(always)]
     pub fn rotate_hi(&self, values: v128) -> v128 {
-        f32x4_mul(u32x4_shuffle::<0, 1, 3, 2>(values, values), self.sign_hi)
+        v128_xor(u32x4_shuffle::<0, 1, 3, 2>(values, values), self.sign_hi)
     }
-
-    // There doesn't seem to be any need for rotating just the first element, but let's keep the code just in case
-    //#[inline(always)]
-    //pub unsafe fn rotate_lo(&self, values: __m128) -> __m128 {
-    //    let temp = _mm_shuffle_ps(values, values, 0xE1);
-    //    _mm_xor_ps(temp, self.sign_lo)
-    //}
 
     #[inline(always)]
     pub unsafe fn rotate_both(&self, values: v128) -> v128 {
-        f32x4_mul(u32x4_shuffle::<1, 0, 3, 2>(values, values), self.sign_both)
+        v128_xor(u32x4_shuffle::<1, 0, 3, 2>(values, values), self.sign_both)
     }
 }
 
@@ -95,12 +88,10 @@ pub fn reverse_complex_elements_f32(values: v128) -> v128 {
 /// values: a.re, a.im, b.re, b.im
 /// --> b.re, b.im, -a.re, -a.im
 #[inline(always)]
-pub fn reverse_complex_and_negate_hi_f32(values: v128) -> v128 {
-    f32x4(
-        f32x4_extract_lane::<2>(values),
-        f32x4_extract_lane::<3>(values),
-        -f32x4_extract_lane::<0>(values),
-        -f32x4_extract_lane::<1>(values),
+pub unsafe fn reverse_complex_and_negate_hi_f32(values: v128) -> v128 {
+    v128_xor(
+        u32x4_shuffle::<2, 3, 0, 1>(values, values),
+        f32x4(0.0, 0.0, -0.0, -0.0),
     )
 }
 
@@ -116,7 +107,7 @@ pub fn reverse_complex_and_negate_hi_f32(values: v128) -> v128 {
 /// values: a.re, a.im, b.re, b.im
 /// --> a.re, a.im, a.re, a.im
 #[inline(always)]
-pub fn duplicate_lo_f32(values: v128) -> v128 {
+pub unsafe fn duplicate_lo_f32(values: v128) -> v128 {
     u64x2_shuffle::<0, 0>(values, values)
 }
 
@@ -124,7 +115,7 @@ pub fn duplicate_lo_f32(values: v128) -> v128 {
 /// values: a.re, a.im, b.re, b.im
 /// --> b.re, b.im, b.re, b.im
 #[inline(always)]
-pub fn duplicate_hi_f32(values: v128) -> v128 {
+pub unsafe fn duplicate_hi_f32(values: v128) -> v128 {
     u64x2_shuffle::<1, 1>(values, values)
 }
 
@@ -156,6 +147,7 @@ pub unsafe fn mul_complex_f32(left: v128, right: v128) -> v128 {
 // |_|  |_|\__,_|\__|_| |_|          \___/   |_| |_.__/|_|\__|
 //
 
+/// Utility functions to rotate complex pointers by 90 degrees
 pub(crate) struct Rotate90F64 {
     sign: v128,
 }
@@ -163,31 +155,25 @@ pub(crate) struct Rotate90F64 {
 impl Rotate90F64 {
     pub fn new(positive: bool) -> Self {
         let sign = if positive {
-            f64x2(-1.0, 1.0)
+            f64x2(-0.0, 0.0)
         } else {
-            f64x2(1.0, -1.0)
+            f64x2(0.0, -0.0)
         };
         Self { sign }
     }
 
     #[inline(always)]
     pub unsafe fn rotate(&self, values: v128) -> v128 {
-        let re = f64x2_extract_lane::<0>(values);
-        let im = f64x2_extract_lane::<1>(values);
-        f64x2_mul(f64x2(im, re), self.sign)
+        v128_xor(u64x2_shuffle::<1, 0>(values, values), self.sign)
     }
 }
 
 #[inline(always)]
 pub unsafe fn mul_complex_f64(left: v128, right: v128) -> v128 {
-    // ARMv8.2-A introduced vcmulq_f64 and vcmlaq_f64 for complex multiplication, these intrinsics are not yet available.
-    let re1 = f64x2_extract_lane::<0>(left);
-    let im1 = f64x2_extract_lane::<1>(left);
-    let re2 = f64x2_extract_lane::<0>(right);
-    let im2 = f64x2_extract_lane::<1>(right);
-    let temp = f64x2(-im1, re1);
-    let sum = f64x2_mul(left, f64x2_splat(re2));
-    f64x2_add(sum, f64x2_mul(temp, f64x2_splat(im2)))
+    const NEGATE_LEFT: v128 = f64x2(-0.0, 0.0);
+    let temp = v128_xor(u64x2_shuffle::<1, 0>(left, left), NEGATE_LEFT);
+    let sum = f64x2_mul(left, u64x2_shuffle::<0, 0>(right, right));
+    f64x2_add(sum, f64x2_mul(temp, u64x2_shuffle::<1, 1>(right, right)))
 }
 
 #[cfg(test)]

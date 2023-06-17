@@ -149,7 +149,7 @@ impl<T: FftNum> WasmSimd32Radix4<T> {
         }
     }
 
-    //#[target_feature(enable = "wasm_simd")]
+    #[target_feature(enable = "simd128")]
     unsafe fn perform_fft_out_of_place(
         &self,
         signal: &[Complex<T>],
@@ -199,7 +199,7 @@ impl<T: FftNum> WasmSimd32Radix4<T> {
 }
 boilerplate_fft_wasm_simd_oop!(WasmSimd32Radix4, |this: &WasmSimd32Radix4<_>| this.len);
 
-//#[target_feature(enable = "wasm_simd")]
+#[target_feature(enable = "simd128")]
 unsafe fn butterfly_4_32<T: FftNum>(
     data: &mut [Complex<T>],
     twiddles: &[v128],
@@ -337,7 +337,7 @@ impl<T: FftNum> WasmSimd64Radix4<T> {
         }
     }
 
-    //#[target_feature(enable = "wasm_simd")]
+    #[target_feature(enable = "simd128")]
     unsafe fn perform_fft_out_of_place(
         &self,
         signal: &[Complex<T>],
@@ -387,7 +387,7 @@ impl<T: FftNum> WasmSimd64Radix4<T> {
 }
 boilerplate_fft_wasm_simd_oop!(WasmSimd64Radix4, |this: &WasmSimd64Radix4<_>| this.len);
 
-//#[target_feature(enable = "wasm_simd")]
+#[target_feature(enable = "simd128")]
 unsafe fn butterfly_4_64<T: FftNum>(
     data: &mut [Complex<T>],
     twiddles: &[v128],
