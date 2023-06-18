@@ -1,11 +1,10 @@
-// TODO: update docs
 use core::arch::wasm32::*;
 use num_complex::Complex;
 use std::ops::{Deref, DerefMut};
 
 use crate::array_utils::DoubleBuf;
 
-/// Read these indexes from an NeonArray and build an array of simd vectors.
+/// Read these indexes from an WasmSimdArray and build an array of simd vectors.
 /// Takes a name of a vector to read from, and a list of indexes to read.
 /// This statement:
 /// ```
@@ -30,7 +29,7 @@ macro_rules! read_complex_to_array {
     }
 }
 
-/// Read these indexes from an NeonArray and build an array or partially filled simd vectors.
+/// Read these indexes from an WasmSimdArray and build an array or partially filled simd vectors.
 /// Takes a name of a vector to read from, and a list of indexes to read.
 /// This statement:
 /// ```
@@ -55,7 +54,7 @@ macro_rules! read_partial1_complex_to_array {
     }
 }
 
-/// Write these indexes of an array of simd vectors to the same indexes of an NeonArray.
+/// Write these indexes of an array of simd vectors to the same indexes of an WasmSimdArray.
 /// Takes a name of a vector to read from, one to write to, and a list of indexes.
 /// This statement:
 /// ```
@@ -78,7 +77,7 @@ macro_rules! write_complex_to_array {
     }
 }
 
-/// Write the low half of these indexes of an array of simd vectors to the same indexes of an NeonArray.
+/// Write the low half of these indexes of an array of simd vectors to the same indexes of an WasmSimdArray.
 /// Takes a name of a vector to read from, one to write to, and a list of indexes.
 /// This statement:
 /// ```
@@ -101,7 +100,7 @@ macro_rules! write_partial_lo_complex_to_array {
     }
 }
 
-/// Write these indexes of an array of simd vectors to the same indexes, multiplied by a stride, of an NeonArray.
+/// Write these indexes of an array of simd vectors to the same indexes, multiplied by a stride, of an WasmSimdArray.
 /// Takes a name of a vector to read from, one to write to, an integer stride, and a list of indexes.
 /// This statement:
 /// ```
@@ -137,15 +136,15 @@ impl WasmSimdNum for f64 {
     const COMPLEX_PER_VECTOR: usize = 1;
 }
 
-/// A trait to handle reading from an array of complex floats into Neon vectors.
-/// Neon works with 128-bit vectors, meaning a vector can hold two complex f32,
+/// A trait to handle reading from an array of complex floats into WASM SIMD vectors.
+/// WASM works with 128-bit vectors, meaning a vector can hold two complex f32,
 /// or a single complex f64.
 pub trait WasmSimdArray<T: WasmSimdNum>: Deref {
-    /// Load complex numbers from the array to fill a Neon vector.
+    /// Load complex numbers from the array to fill a WASM SIMD vector.
     unsafe fn load_complex(&self, index: usize) -> T::VectorType;
-    /// Load a single complex number from the array into a Neon vector, setting the unused elements to zero.
+    /// Load a single complex number from the array into a WASM SIMD vector, setting the unused elements to zero.
     unsafe fn load_partial1_complex(&self, index: usize) -> T::VectorType;
-    /// Load a single complex number from the array, and copy it to all elements of a Neon vector.
+    /// Load a single complex number from the array, and copy it to all elements of a WASM SIMD vector.
     unsafe fn load1_complex(&self, index: usize) -> T::VectorType;
 }
 
@@ -244,15 +243,15 @@ where
     }
 }
 
-/// A trait to handle writing to an array of complex floats from Neon vectors.
-/// Neon works with 128-bit vectors, meaning a vector can hold two complex f32,
+/// A trait to handle writing to an array of complex floats from WASM SIMD vectors.
+/// WASM works with 128-bit vectors, meaning a vector can hold two complex f32,
 /// or a single complex f64.
 pub trait WasmSimdArrayMut<T: WasmSimdNum>: WasmSimdArray<T> + DerefMut {
-    /// Store all complex numbers from a Neon vector to the array.
+    /// Store all complex numbers from a WASM SIMD vector to the array.
     unsafe fn store_complex(&mut self, vector: T::VectorType, index: usize);
-    /// Store the low complex number from a Neon vector to the array.
+    /// Store the low complex number from a WASM SIMD vector to the array.
     unsafe fn store_partial_lo_complex(&mut self, vector: T::VectorType, index: usize);
-    /// Store the high complex number from a Neon vector to the array.
+    /// Store the high complex number from a WASM SIMD vector to the array.
     unsafe fn store_partial_hi_complex(&mut self, vector: T::VectorType, index: usize);
 }
 

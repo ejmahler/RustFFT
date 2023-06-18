@@ -9,7 +9,6 @@ use core::arch::wasm32::*;
 
 /// Utility functions to rotate complex pointers by 90 degrees
 pub struct Rotate90F32 {
-    //sign_lo: float32x4_t,
     sign_hi: v128,
     sign_both: v128,
 }

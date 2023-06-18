@@ -5,7 +5,6 @@ use crate::algorithm::{
     MixedRadixSmall, RadersAlgorithm,
 };
 use crate::math_utils::PrimeFactor;
-// TODO: update docs
 use crate::wasm_simd::*;
 use crate::{fft_cache::FftCache, math_utils::PrimeFactors, Fft, FftDirection, FftNum};
 use std::{any::TypeId, collections::HashMap, sync::Arc};
@@ -183,7 +182,7 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
     pub fn plan_fft_forward(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         self.plan_fft(len, FftDirection::Forward)
     }
-    /// Returns a `Fft` instance which uses WasmSimd instructions to compute inverse FFTs of size `len.
+    /// Returns a `Fft` instance which uses WebAssembly SIMD instructions to compute inverse FFTs of size `len.
     ///
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft_inverse(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
@@ -548,7 +547,7 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
         }
     }
 
-    // Returns Some(instance) if we have a butterfly available for this size. Returns None if there is no butterfly available for this size
+    /// Returns Some(instance) if we have a butterfly available for this size. Returns None if there is no butterfly available for this size
     fn design_butterfly_algorithm(&mut self, len: usize) -> Option<Arc<Recipe>> {
         match len {
             1 => Some(Arc::new(Recipe::Butterfly1)),

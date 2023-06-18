@@ -3383,19 +3383,19 @@ mod unit_tests {
             }
         };
     }
-    test_butterfly_32_func!(test_neonf32_butterfly1, WasmSimdF32Butterfly1, 1);
-    test_butterfly_32_func!(test_neonf32_butterfly2, WasmSimdF32Butterfly2, 2);
-    test_butterfly_32_func!(test_neonf32_butterfly3, WasmSimdF32Butterfly3, 3); // failed
-    test_butterfly_32_func!(test_neonf32_butterfly4, WasmSimdF32Butterfly4, 4); // failed
-    test_butterfly_32_func!(test_neonf32_butterfly5, WasmSimdF32Butterfly5, 5); // failed
-    test_butterfly_32_func!(test_neonf32_butterfly6, WasmSimdF32Butterfly6, 6);
-    test_butterfly_32_func!(test_neonf32_butterfly8, WasmSimdF32Butterfly8, 8); // failed
-    test_butterfly_32_func!(test_neonf32_butterfly9, WasmSimdF32Butterfly9, 9);
-    test_butterfly_32_func!(test_neonf32_butterfly10, WasmSimdF32Butterfly10, 10);
-    test_butterfly_32_func!(test_neonf32_butterfly12, WasmSimdF32Butterfly12, 12); // failed
-    test_butterfly_32_func!(test_neonf32_butterfly15, WasmSimdF32Butterfly15, 15);
-    test_butterfly_32_func!(test_neonf32_butterfly16, WasmSimdF32Butterfly16, 16); // failed
-    test_butterfly_32_func!(test_neonf32_butterfly32, WasmSimdF32Butterfly32, 32); // failed
+    test_butterfly_32_func!(test_wasm_simdf32_butterfly1, WasmSimdF32Butterfly1, 1);
+    test_butterfly_32_func!(test_wasm_simdf32_butterfly2, WasmSimdF32Butterfly2, 2);
+    test_butterfly_32_func!(test_wasm_simdf32_butterfly3, WasmSimdF32Butterfly3, 3);
+    test_butterfly_32_func!(test_wasm_simdf32_butterfly4, WasmSimdF32Butterfly4, 4);
+    test_butterfly_32_func!(test_wasm_simdf32_butterfly5, WasmSimdF32Butterfly5, 5);
+    test_butterfly_32_func!(test_wasm_simdf32_butterfly6, WasmSimdF32Butterfly6, 6);
+    test_butterfly_32_func!(test_wasm_simdf32_butterfly8, WasmSimdF32Butterfly8, 8);
+    test_butterfly_32_func!(test_wasm_simdf32_butterfly9, WasmSimdF32Butterfly9, 9);
+    test_butterfly_32_func!(test_wasm_simdf32_butterfly10, WasmSimdF32Butterfly10, 10);
+    test_butterfly_32_func!(test_wasm_simdf32_butterfly12, WasmSimdF32Butterfly12, 12);
+    test_butterfly_32_func!(test_wasm_simdf32_butterfly15, WasmSimdF32Butterfly15, 15);
+    test_butterfly_32_func!(test_wasm_simdf32_butterfly16, WasmSimdF32Butterfly16, 16);
+    test_butterfly_32_func!(test_wasm_simdf32_butterfly32, WasmSimdF32Butterfly32, 32);
 
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
@@ -3411,19 +3411,19 @@ mod unit_tests {
             }
         };
     }
-    test_butterfly_64_func!(test_neonf64_butterfly1, WasmSimdF64Butterfly1, 1);
-    test_butterfly_64_func!(test_neonf64_butterfly2, WasmSimdF64Butterfly2, 2);
-    test_butterfly_64_func!(test_neonf64_butterfly3, WasmSimdF64Butterfly3, 3); // Failed
-    test_butterfly_64_func!(test_neonf64_butterfly4, WasmSimdF64Butterfly4, 4);
-    test_butterfly_64_func!(test_neonf64_butterfly5, WasmSimdF64Butterfly5, 5);
-    test_butterfly_64_func!(test_neonf64_butterfly6, WasmSimdF64Butterfly6, 6); // Failed
-    test_butterfly_64_func!(test_neonf64_butterfly8, WasmSimdF64Butterfly8, 8);
-    test_butterfly_64_func!(test_neonf64_butterfly9, WasmSimdF64Butterfly9, 9); // Failed
-    test_butterfly_64_func!(test_neonf64_butterfly10, WasmSimdF64Butterfly10, 10);
-    test_butterfly_64_func!(test_neonf64_butterfly12, WasmSimdF64Butterfly12, 12); // Failed
-    test_butterfly_64_func!(test_neonf64_butterfly15, WasmSimdF64Butterfly15, 15); // Failed
-    test_butterfly_64_func!(test_neonf64_butterfly16, WasmSimdF64Butterfly16, 16);
-    test_butterfly_64_func!(test_neonf64_butterfly32, WasmSimdF64Butterfly32, 32);
+    test_butterfly_64_func!(test_wasm_simdf64_butterfly1, WasmSimdF64Butterfly1, 1);
+    test_butterfly_64_func!(test_wasm_simdf64_butterfly2, WasmSimdF64Butterfly2, 2);
+    test_butterfly_64_func!(test_wasm_simdf64_butterfly3, WasmSimdF64Butterfly3, 3);
+    test_butterfly_64_func!(test_wasm_simdf64_butterfly4, WasmSimdF64Butterfly4, 4);
+    test_butterfly_64_func!(test_wasm_simdf64_butterfly5, WasmSimdF64Butterfly5, 5);
+    test_butterfly_64_func!(test_wasm_simdf64_butterfly6, WasmSimdF64Butterfly6, 6);
+    test_butterfly_64_func!(test_wasm_simdf64_butterfly8, WasmSimdF64Butterfly8, 8);
+    test_butterfly_64_func!(test_wasm_simdf64_butterfly9, WasmSimdF64Butterfly9, 9);
+    test_butterfly_64_func!(test_wasm_simdf64_butterfly10, WasmSimdF64Butterfly10, 10);
+    test_butterfly_64_func!(test_wasm_simdf64_butterfly12, WasmSimdF64Butterfly12, 12);
+    test_butterfly_64_func!(test_wasm_simdf64_butterfly15, WasmSimdF64Butterfly15, 15);
+    test_butterfly_64_func!(test_wasm_simdf64_butterfly16, WasmSimdF64Butterfly16, 16);
+    test_butterfly_64_func!(test_wasm_simdf64_butterfly32, WasmSimdF64Butterfly32, 32);
 
     #[wasm_bindgen_test]
     fn test_solo_fft2_32() {
@@ -3472,10 +3472,10 @@ mod unit_tests {
             let res_both = bf2.perform_parallel_fft_direct(p1, p2);
 
             let res = std::mem::transmute::<[v128; 2], [Complex<f32>; 4]>(res_both);
-            let neon_res_a = [res[0], res[2]];
-            let neon_res_b = [res[1], res[3]];
-            assert!(compare_vectors(&val_a, &neon_res_a));
-            assert!(compare_vectors(&val_b, &neon_res_b));
+            let wasmsimd_res_a = [res[0], res[2]];
+            let wasmsimd_res_b = [res[1], res[3]];
+            assert!(compare_vectors(&val_a, &wasmsimd_res_a));
+            assert!(compare_vectors(&val_b, &wasmsimd_res_b));
         }
     }
 }

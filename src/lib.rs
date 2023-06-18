@@ -47,7 +47,7 @@
 //! advanced users may have better insight than the planner into which algorithms are best for a specific size. See the
 //! [`algorithm`](crate::algorithm) module for a complete list of scalar algorithms implemented by RustFFT.
 //!
-//! Users should beware, however, that bypassing the planner will disable all AVX, SSE and Neon optimizations.
+//! Users should beware, however, that bypassing the planner will disable all AVX, SSE, Neon, and WASM SIMD optimizations.
 //!
 //! ### Feature Flags
 //!
@@ -69,6 +69,12 @@
 //!     On AArch64 (64-bit ARM) the `neon` feature enables compilation of Neon-accelerated code. Enabling it improves
 //!     performance, while disabling it reduces compile time and binary size.
 //!     Note that Rust's Neon support requires using rustc 1.61 or newer.
+//! * `wasm_simd` (Disabled by default)
+//!
+//!     The feature `wasm_simd` is disabled by default. If compiled to WASM, this feature enables compilation of WASM SIMD accelerated code.
+//!     To compile with `wasm_simd`, you need rustc v1.54.0 or newer and a [browser or runtime which supports `fixed-width SIMD`](https://webassembly.org/roadmap/).
+//!     
+//!     If RustFFT is not compiled to wasm32, this feature will be ignored and RustFFT will behave like it is not set.
 //!
 //! ### Normalization
 //!
@@ -526,14 +532,14 @@ mod wasm_simd {
             _phantom: std::marker::PhantomData<T>,
         }
         impl<T: FftNum> FftPlannerWasmSimd<T> {
-            /// Creates a new `FftPlannerNeon` instance.
+            /// Creates a new `FftPlannerWasmSimd` instance.
             ///
             /// Returns `Ok(planner_instance)` if this machine has the required instruction sets.
             /// Returns `Err(())` if some instruction sets are missing.
             pub fn new() -> Result<Self, ()> {
                 Err(())
             }
-            /// Returns a `Fft` instance which uses Neon instructions to compute FFTs of size `len`.
+            /// Returns a `Fft` instance which uses WebAssembly SIMD instructions to compute FFTs of size `len`.
             ///
             /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
             ///
@@ -541,13 +547,13 @@ mod wasm_simd {
             pub fn plan_fft(&mut self, _len: usize, _direction: FftDirection) -> Arc<dyn Fft<T>> {
                 unreachable!()
             }
-            /// Returns a `Fft` instance which uses Neon instructions to compute forward FFTs of size `len`.
+            /// Returns a `Fft` instance which uses WebAssembly SIMD instructions to compute forward FFTs of size `len`.
             ///
             /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
             pub fn plan_fft_forward(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
                 unreachable!()
             }
-            /// Returns a `Fft` instance which uses Neon instructions to compute inverse FFTs of size `len.
+            /// Returns a `Fft` instance which uses WebAssembly SIMD instructions to compute inverse FFTs of size `len.
             ///
             /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
             pub fn plan_fft_inverse(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
