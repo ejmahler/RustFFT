@@ -7,7 +7,7 @@ use core::arch::wasm32::*;
 // |_|  |_|\__,_|\__|_| |_|         |____/_____|_.__/|_|\__|
 //
 
-/// Utility functions to rotate complex pointers by 90 degrees
+/// Utility functions to rotate complex numbers by 90 degrees
 pub struct Rotate90F32 {
     sign_hi: v128,
     sign_both: v128,
