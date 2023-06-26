@@ -1,12 +1,14 @@
 use std::any::TypeId;
 
-// Calculate the sum of an expression consisting of just plus and minus, like `value = a + b - c + d`.
-// The expression is rewritten to `value = a + (b - (c - d))` (note the flipped sign on d).
-// After this the `$add` and `$sub` functions are used to make the calculation.
-// For f32 using `_mm_add_ps` and `_mm_sub_ps`, the expression `value = a + b - c + d` becomes:
-// ```let value = _mm_add_ps(a, _mm_sub_ps(b, _mm_sub_ps(c, d)));```
-// Only plus and minus are supported, and all the terms must be plain scalar variables.
-// Using array indices, like `value = temp[0] + temp[1]` is not supported.
+/// Calculate the sum of an expression consisting of just plus and minus, like `value = a + b - c + d`.
+/// The expression is rewritten to `value = a + (b - (c - d))` (note the flipped sign on d).
+/// After this the `$add` and `$sub` functions are used to make the calculation.
+/// For f32 using `f32x4_add` and `f32x4_sub`, the expression `value = a + b - c + d` becomes:
+/// ```
+/// let value = f32x4_add(a, f32x4_sub(b, f32x4_sub(c, d)));
+/// ```
+/// Only plus and minus are supported, and all the terms must be plain scalar variables.
+/// Using array indices, like `value = temp[0] + temp[1]` is not supported.
 macro_rules! calc_sum {
     ($add:ident, $sub:ident, + $acc:tt + $($rest:tt)*)=> {
         $add($acc, calc_sum!($add, $sub, + $($rest)*))
@@ -30,31 +32,31 @@ macro_rules! calc_sum {
     ($add:ident, $sub:ident, - $val:tt) => {$val};
 }
 
-// Calculate the sum of an expression consisting of just plus and minus, like a + b - c + d
+/// Calculate the sum of an expression consisting of just plus and minus, like a + b - c + d
 macro_rules! calc_f32 {
     ($($tokens:tt)*) => { calc_sum!(f32x4_add, f32x4_sub, $($tokens)*)};
 }
 
-// Calculate the sum of an expression consisting of just plus and minus, like a + b - c + d
+/// Calculate the sum of an expression consisting of just plus and minus, like a + b - c + d
 macro_rules! calc_f64 {
     ($($tokens:tt)*) => { calc_sum!(f64x2_add, f64x2_sub, $($tokens)*)};
 }
 
-// Helper function to assert we have the right float type
+/// Helper function to assert we have the right float type
 pub fn assert_f32<T: 'static>() {
     let id_f32 = TypeId::of::<f32>();
     let id_t = TypeId::of::<T>();
     assert!(id_t == id_f32, "Wrong float type, must be f32");
 }
 
-// Helper function to assert we have the right float type
+/// Helper function to assert we have the right float type
 pub fn assert_f64<T: 'static>() {
     let id_f64 = TypeId::of::<f64>();
     let id_t = TypeId::of::<T>();
     assert!(id_t == id_f64, "Wrong float type, must be f64");
 }
 
-// Shuffle elements to interleave two contiguous sets of f32, from an array of simd vectors to a new array of simd vectors
+/// Shuffle elements to interleave two contiguous sets of f32, from an array of simd vectors to a new array of simd vectors
 macro_rules! interleave_complex_f32 {
     ($input:ident, $offset:literal, { $($idx:literal),* }) => {
         [
@@ -66,21 +68,21 @@ macro_rules! interleave_complex_f32 {
     }
 }
 
-// Shuffle elements to interleave two contiguous sets of f32, from an array of simd vectors to a new array of simd vectors
-// This statement:
-// ```
-// let values = separate_interleaved_complex_f32!(input, {0, 2, 4});
-// ```
-// is equivalent to:
-// ```
-// let values = [
-//    extract_lo_lo_f32(input[0], input[1]),
-//    extract_lo_lo_f32(input[2], input[3]),
-//    extract_lo_lo_f32(input[4], input[5]),
-//    extract_hi_hi_f32(input[0], input[1]),
-//    extract_hi_hi_f32(input[2], input[3]),
-//    extract_hi_hi_f32(input[4], input[5]),
-// ];
+/// Shuffle elements to interleave two contiguous sets of f32, from an array of simd vectors to a new array of simd vectors
+/// This statement:
+/// ```
+/// let values = separate_interleaved_complex_f32!(input, {0, 2, 4});
+/// ```
+/// is equivalent to:
+/// ```
+/// let values = [
+///    extract_lo_lo_f32(input[0], input[1]),
+///    extract_lo_lo_f32(input[2], input[3]),
+///    extract_lo_lo_f32(input[4], input[5]),
+///    extract_hi_hi_f32(input[0], input[1]),
+///    extract_hi_hi_f32(input[2], input[3]),
+///    extract_hi_hi_f32(input[4], input[5]),
+/// ];
 macro_rules! separate_interleaved_complex_f32 {
     ($input:ident, { $($idx:literal),* }) => {
         [

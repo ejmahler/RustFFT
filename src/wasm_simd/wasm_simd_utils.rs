@@ -66,10 +66,10 @@ pub fn extract_lo_hi_f32(left: v128, right: v128) -> v128 {
     u32x4_shuffle::<0, 1, 6, 7>(left, right)
 }
 
-// Pack high (2nd) and low (1st) complex
-// left: r1.re, r1.im, r2.re, r2.im
-// right: l1.re, l1.im, l2.re, l2.im
-// --> r2.re, r2.im, l1.re, l1.im
+/// Pack high (2nd) and low (1st) complex
+/// left: r1.re, r1.im, r2.re, r2.im
+/// right: l1.re, l1.im, l2.re, l2.im
+/// --> r2.re, r2.im, l1.re, l1.im
 #[inline(always)]
 pub fn extract_hi_lo_f32(left: v128, right: v128) -> v128 {
     u32x4_shuffle::<2, 3, 4, 5>(left, right)
@@ -127,8 +127,8 @@ pub unsafe fn transpose_complex_2x2_f32(left: v128, right: v128) -> [v128; 2] {
     [temp02, temp13]
 }
 
-// Complex multiplication.
-// Each input contains two complex values, which are multiplied in parallel.
+/// Complex multiplication.
+/// Each input contains two complex values, which are multiplied in parallel.
 #[inline(always)]
 pub unsafe fn mul_complex_f32(left: v128, right: v128) -> v128 {
     let temp1 = u32x4_shuffle::<0, 4, 2, 6>(right, right);

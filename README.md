@@ -36,9 +36,9 @@ RustFFT optionally supports the NEON instruction set in 64-bit Arm, AArch64. Thi
 
 ### WebAssembly
 
-RustFFT additionally supports [fixed-width SIMD](https://github.com/WebAssembly/simd/blob/master/proposals/simd/SIMD.md) when compiling to WebAssembly. Unlike AVX, SSE, and NEON however, WASM does not allow dynamic feature detection as [outlined here](https://doc.rust-lang.org/beta/core/arch/wasm32/index.html#simd). Because of this, RustFFT **does not** automatically switch to WASM SIMD accelerated algorithms.
+RustFFT additionally supports [the fixed-width SIMD extension for WebAssembly](https://github.com/WebAssembly/simd/blob/master/proposals/simd/SIMD.md). Unlike AVX, SSE, and NEON however, WASM does not allow dynamic feature detection as [outlined here](https://doc.rust-lang.org/beta/core/arch/wasm32/index.html#simd). Because of this, RustFFT **does not** automatically switch to WASM SIMD accelerated algorithms.
 
-If you choose to opt into WASM SIMD, this feature will require rustc v1.54.0 or newer and a recent browser version (cf. [Cargo Features](#cargo-features)).
+If you choose to opt into WASM SIMD, this feature will require a recent browser version (cf. [Cargo Features](#cargo-features)).
 
 ## Cargo Features
 
@@ -52,17 +52,17 @@ On other platforms than x86_64, these features do nothing and RustFFT will behav
 
 ### AArch64
 
-On AArch64, the `neon` feature enables compilation of Neon-accelerated code. This requires rustc 1.61 or newer, and is enabled by default. If this feature is disabled, rustc 1.37 or newer is required.
+On AArch64, the `neon` feature enables compilation of Neon-accelerated code. This requires rustc 1.61 or newer, and is enabled by default.
 
 On other platforms than AArch64, this feature does nothing and RustFFT will behave like it is not set.
 
 ### WebAssembly
 
-The feature `wasm_simd` is disabled by default. If compiled to WASM, this feature enables compilation of WASM SIMD accelerated code.
-To compile with `wasm_simd`, you need rustc v1.54.0 or newer and a [browser or runtime which supports `fixed-width SIMD`](https://webassembly.org/roadmap/).
+The feature `wasm_simd` is disabled by default. On the WASM platform, this feature enables compilation of WASM SIMD accelerated code.
+To compile with `wasm_simd`, you need rustc v1.61.0 or newer and a [browser or runtime which supports `fixed-width SIMD`](https://webassembly.org/roadmap/).
 If you run your SIMD accelerated code on an unsupported platform, WebAssembly will specify a [trap](https://webassembly.github.io/spec/core/intro/overview.html#trap) leading to immediate execution cancelation.
 
-If RustFFT is not compiled to wasm32, this feature will be ignored and RustFFT will behave like it is not set.
+On other platforms than WASM, this feature does nothing and RustFFT will behave like it is not set.
 
 ## Stability/Future Breaking Changes
 
@@ -72,7 +72,7 @@ This policy has one exception: We currently re-export pre-1.0 versions of the [n
 
 ### Supported Rust Version
 
-RustFFT requires rustc 1.37 or newer. Minor releases of RustFFT may upgrade the MSRV(minimum supported Rust version) to a newer version of rustc.
+RustFFT requires rustc 1.61 or newer. Minor releases of RustFFT may upgrade the MSRV(minimum supported Rust version) to a newer version of rustc.
 However, if we need to increase the MSRV, the new Rust version must have been released at least six months ago.
 
 ## License

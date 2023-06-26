@@ -71,10 +71,11 @@
 //!     Note that Rust's Neon support requires using rustc 1.61 or newer.
 //! * `wasm_simd` (Disabled by default)
 //!
-//!     The feature `wasm_simd` is disabled by default. If compiled to WASM, this feature enables compilation of WASM SIMD accelerated code.
-//!     To compile with `wasm_simd`, you need rustc v1.54.0 or newer and a [browser or runtime which supports `fixed-width SIMD`](https://webassembly.org/roadmap/).
-//!     
-//!     If RustFFT is not compiled to wasm32, this feature will be ignored and RustFFT will behave like it is not set.
+//!     The feature `wasm_simd` is disabled by default. On the WASM platform, this feature enables compilation of WASM SIMD accelerated code.
+//!     To compile with `wasm_simd`, you need rustc v1.61.0 or newer and a [browser or runtime which supports `fixed-width SIMD`](https://webassembly.org/roadmap/).
+//!     If you run your SIMD accelerated code on an unsupported platform, WebAssembly will specify a [trap](https://webassembly.github.io/spec/core/intro/overview.html#trap) leading to immediate execution cancelation.
+//!
+//!     On every platform besides WASM, this feature does nothing and RustFFT will behave like it is not set.
 //!
 //! ### Normalization
 //!

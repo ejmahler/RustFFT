@@ -1,13 +1,13 @@
 extern crate version_check;
 
 // All platforms except AArch64 with neon support enabled.
-static MIN_RUSTC: &str = "1.37.0";
+static MIN_RUSTC: &str = "1.61.0";
 // On AArch64 with neon support enabled.
 #[cfg(all(target_arch = "aarch64", feature = "neon"))]
 static MIN_RUSTC_NEON: &str = "1.61.0";
 
 #[cfg(all(target_arch = "wasm32", feature = "wasm_simd"))]
-static MIN_RUSTC_WASM_SIMD: &str = "1.54.0";
+static MIN_RUSTC_WASM_SIMD: &str = "1.61.0";
 
 #[cfg(not(any(
     all(target_arch = "aarch64", feature = "neon"),
