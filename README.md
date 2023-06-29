@@ -23,26 +23,46 @@ fft.process(&mut buffer);
 ```
 
 ## SIMD acceleration
+
 ### x86_64
+
 RustFFT supports the AVX instruction set for increased performance. No special code is needed to activate AVX: Simply plan a FFT using the FftPlanner on a machine that supports the `avx` and `fma` CPU features, and RustFFT will automatically switch to faster AVX-accelerated algorithms.
 
 For machines that do not have AVX, RustFFT also supports the SSE4.1 instruction set. As for AVX, this is enabled automatically when using the FftPlanner. If both AVX and SSE4.1 support are enabled, the planner will automatically choose the fastest available instruction set.
 
 ### AArch64
+
 RustFFT optionally supports the NEON instruction set in 64-bit Arm, AArch64. This optional feature requires a newer rustc version: Rustc 1.61. See [Cargo Features](#cargo-features) below for more details.
 
+### WebAssembly
+
+RustFFT additionally supports [the fixed-width SIMD extension for WebAssembly](https://github.com/WebAssembly/simd/blob/master/proposals/simd/SIMD.md). Unlike AVX, SSE, and NEON however, WASM does not allow dynamic feature detection as [outlined here](https://doc.rust-lang.org/beta/core/arch/wasm32/index.html#simd). Because of this, RustFFT **does not** automatically switch to WASM SIMD accelerated algorithms.
+
+If you choose to opt into WASM SIMD, this feature will require a recent browser version (cf. [Cargo Features](#cargo-features)).
+
 ## Cargo Features
+
 ### x86_64
-The features `avx` and `sse` are enabled by default. On x86_64, these features enable compilation of AVX and SSE accelerated code. 
+
+The features `avx` and `sse` are enabled by default. On x86_64, these features enable compilation of AVX and SSE accelerated code.
 
 Disabling them reduces compile time and binary size.
 
 On other platforms than x86_64, these features do nothing and RustFFT will behave like they are not set.
 
 ### AArch64
-On AArch64, the `neon` feature enables compilation of Neon-accelerated code. This requires rustc 1.61 or newer, and is enabled by default. If this feature is disabled, rustc 1.37 or newer is required.
+
+On AArch64, the `neon` feature enables compilation of Neon-accelerated code. This requires rustc 1.61 or newer, and is enabled by default.
 
 On other platforms than AArch64, this feature does nothing and RustFFT will behave like it is not set.
+
+### WebAssembly
+
+The feature `wasm_simd` is disabled by default. On the WASM platform, this feature enables compilation of WASM SIMD accelerated code.
+To compile with `wasm_simd`, you need rustc v1.61.0 or newer and a [browser or runtime which supports `fixed-width SIMD`](https://webassembly.org/roadmap/).
+If you run your SIMD accelerated code on an unsupported platform, WebAssembly will specify a [trap](https://webassembly.github.io/spec/core/intro/overview.html#trap) leading to immediate execution cancelation.
+
+On other platforms than WASM, this feature does nothing and RustFFT will behave like it is not set.
 
 ## Stability/Future Breaking Changes
 
@@ -52,15 +72,15 @@ This policy has one exception: We currently re-export pre-1.0 versions of the [n
 
 ### Supported Rust Version
 
-RustFFT requires rustc 1.37 or newer. Minor releases of RustFFT may upgrade the MSRV(minimum supported Rust version) to a newer version of rustc.
+RustFFT requires rustc 1.61 or newer. Minor releases of RustFFT may upgrade the MSRV(minimum supported Rust version) to a newer version of rustc.
 However, if we need to increase the MSRV, the new Rust version must have been released at least six months ago.
 
 ## License
 
 Licensed under either of
 
- * Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
- * MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+- Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
 
 at your option.
 

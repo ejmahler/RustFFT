@@ -47,7 +47,7 @@
 //! advanced users may have better insight than the planner into which algorithms are best for a specific size. See the
 //! [`algorithm`](crate::algorithm) module for a complete list of scalar algorithms implemented by RustFFT.
 //!
-//! Users should beware, however, that bypassing the planner will disable all AVX, SSE and Neon optimizations.
+//! Users should beware, however, that bypassing the planner will disable all AVX, SSE, Neon, and WASM SIMD optimizations.
 //!
 //! ### Feature Flags
 //!
@@ -69,6 +69,13 @@
 //!     On AArch64 (64-bit ARM) the `neon` feature enables compilation of Neon-accelerated code. Enabling it improves
 //!     performance, while disabling it reduces compile time and binary size.
 //!     Note that Rust's Neon support requires using rustc 1.61 or newer.
+//! * `wasm_simd` (Disabled by default)
+//!
+//!     The feature `wasm_simd` is disabled by default. On the WASM platform, this feature enables compilation of WASM SIMD accelerated code.
+//!     To compile with `wasm_simd`, you need rustc v1.61.0 or newer and a [browser or runtime which supports `fixed-width SIMD`](https://webassembly.org/roadmap/).
+//!     If you run your SIMD accelerated code on an unsupported platform, WebAssembly will specify a [trap](https://webassembly.github.io/spec/core/intro/overview.html#trap) leading to immediate execution cancelation.
+//!
+//!     On every platform besides WASM, this feature does nothing and RustFFT will behave like it is not set.
 //!
 //! ### Normalization
 //!
@@ -480,6 +487,84 @@ mod neon {
 }
 
 pub use self::neon::neon_planner::FftPlannerNeon;
+
+#[cfg(all(target_arch = "wasm32", feature = "wasm_simd"))]
+mod wasm_simd;
+
+// If we're not compiling to WebAssembly, or if the "wasm_simd" feature was disabled, keep a stub implementation around that has the same API, but does nothing
+// That way, users can write code using the WASM planner and compile it on any platform
+#[cfg(not(all(target_arch = "wasm32", feature = "wasm_simd")))]
+mod wasm_simd {
+    pub mod wasm_simd_planner {
+        use crate::{Fft, FftDirection, FftNum};
+        use std::sync::Arc;
+
+        /// The WASM FFT planner creates new FFT algorithm instances using a mix of scalar and WASM SIMD accelerated algorithms.
+        /// It is supported when using fairly recent browser versions as outlined in [the WebAssembly roadmap](https://webassembly.org/roadmap/).
+        ///
+        /// RustFFT has several FFT algorithms available. For a given FFT size, `FftPlannerWasmSimd` decides which of the
+        /// available FFT algorithms to use and then initializes them.
+        ///
+        /// ~~~
+        /// // Perform a forward Fft of size 1234
+        /// use std::sync::Arc;
+        /// use rustfft::{FftPlannerWasmSimd, num_complex::Complex};
+        ///
+        /// if let Ok(mut planner) = FftPlannerWasmSimd::new() {
+        ///   let fft = planner.plan_fft_forward(1234);
+        ///
+        ///   let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1234];
+        ///   fft.process(&mut buffer);
+        ///
+        ///   // The FFT instance returned by the planner has the type `Arc<dyn Fft<T>>`,
+        ///   // where T is the numeric type, ie f32 or f64, so it's cheap to clone
+        ///   let fft_clone = Arc::clone(&fft);
+        /// }
+        /// ~~~
+        ///
+        /// If you plan on creating multiple FFT instances, it is recommended to reuse the same planner for all of them. This
+        /// is because the planner re-uses internal data across FFT instances wherever possible, saving memory and reducing
+        /// setup time. (FFT instances created with one planner will never re-use data and buffers with FFT instances created
+        /// by a different planner)
+        ///
+        /// Each FFT instance owns [`Arc`s](std::sync::Arc) to its internal data, rather than borrowing it from the planner, so it's perfectly
+        /// safe to drop the planner after creating Fft instances.
+        pub struct FftPlannerWasmSimd<T: FftNum> {
+            _phantom: std::marker::PhantomData<T>,
+        }
+        impl<T: FftNum> FftPlannerWasmSimd<T> {
+            /// Creates a new `FftPlannerWasmSimd` instance.
+            ///
+            /// Returns `Ok(planner_instance)` if this machine has the required instruction sets.
+            /// Returns `Err(())` if some instruction sets are missing.
+            pub fn new() -> Result<Self, ()> {
+                Err(())
+            }
+            /// Returns a `Fft` instance which uses WebAssembly SIMD instructions to compute FFTs of size `len`.
+            ///
+            /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
+            ///
+            /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+            pub fn plan_fft(&mut self, _len: usize, _direction: FftDirection) -> Arc<dyn Fft<T>> {
+                unreachable!()
+            }
+            /// Returns a `Fft` instance which uses WebAssembly SIMD instructions to compute forward FFTs of size `len`.
+            ///
+            /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+            pub fn plan_fft_forward(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
+                unreachable!()
+            }
+            /// Returns a `Fft` instance which uses WebAssembly SIMD instructions to compute inverse FFTs of size `len.
+            ///
+            /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+            pub fn plan_fft_inverse(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
+                unreachable!()
+            }
+        }
+    }
+}
+
+pub use self::wasm_simd::wasm_simd_planner::FftPlannerWasmSimd;
 
 #[cfg(test)]
 mod test_utils;
