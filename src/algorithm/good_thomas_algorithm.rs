@@ -1,7 +1,8 @@
 use core::cmp::max;
 use alloc::sync::Arc;
 use alloc::boxed::Box;
-use alloc::vec::Vec;
+#[allow(unused_imports)]
+use alloc::{vec, vec::Vec};
 
 use num_complex::Complex;
 use num_integer::Integer;
