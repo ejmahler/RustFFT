@@ -23,10 +23,11 @@ default = ["avx", "sse", "neon"]
 # On every other platform, these features do nothing, and RustFFT will behave like they are not set.
 #
 # On AArch64, the "neon" feature enables compilation of Neon-accelerated code.
-avx = []
-sse = []
-neon = []
-wasm_simd = []
+std = []
+avx = ["std"]
+sse = ["std"]
+neon = ["std"]
+wasm_simd = ["std"]
 
 
 [dependencies]

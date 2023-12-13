@@ -1,3 +1,4 @@
+#![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(all(feature = "bench", test), feature(test))]
 
 //! RustFFT is a high-performance FFT library written in pure Rust.
@@ -136,7 +137,7 @@ use num_traits::Zero;
 pub use crate::common::FftNum;
 pub use crate::plan::{FftPlanner, FftPlannerScalar};
 
-use alloc::boxed::Box;
+use alloc::vec;
 
 /// A trait that allows FFT algorithms to report their expected input/output size
 pub trait Length {
