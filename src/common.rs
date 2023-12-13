@@ -1,5 +1,5 @@
 use num_traits::{FromPrimitive, Signed};
-use std::fmt::Debug;
+use core::fmt::Debug;
 
 /// Generic floating point number, implemented for f32 and f64
 pub trait FftNum: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {}

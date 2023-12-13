@@ -1,6 +1,6 @@
 use num_integer::gcd;
-use std::collections::HashMap;
-use std::sync::Arc;
+use no_std_compat2::collections::HashMap;
+use alloc::sync::Arc;
 
 use crate::wasm_simd::wasm_simd_planner::FftPlannerWasmSimd;
 use crate::{common::FftNum, fft_cache::FftCache, FftDirection};

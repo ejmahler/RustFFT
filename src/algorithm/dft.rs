@@ -1,5 +1,6 @@
 use num_complex::Complex;
 use num_traits::Zero;
+use alloc::vec::Vec;
 
 use crate::array_utils;
 use crate::common::{fft_error_inplace, fft_error_outofplace};
@@ -70,7 +71,7 @@ mod unit_tests {
     use crate::test_utils::{compare_vectors, random_signal};
     use num_complex::Complex;
     use num_traits::Zero;
-    use std::f32;
+    use core::f32;
 
     fn dft(signal: &[Complex<f32>], spectrum: &mut [Complex<f32>]) {
         for (k, spec_bin) in spectrum.iter_mut().enumerate() {

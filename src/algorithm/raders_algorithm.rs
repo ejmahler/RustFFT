@@ -1,4 +1,6 @@
-use std::sync::Arc;
+use alloc::sync::Arc;
+use alloc::boxed::Box;
+use alloc::vec;
 
 use num_complex::Complex;
 use num_integer::Integer;
@@ -240,7 +242,7 @@ mod unit_tests {
     use super::*;
     use crate::algorithm::Dft;
     use crate::test_utils::check_fft_algorithm;
-    use std::sync::Arc;
+    use alloc::sync::Arc;
 
     #[test]
     fn test_raders() {

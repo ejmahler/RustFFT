@@ -1,4 +1,6 @@
-use std::sync::Arc;
+use alloc::sync::Arc;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 
 use num_complex::Complex;
 use num_traits::Zero;

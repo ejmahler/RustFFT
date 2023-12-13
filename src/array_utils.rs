@@ -1,6 +1,6 @@
 use crate::Complex;
 use crate::FftNum;
-use std::ops::{Deref, DerefMut};
+use core::ops::{Deref, DerefMut};
 
 /// Given an array of size width * height, representing a flattened 2D array,
 /// transpose the rows and columns of that 2D array into the output
@@ -20,13 +20,13 @@ pub unsafe fn transpose_small<T: Copy>(width: usize, height: usize, input: &[T],
 pub unsafe fn workaround_transmute<T, U>(slice: &[T]) -> &[U] {
     let ptr = slice.as_ptr() as *const U;
     let len = slice.len();
-    std::slice::from_raw_parts(ptr, len)
+    core::slice::from_raw_parts(ptr, len)
 }
 #[allow(unused)]
 pub unsafe fn workaround_transmute_mut<T, U>(slice: &mut [T]) -> &mut [U] {
     let ptr = slice.as_mut_ptr() as *mut U;
     let len = slice.len();
-    std::slice::from_raw_parts_mut(ptr, len)
+    core::slice::from_raw_parts_mut(ptr, len)
 }
 
 pub(crate) trait LoadStore<T: FftNum>: DerefMut {

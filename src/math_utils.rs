@@ -1,4 +1,5 @@
 use num_traits::{One, PrimInt, Zero};
+use alloc::vec::Vec;
 
 pub fn primitive_root(prime: u64) -> Option<u64> {
     let test_exponents: Vec<u64> = distinct_prime_factors(prime - 1)
@@ -508,7 +509,7 @@ mod unit_tests {
         }
     }
 
-    use std::collections::HashMap;
+    use no_std_compat2::collections::HashMap;
 
     macro_rules! map{
         { $($key:expr => $value:expr),+ } => {
