@@ -510,7 +510,7 @@ mod unit_tests {
         }
     }
 
-    use no_std_compat2::collections::HashMap;
+    use hashbrown::HashMap;
 
     macro_rules! map{
         { $($key:expr => $value:expr),+ } => {

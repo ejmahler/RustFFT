@@ -1,4 +1,4 @@
-use no_std_compat2::collections::HashMap;
+use hashbrown::HashMap;
 use alloc::sync::Arc;
 
 use crate::{Fft, FftDirection};

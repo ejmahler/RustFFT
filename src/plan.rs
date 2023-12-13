@@ -1,5 +1,5 @@
 use num_integer::gcd;
-use no_std_compat2::collections::HashMap;
+use hashbrown::HashMap;
 use alloc::sync::Arc;
 
 use crate::wasm_simd::wasm_simd_planner::FftPlannerWasmSimd;
