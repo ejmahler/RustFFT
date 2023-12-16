@@ -64,6 +64,10 @@ If you run your SIMD accelerated code on an unsupported platform, WebAssembly wi
 
 On other platforms than WASM, this feature does nothing and RustFFT will behave like it is not set.
 
+### std
+
+The scalar implementation (no avx, sse, neon or wasm SIMD) is available for no-std targets. To build the crate as no-std simply disable default fetures.
+
 ## Stability/Future Breaking Changes
 
 Version 5.0 contains several breaking API changes. heck out the [Upgrade Guide](/UpgradeGuide4to5.md) for a walkthrough of the changes RustFFT 5.0 requires. In the interest of stability, we're committing to making no more breaking changes for 3 years, aka until 2024.
