@@ -1,7 +1,7 @@
-use core::cmp::max;
-use alloc::sync::Arc;
 use alloc::boxed::Box;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
+use core::cmp::max;
 
 use num_complex::Complex;
 use num_integer::Integer;
@@ -458,9 +458,9 @@ mod unit_tests {
     use super::*;
     use crate::test_utils::check_fft_algorithm;
     use crate::{algorithm::Dft, test_utils::BigScratchAlgorithm};
+    use alloc::sync::Arc;
     use num_integer::gcd;
     use num_traits::Zero;
-    use alloc::sync::Arc;
 
     #[test]
     fn test_good_thomas() {

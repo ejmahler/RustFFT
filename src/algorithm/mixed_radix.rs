@@ -1,7 +1,7 @@
-use core::cmp::max;
-use alloc::sync::Arc;
 use alloc::boxed::Box;
+use alloc::sync::Arc;
 use alloc::vec;
+use core::cmp::max;
 
 use num_complex::Complex;
 use num_traits::Zero;
@@ -344,8 +344,8 @@ mod unit_tests {
     use super::*;
     use crate::test_utils::check_fft_algorithm;
     use crate::{algorithm::Dft, test_utils::BigScratchAlgorithm};
-    use num_traits::Zero;
     use alloc::sync::Arc;
+    use num_traits::Zero;
 
     #[test]
     fn test_mixed_radix() {

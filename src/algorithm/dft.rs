@@ -1,6 +1,6 @@
+use alloc::vec::Vec;
 use num_complex::Complex;
 use num_traits::Zero;
-use alloc::vec::Vec;
 
 use crate::array_utils;
 use crate::common::{fft_error_inplace, fft_error_outofplace};
@@ -69,9 +69,9 @@ boilerplate_fft_oop!(Dft, |this: &Dft<_>| this.twiddles.len());
 mod unit_tests {
     use super::*;
     use crate::test_utils::{compare_vectors, random_signal};
+    use core::f32;
     use num_complex::Complex;
     use num_traits::Zero;
-    use core::f32;
 
     fn dft(signal: &[Complex<f32>], spectrum: &mut [Complex<f32>]) {
         for (k, spec_bin) in spectrum.iter_mut().enumerate() {

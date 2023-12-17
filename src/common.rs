@@ -1,5 +1,5 @@
-use num_traits::{FromPrimitive, Signed};
 use core::fmt::Debug;
+use num_traits::{FromPrimitive, Signed};
 
 /// Generic floating point number, implemented for f32 and f64
 #[cfg(not(feature = "libm"))]
