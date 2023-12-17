@@ -1,6 +1,5 @@
 use num_traits::{One, PrimInt, Zero};
-#[allow(unused_imports)]
-use alloc::{vec, vec::Vec};
+use alloc::vec::Vec;
 
 pub fn primitive_root(prime: u64) -> Option<u64> {
     let test_exponents: Vec<u64> = distinct_prime_factors(prime - 1)

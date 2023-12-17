@@ -1,7 +1,6 @@
 use num_complex::Complex;
 use num_traits::Zero;
-#[allow(unused_imports)]
-use alloc::{vec, vec::Vec};
+use alloc::vec::Vec;
 
 use crate::array_utils;
 use crate::common::{fft_error_inplace, fft_error_outofplace};

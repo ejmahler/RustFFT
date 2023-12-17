@@ -1,8 +1,6 @@
 use crate::Complex;
 use crate::FftNum;
 use core::ops::{Deref, DerefMut};
-#[allow(unused_imports)]
-use alloc::{vec, vec::Vec};
 
 /// Given an array of size width * height, representing a flattened 2D array,
 /// transpose the rows and columns of that 2D array into the output
