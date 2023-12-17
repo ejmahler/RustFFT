@@ -31,12 +31,12 @@ wasm_simd = ["std"]
 
 
 [dependencies]
-num-complex = "0.4"
-num-traits = "0.2"
-num-integer = "^0.1.40"
-strength_reduce = "0.2.4"
-transpose = "0.2"
-primal-check = "0.3.3"
+num-complex = { version = "0.4", default-features = false }
+num-traits = { version = "0.2", default-features = false }
+num-integer = { version = "^0.1.40", default-features = false }
+strength_reduce = { version = "0.2.4", default-features = false }
+transpose = { version = "0.2", default-features = false }
+primal-check = { git = "https://github.com/piotrfila/primal.git", branch = "rustfft-compat", default-features = false }
 hashbrown = "0.14.3"
 libm = "0.2.8"
 
