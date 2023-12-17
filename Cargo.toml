@@ -23,11 +23,10 @@ default = ["avx", "sse", "neon"]
 # On every other platform, these features do nothing, and RustFFT will behave like they are not set.
 #
 # On AArch64, the "neon" feature enables compilation of Neon-accelerated code.
-std = ["primal-check/std"]
 avx = ["dep:std_detect"]
 sse = ["dep:std_detect"]
-neon = []
-wasm_simd = ["std"]
+neon = ["dep:std_detect"]
+wasm_simd = []
 libm = ["dep:libm", "primal-check/libm"]
 
 

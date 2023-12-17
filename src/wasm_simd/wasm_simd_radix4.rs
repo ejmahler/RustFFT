@@ -5,7 +5,7 @@ use core::arch::wasm32::*;
 use crate::algorithm::bitreversed_transpose;
 use crate::array_utils;
 use crate::array_utils::workaround_transmute_mut;
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::common::{fft_error_inplace, fft_error_outofplace, std_prelude::{Box, Vec}};
 use crate::wasm_simd::wasm_simd_butterflies::{
     WasmSimdF32Butterfly1, WasmSimdF32Butterfly16, WasmSimdF32Butterfly2, WasmSimdF32Butterfly32,
     WasmSimdF32Butterfly4, WasmSimdF32Butterfly8,
@@ -46,7 +46,7 @@ enum WasmSimd64Butterfly<T> {
 }
 
 pub struct WasmSimd32Radix4<T> {
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     twiddles: Box<[v128]>,
 
     base_fft: WasmSimd32Butterfly<T>,
@@ -144,7 +144,7 @@ impl<T: FftNum> WasmSimd32Radix4<T> {
 
             len,
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             bf4: WasmSimdF32Butterfly4::<T>::new(direction),
         }
     }
@@ -242,7 +242,7 @@ unsafe fn butterfly_4_32<T: FftNum>(
 }
 
 pub struct WasmSimd64Radix4<T> {
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     twiddles: Box<[v128]>,
 
     base_fft: WasmSimd64Butterfly<T>,
@@ -332,7 +332,7 @@ impl<T: FftNum> WasmSimd64Radix4<T> {
 
             len,
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             bf4: WasmSimdF64Butterfly4::<T>::new(direction),
         }
     }

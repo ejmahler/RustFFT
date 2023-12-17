@@ -189,15 +189,15 @@ mod unit_tests {
             let actual_hi = rotate.rotate_hi(input);
             let expected_hi = f32x4(1.0, 2.0, -420.0, 69.0);
             assert_eq!(
-                std::mem::transmute::<v128, [Complex<f32>; 2]>(actual_hi),
-                std::mem::transmute::<v128, [Complex<f32>; 2]>(expected_hi)
+                core::mem::transmute::<v128, [Complex<f32>; 2]>(actual_hi),
+                core::mem::transmute::<v128, [Complex<f32>; 2]>(expected_hi)
             );
 
             let actual = rotate.rotate_both(input);
             let expected = f32x4(-2.0, 1.0, -420.0, 69.0);
             assert_eq!(
-                std::mem::transmute::<v128, [Complex<f32>; 2]>(actual),
-                std::mem::transmute::<v128, [Complex<f32>; 2]>(expected)
+                core::mem::transmute::<v128, [Complex<f32>; 2]>(actual),
+                core::mem::transmute::<v128, [Complex<f32>; 2]>(expected)
             );
         }
     }
@@ -210,15 +210,15 @@ mod unit_tests {
             let actual_hi = rotate.rotate_hi(input);
             let expected_hi = f32x4(1.0, 2.0, 420.0, -69.0);
             assert_eq!(
-                std::mem::transmute::<v128, [Complex<f32>; 2]>(actual_hi),
-                std::mem::transmute::<v128, [Complex<f32>; 2]>(expected_hi)
+                core::mem::transmute::<v128, [Complex<f32>; 2]>(actual_hi),
+                core::mem::transmute::<v128, [Complex<f32>; 2]>(expected_hi)
             );
 
             let actual = rotate.rotate_both(input);
             let expected = f32x4(2.0, -1.0, 420.0, -69.0);
             assert_eq!(
-                std::mem::transmute::<v128, [Complex<f32>; 2]>(actual),
-                std::mem::transmute::<v128, [Complex<f32>; 2]>(expected)
+                core::mem::transmute::<v128, [Complex<f32>; 2]>(actual),
+                core::mem::transmute::<v128, [Complex<f32>; 2]>(expected)
             );
         }
     }
@@ -231,8 +231,8 @@ mod unit_tests {
             let actual = rotate.rotate(input);
             let expected = f64x2(420.0, -69.0);
             assert_eq!(
-                std::mem::transmute::<v128, Complex<f64>>(actual),
-                std::mem::transmute::<v128, Complex<f64>>(expected)
+                core::mem::transmute::<v128, Complex<f64>>(actual),
+                core::mem::transmute::<v128, Complex<f64>>(expected)
             );
         }
     }
@@ -245,8 +245,8 @@ mod unit_tests {
             let actual = rotate.rotate(input);
             let expected = f64x2(-420.0, 69.0);
             assert_eq!(
-                std::mem::transmute::<v128, Complex<f64>>(actual),
-                std::mem::transmute::<v128, Complex<f64>>(expected)
+                core::mem::transmute::<v128, Complex<f64>>(actual),
+                core::mem::transmute::<v128, Complex<f64>>(expected)
             );
         }
     }
@@ -258,8 +258,8 @@ mod unit_tests {
         let expected = f32x4(9.0, 13.0, 1.0, 5.0);
         unsafe {
             assert_eq!(
-                std::mem::transmute::<v128, [Complex<f32>; 2]>(actual),
-                std::mem::transmute::<v128, [Complex<f32>; 2]>(expected)
+                core::mem::transmute::<v128, [Complex<f32>; 2]>(actual),
+                core::mem::transmute::<v128, [Complex<f32>; 2]>(expected)
             );
         }
     }
@@ -275,8 +275,8 @@ mod unit_tests {
             // let expected = vld1q_f64([1.0 * 5.0 - 2.0 * 7.0, 1.0 * 7.0 + 2.0 * 5.0].as_ptr());
             let expected = f64x2(1.0 * 5.0 - 2.0 * 7.0, 1.0 * 7.0 + 2.0 * 5.0);
             assert_eq!(
-                std::mem::transmute::<v128, Complex<f64>>(res),
-                std::mem::transmute::<v128, Complex<f64>>(expected)
+                core::mem::transmute::<v128, Complex<f64>>(res),
+                core::mem::transmute::<v128, Complex<f64>>(expected)
             );
         }
     }
@@ -292,7 +292,7 @@ mod unit_tests {
             let nbr2 = v128_load([val3, val4].as_ptr() as *const v128);
             let nbr1 = v128_load([val1, val2].as_ptr() as *const v128);
             let res = mul_complex_f32(nbr1, nbr2);
-            let res = std::mem::transmute::<v128, [Complex<f32>; 2]>(res);
+            let res = core::mem::transmute::<v128, [Complex<f32>; 2]>(res);
             let expected = [val1 * val3, val2 * val4];
             assert_eq!(res, expected);
         }
@@ -305,8 +305,8 @@ mod unit_tests {
             let nbr1 = f32x4(1.0, 2.0, 3.0, 4.0);
             let first = extract_lo_lo_f32(nbr1, nbr2);
             let second = extract_hi_hi_f32(nbr1, nbr2);
-            let first = std::mem::transmute::<v128, [Complex<f32>; 2]>(first);
-            let second = std::mem::transmute::<v128, [Complex<f32>; 2]>(second);
+            let first = core::mem::transmute::<v128, [Complex<f32>; 2]>(first);
+            let second = core::mem::transmute::<v128, [Complex<f32>; 2]>(second);
             let first_expected = [Complex::new(1.0, 2.0), Complex::new(5.0, 6.0)];
             let second_expected = [Complex::new(3.0, 4.0), Complex::new(7.0, 8.0)];
             assert_eq!(first, first_expected);
