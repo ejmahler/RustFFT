@@ -37,8 +37,7 @@ num-traits = { version = "0.2", default-features = false }
 num-integer = { version = "^0.1.40", default-features = false }
 strength_reduce = { version = "0.2.4", default-features = false }
 transpose = { version = "0.2", default-features = false }
-# primal-check = { git = "https://github.com/piotrfila/primal.git", branch = "rustfft-compat", default-features = false }
-primal-check = { path = "../primal/primal-check", default-features = false }
+primal-check = { git = "https://github.com/piotrfila/primal.git", branch = "rustfft-compat", default-features = false }
 hashbrown = "0.14.3"
 libm = { version = "0.2.8", optional = true }
 
