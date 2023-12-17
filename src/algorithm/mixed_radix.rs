@@ -1,14 +1,10 @@
-use alloc::boxed::Box;
-use alloc::sync::Arc;
-use alloc::vec;
 use core::cmp::max;
-
 use num_complex::Complex;
 use num_traits::Zero;
 use transpose;
 
 use crate::array_utils;
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::common::{fft_error_inplace, fft_error_outofplace, std_prelude::*};
 use crate::{common::FftNum, twiddles, FftDirection};
 use crate::{Direction, Fft, Length};
 
@@ -344,7 +340,6 @@ mod unit_tests {
     use super::*;
     use crate::test_utils::check_fft_algorithm;
     use crate::{algorithm::Dft, test_utils::BigScratchAlgorithm};
-    use alloc::sync::Arc;
     use num_traits::Zero;
 
     #[test]

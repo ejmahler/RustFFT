@@ -134,10 +134,11 @@ mod twiddles;
 use num_complex::Complex;
 use num_traits::Zero;
 
+#[cfg(not(feature = "std"))]
+use crate::common::std_prelude::*;
+
 pub use crate::common::FftNum;
 pub use crate::plan::{FftPlanner, FftPlannerScalar};
-
-use alloc::vec;
 
 /// A trait that allows FFT algorithms to report their expected input/output size
 pub trait Length {
@@ -262,8 +263,8 @@ mod avx;
 #[cfg(not(all(target_arch = "x86_64", feature = "avx")))]
 mod avx {
     pub mod avx_planner {
+        use crate::common::std_prelude::*;
         use crate::{Fft, FftDirection, FftNum};
-        use alloc::sync::Arc;
 
         /// The AVX FFT planner creates new FFT algorithm instances which take advantage of the AVX instruction set.
         ///
@@ -344,8 +345,8 @@ mod sse;
 #[cfg(not(all(target_arch = "x86_64", feature = "sse")))]
 mod sse {
     pub mod sse_planner {
+        use crate::common::std_prelude::*;
         use crate::{Fft, FftDirection, FftNum};
-        use alloc::sync::Arc;
 
         /// The SSE FFT planner creates new FFT algorithm instances using a mix of scalar and SSE accelerated algorithms.
         /// It requires at least SSE4.1, which is available on all reasonably recent x86_64 cpus.
@@ -423,8 +424,8 @@ mod neon;
 #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
 mod neon {
     pub mod neon_planner {
+        use crate::common::std_prelude::*;
         use crate::{Fft, FftDirection, FftNum};
-        use alloc::sync::Arc;
 
         /// The Neon FFT planner creates new FFT algorithm instances using a mix of scalar and Neon accelerated algorithms.
         /// It is supported when using the 64-bit AArch64 instruction set.
@@ -501,8 +502,8 @@ mod wasm_simd;
 #[cfg(not(all(target_arch = "wasm32", feature = "wasm_simd")))]
 mod wasm_simd {
     pub mod wasm_simd_planner {
+        use crate::common::std_prelude::*;
         use crate::{Fft, FftDirection, FftNum};
-        use alloc::sync::Arc;
 
         /// The WASM FFT planner creates new FFT algorithm instances using a mix of scalar and WASM SIMD accelerated algorithms.
         /// It is supported when using fairly recent browser versions as outlined in [the WebAssembly roadmap](https://webassembly.org/roadmap/).

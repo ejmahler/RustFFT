@@ -1,6 +1,8 @@
-use alloc::vec::Vec;
 use num_complex::Complex;
 use num_traits::Zero;
+
+#[cfg(not(feature = "std"))]
+use crate::common::std_prelude::*;
 
 use crate::array_utils;
 use crate::common::{fft_error_inplace, fft_error_outofplace};

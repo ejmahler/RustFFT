@@ -1,10 +1,10 @@
-use alloc::{vec, vec::Vec};
 use num_complex::Complex;
 use num_traits::{Float, One, Zero};
 
 use rand::distributions::{uniform::SampleUniform, Distribution, Uniform};
 use rand::{rngs::StdRng, SeedableRng};
 
+use crate::common::std_prelude::*;
 use crate::{algorithm::Dft, Direction, FftNum, Length};
 use crate::{Fft, FftDirection};
 

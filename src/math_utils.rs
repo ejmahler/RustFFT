@@ -1,6 +1,9 @@
 #[cfg(not(feature = "std"))]
+use crate::common::std_prelude::*;
+
+#[cfg(feature = "libm")]
 use crate::common::FftNum;
-use alloc::vec::Vec;
+
 use num_traits::{One, PrimInt, Zero};
 
 pub fn primitive_root(prime: u64) -> Option<u64> {
@@ -510,8 +513,6 @@ mod unit_tests {
             assert_eq!(factors, expected);
         }
     }
-
-    use hashbrown::HashMap;
 
     macro_rules! map{
         { $($key:expr => $value:expr),+ } => {

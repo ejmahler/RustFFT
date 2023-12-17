@@ -41,6 +41,21 @@ impl FftNum for f64 {
     }
 }
 
+#[cfg(not(feature = "std"))]
+pub(crate) mod std_prelude {
+    pub use alloc::boxed::Box;
+    pub use alloc::sync::Arc;
+    pub use alloc::{vec, vec::Vec};
+    pub use hashbrown::HashMap;
+}
+
+#[cfg(feature = "std")]
+pub(crate) mod std_prelude {
+    pub use std::boxed::Box;
+    pub use std::collections::HashMap;
+    pub use std::sync::Arc;
+}
+
 // Prints an error raised by an in-place FFT algorithm's `process_inplace` method
 // Marked cold and inline never to keep all formatting code out of the many monomorphized process_inplace methods
 #[cold]
