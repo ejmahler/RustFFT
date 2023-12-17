@@ -26,7 +26,7 @@ default = ["avx", "sse", "neon"]
 std = ["primal-check/std"]
 avx = ["dep:std_detect"]
 sse = ["dep:std_detect"]
-neon = ["std"]
+neon = []
 wasm_simd = ["std"]
 libm = ["dep:libm", "primal-check/libm"]
 

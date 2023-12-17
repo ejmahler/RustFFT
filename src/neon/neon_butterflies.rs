@@ -188,7 +188,7 @@ macro_rules! boilerplate_fft_neon_common_butterfly {
 
 pub struct NeonF32Butterfly1<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
 }
 
 boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly1, 1, |this: &NeonF32Butterfly1<_>| this
@@ -201,7 +201,7 @@ impl<T: FftNum> NeonF32Butterfly1<T> {
         assert_f32::<T>();
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
     #[inline(always)]
@@ -229,7 +229,7 @@ impl<T: FftNum> NeonF32Butterfly1<T> {
 
 pub struct NeonF64Butterfly1<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
 }
 
 boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly1, 1, |this: &NeonF64Butterfly1<_>| this
@@ -242,7 +242,7 @@ impl<T: FftNum> NeonF64Butterfly1<T> {
         assert_f64::<T>();
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
     #[inline(always)]
@@ -261,7 +261,7 @@ impl<T: FftNum> NeonF64Butterfly1<T> {
 
 pub struct NeonF32Butterfly2<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
 }
 
 boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly2, 2, |this: &NeonF32Butterfly2<_>| this
@@ -274,7 +274,7 @@ impl<T: FftNum> NeonF32Butterfly2<T> {
         assert_f32::<T>();
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
     #[inline(always)]
@@ -359,7 +359,7 @@ unsafe fn solo_fft2_f32(values: float32x4_t) -> float32x4_t {
 
 pub struct NeonF64Butterfly2<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
 }
 
 boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly2, 2, |this: &NeonF64Butterfly2<_>| this
@@ -372,7 +372,7 @@ impl<T: FftNum> NeonF64Butterfly2<T> {
         assert_f64::<T>();
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
 
@@ -413,7 +413,7 @@ pub(crate) unsafe fn solo_fft2_f64(left: float64x2_t, right: float64x2_t) -> [fl
 
 pub struct NeonF32Butterfly3<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     rotate: Rotate90F32,
     twiddle: float32x4_t,
     twiddle1re: float32x4_t,
@@ -435,7 +435,7 @@ impl<T: FftNum> NeonF32Butterfly3<T> {
         let twiddle1im = unsafe { vmovq_n_f32(tw1.im) };
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             rotate,
             twiddle,
             twiddle1re,
@@ -532,7 +532,7 @@ impl<T: FftNum> NeonF32Butterfly3<T> {
 
 pub struct NeonF64Butterfly3<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     rotate: Rotate90F64,
     twiddle1re: float64x2_t,
     twiddle1im: float64x2_t,
@@ -553,7 +553,7 @@ impl<T: FftNum> NeonF64Butterfly3<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             rotate,
             twiddle1re,
             twiddle1im,
@@ -607,7 +607,7 @@ impl<T: FftNum> NeonF64Butterfly3<T> {
 
 pub struct NeonF32Butterfly4<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     rotate: Rotate90F32,
 }
 
@@ -626,7 +626,7 @@ impl<T: FftNum> NeonF32Butterfly4<T> {
         };
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             rotate,
         }
     }
@@ -732,7 +732,7 @@ impl<T: FftNum> NeonF32Butterfly4<T> {
 
 pub struct NeonF64Butterfly4<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     rotate: Rotate90F64,
 }
 
@@ -752,7 +752,7 @@ impl<T: FftNum> NeonF64Butterfly4<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             rotate,
         }
     }
@@ -812,7 +812,7 @@ impl<T: FftNum> NeonF64Butterfly4<T> {
 
 pub struct NeonF32Butterfly5<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     rotate: Rotate90F32,
     twiddle12re: float32x4_t,
     twiddle21re: float32x4_t,
@@ -846,7 +846,7 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             rotate,
             twiddle12re,
             twiddle21re,
@@ -983,7 +983,7 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
 
 pub struct NeonF64Butterfly5<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     rotate: Rotate90F64,
     twiddle1re: float64x2_t,
     twiddle1im: float64x2_t,
@@ -1009,7 +1009,7 @@ impl<T: FftNum> NeonF64Butterfly5<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             rotate,
             twiddle1re,
             twiddle1im,
@@ -1089,7 +1089,7 @@ impl<T: FftNum> NeonF64Butterfly5<T> {
 
 pub struct NeonF32Butterfly6<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     bf3: NeonF32Butterfly3<T>,
 }
 
@@ -1105,7 +1105,7 @@ impl<T: FftNum> NeonF32Butterfly6<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             bf3,
         }
     }
@@ -1207,7 +1207,7 @@ impl<T: FftNum> NeonF32Butterfly6<T> {
 
 pub struct NeonF64Butterfly6<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     bf3: NeonF64Butterfly3<T>,
 }
 
@@ -1223,7 +1223,7 @@ impl<T: FftNum> NeonF64Butterfly6<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             bf3,
         }
     }
@@ -1501,7 +1501,7 @@ impl<T: FftNum> NeonF64Butterfly8<T> {
 //
 pub struct NeonF32Butterfly9<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     bf3: NeonF32Butterfly3<T>,
     twiddle1: float32x4_t,
     twiddle2: float32x4_t,
@@ -1526,7 +1526,7 @@ impl<T: FftNum> NeonF32Butterfly9<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             bf3,
             twiddle1,
             twiddle2,
@@ -1631,7 +1631,7 @@ impl<T: FftNum> NeonF32Butterfly9<T> {
 
 pub struct NeonF64Butterfly9<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     bf3: NeonF64Butterfly3<T>,
     twiddle1: float64x2_t,
     twiddle2: float64x2_t,
@@ -1656,7 +1656,7 @@ impl<T: FftNum> NeonF64Butterfly9<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             bf3,
             twiddle1,
             twiddle2,
@@ -1707,7 +1707,7 @@ impl<T: FftNum> NeonF64Butterfly9<T> {
 
 pub struct NeonF32Butterfly10<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     bf5: NeonF32Butterfly5<T>,
 }
 
@@ -1722,7 +1722,7 @@ impl<T: FftNum> NeonF32Butterfly10<T> {
         let bf5 = NeonF32Butterfly5::new(direction);
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             bf5,
         }
     }
@@ -1825,7 +1825,7 @@ impl<T: FftNum> NeonF32Butterfly10<T> {
 
 pub struct NeonF64Butterfly10<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     bf2: NeonF64Butterfly2<T>,
     bf5: NeonF64Butterfly5<T>,
 }
@@ -1842,7 +1842,7 @@ impl<T: FftNum> NeonF64Butterfly10<T> {
         let bf5 = NeonF64Butterfly5::new(direction);
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             bf2,
             bf5,
         }
@@ -1895,7 +1895,7 @@ impl<T: FftNum> NeonF64Butterfly10<T> {
 
 pub struct NeonF32Butterfly12<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     bf3: NeonF32Butterfly3<T>,
     bf4: NeonF32Butterfly4<T>,
 }
@@ -1912,7 +1912,7 @@ impl<T: FftNum> NeonF32Butterfly12<T> {
         let bf4 = NeonF32Butterfly4::new(direction);
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             bf3,
             bf4,
         }
@@ -2033,7 +2033,7 @@ impl<T: FftNum> NeonF32Butterfly12<T> {
 
 pub struct NeonF64Butterfly12<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     bf3: NeonF64Butterfly3<T>,
     bf4: NeonF64Butterfly4<T>,
 }
@@ -2050,7 +2050,7 @@ impl<T: FftNum> NeonF64Butterfly12<T> {
         let bf4 = NeonF64Butterfly4::new(direction);
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             bf3,
             bf4,
         }
@@ -2103,7 +2103,7 @@ impl<T: FftNum> NeonF64Butterfly12<T> {
 //
 pub struct NeonF32Butterfly15<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     bf3: NeonF32Butterfly3<T>,
     bf5: NeonF32Butterfly5<T>,
 }
@@ -2120,7 +2120,7 @@ impl<T: FftNum> NeonF32Butterfly15<T> {
         let bf5 = NeonF32Butterfly5::new(direction);
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             bf3,
             bf5,
         }
@@ -2240,7 +2240,7 @@ impl<T: FftNum> NeonF32Butterfly15<T> {
 
 pub struct NeonF64Butterfly15<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     bf3: NeonF64Butterfly3<T>,
     bf5: NeonF64Butterfly5<T>,
 }
@@ -2257,7 +2257,7 @@ impl<T: FftNum> NeonF64Butterfly15<T> {
         let bf5 = NeonF64Butterfly5::new(direction);
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             bf3,
             bf5,
         }
@@ -3290,7 +3290,7 @@ mod unit_tests {
             dft.process(&mut val);
             let res_packed = bf2.perform_fft_direct(in_packed);
 
-            let res = std::mem::transmute::<float32x4_t, [Complex<f32>; 2]>(res_packed);
+            let res = core::mem::transmute::<float32x4_t, [Complex<f32>; 2]>(res_packed);
             assert_eq!(val[0], res[0]);
             assert_eq!(val[1], res[1]);
         }
@@ -3319,7 +3319,7 @@ mod unit_tests {
             dft.process(&mut val_b);
             let res_both = bf2.perform_parallel_fft_direct(p1, p2);
 
-            let res = std::mem::transmute::<[float32x4_t; 2], [Complex<f32>; 4]>(res_both);
+            let res = core::mem::transmute::<[float32x4_t; 2], [Complex<f32>; 4]>(res_both);
             let neon_res_a = [res[0], res[2]];
             let neon_res_b = [res[1], res[3]];
             assert!(compare_vectors(&val_a, &neon_res_a));

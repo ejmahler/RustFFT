@@ -237,8 +237,8 @@ mod unit_tests {
             let res = mul_complex_f64(left, right);
             let expected = vld1q_f64([1.0 * 5.0 - 2.0 * 7.0, 1.0 * 7.0 + 2.0 * 5.0].as_ptr());
             assert_eq!(
-                std::mem::transmute::<float64x2_t, Complex<f64>>(res),
-                std::mem::transmute::<float64x2_t, Complex<f64>>(expected)
+                core::mem::transmute::<float64x2_t, Complex<f64>>(res),
+                core::mem::transmute::<float64x2_t, Complex<f64>>(expected)
             );
         }
     }
@@ -254,7 +254,7 @@ mod unit_tests {
             let nbr2 = vld1q_f32([val3, val4].as_ptr() as *const f32);
             let nbr1 = vld1q_f32([val1, val2].as_ptr() as *const f32);
             let res = mul_complex_f32(nbr1, nbr2);
-            let res = std::mem::transmute::<float32x4_t, [Complex<f32>; 2]>(res);
+            let res = core::mem::transmute::<float32x4_t, [Complex<f32>; 2]>(res);
             let expected = [val1 * val3, val2 * val4];
             assert_eq!(res, expected);
         }
@@ -267,8 +267,8 @@ mod unit_tests {
             let nbr1 = vld1q_f32([1.0, 2.0, 3.0, 4.0].as_ptr());
             let first = extract_lo_lo_f32(nbr1, nbr2);
             let second = extract_hi_hi_f32(nbr1, nbr2);
-            let first = std::mem::transmute::<float32x4_t, [Complex<f32>; 2]>(first);
-            let second = std::mem::transmute::<float32x4_t, [Complex<f32>; 2]>(second);
+            let first = core::mem::transmute::<float32x4_t, [Complex<f32>; 2]>(first);
+            let second = core::mem::transmute::<float32x4_t, [Complex<f32>; 2]>(second);
             let first_expected = [Complex::new(1.0, 2.0), Complex::new(5.0, 6.0)];
             let second_expected = [Complex::new(3.0, 4.0), Complex::new(7.0, 8.0)];
             assert_eq!(first, first_expected);
