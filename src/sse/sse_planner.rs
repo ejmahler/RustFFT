@@ -1,10 +1,7 @@
 use num_integer::gcd;
-use std::any::TypeId;
-use std::collections::HashMap;
+use core::any::TypeId;
 
-use std::sync::Arc;
-
-use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
+use crate::{common::{FftNum, std_prelude::*}, fft_cache::FftCache, FftDirection};
 
 use crate::algorithm::*;
 use crate::sse::sse_butterflies::*;

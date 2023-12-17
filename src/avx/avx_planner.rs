@@ -1,10 +1,9 @@
-use std::sync::Arc;
-use std::{any::TypeId, cmp::min};
+use core::{any::TypeId, cmp::min};
 
 use primal_check::miller_rabin;
 
 use crate::algorithm::*;
-use crate::common::FftNum;
+use crate::common::{FftNum, std_prelude::*};
 use crate::math_utils::PartialFactors;
 use crate::Fft;
 use crate::{algorithm::butterflies::*, fft_cache::FftCache};
@@ -72,7 +71,7 @@ impl MixedRadixPlan {
     }
     fn push_radix_power(&mut self, radix: u8, power: u32) {
         self.radixes
-            .extend(std::iter::repeat(radix).take(power as usize));
+            .extend(core::iter::repeat(radix).take(power as usize));
         self.len *= (radix as usize).pow(power);
     }
 }
@@ -86,7 +85,7 @@ impl MixedRadixPlan {
 ///
 /// ~~~
 /// // Perform a forward Fft of size 1234, accelerated by AVX
-/// use std::sync::Arc;
+/// use core::sync::Arc;
 /// use rustfft::{FftPlannerAvx, num_complex::Complex};
 ///
 /// // If FftPlannerAvx::new() returns Ok(), we'll know AVX algorithms are available
@@ -108,7 +107,7 @@ impl MixedRadixPlan {
 /// setup time. (FFT instances created with one planner will never re-use data and buffers with FFT instances created
 /// by a different planner)
 ///
-/// Each FFT instance owns [`Arc`s](std::sync::Arc) to its internal data, rather than borrowing it from the planner, so it's perfectly
+/// Each FFT instance owns [`Arc`s](core::sync::Arc) to its internal data, rather than borrowing it from the planner, so it's perfectly
 /// safe to drop the planner after creating Fft instances.
 pub struct FftPlannerAvx<T: FftNum> {
     internal_planner: Box<dyn AvxPlannerInternalAPI<T>>,
@@ -198,7 +197,7 @@ trait AvxPlannerInternalAPI<T: FftNum>: Send {
 
 struct AvxPlannerInternal<A: AvxNum, T: FftNum> {
     cache: FftCache<T>,
-    _phantom: std::marker::PhantomData<A>,
+    _phantom: core::marker::PhantomData<A>,
 }
 
 impl<T: FftNum> AvxPlannerInternalAPI<T> for AvxPlannerInternal<f32, T> {
@@ -250,7 +249,7 @@ impl<T: FftNum> AvxPlannerInternal<f32, T> {
 
         Self {
             cache: FftCache::new(),
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
 
@@ -460,7 +459,7 @@ impl<T: FftNum> AvxPlannerInternal<f64, T> {
 
         Self {
             cache: FftCache::new(),
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
 

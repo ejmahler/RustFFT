@@ -4,7 +4,7 @@ use core::arch::x86_64::*;
 
 use crate::algorithm::bitreversed_transpose;
 use crate::array_utils::{self, workaround_transmute_mut};
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::common::{fft_error_inplace, fft_error_outofplace, std_prelude::*};
 use crate::sse::sse_butterflies::{
     SseF32Butterfly1, SseF32Butterfly16, SseF32Butterfly2, SseF32Butterfly32, SseF32Butterfly4,
     SseF32Butterfly8,
@@ -45,7 +45,7 @@ enum Sse64Butterfly<T> {
 }
 
 pub struct Sse32Radix4<T> {
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     twiddles: Box<[__m128]>,
 
     base_fft: Sse32Butterfly<T>,
@@ -121,7 +121,7 @@ impl<T: FftNum> Sse32Radix4<T> {
 
             len,
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             bf4: SseF32Butterfly4::<T>::new(direction),
         }
     }
@@ -219,7 +219,7 @@ unsafe fn butterfly_4_32<T: FftNum>(
 }
 
 pub struct Sse64Radix4<T> {
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     twiddles: Box<[__m128d]>,
 
     base_fft: Sse64Butterfly<T>,
@@ -290,7 +290,7 @@ impl<T: FftNum> Sse64Radix4<T> {
 
             len,
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             bf4: SseF64Butterfly4::<T>::new(direction),
         }
     }

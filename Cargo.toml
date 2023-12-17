@@ -24,8 +24,8 @@ default = ["avx", "sse", "neon"]
 #
 # On AArch64, the "neon" feature enables compilation of Neon-accelerated code.
 std = ["primal-check/std"]
-avx = ["std"]
-sse = ["std"]
+avx = ["dep:std_detect"]
+sse = ["dep:std_detect"]
 neon = ["std"]
 wasm_simd = ["std"]
 libm = ["dep:libm", "primal-check/libm"]
@@ -40,6 +40,8 @@ transpose = { version = "0.2", default-features = false }
 primal-check = { git = "https://github.com/piotrfila/primal.git", branch = "rustfft-compat", default-features = false }
 hashbrown = "0.14.3"
 libm = { version = "0.2.8", optional = true }
+# the crates.io version is out of date
+std_detect = { git = "https://github.com/rust-lang/stdarch.git", rev = "821a641b4b43b31a9aa7749141abd43878d019b1", optional = true }
 
 [dev-dependencies]
 rand = "0.8"

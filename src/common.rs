@@ -47,6 +47,9 @@ pub(crate) mod std_prelude {
     pub use alloc::sync::Arc;
     pub use alloc::{vec, vec::Vec};
     pub use hashbrown::HashMap;
+
+    #[cfg(target_arch = "x86_64")]
+    pub use std_detect::is_x86_feature_detected;
 }
 
 #[cfg(feature = "std")]

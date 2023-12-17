@@ -1,11 +1,10 @@
-use std::any::TypeId;
-use std::sync::Arc;
+use core::any::TypeId;
 
 use num_complex::Complex;
 use num_integer::div_ceil;
 
 use crate::array_utils;
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::common::{fft_error_inplace, fft_error_outofplace, std_prelude::*};
 use crate::{Direction, Fft, FftDirection, FftNum, Length};
 
 use super::{AvxNum, CommonSimdData};
@@ -374,7 +373,7 @@ macro_rules! mixedradix_transpose{
 
 pub struct MixedRadix2xnAvx<A: AvxNum, T> {
     common_data: CommonSimdData<T, A::VectorType>,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
 }
 boilerplate_avx_fft_commondata!(MixedRadix2xnAvx);
 
@@ -383,7 +382,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix2xnAvx<A, T> {
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         Self {
             common_data: mixedradix_gen_data!(2, inner_fft),
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
     mixedradix_column_butterflies!(
@@ -402,7 +401,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix2xnAvx<A, T> {
 pub struct MixedRadix3xnAvx<A: AvxNum, T> {
     twiddles_butterfly3: A::VectorType,
     common_data: CommonSimdData<T, A::VectorType>,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
 }
 boilerplate_avx_fft_commondata!(MixedRadix3xnAvx);
 
@@ -412,7 +411,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix3xnAvx<A, T> {
         Self {
             twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, inner_fft.fft_direction()),
             common_data: mixedradix_gen_data!(3, inner_fft),
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
     mixedradix_column_butterflies!(
@@ -431,7 +430,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix3xnAvx<A, T> {
 pub struct MixedRadix4xnAvx<A: AvxNum, T> {
     twiddles_butterfly4: Rotation90<A::VectorType>,
     common_data: CommonSimdData<T, A::VectorType>,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
 }
 boilerplate_avx_fft_commondata!(MixedRadix4xnAvx);
 
@@ -441,7 +440,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix4xnAvx<A, T> {
         Self {
             twiddles_butterfly4: AvxVector::make_rotation90(inner_fft.fft_direction()),
             common_data: mixedradix_gen_data!(4, inner_fft),
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
     mixedradix_column_butterflies!(
@@ -460,7 +459,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix4xnAvx<A, T> {
 pub struct MixedRadix5xnAvx<A: AvxNum, T> {
     twiddles_butterfly5: [A::VectorType; 2],
     common_data: CommonSimdData<T, A::VectorType>,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
 }
 boilerplate_avx_fft_commondata!(MixedRadix5xnAvx);
 
@@ -473,7 +472,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix5xnAvx<A, T> {
                 AvxVector::broadcast_twiddle(2, 5, inner_fft.fft_direction()),
             ],
             common_data: mixedradix_gen_data!(5, inner_fft),
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
     mixedradix_column_butterflies!(
@@ -498,7 +497,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix5xnAvx<A, T> {
 pub struct MixedRadix6xnAvx<A: AvxNum, T> {
     twiddles_butterfly3: A::VectorType,
     common_data: CommonSimdData<T, A::VectorType>,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
 }
 boilerplate_avx_fft_commondata!(MixedRadix6xnAvx);
 
@@ -508,7 +507,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix6xnAvx<A, T> {
         Self {
             twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, inner_fft.fft_direction()),
             common_data: mixedradix_gen_data!(6, inner_fft),
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
     mixedradix_column_butterflies!(
@@ -527,7 +526,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix6xnAvx<A, T> {
 pub struct MixedRadix7xnAvx<A: AvxNum, T> {
     twiddles_butterfly7: [A::VectorType; 3],
     common_data: CommonSimdData<T, A::VectorType>,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
 }
 boilerplate_avx_fft_commondata!(MixedRadix7xnAvx);
 
@@ -541,7 +540,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix7xnAvx<A, T> {
                 AvxVector::broadcast_twiddle(3, 7, inner_fft.fft_direction()),
             ],
             common_data: mixedradix_gen_data!(7, inner_fft),
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
     mixedradix_column_butterflies!(
@@ -567,7 +566,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix7xnAvx<A, T> {
 pub struct MixedRadix8xnAvx<A: AvxNum, T> {
     twiddles_butterfly4: Rotation90<A::VectorType>,
     common_data: CommonSimdData<T, A::VectorType>,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
 }
 boilerplate_avx_fft_commondata!(MixedRadix8xnAvx);
 
@@ -577,7 +576,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix8xnAvx<A, T> {
         Self {
             twiddles_butterfly4: AvxVector::make_rotation90(inner_fft.fft_direction()),
             common_data: mixedradix_gen_data!(8, inner_fft),
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
 
@@ -599,7 +598,7 @@ pub struct MixedRadix9xnAvx<A: AvxNum, T> {
     twiddles_butterfly9_lo: [A::VectorType; 2],
     twiddles_butterfly3: A::VectorType,
     common_data: CommonSimdData<T, A::VectorType>,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
 }
 boilerplate_avx_fft_commondata!(MixedRadix9xnAvx);
 
@@ -624,7 +623,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix9xnAvx<A, T> {
             ],
             twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, inner_fft.fft_direction()),
             common_data: mixedradix_gen_data!(9, inner_fft),
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
 
@@ -652,7 +651,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix9xnAvx<A, T> {
 pub struct MixedRadix11xnAvx<A: AvxNum, T> {
     twiddles_butterfly11: [A::VectorType; 5],
     common_data: CommonSimdData<T, A::VectorType>,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
 }
 boilerplate_avx_fft_commondata!(MixedRadix11xnAvx);
 
@@ -668,7 +667,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix11xnAvx<A, T> {
                 AvxVector::broadcast_twiddle(5, 11, inner_fft.fft_direction()),
             ],
             common_data: mixedradix_gen_data!(11, inner_fft),
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
     mixedradix_column_butterflies!(
@@ -697,7 +696,7 @@ pub struct MixedRadix12xnAvx<A: AvxNum, T> {
     twiddles_butterfly4: Rotation90<A::VectorType>,
     twiddles_butterfly3: A::VectorType,
     common_data: CommonSimdData<T, A::VectorType>,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
 }
 boilerplate_avx_fft_commondata!(MixedRadix12xnAvx);
 
@@ -709,7 +708,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix12xnAvx<A, T> {
             twiddles_butterfly4: AvxVector::make_rotation90(inverse),
             twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, inverse),
             common_data: mixedradix_gen_data!(12, inner_fft),
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
 
@@ -738,7 +737,7 @@ pub struct MixedRadix16xnAvx<A: AvxNum, T> {
     twiddles_butterfly4: Rotation90<A::VectorType>,
     twiddles_butterfly16: [A::VectorType; 2],
     common_data: CommonSimdData<T, A::VectorType>,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
 }
 boilerplate_avx_fft_commondata!(MixedRadix16xnAvx);
 
@@ -753,7 +752,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix16xnAvx<A, T> {
                 AvxVector::broadcast_twiddle(3, 16, inverse),
             ],
             common_data: mixedradix_gen_data!(16, inner_fft),
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
 
@@ -875,7 +874,7 @@ mod unit_tests {
     use super::*;
     use crate::algorithm::*;
     use crate::test_utils::check_fft_algorithm;
-    use std::sync::Arc;
+    use core::sync::Arc;
 
     macro_rules! test_avx_mixed_radix {
         ($f32_test_name:ident, $f64_test_name:ident, $struct_name:ident, $inner_count:expr) => (

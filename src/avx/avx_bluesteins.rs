@@ -1,11 +1,10 @@
-use std::any::TypeId;
-use std::sync::Arc;
+use core::any::TypeId;
 
 use num_complex::Complex;
 use num_integer::div_ceil;
 use num_traits::Zero;
 
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::common::{fft_error_inplace, fft_error_outofplace, std_prelude::*};
 use crate::{array_utils, twiddles, FftDirection};
 use crate::{Direction, Fft, FftNum, Length};
 
@@ -28,7 +27,7 @@ use super::{
 pub struct BluesteinsAvx<A: AvxNum, T> {
     inner_fft_multiplier: Box<[A::VectorType]>,
     common_data: CommonSimdData<T, A::VectorType>,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
 }
 boilerplate_avx_fft_commondata!(BluesteinsAvx);
 
@@ -147,7 +146,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
 
                 direction,
             },
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
 
@@ -375,7 +374,7 @@ mod unit_tests {
     use super::*;
     use crate::algorithm::Dft;
     use crate::test_utils::check_fft_algorithm;
-    use std::sync::Arc;
+    use core::sync::Arc;
 
     #[test]
     fn test_bluesteins_avx_f32() {

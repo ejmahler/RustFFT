@@ -1,6 +1,6 @@
-use std::arch::x86_64::*;
-use std::marker::PhantomData;
-use std::mem::MaybeUninit;
+use core::arch::x86_64::*;
+use core::marker::PhantomData;
+use core::mem::MaybeUninit;
 
 use num_complex::Complex;
 
@@ -10,6 +10,9 @@ use crate::array_utils::DoubleBuf;
 use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::{common::FftNum, twiddles};
 use crate::{Direction, Fft, FftDirection, Length};
+
+#[cfg(not(feature = "std"))]
+use crate::common::std_prelude::is_x86_feature_detected;
 
 use super::avx64_utils;
 use super::avx_vector;
@@ -289,7 +292,7 @@ macro_rules! gen_butterfly_twiddles_separated_columns {
 pub struct Butterfly5Avx64<T> {
     twiddles: [__m256d; 3],
     direction: FftDirection,
-    _phantom_t: std::marker::PhantomData<T>,
+    _phantom_t: core::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly5Avx64, 5);
 impl Butterfly5Avx64<f64> {
@@ -357,7 +360,7 @@ impl<T> Butterfly5Avx64<T> {
 pub struct Butterfly7Avx64<T> {
     twiddles: [__m256d; 5],
     direction: FftDirection,
-    _phantom_t: std::marker::PhantomData<T>,
+    _phantom_t: core::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly7Avx64, 7);
 impl Butterfly7Avx64<f64> {
@@ -450,7 +453,7 @@ impl<T> Butterfly7Avx64<T> {
 pub struct Butterfly11Avx64<T> {
     twiddles: [__m256d; 10],
     direction: FftDirection,
-    _phantom_t: std::marker::PhantomData<T>,
+    _phantom_t: core::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly11Avx64, 11);
 impl Butterfly11Avx64<f64> {
@@ -579,7 +582,7 @@ pub struct Butterfly8Avx64<T> {
     twiddles: [__m256d; 2],
     twiddles_butterfly4: Rotation90<__m256d>,
     direction: FftDirection,
-    _phantom_t: std::marker::PhantomData<T>,
+    _phantom_t: core::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly8Avx64, 8);
 impl Butterfly8Avx64<f64> {
@@ -626,7 +629,7 @@ pub struct Butterfly9Avx64<T> {
     twiddles: [__m256d; 2],
     twiddles_butterfly3: __m256d,
     direction: FftDirection,
-    _phantom_t: std::marker::PhantomData<T>,
+    _phantom_t: core::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly9Avx64, 9);
 impl Butterfly9Avx64<f64> {
@@ -681,7 +684,7 @@ pub struct Butterfly12Avx64<T> {
     twiddles_butterfly3: __m256d,
     twiddles_butterfly4: Rotation90<__m256d>,
     direction: FftDirection,
-    _phantom_t: std::marker::PhantomData<T>,
+    _phantom_t: core::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly12Avx64, 12);
 impl Butterfly12Avx64<f64> {
@@ -736,7 +739,7 @@ pub struct Butterfly16Avx64<T> {
     twiddles: [__m256d; 6],
     twiddles_butterfly4: Rotation90<__m256d>,
     direction: FftDirection,
-    _phantom_t: std::marker::PhantomData<T>,
+    _phantom_t: core::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly16Avx64, 16);
 impl Butterfly16Avx64<f64> {
@@ -788,7 +791,7 @@ pub struct Butterfly18Avx64<T> {
     twiddles: [__m256d; 5],
     twiddles_butterfly3: __m256d,
     direction: FftDirection,
-    _phantom_t: std::marker::PhantomData<T>,
+    _phantom_t: core::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly18Avx64, 18);
 impl Butterfly18Avx64<f64> {
@@ -845,7 +848,7 @@ pub struct Butterfly24Avx64<T> {
     twiddles_butterfly3: __m256d,
     twiddles_butterfly4: Rotation90<__m256d>,
     direction: FftDirection,
-    _phantom_t: std::marker::PhantomData<T>,
+    _phantom_t: core::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly24Avx64, 24);
 impl Butterfly24Avx64<f64> {
@@ -904,7 +907,7 @@ pub struct Butterfly27Avx64<T> {
     twiddles_butterfly9_lo: [__m256d; 2],
     twiddles_butterfly3: __m256d,
     direction: FftDirection,
-    _phantom_t: std::marker::PhantomData<T>,
+    _phantom_t: core::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly27Avx64, 27);
 impl Butterfly27Avx64<f64> {
@@ -1005,7 +1008,7 @@ pub struct Butterfly32Avx64<T> {
     twiddles: [__m256d; 12],
     twiddles_butterfly4: Rotation90<__m256d>,
     direction: FftDirection,
-    _phantom_t: std::marker::PhantomData<T>,
+    _phantom_t: core::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly32Avx64, 32);
 impl Butterfly32Avx64<f64> {
@@ -1073,7 +1076,7 @@ pub struct Butterfly36Avx64<T> {
     twiddles: [__m256d; 15],
     twiddles_butterfly3: __m256d,
     direction: FftDirection,
-    _phantom_t: std::marker::PhantomData<T>,
+    _phantom_t: core::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly!(Butterfly36Avx64, 36);
 impl Butterfly36Avx64<f64> {
@@ -1151,7 +1154,7 @@ pub struct Butterfly64Avx64<T> {
     twiddles: [__m256d; 28],
     twiddles_butterfly4: Rotation90<__m256d>,
     direction: FftDirection,
-    _phantom_t: std::marker::PhantomData<T>,
+    _phantom_t: core::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly_with_scratch!(Butterfly64Avx64, 64);
 impl Butterfly64Avx64<f64> {
@@ -1224,7 +1227,7 @@ pub struct Butterfly128Avx64<T> {
     twiddles_butterfly16: [__m256d; 2],
     twiddles_butterfly4: Rotation90<__m256d>,
     direction: FftDirection,
-    _phantom_t: std::marker::PhantomData<T>,
+    _phantom_t: core::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly_with_scratch!(Butterfly128Avx64, 128);
 impl Butterfly128Avx64<f64> {
@@ -1300,7 +1303,7 @@ pub struct Butterfly256Avx64<T> {
     twiddles_butterfly32: [__m256d; 6],
     twiddles_butterfly4: Rotation90<__m256d>,
     direction: FftDirection,
-    _phantom_t: std::marker::PhantomData<T>,
+    _phantom_t: core::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly_with_scratch!(Butterfly256Avx64, 256);
 impl Butterfly256Avx64<f64> {
@@ -1381,7 +1384,7 @@ pub struct Butterfly512Avx64<T> {
     twiddles_butterfly16: [__m256d; 2],
     twiddles_butterfly4: Rotation90<__m256d>,
     direction: FftDirection,
-    _phantom_t: std::marker::PhantomData<T>,
+    _phantom_t: core::marker::PhantomData<T>,
 }
 boilerplate_fft_simd_butterfly_with_scratch!(Butterfly512Avx64, 512);
 impl Butterfly512Avx64<f64> {
