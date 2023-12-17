@@ -2,31 +2,43 @@ use num_traits::{FromPrimitive, Signed};
 use core::fmt::Debug;
 
 /// Generic floating point number, implemented for f32 and f64
-#[cfg(feature = "std")]
+#[cfg(not(feature = "libm"))]
 pub trait FftNum: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {}
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "libm"))]
 impl<T> FftNum for T where T: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {}
 
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "libm")]
 pub trait FftNum: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {
     fn sin(self) -> Self;
     fn cos(self) -> Self;
     fn sqrt(self) -> Self;
 }
 
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "libm")]
 impl FftNum for f32 {
-    fn sin(self) -> Self { libm::sinf(self) }
-    fn cos(self) -> Self { libm::cosf(self) }
-    fn sqrt(self) -> Self { libm::sqrtf(self) }
+    fn sin(self) -> Self {
+        libm::sinf(self)
+    }
+    fn cos(self) -> Self {
+        libm::cosf(self)
+    }
+    fn sqrt(self) -> Self {
+        libm::sqrtf(self)
+    }
 }
 
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "libm")]
 impl FftNum for f64 {
-    fn sin(self) -> Self { libm::sin(self) }
-    fn cos(self) -> Self { libm::cos(self) }
-    fn sqrt(self) -> Self { libm::sqrt(self) }
+    fn sin(self) -> Self {
+        libm::sin(self)
+    }
+    fn cos(self) -> Self {
+        libm::cos(self)
+    }
+    fn sqrt(self) -> Self {
+        libm::sqrt(self)
+    }
 }
 
 // Prints an error raised by an in-place FFT algorithm's `process_inplace` method

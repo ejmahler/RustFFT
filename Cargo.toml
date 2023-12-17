@@ -23,11 +23,12 @@ default = ["avx", "sse", "neon"]
 # On every other platform, these features do nothing, and RustFFT will behave like they are not set.
 #
 # On AArch64, the "neon" feature enables compilation of Neon-accelerated code.
-std = []
+std = ["primal-check/std"]
 avx = ["std"]
 sse = ["std"]
 neon = ["std"]
 wasm_simd = ["std"]
+libm = ["dep:libm", "primal-check/libm"]
 
 
 [dependencies]
@@ -36,9 +37,10 @@ num-traits = { version = "0.2", default-features = false }
 num-integer = { version = "^0.1.40", default-features = false }
 strength_reduce = { version = "0.2.4", default-features = false }
 transpose = { version = "0.2", default-features = false }
-primal-check = { git = "https://github.com/piotrfila/primal.git", branch = "rustfft-compat", default-features = false }
+# primal-check = { git = "https://github.com/piotrfila/primal.git", branch = "rustfft-compat", default-features = false }
+primal-check = { path = "../primal/primal-check", default-features = false }
 hashbrown = "0.14.3"
-libm = "0.2.8"
+libm = { version = "0.2.8", optional = true }
 
 [dev-dependencies]
 rand = "0.8"
