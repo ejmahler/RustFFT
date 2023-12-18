@@ -1,4 +1,4 @@
-#![cfg_attr(feature="no-std", no_std)]
+#![cfg_attr(feature = "no-std", no_std)]
 #![cfg_attr(all(feature = "bench", test), feature(test))]
 
 //! RustFFT is a high-performance FFT library written in pure Rust.

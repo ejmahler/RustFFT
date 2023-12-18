@@ -50,6 +50,9 @@ pub(crate) mod std_prelude {
 
     #[cfg(target_arch = "x86_64")]
     pub use std_detect::is_x86_feature_detected;
+
+    #[cfg(target_arch = "aarch64")]
+    pub use std_detect::is_aarch64_feature_detected;
 }
 
 #[cfg(not(feature = "no-std"))]
@@ -58,6 +61,9 @@ pub(crate) mod std_prelude {
     pub use std::collections::HashMap;
     pub use std::sync::Arc;
     pub use std::{vec, vec::Vec};
+
+    #[cfg(target_arch = "aarch64")]
+    pub use std::arch::is_aarch64_feature_detected;
 }
 
 // Prints an error raised by an in-place FFT algorithm's `process_inplace` method
