@@ -27,7 +27,7 @@ avx = ["dep:std_detect"]
 sse = ["dep:std_detect"]
 neon = ["dep:std_detect"]
 wasm_simd = []
-libm = ["dep:libm", "primal-check/libm"]
+libm = ["dep:libm", "primal-check/no-std"]
 
 
 [dependencies]
@@ -36,7 +36,7 @@ num-traits = { version = "0.2", default-features = false }
 num-integer = { version = "^0.1.40", default-features = false }
 strength_reduce = { version = "0.2.4", default-features = false }
 transpose = { version = "0.2", default-features = false }
-primal-check = { git = "https://github.com/piotrfila/primal.git", branch = "rustfft-compat", default-features = false }
+primal-check = { git = "https://github.com/piotrfila/primal.git", ver = "48526bbba548946ef85d6736b9e69544dffb2100" }
 hashbrown = "0.14.3"
 libm = { version = "0.2.8", optional = true }
 # the crates.io version is out of date
