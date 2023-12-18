@@ -1,13 +1,13 @@
-use num_integer::gcd;
 use core::any::TypeId;
-
-use crate::{common::{FftNum, std_prelude::*}, fft_cache::FftCache, FftDirection};
+use num_integer::gcd;
 
 use crate::algorithm::*;
+use crate::common::std_prelude::*;
 use crate::sse::sse_butterflies::*;
 use crate::sse::sse_prime_butterflies::*;
 use crate::sse::sse_radix4::*;
 use crate::Fft;
+use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
 
 use crate::math_utils::{PrimeFactor, PrimeFactors};
 

@@ -1,6 +1,6 @@
+use crate::common::std_prelude::*;
 use crate::{Fft, FftDirection, FftNum};
 use core::arch::x86_64::{__m256, __m256d};
-use crate::common::std_prelude::*;
 
 pub trait AvxNum: FftNum {
     type VectorType: AvxVector256<ScalarType = Self>;

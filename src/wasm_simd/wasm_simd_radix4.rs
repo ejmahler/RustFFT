@@ -5,7 +5,7 @@ use core::arch::wasm32::*;
 use crate::algorithm::bitreversed_transpose;
 use crate::array_utils;
 use crate::array_utils::workaround_transmute_mut;
-use crate::common::{fft_error_inplace, fft_error_outofplace, std_prelude::{Box, Vec}};
+use crate::common::{fft_error_inplace, fft_error_outofplace, std_prelude::*};
 use crate::wasm_simd::wasm_simd_butterflies::{
     WasmSimdF32Butterfly1, WasmSimdF32Butterfly16, WasmSimdF32Butterfly2, WasmSimdF32Butterfly32,
     WasmSimdF32Butterfly4, WasmSimdF32Butterfly8,

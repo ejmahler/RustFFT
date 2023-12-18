@@ -3,7 +3,7 @@ use core::{any::TypeId, cmp::min};
 use primal_check::miller_rabin;
 
 use crate::algorithm::*;
-use crate::common::{FftNum, std_prelude::*};
+use crate::common::{std_prelude::*, FftNum};
 use crate::math_utils::PartialFactors;
 use crate::Fft;
 use crate::{algorithm::butterflies::*, fft_cache::FftCache};

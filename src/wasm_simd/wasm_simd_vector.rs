@@ -1,6 +1,6 @@
 use core::arch::wasm32::*;
-use num_complex::Complex;
 use core::ops::{Deref, DerefMut};
+use num_complex::Complex;
 
 use crate::array_utils::DoubleBuf;
 
