@@ -8,7 +8,7 @@ pub fn compute_twiddle<T: FftNum>(
     fft_len: usize,
     direction: FftDirection,
 ) -> Complex<T> {
-    let constant = -2f64 * std::f64::consts::PI / fft_len as f64;
+    let constant = -2f64 * core::f64::consts::PI / fft_len as f64;
     let angle = constant * index as f64;
 
     let result = Complex {
@@ -34,7 +34,7 @@ pub fn fill_bluesteins_twiddles<T: FftNum>(
 
     // Strength-reduced u128s are very heavy, so we only want to use them if we need them - and we only need them if
     // len * len doesn't fit in a u64, AKA if len doesn't fit in a u32
-    if destination.len() < std::u32::MAX as usize {
+    if destination.len() < core::u32::MAX as usize {
         let twice_len_reduced = StrengthReducedU64::new(twice_len as u64);
 
         for (i, e) in destination.iter_mut().enumerate() {

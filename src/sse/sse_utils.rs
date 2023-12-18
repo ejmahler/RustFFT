@@ -210,8 +210,8 @@ mod unit_tests {
             let res = mul_complex_f64(left, right);
             let expected = _mm_set_pd(2.0 * 5.0 + 1.0 * 7.0, 2.0 * 7.0 - 1.0 * 5.0);
             assert_eq!(
-                std::mem::transmute::<__m128d, Complex<f64>>(res),
-                std::mem::transmute::<__m128d, Complex<f64>>(expected)
+                core::mem::transmute::<__m128d, Complex<f64>>(res),
+                core::mem::transmute::<__m128d, Complex<f64>>(expected)
             );
         }
     }
@@ -227,7 +227,7 @@ mod unit_tests {
             let nbr2 = _mm_set_ps(val4.im, val4.re, val3.im, val3.re);
             let nbr1 = _mm_set_ps(val2.im, val2.re, val1.im, val1.re);
             let res = mul_complex_f32(nbr1, nbr2);
-            let res = std::mem::transmute::<__m128, [Complex<f32>; 2]>(res);
+            let res = core::mem::transmute::<__m128, [Complex<f32>; 2]>(res);
             let expected = [val1 * val3, val2 * val4];
             assert_eq!(res, expected);
         }
@@ -240,8 +240,8 @@ mod unit_tests {
             let nbr1 = _mm_set_ps(4.0, 3.0, 2.0, 1.0);
             let first = extract_lo_lo_f32(nbr1, nbr2);
             let second = extract_hi_hi_f32(nbr1, nbr2);
-            let first = std::mem::transmute::<__m128, [Complex<f32>; 2]>(first);
-            let second = std::mem::transmute::<__m128, [Complex<f32>; 2]>(second);
+            let first = core::mem::transmute::<__m128, [Complex<f32>; 2]>(first);
+            let second = core::mem::transmute::<__m128, [Complex<f32>; 2]>(second);
             let first_expected = [Complex::new(1.0, 2.0), Complex::new(5.0, 6.0)];
             let second_expected = [Complex::new(3.0, 4.0), Complex::new(7.0, 8.0)];
             assert_eq!(first, first_expected);

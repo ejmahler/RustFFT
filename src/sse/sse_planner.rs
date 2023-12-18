@@ -1,16 +1,13 @@
+use core::any::TypeId;
 use num_integer::gcd;
-use std::any::TypeId;
-use std::collections::HashMap;
-
-use std::sync::Arc;
-
-use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
 
 use crate::algorithm::*;
+use crate::common::std_prelude::*;
 use crate::sse::sse_butterflies::*;
 use crate::sse::sse_prime_butterflies::*;
 use crate::sse::sse_radix4::*;
 use crate::Fft;
+use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
 
 use crate::math_utils::{PrimeFactor, PrimeFactors};
 

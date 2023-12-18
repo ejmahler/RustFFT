@@ -33,7 +33,7 @@ use super::wasm_simd_vector::WasmSimdArrayMut;
 
 pub struct WasmSimdF32Butterfly7<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     rotate: Rotate90F32,
     twiddle1re: v128,
     twiddle1im: v128,
@@ -70,7 +70,7 @@ impl<T: FftNum> WasmSimdF32Butterfly7<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             rotate,
             twiddle1re,
             twiddle1im,
@@ -177,7 +177,7 @@ impl<T: FftNum> WasmSimdF32Butterfly7<T> {
 
 pub struct WasmSimdF64Butterfly7<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     rotate: Rotate90F64,
     twiddle1re: v128,
     twiddle1im: v128,
@@ -214,7 +214,7 @@ impl<T: FftNum> WasmSimdF64Butterfly7<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             rotate,
             twiddle1re,
             twiddle1im,
@@ -290,7 +290,7 @@ impl<T: FftNum> WasmSimdF64Butterfly7<T> {
 
 pub struct WasmSimdF32Butterfly11<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     rotate: Rotate90F32,
     twiddle1re: v128,
     twiddle1im: v128,
@@ -337,7 +337,7 @@ impl<T: FftNum> WasmSimdF32Butterfly11<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             rotate,
             twiddle1re,
             twiddle1im,
@@ -499,7 +499,7 @@ impl<T: FftNum> WasmSimdF32Butterfly11<T> {
 
 pub struct WasmSimdF64Butterfly11<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     rotate: Rotate90F64,
     twiddle1re: v128,
     twiddle1im: v128,
@@ -546,7 +546,7 @@ impl<T: FftNum> WasmSimdF64Butterfly11<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             rotate,
             twiddle1re,
             twiddle1im,
@@ -668,7 +668,7 @@ impl<T: FftNum> WasmSimdF64Butterfly11<T> {
 
 pub struct WasmSimdF32Butterfly13<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     rotate: Rotate90F32,
     twiddle1re: v128,
     twiddle1im: v128,
@@ -720,7 +720,7 @@ impl<T: FftNum> WasmSimdF32Butterfly13<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             rotate,
             twiddle1re,
             twiddle1im,
@@ -917,7 +917,7 @@ impl<T: FftNum> WasmSimdF32Butterfly13<T> {
 
 pub struct WasmSimdF64Butterfly13<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     rotate: Rotate90F64,
     twiddle1re: v128,
     twiddle1im: v128,
@@ -969,7 +969,7 @@ impl<T: FftNum> WasmSimdF64Butterfly13<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             rotate,
             twiddle1re,
             twiddle1im,
@@ -1120,7 +1120,7 @@ impl<T: FftNum> WasmSimdF64Butterfly13<T> {
 
 pub struct WasmSimdF32Butterfly17<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     rotate: Rotate90F32,
     twiddle1re: v128,
     twiddle1im: v128,
@@ -1182,7 +1182,7 @@ impl<T: FftNum> WasmSimdF32Butterfly17<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             rotate,
             twiddle1re,
             twiddle1im,
@@ -1465,7 +1465,7 @@ impl<T: FftNum> WasmSimdF32Butterfly17<T> {
 
 pub struct WasmSimdF64Butterfly17<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     rotate: Rotate90F64,
     twiddle1re: v128,
     twiddle1im: v128,
@@ -1527,7 +1527,7 @@ impl<T: FftNum> WasmSimdF64Butterfly17<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             rotate,
             twiddle1re,
             twiddle1im,
@@ -1757,7 +1757,7 @@ impl<T: FftNum> WasmSimdF64Butterfly17<T> {
 //
 pub struct WasmSimdF32Butterfly19<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     rotate: Rotate90F32,
     twiddle1re: v128,
     twiddle1im: v128,
@@ -1824,7 +1824,7 @@ impl<T: FftNum> WasmSimdF32Butterfly19<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             rotate,
             twiddle1re,
             twiddle1im,
@@ -2181,7 +2181,7 @@ impl<T: FftNum> WasmSimdF32Butterfly19<T> {
 
 pub struct WasmSimdF64Butterfly19<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     rotate: Rotate90F64,
     twiddle1re: v128,
     twiddle1im: v128,
@@ -2248,7 +2248,7 @@ impl<T: FftNum> WasmSimdF64Butterfly19<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             rotate,
             twiddle1re,
             twiddle1im,
@@ -2549,7 +2549,7 @@ impl<T: FftNum> WasmSimdF64Butterfly19<T> {
 
 pub struct WasmSimdF32Butterfly23<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     rotate: Rotate90F32,
     twiddle1re: v128,
     twiddle1im: v128,
@@ -2626,7 +2626,7 @@ impl<T: FftNum> WasmSimdF32Butterfly23<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             rotate,
             twiddle1re,
             twiddle1im,
@@ -3254,7 +3254,7 @@ impl<T: FftNum> WasmSimdF32Butterfly23<T> {
 
 pub struct WasmSimdF64Butterfly23<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     rotate: Rotate90F64,
     twiddle1re: v128,
     twiddle1im: v128,
@@ -3331,7 +3331,7 @@ impl<T: FftNum> WasmSimdF64Butterfly23<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             rotate,
             twiddle1re,
             twiddle1im,
@@ -3895,7 +3895,7 @@ impl<T: FftNum> WasmSimdF64Butterfly23<T> {
 
 pub struct WasmSimdF32Butterfly29<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     rotate: Rotate90F32,
     twiddle1re: v128,
     twiddle1im: v128,
@@ -3987,7 +3987,7 @@ impl<T: FftNum> WasmSimdF32Butterfly29<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             rotate,
             twiddle1re,
             twiddle1im,
@@ -4932,7 +4932,7 @@ impl<T: FftNum> WasmSimdF32Butterfly29<T> {
 
 pub struct WasmSimdF64Butterfly29<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     rotate: Rotate90F64,
     twiddle1re: v128,
     twiddle1im: v128,
@@ -5024,7 +5024,7 @@ impl<T: FftNum> WasmSimdF64Butterfly29<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             rotate,
             twiddle1re,
             twiddle1im,
@@ -5892,7 +5892,7 @@ impl<T: FftNum> WasmSimdF64Butterfly29<T> {
 //
 pub struct WasmSimdF32Butterfly31<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     rotate: Rotate90F32,
     twiddle1re: v128,
     twiddle1im: v128,
@@ -5989,7 +5989,7 @@ impl<T: FftNum> WasmSimdF32Butterfly31<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             rotate,
             twiddle1re,
             twiddle1im,
@@ -7060,7 +7060,7 @@ impl<T: FftNum> WasmSimdF32Butterfly31<T> {
 
 pub struct WasmSimdF64Butterfly31<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     rotate: Rotate90F64,
     twiddle1re: v128,
     twiddle1im: v128,
@@ -7157,7 +7157,7 @@ impl<T: FftNum> WasmSimdF64Butterfly31<T> {
 
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             rotate,
             twiddle1re,
             twiddle1im,

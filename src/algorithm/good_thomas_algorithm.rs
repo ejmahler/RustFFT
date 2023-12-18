@@ -1,13 +1,11 @@
-use std::cmp::max;
-use std::sync::Arc;
-
+use core::cmp::max;
 use num_complex::Complex;
 use num_integer::Integer;
 use strength_reduce::StrengthReducedUsize;
 use transpose;
 
 use crate::array_utils;
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::common::{fft_error_inplace, fft_error_outofplace, std_prelude::*};
 use crate::{common::FftNum, FftDirection};
 use crate::{Direction, Fft, Length};
 
@@ -78,8 +76,8 @@ impl<T: FftNum> GoodThomasAlgorithm<T> {
 
         // The trick we're using for our index remapping will only work if width < height, so just swap them if it isn't
         if width > height {
-            std::mem::swap(&mut width, &mut height);
-            std::mem::swap(&mut width_fft, &mut height_fft);
+            core::mem::swap(&mut width, &mut height);
+            core::mem::swap(&mut width_fft, &mut height_fft);
         }
 
         let len = width * height;
@@ -458,7 +456,6 @@ mod unit_tests {
     use crate::{algorithm::Dft, test_utils::BigScratchAlgorithm};
     use num_integer::gcd;
     use num_traits::Zero;
-    use std::sync::Arc;
 
     #[test]
     fn test_good_thomas() {

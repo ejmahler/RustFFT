@@ -5,7 +5,10 @@ use core::arch::aarch64::*;
 use crate::algorithm::bitreversed_transpose;
 use crate::array_utils;
 use crate::array_utils::workaround_transmute_mut;
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::common::{
+    fft_error_inplace, fft_error_outofplace,
+    std_prelude::{Box, Vec},
+};
 use crate::neon::neon_butterflies::{
     NeonF32Butterfly1, NeonF32Butterfly16, NeonF32Butterfly2, NeonF32Butterfly32,
     NeonF32Butterfly4, NeonF32Butterfly8,
@@ -46,7 +49,7 @@ enum Neon64Butterfly<T> {
 }
 
 pub struct Neon32Radix4<T> {
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     twiddles: Box<[float32x4_t]>,
 
     base_fft: Neon32Butterfly<T>,
@@ -141,7 +144,7 @@ impl<T: FftNum> Neon32Radix4<T> {
 
             len,
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             bf4: NeonF32Butterfly4::<T>::new(direction),
         }
     }
@@ -239,7 +242,7 @@ unsafe fn butterfly_4_32<T: FftNum>(
 }
 
 pub struct Neon64Radix4<T> {
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
     twiddles: Box<[float64x2_t]>,
 
     base_fft: Neon64Butterfly<T>,
@@ -326,7 +329,7 @@ impl<T: FftNum> Neon64Radix4<T> {
 
             len,
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
             bf4: NeonF64Butterfly4::<T>::new(direction),
         }
     }

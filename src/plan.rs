@@ -1,9 +1,8 @@
 use num_integer::gcd;
-use std::collections::HashMap;
-use std::sync::Arc;
 
+use crate::common::{std_prelude::*, FftNum};
 use crate::wasm_simd::wasm_simd_planner::FftPlannerWasmSimd;
-use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
+use crate::{fft_cache::FftCache, FftDirection};
 
 use crate::algorithm::butterflies::*;
 use crate::algorithm::*;

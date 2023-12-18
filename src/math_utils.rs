@@ -1,3 +1,9 @@
+#[cfg(feature = "no-std")]
+use crate::common::std_prelude::*;
+
+#[cfg(feature = "no-std")]
+use crate::common::FftNum;
+
 use num_traits::{One, PrimInt, Zero};
 
 pub fn primitive_root(prime: u64) -> Option<u64> {
@@ -507,8 +513,6 @@ mod unit_tests {
             assert_eq!(factors, expected);
         }
     }
-
-    use std::collections::HashMap;
 
     macro_rules! map{
         { $($key:expr => $value:expr),+ } => {

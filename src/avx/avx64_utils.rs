@@ -1,4 +1,4 @@
-use std::arch::x86_64::*;
+use core::arch::x86_64::*;
 
 // Treat the input like the rows of a 2x2 array, and transpose said rows to the columns
 #[inline(always)]

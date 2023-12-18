@@ -4,10 +4,11 @@ use crate::algorithm::{
     BluesteinsAlgorithm, Dft, GoodThomasAlgorithm, GoodThomasAlgorithmSmall, MixedRadix,
     MixedRadixSmall, RadersAlgorithm,
 };
+use crate::common::std_prelude::{Arc, HashMap};
 use crate::math_utils::PrimeFactor;
 use crate::wasm_simd::*;
 use crate::{fft_cache::FftCache, math_utils::PrimeFactors, Fft, FftDirection, FftNum};
-use std::{any::TypeId, collections::HashMap, sync::Arc};
+use core::any::TypeId;
 
 const MIN_RADIX4_BITS: u32 = 6; // smallest size to consider radix 4 an option is 2^6 = 64
 const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this

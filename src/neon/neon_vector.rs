@@ -1,6 +1,6 @@
 use core::arch::aarch64::*;
+use core::ops::{Deref, DerefMut};
 use num_complex::Complex;
-use std::ops::{Deref, DerefMut};
 
 use crate::array_utils::DoubleBuf;
 
@@ -357,19 +357,19 @@ mod unit_tests {
             let load4 = slice.load_complex(3);
             assert_eq!(
                 val1,
-                std::mem::transmute::<float64x2_t, Complex<f64>>(load1)
+                core::mem::transmute::<float64x2_t, Complex<f64>>(load1)
             );
             assert_eq!(
                 val2,
-                std::mem::transmute::<float64x2_t, Complex<f64>>(load2)
+                core::mem::transmute::<float64x2_t, Complex<f64>>(load2)
             );
             assert_eq!(
                 val3,
-                std::mem::transmute::<float64x2_t, Complex<f64>>(load3)
+                core::mem::transmute::<float64x2_t, Complex<f64>>(load3)
             );
             assert_eq!(
                 val4,
-                std::mem::transmute::<float64x2_t, Complex<f64>>(load4)
+                core::mem::transmute::<float64x2_t, Complex<f64>>(load4)
             );
         }
     }

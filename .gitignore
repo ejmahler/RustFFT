@@ -2,3 +2,5 @@
 /Cargo.lock
 *.swp
 .vscode/
+examples/stm32/target/
+examples/stm32/Cargo.lock

@@ -1,10 +1,70 @@
+use core::fmt::Debug;
 use num_traits::{FromPrimitive, Signed};
-use std::fmt::Debug;
 
 /// Generic floating point number, implemented for f32 and f64
+#[cfg(not(feature = "no-std"))]
 pub trait FftNum: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {}
 
+#[cfg(not(feature = "no-std"))]
 impl<T> FftNum for T where T: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {}
+
+#[cfg(feature = "no-std")]
+pub trait FftNum: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {
+    fn sin(self) -> Self;
+    fn cos(self) -> Self;
+    fn sqrt(self) -> Self;
+}
+
+#[cfg(feature = "no-std")]
+impl FftNum for f32 {
+    fn sin(self) -> Self {
+        libm::sinf(self)
+    }
+    fn cos(self) -> Self {
+        libm::cosf(self)
+    }
+    fn sqrt(self) -> Self {
+        libm::sqrtf(self)
+    }
+}
+
+#[cfg(feature = "no-std")]
+impl FftNum for f64 {
+    fn sin(self) -> Self {
+        libm::sin(self)
+    }
+    fn cos(self) -> Self {
+        libm::cos(self)
+    }
+    fn sqrt(self) -> Self {
+        libm::sqrt(self)
+    }
+}
+
+#[cfg(feature = "no-std")]
+pub(crate) mod std_prelude {
+    pub use alloc::boxed::Box;
+    pub use alloc::sync::Arc;
+    pub use alloc::{vec, vec::Vec};
+    pub use hashbrown::HashMap;
+
+    #[cfg(target_arch = "x86_64")]
+    pub use std_detect::is_x86_feature_detected;
+
+    #[cfg(target_arch = "aarch64")]
+    pub use std_detect::is_aarch64_feature_detected;
+}
+
+#[cfg(not(feature = "no-std"))]
+pub(crate) mod std_prelude {
+    pub use std::boxed::Box;
+    pub use std::collections::HashMap;
+    pub use std::sync::Arc;
+    pub use std::{vec, vec::Vec};
+
+    #[cfg(target_arch = "aarch64")]
+    pub use std::arch::is_aarch64_feature_detected;
+}
 
 // Prints an error raised by an in-place FFT algorithm's `process_inplace` method
 // Marked cold and inline never to keep all formatting code out of the many monomorphized process_inplace methods

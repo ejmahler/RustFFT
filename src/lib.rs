@@ -1,3 +1,4 @@
+#![cfg_attr(feature = "no-std", no_std)]
 #![cfg_attr(all(feature = "bench", test), feature(test))]
 
 //! RustFFT is a high-performance FFT library written in pure Rust.
@@ -112,7 +113,9 @@
 //! If that's too slow, see if you can find a nearby size whose prime factors are all 11 or smaller, and you can expect a 2x-5x speedup.
 //! If that's still too slow, find a nearby size whose prime factors are all 2 or 3, and you can expect a 1.1x-1.5x speedup.
 
-use std::fmt::Display;
+extern crate alloc;
+
+use core::fmt::Display;
 
 pub use num_complex;
 pub use num_traits;
@@ -130,6 +133,8 @@ mod twiddles;
 
 use num_complex::Complex;
 use num_traits::Zero;
+
+use crate::common::std_prelude::*;
 
 pub use crate::common::FftNum;
 pub use crate::plan::{FftPlanner, FftPlannerScalar};
@@ -160,7 +165,7 @@ impl FftDirection {
     }
 }
 impl Display for FftDirection {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> Result<(), ::core::fmt::Error> {
         match self {
             Self::Forward => f.write_str("Forward"),
             Self::Inverse => f.write_str("Inverse"),
@@ -257,8 +262,8 @@ mod avx;
 #[cfg(not(all(target_arch = "x86_64", feature = "avx")))]
 mod avx {
     pub mod avx_planner {
+        use crate::common::std_prelude::*;
         use crate::{Fft, FftDirection, FftNum};
-        use std::sync::Arc;
 
         /// The AVX FFT planner creates new FFT algorithm instances which take advantage of the AVX instruction set.
         ///
@@ -294,7 +299,7 @@ mod avx {
         /// Each FFT instance owns [`Arc`s](std::sync::Arc) to its internal data, rather than borrowing it from the planner, so it's perfectly
         /// safe to drop the planner after creating Fft instances.
         pub struct FftPlannerAvx<T: FftNum> {
-            _phantom: std::marker::PhantomData<T>,
+            _phantom: core::marker::PhantomData<T>,
         }
         impl<T: FftNum> FftPlannerAvx<T> {
             /// Constructs a new `FftPlannerAvx` instance.
@@ -339,8 +344,8 @@ mod sse;
 #[cfg(not(all(target_arch = "x86_64", feature = "sse")))]
 mod sse {
     pub mod sse_planner {
+        use crate::common::std_prelude::*;
         use crate::{Fft, FftDirection, FftNum};
-        use std::sync::Arc;
 
         /// The SSE FFT planner creates new FFT algorithm instances using a mix of scalar and SSE accelerated algorithms.
         /// It requires at least SSE4.1, which is available on all reasonably recent x86_64 cpus.
@@ -373,7 +378,7 @@ mod sse {
         /// Each FFT instance owns [`Arc`s](std::sync::Arc) to its internal data, rather than borrowing it from the planner, so it's perfectly
         /// safe to drop the planner after creating Fft instances.
         pub struct FftPlannerSse<T: FftNum> {
-            _phantom: std::marker::PhantomData<T>,
+            _phantom: core::marker::PhantomData<T>,
         }
         impl<T: FftNum> FftPlannerSse<T> {
             /// Creates a new `FftPlannerSse` instance.
@@ -418,8 +423,8 @@ mod neon;
 #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
 mod neon {
     pub mod neon_planner {
+        use crate::common::std_prelude::*;
         use crate::{Fft, FftDirection, FftNum};
-        use std::sync::Arc;
 
         /// The Neon FFT planner creates new FFT algorithm instances using a mix of scalar and Neon accelerated algorithms.
         /// It is supported when using the 64-bit AArch64 instruction set.
@@ -452,7 +457,7 @@ mod neon {
         /// Each FFT instance owns [`Arc`s](std::sync::Arc) to its internal data, rather than borrowing it from the planner, so it's perfectly
         /// safe to drop the planner after creating Fft instances.
         pub struct FftPlannerNeon<T: FftNum> {
-            _phantom: std::marker::PhantomData<T>,
+            _phantom: core::marker::PhantomData<T>,
         }
         impl<T: FftNum> FftPlannerNeon<T> {
             /// Creates a new `FftPlannerNeon` instance.
@@ -496,8 +501,8 @@ mod wasm_simd;
 #[cfg(not(all(target_arch = "wasm32", feature = "wasm_simd")))]
 mod wasm_simd {
     pub mod wasm_simd_planner {
+        use crate::common::std_prelude::*;
         use crate::{Fft, FftDirection, FftNum};
-        use std::sync::Arc;
 
         /// The WASM FFT planner creates new FFT algorithm instances using a mix of scalar and WASM SIMD accelerated algorithms.
         /// It is supported when using fairly recent browser versions as outlined in [the WebAssembly roadmap](https://webassembly.org/roadmap/).
@@ -530,7 +535,7 @@ mod wasm_simd {
         /// Each FFT instance owns [`Arc`s](std::sync::Arc) to its internal data, rather than borrowing it from the planner, so it's perfectly
         /// safe to drop the planner after creating Fft instances.
         pub struct FftPlannerWasmSimd<T: FftNum> {
-            _phantom: std::marker::PhantomData<T>,
+            _phantom: core::marker::PhantomData<T>,
         }
         impl<T: FftNum> FftPlannerWasmSimd<T> {
             /// Creates a new `FftPlannerWasmSimd` instance.

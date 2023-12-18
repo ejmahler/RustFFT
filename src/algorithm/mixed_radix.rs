@@ -1,12 +1,10 @@
-use std::cmp::max;
-use std::sync::Arc;
-
+use core::cmp::max;
 use num_complex::Complex;
 use num_traits::Zero;
 use transpose;
 
 use crate::array_utils;
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::common::{fft_error_inplace, fft_error_outofplace, std_prelude::*};
 use crate::{common::FftNum, twiddles, FftDirection};
 use crate::{Direction, Fft, Length};
 
@@ -343,7 +341,6 @@ mod unit_tests {
     use crate::test_utils::check_fft_algorithm;
     use crate::{algorithm::Dft, test_utils::BigScratchAlgorithm};
     use num_traits::Zero;
-    use std::sync::Arc;
 
     #[test]
     fn test_mixed_radix() {

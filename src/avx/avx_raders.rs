@@ -1,6 +1,5 @@
-use std::convert::TryInto;
-use std::sync::Arc;
-use std::{any::TypeId, arch::x86_64::*};
+use core::convert::TryInto;
+use core::{any::TypeId, arch::x86_64::*};
 
 use num_complex::Complex;
 use num_integer::{div_ceil, Integer};
@@ -8,7 +7,7 @@ use num_traits::Zero;
 use primal_check::miller_rabin;
 use strength_reduce::StrengthReducedUsize;
 
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::common::{fft_error_inplace, fft_error_outofplace, std_prelude::*};
 use crate::{array_utils, FftDirection};
 use crate::{math_utils, twiddles};
 use crate::{Direction, Fft, FftNum, Length};
@@ -109,7 +108,7 @@ pub struct RadersAvx2<A: AvxNum, T> {
     outofplace_scratch_len: usize,
     direction: FftDirection,
 
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
 }
 
 impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
@@ -282,7 +281,7 @@ impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
             outofplace_scratch_len: extra_inner_scratch,
             direction,
 
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
 
@@ -490,7 +489,7 @@ mod unit_tests {
     use super::*;
     use crate::algorithm::Dft;
     use crate::test_utils::check_fft_algorithm;
-    use std::sync::Arc;
+    use core::sync::Arc;
 
     #[test]
     fn test_raders_avx_f32() {

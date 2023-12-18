@@ -1,4 +1,4 @@
-use std::any::TypeId;
+use core::any::TypeId;
 
 // Calculate the sum of an expression consisting of just plus and minus, like `value = a + b - c + d`.
 // The expression is rewritten to `value = a + (b - (c - d))` (note the flipped sign on d).
@@ -317,7 +317,7 @@ mod unit_tests {
             let i = _mm_set_ps(9.0, 9.0, 9.0, 9.0);
             let expected: f32 = 1.0 + 2.0 - 3.0 + 4.0 - 5.0 + 6.0 - 7.0 - 8.0 + 9.0;
             let res = calc_f32!(a + b - c + d - e + f - g - h + i);
-            let sum = std::mem::transmute::<__m128, [f32; 4]>(res);
+            let sum = core::mem::transmute::<__m128, [f32; 4]>(res);
             assert_eq!(sum[0], expected);
             assert_eq!(sum[1], expected);
             assert_eq!(sum[2], expected);
@@ -338,7 +338,7 @@ mod unit_tests {
             let i = _mm_set_pd(9.0, 9.0);
             let expected: f64 = 1.0 + 2.0 - 3.0 + 4.0 - 5.0 + 6.0 - 7.0 - 8.0 + 9.0;
             let res = calc_f64!(a + b - c + d - e + f - g - h + i);
-            let sum = std::mem::transmute::<__m128d, [f64; 2]>(res);
+            let sum = core::mem::transmute::<__m128d, [f64; 2]>(res);
             assert_eq!(sum[0], expected);
             assert_eq!(sum[1], expected);
         }

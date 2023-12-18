@@ -92,14 +92,14 @@ macro_rules! boilerplate_fft_butterfly {
 
 pub struct Butterfly1<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
 }
 impl<T: FftNum> Butterfly1<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
 }
@@ -136,7 +136,7 @@ impl<T> Direction for Butterfly1<T> {
 
 pub struct Butterfly2<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
 }
 boilerplate_fft_butterfly!(Butterfly2, 2, |this: &Butterfly2<_>| this.direction);
 impl<T: FftNum> Butterfly2<T> {
@@ -144,7 +144,7 @@ impl<T: FftNum> Butterfly2<T> {
     pub fn new(direction: FftDirection) -> Self {
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
     #[inline(always)]
@@ -233,7 +233,7 @@ impl<T: FftNum> Butterfly3<T> {
 
 pub struct Butterfly4<T> {
     direction: FftDirection,
-    _phantom: std::marker::PhantomData<T>,
+    _phantom: core::marker::PhantomData<T>,
 }
 boilerplate_fft_butterfly!(Butterfly4, 4, |this: &Butterfly4<_>| this.direction);
 impl<T: FftNum> Butterfly4<T> {
@@ -241,7 +241,7 @@ impl<T: FftNum> Butterfly4<T> {
     pub fn new(direction: FftDirection) -> Self {
         Self {
             direction,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
     #[inline(always)]
