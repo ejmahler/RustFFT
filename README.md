@@ -64,9 +64,11 @@ If you run your SIMD accelerated code on an unsupported platform, WebAssembly wi
 
 On other platforms than WASM, this feature does nothing and RustFFT will behave like it is not set.
 
-### std
+### no-std
 
-The scalar implementation (no avx, sse, neon or wasm SIMD) is available for no-std targets. To build the crate as no-std simply disable default fetures.
+The feature `no-std` makes this library use [libm](https://github.com/rust-lang/libm) instead of std for math operations. This makes it available on no-std targets.
+
+Enabling this feature on targets that support std may degrade performance.
 
 ## Stability/Future Breaking Changes
 

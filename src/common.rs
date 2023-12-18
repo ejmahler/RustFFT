@@ -2,20 +2,20 @@ use core::fmt::Debug;
 use num_traits::{FromPrimitive, Signed};
 
 /// Generic floating point number, implemented for f32 and f64
-#[cfg(not(feature = "libm"))]
+#[cfg(not(feature = "no-std"))]
 pub trait FftNum: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {}
 
-#[cfg(not(feature = "libm"))]
+#[cfg(not(feature = "no-std"))]
 impl<T> FftNum for T where T: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {}
 
-#[cfg(feature = "libm")]
+#[cfg(feature = "no-std")]
 pub trait FftNum: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {
     fn sin(self) -> Self;
     fn cos(self) -> Self;
     fn sqrt(self) -> Self;
 }
 
-#[cfg(feature = "libm")]
+#[cfg(feature = "no-std")]
 impl FftNum for f32 {
     fn sin(self) -> Self {
         libm::sinf(self)
@@ -28,7 +28,7 @@ impl FftNum for f32 {
     }
 }
 
-#[cfg(feature = "libm")]
+#[cfg(feature = "no-std")]
 impl FftNum for f64 {
     fn sin(self) -> Self {
         libm::sin(self)
@@ -41,7 +41,7 @@ impl FftNum for f64 {
     }
 }
 
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "no-std")]
 pub(crate) mod std_prelude {
     pub use alloc::boxed::Box;
     pub use alloc::sync::Arc;
@@ -52,11 +52,12 @@ pub(crate) mod std_prelude {
     pub use std_detect::is_x86_feature_detected;
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "no-std"))]
 pub(crate) mod std_prelude {
     pub use std::boxed::Box;
     pub use std::collections::HashMap;
     pub use std::sync::Arc;
+    pub use std::{vec, vec::Vec};
 }
 
 // Prints an error raised by an in-place FFT algorithm's `process_inplace` method

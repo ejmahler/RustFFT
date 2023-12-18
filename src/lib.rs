@@ -1,3 +1,4 @@
+#![cfg_attr(feature="no-std", no_std)]
 #![cfg_attr(all(feature = "bench", test), feature(test))]
 
 //! RustFFT is a high-performance FFT library written in pure Rust.
@@ -133,7 +134,6 @@ mod twiddles;
 use num_complex::Complex;
 use num_traits::Zero;
 
-#[cfg(not(feature = "std"))]
 use crate::common::std_prelude::*;
 
 pub use crate::common::FftNum;

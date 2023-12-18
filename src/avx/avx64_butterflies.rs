@@ -11,7 +11,7 @@ use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::{common::FftNum, twiddles};
 use crate::{Direction, Fft, FftDirection, Length};
 
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "no-std")]
 use crate::common::std_prelude::is_x86_feature_detected;
 
 use super::avx64_utils;

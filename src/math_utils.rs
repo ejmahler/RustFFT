@@ -1,7 +1,7 @@
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "no-std")]
 use crate::common::std_prelude::*;
 
-#[cfg(feature = "libm")]
+#[cfg(feature = "no-std")]
 use crate::common::FftNum;
 
 use num_traits::{One, PrimInt, Zero};
