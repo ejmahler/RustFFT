@@ -1,0 +1,22 @@
+[package]
+name = "rustfft-stm32-example"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cortex-m = "0.7.7"
+cortex-m-rt = "0.7.3"
+embedded-alloc = "0.5.1"
+embedded-hal = "0.2.7"
+panic-halt = "0.2.0"
+rustfft = { path = "../..", features = ["no-std"] }
+stm32f4xx-hal = "0.19.0"
+
+[features]
+stm32f411 = ["stm32f4xx-hal/stm32f411"]
+
+[profile.dev]
+opt-level = "s"
+
+[profile.release]
+opt-level = "s"
