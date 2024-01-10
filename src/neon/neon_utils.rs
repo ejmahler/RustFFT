@@ -176,12 +176,11 @@ pub unsafe fn transpose_complex_2x2_f32(left: float32x4_t, right: float32x4_t) -
 #[inline(always)]
 pub unsafe fn mul_complex_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t {
     // ARMv8.2-A introduced vcmulq_f32 and vcmlaq_f32 for complex multiplication, these intrinsics are not yet available.
-    let temp1 = vtrn1q_f32(right, right);
-    let temp2 = vtrn2q_f32(right, vnegq_f32(right));
-    let temp3 = vmulq_f32(temp2, left);
-    let temp4 = vrev64q_f32(temp3);
-    vfmaq_f32(temp4, temp1, left)
+    let temp = vmovq_n_f32(0.0);
+    let step1 = vcmlaq_f32(temp, left, right);
+    vcmlaq_rot90_f32(step1, left, right)
 }
+
 
 //  __  __       _   _                __   _  _   _     _ _
 // |  \/  | __ _| |_| |__            / /_ | || | | |__ (_) |_
@@ -219,9 +218,12 @@ impl Rotate90F64 {
 #[inline(always)]
 pub unsafe fn mul_complex_f64(left: float64x2_t, right: float64x2_t) -> float64x2_t {
     // ARMv8.2-A introduced vcmulq_f64 and vcmlaq_f64 for complex multiplication, these intrinsics are not yet available.
-    let temp = vcombine_f64(vneg_f64(vget_high_f64(left)), vget_low_f64(left));
-    let sum = vmulq_laneq_f64::<0>(left, right);
-    vfmaq_laneq_f64::<1>(sum, temp, right)
+    //let temp = vcombine_f64(vneg_f64(vget_high_f64(left)), vget_low_f64(left));
+    //let sum = vmulq_laneq_f64::<0>(left, right);
+    //vfmaq_laneq_f64::<1>(sum, temp, right)
+    let temp = vmovq_n_f64(0.0);
+    let step1 = vcmlaq_f64(temp, left, right);
+    vcmlaq_rot90_f64(step1, left, right)
 }
 
 #[cfg(test)]

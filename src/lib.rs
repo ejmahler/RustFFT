@@ -1,4 +1,5 @@
 #![cfg_attr(all(feature = "bench", test), feature(test))]
+#![feature(stdsimd)]
 
 //! RustFFT is a high-performance FFT library written in pure Rust.
 //!
