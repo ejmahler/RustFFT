@@ -33,9 +33,9 @@ impl Rotate90F32 {
         };
         let sign_both = unsafe {
             if positive {
-                vld1q_f32([-0.0, 0.0, -0.0, 0.0].as_ptr())
+                vmovq_n_f32(1.0)
             } else {
-                vld1q_f32([0.0, -0.0, 0.0, -0.0].as_ptr())
+                vmovq_n_f32(-1.0)
             }
         };
         Self {
@@ -65,11 +65,8 @@ impl Rotate90F32 {
 
     #[inline(always)]
     pub unsafe fn rotate_both(&self, values: float32x4_t) -> float32x4_t {
-        let temp = vrev64q_f32(values);
-        vreinterpretq_f32_u32(veorq_u32(
-            vreinterpretq_u32_f32(temp),
-            vreinterpretq_u32_f32(self.sign_both),
-        ))
+        let temp = vmovq_n_f32(0.0);
+        vcmlaq_rot90_f32(temp, self.sign_both, values)
     }
 }
 
@@ -197,9 +194,9 @@ impl Rotate90F64 {
     pub fn new(positive: bool) -> Self {
         let sign = unsafe {
             if positive {
-                vld1q_f64([-0.0, 0.0].as_ptr())
+                vmovq_n_f64(1.0)
             } else {
-                vld1q_f64([0.0, -0.0].as_ptr())
+                vmovq_n_f64(-1.0)
             }
         };
         Self { sign }
@@ -207,11 +204,8 @@ impl Rotate90F64 {
 
     #[inline(always)]
     pub unsafe fn rotate(&self, values: float64x2_t) -> float64x2_t {
-        let temp = vcombine_f64(vget_high_f64(values), vget_low_f64(values));
-        vreinterpretq_f64_u64(veorq_u64(
-            vreinterpretq_u64_f64(temp),
-            vreinterpretq_u64_f64(self.sign),
-        ))
+        let temp = vmovq_n_f64(0.0);
+        vcmlaq_rot90_f64(temp, self.sign, values)
     }
 }
 
@@ -275,6 +269,62 @@ mod unit_tests {
             let second_expected = [Complex::new(3.0, 4.0), Complex::new(7.0, 8.0)];
             assert_eq!(first, first_expected);
             assert_eq!(second, second_expected);
+        }
+    }
+
+    #[test]
+    fn test_rotate_both_pos_32() {
+        unsafe {
+            let rotp = Rotate90F32::new(true);
+            let nbr = vld1q_f32([1.0, 2.0, 3.0, 4.0].as_ptr());
+            let pos = rotp.rotate_both(nbr);
+            let result = std::mem::transmute::<float32x4_t, [Complex<f32>; 2]>(pos);
+            let expected = [Complex::new(-2.0, 1.0), Complex::new(-4.0, 3.0)];
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
+    fn test_rotate_both_neg_32() {
+        unsafe {
+            let rotp = Rotate90F32::new(false);
+            let nbr = vld1q_f32([1.0, 2.0, 3.0, 4.0].as_ptr());
+            let neg = rotp.rotate_both(nbr);
+            let result = std::mem::transmute::<float32x4_t, [Complex<f32>; 2]>(neg);
+            let expected = [Complex::new(2.0, -1.0), Complex::new(4.0, -3.0)];
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
+    fn test_rotate_single_pos_32() {
+        unsafe {
+            let rotp = Rotate90F32::new(true);
+            let nbr = vld1q_f32([1.0, 2.0, 3.0, 4.0].as_ptr());
+            let hi = rotp.rotate_hi(nbr);
+            // let lo = rotp.rotate_lo(nbr);
+            let result_hi = std::mem::transmute::<float32x4_t, [Complex<f32>; 2]>(hi);
+            //let result_lo = std::mem::transmute::<float32x4_t, [Complex<f32>; 2]>(hi);
+            let expected_hi = [Complex::new(1.0, 2.0), Complex::new(-4.0, 3.0)];
+            //let expected_lo: [Complex<f32>; 2] = [Complex::new(2.0, -1.0), Complex::new(3.0, 4.0)];
+            assert_eq!(result_hi, expected_hi);
+            //assert_eq!(result_lo, expected_lo);
+        }
+    }
+
+    #[test]
+    fn test_rotate_single_neg_32() {
+        unsafe {
+            let rotp = Rotate90F32::new(false);
+            let nbr = vld1q_f32([1.0, 2.0, 3.0, 4.0].as_ptr());
+            let hi = rotp.rotate_hi(nbr);
+            // let lo = rotp.rotate_lo(nbr);
+            let result_hi = std::mem::transmute::<float32x4_t, [Complex<f32>; 2]>(hi);
+            //let result_lo = std::mem::transmute::<float32x4_t, [Complex<f32>; 2]>(hi);
+            let expected_hi = [Complex::new(1.0, 2.0), Complex::new(4.0, -3.0)];
+            //let expected_lo: [Complex<f32>; 2] = [Complex::new(2.0, -1.0), Complex::new(3.0, 4.0)];
+            assert_eq!(result_hi, expected_hi);
+            //assert_eq!(result_lo, expected_lo);
         }
     }
 }

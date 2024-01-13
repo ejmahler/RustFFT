@@ -1353,7 +1353,7 @@ impl<T: FftNum> NeonF32Butterfly8<T> {
         let mut val2 = self.bf4.perform_fft_direct(in13, in57);
 
         // step 3: apply twiddle factors
-        let val2b = self.rotate90.rotate_hi(val2[0]);
+        let val2b = self.rotate90.rotate_both(val2[0]); // same result as rotate_hi
         let val2c = vaddq_f32(val2b, val2[0]);
         let val2d = vmulq_f32(val2c, self.root2);
         val2[0] = extract_lo_hi_f32(val2[0], val2d);
