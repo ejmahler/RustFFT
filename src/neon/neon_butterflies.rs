@@ -966,10 +966,10 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
 
         [
             vaddq_f32(value0, vaddq_f32(x14p, x23p)),
-            vaddq_f32(temp_a1, self.rotate.rotate_both(temp_b1)),
-            vaddq_f32(temp_a2, self.rotate.rotate_both(temp_b2)),
-            vsubq_f32(temp_a2, self.rotate.rotate_both(temp_b2)),
-            vsubq_f32(temp_a1, self.rotate.rotate_both(temp_b1)),
+            self.rotate.rotate_both_and_add(temp_a1, temp_b1),
+            self.rotate.rotate_both_and_add(temp_a2, temp_b2),
+            self.rotate.rotate_both_and_sub(temp_a2, temp_b2),
+            self.rotate.rotate_both_and_sub(temp_a1, temp_b1),
         ]
     }
 }
@@ -1068,14 +1068,12 @@ impl<T: FftNum> NeonF64Butterfly5<T> {
         let temp_b1 = vaddq_f64(temp_b1_1, temp_b1_2);
         let temp_b2 = vsubq_f64(temp_b2_1, temp_b2_2);
 
-        let temp_b1_rot = self.rotate.rotate(temp_b1);
-        let temp_b2_rot = self.rotate.rotate(temp_b2);
         [
             vaddq_f64(value0, vaddq_f64(x14p, x23p)),
-            vaddq_f64(temp_a1, temp_b1_rot),
-            vaddq_f64(temp_a2, temp_b2_rot),
-            vsubq_f64(temp_a2, temp_b2_rot),
-            vsubq_f64(temp_a1, temp_b1_rot),
+            self.rotate.rotate_and_add(temp_a1, temp_b1),
+            self.rotate.rotate_and_add(temp_a2, temp_b2),
+            self.rotate.rotate_and_sub(temp_a2, temp_b2),
+            self.rotate.rotate_and_sub(temp_a1, temp_b1),
         ]
     }
 }
@@ -1353,8 +1351,9 @@ impl<T: FftNum> NeonF32Butterfly8<T> {
         let mut val2 = self.bf4.perform_fft_direct(in13, in57);
 
         // step 3: apply twiddle factors
-        let val2b = self.rotate90.rotate_both(val2[0]); // same result as rotate_hi
-        let val2c = vaddq_f32(val2b, val2[0]);
+        //let val2b = self.rotate90.rotate_both(val2[0]); // same result as rotate_hi
+        //let val2c = vaddq_f32(val2b, val2[0]);
+        let val2c = self.rotate90.rotate_both_and_add(val2[0], val2[0]);
         let val2d = vmulq_f32(val2c, self.root2);
         val2[0] = extract_lo_hi_f32(val2[0], val2d);
 
@@ -1387,8 +1386,9 @@ impl<T: FftNum> NeonF32Butterfly8<T> {
             .perform_parallel_fft_direct(values[1], values[3], values[5], values[7]);
 
         // step 3: apply twiddle factors
-        let val5b = self.rotate90.rotate_both(val47[1]);
-        let val5c = vaddq_f32(val5b, val47[1]);
+        //let val5b = self.rotate90.rotate_both(val47[1]);
+        //let val5c = vaddq_f32(val5b, val47[1]);
+        let val5c = self.rotate90.rotate_both_and_add(val47[1], val47[1]);
         val47[1] = vmulq_f32(val5c, self.root2_dual);
         val47[2] = self.rotate90.rotate_both(val47[2]);
         let val7b = self.rotate90.rotate_both(val47[3]);
@@ -1470,8 +1470,9 @@ impl<T: FftNum> NeonF64Butterfly8<T> {
             .perform_fft_direct(values[1], values[3], values[5], values[7]);
 
         // step 3: apply twiddle factors
-        let val5b = self.rotate90.rotate(val47[1]);
-        let val5c = vaddq_f64(val5b, val47[1]);
+        //let val5b = self.rotate90.rotate(val47[1]);
+        //let val5c = vaddq_f64(val5b, val47[1]);
+        let val5c = self.rotate90.rotate_and_add(val47[1], val47[1]);
         val47[1] = vmulq_f64(val5c, self.root2);
         val47[2] = self.rotate90.rotate(val47[2]);
         let val7b = self.rotate90.rotate(val47[3]);
@@ -2428,23 +2429,23 @@ impl<T: FftNum> NeonF32Butterfly16<T> {
         odds3[1] = mul_complex_f32(odds3[1], self.twiddle23conj);
 
         // step 4: cross FFTs
-        let mut temp0 = parallel_fft2_interleaved_f32(odds1[0], odds3[0]);
-        let mut temp1 = parallel_fft2_interleaved_f32(odds1[1], odds3[1]);
+        let temp0 = parallel_fft2_interleaved_f32(odds1[0], odds3[0]);
+        let temp1 = parallel_fft2_interleaved_f32(odds1[1], odds3[1]);
 
         // apply the butterfly 4 twiddle factor, which is just a rotation
-        temp0[1] = self.rotate90.rotate_both(temp0[1]);
-        temp1[1] = self.rotate90.rotate_both(temp1[1]);
+        //temp0[1] = self.rotate90.rotate_both(temp0[1]);
+        //temp1[1] = self.rotate90.rotate_both(temp1[1]);
 
         //step 5: copy/add/subtract data back to buffer
         [
             vaddq_f32(evens[0], temp0[0]),
             vaddq_f32(evens[1], temp1[0]),
-            vaddq_f32(evens[2], temp0[1]),
-            vaddq_f32(evens[3], temp1[1]),
+            self.rotate90.rotate_both_and_add(evens[2], temp0[1]),
+            self.rotate90.rotate_both_and_add(evens[3], temp1[1]),
             vsubq_f32(evens[0], temp0[0]),
             vsubq_f32(evens[1], temp1[0]),
-            vsubq_f32(evens[2], temp0[1]),
-            vsubq_f32(evens[3], temp1[1]),
+            self.rotate90.rotate_both_and_sub(evens[2], temp0[1]),
+            self.rotate90.rotate_both_and_sub(evens[3], temp1[1]),
         ]
     }
 
@@ -2475,16 +2476,16 @@ impl<T: FftNum> NeonF32Butterfly16<T> {
         odds3[3] = mul_complex_f32(odds3[3], self.twiddle3c);
 
         // step 4: cross FFTs
-        let mut temp0 = parallel_fft2_interleaved_f32(odds1[0], odds3[0]);
-        let mut temp1 = parallel_fft2_interleaved_f32(odds1[1], odds3[1]);
-        let mut temp2 = parallel_fft2_interleaved_f32(odds1[2], odds3[2]);
-        let mut temp3 = parallel_fft2_interleaved_f32(odds1[3], odds3[3]);
+        let temp0 = parallel_fft2_interleaved_f32(odds1[0], odds3[0]);
+        let temp1 = parallel_fft2_interleaved_f32(odds1[1], odds3[1]);
+        let temp2 = parallel_fft2_interleaved_f32(odds1[2], odds3[2]);
+        let temp3 = parallel_fft2_interleaved_f32(odds1[3], odds3[3]);
 
         // apply the butterfly 4 twiddle factor, which is just a rotation
-        temp0[1] = self.rotate90.rotate_both(temp0[1]);
-        temp1[1] = self.rotate90.rotate_both(temp1[1]);
-        temp2[1] = self.rotate90.rotate_both(temp2[1]);
-        temp3[1] = self.rotate90.rotate_both(temp3[1]);
+        //temp0[1] = self.rotate90.rotate_both(temp0[1]);
+        //temp1[1] = self.rotate90.rotate_both(temp1[1]);
+        //temp2[1] = self.rotate90.rotate_both(temp2[1]);
+        //temp3[1] = self.rotate90.rotate_both(temp3[1]);
 
         //step 5: copy/add/subtract data back to buffer
         [
@@ -2492,18 +2493,18 @@ impl<T: FftNum> NeonF32Butterfly16<T> {
             vaddq_f32(evens[1], temp1[0]),
             vaddq_f32(evens[2], temp2[0]),
             vaddq_f32(evens[3], temp3[0]),
-            vaddq_f32(evens[4], temp0[1]),
-            vaddq_f32(evens[5], temp1[1]),
-            vaddq_f32(evens[6], temp2[1]),
-            vaddq_f32(evens[7], temp3[1]),
+            self.rotate90.rotate_both_and_add(evens[4], temp0[1]),
+            self.rotate90.rotate_both_and_add(evens[5], temp1[1]),
+            self.rotate90.rotate_both_and_add(evens[6], temp2[1]),
+            self.rotate90.rotate_both_and_add(evens[7], temp3[1]),
             vsubq_f32(evens[0], temp0[0]),
             vsubq_f32(evens[1], temp1[0]),
             vsubq_f32(evens[2], temp2[0]),
             vsubq_f32(evens[3], temp3[0]),
-            vsubq_f32(evens[4], temp0[1]),
-            vsubq_f32(evens[5], temp1[1]),
-            vsubq_f32(evens[6], temp2[1]),
-            vsubq_f32(evens[7], temp3[1]),
+            self.rotate90.rotate_both_and_sub(evens[4], temp0[1]),
+            self.rotate90.rotate_both_and_sub(evens[5], temp1[1]),
+            self.rotate90.rotate_both_and_sub(evens[6], temp2[1]),
+            self.rotate90.rotate_both_and_sub(evens[7], temp3[1]),
         ]
     }
 }
@@ -2623,35 +2624,30 @@ impl<T: FftNum> NeonF64Butterfly16<T> {
         odds3[3] = mul_complex_f64(odds3[3], self.twiddle3c);
 
         // step 4: cross FFTs
-        let mut temp0 = solo_fft2_f64(odds1[0], odds3[0]);
-        let mut temp1 = solo_fft2_f64(odds1[1], odds3[1]);
-        let mut temp2 = solo_fft2_f64(odds1[2], odds3[2]);
-        let mut temp3 = solo_fft2_f64(odds1[3], odds3[3]);
+        let temp0 = solo_fft2_f64(odds1[0], odds3[0]);
+        let temp1 = solo_fft2_f64(odds1[1], odds3[1]);
+        let temp2 = solo_fft2_f64(odds1[2], odds3[2]);
+        let temp3 = solo_fft2_f64(odds1[3], odds3[3]);
 
-        // apply the butterfly 4 twiddle factor, which is just a rotation
-        temp0[1] = self.rotate90.rotate(temp0[1]);
-        temp1[1] = self.rotate90.rotate(temp1[1]);
-        temp2[1] = self.rotate90.rotate(temp2[1]);
-        temp3[1] = self.rotate90.rotate(temp3[1]);
-
-        //step 5: copy/add/subtract data back to buffer
+        // step 5: copy/add/subtract data back to buffer,
+        // and apply the butterfly 4 twiddle factor, which is just a rotation
         [
             vaddq_f64(evens[0], temp0[0]),
             vaddq_f64(evens[1], temp1[0]),
             vaddq_f64(evens[2], temp2[0]),
             vaddq_f64(evens[3], temp3[0]),
-            vaddq_f64(evens[4], temp0[1]),
-            vaddq_f64(evens[5], temp1[1]),
-            vaddq_f64(evens[6], temp2[1]),
-            vaddq_f64(evens[7], temp3[1]),
+            self.rotate90.rotate_and_add(evens[4], temp0[1]),
+            self.rotate90.rotate_and_add(evens[5], temp1[1]),
+            self.rotate90.rotate_and_add(evens[6], temp2[1]),
+            self.rotate90.rotate_and_add(evens[7], temp3[1]),
             vsubq_f64(evens[0], temp0[0]),
             vsubq_f64(evens[1], temp1[0]),
             vsubq_f64(evens[2], temp2[0]),
             vsubq_f64(evens[3], temp3[0]),
-            vsubq_f64(evens[4], temp0[1]),
-            vsubq_f64(evens[5], temp1[1]),
-            vsubq_f64(evens[6], temp2[1]),
-            vsubq_f64(evens[7], temp3[1]),
+            self.rotate90.rotate_and_sub(evens[4], temp0[1]),
+            self.rotate90.rotate_and_sub(evens[5], temp1[1]),
+            self.rotate90.rotate_and_sub(evens[6], temp2[1]),
+            self.rotate90.rotate_and_sub(evens[7], temp3[1]),
         ]
     }
 }
@@ -2842,16 +2838,16 @@ impl<T: FftNum> NeonF32Butterfly32<T> {
         odds3[3] = mul_complex_f32(odds3[3], self.twiddle67conj);
 
         // step 4: cross FFTs
-        let mut temp0 = parallel_fft2_interleaved_f32(odds1[0], odds3[0]);
-        let mut temp1 = parallel_fft2_interleaved_f32(odds1[1], odds3[1]);
-        let mut temp2 = parallel_fft2_interleaved_f32(odds1[2], odds3[2]);
-        let mut temp3 = parallel_fft2_interleaved_f32(odds1[3], odds3[3]);
+        let temp0 = parallel_fft2_interleaved_f32(odds1[0], odds3[0]);
+        let temp1 = parallel_fft2_interleaved_f32(odds1[1], odds3[1]);
+        let temp2 = parallel_fft2_interleaved_f32(odds1[2], odds3[2]);
+        let temp3 = parallel_fft2_interleaved_f32(odds1[3], odds3[3]);
 
         // apply the butterfly 4 twiddle factor, which is just a rotation
-        temp0[1] = self.rotate90.rotate_both(temp0[1]);
-        temp1[1] = self.rotate90.rotate_both(temp1[1]);
-        temp2[1] = self.rotate90.rotate_both(temp2[1]);
-        temp3[1] = self.rotate90.rotate_both(temp3[1]);
+        //temp0[1] = self.rotate90.rotate_both(temp0[1]);
+        //temp1[1] = self.rotate90.rotate_both(temp1[1]);
+        //temp2[1] = self.rotate90.rotate_both(temp2[1]);
+        //temp3[1] = self.rotate90.rotate_both(temp3[1]);
 
         //step 5: copy/add/subtract data back to buffer
         [
@@ -2859,18 +2855,18 @@ impl<T: FftNum> NeonF32Butterfly32<T> {
             vaddq_f32(evens[1], temp1[0]),
             vaddq_f32(evens[2], temp2[0]),
             vaddq_f32(evens[3], temp3[0]),
-            vaddq_f32(evens[4], temp0[1]),
-            vaddq_f32(evens[5], temp1[1]),
-            vaddq_f32(evens[6], temp2[1]),
-            vaddq_f32(evens[7], temp3[1]),
+            self.rotate90.rotate_both_and_add(evens[4], temp0[1]),
+            self.rotate90.rotate_both_and_add(evens[5], temp1[1]),
+            self.rotate90.rotate_both_and_add(evens[6], temp2[1]),
+            self.rotate90.rotate_both_and_add(evens[7], temp3[1]),
             vsubq_f32(evens[0], temp0[0]),
             vsubq_f32(evens[1], temp1[0]),
             vsubq_f32(evens[2], temp2[0]),
             vsubq_f32(evens[3], temp3[0]),
-            vsubq_f32(evens[4], temp0[1]),
-            vsubq_f32(evens[5], temp1[1]),
-            vsubq_f32(evens[6], temp2[1]),
-            vsubq_f32(evens[7], temp3[1]),
+            self.rotate90.rotate_both_and_sub(evens[4], temp0[1]),
+            self.rotate90.rotate_both_and_sub(evens[5], temp1[1]),
+            self.rotate90.rotate_both_and_sub(evens[6], temp2[1]),
+            self.rotate90.rotate_both_and_sub(evens[7], temp3[1]),
         ]
     }
 
@@ -2918,24 +2914,24 @@ impl<T: FftNum> NeonF32Butterfly32<T> {
         odds3[7] = mul_complex_f32(odds3[7], self.twiddle7c);
 
         // step 4: cross FFTs
-        let mut temp0 = parallel_fft2_interleaved_f32(odds1[0], odds3[0]);
-        let mut temp1 = parallel_fft2_interleaved_f32(odds1[1], odds3[1]);
-        let mut temp2 = parallel_fft2_interleaved_f32(odds1[2], odds3[2]);
-        let mut temp3 = parallel_fft2_interleaved_f32(odds1[3], odds3[3]);
-        let mut temp4 = parallel_fft2_interleaved_f32(odds1[4], odds3[4]);
-        let mut temp5 = parallel_fft2_interleaved_f32(odds1[5], odds3[5]);
-        let mut temp6 = parallel_fft2_interleaved_f32(odds1[6], odds3[6]);
-        let mut temp7 = parallel_fft2_interleaved_f32(odds1[7], odds3[7]);
+        let temp0 = parallel_fft2_interleaved_f32(odds1[0], odds3[0]);
+        let temp1 = parallel_fft2_interleaved_f32(odds1[1], odds3[1]);
+        let temp2 = parallel_fft2_interleaved_f32(odds1[2], odds3[2]);
+        let temp3 = parallel_fft2_interleaved_f32(odds1[3], odds3[3]);
+        let temp4 = parallel_fft2_interleaved_f32(odds1[4], odds3[4]);
+        let temp5 = parallel_fft2_interleaved_f32(odds1[5], odds3[5]);
+        let temp6 = parallel_fft2_interleaved_f32(odds1[6], odds3[6]);
+        let temp7 = parallel_fft2_interleaved_f32(odds1[7], odds3[7]);
 
         // apply the butterfly 4 twiddle factor, which is just a rotation
-        temp0[1] = self.rotate90.rotate_both(temp0[1]);
-        temp1[1] = self.rotate90.rotate_both(temp1[1]);
-        temp2[1] = self.rotate90.rotate_both(temp2[1]);
-        temp3[1] = self.rotate90.rotate_both(temp3[1]);
-        temp4[1] = self.rotate90.rotate_both(temp4[1]);
-        temp5[1] = self.rotate90.rotate_both(temp5[1]);
-        temp6[1] = self.rotate90.rotate_both(temp6[1]);
-        temp7[1] = self.rotate90.rotate_both(temp7[1]);
+        //temp0[1] = self.rotate90.rotate_both(temp0[1]);
+        //temp1[1] = self.rotate90.rotate_both(temp1[1]);
+        //temp2[1] = self.rotate90.rotate_both(temp2[1]);
+        //temp3[1] = self.rotate90.rotate_both(temp3[1]);
+        //temp4[1] = self.rotate90.rotate_both(temp4[1]);
+        //temp5[1] = self.rotate90.rotate_both(temp5[1]);
+        //temp6[1] = self.rotate90.rotate_both(temp6[1]);
+        //temp7[1] = self.rotate90.rotate_both(temp7[1]);
 
         //step 5: copy/add/subtract data back to buffer
         [
@@ -2947,14 +2943,14 @@ impl<T: FftNum> NeonF32Butterfly32<T> {
             vaddq_f32(evens[5], temp5[0]),
             vaddq_f32(evens[6], temp6[0]),
             vaddq_f32(evens[7], temp7[0]),
-            vaddq_f32(evens[8], temp0[1]),
-            vaddq_f32(evens[9], temp1[1]),
-            vaddq_f32(evens[10], temp2[1]),
-            vaddq_f32(evens[11], temp3[1]),
-            vaddq_f32(evens[12], temp4[1]),
-            vaddq_f32(evens[13], temp5[1]),
-            vaddq_f32(evens[14], temp6[1]),
-            vaddq_f32(evens[15], temp7[1]),
+            self.rotate90.rotate_both_and_add(evens[8], temp0[1]),
+            self.rotate90.rotate_both_and_add(evens[9], temp1[1]),
+            self.rotate90.rotate_both_and_add(evens[10], temp2[1]),
+            self.rotate90.rotate_both_and_add(evens[11], temp3[1]),
+            self.rotate90.rotate_both_and_add(evens[12], temp4[1]),
+            self.rotate90.rotate_both_and_add(evens[13], temp5[1]),
+            self.rotate90.rotate_both_and_add(evens[14], temp6[1]),
+            self.rotate90.rotate_both_and_add(evens[15], temp7[1]),
             vsubq_f32(evens[0], temp0[0]),
             vsubq_f32(evens[1], temp1[0]),
             vsubq_f32(evens[2], temp2[0]),
@@ -2963,14 +2959,14 @@ impl<T: FftNum> NeonF32Butterfly32<T> {
             vsubq_f32(evens[5], temp5[0]),
             vsubq_f32(evens[6], temp6[0]),
             vsubq_f32(evens[7], temp7[0]),
-            vsubq_f32(evens[8], temp0[1]),
-            vsubq_f32(evens[9], temp1[1]),
-            vsubq_f32(evens[10], temp2[1]),
-            vsubq_f32(evens[11], temp3[1]),
-            vsubq_f32(evens[12], temp4[1]),
-            vsubq_f32(evens[13], temp5[1]),
-            vsubq_f32(evens[14], temp6[1]),
-            vsubq_f32(evens[15], temp7[1]),
+            self.rotate90.rotate_both_and_sub(evens[8], temp0[1]),
+            self.rotate90.rotate_both_and_sub(evens[9], temp1[1]),
+            self.rotate90.rotate_both_and_sub(evens[10], temp2[1]),
+            self.rotate90.rotate_both_and_sub(evens[11], temp3[1]),
+            self.rotate90.rotate_both_and_sub(evens[12], temp4[1]),
+            self.rotate90.rotate_both_and_sub(evens[13], temp5[1]),
+            self.rotate90.rotate_both_and_sub(evens[14], temp6[1]),
+            self.rotate90.rotate_both_and_sub(evens[15], temp7[1]),
         ]
     }
 }
@@ -3154,26 +3150,18 @@ impl<T: FftNum> NeonF64Butterfly32<T> {
         odds3[7] = mul_complex_f64(odds3[7], self.twiddle7c);
 
         // step 4: cross FFTs
-        let mut temp0 = solo_fft2_f64(odds1[0], odds3[0]);
-        let mut temp1 = solo_fft2_f64(odds1[1], odds3[1]);
-        let mut temp2 = solo_fft2_f64(odds1[2], odds3[2]);
-        let mut temp3 = solo_fft2_f64(odds1[3], odds3[3]);
-        let mut temp4 = solo_fft2_f64(odds1[4], odds3[4]);
-        let mut temp5 = solo_fft2_f64(odds1[5], odds3[5]);
-        let mut temp6 = solo_fft2_f64(odds1[6], odds3[6]);
-        let mut temp7 = solo_fft2_f64(odds1[7], odds3[7]);
+        let temp0 = solo_fft2_f64(odds1[0], odds3[0]);
+        let temp1 = solo_fft2_f64(odds1[1], odds3[1]);
+        let temp2 = solo_fft2_f64(odds1[2], odds3[2]);
+        let temp3 = solo_fft2_f64(odds1[3], odds3[3]);
+        let temp4 = solo_fft2_f64(odds1[4], odds3[4]);
+        let temp5 = solo_fft2_f64(odds1[5], odds3[5]);
+        let temp6 = solo_fft2_f64(odds1[6], odds3[6]);
+        let temp7 = solo_fft2_f64(odds1[7], odds3[7]);
 
+        // step 5: copy/add/subtract data back to buffer
+        // and
         // apply the butterfly 4 twiddle factor, which is just a rotation
-        temp0[1] = self.rotate90.rotate(temp0[1]);
-        temp1[1] = self.rotate90.rotate(temp1[1]);
-        temp2[1] = self.rotate90.rotate(temp2[1]);
-        temp3[1] = self.rotate90.rotate(temp3[1]);
-        temp4[1] = self.rotate90.rotate(temp4[1]);
-        temp5[1] = self.rotate90.rotate(temp5[1]);
-        temp6[1] = self.rotate90.rotate(temp6[1]);
-        temp7[1] = self.rotate90.rotate(temp7[1]);
-
-        //step 5: copy/add/subtract data back to buffer
         [
             vaddq_f64(evens[0], temp0[0]),
             vaddq_f64(evens[1], temp1[0]),
@@ -3183,14 +3171,14 @@ impl<T: FftNum> NeonF64Butterfly32<T> {
             vaddq_f64(evens[5], temp5[0]),
             vaddq_f64(evens[6], temp6[0]),
             vaddq_f64(evens[7], temp7[0]),
-            vaddq_f64(evens[8], temp0[1]),
-            vaddq_f64(evens[9], temp1[1]),
-            vaddq_f64(evens[10], temp2[1]),
-            vaddq_f64(evens[11], temp3[1]),
-            vaddq_f64(evens[12], temp4[1]),
-            vaddq_f64(evens[13], temp5[1]),
-            vaddq_f64(evens[14], temp6[1]),
-            vaddq_f64(evens[15], temp7[1]),
+            self.rotate90.rotate_and_add(evens[8], temp0[1]),
+            self.rotate90.rotate_and_add(evens[9], temp1[1]),
+            self.rotate90.rotate_and_add(evens[10], temp2[1]),
+            self.rotate90.rotate_and_add(evens[11], temp3[1]),
+            self.rotate90.rotate_and_add(evens[12], temp4[1]),
+            self.rotate90.rotate_and_add(evens[13], temp5[1]),
+            self.rotate90.rotate_and_add(evens[14], temp6[1]),
+            self.rotate90.rotate_and_add(evens[15], temp7[1]),
             vsubq_f64(evens[0], temp0[0]),
             vsubq_f64(evens[1], temp1[0]),
             vsubq_f64(evens[2], temp2[0]),
@@ -3199,14 +3187,14 @@ impl<T: FftNum> NeonF64Butterfly32<T> {
             vsubq_f64(evens[5], temp5[0]),
             vsubq_f64(evens[6], temp6[0]),
             vsubq_f64(evens[7], temp7[0]),
-            vsubq_f64(evens[8], temp0[1]),
-            vsubq_f64(evens[9], temp1[1]),
-            vsubq_f64(evens[10], temp2[1]),
-            vsubq_f64(evens[11], temp3[1]),
-            vsubq_f64(evens[12], temp4[1]),
-            vsubq_f64(evens[13], temp5[1]),
-            vsubq_f64(evens[14], temp6[1]),
-            vsubq_f64(evens[15], temp7[1]),
+            self.rotate90.rotate_and_sub(evens[8], temp0[1]),
+            self.rotate90.rotate_and_sub(evens[9], temp1[1]),
+            self.rotate90.rotate_and_sub(evens[10], temp2[1]),
+            self.rotate90.rotate_and_sub(evens[11], temp3[1]),
+            self.rotate90.rotate_and_sub(evens[12], temp4[1]),
+            self.rotate90.rotate_and_sub(evens[13], temp5[1]),
+            self.rotate90.rotate_and_sub(evens[14], temp6[1]),
+            self.rotate90.rotate_and_sub(evens[15], temp7[1]),
         ]
     }
 }

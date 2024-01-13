@@ -47,6 +47,9 @@ impl Rotate90F32 {
 
     #[inline(always)]
     pub unsafe fn rotate_hi(&self, values: float32x4_t) -> float32x4_t {
+        // sign = zero in lo
+        // acc = get only hi
+        // result = vcmlaq acc + sign*value
         vcombine_f32(
             vget_low_f32(values),
             vreinterpret_f32_u32(veor_u32(
@@ -67,6 +70,16 @@ impl Rotate90F32 {
     pub unsafe fn rotate_both(&self, values: float32x4_t) -> float32x4_t {
         let temp = vmovq_n_f32(0.0);
         vcmlaq_rot90_f32(temp, self.sign_both, values)
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_both_and_add(&self, acc: float32x4_t, values: float32x4_t) -> float32x4_t {
+        vcmlaq_rot90_f32(acc, self.sign_both, values)
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_both_and_sub(&self, acc: float32x4_t, values: float32x4_t) -> float32x4_t {
+        vcmlaq_rot270_f32(acc, self.sign_both, values)
     }
 }
 
@@ -178,7 +191,6 @@ pub unsafe fn mul_complex_f32(left: float32x4_t, right: float32x4_t) -> float32x
     vcmlaq_rot90_f32(step1, left, right)
 }
 
-
 //  __  __       _   _                __   _  _   _     _ _
 // |  \/  | __ _| |_| |__            / /_ | || | | |__ (_) |_
 // | |\/| |/ _` | __| '_ \   _____  | '_ \| || |_| '_ \| | __|
@@ -206,6 +218,16 @@ impl Rotate90F64 {
     pub unsafe fn rotate(&self, values: float64x2_t) -> float64x2_t {
         let temp = vmovq_n_f64(0.0);
         vcmlaq_rot90_f64(temp, self.sign, values)
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_and_add(&self, acc: float64x2_t, values: float64x2_t) -> float64x2_t {
+        vcmlaq_rot90_f64(acc, self.sign, values)
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_and_sub(&self, acc: float64x2_t, values: float64x2_t) -> float64x2_t {
+        vcmlaq_rot270_f64(acc, self.sign, values)
     }
 }
 
