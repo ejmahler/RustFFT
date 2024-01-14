@@ -185,7 +185,8 @@ pub unsafe fn transpose_complex_2x2_f32(left: float32x4_t, right: float32x4_t) -
 // Each input contains two complex values, which are multiplied in parallel.
 #[inline(always)]
 pub unsafe fn mul_complex_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t {
-    // ARMv8.2-A introduced vcmulq_f32 and vcmlaq_f32 for complex multiplication, these intrinsics are not yet available.
+    // The complex multiplication intrinsics are all of the type multiply-accumulate,
+    // thus we need a zero vector to start from.
     let temp = vmovq_n_f32(0.0);
     let step1 = vcmlaq_f32(temp, left, right);
     vcmlaq_rot90_f32(step1, left, right)
@@ -233,10 +234,8 @@ impl Rotate90F64 {
 
 #[inline(always)]
 pub unsafe fn mul_complex_f64(left: float64x2_t, right: float64x2_t) -> float64x2_t {
-    // ARMv8.2-A introduced vcmulq_f64 and vcmlaq_f64 for complex multiplication, these intrinsics are not yet available.
-    //let temp = vcombine_f64(vneg_f64(vget_high_f64(left)), vget_low_f64(left));
-    //let sum = vmulq_laneq_f64::<0>(left, right);
-    //vfmaq_laneq_f64::<1>(sum, temp, right)
+    // The complex multiplication intrinsics are all of the type multiply-accumulate,
+    // thus we need a zero vector to start from.
     let temp = vmovq_n_f64(0.0);
     let step1 = vcmlaq_f64(temp, left, right);
     vcmlaq_rot90_f64(step1, left, right)
