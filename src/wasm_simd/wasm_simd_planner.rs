@@ -115,7 +115,7 @@ impl Recipe {
 }
 
 /// The WASM FFT planner creates new FFT algorithm instances using a mix of scalar and WASM SIMD accelerated algorithms.
-/// It is supported when using fairly recent browser versions as outlined in [the WebAssembly roadmap](https://webassembly.org/roadmap/).
+/// WASM SIMD is supported when using fairly recent browser versions as outlined in [the WebAssembly roadmap](https://webassembly.org/roadmap/).
 ///
 /// RustFFT has several FFT algorithms available. For a given FFT size, `FftPlannerWasmSimd` decides which of the
 /// available FFT algorithms to use and then initializes them.
@@ -137,7 +137,7 @@ impl Recipe {
 /// }
 /// ~~~
 ///
-/// If you plan on creating multiple FFT instances, it is recommended to reuse the same planner for all of them. This
+/// If you plan on creating multiple FFT instances, it is recommended to re-use the same planner for all of them. This
 /// is because the planner re-uses internal data across FFT instances wherever possible, saving memory and reducing
 /// setup time. (FFT instances created with one planner will never re-use data and buffers with FFT instances created
 /// by a different planner)
@@ -151,8 +151,8 @@ pub struct FftPlannerWasmSimd<T: FftNum> {
 impl<T: FftNum> FftPlannerWasmSimd<T> {
     /// Creates a new `FftPlannerWasmSimd` instance.
     ///
-    /// Returns `Ok(planner_instance)` if this machine has the required instruction sets.
-    /// Returns `Err(())` if some instruction sets are missing.
+    /// Returns `Ok(planner_instance)` if we're compiling for the WASM target and WASM SIMD was enabled in feature flags.
+    /// Returns `Err(())` if WASM SIMD support is not available.
     pub fn new() -> Result<Self, ()> {
         let id_f32 = TypeId::of::<f32>();
         let id_f64 = TypeId::of::<f64>();

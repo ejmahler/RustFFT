@@ -142,7 +142,7 @@ impl Recipe {
 /// }
 /// ~~~
 ///
-/// If you plan on creating multiple FFT instances, it is recommended to reuse the same planner for all of them. This
+/// If you plan on creating multiple FFT instances, it is recommended to re-use the same planner for all of them. This
 /// is because the planner re-uses internal data across FFT instances wherever possible, saving memory and reducing
 /// setup time. (FFT instances created with one planner will never re-use data and buffers with FFT instances created
 /// by a different planner)
@@ -157,8 +157,8 @@ pub struct FftPlannerNeon<T: FftNum> {
 impl<T: FftNum> FftPlannerNeon<T> {
     /// Creates a new `FftPlannerNeon` instance.
     ///
-    /// Returns `Ok(planner_instance)` if this machine has the required instruction sets.
-    /// Returns `Err(())` if some instruction sets are missing.
+    /// Returns `Ok(planner_instance)` if we're compiling for AArch64 and NEON support was enabled in feature flags.
+    /// Returns `Err(())` if NEON support is not available.
     pub fn new() -> Result<Self, ()> {
         if std::arch::is_aarch64_feature_detected!("neon") {
             // Ideally, we would implement the planner with specialization.

@@ -142,7 +142,7 @@ impl Recipe {
 /// }
 /// ~~~
 ///
-/// If you plan on creating multiple FFT instances, it is recommended to reuse the same planner for all of them. This
+/// If you plan on creating multiple FFT instances, it is recommended to re-use the same planner for all of them. This
 /// is because the planner re-uses internal data across FFT instances wherever possible, saving memory and reducing
 /// setup time. (FFT instances created with one planner will never re-use data and buffers with FFT instances created
 /// by a different planner)
@@ -157,8 +157,8 @@ pub struct FftPlannerSse<T: FftNum> {
 impl<T: FftNum> FftPlannerSse<T> {
     /// Creates a new `FftPlannerSse` instance.
     ///
-    /// Returns `Ok(planner_instance)` if this machine has the required instruction sets.
-    /// Returns `Err(())` if some instruction sets are missing.
+    /// Returns `Ok(planner_instance)` if we're compiling for X86_64, SSE support was enabled in feature flags, and the current CPU supports the `sse4.1` CPU feature.
+    /// Returns `Err(())` if SSE support is not available.
     pub fn new() -> Result<Self, ()> {
         if is_x86_feature_detected!("sse4.1") {
             // Ideally, we would implement the planner with specialization.

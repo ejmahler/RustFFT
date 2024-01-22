@@ -53,10 +53,14 @@ enum ChosenFftPlanner<T: FftNum> {
 /// Each FFT instance owns [`Arc`s](std::sync::Arc) to its internal data, rather than borrowing it from the planner, so it's perfectly
 /// safe to drop the planner after creating Fft instances.
 ///
-/// In the constructor, the FftPlanner will detect available CPU features. If AVX is available, it will set itself up to plan AVX-accelerated FFTs.
-/// If AVX isn't available, the planner will seamlessly fall back to planning non-SIMD FFTs.
+/// In the constructor, the FftPlanner will detect available CPU features. If AVX, SSE, Neon, or WASM SIMD are available, it will set itself up to plan FFTs with the fastest available instruction set.
+/// If no SIMD instruction sets are available, the planner will seamlessly fall back to planning non-SIMD FFTs.
 ///
-/// If you'd prefer not to compute a FFT at all if AVX isn't available, consider creating a [`FftPlannerAvx`](crate::FftPlannerAvx) instead.
+/// If you'd prefer not to compute a FFT at all if a certain SIMD instruction set isn't available, or otherwise specify your own custom fallback, RustFFT exposes dedicated planners for each instruction set:
+///  - [`FftPlannerAvx`](crate::FftPlannerAvx)
+///  - [`FftPlannerSse`](crate::FftPlannerSse)
+///  - [`FftPlannerNeon`](crate::FftPlannerNeon)
+///  - [`FftPlannerWasmSimd`](crate::FftPlannerWasmSimd)
 ///
 /// If you'd prefer to opt out of SIMD algorithms, consider creating a [`FftPlannerScalar`](crate::FftPlannerScalar) instead.
 pub struct FftPlanner<T: FftNum> {
