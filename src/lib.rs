@@ -2,14 +2,15 @@
 
 //! RustFFT is a high-performance FFT library written in pure Rust.
 //!
-//! RustFFT supports the AVX instruction set for increased performance. No special code is needed to activate AVX:
+//! On X86_64, RustFFT supports the AVX instruction set for increased performance. No special code is needed to activate AVX:
 //! Simply plan a FFT using the FftPlanner on a machine that supports the `avx` and `fma` CPU features, and RustFFT
 //! will automatically switch to faster AVX-accelerated algorithms.
 //!
 //! For machines that do not have AVX, RustFFT also supports the SSE4.1 instruction set.
 //! As for AVX, this is enabled automatically when using the FftPlanner.
 //!
-//! Additionally, there is (opt-in) support for the Neon instruction set on AArch64.
+//! Additionally, there is automatic support for the Neon instruction set on AArch64,
+//! and support for WASM SIMD when compiling for WASM targets.
 //!
 //! ### Usage
 //!
@@ -68,11 +69,13 @@
 //!
 //!     On AArch64 (64-bit ARM) the `neon` feature enables compilation of Neon-accelerated code. Enabling it improves
 //!     performance, while disabling it reduces compile time and binary size.
-//!     Note that Rust's Neon support requires using rustc 1.61 or newer.
+//!
+//!     On every platform besides AArch64, this feature does nothing, and RustFFT will behave like it's not set.
 //! * `wasm_simd` (Disabled by default)
 //!
-//!     The feature `wasm_simd` is disabled by default. On the WASM platform, this feature enables compilation of WASM SIMD accelerated code.
-//!     To compile with `wasm_simd`, you need rustc v1.61.0 or newer and a [browser or runtime which supports `fixed-width SIMD`](https://webassembly.org/roadmap/).
+//!     On the WASM platform, this feature enables compilation of WASM SIMD accelerated code.
+//!
+//!     To execute binaries compiled with `wasm_simd`, you need a [target browser or runtime which supports `fixed-width SIMD`](https://webassembly.org/roadmap/).
 //!     If you run your SIMD accelerated code on an unsupported platform, WebAssembly will specify a [trap](https://webassembly.github.io/spec/core/intro/overview.html#trap) leading to immediate execution cancelation.
 //!
 //!     On every platform besides WASM, this feature does nothing and RustFFT will behave like it is not set.

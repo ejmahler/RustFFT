@@ -1,3 +1,14 @@
+## [6.2]
+Released 22nd January 2024
+### Minimum Rustc Version
+ - The MSRV for RustFFT is now 1.61.0
+### Added
+ - Implemented a code path for SIMD-optimized FFTs on WASM targets (Thanks to @pr1metine) (#120)
+### Fixed
+ - Fixed pointer aliasing causing unsoundness and miri check failures (#113)
+ - Fixed computation of size-1 FFTs (#119)
+ - Fixed readme type (#121)
+
 ## [6.1]
 Released 7th Novemeber 2022
 ### Added

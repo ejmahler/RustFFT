@@ -103,7 +103,7 @@ impl MixedRadixPlan {
 /// }
 /// ~~~
 ///
-/// If you plan on creating multiple FFT instances, it is recommended to reuse the same planner for all of them. This
+/// If you plan on creating multiple FFT instances, it is recommended to re-use the same planner for all of them. This
 /// is because the planner re-uses internal data across FFT instances wherever possible, saving memory and reducing
 /// setup time. (FFT instances created with one planner will never re-use data and buffers with FFT instances created
 /// by a different planner)
@@ -116,8 +116,8 @@ pub struct FftPlannerAvx<T: FftNum> {
 impl<T: FftNum> FftPlannerAvx<T> {
     /// Constructs a new `FftPlannerAvx` instance.
     ///
-    /// Returns `Ok(planner_instance)` if this machine has the required instruction sets and the `avx` feature flag is set.
-    /// Returns `Err(())` if some instruction sets are missing, or if the `avx` feature flag is not set.
+    /// Returns `Ok(planner_instance)` if we're compiling for X86_64, AVX support was enabled in feature flags, and the current CPU supports the `avx` and `fma` CPU features.
+    /// Returns `Err(())` if AVX support is not available.
     pub fn new() -> Result<Self, ()> {
         // Eventually we might make AVX algorithms that don't also require FMA.
         // If that happens, we can only check for AVX here? seems like a pretty low-priority addition
