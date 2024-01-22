@@ -69,7 +69,7 @@ On other platforms than WASM, this feature does nothing and RustFFT will behave 
 
 ## Stability/Future Breaking Changes
 
-Version 5.0 contains several breaking API changes. Check out the [Upgrade Guide](/UpgradeGuide4to5.md) for a walkthrough of the changes RustFFT 5.0 requires. In the interest of stability, we're committing to making no more breaking changes for 3 years, aka until 2024.
+The latest version is 6.2 - Version 5.0 was released at the beginning of 2022 and contains several breaking API changes from previous versions. For users on very old version of RustFFT, check out the [Upgrade Guide](/UpgradeGuide4to5.md) for a walkthrough of the changes RustFFT 5.0 requires to upgrade. In the interest of stability, we're committing to making no more breaking changes for 3 years, aka until 2024.
 
 This policy has one exception: We currently re-export pre-1.0 versions of the [num-complex](https://crates.io/crates/num-complex) and [num-traits](https://crates.io/crates/num-traits) crates. In the interest of avoiding ecosystem fragmentation, we will keep up with these crates even if it requires major version bumps. When those crates release new major versions, we will upgrade as soon as possible, which will require a major version change of our own. In these situations, the version increase of num-complex/num-traits will be the only breaking change in the release.
 
