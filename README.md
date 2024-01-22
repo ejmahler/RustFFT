@@ -36,7 +36,7 @@ RustFFT supports the NEON instruction set in 64-bit Arm, AArch64. As with AVX an
 
 ### WebAssembly Targets
 
-RustFFT additionally supports [the fixed-width SIMD extension for WebAssembly](https://github.com/WebAssembly/spec/blob/main/proposals/simd/SIMD.md). Just like AVX, SSE, and NEON, no special code is needed to take advantage of this code path; all you need to do is plan a FFT using the `FftPlanner`.
+RustFFT supports [the fixed-width SIMD extension for WebAssembly](https://github.com/WebAssembly/spec/blob/main/proposals/simd/SIMD.md). Just like AVX, SSE, and NEON, no special code is needed to take advantage of this code path; all you need to do is plan a FFT using the `FftPlanner`.
 
 **Note:** There is an important caveat when compiling WASM SIMD accelerated code: Unlike AVX, SSE, and NEON, WASM does not allow dynamic feature detection. Because of this limitation, RustFFT **cannot** detect CPU features and automatically switch to WASM SIMD accelerated algorithms. Instead, it unconditionally uses the SIMD code path if the `wasm_simd` crate feature is enabled. Read more about this limitation [in the official Rust docs](https://doc.rust-lang.org/1.75.0/core/arch/wasm32/index.html#simd).
 
