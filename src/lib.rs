@@ -2,14 +2,15 @@
 
 //! RustFFT is a high-performance FFT library written in pure Rust.
 //!
-//! RustFFT supports the AVX instruction set for increased performance. No special code is needed to activate AVX:
+//! On X86_64, RustFFT supports the AVX instruction set for increased performance. No special code is needed to activate AVX:
 //! Simply plan a FFT using the FftPlanner on a machine that supports the `avx` and `fma` CPU features, and RustFFT
 //! will automatically switch to faster AVX-accelerated algorithms.
 //!
 //! For machines that do not have AVX, RustFFT also supports the SSE4.1 instruction set.
 //! As for AVX, this is enabled automatically when using the FftPlanner.
 //!
-//! Additionally, there is (opt-in) support for the Neon instruction set on AArch64.
+//! Additionally, there is automatic support for the Neon instruction set on AArch64,
+//! and support for WASM SIMD when compiling for WASM targets.
 //!
 //! ### Usage
 //!
