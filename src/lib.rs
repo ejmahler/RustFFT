@@ -69,12 +69,12 @@
 //!
 //!     On AArch64 (64-bit ARM) the `neon` feature enables compilation of Neon-accelerated code. Enabling it improves
 //!     performance, while disabling it reduces compile time and binary size.
-//! 
+//!
 //!     On every platform besides AArch64, this feature does nothing, and RustFFT will behave like it's not set.
 //! * `wasm_simd` (Disabled by default)
 //!
 //!     On the WASM platform, this feature enables compilation of WASM SIMD accelerated code.
-//! 
+//!
 //!     To execute binaries compiled with `wasm_simd`, you need a [target browser or runtime which supports `fixed-width SIMD`](https://webassembly.org/roadmap/).
 //!     If you run your SIMD accelerated code on an unsupported platform, WebAssembly will specify a [trap](https://webassembly.github.io/spec/core/intro/overview.html#trap) leading to immediate execution cancelation.
 //!
