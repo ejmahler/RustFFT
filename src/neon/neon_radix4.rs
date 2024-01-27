@@ -2,9 +2,7 @@ use num_complex::Complex;
 
 use core::arch::aarch64::*;
 
-use crate::algorithm::bitreversed_transpose;
-use crate::array_utils;
-use crate::array_utils::workaround_transmute_mut;
+use crate::array_utils::{self, bitreversed_transpose, workaround_transmute_mut};
 use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::neon::neon_butterflies::{
     NeonF32Butterfly1, NeonF32Butterfly16, NeonF32Butterfly2, NeonF32Butterfly32,
@@ -154,7 +152,7 @@ impl<T: FftNum> Neon32Radix4<T> {
         if self.len() == self.base_len {
             output.copy_from_slice(input);
         } else {
-            bitreversed_transpose(self.base_len, input, output);
+            bitreversed_transpose::<Complex<T>, 4>(self.base_len, input, output);
         }
 
         // Base-level FFTs
@@ -343,7 +341,7 @@ impl<T: FftNum> Neon64Radix4<T> {
         if self.len() == self.base_len {
             output.copy_from_slice(input);
         } else {
-            bitreversed_transpose(self.base_len, input, output);
+            bitreversed_transpose::<Complex<T>, 4>(self.base_len, input, output);
         }
 
         // Base-level FFTs

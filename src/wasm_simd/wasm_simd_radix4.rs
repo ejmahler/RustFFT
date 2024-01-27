@@ -2,9 +2,7 @@ use num_complex::Complex;
 
 use core::arch::wasm32::*;
 
-use crate::algorithm::bitreversed_transpose;
-use crate::array_utils;
-use crate::array_utils::workaround_transmute_mut;
+use crate::array_utils::{self, bitreversed_transpose, workaround_transmute_mut};
 use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::wasm_simd::wasm_simd_butterflies::{
     WasmSimdF32Butterfly1, WasmSimdF32Butterfly16, WasmSimdF32Butterfly2, WasmSimdF32Butterfly32,
@@ -157,7 +155,7 @@ impl<T: FftNum> WasmSimd32Radix4<T> {
         if self.len() == self.base_len {
             output.copy_from_slice(input);
         } else {
-            bitreversed_transpose(self.base_len, input, output);
+            bitreversed_transpose::<Complex<T>, 4>(self.base_len, input, output);
         }
 
         // Base-level FFTs
@@ -349,7 +347,7 @@ impl<T: FftNum> WasmSimd64Radix4<T> {
         if self.len() == self.base_len {
             output.copy_from_slice(input);
         } else {
-            bitreversed_transpose(self.base_len, input, output);
+            bitreversed_transpose::<Complex<T>, 4>(self.base_len, input, output);
         }
 
         // Base-level FFTs

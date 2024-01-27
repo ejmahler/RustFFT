@@ -2,8 +2,7 @@ use num_complex::Complex;
 
 use core::arch::x86_64::*;
 
-use crate::algorithm::bitreversed_transpose;
-use crate::array_utils::{self, workaround_transmute_mut};
+use crate::array_utils::{self, bitreversed_transpose, workaround_transmute_mut};
 use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::sse::sse_butterflies::{
     SseF32Butterfly1, SseF32Butterfly16, SseF32Butterfly2, SseF32Butterfly32, SseF32Butterfly4,
@@ -137,7 +136,7 @@ impl<T: FftNum> Sse32Radix4<T> {
         if self.len() == self.base_len {
             output.copy_from_slice(input);
         } else {
-            bitreversed_transpose(self.base_len, input, output);
+            bitreversed_transpose::<Complex<T>, 4>(self.base_len, input, output);
         }
 
         // Base-level FFTs
@@ -310,7 +309,7 @@ impl<T: FftNum> Sse64Radix4<T> {
         if self.len() == self.base_len {
             output.copy_from_slice(input);
         } else {
-            bitreversed_transpose(self.base_len, input, output);
+            bitreversed_transpose::<Complex<T>, 4>(self.base_len, input, output);
         }
 
         // Base-level FFTs
