@@ -90,27 +90,27 @@ impl<T: FftNum> Sse32Radix4<T> {
         // we're doing the same precomputation of twiddle factors as the mixed radix algorithm where width=4 and height=len/4
         // but mixed radix only does one step and then calls itself recusrively, and this algorithm does every layer all the way down
         // so we're going to pack all the "layers" of twiddle factors into a single array, starting with the bottom layer and going up
-        let mut twiddle_stride = len / (base_len * 4);
+        const ROW_COUNT: usize = 4;
+        let mut cross_fft_len = base_len * ROW_COUNT;
         let mut twiddle_factors = Vec::with_capacity(len * 2);
-        while twiddle_stride > 0 {
-            let num_rows = len / (twiddle_stride * 4);
-            for i in 0..num_rows / 2 {
-                for k in 1..4 {
+        while cross_fft_len <= len {
+            let num_scalar_columns = cross_fft_len / ROW_COUNT;
+            let num_vector_columns = num_scalar_columns / 2; // 2 complex<T> per __m128
+
+            for i in 0..num_vector_columns {
+                for k in 1..ROW_COUNT {
                     unsafe {
                         let twiddle_a =
-                            twiddles::compute_twiddle(2 * i * k * twiddle_stride, len, direction);
-                        let twiddle_b = twiddles::compute_twiddle(
-                            (2 * i + 1) * k * twiddle_stride,
-                            len,
-                            direction,
-                        );
+                            twiddles::compute_twiddle(2 * i * k, cross_fft_len, direction);
+                        let twiddle_b =
+                            twiddles::compute_twiddle((2 * i + 1) * k, cross_fft_len, direction);
                         let twiddles_packed =
                             _mm_set_ps(twiddle_b.im, twiddle_b.re, twiddle_a.im, twiddle_a.re);
                         twiddle_factors.push(twiddles_packed);
                     }
                 }
             }
-            twiddle_stride >>= 2;
+            cross_fft_len *= ROW_COUNT;
         }
 
         Self {
@@ -129,48 +129,51 @@ impl<T: FftNum> Sse32Radix4<T> {
     #[target_feature(enable = "sse4.1")]
     unsafe fn perform_fft_out_of_place(
         &self,
-        signal: &[Complex<T>],
-        spectrum: &mut [Complex<T>],
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
         _scratch: &mut [Complex<T>],
     ) {
-        // copy the data into the spectrum vector
+        // copy the data into the output vector
         if self.len() == self.base_len {
-            spectrum.copy_from_slice(signal);
+            output.copy_from_slice(input);
         } else {
-            bitreversed_transpose(self.base_len, signal, spectrum);
+            bitreversed_transpose(self.base_len, input, output);
         }
 
         // Base-level FFTs
         match &self.base_fft {
-            Sse32Butterfly::Len1(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
-            Sse32Butterfly::Len2(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
-            Sse32Butterfly::Len4(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
-            Sse32Butterfly::Len8(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
-            Sse32Butterfly::Len16(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
-            Sse32Butterfly::Len32(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
+            Sse32Butterfly::Len1(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
+            Sse32Butterfly::Len2(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
+            Sse32Butterfly::Len4(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
+            Sse32Butterfly::Len8(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
+            Sse32Butterfly::Len16(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
+            Sse32Butterfly::Len32(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
         };
 
         // cross-FFTs
-        let mut current_size = self.base_len * 4;
+        const ROW_COUNT: usize = 4;
+        let mut cross_fft_len = self.base_len * ROW_COUNT;
         let mut layer_twiddles: &[__m128] = &self.twiddles;
 
-        while current_size <= signal.len() {
-            let num_rows = signal.len() / current_size;
+        while cross_fft_len <= input.len() {
+            let num_rows = input.len() / cross_fft_len;
+            let num_columns = cross_fft_len / ROW_COUNT;
 
             for i in 0..num_rows {
                 butterfly_4_32(
-                    &mut spectrum[i * current_size..],
+                    &mut output[i * cross_fft_len..],
                     layer_twiddles,
-                    current_size / 4,
+                    num_columns,
                     &self.bf4,
                 )
             }
 
-            //skip past all the twiddle factors used in this layer
-            let twiddle_offset = (current_size * 3) / 8;
+            // skip past all the twiddle factors used in this layer
+            // half as many twiddles because sse vectors store 2 complex<f32> each
+            let twiddle_offset = num_columns * (ROW_COUNT - 1) / 2;
             layer_twiddles = &layer_twiddles[twiddle_offset..];
 
-            current_size *= 4;
+            cross_fft_len *= ROW_COUNT;
         }
     }
 }
@@ -265,21 +268,22 @@ impl<T: FftNum> Sse64Radix4<T> {
         // we're doing the same precomputation of twiddle factors as the mixed radix algorithm where width=4 and height=len/4
         // but mixed radix only does one step and then calls itself recusrively, and this algorithm does every layer all the way down
         // so we're going to pack all the "layers" of twiddle factors into a single array, starting with the bottom layer and going up
-        let mut twiddle_stride = len / (base_len * 4);
+        const ROW_COUNT: usize = 4;
+        let mut cross_fft_len = base_len * ROW_COUNT;
         let mut twiddle_factors = Vec::with_capacity(len * 2);
-        while twiddle_stride > 0 {
-            let num_rows = len / (twiddle_stride * 4);
-            for i in 0..num_rows {
-                for k in 1..4 {
+        while cross_fft_len <= len {
+            let num_columns = cross_fft_len / ROW_COUNT;
+
+            for i in 0..num_columns {
+                for k in 1..ROW_COUNT {
                     unsafe {
-                        let twiddle =
-                            twiddles::compute_twiddle(i * k * twiddle_stride, len, direction);
+                        let twiddle = twiddles::compute_twiddle(i * k, cross_fft_len, direction);
                         let twiddle_packed = _mm_set_pd(twiddle.im, twiddle.re);
                         twiddle_factors.push(twiddle_packed);
                     }
                 }
             }
-            twiddle_stride >>= 2;
+            cross_fft_len *= ROW_COUNT;
         }
 
         Self {
@@ -298,48 +302,50 @@ impl<T: FftNum> Sse64Radix4<T> {
     #[target_feature(enable = "sse4.1")]
     unsafe fn perform_fft_out_of_place(
         &self,
-        signal: &[Complex<T>],
-        spectrum: &mut [Complex<T>],
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
         _scratch: &mut [Complex<T>],
     ) {
-        // copy the data into the spectrum vector
+        // copy the data into the output vector
         if self.len() == self.base_len {
-            spectrum.copy_from_slice(signal);
+            output.copy_from_slice(input);
         } else {
-            bitreversed_transpose(self.base_len, signal, spectrum);
+            bitreversed_transpose(self.base_len, input, output);
         }
 
         // Base-level FFTs
         match &self.base_fft {
-            Sse64Butterfly::Len1(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
-            Sse64Butterfly::Len2(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
-            Sse64Butterfly::Len4(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
-            Sse64Butterfly::Len8(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
-            Sse64Butterfly::Len16(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
-            Sse64Butterfly::Len32(bf) => bf.perform_fft_butterfly_multi(spectrum).unwrap(),
+            Sse64Butterfly::Len1(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
+            Sse64Butterfly::Len2(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
+            Sse64Butterfly::Len4(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
+            Sse64Butterfly::Len8(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
+            Sse64Butterfly::Len16(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
+            Sse64Butterfly::Len32(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
         }
 
         // cross-FFTs
-        let mut current_size = self.base_len * 4;
+        const ROW_COUNT: usize = 4;
+        let mut cross_fft_len = self.base_len * ROW_COUNT;
         let mut layer_twiddles: &[__m128d] = &self.twiddles;
 
-        while current_size <= signal.len() {
-            let num_rows = signal.len() / current_size;
+        while cross_fft_len <= input.len() {
+            let num_rows = input.len() / cross_fft_len;
+            let num_columns = cross_fft_len / ROW_COUNT;
 
             for i in 0..num_rows {
                 butterfly_4_64(
-                    &mut spectrum[i * current_size..],
+                    &mut output[i * cross_fft_len..],
                     layer_twiddles,
-                    current_size / 4,
+                    num_columns,
                     &self.bf4,
                 )
             }
 
-            //skip past all the twiddle factors used in this layer
-            let twiddle_offset = (current_size * 3) / 4;
+            // skip past all the twiddle factors used in this layer
+            let twiddle_offset = num_columns * (ROW_COUNT - 1);
             layer_twiddles = &layer_twiddles[twiddle_offset..];
 
-            current_size *= 4;
+            cross_fft_len *= ROW_COUNT;
         }
     }
 }
