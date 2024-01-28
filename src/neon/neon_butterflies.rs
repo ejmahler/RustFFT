@@ -12,7 +12,7 @@ use crate::{Direction, Fft, Length};
 
 use super::neon_common::{assert_f32, assert_f64};
 use super::neon_utils::*;
-use super::neon_vector::NeonArrayMut;
+use super::neon_vector::{NeonArrayMut, NeonVector};
 
 #[allow(unused)]
 macro_rules! boilerplate_fft_neon_f32_butterfly {
@@ -1601,10 +1601,10 @@ impl<T: FftNum> NeonF32Butterfly9<T> {
             .perform_parallel_fft_direct(values[2], values[5], values[8]);
 
         // Apply twiddle factors. Note that we're re-using twiddle2
-        mid1[1] = mul_complex_f32(self.twiddle1, mid1[1]);
-        mid1[2] = mul_complex_f32(self.twiddle2, mid1[2]);
-        mid2[1] = mul_complex_f32(self.twiddle2, mid2[1]);
-        mid2[2] = mul_complex_f32(self.twiddle4, mid2[2]);
+        mid1[1] = NeonVector::mul_complex(self.twiddle1, mid1[1]);
+        mid1[2] = NeonVector::mul_complex(self.twiddle2, mid1[2]);
+        mid2[1] = NeonVector::mul_complex(self.twiddle2, mid2[1]);
+        mid2[2] = NeonVector::mul_complex(self.twiddle4, mid2[2]);
 
         let [output0, output1, output2] = self
             .bf3
@@ -1683,10 +1683,10 @@ impl<T: FftNum> NeonF64Butterfly9<T> {
         let mut mid2 = self.bf3.perform_fft_direct(values[2], values[5], values[8]);
 
         // Apply twiddle factors. Note that we're re-using twiddle2
-        mid1[1] = mul_complex_f64(self.twiddle1, mid1[1]);
-        mid1[2] = mul_complex_f64(self.twiddle2, mid1[2]);
-        mid2[1] = mul_complex_f64(self.twiddle2, mid2[1]);
-        mid2[2] = mul_complex_f64(self.twiddle4, mid2[2]);
+        mid1[1] = NeonVector::mul_complex(self.twiddle1, mid1[1]);
+        mid1[2] = NeonVector::mul_complex(self.twiddle2, mid1[2]);
+        mid2[1] = NeonVector::mul_complex(self.twiddle2, mid2[1]);
+        mid2[2] = NeonVector::mul_complex(self.twiddle4, mid2[2]);
 
         let [output0, output1, output2] = self.bf3.perform_fft_direct(mid0[0], mid1[0], mid2[0]);
         let [output3, output4, output5] = self.bf3.perform_fft_direct(mid0[1], mid1[1], mid2[1]);
@@ -2421,11 +2421,11 @@ impl<T: FftNum> NeonF32Butterfly16<T> {
         let mut odds3 = self.bf4.perform_fft_direct(in1503, in0711);
 
         // step 3: apply twiddle factors
-        odds1[0] = mul_complex_f32(odds1[0], self.twiddle01);
-        odds3[0] = mul_complex_f32(odds3[0], self.twiddle01conj);
+        odds1[0] = NeonVector::mul_complex(odds1[0], self.twiddle01);
+        odds3[0] = NeonVector::mul_complex(odds3[0], self.twiddle01conj);
 
-        odds1[1] = mul_complex_f32(odds1[1], self.twiddle23);
-        odds3[1] = mul_complex_f32(odds3[1], self.twiddle23conj);
+        odds1[1] = NeonVector::mul_complex(odds1[1], self.twiddle23);
+        odds3[1] = NeonVector::mul_complex(odds3[1], self.twiddle23conj);
 
         // step 4: cross FFTs
         let mut temp0 = parallel_fft2_interleaved_f32(odds1[0], odds3[0]);
@@ -2465,14 +2465,14 @@ impl<T: FftNum> NeonF32Butterfly16<T> {
             .perform_parallel_fft_direct(input[15], input[3], input[7], input[11]);
 
         // step 3: apply twiddle factors
-        odds1[1] = mul_complex_f32(odds1[1], self.twiddle1);
-        odds3[1] = mul_complex_f32(odds3[1], self.twiddle1c);
+        odds1[1] = NeonVector::mul_complex(odds1[1], self.twiddle1);
+        odds3[1] = NeonVector::mul_complex(odds3[1], self.twiddle1c);
 
-        odds1[2] = mul_complex_f32(odds1[2], self.twiddle2);
-        odds3[2] = mul_complex_f32(odds3[2], self.twiddle2c);
+        odds1[2] = NeonVector::mul_complex(odds1[2], self.twiddle2);
+        odds3[2] = NeonVector::mul_complex(odds3[2], self.twiddle2c);
 
-        odds1[3] = mul_complex_f32(odds1[3], self.twiddle3);
-        odds3[3] = mul_complex_f32(odds3[3], self.twiddle3c);
+        odds1[3] = NeonVector::mul_complex(odds1[3], self.twiddle3);
+        odds3[3] = NeonVector::mul_complex(odds3[3], self.twiddle3c);
 
         // step 4: cross FFTs
         let mut temp0 = parallel_fft2_interleaved_f32(odds1[0], odds3[0]);
@@ -2613,14 +2613,14 @@ impl<T: FftNum> NeonF64Butterfly16<T> {
             .perform_fft_direct(input[15], input[3], input[7], input[11]);
 
         // step 3: apply twiddle factors
-        odds1[1] = mul_complex_f64(odds1[1], self.twiddle1);
-        odds3[1] = mul_complex_f64(odds3[1], self.twiddle1c);
+        odds1[1] = NeonVector::mul_complex(odds1[1], self.twiddle1);
+        odds3[1] = NeonVector::mul_complex(odds3[1], self.twiddle1c);
 
-        odds1[2] = mul_complex_f64(odds1[2], self.twiddle2);
-        odds3[2] = mul_complex_f64(odds3[2], self.twiddle2c);
+        odds1[2] = NeonVector::mul_complex(odds1[2], self.twiddle2);
+        odds3[2] = NeonVector::mul_complex(odds3[2], self.twiddle2c);
 
-        odds1[3] = mul_complex_f64(odds1[3], self.twiddle3);
-        odds3[3] = mul_complex_f64(odds3[3], self.twiddle3c);
+        odds1[3] = NeonVector::mul_complex(odds1[3], self.twiddle3);
+        odds3[3] = NeonVector::mul_complex(odds3[3], self.twiddle3c);
 
         // step 4: cross FFTs
         let mut temp0 = solo_fft2_f64(odds1[0], odds3[0]);
@@ -2829,17 +2829,17 @@ impl<T: FftNum> NeonF32Butterfly32<T> {
             .perform_fft_direct([in3103, in0711, in1519, in2327]);
 
         // step 3: apply twiddle factors
-        odds1[0] = mul_complex_f32(odds1[0], self.twiddle01);
-        odds3[0] = mul_complex_f32(odds3[0], self.twiddle01conj);
+        odds1[0] = NeonVector::mul_complex(odds1[0], self.twiddle01);
+        odds3[0] = NeonVector::mul_complex(odds3[0], self.twiddle01conj);
 
-        odds1[1] = mul_complex_f32(odds1[1], self.twiddle23);
-        odds3[1] = mul_complex_f32(odds3[1], self.twiddle23conj);
+        odds1[1] = NeonVector::mul_complex(odds1[1], self.twiddle23);
+        odds3[1] = NeonVector::mul_complex(odds3[1], self.twiddle23conj);
 
-        odds1[2] = mul_complex_f32(odds1[2], self.twiddle45);
-        odds3[2] = mul_complex_f32(odds3[2], self.twiddle45conj);
+        odds1[2] = NeonVector::mul_complex(odds1[2], self.twiddle45);
+        odds3[2] = NeonVector::mul_complex(odds3[2], self.twiddle45conj);
 
-        odds1[3] = mul_complex_f32(odds1[3], self.twiddle67);
-        odds3[3] = mul_complex_f32(odds3[3], self.twiddle67conj);
+        odds1[3] = NeonVector::mul_complex(odds1[3], self.twiddle67);
+        odds3[3] = NeonVector::mul_complex(odds3[3], self.twiddle67conj);
 
         // step 4: cross FFTs
         let mut temp0 = parallel_fft2_interleaved_f32(odds1[0], odds3[0]);
@@ -2896,26 +2896,26 @@ impl<T: FftNum> NeonF32Butterfly32<T> {
         ]);
 
         // step 3: apply twiddle factors
-        odds1[1] = mul_complex_f32(odds1[1], self.twiddle1);
-        odds3[1] = mul_complex_f32(odds3[1], self.twiddle1c);
+        odds1[1] = NeonVector::mul_complex(odds1[1], self.twiddle1);
+        odds3[1] = NeonVector::mul_complex(odds3[1], self.twiddle1c);
 
-        odds1[2] = mul_complex_f32(odds1[2], self.twiddle2);
-        odds3[2] = mul_complex_f32(odds3[2], self.twiddle2c);
+        odds1[2] = NeonVector::mul_complex(odds1[2], self.twiddle2);
+        odds3[2] = NeonVector::mul_complex(odds3[2], self.twiddle2c);
 
-        odds1[3] = mul_complex_f32(odds1[3], self.twiddle3);
-        odds3[3] = mul_complex_f32(odds3[3], self.twiddle3c);
+        odds1[3] = NeonVector::mul_complex(odds1[3], self.twiddle3);
+        odds3[3] = NeonVector::mul_complex(odds3[3], self.twiddle3c);
 
-        odds1[4] = mul_complex_f32(odds1[4], self.twiddle4);
-        odds3[4] = mul_complex_f32(odds3[4], self.twiddle4c);
+        odds1[4] = NeonVector::mul_complex(odds1[4], self.twiddle4);
+        odds3[4] = NeonVector::mul_complex(odds3[4], self.twiddle4c);
 
-        odds1[5] = mul_complex_f32(odds1[5], self.twiddle5);
-        odds3[5] = mul_complex_f32(odds3[5], self.twiddle5c);
+        odds1[5] = NeonVector::mul_complex(odds1[5], self.twiddle5);
+        odds3[5] = NeonVector::mul_complex(odds3[5], self.twiddle5c);
 
-        odds1[6] = mul_complex_f32(odds1[6], self.twiddle6);
-        odds3[6] = mul_complex_f32(odds3[6], self.twiddle6c);
+        odds1[6] = NeonVector::mul_complex(odds1[6], self.twiddle6);
+        odds3[6] = NeonVector::mul_complex(odds3[6], self.twiddle6c);
 
-        odds1[7] = mul_complex_f32(odds1[7], self.twiddle7);
-        odds3[7] = mul_complex_f32(odds3[7], self.twiddle7c);
+        odds1[7] = NeonVector::mul_complex(odds1[7], self.twiddle7);
+        odds3[7] = NeonVector::mul_complex(odds3[7], self.twiddle7c);
 
         // step 4: cross FFTs
         let mut temp0 = parallel_fft2_interleaved_f32(odds1[0], odds3[0]);
@@ -3132,26 +3132,26 @@ impl<T: FftNum> NeonF64Butterfly32<T> {
         ]);
 
         // step 3: apply twiddle factors
-        odds1[1] = mul_complex_f64(odds1[1], self.twiddle1);
-        odds3[1] = mul_complex_f64(odds3[1], self.twiddle1c);
+        odds1[1] = NeonVector::mul_complex(odds1[1], self.twiddle1);
+        odds3[1] = NeonVector::mul_complex(odds3[1], self.twiddle1c);
 
-        odds1[2] = mul_complex_f64(odds1[2], self.twiddle2);
-        odds3[2] = mul_complex_f64(odds3[2], self.twiddle2c);
+        odds1[2] = NeonVector::mul_complex(odds1[2], self.twiddle2);
+        odds3[2] = NeonVector::mul_complex(odds3[2], self.twiddle2c);
 
-        odds1[3] = mul_complex_f64(odds1[3], self.twiddle3);
-        odds3[3] = mul_complex_f64(odds3[3], self.twiddle3c);
+        odds1[3] = NeonVector::mul_complex(odds1[3], self.twiddle3);
+        odds3[3] = NeonVector::mul_complex(odds3[3], self.twiddle3c);
 
-        odds1[4] = mul_complex_f64(odds1[4], self.twiddle4);
-        odds3[4] = mul_complex_f64(odds3[4], self.twiddle4c);
+        odds1[4] = NeonVector::mul_complex(odds1[4], self.twiddle4);
+        odds3[4] = NeonVector::mul_complex(odds3[4], self.twiddle4c);
 
-        odds1[5] = mul_complex_f64(odds1[5], self.twiddle5);
-        odds3[5] = mul_complex_f64(odds3[5], self.twiddle5c);
+        odds1[5] = NeonVector::mul_complex(odds1[5], self.twiddle5);
+        odds3[5] = NeonVector::mul_complex(odds3[5], self.twiddle5c);
 
-        odds1[6] = mul_complex_f64(odds1[6], self.twiddle6);
-        odds3[6] = mul_complex_f64(odds3[6], self.twiddle6c);
+        odds1[6] = NeonVector::mul_complex(odds1[6], self.twiddle6);
+        odds3[6] = NeonVector::mul_complex(odds3[6], self.twiddle6c);
 
-        odds1[7] = mul_complex_f64(odds1[7], self.twiddle7);
-        odds3[7] = mul_complex_f64(odds3[7], self.twiddle7c);
+        odds1[7] = NeonVector::mul_complex(odds1[7], self.twiddle7);
+        odds3[7] = NeonVector::mul_complex(odds3[7], self.twiddle7c);
 
         // step 4: cross FFTs
         let mut temp0 = solo_fft2_f64(odds1[0], odds3[0]);

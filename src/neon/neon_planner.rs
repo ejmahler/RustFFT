@@ -17,6 +17,7 @@ use crate::math_utils::{PrimeFactor, PrimeFactors};
 const MIN_RADIX4_BITS: u32 = 6; // smallest size to consider radix 4 an option is 2^6 = 64
 const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
 const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the inner fft of Bluestein if length is larger than this
+const RADIX4_USE_BUTTERFLY32_FROM: usize = 262144; // Use length 32 butterfly starting from this length
 
 /// A Recipe is a structure that describes the design of a FFT, without actually creating it.
 /// It is used as a middle step in the planning process.
@@ -47,7 +48,10 @@ pub enum Recipe {
         len: usize,
         inner_fft: Arc<Recipe>,
     },
-    Radix4(usize),
+    Radix4 {
+        k: usize,
+        base_fft: Arc<Recipe>,
+    },
     Butterfly1,
     Butterfly2,
     Butterfly3,
@@ -75,7 +79,7 @@ impl Recipe {
     pub fn len(&self) -> usize {
         match self {
             Recipe::Dft(length) => *length,
-            Recipe::Radix4(length) => *length,
+            Recipe::Radix4 { k, base_fft } => base_fft.len() * (1 << (k * 2)),
             Recipe::Butterfly1 => 1,
             Recipe::Butterfly2 => 2,
             Recipe::Butterfly3 => 3,
@@ -249,11 +253,12 @@ impl<T: FftNum> FftPlannerNeon<T> {
 
         match recipe {
             Recipe::Dft(len) => Arc::new(Dft::new(*len, direction)) as Arc<dyn Fft<T>>,
-            Recipe::Radix4(len) => {
+            Recipe::Radix4 { k, base_fft } => {
+                let base_fft = self.build_fft(&base_fft, direction);
                 if id_t == id_f32 {
-                    Arc::new(Neon32Radix4::new(*len, direction)) as Arc<dyn Fft<T>>
+                    Arc::new(NeonRadix4::<f32, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
                 } else if id_t == id_f64 {
-                    Arc::new(Neon64Radix4::new(*len, direction)) as Arc<dyn Fft<T>>
+                    Arc::new(NeonRadix4::<f64, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
                 } else {
                     panic!("Not f32 or f64");
                 }
@@ -497,7 +502,7 @@ impl<T: FftNum> FftPlannerNeon<T> {
             self.design_prime(len)
         } else if len.trailing_zeros() >= MIN_RADIX4_BITS {
             if len.is_power_of_two() {
-                Arc::new(Recipe::Radix4(len))
+                self.design_radix4(len)
             } else {
                 let non_power_of_two = factors
                     .remove_factors(PrimeFactor {
@@ -621,13 +626,40 @@ impl<T: FftNum> FftPlannerNeon<T> {
                     let mixed_radix_factors = PrimeFactors::compute(mixed_radix_len);
                     self.design_fft_with_factors(mixed_radix_len, mixed_radix_factors)
                 } else {
-                    Arc::new(Recipe::Radix4(inner_fft_len_pow2))
+                    self.design_radix4(len)
                 };
             Arc::new(Recipe::BluesteinsAlgorithm { len, inner_fft })
         } else {
             let inner_fft = self.design_fft_with_factors(inner_fft_len_rader, raders_factors);
             Arc::new(Recipe::RadersAlgorithm { inner_fft })
         }
+    }
+
+    fn design_radix4(&mut self, len: usize) -> Arc<Recipe> {
+        // plan a step of radix4
+        let exponent = len.trailing_zeros() as usize;
+        let base_exponent = match exponent {
+            0 => 0,
+            1 => 1,
+            2 => 2,
+            _ => {
+                if exponent % 2 == 1 {
+                    if len < RADIX4_USE_BUTTERFLY32_FROM {
+                        3
+                    } else {
+                        5
+                    }
+                } else {
+                    4
+                }
+            }
+        };
+
+        let base_fft = self.design_fft_for_len(1 << base_exponent);
+        Arc::new(Recipe::Radix4 {
+            k: (exponent - base_exponent) / 2,
+            base_fft,
+        })
     }
 }
 

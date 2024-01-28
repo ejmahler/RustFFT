@@ -15,3 +15,14 @@ pub mod neon_planner;
 pub use self::neon_butterflies::*;
 pub use self::neon_prime_butterflies::*;
 pub use self::neon_radix4::*;
+
+pub trait NeonNum: FftNum {
+    type VectorType: NeonVector<ScalarType = Self>;
+}
+
+impl NeonNum for f32 {
+    type VectorType = float32x4_t;
+}
+impl NeonNum for f64 {
+    type VectorType = float64x2_t;
+}
