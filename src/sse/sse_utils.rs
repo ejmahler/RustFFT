@@ -143,19 +143,6 @@ pub unsafe fn transpose_complex_2x2_f32(left: __m128, right: __m128) -> [__m128;
     [temp02, temp13]
 }
 
-// Complex multiplication.
-// Each input contains two complex values, which are multiplied in parallel.
-#[inline(always)]
-pub unsafe fn mul_complex_f32(left: __m128, right: __m128) -> __m128 {
-    //SSE3, taken from Intel performance manual
-    let mut temp1 = _mm_shuffle_ps(right, right, 0xA0);
-    let mut temp2 = _mm_shuffle_ps(right, right, 0xF5);
-    temp1 = _mm_mul_ps(temp1, left);
-    temp2 = _mm_mul_ps(temp2, left);
-    temp2 = _mm_shuffle_ps(temp2, temp2, 0xB1);
-    _mm_addsub_ps(temp1, temp2)
-}
-
 //  __  __       _   _                __   _  _   _     _ _
 // |  \/  | __ _| |_| |__            / /_ | || | | |__ (_) |_
 // | |\/| |/ _` | __| '_ \   _____  | '_ \| || |_| '_ \| | __|
@@ -186,19 +173,10 @@ impl Rotate90F64 {
     }
 }
 
-#[inline(always)]
-pub unsafe fn mul_complex_f64(left: __m128d, right: __m128d) -> __m128d {
-    // SSE3, taken from Intel performance manual
-    let mut temp1 = _mm_unpacklo_pd(right, right);
-    let mut temp2 = _mm_unpackhi_pd(right, right);
-    temp1 = _mm_mul_pd(temp1, left);
-    temp2 = _mm_mul_pd(temp2, left);
-    temp2 = _mm_shuffle_pd(temp2, temp2, 0x01);
-    _mm_addsub_pd(temp1, temp2)
-}
-
 #[cfg(test)]
 mod unit_tests {
+    use crate::sse::sse_vector::SseVector;
+
     use super::*;
     use num_complex::Complex;
 
@@ -207,7 +185,7 @@ mod unit_tests {
         unsafe {
             let right = _mm_set_pd(1.0, 2.0);
             let left = _mm_set_pd(5.0, 7.0);
-            let res = mul_complex_f64(left, right);
+            let res = SseVector::mul_complex(left, right);
             let expected = _mm_set_pd(2.0 * 5.0 + 1.0 * 7.0, 2.0 * 7.0 - 1.0 * 5.0);
             assert_eq!(
                 std::mem::transmute::<__m128d, Complex<f64>>(res),
@@ -226,7 +204,7 @@ mod unit_tests {
 
             let nbr2 = _mm_set_ps(val4.im, val4.re, val3.im, val3.re);
             let nbr1 = _mm_set_ps(val2.im, val2.re, val1.im, val1.re);
-            let res = mul_complex_f32(nbr1, nbr2);
+            let res = SseVector::mul_complex(nbr1, nbr2);
             let res = std::mem::transmute::<__m128, [Complex<f32>; 2]>(res);
             let expected = [val1 * val3, val2 * val4];
             assert_eq!(res, expected);

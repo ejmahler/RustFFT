@@ -1,9 +1,15 @@
+use std::sync::Arc;
+
 use num_complex::Complex;
 use num_traits::{Float, One, Zero};
 
 use rand::distributions::{uniform::SampleUniform, Distribution, Uniform};
 use rand::{rngs::StdRng, SeedableRng};
 
+use crate::algorithm::butterflies::{
+    Butterfly1, Butterfly16, Butterfly2, Butterfly3, Butterfly4, Butterfly5, Butterfly6,
+    Butterfly7, Butterfly8, Butterfly9,
+};
 use crate::{algorithm::Dft, Direction, FftNum, Length};
 use crate::{Fft, FftDirection};
 
@@ -90,9 +96,6 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
         fft.process(&mut buffer);
 
         if !compare_vectors(&expected_output, &buffer) {
-            dbg!(&expected_output);
-            dbg!(&buffer);
-
             panic!(
                 "process() failed, length = {}, direction = {}",
                 len, direction
@@ -208,5 +211,21 @@ impl Length for BigScratchAlgorithm {
 impl Direction for BigScratchAlgorithm {
     fn fft_direction(&self) -> FftDirection {
         self.direction
+    }
+}
+
+pub fn construct_base<T: FftNum>(n: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
+    match n {
+        1 => Arc::new(Butterfly1::new(direction)) as Arc<dyn Fft<T>>,
+        2 => Arc::new(Butterfly2::new(direction)) as Arc<dyn Fft<T>>,
+        3 => Arc::new(Butterfly3::new(direction)) as Arc<dyn Fft<T>>,
+        4 => Arc::new(Butterfly4::new(direction)) as Arc<dyn Fft<T>>,
+        5 => Arc::new(Butterfly5::new(direction)) as Arc<dyn Fft<T>>,
+        6 => Arc::new(Butterfly6::new(direction)) as Arc<dyn Fft<T>>,
+        7 => Arc::new(Butterfly7::new(direction)) as Arc<dyn Fft<T>>,
+        8 => Arc::new(Butterfly8::new(direction)) as Arc<dyn Fft<T>>,
+        9 => Arc::new(Butterfly9::new(direction)) as Arc<dyn Fft<T>>,
+        16 => Arc::new(Butterfly16::new(direction)) as Arc<dyn Fft<T>>,
+        _ => unimplemented!(),
     }
 }
