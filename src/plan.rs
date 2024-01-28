@@ -159,11 +159,11 @@ pub enum Recipe {
         inner_fft: Arc<Recipe>,
     },
     Radix3 {
-        k: usize,
+        k: u32,
         base_fft: Arc<Recipe>,
     },
     Radix4 {
-        k: usize,
+        k: u32,
         base_fft: Arc<Recipe>,
     },
     Butterfly2,
@@ -190,7 +190,7 @@ impl Recipe {
     pub fn len(&self) -> usize {
         match self {
             Recipe::Dft(length) => *length,
-            Recipe::Radix3 { k, base_fft } => base_fft.len() * 3usize.pow(*k as u32),
+            Recipe::Radix3 { k, base_fft } => base_fft.len() * 3usize.pow(*k),
             Recipe::Radix4 { k, base_fft } => base_fft.len() * (1 << (k * 2)),
             Recipe::Butterfly2 => 2,
             Recipe::Butterfly3 => 3,
@@ -485,14 +485,14 @@ impl<T: FftNum> FftPlannerScalar<T> {
 
         let base_fft = self.design_fft_for_len(3usize.pow(base_exponent));
         Arc::new(Recipe::Radix3 {
-            k: (exponent - base_exponent) as usize,
+            k: exponent - base_exponent,
             base_fft,
         })
     }
 
     fn design_radix4(&mut self, len: usize) -> Arc<Recipe> {
         // plan a step of radix4
-        let exponent = len.trailing_zeros() as usize;
+        let exponent = len.trailing_zeros();
         let base_exponent = match exponent {
             0 => 0,
             1 => 1,

@@ -205,7 +205,7 @@ pub fn bitreversed_transpose<T: Copy, const D: usize>(
 
         // verify that width is a power of d
         assert!(width_bits % d_bits == 0);
-        (width_bits / d_bits) as usize
+        width_bits / d_bits
     } else {
         compute_logarithm::<D>(width).unwrap()
     };
@@ -243,7 +243,7 @@ pub fn bitreversed_transpose<T: Copy, const D: usize>(
 // Repeatedly divide `value` by divisor `D`, `iters` times, and apply the remainders to a new value
 // When D is a power of 2, this is exactly equal (implementation and assembly)-wise to a bit reversal
 // When D is not a power of 2, think of this function as a logical equivalent to a bit reversal
-pub fn reverse_remainders<const D: usize>(value: usize, rev_digits: usize) -> usize {
+pub fn reverse_remainders<const D: usize>(value: usize, rev_digits: u32) -> usize {
     assert!(D > 1);
 
     let mut result: usize = 0;
@@ -256,7 +256,7 @@ pub fn reverse_remainders<const D: usize>(value: usize, rev_digits: usize) -> us
 }
 
 // computes `n` such that `D ^ n == value`. Returns `None` if `value` is not a perfect power of `D`, otherwise returns `Some(n)`
-pub fn compute_logarithm<const D: usize>(value: usize) -> Option<usize> {
+pub fn compute_logarithm<const D: usize>(value: usize) -> Option<u32> {
     if value == 0 || D < 2 {
         return None;
     }

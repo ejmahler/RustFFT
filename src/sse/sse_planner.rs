@@ -49,7 +49,7 @@ pub enum Recipe {
         inner_fft: Arc<Recipe>,
     },
     Radix4 {
-        k: usize,
+        k: u32,
         base_fft: Arc<Recipe>,
     },
     Butterfly1,
@@ -637,7 +637,7 @@ impl<T: FftNum> FftPlannerSse<T> {
 
     fn design_radix4(&mut self, len: usize) -> Arc<Recipe> {
         // plan a step of radix4
-        let exponent = len.trailing_zeros() as usize;
+        let exponent = len.trailing_zeros();
         let base_exponent = match exponent {
             0 => 0,
             1 => 1,

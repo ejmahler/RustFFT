@@ -43,7 +43,7 @@ impl<T: FftNum> Radix4<T> {
         );
 
         // figure out which base length we're going to use
-        let exponent = len.trailing_zeros() as usize;
+        let exponent = len.trailing_zeros();
         let (base_exponent, base_fft) = match exponent {
             0 => (0, Arc::new(Butterfly1::new(direction)) as Arc<dyn Fft<T>>),
             1 => (1, Arc::new(Butterfly2::new(direction)) as Arc<dyn Fft<T>>),
@@ -61,7 +61,7 @@ impl<T: FftNum> Radix4<T> {
     }
 
     /// Constructs a Radix4 instance which computes FFTs of length `4^k * base_fft.len()`
-    pub fn new_with_base(k: usize, base_fft: Arc<dyn Fft<T>>) -> Self {
+    pub fn new_with_base(k: u32, base_fft: Arc<dyn Fft<T>>) -> Self {
         let base_len = base_fft.len();
         let len = base_len * (1 << (k * 2));
 
@@ -203,7 +203,7 @@ mod unit_tests {
         }
     }
 
-    fn test_radix4(k: usize, base_fft: Arc<dyn Fft<f64>>) {
+    fn test_radix4(k: u32, base_fft: Arc<dyn Fft<f64>>) {
         let len = base_fft.len() * 4usize.pow(k as u32);
         let direction = base_fft.fft_direction();
         let fft = Radix4::new_with_base(k, base_fft);

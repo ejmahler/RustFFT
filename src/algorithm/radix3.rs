@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use std::sync::Arc;
 
 use num_complex::Complex;
@@ -58,9 +57,9 @@ impl<T: FftNum> Radix3<T> {
     }
 
     /// Constructs a Radix3 instance which computes FFTs of length `3^k * base_fft.len()`
-    pub fn new_with_base(k: usize, base_fft: Arc<dyn Fft<T>>) -> Self {
+    pub fn new_with_base(k: u32, base_fft: Arc<dyn Fft<T>>) -> Self {
         let base_len = base_fft.len();
-        let len = base_len * 3usize.pow(k.try_into().unwrap());
+        let len = base_len * 3usize.pow(k);
 
         let direction = base_fft.fft_direction();
 
@@ -197,7 +196,7 @@ mod unit_tests {
         }
     }
 
-    fn test_radix3(k: usize, base_fft: Arc<dyn Fft<f32>>) {
+    fn test_radix3(k: u32, base_fft: Arc<dyn Fft<f32>>) {
         let len = base_fft.len() * 3usize.pow(k as u32);
         let direction = base_fft.fft_direction();
         let fft = Radix3::new_with_base(k, base_fft);

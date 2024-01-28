@@ -29,7 +29,7 @@ pub struct SseRadix4<S: SseNum, T> {
 impl<S: SseNum, T: FftNum> SseRadix4<S, T> {
     /// Constructs a new SseRadix4 which computes FFTs of size 4^k * base_fft.len()
     #[inline]
-    pub fn new(k: usize, base_fft: Arc<dyn Fft<T>>) -> Result<Self, ()> {
+    pub fn new(k: u32, base_fft: Arc<dyn Fft<T>>) -> Result<Self, ()> {
         // Internal sanity check: Make sure that S == T.
         // This struct has two generic parameters S and T, but they must always be the same, and are only kept separate to help work around the lack of specialization.
         // It would be cool if we could do this as a static_assert instead
@@ -47,7 +47,7 @@ impl<S: SseNum, T: FftNum> SseRadix4<S, T> {
     }
 
     #[target_feature(enable = "sse4.1")]
-    unsafe fn new_with_sse(k: usize, base_fft: Arc<dyn Fft<T>>) -> Self {
+    unsafe fn new_with_sse(k: u32, base_fft: Arc<dyn Fft<T>>) -> Self {
         let direction = base_fft.fft_direction();
         let base_len = base_fft.len();
 
@@ -205,8 +205,8 @@ mod unit_tests {
         }
     }
 
-    fn test_sse_radix4_64_with_base(k: usize, base_fft: Arc<dyn Fft<f64>>) {
-        let len = base_fft.len() * 4usize.pow(k as u32);
+    fn test_sse_radix4_64_with_base(k: u32, base_fft: Arc<dyn Fft<f64>>) {
+        let len = base_fft.len() * 4usize.pow(k);
         let direction = base_fft.fft_direction();
         let fft = SseRadix4::<f64, f64>::new(k, base_fft).unwrap();
         check_fft_algorithm::<f64>(&fft, len, direction);
@@ -224,8 +224,8 @@ mod unit_tests {
         }
     }
 
-    fn test_sse_radix4_32_with_base(k: usize, base_fft: Arc<dyn Fft<f32>>) {
-        let len = base_fft.len() * 4usize.pow(k as u32);
+    fn test_sse_radix4_32_with_base(k: u32, base_fft: Arc<dyn Fft<f32>>) {
+        let len = base_fft.len() * 4usize.pow(k);
         let direction = base_fft.fft_direction();
         let fft = SseRadix4::<f32, f32>::new(k, base_fft).unwrap();
         check_fft_algorithm::<f32>(&fft, len, direction);
