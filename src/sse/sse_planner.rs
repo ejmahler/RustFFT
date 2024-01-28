@@ -655,10 +655,10 @@ impl<T: FftNum> FftPlannerSse<T> {
             }
         };
 
-        let base = self.design_fft_for_len(1 << base_exponent);
+        let base_fft = self.design_fft_for_len(1 << base_exponent);
         Arc::new(Recipe::Radix4 {
             k: (exponent - base_exponent) / 2,
-            base_fft: base,
+            base_fft,
         })
     }
 }

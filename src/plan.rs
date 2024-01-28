@@ -158,8 +158,14 @@ pub enum Recipe {
         len: usize,
         inner_fft: Arc<Recipe>,
     },
-    Radix3(usize),
-    Radix4(usize),
+    Radix3 {
+        k: usize,
+        base_fft: Arc<Recipe>,
+    },
+    Radix4 {
+        k: usize,
+        base_fft: Arc<Recipe>,
+    },
     Butterfly2,
     Butterfly3,
     Butterfly4,
@@ -184,8 +190,8 @@ impl Recipe {
     pub fn len(&self) -> usize {
         match self {
             Recipe::Dft(length) => *length,
-            Recipe::Radix3(length) => *length,
-            Recipe::Radix4(length) => *length,
+            Recipe::Radix3 { k, base_fft } => base_fft.len() * 3usize.pow(*k as u32),
+            Recipe::Radix4 { k, base_fft } => base_fft.len() * (1 << (k * 2)),
             Recipe::Butterfly2 => 2,
             Recipe::Butterfly3 => 3,
             Recipe::Butterfly4 => 4,
@@ -327,8 +333,14 @@ impl<T: FftNum> FftPlannerScalar<T> {
     fn build_new_fft(&mut self, recipe: &Recipe, direction: FftDirection) -> Arc<dyn Fft<T>> {
         match recipe {
             Recipe::Dft(len) => Arc::new(Dft::new(*len, direction)) as Arc<dyn Fft<T>>,
-            Recipe::Radix3(len) => Arc::new(Radix3::new(*len, direction)) as Arc<dyn Fft<T>>,
-            Recipe::Radix4(len) => Arc::new(Radix4::new(*len, direction)) as Arc<dyn Fft<T>>,
+            Recipe::Radix3 { k, base_fft } => {
+                let base_fft = self.build_fft(base_fft, direction);
+                Arc::new(Radix3::new_with_base(*k, base_fft)) as Arc<dyn Fft<T>>
+            }
+            Recipe::Radix4 { k, base_fft } => {
+                let base_fft = self.build_fft(base_fft, direction);
+                Arc::new(Radix4::new_with_base(*k, base_fft)) as Arc<dyn Fft<T>>
+            }
             Recipe::Butterfly2 => Arc::new(Butterfly2::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly3 => Arc::new(Butterfly3::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly4 => Arc::new(Butterfly4::new(direction)) as Arc<dyn Fft<T>>,
@@ -397,7 +409,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
             self.design_prime(len)
         } else if len.trailing_zeros() >= MIN_RADIX4_BITS {
             if len.is_power_of_two() {
-                Arc::new(Recipe::Radix4(len))
+                self.design_radix4(len)
             } else {
                 let non_power_of_two = factors
                     .remove_factors(PrimeFactor {
@@ -410,7 +422,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
             }
         } else if factors.get_power_of_three() >= MIN_RADIX3_FACTORS {
             if factors.is_power_of_three() {
-                Arc::new(Recipe::Radix3(len))
+                self.design_radix3(factors.get_power_of_three())
             } else {
                 let power3 = factors.get_power_of_three();
                 let non_power_of_three = factors
@@ -462,6 +474,45 @@ impl<T: FftNum> FftPlannerScalar<T> {
         }
     }
 
+    fn design_radix3(&mut self, exponent: u32) -> Arc<Recipe> {
+        // plan a step of radix3
+        let base_exponent = match exponent {
+            0 => 0,
+            1 => 1,
+            2 => 2,
+            _ => 3,
+        };
+
+        let base_fft = self.design_fft_for_len(3usize.pow(base_exponent));
+        Arc::new(Recipe::Radix3 {
+            k: (exponent - base_exponent) as usize,
+            base_fft,
+        })
+    }
+
+    fn design_radix4(&mut self, len: usize) -> Arc<Recipe> {
+        // plan a step of radix4
+        let exponent = len.trailing_zeros() as usize;
+        let base_exponent = match exponent {
+            0 => 0,
+            1 => 1,
+            2 => 2,
+            _ => {
+                if exponent % 2 == 1 {
+                    3
+                } else {
+                    4
+                }
+            }
+        };
+
+        let base_fft = self.design_fft_for_len(1 << base_exponent);
+        Arc::new(Recipe::Radix4 {
+            k: (exponent - base_exponent) / 2,
+            base_fft,
+        })
+    }
+
     // Returns Some(instance) if we have a butterfly available for this size. Returns None if there is no butterfly available for this size
     fn design_butterfly_algorithm(&mut self, len: usize) -> Option<Arc<Recipe>> {
         match len {
@@ -505,7 +556,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
                     let mixed_radix_factors = PrimeFactors::compute(mixed_radix_len);
                     self.design_fft_with_factors(mixed_radix_len, mixed_radix_factors)
                 } else {
-                    Arc::new(Recipe::Radix4(inner_fft_len_pow2))
+                    self.design_radix4(inner_fft_len_pow2)
                 };
             Arc::new(Recipe::BluesteinsAlgorithm { len, inner_fft })
         } else {
@@ -572,7 +623,7 @@ mod unit_tests {
         for pow in 6..32 {
             let len = 1 << pow;
             let plan = planner.design_fft_for_len(len);
-            assert_eq!(*plan, Recipe::Radix4(len));
+            assert!(matches!(*plan, Recipe::Radix4 { k: _, base_fft: _ }));
             assert_eq!(plan.len(), len, "Recipe reports wrong length");
         }
     }
