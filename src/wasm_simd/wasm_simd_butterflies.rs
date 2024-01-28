@@ -216,8 +216,8 @@ impl<T: FftNum> WasmSimdF32Butterfly1<T> {
     }
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let value = buffer.load_partial1_complex(0);
-        buffer.store_partial_lo_complex(value, 0);
+        let value = buffer.load_partial_lo_complex_v128(0);
+        buffer.store_partial_lo_complex_v128(value, 0);
     }
 
     #[inline(always)]
@@ -225,8 +225,8 @@ impl<T: FftNum> WasmSimdF32Butterfly1<T> {
         &self,
         mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
-        let value = buffer.load_complex(0);
-        buffer.store_complex(value, 0);
+        let value = buffer.load_complex_v128(0);
+        buffer.store_complex_v128(value, 0);
     }
 }
 
@@ -263,8 +263,8 @@ impl<T: FftNum> WasmSimdF64Butterfly1<T> {
     }
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
-        let value = buffer.load_complex(0);
-        buffer.store_complex(value, 0);
+        let value = buffer.load_complex_v128(0);
+        buffer.store_complex_v128(value, 0);
     }
 }
 
@@ -301,11 +301,11 @@ impl<T: FftNum> WasmSimdF32Butterfly2<T> {
     }
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let values = buffer.load_complex(0);
+        let values = buffer.load_complex_v128(0);
 
         let temp = self.perform_fft_direct(values);
 
-        buffer.store_complex(temp, 0);
+        buffer.store_complex_v128(temp, 0);
     }
 
     #[inline(always)]
@@ -313,15 +313,15 @@ impl<T: FftNum> WasmSimdF32Butterfly2<T> {
         &self,
         mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
-        let values_a = buffer.load_complex(0);
-        let values_b = buffer.load_complex(2);
+        let values_a = buffer.load_complex_v128(0);
+        let values_b = buffer.load_complex_v128(2);
 
         let out = self.perform_parallel_fft_direct(values_a, values_b);
 
         let [out02, out13] = transpose_complex_2x2_f32(out[0], out[1]);
 
-        buffer.store_complex(out02, 0);
-        buffer.store_complex(out13, 2);
+        buffer.store_complex_v128(out02, 0);
+        buffer.store_complex_v128(out13, 2);
     }
 
     // length 2 fft of x, given as [x0, x1]
@@ -404,13 +404,13 @@ impl<T: FftNum> WasmSimdF64Butterfly2<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
-        let value0 = buffer.load_complex(0);
-        let value1 = buffer.load_complex(1);
+        let value0 = buffer.load_complex_v128(0);
+        let value1 = buffer.load_complex_v128(1);
 
         let out = self.perform_fft_direct(value0, value1);
 
-        buffer.store_complex(out[0], 0);
-        buffer.store_complex(out[1], 1);
+        buffer.store_complex_v128(out[0], 0);
+        buffer.store_complex_v128(out[1], 1);
     }
 
     #[inline(always)]
@@ -472,13 +472,13 @@ impl<T: FftNum> WasmSimdF32Butterfly3<T> {
     }
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let value0x = buffer.load_partial1_complex(0);
-        let value12 = buffer.load_complex(1);
+        let value0x = buffer.load_partial_lo_complex_v128(0);
+        let value12 = buffer.load_complex_v128(1);
 
         let out = self.perform_fft_direct(value0x, value12);
 
-        buffer.store_partial_lo_complex(out[0], 0);
-        buffer.store_complex(out[1], 1);
+        buffer.store_partial_lo_complex_v128(out[0], 0);
+        buffer.store_complex_v128(out[1], 1);
     }
 
     #[inline(always)]
@@ -486,9 +486,9 @@ impl<T: FftNum> WasmSimdF32Butterfly3<T> {
         &self,
         mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
-        let valuea0a1 = buffer.load_complex(0);
-        let valuea2b0 = buffer.load_complex(2);
-        let valueb1b2 = buffer.load_complex(4);
+        let valuea0a1 = buffer.load_complex_v128(0);
+        let valuea2b0 = buffer.load_complex_v128(2);
+        let valueb1b2 = buffer.load_complex_v128(4);
 
         let value0 = extract_lo_hi_f32(valuea0a1, valuea2b0);
         let value1 = extract_hi_lo_f32(valuea0a1, valueb1b2);
@@ -500,9 +500,9 @@ impl<T: FftNum> WasmSimdF32Butterfly3<T> {
         let out1 = extract_lo_hi_f32(out[2], out[0]);
         let out2 = extract_hi_hi_f32(out[1], out[2]);
 
-        buffer.store_complex(out0, 0);
-        buffer.store_complex(out1, 2);
-        buffer.store_complex(out2, 4);
+        buffer.store_complex_v128(out0, 0);
+        buffer.store_complex_v128(out1, 2);
+        buffer.store_complex_v128(out2, 4);
     }
 
     // length 3 fft of a, given as [x0, 0.0], [x1, x2]
@@ -592,15 +592,15 @@ impl<T: FftNum> WasmSimdF64Butterfly3<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
-        let value0 = buffer.load_complex(0);
-        let value1 = buffer.load_complex(1);
-        let value2 = buffer.load_complex(2);
+        let value0 = buffer.load_complex_v128(0);
+        let value1 = buffer.load_complex_v128(1);
+        let value2 = buffer.load_complex_v128(2);
 
         let out = self.perform_fft_direct(value0, value1, value2);
 
-        buffer.store_complex(out[0], 0);
-        buffer.store_complex(out[1], 1);
-        buffer.store_complex(out[2], 2);
+        buffer.store_complex_v128(out[0], 0);
+        buffer.store_complex_v128(out[1], 1);
+        buffer.store_complex_v128(out[2], 2);
     }
 
     // length 3 fft of x, given as x0, x1, x2.
@@ -669,13 +669,13 @@ impl<T: FftNum> WasmSimdF32Butterfly4<T> {
     }
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let value01 = buffer.load_complex(0);
-        let value23 = buffer.load_complex(2);
+        let value01 = buffer.load_complex_v128(0);
+        let value23 = buffer.load_complex_v128(2);
 
         let out = self.perform_fft_direct(value01, value23);
 
-        buffer.store_complex(out[0], 0);
-        buffer.store_complex(out[1], 2);
+        buffer.store_complex_v128(out[0], 0);
+        buffer.store_complex_v128(out[1], 2);
     }
 
     #[inline(always)]
@@ -683,10 +683,10 @@ impl<T: FftNum> WasmSimdF32Butterfly4<T> {
         &self,
         mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
-        let value01a = buffer.load_complex(0);
-        let value23a = buffer.load_complex(2);
-        let value01b = buffer.load_complex(4);
-        let value23b = buffer.load_complex(6);
+        let value01a = buffer.load_complex_v128(0);
+        let value23a = buffer.load_complex_v128(2);
+        let value01b = buffer.load_complex_v128(4);
+        let value23b = buffer.load_complex_v128(6);
 
         let [value0ab, value1ab] = transpose_complex_2x2_f32(value01a, value01b);
         let [value2ab, value3ab] = transpose_complex_2x2_f32(value23a, value23b);
@@ -696,10 +696,10 @@ impl<T: FftNum> WasmSimdF32Butterfly4<T> {
         let [out0, out1] = transpose_complex_2x2_f32(out[0], out[1]);
         let [out2, out3] = transpose_complex_2x2_f32(out[2], out[3]);
 
-        buffer.store_complex(out0, 0);
-        buffer.store_complex(out1, 4);
-        buffer.store_complex(out2, 2);
-        buffer.store_complex(out3, 6);
+        buffer.store_complex_v128(out0, 0);
+        buffer.store_complex_v128(out1, 4);
+        buffer.store_complex_v128(out2, 2);
+        buffer.store_complex_v128(out3, 6);
     }
 
     // length 4 fft of a, given as [x0, x1], [x2, x3]
@@ -798,17 +798,17 @@ impl<T: FftNum> WasmSimdF64Butterfly4<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
-        let value0 = buffer.load_complex(0);
-        let value1 = buffer.load_complex(1);
-        let value2 = buffer.load_complex(2);
-        let value3 = buffer.load_complex(3);
+        let value0 = buffer.load_complex_v128(0);
+        let value1 = buffer.load_complex_v128(1);
+        let value2 = buffer.load_complex_v128(2);
+        let value3 = buffer.load_complex_v128(3);
 
         let out = self.perform_fft_direct(value0, value1, value2, value3);
 
-        buffer.store_complex(out[0], 0);
-        buffer.store_complex(out[1], 1);
-        buffer.store_complex(out[2], 2);
-        buffer.store_complex(out[3], 3);
+        buffer.store_complex_v128(out[0], 0);
+        buffer.store_complex_v128(out[1], 1);
+        buffer.store_complex_v128(out[2], 2);
+        buffer.store_complex_v128(out[3], 3);
     }
 
     #[inline(always)]
@@ -905,15 +905,15 @@ impl<T: FftNum> WasmSimdF32Butterfly5<T> {
     }
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let value00 = buffer.load1_complex(0);
-        let value12 = buffer.load_complex(1);
-        let value34 = buffer.load_complex(3);
+        let value00 = buffer.load1_complex_v128(0);
+        let value12 = buffer.load_complex_v128(1);
+        let value34 = buffer.load_complex_v128(3);
 
         let out = self.perform_fft_direct(value00, value12, value34);
 
-        buffer.store_partial_lo_complex(out[0], 0);
-        buffer.store_complex(out[1], 1);
-        buffer.store_complex(out[2], 3);
+        buffer.store_partial_lo_complex_v128(out[0], 0);
+        buffer.store_complex_v128(out[1], 1);
+        buffer.store_complex_v128(out[2], 3);
     }
 
     #[inline(always)]
@@ -1071,19 +1071,19 @@ impl<T: FftNum> WasmSimdF64Butterfly5<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
-        let value0 = buffer.load_complex(0);
-        let value1 = buffer.load_complex(1);
-        let value2 = buffer.load_complex(2);
-        let value3 = buffer.load_complex(3);
-        let value4 = buffer.load_complex(4);
+        let value0 = buffer.load_complex_v128(0);
+        let value1 = buffer.load_complex_v128(1);
+        let value2 = buffer.load_complex_v128(2);
+        let value3 = buffer.load_complex_v128(3);
+        let value4 = buffer.load_complex_v128(4);
 
         let out = self.perform_fft_direct(value0, value1, value2, value3, value4);
 
-        buffer.store_complex(out[0], 0);
-        buffer.store_complex(out[1], 1);
-        buffer.store_complex(out[2], 2);
-        buffer.store_complex(out[3], 3);
-        buffer.store_complex(out[4], 4);
+        buffer.store_complex_v128(out[0], 0);
+        buffer.store_complex_v128(out[1], 1);
+        buffer.store_complex_v128(out[2], 2);
+        buffer.store_complex_v128(out[3], 3);
+        buffer.store_complex_v128(out[4], 4);
     }
 
     // length 5 fft of x, given as x0, x1, x2, x3, x4.
@@ -1169,15 +1169,15 @@ impl<T: FftNum> WasmSimdF32Butterfly6<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let value01 = buffer.load_complex(0);
-        let value23 = buffer.load_complex(2);
-        let value45 = buffer.load_complex(4);
+        let value01 = buffer.load_complex_v128(0);
+        let value23 = buffer.load_complex_v128(2);
+        let value45 = buffer.load_complex_v128(4);
 
         let out = self.perform_fft_direct(value01, value23, value45);
 
-        buffer.store_complex(out[0], 0);
-        buffer.store_complex(out[1], 2);
-        buffer.store_complex(out[2], 4);
+        buffer.store_complex_v128(out[0], 0);
+        buffer.store_complex_v128(out[1], 2);
+        buffer.store_complex_v128(out[2], 4);
     }
 
     #[inline(always)]
@@ -1293,21 +1293,21 @@ impl<T: FftNum> WasmSimdF64Butterfly6<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
-        let value0 = buffer.load_complex(0);
-        let value1 = buffer.load_complex(1);
-        let value2 = buffer.load_complex(2);
-        let value3 = buffer.load_complex(3);
-        let value4 = buffer.load_complex(4);
-        let value5 = buffer.load_complex(5);
+        let value0 = buffer.load_complex_v128(0);
+        let value1 = buffer.load_complex_v128(1);
+        let value2 = buffer.load_complex_v128(2);
+        let value3 = buffer.load_complex_v128(3);
+        let value4 = buffer.load_complex_v128(4);
+        let value5 = buffer.load_complex_v128(5);
 
         let out = self.perform_fft_direct(value0, value1, value2, value3, value4, value5);
 
-        buffer.store_complex(out[0], 0);
-        buffer.store_complex(out[1], 1);
-        buffer.store_complex(out[2], 2);
-        buffer.store_complex(out[3], 3);
-        buffer.store_complex(out[4], 4);
-        buffer.store_complex(out[5], 5);
+        buffer.store_complex_v128(out[0], 0);
+        buffer.store_complex_v128(out[1], 1);
+        buffer.store_complex_v128(out[2], 2);
+        buffer.store_complex_v128(out[3], 3);
+        buffer.store_complex_v128(out[4], 4);
+        buffer.store_complex_v128(out[5], 5);
     }
 
     #[inline(always)]
@@ -1622,7 +1622,7 @@ impl<T: FftNum> WasmSimdF32Butterfly9<T> {
         let out = self.perform_parallel_fft_direct(values);
 
         for n in 0..9 {
-            buffer.store_partial_lo_complex(out[n], n);
+            buffer.store_partial_lo_complex_v128(out[n], n);
         }
     }
 
@@ -2241,7 +2241,7 @@ impl<T: FftNum> WasmSimdF32Butterfly15<T> {
         let out = self.perform_parallel_fft_direct(values);
 
         for n in 0..15 {
-            buffer.store_partial_lo_complex(out[n], n);
+            buffer.store_partial_lo_complex_v128(out[n], n);
         }
     }
 

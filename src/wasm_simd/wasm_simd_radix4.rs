@@ -1,110 +1,47 @@
 use num_complex::Complex;
 
-use core::arch::wasm32::*;
+use std::any::TypeId;
+use std::sync::Arc;
 
 use crate::array_utils::{self, bitreversed_transpose, workaround_transmute_mut};
 use crate::common::{fft_error_inplace, fft_error_outofplace};
-use crate::wasm_simd::wasm_simd_butterflies::{
-    WasmSimdF32Butterfly1, WasmSimdF32Butterfly16, WasmSimdF32Butterfly2, WasmSimdF32Butterfly32,
-    WasmSimdF32Butterfly4, WasmSimdF32Butterfly8,
-};
-use crate::wasm_simd::wasm_simd_butterflies::{
-    WasmSimdF64Butterfly1, WasmSimdF64Butterfly16, WasmSimdF64Butterfly2, WasmSimdF64Butterfly32,
-    WasmSimdF64Butterfly4, WasmSimdF64Butterfly8,
-};
-use crate::{common::FftNum, twiddles, FftDirection};
+use crate::{common::FftNum, FftDirection};
 use crate::{Direction, Fft, Length};
 
-use super::wasm_simd_common::{assert_f32, assert_f64};
-use super::wasm_simd_utils::*;
+use super::WasmNum;
 
-use super::wasm_simd_vector::{WasmSimdArray, WasmSimdArrayMut};
+use super::wasm_simd_vector::{Rotation90, WasmSimdArray, WasmSimdArrayMut, WasmVector};
 
-/// FFT algorithm optimized for power-of-two sizes, WasmSimd accelerated version.
+/// FFT algorithm optimized for power-of-two sizes, SSE accelerated version.
 /// This is designed to be used via a Planner, and not created directly.
 
-const USE_BUTTERFLY32_FROM: usize = 262144; // Use length 32 butterfly starting from this length
+pub struct WasmSimdRadix4<S: WasmNum, T> {
+    twiddles: Box<[S::VectorType]>,
+    rotation: Rotation90<S::VectorType>,
 
-enum WasmSimd32Butterfly<T> {
-    Len1(WasmSimdF32Butterfly1<T>),
-    Len2(WasmSimdF32Butterfly2<T>),
-    Len4(WasmSimdF32Butterfly4<T>),
-    Len8(WasmSimdF32Butterfly8<T>),
-    Len16(WasmSimdF32Butterfly16<T>),
-    Len32(WasmSimdF32Butterfly32<T>),
-}
-
-enum WasmSimd64Butterfly<T> {
-    Len1(WasmSimdF64Butterfly1<T>),
-    Len2(WasmSimdF64Butterfly2<T>),
-    Len4(WasmSimdF64Butterfly4<T>),
-    Len8(WasmSimdF64Butterfly8<T>),
-    Len16(WasmSimdF64Butterfly16<T>),
-    Len32(WasmSimdF64Butterfly32<T>),
-}
-
-pub struct WasmSimd32Radix4<T> {
-    _phantom: std::marker::PhantomData<T>,
-    twiddles: Box<[v128]>,
-
-    base_fft: WasmSimd32Butterfly<T>,
+    base_fft: Arc<dyn Fft<T>>,
     base_len: usize,
 
     len: usize,
     direction: FftDirection,
-    bf4: WasmSimdF32Butterfly4<T>,
 }
 
-impl<T: FftNum> WasmSimd32Radix4<T> {
-    /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the power-of-two FFT
-    pub fn new(len: usize, direction: FftDirection) -> Self {
-        assert!(
-            len.is_power_of_two(),
-            "Radix4 algorithm requires a power-of-two input size. Got {}",
-            len
-        );
-        assert_f32::<T>();
+impl<S: WasmNum, T: FftNum> WasmSimdRadix4<S, T> {
+    /// Constructs a new WasmSimdRadix4 which computes FFTs of size 4^k * base_fft.len()
+    pub fn new(k: usize, base_fft: Arc<dyn Fft<T>>) -> Self {
+        // Internal sanity check: Make sure that S == T.
+        // This struct has two generic parameters S and T, but they must always be the same, and are only kept separate to help work around the lack of specialization.
+        // It would be cool if we could do this as a static_assert instead
+        let id_a = TypeId::of::<S>();
+        let id_t = TypeId::of::<T>();
+        assert_eq!(id_a, id_t);
 
-        // figure out which base length we're going to use
-        let num_bits = len.trailing_zeros();
-        let (base_len, base_fft) = match num_bits {
-            0 => (
-                len,
-                WasmSimd32Butterfly::Len1(WasmSimdF32Butterfly1::new(direction)),
-            ),
-            1 => (
-                len,
-                WasmSimd32Butterfly::Len2(WasmSimdF32Butterfly2::new(direction)),
-            ),
-            2 => (
-                len,
-                WasmSimd32Butterfly::Len4(WasmSimdF32Butterfly4::new(direction)),
-            ),
-            3 => (
-                len,
-                WasmSimd32Butterfly::Len8(WasmSimdF32Butterfly8::new(direction)),
-            ),
-            _ => {
-                if num_bits % 2 == 1 {
-                    if len < USE_BUTTERFLY32_FROM {
-                        (
-                            8,
-                            WasmSimd32Butterfly::Len8(WasmSimdF32Butterfly8::new(direction)),
-                        )
-                    } else {
-                        (
-                            32,
-                            WasmSimd32Butterfly::Len32(WasmSimdF32Butterfly32::new(direction)),
-                        )
-                    }
-                } else {
-                    (
-                        16,
-                        WasmSimd32Butterfly::Len16(WasmSimdF32Butterfly16::new(direction)),
-                    )
-                }
-            }
-        };
+        let direction = base_fft.fft_direction();
+        let base_len = base_fft.len();
+
+        assert!(base_len.is_power_of_two() && base_len >= 2 * S::VectorType::COMPLEX_PER_VECTOR);
+
+        let len = base_len * (1 << (k * 2));
 
         // precompute the twiddle factors this algorithm will use.
         // we're doing the same precomputation of twiddle factors as the mixed radix algorithm where width=4 and height=len/4
@@ -115,209 +52,18 @@ impl<T: FftNum> WasmSimd32Radix4<T> {
         let mut twiddle_factors = Vec::with_capacity(len * 2);
         while cross_fft_len <= len {
             let num_scalar_columns = cross_fft_len / ROW_COUNT;
-            let num_vector_columns = num_scalar_columns / 2; // 2 complex<T> per v128
+            let num_vector_columns = num_scalar_columns / S::VectorType::COMPLEX_PER_VECTOR;
 
             for i in 0..num_vector_columns {
                 for k in 1..ROW_COUNT {
-                    let twiddle_a =
-                        twiddles::compute_twiddle::<f32>(2 * i * k, cross_fft_len, direction);
-                    let twiddle_b =
-                        twiddles::compute_twiddle::<f32>((2 * i + 1) * k, cross_fft_len, direction);
-                    let twiddles_packed =
-                        unsafe { [twiddle_a, twiddle_b].as_slice().load_complex(0) };
-                    twiddle_factors.push(twiddles_packed);
-                }
-            }
-            cross_fft_len *= ROW_COUNT;
-        }
-
-        Self {
-            twiddles: twiddle_factors.into_boxed_slice(),
-
-            base_fft,
-            base_len,
-
-            len,
-            direction,
-            _phantom: std::marker::PhantomData,
-            bf4: WasmSimdF32Butterfly4::<T>::new(direction),
-        }
-    }
-
-    #[target_feature(enable = "simd128")]
-    unsafe fn perform_fft_out_of_place(
-        &self,
-        input: &[Complex<T>],
-        output: &mut [Complex<T>],
-        _scratch: &mut [Complex<T>],
-    ) {
-        // copy the data into the output vector
-        if self.len() == self.base_len {
-            output.copy_from_slice(input);
-        } else {
-            bitreversed_transpose::<Complex<T>, 4>(self.base_len, input, output);
-        }
-
-        // Base-level FFTs
-        match &self.base_fft {
-            WasmSimd32Butterfly::Len1(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
-            WasmSimd32Butterfly::Len2(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
-            WasmSimd32Butterfly::Len4(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
-            WasmSimd32Butterfly::Len8(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
-            WasmSimd32Butterfly::Len16(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
-            WasmSimd32Butterfly::Len32(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
-        };
-
-        // cross-FFTs
-        const ROW_COUNT: usize = 4;
-        let mut cross_fft_len = self.base_len * ROW_COUNT;
-        let mut layer_twiddles: &[v128] = &self.twiddles;
-
-        while cross_fft_len <= input.len() {
-            let num_rows = input.len() / cross_fft_len;
-            let num_columns = cross_fft_len / ROW_COUNT;
-
-            for i in 0..num_rows {
-                butterfly_4_32(
-                    &mut output[i * cross_fft_len..],
-                    layer_twiddles,
-                    num_columns,
-                    &self.bf4,
-                )
-            }
-
-            // skip past all the twiddle factors used in this layer
-            // half as many twiddles because v128 vectors store 2 complex<f32> each
-            let twiddle_offset = num_columns * (ROW_COUNT - 1) / 2;
-            layer_twiddles = &layer_twiddles[twiddle_offset..];
-
-            cross_fft_len *= ROW_COUNT;
-        }
-    }
-}
-boilerplate_fft_wasm_simd_oop!(WasmSimd32Radix4, |this: &WasmSimd32Radix4<_>| this.len);
-
-#[target_feature(enable = "simd128")]
-unsafe fn butterfly_4_32<T: FftNum>(
-    data: &mut [Complex<T>],
-    twiddles: &[v128],
-    num_ffts: usize,
-    bf4: &WasmSimdF32Butterfly4<T>,
-) {
-    let mut idx = 0usize;
-    let mut buffer: &mut [Complex<f32>] = workaround_transmute_mut(data);
-    for tw in twiddles.chunks_exact(6).take(num_ffts / 4) {
-        let scratch0 = buffer.load_complex(idx);
-        let scratch0b = buffer.load_complex(idx + 2);
-        let mut scratch1 = buffer.load_complex(idx + 1 * num_ffts);
-        let mut scratch1b = buffer.load_complex(idx + 2 + 1 * num_ffts);
-        let mut scratch2 = buffer.load_complex(idx + 2 * num_ffts);
-        let mut scratch2b = buffer.load_complex(idx + 2 + 2 * num_ffts);
-        let mut scratch3 = buffer.load_complex(idx + 3 * num_ffts);
-        let mut scratch3b = buffer.load_complex(idx + 2 + 3 * num_ffts);
-
-        scratch1 = mul_complex_f32(scratch1, tw[0]);
-        scratch2 = mul_complex_f32(scratch2, tw[1]);
-        scratch3 = mul_complex_f32(scratch3, tw[2]);
-        scratch1b = mul_complex_f32(scratch1b, tw[3]);
-        scratch2b = mul_complex_f32(scratch2b, tw[4]);
-        scratch3b = mul_complex_f32(scratch3b, tw[5]);
-
-        let scratch = bf4.perform_parallel_fft_direct(scratch0, scratch1, scratch2, scratch3);
-        let scratchb = bf4.perform_parallel_fft_direct(scratch0b, scratch1b, scratch2b, scratch3b);
-
-        buffer.store_complex(scratch[0], idx);
-        buffer.store_complex(scratchb[0], idx + 2);
-        buffer.store_complex(scratch[1], idx + 1 * num_ffts);
-        buffer.store_complex(scratchb[1], idx + 2 + 1 * num_ffts);
-        buffer.store_complex(scratch[2], idx + 2 * num_ffts);
-        buffer.store_complex(scratchb[2], idx + 2 + 2 * num_ffts);
-        buffer.store_complex(scratch[3], idx + 3 * num_ffts);
-        buffer.store_complex(scratchb[3], idx + 2 + 3 * num_ffts);
-
-        idx += 4;
-    }
-}
-
-pub struct WasmSimd64Radix4<T> {
-    _phantom: std::marker::PhantomData<T>,
-    twiddles: Box<[v128]>,
-
-    base_fft: WasmSimd64Butterfly<T>,
-    base_len: usize,
-
-    len: usize,
-    direction: FftDirection,
-    bf4: WasmSimdF64Butterfly4<T>,
-}
-
-impl<T: FftNum> WasmSimd64Radix4<T> {
-    /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the power-of-two FFT
-    pub fn new(len: usize, direction: FftDirection) -> Self {
-        assert!(
-            len.is_power_of_two(),
-            "Radix4 algorithm requires a power-of-two input size. Got {}",
-            len
-        );
-
-        assert_f64::<T>();
-
-        // figure out which base length we're going to use
-        let num_bits = len.trailing_zeros();
-        let (base_len, base_fft) = match num_bits {
-            0 => (
-                len,
-                WasmSimd64Butterfly::Len1(WasmSimdF64Butterfly1::new(direction)),
-            ),
-            1 => (
-                len,
-                WasmSimd64Butterfly::Len2(WasmSimdF64Butterfly2::new(direction)),
-            ),
-            2 => (
-                len,
-                WasmSimd64Butterfly::Len4(WasmSimdF64Butterfly4::new(direction)),
-            ),
-            3 => (
-                len,
-                WasmSimd64Butterfly::Len8(WasmSimdF64Butterfly8::new(direction)),
-            ),
-            _ => {
-                if num_bits % 2 == 1 {
-                    if len < USE_BUTTERFLY32_FROM {
-                        (
-                            8,
-                            WasmSimd64Butterfly::Len8(WasmSimdF64Butterfly8::new(direction)),
-                        )
-                    } else {
-                        (
-                            32,
-                            WasmSimd64Butterfly::Len32(WasmSimdF64Butterfly32::new(direction)),
-                        )
+                    unsafe {
+                        twiddle_factors.push(WasmVector::make_mixedradix_twiddle_chunk(
+                            i * S::VectorType::COMPLEX_PER_VECTOR,
+                            k,
+                            cross_fft_len,
+                            direction,
+                        ));
                     }
-                } else {
-                    (
-                        16,
-                        WasmSimd64Butterfly::Len16(WasmSimdF64Butterfly16::new(direction)),
-                    )
-                }
-            }
-        };
-
-        // precompute the twiddle factors this algorithm will use.
-        // we're doing the same precomputation of twiddle factors as the mixed radix algorithm where width=4 and height=len/4
-        // but mixed radix only does one step and then calls itself recusrively, and this algorithm does every layer all the way down
-        // so we're going to pack all the "layers" of twiddle factors into a single array, starting with the bottom layer and going up
-        const ROW_COUNT: usize = 4;
-        let mut cross_fft_len = base_len * ROW_COUNT;
-        let mut twiddle_factors = Vec::with_capacity(len * 2);
-        while cross_fft_len <= len {
-            let num_columns = cross_fft_len / ROW_COUNT;
-
-            for i in 0..num_columns {
-                for k in 1..ROW_COUNT {
-                    let twiddle = twiddles::compute_twiddle::<f64>(i * k, cross_fft_len, direction);
-                    let twiddle_packed = unsafe { [twiddle].as_slice().load_complex(0) };
-                    twiddle_factors.push(twiddle_packed);
                 }
             }
             cross_fft_len *= ROW_COUNT;
@@ -325,14 +71,13 @@ impl<T: FftNum> WasmSimd64Radix4<T> {
 
         Self {
             twiddles: twiddle_factors.into_boxed_slice(),
+            rotation: unsafe { WasmVector::make_rotate90(direction) },
 
             base_fft,
             base_len,
 
             len,
             direction,
-            _phantom: std::marker::PhantomData,
-            bf4: WasmSimdF64Butterfly4::<T>::new(direction),
         }
     }
 
@@ -351,116 +96,128 @@ impl<T: FftNum> WasmSimd64Radix4<T> {
         }
 
         // Base-level FFTs
-        match &self.base_fft {
-            WasmSimd64Butterfly::Len1(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
-            WasmSimd64Butterfly::Len2(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
-            WasmSimd64Butterfly::Len4(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
-            WasmSimd64Butterfly::Len8(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
-            WasmSimd64Butterfly::Len16(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
-            WasmSimd64Butterfly::Len32(bf) => bf.perform_fft_butterfly_multi(output).unwrap(),
-        }
+        self.base_fft.process_with_scratch(output, &mut []);
 
         // cross-FFTs
         const ROW_COUNT: usize = 4;
         let mut cross_fft_len = self.base_len * ROW_COUNT;
-        let mut layer_twiddles: &[v128] = &self.twiddles;
+        let mut layer_twiddles: &[S::VectorType] = &self.twiddles;
 
         while cross_fft_len <= input.len() {
             let num_rows = input.len() / cross_fft_len;
-            let num_columns = cross_fft_len / ROW_COUNT;
+            let num_scalar_columns = cross_fft_len / ROW_COUNT;
+            let num_vector_columns = num_scalar_columns / S::VectorType::COMPLEX_PER_VECTOR;
 
             for i in 0..num_rows {
-                butterfly_4_64(
+                butterfly_4::<S, T>(
                     &mut output[i * cross_fft_len..],
                     layer_twiddles,
-                    num_columns,
-                    &self.bf4,
+                    num_scalar_columns,
+                    &self.rotation,
                 )
             }
 
             // skip past all the twiddle factors used in this layer
-            let twiddle_offset = num_columns * (ROW_COUNT - 1);
+            let twiddle_offset = num_vector_columns * (ROW_COUNT - 1);
             layer_twiddles = &layer_twiddles[twiddle_offset..];
 
             cross_fft_len *= ROW_COUNT;
         }
     }
 }
-boilerplate_fft_wasm_simd_oop!(WasmSimd64Radix4, |this: &WasmSimd64Radix4<_>| this.len);
+boilerplate_fft_wasm_simd_oop!(WasmSimdRadix4, |this: &WasmSimdRadix4<_, _>| this.len);
 
 #[target_feature(enable = "simd128")]
-unsafe fn butterfly_4_64<T: FftNum>(
+unsafe fn butterfly_4<S: WasmNum, T: FftNum>(
     data: &mut [Complex<T>],
-    twiddles: &[v128],
+    twiddles: &[S::VectorType],
     num_ffts: usize,
-    bf4: &WasmSimdF64Butterfly4<T>,
+    rotation: &Rotation90<S::VectorType>,
 ) {
+    let unroll_offset = S::VectorType::COMPLEX_PER_VECTOR;
+
     let mut idx = 0usize;
-    let mut buffer: &mut [Complex<f64>] = workaround_transmute_mut(data);
-    for tw in twiddles.chunks_exact(6).take(num_ffts / 2) {
-        let scratch0 = buffer.load_complex(idx);
-        let scratch0b = buffer.load_complex(idx + 1);
-        let mut scratch1 = buffer.load_complex(idx + 1 * num_ffts);
-        let mut scratch1b = buffer.load_complex(idx + 1 + 1 * num_ffts);
-        let mut scratch2 = buffer.load_complex(idx + 2 * num_ffts);
-        let mut scratch2b = buffer.load_complex(idx + 1 + 2 * num_ffts);
-        let mut scratch3 = buffer.load_complex(idx + 3 * num_ffts);
-        let mut scratch3b = buffer.load_complex(idx + 1 + 3 * num_ffts);
+    let mut buffer: &mut [Complex<S>] = workaround_transmute_mut(data);
+    for tw in twiddles
+        .chunks_exact(6)
+        .take(num_ffts / (S::VectorType::COMPLEX_PER_VECTOR * 2))
+    {
+        let mut scratcha = [
+            buffer.load_complex(idx + 0 * num_ffts),
+            buffer.load_complex(idx + 1 * num_ffts),
+            buffer.load_complex(idx + 2 * num_ffts),
+            buffer.load_complex(idx + 3 * num_ffts),
+        ];
+        let mut scratchb = [
+            buffer.load_complex(idx + 0 * num_ffts + unroll_offset),
+            buffer.load_complex(idx + 1 * num_ffts + unroll_offset),
+            buffer.load_complex(idx + 2 * num_ffts + unroll_offset),
+            buffer.load_complex(idx + 3 * num_ffts + unroll_offset),
+        ];
 
-        scratch1 = mul_complex_f64(scratch1, tw[0]);
-        scratch2 = mul_complex_f64(scratch2, tw[1]);
-        scratch3 = mul_complex_f64(scratch3, tw[2]);
-        scratch1b = mul_complex_f64(scratch1b, tw[3]);
-        scratch2b = mul_complex_f64(scratch2b, tw[4]);
-        scratch3b = mul_complex_f64(scratch3b, tw[5]);
+        scratcha[1] = WasmVector::mul_complex(scratcha[1], tw[0]);
+        scratcha[2] = WasmVector::mul_complex(scratcha[2], tw[1]);
+        scratcha[3] = WasmVector::mul_complex(scratcha[3], tw[2]);
+        scratchb[1] = WasmVector::mul_complex(scratchb[1], tw[3]);
+        scratchb[2] = WasmVector::mul_complex(scratchb[2], tw[4]);
+        scratchb[3] = WasmVector::mul_complex(scratchb[3], tw[5]);
 
-        let scratch = bf4.perform_fft_direct(scratch0, scratch1, scratch2, scratch3);
-        let scratchb = bf4.perform_fft_direct(scratch0b, scratch1b, scratch2b, scratch3b);
+        let scratcha = WasmVector::column_butterfly4(scratcha, *rotation);
+        let scratchb = WasmVector::column_butterfly4(scratchb, *rotation);
 
-        buffer.store_complex(scratch[0], idx);
-        buffer.store_complex(scratchb[0], idx + 1);
-        buffer.store_complex(scratch[1], idx + 1 * num_ffts);
-        buffer.store_complex(scratchb[1], idx + 1 + 1 * num_ffts);
-        buffer.store_complex(scratch[2], idx + 2 * num_ffts);
-        buffer.store_complex(scratchb[2], idx + 1 + 2 * num_ffts);
-        buffer.store_complex(scratch[3], idx + 3 * num_ffts);
-        buffer.store_complex(scratchb[3], idx + 1 + 3 * num_ffts);
+        buffer.store_complex(scratcha[0], idx + 0 * num_ffts);
+        buffer.store_complex(scratchb[0], idx + 0 * num_ffts + unroll_offset);
+        buffer.store_complex(scratcha[1], idx + 1 * num_ffts);
+        buffer.store_complex(scratchb[1], idx + 1 * num_ffts + unroll_offset);
+        buffer.store_complex(scratcha[2], idx + 2 * num_ffts);
+        buffer.store_complex(scratchb[2], idx + 2 * num_ffts + unroll_offset);
+        buffer.store_complex(scratcha[3], idx + 3 * num_ffts);
+        buffer.store_complex(scratchb[3], idx + 3 * num_ffts + unroll_offset);
 
-        idx += 2;
+        idx += S::VectorType::COMPLEX_PER_VECTOR * 2;
     }
 }
 
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use crate::test_utils::check_fft_algorithm;
-    use wasm_bindgen_test::wasm_bindgen_test;
+    use crate::test_utils::{check_fft_algorithm, construct_base};
 
-    #[wasm_bindgen_test]
+    #[test]
     fn test_wasm_simd_radix4_64() {
-        for pow in 4..12 {
-            let len = 1 << pow;
-            test_wasm_simd_radix4_64_with_length(len, FftDirection::Forward);
-            test_wasm_simd_radix4_64_with_length(len, FftDirection::Inverse);
+        for base in [2, 4, 8, 16] {
+            let base_forward = construct_base(base, FftDirection::Forward);
+            let base_inverse = construct_base(base, FftDirection::Inverse);
+            for k in 0..4 {
+                test_wasm_simd_radix4_64_with_base(k, Arc::clone(&base_forward));
+                test_wasm_simd_radix4_64_with_base(k, Arc::clone(&base_inverse));
+            }
         }
     }
 
-    fn test_wasm_simd_radix4_64_with_length(len: usize, direction: FftDirection) {
-        let fft = WasmSimd64Radix4::new(len, direction);
+    fn test_wasm_simd_radix4_64_with_base(k: usize, base_fft: Arc<dyn Fft<f64>>) {
+        let len = base_fft.len() * 4usize.pow(k as u32);
+        let direction = base_fft.fft_direction();
+        let fft = WasmSimdRadix4::<f64, f64>::new(k, base_fft);
         check_fft_algorithm::<f64>(&fft, len, direction);
     }
 
-    #[wasm_bindgen_test]
+    #[test]
     fn test_wasm_simd_radix4_32() {
-        for pow in 0..12 {
-            let len = 1 << pow;
-            test_wasm_simd_radix4_32_with_length(len, FftDirection::Forward);
-            test_wasm_simd_radix4_32_with_length(len, FftDirection::Inverse);
+        for base in [4, 8, 16] {
+            let base_forward = construct_base(base, FftDirection::Forward);
+            let base_inverse = construct_base(base, FftDirection::Inverse);
+            for k in 0..4 {
+                test_wasm_simd_radix4_32_with_base(k, Arc::clone(&base_forward));
+                test_wasm_simd_radix4_32_with_base(k, Arc::clone(&base_inverse));
+            }
         }
     }
 
-    fn test_wasm_simd_radix4_32_with_length(len: usize, direction: FftDirection) {
-        let fft = WasmSimd32Radix4::new(len, direction);
+    fn test_wasm_simd_radix4_32_with_base(k: usize, base_fft: Arc<dyn Fft<f32>>) {
+        let len = base_fft.len() * 4usize.pow(k as u32);
+        let direction = base_fft.fft_direction();
+        let fft = WasmSimdRadix4::<f32, f32>::new(k, base_fft);
         check_fft_algorithm::<f32>(&fft, len, direction);
     }
 }
