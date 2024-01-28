@@ -626,7 +626,7 @@ impl<T: FftNum> FftPlannerNeon<T> {
                     let mixed_radix_factors = PrimeFactors::compute(mixed_radix_len);
                     self.design_fft_with_factors(mixed_radix_len, mixed_radix_factors)
                 } else {
-                    self.design_radix4(len)
+                    self.design_radix4(inner_fft_len_pow2)
                 };
             Arc::new(Recipe::BluesteinsAlgorithm { len, inner_fft })
         } else {
