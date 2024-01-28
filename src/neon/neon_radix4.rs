@@ -199,7 +199,7 @@ mod unit_tests {
     fn test_neon_radix4_64_with_base(k: usize, base_fft: Arc<dyn Fft<f64>>) {
         let len = base_fft.len() * 4usize.pow(k as u32);
         let direction = base_fft.fft_direction();
-        let fft = NeonRadix4::<f64, f64>::new(k, base_fft).unwrap();
+        let fft = NeonRadix4::<f64, f64>::new(k, base_fft);
         check_fft_algorithm::<f64>(&fft, len, direction);
     }
 
@@ -218,7 +218,7 @@ mod unit_tests {
     fn test_neon_radix4_32_with_base(k: usize, base_fft: Arc<dyn Fft<f32>>) {
         let len = base_fft.len() * 4usize.pow(k as u32);
         let direction = base_fft.fft_direction();
-        let fft = NeonRadix4::<f32, f32>::new(k, base_fft).unwrap();
+        let fft = NeonRadix4::<f32, f32>::new(k, base_fft);
         check_fft_algorithm::<f32>(&fft, len, direction);
     }
 }

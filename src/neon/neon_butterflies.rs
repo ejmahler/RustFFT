@@ -206,7 +206,7 @@ impl<T: FftNum> NeonF32Butterfly1<T> {
     }
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
-        let value = buffer.load_partial1_complex(0);
+        let value = buffer.load_partial_lo_complex(0);
         buffer.store_partial_lo_complex(value, 0);
     }
 
@@ -444,7 +444,7 @@ impl<T: FftNum> NeonF32Butterfly3<T> {
     }
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
-        let value0x = buffer.load_partial1_complex(0);
+        let value0x = buffer.load_partial_lo_complex(0);
         let value12 = buffer.load_complex(1);
 
         let out = self.perform_fft_direct(value0x, value12);

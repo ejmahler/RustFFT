@@ -1,5 +1,6 @@
 use core::arch::aarch64::*;
 use num_complex::Complex;
+use num_traits::Zero;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 
@@ -184,7 +185,7 @@ impl NeonVector for float32x4_t {
     unsafe fn load_partial_lo_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
         let temp = vmovq_n_f32(0.0);
         vreinterpretq_f32_u64(vld1q_lane_u64::<0>(
-            ptr as *const f64,
+            ptr as *const u64,
             vreinterpretq_u64_f32(temp),
         ))
     }
@@ -301,7 +302,7 @@ impl NeonVector for float64x2_t {
 
     #[inline(always)]
     unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
-        vst1q_f64(ptr as *mut f64, data, data);
+        vst1q_f64(ptr as *mut f64, data);
     }
 
     #[inline(always)]
@@ -495,25 +496,6 @@ where
     #[inline(always)]
     unsafe fn store_partial_hi_complex(&mut self, vector: T::VectorType, index: usize) {
         self.output.store_partial_hi_complex(vector, index);
-    }
-}
-
-impl<'a, T: NeonNum> NeonArrayMut<T> for DoubleBuf<'a, T>
-where
-    Self: NeonArray<T>,
-    &'a mut [Complex<T>]: NeonArrayMut<T>,
-{
-    #[inline(always)]
-    unsafe fn store_complex(&mut self, vector: T::VectorType, index: usize) {
-        self.output.store_complex(vector, index);
-    }
-    #[inline(always)]
-    unsafe fn store_partial_hi_complex(&mut self, vector: T::VectorType, index: usize) {
-        self.output.store_partial_hi_complex(vector, index);
-    }
-    #[inline(always)]
-    unsafe fn store_partial_lo_complex(&mut self, vector: T::VectorType, index: usize) {
-        self.output.store_partial_lo_complex(vector, index);
     }
 }
 

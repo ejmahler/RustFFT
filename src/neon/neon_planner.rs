@@ -720,7 +720,7 @@ mod unit_tests {
         for pow in 6..32 {
             let len = 1 << pow;
             let plan = planner.design_fft_for_len(len);
-            assert_eq!(*plan, Recipe::Radix4(len));
+            assert!(matches!(*plan, Recipe::Radix4 { k: _, base_fft: _ }));
             assert_eq!(plan.len(), len, "Recipe reports wrong length");
         }
     }

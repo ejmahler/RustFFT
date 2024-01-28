@@ -96,7 +96,7 @@ macro_rules! separate_interleaved_complex_f32 {
 
 macro_rules! boilerplate_fft_neon_oop {
     ($struct_name:ident, $len_fn:expr) => {
-        impl<T: FftNum> Fft<T> for $struct_name<T> {
+        impl<N: NeonNum, T: FftNum> Fft<T> for $struct_name<N, T> {
             fn process_outofplace_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
@@ -174,13 +174,13 @@ macro_rules! boilerplate_fft_neon_oop {
                 0
             }
         }
-        impl<T> Length for $struct_name<T> {
+        impl<N: NeonNum, T> Length for $struct_name<N, T> {
             #[inline(always)]
             fn len(&self) -> usize {
                 $len_fn(self)
             }
         }
-        impl<T> Direction for $struct_name<T> {
+        impl<N: NeonNum, T> Direction for $struct_name<N, T> {
             #[inline(always)]
             fn fft_direction(&self) -> FftDirection {
                 self.direction

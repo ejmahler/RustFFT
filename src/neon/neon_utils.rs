@@ -207,6 +207,7 @@ impl Rotate90F64 {
 #[cfg(test)]
 mod unit_tests {
     use super::*;
+    use crate::neon::NeonVector;
     use num_complex::Complex;
 
     #[test]
@@ -214,7 +215,7 @@ mod unit_tests {
         unsafe {
             let right = vld1q_f64([1.0, 2.0].as_ptr());
             let left = vld1q_f64([5.0, 7.0].as_ptr());
-            let res = mul_complex_f64(left, right);
+            let res = NeonVector::mul_complex(left, right);
             let expected = vld1q_f64([1.0 * 5.0 - 2.0 * 7.0, 1.0 * 7.0 + 2.0 * 5.0].as_ptr());
             assert_eq!(
                 std::mem::transmute::<float64x2_t, Complex<f64>>(res),
@@ -233,7 +234,7 @@ mod unit_tests {
 
             let nbr2 = vld1q_f32([val3, val4].as_ptr() as *const f32);
             let nbr1 = vld1q_f32([val1, val2].as_ptr() as *const f32);
-            let res = mul_complex_f32(nbr1, nbr2);
+            let res = NeonVector::mul_complex(nbr1, nbr2);
             let res = std::mem::transmute::<float32x4_t, [Complex<f32>; 2]>(res);
             let expected = [val1 * val3, val2 * val4];
             assert_eq!(res, expected);

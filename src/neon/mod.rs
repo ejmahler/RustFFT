@@ -16,6 +16,11 @@ pub use self::neon_butterflies::*;
 pub use self::neon_prime_butterflies::*;
 pub use self::neon_radix4::*;
 
+use std::arch::aarch64::{float32x4_t, float64x2_t};
+
+use crate::FftNum;
+use neon_vector::NeonVector;
+
 pub trait NeonNum: FftNum {
     type VectorType: NeonVector<ScalarType = Self>;
 }
