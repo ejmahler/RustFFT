@@ -12,7 +12,7 @@ use crate::{Direction, Fft, Length};
 
 use super::sse_common::{assert_f32, assert_f64};
 use super::sse_utils::*;
-use super::sse_vector::{SseArrayMut};
+use super::sse_vector::SseArrayMut;
 use super::sse_butterflies::{parallel_fft2_interleaved_f32, solo_fft2_f64};
 
 // Auto-generated prime length butterflies

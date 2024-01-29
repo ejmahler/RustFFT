@@ -46,12 +46,22 @@ impl<T: FftNum> Radix3<T> {
         });
 
         // figure out which base length we're going to use
-        let (base_len, base_fft) = match exponent {
-            0 => (len, Arc::new(Butterfly1::new(direction)) as Arc<dyn Fft<T>>),
-            1 => (len, Arc::new(Butterfly3::new(direction)) as Arc<dyn Fft<T>>),
-            2 => (len, Arc::new(Butterfly9::new(direction)) as Arc<dyn Fft<T>>),
-            _ => (27, Arc::new(Butterfly27::new(direction)) as Arc<dyn Fft<T>>),
+        let (base_exponent, base_fft) = match exponent {
+            0 => (0, Arc::new(Butterfly1::new(direction)) as Arc<dyn Fft<T>>),
+            1 => (1, Arc::new(Butterfly3::new(direction)) as Arc<dyn Fft<T>>),
+            2 => (2, Arc::new(Butterfly9::new(direction)) as Arc<dyn Fft<T>>),
+            _ => (3, Arc::new(Butterfly27::new(direction)) as Arc<dyn Fft<T>>),
         };
+
+        Self::new_with_base(exponent - base_exponent, base_fft)
+    }
+
+    /// Constructs a Radix3 instance which computes FFTs of length `3^k * base_fft.len()`
+    pub fn new_with_base(k: u32, base_fft: Arc<dyn Fft<T>>) -> Self {
+        let base_len = base_fft.len();
+        let len = base_len * 3usize.pow(k);
+
+        let direction = base_fft.fft_direction();
 
         // precompute the twiddle factors this algorithm will use.
         // we're doing the same precomputation of twiddle factors as the mixed radix algorithm where width=3 and height=len/3
@@ -158,19 +168,38 @@ unsafe fn butterfly_3<T: FftNum>(
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use crate::test_utils::check_fft_algorithm;
+    use crate::test_utils::{check_fft_algorithm, construct_base};
 
     #[test]
-    fn test_radix3() {
+    fn test_radix3_with_length() {
         for pow in 0..8 {
             let len = 3usize.pow(pow);
-            test_3adix3_with_length(len, FftDirection::Forward);
-            test_3adix3_with_length(len, FftDirection::Inverse);
+
+            let forward_fft = Radix3::new(len, FftDirection::Forward);
+            check_fft_algorithm::<f32>(&forward_fft, len, FftDirection::Forward);
+
+            let inverse_fft = Radix3::new(len, FftDirection::Inverse);
+            check_fft_algorithm::<f32>(&inverse_fft, len, FftDirection::Inverse);
         }
     }
 
-    fn test_3adix3_with_length(len: usize, direction: FftDirection) {
-        let fft = Radix3::new(len, direction);
+    #[test]
+    fn test_radix3_with_base() {
+        for base in 1..=9 {
+            let base_forward = construct_base(base, FftDirection::Forward);
+            let base_inverse = construct_base(base, FftDirection::Inverse);
+
+            for k in 0..5 {
+                test_radix3(k, Arc::clone(&base_forward));
+                test_radix3(k, Arc::clone(&base_inverse));
+            }
+        }
+    }
+
+    fn test_radix3(k: u32, base_fft: Arc<dyn Fft<f32>>) {
+        let len = base_fft.len() * 3usize.pow(k as u32);
+        let direction = base_fft.fft_direction();
+        let fft = Radix3::new_with_base(k, base_fft);
 
         check_fft_algorithm::<f32>(&fft, len, direction);
     }

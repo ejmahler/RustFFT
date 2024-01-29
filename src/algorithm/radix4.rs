@@ -43,19 +43,29 @@ impl<T: FftNum> Radix4<T> {
         );
 
         // figure out which base length we're going to use
-        let num_bits = len.trailing_zeros();
-        let (base_len, base_fft) = match num_bits {
-            0 => (len, Arc::new(Butterfly1::new(direction)) as Arc<dyn Fft<T>>),
-            1 => (len, Arc::new(Butterfly2::new(direction)) as Arc<dyn Fft<T>>),
-            2 => (len, Arc::new(Butterfly4::new(direction)) as Arc<dyn Fft<T>>),
+        let exponent = len.trailing_zeros();
+        let (base_exponent, base_fft) = match exponent {
+            0 => (0, Arc::new(Butterfly1::new(direction)) as Arc<dyn Fft<T>>),
+            1 => (1, Arc::new(Butterfly2::new(direction)) as Arc<dyn Fft<T>>),
+            2 => (2, Arc::new(Butterfly4::new(direction)) as Arc<dyn Fft<T>>),
             _ => {
-                if num_bits % 2 == 1 {
-                    (8, Arc::new(Butterfly8::new(direction)) as Arc<dyn Fft<T>>)
+                if exponent % 2 == 1 {
+                    (3, Arc::new(Butterfly8::new(direction)) as Arc<dyn Fft<T>>)
                 } else {
-                    (16, Arc::new(Butterfly16::new(direction)) as Arc<dyn Fft<T>>)
+                    (4, Arc::new(Butterfly16::new(direction)) as Arc<dyn Fft<T>>)
                 }
             }
         };
+
+        Self::new_with_base((exponent - base_exponent) / 2, base_fft)
+    }
+
+    /// Constructs a Radix4 instance which computes FFTs of length `4^k * base_fft.len()`
+    pub fn new_with_base(k: u32, base_fft: Arc<dyn Fft<T>>) -> Self {
+        let base_len = base_fft.len();
+        let len = base_len * (1 << (k * 2));
+
+        let direction = base_fft.fft_direction();
 
         // precompute the twiddle factors this algorithm will use.
         // we're doing the same precomputation of twiddle factors as the mixed radix algorithm where width=4 and height=len/4
@@ -165,20 +175,39 @@ unsafe fn butterfly_4<T: FftNum>(
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use crate::test_utils::check_fft_algorithm;
+    use crate::test_utils::{check_fft_algorithm, construct_base};
 
     #[test]
-    fn test_radix4() {
-        for pow in 1..12 {
+    fn test_radix4_with_length() {
+        for pow in 0..8 {
             let len = 1 << pow;
-            test_radix4_with_length(len, FftDirection::Forward);
-            //test_radix4_with_length(len, FftDirection::Inverse);
+
+            let forward_fft = Radix4::new(len, FftDirection::Forward);
+            check_fft_algorithm::<f32>(&forward_fft, len, FftDirection::Forward);
+
+            let inverse_fft = Radix4::new(len, FftDirection::Inverse);
+            check_fft_algorithm::<f32>(&inverse_fft, len, FftDirection::Inverse);
         }
     }
 
-    fn test_radix4_with_length(len: usize, direction: FftDirection) {
-        let fft = Radix4::new(len, direction);
+    #[test]
+    fn test_radix4_with_base() {
+        for base in 1..=9 {
+            let base_forward = construct_base(base, FftDirection::Forward);
+            let base_inverse = construct_base(base, FftDirection::Inverse);
 
-        check_fft_algorithm::<f32>(&fft, len, direction);
+            for k in 0..4 {
+                test_radix4(k, Arc::clone(&base_forward));
+                test_radix4(k, Arc::clone(&base_inverse));
+            }
+        }
+    }
+
+    fn test_radix4(k: u32, base_fft: Arc<dyn Fft<f64>>) {
+        let len = base_fft.len() * 4usize.pow(k as u32);
+        let direction = base_fft.fft_direction();
+        let fft = Radix4::new_with_base(k, base_fft);
+
+        check_fft_algorithm::<f64>(&fft, len, direction);
     }
 }

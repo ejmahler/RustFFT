@@ -98,7 +98,7 @@ macro_rules! separate_interleaved_complex_f32 {
 
 macro_rules! boilerplate_fft_wasm_simd_oop {
     ($struct_name:ident, $len_fn:expr) => {
-        impl<T: FftNum> Fft<T> for $struct_name<T> {
+        impl<S: WasmNum, T: FftNum> Fft<T> for $struct_name<S, T> {
             fn process_outofplace_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
@@ -176,13 +176,13 @@ macro_rules! boilerplate_fft_wasm_simd_oop {
                 0
             }
         }
-        impl<T> Length for $struct_name<T> {
+        impl<S: WasmNum, T> Length for $struct_name<S, T> {
             #[inline(always)]
             fn len(&self) -> usize {
                 $len_fn(self)
             }
         }
-        impl<T> Direction for $struct_name<T> {
+        impl<S: WasmNum, T> Direction for $struct_name<S, T> {
             #[inline(always)]
             fn fft_direction(&self) -> FftDirection {
                 self.direction

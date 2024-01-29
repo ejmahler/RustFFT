@@ -171,18 +171,6 @@ pub unsafe fn transpose_complex_2x2_f32(left: float32x4_t, right: float32x4_t) -
     [temp02, temp13]
 }
 
-// Complex multiplication.
-// Each input contains two complex values, which are multiplied in parallel.
-#[inline(always)]
-pub unsafe fn mul_complex_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t {
-    // ARMv8.2-A introduced vcmulq_f32 and vcmlaq_f32 for complex multiplication, these intrinsics are not yet available.
-    let temp1 = vtrn1q_f32(right, right);
-    let temp2 = vtrn2q_f32(right, vnegq_f32(right));
-    let temp3 = vmulq_f32(temp2, left);
-    let temp4 = vrev64q_f32(temp3);
-    vfmaq_f32(temp4, temp1, left)
-}
-
 //  __  __       _   _                __   _  _   _     _ _
 // |  \/  | __ _| |_| |__            / /_ | || | | |__ (_) |_
 // | |\/| |/ _` | __| '_ \   _____  | '_ \| || |_| '_ \| | __|
@@ -216,17 +204,10 @@ impl Rotate90F64 {
     }
 }
 
-#[inline(always)]
-pub unsafe fn mul_complex_f64(left: float64x2_t, right: float64x2_t) -> float64x2_t {
-    // ARMv8.2-A introduced vcmulq_f64 and vcmlaq_f64 for complex multiplication, these intrinsics are not yet available.
-    let temp = vcombine_f64(vneg_f64(vget_high_f64(left)), vget_low_f64(left));
-    let sum = vmulq_laneq_f64::<0>(left, right);
-    vfmaq_laneq_f64::<1>(sum, temp, right)
-}
-
 #[cfg(test)]
 mod unit_tests {
     use super::*;
+    use crate::neon::NeonVector;
     use num_complex::Complex;
 
     #[test]
@@ -234,7 +215,7 @@ mod unit_tests {
         unsafe {
             let right = vld1q_f64([1.0, 2.0].as_ptr());
             let left = vld1q_f64([5.0, 7.0].as_ptr());
-            let res = mul_complex_f64(left, right);
+            let res = NeonVector::mul_complex(left, right);
             let expected = vld1q_f64([1.0 * 5.0 - 2.0 * 7.0, 1.0 * 7.0 + 2.0 * 5.0].as_ptr());
             assert_eq!(
                 std::mem::transmute::<float64x2_t, Complex<f64>>(res),
@@ -253,7 +234,7 @@ mod unit_tests {
 
             let nbr2 = vld1q_f32([val3, val4].as_ptr() as *const f32);
             let nbr1 = vld1q_f32([val1, val2].as_ptr() as *const f32);
-            let res = mul_complex_f32(nbr1, nbr2);
+            let res = NeonVector::mul_complex(nbr1, nbr2);
             let res = std::mem::transmute::<float32x4_t, [Complex<f32>; 2]>(res);
             let expected = [val1 * val3, val2 * val4];
             assert_eq!(res, expected);

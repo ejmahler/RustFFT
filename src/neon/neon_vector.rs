@@ -1,8 +1,12 @@
 use core::arch::aarch64::*;
 use num_complex::Complex;
+use num_traits::Zero;
+use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 
-use crate::array_utils::DoubleBuf;
+use crate::{array_utils::DoubleBuf, twiddles, FftDirection};
+
+use super::NeonNum;
 
 // Read these indexes from an NeonArray and build an array of simd vectors.
 // Takes a name of a vector to read from, and a list of indexes to read.
@@ -123,197 +127,356 @@ macro_rules! write_complex_to_array_strided {
     }
 }
 
-pub trait NeonNum {
-    type VectorType;
+#[derive(Copy, Clone)]
+pub struct Rotation90<V: NeonVector>(V);
+
+// A trait to hold the BVectorType and COMPLEX_PER_VECTOR associated data
+pub trait NeonVector: Copy + Debug + Send + Sync {
+    const SCALAR_PER_VECTOR: usize;
     const COMPLEX_PER_VECTOR: usize;
+
+    type ScalarType: NeonNum<VectorType = Self>;
+
+    // loads of complex numbers
+    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
+    unsafe fn load_partial_lo_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
+    unsafe fn load1_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
+
+    // stores of complex numbers
+    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
+    unsafe fn store_partial_lo_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
+    unsafe fn store_partial_hi_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
+
+    /// Generates a chunk of twiddle factors starting at (X,Y) and incrementing X `COMPLEX_PER_VECTOR` times.
+    /// The result will be [twiddle(x*y, len), twiddle((x+1)*y, len), twiddle((x+2)*y, len), ...] for as many complex numbers fit in a vector
+    unsafe fn make_mixedradix_twiddle_chunk(
+        x: usize,
+        y: usize,
+        len: usize,
+        direction: FftDirection,
+    ) -> Self;
+
+    /// Pairwise multiply the complex numbers in `left` with the complex numbers in `right`.
+    unsafe fn mul_complex(left: Self, right: Self) -> Self;
+
+    /// Constructs a Rotate90 object that will apply eithr a 90 or 270 degree rotationto the complex elements
+    unsafe fn make_rotate90(direction: FftDirection) -> Rotation90<Self>;
+
+    /// Uses a pre-constructed rotate90 object to apply the given rotation
+    unsafe fn apply_rotate90(direction: Rotation90<Self>, values: Self) -> Self;
+
+    /// Each of these Interprets the input as rows of a Self::COMPLEX_PER_VECTOR-by-N 2D array, and computes parallel butterflies down the columns of the 2D array
+    unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2];
+    unsafe fn column_butterfly4(rows: [Self; 4], rotation: Rotation90<Self>) -> [Self; 4];
 }
-impl NeonNum for f32 {
-    type VectorType = float32x4_t;
+
+impl NeonVector for float32x4_t {
+    const SCALAR_PER_VECTOR: usize = 4;
     const COMPLEX_PER_VECTOR: usize = 2;
+
+    type ScalarType = f32;
+
+    #[inline(always)]
+    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+        vld1q_f32(ptr as *const f32)
+    }
+
+    #[inline(always)]
+    unsafe fn load_partial_lo_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+        let temp = vmovq_n_f32(0.0);
+        vreinterpretq_f32_u64(vld1q_lane_u64::<0>(
+            ptr as *const u64,
+            vreinterpretq_u64_f32(temp),
+        ))
+    }
+
+    #[inline(always)]
+    unsafe fn load1_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+        vreinterpretq_f32_u64(vld1q_dup_u64(ptr as *const u64))
+    }
+
+    #[inline(always)]
+    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
+        vst1q_f32(ptr as *mut f32, data);
+    }
+
+    #[inline(always)]
+    unsafe fn store_partial_lo_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
+        let low = vget_low_f32(data);
+        vst1_f32(ptr as *mut f32, low);
+    }
+
+    #[inline(always)]
+    unsafe fn store_partial_hi_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
+        let high = vget_high_f32(data);
+        vst1_f32(ptr as *mut f32, high);
+    }
+
+    #[inline(always)]
+    unsafe fn make_mixedradix_twiddle_chunk(
+        x: usize,
+        y: usize,
+        len: usize,
+        direction: FftDirection,
+    ) -> Self {
+        let mut twiddle_chunk = [Complex::<f32>::zero(); Self::COMPLEX_PER_VECTOR];
+        for i in 0..Self::COMPLEX_PER_VECTOR {
+            twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
+        }
+
+        twiddle_chunk.as_slice().load_complex(0)
+    }
+
+    #[inline(always)]
+    unsafe fn mul_complex(left: Self, right: Self) -> Self {
+        // ARMv8.2-A introduced vcmulq_f32 and vcmlaq_f32 for complex multiplication, these intrinsics are not yet available.
+        let temp1 = vtrn1q_f32(right, right);
+        let temp2 = vtrn2q_f32(right, vnegq_f32(right));
+        let temp3 = vmulq_f32(temp2, left);
+        let temp4 = vrev64q_f32(temp3);
+        vfmaq_f32(temp4, temp1, left)
+    }
+
+    #[inline(always)]
+    unsafe fn make_rotate90(direction: FftDirection) -> Rotation90<Self> {
+        Rotation90(match direction {
+            FftDirection::Forward => vld1q_f32([0.0, -0.0, 0.0, -0.0].as_ptr()),
+            FftDirection::Inverse => vld1q_f32([-0.0, 0.0, -0.0, 0.0].as_ptr()),
+        })
+    }
+
+    #[inline(always)]
+    unsafe fn apply_rotate90(direction: Rotation90<Self>, values: Self) -> Self {
+        let temp = vrev64q_f32(values);
+        vreinterpretq_f32_u32(veorq_u32(
+            vreinterpretq_u32_f32(temp),
+            vreinterpretq_u32_f32(direction.0),
+        ))
+    }
+
+    #[inline(always)]
+    unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
+        [vaddq_f32(rows[0], rows[1]), vsubq_f32(rows[0], rows[1])]
+    }
+
+    #[inline(always)]
+    unsafe fn column_butterfly4(rows: [Self; 4], rotation: Rotation90<Self>) -> [Self; 4] {
+        // Algorithm: 2x2 mixed radix
+
+        // Perform the first set of size-2 FFTs.
+        let [mid0, mid2] = Self::column_butterfly2([rows[0], rows[2]]);
+        let [mid1, mid3] = Self::column_butterfly2([rows[1], rows[3]]);
+
+        // Apply twiddle factors (in this case just a rotation)
+        let mid3_rotated = Self::apply_rotate90(rotation, mid3);
+
+        // Transpose the data and do size-2 FFTs down the columns
+        let [output0, output1] = Self::column_butterfly2([mid0, mid1]);
+        let [output2, output3] = Self::column_butterfly2([mid2, mid3_rotated]);
+
+        // Swap outputs 1 and 2 in the output to do a square transpose
+        [output0, output2, output1, output3]
+    }
 }
-impl NeonNum for f64 {
-    type VectorType = float64x2_t;
+
+impl NeonVector for float64x2_t {
+    const SCALAR_PER_VECTOR: usize = 2;
     const COMPLEX_PER_VECTOR: usize = 1;
+
+    type ScalarType = f64;
+
+    #[inline(always)]
+    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+        vld1q_f64(ptr as *const f64)
+    }
+
+    #[inline(always)]
+    unsafe fn load_partial_lo_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
+        unimplemented!("Impossible to do a load store of complex f64's");
+    }
+
+    #[inline(always)]
+    unsafe fn load1_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
+        unimplemented!("Impossible to do a load store of complex f64's");
+    }
+
+    #[inline(always)]
+    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
+        vst1q_f64(ptr as *mut f64, data);
+    }
+
+    #[inline(always)]
+    unsafe fn store_partial_lo_complex(_ptr: *mut Complex<Self::ScalarType>, _data: Self) {
+        unimplemented!("Impossible to do a partial store of complex f64's");
+    }
+
+    #[inline(always)]
+    unsafe fn store_partial_hi_complex(_ptr: *mut Complex<Self::ScalarType>, _data: Self) {
+        unimplemented!("Impossible to do a partial store of complex f64's");
+    }
+
+    #[inline(always)]
+    unsafe fn make_mixedradix_twiddle_chunk(
+        x: usize,
+        y: usize,
+        len: usize,
+        direction: FftDirection,
+    ) -> Self {
+        let mut twiddle_chunk = [Complex::<f64>::zero(); Self::COMPLEX_PER_VECTOR];
+        for i in 0..Self::COMPLEX_PER_VECTOR {
+            twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
+        }
+
+        twiddle_chunk.as_slice().load_complex(0)
+    }
+
+    #[inline(always)]
+    unsafe fn mul_complex(left: Self, right: Self) -> Self {
+        // ARMv8.2-A introduced vcmulq_f64 and vcmlaq_f64 for complex multiplication, these intrinsics are not yet available.
+        let temp = vcombine_f64(vneg_f64(vget_high_f64(left)), vget_low_f64(left));
+        let sum = vmulq_laneq_f64::<0>(left, right);
+        vfmaq_laneq_f64::<1>(sum, temp, right)
+    }
+
+    #[inline(always)]
+    unsafe fn make_rotate90(direction: FftDirection) -> Rotation90<Self> {
+        Rotation90(match direction {
+            FftDirection::Forward => vld1q_f64([0.0, -0.0].as_ptr()),
+            FftDirection::Inverse => vld1q_f64([-0.0, 0.0].as_ptr()),
+        })
+    }
+
+    #[inline(always)]
+    unsafe fn apply_rotate90(direction: Rotation90<Self>, values: Self) -> Self {
+        let temp = vcombine_f64(vget_high_f64(values), vget_low_f64(values));
+        vreinterpretq_f64_u64(veorq_u64(
+            vreinterpretq_u64_f64(temp),
+            vreinterpretq_u64_f64(direction.0),
+        ))
+    }
+
+    #[inline(always)]
+    unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
+        [vaddq_f64(rows[0], rows[1]), vsubq_f64(rows[0], rows[1])]
+    }
+
+    #[inline(always)]
+    unsafe fn column_butterfly4(rows: [Self; 4], rotation: Rotation90<Self>) -> [Self; 4] {
+        // Algorithm: 2x2 mixed radix
+
+        // Perform the first set of size-2 FFTs.
+        let [mid0, mid2] = Self::column_butterfly2([rows[0], rows[2]]);
+        let [mid1, mid3] = Self::column_butterfly2([rows[1], rows[3]]);
+
+        // Apply twiddle factors (in this case just a rotation)
+        let mid3_rotated = Self::apply_rotate90(rotation, mid3);
+
+        // Transpose the data and do size-2 FFTs down the columns
+        let [output0, output1] = Self::column_butterfly2([mid0, mid1]);
+        let [output2, output3] = Self::column_butterfly2([mid2, mid3_rotated]);
+
+        // Swap outputs 1 and 2 in the output to do a square transpose
+        [output0, output2, output1, output3]
+    }
 }
 
-// A trait to handle reading from an array of complex floats into Neon vectors.
-// Neon works with 128-bit vectors, meaning a vector can hold two complex f32,
+// A trait to handle reading from an array of complex floats into NEON vectors.
+// NEON works with 128-bit vectors, meaning a vector can hold two complex f32,
 // or a single complex f64.
-pub trait NeonArray<T: NeonNum>: Deref {
-    // Load complex numbers from the array to fill a Neon vector.
-    unsafe fn load_complex(&self, index: usize) -> T::VectorType;
-    // Load a single complex number from the array into a Neon vector, setting the unused elements to zero.
-    unsafe fn load_partial1_complex(&self, index: usize) -> T::VectorType;
-    // Load a single complex number from the array, and copy it to all elements of a Neon vector.
-    unsafe fn load1_complex(&self, index: usize) -> T::VectorType;
+pub trait NeonArray<S: NeonNum>: Deref {
+    // Load complex numbers from the array to fill a NEON vector.
+    unsafe fn load_complex(&self, index: usize) -> S::VectorType;
+    // Load a single complex number from the array into a NEON vector, setting the unused elements to zero.
+    unsafe fn load_partial_lo_complex(&self, index: usize) -> S::VectorType;
+    // Load a single complex number from the array, and copy it to all elements of a NEON vector.
+    unsafe fn load1_complex(&self, index: usize) -> S::VectorType;
 }
 
-impl NeonArray<f32> for &[Complex<f32>] {
+impl<S: NeonNum> NeonArray<S> for &[Complex<S>] {
     #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> <f32 as NeonNum>::VectorType {
-        debug_assert!(self.len() >= index + <f32 as NeonNum>::COMPLEX_PER_VECTOR);
-        vld1q_f32(self.as_ptr().add(index) as *const f32)
+    unsafe fn load_complex(&self, index: usize) -> S::VectorType {
+        debug_assert!(self.len() >= index + S::VectorType::COMPLEX_PER_VECTOR);
+        S::VectorType::load_complex(self.as_ptr().add(index))
     }
 
     #[inline(always)]
-    unsafe fn load_partial1_complex(&self, index: usize) -> <f32 as NeonNum>::VectorType {
+    unsafe fn load_partial_lo_complex(&self, index: usize) -> S::VectorType {
         debug_assert!(self.len() >= index + 1);
-        let temp = vmovq_n_f32(0.0);
-        vreinterpretq_f32_u64(vld1q_lane_u64::<0>(
-            self.as_ptr().add(index) as *const u64,
-            vreinterpretq_u64_f32(temp),
-        ))
+        S::VectorType::load_partial_lo_complex(self.as_ptr().add(index))
     }
 
     #[inline(always)]
-    unsafe fn load1_complex(&self, index: usize) -> <f32 as NeonNum>::VectorType {
+    unsafe fn load1_complex(&self, index: usize) -> S::VectorType {
         debug_assert!(self.len() >= index + 1);
-        vreinterpretq_f32_u64(vld1q_dup_u64(self.as_ptr().add(index) as *const u64))
+        S::VectorType::load1_complex(self.as_ptr().add(index))
     }
 }
-
-impl NeonArray<f32> for &mut [Complex<f32>] {
+impl<S: NeonNum> NeonArray<S> for &mut [Complex<S>] {
     #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> <f32 as NeonNum>::VectorType {
-        debug_assert!(self.len() >= index + <f32 as NeonNum>::COMPLEX_PER_VECTOR);
-        vld1q_f32(self.as_ptr().add(index) as *const f32)
+    unsafe fn load_complex(&self, index: usize) -> S::VectorType {
+        debug_assert!(self.len() >= index + S::VectorType::COMPLEX_PER_VECTOR);
+        S::VectorType::load_complex(self.as_ptr().add(index))
     }
 
     #[inline(always)]
-    unsafe fn load_partial1_complex(&self, index: usize) -> <f32 as NeonNum>::VectorType {
+    unsafe fn load_partial_lo_complex(&self, index: usize) -> S::VectorType {
         debug_assert!(self.len() >= index + 1);
-        let temp = vmovq_n_f32(0.0);
-        vreinterpretq_f32_u64(vld1q_lane_u64::<0>(
-            self.as_ptr().add(index) as *const u64,
-            vreinterpretq_u64_f32(temp),
-        ))
+        S::VectorType::load_partial_lo_complex(self.as_ptr().add(index))
     }
 
     #[inline(always)]
-    unsafe fn load1_complex(&self, index: usize) -> <f32 as NeonNum>::VectorType {
+    unsafe fn load1_complex(&self, index: usize) -> S::VectorType {
         debug_assert!(self.len() >= index + 1);
-        vreinterpretq_f32_u64(vld1q_dup_u64(self.as_ptr().add(index) as *const u64))
+        S::VectorType::load1_complex(self.as_ptr().add(index))
     }
 }
 
-impl NeonArray<f64> for &[Complex<f64>] {
-    #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> <f64 as NeonNum>::VectorType {
-        debug_assert!(self.len() >= index + <f64 as NeonNum>::COMPLEX_PER_VECTOR);
-        vld1q_f64(self.as_ptr().add(index) as *const f64)
-    }
-
-    #[inline(always)]
-    unsafe fn load_partial1_complex(&self, _index: usize) -> <f64 as NeonNum>::VectorType {
-        unimplemented!("Impossible to do a partial load of complex f64's");
-    }
-
-    #[inline(always)]
-    unsafe fn load1_complex(&self, _index: usize) -> <f64 as NeonNum>::VectorType {
-        unimplemented!("Impossible to do a partial load of complex f64's");
-    }
-}
-
-impl NeonArray<f64> for &mut [Complex<f64>] {
-    #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> <f64 as NeonNum>::VectorType {
-        debug_assert!(self.len() >= index + <f64 as NeonNum>::COMPLEX_PER_VECTOR);
-        vld1q_f64(self.as_ptr().add(index) as *const f64)
-    }
-
-    #[inline(always)]
-    unsafe fn load_partial1_complex(&self, _index: usize) -> <f64 as NeonNum>::VectorType {
-        unimplemented!("Impossible to do a partial load of complex f64's");
-    }
-
-    #[inline(always)]
-    unsafe fn load1_complex(&self, _index: usize) -> <f64 as NeonNum>::VectorType {
-        unimplemented!("Impossible to do a partial load of complex f64's");
-    }
-}
-
-impl<'a, T: NeonNum> NeonArray<T> for DoubleBuf<'a, T>
+impl<'a, S: NeonNum> NeonArray<S> for DoubleBuf<'a, S>
 where
-    &'a [Complex<T>]: NeonArray<T>,
+    &'a [Complex<S>]: NeonArray<S>,
 {
     #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> T::VectorType {
+    unsafe fn load_complex(&self, index: usize) -> S::VectorType {
         self.input.load_complex(index)
     }
     #[inline(always)]
-    unsafe fn load_partial1_complex(&self, index: usize) -> T::VectorType {
-        self.input.load_partial1_complex(index)
+    unsafe fn load_partial_lo_complex(&self, index: usize) -> S::VectorType {
+        self.input.load_partial_lo_complex(index)
     }
     #[inline(always)]
-    unsafe fn load1_complex(&self, index: usize) -> T::VectorType {
+    unsafe fn load1_complex(&self, index: usize) -> S::VectorType {
         self.input.load1_complex(index)
     }
 }
 
-// A trait to handle writing to an array of complex floats from Neon vectors.
-// Neon works with 128-bit vectors, meaning a vector can hold two complex f32,
+// A trait to handle writing to an array of complex floats from NEON vectors.
+// NEON works with 128-bit vectors, meaning a vector can hold two complex f32,
 // or a single complex f64.
-pub trait NeonArrayMut<T: NeonNum>: NeonArray<T> + DerefMut {
-    // Store all complex numbers from a Neon vector to the array.
-    unsafe fn store_complex(&mut self, vector: T::VectorType, index: usize);
-    // Store the low complex number from a Neon vector to the array.
-    unsafe fn store_partial_lo_complex(&mut self, vector: T::VectorType, index: usize);
-    // Store the high complex number from a Neon vector to the array.
-    unsafe fn store_partial_hi_complex(&mut self, vector: T::VectorType, index: usize);
+pub trait NeonArrayMut<S: NeonNum>: NeonArray<S> + DerefMut {
+    // Store all complex numbers from a NEON vector to the array.
+    unsafe fn store_complex(&mut self, vector: S::VectorType, index: usize);
+    // Store the low complex number from a NEON vector to the array.
+    unsafe fn store_partial_lo_complex(&mut self, vector: S::VectorType, index: usize);
+    // Store the high complex number from a NEON vector to the array.
+    unsafe fn store_partial_hi_complex(&mut self, vector: S::VectorType, index: usize);
 }
 
-impl NeonArrayMut<f32> for &mut [Complex<f32>] {
+impl<S: NeonNum> NeonArrayMut<S> for &mut [Complex<S>] {
     #[inline(always)]
-    unsafe fn store_complex(&mut self, vector: <f32 as NeonNum>::VectorType, index: usize) {
-        debug_assert!(self.len() >= index + <f32 as NeonNum>::COMPLEX_PER_VECTOR);
-        vst1q_f32(self.as_mut_ptr().add(index) as *mut f32, vector);
+    unsafe fn store_complex(&mut self, vector: S::VectorType, index: usize) {
+        debug_assert!(self.len() >= index + S::VectorType::COMPLEX_PER_VECTOR);
+        S::VectorType::store_complex(self.as_mut_ptr().add(index), vector)
     }
 
     #[inline(always)]
-    unsafe fn store_partial_hi_complex(
-        &mut self,
-        vector: <f32 as NeonNum>::VectorType,
-        index: usize,
-    ) {
+    unsafe fn store_partial_hi_complex(&mut self, vector: S::VectorType, index: usize) {
         debug_assert!(self.len() >= index + 1);
-        let high = vget_high_f32(vector);
-        vst1_f32(self.as_mut_ptr().add(index) as *mut f32, high);
+        S::VectorType::store_partial_hi_complex(self.as_mut_ptr().add(index), vector)
     }
-
     #[inline(always)]
-    unsafe fn store_partial_lo_complex(
-        &mut self,
-        vector: <f32 as NeonNum>::VectorType,
-        index: usize,
-    ) {
+    unsafe fn store_partial_lo_complex(&mut self, vector: S::VectorType, index: usize) {
         debug_assert!(self.len() >= index + 1);
-        let low = vget_low_f32(vector);
-        vst1_f32(self.as_mut_ptr().add(index) as *mut f32, low);
-    }
-}
-
-impl NeonArrayMut<f64> for &mut [Complex<f64>] {
-    #[inline(always)]
-    unsafe fn store_complex(&mut self, vector: <f64 as NeonNum>::VectorType, index: usize) {
-        debug_assert!(self.len() >= index + <f64 as NeonNum>::COMPLEX_PER_VECTOR);
-        vst1q_f64(self.as_mut_ptr().add(index) as *mut f64, vector);
-    }
-
-    #[inline(always)]
-    unsafe fn store_partial_hi_complex(
-        &mut self,
-        _vector: <f64 as NeonNum>::VectorType,
-        _index: usize,
-    ) {
-        unimplemented!("Impossible to do a partial store of complex f64's");
-    }
-    #[inline(always)]
-    unsafe fn store_partial_lo_complex(
-        &mut self,
-        _vector: <f64 as NeonNum>::VectorType,
-        _index: usize,
-    ) {
-        unimplemented!("Impossible to do a partial store of complex f64's");
+        S::VectorType::store_partial_lo_complex(self.as_mut_ptr().add(index), vector)
     }
 }
 
@@ -327,12 +490,12 @@ where
         self.output.store_complex(vector, index);
     }
     #[inline(always)]
-    unsafe fn store_partial_hi_complex(&mut self, vector: T::VectorType, index: usize) {
-        self.output.store_partial_hi_complex(vector, index);
-    }
-    #[inline(always)]
     unsafe fn store_partial_lo_complex(&mut self, vector: T::VectorType, index: usize) {
         self.output.store_partial_lo_complex(vector, index);
+    }
+    #[inline(always)]
+    unsafe fn store_partial_hi_complex(&mut self, vector: T::VectorType, index: usize) {
+        self.output.store_partial_hi_complex(vector, index);
     }
 }
 
