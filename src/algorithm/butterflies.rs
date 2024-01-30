@@ -3499,7 +3499,7 @@ impl<T: FftNum> Butterfly24<T> {
         scratch3[4] = -scratch3[4];
         scratch3[5] =
             (twiddles::rotate_90(scratch3[5], self.fft_direction()) + scratch3[5]) * -self.root2;
-            
+
         // step 4: SKIPPED because the next FFTs will be non-contiguous
 
         // step 5: row FFTs

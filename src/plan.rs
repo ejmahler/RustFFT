@@ -413,7 +413,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
         } else if factors.is_prime() {
             self.design_prime(len)
         } else if len.trailing_zeros() >= MIN_RADIX4_BITS {
-            if len.is_power_of_two() {
+            if factors.get_other_factors().is_empty() && factors.get_power_of_three() < 2 {
                 self.design_radix4(factors)
             } else {
                 let non_power_of_two = factors

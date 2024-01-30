@@ -3,7 +3,9 @@ use std::sync::Arc;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use crate::algorithm::butterflies::{Butterfly1, Butterfly16, Butterfly2, Butterfly4, Butterfly8};
+use crate::algorithm::butterflies::{
+    Butterfly1, Butterfly16, Butterfly2, Butterfly32, Butterfly4, Butterfly8,
+};
 use crate::array_utils::{self, bitreversed_transpose};
 use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::{common::FftNum, twiddles, FftDirection};
@@ -48,9 +50,10 @@ impl<T: FftNum> Radix4<T> {
             0 => (0, Arc::new(Butterfly1::new(direction)) as Arc<dyn Fft<T>>),
             1 => (1, Arc::new(Butterfly2::new(direction)) as Arc<dyn Fft<T>>),
             2 => (2, Arc::new(Butterfly4::new(direction)) as Arc<dyn Fft<T>>),
+            3 => (3, Arc::new(Butterfly8::new(direction)) as Arc<dyn Fft<T>>),
             _ => {
                 if exponent % 2 == 1 {
-                    (3, Arc::new(Butterfly8::new(direction)) as Arc<dyn Fft<T>>)
+                    (5, Arc::new(Butterfly32::new(direction)) as Arc<dyn Fft<T>>)
                 } else {
                     (4, Arc::new(Butterfly16::new(direction)) as Arc<dyn Fft<T>>)
                 }

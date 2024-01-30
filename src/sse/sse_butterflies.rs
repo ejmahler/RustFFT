@@ -2600,7 +2600,6 @@ impl<T: FftNum> SseF64Butterfly16<T> {
     }
 }
 
-
 //    ___ _  _             _________  _     _ _
 //   |__ \ || |           |___ /___ \| |__ (_) |_
 //    __) ||| |_   _____    |_ \ __) | '_ \| | __|
@@ -2647,9 +2646,7 @@ impl<T: FftNum> SseF32Butterfly24<T> {
         let bf6 = SseF32Butterfly6::new(direction);
         let bf4 = SseF32Butterfly4::new(direction);
 
-        let pack = |a: Complex<f32>, b: Complex<f32>| {
-            unsafe { _mm_set_ps(b.im, b.re, a.im, a.re) }
-        };
+        let pack = |a: Complex<f32>, b: Complex<f32>| unsafe { _mm_set_ps(b.im, b.re, a.im, a.re) };
 
         let twiddle0 = Complex { re: 1.0, im: 0.0 };
         let twiddle1 = twiddles::compute_twiddle(1, 24, direction);
@@ -2694,7 +2691,8 @@ impl<T: FftNum> SseF32Butterfly24<T> {
 
     #[inline(always)]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl SseArrayMut<f32>) {
-        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22});
+        let input_packed =
+            read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22});
 
         let out = self.perform_fft_direct(input_packed);
 
@@ -2705,11 +2703,13 @@ impl<T: FftNum> SseF32Butterfly24<T> {
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SseArrayMut<f32>) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46});
 
-        let values = interleave_complex_f32!(input_packed, 12, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11});
+        let values =
+            interleave_complex_f32!(input_packed, 12, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11});
 
         let out = self.perform_parallel_fft_direct(values);
 
-        let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22});
+        let out_sorted =
+            separate_interleaved_complex_f32!(out, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22});
 
         write_complex_to_array_strided!(out_sorted, buffer, 2, {0,1,2,3,4,5,6,7,8,9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23 });
     }
@@ -2719,8 +2719,12 @@ impl<T: FftNum> SseF32Butterfly24<T> {
         // Algorithm: 6x4 mixedradix
 
         // Size-6 FFTs down the columns of our reordered array
-        let mut scratch0 = self.bf6.perform_parallel_fft_direct(values[0], values[2], values[4], values[6], values[8], values[10]);
-        let mut scratch1 = self.bf6.perform_parallel_fft_direct(values[1], values[3], values[5], values[7], values[9], values[11]);
+        let mut scratch0 = self.bf6.perform_parallel_fft_direct(
+            values[0], values[2], values[4], values[6], values[8], values[10],
+        );
+        let mut scratch1 = self.bf6.perform_parallel_fft_direct(
+            values[1], values[3], values[5], values[7], values[9], values[11],
+        );
 
         // twiddle factors
         scratch0[1] = SseVector::mul_complex(scratch0[1], self.twiddle01);
@@ -2751,18 +2755,18 @@ impl<T: FftNum> SseF32Butterfly24<T> {
 
         // Reorder and return
         [
-            extract_lo_lo_f32(out0[0], out1[0]),// 0 x
-            extract_lo_lo_f32(out2[0], out3[0]),// x x
-            extract_lo_lo_f32(out4[0], out5[0]),// 4 x
-            extract_hi_hi_f32(out0[0], out1[0]),// 6 x
-            extract_hi_hi_f32(out2[0], out3[0]),// x x
-            extract_hi_hi_f32(out4[0], out5[0]),// 10 11
-            extract_lo_lo_f32(out0[1], out1[1]),// 12 x
-            extract_lo_lo_f32(out2[1], out3[1]),// x x
-            extract_lo_lo_f32(out4[1], out5[1]),// 16 x
-            extract_hi_hi_f32(out0[1], out1[1]),// 18 19
-            extract_hi_hi_f32(out2[1], out3[1]),// x x
-            extract_hi_hi_f32(out4[1], out5[1]),// 22 x
+            extract_lo_lo_f32(out0[0], out1[0]), // 0 x
+            extract_lo_lo_f32(out2[0], out3[0]), // x x
+            extract_lo_lo_f32(out4[0], out5[0]), // 4 x
+            extract_hi_hi_f32(out0[0], out1[0]), // 6 x
+            extract_hi_hi_f32(out2[0], out3[0]), // x x
+            extract_hi_hi_f32(out4[0], out5[0]), // 10 11
+            extract_lo_lo_f32(out0[1], out1[1]), // 12 x
+            extract_lo_lo_f32(out2[1], out3[1]), // x x
+            extract_lo_lo_f32(out4[1], out5[1]), // 16 x
+            extract_hi_hi_f32(out0[1], out1[1]), // 18 19
+            extract_hi_hi_f32(out2[1], out3[1]), // x x
+            extract_hi_hi_f32(out4[1], out5[1]), // 22 x
         ]
     }
 
@@ -2771,10 +2775,18 @@ impl<T: FftNum> SseF32Butterfly24<T> {
         // Algorithm: 6x4 mixedradix
 
         // Size-6 FFTs down the columns of our reordered array
-        let scratch0     = self.bf6.perform_parallel_fft_direct(values[0], values[4], values[8], values[12], values[16], values[20]);
-        let mut scratch1 = self.bf6.perform_parallel_fft_direct(values[1], values[5], values[9], values[13], values[17], values[21]);
-        let mut scratch2 = self.bf6.perform_parallel_fft_direct(values[2], values[6], values[10], values[14], values[18], values[22]);
-        let mut scratch3 = self.bf6.perform_parallel_fft_direct(values[3], values[7], values[11], values[15], values[19], values[23]);
+        let scratch0 = self.bf6.perform_parallel_fft_direct(
+            values[0], values[4], values[8], values[12], values[16], values[20],
+        );
+        let mut scratch1 = self.bf6.perform_parallel_fft_direct(
+            values[1], values[5], values[9], values[13], values[17], values[21],
+        );
+        let mut scratch2 = self.bf6.perform_parallel_fft_direct(
+            values[2], values[6], values[10], values[14], values[18], values[22],
+        );
+        let mut scratch3 = self.bf6.perform_parallel_fft_direct(
+            values[3], values[7], values[11], values[15], values[19], values[23],
+        );
 
         // helper functions for our twiddle factors
         let rotate45 = |vec| {
@@ -2811,18 +2823,47 @@ impl<T: FftNum> SseF32Butterfly24<T> {
         scratch3[5] = rotate225(scratch3[5]);
 
         // step 4/5: Transpose the data and do size-4 FFTs down the columns
-        let out0 = self.bf4.perform_parallel_fft_direct(scratch0[0], scratch1[0], scratch2[0], scratch3[0]);
-        let out1 = self.bf4.perform_parallel_fft_direct(scratch0[1], scratch1[1], scratch2[1], scratch3[1]);
-        let out2 = self.bf4.perform_parallel_fft_direct(scratch0[2], scratch1[2], scratch2[2], scratch3[2]);
-        let out3 = self.bf4.perform_parallel_fft_direct(scratch0[3], scratch1[3], scratch2[3], scratch3[3]);
-        let out4 = self.bf4.perform_parallel_fft_direct(scratch0[4], scratch1[4], scratch2[4], scratch3[4]);
-        let out5 = self.bf4.perform_parallel_fft_direct(scratch0[5], scratch1[5], scratch2[5], scratch3[5]);
+        let out0 = self.bf4.perform_parallel_fft_direct(
+            scratch0[0],
+            scratch1[0],
+            scratch2[0],
+            scratch3[0],
+        );
+        let out1 = self.bf4.perform_parallel_fft_direct(
+            scratch0[1],
+            scratch1[1],
+            scratch2[1],
+            scratch3[1],
+        );
+        let out2 = self.bf4.perform_parallel_fft_direct(
+            scratch0[2],
+            scratch1[2],
+            scratch2[2],
+            scratch3[2],
+        );
+        let out3 = self.bf4.perform_parallel_fft_direct(
+            scratch0[3],
+            scratch1[3],
+            scratch2[3],
+            scratch3[3],
+        );
+        let out4 = self.bf4.perform_parallel_fft_direct(
+            scratch0[4],
+            scratch1[4],
+            scratch2[4],
+            scratch3[4],
+        );
+        let out5 = self.bf4.perform_parallel_fft_direct(
+            scratch0[5],
+            scratch1[5],
+            scratch2[5],
+            scratch3[5],
+        );
 
         // step 6: transpose to output
         [
-            out0[0], out1[0], out2[0], out3[0], out4[0], out5[0],
-            out0[1], out1[1], out2[1], out3[1], out4[1], out5[1],
-            out0[2], out1[2], out2[2], out3[2], out4[2], out5[2],
+            out0[0], out1[0], out2[0], out3[0], out4[0], out5[0], out0[1], out1[1], out2[1],
+            out3[1], out4[1], out5[1], out0[2], out1[2], out2[2], out3[2], out4[2], out5[2],
             out0[3], out1[3], out2[3], out3[3], out4[3], out5[3],
         ]
     }
@@ -2849,8 +2890,9 @@ pub struct SseF64Butterfly24<T> {
     rotation: Rotation90<__m128d>,
 }
 
-boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly24, 24, |this: &SseF64Butterfly24Mixed64<_>| this
-    .direction);
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly24, 24, |this: &SseF64Butterfly24Mixed64<
+    _,
+>| this.direction);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly24, 24, |this: &SseF64Butterfly24<_>| this
     .direction);
 impl<T: FftNum> SseF64Butterfly24<T> {
@@ -2888,10 +2930,18 @@ impl<T: FftNum> SseF64Butterfly24<T> {
         // Algorithm: 6x4 mixedradix
 
         // Size-6 FFTs down the columns of our reordered array
-        let scratch0     = self.bf6.perform_fft_direct(values[0], values[4], values[8], values[12], values[16], values[20]);
-        let mut scratch1 = self.bf6.perform_fft_direct(values[1], values[5], values[9], values[13], values[17], values[21]);
-        let mut scratch2 = self.bf6.perform_fft_direct(values[2], values[6], values[10], values[14], values[18], values[22]);
-        let mut scratch3 = self.bf6.perform_fft_direct(values[3], values[7], values[11], values[15], values[19], values[23]);
+        let scratch0 = self.bf6.perform_fft_direct(
+            values[0], values[4], values[8], values[12], values[16], values[20],
+        );
+        let mut scratch1 = self.bf6.perform_fft_direct(
+            values[1], values[5], values[9], values[13], values[17], values[21],
+        );
+        let mut scratch2 = self.bf6.perform_fft_direct(
+            values[2], values[6], values[10], values[14], values[18], values[22],
+        );
+        let mut scratch3 = self.bf6.perform_fft_direct(
+            values[3], values[7], values[11], values[15], values[19], values[23],
+        );
 
         // helper functions for our twiddle factors
         let rotate45 = |vec| {
@@ -2928,18 +2978,29 @@ impl<T: FftNum> SseF64Butterfly24<T> {
         scratch3[5] = rotate225(scratch3[5]);
 
         // step 4/5: Transpose the data and do size-4 FFTs down the columns
-        let out0 = self.bf4.perform_fft_direct(scratch0[0], scratch1[0], scratch2[0], scratch3[0]);
-        let out1 = self.bf4.perform_fft_direct(scratch0[1], scratch1[1], scratch2[1], scratch3[1]);
-        let out2 = self.bf4.perform_fft_direct(scratch0[2], scratch1[2], scratch2[2], scratch3[2]);
-        let out3 = self.bf4.perform_fft_direct(scratch0[3], scratch1[3], scratch2[3], scratch3[3]);
-        let out4 = self.bf4.perform_fft_direct(scratch0[4], scratch1[4], scratch2[4], scratch3[4]);
-        let out5 = self.bf4.perform_fft_direct(scratch0[5], scratch1[5], scratch2[5], scratch3[5]);
+        let out0 = self
+            .bf4
+            .perform_fft_direct(scratch0[0], scratch1[0], scratch2[0], scratch3[0]);
+        let out1 = self
+            .bf4
+            .perform_fft_direct(scratch0[1], scratch1[1], scratch2[1], scratch3[1]);
+        let out2 = self
+            .bf4
+            .perform_fft_direct(scratch0[2], scratch1[2], scratch2[2], scratch3[2]);
+        let out3 = self
+            .bf4
+            .perform_fft_direct(scratch0[3], scratch1[3], scratch2[3], scratch3[3]);
+        let out4 = self
+            .bf4
+            .perform_fft_direct(scratch0[4], scratch1[4], scratch2[4], scratch3[4]);
+        let out5 = self
+            .bf4
+            .perform_fft_direct(scratch0[5], scratch1[5], scratch2[5], scratch3[5]);
 
         // step 6: transpose to output
         [
-            out0[0], out1[0], out2[0], out3[0], out4[0], out5[0],
-            out0[1], out1[1], out2[1], out3[1], out4[1], out5[1],
-            out0[2], out1[2], out2[2], out3[2], out4[2], out5[2],
+            out0[0], out1[0], out2[0], out3[0], out4[0], out5[0], out0[1], out1[1], out2[1],
+            out3[1], out4[1], out5[1], out0[2], out1[2], out2[2], out3[2], out4[2], out5[2],
             out0[3], out1[3], out2[3], out3[3], out4[3], out5[3],
         ]
     }
