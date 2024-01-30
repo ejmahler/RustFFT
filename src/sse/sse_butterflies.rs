@@ -12,7 +12,7 @@ use crate::{Direction, Fft, Length};
 
 use super::sse_common::{assert_f32, assert_f64};
 use super::sse_utils::*;
-use super::sse_vector::{SseArrayMut, SseVector};
+use super::sse_vector::{Rotation90, SseArrayMut, SseVector};
 
 #[allow(unused)]
 macro_rules! boilerplate_fft_sse_f32_butterfly {
@@ -2600,6 +2600,351 @@ impl<T: FftNum> SseF64Butterfly16<T> {
     }
 }
 
+
+//    ___ _  _             _________  _     _ _
+//   |__ \ || |           |___ /___ \| |__ (_) |_
+//    __) ||| |_   _____    |_ \ __) | '_ \| | __|
+//   / __/__   _| |_____|  ___) / __/| |_) | | |_
+//  |____}  |_|           |____/_____|_.__/|_|\__|
+//
+
+pub struct SseF32Butterfly24<T> {
+    direction: FftDirection,
+    _phantom: std::marker::PhantomData<T>,
+    bf6: SseF32Butterfly6<T>,
+    bf4: SseF32Butterfly4<T>,
+
+    // contiguous twiddles
+    twiddle01: __m128,
+    twiddle02: __m128,
+    twiddle03: __m128,
+    twiddle04: __m128,
+    twiddle05: __m128,
+    twiddle23: __m128,
+    twiddle46: __m128,
+    twiddle69: __m128,
+    twiddle812: __m128,
+    twiddle1015: __m128,
+
+    // parallel twiddles
+    twiddle1: __m128,
+    twiddle2: __m128,
+    twiddle4: __m128,
+    twiddle5: __m128,
+    twiddle8: __m128,
+    twiddle10: __m128,
+    rotation: Rotation90<__m128>,
+}
+
+boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly24, 24, |this: &SseF32Butterfly24<_>| this
+    .direction);
+boilerplate_fft_sse_common_butterfly!(SseF32Butterfly24, 24, |this: &SseF32Butterfly24<_>| this
+    .direction);
+impl<T: FftNum> SseF32Butterfly24<T> {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert_f32::<T>();
+        let bf6 = SseF32Butterfly6::new(direction);
+        let bf4 = SseF32Butterfly4::new(direction);
+
+        let pack = |a: Complex<f32>, b: Complex<f32>| {
+            unsafe { _mm_set_ps(b.im, b.re, a.im, a.re) }
+        };
+
+        let twiddle0 = Complex { re: 1.0, im: 0.0 };
+        let twiddle1 = twiddles::compute_twiddle(1, 24, direction);
+        let twiddle2 = twiddles::compute_twiddle(2, 24, direction);
+        let twiddle3 = twiddles::compute_twiddle(3, 24, direction);
+        let twiddle4 = twiddles::compute_twiddle(4, 24, direction);
+        let twiddle5 = twiddles::compute_twiddle(5, 24, direction);
+        let twiddle6 = twiddles::compute_twiddle(6, 24, direction);
+        let twiddle8 = twiddles::compute_twiddle(8, 24, direction);
+        let twiddle9 = twiddles::compute_twiddle(9, 24, direction);
+        let twiddle10 = twiddles::compute_twiddle(10, 24, direction);
+        let twiddle12 = Complex { re: -1.0, im: 0.0 };
+        let twiddle15 = twiddles::compute_twiddle(15, 24, direction);
+
+        Self {
+            direction,
+            _phantom: std::marker::PhantomData,
+            bf6,
+            bf4,
+
+            twiddle01: pack(twiddle0, twiddle1),
+            twiddle02: pack(twiddle0, twiddle2),
+            twiddle03: pack(twiddle0, twiddle3),
+            twiddle04: pack(twiddle0, twiddle4),
+            twiddle05: pack(twiddle0, twiddle5),
+            twiddle23: pack(twiddle2, twiddle3),
+            twiddle46: pack(twiddle4, twiddle6),
+            twiddle69: pack(twiddle6, twiddle9),
+            twiddle812: pack(twiddle8, twiddle12),
+            twiddle1015: pack(twiddle10, twiddle15),
+
+            twiddle1: pack(twiddle1, twiddle1),
+            twiddle2: pack(twiddle2, twiddle2),
+            twiddle4: pack(twiddle4, twiddle4),
+            twiddle5: pack(twiddle5, twiddle5),
+            twiddle8: pack(twiddle8, twiddle8),
+            twiddle10: pack(twiddle10, twiddle10),
+
+            rotation: unsafe { SseVector::make_rotate90(direction) },
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SseArrayMut<f32>) {
+        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22});
+
+        let out = self.perform_fft_direct(input_packed);
+
+        write_complex_to_array_strided!(out, buffer, 2, {0,1,2,3,4,5,6,7,8,9,10,11});
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SseArrayMut<f32>) {
+        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46});
+
+        let values = interleave_complex_f32!(input_packed, 12, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11});
+
+        let out = self.perform_parallel_fft_direct(values);
+
+        let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22});
+
+        write_complex_to_array_strided!(out_sorted, buffer, 2, {0,1,2,3,4,5,6,7,8,9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23 });
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128; 12]) -> [__m128; 12] {
+        // Algorithm: 6x4 mixedradix
+
+        // Size-6 FFTs down the columns of our reordered array
+        let mut scratch0 = self.bf6.perform_parallel_fft_direct(values[0], values[2], values[4], values[6], values[8], values[10]);
+        let mut scratch1 = self.bf6.perform_parallel_fft_direct(values[1], values[3], values[5], values[7], values[9], values[11]);
+
+        // twiddle factors
+        scratch0[1] = SseVector::mul_complex(scratch0[1], self.twiddle01);
+        scratch0[2] = SseVector::mul_complex(scratch0[2], self.twiddle02);
+        scratch0[3] = SseVector::mul_complex(scratch0[3], self.twiddle03);
+        scratch0[4] = SseVector::mul_complex(scratch0[4], self.twiddle04);
+        scratch0[5] = SseVector::mul_complex(scratch0[5], self.twiddle05);
+        scratch1[1] = SseVector::mul_complex(scratch1[1], self.twiddle23);
+        scratch1[2] = SseVector::mul_complex(scratch1[2], self.twiddle46);
+        scratch1[3] = SseVector::mul_complex(scratch1[3], self.twiddle69);
+        scratch1[4] = SseVector::mul_complex(scratch1[4], self.twiddle812);
+        scratch1[5] = SseVector::mul_complex(scratch1[5], self.twiddle1015);
+
+        // Size-4 FFTs down the rows, without transposing
+        let out0 = self.bf4.perform_fft_direct(scratch0[0], scratch1[0]);
+        let out1 = self.bf4.perform_fft_direct(scratch0[1], scratch1[1]);
+        let out2 = self.bf4.perform_fft_direct(scratch0[2], scratch1[2]);
+        let out3 = self.bf4.perform_fft_direct(scratch0[3], scratch1[3]);
+        let out4 = self.bf4.perform_fft_direct(scratch0[4], scratch1[4]);
+        let out5 = self.bf4.perform_fft_direct(scratch0[5], scratch1[5]);
+
+        // out0: [0 6], [12 18]
+        // out1: [x x], [x 19]
+        // out2: [x x], [x x]
+        // out3: [x x], [x x]
+        // out4: [4 10] [16 22]
+        // out5: [x 11],[x x]
+
+        // Reorder and return
+        [
+            extract_lo_lo_f32(out0[0], out1[0]),// 0 x
+            extract_lo_lo_f32(out2[0], out3[0]),// x x
+            extract_lo_lo_f32(out4[0], out5[0]),// 4 x
+            extract_hi_hi_f32(out0[0], out1[0]),// 6 x
+            extract_hi_hi_f32(out2[0], out3[0]),// x x
+            extract_hi_hi_f32(out4[0], out5[0]),// 10 11
+            extract_lo_lo_f32(out0[1], out1[1]),// 12 x
+            extract_lo_lo_f32(out2[1], out3[1]),// x x
+            extract_lo_lo_f32(out4[1], out5[1]),// 16 x
+            extract_hi_hi_f32(out0[1], out1[1]),// 18 19
+            extract_hi_hi_f32(out2[1], out3[1]),// x x
+            extract_hi_hi_f32(out4[1], out5[1]),// 22 x
+        ]
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [__m128; 24]) -> [__m128; 24] {
+        // Algorithm: 6x4 mixedradix
+
+        // Size-6 FFTs down the columns of our reordered array
+        let scratch0     = self.bf6.perform_parallel_fft_direct(values[0], values[4], values[8], values[12], values[16], values[20]);
+        let mut scratch1 = self.bf6.perform_parallel_fft_direct(values[1], values[5], values[9], values[13], values[17], values[21]);
+        let mut scratch2 = self.bf6.perform_parallel_fft_direct(values[2], values[6], values[10], values[14], values[18], values[22]);
+        let mut scratch3 = self.bf6.perform_parallel_fft_direct(values[3], values[7], values[11], values[15], values[19], values[23]);
+
+        // helper functions for our twiddle factors
+        let rotate45 = |vec| {
+            let rotated = SseVector::apply_rotate90(self.rotation, vec);
+            let sum = _mm_add_ps(vec, rotated);
+            _mm_mul_ps(sum, _mm_set1_ps(0.5f32.sqrt()))
+        };
+        let rotate135 = |vec| {
+            let rotated = SseVector::apply_rotate90(self.rotation, vec);
+            let diff = _mm_sub_ps(rotated, vec);
+            _mm_mul_ps(diff, _mm_set1_ps(0.5f32.sqrt()))
+        };
+        let rotate225 = |vec| {
+            let rotated = SseVector::apply_rotate90(self.rotation, vec);
+            let sum = _mm_add_ps(vec, rotated);
+            _mm_mul_ps(sum, _mm_set1_ps(-0.5f32.sqrt()))
+        };
+
+        // step 3: apply twiddle factors
+        scratch1[1] = SseVector::mul_complex(scratch1[1], self.twiddle1);
+        scratch1[2] = SseVector::mul_complex(scratch1[2], self.twiddle2);
+        scratch1[3] = rotate45(scratch1[3]);
+        scratch1[4] = SseVector::mul_complex(scratch1[4], self.twiddle4);
+        scratch1[5] = SseVector::mul_complex(scratch1[5], self.twiddle5);
+        scratch2[1] = SseVector::mul_complex(scratch2[1], self.twiddle2);
+        scratch2[2] = SseVector::mul_complex(scratch2[2], self.twiddle4);
+        scratch2[3] = SseVector::apply_rotate90(self.rotation, scratch2[3]);
+        scratch2[4] = SseVector::mul_complex(scratch2[4], self.twiddle8);
+        scratch2[5] = SseVector::mul_complex(scratch2[5], self.twiddle10);
+        scratch3[1] = rotate45(scratch3[1]);
+        scratch3[2] = SseVector::apply_rotate90(self.rotation, scratch3[2]);
+        scratch3[3] = rotate135(scratch3[3]);
+        scratch3[4] = _mm_xor_ps(scratch3[4], _mm_set1_ps(-0.0));
+        scratch3[5] = rotate225(scratch3[5]);
+
+        // step 4/5: Transpose the data and do size-4 FFTs down the columns
+        let out0 = self.bf4.perform_parallel_fft_direct(scratch0[0], scratch1[0], scratch2[0], scratch3[0]);
+        let out1 = self.bf4.perform_parallel_fft_direct(scratch0[1], scratch1[1], scratch2[1], scratch3[1]);
+        let out2 = self.bf4.perform_parallel_fft_direct(scratch0[2], scratch1[2], scratch2[2], scratch3[2]);
+        let out3 = self.bf4.perform_parallel_fft_direct(scratch0[3], scratch1[3], scratch2[3], scratch3[3]);
+        let out4 = self.bf4.perform_parallel_fft_direct(scratch0[4], scratch1[4], scratch2[4], scratch3[4]);
+        let out5 = self.bf4.perform_parallel_fft_direct(scratch0[5], scratch1[5], scratch2[5], scratch3[5]);
+
+        // step 6: transpose to output
+        [
+            out0[0], out1[0], out2[0], out3[0], out4[0], out5[0],
+            out0[1], out1[1], out2[1], out3[1], out4[1], out5[1],
+            out0[2], out1[2], out2[2], out3[2], out4[2], out5[2],
+            out0[3], out1[3], out2[3], out3[3], out4[3], out5[3],
+        ]
+    }
+}
+
+//    ___ _  _              __   _  _   _     _ _
+//   |__ \ || |            / /_ | || | | |__ (_) |_
+//    __) ||| |_   _____  | '_ \| || |_| '_ \| | __|
+//   / __/__   _| |_____| | (_) |__   _| |_) | | |_
+//  |____}  |_|            \___/   |_| |_.__/|_|\__|
+//
+
+pub struct SseF64Butterfly24<T> {
+    direction: FftDirection,
+    _phantom: std::marker::PhantomData<T>,
+    bf4: SseF64Butterfly4<T>,
+    bf6: SseF64Butterfly6<T>,
+    twiddle1: __m128d,
+    twiddle2: __m128d,
+    twiddle4: __m128d,
+    twiddle5: __m128d,
+    twiddle8: __m128d,
+    twiddle10: __m128d,
+    rotation: Rotation90<__m128d>,
+}
+
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly24, 24, |this: &SseF64Butterfly24Mixed64<_>| this
+    .direction);
+boilerplate_fft_sse_common_butterfly!(SseF64Butterfly24, 24, |this: &SseF64Butterfly24<_>| this
+    .direction);
+impl<T: FftNum> SseF64Butterfly24<T> {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert_f64::<T>();
+        let bf4 = SseF64Butterfly4::new(direction);
+        let bf6 = SseF64Butterfly6::new(direction);
+        Self {
+            direction,
+            _phantom: std::marker::PhantomData,
+            bf4,
+            bf6,
+            twiddle1: unsafe { SseVector::make_mixedradix_twiddle_chunk(1, 1, 24, direction) },
+            twiddle2: unsafe { SseVector::make_mixedradix_twiddle_chunk(1, 2, 24, direction) },
+            twiddle4: unsafe { SseVector::make_mixedradix_twiddle_chunk(1, 4, 24, direction) },
+            twiddle5: unsafe { SseVector::make_mixedradix_twiddle_chunk(1, 5, 24, direction) },
+            twiddle8: unsafe { SseVector::make_mixedradix_twiddle_chunk(1, 8, 24, direction) },
+            twiddle10: unsafe { SseVector::make_mixedradix_twiddle_chunk(1, 10, 24, direction) },
+            rotation: unsafe { SseVector::make_rotate90(direction) },
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SseArrayMut<f64>) {
+        let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23});
+
+        let out = self.perform_fft_direct(values);
+
+        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23});
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 24]) -> [__m128d; 24] {
+        // Algorithm: 6x4 mixedradix
+
+        // Size-6 FFTs down the columns of our reordered array
+        let scratch0     = self.bf6.perform_fft_direct(values[0], values[4], values[8], values[12], values[16], values[20]);
+        let mut scratch1 = self.bf6.perform_fft_direct(values[1], values[5], values[9], values[13], values[17], values[21]);
+        let mut scratch2 = self.bf6.perform_fft_direct(values[2], values[6], values[10], values[14], values[18], values[22]);
+        let mut scratch3 = self.bf6.perform_fft_direct(values[3], values[7], values[11], values[15], values[19], values[23]);
+
+        // helper functions for our twiddle factors
+        let rotate45 = |vec| {
+            let rotated = SseVector::apply_rotate90(self.rotation, vec);
+            let sum = _mm_add_pd(vec, rotated);
+            _mm_mul_pd(sum, _mm_set1_pd(0.5f64.sqrt()))
+        };
+        let rotate135 = |vec| {
+            let rotated = SseVector::apply_rotate90(self.rotation, vec);
+            let diff = _mm_sub_pd(rotated, vec);
+            _mm_mul_pd(diff, _mm_set1_pd(0.5f64.sqrt()))
+        };
+        let rotate225 = |vec| {
+            let rotated = SseVector::apply_rotate90(self.rotation, vec);
+            let sum = _mm_add_pd(vec, rotated);
+            _mm_mul_pd(sum, _mm_set1_pd(-0.5f64.sqrt()))
+        };
+
+        // step 3: apply twiddle factors
+        scratch1[1] = SseVector::mul_complex(scratch1[1], self.twiddle1);
+        scratch1[2] = SseVector::mul_complex(scratch1[2], self.twiddle2);
+        scratch1[3] = rotate45(scratch1[3]);
+        scratch1[4] = SseVector::mul_complex(scratch1[4], self.twiddle4);
+        scratch1[5] = SseVector::mul_complex(scratch1[5], self.twiddle5);
+        scratch2[1] = SseVector::mul_complex(scratch2[1], self.twiddle2);
+        scratch2[2] = SseVector::mul_complex(scratch2[2], self.twiddle4);
+        scratch2[3] = SseVector::apply_rotate90(self.rotation, scratch2[3]);
+        scratch2[4] = SseVector::mul_complex(scratch2[4], self.twiddle8);
+        scratch2[5] = SseVector::mul_complex(scratch2[5], self.twiddle10);
+        scratch3[1] = rotate45(scratch3[1]);
+        scratch3[2] = SseVector::apply_rotate90(self.rotation, scratch3[2]);
+        scratch3[3] = rotate135(scratch3[3]);
+        scratch3[4] = _mm_xor_pd(scratch3[4], _mm_set1_pd(-0.0));
+        scratch3[5] = rotate225(scratch3[5]);
+
+        // step 4/5: Transpose the data and do size-4 FFTs down the columns
+        let out0 = self.bf4.perform_fft_direct(scratch0[0], scratch1[0], scratch2[0], scratch3[0]);
+        let out1 = self.bf4.perform_fft_direct(scratch0[1], scratch1[1], scratch2[1], scratch3[1]);
+        let out2 = self.bf4.perform_fft_direct(scratch0[2], scratch1[2], scratch2[2], scratch3[2]);
+        let out3 = self.bf4.perform_fft_direct(scratch0[3], scratch1[3], scratch2[3], scratch3[3]);
+        let out4 = self.bf4.perform_fft_direct(scratch0[4], scratch1[4], scratch2[4], scratch3[4]);
+        let out5 = self.bf4.perform_fft_direct(scratch0[5], scratch1[5], scratch2[5], scratch3[5]);
+
+        // step 6: transpose to output
+        [
+            out0[0], out1[0], out2[0], out3[0], out4[0], out5[0],
+            out0[1], out1[1], out2[1], out3[1], out4[1], out5[1],
+            out0[2], out1[2], out2[2], out3[2], out4[2], out5[2],
+            out0[3], out1[3], out2[3], out3[3], out4[3], out5[3],
+        ]
+    }
+}
+
 //   _________            _________  _     _ _
 //  |___ /___ \          |___ /___ \| |__ (_) |_
 //    |_ \ __) |  _____    |_ \ __) | '_ \| | __|
@@ -3153,6 +3498,7 @@ mod unit_tests {
     test_butterfly_32_func!(test_ssef32_butterfly12, SseF32Butterfly12, 12);
     test_butterfly_32_func!(test_ssef32_butterfly15, SseF32Butterfly15, 15);
     test_butterfly_32_func!(test_ssef32_butterfly16, SseF32Butterfly16, 16);
+    test_butterfly_32_func!(test_ssef32_butterfly24, SseF32Butterfly24, 24);
     test_butterfly_32_func!(test_ssef32_butterfly32, SseF32Butterfly32, 32);
 
     //the tests for all butterflies will be identical except for the identifiers used and size
@@ -3181,6 +3527,7 @@ mod unit_tests {
     test_butterfly_64_func!(test_ssef64_butterfly12, SseF64Butterfly12, 12);
     test_butterfly_64_func!(test_ssef64_butterfly15, SseF64Butterfly15, 15);
     test_butterfly_64_func!(test_ssef64_butterfly16, SseF64Butterfly16, 16);
+    test_butterfly_64_func!(test_ssef64_butterfly24, SseF64Butterfly24, 24);
     test_butterfly_64_func!(test_ssef64_butterfly32, SseF64Butterfly32, 32);
 
     #[test]

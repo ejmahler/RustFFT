@@ -3438,8 +3438,8 @@ impl<T: FftNum> Butterfly24<T> {
     }
     #[inline(never)]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
-        // step 1: reorder the input directly into the scratch. normally there's a whole thing to compute this ordering
-        //but thankfully we can just precompute it and hardcode it
+        // algorithm: 6x4 mixed radix
+        // step 1: transpose the input directly into the scratch.
         let mut scratch0 = [
             buffer.load(0),
             buffer.load(4),
@@ -3499,6 +3499,7 @@ impl<T: FftNum> Butterfly24<T> {
         scratch3[4] = -scratch3[4];
         scratch3[5] =
             (twiddles::rotate_90(scratch3[5], self.fft_direction()) + scratch3[5]) * -self.root2;
+            
         // step 4: SKIPPED because the next FFTs will be non-contiguous
 
         // step 5: row FFTs
@@ -3539,9 +3540,7 @@ impl<T: FftNum> Butterfly24<T> {
             &mut scratch3[5],
         );
 
-        // step 6: reorder the result back into the buffer. again we would normally have to do an expensive computation
-        // but instead we can precompute and hardcode the ordering
-        // note that we're also rolling a transpose step into this reorder
+        // step 6: copy back to the buffer. we can skip the transpose, because we skipped step 4
         buffer.store(scratch0[0], 0);
         buffer.store(scratch0[1], 1);
         buffer.store(scratch0[2], 2);
