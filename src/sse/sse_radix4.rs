@@ -51,6 +51,7 @@ impl<S: SseNum, T: FftNum> SseRadix4<S, T> {
         let direction = base_fft.fft_direction();
         let base_len = base_fft.len();
 
+        // note that we can eventually release this restriction - we just need to update the rest of the code in here to handle remainders
         assert!(base_len % (2 * S::VectorType::COMPLEX_PER_VECTOR) == 0 && base_len > 0);
 
         let len = base_len * (1 << (k * 2));

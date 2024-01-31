@@ -12,7 +12,7 @@ use super::WasmNum;
 
 use super::wasm_simd_vector::{Rotation90, WasmSimdArray, WasmSimdArrayMut, WasmVector};
 
-/// FFT algorithm optimized for power-of-two sizes, SSE accelerated version.
+/// FFT algorithm optimized for power-of-two sizes, Wasm SIMD accelerated version.
 /// This is designed to be used via a Planner, and not created directly.
 
 pub struct WasmSimdRadix4<S: WasmNum, T> {

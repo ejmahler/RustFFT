@@ -2628,7 +2628,7 @@ pub struct SseF32Butterfly24<T> {
     twiddle5c: __m128,
 }
 
-boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly24, 24, |this: &SseF32Butterfly24Split<_>| {
+boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly24, 24, |this: &SseF32Butterfly24<_>| {
     this.direction
 });
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly24, 24, |this: &SseF32Butterfly24<_>| this
@@ -2888,7 +2888,7 @@ pub struct SseF64Butterfly24<T> {
     twiddle5c: __m128d,
 }
 
-boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly24, 24, |this: &SseF64Butterfly24Split<_>| {
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly24, 24, |this: &SseF64Butterfly24<_>| {
     this.direction
 });
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly24, 24, |this: &SseF64Butterfly24<_>| this

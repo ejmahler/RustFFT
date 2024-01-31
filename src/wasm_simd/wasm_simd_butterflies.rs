@@ -18,6 +18,7 @@ use super::wasm_simd_vector::WasmSimdArrayMut;
 unsafe fn pack32(a: Complex<f32>, b: Complex<f32>) -> v128 {
     f32x4(a.re, a.im, b.re, b.im)
 }
+#[inline(always)]
 unsafe fn pack64(a: Complex<f64>) -> v128 {
     f64x2(a.re, a.im)
 }
