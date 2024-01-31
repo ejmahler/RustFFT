@@ -7,8 +7,8 @@ use rand::distributions::{uniform::SampleUniform, Distribution, Uniform};
 use rand::{rngs::StdRng, SeedableRng};
 
 use crate::algorithm::butterflies::{
-    Butterfly1, Butterfly16, Butterfly2, Butterfly3, Butterfly4, Butterfly5, Butterfly6,
-    Butterfly7, Butterfly8, Butterfly9,
+    Butterfly1, Butterfly12, Butterfly16, Butterfly2, Butterfly3, Butterfly4, Butterfly5,
+    Butterfly6, Butterfly7, Butterfly8, Butterfly9,
 };
 use crate::{algorithm::Dft, Direction, FftNum, Length};
 use crate::{Fft, FftDirection};
@@ -225,6 +225,7 @@ pub fn construct_base<T: FftNum>(n: usize, direction: FftDirection) -> Arc<dyn F
         7 => Arc::new(Butterfly7::new(direction)) as Arc<dyn Fft<T>>,
         8 => Arc::new(Butterfly8::new(direction)) as Arc<dyn Fft<T>>,
         9 => Arc::new(Butterfly9::new(direction)) as Arc<dyn Fft<T>>,
+        12 => Arc::new(Butterfly12::new(direction)) as Arc<dyn Fft<T>>,
         16 => Arc::new(Butterfly16::new(direction)) as Arc<dyn Fft<T>>,
         _ => unimplemented!(),
     }
