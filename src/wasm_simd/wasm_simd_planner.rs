@@ -11,8 +11,7 @@ use std::{any::TypeId, collections::HashMap, sync::Arc};
 
 const MIN_RADIX4_BITS: u32 = 6; // smallest size to consider radix 4 an option is 2^6 = 64
 const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
-const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the inner fft of Bluestein if length is larger than this
-const RADIX4_USE_BUTTERFLY32_FROM: usize = 262144; // Use length 32 butterfly starting from this length
+const RADIX4_USE_BUTTERFLY32_FROM: u32 = 18; // Use length 32 butterfly starting from this power of 2
 
 /// A Recipe is a structure that describes the design of a FFT, without actually creating it.
 /// It is used as a middle step in the planning process.
@@ -65,6 +64,7 @@ pub enum Recipe {
     Butterfly17,
     Butterfly19,
     Butterfly23,
+    Butterfly24,
     Butterfly29,
     Butterfly31,
     Butterfly32,
@@ -93,6 +93,7 @@ impl Recipe {
             Recipe::Butterfly17 => 17,
             Recipe::Butterfly19 => 19,
             Recipe::Butterfly23 => 23,
+            Recipe::Butterfly24 => 24,
             Recipe::Butterfly29 => 29,
             Recipe::Butterfly31 => 31,
             Recipe::Butterfly32 => 32,
@@ -398,6 +399,15 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
                     panic!("Not f32 or f64");
                 }
             }
+            Recipe::Butterfly24 => {
+                if id_t == id_f32 {
+                    Arc::new(WasmSimdF32Butterfly24::new(direction)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(WasmSimdF64Butterfly24::new(direction)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
+            }
             Recipe::Butterfly29 => {
                 if id_t == id_f32 {
                     Arc::new(WasmSimdF32Butterfly29::new(direction)) as Arc<dyn Fft<T>>
@@ -474,8 +484,8 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
         } else if factors.is_prime() {
             self.design_prime(len)
         } else if len.trailing_zeros() >= MIN_RADIX4_BITS {
-            if len.is_power_of_two() {
-                self.design_radix4(len)
+            if factors.get_other_factors().is_empty() && factors.get_power_of_three() < 2 {
+                self.design_radix4(factors)
             } else {
                 let non_power_of_two = factors
                     .remove_factors(PrimeFactor {
@@ -491,8 +501,8 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
             // Loop through and find all combinations
             // If more than one is found, keep the one where the factors are closer together.
             // For example length 20 where 10x2 and 5x4 are possible, we use 5x4.
-            let butterflies: [usize; 20] = [
-                2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 19, 23, 29, 31, 32,
+            let butterflies: [usize; 21] = [
+                2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 19, 23, 24, 29, 31, 32,
             ];
             let mut bf_left = 0;
             let mut bf_right = 0;
@@ -573,6 +583,7 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
             17 => Some(Arc::new(Recipe::Butterfly17)),
             19 => Some(Arc::new(Recipe::Butterfly19)),
             23 => Some(Arc::new(Recipe::Butterfly23)),
+            24 => Some(Arc::new(Recipe::Butterfly24)),
             29 => Some(Arc::new(Recipe::Butterfly29)),
             31 => Some(Arc::new(Recipe::Butterfly31)),
             32 => Some(Arc::new(Recipe::Butterfly32)),
@@ -589,17 +600,21 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
             .iter()
             .any(|val| val.value > MAX_RADER_PRIME_FACTOR)
         {
-            let inner_fft_len_pow2 = (2 * len - 1).checked_next_power_of_two().unwrap();
-            // for long ffts a mixed radix inner fft is faster than a longer radix4
+            // we want to use bluestein's algorithm. we have a free choice of which inner FFT length to use
+            // the only restriction is that it has to be (2 * len - 1) or larger. So we want the fastest FFT we can compute at or above that size.
+
+            // the most obvious choice is the next-highest power of two, but there's one trick we can pull to get a smaller fft that we can be 100% certain will be faster
             let min_inner_len = 2 * len - 1;
-            let mixed_radix_len = 3 * inner_fft_len_pow2 / 4;
-            let inner_fft =
-                if mixed_radix_len >= min_inner_len && len >= MIN_BLUESTEIN_MIXED_RADIX_LEN {
-                    let mixed_radix_factors = PrimeFactors::compute(mixed_radix_len);
-                    self.design_fft_with_factors(mixed_radix_len, mixed_radix_factors)
-                } else {
-                    self.design_radix4(inner_fft_len_pow2)
-                };
+            let inner_len_pow2 = min_inner_len.checked_next_power_of_two().unwrap();
+            let inner_len_factor3 = inner_len_pow2 / 4 * 3;
+
+            let inner_len = if inner_len_factor3 >= min_inner_len {
+                inner_len_factor3
+            } else {
+                inner_len_pow2
+            };
+            let inner_fft = self.design_fft_for_len(inner_len);
+
             Arc::new(Recipe::BluesteinsAlgorithm { len, inner_fft })
         } else {
             let inner_fft = self.design_fft_with_factors(inner_fft_len_rader, raders_factors);
@@ -607,31 +622,59 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
         }
     }
 
-    fn design_radix4(&mut self, len: usize) -> Arc<Recipe> {
-        // plan a step of radix4
-        let exponent = len.trailing_zeros();
-        let base_exponent = match exponent {
-            0 => 0,
-            1 => 1,
-            2 => 2,
-            _ => {
-                if exponent % 2 == 1 {
-                    if len < RADIX4_USE_BUTTERFLY32_FROM {
-                        3
+    fn design_radix4(&mut self, factors: PrimeFactors) -> Arc<Recipe> {
+        // We can eventually relax this restriction -- it's not instrinsic to radix4, it's just that anything besides 2^n and 3*2^n hasn't been measured yet
+        assert!(factors.get_other_factors().is_empty() && factors.get_power_of_three() < 2);
+
+        let p2 = factors.get_power_of_two();
+        let base_len: usize = if factors.get_power_of_three() == 0 {
+            // pure power of 2
+            match p2 {
+                // base cases. we shouldn't hit these but we might as well be ready for them
+                0 => 1,
+                1 => 2,
+                2 => 4,
+                3 => 8,
+                // main case: if len is a power of 4, use a base of 16, otherwise use a base of 8
+                _ => {
+                    if p2 % 2 == 1 {
+                        if p2 >= RADIX4_USE_BUTTERFLY32_FROM {
+                            32
+                        } else {
+                            8
+                        }
                     } else {
-                        5
+                        16
                     }
-                } else {
-                    4
+                }
+            }
+        } else {
+            // we have a factor 3 that we're going to stick into the butterflies
+            match p2 {
+                // base cases. we shouldn't hit these but we might as well be ready for them
+                0 => 3,
+                1 => 6,
+                // main case: if len is 3*4^k, use a base of 12, otherwise use a base of 24
+                _ => {
+                    if p2 % 2 == 1 {
+                        24
+                    } else {
+                        12
+                    }
                 }
             }
         };
 
-        let base_fft = self.design_fft_for_len(1 << base_exponent);
-        Arc::new(Recipe::Radix4 {
-            k: (exponent - base_exponent) / 2,
-            base_fft,
-        })
+        // now that we know the base length, divide it out get what radix4 needs to compute
+        let cross_len = factors.get_product() / base_len;
+        assert!(cross_len.is_power_of_two());
+
+        let cross_bits = cross_len.trailing_zeros();
+        assert!(cross_bits % 2 == 0);
+        let k = cross_bits / 2;
+
+        let base_fft = self.design_fft_for_len(base_len);
+        Arc::new(Recipe::Radix4 { k, base_fft })
     }
 }
 
@@ -719,6 +762,7 @@ mod unit_tests {
         assert_eq!(*planner.design_fft_for_len(17), Recipe::Butterfly17);
         assert_eq!(*planner.design_fft_for_len(19), Recipe::Butterfly19);
         assert_eq!(*planner.design_fft_for_len(23), Recipe::Butterfly23);
+        assert_eq!(*planner.design_fft_for_len(24), Recipe::Butterfly24);
         assert_eq!(*planner.design_fft_for_len(29), Recipe::Butterfly29);
         assert_eq!(*planner.design_fft_for_len(31), Recipe::Butterfly31);
         assert_eq!(*planner.design_fft_for_len(32), Recipe::Butterfly32);
