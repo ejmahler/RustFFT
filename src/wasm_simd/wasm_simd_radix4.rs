@@ -12,7 +12,7 @@ use super::WasmNum;
 
 use super::wasm_simd_vector::{Rotation90, WasmSimdArray, WasmSimdArrayMut, WasmVector};
 
-/// FFT algorithm optimized for power-of-two sizes, SSE accelerated version.
+/// FFT algorithm optimized for power-of-two sizes, Wasm SIMD accelerated version.
 /// This is designed to be used via a Planner, and not created directly.
 
 pub struct WasmSimdRadix4<S: WasmNum, T> {
@@ -39,7 +39,8 @@ impl<S: WasmNum, T: FftNum> WasmSimdRadix4<S, T> {
         let direction = base_fft.fft_direction();
         let base_len = base_fft.len();
 
-        assert!(base_len.is_power_of_two() && base_len >= 2 * S::VectorType::COMPLEX_PER_VECTOR);
+        // note that we can eventually release this restriction - we just need to update the rest of the code in here to handle remainders
+        assert!(base_len % (2 * S::VectorType::COMPLEX_PER_VECTOR) == 0 && base_len > 0);
 
         let len = base_len * (1 << (k * 2));
 
@@ -182,10 +183,11 @@ unsafe fn butterfly_4<S: WasmNum, T: FftNum>(
 mod unit_tests {
     use super::*;
     use crate::test_utils::{check_fft_algorithm, construct_base};
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn test_wasm_simd_radix4_64() {
-        for base in [2, 4, 8, 16] {
+        for base in [2, 4, 6, 8, 12, 16] {
             let base_forward = construct_base(base, FftDirection::Forward);
             let base_inverse = construct_base(base, FftDirection::Inverse);
             for k in 0..4 {
@@ -202,9 +204,9 @@ mod unit_tests {
         check_fft_algorithm::<f64>(&fft, len, direction);
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn test_wasm_simd_radix4_32() {
-        for base in [4, 8, 16] {
+        for base in [4, 8, 12, 16] {
             let base_forward = construct_base(base, FftDirection::Forward);
             let base_inverse = construct_base(base, FftDirection::Inverse);
             for k in 0..4 {

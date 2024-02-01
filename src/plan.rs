@@ -127,7 +127,6 @@ impl<T: FftNum> FftPlanner<T> {
 const MIN_RADIX4_BITS: u32 = 5; // smallest size to consider radix 4 an option is 2^5 = 32
 const MIN_RADIX3_FACTORS: u32 = 4; // smallest number of factors of 3 to consider radix 4 an option is 3^4=81. any smaller and we want to use butterflies directly.
 const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
-const MIN_BLUESTEIN_MIXED_RADIX_LEN: usize = 90; // only use mixed radix for the inner fft of Bluestein if length is larger than this
 
 /// A Recipe is a structure that describes the design of a FFT, without actually creating it.
 /// It is used as a middle step in the planning process.
@@ -175,11 +174,13 @@ pub enum Recipe {
     Butterfly8,
     Butterfly9,
     Butterfly11,
+    Butterfly12,
     Butterfly13,
     Butterfly16,
     Butterfly17,
     Butterfly19,
     Butterfly23,
+    Butterfly24,
     Butterfly27,
     Butterfly29,
     Butterfly31,
@@ -201,11 +202,13 @@ impl Recipe {
             Recipe::Butterfly8 => 8,
             Recipe::Butterfly9 => 9,
             Recipe::Butterfly11 => 11,
+            Recipe::Butterfly12 => 12,
             Recipe::Butterfly13 => 13,
             Recipe::Butterfly16 => 16,
             Recipe::Butterfly17 => 17,
             Recipe::Butterfly19 => 19,
             Recipe::Butterfly23 => 23,
+            Recipe::Butterfly24 => 24,
             Recipe::Butterfly27 => 27,
             Recipe::Butterfly29 => 29,
             Recipe::Butterfly31 => 31,
@@ -350,11 +353,13 @@ impl<T: FftNum> FftPlannerScalar<T> {
             Recipe::Butterfly8 => Arc::new(Butterfly8::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly9 => Arc::new(Butterfly9::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly11 => Arc::new(Butterfly11::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly12 => Arc::new(Butterfly12::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly13 => Arc::new(Butterfly13::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly16 => Arc::new(Butterfly16::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly17 => Arc::new(Butterfly17::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly19 => Arc::new(Butterfly19::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly23 => Arc::new(Butterfly23::new(direction)) as Arc<dyn Fft<T>>,
+            Recipe::Butterfly24 => Arc::new(Butterfly24::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly27 => Arc::new(Butterfly27::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly29 => Arc::new(Butterfly29::new(direction)) as Arc<dyn Fft<T>>,
             Recipe::Butterfly31 => Arc::new(Butterfly31::new(direction)) as Arc<dyn Fft<T>>,
@@ -408,8 +413,8 @@ impl<T: FftNum> FftPlannerScalar<T> {
         } else if factors.is_prime() {
             self.design_prime(len)
         } else if len.trailing_zeros() >= MIN_RADIX4_BITS {
-            if len.is_power_of_two() {
-                self.design_radix4(len)
+            if factors.get_other_factors().is_empty() && factors.get_power_of_three() < 2 {
+                self.design_radix4(factors)
             } else {
                 let non_power_of_two = factors
                     .remove_factors(PrimeFactor {
@@ -490,27 +495,54 @@ impl<T: FftNum> FftPlannerScalar<T> {
         })
     }
 
-    fn design_radix4(&mut self, len: usize) -> Arc<Recipe> {
-        // plan a step of radix4
-        let exponent = len.trailing_zeros();
-        let base_exponent = match exponent {
-            0 => 0,
-            1 => 1,
-            2 => 2,
-            _ => {
-                if exponent % 2 == 1 {
-                    3
-                } else {
-                    4
+    fn design_radix4(&mut self, factors: PrimeFactors) -> Arc<Recipe> {
+        // We can eventually relax this restriction -- it's not instrinsic to radix4, it's just that anything besides 2^n and 3*2^n hasn't been measured yet
+        assert!(factors.get_other_factors().is_empty() && factors.get_power_of_three() < 2);
+
+        let p2 = factors.get_power_of_two();
+        let base_len: usize = if factors.get_power_of_three() == 0 {
+            // pure power of 2
+            match p2 {
+                // base cases. we shouldn't hit these but we might as well be ready for them
+                0 => 1,
+                1 => 2,
+                2 => 4,
+                // main case: if len is a power of 4, use a base of 16, otherwise use a base of 8
+                _ => {
+                    if p2 % 2 == 1 {
+                        8
+                    } else {
+                        16
+                    }
+                }
+            }
+        } else {
+            // we have a factor 3 that we're going to stick into the butterflies
+            match p2 {
+                // base cases. we shouldn't hit these but we might as well be ready for them
+                0 => 3,
+                1 => 6,
+                // main case: if len is 3*4^k, use a base of 12, otherwise use a base of 24
+                _ => {
+                    if p2 % 2 == 1 {
+                        24
+                    } else {
+                        12
+                    }
                 }
             }
         };
 
-        let base_fft = self.design_fft_for_len(1 << base_exponent);
-        Arc::new(Recipe::Radix4 {
-            k: (exponent - base_exponent) / 2,
-            base_fft,
-        })
+        // now that we know the base length, divide it out get what radix4 needs to compute
+        let cross_len = factors.get_product() / base_len;
+        assert!(cross_len.is_power_of_two());
+
+        let cross_bits = cross_len.trailing_zeros();
+        assert!(cross_bits % 2 == 0);
+        let k = cross_bits / 2;
+
+        let base_fft = self.design_fft_for_len(base_len);
+        Arc::new(Recipe::Radix4 { k, base_fft })
     }
 
     // Returns Some(instance) if we have a butterfly available for this size. Returns None if there is no butterfly available for this size
@@ -525,11 +557,13 @@ impl<T: FftNum> FftPlannerScalar<T> {
             8 => Some(Arc::new(Recipe::Butterfly8)),
             9 => Some(Arc::new(Recipe::Butterfly9)),
             11 => Some(Arc::new(Recipe::Butterfly11)),
+            12 => Some(Arc::new(Recipe::Butterfly12)),
             13 => Some(Arc::new(Recipe::Butterfly13)),
             16 => Some(Arc::new(Recipe::Butterfly16)),
             17 => Some(Arc::new(Recipe::Butterfly17)),
             19 => Some(Arc::new(Recipe::Butterfly19)),
             23 => Some(Arc::new(Recipe::Butterfly23)),
+            24 => Some(Arc::new(Recipe::Butterfly24)),
             27 => Some(Arc::new(Recipe::Butterfly27)),
             29 => Some(Arc::new(Recipe::Butterfly29)),
             31 => Some(Arc::new(Recipe::Butterfly31)),
@@ -547,17 +581,21 @@ impl<T: FftNum> FftPlannerScalar<T> {
             .iter()
             .any(|val| val.value > MAX_RADER_PRIME_FACTOR)
         {
-            let inner_fft_len_pow2 = (2 * len - 1).checked_next_power_of_two().unwrap();
-            // for long ffts a mixed radix inner fft is faster than a longer radix4
+            // we want to use bluestein's algorithm. we have a free choice of which inner FFT length to use
+            // the only restriction is that it has to be (2 * len - 1) or larger. So we want the fastest FFT we can compute at or above that size.
+
+            // the most obvious choice is the next-highest power of two, but there's one trick we can pull to get a smaller fft that we can be 100% certain will be faster
             let min_inner_len = 2 * len - 1;
-            let mixed_radix_len = 3 * inner_fft_len_pow2 / 4;
-            let inner_fft =
-                if mixed_radix_len >= min_inner_len && len >= MIN_BLUESTEIN_MIXED_RADIX_LEN {
-                    let mixed_radix_factors = PrimeFactors::compute(mixed_radix_len);
-                    self.design_fft_with_factors(mixed_radix_len, mixed_radix_factors)
-                } else {
-                    self.design_radix4(inner_fft_len_pow2)
-                };
+            let inner_len_pow2 = min_inner_len.checked_next_power_of_two().unwrap();
+            let inner_len_factor3 = inner_len_pow2 / 4 * 3;
+
+            let inner_len = if inner_len_factor3 >= min_inner_len {
+                inner_len_factor3
+            } else {
+                inner_len_pow2
+            };
+            let inner_fft = self.design_fft_for_len(inner_len);
+
             Arc::new(Recipe::BluesteinsAlgorithm { len, inner_fft })
         } else {
             let inner_fft = self.design_fft_with_factors(inner_fft_len_rader, raders_factors);
@@ -640,11 +678,13 @@ mod unit_tests {
         assert_eq!(*planner.design_fft_for_len(7), Recipe::Butterfly7);
         assert_eq!(*planner.design_fft_for_len(8), Recipe::Butterfly8);
         assert_eq!(*planner.design_fft_for_len(11), Recipe::Butterfly11);
+        assert_eq!(*planner.design_fft_for_len(12), Recipe::Butterfly12);
         assert_eq!(*planner.design_fft_for_len(13), Recipe::Butterfly13);
         assert_eq!(*planner.design_fft_for_len(16), Recipe::Butterfly16);
         assert_eq!(*planner.design_fft_for_len(17), Recipe::Butterfly17);
         assert_eq!(*planner.design_fft_for_len(19), Recipe::Butterfly19);
         assert_eq!(*planner.design_fft_for_len(23), Recipe::Butterfly23);
+        assert_eq!(*planner.design_fft_for_len(24), Recipe::Butterfly24);
         assert_eq!(*planner.design_fft_for_len(29), Recipe::Butterfly29);
         assert_eq!(*planner.design_fft_for_len(31), Recipe::Butterfly31);
         assert_eq!(*planner.design_fft_for_len(32), Recipe::Butterfly32);
@@ -689,7 +729,7 @@ mod unit_tests {
     #[test]
     fn test_plan_scalar_goodthomasbutterfly() {
         let mut planner = FftPlannerScalar::<f64>::new();
-        for len in [3 * 4, 3 * 5, 3 * 7, 5 * 7, 11 * 13].iter() {
+        for len in [3 * 5, 3 * 7, 5 * 7, 11 * 13].iter() {
             let plan = planner.design_fft_for_len(*len);
             assert!(
                 is_goodthomassmall(&plan),

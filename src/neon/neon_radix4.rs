@@ -12,7 +12,7 @@ use super::NeonNum;
 
 use super::neon_vector::{NeonArray, NeonArrayMut, NeonVector, Rotation90};
 
-/// FFT algorithm optimized for power-of-two sizes, SSE accelerated version.
+/// FFT algorithm optimized for power-of-two sizes, Neon accelerated version.
 /// This is designed to be used via a Planner, and not created directly.
 
 pub struct NeonRadix4<N: NeonNum, T> {
@@ -40,7 +40,8 @@ impl<N: NeonNum, T: FftNum> NeonRadix4<N, T> {
         let direction = base_fft.fft_direction();
         let base_len = base_fft.len();
 
-        assert!(base_len.is_power_of_two() && base_len >= 2 * N::VectorType::COMPLEX_PER_VECTOR);
+        // note that we can eventually release this restriction - we just need to update the rest of the code in here to handle remainders
+        assert!(base_len % (2 * N::VectorType::COMPLEX_PER_VECTOR) == 0 && base_len > 0);
 
         let len = base_len * (1 << (k * 2));
 
@@ -186,7 +187,7 @@ mod unit_tests {
 
     #[test]
     fn test_neon_radix4_64() {
-        for base in [2, 4, 8, 16] {
+        for base in [2, 4, 6, 8, 12, 16] {
             let base_forward = construct_base(base, FftDirection::Forward);
             let base_inverse = construct_base(base, FftDirection::Inverse);
             for k in 0..4 {
@@ -205,7 +206,7 @@ mod unit_tests {
 
     #[test]
     fn test_neon_radix4_32() {
-        for base in [4, 8, 16] {
+        for base in [4, 8, 12, 16] {
             let base_forward = construct_base(base, FftDirection::Forward);
             let base_inverse = construct_base(base, FftDirection::Inverse);
             for k in 0..4 {

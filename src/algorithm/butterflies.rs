@@ -274,6 +274,33 @@ impl<T: FftNum> Butterfly4<T> {
         buffer.store(value1, 2);
         buffer.store(value3, 3);
     }
+
+    #[inline(always)]
+    unsafe fn perform_fft_strided(
+        &self,
+        value0: &mut Complex<T>,
+        value1: &mut Complex<T>,
+        value2: &mut Complex<T>,
+        value3: &mut Complex<T>,
+    ) {
+        // step 2: column FFTs
+        Butterfly2::perform_fft_strided(value0, value2);
+        Butterfly2::perform_fft_strided(value1, value3);
+
+        // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
+        *value3 = twiddles::rotate_90(*value3, self.direction);
+
+        // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
+
+        // step 5: row FFTs
+        Butterfly2::perform_fft_strided(value0, value1);
+        Butterfly2::perform_fft_strided(value2, value3);
+
+        // step 6: transpose
+        let temp = *value1;
+        *value1 = *value2;
+        *value2 = temp;
+    }
 }
 
 pub struct Butterfly5<T> {
@@ -1041,6 +1068,83 @@ impl<T: FftNum> Butterfly11<T> {
             },
             10,
         );
+    }
+}
+
+pub struct Butterfly12<T> {
+    butterfly3: Butterfly3<T>,
+    butterfly4: Butterfly4<T>,
+}
+boilerplate_fft_butterfly!(Butterfly12, 12, |this: &Butterfly12<_>| this
+    .butterfly3
+    .fft_direction());
+impl<T: FftNum> Butterfly12<T> {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        Self {
+            butterfly3: Butterfly3::new(direction),
+            butterfly4: Butterfly4::new(direction),
+        }
+    }
+    #[inline(always)]
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+        //since GCD(4,3) == 1 we're going to hardcode a step of the Good-Thomas algorithm to avoid twiddle factors
+
+        // step 1: reorder the input directly into the scratch. normally there's a whole thing to compute this ordering
+        //but thankfully we can just precompute it and hardcode it
+        let mut scratch0 = [
+            buffer.load(0),
+            buffer.load(3),
+            buffer.load(6),
+            buffer.load(9),
+        ];
+        let mut scratch1 = [
+            buffer.load(4),
+            buffer.load(7),
+            buffer.load(10),
+            buffer.load(1),
+        ];
+        let mut scratch2 = [
+            buffer.load(8),
+            buffer.load(11),
+            buffer.load(2),
+            buffer.load(5),
+        ];
+
+        // step 2: column FFTs
+        self.butterfly4.perform_fft_contiguous(&mut scratch0);
+        self.butterfly4.perform_fft_contiguous(&mut scratch1);
+        self.butterfly4.perform_fft_contiguous(&mut scratch2);
+
+        // step 3: apply twiddle factors -- SKIPPED because good-thomas doesn't have twiddle factors :)
+
+        // step 4: SKIPPED because the next FFTs will be non-contiguous
+
+        // step 5: row FFTs
+        self.butterfly3
+            .perform_fft_strided(&mut scratch0[0], &mut scratch1[0], &mut scratch2[0]);
+        self.butterfly3
+            .perform_fft_strided(&mut scratch0[1], &mut scratch1[1], &mut scratch2[1]);
+        self.butterfly3
+            .perform_fft_strided(&mut scratch0[2], &mut scratch1[2], &mut scratch2[2]);
+        self.butterfly3
+            .perform_fft_strided(&mut scratch0[3], &mut scratch1[3], &mut scratch2[3]);
+
+        // step 6: reorder the result back into the buffer. again we would normally have to do an expensive computation
+        // but instead we can precompute and hardcode the ordering
+        // note that we're also rolling a transpose step into this reorder
+        buffer.store(scratch0[0], 0);
+        buffer.store(scratch1[1], 1);
+        buffer.store(scratch2[2], 2);
+        buffer.store(scratch0[3], 3);
+        buffer.store(scratch1[0], 4);
+        buffer.store(scratch2[1], 5);
+        buffer.store(scratch0[2], 6);
+        buffer.store(scratch1[3], 7);
+        buffer.store(scratch2[0], 8);
+        buffer.store(scratch0[1], 9);
+        buffer.store(scratch1[2], 10);
+        buffer.store(scratch2[3], 11);
     }
 }
 
@@ -3300,6 +3404,167 @@ impl<T: FftNum> Butterfly23<T> {
             },
             22,
         );
+    }
+}
+
+pub struct Butterfly24<T> {
+    butterfly4: Butterfly4<T>,
+    butterfly6: Butterfly6<T>,
+    twiddle1: Complex<T>,
+    twiddle2: Complex<T>,
+    twiddle4: Complex<T>,
+    twiddle5: Complex<T>,
+    twiddle8: Complex<T>,
+    twiddle10: Complex<T>,
+    root2: T,
+}
+boilerplate_fft_butterfly!(Butterfly24, 24, |this: &Butterfly24<_>| this
+    .butterfly4
+    .fft_direction());
+impl<T: FftNum> Butterfly24<T> {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        Self {
+            butterfly4: Butterfly4::new(direction),
+            butterfly6: Butterfly6::new(direction),
+            twiddle1: twiddles::compute_twiddle(1, 24, direction),
+            twiddle2: twiddles::compute_twiddle(2, 24, direction),
+            twiddle4: twiddles::compute_twiddle(4, 24, direction),
+            twiddle5: twiddles::compute_twiddle(5, 24, direction),
+            twiddle8: twiddles::compute_twiddle(8, 24, direction),
+            twiddle10: twiddles::compute_twiddle(10, 24, direction),
+            root2: T::from_f64(0.5f64.sqrt()).unwrap(),
+        }
+    }
+    #[inline(never)]
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+        // algorithm: 6x4 mixed radix
+        // step 1: transpose the input directly into the scratch.
+        let mut scratch0 = [
+            buffer.load(0),
+            buffer.load(4),
+            buffer.load(8),
+            buffer.load(12),
+            buffer.load(16),
+            buffer.load(20),
+        ];
+        let mut scratch1 = [
+            buffer.load(1),
+            buffer.load(5),
+            buffer.load(9),
+            buffer.load(13),
+            buffer.load(17),
+            buffer.load(21),
+        ];
+        let mut scratch2 = [
+            buffer.load(2),
+            buffer.load(6),
+            buffer.load(10),
+            buffer.load(14),
+            buffer.load(18),
+            buffer.load(22),
+        ];
+        let mut scratch3 = [
+            buffer.load(3),
+            buffer.load(7),
+            buffer.load(11),
+            buffer.load(15),
+            buffer.load(19),
+            buffer.load(23),
+        ];
+
+        // step 2: column FFTs
+        self.butterfly6.perform_fft_contiguous(&mut scratch0);
+        self.butterfly6.perform_fft_contiguous(&mut scratch1);
+        self.butterfly6.perform_fft_contiguous(&mut scratch2);
+        self.butterfly6.perform_fft_contiguous(&mut scratch3);
+
+        // step 3: apply twiddle factors
+        scratch1[1] = scratch1[1] * self.twiddle1;
+        scratch1[2] = scratch1[2] * self.twiddle2;
+        scratch1[3] =
+            (twiddles::rotate_90(scratch1[3], self.fft_direction()) + scratch1[3]) * self.root2;
+        scratch1[4] = scratch1[4] * self.twiddle4;
+        scratch1[5] = scratch1[5] * self.twiddle5;
+        scratch2[1] = scratch2[1] * self.twiddle2;
+        scratch2[2] = scratch2[2] * self.twiddle4;
+        scratch2[3] = twiddles::rotate_90(scratch2[3], self.fft_direction());
+        scratch2[4] = scratch2[4] * self.twiddle8;
+        scratch2[5] = scratch2[5] * self.twiddle10;
+        scratch3[1] =
+            (twiddles::rotate_90(scratch3[1], self.fft_direction()) + scratch3[1]) * self.root2;
+        scratch3[2] = twiddles::rotate_90(scratch3[2], self.fft_direction());
+        scratch3[3] =
+            (twiddles::rotate_90(scratch3[3], self.fft_direction()) - scratch3[3]) * self.root2;
+        scratch3[4] = -scratch3[4];
+        scratch3[5] =
+            (twiddles::rotate_90(scratch3[5], self.fft_direction()) + scratch3[5]) * -self.root2;
+
+        // step 4: SKIPPED because the next FFTs will be non-contiguous
+
+        // step 5: row FFTs
+        self.butterfly4.perform_fft_strided(
+            &mut scratch0[0],
+            &mut scratch1[0],
+            &mut scratch2[0],
+            &mut scratch3[0],
+        );
+        self.butterfly4.perform_fft_strided(
+            &mut scratch0[1],
+            &mut scratch1[1],
+            &mut scratch2[1],
+            &mut scratch3[1],
+        );
+        self.butterfly4.perform_fft_strided(
+            &mut scratch0[2],
+            &mut scratch1[2],
+            &mut scratch2[2],
+            &mut scratch3[2],
+        );
+        self.butterfly4.perform_fft_strided(
+            &mut scratch0[3],
+            &mut scratch1[3],
+            &mut scratch2[3],
+            &mut scratch3[3],
+        );
+        self.butterfly4.perform_fft_strided(
+            &mut scratch0[4],
+            &mut scratch1[4],
+            &mut scratch2[4],
+            &mut scratch3[4],
+        );
+        self.butterfly4.perform_fft_strided(
+            &mut scratch0[5],
+            &mut scratch1[5],
+            &mut scratch2[5],
+            &mut scratch3[5],
+        );
+
+        // step 6: copy back to the buffer. we can skip the transpose, because we skipped step 4
+        buffer.store(scratch0[0], 0);
+        buffer.store(scratch0[1], 1);
+        buffer.store(scratch0[2], 2);
+        buffer.store(scratch0[3], 3);
+        buffer.store(scratch0[4], 4);
+        buffer.store(scratch0[5], 5);
+        buffer.store(scratch1[0], 6);
+        buffer.store(scratch1[1], 7);
+        buffer.store(scratch1[2], 8);
+        buffer.store(scratch1[3], 9);
+        buffer.store(scratch1[4], 10);
+        buffer.store(scratch1[5], 11);
+        buffer.store(scratch2[0], 12);
+        buffer.store(scratch2[1], 13);
+        buffer.store(scratch2[2], 14);
+        buffer.store(scratch2[3], 15);
+        buffer.store(scratch2[4], 16);
+        buffer.store(scratch2[5], 17);
+        buffer.store(scratch3[0], 18);
+        buffer.store(scratch3[1], 19);
+        buffer.store(scratch3[2], 20);
+        buffer.store(scratch3[3], 21);
+        buffer.store(scratch3[4], 22);
+        buffer.store(scratch3[5], 23);
     }
 }
 
@@ -6138,11 +6403,13 @@ mod unit_tests {
     test_butterfly_func!(test_butterfly8, Butterfly8, 8);
     test_butterfly_func!(test_butterfly9, Butterfly9, 9);
     test_butterfly_func!(test_butterfly11, Butterfly11, 11);
+    test_butterfly_func!(test_butterfly12, Butterfly12, 12);
     test_butterfly_func!(test_butterfly13, Butterfly13, 13);
     test_butterfly_func!(test_butterfly16, Butterfly16, 16);
     test_butterfly_func!(test_butterfly17, Butterfly17, 17);
     test_butterfly_func!(test_butterfly19, Butterfly19, 19);
     test_butterfly_func!(test_butterfly23, Butterfly23, 23);
+    test_butterfly_func!(test_butterfly24, Butterfly24, 24);
     test_butterfly_func!(test_butterfly27, Butterfly27, 27);
     test_butterfly_func!(test_butterfly29, Butterfly29, 29);
     test_butterfly_func!(test_butterfly31, Butterfly31, 31);
