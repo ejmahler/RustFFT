@@ -25,16 +25,24 @@ use super::butterflies::{Butterfly2, Butterfly3, Butterfly4, Butterfly5, Butterf
 
 #[repr(u8)]
 enum InternalRadixFactor<T> {
-    Factor2(Butterfly2<T>) = 2,
-    Factor3(Butterfly3<T>) = 3,
-    Factor4(Butterfly4<T>) = 4,
-    Factor5(Butterfly5<T>) = 5,
-    Factor6(Butterfly6<T>) = 6,
-    Factor7(Butterfly7<T>) = 7,
+    Factor2(Butterfly2<T>),
+    Factor3(Butterfly3<T>),
+    Factor4(Butterfly4<T>),
+    Factor5(Butterfly5<T>),
+    Factor6(Butterfly6<T>),
+    Factor7(Butterfly7<T>),
 }
 impl<T> InternalRadixFactor<T> {
     pub const fn radix(&self) -> usize {
-        unsafe { *(self as *const Self as *const u8) as usize }
+        // note: if we had rustc 1.66, we could just turn these values explicit discriminators on the enum
+        match self {
+            InternalRadixFactor::Factor2(_) => 2,
+            InternalRadixFactor::Factor3(_) => 3,
+            InternalRadixFactor::Factor4(_) => 4,
+            InternalRadixFactor::Factor5(_) => 5,
+            InternalRadixFactor::Factor6(_) => 6,
+            InternalRadixFactor::Factor7(_) => 7,
+        }
     }
 }
 

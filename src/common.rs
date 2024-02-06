@@ -284,15 +284,23 @@ macro_rules! boilerplate_fft {
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum RadixFactor {
-    Factor2 = 2,
-    Factor3 = 3,
-    Factor4 = 4,
-    Factor5 = 5,
-    Factor6 = 6,
-    Factor7 = 7,
+    Factor2,
+    Factor3,
+    Factor4,
+    Factor5,
+    Factor6,
+    Factor7,
 }
 impl RadixFactor {
     pub const fn radix(&self) -> usize {
-        unsafe { *(self as *const Self as *const u8) as usize }
+        // note: if we had rustc 1.66, we could just turn these values explicit discriminators on the enum
+        match self {
+            RadixFactor::Factor2 => 2,
+            RadixFactor::Factor3 => 3,
+            RadixFactor::Factor4 => 4,
+            RadixFactor::Factor5 => 5,
+            RadixFactor::Factor6 => 6,
+            RadixFactor::Factor7 => 7,
+        }
     }
 }
