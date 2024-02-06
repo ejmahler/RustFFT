@@ -185,54 +185,38 @@ impl PrimeFactors {
     pub fn get_other_factors(&self) -> &[PrimeFactor] {
         &self.other_factors
     }
-
+    #[allow(unused)]
     pub fn is_power_of_three(&self) -> bool {
         self.power_three > 0 && self.power_two == 0 && self.other_factors.len() == 0
     }
 
-    // Divides the number by the given prime factor. Returns None if the resulting number is one.
-    pub fn remove_factors(mut self, factor: PrimeFactor) -> Option<Self> {
-        if factor.count == 0 {
-            return Some(self);
-        }
-        if factor.value == 2 {
-            self.power_two = self.power_two.checked_sub(factor.count).unwrap();
-            self.n >>= factor.count;
-            self.total_factor_count -= factor.count;
-            if self.power_two == 0 {
-                self.distinct_factor_count -= 1;
-            }
-            if self.n > 1 {
-                return Some(self);
-            }
-        } else if factor.value == 3 {
-            self.power_three = self.power_three.checked_sub(factor.count).unwrap();
-            self.n /= 3.pow(factor.count);
-            self.total_factor_count -= factor.count;
-            if self.power_two == 0 {
-                self.distinct_factor_count -= 1;
-            }
-            if self.n > 1 {
-                return Some(self);
-            }
-        } else {
-            let found_factor = self
+    // returns true if we have any factors whose value is less than or equal to the provided factor
+    pub fn has_factors_leq(&self, factor: usize) -> bool {
+        self.power_two > 0
+            || self.power_three > 0
+            || self
                 .other_factors
-                .iter_mut()
-                .find(|item| item.value == factor.value)
-                .unwrap();
-            found_factor.count = found_factor.count.checked_sub(factor.count).unwrap();
-            self.n /= factor.value.pow(factor.count);
-            self.total_factor_count -= factor.count;
-            if found_factor.count == 0 {
-                self.distinct_factor_count -= 1;
-                self.other_factors.retain(|item| item.value != factor.value);
-            }
-            if self.n > 1 {
-                return Some(self);
-            }
-        }
-        None
+                .first()
+                .map_or(false, |f| f.value <= factor)
+    }
+
+    // returns true if we have any factors whose value is greater than the provided factor
+    pub fn has_factors_gt(&self, factor: usize) -> bool {
+        (factor < 2 && self.power_two > 0)
+            || (factor < 3 && self.power_three > 0)
+            || self
+                .other_factors
+                .last()
+                .map_or(false, |f| f.value > factor)
+    }
+
+    // returns the product of all factors greater than the provided min_factor
+    pub fn product_above(&self, min_factor: usize) -> usize {
+        self.other_factors
+            .iter()
+            .skip_while(|f| f.value <= min_factor)
+            .map(|f| f.value.pow(f.count))
+            .product()
     }
 
     // Splits this set of prime factors into two different sets so that the products of the two sets are as close as possible
@@ -665,28 +649,6 @@ mod unit_tests {
 
                 assert_internally_consistent(&left_factors);
                 assert_internally_consistent(&right_factors);
-            }
-        }
-    }
-
-    #[test]
-    fn test_remove_factors() {
-        // For every possible factor of a bunch of factors, they removing each and making sure the result is internally consistent
-        for n in 2..200 {
-            let factors = PrimeFactors::compute(n);
-
-            for i in 0..=factors.get_power_of_two() {
-                if let Some(removed_factors) = factors
-                    .clone()
-                    .remove_factors(PrimeFactor { value: 2, count: i })
-                {
-                    assert_eq!(removed_factors.get_product(), factors.get_product() >> i);
-                    assert_internally_consistent(&removed_factors);
-                } else {
-                    // If the method returned None, this must be a power of two and i must be equal to the product
-                    assert!(n.is_power_of_two());
-                    assert!(i == factors.get_power_of_two());
-                }
             }
         }
     }

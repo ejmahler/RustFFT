@@ -38,6 +38,13 @@ impl<T: FftNum> Dft<T> {
         }
     }
 
+    fn inplace_scratch_len(&self) -> usize {
+        self.len()
+    }
+    fn outofplace_scratch_len(&self) -> usize {
+        0
+    }
+
     fn perform_fft_out_of_place(
         &self,
         signal: &[Complex<T>],

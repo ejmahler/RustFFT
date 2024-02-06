@@ -6,14 +6,14 @@ use crate::wasm_simd::wasm_simd_planner::FftPlannerWasmSimd;
 use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
 
 use crate::algorithm::butterflies::*;
-use crate::algorithm::*;
 use crate::Fft;
+use crate::{algorithm::*, RadixFactor};
 
 use crate::FftPlannerAvx;
 use crate::FftPlannerNeon;
 use crate::FftPlannerSse;
 
-use crate::math_utils::{PrimeFactor, PrimeFactors};
+use crate::math_utils::PrimeFactors;
 
 enum ChosenFftPlanner<T: FftNum> {
     Scalar(FftPlannerScalar<T>),
@@ -124,8 +124,7 @@ impl<T: FftNum> FftPlanner<T> {
     }
 }
 
-const MIN_RADIX4_BITS: u32 = 5; // smallest size to consider radix 4 an option is 2^5 = 32
-const MIN_RADIX3_FACTORS: u32 = 4; // smallest number of factors of 3 to consider radix 4 an option is 3^4=81. any smaller and we want to use butterflies directly.
+const MAX_RADIXN_FACTOR: usize = 7; // The largest blutterfly factor that the RadixN algorithm can handle
 const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
 
 /// A Recipe is a structure that describes the design of a FFT, without actually creating it.
@@ -157,8 +156,8 @@ pub enum Recipe {
         len: usize,
         inner_fft: Arc<Recipe>,
     },
-    Radix3 {
-        k: u32,
+    RadixN {
+        factors: Box<[RadixFactor]>,
         base_fft: Arc<Recipe>,
     },
     Radix4 {
@@ -191,7 +190,9 @@ impl Recipe {
     pub fn len(&self) -> usize {
         match self {
             Recipe::Dft(length) => *length,
-            Recipe::Radix3 { k, base_fft } => base_fft.len() * 3usize.pow(*k),
+            Recipe::RadixN { factors, base_fft } => {
+                base_fft.len() * factors.iter().map(|f| f.radix()).product::<usize>()
+            }
             Recipe::Radix4 { k, base_fft } => base_fft.len() * (1 << (k * 2)),
             Recipe::Butterfly2 => 2,
             Recipe::Butterfly3 => 3,
@@ -336,9 +337,9 @@ impl<T: FftNum> FftPlannerScalar<T> {
     fn build_new_fft(&mut self, recipe: &Recipe, direction: FftDirection) -> Arc<dyn Fft<T>> {
         match recipe {
             Recipe::Dft(len) => Arc::new(Dft::new(*len, direction)) as Arc<dyn Fft<T>>,
-            Recipe::Radix3 { k, base_fft } => {
+            Recipe::RadixN { factors, base_fft } => {
                 let base_fft = self.build_fft(base_fft, direction);
-                Arc::new(Radix3::new_with_base(*k, base_fft)) as Arc<dyn Fft<T>>
+                Arc::new(RadixN::new(factors, base_fft)) as Arc<dyn Fft<T>>
             }
             Recipe::Radix4 { k, base_fft } => {
                 let base_fft = self.build_fft(base_fft, direction);
@@ -412,37 +413,61 @@ impl<T: FftNum> FftPlannerScalar<T> {
             fft_instance
         } else if factors.is_prime() {
             self.design_prime(len)
-        } else if len.trailing_zeros() >= MIN_RADIX4_BITS {
-            if factors.get_other_factors().is_empty() && factors.get_power_of_three() < 2 {
-                self.design_radix4(factors)
-            } else {
-                let non_power_of_two = factors
-                    .remove_factors(PrimeFactor {
-                        value: 2,
-                        count: len.trailing_zeros(),
-                    })
-                    .unwrap();
-                let power_of_two = PrimeFactors::compute(1 << len.trailing_zeros());
-                self.design_mixed_radix(power_of_two, non_power_of_two)
-            }
-        } else if factors.get_power_of_three() >= MIN_RADIX3_FACTORS {
-            if factors.is_power_of_three() {
-                self.design_radix3(factors.get_power_of_three())
-            } else {
-                let power3 = factors.get_power_of_three();
-                let non_power_of_three = factors
-                    .remove_factors(PrimeFactor {
-                        value: 3,
-                        count: power3,
-                    })
-                    .unwrap();
-                let power_of_three = PrimeFactors::compute(3usize.pow(power3));
-                self.design_mixed_radix(power_of_three, non_power_of_three)
-            }
+        } else if let Some(butterfly_product) = self.design_butterfly_product(len) {
+            butterfly_product
+        } else if factors.has_factors_leq(MAX_RADIXN_FACTOR) {
+            self.design_radixn(factors)
         } else {
             let (left_factors, right_factors) = factors.partition_factors();
             self.design_mixed_radix(left_factors, right_factors)
         }
+    }
+
+    fn design_butterfly_product(&mut self, len: usize) -> Option<Arc<Recipe>> {
+        if len > 992 || len.is_power_of_two() {
+            return None;
+        } // 31*32 = 992. if we're above this size, don't bother. anddon't bother for powers of 2 because radix4 is fast
+
+        let limit = (len as f64).sqrt().ceil() as usize + 1;
+        let butterflies = [
+            2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 16, 17, 19, 23, 24, 27, 29, 31, 32,
+        ];
+
+        // search through our butterflies. if we find one that divides the length, see of the quotient is also a butterfly
+        // if it is, we have a butterfly product
+        // if there are multiple valid pairs, take the one with the smallest sum - we want the values to be as close together as possible
+        // ie 32 x 2, sum = 34, 16 x 4, sum = 20, 8 x 8, sum = 16, so even though 32,2 and 16x4 are valid, we want 8x8
+
+        let mut min_sum = usize::MAX;
+        let mut found_butterflies = None;
+        for left in butterflies.iter().take_while(|n| **n < limit) {
+            let right = len / left;
+            if left * right == len && butterflies.contains(&right) {
+                let sum = left + right;
+                if sum < min_sum {
+                    min_sum = sum;
+                    found_butterflies = Some((*left, right))
+                }
+            }
+        }
+
+        // if we found a valid pair of butterflies, construct a recipe for them
+        found_butterflies.map(|(left_len, right_len)| {
+            let left_fft = self.design_fft_for_len(left_len);
+            let right_fft = self.design_fft_for_len(right_len);
+
+            if gcd(left_len, right_len) == 1 {
+                Arc::new(Recipe::GoodThomasAlgorithmSmall {
+                    left_fft,
+                    right_fft,
+                })
+            } else {
+                Arc::new(Recipe::MixedRadixSmall {
+                    left_fft,
+                    right_fft,
+                })
+            }
+        })
     }
 
     fn design_mixed_radix(
@@ -479,70 +504,105 @@ impl<T: FftNum> FftPlannerScalar<T> {
         }
     }
 
-    fn design_radix3(&mut self, exponent: u32) -> Arc<Recipe> {
-        // plan a step of radix3
-        let base_exponent = match exponent {
-            0 => 0,
-            1 => 1,
-            2 => 2,
-            _ => 3,
-        };
-
-        let base_fft = self.design_fft_for_len(3usize.pow(base_exponent));
-        Arc::new(Recipe::Radix3 {
-            k: exponent - base_exponent,
-            base_fft,
-        })
-    }
-
-    fn design_radix4(&mut self, factors: PrimeFactors) -> Arc<Recipe> {
-        // We can eventually relax this restriction -- it's not instrinsic to radix4, it's just that anything besides 2^n and 3*2^n hasn't been measured yet
-        assert!(factors.get_other_factors().is_empty() && factors.get_power_of_three() < 2);
-
+    fn design_radixn(&mut self, factors: PrimeFactors) -> Arc<Recipe> {
         let p2 = factors.get_power_of_two();
-        let base_len: usize = if factors.get_power_of_three() == 0 {
-            // pure power of 2
-            match p2 {
-                // base cases. we shouldn't hit these but we might as well be ready for them
-                0 => 1,
-                1 => 2,
-                2 => 4,
-                // main case: if len is a power of 4, use a base of 16, otherwise use a base of 8
-                _ => {
-                    if p2 % 2 == 1 {
-                        8
-                    } else {
-                        16
-                    }
+        let p3 = factors.get_power_of_three();
+        let p5 = factors
+            .get_other_factors()
+            .iter()
+            .find_map(|f| (f.value == 5).then_some(f.count))
+            .unwrap_or(0);
+        let p7 = factors
+            .get_other_factors()
+            .iter()
+            .find_map(|f| (f.value == 7).then_some(f.count))
+            .unwrap_or(0);
+
+        let base_len: usize = if factors.has_factors_gt(MAX_RADIXN_FACTOR) {
+            // If we have factors larger than RadixN can handle, we *must* use the product of those factors as our base
+            factors.product_above(MAX_RADIXN_FACTOR)
+        } else if p7 == 0 && p5 == 0 && p3 < 2 {
+            // here we handle pure powers of 2 and 3 times a power of 2 - we want to hand these to radix4, so we need to consume the correct number of factors to leave us with 4^k
+            if p3 == 0 {
+                // pure power of 2
+                assert!(p2 > 5); // butterflies should have caught this
+                if p2 % 2 == 1 {
+                    8
+                } else {
+                    16
+                }
+            } else {
+                // 3 times a power of 2
+                assert!(p2 > 3); // butterflies should have caught this
+                if p2 % 2 == 1 {
+                    24
+                } else {
+                    12
                 }
             }
+        } else if p2 > 0 && p3 > 0 {
+            // we have a mixed bag of 2s and 3s
+            // todo: if we have way more 3s than 2s, benchmark using butterfly27 as the base
+            let excess_p2 = p2.saturating_sub(p3);
+            match excess_p2 {
+                0 => 6,
+                1 => 12,
+                _ => 24,
+            }
+        } else if p3 > 2 {
+            27
+        } else if p3 > 1 {
+            9
+        } else if p7 > 0 {
+            7
         } else {
-            // we have a factor 3 that we're going to stick into the butterflies
-            match p2 {
-                // base cases. we shouldn't hit these but we might as well be ready for them
-                0 => 3,
-                1 => 6,
-                // main case: if len is 3*4^k, use a base of 12, otherwise use a base of 24
-                _ => {
-                    if p2 % 2 == 1 {
-                        24
-                    } else {
-                        12
-                    }
-                }
-            }
+            assert!(p5 > 0);
+            5
         };
 
         // now that we know the base length, divide it out get what radix4 needs to compute
-        let cross_len = factors.get_product() / base_len;
+        let base_fft = self.design_fft_for_len(base_len);
+        let mut cross_len = factors.get_product() / base_len;
+
+        // see if we can use radix4
+        let cross_bits = cross_len.trailing_zeros();
+        if cross_len.is_power_of_two() && cross_bits % 2 == 0 {
+            let k = cross_bits / 2;
+            return Arc::new(Recipe::Radix4 { k, base_fft });
+        }
+
+        // we weren't able to use radix4, so fall back to RadixN
+        // theoretically we could do this with the p2, p3, p5 etc values above, but our choice of base knocked them out of sync
+        let mut factors = Vec::new();
+        while cross_len % 7 == 0 {
+            cross_len /= 7;
+            factors.push(RadixFactor::Factor7);
+        }
+        while cross_len % 6 == 0 {
+            cross_len /= 6;
+            factors.push(RadixFactor::Factor6);
+        }
+        while cross_len % 5 == 0 {
+            cross_len /= 5;
+            factors.push(RadixFactor::Factor5);
+        }
+        while cross_len % 3 == 0 {
+            cross_len /= 3;
+            factors.push(RadixFactor::Factor3);
+        }
         assert!(cross_len.is_power_of_two());
 
+        // benchmarking suggests that we want to add the 4s *last*, i suspect because 4 is a better-than-usual value for the transpose
         let cross_bits = cross_len.trailing_zeros();
-        assert!(cross_bits % 2 == 0);
-        let k = cross_bits / 2;
+        if cross_bits % 2 == 1 {
+            factors.push(RadixFactor::Factor2);
+        }
+        factors.extend(std::iter::repeat(RadixFactor::Factor4).take(cross_bits as usize / 2));
 
-        let base_fft = self.design_fft_for_len(base_len);
-        Arc::new(Recipe::Radix4 { k, base_fft })
+        Arc::new(Recipe::RadixN {
+            factors: factors.into_boxed_slice(),
+            base_fft,
+        })
     }
 
     // Returns Some(instance) if we have a butterfly available for this size. Returns None if there is no butterfly available for this size
@@ -607,13 +667,6 @@ impl<T: FftNum> FftPlannerScalar<T> {
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-
-    fn is_mixedradix(plan: &Recipe) -> bool {
-        match plan {
-            &Recipe::MixedRadix { .. } => true,
-            _ => false,
-        }
-    }
 
     fn is_mixedradixsmall(plan: &Recipe) -> bool {
         match plan {
@@ -691,8 +744,8 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_plan_scalar_mixedradix() {
-        // Products of several different primes should become MixedRadix
+    fn test_plan_scalar_radixn() {
+        // Products of several different small primes should become RadixN
         let mut planner = FftPlannerScalar::<f64>::new();
         for pow2 in 2..5 {
             for pow3 in 2..5 {
@@ -703,7 +756,17 @@ mod unit_tests {
                             * 5usize.pow(pow5)
                             * 7usize.pow(pow7);
                         let plan = planner.design_fft_for_len(len);
-                        assert!(is_mixedradix(&plan), "Expected MixedRadix, got {:?}", plan);
+                        assert!(
+                            matches!(
+                                *plan,
+                                Recipe::RadixN {
+                                    factors: _,
+                                    base_fft: _
+                                }
+                            ),
+                            "Expected MixedRadix, got {:?}",
+                            plan
+                        );
                         assert_eq!(plan.len(), len, "Recipe reports wrong length");
                     }
                 }
@@ -713,9 +776,9 @@ mod unit_tests {
 
     #[test]
     fn test_plan_scalar_mixedradixsmall() {
-        // Products of two "small" lengths < 31 that have a common divisor >1, and isn't a power of 2 should be MixedRadixSmall
+        // Products of two "small" butterflies < 31 that have a common divisor >1, and isn't a power of 2 should be MixedRadixSmall
         let mut planner = FftPlannerScalar::<f64>::new();
-        for len in [5 * 20, 5 * 25].iter() {
+        for len in [12 * 3, 6 * 27].iter() {
             let plan = planner.design_fft_for_len(*len);
             assert!(
                 is_mixedradixsmall(&plan),

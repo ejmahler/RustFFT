@@ -77,15 +77,25 @@ macro_rules! boilerplate_fft_oop {
                 &self,
                 input: &mut [Complex<T>],
                 output: &mut [Complex<T>],
-                _scratch: &mut [Complex<T>],
+                scratch: &mut [Complex<T>],
             ) {
                 if self.len() == 0 {
                     return;
                 }
 
-                if input.len() < self.len() || output.len() != input.len() {
+                let required_scratch = self.get_outofplace_scratch_len();
+                if input.len() < self.len()
+                    || output.len() != input.len()
+                    || scratch.len() < required_scratch
+                {
                     // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
+                    fft_error_outofplace(
+                        self.len(),
+                        input.len(),
+                        output.len(),
+                        required_scratch,
+                        scratch.len(),
+                    );
                     return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
                 }
 
@@ -94,7 +104,7 @@ macro_rules! boilerplate_fft_oop {
                     output,
                     self.len(),
                     |in_chunk, out_chunk| {
-                        self.perform_fft_out_of_place(in_chunk, out_chunk, &mut [])
+                        self.perform_fft_out_of_place(in_chunk, out_chunk, scratch)
                     },
                 );
 
@@ -121,9 +131,9 @@ macro_rules! boilerplate_fft_oop {
                     return; // Unreachable, because fft_error_inplace asserts, but it helps codegen to put it here
                 }
 
-                let scratch = &mut scratch[..required_scratch];
+                let (scratch, extra_scratch) = scratch.split_at_mut(self.len());
                 let result = array_utils::iter_chunks(buffer, self.len(), |chunk| {
-                    self.perform_fft_out_of_place(chunk, scratch, &mut []);
+                    self.perform_fft_out_of_place(chunk, scratch, extra_scratch);
                     chunk.copy_from_slice(scratch);
                 });
 
@@ -140,11 +150,11 @@ macro_rules! boilerplate_fft_oop {
             }
             #[inline(always)]
             fn get_inplace_scratch_len(&self) -> usize {
-                self.len()
+                self.inplace_scratch_len()
             }
             #[inline(always)]
             fn get_outofplace_scratch_len(&self) -> usize {
-                0
+                self.outofplace_scratch_len()
             }
         }
         impl<T> Length for $struct_name<T> {
@@ -268,4 +278,21 @@ macro_rules! boilerplate_fft {
             }
         }
     };
+}
+
+#[non_exhaustive]
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum RadixFactor {
+    Factor2 = 2,
+    Factor3 = 3,
+    Factor4 = 4,
+    Factor5 = 5,
+    Factor6 = 6,
+    Factor7 = 7,
+}
+impl RadixFactor {
+    pub const fn radix(&self) -> usize {
+        unsafe { *(self as *const Self as *const u8) as usize }
+    }
 }
