@@ -138,7 +138,6 @@ impl<T: FftNum> RadixN<T> {
             base_len,
 
             factors: transpose_factors.into_boxed_slice(),
-            //transpose_lookup_table,
             butterflies: butterflies.into_boxed_slice(),
 
             len: cross_fft_len,
