@@ -510,12 +510,12 @@ impl<T: FftNum> FftPlannerScalar<T> {
         let p5 = factors
             .get_other_factors()
             .iter()
-            .find_map(|f| (f.value == 5).then_some(f.count))
+            .find_map(|f| if f.value == 5 { Some(f.count) } else { None }) // if we had rustc 1.62, we could use (f.value == 5).then_some(f.count)
             .unwrap_or(0);
         let p7 = factors
             .get_other_factors()
             .iter()
-            .find_map(|f| (f.value == 7).then_some(f.count))
+            .find_map(|f| if f.value == 7 { Some(f.count) } else { None })
             .unwrap_or(0);
 
         let base_len: usize = if factors.has_factors_gt(MAX_RADIXN_FACTOR) {
