@@ -1,4 +1,5 @@
 use num_complex::Complex;
+use num_integer::Integer;
 
 use std::any::TypeId;
 use std::sync::Arc;
@@ -10,14 +11,13 @@ use crate::{Direction, Fft, Length};
 
 use super::SseNum;
 
-use super::sse_vector::{Rotation90, SseArray, SseArrayMut, SseVector};
+use super::sse_vector::{Deinterleaved, SseArray, SseArrayMut, SseVector};
 
 /// FFT algorithm optimized for power-of-two sizes, SSE accelerated version.
 /// This is designed to be used via a Planner, and not created directly.
 
 pub struct SseRadix4<S: SseNum, T> {
-    twiddles: Box<[S::VectorType]>,
-    rotation: Rotation90<S::VectorType>,
+    twiddles: Box<[Deinterleaved<S::VectorType>]>,
 
     base_fft: Arc<dyn Fft<T>>,
     base_len: usize,
@@ -52,7 +52,7 @@ impl<S: SseNum, T: FftNum> SseRadix4<S, T> {
         let base_len = base_fft.len();
 
         // note that we can eventually release this restriction - we just need to update the rest of the code in here to handle remainders
-        assert!(base_len % (2 * S::VectorType::COMPLEX_PER_VECTOR) == 0 && base_len > 0);
+        assert!(base_len % (S::VectorType::SCALAR_PER_VECTOR) == 0 && base_len > 0);
 
         let len = base_len * (1 << (k * 2));
 
@@ -61,28 +61,38 @@ impl<S: SseNum, T: FftNum> SseRadix4<S, T> {
         // but mixed radix only does one step and then calls itself recusrively, and this algorithm does every layer all the way down
         // so we're going to pack all the "layers" of twiddle factors into a single array, starting with the bottom layer and going up
         const ROW_COUNT: usize = 4;
-        let mut cross_fft_len = base_len * ROW_COUNT;
+        let mut cross_fft_len = base_len;
         let mut twiddle_factors = Vec::with_capacity(len * 2);
-        while cross_fft_len <= len {
-            let num_scalar_columns = cross_fft_len / ROW_COUNT;
-            let num_vector_columns = num_scalar_columns / S::VectorType::COMPLEX_PER_VECTOR;
+        while cross_fft_len < len {
+            let num_scalar_columns = cross_fft_len;
+            cross_fft_len *= ROW_COUNT;
+
+            let (quotient, remainder) =
+                num_scalar_columns.div_rem(&S::VectorType::SCALAR_PER_VECTOR);
+            let num_vector_columns = quotient + if remainder > 0 { 1 } else { 0 };
 
             for i in 0..num_vector_columns {
                 for k in 1..ROW_COUNT {
-                    twiddle_factors.push(SseVector::make_mixedradix_twiddle_chunk(
-                        i * S::VectorType::COMPLEX_PER_VECTOR,
+                    let twiddle0 = SseVector::make_mixedradix_twiddle_chunk(
+                        i * S::VectorType::SCALAR_PER_VECTOR,
                         k,
                         cross_fft_len,
                         direction,
-                    ));
+                    );
+                    let twiddle1 = SseVector::make_mixedradix_twiddle_chunk(
+                        i * S::VectorType::SCALAR_PER_VECTOR + S::VectorType::COMPLEX_PER_VECTOR,
+                        k,
+                        cross_fft_len,
+                        direction,
+                    );
+                    let deinterleaved_twiddles = SseVector::deinterleave(twiddle0, twiddle1);
+                    twiddle_factors.push(deinterleaved_twiddles);
                 }
             }
-            cross_fft_len *= ROW_COUNT;
         }
 
         Self {
             twiddles: twiddle_factors.into_boxed_slice(),
-            rotation: SseVector::make_rotate90(direction),
 
             base_fft,
             base_len,
@@ -111,81 +121,237 @@ impl<S: SseNum, T: FftNum> SseRadix4<S, T> {
 
         // cross-FFTs
         const ROW_COUNT: usize = 4;
-        let mut cross_fft_len = self.base_len * ROW_COUNT;
-        let mut layer_twiddles: &[S::VectorType] = &self.twiddles;
+        let mut cross_fft_len = self.base_len;
+        let mut layer_twiddles: &[Deinterleaved<S::VectorType>] = &self.twiddles;
 
-        while cross_fft_len <= input.len() {
-            let num_rows = input.len() / cross_fft_len;
-            let num_scalar_columns = cross_fft_len / ROW_COUNT;
-            let num_vector_columns = num_scalar_columns / S::VectorType::COMPLEX_PER_VECTOR;
+        while cross_fft_len < input.len() {
+            let columns = cross_fft_len;
+            let first = cross_fft_len == self.base_len;
+            cross_fft_len *= ROW_COUNT;
+            let last = cross_fft_len == self.len();
 
-            for i in 0..num_rows {
-                butterfly_4::<S, T>(
-                    &mut output[i * cross_fft_len..],
-                    layer_twiddles,
-                    num_scalar_columns,
-                    &self.rotation,
-                )
+            if first && last {
+                for data in output.chunks_exact_mut(cross_fft_len) {
+                    butterfly_4_only::<S, T>(data, layer_twiddles, columns, self.direction)
+                }
+            } else if first {
+                for data in output.chunks_exact_mut(cross_fft_len) {
+                    butterfly_4_first::<S, T>(data, layer_twiddles, columns, self.direction)
+                }
+            } else if last {
+                for data in output.chunks_exact_mut(cross_fft_len) {
+                    butterfly_4_last::<S, T>(data, layer_twiddles, columns, self.direction)
+                }
+            } else {
+                for data in output.chunks_exact_mut(cross_fft_len) {
+                    butterfly_4::<S, T>(data, layer_twiddles, columns, self.direction)
+                }
             }
 
             // skip past all the twiddle factors used in this layer
+            let (quotient, remainder) = columns.div_rem(&S::VectorType::SCALAR_PER_VECTOR);
+            let num_vector_columns = quotient + if remainder > 0 { 1 } else { 0 };
+
             let twiddle_offset = num_vector_columns * (ROW_COUNT - 1);
             layer_twiddles = &layer_twiddles[twiddle_offset..];
-
-            cross_fft_len *= ROW_COUNT;
         }
     }
 }
 boilerplate_fft_sse_oop!(SseRadix4, |this: &SseRadix4<_, _>| this.len);
 
+#[inline(always)]
+fn load_debug_checked<T: Copy>(buffer: &[T], idx: usize) -> T {
+    debug_assert!(idx < buffer.len());
+    unsafe { *buffer.get_unchecked(idx) }
+}
+
+#[inline(always)]
+unsafe fn load_deinterleave<S: SseNum>(
+    buffer: &[Complex<S>],
+    idx: usize,
+) -> Deinterleaved<S::VectorType> {
+    let a = buffer.load_complex(idx);
+    let b = buffer.load_complex(idx + S::VectorType::COMPLEX_PER_VECTOR);
+    SseVector::deinterleave(a, b)
+}
+
+#[inline(always)]
+unsafe fn load<S: SseNum>(buffer: &[Complex<S>], idx: usize) -> Deinterleaved<S::VectorType> {
+    let a = buffer.load_complex(idx);
+    let b = buffer.load_complex(idx + S::VectorType::COMPLEX_PER_VECTOR);
+    Deinterleaved { re: a, im: b }
+}
+
+#[inline(always)]
+unsafe fn store_interleave<S: SseNum>(
+    mut buffer: &mut [Complex<S>],
+    vector: Deinterleaved<S::VectorType>,
+    idx: usize,
+) {
+    let (a, b) = SseVector::interleave(vector);
+    buffer.store_complex(a, idx);
+    buffer.store_complex(b, idx + S::VectorType::COMPLEX_PER_VECTOR);
+}
+
+#[inline(always)]
+unsafe fn store<S: SseNum>(
+    mut buffer: &mut [Complex<S>],
+    vector: Deinterleaved<S::VectorType>,
+    idx: usize,
+) {
+    buffer.store_complex(vector.re, idx);
+    buffer.store_complex(vector.im, idx + S::VectorType::COMPLEX_PER_VECTOR);
+}
+
+#[inline(never)]
+#[target_feature(enable = "sse4.1")]
+unsafe fn butterfly_4_only<S: SseNum, T: FftNum>(
+    data: &mut [Complex<T>],
+    twiddles: &[Deinterleaved<S::VectorType>],
+    num_scalar_columns: usize,
+    direction: FftDirection,
+) {
+    let num_vector_columns = num_scalar_columns / S::VectorType::SCALAR_PER_VECTOR;
+    let buffer: &mut [Complex<S>] = workaround_transmute_mut(data);
+
+    for i in 0..num_vector_columns {
+        let idx = i * S::VectorType::SCALAR_PER_VECTOR;
+        let tw_idx = i * 3;
+        let mut scratch = [
+            load_deinterleave(buffer, idx + 0 * num_scalar_columns),
+            load_deinterleave(buffer, idx + 1 * num_scalar_columns),
+            load_deinterleave(buffer, idx + 2 * num_scalar_columns),
+            load_deinterleave(buffer, idx + 3 * num_scalar_columns),
+        ];
+
+        let tw1 = load_debug_checked(twiddles, tw_idx + 0);
+        let tw2 = load_debug_checked(twiddles, tw_idx + 1);
+        let tw3 = load_debug_checked(twiddles, tw_idx + 2);
+
+        scratch[1] = Deinterleaved::mul_complex(scratch[1], tw1);
+        scratch[2] = Deinterleaved::mul_complex(scratch[2], tw2);
+        scratch[3] = Deinterleaved::mul_complex(scratch[3], tw3);
+
+        let scratch = Deinterleaved::butterfly4(scratch, direction);
+
+        store_interleave(buffer, scratch[0], idx + 0 * num_scalar_columns);
+        store_interleave(buffer, scratch[1], idx + 1 * num_scalar_columns);
+        store_interleave(buffer, scratch[2], idx + 2 * num_scalar_columns);
+        store_interleave(buffer, scratch[3], idx + 3 * num_scalar_columns);
+    }
+}
+
+#[inline(never)]
+#[target_feature(enable = "sse4.1")]
+unsafe fn butterfly_4_first<S: SseNum, T: FftNum>(
+    data: &mut [Complex<T>],
+    twiddles: &[Deinterleaved<S::VectorType>],
+    num_scalar_columns: usize,
+    direction: FftDirection,
+) {
+    let num_vector_columns = num_scalar_columns / S::VectorType::SCALAR_PER_VECTOR;
+    let buffer: &mut [Complex<S>] = workaround_transmute_mut(data);
+
+    for i in 0..num_vector_columns {
+        let idx = i * S::VectorType::SCALAR_PER_VECTOR;
+        let tw_idx = i * 3;
+        let mut scratch = [
+            load_deinterleave(buffer, idx + 0 * num_scalar_columns),
+            load_deinterleave(buffer, idx + 1 * num_scalar_columns),
+            load_deinterleave(buffer, idx + 2 * num_scalar_columns),
+            load_deinterleave(buffer, idx + 3 * num_scalar_columns),
+        ];
+
+        let tw1 = load_debug_checked(twiddles, tw_idx + 0);
+        let tw2 = load_debug_checked(twiddles, tw_idx + 1);
+        let tw3 = load_debug_checked(twiddles, tw_idx + 2);
+
+        scratch[1] = Deinterleaved::mul_complex(scratch[1], tw1);
+        scratch[2] = Deinterleaved::mul_complex(scratch[2], tw2);
+        scratch[3] = Deinterleaved::mul_complex(scratch[3], tw3);
+
+        let scratch = Deinterleaved::butterfly4(scratch, direction);
+
+        store(buffer, scratch[0], idx + 0 * num_scalar_columns);
+        store(buffer, scratch[1], idx + 1 * num_scalar_columns);
+        store(buffer, scratch[2], idx + 2 * num_scalar_columns);
+        store(buffer, scratch[3], idx + 3 * num_scalar_columns);
+    }
+}
+
+#[inline(never)]
 #[target_feature(enable = "sse4.1")]
 unsafe fn butterfly_4<S: SseNum, T: FftNum>(
     data: &mut [Complex<T>],
-    twiddles: &[S::VectorType],
-    num_ffts: usize,
-    rotation: &Rotation90<S::VectorType>,
+    twiddles: &[Deinterleaved<S::VectorType>],
+    num_scalar_columns: usize,
+    direction: FftDirection,
 ) {
-    let unroll_offset = S::VectorType::COMPLEX_PER_VECTOR;
+    let num_vector_columns = num_scalar_columns / S::VectorType::SCALAR_PER_VECTOR;
+    let buffer: &mut [Complex<S>] = workaround_transmute_mut(data);
 
-    let mut idx = 0usize;
-    let mut buffer: &mut [Complex<S>] = workaround_transmute_mut(data);
-    for tw in twiddles
-        .chunks_exact(6)
-        .take(num_ffts / (S::VectorType::COMPLEX_PER_VECTOR * 2))
-    {
-        let mut scratcha = [
-            buffer.load_complex(idx + 0 * num_ffts),
-            buffer.load_complex(idx + 1 * num_ffts),
-            buffer.load_complex(idx + 2 * num_ffts),
-            buffer.load_complex(idx + 3 * num_ffts),
-        ];
-        let mut scratchb = [
-            buffer.load_complex(idx + 0 * num_ffts + unroll_offset),
-            buffer.load_complex(idx + 1 * num_ffts + unroll_offset),
-            buffer.load_complex(idx + 2 * num_ffts + unroll_offset),
-            buffer.load_complex(idx + 3 * num_ffts + unroll_offset),
+    for i in 0..num_vector_columns {
+        let idx = i * S::VectorType::SCALAR_PER_VECTOR;
+        let tw_idx = i * 3;
+        let mut scratch = [
+            load(buffer, idx + 0 * num_scalar_columns),
+            load(buffer, idx + 1 * num_scalar_columns),
+            load(buffer, idx + 2 * num_scalar_columns),
+            load(buffer, idx + 3 * num_scalar_columns),
         ];
 
-        scratcha[1] = SseVector::mul_complex(scratcha[1], tw[0]);
-        scratcha[2] = SseVector::mul_complex(scratcha[2], tw[1]);
-        scratcha[3] = SseVector::mul_complex(scratcha[3], tw[2]);
-        scratchb[1] = SseVector::mul_complex(scratchb[1], tw[3]);
-        scratchb[2] = SseVector::mul_complex(scratchb[2], tw[4]);
-        scratchb[3] = SseVector::mul_complex(scratchb[3], tw[5]);
+        let tw1 = load_debug_checked(twiddles, tw_idx + 0);
+        let tw2 = load_debug_checked(twiddles, tw_idx + 1);
+        let tw3 = load_debug_checked(twiddles, tw_idx + 2);
 
-        let scratcha = SseVector::column_butterfly4(scratcha, *rotation);
-        let scratchb = SseVector::column_butterfly4(scratchb, *rotation);
+        scratch[1] = Deinterleaved::mul_complex(scratch[1], tw1);
+        scratch[2] = Deinterleaved::mul_complex(scratch[2], tw2);
+        scratch[3] = Deinterleaved::mul_complex(scratch[3], tw3);
 
-        buffer.store_complex(scratcha[0], idx + 0 * num_ffts);
-        buffer.store_complex(scratchb[0], idx + 0 * num_ffts + unroll_offset);
-        buffer.store_complex(scratcha[1], idx + 1 * num_ffts);
-        buffer.store_complex(scratchb[1], idx + 1 * num_ffts + unroll_offset);
-        buffer.store_complex(scratcha[2], idx + 2 * num_ffts);
-        buffer.store_complex(scratchb[2], idx + 2 * num_ffts + unroll_offset);
-        buffer.store_complex(scratcha[3], idx + 3 * num_ffts);
-        buffer.store_complex(scratchb[3], idx + 3 * num_ffts + unroll_offset);
+        let scratch = Deinterleaved::butterfly4(scratch, direction);
 
-        idx += S::VectorType::COMPLEX_PER_VECTOR * 2;
+        store(buffer, scratch[0], idx + 0 * num_scalar_columns);
+        store(buffer, scratch[1], idx + 1 * num_scalar_columns);
+        store(buffer, scratch[2], idx + 2 * num_scalar_columns);
+        store(buffer, scratch[3], idx + 3 * num_scalar_columns);
+    }
+}
+
+#[inline(never)]
+#[target_feature(enable = "sse4.1")]
+unsafe fn butterfly_4_last<S: SseNum, T: FftNum>(
+    data: &mut [Complex<T>],
+    twiddles: &[Deinterleaved<S::VectorType>],
+    num_scalar_columns: usize,
+    direction: FftDirection,
+) {
+    let num_vector_columns = num_scalar_columns / S::VectorType::SCALAR_PER_VECTOR;
+    let buffer: &mut [Complex<S>] = workaround_transmute_mut(data);
+
+    for i in 0..num_vector_columns {
+        let idx = i * S::VectorType::SCALAR_PER_VECTOR;
+        let tw_idx = i * 3;
+        let mut scratch = [
+            load(buffer, idx + 0 * num_scalar_columns),
+            load(buffer, idx + 1 * num_scalar_columns),
+            load(buffer, idx + 2 * num_scalar_columns),
+            load(buffer, idx + 3 * num_scalar_columns),
+        ];
+
+        let tw1 = load_debug_checked(twiddles, tw_idx + 0);
+        let tw2 = load_debug_checked(twiddles, tw_idx + 1);
+        let tw3 = load_debug_checked(twiddles, tw_idx + 2);
+
+        scratch[1] = Deinterleaved::mul_complex(scratch[1], tw1);
+        scratch[2] = Deinterleaved::mul_complex(scratch[2], tw2);
+        scratch[3] = Deinterleaved::mul_complex(scratch[3], tw3);
+
+        let scratch = Deinterleaved::butterfly4(scratch, direction);
+
+        store_interleave(buffer, scratch[0], idx + 0 * num_scalar_columns);
+        store_interleave(buffer, scratch[1], idx + 1 * num_scalar_columns);
+        store_interleave(buffer, scratch[2], idx + 2 * num_scalar_columns);
+        store_interleave(buffer, scratch[3], idx + 3 * num_scalar_columns);
     }
 }
 
