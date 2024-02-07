@@ -97,7 +97,11 @@ impl<T: FftNum> Radix4<T> {
         } else {
             cross_fft_len
         };
-        let outofplace_scratch_len = base_inplace_scratch;
+        let outofplace_scratch_len = if base_inplace_scratch > len {
+            base_inplace_scratch
+        } else {
+            0
+        };
 
         Self {
             twiddles: twiddle_factors.into_boxed_slice(),

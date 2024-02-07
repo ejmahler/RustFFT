@@ -17,10 +17,6 @@ use std::arch::x86_64::__m128d;
 
 use crate::FftNum;
 
-pub use self::sse_butterflies::*;
-pub use self::sse_prime_butterflies::*;
-pub use self::sse_radix4::*;
-
 use sse_vector::SseVector;
 
 pub trait SseNum: FftNum {

@@ -6,8 +6,8 @@ use crate::wasm_simd::wasm_simd_planner::FftPlannerWasmSimd;
 use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
 
 use crate::algorithm::butterflies::*;
-use crate::Fft;
-use crate::{algorithm::*, RadixFactor};
+use crate::algorithm::*;
+use crate::{Fft, RadixFactor};
 
 use crate::FftPlannerAvx;
 use crate::FftPlannerNeon;

@@ -9,20 +9,6 @@ use crate::{Direction, Fft, Length, RadixFactor};
 
 use super::butterflies::{Butterfly2, Butterfly3, Butterfly4, Butterfly5, Butterfly6, Butterfly7};
 
-/// FFT algorithm which efficiently computes FFTs with small prime factors.
-///
-/// ~~~
-/// // Computes a forward FFT of size 4096
-/// use rustfft::algorithm::Radix4;
-/// use rustfft::{Fft, FftDirection};
-/// use rustfft::num_complex::Complex;
-///
-/// let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 4096];
-///
-/// let fft = Radix4::new(4096, FftDirection::Forward);
-/// fft.process(&mut buffer);
-/// ~~~
-
 #[repr(u8)]
 enum InternalRadixFactor<T> {
     Factor2(Butterfly2<T>),
@@ -46,6 +32,22 @@ impl<T> InternalRadixFactor<T> {
     }
 }
 
+/// FFT algorithm which efficiently computes FFTs with small prime factors.
+///
+/// ~~~
+/// // Computes a forward FFT of size 6720 (32 * 7 * 5 * 3 * 2)
+/// use std::sync::Arc;
+/// use rustfft::algorithm::{RadixN, butterflies::Butterfly32};
+/// use rustfft::{Fft, FftDirection, RadixFactor};
+/// use rustfft::num_complex::Complex;
+///
+/// let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 6720];
+///
+/// let base_fft = Arc::new(Butterfly32::new(FftDirection::Forward));
+/// let factors = &[RadixFactor::Factor7, RadixFactor::Factor5, RadixFactor::Factor3, RadixFactor::Factor2];
+/// let fft = RadixN::new(factors, base_fft);
+/// fft.process(&mut buffer);
+/// ~~~
 pub struct RadixN<T> {
     twiddles: Box<[Complex<T>]>,
 
@@ -62,7 +64,7 @@ pub struct RadixN<T> {
 }
 
 impl<T: FftNum> RadixN<T> {
-    /// Constructs a Radix4 instance which computes FFTs of length `factor_product * base_fft.len()`
+    /// Constructs a RadixN instance which computes FFTs of length `factor_product * base_fft.len()`
     pub fn new(factors: &[RadixFactor], base_fft: Arc<dyn Fft<T>>) -> Self {
         let base_len = base_fft.len();
         let direction = base_fft.fft_direction();
@@ -76,7 +78,6 @@ impl<T: FftNum> RadixN<T> {
             // compute how many twiddles this cross-FFT needs
             let cross_fft_rows = factor.radix();
             let cross_fft_columns = cross_fft_len;
-            cross_fft_len *= cross_fft_rows;
 
             twiddle_count += cross_fft_columns * (cross_fft_rows - 1);
 
@@ -90,9 +91,14 @@ impl<T: FftNum> RadixN<T> {
                 RadixFactor::Factor7 => InternalRadixFactor::Factor7(Butterfly7::new(direction)),
             };
             butterflies.push(butterfly);
+
+            cross_fft_len *= cross_fft_rows;
         }
+        let len = cross_fft_len;
 
         // set up our list of transpose factors - it's the same list but reversed, and we want to collapse duplicates
+        // Note that we are only de-duplicating adjacent factors. If we're passed 7 * 2 * 7, we can't collapse the sevens
+        // because the exact order of factors is is important for the transpose
         let mut transpose_factors: Vec<TransposeFactor> = Vec::with_capacity(factors.len());
         for f in factors.iter().rev() {
             // I really want let chains for this!
@@ -131,13 +137,18 @@ impl<T: FftNum> RadixN<T> {
             }
         }
 
+        // figure out how much scratch space we need to request from callers
         let base_inplace_scratch = base_fft.get_inplace_scratch_len();
-        let inplace_scratch_len = if base_inplace_scratch > cross_fft_len {
-            cross_fft_len + base_inplace_scratch
+        let inplace_scratch_len = if base_inplace_scratch > len {
+            len + base_inplace_scratch
         } else {
-            cross_fft_len
+            len
         };
-        let outofplace_scratch_len = base_inplace_scratch;
+        let outofplace_scratch_len = if base_inplace_scratch > len {
+            base_inplace_scratch
+        } else {
+            0
+        };
 
         Self {
             twiddles: twiddle_factors.into_boxed_slice(),
@@ -148,7 +159,7 @@ impl<T: FftNum> RadixN<T> {
             factors: transpose_factors.into_boxed_slice(),
             butterflies: butterflies.into_boxed_slice(),
 
-            len: cross_fft_len,
+            len,
             direction,
 
             inplace_scratch_len,
@@ -258,15 +269,15 @@ pub(crate) unsafe fn butterfly_2<T: FftNum>(
     butterfly2: &Butterfly2<T>,
 ) {
     for idx in 0..num_columns {
-        let mut scratch0 = [
+        let mut scratch = [
             data.load(idx + 0 * num_columns),
             data.load(idx + 1 * num_columns) * twiddles.load(idx),
         ];
 
-        butterfly2.perform_fft_butterfly(&mut scratch0);
+        butterfly2.perform_fft_butterfly(&mut scratch);
 
-        data.store(scratch0[0], idx + num_columns * 0);
-        data.store(scratch0[1], idx + num_columns * 1);
+        data.store(scratch[0], idx + num_columns * 0);
+        data.store(scratch[1], idx + num_columns * 1);
     }
 }
 

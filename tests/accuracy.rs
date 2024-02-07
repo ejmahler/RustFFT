@@ -113,7 +113,7 @@ fn test_planned_fft_forward_f32() {
     let direction = FftDirection::Forward;
     let cache: ControlCache<f32> = ControlCache::new(TEST_MAX, direction);
 
-    for len in 118..TEST_MAX {
+    for len in 1..TEST_MAX {
         println!("len: {len}");
         let control = cache.plan_fft(len);
         assert_eq!(control.len(), len);
