@@ -185,12 +185,13 @@ impl PrimeFactors {
     pub fn get_other_factors(&self) -> &[PrimeFactor] {
         &self.other_factors
     }
-
+    #[allow(unused)]
     pub fn is_power_of_three(&self) -> bool {
         self.power_three > 0 && self.power_two == 0 && self.other_factors.len() == 0
     }
 
     // Divides the number by the given prime factor. Returns None if the resulting number is one.
+    #[allow(unused)]
     pub fn remove_factors(mut self, factor: PrimeFactor) -> Option<Self> {
         if factor.count == 0 {
             return Some(self);
@@ -233,6 +234,35 @@ impl PrimeFactors {
             }
         }
         None
+    }
+
+    // returns true if we have any factors whose value is less than or equal to the provided factor
+    pub fn has_factors_leq(&self, factor: usize) -> bool {
+        self.power_two > 0
+            || self.power_three > 0
+            || self
+                .other_factors
+                .first()
+                .map_or(false, |f| f.value <= factor)
+    }
+
+    // returns true if we have any factors whose value is greater than the provided factor
+    pub fn has_factors_gt(&self, factor: usize) -> bool {
+        (factor < 2 && self.power_two > 0)
+            || (factor < 3 && self.power_three > 0)
+            || self
+                .other_factors
+                .last()
+                .map_or(false, |f| f.value > factor)
+    }
+
+    // returns the product of all factors greater than the provided min_factor
+    pub fn product_above(&self, min_factor: usize) -> usize {
+        self.other_factors
+            .iter()
+            .skip_while(|f| f.value <= min_factor)
+            .map(|f| f.value.pow(f.count))
+            .product()
     }
 
     // Splits this set of prime factors into two different sets so that the products of the two sets are as close as possible

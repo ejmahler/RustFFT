@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use num_complex::Complex;
-use num_traits::Zero;
 
 use crate::algorithm::butterflies::{
     Butterfly1, Butterfly16, Butterfly2, Butterfly32, Butterfly4, Butterfly8,
 };
+use crate::algorithm::radixn::butterfly_4;
 use crate::array_utils::{self, bitreversed_transpose};
 use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::{common::FftNum, twiddles, FftDirection};
@@ -33,6 +33,8 @@ pub struct Radix4<T> {
 
     len: usize,
     direction: FftDirection,
+    inplace_scratch_len: usize,
+    outofplace_scratch_len: usize,
 }
 
 impl<T: FftNum> Radix4<T> {
@@ -75,10 +77,11 @@ impl<T: FftNum> Radix4<T> {
         // but mixed radix only does one step and then calls itself recusrively, and this algorithm does every layer all the way down
         // so we're going to pack all the "layers" of twiddle factors into a single array, starting with the bottom layer and going up
         const ROW_COUNT: usize = 4;
-        let mut cross_fft_len = base_len * ROW_COUNT;
+        let mut cross_fft_len = base_len;
         let mut twiddle_factors = Vec::with_capacity(len * 2);
-        while cross_fft_len <= len {
-            let num_columns = cross_fft_len / ROW_COUNT;
+        while cross_fft_len < len {
+            let num_columns = cross_fft_len;
+            cross_fft_len *= ROW_COUNT;
 
             for i in 0..num_columns {
                 for k in 1..ROW_COUNT {
@@ -86,8 +89,19 @@ impl<T: FftNum> Radix4<T> {
                     twiddle_factors.push(twiddle);
                 }
             }
-            cross_fft_len *= ROW_COUNT;
         }
+
+        let base_inplace_scratch = base_fft.get_inplace_scratch_len();
+        let inplace_scratch_len = if base_inplace_scratch > cross_fft_len {
+            cross_fft_len + base_inplace_scratch
+        } else {
+            cross_fft_len
+        };
+        let outofplace_scratch_len = if base_inplace_scratch > len {
+            base_inplace_scratch
+        } else {
+            0
+        };
 
         Self {
             twiddles: twiddle_factors.into_boxed_slice(),
@@ -97,14 +111,24 @@ impl<T: FftNum> Radix4<T> {
 
             len,
             direction,
+
+            inplace_scratch_len,
+            outofplace_scratch_len,
         }
+    }
+
+    fn inplace_scratch_len(&self) -> usize {
+        self.inplace_scratch_len
+    }
+    fn outofplace_scratch_len(&self) -> usize {
+        self.outofplace_scratch_len
     }
 
     fn perform_fft_out_of_place(
         &self,
-        input: &[Complex<T>],
+        input: &mut [Complex<T>],
         output: &mut [Complex<T>],
-        _scratch: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
     ) {
         // copy the data into the output vector
         if self.len() == self.base_len {
@@ -114,66 +138,31 @@ impl<T: FftNum> Radix4<T> {
         }
 
         // Base-level FFTs
-        self.base_fft.process_with_scratch(output, &mut []);
+        let base_scratch = if scratch.len() > 0 { scratch } else { input };
+        self.base_fft.process_with_scratch(output, base_scratch);
 
         // cross-FFTs
         const ROW_COUNT: usize = 4;
-        let mut cross_fft_len = self.base_len * ROW_COUNT;
+        let mut cross_fft_len = self.base_len;
         let mut layer_twiddles: &[Complex<T>] = &self.twiddles;
 
-        while cross_fft_len <= input.len() {
-            let num_rows = input.len() / cross_fft_len;
-            let num_columns = cross_fft_len / ROW_COUNT;
+        let butterfly4 = Butterfly4::new(self.direction);
 
-            for i in 0..num_rows {
-                unsafe {
-                    butterfly_4(
-                        &mut output[i * cross_fft_len..],
-                        layer_twiddles,
-                        num_columns,
-                        self.direction,
-                    )
-                }
+        while cross_fft_len < output.len() {
+            let num_columns = cross_fft_len;
+            cross_fft_len *= ROW_COUNT;
+
+            for data in output.chunks_exact_mut(cross_fft_len) {
+                unsafe { butterfly_4(data, layer_twiddles, num_columns, &butterfly4) }
             }
 
             // skip past all the twiddle factors used in this layer
             let twiddle_offset = num_columns * (ROW_COUNT - 1);
             layer_twiddles = &layer_twiddles[twiddle_offset..];
-
-            cross_fft_len *= ROW_COUNT;
         }
     }
 }
 boilerplate_fft_oop!(Radix4, |this: &Radix4<_>| this.len);
-
-unsafe fn butterfly_4<T: FftNum>(
-    data: &mut [Complex<T>],
-    twiddles: &[Complex<T>],
-    num_ffts: usize,
-    direction: FftDirection,
-) {
-    let butterfly4 = Butterfly4::new(direction);
-
-    let mut idx = 0usize;
-    let mut tw_idx = 0usize;
-    let mut scratch = [Zero::zero(); 4];
-    for _ in 0..num_ffts {
-        scratch[0] = *data.get_unchecked(idx);
-        scratch[1] = *data.get_unchecked(idx + 1 * num_ffts) * twiddles[tw_idx];
-        scratch[2] = *data.get_unchecked(idx + 2 * num_ffts) * twiddles[tw_idx + 1];
-        scratch[3] = *data.get_unchecked(idx + 3 * num_ffts) * twiddles[tw_idx + 2];
-
-        butterfly4.perform_fft_butterfly(&mut scratch);
-
-        *data.get_unchecked_mut(idx) = scratch[0];
-        *data.get_unchecked_mut(idx + 1 * num_ffts) = scratch[1];
-        *data.get_unchecked_mut(idx + 2 * num_ffts) = scratch[2];
-        *data.get_unchecked_mut(idx + 3 * num_ffts) = scratch[3];
-
-        tw_idx += 3;
-        idx += 1;
-    }
-}
 
 #[cfg(test)]
 mod unit_tests {
