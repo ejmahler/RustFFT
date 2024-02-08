@@ -166,7 +166,10 @@ fn load_debug_checked<T: Copy>(buffer: &[T], idx: usize) -> T {
 }
 
 #[inline(always)]
-unsafe fn load<S: SseNum, const DEINTERLEAVE: bool>(buffer: &[Complex<S>], idx: usize) -> Deinterleaved<S::VectorType> {
+unsafe fn load<S: SseNum, const DEINTERLEAVE: bool>(
+    buffer: &[Complex<S>],
+    idx: usize,
+) -> Deinterleaved<S::VectorType> {
     if DEINTERLEAVE {
         let a = buffer.load_complex(idx);
         let b = buffer.load_complex(idx + S::VectorType::COMPLEX_PER_VECTOR);
@@ -192,7 +195,6 @@ unsafe fn store<S: SseNum, const INTERLEAVE: bool>(
         buffer.store_complex(vector.re, idx);
         buffer.store_complex(vector.im, idx + S::VectorType::COMPLEX_PER_VECTOR);
     }
-    
 }
 
 #[inline(never)]
