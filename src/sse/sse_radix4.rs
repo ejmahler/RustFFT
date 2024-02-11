@@ -2,10 +2,12 @@ use num_complex::Complex;
 use num_integer::Integer;
 
 use std::any::TypeId;
+use std::arch::x86_64::{__m128, __m128d};
 use std::sync::Arc;
 
-use crate::array_utils::{self, bitreversed_transpose, workaround_transmute_mut};
+use crate::array_utils::{self, reverse_bits, workaround_transmute, workaround_transmute_mut};
 use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::sse::sse_utils::transpose_complex_2x2_f32;
 use crate::{common::FftNum, FftDirection};
 use crate::{Direction, Fft, Length};
 
@@ -113,7 +115,16 @@ impl<S: SseNum, T: FftNum> SseRadix4<S, T> {
         if self.len() == self.base_len {
             output.copy_from_slice(input);
         } else {
-            bitreversed_transpose::<Complex<T>, 4>(self.base_len, input, output);
+            // Hack: Making a f32 vs f64 agaonstic version of this seems hard. Avoid it for now, and hopefully we can make one later
+            if TypeId::of::<T>() == TypeId::of::<f32>() {
+                let input = workaround_transmute(input);
+                let output = workaround_transmute_mut(output);
+                sse_bitreversed_transpose_f32(self.base_len, input, output);
+            } else {
+                let input = workaround_transmute(input);
+                let output = workaround_transmute_mut(output);
+                sse_bitreversed_transpose_f64(self.base_len, input, output);
+            }
         }
 
         // Base-level FFTs
@@ -232,6 +243,178 @@ unsafe fn butterfly_4<S: SseNum, T: FftNum, const D: bool, const I: bool>(
         store::<S, I>(buffer, scratch[1], idx + 1 * num_scalar_columns);
         store::<S, I>(buffer, scratch[2], idx + 2 * num_scalar_columns);
         store::<S, I>(buffer, scratch[3], idx + 3 * num_scalar_columns);
+    }
+}
+
+#[inline(always)]
+unsafe fn load4_complex_f32(buffer: &[Complex<f32>], idx: usize) -> [__m128; 2] {
+    [buffer.load_complex(idx), buffer.load_complex(idx + <f32 as SseNum>::VectorType::COMPLEX_PER_VECTOR)]
+}
+#[inline(always)]
+unsafe fn transpose_complex_4x4_f32(rows: [[__m128; 2]; 4]) -> [[__m128; 2]; 4] {
+    let transposed0 = transpose_complex_2x2_f32(rows[0][0], rows[1][0]);
+    let transposed1 = transpose_complex_2x2_f32(rows[0][1], rows[1][1]);
+    let transposed2 = transpose_complex_2x2_f32(rows[2][0], rows[3][0]);
+    let transposed3 = transpose_complex_2x2_f32(rows[2][1], rows[3][1]);
+
+    [
+        [transposed0[0], transposed2[0]],
+        [transposed0[1], transposed2[1]],
+        [transposed1[0], transposed3[0]],
+        [transposed1[1], transposed3[1]],
+    ]
+}
+#[inline(always)]
+unsafe fn store4_complex_f32(mut buffer: &mut [Complex<f32>], data: [__m128; 2], idx: usize) {
+    buffer.store_complex(data[0], idx);
+    buffer.store_complex(data[1], idx + <f32 as SseNum>::VectorType::COMPLEX_PER_VECTOR);
+}
+
+// Utility to help reorder data as a part of computing RadixD FFTs. Conceputally, it works like a transpose, but with the column indexes bit-reversed.
+// Use a lookup table to avoid repeating the slow bit reverse operations.
+// Unrolling the outer loop by a factor D helps speed things up.
+// const parameter D (for Divisor) determines the divisor to use for the "bit reverse", and how much to unroll. `input.len() / height` must be a power of D.
+#[inline(never)]
+#[target_feature(enable = "sse4.1")]
+pub unsafe fn sse_bitreversed_transpose_f32(
+    height: usize,
+    input: &[Complex<f32>],
+    output: &mut [Complex<f32>],
+) {
+    let width = input.len() / height;
+    const WIDTH_UNROLL : usize = 4;
+    const HEIGHT_UNROLL : usize = <f32 as SseNum>::VectorType::SCALAR_PER_VECTOR;
+
+    // Let's make sure the arguments are ok
+    assert!(height % <f32 as SseNum>::VectorType::SCALAR_PER_VECTOR == 0 && width % WIDTH_UNROLL == 0 && input.len() % height == 0 && input.len() == output.len());
+
+    let width_bits = width.trailing_zeros();
+    let d_bits = WIDTH_UNROLL.trailing_zeros();
+
+    // verify that width is a power of d
+    assert!(width_bits % d_bits == 0);
+    let rev_digits = width_bits / d_bits;
+    let strided_width = width / WIDTH_UNROLL;
+    let strided_height = height / HEIGHT_UNROLL;
+    for x in 0..strided_width {
+        let x_rev = [
+            reverse_bits::<WIDTH_UNROLL>(WIDTH_UNROLL * x + 0, rev_digits) * height,
+            reverse_bits::<WIDTH_UNROLL>(WIDTH_UNROLL * x + 1, rev_digits) * height,
+            reverse_bits::<WIDTH_UNROLL>(WIDTH_UNROLL * x + 2, rev_digits) * height,
+            reverse_bits::<WIDTH_UNROLL>(WIDTH_UNROLL * x + 3, rev_digits) * height,
+        ];
+
+        // Assert that the the bit reversed indices will not exceed the length of the output.
+        // we add HEIGHT_UNROLL * y to each x_rev, which goes up to height exclusive
+        // so verify that r + height isn't more than our length
+        for r in x_rev {
+            assert!(r <= input.len() - height);
+        }
+        for y in 0..strided_height {
+            unsafe {
+                // Load data in HEIGHT_UNROLL rows, with each row containing WIDTH_UNROLL=4 complex elements
+                // for f32, HEIGHT_UNROLL=4, this translates to 4 rows of 2 SSE vectors each,
+                // overall storing 4x4=16 complex elements
+                let base_input_idx = WIDTH_UNROLL * x + 0 + y * HEIGHT_UNROLL * width;
+                let rows = [
+                    load4_complex_f32(input, base_input_idx + width * 0),
+                    load4_complex_f32(input, base_input_idx + width * 1),
+                    load4_complex_f32(input, base_input_idx + width * 2),
+                    load4_complex_f32(input, base_input_idx + width * 3),
+                ];
+                let transposed = transpose_complex_4x4_f32(rows);
+
+                store4_complex_f32(output, transposed[0], HEIGHT_UNROLL * y + x_rev[0]);
+                store4_complex_f32(output, transposed[1], HEIGHT_UNROLL * y + x_rev[1]);
+                store4_complex_f32(output, transposed[2], HEIGHT_UNROLL * y + x_rev[2]);
+                store4_complex_f32(output, transposed[3], HEIGHT_UNROLL * y + x_rev[3]);
+            }
+        }
+    }
+}
+
+#[inline(always)]
+unsafe fn load4_complex_f64(buffer: &[Complex<f64>], idx: usize) -> [__m128d; 4] {
+    [
+        buffer.load_complex(idx + 0),
+        buffer.load_complex(idx + 1),
+        buffer.load_complex(idx + 2),
+        buffer.load_complex(idx + 3),
+    ]
+}
+#[inline(always)]
+unsafe fn transpose_complex_4x2_f64(rows: [[__m128d; 4]; 2]) -> [[__m128d; 2]; 4] {
+    [
+        [rows[0][0], rows[1][0]],
+        [rows[0][1], rows[1][1]],
+        [rows[0][2], rows[1][2]],
+        [rows[0][3], rows[1][3]],
+    ]
+}
+#[inline(always)]
+unsafe fn store2_complex_f64(mut buffer: &mut [Complex<f64>], data: [__m128d; 2], idx: usize) {
+    buffer.store_complex(data[0], idx);
+    buffer.store_complex(data[1], idx + <f64 as SseNum>::VectorType::COMPLEX_PER_VECTOR);
+}
+
+// Utility to help reorder data as a part of computing RadixD FFTs. Conceputally, it works like a transpose, but with the column indexes bit-reversed.
+// Use a lookup table to avoid repeating the slow bit reverse operations.
+// Unrolling the outer loop by a factor D helps speed things up.
+// const parameter D (for Divisor) determines the divisor to use for the "bit reverse", and how much to unroll. `input.len() / height` must be a power of D.
+#[inline(never)]
+#[target_feature(enable = "sse4.1")]
+pub unsafe fn sse_bitreversed_transpose_f64(
+    height: usize,
+    input: &[Complex<f64>],
+    output: &mut [Complex<f64>],
+) {
+    let width = input.len() / height;
+    const WIDTH_UNROLL : usize = 4;
+    const HEIGHT_UNROLL : usize = <f64 as SseNum>::VectorType::SCALAR_PER_VECTOR;
+
+    // Let's make sure the arguments are ok
+    assert!(height % <f64 as SseNum>::VectorType::SCALAR_PER_VECTOR == 0 && width % WIDTH_UNROLL == 0 && input.len() % height == 0 && input.len() == output.len());
+
+    let width_bits = width.trailing_zeros();
+    let d_bits = WIDTH_UNROLL.trailing_zeros();
+
+    // verify that width is a power of d
+    assert!(width_bits % d_bits == 0);
+    let rev_digits = width_bits / d_bits;
+    let strided_width = width / WIDTH_UNROLL;
+    let strided_height = height / HEIGHT_UNROLL;
+    for x in 0..strided_width {
+        let x_rev = [
+            reverse_bits::<WIDTH_UNROLL>(WIDTH_UNROLL * x + 0, rev_digits) * height,
+            reverse_bits::<WIDTH_UNROLL>(WIDTH_UNROLL * x + 1, rev_digits) * height,
+            reverse_bits::<WIDTH_UNROLL>(WIDTH_UNROLL * x + 2, rev_digits) * height,
+            reverse_bits::<WIDTH_UNROLL>(WIDTH_UNROLL * x + 3, rev_digits) * height,
+        ];
+
+        // Assert that the the bit reversed indices will not exceed the length of the output.
+        // we add HEIGHT_UNROLL * y to each x_rev, which goes up to height exclusive
+        // so verify that r + height isn't more than our length
+        for r in x_rev {
+            assert!(r <= input.len() - height);
+        }
+        for y in 0..strided_height {
+            unsafe {
+                // Load data in HEIGHT_UNROLL rows, with each row containing WIDTH_UNROLL=4 complex elements
+                // for f64, HEIGHT_UNROLL=2, this translates to 2 rows of 4 SSE vectors each,
+                // overall storing 2x4=8 complex elements
+                let base_input_idx = WIDTH_UNROLL * x + 0 + y * HEIGHT_UNROLL * width;
+                let rows = [
+                    load4_complex_f64(input, base_input_idx + width * 0),
+                    load4_complex_f64(input, base_input_idx + width * 1),
+                ];
+                let transposed = transpose_complex_4x2_f64(rows);
+
+                store2_complex_f64(output, transposed[0], HEIGHT_UNROLL * y + x_rev[0]);
+                store2_complex_f64(output, transposed[1], HEIGHT_UNROLL * y + x_rev[1]);
+                store2_complex_f64(output, transposed[2], HEIGHT_UNROLL * y + x_rev[2]);
+                store2_complex_f64(output, transposed[3], HEIGHT_UNROLL * y + x_rev[3]);
+            }
+        }
     }
 }
 
