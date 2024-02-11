@@ -248,7 +248,10 @@ unsafe fn butterfly_4<S: SseNum, T: FftNum, const D: bool, const I: bool>(
 
 #[inline(always)]
 unsafe fn load4_complex_f32(buffer: &[Complex<f32>], idx: usize) -> [__m128; 2] {
-    [buffer.load_complex(idx), buffer.load_complex(idx + <f32 as SseNum>::VectorType::COMPLEX_PER_VECTOR)]
+    [
+        buffer.load_complex(idx),
+        buffer.load_complex(idx + <f32 as SseNum>::VectorType::COMPLEX_PER_VECTOR),
+    ]
 }
 #[inline(always)]
 unsafe fn transpose_complex_4x4_f32(rows: [[__m128; 2]; 4]) -> [[__m128; 2]; 4] {
@@ -267,7 +270,10 @@ unsafe fn transpose_complex_4x4_f32(rows: [[__m128; 2]; 4]) -> [[__m128; 2]; 4] 
 #[inline(always)]
 unsafe fn store4_complex_f32(mut buffer: &mut [Complex<f32>], data: [__m128; 2], idx: usize) {
     buffer.store_complex(data[0], idx);
-    buffer.store_complex(data[1], idx + <f32 as SseNum>::VectorType::COMPLEX_PER_VECTOR);
+    buffer.store_complex(
+        data[1],
+        idx + <f32 as SseNum>::VectorType::COMPLEX_PER_VECTOR,
+    );
 }
 
 // Utility to help reorder data as a part of computing RadixD FFTs. Conceputally, it works like a transpose, but with the column indexes bit-reversed.
@@ -282,11 +288,16 @@ pub unsafe fn sse_bitreversed_transpose_f32(
     output: &mut [Complex<f32>],
 ) {
     let width = input.len() / height;
-    const WIDTH_UNROLL : usize = 4;
-    const HEIGHT_UNROLL : usize = <f32 as SseNum>::VectorType::SCALAR_PER_VECTOR;
+    const WIDTH_UNROLL: usize = 4;
+    const HEIGHT_UNROLL: usize = <f32 as SseNum>::VectorType::SCALAR_PER_VECTOR;
 
     // Let's make sure the arguments are ok
-    assert!(height % <f32 as SseNum>::VectorType::SCALAR_PER_VECTOR == 0 && width % WIDTH_UNROLL == 0 && input.len() % height == 0 && input.len() == output.len());
+    assert!(
+        height % <f32 as SseNum>::VectorType::SCALAR_PER_VECTOR == 0
+            && width % WIDTH_UNROLL == 0
+            && input.len() % height == 0
+            && input.len() == output.len()
+    );
 
     let width_bits = width.trailing_zeros();
     let d_bits = WIDTH_UNROLL.trailing_zeros();
@@ -354,7 +365,10 @@ unsafe fn transpose_complex_4x2_f64(rows: [[__m128d; 4]; 2]) -> [[__m128d; 2]; 4
 #[inline(always)]
 unsafe fn store2_complex_f64(mut buffer: &mut [Complex<f64>], data: [__m128d; 2], idx: usize) {
     buffer.store_complex(data[0], idx);
-    buffer.store_complex(data[1], idx + <f64 as SseNum>::VectorType::COMPLEX_PER_VECTOR);
+    buffer.store_complex(
+        data[1],
+        idx + <f64 as SseNum>::VectorType::COMPLEX_PER_VECTOR,
+    );
 }
 
 // Utility to help reorder data as a part of computing RadixD FFTs. Conceputally, it works like a transpose, but with the column indexes bit-reversed.
@@ -369,11 +383,16 @@ pub unsafe fn sse_bitreversed_transpose_f64(
     output: &mut [Complex<f64>],
 ) {
     let width = input.len() / height;
-    const WIDTH_UNROLL : usize = 4;
-    const HEIGHT_UNROLL : usize = <f64 as SseNum>::VectorType::SCALAR_PER_VECTOR;
+    const WIDTH_UNROLL: usize = 4;
+    const HEIGHT_UNROLL: usize = <f64 as SseNum>::VectorType::SCALAR_PER_VECTOR;
 
     // Let's make sure the arguments are ok
-    assert!(height % <f64 as SseNum>::VectorType::SCALAR_PER_VECTOR == 0 && width % WIDTH_UNROLL == 0 && input.len() % height == 0 && input.len() == output.len());
+    assert!(
+        height % <f64 as SseNum>::VectorType::SCALAR_PER_VECTOR == 0
+            && width % WIDTH_UNROLL == 0
+            && input.len() % height == 0
+            && input.len() == output.len()
+    );
 
     let width_bits = width.trailing_zeros();
     let d_bits = WIDTH_UNROLL.trailing_zeros();
