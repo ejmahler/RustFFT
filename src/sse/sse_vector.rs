@@ -148,6 +148,12 @@ pub trait SseVector: Copy + Debug + Send + Sync {
     unsafe fn store_partial_lo_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
     unsafe fn store_partial_hi_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
 
+    // math ops
+    unsafe fn add(a: Self, b: Self) -> Self;
+    unsafe fn sub(a: Self, b: Self) -> Self;
+    unsafe fn mul(a: Self, b: Self) -> Self;
+    unsafe fn neg(a: Self) -> Self;
+
     /// Generates a chunk of twiddle factors starting at (X,Y) and incrementing X `COMPLEX_PER_VECTOR` times.
     /// The result will be [twiddle(x*y, len), twiddle((x+1)*y, len), twiddle((x+2)*y, len), ...] for as many complex numbers fit in a vector
     unsafe fn make_mixedradix_twiddle_chunk(
@@ -156,6 +162,12 @@ pub trait SseVector: Copy + Debug + Send + Sync {
         len: usize,
         direction: FftDirection,
     ) -> Self;
+
+    /// De-interleaves the complex numbers in a and b so that all of the reals are in one vector, and all the imaginaries are in the other
+    unsafe fn deinterleave(a: Self, b: Self) -> Deinterleaved<Self>;
+
+    /// Interleaves the provided real and imaginary values into interleaved complex numbers
+    unsafe fn interleave(values: Deinterleaved<Self>) -> (Self, Self);
 
     /// Pairwise multiply the complex numbers in `left` with the complex numbers in `right`.
     unsafe fn mul_complex(left: Self, right: Self) -> Self;
@@ -208,6 +220,24 @@ impl SseVector for __m128 {
     }
 
     #[inline(always)]
+    unsafe fn add(a: Self, b: Self) -> Self {
+        _mm_add_ps(a, b)
+    }
+    #[inline(always)]
+    unsafe fn sub(a: Self, b: Self) -> Self {
+        _mm_sub_ps(a, b)
+    }
+    #[inline(always)]
+    unsafe fn mul(a: Self, b: Self) -> Self {
+        _mm_mul_ps(a, b)
+    }
+    #[inline(always)]
+    unsafe fn neg(a: Self) -> Self {
+        let neg_vector = _mm_set1_ps(-0.0);
+        _mm_xor_ps(a, neg_vector)
+    }
+
+    #[inline(always)]
     unsafe fn make_mixedradix_twiddle_chunk(
         x: usize,
         y: usize,
@@ -220,6 +250,21 @@ impl SseVector for __m128 {
         }
 
         twiddle_chunk.as_slice().load_complex(0)
+    }
+
+    #[inline(always)]
+    unsafe fn deinterleave(a: Self, b: Self) -> Deinterleaved<Self> {
+        Deinterleaved {
+            re: _mm_shuffle_ps(a, b, 0x88),
+            im: _mm_shuffle_ps(a, b, 0xDD),
+        }
+    }
+    #[inline(always)]
+    unsafe fn interleave(values: Deinterleaved<Self>) -> (Self, Self) {
+        (
+            _mm_unpacklo_ps(values.re, values.im),
+            _mm_unpackhi_ps(values.re, values.im),
+        )
     }
 
     #[inline(always)]
@@ -309,6 +354,24 @@ impl SseVector for __m128d {
     }
 
     #[inline(always)]
+    unsafe fn add(a: Self, b: Self) -> Self {
+        _mm_add_pd(a, b)
+    }
+    #[inline(always)]
+    unsafe fn sub(a: Self, b: Self) -> Self {
+        _mm_sub_pd(a, b)
+    }
+    #[inline(always)]
+    unsafe fn mul(a: Self, b: Self) -> Self {
+        _mm_mul_pd(a, b)
+    }
+    #[inline(always)]
+    unsafe fn neg(a: Self) -> Self {
+        let neg_vector = _mm_set1_pd(-0.0);
+        _mm_xor_pd(a, neg_vector)
+    }
+
+    #[inline(always)]
     unsafe fn make_mixedradix_twiddle_chunk(
         x: usize,
         y: usize,
@@ -321,6 +384,21 @@ impl SseVector for __m128d {
         }
 
         twiddle_chunk.as_slice().load_complex(0)
+    }
+
+    #[inline(always)]
+    unsafe fn deinterleave(a: Self, b: Self) -> Deinterleaved<Self> {
+        Deinterleaved {
+            re: _mm_unpacklo_pd(a, b),
+            im: _mm_unpackhi_pd(a, b),
+        }
+    }
+    #[inline(always)]
+    unsafe fn interleave(values: Deinterleaved<Self>) -> (Self, Self) {
+        (
+            _mm_unpacklo_pd(values.re, values.im),
+            _mm_unpackhi_pd(values.re, values.im),
+        )
     }
 
     #[inline(always)]
@@ -489,5 +567,114 @@ where
     #[inline(always)]
     unsafe fn store_partial_hi_complex(&mut self, vector: T::VectorType, index: usize) {
         self.output.store_partial_hi_complex(vector, index);
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct Deinterleaved<V: SseVector> {
+    pub re: V,
+    pub im: V,
+}
+
+impl<V: SseVector> Deinterleaved<V> {
+    pub unsafe fn butterfly2(values: [Self; 2]) -> [Self; 2] {
+        let tmp0 = Self {
+            re: SseVector::add(values[0].re, values[1].re),
+            im: SseVector::add(values[0].im, values[1].im),
+        };
+        let tmp1 = Self {
+            re: SseVector::sub(values[0].re, values[1].re),
+            im: SseVector::sub(values[0].im, values[1].im),
+        };
+        [tmp0, tmp1]
+    }
+    pub unsafe fn butterfly4(values: [Self; 4], direction: FftDirection) -> [Self; 4] {
+        let tmp0 = Self::butterfly2([values[0], values[2]]);
+        let mut tmp1 = Self::butterfly2([values[1], values[3]]);
+
+        // butterflies for butterfly4 is just swapping the re and im of tmp1[1], then negating one or the other based on direction
+        if direction == FftDirection::Forward {
+            let tmp = tmp1[1].re;
+            tmp1[1].re = tmp1[1].im;
+            tmp1[1].im = SseVector::neg(tmp);
+        } else {
+            let tmp = tmp1[1].im;
+            tmp1[1].im = tmp1[1].re;
+            tmp1[1].re = SseVector::neg(tmp);
+        }
+
+        let out0 = Self::butterfly2([tmp0[0], tmp1[0]]);
+        let out1 = Self::butterfly2([tmp0[1], tmp1[1]]);
+
+        [out0[0], out1[0], out0[1], out1[1]]
+    }
+    pub unsafe fn mul_complex(a: Self, b: Self) -> Self {
+        Self {
+            re: SseVector::sub(SseVector::mul(a.re, b.re), SseVector::mul(a.im, b.im)),
+            im: SseVector::add(SseVector::mul(a.re, b.im), SseVector::mul(a.im, b.re)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod unit_tests {
+    use std::arch::x86_64::{_mm_store_pd, _mm_store_ps};
+
+    use num_complex::Complex;
+    use num_traits::Zero;
+
+    use super::{SseArray, SseArrayMut, SseVector};
+
+    #[test]
+    fn test_interleave() {
+        unsafe {
+            let data_complex: &[Complex<f32>] = &[
+                Complex { re: 0.0, im: 0.5 },
+                Complex { re: 1.0, im: 1.5 },
+                Complex { re: 2.0, im: 2.5 },
+                Complex { re: 3.0, im: 3.5 },
+            ];
+
+            let deinterleaved =
+                SseVector::deinterleave(data_complex.load_complex(0), data_complex.load_complex(2));
+
+            let mut deinterleaved_re = [0.0f32; 4];
+            let mut deinterleaved_im = [0.0f32; 4];
+            _mm_store_ps(deinterleaved_re.as_mut_ptr(), deinterleaved.re);
+            _mm_store_ps(deinterleaved_im.as_mut_ptr(), deinterleaved.im);
+
+            assert_eq!(deinterleaved_re, [0.0, 1.0, 2.0, 3.0]);
+            assert_eq!(deinterleaved_im, [0.5, 1.5, 2.5, 3.5]);
+
+            let (reinterleaved_a, reinterleaved_b) = SseVector::interleave(deinterleaved);
+            let mut reinterleaved_complex: &mut [Complex<f32>] = &mut [Complex::zero(); 4];
+            reinterleaved_complex.store_complex(reinterleaved_a, 0);
+            reinterleaved_complex.store_complex(reinterleaved_b, 2);
+
+            assert_eq!(data_complex, reinterleaved_complex);
+        }
+
+        unsafe {
+            let data_complex: &[Complex<f64>] =
+                &[Complex { re: 0.0, im: 0.5 }, Complex { re: 1.0, im: 1.5 }];
+
+            let deinterleaved =
+                SseVector::deinterleave(data_complex.load_complex(0), data_complex.load_complex(1));
+
+            let mut deinterleaved_re = [0.0f64; 2];
+            let mut deinterleaved_im = [0.0f64; 2];
+            _mm_store_pd(deinterleaved_re.as_mut_ptr(), deinterleaved.re);
+            _mm_store_pd(deinterleaved_im.as_mut_ptr(), deinterleaved.im);
+
+            assert_eq!(deinterleaved_re, [0.0, 1.0]);
+            assert_eq!(deinterleaved_im, [0.5, 1.5]);
+
+            let (reinterleaved_a, reinterleaved_b) = SseVector::interleave(deinterleaved);
+            let mut reinterleaved_complex: &mut [Complex<f64>] = &mut [Complex::zero(); 2];
+            reinterleaved_complex.store_complex(reinterleaved_a, 0);
+            reinterleaved_complex.store_complex(reinterleaved_b, 1);
+
+            assert_eq!(data_complex, reinterleaved_complex);
+        }
     }
 }
