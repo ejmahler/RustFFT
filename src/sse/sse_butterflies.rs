@@ -2333,6 +2333,13 @@ impl<T: FftNum> SseF32Butterfly16<T> {
 
     #[inline(always)]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl SseArrayMut<f32>) {
+        // To make the best possible use of registers, we're going to write this algorithm in an unusual way
+        // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
+        // But to reduce the number of times registers get spilled, we have these optimizations:
+        // 1: Load data as late as possible, not upfront
+        // 2: Once we're working with a piece of data, make as much progress as possible before moving on 
+        //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
+        // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i| [
             buffer.load_complex(i),
             buffer.load_complex(i + 4),
@@ -2340,6 +2347,7 @@ impl<T: FftNum> SseF32Butterfly16<T> {
             buffer.load_complex(i + 12),
         ];
 
+        // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors, and transpose
         let mut tmp0 = self.bf4.perform_parallel_fft_direct(load(0));
         tmp0[1] = SseVector::mul_complex(tmp0[1], self.twiddles_packed[0]);
         tmp0[2] = SseVector::mul_complex(tmp0[2], self.twiddles_packed[1]);
@@ -2354,13 +2362,14 @@ impl<T: FftNum> SseF32Butterfly16<T> {
         let [mid2, mid3] = transpose_complex_2x2_f32(tmp1[0], tmp1[1]);
         let [mid6, mid7] = transpose_complex_2x2_f32(tmp1[2], tmp1[3]);
 
-        // cross FFTs
+        ////////////////////////////////////////////////////////////
         let mut store = |i: usize, vectors: [__m128; 4]| {
             buffer.store_complex(vectors[0], i + 0);
             buffer.store_complex(vectors[1], i + 4);
             buffer.store_complex(vectors[2], i + 8);
             buffer.store_complex(vectors[3], i + 12);
         };
+        // Size-4 FFTs down each pair of transposed columns, storing them as soon as we're done with them
         let out0 = self.bf4.perform_parallel_fft_direct([mid0, mid1, mid2, mid3]);
         store(0, out0);
 
@@ -2371,12 +2380,13 @@ impl<T: FftNum> SseF32Butterfly16<T> {
     // benchmarking shows it's faster to always use the nonparallel version, but this is kep around for reference
     #[allow(unused)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SseArrayMut<f32>) {
-        // we're going to hardcode a step of 4x4 mixed radix
-        // step 1: transpose (skipped since the vectors mean our data is already in the correct format)
-        // and
-        // step 2: column FFTs
-        // and
-        // step 3: twiddle factors
+        // To make the best possible use of registers, we're going to write this algorithm in an unusual way
+        // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
+        // But to reduce the number of times registers get spilled, we have these optimizations:
+        // 1: Load data as late as possible, not upfront
+        // 2: Once we're working with a piece of data, make as much progress as possible before moving on 
+        //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
+        // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i: usize| {
             let [a0, a1] = transpose_complex_2x2_f32(buffer.load_complex(i + 0), buffer.load_complex(i + 16));
             let [b0, b1] = transpose_complex_2x2_f32(buffer.load_complex(i + 4), buffer.load_complex(i + 20));
@@ -2385,6 +2395,7 @@ impl<T: FftNum> SseF32Butterfly16<T> {
             [[a0, b0, c0, d0], [a1, b1, c1, d1]]
         };
 
+        // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors
         let [in2, in3] = load(2);
         let mut tmp2 = self.bf4.perform_parallel_fft_direct(in2);
         let mut tmp3 = self.bf4.perform_parallel_fft_direct(in3);
@@ -2395,6 +2406,7 @@ impl<T: FftNum> SseF32Butterfly16<T> {
         tmp3[2] = SseVector::mul_complex(tmp3[2], self.twiddle6);
         tmp3[3] = SseVector::mul_complex(tmp3[3], self.twiddle9);
 
+        // Do these last, because fewer twiddles means fewer temporaries forcing the above data to spill
         let [in0, in1] = load(0);
         let tmp0 = self.bf4.perform_parallel_fft_direct(in0);
         let mut tmp1 = self.bf4.perform_parallel_fft_direct(in1);
@@ -2402,7 +2414,7 @@ impl<T: FftNum> SseF32Butterfly16<T> {
         tmp1[2] = SseVector::mul_complex(tmp1[2], self.twiddle2);
         tmp1[3] = SseVector::mul_complex(tmp1[3], self.twiddle3);
 
-        // step 4 and 5: transpose and cross FFTs
+        ////////////////////////////////////////////////////////////
         let mut store = |i, values_a: [__m128; 4], values_b: [__m128; 4]| {
             for n in 0..4 {
                 let [a, b] = transpose_complex_2x2_f32(values_a[n], values_b[n]);
@@ -2410,6 +2422,7 @@ impl<T: FftNum> SseF32Butterfly16<T> {
                 buffer.store_complex(b, i + n*4 + 16);
             }
         };
+        // Size-4 FFTs down each pair of transposed columns, storing them as soon as we're done with them
         let out0 = self.bf4.perform_parallel_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0]]);
         let out1 = self.bf4.perform_parallel_fft_direct([tmp0[1], tmp1[1], tmp2[1], tmp3[1]]);
         store(0, out0, out1);
@@ -2457,12 +2470,13 @@ impl<T: FftNum> SseF64Butterfly16<T> {
 
     #[inline(always)]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl SseArrayMut<f64>) {
-        // we're going to hardcode a step of 4x4 mixed radix
-        // step 1: transpose (skipped since the vectors mean our data is already in the correct format)
-        // and
-        // step 2: column FFTs
-        // and
-        // step 3: twiddle factors
+        // To make the best possible use of registers, we're going to write this algorithm in an unusual way
+        // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
+        // But to reduce the number of times registers get spilled, we have these optimizations:
+        // 1: Load data as late as possible, not upfront
+        // 2: Once we're working with a piece of data, make as much progress as possible before moving on 
+        //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
+        // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i| [
             buffer.load_complex(i),
             buffer.load_complex(i + 4),
@@ -2470,6 +2484,7 @@ impl<T: FftNum> SseF64Butterfly16<T> {
             buffer.load_complex(i + 12),
         ];
 
+        // For each column: load the data, apply our size-4 FFT, apply twiddle factors
         let mut tmp1 = self.bf4.perform_fft_direct(load(1));
         tmp1[1] = SseVector::mul_complex(tmp1[1], self.twiddle1);
         tmp1[2] = self.bf4.rotate.rotate_45(tmp1[2]);
@@ -2485,9 +2500,10 @@ impl<T: FftNum> SseF64Butterfly16<T> {
         tmp2[2] = self.bf4.rotate.rotate(tmp2[2]);
         tmp2[3] = self.bf4.rotate.rotate_135(tmp2[3]);
 
+        // Do the first column last, because no twiddles means fewer temporaries forcing the above data to spill
         let tmp0 = self.bf4.perform_fft_direct(load(0));
 
-        // step 4 and 5: transpose and cross FFTs
+        ////////////////////////////////////////////////////////////
         let mut store = |i: usize, vectors: [__m128d; 4]| {
             buffer.store_complex(vectors[0], i + 0);
             buffer.store_complex(vectors[1], i + 4);
@@ -2495,6 +2511,7 @@ impl<T: FftNum> SseF64Butterfly16<T> {
             buffer.store_complex(vectors[3], i + 12);
         };
 
+        // Size-4 FFTs down each of our transposed columns, storing them as soon as we're done with them
         let out0 = self.bf4.perform_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0]]);
         store(0, out0);
 
@@ -2576,12 +2593,13 @@ impl<T: FftNum> SseF32Butterfly24<T> {
 
     #[inline(always)]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl SseArrayMut<f32>) {
-       // we're going to hardcode a step of 8x4 mixed radix
-        // step 1: transpose (skipped since the vectors mean our data is already in the correct format)
-        // and
-        // step 2: column FFTs
-        // and
-        // step 3: twiddle factors
+        // To make the best possible use of registers, we're going to write this algorithm in an unusual way
+        // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
+        // But to reduce the number of times registers get spilled, we have these optimizations:
+        // 1: Load data as late as possible, not upfront
+        // 2: Once we're working with a piece of data, make as much progress as possible before moving on 
+        //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
+        // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i| [
             buffer.load_complex(i),
             buffer.load_complex(i + 6),
@@ -2589,6 +2607,7 @@ impl<T: FftNum> SseF32Butterfly24<T> {
             buffer.load_complex(i + 18),
         ];
 
+        // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors, transpose
         let mut tmp1 = self.bf4.perform_parallel_fft_direct(load(2));
         tmp1[1] = SseVector::mul_complex(tmp1[1], self.twiddles_packed[3]);
         tmp1[2] = SseVector::mul_complex(tmp1[2], self.twiddles_packed[4]);
@@ -2610,7 +2629,7 @@ impl<T: FftNum> SseF32Butterfly24<T> {
         let [mid0, mid1] = transpose_complex_2x2_f32(tmp0[0], tmp0[1]);
         let [mid6, mid7] = transpose_complex_2x2_f32(tmp0[2], tmp0[3]);
 
-        // step 4 and 5: transpose and cross FFTs
+        ////////////////////////////////////////////////////////////
         let mut store = |i, vectors: [__m128; 6]| {
             buffer.store_complex(vectors[0], i);
             buffer.store_complex(vectors[1], i + 4);
@@ -2620,6 +2639,7 @@ impl<T: FftNum> SseF32Butterfly24<T> {
             buffer.store_complex(vectors[5], i + 20);
         };
 
+        // Size-6 FFTs down each pair of transposed columns, storing them as soon as we're done with them
         let out0 = self.bf6.perform_parallel_fft_direct(mid0, mid1, mid2, mid3, mid4, mid5);
         store(0, out0);
 
@@ -2629,6 +2649,13 @@ impl<T: FftNum> SseF32Butterfly24<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SseArrayMut<f32>) {
+        // To make the best possible use of registers, we're going to write this algorithm in an unusual way
+        // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
+        // But to reduce the number of times registers get spilled, we have these optimizations:
+        // 1: Load data as late as possible, not upfront
+        // 2: Once we're working with a piece of data, make as much progress as possible before moving on 
+        //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
+        // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i: usize| {
             let [a0, a1] = transpose_complex_2x2_f32(buffer.load_complex(i + 0), buffer.load_complex(i + 24));
             let [b0, b1] = transpose_complex_2x2_f32(buffer.load_complex(i + 6), buffer.load_complex(i + 30));
@@ -2637,6 +2664,7 @@ impl<T: FftNum> SseF32Butterfly24<T> {
             [[a0, b0, c0, d0], [a1, b1, c1, d1]]
         };
 
+        // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors
         let [in0, in1] = load(0);
         let tmp0 = self.bf4.perform_parallel_fft_direct(in0);
         let mut tmp1 = self.bf4.perform_parallel_fft_direct(in1);
@@ -2664,7 +2692,7 @@ impl<T: FftNum> SseF32Butterfly24<T> {
         tmp5[2] = SseVector::mul_complex(tmp5[2], self.twiddle10);
         tmp5[3] = self.bf4.rotate.rotate_both_225(tmp5[3]);
 
-        // step 4 and 5: transpose and cross FFTs
+        ////////////////////////////////////////////////////////////
         let mut store = |i, vectors_a: [__m128; 6], vectors_b: [__m128; 6]| {
             for n in 0..6 {
                 let [a, b] = transpose_complex_2x2_f32(vectors_a[n], vectors_b[n]);
@@ -2673,6 +2701,7 @@ impl<T: FftNum> SseF32Butterfly24<T> {
             }
         };
 
+        // Size-6 FFTs down each pair of transposed columns, storing them as soon as we're done with them
         let out0 = self.bf6.perform_parallel_fft_direct(tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0]);
         let out1 = self.bf6.perform_parallel_fft_direct(tmp0[1], tmp1[1], tmp2[1], tmp3[1], tmp4[1], tmp5[1]);
         store(0, out0, out1);
@@ -2733,12 +2762,13 @@ impl<T: FftNum> SseF64Butterfly24<T> {
 
     #[inline(always)]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl SseArrayMut<f64>) {
-        // we're going to hardcode a step of 8x4 mixed radix
-        // step 1: transpose (skipped since the vectors mean our data is already in the correct format)
-        // and
-        // step 2: column FFTs
-        // and
-        // step 3: twiddle factors
+        // To make the best possible use of registers, we're going to write this algorithm in an unusual way
+        // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
+        // But to reduce the number of times registers get spilled, we have these optimizations:
+        // 1: Load data as late as possible, not upfront
+        // 2: Once we're working with a piece of data, make as much progress as possible before moving on 
+        //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
+        // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i| [
             buffer.load_complex(i),
             buffer.load_complex(i + 6),
@@ -2746,6 +2776,7 @@ impl<T: FftNum> SseF64Butterfly24<T> {
             buffer.load_complex(i + 18),
         ];
 
+        // For each column: load the data, apply our size-4 FFT, apply twiddle factors
         let mut tmp1 = self.bf4.perform_fft_direct(load(1));
         tmp1[1] = SseVector::mul_complex(tmp1[1], self.twiddle1);
         tmp1[2] = SseVector::mul_complex(tmp1[2], self.twiddle2);
@@ -2771,9 +2802,10 @@ impl<T: FftNum> SseF64Butterfly24<T> {
         tmp3[2] = self.bf4.rotate.rotate(tmp3[2]);
         tmp3[3] = self.bf4.rotate.rotate_135(tmp3[3]);
 
+        // Do the first column last, because no twiddles means fewer temporaries forcing the above data to spill
         let tmp0 = self.bf4.perform_fft_direct(load(0));
 
-        // step 4 and 5: transpose and cross FFTs
+        ////////////////////////////////////////////////////////////
         let mut store = |i, vectors: [__m128d; 6]| {
             buffer.store_complex(vectors[0], i);
             buffer.store_complex(vectors[1], i + 4);
@@ -2783,6 +2815,7 @@ impl<T: FftNum> SseF64Butterfly24<T> {
             buffer.store_complex(vectors[5], i + 20);
         };
 
+        // Size-6 FFTs down each of our transposed columns, storing them as soon as we're done with them
         let out0 = self.bf6.perform_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0]]);
         store(0, out0);
 
@@ -2880,12 +2913,13 @@ impl<T: FftNum> SseF32Butterfly32<T> {
 
     #[inline(always)]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl SseArrayMut<f32>) {
-       // we're going to hardcode a step of 8x4 mixed radix
-        // step 1: transpose (skipped since the vectors mean our data is already in the correct format)
-        // and
-        // step 2: column FFTs
-        // and
-        // step 3: twiddle factors
+        // To make the best possible use of registers, we're going to write this algorithm in an unusual way
+        // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
+        // But to reduce the number of times registers get spilled, we have these optimizations:
+        // 1: Load data as late as possible, not upfront
+        // 2: Once we're working with a piece of data, make as much progress as possible before moving on 
+        //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
+        // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i| [
             buffer.load_complex(i),
             buffer.load_complex(i + 8),
@@ -2893,6 +2927,7 @@ impl<T: FftNum> SseF32Butterfly32<T> {
             buffer.load_complex(i + 24),
         ];
 
+        // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors
         let mut tmp0 = self.bf8.bf4.perform_parallel_fft_direct(load(0));
         tmp0[1] = SseVector::mul_complex(tmp0[1], self.twiddles_packed[0]);
         tmp0[2] = SseVector::mul_complex(tmp0[2], self.twiddles_packed[1]);
@@ -2921,7 +2956,7 @@ impl<T: FftNum> SseF32Butterfly32<T> {
         let [mid6, mid7] = transpose_complex_2x2_f32(tmp3[0], tmp3[1]);
         let [mid14, mid15] = transpose_complex_2x2_f32(tmp3[2], tmp3[3]);
 
-        // step 4 and 5: transpose and cross FFTs
+        ////////////////////////////////////////////////////////////
         let mut store = |i, vectors: [__m128; 8]| {
             buffer.store_complex(vectors[0], i);
             buffer.store_complex(vectors[1], i + 4);
@@ -2933,6 +2968,7 @@ impl<T: FftNum> SseF32Butterfly32<T> {
             buffer.store_complex(vectors[7], i + 28);
         };
 
+        // Size-8 FFTs down each pair of transposed columns, storing them as soon as we're done with them
         let out0 = self.bf8.perform_parallel_fft_direct([mid0, mid1, mid2, mid3, mid4, mid5, mid6, mid7]);
         store(0, out0);
 
@@ -2942,6 +2978,13 @@ impl<T: FftNum> SseF32Butterfly32<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SseArrayMut<f32>) {
+        // To make the best possible use of registers, we're going to write this algorithm in an unusual way
+        // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
+        // But to reduce the number of times registers get spilled, we have these optimizations:
+        // 1: Load data as late as possible, not upfront
+        // 2: Once we're working with a piece of data, make as much progress as possible before moving on 
+        //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
+        // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i: usize| {
             let [a0, a1] = transpose_complex_2x2_f32(buffer.load_complex(i + 0), buffer.load_complex(i + 32));
             let [b0, b1] = transpose_complex_2x2_f32(buffer.load_complex(i + 8), buffer.load_complex(i + 40));
@@ -2950,6 +2993,7 @@ impl<T: FftNum> SseF32Butterfly32<T> {
             [[a0, b0, c0, d0], [a1, b1, c1, d1]]
         };
 
+        // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors
         let [in0, in1] = load(0);
         let tmp0 = self.bf8.bf4.perform_parallel_fft_direct(in0);
         let mut tmp1 = self.bf8.bf4.perform_parallel_fft_direct(in1);
@@ -2987,7 +3031,7 @@ impl<T: FftNum> SseF32Butterfly32<T> {
         tmp7[2] = SseVector::mul_complex(tmp7[2], self.twiddle14);
         tmp7[3] = SseVector::mul_complex(tmp7[3], self.twiddle21);
 
-        // step 4 and 5: transpose and cross FFTs
+        ////////////////////////////////////////////////////////////
         let mut store = |i, vectors_a: [__m128; 8], vectors_b: [__m128; 8]| {
             for n in 0..8 {
                 let [a, b] = transpose_complex_2x2_f32(vectors_a[n], vectors_b[n]);
@@ -2996,6 +3040,7 @@ impl<T: FftNum> SseF32Butterfly32<T> {
             }
         };
 
+        // Size-8 FFTs down each pair of transposed columns, storing them as soon as we're done with them
         let out0 = self.bf8.perform_parallel_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0], tmp6[0], tmp7[0]]);
         let out1 = self.bf8.perform_parallel_fft_direct([tmp0[1], tmp1[1], tmp2[1], tmp3[1], tmp4[1], tmp5[1], tmp6[1], tmp7[1]]);
         store(0, out0, out1);
@@ -3071,12 +3116,13 @@ impl<T: FftNum> SseF64Butterfly32<T> {
 
     #[inline(always)]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl SseArrayMut<f64>) {
-        // we're going to hardcode a step of 8x4 mixed radix
-        // step 1: transpose (skipped since the vectors mean our data is already in the correct format)
-        // and
-        // step 2: column FFTs
-        // and
-        // step 3: twiddle factors
+        // To make the best possible use of registers, we're going to write this algorithm in an unusual way
+        // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
+        // But to reduce the number of times registers get spilled, we have these optimizations:
+        // 1: Load data as late as possible, not upfront
+        // 2: Once we're working with a piece of data, make as much progress as possible before moving on 
+        //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
+        // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i| [
             buffer.load_complex(i),
             buffer.load_complex(i + 8),
@@ -3084,6 +3130,7 @@ impl<T: FftNum> SseF64Butterfly32<T> {
             buffer.load_complex(i + 24),
         ];
 
+        // For each column: load the data, apply our size-4 FFT, apply twiddle factors
         let mut tmp1 = self.bf8.bf4.perform_fft_direct(load(1));
         tmp1[1] = SseVector::mul_complex(tmp1[1], self.twiddle1);
         tmp1[2] = SseVector::mul_complex(tmp1[2], self.twiddle2);
@@ -3119,9 +3166,10 @@ impl<T: FftNum> SseF64Butterfly32<T> {
         tmp4[2] = self.bf8.bf4.rotate.rotate(tmp4[2]);
         tmp4[3] = self.bf8.bf4.rotate.rotate_135(tmp4[3]);
 
+        // Do the first column last, because no twiddles means fewer temporaries forcing the above data to spill
         let tmp0 = self.bf8.bf4.perform_fft_direct(load(0));
 
-        // step 4 and 5: transpose and cross FFTs
+        ////////////////////////////////////////////////////////////
         let mut store = |i, vectors: [__m128d; 8]| {
             buffer.store_complex(vectors[0], i);
             buffer.store_complex(vectors[1], i + 4);
@@ -3133,6 +3181,7 @@ impl<T: FftNum> SseF64Butterfly32<T> {
             buffer.store_complex(vectors[7], i + 28);
         };
 
+        // Size-8 FFTs down each of our transposed columns, storing them as soon as we're done with them
         let out0 = self.bf8.perform_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0], tmp6[0], tmp7[0]]);
         store(0, out0);
 
