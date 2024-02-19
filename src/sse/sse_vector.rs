@@ -148,6 +148,9 @@ pub trait SseVector: Copy + Debug + Send + Sync {
     unsafe fn store_partial_lo_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
     unsafe fn store_partial_hi_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
 
+    // math ops
+    unsafe fn neg(a: Self) -> Self;
+
     /// Generates a chunk of twiddle factors starting at (X,Y) and incrementing X `COMPLEX_PER_VECTOR` times.
     /// The result will be [twiddle(x*y, len), twiddle((x+1)*y, len), twiddle((x+2)*y, len), ...] for as many complex numbers fit in a vector
     unsafe fn make_mixedradix_twiddle_chunk(
@@ -205,6 +208,11 @@ impl SseVector for __m128 {
     #[inline(always)]
     unsafe fn store_partial_hi_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
         _mm_storeh_pd(ptr as *mut f64, _mm_castps_pd(data));
+    }
+
+    #[inline(always)]
+    unsafe fn neg(a: Self) -> Self {
+        _mm_xor_ps(a, _mm_set1_ps(-0.0))
     }
 
     #[inline(always)]
@@ -306,6 +314,11 @@ impl SseVector for __m128d {
     #[inline(always)]
     unsafe fn store_partial_hi_complex(_ptr: *mut Complex<Self::ScalarType>, _data: Self) {
         unimplemented!("Impossible to do a partial store of complex f64's");
+    }
+
+    #[inline(always)]
+    unsafe fn neg(a: Self) -> Self {
+        _mm_xor_pd(a, _mm_set1_pd(-0.0))
     }
 
     #[inline(always)]

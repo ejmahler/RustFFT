@@ -12,7 +12,17 @@ use crate::{Direction, Fft, Length};
 
 use super::sse_common::{assert_f32, assert_f64};
 use super::sse_utils::*;
-use super::sse_vector::{SseArrayMut, SseVector};
+use super::sse_vector::{SseArray, SseArrayMut, SseVector};
+
+#[inline(always)]
+unsafe fn pack_32(a: Complex<f32>, b: Complex<f32>) -> __m128 {
+    [a,b].as_slice().load_complex(0)
+}
+#[inline(always)]
+unsafe fn pack_64(a: Complex<f64>) -> __m128d {
+    [a].as_slice().load_complex(0)
+}
+
 
 #[allow(unused)]
 macro_rules! boilerplate_fft_sse_f32_butterfly {
@@ -78,6 +88,46 @@ macro_rules! boilerplate_fft_sse_f32_butterfly {
                     })
                 }
                 Ok(())
+            }
+        }
+    };
+}
+
+macro_rules! boilerplate_fft_sse_f32_butterfly_noparallel {
+    ($struct_name:ident, $len:expr, $direction_fn:expr) => {
+        impl<T: FftNum> $struct_name<T> {
+            // Do a single fft
+            #[target_feature(enable = "sse4.1")]
+            pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
+                self.perform_fft_contiguous(workaround_transmute_mut::<_, Complex<f32>>(buffer));
+            }
+
+            // Do multiple ffts over a longer vector inplace, called from "process_with_scratch" of Fft trait
+            #[target_feature(enable = "sse4.1")]
+            pub(crate) unsafe fn perform_fft_butterfly_multi(
+                &self,
+                buffer: &mut [Complex<T>],
+            ) -> Result<(), ()> {
+                array_utils::iter_chunks(buffer, self.len(), |chunk| {
+                    self.perform_fft_butterfly(chunk)
+                })
+            }
+
+            // Do multiple ffts over a longer vector outofplace, called from "process_outofplace_with_scratch" of Fft trait
+            #[target_feature(enable = "sse4.1")]
+            pub(crate) unsafe fn perform_oop_fft_butterfly_multi(
+                &self,
+                input: &mut [Complex<T>],
+                output: &mut [Complex<T>],
+            ) -> Result<(), ()> {
+                array_utils::iter_chunks_zipped(input, output, self.len(), |in_chunk, out_chunk| {
+                    let input_slice = workaround_transmute_mut(in_chunk);
+                    let output_slice = workaround_transmute_mut(out_chunk);
+                    self.perform_fft_contiguous(DoubleBuf {
+                        input: input_slice,
+                        output: output_slice,
+                    })
+                })
             }
         }
     };
@@ -645,7 +695,7 @@ impl<T: FftNum> SseF32Butterfly4<T> {
         let [value0ab, value1ab] = transpose_complex_2x2_f32(value01a, value01b);
         let [value2ab, value3ab] = transpose_complex_2x2_f32(value23a, value23b);
 
-        let out = self.perform_parallel_fft_direct(value0ab, value1ab, value2ab, value3ab);
+        let out = self.perform_parallel_fft_direct([value0ab, value1ab, value2ab, value3ab]);
 
         let [out0, out1] = transpose_complex_2x2_f32(out[0], out[1]);
         let [out2, out3] = transpose_complex_2x2_f32(out[2], out[3]);
@@ -684,21 +734,15 @@ impl<T: FftNum> SseF32Butterfly4<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_direct(
-        &self,
-        values0: __m128,
-        values1: __m128,
-        values2: __m128,
-        values3: __m128,
-    ) -> [__m128; 4] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [__m128; 4]) -> [__m128; 4] {
         //we're going to hardcode a step of mixed radix
         //aka we're going to do the six step algorithm
 
         // step 1: transpose
         // and
         // step 2: column FFTs
-        let temp0 = parallel_fft2_interleaved_f32(values0, values2);
-        let mut temp1 = parallel_fft2_interleaved_f32(values1, values3);
+        let temp0 = parallel_fft2_interleaved_f32(values[0], values[2]);
+        let mut temp1 = parallel_fft2_interleaved_f32(values[1], values[3]);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
         temp1[1] = self.rotate.rotate_both(temp1[1]);
@@ -755,7 +799,7 @@ impl<T: FftNum> SseF64Butterfly4<T> {
         let value2 = buffer.load_complex(2);
         let value3 = buffer.load_complex(3);
 
-        let out = self.perform_fft_direct(value0, value1, value2, value3);
+        let out = self.perform_fft_direct([value0, value1, value2, value3]);
 
         buffer.store_complex(out[0], 0);
         buffer.store_complex(out[1], 1);
@@ -764,21 +808,15 @@ impl<T: FftNum> SseF64Butterfly4<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(
-        &self,
-        value0: __m128d,
-        value1: __m128d,
-        value2: __m128d,
-        value3: __m128d,
-    ) -> [__m128d; 4] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 4]) -> [__m128d; 4] {
         //we're going to hardcode a step of mixed radix
         //aka we're going to do the six step algorithm
 
         // step 1: transpose
         // and
         // step 2: column FFTs
-        let temp0 = solo_fft2_f64(value0, value2);
-        let mut temp1 = solo_fft2_f64(value1, value3);
+        let temp0 = solo_fft2_f64(values[0], values[2]);
+        let mut temp1 = solo_fft2_f64(values[1], values[3]);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
         temp1[1] = self.rotate.rotate(temp1[1]);
@@ -1226,7 +1264,7 @@ impl<T: FftNum> SseF64Butterfly6<T> {
         let value4 = buffer.load_complex(4);
         let value5 = buffer.load_complex(5);
 
-        let out = self.perform_fft_direct(value0, value1, value2, value3, value4, value5);
+        let out = self.perform_fft_direct([value0, value1, value2, value3, value4, value5]);
 
         buffer.store_complex(out[0], 0);
         buffer.store_complex(out[1], 1);
@@ -1237,20 +1275,12 @@ impl<T: FftNum> SseF64Butterfly6<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(
-        &self,
-        value0: __m128d,
-        value1: __m128d,
-        value2: __m128d,
-        value3: __m128d,
-        value4: __m128d,
-        value5: __m128d,
-    ) -> [__m128d; 6] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 6]) -> [__m128d; 6] {
         // Algorithm: 3x2 good-thomas
 
         // Size-3 FFTs down the columns of our reordered array
-        let mid0 = self.bf3.perform_fft_direct(value0, value2, value4);
-        let mid1 = self.bf3.perform_fft_direct(value3, value5, value1);
+        let mid0 = self.bf3.perform_fft_direct(values[0], values[2], values[4]);
+        let mid1 = self.bf3.perform_fft_direct(values[3], values[5], values[1]);
 
         // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
 
@@ -1366,10 +1396,10 @@ impl<T: FftNum> SseF32Butterfly8<T> {
         // step 2: column FFTs
         let val03 = self
             .bf4
-            .perform_parallel_fft_direct(values[0], values[2], values[4], values[6]);
+            .perform_parallel_fft_direct([values[0], values[2], values[4], values[6]]);
         let mut val47 = self
             .bf4
-            .perform_parallel_fft_direct(values[1], values[3], values[5], values[7]);
+            .perform_parallel_fft_direct([values[1], values[3], values[5], values[7]]);
 
         // step 3: apply twiddle factors
         let val5b = self.rotate90.rotate_both(val47[1]);
@@ -1403,32 +1433,19 @@ impl<T: FftNum> SseF32Butterfly8<T> {
 //
 
 pub struct SseF64Butterfly8<T> {
-    root2: __m128d,
-    direction: FftDirection,
     bf4: SseF64Butterfly4<T>,
-    rotate90: Rotate90F64,
 }
 
 boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly8, 8, |this: &SseF64Butterfly8<_>| this
-    .direction);
+    .bf4.direction);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly8, 8, |this: &SseF64Butterfly8<_>| this
-    .direction);
+    .bf4.direction);
 impl<T: FftNum> SseF64Butterfly8<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let bf4 = SseF64Butterfly4::new(direction);
-        let root2 = unsafe { _mm_load1_pd(&0.5f64.sqrt()) };
-        let rotate90 = if direction == FftDirection::Inverse {
-            Rotate90F64::new(true)
-        } else {
-            Rotate90F64::new(false)
-        };
         Self {
-            root2,
-            direction,
-            bf4,
-            rotate90,
+            bf4: SseF64Butterfly4::new(direction),
         }
     }
 
@@ -1449,19 +1466,15 @@ impl<T: FftNum> SseF64Butterfly8<T> {
         // step 2: column FFTs
         let val03 = self
             .bf4
-            .perform_fft_direct(values[0], values[2], values[4], values[6]);
+            .perform_fft_direct([values[0], values[2], values[4], values[6]]);
         let mut val47 = self
             .bf4
-            .perform_fft_direct(values[1], values[3], values[5], values[7]);
+            .perform_fft_direct([values[1], values[3], values[5], values[7]]);
 
         // step 3: apply twiddle factors
-        let val5b = self.rotate90.rotate(val47[1]);
-        let val5c = _mm_add_pd(val5b, val47[1]);
-        val47[1] = _mm_mul_pd(val5c, self.root2);
-        val47[2] = self.rotate90.rotate(val47[2]);
-        let val7b = self.rotate90.rotate(val47[3]);
-        let val7c = _mm_sub_pd(val7b, val47[3]);
-        val47[3] = _mm_mul_pd(val7c, self.root2);
+        val47[1] = self.bf4.rotate.rotate_45(val47[1]);
+        val47[2] = self.bf4.rotate.rotate(val47[2]);
+        val47[3] = self.bf4.rotate.rotate_135(val47[3]);
 
         // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
 
@@ -1957,13 +1970,13 @@ impl<T: FftNum> SseF32Butterfly12<T> {
         // Size-4 FFTs down the columns of our reordered array
         let mid0 = self
             .bf4
-            .perform_parallel_fft_direct(values[0], values[3], values[6], values[9]);
+            .perform_parallel_fft_direct([values[0], values[3], values[6], values[9]]);
         let mid1 = self
             .bf4
-            .perform_parallel_fft_direct(values[4], values[7], values[10], values[1]);
+            .perform_parallel_fft_direct([values[4], values[7], values[10], values[1]]);
         let mid2 = self
             .bf4
-            .perform_parallel_fft_direct(values[8], values[11], values[2], values[5]);
+            .perform_parallel_fft_direct([values[8], values[11], values[2], values[5]]);
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
 
@@ -2037,13 +2050,13 @@ impl<T: FftNum> SseF64Butterfly12<T> {
         // Size-4 FFTs down the columns of our reordered array
         let mid0 = self
             .bf4
-            .perform_fft_direct(values[0], values[3], values[6], values[9]);
+            .perform_fft_direct([values[0], values[3], values[6], values[9]]);
         let mid1 = self
             .bf4
-            .perform_fft_direct(values[4], values[7], values[10], values[1]);
+            .perform_fft_direct([values[4], values[7], values[10], values[1]]);
         let mid2 = self
             .bf4
-            .perform_fft_direct(values[8], values[11], values[2], values[5]);
+            .perform_fft_direct([values[8], values[11], values[2], values[5]]);
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
 
@@ -2271,199 +2284,141 @@ impl<T: FftNum> SseF64Butterfly15<T> {
 //
 
 pub struct SseF32Butterfly16<T> {
-    direction: FftDirection,
     bf4: SseF32Butterfly4<T>,
-    bf8: SseF32Butterfly8<T>,
-    rotate90: Rotate90F32,
-    twiddle01: __m128,
-    twiddle23: __m128,
-    twiddle01conj: __m128,
-    twiddle23conj: __m128,
+    twiddles_packed: [__m128; 6],
     twiddle1: __m128,
     twiddle2: __m128,
     twiddle3: __m128,
-    twiddle1c: __m128,
-    twiddle2c: __m128,
-    twiddle3c: __m128,
+    twiddle6: __m128,
+    twiddle9: __m128,
 }
 
-boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly16, 16, |this: &SseF32Butterfly16<_>| this
-    .direction);
-boilerplate_fft_sse_common_butterfly!(SseF32Butterfly16, 16, |this: &SseF32Butterfly16<_>| this
+boilerplate_fft_sse_f32_butterfly_noparallel!(
+    SseF32Butterfly16,
+    16,
+    |this: &SseF32Butterfly16<_>| this.bf4.direction
+);
+boilerplate_fft_sse_common_butterfly!(SseF32Butterfly16, 16, |this: &SseF32Butterfly16<_>| this.bf4
     .direction);
 impl<T: FftNum> SseF32Butterfly16<T> {
-    #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let bf8 = SseF32Butterfly8::new(direction);
-        let bf4 = SseF32Butterfly4::new(direction);
-        let rotate90 = if direction == FftDirection::Inverse {
-            Rotate90F32::new(true)
-        } else {
-            Rotate90F32::new(false)
-        };
+        let tw0: Complex<f32> = Complex { re: 1.0, im: 0.0 };
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 16, direction);
         let tw2: Complex<f32> = twiddles::compute_twiddle(2, 16, direction);
         let tw3: Complex<f32> = twiddles::compute_twiddle(3, 16, direction);
-        let twiddle01 = unsafe { _mm_set_ps(tw1.im, tw1.re, 0.0, 1.0) };
-        let twiddle23 = unsafe { _mm_set_ps(tw3.im, tw3.re, tw2.im, tw2.re) };
-        let twiddle01conj = unsafe { _mm_set_ps(-tw1.im, tw1.re, 0.0, 1.0) };
-        let twiddle23conj = unsafe { _mm_set_ps(-tw3.im, tw3.re, -tw2.im, tw2.re) };
-        let twiddle1 = unsafe { _mm_set_ps(tw1.im, tw1.re, tw1.im, tw1.re) };
-        let twiddle2 = unsafe { _mm_set_ps(tw2.im, tw2.re, tw2.im, tw2.re) };
-        let twiddle3 = unsafe { _mm_set_ps(tw3.im, tw3.re, tw3.im, tw3.re) };
-        let twiddle1c = unsafe { _mm_set_ps(-tw1.im, tw1.re, -tw1.im, tw1.re) };
-        let twiddle2c = unsafe { _mm_set_ps(-tw2.im, tw2.re, -tw2.im, tw2.re) };
-        let twiddle3c = unsafe { _mm_set_ps(-tw3.im, tw3.re, -tw3.im, tw3.re) };
-        Self {
-            direction,
-            bf4,
-            bf8,
-            rotate90,
-            twiddle01,
-            twiddle23,
-            twiddle01conj,
-            twiddle23conj,
-            twiddle1,
-            twiddle2,
-            twiddle3,
-            twiddle1c,
-            twiddle2c,
-            twiddle3c,
+        let tw4: Complex<f32> = twiddles::compute_twiddle(4, 16, direction);
+        let tw6: Complex<f32> = twiddles::compute_twiddle(6, 16, direction);
+        let tw9: Complex<f32> = twiddles::compute_twiddle(9, 16, direction);
+       
+        unsafe {
+            Self {
+                bf4: SseF32Butterfly4::new(direction),
+                twiddles_packed: [
+                    pack_32(tw0, tw1),
+                    pack_32(tw0, tw2),
+                    pack_32(tw0, tw3),
+                    pack_32(tw2, tw3),
+                    pack_32(tw4, tw6),
+                    pack_32(tw6, tw9),
+                ],
+                twiddle1: pack_32(tw1, tw1),
+                twiddle2: pack_32(tw2, tw2),
+                twiddle3: pack_32(tw3, tw3),
+                twiddle6: pack_32(tw6, tw6),
+                twiddle9: pack_32(tw9, tw9),
+            }
         }
     }
 
     #[inline(always)]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl SseArrayMut<f32>) {
-        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14 });
+        let load = |i| [
+            buffer.load_complex(i),
+            buffer.load_complex(i + 4),
+            buffer.load_complex(i + 8),
+            buffer.load_complex(i + 12),
+        ];
 
-        let out = self.perform_fft_direct(input_packed);
+        let mut tmp0 = self.bf4.perform_parallel_fft_direct(load(0));
+        tmp0[1] = SseVector::mul_complex(tmp0[1], self.twiddles_packed[0]);
+        tmp0[2] = SseVector::mul_complex(tmp0[2], self.twiddles_packed[1]);
+        tmp0[3] = SseVector::mul_complex(tmp0[3], self.twiddles_packed[2]);
+        let [mid0, mid1] = transpose_complex_2x2_f32(tmp0[0], tmp0[1]);
+        let [mid4, mid5] = transpose_complex_2x2_f32(tmp0[2], tmp0[3]);
 
-        write_complex_to_array_strided!(out, buffer, 2, {0,1,2,3,4,5,6,7});
+        let mut tmp1 = self.bf4.perform_parallel_fft_direct(load(2));
+        tmp1[1] = SseVector::mul_complex(tmp1[1], self.twiddles_packed[3]);
+        tmp1[2] = SseVector::mul_complex(tmp1[2], self.twiddles_packed[4]);
+        tmp1[3] = SseVector::mul_complex(tmp1[3], self.twiddles_packed[5]);
+        let [mid2, mid3] = transpose_complex_2x2_f32(tmp1[0], tmp1[1]);
+        let [mid6, mid7] = transpose_complex_2x2_f32(tmp1[2], tmp1[3]);
+
+        // cross FFTs
+        let mut store = |i: usize, vectors: [__m128; 4]| {
+            buffer.store_complex(vectors[0], i + 0);
+            buffer.store_complex(vectors[1], i + 4);
+            buffer.store_complex(vectors[2], i + 8);
+            buffer.store_complex(vectors[3], i + 12);
+        };
+        let out0 = self.bf4.perform_parallel_fft_direct([mid0, mid1, mid2, mid3]);
+        store(0, out0);
+
+        let out1 = self.bf4.perform_parallel_fft_direct([mid4, mid5, mid6, mid7]);
+        store(2, out1);
     }
 
-    #[inline(always)]
+    // benchmarking shows it's faster to always use the nonparallel version, but this is kep around for reference
+    #[allow(unused)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SseArrayMut<f32>) {
-        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30});
-
-        let values = interleave_complex_f32!(input_packed, 8, {0, 1, 2, 3 ,4 ,5 ,6 ,7});
-
-        let out = self.perform_parallel_fft_direct(values);
-
-        let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6, 8, 10, 12, 14});
-
-        write_complex_to_array_strided!(out_sorted, buffer, 2, {0,1,2,3,4,5,6,7,8,9, 10, 11,12,13,14, 15});
-    }
-
-    #[inline(always)]
-    unsafe fn perform_fft_direct(&self, input: [__m128; 8]) -> [__m128; 8] {
-        // we're going to hardcode a step of split radix
-        // step 1: copy and reorder the input into the scratch
-        let in0002 = extract_lo_lo_f32(input[0], input[1]);
-        let in0406 = extract_lo_lo_f32(input[2], input[3]);
-        let in0810 = extract_lo_lo_f32(input[4], input[5]);
-        let in1214 = extract_lo_lo_f32(input[6], input[7]);
-
-        let in0105 = extract_hi_hi_f32(input[0], input[2]);
-        let in0913 = extract_hi_hi_f32(input[4], input[6]);
-        let in1503 = extract_hi_hi_f32(input[7], input[1]);
-        let in0711 = extract_hi_hi_f32(input[3], input[5]);
-
-        let in_evens = [in0002, in0406, in0810, in1214];
-
-        // step 2: column FFTs
-        let evens = self.bf8.perform_fft_direct(in_evens);
-        let mut odds1 = self.bf4.perform_fft_direct(in0105, in0913);
-        let mut odds3 = self.bf4.perform_fft_direct(in1503, in0711);
-
-        // step 3: apply twiddle factors
-        odds1[0] = SseVector::mul_complex(odds1[0], self.twiddle01);
-        odds3[0] = SseVector::mul_complex(odds3[0], self.twiddle01conj);
-
-        odds1[1] = SseVector::mul_complex(odds1[1], self.twiddle23);
-        odds3[1] = SseVector::mul_complex(odds3[1], self.twiddle23conj);
-
-        // step 4: cross FFTs
-        let mut temp0 = parallel_fft2_interleaved_f32(odds1[0], odds3[0]);
-        let mut temp1 = parallel_fft2_interleaved_f32(odds1[1], odds3[1]);
-
-        // apply the butterfly 4 twiddle factor, which is just a rotation
-        temp0[1] = self.rotate90.rotate_both(temp0[1]);
-        temp1[1] = self.rotate90.rotate_both(temp1[1]);
-
-        //step 5: copy/add/subtract data back to buffer
-        [
-            _mm_add_ps(evens[0], temp0[0]),
-            _mm_add_ps(evens[1], temp1[0]),
-            _mm_add_ps(evens[2], temp0[1]),
-            _mm_add_ps(evens[3], temp1[1]),
-            _mm_sub_ps(evens[0], temp0[0]),
-            _mm_sub_ps(evens[1], temp1[0]),
-            _mm_sub_ps(evens[2], temp0[1]),
-            _mm_sub_ps(evens[3], temp1[1]),
-        ]
-    }
-
-    #[inline(always)]
-    unsafe fn perform_parallel_fft_direct(&self, input: [__m128; 16]) -> [__m128; 16] {
-        // we're going to hardcode a step of split radix
-        // step 1: copy and reorder the  input into the scratch
+        // we're going to hardcode a step of 4x4 mixed radix
+        // step 1: transpose (skipped since the vectors mean our data is already in the correct format)
         // and
         // step 2: column FFTs
-        let evens = self.bf8.perform_parallel_fft_direct([
-            input[0], input[2], input[4], input[6], input[8], input[10], input[12], input[14],
-        ]);
-        let mut odds1 = self
-            .bf4
-            .perform_parallel_fft_direct(input[1], input[5], input[9], input[13]);
-        let mut odds3 = self
-            .bf4
-            .perform_parallel_fft_direct(input[15], input[3], input[7], input[11]);
+        // and
+        // step 3: twiddle factors
+        let load = |i: usize| {
+            let [a0, a1] = transpose_complex_2x2_f32(buffer.load_complex(i + 0), buffer.load_complex(i + 16));
+            let [b0, b1] = transpose_complex_2x2_f32(buffer.load_complex(i + 4), buffer.load_complex(i + 20));
+            let [c0, c1] = transpose_complex_2x2_f32(buffer.load_complex(i + 8), buffer.load_complex(i + 24));
+            let [d0, d1] = transpose_complex_2x2_f32(buffer.load_complex(i + 12), buffer.load_complex(i + 28));
+            [[a0, b0, c0, d0], [a1, b1, c1, d1]]
+        };
 
-        // step 3: apply twiddle factors
-        odds1[1] = SseVector::mul_complex(odds1[1], self.twiddle1);
-        odds3[1] = SseVector::mul_complex(odds3[1], self.twiddle1c);
+        let [in2, in3] = load(2);
+        let mut tmp2 = self.bf4.perform_parallel_fft_direct(in2);
+        let mut tmp3 = self.bf4.perform_parallel_fft_direct(in3);
+        tmp2[1] = SseVector::mul_complex(tmp2[1], self.twiddle2);
+        tmp2[2] = self.bf4.rotate.rotate_both(tmp2[2]);
+        tmp2[3] = SseVector::mul_complex(tmp2[3], self.twiddle6);
+        tmp3[1] = SseVector::mul_complex(tmp3[1], self.twiddle3);
+        tmp3[2] = SseVector::mul_complex(tmp3[2], self.twiddle6);
+        tmp3[3] = SseVector::mul_complex(tmp3[3], self.twiddle9);
 
-        odds1[2] = SseVector::mul_complex(odds1[2], self.twiddle2);
-        odds3[2] = SseVector::mul_complex(odds3[2], self.twiddle2c);
+        let [in0, in1] = load(0);
+        let tmp0 = self.bf4.perform_parallel_fft_direct(in0);
+        let mut tmp1 = self.bf4.perform_parallel_fft_direct(in1);
+        tmp1[1] = SseVector::mul_complex(tmp1[1], self.twiddle1);
+        tmp1[2] = SseVector::mul_complex(tmp1[2], self.twiddle2);
+        tmp1[3] = SseVector::mul_complex(tmp1[3], self.twiddle3);
 
-        odds1[3] = SseVector::mul_complex(odds1[3], self.twiddle3);
-        odds3[3] = SseVector::mul_complex(odds3[3], self.twiddle3c);
+        // step 4 and 5: transpose and cross FFTs
+        let mut store = |i, values_a: [__m128; 4], values_b: [__m128; 4]| {
+            for n in 0..4 {
+                let [a, b] = transpose_complex_2x2_f32(values_a[n], values_b[n]);
+                buffer.store_complex(a, i + n*4);
+                buffer.store_complex(b, i + n*4 + 16);
+            }
+        };
+        let out0 = self.bf4.perform_parallel_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0]]);
+        let out1 = self.bf4.perform_parallel_fft_direct([tmp0[1], tmp1[1], tmp2[1], tmp3[1]]);
+        store(0, out0, out1);
 
-        // step 4: cross FFTs
-        let mut temp0 = parallel_fft2_interleaved_f32(odds1[0], odds3[0]);
-        let mut temp1 = parallel_fft2_interleaved_f32(odds1[1], odds3[1]);
-        let mut temp2 = parallel_fft2_interleaved_f32(odds1[2], odds3[2]);
-        let mut temp3 = parallel_fft2_interleaved_f32(odds1[3], odds3[3]);
-
-        // apply the butterfly 4 twiddle factor, which is just a rotation
-        temp0[1] = self.rotate90.rotate_both(temp0[1]);
-        temp1[1] = self.rotate90.rotate_both(temp1[1]);
-        temp2[1] = self.rotate90.rotate_both(temp2[1]);
-        temp3[1] = self.rotate90.rotate_both(temp3[1]);
-
-        //step 5: copy/add/subtract data back to buffer
-        [
-            _mm_add_ps(evens[0], temp0[0]),
-            _mm_add_ps(evens[1], temp1[0]),
-            _mm_add_ps(evens[2], temp2[0]),
-            _mm_add_ps(evens[3], temp3[0]),
-            _mm_add_ps(evens[4], temp0[1]),
-            _mm_add_ps(evens[5], temp1[1]),
-            _mm_add_ps(evens[6], temp2[1]),
-            _mm_add_ps(evens[7], temp3[1]),
-            _mm_sub_ps(evens[0], temp0[0]),
-            _mm_sub_ps(evens[1], temp1[0]),
-            _mm_sub_ps(evens[2], temp2[0]),
-            _mm_sub_ps(evens[3], temp3[0]),
-            _mm_sub_ps(evens[4], temp0[1]),
-            _mm_sub_ps(evens[5], temp1[1]),
-            _mm_sub_ps(evens[6], temp2[1]),
-            _mm_sub_ps(evens[7], temp3[1]),
-        ]
+        let out2 = self.bf4.perform_parallel_fft_direct([tmp0[2], tmp1[2], tmp2[2], tmp3[2]]);
+        let out3 = self.bf4.perform_parallel_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3]]);
+        store(2, out2, out3);
     }
 }
-
 //   _  __              __   _  _   _     _ _
 //  / |/ /_            / /_ | || | | |__ (_) |_
 //  | | '_ \   _____  | '_ \| || |_| '_ \| | __|
@@ -2472,131 +2427,85 @@ impl<T: FftNum> SseF32Butterfly16<T> {
 //
 
 pub struct SseF64Butterfly16<T> {
-    direction: FftDirection,
     bf4: SseF64Butterfly4<T>,
-    bf8: SseF64Butterfly8<T>,
-    rotate90: Rotate90F64,
     twiddle1: __m128d,
-    twiddle2: __m128d,
     twiddle3: __m128d,
-    twiddle1c: __m128d,
-    twiddle2c: __m128d,
-    twiddle3c: __m128d,
+    twiddle9: __m128d,
 }
 
 boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly16, 16, |this: &SseF64Butterfly16<_>| this
-    .direction);
+    .bf4.direction);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly16, 16, |this: &SseF64Butterfly16<_>| this
-    .direction);
+    .bf4.direction);
 impl<T: FftNum> SseF64Butterfly16<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let bf8 = SseF64Butterfly8::new(direction);
-        let bf4 = SseF64Butterfly4::new(direction);
-        let rotate90 = if direction == FftDirection::Inverse {
-            Rotate90F64::new(true)
-        } else {
-            Rotate90F64::new(false)
-        };
-        let twiddle1 =
-            unsafe { _mm_loadu_pd(&twiddles::compute_twiddle(1, 16, direction).re as *const f64) };
-        let twiddle2 =
-            unsafe { _mm_loadu_pd(&twiddles::compute_twiddle(2, 16, direction).re as *const f64) };
-        let twiddle3 =
-            unsafe { _mm_loadu_pd(&twiddles::compute_twiddle(3, 16, direction).re as *const f64) };
-        let twiddle1c = unsafe {
-            _mm_loadu_pd(&twiddles::compute_twiddle(1, 16, direction).conj().re as *const f64)
-        };
-        let twiddle2c = unsafe {
-            _mm_loadu_pd(&twiddles::compute_twiddle(2, 16, direction).conj().re as *const f64)
-        };
-        let twiddle3c = unsafe {
-            _mm_loadu_pd(&twiddles::compute_twiddle(3, 16, direction).conj().re as *const f64)
-        };
-
-        Self {
-            direction,
-            bf4,
-            bf8,
-            rotate90,
-            twiddle1,
-            twiddle2,
-            twiddle3,
-            twiddle1c,
-            twiddle2c,
-            twiddle3c,
+        let tw1: Complex<f64> = twiddles::compute_twiddle(1, 16, direction);
+        let tw3: Complex<f64> = twiddles::compute_twiddle(3, 16, direction);
+        let tw9: Complex<f64> = twiddles::compute_twiddle(9, 16, direction);
+       
+        unsafe {
+            Self {
+                bf4: SseF64Butterfly4::new(direction),
+                twiddle1: pack_64(tw1),
+                twiddle3: pack_64(tw3),
+                twiddle9: pack_64(tw9),
+            }
         }
     }
 
     #[inline(always)]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl SseArrayMut<f64>) {
-        let values =
-            read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15});
-
-        let out = self.perform_fft_direct(values);
-
-        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15});
-    }
-
-    #[inline(always)]
-    unsafe fn perform_fft_direct(&self, input: [__m128d; 16]) -> [__m128d; 16] {
-        // we're going to hardcode a step of split radix
-
-        // step 1: copy and reorder the  input into the scratch
+        // we're going to hardcode a step of 4x4 mixed radix
+        // step 1: transpose (skipped since the vectors mean our data is already in the correct format)
         // and
         // step 2: column FFTs
-        let evens = self.bf8.perform_fft_direct([
-            input[0], input[2], input[4], input[6], input[8], input[10], input[12], input[14],
-        ]);
-        let mut odds1 = self
-            .bf4
-            .perform_fft_direct(input[1], input[5], input[9], input[13]);
-        let mut odds3 = self
-            .bf4
-            .perform_fft_direct(input[15], input[3], input[7], input[11]);
+        // and
+        // step 3: twiddle factors
+        let load = |i| [
+            buffer.load_complex(i),
+            buffer.load_complex(i + 4),
+            buffer.load_complex(i + 8),
+            buffer.load_complex(i + 12),
+        ];
 
-        // step 3: apply twiddle factors
-        odds1[1] = SseVector::mul_complex(odds1[1], self.twiddle1);
-        odds3[1] = SseVector::mul_complex(odds3[1], self.twiddle1c);
+        let mut tmp1 = self.bf4.perform_fft_direct(load(1));
+        tmp1[1] = SseVector::mul_complex(tmp1[1], self.twiddle1);
+        tmp1[2] = self.bf4.rotate.rotate_45(tmp1[2]);
+        tmp1[3] = SseVector::mul_complex(tmp1[3], self.twiddle3);
 
-        odds1[2] = SseVector::mul_complex(odds1[2], self.twiddle2);
-        odds3[2] = SseVector::mul_complex(odds3[2], self.twiddle2c);
+        let mut tmp3 = self.bf4.perform_fft_direct(load(3));
+        tmp3[1] = SseVector::mul_complex(tmp3[1], self.twiddle3);
+        tmp3[2] = self.bf4.rotate.rotate_135(tmp3[2]);
+        tmp3[3] = SseVector::mul_complex(tmp3[3], self.twiddle9);
 
-        odds1[3] = SseVector::mul_complex(odds1[3], self.twiddle3);
-        odds3[3] = SseVector::mul_complex(odds3[3], self.twiddle3c);
+        let mut tmp2 = self.bf4.perform_fft_direct(load(2));
+        tmp2[1] = self.bf4.rotate.rotate_45(tmp2[1]);
+        tmp2[2] = self.bf4.rotate.rotate(tmp2[2]);
+        tmp2[3] = self.bf4.rotate.rotate_135(tmp2[3]);
 
-        // step 4: cross FFTs
-        let mut temp0 = solo_fft2_f64(odds1[0], odds3[0]);
-        let mut temp1 = solo_fft2_f64(odds1[1], odds3[1]);
-        let mut temp2 = solo_fft2_f64(odds1[2], odds3[2]);
-        let mut temp3 = solo_fft2_f64(odds1[3], odds3[3]);
+        let tmp0 = self.bf4.perform_fft_direct(load(0));
 
-        // apply the butterfly 4 twiddle factor, which is just a rotation
-        temp0[1] = self.rotate90.rotate(temp0[1]);
-        temp1[1] = self.rotate90.rotate(temp1[1]);
-        temp2[1] = self.rotate90.rotate(temp2[1]);
-        temp3[1] = self.rotate90.rotate(temp3[1]);
+        // step 4 and 5: transpose and cross FFTs
+        let mut store = |i: usize, vectors: [__m128d; 4]| {
+            buffer.store_complex(vectors[0], i + 0);
+            buffer.store_complex(vectors[1], i + 4);
+            buffer.store_complex(vectors[2], i + 8);
+            buffer.store_complex(vectors[3], i + 12);
+        };
 
-        //step 5: copy/add/subtract data back to buffer
-        [
-            _mm_add_pd(evens[0], temp0[0]),
-            _mm_add_pd(evens[1], temp1[0]),
-            _mm_add_pd(evens[2], temp2[0]),
-            _mm_add_pd(evens[3], temp3[0]),
-            _mm_add_pd(evens[4], temp0[1]),
-            _mm_add_pd(evens[5], temp1[1]),
-            _mm_add_pd(evens[6], temp2[1]),
-            _mm_add_pd(evens[7], temp3[1]),
-            _mm_sub_pd(evens[0], temp0[0]),
-            _mm_sub_pd(evens[1], temp1[0]),
-            _mm_sub_pd(evens[2], temp2[0]),
-            _mm_sub_pd(evens[3], temp3[0]),
-            _mm_sub_pd(evens[4], temp0[1]),
-            _mm_sub_pd(evens[5], temp1[1]),
-            _mm_sub_pd(evens[6], temp2[1]),
-            _mm_sub_pd(evens[7], temp3[1]),
-        ]
+        let out0 = self.bf4.perform_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0]]);
+        store(0, out0);
+
+        let out1 = self.bf4.perform_fft_direct([tmp0[1], tmp1[1], tmp2[1], tmp3[1]]);
+        store(1, out1);
+
+        let out2 = self.bf4.perform_fft_direct([tmp0[2], tmp1[2], tmp2[2], tmp3[2]]);
+        store(2, out2);
+
+        let out3 = self.bf4.perform_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3]]);
+        store(3, out3);
     }
 }
 
@@ -2608,261 +2517,169 @@ impl<T: FftNum> SseF64Butterfly16<T> {
 //
 
 pub struct SseF32Butterfly24<T> {
-    direction: FftDirection,
+    bf4: SseF32Butterfly4<T>,
     bf6: SseF32Butterfly6<T>,
-    bf12: SseF32Butterfly12<T>,
-    rotate90: Rotate90F32,
-    twiddle01: __m128,
-    twiddle23: __m128,
-    twiddle45: __m128,
-    twiddle01conj: __m128,
-    twiddle23conj: __m128,
-    twiddle45conj: __m128,
+    twiddles_packed: [__m128; 9],
     twiddle1: __m128,
     twiddle2: __m128,
     twiddle4: __m128,
     twiddle5: __m128,
-    twiddle1c: __m128,
-    twiddle2c: __m128,
-    twiddle4c: __m128,
-    twiddle5c: __m128,
+    twiddle8: __m128,
+    twiddle10: __m128,
 }
 
 boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly24, 24, |this: &SseF32Butterfly24<_>| {
-    this.direction
+    this.bf4.direction
 });
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly24, 24, |this: &SseF32Butterfly24<_>| this
-    .direction);
+    .bf4.direction);
 impl<T: FftNum> SseF32Butterfly24<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let bf6 = SseF32Butterfly6::new(direction);
-        let bf12 = SseF32Butterfly12::new(direction);
-        let rotate90 = if direction == FftDirection::Inverse {
-            Rotate90F32::new(true)
-        } else {
-            Rotate90F32::new(false)
-        };
+        let tw0: Complex<f32> = Complex { re: 1.0, im: 0.0 };
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 24, direction);
         let tw2: Complex<f32> = twiddles::compute_twiddle(2, 24, direction);
         let tw3: Complex<f32> = twiddles::compute_twiddle(3, 24, direction);
         let tw4: Complex<f32> = twiddles::compute_twiddle(4, 24, direction);
         let tw5: Complex<f32> = twiddles::compute_twiddle(5, 24, direction);
-        let twiddle01 = unsafe { _mm_set_ps(tw1.im, tw1.re, 0.0, 1.0) };
-        let twiddle23 = unsafe { _mm_set_ps(tw3.im, tw3.re, tw2.im, tw2.re) };
-        let twiddle45 = unsafe { _mm_set_ps(tw5.im, tw5.re, tw4.im, tw4.re) };
-        let twiddle01conj = unsafe { _mm_set_ps(-tw1.im, tw1.re, 0.0, 1.0) };
-        let twiddle23conj = unsafe { _mm_set_ps(-tw3.im, tw3.re, -tw2.im, tw2.re) };
-        let twiddle45conj = unsafe { _mm_set_ps(-tw5.im, tw5.re, -tw4.im, tw4.re) };
-        let twiddle1 = unsafe { _mm_set_ps(tw1.im, tw1.re, tw1.im, tw1.re) };
-        let twiddle2 = unsafe { _mm_set_ps(tw2.im, tw2.re, tw2.im, tw2.re) };
-        let twiddle4 = unsafe { _mm_set_ps(tw4.im, tw4.re, tw4.im, tw4.re) };
-        let twiddle5 = unsafe { _mm_set_ps(tw5.im, tw5.re, tw5.im, tw5.re) };
-        let twiddle1c = unsafe { _mm_set_ps(-tw1.im, tw1.re, -tw1.im, tw1.re) };
-        let twiddle2c = unsafe { _mm_set_ps(-tw2.im, tw2.re, -tw2.im, tw2.re) };
-        let twiddle4c = unsafe { _mm_set_ps(-tw4.im, tw4.re, -tw4.im, tw4.re) };
-        let twiddle5c = unsafe { _mm_set_ps(-tw5.im, tw5.re, -tw5.im, tw5.re) };
-        Self {
-            direction,
-            bf6,
-            bf12,
-            rotate90,
-            twiddle01,
-            twiddle23,
-            twiddle45,
-            twiddle01conj,
-            twiddle23conj,
-            twiddle45conj,
-            twiddle1,
-            twiddle2,
-            twiddle4,
-            twiddle5,
-            twiddle1c,
-            twiddle2c,
-            twiddle4c,
-            twiddle5c,
+        let tw6: Complex<f32> = twiddles::compute_twiddle(6, 24, direction);
+        let tw8: Complex<f32> = twiddles::compute_twiddle(8, 24, direction);
+        let tw9: Complex<f32> = twiddles::compute_twiddle(9, 24, direction);
+        let tw10: Complex<f32> = twiddles::compute_twiddle(10, 24, direction);
+        let tw12: Complex<f32> = twiddles::compute_twiddle(12, 24, direction);
+        let tw15: Complex<f32> = twiddles::compute_twiddle(15, 24, direction);
+        unsafe {
+            Self {
+                bf4: SseF32Butterfly4::new(direction),
+                bf6: SseF32Butterfly6::new(direction),
+                twiddles_packed: [
+                    pack_32(tw0, tw1),
+                    pack_32(tw0, tw2),
+                    pack_32(tw0, tw3),
+                    pack_32(tw2, tw3),
+                    pack_32(tw4, tw6),
+                    pack_32(tw6, tw9),
+                    pack_32(tw4, tw5),
+                    pack_32(tw8, tw10),
+                    pack_32(tw12, tw15),
+                ],
+                twiddle1: pack_32(tw1, tw1),
+                twiddle2: pack_32(tw2, tw2),
+                twiddle4: pack_32(tw4, tw4),
+                twiddle5: pack_32(tw5, tw5),
+                twiddle8: pack_32(tw8, tw8),
+                twiddle10: pack_32(tw10, tw10),
+            }
         }
     }
 
     #[inline(always)]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl SseArrayMut<f32>) {
-        let input_packed =
-            read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22});
+       // we're going to hardcode a step of 8x4 mixed radix
+        // step 1: transpose (skipped since the vectors mean our data is already in the correct format)
+        // and
+        // step 2: column FFTs
+        // and
+        // step 3: twiddle factors
+        let load = |i| [
+            buffer.load_complex(i),
+            buffer.load_complex(i + 6),
+            buffer.load_complex(i + 12),
+            buffer.load_complex(i + 18),
+        ];
 
-        let out = self.perform_fft_direct(input_packed);
+        let mut tmp1 = self.bf4.perform_parallel_fft_direct(load(2));
+        tmp1[1] = SseVector::mul_complex(tmp1[1], self.twiddles_packed[3]);
+        tmp1[2] = SseVector::mul_complex(tmp1[2], self.twiddles_packed[4]);
+        tmp1[3] = SseVector::mul_complex(tmp1[3], self.twiddles_packed[5]);
+        let [mid2, mid3] = transpose_complex_2x2_f32(tmp1[0], tmp1[1]);
+        let [mid8, mid9] = transpose_complex_2x2_f32(tmp1[2], tmp1[3]);
 
-        write_complex_to_array_strided!(out, buffer, 2, {0,1,2,3,4,5,6,7,8,9,10,11});
+        let mut tmp2 = self.bf4.perform_parallel_fft_direct(load(4));
+        tmp2[1] = SseVector::mul_complex(tmp2[1], self.twiddles_packed[6]);
+        tmp2[2] = SseVector::mul_complex(tmp2[2], self.twiddles_packed[7]);
+        tmp2[3] = SseVector::mul_complex(tmp2[3], self.twiddles_packed[8]);
+        let [mid4, mid5] = transpose_complex_2x2_f32(tmp2[0], tmp2[1]);
+        let [mid10, mid11] = transpose_complex_2x2_f32(tmp2[2], tmp2[3]);
+
+        let mut tmp0 = self.bf4.perform_parallel_fft_direct(load(0));
+        tmp0[1] = SseVector::mul_complex(tmp0[1], self.twiddles_packed[0]);
+        tmp0[2] = SseVector::mul_complex(tmp0[2], self.twiddles_packed[1]);
+        tmp0[3] = SseVector::mul_complex(tmp0[3], self.twiddles_packed[2]);
+        let [mid0, mid1] = transpose_complex_2x2_f32(tmp0[0], tmp0[1]);
+        let [mid6, mid7] = transpose_complex_2x2_f32(tmp0[2], tmp0[3]);
+
+        // step 4 and 5: transpose and cross FFTs
+        let mut store = |i, vectors: [__m128; 6]| {
+            buffer.store_complex(vectors[0], i);
+            buffer.store_complex(vectors[1], i + 4);
+            buffer.store_complex(vectors[2], i + 8);
+            buffer.store_complex(vectors[3], i + 12);
+            buffer.store_complex(vectors[4], i + 16);
+            buffer.store_complex(vectors[5], i + 20);
+        };
+
+        let out0 = self.bf6.perform_parallel_fft_direct(mid0, mid1, mid2, mid3, mid4, mid5);
+        store(0, out0);
+
+        let out1 = self.bf6.perform_parallel_fft_direct(mid6, mid7, mid8, mid9, mid10, mid11);
+        store(2, out1);
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SseArrayMut<f32>) {
-        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46});
-
-        let values =
-            interleave_complex_f32!(input_packed, 12, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11});
-
-        let out = self.perform_parallel_fft_direct(values);
-
-        let out_sorted =
-            separate_interleaved_complex_f32!(out, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22});
-
-        write_complex_to_array_strided!(out_sorted, buffer, 2, {0,1,2,3,4,5,6,7,8,9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23 });
-    }
-
-    #[inline(always)]
-    unsafe fn perform_fft_direct(&self, input: [__m128; 12]) -> [__m128; 12] {
-        // we're going to hardcode a step of split radix
-
-        // step 1: copy and reorder the input into the scratch
-        let in0002 = extract_lo_lo_f32(input[0], input[1]);
-        let in0406 = extract_lo_lo_f32(input[2], input[3]);
-        let in0810 = extract_lo_lo_f32(input[4], input[5]);
-        let in1214 = extract_lo_lo_f32(input[6], input[7]);
-        let in1618 = extract_lo_lo_f32(input[8], input[9]);
-        let in2022 = extract_lo_lo_f32(input[10], input[11]);
-
-        let in0105 = extract_hi_hi_f32(input[0], input[2]);
-        let in0913 = extract_hi_hi_f32(input[4], input[6]);
-        let in1721 = extract_hi_hi_f32(input[8], input[10]);
-
-        let in2303 = extract_hi_hi_f32(input[11], input[1]);
-        let in0711 = extract_hi_hi_f32(input[3], input[5]);
-        let in1519 = extract_hi_hi_f32(input[7], input[9]);
-
-        let in_evens = [in0002, in0406, in0810, in1214, in1618, in2022];
-
-        // step 2: column FFTs
-        let evens = self.bf12.perform_fft_direct(in_evens);
-        let mut odds1 = self.bf6.perform_fft_direct(in0105, in0913, in1721);
-        let mut odds3 = self.bf6.perform_fft_direct(in2303, in0711, in1519);
-
-        // step 3: apply twiddle factors
-        odds1[0] = SseVector::mul_complex(odds1[0], self.twiddle01);
-        odds3[0] = SseVector::mul_complex(odds3[0], self.twiddle01conj);
-
-        odds1[1] = SseVector::mul_complex(odds1[1], self.twiddle23);
-        odds3[1] = SseVector::mul_complex(odds3[1], self.twiddle23conj);
-
-        odds1[2] = SseVector::mul_complex(odds1[2], self.twiddle45);
-        odds3[2] = SseVector::mul_complex(odds3[2], self.twiddle45conj);
-
-        // step 4: cross FFTs
-        let mut temp0 = parallel_fft2_interleaved_f32(odds1[0], odds3[0]);
-        let mut temp1 = parallel_fft2_interleaved_f32(odds1[1], odds3[1]);
-        let mut temp2 = parallel_fft2_interleaved_f32(odds1[2], odds3[2]);
-
-        // apply the butterfly 4 twiddle factor, which is just a rotation
-        temp0[1] = self.rotate90.rotate_both(temp0[1]);
-        temp1[1] = self.rotate90.rotate_both(temp1[1]);
-        temp2[1] = self.rotate90.rotate_both(temp2[1]);
-
-        //step 5: copy/add/subtract data back to buffer
-        [
-            _mm_add_ps(evens[0], temp0[0]),
-            _mm_add_ps(evens[1], temp1[0]),
-            _mm_add_ps(evens[2], temp2[0]),
-            _mm_add_ps(evens[3], temp0[1]),
-            _mm_add_ps(evens[4], temp1[1]),
-            _mm_add_ps(evens[5], temp2[1]),
-            _mm_sub_ps(evens[0], temp0[0]),
-            _mm_sub_ps(evens[1], temp1[0]),
-            _mm_sub_ps(evens[2], temp2[0]),
-            _mm_sub_ps(evens[3], temp0[1]),
-            _mm_sub_ps(evens[4], temp1[1]),
-            _mm_sub_ps(evens[5], temp2[1]),
-        ]
-    }
-
-    #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_direct(&self, input: [__m128; 24]) -> [__m128; 24] {
-        // we're going to hardcode a step of split radix
-
-        // step 1: copy and reorder the  input into the scratch
-        // and
-        // step 2: column FFTs
-        let evens = self.bf12.perform_parallel_fft_direct([
-            input[0], input[2], input[4], input[6], input[8], input[10], input[12], input[14],
-            input[16], input[18], input[20], input[22],
-        ]);
-        let mut odds1 = self.bf6.perform_parallel_fft_direct(
-            input[1], input[5], input[9], input[13], input[17], input[21],
-        );
-        let mut odds3 = self.bf6.perform_parallel_fft_direct(
-            input[23], input[3], input[7], input[11], input[15], input[19],
-        );
-
-        // twiddle factor helpers
-        let rotate45 = |vec| {
-            let rotated = self.rotate90.rotate_both(vec);
-            let sum = _mm_add_ps(vec, rotated);
-            _mm_mul_ps(sum, _mm_set1_ps(0.5f32.sqrt()))
-        };
-        let rotate315 = |vec| {
-            let rotated = self.rotate90.rotate_both(vec);
-            let sum = _mm_sub_ps(vec, rotated);
-            _mm_mul_ps(sum, _mm_set1_ps(0.5f32.sqrt()))
+        let load = |i: usize| {
+            let [a0, a1] = transpose_complex_2x2_f32(buffer.load_complex(i + 0), buffer.load_complex(i + 24));
+            let [b0, b1] = transpose_complex_2x2_f32(buffer.load_complex(i + 6), buffer.load_complex(i + 30));
+            let [c0, c1] = transpose_complex_2x2_f32(buffer.load_complex(i + 12), buffer.load_complex(i + 36));
+            let [d0, d1] = transpose_complex_2x2_f32(buffer.load_complex(i + 18), buffer.load_complex(i + 42));
+            [[a0, b0, c0, d0], [a1, b1, c1, d1]]
         };
 
-        // step 3: apply twiddle factors
-        odds1[1] = SseVector::mul_complex(odds1[1], self.twiddle1);
-        odds3[1] = SseVector::mul_complex(odds3[1], self.twiddle1c);
+        let [in0, in1] = load(0);
+        let tmp0 = self.bf4.perform_parallel_fft_direct(in0);
+        let mut tmp1 = self.bf4.perform_parallel_fft_direct(in1);
+        tmp1[1] = SseVector::mul_complex(tmp1[1], self.twiddle1);
+        tmp1[2] = SseVector::mul_complex(tmp1[2], self.twiddle2);
+        tmp1[3] = self.bf4.rotate.rotate_both_45(tmp1[3]);
 
-        odds1[2] = SseVector::mul_complex(odds1[2], self.twiddle2);
-        odds3[2] = SseVector::mul_complex(odds3[2], self.twiddle2c);
+        let [in2, in3] = load(2);
+        let mut tmp2 = self.bf4.perform_parallel_fft_direct(in2);
+        let mut tmp3 = self.bf4.perform_parallel_fft_direct(in3);
+        tmp2[1] = SseVector::mul_complex(tmp2[1], self.twiddle2);
+        tmp2[2] = SseVector::mul_complex(tmp2[2], self.twiddle4);
+        tmp2[3] = self.bf4.rotate.rotate_both(tmp2[3]);
+        tmp3[1] = self.bf4.rotate.rotate_both_45(tmp3[1]);
+        tmp3[2] = self.bf4.rotate.rotate_both(tmp3[2]);
+        tmp3[3] = self.bf4.rotate.rotate_both_135(tmp3[3]);
 
-        odds1[3] = rotate45(odds1[3]);
-        odds3[3] = rotate315(odds3[3]);
+        let [in4, in5] = load(4);
+        let mut tmp4 = self.bf4.perform_parallel_fft_direct(in4);
+        let mut tmp5 = self.bf4.perform_parallel_fft_direct(in5);
+        tmp4[1] = SseVector::mul_complex(tmp4[1], self.twiddle4);
+        tmp4[2] = SseVector::mul_complex(tmp4[2], self.twiddle8);
+        tmp4[3] = SseVector::neg(tmp4[3]);
+        tmp5[1] = SseVector::mul_complex(tmp5[1], self.twiddle5);
+        tmp5[2] = SseVector::mul_complex(tmp5[2], self.twiddle10);
+        tmp5[3] = self.bf4.rotate.rotate_both_225(tmp5[3]);
 
-        odds1[4] = SseVector::mul_complex(odds1[4], self.twiddle4);
-        odds3[4] = SseVector::mul_complex(odds3[4], self.twiddle4c);
+        // step 4 and 5: transpose and cross FFTs
+        let mut store = |i, vectors_a: [__m128; 6], vectors_b: [__m128; 6]| {
+            for n in 0..6 {
+                let [a, b] = transpose_complex_2x2_f32(vectors_a[n], vectors_b[n]);
+                buffer.store_complex(a, i + n*4);
+                buffer.store_complex(b, i + n*4 + 24);
+            }
+        };
 
-        odds1[5] = SseVector::mul_complex(odds1[5], self.twiddle5);
-        odds3[5] = SseVector::mul_complex(odds3[5], self.twiddle5c);
+        let out0 = self.bf6.perform_parallel_fft_direct(tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0]);
+        let out1 = self.bf6.perform_parallel_fft_direct(tmp0[1], tmp1[1], tmp2[1], tmp3[1], tmp4[1], tmp5[1]);
+        store(0, out0, out1);
 
-        // step 4: cross FFTs
-        let mut temp0 = parallel_fft2_interleaved_f32(odds1[0], odds3[0]);
-        let mut temp1 = parallel_fft2_interleaved_f32(odds1[1], odds3[1]);
-        let mut temp2 = parallel_fft2_interleaved_f32(odds1[2], odds3[2]);
-        let mut temp3 = parallel_fft2_interleaved_f32(odds1[3], odds3[3]);
-        let mut temp4 = parallel_fft2_interleaved_f32(odds1[4], odds3[4]);
-        let mut temp5 = parallel_fft2_interleaved_f32(odds1[5], odds3[5]);
-
-        // apply the butterfly 4 twiddle factor, which is just a rotation
-        temp0[1] = self.rotate90.rotate_both(temp0[1]);
-        temp1[1] = self.rotate90.rotate_both(temp1[1]);
-        temp2[1] = self.rotate90.rotate_both(temp2[1]);
-        temp3[1] = self.rotate90.rotate_both(temp3[1]);
-        temp4[1] = self.rotate90.rotate_both(temp4[1]);
-        temp5[1] = self.rotate90.rotate_both(temp5[1]);
-
-        //step 5: copy/add/subtract data back to buffer
-        [
-            _mm_add_ps(evens[0], temp0[0]),
-            _mm_add_ps(evens[1], temp1[0]),
-            _mm_add_ps(evens[2], temp2[0]),
-            _mm_add_ps(evens[3], temp3[0]),
-            _mm_add_ps(evens[4], temp4[0]),
-            _mm_add_ps(evens[5], temp5[0]),
-            _mm_add_ps(evens[6], temp0[1]),
-            _mm_add_ps(evens[7], temp1[1]),
-            _mm_add_ps(evens[8], temp2[1]),
-            _mm_add_ps(evens[9], temp3[1]),
-            _mm_add_ps(evens[10], temp4[1]),
-            _mm_add_ps(evens[11], temp5[1]),
-            _mm_sub_ps(evens[0], temp0[0]),
-            _mm_sub_ps(evens[1], temp1[0]),
-            _mm_sub_ps(evens[2], temp2[0]),
-            _mm_sub_ps(evens[3], temp3[0]),
-            _mm_sub_ps(evens[4], temp4[0]),
-            _mm_sub_ps(evens[5], temp5[0]),
-            _mm_sub_ps(evens[6], temp0[1]),
-            _mm_sub_ps(evens[7], temp1[1]),
-            _mm_sub_ps(evens[8], temp2[1]),
-            _mm_sub_ps(evens[9], temp3[1]),
-            _mm_sub_ps(evens[10], temp4[1]),
-            _mm_sub_ps(evens[11], temp5[1]),
-        ]
+        let out2 = self.bf6.perform_parallel_fft_direct(tmp0[2], tmp1[2], tmp2[2], tmp3[2], tmp4[2], tmp5[2]);
+        let out3 = self.bf6.perform_parallel_fft_direct(tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3]);
+        store(2, out2, out3);
     }
 }
 
@@ -2874,170 +2691,109 @@ impl<T: FftNum> SseF32Butterfly24<T> {
 //
 
 pub struct SseF64Butterfly24<T> {
-    direction: FftDirection,
+    bf4: SseF64Butterfly4<T>,
     bf6: SseF64Butterfly6<T>,
-    bf12: SseF64Butterfly12<T>,
-    rotate90: Rotate90F64,
     twiddle1: __m128d,
     twiddle2: __m128d,
     twiddle4: __m128d,
     twiddle5: __m128d,
-    twiddle1c: __m128d,
-    twiddle2c: __m128d,
-    twiddle4c: __m128d,
-    twiddle5c: __m128d,
+    twiddle8: __m128d,
+    twiddle10: __m128d,
 }
 
 boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly24, 24, |this: &SseF64Butterfly24<_>| {
-    this.direction
+    this.bf4.direction
 });
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly24, 24, |this: &SseF64Butterfly24<_>| this
-    .direction);
+    .bf4.direction);
 impl<T: FftNum> SseF64Butterfly24<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let bf6 = SseF64Butterfly6::new(direction);
-        let bf12 = SseF64Butterfly12::new(direction);
-        let rotate90 = if direction == FftDirection::Inverse {
-            Rotate90F64::new(true)
-        } else {
-            Rotate90F64::new(false)
-        };
-        let twiddle1 =
-            unsafe { _mm_loadu_pd(&twiddles::compute_twiddle(1, 24, direction).re as *const f64) };
-        let twiddle2 =
-            unsafe { _mm_loadu_pd(&twiddles::compute_twiddle(2, 24, direction).re as *const f64) };
-        let twiddle4 =
-            unsafe { _mm_loadu_pd(&twiddles::compute_twiddle(4, 24, direction).re as *const f64) };
-        let twiddle5 =
-            unsafe { _mm_loadu_pd(&twiddles::compute_twiddle(5, 24, direction).re as *const f64) };
-        let twiddle1c = unsafe {
-            _mm_loadu_pd(&twiddles::compute_twiddle(1, 24, direction).conj().re as *const f64)
-        };
-        let twiddle2c = unsafe {
-            _mm_loadu_pd(&twiddles::compute_twiddle(2, 24, direction).conj().re as *const f64)
-        };
-        let twiddle4c = unsafe {
-            _mm_loadu_pd(&twiddles::compute_twiddle(4, 24, direction).conj().re as *const f64)
-        };
-        let twiddle5c = unsafe {
-            _mm_loadu_pd(&twiddles::compute_twiddle(5, 24, direction).conj().re as *const f64)
-        };
-        Self {
-            direction,
-            bf6,
-            bf12,
-            rotate90,
-            twiddle1,
-            twiddle2,
-            twiddle4,
-            twiddle5,
-            twiddle1c,
-            twiddle2c,
-            twiddle4c,
-            twiddle5c,
+        let tw1: Complex<f64> = twiddles::compute_twiddle(1, 24, direction);
+        let tw2: Complex<f64> = twiddles::compute_twiddle(2, 24, direction);
+        let tw4: Complex<f64> = twiddles::compute_twiddle(4, 24, direction);
+        let tw5: Complex<f64> = twiddles::compute_twiddle(5, 24, direction);
+        let tw8: Complex<f64> = twiddles::compute_twiddle(8, 24, direction);
+        let tw10: Complex<f64> = twiddles::compute_twiddle(10, 24, direction);
+       
+        unsafe {
+            Self {
+                bf4: SseF64Butterfly4::new(direction),
+                bf6: SseF64Butterfly6::new(direction),
+                twiddle1: pack_64(tw1),
+                twiddle2: pack_64(tw2),
+                twiddle4: pack_64(tw4),
+                twiddle5: pack_64(tw5),
+                twiddle8: pack_64(tw8),
+                twiddle10: pack_64(tw10),
+            }
         }
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SseArrayMut<f64>) {
-        let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23});
-
-        let out = self.perform_fft_direct(values);
-
-        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23});
-    }
-
-    #[inline(always)]
-    unsafe fn perform_fft_direct(&self, input: [__m128d; 24]) -> [__m128d; 24] {
-        // we're going to hardcode a step of split radix
-
-        // step 1: copy and reorder the  input into the scratch
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SseArrayMut<f64>) {
+        // we're going to hardcode a step of 8x4 mixed radix
+        // step 1: transpose (skipped since the vectors mean our data is already in the correct format)
         // and
         // step 2: column FFTs
-        let evens = self.bf12.perform_fft_direct([
-            input[0], input[2], input[4], input[6], input[8], input[10], input[12], input[14],
-            input[16], input[18], input[20], input[22],
-        ]);
-        let mut odds1 = self.bf6.perform_fft_direct(
-            input[1], input[5], input[9], input[13], input[17], input[21],
-        );
-        let mut odds3 = self.bf6.perform_fft_direct(
-            input[23], input[3], input[7], input[11], input[15], input[19],
-        );
+        // and
+        // step 3: twiddle factors
+        let load = |i| [
+            buffer.load_complex(i),
+            buffer.load_complex(i + 6),
+            buffer.load_complex(i + 12),
+            buffer.load_complex(i + 18),
+        ];
 
-        // twiddle factor helpers
-        let rotate45 = |vec| {
-            let rotated = self.rotate90.rotate(vec);
-            let sum = _mm_add_pd(vec, rotated);
-            _mm_mul_pd(sum, _mm_set1_pd(0.5f64.sqrt()))
+        let mut tmp1 = self.bf4.perform_fft_direct(load(1));
+        tmp1[1] = SseVector::mul_complex(tmp1[1], self.twiddle1);
+        tmp1[2] = SseVector::mul_complex(tmp1[2], self.twiddle2);
+        tmp1[3] = self.bf4.rotate.rotate_45(tmp1[3]);
+
+        let mut tmp2 = self.bf4.perform_fft_direct(load(2));
+        tmp2[1] = SseVector::mul_complex(tmp2[1], self.twiddle2);
+        tmp2[2] = SseVector::mul_complex(tmp2[2], self.twiddle4);
+        tmp2[3] = self.bf4.rotate.rotate(tmp2[3]);
+        
+        let mut tmp4 = self.bf4.perform_fft_direct(load(4));
+        tmp4[1] = SseVector::mul_complex(tmp4[1], self.twiddle4);
+        tmp4[2] = SseVector::mul_complex(tmp4[2], self.twiddle8);
+        tmp4[3] = SseVector::neg(tmp4[3]);
+
+        let mut tmp5 = self.bf4.perform_fft_direct(load(5));
+        tmp5[1] = SseVector::mul_complex(tmp5[1], self.twiddle5);
+        tmp5[2] = SseVector::mul_complex(tmp5[2], self.twiddle10);
+        tmp5[3] = self.bf4.rotate.rotate_225(tmp5[3]);
+
+        let mut tmp3 = self.bf4.perform_fft_direct(load(3));
+        tmp3[1] = self.bf4.rotate.rotate_45(tmp3[1]);
+        tmp3[2] = self.bf4.rotate.rotate(tmp3[2]);
+        tmp3[3] = self.bf4.rotate.rotate_135(tmp3[3]);
+
+        let tmp0 = self.bf4.perform_fft_direct(load(0));
+
+        // step 4 and 5: transpose and cross FFTs
+        let mut store = |i, vectors: [__m128d; 6]| {
+            buffer.store_complex(vectors[0], i);
+            buffer.store_complex(vectors[1], i + 4);
+            buffer.store_complex(vectors[2], i + 8);
+            buffer.store_complex(vectors[3], i + 12);
+            buffer.store_complex(vectors[4], i + 16);
+            buffer.store_complex(vectors[5], i + 20);
         };
-        let rotate315 = |vec| {
-            let rotated = self.rotate90.rotate(vec);
-            let sum = _mm_sub_pd(vec, rotated);
-            _mm_mul_pd(sum, _mm_set1_pd(0.5f64.sqrt()))
-        };
 
-        // step 3: apply twiddle factors
-        odds1[1] = SseVector::mul_complex(odds1[1], self.twiddle1);
-        odds3[1] = SseVector::mul_complex(odds3[1], self.twiddle1c);
+        let out0 = self.bf6.perform_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0]]);
+        store(0, out0);
 
-        odds1[2] = SseVector::mul_complex(odds1[2], self.twiddle2);
-        odds3[2] = SseVector::mul_complex(odds3[2], self.twiddle2c);
+        let out1 = self.bf6.perform_fft_direct([tmp0[1], tmp1[1], tmp2[1], tmp3[1], tmp4[1], tmp5[1]]);
+        store(1, out1);
 
-        odds1[3] = rotate45(odds1[3]);
-        odds3[3] = rotate315(odds3[3]);
-
-        odds1[4] = SseVector::mul_complex(odds1[4], self.twiddle4);
-        odds3[4] = SseVector::mul_complex(odds3[4], self.twiddle4c);
-
-        odds1[5] = SseVector::mul_complex(odds1[5], self.twiddle5);
-        odds3[5] = SseVector::mul_complex(odds3[5], self.twiddle5c);
-
-        // step 4: cross FFTs
-        let mut temp0 = solo_fft2_f64(odds1[0], odds3[0]);
-        let mut temp1 = solo_fft2_f64(odds1[1], odds3[1]);
-        let mut temp2 = solo_fft2_f64(odds1[2], odds3[2]);
-        let mut temp3 = solo_fft2_f64(odds1[3], odds3[3]);
-        let mut temp4 = solo_fft2_f64(odds1[4], odds3[4]);
-        let mut temp5 = solo_fft2_f64(odds1[5], odds3[5]);
-
-        // apply the butterfly 4 twiddle factor, which is just a rotation
-        temp0[1] = self.rotate90.rotate(temp0[1]);
-        temp1[1] = self.rotate90.rotate(temp1[1]);
-        temp2[1] = self.rotate90.rotate(temp2[1]);
-        temp3[1] = self.rotate90.rotate(temp3[1]);
-        temp4[1] = self.rotate90.rotate(temp4[1]);
-        temp5[1] = self.rotate90.rotate(temp5[1]);
-
-        //step 5: copy/add/subtract data back to buffer
-        [
-            _mm_add_pd(evens[0], temp0[0]),
-            _mm_add_pd(evens[1], temp1[0]),
-            _mm_add_pd(evens[2], temp2[0]),
-            _mm_add_pd(evens[3], temp3[0]),
-            _mm_add_pd(evens[4], temp4[0]),
-            _mm_add_pd(evens[5], temp5[0]),
-            _mm_add_pd(evens[6], temp0[1]),
-            _mm_add_pd(evens[7], temp1[1]),
-            _mm_add_pd(evens[8], temp2[1]),
-            _mm_add_pd(evens[9], temp3[1]),
-            _mm_add_pd(evens[10], temp4[1]),
-            _mm_add_pd(evens[11], temp5[1]),
-            _mm_sub_pd(evens[0], temp0[0]),
-            _mm_sub_pd(evens[1], temp1[0]),
-            _mm_sub_pd(evens[2], temp2[0]),
-            _mm_sub_pd(evens[3], temp3[0]),
-            _mm_sub_pd(evens[4], temp4[0]),
-            _mm_sub_pd(evens[5], temp5[0]),
-            _mm_sub_pd(evens[6], temp0[1]),
-            _mm_sub_pd(evens[7], temp1[1]),
-            _mm_sub_pd(evens[8], temp2[1]),
-            _mm_sub_pd(evens[9], temp3[1]),
-            _mm_sub_pd(evens[10], temp4[1]),
-            _mm_sub_pd(evens[11], temp5[1]),
-        ]
+        let out2 = self.bf6.perform_fft_direct([tmp0[2], tmp1[2], tmp2[2], tmp3[2], tmp4[2], tmp5[2]]);
+        store(2, out2);
+        
+        let out3 = self.bf6.perform_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3]]);
+        store(3, out3);
     }
 }
 
@@ -3049,49 +2805,31 @@ impl<T: FftNum> SseF64Butterfly24<T> {
 //
 
 pub struct SseF32Butterfly32<T> {
-    direction: FftDirection,
     bf8: SseF32Butterfly8<T>,
-    bf16: SseF32Butterfly16<T>,
-    rotate90: Rotate90F32,
-    twiddle01: __m128,
-    twiddle23: __m128,
-    twiddle45: __m128,
-    twiddle67: __m128,
-    twiddle01conj: __m128,
-    twiddle23conj: __m128,
-    twiddle45conj: __m128,
-    twiddle67conj: __m128,
+    twiddles_packed: [__m128; 12],
     twiddle1: __m128,
     twiddle2: __m128,
     twiddle3: __m128,
-    twiddle4: __m128,
     twiddle5: __m128,
     twiddle6: __m128,
     twiddle7: __m128,
-    twiddle1c: __m128,
-    twiddle2c: __m128,
-    twiddle3c: __m128,
-    twiddle4c: __m128,
-    twiddle5c: __m128,
-    twiddle6c: __m128,
-    twiddle7c: __m128,
+    twiddle9: __m128,
+    twiddle10: __m128,
+    twiddle14: __m128,
+    twiddle15: __m128,
+    twiddle18: __m128,
+    twiddle21: __m128,
 }
 
 boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly32, 32, |this: &SseF32Butterfly32<_>| this
-    .direction);
+    .bf8.bf4.direction);
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly32, 32, |this: &SseF32Butterfly32<_>| this
-    .direction);
+    .bf8.bf4.direction);
 impl<T: FftNum> SseF32Butterfly32<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let bf8 = SseF32Butterfly8::new(direction);
-        let bf16 = SseF32Butterfly16::new(direction);
-        let rotate90 = if direction == FftDirection::Inverse {
-            Rotate90F32::new(true)
-        } else {
-            Rotate90F32::new(false)
-        };
+        let tw0: Complex<f32> = Complex { re: 1.0, im: 0.0 };
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 32, direction);
         let tw2: Complex<f32> = twiddles::compute_twiddle(2, 32, direction);
         let tw3: Complex<f32> = twiddles::compute_twiddle(3, 32, direction);
@@ -3099,258 +2837,172 @@ impl<T: FftNum> SseF32Butterfly32<T> {
         let tw5: Complex<f32> = twiddles::compute_twiddle(5, 32, direction);
         let tw6: Complex<f32> = twiddles::compute_twiddle(6, 32, direction);
         let tw7: Complex<f32> = twiddles::compute_twiddle(7, 32, direction);
-        let twiddle01 = unsafe { _mm_set_ps(tw1.im, tw1.re, 0.0, 1.0) };
-        let twiddle23 = unsafe { _mm_set_ps(tw3.im, tw3.re, tw2.im, tw2.re) };
-        let twiddle45 = unsafe { _mm_set_ps(tw5.im, tw5.re, tw4.im, tw4.re) };
-        let twiddle67 = unsafe { _mm_set_ps(tw7.im, tw7.re, tw6.im, tw6.re) };
-        let twiddle01conj = unsafe { _mm_set_ps(-tw1.im, tw1.re, 0.0, 1.0) };
-        let twiddle23conj = unsafe { _mm_set_ps(-tw3.im, tw3.re, -tw2.im, tw2.re) };
-        let twiddle45conj = unsafe { _mm_set_ps(-tw5.im, tw5.re, -tw4.im, tw4.re) };
-        let twiddle67conj = unsafe { _mm_set_ps(-tw7.im, tw7.re, -tw6.im, tw6.re) };
-        let twiddle1 = unsafe { _mm_set_ps(tw1.im, tw1.re, tw1.im, tw1.re) };
-        let twiddle2 = unsafe { _mm_set_ps(tw2.im, tw2.re, tw2.im, tw2.re) };
-        let twiddle3 = unsafe { _mm_set_ps(tw3.im, tw3.re, tw3.im, tw3.re) };
-        let twiddle4 = unsafe { _mm_set_ps(tw4.im, tw4.re, tw4.im, tw4.re) };
-        let twiddle5 = unsafe { _mm_set_ps(tw5.im, tw5.re, tw5.im, tw5.re) };
-        let twiddle6 = unsafe { _mm_set_ps(tw6.im, tw6.re, tw6.im, tw6.re) };
-        let twiddle7 = unsafe { _mm_set_ps(tw7.im, tw7.re, tw7.im, tw7.re) };
-        let twiddle1c = unsafe { _mm_set_ps(-tw1.im, tw1.re, -tw1.im, tw1.re) };
-        let twiddle2c = unsafe { _mm_set_ps(-tw2.im, tw2.re, -tw2.im, tw2.re) };
-        let twiddle3c = unsafe { _mm_set_ps(-tw3.im, tw3.re, -tw3.im, tw3.re) };
-        let twiddle4c = unsafe { _mm_set_ps(-tw4.im, tw4.re, -tw4.im, tw4.re) };
-        let twiddle5c = unsafe { _mm_set_ps(-tw5.im, tw5.re, -tw5.im, tw5.re) };
-        let twiddle6c = unsafe { _mm_set_ps(-tw6.im, tw6.re, -tw6.im, tw6.re) };
-        let twiddle7c = unsafe { _mm_set_ps(-tw7.im, tw7.re, -tw7.im, tw7.re) };
-        Self {
-            direction,
-            bf8,
-            bf16,
-            rotate90,
-            twiddle01,
-            twiddle23,
-            twiddle45,
-            twiddle67,
-            twiddle01conj,
-            twiddle23conj,
-            twiddle45conj,
-            twiddle67conj,
-            twiddle1,
-            twiddle2,
-            twiddle3,
-            twiddle4,
-            twiddle5,
-            twiddle6,
-            twiddle7,
-            twiddle1c,
-            twiddle2c,
-            twiddle3c,
-            twiddle4c,
-            twiddle5c,
-            twiddle6c,
-            twiddle7c,
+        let tw8: Complex<f32> = twiddles::compute_twiddle(8, 32, direction);
+        let tw9: Complex<f32> = twiddles::compute_twiddle(9, 32, direction);
+        let tw10: Complex<f32> = twiddles::compute_twiddle(10, 32, direction);
+        let tw12: Complex<f32> = twiddles::compute_twiddle(12, 32, direction);
+        let tw14: Complex<f32> = twiddles::compute_twiddle(14, 32, direction);
+        let tw15: Complex<f32> = twiddles::compute_twiddle(15, 32, direction);
+        let tw18: Complex<f32> = twiddles::compute_twiddle(18, 32, direction);
+        let tw21: Complex<f32> = twiddles::compute_twiddle(21, 32, direction);
+        unsafe {
+            Self {
+                bf8: SseF32Butterfly8::new(direction),
+                twiddles_packed: [
+                    pack_32(tw0, tw1),
+                    pack_32(tw0, tw2),
+                    pack_32(tw0, tw3),
+                    pack_32(tw2, tw3),
+                    pack_32(tw4, tw6),
+                    pack_32(tw6, tw9),
+                    pack_32(tw4, tw5),
+                    pack_32(tw8, tw10),
+                    pack_32(tw12, tw15),
+                    pack_32(tw6, tw7),
+                    pack_32(tw12, tw14),
+                    pack_32(tw18, tw21),
+                ],
+                twiddle1: pack_32(tw1, tw1),
+                twiddle2: pack_32(tw2, tw2),
+                twiddle3: pack_32(tw3, tw3),
+                twiddle5: pack_32(tw5, tw5),
+                twiddle6: pack_32(tw6, tw6),
+                twiddle7: pack_32(tw7, tw7),
+                twiddle9: pack_32(tw9, tw9),
+                twiddle10: pack_32(tw10, tw10),
+                twiddle14: pack_32(tw14, tw14),
+                twiddle15: pack_32(tw15, tw15),
+                twiddle18: pack_32(tw18, tw18),
+                twiddle21: pack_32(tw21, tw21),
+            }
         }
     }
 
     #[inline(always)]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl SseArrayMut<f32>) {
-        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30 });
+       // we're going to hardcode a step of 8x4 mixed radix
+        // step 1: transpose (skipped since the vectors mean our data is already in the correct format)
+        // and
+        // step 2: column FFTs
+        // and
+        // step 3: twiddle factors
+        let load = |i| [
+            buffer.load_complex(i),
+            buffer.load_complex(i + 8),
+            buffer.load_complex(i + 16),
+            buffer.load_complex(i + 24),
+        ];
 
-        let out = self.perform_fft_direct(input_packed);
+        let mut tmp0 = self.bf8.bf4.perform_parallel_fft_direct(load(0));
+        tmp0[1] = SseVector::mul_complex(tmp0[1], self.twiddles_packed[0]);
+        tmp0[2] = SseVector::mul_complex(tmp0[2], self.twiddles_packed[1]);
+        tmp0[3] = SseVector::mul_complex(tmp0[3], self.twiddles_packed[2]);
+        let [mid0, mid1] = transpose_complex_2x2_f32(tmp0[0], tmp0[1]);
+        let [mid8, mid9] = transpose_complex_2x2_f32(tmp0[2], tmp0[3]);
 
-        write_complex_to_array_strided!(out, buffer, 2, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15});
+        let mut tmp1 = self.bf8.bf4.perform_parallel_fft_direct(load(2));
+        tmp1[1] = SseVector::mul_complex(tmp1[1], self.twiddles_packed[3]);
+        tmp1[2] = SseVector::mul_complex(tmp1[2], self.twiddles_packed[4]);
+        tmp1[3] = SseVector::mul_complex(tmp1[3], self.twiddles_packed[5]);
+        let [mid2, mid3] = transpose_complex_2x2_f32(tmp1[0], tmp1[1]);
+        let [mid10, mid11] = transpose_complex_2x2_f32(tmp1[2], tmp1[3]);
+
+        let mut tmp2 = self.bf8.bf4.perform_parallel_fft_direct(load(4));
+        tmp2[1] = SseVector::mul_complex(tmp2[1], self.twiddles_packed[6]);
+        tmp2[2] = SseVector::mul_complex(tmp2[2], self.twiddles_packed[7]);
+        tmp2[3] = SseVector::mul_complex(tmp2[3], self.twiddles_packed[8]);
+        let [mid4, mid5] = transpose_complex_2x2_f32(tmp2[0], tmp2[1]);
+        let [mid12, mid13] = transpose_complex_2x2_f32(tmp2[2], tmp2[3]);
+
+        let mut tmp3 = self.bf8.bf4.perform_parallel_fft_direct(load(6));
+        tmp3[1] = SseVector::mul_complex(tmp3[1], self.twiddles_packed[9]);
+        tmp3[2] = SseVector::mul_complex(tmp3[2], self.twiddles_packed[10]);
+        tmp3[3] = SseVector::mul_complex(tmp3[3], self.twiddles_packed[11]);
+        let [mid6, mid7] = transpose_complex_2x2_f32(tmp3[0], tmp3[1]);
+        let [mid14, mid15] = transpose_complex_2x2_f32(tmp3[2], tmp3[3]);
+
+        // step 4 and 5: transpose and cross FFTs
+        let mut store = |i, vectors: [__m128; 8]| {
+            buffer.store_complex(vectors[0], i);
+            buffer.store_complex(vectors[1], i + 4);
+            buffer.store_complex(vectors[2], i + 8);
+            buffer.store_complex(vectors[3], i + 12);
+            buffer.store_complex(vectors[4], i + 16);
+            buffer.store_complex(vectors[5], i + 20);
+            buffer.store_complex(vectors[6], i + 24);
+            buffer.store_complex(vectors[7], i + 28);
+        };
+
+        let out0 = self.bf8.perform_parallel_fft_direct([mid0, mid1, mid2, mid3, mid4, mid5, mid6, mid7]);
+        store(0, out0);
+
+        let out1 = self.bf8.perform_parallel_fft_direct([mid8, mid9, mid10, mid11, mid12, mid13, mid14, mid15]);
+        store(2, out1);
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SseArrayMut<f32>) {
-        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62});
+        let load = |i: usize| {
+            let [a0, a1] = transpose_complex_2x2_f32(buffer.load_complex(i + 0), buffer.load_complex(i + 32));
+            let [b0, b1] = transpose_complex_2x2_f32(buffer.load_complex(i + 8), buffer.load_complex(i + 40));
+            let [c0, c1] = transpose_complex_2x2_f32(buffer.load_complex(i + 16), buffer.load_complex(i + 48));
+            let [d0, d1] = transpose_complex_2x2_f32(buffer.load_complex(i + 24), buffer.load_complex(i + 56));
+            [[a0, b0, c0, d0], [a1, b1, c1, d1]]
+        };
 
-        let values = interleave_complex_f32!(input_packed, 16, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15});
+        let [in0, in1] = load(0);
+        let tmp0 = self.bf8.bf4.perform_parallel_fft_direct(in0);
+        let mut tmp1 = self.bf8.bf4.perform_parallel_fft_direct(in1);
+        tmp1[1] = SseVector::mul_complex(tmp1[1], self.twiddle1);
+        tmp1[2] = SseVector::mul_complex(tmp1[2], self.twiddle2);
+        tmp1[3] = SseVector::mul_complex(tmp1[3], self.twiddle3);
 
-        let out = self.perform_parallel_fft_direct(values);
+        let [in2, in3] = load(2);
+        let mut tmp2 = self.bf8.bf4.perform_parallel_fft_direct(in2);
+        let mut tmp3 = self.bf8.bf4.perform_parallel_fft_direct(in3);
+        tmp2[1] = SseVector::mul_complex(tmp2[1], self.twiddle2);
+        tmp2[2] = self.bf8.bf4.rotate.rotate_both_45(tmp2[2]);
+        tmp2[3] = SseVector::mul_complex(tmp2[3], self.twiddle6);
+        tmp3[1] = SseVector::mul_complex(tmp3[1], self.twiddle3);
+        tmp3[2] = SseVector::mul_complex(tmp3[2], self.twiddle6);
+        tmp3[3] = SseVector::mul_complex(tmp3[3], self.twiddle9);
 
-        let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30});
+        let [in4, in5] = load(4);
+        let mut tmp4 = self.bf8.bf4.perform_parallel_fft_direct(in4);
+        let mut tmp5 = self.bf8.bf4.perform_parallel_fft_direct(in5);
+        tmp4[1] = self.bf8.bf4.rotate.rotate_both_45(tmp4[1]);
+        tmp4[2] = self.bf8.bf4.rotate.rotate_both(tmp4[2]);
+        tmp4[3] = self.bf8.bf4.rotate.rotate_both_135(tmp4[3]);
+        tmp5[1] = SseVector::mul_complex(tmp5[1], self.twiddle5);
+        tmp5[2] = SseVector::mul_complex(tmp5[2], self.twiddle10);
+        tmp5[3] = SseVector::mul_complex(tmp5[3], self.twiddle15);
 
-        write_complex_to_array_strided!(out_sorted, buffer, 2, {0,1,2,3,4,5,6,7,8,9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31 });
-    }
+        let [in6, in7] = load(6);
+        let mut tmp6 = self.bf8.bf4.perform_parallel_fft_direct(in6);
+        let mut tmp7 = self.bf8.bf4.perform_parallel_fft_direct(in7);
+        tmp6[1] = SseVector::mul_complex(tmp6[1], self.twiddle6);
+        tmp6[2] = self.bf8.bf4.rotate.rotate_both_135(tmp6[2]);
+        tmp6[3] = SseVector::mul_complex(tmp6[3], self.twiddle18);
+        tmp7[1] = SseVector::mul_complex(tmp7[1], self.twiddle7);
+        tmp7[2] = SseVector::mul_complex(tmp7[2], self.twiddle14);
+        tmp7[3] = SseVector::mul_complex(tmp7[3], self.twiddle21);
 
-    #[inline(always)]
-    unsafe fn perform_fft_direct(&self, input: [__m128; 16]) -> [__m128; 16] {
-        // we're going to hardcode a step of split radix
+        // step 4 and 5: transpose and cross FFTs
+        let mut store = |i, vectors_a: [__m128; 8], vectors_b: [__m128; 8]| {
+            for n in 0..8 {
+                let [a, b] = transpose_complex_2x2_f32(vectors_a[n], vectors_b[n]);
+                buffer.store_complex(a, i + n*4);
+                buffer.store_complex(b, i + n*4 + 32);
+            }
+        };
 
-        // step 1: copy and reorder the input into the scratch
-        let in0002 = extract_lo_lo_f32(input[0], input[1]);
-        let in0406 = extract_lo_lo_f32(input[2], input[3]);
-        let in0810 = extract_lo_lo_f32(input[4], input[5]);
-        let in1214 = extract_lo_lo_f32(input[6], input[7]);
-        let in1618 = extract_lo_lo_f32(input[8], input[9]);
-        let in2022 = extract_lo_lo_f32(input[10], input[11]);
-        let in2426 = extract_lo_lo_f32(input[12], input[13]);
-        let in2830 = extract_lo_lo_f32(input[14], input[15]);
+        let out0 = self.bf8.perform_parallel_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0], tmp6[0], tmp7[0]]);
+        let out1 = self.bf8.perform_parallel_fft_direct([tmp0[1], tmp1[1], tmp2[1], tmp3[1], tmp4[1], tmp5[1], tmp6[1], tmp7[1]]);
+        store(0, out0, out1);
 
-        let in0105 = extract_hi_hi_f32(input[0], input[2]);
-        let in0913 = extract_hi_hi_f32(input[4], input[6]);
-        let in1721 = extract_hi_hi_f32(input[8], input[10]);
-        let in2529 = extract_hi_hi_f32(input[12], input[14]);
-
-        let in3103 = extract_hi_hi_f32(input[15], input[1]);
-        let in0711 = extract_hi_hi_f32(input[3], input[5]);
-        let in1519 = extract_hi_hi_f32(input[7], input[9]);
-        let in2327 = extract_hi_hi_f32(input[11], input[13]);
-
-        let in_evens = [
-            in0002, in0406, in0810, in1214, in1618, in2022, in2426, in2830,
-        ];
-
-        // step 2: column FFTs
-        let evens = self.bf16.perform_fft_direct(in_evens);
-        let mut odds1 = self
-            .bf8
-            .perform_fft_direct([in0105, in0913, in1721, in2529]);
-        let mut odds3 = self
-            .bf8
-            .perform_fft_direct([in3103, in0711, in1519, in2327]);
-
-        // step 3: apply twiddle factors
-        odds1[0] = SseVector::mul_complex(odds1[0], self.twiddle01);
-        odds3[0] = SseVector::mul_complex(odds3[0], self.twiddle01conj);
-
-        odds1[1] = SseVector::mul_complex(odds1[1], self.twiddle23);
-        odds3[1] = SseVector::mul_complex(odds3[1], self.twiddle23conj);
-
-        odds1[2] = SseVector::mul_complex(odds1[2], self.twiddle45);
-        odds3[2] = SseVector::mul_complex(odds3[2], self.twiddle45conj);
-
-        odds1[3] = SseVector::mul_complex(odds1[3], self.twiddle67);
-        odds3[3] = SseVector::mul_complex(odds3[3], self.twiddle67conj);
-
-        // step 4: cross FFTs
-        let mut temp0 = parallel_fft2_interleaved_f32(odds1[0], odds3[0]);
-        let mut temp1 = parallel_fft2_interleaved_f32(odds1[1], odds3[1]);
-        let mut temp2 = parallel_fft2_interleaved_f32(odds1[2], odds3[2]);
-        let mut temp3 = parallel_fft2_interleaved_f32(odds1[3], odds3[3]);
-
-        // apply the butterfly 4 twiddle factor, which is just a rotation
-        temp0[1] = self.rotate90.rotate_both(temp0[1]);
-        temp1[1] = self.rotate90.rotate_both(temp1[1]);
-        temp2[1] = self.rotate90.rotate_both(temp2[1]);
-        temp3[1] = self.rotate90.rotate_both(temp3[1]);
-
-        //step 5: copy/add/subtract data back to buffer
-        [
-            _mm_add_ps(evens[0], temp0[0]),
-            _mm_add_ps(evens[1], temp1[0]),
-            _mm_add_ps(evens[2], temp2[0]),
-            _mm_add_ps(evens[3], temp3[0]),
-            _mm_add_ps(evens[4], temp0[1]),
-            _mm_add_ps(evens[5], temp1[1]),
-            _mm_add_ps(evens[6], temp2[1]),
-            _mm_add_ps(evens[7], temp3[1]),
-            _mm_sub_ps(evens[0], temp0[0]),
-            _mm_sub_ps(evens[1], temp1[0]),
-            _mm_sub_ps(evens[2], temp2[0]),
-            _mm_sub_ps(evens[3], temp3[0]),
-            _mm_sub_ps(evens[4], temp0[1]),
-            _mm_sub_ps(evens[5], temp1[1]),
-            _mm_sub_ps(evens[6], temp2[1]),
-            _mm_sub_ps(evens[7], temp3[1]),
-        ]
-    }
-
-    #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_direct(&self, input: [__m128; 32]) -> [__m128; 32] {
-        // we're going to hardcode a step of split radix
-
-        // step 1: copy and reorder the  input into the scratch
-        // and
-        // step 2: column FFTs
-        let evens = self.bf16.perform_parallel_fft_direct([
-            input[0], input[2], input[4], input[6], input[8], input[10], input[12], input[14],
-            input[16], input[18], input[20], input[22], input[24], input[26], input[28], input[30],
-        ]);
-        let mut odds1 = self.bf8.perform_parallel_fft_direct([
-            input[1], input[5], input[9], input[13], input[17], input[21], input[25], input[29],
-        ]);
-        let mut odds3 = self.bf8.perform_parallel_fft_direct([
-            input[31], input[3], input[7], input[11], input[15], input[19], input[23], input[27],
-        ]);
-
-        // step 3: apply twiddle factors
-        odds1[1] = SseVector::mul_complex(odds1[1], self.twiddle1);
-        odds3[1] = SseVector::mul_complex(odds3[1], self.twiddle1c);
-
-        odds1[2] = SseVector::mul_complex(odds1[2], self.twiddle2);
-        odds3[2] = SseVector::mul_complex(odds3[2], self.twiddle2c);
-
-        odds1[3] = SseVector::mul_complex(odds1[3], self.twiddle3);
-        odds3[3] = SseVector::mul_complex(odds3[3], self.twiddle3c);
-
-        odds1[4] = SseVector::mul_complex(odds1[4], self.twiddle4);
-        odds3[4] = SseVector::mul_complex(odds3[4], self.twiddle4c);
-
-        odds1[5] = SseVector::mul_complex(odds1[5], self.twiddle5);
-        odds3[5] = SseVector::mul_complex(odds3[5], self.twiddle5c);
-
-        odds1[6] = SseVector::mul_complex(odds1[6], self.twiddle6);
-        odds3[6] = SseVector::mul_complex(odds3[6], self.twiddle6c);
-
-        odds1[7] = SseVector::mul_complex(odds1[7], self.twiddle7);
-        odds3[7] = SseVector::mul_complex(odds3[7], self.twiddle7c);
-
-        // step 4: cross FFTs
-        let mut temp0 = parallel_fft2_interleaved_f32(odds1[0], odds3[0]);
-        let mut temp1 = parallel_fft2_interleaved_f32(odds1[1], odds3[1]);
-        let mut temp2 = parallel_fft2_interleaved_f32(odds1[2], odds3[2]);
-        let mut temp3 = parallel_fft2_interleaved_f32(odds1[3], odds3[3]);
-        let mut temp4 = parallel_fft2_interleaved_f32(odds1[4], odds3[4]);
-        let mut temp5 = parallel_fft2_interleaved_f32(odds1[5], odds3[5]);
-        let mut temp6 = parallel_fft2_interleaved_f32(odds1[6], odds3[6]);
-        let mut temp7 = parallel_fft2_interleaved_f32(odds1[7], odds3[7]);
-
-        // apply the butterfly 4 twiddle factor, which is just a rotation
-        temp0[1] = self.rotate90.rotate_both(temp0[1]);
-        temp1[1] = self.rotate90.rotate_both(temp1[1]);
-        temp2[1] = self.rotate90.rotate_both(temp2[1]);
-        temp3[1] = self.rotate90.rotate_both(temp3[1]);
-        temp4[1] = self.rotate90.rotate_both(temp4[1]);
-        temp5[1] = self.rotate90.rotate_both(temp5[1]);
-        temp6[1] = self.rotate90.rotate_both(temp6[1]);
-        temp7[1] = self.rotate90.rotate_both(temp7[1]);
-
-        //step 5: copy/add/subtract data back to buffer
-        [
-            _mm_add_ps(evens[0], temp0[0]),
-            _mm_add_ps(evens[1], temp1[0]),
-            _mm_add_ps(evens[2], temp2[0]),
-            _mm_add_ps(evens[3], temp3[0]),
-            _mm_add_ps(evens[4], temp4[0]),
-            _mm_add_ps(evens[5], temp5[0]),
-            _mm_add_ps(evens[6], temp6[0]),
-            _mm_add_ps(evens[7], temp7[0]),
-            _mm_add_ps(evens[8], temp0[1]),
-            _mm_add_ps(evens[9], temp1[1]),
-            _mm_add_ps(evens[10], temp2[1]),
-            _mm_add_ps(evens[11], temp3[1]),
-            _mm_add_ps(evens[12], temp4[1]),
-            _mm_add_ps(evens[13], temp5[1]),
-            _mm_add_ps(evens[14], temp6[1]),
-            _mm_add_ps(evens[15], temp7[1]),
-            _mm_sub_ps(evens[0], temp0[0]),
-            _mm_sub_ps(evens[1], temp1[0]),
-            _mm_sub_ps(evens[2], temp2[0]),
-            _mm_sub_ps(evens[3], temp3[0]),
-            _mm_sub_ps(evens[4], temp4[0]),
-            _mm_sub_ps(evens[5], temp5[0]),
-            _mm_sub_ps(evens[6], temp6[0]),
-            _mm_sub_ps(evens[7], temp7[0]),
-            _mm_sub_ps(evens[8], temp0[1]),
-            _mm_sub_ps(evens[9], temp1[1]),
-            _mm_sub_ps(evens[10], temp2[1]),
-            _mm_sub_ps(evens[11], temp3[1]),
-            _mm_sub_ps(evens[12], temp4[1]),
-            _mm_sub_ps(evens[13], temp5[1]),
-            _mm_sub_ps(evens[14], temp6[1]),
-            _mm_sub_ps(evens[15], temp7[1]),
-        ]
+        let out2 = self.bf8.perform_parallel_fft_direct([tmp0[2], tmp1[2], tmp2[2], tmp3[2], tmp4[2], tmp5[2], tmp6[2], tmp7[2]]);
+        let out3 = self.bf8.perform_parallel_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3], tmp6[3], tmp7[3]]);
+        store(2, out2, out3);
     }
 }
 
@@ -3362,211 +3014,143 @@ impl<T: FftNum> SseF32Butterfly32<T> {
 //
 
 pub struct SseF64Butterfly32<T> {
-    direction: FftDirection,
     bf8: SseF64Butterfly8<T>,
-    bf16: SseF64Butterfly16<T>,
-    rotate90: Rotate90F64,
     twiddle1: __m128d,
     twiddle2: __m128d,
     twiddle3: __m128d,
-    twiddle4: __m128d,
     twiddle5: __m128d,
     twiddle6: __m128d,
     twiddle7: __m128d,
-    twiddle1c: __m128d,
-    twiddle2c: __m128d,
-    twiddle3c: __m128d,
-    twiddle4c: __m128d,
-    twiddle5c: __m128d,
-    twiddle6c: __m128d,
-    twiddle7c: __m128d,
+    twiddle9: __m128d,
+    twiddle10: __m128d,
+    twiddle14: __m128d,
+    twiddle15: __m128d,
+    twiddle18: __m128d,
+    twiddle21: __m128d,
 }
 
 boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly32, 32, |this: &SseF64Butterfly32<_>| this
-    .direction);
+    .bf8.bf4.direction);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly32, 32, |this: &SseF64Butterfly32<_>| this
-    .direction);
+    .bf8.bf4.direction);
 impl<T: FftNum> SseF64Butterfly32<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let bf8 = SseF64Butterfly8::new(direction);
-        let bf16 = SseF64Butterfly16::new(direction);
-        let rotate90 = if direction == FftDirection::Inverse {
-            Rotate90F64::new(true)
-        } else {
-            Rotate90F64::new(false)
-        };
-        let twiddle1 =
-            unsafe { _mm_loadu_pd(&twiddles::compute_twiddle(1, 32, direction).re as *const f64) };
-        let twiddle2 =
-            unsafe { _mm_loadu_pd(&twiddles::compute_twiddle(2, 32, direction).re as *const f64) };
-        let twiddle3 =
-            unsafe { _mm_loadu_pd(&twiddles::compute_twiddle(3, 32, direction).re as *const f64) };
-        let twiddle4 =
-            unsafe { _mm_loadu_pd(&twiddles::compute_twiddle(4, 32, direction).re as *const f64) };
-        let twiddle5 =
-            unsafe { _mm_loadu_pd(&twiddles::compute_twiddle(5, 32, direction).re as *const f64) };
-        let twiddle6 =
-            unsafe { _mm_loadu_pd(&twiddles::compute_twiddle(6, 32, direction).re as *const f64) };
-        let twiddle7 =
-            unsafe { _mm_loadu_pd(&twiddles::compute_twiddle(7, 32, direction).re as *const f64) };
-        let twiddle1c = unsafe {
-            _mm_loadu_pd(&twiddles::compute_twiddle(1, 32, direction).conj().re as *const f64)
-        };
-        let twiddle2c = unsafe {
-            _mm_loadu_pd(&twiddles::compute_twiddle(2, 32, direction).conj().re as *const f64)
-        };
-        let twiddle3c = unsafe {
-            _mm_loadu_pd(&twiddles::compute_twiddle(3, 32, direction).conj().re as *const f64)
-        };
-        let twiddle4c = unsafe {
-            _mm_loadu_pd(&twiddles::compute_twiddle(4, 32, direction).conj().re as *const f64)
-        };
-        let twiddle5c = unsafe {
-            _mm_loadu_pd(&twiddles::compute_twiddle(5, 32, direction).conj().re as *const f64)
-        };
-        let twiddle6c = unsafe {
-            _mm_loadu_pd(&twiddles::compute_twiddle(6, 32, direction).conj().re as *const f64)
-        };
-        let twiddle7c = unsafe {
-            _mm_loadu_pd(&twiddles::compute_twiddle(7, 32, direction).conj().re as *const f64)
-        };
-
-        Self {
-            direction,
-            bf8,
-            bf16,
-            rotate90,
-            twiddle1,
-            twiddle2,
-            twiddle3,
-            twiddle4,
-            twiddle5,
-            twiddle6,
-            twiddle7,
-            twiddle1c,
-            twiddle2c,
-            twiddle3c,
-            twiddle4c,
-            twiddle5c,
-            twiddle6c,
-            twiddle7c,
+        let tw1: Complex<f64> = twiddles::compute_twiddle(1, 32, direction);
+        let tw2: Complex<f64> = twiddles::compute_twiddle(2, 32, direction);
+        let tw3: Complex<f64> = twiddles::compute_twiddle(3, 32, direction);
+        let tw5: Complex<f64> = twiddles::compute_twiddle(5, 32, direction);
+        let tw6: Complex<f64> = twiddles::compute_twiddle(6, 32, direction);
+        let tw7: Complex<f64> = twiddles::compute_twiddle(7, 32, direction);
+        let tw9: Complex<f64> = twiddles::compute_twiddle(9, 32, direction);
+        let tw10: Complex<f64> = twiddles::compute_twiddle(10, 32, direction);
+        let tw14: Complex<f64> = twiddles::compute_twiddle(14, 32, direction);
+        let tw15: Complex<f64> = twiddles::compute_twiddle(15, 32, direction);
+        let tw18: Complex<f64> = twiddles::compute_twiddle(18, 32, direction);
+        let tw21: Complex<f64> = twiddles::compute_twiddle(21, 32, direction);
+       
+        unsafe {
+            Self {
+                bf8: SseF64Butterfly8::new(direction),
+                twiddle1: pack_64(tw1),
+                twiddle2: pack_64(tw2),
+                twiddle3: pack_64(tw3),
+                twiddle5: pack_64(tw5),
+                twiddle6: pack_64(tw6),
+                twiddle7: pack_64(tw7),
+                twiddle9: pack_64(tw9),
+                twiddle10: pack_64(tw10),
+                twiddle14: pack_64(tw14),
+                twiddle15: pack_64(tw15),
+                twiddle18: pack_64(tw18),
+                twiddle21: pack_64(tw21),
+            }
         }
     }
 
     #[inline(always)]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl SseArrayMut<f64>) {
-        let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31});
-
-        let out = self.perform_fft_direct(values);
-
-        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31});
-    }
-
-    #[inline(always)]
-    unsafe fn perform_fft_direct(&self, input: [__m128d; 32]) -> [__m128d; 32] {
-        // we're going to hardcode a step of split radix
-
-        // step 1: copy and reorder the  input into the scratch
+        // we're going to hardcode a step of 8x4 mixed radix
+        // step 1: transpose (skipped since the vectors mean our data is already in the correct format)
         // and
         // step 2: column FFTs
-        let evens = self.bf16.perform_fft_direct([
-            input[0], input[2], input[4], input[6], input[8], input[10], input[12], input[14],
-            input[16], input[18], input[20], input[22], input[24], input[26], input[28], input[30],
-        ]);
-        let mut odds1 = self.bf8.perform_fft_direct([
-            input[1], input[5], input[9], input[13], input[17], input[21], input[25], input[29],
-        ]);
-        let mut odds3 = self.bf8.perform_fft_direct([
-            input[31], input[3], input[7], input[11], input[15], input[19], input[23], input[27],
-        ]);
+        // and
+        // step 3: twiddle factors
+        let load = |i| [
+            buffer.load_complex(i),
+            buffer.load_complex(i + 8),
+            buffer.load_complex(i + 16),
+            buffer.load_complex(i + 24),
+        ];
 
-        // step 3: apply twiddle factors
-        odds1[1] = SseVector::mul_complex(odds1[1], self.twiddle1);
-        odds3[1] = SseVector::mul_complex(odds3[1], self.twiddle1c);
+        let mut tmp1 = self.bf8.bf4.perform_fft_direct(load(1));
+        tmp1[1] = SseVector::mul_complex(tmp1[1], self.twiddle1);
+        tmp1[2] = SseVector::mul_complex(tmp1[2], self.twiddle2);
+        tmp1[3] = SseVector::mul_complex(tmp1[3], self.twiddle3);
 
-        odds1[2] = SseVector::mul_complex(odds1[2], self.twiddle2);
-        odds3[2] = SseVector::mul_complex(odds3[2], self.twiddle2c);
+        let mut tmp2 = self.bf8.bf4.perform_fft_direct(load(2));
+        tmp2[1] = SseVector::mul_complex(tmp2[1], self.twiddle2);
+        tmp2[2] = self.bf8.bf4.rotate.rotate_45(tmp2[2]);
+        tmp2[3] = SseVector::mul_complex(tmp2[3], self.twiddle6);
 
-        odds1[3] = SseVector::mul_complex(odds1[3], self.twiddle3);
-        odds3[3] = SseVector::mul_complex(odds3[3], self.twiddle3c);
+        let mut tmp3 = self.bf8.bf4.perform_fft_direct(load(3));
+        tmp3[1] = SseVector::mul_complex(tmp3[1], self.twiddle3);
+        tmp3[2] = SseVector::mul_complex(tmp3[2], self.twiddle6);
+        tmp3[3] = SseVector::mul_complex(tmp3[3], self.twiddle9);
 
-        odds1[4] = SseVector::mul_complex(odds1[4], self.twiddle4);
-        odds3[4] = SseVector::mul_complex(odds3[4], self.twiddle4c);
+        let mut tmp5 = self.bf8.bf4.perform_fft_direct(load(5));
+        tmp5[1] = SseVector::mul_complex(tmp5[1], self.twiddle5);
+        tmp5[2] = SseVector::mul_complex(tmp5[2], self.twiddle10);
+        tmp5[3] = SseVector::mul_complex(tmp5[3], self.twiddle15);
 
-        odds1[5] = SseVector::mul_complex(odds1[5], self.twiddle5);
-        odds3[5] = SseVector::mul_complex(odds3[5], self.twiddle5c);
+        let mut tmp6 = self.bf8.bf4.perform_fft_direct(load(6));
+        tmp6[1] = SseVector::mul_complex(tmp6[1], self.twiddle6);
+        tmp6[2] = self.bf8.bf4.rotate.rotate_135(tmp6[2]);
+        tmp6[3] = SseVector::mul_complex(tmp6[3], self.twiddle18);
 
-        odds1[6] = SseVector::mul_complex(odds1[6], self.twiddle6);
-        odds3[6] = SseVector::mul_complex(odds3[6], self.twiddle6c);
+        let mut tmp7 = self.bf8.bf4.perform_fft_direct(load(7));
+        tmp7[1] = SseVector::mul_complex(tmp7[1], self.twiddle7);
+        tmp7[2] = SseVector::mul_complex(tmp7[2], self.twiddle14);
+        tmp7[3] = SseVector::mul_complex(tmp7[3], self.twiddle21);
 
-        odds1[7] = SseVector::mul_complex(odds1[7], self.twiddle7);
-        odds3[7] = SseVector::mul_complex(odds3[7], self.twiddle7c);
+        let mut tmp4 = self.bf8.bf4.perform_fft_direct(load(4));
+        tmp4[1] = self.bf8.bf4.rotate.rotate_45(tmp4[1]);
+        tmp4[2] = self.bf8.bf4.rotate.rotate(tmp4[2]);
+        tmp4[3] = self.bf8.bf4.rotate.rotate_135(tmp4[3]);
 
-        // step 4: cross FFTs
-        let mut temp0 = solo_fft2_f64(odds1[0], odds3[0]);
-        let mut temp1 = solo_fft2_f64(odds1[1], odds3[1]);
-        let mut temp2 = solo_fft2_f64(odds1[2], odds3[2]);
-        let mut temp3 = solo_fft2_f64(odds1[3], odds3[3]);
-        let mut temp4 = solo_fft2_f64(odds1[4], odds3[4]);
-        let mut temp5 = solo_fft2_f64(odds1[5], odds3[5]);
-        let mut temp6 = solo_fft2_f64(odds1[6], odds3[6]);
-        let mut temp7 = solo_fft2_f64(odds1[7], odds3[7]);
+        let tmp0 = self.bf8.bf4.perform_fft_direct(load(0));
 
-        // apply the butterfly 4 twiddle factor, which is just a rotation
-        temp0[1] = self.rotate90.rotate(temp0[1]);
-        temp1[1] = self.rotate90.rotate(temp1[1]);
-        temp2[1] = self.rotate90.rotate(temp2[1]);
-        temp3[1] = self.rotate90.rotate(temp3[1]);
-        temp4[1] = self.rotate90.rotate(temp4[1]);
-        temp5[1] = self.rotate90.rotate(temp5[1]);
-        temp6[1] = self.rotate90.rotate(temp6[1]);
-        temp7[1] = self.rotate90.rotate(temp7[1]);
+        // step 4 and 5: transpose and cross FFTs
+        let mut store = |i, vectors: [__m128d; 8]| {
+            buffer.store_complex(vectors[0], i);
+            buffer.store_complex(vectors[1], i + 4);
+            buffer.store_complex(vectors[2], i + 8);
+            buffer.store_complex(vectors[3], i + 12);
+            buffer.store_complex(vectors[4], i + 16);
+            buffer.store_complex(vectors[5], i + 20);
+            buffer.store_complex(vectors[6], i + 24);
+            buffer.store_complex(vectors[7], i + 28);
+        };
 
-        //step 5: copy/add/subtract data back to buffer
-        [
-            _mm_add_pd(evens[0], temp0[0]),
-            _mm_add_pd(evens[1], temp1[0]),
-            _mm_add_pd(evens[2], temp2[0]),
-            _mm_add_pd(evens[3], temp3[0]),
-            _mm_add_pd(evens[4], temp4[0]),
-            _mm_add_pd(evens[5], temp5[0]),
-            _mm_add_pd(evens[6], temp6[0]),
-            _mm_add_pd(evens[7], temp7[0]),
-            _mm_add_pd(evens[8], temp0[1]),
-            _mm_add_pd(evens[9], temp1[1]),
-            _mm_add_pd(evens[10], temp2[1]),
-            _mm_add_pd(evens[11], temp3[1]),
-            _mm_add_pd(evens[12], temp4[1]),
-            _mm_add_pd(evens[13], temp5[1]),
-            _mm_add_pd(evens[14], temp6[1]),
-            _mm_add_pd(evens[15], temp7[1]),
-            _mm_sub_pd(evens[0], temp0[0]),
-            _mm_sub_pd(evens[1], temp1[0]),
-            _mm_sub_pd(evens[2], temp2[0]),
-            _mm_sub_pd(evens[3], temp3[0]),
-            _mm_sub_pd(evens[4], temp4[0]),
-            _mm_sub_pd(evens[5], temp5[0]),
-            _mm_sub_pd(evens[6], temp6[0]),
-            _mm_sub_pd(evens[7], temp7[0]),
-            _mm_sub_pd(evens[8], temp0[1]),
-            _mm_sub_pd(evens[9], temp1[1]),
-            _mm_sub_pd(evens[10], temp2[1]),
-            _mm_sub_pd(evens[11], temp3[1]),
-            _mm_sub_pd(evens[12], temp4[1]),
-            _mm_sub_pd(evens[13], temp5[1]),
-            _mm_sub_pd(evens[14], temp6[1]),
-            _mm_sub_pd(evens[15], temp7[1]),
-        ]
+        let out0 = self.bf8.perform_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0], tmp6[0], tmp7[0]]);
+        store(0, out0);
+
+        let out1 = self.bf8.perform_fft_direct([tmp0[1], tmp1[1], tmp2[1], tmp3[1], tmp4[1], tmp5[1], tmp6[1], tmp7[1]]);
+        store(1, out1);
+
+        let out2 = self.bf8.perform_fft_direct([tmp0[2], tmp1[2], tmp2[2], tmp3[2], tmp4[2], tmp5[2], tmp6[2], tmp7[2]]);
+        store(2, out2);
+        
+        let out3 = self.bf8.perform_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3], tmp6[3], tmp7[3]]);
+        store(3, out3);
     }
 }
 
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use crate::algorithm::Dft;
-    use crate::test_utils::{check_fft_algorithm, compare_vectors};
+    use crate::{algorithm::Dft, test_utils::{check_fft_algorithm, compare_vectors}};
 
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
@@ -3653,7 +3237,7 @@ mod unit_tests {
 
             dft.process(&mut val_a);
             dft.process(&mut val_b);
-            let res_both = bf4.perform_parallel_fft_direct(p1, p2, p3, p4);
+            let res_both = bf4.perform_parallel_fft_direct([p1, p2, p3, p4]);
 
             let res = std::mem::transmute::<[__m128; 4], [Complex<f32>; 8]>(res_both);
             let sse_res_a = [res[0], res[2], res[4], res[6]];
