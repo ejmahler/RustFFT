@@ -158,6 +158,9 @@ pub trait WasmVector: Copy + Debug + Send + Sync {
     unsafe fn store_partial_lo_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
     unsafe fn store_partial_hi_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
 
+    // math ops
+    unsafe fn neg(a: Self) -> Self;
+
     /// Generates a chunk of twiddle factors starting at (X,Y) and incrementing X `COMPLEX_PER_VECTOR` times.
     /// The result will be [twiddle(x*y, len), twiddle((x+1)*y, len), twiddle((x+2)*y, len), ...] for as many complex numbers fit in a vector
     unsafe fn make_mixedradix_twiddle_chunk(
@@ -220,6 +223,11 @@ impl WasmVector for WasmVector32 {
     #[inline(always)]
     unsafe fn store_partial_hi_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
         v128_store64_lane::<1>(data.0, ptr as *mut u64);
+    }
+
+    #[inline(always)]
+    unsafe fn neg(a: Self) -> Self {
+        Self(f32x4_neg(a.0))
     }
 
     #[inline(always)]
@@ -330,6 +338,11 @@ impl WasmVector for WasmVector64 {
     #[inline(always)]
     unsafe fn store_partial_hi_complex(_ptr: *mut Complex<Self::ScalarType>, _data: Self) {
         unimplemented!("Impossible to do a partial store of complex f64's");
+    }
+
+    #[inline(always)]
+    unsafe fn neg(a: Self) -> Self {
+        Self(f64x2_neg(a.0))
     }
 
     #[inline(always)]

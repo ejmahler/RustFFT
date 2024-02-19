@@ -37,6 +37,27 @@ impl Rotate90F32 {
     pub unsafe fn rotate_both(&self, values: v128) -> v128 {
         v128_xor(u32x4_shuffle::<1, 0, 3, 2>(values, values), self.sign_both)
     }
+
+    #[inline(always)]
+    pub unsafe fn rotate_both_45(&self, values: v128) -> v128 {
+        let rotated = self.rotate_both(values);
+        let sum = f32x4_add(rotated, values);
+        f32x4_mul(sum, f32x4_splat(0.5f32.sqrt()))
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_both_135(&self, values: v128) -> v128 {
+        let rotated = self.rotate_both(values);
+        let diff = f32x4_sub(rotated, values);
+        f32x4_mul(diff, f32x4_splat(0.5f32.sqrt()))
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_both_225(&self, values: v128) -> v128 {
+        let rotated = self.rotate_both(values);
+        let diff = f32x4_add(rotated, values);
+        f32x4_mul(diff, f32x4_splat(-(0.5f32.sqrt())))
+    }
 }
 
 /// Pack low (1st) complex
@@ -164,6 +185,27 @@ impl Rotate90F64 {
     #[inline(always)]
     pub unsafe fn rotate(&self, values: v128) -> v128 {
         v128_xor(u64x2_shuffle::<1, 0>(values, values), self.sign)
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_45(&self, values: v128) -> v128 {
+        let rotated = self.rotate(values);
+        let sum = f64x2_add(rotated, values);
+        f64x2_mul(sum, f64x2_splat(0.5f64.sqrt()))
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_135(&self, values: v128) -> v128 {
+        let rotated = self.rotate(values);
+        let diff = f64x2_sub(rotated, values);
+        f64x2_mul(diff, f64x2_splat(0.5f64.sqrt()))
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_225(&self, values: v128) -> v128 {
+        let rotated = self.rotate(values);
+        let diff = f64x2_add(rotated, values);
+        f64x2_mul(diff, f64x2_splat(-(0.5f64.sqrt())))
     }
 }
 
