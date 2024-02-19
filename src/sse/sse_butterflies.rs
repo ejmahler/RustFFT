@@ -23,7 +23,6 @@ unsafe fn pack_64(a: Complex<f64>) -> __m128d {
     _mm_set_pd(a.im, a.re)
 }
 
-
 #[allow(unused)]
 macro_rules! boilerplate_fft_sse_f32_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
@@ -1437,9 +1436,11 @@ pub struct SseF64Butterfly8<T> {
 }
 
 boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly8, 8, |this: &SseF64Butterfly8<_>| this
-    .bf4.direction);
+    .bf4
+    .direction);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly8, 8, |this: &SseF64Butterfly8<_>| this
-    .bf4.direction);
+    .bf4
+    .direction);
 impl<T: FftNum> SseF64Butterfly8<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -2293,12 +2294,11 @@ pub struct SseF32Butterfly16<T> {
     twiddle9: __m128,
 }
 
-boilerplate_fft_sse_f32_butterfly_noparallel!(
-    SseF32Butterfly16,
-    16,
-    |this: &SseF32Butterfly16<_>| this.bf4.direction
-);
-boilerplate_fft_sse_common_butterfly!(SseF32Butterfly16, 16, |this: &SseF32Butterfly16<_>| this.bf4
+boilerplate_fft_sse_f32_butterfly_noparallel!(SseF32Butterfly16, 16, |this: &SseF32Butterfly16<
+    _,
+>| this.bf4.direction);
+boilerplate_fft_sse_common_butterfly!(SseF32Butterfly16, 16, |this: &SseF32Butterfly16<_>| this
+    .bf4
     .direction);
 impl<T: FftNum> SseF32Butterfly16<T> {
     pub fn new(direction: FftDirection) -> Self {
@@ -2310,7 +2310,7 @@ impl<T: FftNum> SseF32Butterfly16<T> {
         let tw4: Complex<f32> = twiddles::compute_twiddle(4, 16, direction);
         let tw6: Complex<f32> = twiddles::compute_twiddle(6, 16, direction);
         let tw9: Complex<f32> = twiddles::compute_twiddle(9, 16, direction);
-       
+
         unsafe {
             Self {
                 bf4: SseF32Butterfly4::new(direction),
@@ -2337,15 +2337,17 @@ impl<T: FftNum> SseF32Butterfly16<T> {
         // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
         // But to reduce the number of times registers get spilled, we have these optimizations:
         // 1: Load data as late as possible, not upfront
-        // 2: Once we're working with a piece of data, make as much progress as possible before moving on 
+        // 2: Once we're working with a piece of data, make as much progress as possible before moving on
         //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
-        let load = |i| [
-            buffer.load_complex(i),
-            buffer.load_complex(i + 4),
-            buffer.load_complex(i + 8),
-            buffer.load_complex(i + 12),
-        ];
+        let load = |i| {
+            [
+                buffer.load_complex(i),
+                buffer.load_complex(i + 4),
+                buffer.load_complex(i + 8),
+                buffer.load_complex(i + 12),
+            ]
+        };
 
         // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors, and transpose
         let mut tmp0 = self.bf4.perform_parallel_fft_direct(load(0));
@@ -2370,10 +2372,14 @@ impl<T: FftNum> SseF32Butterfly16<T> {
             buffer.store_complex(vectors[3], i + 12);
         };
         // Size-4 FFTs down each pair of transposed columns, storing them as soon as we're done with them
-        let out0 = self.bf4.perform_parallel_fft_direct([mid0, mid1, mid2, mid3]);
+        let out0 = self
+            .bf4
+            .perform_parallel_fft_direct([mid0, mid1, mid2, mid3]);
         store(0, out0);
 
-        let out1 = self.bf4.perform_parallel_fft_direct([mid4, mid5, mid6, mid7]);
+        let out1 = self
+            .bf4
+            .perform_parallel_fft_direct([mid4, mid5, mid6, mid7]);
         store(2, out1);
     }
 
@@ -2384,14 +2390,18 @@ impl<T: FftNum> SseF32Butterfly16<T> {
         // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
         // But to reduce the number of times registers get spilled, we have these optimizations:
         // 1: Load data as late as possible, not upfront
-        // 2: Once we're working with a piece of data, make as much progress as possible before moving on 
+        // 2: Once we're working with a piece of data, make as much progress as possible before moving on
         //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i: usize| {
-            let [a0, a1] = transpose_complex_2x2_f32(buffer.load_complex(i + 0), buffer.load_complex(i + 16));
-            let [b0, b1] = transpose_complex_2x2_f32(buffer.load_complex(i + 4), buffer.load_complex(i + 20));
-            let [c0, c1] = transpose_complex_2x2_f32(buffer.load_complex(i + 8), buffer.load_complex(i + 24));
-            let [d0, d1] = transpose_complex_2x2_f32(buffer.load_complex(i + 12), buffer.load_complex(i + 28));
+            let [a0, a1] =
+                transpose_complex_2x2_f32(buffer.load_complex(i + 0), buffer.load_complex(i + 16));
+            let [b0, b1] =
+                transpose_complex_2x2_f32(buffer.load_complex(i + 4), buffer.load_complex(i + 20));
+            let [c0, c1] =
+                transpose_complex_2x2_f32(buffer.load_complex(i + 8), buffer.load_complex(i + 24));
+            let [d0, d1] =
+                transpose_complex_2x2_f32(buffer.load_complex(i + 12), buffer.load_complex(i + 28));
             [[a0, b0, c0, d0], [a1, b1, c1, d1]]
         };
 
@@ -2418,17 +2428,25 @@ impl<T: FftNum> SseF32Butterfly16<T> {
         let mut store = |i, values_a: [__m128; 4], values_b: [__m128; 4]| {
             for n in 0..4 {
                 let [a, b] = transpose_complex_2x2_f32(values_a[n], values_b[n]);
-                buffer.store_complex(a, i + n*4);
-                buffer.store_complex(b, i + n*4 + 16);
+                buffer.store_complex(a, i + n * 4);
+                buffer.store_complex(b, i + n * 4 + 16);
             }
         };
         // Size-4 FFTs down each pair of transposed columns, storing them as soon as we're done with them
-        let out0 = self.bf4.perform_parallel_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0]]);
-        let out1 = self.bf4.perform_parallel_fft_direct([tmp0[1], tmp1[1], tmp2[1], tmp3[1]]);
+        let out0 = self
+            .bf4
+            .perform_parallel_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0]]);
+        let out1 = self
+            .bf4
+            .perform_parallel_fft_direct([tmp0[1], tmp1[1], tmp2[1], tmp3[1]]);
         store(0, out0, out1);
 
-        let out2 = self.bf4.perform_parallel_fft_direct([tmp0[2], tmp1[2], tmp2[2], tmp3[2]]);
-        let out3 = self.bf4.perform_parallel_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3]]);
+        let out2 = self
+            .bf4
+            .perform_parallel_fft_direct([tmp0[2], tmp1[2], tmp2[2], tmp3[2]]);
+        let out3 = self
+            .bf4
+            .perform_parallel_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3]]);
         store(2, out2, out3);
     }
 }
@@ -2447,9 +2465,11 @@ pub struct SseF64Butterfly16<T> {
 }
 
 boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly16, 16, |this: &SseF64Butterfly16<_>| this
-    .bf4.direction);
+    .bf4
+    .direction);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly16, 16, |this: &SseF64Butterfly16<_>| this
-    .bf4.direction);
+    .bf4
+    .direction);
 impl<T: FftNum> SseF64Butterfly16<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -2457,7 +2477,7 @@ impl<T: FftNum> SseF64Butterfly16<T> {
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 16, direction);
         let tw3: Complex<f64> = twiddles::compute_twiddle(3, 16, direction);
         let tw9: Complex<f64> = twiddles::compute_twiddle(9, 16, direction);
-       
+
         unsafe {
             Self {
                 bf4: SseF64Butterfly4::new(direction),
@@ -2474,15 +2494,17 @@ impl<T: FftNum> SseF64Butterfly16<T> {
         // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
         // But to reduce the number of times registers get spilled, we have these optimizations:
         // 1: Load data as late as possible, not upfront
-        // 2: Once we're working with a piece of data, make as much progress as possible before moving on 
+        // 2: Once we're working with a piece of data, make as much progress as possible before moving on
         //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
-        let load = |i| [
-            buffer.load_complex(i),
-            buffer.load_complex(i + 4),
-            buffer.load_complex(i + 8),
-            buffer.load_complex(i + 12),
-        ];
+        let load = |i| {
+            [
+                buffer.load_complex(i),
+                buffer.load_complex(i + 4),
+                buffer.load_complex(i + 8),
+                buffer.load_complex(i + 12),
+            ]
+        };
 
         // For each column: load the data, apply our size-4 FFT, apply twiddle factors
         let mut tmp1 = self.bf4.perform_fft_direct(load(1));
@@ -2512,16 +2534,24 @@ impl<T: FftNum> SseF64Butterfly16<T> {
         };
 
         // Size-4 FFTs down each of our transposed columns, storing them as soon as we're done with them
-        let out0 = self.bf4.perform_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0]]);
+        let out0 = self
+            .bf4
+            .perform_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0]]);
         store(0, out0);
 
-        let out1 = self.bf4.perform_fft_direct([tmp0[1], tmp1[1], tmp2[1], tmp3[1]]);
+        let out1 = self
+            .bf4
+            .perform_fft_direct([tmp0[1], tmp1[1], tmp2[1], tmp3[1]]);
         store(1, out1);
 
-        let out2 = self.bf4.perform_fft_direct([tmp0[2], tmp1[2], tmp2[2], tmp3[2]]);
+        let out2 = self
+            .bf4
+            .perform_fft_direct([tmp0[2], tmp1[2], tmp2[2], tmp3[2]]);
         store(2, out2);
 
-        let out3 = self.bf4.perform_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3]]);
+        let out3 = self
+            .bf4
+            .perform_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3]]);
         store(3, out3);
     }
 }
@@ -2549,7 +2579,8 @@ boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly24, 24, |this: &SseF32Butterfl
     this.bf4.direction
 });
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly24, 24, |this: &SseF32Butterfly24<_>| this
-    .bf4.direction);
+    .bf4
+    .direction);
 impl<T: FftNum> SseF32Butterfly24<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -2597,15 +2628,17 @@ impl<T: FftNum> SseF32Butterfly24<T> {
         // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
         // 1: Load data as late as possible, not upfront
-        // 2: Once we're working with a piece of data, make as much progress as possible before moving on 
+        // 2: Once we're working with a piece of data, make as much progress as possible before moving on
         //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
-        let load = |i| [
-            buffer.load_complex(i),
-            buffer.load_complex(i + 6),
-            buffer.load_complex(i + 12),
-            buffer.load_complex(i + 18),
-        ];
+        let load = |i| {
+            [
+                buffer.load_complex(i),
+                buffer.load_complex(i + 6),
+                buffer.load_complex(i + 12),
+                buffer.load_complex(i + 18),
+            ]
+        };
 
         // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors, transpose
         let mut tmp1 = self.bf4.perform_parallel_fft_direct(load(2));
@@ -2640,10 +2673,14 @@ impl<T: FftNum> SseF32Butterfly24<T> {
         };
 
         // Size-6 FFTs down each pair of transposed columns, storing them as soon as we're done with them
-        let out0 = self.bf6.perform_parallel_fft_direct(mid0, mid1, mid2, mid3, mid4, mid5);
+        let out0 = self
+            .bf6
+            .perform_parallel_fft_direct(mid0, mid1, mid2, mid3, mid4, mid5);
         store(0, out0);
 
-        let out1 = self.bf6.perform_parallel_fft_direct(mid6, mid7, mid8, mid9, mid10, mid11);
+        let out1 = self
+            .bf6
+            .perform_parallel_fft_direct(mid6, mid7, mid8, mid9, mid10, mid11);
         store(2, out1);
     }
 
@@ -2653,14 +2690,18 @@ impl<T: FftNum> SseF32Butterfly24<T> {
         // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
         // 1: Load data as late as possible, not upfront
-        // 2: Once we're working with a piece of data, make as much progress as possible before moving on 
+        // 2: Once we're working with a piece of data, make as much progress as possible before moving on
         //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i: usize| {
-            let [a0, a1] = transpose_complex_2x2_f32(buffer.load_complex(i + 0), buffer.load_complex(i + 24));
-            let [b0, b1] = transpose_complex_2x2_f32(buffer.load_complex(i + 6), buffer.load_complex(i + 30));
-            let [c0, c1] = transpose_complex_2x2_f32(buffer.load_complex(i + 12), buffer.load_complex(i + 36));
-            let [d0, d1] = transpose_complex_2x2_f32(buffer.load_complex(i + 18), buffer.load_complex(i + 42));
+            let [a0, a1] =
+                transpose_complex_2x2_f32(buffer.load_complex(i + 0), buffer.load_complex(i + 24));
+            let [b0, b1] =
+                transpose_complex_2x2_f32(buffer.load_complex(i + 6), buffer.load_complex(i + 30));
+            let [c0, c1] =
+                transpose_complex_2x2_f32(buffer.load_complex(i + 12), buffer.load_complex(i + 36));
+            let [d0, d1] =
+                transpose_complex_2x2_f32(buffer.load_complex(i + 18), buffer.load_complex(i + 42));
             [[a0, b0, c0, d0], [a1, b1, c1, d1]]
         };
 
@@ -2696,18 +2737,26 @@ impl<T: FftNum> SseF32Butterfly24<T> {
         let mut store = |i, vectors_a: [__m128; 6], vectors_b: [__m128; 6]| {
             for n in 0..6 {
                 let [a, b] = transpose_complex_2x2_f32(vectors_a[n], vectors_b[n]);
-                buffer.store_complex(a, i + n*4);
-                buffer.store_complex(b, i + n*4 + 24);
+                buffer.store_complex(a, i + n * 4);
+                buffer.store_complex(b, i + n * 4 + 24);
             }
         };
 
         // Size-6 FFTs down each pair of transposed columns, storing them as soon as we're done with them
-        let out0 = self.bf6.perform_parallel_fft_direct(tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0]);
-        let out1 = self.bf6.perform_parallel_fft_direct(tmp0[1], tmp1[1], tmp2[1], tmp3[1], tmp4[1], tmp5[1]);
+        let out0 = self
+            .bf6
+            .perform_parallel_fft_direct(tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0]);
+        let out1 = self
+            .bf6
+            .perform_parallel_fft_direct(tmp0[1], tmp1[1], tmp2[1], tmp3[1], tmp4[1], tmp5[1]);
         store(0, out0, out1);
 
-        let out2 = self.bf6.perform_parallel_fft_direct(tmp0[2], tmp1[2], tmp2[2], tmp3[2], tmp4[2], tmp5[2]);
-        let out3 = self.bf6.perform_parallel_fft_direct(tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3]);
+        let out2 = self
+            .bf6
+            .perform_parallel_fft_direct(tmp0[2], tmp1[2], tmp2[2], tmp3[2], tmp4[2], tmp5[2]);
+        let out3 = self
+            .bf6
+            .perform_parallel_fft_direct(tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3]);
         store(2, out2, out3);
     }
 }
@@ -2734,7 +2783,8 @@ boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly24, 24, |this: &SseF64Butterfl
     this.bf4.direction
 });
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly24, 24, |this: &SseF64Butterfly24<_>| this
-    .bf4.direction);
+    .bf4
+    .direction);
 impl<T: FftNum> SseF64Butterfly24<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -2745,7 +2795,7 @@ impl<T: FftNum> SseF64Butterfly24<T> {
         let tw5: Complex<f64> = twiddles::compute_twiddle(5, 24, direction);
         let tw8: Complex<f64> = twiddles::compute_twiddle(8, 24, direction);
         let tw10: Complex<f64> = twiddles::compute_twiddle(10, 24, direction);
-       
+
         unsafe {
             Self {
                 bf4: SseF64Butterfly4::new(direction),
@@ -2766,15 +2816,17 @@ impl<T: FftNum> SseF64Butterfly24<T> {
         // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
         // 1: Load data as late as possible, not upfront
-        // 2: Once we're working with a piece of data, make as much progress as possible before moving on 
+        // 2: Once we're working with a piece of data, make as much progress as possible before moving on
         //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
-        let load = |i| [
-            buffer.load_complex(i),
-            buffer.load_complex(i + 6),
-            buffer.load_complex(i + 12),
-            buffer.load_complex(i + 18),
-        ];
+        let load = |i| {
+            [
+                buffer.load_complex(i),
+                buffer.load_complex(i + 6),
+                buffer.load_complex(i + 12),
+                buffer.load_complex(i + 18),
+            ]
+        };
 
         // For each column: load the data, apply our size-4 FFT, apply twiddle factors
         let mut tmp1 = self.bf4.perform_fft_direct(load(1));
@@ -2786,7 +2838,7 @@ impl<T: FftNum> SseF64Butterfly24<T> {
         tmp2[1] = SseVector::mul_complex(tmp2[1], self.twiddle2);
         tmp2[2] = SseVector::mul_complex(tmp2[2], self.twiddle4);
         tmp2[3] = self.bf4.rotate.rotate(tmp2[3]);
-        
+
         let mut tmp4 = self.bf4.perform_fft_direct(load(4));
         tmp4[1] = SseVector::mul_complex(tmp4[1], self.twiddle4);
         tmp4[2] = SseVector::mul_complex(tmp4[2], self.twiddle8);
@@ -2816,16 +2868,24 @@ impl<T: FftNum> SseF64Butterfly24<T> {
         };
 
         // Size-6 FFTs down each of our transposed columns, storing them as soon as we're done with them
-        let out0 = self.bf6.perform_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0]]);
+        let out0 = self
+            .bf6
+            .perform_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0]]);
         store(0, out0);
 
-        let out1 = self.bf6.perform_fft_direct([tmp0[1], tmp1[1], tmp2[1], tmp3[1], tmp4[1], tmp5[1]]);
+        let out1 = self
+            .bf6
+            .perform_fft_direct([tmp0[1], tmp1[1], tmp2[1], tmp3[1], tmp4[1], tmp5[1]]);
         store(1, out1);
 
-        let out2 = self.bf6.perform_fft_direct([tmp0[2], tmp1[2], tmp2[2], tmp3[2], tmp4[2], tmp5[2]]);
+        let out2 = self
+            .bf6
+            .perform_fft_direct([tmp0[2], tmp1[2], tmp2[2], tmp3[2], tmp4[2], tmp5[2]]);
         store(2, out2);
-        
-        let out3 = self.bf6.perform_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3]]);
+
+        let out3 = self
+            .bf6
+            .perform_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3]]);
         store(3, out3);
     }
 }
@@ -2855,9 +2915,13 @@ pub struct SseF32Butterfly32<T> {
 }
 
 boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly32, 32, |this: &SseF32Butterfly32<_>| this
-    .bf8.bf4.direction);
+    .bf8
+    .bf4
+    .direction);
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly32, 32, |this: &SseF32Butterfly32<_>| this
-    .bf8.bf4.direction);
+    .bf8
+    .bf4
+    .direction);
 impl<T: FftNum> SseF32Butterfly32<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -2917,15 +2981,17 @@ impl<T: FftNum> SseF32Butterfly32<T> {
         // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
         // 1: Load data as late as possible, not upfront
-        // 2: Once we're working with a piece of data, make as much progress as possible before moving on 
+        // 2: Once we're working with a piece of data, make as much progress as possible before moving on
         //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
-        let load = |i| [
-            buffer.load_complex(i),
-            buffer.load_complex(i + 8),
-            buffer.load_complex(i + 16),
-            buffer.load_complex(i + 24),
-        ];
+        let load = |i| {
+            [
+                buffer.load_complex(i),
+                buffer.load_complex(i + 8),
+                buffer.load_complex(i + 16),
+                buffer.load_complex(i + 24),
+            ]
+        };
 
         // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors
         let mut tmp0 = self.bf8.bf4.perform_parallel_fft_direct(load(0));
@@ -2969,10 +3035,14 @@ impl<T: FftNum> SseF32Butterfly32<T> {
         };
 
         // Size-8 FFTs down each pair of transposed columns, storing them as soon as we're done with them
-        let out0 = self.bf8.perform_parallel_fft_direct([mid0, mid1, mid2, mid3, mid4, mid5, mid6, mid7]);
+        let out0 = self
+            .bf8
+            .perform_parallel_fft_direct([mid0, mid1, mid2, mid3, mid4, mid5, mid6, mid7]);
         store(0, out0);
 
-        let out1 = self.bf8.perform_parallel_fft_direct([mid8, mid9, mid10, mid11, mid12, mid13, mid14, mid15]);
+        let out1 = self
+            .bf8
+            .perform_parallel_fft_direct([mid8, mid9, mid10, mid11, mid12, mid13, mid14, mid15]);
         store(2, out1);
     }
 
@@ -2982,14 +3052,18 @@ impl<T: FftNum> SseF32Butterfly32<T> {
         // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
         // 1: Load data as late as possible, not upfront
-        // 2: Once we're working with a piece of data, make as much progress as possible before moving on 
+        // 2: Once we're working with a piece of data, make as much progress as possible before moving on
         //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i: usize| {
-            let [a0, a1] = transpose_complex_2x2_f32(buffer.load_complex(i + 0), buffer.load_complex(i + 32));
-            let [b0, b1] = transpose_complex_2x2_f32(buffer.load_complex(i + 8), buffer.load_complex(i + 40));
-            let [c0, c1] = transpose_complex_2x2_f32(buffer.load_complex(i + 16), buffer.load_complex(i + 48));
-            let [d0, d1] = transpose_complex_2x2_f32(buffer.load_complex(i + 24), buffer.load_complex(i + 56));
+            let [a0, a1] =
+                transpose_complex_2x2_f32(buffer.load_complex(i + 0), buffer.load_complex(i + 32));
+            let [b0, b1] =
+                transpose_complex_2x2_f32(buffer.load_complex(i + 8), buffer.load_complex(i + 40));
+            let [c0, c1] =
+                transpose_complex_2x2_f32(buffer.load_complex(i + 16), buffer.load_complex(i + 48));
+            let [d0, d1] =
+                transpose_complex_2x2_f32(buffer.load_complex(i + 24), buffer.load_complex(i + 56));
             [[a0, b0, c0, d0], [a1, b1, c1, d1]]
         };
 
@@ -3035,18 +3109,26 @@ impl<T: FftNum> SseF32Butterfly32<T> {
         let mut store = |i, vectors_a: [__m128; 8], vectors_b: [__m128; 8]| {
             for n in 0..8 {
                 let [a, b] = transpose_complex_2x2_f32(vectors_a[n], vectors_b[n]);
-                buffer.store_complex(a, i + n*4);
-                buffer.store_complex(b, i + n*4 + 32);
+                buffer.store_complex(a, i + n * 4);
+                buffer.store_complex(b, i + n * 4 + 32);
             }
         };
 
         // Size-8 FFTs down each pair of transposed columns, storing them as soon as we're done with them
-        let out0 = self.bf8.perform_parallel_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0], tmp6[0], tmp7[0]]);
-        let out1 = self.bf8.perform_parallel_fft_direct([tmp0[1], tmp1[1], tmp2[1], tmp3[1], tmp4[1], tmp5[1], tmp6[1], tmp7[1]]);
+        let out0 = self.bf8.perform_parallel_fft_direct([
+            tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0], tmp6[0], tmp7[0],
+        ]);
+        let out1 = self.bf8.perform_parallel_fft_direct([
+            tmp0[1], tmp1[1], tmp2[1], tmp3[1], tmp4[1], tmp5[1], tmp6[1], tmp7[1],
+        ]);
         store(0, out0, out1);
 
-        let out2 = self.bf8.perform_parallel_fft_direct([tmp0[2], tmp1[2], tmp2[2], tmp3[2], tmp4[2], tmp5[2], tmp6[2], tmp7[2]]);
-        let out3 = self.bf8.perform_parallel_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3], tmp6[3], tmp7[3]]);
+        let out2 = self.bf8.perform_parallel_fft_direct([
+            tmp0[2], tmp1[2], tmp2[2], tmp3[2], tmp4[2], tmp5[2], tmp6[2], tmp7[2],
+        ]);
+        let out3 = self.bf8.perform_parallel_fft_direct([
+            tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3], tmp6[3], tmp7[3],
+        ]);
         store(2, out2, out3);
     }
 }
@@ -3075,9 +3157,13 @@ pub struct SseF64Butterfly32<T> {
 }
 
 boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly32, 32, |this: &SseF64Butterfly32<_>| this
-    .bf8.bf4.direction);
+    .bf8
+    .bf4
+    .direction);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly32, 32, |this: &SseF64Butterfly32<_>| this
-    .bf8.bf4.direction);
+    .bf8
+    .bf4
+    .direction);
 impl<T: FftNum> SseF64Butterfly32<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -3094,7 +3180,7 @@ impl<T: FftNum> SseF64Butterfly32<T> {
         let tw15: Complex<f64> = twiddles::compute_twiddle(15, 32, direction);
         let tw18: Complex<f64> = twiddles::compute_twiddle(18, 32, direction);
         let tw21: Complex<f64> = twiddles::compute_twiddle(21, 32, direction);
-       
+
         unsafe {
             Self {
                 bf8: SseF64Butterfly8::new(direction),
@@ -3120,15 +3206,17 @@ impl<T: FftNum> SseF64Butterfly32<T> {
         // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
         // 1: Load data as late as possible, not upfront
-        // 2: Once we're working with a piece of data, make as much progress as possible before moving on 
+        // 2: Once we're working with a piece of data, make as much progress as possible before moving on
         //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
-        let load = |i| [
-            buffer.load_complex(i),
-            buffer.load_complex(i + 8),
-            buffer.load_complex(i + 16),
-            buffer.load_complex(i + 24),
-        ];
+        let load = |i| {
+            [
+                buffer.load_complex(i),
+                buffer.load_complex(i + 8),
+                buffer.load_complex(i + 16),
+                buffer.load_complex(i + 24),
+            ]
+        };
 
         // For each column: load the data, apply our size-4 FFT, apply twiddle factors
         let mut tmp1 = self.bf8.bf4.perform_fft_direct(load(1));
@@ -3182,16 +3270,24 @@ impl<T: FftNum> SseF64Butterfly32<T> {
         };
 
         // Size-8 FFTs down each of our transposed columns, storing them as soon as we're done with them
-        let out0 = self.bf8.perform_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0], tmp6[0], tmp7[0]]);
+        let out0 = self.bf8.perform_fft_direct([
+            tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0], tmp6[0], tmp7[0],
+        ]);
         store(0, out0);
 
-        let out1 = self.bf8.perform_fft_direct([tmp0[1], tmp1[1], tmp2[1], tmp3[1], tmp4[1], tmp5[1], tmp6[1], tmp7[1]]);
+        let out1 = self.bf8.perform_fft_direct([
+            tmp0[1], tmp1[1], tmp2[1], tmp3[1], tmp4[1], tmp5[1], tmp6[1], tmp7[1],
+        ]);
         store(1, out1);
 
-        let out2 = self.bf8.perform_fft_direct([tmp0[2], tmp1[2], tmp2[2], tmp3[2], tmp4[2], tmp5[2], tmp6[2], tmp7[2]]);
+        let out2 = self.bf8.perform_fft_direct([
+            tmp0[2], tmp1[2], tmp2[2], tmp3[2], tmp4[2], tmp5[2], tmp6[2], tmp7[2],
+        ]);
         store(2, out2);
-        
-        let out3 = self.bf8.perform_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3], tmp6[3], tmp7[3]]);
+
+        let out3 = self.bf8.perform_fft_direct([
+            tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3], tmp6[3], tmp7[3],
+        ]);
         store(3, out3);
     }
 }
@@ -3199,7 +3295,10 @@ impl<T: FftNum> SseF64Butterfly32<T> {
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use crate::{algorithm::Dft, test_utils::{check_fft_algorithm, compare_vectors}};
+    use crate::{
+        algorithm::Dft,
+        test_utils::{check_fft_algorithm, compare_vectors},
+    };
 
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
