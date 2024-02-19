@@ -12,15 +12,15 @@ use crate::{Direction, Fft, Length};
 
 use super::sse_common::{assert_f32, assert_f64};
 use super::sse_utils::*;
-use super::sse_vector::{SseArray, SseArrayMut, SseVector};
+use super::sse_vector::{SseArrayMut, SseVector};
 
 #[inline(always)]
 unsafe fn pack_32(a: Complex<f32>, b: Complex<f32>) -> __m128 {
-    [a,b].as_slice().load_complex(0)
+    _mm_set_ps(b.im, b.re, a.im, a.re)
 }
 #[inline(always)]
 unsafe fn pack_64(a: Complex<f64>) -> __m128d {
-    [a].as_slice().load_complex(0)
+    _mm_set_pd(a.im, a.re)
 }
 
 
