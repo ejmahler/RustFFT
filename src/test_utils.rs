@@ -41,6 +41,15 @@ pub fn compare_vectors<T: FftNum + Float>(vec1: &[Complex<T>], vec2: &[Complex<T
     }
     return (error.to_f64().unwrap() / vec1.len() as f64) < 0.1f64;
 }
+pub fn first_diff<T: FftNum + Float>(vec1: &[Complex<T>], vec2: &[Complex<T>]) -> Option<usize> {
+    assert_eq!(vec1.len(), vec2.len());
+    for (i, (&a, &b)) in vec1.iter().zip(vec2.iter()).enumerate() {
+        if (a - b).norm().to_f64().unwrap() > 0.1 {
+            return Some(i);
+        }
+    }
+    None
+}
 
 #[allow(unused)]
 fn transppose_diagnostic<T: FftNum + Float>(expected: &[Complex<T>], actual: &[Complex<T>]) {
@@ -97,8 +106,10 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
 
         if !compare_vectors(&expected_output, &buffer) {
             panic!(
-                "process() failed, length = {}, direction = {}",
-                len, direction
+                "process() failed, length = {}, direction = {}, first diff = {:?}",
+                len,
+                direction,
+                first_diff(&expected_output, &buffer)
             );
         }
     }
