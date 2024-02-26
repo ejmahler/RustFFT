@@ -702,7 +702,10 @@ impl<T: FftNum> NeonF32Butterfly4<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [float32x4_t; 4]) -> [float32x4_t; 4] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(
+        &self,
+        values: [float32x4_t; 4],
+    ) -> [float32x4_t; 4] {
         //we're going to hardcode a step of mixed radix
         //aka we're going to do the six step algorithm
 
@@ -2310,9 +2313,9 @@ pub struct NeonF32Butterfly16<T> {
     twiddle9: float32x4_t,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly16, 16, |this: &NeonF32Butterfly16<
-    _,
->| this.bf4.direction);
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly16, 16, |this: &NeonF32Butterfly16<_>| this
+    .bf4
+    .direction);
 boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly16, 16, |this: &NeonF32Butterfly16<_>| this
     .bf4
     .direction);
@@ -2399,7 +2402,10 @@ impl<T: FftNum> NeonF32Butterfly16<T> {
         store(2, out1);
     }
 
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(
+        &self,
+        mut buffer: impl NeonArrayMut<f32>,
+    ) {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -2699,7 +2705,10 @@ impl<T: FftNum> NeonF32Butterfly24<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(
+        &self,
+        mut buffer: impl NeonArrayMut<f32>,
+    ) {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -3061,7 +3070,10 @@ impl<T: FftNum> NeonF32Butterfly32<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(
+        &self,
+        mut buffer: impl NeonArrayMut<f32>,
+    ) {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
