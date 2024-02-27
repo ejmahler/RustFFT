@@ -46,5 +46,9 @@ paste = "1.0.9"
 getrandom = {version = "^0.2", features = ["js"]}
 wasm-bindgen-test = "^0.3.36"
 
+# we don't need bumpalo directly, but a dependency does, and version 3.15.x requires rustc 1.73+
+# it probably isn't wise to stay on an old version for a long time, but we'll have to upgrade MSRV to upgrade
+bumpalo = "=3.14.0"
+
 [build-dependencies]
 version_check = "0.9"
