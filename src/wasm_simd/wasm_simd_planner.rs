@@ -11,7 +11,6 @@ use std::{any::TypeId, collections::HashMap, sync::Arc};
 
 const MIN_RADIX4_BITS: u32 = 6; // smallest size to consider radix 4 an option is 2^6 = 64
 const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
-const RADIX4_USE_BUTTERFLY32_FROM: u32 = 18; // Use length 32 butterfly starting from this power of 2
 
 /// A Recipe is a structure that describes the design of a FFT, without actually creating it.
 /// It is used as a middle step in the planning process.
@@ -638,11 +637,7 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
                 // main case: if len is a power of 4, use a base of 16, otherwise use a base of 8
                 _ => {
                     if p2 % 2 == 1 {
-                        if p2 >= RADIX4_USE_BUTTERFLY32_FROM {
-                            32
-                        } else {
-                            8
-                        }
+                        32
                     } else {
                         16
                     }

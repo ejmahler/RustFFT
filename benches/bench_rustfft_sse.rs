@@ -76,6 +76,7 @@ fn bench_planned_multi_f64(b: &mut Bencher, len: usize) {
 #[bench] fn sse_butterfly32_17(b: &mut Bencher) { bench_planned_multi_f32(b, 17);}
 #[bench] fn sse_butterfly32_19(b: &mut Bencher) { bench_planned_multi_f32(b, 19);}
 #[bench] fn sse_butterfly32_23(b: &mut Bencher) { bench_planned_multi_f32(b, 23);}
+#[bench] fn sse_butterfly32_24(b: &mut Bencher) { bench_planned_multi_f32(b, 24);}
 #[bench] fn sse_butterfly32_29(b: &mut Bencher) { bench_planned_multi_f32(b, 29);}
 #[bench] fn sse_butterfly32_31(b: &mut Bencher) { bench_planned_multi_f32(b, 31);}
 #[bench] fn sse_butterfly32_32(b: &mut Bencher) { bench_planned_multi_f32(b, 32);}
@@ -97,6 +98,7 @@ fn bench_planned_multi_f64(b: &mut Bencher, len: usize) {
 #[bench] fn sse_butterfly64_17(b: &mut Bencher) { bench_planned_multi_f64(b, 17);}
 #[bench] fn sse_butterfly64_19(b: &mut Bencher) { bench_planned_multi_f64(b, 19);}
 #[bench] fn sse_butterfly64_23(b: &mut Bencher) { bench_planned_multi_f64(b, 23);}
+#[bench] fn sse_butterfly64_24(b: &mut Bencher) { bench_planned_multi_f64(b, 24);}
 #[bench] fn sse_butterfly64_29(b: &mut Bencher) { bench_planned_multi_f64(b, 29);}
 #[bench] fn sse_butterfly64_31(b: &mut Bencher) { bench_planned_multi_f64(b, 31);}
 #[bench] fn sse_butterfly64_32(b: &mut Bencher) { bench_planned_multi_f64(b, 32);}

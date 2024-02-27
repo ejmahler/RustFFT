@@ -71,6 +71,27 @@ impl Rotate90F32 {
             vreinterpretq_u32_f32(self.sign_both),
         ))
     }
+
+    #[inline(always)]
+    pub unsafe fn rotate_both_45(&self, values: float32x4_t) -> float32x4_t {
+        let rotated = self.rotate_both(values);
+        let sum = vaddq_f32(rotated, values);
+        vmulq_f32(sum, vmovq_n_f32(0.5f32.sqrt()))
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_both_135(&self, values: float32x4_t) -> float32x4_t {
+        let rotated = self.rotate_both(values);
+        let diff = vsubq_f32(rotated, values);
+        vmulq_f32(diff, vmovq_n_f32(0.5f32.sqrt()))
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_both_225(&self, values: float32x4_t) -> float32x4_t {
+        let rotated = self.rotate_both(values);
+        let diff = vaddq_f32(rotated, values);
+        vmulq_f32(diff, vmovq_n_f32(-(0.5f32.sqrt())))
+    }
 }
 
 // Pack low (1st) complex
@@ -201,6 +222,27 @@ impl Rotate90F64 {
             vreinterpretq_u64_f64(temp),
             vreinterpretq_u64_f64(self.sign),
         ))
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_45(&self, values: float64x2_t) -> float64x2_t {
+        let rotated = self.rotate(values);
+        let sum = vaddq_f64(rotated, values);
+        vmulq_f64(sum, vmovq_n_f64(0.5f64.sqrt()))
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_135(&self, values: float64x2_t) -> float64x2_t {
+        let rotated = self.rotate(values);
+        let diff = vsubq_f64(rotated, values);
+        vmulq_f64(diff, vmovq_n_f64(0.5f64.sqrt()))
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_225(&self, values: float64x2_t) -> float64x2_t {
+        let rotated = self.rotate(values);
+        let diff = vaddq_f64(rotated, values);
+        vmulq_f64(diff, vmovq_n_f64(-(0.5f64.sqrt())))
     }
 }
 

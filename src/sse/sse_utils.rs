@@ -63,6 +63,27 @@ impl Rotate90F32 {
         let temp = _mm_shuffle_ps(values, values, 0xB1);
         _mm_xor_ps(temp, self.sign_both)
     }
+
+    #[inline(always)]
+    pub unsafe fn rotate_both_45(&self, values: __m128) -> __m128 {
+        let rotated = self.rotate_both(values);
+        let sum = _mm_add_ps(rotated, values);
+        _mm_mul_ps(sum, _mm_set1_ps(0.5f32.sqrt()))
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_both_135(&self, values: __m128) -> __m128 {
+        let rotated = self.rotate_both(values);
+        let diff = _mm_sub_ps(rotated, values);
+        _mm_mul_ps(diff, _mm_set1_ps(0.5f32.sqrt()))
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_both_225(&self, values: __m128) -> __m128 {
+        let rotated = self.rotate_both(values);
+        let diff = _mm_add_ps(rotated, values);
+        _mm_mul_ps(diff, _mm_set1_ps(-(0.5f32.sqrt())))
+    }
 }
 
 // Pack low (1st) complex
@@ -170,6 +191,27 @@ impl Rotate90F64 {
     pub unsafe fn rotate(&self, values: __m128d) -> __m128d {
         let temp = _mm_shuffle_pd(values, values, 0x01);
         _mm_xor_pd(temp, self.sign)
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_45(&self, values: __m128d) -> __m128d {
+        let rotated = self.rotate(values);
+        let sum = _mm_add_pd(rotated, values);
+        _mm_mul_pd(sum, _mm_set1_pd(0.5f64.sqrt()))
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_135(&self, values: __m128d) -> __m128d {
+        let rotated = self.rotate(values);
+        let diff = _mm_sub_pd(rotated, values);
+        _mm_mul_pd(diff, _mm_set1_pd(0.5f64.sqrt()))
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_225(&self, values: __m128d) -> __m128d {
+        let rotated = self.rotate(values);
+        let diff = _mm_add_pd(rotated, values);
+        _mm_mul_pd(diff, _mm_set1_pd(-(0.5f64.sqrt())))
     }
 }
 

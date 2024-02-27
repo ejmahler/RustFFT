@@ -157,6 +157,10 @@ fn wasm_simd_butterfly32_23(b: &mut Bencher) {
     bench_planned_multi_f32(b, 23);
 }
 #[bench]
+fn wasm_simd_butterfly32_24(b: &mut Bencher) {
+    bench_planned_multi_f32(b, 24);
+}
+#[bench]
 fn wasm_simd_butterfly32_29(b: &mut Bencher) {
     bench_planned_multi_f32(b, 29);
 }
@@ -236,6 +240,10 @@ fn wasm_simd_butterfly64_19(b: &mut Bencher) {
 #[bench]
 fn wasm_simd_butterfly64_23(b: &mut Bencher) {
     bench_planned_multi_f64(b, 23);
+}
+#[bench]
+fn wasm_simd_butterfly64_24(b: &mut Bencher) {
+    bench_planned_multi_f64(b, 24);
 }
 #[bench]
 fn wasm_simd_butterfly64_29(b: &mut Bencher) {
