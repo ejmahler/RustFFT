@@ -2288,9 +2288,7 @@ pub struct SseF32Butterfly16<T> {
     bf4: SseF32Butterfly4<T>,
     twiddles_packed: [__m128; 6],
     twiddle1: __m128,
-    twiddle2: __m128,
     twiddle3: __m128,
-    twiddle6: __m128,
     twiddle9: __m128,
 }
 
@@ -2323,9 +2321,7 @@ impl<T: FftNum> SseF32Butterfly16<T> {
                     pack_32(tw6, tw9),
                 ],
                 twiddle1: pack_32(tw1, tw1),
-                twiddle2: pack_32(tw2, tw2),
                 twiddle3: pack_32(tw3, tw3),
-                twiddle6: pack_32(tw6, tw6),
                 twiddle9: pack_32(tw9, tw9),
             }
         }
@@ -2409,11 +2405,11 @@ impl<T: FftNum> SseF32Butterfly16<T> {
         let [in2, in3] = load(2);
         let mut tmp2 = self.bf4.perform_parallel_fft_direct(in2);
         let mut tmp3 = self.bf4.perform_parallel_fft_direct(in3);
-        tmp2[1] = SseVector::mul_complex(tmp2[1], self.twiddle2);
+        tmp2[1] = self.bf4.rotate.rotate_both_45(tmp2[1]);
         tmp2[2] = self.bf4.rotate.rotate_both(tmp2[2]);
-        tmp2[3] = SseVector::mul_complex(tmp2[3], self.twiddle6);
+        tmp2[3] = self.bf4.rotate.rotate_both_135(tmp2[3]);
         tmp3[1] = SseVector::mul_complex(tmp3[1], self.twiddle3);
-        tmp3[2] = SseVector::mul_complex(tmp3[2], self.twiddle6);
+        tmp3[2] = self.bf4.rotate.rotate_both_135(tmp3[2]);
         tmp3[3] = SseVector::mul_complex(tmp3[3], self.twiddle9);
 
         // Do these last, because fewer twiddles means fewer temporaries forcing the above data to spill
@@ -2421,7 +2417,7 @@ impl<T: FftNum> SseF32Butterfly16<T> {
         let tmp0 = self.bf4.perform_parallel_fft_direct(in0);
         let mut tmp1 = self.bf4.perform_parallel_fft_direct(in1);
         tmp1[1] = SseVector::mul_complex(tmp1[1], self.twiddle1);
-        tmp1[2] = SseVector::mul_complex(tmp1[2], self.twiddle2);
+        tmp1[2] = self.bf4.rotate.rotate_both_45(tmp1[2]);
         tmp1[3] = SseVector::mul_complex(tmp1[3], self.twiddle3);
 
         ////////////////////////////////////////////////////////////
