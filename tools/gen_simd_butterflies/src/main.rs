@@ -15,38 +15,95 @@ struct FftEntry {
 }
 
 #[derive(Serialize)]
+struct Architecture {
+    name_snakecase: &'static str,
+    name_camelcase: &'static str,
+    name_display: &'static str,
+    array_trait: &'static str,
+    vector_trait: &'static str,
+    vector_f32: &'static str,
+    vector_f64: &'static str,
+    cpu_feature_name: &'static str,
+}
+
+#[derive(Serialize)]
 struct Context {
     command_str: String,
+    arch: Architecture,
     lengths: Vec<FftEntry>,
 }
 
+const USAGE_STR : &'static str = "Usage: {executable} sse|wasm_simd [size list]";
+
 fn main() -> Result<(), Box<dyn Error>> {
-    let raw_sse_template = include_str!("templates/sse_template.tt.rs");
-    let processed_template = preprocess_template(raw_sse_template);
+    // manual argument parsing. we could use a library for this but our requirements are very simple
+    let mut arg_iter = std::env::args();
 
-    let mut tt = TinyTemplate::new();
-    tt.add_template("simd_template", &processed_template)?;
+    // skip first arg
+    arg_iter.next();
 
-    let arg_list : Vec<String> = std::env::args().skip(1).collect();
-    let lengths : Vec<FftEntry> = arg_list
-        .iter()
+    // next arg is arch
+    let arch = parse_architecture(arg_iter.next())?;
+
+    // all remaining args are sizes
+    let lengths : Vec<FftEntry> = arg_iter
         .map_while(|arg| arg.parse::<usize>().ok())
-        .map(generate_fft_entry)
+        .map(|i| generate_fft_entry(i, &arch))
         .collect();
     let lengths_as_str : Vec<String> = lengths.iter().map(|l| l.len.to_string()).collect();
 
     let context = Context {
-        command_str: format!("cargo run --manifest-path ./tools/gen_simd_butterflies/Cargo.toml -- {}", lengths_as_str.join(" ")),
+        command_str: format!("cargo run --manifest-path ./tools/gen_simd_butterflies/Cargo.toml -- {} {}", arch.name_snakecase, lengths_as_str.join(" ")),
+        arch,
         lengths,
     };
 
-    let rendered = tt.render("simd_template", &context)?;
+    
+    let raw_prime_template = include_str!("templates/prime_template.tt.rs");
+    let processed_prime_template = preprocess_template(raw_prime_template);
+
+    let mut tt = TinyTemplate::new();
+    tt.add_template("prime_template", &processed_prime_template)?;
+
+    let rendered = tt.render("prime_template", &context)?;
     println!("{rendered}");
 
     Ok(())
 }
 
-fn generate_fft_entry(len: usize) -> FftEntry {
+fn parse_architecture(arch_str: Option<String>) -> Result<Architecture, String> {
+    if let Some(arch_str) = arch_str {
+        if arch_str == "sse" {
+            return Ok(Architecture {
+                name_snakecase: "sse",
+                name_camelcase: "Sse",
+                name_display: "SSE",
+                array_trait: "SseArrayMut",
+                vector_trait: "SseVector",
+                vector_f32: "__m128",
+                vector_f64: "__m128d",
+                cpu_feature_name: "sse4.1"
+            });
+        } else if arch_str == "wasm_simd" {
+            return Ok(Architecture {
+                name_snakecase: "wasm_simd",
+                name_camelcase: "WasmSimd",
+                name_display: "Wasm SIMD",
+                array_trait: "WasmSimdArrayMut",
+                vector_trait: "WasmSimdVector",
+                vector_f32: "WasmVector32",
+                vector_f64: "WasmVector64",
+                cpu_feature_name: "simd128"
+            });
+        }
+    }
+
+    Err(USAGE_STR.to_owned())
+}
+
+fn generate_fft_entry(len: usize, arch: &Architecture) -> FftEntry {
+    let vector_trait = arch.vector_trait;
+
     // generate the in-shuffle sequence for f32 parallel FFTs
     let shuffle_in_str = {
         let indent = "            ";
@@ -86,7 +143,7 @@ fn generate_fft_entry(len: usize) -> FftEntry {
         let lenm1 = len - 1;
 
         let mut impl_strs = Vec::with_capacity(len * len);
-        impl_strs.push(format!("{indent}let rotate = SseVector::make_rotate90(FftDirection::Inverse);"));
+        impl_strs.push(format!("{indent}let rotate = {vector_trait}::make_rotate90(FftDirection::Inverse);"));
         impl_strs.push(String::new());
 
         // butterfly2's down the inputs, and rotate the subtraction half of the butterfly 2's
@@ -94,9 +151,9 @@ fn generate_fft_entry(len: usize) -> FftEntry {
         impl_strs.push(format!("{indent}let y00 = values[0];"));
         for n in 1..halflen {
             let nrev = len - n;
-            impl_strs.push(format!("{indent}let [x{n}p{nrev}, x{n}m{nrev}] =  SseVector::column_butterfly2([values[{n}], values[{nrev}]]);"));
-            impl_strs.push(format!("{indent}let x{n}m{nrev} = SseVector::apply_rotate90(rotate, x{n}m{nrev});"));
-            impl_strs.push(format!("{indent}let y00 = SseVector::add(y00, x{n}p{nrev});"));
+            impl_strs.push(format!("{indent}let [x{n}p{nrev}, x{n}m{nrev}] =  {vector_trait}::column_butterfly2([values[{n}], values[{nrev}]]);"));
+            impl_strs.push(format!("{indent}let x{n}m{nrev} = {vector_trait}::apply_rotate90(rotate, x{n}m{nrev});"));
+            impl_strs.push(format!("{indent}let y00 = {vector_trait}::add(y00, x{n}p{nrev});"));
         };
         impl_strs.push(String::new());
 
@@ -108,26 +165,26 @@ fn generate_fft_entry(len: usize) -> FftEntry {
             let first_twiddle = n - 1;
             let variable_name_a = format!("m{n:02}{nrev:02}a");
 
-            impl_strs.push(format!("{indent}let {variable_name_a} = SseVector::fmadd(values[0], self.twiddles_re[{first_twiddle}], x1p{lenm1});"));
+            impl_strs.push(format!("{indent}let {variable_name_a} = {vector_trait}::fmadd(values[0], self.twiddles_re[{first_twiddle}], x1p{lenm1});"));
             for m in 2..halflen {
                 let mrev = len - m;
                 let mn = (m*n)%len;
                 let tw_idx = if mn > len/2 { len - mn - 1 } else { mn - 1 };
-                impl_strs.push(format!("{indent}let {variable_name_a} = SseVector::fmadd({variable_name_a}, self.twiddles_re[{tw_idx}], x{m}p{mrev});"));
+                impl_strs.push(format!("{indent}let {variable_name_a} = {vector_trait}::fmadd({variable_name_a}, self.twiddles_re[{tw_idx}], x{m}p{mrev});"));
             }
 
             let variable_name_b = format!("m{n:02}{nrev:02}b");
-            impl_strs.push(format!("{indent}let {variable_name_b} = SseVector::mul(self.twiddles_im[{first_twiddle}], x1m{lenm1});"));
+            impl_strs.push(format!("{indent}let {variable_name_b} = {vector_trait}::mul(self.twiddles_im[{first_twiddle}], x1m{lenm1});"));
             for m in 2..halflen {
                 let mrev = len - m;
                 let mn = (m*n)%len;
                 let tw_idx = if mn > len/2 { len - mn - 1 } else { mn - 1 };
                 let func = if mn > len/2 { "nmadd" } else { "fmadd" };
 
-                impl_strs.push(format!("{indent}let {variable_name_b} = SseVector::{func}({variable_name_b}, self.twiddles_im[{tw_idx}], x{m}m{mrev});"));
+                impl_strs.push(format!("{indent}let {variable_name_b} = {vector_trait}::{func}({variable_name_b}, self.twiddles_im[{tw_idx}], x{m}m{mrev});"));
 
             }
-            impl_strs.push(format!("{indent}let [y{n:02}, y{nrev:02}] = SseVector::column_butterfly2([{variable_name_a}, {variable_name_b}]);"));
+            impl_strs.push(format!("{indent}let [y{n:02}, y{nrev:02}] = {vector_trait}::column_butterfly2([{variable_name_a}, {variable_name_b}]);"));
             impl_strs.push(String::new());
         }
         impl_strs.push(String::new());
