@@ -14,8 +14,6 @@ use crate::Fft;
 
 use crate::math_utils::{PrimeFactor, PrimeFactors};
 
-use super::sse_prime_butterflies::prime_butterfly_lens;
-
 const MIN_RADIX4_BITS: u32 = 6; // smallest size to consider radix 4 an option is 2^6 = 64
 const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
 
