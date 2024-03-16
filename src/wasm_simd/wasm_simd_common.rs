@@ -1,47 +1,5 @@
 use std::any::TypeId;
 
-/// Calculate the sum of an expression consisting of just plus and minus, like `value = a + b - c + d`.
-/// The expression is rewritten to `value = a + (b - (c - d))` (note the flipped sign on d).
-/// After this the `$add` and `$sub` functions are used to make the calculation.
-/// For f32 using `f32x4_add` and `f32x4_sub`, the expression `value = a + b - c + d` becomes:
-/// ```
-/// let value = f32x4_add(a, f32x4_sub(b, f32x4_sub(c, d)));
-/// ```
-/// Only plus and minus are supported, and all the terms must be plain scalar variables.
-/// Using array indices, like `value = temp[0] + temp[1]` is not supported.
-macro_rules! calc_sum {
-    ($add:ident, $sub:ident, + $acc:tt + $($rest:tt)*)=> {
-        $add($acc, calc_sum!($add, $sub, + $($rest)*))
-    };
-    ($add:ident, $sub:ident, + $acc:tt - $($rest:tt)*)=> {
-        $sub($acc, calc_sum!($add, $sub, - $($rest)*))
-    };
-    ($add:ident, $sub:ident, - $acc:tt + $($rest:tt)*)=> {
-        $sub($acc, calc_sum!($add, $sub, + $($rest)*))
-    };
-    ($add:ident, $sub:ident, - $acc:tt - $($rest:tt)*)=> {
-        $add($acc, calc_sum!($add, $sub, - $($rest)*))
-    };
-    ($add:ident, $sub:ident, $acc:tt + $($rest:tt)*)=> {
-        $add($acc, calc_sum!($add, $sub, + $($rest)*))
-    };
-    ($add:ident, $sub:ident, $acc:tt - $($rest:tt)*)=> {
-        $sub($acc, calc_sum!($add, $sub, - $($rest)*))
-    };
-    ($add:ident, $sub:ident, + $val:tt) => {$val};
-    ($add:ident, $sub:ident, - $val:tt) => {$val};
-}
-
-/// Calculate the sum of an expression consisting of just plus and minus, like a + b - c + d
-macro_rules! calc_f32 {
-    ($($tokens:tt)*) => { calc_sum!(f32x4_add, f32x4_sub, $($tokens)*)};
-}
-
-/// Calculate the sum of an expression consisting of just plus and minus, like a + b - c + d
-macro_rules! calc_f64 {
-    ($($tokens:tt)*) => { calc_sum!(f64x2_add, f64x2_sub, $($tokens)*)};
-}
-
 /// Helper function to assert we have the right float type
 pub fn assert_f32<T: 'static>() {
     let id_f32 = TypeId::of::<f32>();
@@ -189,52 +147,4 @@ macro_rules! boilerplate_fft_wasm_simd_oop {
             }
         }
     };
-}
-
-#[cfg(test)]
-mod unit_tests {
-    use core::arch::wasm32::*;
-
-    use wasm_bindgen_test::wasm_bindgen_test;
-
-    #[wasm_bindgen_test]
-    fn test_calc_f32() {
-        unsafe {
-            let a = f32x4(1.0, 1.0, 1.0, 1.0);
-            let b = f32x4(2.0, 2.0, 2.0, 2.0);
-            let c = f32x4(3.0, 3.0, 3.0, 3.0);
-            let d = f32x4(4.0, 4.0, 4.0, 4.0);
-            let e = f32x4(5.0, 5.0, 5.0, 5.0);
-            let f = f32x4(6.0, 6.0, 6.0, 6.0);
-            let g = f32x4(7.0, 7.0, 7.0, 7.0);
-            let h = f32x4(8.0, 8.0, 8.0, 8.0);
-            let i = f32x4(9.0, 9.0, 9.0, 9.0);
-            let expected: f32 = 1.0 + 2.0 - 3.0 + 4.0 - 5.0 + 6.0 - 7.0 - 8.0 + 9.0;
-            let res = calc_f32!(a + b - c + d - e + f - g - h + i);
-            let sum = std::mem::transmute::<v128, [f32; 4]>(res);
-            assert_eq!(sum[0], expected);
-            assert_eq!(sum[1], expected);
-            assert_eq!(sum[2], expected);
-            assert_eq!(sum[3], expected);
-        }
-    }
-    #[wasm_bindgen_test]
-    fn test_calc_f64() {
-        unsafe {
-            let a = f64x2(1.0, 1.0);
-            let b = f64x2(2.0, 2.0);
-            let c = f64x2(3.0, 3.0);
-            let d = f64x2(4.0, 4.0);
-            let e = f64x2(5.0, 5.0);
-            let f = f64x2(6.0, 6.0);
-            let g = f64x2(7.0, 7.0);
-            let h = f64x2(8.0, 8.0);
-            let i = f64x2(9.0, 9.0);
-            let expected: f64 = 1.0 + 2.0 - 3.0 + 4.0 - 5.0 + 6.0 - 7.0 - 8.0 + 9.0;
-            let res = calc_f64!(a + b - c + d - e + f - g - h + i);
-            let sum = std::mem::transmute::<v128, [f64; 2]>(res);
-            assert_eq!(sum[0], expected);
-            assert_eq!(sum[1], expected);
-        }
-    }
 }

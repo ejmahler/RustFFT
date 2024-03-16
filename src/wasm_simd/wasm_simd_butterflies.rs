@@ -2225,7 +2225,8 @@ impl<T: FftNum> WasmSimdF32Butterfly15<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
         // A single WasmSimd 15-point will need a lot of shuffling, let's just reuse the dual one
-        let values = read_partial1_complex_to_array_v128!(buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14});
+        let values =
+            read_partial1_complex_to_array_v128!(buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14});
 
         let out = self.perform_parallel_fft_direct(values);
 
@@ -2239,8 +2240,7 @@ impl<T: FftNum> WasmSimdF32Butterfly15<T> {
         &self,
         mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
-        let input_packed =
-            read_complex_to_array_v128!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28});
+        let input_packed = read_complex_to_array_v128!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28});
 
         let values = [
             extract_lo_hi_f32_v128(input_packed[0], input_packed[7]),

@@ -1,3 +1,4 @@
+use super::wasm_simd_vector::WasmVector32;
 use core::arch::wasm32::*;
 
 //  __  __       _   _               _________  _     _ _
@@ -58,6 +59,42 @@ impl Rotate90F32 {
         let diff = f32x4_add(rotated, values);
         f32x4_mul(diff, f32x4_splat(-(0.5f32.sqrt())))
     }
+}
+
+/// Pack low (1st) complex
+/// left: l1.re, l1.im, l2.re, l2.im
+/// right: r1.re, r1.im, r2.re, r2.im
+/// --> l1.re, l1.im, r1.re, r1.im
+#[inline(always)]
+pub fn extract_lo_lo_f32(left: WasmVector32, right: WasmVector32) -> WasmVector32 {
+    WasmVector32(u32x4_shuffle::<0, 1, 4, 5>(left.0, right.0))
+}
+
+/// Pack high (2nd) complex
+/// left: l1.re, l1.im, l2.re, l2.im
+/// right: r1.re, r1.im, r2.re, r2.im
+/// --> l2.re, l2.im, r2.re, r2.im
+#[inline(always)]
+pub fn extract_hi_hi_f32(left: WasmVector32, right: WasmVector32) -> WasmVector32 {
+    WasmVector32(u32x4_shuffle::<2, 3, 6, 7>(left.0, right.0))
+}
+
+/// Pack low (1st) and high (2nd) complex
+/// left: l1.re, l1.im, l2.re, l2.im
+/// right: r1.re, r1.im, r2.re, r2.im
+/// --> l1.re, l1.im, r2.re, r2.im
+#[inline(always)]
+pub fn extract_lo_hi_f32(left: WasmVector32, right: WasmVector32) -> WasmVector32 {
+    WasmVector32(u32x4_shuffle::<0, 1, 6, 7>(left.0, right.0))
+}
+
+/// Pack high (2nd) and low (1st) complex
+/// left: r1.re, r1.im, r2.re, r2.im
+/// right: l1.re, l1.im, l2.re, l2.im
+/// --> r2.re, r2.im, l1.re, l1.im
+#[inline(always)]
+pub fn extract_hi_lo_f32(left: WasmVector32, right: WasmVector32) -> WasmVector32 {
+    WasmVector32(u32x4_shuffle::<2, 3, 4, 5>(left.0, right.0))
 }
 
 /// Pack low (1st) complex

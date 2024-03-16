@@ -16,7 +16,6 @@ use crate::FftNum;
 use core::arch::wasm32::v128;
 
 pub use self::wasm_simd_butterflies::*;
-pub use self::wasm_simd_prime_butterflies::*;
 pub use self::wasm_simd_radix4::*;
 use self::wasm_simd_vector::WasmVector;
 use self::wasm_simd_vector::WasmVector32;

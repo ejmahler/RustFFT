@@ -24,6 +24,11 @@ struct Architecture {
     vector_f32: &'static str,
     vector_f64: &'static str,
     cpu_feature_name: &'static str,
+    has_dynamic_cpu_features: bool,
+    dynamic_cpu_feature_macro: &'static str,
+    arch_include: &'static str,
+    test_attribute: &'static str,
+    extra_test_includes: Vec<&'static str>,
 }
 
 #[derive(Serialize)]
@@ -82,7 +87,12 @@ fn parse_architecture(arch_str: Option<String>) -> Result<Architecture, String> 
                 vector_trait: "SseVector",
                 vector_f32: "__m128",
                 vector_f64: "__m128d",
-                cpu_feature_name: "sse4.1"
+                cpu_feature_name: "sse4.1",
+                has_dynamic_cpu_features: true,
+                dynamic_cpu_feature_macro: "is_x86_feature_detected",
+                arch_include: "use core::arch::x86_64::{__m128, __m128d};",
+                test_attribute: "test",
+                extra_test_includes: Vec::new(),
             });
         } else if arch_str == "wasm_simd" {
             return Ok(Architecture {
@@ -90,10 +100,15 @@ fn parse_architecture(arch_str: Option<String>) -> Result<Architecture, String> 
                 name_camelcase: "WasmSimd",
                 name_display: "Wasm SIMD",
                 array_trait: "WasmSimdArrayMut",
-                vector_trait: "WasmSimdVector",
+                vector_trait: "WasmVector",
                 vector_f32: "WasmVector32",
                 vector_f64: "WasmVector64",
-                cpu_feature_name: "simd128"
+                cpu_feature_name: "simd128",
+                has_dynamic_cpu_features: false,
+                dynamic_cpu_feature_macro: "",
+                arch_include: "",
+                test_attribute: "wasm_bindgen_test",
+                extra_test_includes: vec!["use wasm_bindgen_test::wasm_bindgen_test;"]
             });
         }
     }
