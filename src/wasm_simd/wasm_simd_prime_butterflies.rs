@@ -82,11 +82,11 @@ impl<T: FftNum> WasmSimdF32Butterfly7<T> {
     }
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let values = read_partial1_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6});
+        let values = read_partial1_complex_to_array_v128!(buffer, {0, 1, 2, 3, 4, 5, 6});
 
         let out = self.perform_parallel_fft_direct(values);
 
-        write_partial_lo_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6});
+        write_partial_lo_complex_to_array_v128!(out, buffer, {0, 1, 2, 3, 4, 5, 6});
     }
 
     #[inline(always)]
@@ -94,31 +94,31 @@ impl<T: FftNum> WasmSimdF32Butterfly7<T> {
         &self,
         mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
-        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12});
+        let input_packed = read_complex_to_array_v128!(buffer, {0, 2, 4, 6, 8, 10, 12});
 
         let values = [
-            extract_lo_hi_f32(input_packed[0], input_packed[3]),
-            extract_hi_lo_f32(input_packed[0], input_packed[4]),
-            extract_lo_hi_f32(input_packed[1], input_packed[4]),
-            extract_hi_lo_f32(input_packed[1], input_packed[5]),
-            extract_lo_hi_f32(input_packed[2], input_packed[5]),
-            extract_hi_lo_f32(input_packed[2], input_packed[6]),
-            extract_lo_hi_f32(input_packed[3], input_packed[6]),
+            extract_lo_hi_f32_v128(input_packed[0], input_packed[3]),
+            extract_hi_lo_f32_v128(input_packed[0], input_packed[4]),
+            extract_lo_hi_f32_v128(input_packed[1], input_packed[4]),
+            extract_hi_lo_f32_v128(input_packed[1], input_packed[5]),
+            extract_lo_hi_f32_v128(input_packed[2], input_packed[5]),
+            extract_hi_lo_f32_v128(input_packed[2], input_packed[6]),
+            extract_lo_hi_f32_v128(input_packed[3], input_packed[6]),
         ];
 
         let out = self.perform_parallel_fft_direct(values);
 
         let out_packed = [
-            extract_lo_lo_f32(out[0], out[1]),
-            extract_lo_lo_f32(out[2], out[3]),
-            extract_lo_lo_f32(out[4], out[5]),
-            extract_lo_hi_f32(out[6], out[0]),
-            extract_hi_hi_f32(out[1], out[2]),
-            extract_hi_hi_f32(out[3], out[4]),
-            extract_hi_hi_f32(out[5], out[6]),
+            extract_lo_lo_f32_v128(out[0], out[1]),
+            extract_lo_lo_f32_v128(out[2], out[3]),
+            extract_lo_lo_f32_v128(out[4], out[5]),
+            extract_lo_hi_f32_v128(out[6], out[0]),
+            extract_hi_hi_f32_v128(out[1], out[2]),
+            extract_hi_hi_f32_v128(out[3], out[4]),
+            extract_hi_hi_f32_v128(out[5], out[6]),
         ];
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, {0,1,2,3,4,5,6});
+        write_complex_to_array_strided_v128!(out_packed, buffer, 2, {0,1,2,3,4,5,6});
     }
 
     #[inline(always)]
@@ -227,11 +227,11 @@ impl<T: FftNum> WasmSimdF64Butterfly7<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
-        let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6});
+        let values = read_complex_to_array_v128!(buffer, {0, 1, 2, 3, 4, 5, 6});
 
         let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6});
+        write_complex_to_array_v128!(out, buffer, {0, 1, 2, 3, 4, 5, 6});
     }
 
     #[inline(always)]
@@ -354,11 +354,11 @@ impl<T: FftNum> WasmSimdF32Butterfly11<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let values = read_partial1_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+        let values = read_partial1_complex_to_array_v128!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
 
         let out = self.perform_parallel_fft_direct(values);
 
-        write_partial_lo_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+        write_partial_lo_complex_to_array_v128!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
     }
 
     #[inline(always)]
@@ -366,39 +366,39 @@ impl<T: FftNum> WasmSimdF32Butterfly11<T> {
         &self,
         mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
-        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20});
+        let input_packed = read_complex_to_array_v128!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20});
 
         let values = [
-            extract_lo_hi_f32(input_packed[0], input_packed[5]),
-            extract_hi_lo_f32(input_packed[0], input_packed[6]),
-            extract_lo_hi_f32(input_packed[1], input_packed[6]),
-            extract_hi_lo_f32(input_packed[1], input_packed[7]),
-            extract_lo_hi_f32(input_packed[2], input_packed[7]),
-            extract_hi_lo_f32(input_packed[2], input_packed[8]),
-            extract_lo_hi_f32(input_packed[3], input_packed[8]),
-            extract_hi_lo_f32(input_packed[3], input_packed[9]),
-            extract_lo_hi_f32(input_packed[4], input_packed[9]),
-            extract_hi_lo_f32(input_packed[4], input_packed[10]),
-            extract_lo_hi_f32(input_packed[5], input_packed[10]),
+            extract_lo_hi_f32_v128(input_packed[0], input_packed[5]),
+            extract_hi_lo_f32_v128(input_packed[0], input_packed[6]),
+            extract_lo_hi_f32_v128(input_packed[1], input_packed[6]),
+            extract_hi_lo_f32_v128(input_packed[1], input_packed[7]),
+            extract_lo_hi_f32_v128(input_packed[2], input_packed[7]),
+            extract_hi_lo_f32_v128(input_packed[2], input_packed[8]),
+            extract_lo_hi_f32_v128(input_packed[3], input_packed[8]),
+            extract_hi_lo_f32_v128(input_packed[3], input_packed[9]),
+            extract_lo_hi_f32_v128(input_packed[4], input_packed[9]),
+            extract_hi_lo_f32_v128(input_packed[4], input_packed[10]),
+            extract_lo_hi_f32_v128(input_packed[5], input_packed[10]),
         ];
 
         let out = self.perform_parallel_fft_direct(values);
 
         let out_packed = [
-            extract_lo_lo_f32(out[0], out[1]),
-            extract_lo_lo_f32(out[2], out[3]),
-            extract_lo_lo_f32(out[4], out[5]),
-            extract_lo_lo_f32(out[6], out[7]),
-            extract_lo_lo_f32(out[8], out[9]),
-            extract_lo_hi_f32(out[10], out[0]),
-            extract_hi_hi_f32(out[1], out[2]),
-            extract_hi_hi_f32(out[3], out[4]),
-            extract_hi_hi_f32(out[5], out[6]),
-            extract_hi_hi_f32(out[7], out[8]),
-            extract_hi_hi_f32(out[9], out[10]),
+            extract_lo_lo_f32_v128(out[0], out[1]),
+            extract_lo_lo_f32_v128(out[2], out[3]),
+            extract_lo_lo_f32_v128(out[4], out[5]),
+            extract_lo_lo_f32_v128(out[6], out[7]),
+            extract_lo_lo_f32_v128(out[8], out[9]),
+            extract_lo_hi_f32_v128(out[10], out[0]),
+            extract_hi_hi_f32_v128(out[1], out[2]),
+            extract_hi_hi_f32_v128(out[3], out[4]),
+            extract_hi_hi_f32_v128(out[5], out[6]),
+            extract_hi_hi_f32_v128(out[7], out[8]),
+            extract_hi_hi_f32_v128(out[9], out[10]),
         ];
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+        write_complex_to_array_strided_v128!(out_packed, buffer, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
     }
 
     #[inline(always)]
@@ -563,11 +563,11 @@ impl<T: FftNum> WasmSimdF64Butterfly11<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
-        let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+        let values = read_complex_to_array_v128!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
 
         let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+        write_complex_to_array_v128!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
     }
 
     #[inline(always)]
@@ -740,11 +740,11 @@ impl<T: FftNum> WasmSimdF32Butterfly13<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
         let values =
-            read_partial1_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
+            read_partial1_complex_to_array_v128!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
 
         let out = self.perform_parallel_fft_direct(values);
 
-        write_partial_lo_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
+        write_partial_lo_complex_to_array_v128!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
     }
 
     #[inline(always)]
@@ -753,43 +753,43 @@ impl<T: FftNum> WasmSimdF32Butterfly13<T> {
         mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
         let input_packed =
-            read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24});
+            read_complex_to_array_v128!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24});
 
         let values = [
-            extract_lo_hi_f32(input_packed[0], input_packed[6]),
-            extract_hi_lo_f32(input_packed[0], input_packed[7]),
-            extract_lo_hi_f32(input_packed[1], input_packed[7]),
-            extract_hi_lo_f32(input_packed[1], input_packed[8]),
-            extract_lo_hi_f32(input_packed[2], input_packed[8]),
-            extract_hi_lo_f32(input_packed[2], input_packed[9]),
-            extract_lo_hi_f32(input_packed[3], input_packed[9]),
-            extract_hi_lo_f32(input_packed[3], input_packed[10]),
-            extract_lo_hi_f32(input_packed[4], input_packed[10]),
-            extract_hi_lo_f32(input_packed[4], input_packed[11]),
-            extract_lo_hi_f32(input_packed[5], input_packed[11]),
-            extract_hi_lo_f32(input_packed[5], input_packed[12]),
-            extract_lo_hi_f32(input_packed[6], input_packed[12]),
+            extract_lo_hi_f32_v128(input_packed[0], input_packed[6]),
+            extract_hi_lo_f32_v128(input_packed[0], input_packed[7]),
+            extract_lo_hi_f32_v128(input_packed[1], input_packed[7]),
+            extract_hi_lo_f32_v128(input_packed[1], input_packed[8]),
+            extract_lo_hi_f32_v128(input_packed[2], input_packed[8]),
+            extract_hi_lo_f32_v128(input_packed[2], input_packed[9]),
+            extract_lo_hi_f32_v128(input_packed[3], input_packed[9]),
+            extract_hi_lo_f32_v128(input_packed[3], input_packed[10]),
+            extract_lo_hi_f32_v128(input_packed[4], input_packed[10]),
+            extract_hi_lo_f32_v128(input_packed[4], input_packed[11]),
+            extract_lo_hi_f32_v128(input_packed[5], input_packed[11]),
+            extract_hi_lo_f32_v128(input_packed[5], input_packed[12]),
+            extract_lo_hi_f32_v128(input_packed[6], input_packed[12]),
         ];
 
         let out = self.perform_parallel_fft_direct(values);
 
         let out_packed = [
-            extract_lo_lo_f32(out[0], out[1]),
-            extract_lo_lo_f32(out[2], out[3]),
-            extract_lo_lo_f32(out[4], out[5]),
-            extract_lo_lo_f32(out[6], out[7]),
-            extract_lo_lo_f32(out[8], out[9]),
-            extract_lo_lo_f32(out[10], out[11]),
-            extract_lo_hi_f32(out[12], out[0]),
-            extract_hi_hi_f32(out[1], out[2]),
-            extract_hi_hi_f32(out[3], out[4]),
-            extract_hi_hi_f32(out[5], out[6]),
-            extract_hi_hi_f32(out[7], out[8]),
-            extract_hi_hi_f32(out[9], out[10]),
-            extract_hi_hi_f32(out[11], out[12]),
+            extract_lo_lo_f32_v128(out[0], out[1]),
+            extract_lo_lo_f32_v128(out[2], out[3]),
+            extract_lo_lo_f32_v128(out[4], out[5]),
+            extract_lo_lo_f32_v128(out[6], out[7]),
+            extract_lo_lo_f32_v128(out[8], out[9]),
+            extract_lo_lo_f32_v128(out[10], out[11]),
+            extract_lo_hi_f32_v128(out[12], out[0]),
+            extract_hi_hi_f32_v128(out[1], out[2]),
+            extract_hi_hi_f32_v128(out[3], out[4]),
+            extract_hi_hi_f32_v128(out[5], out[6]),
+            extract_hi_hi_f32_v128(out[7], out[8]),
+            extract_hi_hi_f32_v128(out[9], out[10]),
+            extract_hi_hi_f32_v128(out[11], out[12]),
         ];
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
+        write_complex_to_array_strided_v128!(out_packed, buffer, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
     }
 
     #[inline(always)]
@@ -988,11 +988,11 @@ impl<T: FftNum> WasmSimdF64Butterfly13<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
-        let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
+        let values = read_complex_to_array_v128!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
 
         let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
+        write_complex_to_array_v128!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
     }
 
     #[inline(always)]
@@ -1205,11 +1205,11 @@ impl<T: FftNum> WasmSimdF32Butterfly17<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let values = read_partial1_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});
+        let values = read_partial1_complex_to_array_v128!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});
 
         let out = self.perform_parallel_fft_direct(values);
 
-        write_partial_lo_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});
+        write_partial_lo_complex_to_array_v128!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});
     }
 
     #[inline(always)]
@@ -1217,51 +1217,51 @@ impl<T: FftNum> WasmSimdF32Butterfly17<T> {
         &self,
         mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
-        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32});
+        let input_packed = read_complex_to_array_v128!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32});
 
         let values = [
-            extract_lo_hi_f32(input_packed[0], input_packed[8]),
-            extract_hi_lo_f32(input_packed[0], input_packed[9]),
-            extract_lo_hi_f32(input_packed[1], input_packed[9]),
-            extract_hi_lo_f32(input_packed[1], input_packed[10]),
-            extract_lo_hi_f32(input_packed[2], input_packed[10]),
-            extract_hi_lo_f32(input_packed[2], input_packed[11]),
-            extract_lo_hi_f32(input_packed[3], input_packed[11]),
-            extract_hi_lo_f32(input_packed[3], input_packed[12]),
-            extract_lo_hi_f32(input_packed[4], input_packed[12]),
-            extract_hi_lo_f32(input_packed[4], input_packed[13]),
-            extract_lo_hi_f32(input_packed[5], input_packed[13]),
-            extract_hi_lo_f32(input_packed[5], input_packed[14]),
-            extract_lo_hi_f32(input_packed[6], input_packed[14]),
-            extract_hi_lo_f32(input_packed[6], input_packed[15]),
-            extract_lo_hi_f32(input_packed[7], input_packed[15]),
-            extract_hi_lo_f32(input_packed[7], input_packed[16]),
-            extract_lo_hi_f32(input_packed[8], input_packed[16]),
+            extract_lo_hi_f32_v128(input_packed[0], input_packed[8]),
+            extract_hi_lo_f32_v128(input_packed[0], input_packed[9]),
+            extract_lo_hi_f32_v128(input_packed[1], input_packed[9]),
+            extract_hi_lo_f32_v128(input_packed[1], input_packed[10]),
+            extract_lo_hi_f32_v128(input_packed[2], input_packed[10]),
+            extract_hi_lo_f32_v128(input_packed[2], input_packed[11]),
+            extract_lo_hi_f32_v128(input_packed[3], input_packed[11]),
+            extract_hi_lo_f32_v128(input_packed[3], input_packed[12]),
+            extract_lo_hi_f32_v128(input_packed[4], input_packed[12]),
+            extract_hi_lo_f32_v128(input_packed[4], input_packed[13]),
+            extract_lo_hi_f32_v128(input_packed[5], input_packed[13]),
+            extract_hi_lo_f32_v128(input_packed[5], input_packed[14]),
+            extract_lo_hi_f32_v128(input_packed[6], input_packed[14]),
+            extract_hi_lo_f32_v128(input_packed[6], input_packed[15]),
+            extract_lo_hi_f32_v128(input_packed[7], input_packed[15]),
+            extract_hi_lo_f32_v128(input_packed[7], input_packed[16]),
+            extract_lo_hi_f32_v128(input_packed[8], input_packed[16]),
         ];
 
         let out = self.perform_parallel_fft_direct(values);
 
         let out_packed = [
-            extract_lo_lo_f32(out[0], out[1]),
-            extract_lo_lo_f32(out[2], out[3]),
-            extract_lo_lo_f32(out[4], out[5]),
-            extract_lo_lo_f32(out[6], out[7]),
-            extract_lo_lo_f32(out[8], out[9]),
-            extract_lo_lo_f32(out[10], out[11]),
-            extract_lo_lo_f32(out[12], out[13]),
-            extract_lo_lo_f32(out[14], out[15]),
-            extract_lo_hi_f32(out[16], out[0]),
-            extract_hi_hi_f32(out[1], out[2]),
-            extract_hi_hi_f32(out[3], out[4]),
-            extract_hi_hi_f32(out[5], out[6]),
-            extract_hi_hi_f32(out[7], out[8]),
-            extract_hi_hi_f32(out[9], out[10]),
-            extract_hi_hi_f32(out[11], out[12]),
-            extract_hi_hi_f32(out[13], out[14]),
-            extract_hi_hi_f32(out[15], out[16]),
+            extract_lo_lo_f32_v128(out[0], out[1]),
+            extract_lo_lo_f32_v128(out[2], out[3]),
+            extract_lo_lo_f32_v128(out[4], out[5]),
+            extract_lo_lo_f32_v128(out[6], out[7]),
+            extract_lo_lo_f32_v128(out[8], out[9]),
+            extract_lo_lo_f32_v128(out[10], out[11]),
+            extract_lo_lo_f32_v128(out[12], out[13]),
+            extract_lo_lo_f32_v128(out[14], out[15]),
+            extract_lo_hi_f32_v128(out[16], out[0]),
+            extract_hi_hi_f32_v128(out[1], out[2]),
+            extract_hi_hi_f32_v128(out[3], out[4]),
+            extract_hi_hi_f32_v128(out[5], out[6]),
+            extract_hi_hi_f32_v128(out[7], out[8]),
+            extract_hi_hi_f32_v128(out[9], out[10]),
+            extract_hi_hi_f32_v128(out[11], out[12]),
+            extract_hi_hi_f32_v128(out[13], out[14]),
+            extract_hi_hi_f32_v128(out[15], out[16]),
         ];
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});
+        write_complex_to_array_strided_v128!(out_packed, buffer, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});
     }
 
     #[inline(always)]
@@ -1550,11 +1550,11 @@ impl<T: FftNum> WasmSimdF64Butterfly17<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
-        let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});
+        let values = read_complex_to_array_v128!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});
 
         let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});
+        write_complex_to_array_v128!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});
     }
 
     #[inline(always)]
@@ -1849,11 +1849,11 @@ impl<T: FftNum> WasmSimdF32Butterfly19<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let values = read_partial1_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18});
+        let values = read_partial1_complex_to_array_v128!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18});
 
         let out = self.perform_parallel_fft_direct(values);
 
-        write_partial_lo_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18});
+        write_partial_lo_complex_to_array_v128!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18});
     }
 
     #[inline(always)]
@@ -1861,55 +1861,55 @@ impl<T: FftNum> WasmSimdF32Butterfly19<T> {
         &self,
         mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
-        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36});
+        let input_packed = read_complex_to_array_v128!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36});
 
         let values = [
-            extract_lo_hi_f32(input_packed[0], input_packed[9]),
-            extract_hi_lo_f32(input_packed[0], input_packed[10]),
-            extract_lo_hi_f32(input_packed[1], input_packed[10]),
-            extract_hi_lo_f32(input_packed[1], input_packed[11]),
-            extract_lo_hi_f32(input_packed[2], input_packed[11]),
-            extract_hi_lo_f32(input_packed[2], input_packed[12]),
-            extract_lo_hi_f32(input_packed[3], input_packed[12]),
-            extract_hi_lo_f32(input_packed[3], input_packed[13]),
-            extract_lo_hi_f32(input_packed[4], input_packed[13]),
-            extract_hi_lo_f32(input_packed[4], input_packed[14]),
-            extract_lo_hi_f32(input_packed[5], input_packed[14]),
-            extract_hi_lo_f32(input_packed[5], input_packed[15]),
-            extract_lo_hi_f32(input_packed[6], input_packed[15]),
-            extract_hi_lo_f32(input_packed[6], input_packed[16]),
-            extract_lo_hi_f32(input_packed[7], input_packed[16]),
-            extract_hi_lo_f32(input_packed[7], input_packed[17]),
-            extract_lo_hi_f32(input_packed[8], input_packed[17]),
-            extract_hi_lo_f32(input_packed[8], input_packed[18]),
-            extract_lo_hi_f32(input_packed[9], input_packed[18]),
+            extract_lo_hi_f32_v128(input_packed[0], input_packed[9]),
+            extract_hi_lo_f32_v128(input_packed[0], input_packed[10]),
+            extract_lo_hi_f32_v128(input_packed[1], input_packed[10]),
+            extract_hi_lo_f32_v128(input_packed[1], input_packed[11]),
+            extract_lo_hi_f32_v128(input_packed[2], input_packed[11]),
+            extract_hi_lo_f32_v128(input_packed[2], input_packed[12]),
+            extract_lo_hi_f32_v128(input_packed[3], input_packed[12]),
+            extract_hi_lo_f32_v128(input_packed[3], input_packed[13]),
+            extract_lo_hi_f32_v128(input_packed[4], input_packed[13]),
+            extract_hi_lo_f32_v128(input_packed[4], input_packed[14]),
+            extract_lo_hi_f32_v128(input_packed[5], input_packed[14]),
+            extract_hi_lo_f32_v128(input_packed[5], input_packed[15]),
+            extract_lo_hi_f32_v128(input_packed[6], input_packed[15]),
+            extract_hi_lo_f32_v128(input_packed[6], input_packed[16]),
+            extract_lo_hi_f32_v128(input_packed[7], input_packed[16]),
+            extract_hi_lo_f32_v128(input_packed[7], input_packed[17]),
+            extract_lo_hi_f32_v128(input_packed[8], input_packed[17]),
+            extract_hi_lo_f32_v128(input_packed[8], input_packed[18]),
+            extract_lo_hi_f32_v128(input_packed[9], input_packed[18]),
         ];
 
         let out = self.perform_parallel_fft_direct(values);
 
         let out_packed = [
-            extract_lo_lo_f32(out[0], out[1]),
-            extract_lo_lo_f32(out[2], out[3]),
-            extract_lo_lo_f32(out[4], out[5]),
-            extract_lo_lo_f32(out[6], out[7]),
-            extract_lo_lo_f32(out[8], out[9]),
-            extract_lo_lo_f32(out[10], out[11]),
-            extract_lo_lo_f32(out[12], out[13]),
-            extract_lo_lo_f32(out[14], out[15]),
-            extract_lo_lo_f32(out[16], out[17]),
-            extract_lo_hi_f32(out[18], out[0]),
-            extract_hi_hi_f32(out[1], out[2]),
-            extract_hi_hi_f32(out[3], out[4]),
-            extract_hi_hi_f32(out[5], out[6]),
-            extract_hi_hi_f32(out[7], out[8]),
-            extract_hi_hi_f32(out[9], out[10]),
-            extract_hi_hi_f32(out[11], out[12]),
-            extract_hi_hi_f32(out[13], out[14]),
-            extract_hi_hi_f32(out[15], out[16]),
-            extract_hi_hi_f32(out[17], out[18]),
+            extract_lo_lo_f32_v128(out[0], out[1]),
+            extract_lo_lo_f32_v128(out[2], out[3]),
+            extract_lo_lo_f32_v128(out[4], out[5]),
+            extract_lo_lo_f32_v128(out[6], out[7]),
+            extract_lo_lo_f32_v128(out[8], out[9]),
+            extract_lo_lo_f32_v128(out[10], out[11]),
+            extract_lo_lo_f32_v128(out[12], out[13]),
+            extract_lo_lo_f32_v128(out[14], out[15]),
+            extract_lo_lo_f32_v128(out[16], out[17]),
+            extract_lo_hi_f32_v128(out[18], out[0]),
+            extract_hi_hi_f32_v128(out[1], out[2]),
+            extract_hi_hi_f32_v128(out[3], out[4]),
+            extract_hi_hi_f32_v128(out[5], out[6]),
+            extract_hi_hi_f32_v128(out[7], out[8]),
+            extract_hi_hi_f32_v128(out[9], out[10]),
+            extract_hi_hi_f32_v128(out[11], out[12]),
+            extract_hi_hi_f32_v128(out[13], out[14]),
+            extract_hi_hi_f32_v128(out[15], out[16]),
+            extract_hi_hi_f32_v128(out[17], out[18]),
         ];
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18});
+        write_complex_to_array_strided_v128!(out_packed, buffer, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18});
     }
 
     #[inline(always)]
@@ -2273,11 +2273,11 @@ impl<T: FftNum> WasmSimdF64Butterfly19<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
-        let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18});
+        let values = read_complex_to_array_v128!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18});
 
         let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18});
+        write_complex_to_array_v128!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18});
     }
 
     #[inline(always)]
@@ -2655,11 +2655,11 @@ impl<T: FftNum> WasmSimdF32Butterfly23<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let values = read_partial1_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22});
+        let values = read_partial1_complex_to_array_v128!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22});
 
         let out = self.perform_parallel_fft_direct(values);
 
-        write_partial_lo_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22});
+        write_partial_lo_complex_to_array_v128!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22});
     }
 
     #[inline(always)]
@@ -2667,63 +2667,63 @@ impl<T: FftNum> WasmSimdF32Butterfly23<T> {
         &self,
         mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
-        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44});
+        let input_packed = read_complex_to_array_v128!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44});
 
         let values = [
-            extract_lo_hi_f32(input_packed[0], input_packed[11]),
-            extract_hi_lo_f32(input_packed[0], input_packed[12]),
-            extract_lo_hi_f32(input_packed[1], input_packed[12]),
-            extract_hi_lo_f32(input_packed[1], input_packed[13]),
-            extract_lo_hi_f32(input_packed[2], input_packed[13]),
-            extract_hi_lo_f32(input_packed[2], input_packed[14]),
-            extract_lo_hi_f32(input_packed[3], input_packed[14]),
-            extract_hi_lo_f32(input_packed[3], input_packed[15]),
-            extract_lo_hi_f32(input_packed[4], input_packed[15]),
-            extract_hi_lo_f32(input_packed[4], input_packed[16]),
-            extract_lo_hi_f32(input_packed[5], input_packed[16]),
-            extract_hi_lo_f32(input_packed[5], input_packed[17]),
-            extract_lo_hi_f32(input_packed[6], input_packed[17]),
-            extract_hi_lo_f32(input_packed[6], input_packed[18]),
-            extract_lo_hi_f32(input_packed[7], input_packed[18]),
-            extract_hi_lo_f32(input_packed[7], input_packed[19]),
-            extract_lo_hi_f32(input_packed[8], input_packed[19]),
-            extract_hi_lo_f32(input_packed[8], input_packed[20]),
-            extract_lo_hi_f32(input_packed[9], input_packed[20]),
-            extract_hi_lo_f32(input_packed[9], input_packed[21]),
-            extract_lo_hi_f32(input_packed[10], input_packed[21]),
-            extract_hi_lo_f32(input_packed[10], input_packed[22]),
-            extract_lo_hi_f32(input_packed[11], input_packed[22]),
+            extract_lo_hi_f32_v128(input_packed[0], input_packed[11]),
+            extract_hi_lo_f32_v128(input_packed[0], input_packed[12]),
+            extract_lo_hi_f32_v128(input_packed[1], input_packed[12]),
+            extract_hi_lo_f32_v128(input_packed[1], input_packed[13]),
+            extract_lo_hi_f32_v128(input_packed[2], input_packed[13]),
+            extract_hi_lo_f32_v128(input_packed[2], input_packed[14]),
+            extract_lo_hi_f32_v128(input_packed[3], input_packed[14]),
+            extract_hi_lo_f32_v128(input_packed[3], input_packed[15]),
+            extract_lo_hi_f32_v128(input_packed[4], input_packed[15]),
+            extract_hi_lo_f32_v128(input_packed[4], input_packed[16]),
+            extract_lo_hi_f32_v128(input_packed[5], input_packed[16]),
+            extract_hi_lo_f32_v128(input_packed[5], input_packed[17]),
+            extract_lo_hi_f32_v128(input_packed[6], input_packed[17]),
+            extract_hi_lo_f32_v128(input_packed[6], input_packed[18]),
+            extract_lo_hi_f32_v128(input_packed[7], input_packed[18]),
+            extract_hi_lo_f32_v128(input_packed[7], input_packed[19]),
+            extract_lo_hi_f32_v128(input_packed[8], input_packed[19]),
+            extract_hi_lo_f32_v128(input_packed[8], input_packed[20]),
+            extract_lo_hi_f32_v128(input_packed[9], input_packed[20]),
+            extract_hi_lo_f32_v128(input_packed[9], input_packed[21]),
+            extract_lo_hi_f32_v128(input_packed[10], input_packed[21]),
+            extract_hi_lo_f32_v128(input_packed[10], input_packed[22]),
+            extract_lo_hi_f32_v128(input_packed[11], input_packed[22]),
         ];
 
         let out = self.perform_parallel_fft_direct(values);
 
         let out_packed = [
-            extract_lo_lo_f32(out[0], out[1]),
-            extract_lo_lo_f32(out[2], out[3]),
-            extract_lo_lo_f32(out[4], out[5]),
-            extract_lo_lo_f32(out[6], out[7]),
-            extract_lo_lo_f32(out[8], out[9]),
-            extract_lo_lo_f32(out[10], out[11]),
-            extract_lo_lo_f32(out[12], out[13]),
-            extract_lo_lo_f32(out[14], out[15]),
-            extract_lo_lo_f32(out[16], out[17]),
-            extract_lo_lo_f32(out[18], out[19]),
-            extract_lo_lo_f32(out[20], out[21]),
-            extract_lo_hi_f32(out[22], out[0]),
-            extract_hi_hi_f32(out[1], out[2]),
-            extract_hi_hi_f32(out[3], out[4]),
-            extract_hi_hi_f32(out[5], out[6]),
-            extract_hi_hi_f32(out[7], out[8]),
-            extract_hi_hi_f32(out[9], out[10]),
-            extract_hi_hi_f32(out[11], out[12]),
-            extract_hi_hi_f32(out[13], out[14]),
-            extract_hi_hi_f32(out[15], out[16]),
-            extract_hi_hi_f32(out[17], out[18]),
-            extract_hi_hi_f32(out[19], out[20]),
-            extract_hi_hi_f32(out[21], out[22]),
+            extract_lo_lo_f32_v128(out[0], out[1]),
+            extract_lo_lo_f32_v128(out[2], out[3]),
+            extract_lo_lo_f32_v128(out[4], out[5]),
+            extract_lo_lo_f32_v128(out[6], out[7]),
+            extract_lo_lo_f32_v128(out[8], out[9]),
+            extract_lo_lo_f32_v128(out[10], out[11]),
+            extract_lo_lo_f32_v128(out[12], out[13]),
+            extract_lo_lo_f32_v128(out[14], out[15]),
+            extract_lo_lo_f32_v128(out[16], out[17]),
+            extract_lo_lo_f32_v128(out[18], out[19]),
+            extract_lo_lo_f32_v128(out[20], out[21]),
+            extract_lo_hi_f32_v128(out[22], out[0]),
+            extract_hi_hi_f32_v128(out[1], out[2]),
+            extract_hi_hi_f32_v128(out[3], out[4]),
+            extract_hi_hi_f32_v128(out[5], out[6]),
+            extract_hi_hi_f32_v128(out[7], out[8]),
+            extract_hi_hi_f32_v128(out[9], out[10]),
+            extract_hi_hi_f32_v128(out[11], out[12]),
+            extract_hi_hi_f32_v128(out[13], out[14]),
+            extract_hi_hi_f32_v128(out[15], out[16]),
+            extract_hi_hi_f32_v128(out[17], out[18]),
+            extract_hi_hi_f32_v128(out[19], out[20]),
+            extract_hi_hi_f32_v128(out[21], out[22]),
         ];
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22});
+        write_complex_to_array_strided_v128!(out_packed, buffer, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22});
     }
 
     #[inline(always)]
@@ -3360,11 +3360,11 @@ impl<T: FftNum> WasmSimdF64Butterfly23<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
-        let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22});
+        let values = read_complex_to_array_v128!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22});
 
         let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22});
+        write_complex_to_array_v128!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22});
     }
 
     #[inline(always)]
@@ -4022,11 +4022,11 @@ impl<T: FftNum> WasmSimdF32Butterfly29<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let values = read_partial1_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28});
+        let values = read_partial1_complex_to_array_v128!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28});
 
         let out = self.perform_parallel_fft_direct(values);
 
-        write_partial_lo_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28});
+        write_partial_lo_complex_to_array_v128!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28});
     }
 
     #[inline(always)]
@@ -4034,75 +4034,75 @@ impl<T: FftNum> WasmSimdF32Butterfly29<T> {
         &self,
         mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
-        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56});
+        let input_packed = read_complex_to_array_v128!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56});
 
         let values = [
-            extract_lo_hi_f32(input_packed[0], input_packed[14]),
-            extract_hi_lo_f32(input_packed[0], input_packed[15]),
-            extract_lo_hi_f32(input_packed[1], input_packed[15]),
-            extract_hi_lo_f32(input_packed[1], input_packed[16]),
-            extract_lo_hi_f32(input_packed[2], input_packed[16]),
-            extract_hi_lo_f32(input_packed[2], input_packed[17]),
-            extract_lo_hi_f32(input_packed[3], input_packed[17]),
-            extract_hi_lo_f32(input_packed[3], input_packed[18]),
-            extract_lo_hi_f32(input_packed[4], input_packed[18]),
-            extract_hi_lo_f32(input_packed[4], input_packed[19]),
-            extract_lo_hi_f32(input_packed[5], input_packed[19]),
-            extract_hi_lo_f32(input_packed[5], input_packed[20]),
-            extract_lo_hi_f32(input_packed[6], input_packed[20]),
-            extract_hi_lo_f32(input_packed[6], input_packed[21]),
-            extract_lo_hi_f32(input_packed[7], input_packed[21]),
-            extract_hi_lo_f32(input_packed[7], input_packed[22]),
-            extract_lo_hi_f32(input_packed[8], input_packed[22]),
-            extract_hi_lo_f32(input_packed[8], input_packed[23]),
-            extract_lo_hi_f32(input_packed[9], input_packed[23]),
-            extract_hi_lo_f32(input_packed[9], input_packed[24]),
-            extract_lo_hi_f32(input_packed[10], input_packed[24]),
-            extract_hi_lo_f32(input_packed[10], input_packed[25]),
-            extract_lo_hi_f32(input_packed[11], input_packed[25]),
-            extract_hi_lo_f32(input_packed[11], input_packed[26]),
-            extract_lo_hi_f32(input_packed[12], input_packed[26]),
-            extract_hi_lo_f32(input_packed[12], input_packed[27]),
-            extract_lo_hi_f32(input_packed[13], input_packed[27]),
-            extract_hi_lo_f32(input_packed[13], input_packed[28]),
-            extract_lo_hi_f32(input_packed[14], input_packed[28]),
+            extract_lo_hi_f32_v128(input_packed[0], input_packed[14]),
+            extract_hi_lo_f32_v128(input_packed[0], input_packed[15]),
+            extract_lo_hi_f32_v128(input_packed[1], input_packed[15]),
+            extract_hi_lo_f32_v128(input_packed[1], input_packed[16]),
+            extract_lo_hi_f32_v128(input_packed[2], input_packed[16]),
+            extract_hi_lo_f32_v128(input_packed[2], input_packed[17]),
+            extract_lo_hi_f32_v128(input_packed[3], input_packed[17]),
+            extract_hi_lo_f32_v128(input_packed[3], input_packed[18]),
+            extract_lo_hi_f32_v128(input_packed[4], input_packed[18]),
+            extract_hi_lo_f32_v128(input_packed[4], input_packed[19]),
+            extract_lo_hi_f32_v128(input_packed[5], input_packed[19]),
+            extract_hi_lo_f32_v128(input_packed[5], input_packed[20]),
+            extract_lo_hi_f32_v128(input_packed[6], input_packed[20]),
+            extract_hi_lo_f32_v128(input_packed[6], input_packed[21]),
+            extract_lo_hi_f32_v128(input_packed[7], input_packed[21]),
+            extract_hi_lo_f32_v128(input_packed[7], input_packed[22]),
+            extract_lo_hi_f32_v128(input_packed[8], input_packed[22]),
+            extract_hi_lo_f32_v128(input_packed[8], input_packed[23]),
+            extract_lo_hi_f32_v128(input_packed[9], input_packed[23]),
+            extract_hi_lo_f32_v128(input_packed[9], input_packed[24]),
+            extract_lo_hi_f32_v128(input_packed[10], input_packed[24]),
+            extract_hi_lo_f32_v128(input_packed[10], input_packed[25]),
+            extract_lo_hi_f32_v128(input_packed[11], input_packed[25]),
+            extract_hi_lo_f32_v128(input_packed[11], input_packed[26]),
+            extract_lo_hi_f32_v128(input_packed[12], input_packed[26]),
+            extract_hi_lo_f32_v128(input_packed[12], input_packed[27]),
+            extract_lo_hi_f32_v128(input_packed[13], input_packed[27]),
+            extract_hi_lo_f32_v128(input_packed[13], input_packed[28]),
+            extract_lo_hi_f32_v128(input_packed[14], input_packed[28]),
         ];
 
         let out = self.perform_parallel_fft_direct(values);
 
         let out_packed = [
-            extract_lo_lo_f32(out[0], out[1]),
-            extract_lo_lo_f32(out[2], out[3]),
-            extract_lo_lo_f32(out[4], out[5]),
-            extract_lo_lo_f32(out[6], out[7]),
-            extract_lo_lo_f32(out[8], out[9]),
-            extract_lo_lo_f32(out[10], out[11]),
-            extract_lo_lo_f32(out[12], out[13]),
-            extract_lo_lo_f32(out[14], out[15]),
-            extract_lo_lo_f32(out[16], out[17]),
-            extract_lo_lo_f32(out[18], out[19]),
-            extract_lo_lo_f32(out[20], out[21]),
-            extract_lo_lo_f32(out[22], out[23]),
-            extract_lo_lo_f32(out[24], out[25]),
-            extract_lo_lo_f32(out[26], out[27]),
-            extract_lo_hi_f32(out[28], out[0]),
-            extract_hi_hi_f32(out[1], out[2]),
-            extract_hi_hi_f32(out[3], out[4]),
-            extract_hi_hi_f32(out[5], out[6]),
-            extract_hi_hi_f32(out[7], out[8]),
-            extract_hi_hi_f32(out[9], out[10]),
-            extract_hi_hi_f32(out[11], out[12]),
-            extract_hi_hi_f32(out[13], out[14]),
-            extract_hi_hi_f32(out[15], out[16]),
-            extract_hi_hi_f32(out[17], out[18]),
-            extract_hi_hi_f32(out[19], out[20]),
-            extract_hi_hi_f32(out[21], out[22]),
-            extract_hi_hi_f32(out[23], out[24]),
-            extract_hi_hi_f32(out[25], out[26]),
-            extract_hi_hi_f32(out[27], out[28]),
+            extract_lo_lo_f32_v128(out[0], out[1]),
+            extract_lo_lo_f32_v128(out[2], out[3]),
+            extract_lo_lo_f32_v128(out[4], out[5]),
+            extract_lo_lo_f32_v128(out[6], out[7]),
+            extract_lo_lo_f32_v128(out[8], out[9]),
+            extract_lo_lo_f32_v128(out[10], out[11]),
+            extract_lo_lo_f32_v128(out[12], out[13]),
+            extract_lo_lo_f32_v128(out[14], out[15]),
+            extract_lo_lo_f32_v128(out[16], out[17]),
+            extract_lo_lo_f32_v128(out[18], out[19]),
+            extract_lo_lo_f32_v128(out[20], out[21]),
+            extract_lo_lo_f32_v128(out[22], out[23]),
+            extract_lo_lo_f32_v128(out[24], out[25]),
+            extract_lo_lo_f32_v128(out[26], out[27]),
+            extract_lo_hi_f32_v128(out[28], out[0]),
+            extract_hi_hi_f32_v128(out[1], out[2]),
+            extract_hi_hi_f32_v128(out[3], out[4]),
+            extract_hi_hi_f32_v128(out[5], out[6]),
+            extract_hi_hi_f32_v128(out[7], out[8]),
+            extract_hi_hi_f32_v128(out[9], out[10]),
+            extract_hi_hi_f32_v128(out[11], out[12]),
+            extract_hi_hi_f32_v128(out[13], out[14]),
+            extract_hi_hi_f32_v128(out[15], out[16]),
+            extract_hi_hi_f32_v128(out[17], out[18]),
+            extract_hi_hi_f32_v128(out[19], out[20]),
+            extract_hi_hi_f32_v128(out[21], out[22]),
+            extract_hi_hi_f32_v128(out[23], out[24]),
+            extract_hi_hi_f32_v128(out[25], out[26]),
+            extract_hi_hi_f32_v128(out[27], out[28]),
         ];
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28});
+        write_complex_to_array_strided_v128!(out_packed, buffer, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28});
     }
 
     #[inline(always)]
@@ -5059,11 +5059,11 @@ impl<T: FftNum> WasmSimdF64Butterfly29<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
-        let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28});
+        let values = read_complex_to_array_v128!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28});
 
         let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28});
+        write_complex_to_array_v128!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28});
     }
 
     #[inline(always)]
@@ -6026,11 +6026,11 @@ impl<T: FftNum> WasmSimdF32Butterfly31<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let values = read_partial1_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30});
+        let values = read_partial1_complex_to_array_v128!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30});
 
         let out = self.perform_parallel_fft_direct(values);
 
-        write_partial_lo_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30});
+        write_partial_lo_complex_to_array_v128!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30});
     }
 
     #[inline(always)]
@@ -6038,79 +6038,79 @@ impl<T: FftNum> WasmSimdF32Butterfly31<T> {
         &self,
         mut buffer: impl WasmSimdArrayMut<f32>,
     ) {
-        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60});
+        let input_packed = read_complex_to_array_v128!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60});
 
         let values = [
-            extract_lo_hi_f32(input_packed[0], input_packed[15]),
-            extract_hi_lo_f32(input_packed[0], input_packed[16]),
-            extract_lo_hi_f32(input_packed[1], input_packed[16]),
-            extract_hi_lo_f32(input_packed[1], input_packed[17]),
-            extract_lo_hi_f32(input_packed[2], input_packed[17]),
-            extract_hi_lo_f32(input_packed[2], input_packed[18]),
-            extract_lo_hi_f32(input_packed[3], input_packed[18]),
-            extract_hi_lo_f32(input_packed[3], input_packed[19]),
-            extract_lo_hi_f32(input_packed[4], input_packed[19]),
-            extract_hi_lo_f32(input_packed[4], input_packed[20]),
-            extract_lo_hi_f32(input_packed[5], input_packed[20]),
-            extract_hi_lo_f32(input_packed[5], input_packed[21]),
-            extract_lo_hi_f32(input_packed[6], input_packed[21]),
-            extract_hi_lo_f32(input_packed[6], input_packed[22]),
-            extract_lo_hi_f32(input_packed[7], input_packed[22]),
-            extract_hi_lo_f32(input_packed[7], input_packed[23]),
-            extract_lo_hi_f32(input_packed[8], input_packed[23]),
-            extract_hi_lo_f32(input_packed[8], input_packed[24]),
-            extract_lo_hi_f32(input_packed[9], input_packed[24]),
-            extract_hi_lo_f32(input_packed[9], input_packed[25]),
-            extract_lo_hi_f32(input_packed[10], input_packed[25]),
-            extract_hi_lo_f32(input_packed[10], input_packed[26]),
-            extract_lo_hi_f32(input_packed[11], input_packed[26]),
-            extract_hi_lo_f32(input_packed[11], input_packed[27]),
-            extract_lo_hi_f32(input_packed[12], input_packed[27]),
-            extract_hi_lo_f32(input_packed[12], input_packed[28]),
-            extract_lo_hi_f32(input_packed[13], input_packed[28]),
-            extract_hi_lo_f32(input_packed[13], input_packed[29]),
-            extract_lo_hi_f32(input_packed[14], input_packed[29]),
-            extract_hi_lo_f32(input_packed[14], input_packed[30]),
-            extract_lo_hi_f32(input_packed[15], input_packed[30]),
+            extract_lo_hi_f32_v128(input_packed[0], input_packed[15]),
+            extract_hi_lo_f32_v128(input_packed[0], input_packed[16]),
+            extract_lo_hi_f32_v128(input_packed[1], input_packed[16]),
+            extract_hi_lo_f32_v128(input_packed[1], input_packed[17]),
+            extract_lo_hi_f32_v128(input_packed[2], input_packed[17]),
+            extract_hi_lo_f32_v128(input_packed[2], input_packed[18]),
+            extract_lo_hi_f32_v128(input_packed[3], input_packed[18]),
+            extract_hi_lo_f32_v128(input_packed[3], input_packed[19]),
+            extract_lo_hi_f32_v128(input_packed[4], input_packed[19]),
+            extract_hi_lo_f32_v128(input_packed[4], input_packed[20]),
+            extract_lo_hi_f32_v128(input_packed[5], input_packed[20]),
+            extract_hi_lo_f32_v128(input_packed[5], input_packed[21]),
+            extract_lo_hi_f32_v128(input_packed[6], input_packed[21]),
+            extract_hi_lo_f32_v128(input_packed[6], input_packed[22]),
+            extract_lo_hi_f32_v128(input_packed[7], input_packed[22]),
+            extract_hi_lo_f32_v128(input_packed[7], input_packed[23]),
+            extract_lo_hi_f32_v128(input_packed[8], input_packed[23]),
+            extract_hi_lo_f32_v128(input_packed[8], input_packed[24]),
+            extract_lo_hi_f32_v128(input_packed[9], input_packed[24]),
+            extract_hi_lo_f32_v128(input_packed[9], input_packed[25]),
+            extract_lo_hi_f32_v128(input_packed[10], input_packed[25]),
+            extract_hi_lo_f32_v128(input_packed[10], input_packed[26]),
+            extract_lo_hi_f32_v128(input_packed[11], input_packed[26]),
+            extract_hi_lo_f32_v128(input_packed[11], input_packed[27]),
+            extract_lo_hi_f32_v128(input_packed[12], input_packed[27]),
+            extract_hi_lo_f32_v128(input_packed[12], input_packed[28]),
+            extract_lo_hi_f32_v128(input_packed[13], input_packed[28]),
+            extract_hi_lo_f32_v128(input_packed[13], input_packed[29]),
+            extract_lo_hi_f32_v128(input_packed[14], input_packed[29]),
+            extract_hi_lo_f32_v128(input_packed[14], input_packed[30]),
+            extract_lo_hi_f32_v128(input_packed[15], input_packed[30]),
         ];
 
         let out = self.perform_parallel_fft_direct(values);
 
         let out_packed = [
-            extract_lo_lo_f32(out[0], out[1]),
-            extract_lo_lo_f32(out[2], out[3]),
-            extract_lo_lo_f32(out[4], out[5]),
-            extract_lo_lo_f32(out[6], out[7]),
-            extract_lo_lo_f32(out[8], out[9]),
-            extract_lo_lo_f32(out[10], out[11]),
-            extract_lo_lo_f32(out[12], out[13]),
-            extract_lo_lo_f32(out[14], out[15]),
-            extract_lo_lo_f32(out[16], out[17]),
-            extract_lo_lo_f32(out[18], out[19]),
-            extract_lo_lo_f32(out[20], out[21]),
-            extract_lo_lo_f32(out[22], out[23]),
-            extract_lo_lo_f32(out[24], out[25]),
-            extract_lo_lo_f32(out[26], out[27]),
-            extract_lo_lo_f32(out[28], out[29]),
-            extract_lo_hi_f32(out[30], out[0]),
-            extract_hi_hi_f32(out[1], out[2]),
-            extract_hi_hi_f32(out[3], out[4]),
-            extract_hi_hi_f32(out[5], out[6]),
-            extract_hi_hi_f32(out[7], out[8]),
-            extract_hi_hi_f32(out[9], out[10]),
-            extract_hi_hi_f32(out[11], out[12]),
-            extract_hi_hi_f32(out[13], out[14]),
-            extract_hi_hi_f32(out[15], out[16]),
-            extract_hi_hi_f32(out[17], out[18]),
-            extract_hi_hi_f32(out[19], out[20]),
-            extract_hi_hi_f32(out[21], out[22]),
-            extract_hi_hi_f32(out[23], out[24]),
-            extract_hi_hi_f32(out[25], out[26]),
-            extract_hi_hi_f32(out[27], out[28]),
-            extract_hi_hi_f32(out[29], out[30]),
+            extract_lo_lo_f32_v128(out[0], out[1]),
+            extract_lo_lo_f32_v128(out[2], out[3]),
+            extract_lo_lo_f32_v128(out[4], out[5]),
+            extract_lo_lo_f32_v128(out[6], out[7]),
+            extract_lo_lo_f32_v128(out[8], out[9]),
+            extract_lo_lo_f32_v128(out[10], out[11]),
+            extract_lo_lo_f32_v128(out[12], out[13]),
+            extract_lo_lo_f32_v128(out[14], out[15]),
+            extract_lo_lo_f32_v128(out[16], out[17]),
+            extract_lo_lo_f32_v128(out[18], out[19]),
+            extract_lo_lo_f32_v128(out[20], out[21]),
+            extract_lo_lo_f32_v128(out[22], out[23]),
+            extract_lo_lo_f32_v128(out[24], out[25]),
+            extract_lo_lo_f32_v128(out[26], out[27]),
+            extract_lo_lo_f32_v128(out[28], out[29]),
+            extract_lo_hi_f32_v128(out[30], out[0]),
+            extract_hi_hi_f32_v128(out[1], out[2]),
+            extract_hi_hi_f32_v128(out[3], out[4]),
+            extract_hi_hi_f32_v128(out[5], out[6]),
+            extract_hi_hi_f32_v128(out[7], out[8]),
+            extract_hi_hi_f32_v128(out[9], out[10]),
+            extract_hi_hi_f32_v128(out[11], out[12]),
+            extract_hi_hi_f32_v128(out[13], out[14]),
+            extract_hi_hi_f32_v128(out[15], out[16]),
+            extract_hi_hi_f32_v128(out[17], out[18]),
+            extract_hi_hi_f32_v128(out[19], out[20]),
+            extract_hi_hi_f32_v128(out[21], out[22]),
+            extract_hi_hi_f32_v128(out[23], out[24]),
+            extract_hi_hi_f32_v128(out[25], out[26]),
+            extract_hi_hi_f32_v128(out[27], out[28]),
+            extract_hi_hi_f32_v128(out[29], out[30]),
         ];
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30});
+        write_complex_to_array_strided_v128!(out_packed, buffer, 2, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30});
     }
 
     #[inline(always)]
@@ -7194,11 +7194,11 @@ impl<T: FftNum> WasmSimdF64Butterfly31<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
-        let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30});
+        let values = read_complex_to_array_v128!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30});
 
         let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30});
+        write_complex_to_array_v128!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30});
     }
 
     #[inline(always)]

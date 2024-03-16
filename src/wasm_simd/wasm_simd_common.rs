@@ -61,8 +61,8 @@ macro_rules! interleave_complex_f32 {
     ($input:ident, $offset:literal, { $($idx:literal),* }) => {
         [
         $(
-            extract_lo_lo_f32($input[$idx], $input[$idx+$offset]),
-            extract_hi_hi_f32($input[$idx], $input[$idx+$offset]),
+            extract_lo_lo_f32_v128($input[$idx], $input[$idx+$offset]),
+            extract_hi_hi_f32_v128($input[$idx], $input[$idx+$offset]),
         )*
         ]
     }
@@ -87,10 +87,10 @@ macro_rules! separate_interleaved_complex_f32 {
     ($input:ident, { $($idx:literal),* }) => {
         [
         $(
-            extract_lo_lo_f32($input[$idx], $input[$idx+1]),
+            extract_lo_lo_f32_v128($input[$idx], $input[$idx+1]),
         )*
         $(
-            extract_hi_hi_f32($input[$idx], $input[$idx+1]),
+            extract_hi_hi_f32_v128($input[$idx], $input[$idx+1]),
         )*
         ]
     }

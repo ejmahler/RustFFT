@@ -12,7 +12,7 @@ use super::WasmNum;
 /// Takes a name of a vector to read from, and a list of indexes to read.
 /// This statement:
 /// ```
-/// let values = read_complex_to_array!(input, {0, 1, 2, 3});
+/// let values = read_complex_to_array_v128!(input, {0, 1, 2, 3});
 /// ```
 /// is equivalent to:
 /// ```
@@ -23,7 +23,7 @@ use super::WasmNum;
 ///     input.load_complex(3),
 /// ];
 /// ```
-macro_rules! read_complex_to_array {
+macro_rules! read_complex_to_array_v128 {
     ($input:ident, { $($idx:literal),* }) => {
         [
         $(
@@ -37,7 +37,7 @@ macro_rules! read_complex_to_array {
 /// Takes a name of a vector to read from, and a list of indexes to read.
 /// This statement:
 /// ```
-/// let values = read_partial1_complex_to_array!(input, {0, 1, 2, 3});
+/// let values = read_partial1_complex_to_array_v128!(input, {0, 1, 2, 3});
 /// ```
 /// is equivalent to:
 /// ```
@@ -48,7 +48,7 @@ macro_rules! read_complex_to_array {
 ///     input.load1_complex(3),
 /// ];
 /// ```
-macro_rules! read_partial1_complex_to_array {
+macro_rules! read_partial1_complex_to_array_v128 {
     ($input:ident, { $($idx:literal),* }) => {
         [
         $(
@@ -62,7 +62,7 @@ macro_rules! read_partial1_complex_to_array {
 /// Takes a name of a vector to read from, one to write to, and a list of indexes.
 /// This statement:
 /// ```
-/// let values = write_complex_to_array!(input, output, {0, 1, 2, 3});
+/// let values = write_complex_to_array_v128!(input, output, {0, 1, 2, 3});
 /// ```
 /// is equivalent to:
 /// ```
@@ -73,7 +73,7 @@ macro_rules! read_partial1_complex_to_array {
 ///     output.store_complex(input[3], 3),
 /// ];
 /// ```
-macro_rules! write_complex_to_array {
+macro_rules! write_complex_to_array_v128 {
     ($input:ident, $output:ident, { $($idx:literal),* }) => {
         $(
             $output.store_complex_v128($input[$idx], $idx);
@@ -85,7 +85,7 @@ macro_rules! write_complex_to_array {
 /// Takes a name of a vector to read from, one to write to, and a list of indexes.
 /// This statement:
 /// ```
-/// let values = write_partial_lo_complex_to_array!(input, output, {0, 1, 2, 3});
+/// let values = write_partial_lo_complex_to_array_v128!(input, output, {0, 1, 2, 3});
 /// ```
 /// is equivalent to:
 /// ```
@@ -96,7 +96,7 @@ macro_rules! write_complex_to_array {
 ///     output.store_partial_lo_complex(input[3], 3),
 /// ];
 /// ```
-macro_rules! write_partial_lo_complex_to_array {
+macro_rules! write_partial_lo_complex_to_array_v128 {
     ($input:ident, $output:ident, { $($idx:literal),* }) => {
         $(
             $output.store_partial_lo_complex_v128($input[$idx], $idx);
@@ -108,7 +108,7 @@ macro_rules! write_partial_lo_complex_to_array {
 /// Takes a name of a vector to read from, one to write to, an integer stride, and a list of indexes.
 /// This statement:
 /// ```
-/// let values = write_complex_to_array_separate!(input, output, {0, 1, 2, 3});
+/// let values = write_complex_to_array_strided_v128!(input, output, {0, 1, 2, 3});
 /// ```
 /// is equivalent to:
 /// ```
@@ -119,7 +119,7 @@ macro_rules! write_partial_lo_complex_to_array {
 ///     output.store_complex(input[3], 6),
 /// ];
 /// ```
-macro_rules! write_complex_to_array_strided {
+macro_rules! write_complex_to_array_strided_v128 {
     ($input:ident, $output:ident, $stride:literal, { $($idx:literal),* }) => {
         $(
             $output.store_complex_v128($input[$idx], $idx*$stride);
