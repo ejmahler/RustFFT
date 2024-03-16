@@ -67,7 +67,7 @@ pub unsafe fn construct_prime_butterfly<T: FftNum>(len: usize, direction: FftDir
             _ => unimplemented!("Invalid SSE prime butterfly length: {len}"),
         }
     } else {
-        unimplemented!("Not f32 or f64");
+        unimplemented!("Invalid type T for construct_prime_butterfly(...)");
     }
 }
 
@@ -182,7 +182,7 @@ impl<T: FftNum> SseF32Butterfly7<T> {
         let [y03, y04] = SseVector::column_butterfly2([m0304a, m0304b]);
 
 
-[y00, y01, y02, y03, y04, y05, y06]
+        [y00, y01, y02, y03, y04, y05, y06]
     }
 }
 
@@ -258,7 +258,7 @@ impl<T: FftNum> SseF64Butterfly7<T> {
         let [y03, y04] = SseVector::column_butterfly2([m0304a, m0304b]);
 
 
-[y00, y01, y02, y03, y04, y05, y06]
+        [y00, y01, y02, y03, y04, y05, y06]
     }
 }
 
@@ -413,7 +413,7 @@ impl<T: FftNum> SseF32Butterfly11<T> {
         let [y05, y06] = SseVector::column_butterfly2([m0506a, m0506b]);
 
 
-[y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10]
+        [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10]
     }
 }
 
@@ -531,7 +531,7 @@ impl<T: FftNum> SseF64Butterfly11<T> {
         let [y05, y06] = SseVector::column_butterfly2([m0506a, m0506b]);
 
 
-[y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10]
+        [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10]
     }
 }
 
@@ -717,7 +717,7 @@ impl<T: FftNum> SseF32Butterfly13<T> {
         let [y06, y07] = SseVector::column_butterfly2([m0607a, m0607b]);
 
 
-[y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12]
+        [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12]
     }
 }
 
@@ -862,7 +862,7 @@ impl<T: FftNum> SseF64Butterfly13<T> {
         let [y06, y07] = SseVector::column_butterfly2([m0607a, m0607b]);
 
 
-[y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12]
+        [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12]
     }
 }
 
@@ -1122,7 +1122,7 @@ impl<T: FftNum> SseF32Butterfly17<T> {
         let [y08, y09] = SseVector::column_butterfly2([m0809a, m0809b]);
 
 
-[y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16]
+        [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16]
     }
 }
 
@@ -1333,7 +1333,7 @@ impl<T: FftNum> SseF64Butterfly17<T> {
         let [y08, y09] = SseVector::column_butterfly2([m0809a, m0809b]);
 
 
-[y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16]
+        [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16]
     }
 }
 
@@ -1636,7 +1636,7 @@ impl<T: FftNum> SseF32Butterfly19<T> {
         let [y09, y10] = SseVector::column_butterfly2([m0910a, m0910b]);
 
 
-[y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18]
+        [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18]
     }
 }
 
@@ -1886,7 +1886,7 @@ impl<T: FftNum> SseF64Butterfly19<T> {
         let [y09, y10] = SseVector::column_butterfly2([m0910a, m0910b]);
 
 
-[y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18]
+        [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18]
     }
 }
 
@@ -2287,7 +2287,7 @@ impl<T: FftNum> SseF32Butterfly23<T> {
         let [y11, y12] = SseVector::column_butterfly2([m1112a, m1112b]);
 
 
-[y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22]
+        [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22]
     }
 }
 
@@ -2627,7 +2627,7 @@ impl<T: FftNum> SseF64Butterfly23<T> {
         let [y11, y12] = SseVector::column_butterfly2([m1112a, m1112b]);
 
 
-[y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22]
+        [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22]
     }
 }
 
@@ -3205,7 +3205,7 @@ impl<T: FftNum> SseF32Butterfly29<T> {
         let [y14, y15] = SseVector::column_butterfly2([m1415a, m1415b]);
 
 
-[y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22, y23, y24, y25, y26, y27, y28]
+        [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22, y23, y24, y25, y26, y27, y28]
     }
 }
 
@@ -3710,7 +3710,7 @@ impl<T: FftNum> SseF64Butterfly29<T> {
         let [y14, y15] = SseVector::column_butterfly2([m1415a, m1415b]);
 
 
-[y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22, y23, y24, y25, y26, y27, y28]
+        [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22, y23, y24, y25, y26, y27, y28]
     }
 }
 
@@ -4355,7 +4355,7 @@ impl<T: FftNum> SseF32Butterfly31<T> {
         let [y15, y16] = SseVector::column_butterfly2([m1516a, m1516b]);
 
 
-[y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22, y23, y24, y25, y26, y27, y28, y29, y30]
+        [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22, y23, y24, y25, y26, y27, y28, y29, y30]
     }
 }
 
@@ -4923,7 +4923,7 @@ impl<T: FftNum> SseF64Butterfly31<T> {
         let [y15, y16] = SseVector::column_butterfly2([m1516a, m1516b]);
 
 
-[y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22, y23, y24, y25, y26, y27, y28, y29, y30]
+        [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22, y23, y24, y25, y26, y27, y28, y29, y30]
     }
 }
 

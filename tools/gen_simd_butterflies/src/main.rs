@@ -134,7 +134,7 @@ fn generate_fft_entry(len: usize) -> FftEntry {
 
         // last step is to just return an array containing our output variables
         let out_strs = (0..len).map(|i| format!("y{i:02}")).collect::<Vec<_>>();
-        impl_strs.push(format!("[{}]", out_strs.join(", ")));
+        impl_strs.push(format!("{indent}[{}]", out_strs.join(", ")));
 
         impl_strs.join("\n")
     };
