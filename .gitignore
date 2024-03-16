@@ -1,4 +1,6 @@
 /target
 /Cargo.lock
+Tools/gen_simd_butterflies/target
+Tools/gen_simd_butterflies/Cargo.lock
 *.swp
 .vscode/
