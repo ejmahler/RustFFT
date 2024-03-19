@@ -4937,7 +4937,7 @@ mod unit_tests {
         ($test_name:ident, $struct_name:ident, $size:expr) => {
             #[test]
             fn $test_name() {
-                assert!(is_x86_feature_detected!("sse4.1"));
+                assert!(std::arch::is_x86_feature_detected!("sse4.1"));
                 let fwd = unsafe { $struct_name::new(FftDirection::Forward) };
                 check_fft_algorithm::<f32>(&fwd, $size, FftDirection::Forward);
 
@@ -4950,7 +4950,7 @@ mod unit_tests {
         ($test_name:ident, $struct_name:ident, $size:expr) => {
             #[test]
             fn $test_name() {
-                assert!(is_x86_feature_detected!("sse4.1"));
+                assert!(std::arch::is_x86_feature_detected!("sse4.1"));
 
                 let fwd = unsafe { $struct_name::new(FftDirection::Forward) };
                 check_fft_algorithm::<f64>(&fwd, $size, FftDirection::Forward);

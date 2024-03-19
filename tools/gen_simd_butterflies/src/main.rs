@@ -89,7 +89,7 @@ fn parse_architecture(arch_str: Option<String>) -> Result<Architecture, String> 
                 vector_f64: "__m128d",
                 cpu_feature_name: "sse4.1",
                 has_dynamic_cpu_features: true,
-                dynamic_cpu_feature_macro: "is_x86_feature_detected",
+                dynamic_cpu_feature_macro: "std::arch::is_x86_feature_detected",
                 arch_include: "use core::arch::x86_64::{__m128, __m128d};",
                 test_attribute: "test",
                 extra_test_includes: Vec::new(),
