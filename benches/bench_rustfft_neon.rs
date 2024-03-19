@@ -80,6 +80,25 @@ fn bench_planned_multi_f64(b: &mut Bencher, len: usize) {
 #[bench] fn neon_butterfly32_31(b: &mut Bencher) { bench_planned_multi_f32(b, 31);}
 #[bench] fn neon_butterfly32_32(b: &mut Bencher) { bench_planned_multi_f32(b, 32);}
 
+
+#[bench] fn neon_prime_butterfly32_07(b: &mut Bencher) { bench_planned_multi_f32(b, 7);}
+#[bench] fn neon_prime_butterfly32_11(b: &mut Bencher) { bench_planned_multi_f32(b, 11);}
+#[bench] fn neon_prime_butterfly32_13(b: &mut Bencher) { bench_planned_multi_f32(b, 13);}
+#[bench] fn neon_prime_butterfly32_17(b: &mut Bencher) { bench_planned_multi_f32(b, 17);}
+#[bench] fn neon_prime_butterfly32_19(b: &mut Bencher) { bench_planned_multi_f32(b, 19);}
+#[bench] fn neon_prime_butterfly32_23(b: &mut Bencher) { bench_planned_multi_f32(b, 23);}
+#[bench] fn neon_prime_butterfly32_29(b: &mut Bencher) { bench_planned_multi_f32(b, 29);}
+#[bench] fn neon_prime_butterfly32_31(b: &mut Bencher) { bench_planned_multi_f32(b, 31);}
+
+#[bench] fn neon_prime_butterfly64_07(b: &mut Bencher) { bench_planned_multi_f64(b, 7);}
+#[bench] fn neon_prime_butterfly64_11(b: &mut Bencher) { bench_planned_multi_f64(b, 11);}
+#[bench] fn neon_prime_butterfly64_13(b: &mut Bencher) { bench_planned_multi_f64(b, 13);}
+#[bench] fn neon_prime_butterfly64_17(b: &mut Bencher) { bench_planned_multi_f64(b, 17);}
+#[bench] fn neon_prime_butterfly64_19(b: &mut Bencher) { bench_planned_multi_f64(b, 19);}
+#[bench] fn neon_prime_butterfly64_23(b: &mut Bencher) { bench_planned_multi_f64(b, 23);}
+#[bench] fn neon_prime_butterfly64_29(b: &mut Bencher) { bench_planned_multi_f64(b, 29);}
+#[bench] fn neon_prime_butterfly64_31(b: &mut Bencher) { bench_planned_multi_f64(b, 31);}
+
 #[bench] fn neon_butterfly64_02(b: &mut Bencher) { bench_planned_multi_f64(b, 2);}
 #[bench] fn neon_butterfly64_03(b: &mut Bencher) { bench_planned_multi_f64(b, 3);}
 #[bench] fn neon_butterfly64_04(b: &mut Bencher) { bench_planned_multi_f64(b, 4);}
