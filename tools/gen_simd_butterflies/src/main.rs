@@ -110,6 +110,22 @@ fn parse_architecture(arch_str: Option<String>) -> Result<Architecture, String> 
                 test_attribute: "wasm_bindgen_test",
                 extra_test_includes: vec!["use wasm_bindgen_test::wasm_bindgen_test;"]
             });
+        } else if arch_str == "neon" {
+            return Ok(Architecture {
+                name_snakecase: "neon",
+                name_camelcase: "Neon",
+                name_display: "NEON",
+                array_trait: "NeonArrayMut",
+                vector_trait: "NeonVector",
+                vector_f32: "float32x4_t",
+                vector_f64: "float64x2_t",
+                cpu_feature_name: "neon",
+                has_dynamic_cpu_features: true,
+                dynamic_cpu_feature_macro: "std::arch::is_aarch64_feature_detected",
+                arch_include: "use core::arch::aarch64::{float32x4_t, float64x2_t};",
+                test_attribute: "test",
+                extra_test_includes: vec![],
+            });
         }
     }
 

@@ -149,6 +149,12 @@ pub trait NeonVector: Copy + Debug + Send + Sync {
 
     // math ops
     unsafe fn neg(a: Self) -> Self;
+    unsafe fn add(a: Self, b: Self) -> Self;
+    unsafe fn mul(a: Self, b: Self) -> Self;
+    unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self;
+    unsafe fn nmadd(acc: Self, a: Self, b: Self) -> Self;
+
+    unsafe fn broadcast_scalar(value: Self::ScalarType) -> Self;
 
     /// Generates a chunk of twiddle factors starting at (X,Y) and incrementing X `COMPLEX_PER_VECTOR` times.
     /// The result will be [twiddle(x*y, len), twiddle((x+1)*y, len), twiddle((x+2)*y, len), ...] for as many complex numbers fit in a vector
@@ -218,6 +224,27 @@ impl NeonVector for float32x4_t {
     #[inline(always)]
     unsafe fn neg(a: Self) -> Self {
         vnegq_f32(a)
+    }
+    #[inline(always)]
+    unsafe fn add(a: Self, b: Self) -> Self {
+        vaddq_f32(a, b)
+    }
+    #[inline(always)]
+    unsafe fn mul(a: Self, b: Self) -> Self {
+        vmulq_f32(a, b)
+    }
+    #[inline(always)]
+    unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self {
+        vfmaq_f32(acc, a, b)
+    }
+    #[inline(always)]
+    unsafe fn nmadd(acc: Self, a: Self, b: Self) -> Self {
+        vfmaq_f32(acc, a, vnegq_f32(b))
+    }
+
+    #[inline(always)]
+    unsafe fn broadcast_scalar(value: Self::ScalarType) -> Self {
+        vmovq_n_f32(value)
     }
 
     #[inline(always)]
@@ -326,6 +353,27 @@ impl NeonVector for float64x2_t {
     #[inline(always)]
     unsafe fn neg(a: Self) -> Self {
         vnegq_f64(a)
+    }
+    #[inline(always)]
+    unsafe fn add(a: Self, b: Self) -> Self {
+        vaddq_f64(a, b)
+    }
+    #[inline(always)]
+    unsafe fn mul(a: Self, b: Self) -> Self {
+        vmulq_f64(a, b)
+    }
+    #[inline(always)]
+    unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self {
+        vfmaq_f64(acc, a, b)
+    }
+    #[inline(always)]
+    unsafe fn nmadd(acc: Self, a: Self, b: Self) -> Self {
+        vfmaq_f64(acc, a, vnegq_f64(b))
+    }
+
+    #[inline(always)]
+    unsafe fn broadcast_scalar(value: Self::ScalarType) -> Self {
+        vmovq_n_f64(value)
     }
 
     #[inline(always)]
