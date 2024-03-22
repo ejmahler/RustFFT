@@ -12,6 +12,8 @@ struct FftEntry {
     shuffle_in_str: String,
     shuffle_out_str: String,
     impl_str: String,
+    struct_name_32: String,
+    struct_name_64: String,
 }
 
 #[derive(Serialize)]
@@ -235,6 +237,8 @@ fn generate_fft_entry(len: usize, arch: &Architecture) -> FftEntry {
         shuffle_in_str,
         shuffle_out_str,
         impl_str,
+        struct_name_32: format!("{}F32Butterfly{len}", arch.name_camelcase),
+        struct_name_64: format!("{}F64Butterfly{len}", arch.name_camelcase),
     }
 }   
 

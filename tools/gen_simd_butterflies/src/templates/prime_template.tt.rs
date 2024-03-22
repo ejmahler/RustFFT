@@ -72,16 +72,16 @@ fn make_twiddles<const TW: usize, T: FftNum>(len: usize, direction: FftDirection
 }
 
 ${{ for entry in lengths -}}
-struct ${arch.name_camelcase}F32Butterfly${entry.len}<T> {
+struct ${entry.struct_name_32}<T> {
     direction: FftDirection,
     twiddles_re: [${arch.vector_f32}; ${entry.twiddle_len}],
     twiddles_im: [${arch.vector_f32}; ${entry.twiddle_len}],
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_${arch.name_snakecase}_f32_butterfly!(${arch.name_camelcase}F32Butterfly${entry.len}, ${entry.len}, |this: &${arch.name_camelcase}F32Butterfly${entry.len}<_>| this.direction);
-boilerplate_fft_${arch.name_snakecase}_common_butterfly!(${arch.name_camelcase}F32Butterfly${entry.len}, ${entry.len}, |this: &${arch.name_camelcase}F32Butterfly${entry.len}<_>| this.direction);
-impl<T: FftNum> ${arch.name_camelcase}F32Butterfly${entry.len}<T> {
+boilerplate_fft_${arch.name_snakecase}_f32_butterfly!(${entry.struct_name_32}, ${entry.len}, |this: &${entry.struct_name_32}<_>| this.direction);
+boilerplate_fft_${arch.name_snakecase}_common_butterfly!(${entry.struct_name_32}, ${entry.len}, |this: &${entry.struct_name_32}<_>| this.direction);
+impl<T: FftNum> ${entry.struct_name_32}<T> {
     /// Safety: The current machine must support the ${arch.cpu_feature_name} instruction set
     #[target_feature(enable = "${arch.cpu_feature_name}")]
     unsafe fn new(direction: FftDirection) -> Self {
@@ -127,16 +127,16 @@ ${entry.impl_str}
     }
 }
 
-struct ${arch.name_camelcase}F64Butterfly${entry.len}<T> {
+struct ${entry.struct_name_64}<T> {
     direction: FftDirection,
     twiddles_re: [${arch.vector_f64}; ${entry.twiddle_len}],
     twiddles_im: [${arch.vector_f64}; ${entry.twiddle_len}],
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_${arch.name_snakecase}_f64_butterfly!(${arch.name_camelcase}F64Butterfly${entry.len}, ${entry.len}, |this: &${arch.name_camelcase}F64Butterfly${entry.len}<_>| this.direction);
-boilerplate_fft_${arch.name_snakecase}_common_butterfly!(${arch.name_camelcase}F64Butterfly${entry.len}, ${entry.len}, |this: &${arch.name_camelcase}F64Butterfly${entry.len}<_>| this.direction);
-impl<T: FftNum> ${arch.name_camelcase}F64Butterfly${entry.len}<T> {
+boilerplate_fft_${arch.name_snakecase}_f64_butterfly!(${entry.struct_name_64}, ${entry.len}, |this: &${entry.struct_name_64}<_>| this.direction);
+boilerplate_fft_${arch.name_snakecase}_common_butterfly!(${entry.struct_name_64}, ${entry.len}, |this: &${entry.struct_name_64}<_>| this.direction);
+impl<T: FftNum> ${entry.struct_name_64}<T> {
     /// Safety: The current machine must support the ${arch.cpu_feature_name} instruction set
     #[target_feature(enable = "${arch.cpu_feature_name}")]
     unsafe fn new(direction: FftDirection) -> Self {
