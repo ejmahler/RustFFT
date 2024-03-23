@@ -200,7 +200,7 @@ pub struct NeonF32Butterfly1<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly1n);
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly1);
 boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly1, 1, |this: &NeonF32Butterfly1<_>| this
     .direction);
 impl<T: FftNum> NeonF32Butterfly1<T> {
