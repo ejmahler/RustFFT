@@ -2770,7 +2770,7 @@ pub struct NeonF64Butterfly24<T> {
     twiddle10: float64x2_t,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly24, 24);
+boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly24);
 boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly24, 24, |this: &NeonF64Butterfly24<_>| this
     .bf4
     .direction);
