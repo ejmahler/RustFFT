@@ -25,7 +25,7 @@ unsafe fn pack_64(a: Complex<f64>) -> v128 {
 
 #[allow(unused)]
 macro_rules! boilerplate_fft_wasm_simd_f32_butterfly {
-    ($struct_name:ident, $len:expr, $direction_fn:expr) => {
+    ($struct_name:ident) => {
         impl<T: FftNum> $struct_name<T> {
             #[target_feature(enable = "simd128")]
             pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
@@ -91,7 +91,7 @@ macro_rules! boilerplate_fft_wasm_simd_f32_butterfly {
 }
 
 macro_rules! boilerplate_fft_wasm_simd_f64_butterfly {
-    ($struct_name:ident, $len:expr, $direction_fn:expr) => {
+    ($struct_name:ident) => {
         impl<T: FftNum> $struct_name<T> {
             // Do a single fft
             #[target_feature(enable = "simd128")]
@@ -204,11 +204,7 @@ pub struct WasmSimdF32Butterfly1<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_wasm_simd_f32_butterfly!(
-    WasmSimdF32Butterfly1,
-    1,
-    |this: &WasmSimdF32Butterfly1<_>| this.direction
-);
+boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly1);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF32Butterfly1,
     1,
@@ -251,11 +247,7 @@ pub struct WasmSimdF64Butterfly1<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_wasm_simd_f64_butterfly!(
-    WasmSimdF64Butterfly1,
-    1,
-    |this: &WasmSimdF64Butterfly1<_>| this.direction
-);
+boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly1);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF64Butterfly1,
     1,
@@ -289,11 +281,7 @@ pub struct WasmSimdF32Butterfly2<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_wasm_simd_f32_butterfly!(
-    WasmSimdF32Butterfly2,
-    2,
-    |this: &WasmSimdF32Butterfly2<_>| this.direction
-);
+boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly2);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF32Butterfly2,
     2,
@@ -391,11 +379,7 @@ pub struct WasmSimdF64Butterfly2<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_wasm_simd_f64_butterfly!(
-    WasmSimdF64Butterfly2,
-    2,
-    |this: &WasmSimdF64Butterfly2<_>| this.direction
-);
+boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly2);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF64Butterfly2,
     2,
@@ -451,11 +435,7 @@ pub struct WasmSimdF32Butterfly3<T> {
     twiddle1im: v128,
 }
 
-boilerplate_fft_wasm_simd_f32_butterfly!(
-    WasmSimdF32Butterfly3,
-    3,
-    |this: &WasmSimdF32Butterfly3<_>| this.direction
-);
+boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly3);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF32Butterfly3,
     3,
@@ -571,11 +551,7 @@ pub struct WasmSimdF64Butterfly3<T> {
     twiddle1im: v128,
 }
 
-boilerplate_fft_wasm_simd_f64_butterfly!(
-    WasmSimdF64Butterfly3,
-    3,
-    |this: &WasmSimdF64Butterfly3<_>| this.direction
-);
+boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly3);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF64Butterfly3,
     3,
@@ -651,11 +627,7 @@ pub struct WasmSimdF32Butterfly4<T> {
     rotate: Rotate90F32,
 }
 
-boilerplate_fft_wasm_simd_f32_butterfly!(
-    WasmSimdF32Butterfly4,
-    4,
-    |this: &WasmSimdF32Butterfly4<_>| this.direction
-);
+boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly4);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF32Butterfly4,
     4,
@@ -772,11 +744,7 @@ pub struct WasmSimdF64Butterfly4<T> {
     rotate: Rotate90F64,
 }
 
-boilerplate_fft_wasm_simd_f64_butterfly!(
-    WasmSimdF64Butterfly4,
-    4,
-    |this: &WasmSimdF64Butterfly4<_>| this.direction
-);
+boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly4);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF64Butterfly4,
     4,
@@ -860,11 +828,7 @@ pub struct WasmSimdF32Butterfly5<T> {
     twiddle2im: v128,
 }
 
-boilerplate_fft_wasm_simd_f32_butterfly!(
-    WasmSimdF32Butterfly5,
-    5,
-    |this: &WasmSimdF32Butterfly5<_>| this.direction
-);
+boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly5);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF32Butterfly5,
     5,
@@ -1033,11 +997,7 @@ pub struct WasmSimdF64Butterfly5<T> {
     twiddle2im: v128,
 }
 
-boilerplate_fft_wasm_simd_f64_butterfly!(
-    WasmSimdF64Butterfly5,
-    5,
-    |this: &WasmSimdF64Butterfly5<_>| this.direction
-);
+boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly5);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF64Butterfly5,
     5,
@@ -1141,11 +1101,7 @@ pub struct WasmSimdF32Butterfly6<T> {
     bf3: WasmSimdF32Butterfly3<T>,
 }
 
-boilerplate_fft_wasm_simd_f32_butterfly!(
-    WasmSimdF32Butterfly6,
-    6,
-    |this: &WasmSimdF32Butterfly6<_>| this.direction
-);
+boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly6);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF32Butterfly6,
     6,
@@ -1265,11 +1221,7 @@ pub struct WasmSimdF64Butterfly6<T> {
     bf3: WasmSimdF64Butterfly3<T>,
 }
 
-boilerplate_fft_wasm_simd_f64_butterfly!(
-    WasmSimdF64Butterfly6,
-    6,
-    |this: &WasmSimdF64Butterfly6<_>| this.direction
-);
+boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly6);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF64Butterfly6,
     6,
@@ -1342,11 +1294,7 @@ pub struct WasmSimdF32Butterfly8<T> {
     rotate90: Rotate90F32,
 }
 
-boilerplate_fft_wasm_simd_f32_butterfly!(
-    WasmSimdF32Butterfly8,
-    8,
-    |this: &WasmSimdF32Butterfly8<_>| this.direction
-);
+boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly8);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF32Butterfly8,
     8,
@@ -1481,11 +1429,7 @@ pub struct WasmSimdF64Butterfly8<T> {
     rotate90: Rotate90F64,
 }
 
-boilerplate_fft_wasm_simd_f64_butterfly!(
-    WasmSimdF64Butterfly8,
-    8,
-    |this: &WasmSimdF64Butterfly8<_>| this.direction
-);
+boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly8);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF64Butterfly8,
     8,
@@ -1571,11 +1515,7 @@ pub struct WasmSimdF32Butterfly9<T> {
     twiddle4: v128,
 }
 
-boilerplate_fft_wasm_simd_f32_butterfly!(
-    WasmSimdF32Butterfly9,
-    9,
-    |this: &WasmSimdF32Butterfly9<_>| this.direction
-);
+boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly9);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF32Butterfly9,
     9,
@@ -1704,11 +1644,7 @@ pub struct WasmSimdF64Butterfly9<T> {
     twiddle4: v128,
 }
 
-boilerplate_fft_wasm_simd_f64_butterfly!(
-    WasmSimdF64Butterfly9,
-    9,
-    |this: &WasmSimdF64Butterfly9<_>| this.direction
-);
+boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly9);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF64Butterfly9,
     9,
@@ -1783,11 +1719,7 @@ pub struct WasmSimdF32Butterfly10<T> {
     bf5: WasmSimdF32Butterfly5<T>,
 }
 
-boilerplate_fft_wasm_simd_f32_butterfly!(
-    WasmSimdF32Butterfly10,
-    10,
-    |this: &WasmSimdF32Butterfly10<_>| this.direction
-);
+boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly10);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF32Butterfly10,
     10,
@@ -1905,11 +1837,7 @@ pub struct WasmSimdF64Butterfly10<T> {
     bf5: WasmSimdF64Butterfly5<T>,
 }
 
-boilerplate_fft_wasm_simd_f64_butterfly!(
-    WasmSimdF64Butterfly10,
-    10,
-    |this: &WasmSimdF64Butterfly10<_>| this.direction
-);
+boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly10);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF64Butterfly10,
     10,
@@ -1981,11 +1909,7 @@ pub struct WasmSimdF32Butterfly12<T> {
     bf4: WasmSimdF32Butterfly4<T>,
 }
 
-boilerplate_fft_wasm_simd_f32_butterfly!(
-    WasmSimdF32Butterfly12,
-    12,
-    |this: &WasmSimdF32Butterfly12<_>| this.direction
-);
+boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly12);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF32Butterfly12,
     12,
@@ -2122,11 +2046,7 @@ pub struct WasmSimdF64Butterfly12<T> {
     bf4: WasmSimdF64Butterfly4<T>,
 }
 
-boilerplate_fft_wasm_simd_f64_butterfly!(
-    WasmSimdF64Butterfly12,
-    12,
-    |this: &WasmSimdF64Butterfly12<_>| this.direction
-);
+boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly12);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF64Butterfly12,
     12,
@@ -2198,11 +2118,7 @@ pub struct WasmSimdF32Butterfly15<T> {
     bf5: WasmSimdF32Butterfly5<T>,
 }
 
-boilerplate_fft_wasm_simd_f32_butterfly!(
-    WasmSimdF32Butterfly15,
-    15,
-    |this: &WasmSimdF32Butterfly15<_>| this.direction
-);
+boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly15);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF32Butterfly15,
     15,
@@ -2338,11 +2254,7 @@ pub struct WasmSimdF64Butterfly15<T> {
     bf5: WasmSimdF64Butterfly5<T>,
 }
 
-boilerplate_fft_wasm_simd_f64_butterfly!(
-    WasmSimdF64Butterfly15,
-    15,
-    |this: &WasmSimdF64Butterfly15<_>| this.direction
-);
+boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly15);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF64Butterfly15,
     15,
@@ -2418,11 +2330,7 @@ pub struct WasmSimdF32Butterfly16<T> {
     twiddle9: v128,
 }
 
-boilerplate_fft_wasm_simd_f32_butterfly!(
-    WasmSimdF32Butterfly16,
-    16,
-    |this: &WasmSimdF32Butterfly16<_>| this.bf4.direction
-);
+boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly16);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF32Butterfly16,
     16,
@@ -2607,11 +2515,7 @@ pub struct WasmSimdF64Butterfly16<T> {
     twiddle9: v128,
 }
 
-boilerplate_fft_wasm_simd_f64_butterfly!(
-    WasmSimdF64Butterfly16,
-    16,
-    |this: &WasmSimdF64Butterfly16<_>| this.bf4.direction
-);
+boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly16);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF64Butterfly16,
     16,
@@ -2722,11 +2626,7 @@ pub struct WasmSimdF32Butterfly24<T> {
     twiddle10: v128,
 }
 
-boilerplate_fft_wasm_simd_f32_butterfly!(
-    WasmSimdF32Butterfly24,
-    24,
-    |this: &WasmSimdF32Butterfly24<_>| { this.bf4.direction }
-);
+boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly24);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF32Butterfly24,
     24,
@@ -2948,11 +2848,7 @@ pub struct WasmSimdF64Butterfly24<T> {
     twiddle10: v128,
 }
 
-boilerplate_fft_wasm_simd_f64_butterfly!(
-    WasmSimdF64Butterfly24,
-    24,
-    |this: &WasmSimdF64Butterfly24<_>| { this.bf4.direction }
-);
+boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly24);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF64Butterfly24,
     24,
@@ -3087,11 +2983,7 @@ pub struct WasmSimdF32Butterfly32<T> {
     twiddle21: v128,
 }
 
-boilerplate_fft_wasm_simd_f32_butterfly!(
-    WasmSimdF32Butterfly32,
-    32,
-    |this: &WasmSimdF32Butterfly32<_>| this.bf8.bf4.direction
-);
+boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly32);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF32Butterfly32,
     32,
@@ -3355,11 +3247,7 @@ pub struct WasmSimdF64Butterfly32<T> {
     twiddle21: v128,
 }
 
-boilerplate_fft_wasm_simd_f64_butterfly!(
-    WasmSimdF64Butterfly32,
-    32,
-    |this: &WasmSimdF64Butterfly32<_>| this.bf8.bf4.direction
-);
+boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly32);
 boilerplate_fft_wasm_simd_common_butterfly!(
     WasmSimdF64Butterfly32,
     32,

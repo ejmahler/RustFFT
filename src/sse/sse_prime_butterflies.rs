@@ -88,7 +88,7 @@ struct SseF32Butterfly7<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly7, 7, |this: &SseF32Butterfly7<_>| this.direction);
+boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly7);
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly7, 7, |this: &SseF32Butterfly7<_>| this.direction);
 impl<T: FftNum> SseF32Butterfly7<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
@@ -193,7 +193,7 @@ struct SseF64Butterfly7<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly7, 7, |this: &SseF64Butterfly7<_>| this.direction);
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly7);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly7, 7, |this: &SseF64Butterfly7<_>| this.direction);
 impl<T: FftNum> SseF64Butterfly7<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
@@ -269,7 +269,7 @@ struct SseF32Butterfly11<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly11, 11, |this: &SseF32Butterfly11<_>| this.direction);
+boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly11);
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly11, 11, |this: &SseF32Butterfly11<_>| this.direction);
 impl<T: FftNum> SseF32Butterfly11<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
@@ -424,7 +424,7 @@ struct SseF64Butterfly11<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly11, 11, |this: &SseF64Butterfly11<_>| this.direction);
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly11);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly11, 11, |this: &SseF64Butterfly11<_>| this.direction);
 impl<T: FftNum> SseF64Butterfly11<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
@@ -542,7 +542,7 @@ struct SseF32Butterfly13<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly13, 13, |this: &SseF32Butterfly13<_>| this.direction);
+boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly13);
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly13, 13, |this: &SseF32Butterfly13<_>| this.direction);
 impl<T: FftNum> SseF32Butterfly13<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
@@ -728,7 +728,7 @@ struct SseF64Butterfly13<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly13, 13, |this: &SseF64Butterfly13<_>| this.direction);
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly13);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly13, 13, |this: &SseF64Butterfly13<_>| this.direction);
 impl<T: FftNum> SseF64Butterfly13<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
@@ -873,7 +873,7 @@ struct SseF32Butterfly17<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly17, 17, |this: &SseF32Butterfly17<_>| this.direction);
+boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly17);
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly17, 17, |this: &SseF32Butterfly17<_>| this.direction);
 impl<T: FftNum> SseF32Butterfly17<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
@@ -1133,7 +1133,7 @@ struct SseF64Butterfly17<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly17, 17, |this: &SseF64Butterfly17<_>| this.direction);
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly17);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly17, 17, |this: &SseF64Butterfly17<_>| this.direction);
 impl<T: FftNum> SseF64Butterfly17<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
@@ -1344,7 +1344,7 @@ struct SseF32Butterfly19<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly19, 19, |this: &SseF32Butterfly19<_>| this.direction);
+boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly19);
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly19, 19, |this: &SseF32Butterfly19<_>| this.direction);
 impl<T: FftNum> SseF32Butterfly19<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
@@ -1647,7 +1647,7 @@ struct SseF64Butterfly19<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly19, 19, |this: &SseF64Butterfly19<_>| this.direction);
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly19);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly19, 19, |this: &SseF64Butterfly19<_>| this.direction);
 impl<T: FftNum> SseF64Butterfly19<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
@@ -1897,7 +1897,7 @@ struct SseF32Butterfly23<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly23, 23, |this: &SseF32Butterfly23<_>| this.direction);
+boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly23);
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly23, 23, |this: &SseF32Butterfly23<_>| this.direction);
 impl<T: FftNum> SseF32Butterfly23<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
@@ -2298,7 +2298,7 @@ struct SseF64Butterfly23<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly23, 23, |this: &SseF64Butterfly23<_>| this.direction);
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly23);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly23, 23, |this: &SseF64Butterfly23<_>| this.direction);
 impl<T: FftNum> SseF64Butterfly23<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
@@ -2638,7 +2638,7 @@ struct SseF32Butterfly29<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly29, 29, |this: &SseF32Butterfly29<_>| this.direction);
+boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly29);
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly29, 29, |this: &SseF32Butterfly29<_>| this.direction);
 impl<T: FftNum> SseF32Butterfly29<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
@@ -3216,7 +3216,7 @@ struct SseF64Butterfly29<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly29, 29, |this: &SseF64Butterfly29<_>| this.direction);
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly29);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly29, 29, |this: &SseF64Butterfly29<_>| this.direction);
 impl<T: FftNum> SseF64Butterfly29<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
@@ -3721,7 +3721,7 @@ struct SseF32Butterfly31<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly31, 31, |this: &SseF32Butterfly31<_>| this.direction);
+boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly31);
 boilerplate_fft_sse_common_butterfly!(SseF32Butterfly31, 31, |this: &SseF32Butterfly31<_>| this.direction);
 impl<T: FftNum> SseF32Butterfly31<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
@@ -4366,7 +4366,7 @@ struct SseF64Butterfly31<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly31, 31, |this: &SseF64Butterfly31<_>| this.direction);
+boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly31);
 boilerplate_fft_sse_common_butterfly!(SseF64Butterfly31, 31, |this: &SseF64Butterfly31<_>| this.direction);
 impl<T: FftNum> SseF64Butterfly31<T> {
     /// Safety: The current machine must support the sse4.1 instruction set

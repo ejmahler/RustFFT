@@ -88,7 +88,7 @@ struct NeonF32Butterfly7<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly7, 7, |this: &NeonF32Butterfly7<_>| this.direction);
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly7);
 boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly7, 7, |this: &NeonF32Butterfly7<_>| this.direction);
 impl<T: FftNum> NeonF32Butterfly7<T> {
     /// Safety: The current machine must support the neon instruction set
@@ -193,7 +193,7 @@ struct NeonF64Butterfly7<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly7, 7, |this: &NeonF64Butterfly7<_>| this.direction);
+boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly7);
 boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly7, 7, |this: &NeonF64Butterfly7<_>| this.direction);
 impl<T: FftNum> NeonF64Butterfly7<T> {
     /// Safety: The current machine must support the neon instruction set
@@ -269,7 +269,7 @@ struct NeonF32Butterfly11<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly11, 11, |this: &NeonF32Butterfly11<_>| this.direction);
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly11);
 boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly11, 11, |this: &NeonF32Butterfly11<_>| this.direction);
 impl<T: FftNum> NeonF32Butterfly11<T> {
     /// Safety: The current machine must support the neon instruction set
@@ -424,7 +424,7 @@ struct NeonF64Butterfly11<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly11, 11, |this: &NeonF64Butterfly11<_>| this.direction);
+boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly11);
 boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly11, 11, |this: &NeonF64Butterfly11<_>| this.direction);
 impl<T: FftNum> NeonF64Butterfly11<T> {
     /// Safety: The current machine must support the neon instruction set
@@ -542,7 +542,7 @@ struct NeonF32Butterfly13<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly13, 13, |this: &NeonF32Butterfly13<_>| this.direction);
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly13);
 boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly13, 13, |this: &NeonF32Butterfly13<_>| this.direction);
 impl<T: FftNum> NeonF32Butterfly13<T> {
     /// Safety: The current machine must support the neon instruction set
@@ -728,7 +728,7 @@ struct NeonF64Butterfly13<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly13, 13, |this: &NeonF64Butterfly13<_>| this.direction);
+boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly13);
 boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly13, 13, |this: &NeonF64Butterfly13<_>| this.direction);
 impl<T: FftNum> NeonF64Butterfly13<T> {
     /// Safety: The current machine must support the neon instruction set
@@ -873,7 +873,7 @@ struct NeonF32Butterfly17<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly17, 17, |this: &NeonF32Butterfly17<_>| this.direction);
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly17);
 boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly17, 17, |this: &NeonF32Butterfly17<_>| this.direction);
 impl<T: FftNum> NeonF32Butterfly17<T> {
     /// Safety: The current machine must support the neon instruction set
@@ -1133,7 +1133,7 @@ struct NeonF64Butterfly17<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly17, 17, |this: &NeonF64Butterfly17<_>| this.direction);
+boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly17);
 boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly17, 17, |this: &NeonF64Butterfly17<_>| this.direction);
 impl<T: FftNum> NeonF64Butterfly17<T> {
     /// Safety: The current machine must support the neon instruction set
@@ -1344,7 +1344,7 @@ struct NeonF32Butterfly19<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly19, 19, |this: &NeonF32Butterfly19<_>| this.direction);
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly19);
 boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly19, 19, |this: &NeonF32Butterfly19<_>| this.direction);
 impl<T: FftNum> NeonF32Butterfly19<T> {
     /// Safety: The current machine must support the neon instruction set
@@ -1647,7 +1647,7 @@ struct NeonF64Butterfly19<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly19, 19, |this: &NeonF64Butterfly19<_>| this.direction);
+boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly19);
 boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly19, 19, |this: &NeonF64Butterfly19<_>| this.direction);
 impl<T: FftNum> NeonF64Butterfly19<T> {
     /// Safety: The current machine must support the neon instruction set
@@ -1897,7 +1897,7 @@ struct NeonF32Butterfly23<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly23, 23, |this: &NeonF32Butterfly23<_>| this.direction);
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly23);
 boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly23, 23, |this: &NeonF32Butterfly23<_>| this.direction);
 impl<T: FftNum> NeonF32Butterfly23<T> {
     /// Safety: The current machine must support the neon instruction set
@@ -2298,7 +2298,7 @@ struct NeonF64Butterfly23<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly23, 23, |this: &NeonF64Butterfly23<_>| this.direction);
+boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly23);
 boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly23, 23, |this: &NeonF64Butterfly23<_>| this.direction);
 impl<T: FftNum> NeonF64Butterfly23<T> {
     /// Safety: The current machine must support the neon instruction set
@@ -2638,7 +2638,7 @@ struct NeonF32Butterfly29<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly29, 29, |this: &NeonF32Butterfly29<_>| this.direction);
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly29);
 boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly29, 29, |this: &NeonF32Butterfly29<_>| this.direction);
 impl<T: FftNum> NeonF32Butterfly29<T> {
     /// Safety: The current machine must support the neon instruction set
@@ -3216,7 +3216,7 @@ struct NeonF64Butterfly29<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly29, 29, |this: &NeonF64Butterfly29<_>| this.direction);
+boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly29);
 boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly29, 29, |this: &NeonF64Butterfly29<_>| this.direction);
 impl<T: FftNum> NeonF64Butterfly29<T> {
     /// Safety: The current machine must support the neon instruction set
@@ -3721,7 +3721,7 @@ struct NeonF32Butterfly31<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly31, 31, |this: &NeonF32Butterfly31<_>| this.direction);
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly31);
 boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly31, 31, |this: &NeonF32Butterfly31<_>| this.direction);
 impl<T: FftNum> NeonF32Butterfly31<T> {
     /// Safety: The current machine must support the neon instruction set
@@ -4366,7 +4366,7 @@ struct NeonF64Butterfly31<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly31, 31, |this: &NeonF64Butterfly31<_>| this.direction);
+boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly31);
 boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly31, 31, |this: &NeonF64Butterfly31<_>| this.direction);
 impl<T: FftNum> NeonF64Butterfly31<T> {
     /// Safety: The current machine must support the neon instruction set

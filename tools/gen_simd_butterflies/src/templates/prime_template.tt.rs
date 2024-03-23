@@ -79,7 +79,7 @@ struct ${entry.struct_name_32}<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_${arch.name_snakecase}_f32_butterfly!(${entry.struct_name_32}, ${entry.len}, |this: &${entry.struct_name_32}<_>| this.direction);
+boilerplate_fft_${arch.name_snakecase}_f32_butterfly!(${entry.struct_name_32});
 boilerplate_fft_${arch.name_snakecase}_common_butterfly!(${entry.struct_name_32}, ${entry.len}, |this: &${entry.struct_name_32}<_>| this.direction);
 impl<T: FftNum> ${entry.struct_name_32}<T> {
     /// Safety: The current machine must support the ${arch.cpu_feature_name} instruction set
@@ -134,7 +134,7 @@ struct ${entry.struct_name_64}<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_${arch.name_snakecase}_f64_butterfly!(${entry.struct_name_64}, ${entry.len}, |this: &${entry.struct_name_64}<_>| this.direction);
+boilerplate_fft_${arch.name_snakecase}_f64_butterfly!(${entry.struct_name_64});
 boilerplate_fft_${arch.name_snakecase}_common_butterfly!(${entry.struct_name_64}, ${entry.len}, |this: &${entry.struct_name_64}<_>| this.direction);
 impl<T: FftNum> ${entry.struct_name_64}<T> {
     /// Safety: The current machine must support the ${arch.cpu_feature_name} instruction set
