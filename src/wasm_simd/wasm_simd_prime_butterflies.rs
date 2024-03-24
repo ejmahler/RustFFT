@@ -106,16 +106,16 @@ impl<T: FftNum> WasmSimdF32Butterfly7<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let values = read_partial1_complex_to_array!(buffer, {0,1,2,3,4,5,6});
+        let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6 });
 
         let out = self.perform_parallel_fft_direct(values);
         
-        write_partial_lo_complex_to_array!(out, buffer, {0,1,2,3,4,5,6}); 
+        write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6 } ); 
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let input_packed = read_complex_to_array!(buffer, {0,2,4,6,8,10,12});
+        let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12 });
 
         let values = [
             extract_lo_hi_f32(input_packed[0], input_packed[3]),
@@ -139,7 +139,7 @@ impl<T: FftNum> WasmSimdF32Butterfly7<T> {
             extract_hi_hi_f32(out[5], out[6]),
         ];
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, {0,1,2,3,4,5,6});
+        write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6 });
     }
 
     #[inline(always)]
@@ -211,11 +211,11 @@ impl<T: FftNum> WasmSimdF64Butterfly7<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
-        let values = read_complex_to_array!(buffer, {0,1,2,3,4,5,6});
+        let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6 });
 
         let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, buffer, {0,1,2,3,4,5,6});   
+        write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6 });   
     }
 
     #[inline(always)]
@@ -287,16 +287,16 @@ impl<T: FftNum> WasmSimdF32Butterfly11<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let values = read_partial1_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8,9,10});
+        let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10 });
 
         let out = self.perform_parallel_fft_direct(values);
         
-        write_partial_lo_complex_to_array!(out, buffer, {0,1,2,3,4,5,6,7,8,9,10}); 
+        write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10 } ); 
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let input_packed = read_complex_to_array!(buffer, {0,2,4,6,8,10,12,14,16,18,20});
+        let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20 });
 
         let values = [
             extract_lo_hi_f32(input_packed[0], input_packed[5]),
@@ -328,7 +328,7 @@ impl<T: FftNum> WasmSimdF32Butterfly11<T> {
             extract_hi_hi_f32(out[9], out[10]),
         ];
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, {0,1,2,3,4,5,6,7,8,9,10});
+        write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10 });
     }
 
     #[inline(always)]
@@ -442,11 +442,11 @@ impl<T: FftNum> WasmSimdF64Butterfly11<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
-        let values = read_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8,9,10});
+        let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10 });
 
         let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, buffer, {0,1,2,3,4,5,6,7,8,9,10});   
+        write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10 });   
     }
 
     #[inline(always)]
@@ -560,16 +560,16 @@ impl<T: FftNum> WasmSimdF32Butterfly13<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let values = read_partial1_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12});
+        let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 });
 
         let out = self.perform_parallel_fft_direct(values);
         
-        write_partial_lo_complex_to_array!(out, buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12}); 
+        write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 } ); 
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let input_packed = read_complex_to_array!(buffer, {0,2,4,6,8,10,12,14,16,18,20,22,24});
+        let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24 });
 
         let values = [
             extract_lo_hi_f32(input_packed[0], input_packed[6]),
@@ -605,7 +605,7 @@ impl<T: FftNum> WasmSimdF32Butterfly13<T> {
             extract_hi_hi_f32(out[11], out[12]),
         ];
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, {0,1,2,3,4,5,6,7,8,9,10,11,12});
+        write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12 });
     }
 
     #[inline(always)]
@@ -746,11 +746,11 @@ impl<T: FftNum> WasmSimdF64Butterfly13<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
-        let values = read_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12});
+        let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 });
 
         let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12});   
+        write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 });   
     }
 
     #[inline(always)]
@@ -891,16 +891,16 @@ impl<T: FftNum> WasmSimdF32Butterfly17<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let values = read_partial1_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16});
+        let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 });
 
         let out = self.perform_parallel_fft_direct(values);
         
-        write_partial_lo_complex_to_array!(out, buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16}); 
+        write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 } ); 
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let input_packed = read_complex_to_array!(buffer, {0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32});
+        let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32 });
 
         let values = [
             extract_lo_hi_f32(input_packed[0], input_packed[8]),
@@ -944,7 +944,7 @@ impl<T: FftNum> WasmSimdF32Butterfly17<T> {
             extract_hi_hi_f32(out[15], out[16]),
         ];
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16});
+        write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 });
     }
 
     #[inline(always)]
@@ -1151,11 +1151,11 @@ impl<T: FftNum> WasmSimdF64Butterfly17<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
-        let values = read_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16});
+        let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 });
 
         let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16});   
+        write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 });   
     }
 
     #[inline(always)]
@@ -1362,16 +1362,16 @@ impl<T: FftNum> WasmSimdF32Butterfly19<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let values = read_partial1_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18});
+        let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 });
 
         let out = self.perform_parallel_fft_direct(values);
         
-        write_partial_lo_complex_to_array!(out, buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18}); 
+        write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 } ); 
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let input_packed = read_complex_to_array!(buffer, {0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36});
+        let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36 });
 
         let values = [
             extract_lo_hi_f32(input_packed[0], input_packed[9]),
@@ -1419,7 +1419,7 @@ impl<T: FftNum> WasmSimdF32Butterfly19<T> {
             extract_hi_hi_f32(out[17], out[18]),
         ];
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18});
+        write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 });
     }
 
     #[inline(always)]
@@ -1665,11 +1665,11 @@ impl<T: FftNum> WasmSimdF64Butterfly19<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
-        let values = read_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18});
+        let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 });
 
         let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18});   
+        write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 });   
     }
 
     #[inline(always)]
@@ -1915,16 +1915,16 @@ impl<T: FftNum> WasmSimdF32Butterfly23<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let values = read_partial1_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22});
+        let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 });
 
         let out = self.perform_parallel_fft_direct(values);
         
-        write_partial_lo_complex_to_array!(out, buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22}); 
+        write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 } ); 
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let input_packed = read_complex_to_array!(buffer, {0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44});
+        let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44 });
 
         let values = [
             extract_lo_hi_f32(input_packed[0], input_packed[11]),
@@ -1980,7 +1980,7 @@ impl<T: FftNum> WasmSimdF32Butterfly23<T> {
             extract_hi_hi_f32(out[21], out[22]),
         ];
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22});
+        write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 });
     }
 
     #[inline(always)]
@@ -2316,11 +2316,11 @@ impl<T: FftNum> WasmSimdF64Butterfly23<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
-        let values = read_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22});
+        let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 });
 
         let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22});   
+        write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 });   
     }
 
     #[inline(always)]
@@ -2656,16 +2656,16 @@ impl<T: FftNum> WasmSimdF32Butterfly29<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let values = read_partial1_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28});
+        let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 });
 
         let out = self.perform_parallel_fft_direct(values);
         
-        write_partial_lo_complex_to_array!(out, buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28}); 
+        write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 } ); 
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let input_packed = read_complex_to_array!(buffer, {0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56});
+        let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56 });
 
         let values = [
             extract_lo_hi_f32(input_packed[0], input_packed[14]),
@@ -2733,7 +2733,7 @@ impl<T: FftNum> WasmSimdF32Butterfly29<T> {
             extract_hi_hi_f32(out[27], out[28]),
         ];
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28});
+        write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 });
     }
 
     #[inline(always)]
@@ -3234,11 +3234,11 @@ impl<T: FftNum> WasmSimdF64Butterfly29<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
-        let values = read_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28});
+        let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 });
 
         let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28});   
+        write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 });   
     }
 
     #[inline(always)]
@@ -3739,16 +3739,16 @@ impl<T: FftNum> WasmSimdF32Butterfly31<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let values = read_partial1_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30});
+        let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 });
 
         let out = self.perform_parallel_fft_direct(values);
         
-        write_partial_lo_complex_to_array!(out, buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30}); 
+        write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 } ); 
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
-        let input_packed = read_complex_to_array!(buffer, {0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56,58,60});
+        let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56,58,60 });
 
         let values = [
             extract_lo_hi_f32(input_packed[0], input_packed[15]),
@@ -3820,7 +3820,7 @@ impl<T: FftNum> WasmSimdF32Butterfly31<T> {
             extract_hi_hi_f32(out[29], out[30]),
         ];
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30});
+        write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 });
     }
 
     #[inline(always)]
@@ -4384,11 +4384,11 @@ impl<T: FftNum> WasmSimdF64Butterfly31<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f64>) {
-        let values = read_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30});
+        let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 });
 
         let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30});   
+        write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 });   
     }
 
     #[inline(always)]
@@ -4927,17 +4927,18 @@ impl<T: FftNum> WasmSimdF64Butterfly31<T> {
     }
 }
 
+
 #[cfg(test)]
 mod unit_tests {
     use super::*;
     use crate::test_utils::check_fft_algorithm;
-    
     use wasm_bindgen_test::wasm_bindgen_test;
 
     macro_rules! test_butterfly_32_func {
         ($test_name:ident, $struct_name:ident, $size:expr) => {
             #[wasm_bindgen_test]
             fn $test_name() {
+
                 let fwd = unsafe { $struct_name::new(FftDirection::Forward) };
                 check_fft_algorithm::<f32>(&fwd, $size, FftDirection::Forward);
 
@@ -4950,6 +4951,7 @@ mod unit_tests {
         ($test_name:ident, $struct_name:ident, $size:expr) => {
             #[wasm_bindgen_test]
             fn $test_name() {
+
                 let fwd = unsafe { $struct_name::new(FftDirection::Forward) };
                 check_fft_algorithm::<f64>(&fwd, $size, FftDirection::Forward);
 
@@ -4958,7 +4960,6 @@ mod unit_tests {
             }
         };
     }
-    
     test_butterfly_32_func!(test_wasm_simdf32_butterfly7, WasmSimdF32Butterfly7, 7);
     test_butterfly_32_func!(test_wasm_simdf32_butterfly11, WasmSimdF32Butterfly11, 11);
     test_butterfly_32_func!(test_wasm_simdf32_butterfly13, WasmSimdF32Butterfly13, 13);
@@ -4967,7 +4968,6 @@ mod unit_tests {
     test_butterfly_32_func!(test_wasm_simdf32_butterfly23, WasmSimdF32Butterfly23, 23);
     test_butterfly_32_func!(test_wasm_simdf32_butterfly29, WasmSimdF32Butterfly29, 29);
     test_butterfly_32_func!(test_wasm_simdf32_butterfly31, WasmSimdF32Butterfly31, 31);
-    
     test_butterfly_64_func!(test_wasm_simdf64_butterfly7, WasmSimdF64Butterfly7, 7);
     test_butterfly_64_func!(test_wasm_simdf64_butterfly11, WasmSimdF64Butterfly11, 11);
     test_butterfly_64_func!(test_wasm_simdf64_butterfly13, WasmSimdF64Butterfly13, 13);

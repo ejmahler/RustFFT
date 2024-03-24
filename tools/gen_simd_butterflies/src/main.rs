@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use serde::Serialize;
-use tinytemplate::TinyTemplate;
+use handlebars;
 
 #[derive(Serialize)]
 struct FftEntry {
@@ -66,13 +66,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
 
     
-    let raw_prime_template = include_str!("templates/prime_template.tt.rs");
-    let processed_prime_template = preprocess_template(raw_prime_template);
+    let prime_template = include_str!("templates/prime_template.hbs.rs");
 
-    let mut tt = TinyTemplate::new();
-    tt.add_template("prime_template", &processed_prime_template)?;
+    let mut handlebars = handlebars::Handlebars::new();
+    handlebars.register_escape_fn(handlebars::no_escape);
+    handlebars.register_template_string("prime_template", prime_template)?;
 
-    let rendered = tt.render("prime_template", &context)?;
+    let rendered = handlebars.render("prime_template", &context)?;
     println!("{rendered}");
 
     Ok(())
@@ -241,49 +241,3 @@ fn generate_fft_entry(len: usize, arch: &Architecture) -> FftEntry {
         struct_name_64: format!("{}F64Butterfly{len}", arch.name_camelcase),
     }
 }   
-
-// We're using tinytemplate, which has pretty much exactly the feature set we need, with one wrinkle:
-// tinytemplate uses { and } as template characters, meaning any { in the original text needs to be escaped
-// Since we're outputting rust code, we have { all over the place, which would be a nightmare to escape
-// So we're creating our own DSL where { doesn't need to be escaped, and tinytemplate tokens need to be prepended with $
-// This function converts that DSL into the format tinytemplate is expecting.
-//
-// Mechanically speaking, the DSL is drop dead simple: Whenever we see a '$' followed by a sequence of '{', those '{'
-// will be passed through and the '$' will be omitted. All other '{' will be escaped, and all other '$' will be passed through. That's it.
-fn preprocess_template(text: &str) -> String {
-    // we're going to be escaping a bunch of characters, so we may need a little extra memory
-    let mut result = String::with_capacity(text.len() * 11 / 10);
-
-    let mut suppression_count : Option<usize> = None;
-    for character in text.chars() {
-        // Whenever we find a $, we want to suppress escaping for any subsequent curly braces
-        if character == '$' {
-            if suppression_count.is_some() {
-                todo!("Multiple $ characters in a row aren't supported, nor are sequences of alternating between $ and {{");
-            }
-            suppression_count = Some(0);
-        } else if character == '{' {
-            // If escaping is currently suppressed, just push the brace as-is so tinytemplate will use it. Otherwise, escape it so tinytemplate passes it through
-            if let Some(count) = &mut suppression_count {
-                *count += 1;
-                result.push('{');
-            } else {
-                result.push_str("\\{");
-            }
-        } else {
-            // If we get here, it's because we found a character that wasn't a $ and wasn't a {. So if we're suppressing escapes, stop.
-            if let Some(count) = suppression_count {
-                // If we didn't actually suppress any escapes, then this is a false positive. We didn't putput the $ up above, so do it now.
-                if count == 0 {
-                    result.push('$');
-                }
-                suppression_count = None;
-            }
-
-            // now push whatever character this was
-            result.push(character);
-        }
-    }
-
-    result
-}
