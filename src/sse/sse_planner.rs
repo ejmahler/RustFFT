@@ -8,7 +8,7 @@ use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
 
 use crate::algorithm::*;
 use crate::sse::sse_butterflies::*;
-use crate::sse::sse_prime_butterflies::*;
+use crate::sse::sse_prime_butterflies;
 use crate::sse::sse_radix4::*;
 use crate::Fft;
 
@@ -56,22 +56,17 @@ pub enum Recipe {
     Butterfly4,
     Butterfly5,
     Butterfly6,
-    Butterfly7,
     Butterfly8,
     Butterfly9,
     Butterfly10,
-    Butterfly11,
     Butterfly12,
-    Butterfly13,
     Butterfly15,
     Butterfly16,
-    Butterfly17,
-    Butterfly19,
-    Butterfly23,
     Butterfly24,
-    Butterfly29,
-    Butterfly31,
     Butterfly32,
+    PrimeButterfly {
+        len: usize,
+    },
 }
 
 impl Recipe {
@@ -85,22 +80,15 @@ impl Recipe {
             Recipe::Butterfly4 => 4,
             Recipe::Butterfly5 => 5,
             Recipe::Butterfly6 => 6,
-            Recipe::Butterfly7 => 7,
             Recipe::Butterfly8 => 8,
             Recipe::Butterfly9 => 9,
             Recipe::Butterfly10 => 10,
-            Recipe::Butterfly11 => 11,
             Recipe::Butterfly12 => 12,
-            Recipe::Butterfly13 => 13,
             Recipe::Butterfly15 => 15,
             Recipe::Butterfly16 => 16,
-            Recipe::Butterfly17 => 17,
-            Recipe::Butterfly19 => 19,
-            Recipe::Butterfly23 => 23,
             Recipe::Butterfly24 => 24,
-            Recipe::Butterfly29 => 29,
-            Recipe::Butterfly31 => 31,
             Recipe::Butterfly32 => 32,
+            Recipe::PrimeButterfly { len } => *len,
             Recipe::MixedRadix {
                 left_fft,
                 right_fft,
@@ -156,6 +144,7 @@ impl Recipe {
 pub struct FftPlannerSse<T: FftNum> {
     algorithm_cache: FftCache<T>,
     recipe_cache: HashMap<usize, Arc<Recipe>>,
+    all_butterflies: Box<[usize]>,
 }
 
 impl<T: FftNum> FftPlannerSse<T> {
@@ -183,9 +172,25 @@ impl<T: FftNum> FftPlannerSse<T> {
             let id_t = TypeId::of::<T>();
 
             if id_t == id_f32 || id_t == id_f64 {
+                let hand_butterflies: [usize; 13] = [2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 16, 24, 32];
+                let prime_butterflies = sse_prime_butterflies::prime_butterfly_lens();
+                let mut all_butterflies: Box<[usize]> = hand_butterflies
+                    .iter()
+                    .chain(prime_butterflies.iter())
+                    .copied()
+                    .collect();
+                all_butterflies.sort();
+
+                // make sure we didn't get any duplicate butterflies from multiple sources
+                // since it's sorted, any duplicates will be adjacent
+                for window in all_butterflies.windows(2) {
+                    assert_ne!(window[0], window[1]);
+                }
+
                 return Ok(Self {
                     algorithm_cache: FftCache::new(),
                     recipe_cache: HashMap::new(),
+                    all_butterflies,
                 });
             }
         }
@@ -317,15 +322,6 @@ impl<T: FftNum> FftPlannerSse<T> {
                     panic!("Not f32 or f64");
                 }
             }
-            Recipe::Butterfly7 => {
-                if id_t == id_f32 {
-                    Arc::new(SseF32Butterfly7::new(direction)) as Arc<dyn Fft<T>>
-                } else if id_t == id_f64 {
-                    Arc::new(SseF64Butterfly7::new(direction)) as Arc<dyn Fft<T>>
-                } else {
-                    panic!("Not f32 or f64");
-                }
-            }
             Recipe::Butterfly8 => {
                 if id_t == id_f32 {
                     Arc::new(SseF32Butterfly8::new(direction)) as Arc<dyn Fft<T>>
@@ -353,29 +349,11 @@ impl<T: FftNum> FftPlannerSse<T> {
                     panic!("Not f32 or f64");
                 }
             }
-            Recipe::Butterfly11 => {
-                if id_t == id_f32 {
-                    Arc::new(SseF32Butterfly11::new(direction)) as Arc<dyn Fft<T>>
-                } else if id_t == id_f64 {
-                    Arc::new(SseF64Butterfly11::new(direction)) as Arc<dyn Fft<T>>
-                } else {
-                    panic!("Not f32 or f64");
-                }
-            }
             Recipe::Butterfly12 => {
                 if id_t == id_f32 {
                     Arc::new(SseF32Butterfly12::new(direction)) as Arc<dyn Fft<T>>
                 } else if id_t == id_f64 {
                     Arc::new(SseF64Butterfly12::new(direction)) as Arc<dyn Fft<T>>
-                } else {
-                    panic!("Not f32 or f64");
-                }
-            }
-            Recipe::Butterfly13 => {
-                if id_t == id_f32 {
-                    Arc::new(SseF32Butterfly13::new(direction)) as Arc<dyn Fft<T>>
-                } else if id_t == id_f64 {
-                    Arc::new(SseF64Butterfly13::new(direction)) as Arc<dyn Fft<T>>
                 } else {
                     panic!("Not f32 or f64");
                 }
@@ -398,56 +376,11 @@ impl<T: FftNum> FftPlannerSse<T> {
                     panic!("Not f32 or f64");
                 }
             }
-            Recipe::Butterfly17 => {
-                if id_t == id_f32 {
-                    Arc::new(SseF32Butterfly17::new(direction)) as Arc<dyn Fft<T>>
-                } else if id_t == id_f64 {
-                    Arc::new(SseF64Butterfly17::new(direction)) as Arc<dyn Fft<T>>
-                } else {
-                    panic!("Not f32 or f64");
-                }
-            }
-            Recipe::Butterfly19 => {
-                if id_t == id_f32 {
-                    Arc::new(SseF32Butterfly19::new(direction)) as Arc<dyn Fft<T>>
-                } else if id_t == id_f64 {
-                    Arc::new(SseF64Butterfly19::new(direction)) as Arc<dyn Fft<T>>
-                } else {
-                    panic!("Not f32 or f64");
-                }
-            }
-            Recipe::Butterfly23 => {
-                if id_t == id_f32 {
-                    Arc::new(SseF32Butterfly23::new(direction)) as Arc<dyn Fft<T>>
-                } else if id_t == id_f64 {
-                    Arc::new(SseF64Butterfly23::new(direction)) as Arc<dyn Fft<T>>
-                } else {
-                    panic!("Not f32 or f64");
-                }
-            }
             Recipe::Butterfly24 => {
                 if id_t == id_f32 {
                     Arc::new(SseF32Butterfly24::new(direction)) as Arc<dyn Fft<T>>
                 } else if id_t == id_f64 {
                     Arc::new(SseF64Butterfly24::new(direction)) as Arc<dyn Fft<T>>
-                } else {
-                    panic!("Not f32 or f64");
-                }
-            }
-            Recipe::Butterfly29 => {
-                if id_t == id_f32 {
-                    Arc::new(SseF32Butterfly29::new(direction)) as Arc<dyn Fft<T>>
-                } else if id_t == id_f64 {
-                    Arc::new(SseF64Butterfly29::new(direction)) as Arc<dyn Fft<T>>
-                } else {
-                    panic!("Not f32 or f64");
-                }
-            }
-            Recipe::Butterfly31 => {
-                if id_t == id_f32 {
-                    Arc::new(SseF32Butterfly31::new(direction)) as Arc<dyn Fft<T>>
-                } else if id_t == id_f64 {
-                    Arc::new(SseF64Butterfly31::new(direction)) as Arc<dyn Fft<T>>
                 } else {
                     panic!("Not f32 or f64");
                 }
@@ -460,6 +393,10 @@ impl<T: FftNum> FftPlannerSse<T> {
                 } else {
                     panic!("Not f32 or f64");
                 }
+            }
+            Recipe::PrimeButterfly { len } => {
+                // Safety: construct_prime_butterfly() requires the sse4.1 instruction set, and we checked that in the constructor
+                unsafe { sse_prime_butterflies::construct_prime_butterfly(*len, direction) }
             }
             Recipe::MixedRadix {
                 left_fft,
@@ -527,17 +464,14 @@ impl<T: FftNum> FftPlannerSse<T> {
             // Loop through and find all combinations
             // If more than one is found, keep the one where the factors are closer together.
             // For example length 20 where 10x2 and 5x4 are possible, we use 5x4.
-            let butterflies: [usize; 21] = [
-                2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 19, 23, 24, 29, 31, 32,
-            ];
             let mut bf_left = 0;
             let mut bf_right = 0;
             // If the length is below 14, or over 1024 we don't need to try this.
             if len > 13 && len <= 1024 {
-                for (n, bf_l) in butterflies.iter().enumerate() {
+                for (n, bf_l) in self.all_butterflies.iter().enumerate() {
                     if len % bf_l == 0 {
                         let bf_r = len / bf_l;
-                        if butterflies.iter().skip(n).any(|&m| m == bf_r) {
+                        if self.all_butterflies.iter().skip(n).any(|&m| m == bf_r) {
                             bf_left = *bf_l;
                             bf_right = bf_r;
                         }
@@ -598,23 +532,21 @@ impl<T: FftNum> FftPlannerSse<T> {
             4 => Some(Arc::new(Recipe::Butterfly4)),
             5 => Some(Arc::new(Recipe::Butterfly5)),
             6 => Some(Arc::new(Recipe::Butterfly6)),
-            7 => Some(Arc::new(Recipe::Butterfly7)),
             8 => Some(Arc::new(Recipe::Butterfly8)),
             9 => Some(Arc::new(Recipe::Butterfly9)),
             10 => Some(Arc::new(Recipe::Butterfly10)),
-            11 => Some(Arc::new(Recipe::Butterfly11)),
             12 => Some(Arc::new(Recipe::Butterfly12)),
-            13 => Some(Arc::new(Recipe::Butterfly13)),
             15 => Some(Arc::new(Recipe::Butterfly15)),
             16 => Some(Arc::new(Recipe::Butterfly16)),
-            17 => Some(Arc::new(Recipe::Butterfly17)),
-            19 => Some(Arc::new(Recipe::Butterfly19)),
-            23 => Some(Arc::new(Recipe::Butterfly23)),
             24 => Some(Arc::new(Recipe::Butterfly24)),
-            29 => Some(Arc::new(Recipe::Butterfly29)),
-            31 => Some(Arc::new(Recipe::Butterfly31)),
             32 => Some(Arc::new(Recipe::Butterfly32)),
-            _ => None,
+            _ => {
+                if sse_prime_butterflies::prime_butterfly_lens().contains(&len) {
+                    Some(Arc::new(Recipe::PrimeButterfly { len }))
+                } else {
+                    None
+                }
+            }
         }
     }
 
@@ -772,22 +704,20 @@ mod unit_tests {
         assert_eq!(*planner.design_fft_for_len(4), Recipe::Butterfly4);
         assert_eq!(*planner.design_fft_for_len(5), Recipe::Butterfly5);
         assert_eq!(*planner.design_fft_for_len(6), Recipe::Butterfly6);
-        assert_eq!(*planner.design_fft_for_len(7), Recipe::Butterfly7);
         assert_eq!(*planner.design_fft_for_len(8), Recipe::Butterfly8);
         assert_eq!(*planner.design_fft_for_len(9), Recipe::Butterfly9);
         assert_eq!(*planner.design_fft_for_len(10), Recipe::Butterfly10);
-        assert_eq!(*planner.design_fft_for_len(11), Recipe::Butterfly11);
         assert_eq!(*planner.design_fft_for_len(12), Recipe::Butterfly12);
-        assert_eq!(*planner.design_fft_for_len(13), Recipe::Butterfly13);
         assert_eq!(*planner.design_fft_for_len(15), Recipe::Butterfly15);
         assert_eq!(*planner.design_fft_for_len(16), Recipe::Butterfly16);
-        assert_eq!(*planner.design_fft_for_len(17), Recipe::Butterfly17);
-        assert_eq!(*planner.design_fft_for_len(19), Recipe::Butterfly19);
-        assert_eq!(*planner.design_fft_for_len(23), Recipe::Butterfly23);
         assert_eq!(*planner.design_fft_for_len(24), Recipe::Butterfly24);
-        assert_eq!(*planner.design_fft_for_len(29), Recipe::Butterfly29);
-        assert_eq!(*planner.design_fft_for_len(31), Recipe::Butterfly31);
         assert_eq!(*planner.design_fft_for_len(32), Recipe::Butterfly32);
+        for len in sse_prime_butterflies::prime_butterfly_lens() {
+            assert_eq!(
+                *planner.design_fft_for_len(*len),
+                Recipe::PrimeButterfly { len: *len }
+            );
+        }
     }
 
     #[test]

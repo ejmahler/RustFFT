@@ -150,6 +150,12 @@ pub trait SseVector: Copy + Debug + Send + Sync {
 
     // math ops
     unsafe fn neg(a: Self) -> Self;
+    unsafe fn add(a: Self, b: Self) -> Self;
+    unsafe fn mul(a: Self, b: Self) -> Self;
+    unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self;
+    unsafe fn nmadd(acc: Self, a: Self, b: Self) -> Self;
+
+    unsafe fn broadcast_scalar(value: Self::ScalarType) -> Self;
 
     /// Generates a chunk of twiddle factors starting at (X,Y) and incrementing X `COMPLEX_PER_VECTOR` times.
     /// The result will be [twiddle(x*y, len), twiddle((x+1)*y, len), twiddle((x+2)*y, len), ...] for as many complex numbers fit in a vector
@@ -213,6 +219,27 @@ impl SseVector for __m128 {
     #[inline(always)]
     unsafe fn neg(a: Self) -> Self {
         _mm_xor_ps(a, _mm_set1_ps(-0.0))
+    }
+    #[inline(always)]
+    unsafe fn add(a: Self, b: Self) -> Self {
+        _mm_add_ps(a, b)
+    }
+    #[inline(always)]
+    unsafe fn mul(a: Self, b: Self) -> Self {
+        _mm_mul_ps(a, b)
+    }
+    #[inline(always)]
+    unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self {
+        _mm_add_ps(acc, _mm_mul_ps(a, b))
+    }
+    #[inline(always)]
+    unsafe fn nmadd(acc: Self, a: Self, b: Self) -> Self {
+        _mm_sub_ps(acc, _mm_mul_ps(a, b))
+    }
+
+    #[inline(always)]
+    unsafe fn broadcast_scalar(value: Self::ScalarType) -> Self {
+        _mm_set1_ps(value)
     }
 
     #[inline(always)]
@@ -319,6 +346,27 @@ impl SseVector for __m128d {
     #[inline(always)]
     unsafe fn neg(a: Self) -> Self {
         _mm_xor_pd(a, _mm_set1_pd(-0.0))
+    }
+    #[inline(always)]
+    unsafe fn add(a: Self, b: Self) -> Self {
+        _mm_add_pd(a, b)
+    }
+    #[inline(always)]
+    unsafe fn mul(a: Self, b: Self) -> Self {
+        _mm_mul_pd(a, b)
+    }
+    #[inline(always)]
+    unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self {
+        _mm_add_pd(acc, _mm_mul_pd(a, b))
+    }
+    #[inline(always)]
+    unsafe fn nmadd(acc: Self, a: Self, b: Self) -> Self {
+        _mm_sub_pd(acc, _mm_mul_pd(a, b))
+    }
+
+    #[inline(always)]
+    unsafe fn broadcast_scalar(value: Self::ScalarType) -> Self {
+        _mm_set1_pd(value)
     }
 
     #[inline(always)]

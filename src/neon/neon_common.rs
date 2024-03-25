@@ -1,45 +1,5 @@
 use std::any::TypeId;
 
-// Calculate the sum of an expression consisting of just plus and minus, like `value = a + b - c + d`.
-// The expression is rewritten to `value = a + (b - (c - d))` (note the flipped sign on d).
-// After this the `$add` and `$sub` functions are used to make the calculation.
-// For f32 using `_mm_add_ps` and `_mm_sub_ps`, the expression `value = a + b - c + d` becomes:
-// ```let value = _mm_add_ps(a, _mm_sub_ps(b, _mm_sub_ps(c, d)));```
-// Only plus and minus are supported, and all the terms must be plain scalar variables.
-// Using array indices, like `value = temp[0] + temp[1]` is not supported.
-macro_rules! calc_sum {
-    ($add:ident, $sub:ident, + $acc:tt + $($rest:tt)*)=> {
-        $add($acc, calc_sum!($add, $sub, + $($rest)*))
-    };
-    ($add:ident, $sub:ident, + $acc:tt - $($rest:tt)*)=> {
-        $sub($acc, calc_sum!($add, $sub, - $($rest)*))
-    };
-    ($add:ident, $sub:ident, - $acc:tt + $($rest:tt)*)=> {
-        $sub($acc, calc_sum!($add, $sub, + $($rest)*))
-    };
-    ($add:ident, $sub:ident, - $acc:tt - $($rest:tt)*)=> {
-        $add($acc, calc_sum!($add, $sub, - $($rest)*))
-    };
-    ($add:ident, $sub:ident, $acc:tt + $($rest:tt)*)=> {
-        $add($acc, calc_sum!($add, $sub, + $($rest)*))
-    };
-    ($add:ident, $sub:ident, $acc:tt - $($rest:tt)*)=> {
-        $sub($acc, calc_sum!($add, $sub, - $($rest)*))
-    };
-    ($add:ident, $sub:ident, + $val:tt) => {$val};
-    ($add:ident, $sub:ident, - $val:tt) => {$val};
-}
-
-// Calculate the sum of an expression consisting of just plus and minus, like a + b - c + d
-macro_rules! calc_f32 {
-    ($($tokens:tt)*) => { calc_sum!(vaddq_f32, vsubq_f32, $($tokens)*)};
-}
-
-// Calculate the sum of an expression consisting of just plus and minus, like a + b - c + d
-macro_rules! calc_f64 {
-    ($($tokens:tt)*) => { calc_sum!(vaddq_f64, vsubq_f64, $($tokens)*)};
-}
-
 // Helper function to assert we have the right float type
 pub fn assert_f32<T: 'static>() {
     let id_f32 = TypeId::of::<f32>();
@@ -298,49 +258,3 @@ macro_rules! boilerplate_sse_fft {
     };
 }
 */
-
-#[cfg(test)]
-mod unit_tests {
-    use core::arch::aarch64::*;
-
-    #[test]
-    fn test_calc_f32() {
-        unsafe {
-            let a = vld1q_f32([1.0, 1.0, 1.0, 1.0].as_ptr());
-            let b = vld1q_f32([2.0, 2.0, 2.0, 2.0].as_ptr());
-            let c = vld1q_f32([3.0, 3.0, 3.0, 3.0].as_ptr());
-            let d = vld1q_f32([4.0, 4.0, 4.0, 4.0].as_ptr());
-            let e = vld1q_f32([5.0, 5.0, 5.0, 5.0].as_ptr());
-            let f = vld1q_f32([6.0, 6.0, 6.0, 6.0].as_ptr());
-            let g = vld1q_f32([7.0, 7.0, 7.0, 7.0].as_ptr());
-            let h = vld1q_f32([8.0, 8.0, 8.0, 8.0].as_ptr());
-            let i = vld1q_f32([9.0, 9.0, 9.0, 9.0].as_ptr());
-            let expected: f32 = 1.0 + 2.0 - 3.0 + 4.0 - 5.0 + 6.0 - 7.0 - 8.0 + 9.0;
-            let res = calc_f32!(a + b - c + d - e + f - g - h + i);
-            let sum = std::mem::transmute::<float32x4_t, [f32; 4]>(res);
-            assert_eq!(sum[0], expected);
-            assert_eq!(sum[1], expected);
-            assert_eq!(sum[2], expected);
-            assert_eq!(sum[3], expected);
-        }
-    }
-    #[test]
-    fn test_calc_f64() {
-        unsafe {
-            let a = vld1q_f64([1.0, 1.0].as_ptr());
-            let b = vld1q_f64([2.0, 2.0].as_ptr());
-            let c = vld1q_f64([3.0, 3.0].as_ptr());
-            let d = vld1q_f64([4.0, 4.0].as_ptr());
-            let e = vld1q_f64([5.0, 5.0].as_ptr());
-            let f = vld1q_f64([6.0, 6.0].as_ptr());
-            let g = vld1q_f64([7.0, 7.0].as_ptr());
-            let h = vld1q_f64([8.0, 8.0].as_ptr());
-            let i = vld1q_f64([9.0, 9.0].as_ptr());
-            let expected: f64 = 1.0 + 2.0 - 3.0 + 4.0 - 5.0 + 6.0 - 7.0 - 8.0 + 9.0;
-            let res = calc_f64!(a + b - c + d - e + f - g - h + i);
-            let sum = std::mem::transmute::<float64x2_t, [f64; 2]>(res);
-            assert_eq!(sum[0], expected);
-            assert_eq!(sum[1], expected);
-        }
-    }
-}

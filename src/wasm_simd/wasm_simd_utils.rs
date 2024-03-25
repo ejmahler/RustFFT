@@ -1,3 +1,4 @@
+use super::wasm_simd_vector::WasmVector32;
 use core::arch::wasm32::*;
 
 //  __  __       _   _               _________  _     _ _
@@ -65,7 +66,43 @@ impl Rotate90F32 {
 /// right: r1.re, r1.im, r2.re, r2.im
 /// --> l1.re, l1.im, r1.re, r1.im
 #[inline(always)]
-pub fn extract_lo_lo_f32(left: v128, right: v128) -> v128 {
+pub fn extract_lo_lo_f32(left: WasmVector32, right: WasmVector32) -> WasmVector32 {
+    WasmVector32(u32x4_shuffle::<0, 1, 4, 5>(left.0, right.0))
+}
+
+/// Pack high (2nd) complex
+/// left: l1.re, l1.im, l2.re, l2.im
+/// right: r1.re, r1.im, r2.re, r2.im
+/// --> l2.re, l2.im, r2.re, r2.im
+#[inline(always)]
+pub fn extract_hi_hi_f32(left: WasmVector32, right: WasmVector32) -> WasmVector32 {
+    WasmVector32(u32x4_shuffle::<2, 3, 6, 7>(left.0, right.0))
+}
+
+/// Pack low (1st) and high (2nd) complex
+/// left: l1.re, l1.im, l2.re, l2.im
+/// right: r1.re, r1.im, r2.re, r2.im
+/// --> l1.re, l1.im, r2.re, r2.im
+#[inline(always)]
+pub fn extract_lo_hi_f32(left: WasmVector32, right: WasmVector32) -> WasmVector32 {
+    WasmVector32(u32x4_shuffle::<0, 1, 6, 7>(left.0, right.0))
+}
+
+/// Pack high (2nd) and low (1st) complex
+/// left: r1.re, r1.im, r2.re, r2.im
+/// right: l1.re, l1.im, l2.re, l2.im
+/// --> r2.re, r2.im, l1.re, l1.im
+#[inline(always)]
+pub fn extract_hi_lo_f32(left: WasmVector32, right: WasmVector32) -> WasmVector32 {
+    WasmVector32(u32x4_shuffle::<2, 3, 4, 5>(left.0, right.0))
+}
+
+/// Pack low (1st) complex
+/// left: l1.re, l1.im, l2.re, l2.im
+/// right: r1.re, r1.im, r2.re, r2.im
+/// --> l1.re, l1.im, r1.re, r1.im
+#[inline(always)]
+pub fn extract_lo_lo_f32_v128(left: v128, right: v128) -> v128 {
     u32x4_shuffle::<0, 1, 4, 5>(left, right)
 }
 
@@ -74,7 +111,7 @@ pub fn extract_lo_lo_f32(left: v128, right: v128) -> v128 {
 /// right: r1.re, r1.im, r2.re, r2.im
 /// --> l2.re, l2.im, r2.re, r2.im
 #[inline(always)]
-pub fn extract_hi_hi_f32(left: v128, right: v128) -> v128 {
+pub fn extract_hi_hi_f32_v128(left: v128, right: v128) -> v128 {
     u32x4_shuffle::<2, 3, 6, 7>(left, right)
 }
 
@@ -83,7 +120,7 @@ pub fn extract_hi_hi_f32(left: v128, right: v128) -> v128 {
 /// right: r1.re, r1.im, r2.re, r2.im
 /// --> l1.re, l1.im, r2.re, r2.im
 #[inline(always)]
-pub fn extract_lo_hi_f32(left: v128, right: v128) -> v128 {
+pub fn extract_lo_hi_f32_v128(left: v128, right: v128) -> v128 {
     u32x4_shuffle::<0, 1, 6, 7>(left, right)
 }
 
@@ -92,7 +129,7 @@ pub fn extract_lo_hi_f32(left: v128, right: v128) -> v128 {
 /// right: l1.re, l1.im, l2.re, l2.im
 /// --> r2.re, r2.im, l1.re, l1.im
 #[inline(always)]
-pub fn extract_hi_lo_f32(left: v128, right: v128) -> v128 {
+pub fn extract_hi_lo_f32_v128(left: v128, right: v128) -> v128 {
     u32x4_shuffle::<2, 3, 4, 5>(left, right)
 }
 
@@ -143,8 +180,8 @@ pub unsafe fn duplicate_hi_f32(values: v128) -> v128 {
 /// result is [x0, x2], [x1, x3]
 #[inline(always)]
 pub unsafe fn transpose_complex_2x2_f32(left: v128, right: v128) -> [v128; 2] {
-    let temp02 = extract_lo_lo_f32(left, right);
-    let temp13 = extract_hi_hi_f32(left, right);
+    let temp02 = extract_lo_lo_f32_v128(left, right);
+    let temp13 = extract_hi_hi_f32_v128(left, right);
     [temp02, temp13]
 }
 
@@ -345,8 +382,8 @@ mod unit_tests {
         unsafe {
             let nbr2 = f32x4(5.0, 6.0, 7.0, 8.0);
             let nbr1 = f32x4(1.0, 2.0, 3.0, 4.0);
-            let first = extract_lo_lo_f32(nbr1, nbr2);
-            let second = extract_hi_hi_f32(nbr1, nbr2);
+            let first = extract_lo_lo_f32_v128(nbr1, nbr2);
+            let second = extract_hi_hi_f32_v128(nbr1, nbr2);
             let first = std::mem::transmute::<v128, [Complex<f32>; 2]>(first);
             let second = std::mem::transmute::<v128, [Complex<f32>; 2]>(second);
             let first_expected = [Complex::new(1.0, 2.0), Complex::new(5.0, 6.0)];

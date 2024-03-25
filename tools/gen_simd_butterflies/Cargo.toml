@@ -1,0 +1,13 @@
+[package]
+
+name = "gen_simd_butterflies"
+version = "0.0.1"
+authors = ["Elliott Mahler <join.together at gmail>"]
+edition = "2021"
+
+description = "Autogenerates SIMD butterfly code"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+handlebars = "5.1.0"

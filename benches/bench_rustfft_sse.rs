@@ -103,6 +103,24 @@ fn bench_planned_multi_f64(b: &mut Bencher, len: usize) {
 #[bench] fn sse_butterfly64_31(b: &mut Bencher) { bench_planned_multi_f64(b, 31);}
 #[bench] fn sse_butterfly64_32(b: &mut Bencher) { bench_planned_multi_f64(b, 32);}
 
+// prime butterflies
+#[bench] fn sse_prime_butterfly32_07(b: &mut Bencher) { bench_planned_multi_f32(b, 7);}
+#[bench] fn sse_prime_butterfly32_11(b: &mut Bencher) { bench_planned_multi_f32(b, 11);}
+#[bench] fn sse_prime_butterfly32_13(b: &mut Bencher) { bench_planned_multi_f32(b, 13);}
+#[bench] fn sse_prime_butterfly32_17(b: &mut Bencher) { bench_planned_multi_f32(b, 17);}
+#[bench] fn sse_prime_butterfly32_19(b: &mut Bencher) { bench_planned_multi_f32(b, 19);}
+#[bench] fn sse_prime_butterfly32_23(b: &mut Bencher) { bench_planned_multi_f32(b, 23);}
+#[bench] fn sse_prime_butterfly32_29(b: &mut Bencher) { bench_planned_multi_f32(b, 29);}
+#[bench] fn sse_prime_butterfly32_31(b: &mut Bencher) { bench_planned_multi_f32(b, 31);}
+#[bench] fn sse_prime_butterfly64_07(b: &mut Bencher) { bench_planned_multi_f64(b, 7);}
+#[bench] fn sse_prime_butterfly64_11(b: &mut Bencher) { bench_planned_multi_f64(b, 11);}
+#[bench] fn sse_prime_butterfly64_13(b: &mut Bencher) { bench_planned_multi_f64(b, 13);}
+#[bench] fn sse_prime_butterfly64_17(b: &mut Bencher) { bench_planned_multi_f64(b, 17);}
+#[bench] fn sse_prime_butterfly64_19(b: &mut Bencher) { bench_planned_multi_f64(b, 19);}
+#[bench] fn sse_prime_butterfly64_23(b: &mut Bencher) { bench_planned_multi_f64(b, 23);}
+#[bench] fn sse_prime_butterfly64_29(b: &mut Bencher) { bench_planned_multi_f64(b, 29);}
+#[bench] fn sse_prime_butterfly64_31(b: &mut Bencher) { bench_planned_multi_f64(b, 31);}
+
 // Powers of 2
 #[bench] fn sse_planned32_p2_00000064(b: &mut Bencher) { bench_planned_f32(b, 64); }
 #[bench] fn sse_planned32_p2_00000128(b: &mut Bencher) { bench_planned_f32(b, 128); }

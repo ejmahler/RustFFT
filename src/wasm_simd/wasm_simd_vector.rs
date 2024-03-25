@@ -27,7 +27,7 @@ macro_rules! read_complex_to_array {
     ($input:ident, { $($idx:literal),* }) => {
         [
         $(
-            $input.load_complex_v128($idx),
+            $input.load_complex($idx),
         )*
         ]
     }
@@ -52,7 +52,7 @@ macro_rules! read_partial1_complex_to_array {
     ($input:ident, { $($idx:literal),* }) => {
         [
         $(
-            $input.load1_complex_v128($idx),
+            $input.load1_complex($idx),
         )*
         ]
     }
@@ -76,7 +76,7 @@ macro_rules! read_partial1_complex_to_array {
 macro_rules! write_complex_to_array {
     ($input:ident, $output:ident, { $($idx:literal),* }) => {
         $(
-            $output.store_complex_v128($input[$idx], $idx);
+            $output.store_complex($input[$idx], $idx);
         )*
     }
 }
@@ -99,7 +99,7 @@ macro_rules! write_complex_to_array {
 macro_rules! write_partial_lo_complex_to_array {
     ($input:ident, $output:ident, { $($idx:literal),* }) => {
         $(
-            $output.store_partial_lo_complex_v128($input[$idx], $idx);
+            $output.store_partial_lo_complex($input[$idx], $idx);
         )*
     }
 }
@@ -108,7 +108,7 @@ macro_rules! write_partial_lo_complex_to_array {
 /// Takes a name of a vector to read from, one to write to, an integer stride, and a list of indexes.
 /// This statement:
 /// ```
-/// let values = write_complex_to_array_separate!(input, output, {0, 1, 2, 3});
+/// let values = write_complex_to_array_strided!(input, output, {0, 1, 2, 3});
 /// ```
 /// is equivalent to:
 /// ```
@@ -120,6 +120,102 @@ macro_rules! write_partial_lo_complex_to_array {
 /// ];
 /// ```
 macro_rules! write_complex_to_array_strided {
+    ($input:ident, $output:ident, $stride:literal, { $($idx:literal),* }) => {
+        $(
+            $output.store_complex($input[$idx], $idx*$stride);
+        )*
+    }
+}
+
+/// Read these indexes from an WasmSimdArray and build an array of simd vectors.
+/// Takes a name of a vector to read from, and a list of indexes to read.
+/// This statement:
+/// ```
+/// let values = read_complex_to_array_v128!(input, {0, 1, 2, 3});
+/// ```
+/// is equivalent to:
+/// ```
+/// let values = [
+///     input.load_complex_v128(0),
+///     input.load_complex_v128(1),
+///     input.load_complex_v128(2),
+///     input.load_complex_v128(3),
+/// ];
+/// ```
+macro_rules! read_complex_to_array_v128 {
+    ($input:ident, { $($idx:literal),* }) => {
+        [
+        $(
+            $input.load_complex_v128($idx),
+        )*
+        ]
+    }
+}
+
+/// Read these indexes from an WasmSimdArray and build an array or partially filled simd vectors.
+/// Takes a name of a vector to read from, and a list of indexes to read.
+/// This statement:
+/// ```
+/// let values = read_partial1_complex_to_array_v128!(input, {0, 1, 2, 3});
+/// ```
+/// is equivalent to:
+/// ```
+/// let values = [
+///     input.load1_complex_v128(0),
+///     input.load1_complex_v128(1),
+///     input.load1_complex_v128(2),
+///     input.load1_complex_v128(3),
+/// ];
+/// ```
+macro_rules! read_partial1_complex_to_array_v128 {
+    ($input:ident, { $($idx:literal),* }) => {
+        [
+        $(
+            $input.load1_complex_v128($idx),
+        )*
+        ]
+    }
+}
+
+/// Write these indexes of an array of simd vectors to the same indexes of an WasmSimdArray.
+/// Takes a name of a vector to read from, one to write to, and a list of indexes.
+/// This statement:
+/// ```
+/// let values = write_complex_to_array_v128!(input, output, {0, 1, 2, 3});
+/// ```
+/// is equivalent to:
+/// ```
+/// let values = [
+///     output.store_complex_v128(input[0], 0),
+///     output.store_complex_v128(input[1], 1),
+///     output.store_complex_v128(input[2], 2),
+///     output.store_complex_v128(input[3], 3),
+/// ];
+/// ```
+macro_rules! write_complex_to_array_v128 {
+    ($input:ident, $output:ident, { $($idx:literal),* }) => {
+        $(
+            $output.store_complex_v128($input[$idx], $idx);
+        )*
+    }
+}
+
+/// Write these indexes of an array of simd vectors to the same indexes, multiplied by a stride, of an WasmSimdArray.
+/// Takes a name of a vector to read from, one to write to, an integer stride, and a list of indexes.
+/// This statement:
+/// ```
+/// let values = write_complex_to_array_strided_v128!(input, output, {0, 1, 2, 3});
+/// ```
+/// is equivalent to:
+/// ```
+/// let values = [
+///     output.store_complex_v128(input[0], 0),
+///     output.store_complex_v128(input[1], 2),
+///     output.store_complex_v128(input[2], 4),
+///     output.store_complex_v128(input[3], 6),
+/// ];
+/// ```
+macro_rules! write_complex_to_array_strided_v128 {
     ($input:ident, $output:ident, $stride:literal, { $($idx:literal),* }) => {
         $(
             $output.store_complex_v128($input[$idx], $idx*$stride);
@@ -160,6 +256,12 @@ pub trait WasmVector: Copy + Debug + Send + Sync {
 
     // math ops
     unsafe fn neg(a: Self) -> Self;
+    unsafe fn add(a: Self, b: Self) -> Self;
+    unsafe fn mul(a: Self, b: Self) -> Self;
+    unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self;
+    unsafe fn nmadd(acc: Self, a: Self, b: Self) -> Self;
+
+    unsafe fn broadcast_scalar(value: Self::ScalarType) -> Self;
 
     /// Generates a chunk of twiddle factors starting at (X,Y) and incrementing X `COMPLEX_PER_VECTOR` times.
     /// The result will be [twiddle(x*y, len), twiddle((x+1)*y, len), twiddle((x+2)*y, len), ...] for as many complex numbers fit in a vector
@@ -228,6 +330,27 @@ impl WasmVector for WasmVector32 {
     #[inline(always)]
     unsafe fn neg(a: Self) -> Self {
         Self(f32x4_neg(a.0))
+    }
+    #[inline(always)]
+    unsafe fn add(a: Self, b: Self) -> Self {
+        Self(f32x4_add(a.0, b.0))
+    }
+    #[inline(always)]
+    unsafe fn mul(a: Self, b: Self) -> Self {
+        Self(f32x4_mul(a.0, b.0))
+    }
+    #[inline(always)]
+    unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self {
+        Self(f32x4_add(acc.0, f32x4_mul(a.0, b.0)))
+    }
+    #[inline(always)]
+    unsafe fn nmadd(acc: Self, a: Self, b: Self) -> Self {
+        Self(f32x4_sub(acc.0, f32x4_mul(a.0, b.0)))
+    }
+
+    #[inline(always)]
+    unsafe fn broadcast_scalar(value: Self::ScalarType) -> Self {
+        Self(f32x4_splat(value))
     }
 
     #[inline(always)]
@@ -343,6 +466,27 @@ impl WasmVector for WasmVector64 {
     #[inline(always)]
     unsafe fn neg(a: Self) -> Self {
         Self(f64x2_neg(a.0))
+    }
+    #[inline(always)]
+    unsafe fn add(a: Self, b: Self) -> Self {
+        Self(f64x2_add(a.0, b.0))
+    }
+    #[inline(always)]
+    unsafe fn mul(a: Self, b: Self) -> Self {
+        Self(f64x2_mul(a.0, b.0))
+    }
+    #[inline(always)]
+    unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self {
+        Self(f64x2_add(acc.0, f64x2_mul(a.0, b.0)))
+    }
+    #[inline(always)]
+    unsafe fn nmadd(acc: Self, a: Self, b: Self) -> Self {
+        Self(f64x2_sub(acc.0, f64x2_mul(a.0, b.0)))
+    }
+
+    #[inline(always)]
+    unsafe fn broadcast_scalar(value: Self::ScalarType) -> Self {
+        Self(f64x2_splat(value))
     }
 
     #[inline(always)]
