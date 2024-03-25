@@ -3,7 +3,6 @@ use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 
-use handlebars;
 use serde::Serialize;
 
 #[derive(Serialize)]
