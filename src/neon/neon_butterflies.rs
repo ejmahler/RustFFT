@@ -128,7 +128,7 @@ macro_rules! boilerplate_fft_neon_f64_butterfly {
 
 #[allow(unused)]
 macro_rules! boilerplate_fft_neon_common_butterfly {
-    ($struct_name:ident, $len:expr, $direction_fn:expr) => {
+    ($struct_name:ident, $len:expr) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             fn process_outofplace_with_scratch(
                 &self,
@@ -182,7 +182,7 @@ macro_rules! boilerplate_fft_neon_common_butterfly {
         impl<T> Direction for $struct_name<T> {
             #[inline(always)]
             fn fft_direction(&self) -> FftDirection {
-                $direction_fn(self)
+                self.direction
             }
         }
     };
@@ -201,8 +201,7 @@ pub struct NeonF32Butterfly1<T> {
 }
 
 boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly1);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly1, 1, |this: &NeonF32Butterfly1<_>| this
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly1, 1);
 impl<T: FftNum> NeonF32Butterfly1<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -241,8 +240,7 @@ pub struct NeonF64Butterfly1<T> {
 }
 
 boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly1);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly1, 1, |this: &NeonF64Butterfly1<_>| this
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly1, 1);
 impl<T: FftNum> NeonF64Butterfly1<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -272,8 +270,7 @@ pub struct NeonF32Butterfly2<T> {
 }
 
 boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly2);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly2, 2, |this: &NeonF32Butterfly2<_>| this
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly2, 2);
 impl<T: FftNum> NeonF32Butterfly2<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -369,8 +366,7 @@ pub struct NeonF64Butterfly2<T> {
 }
 
 boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly2);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly2, 2, |this: &NeonF64Butterfly2<_>| this
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly2, 2);
 impl<T: FftNum> NeonF64Butterfly2<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -427,8 +423,7 @@ pub struct NeonF32Butterfly3<T> {
 }
 
 boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly3);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly3, 3, |this: &NeonF32Butterfly3<_>| this
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly3, 3);
 impl<T: FftNum> NeonF32Butterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -543,8 +538,7 @@ pub struct NeonF64Butterfly3<T> {
 }
 
 boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly3);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly3, 3, |this: &NeonF64Butterfly3<_>| this
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly3, 3);
 impl<T: FftNum> NeonF64Butterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -615,8 +609,7 @@ pub struct NeonF32Butterfly4<T> {
 }
 
 boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly4);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly4, 4, |this: &NeonF32Butterfly4<_>| this
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly4, 4);
 impl<T: FftNum> NeonF32Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -736,8 +729,7 @@ pub struct NeonF64Butterfly4<T> {
 }
 
 boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly4);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly4, 4, |this: &NeonF64Butterfly4<_>| this
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly4, 4);
 impl<T: FftNum> NeonF64Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -817,8 +809,7 @@ pub struct NeonF32Butterfly5<T> {
 }
 
 boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly5);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly5, 5, |this: &NeonF32Butterfly5<_>| this
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly5, 5);
 impl<T: FftNum> NeonF32Butterfly5<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -983,8 +974,7 @@ pub struct NeonF64Butterfly5<T> {
 }
 
 boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly5);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly5, 5, |this: &NeonF64Butterfly5<_>| this
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly5, 5);
 impl<T: FftNum> NeonF64Butterfly5<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -1084,8 +1074,7 @@ pub struct NeonF32Butterfly6<T> {
 }
 
 boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly6);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly6, 6, |this: &NeonF32Butterfly6<_>| this
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly6, 6);
 impl<T: FftNum> NeonF32Butterfly6<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -1201,8 +1190,7 @@ pub struct NeonF64Butterfly6<T> {
 }
 
 boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly6);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly6, 6, |this: &NeonF64Butterfly6<_>| this
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly6, 6);
 impl<T: FftNum> NeonF64Butterfly6<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -1271,8 +1259,7 @@ pub struct NeonF32Butterfly8<T> {
 }
 
 boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly8);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly8, 8, |this: &NeonF32Butterfly8<_>| this
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly8, 8);
 impl<T: FftNum> NeonF32Butterfly8<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -1404,8 +1391,7 @@ pub struct NeonF64Butterfly8<T> {
 }
 
 boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly8);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly8, 8, |this: &NeonF64Butterfly8<_>| this
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly8, 8);
 impl<T: FftNum> NeonF64Butterfly8<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -1487,8 +1473,7 @@ pub struct NeonF32Butterfly9<T> {
 }
 
 boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly9);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly9, 9, |this: &NeonF32Butterfly9<_>| this
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly9, 9);
 impl<T: FftNum> NeonF32Butterfly9<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -1616,8 +1601,7 @@ pub struct NeonF64Butterfly9<T> {
 }
 
 boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly9);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly9, 9, |this: &NeonF64Butterfly9<_>| this
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly9, 9);
 impl<T: FftNum> NeonF64Butterfly9<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -1688,8 +1672,7 @@ pub struct NeonF32Butterfly10<T> {
 }
 
 boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly10);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly10, 10, |this: &NeonF32Butterfly10<_>| this
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly10, 10);
 impl<T: FftNum> NeonF32Butterfly10<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -1806,8 +1789,7 @@ pub struct NeonF64Butterfly10<T> {
 }
 
 boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly10);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly10, 10, |this: &NeonF64Butterfly10<_>| this
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly10, 10);
 impl<T: FftNum> NeonF64Butterfly10<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -1875,8 +1857,7 @@ pub struct NeonF32Butterfly12<T> {
 }
 
 boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly12);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly12, 12, |this: &NeonF32Butterfly12<_>| this
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly12, 12);
 impl<T: FftNum> NeonF32Butterfly12<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -2012,8 +1993,7 @@ pub struct NeonF64Butterfly12<T> {
 }
 
 boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly12);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly12, 12, |this: &NeonF64Butterfly12<_>| this
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly12, 12);
 impl<T: FftNum> NeonF64Butterfly12<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -2081,8 +2061,7 @@ pub struct NeonF32Butterfly15<T> {
 }
 
 boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly15);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly15, 15, |this: &NeonF32Butterfly15<_>| this
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly15, 15);
 impl<T: FftNum> NeonF32Butterfly15<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -2217,8 +2196,7 @@ pub struct NeonF64Butterfly15<T> {
 }
 
 boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly15);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly15, 15, |this: &NeonF64Butterfly15<_>| this
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly15, 15);
 impl<T: FftNum> NeonF64Butterfly15<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -2283,6 +2261,7 @@ impl<T: FftNum> NeonF64Butterfly15<T> {
 
 pub struct NeonF32Butterfly16<T> {
     bf4: NeonF32Butterfly4<T>,
+    direction: FftDirection,
     twiddles_packed: [float32x4_t; 6],
     twiddle1: float32x4_t,
     twiddle3: float32x4_t,
@@ -2290,9 +2269,7 @@ pub struct NeonF32Butterfly16<T> {
 }
 
 boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly16);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly16, 16, |this: &NeonF32Butterfly16<_>| this
-    .bf4
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly16, 16);
 impl<T: FftNum> NeonF32Butterfly16<T> {
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
@@ -2307,6 +2284,7 @@ impl<T: FftNum> NeonF32Butterfly16<T> {
         unsafe {
             Self {
                 bf4: NeonF32Butterfly4::new(direction),
+                direction,
                 twiddles_packed: [
                     pack_32(tw0, tw1),
                     pack_32(tw0, tw2),
@@ -2451,15 +2429,14 @@ impl<T: FftNum> NeonF32Butterfly16<T> {
 
 pub struct NeonF64Butterfly16<T> {
     bf4: NeonF64Butterfly4<T>,
+    direction: FftDirection,
     twiddle1: float64x2_t,
     twiddle3: float64x2_t,
     twiddle9: float64x2_t,
 }
 
 boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly16);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly16, 16, |this: &NeonF64Butterfly16<_>| this
-    .bf4
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly16, 16);
 impl<T: FftNum> NeonF64Butterfly16<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -2471,6 +2448,7 @@ impl<T: FftNum> NeonF64Butterfly16<T> {
         unsafe {
             Self {
                 bf4: NeonF64Butterfly4::new(direction),
+                direction,
                 twiddle1: pack_64(tw1),
                 twiddle3: pack_64(tw3),
                 twiddle9: pack_64(tw9),
@@ -2556,6 +2534,7 @@ impl<T: FftNum> NeonF64Butterfly16<T> {
 pub struct NeonF32Butterfly24<T> {
     bf4: NeonF32Butterfly4<T>,
     bf6: NeonF32Butterfly6<T>,
+    direction: FftDirection,
     twiddles_packed: [float32x4_t; 9],
     twiddle1: float32x4_t,
     twiddle2: float32x4_t,
@@ -2566,9 +2545,7 @@ pub struct NeonF32Butterfly24<T> {
 }
 
 boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly24);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly24, 24, |this: &NeonF32Butterfly24<_>| this
-    .bf4
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly24, 24);
 impl<T: FftNum> NeonF32Butterfly24<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -2589,6 +2566,7 @@ impl<T: FftNum> NeonF32Butterfly24<T> {
             Self {
                 bf4: NeonF32Butterfly4::new(direction),
                 bf6: NeonF32Butterfly6::new(direction),
+                direction,
                 twiddles_packed: [
                     pack_32(tw0, tw1),
                     pack_32(tw0, tw2),
@@ -2762,6 +2740,7 @@ impl<T: FftNum> NeonF32Butterfly24<T> {
 pub struct NeonF64Butterfly24<T> {
     bf4: NeonF64Butterfly4<T>,
     bf6: NeonF64Butterfly6<T>,
+    direction: FftDirection,
     twiddle1: float64x2_t,
     twiddle2: float64x2_t,
     twiddle4: float64x2_t,
@@ -2771,9 +2750,7 @@ pub struct NeonF64Butterfly24<T> {
 }
 
 boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly24);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly24, 24, |this: &NeonF64Butterfly24<_>| this
-    .bf4
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly24, 24);
 impl<T: FftNum> NeonF64Butterfly24<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -2789,6 +2766,7 @@ impl<T: FftNum> NeonF64Butterfly24<T> {
             Self {
                 bf4: NeonF64Butterfly4::new(direction),
                 bf6: NeonF64Butterfly6::new(direction),
+                direction,
                 twiddle1: pack_64(tw1),
                 twiddle2: pack_64(tw2),
                 twiddle4: pack_64(tw4),
@@ -2888,6 +2866,7 @@ impl<T: FftNum> NeonF64Butterfly24<T> {
 
 pub struct NeonF32Butterfly32<T> {
     bf8: NeonF32Butterfly8<T>,
+    direction: FftDirection,
     twiddles_packed: [float32x4_t; 12],
     twiddle1: float32x4_t,
     twiddle2: float32x4_t,
@@ -2904,10 +2883,7 @@ pub struct NeonF32Butterfly32<T> {
 }
 
 boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly32);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly32, 32, |this: &NeonF32Butterfly32<_>| this
-    .bf8
-    .bf4
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly32, 32);
 impl<T: FftNum> NeonF32Butterfly32<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -2931,6 +2907,7 @@ impl<T: FftNum> NeonF32Butterfly32<T> {
         unsafe {
             Self {
                 bf8: NeonF32Butterfly8::new(direction),
+                direction,
                 twiddles_packed: [
                     pack_32(tw0, tw1),
                     pack_32(tw0, tw2),
@@ -3131,6 +3108,7 @@ impl<T: FftNum> NeonF32Butterfly32<T> {
 
 pub struct NeonF64Butterfly32<T> {
     bf8: NeonF64Butterfly8<T>,
+    direction: FftDirection,
     twiddle1: float64x2_t,
     twiddle2: float64x2_t,
     twiddle3: float64x2_t,
@@ -3146,10 +3124,7 @@ pub struct NeonF64Butterfly32<T> {
 }
 
 boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly32);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly32, 32, |this: &NeonF64Butterfly32<_>| this
-    .bf8
-    .bf4
-    .direction);
+boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly32, 32);
 impl<T: FftNum> NeonF64Butterfly32<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -3170,6 +3145,7 @@ impl<T: FftNum> NeonF64Butterfly32<T> {
         unsafe {
             Self {
                 bf8: NeonF64Butterfly8::new(direction),
+                direction,
                 twiddle1: pack_64(tw1),
                 twiddle2: pack_64(tw2),
                 twiddle3: pack_64(tw3),
