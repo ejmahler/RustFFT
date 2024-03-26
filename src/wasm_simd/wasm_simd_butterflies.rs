@@ -132,7 +132,7 @@ macro_rules! boilerplate_fft_wasm_simd_f64_butterfly {
 
 #[allow(unused)]
 macro_rules! boilerplate_fft_wasm_simd_common_butterfly {
-    ($struct_name:ident, $len:expr, $direction_fn:expr) => {
+    ($struct_name:ident, $len:expr) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             fn process_outofplace_with_scratch(
                 &self,
@@ -186,7 +186,7 @@ macro_rules! boilerplate_fft_wasm_simd_common_butterfly {
         impl<T> Direction for $struct_name<T> {
             #[inline(always)]
             fn fft_direction(&self) -> FftDirection {
-                $direction_fn(self)
+                self.direction
             }
         }
     };
@@ -205,11 +205,7 @@ pub struct WasmSimdF32Butterfly1<T> {
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly1);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF32Butterfly1,
-    1,
-    |this: &WasmSimdF32Butterfly1<_>| this.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly1, 1);
 impl<T: FftNum> WasmSimdF32Butterfly1<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -248,11 +244,7 @@ pub struct WasmSimdF64Butterfly1<T> {
 }
 
 boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly1);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF64Butterfly1,
-    1,
-    |this: &WasmSimdF64Butterfly1<_>| this.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly1, 1);
 impl<T: FftNum> WasmSimdF64Butterfly1<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -282,11 +274,7 @@ pub struct WasmSimdF32Butterfly2<T> {
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly2);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF32Butterfly2,
-    2,
-    |this: &WasmSimdF32Butterfly2<_>| this.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly2, 2);
 impl<T: FftNum> WasmSimdF32Butterfly2<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -380,11 +368,7 @@ pub struct WasmSimdF64Butterfly2<T> {
 }
 
 boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly2);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF64Butterfly2,
-    2,
-    |this: &WasmSimdF64Butterfly2<_>| this.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly2, 2);
 impl<T: FftNum> WasmSimdF64Butterfly2<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -436,11 +420,7 @@ pub struct WasmSimdF32Butterfly3<T> {
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly3);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF32Butterfly3,
-    3,
-    |this: &WasmSimdF32Butterfly3<_>| this.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly3, 3);
 impl<T: FftNum> WasmSimdF32Butterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -552,11 +532,7 @@ pub struct WasmSimdF64Butterfly3<T> {
 }
 
 boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly3);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF64Butterfly3,
-    3,
-    |this: &WasmSimdF64Butterfly3<_>| this.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly3, 3);
 impl<T: FftNum> WasmSimdF64Butterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -628,11 +604,7 @@ pub struct WasmSimdF32Butterfly4<T> {
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly4);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF32Butterfly4,
-    4,
-    |this: &WasmSimdF32Butterfly4<_>| this.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly4, 4);
 impl<T: FftNum> WasmSimdF32Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -745,11 +717,7 @@ pub struct WasmSimdF64Butterfly4<T> {
 }
 
 boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly4);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF64Butterfly4,
-    4,
-    |this: &WasmSimdF64Butterfly4<_>| this.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly4, 4);
 impl<T: FftNum> WasmSimdF64Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -829,11 +797,7 @@ pub struct WasmSimdF32Butterfly5<T> {
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly5);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF32Butterfly5,
-    5,
-    |this: &WasmSimdF32Butterfly5<_>| this.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly5, 5);
 impl<T: FftNum> WasmSimdF32Butterfly5<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -998,11 +962,7 @@ pub struct WasmSimdF64Butterfly5<T> {
 }
 
 boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly5);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF64Butterfly5,
-    5,
-    |this: &WasmSimdF64Butterfly5<_>| this.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly5, 5);
 impl<T: FftNum> WasmSimdF64Butterfly5<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -1102,11 +1062,7 @@ pub struct WasmSimdF32Butterfly6<T> {
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly6);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF32Butterfly6,
-    6,
-    |this: &WasmSimdF32Butterfly6<_>| this.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly6, 6);
 impl<T: FftNum> WasmSimdF32Butterfly6<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -1222,11 +1178,7 @@ pub struct WasmSimdF64Butterfly6<T> {
 }
 
 boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly6);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF64Butterfly6,
-    6,
-    |this: &WasmSimdF64Butterfly6<_>| this.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly6, 6);
 impl<T: FftNum> WasmSimdF64Butterfly6<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -1295,11 +1247,7 @@ pub struct WasmSimdF32Butterfly8<T> {
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly8);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF32Butterfly8,
-    8,
-    |this: &WasmSimdF32Butterfly8<_>| this.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly8, 8);
 impl<T: FftNum> WasmSimdF32Butterfly8<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -1430,11 +1378,7 @@ pub struct WasmSimdF64Butterfly8<T> {
 }
 
 boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly8);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF64Butterfly8,
-    8,
-    |this: &WasmSimdF64Butterfly8<_>| this.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly8, 8);
 impl<T: FftNum> WasmSimdF64Butterfly8<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -1516,11 +1460,7 @@ pub struct WasmSimdF32Butterfly9<T> {
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly9);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF32Butterfly9,
-    9,
-    |this: &WasmSimdF32Butterfly9<_>| this.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly9, 9);
 impl<T: FftNum> WasmSimdF32Butterfly9<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -1645,11 +1585,7 @@ pub struct WasmSimdF64Butterfly9<T> {
 }
 
 boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly9);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF64Butterfly9,
-    9,
-    |this: &WasmSimdF64Butterfly9<_>| this.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly9, 9);
 impl<T: FftNum> WasmSimdF64Butterfly9<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -1720,11 +1656,7 @@ pub struct WasmSimdF32Butterfly10<T> {
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly10);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF32Butterfly10,
-    10,
-    |this: &WasmSimdF32Butterfly10<_>| this.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly10, 10);
 impl<T: FftNum> WasmSimdF32Butterfly10<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -1838,11 +1770,7 @@ pub struct WasmSimdF64Butterfly10<T> {
 }
 
 boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly10);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF64Butterfly10,
-    10,
-    |this: &WasmSimdF64Butterfly10<_>| this.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly10, 10);
 impl<T: FftNum> WasmSimdF64Butterfly10<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -1910,11 +1838,7 @@ pub struct WasmSimdF32Butterfly12<T> {
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly12);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF32Butterfly12,
-    12,
-    |this: &WasmSimdF32Butterfly12<_>| this.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly12, 12);
 impl<T: FftNum> WasmSimdF32Butterfly12<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -2047,11 +1971,7 @@ pub struct WasmSimdF64Butterfly12<T> {
 }
 
 boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly12);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF64Butterfly12,
-    12,
-    |this: &WasmSimdF64Butterfly12<_>| this.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly12, 12);
 impl<T: FftNum> WasmSimdF64Butterfly12<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -2119,11 +2039,7 @@ pub struct WasmSimdF32Butterfly15<T> {
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly15);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF32Butterfly15,
-    15,
-    |this: &WasmSimdF32Butterfly15<_>| this.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly15, 15);
 impl<T: FftNum> WasmSimdF32Butterfly15<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -2255,11 +2171,7 @@ pub struct WasmSimdF64Butterfly15<T> {
 }
 
 boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly15);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF64Butterfly15,
-    15,
-    |this: &WasmSimdF64Butterfly15<_>| this.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly15, 15);
 impl<T: FftNum> WasmSimdF64Butterfly15<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -2324,6 +2236,7 @@ impl<T: FftNum> WasmSimdF64Butterfly15<T> {
 
 pub struct WasmSimdF32Butterfly16<T> {
     bf4: WasmSimdF32Butterfly4<T>,
+    direction: FftDirection,
     twiddles_packed: [v128; 6],
     twiddle1: v128,
     twiddle3: v128,
@@ -2331,11 +2244,7 @@ pub struct WasmSimdF32Butterfly16<T> {
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly16);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF32Butterfly16,
-    16,
-    |this: &WasmSimdF32Butterfly16<_>| this.bf4.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly16, 16);
 impl<T: FftNum> WasmSimdF32Butterfly16<T> {
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
@@ -2350,6 +2259,7 @@ impl<T: FftNum> WasmSimdF32Butterfly16<T> {
         unsafe {
             Self {
                 bf4: WasmSimdF32Butterfly4::new(direction),
+                direction,
                 twiddles_packed: [
                     pack_32(tw0, tw1),
                     pack_32(tw0, tw2),
@@ -2510,17 +2420,14 @@ impl<T: FftNum> WasmSimdF32Butterfly16<T> {
 
 pub struct WasmSimdF64Butterfly16<T> {
     bf4: WasmSimdF64Butterfly4<T>,
+    direction: FftDirection,
     twiddle1: v128,
     twiddle3: v128,
     twiddle9: v128,
 }
 
 boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly16);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF64Butterfly16,
-    16,
-    |this: &WasmSimdF64Butterfly16<_>| this.bf4.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly16, 16);
 impl<T: FftNum> WasmSimdF64Butterfly16<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -2532,6 +2439,7 @@ impl<T: FftNum> WasmSimdF64Butterfly16<T> {
         unsafe {
             Self {
                 bf4: WasmSimdF64Butterfly4::new(direction),
+                direction,
                 twiddle1: pack_64(tw1),
                 twiddle3: pack_64(tw3),
                 twiddle9: pack_64(tw9),
@@ -2617,6 +2525,7 @@ impl<T: FftNum> WasmSimdF64Butterfly16<T> {
 pub struct WasmSimdF32Butterfly24<T> {
     bf4: WasmSimdF32Butterfly4<T>,
     bf6: WasmSimdF32Butterfly6<T>,
+    direction: FftDirection,
     twiddles_packed: [v128; 9],
     twiddle1: v128,
     twiddle2: v128,
@@ -2627,11 +2536,7 @@ pub struct WasmSimdF32Butterfly24<T> {
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly24);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF32Butterfly24,
-    24,
-    |this: &WasmSimdF32Butterfly24<_>| this.bf4.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly24, 24);
 impl<T: FftNum> WasmSimdF32Butterfly24<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -2652,6 +2557,7 @@ impl<T: FftNum> WasmSimdF32Butterfly24<T> {
             Self {
                 bf4: WasmSimdF32Butterfly4::new(direction),
                 bf6: WasmSimdF32Butterfly6::new(direction),
+                direction,
                 twiddles_packed: [
                     pack_32(tw0, tw1),
                     pack_32(tw0, tw2),
@@ -2840,6 +2746,7 @@ impl<T: FftNum> WasmSimdF32Butterfly24<T> {
 pub struct WasmSimdF64Butterfly24<T> {
     bf4: WasmSimdF64Butterfly4<T>,
     bf6: WasmSimdF64Butterfly6<T>,
+    direction: FftDirection,
     twiddle1: v128,
     twiddle2: v128,
     twiddle4: v128,
@@ -2849,11 +2756,7 @@ pub struct WasmSimdF64Butterfly24<T> {
 }
 
 boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly24);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF64Butterfly24,
-    24,
-    |this: &WasmSimdF64Butterfly24<_>| this.bf4.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly24, 24);
 impl<T: FftNum> WasmSimdF64Butterfly24<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -2869,6 +2772,7 @@ impl<T: FftNum> WasmSimdF64Butterfly24<T> {
             Self {
                 bf4: WasmSimdF64Butterfly4::new(direction),
                 bf6: WasmSimdF64Butterfly6::new(direction),
+                direction,
                 twiddle1: pack_64(tw1),
                 twiddle2: pack_64(tw2),
                 twiddle4: pack_64(tw4),
@@ -2968,6 +2872,7 @@ impl<T: FftNum> WasmSimdF64Butterfly24<T> {
 
 pub struct WasmSimdF32Butterfly32<T> {
     bf8: WasmSimdF32Butterfly8<T>,
+    direction: FftDirection,
     twiddles_packed: [v128; 12],
     twiddle1: v128,
     twiddle2: v128,
@@ -2984,11 +2889,7 @@ pub struct WasmSimdF32Butterfly32<T> {
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly32);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF32Butterfly32,
-    32,
-    |this: &WasmSimdF32Butterfly32<_>| this.bf8.bf4.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly32, 32);
 impl<T: FftNum> WasmSimdF32Butterfly32<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -3012,6 +2913,7 @@ impl<T: FftNum> WasmSimdF32Butterfly32<T> {
         unsafe {
             Self {
                 bf8: WasmSimdF32Butterfly8::new(direction),
+                direction,
                 twiddles_packed: [
                     pack_32(tw0, tw1),
                     pack_32(tw0, tw2),
@@ -3233,6 +3135,7 @@ impl<T: FftNum> WasmSimdF32Butterfly32<T> {
 
 pub struct WasmSimdF64Butterfly32<T> {
     bf8: WasmSimdF64Butterfly8<T>,
+    direction: FftDirection,
     twiddle1: v128,
     twiddle2: v128,
     twiddle3: v128,
@@ -3248,11 +3151,7 @@ pub struct WasmSimdF64Butterfly32<T> {
 }
 
 boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly32);
-boilerplate_fft_wasm_simd_common_butterfly!(
-    WasmSimdF64Butterfly32,
-    32,
-    |this: &WasmSimdF64Butterfly32<_>| this.bf8.bf4.direction
-);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly32, 32);
 impl<T: FftNum> WasmSimdF64Butterfly32<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
@@ -3273,6 +3172,7 @@ impl<T: FftNum> WasmSimdF64Butterfly32<T> {
         unsafe {
             Self {
                 bf8: WasmSimdF64Butterfly8::new(direction),
+                direction,
                 twiddle1: pack_64(tw1),
                 twiddle2: pack_64(tw2),
                 twiddle3: pack_64(tw3),

@@ -89,7 +89,7 @@ struct WasmSimdF32Butterfly7<T> {
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly7);
-boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly7, 7, |this: &WasmSimdF32Butterfly7<_>| this.direction);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly7, 7);
 impl<T: FftNum> WasmSimdF32Butterfly7<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
@@ -194,7 +194,7 @@ struct WasmSimdF64Butterfly7<T> {
 }
 
 boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly7);
-boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly7, 7, |this: &WasmSimdF64Butterfly7<_>| this.direction);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly7, 7);
 impl<T: FftNum> WasmSimdF64Butterfly7<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
@@ -270,7 +270,7 @@ struct WasmSimdF32Butterfly11<T> {
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly11);
-boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly11, 11, |this: &WasmSimdF32Butterfly11<_>| this.direction);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly11, 11);
 impl<T: FftNum> WasmSimdF32Butterfly11<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
@@ -425,7 +425,7 @@ struct WasmSimdF64Butterfly11<T> {
 }
 
 boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly11);
-boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly11, 11, |this: &WasmSimdF64Butterfly11<_>| this.direction);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly11, 11);
 impl<T: FftNum> WasmSimdF64Butterfly11<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
@@ -543,7 +543,7 @@ struct WasmSimdF32Butterfly13<T> {
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly13);
-boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly13, 13, |this: &WasmSimdF32Butterfly13<_>| this.direction);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly13, 13);
 impl<T: FftNum> WasmSimdF32Butterfly13<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
@@ -729,7 +729,7 @@ struct WasmSimdF64Butterfly13<T> {
 }
 
 boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly13);
-boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly13, 13, |this: &WasmSimdF64Butterfly13<_>| this.direction);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly13, 13);
 impl<T: FftNum> WasmSimdF64Butterfly13<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
@@ -874,7 +874,7 @@ struct WasmSimdF32Butterfly17<T> {
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly17);
-boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly17, 17, |this: &WasmSimdF32Butterfly17<_>| this.direction);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly17, 17);
 impl<T: FftNum> WasmSimdF32Butterfly17<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
@@ -1134,7 +1134,7 @@ struct WasmSimdF64Butterfly17<T> {
 }
 
 boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly17);
-boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly17, 17, |this: &WasmSimdF64Butterfly17<_>| this.direction);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly17, 17);
 impl<T: FftNum> WasmSimdF64Butterfly17<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
@@ -1345,7 +1345,7 @@ struct WasmSimdF32Butterfly19<T> {
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly19);
-boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly19, 19, |this: &WasmSimdF32Butterfly19<_>| this.direction);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly19, 19);
 impl<T: FftNum> WasmSimdF32Butterfly19<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
@@ -1648,7 +1648,7 @@ struct WasmSimdF64Butterfly19<T> {
 }
 
 boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly19);
-boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly19, 19, |this: &WasmSimdF64Butterfly19<_>| this.direction);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly19, 19);
 impl<T: FftNum> WasmSimdF64Butterfly19<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
@@ -1898,7 +1898,7 @@ struct WasmSimdF32Butterfly23<T> {
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly23);
-boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly23, 23, |this: &WasmSimdF32Butterfly23<_>| this.direction);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly23, 23);
 impl<T: FftNum> WasmSimdF32Butterfly23<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
@@ -2299,7 +2299,7 @@ struct WasmSimdF64Butterfly23<T> {
 }
 
 boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly23);
-boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly23, 23, |this: &WasmSimdF64Butterfly23<_>| this.direction);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly23, 23);
 impl<T: FftNum> WasmSimdF64Butterfly23<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
@@ -2639,7 +2639,7 @@ struct WasmSimdF32Butterfly29<T> {
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly29);
-boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly29, 29, |this: &WasmSimdF32Butterfly29<_>| this.direction);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly29, 29);
 impl<T: FftNum> WasmSimdF32Butterfly29<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
@@ -3217,7 +3217,7 @@ struct WasmSimdF64Butterfly29<T> {
 }
 
 boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly29);
-boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly29, 29, |this: &WasmSimdF64Butterfly29<_>| this.direction);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly29, 29);
 impl<T: FftNum> WasmSimdF64Butterfly29<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
@@ -3722,7 +3722,7 @@ struct WasmSimdF32Butterfly31<T> {
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly31);
-boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly31, 31, |this: &WasmSimdF32Butterfly31<_>| this.direction);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF32Butterfly31, 31);
 impl<T: FftNum> WasmSimdF32Butterfly31<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
@@ -4367,7 +4367,7 @@ struct WasmSimdF64Butterfly31<T> {
 }
 
 boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly31);
-boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly31, 31, |this: &WasmSimdF64Butterfly31<_>| this.direction);
+boilerplate_fft_wasm_simd_common_butterfly!(WasmSimdF64Butterfly31, 31);
 impl<T: FftNum> WasmSimdF64Butterfly31<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
