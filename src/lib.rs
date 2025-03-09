@@ -241,13 +241,6 @@ pub trait Fft<T: FftNum>: Length + Direction + Sync + Send {
         input: &[Complex<T>],
         output: &mut [Complex<T>],
         scratch: &mut [Complex<T>],
-    );
-
-    fn process_outofplace_with_scratch_naive(
-        &self,
-        input: &[Complex<T>],
-        output: &mut [Complex<T>],
-        scratch: &mut [Complex<T>],
     ) {
         let (mut input_scratch, scratch) = scratch.split_at_mut(input.len());
         input_scratch.copy_from_slice(input);
