@@ -77,24 +77,19 @@ macro_rules! boilerplate_mixedradix {
         ) {
             // Perform the column FFTs
             // Safety: self.perform_column_butterflies() requires the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't available
-            scratch.copy_from_slice(input);
+            output.copy_from_slice(input);
             unsafe {
                 // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
                 let transmuted_output: &mut [Complex<A>] =
-                    array_utils::workaround_transmute_mut(scratch);
+                    array_utils::workaround_transmute_mut(output);
 
                 self.perform_column_butterflies(transmuted_output);
             }
 
-            // process the row FFTs. If extra scratch was provided, pass it in. Otherwise, use the output.
-            // let inner_scratch = if scratch.len() > 0 {
-            //     scratch
-            // } else {
-            //     &mut output[..]
-            // };
             self.common_data
                 .inner_fft
-                .process_with_scratch(scratch, output);
+                .process_with_scratch(output, scratch);
+            scratch[..input.len()].copy_from_slice(output);
 
             // Transpose
             // Safety: self.transpose() requires the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
