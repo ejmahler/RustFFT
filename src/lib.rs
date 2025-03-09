@@ -236,6 +236,13 @@ pub trait Fft<T: FftNum>: Length + Direction + Sync + Send {
         scratch: &mut [Complex<T>],
     );
 
+    fn process_outofplace_with_scratch_immut(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    );
+
     /// Returns the size of the scratch buffer required by `process_with_scratch`
     ///
     /// For most FFT sizes, this method will return `self.len()`. For a few small sizes it will return 0, and for some special FFT sizes
