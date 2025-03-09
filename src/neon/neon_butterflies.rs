@@ -55,16 +55,16 @@ macro_rules! boilerplate_fft_neon_f32_butterfly {
             // Do multiple ffts over a longer vector outofplace, called from "process_outofplace_with_scratch" of Fft trait
             pub(crate) unsafe fn perform_oop_fft_butterfly_multi(
                 &self,
-                input: &mut [Complex<T>],
+                input: &[Complex<T>],
                 output: &mut [Complex<T>],
             ) -> Result<(), ()> {
                 let len = input.len();
-                let alldone = array_utils::iter_chunks_zipped_mut(
+                let alldone = array_utils::iter_chunks_zipped(
                     input,
                     output,
                     2 * self.len(),
                     |in_chunk, out_chunk| {
-                        let input_slice = workaround_transmute_mut(in_chunk);
+                        let input_slice = crate::array_utils::workaround_transmute(in_chunk);
                         let output_slice = workaround_transmute_mut(out_chunk);
                         self.perform_parallel_fft_contiguous(DoubleBuf {
                             input: input_slice,
@@ -73,10 +73,10 @@ macro_rules! boilerplate_fft_neon_f32_butterfly {
                     },
                 );
                 if alldone.is_err() && input.len() >= self.len() {
-                    let input_slice = workaround_transmute_mut(input);
+                    let input_slice = crate::array_utils::workaround_transmute(input);
                     let output_slice = workaround_transmute_mut(output);
                     self.perform_fft_contiguous(DoubleBuf {
-                        input: &mut input_slice[len - self.len()..],
+                        input: &input_slice[len - self.len()..],
                         output: &mut output_slice[len - self.len()..],
                     })
                 }
@@ -110,11 +110,11 @@ macro_rules! boilerplate_fft_neon_f64_butterfly {
             //#[target_feature(enable = "neon")]
             pub(crate) unsafe fn perform_oop_fft_butterfly_multi(
                 &self,
-                input: &mut [Complex<T>],
+                input: &[Complex<T>],
                 output: &mut [Complex<T>],
             ) -> Result<(), ()> {
-                array_utils::iter_chunks_zipped_mut(input, output, self.len(), |in_chunk, out_chunk| {
-                    let input_slice = workaround_transmute_mut(in_chunk);
+                array_utils::iter_chunks_zipped(input, output, self.len(), |in_chunk, out_chunk| {
+                    let input_slice = crate::array_utils::workaround_transmute(in_chunk);
                     let output_slice = workaround_transmute_mut(out_chunk);
                     self.perform_fft_contiguous(DoubleBuf {
                         input: input_slice,
@@ -130,6 +130,25 @@ macro_rules! boilerplate_fft_neon_f64_butterfly {
 macro_rules! boilerplate_fft_neon_common_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
+            fn process_outofplace_with_scratch_immut(
+                &self,
+                input: &[Complex<T>],
+                output: &mut [Complex<T>],
+                _scratch: &mut [Complex<T>],
+            ) {
+                if input.len() < self.len() || output.len() != input.len() {
+                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
+                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
+                }
+                let result = unsafe { self.perform_oop_fft_butterfly_multi(input, output) };
+
+                if result.is_err() {
+                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
+                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
+                }
+            }
             fn process_outofplace_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
