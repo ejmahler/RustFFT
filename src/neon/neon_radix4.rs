@@ -83,6 +83,15 @@ impl<N: NeonNum, T: FftNum> NeonRadix4<N, T> {
         }
     }
 
+    unsafe fn perform_fft_out_of_place_immut(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) {
+        todo!()
+    }
+
     //#[target_feature(enable = "neon")]
     unsafe fn perform_fft_out_of_place(
         &self,

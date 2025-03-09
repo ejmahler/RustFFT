@@ -311,6 +311,15 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
         }
     }
 
+    fn perform_fft_out_of_place_immut(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) {
+        todo!()
+    }
+
     fn perform_fft_out_of_place(
         &self,
         input: &[Complex<T>],

@@ -241,6 +241,15 @@ impl<T: FftNum> GoodThomasAlgorithm<T> {
         self.reindex_output(scratch, buffer);
     }
 
+    fn perform_fft_out_of_place_immut(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) {
+        todo!()
+    }
+
     fn perform_fft_out_of_place(
         &self,
         input: &mut [Complex<T>],
@@ -382,6 +391,15 @@ impl<T: FftNum> GoodThomasAlgorithmSmall<T> {
 
             input_output_map: input_output_map.into_boxed_slice(),
         }
+    }
+
+    fn perform_fft_out_of_place_immut(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) {
+        todo!()
     }
 
     fn perform_fft_out_of_place(

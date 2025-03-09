@@ -226,7 +226,10 @@ macro_rules! boilerplate_fft {
                     return;
                 }
 
-                let required_scratch = self.get_outofplace_scratch_len();
+                // Normally the required scratch would just be `self.self.get_outofplace_scratch_len()`
+                // However, small FFTs could have a required scratch of 0. Use the max of the scratch
+                // and the length for that case
+                let required_scratch = usize::max(self.get_outofplace_scratch_len(), self.len());
                 if scratch.len() < required_scratch
                     || input.len() < self.len()
                     || output.len() != input.len()
@@ -248,7 +251,7 @@ macro_rules! boilerplate_fft {
                     output,
                     self.len(),
                     |in_chunk, out_chunk| {
-                        self.process_outofplace_with_scratch_immut(in_chunk, out_chunk, scratch)
+                        self.perform_fft_out_of_place_immut(in_chunk, out_chunk, scratch)
                     },
                 );
 

@@ -190,6 +190,15 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                 };
             }
 
+            fn perform_fft_out_of_place_immut(
+                &self,
+                input: &[Complex<T>],
+                output: &mut [Complex<T>],
+                scratch: &mut [Complex<T>],
+            ) {
+                todo!()
+            }
+
             #[inline]
             fn perform_fft_out_of_place(
                 &self,
