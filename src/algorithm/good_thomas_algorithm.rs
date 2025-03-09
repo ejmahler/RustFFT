@@ -399,7 +399,30 @@ impl<T: FftNum> GoodThomasAlgorithmSmall<T> {
         output: &mut [Complex<T>],
         scratch: &mut [Complex<T>],
     ) {
-        todo!()
+        // These asserts are for the unsafe blocks down below. we're relying on the optimizer to get rid of this assert
+        assert_eq!(self.len(), input.len());
+        assert_eq!(self.len(), output.len());
+
+        let (input_map, output_map) = self.input_output_map.split_at(self.len());
+
+        // copy the input using our reordering mapping
+        for (output_element, &input_index) in output.iter_mut().zip(input_map.iter()) {
+            *output_element = input[input_index];
+        }
+
+        // run FFTs of size `width`
+        self.width_size_fft.process_with_scratch(output, scratch);
+
+        // transpose
+        unsafe { array_utils::transpose_small(self.width, self.height, output, scratch) };
+
+        // run FFTs of size 'height'
+        self.height_size_fft.process_with_scratch(scratch, output);
+
+        // copy to the output, using our output redordeing mapping
+        for (input_element, &output_index) in scratch.iter().zip(output_map.iter()) {
+            output[output_index] = *input_element;
+        }
     }
 
     fn perform_fft_out_of_place(

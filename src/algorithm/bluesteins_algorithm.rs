@@ -143,7 +143,10 @@ impl<T: FftNum> BluesteinsAlgorithm<T> {
         output: &mut [Complex<T>],
         scratch: &mut [Complex<T>],
     ) {
-        todo!()
+        // TODO - Is there a better way to do this?
+        let (mut input_scratch, scratch) = scratch.split_at_mut(input.len());
+        input_scratch.copy_from_slice(input);
+        self.process_outofplace_with_scratch(&mut input_scratch, output, scratch);
     }
 
     fn perform_fft_out_of_place(
