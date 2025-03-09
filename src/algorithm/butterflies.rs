@@ -29,7 +29,7 @@ macro_rules! boilerplate_fft_butterfly {
                     return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
                 }
 
-                let result = array_utils::iter_chunks_zipped(
+                let result = array_utils::iter_chunks_zipped_mut(
                     input,
                     output,
                     self.len(),
@@ -56,7 +56,7 @@ macro_rules! boilerplate_fft_butterfly {
                     return; // Unreachable, because fft_error_inplace asserts, but it helps codegen to put it here
                 }
 
-                let result = array_utils::iter_chunks(buffer, self.len(), |chunk| unsafe {
+                let result = array_utils::iter_chunks_mut(buffer, self.len(), |chunk| unsafe {
                     self.perform_fft_butterfly(chunk)
                 });
 

@@ -99,7 +99,7 @@ macro_rules! boilerplate_fft_oop {
                     return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
                 }
 
-                let result = array_utils::iter_chunks_zipped(
+                let result = array_utils::iter_chunks_zipped_mut(
                     input,
                     output,
                     self.len(),
@@ -132,7 +132,7 @@ macro_rules! boilerplate_fft_oop {
                 }
 
                 let (scratch, extra_scratch) = scratch.split_at_mut(self.len());
-                let result = array_utils::iter_chunks(buffer, self.len(), |chunk| {
+                let result = array_utils::iter_chunks_mut(buffer, self.len(), |chunk| {
                     self.perform_fft_out_of_place(chunk, scratch, extra_scratch);
                     chunk.copy_from_slice(scratch);
                 });
@@ -202,7 +202,7 @@ macro_rules! boilerplate_fft {
                 }
 
                 let scratch = &mut scratch[..required_scratch];
-                let result = array_utils::iter_chunks_zipped(
+                let result = array_utils::iter_chunks_zipped_mut(
                     input,
                     output,
                     self.len(),
@@ -241,7 +241,7 @@ macro_rules! boilerplate_fft {
                 }
 
                 let scratch = &mut scratch[..required_scratch];
-                let result = array_utils::iter_chunks(buffer, self.len(), |chunk| {
+                let result = array_utils::iter_chunks_mut(buffer, self.len(), |chunk| {
                     self.perform_fft_inplace(chunk, scratch)
                 });
 

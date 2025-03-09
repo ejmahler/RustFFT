@@ -53,7 +53,7 @@ macro_rules! boilerplate_avx_fft {
                 }
 
                 let scratch = &mut scratch[..required_scratch];
-                let result = array_utils::iter_chunks_zipped(
+                let result = array_utils::iter_chunks_zipped_mut(
                     input,
                     output,
                     self.len(),
@@ -88,7 +88,7 @@ macro_rules! boilerplate_avx_fft {
                 }
 
                 let scratch = &mut scratch[..required_scratch];
-                let result = array_utils::iter_chunks(buffer, self.len(), |chunk| {
+                let result = array_utils::iter_chunks_mut(buffer, self.len(), |chunk| {
                     self.perform_fft_inplace(chunk, scratch)
                 });
 
@@ -157,7 +157,7 @@ macro_rules! boilerplate_avx_fft_commondata {
                 }
 
                 let scratch = &mut scratch[..required_scratch];
-                let result = array_utils::iter_chunks_zipped(
+                let result = array_utils::iter_chunks_zipped_mut(
                     input,
                     output,
                     self.len(),
@@ -196,7 +196,7 @@ macro_rules! boilerplate_avx_fft_commondata {
                 }
 
                 let scratch = &mut scratch[..required_scratch];
-                let result = array_utils::iter_chunks(buffer, self.len(), |chunk| {
+                let result = array_utils::iter_chunks_mut(buffer, self.len(), |chunk| {
                     self.perform_fft_inplace(chunk, scratch)
                 });
 

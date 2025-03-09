@@ -13,7 +13,7 @@ categories = ["algorithms", "compression", "multimedia::encoding", "science"]
 license = "MIT OR Apache-2.0"
 
 [features]
-default = ["avx", "sse", "neon"]
+default = ["avx"]
 
 # On x86_64, the "avx" feature enables compilation of AVX-acclerated code. 
 # Similarly, the "sse" feature enables compilation of SSE-accelerated code. 

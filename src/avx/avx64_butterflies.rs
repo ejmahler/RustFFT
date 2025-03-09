@@ -47,7 +47,7 @@ macro_rules! boilerplate_fft_simd_butterfly {
                     return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
                 }
 
-                let result = array_utils::iter_chunks_zipped(
+                let result = array_utils::iter_chunks_zipped_mut(
                     input,
                     output,
                     self.len(),
@@ -77,7 +77,7 @@ macro_rules! boilerplate_fft_simd_butterfly {
                     return; // Unreachable, because fft_error_inplace asserts, but it helps codegen to put it here
                 }
 
-                let result = array_utils::iter_chunks(buffer, self.len(), |chunk| {
+                let result = array_utils::iter_chunks_mut(buffer, self.len(), |chunk| {
                     unsafe {
                         // Specialization workaround: See the comments in FftPlannerAvx::new() for why we have to transmute these slices
                         self.perform_fft_f64(workaround_transmute_mut::<_, Complex<f64>>(chunk));
@@ -188,7 +188,7 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                     unsafe { array_utils::workaround_transmute_mut(input) };
                 let transmuted_output: &mut [Complex<f64>] =
                     unsafe { array_utils::workaround_transmute_mut(output) };
-                let result = array_utils::iter_chunks_zipped(
+                let result = array_utils::iter_chunks_zipped_mut(
                     transmuted_input,
                     transmuted_output,
                     self.len(),
@@ -216,7 +216,7 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                     unsafe { array_utils::workaround_transmute_mut(buffer) };
                 let transmuted_scratch: &mut [Complex<f64>] =
                     unsafe { array_utils::workaround_transmute_mut(scratch) };
-                let result = array_utils::iter_chunks(transmuted_buffer, self.len(), |chunk| {
+                let result = array_utils::iter_chunks_mut(transmuted_buffer, self.len(), |chunk| {
                     self.perform_fft_inplace(chunk, transmuted_scratch)
                 });
 
