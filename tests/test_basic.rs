@@ -6,13 +6,13 @@ use std::sync::Arc;
 #[test]
 fn test_100() {
     // let len = 102;
-    for len in 1..250 {
+    for len in 37..250 {
         dbg!(len);
         let mut p = FftPlanner::<f32>::new();
         let planner: Arc<dyn Fft<f32>> = p.plan_fft_forward(len);
 
         let mut input: Vec<_> = (0..len).map(|i| Complex::new(i as f32, 0.0)).collect();
-        dbg!(planner.get_inplace_scratch_len(), planner.get_outofplace_scratch_len());
+        // dbg!(planner.get_inplace_scratch_len(), planner.get_outofplace_scratch_len());
         let mut output = input.clone();
         let mut output2 = output.clone();
         let mut scratch = vec![Complex::<f32>::ZERO; planner.get_outofplace_scratch_len() + len];

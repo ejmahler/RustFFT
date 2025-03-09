@@ -36,7 +36,7 @@ macro_rules! boilerplate_avx_fft {
                 output: &mut [Complex<T>],
                 scratch: &mut [Complex<T>],
             ) {
-                let required_scratch = self.get_outofplace_scratch_len();
+                let required_scratch = self.get_inplace_scratch_len();
                 if scratch.len() < required_scratch
                     || input.len() < self.len()
                     || output.len() != input.len()
@@ -46,7 +46,7 @@ macro_rules! boilerplate_avx_fft {
                         self.len(),
                         input.len(),
                         output.len(),
-                        self.get_outofplace_scratch_len(),
+                        self.get_inplace_scratch_len(),
                         scratch.len(),
                     );
                     return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
@@ -58,7 +58,7 @@ macro_rules! boilerplate_avx_fft {
                     output,
                     self.len(),
                     |in_chunk, out_chunk| {
-                        self.process_outofplace_with_scratch_immut(in_chunk, out_chunk, scratch)
+                        self.perform_fft_out_of_place_immut(in_chunk, out_chunk, scratch)
                     },
                 );
 
@@ -184,7 +184,7 @@ macro_rules! boilerplate_avx_fft_commondata {
                     return;
                 }
 
-                let required_scratch = self.get_outofplace_scratch_len();
+                let required_scratch = self.get_inplace_scratch_len();
                 if scratch.len() < required_scratch
                     || input.len() < self.len()
                     || output.len() != input.len()
@@ -194,7 +194,7 @@ macro_rules! boilerplate_avx_fft_commondata {
                         self.len(),
                         input.len(),
                         output.len(),
-                        self.get_outofplace_scratch_len(),
+                        self.get_inplace_scratch_len(),
                         scratch.len(),
                     );
                     return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
@@ -206,7 +206,7 @@ macro_rules! boilerplate_avx_fft_commondata {
                     output,
                     self.len(),
                     |in_chunk, out_chunk| {
-                        self.process_outofplace_with_scratch_immut(in_chunk, out_chunk, scratch)
+                        self.perform_fft_out_of_place_immut(in_chunk, out_chunk, scratch)
                     },
                 );
 
