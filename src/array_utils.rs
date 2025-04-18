@@ -1,6 +1,6 @@
+use crate::common::RadixFactor;
 use crate::Complex;
 use crate::FftNum;
-use crate::RadixFactor;
 use std::ops::{Deref, DerefMut};
 
 /// Given an array of size width * height, representing a flattened 2D array,

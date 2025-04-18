@@ -2,12 +2,13 @@ use num_integer::gcd;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::common::RadixFactor;
 use crate::wasm_simd::wasm_simd_planner::FftPlannerWasmSimd;
 use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
 
 use crate::algorithm::butterflies::*;
 use crate::algorithm::*;
-use crate::{Fft, RadixFactor};
+use crate::Fft;
 
 use crate::FftPlannerAvx;
 use crate::FftPlannerNeon;
