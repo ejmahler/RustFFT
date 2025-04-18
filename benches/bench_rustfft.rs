@@ -12,6 +12,8 @@ use rustfft::num_traits::Zero;
 use rustfft::algorithm::*;
 use rustfft::algorithm::butterflies::*;
 
+
+#[allow(unused)]
 struct Noop {
     len: usize,
     direction: FftDirection,

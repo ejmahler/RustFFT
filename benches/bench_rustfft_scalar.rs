@@ -13,6 +13,7 @@ use rustfft::{Direction, Fft, FftDirection, FftNum, Length};
 use std::sync::Arc;
 use test::Bencher;
 
+#[allow(unused)]
 struct Noop {
     len: usize,
     direction: FftDirection,
