@@ -1,3 +1,11 @@
+## [6.3]
+Released 17th April 2025
+### Changed
+ - Miscellaneous improvements to performance for non-power-of-two FFT lengths, especially on NEON (#131, #132, #134, #136, #137)
+### Fixed
+ - Fixed `FftPlanner` not being `Sync` (#153)
+
+
 ## [6.2]
 Released 22nd January 2024
 ### Minimum Rustc Version
