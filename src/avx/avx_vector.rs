@@ -152,29 +152,6 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
         [output0, output2, output1, output3]
     }
 
-    // A niche variant of column_butterfly4 that negates row 3 before performing the FFT. It's able to roll it into existing instructions, so the negation is free
-    #[inline(always)]
-    unsafe fn column_butterfly4_negaterow3(
-        rows: [Self; 4],
-        rotation: Rotation90<Self>,
-    ) -> [Self; 4] {
-        // Algorithm: 2x2 mixed radix
-
-        // Perform the first set of size-2 FFTs.
-        let [mid0, mid2] = Self::column_butterfly2([rows[0], rows[2]]);
-        let (mid1, mid3) = (Self::sub(rows[1], rows[3]), Self::add(rows[1], rows[3])); // to negate row 3, swap add and sub in the butterfly 2
-
-        // Apply twiddle factors (in this case just a rotation)
-        let mid3_rotated = mid3.rotate90(rotation);
-
-        // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = Self::column_butterfly2([mid0, mid1]);
-        let [output2, output3] = Self::column_butterfly2([mid2, mid3_rotated]);
-
-        // Swap outputs 1 and 2 in the output to do a square transpose
-        [output0, output2, output1, output3]
-    }
-
     #[inline(always)]
     unsafe fn column_butterfly5(rows: [Self; 5], twiddles: [Self; 2]) -> [Self; 5] {
         // This algorithm is derived directly from the definition of the Dft of size 5
@@ -427,57 +404,6 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
             output9, output10,
         ]
     }
-
-    #[inline(always)]
-    unsafe fn column_butterfly16(
-        rows: [Self; 16],
-        twiddles: [Self; 2],
-        rotation: Rotation90<Self>,
-    ) -> [Self; 16] {
-        // Algorithm: 4x4 mixed radix
-
-        // Size-4 FFTs down the columns
-        let mid0 = Self::column_butterfly4([rows[0], rows[4], rows[8], rows[12]], rotation);
-        let mut mid1 = Self::column_butterfly4([rows[1], rows[5], rows[9], rows[13]], rotation);
-        let mut mid2 = Self::column_butterfly4([rows[2], rows[6], rows[10], rows[14]], rotation);
-        let mut mid3 = Self::column_butterfly4([rows[3], rows[7], rows[11], rows[15]], rotation);
-
-        // Apply twiddle factors
-        mid1[1] = Self::mul_complex(mid1[1], twiddles[0]);
-
-        // for twiddle(2, 16), we can use the butterfly8 twiddle1 instead, which takes fewer instructions and fewer multiplies
-        mid2[1] = apply_butterfly8_twiddle1(mid2[1], rotation);
-        mid1[2] = apply_butterfly8_twiddle1(mid1[2], rotation);
-
-        // for twiddle(3,16), we can use twiddle(1,16), sort of, but we'd need a branch, and at this point it's easier to just have another vector
-        mid3[1] = Self::mul_complex(mid3[1], twiddles[1]);
-        mid1[3] = Self::mul_complex(mid1[3], twiddles[1]);
-
-        // twiddle(4,16) is just a rotate
-        mid2[2] = mid2[2].rotate90(rotation);
-
-        // for twiddle(6, 16), we can use the butterfly8 twiddle3 instead, which takes fewer instructions and fewer multiplies
-        mid3[2] = apply_butterfly8_twiddle3(mid3[2], rotation);
-        mid2[3] = apply_butterfly8_twiddle3(mid2[3], rotation);
-
-        // twiddle(9, 16) is twiddle (1,16) negated. we're just going to use the same twiddle for now, and apply the negation as a part of our subsequent butterfly 4's
-        mid3[3] = Self::mul_complex(mid3[3], twiddles[0]);
-
-        // Up next is a transpose, but since everything is already in registers, we don't actually have to transpose anything!
-        // "transpose" and thne apply butterfly 4's across the columns of our 4x4 array
-        let output0 = Self::column_butterfly4([mid0[0], mid1[0], mid2[0], mid3[0]], rotation);
-        let output1 = Self::column_butterfly4([mid0[1], mid1[1], mid2[1], mid3[1]], rotation);
-        let output2 = Self::column_butterfly4([mid0[2], mid1[2], mid2[2], mid3[2]], rotation);
-        let output3 =
-            Self::column_butterfly4_negaterow3([mid0[3], mid1[3], mid2[3], mid3[3]], rotation); // finish the twiddle of the last row by negating it
-
-        // finally, one more transpose
-        [
-            output0[0], output1[0], output2[0], output3[0], output0[1], output1[1], output2[1],
-            output3[1], output0[2], output1[2], output2[2], output3[2], output0[3], output1[3],
-            output2[3], output3[3],
-        ]
-    }
 }
 
 /// A 256-bit SIMD vector of complex numbers, stored with the real values and imaginary values interleaved.
@@ -491,16 +417,10 @@ pub trait AvxVector256: AvxVector {
 
     unsafe fn lo(self) -> Self::HalfVector;
     unsafe fn hi(self) -> Self::HalfVector;
-    unsafe fn split(self) -> (Self::HalfVector, Self::HalfVector) {
-        (self.lo(), self.hi())
-    }
     unsafe fn merge(lo: Self::HalfVector, hi: Self::HalfVector) -> Self;
 
     /// Fill a vector by repeating the provided complex number as many times as possible
     unsafe fn broadcast_complex_elements(value: Complex<Self::ScalarType>) -> Self;
-
-    /// Adds all complex elements from this vector horizontally
-    unsafe fn hadd_complex(self) -> Complex<Self::ScalarType>;
 
     // loads/stores of complex numbers
     unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
@@ -1129,21 +1049,6 @@ impl AvxVector256 for __m256 {
     }
 
     #[inline(always)]
-    unsafe fn hadd_complex(self) -> Complex<Self::ScalarType> {
-        let lo = self.lo();
-        let hi = self.hi();
-        let sum = _mm_add_ps(lo, hi);
-        let shuffled_sum = Self::HalfVector::unpackhi_complex([sum, sum]);
-        let result = _mm_add_ps(sum, shuffled_sum);
-
-        let mut result_storage = [Complex::zero(); 1];
-        result_storage
-            .as_mut_slice()
-            .store_partial1_complex(result, 0);
-        result_storage[0]
-    }
-
-    #[inline(always)]
     unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
         _mm256_loadu_ps(ptr as *const Self::ScalarType)
     }
@@ -1717,17 +1622,6 @@ impl AvxVector256 for __m256d {
     #[inline(always)]
     unsafe fn broadcast_complex_elements(value: Complex<Self::ScalarType>) -> Self {
         _mm256_set_pd(value.im, value.re, value.im, value.re)
-    }
-
-    #[inline(always)]
-    unsafe fn hadd_complex(self) -> Complex<Self::ScalarType> {
-        let lo = self.lo();
-        let hi = self.hi();
-        let sum = _mm_add_pd(lo, hi);
-
-        let mut result_storage = [Complex::zero(); 1];
-        result_storage.as_mut_slice().store_partial1_complex(sum, 0);
-        result_storage[0]
     }
 
     #[inline(always)]
