@@ -17,4 +17,4 @@ pub use self::mixed_radix::{MixedRadix, MixedRadixSmall};
 pub use self::raders_algorithm::RadersAlgorithm;
 pub use self::radix3::Radix3;
 pub use self::radix4::Radix4;
-pub use self::radixn::RadixN;
+pub(crate) use self::radixn::RadixN;

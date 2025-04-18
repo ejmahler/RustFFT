@@ -134,7 +134,7 @@ mod twiddles;
 use num_complex::Complex;
 use num_traits::Zero;
 
-pub use crate::common::{FftNum, RadixFactor};
+pub use crate::common::FftNum;
 pub use crate::plan::{FftPlanner, FftPlannerScalar};
 
 /// A trait that allows FFT algorithms to report their expected input/output size

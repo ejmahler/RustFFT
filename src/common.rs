@@ -283,7 +283,7 @@ macro_rules! boilerplate_fft {
 #[non_exhaustive]
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub enum RadixFactor {
+pub(crate) enum RadixFactor {
     Factor2,
     Factor3,
     Factor4,

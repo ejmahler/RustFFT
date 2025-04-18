@@ -3,9 +3,9 @@ use std::sync::Arc;
 use num_complex::Complex;
 
 use crate::array_utils::{self, factor_transpose, Load, LoadStore, TransposeFactor};
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::common::{fft_error_inplace, fft_error_outofplace, RadixFactor};
 use crate::{common::FftNum, twiddles, FftDirection};
-use crate::{Direction, Fft, Length, RadixFactor};
+use crate::{Direction, Fft, Length};
 
 use super::butterflies::{Butterfly2, Butterfly3, Butterfly4, Butterfly5, Butterfly6, Butterfly7};
 
@@ -32,23 +32,7 @@ impl<T> InternalRadixFactor<T> {
     }
 }
 
-/// FFT algorithm which efficiently computes FFTs with small prime factors.
-///
-/// ~~~
-/// // Computes a forward FFT of size 6720 (32 * 7 * 5 * 3 * 2)
-/// use std::sync::Arc;
-/// use rustfft::algorithm::{RadixN, butterflies::Butterfly32};
-/// use rustfft::{Fft, FftDirection, RadixFactor};
-/// use rustfft::num_complex::Complex;
-///
-/// let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 6720];
-///
-/// let base_fft = Arc::new(Butterfly32::new(FftDirection::Forward));
-/// let factors = &[RadixFactor::Factor7, RadixFactor::Factor5, RadixFactor::Factor3, RadixFactor::Factor2];
-/// let fft = RadixN::new(factors, base_fft);
-/// fft.process(&mut buffer);
-/// ~~~
-pub struct RadixN<T> {
+pub(crate) struct RadixN<T> {
     twiddles: Box<[Complex<T>]>,
 
     base_fft: Arc<dyn Fft<T>>,

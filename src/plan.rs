@@ -2,12 +2,13 @@ use num_integer::gcd;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::common::RadixFactor;
 use crate::wasm_simd::wasm_simd_planner::FftPlannerWasmSimd;
 use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
 
 use crate::algorithm::butterflies::*;
 use crate::algorithm::*;
-use crate::{Fft, RadixFactor};
+use crate::Fft;
 
 use crate::FftPlannerAvx;
 use crate::FftPlannerNeon;
@@ -130,7 +131,7 @@ const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft l
 /// A Recipe is a structure that describes the design of a FFT, without actually creating it.
 /// It is used as a middle step in the planning process.
 #[derive(Debug, PartialEq, Clone)]
-pub enum Recipe {
+pub(crate) enum Recipe {
     Dft(usize),
     MixedRadix {
         left_fft: Arc<Recipe>,

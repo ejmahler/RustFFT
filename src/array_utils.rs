@@ -1,6 +1,6 @@
+use crate::common::RadixFactor;
 use crate::Complex;
 use crate::FftNum;
-use crate::RadixFactor;
 use std::ops::{Deref, DerefMut};
 
 /// Given an array of size width * height, representing a flattened 2D array,
@@ -296,7 +296,7 @@ pub fn compute_logarithm<const D: usize>(value: usize) -> Option<u32> {
     }
 }
 
-pub struct TransposeFactor {
+pub(crate) struct TransposeFactor {
     pub factor: RadixFactor,
     pub count: u8,
 }
@@ -305,7 +305,7 @@ pub struct TransposeFactor {
 // Use a lookup table to avoid repeating the slow bit reverse operations.
 // Unrolling the outer loop by a factor D helps speed things up.
 // const parameter D (for Divisor) determines how much to unroll. `input.len() / height` must divisible by D.
-pub fn factor_transpose<T: Copy, const D: usize>(
+pub(crate) fn factor_transpose<T: Copy, const D: usize>(
     height: usize,
     input: &[T],
     output: &mut [T],
@@ -350,7 +350,7 @@ pub fn factor_transpose<T: Copy, const D: usize>(
 // Divide `value` by the provided array of factors, and push the remainders into a new number
 // When all of the provided factors are 2, this is exactly equal to a bit reversal
 // When some of the factors are not 2, think of this as a "generalization" of a bit reversal, to something like a "Remainder reversal".
-pub fn reverse_remainders(value: usize, factors: &[TransposeFactor]) -> usize {
+pub(crate) fn reverse_remainders(value: usize, factors: &[TransposeFactor]) -> usize {
     let mut result: usize = 0;
     let mut value = value;
     for f in factors.iter() {
