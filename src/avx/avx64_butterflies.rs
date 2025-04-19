@@ -5,7 +5,7 @@ use std::mem::MaybeUninit;
 use num_complex::Complex;
 
 use crate::array_utils;
-use crate::array_utils::workaround_transmute_mut;
+use crate::array_utils::*;
 use crate::array_utils::DoubleBuf;
 use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::{common::FftNum, twiddles};
@@ -35,6 +35,14 @@ macro_rules! boilerplate_fft_simd_butterfly {
             }
         }
         impl<T: FftNum> Fft<T> for $struct_name<f64> {
+            fn process_outofplace_with_scratch_immut(
+                &self,
+                input: &[Complex<T>],
+                output: &mut [Complex<T>],
+                scratch: &mut [Complex<T>],
+            ) {
+                todo!()
+            }
             fn process_outofplace_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
@@ -47,7 +55,7 @@ macro_rules! boilerplate_fft_simd_butterfly {
                     return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
                 }
 
-                let result = array_utils::iter_chunks_zipped(
+                let result = array_utils::iter_chunks_zipped_mut(
                     input,
                     output,
                     self.len(),
@@ -77,7 +85,7 @@ macro_rules! boilerplate_fft_simd_butterfly {
                     return; // Unreachable, because fft_error_inplace asserts, but it helps codegen to put it here
                 }
 
-                let result = array_utils::iter_chunks(buffer, self.len(), |chunk| {
+                let result = array_utils::iter_chunks_mut(buffer, self.len(), |chunk| {
                     unsafe {
                         // Specialization workaround: See the comments in FftPlannerAvx::new() for why we have to transmute these slices
                         self.perform_fft_f64(workaround_transmute_mut::<_, Complex<f64>>(chunk));
@@ -155,6 +163,15 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                 };
             }
 
+            fn perform_fft_out_of_place_immut(
+                &self,
+                input: &[Complex<T>],
+                output: &mut [Complex<T>],
+                scratch: &mut [Complex<T>],
+            ) {
+                todo!()
+            }
+
             #[inline]
             fn perform_fft_out_of_place(
                 &self,
@@ -171,6 +188,14 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
             }
         }
         impl<T: FftNum> Fft<T> for $struct_name<f64> {
+            fn process_outofplace_with_scratch_immut(
+                &self,
+                input: &[Complex<T>],
+                output: &mut [Complex<T>],
+                scratch: &mut [Complex<T>],
+            ) {
+                todo!()
+            }
             fn process_outofplace_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
@@ -188,7 +213,7 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                     unsafe { array_utils::workaround_transmute_mut(input) };
                 let transmuted_output: &mut [Complex<f64>] =
                     unsafe { array_utils::workaround_transmute_mut(output) };
-                let result = array_utils::iter_chunks_zipped(
+                let result = array_utils::iter_chunks_zipped_mut(
                     transmuted_input,
                     transmuted_output,
                     self.len(),
@@ -216,7 +241,7 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                     unsafe { array_utils::workaround_transmute_mut(buffer) };
                 let transmuted_scratch: &mut [Complex<f64>] =
                     unsafe { array_utils::workaround_transmute_mut(scratch) };
-                let result = array_utils::iter_chunks(transmuted_buffer, self.len(), |chunk| {
+                let result = array_utils::iter_chunks_mut(transmuted_buffer, self.len(), |chunk| {
                     self.perform_fft_inplace(chunk, transmuted_scratch)
                 });
 

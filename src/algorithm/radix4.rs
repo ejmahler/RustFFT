@@ -124,6 +124,15 @@ impl<T: FftNum> Radix4<T> {
         self.outofplace_scratch_len
     }
 
+    fn perform_fft_out_of_place_immut(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) {
+        todo!()
+    }
+
     fn perform_fft_out_of_place(
         &self,
         input: &mut [Complex<T>],

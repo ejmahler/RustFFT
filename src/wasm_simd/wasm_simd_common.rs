@@ -74,7 +74,7 @@ macro_rules! boilerplate_fft_wasm_simd_oop {
                 }
 
                 let result = unsafe {
-                    array_utils::iter_chunks_zipped(
+                    array_utils::iter_chunks_zipped_mut(
                         input,
                         output,
                         self.len(),
@@ -109,7 +109,7 @@ macro_rules! boilerplate_fft_wasm_simd_oop {
 
                 let scratch = &mut scratch[..required_scratch];
                 let result = unsafe {
-                    array_utils::iter_chunks(buffer, self.len(), |chunk| {
+                    array_utils::iter_chunks_mut(buffer, self.len(), |chunk| {
                         self.perform_fft_out_of_place(chunk, scratch, &mut []);
                         chunk.copy_from_slice(scratch);
                     })

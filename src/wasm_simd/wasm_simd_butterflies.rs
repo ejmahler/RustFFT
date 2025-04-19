@@ -46,7 +46,7 @@ macro_rules! boilerplate_fft_wasm_simd_f32_butterfly {
                 buffer: &mut [Complex<T>],
             ) -> Result<(), ()> {
                 let len = buffer.len();
-                let alldone = array_utils::iter_chunks(buffer, 2 * self.len(), |chunk| {
+                let alldone = array_utils::iter_chunks_mut(buffer, 2 * self.len(), |chunk| {
                     self.perform_parallel_fft_butterfly(chunk)
                 });
                 if alldone.is_err() && buffer.len() >= self.len() {
@@ -63,7 +63,7 @@ macro_rules! boilerplate_fft_wasm_simd_f32_butterfly {
                 output: &mut [Complex<T>],
             ) -> Result<(), ()> {
                 let len = input.len();
-                let alldone = array_utils::iter_chunks_zipped(
+                let alldone = array_utils::iter_chunks_zipped_mut(
                     input,
                     output,
                     2 * self.len(),
@@ -105,7 +105,7 @@ macro_rules! boilerplate_fft_wasm_simd_f64_butterfly {
                 &self,
                 buffer: &mut [Complex<T>],
             ) -> Result<(), ()> {
-                array_utils::iter_chunks(buffer, self.len(), |chunk| {
+                array_utils::iter_chunks_mut(buffer, self.len(), |chunk| {
                     self.perform_fft_butterfly(chunk)
                 })
             }
@@ -117,7 +117,7 @@ macro_rules! boilerplate_fft_wasm_simd_f64_butterfly {
                 input: &mut [Complex<T>],
                 output: &mut [Complex<T>],
             ) -> Result<(), ()> {
-                array_utils::iter_chunks_zipped(input, output, self.len(), |in_chunk, out_chunk| {
+                array_utils::iter_chunks_zipped_mut(input, output, self.len(), |in_chunk, out_chunk| {
                     let input_slice = workaround_transmute_mut(in_chunk);
                     let output_slice = workaround_transmute_mut(out_chunk);
                     self.perform_fft_contiguous(DoubleBuf {

@@ -213,6 +213,20 @@ impl<T: FftNum> Fft<T> for BigScratchAlgorithm {
     fn get_outofplace_scratch_len(&self) -> usize {
         self.outofplace_scratch
     }
+    
+    fn process_outofplace_with_scratch_immut(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) {
+        assert!(
+            scratch.len() >= self.outofplace_scratch,
+            "Not enough OOP scratch provided, self={:?}, provided scratch={}",
+            &self,
+            scratch.len()
+        );
+    }
 }
 impl Length for BigScratchAlgorithm {
     fn len(&self) -> usize {
