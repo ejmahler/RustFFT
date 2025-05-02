@@ -118,9 +118,10 @@ impl<T: FftNum> Radix3<T> {
         self.outofplace_scratch_len
     }
 
-    fn perform_fft_out_of_place(
+    #[inline]
+    fn perform_fft_immut(
         &self,
-        input: &mut [Complex<T>],
+        input: &[Complex<T>],
         output: &mut [Complex<T>],
         scratch: &mut [Complex<T>],
     ) {
@@ -132,8 +133,7 @@ impl<T: FftNum> Radix3<T> {
         }
 
         // Base-level FFTs
-        let base_scratch = if scratch.len() > 0 { scratch } else { input };
-        self.base_fft.process_with_scratch(output, base_scratch);
+        self.base_fft.process_with_scratch(output, scratch);
 
         // cross-FFTs
         const ROW_COUNT: usize = 3;
@@ -152,6 +152,15 @@ impl<T: FftNum> Radix3<T> {
             let twiddle_offset = num_columns * (ROW_COUNT - 1);
             layer_twiddles = &layer_twiddles[twiddle_offset..];
         }
+    }
+
+    fn perform_fft_out_of_place(
+        &self,
+        input: &mut [Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) {
+        self.perform_fft_immut(input, output, scratch);
     }
 }
 boilerplate_fft_oop!(Radix3, |this: &Radix3<_>| this.len);

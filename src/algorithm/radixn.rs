@@ -158,6 +158,89 @@ impl<T: FftNum> RadixN<T> {
         self.outofplace_scratch_len
     }
 
+    fn perform_fft_immut(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) {
+        if let Some(unroll_factor) = self.factors.first() {
+            // for performance, we really, really want to unroll the transpose, but we need to make sure the output length is divisible by the unroll amount
+            // choosing the first factor seems to reliably perform well
+            match unroll_factor.factor {
+                RadixFactor::Factor2 => {
+                    factor_transpose::<Complex<T>, 2>(self.base_len, input, output, &self.factors)
+                }
+                RadixFactor::Factor3 => {
+                    factor_transpose::<Complex<T>, 3>(self.base_len, input, output, &self.factors)
+                }
+                RadixFactor::Factor4 => {
+                    factor_transpose::<Complex<T>, 4>(self.base_len, input, output, &self.factors)
+                }
+                RadixFactor::Factor5 => {
+                    factor_transpose::<Complex<T>, 5>(self.base_len, input, output, &self.factors)
+                }
+                RadixFactor::Factor6 => {
+                    factor_transpose::<Complex<T>, 6>(self.base_len, input, output, &self.factors)
+                }
+                RadixFactor::Factor7 => {
+                    factor_transpose::<Complex<T>, 7>(self.base_len, input, output, &self.factors)
+                }
+            }
+        } else {
+            // no factors, so just pass data straight to our base
+            output.copy_from_slice(input);
+        }
+
+        // Base-level FFTs
+        self.base_fft.process_with_scratch(output, scratch);
+
+        let mut cross_fft_len = self.base_len;
+        let mut layer_twiddles: &[Complex<T>] = &self.twiddles;
+
+        for factor in self.butterflies.iter() {
+            let cross_fft_columns = cross_fft_len;
+            cross_fft_len *= factor.radix();
+
+            match factor {
+                InternalRadixFactor::Factor2(butterfly2) => {
+                    for data in output.chunks_exact_mut(cross_fft_len) {
+                        unsafe { butterfly_2(data, layer_twiddles, cross_fft_columns, butterfly2) }
+                    }
+                }
+                InternalRadixFactor::Factor3(butterfly3) => {
+                    for data in output.chunks_exact_mut(cross_fft_len) {
+                        unsafe { butterfly_3(data, layer_twiddles, cross_fft_columns, butterfly3) }
+                    }
+                }
+                InternalRadixFactor::Factor4(butterfly4) => {
+                    for data in output.chunks_exact_mut(cross_fft_len) {
+                        unsafe { butterfly_4(data, layer_twiddles, cross_fft_columns, butterfly4) }
+                    }
+                }
+                InternalRadixFactor::Factor5(butterfly5) => {
+                    for data in output.chunks_exact_mut(cross_fft_len) {
+                        unsafe { butterfly_5(data, layer_twiddles, cross_fft_columns, butterfly5) }
+                    }
+                }
+                InternalRadixFactor::Factor6(butterfly6) => {
+                    for data in output.chunks_exact_mut(cross_fft_len) {
+                        unsafe { butterfly_6(data, layer_twiddles, cross_fft_columns, butterfly6) }
+                    }
+                }
+                InternalRadixFactor::Factor7(butterfly7) => {
+                    for data in output.chunks_exact_mut(cross_fft_len) {
+                        unsafe { butterfly_7(data, layer_twiddles, cross_fft_columns, butterfly7) }
+                    }
+                }
+            }
+
+            // skip past all the twiddle factors used in this layer
+            let twiddle_offset = cross_fft_columns * (factor.radix() - 1);
+            layer_twiddles = &layer_twiddles[twiddle_offset..];
+        }
+    }
+
     fn perform_fft_out_of_place(
         &self,
         input: &mut [Complex<T>],

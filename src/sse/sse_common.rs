@@ -57,9 +57,9 @@ macro_rules! separate_interleaved_complex_f32 {
 macro_rules! boilerplate_fft_sse_oop {
     ($struct_name:ident, $len_fn:expr) => {
         impl<S: SseNum, T: FftNum> Fft<T> for $struct_name<S, T> {
-            fn process_outofplace_with_scratch(
+            fn process_immutable_with_scratch(
                 &self,
-                input: &mut [Complex<T>],
+                input: &[Complex<T>],
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
@@ -90,6 +90,14 @@ macro_rules! boilerplate_fft_sse_oop {
                     fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
                 }
             }
+            fn process_outofplace_with_scratch(
+                &self,
+                input: &mut [Complex<T>],
+                output: &mut [Complex<T>],
+                scratch: &mut [Complex<T>],
+            ) {
+                self.process_immutable_with_scratch(input, output, scratch);
+            }
             fn process_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
                 if self.len() == 0 {
                     return;
@@ -109,7 +117,7 @@ macro_rules! boilerplate_fft_sse_oop {
 
                 let scratch = &mut scratch[..required_scratch];
                 let result = unsafe {
-                    array_utils::iter_chunks(buffer, self.len(), |chunk| {
+                    array_utils::iter_chunks_mut(buffer, self.len(), |chunk| {
                         self.perform_fft_out_of_place(chunk, scratch, &mut []);
                         chunk.copy_from_slice(scratch);
                     })
@@ -131,6 +139,10 @@ macro_rules! boilerplate_fft_sse_oop {
             }
             #[inline(always)]
             fn get_outofplace_scratch_len(&self) -> usize {
+                0
+            }
+            #[inline(always)]
+            fn get_immutable_scratch_len(&self) -> usize {
                 0
             }
         }
@@ -180,7 +192,7 @@ macro_rules! boilerplate_sse_fft {
                 }
 
                 let scratch = &mut scratch[..required_scratch];
-                let result = array_utils::iter_chunks_zipped(
+                let result = array_utils::iter_chunks_zipped_mut(
                     input,
                     output,
                     self.len(),
@@ -219,7 +231,7 @@ macro_rules! boilerplate_sse_fft {
                 }
 
                 let scratch = &mut scratch[..required_scratch];
-                let result = array_utils::iter_chunks(buffer, self.len(), |chunk| {
+                let result = array_utils::iter_chunks_mut(buffer, self.len(), |chunk| {
                     self.perform_fft_inplace(chunk, scratch)
                 });
 

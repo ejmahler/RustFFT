@@ -44,6 +44,7 @@ pub struct MixedRadix<T> {
 
     inplace_scratch_len: usize,
     outofplace_scratch_len: usize,
+    immut_scratch_len: usize,
 
     direction: FftDirection,
 }
@@ -103,6 +104,14 @@ impl<T: FftNum> MixedRadix<T> {
                 width_outofplace_scratch,
             );
 
+        let height_fft_immut = height_fft.get_immutable_scratch_len();
+        let width_fft_immut = width_fft.get_immutable_scratch_len();
+
+        let immut_scratch_len = 2 * max(
+            max(height_fft_immut, width_fft_immut),
+            max(outofplace_scratch_len, inplace_scratch_len),
+        );
+
         Self {
             twiddles: twiddles.into_boxed_slice(),
 
@@ -114,6 +123,7 @@ impl<T: FftNum> MixedRadix<T> {
 
             inplace_scratch_len,
             outofplace_scratch_len,
+            immut_scratch_len,
 
             direction,
         }
@@ -149,6 +159,47 @@ impl<T: FftNum> MixedRadix<T> {
 
         // STEP 6: transpose again
         transpose::transpose(scratch, buffer, self.width, self.height);
+    }
+
+    fn perform_fft_immut(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        scratch_raw: &mut [Complex<T>],
+    ) {
+        // We require twice as much scratch here as perform_fft_out_of_place
+        // We have this psuedocode:
+        // ...
+        // fft(output, scratch) // FFT in place with scratch
+        // transpose(output, scratch) // Transpose output -> scratch
+        // fft(scratch, output) // FFT in place using `output` as scratch
+        // ...
+        // process_with_scratch can transpose the output into the input variable, saving scratch for just fft scratch
+        // Since we can't use the input variable, allocate twice as much scratch as process_with_scratch,
+        // and split them into two scratches we can use
+        let (scratch, scratch2) = scratch_raw.split_at_mut(scratch_raw.len() / 2);
+        // SIX STEP FFT:
+
+        // STEP 1: transpose
+        transpose::transpose(input, output, self.width, self.height);
+
+        // STEP 2: perform FFTs of size `height`
+        self.height_size_fft.process_with_scratch(output, scratch);
+
+        // STEP 3: Apply twiddle factors
+        for (element, twiddle) in output.iter_mut().zip(self.twiddles.iter()) {
+            *element = *element * twiddle;
+        }
+
+        let scratch2 = &mut scratch2[..output.len()];
+        // STEP 4: transpose again
+        transpose::transpose(output, scratch2, self.height, self.width);
+
+        // STEP 5: perform FFTs of size `width`
+        self.width_size_fft.process_with_scratch(scratch2, scratch);
+
+        // STEP 6: transpose again
+        transpose::transpose(scratch2, output, self.width, self.height);
     }
 
     fn perform_fft_out_of_place(
@@ -196,7 +247,8 @@ boilerplate_fft!(
     MixedRadix,
     |this: &MixedRadix<_>| this.twiddles.len(),
     |this: &MixedRadix<_>| this.inplace_scratch_len,
-    |this: &MixedRadix<_>| this.outofplace_scratch_len
+    |this: &MixedRadix<_>| this.outofplace_scratch_len,
+    |this: &MixedRadix<_>| this.immut_scratch_len
 );
 
 /// Implementation of the Mixed-Radix FFT algorithm, specialized for smaller input sizes
@@ -302,6 +354,34 @@ impl<T: FftNum> MixedRadixSmall<T> {
         unsafe { array_utils::transpose_small(self.width, self.height, scratch, buffer) };
     }
 
+    fn perform_fft_immut(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) {
+        // SIX STEP FFT:
+        // STEP 1: transpose
+        unsafe { array_utils::transpose_small(self.width, self.height, input, output) };
+
+        // STEP 2: perform FFTs of size `height`
+        self.height_size_fft.process_with_scratch(output, scratch);
+
+        // STEP 3: Apply twiddle factors
+        for (element, twiddle) in output.iter_mut().zip(self.twiddles.iter()) {
+            *element = *element * twiddle;
+        }
+
+        // STEP 4: transpose again
+        unsafe { array_utils::transpose_small(self.height, self.width, output, scratch) };
+
+        // STEP 5: perform FFTs of size `width`
+        self.width_size_fft.process_with_scratch(scratch, output);
+
+        // STEP 6: transpose again
+        unsafe { array_utils::transpose_small(self.width, self.height, scratch, output) };
+    }
+
     fn perform_fft_out_of_place(
         &self,
         input: &mut [Complex<T>],
@@ -334,7 +414,8 @@ boilerplate_fft!(
     MixedRadixSmall,
     |this: &MixedRadixSmall<_>| this.twiddles.len(),
     |this: &MixedRadixSmall<_>| this.len(),
-    |_| 0
+    |_| 0,
+    |this: &MixedRadixSmall<_>| this.len()
 );
 
 #[cfg(test)]
@@ -393,12 +474,15 @@ mod unit_tests {
         for &len in &scratch_lengths {
             for &inplace_scratch in &scratch_lengths {
                 for &outofplace_scratch in &scratch_lengths {
-                    inner_ffts.push(Arc::new(BigScratchAlgorithm {
-                        len,
-                        inplace_scratch,
-                        outofplace_scratch,
-                        direction: FftDirection::Forward,
-                    }) as Arc<dyn Fft<f32>>);
+                    for &immut_scratch in &scratch_lengths {
+                        inner_ffts.push(Arc::new(BigScratchAlgorithm {
+                            len,
+                            inplace_scratch,
+                            outofplace_scratch,
+                            immut_scratch,
+                            direction: FftDirection::Forward,
+                        }) as Arc<dyn Fft<f32>>);
+                    }
                 }
             }
         }
@@ -420,6 +504,16 @@ mod unit_tests {
                     &mut outofplace_input,
                     &mut outofplace_output,
                     &mut outofplace_scratch,
+                );
+
+                let immut_input = vec![Complex::zero(); fft.len()];
+                let mut immut_output = vec![Complex::zero(); fft.len()];
+                let mut immut_scratch = vec![Complex::zero(); fft.get_immutable_scratch_len()];
+
+                fft.process_immutable_with_scratch(
+                    &immut_input,
+                    &mut immut_output,
+                    &mut immut_scratch,
                 );
             }
         }
