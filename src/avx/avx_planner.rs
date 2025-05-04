@@ -127,7 +127,7 @@ impl<T: FftNum> FftPlannerAvx<T> {
             // Ideally, we would implement the planner with specialization.
             // Specialization won't be on stable rust for a long time tohugh, so in the meantime, we can hack around it.
             //
-            // The first step of the hack is to use TypeID to determine if T is f32, f64, or neither. If neither, we don't want to di any AVX acceleration
+            // The first step of the hack is to use TypeID to determine if T is f32, f64, or neither. If neither, we don't want to do any AVX acceleration
             // If it's f32 or f64, then construct an internal type that has two generic parameters, one bounded on AvxNum, the other bounded on FftNum
             //
             // - A is bounded on the AvxNum trait, and is the type we use for any AVX computations. It has associated types for AVX vectors,
