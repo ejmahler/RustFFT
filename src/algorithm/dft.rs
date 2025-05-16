@@ -51,15 +51,6 @@ impl<T: FftNum> Dft<T> {
         spectrum: &mut [Complex<T>],
         _scratch: &mut [Complex<T>],
     ) {
-        self.perform_fft_out_of_place(signal, spectrum, _scratch);
-    }
-
-    fn perform_fft_out_of_place(
-        &self,
-        signal: &[Complex<T>],
-        spectrum: &mut [Complex<T>],
-        _scratch: &mut [Complex<T>],
-    ) {
         for k in 0..spectrum.len() {
             let output_cell = spectrum.get_mut(k).unwrap();
 
@@ -76,6 +67,15 @@ impl<T: FftNum> Dft<T> {
                 }
             }
         }
+    }
+
+    fn perform_fft_out_of_place(
+        &self,
+        signal: &[Complex<T>],
+        spectrum: &mut [Complex<T>],
+        _scratch: &mut [Complex<T>],
+    ) {
+        self.perform_fft_immut(signal, spectrum, _scratch);
     }
 }
 boilerplate_fft_oop!(Dft, |this: &Dft<_>| this.twiddles.len());

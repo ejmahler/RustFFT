@@ -43,14 +43,14 @@ macro_rules! boilerplate_avx_fft {
                     || output.len() != input.len()
                 {
                     // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(
+                    crate::common::fft_error_immut(
                         self.len(),
                         input.len(),
                         output.len(),
                         required_scratch,
                         scratch.len(),
                     );
-                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
+                    return; // Unreachable, because fft_error_immut asserts, but it helps codegen to put it here
                 }
 
                 let scratch = &mut scratch[..required_scratch];
@@ -194,14 +194,14 @@ macro_rules! boilerplate_avx_fft_commondata {
                     || output.len() != input.len()
                 {
                     // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(
+                    crate::common::fft_error_immut(
                         self.len(),
                         input.len(),
                         output.len(),
                         self.get_immutable_scratch_len(),
                         scratch.len(),
                     );
-                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
+                    return; // Unreachable, because fft_error_immut asserts, but it helps codegen to put it here
                 }
 
                 let scratch = &mut scratch[..required_scratch];

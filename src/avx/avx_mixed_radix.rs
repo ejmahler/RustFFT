@@ -78,8 +78,7 @@ macro_rules! boilerplate_mixedradix {
         ) {
             // Perform the column FFTs
             // Safety: self.perform_column_butterflies() requires the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't available
-            let (scratch, scratch2) = scratch.split_at_mut(scratch.len() / 2);
-            let scratch = &mut scratch[..input.len()];
+            let (scratch, inner_scratch) = scratch.split_at_mut(input.len());
             unsafe {
                 // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
                 let transmuted_input: &[Complex<A>] = array_utils::workaround_transmute(input);
@@ -92,7 +91,7 @@ macro_rules! boilerplate_mixedradix {
             // process the row FFTs. If extra scratch was provided, pass it in. Otherwise, use the output.
             self.common_data
                 .inner_fft
-                .process_with_scratch(scratch, scratch2);
+                .process_with_scratch(scratch, inner_scratch);
 
             // Transpose
             // Safety: self.transpose() requires the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
@@ -176,7 +175,7 @@ macro_rules! mixedradix_gen_data {
 
         let inner_outofplace_scratch = $inner_fft.get_outofplace_scratch_len();
         let inner_inplace_scratch = $inner_fft.get_inplace_scratch_len();
-        let immut_scratch_len = usize::max($inner_fft.get_immutable_scratch_len() * 2, len * 2);
+        let immut_scratch_len = len + $inner_fft.get_inplace_scratch_len();
 
         CommonSimdData {
             twiddles: twiddles.into_boxed_slice(),
@@ -205,42 +204,33 @@ macro_rules! mixedradix_column_butterflies {
             let len_per_row = self.len() / ROW_COUNT;
             let chunk_count = len_per_row / A::VectorType::COMPLEX_PER_VECTOR;
 
-            // If we don't have any column FFTs, we need to move the
-            // input into the output buffer for the remainder processing
-            if chunk_count == 0 {
-                let simd_ops = self.len() / 4;
-                for i in (0..simd_ops).step_by(4) {
-                    buffer.store_complex(input.load_complex(i), i);
+            // process the column FFTs
+            for (c, twiddle_chunk) in self
+                .common_data
+                .twiddles
+                .chunks_exact(TWIDDLES_PER_COLUMN)
+                .take(chunk_count)
+                .enumerate()
+            {
+                let index_base = c * A::VectorType::COMPLEX_PER_VECTOR;
+
+                // Load columns from the input into registers
+                let mut columns = [AvxVector::zero(); ROW_COUNT];
+                for i in 0..ROW_COUNT {
+                    columns[i] = input.load_complex(index_base + len_per_row * i);
                 }
-            } else {
-                // process the column FFTs
-                for (c, twiddle_chunk) in self
-                    .common_data
-                    .twiddles
-                    .chunks_exact(TWIDDLES_PER_COLUMN)
-                    .take(chunk_count)
-                    .enumerate()
-                {
-                    let index_base = c * A::VectorType::COMPLEX_PER_VECTOR;
 
-                    // Load columns from the input into registers
-                    let mut columns = [AvxVector::zero(); ROW_COUNT];
-                    for i in 0..ROW_COUNT {
-                        columns[i] = input.load_complex(index_base + len_per_row * i);
-                    }
+                // apply our butterfly function down the columns
+                let output = $butterfly_fn(columns, self);
 
-                    // apply our butterfly function down the columns
-                    let output = $butterfly_fn(columns, self);
+                // always write the first row directly back without twiddles
+                buffer.store_complex(output[0], index_base);
 
-                    // always write the first row directly back without twiddles
-                    buffer.store_complex(output[0], index_base);
-
-                    // for every other row, apply twiddle factors and then write back to memory
-                    for i in 1..ROW_COUNT {
-                        let twiddle = twiddle_chunk[i - 1];
-                        let output = AvxVector::mul_complex(twiddle, output[i]);
-                        buffer.store_complex(output, index_base + len_per_row * i);
-                    }
+                // for every other row, apply twiddle factors and then write back to memory
+                for i in 1..ROW_COUNT {
+                    let twiddle = twiddle_chunk[i - 1];
+                    let output = AvxVector::mul_complex(twiddle, output[i]);
+                    buffer.store_complex(output, index_base + len_per_row * i);
                 }
             }
 

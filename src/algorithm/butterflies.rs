@@ -3,7 +3,7 @@ use num_complex::Complex;
 use crate::{common::FftNum, FftDirection};
 
 use crate::array_utils::{self, DoubleBuf, LoadStore};
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::common::{fft_error_inplace, fft_error_outofplace, fft_error_immut};
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
 
@@ -26,8 +26,8 @@ macro_rules! boilerplate_fft_butterfly {
             ) {
                 if input.len() < self.len() || output.len() != input.len() {
                     // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
-                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
+                    fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
+                    return; // Unreachable, because fft_error_immut asserts, but it helps codegen to put it here
                 }
 
                 let result = array_utils::iter_chunks_zipped(

@@ -133,7 +133,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
         // The first output element is just the sum of all the input elements, and we need to store off the first input value
         let (output_first, output) = output.split_first_mut().unwrap();
         let (input_first, input) = input.split_first().unwrap();
-        let (scratch, scratch2) = scratch.split_at_mut(output.len());
+        let (scratch, extra_scratch) = scratch.split_at_mut(self.len() - 1);
 
         // copy the input into the output, reordering as we go. also compute a sum of all elements
         let mut input_index = 1;
@@ -144,35 +144,30 @@ impl<T: FftNum> RadersAlgorithm<T> {
             *output_element = input_element;
         }
 
-        self.inner_fft.process_with_scratch(scratch, scratch2);
+        self.inner_fft.process_with_scratch(scratch, extra_scratch);
 
         // output[0] now contains the sum of elements 1..len. We need the sum of all elements, so all we have to do is add the first input
         *output_first = *input_first + scratch[0];
 
-        // let scratch = &mut scratch[..output.len()];
-
         // multiply the inner result with our cached setup data
         // also conjugate every entry. this sets us up to do an inverse FFT
         // (because an inverse FFT is equivalent to a normal FFT where you conjugate both the inputs and outputs)
-        for ((output_cell, scratch_cell), &multiple) in scratch
-            .iter()
-            .zip(scratch2.iter_mut())
-            .zip(self.inner_fft_data.iter())
-        {
-            *scratch_cell = (*output_cell * multiple).conj();
+        for (scratch_cell, &twiddle) in scratch.iter_mut().zip(self.inner_fft_data.iter()) {
+            *scratch_cell = (*scratch_cell * twiddle).conj();
         }
 
         // We need to add the first input value to all output values. We can accomplish this by adding it to the DC input of our inner ifft.
         // Of course, we have to conjugate it, just like we conjugated the complex multiplied above
-        scratch2[0] = scratch2[0] + input_first.conj();
+        scratch[0] = scratch[0] + input_first.conj();
 
-        self.inner_fft.process_with_scratch(scratch2, scratch);
+        // execute the second FFT
+        self.inner_fft.process_with_scratch(scratch, extra_scratch);
 
         // copy the final values into the output, reordering as we go
         let mut output_index = 1;
-        for input_element in scratch2 {
+        for scratch_element in scratch {
             output_index = (output_index * self.primitive_root_inverse) % self.len;
-            output[output_index - 1] = input_element.conj();
+            output[output_index - 1] = scratch_element.conj();
         }
     }
 

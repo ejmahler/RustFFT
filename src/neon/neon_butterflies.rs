@@ -188,15 +188,15 @@ macro_rules! boilerplate_fft_neon_common_butterfly {
             ) {
                 if input.len() < self.len() || output.len() != input.len() {
                     // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
-                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
+                    fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
+                    return; // Unreachable, because fft_error_immut asserts, but it helps codegen to put it here
                 }
                 let result = unsafe { self.perform_oop_fft_butterfly_multi_immut(input, output) };
 
                 if result.is_err() {
                     // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
                     // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
+                    fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
                 }
             }
             fn process_outofplace_with_scratch(

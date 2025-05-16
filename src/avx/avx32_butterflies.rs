@@ -6,8 +6,8 @@ use num_complex::Complex;
 
 use crate::array_utils;
 use crate::array_utils::DoubleBuf;
-use crate::array_utils::*;
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::array_utils::{workaround_transmute, workaround_transmute_mut};
+use crate::common::{fft_error_immut, fft_error_inplace, fft_error_outofplace};
 use crate::{common::FftNum, twiddles};
 use crate::{Direction, Fft, FftDirection, Length};
 
@@ -45,8 +45,8 @@ macro_rules! boilerplate_fft_simd_butterfly {
             ) {
                 if input.len() < self.len() || output.len() != input.len() {
                     // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
-                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
+                    fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
+                    return; // Unreachable, because fft_error_immut asserts, but it helps codegen to put it here
                 }
 
                 let result = array_utils::iter_chunks_zipped(
@@ -201,8 +201,8 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
             ) {
                 if input.len() < self.len() || output.len() != input.len() {
                     // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
-                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
+                    fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
+                    return; // Unreachable, because fft_error_immut asserts, but it helps codegen to put it here
                 }
 
                 // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary

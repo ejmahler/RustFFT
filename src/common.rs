@@ -70,6 +70,39 @@ pub fn fft_error_outofplace(
     );
 }
 
+// Prints an error raised by an in-place FFT algorithm's `process_inplace` method
+// Marked cold and inline never to keep all formatting code out of the many monomorphized process_inplace methods
+#[cold]
+#[inline(never)]
+pub fn fft_error_immut(
+    expected_len: usize,
+    actual_input: usize,
+    actual_output: usize,
+    expected_scratch: usize,
+    actual_scratch: usize,
+) {
+    assert_eq!(actual_input, actual_output, "Provided FFT input buffer and output buffer must have the same length. Got input.len() = {}, output.len() = {}", actual_input, actual_output);
+    assert!(
+        actual_input >= expected_len,
+        "Provided FFT buffer was too small. Expected len = {}, got len = {}",
+        expected_len,
+        actual_input
+    );
+    assert_eq!(
+        actual_input % expected_len,
+        0,
+        "Input FFT buffer must be a multiple of FFT length. Expected multiple of {}, got len = {}",
+        expected_len,
+        actual_input
+    );
+    assert!(
+        actual_scratch >= expected_scratch,
+        "Not enough scratch space was provided. Expected scratch len >= {}, got scratch len = {}",
+        expected_scratch,
+        actual_scratch
+    );
+}
+
 macro_rules! boilerplate_fft_oop {
     ($struct_name:ident, $len_fn:expr) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
@@ -89,14 +122,14 @@ macro_rules! boilerplate_fft_oop {
                     || scratch.len() < required_scratch
                 {
                     // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(
+                    crate::common::fft_error_immut(
                         self.len(),
                         input.len(),
                         output.len(),
                         required_scratch,
                         scratch.len(),
                     );
-                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
+                    return; // Unreachable, because fft_error_immut asserts, but it helps codegen to put it here
                 }
 
                 let result = array_utils::iter_chunks_zipped(
@@ -232,7 +265,7 @@ macro_rules! boilerplate_fft {
                     || input.len() < self.len()
                     || output.len() != input.len()
                 {
-                    fft_error_outofplace(
+                    crate::common::fft_error_immut(
                         self.len(),
                         input.len(),
                         output.len(),

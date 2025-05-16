@@ -117,12 +117,10 @@ impl<T: FftNum> GoodThomasAlgorithm<T> {
                 },
                 height_outofplace_scratch,
             );
-        let height_fft_immut = height_fft.get_immutable_scratch_len();
-        let width_fft_immut = width_fft.get_immutable_scratch_len();
 
-        let immut_scratch_len = 2 * max(
-            max(height_fft_immut, width_fft_immut),
-            max(outofplace_scratch_len, inplace_scratch_len),
+        let immut_scratch_len = max(
+            width_fft.get_inplace_scratch_len(),
+            len + height_fft.get_inplace_scratch_len(),
         );
 
         Self {
@@ -256,19 +254,20 @@ impl<T: FftNum> GoodThomasAlgorithm<T> {
         output: &mut [Complex<T>],
         scratch: &mut [Complex<T>],
     ) {
-        let (scratch, scratch2) = scratch.split_at_mut(scratch.len() / 2);
         // Re-index the input, copying from the input to the output in the process
         self.reindex_input(input, output);
 
         // run FFTs of size `width`
         self.width_size_fft.process_with_scratch(output, scratch);
 
-        let scratch = &mut scratch[..output.len()];
+        let (scratch, inner_scratch) = scratch.split_at_mut(self.len());
+
         // transpose
         transpose::transpose(output, scratch, self.width, self.height);
 
         // run FFTs of size 'height'
-        self.height_size_fft.process_with_scratch(scratch, scratch2);
+        self.height_size_fft
+            .process_with_scratch(scratch, inner_scratch);
 
         // Re-index the output, copying from the input to the output in the process
         self.reindex_output(scratch, output);
@@ -604,8 +603,8 @@ mod unit_tests {
                             len,
                             inplace_scratch,
                             outofplace_scratch,
-                            direction: FftDirection::Forward,
                             immut_scratch,
+                            direction: FftDirection::Forward,
                         }) as Arc<dyn Fft<f32>>);
                     }
                 }

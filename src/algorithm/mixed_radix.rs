@@ -104,12 +104,9 @@ impl<T: FftNum> MixedRadix<T> {
                 width_outofplace_scratch,
             );
 
-        let height_fft_immut = height_fft.get_immutable_scratch_len();
-        let width_fft_immut = width_fft.get_immutable_scratch_len();
-
-        let immut_scratch_len = 2 * max(
-            max(height_fft_immut, width_fft_immut),
-            max(outofplace_scratch_len, inplace_scratch_len),
+        let immut_scratch_len = max(
+            len + width_fft.get_inplace_scratch_len(),
+            height_fft.get_inplace_scratch_len(),
         );
 
         Self {
@@ -167,39 +164,27 @@ impl<T: FftNum> MixedRadix<T> {
         output: &mut [Complex<T>],
         scratch_raw: &mut [Complex<T>],
     ) {
-        // We require twice as much scratch here as perform_fft_out_of_place
-        // We have this psuedocode:
-        // ...
-        // fft(output, scratch) // FFT in place with scratch
-        // transpose(output, scratch) // Transpose output -> scratch
-        // fft(scratch, output) // FFT in place using `output` as scratch
-        // ...
-        // process_with_scratch can transpose the output into the input variable, saving scratch for just fft scratch
-        // Since we can't use the input variable, allocate twice as much scratch as process_with_scratch,
-        // and split them into two scratches we can use
-        let (scratch, scratch2) = scratch_raw.split_at_mut(scratch_raw.len() / 2);
-        // SIX STEP FFT:
-
         // STEP 1: transpose
         transpose::transpose(input, output, self.width, self.height);
 
         // STEP 2: perform FFTs of size `height`
-        self.height_size_fft.process_with_scratch(output, scratch);
+        self.height_size_fft.process_with_scratch(output, scratch_raw);
 
         // STEP 3: Apply twiddle factors
         for (element, twiddle) in output.iter_mut().zip(self.twiddles.iter()) {
             *element = *element * twiddle;
         }
 
-        let scratch2 = &mut scratch2[..output.len()];
+        let (scratch, inner_scratch) = scratch_raw.split_at_mut(self.len());
+
         // STEP 4: transpose again
-        transpose::transpose(output, scratch2, self.height, self.width);
+        transpose::transpose(output, scratch, self.height, self.width);
 
         // STEP 5: perform FFTs of size `width`
-        self.width_size_fft.process_with_scratch(scratch2, scratch);
+        self.width_size_fft.process_with_scratch(scratch, inner_scratch);
 
         // STEP 6: transpose again
-        transpose::transpose(scratch2, output, self.width, self.height);
+        transpose::transpose(scratch, output, self.width, self.height);
     }
 
     fn perform_fft_out_of_place(

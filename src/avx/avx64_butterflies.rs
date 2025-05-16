@@ -7,7 +7,7 @@ use num_complex::Complex;
 use crate::array_utils;
 use crate::array_utils::DoubleBuf;
 use crate::array_utils::{workaround_transmute, workaround_transmute_mut};
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::common::{fft_error_inplace, fft_error_outofplace, fft_error_immut};
 use crate::{common::FftNum, twiddles};
 use crate::{Direction, Fft, FftDirection, Length};
 
@@ -43,8 +43,8 @@ macro_rules! boilerplate_fft_simd_butterfly {
             ) {
                 if input.len() < self.len() || output.len() != input.len() {
                     // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
-                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
+                    fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
+                    return; // Unreachable, because fft_error_immut asserts, but it helps codegen to put it here
                 }
 
                 let result = array_utils::iter_chunks_zipped(
@@ -174,19 +174,13 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                 output: &mut [Complex<f64>],
                 _scratch: &mut [Complex<f64>],
             ) {
-                // Perform the column FFTs
-                // Safety: self.perform_column_butterflies() requres the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't available
-                unsafe { self.column_butterflies_and_transpose(input, output) };
-
-                // process the row FFTs in-place in the output buffer
-                // Safety: self.transpose() requres the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
-                unsafe { self.row_butterflies(output) };
+                self.perform_fft_out_of_place(input, output);
             }
 
             #[inline]
             fn perform_fft_out_of_place(
                 &self,
-                input: &mut [Complex<f64>],
+                input: &[Complex<f64>],
                 output: &mut [Complex<f64>],
             ) {
                 // Perform the column FFTs
@@ -207,8 +201,8 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
             ) {
                 if input.len() < self.len() || output.len() != input.len() {
                     // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
-                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
+                    fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
+                    return; // Unreachable, because fft_error_immut asserts, but it helps codegen to put it here
                 }
 
                 // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
