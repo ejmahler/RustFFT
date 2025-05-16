@@ -144,6 +144,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
 
                 inplace_scratch_len: required_scratch,
                 outofplace_scratch_len: required_scratch,
+                immut_scratch_len: required_scratch,
 
                 direction,
             },
@@ -309,6 +310,15 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
 
             self.finalize_bluesteins(transmuted_inner_input, transmuted_buffer);
         }
+    }
+
+    fn perform_fft_immut(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) {
+        self.perform_fft_out_of_place(input, output, scratch);
     }
 
     fn perform_fft_out_of_place(
