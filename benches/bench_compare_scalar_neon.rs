@@ -57,7 +57,6 @@ fn bench_neon_64(b: &mut Bencher, len: usize) {
     });
 }
 
-
 // Create benches using functions taking one argument
 macro_rules! make_benches {
     ($name:ident, { $($len:literal),* }) => {

@@ -45,7 +45,7 @@ impl<T: FftNum> Dft<T> {
         0
     }
 
-    fn perform_fft_out_of_place(
+    fn perform_fft_immut(
         &self,
         signal: &[Complex<T>],
         spectrum: &mut [Complex<T>],
@@ -67,6 +67,15 @@ impl<T: FftNum> Dft<T> {
                 }
             }
         }
+    }
+
+    fn perform_fft_out_of_place(
+        &self,
+        signal: &[Complex<T>],
+        spectrum: &mut [Complex<T>],
+        _scratch: &mut [Complex<T>],
+    ) {
+        self.perform_fft_immut(signal, spectrum, _scratch);
     }
 }
 boilerplate_fft_oop!(Dft, |this: &Dft<_>| this.twiddles.len());

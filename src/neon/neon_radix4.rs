@@ -4,7 +4,7 @@ use std::any::TypeId;
 use std::sync::Arc;
 
 use crate::array_utils::{self, bitreversed_transpose, workaround_transmute_mut};
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::common::{fft_error_immut, fft_error_inplace, fft_error_outofplace};
 use crate::{common::FftNum, FftDirection};
 use crate::{Direction, Fft, Length};
 
@@ -80,6 +80,49 @@ impl<N: NeonNum, T: FftNum> NeonRadix4<N, T> {
 
             len,
             direction,
+        }
+    }
+
+    unsafe fn perform_fft_immut(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        _scratch: &mut [Complex<T>],
+    ) {
+        // copy the data into the output vector
+        if self.len() == self.base_len {
+            output.copy_from_slice(input);
+        } else {
+            bitreversed_transpose::<Complex<T>, 4>(self.base_len, input, output);
+        }
+
+        // Base-level FFTs
+        self.base_fft.process_with_scratch(output, &mut []);
+
+        // cross-FFTs
+        const ROW_COUNT: usize = 4;
+        let mut cross_fft_len = self.base_len * ROW_COUNT;
+        let mut layer_twiddles: &[N::VectorType] = &self.twiddles;
+
+        while cross_fft_len <= input.len() {
+            let num_rows = input.len() / cross_fft_len;
+            let num_scalar_columns = cross_fft_len / ROW_COUNT;
+            let num_vector_columns = num_scalar_columns / N::VectorType::COMPLEX_PER_VECTOR;
+
+            for i in 0..num_rows {
+                butterfly_4::<N, T>(
+                    &mut output[i * cross_fft_len..],
+                    layer_twiddles,
+                    num_scalar_columns,
+                    &self.rotation,
+                )
+            }
+
+            // skip past all the twiddle factors used in this layer
+            let twiddle_offset = num_vector_columns * (ROW_COUNT - 1);
+            layer_twiddles = &layer_twiddles[twiddle_offset..];
+
+            cross_fft_len *= ROW_COUNT;
         }
     }
 
