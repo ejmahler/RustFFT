@@ -3,7 +3,7 @@ use num_complex::Complex;
 use crate::{common::FftNum, FftDirection};
 
 use crate::array_utils::{self, DoubleBuf, LoadStore};
-use crate::common::{fft_error_inplace, fft_error_outofplace, fft_error_immut};
+use crate::common::{fft_error_immut, fft_error_inplace, fft_error_outofplace};
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
 

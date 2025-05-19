@@ -103,7 +103,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
             required_inner_scratch
         };
         let inplace_scratch_len = inner_fft_len + extra_inner_scratch;
-        let immut_scratch_len = inplace_scratch_len * 2;
+        let immut_scratch_len = inner_fft_len + required_inner_scratch;
 
         //precompute a FFT of our reordered twiddle factors
         let mut inner_fft_scratch = vec![Zero::zero(); required_inner_scratch];
@@ -117,7 +117,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
             primitive_root_inverse,
 
             len: reduced_len,
-            inplace_scratch_len: inner_fft_len + extra_inner_scratch,
+            inplace_scratch_len,
             outofplace_scratch_len: extra_inner_scratch,
             immut_scratch_len,
             direction,

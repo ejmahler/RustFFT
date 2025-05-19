@@ -33,7 +33,7 @@ impl<T: FftNum> Fft<T> for Noop {
     fn get_outofplace_scratch_len(&self) -> usize {
         0
     }
-    
+
     fn process_immutable_with_scratch(
         &self,
         _input: &[Complex<T>],
@@ -41,8 +41,10 @@ impl<T: FftNum> Fft<T> for Noop {
         _scratch: &mut [Complex<T>],
     ) {
     }
-    
-    fn get_immutable_scratch_len(&self) -> usize { 0 }
+
+    fn get_immutable_scratch_len(&self) -> usize {
+        0
+    }
 }
 impl Length for Noop {
     fn len(&self) -> usize {

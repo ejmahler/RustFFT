@@ -6,7 +6,7 @@ use crate::{common::FftNum, FftDirection};
 use crate::array_utils;
 use crate::array_utils::workaround_transmute_mut;
 use crate::array_utils::DoubleBuf;
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::common::{fft_error_immut, fft_error_inplace, fft_error_outofplace};
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
 

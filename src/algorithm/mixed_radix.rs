@@ -168,7 +168,8 @@ impl<T: FftNum> MixedRadix<T> {
         transpose::transpose(input, output, self.width, self.height);
 
         // STEP 2: perform FFTs of size `height`
-        self.height_size_fft.process_with_scratch(output, scratch_raw);
+        self.height_size_fft
+            .process_with_scratch(output, scratch_raw);
 
         // STEP 3: Apply twiddle factors
         for (element, twiddle) in output.iter_mut().zip(self.twiddles.iter()) {
@@ -181,7 +182,8 @@ impl<T: FftNum> MixedRadix<T> {
         transpose::transpose(output, scratch, self.height, self.width);
 
         // STEP 5: perform FFTs of size `width`
-        self.width_size_fft.process_with_scratch(scratch, inner_scratch);
+        self.width_size_fft
+            .process_with_scratch(scratch, inner_scratch);
 
         // STEP 6: transpose again
         transpose::transpose(scratch, output, self.width, self.height);
