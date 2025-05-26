@@ -7,7 +7,7 @@ use num_complex::Complex;
 use crate::array_utils;
 use crate::array_utils::DoubleBuf;
 use crate::array_utils::{workaround_transmute, workaround_transmute_mut};
-use crate::common::{fft_error_inplace, fft_error_outofplace, fft_error_immut};
+use crate::common::{fft_error_immut, fft_error_inplace, fft_error_outofplace};
 use crate::{common::FftNum, twiddles};
 use crate::{Direction, Fft, FftDirection, Length};
 
