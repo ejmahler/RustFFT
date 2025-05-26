@@ -269,7 +269,8 @@ pub trait Fft<T: FftNum>: Length + Direction + Sync + Send {
 
     /// Returns the size of the scratch buffer required by `process_immutable_with_scratch`
     ///
-    /// For most FFT sizes, this method will return `self.len()`. For a few small sizes it will return 0, and for some special FFT sizes
+    /// For most FFT sizes, this method will return something between self.len() and self.len() * 2.
+    /// For a few small sizes it will return 0, and for some special FFT sizes
     /// (Sizes that require the use of Bluestein's Algorithm), this may return a scratch size larger than `self.len()`.
     /// The returned value may change from one version of RustFFT to the next.
     fn get_immutable_scratch_len(&self) -> usize;

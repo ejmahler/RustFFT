@@ -1069,16 +1069,6 @@ impl<A: AvxNum, T: FftNum> MixedRadix16xnAvx<A, T> {
         // Normally, we can fit 4 complex numbers into an AVX register, but we only have `partial_remainder` columns left, so we need special logic to handle these final columns
         let partial_remainder = len_per_row % A::VectorType::COMPLEX_PER_VECTOR;
         if partial_remainder > 0 {
-            // We need to copy the partial remainders to the buffer
-            for c in 0..self.len() / len_per_row {
-                let cs = c * len_per_row + len_per_row - partial_remainder;
-                match partial_remainder {
-                    1 => buffer.store_partial1_complex(input.load_partial1_complex(cs), cs),
-                    2 => buffer.store_partial2_complex(input.load_partial2_complex(cs), cs),
-                    3 => buffer.store_partial3_complex(input.load_partial3_complex(cs), cs),
-                    _ => unreachable!(),
-                }
-            }
             let partial_remainder_base = chunk_count * A::VectorType::COMPLEX_PER_VECTOR;
             let partial_remainder_twiddle_base =
                 self.common_data.twiddles.len() - TWIDDLES_PER_COLUMN;
@@ -1086,6 +1076,10 @@ impl<A: AvxNum, T: FftNum> MixedRadix16xnAvx<A, T> {
 
             match partial_remainder {
                 1 => {
+                    for c in 0..self.len() / len_per_row {
+                        let cs = c * len_per_row + len_per_row - partial_remainder;
+                        buffer.store_partial1_complex(input.load_partial1_complex(cs), cs);
+                    }
                     column_butterfly16_loadfn!(
                         |index| buffer
                             .load_partial1_complex(partial_remainder_base + len_per_row * index),
@@ -1107,6 +1101,10 @@ impl<A: AvxNum, T: FftNum> MixedRadix16xnAvx<A, T> {
                     );
                 }
                 2 => {
+                    for c in 0..self.len() / len_per_row {
+                        let cs = c * len_per_row + len_per_row - partial_remainder;
+                        buffer.store_partial2_complex(input.load_partial2_complex(cs), cs);
+                    }
                     column_butterfly16_loadfn!(
                         |index| buffer
                             .load_partial2_complex(partial_remainder_base + len_per_row * index),
@@ -1128,6 +1126,10 @@ impl<A: AvxNum, T: FftNum> MixedRadix16xnAvx<A, T> {
                     );
                 }
                 3 => {
+                    for c in 0..self.len() / len_per_row {
+                        let cs = c * len_per_row + len_per_row - partial_remainder;
+                        buffer.store_partial3_complex(input.load_partial3_complex(cs), cs);
+                    }
                     column_butterfly16_loadfn!(
                         |index| buffer
                             .load_partial3_complex(partial_remainder_base + len_per_row * index),
