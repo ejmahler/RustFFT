@@ -93,6 +93,16 @@ impl<S: SseNum, T: FftNum> SseRadix4<S, T> {
     }
 
     #[target_feature(enable = "sse4.1")]
+    unsafe fn perform_fft_immut(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        _scratch: &mut [Complex<T>],
+    ) {
+        self.perform_fft_out_of_place(input, output, _scratch);
+    }
+
+    #[target_feature(enable = "sse4.1")]
     unsafe fn perform_fft_out_of_place(
         &self,
         input: &[Complex<T>],
