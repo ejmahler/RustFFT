@@ -4,7 +4,7 @@ use std::any::TypeId;
 use std::sync::Arc;
 
 use crate::array_utils::{self, bitreversed_transpose, workaround_transmute_mut};
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::common::{fft_error_immut, fft_error_inplace, fft_error_outofplace};
 use crate::{common::FftNum, FftDirection};
 use crate::{Direction, Fft, Length};
 
@@ -81,6 +81,15 @@ impl<N: NeonNum, T: FftNum> NeonRadix4<N, T> {
             len,
             direction,
         }
+    }
+
+    unsafe fn perform_fft_immut(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        _scratch: &mut [Complex<T>],
+    ) {
+        self.perform_fft_out_of_place(input, output, _scratch);
     }
 
     //#[target_feature(enable = "neon")]

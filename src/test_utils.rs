@@ -173,6 +173,39 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
             );
         }
     }
+
+    // test process_immutable_with_scratch()
+    {
+        let mut input = reference_input.clone();
+        let mut scratch = vec![Zero::zero(); fft.get_immutable_scratch_len()];
+        let mut output = vec![Zero::zero(); n * len];
+
+        fft.process_immutable_with_scratch(&input, &mut output, &mut scratch);
+
+        assert!(
+            compare_vectors(&expected_output, &output),
+            "process_immutable_with_scratch() failed, length = {}, direction = {}",
+            len,
+            direction
+        );
+
+        // make sure this algorithm works correctly with dirty scratch
+        if scratch.len() > 0 {
+            for item in scratch.iter_mut() {
+                *item = dirty_scratch_value;
+            }
+            input.copy_from_slice(&reference_input);
+
+            fft.process_immutable_with_scratch(&input, &mut output, &mut scratch);
+
+            assert!(
+                compare_vectors(&expected_output, &output),
+                "process_immutable_with_scratch() failed the 'dirty scratch' test, length = {}, direction = {}",
+                len,
+                direction
+            );
+        }
+    }
 }
 
 // A fake FFT algorithm that requests much more scratch than it needs. You can use this as an inner FFT to other algorithms to test their scratch-supplying logic
@@ -182,10 +215,24 @@ pub struct BigScratchAlgorithm {
 
     pub inplace_scratch: usize,
     pub outofplace_scratch: usize,
+    pub immut_scratch: usize,
 
     pub direction: FftDirection,
 }
 impl<T: FftNum> Fft<T> for BigScratchAlgorithm {
+    fn process_immutable_with_scratch(
+        &self,
+        _input: &[Complex<T>],
+        _output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) {
+        assert!(
+            scratch.len() >= self.immut_scratch,
+            "Not enough immut scratch provided, self={:?}, provided scratch={}",
+            &self,
+            scratch.len()
+        );
+    }
     fn process_with_scratch(&self, _buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
         assert!(
             scratch.len() >= self.inplace_scratch,
@@ -212,6 +259,9 @@ impl<T: FftNum> Fft<T> for BigScratchAlgorithm {
     }
     fn get_outofplace_scratch_len(&self) -> usize {
         self.outofplace_scratch
+    }
+    fn get_immutable_scratch_len(&self) -> usize {
+        self.immut_scratch
     }
 }
 impl Length for BigScratchAlgorithm {
