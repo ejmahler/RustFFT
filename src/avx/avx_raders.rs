@@ -282,7 +282,7 @@ impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
 
             inplace_scratch_len,
             outofplace_scratch_len: extra_inner_scratch,
-            immut_scratch_len: inplace_scratch_len * 2,
+            immut_scratch_len: inner_fft_len + required_inner_scratch + 1,
             direction,
 
             _phantom: std::marker::PhantomData,
@@ -370,11 +370,9 @@ impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
 
         let (first_input, _) = input.split_first().unwrap();
         let (first_output, inner_output) = output.split_first_mut().unwrap();
+        let (scratch2, extra_scratch) = scratch.split_at_mut(self.len());
+        let (_, scratch) = scratch2.split_first_mut().unwrap();
 
-        let (scratch, scratch2) = scratch.split_at_mut(scratch.len() / 2);
-        let (_, scratch_inner) = scratch2.split_first_mut().unwrap();
-
-        // perform the first of two inner FFTs
         self.inner_fft.process_with_scratch(inner_output, scratch);
 
         // inner_output[0] now contains the sum of elements 1..n. we want the sum of all inputs, so all we need to do is add the first input
@@ -386,7 +384,7 @@ impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
         unsafe {
             // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
             let transmuted_inner_input: &mut [Complex<A>] =
-                array_utils::workaround_transmute_mut(scratch_inner);
+                array_utils::workaround_transmute_mut(scratch);
             let transmuted_inner_output: &mut [Complex<A>] =
                 array_utils::workaround_transmute_mut(inner_output);
             avx_vector::pairwise_complex_mul_conjugated(
@@ -398,10 +396,10 @@ impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
 
         // We need to add the first input value to all output values. We can accomplish this by adding it to the DC input of our inner ifft.
         // Of course, we have to conjugate it, just like we conjugated the complex multiplied above
-        scratch_inner[0] = scratch_inner[0] + first_input.conj();
+        scratch[0] = scratch[0] + first_input.conj();
 
-        // execute the second FFT
-        self.inner_fft.process_with_scratch(scratch_inner, scratch);
+        self.inner_fft.process_with_scratch(scratch, extra_scratch);
+        scratch2[0] = *first_input;
 
         // copy the final values into the output, reordering as we go
         unsafe {
@@ -448,13 +446,13 @@ impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
         // (because an inverse FFT is equivalent to a normal FFT where you conjugate both the inputs and outputs)
         unsafe {
             // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
-            let transmuted_inner_input: &mut [Complex<A>] =
-                array_utils::workaround_transmute_mut(inner_input);
             let transmuted_inner_output: &mut [Complex<A>] =
+                array_utils::workaround_transmute_mut(inner_input);
+            let transmuted_inner_input: &mut [Complex<A>] =
                 array_utils::workaround_transmute_mut(inner_output);
             avx_vector::pairwise_complex_mul_conjugated(
-                transmuted_inner_output,
                 transmuted_inner_input,
+                transmuted_inner_output,
                 &self.twiddles,
             )
         };
