@@ -87,16 +87,41 @@ macro_rules! boilerplate_fft_sse_oop {
                 if result.is_err() {
                     // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
                     // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
+                    crate::common::fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
                 }
             }
             fn process_outofplace_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
                 output: &mut [Complex<T>],
-                scratch: &mut [Complex<T>],
+                _scratch: &mut [Complex<T>],
             ) {
-                self.process_immutable_with_scratch(input, output, scratch);
+                if self.len() == 0 {
+                    return;
+                }
+
+                if input.len() < self.len() || output.len() != input.len() {
+                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
+                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
+                }
+
+                let result = unsafe {
+                    array_utils::iter_chunks_zipped(
+                        input,
+                        output,
+                        self.len(),
+                        |in_chunk, out_chunk| {
+                            self.perform_fft_out_of_place(in_chunk, out_chunk, &mut [])
+                        },
+                    )
+                };
+
+                if result.is_err() {
+                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
+                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
+                }
             }
             fn process_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
                 if self.len() == 0 {
