@@ -163,7 +163,8 @@ impl<T: FftNum> Radix3<T> {
         }
     }
 }
-boilerplate_fft_oop!(Radix3, |this: &Radix3<_>| this.len);
+boilerplate_fft_oop!(Radix3, |this: &Radix3<_>| this.len, |this: &Radix3<_>| this
+    .inplace_scratch_len);
 
 #[cfg(test)]
 mod unit_tests {

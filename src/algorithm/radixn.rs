@@ -326,7 +326,8 @@ impl<T: FftNum> RadixN<T> {
         }
     }
 }
-boilerplate_fft_oop!(RadixN, |this: &RadixN<_>| this.len);
+boilerplate_fft_oop!(RadixN, |this: &RadixN<_>| this.len, |this: &RadixN<_>| this
+    .inplace_scratch_len);
 
 #[inline(never)]
 pub(crate) unsafe fn butterfly_2<T: FftNum>(
