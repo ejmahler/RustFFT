@@ -43,8 +43,10 @@ pub(crate) struct RadixN<T> {
 
     len: usize,
     direction: FftDirection,
+
     inplace_scratch_len: usize,
     outofplace_scratch_len: usize,
+    immut_scratch_len: usize,
 }
 
 impl<T: FftNum> RadixN<T> {
@@ -148,6 +150,7 @@ impl<T: FftNum> RadixN<T> {
 
             inplace_scratch_len,
             outofplace_scratch_len,
+            immut_scratch_len: base_inplace_scratch,
         }
     }
 
@@ -327,7 +330,7 @@ impl<T: FftNum> RadixN<T> {
     }
 }
 boilerplate_fft_oop!(RadixN, |this: &RadixN<_>| this.len, |this: &RadixN<_>| this
-    .inplace_scratch_len);
+    .immut_scratch_len);
 
 #[inline(never)]
 pub(crate) unsafe fn butterfly_2<T: FftNum>(

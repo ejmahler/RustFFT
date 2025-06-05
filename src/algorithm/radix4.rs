@@ -35,6 +35,7 @@ pub struct Radix4<T> {
     direction: FftDirection,
     inplace_scratch_len: usize,
     outofplace_scratch_len: usize,
+    immut_scratch_len: usize,
 }
 
 impl<T: FftNum> Radix4<T> {
@@ -114,6 +115,7 @@ impl<T: FftNum> Radix4<T> {
 
             inplace_scratch_len,
             outofplace_scratch_len,
+            immut_scratch_len: base_inplace_scratch,
         }
     }
 
@@ -200,7 +202,7 @@ impl<T: FftNum> Radix4<T> {
     }
 }
 boilerplate_fft_oop!(Radix4, |this: &Radix4<_>| this.len, |this: &Radix4<_>| this
-    .inplace_scratch_len);
+    .immut_scratch_len);
 
 #[cfg(test)]
 mod unit_tests {
