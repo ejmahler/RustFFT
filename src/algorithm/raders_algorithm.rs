@@ -135,7 +135,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
         let (input_first, input) = input.split_first().unwrap();
         let (scratch, extra_scratch) = scratch.split_at_mut(self.len() - 1);
 
-        // copy the input into the output, reordering as we go. also compute a sum of all elements
+        // copy the input into the scratch space, reordering as we go
         let mut input_index = 1;
         for output_element in scratch.iter_mut() {
             input_index = (input_index * self.primitive_root) % self.len;
