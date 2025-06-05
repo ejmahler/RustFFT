@@ -318,15 +318,6 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
         output: &mut [Complex<T>],
         scratch: &mut [Complex<T>],
     ) {
-        self.perform_fft_out_of_place(input, output, scratch);
-    }
-
-    fn perform_fft_out_of_place(
-        &self,
-        input: &[Complex<T>],
-        output: &mut [Complex<T>],
-        scratch: &mut [Complex<T>],
-    ) {
         let (inner_input, inner_scratch) = scratch
             .split_at_mut(self.inner_fft_multiplier.len() * A::VectorType::COMPLEX_PER_VECTOR);
 
@@ -374,6 +365,15 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
 
             self.finalize_bluesteins(transmuted_inner_input, transmuted_output)
         }
+    }
+
+    fn perform_fft_out_of_place(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) {
+        self.perform_fft_immut(input, output, scratch);
     }
 }
 
