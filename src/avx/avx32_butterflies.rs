@@ -195,12 +195,7 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
             }
 
             #[inline]
-            fn perform_fft_immut(
-                &self,
-                input: &[Complex<f32>],
-                output: &mut [Complex<f32>],
-                _scratch: &mut [Complex<f32>],
-            ) {
+            fn perform_fft_immut(&self, input: &[Complex<f32>], output: &mut [Complex<f32>]) {
                 // Perform the column FFTs
                 // Safety: self.perform_column_butterflies() requres the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't available
                 unsafe { self.column_butterflies_and_transpose(input, output) };
@@ -216,7 +211,7 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                 input: &mut [Complex<f32>],
                 output: &mut [Complex<f32>],
             ) {
-                self.perform_fft_immut(input, output, &mut []);
+                self.perform_fft_immut(input, output);
             }
         }
         impl<T: FftNum> Fft<T> for $struct_name<f32> {
@@ -224,7 +219,7 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                 &self,
                 input: &[Complex<T>],
                 output: &mut [Complex<T>],
-                scratch: &mut [Complex<T>],
+                _scratch: &mut [Complex<T>],
             ) {
                 if input.len() < self.len() || output.len() != input.len() {
                     // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
@@ -237,15 +232,11 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                     unsafe { array_utils::workaround_transmute(input) };
                 let transmuted_output: &mut [Complex<f32>] =
                     unsafe { array_utils::workaround_transmute_mut(output) };
-                let transmuted_scratch: &mut [Complex<f32>] =
-                    unsafe { array_utils::workaround_transmute_mut(scratch) };
                 let result = array_utils::iter_chunks_zipped(
                     transmuted_input,
                     transmuted_output,
                     self.len(),
-                    |in_chunk, out_chunk| {
-                        self.perform_fft_immut(in_chunk, out_chunk, transmuted_scratch)
-                    },
+                    |in_chunk, out_chunk| self.perform_fft_immut(in_chunk, out_chunk),
                 );
 
                 if result.is_err() {
