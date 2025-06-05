@@ -89,16 +89,6 @@ impl<N: NeonNum, T: FftNum> NeonRadix4<N, T> {
         output: &mut [Complex<T>],
         _scratch: &mut [Complex<T>],
     ) {
-        self.perform_fft_out_of_place(input, output, _scratch);
-    }
-
-    //#[target_feature(enable = "neon")]
-    unsafe fn perform_fft_out_of_place(
-        &self,
-        input: &[Complex<T>],
-        output: &mut [Complex<T>],
-        _scratch: &mut [Complex<T>],
-    ) {
         // copy the data into the output vector
         if self.len() == self.base_len {
             output.copy_from_slice(input);
@@ -134,6 +124,16 @@ impl<N: NeonNum, T: FftNum> NeonRadix4<N, T> {
 
             cross_fft_len *= ROW_COUNT;
         }
+    }
+
+    //#[target_feature(enable = "neon")]
+    unsafe fn perform_fft_out_of_place(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        _scratch: &mut [Complex<T>],
+    ) {
+        self.perform_fft_immut(input, output, _scratch);
     }
 }
 boilerplate_fft_neon_oop!(NeonRadix4, |this: &NeonRadix4<_, _>| this.len);

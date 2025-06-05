@@ -99,16 +99,6 @@ impl<S: SseNum, T: FftNum> SseRadix4<S, T> {
         output: &mut [Complex<T>],
         _scratch: &mut [Complex<T>],
     ) {
-        self.perform_fft_out_of_place(input, output, _scratch);
-    }
-
-    #[target_feature(enable = "sse4.1")]
-    unsafe fn perform_fft_out_of_place(
-        &self,
-        input: &[Complex<T>],
-        output: &mut [Complex<T>],
-        _scratch: &mut [Complex<T>],
-    ) {
         // copy the data into the output vector
         if self.len() == self.base_len {
             output.copy_from_slice(input);
@@ -144,6 +134,16 @@ impl<S: SseNum, T: FftNum> SseRadix4<S, T> {
 
             cross_fft_len *= ROW_COUNT;
         }
+    }
+
+    #[target_feature(enable = "sse4.1")]
+    unsafe fn perform_fft_out_of_place(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        _scratch: &mut [Complex<T>],
+    ) {
+        self.perform_fft_immut(input, output, _scratch);
     }
 }
 boilerplate_fft_sse_oop!(SseRadix4, |this: &SseRadix4<_, _>| this.len);
