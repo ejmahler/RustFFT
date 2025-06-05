@@ -78,9 +78,7 @@ impl<T: FftNum> Dft<T> {
         self.perform_fft_immut(signal, spectrum, _scratch);
     }
 }
-boilerplate_fft_oop!(Dft, |this: &Dft<_>| this.twiddles.len(), |this: &Dft<_>| {
-    this.len()
-});
+boilerplate_fft_oop!(Dft, |this: &Dft<_>| this.twiddles.len(), |_: &Dft<_>| 0);
 
 #[cfg(test)]
 mod unit_tests {
