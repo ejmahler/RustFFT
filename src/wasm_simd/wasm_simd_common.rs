@@ -69,7 +69,7 @@ macro_rules! boilerplate_fft_wasm_simd_oop {
 
                 if input.len() < self.len() || output.len() != input.len() {
                     // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    crate::common::fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
+                    fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
                     return; // Unreachable, because fft_error_immut asserts, but it helps codegen to put it here
                 }
 
@@ -85,7 +85,7 @@ macro_rules! boilerplate_fft_wasm_simd_oop {
                 if result.is_err() {
                     // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
                     // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    crate::common::fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
+                    fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
                 }
             }
             fn process_outofplace_with_scratch(
