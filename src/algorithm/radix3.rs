@@ -5,7 +5,7 @@ use num_complex::Complex;
 use crate::algorithm::butterflies::{Butterfly1, Butterfly27, Butterfly3, Butterfly9};
 use crate::algorithm::radixn::butterfly_3;
 use crate::array_utils::{self, bitreversed_transpose, compute_logarithm};
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::common::{fft_error_immut, fft_error_inplace, fft_error_outofplace};
 use crate::{common::FftNum, twiddles, FftDirection};
 use crate::{Direction, Fft, Length};
 

@@ -122,7 +122,7 @@ macro_rules! boilerplate_fft_oop {
                     || scratch.len() < required_scratch
                 {
                     // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    crate::common::fft_error_immut(
+                    fft_error_immut(
                         self.len(),
                         input.len(),
                         output.len(),
@@ -142,7 +142,13 @@ macro_rules! boilerplate_fft_oop {
                 if result.is_err() {
                     // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
                     // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
+                    fft_error_immut(
+                        self.len(),
+                        input.len(),
+                        output.len(),
+                        required_scratch,
+                        scratch.len(),
+                    );
                 }
             }
             fn process_outofplace_with_scratch(

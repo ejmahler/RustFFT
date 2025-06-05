@@ -3,7 +3,7 @@ use std::sync::Arc;
 use num_complex::Complex;
 
 use crate::array_utils::{self, factor_transpose, Load, LoadStore, TransposeFactor};
-use crate::common::{fft_error_inplace, fft_error_outofplace, RadixFactor};
+use crate::common::{fft_error_immut, fft_error_inplace, fft_error_outofplace, RadixFactor};
 use crate::{common::FftNum, twiddles, FftDirection};
 use crate::{Direction, Fft, Length};
 
