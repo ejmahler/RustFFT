@@ -52,38 +52,7 @@ macro_rules! boilerplate_fft_neon_f32_butterfly {
                 Ok(())
             }
 
-            // Do multiple ffts over a longer vector outofplace, called from "process_outofplace_with_scratch" of Fft trait
             pub(crate) unsafe fn perform_oop_fft_butterfly_multi(
-                &self,
-                input: &mut [Complex<T>],
-                output: &mut [Complex<T>],
-            ) -> Result<(), ()> {
-                let len = input.len();
-                let alldone = array_utils::iter_chunks_zipped_mut(
-                    input,
-                    output,
-                    2 * self.len(),
-                    |in_chunk, out_chunk| {
-                        let input_slice = workaround_transmute_mut(in_chunk);
-                        let output_slice = workaround_transmute_mut(out_chunk);
-                        self.perform_parallel_fft_contiguous(DoubleBuf {
-                            input: input_slice,
-                            output: output_slice,
-                        })
-                    },
-                );
-                if alldone.is_err() && input.len() >= self.len() {
-                    let input_slice = workaround_transmute_mut(input);
-                    let output_slice = workaround_transmute_mut(output);
-                    self.perform_fft_contiguous(DoubleBuf {
-                        input: &mut input_slice[len - self.len()..],
-                        output: &mut output_slice[len - self.len()..],
-                    })
-                }
-                Ok(())
-            }
-
-            pub(crate) unsafe fn perform_oop_fft_butterfly_multi_immut(
                 &self,
                 input: &[Complex<T>],
                 output: &mut [Complex<T>],
@@ -137,28 +106,7 @@ macro_rules! boilerplate_fft_neon_f64_butterfly {
             }
 
             // Do multiple ffts over a longer vector outofplace, called from "process_outofplace_with_scratch" of Fft trait
-            //#[target_feature(enable = "neon")]
             pub(crate) unsafe fn perform_oop_fft_butterfly_multi(
-                &self,
-                input: &mut [Complex<T>],
-                output: &mut [Complex<T>],
-            ) -> Result<(), ()> {
-                array_utils::iter_chunks_zipped_mut(
-                    input,
-                    output,
-                    self.len(),
-                    |in_chunk, out_chunk| {
-                        let input_slice = workaround_transmute_mut(in_chunk);
-                        let output_slice = workaround_transmute_mut(out_chunk);
-                        self.perform_fft_contiguous(DoubleBuf {
-                            input: input_slice,
-                            output: output_slice,
-                        })
-                    },
-                )
-            }
-
-            pub(crate) unsafe fn perform_oop_fft_butterfly_multi_immut(
                 &self,
                 input: &[Complex<T>],
                 output: &mut [Complex<T>],
@@ -191,7 +139,7 @@ macro_rules! boilerplate_fft_neon_common_butterfly {
                     fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
                     return; // Unreachable, because fft_error_immut asserts, but it helps codegen to put it here
                 }
-                let result = unsafe { self.perform_oop_fft_butterfly_multi_immut(input, output) };
+                let result = unsafe { self.perform_oop_fft_butterfly_multi(input, output) };
 
                 if result.is_err() {
                     // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
