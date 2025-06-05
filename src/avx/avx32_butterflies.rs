@@ -69,7 +69,7 @@ macro_rules! boilerplate_fft_simd_butterfly {
                 if result.is_err() {
                     // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
                     // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
+                    fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
                 }
             }
             fn process_outofplace_with_scratch(
@@ -78,7 +78,34 @@ macro_rules! boilerplate_fft_simd_butterfly {
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                self.process_immutable_with_scratch(input, output, _scratch);
+                if input.len() < self.len() || output.len() != input.len() {
+                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
+                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
+                }
+
+                let result = array_utils::iter_chunks_zipped(
+                    input,
+                    output,
+                    self.len(),
+                    |in_chunk, out_chunk| {
+                        unsafe {
+                            // Specialization workaround: See the comments in FftPlannerAvx::new() for why we have to transmute these slices
+                            let input_slice = workaround_transmute(in_chunk);
+                            let output_slice = workaround_transmute_mut(out_chunk);
+                            self.perform_fft_f32(DoubleBuf {
+                                input: input_slice,
+                                output: output_slice,
+                            });
+                        }
+                    },
+                );
+
+                if result.is_err() {
+                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
+                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
+                }
             }
             fn process_with_scratch(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
                 if buffer.len() < self.len() {
@@ -224,7 +251,7 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                 if result.is_err() {
                     // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
                     // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
+                    fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
                 }
             }
             fn process_outofplace_with_scratch(
