@@ -43,7 +43,7 @@ macro_rules! boilerplate_avx_fft {
                     || output.len() != input.len()
                 {
                     // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    crate::common::fft_error_immut(
+                    fft_error_immut(
                         self.len(),
                         input.len(),
                         output.len(),
@@ -64,11 +64,11 @@ macro_rules! boilerplate_avx_fft {
                 if result.is_err() {
                     // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
                     // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(
+                    fft_error_immut(
                         self.len(),
                         input.len(),
                         output.len(),
-                        self.get_outofplace_scratch_len(),
+                        required_scratch,
                         scratch.len(),
                     )
                 }
@@ -194,7 +194,7 @@ macro_rules! boilerplate_avx_fft_commondata {
                     || output.len() != input.len()
                 {
                     // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    crate::common::fft_error_immut(
+                    fft_error_immut(
                         self.len(),
                         input.len(),
                         output.len(),
@@ -215,11 +215,11 @@ macro_rules! boilerplate_avx_fft_commondata {
                 if result.is_err() {
                     // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
                     // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(
+                    fft_error_immut(
                         self.len(),
                         input.len(),
                         output.len(),
-                        self.get_outofplace_scratch_len(),
+                        self.get_immutable_scratch_len(),
                         scratch.len(),
                     );
                 }

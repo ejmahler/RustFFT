@@ -8,7 +8,7 @@ use num_traits::Zero;
 use primal_check::miller_rabin;
 use strength_reduce::StrengthReducedUsize;
 
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::common::{fft_error_immut, fft_error_inplace, fft_error_outofplace};
 use crate::{array_utils, FftDirection};
 use crate::{math_utils, twiddles};
 use crate::{Direction, Fft, FftNum, Length};
