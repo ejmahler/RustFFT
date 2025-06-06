@@ -2,7 +2,7 @@ use num_complex::Complex;
 use num_traits::Zero;
 
 use crate::array_utils;
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::common::{fft_error_immut, fft_error_inplace, fft_error_outofplace};
 use crate::{twiddles, FftDirection};
 use crate::{Direction, Fft, FftNum, Length};
 
@@ -45,7 +45,7 @@ impl<T: FftNum> Dft<T> {
         0
     }
 
-    fn perform_fft_out_of_place(
+    fn perform_fft_immut(
         &self,
         signal: &[Complex<T>],
         spectrum: &mut [Complex<T>],
@@ -68,8 +68,17 @@ impl<T: FftNum> Dft<T> {
             }
         }
     }
+
+    fn perform_fft_out_of_place(
+        &self,
+        signal: &[Complex<T>],
+        spectrum: &mut [Complex<T>],
+        _scratch: &mut [Complex<T>],
+    ) {
+        self.perform_fft_immut(signal, spectrum, _scratch);
+    }
 }
-boilerplate_fft_oop!(Dft, |this: &Dft<_>| this.twiddles.len());
+boilerplate_fft_oop!(Dft, |this: &Dft<_>| this.twiddles.len(), |_: &Dft<_>| 0);
 
 #[cfg(test)]
 mod unit_tests {

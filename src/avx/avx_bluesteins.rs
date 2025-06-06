@@ -5,7 +5,7 @@ use num_complex::Complex;
 use num_integer::div_ceil;
 use num_traits::Zero;
 
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::common::{fft_error_immut, fft_error_inplace, fft_error_outofplace};
 use crate::{array_utils, twiddles, FftDirection};
 use crate::{Direction, Fft, FftNum, Length};
 
@@ -144,6 +144,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
 
                 inplace_scratch_len: required_scratch,
                 outofplace_scratch_len: required_scratch,
+                immut_scratch_len: required_scratch,
 
                 direction,
             },
@@ -311,7 +312,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
         }
     }
 
-    fn perform_fft_out_of_place(
+    fn perform_fft_immut(
         &self,
         input: &[Complex<T>],
         output: &mut [Complex<T>],
@@ -364,6 +365,15 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
 
             self.finalize_bluesteins(transmuted_inner_input, transmuted_output)
         }
+    }
+
+    fn perform_fft_out_of_place(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) {
+        self.perform_fft_immut(input, output, scratch);
     }
 }
 

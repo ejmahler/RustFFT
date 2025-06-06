@@ -2265,7 +2265,7 @@ pub unsafe fn pairwise_complex_mul_conjugated<T: AvxNum>(
         multiplier.len(),
         input.len()
     ); // Assert to convince the compiler to omit bounds checks inside the loop
-    assert!(input.len() == output.len()); // Assert to convince the compiler to omit bounds checks inside the loop
+    assert_eq!(input.len(), output.len()); // Assert to convince the compiler to omit bounds checks inside the loop
     let main_loop_count = input.len() / T::VectorType::COMPLEX_PER_VECTOR;
     let remainder_count = input.len() % T::VectorType::COMPLEX_PER_VECTOR;
 

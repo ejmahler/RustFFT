@@ -23,13 +23,57 @@ struct CommonSimdData<T, V> {
 
     inplace_scratch_len: usize,
     outofplace_scratch_len: usize,
+    immut_scratch_len: usize,
 
     direction: FftDirection,
 }
 
 macro_rules! boilerplate_avx_fft {
-    ($struct_name:ident, $len_fn:expr, $inplace_scratch_len_fn:expr, $out_of_place_scratch_len_fn:expr) => {
+    ($struct_name:ident, $len_fn:expr, $inplace_scratch_len_fn:expr, $out_of_place_scratch_len_fn:expr, $immut_scratch_len_fn:expr) => {
         impl<A: AvxNum, T: FftNum> Fft<T> for $struct_name<A, T> {
+            fn process_immutable_with_scratch(
+                &self,
+                input: &[Complex<T>],
+                output: &mut [Complex<T>],
+                scratch: &mut [Complex<T>],
+            ) {
+                let required_scratch = self.get_immutable_scratch_len();
+                if scratch.len() < required_scratch
+                    || input.len() < self.len()
+                    || output.len() != input.len()
+                {
+                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_immut(
+                        self.len(),
+                        input.len(),
+                        output.len(),
+                        required_scratch,
+                        scratch.len(),
+                    );
+                    return; // Unreachable, because fft_error_immut asserts, but it helps codegen to put it here
+                }
+
+                let scratch = &mut scratch[..required_scratch];
+                let result = array_utils::iter_chunks_zipped(
+                    input,
+                    output,
+                    self.len(),
+                    |in_chunk, out_chunk| self.perform_fft_immut(in_chunk, out_chunk, scratch),
+                );
+
+                if result.is_err() {
+                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
+                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_immut(
+                        self.len(),
+                        input.len(),
+                        output.len(),
+                        required_scratch,
+                        scratch.len(),
+                    )
+                }
+            }
+
             fn process_outofplace_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
@@ -53,7 +97,7 @@ macro_rules! boilerplate_avx_fft {
                 }
 
                 let scratch = &mut scratch[..required_scratch];
-                let result = array_utils::iter_chunks_zipped(
+                let result = array_utils::iter_chunks_zipped_mut(
                     input,
                     output,
                     self.len(),
@@ -88,7 +132,7 @@ macro_rules! boilerplate_avx_fft {
                 }
 
                 let scratch = &mut scratch[..required_scratch];
-                let result = array_utils::iter_chunks(buffer, self.len(), |chunk| {
+                let result = array_utils::iter_chunks_mut(buffer, self.len(), |chunk| {
                     self.perform_fft_inplace(chunk, scratch)
                 });
 
@@ -111,6 +155,10 @@ macro_rules! boilerplate_avx_fft {
             fn get_outofplace_scratch_len(&self) -> usize {
                 $out_of_place_scratch_len_fn(self)
             }
+            #[inline(always)]
+            fn get_immutable_scratch_len(&self) -> usize {
+                $immut_scratch_len_fn(self)
+            }
         }
         impl<A: AvxNum, T> Length for $struct_name<A, T> {
             #[inline(always)]
@@ -130,6 +178,52 @@ macro_rules! boilerplate_avx_fft {
 macro_rules! boilerplate_avx_fft_commondata {
     ($struct_name:ident) => {
         impl<A: AvxNum, T: FftNum> Fft<T> for $struct_name<A, T> {
+            fn process_immutable_with_scratch(
+                &self,
+                input: &[Complex<T>],
+                output: &mut [Complex<T>],
+                scratch: &mut [Complex<T>],
+            ) {
+                if self.len() == 0 {
+                    return;
+                }
+
+                let required_scratch = self.common_data.immut_scratch_len;
+                if scratch.len() < required_scratch
+                    || input.len() < self.len()
+                    || output.len() != input.len()
+                {
+                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_immut(
+                        self.len(),
+                        input.len(),
+                        output.len(),
+                        self.get_immutable_scratch_len(),
+                        scratch.len(),
+                    );
+                    return; // Unreachable, because fft_error_immut asserts, but it helps codegen to put it here
+                }
+
+                let scratch = &mut scratch[..required_scratch];
+                let result = array_utils::iter_chunks_zipped(
+                    input,
+                    output,
+                    self.len(),
+                    |in_chunk, out_chunk| self.perform_fft_immut(in_chunk, out_chunk, scratch),
+                );
+
+                if result.is_err() {
+                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
+                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_immut(
+                        self.len(),
+                        input.len(),
+                        output.len(),
+                        self.get_immutable_scratch_len(),
+                        scratch.len(),
+                    );
+                }
+            }
             fn process_outofplace_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
@@ -157,7 +251,7 @@ macro_rules! boilerplate_avx_fft_commondata {
                 }
 
                 let scratch = &mut scratch[..required_scratch];
-                let result = array_utils::iter_chunks_zipped(
+                let result = array_utils::iter_chunks_zipped_mut(
                     input,
                     output,
                     self.len(),
@@ -196,7 +290,7 @@ macro_rules! boilerplate_avx_fft_commondata {
                 }
 
                 let scratch = &mut scratch[..required_scratch];
-                let result = array_utils::iter_chunks(buffer, self.len(), |chunk| {
+                let result = array_utils::iter_chunks_mut(buffer, self.len(), |chunk| {
                     self.perform_fft_inplace(chunk, scratch)
                 });
 
@@ -218,6 +312,10 @@ macro_rules! boilerplate_avx_fft_commondata {
             #[inline(always)]
             fn get_outofplace_scratch_len(&self) -> usize {
                 self.common_data.outofplace_scratch_len
+            }
+            #[inline(always)]
+            fn get_immutable_scratch_len(&self) -> usize {
+                self.common_data.immut_scratch_len
             }
         }
         impl<A: AvxNum, T> Length for $struct_name<A, T> {

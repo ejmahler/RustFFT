@@ -4,7 +4,7 @@ use std::any::TypeId;
 use std::sync::Arc;
 
 use crate::array_utils::{self, bitreversed_transpose, workaround_transmute_mut};
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::common::{fft_error_immut, fft_error_inplace, fft_error_outofplace};
 use crate::{common::FftNum, FftDirection};
 use crate::{Direction, Fft, Length};
 
@@ -93,7 +93,7 @@ impl<S: SseNum, T: FftNum> SseRadix4<S, T> {
     }
 
     #[target_feature(enable = "sse4.1")]
-    unsafe fn perform_fft_out_of_place(
+    unsafe fn perform_fft_immut(
         &self,
         input: &[Complex<T>],
         output: &mut [Complex<T>],
@@ -134,6 +134,16 @@ impl<S: SseNum, T: FftNum> SseRadix4<S, T> {
 
             cross_fft_len *= ROW_COUNT;
         }
+    }
+
+    #[target_feature(enable = "sse4.1")]
+    unsafe fn perform_fft_out_of_place(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        _scratch: &mut [Complex<T>],
+    ) {
+        self.perform_fft_immut(input, output, _scratch);
     }
 }
 boilerplate_fft_sse_oop!(SseRadix4, |this: &SseRadix4<_, _>| this.len);

@@ -7,7 +7,7 @@ use crate::algorithm::butterflies::{
 };
 use crate::algorithm::radixn::butterfly_4;
 use crate::array_utils::{self, bitreversed_transpose};
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::common::{fft_error_immut, fft_error_inplace, fft_error_outofplace};
 use crate::{common::FftNum, twiddles, FftDirection};
 use crate::{Direction, Fft, Length};
 
@@ -35,6 +35,7 @@ pub struct Radix4<T> {
     direction: FftDirection,
     inplace_scratch_len: usize,
     outofplace_scratch_len: usize,
+    immut_scratch_len: usize,
 }
 
 impl<T: FftNum> Radix4<T> {
@@ -114,6 +115,7 @@ impl<T: FftNum> Radix4<T> {
 
             inplace_scratch_len,
             outofplace_scratch_len,
+            immut_scratch_len: base_inplace_scratch,
         }
     }
 
@@ -122,6 +124,43 @@ impl<T: FftNum> Radix4<T> {
     }
     fn outofplace_scratch_len(&self) -> usize {
         self.outofplace_scratch_len
+    }
+
+    #[inline]
+    fn perform_fft_immut(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) {
+        // copy the data into the output vector
+        if self.len() == self.base_len {
+            output.copy_from_slice(input);
+        } else {
+            bitreversed_transpose::<Complex<T>, 4>(self.base_len, input, output);
+        }
+
+        self.base_fft.process_with_scratch(output, scratch);
+
+        // cross-FFTs
+        const ROW_COUNT: usize = 4;
+        let mut cross_fft_len = self.base_len;
+        let mut layer_twiddles: &[Complex<T>] = &self.twiddles;
+
+        let butterfly4 = Butterfly4::new(self.direction);
+
+        while cross_fft_len < output.len() {
+            let num_columns = cross_fft_len;
+            cross_fft_len *= ROW_COUNT;
+
+            for data in output.chunks_exact_mut(cross_fft_len) {
+                unsafe { butterfly_4(data, layer_twiddles, num_columns, &butterfly4) }
+            }
+
+            // skip past all the twiddle factors used in this layer
+            let twiddle_offset = num_columns * (ROW_COUNT - 1);
+            layer_twiddles = &layer_twiddles[twiddle_offset..];
+        }
     }
 
     fn perform_fft_out_of_place(
@@ -162,7 +201,8 @@ impl<T: FftNum> Radix4<T> {
         }
     }
 }
-boilerplate_fft_oop!(Radix4, |this: &Radix4<_>| this.len);
+boilerplate_fft_oop!(Radix4, |this: &Radix4<_>| this.len, |this: &Radix4<_>| this
+    .immut_scratch_len);
 
 #[cfg(test)]
 mod unit_tests {

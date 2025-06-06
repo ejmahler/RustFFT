@@ -4,9 +4,9 @@ use num_complex::Complex;
 use crate::{common::FftNum, FftDirection};
 
 use crate::array_utils;
-use crate::array_utils::workaround_transmute_mut;
 use crate::array_utils::DoubleBuf;
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::array_utils::{workaround_transmute, workaround_transmute_mut};
+use crate::common::{fft_error_immut, fft_error_inplace, fft_error_outofplace};
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
 
@@ -48,7 +48,7 @@ macro_rules! boilerplate_fft_sse_f32_butterfly {
                 buffer: &mut [Complex<T>],
             ) -> Result<(), ()> {
                 let len = buffer.len();
-                let alldone = array_utils::iter_chunks(buffer, 2 * self.len(), |chunk| {
+                let alldone = array_utils::iter_chunks_mut(buffer, 2 * self.len(), |chunk| {
                     self.perform_parallel_fft_butterfly(chunk)
                 });
                 if alldone.is_err() && buffer.len() >= self.len() {
@@ -61,7 +61,7 @@ macro_rules! boilerplate_fft_sse_f32_butterfly {
             #[target_feature(enable = "sse4.1")]
             pub(crate) unsafe fn perform_oop_fft_butterfly_multi(
                 &self,
-                input: &mut [Complex<T>],
+                input: &[Complex<T>],
                 output: &mut [Complex<T>],
             ) -> Result<(), ()> {
                 let len = input.len();
@@ -70,7 +70,7 @@ macro_rules! boilerplate_fft_sse_f32_butterfly {
                     output,
                     2 * self.len(),
                     |in_chunk, out_chunk| {
-                        let input_slice = workaround_transmute_mut(in_chunk);
+                        let input_slice = crate::array_utils::workaround_transmute(in_chunk);
                         let output_slice = workaround_transmute_mut(out_chunk);
                         self.perform_parallel_fft_contiguous(DoubleBuf {
                             input: input_slice,
@@ -79,10 +79,10 @@ macro_rules! boilerplate_fft_sse_f32_butterfly {
                     },
                 );
                 if alldone.is_err() && input.len() >= self.len() {
-                    let input_slice = workaround_transmute_mut(input);
+                    let input_slice = crate::array_utils::workaround_transmute(input);
                     let output_slice = workaround_transmute_mut(output);
                     self.perform_fft_contiguous(DoubleBuf {
-                        input: &mut input_slice[len - self.len()..],
+                        input: &input_slice[len - self.len()..],
                         output: &mut output_slice[len - self.len()..],
                     })
                 }
@@ -107,7 +107,7 @@ macro_rules! boilerplate_fft_sse_f32_butterfly_noparallel {
                 &self,
                 buffer: &mut [Complex<T>],
             ) -> Result<(), ()> {
-                array_utils::iter_chunks(buffer, self.len(), |chunk| {
+                array_utils::iter_chunks_mut(buffer, self.len(), |chunk| {
                     self.perform_fft_butterfly(chunk)
                 })
             }
@@ -116,11 +116,11 @@ macro_rules! boilerplate_fft_sse_f32_butterfly_noparallel {
             #[target_feature(enable = "sse4.1")]
             pub(crate) unsafe fn perform_oop_fft_butterfly_multi(
                 &self,
-                input: &mut [Complex<T>],
+                input: &[Complex<T>],
                 output: &mut [Complex<T>],
             ) -> Result<(), ()> {
                 array_utils::iter_chunks_zipped(input, output, self.len(), |in_chunk, out_chunk| {
-                    let input_slice = workaround_transmute_mut(in_chunk);
+                    let input_slice = workaround_transmute(in_chunk);
                     let output_slice = workaround_transmute_mut(out_chunk);
                     self.perform_fft_contiguous(DoubleBuf {
                         input: input_slice,
@@ -147,7 +147,7 @@ macro_rules! boilerplate_fft_sse_f64_butterfly {
                 &self,
                 buffer: &mut [Complex<T>],
             ) -> Result<(), ()> {
-                array_utils::iter_chunks(buffer, self.len(), |chunk| {
+                array_utils::iter_chunks_mut(buffer, self.len(), |chunk| {
                     self.perform_fft_butterfly(chunk)
                 })
             }
@@ -156,11 +156,11 @@ macro_rules! boilerplate_fft_sse_f64_butterfly {
             #[target_feature(enable = "sse4.1")]
             pub(crate) unsafe fn perform_oop_fft_butterfly_multi(
                 &self,
-                input: &mut [Complex<T>],
+                input: &[Complex<T>],
                 output: &mut [Complex<T>],
             ) -> Result<(), ()> {
                 array_utils::iter_chunks_zipped(input, output, self.len(), |in_chunk, out_chunk| {
-                    let input_slice = workaround_transmute_mut(in_chunk);
+                    let input_slice = crate::array_utils::workaround_transmute(in_chunk);
                     let output_slice = workaround_transmute_mut(out_chunk);
                     self.perform_fft_contiguous(DoubleBuf {
                         input: input_slice,
@@ -176,6 +176,25 @@ macro_rules! boilerplate_fft_sse_f64_butterfly {
 macro_rules! boilerplate_fft_sse_common_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
+            fn process_immutable_with_scratch(
+                &self,
+                input: &[Complex<T>],
+                output: &mut [Complex<T>],
+                _scratch: &mut [Complex<T>],
+            ) {
+                if input.len() < self.len() || output.len() != input.len() {
+                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
+                    return; // Unreachable, because fft_error_immut asserts, but it helps codegen to put it here
+                }
+                let result = unsafe { self.perform_oop_fft_butterfly_multi(input, output) };
+
+                if result.is_err() {
+                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
+                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+                    fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
+                }
+            }
             fn process_outofplace_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
@@ -216,6 +235,10 @@ macro_rules! boilerplate_fft_sse_common_butterfly {
             }
             #[inline(always)]
             fn get_outofplace_scratch_len(&self) -> usize {
+                0
+            }
+            #[inline(always)]
+            fn get_immutable_scratch_len(&self) -> usize {
                 0
             }
         }
