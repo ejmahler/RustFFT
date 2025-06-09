@@ -7,7 +7,6 @@ use strength_reduce::StrengthReducedUsize;
 use transpose;
 
 use crate::array_utils;
-use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::{common::FftNum, FftDirection};
 use crate::{Direction, Fft, Length};
 

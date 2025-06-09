@@ -1,6 +1,8 @@
 use num_traits::{FromPrimitive, Signed};
 use std::fmt::Debug;
 
+use crate::array_utils;
+
 /// Generic floating point number, implemented for f32 and f64
 pub trait FftNum: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {}
 
@@ -103,6 +105,104 @@ pub fn fft_error_immut(
     );
 }
 
+// A utility that validates the provided FFT parameters, executes the FFT if validation succeeds, or panics with a hopefully helpful error message if validation fails
+// Since this implementation is basically always the same across all algorithms, this helper keeps us from having to duplicate it
+#[inline(always)]
+pub fn fft_helper_inplace<T>(
+    buffer: &mut [T],
+    scratch: &mut [T],
+    chunk_size: usize,
+    required_scratch: usize,
+    chunk_fn: impl FnMut(&mut [T], &mut [T]),
+) {
+    if chunk_size == 0 {
+        return;
+    }
+
+    let result =
+        array_utils::validate_and_iter(buffer, scratch, chunk_size, required_scratch, chunk_fn);
+
+    if result.is_err() {
+        // We want to trigger a panic, because the passed parameters failed validation in some way.
+        // But we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+        fft_error_inplace(chunk_size, buffer.len(), required_scratch, scratch.len());
+    }
+}
+
+// A utility that validates the provided FFT parameters, executes the FFT if validation succeeds, or panics with a hopefully helpful error message if validation fails
+// Since this implementation is basically always the same across all algorithms,, this helper keeps us from having to duplicate it
+#[inline(always)]
+pub fn fft_helper_immut<T>(
+    input: &[T],
+    output: &mut [T],
+    scratch: &mut [T],
+    chunk_size: usize,
+    required_scratch: usize,
+    chunk_fn: impl FnMut(&[T], &mut [T], &mut [T]),
+) {
+    if chunk_size == 0 {
+        return;
+    }
+
+    let result = array_utils::validate_and_zip(
+        input,
+        output,
+        scratch,
+        chunk_size,
+        required_scratch,
+        chunk_fn,
+    );
+
+    if result.is_err() {
+        // We want to trigger a panic, because the passed parameters failed validation in some way.
+        // But we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+        fft_error_immut(
+            chunk_size,
+            input.len(),
+            output.len(),
+            required_scratch,
+            scratch.len(),
+        );
+    }
+}
+
+// A utility that validates the provided FFT parameters, executes the FFT if validation succeeds, or panics with a hopefully helpful error message if validation fails
+// Since this implementation is basically always the same across all algorithms,, this helper keeps us from having to duplicate it
+#[inline(always)]
+pub fn fft_helper_outofplace<T>(
+    input: &mut [T],
+    output: &mut [T],
+    scratch: &mut [T],
+    chunk_size: usize,
+    required_scratch: usize,
+    chunk_fn: impl FnMut(&mut [T], &mut [T], &mut [T]),
+) {
+    if chunk_size == 0 {
+        return;
+    }
+
+    let result = array_utils::validate_and_zip_mut(
+        input,
+        output,
+        scratch,
+        chunk_size,
+        required_scratch,
+        chunk_fn,
+    );
+
+    if result.is_err() {
+        // We want to trigger a panic, because the passed parameters failed validation in some way.
+        // But we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
+        fft_error_outofplace(
+            chunk_size,
+            input.len(),
+            output.len(),
+            required_scratch,
+            scratch.len(),
+        );
+    }
+}
+
 macro_rules! boilerplate_fft_oop {
     ($struct_name:ident, $len_fn:expr, $immut_scratch_len:expr) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
@@ -112,44 +212,16 @@ macro_rules! boilerplate_fft_oop {
                 output: &mut [Complex<T>],
                 scratch: &mut [Complex<T>],
             ) {
-                if self.len() == 0 {
-                    return;
-                }
-
-                let required_scratch = self.get_immutable_scratch_len();
-                if input.len() < self.len()
-                    || output.len() != input.len()
-                    || scratch.len() < required_scratch
-                {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_immut(
-                        self.len(),
-                        input.len(),
-                        output.len(),
-                        required_scratch,
-                        scratch.len(),
-                    );
-                    return; // Unreachable, because fft_error_immut asserts, but it helps codegen to put it here
-                }
-
-                let result = array_utils::iter_chunks_zipped(
+                crate::common::fft_helper_immut(
                     input,
                     output,
+                    scratch,
                     self.len(),
-                    |in_chunk, out_chunk| self.perform_fft_immut(in_chunk, out_chunk, scratch),
+                    self.get_immutable_scratch_len(),
+                    |in_chunk, out_chunk, scratch| {
+                        self.perform_fft_immut(in_chunk, out_chunk, scratch)
+                    },
                 );
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_immut(
-                        self.len(),
-                        input.len(),
-                        output.len(),
-                        required_scratch,
-                        scratch.len(),
-                    );
-                }
             }
             fn process_outofplace_with_scratch(
                 &self,
@@ -157,74 +229,29 @@ macro_rules! boilerplate_fft_oop {
                 output: &mut [Complex<T>],
                 scratch: &mut [Complex<T>],
             ) {
-                if self.len() == 0 {
-                    return;
-                }
-
-                let required_scratch = self.get_outofplace_scratch_len();
-                if input.len() < self.len()
-                    || output.len() != input.len()
-                    || scratch.len() < required_scratch
-                {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(
-                        self.len(),
-                        input.len(),
-                        output.len(),
-                        required_scratch,
-                        scratch.len(),
-                    );
-                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
-                }
-
-                let result = array_utils::iter_chunks_zipped_mut(
+                crate::common::fft_helper_outofplace(
                     input,
                     output,
+                    scratch,
                     self.len(),
-                    |in_chunk, out_chunk| {
+                    self.get_outofplace_scratch_len(),
+                    |in_chunk, out_chunk, scratch| {
                         self.perform_fft_out_of_place(in_chunk, out_chunk, scratch)
                     },
                 );
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
-                }
             }
             fn process_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-                if self.len() == 0 {
-                    return;
-                }
-
-                let required_scratch = self.get_inplace_scratch_len();
-                if scratch.len() < required_scratch || buffer.len() < self.len() {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_inplace(
-                        self.len(),
-                        buffer.len(),
-                        self.get_inplace_scratch_len(),
-                        scratch.len(),
-                    );
-                    return; // Unreachable, because fft_error_inplace asserts, but it helps codegen to put it here
-                }
-
-                let (scratch, extra_scratch) = scratch.split_at_mut(self.len());
-                let result = array_utils::iter_chunks_mut(buffer, self.len(), |chunk| {
-                    self.perform_fft_out_of_place(chunk, scratch, extra_scratch);
-                    chunk.copy_from_slice(scratch);
-                });
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_inplace(
-                        self.len(),
-                        buffer.len(),
-                        self.get_inplace_scratch_len(),
-                        scratch.len(),
-                    );
-                }
+                crate::common::fft_helper_inplace(
+                    buffer,
+                    scratch,
+                    self.len(),
+                    self.get_inplace_scratch_len(),
+                    |chunk, scratch| {
+                        let (self_scratch, inner_scratch) = scratch.split_at_mut(self.len());
+                        self.perform_fft_out_of_place(chunk, self_scratch, inner_scratch);
+                        chunk.copy_from_slice(self_scratch);
+                    },
+                );
             }
             #[inline(always)]
             fn get_inplace_scratch_len(&self) -> usize {
@@ -263,39 +290,16 @@ macro_rules! boilerplate_fft {
                 output: &mut [Complex<T>],
                 scratch: &mut [Complex<T>],
             ) {
-                if self.len() == 0 {
-                    return;
-                }
-                let required_scratch = self.get_immutable_scratch_len();
-                if scratch.len() < required_scratch
-                    || input.len() < self.len()
-                    || output.len() != input.len()
-                {
-                    crate::common::fft_error_immut(
-                        self.len(),
-                        input.len(),
-                        output.len(),
-                        required_scratch,
-                        scratch.len(),
-                    );
-                }
-
-                let scratch = &mut scratch[..required_scratch];
-                let result = array_utils::iter_chunks_zipped(
+                crate::common::fft_helper_immut(
                     input,
                     output,
+                    scratch,
                     self.len(),
-                    |in_chunk, out_chunk| self.perform_fft_immut(in_chunk, out_chunk, scratch),
+                    self.get_immutable_scratch_len(),
+                    |in_chunk, out_chunk, scratch| {
+                        self.perform_fft_immut(in_chunk, out_chunk, scratch)
+                    },
                 );
-                if result.is_err() {
-                    fft_error_outofplace(
-                        self.len(),
-                        input.len(),
-                        output.len(),
-                        required_scratch,
-                        scratch.len(),
-                    );
-                }
             }
 
             fn process_outofplace_with_scratch(
@@ -304,80 +308,27 @@ macro_rules! boilerplate_fft {
                 output: &mut [Complex<T>],
                 scratch: &mut [Complex<T>],
             ) {
-                if self.len() == 0 {
-                    return;
-                }
-
-                let required_scratch = self.get_outofplace_scratch_len();
-                if scratch.len() < required_scratch
-                    || input.len() < self.len()
-                    || output.len() != input.len()
-                {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(
-                        self.len(),
-                        input.len(),
-                        output.len(),
-                        self.get_outofplace_scratch_len(),
-                        scratch.len(),
-                    );
-                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
-                }
-
-                let scratch = &mut scratch[..required_scratch];
-                let result = array_utils::iter_chunks_zipped_mut(
+                crate::common::fft_helper_outofplace(
                     input,
                     output,
+                    scratch,
                     self.len(),
-                    |in_chunk, out_chunk| {
+                    self.get_outofplace_scratch_len(),
+                    |in_chunk, out_chunk, scratch| {
                         self.perform_fft_out_of_place(in_chunk, out_chunk, scratch)
                     },
                 );
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(
-                        self.len(),
-                        input.len(),
-                        output.len(),
-                        self.get_outofplace_scratch_len(),
-                        scratch.len(),
-                    );
-                }
             }
             fn process_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-                if self.len() == 0 {
-                    return;
-                }
-
-                let required_scratch = self.get_inplace_scratch_len();
-                if scratch.len() < required_scratch || buffer.len() < self.len() {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_inplace(
-                        self.len(),
-                        buffer.len(),
-                        self.get_inplace_scratch_len(),
-                        scratch.len(),
-                    );
-                    return; // Unreachable, because fft_error_inplace asserts, but it helps codegen to put it here
-                }
-
-                let scratch = &mut scratch[..required_scratch];
-                let result = array_utils::iter_chunks_mut(buffer, self.len(), |chunk| {
-                    self.perform_fft_inplace(chunk, scratch)
-                });
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_inplace(
-                        self.len(),
-                        buffer.len(),
-                        self.get_inplace_scratch_len(),
-                        scratch.len(),
-                    );
-                }
+                crate::common::fft_helper_inplace(
+                    buffer,
+                    scratch,
+                    self.len(),
+                    self.get_inplace_scratch_len(),
+                    |chunk, scratch| {
+                        self.perform_fft_inplace(chunk, scratch);
+                    },
+                );
             }
             #[inline(always)]
             fn get_inplace_scratch_len(&self) -> usize {

@@ -2,8 +2,7 @@ use num_complex::Complex;
 
 use crate::{common::FftNum, FftDirection};
 
-use crate::array_utils::{self, DoubleBuf, LoadStore};
-use crate::common::{fft_error_immut, fft_error_inplace, fft_error_outofplace};
+use crate::array_utils::{DoubleBuf, LoadStore};
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
 
@@ -24,31 +23,19 @@ macro_rules! boilerplate_fft_butterfly {
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                if input.len() < self.len() || output.len() != input.len() {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
-                    return; // Unreachable, because fft_error_immut asserts, but it helps codegen to put it here
-                }
-
-                let result = array_utils::iter_chunks_zipped(
+                crate::common::fft_helper_immut(
                     input,
                     output,
+                    &mut [],
                     self.len(),
-                    |in_chunk, out_chunk| {
-                        unsafe {
-                            self.perform_fft_butterfly(DoubleBuf {
-                                input: in_chunk,
-                                output: out_chunk,
-                            })
-                        };
+                    0,
+                    |in_chunk, out_chunk, _| unsafe {
+                        self.perform_fft_butterfly(DoubleBuf {
+                            input: in_chunk,
+                            output: out_chunk,
+                        })
                     },
                 );
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
-                }
             }
             fn process_outofplace_with_scratch(
                 &self,
@@ -56,48 +43,28 @@ macro_rules! boilerplate_fft_butterfly {
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                if input.len() < self.len() || output.len() != input.len() {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
-                    return; // Unreachable, because fft_error_immut asserts, but it helps codegen to put it here
-                }
-
-                let result = array_utils::iter_chunks_zipped(
+                crate::common::fft_helper_outofplace(
                     input,
                     output,
+                    &mut [],
                     self.len(),
-                    |in_chunk, out_chunk| {
-                        unsafe {
-                            self.perform_fft_butterfly(DoubleBuf {
-                                input: in_chunk,
-                                output: out_chunk,
-                            })
-                        };
+                    0,
+                    |in_chunk, out_chunk, _| unsafe {
+                        self.perform_fft_butterfly(DoubleBuf {
+                            input: in_chunk,
+                            output: out_chunk,
+                        })
                     },
                 );
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
-                }
             }
             fn process_with_scratch(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-                if buffer.len() < self.len() {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_inplace(self.len(), buffer.len(), 0, 0);
-                    return; // Unreachable, because fft_error_inplace asserts, but it helps codegen to put it here
-                }
-
-                let result = array_utils::iter_chunks_mut(buffer, self.len(), |chunk| unsafe {
-                    self.perform_fft_butterfly(chunk)
-                });
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_inplace(self.len(), buffer.len(), 0, 0);
-                }
+                crate::common::fft_helper_inplace(
+                    buffer,
+                    &mut [],
+                    self.len(),
+                    0,
+                    |chunk, _| unsafe { self.perform_fft_butterfly(chunk) },
+                );
             }
             #[inline(always)]
             fn get_inplace_scratch_len(&self) -> usize {
