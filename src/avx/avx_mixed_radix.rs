@@ -5,7 +5,6 @@ use num_complex::Complex;
 use num_integer::div_ceil;
 
 use crate::array_utils;
-use crate::common::{fft_error_immut, fft_error_inplace, fft_error_outofplace};
 use crate::{Direction, Fft, FftDirection, FftNum, Length};
 
 use super::{AvxNum, CommonSimdData};
@@ -36,7 +35,7 @@ macro_rules! boilerplate_mixedradix {
             }
         }
 
-        #[inline]
+        #[target_feature(enable = "avx", enable = "fma")]
         fn perform_fft_inplace(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
             // Perform the column FFTs
             // Safety: self.perform_column_butterflies() requres the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't available
@@ -69,17 +68,16 @@ macro_rules! boilerplate_mixedradix {
             }
         }
 
-        #[inline]
-        fn perform_fft_immut(
+        #[target_feature(enable = "avx", enable = "fma")]
+        unsafe fn perform_fft_immut(
             &self,
             input: &[Complex<T>],
             output: &mut [Complex<T>],
             scratch: &mut [Complex<T>],
         ) {
             // Perform the column FFTs
-            // Safety: self.perform_column_butterflies() requires the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't available
             let (scratch, inner_scratch) = scratch.split_at_mut(input.len());
-            unsafe {
+            {
                 // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
                 let transmuted_input: &[Complex<A>] = array_utils::workaround_transmute(input);
                 let transmuted_output: &mut [Complex<A>] =
@@ -94,8 +92,7 @@ macro_rules! boilerplate_mixedradix {
                 .process_with_scratch(scratch, inner_scratch);
 
             // Transpose
-            // Safety: self.transpose() requires the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
-            unsafe {
+            {
                 // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
                 let transmuted_input: &mut [Complex<A>] =
                     array_utils::workaround_transmute_mut(scratch);
@@ -106,20 +103,18 @@ macro_rules! boilerplate_mixedradix {
             }
         }
 
-        #[inline]
-        fn perform_fft_out_of_place(
+        #[target_feature(enable = "avx", enable = "fma")]
+        unsafe fn perform_fft_out_of_place(
             &self,
             input: &mut [Complex<T>],
             output: &mut [Complex<T>],
             scratch: &mut [Complex<T>],
         ) {
             // Perform the column FFTs
-            // Safety: self.perform_column_butterflies() requires the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't available
-            unsafe {
+            {
                 // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
                 let transmuted_input: &mut [Complex<A>] =
                     array_utils::workaround_transmute_mut(input);
-
                 self.perform_column_butterflies(transmuted_input);
             }
 
@@ -134,8 +129,7 @@ macro_rules! boilerplate_mixedradix {
                 .process_with_scratch(input, inner_scratch);
 
             // Transpose
-            // Safety: self.transpose() requires the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
-            unsafe {
+            {
                 // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
                 let transmuted_input: &mut [Complex<A>] =
                     array_utils::workaround_transmute_mut(input);
