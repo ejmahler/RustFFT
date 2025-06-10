@@ -1,8 +1,6 @@
 use num_traits::{FromPrimitive, Signed};
 use std::fmt::Debug;
 
-use crate::array_utils;
-
 /// Generic floating point number, implemented for f32 and f64
 pub trait FftNum: Copy + FromPrimitive + Signed + Sync + Send + Debug + 'static {}
 
@@ -105,104 +103,6 @@ pub fn fft_error_immut(
     );
 }
 
-// A utility that validates the provided FFT parameters, executes the FFT if validation succeeds, or panics with a hopefully helpful error message if validation fails
-// Since this implementation is basically always the same across all algorithms, this helper keeps us from having to duplicate it
-#[inline(always)]
-pub fn fft_helper_inplace<T>(
-    buffer: &mut [T],
-    scratch: &mut [T],
-    chunk_size: usize,
-    required_scratch: usize,
-    chunk_fn: impl FnMut(&mut [T], &mut [T]),
-) {
-    if chunk_size == 0 {
-        return;
-    }
-
-    let result =
-        array_utils::validate_and_iter(buffer, scratch, chunk_size, required_scratch, chunk_fn);
-
-    if result.is_err() {
-        // We want to trigger a panic, because the passed parameters failed validation in some way.
-        // But we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-        fft_error_inplace(chunk_size, buffer.len(), required_scratch, scratch.len());
-    }
-}
-
-// A utility that validates the provided FFT parameters, executes the FFT if validation succeeds, or panics with a hopefully helpful error message if validation fails
-// Since this implementation is basically always the same across all algorithms,, this helper keeps us from having to duplicate it
-#[inline(always)]
-pub fn fft_helper_immut<T>(
-    input: &[T],
-    output: &mut [T],
-    scratch: &mut [T],
-    chunk_size: usize,
-    required_scratch: usize,
-    chunk_fn: impl FnMut(&[T], &mut [T], &mut [T]),
-) {
-    if chunk_size == 0 {
-        return;
-    }
-
-    let result = array_utils::validate_and_zip(
-        input,
-        output,
-        scratch,
-        chunk_size,
-        required_scratch,
-        chunk_fn,
-    );
-
-    if result.is_err() {
-        // We want to trigger a panic, because the passed parameters failed validation in some way.
-        // But we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-        fft_error_immut(
-            chunk_size,
-            input.len(),
-            output.len(),
-            required_scratch,
-            scratch.len(),
-        );
-    }
-}
-
-// A utility that validates the provided FFT parameters, executes the FFT if validation succeeds, or panics with a hopefully helpful error message if validation fails
-// Since this implementation is basically always the same across all algorithms,, this helper keeps us from having to duplicate it
-#[inline(always)]
-pub fn fft_helper_outofplace<T>(
-    input: &mut [T],
-    output: &mut [T],
-    scratch: &mut [T],
-    chunk_size: usize,
-    required_scratch: usize,
-    chunk_fn: impl FnMut(&mut [T], &mut [T], &mut [T]),
-) {
-    if chunk_size == 0 {
-        return;
-    }
-
-    let result = array_utils::validate_and_zip_mut(
-        input,
-        output,
-        scratch,
-        chunk_size,
-        required_scratch,
-        chunk_fn,
-    );
-
-    if result.is_err() {
-        // We want to trigger a panic, because the passed parameters failed validation in some way.
-        // But we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-        fft_error_outofplace(
-            chunk_size,
-            input.len(),
-            output.len(),
-            required_scratch,
-            scratch.len(),
-        );
-    }
-}
-
 macro_rules! boilerplate_fft_oop {
     ($struct_name:ident, $len_fn:expr, $immut_scratch_len:expr) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
@@ -212,7 +112,7 @@ macro_rules! boilerplate_fft_oop {
                 output: &mut [Complex<T>],
                 scratch: &mut [Complex<T>],
             ) {
-                crate::common::fft_helper_immut(
+                crate::fft_helper::fft_helper_immut(
                     input,
                     output,
                     scratch,
@@ -229,7 +129,7 @@ macro_rules! boilerplate_fft_oop {
                 output: &mut [Complex<T>],
                 scratch: &mut [Complex<T>],
             ) {
-                crate::common::fft_helper_outofplace(
+                crate::fft_helper::fft_helper_outofplace(
                     input,
                     output,
                     scratch,
@@ -241,7 +141,7 @@ macro_rules! boilerplate_fft_oop {
                 );
             }
             fn process_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-                crate::common::fft_helper_inplace(
+                crate::fft_helper::fft_helper_inplace(
                     buffer,
                     scratch,
                     self.len(),
@@ -290,7 +190,7 @@ macro_rules! boilerplate_fft {
                 output: &mut [Complex<T>],
                 scratch: &mut [Complex<T>],
             ) {
-                crate::common::fft_helper_immut(
+                crate::fft_helper::fft_helper_immut(
                     input,
                     output,
                     scratch,
@@ -308,7 +208,7 @@ macro_rules! boilerplate_fft {
                 output: &mut [Complex<T>],
                 scratch: &mut [Complex<T>],
             ) {
-                crate::common::fft_helper_outofplace(
+                crate::fft_helper::fft_helper_outofplace(
                     input,
                     output,
                     scratch,
@@ -320,7 +220,7 @@ macro_rules! boilerplate_fft {
                 );
             }
             fn process_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-                crate::common::fft_helper_inplace(
+                crate::fft_helper::fft_helper_inplace(
                     buffer,
                     scratch,
                     self.len(),

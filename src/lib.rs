@@ -125,6 +125,7 @@ mod common;
 pub mod algorithm;
 mod array_utils;
 mod fft_cache;
+mod fft_helper;
 mod math_utils;
 mod plan;
 mod twiddles;

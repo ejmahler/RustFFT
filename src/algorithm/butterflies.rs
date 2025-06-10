@@ -23,7 +23,7 @@ macro_rules! boilerplate_fft_butterfly {
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                crate::common::fft_helper_immut(
+                crate::fft_helper::fft_helper_immut(
                     input,
                     output,
                     &mut [],
@@ -43,7 +43,7 @@ macro_rules! boilerplate_fft_butterfly {
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                crate::common::fft_helper_outofplace(
+                crate::fft_helper::fft_helper_outofplace(
                     input,
                     output,
                     &mut [],
@@ -58,7 +58,7 @@ macro_rules! boilerplate_fft_butterfly {
                 );
             }
             fn process_with_scratch(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-                crate::common::fft_helper_inplace(
+                crate::fft_helper::fft_helper_inplace(
                     buffer,
                     &mut [],
                     self.len(),
