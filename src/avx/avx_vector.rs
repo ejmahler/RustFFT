@@ -14,7 +14,6 @@ use super::AvxNum;
 ///
 /// The goal of this trait is to reduce code duplication by letting code be generic over the vector type
 pub trait AvxVector: Copy + Debug + Send + Sync {
-    const SCALAR_PER_VECTOR: usize;
     const COMPLEX_PER_VECTOR: usize;
 
     // useful constants
@@ -729,7 +728,6 @@ impl<V: AvxVector256> Rotation90<V> {
 }
 
 impl AvxVector for __m256 {
-    const SCALAR_PER_VECTOR: usize = 8;
     const COMPLEX_PER_VECTOR: usize = 4;
 
     #[inline(always)]
@@ -1102,7 +1100,6 @@ impl AvxVector256 for __m256 {
 }
 
 impl AvxVector for __m128 {
-    const SCALAR_PER_VECTOR: usize = 4;
     const COMPLEX_PER_VECTOR: usize = 2;
 
     #[inline(always)]
@@ -1375,7 +1372,6 @@ impl AvxVector128 for __m128 {
 }
 
 impl AvxVector for __m256d {
-    const SCALAR_PER_VECTOR: usize = 4;
     const COMPLEX_PER_VECTOR: usize = 2;
 
     #[inline(always)]
@@ -1684,7 +1680,6 @@ impl AvxVector256 for __m256d {
 }
 
 impl AvxVector for __m128d {
-    const SCALAR_PER_VECTOR: usize = 2;
     const COMPLEX_PER_VECTOR: usize = 1;
 
     #[inline(always)]
@@ -1900,9 +1895,6 @@ pub trait AvxArrayMut<T: AvxNum>: AvxArray<T> + DerefMut {
         index: usize,
     );
     unsafe fn store_partial3_complex(&mut self, data: T::VectorType, index: usize);
-
-    // some avx operations need bespoke one-off things that don't fit into the methods above, so we should provide an escape hatch for them
-    fn output_ptr(&mut self) -> *mut Complex<T>;
 }
 
 impl<T: AvxNum> AvxArray<T> for &[Complex<T>] {
@@ -2030,10 +2022,6 @@ impl<T: AvxNum> AvxArrayMut<T> for &mut [Complex<T>] {
         debug_assert!(self.len() >= index + 3);
         T::VectorType::store_partial3_complex(self.as_mut_ptr().add(index), data);
     }
-    #[inline(always)]
-    fn output_ptr(&mut self) -> *mut Complex<T> {
-        self.as_mut_ptr()
-    }
 }
 impl<'a, T: AvxNum> AvxArrayMut<T> for DoubleBuf<'a, T>
 where
@@ -2063,10 +2051,6 @@ where
     #[inline(always)]
     unsafe fn store_partial3_complex(&mut self, data: T::VectorType, index: usize) {
         self.output.store_partial3_complex(data, index);
-    }
-    #[inline(always)]
-    fn output_ptr(&mut self) -> *mut Complex<T> {
-        self.output.output_ptr()
     }
 }
 
