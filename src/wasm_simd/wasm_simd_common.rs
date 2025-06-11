@@ -1,5 +1,10 @@
 use std::any::TypeId;
 
+use crate::fft_helper::{
+    fft_helper_immut, fft_helper_immut_unroll2x, fft_helper_inplace, fft_helper_inplace_unroll2x,
+    fft_helper_outofplace, fft_helper_outofplace_unroll2x,
+};
+
 /// Helper function to assert we have the right float type
 pub fn assert_f32<T: 'static>() {
     let id_f32 = TypeId::of::<f32>();
@@ -63,29 +68,17 @@ macro_rules! boilerplate_fft_wasm_simd_oop {
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                if self.len() == 0 {
-                    return;
-                }
-
-                if input.len() < self.len() || output.len() != input.len() {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
-                    return; // Unreachable, because fft_error_immut asserts, but it helps codegen to put it here
-                }
-
-                let result = unsafe {
-                    array_utils::iter_chunks_zipped(
-                        input,
-                        output,
+                unsafe {
+                    let simd_input = crate::array_utils::workaround_transmute(input);
+                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
+                    super::wasm_simd_common::wasm_simd_fft_helper_immut(
+                        simd_input,
+                        simd_output,
+                        &mut [],
                         self.len(),
-                        |in_chunk, out_chunk| self.perform_fft_immut(in_chunk, out_chunk, &mut []),
-                    )
-                };
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
+                        0,
+                        |input, output, _| self.perform_fft_out_of_place(input, output, &mut []),
+                    );
                 }
             }
             fn process_outofplace_with_scratch(
@@ -94,66 +87,32 @@ macro_rules! boilerplate_fft_wasm_simd_oop {
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                if self.len() == 0 {
-                    return;
-                }
-
-                if input.len() < self.len() || output.len() != input.len() {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
-                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
-                }
-
-                let result = unsafe {
-                    array_utils::iter_chunks_zipped_mut(
-                        input,
-                        output,
+                unsafe {
+                    let simd_input = crate::array_utils::workaround_transmute_mut(input);
+                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
+                    super::wasm_simd_common::wasm_simd_fft_helper_outofplace(
+                        simd_input,
+                        simd_output,
+                        &mut [],
                         self.len(),
-                        |in_chunk, out_chunk| {
-                            self.perform_fft_out_of_place(in_chunk, out_chunk, &mut [])
-                        },
-                    )
-                };
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
+                        0,
+                        |input, output, _| self.perform_fft_out_of_place(input, output, &mut []),
+                    );
                 }
             }
             fn process_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-                if self.len() == 0 {
-                    return;
-                }
-
-                let required_scratch = self.get_inplace_scratch_len();
-                if scratch.len() < required_scratch || buffer.len() < self.len() {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_inplace(
+                unsafe {
+                    let simd_buffer = crate::array_utils::workaround_transmute_mut(buffer);
+                    super::wasm_simd_common::wasm_simd_fft_helper_inplace(
+                        simd_buffer,
+                        &mut [],
                         self.len(),
-                        buffer.len(),
-                        self.get_inplace_scratch_len(),
-                        scratch.len(),
-                    );
-                    return; // Unreachable, because fft_error_inplace asserts, but it helps codegen to put it here
-                }
-
-                let scratch = &mut scratch[..required_scratch];
-                let result = unsafe {
-                    array_utils::iter_chunks_mut(buffer, self.len(), |chunk| {
-                        self.perform_fft_out_of_place(chunk, scratch, &mut []);
-                        chunk.copy_from_slice(scratch);
-                    })
-                };
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_inplace(
-                        self.len(),
-                        buffer.len(),
-                        self.get_inplace_scratch_len(),
-                        scratch.len(),
-                    );
+                        0,
+                        |chunk, _| {
+                            self.perform_fft_out_of_place(chunk, scratch, &mut []);
+                            chunk.copy_from_slice(scratch);
+                        },
+                    )
                 }
             }
             #[inline(always)]
@@ -166,7 +125,7 @@ macro_rules! boilerplate_fft_wasm_simd_oop {
             }
             #[inline(always)]
             fn get_immutable_scratch_len(&self) -> usize {
-                self.len()
+                0
             }
         }
         impl<S: WasmNum, T> Length for $struct_name<S, T> {
@@ -182,4 +141,97 @@ macro_rules! boilerplate_fft_wasm_simd_oop {
             }
         }
     };
+}
+
+// A wrapper for the FFT helper functions that make sure the entire thing happens with the benefit of the Wasm SIMD target feature,
+// so that things like loading twiddle factor registers etc can be lifted out of the loop
+#[target_feature(enable = "simd128")]
+pub unsafe fn wasm_simd_fft_helper_immut<T>(
+    input: &[T],
+    output: &mut [T],
+    scratch: &mut [T],
+    chunk_size: usize,
+    required_scratch: usize,
+    chunk_fn: impl FnMut(&[T], &mut [T], &mut [T]),
+) {
+    fft_helper_immut(
+        input,
+        output,
+        scratch,
+        chunk_size,
+        required_scratch,
+        chunk_fn,
+    )
+}
+
+// A wrapper for the FFT helper functions that make sure the entire thing happens with the benefit of the Wasm SIMD target feature,
+// so that things like loading twiddle factor registers etc can be lifted out of the loop
+#[target_feature(enable = "simd128")]
+pub unsafe fn wasm_simd_fft_helper_outofplace<T>(
+    input: &mut [T],
+    output: &mut [T],
+    scratch: &mut [T],
+    chunk_size: usize,
+    required_scratch: usize,
+    chunk_fn: impl FnMut(&mut [T], &mut [T], &mut [T]),
+) {
+    fft_helper_outofplace(
+        input,
+        output,
+        scratch,
+        chunk_size,
+        required_scratch,
+        chunk_fn,
+    )
+}
+
+// A wrapper for the FFT helper functions that make sure the entire thing happens with the benefit of the Wasm SIMD target feature,
+// so that things like loading twiddle factor registers etc can be lifted out of the loop
+#[target_feature(enable = "simd128")]
+pub unsafe fn wasm_simd_fft_helper_inplace<T>(
+    buffer: &mut [T],
+    scratch: &mut [T],
+    chunk_size: usize,
+    required_scratch: usize,
+    chunk_fn: impl FnMut(&mut [T], &mut [T]),
+) {
+    fft_helper_inplace(buffer, scratch, chunk_size, required_scratch, chunk_fn)
+}
+
+// A wrapper for the FFT helper functions that make sure the entire thing happens with the benefit of the Wasm SIMD target feature,
+// so that things like loading twiddle factor registers etc can be lifted out of the loop
+#[target_feature(enable = "simd128")]
+pub unsafe fn wasm_simd_fft_helper_immut_unroll2x<T>(
+    input: &[T],
+    output: &mut [T],
+    chunk_size: usize,
+    chunk2x_fn: impl FnMut(&[T], &mut [T]),
+    chunk_fn: impl FnMut(&[T], &mut [T]),
+) {
+    fft_helper_immut_unroll2x(input, output, chunk_size, chunk2x_fn, chunk_fn)
+}
+
+// A wrapper for the FFT helper functions that make sure the entire thing happens with the benefit of the Wasm SIMD target feature,
+// so that things like loading twiddle factor registers etc can be lifted out of the loop
+#[target_feature(enable = "simd128")]
+pub unsafe fn wasm_simd_fft_helper_outofplace_unroll2x<T>(
+    input: &mut [T],
+    output: &mut [T],
+    chunk_size: usize,
+    chunk2x_fn: impl FnMut(&mut [T], &mut [T]),
+    chunk_fn: impl FnMut(&mut [T], &mut [T]),
+) {
+    fft_helper_outofplace_unroll2x(input, output, chunk_size, chunk2x_fn, chunk_fn)
+}
+
+// A wrapper for the FFT helper functions that make sure the entire thing happens with the benefit of the Wasm SIMD target feature,
+// so that things like loading twiddle factor registers etc can be lifted out of the loop
+#[target_feature(enable = "simd128")]
+pub unsafe fn wasm_simd_fft_helper_inplace_unroll2x<T>(
+    buffer: &mut [T],
+    chunk_size: usize,
+    chunk2x_fn: impl FnMut(&mut [T]),
+    chunk_fn: impl FnMut(&mut [T]),
+) {
+    fft_helper_inplace_unroll2x(buffer, chunk_size, chunk2x_fn, chunk_fn)
 }
