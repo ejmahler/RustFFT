@@ -104,7 +104,7 @@ pub fn fft_error_immut(
 }
 
 macro_rules! boilerplate_fft_oop {
-    ($struct_name:ident, $len_fn:expr, $immut_scratch_len:expr) => {
+    ($struct_name:ident, $len_fn:expr) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             fn process_immutable_with_scratch(
                 &self,
@@ -163,7 +163,7 @@ macro_rules! boilerplate_fft_oop {
             }
             #[inline(always)]
             fn get_immutable_scratch_len(&self) -> usize {
-                $immut_scratch_len(self)
+                self.immut_scratch_len()
             }
         }
         impl<T> Length for $struct_name<T> {

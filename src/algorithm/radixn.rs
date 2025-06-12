@@ -160,6 +160,9 @@ impl<T: FftNum> RadixN<T> {
     fn outofplace_scratch_len(&self) -> usize {
         self.outofplace_scratch_len
     }
+    fn immut_scratch_len(&self) -> usize {
+        self.immut_scratch_len
+    }
 
     fn perform_fft_immut(
         &self,
@@ -329,8 +332,7 @@ impl<T: FftNum> RadixN<T> {
         }
     }
 }
-boilerplate_fft_oop!(RadixN, |this: &RadixN<_>| this.len, |this: &RadixN<_>| this
-    .immut_scratch_len);
+boilerplate_fft_oop!(RadixN, |this: &RadixN<_>| this.len);
 
 #[inline(never)]
 pub(crate) unsafe fn butterfly_2<T: FftNum>(

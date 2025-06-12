@@ -42,6 +42,9 @@ impl<T: FftNum> Dft<T> {
     fn outofplace_scratch_len(&self) -> usize {
         0
     }
+    fn immut_scratch_len(&self) -> usize {
+        0
+    }
 
     fn perform_fft_immut(
         &self,
@@ -76,7 +79,7 @@ impl<T: FftNum> Dft<T> {
         self.perform_fft_immut(signal, spectrum, _scratch);
     }
 }
-boilerplate_fft_oop!(Dft, |this: &Dft<_>| this.twiddles.len(), |_: &Dft<_>| 0);
+boilerplate_fft_oop!(Dft, |this: &Dft<_>| this.twiddles.len());
 
 #[cfg(test)]
 mod unit_tests {

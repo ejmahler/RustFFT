@@ -124,6 +124,9 @@ impl<T: FftNum> Radix4<T> {
     fn outofplace_scratch_len(&self) -> usize {
         self.outofplace_scratch_len
     }
+    fn immut_scratch_len(&self) -> usize {
+        self.immut_scratch_len
+    }
 
     fn perform_fft_immut(
         &self,
@@ -199,8 +202,7 @@ impl<T: FftNum> Radix4<T> {
         }
     }
 }
-boilerplate_fft_oop!(Radix4, |this: &Radix4<_>| this.len, |this: &Radix4<_>| this
-    .immut_scratch_len);
+boilerplate_fft_oop!(Radix4, |this: &Radix4<_>| this.len);
 
 #[cfg(test)]
 mod unit_tests {
