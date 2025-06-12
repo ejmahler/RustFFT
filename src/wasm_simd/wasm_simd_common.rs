@@ -77,7 +77,7 @@ macro_rules! boilerplate_fft_wasm_simd_oop {
                         &mut [],
                         self.len(),
                         0,
-                        |input, output, _| self.perform_fft_out_of_place(input, output, &mut []),
+                        |input, output, _| self.perform_fft_immut(input, output, &mut []),
                     );
                 }
             }
@@ -103,12 +103,13 @@ macro_rules! boilerplate_fft_wasm_simd_oop {
             fn process_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
                 unsafe {
                     let simd_buffer = crate::array_utils::workaround_transmute_mut(buffer);
+                    let simd_scratch = crate::array_utils::workaround_transmute_mut(scratch);
                     super::wasm_simd_common::wasm_simd_fft_helper_inplace(
                         simd_buffer,
-                        &mut [],
+                        simd_scratch,
                         self.len(),
-                        0,
-                        |chunk, _| {
+                        self.get_inplace_scratch_len(),
+                        |chunk, scratch| {
                             self.perform_fft_out_of_place(chunk, scratch, &mut []);
                             chunk.copy_from_slice(scratch);
                         },

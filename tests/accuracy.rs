@@ -16,6 +16,7 @@ use rustfft::{num_traits::Zero, FftDirection};
 
 use rand::distributions::{uniform::SampleUniform, Distribution, Uniform};
 use rand::{rngs::StdRng, SeedableRng};
+use wasm_bindgen_test::wasm_bindgen_test;
 
 /// The seed for the random number generator used to generate
 /// random signals. It's defined here so that we have deterministic
@@ -156,6 +157,67 @@ fn test_planned_fft_forward_f64() {
 
 #[test]
 fn test_planned_fft_inverse_f64() {
+    let direction = FftDirection::Inverse;
+    let cache: ControlCache<f64> = ControlCache::new(TEST_MAX, direction);
+
+    for len in 1..TEST_MAX {
+        let control = cache.plan_fft(len);
+        assert_eq!(control.len(), len);
+        assert_eq!(control.fft_direction(), direction);
+
+        let signal = random_signal(len);
+        assert!(fft_matches_control(control, &signal), "length = {}", len);
+    }
+}
+
+#[wasm_bindgen_test]
+fn wasm_test_planned_fft_forward_f32() {
+    let direction = FftDirection::Forward;
+    let cache: ControlCache<f32> = ControlCache::new(TEST_MAX, direction);
+
+    for len in 1..TEST_MAX {
+        println!("len: {len}");
+        let control = cache.plan_fft(len);
+        assert_eq!(control.len(), len);
+        assert_eq!(control.fft_direction(), direction);
+
+        let signal = random_signal(len);
+        assert!(fft_matches_control(control, &signal), "length = {}", len);
+    }
+}
+
+#[wasm_bindgen_test]
+fn wasm_test_planned_fft_inverse_f32() {
+    let direction = FftDirection::Inverse;
+    let cache: ControlCache<f32> = ControlCache::new(TEST_MAX, direction);
+
+    for len in 1..TEST_MAX {
+        let control = cache.plan_fft(len);
+        assert_eq!(control.len(), len);
+        assert_eq!(control.fft_direction(), direction);
+
+        let signal = random_signal(len);
+        assert!(fft_matches_control(control, &signal), "length = {}", len);
+    }
+}
+
+#[wasm_bindgen_test]
+fn wasm_test_planned_fft_forward_f64() {
+    let direction = FftDirection::Forward;
+    let cache: ControlCache<f64> = ControlCache::new(TEST_MAX, direction);
+
+    for len in 1..TEST_MAX {
+        let control = cache.plan_fft(len);
+        assert_eq!(control.len(), len);
+        assert_eq!(control.fft_direction(), direction);
+
+        let signal = random_signal(len);
+        assert!(fft_matches_control(control, &signal), "length = {}", len);
+    }
+}
+
+#[wasm_bindgen_test]
+fn wasm_test_planned_fft_inverse_f64() {
     let direction = FftDirection::Inverse;
     let cache: ControlCache<f64> = ControlCache::new(TEST_MAX, direction);
 
