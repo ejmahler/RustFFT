@@ -12,7 +12,7 @@
 //!
 //! ### Usage
 //!
-//! The recommended way to use RustFFT is to create a [`FftPlanner`](crate::FftPlanner) instance and then call its
+//! The recommended way to use RustFFT is to create a [`FftPlanner`] instance and then call its
 //! [`plan_fft`](crate::FftPlanner::plan_fft) method. This method will automatically choose which FFT algorithms are best
 //! for a given size and initialize the required buffers and precomputed data.
 //!
@@ -26,7 +26,7 @@
 //! let mut buffer = vec![Complex{ re: 0.0f32, im: 0.0f32 }; 1234];
 //! fft.process(&mut buffer);
 //! ```
-//! The planner returns trait objects of the [`Fft`](crate::Fft) trait, allowing for FFT sizes that aren't known
+//! The planner returns trait objects of the [`Fft`] trait, allowing for FFT sizes that aren't known
 //! until runtime.
 //!
 //! RustFFT also exposes individual FFT algorithms. For example, if you know beforehand that you need a power-of-two FFT, you can
@@ -42,9 +42,9 @@
 //! fft.process(&mut buffer);
 //! ```
 //!
-//! For the vast majority of situations, simply using the [`FftPlanner`](crate::FftPlanner) will be enough, but
+//! For the vast majority of situations, simply using the [`FftPlanner`] will be enough, but
 //! advanced users may have better insight than the planner into which algorithms are best for a specific size. See the
-//! [`algorithm`](crate::algorithm) module for a complete list of scalar algorithms implemented by RustFFT.
+//! [`algorithm`] module for a complete list of scalar algorithms implemented by RustFFT.
 //!
 //! Users should beware, however, that bypassing the planner will disable all AVX, SSE, Neon, and WASM SIMD optimizations.
 //!
