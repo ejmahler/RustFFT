@@ -38,7 +38,6 @@ fn compare_vectors<T: rustfft::FftNum + Float>(vec1: &[Complex<T>], vec2: &[Comp
 
 fn fft_matches_control<T: FftNum + Float>(control: Arc<dyn Fft<T>>, input: &[Complex<T>]) -> bool {
     let mut control_input = input.to_vec();
-    let mut test_input = input.to_vec();
 
     let mut planner = FftPlanner::new();
     let fft = planner.plan_fft(control.len(), control.fft_direction());
@@ -55,14 +54,31 @@ fn fft_matches_control<T: FftNum + Float>(control: Arc<dyn Fft<T>>, input: &[Com
 
     let scratch_max = std::cmp::max(
         control.get_inplace_scratch_len(),
-        fft.get_inplace_scratch_len(),
+        std::cmp::max(
+            fft.get_inplace_scratch_len(),
+            std::cmp::max(
+                fft.get_outofplace_scratch_len(),
+                fft.get_immutable_scratch_len(),
+            ),
+        ),
     );
     let mut scratch = vec![Zero::zero(); scratch_max];
 
     control.process_with_scratch(&mut control_input, &mut scratch);
-    fft.process_with_scratch(&mut test_input, &mut scratch);
 
-    return compare_vectors(&test_input, &control_input);
+    let mut test_output_inplace = input.to_vec();
+    fft.process_with_scratch(&mut test_output_inplace, &mut scratch);
+
+    let mut input_oop = input.to_vec();
+    let mut test_output_oop = input.to_vec();
+    fft.process_outofplace_with_scratch(&mut input_oop, &mut test_output_oop, &mut scratch);
+
+    let mut test_output_immut = input.to_vec();
+    fft.process_immutable_with_scratch(input, &mut test_output_immut, &mut scratch);
+
+    return compare_vectors(&control_input, &test_output_inplace)
+        && compare_vectors(&control_input, &test_output_oop)
+        && compare_vectors(&control_input, &test_output_immut);
 }
 
 fn random_signal<T: FftNum + SampleUniform>(length: usize) -> Vec<Complex<T>> {
