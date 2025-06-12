@@ -29,6 +29,7 @@ pub fn fft_helper_inplace<T>(
 
 // A utility that validates the provided FFT parameters, executes the FFT if validation succeeds, or panics with a hopefully helpful error message if validation fails
 // Since this implementation is basically always the same across all algorithms, this helper keeps us from having to duplicate it
+#[allow(dead_code)]
 #[inline(always)]
 pub fn fft_helper_inplace_unroll2x<T>(
     buffer: &mut [T],
@@ -88,6 +89,7 @@ pub fn fft_helper_immut<T>(
 
 // A utility that validates the provided FFT parameters, executes the FFT if validation succeeds, or panics with a hopefully helpful error message if validation fails
 // Since this implementation is basically always the same across all algorithms, this helper keeps us from having to duplicate it
+#[allow(dead_code)]
 #[inline(always)]
 pub fn fft_helper_immut_unroll2x<T>(
     input: &[T],
@@ -149,6 +151,7 @@ pub fn fft_helper_outofplace<T>(
 
 // A utility that validates the provided FFT parameters, executes the FFT if validation succeeds, or panics with a hopefully helpful error message if validation fails
 // Since this implementation is basically always the same across all algorithms, this helper keeps us from having to duplicate it
+#[allow(dead_code)]
 #[inline(always)]
 pub fn fft_helper_outofplace_unroll2x<T>(
     input: &mut [T],
