@@ -1,3 +1,12 @@
+## [6.4]
+Released 12th June 2025
+### Added
+ - Implemented a new code path for out-of-place FFTs where the input vector is immutable: `Fft::process_immutable_with_scratch` (Thanks to @michaelciraci) (#157)
+### Changed
+ - Refactored some RustFFT internals. Gives a small reduction in binary size, among other benefits (#161)
+ - Upgraded to 2021 edition (#162)
+
+
 ## [6.3]
 Released 17th April 2025
 ### Changed
