@@ -279,7 +279,7 @@ fn bench_good_thomas(b: &mut Bencher, width: usize, height: usize) {
     let width_fft = planner.plan_fft_forward(width);
     let height_fft = planner.plan_fft_forward(height);
 
-    let fft: Arc<Fft<f32>> = Arc::new(GoodThomasAlgorithm::new(width_fft, height_fft));
+    let fft: Arc<dyn Fft<f32>> = Arc::new(GoodThomasAlgorithm::new(width_fft, height_fft));
 
     let mut buffer = vec![Complex::zero(); width * height];
     let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
@@ -320,7 +320,7 @@ fn bench_good_thomas_setup(b: &mut Bencher, width: usize, height: usize) {
     let height_fft = planner.plan_fft_forward(height);
 
     b.iter(|| {
-        let fft: Arc<Fft<f32>> = Arc::new(GoodThomasAlgorithm::new(
+        let fft: Arc<dyn Fft<f32>> = Arc::new(GoodThomasAlgorithm::new(
             Arc::clone(&width_fft),
             Arc::clone(&height_fft),
         ));
@@ -368,7 +368,7 @@ fn bench_mixed_radix(b: &mut Bencher, width: usize, height: usize) {
     let width_fft = planner.plan_fft_forward(width);
     let height_fft = planner.plan_fft_forward(height);
 
-    let fft: Arc<Fft<_>> = Arc::new(MixedRadix::new(width_fft, height_fft));
+    let fft: Arc<dyn Fft<_>> = Arc::new(MixedRadix::new(width_fft, height_fft));
 
     let mut buffer = vec![
         Complex {
@@ -413,7 +413,7 @@ fn mixed_radix_0032_27(b: &mut Bencher) {
 //#[bench] fn mixed_radix_2048_3(b: &mut Bencher) { bench_mixed_radix(b,  2048, 3); }
 //#[bench] fn mixed_radix_2048_2187(b: &mut Bencher) { bench_mixed_radix(b,  2048, 2187); }
 
-fn plan_butterfly_fft(len: usize) -> Arc<Fft<f32>> {
+fn plan_butterfly_fft(len: usize) -> Arc<dyn Fft<f32>> {
     match len {
         2 => Arc::new(Butterfly2::new(FftDirection::Forward)),
         3 => Arc::new(Butterfly3::new(FftDirection::Forward)),
@@ -434,7 +434,7 @@ fn bench_mixed_radix_small(b: &mut Bencher, width: usize, height: usize) {
     let width_fft = plan_butterfly_fft(width);
     let height_fft = plan_butterfly_fft(height);
 
-    let fft: Arc<Fft<_>> = Arc::new(MixedRadixSmall::new(width_fft, height_fft));
+    let fft: Arc<dyn Fft<_>> = Arc::new(MixedRadixSmall::new(width_fft, height_fft));
 
     let mut signal = vec![
         Complex {
@@ -472,7 +472,7 @@ fn bench_good_thomas_small(b: &mut Bencher, width: usize, height: usize) {
     let width_fft = plan_butterfly_fft(width);
     let height_fft = plan_butterfly_fft(height);
 
-    let fft: Arc<Fft<_>> = Arc::new(GoodThomasAlgorithmSmall::new(width_fft, height_fft));
+    let fft: Arc<dyn Fft<_>> = Arc::new(GoodThomasAlgorithmSmall::new(width_fft, height_fft));
 
     let mut signal = vec![
         Complex {
@@ -511,7 +511,7 @@ fn bench_raders_scalar(b: &mut Bencher, len: usize) {
     let mut planner = rustfft::FftPlannerScalar::new();
     let inner_fft = planner.plan_fft_forward(len - 1);
 
-    let fft: Arc<Fft<_>> = Arc::new(RadersAlgorithm::new(inner_fft));
+    let fft: Arc<dyn Fft<_>> = Arc::new(RadersAlgorithm::new(inner_fft));
 
     let mut buffer = vec![
         Complex {
@@ -553,7 +553,7 @@ fn bench_raders_scalar(b: &mut Bencher, len: usize) {
 fn bench_bluesteins_scalar_prime(b: &mut Bencher, len: usize) {
     let mut planner = rustfft::FftPlannerScalar::new();
     let inner_fft = planner.plan_fft_forward((len * 2 - 1).checked_next_power_of_two().unwrap());
-    let fft: Arc<Fft<f32>> = Arc::new(BluesteinsAlgorithm::new(len, inner_fft));
+    let fft: Arc<dyn Fft<f32>> = Arc::new(BluesteinsAlgorithm::new(len, inner_fft));
 
     let mut buffer = vec![Zero::zero(); len];
     let mut scratch = vec![Zero::zero(); fft.get_inplace_scratch_len()];
