@@ -132,7 +132,6 @@ pub struct Rotation90<V: NeonVector>(V);
 
 // A trait to hold the BVectorType and COMPLEX_PER_VECTOR associated data
 pub trait NeonVector: Copy + Debug + Send + Sync {
-    const SCALAR_PER_VECTOR: usize;
     const COMPLEX_PER_VECTOR: usize;
 
     type ScalarType: NeonNum<VectorType = Self>;
@@ -145,6 +144,9 @@ pub trait NeonVector: Copy + Debug + Send + Sync {
     // stores of complex numbers
     unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
     unsafe fn store_partial_lo_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
+
+    // Keep this around even though it's unused - research went into how to do it, keeping it ensures that research doesn't need to be repeated
+    #[allow(unused)]
     unsafe fn store_partial_hi_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
 
     // math ops
@@ -180,7 +182,6 @@ pub trait NeonVector: Copy + Debug + Send + Sync {
 }
 
 impl NeonVector for float32x4_t {
-    const SCALAR_PER_VECTOR: usize = 4;
     const COMPLEX_PER_VECTOR: usize = 2;
 
     type ScalarType = f32;
@@ -315,7 +316,6 @@ impl NeonVector for float32x4_t {
 }
 
 impl NeonVector for float64x2_t {
-    const SCALAR_PER_VECTOR: usize = 2;
     const COMPLEX_PER_VECTOR: usize = 1;
 
     type ScalarType = f64;
@@ -518,8 +518,6 @@ pub trait NeonArrayMut<S: NeonNum>: NeonArray<S> + DerefMut {
     unsafe fn store_complex(&mut self, vector: S::VectorType, index: usize);
     // Store the low complex number from a NEON vector to the array.
     unsafe fn store_partial_lo_complex(&mut self, vector: S::VectorType, index: usize);
-    // Store the high complex number from a NEON vector to the array.
-    unsafe fn store_partial_hi_complex(&mut self, vector: S::VectorType, index: usize);
 }
 
 impl<S: NeonNum> NeonArrayMut<S> for &mut [Complex<S>] {
@@ -527,12 +525,6 @@ impl<S: NeonNum> NeonArrayMut<S> for &mut [Complex<S>] {
     unsafe fn store_complex(&mut self, vector: S::VectorType, index: usize) {
         debug_assert!(self.len() >= index + S::VectorType::COMPLEX_PER_VECTOR);
         S::VectorType::store_complex(self.as_mut_ptr().add(index), vector)
-    }
-
-    #[inline(always)]
-    unsafe fn store_partial_hi_complex(&mut self, vector: S::VectorType, index: usize) {
-        debug_assert!(self.len() >= index + 1);
-        S::VectorType::store_partial_hi_complex(self.as_mut_ptr().add(index), vector)
     }
     #[inline(always)]
     unsafe fn store_partial_lo_complex(&mut self, vector: S::VectorType, index: usize) {
@@ -553,10 +545,6 @@ where
     #[inline(always)]
     unsafe fn store_partial_lo_complex(&mut self, vector: T::VectorType, index: usize) {
         self.output.store_partial_lo_complex(vector, index);
-    }
-    #[inline(always)]
-    unsafe fn store_partial_hi_complex(&mut self, vector: T::VectorType, index: usize) {
-        self.output.store_partial_hi_complex(vector, index);
     }
 }
 

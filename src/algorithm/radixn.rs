@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use num_complex::Complex;
 
-use crate::array_utils::{self, factor_transpose, Load, LoadStore, TransposeFactor};
-use crate::common::{fft_error_immut, fft_error_inplace, fft_error_outofplace, RadixFactor};
+use crate::array_utils::{factor_transpose, Load, LoadStore, TransposeFactor};
+use crate::common::RadixFactor;
 use crate::{common::FftNum, twiddles, FftDirection};
 use crate::{Direction, Fft, Length};
 
@@ -159,6 +159,9 @@ impl<T: FftNum> RadixN<T> {
     }
     fn outofplace_scratch_len(&self) -> usize {
         self.outofplace_scratch_len
+    }
+    fn immut_scratch_len(&self) -> usize {
+        self.immut_scratch_len
     }
 
     fn perform_fft_immut(
@@ -329,8 +332,7 @@ impl<T: FftNum> RadixN<T> {
         }
     }
 }
-boilerplate_fft_oop!(RadixN, |this: &RadixN<_>| this.len, |this: &RadixN<_>| this
-    .immut_scratch_len);
+boilerplate_fft_oop!(RadixN, |this: &RadixN<_>| this.len);
 
 #[inline(never)]
 pub(crate) unsafe fn butterfly_2<T: FftNum>(

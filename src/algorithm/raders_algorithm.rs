@@ -6,8 +6,6 @@ use num_traits::Zero;
 use primal_check::miller_rabin;
 use strength_reduce::StrengthReducedUsize;
 
-use crate::array_utils;
-use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::math_utils;
 use crate::{common::FftNum, twiddles, FftDirection};
 use crate::{Direction, Fft, Length};

@@ -16,6 +16,7 @@ use rustfft::{num_traits::Zero, FftDirection};
 
 use rand::distributions::{uniform::SampleUniform, Distribution, Uniform};
 use rand::{rngs::StdRng, SeedableRng};
+use wasm_bindgen_test::wasm_bindgen_test;
 
 /// The seed for the random number generator used to generate
 /// random signals. It's defined here so that we have deterministic
@@ -37,7 +38,6 @@ fn compare_vectors<T: rustfft::FftNum + Float>(vec1: &[Complex<T>], vec2: &[Comp
 
 fn fft_matches_control<T: FftNum + Float>(control: Arc<dyn Fft<T>>, input: &[Complex<T>]) -> bool {
     let mut control_input = input.to_vec();
-    let mut test_input = input.to_vec();
 
     let mut planner = FftPlanner::new();
     let fft = planner.plan_fft(control.len(), control.fft_direction());
@@ -54,14 +54,31 @@ fn fft_matches_control<T: FftNum + Float>(control: Arc<dyn Fft<T>>, input: &[Com
 
     let scratch_max = std::cmp::max(
         control.get_inplace_scratch_len(),
-        fft.get_inplace_scratch_len(),
+        std::cmp::max(
+            fft.get_inplace_scratch_len(),
+            std::cmp::max(
+                fft.get_outofplace_scratch_len(),
+                fft.get_immutable_scratch_len(),
+            ),
+        ),
     );
     let mut scratch = vec![Zero::zero(); scratch_max];
 
     control.process_with_scratch(&mut control_input, &mut scratch);
-    fft.process_with_scratch(&mut test_input, &mut scratch);
 
-    return compare_vectors(&test_input, &control_input);
+    let mut test_output_inplace = input.to_vec();
+    fft.process_with_scratch(&mut test_output_inplace, &mut scratch);
+
+    let mut input_oop = input.to_vec();
+    let mut test_output_oop = input.to_vec();
+    fft.process_outofplace_with_scratch(&mut input_oop, &mut test_output_oop, &mut scratch);
+
+    let mut test_output_immut = input.to_vec();
+    fft.process_immutable_with_scratch(input, &mut test_output_immut, &mut scratch);
+
+    return compare_vectors(&control_input, &test_output_inplace)
+        && compare_vectors(&control_input, &test_output_oop)
+        && compare_vectors(&control_input, &test_output_immut);
 }
 
 fn random_signal<T: FftNum + SampleUniform>(length: usize) -> Vec<Complex<T>> {
@@ -156,6 +173,67 @@ fn test_planned_fft_forward_f64() {
 
 #[test]
 fn test_planned_fft_inverse_f64() {
+    let direction = FftDirection::Inverse;
+    let cache: ControlCache<f64> = ControlCache::new(TEST_MAX, direction);
+
+    for len in 1..TEST_MAX {
+        let control = cache.plan_fft(len);
+        assert_eq!(control.len(), len);
+        assert_eq!(control.fft_direction(), direction);
+
+        let signal = random_signal(len);
+        assert!(fft_matches_control(control, &signal), "length = {}", len);
+    }
+}
+
+#[wasm_bindgen_test]
+fn wasm_test_planned_fft_forward_f32() {
+    let direction = FftDirection::Forward;
+    let cache: ControlCache<f32> = ControlCache::new(TEST_MAX, direction);
+
+    for len in 1..TEST_MAX {
+        println!("len: {len}");
+        let control = cache.plan_fft(len);
+        assert_eq!(control.len(), len);
+        assert_eq!(control.fft_direction(), direction);
+
+        let signal = random_signal(len);
+        assert!(fft_matches_control(control, &signal), "length = {}", len);
+    }
+}
+
+#[wasm_bindgen_test]
+fn wasm_test_planned_fft_inverse_f32() {
+    let direction = FftDirection::Inverse;
+    let cache: ControlCache<f32> = ControlCache::new(TEST_MAX, direction);
+
+    for len in 1..TEST_MAX {
+        let control = cache.plan_fft(len);
+        assert_eq!(control.len(), len);
+        assert_eq!(control.fft_direction(), direction);
+
+        let signal = random_signal(len);
+        assert!(fft_matches_control(control, &signal), "length = {}", len);
+    }
+}
+
+#[wasm_bindgen_test]
+fn wasm_test_planned_fft_forward_f64() {
+    let direction = FftDirection::Forward;
+    let cache: ControlCache<f64> = ControlCache::new(TEST_MAX, direction);
+
+    for len in 1..TEST_MAX {
+        let control = cache.plan_fft(len);
+        assert_eq!(control.len(), len);
+        assert_eq!(control.fft_direction(), direction);
+
+        let signal = random_signal(len);
+        assert!(fft_matches_control(control, &signal), "length = {}", len);
+    }
+}
+
+#[wasm_bindgen_test]
+fn wasm_test_planned_fft_inverse_f64() {
     let direction = FftDirection::Inverse;
     let cache: ControlCache<f64> = ControlCache::new(TEST_MAX, direction);
 

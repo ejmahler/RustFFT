@@ -4,10 +4,7 @@ use std::mem::MaybeUninit;
 
 use num_complex::Complex;
 
-use crate::array_utils;
 use crate::array_utils::DoubleBuf;
-use crate::array_utils::{workaround_transmute, workaround_transmute_mut};
-use crate::common::{fft_error_immut, fft_error_inplace, fft_error_outofplace};
 use crate::{common::FftNum, twiddles};
 use crate::{Direction, Fft, FftDirection, Length};
 
@@ -43,33 +40,17 @@ macro_rules! boilerplate_fft_simd_butterfly {
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                if input.len() < self.len() || output.len() != input.len() {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
-                    return; // Unreachable, because fft_error_immut asserts, but it helps codegen to put it here
-                }
-
-                let result = array_utils::iter_chunks_zipped(
-                    input,
-                    output,
-                    self.len(),
-                    |in_chunk, out_chunk| {
-                        unsafe {
-                            // Specialization workaround: See the comments in FftPlannerAvx::new() for why we have to transmute these slices
-                            let input_slice = workaround_transmute(in_chunk);
-                            let output_slice = workaround_transmute_mut(out_chunk);
-                            self.perform_fft_f32(DoubleBuf {
-                                input: input_slice,
-                                output: output_slice,
-                            });
-                        }
-                    },
-                );
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
+                unsafe {
+                    let simd_input = crate::array_utils::workaround_transmute(input);
+                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
+                    super::avx_fft_helper_immut(
+                        simd_input,
+                        simd_output,
+                        &mut [],
+                        self.len(),
+                        0,
+                        |input, output, _| self.perform_fft_f32(DoubleBuf { input, output }),
+                    );
                 }
             }
             fn process_outofplace_with_scratch(
@@ -78,53 +59,29 @@ macro_rules! boilerplate_fft_simd_butterfly {
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                if input.len() < self.len() || output.len() != input.len() {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
-                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
-                }
-
-                let result = array_utils::iter_chunks_zipped(
-                    input,
-                    output,
-                    self.len(),
-                    |in_chunk, out_chunk| {
-                        unsafe {
-                            // Specialization workaround: See the comments in FftPlannerAvx::new() for why we have to transmute these slices
-                            let input_slice = workaround_transmute(in_chunk);
-                            let output_slice = workaround_transmute_mut(out_chunk);
-                            self.perform_fft_f32(DoubleBuf {
-                                input: input_slice,
-                                output: output_slice,
-                            });
-                        }
-                    },
-                );
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
+                unsafe {
+                    let simd_input = crate::array_utils::workaround_transmute_mut(input);
+                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
+                    super::avx_fft_helper_outofplace(
+                        simd_input,
+                        simd_output,
+                        &mut [],
+                        self.len(),
+                        0,
+                        |input, output, _| self.perform_fft_f32(DoubleBuf { input, output }),
+                    );
                 }
             }
             fn process_with_scratch(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-                if buffer.len() < self.len() {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_inplace(self.len(), buffer.len(), 0, 0);
-                    return; // Unreachable, because fft_error_inplace asserts, but it helps codegen to put it here
-                }
-
-                let result = array_utils::iter_chunks_mut(buffer, self.len(), |chunk| {
-                    unsafe {
-                        // Specialization workaround: See the comments in FftPlannerAvx::new() for why we have to transmute these slices
-                        self.perform_fft_f32(workaround_transmute_mut::<_, Complex<f32>>(chunk));
-                    }
-                });
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_inplace(self.len(), buffer.len(), 0, 0);
+                unsafe {
+                    let simd_buffer = crate::array_utils::workaround_transmute_mut(buffer);
+                    super::avx_fft_helper_inplace(
+                        simd_buffer,
+                        &mut [],
+                        self.len(),
+                        0,
+                        |chunk, _| self.perform_fft_f32(chunk),
+                    )
                 }
             }
             #[inline(always)]
@@ -204,15 +161,6 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                 // Safety: self.transpose() requres the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
                 unsafe { self.row_butterflies(output) };
             }
-
-            #[inline]
-            fn perform_fft_out_of_place(
-                &self,
-                input: &mut [Complex<f32>],
-                output: &mut [Complex<f32>],
-            ) {
-                self.perform_fft_immut(input, output);
-            }
         }
         impl<T: FftNum> Fft<T> for $struct_name<f32> {
             fn process_immutable_with_scratch(
@@ -221,28 +169,17 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                if input.len() < self.len() || output.len() != input.len() {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
-                    return; // Unreachable, because fft_error_immut asserts, but it helps codegen to put it here
-                }
-
-                // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
-                let transmuted_input: &[Complex<f32>] =
-                    unsafe { array_utils::workaround_transmute(input) };
-                let transmuted_output: &mut [Complex<f32>] =
-                    unsafe { array_utils::workaround_transmute_mut(output) };
-                let result = array_utils::iter_chunks_zipped(
-                    transmuted_input,
-                    transmuted_output,
-                    self.len(),
-                    |in_chunk, out_chunk| self.perform_fft_immut(in_chunk, out_chunk),
-                );
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
+                unsafe {
+                    let simd_input = crate::array_utils::workaround_transmute(input);
+                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
+                    super::avx_fft_helper_immut(
+                        simd_input,
+                        simd_output,
+                        &mut [],
+                        self.len(),
+                        0,
+                        |input, output, _| self.perform_fft_immut(input, output),
+                    );
                 }
             }
             fn process_outofplace_with_scratch(
@@ -251,53 +188,30 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                if input.len() < self.len() || output.len() != input.len() {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
-                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
-                }
-
-                // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
-                let transmuted_input: &mut [Complex<f32>] =
-                    unsafe { array_utils::workaround_transmute_mut(input) };
-                let transmuted_output: &mut [Complex<f32>] =
-                    unsafe { array_utils::workaround_transmute_mut(output) };
-                let result = array_utils::iter_chunks_zipped_mut(
-                    transmuted_input,
-                    transmuted_output,
-                    self.len(),
-                    |in_chunk, out_chunk| self.perform_fft_out_of_place(in_chunk, out_chunk),
-                );
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
+                unsafe {
+                    let simd_input = crate::array_utils::workaround_transmute_mut(input);
+                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
+                    super::avx_fft_helper_outofplace(
+                        simd_input,
+                        simd_output,
+                        &mut [],
+                        self.len(),
+                        0,
+                        |input, output, _| self.perform_fft_immut(input, output),
+                    );
                 }
             }
             fn process_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-                let required_scratch = self.len();
-                if scratch.len() < required_scratch || buffer.len() < self.len() {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_inplace(self.len(), buffer.len(), self.len(), scratch.len());
-                    return; // Unreachable, because fft_error_inplace asserts, but it helps codegen to put it here
-                }
-
-                let scratch = &mut scratch[..required_scratch];
-
-                // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
-                let transmuted_buffer: &mut [Complex<f32>] =
-                    unsafe { array_utils::workaround_transmute_mut(buffer) };
-                let transmuted_scratch: &mut [Complex<f32>] =
-                    unsafe { array_utils::workaround_transmute_mut(scratch) };
-                let result = array_utils::iter_chunks_mut(transmuted_buffer, self.len(), |chunk| {
-                    self.perform_fft_inplace(chunk, transmuted_scratch)
-                });
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_inplace(self.len(), buffer.len(), self.len(), scratch.len());
+                unsafe {
+                    let simd_buffer = crate::array_utils::workaround_transmute_mut(buffer);
+                    let simd_scratch = crate::array_utils::workaround_transmute_mut(scratch);
+                    super::avx_fft_helper_inplace(
+                        simd_buffer,
+                        simd_scratch,
+                        self.len(),
+                        self.len(),
+                        |chunk, scratch| self.perform_fft_inplace(chunk, scratch),
+                    )
                 }
             }
             #[inline(always)]

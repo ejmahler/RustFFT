@@ -6,8 +6,7 @@ use crate::algorithm::butterflies::{
     Butterfly1, Butterfly16, Butterfly2, Butterfly32, Butterfly4, Butterfly8,
 };
 use crate::algorithm::radixn::butterfly_4;
-use crate::array_utils::{self, bitreversed_transpose};
-use crate::common::{fft_error_immut, fft_error_inplace, fft_error_outofplace};
+use crate::array_utils::bitreversed_transpose;
 use crate::{common::FftNum, twiddles, FftDirection};
 use crate::{Direction, Fft, Length};
 
@@ -125,8 +124,10 @@ impl<T: FftNum> Radix4<T> {
     fn outofplace_scratch_len(&self) -> usize {
         self.outofplace_scratch_len
     }
+    fn immut_scratch_len(&self) -> usize {
+        self.immut_scratch_len
+    }
 
-    #[inline]
     fn perform_fft_immut(
         &self,
         input: &[Complex<T>],
@@ -201,8 +202,7 @@ impl<T: FftNum> Radix4<T> {
         }
     }
 }
-boilerplate_fft_oop!(Radix4, |this: &Radix4<_>| this.len, |this: &Radix4<_>| this
-    .immut_scratch_len);
+boilerplate_fft_oop!(Radix4, |this: &Radix4<_>| this.len);
 
 #[cfg(test)]
 mod unit_tests {

@@ -5,10 +5,7 @@ use num_complex::Complex;
 
 use crate::{common::FftNum, FftDirection};
 
-use crate::array_utils;
-use crate::array_utils::workaround_transmute_mut;
 use crate::array_utils::DoubleBuf;
-use crate::common::{fft_error_immut, fft_error_inplace, fft_error_outofplace};
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
 
@@ -79,8 +76,7 @@ struct {{this.struct_name_32}}<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_{{../arch.name_snakecase}}_f32_butterfly!({{this.struct_name_32}});
-boilerplate_fft_{{../arch.name_snakecase}}_common_butterfly!({{this.struct_name_32}}, {{this.len}}, |this: &{{this.struct_name_32}}<_>| this.direction);
+boilerplate_fft_{{../arch.name_snakecase}}_f32_butterfly!({{this.struct_name_32}}, {{this.len}}, |this: &{{this.struct_name_32}}<_>| this.direction);
 impl<T: FftNum> {{this.struct_name_32}}<T> {
     /// Safety: The current machine must support the {{../arch.cpu_feature_name}} instruction set
     #[target_feature(enable = "{{../arch.cpu_feature_name}}")]
@@ -134,8 +130,7 @@ struct {{this.struct_name_64}}<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_{{../arch.name_snakecase}}_f64_butterfly!({{this.struct_name_64}});
-boilerplate_fft_{{../arch.name_snakecase}}_common_butterfly!({{this.struct_name_64}}, {{this.len}}, |this: &{{this.struct_name_64}}<_>| this.direction);
+boilerplate_fft_{{../arch.name_snakecase}}_f64_butterfly!({{this.struct_name_64}}, {{this.len}}, |this: &{{this.struct_name_64}}<_>| this.direction);
 impl<T: FftNum> {{this.struct_name_64}}<T> {
     /// Safety: The current machine must support the {{../arch.cpu_feature_name}} instruction set
     #[target_feature(enable = "{{../arch.cpu_feature_name}}")]
