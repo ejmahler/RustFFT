@@ -3,10 +3,7 @@ use num_complex::Complex;
 
 use crate::{common::FftNum, FftDirection};
 
-use crate::array_utils;
-use crate::array_utils::workaround_transmute_mut;
 use crate::array_utils::DoubleBuf;
-use crate::common::{fft_error_immut, fft_error_inplace, fft_error_outofplace};
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
 
@@ -25,107 +22,6 @@ unsafe fn pack_64(a: Complex<f64>) -> float64x2_t {
 
 #[allow(unused)]
 macro_rules! boilerplate_fft_neon_f32_butterfly {
-    ($struct_name:ident) => {
-        impl<T: FftNum> $struct_name<T> {
-            pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
-                self.perform_fft_contiguous(workaround_transmute_mut::<_, Complex<f32>>(buffer));
-            }
-
-            pub(crate) unsafe fn perform_parallel_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
-                self.perform_parallel_fft_contiguous(workaround_transmute_mut::<_, Complex<f32>>(
-                    buffer,
-                ));
-            }
-
-            // Do multiple ffts over a longer vector inplace, called from "process_with_scratch" of Fft trait
-            pub(crate) unsafe fn perform_fft_butterfly_multi(
-                &self,
-                buffer: &mut [Complex<T>],
-            ) -> Result<(), ()> {
-                let len = buffer.len();
-                let alldone = array_utils::iter_chunks_mut(buffer, 2 * self.len(), |chunk| {
-                    self.perform_parallel_fft_butterfly(chunk)
-                });
-                if alldone.is_err() && buffer.len() >= self.len() {
-                    self.perform_fft_butterfly(&mut buffer[len - self.len()..]);
-                }
-                Ok(())
-            }
-
-            pub(crate) unsafe fn perform_oop_fft_butterfly_multi(
-                &self,
-                input: &[Complex<T>],
-                output: &mut [Complex<T>],
-            ) -> Result<(), ()> {
-                let len = input.len();
-                let alldone = array_utils::iter_chunks_zipped(
-                    input,
-                    output,
-                    2 * self.len(),
-                    |in_chunk, out_chunk| {
-                        let input_slice = crate::array_utils::workaround_transmute(in_chunk);
-                        let output_slice = workaround_transmute_mut(out_chunk);
-                        self.perform_parallel_fft_contiguous(DoubleBuf {
-                            input: input_slice,
-                            output: output_slice,
-                        })
-                    },
-                );
-                if alldone.is_err() && input.len() >= self.len() {
-                    let input_slice = crate::array_utils::workaround_transmute(input);
-                    let output_slice = workaround_transmute_mut(output);
-                    self.perform_fft_contiguous(DoubleBuf {
-                        input: &input_slice[len - self.len()..],
-                        output: &mut output_slice[len - self.len()..],
-                    })
-                }
-                Ok(())
-            }
-        }
-    };
-}
-
-macro_rules! boilerplate_fft_neon_f64_butterfly {
-    ($struct_name:ident) => {
-        impl<T: FftNum> $struct_name<T> {
-            // Do a single fft
-            //#[target_feature(enable = "neon")]
-            pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: &mut [Complex<T>]) {
-                self.perform_fft_contiguous(workaround_transmute_mut::<_, Complex<f64>>(buffer));
-            }
-
-            // Do multiple ffts over a longer vector inplace, called from "process_with_scratch" of Fft trait
-            //#[target_feature(enable = "neon")]
-            pub(crate) unsafe fn perform_fft_butterfly_multi(
-                &self,
-                buffer: &mut [Complex<T>],
-            ) -> Result<(), ()> {
-                array_utils::iter_chunks_mut(buffer, self.len(), |chunk| {
-                    self.perform_fft_butterfly(chunk)
-                })
-            }
-
-            // Do multiple ffts over a longer vector outofplace, called from "process_outofplace_with_scratch" of Fft trait
-            pub(crate) unsafe fn perform_oop_fft_butterfly_multi(
-                &self,
-                input: &[Complex<T>],
-                output: &mut [Complex<T>],
-            ) -> Result<(), ()> {
-                array_utils::iter_chunks_zipped(input, output, self.len(), |in_chunk, out_chunk| {
-                    let input_slice = crate::array_utils::workaround_transmute(in_chunk);
-                    let output_slice = workaround_transmute_mut(out_chunk);
-                    self.perform_fft_contiguous(DoubleBuf {
-                        input: input_slice,
-                        output: output_slice,
-                    })
-                })
-            }
-        }
-    };
-}
-
-#[allow(unused)]
-macro_rules! boilerplate_fft_neon_common_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             fn process_immutable_with_scratch(
@@ -134,17 +30,18 @@ macro_rules! boilerplate_fft_neon_common_butterfly {
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                if input.len() < self.len() || output.len() != input.len() {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
-                    return; // Unreachable, because fft_error_immut asserts, but it helps codegen to put it here
-                }
-                let result = unsafe { self.perform_oop_fft_butterfly_multi(input, output) };
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_immut(self.len(), input.len(), output.len(), 0, 0);
+                unsafe {
+                    let simd_input = crate::array_utils::workaround_transmute(input);
+                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
+                    super::neon_common::neon_fft_helper_immut_unroll2x(
+                        simd_input,
+                        simd_output,
+                        self.len(),
+                        |input, output| {
+                            self.perform_parallel_fft_contiguous(DoubleBuf { input, output })
+                        },
+                        |input, output| self.perform_fft_contiguous(DoubleBuf { input, output }),
+                    );
                 }
             }
             fn process_outofplace_with_scratch(
@@ -153,32 +50,110 @@ macro_rules! boilerplate_fft_neon_common_butterfly {
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                if input.len() < self.len() || output.len() != input.len() {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
-                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
-                }
-                let result = unsafe { self.perform_oop_fft_butterfly_multi(input, output) };
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
+                unsafe {
+                    let simd_input = crate::array_utils::workaround_transmute_mut(input);
+                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
+                    super::neon_common::neon_fft_helper_outofplace_unroll2x(
+                        simd_input,
+                        simd_output,
+                        self.len(),
+                        |input, output| {
+                            self.perform_parallel_fft_contiguous(DoubleBuf { input, output })
+                        },
+                        |input, output| self.perform_fft_contiguous(DoubleBuf { input, output }),
+                    );
                 }
             }
             fn process_with_scratch(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-                if buffer.len() < self.len() {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_inplace(self.len(), buffer.len(), 0, 0);
-                    return; // Unreachable, because fft_error_inplace asserts, but it helps codegen to put it here
+                unsafe {
+                    let simd_buffer = crate::array_utils::workaround_transmute_mut(buffer);
+                    super::neon_common::neon_fft_helper_inplace_unroll2x(
+                        simd_buffer,
+                        self.len(),
+                        |chunk| self.perform_parallel_fft_contiguous(chunk),
+                        |chunk| self.perform_fft_contiguous(chunk),
+                    )
                 }
+            }
+            #[inline(always)]
+            fn get_inplace_scratch_len(&self) -> usize {
+                0
+            }
+            #[inline(always)]
+            fn get_outofplace_scratch_len(&self) -> usize {
+                0
+            }
+            #[inline(always)]
+            fn get_immutable_scratch_len(&self) -> usize {
+                0
+            }
+        }
+        impl<T> Length for $struct_name<T> {
+            #[inline(always)]
+            fn len(&self) -> usize {
+                $len
+            }
+        }
+        impl<T> Direction for $struct_name<T> {
+            #[inline(always)]
+            fn fft_direction(&self) -> FftDirection {
+                $direction_fn(self)
+            }
+        }
+    };
+}
 
-                let result = unsafe { self.perform_fft_butterfly_multi(buffer) };
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_inplace(self.len(), buffer.len(), 0, 0);
+macro_rules! boilerplate_fft_neon_f64_butterfly {
+    ($struct_name:ident, $len:expr, $direction_fn:expr) => {
+        impl<T: FftNum> Fft<T> for $struct_name<T> {
+            fn process_immutable_with_scratch(
+                &self,
+                input: &[Complex<T>],
+                output: &mut [Complex<T>],
+                _scratch: &mut [Complex<T>],
+            ) {
+                unsafe {
+                    let simd_input = crate::array_utils::workaround_transmute(input);
+                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
+                    super::neon_common::neon_fft_helper_immut(
+                        simd_input,
+                        simd_output,
+                        &mut [],
+                        self.len(),
+                        0,
+                        |input, output, _| self.perform_fft_contiguous(DoubleBuf { input, output }),
+                    );
+                }
+            }
+            fn process_outofplace_with_scratch(
+                &self,
+                input: &mut [Complex<T>],
+                output: &mut [Complex<T>],
+                _scratch: &mut [Complex<T>],
+            ) {
+                unsafe {
+                    let simd_input = crate::array_utils::workaround_transmute_mut(input);
+                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
+                    super::neon_common::neon_fft_helper_outofplace(
+                        simd_input,
+                        simd_output,
+                        &mut [],
+                        self.len(),
+                        0,
+                        |input, output, _| self.perform_fft_contiguous(DoubleBuf { input, output }),
+                    );
+                }
+            }
+            fn process_with_scratch(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
+                unsafe {
+                    let simd_buffer = crate::array_utils::workaround_transmute_mut(buffer);
+                    super::neon_common::neon_fft_helper_inplace(
+                        simd_buffer,
+                        &mut [],
+                        self.len(),
+                        0,
+                        |chunk, _| self.perform_fft_contiguous(chunk),
+                    )
                 }
             }
             #[inline(always)]
@@ -221,8 +196,7 @@ pub struct NeonF32Butterfly1<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly1);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly1, 1, |this: &NeonF32Butterfly1<_>| this
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly1, 1, |this: &NeonF32Butterfly1<_>| this
     .direction);
 impl<T: FftNum> NeonF32Butterfly1<T> {
     #[inline(always)]
@@ -261,8 +235,7 @@ pub struct NeonF64Butterfly1<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly1);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly1, 1, |this: &NeonF64Butterfly1<_>| this
+boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly1, 1, |this: &NeonF64Butterfly1<_>| this
     .direction);
 impl<T: FftNum> NeonF64Butterfly1<T> {
     #[inline(always)]
@@ -292,8 +265,7 @@ pub struct NeonF32Butterfly2<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly2);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly2, 2, |this: &NeonF32Butterfly2<_>| this
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly2, 2, |this: &NeonF32Butterfly2<_>| this
     .direction);
 impl<T: FftNum> NeonF32Butterfly2<T> {
     #[inline(always)]
@@ -389,8 +361,7 @@ pub struct NeonF64Butterfly2<T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly2);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly2, 2, |this: &NeonF64Butterfly2<_>| this
+boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly2, 2, |this: &NeonF64Butterfly2<_>| this
     .direction);
 impl<T: FftNum> NeonF64Butterfly2<T> {
     #[inline(always)]
@@ -447,8 +418,7 @@ pub struct NeonF32Butterfly3<T> {
     twiddle2im: float32x4_t,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly3);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly3, 3, |this: &NeonF32Butterfly3<_>| this
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly3, 3, |this: &NeonF32Butterfly3<_>| this
     .direction);
 impl<T: FftNum> NeonF32Butterfly3<T> {
     #[inline(always)]
@@ -563,8 +533,7 @@ pub struct NeonF64Butterfly3<T> {
     twiddle2im: float64x2_t,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly3);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly3, 3, |this: &NeonF64Butterfly3<_>| this
+boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly3, 3, |this: &NeonF64Butterfly3<_>| this
     .direction);
 impl<T: FftNum> NeonF64Butterfly3<T> {
     #[inline(always)]
@@ -635,8 +604,7 @@ pub struct NeonF32Butterfly4<T> {
     rotate: Rotate90F32,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly4);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly4, 4, |this: &NeonF32Butterfly4<_>| this
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly4, 4, |this: &NeonF32Butterfly4<_>| this
     .direction);
 impl<T: FftNum> NeonF32Butterfly4<T> {
     #[inline(always)]
@@ -756,8 +724,7 @@ pub struct NeonF64Butterfly4<T> {
     rotate: Rotate90F64,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly4);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly4, 4, |this: &NeonF64Butterfly4<_>| this
+boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly4, 4, |this: &NeonF64Butterfly4<_>| this
     .direction);
 impl<T: FftNum> NeonF64Butterfly4<T> {
     #[inline(always)]
@@ -837,8 +804,7 @@ pub struct NeonF32Butterfly5<T> {
     twiddle2im: float32x4_t,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly5);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly5, 5, |this: &NeonF32Butterfly5<_>| this
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly5, 5, |this: &NeonF32Butterfly5<_>| this
     .direction);
 impl<T: FftNum> NeonF32Butterfly5<T> {
     #[inline(always)]
@@ -1003,8 +969,7 @@ pub struct NeonF64Butterfly5<T> {
     twiddle2im: float64x2_t,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly5);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly5, 5, |this: &NeonF64Butterfly5<_>| this
+boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly5, 5, |this: &NeonF64Butterfly5<_>| this
     .direction);
 impl<T: FftNum> NeonF64Butterfly5<T> {
     #[inline(always)]
@@ -1099,13 +1064,12 @@ impl<T: FftNum> NeonF64Butterfly5<T> {
 //
 
 pub struct NeonF32Butterfly6<T> {
-    direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     bf3: NeonF32Butterfly3<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly6);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly6, 6, |this: &NeonF32Butterfly6<_>| this
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly6, 6, |this: &NeonF32Butterfly6<_>| this
+    .bf3
     .direction);
 impl<T: FftNum> NeonF32Butterfly6<T> {
     #[inline(always)]
@@ -1114,7 +1078,6 @@ impl<T: FftNum> NeonF32Butterfly6<T> {
         let bf3 = NeonF32Butterfly3::new(direction);
 
         Self {
-            direction,
             _phantom: std::marker::PhantomData,
             bf3,
         }
@@ -1216,13 +1179,12 @@ impl<T: FftNum> NeonF32Butterfly6<T> {
 //
 
 pub struct NeonF64Butterfly6<T> {
-    direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     bf3: NeonF64Butterfly3<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly6);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly6, 6, |this: &NeonF64Butterfly6<_>| this
+boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly6, 6, |this: &NeonF64Butterfly6<_>| this
+    .bf3
     .direction);
 impl<T: FftNum> NeonF64Butterfly6<T> {
     #[inline(always)]
@@ -1231,7 +1193,6 @@ impl<T: FftNum> NeonF64Butterfly6<T> {
         let bf3 = NeonF64Butterfly3::new(direction);
 
         Self {
-            direction,
             _phantom: std::marker::PhantomData,
             bf3,
         }
@@ -1286,13 +1247,12 @@ impl<T: FftNum> NeonF64Butterfly6<T> {
 pub struct NeonF32Butterfly8<T> {
     root2: float32x4_t,
     root2_dual: float32x4_t,
-    direction: FftDirection,
     bf4: NeonF32Butterfly4<T>,
     rotate90: Rotate90F32,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly8);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly8, 8, |this: &NeonF32Butterfly8<_>| this
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly8, 8, |this: &NeonF32Butterfly8<_>| this
+    .bf4
     .direction);
 impl<T: FftNum> NeonF32Butterfly8<T> {
     #[inline(always)]
@@ -1310,7 +1270,6 @@ impl<T: FftNum> NeonF32Butterfly8<T> {
         Self {
             root2,
             root2_dual,
-            direction,
             bf4,
             rotate90,
         }
@@ -1419,13 +1378,12 @@ impl<T: FftNum> NeonF32Butterfly8<T> {
 
 pub struct NeonF64Butterfly8<T> {
     root2: float64x2_t,
-    direction: FftDirection,
     bf4: NeonF64Butterfly4<T>,
     rotate90: Rotate90F64,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly8);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly8, 8, |this: &NeonF64Butterfly8<_>| this
+boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly8, 8, |this: &NeonF64Butterfly8<_>| this
+    .bf4
     .direction);
 impl<T: FftNum> NeonF64Butterfly8<T> {
     #[inline(always)]
@@ -1440,7 +1398,6 @@ impl<T: FftNum> NeonF64Butterfly8<T> {
         };
         Self {
             root2,
-            direction,
             bf4,
             rotate90,
         }
@@ -1499,7 +1456,6 @@ impl<T: FftNum> NeonF64Butterfly8<T> {
 //     /_/          |____/_____|_.__/|_|\__|
 //
 pub struct NeonF32Butterfly9<T> {
-    direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     bf3: NeonF32Butterfly3<T>,
     twiddle1: float32x4_t,
@@ -1507,8 +1463,8 @@ pub struct NeonF32Butterfly9<T> {
     twiddle4: float32x4_t,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly9);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly9, 9, |this: &NeonF32Butterfly9<_>| this
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly9, 9, |this: &NeonF32Butterfly9<_>| this
+    .bf3
     .direction);
 impl<T: FftNum> NeonF32Butterfly9<T> {
     #[inline(always)]
@@ -1523,7 +1479,6 @@ impl<T: FftNum> NeonF32Butterfly9<T> {
         let twiddle4 = unsafe { vld1q_f32([tw4.re, tw4.im, tw4.re, tw4.im].as_ptr()) };
 
         Self {
-            direction,
             _phantom: std::marker::PhantomData,
             bf3,
             twiddle1,
@@ -1628,7 +1583,6 @@ impl<T: FftNum> NeonF32Butterfly9<T> {
 //
 
 pub struct NeonF64Butterfly9<T> {
-    direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     bf3: NeonF64Butterfly3<T>,
     twiddle1: float64x2_t,
@@ -1636,8 +1590,8 @@ pub struct NeonF64Butterfly9<T> {
     twiddle4: float64x2_t,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly9);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly9, 9, |this: &NeonF64Butterfly9<_>| this
+boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly9, 9, |this: &NeonF64Butterfly9<_>| this
+    .bf3
     .direction);
 impl<T: FftNum> NeonF64Butterfly9<T> {
     #[inline(always)]
@@ -1652,7 +1606,6 @@ impl<T: FftNum> NeonF64Butterfly9<T> {
         let twiddle4 = unsafe { vld1q_f64([tw4.re, tw4.im].as_ptr()) };
 
         Self {
-            direction,
             _phantom: std::marker::PhantomData,
             bf3,
             twiddle1,
@@ -1703,13 +1656,12 @@ impl<T: FftNum> NeonF64Butterfly9<T> {
 //
 
 pub struct NeonF32Butterfly10<T> {
-    direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     bf5: NeonF32Butterfly5<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly10);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly10, 10, |this: &NeonF32Butterfly10<_>| this
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly10, 10, |this: &NeonF32Butterfly10<_>| this
+    .bf5
     .direction);
 impl<T: FftNum> NeonF32Butterfly10<T> {
     #[inline(always)]
@@ -1717,7 +1669,6 @@ impl<T: FftNum> NeonF32Butterfly10<T> {
         assert_f32::<T>();
         let bf5 = NeonF32Butterfly5::new(direction);
         Self {
-            direction,
             _phantom: std::marker::PhantomData,
             bf5,
         }
@@ -1820,14 +1771,13 @@ impl<T: FftNum> NeonF32Butterfly10<T> {
 //
 
 pub struct NeonF64Butterfly10<T> {
-    direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     bf2: NeonF64Butterfly2<T>,
     bf5: NeonF64Butterfly5<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly10);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly10, 10, |this: &NeonF64Butterfly10<_>| this
+boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly10, 10, |this: &NeonF64Butterfly10<_>| this
+    .bf5
     .direction);
 impl<T: FftNum> NeonF64Butterfly10<T> {
     #[inline(always)]
@@ -1836,7 +1786,6 @@ impl<T: FftNum> NeonF64Butterfly10<T> {
         let bf2 = NeonF64Butterfly2::new(direction);
         let bf5 = NeonF64Butterfly5::new(direction);
         Self {
-            direction,
             _phantom: std::marker::PhantomData,
             bf2,
             bf5,
@@ -1889,14 +1838,13 @@ impl<T: FftNum> NeonF64Butterfly10<T> {
 //
 
 pub struct NeonF32Butterfly12<T> {
-    direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     bf3: NeonF32Butterfly3<T>,
     bf4: NeonF32Butterfly4<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly12);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly12, 12, |this: &NeonF32Butterfly12<_>| this
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly12, 12, |this: &NeonF32Butterfly12<_>| this
+    .bf4
     .direction);
 impl<T: FftNum> NeonF32Butterfly12<T> {
     #[inline(always)]
@@ -1905,7 +1853,6 @@ impl<T: FftNum> NeonF32Butterfly12<T> {
         let bf3 = NeonF32Butterfly3::new(direction);
         let bf4 = NeonF32Butterfly4::new(direction);
         Self {
-            direction,
             _phantom: std::marker::PhantomData,
             bf3,
             bf4,
@@ -2026,14 +1973,13 @@ impl<T: FftNum> NeonF32Butterfly12<T> {
 //
 
 pub struct NeonF64Butterfly12<T> {
-    direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     bf3: NeonF64Butterfly3<T>,
     bf4: NeonF64Butterfly4<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly12);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly12, 12, |this: &NeonF64Butterfly12<_>| this
+boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly12, 12, |this: &NeonF64Butterfly12<_>| this
+    .bf4
     .direction);
 impl<T: FftNum> NeonF64Butterfly12<T> {
     #[inline(always)]
@@ -2042,7 +1988,6 @@ impl<T: FftNum> NeonF64Butterfly12<T> {
         let bf3 = NeonF64Butterfly3::new(direction);
         let bf4 = NeonF64Butterfly4::new(direction);
         Self {
-            direction,
             _phantom: std::marker::PhantomData,
             bf3,
             bf4,
@@ -2095,14 +2040,13 @@ impl<T: FftNum> NeonF64Butterfly12<T> {
 //  |_|____/          |____/_____|_.__/|_|\__|
 //
 pub struct NeonF32Butterfly15<T> {
-    direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     bf3: NeonF32Butterfly3<T>,
     bf5: NeonF32Butterfly5<T>,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly15);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly15, 15, |this: &NeonF32Butterfly15<_>| this
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly15, 15, |this: &NeonF32Butterfly15<_>| this
+    .bf3
     .direction);
 impl<T: FftNum> NeonF32Butterfly15<T> {
     #[inline(always)]
@@ -2111,7 +2055,6 @@ impl<T: FftNum> NeonF32Butterfly15<T> {
         let bf3 = NeonF32Butterfly3::new(direction);
         let bf5 = NeonF32Butterfly5::new(direction);
         Self {
-            direction,
             _phantom: std::marker::PhantomData,
             bf3,
             bf5,
@@ -2231,14 +2174,13 @@ impl<T: FftNum> NeonF32Butterfly15<T> {
 //
 
 pub struct NeonF64Butterfly15<T> {
-    direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     bf3: NeonF64Butterfly3<T>,
     bf5: NeonF64Butterfly5<T>,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly15);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly15, 15, |this: &NeonF64Butterfly15<_>| this
+boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly15, 15, |this: &NeonF64Butterfly15<_>| this
+    .bf3
     .direction);
 impl<T: FftNum> NeonF64Butterfly15<T> {
     #[inline(always)]
@@ -2247,7 +2189,6 @@ impl<T: FftNum> NeonF64Butterfly15<T> {
         let bf3 = NeonF64Butterfly3::new(direction);
         let bf5 = NeonF64Butterfly5::new(direction);
         Self {
-            direction,
             _phantom: std::marker::PhantomData,
             bf3,
             bf5,
@@ -2310,8 +2251,7 @@ pub struct NeonF32Butterfly16<T> {
     twiddle9: float32x4_t,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly16);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly16, 16, |this: &NeonF32Butterfly16<_>| this
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly16, 16, |this: &NeonF32Butterfly16<_>| this
     .bf4
     .direction);
 impl<T: FftNum> NeonF32Butterfly16<T> {
@@ -2477,8 +2417,7 @@ pub struct NeonF64Butterfly16<T> {
     twiddle9: float64x2_t,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly16);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly16, 16, |this: &NeonF64Butterfly16<_>| this
+boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly16, 16, |this: &NeonF64Butterfly16<_>| this
     .bf4
     .direction);
 impl<T: FftNum> NeonF64Butterfly16<T> {
@@ -2586,8 +2525,7 @@ pub struct NeonF32Butterfly24<T> {
     twiddle10: float32x4_t,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly24);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly24, 24, |this: &NeonF32Butterfly24<_>| this
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly24, 24, |this: &NeonF32Butterfly24<_>| this
     .bf4
     .direction);
 impl<T: FftNum> NeonF32Butterfly24<T> {
@@ -2791,8 +2729,7 @@ pub struct NeonF64Butterfly24<T> {
     twiddle10: float64x2_t,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly24);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly24, 24, |this: &NeonF64Butterfly24<_>| this
+boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly24, 24, |this: &NeonF64Butterfly24<_>| this
     .bf4
     .direction);
 impl<T: FftNum> NeonF64Butterfly24<T> {
@@ -2924,8 +2861,7 @@ pub struct NeonF32Butterfly32<T> {
     twiddle21: float32x4_t,
 }
 
-boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly32);
-boilerplate_fft_neon_common_butterfly!(NeonF32Butterfly32, 32, |this: &NeonF32Butterfly32<_>| this
+boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly32, 32, |this: &NeonF32Butterfly32<_>| this
     .bf8
     .bf4
     .direction);
@@ -3166,8 +3102,7 @@ pub struct NeonF64Butterfly32<T> {
     twiddle21: float64x2_t,
 }
 
-boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly32);
-boilerplate_fft_neon_common_butterfly!(NeonF64Butterfly32, 32, |this: &NeonF64Butterfly32<_>| this
+boilerplate_fft_neon_f64_butterfly!(NeonF64Butterfly32, 32, |this: &NeonF64Butterfly32<_>| this
     .bf8
     .bf4
     .direction);
