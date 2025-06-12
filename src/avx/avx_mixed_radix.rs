@@ -36,7 +36,11 @@ macro_rules! boilerplate_mixedradix {
         }
 
         #[target_feature(enable = "avx", enable = "fma")]
-        fn perform_fft_inplace(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        unsafe fn perform_fft_inplace(
+            &self,
+            buffer: &mut [Complex<T>],
+            scratch: &mut [Complex<T>],
+        ) {
             // Perform the column FFTs
             // Safety: self.perform_column_butterflies() requres the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't available
             unsafe {
