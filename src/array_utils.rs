@@ -150,15 +150,15 @@ mod unit_tests {
 // Since this is duplicated into every FFT algorithm we provide, this is tuned to reduce code size as much as possible, with a secondary focus being on ease of implementation
 pub fn validate_and_iter<T>(
     mut buffer: &mut [T],
-    mut scratch: &mut [T],
+    scratch: &mut [T],
     chunk_size: usize,
     required_scratch: usize,
     mut chunk_fn: impl FnMut(&mut [T], &mut [T]),
 ) -> Result<(), ()> {
-    match scratch.split_at_mut_checked(required_scratch) {
-        Some((clipped, _)) => scratch = clipped,
-        None => return Err(()),
-    };
+    if scratch.len() < required_scratch {
+        return Err(());
+    }
+    let scratch = &mut scratch[..required_scratch];
 
     // Now that we know the two slices are the same length, loop over each one, splicing off chunk_size at a time, and calling chunk_fn on each
     while buffer.len() >= chunk_size {
@@ -212,15 +212,15 @@ pub fn validate_and_iter_unroll2x<T>(
 pub fn validate_and_zip<T>(
     mut buffer1: &[T],
     mut buffer2: &mut [T],
-    mut scratch: &mut [T],
+    scratch: &mut [T],
     chunk_size: usize,
     required_scratch: usize,
     mut chunk_fn: impl FnMut(&[T], &mut [T], &mut [T]),
 ) -> Result<(), ()> {
-    match scratch.split_at_mut_checked(required_scratch) {
-        Some((clipped, _)) => scratch = clipped,
-        None => return Err(()),
-    };
+    if scratch.len() < required_scratch {
+        return Err(());
+    }
+    let scratch = &mut scratch[..required_scratch];
 
     if buffer1.len() != buffer2.len() {
         return Err(());
@@ -293,15 +293,15 @@ pub fn validate_and_zip_unroll2x<T>(
 pub fn validate_and_zip_mut<T>(
     mut buffer1: &mut [T],
     mut buffer2: &mut [T],
-    mut scratch: &mut [T],
+    scratch: &mut [T],
     chunk_size: usize,
     required_scratch: usize,
     mut chunk_fn: impl FnMut(&mut [T], &mut [T], &mut [T]),
 ) -> Result<(), ()> {
-    match scratch.split_at_mut_checked(required_scratch) {
-        Some((clipped, _)) => scratch = clipped,
-        None => return Err(()),
-    };
+    if scratch.len() < required_scratch {
+        return Err(());
+    }
+    let scratch = &mut scratch[..required_scratch];
 
     if buffer1.len() != buffer2.len() {
         return Err(());
