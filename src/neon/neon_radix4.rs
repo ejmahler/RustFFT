@@ -3,8 +3,7 @@ use num_complex::Complex;
 use std::any::TypeId;
 use std::sync::Arc;
 
-use crate::array_utils::{self, bitreversed_transpose, workaround_transmute_mut};
-use crate::common::{fft_error_inplace, fft_error_outofplace};
+use crate::array_utils::{bitreversed_transpose, workaround_transmute_mut};
 use crate::{common::FftNum, FftDirection};
 use crate::{Direction, Fft, Length};
 
@@ -83,8 +82,7 @@ impl<N: NeonNum, T: FftNum> NeonRadix4<N, T> {
         }
     }
 
-    //#[target_feature(enable = "neon")]
-    unsafe fn perform_fft_out_of_place(
+    unsafe fn perform_fft_immut(
         &self,
         input: &[Complex<T>],
         output: &mut [Complex<T>],
@@ -125,6 +123,16 @@ impl<N: NeonNum, T: FftNum> NeonRadix4<N, T> {
 
             cross_fft_len *= ROW_COUNT;
         }
+    }
+
+    //#[target_feature(enable = "neon")]
+    unsafe fn perform_fft_out_of_place(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        _scratch: &mut [Complex<T>],
+    ) {
+        self.perform_fft_immut(input, output, _scratch);
     }
 }
 boilerplate_fft_neon_oop!(NeonRadix4, |this: &NeonRadix4<_, _>| this.len);

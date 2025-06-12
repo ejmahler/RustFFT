@@ -5,7 +5,6 @@ use num_complex::Complex;
 use num_integer::div_ceil;
 
 use crate::array_utils;
-use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::{Direction, Fft, FftDirection, FftNum, Length};
 
 use super::{AvxNum, CommonSimdData};
@@ -36,8 +35,12 @@ macro_rules! boilerplate_mixedradix {
             }
         }
 
-        #[inline]
-        fn perform_fft_inplace(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        #[target_feature(enable = "avx", enable = "fma")]
+        unsafe fn perform_fft_inplace(
+            &self,
+            buffer: &mut [Complex<T>],
+            scratch: &mut [Complex<T>],
+        ) {
             // Perform the column FFTs
             // Safety: self.perform_column_butterflies() requres the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't available
             unsafe {
@@ -69,20 +72,53 @@ macro_rules! boilerplate_mixedradix {
             }
         }
 
-        #[inline]
-        fn perform_fft_out_of_place(
+        #[target_feature(enable = "avx", enable = "fma")]
+        unsafe fn perform_fft_immut(
+            &self,
+            input: &[Complex<T>],
+            output: &mut [Complex<T>],
+            scratch: &mut [Complex<T>],
+        ) {
+            // Perform the column FFTs
+            let (scratch, inner_scratch) = scratch.split_at_mut(input.len());
+            {
+                // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
+                let transmuted_input: &[Complex<A>] = array_utils::workaround_transmute(input);
+                let transmuted_output: &mut [Complex<A>] =
+                    array_utils::workaround_transmute_mut(scratch);
+
+                self.perform_column_butterflies_immut(transmuted_input, transmuted_output);
+            }
+
+            // process the row FFTs. If extra scratch was provided, pass it in. Otherwise, use the output.
+            self.common_data
+                .inner_fft
+                .process_with_scratch(scratch, inner_scratch);
+
+            // Transpose
+            {
+                // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
+                let transmuted_input: &mut [Complex<A>] =
+                    array_utils::workaround_transmute_mut(scratch);
+                let transmuted_output: &mut [Complex<A>] =
+                    array_utils::workaround_transmute_mut(output);
+
+                self.transpose(transmuted_input, transmuted_output)
+            }
+        }
+
+        #[target_feature(enable = "avx", enable = "fma")]
+        unsafe fn perform_fft_out_of_place(
             &self,
             input: &mut [Complex<T>],
             output: &mut [Complex<T>],
             scratch: &mut [Complex<T>],
         ) {
             // Perform the column FFTs
-            // Safety: self.perform_column_butterflies() requires the "avx" and "fma" instruction sets, and we return Err() in our constructor if the instructions aren't available
-            unsafe {
+            {
                 // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
                 let transmuted_input: &mut [Complex<A>] =
                     array_utils::workaround_transmute_mut(input);
-
                 self.perform_column_butterflies(transmuted_input);
             }
 
@@ -97,8 +133,7 @@ macro_rules! boilerplate_mixedradix {
                 .process_with_scratch(input, inner_scratch);
 
             // Transpose
-            // Safety: self.transpose() requires the "avx" instruction set, and we return Err() in our constructor if the instructions aren't available
-            unsafe {
+            {
                 // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
                 let transmuted_input: &mut [Complex<A>] =
                     array_utils::workaround_transmute_mut(input);
@@ -138,11 +173,13 @@ macro_rules! mixedradix_gen_data {
 
         let inner_outofplace_scratch = $inner_fft.get_outofplace_scratch_len();
         let inner_inplace_scratch = $inner_fft.get_inplace_scratch_len();
+        let immut_scratch_len = len + $inner_fft.get_inplace_scratch_len();
 
         CommonSimdData {
             twiddles: twiddles.into_boxed_slice(),
             inplace_scratch_len: len + inner_outofplace_scratch,
             outofplace_scratch_len: if inner_inplace_scratch > len { inner_inplace_scratch } else { 0 },
+            immut_scratch_len,
             inner_fft: $inner_fft,
             len,
             direction,
@@ -152,6 +189,124 @@ macro_rules! mixedradix_gen_data {
 
 macro_rules! mixedradix_column_butterflies {
     ($row_count: expr, $butterfly_fn: expr, $butterfly_fn_lo: expr) => {
+        #[target_feature(enable = "avx", enable = "fma")]
+        unsafe fn perform_column_butterflies_immut(
+            &self,
+            input: impl AvxArray<A>,
+            mut buffer: impl AvxArrayMut<A>,
+        ) {
+            // How many rows this FFT has, ie 2 for 2xn, 4 for 4xn, etc
+            const ROW_COUNT: usize = $row_count;
+            const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
+
+            let len_per_row = self.len() / ROW_COUNT;
+            let chunk_count = len_per_row / A::VectorType::COMPLEX_PER_VECTOR;
+
+            // process the column FFTs
+            for (c, twiddle_chunk) in self
+                .common_data
+                .twiddles
+                .chunks_exact(TWIDDLES_PER_COLUMN)
+                .take(chunk_count)
+                .enumerate()
+            {
+                let index_base = c * A::VectorType::COMPLEX_PER_VECTOR;
+
+                // Load columns from the input into registers
+                let mut columns = [AvxVector::zero(); ROW_COUNT];
+                for i in 0..ROW_COUNT {
+                    columns[i] = input.load_complex(index_base + len_per_row * i);
+                }
+
+                // apply our butterfly function down the columns
+                let output = $butterfly_fn(columns, self);
+
+                // always write the first row directly back without twiddles
+                buffer.store_complex(output[0], index_base);
+
+                // for every other row, apply twiddle factors and then write back to memory
+                for i in 1..ROW_COUNT {
+                    let twiddle = twiddle_chunk[i - 1];
+                    let output = AvxVector::mul_complex(twiddle, output[i]);
+                    buffer.store_complex(output, index_base + len_per_row * i);
+                }
+            }
+
+            // finally, we might have a remainder chunk
+            // Normally, we can fit COMPLEX_PER_VECTOR complex numbers into an AVX register, but we only have `partial_remainder` columns left, so we need special logic to handle these final columns
+            let partial_remainder = len_per_row % A::VectorType::COMPLEX_PER_VECTOR;
+            if partial_remainder > 0 {
+                let partial_remainder_base = chunk_count * A::VectorType::COMPLEX_PER_VECTOR;
+                let partial_remainder_twiddle_base =
+                    self.common_data.twiddles.len() - TWIDDLES_PER_COLUMN;
+                let final_twiddle_chunk =
+                    &self.common_data.twiddles[partial_remainder_twiddle_base..];
+
+                if partial_remainder > 2 {
+                    // Load 3 columns into full AVX vectors to process our remainder
+                    let mut columns = [AvxVector::zero(); ROW_COUNT];
+                    for i in 0..ROW_COUNT {
+                        columns[i] =
+                            input.load_partial3_complex(partial_remainder_base + len_per_row * i);
+                    }
+
+                    // apply our butterfly function down the columns
+                    let mid = $butterfly_fn(columns, self);
+
+                    // always write the first row without twiddles
+                    buffer.store_partial3_complex(mid[0], partial_remainder_base);
+
+                    // for the remaining rows, apply twiddle factors and then write back to memory
+                    for i in 1..ROW_COUNT {
+                        let twiddle = final_twiddle_chunk[i - 1];
+                        let output = AvxVector::mul_complex(twiddle, mid[i]);
+                        buffer.store_partial3_complex(
+                            output,
+                            partial_remainder_base + len_per_row * i,
+                        );
+                    }
+                } else {
+                    // Load 1 or 2 columns into half vectors to process our remainder. Thankfully, the compiler is smart enough to eliminate this branch on f64, since the partial remainder can only possibly be 1
+                    let mut columns = [AvxVector::zero(); ROW_COUNT];
+                    if partial_remainder == 1 {
+                        for i in 0..ROW_COUNT {
+                            columns[i] = input
+                                .load_partial1_complex(partial_remainder_base + len_per_row * i);
+                        }
+                    } else {
+                        for i in 0..ROW_COUNT {
+                            columns[i] = input
+                                .load_partial2_complex(partial_remainder_base + len_per_row * i);
+                        }
+                    }
+
+                    // apply our butterfly function down the columns
+                    let mut mid = $butterfly_fn_lo(columns, self);
+
+                    // apply twiddle factors
+                    for i in 1..ROW_COUNT {
+                        mid[i] = AvxVector::mul_complex(final_twiddle_chunk[i - 1].lo(), mid[i]);
+                    }
+
+                    // store output
+                    if partial_remainder == 1 {
+                        for i in 0..ROW_COUNT {
+                            buffer.store_partial1_complex(
+                                mid[i],
+                                partial_remainder_base + len_per_row * i,
+                            );
+                        }
+                    } else {
+                        for i in 0..ROW_COUNT {
+                            buffer.store_partial2_complex(
+                                mid[i],
+                                partial_remainder_base + len_per_row * i,
+                            );
+                        }
+                    }
+                }
+            }
+        }
         #[target_feature(enable = "avx", enable = "fma")]
         unsafe fn perform_column_butterflies(&self, mut buffer: impl AvxArrayMut<A>) {
             // How many rows this FFT has, ie 2 for 2xn, 4 for 4xn, etc
@@ -842,6 +997,127 @@ impl<A: AvxNum, T: FftNum> MixedRadix16xnAvx<A, T> {
                     );
                 }
                 3 => {
+                    column_butterfly16_loadfn!(
+                        |index| buffer
+                            .load_partial3_complex(partial_remainder_base + len_per_row * index),
+                        |mut data, index| {
+                            if index > 0 {
+                                data = AvxVector::mul_complex(data, final_twiddle_chunk[index - 1]);
+                            }
+                            buffer.store_partial3_complex(
+                                data,
+                                partial_remainder_base + len_per_row * index,
+                            )
+                        },
+                        self.twiddles_butterfly16,
+                        self.twiddles_butterfly4
+                    );
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+    #[target_feature(enable = "avx", enable = "fma")]
+    unsafe fn perform_column_butterflies_immut(
+        &self,
+        input: impl AvxArray<A>,
+        mut buffer: impl AvxArrayMut<A>,
+    ) {
+        // How many rows this FFT has, ie 2 for 2xn, 4 for 4xn, etc
+        const ROW_COUNT: usize = 16;
+        const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
+
+        let len_per_row = self.len() / ROW_COUNT;
+        let chunk_count = len_per_row / A::VectorType::COMPLEX_PER_VECTOR;
+
+        // process the column FFTs
+        for (c, twiddle_chunk) in self
+            .common_data
+            .twiddles
+            .chunks_exact(TWIDDLES_PER_COLUMN)
+            .take(chunk_count)
+            .enumerate()
+        {
+            let index_base = c * A::VectorType::COMPLEX_PER_VECTOR;
+
+            column_butterfly16_loadfn!(
+                |index| input.load_complex(index_base + len_per_row * index),
+                |mut data, index| {
+                    if index > 0 {
+                        data = AvxVector::mul_complex(data, twiddle_chunk[index - 1]);
+                    }
+                    buffer.store_complex(data, index_base + len_per_row * index)
+                },
+                self.twiddles_butterfly16,
+                self.twiddles_butterfly4
+            );
+        }
+
+        // finally, we might have a single partial chunk.
+        // Normally, we can fit 4 complex numbers into an AVX register, but we only have `partial_remainder` columns left, so we need special logic to handle these final columns
+        let partial_remainder = len_per_row % A::VectorType::COMPLEX_PER_VECTOR;
+        if partial_remainder > 0 {
+            let partial_remainder_base = chunk_count * A::VectorType::COMPLEX_PER_VECTOR;
+            let partial_remainder_twiddle_base =
+                self.common_data.twiddles.len() - TWIDDLES_PER_COLUMN;
+            let final_twiddle_chunk = &self.common_data.twiddles[partial_remainder_twiddle_base..];
+
+            match partial_remainder {
+                1 => {
+                    for c in 0..self.len() / len_per_row {
+                        let cs = c * len_per_row + len_per_row - partial_remainder;
+                        buffer.store_partial1_complex(input.load_partial1_complex(cs), cs);
+                    }
+                    column_butterfly16_loadfn!(
+                        |index| buffer
+                            .load_partial1_complex(partial_remainder_base + len_per_row * index),
+                        |mut data, index| {
+                            if index > 0 {
+                                let twiddle: A::VectorType = final_twiddle_chunk[index - 1];
+                                data = AvxVector::mul_complex(data, twiddle.lo());
+                            }
+                            buffer.store_partial1_complex(
+                                data,
+                                partial_remainder_base + len_per_row * index,
+                            )
+                        },
+                        [
+                            self.twiddles_butterfly16[0].lo(),
+                            self.twiddles_butterfly16[1].lo()
+                        ],
+                        self.twiddles_butterfly4.lo()
+                    );
+                }
+                2 => {
+                    for c in 0..self.len() / len_per_row {
+                        let cs = c * len_per_row + len_per_row - partial_remainder;
+                        buffer.store_partial2_complex(input.load_partial2_complex(cs), cs);
+                    }
+                    column_butterfly16_loadfn!(
+                        |index| buffer
+                            .load_partial2_complex(partial_remainder_base + len_per_row * index),
+                        |mut data, index| {
+                            if index > 0 {
+                                let twiddle: A::VectorType = final_twiddle_chunk[index - 1];
+                                data = AvxVector::mul_complex(data, twiddle.lo());
+                            }
+                            buffer.store_partial2_complex(
+                                data,
+                                partial_remainder_base + len_per_row * index,
+                            )
+                        },
+                        [
+                            self.twiddles_butterfly16[0].lo(),
+                            self.twiddles_butterfly16[1].lo()
+                        ],
+                        self.twiddles_butterfly4.lo()
+                    );
+                }
+                3 => {
+                    for c in 0..self.len() / len_per_row {
+                        let cs = c * len_per_row + len_per_row - partial_remainder;
+                        buffer.store_partial3_complex(input.load_partial3_complex(cs), cs);
+                    }
                     column_butterfly16_loadfn!(
                         |index| buffer
                             .load_partial3_complex(partial_remainder_base + len_per_row * index),

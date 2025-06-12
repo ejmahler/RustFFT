@@ -237,7 +237,6 @@ pub struct Rotation90<V: WasmVector>(V);
 
 // A trait to hold the BVectorType and COMPLEX_PER_VECTOR associated data
 pub trait WasmVector: Copy + Debug + Send + Sync {
-    const SCALAR_PER_VECTOR: usize;
     const COMPLEX_PER_VECTOR: usize;
 
     type ScalarType: WasmNum<VectorType = Self>;
@@ -252,6 +251,9 @@ pub trait WasmVector: Copy + Debug + Send + Sync {
     // stores of complex numbers
     unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
     unsafe fn store_partial_lo_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
+
+    // Keep this around even though it's unused - research went into how to do it, keeping it ensures that research doesn't need to be repeated
+    #[allow(unused)]
     unsafe fn store_partial_hi_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
 
     // math ops
@@ -287,7 +289,6 @@ pub trait WasmVector: Copy + Debug + Send + Sync {
 }
 
 impl WasmVector for WasmVector32 {
-    const SCALAR_PER_VECTOR: usize = 4;
     const COMPLEX_PER_VECTOR: usize = 2;
 
     type ScalarType = f32;
@@ -423,7 +424,6 @@ impl WasmVector for WasmVector32 {
 }
 
 impl WasmVector for WasmVector64 {
-    const SCALAR_PER_VECTOR: usize = 2;
     const COMPLEX_PER_VECTOR: usize = 1;
 
     type ScalarType = f64;
@@ -559,22 +559,22 @@ impl WasmVector for WasmVector64 {
     }
 }
 
-// A trait to handle reading from an array of complex floats into SSE vectors.
-// SSE works with 128-bit vectors, meaning a vector can hold two complex f32,
+// A trait to handle reading from an array of complex floats into Wasm SIMD vectors.
+// Wasm SIMD works with 128-bit vectors, meaning a vector can hold two complex f32,
 // or a single complex f64.
 pub trait WasmSimdArray<S: WasmNum>: Deref {
-    // Load complex numbers from the array to fill a SSE vector.
+    // Load complex numbers from the array to fill a Wasm SIMD vector.
     unsafe fn load_complex_v128(&self, index: usize) -> v128;
-    // Load a single complex number from the array into a SSE vector, setting the unused elements to zero.
+    // Load a single complex number from the array into a Wasm SIMD vector, setting the unused elements to zero.
     unsafe fn load_partial_lo_complex_v128(&self, index: usize) -> v128;
-    // Load a single complex number from the array, and copy it to all elements of a SSE vector.
+    // Load a single complex number from the array, and copy it to all elements of a Wasm SIMD vector.
     unsafe fn load1_complex_v128(&self, index: usize) -> v128;
 
-    // Load complex numbers from the array to fill a SSE vector.
+    // Load complex numbers from the array to fill a Wasm SIMD vector.
     unsafe fn load_complex(&self, index: usize) -> S::VectorType;
-    // Load a single complex number from the array into a SSE vector, setting the unused elements to zero.
+    // Load a single complex number from the array into a Wasm SIMD vector, setting the unused elements to zero.
     unsafe fn load_partial_lo_complex(&self, index: usize) -> S::VectorType;
-    // Load a single complex number from the array, and copy it to all elements of a SSE vector.
+    // Load a single complex number from the array, and copy it to all elements of a Wasm SIMD vector.
     unsafe fn load1_complex(&self, index: usize) -> S::VectorType;
 }
 
@@ -684,16 +684,14 @@ where
     }
 }
 
-// A trait to handle writing to an array of complex floats from SSE vectors.
-// SSE works with 128-bit vectors, meaning a vector can hold two complex f32,
+// A trait to handle writing to an array of complex floats from Wasm SIMD vectors.
+// Wasm SIMD works with 128-bit vectors, meaning a vector can hold two complex f32,
 // or a single complex f64.
 pub trait WasmSimdArrayMut<S: WasmNum>: WasmSimdArray<S> + DerefMut {
     // Store all complex numbers from a SSE vector to the array.
     unsafe fn store_complex_v128(&mut self, vector: v128, index: usize);
     // Store the low complex number from a SSE vector to the array.
     unsafe fn store_partial_lo_complex_v128(&mut self, vector: v128, index: usize);
-    // Store the high complex number from a SSE vector to the array.
-    unsafe fn store_partial_hi_complex_v128(&mut self, vector: v128, index: usize);
 
     // Store all complex numbers from a SSE vector to the array.
     unsafe fn store_complex(&mut self, vector: S::VectorType, index: usize);
@@ -711,11 +709,6 @@ impl<S: WasmNum> WasmSimdArrayMut<S> for &mut [Complex<S>] {
     unsafe fn store_partial_lo_complex_v128(&mut self, vector: v128, index: usize) {
         debug_assert!(self.len() >= index + 1);
         S::VectorType::store_partial_lo_complex(self.as_mut_ptr().add(index), S::wrap(vector))
-    }
-    #[inline(always)]
-    unsafe fn store_partial_hi_complex_v128(&mut self, vector: v128, index: usize) {
-        debug_assert!(self.len() >= index + 1);
-        S::VectorType::store_partial_hi_complex(self.as_mut_ptr().add(index), S::wrap(vector))
     }
 
     #[inline(always)]
@@ -742,10 +735,6 @@ where
     #[inline(always)]
     unsafe fn store_partial_lo_complex_v128(&mut self, vector: v128, index: usize) {
         self.output.store_partial_lo_complex_v128(vector, index);
-    }
-    #[inline(always)]
-    unsafe fn store_partial_hi_complex_v128(&mut self, vector: v128, index: usize) {
-        self.output.store_partial_hi_complex_v128(vector, index);
     }
 
     #[inline(always)]

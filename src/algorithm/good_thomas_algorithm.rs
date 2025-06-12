@@ -7,7 +7,6 @@ use strength_reduce::StrengthReducedUsize;
 use transpose;
 
 use crate::array_utils;
-use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::{common::FftNum, FftDirection};
 use crate::{Direction, Fft, Length};
 
@@ -50,6 +49,7 @@ pub struct GoodThomasAlgorithm<T> {
 
     inplace_scratch_len: usize,
     outofplace_scratch_len: usize,
+    immut_scratch_len: usize,
 
     len: usize,
     direction: FftDirection,
@@ -117,6 +117,11 @@ impl<T: FftNum> GoodThomasAlgorithm<T> {
                 height_outofplace_scratch,
             );
 
+        let immut_scratch_len = max(
+            width_fft.get_inplace_scratch_len(),
+            len + height_fft.get_inplace_scratch_len(),
+        );
+
         Self {
             width,
             width_size_fft: width_fft,
@@ -129,6 +134,7 @@ impl<T: FftNum> GoodThomasAlgorithm<T> {
 
             inplace_scratch_len,
             outofplace_scratch_len,
+            immut_scratch_len,
 
             len,
             direction,
@@ -241,6 +247,31 @@ impl<T: FftNum> GoodThomasAlgorithm<T> {
         self.reindex_output(scratch, buffer);
     }
 
+    fn perform_fft_immut(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) {
+        // Re-index the input, copying from the input to the output in the process
+        self.reindex_input(input, output);
+
+        // run FFTs of size `width`
+        self.width_size_fft.process_with_scratch(output, scratch);
+
+        let (scratch, inner_scratch) = scratch.split_at_mut(self.len());
+
+        // transpose
+        transpose::transpose(output, scratch, self.width, self.height);
+
+        // run FFTs of size 'height'
+        self.height_size_fft
+            .process_with_scratch(scratch, inner_scratch);
+
+        // Re-index the output, copying from the input to the output in the process
+        self.reindex_output(scratch, output);
+    }
+
     fn perform_fft_out_of_place(
         &self,
         input: &mut [Complex<T>],
@@ -279,7 +310,8 @@ boilerplate_fft!(
     GoodThomasAlgorithm,
     |this: &GoodThomasAlgorithm<_>| this.len,
     |this: &GoodThomasAlgorithm<_>| this.inplace_scratch_len,
-    |this: &GoodThomasAlgorithm<_>| this.outofplace_scratch_len
+    |this: &GoodThomasAlgorithm<_>| this.outofplace_scratch_len,
+    |this: &GoodThomasAlgorithm<_>| this.immut_scratch_len
 );
 
 /// Implementation of the Good-Thomas Algorithm, specialized for smaller input sizes
@@ -384,6 +416,38 @@ impl<T: FftNum> GoodThomasAlgorithmSmall<T> {
         }
     }
 
+    fn perform_fft_immut(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) {
+        // These asserts are for the unsafe blocks down below. we're relying on the optimizer to get rid of this assert
+        assert_eq!(self.len(), input.len());
+        assert_eq!(self.len(), output.len());
+
+        let (input_map, output_map) = self.input_output_map.split_at(self.len());
+
+        // copy the input using our reordering mapping
+        for (output_element, &input_index) in output.iter_mut().zip(input_map.iter()) {
+            *output_element = input[input_index];
+        }
+
+        // run FFTs of size `width`
+        self.width_size_fft.process_with_scratch(output, scratch);
+
+        // transpose
+        unsafe { array_utils::transpose_small(self.width, self.height, output, scratch) };
+
+        // run FFTs of size 'height'
+        self.height_size_fft.process_with_scratch(scratch, output);
+
+        // copy to the output, using our output redordeing mapping
+        for (input_element, &output_index) in scratch.iter().zip(output_map.iter()) {
+            output[output_index] = *input_element;
+        }
+    }
+
     fn perform_fft_out_of_place(
         &self,
         input: &mut [Complex<T>],
@@ -448,7 +512,8 @@ boilerplate_fft!(
     GoodThomasAlgorithmSmall,
     |this: &GoodThomasAlgorithmSmall<_>| this.width * this.height,
     |this: &GoodThomasAlgorithmSmall<_>| this.len(),
-    |_| 0
+    |_| 0,
+    |this: &GoodThomasAlgorithmSmall<_>| this.len()
 );
 
 #[cfg(test)]
@@ -532,12 +597,15 @@ mod unit_tests {
         for &len in &scratch_lengths {
             for &inplace_scratch in &scratch_lengths {
                 for &outofplace_scratch in &scratch_lengths {
-                    inner_ffts.push(Arc::new(BigScratchAlgorithm {
-                        len,
-                        inplace_scratch,
-                        outofplace_scratch,
-                        direction: FftDirection::Forward,
-                    }) as Arc<dyn Fft<f32>>);
+                    for &immut_scratch in &scratch_lengths {
+                        inner_ffts.push(Arc::new(BigScratchAlgorithm {
+                            len,
+                            inplace_scratch,
+                            outofplace_scratch,
+                            immut_scratch,
+                            direction: FftDirection::Forward,
+                        }) as Arc<dyn Fft<f32>>);
+                    }
                 }
             }
         }
@@ -564,6 +632,16 @@ mod unit_tests {
                     &mut outofplace_input,
                     &mut outofplace_output,
                     &mut outofplace_scratch,
+                );
+
+                let immut_input = vec![Complex::zero(); fft.len()];
+                let mut immut_output = vec![Complex::zero(); fft.len()];
+                let mut immut_scratch = vec![Complex::zero(); fft.get_immutable_scratch_len()];
+
+                fft.process_immutable_with_scratch(
+                    &immut_input,
+                    &mut immut_output,
+                    &mut immut_scratch,
                 );
             }
         }

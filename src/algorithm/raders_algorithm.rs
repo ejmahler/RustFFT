@@ -6,8 +6,6 @@ use num_traits::Zero;
 use primal_check::miller_rabin;
 use strength_reduce::StrengthReducedUsize;
 
-use crate::array_utils;
-use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::math_utils;
 use crate::{common::FftNum, twiddles, FftDirection};
 use crate::{Direction, Fft, Length};
@@ -50,6 +48,8 @@ pub struct RadersAlgorithm<T> {
     len: StrengthReducedUsize,
     inplace_scratch_len: usize,
     outofplace_scratch_len: usize,
+    immut_scratch_len: usize,
+
     direction: FftDirection,
 }
 
@@ -100,6 +100,8 @@ impl<T: FftNum> RadersAlgorithm<T> {
         } else {
             required_inner_scratch
         };
+        let inplace_scratch_len = inner_fft_len + extra_inner_scratch;
+        let immut_scratch_len = inner_fft_len + required_inner_scratch;
 
         //precompute a FFT of our reordered twiddle factors
         let mut inner_fft_scratch = vec![Zero::zero(); required_inner_scratch];
@@ -113,9 +115,57 @@ impl<T: FftNum> RadersAlgorithm<T> {
             primitive_root_inverse,
 
             len: reduced_len,
-            inplace_scratch_len: inner_fft_len + extra_inner_scratch,
+            inplace_scratch_len,
             outofplace_scratch_len: extra_inner_scratch,
+            immut_scratch_len,
             direction,
+        }
+    }
+
+    fn perform_fft_immut(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) {
+        // The first output element is just the sum of all the input elements, and we need to store off the first input value
+        let (output_first, output) = output.split_first_mut().unwrap();
+        let (input_first, input) = input.split_first().unwrap();
+        let (scratch, extra_scratch) = scratch.split_at_mut(self.len() - 1);
+
+        // copy the input into the scratch space, reordering as we go
+        let mut input_index = 1;
+        for output_element in scratch.iter_mut() {
+            input_index = (input_index * self.primitive_root) % self.len;
+
+            let input_element = input[input_index - 1];
+            *output_element = input_element;
+        }
+
+        self.inner_fft.process_with_scratch(scratch, extra_scratch);
+
+        // output[0] now contains the sum of elements 1..len. We need the sum of all elements, so all we have to do is add the first input
+        *output_first = *input_first + scratch[0];
+
+        // multiply the inner result with our cached setup data
+        // also conjugate every entry. this sets us up to do an inverse FFT
+        // (because an inverse FFT is equivalent to a normal FFT where you conjugate both the inputs and outputs)
+        for (scratch_cell, &twiddle) in scratch.iter_mut().zip(self.inner_fft_data.iter()) {
+            *scratch_cell = (*scratch_cell * twiddle).conj();
+        }
+
+        // We need to add the first input value to all output values. We can accomplish this by adding it to the DC input of our inner ifft.
+        // Of course, we have to conjugate it, just like we conjugated the complex multiplied above
+        scratch[0] = scratch[0] + input_first.conj();
+
+        // execute the second FFT
+        self.inner_fft.process_with_scratch(scratch, extra_scratch);
+
+        // copy the final values into the output, reordering as we go
+        let mut output_index = 1;
+        for scratch_element in scratch {
+            output_index = (output_index * self.primitive_root_inverse) % self.len;
+            output[output_index - 1] = scratch_element.conj();
         }
     }
 
@@ -232,7 +282,8 @@ boilerplate_fft!(
     RadersAlgorithm,
     |this: &RadersAlgorithm<_>| this.len.get(),
     |this: &RadersAlgorithm<_>| this.inplace_scratch_len,
-    |this: &RadersAlgorithm<_>| this.outofplace_scratch_len
+    |this: &RadersAlgorithm<_>| this.outofplace_scratch_len,
+    |this: &RadersAlgorithm<_>| this.immut_scratch_len
 );
 
 #[cfg(test)]

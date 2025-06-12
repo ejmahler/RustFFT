@@ -1,5 +1,3 @@
-#![cfg_attr(all(feature = "bench", test), feature(test))]
-
 //! RustFFT is a high-performance FFT library written in pure Rust.
 //!
 //! On X86_64, RustFFT supports the AVX instruction set for increased performance. No special code is needed to activate AVX:
@@ -127,6 +125,7 @@ mod common;
 pub mod algorithm;
 mod array_utils;
 mod fft_cache;
+mod fft_helper;
 mod math_utils;
 mod plan;
 mod twiddles;
@@ -134,7 +133,7 @@ mod twiddles;
 use num_complex::Complex;
 use num_traits::Zero;
 
-pub use crate::common::{FftNum, RadixFactor};
+pub use crate::common::FftNum;
 pub use crate::plan::{FftPlanner, FftPlannerScalar};
 
 /// A trait that allows FFT algorithms to report their expected input/output size
@@ -236,6 +235,25 @@ pub trait Fft<T: FftNum>: Length + Direction + Sync + Send {
         scratch: &mut [Complex<T>],
     );
 
+    /// Divides `input` and `output` into chunks of `self.len()`, and computes a FFT on each chunk while
+    /// keeping `input` untouched.
+    ///
+    /// This method uses the `scratch` buffer as scratch space, so the contents should be considered garbage after calling.
+    ///
+    /// # Panics
+    ///
+    /// This method panics if:
+    /// - `output.len() ! input.len()`
+    /// - `input.len() % self.len() > 0`
+    /// - `input.len() < self.len()`
+    /// - `scratch.len() < get_immutable_scratch_len()`
+    fn process_immutable_with_scratch(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    );
+
     /// Returns the size of the scratch buffer required by `process_with_scratch`
     ///
     /// For most FFT sizes, this method will return `self.len()`. For a few small sizes it will return 0, and for some special FFT sizes
@@ -249,6 +267,14 @@ pub trait Fft<T: FftNum>: Length + Direction + Sync + Send {
     /// (Sizes that require the use of Bluestein's Algorithm), this may return a scratch size larger than `self.len()`.
     /// The returned value may change from one version of RustFFT to the next.
     fn get_outofplace_scratch_len(&self) -> usize;
+
+    /// Returns the size of the scratch buffer required by `process_immutable_with_scratch`
+    ///
+    /// For most FFT sizes, this method will return something between self.len() and self.len() * 2.
+    /// For a few small sizes it will return 0, and for some special FFT sizes
+    /// (Sizes that require the use of Bluestein's Algorithm), this may return a scratch size larger than `self.len()`.
+    /// The returned value may change from one version of RustFFT to the next.
+    fn get_immutable_scratch_len(&self) -> usize;
 }
 
 // Algorithms implemented to use AVX instructions. Only compiled on x86_64, and only compiled if the "avx" feature flag is set.

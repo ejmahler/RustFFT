@@ -3,8 +3,6 @@ use std::sync::Arc;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use crate::array_utils;
-use crate::common::{fft_error_inplace, fft_error_outofplace};
 use crate::{common::FftNum, twiddles, FftDirection};
 use crate::{Direction, Fft, Length};
 
@@ -137,9 +135,10 @@ impl<T: FftNum> BluesteinsAlgorithm<T> {
         }
     }
 
-    fn perform_fft_out_of_place(
+    #[inline]
+    fn perform_fft_immut(
         &self,
-        input: &mut [Complex<T>],
+        input: &[Complex<T>],
         output: &mut [Complex<T>],
         scratch: &mut [Complex<T>],
     ) {
@@ -179,6 +178,15 @@ impl<T: FftNum> BluesteinsAlgorithm<T> {
             *buffer_entry = inner_entry.conj() * twiddle;
         }
     }
+
+    fn perform_fft_out_of_place(
+        &self,
+        input: &mut [Complex<T>],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) {
+        self.perform_fft_immut(input, output, scratch);
+    }
 }
 boilerplate_fft!(
     BluesteinsAlgorithm,
@@ -186,7 +194,9 @@ boilerplate_fft!(
     |this: &BluesteinsAlgorithm<_>| this.inner_fft_multiplier.len()
         + this.inner_fft.get_inplace_scratch_len(), // in-place scratch len
     |this: &BluesteinsAlgorithm<_>| this.inner_fft_multiplier.len()
-        + this.inner_fft.get_inplace_scratch_len()  // out of place scratch len
+        + this.inner_fft.get_inplace_scratch_len(), // out of place scratch len
+    |this: &BluesteinsAlgorithm<_>| this.inner_fft_multiplier.len()
+        + this.inner_fft.get_inplace_scratch_len()  // immut scratch len
 );
 
 #[cfg(test)]

@@ -1,3 +1,4 @@
+use crate::fft_helper::{fft_helper_immut, fft_helper_inplace, fft_helper_outofplace};
 use crate::{Fft, FftDirection, FftNum};
 use std::arch::x86_64::{__m256, __m256d};
 use std::sync::Arc;
@@ -23,83 +24,61 @@ struct CommonSimdData<T, V> {
 
     inplace_scratch_len: usize,
     outofplace_scratch_len: usize,
+    immut_scratch_len: usize,
 
     direction: FftDirection,
 }
 
 macro_rules! boilerplate_avx_fft {
-    ($struct_name:ident, $len_fn:expr, $inplace_scratch_len_fn:expr, $out_of_place_scratch_len_fn:expr) => {
+    ($struct_name:ident, $len_fn:expr, $inplace_scratch_len_fn:expr, $out_of_place_scratch_len_fn:expr, $immut_scratch_len_fn:expr) => {
         impl<A: AvxNum, T: FftNum> Fft<T> for $struct_name<A, T> {
+            fn process_immutable_with_scratch(
+                &self,
+                input: &[Complex<T>],
+                output: &mut [Complex<T>],
+                scratch: &mut [Complex<T>],
+            ) {
+                unsafe {
+                    super::avx_fft_helper_immut(
+                        input,
+                        output,
+                        scratch,
+                        self.len(),
+                        self.get_immutable_scratch_len(),
+                        |in_chunk, out_chunk, scratch| {
+                            self.perform_fft_immut(in_chunk, out_chunk, scratch)
+                        },
+                    )
+                }
+            }
+
             fn process_outofplace_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
                 output: &mut [Complex<T>],
                 scratch: &mut [Complex<T>],
             ) {
-                let required_scratch = self.get_outofplace_scratch_len();
-                if scratch.len() < required_scratch
-                    || input.len() < self.len()
-                    || output.len() != input.len()
-                {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(
+                unsafe {
+                    super::avx_fft_helper_outofplace(
+                        input,
+                        output,
+                        scratch,
                         self.len(),
-                        input.len(),
-                        output.len(),
                         self.get_outofplace_scratch_len(),
-                        scratch.len(),
-                    );
-                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
-                }
-
-                let scratch = &mut scratch[..required_scratch];
-                let result = array_utils::iter_chunks_zipped(
-                    input,
-                    output,
-                    self.len(),
-                    |in_chunk, out_chunk| {
-                        self.perform_fft_out_of_place(in_chunk, out_chunk, scratch)
-                    },
-                );
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(
-                        self.len(),
-                        input.len(),
-                        output.len(),
-                        self.get_outofplace_scratch_len(),
-                        scratch.len(),
+                        |in_chunk, out_chunk, scratch| {
+                            self.perform_fft_out_of_place(in_chunk, out_chunk, scratch)
+                        },
                     )
                 }
             }
             fn process_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-                let required_scratch = self.get_inplace_scratch_len();
-                if scratch.len() < required_scratch || buffer.len() < self.len() {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_inplace(
+                unsafe {
+                    super::avx_fft_helper_inplace(
+                        buffer,
+                        scratch,
                         self.len(),
-                        buffer.len(),
                         self.get_inplace_scratch_len(),
-                        scratch.len(),
-                    );
-                    return; // Unreachable, because fft_error_inplace asserts, but it helps codegen to put it here
-                }
-
-                let scratch = &mut scratch[..required_scratch];
-                let result = array_utils::iter_chunks(buffer, self.len(), |chunk| {
-                    self.perform_fft_inplace(chunk, scratch)
-                });
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_inplace(
-                        self.len(),
-                        buffer.len(),
-                        self.get_inplace_scratch_len(),
-                        scratch.len(),
+                        |chunk, scratch| self.perform_fft_inplace(chunk, scratch),
                     )
                 }
             }
@@ -110,6 +89,10 @@ macro_rules! boilerplate_avx_fft {
             #[inline(always)]
             fn get_outofplace_scratch_len(&self) -> usize {
                 $out_of_place_scratch_len_fn(self)
+            }
+            #[inline(always)]
+            fn get_immutable_scratch_len(&self) -> usize {
+                $immut_scratch_len_fn(self)
             }
         }
         impl<A: AvxNum, T> Length for $struct_name<A, T> {
@@ -130,85 +113,53 @@ macro_rules! boilerplate_avx_fft {
 macro_rules! boilerplate_avx_fft_commondata {
     ($struct_name:ident) => {
         impl<A: AvxNum, T: FftNum> Fft<T> for $struct_name<A, T> {
+            fn process_immutable_with_scratch(
+                &self,
+                input: &[Complex<T>],
+                output: &mut [Complex<T>],
+                scratch: &mut [Complex<T>],
+            ) {
+                unsafe {
+                    super::avx_fft_helper_immut(
+                        input,
+                        output,
+                        scratch,
+                        self.len(),
+                        self.get_immutable_scratch_len(),
+                        |in_chunk, out_chunk, scratch| {
+                            self.perform_fft_immut(in_chunk, out_chunk, scratch)
+                        },
+                    )
+                }
+            }
             fn process_outofplace_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
                 output: &mut [Complex<T>],
                 scratch: &mut [Complex<T>],
             ) {
-                if self.len() == 0 {
-                    return;
-                }
-
-                let required_scratch = self.get_outofplace_scratch_len();
-                if scratch.len() < required_scratch
-                    || input.len() < self.len()
-                    || output.len() != input.len()
-                {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(
+                unsafe {
+                    super::avx_fft_helper_outofplace(
+                        input,
+                        output,
+                        scratch,
                         self.len(),
-                        input.len(),
-                        output.len(),
                         self.get_outofplace_scratch_len(),
-                        scratch.len(),
-                    );
-                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
-                }
-
-                let scratch = &mut scratch[..required_scratch];
-                let result = array_utils::iter_chunks_zipped(
-                    input,
-                    output,
-                    self.len(),
-                    |in_chunk, out_chunk| {
-                        self.perform_fft_out_of_place(in_chunk, out_chunk, scratch)
-                    },
-                );
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(
-                        self.len(),
-                        input.len(),
-                        output.len(),
-                        self.get_outofplace_scratch_len(),
-                        scratch.len(),
-                    );
+                        |in_chunk, out_chunk, scratch| {
+                            self.perform_fft_out_of_place(in_chunk, out_chunk, scratch)
+                        },
+                    )
                 }
             }
             fn process_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-                if self.len() == 0 {
-                    return;
-                }
-
-                let required_scratch = self.get_inplace_scratch_len();
-                if scratch.len() < required_scratch || buffer.len() < self.len() {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_inplace(
+                unsafe {
+                    super::avx_fft_helper_inplace(
+                        buffer,
+                        scratch,
                         self.len(),
-                        buffer.len(),
                         self.get_inplace_scratch_len(),
-                        scratch.len(),
-                    );
-                    return; // Unreachable, because fft_error_inplace asserts, but it helps codegen to put it here
-                }
-
-                let scratch = &mut scratch[..required_scratch];
-                let result = array_utils::iter_chunks(buffer, self.len(), |chunk| {
-                    self.perform_fft_inplace(chunk, scratch)
-                });
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_inplace(
-                        self.len(),
-                        buffer.len(),
-                        self.get_inplace_scratch_len(),
-                        scratch.len(),
-                    );
+                        |chunk, scratch| self.perform_fft_inplace(chunk, scratch),
+                    )
                 }
             }
             #[inline(always)]
@@ -218,6 +169,10 @@ macro_rules! boilerplate_avx_fft_commondata {
             #[inline(always)]
             fn get_outofplace_scratch_len(&self) -> usize {
                 self.common_data.outofplace_scratch_len
+            }
+            #[inline(always)]
+            fn get_immutable_scratch_len(&self) -> usize {
+                self.common_data.immut_scratch_len
             }
         }
         impl<A: AvxNum, T> Length for $struct_name<A, T> {
@@ -233,6 +188,61 @@ macro_rules! boilerplate_avx_fft_commondata {
             }
         }
     };
+}
+
+// A wrapper for the FFT helper functions that make sure the entire thing happens with the benefit of the AVX and FMA target features,
+// so that things like loading twiddle factor registers etc can be lifted out of the loop
+#[target_feature(enable = "avx", enable = "fma")]
+pub unsafe fn avx_fft_helper_immut<T>(
+    input: &[T],
+    output: &mut [T],
+    scratch: &mut [T],
+    chunk_size: usize,
+    required_scratch: usize,
+    chunk_fn: impl FnMut(&[T], &mut [T], &mut [T]),
+) {
+    fft_helper_immut(
+        input,
+        output,
+        scratch,
+        chunk_size,
+        required_scratch,
+        chunk_fn,
+    )
+}
+
+// A wrapper for the FFT helper functions that make sure the entire thing happens with the benefit of the AVX and FMA target features,
+// so that things like loading twiddle factor registers etc can be lifted out of the loop
+#[target_feature(enable = "avx", enable = "fma")]
+pub unsafe fn avx_fft_helper_outofplace<T>(
+    input: &mut [T],
+    output: &mut [T],
+    scratch: &mut [T],
+    chunk_size: usize,
+    required_scratch: usize,
+    chunk_fn: impl FnMut(&mut [T], &mut [T], &mut [T]),
+) {
+    fft_helper_outofplace(
+        input,
+        output,
+        scratch,
+        chunk_size,
+        required_scratch,
+        chunk_fn,
+    )
+}
+
+// A wrapper for the FFT helper functions that make sure the entire thing happens with the benefit of the AVX and FMA target features,
+// so that things like loading twiddle factor registers etc can be lifted out of the loop
+#[target_feature(enable = "avx", enable = "fma")]
+pub unsafe fn avx_fft_helper_inplace<T>(
+    buffer: &mut [T],
+    scratch: &mut [T],
+    chunk_size: usize,
+    required_scratch: usize,
+    chunk_fn: impl FnMut(&mut [T], &mut [T]),
+) {
+    fft_helper_inplace(buffer, scratch, chunk_size, required_scratch, chunk_fn)
 }
 
 #[macro_use]

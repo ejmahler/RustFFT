@@ -1,6 +1,6 @@
+use crate::common::RadixFactor;
 use crate::Complex;
 use crate::FftNum;
-use crate::RadixFactor;
 use std::ops::{Deref, DerefMut};
 
 /// Given an array of size width * height, representing a flattened 2D array,
@@ -143,22 +143,32 @@ mod unit_tests {
     }
 }
 
-// Loop over exact chunks of the provided buffer. Very similar in semantics to ChunksExactMut, but generates smaller code and requires no modulo operations
-// Returns Ok() if every element ended up in a chunk, Err() if there was a remainder
-pub fn iter_chunks<T>(
+// A utility that validates the following conditions, then calls chunk_fn() on each chunk of buffer. Passes the entire scratch buffer with each call.
+// - buffer1.len() % chunk_size == 0
+// - scratch.len() >= required_scratch
+// Returns Ok(()) if the validation passed, Err(()) if there was a problem
+// Since this is duplicated into every FFT algorithm we provide, this is tuned to reduce code size as much as possible, with a secondary focus being on ease of implementation
+pub fn validate_and_iter<T>(
     mut buffer: &mut [T],
+    scratch: &mut [T],
     chunk_size: usize,
-    mut chunk_fn: impl FnMut(&mut [T]),
+    required_scratch: usize,
+    mut chunk_fn: impl FnMut(&mut [T], &mut [T]),
 ) -> Result<(), ()> {
-    // Loop over the buffer, splicing off chunk_size at a time, and calling chunk_fn on each
+    if scratch.len() < required_scratch {
+        return Err(());
+    }
+    let scratch = &mut scratch[..required_scratch];
+
+    // Now that we know the two slices are the same length, loop over each one, splicing off chunk_size at a time, and calling chunk_fn on each
     while buffer.len() >= chunk_size {
         let (head, tail) = buffer.split_at_mut(chunk_size);
         buffer = tail;
 
-        chunk_fn(head);
+        chunk_fn(head, scratch);
     }
 
-    // We have a remainder if there's data still in the buffer -- in which case we want to indicate to the caller that there was an unwanted remainder
+    // We have a remainder if there's still data in the buffers -- in which case we want to indicate to the caller that there was an unwanted remainder
     if buffer.len() == 0 {
         Ok(())
     } else {
@@ -166,38 +176,189 @@ pub fn iter_chunks<T>(
     }
 }
 
-// Loop over exact zipped chunks of the 2 provided buffers. Very similar in semantics to ChunksExactMut.zip(ChunksExactMut), but generates smaller code and requires no modulo operations
-// Returns Ok() if every element of both buffers ended up in a chunk, Err() if there was a remainder
-pub fn iter_chunks_zipped<T>(
-    mut buffer1: &mut [T],
-    mut buffer2: &mut [T],
+// A utility that validates that buffer1.len() % chunk_size == 0, then calls chunk_fn() on each chunk of buffer.
+// This version does 2x partial unrolling of the buffer, because most SIMD butterfly algorithms operate that way.
+// Returns Ok(()) if the validation passed, Err(()) if there was a problem
+pub fn validate_and_iter_unroll2x<T>(
+    mut buffer: &mut [T],
     chunk_size: usize,
-    mut chunk_fn: impl FnMut(&mut [T], &mut [T]),
+    mut chunk2x_fn: impl FnMut(&mut [T]),
+    mut chunk_fn: impl FnMut(&mut [T]),
 ) -> Result<(), ()> {
-    // If the two buffers aren't the same size, record the fact that they're different, then snip them to be the same size
-    let uneven = if buffer1.len() > buffer2.len() {
-        buffer1 = &mut buffer1[..buffer2.len()];
-        true
-    } else if buffer2.len() < buffer1.len() {
-        buffer2 = &mut buffer2[..buffer1.len()];
-        true
+    // Now that we know the two slices are the same length, loop over each one, splicing off chunk_size at a time, and calling chunk_fn on each
+    while buffer.len() >= chunk_size * 2 {
+        let (head, tail) = buffer.split_at_mut(chunk_size * 2);
+        buffer = tail;
+
+        chunk2x_fn(head);
+    }
+
+    if buffer.len() == chunk_size {
+        chunk_fn(buffer);
+        Ok(())
+    } else if buffer.len() == 0 {
+        Ok(())
     } else {
-        false
-    };
+        Err(())
+    }
+}
+
+// A utility that validates the following conditions, then calls chunk_fn() on each chunk of buffer1 and buffer 2 zipped together. Passes the entire scratch buffer with each call.
+// - buffer1.len() == buffer2.len()
+// - buffer1.len() % chunk_size == 0
+// - scratch.len() >= required_scratch
+// Returns Ok(()) if the validation passed, Err(()) if there was a problem
+// Since this is duplicated into every FFT algorithm we provide, this is tuned to reduce code size as much as possible, with a secondary focus being on ease of implementation
+pub fn validate_and_zip<T>(
+    mut buffer1: &[T],
+    mut buffer2: &mut [T],
+    scratch: &mut [T],
+    chunk_size: usize,
+    required_scratch: usize,
+    mut chunk_fn: impl FnMut(&[T], &mut [T], &mut [T]),
+) -> Result<(), ()> {
+    if scratch.len() < required_scratch {
+        return Err(());
+    }
+    let scratch = &mut scratch[..required_scratch];
+
+    if buffer1.len() != buffer2.len() {
+        return Err(());
+    }
 
     // Now that we know the two slices are the same length, loop over each one, splicing off chunk_size at a time, and calling chunk_fn on each
-    while buffer1.len() >= chunk_size && buffer2.len() >= chunk_size {
+    while buffer1.len() >= chunk_size {
+        let (head1, tail1) = buffer1.split_at(chunk_size);
+        buffer1 = tail1;
+
+        let (head2, tail2) = buffer2.split_at_mut(chunk_size);
+        buffer2 = tail2;
+
+        chunk_fn(head1, head2, scratch);
+    }
+
+    // We have a remainder if the 2 chunks were uneven to start with, or if there's still data in the buffers -- in which case we want to indicate to the caller that there was an unwanted remainder
+    if buffer1.len() == 0 {
+        Ok(())
+    } else {
+        Err(())
+    }
+}
+
+// A utility that validates the following conditions, then calls chunk_fn() on each chunk of buffer1 and buffer 2 zipped together. Passes the entire scratch buffer with each call.
+// - buffer1.len() == buffer2.len()
+// - buffer1.len() % chunk_size == 0
+// Returns Ok(()) if the validation passed, Err(()) if there was a problem
+// This version does 2x partial unrolling of the buffer, because most SIMD butterfly algorithms operate that way.
+// Since this is duplicated into every FFT algorithm we provide, this is tuned to reduce code size as much as possible, with a secondary focus being on ease of implementation
+pub fn validate_and_zip_unroll2x<T>(
+    mut buffer1: &[T],
+    mut buffer2: &mut [T],
+    chunk_size: usize,
+    mut chunk2x_fn: impl FnMut(&[T], &mut [T]),
+    mut chunk_fn: impl FnMut(&[T], &mut [T]),
+) -> Result<(), ()> {
+    if buffer1.len() != buffer2.len() {
+        return Err(());
+    }
+
+    // Now that we know the two slices are the same length, loop over each one, splicing off chunk_size at a time, and calling chunk_fn on each
+    while buffer1.len() >= chunk_size * 2 {
+        let (head1, tail1) = buffer1.split_at(chunk_size * 2);
+        buffer1 = tail1;
+
+        let (head2, tail2) = buffer2.split_at_mut(chunk_size * 2);
+        buffer2 = tail2;
+
+        chunk2x_fn(head1, head2);
+    }
+
+    // We have a remainder if the 2 chunks were uneven to start with, or if there's still data in the buffers -- in which case we want to indicate to the caller that there was an unwanted remainder
+    if buffer1.len() == chunk_size {
+        chunk_fn(buffer1, buffer2);
+        Ok(())
+    } else if buffer1.len() == 0 {
+        Ok(())
+    } else {
+        Err(())
+    }
+}
+
+// A utility that validates the following conditions, then calls chunk_fn() on each chunk of buffer1 and buffer 2 zipped together. Passes the entire scratch buffer with each call.
+// - buffer1.len() == buffer2.len()
+// - buffer1.len() % chunk_size == 0
+// - scratch.len() >= required_scratch
+// Returns Ok(()) if the validation passed, Err(()) if there was a problem
+// Since this is duplicated into every FFT algorithm we provide, this is tuned to reduce code size as much as possible, with a secondary focus being on ease of implementation
+pub fn validate_and_zip_mut<T>(
+    mut buffer1: &mut [T],
+    mut buffer2: &mut [T],
+    scratch: &mut [T],
+    chunk_size: usize,
+    required_scratch: usize,
+    mut chunk_fn: impl FnMut(&mut [T], &mut [T], &mut [T]),
+) -> Result<(), ()> {
+    if scratch.len() < required_scratch {
+        return Err(());
+    }
+    let scratch = &mut scratch[..required_scratch];
+
+    if buffer1.len() != buffer2.len() {
+        return Err(());
+    }
+
+    // Now that we know the two slices are the same length, loop over each one, splicing off chunk_size at a time, and calling chunk_fn on each
+    while buffer1.len() >= chunk_size {
         let (head1, tail1) = buffer1.split_at_mut(chunk_size);
         buffer1 = tail1;
 
         let (head2, tail2) = buffer2.split_at_mut(chunk_size);
         buffer2 = tail2;
 
-        chunk_fn(head1, head2);
+        chunk_fn(head1, head2, scratch);
     }
 
     // We have a remainder if the 2 chunks were uneven to start with, or if there's still data in the buffers -- in which case we want to indicate to the caller that there was an unwanted remainder
-    if !uneven && buffer1.len() == 0 {
+    if buffer1.len() == 0 {
+        Ok(())
+    } else {
+        Err(())
+    }
+}
+
+// A utility that validates the following conditions, then calls chunk_fn() on each chunk of buffer1 and buffer 2 zipped together. Passes the entire scratch buffer with each call.
+// - buffer1.len() == buffer2.len()
+// - buffer1.len() % chunk_size == 0
+// Returns Ok(()) if the validation passed, Err(()) if there was a problem
+// This version does 2x partial unrolling of the buffer, because most SIMD butterfly algorithms operate that way.
+// Since this is duplicated into every FFT algorithm we provide, this is tuned to reduce code size as much as possible, with a secondary focus being on ease of implementation
+pub fn validate_and_zip_mut_unroll2x<T>(
+    mut buffer1: &mut [T],
+    mut buffer2: &mut [T],
+    chunk_size: usize,
+    mut chunk2x_fn: impl FnMut(&mut [T], &mut [T]),
+    mut chunk_fn: impl FnMut(&mut [T], &mut [T]),
+) -> Result<(), ()> {
+    if buffer1.len() != buffer2.len() {
+        return Err(());
+    }
+
+    // Now that we know the two slices are the same length, loop over each one, splicing off chunk_size at a time, and calling chunk_fn on each
+    while buffer1.len() >= chunk_size * 2 {
+        let (head1, tail1) = buffer1.split_at_mut(chunk_size * 2);
+        buffer1 = tail1;
+
+        let (head2, tail2) = buffer2.split_at_mut(chunk_size * 2);
+        buffer2 = tail2;
+
+        chunk2x_fn(head1, head2);
+    }
+
+    // We have a remainder if the 2 chunks were uneven to start with, or if there's still data in the buffers -- in which case we want to indicate to the caller that there was an unwanted remainder
+    if buffer1.len() == chunk_size {
+        chunk_fn(buffer1, buffer2);
+        Ok(())
+    } else if buffer1.len() == 0 {
         Ok(())
     } else {
         Err(())
@@ -296,7 +457,7 @@ pub fn compute_logarithm<const D: usize>(value: usize) -> Option<u32> {
     }
 }
 
-pub struct TransposeFactor {
+pub(crate) struct TransposeFactor {
     pub factor: RadixFactor,
     pub count: u8,
 }
@@ -305,7 +466,7 @@ pub struct TransposeFactor {
 // Use a lookup table to avoid repeating the slow bit reverse operations.
 // Unrolling the outer loop by a factor D helps speed things up.
 // const parameter D (for Divisor) determines how much to unroll. `input.len() / height` must divisible by D.
-pub fn factor_transpose<T: Copy, const D: usize>(
+pub(crate) fn factor_transpose<T: Copy, const D: usize>(
     height: usize,
     input: &[T],
     output: &mut [T],
@@ -350,7 +511,7 @@ pub fn factor_transpose<T: Copy, const D: usize>(
 // Divide `value` by the provided array of factors, and push the remainders into a new number
 // When all of the provided factors are 2, this is exactly equal to a bit reversal
 // When some of the factors are not 2, think of this as a "generalization" of a bit reversal, to something like a "Remainder reversal".
-pub fn reverse_remainders(value: usize, factors: &[TransposeFactor]) -> usize {
+pub(crate) fn reverse_remainders(value: usize, factors: &[TransposeFactor]) -> usize {
     let mut result: usize = 0;
     let mut value = value;
     for f in factors.iter() {

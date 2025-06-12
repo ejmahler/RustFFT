@@ -1,5 +1,10 @@
 use std::any::TypeId;
 
+use crate::fft_helper::{
+    fft_helper_immut, fft_helper_immut_unroll2x, fft_helper_inplace, fft_helper_inplace_unroll2x,
+    fft_helper_outofplace, fft_helper_outofplace_unroll2x,
+};
+
 // Helper function to assert we have the right float type
 pub fn assert_f32<T: 'static>() {
     let id_f32 = TypeId::of::<f32>();
@@ -57,72 +62,58 @@ macro_rules! separate_interleaved_complex_f32 {
 macro_rules! boilerplate_fft_neon_oop {
     ($struct_name:ident, $len_fn:expr) => {
         impl<N: NeonNum, T: FftNum> Fft<T> for $struct_name<N, T> {
+            fn process_immutable_with_scratch(
+                &self,
+                input: &[Complex<T>],
+                output: &mut [Complex<T>],
+                _scratch: &mut [Complex<T>],
+            ) {
+                unsafe {
+                    let simd_input = crate::array_utils::workaround_transmute(input);
+                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
+                    super::neon_common::neon_fft_helper_immut(
+                        simd_input,
+                        simd_output,
+                        &mut [],
+                        self.len(),
+                        0,
+                        |input, output, _| self.perform_fft_immut(input, output, &mut []),
+                    );
+                }
+            }
             fn process_outofplace_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                if self.len() == 0 {
-                    return;
-                }
-
-                if input.len() < self.len() || output.len() != input.len() {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
-                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
-                }
-
-                let result = unsafe {
-                    array_utils::iter_chunks_zipped(
-                        input,
-                        output,
+                unsafe {
+                    let simd_input = crate::array_utils::workaround_transmute_mut(input);
+                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
+                    super::neon_common::neon_fft_helper_outofplace(
+                        simd_input,
+                        simd_output,
+                        &mut [],
                         self.len(),
-                        |in_chunk, out_chunk| {
-                            self.perform_fft_out_of_place(in_chunk, out_chunk, &mut [])
-                        },
-                    )
-                };
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(self.len(), input.len(), output.len(), 0, 0);
+                        0,
+                        |input, output, _| self.perform_fft_out_of_place(input, output, &mut []),
+                    );
                 }
             }
             fn process_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-                if self.len() == 0 {
-                    return;
-                }
-
-                let required_scratch = self.get_inplace_scratch_len();
-                if scratch.len() < required_scratch || buffer.len() < self.len() {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_inplace(
+                unsafe {
+                    let simd_buffer = crate::array_utils::workaround_transmute_mut(buffer);
+                    let simd_scratch = crate::array_utils::workaround_transmute_mut(scratch);
+                    super::neon_common::neon_fft_helper_inplace(
+                        simd_buffer,
+                        simd_scratch,
                         self.len(),
-                        buffer.len(),
                         self.get_inplace_scratch_len(),
-                        scratch.len(),
-                    );
-                    return; // Unreachable, because fft_error_inplace asserts, but it helps codegen to put it here
-                }
-
-                let scratch = &mut scratch[..required_scratch];
-                let result = unsafe {
-                    array_utils::iter_chunks(buffer, self.len(), |chunk| {
-                        self.perform_fft_out_of_place(chunk, scratch, &mut []);
-                        chunk.copy_from_slice(scratch);
-                    })
-                };
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_inplace(
-                        self.len(),
-                        buffer.len(),
-                        self.get_inplace_scratch_len(),
-                        scratch.len(),
-                    );
+                        |chunk, scratch| {
+                            self.perform_fft_out_of_place(chunk, scratch, &mut []);
+                            chunk.copy_from_slice(scratch);
+                        },
+                    )
                 }
             }
             #[inline(always)]
@@ -131,6 +122,10 @@ macro_rules! boilerplate_fft_neon_oop {
             }
             #[inline(always)]
             fn get_outofplace_scratch_len(&self) -> usize {
+                0
+            }
+            #[inline(always)]
+            fn get_immutable_scratch_len(&self) -> usize {
                 0
             }
         }
@@ -149,112 +144,95 @@ macro_rules! boilerplate_fft_neon_oop {
     };
 }
 
-/* Not used now, but maybe later for the mixed radixes etc
-macro_rules! boilerplate_sse_fft {
-    ($struct_name:ident, $len_fn:expr, $inplace_scratch_len_fn:expr, $out_of_place_scratch_len_fn:expr) => {
-        impl<T: FftNum> Fft<T> for $struct_name<T> {
-            fn process_outofplace_with_scratch(
-                &self,
-                input: &mut [Complex<T>],
-                output: &mut [Complex<T>],
-                scratch: &mut [Complex<T>],
-            ) {
-                if self.len() == 0 {
-                    return;
-                }
-
-                let required_scratch = self.get_outofplace_scratch_len();
-                if scratch.len() < required_scratch
-                    || input.len() < self.len()
-                    || output.len() != input.len()
-                {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(
-                        self.len(),
-                        input.len(),
-                        output.len(),
-                        self.get_outofplace_scratch_len(),
-                        scratch.len(),
-                    );
-                    return; // Unreachable, because fft_error_outofplace asserts, but it helps codegen to put it here
-                }
-
-                let scratch = &mut scratch[..required_scratch];
-                let result = array_utils::iter_chunks_zipped(
-                    input,
-                    output,
-                    self.len(),
-                    |in_chunk, out_chunk| {
-                        self.perform_fft_out_of_place(in_chunk, out_chunk, scratch)
-                    },
-                );
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_outofplace(
-                        self.len(),
-                        input.len(),
-                        output.len(),
-                        self.get_outofplace_scratch_len(),
-                        scratch.len(),
-                    );
-                }
-            }
-            fn process_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-                if self.len() == 0 {
-                    return;
-                }
-
-                let required_scratch = self.get_inplace_scratch_len();
-                if scratch.len() < required_scratch || buffer.len() < self.len() {
-                    // We want to trigger a panic, but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_inplace(
-                        self.len(),
-                        buffer.len(),
-                        self.get_inplace_scratch_len(),
-                        scratch.len(),
-                    );
-                    return; // Unreachable, because fft_error_inplace asserts, but it helps codegen to put it here
-                }
-
-                let scratch = &mut scratch[..required_scratch];
-                let result = array_utils::iter_chunks(buffer, self.len(), |chunk| {
-                    self.perform_fft_inplace(chunk, scratch)
-                });
-
-                if result.is_err() {
-                    // We want to trigger a panic, because the buffer sizes weren't cleanly divisible by the FFT size,
-                    // but we want to avoid doing it in this function to reduce code size, so call a function marked cold and inline(never) that will do it for us
-                    fft_error_inplace(
-                        self.len(),
-                        buffer.len(),
-                        self.get_inplace_scratch_len(),
-                        scratch.len(),
-                    );
-                }
-            }
-            #[inline(always)]
-            fn get_inplace_scratch_len(&self) -> usize {
-                $inplace_scratch_len_fn(self)
-            }
-            #[inline(always)]
-            fn get_outofplace_scratch_len(&self) -> usize {
-                $out_of_place_scratch_len_fn(self)
-            }
-        }
-        impl<T: FftNum> Length for $struct_name<T> {
-            #[inline(always)]
-            fn len(&self) -> usize {
-                $len_fn(self)
-            }
-        }
-        impl<T: FftNum> Direction for $struct_name<T> {
-            #[inline(always)]
-            fn fft_direction(&self) -> FftDirection {
-                self.direction
-            }
-        }
-    };
+// A wrapper for the FFT helper functions that make sure the entire thing happens with the benefit of the NEON target feature,
+// so that things like loading twiddle factor registers etc can be lifted out of the loop
+#[target_feature(enable = "neon")]
+pub unsafe fn neon_fft_helper_immut<T>(
+    input: &[T],
+    output: &mut [T],
+    scratch: &mut [T],
+    chunk_size: usize,
+    required_scratch: usize,
+    chunk_fn: impl FnMut(&[T], &mut [T], &mut [T]),
+) {
+    fft_helper_immut(
+        input,
+        output,
+        scratch,
+        chunk_size,
+        required_scratch,
+        chunk_fn,
+    )
 }
-*/
+
+// A wrapper for the FFT helper functions that make sure the entire thing happens with the benefit of the NEON target feature,
+// so that things like loading twiddle factor registers etc can be lifted out of the loop
+#[target_feature(enable = "neon")]
+pub unsafe fn neon_fft_helper_outofplace<T>(
+    input: &mut [T],
+    output: &mut [T],
+    scratch: &mut [T],
+    chunk_size: usize,
+    required_scratch: usize,
+    chunk_fn: impl FnMut(&mut [T], &mut [T], &mut [T]),
+) {
+    fft_helper_outofplace(
+        input,
+        output,
+        scratch,
+        chunk_size,
+        required_scratch,
+        chunk_fn,
+    )
+}
+
+// A wrapper for the FFT helper functions that make sure the entire thing happens with the benefit of the NEON target feature,
+// so that things like loading twiddle factor registers etc can be lifted out of the loop
+#[target_feature(enable = "neon")]
+pub unsafe fn neon_fft_helper_inplace<T>(
+    buffer: &mut [T],
+    scratch: &mut [T],
+    chunk_size: usize,
+    required_scratch: usize,
+    chunk_fn: impl FnMut(&mut [T], &mut [T]),
+) {
+    fft_helper_inplace(buffer, scratch, chunk_size, required_scratch, chunk_fn)
+}
+
+// A wrapper for the FFT helper functions that make sure the entire thing happens with the benefit of the NEON target feature,
+// so that things like loading twiddle factor registers etc can be lifted out of the loop
+#[target_feature(enable = "neon")]
+pub unsafe fn neon_fft_helper_immut_unroll2x<T>(
+    input: &[T],
+    output: &mut [T],
+    chunk_size: usize,
+    chunk2x_fn: impl FnMut(&[T], &mut [T]),
+    chunk_fn: impl FnMut(&[T], &mut [T]),
+) {
+    fft_helper_immut_unroll2x(input, output, chunk_size, chunk2x_fn, chunk_fn)
+}
+
+// A wrapper for the FFT helper functions that make sure the entire thing happens with the benefit of the NEON target feature,
+// so that things like loading twiddle factor registers etc can be lifted out of the loop
+#[target_feature(enable = "neon")]
+pub unsafe fn neon_fft_helper_outofplace_unroll2x<T>(
+    input: &mut [T],
+    output: &mut [T],
+    chunk_size: usize,
+    chunk2x_fn: impl FnMut(&mut [T], &mut [T]),
+    chunk_fn: impl FnMut(&mut [T], &mut [T]),
+) {
+    fft_helper_outofplace_unroll2x(input, output, chunk_size, chunk2x_fn, chunk_fn)
+}
+
+// A wrapper for the FFT helper functions that make sure the entire thing happens with the benefit of the NEON target feature,
+// so that things like loading twiddle factor registers etc can be lifted out of the loop
+#[target_feature(enable = "neon")]
+pub unsafe fn neon_fft_helper_inplace_unroll2x<T>(
+    buffer: &mut [T],
+    chunk_size: usize,
+    chunk2x_fn: impl FnMut(&mut [T]),
+    chunk_fn: impl FnMut(&mut [T]),
+) {
+    fft_helper_inplace_unroll2x(buffer, chunk_size, chunk2x_fn, chunk_fn)
+}

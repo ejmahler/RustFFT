@@ -191,7 +191,7 @@ impl<T: FftNum> FftPlannerAvx<T> {
     }
 }
 
-trait AvxPlannerInternalAPI<T: FftNum>: Send {
+trait AvxPlannerInternalAPI<T: FftNum>: Send + Sync {
     fn plan_and_construct_fft(&mut self, len: usize, direction: FftDirection) -> Arc<dyn Fft<T>>;
     fn debug_plan_fft(&self, len: usize, direction: FftDirection) -> MixedRadixPlan;
 }
