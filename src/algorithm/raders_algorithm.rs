@@ -91,7 +91,8 @@ impl<T: FftNum> RadersAlgorithm<T> {
             let twiddle = twiddles::compute_twiddle(twiddle_input, len, direction);
             *input_cell = twiddle * inner_fft_scale;
 
-            twiddle_input = (twiddle_input * primitive_root_inverse) % reduced_len;
+            twiddle_input =
+                ((twiddle_input as u64 * primitive_root_inverse as u64) % len as u64) as usize;
         }
 
         let required_inner_scratch = inner_fft.get_inplace_scratch_len();
@@ -290,7 +291,7 @@ boilerplate_fft!(
 mod unit_tests {
     use super::*;
     use crate::algorithm::Dft;
-    use crate::test_utils::check_fft_algorithm;
+    use crate::test_utils::{check_fft_algorithm, BigScratchAlgorithm};
     use std::sync::Arc;
 
     #[test]
@@ -300,6 +301,24 @@ mod unit_tests {
                 test_raders_with_length(len, FftDirection::Forward);
                 test_raders_with_length(len, FftDirection::Inverse);
             }
+        }
+    }
+
+    #[test]
+    fn test_construct_big_raders() {
+        // Construct Raders instances for a few large primes
+        // that could cause overflow errors on 32-bit builds.
+        for len in [112501, 216569, 417623] {
+            let dummy_fft = BigScratchAlgorithm {
+                len: len - 1,
+                inplace_scratch: len - 1,
+                outofplace_scratch: len - 1,
+                immut_scratch: len - 1,
+                direction: FftDirection::Forward,
+            };
+            let inner_fft: Arc<BigScratchAlgorithm> = Arc::new(dummy_fft);
+            let fft: RadersAlgorithm<f32> = RadersAlgorithm::new(inner_fft);
+            assert_eq!(fft.len(), len);
         }
     }
 
