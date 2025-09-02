@@ -291,7 +291,8 @@ boilerplate_fft!(
 mod unit_tests {
     use super::*;
     use crate::algorithm::Dft;
-    use crate::test_utils::{check_fft_algorithm, BigScratchAlgorithm};
+    use crate::test_utils::check_fft_algorithm;
+    use crate::FftPlanner;
     use std::sync::Arc;
 
     #[test]
@@ -305,20 +306,15 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_construct_big_raders() {
-        // Construct Raders instances for a few large primes
-        // that could cause overflow errors on 32-bit builds.
+    fn test_raders_32bit_overflow() {
+        // Construct and use Raders instances for a few large primes
+        // that could panic due to overflow errors on 32-bit builds.
+        let mut planner = FftPlanner::<f32>::new();
         for len in [112501, 216569, 417623] {
-            let dummy_fft = BigScratchAlgorithm {
-                len: len - 1,
-                inplace_scratch: len - 1,
-                outofplace_scratch: len - 1,
-                immut_scratch: len - 1,
-                direction: FftDirection::Forward,
-            };
-            let inner_fft: Arc<BigScratchAlgorithm> = Arc::new(dummy_fft);
+            let inner_fft = planner.plan_fft_forward(len - 1);
             let fft: RadersAlgorithm<f32> = RadersAlgorithm::new(inner_fft);
-            assert_eq!(fft.len(), len);
+            let mut data = vec![Complex::new(0.0, 0.0); len];
+            fft.process(&mut data);
         }
     }
 
