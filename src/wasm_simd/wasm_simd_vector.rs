@@ -11,18 +11,17 @@ use super::WasmNum;
 /// Read these indexes from an WasmSimdArray and build an array of simd vectors.
 /// Takes a name of a vector to read from, and a list of indexes to read.
 /// This statement:
-/// ```
+///
 /// let values = read_complex_to_array!(input, {0, 1, 2, 3});
-/// ```
+///
 /// is equivalent to:
-/// ```
+///
 /// let values = [
 ///     input.load_complex(0),
 ///     input.load_complex(1),
 ///     input.load_complex(2),
 ///     input.load_complex(3),
 /// ];
-/// ```
 macro_rules! read_complex_to_array {
     ($input:ident, { $($idx:literal),* }) => {
         [
@@ -36,18 +35,18 @@ macro_rules! read_complex_to_array {
 /// Read these indexes from an WasmSimdArray and build an array or partially filled simd vectors.
 /// Takes a name of a vector to read from, and a list of indexes to read.
 /// This statement:
-/// ```
+///
 /// let values = read_partial1_complex_to_array!(input, {0, 1, 2, 3});
-/// ```
+///
 /// is equivalent to:
-/// ```
+///
 /// let values = [
 ///     input.load1_complex(0),
 ///     input.load1_complex(1),
 ///     input.load1_complex(2),
 ///     input.load1_complex(3),
 /// ];
-/// ```
+///
 macro_rules! read_partial1_complex_to_array {
     ($input:ident, { $($idx:literal),* }) => {
         [
@@ -61,18 +60,18 @@ macro_rules! read_partial1_complex_to_array {
 /// Write these indexes of an array of simd vectors to the same indexes of an WasmSimdArray.
 /// Takes a name of a vector to read from, one to write to, and a list of indexes.
 /// This statement:
-/// ```
+///
 /// let values = write_complex_to_array!(input, output, {0, 1, 2, 3});
-/// ```
+///
 /// is equivalent to:
-/// ```
+///
 /// let values = [
 ///     output.store_complex(input[0], 0),
 ///     output.store_complex(input[1], 1),
 ///     output.store_complex(input[2], 2),
 ///     output.store_complex(input[3], 3),
 /// ];
-/// ```
+///
 macro_rules! write_complex_to_array {
     ($input:ident, $output:ident, { $($idx:literal),* }) => {
         $(
@@ -84,18 +83,18 @@ macro_rules! write_complex_to_array {
 /// Write the low half of these indexes of an array of simd vectors to the same indexes of an WasmSimdArray.
 /// Takes a name of a vector to read from, one to write to, and a list of indexes.
 /// This statement:
-/// ```
+///
 /// let values = write_partial_lo_complex_to_array!(input, output, {0, 1, 2, 3});
-/// ```
+///
 /// is equivalent to:
-/// ```
+///
 /// let values = [
 ///     output.store_partial_lo_complex(input[0], 0),
 ///     output.store_partial_lo_complex(input[1], 1),
 ///     output.store_partial_lo_complex(input[2], 2),
 ///     output.store_partial_lo_complex(input[3], 3),
 /// ];
-/// ```
+///
 macro_rules! write_partial_lo_complex_to_array {
     ($input:ident, $output:ident, { $($idx:literal),* }) => {
         $(
@@ -107,18 +106,18 @@ macro_rules! write_partial_lo_complex_to_array {
 /// Write these indexes of an array of simd vectors to the same indexes, multiplied by a stride, of an WasmSimdArray.
 /// Takes a name of a vector to read from, one to write to, an integer stride, and a list of indexes.
 /// This statement:
-/// ```
+///
 /// let values = write_complex_to_array_strided!(input, output, {0, 1, 2, 3});
-/// ```
+///
 /// is equivalent to:
-/// ```
+///
 /// let values = [
 ///     output.store_complex(input[0], 0),
 ///     output.store_complex(input[1], 2),
 ///     output.store_complex(input[2], 4),
 ///     output.store_complex(input[3], 6),
 /// ];
-/// ```
+///
 macro_rules! write_complex_to_array_strided {
     ($input:ident, $output:ident, $stride:literal, { $($idx:literal),* }) => {
         $(
@@ -130,18 +129,18 @@ macro_rules! write_complex_to_array_strided {
 /// Read these indexes from an WasmSimdArray and build an array of simd vectors.
 /// Takes a name of a vector to read from, and a list of indexes to read.
 /// This statement:
-/// ```
+///
 /// let values = read_complex_to_array_v128!(input, {0, 1, 2, 3});
-/// ```
+///
 /// is equivalent to:
-/// ```
+///
 /// let values = [
 ///     input.load_complex_v128(0),
 ///     input.load_complex_v128(1),
 ///     input.load_complex_v128(2),
 ///     input.load_complex_v128(3),
 /// ];
-/// ```
+///
 macro_rules! read_complex_to_array_v128 {
     ($input:ident, { $($idx:literal),* }) => {
         [
@@ -155,18 +154,18 @@ macro_rules! read_complex_to_array_v128 {
 /// Read these indexes from an WasmSimdArray and build an array or partially filled simd vectors.
 /// Takes a name of a vector to read from, and a list of indexes to read.
 /// This statement:
-/// ```
+///
 /// let values = read_partial1_complex_to_array_v128!(input, {0, 1, 2, 3});
-/// ```
+///
 /// is equivalent to:
-/// ```
+///
 /// let values = [
 ///     input.load1_complex_v128(0),
 ///     input.load1_complex_v128(1),
 ///     input.load1_complex_v128(2),
 ///     input.load1_complex_v128(3),
 /// ];
-/// ```
+///
 macro_rules! read_partial1_complex_to_array_v128 {
     ($input:ident, { $($idx:literal),* }) => {
         [
@@ -180,18 +179,18 @@ macro_rules! read_partial1_complex_to_array_v128 {
 /// Write these indexes of an array of simd vectors to the same indexes of an WasmSimdArray.
 /// Takes a name of a vector to read from, one to write to, and a list of indexes.
 /// This statement:
-/// ```
+///
 /// let values = write_complex_to_array_v128!(input, output, {0, 1, 2, 3});
-/// ```
+///
 /// is equivalent to:
-/// ```
+///
 /// let values = [
 ///     output.store_complex_v128(input[0], 0),
 ///     output.store_complex_v128(input[1], 1),
 ///     output.store_complex_v128(input[2], 2),
 ///     output.store_complex_v128(input[3], 3),
 /// ];
-/// ```
+///
 macro_rules! write_complex_to_array_v128 {
     ($input:ident, $output:ident, { $($idx:literal),* }) => {
         $(
@@ -203,18 +202,18 @@ macro_rules! write_complex_to_array_v128 {
 /// Write these indexes of an array of simd vectors to the same indexes, multiplied by a stride, of an WasmSimdArray.
 /// Takes a name of a vector to read from, one to write to, an integer stride, and a list of indexes.
 /// This statement:
-/// ```
+///
 /// let values = write_complex_to_array_strided_v128!(input, output, {0, 1, 2, 3});
-/// ```
+///
 /// is equivalent to:
-/// ```
+///
 /// let values = [
 ///     output.store_complex_v128(input[0], 0),
 ///     output.store_complex_v128(input[1], 2),
 ///     output.store_complex_v128(input[2], 4),
 ///     output.store_complex_v128(input[3], 6),
 /// ];
-/// ```
+///
 macro_rules! write_complex_to_array_strided_v128 {
     ($input:ident, $output:ident, $stride:literal, { $($idx:literal),* }) => {
         $(

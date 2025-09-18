@@ -4,7 +4,7 @@ use num_complex::Complex;
 use num_integer::Integer;
 use num_traits::Zero;
 use primal_check::miller_rabin;
-use strength_reduce::StrengthReducedUsize;
+use strength_reduce::StrengthReducedU64;
 
 use crate::math_utils;
 use crate::{common::FftNum, twiddles, FftDirection};
@@ -42,10 +42,10 @@ pub struct RadersAlgorithm<T> {
     inner_fft: Arc<dyn Fft<T>>,
     inner_fft_data: Box<[Complex<T>]>,
 
-    primitive_root: usize,
-    primitive_root_inverse: usize,
+    primitive_root: u64,
+    primitive_root_inverse: u64,
 
-    len: StrengthReducedUsize,
+    len: StrengthReducedU64,
     inplace_scratch_len: usize,
     outofplace_scratch_len: usize,
     immut_scratch_len: usize,
@@ -68,10 +68,10 @@ impl<T: FftNum> RadersAlgorithm<T> {
         assert!(miller_rabin(len as u64), "For raders algorithm, inner_fft.len() + 1 must be prime. Expected prime number, got {} + 1 = {}", inner_fft_len, len);
 
         let direction = inner_fft.fft_direction();
-        let reduced_len = StrengthReducedUsize::new(len);
+        let reduced_len = StrengthReducedU64::new(len as u64);
 
         // compute the primitive root and its inverse for this size
-        let primitive_root = math_utils::primitive_root(len as u64).unwrap() as usize;
+        let primitive_root = math_utils::primitive_root(len as u64).unwrap();
 
         // compute the multiplicative inverse of primative_root mod len and vice versa.
         // i64::extended_gcd will compute both the inverse of left mod right, and the inverse of right mod left, but we're only goingto use one of them
@@ -81,7 +81,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
             gcd_data.x
         } else {
             gcd_data.x + len as i64
-        } as usize;
+        } as u64;
 
         // precompute the coefficients to use inside the process method
         let inner_fft_scale = T::one() / T::from_usize(inner_fft_len).unwrap();
@@ -91,7 +91,8 @@ impl<T: FftNum> RadersAlgorithm<T> {
             let twiddle = twiddles::compute_twiddle(twiddle_input, len, direction);
             *input_cell = twiddle * inner_fft_scale;
 
-            twiddle_input = (twiddle_input * primitive_root_inverse) % reduced_len;
+            twiddle_input =
+                ((twiddle_input as u64 * primitive_root_inverse) % reduced_len) as usize;
         }
 
         let required_inner_scratch = inner_fft.get_inplace_scratch_len();
@@ -136,7 +137,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
         // copy the input into the scratch space, reordering as we go
         let mut input_index = 1;
         for output_element in scratch.iter_mut() {
-            input_index = (input_index * self.primitive_root) % self.len;
+            input_index = ((input_index as u64 * self.primitive_root) % self.len) as usize;
 
             let input_element = input[input_index - 1];
             *output_element = input_element;
@@ -164,7 +165,8 @@ impl<T: FftNum> RadersAlgorithm<T> {
         // copy the final values into the output, reordering as we go
         let mut output_index = 1;
         for scratch_element in scratch {
-            output_index = (output_index * self.primitive_root_inverse) % self.len;
+            output_index =
+                ((output_index as u64 * self.primitive_root_inverse) % self.len) as usize;
             output[output_index - 1] = scratch_element.conj();
         }
     }
@@ -182,7 +184,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
         // copy the input into the output, reordering as we go. also compute a sum of all elements
         let mut input_index = 1;
         for output_element in output.iter_mut() {
-            input_index = (input_index * self.primitive_root) % self.len;
+            input_index = ((input_index as u64 * self.primitive_root) % self.len) as usize;
 
             let input_element = input[input_index - 1];
             *output_element = input_element;
@@ -225,7 +227,8 @@ impl<T: FftNum> RadersAlgorithm<T> {
         // copy the final values into the output, reordering as we go
         let mut output_index = 1;
         for input_element in input {
-            output_index = (output_index * self.primitive_root_inverse) % self.len;
+            output_index =
+                ((output_index as u64 * self.primitive_root_inverse) % self.len) as usize;
             output[output_index - 1] = input_element.conj();
         }
     }
@@ -239,7 +242,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
         // copy the buffer into the scratch, reordering as we go. also compute a sum of all elements
         let mut input_index = 1;
         for scratch_element in scratch.iter_mut() {
-            input_index = (input_index * self.primitive_root) % self.len;
+            input_index = ((input_index as u64 * self.primitive_root) % self.len) as usize;
 
             let buffer_element = buffer[input_index - 1];
             *scratch_element = buffer_element;
@@ -273,14 +276,15 @@ impl<T: FftNum> RadersAlgorithm<T> {
         // copy the final values into the output, reordering as we go
         let mut output_index = 1;
         for scratch_element in scratch {
-            output_index = (output_index * self.primitive_root_inverse) % self.len;
+            output_index =
+                ((output_index as u64 * self.primitive_root_inverse) % self.len) as usize;
             buffer[output_index - 1] = scratch_element.conj();
         }
     }
 }
 boilerplate_fft!(
     RadersAlgorithm,
-    |this: &RadersAlgorithm<_>| this.len.get(),
+    |this: &RadersAlgorithm<_>| this.len.get() as usize,
     |this: &RadersAlgorithm<_>| this.inplace_scratch_len,
     |this: &RadersAlgorithm<_>| this.outofplace_scratch_len,
     |this: &RadersAlgorithm<_>| this.immut_scratch_len
@@ -291,6 +295,7 @@ mod unit_tests {
     use super::*;
     use crate::algorithm::Dft;
     use crate::test_utils::check_fft_algorithm;
+    use crate::FftPlanner;
     use std::sync::Arc;
 
     #[test]
@@ -300,6 +305,19 @@ mod unit_tests {
                 test_raders_with_length(len, FftDirection::Forward);
                 test_raders_with_length(len, FftDirection::Inverse);
             }
+        }
+    }
+
+    #[test]
+    fn test_raders_32bit_overflow() {
+        // Construct and use Raders instances for a few large primes
+        // that could panic due to overflow errors on 32-bit builds.
+        let mut planner = FftPlanner::<f32>::new();
+        for len in [112501, 216569, 417623] {
+            let inner_fft = planner.plan_fft_forward(len - 1);
+            let fft: RadersAlgorithm<f32> = RadersAlgorithm::new(inner_fft);
+            let mut data = vec![Complex::new(0.0, 0.0); len];
+            fft.process(&mut data);
         }
     }
 

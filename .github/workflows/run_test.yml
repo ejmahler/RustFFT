@@ -161,4 +161,4 @@ jobs:
         with:
           version: "latest"
       - name: Run test suites with wasm-pack
-        run: wasm-pack test --node --lib --features wasm_simd
+        run: wasm-pack test --node --features wasm_simd
