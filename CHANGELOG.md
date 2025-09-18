@@ -1,3 +1,8 @@
+## [6.4.1]
+Released 17th September 2025
+### Fixed
+ - Use u64 in Raders twiddle calculations (Thanks to @HEnquist) (#164, fixes #163)
+
 ## [6.4]
 Released 12th June 2025
 ### Added
