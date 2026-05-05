@@ -568,6 +568,38 @@ mod unit_tests {
         check_fft_algorithm(&fft, width * height, direction);
     }
 
+    #[cfg(miri)]
+    #[test]
+    fn miri_good_thomas_small_inner_len_product_overflow() {
+        // Memory safety issue: GoodThomasAlgorithmSmall accepts safe user-provided
+        // Fft trait objects and computes `width * height` with unchecked usize
+        // arithmetic. In release, coprime reported lengths can wrap to a tiny
+        // `self.len()`. The process path then validates only that wrapped length
+        // before calling unsafe transpose_small with the original huge dimensions,
+        // causing unchecked out-of-bounds slice access.
+        let width_fft = Arc::new(BigScratchAlgorithm {
+            len: usize::MAX,
+            inplace_scratch: 0,
+            outofplace_scratch: 0,
+            immut_scratch: 0,
+            direction: FftDirection::Forward,
+        }) as Arc<dyn Fft<f32>>;
+        let height_fft = Arc::new(BigScratchAlgorithm {
+            len: usize::MAX - 2,
+            inplace_scratch: 0,
+            outofplace_scratch: 0,
+            immut_scratch: 0,
+            direction: FftDirection::Forward,
+        }) as Arc<dyn Fft<f32>>;
+
+        let fft = GoodThomasAlgorithmSmall::new(width_fft, height_fft);
+        assert_eq!(fft.len(), 3);
+
+        let mut buffer = vec![Complex::zero(); fft.len()];
+        let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
+        fft.process_with_scratch(&mut buffer, &mut scratch);
+    }
+
     #[test]
     fn test_output_mapping() {
         let width = 15;
