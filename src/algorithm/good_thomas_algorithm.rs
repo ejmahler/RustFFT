@@ -365,7 +365,9 @@ impl<T: FftNum> GoodThomasAlgorithmSmall<T> {
 
         let width = width_fft.len();
         let height = height_fft.len();
-        let len = width * height;
+        let len = width
+            .checked_mul(height)
+            .expect("GoodThomasAlgorithmSmall length overflow");
 
         assert_eq!(width_fft.get_outofplace_scratch_len(), 0, "GoodThomasAlgorithmSmall should only be used with algorithms that require 0 out-of-place scratch. Width FFT (len={}) requires {}, should require 0", width, width_fft.get_outofplace_scratch_len());
         assert_eq!(height_fft.get_outofplace_scratch_len(), 0, "GoodThomasAlgorithmSmall should only be used with algorithms that require 0 out-of-place scratch. Height FFT (len={}) requires {}, should require 0", height, height_fft.get_outofplace_scratch_len());
@@ -568,15 +570,14 @@ mod unit_tests {
         check_fft_algorithm(&fft, width * height, direction);
     }
 
-    #[cfg(miri)]
     #[test]
-    fn miri_good_thomas_small_inner_len_product_overflow() {
-        // Memory safety issue: GoodThomasAlgorithmSmall accepts safe user-provided
-        // Fft trait objects and computes `width * height` with unchecked usize
-        // arithmetic. In release, coprime reported lengths can wrap to a tiny
-        // `self.len()`. The process path then validates only that wrapped length
-        // before calling unsafe transpose_small with the original huge dimensions,
-        // causing unchecked out-of-bounds slice access.
+    #[should_panic(expected = "GoodThomasAlgorithmSmall length overflow")]
+    fn test_good_thomas_small_rejects_inner_len_product_overflow() {
+        // Regression test for a memory safety issue: GoodThomasAlgorithmSmall
+        // accepts safe user-provided Fft trait objects, so adversarial coprime
+        // `len()` values must be rejected before a wrapped length can validate a
+        // tiny buffer and then reach unsafe transpose_small with the original huge
+        // dimensions.
         let width_fft = Arc::new(BigScratchAlgorithm {
             len: usize::MAX,
             inplace_scratch: 0,
@@ -592,12 +593,7 @@ mod unit_tests {
             direction: FftDirection::Forward,
         }) as Arc<dyn Fft<f32>>;
 
-        let fft = GoodThomasAlgorithmSmall::new(width_fft, height_fft);
-        assert_eq!(fft.len(), 3);
-
-        let mut buffer = vec![Complex::zero(); fft.len()];
-        let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
-        fft.process_with_scratch(&mut buffer, &mut scratch);
+        GoodThomasAlgorithmSmall::new(width_fft, height_fft);
     }
 
     #[test]
