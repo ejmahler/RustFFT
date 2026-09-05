@@ -3,25 +3,35 @@ use crate::Complex;
 use crate::FftNum;
 use std::ops::{Deref, DerefMut};
 
+/// Transpose the input array into the output array.
+///
 /// Given an array of size width * height, representing a flattened 2D array,
-/// transpose the rows and columns of that 2D array into the output
-/// benchmarking shows that loop tiling isn't effective for small arrays (in the range of 50x50 or smaller)
-pub unsafe fn transpose_small<T: Copy + 'static>(width: usize, height: usize, input: &[T], output: &mut [T]) {
+/// transpose the rows and columns of that 2D array into the output.
+pub unsafe fn transpose<T: Copy + 'static>(
+    input: &[T],
+    output: &mut [T],
+    width: usize,
+    height: usize,
+) {
     #[cfg(all(target_arch = "aarch64", feature = "neon"))]
     {
-        if crate::neon::neon_utils::transpose_small(width, height, input, output) {
+        if crate::neon::neon_utils::transpose(width, height, input, output) {
             return;
         }
     }
 
-    for y in 0..height {
-        for x in 0..width {
-            let input_index = x + y * width;
-            let output_index = y + x * height;
+    transpose::transpose(input, output, width, height);
+}
 
-            *output.get_unchecked_mut(output_index) = *input.get_unchecked(input_index);
-        }
-    }
+/// Given an array of size width * height, representing a flattened 2D array,
+/// transpose the rows and columns of that 2D array into the output
+pub unsafe fn transpose_small<T: Copy + 'static>(
+    width: usize,
+    height: usize,
+    input: &[T],
+    output: &mut [T],
+) {
+    transpose(input, output, width, height);
 }
 
 pub unsafe fn transpose_small_twiddle<T: FftNum>(
@@ -147,25 +157,44 @@ mod unit_tests {
 
     #[test]
     fn test_transpose() {
-        let sizes: Vec<usize> = (1..16).collect();
+        let sizes: Vec<usize> = (1..35).collect();
 
         for &width in &sizes {
             for &height in &sizes {
                 let len = width * height;
 
-                let input: Vec<Complex<f32>> = random_signal(len);
-                let mut output = vec![Zero::zero(); len];
-
-                unsafe { transpose_small(width, height, &input, &mut output) };
-
+                // Test f32
+                let input_f32: Vec<Complex<f32>> = random_signal(len);
+                let mut output_f32 = vec![Zero::zero(); len];
+                unsafe { transpose(&input_f32, &mut output_f32, width, height) };
                 for x in 0..width {
                     for y in 0..height {
                         assert_eq!(
-                            input[x + y * width],
-                            output[y + x * height],
-                            "x = {}, y = {}",
+                            input_f32[x + y * width],
+                            output_f32[y + x * height],
+                            "f32: x = {}, y = {}, width = {}, height = {}",
                             x,
-                            y
+                            y,
+                            width,
+                            height
+                        );
+                    }
+                }
+
+                // Test f64
+                let input_f64: Vec<Complex<f64>> = random_signal(len);
+                let mut output_f64 = vec![Zero::zero(); len];
+                unsafe { transpose(&input_f64, &mut output_f64, width, height) };
+                for x in 0..width {
+                    for y in 0..height {
+                        assert_eq!(
+                            input_f64[x + y * width],
+                            output_f64[y + x * height],
+                            "f64: x = {}, y = {}, width = {}, height = {}",
+                            x,
+                            y,
+                            width,
+                            height
                         );
                     }
                 }

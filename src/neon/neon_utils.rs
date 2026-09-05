@@ -248,7 +248,141 @@ impl Rotate90F64 {
     }
 }
 
-pub unsafe fn transpose_small<T: Copy + 'static>(
+#[inline(always)]
+unsafe fn transpose_f64(p_in: *const f64, p_out: *mut f64, width: usize, height: usize) {
+    const TILE_SIZE: usize = 32;
+
+    let mut by = 0;
+    while by < height {
+        let block_h = (height - by).min(TILE_SIZE);
+        let mut bx = 0;
+        while bx < width {
+            let block_w = (width - bx).min(TILE_SIZE);
+
+            let mut y = 0;
+            while y + 2 <= block_h {
+                let cy = by + y;
+                let in_r0 = (cy * width + bx) * 2;
+                let in_r1 = ((cy + 1) * width + bx) * 2;
+
+                let mut x = 0;
+                while x + 2 <= block_w {
+                    let cx = bx + x;
+                    let a0 = vld1q_f64(p_in.add(in_r0 + x * 2));
+                    let a1 = vld1q_f64(p_in.add(in_r0 + x * 2 + 2));
+
+                    let b0 = vld1q_f64(p_in.add(in_r1 + x * 2));
+                    let b1 = vld1q_f64(p_in.add(in_r1 + x * 2 + 2));
+
+                    let out_c0 = (cy + cx * height) * 2;
+                    let out_c1 = (cy + (cx + 1) * height) * 2;
+
+                    vst1q_f64(p_out.add(out_c0), a0);
+                    vst1q_f64(p_out.add(out_c0 + 2), b0);
+
+                    vst1q_f64(p_out.add(out_c1), a1);
+                    vst1q_f64(p_out.add(out_c1 + 2), b1);
+
+                    x += 2;
+                }
+                while x < block_w {
+                    let cx = bx + x;
+                    let a0 = vld1q_f64(p_in.add(in_r0 + x * 2));
+                    let b0 = vld1q_f64(p_in.add(in_r1 + x * 2));
+
+                    let out_c0 = (cy + cx * height) * 2;
+
+                    vst1q_f64(p_out.add(out_c0), a0);
+                    vst1q_f64(p_out.add(out_c0 + 2), b0);
+
+                    x += 1;
+                }
+                y += 2;
+            }
+            while y < block_h {
+                let cy = by + y;
+                let in_r = (cy * width + bx) * 2;
+                for x in 0..block_w {
+                    let cx = bx + x;
+                    let a0 = vld1q_f64(p_in.add(in_r + x * 2));
+                    let out_c = (cy + cx * height) * 2;
+                    vst1q_f64(p_out.add(out_c), a0);
+                }
+                y += 1;
+            }
+
+            bx += TILE_SIZE;
+        }
+        by += TILE_SIZE;
+    }
+}
+
+#[inline(always)]
+unsafe fn transpose_f32(p_in: *const f32, p_out: *mut f32, width: usize, height: usize) {
+    const TILE_SIZE: usize = 32;
+
+    let mut by = 0;
+    while by < height {
+        let block_h = (height - by).min(TILE_SIZE);
+        let mut bx = 0;
+        while bx < width {
+            let block_w = (width - bx).min(TILE_SIZE);
+
+            let mut y = 0;
+            while y + 2 <= block_h {
+                let cy = by + y;
+                let in_r0 = (cy * width + bx) * 2;
+                let in_r1 = ((cy + 1) * width + bx) * 2;
+
+                let mut x = 0;
+                while x + 2 <= block_w {
+                    let cx = bx + x;
+                    let row0 = vld1q_f32(p_in.add(in_r0 + x * 2));
+                    let row1 = vld1q_f32(p_in.add(in_r1 + x * 2));
+
+                    let transposed = transpose_complex_2x2_f32(row0, row1);
+
+                    let out_c0 = (cy + cx * height) * 2;
+                    let out_c1 = (cy + (cx + 1) * height) * 2;
+
+                    vst1q_f32(p_out.add(out_c0), transposed[0]);
+                    vst1q_f32(p_out.add(out_c1), transposed[1]);
+
+                    x += 2;
+                }
+                while x < block_w {
+                    let cx = bx + x;
+                    let a0 = vld1_f32(p_in.add(in_r0 + x * 2));
+                    let b0 = vld1_f32(p_in.add(in_r1 + x * 2));
+
+                    let out_c0 = (cy + cx * height) * 2;
+
+                    vst1_f32(p_out.add(out_c0), a0);
+                    vst1_f32(p_out.add(out_c0 + 2), b0);
+
+                    x += 1;
+                }
+                y += 2;
+            }
+            while y < block_h {
+                let cy = by + y;
+                let in_r = (cy * width + bx) * 2;
+                for x in 0..block_w {
+                    let cx = bx + x;
+                    let a0 = vld1_f32(p_in.add(in_r + x * 2));
+                    let out_c = (cy + cx * height) * 2;
+                    vst1_f32(p_out.add(out_c), a0);
+                }
+                y += 1;
+            }
+
+            bx += TILE_SIZE;
+        }
+        by += TILE_SIZE;
+    }
+}
+
+pub unsafe fn transpose<T: Copy + 'static>(
     width: usize,
     height: usize,
     input: &[T],
@@ -258,51 +392,12 @@ pub unsafe fn transpose_small<T: Copy + 'static>(
     if TypeId::of::<T>() == TypeId::of::<Complex<f64>>() {
         let p_in = input.as_ptr() as *const f64;
         let p_out = output.as_mut_ptr() as *mut f64;
-
-        let mut y = 0;
-        while y + 2 <= height {
-            let in_row0 = (y * width) * 2;
-            let in_row1 = ((y + 1) * width) * 2;
-            let mut x = 0;
-            while x + 2 <= width {
-                let in_idx0 = in_row0 + x * 2;
-                let in_idx1 = in_row1 + x * 2;
-                let a0 = vld1q_f64(p_in.add(in_idx0));
-                let a1 = vld1q_f64(p_in.add(in_idx0 + 2));
-                let b0 = vld1q_f64(p_in.add(in_idx1));
-                let b1 = vld1q_f64(p_in.add(in_idx1 + 2));
-
-                let out_idx0 = (y + x * height) * 2;
-                let out_idx1 = (y + (x + 1) * height) * 2;
-                vst1q_f64(p_out.add(out_idx0), a0);
-                vst1q_f64(p_out.add(out_idx0 + 2), b0);
-                vst1q_f64(p_out.add(out_idx1), a1);
-                vst1q_f64(p_out.add(out_idx1 + 2), b1);
-
-                x += 2;
-            }
-            while x < width {
-                let in_idx0 = in_row0 + x * 2;
-                let in_idx1 = in_row1 + x * 2;
-                let a0 = vld1q_f64(p_in.add(in_idx0));
-                let b0 = vld1q_f64(p_in.add(in_idx1));
-                let out_idx0 = (y + x * height) * 2;
-                vst1q_f64(p_out.add(out_idx0), a0);
-                vst1q_f64(p_out.add(out_idx0 + 2), b0);
-                x += 1;
-            }
-            y += 2;
-        }
-        while y < height {
-            let in_row = (y * width) * 2;
-            for x in 0..width {
-                let in_idx = in_row + x * 2;
-                let out_idx = (y + x * height) * 2;
-                let a = vld1q_f64(p_in.add(in_idx));
-                vst1q_f64(p_out.add(out_idx), a);
-            }
-            y += 1;
-        }
+        transpose_f64(p_in, p_out, width, height);
+        return true;
+    } else if TypeId::of::<T>() == TypeId::of::<Complex<f32>>() {
+        let p_in = input.as_ptr() as *const f32;
+        let p_out = output.as_mut_ptr() as *mut f32;
+        transpose_f32(p_in, p_out, width, height);
         return true;
     }
     false
