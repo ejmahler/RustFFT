@@ -24,8 +24,31 @@ pub unsafe fn transpose_small<T: Copy + 'static>(width: usize, height: usize, in
     }
 }
 
+pub unsafe fn transpose_small_twiddle<T: FftNum>(
+    width: usize,
+    height: usize,
+    input: &[Complex<T>],
+    output: &mut [Complex<T>],
+    twiddles: &[Complex<T>],
+) {
+    #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+    {
+        if crate::neon::neon_utils::transpose_small_twiddle(width, height, input, output, twiddles) {
+            return;
+        }
+    }
 
-#[allow(unused)]
+    for y in 0..height {
+        for x in 0..width {
+            let in_idx = x + y * width;
+            let out_idx = y + x * height;
+            let val = *input.get_unchecked(in_idx);
+            let tw = *twiddles.get_unchecked(in_idx);
+            *output.get_unchecked_mut(out_idx) = val * tw;
+        }
+    }
+}
+
 pub unsafe fn workaround_transmute<T, U>(slice: &[T]) -> &[U] {
     let ptr = slice.as_ptr() as *const U;
     let len = slice.len();

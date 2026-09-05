@@ -324,13 +324,16 @@ impl<T: FftNum> MixedRadixSmall<T> {
         // STEP 2: perform FFTs of size `height`
         self.height_size_fft.process_with_scratch(scratch, buffer);
 
-        // STEP 3: Apply twiddle factors
-        for (element, twiddle) in scratch.iter_mut().zip(self.twiddles.iter()) {
-            *element = *element * twiddle;
-        }
-
-        // STEP 4: transpose again
-        unsafe { array_utils::transpose_small(self.height, self.width, scratch, buffer) };
+        // STEP 3 & 4: Apply twiddle factors and transpose
+        unsafe {
+            array_utils::transpose_small_twiddle(
+                self.height,
+                self.width,
+                scratch,
+                buffer,
+                &self.twiddles,
+            )
+        };
 
         // STEP 5: perform FFTs of size `width`
         self.width_size_fft
@@ -353,13 +356,16 @@ impl<T: FftNum> MixedRadixSmall<T> {
         // STEP 2: perform FFTs of size `height`
         self.height_size_fft.process_with_scratch(output, scratch);
 
-        // STEP 3: Apply twiddle factors
-        for (element, twiddle) in output.iter_mut().zip(self.twiddles.iter()) {
-            *element = *element * twiddle;
-        }
-
-        // STEP 4: transpose again
-        unsafe { array_utils::transpose_small(self.height, self.width, output, scratch) };
+        // STEP 3 & 4: Apply twiddle factors and transpose
+        unsafe {
+            array_utils::transpose_small_twiddle(
+                self.height,
+                self.width,
+                output,
+                scratch,
+                &self.twiddles,
+            )
+        };
 
         // STEP 5: perform FFTs of size `width`
         self.width_size_fft.process_with_scratch(scratch, output);
@@ -381,13 +387,16 @@ impl<T: FftNum> MixedRadixSmall<T> {
         // STEP 2: perform FFTs of size `height`
         self.height_size_fft.process_with_scratch(output, input);
 
-        // STEP 3: Apply twiddle factors
-        for (element, twiddle) in output.iter_mut().zip(self.twiddles.iter()) {
-            *element = *element * twiddle;
-        }
-
-        // STEP 4: transpose again
-        unsafe { array_utils::transpose_small(self.height, self.width, output, input) };
+        // STEP 3 & 4: Apply twiddle factors and transpose
+        unsafe {
+            array_utils::transpose_small_twiddle(
+                self.height,
+                self.width,
+                output,
+                input,
+                &self.twiddles,
+            )
+        };
 
         // STEP 5: perform FFTs of size `width`
         self.width_size_fft.process_with_scratch(input, output);

@@ -1,5 +1,6 @@
 use core::arch::aarch64::*;
 use num_complex::Complex;
+use crate::FftNum;
 
 //  __  __       _   _               _________  _     _ _
 // |  \/  | __ _| |_| |__           |___ /___ \| |__ (_) |_
@@ -301,6 +302,120 @@ pub unsafe fn transpose_small<T: Copy + 'static>(
                 vst1q_f64(p_out.add(out_idx), a);
             }
             y += 1;
+        }
+        return true;
+    }
+    false
+}
+
+#[inline(always)]
+unsafe fn neon_complex_mul_f64(
+    val: float64x2_t,
+    tw: float64x2_t,
+) -> float64x2_t {
+    let temp = vcombine_f64(vneg_f64(vget_high_f64(val)), vget_low_f64(val));
+    let sum = vmulq_laneq_f64::<0>(val, tw);
+    vfmaq_laneq_f64::<1>(sum, temp, tw)
+}
+
+pub unsafe fn transpose_small_twiddle<T: FftNum>(
+    width: usize,
+    height: usize,
+    input: &[Complex<T>],
+    output: &mut [Complex<T>],
+    twiddles: &[Complex<T>],
+) -> bool {
+    use std::any::TypeId;
+    if TypeId::of::<T>() == TypeId::of::<f64>() {
+        let p_in = input.as_ptr() as *const f64;
+        let p_out = output.as_mut_ptr() as *mut f64;
+        let p_tw = twiddles.as_ptr() as *const f64;
+
+        let mut y = 0;
+        while y + 2 <= height {
+            let in_row0 = (y * width) * 2;
+            let in_row1 = ((y + 1) * width) * 2;
+            let mut x = 0;
+            while x + 2 <= width {
+                let in_idx0 = in_row0 + x * 2;
+                let in_idx1 = in_row1 + x * 2;
+
+                let a0 = vld1q_f64(p_in.add(in_idx0));
+                let tw_a0 = vld1q_f64(p_tw.add(in_idx0));
+                let a1 = vld1q_f64(p_in.add(in_idx0 + 2));
+                let tw_a1 = vld1q_f64(p_tw.add(in_idx0 + 2));
+
+                let b0 = vld1q_f64(p_in.add(in_idx1));
+                let tw_b0 = vld1q_f64(p_tw.add(in_idx1));
+                let b1 = vld1q_f64(p_in.add(in_idx1 + 2));
+                let tw_b1 = vld1q_f64(p_tw.add(in_idx1 + 2));
+
+                let res_a0 = neon_complex_mul_f64(a0, tw_a0);
+                let res_a1 = neon_complex_mul_f64(a1, tw_a1);
+                let res_b0 = neon_complex_mul_f64(b0, tw_b0);
+                let res_b1 = neon_complex_mul_f64(b1, tw_b1);
+
+                let out_idx0 = (y + x * height) * 2;
+                let out_idx1 = (y + (x + 1) * height) * 2;
+
+                vst1q_f64(p_out.add(out_idx0), res_a0);
+                vst1q_f64(p_out.add(out_idx0 + 2), res_b0);
+                vst1q_f64(p_out.add(out_idx1), res_a1);
+                vst1q_f64(p_out.add(out_idx1 + 2), res_b1);
+
+                x += 2;
+            }
+            while x < width {
+                let in_idx0 = in_row0 + x * 2;
+                let in_idx1 = in_row1 + x * 2;
+
+                let a0 = vld1q_f64(p_in.add(in_idx0));
+                let tw_a0 = vld1q_f64(p_tw.add(in_idx0));
+                let b0 = vld1q_f64(p_in.add(in_idx1));
+                let tw_b0 = vld1q_f64(p_tw.add(in_idx1));
+
+                let res_a0 = neon_complex_mul_f64(a0, tw_a0);
+                let res_b0 = neon_complex_mul_f64(b0, tw_b0);
+
+                let out_idx0 = (y + x * height) * 2;
+                vst1q_f64(p_out.add(out_idx0), res_a0);
+                vst1q_f64(p_out.add(out_idx0 + 2), res_b0);
+                x += 1;
+            }
+            y += 2;
+        }
+        while y < height {
+            let in_row = (y * width) * 2;
+            for x in 0..width {
+                let in_idx = in_row + x * 2;
+                let out_idx = (y + x * height) * 2;
+                let a = vld1q_f64(p_in.add(in_idx));
+                let tw = vld1q_f64(p_tw.add(in_idx));
+                let res = neon_complex_mul_f64(a, tw);
+                vst1q_f64(p_out.add(out_idx), res);
+            }
+            y += 1;
+        }
+        return true;
+    } else if TypeId::of::<T>() == TypeId::of::<f32>() {
+        let p_in = input.as_ptr() as *const f32;
+        let p_out = output.as_mut_ptr() as *mut f32;
+        let p_tw = twiddles.as_ptr() as *const f32;
+        for y in 0..height {
+            for x in 0..width {
+                let in_idx = (x + y * width) * 2;
+                let out_idx = (y + x * height) * 2;
+                let left = vld1_f32(p_in.add(in_idx));
+                let right = vld1_f32(p_tw.add(in_idx));
+                let left_q = vcombine_f32(left, left);
+                let right_q = vcombine_f32(right, right);
+                let temp1 = vtrn1q_f32(right_q, right_q);
+                let temp2 = vtrn2q_f32(right_q, vnegq_f32(right_q));
+                let temp3 = vmulq_f32(temp2, left_q);
+                let temp4 = vrev64q_f32(temp3);
+                let res = vfmaq_f32(temp4, temp1, left_q);
+                vst1_f32(p_out.add(out_idx), vget_low_f32(res));
+            }
         }
         return true;
     }
