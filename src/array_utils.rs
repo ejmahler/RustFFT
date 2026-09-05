@@ -6,9 +6,16 @@ use std::ops::{Deref, DerefMut};
 /// Given an array of size width * height, representing a flattened 2D array,
 /// transpose the rows and columns of that 2D array into the output
 /// benchmarking shows that loop tiling isn't effective for small arrays (in the range of 50x50 or smaller)
-pub unsafe fn transpose_small<T: Copy>(width: usize, height: usize, input: &[T], output: &mut [T]) {
-    for x in 0..width {
-        for y in 0..height {
+pub unsafe fn transpose_small<T: Copy + 'static>(width: usize, height: usize, input: &[T], output: &mut [T]) {
+    #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+    {
+        if crate::neon::neon_utils::transpose_small(width, height, input, output) {
+            return;
+        }
+    }
+
+    for y in 0..height {
+        for x in 0..width {
             let input_index = x + y * width;
             let output_index = y + x * height;
 
@@ -16,6 +23,7 @@ pub unsafe fn transpose_small<T: Copy>(width: usize, height: usize, input: &[T],
         }
     }
 }
+
 
 #[allow(unused)]
 pub unsafe fn workaround_transmute<T, U>(slice: &[T]) -> &[U] {

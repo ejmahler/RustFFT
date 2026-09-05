@@ -1,4 +1,5 @@
 use core::arch::aarch64::*;
+use num_complex::Complex;
 
 //  __  __       _   _               _________  _     _ _
 // |  \/  | __ _| |_| |__           |___ /___ \| |__ (_) |_
@@ -244,6 +245,66 @@ impl Rotate90F64 {
         let diff = vaddq_f64(rotated, values);
         vmulq_f64(diff, vmovq_n_f64(-(0.5f64.sqrt())))
     }
+}
+
+pub unsafe fn transpose_small<T: Copy + 'static>(
+    width: usize,
+    height: usize,
+    input: &[T],
+    output: &mut [T],
+) -> bool {
+    use std::any::TypeId;
+    if TypeId::of::<T>() == TypeId::of::<Complex<f64>>() {
+        let p_in = input.as_ptr() as *const f64;
+        let p_out = output.as_mut_ptr() as *mut f64;
+
+        let mut y = 0;
+        while y + 2 <= height {
+            let in_row0 = (y * width) * 2;
+            let in_row1 = ((y + 1) * width) * 2;
+            let mut x = 0;
+            while x + 2 <= width {
+                let in_idx0 = in_row0 + x * 2;
+                let in_idx1 = in_row1 + x * 2;
+                let a0 = vld1q_f64(p_in.add(in_idx0));
+                let a1 = vld1q_f64(p_in.add(in_idx0 + 2));
+                let b0 = vld1q_f64(p_in.add(in_idx1));
+                let b1 = vld1q_f64(p_in.add(in_idx1 + 2));
+
+                let out_idx0 = (y + x * height) * 2;
+                let out_idx1 = (y + (x + 1) * height) * 2;
+                vst1q_f64(p_out.add(out_idx0), a0);
+                vst1q_f64(p_out.add(out_idx0 + 2), b0);
+                vst1q_f64(p_out.add(out_idx1), a1);
+                vst1q_f64(p_out.add(out_idx1 + 2), b1);
+
+                x += 2;
+            }
+            while x < width {
+                let in_idx0 = in_row0 + x * 2;
+                let in_idx1 = in_row1 + x * 2;
+                let a0 = vld1q_f64(p_in.add(in_idx0));
+                let b0 = vld1q_f64(p_in.add(in_idx1));
+                let out_idx0 = (y + x * height) * 2;
+                vst1q_f64(p_out.add(out_idx0), a0);
+                vst1q_f64(p_out.add(out_idx0 + 2), b0);
+                x += 1;
+            }
+            y += 2;
+        }
+        while y < height {
+            let in_row = (y * width) * 2;
+            for x in 0..width {
+                let in_idx = in_row + x * 2;
+                let out_idx = (y + x * height) * 2;
+                let a = vld1q_f64(p_in.add(in_idx));
+                vst1q_f64(p_out.add(out_idx), a);
+            }
+            y += 1;
+        }
+        return true;
+    }
+    false
 }
 
 #[cfg(test)]
