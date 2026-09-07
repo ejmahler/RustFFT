@@ -27,14 +27,15 @@ pub fn transpose<T: Copy + 'static>(
 }
 
 /// Given an array of size width * height, representing a flattened 2D array,
-/// transpose the rows and columns of that 2D array into the output
-pub unsafe fn transpose_small<T: Copy + 'static>(
-    width: usize,
-    height: usize,
-    input: &[T],
-    output: &mut [T],
-) {
-    transpose(input, output, width, height);
+pub unsafe fn transpose_small<T: Copy>(width: usize, height: usize, input: &[T], output: &mut [T]) {
+    for x in 0..width {
+        for y in 0..height {
+            let input_index = x + y * width;
+            let output_index = y + x * height;
+
+            *output.get_unchecked_mut(output_index) = *input.get_unchecked(input_index);
+        }
+    }
 }
 
 pub unsafe fn transpose_small_twiddle<T: FftNum>(
