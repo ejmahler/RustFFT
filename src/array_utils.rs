@@ -7,15 +7,18 @@ use std::ops::{Deref, DerefMut};
 ///
 /// Given an array of size width * height, representing a flattened 2D array,
 /// transpose the rows and columns of that 2D array into the output.
-pub unsafe fn transpose<T: Copy + 'static>(
+pub fn transpose<T: Copy + 'static>(
     input: &[T],
     output: &mut [T],
     width: usize,
     height: usize,
 ) {
+    assert!(input.len() >= width * height);
+    assert!(output.len() >= width * height);
+
     #[cfg(all(target_arch = "aarch64", feature = "neon"))]
     {
-        if crate::neon::neon_utils::transpose(width, height, input, output) {
+        if unsafe { crate::neon::neon_utils::transpose(width, height, input, output) } {
             return;
         }
     }
@@ -41,6 +44,10 @@ pub unsafe fn transpose_small_twiddle<T: FftNum>(
     output: &mut [Complex<T>],
     twiddles: &[Complex<T>],
 ) {
+    assert!(input.len() >= width * height);
+    assert!(output.len() >= width * height);
+    assert!(twiddles.len() >= width * height);
+
     #[cfg(all(target_arch = "aarch64", feature = "neon"))]
     {
         if crate::neon::neon_utils::transpose_small_twiddle(width, height, input, output, twiddles) {
@@ -59,6 +66,7 @@ pub unsafe fn transpose_small_twiddle<T: FftNum>(
     }
 }
 
+#[allow(unused)]
 pub unsafe fn workaround_transmute<T, U>(slice: &[T]) -> &[U] {
     let ptr = slice.as_ptr() as *const U;
     let len = slice.len();
@@ -166,7 +174,7 @@ mod unit_tests {
                 // Test f32
                 let input_f32: Vec<Complex<f32>> = random_signal(len);
                 let mut output_f32 = vec![Zero::zero(); len];
-                unsafe { transpose(&input_f32, &mut output_f32, width, height) };
+                transpose(&input_f32, &mut output_f32, width, height);
                 for x in 0..width {
                     for y in 0..height {
                         assert_eq!(
@@ -184,7 +192,7 @@ mod unit_tests {
                 // Test f64
                 let input_f64: Vec<Complex<f64>> = random_signal(len);
                 let mut output_f64 = vec![Zero::zero(); len];
-                unsafe { transpose(&input_f64, &mut output_f64, width, height) };
+                transpose(&input_f64, &mut output_f64, width, height);
                 for x in 0..width {
                     for y in 0..height {
                         assert_eq!(

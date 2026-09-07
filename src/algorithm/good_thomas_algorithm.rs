@@ -236,7 +236,7 @@ impl<T: FftNum> GoodThomasAlgorithm<T> {
             .process_with_scratch(scratch, width_scratch);
 
         // transpose
-        unsafe { array_utils::transpose(scratch, buffer, self.width, self.height) };
+        array_utils::transpose(scratch, buffer, self.width, self.height);
 
         // run FFTs of size 'height'
         self.height_size_fft
@@ -261,7 +261,7 @@ impl<T: FftNum> GoodThomasAlgorithm<T> {
         let (scratch, inner_scratch) = scratch.split_at_mut(self.len());
 
         // transpose
-        unsafe { array_utils::transpose(output, scratch, self.width, self.height) };
+        array_utils::transpose(output, scratch, self.width, self.height);
 
         // run FFTs of size 'height'
         self.height_size_fft
@@ -290,7 +290,7 @@ impl<T: FftNum> GoodThomasAlgorithm<T> {
             .process_with_scratch(output, width_scratch);
 
         // transpose
-        unsafe { array_utils::transpose(output, input, self.width, self.height) };
+        array_utils::transpose(output, input, self.width, self.height);
 
         // run FFTs of size 'height'
         let height_scratch = if scratch.len() > output.len() {
