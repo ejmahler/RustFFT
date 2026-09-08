@@ -50,3 +50,10 @@ rand = "0.8"
 pastey = "0.2"
 getrandom = {version = "^0.2", features = ["js"]}
 wasm-bindgen-test = "^0.3.36"
+
+# Compares the Neon and FCMA backends against each other. Needs the nightly-only "fcma" feature,
+# and a CPU implementing ARMv8.3-A:
+#   cargo +nightly bench --features fcma --bench bench_compare_neon_fcma
+[[bench]]
+name = "bench_compare_neon_fcma"
+required-features = ["fcma"]
