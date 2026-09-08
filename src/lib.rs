@@ -130,6 +130,9 @@ mod math_utils;
 mod plan;
 mod twiddles;
 
+/// Utilities for 2D FFTs.
+pub mod fft2d;
+
 use num_complex::Complex;
 use num_traits::Zero;
 
