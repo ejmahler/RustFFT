@@ -119,9 +119,15 @@ jobs:
       - name: Run cargo test for arm
         run: cross test --release --features neon --target aarch64-unknown-linux-gnu
 
+  # Both fcma jobs run on native arm hardware that implements ARMv8.3-A, so they really execute
+  # the FCMA instructions. The tests assert that the feature was detected, so they fail rather
+  # than quietly skipping if that ever stops being true.
+  #
+  # It is worth having both: fcma is in the default target features on aarch64-apple-darwin but
+  # not on aarch64-unknown-linux-gnu, and the two targets detect it in different ways.
   check_arm64_fcma:
-    name: Check Linux arm 64bit with fcma
-    runs-on: ubuntu-latest
+    name: Check and test Linux arm 64bit with fcma
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout sources
         uses: actions/checkout@v3
@@ -129,16 +135,29 @@ jobs:
       # The FCMA intrinsics are unstable, so this feature only builds on nightly.
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@nightly
-        with:
-          targets: aarch64-unknown-linux-gnu
 
-      - name: Install cross
-        run: cargo install cross --version 0.2.5 --locked
-
-      # This is a compile check only. The runners available here are older than ARMv8.3-A,
-      # so they cannot execute the FCMA instructions.
       - name: Run cargo check
-        run: cross check --features fcma --target aarch64-unknown-linux-gnu
+        run: cargo check --features fcma
+
+      - name: Run cargo test
+        run: cargo test --release --features fcma
+
+  check_macos_fcma:
+    name: Check and test macOS arm 64bit with fcma
+    runs-on: macos-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v3
+
+      # The FCMA intrinsics are unstable, so this feature only builds on nightly.
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Run cargo check
+        run: cargo check --features fcma
+
+      - name: Run cargo test
+        run: cargo test --release --features fcma
 
   check_x86:
     name: Check and test Linux x86 32bit
