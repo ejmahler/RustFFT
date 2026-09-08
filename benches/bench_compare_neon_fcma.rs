@@ -86,4 +86,9 @@ macro_rules! make_benches {
     }
 }
 
+// Powers of two, which go through radix4 and the hand written butterflies
 make_benches!(fcmacomparison, {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072});
+
+// The prime butterfly lengths, some composites built from them, and larger primes that end up in
+// Rader's or Bluestein's with a prime butterfly somewhere inside
+make_benches!(fcmacomparison, {7, 11, 13, 17, 19, 23, 29, 31, 49, 121, 289, 961, 1000, 1009, 5000, 5003});

@@ -152,9 +152,7 @@ pub trait FcmaVector: Copy + Debug + Send + Sync {
     // math ops
     unsafe fn neg(a: Self) -> Self;
     unsafe fn add(a: Self, b: Self) -> Self;
-    unsafe fn mul(a: Self, b: Self) -> Self;
     unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self;
-    unsafe fn nmadd(acc: Self, a: Self, b: Self) -> Self;
 
     unsafe fn broadcast_scalar(value: Self::ScalarType) -> Self;
 
@@ -173,15 +171,25 @@ pub trait FcmaVector: Copy + Debug + Send + Sync {
     /// Constructs a Rotate90 object that will apply eithr a 90 or 270 degree rotationto the complex elements
     unsafe fn make_rotate90(direction: FftDirection) -> Rotation90<Self>;
 
-    /// Uses a pre-constructed rotate90 object to apply the given rotation
-    unsafe fn apply_rotate90(direction: Rotation90<Self>, values: Self) -> Self;
-
     /// Rotates `values` and adds the result to `acc`. The FCMA instructions do the rotation and
     /// the accumulation in one go, so this is cheaper than rotating and adding separately.
     unsafe fn rotate90_and_add(direction: Rotation90<Self>, acc: Self, values: Self) -> Self;
 
     /// Rotates `values` and subtracts the result from `acc`, see `rotate90_and_add`.
     unsafe fn rotate90_and_sub(direction: Rotation90<Self>, acc: Self, values: Self) -> Self;
+
+    /// Rotates `b` by 90 degrees and multiplies it by the real number `a`, which must be
+    /// broadcast to both halves of every complex element. One FCMA instruction does the whole
+    /// thing, so the rotation is free.
+    unsafe fn mul_rotate90(a: Self, b: Self) -> Self;
+
+    /// Rotates `b` by 90 degrees, multiplies it by the real number `a`, and adds the result to
+    /// `acc`. See `mul_rotate90` for the requirement on `a`.
+    unsafe fn fmadd_rotate90(acc: Self, a: Self, b: Self) -> Self;
+
+    /// Rotates `b` by 90 degrees, multiplies it by the real number `a`, and subtracts the result
+    /// from `acc`. See `mul_rotate90` for the requirement on `a`.
+    unsafe fn nmadd_rotate90(acc: Self, a: Self, b: Self) -> Self;
 
     /// Each of these Interprets the input as rows of a Self::COMPLEX_PER_VECTOR-by-N 2D array, and computes parallel butterflies down the columns of the 2D array
     unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2];
@@ -238,16 +246,8 @@ impl FcmaVector for float32x4_t {
         vaddq_f32(a, b)
     }
     #[inline(always)]
-    unsafe fn mul(a: Self, b: Self) -> Self {
-        vmulq_f32(a, b)
-    }
-    #[inline(always)]
     unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self {
         vfmaq_f32(acc, a, b)
-    }
-    #[inline(always)]
-    unsafe fn nmadd(acc: Self, a: Self, b: Self) -> Self {
-        vfmaq_f32(acc, a, vnegq_f32(b))
     }
 
     #[inline(always)]
@@ -290,12 +290,6 @@ impl FcmaVector for float32x4_t {
     }
 
     #[inline(always)]
-    unsafe fn apply_rotate90(direction: Rotation90<Self>, values: Self) -> Self {
-        let zero = vmovq_n_f32(0.0);
-        vcmlaq_rot90_f32(zero, direction.0, values)
-    }
-
-    #[inline(always)]
     unsafe fn rotate90_and_add(direction: Rotation90<Self>, acc: Self, values: Self) -> Self {
         vcmlaq_rot90_f32(acc, direction.0, values)
     }
@@ -303,6 +297,22 @@ impl FcmaVector for float32x4_t {
     #[inline(always)]
     unsafe fn rotate90_and_sub(direction: Rotation90<Self>, acc: Self, values: Self) -> Self {
         vcmlaq_rot270_f32(acc, direction.0, values)
+    }
+
+    #[inline(always)]
+    unsafe fn mul_rotate90(a: Self, b: Self) -> Self {
+        let zero = vmovq_n_f32(0.0);
+        vcmlaq_rot90_f32(zero, a, b)
+    }
+
+    #[inline(always)]
+    unsafe fn fmadd_rotate90(acc: Self, a: Self, b: Self) -> Self {
+        vcmlaq_rot90_f32(acc, a, b)
+    }
+
+    #[inline(always)]
+    unsafe fn nmadd_rotate90(acc: Self, a: Self, b: Self) -> Self {
+        vcmlaq_rot270_f32(acc, a, b)
     }
 
     #[inline(always)]
@@ -373,16 +383,8 @@ impl FcmaVector for float64x2_t {
         vaddq_f64(a, b)
     }
     #[inline(always)]
-    unsafe fn mul(a: Self, b: Self) -> Self {
-        vmulq_f64(a, b)
-    }
-    #[inline(always)]
     unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self {
         vfmaq_f64(acc, a, b)
-    }
-    #[inline(always)]
-    unsafe fn nmadd(acc: Self, a: Self, b: Self) -> Self {
-        vfmaq_f64(acc, a, vnegq_f64(b))
     }
 
     #[inline(always)]
@@ -425,12 +427,6 @@ impl FcmaVector for float64x2_t {
     }
 
     #[inline(always)]
-    unsafe fn apply_rotate90(direction: Rotation90<Self>, values: Self) -> Self {
-        let zero = vmovq_n_f64(0.0);
-        vcmlaq_rot90_f64(zero, direction.0, values)
-    }
-
-    #[inline(always)]
     unsafe fn rotate90_and_add(direction: Rotation90<Self>, acc: Self, values: Self) -> Self {
         vcmlaq_rot90_f64(acc, direction.0, values)
     }
@@ -438,6 +434,22 @@ impl FcmaVector for float64x2_t {
     #[inline(always)]
     unsafe fn rotate90_and_sub(direction: Rotation90<Self>, acc: Self, values: Self) -> Self {
         vcmlaq_rot270_f64(acc, direction.0, values)
+    }
+
+    #[inline(always)]
+    unsafe fn mul_rotate90(a: Self, b: Self) -> Self {
+        let zero = vmovq_n_f64(0.0);
+        vcmlaq_rot90_f64(zero, a, b)
+    }
+
+    #[inline(always)]
+    unsafe fn fmadd_rotate90(acc: Self, a: Self, b: Self) -> Self {
+        vcmlaq_rot90_f64(acc, a, b)
+    }
+
+    #[inline(always)]
+    unsafe fn nmadd_rotate90(acc: Self, a: Self, b: Self) -> Self {
+        vcmlaq_rot270_f64(acc, a, b)
     }
 
     #[inline(always)]
