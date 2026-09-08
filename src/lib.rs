@@ -88,9 +88,9 @@
 //!
 //! Elements in the output have the following order:
 //! 
-//!  - Frequency zero
-//!  - Positive frequencies, from smallest magnitude to largest
-//!  - Negative frequencies, from smallest magnitude to largest
+//!  1. Frequency zero
+//!  1. Positive frequencies, from smallest magnitude to largest
+//!  1. Negative frequencies, from smallest magnitude to largest
 //!
 //! ### AVX Performance Tips
 //!
