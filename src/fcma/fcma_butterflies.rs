@@ -695,16 +695,19 @@ impl<T: FftNum> FcmaF32Butterfly4<T> {
         // and
         // step 2: column FFTs
         let temp0 = parallel_fft2_interleaved_f32(values[0], values[2]);
-        let mut temp1 = parallel_fft2_interleaved_f32(values[1], values[3]);
+        let temp1 = parallel_fft2_interleaved_f32(values[1], values[3]);
 
-        // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-        temp1[1] = self.rotate.rotate_both(temp1[1]);
+        // step 3 and 5: the only twiddle factor is either 0 + i or 0 - i, so the rotation folds
+        // into the second row FFT
 
         // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
         // step 5: row FFTs
         let out0 = parallel_fft2_interleaved_f32(temp0[0], temp1[0]);
-        let out2 = parallel_fft2_interleaved_f32(temp0[1], temp1[1]);
+        let out2 = [
+            self.rotate.rotate_both_and_add(temp0[1], temp1[1]),
+            self.rotate.rotate_both_and_sub(temp0[1], temp1[1]),
+        ];
 
         // step 6: transpose by swapping index 1 and 2
         [out0[0], out2[0], out0[1], out2[1]]
@@ -767,16 +770,19 @@ impl<T: FftNum> FcmaF64Butterfly4<T> {
         // and
         // step 2: column FFTs
         let temp0 = solo_fft2_f64(values[0], values[2]);
-        let mut temp1 = solo_fft2_f64(values[1], values[3]);
+        let temp1 = solo_fft2_f64(values[1], values[3]);
 
-        // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-        temp1[1] = self.rotate.rotate(temp1[1]);
+        // step 3 and 5: the only twiddle factor is either 0 + i or 0 - i, so the rotation folds
+        // into the second row FFT
 
         // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
         // step 5: row FFTs
         let out0 = solo_fft2_f64(temp0[0], temp1[0]);
-        let out2 = solo_fft2_f64(temp0[1], temp1[1]);
+        let out2 = [
+            self.rotate.rotate_and_add(temp0[1], temp1[1]),
+            self.rotate.rotate_and_sub(temp0[1], temp1[1]),
+        ];
 
         // step 6: transpose by swapping index 1 and 2
         [out0[0], out2[0], out0[1], out2[1]]
@@ -902,12 +908,10 @@ impl<T: FftNum> FcmaF32Butterfly5<T> {
         let temp_a = vaddq_f32(value00, temp_a);
         let temp_b = vfmaq_f32(temp_b1, self.twiddle21im, x2323n);
 
-        let b_rot = self.rotate.rotate_both(temp_b);
-
         let x00 = vaddq_f32(value00, vaddq_f32(x1414p, x2323p));
 
-        let x12 = vaddq_f32(temp_a, b_rot);
-        let x34 = reverse_complex_elements_f32(vsubq_f32(temp_a, b_rot));
+        let x12 = self.rotate.rotate_both_and_add(temp_a, temp_b);
+        let x34 = reverse_complex_elements_f32(self.rotate.rotate_both_and_sub(temp_a, temp_b));
         [x00, x12, x34]
     }
 
@@ -944,10 +948,10 @@ impl<T: FftNum> FcmaF32Butterfly5<T> {
 
         [
             vaddq_f32(value0, vaddq_f32(x14p, x23p)),
-            vaddq_f32(temp_a1, self.rotate.rotate_both(temp_b1)),
-            vaddq_f32(temp_a2, self.rotate.rotate_both(temp_b2)),
-            vsubq_f32(temp_a2, self.rotate.rotate_both(temp_b2)),
-            vsubq_f32(temp_a1, self.rotate.rotate_both(temp_b1)),
+            self.rotate.rotate_both_and_add(temp_a1, temp_b1),
+            self.rotate.rotate_both_and_add(temp_a2, temp_b2),
+            self.rotate.rotate_both_and_sub(temp_a2, temp_b2),
+            self.rotate.rotate_both_and_sub(temp_a1, temp_b1),
         ]
     }
 }
@@ -1044,14 +1048,12 @@ impl<T: FftNum> FcmaF64Butterfly5<T> {
         let temp_b1 = vaddq_f64(temp_b1_1, temp_b1_2);
         let temp_b2 = vsubq_f64(temp_b2_1, temp_b2_2);
 
-        let temp_b1_rot = self.rotate.rotate(temp_b1);
-        let temp_b2_rot = self.rotate.rotate(temp_b2);
         [
             vaddq_f64(value0, vaddq_f64(x14p, x23p)),
-            vaddq_f64(temp_a1, temp_b1_rot),
-            vaddq_f64(temp_a2, temp_b2_rot),
-            vsubq_f64(temp_a2, temp_b2_rot),
-            vsubq_f64(temp_a1, temp_b1_rot),
+            self.rotate.rotate_and_add(temp_a1, temp_b1),
+            self.rotate.rotate_and_add(temp_a2, temp_b2),
+            self.rotate.rotate_and_sub(temp_a2, temp_b2),
+            self.rotate.rotate_and_sub(temp_a1, temp_b1),
         ]
     }
 }
@@ -1246,7 +1248,6 @@ impl<T: FftNum> FcmaF64Butterfly6<T> {
 
 pub struct FcmaF32Butterfly8<T> {
     root2: float32x4_t,
-    root2_dual: float32x4_t,
     bf4: FcmaF32Butterfly4<T>,
     rotate90: Rotate90F32,
 }
@@ -1261,7 +1262,6 @@ impl<T: FftNum> FcmaF32Butterfly8<T> {
         let bf4 = FcmaF32Butterfly4::new(direction);
         let root2 =
             unsafe { vld1q_f32([1.0, 1.0, 0.5f32.sqrt(), 0.5f32.sqrt(), 1.0, 1.0].as_ptr()) };
-        let root2_dual = unsafe { vmovq_n_f32(0.5f32.sqrt()) };
         let rotate90 = if direction == FftDirection::Inverse {
             Rotate90F32::new(true)
         } else {
@@ -1269,7 +1269,6 @@ impl<T: FftNum> FcmaF32Butterfly8<T> {
         };
         Self {
             root2,
-            root2_dual,
             bf4,
             rotate90,
         }
@@ -1318,8 +1317,7 @@ impl<T: FftNum> FcmaF32Butterfly8<T> {
         val2[0] = extract_lo_hi_f32(val2[0], val2d);
 
         let val3b = self.rotate90.rotate_both(val2[1]);
-        let val3c = vsubq_f32(val3b, val2[1]);
-        let val3d = vmulq_f32(val3c, self.root2);
+        let val3d = self.rotate90.rotate_both_135(val2[1]);
         val2[1] = extract_lo_hi_f32(val3b, val3d);
 
         // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
@@ -1346,13 +1344,9 @@ impl<T: FftNum> FcmaF32Butterfly8<T> {
             .perform_parallel_fft_direct([values[1], values[3], values[5], values[7]]);
 
         // step 3: apply twiddle factors
-        let val5b = self.rotate90.rotate_both(val47[1]);
-        let val5c = vaddq_f32(val5b, val47[1]);
-        val47[1] = vmulq_f32(val5c, self.root2_dual);
+        val47[1] = self.rotate90.rotate_both_45(val47[1]);
         val47[2] = self.rotate90.rotate_both(val47[2]);
-        let val7b = self.rotate90.rotate_both(val47[3]);
-        let val7c = vsubq_f32(val7b, val47[3]);
-        val47[3] = vmulq_f32(val7c, self.root2_dual);
+        val47[3] = self.rotate90.rotate_both_135(val47[3]);
 
         // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
 
@@ -1377,7 +1371,6 @@ impl<T: FftNum> FcmaF32Butterfly8<T> {
 //
 
 pub struct FcmaF64Butterfly8<T> {
-    root2: float64x2_t,
     bf4: FcmaF64Butterfly4<T>,
     rotate90: Rotate90F64,
 }
@@ -1390,17 +1383,12 @@ impl<T: FftNum> FcmaF64Butterfly8<T> {
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let bf4 = FcmaF64Butterfly4::new(direction);
-        let root2 = unsafe { vmovq_n_f64(0.5f64.sqrt()) };
         let rotate90 = if direction == FftDirection::Inverse {
             Rotate90F64::new(true)
         } else {
             Rotate90F64::new(false)
         };
-        Self {
-            root2,
-            bf4,
-            rotate90,
-        }
+        Self { bf4, rotate90 }
     }
 
     #[inline(always)]
@@ -1426,13 +1414,9 @@ impl<T: FftNum> FcmaF64Butterfly8<T> {
             .perform_fft_direct([values[1], values[3], values[5], values[7]]);
 
         // step 3: apply twiddle factors
-        let val5b = self.rotate90.rotate(val47[1]);
-        let val5c = vaddq_f64(val5b, val47[1]);
-        val47[1] = vmulq_f64(val5c, self.root2);
+        val47[1] = self.rotate90.rotate_45(val47[1]);
         val47[2] = self.rotate90.rotate(val47[2]);
-        let val7b = self.rotate90.rotate(val47[3]);
-        let val7c = vsubq_f64(val7b, val47[3]);
-        val47[3] = vmulq_f64(val7c, self.root2);
+        val47[3] = self.rotate90.rotate_135(val47[3]);
 
         // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
 

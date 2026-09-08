@@ -31,11 +31,13 @@ impl Rotate90F32 {
                 vld1_f32([0.0, -0.0].as_ptr())
             }
         };
+        // The FCMA instructions multiply by a complex number rather than flipping a sign bit,
+        // so this is the factor to multiply the rotated value by, not a sign mask.
         let sign_both = unsafe {
             if positive {
-                vld1q_f32([-0.0, 0.0, -0.0, 0.0].as_ptr())
+                vmovq_n_f32(1.0)
             } else {
-                vld1q_f32([0.0, -0.0, 0.0, -0.0].as_ptr())
+                vmovq_n_f32(-1.0)
             }
         };
         Self {
@@ -65,32 +67,41 @@ impl Rotate90F32 {
 
     #[inline(always)]
     pub unsafe fn rotate_both(&self, values: float32x4_t) -> float32x4_t {
-        let temp = vrev64q_f32(values);
-        vreinterpretq_f32_u32(veorq_u32(
-            vreinterpretq_u32_f32(temp),
-            vreinterpretq_u32_f32(self.sign_both),
-        ))
+        let zero = vmovq_n_f32(0.0);
+        vcmlaq_rot90_f32(zero, self.sign_both, values)
+    }
+
+    /// Rotates `values` and adds the result to `acc`, in a single instruction.
+    #[inline(always)]
+    pub unsafe fn rotate_both_and_add(&self, acc: float32x4_t, values: float32x4_t) -> float32x4_t {
+        vcmlaq_rot90_f32(acc, self.sign_both, values)
+    }
+
+    /// Rotates `values` and subtracts the result from `acc`, in a single instruction.
+    #[inline(always)]
+    pub unsafe fn rotate_both_and_sub(&self, acc: float32x4_t, values: float32x4_t) -> float32x4_t {
+        vcmlaq_rot270_f32(acc, self.sign_both, values)
     }
 
     #[inline(always)]
     pub unsafe fn rotate_both_45(&self, values: float32x4_t) -> float32x4_t {
-        let rotated = self.rotate_both(values);
-        let sum = vaddq_f32(rotated, values);
+        // rotate(values) + values
+        let sum = self.rotate_both_and_add(values, values);
         vmulq_f32(sum, vmovq_n_f32(0.5f32.sqrt()))
     }
 
     #[inline(always)]
     pub unsafe fn rotate_both_135(&self, values: float32x4_t) -> float32x4_t {
-        let rotated = self.rotate_both(values);
-        let diff = vsubq_f32(rotated, values);
-        vmulq_f32(diff, vmovq_n_f32(0.5f32.sqrt()))
+        // values - rotate(values), which is the negated difference we are after
+        let diff = self.rotate_both_and_sub(values, values);
+        vmulq_f32(diff, vmovq_n_f32(-(0.5f32.sqrt())))
     }
 
     #[inline(always)]
     pub unsafe fn rotate_both_225(&self, values: float32x4_t) -> float32x4_t {
-        let rotated = self.rotate_both(values);
-        let diff = vaddq_f32(rotated, values);
-        vmulq_f32(diff, vmovq_n_f32(-(0.5f32.sqrt())))
+        // rotate(values) + values
+        let sum = self.rotate_both_and_add(values, values);
+        vmulq_f32(sum, vmovq_n_f32(-(0.5f32.sqrt())))
     }
 }
 
@@ -205,11 +216,13 @@ pub(crate) struct Rotate90F64 {
 
 impl Rotate90F64 {
     pub fn new(positive: bool) -> Self {
+        // The FCMA instructions multiply by a complex number rather than flipping a sign bit,
+        // so this is the factor to multiply the rotated value by, not a sign mask.
         let sign = unsafe {
             if positive {
-                vld1q_f64([-0.0, 0.0].as_ptr())
+                vmovq_n_f64(1.0)
             } else {
-                vld1q_f64([0.0, -0.0].as_ptr())
+                vmovq_n_f64(-1.0)
             }
         };
         Self { sign }
@@ -217,32 +230,41 @@ impl Rotate90F64 {
 
     #[inline(always)]
     pub unsafe fn rotate(&self, values: float64x2_t) -> float64x2_t {
-        let temp = vcombine_f64(vget_high_f64(values), vget_low_f64(values));
-        vreinterpretq_f64_u64(veorq_u64(
-            vreinterpretq_u64_f64(temp),
-            vreinterpretq_u64_f64(self.sign),
-        ))
+        let zero = vmovq_n_f64(0.0);
+        vcmlaq_rot90_f64(zero, self.sign, values)
+    }
+
+    /// Rotates `values` and adds the result to `acc`, in a single instruction.
+    #[inline(always)]
+    pub unsafe fn rotate_and_add(&self, acc: float64x2_t, values: float64x2_t) -> float64x2_t {
+        vcmlaq_rot90_f64(acc, self.sign, values)
+    }
+
+    /// Rotates `values` and subtracts the result from `acc`, in a single instruction.
+    #[inline(always)]
+    pub unsafe fn rotate_and_sub(&self, acc: float64x2_t, values: float64x2_t) -> float64x2_t {
+        vcmlaq_rot270_f64(acc, self.sign, values)
     }
 
     #[inline(always)]
     pub unsafe fn rotate_45(&self, values: float64x2_t) -> float64x2_t {
-        let rotated = self.rotate(values);
-        let sum = vaddq_f64(rotated, values);
+        // rotate(values) + values
+        let sum = self.rotate_and_add(values, values);
         vmulq_f64(sum, vmovq_n_f64(0.5f64.sqrt()))
     }
 
     #[inline(always)]
     pub unsafe fn rotate_135(&self, values: float64x2_t) -> float64x2_t {
-        let rotated = self.rotate(values);
-        let diff = vsubq_f64(rotated, values);
-        vmulq_f64(diff, vmovq_n_f64(0.5f64.sqrt()))
+        // values - rotate(values), which is the negated difference we are after
+        let diff = self.rotate_and_sub(values, values);
+        vmulq_f64(diff, vmovq_n_f64(-(0.5f64.sqrt())))
     }
 
     #[inline(always)]
     pub unsafe fn rotate_225(&self, values: float64x2_t) -> float64x2_t {
-        let rotated = self.rotate(values);
-        let diff = vaddq_f64(rotated, values);
-        vmulq_f64(diff, vmovq_n_f64(-(0.5f64.sqrt())))
+        // rotate(values) + values
+        let sum = self.rotate_and_add(values, values);
+        vmulq_f64(sum, vmovq_n_f64(-(0.5f64.sqrt())))
     }
 }
 
