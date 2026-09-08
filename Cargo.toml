@@ -66,3 +66,7 @@ wasm-bindgen = "=0.2.105"
 # we don't serde_json directly, but a dependency does, and version 1.0.146+ requires rustc 1.65+
 # it probably isn't wise to stay on an old version for a long time, but we'll have to upgrade MSRV to upgrade
 serde_json = "=1.0.145"
+
+# we don't itoa directly, but a dependency does, and version 1.0.16+ requires rustc 1.68+
+# it probably isn't wise to stay on an old version for a long time, but we'll have to upgrade MSRV to upgrade
+itoa = "=1.0.15"
