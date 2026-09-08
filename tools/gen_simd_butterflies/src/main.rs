@@ -28,6 +28,9 @@ struct Architecture {
     vector_f32: &'static str,
     vector_f64: &'static str,
     cpu_feature_name: &'static str,
+    // The feature list for #[target_feature(enable = ...)], which may need more than the
+    // single feature that gets detected at runtime.
+    target_feature_name: &'static str,
     has_dynamic_cpu_features: bool,
     dynamic_cpu_feature_macro: &'static str,
     arch_include: &'static str,
@@ -43,7 +46,7 @@ struct Context {
 }
 
 const USAGE_STR: &'static str =
-    "Usage: {executable} sse|wasm_simd|neon lengths [--check <filename>]";
+    "Usage: {executable} sse|wasm_simd|neon|fcma lengths [--check <filename>]";
 
 fn main() -> Result<(), Box<dyn Error>> {
     let (arch, lengths, check_filename) = parse_args()?;
@@ -155,6 +158,7 @@ fn parse_architecture(arch_str: Option<String>) -> Result<Architecture, String> 
                 vector_f32: "__m128",
                 vector_f64: "__m128d",
                 cpu_feature_name: "sse4.1",
+                target_feature_name: "sse4.1",
                 has_dynamic_cpu_features: true,
                 dynamic_cpu_feature_macro: "std::arch::is_x86_feature_detected",
                 arch_include: "use core::arch::x86_64::{__m128, __m128d};",
@@ -171,11 +175,29 @@ fn parse_architecture(arch_str: Option<String>) -> Result<Architecture, String> 
                 vector_f32: "WasmVector32",
                 vector_f64: "WasmVector64",
                 cpu_feature_name: "simd128",
+                target_feature_name: "simd128",
                 has_dynamic_cpu_features: false,
                 dynamic_cpu_feature_macro: "",
                 arch_include: "",
                 test_attribute: "wasm_bindgen_test",
                 extra_test_includes: vec!["use wasm_bindgen_test::wasm_bindgen_test;"],
+            });
+        } else if arch_str == "fcma" {
+            return Ok(Architecture {
+                name_snakecase: "fcma",
+                name_camelcase: "Fcma",
+                name_display: "FCMA",
+                array_trait: "FcmaArrayMut",
+                vector_trait: "FcmaVector",
+                vector_f32: "float32x4_t",
+                vector_f64: "float64x2_t",
+                cpu_feature_name: "fcma",
+                target_feature_name: "neon,fcma",
+                has_dynamic_cpu_features: true,
+                dynamic_cpu_feature_macro: "std::arch::is_aarch64_feature_detected",
+                arch_include: "use core::arch::aarch64::{float32x4_t, float64x2_t};",
+                test_attribute: "test",
+                extra_test_includes: vec![],
             });
         } else if arch_str == "neon" {
             return Ok(Architecture {
@@ -187,6 +209,7 @@ fn parse_architecture(arch_str: Option<String>) -> Result<Architecture, String> 
                 vector_f32: "float32x4_t",
                 vector_f64: "float64x2_t",
                 cpu_feature_name: "neon",
+                target_feature_name: "neon",
                 has_dynamic_cpu_features: true,
                 dynamic_cpu_feature_macro: "std::arch::is_aarch64_feature_detected",
                 arch_include: "use core::arch::aarch64::{float32x4_t, float64x2_t};",

@@ -11,6 +11,7 @@ use crate::algorithm::*;
 use crate::Fft;
 
 use crate::FftPlannerAvx;
+use crate::FftPlannerFcma;
 use crate::FftPlannerNeon;
 use crate::FftPlannerSse;
 
@@ -20,6 +21,7 @@ enum ChosenFftPlanner<T: FftNum> {
     Scalar(FftPlannerScalar<T>),
     Avx(FftPlannerAvx<T>),
     Sse(FftPlannerSse<T>),
+    Fcma(FftPlannerFcma<T>),
     Neon(FftPlannerNeon<T>),
     WasmSimd(FftPlannerWasmSimd<T>),
     // todo: If we add NEON, avx-512 etc support, add more enum variants for them here
@@ -78,6 +80,10 @@ impl<T: FftNum> FftPlanner<T> {
             Self {
                 chosen_planner: ChosenFftPlanner::Sse(sse_planner),
             }
+        } else if let Ok(fcma_planner) = FftPlannerFcma::new() {
+            Self {
+                chosen_planner: ChosenFftPlanner::Fcma(fcma_planner),
+            }
         } else if let Ok(neon_planner) = FftPlannerNeon::new() {
             Self {
                 chosen_planner: ChosenFftPlanner::Neon(neon_planner),
@@ -103,6 +109,7 @@ impl<T: FftNum> FftPlanner<T> {
             ChosenFftPlanner::Scalar(scalar_planner) => scalar_planner.plan_fft(len, direction),
             ChosenFftPlanner::Avx(avx_planner) => avx_planner.plan_fft(len, direction),
             ChosenFftPlanner::Sse(sse_planner) => sse_planner.plan_fft(len, direction),
+            ChosenFftPlanner::Fcma(fcma_planner) => fcma_planner.plan_fft(len, direction),
             ChosenFftPlanner::Neon(neon_planner) => neon_planner.plan_fft(len, direction),
             ChosenFftPlanner::WasmSimd(wasm_simd_planner) => {
                 wasm_simd_planner.plan_fft(len, direction)

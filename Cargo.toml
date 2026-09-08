@@ -23,6 +23,9 @@ default = ["avx", "sse", "neon"]
 # If neither instruction set is available, it will fall back to the scalar code.  
 #
 # On AArch64, the "neon" feature enables compilation of Neon-accelerated code.
+# Also on AArch64, the "fcma" feature enables compilation of code using the FCMA (floating point complex
+# multiply accumulate) instructions from ARMv8.3-A. This requires a nightly compiler, since the intrinsics
+# are still unstable. It is used instead of the plain Neon code when the CPU supports it.
 #
 # On wasm32, the "wasm_simd" feature enables compilation of Wasm SIMD accelerated code.
 #
@@ -30,6 +33,7 @@ default = ["avx", "sse", "neon"]
 avx = []
 sse = []
 neon = []
+fcma = []
 wasm_simd = []
 
 

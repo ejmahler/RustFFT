@@ -60,6 +60,8 @@ jobs:
         run: cargo run --manifest-path ./tools/gen_simd_butterflies/Cargo.toml -- sse 7 11 13 17 19 23 29 31 --check src/sse/sse_prime_butterflies.rs
       - name: Check NEON Prime Butterflies
         run: cargo run --manifest-path ./tools/gen_simd_butterflies/Cargo.toml -- neon 7 11 13 17 19 23 29 31 --check src/neon/neon_prime_butterflies.rs
+      - name: Check FCMA Prime Butterflies
+        run: cargo run --manifest-path ./tools/gen_simd_butterflies/Cargo.toml -- fcma 7 11 13 17 19 23 29 31 --check src/fcma/fcma_prime_butterflies.rs
       - name: Check Wasm SIMD Prime Butterflies
         run: cargo run --manifest-path ./tools/gen_simd_butterflies/Cargo.toml -- wasm_simd 7 11 13 17 19 23 29 31 --check src/wasm_simd/wasm_simd_prime_butterflies.rs
 
@@ -116,6 +118,27 @@ jobs:
 
       - name: Run cargo test for arm
         run: cross test --release --features neon --target aarch64-unknown-linux-gnu
+
+  check_arm64_fcma:
+    name: Check Linux arm 64bit with fcma
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v3
+
+      # The FCMA intrinsics are unstable, so this feature only builds on nightly.
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: aarch64-unknown-linux-gnu
+
+      - name: Install cross
+        run: cargo install cross --version 0.2.5 --locked
+
+      # This is a compile check only. The runners available here are older than ARMv8.3-A,
+      # so they cannot execute the FCMA instructions.
+      - name: Run cargo check
+        run: cross check --features fcma --target aarch64-unknown-linux-gnu
 
   check_x86:
     name: Check and test Linux x86 32bit
