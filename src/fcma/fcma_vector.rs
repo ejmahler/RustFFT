@@ -176,6 +176,13 @@ pub trait FcmaVector: Copy + Debug + Send + Sync {
     /// Uses a pre-constructed rotate90 object to apply the given rotation
     unsafe fn apply_rotate90(direction: Rotation90<Self>, values: Self) -> Self;
 
+    /// Rotates `values` and adds the result to `acc`. The FCMA instructions do the rotation and
+    /// the accumulation in one go, so this is cheaper than rotating and adding separately.
+    unsafe fn rotate90_and_add(direction: Rotation90<Self>, acc: Self, values: Self) -> Self;
+
+    /// Rotates `values` and subtracts the result from `acc`, see `rotate90_and_add`.
+    unsafe fn rotate90_and_sub(direction: Rotation90<Self>, acc: Self, values: Self) -> Self;
+
     /// Each of these Interprets the input as rows of a Self::COMPLEX_PER_VECTOR-by-N 2D array, and computes parallel butterflies down the columns of the 2D array
     unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2];
     unsafe fn column_butterfly4(rows: [Self; 4], rotation: Rotation90<Self>) -> [Self; 4];
@@ -274,19 +281,28 @@ impl FcmaVector for float32x4_t {
 
     #[inline(always)]
     unsafe fn make_rotate90(direction: FftDirection) -> Rotation90<Self> {
+        // The FCMA instructions multiply by a complex number rather than flipping a sign bit,
+        // so the rotation is stored as the factor +1 or -1 to multiply the rotated value by.
         Rotation90(match direction {
-            FftDirection::Forward => vld1q_f32([0.0, -0.0, 0.0, -0.0].as_ptr()),
-            FftDirection::Inverse => vld1q_f32([-0.0, 0.0, -0.0, 0.0].as_ptr()),
+            FftDirection::Forward => vmovq_n_f32(-1.0),
+            FftDirection::Inverse => vmovq_n_f32(1.0),
         })
     }
 
     #[inline(always)]
     unsafe fn apply_rotate90(direction: Rotation90<Self>, values: Self) -> Self {
-        let temp = vrev64q_f32(values);
-        vreinterpretq_f32_u32(veorq_u32(
-            vreinterpretq_u32_f32(temp),
-            vreinterpretq_u32_f32(direction.0),
-        ))
+        let zero = vmovq_n_f32(0.0);
+        vcmlaq_rot90_f32(zero, direction.0, values)
+    }
+
+    #[inline(always)]
+    unsafe fn rotate90_and_add(direction: Rotation90<Self>, acc: Self, values: Self) -> Self {
+        vcmlaq_rot90_f32(acc, direction.0, values)
+    }
+
+    #[inline(always)]
+    unsafe fn rotate90_and_sub(direction: Rotation90<Self>, acc: Self, values: Self) -> Self {
+        vcmlaq_rot270_f32(acc, direction.0, values)
     }
 
     #[inline(always)]
@@ -302,12 +318,11 @@ impl FcmaVector for float32x4_t {
         let [mid0, mid2] = Self::column_butterfly2([rows[0], rows[2]]);
         let [mid1, mid3] = Self::column_butterfly2([rows[1], rows[3]]);
 
-        // Apply twiddle factors (in this case just a rotation)
-        let mid3_rotated = Self::apply_rotate90(rotation, mid3);
-
-        // Transpose the data and do size-2 FFTs down the columns
+        // Transpose the data and do size-2 FFTs down the columns. The twiddle factors are just a
+        // rotation of mid3, which the FCMA instructions fold into the second size-2 FFT.
         let [output0, output1] = Self::column_butterfly2([mid0, mid1]);
-        let [output2, output3] = Self::column_butterfly2([mid2, mid3_rotated]);
+        let output2 = Self::rotate90_and_add(rotation, mid2, mid3);
+        let output3 = Self::rotate90_and_sub(rotation, mid2, mid3);
 
         // Swap outputs 1 and 2 in the output to do a square transpose
         [output0, output2, output1, output3]
@@ -401,19 +416,28 @@ impl FcmaVector for float64x2_t {
 
     #[inline(always)]
     unsafe fn make_rotate90(direction: FftDirection) -> Rotation90<Self> {
+        // The FCMA instructions multiply by a complex number rather than flipping a sign bit,
+        // so the rotation is stored as the factor +1 or -1 to multiply the rotated value by.
         Rotation90(match direction {
-            FftDirection::Forward => vld1q_f64([0.0, -0.0].as_ptr()),
-            FftDirection::Inverse => vld1q_f64([-0.0, 0.0].as_ptr()),
+            FftDirection::Forward => vmovq_n_f64(-1.0),
+            FftDirection::Inverse => vmovq_n_f64(1.0),
         })
     }
 
     #[inline(always)]
     unsafe fn apply_rotate90(direction: Rotation90<Self>, values: Self) -> Self {
-        let temp = vcombine_f64(vget_high_f64(values), vget_low_f64(values));
-        vreinterpretq_f64_u64(veorq_u64(
-            vreinterpretq_u64_f64(temp),
-            vreinterpretq_u64_f64(direction.0),
-        ))
+        let zero = vmovq_n_f64(0.0);
+        vcmlaq_rot90_f64(zero, direction.0, values)
+    }
+
+    #[inline(always)]
+    unsafe fn rotate90_and_add(direction: Rotation90<Self>, acc: Self, values: Self) -> Self {
+        vcmlaq_rot90_f64(acc, direction.0, values)
+    }
+
+    #[inline(always)]
+    unsafe fn rotate90_and_sub(direction: Rotation90<Self>, acc: Self, values: Self) -> Self {
+        vcmlaq_rot270_f64(acc, direction.0, values)
     }
 
     #[inline(always)]
@@ -429,12 +453,11 @@ impl FcmaVector for float64x2_t {
         let [mid0, mid2] = Self::column_butterfly2([rows[0], rows[2]]);
         let [mid1, mid3] = Self::column_butterfly2([rows[1], rows[3]]);
 
-        // Apply twiddle factors (in this case just a rotation)
-        let mid3_rotated = Self::apply_rotate90(rotation, mid3);
-
-        // Transpose the data and do size-2 FFTs down the columns
+        // Transpose the data and do size-2 FFTs down the columns. The twiddle factors are just a
+        // rotation of mid3, which the FCMA instructions fold into the second size-2 FFT.
         let [output0, output1] = Self::column_butterfly2([mid0, mid1]);
-        let [output2, output3] = Self::column_butterfly2([mid2, mid3_rotated]);
+        let output2 = Self::rotate90_and_add(rotation, mid2, mid3);
+        let output3 = Self::rotate90_and_sub(rotation, mid2, mid3);
 
         // Swap outputs 1 and 2 in the output to do a square transpose
         [output0, output2, output1, output3]
