@@ -86,7 +86,11 @@
 //!
 //! ### Output Order
 //!
-//! Elements in the output are ordered by ascending frequency, with the first element corresponding to frequency 0.
+//! Elements in the output have the following order:
+//! 
+//!  - Frequency zero
+//!  - Positive frequencies, from smallest magnitude to largest
+//!  - Negative frequencies, from smallest magnitude to largest
 //!
 //! ### AVX Performance Tips
 //!
