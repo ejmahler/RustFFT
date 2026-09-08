@@ -1,6 +1,7 @@
 use core::arch::aarch64::*;
 use num_complex::Complex;
 use crate::FftNum;
+use crate::neon::neon_vector::{NeonArray, NeonArrayMut, NeonVector};
 
 //  __  __       _   _               _________  _     _ _
 // |  \/  | __ _| |_| |__           |___ /___ \| |__ (_) |_
@@ -252,465 +253,16 @@ impl Rotate90F64 {
     }
 }
 
-// Multiply two complex f64 numbers (1 complex number per 128-bit register):
-// val: [val.re, val.im]
-// tw:  [tw.re,  tw.im]
-// Returns: [val.re * tw.re - val.im * tw.im, val.re * tw.im + val.im * tw.re]
-#[inline(always)]
-pub unsafe fn neon_complex_mul_f64(val: float64x2_t, tw: float64x2_t) -> float64x2_t {
-    // temp: [-val.im, val.re]
-    let temp = vcombine_f64(vneg_f64(vget_high_f64(val)), vget_low_f64(val));
-    // sum: [val.re * tw.re, val.im * tw.re]
-    let sum = vmulq_laneq_f64::<0>(val, tw);
-    // sum + temp * tw.im: [val.re * tw.re - val.im * tw.im, val.im * tw.re + val.re * tw.im]
-    vfmaq_laneq_f64::<1>(sum, temp, tw)
-}
-
-// Pairwise multiply two pairs of complex f32 numbers (2 complex numbers per 128-bit register):
-// val: [a0.re, a0.im, a1.re, a1.im]
-// tw:  [t0.re, t0.im, t1.re, t1.im]
-// Returns: [
-//   a0.re * t0.re - a0.im * t0.im, a0.re * t0.im + a0.im * t0.re,
-//   a1.re * t1.re - a1.im * t1.im, a1.re * t1.im + a1.im * t1.re,
-// ]
-#[inline(always)]
-pub unsafe fn neon_complex_mul_f32(val: float32x4_t, tw: float32x4_t) -> float32x4_t {
-    let temp1 = vtrn1q_f32(tw, tw);
-    let temp2 = vtrn2q_f32(tw, vnegq_f32(tw));
-    let temp3 = vmulq_f32(temp2, val);
-    let temp4 = vrev64q_f32(temp3);
-    vfmaq_f32(temp4, temp1, val)
-}
-
-// Multiply a single complex f32 number (64-bit vector):
-// val: [a.re, a.im]
-// tw:  [t.re, t.im]
-// Returns: [a.re * t.re - a.im * t.im, a.re * t.im + a.im * t.re]
-#[inline(always)]
-pub unsafe fn neon_complex_mul_single_f32(val: float32x2_t, tw: float32x2_t) -> float32x2_t {
-    let val_q = vcombine_f32(val, val);
-    let tw_q = vcombine_f32(tw, tw);
-    vget_low_f32(neon_complex_mul_f32(val_q, tw_q))
-}
-
-trait TransposeKernel {
-    type Elem: Copy;
-    unsafe fn transpose_2x2(
-        input: &[Self::Elem],
-        output: &mut [Self::Elem],
-        in_r0: usize,
-        in_r1: usize,
-        out_c0: usize,
-        out_c1: usize,
-    );
-    unsafe fn transpose_1x2(
-        input: &[Self::Elem],
-        output: &mut [Self::Elem],
-        in_r0: usize,
-        in_r1: usize,
-        out_c0: usize,
-    );
-    unsafe fn transpose_1x1(
-        input: &[Self::Elem],
-        output: &mut [Self::Elem],
-        in_r: usize,
-        out_c: usize,
-    );
-}
-
-trait TransposeTwiddleKernel {
-    type Elem: Copy;
-    unsafe fn step_2x2(
-        input: &[Self::Elem],
-        output: &mut [Self::Elem],
-        twiddles: &[Self::Elem],
-        in_r0: usize,
-        in_r1: usize,
-        out_c0: usize,
-        out_c1: usize,
-    );
-    unsafe fn step_1x2(
-        input: &[Self::Elem],
-        output: &mut [Self::Elem],
-        twiddles: &[Self::Elem],
-        in_r0: usize,
-        in_r1: usize,
-        out_c0: usize,
-    );
-    unsafe fn step_1x1(
-        input: &[Self::Elem],
-        output: &mut [Self::Elem],
-        twiddles: &[Self::Elem],
-        in_r: usize,
-        out_c: usize,
-    );
-}
-
-struct KernelF64;
-struct KernelF32;
-
-impl TransposeKernel for KernelF64 {
-    type Elem = Complex<f64>;
-
-    #[inline(always)]
-    unsafe fn transpose_2x2(
-        input: &[Complex<f64>],
-        output: &mut [Complex<f64>],
-        in_r0: usize,
-        in_r1: usize,
-        out_c0: usize,
-        out_c1: usize,
-    ) {
-        let a0 = vld1q_f64(input.get_unchecked(in_r0) as *const _ as *const f64);
-        let a1 = vld1q_f64(input.get_unchecked(in_r0 + 1) as *const _ as *const f64);
-        let b0 = vld1q_f64(input.get_unchecked(in_r1) as *const _ as *const f64);
-        let b1 = vld1q_f64(input.get_unchecked(in_r1 + 1) as *const _ as *const f64);
-
-        vst1q_f64(output.get_unchecked_mut(out_c0) as *mut _ as *mut f64, a0);
-        vst1q_f64(output.get_unchecked_mut(out_c0 + 1) as *mut _ as *mut f64, b0);
-        vst1q_f64(output.get_unchecked_mut(out_c1) as *mut _ as *mut f64, a1);
-        vst1q_f64(output.get_unchecked_mut(out_c1 + 1) as *mut _ as *mut f64, b1);
-    }
-
-    #[inline(always)]
-    unsafe fn transpose_1x2(
-        input: &[Complex<f64>],
-        output: &mut [Complex<f64>],
-        in_r0: usize,
-        in_r1: usize,
-        out_c0: usize,
-    ) {
-        let a0 = vld1q_f64(input.get_unchecked(in_r0) as *const _ as *const f64);
-        let b0 = vld1q_f64(input.get_unchecked(in_r1) as *const _ as *const f64);
-
-        vst1q_f64(output.get_unchecked_mut(out_c0) as *mut _ as *mut f64, a0);
-        vst1q_f64(output.get_unchecked_mut(out_c0 + 1) as *mut _ as *mut f64, b0);
-    }
-
-    #[inline(always)]
-    unsafe fn transpose_1x1(
-        input: &[Complex<f64>],
-        output: &mut [Complex<f64>],
-        in_r: usize,
-        out_c: usize,
-    ) {
-        *output.get_unchecked_mut(out_c) = *input.get_unchecked(in_r);
-    }
-}
-
-impl TransposeTwiddleKernel for KernelF64 {
-    type Elem = Complex<f64>;
-
-    #[inline(always)]
-    unsafe fn step_2x2(
-        input: &[Complex<f64>],
-        output: &mut [Complex<f64>],
-        twiddles: &[Complex<f64>],
-        in_r0: usize,
-        in_r1: usize,
-        out_c0: usize,
-        out_c1: usize,
-    ) {
-        let a0 = vld1q_f64(input.get_unchecked(in_r0) as *const _ as *const f64);
-        let tw_a0 = vld1q_f64(twiddles.get_unchecked(in_r0) as *const _ as *const f64);
-        let a1 = vld1q_f64(input.get_unchecked(in_r0 + 1) as *const _ as *const f64);
-        let tw_a1 = vld1q_f64(twiddles.get_unchecked(in_r0 + 1) as *const _ as *const f64);
-
-        let b0 = vld1q_f64(input.get_unchecked(in_r1) as *const _ as *const f64);
-        let tw_b0 = vld1q_f64(twiddles.get_unchecked(in_r1) as *const _ as *const f64);
-        let b1 = vld1q_f64(input.get_unchecked(in_r1 + 1) as *const _ as *const f64);
-        let tw_b1 = vld1q_f64(twiddles.get_unchecked(in_r1 + 1) as *const _ as *const f64);
-
-        let res_a0 = neon_complex_mul_f64(a0, tw_a0);
-        let res_a1 = neon_complex_mul_f64(a1, tw_a1);
-        let res_b0 = neon_complex_mul_f64(b0, tw_b0);
-        let res_b1 = neon_complex_mul_f64(b1, tw_b1);
-
-        vst1q_f64(output.get_unchecked_mut(out_c0) as *mut _ as *mut f64, res_a0);
-        vst1q_f64(output.get_unchecked_mut(out_c0 + 1) as *mut _ as *mut f64, res_b0);
-        vst1q_f64(output.get_unchecked_mut(out_c1) as *mut _ as *mut f64, res_a1);
-        vst1q_f64(output.get_unchecked_mut(out_c1 + 1) as *mut _ as *mut f64, res_b1);
-    }
-
-    #[inline(always)]
-    unsafe fn step_1x2(
-        input: &[Complex<f64>],
-        output: &mut [Complex<f64>],
-        twiddles: &[Complex<f64>],
-        in_r0: usize,
-        in_r1: usize,
-        out_c0: usize,
-    ) {
-        let a0 = vld1q_f64(input.get_unchecked(in_r0) as *const _ as *const f64);
-        let tw_a0 = vld1q_f64(twiddles.get_unchecked(in_r0) as *const _ as *const f64);
-        let b0 = vld1q_f64(input.get_unchecked(in_r1) as *const _ as *const f64);
-        let tw_b0 = vld1q_f64(twiddles.get_unchecked(in_r1) as *const _ as *const f64);
-
-        let res_a0 = neon_complex_mul_f64(a0, tw_a0);
-        let res_b0 = neon_complex_mul_f64(b0, tw_b0);
-
-        vst1q_f64(output.get_unchecked_mut(out_c0) as *mut _ as *mut f64, res_a0);
-        vst1q_f64(output.get_unchecked_mut(out_c0 + 1) as *mut _ as *mut f64, res_b0);
-    }
-
-    #[inline(always)]
-    unsafe fn step_1x1(
-        input: &[Complex<f64>],
-        output: &mut [Complex<f64>],
-        twiddles: &[Complex<f64>],
-        in_r: usize,
-        out_c: usize,
-    ) {
-        let a = vld1q_f64(input.get_unchecked(in_r) as *const _ as *const f64);
-        let tw = vld1q_f64(twiddles.get_unchecked(in_r) as *const _ as *const f64);
-        let res = neon_complex_mul_f64(a, tw);
-        vst1q_f64(output.get_unchecked_mut(out_c) as *mut _ as *mut f64, res);
-    }
-}
-
-impl TransposeKernel for KernelF32 {
-    type Elem = Complex<f32>;
-
-    #[inline(always)]
-    unsafe fn transpose_2x2(
-        input: &[Complex<f32>],
-        output: &mut [Complex<f32>],
-        in_r0: usize,
-        in_r1: usize,
-        out_c0: usize,
-        out_c1: usize,
-    ) {
-        // Load row 0: 2 Complex<f32> into 1 float32x4_t: [a0, a1]
-        let row0 = vld1q_f32(input.get_unchecked(in_r0) as *const _ as *const f32);
-        // Load row 1: 2 Complex<f32> into 1 float32x4_t: [b0, b1]
-        let row1 = vld1q_f32(input.get_unchecked(in_r1) as *const _ as *const f32);
-
-        // Transpose to get col 0 [a0, b0] and col 1 [a1, b1]
-        let transposed = transpose_complex_2x2_f32(row0, row1);
-
-        vst1q_f32(output.get_unchecked_mut(out_c0) as *mut _ as *mut f32, transposed[0]);
-        vst1q_f32(output.get_unchecked_mut(out_c1) as *mut _ as *mut f32, transposed[1]);
-    }
-
-    #[inline(always)]
-    unsafe fn transpose_1x2(
-        input: &[Complex<f32>],
-        output: &mut [Complex<f32>],
-        in_r0: usize,
-        in_r1: usize,
-        out_c0: usize,
-    ) {
-        let a0 = vld1_f32(input.get_unchecked(in_r0) as *const _ as *const f32);
-        let b0 = vld1_f32(input.get_unchecked(in_r1) as *const _ as *const f32);
-
-        let col0 = vcombine_f32(a0, b0);
-        vst1q_f32(output.get_unchecked_mut(out_c0) as *mut _ as *mut f32, col0);
-    }
-
-    #[inline(always)]
-    unsafe fn transpose_1x1(
-        input: &[Complex<f32>],
-        output: &mut [Complex<f32>],
-        in_r: usize,
-        out_c: usize,
-    ) {
-        *output.get_unchecked_mut(out_c) = *input.get_unchecked(in_r);
-    }
-}
-
-impl TransposeTwiddleKernel for KernelF32 {
-    type Elem = Complex<f32>;
-
-    #[inline(always)]
-    unsafe fn step_2x2(
-        input: &[Complex<f32>],
-        output: &mut [Complex<f32>],
-        twiddles: &[Complex<f32>],
-        in_r0: usize,
-        in_r1: usize,
-        out_c0: usize,
-        out_c1: usize,
-    ) {
-        let row0 = vld1q_f32(input.get_unchecked(in_r0) as *const _ as *const f32);
-        let tw_row0 = vld1q_f32(twiddles.get_unchecked(in_r0) as *const _ as *const f32);
-
-        let row1 = vld1q_f32(input.get_unchecked(in_r1) as *const _ as *const f32);
-        let tw_row1 = vld1q_f32(twiddles.get_unchecked(in_r1) as *const _ as *const f32);
-
-        let res0 = neon_complex_mul_f32(row0, tw_row0);
-        let res1 = neon_complex_mul_f32(row1, tw_row1);
-
-        let transposed = transpose_complex_2x2_f32(res0, res1);
-
-        vst1q_f32(output.get_unchecked_mut(out_c0) as *mut _ as *mut f32, transposed[0]);
-        vst1q_f32(output.get_unchecked_mut(out_c1) as *mut _ as *mut f32, transposed[1]);
-    }
-
-    #[inline(always)]
-    unsafe fn step_1x2(
-        input: &[Complex<f32>],
-        output: &mut [Complex<f32>],
-        twiddles: &[Complex<f32>],
-        in_r0: usize,
-        in_r1: usize,
-        out_c0: usize,
-    ) {
-        let a0 = vld1_f32(input.get_unchecked(in_r0) as *const _ as *const f32);
-        let tw_a0 = vld1_f32(twiddles.get_unchecked(in_r0) as *const _ as *const f32);
-        let b0 = vld1_f32(input.get_unchecked(in_r1) as *const _ as *const f32);
-        let tw_b0 = vld1_f32(twiddles.get_unchecked(in_r1) as *const _ as *const f32);
-
-        let res_a0 = neon_complex_mul_single_f32(a0, tw_a0);
-        let res_b0 = neon_complex_mul_single_f32(b0, tw_b0);
-
-        let col0 = vcombine_f32(res_a0, res_b0);
-        vst1q_f32(output.get_unchecked_mut(out_c0) as *mut _ as *mut f32, col0);
-    }
-
-    #[inline(always)]
-    unsafe fn step_1x1(
-        input: &[Complex<f32>],
-        output: &mut [Complex<f32>],
-        twiddles: &[Complex<f32>],
-        in_r: usize,
-        out_c: usize,
-    ) {
-        let a = vld1_f32(input.get_unchecked(in_r) as *const _ as *const f32);
-        let tw = vld1_f32(twiddles.get_unchecked(in_r) as *const _ as *const f32);
-        let res = neon_complex_mul_single_f32(a, tw);
-        vst1_f32(output.get_unchecked_mut(out_c) as *mut _ as *mut f32, res);
-    }
-}
-
-/// Tiled matrix transpose for 2D array of Complex elements.
-///
-/// Divides the matrix into TILE_SIZE x TILE_SIZE blocks to maximize cache locality.
-/// Within each tile, processes 2x2 complex sub-blocks using SIMD vector instructions,
-/// followed by remainder column and remainder row handling.
-#[inline(always)]
-unsafe fn transpose_tiled<K: TransposeKernel>(
-    input: &[K::Elem],
-    output: &mut [K::Elem],
-    width: usize,
-    height: usize,
-) {
-    const TILE_SIZE: usize = 32;
-
-    // Loop 1: iterate over row tiles of height TILE_SIZE
-    let mut by = 0;
-    while by < height {
-        let block_h = (height - by).min(TILE_SIZE);
-
-        // Loop 2: iterate over column tiles of width TILE_SIZE
-        let mut bx = 0;
-        while bx < width {
-            let block_w = (width - bx).min(TILE_SIZE);
-
-            // Loop 3: process 2 rows at a time within the tile
-            let mut y = 0;
-            while y + 2 <= block_h {
-                let cy = by + y;
-                let in_r0 = cy * width + bx;
-                let in_r1 = (cy + 1) * width + bx;
-
-                // Loop 4: process 2 columns at a time (2x2 complex sub-block)
-                let mut x = 0;
-                while x + 2 <= block_w {
-                    let cx = bx + x;
-                    let out_c0 = cy + cx * height;
-                    let out_c1 = cy + (cx + 1) * height;
-
-                    K::transpose_2x2(input, output, in_r0 + x, in_r1 + x, out_c0, out_c1);
-                    x += 2;
-                }
-
-                // Handle remainder column when block_w is odd (2 rows x 1 column)
-                if x < block_w {
-                    let cx = bx + x;
-                    let out_c0 = cy + cx * height;
-                    K::transpose_1x2(input, output, in_r0 + x, in_r1 + x, out_c0);
-                }
-
-                y += 2;
-            }
-
-            // Handle remainder row when block_h is odd (1 row x block_w columns)
-            if y < block_h {
-                let cy = by + y;
-                let in_r = cy * width + bx;
-                for x in 0..block_w {
-                    let cx = bx + x;
-                    let out_c = cy + cx * height;
-                    K::transpose_1x1(input, output, in_r + x, out_c);
-                }
-            }
-
-            bx += TILE_SIZE;
-        }
-        by += TILE_SIZE;
-    }
-}
-
-pub unsafe fn transpose_f64(
-    input: &[Complex<f64>],
-    output: &mut [Complex<f64>],
-    width: usize,
-    height: usize,
-) {
-    super::neon_common::assert_f64::<f64>();
-    assert!(input.len() >= width * height);
-    assert!(output.len() >= width * height);
-
-    transpose_tiled::<KernelF64>(input, output, width, height);
-}
-
-pub unsafe fn transpose_f32(
-    input: &[Complex<f32>],
-    output: &mut [Complex<f32>],
-    width: usize,
-    height: usize,
-) {
-    super::neon_common::assert_f32::<f32>();
-    assert!(input.len() >= width * height);
-    assert!(output.len() >= width * height);
-
-    transpose_tiled::<KernelF32>(input, output, width, height);
-}
-
-pub unsafe fn transpose<T: Copy + 'static>(
-    width: usize,
-    height: usize,
-    input: &[T],
-    output: &mut [T],
-) -> bool {
-    assert!(input.len() >= width * height);
-    assert!(output.len() >= width * height);
-
-    use std::any::TypeId;
-    if TypeId::of::<T>() == TypeId::of::<Complex<f64>>() {
-        let input: &[Complex<f64>] = crate::array_utils::workaround_transmute(input);
-        let output: &mut [Complex<f64>] = crate::array_utils::workaround_transmute_mut(output);
-        transpose_f64(input, output, width, height);
-        return true;
-    } else if TypeId::of::<T>() == TypeId::of::<Complex<f32>>() {
-        let input: &[Complex<f32>] = crate::array_utils::workaround_transmute(input);
-        let output: &mut [Complex<f32>] = crate::array_utils::workaround_transmute_mut(output);
-        transpose_f32(input, output, width, height);
-        return true;
-    }
-    false
-}
-
-/// Fused complex twiddle multiplication and matrix transpose for small sizes.
+/// Fused complex twiddle multiplication and matrix transpose for small f64 sizes.
 ///
 /// Computes `output[y + x * height] = input[x + y * width] * twiddles[x + y * width]`.
-/// Processes 2x2 complex blocks with SIMD multiplication and transposition,
+/// Processes 2x2 complex blocks with NEON SIMD vector instructions,
 /// followed by remainder column and row handling.
 #[inline(always)]
-unsafe fn transpose_small_twiddle_impl<K: TransposeTwiddleKernel>(
-    input: &[K::Elem],
-    output: &mut [K::Elem],
-    twiddles: &[K::Elem],
+pub unsafe fn transpose_small_twiddle_f64(
+    input: impl NeonArray<f64>,
+    mut output: impl NeonArrayMut<f64>,
+    twiddles: impl NeonArray<f64>,
     width: usize,
     height: usize,
 ) {
@@ -720,20 +272,49 @@ unsafe fn transpose_small_twiddle_impl<K: TransposeTwiddleKernel>(
         let in_r0 = y * width;
         let in_r1 = (y + 1) * width;
 
-        // Loop 2: process 2 columns at a time (2x2 complex sub-block)
+        // Loop 2: process 2 columns at a time (2x2 complex block)
         let mut x = 0;
         while x + 2 <= width {
             let out_c0 = y + x * height;
             let out_c1 = y + (x + 1) * height;
 
-            K::step_2x2(input, output, twiddles, in_r0 + x, in_r1 + x, out_c0, out_c1);
+            let a0 = input.load_complex(in_r0 + x);
+            let tw_a0 = twiddles.load_complex(in_r0 + x);
+            let a1 = input.load_complex(in_r0 + x + 1);
+            let tw_a1 = twiddles.load_complex(in_r0 + x + 1);
+
+            let b0 = input.load_complex(in_r1 + x);
+            let tw_b0 = twiddles.load_complex(in_r1 + x);
+            let b1 = input.load_complex(in_r1 + x + 1);
+            let tw_b1 = twiddles.load_complex(in_r1 + x + 1);
+
+            let res_a0 = NeonVector::mul_complex(a0, tw_a0);
+            let res_a1 = NeonVector::mul_complex(a1, tw_a1);
+            let res_b0 = NeonVector::mul_complex(b0, tw_b0);
+            let res_b1 = NeonVector::mul_complex(b1, tw_b1);
+
+            output.store_complex(res_a0, out_c0);
+            output.store_complex(res_b0, out_c0 + 1);
+            output.store_complex(res_a1, out_c1);
+            output.store_complex(res_b1, out_c1 + 1);
+
             x += 2;
         }
 
         // Remainder column when width is odd (2 rows x 1 column)
         if x < width {
             let out_c0 = y + x * height;
-            K::step_1x2(input, output, twiddles, in_r0 + x, in_r1 + x, out_c0);
+
+            let a0 = input.load_complex(in_r0 + x);
+            let tw_a0 = twiddles.load_complex(in_r0 + x);
+            let b0 = input.load_complex(in_r1 + x);
+            let tw_b0 = twiddles.load_complex(in_r1 + x);
+
+            let res_a0 = NeonVector::mul_complex(a0, tw_a0);
+            let res_b0 = NeonVector::mul_complex(b0, tw_b0);
+
+            output.store_complex(res_a0, out_c0);
+            output.store_complex(res_b0, out_c0 + 1);
         }
 
         y += 2;
@@ -743,40 +324,89 @@ unsafe fn transpose_small_twiddle_impl<K: TransposeTwiddleKernel>(
     if y < height {
         let in_r = y * width;
         for x in 0..width {
-            let out_c = y + x * height;
-            K::step_1x1(input, output, twiddles, in_r + x, out_c);
+            let in_idx = in_r + x;
+            let out_idx = y + x * height;
+            let a = input.load_complex(in_idx);
+            let tw = twiddles.load_complex(in_idx);
+            let res = NeonVector::mul_complex(a, tw);
+            output.store_complex(res, out_idx);
         }
     }
 }
 
-pub unsafe fn transpose_small_twiddle_f64(
-    input: &[Complex<f64>],
-    output: &mut [Complex<f64>],
-    twiddles: &[Complex<f64>],
-    width: usize,
-    height: usize,
-) {
-    super::neon_common::assert_f64::<f64>();
-    assert!(input.len() >= width * height);
-    assert!(output.len() >= width * height);
-    assert!(twiddles.len() >= width * height);
-
-    transpose_small_twiddle_impl::<KernelF64>(input, output, twiddles, width, height);
-}
-
+/// Fused complex twiddle multiplication and matrix transpose for small f32 sizes.
+///
+/// Computes `output[y + x * height] = input[x + y * width] * twiddles[x + y * width]`.
+/// Processes 2x2 complex blocks with NEON SIMD vector instructions,
+/// followed by remainder column and row handling.
+#[inline(always)]
 pub unsafe fn transpose_small_twiddle_f32(
-    input: &[Complex<f32>],
-    output: &mut [Complex<f32>],
-    twiddles: &[Complex<f32>],
+    input: impl NeonArray<f32>,
+    mut output: impl NeonArrayMut<f32>,
+    twiddles: impl NeonArray<f32>,
     width: usize,
     height: usize,
 ) {
-    super::neon_common::assert_f32::<f32>();
-    assert!(input.len() >= width * height);
-    assert!(output.len() >= width * height);
-    assert!(twiddles.len() >= width * height);
+    // Loop 1: process 2 rows at a time
+    let mut y = 0;
+    while y + 2 <= height {
+        let in_r0 = y * width;
+        let in_r1 = (y + 1) * width;
 
-    transpose_small_twiddle_impl::<KernelF32>(input, output, twiddles, width, height);
+        // Loop 2: process 2 columns at a time (2x2 complex block)
+        let mut x = 0;
+        while x + 2 <= width {
+            let out_c0 = y + x * height;
+            let out_c1 = y + (x + 1) * height;
+
+            let row0 = input.load_complex(in_r0 + x);
+            let tw_row0 = twiddles.load_complex(in_r0 + x);
+            let row1 = input.load_complex(in_r1 + x);
+            let tw_row1 = twiddles.load_complex(in_r1 + x);
+
+            let res0 = NeonVector::mul_complex(row0, tw_row0);
+            let res1 = NeonVector::mul_complex(row1, tw_row1);
+
+            let [col0, col1] = transpose_complex_2x2_f32(res0, res1);
+
+            output.store_complex(col0, out_c0);
+            output.store_complex(col1, out_c1);
+
+            x += 2;
+        }
+
+        // Remainder column when width is odd (2 rows x 1 column)
+        if x < width {
+            let out_c0 = y + x * height;
+
+            let a0 = vget_low_f32(input.load_partial_lo_complex(in_r0 + x));
+            let b0 = vget_low_f32(input.load_partial_lo_complex(in_r1 + x));
+            let val = vcombine_f32(a0, b0);
+
+            let tw_a0 = vget_low_f32(twiddles.load_partial_lo_complex(in_r0 + x));
+            let tw_b0 = vget_low_f32(twiddles.load_partial_lo_complex(in_r1 + x));
+            let tw = vcombine_f32(tw_a0, tw_b0);
+
+            let res = NeonVector::mul_complex(val, tw);
+
+            output.store_complex(res, out_c0);
+        }
+
+        y += 2;
+    }
+
+    // Remainder row when height is odd (1 row x width columns)
+    if y < height {
+        let in_r = y * width;
+        for x in 0..width {
+            let in_idx = in_r + x;
+            let out_idx = y + x * height;
+            let a = input.load_partial_lo_complex(in_idx);
+            let tw = twiddles.load_partial_lo_complex(in_idx);
+            let res = NeonVector::mul_complex(a, tw);
+            output.store_partial_lo_complex(res, out_idx);
+        }
+    }
 }
 
 pub unsafe fn transpose_small_twiddle<T: FftNum>(
@@ -786,9 +416,9 @@ pub unsafe fn transpose_small_twiddle<T: FftNum>(
     output: &mut [Complex<T>],
     twiddles: &[Complex<T>],
 ) -> bool {
-    assert!(input.len() >= width * height);
-    assert!(output.len() >= width * height);
-    assert!(twiddles.len() >= width * height);
+    debug_assert!(input.len() >= width * height);
+    debug_assert!(output.len() >= width * height);
+    debug_assert!(twiddles.len() >= width * height);
 
     use std::any::TypeId;
     if TypeId::of::<T>() == TypeId::of::<f64>() {
@@ -845,46 +475,18 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_transpose_neon_f32_f64() {
-        use num_traits::Zero;
-        for width in [1, 2, 3, 4, 5, 7, 8, 16, 31, 32, 33, 40] {
-            for height in [1, 2, 3, 4, 5, 7, 8, 16, 31, 32, 33, 40] {
-                let len = width * height;
-
-                // f32
-                let input_f32: Vec<Complex<f32>> = (0..len)
-                    .map(|i| Complex::new(i as f32, (i * 2) as f32))
-                    .collect();
-                let mut out_f32 = vec![Complex::zero(); len];
-                unsafe { transpose(width, height, &input_f32, &mut out_f32) };
-                for y in 0..height {
-                    for x in 0..width {
-                        assert_eq!(
-                            input_f32[x + y * width],
-                            out_f32[y + x * height],
-                            "f32 mismatch at ({}, {}) for {}x{}",
-                            x, y, width, height
-                        );
-                    }
-                }
-
-                // f64
-                let input_f64: Vec<Complex<f64>> = (0..len)
-                    .map(|i| Complex::new(i as f64, (i * 2) as f64))
-                    .collect();
-                let mut out_f64 = vec![Complex::zero(); len];
-                unsafe { transpose(width, height, &input_f64, &mut out_f64) };
-                for y in 0..height {
-                    for x in 0..width {
-                        assert_eq!(
-                            input_f64[x + y * width],
-                            out_f64[y + x * height],
-                            "f64 mismatch at ({}, {}) for {}x{}",
-                            x, y, width, height
-                        );
-                    }
-                }
-            }
+    fn test_pack() {
+        unsafe {
+            let nbr2 = vld1q_f32([5.0, 6.0, 7.0, 8.0].as_ptr());
+            let nbr1 = vld1q_f32([1.0, 2.0, 3.0, 4.0].as_ptr());
+            let first = extract_lo_lo_f32(nbr1, nbr2);
+            let second = extract_hi_hi_f32(nbr1, nbr2);
+            let first = std::mem::transmute::<float32x4_t, [Complex<f32>; 2]>(first);
+            let second = std::mem::transmute::<float32x4_t, [Complex<f32>; 2]>(second);
+            let first_expected = [Complex::new(1.0, 2.0), Complex::new(5.0, 6.0)];
+            let second_expected = [Complex::new(3.0, 4.0), Complex::new(7.0, 8.0)];
+            assert_eq!(first, first_expected);
+            assert_eq!(second, second_expected);
         }
     }
 

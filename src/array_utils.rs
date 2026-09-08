@@ -3,30 +3,9 @@ use crate::Complex;
 use crate::FftNum;
 use std::ops::{Deref, DerefMut};
 
-/// Transpose the input array into the output array.
-///
 /// Given an array of size width * height, representing a flattened 2D array,
-/// transpose the rows and columns of that 2D array into the output.
-pub fn transpose<T: Copy + 'static>(
-    input: &[T],
-    output: &mut [T],
-    width: usize,
-    height: usize,
-) {
-    assert!(input.len() >= width * height);
-    assert!(output.len() >= width * height);
-
-    #[cfg(all(target_arch = "aarch64", feature = "neon"))]
-    {
-        if unsafe { crate::neon::neon_utils::transpose(width, height, input, output) } {
-            return;
-        }
-    }
-
-    transpose::transpose(input, output, width, height);
-}
-
-/// Given an array of size width * height, representing a flattened 2D array,
+/// transpose the rows and columns of that 2D array into the output
+/// benchmarking shows that loop tiling isn't effective for small arrays (in the range of 50x50 or smaller)
 pub unsafe fn transpose_small<T: Copy>(width: usize, height: usize, input: &[T], output: &mut [T]) {
     for x in 0..width {
         for y in 0..height {
@@ -165,8 +144,36 @@ mod unit_tests {
     use num_traits::Zero;
 
     #[test]
-    fn test_transpose() {
-        let sizes: Vec<usize> = (1..35).collect();
+    fn test_transpose_small() {
+        let sizes: Vec<usize> = (1..16).collect();
+
+        for &width in &sizes {
+            for &height in &sizes {
+                let len = width * height;
+
+                let input: Vec<Complex<f32>> = random_signal(len);
+                let mut output = vec![Zero::zero(); len];
+
+                unsafe { transpose_small(width, height, &input, &mut output) };
+
+                for x in 0..width {
+                    for y in 0..height {
+                        assert_eq!(
+                            input[x + y * width],
+                            output[y + x * height],
+                            "x = {}, y = {}",
+                            x,
+                            y
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_transpose_small_twiddle() {
+        let sizes: Vec<usize> = (1..16).collect();
 
         for &width in &sizes {
             for &height in &sizes {
@@ -174,36 +181,38 @@ mod unit_tests {
 
                 // Test f32
                 let input_f32: Vec<Complex<f32>> = random_signal(len);
+                let twiddles_f32: Vec<Complex<f32>> = random_signal(len);
                 let mut output_f32 = vec![Zero::zero(); len];
-                transpose(&input_f32, &mut output_f32, width, height);
+                unsafe {
+                    transpose_small_twiddle(width, height, &input_f32, &mut output_f32, &twiddles_f32);
+                }
                 for x in 0..width {
                     for y in 0..height {
-                        assert_eq!(
-                            input_f32[x + y * width],
-                            output_f32[y + x * height],
-                            "f32: x = {}, y = {}, width = {}, height = {}",
-                            x,
-                            y,
-                            width,
-                            height
+                        let expected = input_f32[x + y * width] * twiddles_f32[x + y * width];
+                        let actual = output_f32[y + x * height];
+                        assert!(
+                            (actual.re - expected.re).abs() < 1e-5 && (actual.im - expected.im).abs() < 1e-5,
+                            "f32 mismatch at ({}, {}) for {}x{}",
+                            x, y, width, height
                         );
                     }
                 }
 
                 // Test f64
                 let input_f64: Vec<Complex<f64>> = random_signal(len);
+                let twiddles_f64: Vec<Complex<f64>> = random_signal(len);
                 let mut output_f64 = vec![Zero::zero(); len];
-                transpose(&input_f64, &mut output_f64, width, height);
+                unsafe {
+                    transpose_small_twiddle(width, height, &input_f64, &mut output_f64, &twiddles_f64);
+                }
                 for x in 0..width {
                     for y in 0..height {
-                        assert_eq!(
-                            input_f64[x + y * width],
-                            output_f64[y + x * height],
-                            "f64: x = {}, y = {}, width = {}, height = {}",
-                            x,
-                            y,
-                            width,
-                            height
+                        let expected = input_f64[x + y * width] * twiddles_f64[x + y * width];
+                        let actual = output_f64[y + x * height];
+                        assert!(
+                            (actual.re - expected.re).abs() < 1e-10 && (actual.im - expected.im).abs() < 1e-10,
+                            "f64 mismatch at ({}, {}) for {}x{}",
+                            x, y, width, height
                         );
                     }
                 }
