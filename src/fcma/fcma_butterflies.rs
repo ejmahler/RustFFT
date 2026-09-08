@@ -415,7 +415,6 @@ pub struct FcmaF32Butterfly3<T> {
     twiddle: float32x4_t,
     twiddle1re: float32x4_t,
     twiddle1im: float32x4_t,
-    twiddle2im: float32x4_t,
 }
 
 boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly3, 3, |this: &FcmaF32Butterfly3<_>| this
@@ -429,7 +428,6 @@ impl<T: FftNum> FcmaF32Butterfly3<T> {
         let twiddle = unsafe { vld1q_f32([tw1.re, tw1.re, -tw1.im, -tw1.im].as_ptr()) };
         let twiddle1re = unsafe { vmovq_n_f32(tw1.re) };
         let twiddle1im = unsafe { vmovq_n_f32(tw1.im) };
-        let twiddle2im = unsafe { vmovq_n_f32(-tw1.im) };
         Self {
             direction,
             _phantom: std::marker::PhantomData,
@@ -437,7 +435,6 @@ impl<T: FftNum> FcmaF32Butterfly3<T> {
             twiddle,
             twiddle1re,
             twiddle1im,
-            twiddle2im,
         }
     }
     #[inline(always)]
@@ -508,11 +505,12 @@ impl<T: FftNum> FcmaF32Butterfly3<T> {
         let x12n = vsubq_f32(value1, value2);
 
         let temp = vfmaq_f32(value0, self.twiddle1re, x12p);
-        let n_rot = self.rotate.rotate_both(x12n);
 
+        // The rotation of x12n is part of the multiplications below, and the second twiddle is
+        // the negated first one, so that multiplication rotates the other way instead.
         let x0 = vaddq_f32(value0, x12p);
-        let x1 = vfmaq_f32(temp, self.twiddle1im, n_rot);
-        let x2 = vfmaq_f32(temp, self.twiddle2im, n_rot);
+        let x1 = FcmaVector::fmadd_rotate90(temp, self.twiddle1im, x12n);
+        let x2 = FcmaVector::nmadd_rotate90(temp, self.twiddle1im, x12n);
         [x0, x1, x2]
     }
 }
@@ -527,10 +525,8 @@ impl<T: FftNum> FcmaF32Butterfly3<T> {
 pub struct FcmaF64Butterfly3<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    rotate: Rotate90F64,
     twiddle1re: float64x2_t,
     twiddle1im: float64x2_t,
-    twiddle2im: float64x2_t,
 }
 
 boilerplate_fft_fcma_f64_butterfly!(FcmaF64Butterfly3, 3, |this: &FcmaF64Butterfly3<_>| this
@@ -539,19 +535,15 @@ impl<T: FftNum> FcmaF64Butterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let rotate = Rotate90F64::new(true);
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 3, direction);
         let twiddle1re = unsafe { vmovq_n_f64(tw1.re) };
         let twiddle1im = unsafe { vmovq_n_f64(tw1.im) };
-        let twiddle2im = unsafe { vmovq_n_f64(-tw1.im) };
 
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            rotate,
             twiddle1re,
             twiddle1im,
-            twiddle2im,
         }
     }
 
@@ -582,11 +574,12 @@ impl<T: FftNum> FcmaF64Butterfly3<T> {
         let x12n = vsubq_f64(value1, value2);
 
         let temp = vfmaq_f64(value0, self.twiddle1re, x12p);
-        let n_rot = self.rotate.rotate(x12n);
 
+        // The rotation of x12n is part of the multiplications below, and the second twiddle is
+        // the negated first one, so that multiplication rotates the other way instead.
         let x0 = vaddq_f64(value0, x12p);
-        let x1 = vfmaq_f64(temp, self.twiddle1im, n_rot);
-        let x2 = vfmaq_f64(temp, self.twiddle2im, n_rot);
+        let x1 = FcmaVector::fmadd_rotate90(temp, self.twiddle1im, x12n);
+        let x2 = FcmaVector::nmadd_rotate90(temp, self.twiddle1im, x12n);
         [x0, x1, x2]
     }
 }

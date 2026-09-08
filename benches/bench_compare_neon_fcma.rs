@@ -92,3 +92,6 @@ make_benches!(fcmacomparison, {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096
 // The prime butterfly lengths, some composites built from them, and larger primes that end up in
 // Rader's or Bluestein's with a prime butterfly somewhere inside
 make_benches!(fcmacomparison, {7, 11, 13, 17, 19, 23, 29, 31, 49, 121, 289, 961, 1000, 1009, 5000, 5003});
+
+// Lengths built from the small hand written butterflies other than the powers of two
+make_benches!(fcmacomparison, {3, 5, 6, 9, 10, 12, 15, 24, 27, 81, 243, 729, 2187, 6561, 1536, 12288});
