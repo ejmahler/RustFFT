@@ -286,7 +286,9 @@ impl<T: FftNum> MixedRadixSmall<T> {
         // Verify that the inner FFTs don't require out-of-place scratch, and only arequire a small amount of inplace scratch
         let width = width_fft.len();
         let height = height_fft.len();
-        let len = width * height;
+        let len = width
+            .checked_mul(height)
+            .expect("MixedRadixSmall length overflow");
 
         assert_eq!(width_fft.get_outofplace_scratch_len(), 0, "MixedRadixSmall should only be used with algorithms that require 0 out-of-place scratch. Width FFT (len={}) requires {}, should require 0", width, width_fft.get_outofplace_scratch_len());
         assert_eq!(height_fft.get_outofplace_scratch_len(), 0, "MixedRadixSmall should only be used with algorithms that require 0 out-of-place scratch. Height FFT (len={}) requires {}, should require 0", height, height_fft.get_outofplace_scratch_len());
@@ -448,6 +450,31 @@ mod unit_tests {
         let fft = MixedRadixSmall::new(width_fft, height_fft);
 
         check_fft_algorithm(&fft, width * height, direction);
+    }
+
+    #[test]
+    #[should_panic(expected = "MixedRadixSmall length overflow")]
+    fn test_mixed_radix_small_rejects_inner_len_product_overflow() {
+        // Regression test for a memory safety issue: MixedRadixSmall accepts safe
+        // user-provided Fft trait objects, so adversarial `len()` values must be
+        // rejected before a wrapped length can validate a tiny buffer and then
+        // reach unsafe transpose_small with the original huge dimensions.
+        let width_fft = Arc::new(BigScratchAlgorithm {
+            len: usize::MAX,
+            inplace_scratch: 0,
+            outofplace_scratch: 0,
+            immut_scratch: 0,
+            direction: FftDirection::Forward,
+        }) as Arc<dyn Fft<f32>>;
+        let height_fft = Arc::new(BigScratchAlgorithm {
+            len: usize::MAX,
+            inplace_scratch: 0,
+            outofplace_scratch: 0,
+            immut_scratch: 0,
+            direction: FftDirection::Forward,
+        }) as Arc<dyn Fft<f32>>;
+
+        MixedRadixSmall::new(width_fft, height_fft);
     }
 
     // Verify that the mixed radix algorithm correctly provides scratch space to inner FFTs
