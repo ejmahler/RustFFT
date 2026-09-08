@@ -17,6 +17,35 @@ pub unsafe fn transpose_small<T: Copy>(width: usize, height: usize, input: &[T],
     }
 }
 
+pub unsafe fn transpose_small_twiddle<T: FftNum>(
+    width: usize,
+    height: usize,
+    input: &[Complex<T>],
+    output: &mut [Complex<T>],
+    twiddles: &[Complex<T>],
+) {
+    assert!(input.len() >= width * height);
+    assert!(output.len() >= width * height);
+    assert!(twiddles.len() >= width * height);
+
+    #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+    {
+        if crate::neon::neon_utils::transpose_small_twiddle(width, height, input, output, twiddles) {
+            return;
+        }
+    }
+
+    for y in 0..height {
+        for x in 0..width {
+            let in_idx = x + y * width;
+            let out_idx = y + x * height;
+            let val = *input.get_unchecked(in_idx);
+            let tw = *twiddles.get_unchecked(in_idx);
+            *output.get_unchecked_mut(out_idx) = val * tw;
+        }
+    }
+}
+
 #[allow(unused)]
 pub unsafe fn workaround_transmute<T, U>(slice: &[T]) -> &[U] {
     let ptr = slice.as_ptr() as *const U;
@@ -115,7 +144,7 @@ mod unit_tests {
     use num_traits::Zero;
 
     #[test]
-    fn test_transpose() {
+    fn test_transpose_small() {
         let sizes: Vec<usize> = (1..16).collect();
 
         for &width in &sizes {
@@ -135,6 +164,55 @@ mod unit_tests {
                             "x = {}, y = {}",
                             x,
                             y
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_transpose_small_twiddle() {
+        let sizes: Vec<usize> = (1..16).collect();
+
+        for &width in &sizes {
+            for &height in &sizes {
+                let len = width * height;
+
+                // Test f32
+                let input_f32: Vec<Complex<f32>> = random_signal(len);
+                let twiddles_f32: Vec<Complex<f32>> = random_signal(len);
+                let mut output_f32 = vec![Zero::zero(); len];
+                unsafe {
+                    transpose_small_twiddle(width, height, &input_f32, &mut output_f32, &twiddles_f32);
+                }
+                for x in 0..width {
+                    for y in 0..height {
+                        let expected = input_f32[x + y * width] * twiddles_f32[x + y * width];
+                        let actual = output_f32[y + x * height];
+                        assert!(
+                            (actual.re - expected.re).abs() < 1e-5 && (actual.im - expected.im).abs() < 1e-5,
+                            "f32 mismatch at ({}, {}) for {}x{}",
+                            x, y, width, height
+                        );
+                    }
+                }
+
+                // Test f64
+                let input_f64: Vec<Complex<f64>> = random_signal(len);
+                let twiddles_f64: Vec<Complex<f64>> = random_signal(len);
+                let mut output_f64 = vec![Zero::zero(); len];
+                unsafe {
+                    transpose_small_twiddle(width, height, &input_f64, &mut output_f64, &twiddles_f64);
+                }
+                for x in 0..width {
+                    for y in 0..height {
+                        let expected = input_f64[x + y * width] * twiddles_f64[x + y * width];
+                        let actual = output_f64[y + x * height];
+                        assert!(
+                            (actual.re - expected.re).abs() < 1e-10 && (actual.im - expected.im).abs() < 1e-10,
+                            "f64 mismatch at ({}, {}) for {}x{}",
+                            x, y, width, height
                         );
                     }
                 }
