@@ -131,11 +131,17 @@ mod plan;
 mod twiddles;
 
 // The SIMD backends all share one RadixN, generic over the vector type each of them provides
-#[cfg(all(target_arch = "aarch64", feature = "neon"))]
+#[cfg(any(
+    all(target_arch = "aarch64", feature = "neon"),
+    all(target_arch = "x86_64", feature = "sse"),
+))]
 mod simd_radixn;
 
 // ...and the planner arithmetic that goes with it
-#[cfg(all(target_arch = "aarch64", feature = "neon"))]
+#[cfg(any(
+    all(target_arch = "aarch64", feature = "neon"),
+    all(target_arch = "x86_64", feature = "sse"),
+))]
 mod simd_planner;
 
 use num_complex::Complex;
