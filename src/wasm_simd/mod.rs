@@ -7,6 +7,7 @@ mod wasm_simd_vector;
 pub mod wasm_simd_butterflies;
 pub mod wasm_simd_prime_butterflies;
 pub mod wasm_simd_radix4;
+pub mod wasm_simd_radixn;
 
 mod wasm_simd_utils;
 
@@ -17,6 +18,7 @@ use core::arch::wasm32::v128;
 
 pub use self::wasm_simd_butterflies::*;
 pub use self::wasm_simd_radix4::*;
+pub use self::wasm_simd_radixn::*;
 use self::wasm_simd_vector::WasmVector;
 use self::wasm_simd_vector::WasmVector32;
 use self::wasm_simd_vector::WasmVector64;

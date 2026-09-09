@@ -145,6 +145,65 @@ macro_rules! boilerplate_fft_wasm_simd_oop {
     };
 }
 
+// The `RadixNVector::fft_helper_*` methods, which are the same forwarding calls for every WASM
+// SIMD vector type: they hand the chunk loop to the target-feature-enabled wrappers below.
+macro_rules! wasm_simd_radixn_fft_helpers {
+    () => {
+        #[inline(always)]
+        unsafe fn fft_helper_immut<E>(
+            input: &[E],
+            output: &mut [E],
+            scratch: &mut [E],
+            chunk_size: usize,
+            required_scratch: usize,
+            chunk_fn: impl FnMut(&[E], &mut [E], &mut [E]),
+        ) {
+            super::wasm_simd_common::wasm_simd_fft_helper_immut(
+                input,
+                output,
+                scratch,
+                chunk_size,
+                required_scratch,
+                chunk_fn,
+            )
+        }
+        #[inline(always)]
+        unsafe fn fft_helper_outofplace<E>(
+            input: &mut [E],
+            output: &mut [E],
+            scratch: &mut [E],
+            chunk_size: usize,
+            required_scratch: usize,
+            chunk_fn: impl FnMut(&mut [E], &mut [E], &mut [E]),
+        ) {
+            super::wasm_simd_common::wasm_simd_fft_helper_outofplace(
+                input,
+                output,
+                scratch,
+                chunk_size,
+                required_scratch,
+                chunk_fn,
+            )
+        }
+        #[inline(always)]
+        unsafe fn fft_helper_inplace<E>(
+            buffer: &mut [E],
+            scratch: &mut [E],
+            chunk_size: usize,
+            required_scratch: usize,
+            chunk_fn: impl FnMut(&mut [E], &mut [E]),
+        ) {
+            super::wasm_simd_common::wasm_simd_fft_helper_inplace(
+                buffer,
+                scratch,
+                chunk_size,
+                required_scratch,
+                chunk_fn,
+            )
+        }
+    };
+}
+
 // A wrapper for the FFT helper functions that make sure the entire thing happens with the benefit of the Wasm SIMD target feature,
 // so that things like loading twiddle factor registers etc can be lifted out of the loop
 #[target_feature(enable = "simd128")]
