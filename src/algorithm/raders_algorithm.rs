@@ -42,10 +42,15 @@ pub struct RadersAlgorithm<T> {
     inner_fft: Arc<dyn Fft<T>>,
     inner_fft_data: Box<[Complex<T>]>,
 
-    primitive_root: u64,
-    primitive_root_inverse: u64,
+    // Buffer offsets for the input reordering: inner FFT input k reads buffer position
+    // permutation[k], which is g^(k+1) mod len, less one. The sequence depends only on the
+    // primitive root and the length, so building it once here keeps a serial chain of
+    // strength-reduced modular multiplies out of the hot loops. avx_raders.rs precomputes its
+    // output mapping for the same reason. This costs 4 * (len - 1) bytes, the same order as the
+    // twiddles avx_raders.rs and Bluestein's already store at this size.
+    permutation: Box<[u32]>,
 
-    len: StrengthReducedU64,
+    len: usize,
     inplace_scratch_len: usize,
     outofplace_scratch_len: usize,
     immut_scratch_len: usize,
@@ -95,6 +100,15 @@ impl<T: FftNum> RadersAlgorithm<T> {
                 ((twiddle_input as u64 * primitive_root_inverse) % reduced_len) as usize;
         }
 
+        // Precompute the input reordering. Stored already offset by one so the hot loops are a
+        // plain indexed load with no arithmetic.
+        let mut permutation = Vec::with_capacity(inner_fft_len);
+        let mut input_index = 1u64;
+        for _ in 0..inner_fft_len {
+            input_index = (input_index * primitive_root) % reduced_len;
+            permutation.push(u32::try_from(input_index - 1).unwrap());
+        }
+
         let required_inner_scratch = inner_fft.get_inplace_scratch_len();
         let extra_inner_scratch = if required_inner_scratch <= inner_fft_len {
             0
@@ -112,15 +126,39 @@ impl<T: FftNum> RadersAlgorithm<T> {
             inner_fft,
             inner_fft_data: inner_fft_input.into_boxed_slice(),
 
-            primitive_root,
-            primitive_root_inverse,
+            permutation: permutation.into_boxed_slice(),
 
-            len: reduced_len,
+            len,
             inplace_scratch_len,
             outofplace_scratch_len: extra_inner_scratch,
             immut_scratch_len,
             direction,
         }
+    }
+
+    /// Copies `src` into `dest`, applying the input reordering.
+    #[inline]
+    fn gather_input(&self, src: &[Complex<T>], dest: &mut [Complex<T>]) {
+        for (dest_element, &input_index) in dest.iter_mut().zip(self.permutation.iter()) {
+            *dest_element = src[input_index as usize];
+        }
+    }
+
+    /// Copies `src` into `dest`, conjugating and applying the output reordering.
+    ///
+    /// The output reordering walks `g^-1` where the input reordering walks `g`. Since
+    /// `g^(len - 1) == 1` we have `g^-k == g^(len - 1 - k)`, so the inverse sequence is the
+    /// forward table read backwards and rotated by one. Peeling the rotated element off keeps
+    /// the loop a plain zip over two slices instead of a chained iterator.
+    #[inline]
+    fn scatter_output(&self, src: &[Complex<T>], dest: &mut [Complex<T>]) {
+        let (&last_index, head) = self.permutation.split_last().unwrap();
+        let (last_element, src_head) = src.split_last().unwrap();
+
+        for (src_element, &output_index) in src_head.iter().zip(head.iter().rev()) {
+            dest[output_index as usize] = src_element.conj();
+        }
+        dest[last_index as usize] = last_element.conj();
     }
 
     fn perform_fft_immut(
@@ -135,13 +173,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
         let (scratch, extra_scratch) = scratch.split_at_mut(self.len() - 1);
 
         // copy the input into the scratch space, reordering as we go
-        let mut input_index = 1;
-        for output_element in scratch.iter_mut() {
-            input_index = ((input_index as u64 * self.primitive_root) % self.len) as usize;
-
-            let input_element = input[input_index - 1];
-            *output_element = input_element;
-        }
+        self.gather_input(input, scratch);
 
         self.inner_fft.process_with_scratch(scratch, extra_scratch);
 
@@ -163,12 +195,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
         self.inner_fft.process_with_scratch(scratch, extra_scratch);
 
         // copy the final values into the output, reordering as we go
-        let mut output_index = 1;
-        for scratch_element in scratch {
-            output_index =
-                ((output_index as u64 * self.primitive_root_inverse) % self.len) as usize;
-            output[output_index - 1] = scratch_element.conj();
-        }
+        self.scatter_output(scratch, output);
     }
 
     fn perform_fft_out_of_place(
@@ -182,13 +209,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
         let (input_first, input) = input.split_first_mut().unwrap();
 
         // copy the input into the output, reordering as we go. also compute a sum of all elements
-        let mut input_index = 1;
-        for output_element in output.iter_mut() {
-            input_index = ((input_index as u64 * self.primitive_root) % self.len) as usize;
-
-            let input_element = input[input_index - 1];
-            *output_element = input_element;
-        }
+        self.gather_input(input, output);
 
         // perform the first of two inner FFTs
         let inner_scratch = if scratch.len() > 0 {
@@ -225,12 +246,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
         self.inner_fft.process_with_scratch(input, inner_scratch);
 
         // copy the final values into the output, reordering as we go
-        let mut output_index = 1;
-        for input_element in input {
-            output_index =
-                ((output_index as u64 * self.primitive_root_inverse) % self.len) as usize;
-            output[output_index - 1] = input_element.conj();
-        }
+        self.scatter_output(input, output);
     }
     fn perform_fft_inplace(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
         // The first output element is just the sum of all the input elements, and we need to store off the first input value
@@ -240,13 +256,7 @@ impl<T: FftNum> RadersAlgorithm<T> {
         let (scratch, extra_scratch) = scratch.split_at_mut(self.len() - 1);
 
         // copy the buffer into the scratch, reordering as we go. also compute a sum of all elements
-        let mut input_index = 1;
-        for scratch_element in scratch.iter_mut() {
-            input_index = ((input_index as u64 * self.primitive_root) % self.len) as usize;
-
-            let buffer_element = buffer[input_index - 1];
-            *scratch_element = buffer_element;
-        }
+        self.gather_input(buffer, scratch);
 
         // perform the first of two inner FFTs
         let inner_scratch = if extra_scratch.len() > 0 {
@@ -274,17 +284,12 @@ impl<T: FftNum> RadersAlgorithm<T> {
         self.inner_fft.process_with_scratch(scratch, inner_scratch);
 
         // copy the final values into the output, reordering as we go
-        let mut output_index = 1;
-        for scratch_element in scratch {
-            output_index =
-                ((output_index as u64 * self.primitive_root_inverse) % self.len) as usize;
-            buffer[output_index - 1] = scratch_element.conj();
-        }
+        self.scatter_output(scratch, buffer);
     }
 }
 boilerplate_fft!(
     RadersAlgorithm,
-    |this: &RadersAlgorithm<_>| this.len.get() as usize,
+    |this: &RadersAlgorithm<_>| this.len,
     |this: &RadersAlgorithm<_>| this.inplace_scratch_len,
     |this: &RadersAlgorithm<_>| this.outofplace_scratch_len,
     |this: &RadersAlgorithm<_>| this.immut_scratch_len
