@@ -134,6 +134,7 @@ mod twiddles;
 #[cfg(any(
     all(target_arch = "aarch64", feature = "neon"),
     all(target_arch = "x86_64", feature = "sse"),
+    all(target_arch = "wasm32", feature = "wasm_simd"),
 ))]
 mod simd_radixn;
 
@@ -141,6 +142,7 @@ mod simd_radixn;
 #[cfg(any(
     all(target_arch = "aarch64", feature = "neon"),
     all(target_arch = "x86_64", feature = "sse"),
+    all(target_arch = "wasm32", feature = "wasm_simd"),
 ))]
 mod simd_planner;
 
