@@ -281,4 +281,42 @@ impl RadixFactor {
             RadixFactor::Factor7 => 7,
         }
     }
+
+    /// Split a RadixN cross-FFT length into the layers that make it up, or None if it has a
+    /// factor no layer can handle.
+    ///
+    /// Every planner picks its base by its own rules, but once the base is divided out the rest
+    /// is the same arithmetic for all of them, so this is deliberately free of any policy.
+    pub fn split_cross_len(mut cross_len: usize) -> Option<Box<[RadixFactor]>> {
+        let mut factors = Vec::new();
+        while cross_len % 7 == 0 {
+            cross_len /= 7;
+            factors.push(RadixFactor::Factor7);
+        }
+        while cross_len % 6 == 0 {
+            cross_len /= 6;
+            factors.push(RadixFactor::Factor6);
+        }
+        while cross_len % 5 == 0 {
+            cross_len /= 5;
+            factors.push(RadixFactor::Factor5);
+        }
+        while cross_len % 3 == 0 {
+            cross_len /= 3;
+            factors.push(RadixFactor::Factor3);
+        }
+        if !cross_len.is_power_of_two() {
+            return None;
+        }
+
+        // benchmarking suggests that we want to add the 4s *last*, i suspect because 4 is a
+        // better-than-usual value for the transpose
+        let cross_bits = cross_len.trailing_zeros();
+        if cross_bits % 2 == 1 {
+            factors.push(RadixFactor::Factor2);
+        }
+        factors.extend(std::iter::repeat(RadixFactor::Factor4).take(cross_bits as usize / 2));
+
+        Some(factors.into_boxed_slice())
+    }
 }
