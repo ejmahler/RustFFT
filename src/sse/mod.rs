@@ -7,6 +7,7 @@ mod sse_vector;
 pub mod sse_butterflies;
 pub mod sse_prime_butterflies;
 pub mod sse_radix4;
+pub mod sse_radixn;
 
 mod sse_utils;
 
