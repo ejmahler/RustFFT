@@ -69,7 +69,7 @@ fn make_twiddles<const TW: usize, T: FftNum>(len: usize, direction: FftDirection
 }
 
 {{#each lengths}}
-struct {{this.struct_name_32}}<T> {
+pub struct {{this.struct_name_32}}<T> {
     direction: FftDirection,
     twiddles_re: [{{../arch.vector_f32}}; {{this.twiddle_len}}],
     twiddles_im: [{{../arch.vector_f32}}; {{this.twiddle_len}}],
@@ -80,7 +80,7 @@ boilerplate_fft_{{../arch.name_snakecase}}_f32_butterfly!({{this.struct_name_32}
 impl<T: FftNum> {{this.struct_name_32}}<T> {
     /// Safety: The current machine must support the {{../arch.cpu_feature_name}} instruction set
     #[target_feature(enable = "{{../arch.cpu_feature_name}}")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles({{this.len}}, direction);
         Self {
@@ -123,7 +123,7 @@ impl<T: FftNum> {{this.struct_name_32}}<T> {
     }
 }
 
-struct {{this.struct_name_64}}<T> {
+pub struct {{this.struct_name_64}}<T> {
     direction: FftDirection,
     twiddles_re: [{{../arch.vector_f64}}; {{this.twiddle_len}}],
     twiddles_im: [{{../arch.vector_f64}}; {{this.twiddle_len}}],
@@ -134,7 +134,7 @@ boilerplate_fft_{{../arch.name_snakecase}}_f64_butterfly!({{this.struct_name_64}
 impl<T: FftNum> {{this.struct_name_64}}<T> {
     /// Safety: The current machine must support the {{../arch.cpu_feature_name}} instruction set
     #[target_feature(enable = "{{../arch.cpu_feature_name}}")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles({{this.len}}, direction);
         unsafe {Self {

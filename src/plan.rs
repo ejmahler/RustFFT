@@ -506,18 +506,10 @@ impl<T: FftNum> FftPlannerScalar<T> {
     }
 
     fn design_radixn(&mut self, factors: PrimeFactors) -> Arc<Recipe> {
-        let p2 = factors.get_power_of_two();
-        let p3 = factors.get_power_of_three();
-        let p5 = factors
-            .get_other_factors()
-            .iter()
-            .find_map(|f| if f.value == 5 { Some(f.count) } else { None }) // if we had rustc 1.62, we could use (f.value == 5).then_some(f.count)
-            .unwrap_or(0);
-        let p7 = factors
-            .get_other_factors()
-            .iter()
-            .find_map(|f| if f.value == 7 { Some(f.count) } else { None })
-            .unwrap_or(0);
+        let p2 = factors.get_power_of(2);
+        let p3 = factors.get_power_of(3);
+        let p5 = factors.get_power_of(5);
+        let p7 = factors.get_power_of(7);
 
         let base_len: usize = if factors.has_factors_gt(MAX_RADIXN_FACTOR) {
             // If we have factors larger than RadixN can handle, we *must* use the product of those factors as our base
@@ -563,7 +555,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
 
         // now that we know the base length, divide it out get what radix4 needs to compute
         let base_fft = self.design_fft_for_len(base_len);
-        let mut cross_len = factors.get_product() / base_len;
+        let cross_len = factors.get_product() / base_len;
 
         // see if we can use radix4
         let cross_bits = cross_len.trailing_zeros();
@@ -574,36 +566,10 @@ impl<T: FftNum> FftPlannerScalar<T> {
 
         // we weren't able to use radix4, so fall back to RadixN
         // theoretically we could do this with the p2, p3, p5 etc values above, but our choice of base knocked them out of sync
-        let mut factors = Vec::new();
-        while cross_len % 7 == 0 {
-            cross_len /= 7;
-            factors.push(RadixFactor::Factor7);
-        }
-        while cross_len % 6 == 0 {
-            cross_len /= 6;
-            factors.push(RadixFactor::Factor6);
-        }
-        while cross_len % 5 == 0 {
-            cross_len /= 5;
-            factors.push(RadixFactor::Factor5);
-        }
-        while cross_len % 3 == 0 {
-            cross_len /= 3;
-            factors.push(RadixFactor::Factor3);
-        }
-        assert!(cross_len.is_power_of_two());
+        let factors = RadixFactor::split_cross_len(cross_len)
+            .expect("Every factor RadixN can't handle should have gone into the base");
 
-        // benchmarking suggests that we want to add the 4s *last*, i suspect because 4 is a better-than-usual value for the transpose
-        let cross_bits = cross_len.trailing_zeros();
-        if cross_bits % 2 == 1 {
-            factors.push(RadixFactor::Factor2);
-        }
-        factors.extend(std::iter::repeat(RadixFactor::Factor4).take(cross_bits as usize / 2));
-
-        Arc::new(Recipe::RadixN {
-            factors: factors.into_boxed_slice(),
-            base_fft,
-        })
+        Arc::new(Recipe::RadixN { factors, base_fft })
     }
 
     // Returns Some(instance) if we have a butterfly available for this size. Returns None if there is no butterfly available for this size

@@ -78,7 +78,7 @@ fn make_twiddles<const TW: usize, T: FftNum>(len: usize, direction: FftDirection
     })
 }
 
-struct SseF32Butterfly7<T> {
+pub struct SseF32Butterfly7<T> {
     direction: FftDirection,
     twiddles_re: [__m128; 3],
     twiddles_im: [__m128; 3],
@@ -89,7 +89,7 @@ boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly7, 7, |this: &SseF32Butterfly7
 impl<T: FftNum> SseF32Butterfly7<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(7, direction);
         Self {
@@ -182,7 +182,7 @@ impl<T: FftNum> SseF32Butterfly7<T> {
     }
 }
 
-struct SseF64Butterfly7<T> {
+pub struct SseF64Butterfly7<T> {
     direction: FftDirection,
     twiddles_re: [__m128d; 3],
     twiddles_im: [__m128d; 3],
@@ -193,7 +193,7 @@ boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly7, 7, |this: &SseF64Butterfly7
 impl<T: FftNum> SseF64Butterfly7<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(7, direction);
         unsafe {Self {
@@ -257,7 +257,7 @@ impl<T: FftNum> SseF64Butterfly7<T> {
     }
 }
 
-struct SseF32Butterfly11<T> {
+pub struct SseF32Butterfly11<T> {
     direction: FftDirection,
     twiddles_re: [__m128; 5],
     twiddles_im: [__m128; 5],
@@ -268,7 +268,7 @@ boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly11, 11, |this: &SseF32Butterfl
 impl<T: FftNum> SseF32Butterfly11<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(11, direction);
         Self {
@@ -411,7 +411,7 @@ impl<T: FftNum> SseF32Butterfly11<T> {
     }
 }
 
-struct SseF64Butterfly11<T> {
+pub struct SseF64Butterfly11<T> {
     direction: FftDirection,
     twiddles_re: [__m128d; 5],
     twiddles_im: [__m128d; 5],
@@ -422,7 +422,7 @@ boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly11, 11, |this: &SseF64Butterfl
 impl<T: FftNum> SseF64Butterfly11<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(11, direction);
         unsafe {Self {
@@ -528,7 +528,7 @@ impl<T: FftNum> SseF64Butterfly11<T> {
     }
 }
 
-struct SseF32Butterfly13<T> {
+pub struct SseF32Butterfly13<T> {
     direction: FftDirection,
     twiddles_re: [__m128; 6],
     twiddles_im: [__m128; 6],
@@ -539,7 +539,7 @@ boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly13, 13, |this: &SseF32Butterfl
 impl<T: FftNum> SseF32Butterfly13<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(13, direction);
         Self {
@@ -713,7 +713,7 @@ impl<T: FftNum> SseF32Butterfly13<T> {
     }
 }
 
-struct SseF64Butterfly13<T> {
+pub struct SseF64Butterfly13<T> {
     direction: FftDirection,
     twiddles_re: [__m128d; 6],
     twiddles_im: [__m128d; 6],
@@ -724,7 +724,7 @@ boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly13, 13, |this: &SseF64Butterfl
 impl<T: FftNum> SseF64Butterfly13<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(13, direction);
         unsafe {Self {
@@ -857,7 +857,7 @@ impl<T: FftNum> SseF64Butterfly13<T> {
     }
 }
 
-struct SseF32Butterfly17<T> {
+pub struct SseF32Butterfly17<T> {
     direction: FftDirection,
     twiddles_re: [__m128; 8],
     twiddles_im: [__m128; 8],
@@ -868,7 +868,7 @@ boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly17, 17, |this: &SseF32Butterfl
 impl<T: FftNum> SseF32Butterfly17<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(17, direction);
         Self {
@@ -1116,7 +1116,7 @@ impl<T: FftNum> SseF32Butterfly17<T> {
     }
 }
 
-struct SseF64Butterfly17<T> {
+pub struct SseF64Butterfly17<T> {
     direction: FftDirection,
     twiddles_re: [__m128d; 8],
     twiddles_im: [__m128d; 8],
@@ -1127,7 +1127,7 @@ boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly17, 17, |this: &SseF64Butterfl
 impl<T: FftNum> SseF64Butterfly17<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(17, direction);
         unsafe {Self {
@@ -1326,7 +1326,7 @@ impl<T: FftNum> SseF64Butterfly17<T> {
     }
 }
 
-struct SseF32Butterfly19<T> {
+pub struct SseF32Butterfly19<T> {
     direction: FftDirection,
     twiddles_re: [__m128; 9],
     twiddles_im: [__m128; 9],
@@ -1337,7 +1337,7 @@ boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly19, 19, |this: &SseF32Butterfl
 impl<T: FftNum> SseF32Butterfly19<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(19, direction);
         Self {
@@ -1628,7 +1628,7 @@ impl<T: FftNum> SseF32Butterfly19<T> {
     }
 }
 
-struct SseF64Butterfly19<T> {
+pub struct SseF64Butterfly19<T> {
     direction: FftDirection,
     twiddles_re: [__m128d; 9],
     twiddles_im: [__m128d; 9],
@@ -1639,7 +1639,7 @@ boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly19, 19, |this: &SseF64Butterfl
 impl<T: FftNum> SseF64Butterfly19<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(19, direction);
         unsafe {Self {
@@ -1877,7 +1877,7 @@ impl<T: FftNum> SseF64Butterfly19<T> {
     }
 }
 
-struct SseF32Butterfly23<T> {
+pub struct SseF32Butterfly23<T> {
     direction: FftDirection,
     twiddles_re: [__m128; 11],
     twiddles_im: [__m128; 11],
@@ -1888,7 +1888,7 @@ boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly23, 23, |this: &SseF32Butterfl
 impl<T: FftNum> SseF32Butterfly23<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(23, direction);
         Self {
@@ -2277,7 +2277,7 @@ impl<T: FftNum> SseF32Butterfly23<T> {
     }
 }
 
-struct SseF64Butterfly23<T> {
+pub struct SseF64Butterfly23<T> {
     direction: FftDirection,
     twiddles_re: [__m128d; 11],
     twiddles_im: [__m128d; 11],
@@ -2288,7 +2288,7 @@ boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly23, 23, |this: &SseF64Butterfl
 impl<T: FftNum> SseF64Butterfly23<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(23, direction);
         unsafe {Self {
@@ -2616,7 +2616,7 @@ impl<T: FftNum> SseF64Butterfly23<T> {
     }
 }
 
-struct SseF32Butterfly29<T> {
+pub struct SseF32Butterfly29<T> {
     direction: FftDirection,
     twiddles_re: [__m128; 14],
     twiddles_im: [__m128; 14],
@@ -2627,7 +2627,7 @@ boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly29, 29, |this: &SseF32Butterfl
 impl<T: FftNum> SseF32Butterfly29<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(29, direction);
         Self {
@@ -3193,7 +3193,7 @@ impl<T: FftNum> SseF32Butterfly29<T> {
     }
 }
 
-struct SseF64Butterfly29<T> {
+pub struct SseF64Butterfly29<T> {
     direction: FftDirection,
     twiddles_re: [__m128d; 14],
     twiddles_im: [__m128d; 14],
@@ -3204,7 +3204,7 @@ boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly29, 29, |this: &SseF64Butterfl
 impl<T: FftNum> SseF64Butterfly29<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(29, direction);
         unsafe {Self {
@@ -3697,7 +3697,7 @@ impl<T: FftNum> SseF64Butterfly29<T> {
     }
 }
 
-struct SseF32Butterfly31<T> {
+pub struct SseF32Butterfly31<T> {
     direction: FftDirection,
     twiddles_re: [__m128; 15],
     twiddles_im: [__m128; 15],
@@ -3708,7 +3708,7 @@ boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly31, 31, |this: &SseF32Butterfl
 impl<T: FftNum> SseF32Butterfly31<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(31, direction);
         Self {
@@ -4341,7 +4341,7 @@ impl<T: FftNum> SseF32Butterfly31<T> {
     }
 }
 
-struct SseF64Butterfly31<T> {
+pub struct SseF64Butterfly31<T> {
     direction: FftDirection,
     twiddles_re: [__m128d; 15],
     twiddles_im: [__m128d; 15],
@@ -4352,7 +4352,7 @@ boilerplate_fft_sse_f64_butterfly!(SseF64Butterfly31, 31, |this: &SseF64Butterfl
 impl<T: FftNum> SseF64Butterfly31<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(31, direction);
         unsafe {Self {

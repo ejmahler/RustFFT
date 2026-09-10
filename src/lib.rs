@@ -130,6 +130,22 @@ mod math_utils;
 mod plan;
 mod twiddles;
 
+// The SIMD backends all share one RadixN, generic over the vector type each of them provides
+#[cfg(any(
+    all(target_arch = "aarch64", feature = "neon"),
+    all(target_arch = "x86_64", feature = "sse"),
+    all(target_arch = "wasm32", feature = "wasm_simd"),
+))]
+mod simd_radixn;
+
+// ...and the planner arithmetic that goes with it
+#[cfg(any(
+    all(target_arch = "aarch64", feature = "neon"),
+    all(target_arch = "x86_64", feature = "sse"),
+    all(target_arch = "wasm32", feature = "wasm_simd"),
+))]
+mod simd_planner;
+
 use num_complex::Complex;
 use num_traits::Zero;
 

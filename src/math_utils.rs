@@ -185,6 +185,26 @@ impl PrimeFactors {
     pub fn get_other_factors(&self) -> &[PrimeFactor] {
         &self.other_factors
     }
+    /// How many times `value` divides this number, or zero if it isn't a factor at all.
+    /// `value` is assumed to be prime.
+    #[allow(unused)]
+    pub fn get_power_of(&self, value: usize) -> u32 {
+        match value {
+            2 => self.power_two,
+            3 => self.power_three,
+            _ => self
+                .other_factors
+                .iter()
+                .find_map(|f| {
+                    if f.value == value {
+                        Some(f.count)
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(0),
+        }
+    }
     #[allow(unused)]
     pub fn is_power_of_three(&self) -> bool {
         self.power_three > 0 && self.power_two == 0 && self.other_factors.len() == 0
