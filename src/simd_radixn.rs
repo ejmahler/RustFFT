@@ -321,34 +321,46 @@ impl<V: RadixNVector, T: FftNum> SimdRadixN<V, T> {
             let num_columns = cross_fft_len;
             cross_fft_len *= factor.radix();
 
-            for data in out.chunks_exact_mut(cross_fft_len) {
-                match factor {
-                    InternalRadixFactor::Factor2 => {
+            // Dispatch once per layer rather than once per chunk, so each layer runs a single
+            // monomorphized loop over its chunks. Mirrors the scalar `RadixN`.
+            match factor {
+                InternalRadixFactor::Factor2 => {
+                    for data in out.chunks_exact_mut(cross_fft_len) {
                         cross_layer::<V, 2, _>(data, layer_twiddles, num_columns, |v| {
                             V::column_butterfly2(v)
                         })
                     }
-                    InternalRadixFactor::Factor3(bf) => {
+                }
+                InternalRadixFactor::Factor3(bf) => {
+                    for data in out.chunks_exact_mut(cross_fft_len) {
                         cross_layer::<V, 3, _>(data, layer_twiddles, num_columns, |v| {
                             V::column_butterfly3(bf, v)
                         })
                     }
-                    InternalRadixFactor::Factor4(rotation) => {
+                }
+                InternalRadixFactor::Factor4(rotation) => {
+                    for data in out.chunks_exact_mut(cross_fft_len) {
                         cross_layer::<V, 4, _>(data, layer_twiddles, num_columns, |v| {
                             V::column_butterfly4(v, *rotation)
                         })
                     }
-                    InternalRadixFactor::Factor5(bf) => {
+                }
+                InternalRadixFactor::Factor5(bf) => {
+                    for data in out.chunks_exact_mut(cross_fft_len) {
                         cross_layer::<V, 5, _>(data, layer_twiddles, num_columns, |v| {
                             V::column_butterfly5(bf, v)
                         })
                     }
-                    InternalRadixFactor::Factor6(bf) => {
+                }
+                InternalRadixFactor::Factor6(bf) => {
+                    for data in out.chunks_exact_mut(cross_fft_len) {
                         cross_layer::<V, 6, _>(data, layer_twiddles, num_columns, |v| {
                             V::column_butterfly6(bf, v)
                         })
                     }
-                    InternalRadixFactor::Factor7(bf) => {
+                }
+                InternalRadixFactor::Factor7(bf) => {
+                    for data in out.chunks_exact_mut(cross_fft_len) {
                         cross_layer::<V, 7, _>(data, layer_twiddles, num_columns, |v| {
                             V::column_butterfly7(bf, v)
                         })
