@@ -1,11 +1,11 @@
 #![allow(bare_trait_objects)]
 #![allow(non_snake_case)]
-#![feature(test)]
-extern crate test;
 extern crate rustfft;
 
 use std::sync::Arc;
-use test::Bencher;
+mod config;
+
+use criterion::{criterion_group, criterion_main, Bencher, Criterion};
 use rustfft::{Direction, FftNum, Fft, FftDirection, Length};
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
@@ -55,72 +55,72 @@ fn bench_planned_f32(b: &mut Bencher, len: usize) {
 
 
 // Powers of 4
-#[bench] fn planned32_p2_00000064(b: &mut Bencher) { bench_planned_f32(b,       64); }
-#[bench] fn planned32_p2_00000128(b: &mut Bencher) { bench_planned_f32(b,      128); }
-#[bench] fn planned32_p2_00000256(b: &mut Bencher) { bench_planned_f32(b,      256); }
-#[bench] fn planned32_p2_00000512(b: &mut Bencher) { bench_planned_f32(b,      512); }
-#[bench] fn planned32_p2_00001024(b: &mut Bencher) { bench_planned_f32(b,     1024); }
-#[bench] fn planned32_p2_00002048(b: &mut Bencher) { bench_planned_f32(b,     2048); }
-#[bench] fn planned32_p2_00004096(b: &mut Bencher) { bench_planned_f32(b,     4096); }
-#[bench] fn planned32_p2_00016384(b: &mut Bencher) { bench_planned_f32(b,    16384); }
-#[bench] fn planned32_p2_00065536(b: &mut Bencher) { bench_planned_f32(b,    65536); }
-#[bench] fn planned32_p2_01048576(b: &mut Bencher) { bench_planned_f32(b,  1048576); }
-#[bench] fn planned32_p2_16777216(b: &mut Bencher) { bench_planned_f32(b, 16777216); }
+fn planned32_p2_00000064(b: &mut Bencher) { bench_planned_f32(b,       64); }
+fn planned32_p2_00000128(b: &mut Bencher) { bench_planned_f32(b,      128); }
+fn planned32_p2_00000256(b: &mut Bencher) { bench_planned_f32(b,      256); }
+fn planned32_p2_00000512(b: &mut Bencher) { bench_planned_f32(b,      512); }
+fn planned32_p2_00001024(b: &mut Bencher) { bench_planned_f32(b,     1024); }
+fn planned32_p2_00002048(b: &mut Bencher) { bench_planned_f32(b,     2048); }
+fn planned32_p2_00004096(b: &mut Bencher) { bench_planned_f32(b,     4096); }
+fn planned32_p2_00016384(b: &mut Bencher) { bench_planned_f32(b,    16384); }
+fn planned32_p2_00065536(b: &mut Bencher) { bench_planned_f32(b,    65536); }
+fn planned32_p2_01048576(b: &mut Bencher) { bench_planned_f32(b,  1048576); }
+fn planned32_p2_16777216(b: &mut Bencher) { bench_planned_f32(b, 16777216); }
 
 
 // Powers of 5
-#[bench] fn planned32_p5_00125(b: &mut Bencher) { bench_planned_f32(b, 125); }
-#[bench] fn planned32_p5_00625(b: &mut Bencher) { bench_planned_f32(b, 625); }
-#[bench] fn planned32_p5_03125(b: &mut Bencher) { bench_planned_f32(b, 3125); }
-#[bench] fn planned32_p5_15625(b: &mut Bencher) { bench_planned_f32(b, 15625); }
+fn planned32_p5_00125(b: &mut Bencher) { bench_planned_f32(b, 125); }
+fn planned32_p5_00625(b: &mut Bencher) { bench_planned_f32(b, 625); }
+fn planned32_p5_03125(b: &mut Bencher) { bench_planned_f32(b, 3125); }
+fn planned32_p5_15625(b: &mut Bencher) { bench_planned_f32(b, 15625); }
 
 // Powers of 7
-#[bench] fn planned32_p7_00343(b: &mut Bencher) { bench_planned_f32(b,   343); }
-#[bench] fn planned32_p7_02401(b: &mut Bencher) { bench_planned_f32(b,  2401); }
-#[bench] fn planned32_p7_16807(b: &mut Bencher) { bench_planned_f32(b, 16807); }
+fn planned32_p7_00343(b: &mut Bencher) { bench_planned_f32(b,   343); }
+fn planned32_p7_02401(b: &mut Bencher) { bench_planned_f32(b,  2401); }
+fn planned32_p7_16807(b: &mut Bencher) { bench_planned_f32(b, 16807); }
 
 // Prime lengths
 // Prime lengths
-#[bench] fn planned32_prime_0005(b: &mut Bencher)     { bench_planned_f32(b,  5); }
-#[bench] fn planned32_prime_0017(b: &mut Bencher)     { bench_planned_f32(b,  17); }
-#[bench] fn planned32_prime_0149(b: &mut Bencher)     { bench_planned_f32(b,  149); }
-#[bench] fn planned32_prime_0151(b: &mut Bencher)     { bench_planned_f32(b,  151); }
-#[bench] fn planned32_prime_0251(b: &mut Bencher)     { bench_planned_f32(b,  251); }
-#[bench] fn planned32_prime_0257(b: &mut Bencher)     { bench_planned_f32(b,  257); }
-#[bench] fn planned32_prime_1009(b: &mut Bencher)     { bench_planned_f32(b,  1009); }
-#[bench] fn planned32_prime_1201(b: &mut Bencher)     { bench_planned_f32(b,  1201); }
-#[bench] fn planned32_prime_2017(b: &mut Bencher)     { bench_planned_f32(b,  2017); }
-#[bench] fn planned32_prime_2879(b: &mut Bencher)     { bench_planned_f32(b,  2879); }
-#[bench] fn planned32_prime_32767(b: &mut Bencher)    { bench_planned_f32(b, 32767); }
-#[bench] fn planned32_prime_65521(b: &mut Bencher)    { bench_planned_f32(b, 65521); }
-#[bench] fn planned32_prime_65537(b: &mut Bencher)    { bench_planned_f32(b, 65537); }
-#[bench] fn planned32_prime_746483(b: &mut Bencher)   { bench_planned_f32(b,746483); }
-#[bench] fn planned32_prime_746497(b: &mut Bencher)   { bench_planned_f32(b,746497); }
+fn planned32_prime_0005(b: &mut Bencher)     { bench_planned_f32(b,  5); }
+fn planned32_prime_0017(b: &mut Bencher)     { bench_planned_f32(b,  17); }
+fn planned32_prime_0149(b: &mut Bencher)     { bench_planned_f32(b,  149); }
+fn planned32_prime_0151(b: &mut Bencher)     { bench_planned_f32(b,  151); }
+fn planned32_prime_0251(b: &mut Bencher)     { bench_planned_f32(b,  251); }
+fn planned32_prime_0257(b: &mut Bencher)     { bench_planned_f32(b,  257); }
+fn planned32_prime_1009(b: &mut Bencher)     { bench_planned_f32(b,  1009); }
+fn planned32_prime_1201(b: &mut Bencher)     { bench_planned_f32(b,  1201); }
+fn planned32_prime_2017(b: &mut Bencher)     { bench_planned_f32(b,  2017); }
+fn planned32_prime_2879(b: &mut Bencher)     { bench_planned_f32(b,  2879); }
+fn planned32_prime_32767(b: &mut Bencher)    { bench_planned_f32(b, 32767); }
+fn planned32_prime_65521(b: &mut Bencher)    { bench_planned_f32(b, 65521); }
+fn planned32_prime_65537(b: &mut Bencher)    { bench_planned_f32(b, 65537); }
+fn planned32_prime_746483(b: &mut Bencher)   { bench_planned_f32(b,746483); }
+fn planned32_prime_746497(b: &mut Bencher)   { bench_planned_f32(b,746497); }
 
 //primes raised to a power
-#[bench] fn planned32_primepower_044521(b: &mut Bencher) { bench_planned_f32(b, 44521); } // 211^2
-#[bench] fn planned32_primepower_160801(b: &mut Bencher) { bench_planned_f32(b, 160801); } // 401^2
+fn planned32_primepower_044521(b: &mut Bencher) { bench_planned_f32(b, 44521); } // 211^2
+fn planned32_primepower_160801(b: &mut Bencher) { bench_planned_f32(b, 160801); } // 401^2
 
 // numbers times powers of two
-#[bench] fn planned32_composite_024576(b: &mut Bencher) { bench_planned_f32(b,  24576); }
-#[bench] fn planned32_composite_020736(b: &mut Bencher) { bench_planned_f32(b,  20736); }
+fn planned32_composite_024576(b: &mut Bencher) { bench_planned_f32(b,  24576); }
+fn planned32_composite_020736(b: &mut Bencher) { bench_planned_f32(b,  20736); }
 
 // power of 2 times large prime
-#[bench] fn planned32_composite_032192(b: &mut Bencher) { bench_planned_f32(b,  32192); }
-#[bench] fn planned32_composite_024028(b: &mut Bencher) { bench_planned_f32(b,  24028); }
+fn planned32_composite_032192(b: &mut Bencher) { bench_planned_f32(b,  32192); }
+fn planned32_composite_024028(b: &mut Bencher) { bench_planned_f32(b,  24028); }
 
 // small mixed composites times a large prime
-#[bench] fn planned32_composite_005472(b: &mut Bencher) { bench_planned_f32(b,  5472); }
-#[bench] fn planned32_composite_030270(b: &mut Bencher) { bench_planned_f32(b,  30270); }
+fn planned32_composite_005472(b: &mut Bencher) { bench_planned_f32(b,  5472); }
+fn planned32_composite_030270(b: &mut Bencher) { bench_planned_f32(b,  30270); }
 
 // small mixed composites
-#[bench] fn planned32_composite_000018(b: &mut Bencher) { bench_planned_f32(b,  00018); }
-#[bench] fn planned32_composite_000360(b: &mut Bencher) { bench_planned_f32(b,  00360); }
-#[bench] fn planned32_composite_001200(b: &mut Bencher) { bench_planned_f32(b,  01200); }
-#[bench] fn planned32_composite_044100(b: &mut Bencher) { bench_planned_f32(b,  44100); }
-#[bench] fn planned32_composite_048000(b: &mut Bencher) { bench_planned_f32(b,  48000); }
-#[bench] fn planned32_composite_046656(b: &mut Bencher) { bench_planned_f32(b,  46656); }
-#[bench] fn planned32_composite_100000(b: &mut Bencher) { bench_planned_f32(b,  100000); }
+fn planned32_composite_000018(b: &mut Bencher) { bench_planned_f32(b,  00018); }
+fn planned32_composite_000360(b: &mut Bencher) { bench_planned_f32(b,  00360); }
+fn planned32_composite_001200(b: &mut Bencher) { bench_planned_f32(b,  01200); }
+fn planned32_composite_044100(b: &mut Bencher) { bench_planned_f32(b,  44100); }
+fn planned32_composite_048000(b: &mut Bencher) { bench_planned_f32(b,  48000); }
+fn planned32_composite_046656(b: &mut Bencher) { bench_planned_f32(b,  46656); }
+fn planned32_composite_100000(b: &mut Bencher) { bench_planned_f32(b,  100000); }
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
@@ -134,66 +134,66 @@ fn bench_planned_f64(b: &mut Bencher, len: usize) {
     b.iter(|| { fft.process_with_scratch(&mut buffer, &mut scratch); });
 }
 
-#[bench] fn planned64_p2_00000064(b: &mut Bencher) { bench_planned_f64(b,       64); }
-#[bench] fn planned64_p2_00000128(b: &mut Bencher) { bench_planned_f64(b,      128); }
-#[bench] fn planned64_p2_00000256(b: &mut Bencher) { bench_planned_f64(b,      256); }
-#[bench] fn planned64_p2_00000512(b: &mut Bencher) { bench_planned_f64(b,      512); }
-#[bench] fn planned64_p2_00001024(b: &mut Bencher) { bench_planned_f64(b,     1024); }
-#[bench] fn planned64_p2_00002048(b: &mut Bencher) { bench_planned_f64(b,     2048); }
-#[bench] fn planned64_p2_00004096(b: &mut Bencher) { bench_planned_f64(b,     4096); }
-#[bench] fn planned64_p2_00016384(b: &mut Bencher) { bench_planned_f64(b,    16384); }
-#[bench] fn planned64_p2_00065536(b: &mut Bencher) { bench_planned_f64(b,    65536); }
-#[bench] fn planned64_p2_01048576(b: &mut Bencher) { bench_planned_f64(b,  1048576); }
+fn planned64_p2_00000064(b: &mut Bencher) { bench_planned_f64(b,       64); }
+fn planned64_p2_00000128(b: &mut Bencher) { bench_planned_f64(b,      128); }
+fn planned64_p2_00000256(b: &mut Bencher) { bench_planned_f64(b,      256); }
+fn planned64_p2_00000512(b: &mut Bencher) { bench_planned_f64(b,      512); }
+fn planned64_p2_00001024(b: &mut Bencher) { bench_planned_f64(b,     1024); }
+fn planned64_p2_00002048(b: &mut Bencher) { bench_planned_f64(b,     2048); }
+fn planned64_p2_00004096(b: &mut Bencher) { bench_planned_f64(b,     4096); }
+fn planned64_p2_00016384(b: &mut Bencher) { bench_planned_f64(b,    16384); }
+fn planned64_p2_00065536(b: &mut Bencher) { bench_planned_f64(b,    65536); }
+fn planned64_p2_01048576(b: &mut Bencher) { bench_planned_f64(b,  1048576); }
 //#[bench] fn planned64_p2_16777216(b: &mut Bencher) { bench_planned_f64(b, 16777216); }
 
 // Powers of 5
-#[bench] fn planned64_p5_00125(b: &mut Bencher) { bench_planned_f64(b, 125); }
-#[bench] fn planned64_p5_00625(b: &mut Bencher) { bench_planned_f64(b, 625); }
-#[bench] fn planned64_p5_03125(b: &mut Bencher) { bench_planned_f64(b, 3125); }
-#[bench] fn planned64_p5_15625(b: &mut Bencher) { bench_planned_f64(b, 15625); }
+fn planned64_p5_00125(b: &mut Bencher) { bench_planned_f64(b, 125); }
+fn planned64_p5_00625(b: &mut Bencher) { bench_planned_f64(b, 625); }
+fn planned64_p5_03125(b: &mut Bencher) { bench_planned_f64(b, 3125); }
+fn planned64_p5_15625(b: &mut Bencher) { bench_planned_f64(b, 15625); }
 
-#[bench] fn planned64_p7_00343(b: &mut Bencher) { bench_planned_f64(b,   343); }
-#[bench] fn planned64_p7_02401(b: &mut Bencher) { bench_planned_f64(b,  2401); }
-#[bench] fn planned64_p7_16807(b: &mut Bencher) { bench_planned_f64(b, 16807); }
+fn planned64_p7_00343(b: &mut Bencher) { bench_planned_f64(b,   343); }
+fn planned64_p7_02401(b: &mut Bencher) { bench_planned_f64(b,  2401); }
+fn planned64_p7_16807(b: &mut Bencher) { bench_planned_f64(b, 16807); }
 
 // Prime lengths
-#[bench] fn planned64_prime_0005(b: &mut Bencher)     { bench_planned_f64(b,  5); }
-#[bench] fn planned64_prime_0017(b: &mut Bencher)     { bench_planned_f64(b,  17); }
-#[bench] fn planned64_prime_0149(b: &mut Bencher)     { bench_planned_f64(b,  149); }
-#[bench] fn planned64_prime_0151(b: &mut Bencher)     { bench_planned_f64(b,  151); }
-#[bench] fn planned64_prime_0251(b: &mut Bencher)     { bench_planned_f64(b,  251); }
-#[bench] fn planned64_prime_0257(b: &mut Bencher)     { bench_planned_f64(b,  257); }
-#[bench] fn planned64_prime_1009(b: &mut Bencher)     { bench_planned_f64(b,  1009); }
-#[bench] fn planned64_prime_2017(b: &mut Bencher)     { bench_planned_f64(b,  2017); }
-#[bench] fn planned64_prime_2879(b: &mut Bencher)     { bench_planned_f64(b,  2879); }
-#[bench] fn planned64_prime_32767(b: &mut Bencher)    { bench_planned_f64(b, 32767); }
-#[bench] fn planned64_prime_65521(b: &mut Bencher)    { bench_planned_f64(b, 65521); }
-#[bench] fn planned64_prime_65537(b: &mut Bencher)    { bench_planned_f64(b, 65537); }
-#[bench] fn planned64_prime_746483(b: &mut Bencher)   { bench_planned_f64(b,746483); }
-#[bench] fn planned64_prime_746497(b: &mut Bencher)   { bench_planned_f64(b,746497); }
+fn planned64_prime_0005(b: &mut Bencher)     { bench_planned_f64(b,  5); }
+fn planned64_prime_0017(b: &mut Bencher)     { bench_planned_f64(b,  17); }
+fn planned64_prime_0149(b: &mut Bencher)     { bench_planned_f64(b,  149); }
+fn planned64_prime_0151(b: &mut Bencher)     { bench_planned_f64(b,  151); }
+fn planned64_prime_0251(b: &mut Bencher)     { bench_planned_f64(b,  251); }
+fn planned64_prime_0257(b: &mut Bencher)     { bench_planned_f64(b,  257); }
+fn planned64_prime_1009(b: &mut Bencher)     { bench_planned_f64(b,  1009); }
+fn planned64_prime_2017(b: &mut Bencher)     { bench_planned_f64(b,  2017); }
+fn planned64_prime_2879(b: &mut Bencher)     { bench_planned_f64(b,  2879); }
+fn planned64_prime_32767(b: &mut Bencher)    { bench_planned_f64(b, 32767); }
+fn planned64_prime_65521(b: &mut Bencher)    { bench_planned_f64(b, 65521); }
+fn planned64_prime_65537(b: &mut Bencher)    { bench_planned_f64(b, 65537); }
+fn planned64_prime_746483(b: &mut Bencher)   { bench_planned_f64(b,746483); }
+fn planned64_prime_746497(b: &mut Bencher)   { bench_planned_f64(b,746497); }
 
 //primes raised to a power
-#[bench] fn planned64_primepower_044521(b: &mut Bencher) { bench_planned_f64(b, 44521); } // 211^2
-#[bench] fn planned64_primepower_160801(b: &mut Bencher) { bench_planned_f64(b, 160801); } // 401^2
+fn planned64_primepower_044521(b: &mut Bencher) { bench_planned_f64(b, 44521); } // 211^2
+fn planned64_primepower_160801(b: &mut Bencher) { bench_planned_f64(b, 160801); } // 401^2
 
 // numbers times powers of two
-#[bench] fn planned64_composite_024576(b: &mut Bencher) { bench_planned_f64(b,  24576); }
-#[bench] fn planned64_composite_020736(b: &mut Bencher) { bench_planned_f64(b,  20736); }
+fn planned64_composite_024576(b: &mut Bencher) { bench_planned_f64(b,  24576); }
+fn planned64_composite_020736(b: &mut Bencher) { bench_planned_f64(b,  20736); }
 
 // power of 2 times large prime
-#[bench] fn planned64_composite_032192(b: &mut Bencher) { bench_planned_f64(b,  32192); }
-#[bench] fn planned64_composite_024028(b: &mut Bencher) { bench_planned_f64(b,  24028); }
+fn planned64_composite_032192(b: &mut Bencher) { bench_planned_f64(b,  32192); }
+fn planned64_composite_024028(b: &mut Bencher) { bench_planned_f64(b,  24028); }
 
 // small mixed composites times a large prime
-#[bench] fn planned64_composite_030270(b: &mut Bencher) { bench_planned_f64(b,  30270); }
+fn planned64_composite_030270(b: &mut Bencher) { bench_planned_f64(b,  30270); }
 
 // small mixed composites
-#[bench] fn planned64_composite_000018(b: &mut Bencher) { bench_planned_f64(b,  00018); }
-#[bench] fn planned64_composite_000360(b: &mut Bencher) { bench_planned_f64(b,  00360); }
-#[bench] fn planned64_composite_044100(b: &mut Bencher) { bench_planned_f64(b,  44100); }
-#[bench] fn planned64_composite_048000(b: &mut Bencher) { bench_planned_f64(b,  48000); }
-#[bench] fn planned64_composite_046656(b: &mut Bencher) { bench_planned_f64(b,  46656); }
-#[bench] fn planned64_composite_100000(b: &mut Bencher) { bench_planned_f64(b,  100000); }
+fn planned64_composite_000018(b: &mut Bencher) { bench_planned_f64(b,  00018); }
+fn planned64_composite_000360(b: &mut Bencher) { bench_planned_f64(b,  00360); }
+fn planned64_composite_044100(b: &mut Bencher) { bench_planned_f64(b,  44100); }
+fn planned64_composite_048000(b: &mut Bencher) { bench_planned_f64(b,  48000); }
+fn planned64_composite_046656(b: &mut Bencher) { bench_planned_f64(b,  46656); }
+fn planned64_composite_100000(b: &mut Bencher) { bench_planned_f64(b,  100000); }
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to the Good-Thomas algorithm
@@ -210,14 +210,14 @@ fn bench_good_thomas(b: &mut Bencher, width: usize, height: usize) {
     b.iter(|| {fft.process_with_scratch(&mut buffer, &mut scratch);} );
 }
 
-#[bench] fn good_thomas_0002_3(b: &mut Bencher) { bench_good_thomas(b,  2, 3); }
-#[bench] fn good_thomas_0003_4(b: &mut Bencher) { bench_good_thomas(b,  3, 4); }
-#[bench] fn good_thomas_0004_5(b: &mut Bencher) { bench_good_thomas(b,  4, 5); }
-#[bench] fn good_thomas_0007_32(b: &mut Bencher) { bench_good_thomas(b, 7, 32); }
-#[bench] fn good_thomas_0032_27(b: &mut Bencher) { bench_good_thomas(b,  32, 27); }
-#[bench] fn good_thomas_0256_243(b: &mut Bencher) { bench_good_thomas(b,  256, 243); }
-#[bench] fn good_thomas_2048_3(b: &mut Bencher) { bench_good_thomas(b,  2048, 3); }
-#[bench] fn good_thomas_2048_2187(b: &mut Bencher) { bench_good_thomas(b,  2048, 2187); }
+fn good_thomas_0002_3(b: &mut Bencher) { bench_good_thomas(b,  2, 3); }
+fn good_thomas_0003_4(b: &mut Bencher) { bench_good_thomas(b,  3, 4); }
+fn good_thomas_0004_5(b: &mut Bencher) { bench_good_thomas(b,  4, 5); }
+fn good_thomas_0007_32(b: &mut Bencher) { bench_good_thomas(b, 7, 32); }
+fn good_thomas_0032_27(b: &mut Bencher) { bench_good_thomas(b,  32, 27); }
+fn good_thomas_0256_243(b: &mut Bencher) { bench_good_thomas(b,  256, 243); }
+fn good_thomas_2048_3(b: &mut Bencher) { bench_good_thomas(b,  2048, 3); }
+fn good_thomas_2048_2187(b: &mut Bencher) { bench_good_thomas(b,  2048, 2187); }
 
 /// Times just the FFT setup (not execution)
 /// for a given length, specific to the Good-Thomas algorithm
@@ -229,18 +229,18 @@ fn bench_good_thomas_setup(b: &mut Bencher, width: usize, height: usize) {
 
     b.iter(|| { 
         let fft : Arc<dyn Fft<f32>> = Arc::new(GoodThomasAlgorithm::new(Arc::clone(&width_fft), Arc::clone(&height_fft)));
-        test::black_box(fft);
+        std::hint::black_box(fft);
     });
 }
 
-#[bench] fn good_thomas_setup_0002_3(b: &mut Bencher) { bench_good_thomas_setup(b,  2, 3); }
-#[bench] fn good_thomas_setup_0003_4(b: &mut Bencher) { bench_good_thomas_setup(b,  3, 4); }
-#[bench] fn good_thomas_setup_0004_5(b: &mut Bencher) { bench_good_thomas_setup(b,  4, 5); }
-#[bench] fn good_thomas_setup_0007_32(b: &mut Bencher) { bench_good_thomas_setup(b, 7, 32); }
-#[bench] fn good_thomas_setup_0032_27(b: &mut Bencher) { bench_good_thomas_setup(b,  32, 27); }
-#[bench] fn good_thomas_setup_0256_243(b: &mut Bencher) { bench_good_thomas_setup(b,  256, 243); }
-#[bench] fn good_thomas_setup_2048_3(b: &mut Bencher) { bench_good_thomas_setup(b,  2048, 3); }
-#[bench] fn good_thomas_setup_2048_2187(b: &mut Bencher) { bench_good_thomas_setup(b,  2048, 2187); }
+fn good_thomas_setup_0002_3(b: &mut Bencher) { bench_good_thomas_setup(b,  2, 3); }
+fn good_thomas_setup_0003_4(b: &mut Bencher) { bench_good_thomas_setup(b,  3, 4); }
+fn good_thomas_setup_0004_5(b: &mut Bencher) { bench_good_thomas_setup(b,  4, 5); }
+fn good_thomas_setup_0007_32(b: &mut Bencher) { bench_good_thomas_setup(b, 7, 32); }
+fn good_thomas_setup_0032_27(b: &mut Bencher) { bench_good_thomas_setup(b,  32, 27); }
+fn good_thomas_setup_0256_243(b: &mut Bencher) { bench_good_thomas_setup(b,  256, 243); }
+fn good_thomas_setup_2048_3(b: &mut Bencher) { bench_good_thomas_setup(b,  2048, 3); }
+fn good_thomas_setup_2048_2187(b: &mut Bencher) { bench_good_thomas_setup(b,  2048, 2187); }
 
 /// Times just the FFT setup (not execution)
 /// for a given length, specific to MixedRadix
@@ -252,18 +252,18 @@ fn bench_mixed_radix_setup(b: &mut Bencher, width: usize, height: usize) {
 
     b.iter(|| { 
         let fft : Arc<dyn Fft<f32>> = Arc::new(MixedRadix::new(Arc::clone(&width_fft), Arc::clone(&height_fft)));
-        test::black_box(fft);
+        std::hint::black_box(fft);
     });
 }
 
-#[bench] fn setup_mixed_radix_0002_3(b: &mut Bencher) { bench_mixed_radix_setup(b,  2, 3); }
-#[bench] fn setup_mixed_radix_0003_4(b: &mut Bencher) { bench_mixed_radix_setup(b,  3, 4); }
-#[bench] fn setup_mixed_radix_0004_5(b: &mut Bencher) { bench_mixed_radix_setup(b,  4, 5); }
-#[bench] fn setup_mixed_radix_0007_32(b: &mut Bencher) { bench_mixed_radix_setup(b, 7, 32); }
-#[bench] fn setup_mixed_radix_0032_27(b: &mut Bencher) { bench_mixed_radix_setup(b,  32, 27); }
-#[bench] fn setup_mixed_radix_0256_243(b: &mut Bencher) { bench_mixed_radix_setup(b,  256, 243); }
-#[bench] fn setup_mixed_radix_2048_3(b: &mut Bencher) { bench_mixed_radix_setup(b,  2048, 3); }
-#[bench] fn setup_mixed_radix_2048_2187(b: &mut Bencher) { bench_mixed_radix_setup(b,  2048, 2187); }
+fn setup_mixed_radix_0002_3(b: &mut Bencher) { bench_mixed_radix_setup(b,  2, 3); }
+fn setup_mixed_radix_0003_4(b: &mut Bencher) { bench_mixed_radix_setup(b,  3, 4); }
+fn setup_mixed_radix_0004_5(b: &mut Bencher) { bench_mixed_radix_setup(b,  4, 5); }
+fn setup_mixed_radix_0007_32(b: &mut Bencher) { bench_mixed_radix_setup(b, 7, 32); }
+fn setup_mixed_radix_0032_27(b: &mut Bencher) { bench_mixed_radix_setup(b,  32, 27); }
+fn setup_mixed_radix_0256_243(b: &mut Bencher) { bench_mixed_radix_setup(b,  256, 243); }
+fn setup_mixed_radix_2048_3(b: &mut Bencher) { bench_mixed_radix_setup(b,  2048, 3); }
+fn setup_mixed_radix_2048_2187(b: &mut Bencher) { bench_mixed_radix_setup(b,  2048, 2187); }
 
 /// Times just the FFT setup (not execution)
 /// for a given length, specific to MixedRadix
@@ -275,15 +275,15 @@ fn bench_small_mixed_radix_setup(b: &mut Bencher, width: usize, height: usize) {
 
     b.iter(|| { 
         let fft : Arc<dyn Fft<f32>> = Arc::new(MixedRadixSmall::new(Arc::clone(&width_fft), Arc::clone(&height_fft)));
-        test::black_box(fft);
+        std::hint::black_box(fft);
     });
 }
 
-#[bench] fn setup_small_mixed_radix_0002_3(b: &mut Bencher) { bench_small_mixed_radix_setup(b,  2, 3); }
-#[bench] fn setup_small_mixed_radix_0003_4(b: &mut Bencher) { bench_small_mixed_radix_setup(b,  3, 4); }
-#[bench] fn setup_small_mixed_radix_0004_5(b: &mut Bencher) { bench_small_mixed_radix_setup(b,  4, 5); }
-#[bench] fn setup_small_mixed_radix_0007_32(b: &mut Bencher) { bench_small_mixed_radix_setup(b, 7, 32); }
-#[bench] fn setup_small_mixed_radix_0032_27(b: &mut Bencher) { bench_small_mixed_radix_setup(b,  32, 27); }
+fn setup_small_mixed_radix_0002_3(b: &mut Bencher) { bench_small_mixed_radix_setup(b,  2, 3); }
+fn setup_small_mixed_radix_0003_4(b: &mut Bencher) { bench_small_mixed_radix_setup(b,  3, 4); }
+fn setup_small_mixed_radix_0004_5(b: &mut Bencher) { bench_small_mixed_radix_setup(b,  4, 5); }
+fn setup_small_mixed_radix_0007_32(b: &mut Bencher) { bench_small_mixed_radix_setup(b, 7, 32); }
+fn setup_small_mixed_radix_0032_27(b: &mut Bencher) { bench_small_mixed_radix_setup(b,  32, 27); }
 
 
 /// Times just the FFT execution (not allocation and pre-calculation)
@@ -301,14 +301,14 @@ fn bench_mixed_radix(b: &mut Bencher, width: usize, height: usize) {
     b.iter(|| {fft.process_with_scratch(&mut buffer, &mut scratch);} );
 }
 
-#[bench] fn mixed_radix_0002_3(b: &mut Bencher) { bench_mixed_radix(b,  2, 3); }
-#[bench] fn mixed_radix_0003_4(b: &mut Bencher) { bench_mixed_radix(b,  3, 4); }
-#[bench] fn mixed_radix_0004_5(b: &mut Bencher) { bench_mixed_radix(b,  4, 5); }
-#[bench] fn mixed_radix_0007_32(b: &mut Bencher) { bench_mixed_radix(b, 7, 32); }
-#[bench] fn mixed_radix_0032_27(b: &mut Bencher) { bench_mixed_radix(b,  32, 27); }
-#[bench] fn mixed_radix_0256_243(b: &mut Bencher) { bench_mixed_radix(b,  256, 243); }
-#[bench] fn mixed_radix_2048_3(b: &mut Bencher) { bench_mixed_radix(b,  2048, 3); }
-#[bench] fn mixed_radix_2048_2187(b: &mut Bencher) { bench_mixed_radix(b,  2048, 2187); }
+fn mixed_radix_0002_3(b: &mut Bencher) { bench_mixed_radix(b,  2, 3); }
+fn mixed_radix_0003_4(b: &mut Bencher) { bench_mixed_radix(b,  3, 4); }
+fn mixed_radix_0004_5(b: &mut Bencher) { bench_mixed_radix(b,  4, 5); }
+fn mixed_radix_0007_32(b: &mut Bencher) { bench_mixed_radix(b, 7, 32); }
+fn mixed_radix_0032_27(b: &mut Bencher) { bench_mixed_radix(b,  32, 27); }
+fn mixed_radix_0256_243(b: &mut Bencher) { bench_mixed_radix(b,  256, 243); }
+fn mixed_radix_2048_3(b: &mut Bencher) { bench_mixed_radix(b,  2048, 3); }
+fn mixed_radix_2048_2187(b: &mut Bencher) { bench_mixed_radix(b,  2048, 2187); }
 
 fn plan_butterfly_fft(len: usize) -> Arc<dyn Fft<f32>> {
     match len {
@@ -339,10 +339,10 @@ fn bench_mixed_radix_small(b: &mut Bencher, width: usize, height: usize) {
     b.iter(|| {fft.process_with_scratch(&mut signal, &mut spectrum);} );
 }
 
-#[bench] fn mixed_radix_small_0002_3(b: &mut Bencher) { bench_mixed_radix_small(b,  2, 3); }
-#[bench] fn mixed_radix_small_0003_4(b: &mut Bencher) { bench_mixed_radix_small(b,  3, 4); }
-#[bench] fn mixed_radix_small_0004_5(b: &mut Bencher) { bench_mixed_radix_small(b,  4, 5); }
-#[bench] fn mixed_radix_small_0007_32(b: &mut Bencher) { bench_mixed_radix_small(b, 7, 32); }
+fn mixed_radix_small_0002_3(b: &mut Bencher) { bench_mixed_radix_small(b,  2, 3); }
+fn mixed_radix_small_0003_4(b: &mut Bencher) { bench_mixed_radix_small(b,  3, 4); }
+fn mixed_radix_small_0004_5(b: &mut Bencher) { bench_mixed_radix_small(b,  4, 5); }
+fn mixed_radix_small_0007_32(b: &mut Bencher) { bench_mixed_radix_small(b, 7, 32); }
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to the Mixed-Radix Double Butterfly algorithm
@@ -358,10 +358,10 @@ fn bench_good_thomas_small(b: &mut Bencher, width: usize, height: usize) {
     b.iter(|| {fft.process_with_scratch(&mut signal, &mut spectrum);} );
 }
 
-#[bench] fn good_thomas_small_0002_3(b: &mut Bencher) { bench_good_thomas_small(b,  2, 3); }
-#[bench] fn good_thomas_small_0003_4(b: &mut Bencher) { bench_good_thomas_small(b,  3, 4); }
-#[bench] fn good_thomas_small_0004_5(b: &mut Bencher) { bench_good_thomas_small(b,  4, 5); }
-#[bench] fn good_thomas_small_0007_32(b: &mut Bencher) { bench_good_thomas_small(b, 7, 32); }
+fn good_thomas_small_0002_3(b: &mut Bencher) { bench_good_thomas_small(b,  2, 3); }
+fn good_thomas_small_0003_4(b: &mut Bencher) { bench_good_thomas_small(b,  3, 4); }
+fn good_thomas_small_0004_5(b: &mut Bencher) { bench_good_thomas_small(b,  4, 5); }
+fn good_thomas_small_0007_32(b: &mut Bencher) { bench_good_thomas_small(b, 7, 32); }
 
 
 /// Times just the FFT execution (not allocation and pre-calculation)
@@ -378,20 +378,20 @@ fn bench_raders_scalar(b: &mut Bencher, len: usize) {
     b.iter(|| {fft.process_with_scratch(&mut buffer, &mut scratch);} );
 }
 
-#[bench] fn raders_fft_scalar_prime_0005(b: &mut Bencher) { bench_raders_scalar(b,  5); }
-#[bench] fn raders_fft_scalar_prime_0017(b: &mut Bencher) { bench_raders_scalar(b,  17); }
-#[bench] fn raders_fft_scalar_prime_0149(b: &mut Bencher) { bench_raders_scalar(b,  149); }
-#[bench] fn raders_fft_scalar_prime_0151(b: &mut Bencher) { bench_raders_scalar(b,  151); }
-#[bench] fn raders_fft_scalar_prime_0251(b: &mut Bencher) { bench_raders_scalar(b,  251); }
-#[bench] fn raders_fft_scalar_prime_0257(b: &mut Bencher) { bench_raders_scalar(b,  257); }
-#[bench] fn raders_fft_scalar_prime_1009(b: &mut Bencher) { bench_raders_scalar(b,  1009); }
-#[bench] fn raders_fft_scalar_prime_2017(b: &mut Bencher) { bench_raders_scalar(b,  2017); }
-#[bench] fn raders_fft_scalar_prime_12289(b: &mut Bencher) { bench_raders_scalar(b, 12289); }
-#[bench] fn raders_fft_scalar_prime_18433(b: &mut Bencher) { bench_raders_scalar(b, 18433); }
-#[bench] fn raders_fft_scalar_prime_65521(b: &mut Bencher) { bench_raders_scalar(b, 65521); }
-#[bench] fn raders_fft_scalar_prime_65537(b: &mut Bencher) { bench_raders_scalar(b, 65537); }
-#[bench] fn raders_fft_scalar_prime_746483(b: &mut Bencher) { bench_raders_scalar(b,746483); }
-#[bench] fn raders_fft_scalar_prime_746497(b: &mut Bencher) { bench_raders_scalar(b,746497); }
+fn raders_fft_scalar_prime_0005(b: &mut Bencher) { bench_raders_scalar(b,  5); }
+fn raders_fft_scalar_prime_0017(b: &mut Bencher) { bench_raders_scalar(b,  17); }
+fn raders_fft_scalar_prime_0149(b: &mut Bencher) { bench_raders_scalar(b,  149); }
+fn raders_fft_scalar_prime_0151(b: &mut Bencher) { bench_raders_scalar(b,  151); }
+fn raders_fft_scalar_prime_0251(b: &mut Bencher) { bench_raders_scalar(b,  251); }
+fn raders_fft_scalar_prime_0257(b: &mut Bencher) { bench_raders_scalar(b,  257); }
+fn raders_fft_scalar_prime_1009(b: &mut Bencher) { bench_raders_scalar(b,  1009); }
+fn raders_fft_scalar_prime_2017(b: &mut Bencher) { bench_raders_scalar(b,  2017); }
+fn raders_fft_scalar_prime_12289(b: &mut Bencher) { bench_raders_scalar(b, 12289); }
+fn raders_fft_scalar_prime_18433(b: &mut Bencher) { bench_raders_scalar(b, 18433); }
+fn raders_fft_scalar_prime_65521(b: &mut Bencher) { bench_raders_scalar(b, 65521); }
+fn raders_fft_scalar_prime_65537(b: &mut Bencher) { bench_raders_scalar(b, 65537); }
+fn raders_fft_scalar_prime_746483(b: &mut Bencher) { bench_raders_scalar(b,746483); }
+fn raders_fft_scalar_prime_746497(b: &mut Bencher) { bench_raders_scalar(b,746497); }
 
 
 /// Times just the FFT execution (not allocation and pre-calculation)
@@ -406,19 +406,19 @@ fn bench_bluesteins_scalar_prime(b: &mut Bencher, len: usize) {
     b.iter(|| { fft.process_with_scratch(&mut buffer, &mut scratch);} );
 }
 
-#[bench] fn bench_bluesteins_scalar_prime_0005(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  5); }
-#[bench] fn bench_bluesteins_scalar_prime_0017(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  17); }
-#[bench] fn bench_bluesteins_scalar_prime_0149(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  149); }
-#[bench] fn bench_bluesteins_scalar_prime_0151(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  151); }
-#[bench] fn bench_bluesteins_scalar_prime_0251(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  251); }
-#[bench] fn bench_bluesteins_scalar_prime_0257(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  257); }
-#[bench] fn bench_bluesteins_scalar_prime_1009(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  1009); }
-#[bench] fn bench_bluesteins_scalar_prime_2017(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  2017); }
-#[bench] fn bench_bluesteins_scalar_prime_32767(b: &mut Bencher) { bench_bluesteins_scalar_prime(b, 32767); }
-#[bench] fn bench_bluesteins_scalar_prime_65521(b: &mut Bencher) { bench_bluesteins_scalar_prime(b, 65521); }
-#[bench] fn bench_bluesteins_scalar_prime_65537(b: &mut Bencher) { bench_bluesteins_scalar_prime(b, 65537); }
-#[bench] fn bench_bluesteins_scalar_prime_746483(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,746483); }
-#[bench] fn bench_bluesteins_scalar_prime_746497(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,746497); }
+fn bench_bluesteins_scalar_prime_0005(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  5); }
+fn bench_bluesteins_scalar_prime_0017(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  17); }
+fn bench_bluesteins_scalar_prime_0149(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  149); }
+fn bench_bluesteins_scalar_prime_0151(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  151); }
+fn bench_bluesteins_scalar_prime_0251(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  251); }
+fn bench_bluesteins_scalar_prime_0257(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  257); }
+fn bench_bluesteins_scalar_prime_1009(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  1009); }
+fn bench_bluesteins_scalar_prime_2017(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,  2017); }
+fn bench_bluesteins_scalar_prime_32767(b: &mut Bencher) { bench_bluesteins_scalar_prime(b, 32767); }
+fn bench_bluesteins_scalar_prime_65521(b: &mut Bencher) { bench_bluesteins_scalar_prime(b, 65521); }
+fn bench_bluesteins_scalar_prime_65537(b: &mut Bencher) { bench_bluesteins_scalar_prime(b, 65537); }
+fn bench_bluesteins_scalar_prime_746483(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,746483); }
+fn bench_bluesteins_scalar_prime_746497(b: &mut Bencher) { bench_bluesteins_scalar_prime(b,746497); }
 
 
 /// Times just the FFT execution (not allocation and pre-calculation)
@@ -433,11 +433,11 @@ fn bench_radix4(b: &mut Bencher, len: usize) {
     b.iter(|| {fft.process_outofplace_with_scratch(&mut signal, &mut spectrum, &mut []);} );
 }
 
-#[bench] fn radix4_______64(b: &mut Bencher) { bench_radix4(b, 64); }
-#[bench] fn radix4______256(b: &mut Bencher) { bench_radix4(b, 256); }
-#[bench] fn radix4_____1024(b: &mut Bencher) { bench_radix4(b, 1024); }
-#[bench] fn radix4____65536(b: &mut Bencher) { bench_radix4(b, 65536); }
-#[bench] fn radix4__1048576(b: &mut Bencher) { bench_radix4(b, 1048576); }
+fn radix4_______64(b: &mut Bencher) { bench_radix4(b, 64); }
+fn radix4______256(b: &mut Bencher) { bench_radix4(b, 256); }
+fn radix4_____1024(b: &mut Bencher) { bench_radix4(b, 1024); }
+fn radix4____65536(b: &mut Bencher) { bench_radix4(b, 65536); }
+fn radix4__1048576(b: &mut Bencher) { bench_radix4(b, 1048576); }
 //#[bench] fn radix4_16777216(b: &mut Bencher) { bench_radix4(b, 16777216); }
 
 fn get_mixed_radix_power2(len: usize) -> Arc<dyn Fft<f32>> {
@@ -467,12 +467,12 @@ fn bench_mixed_radix_power2(b: &mut Bencher, len: usize) {
     });
 }
 
-#[bench] fn mixed_radix_power2__00000256(b: &mut Bencher) { bench_mixed_radix_power2(b, 256); }
-#[bench] fn mixed_radix_power2__00001024(b: &mut Bencher) { bench_mixed_radix_power2(b, 1024); }
-#[bench] fn mixed_radix_power2__00004096(b: &mut Bencher) { bench_mixed_radix_power2(b, 4096); }
-#[bench] fn mixed_radix_power2__00065536(b: &mut Bencher) { bench_mixed_radix_power2(b, 65536); }
-#[bench] fn mixed_radix_power2__01048576(b: &mut Bencher) { bench_mixed_radix_power2(b, 1048576); }
-#[bench] fn mixed_radix_power2__16777216(b: &mut Bencher) { bench_mixed_radix_power2(b, 16777216); }
+fn mixed_radix_power2__00000256(b: &mut Bencher) { bench_mixed_radix_power2(b, 256); }
+fn mixed_radix_power2__00001024(b: &mut Bencher) { bench_mixed_radix_power2(b, 1024); }
+fn mixed_radix_power2__00004096(b: &mut Bencher) { bench_mixed_radix_power2(b, 4096); }
+fn mixed_radix_power2__00065536(b: &mut Bencher) { bench_mixed_radix_power2(b, 65536); }
+fn mixed_radix_power2__01048576(b: &mut Bencher) { bench_mixed_radix_power2(b, 1048576); }
+fn mixed_radix_power2__16777216(b: &mut Bencher) { bench_mixed_radix_power2(b, 16777216); }
 
 
 fn get_mixed_radix_inline_power2(len: usize) -> Arc<dyn Fft<f32>> {
@@ -502,12 +502,12 @@ fn bench_mixed_radix_inline_power2(b: &mut Bencher, len: usize) {
     });
 }
 
-#[bench] fn mixed_radix_power2_inline__00000256(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 256); }
-#[bench] fn mixed_radix_power2_inline__00001024(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 1024); }
-#[bench] fn mixed_radix_power2_inline__00004096(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 4096); }
-#[bench] fn mixed_radix_power2_inline__00065536(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 65536); }
-#[bench] fn mixed_radix_power2_inline__01048576(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 1048576); }
-#[bench] fn mixed_radix_power2_inline__16777216(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 16777216); }
+fn mixed_radix_power2_inline__00000256(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 256); }
+fn mixed_radix_power2_inline__00001024(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 1024); }
+fn mixed_radix_power2_inline__00004096(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 4096); }
+fn mixed_radix_power2_inline__00065536(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 65536); }
+fn mixed_radix_power2_inline__01048576(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 1048576); }
+fn mixed_radix_power2_inline__16777216(b: &mut Bencher) { bench_mixed_radix_inline_power2(b, 16777216); }
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
@@ -521,28 +521,28 @@ fn bench_butterfly32(b: &mut Bencher, len: usize) {
     b.iter(|| { fft.process_with_scratch(&mut buffer, &mut scratch); });
 }
 
-#[bench] fn butterfly32_02(b: &mut Bencher) { bench_butterfly32(b, 2); }
-#[bench] fn butterfly32_03(b: &mut Bencher) { bench_butterfly32(b, 3); }
-#[bench] fn butterfly32_04(b: &mut Bencher) { bench_butterfly32(b, 4); }
-#[bench] fn butterfly32_05(b: &mut Bencher) { bench_butterfly32(b, 5); }
-#[bench] fn butterfly32_06(b: &mut Bencher) { bench_butterfly32(b, 6); }
-#[bench] fn butterfly32_07(b: &mut Bencher) { bench_butterfly32(b, 7); }
-#[bench] fn butterfly32_08(b: &mut Bencher) { bench_butterfly32(b, 8); }
-#[bench] fn butterfly32_09(b: &mut Bencher) { bench_butterfly32(b, 9); }
-#[bench] fn butterfly32_11(b: &mut Bencher) { bench_butterfly32(b, 11); }
-#[bench] fn butterfly32_12(b: &mut Bencher) { bench_butterfly32(b, 12); }
-#[bench] fn butterfly32_16(b: &mut Bencher) { bench_butterfly32(b, 16); }
-#[bench] fn butterfly32_24(b: &mut Bencher) { bench_butterfly32(b, 24); }
-#[bench] fn butterfly32_27(b: &mut Bencher) { bench_butterfly32(b, 27); }
-#[bench] fn butterfly32_32(b: &mut Bencher) { bench_butterfly32(b, 32); }
-#[bench] fn butterfly32_36(b: &mut Bencher) { bench_butterfly32(b, 36); }
-#[bench] fn butterfly32_48(b: &mut Bencher) { bench_butterfly32(b, 48); }
-#[bench] fn butterfly32_54(b: &mut Bencher) { bench_butterfly32(b, 54); }
-#[bench] fn butterfly32_64(b: &mut Bencher) { bench_butterfly32(b, 64); }
-#[bench] fn butterfly32_72(b: &mut Bencher) { bench_butterfly32(b, 72); }
-#[bench] fn butterfly32_128(b: &mut Bencher) { bench_butterfly32(b, 128); }
-#[bench] fn butterfly32_256(b: &mut Bencher) { bench_butterfly32(b, 256); }
-#[bench] fn butterfly32_512(b: &mut Bencher) { bench_butterfly32(b, 512); }
+fn butterfly32_02(b: &mut Bencher) { bench_butterfly32(b, 2); }
+fn butterfly32_03(b: &mut Bencher) { bench_butterfly32(b, 3); }
+fn butterfly32_04(b: &mut Bencher) { bench_butterfly32(b, 4); }
+fn butterfly32_05(b: &mut Bencher) { bench_butterfly32(b, 5); }
+fn butterfly32_06(b: &mut Bencher) { bench_butterfly32(b, 6); }
+fn butterfly32_07(b: &mut Bencher) { bench_butterfly32(b, 7); }
+fn butterfly32_08(b: &mut Bencher) { bench_butterfly32(b, 8); }
+fn butterfly32_09(b: &mut Bencher) { bench_butterfly32(b, 9); }
+fn butterfly32_11(b: &mut Bencher) { bench_butterfly32(b, 11); }
+fn butterfly32_12(b: &mut Bencher) { bench_butterfly32(b, 12); }
+fn butterfly32_16(b: &mut Bencher) { bench_butterfly32(b, 16); }
+fn butterfly32_24(b: &mut Bencher) { bench_butterfly32(b, 24); }
+fn butterfly32_27(b: &mut Bencher) { bench_butterfly32(b, 27); }
+fn butterfly32_32(b: &mut Bencher) { bench_butterfly32(b, 32); }
+fn butterfly32_36(b: &mut Bencher) { bench_butterfly32(b, 36); }
+fn butterfly32_48(b: &mut Bencher) { bench_butterfly32(b, 48); }
+fn butterfly32_54(b: &mut Bencher) { bench_butterfly32(b, 54); }
+fn butterfly32_64(b: &mut Bencher) { bench_butterfly32(b, 64); }
+fn butterfly32_72(b: &mut Bencher) { bench_butterfly32(b, 72); }
+fn butterfly32_128(b: &mut Bencher) { bench_butterfly32(b, 128); }
+fn butterfly32_256(b: &mut Bencher) { bench_butterfly32(b, 256); }
+fn butterfly32_512(b: &mut Bencher) { bench_butterfly32(b, 512); }
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
@@ -556,23 +556,259 @@ fn bench_butterfly64(b: &mut Bencher, len: usize) {
     b.iter(|| { fft.process_with_scratch(&mut buffer, &mut scratch); });
 }
 
-#[bench] fn butterfly64_02(b: &mut Bencher) { bench_butterfly64(b, 2); }
-#[bench] fn butterfly64_03(b: &mut Bencher) { bench_butterfly64(b, 3); }
-#[bench] fn butterfly64_04(b: &mut Bencher) { bench_butterfly64(b, 4); }
-#[bench] fn butterfly64_05(b: &mut Bencher) { bench_butterfly64(b, 5); }
-#[bench] fn butterfly64_06(b: &mut Bencher) { bench_butterfly64(b, 6); }
-#[bench] fn butterfly64_07(b: &mut Bencher) { bench_butterfly64(b, 7); }
-#[bench] fn butterfly64_08(b: &mut Bencher) { bench_butterfly64(b, 8); }
-#[bench] fn butterfly64_09(b: &mut Bencher) { bench_butterfly64(b, 9); }
-#[bench] fn butterfly64_11(b: &mut Bencher) { bench_butterfly64(b, 11); }
-#[bench] fn butterfly64_12(b: &mut Bencher) { bench_butterfly64(b, 12); }
-#[bench] fn butterfly64_16(b: &mut Bencher) { bench_butterfly64(b, 16); }
-#[bench] fn butterfly64_18(b: &mut Bencher) { bench_butterfly64(b, 18); }
-#[bench] fn butterfly64_24(b: &mut Bencher) { bench_butterfly64(b, 24); }
-#[bench] fn butterfly64_27(b: &mut Bencher) { bench_butterfly64(b, 27); }
-#[bench] fn butterfly64_32(b: &mut Bencher) { bench_butterfly64(b, 32); }
-#[bench] fn butterfly64_36(b: &mut Bencher) { bench_butterfly64(b, 36); }
-#[bench] fn butterfly64_64(b: &mut Bencher) { bench_butterfly64(b, 64); }
-#[bench] fn butterfly64_128(b: &mut Bencher) { bench_butterfly64(b, 128); }
-#[bench] fn butterfly64_256(b: &mut Bencher) { bench_butterfly64(b, 256); }
-#[bench] fn butterfly64_512(b: &mut Bencher) { bench_butterfly64(b, 512); }
+fn butterfly64_02(b: &mut Bencher) { bench_butterfly64(b, 2); }
+fn butterfly64_03(b: &mut Bencher) { bench_butterfly64(b, 3); }
+fn butterfly64_04(b: &mut Bencher) { bench_butterfly64(b, 4); }
+fn butterfly64_05(b: &mut Bencher) { bench_butterfly64(b, 5); }
+fn butterfly64_06(b: &mut Bencher) { bench_butterfly64(b, 6); }
+fn butterfly64_07(b: &mut Bencher) { bench_butterfly64(b, 7); }
+fn butterfly64_08(b: &mut Bencher) { bench_butterfly64(b, 8); }
+fn butterfly64_09(b: &mut Bencher) { bench_butterfly64(b, 9); }
+fn butterfly64_11(b: &mut Bencher) { bench_butterfly64(b, 11); }
+fn butterfly64_12(b: &mut Bencher) { bench_butterfly64(b, 12); }
+fn butterfly64_16(b: &mut Bencher) { bench_butterfly64(b, 16); }
+fn butterfly64_18(b: &mut Bencher) { bench_butterfly64(b, 18); }
+fn butterfly64_24(b: &mut Bencher) { bench_butterfly64(b, 24); }
+fn butterfly64_27(b: &mut Bencher) { bench_butterfly64(b, 27); }
+fn butterfly64_32(b: &mut Bencher) { bench_butterfly64(b, 32); }
+fn butterfly64_36(b: &mut Bencher) { bench_butterfly64(b, 36); }
+fn butterfly64_64(b: &mut Bencher) { bench_butterfly64(b, 64); }
+fn butterfly64_128(b: &mut Bencher) { bench_butterfly64(b, 128); }
+fn butterfly64_256(b: &mut Bencher) { bench_butterfly64(b, 256); }
+fn butterfly64_512(b: &mut Bencher) { bench_butterfly64(b, 512); }
+
+fn criterion_benchmark(c: &mut Criterion) {
+    config::register_benchmarks!(
+        c,
+        planned32_p2_00000064,
+        planned32_p2_00000128,
+        planned32_p2_00000256,
+        planned32_p2_00000512,
+        planned32_p2_00001024,
+        planned32_p2_00002048,
+        planned32_p2_00004096,
+        planned32_p2_00016384,
+        planned32_p2_00065536,
+        planned32_p2_01048576,
+        planned32_p2_16777216,
+        planned32_p5_00125,
+        planned32_p5_00625,
+        planned32_p5_03125,
+        planned32_p5_15625,
+        planned32_p7_00343,
+        planned32_p7_02401,
+        planned32_p7_16807,
+        planned32_prime_0005,
+        planned32_prime_0017,
+        planned32_prime_0149,
+        planned32_prime_0151,
+        planned32_prime_0251,
+        planned32_prime_0257,
+        planned32_prime_1009,
+        planned32_prime_1201,
+        planned32_prime_2017,
+        planned32_prime_2879,
+        planned32_prime_32767,
+        planned32_prime_65521,
+        planned32_prime_65537,
+        planned32_prime_746483,
+        planned32_prime_746497,
+        planned32_primepower_044521,
+        planned32_primepower_160801,
+        planned32_composite_024576,
+        planned32_composite_020736,
+        planned32_composite_032192,
+        planned32_composite_024028,
+        planned32_composite_005472,
+        planned32_composite_030270,
+        planned32_composite_000018,
+        planned32_composite_000360,
+        planned32_composite_001200,
+        planned32_composite_044100,
+        planned32_composite_048000,
+        planned32_composite_046656,
+        planned32_composite_100000,
+        planned64_p2_00000064,
+        planned64_p2_00000128,
+        planned64_p2_00000256,
+        planned64_p2_00000512,
+        planned64_p2_00001024,
+        planned64_p2_00002048,
+        planned64_p2_00004096,
+        planned64_p2_00016384,
+        planned64_p2_00065536,
+        planned64_p2_01048576,
+        planned64_p5_00125,
+        planned64_p5_00625,
+        planned64_p5_03125,
+        planned64_p5_15625,
+        planned64_p7_00343,
+        planned64_p7_02401,
+        planned64_p7_16807,
+        planned64_prime_0005,
+        planned64_prime_0017,
+        planned64_prime_0149,
+        planned64_prime_0151,
+        planned64_prime_0251,
+        planned64_prime_0257,
+        planned64_prime_1009,
+        planned64_prime_2017,
+        planned64_prime_2879,
+        planned64_prime_32767,
+        planned64_prime_65521,
+        planned64_prime_65537,
+        planned64_prime_746483,
+        planned64_prime_746497,
+        planned64_primepower_044521,
+        planned64_primepower_160801,
+        planned64_composite_024576,
+        planned64_composite_020736,
+        planned64_composite_032192,
+        planned64_composite_024028,
+        planned64_composite_030270,
+        planned64_composite_000018,
+        planned64_composite_000360,
+        planned64_composite_044100,
+        planned64_composite_048000,
+        planned64_composite_046656,
+        planned64_composite_100000,
+        good_thomas_0002_3,
+        good_thomas_0003_4,
+        good_thomas_0004_5,
+        good_thomas_0007_32,
+        good_thomas_0032_27,
+        good_thomas_0256_243,
+        good_thomas_2048_3,
+        good_thomas_2048_2187,
+        good_thomas_setup_0002_3,
+        good_thomas_setup_0003_4,
+        good_thomas_setup_0004_5,
+        good_thomas_setup_0007_32,
+        good_thomas_setup_0032_27,
+        good_thomas_setup_0256_243,
+        good_thomas_setup_2048_3,
+        good_thomas_setup_2048_2187,
+        setup_mixed_radix_0002_3,
+        setup_mixed_radix_0003_4,
+        setup_mixed_radix_0004_5,
+        setup_mixed_radix_0007_32,
+        setup_mixed_radix_0032_27,
+        setup_mixed_radix_0256_243,
+        setup_mixed_radix_2048_3,
+        setup_mixed_radix_2048_2187,
+        setup_small_mixed_radix_0002_3,
+        setup_small_mixed_radix_0003_4,
+        setup_small_mixed_radix_0004_5,
+        setup_small_mixed_radix_0007_32,
+        setup_small_mixed_radix_0032_27,
+        mixed_radix_0002_3,
+        mixed_radix_0003_4,
+        mixed_radix_0004_5,
+        mixed_radix_0007_32,
+        mixed_radix_0032_27,
+        mixed_radix_0256_243,
+        mixed_radix_2048_3,
+        mixed_radix_2048_2187,
+        mixed_radix_small_0002_3,
+        mixed_radix_small_0003_4,
+        mixed_radix_small_0004_5,
+        mixed_radix_small_0007_32,
+        good_thomas_small_0002_3,
+        good_thomas_small_0003_4,
+        good_thomas_small_0004_5,
+        good_thomas_small_0007_32,
+        raders_fft_scalar_prime_0005,
+        raders_fft_scalar_prime_0017,
+        raders_fft_scalar_prime_0149,
+        raders_fft_scalar_prime_0151,
+        raders_fft_scalar_prime_0251,
+        raders_fft_scalar_prime_0257,
+        raders_fft_scalar_prime_1009,
+        raders_fft_scalar_prime_2017,
+        raders_fft_scalar_prime_12289,
+        raders_fft_scalar_prime_18433,
+        raders_fft_scalar_prime_65521,
+        raders_fft_scalar_prime_65537,
+        raders_fft_scalar_prime_746483,
+        raders_fft_scalar_prime_746497,
+        bench_bluesteins_scalar_prime_0005,
+        bench_bluesteins_scalar_prime_0017,
+        bench_bluesteins_scalar_prime_0149,
+        bench_bluesteins_scalar_prime_0151,
+        bench_bluesteins_scalar_prime_0251,
+        bench_bluesteins_scalar_prime_0257,
+        bench_bluesteins_scalar_prime_1009,
+        bench_bluesteins_scalar_prime_2017,
+        bench_bluesteins_scalar_prime_32767,
+        bench_bluesteins_scalar_prime_65521,
+        bench_bluesteins_scalar_prime_65537,
+        bench_bluesteins_scalar_prime_746483,
+        bench_bluesteins_scalar_prime_746497,
+        radix4_______64,
+        radix4______256,
+        radix4_____1024,
+        radix4____65536,
+        radix4__1048576,
+        mixed_radix_power2__00000256,
+        mixed_radix_power2__00001024,
+        mixed_radix_power2__00004096,
+        mixed_radix_power2__00065536,
+        mixed_radix_power2__01048576,
+        mixed_radix_power2__16777216,
+        mixed_radix_power2_inline__00000256,
+        mixed_radix_power2_inline__00001024,
+        mixed_radix_power2_inline__00004096,
+        mixed_radix_power2_inline__00065536,
+        mixed_radix_power2_inline__01048576,
+        mixed_radix_power2_inline__16777216,
+        butterfly32_02,
+        butterfly32_03,
+        butterfly32_04,
+        butterfly32_05,
+        butterfly32_06,
+        butterfly32_07,
+        butterfly32_08,
+        butterfly32_09,
+        butterfly32_11,
+        butterfly32_12,
+        butterfly32_16,
+        butterfly32_24,
+        butterfly32_27,
+        butterfly32_32,
+        butterfly32_36,
+        butterfly32_48,
+        butterfly32_54,
+        butterfly32_64,
+        butterfly32_72,
+        butterfly32_128,
+        butterfly32_256,
+        butterfly32_512,
+        butterfly64_02,
+        butterfly64_03,
+        butterfly64_04,
+        butterfly64_05,
+        butterfly64_06,
+        butterfly64_07,
+        butterfly64_08,
+        butterfly64_09,
+        butterfly64_11,
+        butterfly64_12,
+        butterfly64_16,
+        butterfly64_18,
+        butterfly64_24,
+        butterfly64_27,
+        butterfly64_32,
+        butterfly64_36,
+        butterfly64_64,
+        butterfly64_128,
+        butterfly64_256,
+        butterfly64_512,
+    );
+}
+
+criterion_group! {
+    name = benches;
+    config = config::fast();
+    targets = criterion_benchmark
+}
+criterion_main!(benches);
