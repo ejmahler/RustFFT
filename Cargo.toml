@@ -42,10 +42,15 @@ transpose = "0.2"
 primal-check = "0.3.3"
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = { version = "0.5", default-features = false }
+
 rand = "0.9"
 getrandom = {version = "^0.2", features = ["js"]}
 wasm-bindgen-test = "^0.3.36"
+
+# These are in the dependency tree of criterion. These need to be pinned for the MSRV tests
+clap = { version = "=4.5.32", default-features = false, features = ["std"] }
+half = { version = "=2.4.1", default-features = false }
 
 [[bench]]
 name = "bench_check_neon_2to1024"

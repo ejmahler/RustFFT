@@ -1,7 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(unused)]
 
-extern crate rustfft;
 mod config;
 
 use criterion::{criterion_group, criterion_main, Bencher, Criterion};

@@ -1,6 +1,5 @@
 #![allow(bare_trait_objects)]
 #![allow(non_snake_case)]
-extern crate rustfft;
 
 use rustfft::algorithm::butterflies::*;
 use rustfft::algorithm::*;

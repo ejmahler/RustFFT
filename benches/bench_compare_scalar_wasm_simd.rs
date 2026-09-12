@@ -28,8 +28,6 @@
 ///
 /// For more information, refer to [Criterion's user guide](https://github.com/bheisler/criterion.rs/blob/dc2b06cd31f7aa34cff6a83a00598e0523186dad/book/src/user_guide/wasi.md)
 /// which should be mostly applicable to our use case.
-extern crate rustfft;
-
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 use rustfft::Fft;

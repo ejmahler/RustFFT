@@ -1,5 +1,3 @@
-extern crate rustfft;
-
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 use rustfft::{Fft, FftDirection};
