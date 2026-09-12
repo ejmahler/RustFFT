@@ -14,7 +14,7 @@ use rustfft::{
 };
 use rustfft::{num_traits::Zero, FftDirection};
 
-use rand::distributions::{uniform::SampleUniform, Distribution, Uniform};
+use rand::distr::{uniform::SampleUniform, Distribution, Uniform};
 use rand::{rngs::StdRng, SeedableRng};
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -83,7 +83,7 @@ fn fft_matches_control<T: FftNum + Float>(control: Arc<dyn Fft<T>>, input: &[Com
 
 fn random_signal<T: FftNum + SampleUniform>(length: usize) -> Vec<Complex<T>> {
     let mut sig = Vec::with_capacity(length);
-    let dist: Uniform<T> = Uniform::new(T::zero(), T::from_f64(10.0).unwrap());
+    let dist: Uniform<T> = Uniform::new(T::zero(), T::from_f64(10.0).unwrap()).unwrap();
     let mut rng: StdRng = SeedableRng::from_seed(RNG_SEED);
     for _ in 0..length {
         sig.push(Complex {
