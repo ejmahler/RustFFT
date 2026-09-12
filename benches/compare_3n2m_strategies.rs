@@ -1,10 +1,9 @@
-#![feature(test)]
 #![allow(non_snake_case)]
 #![allow(unused)]
 
-extern crate rustfft;
-extern crate test;
-use test::Bencher;
+mod config;
+
+use criterion::{criterion_group, criterion_main, Bencher, Criterion};
 
 use rustfft::algorithm::butterflies::*;
 use rustfft::algorithm::Dft;
@@ -164,9 +163,8 @@ fn filter_strategy(strategy: &Vec<usize>) -> bool {
 }
 
 // cargo bench generate_3n2m_comparison_benchmarks_32 -- --nocapture --ignored
-#[ignore]
-#[bench]
-fn generate_3n2m_comparison_benchmarks_32(_: &mut test::Bencher) {
+#[allow(dead_code)]
+fn generate_3n2m_comparison_benchmarks_32(_: &mut Bencher) {
     let butterfly_sizes = [128, 256, 512, 72, 36, 48, 54, 64];
     let last_ditch_butterflies = [27, 9, 32, 24];
     let available_radixes = [
@@ -223,9 +221,8 @@ fn generate_3n2m_comparison_benchmarks_32(_: &mut test::Bencher) {
 }
 
 // cargo bench generate_3n2m_comparison_benchmarks_64 -- --nocapture --ignored
-#[ignore]
-#[bench]
-fn generate_3n2m_comparison_benchmarks_64(_: &mut test::Bencher) {
+#[allow(dead_code)]
+fn generate_3n2m_comparison_benchmarks_64(_: &mut Bencher) {
     let butterfly_sizes = [512, 256, 128, 64, 36, 27, 24, 18, 12];
     let last_ditch_butterflies = [32, 16, 8, 9];
     let available_radixes = [
@@ -282,9 +279,8 @@ fn generate_3n2m_comparison_benchmarks_64(_: &mut test::Bencher) {
 }
 
 // cargo bench generate_3n2m_planned_benchmarks_32 -- --nocapture --ignored
-#[ignore]
-#[bench]
-fn generate_3n2m_planned_benchmarks(_: &mut test::Bencher) {
+#[allow(dead_code)]
+fn generate_3n2m_planned_benchmarks(_: &mut Bencher) {
     let mut fft_sizes = vec![];
 
     let max_len: usize = 1 << 23;
@@ -323,9 +319,8 @@ fn generate_3n2m_planned_benchmarks(_: &mut test::Bencher) {
 }
 
 // cargo bench generate_3n2m_planned_benchmarks_64 -- --nocapture --ignored
-#[ignore]
-#[bench]
-fn generate_3n2m_planned_benchmarks_64(_: &mut test::Bencher) {
+#[allow(dead_code)]
+fn generate_3n2m_planned_benchmarks_64(_: &mut Bencher) {
     let mut fft_sizes = vec![];
 
     let max_len: usize = 1 << 23;
@@ -474,9 +469,8 @@ impl PartialFactors {
 }
 
 // cargo bench generate_raders_benchmarks -- --nocapture --ignored
-#[ignore]
-#[bench]
-fn generate_raders_benchmarks(_: &mut test::Bencher) {
+#[allow(dead_code)]
+fn generate_raders_benchmarks(_: &mut Bencher) {
     for len in 10usize..100000 {
         if miller_rabin(len as u64) {
             let inner_factors = PartialFactors::compute(len - 1);
@@ -558,219 +552,230 @@ fn bench_planned_raders_f64(b: &mut Bencher, len: usize) {
     b.iter(|| { fft.process_with_scratch(&mut buffer, &mut scratch); });
 }
 
-#[bench] fn comparef64_len0000023_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 23); }
-#[bench] fn comparef64_len0000023_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 23); }
-#[bench] fn comparef64_len0000067_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 67); }
-#[bench] fn comparef64_len0000067_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 67); }
-#[bench] fn comparef64_len0000089_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 89); }
-#[bench] fn comparef64_len0000089_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 89); }
-#[bench] fn comparef64_len0000199_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 199); }
-#[bench] fn comparef64_len0000199_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 199); }
-#[bench] fn comparef64_len0000331_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 331); }
-#[bench] fn comparef64_len0000331_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 331); }
-#[bench] fn comparef64_len0000353_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 353); }
-#[bench] fn comparef64_len0000353_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 353); }
-#[bench] fn comparef64_len0000397_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 397); }
-#[bench] fn comparef64_len0000397_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 397); }
-#[bench] fn comparef64_len0000463_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 463); }
-#[bench] fn comparef64_len0000463_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 463); }
-#[bench] fn comparef64_len0000617_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 617); }
-#[bench] fn comparef64_len0000617_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 617); }
-#[bench] fn comparef64_len0000661_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 661); }
-#[bench] fn comparef64_len0000661_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 661); }
-#[bench] fn comparef64_len0000727_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 727); }
-#[bench] fn comparef64_len0000727_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 727); }
-#[bench] fn comparef64_len0000881_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 881); }
-#[bench] fn comparef64_len0000881_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 881); }
-#[bench] fn comparef64_len0000991_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 991); }
-#[bench] fn comparef64_len0000991_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 991); }
-#[bench] fn comparef64_len0001321_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 1321); }
-#[bench] fn comparef64_len0001321_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 1321); }
-#[bench] fn comparef64_len0001409_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 1409); }
-#[bench] fn comparef64_len0001409_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 1409); }
-#[bench] fn comparef64_len0001453_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 1453); }
-#[bench] fn comparef64_len0001453_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 1453); }
-#[bench] fn comparef64_len0001783_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 1783); }
-#[bench] fn comparef64_len0001783_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 1783); }
-#[bench] fn comparef64_len0002113_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 2113); }
-#[bench] fn comparef64_len0002113_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 2113); }
-#[bench] fn comparef64_len0002179_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 2179); }
-#[bench] fn comparef64_len0002179_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 2179); }
-#[bench] fn comparef64_len0002311_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 2311); }
-#[bench] fn comparef64_len0002311_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 2311); }
-#[bench] fn comparef64_len0002377_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 2377); }
-#[bench] fn comparef64_len0002377_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 2377); }
-#[bench] fn comparef64_len0002663_11p03_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 2663); }
-#[bench] fn comparef64_len0002663_11p03_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 2663); }
-#[bench] fn comparef64_len0002971_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 2971); }
-#[bench] fn comparef64_len0002971_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 2971); }
-#[bench] fn comparef64_len0003169_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 3169); }
-#[bench] fn comparef64_len0003169_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 3169); }
-#[bench] fn comparef64_len0003301_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 3301); }
-#[bench] fn comparef64_len0003301_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 3301); }
-#[bench] fn comparef64_len0003389_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 3389); }
-#[bench] fn comparef64_len0003389_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 3389); }
-#[bench] fn comparef64_len0003631_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 3631); }
-#[bench] fn comparef64_len0003631_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 3631); }
-#[bench] fn comparef64_len0003697_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 3697); }
-#[bench] fn comparef64_len0003697_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 3697); }
-#[bench] fn comparef64_len0003851_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 3851); }
-#[bench] fn comparef64_len0003851_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 3851); }
-#[bench] fn comparef64_len0004159_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 4159); }
-#[bench] fn comparef64_len0004159_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 4159); }
-#[bench] fn comparef64_len0004357_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 4357); }
-#[bench] fn comparef64_len0004357_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 4357); }
-#[bench] fn comparef64_len0004621_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 4621); }
-#[bench] fn comparef64_len0004621_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 4621); }
-#[bench] fn comparef64_len0004951_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 4951); }
-#[bench] fn comparef64_len0004951_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 4951); }
-#[bench] fn comparef64_len0005281_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 5281); }
-#[bench] fn comparef64_len0005281_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 5281); }
-#[bench] fn comparef64_len0005347_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 5347); }
-#[bench] fn comparef64_len0005347_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 5347); }
-#[bench] fn comparef64_len0005501_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 5501); }
-#[bench] fn comparef64_len0005501_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 5501); }
-#[bench] fn comparef64_len0006337_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 6337); }
-#[bench] fn comparef64_len0006337_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 6337); }
-#[bench] fn comparef64_len0006469_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 6469); }
-#[bench] fn comparef64_len0006469_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 6469); }
-#[bench] fn comparef64_len0007129_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 7129); }
-#[bench] fn comparef64_len0007129_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 7129); }
-#[bench] fn comparef64_len0007393_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 7393); }
-#[bench] fn comparef64_len0007393_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 7393); }
-#[bench] fn comparef64_len0007547_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 7547); }
-#[bench] fn comparef64_len0007547_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 7547); }
-#[bench] fn comparef64_len0008317_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 8317); }
-#[bench] fn comparef64_len0008317_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 8317); }
-#[bench] fn comparef64_len0008713_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 8713); }
-#[bench] fn comparef64_len0008713_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 8713); }
-#[bench] fn comparef64_len0009241_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 9241); }
-#[bench] fn comparef64_len0009241_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 9241); }
-#[bench] fn comparef64_len0009857_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 9857); }
-#[bench] fn comparef64_len0009857_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 9857); }
-#[bench] fn comparef64_len0009901_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 9901); }
-#[bench] fn comparef64_len0009901_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 9901); }
-#[bench] fn comparef64_len0010781_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 10781); }
-#[bench] fn comparef64_len0010781_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 10781); }
-#[bench] fn comparef64_len0010891_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 10891); }
-#[bench] fn comparef64_len0010891_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 10891); }
-#[bench] fn comparef64_len0011551_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 11551); }
-#[bench] fn comparef64_len0011551_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 11551); }
-#[bench] fn comparef64_len0011617_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 11617); }
-#[bench] fn comparef64_len0011617_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 11617); }
-#[bench] fn comparef64_len0012101_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 12101); }
-#[bench] fn comparef64_len0012101_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 12101); }
-#[bench] fn comparef64_len0013553_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 13553); }
-#[bench] fn comparef64_len0013553_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 13553); }
-#[bench] fn comparef64_len0013751_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 13751); }
-#[bench] fn comparef64_len0013751_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 13751); }
-#[bench] fn comparef64_len0014081_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 14081); }
-#[bench] fn comparef64_len0014081_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 14081); }
-#[bench] fn comparef64_len0014851_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 14851); }
-#[bench] fn comparef64_len0014851_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 14851); }
-#[bench] fn comparef64_len0015401_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 15401); }
-#[bench] fn comparef64_len0015401_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 15401); }
-#[bench] fn comparef64_len0015973_11p03_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 15973); }
-#[bench] fn comparef64_len0015973_11p03_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 15973); }
-#[bench] fn comparef64_len0016633_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 16633); }
-#[bench] fn comparef64_len0016633_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 16633); }
-#[bench] fn comparef64_len0018481_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 18481); }
-#[bench] fn comparef64_len0018481_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 18481); }
-#[bench] fn comparef64_len0019009_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 19009); }
-#[bench] fn comparef64_len0019009_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 19009); }
-#[bench] fn comparef64_len0019603_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 19603); }
-#[bench] fn comparef64_len0019603_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 19603); }
-#[bench] fn comparef64_len0019801_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 19801); }
-#[bench] fn comparef64_len0019801_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 19801); }
-#[bench] fn comparef64_len0021121_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 21121); }
-#[bench] fn comparef64_len0021121_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 21121); }
-#[bench] fn comparef64_len0022639_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 22639); }
-#[bench] fn comparef64_len0022639_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 22639); }
-#[bench] fn comparef64_len0023761_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 23761); }
-#[bench] fn comparef64_len0023761_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 23761); }
-#[bench] fn comparef64_len0025411_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 25411); }
-#[bench] fn comparef64_len0025411_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 25411); }
-#[bench] fn comparef64_len0025873_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 25873); }
-#[bench] fn comparef64_len0025873_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 25873); }
-#[bench] fn comparef64_len0026731_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 26731); }
-#[bench] fn comparef64_len0026731_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 26731); }
-#[bench] fn comparef64_len0026951_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 26951); }
-#[bench] fn comparef64_len0026951_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 26951); }
-#[bench] fn comparef64_len0028513_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 28513); }
-#[bench] fn comparef64_len0028513_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 28513); }
-#[bench] fn comparef64_len0029569_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 29569); }
-#[bench] fn comparef64_len0029569_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 29569); }
-#[bench] fn comparef64_len0030493_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 30493); }
-#[bench] fn comparef64_len0030493_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 30493); }
-#[bench] fn comparef64_len0030977_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 30977); }
-#[bench] fn comparef64_len0030977_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 30977); }
-#[bench] fn comparef64_len0032077_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 32077); }
-#[bench] fn comparef64_len0032077_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 32077); }
-#[bench] fn comparef64_len0032341_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 32341); }
-#[bench] fn comparef64_len0032341_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 32341); }
-#[bench] fn comparef64_len0034651_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 34651); }
-#[bench] fn comparef64_len0034651_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 34651); }
-#[bench] fn comparef64_len0034849_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 34849); }
-#[bench] fn comparef64_len0034849_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 34849); }
-#[bench] fn comparef64_len0035201_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 35201); }
-#[bench] fn comparef64_len0035201_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 35201); }
-#[bench] fn comparef64_len0037423_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 37423); }
-#[bench] fn comparef64_len0037423_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 37423); }
-#[bench] fn comparef64_len0038501_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 38501); }
-#[bench] fn comparef64_len0038501_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 38501); }
-#[bench] fn comparef64_len0047521_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 47521); }
-#[bench] fn comparef64_len0047521_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 47521); }
-#[bench] fn comparef64_len0047917_11p03_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 47917); }
-#[bench] fn comparef64_len0047917_11p03_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 47917); }
-#[bench] fn comparef64_len0050821_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 50821); }
-#[bench] fn comparef64_len0050821_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 50821); }
-#[bench] fn comparef64_len0055001_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 55001); }
-#[bench] fn comparef64_len0055001_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 55001); }
-#[bench] fn comparef64_len0055441_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 55441); }
-#[bench] fn comparef64_len0055441_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 55441); }
-#[bench] fn comparef64_len0055903_11p03_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 55903); }
-#[bench] fn comparef64_len0055903_11p03_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 55903); }
-#[bench] fn comparef64_len0057751_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 57751); }
-#[bench] fn comparef64_len0057751_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 57751); }
-#[bench] fn comparef64_len0063361_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 63361); }
-#[bench] fn comparef64_len0063361_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 63361); }
-#[bench] fn comparef64_len0064153_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 64153); }
-#[bench] fn comparef64_len0064153_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 64153); }
-#[bench] fn comparef64_len0066529_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 66529); }
-#[bench] fn comparef64_len0066529_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 66529); }
-#[bench] fn comparef64_len0068993_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 68993); }
-#[bench] fn comparef64_len0068993_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 68993); }
-#[bench] fn comparef64_len0069697_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 69697); }
-#[bench] fn comparef64_len0069697_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 69697); }
-#[bench] fn comparef64_len0076231_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 76231); }
-#[bench] fn comparef64_len0076231_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 76231); }
-#[bench] fn comparef64_len0077617_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 77617); }
-#[bench] fn comparef64_len0077617_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 77617); }
-#[bench] fn comparef64_len0079201_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 79201); }
-#[bench] fn comparef64_len0079201_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 79201); }
-#[bench] fn comparef64_len0079861_11p03_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 79861); }
-#[bench] fn comparef64_len0079861_11p03_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 79861); }
-#[bench] fn comparef64_len0080191_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 80191); }
-#[bench] fn comparef64_len0080191_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 80191); }
-#[bench] fn comparef64_len0084481_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 84481); }
-#[bench] fn comparef64_len0084481_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 84481); }
-#[bench] fn comparef64_len0084701_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 84701); }
-#[bench] fn comparef64_len0084701_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 84701); }
-#[bench] fn comparef64_len0087121_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 87121); }
-#[bench] fn comparef64_len0087121_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 87121); }
-#[bench] fn comparef64_len0088001_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 88001); }
-#[bench] fn comparef64_len0088001_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 88001); }
-#[bench] fn comparef64_len0089101_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 89101); }
-#[bench] fn comparef64_len0089101_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 89101); }
-#[bench] fn comparef64_len0092401_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 92401); }
-#[bench] fn comparef64_len0092401_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 92401); }
-#[bench] fn comparef64_len0097021_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 97021); }
-#[bench] fn comparef64_len0097021_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 97021); }
-#[bench] fn comparef64_len0098011_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 98011); }
-#[bench] fn comparef64_len0098011_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 98011); }
-#[bench] fn comparef64_len0098561_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 98561); }
-#[bench] fn comparef64_len0098561_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 98561); }
-#[bench] fn comparef64_len0099793_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 99793); }
-#[bench] fn comparef64_len0099793_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 99793); }
+fn comparef64_len0000023_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 23); }
+fn comparef64_len0000023_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 23); }
+fn comparef64_len0000067_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 67); }
+fn comparef64_len0000067_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 67); }
+fn comparef64_len0000089_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 89); }
+fn comparef64_len0000089_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 89); }
+fn comparef64_len0000199_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 199); }
+fn comparef64_len0000199_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 199); }
+fn comparef64_len0000331_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 331); }
+fn comparef64_len0000331_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 331); }
+fn comparef64_len0000353_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 353); }
+fn comparef64_len0000353_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 353); }
+fn comparef64_len0000397_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 397); }
+fn comparef64_len0000397_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 397); }
+fn comparef64_len0000463_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 463); }
+fn comparef64_len0000463_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 463); }
+fn comparef64_len0000617_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 617); }
+fn comparef64_len0000617_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 617); }
+fn comparef64_len0000661_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 661); }
+fn comparef64_len0000661_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 661); }
+fn comparef64_len0000727_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 727); }
+fn comparef64_len0000727_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 727); }
+fn comparef64_len0000881_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 881); }
+fn comparef64_len0000881_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 881); }
+fn comparef64_len0000991_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 991); }
+fn comparef64_len0000991_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 991); }
+fn comparef64_len0001321_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 1321); }
+fn comparef64_len0001321_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 1321); }
+fn comparef64_len0001409_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 1409); }
+fn comparef64_len0001409_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 1409); }
+fn comparef64_len0001453_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 1453); }
+fn comparef64_len0001453_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 1453); }
+fn comparef64_len0001783_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 1783); }
+fn comparef64_len0001783_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 1783); }
+fn comparef64_len0002113_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 2113); }
+fn comparef64_len0002113_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 2113); }
+fn comparef64_len0002179_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 2179); }
+fn comparef64_len0002179_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 2179); }
+fn comparef64_len0002311_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 2311); }
+fn comparef64_len0002311_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 2311); }
+fn comparef64_len0002377_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 2377); }
+fn comparef64_len0002377_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 2377); }
+fn comparef64_len0002663_11p03_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 2663); }
+fn comparef64_len0002663_11p03_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 2663); }
+fn comparef64_len0002971_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 2971); }
+fn comparef64_len0002971_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 2971); }
+fn comparef64_len0003169_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 3169); }
+fn comparef64_len0003169_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 3169); }
+fn comparef64_len0003301_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 3301); }
+fn comparef64_len0003301_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 3301); }
+fn comparef64_len0003389_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 3389); }
+fn comparef64_len0003389_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 3389); }
+fn comparef64_len0003631_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 3631); }
+fn comparef64_len0003631_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 3631); }
+fn comparef64_len0003697_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 3697); }
+fn comparef64_len0003697_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 3697); }
+fn comparef64_len0003851_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 3851); }
+fn comparef64_len0003851_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 3851); }
+fn comparef64_len0004159_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 4159); }
+fn comparef64_len0004159_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 4159); }
+fn comparef64_len0004357_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 4357); }
+fn comparef64_len0004357_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 4357); }
+fn comparef64_len0004621_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 4621); }
+fn comparef64_len0004621_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 4621); }
+fn comparef64_len0004951_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 4951); }
+fn comparef64_len0004951_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 4951); }
+fn comparef64_len0005281_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 5281); }
+fn comparef64_len0005281_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 5281); }
+fn comparef64_len0005347_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 5347); }
+fn comparef64_len0005347_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 5347); }
+fn comparef64_len0005501_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 5501); }
+fn comparef64_len0005501_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 5501); }
+fn comparef64_len0006337_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 6337); }
+fn comparef64_len0006337_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 6337); }
+fn comparef64_len0006469_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 6469); }
+fn comparef64_len0006469_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 6469); }
+fn comparef64_len0007129_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 7129); }
+fn comparef64_len0007129_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 7129); }
+fn comparef64_len0007393_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 7393); }
+fn comparef64_len0007393_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 7393); }
+fn comparef64_len0007547_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 7547); }
+fn comparef64_len0007547_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 7547); }
+fn comparef64_len0008317_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 8317); }
+fn comparef64_len0008317_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 8317); }
+fn comparef64_len0008713_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 8713); }
+fn comparef64_len0008713_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 8713); }
+fn comparef64_len0009241_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 9241); }
+fn comparef64_len0009241_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 9241); }
+fn comparef64_len0009857_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 9857); }
+fn comparef64_len0009857_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 9857); }
+fn comparef64_len0009901_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 9901); }
+fn comparef64_len0009901_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 9901); }
+fn comparef64_len0010781_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 10781); }
+fn comparef64_len0010781_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 10781); }
+fn comparef64_len0010891_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 10891); }
+fn comparef64_len0010891_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 10891); }
+fn comparef64_len0011551_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 11551); }
+fn comparef64_len0011551_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 11551); }
+fn comparef64_len0011617_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 11617); }
+fn comparef64_len0011617_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 11617); }
+fn comparef64_len0012101_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 12101); }
+fn comparef64_len0012101_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 12101); }
+fn comparef64_len0013553_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 13553); }
+fn comparef64_len0013553_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 13553); }
+fn comparef64_len0013751_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 13751); }
+fn comparef64_len0013751_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 13751); }
+fn comparef64_len0014081_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 14081); }
+fn comparef64_len0014081_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 14081); }
+fn comparef64_len0014851_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 14851); }
+fn comparef64_len0014851_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 14851); }
+fn comparef64_len0015401_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 15401); }
+fn comparef64_len0015401_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 15401); }
+fn comparef64_len0015973_11p03_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 15973); }
+fn comparef64_len0015973_11p03_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 15973); }
+fn comparef64_len0016633_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 16633); }
+fn comparef64_len0016633_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 16633); }
+fn comparef64_len0018481_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 18481); }
+fn comparef64_len0018481_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 18481); }
+fn comparef64_len0019009_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 19009); }
+fn comparef64_len0019009_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 19009); }
+fn comparef64_len0019603_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 19603); }
+fn comparef64_len0019603_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 19603); }
+fn comparef64_len0019801_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 19801); }
+fn comparef64_len0019801_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 19801); }
+fn comparef64_len0021121_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 21121); }
+fn comparef64_len0021121_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 21121); }
+fn comparef64_len0022639_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 22639); }
+fn comparef64_len0022639_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 22639); }
+fn comparef64_len0023761_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 23761); }
+fn comparef64_len0023761_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 23761); }
+fn comparef64_len0025411_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 25411); }
+fn comparef64_len0025411_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 25411); }
+fn comparef64_len0025873_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 25873); }
+fn comparef64_len0025873_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 25873); }
+fn comparef64_len0026731_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 26731); }
+fn comparef64_len0026731_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 26731); }
+fn comparef64_len0026951_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 26951); }
+fn comparef64_len0026951_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 26951); }
+fn comparef64_len0028513_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 28513); }
+fn comparef64_len0028513_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 28513); }
+fn comparef64_len0029569_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 29569); }
+fn comparef64_len0029569_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 29569); }
+fn comparef64_len0030493_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 30493); }
+fn comparef64_len0030493_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 30493); }
+fn comparef64_len0030977_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 30977); }
+fn comparef64_len0030977_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 30977); }
+fn comparef64_len0032077_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 32077); }
+fn comparef64_len0032077_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 32077); }
+fn comparef64_len0032341_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 32341); }
+fn comparef64_len0032341_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 32341); }
+fn comparef64_len0034651_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 34651); }
+fn comparef64_len0034651_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 34651); }
+fn comparef64_len0034849_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 34849); }
+fn comparef64_len0034849_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 34849); }
+fn comparef64_len0035201_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 35201); }
+fn comparef64_len0035201_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 35201); }
+fn comparef64_len0037423_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 37423); }
+fn comparef64_len0037423_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 37423); }
+fn comparef64_len0038501_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 38501); }
+fn comparef64_len0038501_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 38501); }
+fn comparef64_len0047521_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 47521); }
+fn comparef64_len0047521_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 47521); }
+fn comparef64_len0047917_11p03_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 47917); }
+fn comparef64_len0047917_11p03_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 47917); }
+fn comparef64_len0050821_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 50821); }
+fn comparef64_len0050821_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 50821); }
+fn comparef64_len0055001_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 55001); }
+fn comparef64_len0055001_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 55001); }
+fn comparef64_len0055441_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 55441); }
+fn comparef64_len0055441_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 55441); }
+fn comparef64_len0055903_11p03_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 55903); }
+fn comparef64_len0055903_11p03_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 55903); }
+fn comparef64_len0057751_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 57751); }
+fn comparef64_len0057751_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 57751); }
+fn comparef64_len0063361_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 63361); }
+fn comparef64_len0063361_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 63361); }
+fn comparef64_len0064153_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 64153); }
+fn comparef64_len0064153_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 64153); }
+fn comparef64_len0066529_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 66529); }
+fn comparef64_len0066529_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 66529); }
+fn comparef64_len0068993_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 68993); }
+fn comparef64_len0068993_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 68993); }
+fn comparef64_len0069697_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 69697); }
+fn comparef64_len0069697_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 69697); }
+fn comparef64_len0076231_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 76231); }
+fn comparef64_len0076231_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 76231); }
+fn comparef64_len0077617_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 77617); }
+fn comparef64_len0077617_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 77617); }
+fn comparef64_len0079201_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 79201); }
+fn comparef64_len0079201_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 79201); }
+fn comparef64_len0079861_11p03_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 79861); }
+fn comparef64_len0079861_11p03_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 79861); }
+fn comparef64_len0080191_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 80191); }
+fn comparef64_len0080191_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 80191); }
+fn comparef64_len0084481_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 84481); }
+fn comparef64_len0084481_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 84481); }
+fn comparef64_len0084701_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 84701); }
+fn comparef64_len0084701_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 84701); }
+fn comparef64_len0087121_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 87121); }
+fn comparef64_len0087121_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 87121); }
+fn comparef64_len0088001_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 88001); }
+fn comparef64_len0088001_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 88001); }
+fn comparef64_len0089101_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 89101); }
+fn comparef64_len0089101_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 89101); }
+fn comparef64_len0092401_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 92401); }
+fn comparef64_len0092401_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 92401); }
+fn comparef64_len0097021_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 97021); }
+fn comparef64_len0097021_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 97021); }
+fn comparef64_len0098011_11p02_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 98011); }
+fn comparef64_len0098011_11p02_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 98011); }
+fn comparef64_len0098561_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 98561); }
+fn comparef64_len0098561_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 98561); }
+fn comparef64_len0099793_11p01_bluesteins(b: &mut Bencher) { bench_planned_bluesteins_f64(b, 99793); }
+fn comparef64_len0099793_11p01_raders(b: &mut Bencher) { bench_planned_raders_f64(b, 99793); }
 
 */
+
+fn criterion_benchmark(c: &mut Criterion) {
+    let _ = c;
+}
+
+criterion_group! {
+    name = benches;
+    config = config::fast();
+    targets = criterion_benchmark
+}
+criterion_main!(benches);

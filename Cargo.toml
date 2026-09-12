@@ -42,7 +42,60 @@ transpose = "0.2"
 primal-check = "0.3.3"
 
 [dev-dependencies]
-rand = "0.8"
-pastey = "0.2"
-getrandom = {version = "^0.2", features = ["js"]}
+criterion = { version = "0.5", default-features = false }
+
+rand = "0.9"
+getrandom = {version = "=0.3.1", features = ["wasm_js"]}
 wasm-bindgen-test = "^0.3.36"
+
+# These are in the dependency tree of criterion. These need to be pinned for the MSRV tests
+clap = { version = "=4.5.32", default-features = false, features = ["std"] }
+half = { version = "=2.4.1", default-features = false }
+
+[[bench]]
+name = "bench_check_neon_2to1024"
+harness = false
+
+[[bench]]
+name = "bench_check_scalar_2to1024"
+harness = false
+
+[[bench]]
+name = "bench_check_sse_2to1024"
+harness = false
+
+[[bench]]
+name = "bench_compare_scalar_neon"
+harness = false
+
+[[bench]]
+name = "bench_compare_scalar_sse_avx"
+harness = false
+
+[[bench]]
+name = "bench_compare_scalar_wasm_simd"
+harness = false
+
+[[bench]]
+name = "bench_rustfft"
+harness = false
+
+[[bench]]
+name = "bench_rustfft_neon"
+harness = false
+
+[[bench]]
+name = "bench_rustfft_scalar"
+harness = false
+
+[[bench]]
+name = "bench_rustfft_sse"
+harness = false
+
+[[bench]]
+name = "bench_rustfft_wasm_simd"
+harness = false
+
+[[bench]]
+name = "compare_3n2m_strategies"
+harness = false

@@ -1,4 +1,3 @@
-#![feature(test)]
 /// Unfortunately, `cargo bench` does not permit running these benchmarks out-of-the-box
 /// on a WebAssembly virtual machine.
 ///
@@ -29,15 +28,13 @@
 ///
 /// For more information, refer to [Criterion's user guide](https://github.com/bheisler/criterion.rs/blob/dc2b06cd31f7aa34cff6a83a00598e0523186dad/book/src/user_guide/wasi.md)
 /// which should be mostly applicable to our use case.
-extern crate rustfft;
-extern crate test;
-
-use pastey::paste;
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 use rustfft::Fft;
 use std::sync::Arc;
-use test::Bencher;
+mod config;
+
+use criterion::{criterion_group, criterion_main, Bencher, Criterion};
 
 // Make fft using scalar planner
 fn bench_scalar_32(b: &mut Bencher, len: usize) {
@@ -87,34 +84,23 @@ fn bench_wasmsimd_64(b: &mut Bencher, len: usize) {
     });
 }
 
-// Create benches using functions taking one argument
-macro_rules! make_benches {
-    ($name:ident, { $($len:literal),* }) => {
-        paste! {
-            $(
-                #[bench]
-                fn [<$name _ $len _f32_scalar>](b: &mut Bencher)  {
-                    [<bench_scalar_32>](b, $len);
-                }
+fn criterion_benchmark(c: &mut Criterion) {
+    const LENGTHS: &[usize] = &[
+        4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072,
+        262144, 524288, 1048576, 2097152, 4194304,
+    ];
 
-                #[bench]
-                fn [<$name _ $len _f64_scalar>](b: &mut Bencher)  {
-                    [<bench_scalar_64>](b, $len);
-                }
-
-                #[bench]
-                fn [<$name _ $len _f32_wasmsimd>](b: &mut Bencher)  {
-                    [<bench_wasmsimd_32>](b, $len);
-                }
-
-                #[bench]
-                fn [<$name _ $len _f64_wasmsimd>](b: &mut Bencher)  {
-                    [<bench_wasmsimd_64>](b, $len);
-                }
-            )*
-        }
+    for &len in LENGTHS {
+        c.bench_function(&format!("wasmsimdcomparison_{len}_f32_scalar"), |b| bench_scalar_32(b, len));
+        c.bench_function(&format!("wasmsimdcomparison_{len}_f64_scalar"), |b| bench_scalar_64(b, len));
+        c.bench_function(&format!("wasmsimdcomparison_{len}_f32_wasmsimd"), |b| bench_wasmsimd_32(b, len));
+        c.bench_function(&format!("wasmsimdcomparison_{len}_f64_wasmsimd"),|b| bench_wasmsimd_64(b, len));
     }
 }
 
-make_benches!(wasmsimdcomparison, {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072});
-make_benches!(wasmsimdcomparison, { 262144, 524288, 1048576, 2097152, 4194304 });
+criterion_group! {
+    name = benches;
+    config = config::fast();
+    targets = criterion_benchmark
+}
+criterion_main!(benches);
