@@ -32,12 +32,8 @@ fn bench_planned_64(b: &mut Bencher, len: usize) {
 
 fn criterion_benchmark(c: &mut Criterion) {
     for len in 2..200 {
-        c.bench_function(&format!("bench_from2to1024_f32_{len}"), move |b| {
-            bench_planned_32(b, len)
-        });
-        c.bench_function(&format!("bench_from2to1024_f64_{len}"), move |b| {
-            bench_planned_64(b, len)
-        });
+        c.bench_function(&format!("bench_from2to1024_f32_{len}"), |b| bench_planned_32(b, len));
+        c.bench_function(&format!("bench_from2to1024_f64_{len}"), |b| bench_planned_64(b, len));
     }
 }
 

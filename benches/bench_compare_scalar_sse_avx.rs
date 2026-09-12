@@ -85,24 +85,12 @@ fn criterion_benchmark(c: &mut Criterion) {
     ];
 
     for &len in LENGTHS {
-        c.bench_function(&format!("comparison_{len}_f32_scalar"), move |b| {
-            bench_scalar_32(b, len)
-        });
-        c.bench_function(&format!("comparison_{len}_f64_scalar"), move |b| {
-            bench_scalar_64(b, len)
-        });
-        c.bench_function(&format!("comparison_{len}_f32_sse"), move |b| {
-            bench_sse_32(b, len)
-        });
-        c.bench_function(&format!("comparison_{len}_f64_sse"), move |b| {
-            bench_sse_64(b, len)
-        });
-        c.bench_function(&format!("comparison_{len}_f32_avx"), move |b| {
-            bench_avx_32(b, len)
-        });
-        c.bench_function(&format!("comparison_{len}_f64_avx"), move |b| {
-            bench_avx_64(b, len)
-        });
+        c.bench_function(&format!("comparison_{len}_f32_scalar"), |b| bench_scalar_32(b, len));
+        c.bench_function(&format!("comparison_{len}_f64_scalar"), |b| bench_scalar_64(b, len));
+        c.bench_function(&format!("comparison_{len}_f32_sse"), |b| bench_sse_32(b, len));
+        c.bench_function(&format!("comparison_{len}_f64_sse"), |b| bench_sse_64(b, len));
+        c.bench_function(&format!("comparison_{len}_f32_avx"), |b| bench_avx_32(b, len));
+        c.bench_function(&format!("comparison_{len}_f64_avx"), |b| bench_avx_64(b, len));
     }
 }
 

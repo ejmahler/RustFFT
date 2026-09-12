@@ -61,18 +61,10 @@ fn criterion_benchmark(c: &mut Criterion) {
     ];
 
     for &len in LENGTHS {
-        c.bench_function(&format!("neoncomparison_{len}_f32_scalar"), move |b| {
-            bench_scalar_32(b, len)
-        });
-        c.bench_function(&format!("neoncomparison_{len}_f64_scalar"), move |b| {
-            bench_scalar_64(b, len)
-        });
-        c.bench_function(&format!("neoncomparison_{len}_f32_neon"), move |b| {
-            bench_neon_32(b, len)
-        });
-        c.bench_function(&format!("neoncomparison_{len}_f64_neon"), move |b| {
-            bench_neon_64(b, len)
-        });
+        c.bench_function(&format!("neoncomparison_{len}_f32_scalar"), |b| bench_scalar_32(b, len));
+        c.bench_function(&format!("neoncomparison_{len}_f64_scalar"), |b| bench_scalar_64(b, len));
+        c.bench_function(&format!("neoncomparison_{len}_f32_neon"), |b| bench_neon_32(b, len));
+        c.bench_function(&format!("neoncomparison_{len}_f64_neon"), |b| bench_neon_64(b, len));
     }
 }
 
