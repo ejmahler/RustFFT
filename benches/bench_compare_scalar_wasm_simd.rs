@@ -91,10 +91,18 @@ fn criterion_benchmark(c: &mut Criterion) {
     ];
 
     for &len in LENGTHS {
-        c.bench_function(&format!("wasmsimdcomparison_{len}_f32_scalar"), |b| bench_scalar_32(b, len));
-        c.bench_function(&format!("wasmsimdcomparison_{len}_f64_scalar"), |b| bench_scalar_64(b, len));
-        c.bench_function(&format!("wasmsimdcomparison_{len}_f32_wasmsimd"), |b| bench_wasmsimd_32(b, len));
-        c.bench_function(&format!("wasmsimdcomparison_{len}_f64_wasmsimd"),|b| bench_wasmsimd_64(b, len));
+        c.bench_function(&format!("wasmsimdcomparison_{len}_f32_scalar"), |b| {
+            bench_scalar_32(b, len)
+        });
+        c.bench_function(&format!("wasmsimdcomparison_{len}_f64_scalar"), |b| {
+            bench_scalar_64(b, len)
+        });
+        c.bench_function(&format!("wasmsimdcomparison_{len}_f32_wasmsimd"), |b| {
+            bench_wasmsimd_32(b, len)
+        });
+        c.bench_function(&format!("wasmsimdcomparison_{len}_f64_wasmsimd"), |b| {
+            bench_wasmsimd_64(b, len)
+        });
     }
 }
 

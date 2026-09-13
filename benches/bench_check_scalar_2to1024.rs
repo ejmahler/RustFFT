@@ -53,30 +53,30 @@ fn bench_radix3_64(b: &mut Bencher, len: usize) {
 
 fn criterion_benchmark(c: &mut Criterion) {
     for len in 2..200 {
-        c.bench_function(&format!("bench_from2to1024_f32_{len}"), |b| bench_planned_32(b, len));
-        c.bench_function(&format!("bench_from2to1024_f64_{len}"), |b| bench_planned_64(b, len));
+        c.bench_function(&format!("bench_from2to1024_f32_{len}"), |b| {
+            bench_planned_32(b, len)
+        });
+        c.bench_function(&format!("bench_from2to1024_f64_{len}"), |b| {
+            bench_planned_64(b, len)
+        });
     }
 
     const POWERS_OF_THREE: &[usize] = &[
         3, 9, 27, 81, 243, 729, 2187, 6561, 19683, 59049, 177147, 531441, 1594323, 4782969,
     ];
     for &len in POWERS_OF_THREE {
-        c.bench_function(
-            &format!("bench_power3_planned_scalar_f32_{len:07}"),
-            |b| bench_planned_32(b, len),
-        );
-        c.bench_function(
-            &format!("bench_power3_planned_scalar_f64_{len:07}"),
-            |b| bench_planned_64(b, len),
-        );
-        c.bench_function(
-            &format!("bench_power3_radix3_scalar_f32_{len:07}"),
-            |b| bench_radix3_32(b, len),
-        );
-        c.bench_function(
-            &format!("bench_power3_radix3_scalar_f64_{len:07}"),
-            |b| bench_radix3_64(b, len),
-        );
+        c.bench_function(&format!("bench_power3_planned_scalar_f32_{len:07}"), |b| {
+            bench_planned_32(b, len)
+        });
+        c.bench_function(&format!("bench_power3_planned_scalar_f64_{len:07}"), |b| {
+            bench_planned_64(b, len)
+        });
+        c.bench_function(&format!("bench_power3_radix3_scalar_f32_{len:07}"), |b| {
+            bench_radix3_32(b, len)
+        });
+        c.bench_function(&format!("bench_power3_radix3_scalar_f64_{len:07}"), |b| {
+            bench_radix3_64(b, len)
+        });
     }
 }
 

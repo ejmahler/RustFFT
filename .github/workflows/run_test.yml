@@ -161,4 +161,6 @@ jobs:
         with:
           version: "latest"
       - name: Run test suites with wasm-pack
+        env:
+          RUSTFLAGS: '--cfg getrandom_backend="wasm_js"'
         run: wasm-pack test --node --features wasm_simd --locked
