@@ -209,10 +209,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43a49c392881ce6d5c3b8cb70f98717b7c07aabbdff06687b9030dbfbe2725f8"
 dependencies = [
  "cfg-if",
- "js-sys",
  "libc",
  "wasi",
- "wasm-bindgen",
  "windows-targets",
 ]
 
@@ -451,7 +449,6 @@ name = "rustfft"
 version = "6.4.1"
 dependencies = [
  "criterion",
- "getrandom",
  "num-complex",
  "num-integer",
  "num-traits",
