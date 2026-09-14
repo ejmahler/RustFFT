@@ -91,10 +91,23 @@ impl<T: FftNum> RadersAlgorithm<T> {
         // precompute the coefficients to use inside the process method
         let inner_fft_scale = T::one() / T::from_usize(inner_fft_len).unwrap();
         let mut inner_fft_input = vec![Complex::zero(); inner_fft_len];
+
+        // primitive_root() above only returns Some for len > 2, so len is an odd prime here and
+        // inner_fft_len = len - 1 is even. That makes the multiplicative group mod len cyclic of
+        // even order, and in a cyclic group of even order, g^(order/2) is the unique element of
+        // order 2, which mod a prime is -1. That holds for primitive_root_inverse just as much
+        // as for primitive_root, so the twiddle_input sequence e_p = primitive_root_inverse^p
+        // mod len satisfies e_{p + (len-1)/2} == len - e_p. Since compute_twiddle(len - x, ..)
+        // is the complex conjugate of compute_twiddle(x, ..), the second half of this array is
+        // just the conjugate of the first half: only the first half needs an actual
+        // compute_twiddle (trig) call and a step through the modular-multiply chain. Idea from
+        // https://github.com/ejmahler/RustFFT/pull/178#discussion_r3995689422
+        let (first_half, second_half) = inner_fft_input.split_at_mut(inner_fft_len / 2);
         let mut twiddle_input = 1;
-        for input_cell in &mut inner_fft_input {
+        for (input_cell, conjugate_input_cell) in first_half.iter_mut().zip(second_half) {
             let twiddle = twiddles::compute_twiddle(twiddle_input, len, direction);
             *input_cell = twiddle * inner_fft_scale;
+            *conjugate_input_cell = input_cell.conj();
 
             twiddle_input =
                 ((twiddle_input as u64 * primitive_root_inverse) % reduced_len) as usize;
