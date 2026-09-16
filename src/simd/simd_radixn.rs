@@ -455,14 +455,14 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize, F>(
 
     // The row-0 twiddle is always 1, so it's neither stored nor applied.
     let gather = |data: &[Complex<V::ScalarType>], idx: usize, tw_base: usize| -> [V; RADIX] {
-        // row 0 first, so the array is fully initialized without `array::from_fn`, which is
-        // newer than the crate MSRV
-        let mut rows = [V::load(data, idx); RADIX];
-        for (r, row) in rows.iter_mut().enumerate().skip(1) {
+        std::array::from_fn(|r| {
             let v = V::load(data, idx + r * num_columns);
-            *row = V::mul_complex(v, *twiddles.get_unchecked(tw_base + r - 1));
-        }
-        rows
+            if r == 0 {
+                v
+            } else {
+                V::mul_complex(v, *twiddles.get_unchecked(tw_base + r - 1))
+            }
+        })
     };
 
     let (unroll_count, unroll_remainder) = (num_vector_columns / 2, num_vector_columns % 2);
