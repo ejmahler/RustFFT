@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use num_complex::Complex;
 
-use crate::array_utils::{factor_transpose, workaround_transmute_mut, TransposeFactor};
+use crate::array_utils::{reverse_remainders, workaround_transmute_mut, TransposeFactor};
 use crate::common::{FftNum, RadixFactor};
 use crate::{Direction, Fft, FftDirection, Length};
 
@@ -136,7 +136,10 @@ pub struct SimdRadixN<V: RadixNVector, T> {
     base_fft: Arc<dyn Fft<T>>,
     base_len: usize,
 
-    factors: Box<[TransposeFactor]>,
+    // The factor the transpose is unrolled by, and the output column of each input column. None
+    // when there are no factors and the transpose is a plain copy.
+    unroll_factor: Option<RadixFactor>,
+    reversed_columns: Box<[usize]>,
     butterflies: Box<[InternalRadixFactor<V>]>,
 
     len: usize,
@@ -223,6 +226,17 @@ impl<V: RadixNVector, T: FftNum> SimdRadixN<V, T> {
             }
         }
 
+        // Precompute where each column lands. Working this out per call costs two hardware divides
+        // and an out-of-line `reverse_remainders` call per column, which is a large share of a
+        // short FFT, and much more so on x86 where a 64-bit divide takes tens of cycles.
+        let width = len / base_len;
+        let reversed_columns: Box<[usize]> = (0..width)
+            .map(|x| reverse_remainders(x, &transpose_factors))
+            .collect();
+        // `table_transpose` indexes unchecked, and relies on this.
+        assert!(reversed_columns.iter().all(|&r| r < width));
+        let unroll_factor = transpose_factors.first().map(|f| f.factor);
+
         // Same packing as the scalar RadixN: all layers in one array, bottom layer first, and
         // within a layer, (radix - 1) twiddles per column. The difference is that a "column" here
         // is a whole vector of columns, so each entry is a twiddle chunk rather than one twiddle.
@@ -265,7 +279,8 @@ impl<V: RadixNVector, T: FftNum> SimdRadixN<V, T> {
             base_fft,
             base_len,
 
-            factors: transpose_factors.into_boxed_slice(),
+            unroll_factor,
+            reversed_columns,
             butterflies: butterflies.into_boxed_slice(),
 
             len,
@@ -280,29 +295,18 @@ impl<V: RadixNVector, T: FftNum> SimdRadixN<V, T> {
     /// The flat transpose that reorders the input down to base-sized chunks.
     #[inline(always)]
     fn transpose(&self, input: &[Complex<T>], output: &mut [Complex<T>]) {
-        if let Some(unroll_factor) = self.factors.first() {
+        if let Some(unroll_factor) = self.unroll_factor {
             // for performance, we really, really want to unroll the transpose, but we need to make
             // sure the output length is divisible by the unroll amount. choosing the first factor
             // seems to reliably perform well
-            match unroll_factor.factor {
-                RadixFactor::Factor2 => {
-                    factor_transpose::<Complex<T>, 2>(self.base_len, input, output, &self.factors)
-                }
-                RadixFactor::Factor3 => {
-                    factor_transpose::<Complex<T>, 3>(self.base_len, input, output, &self.factors)
-                }
-                RadixFactor::Factor4 => {
-                    factor_transpose::<Complex<T>, 4>(self.base_len, input, output, &self.factors)
-                }
-                RadixFactor::Factor5 => {
-                    factor_transpose::<Complex<T>, 5>(self.base_len, input, output, &self.factors)
-                }
-                RadixFactor::Factor6 => {
-                    factor_transpose::<Complex<T>, 6>(self.base_len, input, output, &self.factors)
-                }
-                RadixFactor::Factor7 => {
-                    factor_transpose::<Complex<T>, 7>(self.base_len, input, output, &self.factors)
-                }
+            let (height, columns) = (self.base_len, &*self.reversed_columns);
+            match unroll_factor {
+                RadixFactor::Factor2 => table_transpose::<_, 2>(height, columns, input, output),
+                RadixFactor::Factor3 => table_transpose::<_, 3>(height, columns, input, output),
+                RadixFactor::Factor4 => table_transpose::<_, 4>(height, columns, input, output),
+                RadixFactor::Factor5 => table_transpose::<_, 5>(height, columns, input, output),
+                RadixFactor::Factor6 => table_transpose::<_, 6>(height, columns, input, output),
+                RadixFactor::Factor7 => table_transpose::<_, 7>(height, columns, input, output),
             }
         } else {
             // no factors, so just pass data straight to our base
@@ -325,46 +329,34 @@ impl<V: RadixNVector, T: FftNum> SimdRadixN<V, T> {
             // monomorphized loop over its chunks. Mirrors the scalar `RadixN`.
             match factor {
                 InternalRadixFactor::Factor2 => {
-                    for data in out.chunks_exact_mut(cross_fft_len) {
-                        cross_layer::<V, 2, _>(data, layer_twiddles, num_columns, |v| {
-                            V::column_butterfly2(v)
-                        })
-                    }
+                    cross_layer_chunks::<V, 2, _>(out, layer_twiddles, num_columns, |v| {
+                        V::column_butterfly2(v)
+                    })
                 }
                 InternalRadixFactor::Factor3(bf) => {
-                    for data in out.chunks_exact_mut(cross_fft_len) {
-                        cross_layer::<V, 3, _>(data, layer_twiddles, num_columns, |v| {
-                            V::column_butterfly3(bf, v)
-                        })
-                    }
+                    cross_layer_chunks::<V, 3, _>(out, layer_twiddles, num_columns, |v| {
+                        V::column_butterfly3(bf, v)
+                    })
                 }
                 InternalRadixFactor::Factor4(rotation) => {
-                    for data in out.chunks_exact_mut(cross_fft_len) {
-                        cross_layer::<V, 4, _>(data, layer_twiddles, num_columns, |v| {
-                            V::column_butterfly4(v, *rotation)
-                        })
-                    }
+                    cross_layer_chunks::<V, 4, _>(out, layer_twiddles, num_columns, |v| {
+                        V::column_butterfly4(v, *rotation)
+                    })
                 }
                 InternalRadixFactor::Factor5(bf) => {
-                    for data in out.chunks_exact_mut(cross_fft_len) {
-                        cross_layer::<V, 5, _>(data, layer_twiddles, num_columns, |v| {
-                            V::column_butterfly5(bf, v)
-                        })
-                    }
+                    cross_layer_chunks::<V, 5, _>(out, layer_twiddles, num_columns, |v| {
+                        V::column_butterfly5(bf, v)
+                    })
                 }
                 InternalRadixFactor::Factor6(bf) => {
-                    for data in out.chunks_exact_mut(cross_fft_len) {
-                        cross_layer::<V, 6, _>(data, layer_twiddles, num_columns, |v| {
-                            V::column_butterfly6(bf, v)
-                        })
-                    }
+                    cross_layer_chunks::<V, 6, _>(out, layer_twiddles, num_columns, |v| {
+                        V::column_butterfly6(bf, v)
+                    })
                 }
                 InternalRadixFactor::Factor7(bf) => {
-                    for data in out.chunks_exact_mut(cross_fft_len) {
-                        cross_layer::<V, 7, _>(data, layer_twiddles, num_columns, |v| {
-                            V::column_butterfly7(bf, v)
-                        })
-                    }
+                    cross_layer_chunks::<V, 7, _>(out, layer_twiddles, num_columns, |v| {
+                        V::column_butterfly7(bf, v)
+                    })
                 }
             }
 
@@ -477,6 +469,58 @@ impl<V: RadixNVector, T> Direction for SimdRadixN<V, T> {
     #[inline(always)]
     fn fft_direction(&self) -> FftDirection {
         self.direction
+    }
+}
+
+/// Run `cross_layer` over every chunk of `data`, each `num_columns * RADIX` long.
+///
+/// This is `chunks_exact_mut` without the divide it does to find the chunk count. At short lengths
+/// that one divide per layer is a measurable share of the whole FFT.
+#[inline(always)]
+unsafe fn cross_layer_chunks<V: RadixNVector, const RADIX: usize, F>(
+    data: &mut [Complex<V::ScalarType>],
+    twiddles: &[V],
+    num_columns: usize,
+    butterfly: F,
+) where
+    F: Fn([V; RADIX]) -> [V; RADIX],
+{
+    let chunk_len = num_columns * RADIX;
+    let mut rest = data;
+    while rest.len() >= chunk_len {
+        let (chunk, tail) = rest.split_at_mut(chunk_len);
+        cross_layer::<V, RADIX, _>(chunk, twiddles, num_columns, &butterfly);
+        rest = tail;
+    }
+    debug_assert!(rest.is_empty());
+}
+
+/// `factor_transpose` with the reversed column indices looked up instead of recomputed.
+///
+/// `reversed_columns[x]` is the output column of input column `x`, so its length is the width and
+/// nothing here needs to divide. Every entry must be below the width, which `SimdRadixN::new`
+/// asserts, and `D` must divide the width.
+#[inline(always)]
+fn table_transpose<T: Copy, const D: usize>(
+    height: usize,
+    reversed_columns: &[usize],
+    input: &[T],
+    output: &mut [T],
+) {
+    let width = reversed_columns.len();
+    assert!(input.len() == width * height && output.len() == input.len());
+
+    for (group, rev) in reversed_columns.chunks_exact(D).enumerate() {
+        let x = group * D;
+        let rev: &[usize; D] = rev.try_into().unwrap();
+        for y in 0..height {
+            let row = x + y * width;
+            for (i, &r) in rev.iter().enumerate() {
+                unsafe {
+                    *output.get_unchecked_mut(y + r * height) = *input.get_unchecked(row + i);
+                }
+            }
+        }
     }
 }
 
