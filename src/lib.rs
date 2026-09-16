@@ -86,7 +86,14 @@
 //!
 //! ### Output Order
 //!
-//! Elements in the output are ordered by ascending frequency, with the first element corresponding to frequency 0.
+//! Elements in the output have the following order:
+//!
+//!  1. Frequency zero
+//!  2. Positive frequencies, from smallest magnitude to largest
+//!  3. Negative frequencies, from largest magnitude to smallest
+//!
+//! For example, with 6 elements and a sample rate `fs`, the output frequencies are
+//! `[0, fs/6, 2*fs/6, 3*fs/6, -2*fs/6, -fs/6]`, where `3*fs/6` is the Nyquist frequency.
 //!
 //! ### AVX Performance Tips
 //!
