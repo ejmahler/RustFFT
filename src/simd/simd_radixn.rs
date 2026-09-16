@@ -284,33 +284,6 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
             layer_twiddles = &layer_twiddles[twiddle_offset..];
         }
     }
-
-    unsafe fn perform_fft_immut(
-        &self,
-        input: &[Complex<T>],
-        output: &mut [Complex<T>],
-        scratch: &mut [Complex<T>],
-    ) {
-        self.transpose(input, output);
-        self.base_fft.process_with_scratch(output, scratch);
-        self.cross_ffts(output);
-    }
-
-    unsafe fn perform_fft_out_of_place(
-        &self,
-        input: &mut [Complex<T>],
-        output: &mut [Complex<T>],
-        scratch: &mut [Complex<T>],
-    ) {
-        self.transpose(input, output);
-
-        // the input is free once the transpose is done, so use it as base scratch when we weren't
-        // handed any of our own
-        let base_scratch = if !scratch.is_empty() { scratch } else { input };
-        self.base_fft.process_with_scratch(output, base_scratch);
-
-        self.cross_ffts(output);
-    }
 }
 
 impl<V: SimdVector, T: FftNum> Fft<T> for SimdRadixN<V, T> {
@@ -327,7 +300,11 @@ impl<V: SimdVector, T: FftNum> Fft<T> for SimdRadixN<V, T> {
                 scratch,
                 self.len(),
                 self.get_immutable_scratch_len(),
-                |in_chunk, out_chunk, scratch| self.perform_fft_immut(in_chunk, out_chunk, scratch),
+                |input, output, scratch| {
+                    self.transpose(input, output);
+                    self.base_fft.process_with_scratch(output, scratch);
+                    self.cross_ffts(output);
+                },
             );
         }
     }
@@ -344,8 +321,13 @@ impl<V: SimdVector, T: FftNum> Fft<T> for SimdRadixN<V, T> {
                 scratch,
                 self.len(),
                 self.get_outofplace_scratch_len(),
-                |in_chunk, out_chunk, scratch| {
-                    self.perform_fft_out_of_place(in_chunk, out_chunk, scratch)
+                |input, output, scratch| {
+                    self.transpose(input, output);
+                    // the input is free once the transpose is done, so use it as base scratch
+                    // when we weren't handed any of our own
+                    let base_scratch = if !scratch.is_empty() { scratch } else { input };
+                    self.base_fft.process_with_scratch(output, base_scratch);
+                    self.cross_ffts(output);
                 },
             );
         }
@@ -358,9 +340,17 @@ impl<V: SimdVector, T: FftNum> Fft<T> for SimdRadixN<V, T> {
                 self.len(),
                 self.get_inplace_scratch_len(),
                 |chunk, scratch| {
-                    let (self_scratch, inner_scratch) = scratch.split_at_mut(self.len());
-                    self.perform_fft_out_of_place(chunk, self_scratch, inner_scratch);
-                    chunk.copy_from_slice(self_scratch);
+                    let (output, inner_scratch) = scratch.split_at_mut(self.len());
+                    self.transpose(chunk, output);
+                    // same as out of place: the chunk is free once the transpose is done
+                    let base_scratch = if !inner_scratch.is_empty() {
+                        inner_scratch
+                    } else {
+                        &mut *chunk
+                    };
+                    self.base_fft.process_with_scratch(output, base_scratch);
+                    self.cross_ffts(output);
+                    chunk.copy_from_slice(output);
                 },
             )
         }
@@ -475,8 +465,9 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize, F>(
         rows
     };
 
-    let mut vcol = 0;
-    while vcol + 2 <= num_vector_columns {
+    let (unroll_count, unroll_remainder) = (num_vector_columns / 2, num_vector_columns % 2);
+    for i in 0..unroll_count {
+        let vcol = i * 2;
         let idx = vcol * complex_per_vector;
 
         let a = gather(data, idx, vcol * tw_stride);
@@ -489,12 +480,11 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize, F>(
             V::store(data, *a_row, idx + r * num_columns);
             V::store(data, *b_row, idx + complex_per_vector + r * num_columns);
         }
-
-        vcol += 2;
     }
 
     // an odd vector column count leaves one behind
-    if vcol < num_vector_columns {
+    if unroll_remainder > 0 {
+        let vcol = unroll_count * 2;
         let idx = vcol * complex_per_vector;
         let a = butterfly(gather(data, idx, vcol * tw_stride));
         for (r, a_row) in a.iter().enumerate() {
