@@ -33,7 +33,7 @@ pub const fn prime_butterfly_lens() -> &'static [usize] {
     &[{{#each lengths }}{{this.len}}, {{/each}}]
 }
 
-/// Safety: The current machine must support the {{arch.cpu_feature_name}} target feature
+/// Safety: The current machine must support the {{arch.target_feature_name}} target feature
 #[target_feature(enable = "{{arch.target_feature_name}}")]
 pub unsafe fn construct_prime_butterfly<T: FftNum>(len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
     let id_f32 = TypeId::of::<f32>();
@@ -78,7 +78,7 @@ struct {{this.struct_name_32}}<T> {
 
 boilerplate_fft_{{../arch.name_snakecase}}_f32_butterfly!({{this.struct_name_32}}, {{this.len}}, |this: &{{this.struct_name_32}}<_>| this.direction);
 impl<T: FftNum> {{this.struct_name_32}}<T> {
-    /// Safety: The current machine must support the {{../arch.cpu_feature_name}} instruction set
+    /// Safety: The current machine must support the {{../arch.target_feature_name}} instruction set
     #[target_feature(enable = "{{../arch.target_feature_name}}")]
     unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
@@ -132,7 +132,7 @@ struct {{this.struct_name_64}}<T> {
 
 boilerplate_fft_{{../arch.name_snakecase}}_f64_butterfly!({{this.struct_name_64}}, {{this.len}}, |this: &{{this.struct_name_64}}<_>| this.direction);
 impl<T: FftNum> {{this.struct_name_64}}<T> {
-    /// Safety: The current machine must support the {{../arch.cpu_feature_name}} instruction set
+    /// Safety: The current machine must support the {{../arch.target_feature_name}} instruction set
     #[target_feature(enable = "{{../arch.target_feature_name}}")]
     unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();

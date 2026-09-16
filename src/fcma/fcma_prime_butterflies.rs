@@ -33,7 +33,7 @@ pub const fn prime_butterfly_lens() -> &'static [usize] {
     &[7, 11, 13, 17, 19, 23, 29, 31, ]
 }
 
-/// Safety: The current machine must support the fcma target feature
+/// Safety: The current machine must support the neon,fcma target feature
 #[target_feature(enable = "neon,fcma")]
 pub unsafe fn construct_prime_butterfly<T: FftNum>(len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
     let id_f32 = TypeId::of::<f32>();
@@ -87,7 +87,7 @@ struct FcmaF32Butterfly7<T> {
 
 boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly7, 7, |this: &FcmaF32Butterfly7<_>| this.direction);
 impl<T: FftNum> FcmaF32Butterfly7<T> {
-    /// Safety: The current machine must support the fcma instruction set
+    /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
@@ -186,7 +186,7 @@ struct FcmaF64Butterfly7<T> {
 
 boilerplate_fft_fcma_f64_butterfly!(FcmaF64Butterfly7, 7, |this: &FcmaF64Butterfly7<_>| this.direction);
 impl<T: FftNum> FcmaF64Butterfly7<T> {
-    /// Safety: The current machine must support the fcma instruction set
+    /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
@@ -256,7 +256,7 @@ struct FcmaF32Butterfly11<T> {
 
 boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly11, 11, |this: &FcmaF32Butterfly11<_>| this.direction);
 impl<T: FftNum> FcmaF32Butterfly11<T> {
-    /// Safety: The current machine must support the fcma instruction set
+    /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
@@ -403,7 +403,7 @@ struct FcmaF64Butterfly11<T> {
 
 boilerplate_fft_fcma_f64_butterfly!(FcmaF64Butterfly11, 11, |this: &FcmaF64Butterfly11<_>| this.direction);
 impl<T: FftNum> FcmaF64Butterfly11<T> {
-    /// Safety: The current machine must support the fcma instruction set
+    /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
@@ -513,7 +513,7 @@ struct FcmaF32Butterfly13<T> {
 
 boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly13, 13, |this: &FcmaF32Butterfly13<_>| this.direction);
 impl<T: FftNum> FcmaF32Butterfly13<T> {
-    /// Safety: The current machine must support the fcma instruction set
+    /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
@@ -690,7 +690,7 @@ struct FcmaF64Butterfly13<T> {
 
 boilerplate_fft_fcma_f64_butterfly!(FcmaF64Butterfly13, 13, |this: &FcmaF64Butterfly13<_>| this.direction);
 impl<T: FftNum> FcmaF64Butterfly13<T> {
-    /// Safety: The current machine must support the fcma instruction set
+    /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
@@ -826,7 +826,7 @@ struct FcmaF32Butterfly17<T> {
 
 boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly17, 17, |this: &FcmaF32Butterfly17<_>| this.direction);
 impl<T: FftNum> FcmaF32Butterfly17<T> {
-    /// Safety: The current machine must support the fcma instruction set
+    /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
@@ -1075,7 +1075,7 @@ struct FcmaF64Butterfly17<T> {
 
 boilerplate_fft_fcma_f64_butterfly!(FcmaF64Butterfly17, 17, |this: &FcmaF64Butterfly17<_>| this.direction);
 impl<T: FftNum> FcmaF64Butterfly17<T> {
-    /// Safety: The current machine must support the fcma instruction set
+    /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
@@ -1275,7 +1275,7 @@ struct FcmaF32Butterfly19<T> {
 
 boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly19, 19, |this: &FcmaF32Butterfly19<_>| this.direction);
 impl<T: FftNum> FcmaF32Butterfly19<T> {
-    /// Safety: The current machine must support the fcma instruction set
+    /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
@@ -1566,7 +1566,7 @@ struct FcmaF64Butterfly19<T> {
 
 boilerplate_fft_fcma_f64_butterfly!(FcmaF64Butterfly19, 19, |this: &FcmaF64Butterfly19<_>| this.direction);
 impl<T: FftNum> FcmaF64Butterfly19<T> {
-    /// Safety: The current machine must support the fcma instruction set
+    /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
@@ -1804,7 +1804,7 @@ struct FcmaF32Butterfly23<T> {
 
 boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly23, 23, |this: &FcmaF32Butterfly23<_>| this.direction);
 impl<T: FftNum> FcmaF32Butterfly23<T> {
-    /// Safety: The current machine must support the fcma instruction set
+    /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
@@ -2191,7 +2191,7 @@ struct FcmaF64Butterfly23<T> {
 
 boilerplate_fft_fcma_f64_butterfly!(FcmaF64Butterfly23, 23, |this: &FcmaF64Butterfly23<_>| this.direction);
 impl<T: FftNum> FcmaF64Butterfly23<T> {
-    /// Safety: The current machine must support the fcma instruction set
+    /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
@@ -2517,7 +2517,7 @@ struct FcmaF32Butterfly29<T> {
 
 boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly29, 29, |this: &FcmaF32Butterfly29<_>| this.direction);
 impl<T: FftNum> FcmaF32Butterfly29<T> {
-    /// Safety: The current machine must support the fcma instruction set
+    /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
@@ -3078,7 +3078,7 @@ struct FcmaF64Butterfly29<T> {
 
 boilerplate_fft_fcma_f64_butterfly!(FcmaF64Butterfly29, 29, |this: &FcmaF64Butterfly29<_>| this.direction);
 impl<T: FftNum> FcmaF64Butterfly29<T> {
-    /// Safety: The current machine must support the fcma instruction set
+    /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
@@ -3566,7 +3566,7 @@ struct FcmaF32Butterfly31<T> {
 
 boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly31, 31, |this: &FcmaF32Butterfly31<_>| this.direction);
 impl<T: FftNum> FcmaF32Butterfly31<T> {
-    /// Safety: The current machine must support the fcma instruction set
+    /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
@@ -4193,7 +4193,7 @@ struct FcmaF64Butterfly31<T> {
 
 boilerplate_fft_fcma_f64_butterfly!(FcmaF64Butterfly31, 31, |this: &FcmaF64Butterfly31<_>| this.direction);
 impl<T: FftNum> FcmaF64Butterfly31<T> {
-    /// Safety: The current machine must support the fcma instruction set
+    /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
