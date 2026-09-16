@@ -13,7 +13,7 @@
 //! style, so folding it in would be a planner change to measure, not a deduplication.
 
 use crate::common::RadixFactor;
-use crate::math_utils::PrimeFactors;
+use crate::math_utils::{split_cross_len, PrimeFactors};
 use crate::FftNum;
 
 use std::any::TypeId;
@@ -171,7 +171,7 @@ pub fn design_radixn(factors: &PrimeFactors, complex_per_vector: usize) -> Optio
     // Split what's left into cross-FFT layers. Every factor too big for a layer went into the
     // base above, so the split can't fail, and the same expect guards it in `src/plan.rs`.
     Some(RadixNPlan::RadixN {
-        factors: RadixFactor::split_cross_len(cross_len)
+        factors: split_cross_len(cross_len)
             .expect("Every factor RadixN can't handle should have gone into the base"),
         base_len,
     })
