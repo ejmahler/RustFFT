@@ -20,6 +20,19 @@ use crate::{Fft, FftDirection, FftNum};
 mod adapters;
 pub use adapters::*;
 
+#[cfg(any(
+    all(target_arch = "aarch64", feature = "neon"),
+    all(target_arch = "x86_64", feature = "sse"),
+    all(target_arch = "wasm32", feature = "wasm_simd"),
+))]
+mod cost;
+#[cfg(any(
+    all(target_arch = "aarch64", feature = "neon"),
+    all(target_arch = "x86_64", feature = "sse"),
+    all(target_arch = "wasm32", feature = "wasm_simd"),
+))]
+pub use cost::{spec_cost, CostModel, InstructionSet};
+
 // ---------------------------------------------------------------------------
 // Planner-independent recipe description
 // ---------------------------------------------------------------------------
@@ -288,6 +301,31 @@ pub trait TunablePlanner<T: FftNum>: Sized {
     fn has_radixn() -> bool {
         false
     }
+
+    /// The recipe the estimating planner picks for `len`, or `None` for a planner that does not
+    /// estimate. [`plan`](Self::plan) is always the fixed planner's pick.
+    fn estimate(&mut self, _len: usize) -> Option<Arc<Spec>> {
+        None
+    }
+
+    /// The estimating planner's current cost model, or `None` for a planner that does not
+    /// estimate.
+    #[cfg(any(
+        all(target_arch = "aarch64", feature = "neon"),
+        all(target_arch = "x86_64", feature = "sse"),
+        all(target_arch = "wasm32", feature = "wasm_simd"),
+    ))]
+    fn cost_model(&self) -> Option<CostModel> {
+        None
+    }
+
+    /// Replace the estimating planner's cost model, for fitting its weights.
+    #[cfg(any(
+        all(target_arch = "aarch64", feature = "neon"),
+        all(target_arch = "x86_64", feature = "sse"),
+        all(target_arch = "wasm32", feature = "wasm_simd"),
+    ))]
+    fn set_cost_model(&mut self, _cost_model: CostModel) {}
 }
 
 // ---------------------------------------------------------------------------
@@ -317,30 +355,20 @@ pub fn check_unambiguous(spec: &Spec, seen: &mut HashMap<usize, String>) -> Resu
     Ok(())
 }
 
-/// Plausible alternatives to the planner's choice for `len`, the planner's own pick first.
+/// Plausible alternatives to the planner's choice for `len`, the fixed planner's pick first.
 ///
-/// Deliberately broader than what any planner would consider: the point is to find what the best
-/// available recipe actually is, so a planner's pick can be scored against it.
+/// Deliberately broader than what the estimating planner considers: every split in both orders,
+/// and Bluestein's at every length. The point is to find what the best available recipe actually
+/// is, so a planner's pick can be scored against it, and it is how each of the estimating
+/// planner's shortcuts was justified. Re-justifying them after a kernel change needs the same
+/// breadth.
+///
+/// Inner recipes come from the fixed planner, so this searches one level deep.
 pub fn candidates<T: FftNum, P: TunablePlanner<T>>(planner: &mut P, len: usize) -> Vec<Arc<Spec>> {
-    candidates_inner(planner, len, false)
-}
-
-/// `candidates`, optionally skipping the wider-of-the-two-first ordering of each split.
-///
-/// The prune has to happen here rather than as a filter afterwards. Generating a candidate costs
-/// far more than pricing one: it renders the spec to a string, scans the seen-list linearly, and
-/// walks the tree to check it is unambiguous. Filtering after the fact at length 1200 cut the
-/// candidate count from 48 to 32 but plan time only from 211us to 181us; skipping the work up
-/// front is what actually saves it.
-fn candidates_inner<T: FftNum, P: TunablePlanner<T>>(
-    planner: &mut P,
-    len: usize,
-    planning: bool,
-) -> Vec<Arc<Spec>> {
     let mut out: Vec<Arc<Spec>> = vec![planner.plan(len)];
     let mut seen: Vec<String> = vec![to_spec_string(&out[0])];
 
-    let mut push = |spec: Arc<Spec>, out: &mut Vec<Arc<Spec>>, seen: &mut Vec<String>| {
+    let push = |spec: Arc<Spec>, out: &mut Vec<Arc<Spec>>, seen: &mut Vec<String>| {
         if spec.len() != len {
             return;
         }
@@ -359,24 +387,15 @@ fn candidates_inner<T: FftNum, P: TunablePlanner<T>>(
             continue;
         }
         let right_len = len / left_len;
-        if planning && left_len > right_len {
-            continue;
-        }
         let left = planner.plan(left_len);
         let right = planner.plan(right_len);
         let coprime = gcd(left_len, right_len) == 1;
         let small = left_len < 33 && right_len < 33;
 
-        // Both orderings, unless pruning. The loop above already restricts `left_len` to the
-        // smaller half when pruning, so the surviving order is the smaller-width-first one.
-        let orders: Vec<(Arc<Spec>, Arc<Spec>)> = if planning {
-            vec![(Arc::clone(&left), Arc::clone(&right))]
-        } else {
-            vec![
-                (Arc::clone(&left), Arc::clone(&right)),
-                (Arc::clone(&right), Arc::clone(&left)),
-            ]
-        };
+        let orders = [
+            (Arc::clone(&left), Arc::clone(&right)),
+            (Arc::clone(&right), Arc::clone(&left)),
+        ];
         for (left, right) in orders {
             for small_flag in if small {
                 vec![false, true]
@@ -483,33 +502,7 @@ fn candidates_inner<T: FftNum, P: TunablePlanner<T>>(
     // pattern is a composite whose factorisation forces Rader's onto a large prime factor:
     // Rader's permutation work is scalar, so at f32 it does not shrink while everything around
     // it does.
-    // When planning, offer Bluestein's only where the direct route can actually be bad: some
-    // prime factor with no butterfly of its own, which is what forces Rader's or an awkward
-    // split. If every prime factor has a butterfly the decomposition is all butterflies and
-    // Bluestein's, which needs an inner FFT of at least 2*len - 1, cannot compete. Across the
-    // four 1..1000 sweeps the model picked Bluestein's at 1315 lengths and **not one** of them
-    // had all its prime factors covered, so this costs nothing and skips the enumeration at
-    // every smooth length. `candidates` still offers it everywhere, which is how that was
-    // checked and how it would be re-checked.
-    let bluesteins_worth_it = !planning || {
-        let butterflies = P::butterfly_lens();
-        let mut n = len;
-        let mut uncovered = false;
-        let mut d = 2;
-        while d * d <= n {
-            while n % d == 0 {
-                uncovered |= !butterflies.contains(&d);
-                n /= d;
-            }
-            d += 1;
-        }
-        if n > 1 {
-            uncovered |= !butterflies.contains(&n);
-        }
-        uncovered
-    };
-
-    if len > 3 && bluesteins_worth_it {
+    if len > 3 {
         let min_inner = 2 * len - 1;
         let mut inner_lens: Vec<usize> = Vec::new();
         for multiplier in [1usize, 3, 5, 7, 9, 15] {
@@ -547,52 +540,6 @@ fn candidates_inner<T: FftNum, P: TunablePlanner<T>>(
 /// planner's pick, Radix4 and RadixN shapes, Rader's and Bluestein's) and only splits are
 /// dropped, most lopsided first, on the grounds that a split with a tiny side is mostly just its
 /// large side plus a transpose.
-/// What an estimating planner would actually enumerate at `len`.
-///
-/// Identical to `candidates_capped`, except that it returns the fixed planner's pick immediately
-/// at lengths where there is nothing to decide. Enumeration is pure overhead there, and it is the
-/// overhead that matters most: plan-time is a large fraction of plan-plus-build at small lengths
-/// and a negligible one at large lengths, so the cheapest lengths are exactly where an estimating
-/// planner can least afford to enumerate.
-///
-/// Two classes need no decision, and both were checked against measurement rather than assumed:
-///
-/// - **A length with its own butterfly.** A single hand-written kernel beats any decomposition.
-///   Over lengths 8..128 on NEON the bare butterfly is fastest at all fifteen such lengths, and
-///   is never beaten by a split.
-/// - **A power of two.** Radix4 wins, and the fixed planner already picks the right base, which
-///   is the part that is not obvious: at 1024 `r4(3,b16)` beats `r4(4,b4)` by 1.15x. Across four
-///   datasets, at every power of two from 64 up the fixed planner's pick is exactly the fastest
-///   measured candidate, regret 1.000.
-///
-/// It also drops the wider-of-the-two-first ordering of every split. Each two-way split is
-/// otherwise enumerated twice, which roughly doubles the candidate count at a highly composite
-/// length for almost no information: the two orderings differ only in how `transpose_small` walks
-/// the rectangle and in which inner FFT runs first. The smaller-width ordering is the better one
-/// in 90 to 97% of measured pairs for the Small variants, and for the general variants the two
-/// are usually indistinguishable, which makes dropping one free rather than merely cheap.
-///
-/// Measured over four datasets, that keeps 58 to 63% of candidates for a geometric mean regret of
-/// 1.0016 or better against the full set. The worst single case is 1.129x at length 62 on NEON
-/// f32, where `gts(b31,b2)` beats `gts(b2,b31)`; both known exceptions involve b31 or b32, where
-/// the parallel-pair f32 butterflies make the chunk count matter in a way none of this models.
-/// The planner's own pick is always element zero, so pruning can never leave an estimating
-/// planner worse than the fixed one.
-///
-/// `candidates` and `candidates_capped` stay exhaustive, because scoring a planner's pick needs
-/// the alternatives even where a planner would not look at them. That is how every claim above
-/// was established, and re-establishing them after a kernel change needs the same breadth.
-pub fn plan_candidates<T: FftNum, P: TunablePlanner<T>>(
-    planner: &mut P,
-    len: usize,
-    cap: usize,
-) -> Vec<Arc<Spec>> {
-    if len.is_power_of_two() || P::butterfly_lens().contains(&len) {
-        return vec![planner.plan(len)];
-    }
-    cap_list(candidates_inner(planner, len, true), cap)
-}
-
 pub fn candidates_capped<T: FftNum, P: TunablePlanner<T>>(
     planner: &mut P,
     len: usize,

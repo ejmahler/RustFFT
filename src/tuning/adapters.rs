@@ -236,7 +236,10 @@ const SIMD_RADIXN_BASES: [usize; 12] = [4, 5, 6, 7, 8, 9, 10, 12, 15, 16, 24, 32
 macro_rules! simd_adapter {
     ($tuner:ident, $label:literal, $planner:path, $recipe:path, $prime_lens:path) => {
         pub struct $tuner<T: FftNum> {
+            // The fixed planner, whose picks `plan` reports.
             planner: $planner,
+            // The estimating planner, whose picks `estimate` reports.
+            estimator: $planner,
         }
 
         impl<T: FftNum> $tuner<T> {
@@ -382,8 +385,12 @@ macro_rules! simd_adapter {
             }
 
             fn new() -> Self {
+                let mut planner =
+                    <$planner>::new().expect(concat!("this machine does not support ", $label));
+                planner.set_estimating(false);
                 Self {
-                    planner: <$planner>::new()
+                    planner,
+                    estimator: <$planner>::new()
                         .expect(concat!("this machine does not support ", $label)),
                 }
             }
@@ -391,6 +398,19 @@ macro_rules! simd_adapter {
             fn plan(&mut self, len: usize) -> Arc<Spec> {
                 let recipe = self.planner.design_fft_for_len(len);
                 Self::to_spec(&recipe)
+            }
+
+            fn estimate(&mut self, len: usize) -> Option<Arc<Spec>> {
+                let recipe = self.estimator.design_fft_for_len(len);
+                Some(Self::to_spec(&recipe))
+            }
+
+            fn cost_model(&self) -> Option<super::CostModel> {
+                Some(self.estimator.cost_model())
+            }
+
+            fn set_cost_model(&mut self, cost_model: super::CostModel) {
+                self.estimator.set_cost_model(cost_model);
             }
 
             fn build(&mut self, spec: &Spec, direction: FftDirection) -> Arc<dyn Fft<T>> {

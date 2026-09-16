@@ -443,6 +443,12 @@ impl<T: FftNum> FftPlannerSse<T> {
         self.clear_caches();
     }
 
+    /// The cost model the estimating planner uses.
+    #[cfg(feature = "tuning")]
+    pub(crate) fn cost_model(&self) -> CostModel {
+        self.cost_model
+    }
+
     /// Replace the cost model's weights, for fitting them. Clears every cache.
     #[cfg(feature = "tuning")]
     pub(crate) fn set_cost_model(&mut self, cost_model: CostModel) {

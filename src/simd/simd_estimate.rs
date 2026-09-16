@@ -38,7 +38,7 @@ const BLUESTEIN_MULTIPLIERS: [usize; 6] = [1, 3, 5, 7, 9, 15];
 
 /// The top level of a recipe, with its inner FFTs given only by length.
 #[derive(Debug, Clone, PartialEq)]
-pub enum Shape {
+pub(crate) enum Shape {
     Butterfly(usize),
     Radix4 {
         k: u32,
@@ -293,7 +293,7 @@ impl CostModel {
     ///
     /// `None` if a butterfly has no counted entry, so a gap in the tables fails loudly rather than
     /// pricing a recipe as free.
-    pub fn cost(&self, shape: &Shape, child_cost: impl Fn(usize) -> f64) -> Option<f64> {
+    pub(crate) fn cost(&self, shape: &Shape, child_cost: impl Fn(usize) -> f64) -> Option<f64> {
         let cpv = self.complex_per_vector as f64;
         Some(match shape {
             Shape::Butterfly(len) => {
@@ -417,7 +417,7 @@ pub fn has_choice(len: usize, all_butterflies: &[usize]) -> bool {
 /// roughly doubles the candidate count at a highly composite length for almost no information:
 /// the smaller-width ordering is the better one in 90 to 97% of measured pairs for the `Small`
 /// variants, and the general variants are usually indistinguishable.
-pub fn candidates(
+pub(crate) fn candidates(
     len: usize,
     factors: &PrimeFactors,
     fixed: Shape,
