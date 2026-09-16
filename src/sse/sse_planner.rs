@@ -239,7 +239,7 @@ impl<T: FftNum> FftPlannerSse<T> {
     }
 
     // Make a recipe for a length
-    fn design_fft_for_len(&mut self, len: usize) -> Arc<Recipe> {
+    pub(crate) fn design_fft_for_len(&mut self, len: usize) -> Arc<Recipe> {
         if len < 1 {
             Arc::new(Recipe::Dft(len))
         } else if let Some(recipe) = self.recipe_cache.get(&len) {
@@ -253,7 +253,7 @@ impl<T: FftNum> FftPlannerSse<T> {
     }
 
     // Create the fft from a recipe, take from cache if possible
-    fn build_fft(&mut self, recipe: &Recipe, direction: FftDirection) -> Arc<dyn Fft<T>> {
+    pub(crate) fn build_fft(&mut self, recipe: &Recipe, direction: FftDirection) -> Arc<dyn Fft<T>> {
         let len = recipe.len();
         if let Some(instance) = self.algorithm_cache.get(len, direction) {
             instance

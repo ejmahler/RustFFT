@@ -611,5 +611,10 @@ mod wasm_simd {
 
 pub use self::wasm_simd::wasm_simd_planner::FftPlannerWasmSimd;
 
+// Internal support for the planner-tuning tools. Not part of the public API.
+#[cfg(feature = "tuning")]
+#[doc(hidden)]
+pub mod tuning;
+
 #[cfg(test)]
 mod test_utils;

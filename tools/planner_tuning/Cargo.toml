@@ -1,0 +1,26 @@
+[package]
+name = "planner_tuning"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# The SIMD planner available depends on the architecture, so the feature does too. Both builds
+# always include the scalar planner, which needs no feature of its own.
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+rustfft = { path = "../..", default-features = false, features = ["neon", "tuning"] }
+
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+rustfft = { path = "../..", default-features = false, features = ["sse", "tuning"] }
+
+# Wasm needs a runtime with a working monotonic clock to time anything, so build for
+# wasm32-wasip1 and run under wasmtime rather than wasm32-unknown-unknown.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+rustfft = { path = "../..", default-features = false, features = ["wasm_simd", "tuning"] }
+
+[target.'cfg(not(any(target_arch = "aarch64", target_arch = "x86_64", target_arch = "wasm32")))'.dependencies]
+rustfft = { path = "../..", default-features = false, features = ["tuning"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
