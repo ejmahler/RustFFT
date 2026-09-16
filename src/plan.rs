@@ -14,7 +14,7 @@ use crate::FftPlannerAvx;
 use crate::FftPlannerNeon;
 use crate::FftPlannerSse;
 
-use crate::math_utils::PrimeFactors;
+use crate::math_utils::{split_cross_len, PrimeFactors};
 
 enum ChosenFftPlanner<T: FftNum> {
     Scalar(FftPlannerScalar<T>),
@@ -566,7 +566,7 @@ impl<T: FftNum> FftPlannerScalar<T> {
 
         // we weren't able to use radix4, so fall back to RadixN
         // theoretically we could do this with the p2, p3, p5 etc values above, but our choice of base knocked them out of sync
-        let factors = RadixFactor::split_cross_len(cross_len)
+        let factors = split_cross_len(cross_len)
             .expect("Every factor RadixN can't handle should have gone into the base");
 
         Arc::new(Recipe::RadixN { factors, base_fft })
