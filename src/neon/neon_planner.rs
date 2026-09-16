@@ -18,7 +18,7 @@ use crate::neon::neon_radixn::*;
 use crate::Fft;
 
 use crate::math_utils::{PrimeFactor, PrimeFactors};
-use crate::simd_planner::{self, RadixNPlan};
+use crate::simd::simd_planner::{self, RadixNPlan};
 
 const MIN_RADIX4_BITS: u32 = 6; // smallest size to consider radix 4 an option is 2^6 = 64
 

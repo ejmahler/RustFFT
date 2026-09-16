@@ -5,9 +5,8 @@
 //! cross-FFT layers use SIMD column butterflies instead of the scalar ones, so a whole vector of
 //! columns is processed per butterfly call.
 //!
-//! Everything here is generic over `RadixNVector`, which is the handful of vector operations the
-//! algorithm needs. A backend implements that trait once per vector type and gets the algorithm,
-//! so `SimdRadixN` is the only copy of it.
+//! Everything here is generic over `SimdVector`, from `simd_vector.rs`. A backend implements that
+//! trait once per vector type and gets the algorithm, so `SimdRadixN` is the only copy of it.
 //!
 //! Because a column butterfly consumes `COMPLEX_PER_VECTOR` columns at a time, the column count at
 //! every layer has to be a whole number of vectors. The column count starts at `base_len` and only
@@ -23,90 +22,10 @@ use crate::array_utils::{reverse_remainders, workaround_transmute_mut, Transpose
 use crate::common::{FftNum, RadixFactor};
 use crate::{Direction, Fft, FftDirection, Length};
 
-/// Everything `SimdRadixN` needs from a backend's vector type.
-///
-/// Radix 2 and 4 are vector-generic in every backend, so they map straight onto the backend's
-/// vector trait. Radix 3, 5, 6 and 7 only exist as element-type-specific structs holding
-/// precomputed twiddles, so this trait pairs each vector type with its own set of them. For f64 a
-/// vector is one complex number and the plain `perform_fft_direct` is already a single column; for
-/// f32 a vector is two complex numbers and `perform_parallel_fft_direct` does two columns at once.
-///
-/// Safety: every method here requires the current machine to support the backend's SIMD
-/// instruction set.
-pub trait RadixNVector: Copy + Send + Sync + Sized {
-    const COMPLEX_PER_VECTOR: usize;
-
-    /// The scalar this vector holds. Always the same type as the `T` of the `SimdRadixN` using it.
-    type ScalarType: FftNum;
-
-    /// The backend's precomputed 90 degree rotation, which the radix 4 butterfly needs.
-    type Rotation: Copy + Send + Sync;
-
-    type Butterfly3: Send + Sync;
-    type Butterfly5: Send + Sync;
-    type Butterfly6: Send + Sync;
-    type Butterfly7: Send + Sync;
-
-    unsafe fn load(data: &[Complex<Self::ScalarType>], index: usize) -> Self;
-    unsafe fn store(data: &mut [Complex<Self::ScalarType>], value: Self, index: usize);
-
-    /// Pairwise multiply the complex numbers in `left` with the complex numbers in `right`.
-    unsafe fn mul_complex(left: Self, right: Self) -> Self;
-
-    /// Generates a chunk of twiddle factors starting at (X,Y) and incrementing X
-    /// `COMPLEX_PER_VECTOR` times.
-    unsafe fn make_mixedradix_twiddle_chunk(
-        x: usize,
-        y: usize,
-        len: usize,
-        direction: FftDirection,
-    ) -> Self;
-
-    unsafe fn make_rotate90(direction: FftDirection) -> Self::Rotation;
-    unsafe fn make_butterfly3(direction: FftDirection) -> Self::Butterfly3;
-    unsafe fn make_butterfly5(direction: FftDirection) -> Self::Butterfly5;
-    unsafe fn make_butterfly6(direction: FftDirection) -> Self::Butterfly6;
-    unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7;
-
-    /// Each of these interprets the input as rows of a `COMPLEX_PER_VECTOR`-by-N 2D array, and
-    /// computes parallel butterflies down the columns of the 2D array.
-    unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2];
-    unsafe fn column_butterfly3(bf: &Self::Butterfly3, rows: [Self; 3]) -> [Self; 3];
-    unsafe fn column_butterfly4(rows: [Self; 4], rotation: Self::Rotation) -> [Self; 4];
-    unsafe fn column_butterfly5(bf: &Self::Butterfly5, rows: [Self; 5]) -> [Self; 5];
-    unsafe fn column_butterfly6(bf: &Self::Butterfly6, rows: [Self; 6]) -> [Self; 6];
-    unsafe fn column_butterfly7(bf: &Self::Butterfly7, rows: [Self; 7]) -> [Self; 7];
-
-    /// The three `fft_helper_*` wrappers from the backend's `*_common.rs`, which run the whole
-    /// chunk loop with the backend's target feature enabled so that things like loading twiddle
-    /// factor registers can be lifted out of the loop.
-    unsafe fn fft_helper_immut<E>(
-        input: &[E],
-        output: &mut [E],
-        scratch: &mut [E],
-        chunk_size: usize,
-        required_scratch: usize,
-        chunk_fn: impl FnMut(&[E], &mut [E], &mut [E]),
-    );
-    unsafe fn fft_helper_outofplace<E>(
-        input: &mut [E],
-        output: &mut [E],
-        scratch: &mut [E],
-        chunk_size: usize,
-        required_scratch: usize,
-        chunk_fn: impl FnMut(&mut [E], &mut [E], &mut [E]),
-    );
-    unsafe fn fft_helper_inplace<E>(
-        buffer: &mut [E],
-        scratch: &mut [E],
-        chunk_size: usize,
-        required_scratch: usize,
-        chunk_fn: impl FnMut(&mut [E], &mut [E]),
-    );
-}
+use super::simd_vector::SimdVector;
 
 /// The per-layer cross-FFT kernels, holding whatever precomputed state each radix needs.
-enum InternalRadixFactor<V: RadixNVector> {
+enum InternalRadixFactor<V: SimdVector> {
     Factor2,
     Factor3(V::Butterfly3),
     Factor4(V::Rotation),
@@ -115,7 +34,7 @@ enum InternalRadixFactor<V: RadixNVector> {
     Factor7(V::Butterfly7),
 }
 
-impl<V: RadixNVector> InternalRadixFactor<V> {
+impl<V: SimdVector> InternalRadixFactor<V> {
     fn radix(&self) -> usize {
         match self {
             InternalRadixFactor::Factor2 => 2,
@@ -130,7 +49,7 @@ impl<V: RadixNVector> InternalRadixFactor<V> {
 
 /// FFT algorithm for lengths that factor into small radixes, SIMD accelerated version.
 /// This is designed to be used via a Planner, and not created directly.
-pub struct SimdRadixN<V: RadixNVector, T> {
+pub struct SimdRadixN<V: SimdVector, T> {
     twiddles: Box<[V]>,
 
     base_fft: Arc<dyn Fft<T>>,
@@ -150,7 +69,7 @@ pub struct SimdRadixN<V: RadixNVector, T> {
     immut_scratch_len: usize,
 }
 
-impl<V: RadixNVector, T: FftNum> SimdRadixN<V, T> {
+impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
     /// Constructs a SimdRadixN which computes FFTs of length `factor_product * base_fft.len()`.
     pub fn new(factors: &[RadixFactor], base_fft: Arc<dyn Fft<T>>) -> Self {
         // Internal sanity check: Make sure that the vector's scalar type is T.
@@ -394,7 +313,7 @@ impl<V: RadixNVector, T: FftNum> SimdRadixN<V, T> {
     }
 }
 
-impl<V: RadixNVector, T: FftNum> Fft<T> for SimdRadixN<V, T> {
+impl<V: SimdVector, T: FftNum> Fft<T> for SimdRadixN<V, T> {
     fn process_immutable_with_scratch(
         &self,
         input: &[Complex<T>],
@@ -459,13 +378,13 @@ impl<V: RadixNVector, T: FftNum> Fft<T> for SimdRadixN<V, T> {
         self.immut_scratch_len
     }
 }
-impl<V: RadixNVector, T> Length for SimdRadixN<V, T> {
+impl<V: SimdVector, T> Length for SimdRadixN<V, T> {
     #[inline(always)]
     fn len(&self) -> usize {
         self.len
     }
 }
-impl<V: RadixNVector, T> Direction for SimdRadixN<V, T> {
+impl<V: SimdVector, T> Direction for SimdRadixN<V, T> {
     #[inline(always)]
     fn fft_direction(&self) -> FftDirection {
         self.direction
@@ -477,7 +396,7 @@ impl<V: RadixNVector, T> Direction for SimdRadixN<V, T> {
 /// This is `chunks_exact_mut` without the divide it does to find the chunk count. At short lengths
 /// that one divide per layer is a measurable share of the whole FFT.
 #[inline(always)]
-unsafe fn cross_layer_chunks<V: RadixNVector, const RADIX: usize, F>(
+unsafe fn cross_layer_chunks<V: SimdVector, const RADIX: usize, F>(
     data: &mut [Complex<V::ScalarType>],
     twiddles: &[V],
     num_columns: usize,
@@ -530,7 +449,7 @@ fn table_transpose<T: Copy, const D: usize>(
 /// Unrolled two vectors at a time, which is what the SIMD Radix4's `butterfly_4` does and is what
 /// gets the two independent dependency chains needed to keep the FMA pipeline busy.
 #[inline(always)]
-unsafe fn cross_layer<V: RadixNVector, const RADIX: usize, F>(
+unsafe fn cross_layer<V: SimdVector, const RADIX: usize, F>(
     data: &mut [Complex<V::ScalarType>],
     twiddles: &[V],
     num_columns: usize,
@@ -606,7 +525,7 @@ pub mod test_bodies {
     /// Every empty, one-factor and two-factor recipe over each of `bases`, both directions.
     pub fn factor_pairs<V>(bases: &[usize])
     where
-        V: RadixNVector,
+        V: SimdVector,
         V::ScalarType: Float + SampleUniform,
     {
         for base in bases {
@@ -634,8 +553,8 @@ pub mod test_bodies {
     /// has factors above 7 (for example 11 * 13 = 143).
     pub fn composite_base<V32, V64>()
     where
-        V32: RadixNVector<ScalarType = f32>,
-        V64: RadixNVector<ScalarType = f64>,
+        V32: SimdVector<ScalarType = f32>,
+        V64: SimdVector<ScalarType = f64>,
     {
         let mut planner64 = crate::FftPlannerScalar::<f64>::new();
         let mut planner32 = crate::FftPlannerScalar::<f32>::new();
@@ -674,8 +593,8 @@ pub mod test_bodies {
     /// naive `Dft` the result is checked against affordable.
     pub fn large_recipes<V32, V64>()
     where
-        V32: RadixNVector<ScalarType = f32>,
-        V64: RadixNVector<ScalarType = f64>,
+        V32: SimdVector<ScalarType = f32>,
+        V64: SimdVector<ScalarType = f64>,
     {
         use RadixFactor::*;
         // (factors, f64 base, f32 base). f32 needs an even base, so it gets its own.
@@ -695,8 +614,8 @@ pub mod test_bodies {
     /// `cargo test --release -- --ignored radixn_six_layers`.
     pub fn six_layers<V32, V64>()
     where
-        V32: RadixNVector<ScalarType = f32>,
-        V64: RadixNVector<ScalarType = f64>,
+        V32: SimdVector<ScalarType = f32>,
+        V64: SimdVector<ScalarType = f64>,
     {
         use RadixFactor::*;
         let cases: [(&[RadixFactor], usize, usize); 1] = [(
@@ -710,8 +629,8 @@ pub mod test_bodies {
     /// Runs each (factors, f64 base, f32 base) case in both directions.
     fn recipes<V32, V64>(cases: &[(&[RadixFactor], usize, usize)])
     where
-        V32: RadixNVector<ScalarType = f32>,
-        V64: RadixNVector<ScalarType = f64>,
+        V32: SimdVector<ScalarType = f32>,
+        V64: SimdVector<ScalarType = f64>,
     {
         for (factors, base64, base32) in cases {
             for direction in [FftDirection::Forward, FftDirection::Inverse] {
@@ -723,7 +642,7 @@ pub mod test_bodies {
 
     fn check<V>(factors: &[RadixFactor], base_fft: Arc<dyn Fft<V::ScalarType>>)
     where
-        V: RadixNVector,
+        V: SimdVector,
         V::ScalarType: Float + SampleUniform,
     {
         let len = base_fft.len() * factors.iter().map(|f| f.radix()).product::<usize>();

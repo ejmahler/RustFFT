@@ -6,7 +6,7 @@ use crate::algorithm::{
 };
 use crate::common::RadixFactor;
 use crate::math_utils::PrimeFactor;
-use crate::simd_planner::{self, RadixNPlan};
+use crate::simd::simd_planner::{self, RadixNPlan};
 use crate::wasm_simd::*;
 use crate::{fft_cache::FftCache, math_utils::PrimeFactors, Fft, FftDirection, FftNum};
 use std::{any::TypeId, collections::HashMap, sync::Arc};
