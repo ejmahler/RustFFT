@@ -6,6 +6,7 @@ use crate::algorithm::{
 };
 use crate::common::RadixFactor;
 use crate::math_utils::PrimeFactor;
+use crate::simd::simd_estimate::{self, CostModel, InstructionSet, Shape};
 use crate::simd::simd_planner::{self, RadixNPlan};
 use crate::wasm_simd::*;
 use crate::{fft_cache::FftCache, math_utils::PrimeFactors, Fft, FftDirection, FftNum};
@@ -146,10 +147,21 @@ impl Recipe {
 ///
 /// Each FFT instance owns [`Arc`s](std::sync::Arc) to its internal data, rather than borrowing it from the planner, so it's perfectly
 /// safe to drop the planner after creating Fft instances.
+///
+/// For lengths with more than one plausible recipe, the planner estimates the cost of each
+/// candidate from instruction counts and a model of memory access, and picks the cheapest. This
+/// means planning a new length takes longer than building a fixed recipe would, but the planner
+/// caches every length it has planned, including the inner lengths of composite FFTs.
 pub struct FftPlannerWasmSimd<T: FftNum> {
     algorithm_cache: FftCache<T>,
     recipe_cache: HashMap<usize, Arc<Recipe>>,
     all_butterflies: Box<[usize]>,
+    // The estimated cost of each length in `recipe_cache`, when estimating.
+    cost_cache: HashMap<usize, f64>,
+    cost_model: CostModel,
+    // False plans with the fixed planner, which is kept for comparison while the
+    // estimating planner is a draft.
+    estimating: bool,
 }
 impl<T: FftNum> FftPlannerWasmSimd<T> {
     /// Creates a new `FftPlannerWasmSimd` instance.
@@ -184,6 +196,12 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
             algorithm_cache: FftCache::new(),
             recipe_cache: HashMap::new(),
             all_butterflies,
+            cost_cache: HashMap::new(),
+            // Placeholder: wasm has no instruction counts of its own yet, so it borrows
+            // NEON's. A quick test on an M1 showed wasm tracking NEON closely, but that is the
+            // same machine, and nothing has been counted or fitted for wasm itself.
+            cost_model: CostModel::for_type::<T>(InstructionSet::Neon),
+            estimating: true,
         })
     }
     /// Returns a `Fft` instance which uses WebAssembly SIMD instructions to compute FFTs of size `len`.
@@ -210,6 +228,7 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
 }
 
 impl<T: FftNum> FftPlannerWasmSimd<T> {
+    // Make a recipe for a length, by estimating or with the fixed planner.
     pub(crate) fn design_fft_for_len(&mut self, len: usize) -> Arc<Recipe> {
         if len < 1 {
             Arc::new(Recipe::Dft(len))
@@ -217,13 +236,207 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
             Arc::clone(&recipe)
         } else {
             let factors = PrimeFactors::compute(len);
-            let recipe = self.design_fft_with_factors(len, factors);
+            let recipe = if self.estimating {
+                self.estimate_fft_with_factors(len, factors)
+            } else {
+                self.design_fft_with_factors(len, factors)
+            };
             self.recipe_cache.insert(len, Arc::clone(&recipe));
             recipe
         }
     }
 
-    pub(crate) fn build_fft(&mut self, recipe: &Recipe, direction: FftDirection) -> Arc<dyn Fft<T>> {
+    // Price every recipe worth considering for this length, and keep the cheapest. The fixed
+    // planner's pick is always one of them, and wins ties.
+    //
+    // Inner FFTs are planned through `design_fft_for_len`, so each length is estimated once, and
+    // the chosen recipe's cost is recorded for the larger lengths built on top of it.
+    fn estimate_fft_with_factors(&mut self, len: usize, factors: PrimeFactors) -> Arc<Recipe> {
+        let fixed = Self::shape_of(&self.design_fft_with_factors(len, factors.clone()));
+        let shapes = if simd_estimate::has_choice(len, &self.all_butterflies) {
+            simd_estimate::candidates(
+                len,
+                &factors,
+                fixed,
+                &self.all_butterflies,
+                simd_planner::complex_per_vector::<T>(),
+            )
+        } else {
+            vec![fixed]
+        };
+
+        let mut best: Option<(f64, Shape)> = None;
+        for shape in shapes {
+            if let Some(cost) = self.price(&shape) {
+                if best
+                    .as_ref()
+                    .map_or(true, |(best_cost, _)| cost < *best_cost)
+                {
+                    best = Some((cost, shape));
+                }
+            }
+        }
+        let (cost, shape) = best
+            .expect("the cost model is missing the counts for one of this planner's butterflies");
+        self.cost_cache.insert(len, cost);
+        self.recipe_for_shape(shape)
+    }
+
+    // The estimated cost of one FFT of this shape, planning its inner FFTs first.
+    fn price(&mut self, shape: &Shape) -> Option<f64> {
+        for child_len in shape.child_lens() {
+            self.design_fft_for_len(child_len);
+        }
+        let costs = &self.cost_cache;
+        self.cost_model.cost(shape, |child_len| costs[&child_len])
+    }
+
+    // The top level of a recipe the fixed planner made, so it can be priced like any other.
+    fn shape_of(recipe: &Recipe) -> Shape {
+        match recipe {
+            Recipe::Dft(_) => unreachable!("the planner only uses a Dft for length 0"),
+            Recipe::Radix4 { k, base_fft } => Shape::Radix4 {
+                k: *k,
+                base_len: base_fft.len(),
+            },
+            Recipe::RadixN { factors, base_fft } => Shape::RadixN {
+                factors: factors.clone(),
+                base_len: base_fft.len(),
+            },
+            Recipe::MixedRadix {
+                left_fft,
+                right_fft,
+            } => Shape::MixedRadix {
+                left_len: left_fft.len(),
+                right_len: right_fft.len(),
+                small: false,
+            },
+            Recipe::MixedRadixSmall {
+                left_fft,
+                right_fft,
+            } => Shape::MixedRadix {
+                left_len: left_fft.len(),
+                right_len: right_fft.len(),
+                small: true,
+            },
+            Recipe::GoodThomasAlgorithm {
+                left_fft,
+                right_fft,
+            } => Shape::GoodThomas {
+                left_len: left_fft.len(),
+                right_len: right_fft.len(),
+                small: false,
+            },
+            Recipe::GoodThomasAlgorithmSmall {
+                left_fft,
+                right_fft,
+            } => Shape::GoodThomas {
+                left_len: left_fft.len(),
+                right_len: right_fft.len(),
+                small: true,
+            },
+            Recipe::RadersAlgorithm { inner_fft } => Shape::Raders {
+                len: inner_fft.len() + 1,
+            },
+            Recipe::BluesteinsAlgorithm { len, inner_fft } => Shape::Bluesteins {
+                len: *len,
+                inner_len: inner_fft.len(),
+            },
+            butterfly => Shape::Butterfly(butterfly.len()),
+        }
+    }
+
+    // Turn a shape into a recipe, with estimated inner FFTs.
+    fn recipe_for_shape(&mut self, shape: Shape) -> Arc<Recipe> {
+        Arc::new(match shape {
+            Shape::Butterfly(len) => {
+                return self
+                    .design_butterfly_algorithm(len)
+                    .expect("a butterfly shape should have a butterfly")
+            }
+            Shape::Radix4 { k, base_len } => Recipe::Radix4 {
+                k,
+                base_fft: self.design_fft_for_len(base_len),
+            },
+            Shape::RadixN { factors, base_len } => Recipe::RadixN {
+                factors,
+                base_fft: self.design_fft_for_len(base_len),
+            },
+            Shape::MixedRadix {
+                left_len,
+                right_len,
+                small,
+            } => {
+                let left_fft = self.design_fft_for_len(left_len);
+                let right_fft = self.design_fft_for_len(right_len);
+                if small {
+                    Recipe::MixedRadixSmall {
+                        left_fft,
+                        right_fft,
+                    }
+                } else {
+                    Recipe::MixedRadix {
+                        left_fft,
+                        right_fft,
+                    }
+                }
+            }
+            Shape::GoodThomas {
+                left_len,
+                right_len,
+                small,
+            } => {
+                let left_fft = self.design_fft_for_len(left_len);
+                let right_fft = self.design_fft_for_len(right_len);
+                if small {
+                    Recipe::GoodThomasAlgorithmSmall {
+                        left_fft,
+                        right_fft,
+                    }
+                } else {
+                    Recipe::GoodThomasAlgorithm {
+                        left_fft,
+                        right_fft,
+                    }
+                }
+            }
+            Shape::Raders { len } => Recipe::RadersAlgorithm {
+                inner_fft: self.design_fft_for_len(len - 1),
+            },
+            Shape::Bluesteins { len, inner_len } => Recipe::BluesteinsAlgorithm {
+                len,
+                inner_fft: self.design_fft_for_len(inner_len),
+            },
+        })
+    }
+
+    /// Switch between the estimating planner and the fixed planner it replaces, for comparing the
+    /// two. Clears every cache, so nothing planned one way is reused the other.
+    #[cfg(any(test, feature = "tuning"))]
+    pub(crate) fn set_estimating(&mut self, estimating: bool) {
+        self.estimating = estimating;
+        self.clear_caches();
+    }
+
+    /// Replace the cost model's weights, for fitting them. Clears every cache.
+    #[cfg(feature = "tuning")]
+    pub(crate) fn set_cost_model(&mut self, cost_model: CostModel) {
+        self.cost_model = cost_model;
+        self.clear_caches();
+    }
+
+    #[cfg(any(test, feature = "tuning"))]
+    fn clear_caches(&mut self) {
+        self.algorithm_cache = FftCache::new();
+        self.recipe_cache.clear();
+        self.cost_cache.clear();
+    }
+
+    pub(crate) fn build_fft(
+        &mut self,
+        recipe: &Recipe,
+        direction: FftDirection,
+    ) -> Arc<dyn Fft<T>> {
         let len = recipe.len();
         if let Some(instance) = self.algorithm_cache.get(len, direction) {
             instance
@@ -635,6 +848,24 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
 #[cfg(test)]
 mod unit_tests {
     use super::*;
+
+    // The recipe tests pin down the fixed planner's decisions. It stays available for comparison
+    // while the estimating planner is a draft.
+    fn fixed<T: FftNum>(mut planner: FftPlannerWasmSimd<T>) -> FftPlannerWasmSimd<T> {
+        planner.set_estimating(false);
+        planner
+    }
+
+    #[test]
+    fn test_estimated_recipes_have_the_planned_length() {
+        // Checks the whole recursion, including Bluestein's inner lengths above the planned one.
+        let mut planner32 = FftPlannerWasmSimd::<f32>::new().unwrap();
+        let mut planner64 = FftPlannerWasmSimd::<f64>::new().unwrap();
+        for len in 0..2000 {
+            assert_eq!(planner32.design_fft_for_len(len).len(), len);
+            assert_eq!(planner64.design_fft_for_len(len).len(), len);
+        }
+    }
     use wasm_bindgen_test::*;
 
     fn is_mixedradix(plan: &Recipe) -> bool {
@@ -682,7 +913,7 @@ mod unit_tests {
     #[wasm_bindgen_test]
     fn test_plan_wasm_simd_trivial() {
         // Length 0 and 1 should use Dft
-        let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
+        let mut planner = fixed(FftPlannerWasmSimd::<f64>::new().unwrap());
         for len in 0..1 {
             let plan = planner.design_fft_for_len(len);
             assert_eq!(*plan, Recipe::Dft(len));
@@ -693,7 +924,7 @@ mod unit_tests {
     #[wasm_bindgen_test]
     fn test_plan_wasm_simd_largepoweroftwo() {
         // Powers of 2 above 6 should use Radix4
-        let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
+        let mut planner = fixed(FftPlannerWasmSimd::<f64>::new().unwrap());
         for pow in 6..32 {
             let len = 1 << pow;
             let plan = planner.design_fft_for_len(len);
@@ -705,7 +936,7 @@ mod unit_tests {
     #[wasm_bindgen_test]
     fn test_plan_wasm_simd_butterflies() {
         // Check that all butterflies are used
-        let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
+        let mut planner = fixed(FftPlannerWasmSimd::<f64>::new().unwrap());
         assert_eq!(*planner.design_fft_for_len(2), Recipe::Butterfly2);
         assert_eq!(*planner.design_fft_for_len(3), Recipe::Butterfly3);
         assert_eq!(*planner.design_fft_for_len(4), Recipe::Butterfly4);
@@ -731,7 +962,7 @@ mod unit_tests {
     fn test_plan_wasm_simd_mixedradix() {
         // Products of several primes that are all too big for a RadixN cross-FFT layer should
         // become MixedRadix
-        let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
+        let mut planner = fixed(FftPlannerWasmSimd::<f64>::new().unwrap());
         for len in [11 * 11 * 13, 11 * 13 * 17, 17 * 19 * 23, 11 * 13 * 17 * 19] {
             let plan = planner.design_fft_for_len(len);
             assert!(is_mixedradix(&plan), "Expected MixedRadix, got {:?}", plan);
@@ -742,7 +973,7 @@ mod unit_tests {
     #[wasm_bindgen_test]
     fn test_plan_wasm_simd_radixn() {
         // Products of several small primes should become RadixN
-        let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
+        let mut planner = fixed(FftPlannerWasmSimd::<f64>::new().unwrap());
         for pow2 in 2..5 {
             for pow3 in 2..5 {
                 for pow5 in 2..5 {
@@ -764,8 +995,8 @@ mod unit_tests {
     fn test_plan_wasm_simd_radixn_f32_needs_an_even_base() {
         // An f32 vector holds two complex numbers, so RadixN needs an even column count and can
         // never take an odd length. Those have to keep falling back to mixed radix.
-        let mut planner32 = FftPlannerWasmSimd::<f32>::new().unwrap();
-        let mut planner64 = FftPlannerWasmSimd::<f64>::new().unwrap();
+        let mut planner32 = fixed(FftPlannerWasmSimd::<f32>::new().unwrap());
+        let mut planner64 = fixed(FftPlannerWasmSimd::<f64>::new().unwrap());
         for len in [1215, 10125, 3125] {
             let plan32 = planner32.design_fft_for_len(len);
             assert!(!is_radixn(&plan32), "Expected no RadixN, got {:?}", plan32);
@@ -780,7 +1011,7 @@ mod unit_tests {
     #[wasm_bindgen_test]
     fn test_plan_wasm_simd_mixedradixsmall() {
         // Products of two "small" lengths < 31 that have a common divisor >1, and isn't a power of 2 should be MixedRadixSmall
-        let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
+        let mut planner = fixed(FftPlannerWasmSimd::<f64>::new().unwrap());
         for len in [5 * 20, 6 * 9, 12 * 15, 10 * 15].iter() {
             let plan = planner.design_fft_for_len(*len);
             assert!(
@@ -794,7 +1025,7 @@ mod unit_tests {
 
     #[wasm_bindgen_test]
     fn test_plan_wasm_simd_goodthomasbutterfly() {
-        let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
+        let mut planner = fixed(FftPlannerWasmSimd::<f64>::new().unwrap());
         for len in [3 * 7, 5 * 7, 11 * 13, 2 * 29].iter() {
             let plan = planner.design_fft_for_len(*len);
             assert!(
@@ -814,7 +1045,7 @@ mod unit_tests {
             181, 191, 193, 197, 199,
         ];
 
-        let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
+        let mut planner = fixed(FftPlannerWasmSimd::<f64>::new().unwrap());
         for len in difficultprimes.iter() {
             let plan = planner.design_fft_for_len(*len);
             assert!(
@@ -835,21 +1066,21 @@ mod unit_tests {
     fn test_wasm_simd_fft_cache() {
         {
             // Check that FFTs are reused if they're both forward
-            let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
+            let mut planner = fixed(FftPlannerWasmSimd::<f64>::new().unwrap());
             let fft_a = planner.plan_fft(1234, FftDirection::Forward);
             let fft_b = planner.plan_fft(1234, FftDirection::Forward);
             assert!(Arc::ptr_eq(&fft_a, &fft_b), "Existing fft was not reused");
         }
         {
             // Check that FFTs are reused if they're both inverse
-            let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
+            let mut planner = fixed(FftPlannerWasmSimd::<f64>::new().unwrap());
             let fft_a = planner.plan_fft(1234, FftDirection::Inverse);
             let fft_b = planner.plan_fft(1234, FftDirection::Inverse);
             assert!(Arc::ptr_eq(&fft_a, &fft_b), "Existing fft was not reused");
         }
         {
             // Check that FFTs are NOT resued if they don't both have the same direction
-            let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
+            let mut planner = fixed(FftPlannerWasmSimd::<f64>::new().unwrap());
             let fft_a = planner.plan_fft(1234, FftDirection::Forward);
             let fft_b = planner.plan_fft(1234, FftDirection::Inverse);
             assert!(
@@ -862,7 +1093,7 @@ mod unit_tests {
     #[wasm_bindgen_test]
     fn test_wasm_simd_recipe_cache() {
         // Check that all butterflies are used
-        let mut planner = FftPlannerWasmSimd::<f64>::new().unwrap();
+        let mut planner = fixed(FftPlannerWasmSimd::<f64>::new().unwrap());
         let fft_a = planner.design_fft_for_len(1234);
         let fft_b = planner.design_fft_for_len(1234);
         assert!(

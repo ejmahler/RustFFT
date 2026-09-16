@@ -323,7 +323,11 @@ impl<T: FftNum> FftPlannerScalar<T> {
     }
 
     // Create the fft from a recipe, take from cache if possible
-    pub(crate) fn build_fft(&mut self, recipe: &Recipe, direction: FftDirection) -> Arc<dyn Fft<T>> {
+    pub(crate) fn build_fft(
+        &mut self,
+        recipe: &Recipe,
+        direction: FftDirection,
+    ) -> Arc<dyn Fft<T>> {
         let len = recipe.len();
         if let Some(instance) = self.algorithm_cache.get(len, direction) {
             instance

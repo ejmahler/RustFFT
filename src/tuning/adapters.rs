@@ -313,9 +313,7 @@ macro_rules! simd_adapter {
                                 5 => crate::common::RadixFactor::Factor5,
                                 6 => crate::common::RadixFactor::Factor6,
                                 7 => crate::common::RadixFactor::Factor7,
-                                other => {
-                                    unsupported($label, &format!("a radix of {}", other))
-                                }
+                                other => unsupported($label, &format!("a radix of {}", other)),
                             })
                             .collect::<Vec<_>>()
                             .into_boxed_slice(),
@@ -396,11 +394,10 @@ macro_rules! simd_adapter {
             }
 
             fn build(&mut self, spec: &Spec, direction: FftDirection) -> Arc<dyn Fft<T>> {
-                super::check_unambiguous(spec, &mut Default::default())
-                    .expect("ambiguous recipe");
+                super::check_unambiguous(spec, &mut Default::default()).expect("ambiguous recipe");
                 let recipe = Self::from_spec(spec);
-                let mut planner = <$planner>::new()
-                    .expect(concat!("this machine does not support ", $label));
+                let mut planner =
+                    <$planner>::new().expect(concat!("this machine does not support ", $label));
                 planner.build_fft(&recipe, direction)
             }
 
