@@ -30,7 +30,8 @@ pub unsafe fn transpose_small_twiddle<T: FftNum>(
 
     #[cfg(all(target_arch = "aarch64", feature = "neon"))]
     {
-        if crate::neon::neon_utils::transpose_small_twiddle(width, height, input, output, twiddles) {
+        if crate::neon::neon_utils::transpose_small_twiddle(width, height, input, output, twiddles)
+        {
             return;
         }
     }
@@ -184,16 +185,26 @@ mod unit_tests {
                 let twiddles_f32: Vec<Complex<f32>> = random_signal(len);
                 let mut output_f32 = vec![Zero::zero(); len];
                 unsafe {
-                    transpose_small_twiddle(width, height, &input_f32, &mut output_f32, &twiddles_f32);
+                    transpose_small_twiddle(
+                        width,
+                        height,
+                        &input_f32,
+                        &mut output_f32,
+                        &twiddles_f32,
+                    );
                 }
                 for x in 0..width {
                     for y in 0..height {
                         let expected = input_f32[x + y * width] * twiddles_f32[x + y * width];
                         let actual = output_f32[y + x * height];
                         assert!(
-                            (actual.re - expected.re).abs() < 1e-5 && (actual.im - expected.im).abs() < 1e-5,
+                            (actual.re - expected.re).abs() < 1e-5
+                                && (actual.im - expected.im).abs() < 1e-5,
                             "f32 mismatch at ({}, {}) for {}x{}",
-                            x, y, width, height
+                            x,
+                            y,
+                            width,
+                            height
                         );
                     }
                 }
@@ -203,16 +214,26 @@ mod unit_tests {
                 let twiddles_f64: Vec<Complex<f64>> = random_signal(len);
                 let mut output_f64 = vec![Zero::zero(); len];
                 unsafe {
-                    transpose_small_twiddle(width, height, &input_f64, &mut output_f64, &twiddles_f64);
+                    transpose_small_twiddle(
+                        width,
+                        height,
+                        &input_f64,
+                        &mut output_f64,
+                        &twiddles_f64,
+                    );
                 }
                 for x in 0..width {
                     for y in 0..height {
                         let expected = input_f64[x + y * width] * twiddles_f64[x + y * width];
                         let actual = output_f64[y + x * height];
                         assert!(
-                            (actual.re - expected.re).abs() < 1e-10 && (actual.im - expected.im).abs() < 1e-10,
+                            (actual.re - expected.re).abs() < 1e-10
+                                && (actual.im - expected.im).abs() < 1e-10,
                             "f64 mismatch at ({}, {}) for {}x{}",
-                            x, y, width, height
+                            x,
+                            y,
+                            width,
+                            height
                         );
                     }
                 }

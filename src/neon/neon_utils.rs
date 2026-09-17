@@ -1,7 +1,7 @@
+use crate::neon::neon_vector::{NeonArray, NeonArrayMut, NeonVector};
+use crate::FftNum;
 use core::arch::aarch64::*;
 use num_complex::Complex;
-use crate::FftNum;
-use crate::neon::neon_vector::{NeonArray, NeonArrayMut, NeonVector};
 
 //  __  __       _   _               _________  _     _ _
 // |  \/  | __ _| |_| |__           |___ /___ \| |__ (_) |_
@@ -513,9 +513,15 @@ mod unit_tests {
                         let expected = input_f32[x + y * width] * twiddles_f32[x + y * width];
                         let actual = out_f32[y + x * height];
                         assert!(
-                            (actual.re - expected.re).abs() < 1e-5 && (actual.im - expected.im).abs() < 1e-5,
+                            (actual.re - expected.re).abs() < 1e-5
+                                && (actual.im - expected.im).abs() < 1e-5,
                             "f32 twiddle mismatch at ({}, {}) for {}x{}: expected {:?}, got {:?}",
-                            x, y, width, height, expected, actual
+                            x,
+                            y,
+                            width,
+                            height,
+                            expected,
+                            actual
                         );
                     }
                 }
@@ -536,9 +542,15 @@ mod unit_tests {
                         let expected = input_f64[x + y * width] * twiddles_f64[x + y * width];
                         let actual = out_f64[y + x * height];
                         assert!(
-                            (actual.re - expected.re).abs() < 1e-10 && (actual.im - expected.im).abs() < 1e-10,
+                            (actual.re - expected.re).abs() < 1e-10
+                                && (actual.im - expected.im).abs() < 1e-10,
                             "f64 twiddle mismatch at ({}, {}) for {}x{}: expected {:?}, got {:?}",
-                            x, y, width, height, expected, actual
+                            x,
+                            y,
+                            width,
+                            height,
+                            expected,
+                            actual
                         );
                     }
                 }
