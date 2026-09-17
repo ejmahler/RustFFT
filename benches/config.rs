@@ -4,8 +4,8 @@ use std::time::Duration;
 /// Config (warm up time, measurement time) for all the benches
 pub fn fast() -> Criterion {
     Criterion::default()
-        .warm_up_time(Duration::from_millis(100))
-        .measurement_time(Duration::from_millis(100))
+        .warm_up_time(Duration::from_millis(300))
+        .measurement_time(Duration::from_secs(1))
         .sample_size(10)
         .without_plots()
 }
