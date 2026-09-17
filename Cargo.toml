@@ -47,6 +47,9 @@ wasm-bindgen-test = "^0.3.36"
 
 criterion = { version = "0.3", default-features = false }
 
+[target.'cfg(all(target_arch = "wasm32", target_os = "wasi", target_env = "p2"))'.dev-dependencies]
+getrandom = "=0.3.1"
+
 [[bench]]
 name = "bench_check_neon_2to1024"
 harness = false
