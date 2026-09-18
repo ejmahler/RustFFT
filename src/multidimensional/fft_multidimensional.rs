@@ -97,28 +97,25 @@ pub struct FftMultiDimensional<T: FftNum, const DIMENSIONS: usize> {
 impl<T: FftNum, const DIMENSIONS: usize> FftMultiDimensional<T, DIMENSIONS> {
     /// Constructs a new FftMultiDimension instance which will compute multidimensional FFTs. Dimensions are defined by the profidved `ffts` array.
     pub fn new(ffts: [Arc<dyn Fft<T>>; DIMENSIONS]) -> Self {
-        const {
-            assert!(
-                DIMENSIONS > 1,
-                "Can't compute a multidimensional FFT with less than 2 dimensions"
-            );
-        }
-
-        let direction = ffts[0].fft_direction();
-        for i in 1..DIMENSIONS {
-            assert_eq!(
-                direction,
-                ffts[i].fft_direction(),
-                "All provided FFTs must have the same direction"
-            );
-        }
-        let mut len: usize = 1;
-        for fft in ffts.iter() {
-            len = len
-                .checked_mul(fft.len())
-                .expect("FftMultiDimension length overflow");
-        }
-
+        let (len, direction) = if DIMENSIONS > 0 {
+            let direction = ffts[0].fft_direction();
+            for i in 1..DIMENSIONS {
+                assert_eq!(
+                    direction,
+                    ffts[i].fft_direction(),
+                    "All provided FFTs must have the same direction"
+                );
+            }
+            let mut len: usize = 1;
+            for fft in ffts.iter() {
+                len = len
+                    .checked_mul(fft.len())
+                    .expect("FftMultiDimension length overflow");
+            }
+            (len, direction)
+        } else {
+            (0, FftDirection::Forward)
+        };
         Self::new_with_dimensions(
             len,
             direction,
@@ -127,7 +124,7 @@ impl<T: FftNum, const DIMENSIONS: usize> FftMultiDimensional<T, DIMENSIONS> {
                 FftDimension {
                     fft,
                     len: d,
-                    transpose_height: len / d,
+                    transpose_height: if d > 0 { len / d } else { 0 },
                 }
             }),
         )
@@ -141,26 +138,25 @@ impl<T: FftNum, const DIMENSIONS: usize> FftMultiDimensional<T, DIMENSIONS> {
         direction: FftDirection,
         shape: [usize; DIMENSIONS],
     ) -> Self {
-        const {
-            assert!(
-                DIMENSIONS > 1,
-                "Can't compute a multidimensional FFT with less than 2 dimensions"
-            );
-        }
+        let len = if DIMENSIONS > 0 {
+            let mut len: usize = 1;
+            for d in shape {
+                len = len
+                    .checked_mul(d)
+                    .expect("FftMultiDimension length overflow");
+            }
+            len
+        } else {
+            0
+        };
 
-        let mut len: usize = 1;
-        for d in shape {
-            len = len
-                .checked_mul(d)
-                .expect("FftMultiDimension length overflow");
-        }
         Self::new_with_dimensions(
             len,
             direction,
             shape.map(|d| FftDimension {
                 fft: planner.plan_fft(d, direction),
                 len: d,
-                transpose_height: len / d,
+                transpose_height: if d > 0 { len / d } else { 0 },
             }),
         )
     }
@@ -175,39 +171,47 @@ impl<T: FftNum, const DIMENSIONS: usize> FftMultiDimensional<T, DIMENSIONS> {
         let mut outofplace_scratch_len = 0;
         let mut immut_scratch_len = 0;
 
-        for (i, dimension) in ffts.iter().enumerate() {
-            // todo: all of these scratch requirements can be reduced
-            let dimension_inplace = dimension.fft.get_inplace_scratch_len();
-            let dimension_outofplace = dimension.fft.get_outofplace_scratch_len();
-            let dimension_immut = dimension.fft.get_immutable_scratch_len();
+        if DIMENSIONS == 1 {
+            // When dimension is 1, we just forward directly to our one child FFT
+            inplace_scratch_len = ffts[0].fft.get_inplace_scratch_len();
+            outofplace_scratch_len = ffts[0].fft.get_outofplace_scratch_len();
+            immut_scratch_len = ffts[0].fft.get_immutable_scratch_len();
+        } else if DIMENSIONS > 1 {
+            for (i, dimension) in ffts.iter().enumerate() {
+                // todo: all of these scratch requirements can be reduced
+                let dimension_inplace = dimension.fft.get_inplace_scratch_len();
+                let dimension_outofplace = dimension.fft.get_outofplace_scratch_len();
+                let dimension_immut = dimension.fft.get_immutable_scratch_len();
 
-            // In place scratch len: the final FFT is computed differently based on how many dimensions we have
-            if i == ffts.len() - 1 {
-                if DIMENSIONS % 2 == 0 {
-                    inplace_scratch_len = inplace_scratch_len.max(len + dimension_inplace);
+                // In place scratch len: the final FFT is computed differently based on how many dimensions we have
+                if i == ffts.len() - 1 {
+                    if DIMENSIONS % 2 == 0 {
+                        inplace_scratch_len = inplace_scratch_len.max(len + dimension_inplace);
+                    } else {
+                        inplace_scratch_len = inplace_scratch_len.max(dimension_outofplace);
+                    }
                 } else {
-                    inplace_scratch_len = inplace_scratch_len.max(dimension_outofplace);
+                    inplace_scratch_len = inplace_scratch_len.max(len + dimension_inplace);
                 }
-            } else {
-                inplace_scratch_len = inplace_scratch_len.max(len + dimension_inplace);
-            }
 
-            // Out of place scratch len: the final FFT is computed differently based on how many dimensions we have
-            if i == ffts.len() - 1 {
-                if DIMENSIONS % 2 == 0 {
-                    outofplace_scratch_len = outofplace_scratch_len.max(dimension_outofplace);
+                // Out of place scratch len: the final FFT is computed differently based on how many dimensions we have
+                if i == ffts.len() - 1 {
+                    if DIMENSIONS % 2 == 0 {
+                        outofplace_scratch_len = outofplace_scratch_len.max(dimension_outofplace);
+                    } else {
+                        outofplace_scratch_len =
+                            outofplace_scratch_len.max(len + dimension_inplace);
+                    }
                 } else {
                     outofplace_scratch_len = outofplace_scratch_len.max(len + dimension_inplace);
                 }
-            } else {
-                outofplace_scratch_len = outofplace_scratch_len.max(len + dimension_inplace);
-            }
 
-            // Immutable scratch is different for the final FFT
-            if i == ffts.len() - 1 {
-                immut_scratch_len = immut_scratch_len.max(len + dimension_immut);
-            } else {
-                immut_scratch_len = immut_scratch_len.max(len + dimension_inplace);
+                // Immutable scratch is different for the final FFT
+                if i == ffts.len() - 1 {
+                    immut_scratch_len = immut_scratch_len.max(len + dimension_immut);
+                } else {
+                    immut_scratch_len = immut_scratch_len.max(len + dimension_inplace);
+                }
             }
         }
         Self {
@@ -283,6 +287,12 @@ impl<T: FftNum, const DIMENSIONS: usize> FftMultiDimensional<T, DIMENSIONS> {
     /// - `buffer.len() < self.len()`
     /// - `scratch.len() < self.get_inplace_scratch_len()`
     pub fn process_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        if DIMENSIONS == 0 || self.len == 0 {
+            return;
+        } else if DIMENSIONS == 1 {
+            return self.ffts[0].fft.process_with_scratch(buffer, scratch);
+        }
+
         fft_helper_inplace(
             buffer,
             scratch,
@@ -350,6 +360,14 @@ impl<T: FftNum, const DIMENSIONS: usize> FftMultiDimensional<T, DIMENSIONS> {
         output: &mut [Complex<T>],
         scratch: &mut [Complex<T>],
     ) {
+        if DIMENSIONS == 0 || self.len == 0 {
+            return;
+        } else if DIMENSIONS == 1 {
+            return self.ffts[0]
+                .fft
+                .process_outofplace_with_scratch(input, output, scratch);
+        }
+
         fft_helper_outofplace(
             input,
             output,
@@ -410,6 +428,14 @@ impl<T: FftNum, const DIMENSIONS: usize> FftMultiDimensional<T, DIMENSIONS> {
         output: &mut [Complex<T>],
         scratch: &mut [Complex<T>],
     ) {
+        if DIMENSIONS == 0 || self.len == 0 {
+            return;
+        } else if DIMENSIONS == 1 {
+            return self.ffts[0]
+                .fft
+                .process_immutable_with_scratch(input, output, scratch);
+        }
+
         fft_helper_immut(
             input,
             output,
@@ -645,11 +671,69 @@ mod unit_tests {
     }
 
     #[test]
+    fn test_multidimensional_procedural_0d() {
+        let mut planner = FftPlanner::<f32>::new();
+
+        // There's no reason to create a 0d multimensional FFT, but that doesn't mean it shouldn't work if someone does
+        // Forward FFT
+        // Test FftMultiDimensional::plan
+        let fft_forward_plan = FftMultiDimensional::plan(&mut planner, FftDirection::Forward, []);
+        check_multidimensional_fft_algorithm(&fft_forward_plan, [], FftDirection::Forward);
+
+        // Test FftMultiDimensional::new
+        let fft_forward_new = FftMultiDimensional::<f32, 0>::new([]);
+        check_multidimensional_fft_algorithm(&fft_forward_new, [], FftDirection::Forward);
+
+        // Inverse FFT
+        // Test FftMultiDimensional::plan
+        let fft_inverse_plan = FftMultiDimensional::plan(&mut planner, FftDirection::Inverse, []);
+        check_multidimensional_fft_algorithm(&fft_inverse_plan, [], FftDirection::Inverse);
+
+        // Test FftMultiDimensional::new
+        let fft_inverse_new = FftMultiDimensional::<f32, 0>::new([]);
+        check_multidimensional_fft_algorithm(
+            &fft_inverse_new,
+            [],
+            FftDirection::Forward, // FIXME: Due to an api limitation here, we never actually tell the child fft that it's an inverse for 0 dimensions, so it reports forward
+        );
+    }
+
+    #[test]
+    fn test_multidimensional_procedural_1d() {
+        let mut planner = FftPlanner::<f32>::new();
+
+        // There's no reason to create a 1d multimensional FFT, but that doesn't mean it shouldn't work if someone does
+        for a in 0..10 {
+            // Forward FFT
+            // Test FftMultiDimensional::plan
+            let fft_forward_plan =
+                FftMultiDimensional::plan(&mut planner, FftDirection::Forward, [a]);
+            check_multidimensional_fft_algorithm(&fft_forward_plan, [a], FftDirection::Forward);
+
+            // Test FftMultiDimensional::new
+            let fft_forward_new =
+                FftMultiDimensional::new([planner.plan_fft(a, FftDirection::Forward)]);
+            check_multidimensional_fft_algorithm(&fft_forward_new, [a], FftDirection::Forward);
+
+            // Inverse FFT
+            // Test FftMultiDimensional::plan
+            let fft_inverse_plan =
+                FftMultiDimensional::plan(&mut planner, FftDirection::Inverse, [a]);
+            check_multidimensional_fft_algorithm(&fft_inverse_plan, [a], FftDirection::Inverse);
+
+            // Test FftMultiDimensional::new
+            let fft_inverse_new =
+                FftMultiDimensional::new([planner.plan_fft(a, FftDirection::Inverse)]);
+            check_multidimensional_fft_algorithm(&fft_inverse_new, [a], FftDirection::Inverse);
+        }
+    }
+
+    #[test]
     fn test_multidimensional_procedural_2d() {
         let mut planner = FftPlanner::<f32>::new();
 
-        for a in 1..10 {
-            for b in 1..10 {
+        for a in 0..10 {
+            for b in 0..10 {
                 // Forward FFT
                 // Test FftMultiDimensional::plan
                 let fft_forward_plan =
@@ -699,9 +783,9 @@ mod unit_tests {
     fn test_multidimensional_procedural_3d() {
         let mut planner = FftPlanner::<f32>::new();
 
-        for a in 1..8 {
-            for b in 1..8 {
-                for c in 1..8 {
+        for a in 0..8 {
+            for b in 0..8 {
+                for c in 0..8 {
                     // Forward FFT
                     // Test FftMultiDimensional::plan
                     let fft_forward_plan =
@@ -754,10 +838,10 @@ mod unit_tests {
     fn test_multidimensional_procedural_4d() {
         let mut planner = FftPlanner::<f32>::new();
 
-        for a in 1..5 {
-            for b in 1..5 {
-                for c in 1..5 {
-                    for d in 1..5 {
+        for a in 0..5 {
+            for b in 0..5 {
+                for c in 0..5 {
+                    for d in 0..5 {
                         // Forward FFT
                         // Test FftMultiDimensional::plan
                         let fft_forward_plan = FftMultiDimensional::plan(
@@ -819,11 +903,11 @@ mod unit_tests {
     fn test_multidimensional_procedural_5d() {
         let mut planner = FftPlanner::<f32>::new();
 
-        for a in 1..4 {
-            for b in 1..4 {
-                for c in 1..4 {
-                    for d in 1..4 {
-                        for e in 1..4 {
+        for a in 0..4 {
+            for b in 0..4 {
+                for c in 0..4 {
+                    for d in 0..4 {
+                        for e in 0..4 {
                             // Forward FFT
                             // Test FftMultiDimensional::plan
                             let fft_forward_plan = FftMultiDimensional::plan(
@@ -890,7 +974,7 @@ mod unit_tests {
         shape: [usize; D],
         direction: FftDirection,
     ) {
-        let len: usize = shape.iter().product();
+        let len: usize = if D == 0 { 0 } else { shape.iter().product() };
 
         assert_eq!(
             fft.len(),
@@ -1029,7 +1113,11 @@ mod unit_tests {
         shape: [usize; D],
         direction: FftDirection,
     ) {
-        let len: usize = shape.iter().product();
+        let len = if D == 0 { 0 } else { shape.iter().product() };
+        if len == 0 {
+            return;
+        }
+
         let mut planner = FftPlanner::new();
         let mut local_buffer = Vec::with_capacity(len);
 

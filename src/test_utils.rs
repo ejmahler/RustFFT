@@ -39,7 +39,7 @@ pub fn compare_vectors<T: FftNum + Float>(vec1: &[Complex<T>], vec2: &[Complex<T
     for (&a, &b) in vec1.iter().zip(vec2.iter()) {
         error = error + (a - b).norm();
     }
-    return (error.to_f64().unwrap() / vec1.len() as f64) < 0.1f64;
+    return (error.to_f64().unwrap() / vec1.len().max(1) as f64) < 0.1f64;
 }
 pub fn first_diff<T: FftNum + Float>(vec1: &[Complex<T>], vec2: &[Complex<T>]) -> Option<usize> {
     assert_eq!(vec1.len(), vec2.len());
