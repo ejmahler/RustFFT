@@ -140,8 +140,10 @@ struct Weights {
     general_row: Option<f64>,
     small_row: Option<f64>,
     /// Cache size in KiB, converted to complex numbers for whichever element type is in use.
+    radix_call: Option<f64>,
     cache_kib: Option<f64>,
     dram: Option<f64>,
+    dram_pass: Option<f64>,
 }
 
 impl Weights {
@@ -164,7 +166,9 @@ impl Weights {
             self.cache_kib
                 .map(|kib| kib * 1024.0 / 16.0 * model.complex_per_vector as f64),
         );
+        set(&mut model.radix_call, self.radix_call);
         set(&mut model.dram, self.dram);
+        set(&mut model.dram_pass, self.dram_pass);
         model
     }
 }
@@ -178,9 +182,11 @@ struct Options {
     out: Option<String>,
     weights: Weights,
     f32: bool,
-    /// For `survey`: how many lengths, and the seed that picks them.
+    /// For `survey`, and for `picks` with `--mix`: how many lengths, and the seed.
     count: usize,
     seed: u64,
+    /// Turn a range into the same spread of lengths `survey` uses, rather than every length.
+    mix: bool,
 }
 
 /// A tuner for `P`, with the weight overrides applied to its estimating planner.
@@ -594,22 +600,129 @@ fn cmd_sweep<T: FftNum, P: TunablePlanner<T>>(lengths: &[usize], opts: &Options)
     );
 }
 
-/// `count` distinct lengths drawn uniformly from `lo..=hi`, sorted, from a fixed seed.
-fn random_lengths(lo: usize, hi: usize, count: usize, seed: u64) -> Vec<usize> {
+/// A spread of `count` distinct lengths from `lo..=hi`, sorted, reproducible from `seed`.
+///
+/// Drawn in equal parts from seven strata, because what a planner does depends on how a length
+/// factors, and uniform random integers are almost all "a big prime factor times something
+/// small". Log-uniform within each stratum, so every decade up to a million is represented
+/// rather than only the largest.
+///
+/// The strata are: anything at all; primes, which force Rader's or Bluestein's; 5-smooth and
+/// 7-smooth lengths, which every algorithm can decompose; powers of two and three times a power
+/// of two, which are Radix4's; a large prime factor times a smooth one, which is the case that
+/// forces an awkward split; a product of two middling primes; and short lengths under 2000,
+/// which is where the weights were fitted and where plan time matters most.
+fn mixed_lengths(lo: usize, hi: usize, count: usize, seed: u64) -> Vec<usize> {
     // splitmix64, so the tool needs no dependencies and a seed reproduces a survey anywhere.
     let mut state = seed;
-    let mut next = || {
+    let mut next = move || {
         state = state.wrapping_add(0x9e3779b97f4a7c15);
         let mut z = state;
         z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
         z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
         z ^ (z >> 31)
     };
-    let span = (hi - lo + 1) as u64;
-    let count = count.min(span as usize);
+    let is_prime = |n: usize| {
+        if n < 2 {
+            return false;
+        }
+        if n % 2 == 0 {
+            return n == 2;
+        }
+        let mut d = 3;
+        while d * d <= n {
+            if n % d == 0 {
+                return false;
+            }
+            d += 2;
+        }
+        true
+    };
+    // Log-uniform in [lo, hi].
+    let log_uniform = |draw: u64, lo: usize, hi: usize| -> usize {
+        let (lo_l, hi_l) = ((lo.max(1) as f64).ln(), (hi as f64).ln());
+        let t = (draw >> 11) as f64 / (1u64 << 53) as f64;
+        ((lo_l + t * (hi_l - lo_l)).exp() as usize).clamp(lo.max(1), hi)
+    };
+
     let mut lengths = std::collections::BTreeSet::new();
-    while lengths.len() < count {
-        lengths.insert(lo + (next() % span) as usize);
+    let strata = 7;
+    let per_stratum = count.div_ceil(strata);
+    for stratum in 0..strata {
+        let mut taken = 0;
+        // Bounded, so a stratum with few members in range cannot spin forever.
+        for _ in 0..per_stratum * 200 {
+            if taken >= per_stratum || lengths.len() >= count {
+                break;
+            }
+            let draw = next();
+            let candidate = match stratum {
+                // anything
+                0 => log_uniform(draw, lo, hi),
+                // a prime: the next one at or above a log-uniform draw
+                1 => {
+                    let mut n = log_uniform(draw, lo.max(2), hi);
+                    while n <= hi && !is_prime(n) {
+                        n += 1;
+                    }
+                    n
+                }
+                // 5-smooth or 7-smooth
+                2 => {
+                    let mut n = 1usize;
+                    let target = log_uniform(draw, lo.max(8), hi);
+                    let factors = if draw & 1 == 0 {
+                        [2, 3, 5, 5]
+                    } else {
+                        [2, 3, 5, 7]
+                    };
+                    while n < target {
+                        let f = factors[(next() % 4) as usize];
+                        if n.saturating_mul(f) > hi {
+                            break;
+                        }
+                        n *= f;
+                    }
+                    n
+                }
+                // a power of two, or three times one
+                3 => {
+                    let n = log_uniform(draw, lo.max(2), hi);
+                    let p2 = 1usize << (usize::BITS - 1 - n.leading_zeros()).min(20);
+                    if draw & 1 == 0 || p2 * 3 > hi {
+                        p2
+                    } else {
+                        p2 * 3
+                    }
+                }
+                // a large prime factor times a smooth one, which forces an awkward split
+                4 => {
+                    let mut p = log_uniform(draw, 40, (hi / 4).max(41));
+                    while !is_prime(p) {
+                        p += 1;
+                    }
+                    let smooth = [2usize, 3, 4, 5, 6, 8, 9, 12, 16][(next() % 9) as usize];
+                    p.saturating_mul(smooth)
+                }
+                // two middling primes multiplied together
+                5 => {
+                    let mut a = log_uniform(draw, 11, 4000);
+                    while !is_prime(a) {
+                        a += 1;
+                    }
+                    let mut b = log_uniform(next(), 11, (hi / a).max(12));
+                    while !is_prime(b) {
+                        b += 1;
+                    }
+                    a.saturating_mul(b)
+                }
+                // short lengths, where the weights were fitted
+                _ => log_uniform(draw, lo, hi.min(2000)),
+            };
+            if candidate >= lo.max(1) && candidate <= hi && lengths.insert(candidate) {
+                taken += 1;
+            }
+        }
     }
     lengths.into_iter().collect()
 }
@@ -1129,13 +1242,14 @@ fn usage() -> ! {
     eprintln!("  --rounds N         timing rounds per subject (default 9)");
     eprintln!("  --block-ms MS      wall-clock time per timed block (default 10)");
     eprintln!("  --cap N            max candidates per length when enumerating (default 48)");
-    eprintln!("  --count N          survey: how many lengths (default 300)");
+    eprintln!("  --count N          survey, and picks --mix: how many lengths (default 300)");
+    eprintln!("  --mix              picks: sample a range like survey does, not every length");
     eprintln!("  --seed N           survey: seed for picking lengths (default 1)");
     eprintln!("  --out FILE         dump: where to write (default dump.tsv)");
     eprintln!("  --verbose          regret: list the top candidates per length");
     eprintln!("  cost model weights, overriding the planner's defaults:");
     eprintln!("    --strided X --permuted X --rader-index X --radixn-extra X");
-    eprintln!("    --general-row X --small-row X --cache-kib X --dram X");
+    eprintln!("    --general-row X --small-row X --cache-kib X --dram X --dram-pass X");
     std::process::exit(2);
 }
 
@@ -1157,6 +1271,7 @@ fn main() {
         f32: false,
         count: 300,
         seed: 1,
+        mix: false,
     };
     let mut rest: Vec<String> = Vec::new();
 
@@ -1185,6 +1300,7 @@ fn main() {
             "--cap" => opts.cap = number(value(&mut i, &arg), &arg) as usize,
             "--count" => opts.count = number(value(&mut i, &arg), &arg) as usize,
             "--seed" => opts.seed = number(value(&mut i, &arg), &arg) as u64,
+            "--mix" => opts.mix = true,
             "--out" => opts.out = Some(value(&mut i, &arg)),
             "--f32" => opts.f32 = true,
             "--verbose" => opts.verbose = true,
@@ -1194,8 +1310,10 @@ fn main() {
             "--radixn-extra" => opts.weights.radixn_extra = Some(number(value(&mut i, &arg), &arg)),
             "--general-row" => opts.weights.general_row = Some(number(value(&mut i, &arg), &arg)),
             "--small-row" => opts.weights.small_row = Some(number(value(&mut i, &arg), &arg)),
+            "--radix-call" => opts.weights.radix_call = Some(number(value(&mut i, &arg), &arg)),
             "--cache-kib" => opts.weights.cache_kib = Some(number(value(&mut i, &arg), &arg)),
             "--dram" => opts.weights.dram = Some(number(value(&mut i, &arg), &arg)),
+            "--dram-pass" => opts.weights.dram_pass = Some(number(value(&mut i, &arg), &arg)),
             other if other.starts_with("--") => {
                 eprintln!("unknown option '{}'", other);
                 usage();
@@ -1224,6 +1342,16 @@ fn main() {
         |values: &[String]| -> String { values.first().cloned().unwrap_or_else(|| usage()) };
 
     let command = match command_name.as_str() {
+        "picks" if opts.mix => {
+            let range = single(&rest);
+            let (lo, hi) = range.split_once("..").unwrap_or_else(|| usage());
+            Command::Picks(mixed_lengths(
+                lo.parse().expect("bad range start"),
+                hi.parse().expect("bad range end"),
+                opts.count,
+                opts.seed,
+            ))
+        }
         "picks" => Command::Picks(lengths(&rest)),
         "time" => Command::Time(rest.clone()),
         "regret" => Command::Regret(lengths(&rest)),
@@ -1239,7 +1367,7 @@ fn main() {
                 "# survey\t{} lengths from {}..{}, seed {}",
                 opts.count, lo, hi, opts.seed
             );
-            Command::Sweep(random_lengths(lo, hi, opts.count, opts.seed))
+            Command::Sweep(mixed_lengths(lo, hi, opts.count, opts.seed))
         }
         "verify" => Command::Verify(lengths(&rest)),
         "dump" => Command::Dump(lengths(&rest)),

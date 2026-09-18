@@ -243,6 +243,15 @@ pub struct CostModel {
     /// One outer iteration of `transpose_small`, charged to the `Small` variants for the width
     /// by which the pair is wider than it is tall. A tie-break between the two orderings.
     pub small_row: f64,
+    /// Charged once per `SimdRadixN` or `Radix4` execution, for the work that does not scale
+    /// with the length: the call itself, splitting the scratch, walking the factor list, setting
+    /// up each layer's twiddle slice, and the virtual call into the base FFT.
+    ///
+    /// It only matters at short lengths, where it is the difference between a generic driver and
+    /// a table-driven `GoodThomasAlgorithmSmall`: at 100, which is about 8 ns or 25 cycles on an
+    /// M1, lengths 14 and 21 stop preferring a RadixN that measures 1.32x slower, while the wins
+    /// at 40, 150, 241 and 321 are untouched. Nothing above about 500 notices it.
+    pub radix_call: f64,
     /// Complex numbers that still fit in cache. A transpose of more than this many is charged
     /// `dram` per access on top of its pattern. Infinite prices every transpose the same.
     ///
@@ -258,9 +267,27 @@ pub struct CostModel {
     /// from 8194, raising it to 2 MiB moves none below 20000 and is worse in the f32 tail.
     pub cache_elems: f64,
     /// What one access of a transpose costs once the buffer no longer fits in cache, relative to
-    /// the same access in cache. Anything from 2 to 5 scores the same, so this is an order of
-    /// magnitude rather than a fitted value.
+    /// the same access in cache.
+    ///
+    /// This one and `dram_pass` have to move together. Charging ordinary passes without charging
+    /// transposes just as hard makes a MixedRadix wrapped around a smaller radix recipe look
+    /// good, because its inner FFTs are then cache resident, and those recipes measure worse on
+    /// both machines: at `dram_pass` 2 with this at 2, the M1 has 7 losses beyond 5% in f64 and
+    /// 9 in f32, which raising this to 4 removes entirely. 4 and 6 score the same.
     pub dram: f64,
+    /// The same, for every other pass: a RadixN or Radix4 cross layer, a Rader's permutation, or
+    /// Bluestein's padded multiply.
+    ///
+    /// Separate from `dram` because these keep far more locality than a transpose does: a cross
+    /// layer gathers its rows from inside the chunk it is already working on. It decides how much
+    /// the model dislikes doing the work in one large FFT rather than in several small ones,
+    /// which is the difference between Bluestein's over the whole length and a split, and that
+    /// call is worth 2x to 4x on a machine with a small cache.
+    ///
+    /// Fitted on a Raspberry Pi 5, the machine that has the least cache to spare, over the
+    /// lengths where the two disagree. At 2 its worst case goes from 4.19 to 1.24 in f64 and
+    /// from 3.81 to 2.71 in f32, and lengths where the model already won are unaffected.
+    pub dram_pass: f64,
 }
 
 impl CostModel {
@@ -281,8 +308,10 @@ impl CostModel {
             radixn_extra,
             general_row: 30.0,
             small_row: 10.0,
+            radix_call: 100.0,
             cache_elems: 256.0 * 1024.0 / 16.0 * complex_per_vector as f64,
-            dram: 2.0,
+            dram: 4.0,
+            dram_pass: 2.0,
         }
     }
 
@@ -301,8 +330,11 @@ impl CostModel {
             Pattern::Strided => accesses / self.complex_per_vector as f64 * self.strided,
             Pattern::Sequential => accesses / self.complex_per_vector as f64,
         };
-        let _ = ws;
-        cost
+        if ws > self.cache_elems {
+            cost * self.dram_pass
+        } else {
+            cost
+        }
     }
 
     /// Cost of a pass that transposes the whole buffer, which is the one access pattern that
@@ -315,7 +347,8 @@ impl CostModel {
     fn transpose_mem(&self, accesses: f64, pattern: Pattern, ws: f64) -> f64 {
         let cost = self.mem(accesses, pattern, ws);
         if ws > self.cache_elems {
-            cost * self.dram
+            // `mem` already applied `dram_pass`, so scale up to `dram` in total.
+            cost * self.dram / self.dram_pass
         } else {
             cost
         }
@@ -348,7 +381,8 @@ impl CostModel {
                 // One digit-reversal transpose, then the base FFTs, then k cross layers of
                 // len/4 column_butterfly4, each four butterfly2 plus a rotate90 (10 instructions)
                 // and three twiddle multiplies.
-                let mut c = self.mem(2.0 * len, Pattern::Permuted, len);
+                // One digit-reversal transpose, then the base FFTs, then k cross layers.
+                let mut c = self.mem(2.0 * len, Pattern::Permuted, len) + self.radix_call;
                 c += reps * child_cost(*base_len);
                 c += *k as f64
                     * ((len / (4.0 * cpv)) * (10.0 + 3.0 * self.mul_complex())
@@ -359,7 +393,7 @@ impl CostModel {
                 let radix_product: usize = factors.iter().map(|f| f.radix()).product();
                 let len = (*base_len * radix_product) as f64;
                 let reps = len / *base_len as f64;
-                let mut c = self.mem(2.0 * len, Pattern::Permuted, len);
+                let mut c = self.mem(2.0 * len, Pattern::Permuted, len) + self.radix_call;
                 c += reps * child_cost(*base_len);
                 for factor in factors.iter() {
                     let radix = factor.radix();
