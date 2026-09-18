@@ -134,6 +134,7 @@ mod array_utils;
 mod fft_cache;
 mod fft_helper;
 mod math_utils;
+mod multidimensional;
 mod plan;
 mod twiddles;
 
@@ -141,6 +142,7 @@ use num_complex::Complex;
 use num_traits::Zero;
 
 pub use crate::common::FftNum;
+pub use crate::multidimensional::fft_multidimensional::FftMultiDimensional;
 pub use crate::plan::{FftPlanner, FftPlannerScalar};
 
 /// A trait that allows FFT algorithms to report their expected input/output size
