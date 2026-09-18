@@ -273,7 +273,11 @@ pub struct CostModel {
     /// transposes just as hard makes a MixedRadix wrapped around a smaller radix recipe look
     /// good, because its inner FFTs are then cache resident, and those recipes measure worse on
     /// both machines: at `dram_pass` 2 with this at 2, the M1 has 7 losses beyond 5% in f64 and
-    /// 9 in f32, which raising this to 4 removes entirely. 4 and 6 score the same.
+    /// 9 in f32, which raising it removes entirely.
+    ///
+    /// 6 rather than 4 on the full validation set: it halves the M1's f32 losses beyond 5%, 27 to
+    /// 15, and leaves the Pi 5's loss count unchanged at 14. The Pi's worst case grows from 3.22
+    /// to 3.51, inside the large-Bluestein class that neither value solves.
     pub dram: f64,
     /// The same, for every other pass: a RadixN or Radix4 cross layer, a Rader's permutation, or
     /// Bluestein's padded multiply.
@@ -310,7 +314,7 @@ impl CostModel {
             small_row: 10.0,
             radix_call: 100.0,
             cache_elems: 256.0 * 1024.0 / 16.0 * complex_per_vector as f64,
-            dram: 4.0,
+            dram: 6.0,
             dram_pass: 2.0,
         }
     }
