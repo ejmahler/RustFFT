@@ -139,6 +139,9 @@ struct Weights {
     radixn_extra: Option<f64>,
     general_row: Option<f64>,
     small_row: Option<f64>,
+    /// Cache size in KiB, converted to complex numbers for whichever element type is in use.
+    cache_kib: Option<f64>,
+    dram: Option<f64>,
 }
 
 impl Weights {
@@ -154,6 +157,14 @@ impl Weights {
         set(&mut model.radixn_extra, self.radixn_extra);
         set(&mut model.general_row, self.general_row);
         set(&mut model.small_row, self.small_row);
+        // A complex f64 is 16 bytes and a complex f32 is 8, so the same cache holds twice as
+        // many of the latter.
+        set(
+            &mut model.cache_elems,
+            self.cache_kib
+                .map(|kib| kib * 1024.0 / 16.0 * model.complex_per_vector as f64),
+        );
+        set(&mut model.dram, self.dram);
         model
     }
 }
@@ -377,6 +388,28 @@ fn candidates_with_model_pick<T: FftNum, P: TunablePlanner<T>>(
                 }
             });
     (specs, model_index)
+}
+
+/// Print what each planner picks at every length, without timing anything.
+///
+/// Fast enough for tens of thousands of lengths, so two cost models can be diffed by their
+/// decisions before spending a machine on measuring the ones that differ.
+fn cmd_picks<T: FftNum, P: TunablePlanner<T>>(lengths: &[usize], opts: &Options) {
+    let mut planner = tuner::<T, P>(opts);
+    println!("len\tagree\tplanner_spec\tmodel_spec");
+    for &len in lengths {
+        let planner_spec = planner.plan(len);
+        let model_spec = planner
+            .estimate(len)
+            .unwrap_or_else(|| Arc::clone(&planner_spec));
+        println!(
+            "{}\t{}\t{}\t{}",
+            len,
+            if planner_spec == model_spec { 1 } else { 0 },
+            to_spec_string(&planner_spec),
+            to_spec_string(&model_spec)
+        );
+    }
 }
 
 fn cmd_regret<T: FftNum, P: TunablePlanner<T>>(lengths: &[usize], opts: &Options) {
@@ -1022,6 +1055,7 @@ fn cmd_crossover<T: FftNum, P: TunablePlanner<T>>(lengths: &[usize], opts: &Opti
 // ---------------------------------------------------------------------------
 
 enum Command {
+    Picks(Vec<usize>),
     Time(Vec<String>),
     Regret(Vec<usize>),
     Sweep(Vec<usize>),
@@ -1036,6 +1070,7 @@ enum Command {
 
 fn run<T: FftNum + ToPrimitive, P: TunablePlanner<T>>(command: &Command, opts: &Options) {
     match command {
+        Command::Picks(lengths) => cmd_picks::<T, P>(lengths, opts),
         Command::Time(specs) => cmd_time::<T, P>(specs, opts),
         Command::Regret(lengths) => cmd_regret::<T, P>(lengths, opts),
         Command::Sweep(lengths) => cmd_sweep::<T, P>(lengths, opts),
@@ -1083,7 +1118,8 @@ fn native_planner() -> &'static str {
 
 fn usage() -> ! {
     eprintln!("usage: planner_tuning <command> [options] ARGS...");
-    eprintln!("commands: time SPEC... | regret LEN... | sweep LEN...|A..B | survey A..B");
+    eprintln!("commands: picks LEN... | time SPEC... | regret LEN... | sweep LEN...|A..B");
+    eprintln!("          survey A..B");
     eprintln!("          verify LEN... | dump LEN... | score DUMP | costs DUMP | explain SPEC");
     eprintln!("          plantime LEN... | crossover LEN...");
     eprintln!(
@@ -1099,7 +1135,7 @@ fn usage() -> ! {
     eprintln!("  --verbose          regret: list the top candidates per length");
     eprintln!("  cost model weights, overriding the planner's defaults:");
     eprintln!("    --strided X --permuted X --rader-index X --radixn-extra X");
-    eprintln!("    --general-row X --small-row X");
+    eprintln!("    --general-row X --small-row X --cache-kib X --dram X");
     std::process::exit(2);
 }
 
@@ -1158,6 +1194,8 @@ fn main() {
             "--radixn-extra" => opts.weights.radixn_extra = Some(number(value(&mut i, &arg), &arg)),
             "--general-row" => opts.weights.general_row = Some(number(value(&mut i, &arg), &arg)),
             "--small-row" => opts.weights.small_row = Some(number(value(&mut i, &arg), &arg)),
+            "--cache-kib" => opts.weights.cache_kib = Some(number(value(&mut i, &arg), &arg)),
+            "--dram" => opts.weights.dram = Some(number(value(&mut i, &arg), &arg)),
             other if other.starts_with("--") => {
                 eprintln!("unknown option '{}'", other);
                 usage();
@@ -1186,6 +1224,7 @@ fn main() {
         |values: &[String]| -> String { values.first().cloned().unwrap_or_else(|| usage()) };
 
     let command = match command_name.as_str() {
+        "picks" => Command::Picks(lengths(&rest)),
         "time" => Command::Time(rest.clone()),
         "regret" => Command::Regret(lengths(&rest)),
         "sweep" => Command::Sweep(lengths(&rest)),

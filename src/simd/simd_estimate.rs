@@ -243,6 +243,24 @@ pub struct CostModel {
     /// One outer iteration of `transpose_small`, charged to the `Small` variants for the width
     /// by which the pair is wider than it is tall. A tie-break between the two orderings.
     pub small_row: f64,
+    /// Complex numbers that still fit in cache. A transpose of more than this many is charged
+    /// `dram` per access on top of its pattern. Infinite prices every transpose the same.
+    ///
+    /// A node is charged at the size of the buffer it walks itself, never at the size of the
+    /// transform it sits inside, so a recipe's cost stays a function of its own subtree and can
+    /// be cached by length.
+    ///
+    /// The default is 256 KiB worth of complex numbers, which is the smallest last-level cache
+    /// worth planning for rather than any particular machine's. A step is what the hardware
+    /// does, and unlike a cost that grows smoothly with length it leaves every shorter length
+    /// priced exactly as before, so the weights fitted by sweeping 1 to 1000 stay valid: no pick
+    /// below length 16385 changes at this threshold. Lowering it to 128 KiB starts moving picks
+    /// from 8194, raising it to 2 MiB moves none below 20000 and is worse in the f32 tail.
+    pub cache_elems: f64,
+    /// What one access of a transpose costs once the buffer no longer fits in cache, relative to
+    /// the same access in cache. Anything from 2 to 5 scores the same, so this is an order of
+    /// magnitude rather than a fitted value.
+    pub dram: f64,
 }
 
 impl CostModel {
@@ -263,6 +281,8 @@ impl CostModel {
             radixn_extra,
             general_row: 30.0,
             small_row: 10.0,
+            cache_elems: 256.0 * 1024.0 / 16.0 * complex_per_vector as f64,
+            dram: 2.0,
         }
     }
 
@@ -271,14 +291,33 @@ impl CostModel {
         Self::new(instruction_set, complex_per_vector::<T>())
     }
 
-    /// Cost of touching `accesses` elements, counting each load and each store once.
-    fn mem(&self, accesses: f64, pattern: Pattern) -> f64 {
-        match pattern {
+    /// Cost of touching `accesses` elements, counting each load and each store once, in a pass
+    /// over a buffer of `ws` complex numbers.
+    fn mem(&self, accesses: f64, pattern: Pattern, ws: f64) -> f64 {
+        let cost = match pattern {
             // A gather or scatter computes an address per complex number, so it cannot fill a
             // vector.
             Pattern::Permuted => accesses * self.permuted,
             Pattern::Strided => accesses / self.complex_per_vector as f64 * self.strided,
             Pattern::Sequential => accesses / self.complex_per_vector as f64,
+        };
+        let _ = ws;
+        cost
+    }
+
+    /// Cost of a pass that transposes the whole buffer, which is the one access pattern that
+    /// really falls out of cache.
+    ///
+    /// A RadixN or Radix4 cross layer looks strided but gathers its rows from inside the chunk it
+    /// is already working on, so it keeps its locality at any size. A MixedRadix or GoodThomas
+    /// transpose walks the whole rectangle, so once that no longer fits in cache every element
+    /// costs a fresh line.
+    fn transpose_mem(&self, accesses: f64, pattern: Pattern, ws: f64) -> f64 {
+        let cost = self.mem(accesses, pattern, ws);
+        if ws > self.cache_elems {
+            cost * self.dram
+        } else {
+            cost
         }
     }
 
@@ -300,7 +339,8 @@ impl CostModel {
         let cpv = self.complex_per_vector as f64;
         Some(match shape {
             Shape::Butterfly(len) => {
-                self.butterfly(*len)? + self.mem(2.0 * *len as f64, Pattern::Sequential)
+                self.butterfly(*len)?
+                    + self.mem(2.0 * *len as f64, Pattern::Sequential, *len as f64)
             }
             Shape::Radix4 { k, base_len } => {
                 let len = (*base_len << (2 * k)) as f64;
@@ -308,18 +348,18 @@ impl CostModel {
                 // One digit-reversal transpose, then the base FFTs, then k cross layers of
                 // len/4 column_butterfly4, each four butterfly2 plus a rotate90 (10 instructions)
                 // and three twiddle multiplies.
-                let mut c = self.mem(2.0 * len, Pattern::Permuted);
+                let mut c = self.mem(2.0 * len, Pattern::Permuted, len);
                 c += reps * child_cost(*base_len);
                 c += *k as f64
                     * ((len / (4.0 * cpv)) * (10.0 + 3.0 * self.mul_complex())
-                        + self.mem(2.0 * len, Pattern::Strided));
+                        + self.mem(2.0 * len, Pattern::Strided, len));
                 c
             }
             Shape::RadixN { factors, base_len } => {
                 let radix_product: usize = factors.iter().map(|f| f.radix()).product();
                 let len = (*base_len * radix_product) as f64;
                 let reps = len / *base_len as f64;
-                let mut c = self.mem(2.0 * len, Pattern::Permuted);
+                let mut c = self.mem(2.0 * len, Pattern::Permuted, len);
                 c += reps * child_cost(*base_len);
                 for factor in factors.iter() {
                     let radix = factor.radix();
@@ -327,7 +367,7 @@ impl CostModel {
                     // table applies directly. Row 0 needs no twiddle, hence radix - 1.
                     c += (len / radix as f64)
                         * (self.butterfly(radix)? + (radix as f64 - 1.0) * self.mul_complex());
-                    c += self.mem(2.0 * len, Pattern::Strided);
+                    c += self.mem(2.0 * len, Pattern::Strided, len);
                     c += len * self.radixn_extra;
                 }
                 c
@@ -345,13 +385,14 @@ impl CostModel {
                 // `MixedRadix` hands the job to the `transpose` crate, which tiles the rectangle
                 // to get cache reuse back and pays `general_row` per row for it.
                 let mut c = if *small {
-                    3.0 * self.mem(2.0 * len, Pattern::Permuted)
+                    3.0 * self.transpose_mem(2.0 * len, Pattern::Permuted, len)
                         + self.small_row * left_len.saturating_sub(*right_len) as f64
                 } else {
-                    3.0 * self.mem(2.0 * len, Pattern::Strided)
+                    3.0 * self.transpose_mem(2.0 * len, Pattern::Strided, len)
                         + self.general_row * 1.5 * (left_len + right_len) as f64
                 };
-                c += (len / cpv) * self.mul_complex() + self.mem(2.0 * len, Pattern::Sequential);
+                c += (len / cpv) * self.mul_complex()
+                    + self.mem(2.0 * len, Pattern::Sequential, len);
                 c += *right_len as f64 * child_cost(*left_len);
                 c += *left_len as f64 * child_cost(*right_len);
                 c
@@ -365,12 +406,12 @@ impl CostModel {
                 // Two CRT reindexing passes and one transpose, but no twiddle multiplies. Both
                 // reindexing passes are permuted in either variant; the transpose splits the two
                 // exactly as in MixedRadix.
-                let mut c = 2.0 * self.mem(2.0 * len, Pattern::Permuted);
+                let mut c = 2.0 * self.transpose_mem(2.0 * len, Pattern::Permuted, len);
                 c += if *small {
-                    self.mem(2.0 * len, Pattern::Permuted)
+                    self.transpose_mem(2.0 * len, Pattern::Permuted, len)
                         + self.small_row * left_len.saturating_sub(*right_len) as f64
                 } else {
-                    self.mem(2.0 * len, Pattern::Strided)
+                    self.transpose_mem(2.0 * len, Pattern::Strided, len)
                         + self.general_row * 1.5 * (left_len + right_len) as f64
                 };
                 c += *right_len as f64 * child_cost(*left_len);
@@ -381,8 +422,9 @@ impl CostModel {
                 let len_f = *len as f64;
                 // The inner FFT runs twice, around a permuting gather and scatter.
                 let mut c = 2.0 * child_cost(len - 1);
-                c += 2.0 * (self.mem(2.0 * len_f, Pattern::Permuted) + len_f * self.rader_index);
-                c += len_f * self.mul_complex() + self.mem(2.0 * len_f, Pattern::Sequential);
+                c += 2.0
+                    * (self.mem(2.0 * len_f, Pattern::Permuted, len_f) + len_f * self.rader_index);
+                c += len_f * self.mul_complex() + self.mem(2.0 * len_f, Pattern::Sequential, len_f);
                 c
             }
             Shape::Bluesteins { len, inner_len } => {
@@ -391,9 +433,10 @@ impl CostModel {
                 // Inner FFT twice, pointwise multiply over the padded inner length, and a
                 // twiddle-and-pad pass in and out over the outer length.
                 let mut c = 2.0 * child_cost(*inner_len);
-                c += inner * self.mul_complex() + self.mem(2.0 * inner, Pattern::Sequential);
-                c +=
-                    2.0 * (outer * self.mul_complex() + self.mem(2.0 * outer, Pattern::Sequential));
+                c += inner * self.mul_complex() + self.mem(2.0 * inner, Pattern::Sequential, inner);
+                c += 2.0
+                    * (outer * self.mul_complex()
+                        + self.mem(2.0 * outer, Pattern::Sequential, outer));
                 c
             }
         })
