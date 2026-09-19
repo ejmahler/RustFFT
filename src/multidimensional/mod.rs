@@ -97,24 +97,6 @@ pub(crate) mod multidimensional_test_utils;
 /// It takes in a slice of `Complex<T>` and computes a multidimensional FFT on that slice, in-place. It may copy the data over to internal scratch buffers
 /// if that speeds up the computation, but the output will always end up in the same slice as the input.
 pub trait FftNd<T: FftNum, const DIMENSIONS: usize>: Length + Direction + Sync + Send {
-    /// Returns FFT length of each dimension of this multidimensional FFT
-    fn shape(&self) -> [usize; DIMENSIONS];
-
-    /// Returns the size of the scratch buffer required by `process_with_scratch`
-    ///
-    /// The returned value may change from one version of RustFFT to the next.
-    fn get_inplace_scratch_len(&self) -> usize;
-
-    /// Returns the size of the scratch buffer required by `process_outofplace_with_scratch`
-    ///
-    /// The returned value may change from one version of RustFFT to the next.
-    fn get_outofplace_scratch_len(&self) -> usize;
-
-    /// Returns the size of the scratch buffer required by `process_immutable_with_scratch`
-    ///
-    /// The returned value may change from one version of RustFFT to the next.
-    fn get_immutable_scratch_len(&self) -> usize;
-
     /// Computes a multi-dimensional FFT in-place.
     ///
     /// Convenience method that allocates a `Vec` with the required scratch space and calls `self.process_with_scratch`.
@@ -184,4 +166,22 @@ pub trait FftNd<T: FftNum, const DIMENSIONS: usize>: Length + Direction + Sync +
         output: &mut [Complex<T>],
         scratch: &mut [Complex<T>],
     );
+
+    /// Returns the size of the scratch buffer required by `process_with_scratch`
+    ///
+    /// The returned value may change from one version of RustFFT to the next.
+    fn get_inplace_scratch_len(&self) -> usize;
+
+    /// Returns the size of the scratch buffer required by `process_outofplace_with_scratch`
+    ///
+    /// The returned value may change from one version of RustFFT to the next.
+    fn get_outofplace_scratch_len(&self) -> usize;
+
+    /// Returns the size of the scratch buffer required by `process_immutable_with_scratch`
+    ///
+    /// The returned value may change from one version of RustFFT to the next.
+    fn get_immutable_scratch_len(&self) -> usize;
+
+    /// Returns FFT length of each dimension of this multidimensional FFT
+    fn shape(&self) -> [usize; DIMENSIONS];
 }
