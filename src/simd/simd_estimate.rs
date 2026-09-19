@@ -226,12 +226,17 @@ pub struct CostModel {
     /// A gather or scatter against a sequential pass.
     pub permuted: f64,
     /// One element of Rader's permutation passes, on top of the gather or scatter itself: the
-    /// load of its index from the precomputed `u32` table.
+    /// load of its index from the precomputed `u32` table, and assembling the element.
     ///
-    /// Before ejmahler#178 the index came from a loop-carried modular-multiply chain, latency
-    /// bound, and this was 30 (f64) and 45 (f32). With the table, a survey of 300 random lengths
-    /// up to a million on an M1 scores 2 and 8 about the same, and both far better than the old
-    /// values, which made Rader's look expensive enough to trade for a large Bluestein's.
+    /// Per backend, and the gap is large: 2 on NEON, 20 on SSE. NEON gathers a complex number
+    /// with a single lane load, while SSE has to assemble one from scalar halves, so the same
+    /// permutation costs far more per element there. Before ejmahler#178 the index came from a
+    /// loop-carried modular multiply and this was 30 and 45, dominated by that latency.
+    ///
+    /// On NEON a survey of 300 random lengths up to a million on an M1 scores 2 and 8 the same,
+    /// and both far better than the old values. On SSE, over the lengths where the value changes
+    /// a pick, 20 gives 2 losses beyond 5% in f64 against 12 at 2, and it is also the best value
+    /// in f32, so one number serves both precisions there.
     pub rader_index: f64,
     /// Extra cost per element per cross-FFT layer of the generic `SimdRadixN` driver, over the
     /// hand-written `Radix4` kernel doing the same work. Expected near zero on NEON's 32 vector
@@ -308,7 +313,10 @@ impl CostModel {
             complex_per_vector,
             strided,
             permuted: 2.5,
-            rader_index: 2.0,
+            rader_index: match instruction_set {
+                InstructionSet::Neon => 2.0,
+                InstructionSet::Sse => 20.0,
+            },
             radixn_extra,
             general_row: 30.0,
             small_row: 10.0,
