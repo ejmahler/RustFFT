@@ -222,9 +222,39 @@ the weight.
 
 ## 6. Known blind spots
 
-1. **Bluestein's at large lengths in f32.** The worst remaining class. On the Pi 5, lengths like
-   774209 and 232371 still take a Bluestein's whose inner FFT is several times the cache, at 3.2x
-   and 2.5x the fixed planner. The memory terms improved these without fixing them.
+1. **A large prime factor, in f32, on a machine with a small cache.** The worst remaining class,
+   and the one place a fixed cache threshold cannot be right for everyone. Pi 5 f32, grouped by
+   largest prime factor, over the validation set:
+
+   | class | n | geomean | losses >5% | losses >20% | worst |
+   |---|---|---|---|---|---|
+   | every factor has a butterfly | 131 | 0.941 | 2 | 0 | 1.10 |
+   | largest prime 33 to 2000 | 121 | 0.918 | 2 | 1 | 1.30 |
+   | largest prime 2k to 20k | 44 | 0.988 | 3 | 2 | 3.51 |
+   | largest prime above 20000 | 38 | 0.936 | 7 | 5 | 2.58 |
+
+   In f64 the same table has three losses beyond 5% and a worst of 1.26. Smooth lengths never lose
+   more than 10% on either machine.
+
+   **The diagnosis, so it does not have to be re-derived.** At 774209 (331 x 2339) the model takes
+   one Bluestein's with a 1572864-point inner, 12.6 MB in f32. Timing the pieces on the Pi gives
+   0.19 to 0.21 ns per unit of cost for the cache-resident parts and 0.79 to 0.98 for that inner,
+   so out-of-cache work is still under-priced about four times over, after `dram_pass`. The same
+   pick is *correct* on the M1, where 12.6 MB still fits a 12 MB L2.
+
+   So the multiplier is not the machine-specific part, the threshold is. Fixing it at 256 KiB makes
+   one number cover both "just past the Pi's 2 MB L3" and "still inside the M1's L2". Raising
+   `dram_pass` to 3 fixes the Pi outright (774209 goes 3.40 to 1.02, 232371 2.50 to 1.09) and costs
+   the M1 dearly at that threshold, 0 losses to 7 in f64. Give each machine its own cache size and
+   the conflict disappears: at a 12 MiB threshold, `dram_pass` 3 costs the M1 one loss instead of
+   seven, while still fixing the Pi.
+
+   **The fix, when it is wanted, is to read the last-level cache size at construction** and set
+   `cache_elems` from it: `/sys/devices/system/cpu/cpu0/cache/` on Linux, and
+   `hw.perflevel0.l2cachesize` on macOS, whose flat `hw.*cachesize` keys report the E-core sizes.
+   That is a deliberate reversal of the spike's conclusion that a shipping model needs no cache
+   sizes, which held only while the cache term was inert.
+
 2. **Width and height are tied.** The cost function gives `mr(A,B)` and `mr(B,A)` the same cost
    apart from the `small_row` tie-break, yet many reversed pairs measure more than 2% apart. This is
    the clearest unexploited improvement and it is derivable from the code.
