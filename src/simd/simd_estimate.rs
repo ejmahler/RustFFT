@@ -239,8 +239,17 @@ pub struct CostModel {
     /// in f32, so one number serves both precisions there.
     pub rader_index: f64,
     /// Extra cost per element per cross-FFT layer of the generic `SimdRadixN` driver, over the
-    /// hand-written `Radix4` kernel doing the same work. Expected near zero on NEON's 32 vector
-    /// registers and positive on SSE's 16, since a layer holds two rows per radix live at once.
+    /// hand-written `Radix4` kernel doing the same work.
+    ///
+    /// Zero on NEON and positive on SSE, which is what a register-count argument predicts: a
+    /// cross layer holds two rows per radix live at once, which fits aarch64's 32 vector
+    /// registers at every supported radix and does not fit x86-64's 16.
+    ///
+    /// Rechecked on the ThinkCentre after the memory terms and `rader_index` changed underneath
+    /// it, and 6 and 1 survive. A grid over the previous run's losing lengths preferred 10 in
+    /// f64, but that set is selected for what the old value got wrong, and over the whole
+    /// validation set 10 scores 24 losses beyond 5% against 6's 20. Grid on an independent
+    /// sample, not on the lengths a previous run lost.
     pub radixn_extra: f64,
     /// Fixed cost per row charged to the general MixedRadix and GoodThomas, for the blocked
     /// transpose and on-the-fly CRT mapping that the `Small` variants do not have.

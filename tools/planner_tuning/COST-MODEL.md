@@ -153,11 +153,11 @@ and must be rechecked when the machines change.
 | `permuted` | 2.5 | grid against measured dumps |
 | `general_row` | 30 | the twelve measured general-over-small ratios |
 | `small_row` | 10 | one outer iteration of `transpose_small`, 1.48 ns on an i3, 0.7 to 1.0 on an M1. A tie-break with a derivation; anything from 2 to 24 scores the same |
-| `rader_index` | 2 | one load from the permutation table ejmahler#178 added. It was 30 and 45 when that index came from a loop-carried modular multiply |
-| `radixn_extra` | 0 on NEON, 6 and 1 on SSE f64 and f32 | expected near zero where 2R rows fit the register file: 32 vector registers on aarch64, 16 on x86-64. **Fitted before the memory terms below and not yet rechecked** |
+| `rader_index` | 2 on NEON, 20 on SSE | one load from the permutation table ejmahler#178 added, plus assembling the element, which costs far more on SSE. It was 30 and 45 when that index came from a loop-carried modular multiply |
+| `radixn_extra` | 0 on NEON, 6 and 1 on SSE f64 and f32 | expected near zero where 2R rows fit the register file: 32 vector registers on aarch64, 16 on x86-64. Rechecked on the ThinkCentre after the memory terms landed |
 | `radix_call` | 100 | sized at length 14 on an M1, about 8 ns or 25 cycles: the call, the scratch split, the layer setup and the virtual call into the base FFT |
 | `cache_elems` | 256 KiB worth | the smallest last-level cache worth planning for, not any one machine's. No pick below length 16385 changes at this threshold, so weights fitted on short lengths stay valid |
-| `dram`, `dram_pass` | 6 and 2 | fitted on a Raspberry Pi 5 and checked on an M1; see below |
+| `dram`, `dram_pass` | 6 and 2 | fitted on a Raspberry Pi 5, checked on an M1 and on an i3-8100T whose 6 MiB L3 sits between the other two; see below |
 
 ### The two weights where machines disagree
 
@@ -186,20 +186,20 @@ large-Bluestein class neither value solves.
 ## 4a. What it scores
 
 334 lengths spread over 1 to 1,000,000 (`survey --count 350 --seed 1`), as the estimating
-planner's runtime over the fixed planner's, so below 1 is faster:
+planner's runtime over the fixed planner's, so below 1 is faster and a loss is a length where the
+fixed planner was more than 5% faster:
 
 | | geomean | p10 | p50 | p90 | worst | losses >5% | wins >5% |
 |---|---|---|---|---|---|---|---|
-| M1 f64 | 0.917 | 0.76 | 0.98 | 1.000 | 1.14 | 5 | 147 |
-| M1 f32 | 0.933 | 0.79 | 1.00 | 1.005 | 1.40 | 15 | 118 |
-| Pi 5 f64 | 0.881 | 0.70 | 0.96 | 1.000 | 1.26 | 3 | 161 |
-| Pi 5 f32 | 0.938 | 0.78 | 1.00 | 1.000 | 3.51 | 14 | 123 |
+| M1 (NEON) f64 | 0.917 | 0.76 | 0.98 | 1.000 | 1.14 | 5 | 147 |
+| M1 (NEON) f32 | 0.933 | 0.77 | 1.00 | 1.000 | 1.40 | 15 | 118 |
+| Pi 5 (NEON) f64 | 0.881 | 0.70 | 0.96 | 1.000 | 1.26 | 3 | 161 |
+| Pi 5 (NEON) f32 | 0.938 | 0.79 | 1.00 | 1.000 | 3.51 | 14 | 123 |
+| i3-8100T (SSE) f64 | 0.983 | 0.91 | 1.00 | 1.017 | 1.41 | 20 | 64 |
+| i3-8100T (SSE) f32 | 0.943 | 0.81 | 1.00 | 1.000 | 1.38 | 7 | 110 |
 
-SSE is not in this table: the machine was unreachable when it was taken, and `radixn_extra` there
-was fitted before the memory terms existed.
-
-The rule for any future weight like these: sweep it on every machine and take the value whose worst
-machine looks best, rather than the optimum on any one.
+SSE f64 is the weakest cell: it wins at 64 lengths of 334 and loses at 20, for about 2% on
+average. The NEON cells win at a third to a half of all lengths.
 
 ## 5. What to redo when the kernels change
 
@@ -262,7 +262,9 @@ the weight.
    cost difference is a constant multiple of `len`, so its sign cannot vary with length. Keep any
    correction small: a stride-aware rewrite aimed at this regressed both backends and was reverted.
 4. **x86 has one machine.** The Pi 5 separated machine from backend on ARM. Nothing has done that
-   for SSE, and `radixn_extra` is the largest single weight fitted there.
+   for SSE, so an SSE weight and an i3-8100T weight are still the same column. `rader_index` shows
+   why that matters: it is 2 on NEON and 20 on SSE, a gap explained by how each backend gathers a
+   complex number, but only a second x86 machine can confirm that reading.
 5. **Plan time.** Enumerate-and-price costs far more than the fixed planner's plan, which is the
    wrong denominator: a caller pays plan plus build, and building dominates. Against plan-plus-build
    the estimating planner costs a few executions of the transform it is planning at small lengths,
