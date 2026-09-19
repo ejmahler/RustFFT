@@ -11,6 +11,9 @@ struct FftDimension<T> {
     fft: Arc<dyn Fft<T>>,
     len: usize,
     transpose_height: usize,
+
+    // If this dimension is being executed in-place, false if it can use pre-existing buffers for scratch, true if it needs extra
+    inplace_needs_extra_scratch: bool,
 }
 
 /// Computes multidimensional FFTs by doing one transpose per dimension to make that dimension contiguous, then computing contiguous FFTs for that dimension
@@ -51,50 +54,74 @@ impl<T: FftNum, const DIMENSIONS: usize> FftNdTranspose<T, DIMENSIONS> {
             outofplace_scratch_len = ffts[0].get_outofplace_scratch_len();
             immut_scratch_len = ffts[0].get_immutable_scratch_len();
         } else if DIMENSIONS > 1 {
+            // For multi-dimension FFTs, there's quite an involved process for for figuring out how much scratch to request
+            inplace_scratch_len = len;
+            outofplace_scratch_len = 0;
+            immut_scratch_len = len;
+
             for (i, dimension) in ffts.iter().enumerate() {
-                // todo: all of these scratch requirements can be reduced
                 let dimension_inplace = dimension.get_inplace_scratch_len();
                 let dimension_outofplace = dimension.get_outofplace_scratch_len();
                 let dimension_immut = dimension.get_immutable_scratch_len();
 
-                // In place scratch len: the final FFT is computed differently based on how many dimensions we have
-                if i == ffts.len() - 1 {
-                    if DIMENSIONS % 2 == 0 {
-                        inplace_scratch_len = inplace_scratch_len.max(len + dimension_inplace);
+                // In place scratch len: In most cases we call inplace on the inner FFTs, so whatever that needs
+                if i < ffts.len() - 1 || DIMENSIONS % 2 == 0 {
+                    // If this step's scratch fits in our len, it can reuse the already-existing len scratch, so it doesn't need extra
+                    // If it's bigger than that we have to allocate it on top of the already-existing len scratch
+                    let step_scratch = if dimension_inplace <= len {
+                        0
                     } else {
-                        inplace_scratch_len = inplace_scratch_len.max(len + dimension_outofplace);
-                    }
+                        len + dimension_inplace
+                    };
+                    inplace_scratch_len = inplace_scratch_len.max(step_scratch);
                 } else {
-                    inplace_scratch_len = inplace_scratch_len.max(len + dimension_inplace);
+                    // When the dimensionality is odd and this is the last fft, we use out of place instead.
+                    // This is the last step and the only one that isn't in place. If the existing value of inplace_scratch_len is
+                    inplace_scratch_len = inplace_scratch_len.max(len + dimension_outofplace);
                 }
 
-                // Out of place scratch len: the final FFT is computed differently based on how many dimensions we have
-                if i == ffts.len() - 1 {
-                    if DIMENSIONS % 2 == 0 {
-                        outofplace_scratch_len = outofplace_scratch_len.max(dimension_outofplace);
+                // Out of place scratch len: In most cases we call inplace on the inner FFTs, so whatever that needs
+                if i < ffts.len() - 1 || DIMENSIONS % 2 == 1 {
+                    // If this step's scratch fits within our len, it can reuse the already-existing input/output buffer, so it doesn't need extra
+                    // If it's bigger than that we have to allocate it special
+                    let step_scratch = if dimension_inplace <= len {
+                        0
                     } else {
-                        outofplace_scratch_len =
-                            outofplace_scratch_len.max(len + dimension_inplace);
-                    }
+                        dimension_inplace
+                    };
+                    outofplace_scratch_len = outofplace_scratch_len.max(step_scratch);
                 } else {
-                    outofplace_scratch_len = outofplace_scratch_len.max(len + dimension_inplace);
+                    // When the dimensionality is even and this is the last fft, we use out of place instead
+                    outofplace_scratch_len = outofplace_scratch_len.max(dimension_outofplace);
                 }
 
-                // Immutable scratch is different for the final FFT
+                // Immutable scratch: On the last step we unconditionally call immut, on every other step we call process in place
                 if i == ffts.len() - 1 {
                     immut_scratch_len = immut_scratch_len.max(len + dimension_immut);
                 } else {
-                    immut_scratch_len = immut_scratch_len.max(len + dimension_inplace);
+                    // If this step's scratch fits in our len, it can reuse the already-existing len scratch, so it doesn't need extra
+                    // If it's bigger than that we have to allocate it on top of the already-existing len scratch
+                    let step_scratch = if dimension_inplace <= len {
+                        0
+                    } else {
+                        len + dimension_inplace
+                    };
+                    immut_scratch_len = immut_scratch_len.max(step_scratch);
                 }
             }
         }
         Self {
             ffts: ffts.map(|fft| {
                 let d = fft.len();
+
+                // If this FFT's in-place scratch is greater than our outer FFT length (rare), mark that it needs extra scratch
+                // We already took care of computing how much earlier, this just takes care of which ones need it
+                let inplace_needs_extra_scratch = fft.get_inplace_scratch_len() > len;
                 FftDimension {
                     fft,
                     len: d,
                     transpose_height: if d > 0 { len / d } else { 0 },
+                    inplace_needs_extra_scratch,
                 }
             }),
             len,
@@ -152,7 +179,12 @@ impl<T: FftNum, const DIMENSIONS: usize> FftNd<T, DIMENSIONS> for FftNdTranspose
                 // Our main loop bounces data back and forth between chunk and scratch. We want it to end up in chunk,
                 // So our first FFT needs to initialize the bouncing into the correct place, which differs based on how many total FFTs there are to do
                 let (mut step_input, mut step_output) = if DIMENSIONS % 2 == 0 {
-                    last_fft.fft.process_with_scratch(chunk, inner_scratch);
+                    let step_scratch = if last_fft.inplace_needs_extra_scratch {
+                        &mut inner_scratch[..]
+                    } else {
+                        &mut scratch[..]
+                    };
+                    last_fft.fft.process_with_scratch(chunk, step_scratch);
                     (chunk, scratch)
                 } else {
                     last_fft
@@ -171,9 +203,14 @@ impl<T: FftNum, const DIMENSIONS: usize> FftNd<T, DIMENSIONS> for FftNdTranspose
                 // Execute the remaining FFTs, bouncing the data back and forth between output and scratch
                 for inner_fft in other_ffts.iter().rev() {
                     (step_input, step_output) = (step_output, step_input);
-                    inner_fft
-                        .fft
-                        .process_with_scratch(step_input, inner_scratch);
+
+                    let step_scratch = if inner_fft.inplace_needs_extra_scratch {
+                        &mut inner_scratch[..]
+                    } else {
+                        &mut step_output[..]
+                    };
+
+                    inner_fft.fft.process_with_scratch(step_input, step_scratch);
                     transpose::transpose(
                         step_input,
                         step_output,
@@ -216,7 +253,12 @@ impl<T: FftNum, const DIMENSIONS: usize> FftNd<T, DIMENSIONS> for FftNdTranspose
                         .process_outofplace_with_scratch(chunk_in, chunk_out, scratch);
                     (chunk_out, chunk_in)
                 } else {
-                    last_fft.fft.process_with_scratch(chunk_in, scratch);
+                    let step_scratch = if last_fft.inplace_needs_extra_scratch {
+                        &mut scratch[..]
+                    } else {
+                        &mut chunk_out[..]
+                    };
+                    last_fft.fft.process_with_scratch(chunk_in, step_scratch);
                     (chunk_in, chunk_out)
                 };
                 transpose::transpose(
@@ -229,7 +271,14 @@ impl<T: FftNum, const DIMENSIONS: usize> FftNd<T, DIMENSIONS> for FftNdTranspose
                 // Execute the remaining FFTs, bouncing the data back and forth between output and scratch
                 for inner_fft in other_ffts.iter().rev() {
                     (step_input, step_output) = (step_output, step_input);
-                    inner_fft.fft.process_with_scratch(step_input, scratch);
+
+                    let step_scratch = if inner_fft.inplace_needs_extra_scratch {
+                        &mut scratch[..]
+                    } else {
+                        &mut step_output[..]
+                    };
+
+                    inner_fft.fft.process_with_scratch(step_input, step_scratch);
                     transpose::transpose(
                         step_input,
                         step_output,
@@ -287,9 +336,14 @@ impl<T: FftNum, const DIMENSIONS: usize> FftNd<T, DIMENSIONS> for FftNdTranspose
                 // Execute the remaining FFTs, bouncing the data back and forth between output and scratch
                 for inner_fft in other_ffts.iter().rev() {
                     (step_input, step_output) = (step_output, step_input);
-                    inner_fft
-                        .fft
-                        .process_with_scratch(step_input, inner_scratch);
+
+                    let step_scratch = if inner_fft.inplace_needs_extra_scratch {
+                        &mut inner_scratch[..]
+                    } else {
+                        &mut step_output[..]
+                    };
+
+                    inner_fft.fft.process_with_scratch(step_input, step_scratch);
                     transpose::transpose(
                         step_input,
                         step_output,
