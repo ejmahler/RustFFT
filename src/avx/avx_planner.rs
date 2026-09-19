@@ -6,8 +6,9 @@ use primal_check::miller_rabin;
 use crate::algorithm::*;
 use crate::common::FftNum;
 use crate::math_utils::PartialFactors;
-use crate::Fft;
+use crate::multidimensional::fft_nd_transpose::FftNdTranspose;
 use crate::{algorithm::butterflies::*, fft_cache::FftCache};
+use crate::{Fft, FftNd};
 
 use super::*;
 
@@ -182,6 +183,34 @@ impl<T: FftNum> FftPlannerAvx<T> {
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft_inverse(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         self.plan_fft(len, FftDirection::Inverse)
+    }
+
+    /// Returns a `FftNd` instance which computes multimensional FFTs with dimensions specified by `shape`.
+    ///
+    /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
+    ///
+    /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+    pub fn plan_fft_multidimensional<const DIMENSIONS: usize>(
+        &mut self,
+        shape: [usize; DIMENSIONS],
+        direction: FftDirection,
+    ) -> Arc<dyn FftNd<T, DIMENSIONS>> {
+        let len = if DIMENSIONS == 0 {
+            0
+        } else {
+            let mut len: usize = 1;
+            for s in shape {
+                len = len.checked_mul(s).expect("Overflow when multiplying shape sizes together to compute FFT length in plan_fft_multidimensional");
+            }
+            len
+        };
+
+        // No caching for multimensional FFTs for now, since they're just thin wrappers over their internal algorithms
+        Arc::new(FftNdTranspose::new(
+            len,
+            direction,
+            shape.map(|s| self.plan_fft(s, direction)),
+        ))
     }
 
     /// Returns a FFT plan without constructing it
@@ -996,6 +1025,8 @@ impl<A: AvxNum, T: FftNum> AvxPlannerInternal<A, T> {
 
 #[cfg(test)]
 mod unit_tests {
+    use crate::multidimensional::multidimensional_test_utils::check_multidimensional_fft_algorithm;
+
     use super::*;
 
     // We don't need to actually compute anything for a FFT size of zero, but we do need to verify that it doesn't explode
@@ -1008,5 +1039,92 @@ mod unit_tests {
         let mut planner64 = FftPlannerAvx::<f64>::new().unwrap();
         let fft_zero64 = planner64.plan_fft_forward(0);
         fft_zero64.process(&mut []);
+    }
+
+    fn test_multidimensional_planned_nd<const D: usize>(
+        planner: &mut FftPlannerAvx<f32>,
+        shape: [usize; D],
+    ) {
+        // Forward FFT
+        let fft_forward = planner.plan_fft_multidimensional(shape, FftDirection::Forward);
+        check_multidimensional_fft_algorithm(fft_forward.as_ref(), shape, FftDirection::Forward);
+
+        // Inverse FFT
+        let fft_inverse = planner.plan_fft_multidimensional(shape, FftDirection::Forward);
+        check_multidimensional_fft_algorithm(fft_inverse.as_ref(), shape, FftDirection::Forward);
+    }
+
+    #[test]
+    fn test_multidimensional_planned_avx_0d() {
+        let mut planner: FftPlannerAvx<_> = FftPlannerAvx::new().unwrap();
+
+        // There's no reason to create a 0d multimensional FFT, but that doesn't mean it shouldn't work if someone does
+        test_multidimensional_planned_nd(&mut planner, []);
+    }
+
+    #[test]
+    fn test_multidimensional_planned_avx_1d() {
+        let mut planner = FftPlannerAvx::<f32>::new().unwrap();
+
+        // There's no reason to create a 1d multimensional FFT, but that doesn't mean it shouldn't work if someone does
+        for a in 0..10 {
+            test_multidimensional_planned_nd(&mut planner, [a]);
+        }
+    }
+
+    #[test]
+    fn test_multidimensional_planned_avx_2d() {
+        let mut planner = FftPlannerAvx::<f32>::new().unwrap();
+
+        for a in 0..10 {
+            for b in 0..10 {
+                test_multidimensional_planned_nd(&mut planner, [a, b]);
+            }
+        }
+    }
+
+    #[test]
+    fn test_multidimensional_planned_avx_3d() {
+        let mut planner = FftPlannerAvx::<f32>::new().unwrap();
+
+        for a in 0..8 {
+            for b in 0..8 {
+                for c in 0..8 {
+                    test_multidimensional_planned_nd(&mut planner, [a, b, c]);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_multidimensional_planned_avx_4d() {
+        let mut planner = FftPlannerAvx::<f32>::new().unwrap();
+
+        for a in 0..5 {
+            for b in 0..5 {
+                for c in 0..5 {
+                    for d in 0..5 {
+                        test_multidimensional_planned_nd(&mut planner, [a, b, c, d]);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_multidimensional_planned_avx_5d() {
+        let mut planner = FftPlannerAvx::<f32>::new().unwrap();
+
+        for a in 0..4 {
+            for b in 0..4 {
+                for c in 0..4 {
+                    for d in 0..4 {
+                        for e in 0..4 {
+                            test_multidimensional_planned_nd(&mut planner, [a, b, c, d, e]);
+                        }
+                    }
+                }
+            }
+        }
     }
 }
