@@ -6,6 +6,11 @@ use std::ops::{Deref, DerefMut};
 
 use crate::{array_utils::DoubleBuf, twiddles, FftDirection};
 
+use super::wasm_simd_butterflies::{
+    WasmSimdF32Butterfly3, WasmSimdF32Butterfly5, WasmSimdF32Butterfly6, WasmSimdF64Butterfly3,
+    WasmSimdF64Butterfly5, WasmSimdF64Butterfly6,
+};
+use super::wasm_simd_prime_butterflies::{WasmSimdF32Butterfly7, WasmSimdF64Butterfly7};
 use super::WasmNum;
 
 /// Read these indexes from an WasmSimdArray and build an array of simd vectors.
@@ -744,6 +749,250 @@ where
     unsafe fn store_partial_lo_complex(&mut self, vector: T::VectorType, index: usize) {
         self.output.store_partial_lo_complex(vector, index);
     }
+}
+
+// The `SimdVector` impls, which let this backend use the algorithms in `src/simd`. The trait is
+// named by path instead of imported, because importing it would make methods like
+// `Self::column_butterfly2` ambiguous with the backend's own vector trait.
+
+// The `SimdVector::fft_helper_*` methods, which are the same forwarding calls for every WASM
+// SIMD vector type: they hand the chunk loop to the target-feature-enabled wrappers in
+// `wasm_simd_common.rs`.
+macro_rules! wasm_simd_vector_fft_helpers {
+    () => {
+        #[inline(always)]
+        unsafe fn fft_helper_immut<E>(
+            input: &[E],
+            output: &mut [E],
+            scratch: &mut [E],
+            chunk_size: usize,
+            required_scratch: usize,
+            chunk_fn: impl FnMut(&[E], &mut [E], &mut [E]),
+        ) {
+            super::wasm_simd_common::wasm_simd_fft_helper_immut(
+                input,
+                output,
+                scratch,
+                chunk_size,
+                required_scratch,
+                chunk_fn,
+            )
+        }
+        #[inline(always)]
+        unsafe fn fft_helper_outofplace<E>(
+            input: &mut [E],
+            output: &mut [E],
+            scratch: &mut [E],
+            chunk_size: usize,
+            required_scratch: usize,
+            chunk_fn: impl FnMut(&mut [E], &mut [E], &mut [E]),
+        ) {
+            super::wasm_simd_common::wasm_simd_fft_helper_outofplace(
+                input,
+                output,
+                scratch,
+                chunk_size,
+                required_scratch,
+                chunk_fn,
+            )
+        }
+        #[inline(always)]
+        unsafe fn fft_helper_inplace<E>(
+            buffer: &mut [E],
+            scratch: &mut [E],
+            chunk_size: usize,
+            required_scratch: usize,
+            chunk_fn: impl FnMut(&mut [E], &mut [E]),
+        ) {
+            super::wasm_simd_common::wasm_simd_fft_helper_inplace(
+                buffer,
+                scratch,
+                chunk_size,
+                required_scratch,
+                chunk_fn,
+            )
+        }
+    };
+}
+
+impl crate::simd::simd_vector::SimdVector for WasmVector64 {
+    const COMPLEX_PER_VECTOR: usize = 1;
+
+    type ScalarType = f64;
+    type Rotation = Rotation90<Self>;
+
+    type Butterfly3 = WasmSimdF64Butterfly3<f64>;
+    type Butterfly5 = WasmSimdF64Butterfly5<f64>;
+    type Butterfly6 = WasmSimdF64Butterfly6<f64>;
+    type Butterfly7 = WasmSimdF64Butterfly7<f64>;
+
+    #[inline(always)]
+    unsafe fn load(data: &[Complex<f64>], index: usize) -> Self {
+        data.load_complex(index)
+    }
+    #[inline(always)]
+    unsafe fn store(mut data: &mut [Complex<f64>], value: Self, index: usize) {
+        data.store_complex(value, index)
+    }
+
+    #[inline(always)]
+    unsafe fn mul_complex(left: Self, right: Self) -> Self {
+        WasmVector::mul_complex(left, right)
+    }
+    #[inline(always)]
+    unsafe fn make_mixedradix_twiddle_chunk(
+        x: usize,
+        y: usize,
+        len: usize,
+        direction: FftDirection,
+    ) -> Self {
+        WasmVector::make_mixedradix_twiddle_chunk(x, y, len, direction)
+    }
+
+    #[inline(always)]
+    unsafe fn make_rotate90(direction: FftDirection) -> Self::Rotation {
+        WasmVector::make_rotate90(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly3(direction: FftDirection) -> Self::Butterfly3 {
+        WasmSimdF64Butterfly3::new(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly5(direction: FftDirection) -> Self::Butterfly5 {
+        WasmSimdF64Butterfly5::new(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly6(direction: FftDirection) -> Self::Butterfly6 {
+        WasmSimdF64Butterfly6::new(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
+        WasmSimdF64Butterfly7::new(direction)
+    }
+
+    #[inline(always)]
+    unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
+        WasmVector::column_butterfly2(rows)
+    }
+    // Butterflies 3, 5 and 6 are written against raw `v128` while `WasmVector64` is a newtype over
+    // it, so their results come back needing rewrapping. Butterfly 7 already speaks the wrapper
+    // types and needs none of it.
+    #[inline(always)]
+    unsafe fn column_butterfly3(bf: &Self::Butterfly3, rows: [Self; 3]) -> [Self; 3] {
+        bf.perform_fft_direct(rows[0].0, rows[1].0, rows[2].0)
+            .map(f64::wrap)
+    }
+    #[inline(always)]
+    unsafe fn column_butterfly4(rows: [Self; 4], rotation: Self::Rotation) -> [Self; 4] {
+        WasmVector::column_butterfly4(rows, rotation)
+    }
+    #[inline(always)]
+    unsafe fn column_butterfly5(bf: &Self::Butterfly5, rows: [Self; 5]) -> [Self; 5] {
+        bf.perform_fft_direct(rows[0].0, rows[1].0, rows[2].0, rows[3].0, rows[4].0)
+            .map(f64::wrap)
+    }
+    #[inline(always)]
+    unsafe fn column_butterfly6(bf: &Self::Butterfly6, rows: [Self; 6]) -> [Self; 6] {
+        bf.perform_fft_direct([
+            rows[0].0, rows[1].0, rows[2].0, rows[3].0, rows[4].0, rows[5].0,
+        ])
+        .map(f64::wrap)
+    }
+    #[inline(always)]
+    unsafe fn column_butterfly7(bf: &Self::Butterfly7, rows: [Self; 7]) -> [Self; 7] {
+        bf.perform_fft_direct(rows)
+    }
+
+    wasm_simd_vector_fft_helpers!();
+}
+
+impl crate::simd::simd_vector::SimdVector for WasmVector32 {
+    const COMPLEX_PER_VECTOR: usize = 2;
+
+    type ScalarType = f32;
+    type Rotation = Rotation90<Self>;
+
+    type Butterfly3 = WasmSimdF32Butterfly3<f32>;
+    type Butterfly5 = WasmSimdF32Butterfly5<f32>;
+    type Butterfly6 = WasmSimdF32Butterfly6<f32>;
+    type Butterfly7 = WasmSimdF32Butterfly7<f32>;
+
+    #[inline(always)]
+    unsafe fn load(data: &[Complex<f32>], index: usize) -> Self {
+        data.load_complex(index)
+    }
+    #[inline(always)]
+    unsafe fn store(mut data: &mut [Complex<f32>], value: Self, index: usize) {
+        data.store_complex(value, index)
+    }
+
+    #[inline(always)]
+    unsafe fn mul_complex(left: Self, right: Self) -> Self {
+        WasmVector::mul_complex(left, right)
+    }
+    #[inline(always)]
+    unsafe fn make_mixedradix_twiddle_chunk(
+        x: usize,
+        y: usize,
+        len: usize,
+        direction: FftDirection,
+    ) -> Self {
+        WasmVector::make_mixedradix_twiddle_chunk(x, y, len, direction)
+    }
+
+    #[inline(always)]
+    unsafe fn make_rotate90(direction: FftDirection) -> Self::Rotation {
+        WasmVector::make_rotate90(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly3(direction: FftDirection) -> Self::Butterfly3 {
+        WasmSimdF32Butterfly3::new(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly5(direction: FftDirection) -> Self::Butterfly5 {
+        WasmSimdF32Butterfly5::new(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly6(direction: FftDirection) -> Self::Butterfly6 {
+        WasmSimdF32Butterfly6::new(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
+        WasmSimdF32Butterfly7::new(direction)
+    }
+
+    #[inline(always)]
+    unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
+        WasmVector::column_butterfly2(rows)
+    }
+    // See the f64 impl for why butterflies 3, 5 and 6 rewrap their results and 7 doesn't.
+    #[inline(always)]
+    unsafe fn column_butterfly3(bf: &Self::Butterfly3, rows: [Self; 3]) -> [Self; 3] {
+        bf.perform_parallel_fft_direct(rows[0].0, rows[1].0, rows[2].0)
+            .map(f32::wrap)
+    }
+    #[inline(always)]
+    unsafe fn column_butterfly4(rows: [Self; 4], rotation: Self::Rotation) -> [Self; 4] {
+        WasmVector::column_butterfly4(rows, rotation)
+    }
+    #[inline(always)]
+    unsafe fn column_butterfly5(bf: &Self::Butterfly5, rows: [Self; 5]) -> [Self; 5] {
+        bf.perform_parallel_fft_direct(rows[0].0, rows[1].0, rows[2].0, rows[3].0, rows[4].0)
+            .map(f32::wrap)
+    }
+    #[inline(always)]
+    unsafe fn column_butterfly6(bf: &Self::Butterfly6, rows: [Self; 6]) -> [Self; 6] {
+        bf.perform_parallel_fft_direct(
+            rows[0].0, rows[1].0, rows[2].0, rows[3].0, rows[4].0, rows[5].0,
+        )
+        .map(f32::wrap)
+    }
+    #[inline(always)]
+    unsafe fn column_butterfly7(bf: &Self::Butterfly7, rows: [Self; 7]) -> [Self; 7] {
+        bf.perform_parallel_fft_direct(rows)
+    }
+
+    wasm_simd_vector_fft_helpers!();
 }
 
 #[cfg(test)]

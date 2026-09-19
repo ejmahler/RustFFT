@@ -78,7 +78,7 @@ fn make_twiddles<const TW: usize, T: FftNum>(len: usize, direction: FftDirection
     })
 }
 
-struct WasmSimdF32Butterfly7<T> {
+pub struct WasmSimdF32Butterfly7<T> {
     direction: FftDirection,
     twiddles_re: [WasmVector32; 3],
     twiddles_im: [WasmVector32; 3],
@@ -89,7 +89,7 @@ boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly7, 7, |this: &WasmS
 impl<T: FftNum> WasmSimdF32Butterfly7<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(7, direction);
         Self {
@@ -182,7 +182,7 @@ impl<T: FftNum> WasmSimdF32Butterfly7<T> {
     }
 }
 
-struct WasmSimdF64Butterfly7<T> {
+pub struct WasmSimdF64Butterfly7<T> {
     direction: FftDirection,
     twiddles_re: [WasmVector64; 3],
     twiddles_im: [WasmVector64; 3],
@@ -193,7 +193,7 @@ boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly7, 7, |this: &WasmS
 impl<T: FftNum> WasmSimdF64Butterfly7<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(7, direction);
         unsafe {Self {
@@ -257,7 +257,7 @@ impl<T: FftNum> WasmSimdF64Butterfly7<T> {
     }
 }
 
-struct WasmSimdF32Butterfly11<T> {
+pub struct WasmSimdF32Butterfly11<T> {
     direction: FftDirection,
     twiddles_re: [WasmVector32; 5],
     twiddles_im: [WasmVector32; 5],
@@ -268,7 +268,7 @@ boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly11, 11, |this: &Was
 impl<T: FftNum> WasmSimdF32Butterfly11<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(11, direction);
         Self {
@@ -411,7 +411,7 @@ impl<T: FftNum> WasmSimdF32Butterfly11<T> {
     }
 }
 
-struct WasmSimdF64Butterfly11<T> {
+pub struct WasmSimdF64Butterfly11<T> {
     direction: FftDirection,
     twiddles_re: [WasmVector64; 5],
     twiddles_im: [WasmVector64; 5],
@@ -422,7 +422,7 @@ boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly11, 11, |this: &Was
 impl<T: FftNum> WasmSimdF64Butterfly11<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(11, direction);
         unsafe {Self {
@@ -528,7 +528,7 @@ impl<T: FftNum> WasmSimdF64Butterfly11<T> {
     }
 }
 
-struct WasmSimdF32Butterfly13<T> {
+pub struct WasmSimdF32Butterfly13<T> {
     direction: FftDirection,
     twiddles_re: [WasmVector32; 6],
     twiddles_im: [WasmVector32; 6],
@@ -539,7 +539,7 @@ boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly13, 13, |this: &Was
 impl<T: FftNum> WasmSimdF32Butterfly13<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(13, direction);
         Self {
@@ -713,7 +713,7 @@ impl<T: FftNum> WasmSimdF32Butterfly13<T> {
     }
 }
 
-struct WasmSimdF64Butterfly13<T> {
+pub struct WasmSimdF64Butterfly13<T> {
     direction: FftDirection,
     twiddles_re: [WasmVector64; 6],
     twiddles_im: [WasmVector64; 6],
@@ -724,7 +724,7 @@ boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly13, 13, |this: &Was
 impl<T: FftNum> WasmSimdF64Butterfly13<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(13, direction);
         unsafe {Self {
@@ -857,7 +857,7 @@ impl<T: FftNum> WasmSimdF64Butterfly13<T> {
     }
 }
 
-struct WasmSimdF32Butterfly17<T> {
+pub struct WasmSimdF32Butterfly17<T> {
     direction: FftDirection,
     twiddles_re: [WasmVector32; 8],
     twiddles_im: [WasmVector32; 8],
@@ -868,7 +868,7 @@ boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly17, 17, |this: &Was
 impl<T: FftNum> WasmSimdF32Butterfly17<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(17, direction);
         Self {
@@ -1116,7 +1116,7 @@ impl<T: FftNum> WasmSimdF32Butterfly17<T> {
     }
 }
 
-struct WasmSimdF64Butterfly17<T> {
+pub struct WasmSimdF64Butterfly17<T> {
     direction: FftDirection,
     twiddles_re: [WasmVector64; 8],
     twiddles_im: [WasmVector64; 8],
@@ -1127,7 +1127,7 @@ boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly17, 17, |this: &Was
 impl<T: FftNum> WasmSimdF64Butterfly17<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(17, direction);
         unsafe {Self {
@@ -1326,7 +1326,7 @@ impl<T: FftNum> WasmSimdF64Butterfly17<T> {
     }
 }
 
-struct WasmSimdF32Butterfly19<T> {
+pub struct WasmSimdF32Butterfly19<T> {
     direction: FftDirection,
     twiddles_re: [WasmVector32; 9],
     twiddles_im: [WasmVector32; 9],
@@ -1337,7 +1337,7 @@ boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly19, 19, |this: &Was
 impl<T: FftNum> WasmSimdF32Butterfly19<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(19, direction);
         Self {
@@ -1628,7 +1628,7 @@ impl<T: FftNum> WasmSimdF32Butterfly19<T> {
     }
 }
 
-struct WasmSimdF64Butterfly19<T> {
+pub struct WasmSimdF64Butterfly19<T> {
     direction: FftDirection,
     twiddles_re: [WasmVector64; 9],
     twiddles_im: [WasmVector64; 9],
@@ -1639,7 +1639,7 @@ boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly19, 19, |this: &Was
 impl<T: FftNum> WasmSimdF64Butterfly19<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(19, direction);
         unsafe {Self {
@@ -1877,7 +1877,7 @@ impl<T: FftNum> WasmSimdF64Butterfly19<T> {
     }
 }
 
-struct WasmSimdF32Butterfly23<T> {
+pub struct WasmSimdF32Butterfly23<T> {
     direction: FftDirection,
     twiddles_re: [WasmVector32; 11],
     twiddles_im: [WasmVector32; 11],
@@ -1888,7 +1888,7 @@ boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly23, 23, |this: &Was
 impl<T: FftNum> WasmSimdF32Butterfly23<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(23, direction);
         Self {
@@ -2277,7 +2277,7 @@ impl<T: FftNum> WasmSimdF32Butterfly23<T> {
     }
 }
 
-struct WasmSimdF64Butterfly23<T> {
+pub struct WasmSimdF64Butterfly23<T> {
     direction: FftDirection,
     twiddles_re: [WasmVector64; 11],
     twiddles_im: [WasmVector64; 11],
@@ -2288,7 +2288,7 @@ boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly23, 23, |this: &Was
 impl<T: FftNum> WasmSimdF64Butterfly23<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(23, direction);
         unsafe {Self {
@@ -2616,7 +2616,7 @@ impl<T: FftNum> WasmSimdF64Butterfly23<T> {
     }
 }
 
-struct WasmSimdF32Butterfly29<T> {
+pub struct WasmSimdF32Butterfly29<T> {
     direction: FftDirection,
     twiddles_re: [WasmVector32; 14],
     twiddles_im: [WasmVector32; 14],
@@ -2627,7 +2627,7 @@ boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly29, 29, |this: &Was
 impl<T: FftNum> WasmSimdF32Butterfly29<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(29, direction);
         Self {
@@ -3193,7 +3193,7 @@ impl<T: FftNum> WasmSimdF32Butterfly29<T> {
     }
 }
 
-struct WasmSimdF64Butterfly29<T> {
+pub struct WasmSimdF64Butterfly29<T> {
     direction: FftDirection,
     twiddles_re: [WasmVector64; 14],
     twiddles_im: [WasmVector64; 14],
@@ -3204,7 +3204,7 @@ boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly29, 29, |this: &Was
 impl<T: FftNum> WasmSimdF64Butterfly29<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(29, direction);
         unsafe {Self {
@@ -3697,7 +3697,7 @@ impl<T: FftNum> WasmSimdF64Butterfly29<T> {
     }
 }
 
-struct WasmSimdF32Butterfly31<T> {
+pub struct WasmSimdF32Butterfly31<T> {
     direction: FftDirection,
     twiddles_re: [WasmVector32; 15],
     twiddles_im: [WasmVector32; 15],
@@ -3708,7 +3708,7 @@ boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly31, 31, |this: &Was
 impl<T: FftNum> WasmSimdF32Butterfly31<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(31, direction);
         Self {
@@ -4341,7 +4341,7 @@ impl<T: FftNum> WasmSimdF32Butterfly31<T> {
     }
 }
 
-struct WasmSimdF64Butterfly31<T> {
+pub struct WasmSimdF64Butterfly31<T> {
     direction: FftDirection,
     twiddles_re: [WasmVector64; 15],
     twiddles_im: [WasmVector64; 15],
@@ -4352,7 +4352,7 @@ boilerplate_fft_wasm_simd_f64_butterfly!(WasmSimdF64Butterfly31, 31, |this: &Was
 impl<T: FftNum> WasmSimdF64Butterfly31<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(31, direction);
         unsafe {Self {

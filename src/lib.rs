@@ -137,6 +137,15 @@ mod math_utils;
 mod plan;
 mod twiddles;
 
+// Code shared by the SIMD backends: the `SimdVector` trait, the algorithms written against it, and
+// the planner arithmetic that goes with them
+#[cfg(any(
+    all(target_arch = "aarch64", feature = "neon"),
+    all(target_arch = "x86_64", feature = "sse"),
+    all(target_arch = "wasm32", feature = "wasm_simd"),
+))]
+mod simd;
+
 use num_complex::Complex;
 use num_traits::Zero;
 
@@ -601,6 +610,11 @@ mod wasm_simd {
 }
 
 pub use self::wasm_simd::wasm_simd_planner::FftPlannerWasmSimd;
+
+// Internal support for the planner-tuning tools. Not part of the public API.
+#[cfg(feature = "tuning")]
+#[doc(hidden)]
+pub mod tuning;
 
 #[cfg(test)]
 mod test_utils;
