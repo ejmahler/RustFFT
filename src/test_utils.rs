@@ -39,7 +39,7 @@ pub fn compare_vectors<T: FftNum + Float>(vec1: &[Complex<T>], vec2: &[Complex<T
     for (&a, &b) in vec1.iter().zip(vec2.iter()) {
         error = error + (a - b).norm();
     }
-    return (error.to_f64().unwrap() / vec1.len() as f64) < 0.1f64;
+    return (error.to_f64().unwrap() / vec1.len().max(1) as f64) < 0.1f64;
 }
 pub fn first_diff<T: FftNum + Float>(vec1: &[Complex<T>], vec2: &[Complex<T>]) -> Option<usize> {
     assert_eq!(vec1.len(), vec2.len());
@@ -270,6 +270,66 @@ impl Length for BigScratchAlgorithm {
     }
 }
 impl Direction for BigScratchAlgorithm {
+    fn fft_direction(&self) -> FftDirection {
+        self.direction
+    }
+}
+
+// A fake FFT algorithm that requests much more scratch than it needs. You can use this as an inner FFT to other algorithms to test their scratch-supplying logic
+// This algorithm is ONLY intended to use in in-place contexts, and asserts otherwise. Used in conjunction with BigScratchAlgorithm to cut down on combinatoric explosion
+#[derive(Debug)]
+pub struct InPlaceOnlyAlgorithm {
+    pub len: usize,
+
+    pub inplace_scratch: usize,
+
+    pub direction: FftDirection,
+}
+impl<T: FftNum> Fft<T> for InPlaceOnlyAlgorithm {
+    fn process_immutable_with_scratch(
+        &self,
+        _input: &[Complex<T>],
+        _output: &mut [Complex<T>],
+        _scratch: &mut [Complex<T>],
+    ) {
+        unreachable!(
+            "FFT algorithm calls process_immutable_with_scratch() when it isn't supposed to"
+        );
+    }
+    fn process_with_scratch(&self, _buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        assert!(
+            scratch.len() >= self.inplace_scratch,
+            "Not enough inplace scratch provided, self={:?}, provided scratch={}",
+            &self,
+            scratch.len()
+        );
+    }
+    fn process_outofplace_with_scratch(
+        &self,
+        _input: &mut [Complex<T>],
+        _output: &mut [Complex<T>],
+        _scratch: &mut [Complex<T>],
+    ) {
+        unreachable!(
+            "FFT algorithm calls process_outofplace_with_scratch() when it isn't supposed to"
+        );
+    }
+    fn get_inplace_scratch_len(&self) -> usize {
+        self.inplace_scratch
+    }
+    fn get_outofplace_scratch_len(&self) -> usize {
+        0
+    }
+    fn get_immutable_scratch_len(&self) -> usize {
+        0
+    }
+}
+impl Length for InPlaceOnlyAlgorithm {
+    fn len(&self) -> usize {
+        self.len
+    }
+}
+impl Direction for InPlaceOnlyAlgorithm {
     fn fft_direction(&self) -> FftDirection {
         self.direction
     }

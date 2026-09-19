@@ -5,8 +5,10 @@ use crate::algorithm::{
     MixedRadixSmall, RadersAlgorithm,
 };
 use crate::math_utils::PrimeFactor;
+use crate::multidimensional::fft_nd_transpose::FftNdTranspose;
 use crate::wasm_simd::*;
-use crate::{fft_cache::FftCache, math_utils::PrimeFactors, Fft, FftDirection, FftNum};
+use crate::{fft_cache::FftCache, math_utils::PrimeFactors, FftDirection, FftNum};
+use crate::{Fft, FftNd};
 use std::{any::TypeId, collections::HashMap, sync::Arc};
 
 const MIN_RADIX4_BITS: u32 = 6; // smallest size to consider radix 4 an option is 2^6 = 64
@@ -196,6 +198,34 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft_inverse(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
         self.plan_fft(_len, FftDirection::Inverse)
+    }
+
+    /// Returns a `FftNd` instance which computes multimensional FFTs with dimensions specified by `shape`.
+    ///
+    /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
+    ///
+    /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+    pub fn plan_fft_multidimensional<const DIMENSIONS: usize>(
+        &mut self,
+        shape: [usize; DIMENSIONS],
+        direction: FftDirection,
+    ) -> Arc<dyn FftNd<T, DIMENSIONS>> {
+        let len = if DIMENSIONS == 0 {
+            0
+        } else {
+            let mut len: usize = 1;
+            for s in shape {
+                len = len.checked_mul(s).expect("Overflow when multiplying shape sizes together to compute FFT length in plan_fft_multidimensional");
+            }
+            len
+        };
+
+        // No caching for multimensional FFTs for now, since they're just thin wrappers over their internal algorithms
+        Arc::new(FftNdTranspose::new(
+            len,
+            direction,
+            shape.map(|s| self.plan_fft(s, direction)),
+        ))
     }
 }
 
@@ -607,6 +637,7 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
 #[cfg(test)]
 mod unit_tests {
     use super::*;
+    use crate::multidimensional::multidimensional_test_utils::check_multidimensional_fft_algorithm;
     use wasm_bindgen_test::*;
 
     fn is_mixedradix(plan: &Recipe) -> bool {
@@ -805,5 +836,92 @@ mod unit_tests {
             Arc::ptr_eq(&fft_a, &fft_b),
             "Existing recipe was not reused"
         );
+    }
+
+    fn test_multidimensional_planned_nd<const D: usize>(
+        planner: &mut FftPlannerWasmSimd<f32>,
+        shape: [usize; D],
+    ) {
+        // Forward FFT
+        let fft_forward = planner.plan_fft_multidimensional(shape, FftDirection::Forward);
+        check_multidimensional_fft_algorithm(fft_forward.as_ref(), shape, FftDirection::Forward);
+
+        // Inverse FFT
+        let fft_inverse = planner.plan_fft_multidimensional(shape, FftDirection::Forward);
+        check_multidimensional_fft_algorithm(fft_inverse.as_ref(), shape, FftDirection::Forward);
+    }
+
+    #[wasm_bindgen_test]
+    fn test_multidimensional_planned_wasm_simd_0d() {
+        let mut planner: FftPlannerWasmSimd<_> = FftPlannerWasmSimd::new().unwrap();
+
+        // There's no reason to create a 0d multimensional FFT, but that doesn't mean it shouldn't work if someone does
+        test_multidimensional_planned_nd(&mut planner, []);
+    }
+
+    #[wasm_bindgen_test]
+    fn test_multidimensional_planned_wasm_simd_1d() {
+        let mut planner = FftPlannerWasmSimd::<f32>::new().unwrap();
+
+        // There's no reason to create a 1d multimensional FFT, but that doesn't mean it shouldn't work if someone does
+        for a in 0..10 {
+            test_multidimensional_planned_nd(&mut planner, [a]);
+        }
+    }
+
+    #[wasm_bindgen_test]
+    fn test_multidimensional_planned_wasm_simd_2d() {
+        let mut planner = FftPlannerWasmSimd::<f32>::new().unwrap();
+
+        for a in 0..10 {
+            for b in 0..10 {
+                test_multidimensional_planned_nd(&mut planner, [a, b]);
+            }
+        }
+    }
+
+    #[wasm_bindgen_test]
+    fn test_multidimensional_planned_wasm_simd_3d() {
+        let mut planner = FftPlannerWasmSimd::<f32>::new().unwrap();
+
+        for a in 0..8 {
+            for b in 0..8 {
+                for c in 0..8 {
+                    test_multidimensional_planned_nd(&mut planner, [a, b, c]);
+                }
+            }
+        }
+    }
+
+    #[wasm_bindgen_test]
+    fn test_multidimensional_planned_wasm_simd_4d() {
+        let mut planner = FftPlannerWasmSimd::<f32>::new().unwrap();
+
+        for a in 0..5 {
+            for b in 0..5 {
+                for c in 0..5 {
+                    for d in 0..5 {
+                        test_multidimensional_planned_nd(&mut planner, [a, b, c, d]);
+                    }
+                }
+            }
+        }
+    }
+
+    #[wasm_bindgen_test]
+    fn test_multidimensional_planned_wasm_simd_5d() {
+        let mut planner = FftPlannerWasmSimd::<f32>::new().unwrap();
+
+        for a in 0..4 {
+            for b in 0..4 {
+                for c in 0..4 {
+                    for d in 0..4 {
+                        for e in 0..4 {
+                            test_multidimensional_planned_nd(&mut planner, [a, b, c, d, e]);
+                        }
+                    }
+                }
+            }
+        }
     }
 }

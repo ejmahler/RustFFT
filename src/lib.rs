@@ -48,6 +48,10 @@
 //!
 //! Users should beware, however, that bypassing the planner will disable all AVX, SSE, Neon, and WASM SIMD optimizations.
 //!
+//! ### Multidimensional FFTs
+//!
+//! RustFFT has built in tools to compute multidimensional FFTs. See the [`multidimensional`] module for more information.
+//!
 //! ### Feature Flags
 //!
 //! * `avx` (Enabled by default)
@@ -134,6 +138,7 @@ mod array_utils;
 mod fft_cache;
 mod fft_helper;
 mod math_utils;
+pub mod multidimensional;
 mod plan;
 mod twiddles;
 
@@ -141,6 +146,7 @@ use num_complex::Complex;
 use num_traits::Zero;
 
 pub use crate::common::FftNum;
+pub use crate::multidimensional::FftNd;
 pub use crate::plan::{FftPlanner, FftPlannerScalar};
 
 /// A trait that allows FFT algorithms to report their expected input/output size
@@ -293,7 +299,7 @@ mod avx;
 #[cfg(not(all(target_arch = "x86_64", feature = "avx")))]
 mod avx {
     pub mod avx_planner {
-        use crate::{Fft, FftDirection, FftNum};
+        use crate::{Fft, FftDirection, FftNd, FftNum};
         use std::sync::Arc;
 
         /// The AVX FFT planner creates new FFT algorithm instances which take advantage of the AVX instruction set.
@@ -360,6 +366,18 @@ mod avx {
             pub fn plan_fft_inverse(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
                 unreachable!()
             }
+            /// Returns a `FftNd` instance which computes multimensional FFTs with dimensions specified by `shape`.
+            ///
+            /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
+            ///
+            /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+            pub fn plan_fft_multidimensional<const DIMENSIONS: usize>(
+                &mut self,
+                _shape: [usize; DIMENSIONS],
+                _direction: FftDirection,
+            ) -> Arc<dyn FftNd<T, DIMENSIONS>> {
+                unreachable!()
+            }
         }
     }
 }
@@ -375,7 +393,7 @@ mod sse;
 #[cfg(not(all(target_arch = "x86_64", feature = "sse")))]
 mod sse {
     pub mod sse_planner {
-        use crate::{Fft, FftDirection, FftNum};
+        use crate::{Fft, FftDirection, FftNd, FftNum};
         use std::sync::Arc;
 
         /// The SSE FFT planner creates new FFT algorithm instances using a mix of scalar and SSE accelerated algorithms.
@@ -439,6 +457,18 @@ mod sse {
             pub fn plan_fft_inverse(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
                 unreachable!()
             }
+            /// Returns a `FftNd` instance which computes multimensional FFTs with dimensions specified by `shape`.
+            ///
+            /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
+            ///
+            /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+            pub fn plan_fft_multidimensional<const DIMENSIONS: usize>(
+                &mut self,
+                _shape: [usize; DIMENSIONS],
+                _direction: FftDirection,
+            ) -> Arc<dyn FftNd<T, DIMENSIONS>> {
+                unreachable!()
+            }
         }
     }
 }
@@ -454,7 +484,7 @@ mod neon;
 #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
 mod neon {
     pub mod neon_planner {
-        use crate::{Fft, FftDirection, FftNum};
+        use crate::{Fft, FftDirection, FftNd, FftNum};
         use std::sync::Arc;
 
         /// The Neon FFT planner creates new FFT algorithm instances using a mix of scalar and Neon accelerated algorithms.
@@ -518,6 +548,18 @@ mod neon {
             pub fn plan_fft_inverse(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
                 unreachable!()
             }
+            /// Returns a `FftNd` instance which computes multimensional FFTs with dimensions specified by `shape`.
+            ///
+            /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
+            ///
+            /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+            pub fn plan_fft_multidimensional<const DIMENSIONS: usize>(
+                &mut self,
+                _shape: [usize; DIMENSIONS],
+                _direction: FftDirection,
+            ) -> Arc<dyn FftNd<T, DIMENSIONS>> {
+                unreachable!()
+            }
         }
     }
 }
@@ -532,7 +574,7 @@ mod wasm_simd;
 #[cfg(not(all(target_arch = "wasm32", feature = "wasm_simd")))]
 mod wasm_simd {
     pub mod wasm_simd_planner {
-        use crate::{Fft, FftDirection, FftNum};
+        use crate::{Fft, FftDirection, FftNd, FftNum};
         use std::sync::Arc;
 
         /// The WASM FFT planner creates new FFT algorithm instances using a mix of scalar and WASM SIMD accelerated algorithms.
@@ -594,6 +636,18 @@ mod wasm_simd {
             ///
             /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
             pub fn plan_fft_inverse(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
+                unreachable!()
+            }
+            /// Returns a `FftNd` instance which computes multimensional FFTs with dimensions specified by `shape`.
+            ///
+            /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
+            ///
+            /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+            pub fn plan_fft_multidimensional<const DIMENSIONS: usize>(
+                &mut self,
+                _shape: [usize; DIMENSIONS],
+                _direction: FftDirection,
+            ) -> Arc<dyn FftNd<T, DIMENSIONS>> {
                 unreachable!()
             }
         }
