@@ -646,7 +646,6 @@ mod unit_tests {
     }
 
     fn test_multidimensional_inner_scratch_nd<const D: usize>(ffts: [Arc<dyn Fft<f32>>; D]) {
-        const { assert!(D > 0) };
         let fft = FftNdTranspose::new(
             ffts.iter().map(|f| f.len()).product(),
             ffts[0].fft_direction(),
