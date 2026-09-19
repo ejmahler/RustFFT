@@ -62,7 +62,7 @@ impl<T: FftNum, const DIMENSIONS: usize> FftNdTranspose<T, DIMENSIONS> {
                     if DIMENSIONS % 2 == 0 {
                         inplace_scratch_len = inplace_scratch_len.max(len + dimension_inplace);
                     } else {
-                        inplace_scratch_len = inplace_scratch_len.max(dimension_outofplace);
+                        inplace_scratch_len = inplace_scratch_len.max(len + dimension_outofplace);
                     }
                 } else {
                     inplace_scratch_len = inplace_scratch_len.max(len + dimension_inplace);
@@ -304,6 +304,8 @@ impl<T: FftNum, const DIMENSIONS: usize> FftNd<T, DIMENSIONS> for FftNdTranspose
 
 #[cfg(test)]
 mod unit_tests {
+    use std::sync::Arc;
+
     use num_complex::Complex;
     use num_traits::Zero;
 
@@ -313,8 +315,8 @@ mod unit_tests {
             known_test_data::{self, KnownTestData},
             multidimensional_test_utils::{check_multidimensional_fft_algorithm, control_fft_nd},
         },
-        test_utils::{compare_vectors, first_diff},
-        FftDirection, FftPlanner,
+        test_utils::{compare_vectors, first_diff, BigScratchAlgorithm, InPlaceOnlyAlgorithm},
+        Fft, FftDirection, FftNd, FftPlanner, Length,
     };
 
     #[test]
@@ -584,6 +586,89 @@ mod unit_tests {
                             test_multidimensional_procedural_nd(&mut planner, [a, b, c, d, e]);
                         }
                     }
+                }
+            }
+        }
+    }
+
+    fn test_multidimensional_inner_scratch_nd<const D: usize>(ffts: [Arc<dyn Fft<f32>>; D]) {
+        const { assert!(D > 0) };
+        let fft = FftNdTranspose::new(
+            ffts.iter().map(|f| f.len()).product(),
+            ffts[0].fft_direction(),
+            ffts,
+        );
+
+        let mut inplace_buffer = vec![Complex::zero(); fft.len()];
+        let mut inplace_scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
+        fft.process_with_scratch(&mut inplace_buffer, &mut inplace_scratch);
+
+        let mut outofplace_input = vec![Complex::zero(); fft.len()];
+        let mut outofplace_output = vec![Complex::zero(); fft.len()];
+        let mut outofplace_scratch = vec![Complex::zero(); fft.get_outofplace_scratch_len()];
+        fft.process_outofplace_with_scratch(
+            &mut outofplace_input,
+            &mut outofplace_output,
+            &mut outofplace_scratch,
+        );
+
+        let immut_input = vec![Complex::zero(); fft.len()];
+        let mut immut_output = vec![Complex::zero(); fft.len()];
+        let mut immut_scratch = vec![Complex::zero(); fft.get_immutable_scratch_len()];
+        fft.process_immutable_with_scratch(&immut_input, &mut immut_output, &mut immut_scratch);
+    }
+
+    // Verify that FftNdTranspose algorithm correctly provides scratch space to inner FFTs
+    #[test]
+    fn test_multidimensional_inner_scratch() {
+        // This test can go through a very bad combinatoric explosion if we aren't careful. So we're going to choose our test data carefully to avoid that explosion
+        // Specifically, we're going to bake in knoweldge that the first d - 1 inner ffts of each n-d transpose fft DO NOT TOUCH the out of place or immutable code paths
+        // And we'll use InPlaceOnlyAlgorithm for those FFTs, so that if that changes we'll know
+        let fft_lengths = [1, 3, 9];
+        let direction = FftDirection::Forward;
+
+        let mut inner_ffts_inplace = Vec::new();
+        let mut inner_ffts_any = Vec::new();
+
+        for &len in &fft_lengths {
+            let scratch_lengths = [0, len, 25];
+            for &inplace_scratch in &scratch_lengths {
+                inner_ffts_inplace.push(Arc::new(InPlaceOnlyAlgorithm {
+                    len,
+                    inplace_scratch,
+                    direction,
+                }) as Arc<dyn Fft<f32>>);
+                for &outofplace_scratch in &scratch_lengths {
+                    for &immut_scratch in &scratch_lengths {
+                        inner_ffts_any.push(Arc::new(BigScratchAlgorithm {
+                            len,
+                            inplace_scratch,
+                            outofplace_scratch,
+                            immut_scratch,
+                            direction,
+                        }) as Arc<dyn Fft<f32>>);
+                    }
+                }
+            }
+        }
+
+        // 1d
+        for a in inner_ffts_any.iter() {
+            test_multidimensional_inner_scratch_nd([a].map(Arc::clone));
+        }
+
+        // 2d
+        for a in inner_ffts_inplace.iter() {
+            for b in inner_ffts_any.iter() {
+                test_multidimensional_inner_scratch_nd([a, b].map(Arc::clone));
+            }
+        }
+
+        // 3d
+        for a in inner_ffts_inplace.iter() {
+            for b in inner_ffts_inplace.iter() {
+                for c in inner_ffts_any.iter() {
+                    test_multidimensional_inner_scratch_nd([a, b, c].map(Arc::clone));
                 }
             }
         }
