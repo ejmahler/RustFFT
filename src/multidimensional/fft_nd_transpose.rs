@@ -143,11 +143,7 @@ impl<T: FftNum, const DIMENSIONS: usize> Direction for FftNdTranspose<T, DIMENSI
     }
 }
 
-impl<T: FftNum, const DIMENSIONS: usize> FftNd<T, DIMENSIONS> for FftNdTranspose<T, DIMENSIONS> {
-    /// Returns FFT length of each dimension of this multidimensional FFT
-    fn shape(&self) -> [usize; DIMENSIONS] {
-        self.ffts.each_ref().map(|fft| fft.len)
-    }
+impl<T: FftNum, const DIMENSIONS: usize> Fft<T> for FftNdTranspose<T, DIMENSIONS> {
     fn get_inplace_scratch_len(&self) -> usize {
         self.inplace_scratch_len
     }
@@ -355,6 +351,12 @@ impl<T: FftNum, const DIMENSIONS: usize> FftNd<T, DIMENSIONS> for FftNdTranspose
         );
     }
 }
+impl<T: FftNum, const DIMENSIONS: usize> FftNd<T, DIMENSIONS> for FftNdTranspose<T, DIMENSIONS> {
+    /// Returns FFT length of each dimension of this multidimensional FFT
+    fn shape(&self) -> [usize; DIMENSIONS] {
+        self.ffts.each_ref().map(|fft| fft.len)
+    }
+}
 
 #[cfg(test)]
 mod unit_tests {
@@ -370,7 +372,7 @@ mod unit_tests {
             multidimensional_test_utils::{check_multidimensional_fft_algorithm, control_fft_nd},
         },
         test_utils::{compare_vectors, first_diff, BigScratchAlgorithm, InPlaceOnlyAlgorithm},
-        Fft, FftDirection, FftNd, FftPlanner, Length,
+        Fft, FftDirection, FftPlanner, Length,
     };
 
     #[test]
@@ -402,6 +404,9 @@ mod unit_tests {
         let mut planner = FftPlanner::new();
         let fft = planner.plan_fft_multidimensional(t.shape, FftDirection::Forward);
         let inverse_fft = planner.plan_fft_multidimensional(t.shape, FftDirection::Inverse);
+
+        assert_eq!(fft.shape(), t.shape);
+        assert_eq!(inverse_fft.shape(), t.shape);
 
         // Test control_fft_nd()
         {

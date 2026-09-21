@@ -13,6 +13,8 @@ pub fn check_multidimensional_fft_algorithm<const D: usize, T: FftNum + Float + 
     shape: [usize; D],
     direction: FftDirection,
 ) {
+    // todo: once our msrv supports trait inheritance coercion, we can just verify shape() and then forward to the main check_fft_algorithm
+
     let len: usize = if D == 0 { 0 } else { shape.iter().product() };
 
     assert_eq!(
@@ -26,6 +28,11 @@ pub fn check_multidimensional_fft_algorithm<const D: usize, T: FftNum + Float + 
         fft.fft_direction(),
         direction,
         "Algorithm reported incorrect FFT direction"
+    );
+    assert_eq!(
+        fft.shape(),
+        shape,
+        "Algorithm reported incorrect multidimensional FFT shape"
     );
 
     let n = 3;
@@ -139,9 +146,9 @@ pub fn check_multidimensional_fft_algorithm<const D: usize, T: FftNum + Float + 
             assert!(
                 compare_vectors(&expected_output, &output),
                 "process_immutable_with_scratch() failed the 'dirty scratch' test, length = {}, direction = {}",
-            len,
-            direction
-        );
+                len,
+                direction
+            );
         }
     }
 }
