@@ -594,7 +594,7 @@ mod fcma;
 #[cfg(not(all(target_arch = "aarch64", feature = "fcma")))]
 mod fcma {
     pub mod fcma_planner {
-        use crate::{Fft, FftDirection, FftNum};
+        use crate::{Fft, FftDirection, FftNd, FftNum};
         use std::sync::Arc;
 
         /// The FCMA FFT planner creates new FFT algorithm instances using a mix of scalar, Neon and FCMA accelerated algorithms.
@@ -656,6 +656,18 @@ mod fcma {
             ///
             /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
             pub fn plan_fft_inverse(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
+                unreachable!()
+            }
+            /// Returns a `FftNd` instance which computes multidimensional FFTs with dimensions specified by `shape`.
+            ///
+            /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
+            ///
+            /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+            pub fn plan_fft_multidimensional<const DIMENSIONS: usize>(
+                &mut self,
+                _shape: [usize; DIMENSIONS],
+                _direction: FftDirection,
+            ) -> Arc<dyn FftNd<T, DIMENSIONS>> {
                 unreachable!()
             }
         }

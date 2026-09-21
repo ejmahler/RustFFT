@@ -158,6 +158,9 @@ impl<T: FftNum> FftPlanner<T> {
             ChosenFftPlanner::Neon(neon_planner) => {
                 neon_planner.plan_fft_multidimensional(shape, direction)
             }
+            ChosenFftPlanner::Fcma(fcma_planner) => {
+                fcma_planner.plan_fft_multidimensional(shape, direction)
+            }
             ChosenFftPlanner::WasmSimd(wasm_simd_planner) => {
                 wasm_simd_planner.plan_fft_multidimensional(shape, direction)
             }
