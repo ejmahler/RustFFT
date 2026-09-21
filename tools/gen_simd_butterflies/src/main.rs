@@ -28,7 +28,13 @@ struct Architecture {
     vector_f32: &'static str,
     vector_f64: &'static str,
     cpu_feature_name: &'static str,
+    // The feature list for #[target_feature(enable = ...)], which may need more than the
+    // single feature that gets detected at runtime.
+    target_feature_name: &'static str,
     has_dynamic_cpu_features: bool,
+    // Set when the architecture can rotate by 90 degrees as part of a multiply-accumulate,
+    // which makes the standalone rotations unnecessary.
+    has_fused_rotate: bool,
     dynamic_cpu_feature_macro: &'static str,
     arch_include: &'static str,
     test_attribute: &'static str,
@@ -43,7 +49,7 @@ struct Context {
 }
 
 const USAGE_STR: &'static str =
-    "Usage: {executable} sse|wasm_simd|neon lengths [--check <filename>]";
+    "Usage: {executable} sse|wasm_simd|neon|fcma lengths [--check <filename>]";
 
 fn main() -> Result<(), Box<dyn Error>> {
     let (arch, lengths, check_filename) = parse_args()?;
@@ -155,6 +161,8 @@ fn parse_architecture(arch_str: Option<String>) -> Result<Architecture, String> 
                 vector_f32: "__m128",
                 vector_f64: "__m128d",
                 cpu_feature_name: "sse4.1",
+                has_fused_rotate: false,
+                target_feature_name: "sse4.1",
                 has_dynamic_cpu_features: true,
                 dynamic_cpu_feature_macro: "std::arch::is_x86_feature_detected",
                 arch_include: "use core::arch::x86_64::{__m128, __m128d};",
@@ -171,11 +179,31 @@ fn parse_architecture(arch_str: Option<String>) -> Result<Architecture, String> 
                 vector_f32: "WasmVector32",
                 vector_f64: "WasmVector64",
                 cpu_feature_name: "simd128",
+                has_fused_rotate: false,
+                target_feature_name: "simd128",
                 has_dynamic_cpu_features: false,
                 dynamic_cpu_feature_macro: "",
                 arch_include: "",
                 test_attribute: "wasm_bindgen_test",
                 extra_test_includes: vec!["use wasm_bindgen_test::wasm_bindgen_test;"],
+            });
+        } else if arch_str == "fcma" {
+            return Ok(Architecture {
+                name_snakecase: "fcma",
+                name_camelcase: "Fcma",
+                name_display: "FCMA",
+                array_trait: "FcmaArrayMut",
+                vector_trait: "FcmaVector",
+                vector_f32: "float32x4_t",
+                vector_f64: "float64x2_t",
+                cpu_feature_name: "fcma",
+                has_fused_rotate: true,
+                target_feature_name: "neon,fcma",
+                has_dynamic_cpu_features: true,
+                dynamic_cpu_feature_macro: "std::arch::is_aarch64_feature_detected",
+                arch_include: "use core::arch::aarch64::{float32x4_t, float64x2_t};",
+                test_attribute: "test",
+                extra_test_includes: vec![],
             });
         } else if arch_str == "neon" {
             return Ok(Architecture {
@@ -187,6 +215,8 @@ fn parse_architecture(arch_str: Option<String>) -> Result<Architecture, String> 
                 vector_f32: "float32x4_t",
                 vector_f64: "float64x2_t",
                 cpu_feature_name: "neon",
+                has_fused_rotate: false,
+                target_feature_name: "neon",
                 has_dynamic_cpu_features: true,
                 dynamic_cpu_feature_macro: "std::arch::is_aarch64_feature_detected",
                 arch_include: "use core::arch::aarch64::{float32x4_t, float64x2_t};",
@@ -257,20 +287,25 @@ fn generate_fft_entry(len: usize, arch: &Architecture) -> FftEntry {
         let lenm1 = len - 1;
 
         let mut impl_strs = Vec::with_capacity(len * len);
-        impl_strs.push(format!(
-            "{indent}let rotate = {vector_trait}::make_rotate90(FftDirection::Inverse);"
-        ));
-        impl_strs.push(String::new());
+        if !arch.has_fused_rotate {
+            impl_strs.push(format!(
+                "{indent}let rotate = {vector_trait}::make_rotate90(FftDirection::Inverse);"
+            ));
+            impl_strs.push(String::new());
+        }
 
-        // butterfly2's down the inputs, and rotate the subtraction half of the butterfly 2's
-        // todo: when we get FCMA, we can conditionally skip the rotations here!
+        // butterfly2's down the inputs, and rotate the subtraction half of the butterfly 2's.
+        // Architectures with a fused rotate skip the rotation here and fold it into the
+        // multiply-accumulates below instead.
         impl_strs.push(format!("{indent}let y00 = values[0];"));
         for n in 1..halflen {
             let nrev = len - n;
             impl_strs.push(format!("{indent}let [x{n}p{nrev}, x{n}m{nrev}] =  {vector_trait}::column_butterfly2([values[{n}], values[{nrev}]]);"));
-            impl_strs.push(format!(
-                "{indent}let x{n}m{nrev} = {vector_trait}::apply_rotate90(rotate, x{n}m{nrev});"
-            ));
+            if !arch.has_fused_rotate {
+                impl_strs.push(format!(
+                    "{indent}let x{n}m{nrev} = {vector_trait}::apply_rotate90(rotate, x{n}m{nrev});"
+                ));
+            }
             impl_strs.push(format!(
                 "{indent}let y00 = {vector_trait}::add(y00, x{n}p{nrev});"
             ));
@@ -294,12 +329,18 @@ fn generate_fft_entry(len: usize, arch: &Architecture) -> FftEntry {
             }
 
             let variable_name_b = format!("m{n:02}{nrev:02}b");
-            impl_strs.push(format!("{indent}let {variable_name_b} = {vector_trait}::mul(self.twiddles_im[{first_twiddle}], x1m{lenm1});"));
+            let mul_fn = if arch.has_fused_rotate { "mul_rotate90" } else { "mul" };
+            impl_strs.push(format!("{indent}let {variable_name_b} = {vector_trait}::{mul_fn}(self.twiddles_im[{first_twiddle}], x1m{lenm1});"));
             for m in 2..halflen {
                 let mrev = len - m;
                 let mn = (m * n) % len;
                 let tw_idx = if mn > len / 2 { len - mn - 1 } else { mn - 1 };
-                let func = if mn > len / 2 { "nmadd" } else { "fmadd" };
+                let func = match (mn > len / 2, arch.has_fused_rotate) {
+                    (true, false) => "nmadd",
+                    (false, false) => "fmadd",
+                    (true, true) => "nmadd_rotate90",
+                    (false, true) => "fmadd_rotate90",
+                };
 
                 impl_strs.push(format!("{indent}let {variable_name_b} = {vector_trait}::{func}({variable_name_b}, self.twiddles_im[{tw_idx}], x{m}m{mrev});"));
             }
