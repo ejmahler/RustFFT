@@ -881,7 +881,7 @@ mod unit_tests {
     fn test_multidimensional_planned_fcma_0d() {
         let mut planner = FftPlannerFcma::new().unwrap();
 
-        // There's no reason to create a 0d multimensional FFT, but that doesn't mean it shouldn't work if someone does
+        // There's no reason to create a 0d multidimensional FFT, but that doesn't mean it shouldn't work if someone does
         test_multidimensional_planned_nd(&mut planner, []);
     }
 
@@ -889,7 +889,7 @@ mod unit_tests {
     fn test_multidimensional_planned_fcma_1d() {
         let mut planner = FftPlannerFcma::<f32>::new().unwrap();
 
-        // There's no reason to create a 1d multimensional FFT, but that doesn't mean it shouldn't work if someone does
+        // There's no reason to create a 1d multidimensional FFT, but that doesn't mean it shouldn't work if someone does
         for a in 0..10 {
             test_multidimensional_planned_nd(&mut planner, [a]);
         }

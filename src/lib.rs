@@ -383,7 +383,7 @@ mod avx {
             pub fn plan_fft_inverse(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
                 unreachable!()
             }
-            /// Returns a `FftNd` instance which computes multimensional FFTs with dimensions specified by `shape`.
+            /// Returns a `FftNd` instance which computes multidimensional FFTs with dimensions specified by `shape`.
             ///
             /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
             ///
@@ -474,7 +474,7 @@ mod sse {
             pub fn plan_fft_inverse(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
                 unreachable!()
             }
-            /// Returns a `FftNd` instance which computes multimensional FFTs with dimensions specified by `shape`.
+            /// Returns a `FftNd` instance which computes multidimensional FFTs with dimensions specified by `shape`.
             ///
             /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
             ///
@@ -565,7 +565,7 @@ mod neon {
             pub fn plan_fft_inverse(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
                 unreachable!()
             }
-            /// Returns a `FftNd` instance which computes multimensional FFTs with dimensions specified by `shape`.
+            /// Returns a `FftNd` instance which computes multidimensional FFTs with dimensions specified by `shape`.
             ///
             /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
             ///
@@ -748,7 +748,7 @@ mod wasm_simd {
             pub fn plan_fft_inverse(&mut self, _len: usize) -> Arc<dyn Fft<T>> {
                 unreachable!()
             }
-            /// Returns a `FftNd` instance which computes multimensional FFTs with dimensions specified by `shape`.
+            /// Returns a `FftNd` instance which computes multidimensional FFTs with dimensions specified by `shape`.
             ///
             /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
             ///

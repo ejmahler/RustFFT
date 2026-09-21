@@ -225,7 +225,7 @@ impl<T: FftNum> FftPlannerSse<T> {
         self.plan_fft(len, FftDirection::Inverse)
     }
 
-    /// Returns a `FftNd` instance which computes multimensional FFTs with dimensions specified by `shape`.
+    /// Returns a `FftNd` instance which computes multidimensional FFTs with dimensions specified by `shape`.
     ///
     /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
     ///
@@ -245,7 +245,7 @@ impl<T: FftNum> FftPlannerSse<T> {
             len
         };
 
-        // No caching for multimensional FFTs for now, since they're just thin wrappers over their internal algorithms
+        // No caching for multidimensional FFTs for now, since they're just thin wrappers over their internal algorithms
         Arc::new(FftNdTranspose::new(
             len,
             direction,
@@ -883,7 +883,7 @@ mod unit_tests {
     fn test_multidimensional_planned_sse_0d() {
         let mut planner: FftPlannerSse<_> = FftPlannerSse::new().unwrap();
 
-        // There's no reason to create a 0d multimensional FFT, but that doesn't mean it shouldn't work if someone does
+        // There's no reason to create a 0d multidimensional FFT, but that doesn't mean it shouldn't work if someone does
         test_multidimensional_planned_nd(&mut planner, []);
     }
 
@@ -891,7 +891,7 @@ mod unit_tests {
     fn test_multidimensional_planned_sse_1d() {
         let mut planner = FftPlannerSse::<f32>::new().unwrap();
 
-        // There's no reason to create a 1d multimensional FFT, but that doesn't mean it shouldn't work if someone does
+        // There's no reason to create a 1d multidimensional FFT, but that doesn't mean it shouldn't work if someone does
         for a in 0..10 {
             test_multidimensional_planned_nd(&mut planner, [a]);
         }

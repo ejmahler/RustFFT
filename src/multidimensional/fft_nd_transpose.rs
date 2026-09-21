@@ -575,7 +575,7 @@ mod unit_tests {
     fn test_multidimensional_procedural_0d() {
         let mut planner = FftPlanner::new();
 
-        // There's no reason to create a 0d multimensional FFT, but that doesn't mean it shouldn't work if someone does
+        // There's no reason to create a 0d multidimensional FFT, but that doesn't mean it shouldn't work if someone does
         test_multidimensional_procedural_nd(&mut planner, []);
     }
 
@@ -583,7 +583,7 @@ mod unit_tests {
     fn test_multidimensional_procedural_1d() {
         let mut planner = FftPlanner::<f32>::new();
 
-        // There's no reason to create a 1d multimensional FFT, but that doesn't mean it shouldn't work if someone does
+        // There's no reason to create a 1d multidimensional FFT, but that doesn't mean it shouldn't work if someone does
         for a in 0..10 {
             test_multidimensional_procedural_nd(&mut planner, [a]);
         }
