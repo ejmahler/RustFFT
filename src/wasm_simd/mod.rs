@@ -18,6 +18,7 @@ use core::arch::wasm32::v128;
 
 pub use self::wasm_simd_butterflies::*;
 pub use self::wasm_simd_radix4::*;
+#[allow(unused_imports)] // reachable once the planner PR wires RadixN up
 pub use self::wasm_simd_radixn::*;
 use self::wasm_simd_vector::WasmVector;
 use self::wasm_simd_vector::WasmVector32;

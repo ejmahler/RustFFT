@@ -10,6 +10,7 @@ use super::WasmNum;
 
 /// FFT algorithm for lengths that factor into small radixes, WASM SIMD accelerated version.
 /// This is designed to be used via a Planner, and not created directly.
+#[allow(dead_code)]
 pub type WasmSimdRadixN<S, T> = SimdRadixN<<S as WasmNum>::VectorType, T>;
 
 #[cfg(test)]

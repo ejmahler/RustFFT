@@ -10,6 +10,7 @@ use super::NeonNum;
 
 /// FFT algorithm for lengths that factor into small radixes, NEON accelerated version.
 /// This is designed to be used via a Planner, and not created directly.
+#[allow(dead_code)]
 pub type NeonRadixN<N, T> = SimdRadixN<<N as NeonNum>::VectorType, T>;
 
 #[cfg(test)]

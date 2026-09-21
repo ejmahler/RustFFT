@@ -10,6 +10,7 @@ use super::SseNum;
 
 /// FFT algorithm for lengths that factor into small radixes, SSE accelerated version.
 /// This is designed to be used via a Planner, and not created directly.
+#[allow(dead_code)]
 pub type SseRadixN<S, T> = SimdRadixN<<S as SseNum>::VectorType, T>;
 
 #[cfg(test)]
