@@ -23,6 +23,9 @@ default = ["avx", "sse", "neon"]
 # If neither instruction set is available, it will fall back to the scalar code.  
 #
 # On AArch64, the "neon" feature enables compilation of Neon-accelerated code.
+# Also on AArch64, the "fcma" feature enables compilation of code using the FCMA (floating point complex
+# multiply accumulate) instructions from ARMv8.3-A. This requires a nightly compiler, since the intrinsics
+# are still unstable. It is used instead of the plain Neon code when the CPU supports it.
 #
 # On wasm32, the "wasm_simd" feature enables compilation of Wasm SIMD accelerated code.
 #
@@ -30,6 +33,7 @@ default = ["avx", "sse", "neon"]
 avx = []
 sse = []
 neon = []
+fcma = []
 wasm_simd = []
 
 
@@ -51,15 +55,15 @@ criterion = { version = "0.3", default-features = false }
 getrandom = "=0.3.1"
 
 [[bench]]
-name = "bench_check_neon_2to1024"
+name = "bench_check_neon"
 harness = false
 
 [[bench]]
-name = "bench_check_scalar_2to1024"
+name = "bench_check_scalar"
 harness = false
 
 [[bench]]
-name = "bench_check_sse_2to1024"
+name = "bench_check_sse"
 harness = false
 
 [[bench]]
@@ -96,4 +100,12 @@ harness = false
 
 [[bench]]
 name = "compare_3n2m_strategies"
+harness = false
+
+# Compares the Neon and FCMA backends against each other. Needs the nightly-only "fcma" feature,
+# and a CPU implementing ARMv8.3-A:
+#   cargo +nightly bench --features fcma --bench bench_compare_neon_fcma
+[[bench]]
+name = "bench_compare_neon_fcma"
+required-features = ["fcma"]
 harness = false
