@@ -1,8 +1,5 @@
 #![allow(bare_trait_objects)]
 #![allow(non_snake_case)]
-#![feature(test)]
-extern crate rustfft;
-extern crate test;
 
 use rustfft::algorithm::butterflies::*;
 use rustfft::algorithm::*;
@@ -11,7 +8,9 @@ use rustfft::num_traits::Zero;
 use rustfft::FftPlannerScalar;
 use rustfft::{Direction, Fft, FftDirection, FftNum, Length};
 use std::sync::Arc;
-use test::Bencher;
+mod config;
+
+use criterion::{criterion_group, criterion_main, Bencher, Criterion};
 
 #[allow(unused)]
 struct Noop {
@@ -72,43 +71,33 @@ fn bench_planned_f32(b: &mut Bencher, len: usize) {
 }
 
 // Powers of 4
-#[bench]
 fn planned32_p2_00000064(b: &mut Bencher) {
     bench_planned_f32(b, 64);
 }
-#[bench]
 fn planned32_p2_00000128(b: &mut Bencher) {
     bench_planned_f32(b, 128);
 }
-#[bench]
 fn planned32_p2_00000256(b: &mut Bencher) {
     bench_planned_f32(b, 256);
 }
-#[bench]
 fn planned32_p2_00000512(b: &mut Bencher) {
     bench_planned_f32(b, 512);
 }
-#[bench]
 fn planned32_p2_00001024(b: &mut Bencher) {
     bench_planned_f32(b, 1024);
 }
-#[bench]
 fn planned32_p2_00002048(b: &mut Bencher) {
     bench_planned_f32(b, 2048);
 }
-#[bench]
 fn planned32_p2_00004096(b: &mut Bencher) {
     bench_planned_f32(b, 4096);
 }
-#[bench]
 fn planned32_p2_00016384(b: &mut Bencher) {
     bench_planned_f32(b, 16384);
 }
-#[bench]
 fn planned32_p2_00065536(b: &mut Bencher) {
     bench_planned_f32(b, 65536);
 }
-#[bench]
 fn planned32_p2_01048576(b: &mut Bencher) {
     bench_planned_f32(b, 1048576);
 }
@@ -181,43 +170,33 @@ fn bench_planned_f64(b: &mut Bencher, len: usize) {
     });
 }
 
-#[bench]
 fn planned64_p2_00000064(b: &mut Bencher) {
     bench_planned_f64(b, 64);
 }
-#[bench]
 fn planned64_p2_00000128(b: &mut Bencher) {
     bench_planned_f64(b, 128);
 }
-#[bench]
 fn planned64_p2_00000256(b: &mut Bencher) {
     bench_planned_f64(b, 256);
 }
-#[bench]
 fn planned64_p2_00000512(b: &mut Bencher) {
     bench_planned_f64(b, 512);
 }
-#[bench]
 fn planned64_p2_00001024(b: &mut Bencher) {
     bench_planned_f64(b, 1024);
 }
-#[bench]
 fn planned64_p2_00002048(b: &mut Bencher) {
     bench_planned_f64(b, 2048);
 }
-#[bench]
 fn planned64_p2_00004096(b: &mut Bencher) {
     bench_planned_f64(b, 4096);
 }
-#[bench]
 fn planned64_p2_00016384(b: &mut Bencher) {
     bench_planned_f64(b, 16384);
 }
-#[bench]
 fn planned64_p2_00065536(b: &mut Bencher) {
     bench_planned_f64(b, 65536);
 }
-#[bench]
 fn planned64_p2_01048576(b: &mut Bencher) {
     bench_planned_f64(b, 1048576);
 }
@@ -288,23 +267,18 @@ fn bench_good_thomas(b: &mut Bencher, width: usize, height: usize) {
     });
 }
 
-#[bench]
 fn good_thomas_0002_3(b: &mut Bencher) {
     bench_good_thomas(b, 2, 3);
 }
-#[bench]
 fn good_thomas_0003_4(b: &mut Bencher) {
     bench_good_thomas(b, 3, 4);
 }
-#[bench]
 fn good_thomas_0004_5(b: &mut Bencher) {
     bench_good_thomas(b, 4, 5);
 }
-#[bench]
 fn good_thomas_0007_32(b: &mut Bencher) {
     bench_good_thomas(b, 7, 32);
 }
-#[bench]
 fn good_thomas_0032_27(b: &mut Bencher) {
     bench_good_thomas(b, 32, 27);
 }
@@ -324,39 +298,31 @@ fn bench_good_thomas_setup(b: &mut Bencher, width: usize, height: usize) {
             Arc::clone(&width_fft),
             Arc::clone(&height_fft),
         ));
-        test::black_box(fft);
+        std::hint::black_box(fft);
     });
 }
 
-#[bench]
 fn good_thomas_setup_0002_3(b: &mut Bencher) {
     bench_good_thomas_setup(b, 2, 3);
 }
-#[bench]
 fn good_thomas_setup_0003_4(b: &mut Bencher) {
     bench_good_thomas_setup(b, 3, 4);
 }
-#[bench]
 fn good_thomas_setup_0004_5(b: &mut Bencher) {
     bench_good_thomas_setup(b, 4, 5);
 }
-#[bench]
 fn good_thomas_setup_0007_32(b: &mut Bencher) {
     bench_good_thomas_setup(b, 7, 32);
 }
-#[bench]
 fn good_thomas_setup_0032_27(b: &mut Bencher) {
     bench_good_thomas_setup(b, 32, 27);
 }
-#[bench]
 fn good_thomas_setup_0256_243(b: &mut Bencher) {
     bench_good_thomas_setup(b, 256, 243);
 }
-#[bench]
 fn good_thomas_setup_2048_3(b: &mut Bencher) {
     bench_good_thomas_setup(b, 2048, 3);
 }
-#[bench]
 fn good_thomas_setup_2048_2187(b: &mut Bencher) {
     bench_good_thomas_setup(b, 2048, 2187);
 }
@@ -389,23 +355,18 @@ fn bench_mixed_radix(b: &mut Bencher, width: usize, height: usize) {
     });
 }
 
-#[bench]
 fn mixed_radix_0002_3(b: &mut Bencher) {
     bench_mixed_radix(b, 2, 3);
 }
-#[bench]
 fn mixed_radix_0003_4(b: &mut Bencher) {
     bench_mixed_radix(b, 3, 4);
 }
-#[bench]
 fn mixed_radix_0004_5(b: &mut Bencher) {
     bench_mixed_radix(b, 4, 5);
 }
-#[bench]
 fn mixed_radix_0007_32(b: &mut Bencher) {
     bench_mixed_radix(b, 7, 32);
 }
-#[bench]
 fn mixed_radix_0032_27(b: &mut Bencher) {
     bench_mixed_radix(b, 32, 27);
 }
@@ -449,19 +410,15 @@ fn bench_mixed_radix_small(b: &mut Bencher, width: usize, height: usize) {
     });
 }
 
-#[bench]
 fn mixed_radix_small_0002_3(b: &mut Bencher) {
     bench_mixed_radix_small(b, 2, 3);
 }
-#[bench]
 fn mixed_radix_small_0003_4(b: &mut Bencher) {
     bench_mixed_radix_small(b, 3, 4);
 }
-#[bench]
 fn mixed_radix_small_0004_5(b: &mut Bencher) {
     bench_mixed_radix_small(b, 4, 5);
 }
-#[bench]
 fn mixed_radix_small_0007_32(b: &mut Bencher) {
     bench_mixed_radix_small(b, 7, 32);
 }
@@ -487,19 +444,15 @@ fn bench_good_thomas_small(b: &mut Bencher, width: usize, height: usize) {
     });
 }
 
-#[bench]
 fn good_thomas_small_0002_3(b: &mut Bencher) {
     bench_good_thomas_small(b, 2, 3);
 }
-#[bench]
 fn good_thomas_small_0003_4(b: &mut Bencher) {
     bench_good_thomas_small(b, 3, 4);
 }
-#[bench]
 fn good_thomas_small_0004_5(b: &mut Bencher) {
     bench_good_thomas_small(b, 4, 5);
 }
-#[bench]
 fn good_thomas_small_0007_32(b: &mut Bencher) {
     bench_good_thomas_small(b, 7, 32);
 }
@@ -596,19 +549,15 @@ fn bench_radix4(b: &mut Bencher, len: usize) {
     });
 }
 
-#[bench]
 fn radix4_______64(b: &mut Bencher) {
     bench_radix4(b, 64);
 }
-#[bench]
 fn radix4______256(b: &mut Bencher) {
     bench_radix4(b, 256);
 }
-#[bench]
 fn radix4_____1024(b: &mut Bencher) {
     bench_radix4(b, 1024);
 }
-#[bench]
 fn radix4____65536(b: &mut Bencher) {
     bench_radix4(b, 65536);
 }
@@ -635,19 +584,15 @@ fn bench_64_radix4(b: &mut Bencher, len: usize) {
     });
 }
 
-#[bench]
 fn radix4_64____64(b: &mut Bencher) {
     bench_64_radix4(b, 64);
 }
-#[bench]
 fn radix4_64___256(b: &mut Bencher) {
     bench_64_radix4(b, 256);
 }
-#[bench]
 fn radix4_64__1024(b: &mut Bencher) {
     bench_64_radix4(b, 1024);
 }
-#[bench]
 fn radix4_64_65536(b: &mut Bencher) {
     bench_64_radix4(b, 65536);
 }
@@ -681,19 +626,15 @@ fn bench_mixed_radix_power2(b: &mut Bencher, len: usize) {
     });
 }
 
-#[bench]
 fn mixed_radix_power2__00000256(b: &mut Bencher) {
     bench_mixed_radix_power2(b, 256);
 }
-#[bench]
 fn mixed_radix_power2__00001024(b: &mut Bencher) {
     bench_mixed_radix_power2(b, 1024);
 }
-#[bench]
 fn mixed_radix_power2__00004096(b: &mut Bencher) {
     bench_mixed_radix_power2(b, 4096);
 }
-#[bench]
 fn mixed_radix_power2__00065536(b: &mut Bencher) {
     bench_mixed_radix_power2(b, 65536);
 }
@@ -727,19 +668,15 @@ fn bench_mixed_radix_inline_power2(b: &mut Bencher, len: usize) {
     });
 }
 
-#[bench]
 fn mixed_radix_power2_inline__00000256(b: &mut Bencher) {
     bench_mixed_radix_inline_power2(b, 256);
 }
-#[bench]
 fn mixed_radix_power2_inline__00001024(b: &mut Bencher) {
     bench_mixed_radix_inline_power2(b, 1024);
 }
-#[bench]
 fn mixed_radix_power2_inline__00004096(b: &mut Bencher) {
     bench_mixed_radix_inline_power2(b, 4096);
 }
-#[bench]
 fn mixed_radix_power2_inline__00065536(b: &mut Bencher) {
     bench_mixed_radix_inline_power2(b, 65536);
 }
@@ -759,47 +696,36 @@ fn bench_butterfly32(b: &mut Bencher, len: usize) {
     });
 }
 
-#[bench]
 fn butterfly32_02(b: &mut Bencher) {
     bench_butterfly32(b, 2);
 }
-#[bench]
 fn butterfly32_03(b: &mut Bencher) {
     bench_butterfly32(b, 3);
 }
-#[bench]
 fn butterfly32_04(b: &mut Bencher) {
     bench_butterfly32(b, 4);
 }
-#[bench]
 fn butterfly32_05(b: &mut Bencher) {
     bench_butterfly32(b, 5);
 }
-#[bench]
 fn butterfly32_06(b: &mut Bencher) {
     bench_butterfly32(b, 6);
 }
-#[bench]
 fn butterfly32_07(b: &mut Bencher) {
     bench_butterfly32(b, 7);
 }
-#[bench]
 fn butterfly32_08(b: &mut Bencher) {
     bench_butterfly32(b, 8);
 }
-#[bench]
 fn butterfly32_09(b: &mut Bencher) {
     bench_butterfly32(b, 9);
 }
-#[bench]
 fn butterfly32_11(b: &mut Bencher) {
     bench_butterfly32(b, 11);
 }
-#[bench]
 fn butterfly32_12(b: &mut Bencher) {
     bench_butterfly32(b, 12);
 }
-#[bench]
 fn butterfly32_16(b: &mut Bencher) {
     bench_butterfly32(b, 16);
 }
@@ -828,47 +754,36 @@ fn bench_butterfly64(b: &mut Bencher, len: usize) {
     });
 }
 
-#[bench]
 fn butterfly64_02(b: &mut Bencher) {
     bench_butterfly64(b, 2);
 }
-#[bench]
 fn butterfly64_03(b: &mut Bencher) {
     bench_butterfly64(b, 3);
 }
-#[bench]
 fn butterfly64_04(b: &mut Bencher) {
     bench_butterfly64(b, 4);
 }
-#[bench]
 fn butterfly64_05(b: &mut Bencher) {
     bench_butterfly64(b, 5);
 }
-#[bench]
 fn butterfly64_06(b: &mut Bencher) {
     bench_butterfly64(b, 6);
 }
-#[bench]
 fn butterfly64_07(b: &mut Bencher) {
     bench_butterfly64(b, 7);
 }
-#[bench]
 fn butterfly64_08(b: &mut Bencher) {
     bench_butterfly64(b, 8);
 }
-#[bench]
 fn butterfly64_09(b: &mut Bencher) {
     bench_butterfly64(b, 9);
 }
-#[bench]
 fn butterfly64_11(b: &mut Bencher) {
     bench_butterfly64(b, 11);
 }
-#[bench]
 fn butterfly64_12(b: &mut Bencher) {
     bench_butterfly64(b, 12);
 }
-#[bench]
 fn butterfly64_16(b: &mut Bencher) {
     bench_butterfly64(b, 16);
 }
@@ -887,31 +802,128 @@ fn bench_bluesteins_setup(b: &mut Bencher, len: usize) {
     let inner_fft = FftPlannerScalar::<f32>::new().plan_fft_forward(inner_len);
 
     b.iter(|| {
-        test::black_box(BluesteinsAlgorithm::new(len, Arc::clone(&inner_fft)));
+        std::hint::black_box(BluesteinsAlgorithm::new(len, Arc::clone(&inner_fft)));
     });
 }
 
-#[bench]
 fn setup_bluesteins_0017(b: &mut Bencher) {
     bench_bluesteins_setup(b, 17);
 }
-#[bench]
 fn setup_bluesteins_0055(b: &mut Bencher) {
     bench_bluesteins_setup(b, 55);
 }
-#[bench]
 fn setup_bluesteins_0117(b: &mut Bencher) {
     bench_bluesteins_setup(b, 117);
 }
-#[bench]
 fn setup_bluesteins_0555(b: &mut Bencher) {
     bench_bluesteins_setup(b, 555);
 }
-#[bench]
 fn setup_bluesteins_1117(b: &mut Bencher) {
     bench_bluesteins_setup(b, 1117);
 }
-#[bench]
 fn setup_bluesteins_5555(b: &mut Bencher) {
     bench_bluesteins_setup(b, 5555);
 }
+
+fn criterion_benchmark(c: &mut Criterion) {
+    config::register_benchmarks!(
+        c,
+        planned32_p2_00000064,
+        planned32_p2_00000128,
+        planned32_p2_00000256,
+        planned32_p2_00000512,
+        planned32_p2_00001024,
+        planned32_p2_00002048,
+        planned32_p2_00004096,
+        planned32_p2_00016384,
+        planned32_p2_00065536,
+        planned32_p2_01048576,
+        planned64_p2_00000064,
+        planned64_p2_00000128,
+        planned64_p2_00000256,
+        planned64_p2_00000512,
+        planned64_p2_00001024,
+        planned64_p2_00002048,
+        planned64_p2_00004096,
+        planned64_p2_00016384,
+        planned64_p2_00065536,
+        planned64_p2_01048576,
+        good_thomas_0002_3,
+        good_thomas_0003_4,
+        good_thomas_0004_5,
+        good_thomas_0007_32,
+        good_thomas_0032_27,
+        good_thomas_setup_0002_3,
+        good_thomas_setup_0003_4,
+        good_thomas_setup_0004_5,
+        good_thomas_setup_0007_32,
+        good_thomas_setup_0032_27,
+        good_thomas_setup_0256_243,
+        good_thomas_setup_2048_3,
+        good_thomas_setup_2048_2187,
+        mixed_radix_0002_3,
+        mixed_radix_0003_4,
+        mixed_radix_0004_5,
+        mixed_radix_0007_32,
+        mixed_radix_0032_27,
+        mixed_radix_small_0002_3,
+        mixed_radix_small_0003_4,
+        mixed_radix_small_0004_5,
+        mixed_radix_small_0007_32,
+        good_thomas_small_0002_3,
+        good_thomas_small_0003_4,
+        good_thomas_small_0004_5,
+        good_thomas_small_0007_32,
+        radix4_______64,
+        radix4______256,
+        radix4_____1024,
+        radix4____65536,
+        radix4_64____64,
+        radix4_64___256,
+        radix4_64__1024,
+        radix4_64_65536,
+        mixed_radix_power2__00000256,
+        mixed_radix_power2__00001024,
+        mixed_radix_power2__00004096,
+        mixed_radix_power2__00065536,
+        mixed_radix_power2_inline__00000256,
+        mixed_radix_power2_inline__00001024,
+        mixed_radix_power2_inline__00004096,
+        mixed_radix_power2_inline__00065536,
+        butterfly32_02,
+        butterfly32_03,
+        butterfly32_04,
+        butterfly32_05,
+        butterfly32_06,
+        butterfly32_07,
+        butterfly32_08,
+        butterfly32_09,
+        butterfly32_11,
+        butterfly32_12,
+        butterfly32_16,
+        butterfly64_02,
+        butterfly64_03,
+        butterfly64_04,
+        butterfly64_05,
+        butterfly64_06,
+        butterfly64_07,
+        butterfly64_08,
+        butterfly64_09,
+        butterfly64_11,
+        butterfly64_12,
+        butterfly64_16,
+        setup_bluesteins_0017,
+        setup_bluesteins_0055,
+        setup_bluesteins_0117,
+        setup_bluesteins_0555,
+        setup_bluesteins_1117,
+        setup_bluesteins_5555,
+    );
+}
+
+criterion_group! {
+    name = benches;
+    config = config::fast();
+    targets = criterion_benchmark
+}
+criterion_main!(benches);
