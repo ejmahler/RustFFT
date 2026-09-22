@@ -181,11 +181,9 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
 
         // figure out how much scratch space we need to request from callers
         let base_inplace_scratch = base_fft.get_inplace_scratch_len();
-        let inplace_scratch_len = if base_inplace_scratch > len {
-            len + base_inplace_scratch
-        } else {
-            len
-        };
+        // the in-place path transposes into its own scratch and runs the base out of place from
+        // there back into the caller's buffer, so it needs the base's out-of-place scratch on top
+        let inplace_scratch_len = len + base_fft.get_outofplace_scratch_len();
         let outofplace_scratch_len = if base_inplace_scratch > len {
             base_inplace_scratch
         } else {
@@ -340,17 +338,14 @@ impl<V: SimdVector, T: FftNum> Fft<T> for SimdRadixN<V, T> {
                 self.len(),
                 self.get_inplace_scratch_len(),
                 |chunk, scratch| {
-                    let (output, inner_scratch) = scratch.split_at_mut(self.len());
-                    self.transpose(chunk, output);
-                    // same as out of place: the chunk is free once the transpose is done
-                    let base_scratch = if !inner_scratch.is_empty() {
-                        inner_scratch
-                    } else {
-                        &mut *chunk
-                    };
-                    self.base_fft.process_with_scratch(output, base_scratch);
-                    self.cross_ffts(output);
-                    chunk.copy_from_slice(output);
+                    let (transposed, inner_scratch) = scratch.split_at_mut(self.len());
+                    self.transpose(chunk, transposed);
+                    // Run the base out of place, from the scratch back into the caller's chunk.
+                    // The cross layers are then in place on the chunk, and the whole thing ends
+                    // where the caller wants it without a final copy.
+                    self.base_fft
+                        .process_outofplace_with_scratch(transposed, chunk, inner_scratch);
+                    self.cross_ffts(chunk);
                 },
             )
         }
