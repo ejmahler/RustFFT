@@ -33,8 +33,8 @@ pub const fn prime_butterfly_lens() -> &'static [usize] {
     &[{{#each lengths }}{{this.len}}, {{/each}}]
 }
 
-/// Safety: The current machine must support the {{arch.cpu_feature_name}} target feature
-#[target_feature(enable = "{{arch.cpu_feature_name}}")]
+/// Safety: The current machine must support the {{arch.target_feature_name}} target feature
+#[target_feature(enable = "{{arch.target_feature_name}}")]
 pub unsafe fn construct_prime_butterfly<T: FftNum>(len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
     let id_f32 = TypeId::of::<f32>();
     let id_f64 = TypeId::of::<f64>();

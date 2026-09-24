@@ -60,6 +60,8 @@ jobs:
         run: cargo run --manifest-path ./tools/gen_simd_butterflies/Cargo.toml -- sse 7 11 13 17 19 23 29 31 --check src/sse/sse_prime_butterflies.rs
       - name: Check NEON Prime Butterflies
         run: cargo run --manifest-path ./tools/gen_simd_butterflies/Cargo.toml -- neon 7 11 13 17 19 23 29 31 --check src/neon/neon_prime_butterflies.rs
+      - name: Check FCMA Prime Butterflies
+        run: cargo run --manifest-path ./tools/gen_simd_butterflies/Cargo.toml -- fcma 7 11 13 17 19 23 29 31 --check src/fcma/fcma_prime_butterflies.rs
       - name: Check Wasm SIMD Prime Butterflies
         run: cargo run --manifest-path ./tools/gen_simd_butterflies/Cargo.toml -- wasm_simd 7 11 13 17 19 23 29 31 --check src/wasm_simd/wasm_simd_prime_butterflies.rs
 
@@ -116,6 +118,46 @@ jobs:
 
       - name: Run cargo test for arm
         run: cross test --release --features neon --target aarch64-unknown-linux-gnu
+
+  # Both fcma jobs run on native arm hardware that implements ARMv8.3-A, so they really execute
+  # the FCMA instructions. The tests assert that the feature was detected, so they fail rather
+  # than quietly skipping if that ever stops being true.
+  #
+  # It is worth having both: fcma is in the default target features on aarch64-apple-darwin but
+  # not on aarch64-unknown-linux-gnu, and the two targets detect it in different ways.
+  check_arm64_fcma:
+    name: Check and test Linux arm 64bit with fcma
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v3
+
+      # The FCMA intrinsics are unstable, so this feature only builds on nightly.
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Run cargo check
+        run: cargo check --features fcma
+
+      - name: Run cargo test
+        run: cargo test --release --features fcma
+
+  check_macos_fcma:
+    name: Check and test macOS arm 64bit with fcma
+    runs-on: macos-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v3
+
+      # The FCMA intrinsics are unstable, so this feature only builds on nightly.
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Run cargo check
+        run: cargo check --features fcma
+
+      - name: Run cargo test
+        run: cargo test --release --features fcma
 
   check_x86:
     name: Check and test Linux x86 32bit
