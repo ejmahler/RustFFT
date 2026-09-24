@@ -9,7 +9,7 @@ use std::any::TypeId;
 use std::sync::Arc;
 mod config;
 
-use criterion::{criterion_group, criterion_main, Bencher, Criterion};
+use criterion::{Bencher, BenchmarkId, Criterion, criterion_group, criterion_main};
 
 
 /// Times just the FFT execution (not allocation and pre-calculation)
@@ -366,27 +366,41 @@ fn bench_factor31_mixedradix<T: FftNum>(b: &mut Bencher, power31: u32, power2: u
 }
 
 fn criterion_benchmark_factor31(c: &mut Criterion) {
-    for power31 in 1..5 {
-        for power2 in 1..10 {
-            c.bench_function(&format!("factor31_f32_sse_mixedradix_n{power31}_p{power2}"), |b| {
-                bench_factor31_mixedradix::<f32>(b, power31, power2)
-            });
-            c.bench_function(&format!("factor31_f32_sse_radixnbase_n{power31}_p{power2}"), |b| {
-                bench_factor31_radixnbase::<f32>(b, power31, power2)
-            });
-            c.bench_function(&format!("factor31_f32_sse_radixncross_n{power31}_p{power2}"), |b| {
-                bench_factor31_radixncross::<f32>(b, power31, power2)
-            });
+    {
+        let mut group32 = c.benchmark_group("factor31_sse_f32");
+        
+        for power31 in 1..2 {
+            for power2 in 1..10 {
+                let len = 31usize.pow(power31)*2usize.pow(power2);
+                group32.bench_with_input(BenchmarkId::new("mixedradix", len), &len,  |b, _| {
+                    bench_factor31_mixedradix::<f32>(b, power31, power2)
+                });
+                /*group32.bench_with_input(BenchmarkId::new("radixnbase", len), &len,  |b, _| {
+                    bench_factor31_radixnbase::<f32>(b, power31, power2)
+                });*/
+                group32.bench_with_input(BenchmarkId::new("radixncross", len), &len,  |b, _| {
+                    bench_factor31_radixncross::<f32>(b, power31, power2)
+                });
+            }
+        }
+    }
 
-            c.bench_function(&format!("factor31_f64_sse_mixedradix_n{power31}_p{power2}"), |b| {
-                bench_factor31_mixedradix::<f64>(b, power31, power2)
-            });
-            c.bench_function(&format!("factor31_f64_sse_radixnbase_n{power31}_p{power2}"), |b| {
-                bench_factor31_radixnbase::<f64>(b, power31, power2)
-            });
-            c.bench_function(&format!("factor31_f64_sse_radixncross_n{power31}_p{power2}"), |b| {
-                bench_factor31_radixncross::<f64>(b, power31, power2)
-            });
+    {
+        let mut group64 = c.benchmark_group("factor31_sse_f64");
+
+        for power31 in 1..2 {
+            for power2 in 1..10 {
+                let len = 31usize.pow(power31)*2usize.pow(power2);
+                group64.bench_with_input(BenchmarkId::new("mixedradix", len), &len, |b, _| {
+                    bench_factor31_mixedradix::<f64>(b, power31, power2)
+                });
+                group64.bench_with_input(BenchmarkId::new("radixnbase", len), &len, |b, _| {
+                    bench_factor31_radixnbase::<f64>(b, power31, power2)
+                });
+                group64.bench_with_input(BenchmarkId::new("radixncross", len), &len, |b, _| {
+                    bench_factor31_radixncross::<f64>(b, power31, power2)
+                });
+            }
         }
     }
 }
