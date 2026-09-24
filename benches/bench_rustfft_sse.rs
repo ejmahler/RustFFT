@@ -369,7 +369,7 @@ fn criterion_benchmark_factor31(c: &mut Criterion) {
     {
         let mut group32 = c.benchmark_group("factor31_sse_f32");
         
-        for power31 in 1..2 {
+        for power31 in 1..3 {
             for power2 in 1..10 {
                 let len = 31usize.pow(power31)*2usize.pow(power2);
                 group32.bench_with_input(BenchmarkId::new("mixedradix", len), &len,  |b, _| {
@@ -388,7 +388,7 @@ fn criterion_benchmark_factor31(c: &mut Criterion) {
     {
         let mut group64 = c.benchmark_group("factor31_sse_f64");
 
-        for power31 in 1..2 {
+        for power31 in 1..3 {
             for power2 in 1..10 {
                 let len = 31usize.pow(power31)*2usize.pow(power2);
                 group64.bench_with_input(BenchmarkId::new("mixedradix", len), &len, |b, _| {
