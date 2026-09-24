@@ -46,6 +46,7 @@ pub trait RadixNVector: Copy + Send + Sync + Sized {
     type Butterfly5: Send + Sync;
     type Butterfly6: Send + Sync;
     type Butterfly7: Send + Sync;
+    type Butterfly31: Send + Sync;
 
     unsafe fn load(data: &[Complex<Self::ScalarType>], index: usize) -> Self;
     unsafe fn store(data: &mut [Complex<Self::ScalarType>], value: Self, index: usize);
@@ -67,6 +68,7 @@ pub trait RadixNVector: Copy + Send + Sync + Sized {
     unsafe fn make_butterfly5(direction: FftDirection) -> Self::Butterfly5;
     unsafe fn make_butterfly6(direction: FftDirection) -> Self::Butterfly6;
     unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7;
+    unsafe fn make_butterfly31(direction: FftDirection) -> Self::Butterfly31;
 
     /// Each of these interprets the input as rows of a `COMPLEX_PER_VECTOR`-by-N 2D array, and
     /// computes parallel butterflies down the columns of the 2D array.
@@ -76,6 +78,7 @@ pub trait RadixNVector: Copy + Send + Sync + Sized {
     unsafe fn column_butterfly5(bf: &Self::Butterfly5, rows: [Self; 5]) -> [Self; 5];
     unsafe fn column_butterfly6(bf: &Self::Butterfly6, rows: [Self; 6]) -> [Self; 6];
     unsafe fn column_butterfly7(bf: &Self::Butterfly7, rows: [Self; 7]) -> [Self; 7];
+    unsafe fn column_butterfly31(bf: &Self::Butterfly31, rows: [Self; 31]) -> [Self; 31];
 
     /// The three `fft_helper_*` wrappers from the backend's `*_common.rs`, which run the whole
     /// chunk loop with the backend's target feature enabled so that things like loading twiddle
@@ -113,6 +116,7 @@ enum InternalRadixFactor<V: RadixNVector> {
     Factor5(V::Butterfly5),
     Factor6(V::Butterfly6),
     Factor7(V::Butterfly7),
+    Factor31(V::Butterfly31),
 }
 
 impl<V: RadixNVector> InternalRadixFactor<V> {
@@ -124,6 +128,7 @@ impl<V: RadixNVector> InternalRadixFactor<V> {
             InternalRadixFactor::Factor5(_) => 5,
             InternalRadixFactor::Factor6(_) => 6,
             InternalRadixFactor::Factor7(_) => 7,
+            InternalRadixFactor::Factor31(_) => 31,
         }
     }
 }
@@ -195,6 +200,9 @@ impl<V: RadixNVector, T: FftNum> SimdRadixN<V, T> {
                     }
                     RadixFactor::Factor7 => {
                         InternalRadixFactor::Factor7(V::make_butterfly7(direction))
+                    }
+                    RadixFactor::Factor31 => {
+                        InternalRadixFactor::Factor31(V::make_butterfly31(direction))
                     }
                 }
             });
@@ -303,6 +311,9 @@ impl<V: RadixNVector, T: FftNum> SimdRadixN<V, T> {
                 RadixFactor::Factor7 => {
                     factor_transpose::<Complex<T>, 7>(self.base_len, input, output, &self.factors)
                 }
+                RadixFactor::Factor31 => {
+                    factor_transpose::<Complex<T>, 31>(self.base_len, input, output, &self.factors)
+                }
             }
         } else {
             // no factors, so just pass data straight to our base
@@ -363,6 +374,13 @@ impl<V: RadixNVector, T: FftNum> SimdRadixN<V, T> {
                     for data in out.chunks_exact_mut(cross_fft_len) {
                         cross_layer::<V, 7, _>(data, layer_twiddles, num_columns, |v| {
                             V::column_butterfly7(bf, v)
+                        })
+                    }
+                }
+                InternalRadixFactor::Factor31(bf) => {
+                    for data in out.chunks_exact_mut(cross_fft_len) {
+                        cross_layer::<V, 31, _>(data, layer_twiddles, num_columns, |v| {
+                            V::column_butterfly31(bf, v)
                         })
                     }
                 }
@@ -548,7 +566,7 @@ pub mod test_bodies {
     use super::*;
     use crate::test_utils::{check_fft_algorithm, construct_base};
     use num_traits::Float;
-    use rand::distributions::uniform::SampleUniform;
+    use rand::distr::uniform::SampleUniform;
 
     const FACTOR_LIST: &[RadixFactor] = &[
         RadixFactor::Factor2,
@@ -557,6 +575,7 @@ pub mod test_bodies {
         RadixFactor::Factor5,
         RadixFactor::Factor6,
         RadixFactor::Factor7,
+        RadixFactor::Factor31,
     ];
 
     /// Every empty, one-factor and two-factor recipe over each of `bases`, both directions.

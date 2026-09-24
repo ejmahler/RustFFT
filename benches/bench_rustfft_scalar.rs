@@ -7,6 +7,7 @@ use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 use rustfft::FftPlannerScalar;
 use rustfft::{Direction, Fft, FftDirection, FftNum, Length};
+use rustfft::RadixFactor;
 use std::sync::Arc;
 mod config;
 
@@ -374,7 +375,7 @@ fn mixed_radix_0032_27(b: &mut Bencher) {
 //#[bench] fn mixed_radix_2048_3(b: &mut Bencher) { bench_mixed_radix(b,  2048, 3); }
 //#[bench] fn mixed_radix_2048_2187(b: &mut Bencher) { bench_mixed_radix(b,  2048, 2187); }
 
-fn plan_butterfly_fft(len: usize) -> Arc<dyn Fft<f32>> {
+fn plan_butterfly_fft<T: FftNum>(len: usize) -> Arc<dyn Fft<T>> {
     match len {
         2 => Arc::new(Butterfly2::new(FftDirection::Forward)),
         3 => Arc::new(Butterfly3::new(FftDirection::Forward)),
@@ -825,6 +826,150 @@ fn setup_bluesteins_5555(b: &mut Bencher) {
     bench_bluesteins_setup(b, 5555);
 }
 
+fn plan_mixedradix_power31<T: FftNum>(power31: u32) -> Arc<dyn Fft<T>> {
+    fn construct_branch<T: FftNum>(power: u32, butterfly31: &Arc<dyn Fft<T>>) -> Arc<dyn Fft<T>> {
+        if power == 1 {
+            Arc::clone(butterfly31)
+        } else {
+            let left = power / 2;
+            let right = power - left;
+            let fft_left = construct_branch(left, butterfly31);
+            let fft_right = construct_branch(right, butterfly31);
+
+            if fft_left.len() == 31 && fft_right.len() == 31 {
+                Arc::new(MixedRadixSmall::new(fft_left, fft_right))
+            } else {
+                Arc::new(MixedRadix::new(fft_left, fft_right))
+            }
+        }
+    }
+    
+    let butterfly31 = Arc::new(Butterfly31::new(FftDirection::Forward)) as Arc<dyn Fft<T>>;
+    construct_branch(power31, &butterfly31)
+}
+
+// Tests incorporating a factor of 31 by using it as a cross-FFT for RadixN
+fn bench_factor31_radixncross<T: FftNum>(b: &mut Bencher, power31: u32, power2: u32) {
+    let base_power2 = match power2 {
+        0 => unimplemented!(),
+        1 => 1,
+        2 => 2,
+        3 => 3,
+        4 => 4, 
+        5 => 5,
+        other =>  if other % 2 == 0 { 4 } else { 5 }
+    };
+
+    let power2_cross = power2 - base_power2;
+    assert!(power2_cross % 2 == 0);
+    let power4_cross = power2_cross / 2;
+
+    let base_fft = plan_butterfly_fft::<T>(1 << base_power2);
+    
+    let mut factors : Vec<RadixFactor> = Vec::new();
+    for _ in 0..power31 {
+        factors.push(RadixFactor::Factor31);
+    }
+    for _ in 0..power4_cross {
+        factors.push(RadixFactor::Factor4);
+    }
+
+    let fft = RadixN::new(&factors, base_fft);
+    let len = fft.len();
+
+    let mut buffer_in = vec![Complex::zero(); len * 10];
+    let mut buffer_out = vec![Complex::zero(); len * 10];
+    let mut buffer_scratch = vec![Complex::zero(); fft.get_outofplace_scratch_len()];
+    b.iter(|| {
+        fft.process_outofplace_with_scratch(&mut buffer_in, &mut buffer_out, &mut buffer_scratch);
+    });
+}
+// Tests incorporating a factor of 31 by using it as the base of RadixN
+fn bench_factor31_radixnbase<T: FftNum>(b: &mut Bencher, power31: u32, power2: u32) {
+    let base_fft = plan_mixedradix_power31::<T>(power31);
+    
+    let mut factors : Vec<RadixFactor> = Vec::new();
+    if power2 % 2 == 1 {
+        factors.push(RadixFactor::Factor2);
+    }
+    let power4_cross = power2 / 2;
+    for _ in 0..power4_cross {
+        factors.push(RadixFactor::Factor4);
+    }
+
+    let fft = RadixN::new(&factors, base_fft);
+    let len = fft.len();
+
+    let mut buffer_in = vec![Complex::zero(); len * 10];
+    let mut buffer_out = vec![Complex::zero(); len * 10];
+    let mut buffer_scratch = vec![Complex::zero(); fft.get_outofplace_scratch_len()];
+    b.iter(|| {
+        fft.process_outofplace_with_scratch(&mut buffer_in, &mut buffer_out, &mut buffer_scratch);
+    });
+}
+// Tests incorporating a factor of 31 via mixed radix
+fn bench_factor31_mixedradix<T: FftNum>(b: &mut Bencher, power31: u32, power2: u32) {
+    let base_power2 = match power2 {
+        0 => unimplemented!(),
+        1 => 1,
+        2 => 2,
+        3 => 3,
+        4 => 4, 
+        5 => 5,
+        other =>  if other % 2 == 0 { 4 } else { 5 }
+    };
+
+    let power2_cross = power2 - base_power2;
+    assert!(power2_cross % 2 == 0);
+    let power4_cross = power2_cross / 2;
+
+    let base_fft = plan_butterfly_fft::<T>(1 << base_power2);
+    
+    let mut factors : Vec<RadixFactor> = Vec::new();
+    for _ in 0..power4_cross {
+        factors.push(RadixFactor::Factor4);
+    }
+
+    let power2_fft = Arc::new(RadixN::new(&factors, base_fft));
+    let power31_fft = plan_mixedradix_power31(power31);
+    let fft = MixedRadix::new(power31_fft, power2_fft);
+    let len = fft.len();
+
+    let mut buffer_in = vec![Complex::zero(); len * 10];
+    let mut buffer_out = vec![Complex::zero(); len * 10];
+    let mut buffer_scratch = vec![Complex::zero(); fft.get_outofplace_scratch_len()];
+    b.iter(|| {
+        fft.process_outofplace_with_scratch(&mut buffer_in, &mut buffer_out, &mut buffer_scratch);
+    });
+}
+
+fn criterion_benchmark_factor31(c: &mut Criterion) {
+    
+    for power31 in 1..5 {
+        for power2 in 1..10 {
+            c.bench_function(&format!("factor31_f32_scalar_mixedradix_n{power31}_p{power2}"), |b| {
+                bench_factor31_mixedradix::<f32>(b, power31, power2)
+            });
+            c.bench_function(&format!("factor31_f32_scalar_radixnbase_n{power31}_p{power2}"), |b| {
+                bench_factor31_radixnbase::<f32>(b, power31, power2)
+            });
+            c.bench_function(&format!("factor31_f32_scalar_radixncross_n{power31}_p{power2}"), |b| {
+                bench_factor31_radixncross::<f32>(b, power31, power2)
+            });
+
+            c.bench_function(&format!("factor31_f64_scalar_mixedradix_n{power31}_p{power2}"), |b| {
+                bench_factor31_mixedradix::<f64>(b, power31, power2)
+            });
+            c.bench_function(&format!("factor31_f64_scalar_radixnbase_n{power31}_p{power2}"), |b| {
+                bench_factor31_radixnbase::<f64>(b, power31, power2)
+            });
+            c.bench_function(&format!("factor31_f64_scalar_radixncross_n{power31}_p{power2}"), |b| {
+                bench_factor31_radixncross::<f64>(b, power31, power2)
+            });
+        }
+    }
+}
+
 fn criterion_benchmark(c: &mut Criterion) {
     config::register_benchmarks!(
         c,
@@ -924,6 +1069,6 @@ fn criterion_benchmark(c: &mut Criterion) {
 criterion_group! {
     name = benches;
     config = config::fast();
-    targets = criterion_benchmark
+    targets = criterion_benchmark, criterion_benchmark_factor31
 }
 criterion_main!(benches);

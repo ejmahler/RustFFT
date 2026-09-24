@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use num_complex::Complex;
 
+use crate::algorithm::butterflies::Butterfly31;
 use crate::array_utils::{factor_transpose, Load, LoadStore, TransposeFactor};
 use crate::common::RadixFactor;
 use crate::{common::FftNum, twiddles, FftDirection};
@@ -17,6 +18,7 @@ enum InternalRadixFactor<T> {
     Factor5(Butterfly5<T>),
     Factor6(Butterfly6<T>),
     Factor7(Butterfly7<T>),
+    Factor31(Butterfly31<T>),
 }
 impl<T> InternalRadixFactor<T> {
     pub const fn radix(&self) -> usize {
@@ -28,11 +30,12 @@ impl<T> InternalRadixFactor<T> {
             InternalRadixFactor::Factor5(_) => 5,
             InternalRadixFactor::Factor6(_) => 6,
             InternalRadixFactor::Factor7(_) => 7,
+            InternalRadixFactor::Factor31(_) => 31,
         }
     }
 }
 
-pub(crate) struct RadixN<T> {
+pub struct RadixN<T> {
     twiddles: Box<[Complex<T>]>,
 
     base_fft: Arc<dyn Fft<T>>,
@@ -75,6 +78,7 @@ impl<T: FftNum> RadixN<T> {
                 RadixFactor::Factor5 => InternalRadixFactor::Factor5(Butterfly5::new(direction)),
                 RadixFactor::Factor6 => InternalRadixFactor::Factor6(Butterfly6::new(direction)),
                 RadixFactor::Factor7 => InternalRadixFactor::Factor7(Butterfly7::new(direction)),
+                RadixFactor::Factor31 => InternalRadixFactor::Factor31(Butterfly31::new(direction)),
             };
             butterflies.push(butterfly);
 
@@ -192,6 +196,9 @@ impl<T: FftNum> RadixN<T> {
                 RadixFactor::Factor7 => {
                     factor_transpose::<Complex<T>, 7>(self.base_len, input, output, &self.factors)
                 }
+                RadixFactor::Factor31 => {
+                    factor_transpose::<Complex<T>, 31>(self.base_len, input, output, &self.factors)
+                }
             }
         } else {
             // no factors, so just pass data straight to our base
@@ -239,6 +246,11 @@ impl<T: FftNum> RadixN<T> {
                         unsafe { butterfly_7(data, layer_twiddles, cross_fft_columns, butterfly7) }
                     }
                 }
+                InternalRadixFactor::Factor31(butterfly31) => {
+                    for data in output.chunks_exact_mut(cross_fft_len) {
+                        unsafe { butterfly_31(data, layer_twiddles, cross_fft_columns, butterfly31) }
+                    }
+                }
             }
 
             // skip past all the twiddle factors used in this layer
@@ -274,6 +286,9 @@ impl<T: FftNum> RadixN<T> {
                 }
                 RadixFactor::Factor7 => {
                     factor_transpose::<Complex<T>, 7>(self.base_len, input, output, &self.factors)
+                }
+                RadixFactor::Factor31 => {
+                    factor_transpose::<Complex<T>, 31>(self.base_len, input, output, &self.factors)
                 }
             }
         } else {
@@ -322,6 +337,11 @@ impl<T: FftNum> RadixN<T> {
                 InternalRadixFactor::Factor7(butterfly7) => {
                     for data in output.chunks_exact_mut(cross_fft_len) {
                         unsafe { butterfly_7(data, layer_twiddles, cross_fft_columns, butterfly7) }
+                    }
+                }
+                InternalRadixFactor::Factor31(butterfly31) => {
+                    for data in output.chunks_exact_mut(cross_fft_len) {
+                        unsafe { butterfly_31(data, layer_twiddles, cross_fft_columns, butterfly31) }
                     }
                 }
             }
@@ -488,6 +508,84 @@ pub(crate) unsafe fn butterfly_7<T: FftNum>(
         data.store(scratch[6], idx + 6 * num_columns);
     }
 }
+#[inline(never)]
+pub(crate) unsafe fn butterfly_31<T: FftNum>(
+    mut data: impl LoadStore<T>,
+    twiddles: impl Load<T>,
+    num_columns: usize,
+    butterfly31: &Butterfly31<T>,
+) {
+    for idx in 0..num_columns {
+        let tw_idx = idx * 30;
+        let mut scratch = [
+            data.load(idx + 0 * num_columns),
+            data.load(idx + 1 * num_columns) * twiddles.load(tw_idx + 0),
+            data.load(idx + 2 * num_columns) * twiddles.load(tw_idx + 1),
+            data.load(idx + 3 * num_columns) * twiddles.load(tw_idx + 2),
+            data.load(idx + 4 * num_columns) * twiddles.load(tw_idx + 3),
+            data.load(idx + 5 * num_columns) * twiddles.load(tw_idx + 4),
+            data.load(idx + 6 * num_columns) * twiddles.load(tw_idx + 5),
+            data.load(idx + 7 * num_columns) * twiddles.load(tw_idx + 6),
+            data.load(idx + 8 * num_columns) * twiddles.load(tw_idx + 7),
+            data.load(idx + 9 * num_columns) * twiddles.load(tw_idx + 8),
+            data.load(idx + 10 * num_columns) * twiddles.load(tw_idx + 9),
+            data.load(idx + 11 * num_columns) * twiddles.load(tw_idx + 10),
+            data.load(idx + 12 * num_columns) * twiddles.load(tw_idx + 11),
+            data.load(idx + 13 * num_columns) * twiddles.load(tw_idx + 12),
+            data.load(idx + 14 * num_columns) * twiddles.load(tw_idx + 13),
+            data.load(idx + 15 * num_columns) * twiddles.load(tw_idx + 14),
+            data.load(idx + 16 * num_columns) * twiddles.load(tw_idx + 15),
+            data.load(idx + 17 * num_columns) * twiddles.load(tw_idx + 16),
+            data.load(idx + 18 * num_columns) * twiddles.load(tw_idx + 17),
+            data.load(idx + 19 * num_columns) * twiddles.load(tw_idx + 18),
+            data.load(idx + 20 * num_columns) * twiddles.load(tw_idx + 19),
+            data.load(idx + 21 * num_columns) * twiddles.load(tw_idx + 20),
+            data.load(idx + 22 * num_columns) * twiddles.load(tw_idx + 21),
+            data.load(idx + 23 * num_columns) * twiddles.load(tw_idx + 22),
+            data.load(idx + 24 * num_columns) * twiddles.load(tw_idx + 23),
+            data.load(idx + 25 * num_columns) * twiddles.load(tw_idx + 24),
+            data.load(idx + 26 * num_columns) * twiddles.load(tw_idx + 25),
+            data.load(idx + 27 * num_columns) * twiddles.load(tw_idx + 26),
+            data.load(idx + 28 * num_columns) * twiddles.load(tw_idx + 27),
+            data.load(idx + 29 * num_columns) * twiddles.load(tw_idx + 28),
+            data.load(idx + 30 * num_columns) * twiddles.load(tw_idx + 29),
+        ];
+
+        butterfly31.perform_fft_butterfly(&mut scratch);
+
+        data.store(scratch[0], idx + 0 * num_columns);
+        data.store(scratch[1], idx + 1 * num_columns);
+        data.store(scratch[2], idx + 2 * num_columns);
+        data.store(scratch[3], idx + 3 * num_columns);
+        data.store(scratch[4], idx + 4 * num_columns);
+        data.store(scratch[5], idx + 5 * num_columns);
+        data.store(scratch[6], idx + 6 * num_columns);
+        data.store(scratch[7], idx + 7 * num_columns);
+        data.store(scratch[8], idx + 8 * num_columns);
+        data.store(scratch[9], idx + 9 * num_columns);
+        data.store(scratch[10], idx + 10 * num_columns);
+        data.store(scratch[11], idx + 11 * num_columns);
+        data.store(scratch[12], idx + 12 * num_columns);
+        data.store(scratch[13], idx + 13 * num_columns);
+        data.store(scratch[14], idx + 14 * num_columns);
+        data.store(scratch[15], idx + 15 * num_columns);
+        data.store(scratch[16], idx + 16 * num_columns);
+        data.store(scratch[17], idx + 17 * num_columns);
+        data.store(scratch[18], idx + 18 * num_columns);
+        data.store(scratch[19], idx + 19 * num_columns);
+        data.store(scratch[20], idx + 20 * num_columns);
+        data.store(scratch[21], idx + 21 * num_columns);
+        data.store(scratch[22], idx + 22 * num_columns);
+        data.store(scratch[23], idx + 23 * num_columns);
+        data.store(scratch[24], idx + 24 * num_columns);
+        data.store(scratch[25], idx + 25 * num_columns);
+        data.store(scratch[26], idx + 26 * num_columns);
+        data.store(scratch[27], idx + 27 * num_columns);
+        data.store(scratch[28], idx + 28 * num_columns);
+        data.store(scratch[29], idx + 29 * num_columns);
+        data.store(scratch[30], idx + 30 * num_columns);
+    }
+}
 
 #[cfg(test)]
 mod unit_tests {
@@ -503,6 +601,7 @@ mod unit_tests {
             RadixFactor::Factor5,
             RadixFactor::Factor6,
             RadixFactor::Factor7,
+            RadixFactor::Factor31,
         ];
 
         for base in 1..7 {

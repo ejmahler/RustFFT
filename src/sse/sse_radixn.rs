@@ -10,12 +10,13 @@ use num_complex::Complex;
 
 use crate::simd_radixn::{RadixNVector, SimdRadixN};
 use crate::FftDirection;
+use crate::sse::sse_prime_butterflies::SseF32Butterfly31;
 
 use super::sse_butterflies::{
     SseF32Butterfly3, SseF32Butterfly5, SseF32Butterfly6, SseF64Butterfly3, SseF64Butterfly5,
     SseF64Butterfly6,
 };
-use super::sse_prime_butterflies::{SseF32Butterfly7, SseF64Butterfly7};
+use super::sse_prime_butterflies::{SseF32Butterfly7, SseF64Butterfly7, SseF64Butterfly31};
 use super::sse_vector::{Rotation90, SseArray, SseArrayMut, SseVector};
 use super::SseNum;
 
@@ -33,6 +34,7 @@ impl RadixNVector for __m128d {
     type Butterfly5 = SseF64Butterfly5<f64>;
     type Butterfly6 = SseF64Butterfly6<f64>;
     type Butterfly7 = SseF64Butterfly7<f64>;
+    type Butterfly31 = SseF64Butterfly31<f64>;
 
     #[inline(always)]
     unsafe fn load(data: &[Complex<f64>], index: usize) -> Self {
@@ -77,6 +79,10 @@ impl RadixNVector for __m128d {
     unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
         SseF64Butterfly7::new(direction)
     }
+    #[inline(always)]
+    unsafe fn make_butterfly31(direction: FftDirection) -> Self::Butterfly31 {
+        SseF64Butterfly31::new(direction)
+    }
 
     #[inline(always)]
     unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
@@ -102,6 +108,10 @@ impl RadixNVector for __m128d {
     unsafe fn column_butterfly7(bf: &Self::Butterfly7, rows: [Self; 7]) -> [Self; 7] {
         bf.perform_fft_direct(rows)
     }
+    #[inline(always)]
+    unsafe fn column_butterfly31(bf: &Self::Butterfly31, rows: [Self; 31]) -> [Self; 31] {
+        bf.perform_fft_direct(rows)
+    }
 
     sse_radixn_fft_helpers!();
 }
@@ -116,6 +126,7 @@ impl RadixNVector for __m128 {
     type Butterfly5 = SseF32Butterfly5<f32>;
     type Butterfly6 = SseF32Butterfly6<f32>;
     type Butterfly7 = SseF32Butterfly7<f32>;
+    type Butterfly31 = SseF32Butterfly31<f32>;
 
     #[inline(always)]
     unsafe fn load(data: &[Complex<f32>], index: usize) -> Self {
@@ -160,6 +171,10 @@ impl RadixNVector for __m128 {
     unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
         SseF32Butterfly7::new(direction)
     }
+    #[inline(always)]
+    unsafe fn make_butterfly31(direction: FftDirection) -> Self::Butterfly31 {
+        SseF32Butterfly31::new(direction)
+    }
 
     #[inline(always)]
     unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
@@ -183,6 +198,10 @@ impl RadixNVector for __m128 {
     }
     #[inline(always)]
     unsafe fn column_butterfly7(bf: &Self::Butterfly7, rows: [Self; 7]) -> [Self; 7] {
+        bf.perform_parallel_fft_direct(rows)
+    }
+    #[inline(always)]
+    unsafe fn column_butterfly31(bf: &Self::Butterfly31, rows: [Self; 31]) -> [Self; 31] {
         bf.perform_parallel_fft_direct(rows)
     }
 

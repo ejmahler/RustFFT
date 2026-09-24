@@ -261,13 +261,14 @@ macro_rules! boilerplate_fft {
 #[non_exhaustive]
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub(crate) enum RadixFactor {
+pub enum RadixFactor {
     Factor2,
     Factor3,
     Factor4,
     Factor5,
     Factor6,
     Factor7,
+    Factor31,
 }
 impl RadixFactor {
     pub const fn radix(&self) -> usize {
@@ -279,6 +280,7 @@ impl RadixFactor {
             RadixFactor::Factor5 => 5,
             RadixFactor::Factor6 => 6,
             RadixFactor::Factor7 => 7,
+            RadixFactor::Factor31 => 31,
         }
     }
 
