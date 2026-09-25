@@ -84,17 +84,22 @@ impl<T: FftNum> FftPlanner<T> {
             Self {
                 chosen_planner: ChosenFftPlanner::Fcma(fcma_planner),
             }
-        } else if let Ok(neon_planner) = FftPlannerNeon::new() {
-            Self {
-                chosen_planner: ChosenFftPlanner::Neon(neon_planner),
-            }
-        } else if let Ok(wasm_simd_planner) = FftPlannerWasmSimd::new() {
-            Self {
-                chosen_planner: ChosenFftPlanner::WasmSimd(wasm_simd_planner),
-            }
         } else {
-            Self {
-                chosen_planner: ChosenFftPlanner::Scalar(FftPlannerScalar::new()),
+            match FftPlannerNeon::new() {
+                Ok(neon_planner) => Self {
+                    chosen_planner: ChosenFftPlanner::Neon(neon_planner),
+                },
+                _ => {
+                    if let Ok(wasm_simd_planner) = FftPlannerWasmSimd::new() {
+                        Self {
+                            chosen_planner: ChosenFftPlanner::WasmSimd(wasm_simd_planner),
+                        }
+                    } else {
+                        Self {
+                            chosen_planner: ChosenFftPlanner::Scalar(FftPlannerScalar::new()),
+                        }
+                    }
+                }
             }
         }
     }
@@ -332,12 +337,13 @@ impl<T: FftNum> FftPlannerScalar<T> {
     // Create the fft from a recipe, take from cache if possible
     fn build_fft(&mut self, recipe: &Recipe, direction: FftDirection) -> Arc<dyn Fft<T>> {
         let len = recipe.len();
-        if let Some(instance) = self.algorithm_cache.get(len, direction) {
-            instance
-        } else {
-            let fft = self.build_new_fft(recipe, direction);
-            self.algorithm_cache.insert(&fft);
-            fft
+        match self.algorithm_cache.get(len, direction) {
+            Some(instance) => instance,
+            _ => {
+                let fft = self.build_new_fft(recipe, direction);
+                self.algorithm_cache.insert(&fft);
+                fft
+            }
         }
     }
 

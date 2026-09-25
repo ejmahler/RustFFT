@@ -241,12 +241,13 @@ impl<T: FftNum> FftPlannerNeon<T> {
     // Create the fft from a recipe, take from cache if possible
     fn build_fft(&mut self, recipe: &Recipe, direction: FftDirection) -> Arc<dyn Fft<T>> {
         let len = recipe.len();
-        if let Some(instance) = self.algorithm_cache.get(len, direction) {
-            instance
-        } else {
-            let fft = self.build_new_fft(recipe, direction);
-            self.algorithm_cache.insert(&fft);
-            fft
+        match self.algorithm_cache.get(len, direction) {
+            Some(instance) => instance,
+            _ => {
+                let fft = self.build_new_fft(recipe, direction);
+                self.algorithm_cache.insert(&fft);
+                fft
+            }
         }
     }
 

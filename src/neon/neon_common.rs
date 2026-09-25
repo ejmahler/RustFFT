@@ -60,7 +60,7 @@ macro_rules! separate_interleaved_complex_f32 {
 }
 
 macro_rules! boilerplate_fft_neon_oop {
-    ($struct_name:ident, $len_fn:expr) => {
+    ($struct_name:ident, $len_fn:expr_2021) => {
         impl<N: NeonNum, T: FftNum> Fft<T> for $struct_name<N, T> {
             fn process_immutable_with_scratch(
                 &self,
