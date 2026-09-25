@@ -47,13 +47,15 @@ impl Rotate90F32 {
 
     #[inline(always)]
     pub unsafe fn rotate_hi(&self, values: float32x4_t) -> float32x4_t {
-        vcombine_f32(
-            vget_low_f32(values),
-            vreinterpret_f32_u32(veor_u32(
-                vrev64_u32(vreinterpret_u32_f32(vget_high_f32(values))),
-                vreinterpret_u32_f32(self.sign_hi),
-            )),
-        )
+        unsafe {
+            vcombine_f32(
+                vget_low_f32(values),
+                vreinterpret_f32_u32(veor_u32(
+                    vrev64_u32(vreinterpret_u32_f32(vget_high_f32(values))),
+                    vreinterpret_u32_f32(self.sign_hi),
+                )),
+            )
+        }
     }
 
     // There doesn't seem to be any need for rotating just the first element, but let's keep the code just in case
@@ -65,32 +67,40 @@ impl Rotate90F32 {
 
     #[inline(always)]
     pub unsafe fn rotate_both(&self, values: float32x4_t) -> float32x4_t {
-        let temp = vrev64q_f32(values);
-        vreinterpretq_f32_u32(veorq_u32(
-            vreinterpretq_u32_f32(temp),
-            vreinterpretq_u32_f32(self.sign_both),
-        ))
+        unsafe {
+            let temp = vrev64q_f32(values);
+            vreinterpretq_f32_u32(veorq_u32(
+                vreinterpretq_u32_f32(temp),
+                vreinterpretq_u32_f32(self.sign_both),
+            ))
+        }
     }
 
     #[inline(always)]
     pub unsafe fn rotate_both_45(&self, values: float32x4_t) -> float32x4_t {
-        let rotated = self.rotate_both(values);
-        let sum = vaddq_f32(rotated, values);
-        vmulq_f32(sum, vmovq_n_f32(0.5f32.sqrt()))
+        unsafe {
+            let rotated = self.rotate_both(values);
+            let sum = vaddq_f32(rotated, values);
+            vmulq_f32(sum, vmovq_n_f32(0.5f32.sqrt()))
+        }
     }
 
     #[inline(always)]
     pub unsafe fn rotate_both_135(&self, values: float32x4_t) -> float32x4_t {
-        let rotated = self.rotate_both(values);
-        let diff = vsubq_f32(rotated, values);
-        vmulq_f32(diff, vmovq_n_f32(0.5f32.sqrt()))
+        unsafe {
+            let rotated = self.rotate_both(values);
+            let diff = vsubq_f32(rotated, values);
+            vmulq_f32(diff, vmovq_n_f32(0.5f32.sqrt()))
+        }
     }
 
     #[inline(always)]
     pub unsafe fn rotate_both_225(&self, values: float32x4_t) -> float32x4_t {
-        let rotated = self.rotate_both(values);
-        let diff = vaddq_f32(rotated, values);
-        vmulq_f32(diff, vmovq_n_f32(-(0.5f32.sqrt())))
+        unsafe {
+            let rotated = self.rotate_both(values);
+            let diff = vaddq_f32(rotated, values);
+            vmulq_f32(diff, vmovq_n_f32(-(0.5f32.sqrt())))
+        }
     }
 }
 
@@ -100,11 +110,13 @@ impl Rotate90F32 {
 // --> r1.re, r1.im, l1.re, l1.im
 #[inline(always)]
 pub unsafe fn extract_lo_lo_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t {
-    //_mm_shuffle_ps(left, right, 0x44)
-    vreinterpretq_f32_f64(vtrn1q_f64(
-        vreinterpretq_f64_f32(left),
-        vreinterpretq_f64_f32(right),
-    ))
+    unsafe {
+        //_mm_shuffle_ps(left, right, 0x44)
+        vreinterpretq_f32_f64(vtrn1q_f64(
+            vreinterpretq_f64_f32(left),
+            vreinterpretq_f64_f32(right),
+        ))
+    }
 }
 
 // Pack high (2nd) complex
@@ -113,10 +125,12 @@ pub unsafe fn extract_lo_lo_f32(left: float32x4_t, right: float32x4_t) -> float3
 // --> r2.re, r2.im, l2.re, l2.im
 #[inline(always)]
 pub unsafe fn extract_hi_hi_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t {
-    vreinterpretq_f32_f64(vtrn2q_f64(
-        vreinterpretq_f64_f32(left),
-        vreinterpretq_f64_f32(right),
-    ))
+    unsafe {
+        vreinterpretq_f32_f64(vtrn2q_f64(
+            vreinterpretq_f64_f32(left),
+            vreinterpretq_f64_f32(right),
+        ))
+    }
 }
 
 // Pack low (1st) and high (2nd) complex
@@ -125,7 +139,7 @@ pub unsafe fn extract_hi_hi_f32(left: float32x4_t, right: float32x4_t) -> float3
 // --> r1.re, r1.im, l2.re, l2.im
 #[inline(always)]
 pub unsafe fn extract_lo_hi_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t {
-    vcombine_f32(vget_low_f32(left), vget_high_f32(right))
+    unsafe { vcombine_f32(vget_low_f32(left), vget_high_f32(right)) }
 }
 
 // Pack  high (2nd) and low (1st) complex
@@ -134,7 +148,7 @@ pub unsafe fn extract_lo_hi_f32(left: float32x4_t, right: float32x4_t) -> float3
 // --> r2.re, r2.im, l1.re, l1.im
 #[inline(always)]
 pub unsafe fn extract_hi_lo_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t {
-    vcombine_f32(vget_high_f32(left), vget_low_f32(right))
+    unsafe { vcombine_f32(vget_high_f32(left), vget_low_f32(right)) }
 }
 
 // Reverse complex
@@ -142,7 +156,7 @@ pub unsafe fn extract_hi_lo_f32(left: float32x4_t, right: float32x4_t) -> float3
 // --> b.re, b.im, a.re, a.im
 #[inline(always)]
 pub unsafe fn reverse_complex_elements_f32(values: float32x4_t) -> float32x4_t {
-    vcombine_f32(vget_high_f32(values), vget_low_f32(values))
+    unsafe { vcombine_f32(vget_high_f32(values), vget_low_f32(values)) }
 }
 
 // Reverse complex and then negate hi complex
@@ -150,7 +164,7 @@ pub unsafe fn reverse_complex_elements_f32(values: float32x4_t) -> float32x4_t {
 // --> b.re, b.im, -a.re, -a.im
 #[inline(always)]
 pub unsafe fn reverse_complex_and_negate_hi_f32(values: float32x4_t) -> float32x4_t {
-    vcombine_f32(vget_high_f32(values), vneg_f32(vget_low_f32(values)))
+    unsafe { vcombine_f32(vget_high_f32(values), vneg_f32(vget_low_f32(values))) }
 }
 
 // Invert sign of high (2nd) complex
@@ -166,10 +180,12 @@ pub unsafe fn reverse_complex_and_negate_hi_f32(values: float32x4_t) -> float32x
 // --> a.re, a.im, a.re, a.im
 #[inline(always)]
 pub unsafe fn duplicate_lo_f32(values: float32x4_t) -> float32x4_t {
-    vreinterpretq_f32_f64(vtrn1q_f64(
-        vreinterpretq_f64_f32(values),
-        vreinterpretq_f64_f32(values),
-    ))
+    unsafe {
+        vreinterpretq_f32_f64(vtrn1q_f64(
+            vreinterpretq_f64_f32(values),
+            vreinterpretq_f64_f32(values),
+        ))
+    }
 }
 
 // Duplicate high (2nd) complex
@@ -177,19 +193,23 @@ pub unsafe fn duplicate_lo_f32(values: float32x4_t) -> float32x4_t {
 // --> b.re, b.im, b.re, b.im
 #[inline(always)]
 pub unsafe fn duplicate_hi_f32(values: float32x4_t) -> float32x4_t {
-    vreinterpretq_f32_f64(vtrn2q_f64(
-        vreinterpretq_f64_f32(values),
-        vreinterpretq_f64_f32(values),
-    ))
+    unsafe {
+        vreinterpretq_f32_f64(vtrn2q_f64(
+            vreinterpretq_f64_f32(values),
+            vreinterpretq_f64_f32(values),
+        ))
+    }
 }
 
 // transpose a 2x2 complex matrix given as [x0, x1], [x2, x3]
 // result is [x0, x2], [x1, x3]
 #[inline(always)]
 pub unsafe fn transpose_complex_2x2_f32(left: float32x4_t, right: float32x4_t) -> [float32x4_t; 2] {
-    let temp02 = extract_lo_lo_f32(left, right);
-    let temp13 = extract_hi_hi_f32(left, right);
-    [temp02, temp13]
+    unsafe {
+        let temp02 = extract_lo_lo_f32(left, right);
+        let temp13 = extract_hi_hi_f32(left, right);
+        [temp02, temp13]
+    }
 }
 
 //  __  __       _   _                __   _  _   _     _ _
@@ -217,32 +237,40 @@ impl Rotate90F64 {
 
     #[inline(always)]
     pub unsafe fn rotate(&self, values: float64x2_t) -> float64x2_t {
-        let temp = vcombine_f64(vget_high_f64(values), vget_low_f64(values));
-        vreinterpretq_f64_u64(veorq_u64(
-            vreinterpretq_u64_f64(temp),
-            vreinterpretq_u64_f64(self.sign),
-        ))
+        unsafe {
+            let temp = vcombine_f64(vget_high_f64(values), vget_low_f64(values));
+            vreinterpretq_f64_u64(veorq_u64(
+                vreinterpretq_u64_f64(temp),
+                vreinterpretq_u64_f64(self.sign),
+            ))
+        }
     }
 
     #[inline(always)]
     pub unsafe fn rotate_45(&self, values: float64x2_t) -> float64x2_t {
-        let rotated = self.rotate(values);
-        let sum = vaddq_f64(rotated, values);
-        vmulq_f64(sum, vmovq_n_f64(0.5f64.sqrt()))
+        unsafe {
+            let rotated = self.rotate(values);
+            let sum = vaddq_f64(rotated, values);
+            vmulq_f64(sum, vmovq_n_f64(0.5f64.sqrt()))
+        }
     }
 
     #[inline(always)]
     pub unsafe fn rotate_135(&self, values: float64x2_t) -> float64x2_t {
-        let rotated = self.rotate(values);
-        let diff = vsubq_f64(rotated, values);
-        vmulq_f64(diff, vmovq_n_f64(0.5f64.sqrt()))
+        unsafe {
+            let rotated = self.rotate(values);
+            let diff = vsubq_f64(rotated, values);
+            vmulq_f64(diff, vmovq_n_f64(0.5f64.sqrt()))
+        }
     }
 
     #[inline(always)]
     pub unsafe fn rotate_225(&self, values: float64x2_t) -> float64x2_t {
-        let rotated = self.rotate(values);
-        let diff = vaddq_f64(rotated, values);
-        vmulq_f64(diff, vmovq_n_f64(-(0.5f64.sqrt())))
+        unsafe {
+            let rotated = self.rotate(values);
+            let diff = vaddq_f64(rotated, values);
+            vmulq_f64(diff, vmovq_n_f64(-(0.5f64.sqrt())))
+        }
     }
 }
 

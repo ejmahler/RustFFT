@@ -3,8 +3,8 @@
 name = "rustfft"
 version = "6.4.1"
 authors = ["Allen Welkie <allen.welkie at gmail>", "Elliott Mahler <join.together at gmail>"]
-edition = "2021"
-rust-version = "1.77"
+edition = "2024"
+rust-version = "1.86"
 
 description = "High-performance FFT library written in pure Rust."
 documentation = "https://docs.rs/rustfft/"

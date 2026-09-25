@@ -188,64 +188,72 @@ impl NeonVector for float32x4_t {
 
     #[inline(always)]
     unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
-        vld1q_f32(ptr as *const f32)
+        unsafe { vld1q_f32(ptr as *const f32) }
     }
 
     #[inline(always)]
     unsafe fn load_partial_lo_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
-        let temp = vmovq_n_f32(0.0);
-        vreinterpretq_f32_u64(vld1q_lane_u64::<0>(
-            ptr as *const u64,
-            vreinterpretq_u64_f32(temp),
-        ))
+        unsafe {
+            let temp = vmovq_n_f32(0.0);
+            vreinterpretq_f32_u64(vld1q_lane_u64::<0>(
+                ptr as *const u64,
+                vreinterpretq_u64_f32(temp),
+            ))
+        }
     }
 
     #[inline(always)]
     unsafe fn load1_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
-        vreinterpretq_f32_u64(vld1q_dup_u64(ptr as *const u64))
+        unsafe { vreinterpretq_f32_u64(vld1q_dup_u64(ptr as *const u64)) }
     }
 
     #[inline(always)]
     unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
-        vst1q_f32(ptr as *mut f32, data);
+        unsafe {
+            vst1q_f32(ptr as *mut f32, data);
+        }
     }
 
     #[inline(always)]
     unsafe fn store_partial_lo_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
-        let low = vget_low_f32(data);
-        vst1_f32(ptr as *mut f32, low);
+        unsafe {
+            let low = vget_low_f32(data);
+            vst1_f32(ptr as *mut f32, low);
+        }
     }
 
     #[inline(always)]
     unsafe fn store_partial_hi_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
-        let high = vget_high_f32(data);
-        vst1_f32(ptr as *mut f32, high);
+        unsafe {
+            let high = vget_high_f32(data);
+            vst1_f32(ptr as *mut f32, high);
+        }
     }
 
     #[inline(always)]
     unsafe fn neg(a: Self) -> Self {
-        vnegq_f32(a)
+        unsafe { vnegq_f32(a) }
     }
     #[inline(always)]
     unsafe fn add(a: Self, b: Self) -> Self {
-        vaddq_f32(a, b)
+        unsafe { vaddq_f32(a, b) }
     }
     #[inline(always)]
     unsafe fn mul(a: Self, b: Self) -> Self {
-        vmulq_f32(a, b)
+        unsafe { vmulq_f32(a, b) }
     }
     #[inline(always)]
     unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self {
-        vfmaq_f32(acc, a, b)
+        unsafe { vfmaq_f32(acc, a, b) }
     }
     #[inline(always)]
     unsafe fn nmadd(acc: Self, a: Self, b: Self) -> Self {
-        vfmaq_f32(acc, a, vnegq_f32(b))
+        unsafe { vfmaq_f32(acc, a, vnegq_f32(b)) }
     }
 
     #[inline(always)]
     unsafe fn broadcast_scalar(value: Self::ScalarType) -> Self {
-        vmovq_n_f32(value)
+        unsafe { vmovq_n_f32(value) }
     }
 
     #[inline(always)]
@@ -255,63 +263,73 @@ impl NeonVector for float32x4_t {
         len: usize,
         direction: FftDirection,
     ) -> Self {
-        let mut twiddle_chunk = [Complex::<f32>::zero(); Self::COMPLEX_PER_VECTOR];
-        for i in 0..Self::COMPLEX_PER_VECTOR {
-            twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
-        }
+        unsafe {
+            let mut twiddle_chunk = [Complex::<f32>::zero(); Self::COMPLEX_PER_VECTOR];
+            for i in 0..Self::COMPLEX_PER_VECTOR {
+                twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
+            }
 
-        twiddle_chunk.as_slice().load_complex(0)
+            twiddle_chunk.as_slice().load_complex(0)
+        }
     }
 
     #[inline(always)]
     unsafe fn mul_complex(left: Self, right: Self) -> Self {
-        // ARMv8.2-A introduced vcmulq_f32 and vcmlaq_f32 for complex multiplication, these intrinsics are not yet available.
-        let temp1 = vtrn1q_f32(right, right);
-        let temp2 = vtrn2q_f32(right, vnegq_f32(right));
-        let temp3 = vmulq_f32(temp2, left);
-        let temp4 = vrev64q_f32(temp3);
-        vfmaq_f32(temp4, temp1, left)
+        unsafe {
+            // ARMv8.2-A introduced vcmulq_f32 and vcmlaq_f32 for complex multiplication, these intrinsics are not yet available.
+            let temp1 = vtrn1q_f32(right, right);
+            let temp2 = vtrn2q_f32(right, vnegq_f32(right));
+            let temp3 = vmulq_f32(temp2, left);
+            let temp4 = vrev64q_f32(temp3);
+            vfmaq_f32(temp4, temp1, left)
+        }
     }
 
     #[inline(always)]
     unsafe fn make_rotate90(direction: FftDirection) -> Rotation90<Self> {
-        Rotation90(match direction {
-            FftDirection::Forward => vld1q_f32([0.0, -0.0, 0.0, -0.0].as_ptr()),
-            FftDirection::Inverse => vld1q_f32([-0.0, 0.0, -0.0, 0.0].as_ptr()),
-        })
+        unsafe {
+            Rotation90(match direction {
+                FftDirection::Forward => vld1q_f32([0.0, -0.0, 0.0, -0.0].as_ptr()),
+                FftDirection::Inverse => vld1q_f32([-0.0, 0.0, -0.0, 0.0].as_ptr()),
+            })
+        }
     }
 
     #[inline(always)]
     unsafe fn apply_rotate90(direction: Rotation90<Self>, values: Self) -> Self {
-        let temp = vrev64q_f32(values);
-        vreinterpretq_f32_u32(veorq_u32(
-            vreinterpretq_u32_f32(temp),
-            vreinterpretq_u32_f32(direction.0),
-        ))
+        unsafe {
+            let temp = vrev64q_f32(values);
+            vreinterpretq_f32_u32(veorq_u32(
+                vreinterpretq_u32_f32(temp),
+                vreinterpretq_u32_f32(direction.0),
+            ))
+        }
     }
 
     #[inline(always)]
     unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
-        [vaddq_f32(rows[0], rows[1]), vsubq_f32(rows[0], rows[1])]
+        unsafe { [vaddq_f32(rows[0], rows[1]), vsubq_f32(rows[0], rows[1])] }
     }
 
     #[inline(always)]
     unsafe fn column_butterfly4(rows: [Self; 4], rotation: Rotation90<Self>) -> [Self; 4] {
-        // Algorithm: 2x2 mixed radix
+        unsafe {
+            // Algorithm: 2x2 mixed radix
 
-        // Perform the first set of size-2 FFTs.
-        let [mid0, mid2] = Self::column_butterfly2([rows[0], rows[2]]);
-        let [mid1, mid3] = Self::column_butterfly2([rows[1], rows[3]]);
+            // Perform the first set of size-2 FFTs.
+            let [mid0, mid2] = Self::column_butterfly2([rows[0], rows[2]]);
+            let [mid1, mid3] = Self::column_butterfly2([rows[1], rows[3]]);
 
-        // Apply twiddle factors (in this case just a rotation)
-        let mid3_rotated = Self::apply_rotate90(rotation, mid3);
+            // Apply twiddle factors (in this case just a rotation)
+            let mid3_rotated = Self::apply_rotate90(rotation, mid3);
 
-        // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = Self::column_butterfly2([mid0, mid1]);
-        let [output2, output3] = Self::column_butterfly2([mid2, mid3_rotated]);
+            // Transpose the data and do size-2 FFTs down the columns
+            let [output0, output1] = Self::column_butterfly2([mid0, mid1]);
+            let [output2, output3] = Self::column_butterfly2([mid2, mid3_rotated]);
 
-        // Swap outputs 1 and 2 in the output to do a square transpose
-        [output0, output2, output1, output3]
+            // Swap outputs 1 and 2 in the output to do a square transpose
+            [output0, output2, output1, output3]
+        }
     }
 }
 
@@ -322,7 +340,7 @@ impl NeonVector for float64x2_t {
 
     #[inline(always)]
     unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
-        vld1q_f64(ptr as *const f64)
+        unsafe { vld1q_f64(ptr as *const f64) }
     }
 
     #[inline(always)]
@@ -337,7 +355,9 @@ impl NeonVector for float64x2_t {
 
     #[inline(always)]
     unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
-        vst1q_f64(ptr as *mut f64, data);
+        unsafe {
+            vst1q_f64(ptr as *mut f64, data);
+        }
     }
 
     #[inline(always)]
@@ -352,28 +372,28 @@ impl NeonVector for float64x2_t {
 
     #[inline(always)]
     unsafe fn neg(a: Self) -> Self {
-        vnegq_f64(a)
+        unsafe { vnegq_f64(a) }
     }
     #[inline(always)]
     unsafe fn add(a: Self, b: Self) -> Self {
-        vaddq_f64(a, b)
+        unsafe { vaddq_f64(a, b) }
     }
     #[inline(always)]
     unsafe fn mul(a: Self, b: Self) -> Self {
-        vmulq_f64(a, b)
+        unsafe { vmulq_f64(a, b) }
     }
     #[inline(always)]
     unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self {
-        vfmaq_f64(acc, a, b)
+        unsafe { vfmaq_f64(acc, a, b) }
     }
     #[inline(always)]
     unsafe fn nmadd(acc: Self, a: Self, b: Self) -> Self {
-        vfmaq_f64(acc, a, vnegq_f64(b))
+        unsafe { vfmaq_f64(acc, a, vnegq_f64(b)) }
     }
 
     #[inline(always)]
     unsafe fn broadcast_scalar(value: Self::ScalarType) -> Self {
-        vmovq_n_f64(value)
+        unsafe { vmovq_n_f64(value) }
     }
 
     #[inline(always)]
@@ -383,61 +403,71 @@ impl NeonVector for float64x2_t {
         len: usize,
         direction: FftDirection,
     ) -> Self {
-        let mut twiddle_chunk = [Complex::<f64>::zero(); Self::COMPLEX_PER_VECTOR];
-        for i in 0..Self::COMPLEX_PER_VECTOR {
-            twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
-        }
+        unsafe {
+            let mut twiddle_chunk = [Complex::<f64>::zero(); Self::COMPLEX_PER_VECTOR];
+            for i in 0..Self::COMPLEX_PER_VECTOR {
+                twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
+            }
 
-        twiddle_chunk.as_slice().load_complex(0)
+            twiddle_chunk.as_slice().load_complex(0)
+        }
     }
 
     #[inline(always)]
     unsafe fn mul_complex(left: Self, right: Self) -> Self {
-        // ARMv8.2-A introduced vcmulq_f64 and vcmlaq_f64 for complex multiplication, these intrinsics are not yet available.
-        let temp = vcombine_f64(vneg_f64(vget_high_f64(left)), vget_low_f64(left));
-        let sum = vmulq_laneq_f64::<0>(left, right);
-        vfmaq_laneq_f64::<1>(sum, temp, right)
+        unsafe {
+            // ARMv8.2-A introduced vcmulq_f64 and vcmlaq_f64 for complex multiplication, these intrinsics are not yet available.
+            let temp = vcombine_f64(vneg_f64(vget_high_f64(left)), vget_low_f64(left));
+            let sum = vmulq_laneq_f64::<0>(left, right);
+            vfmaq_laneq_f64::<1>(sum, temp, right)
+        }
     }
 
     #[inline(always)]
     unsafe fn make_rotate90(direction: FftDirection) -> Rotation90<Self> {
-        Rotation90(match direction {
-            FftDirection::Forward => vld1q_f64([0.0, -0.0].as_ptr()),
-            FftDirection::Inverse => vld1q_f64([-0.0, 0.0].as_ptr()),
-        })
+        unsafe {
+            Rotation90(match direction {
+                FftDirection::Forward => vld1q_f64([0.0, -0.0].as_ptr()),
+                FftDirection::Inverse => vld1q_f64([-0.0, 0.0].as_ptr()),
+            })
+        }
     }
 
     #[inline(always)]
     unsafe fn apply_rotate90(direction: Rotation90<Self>, values: Self) -> Self {
-        let temp = vcombine_f64(vget_high_f64(values), vget_low_f64(values));
-        vreinterpretq_f64_u64(veorq_u64(
-            vreinterpretq_u64_f64(temp),
-            vreinterpretq_u64_f64(direction.0),
-        ))
+        unsafe {
+            let temp = vcombine_f64(vget_high_f64(values), vget_low_f64(values));
+            vreinterpretq_f64_u64(veorq_u64(
+                vreinterpretq_u64_f64(temp),
+                vreinterpretq_u64_f64(direction.0),
+            ))
+        }
     }
 
     #[inline(always)]
     unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
-        [vaddq_f64(rows[0], rows[1]), vsubq_f64(rows[0], rows[1])]
+        unsafe { [vaddq_f64(rows[0], rows[1]), vsubq_f64(rows[0], rows[1])] }
     }
 
     #[inline(always)]
     unsafe fn column_butterfly4(rows: [Self; 4], rotation: Rotation90<Self>) -> [Self; 4] {
-        // Algorithm: 2x2 mixed radix
+        unsafe {
+            // Algorithm: 2x2 mixed radix
 
-        // Perform the first set of size-2 FFTs.
-        let [mid0, mid2] = Self::column_butterfly2([rows[0], rows[2]]);
-        let [mid1, mid3] = Self::column_butterfly2([rows[1], rows[3]]);
+            // Perform the first set of size-2 FFTs.
+            let [mid0, mid2] = Self::column_butterfly2([rows[0], rows[2]]);
+            let [mid1, mid3] = Self::column_butterfly2([rows[1], rows[3]]);
 
-        // Apply twiddle factors (in this case just a rotation)
-        let mid3_rotated = Self::apply_rotate90(rotation, mid3);
+            // Apply twiddle factors (in this case just a rotation)
+            let mid3_rotated = Self::apply_rotate90(rotation, mid3);
 
-        // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = Self::column_butterfly2([mid0, mid1]);
-        let [output2, output3] = Self::column_butterfly2([mid2, mid3_rotated]);
+            // Transpose the data and do size-2 FFTs down the columns
+            let [output0, output1] = Self::column_butterfly2([mid0, mid1]);
+            let [output2, output3] = Self::column_butterfly2([mid2, mid3_rotated]);
 
-        // Swap outputs 1 and 2 in the output to do a square transpose
-        [output0, output2, output1, output3]
+            // Swap outputs 1 and 2 in the output to do a square transpose
+            [output0, output2, output1, output3]
+        }
     }
 }
 
@@ -456,39 +486,51 @@ pub trait NeonArray<S: NeonNum>: Deref {
 impl<S: NeonNum> NeonArray<S> for &[Complex<S>] {
     #[inline(always)]
     unsafe fn load_complex(&self, index: usize) -> S::VectorType {
-        debug_assert!(self.len() >= index + S::VectorType::COMPLEX_PER_VECTOR);
-        S::VectorType::load_complex(self.as_ptr().add(index))
+        unsafe {
+            debug_assert!(self.len() >= index + S::VectorType::COMPLEX_PER_VECTOR);
+            S::VectorType::load_complex(self.as_ptr().add(index))
+        }
     }
 
     #[inline(always)]
     unsafe fn load_partial_lo_complex(&self, index: usize) -> S::VectorType {
-        debug_assert!(self.len() >= index + 1);
-        S::VectorType::load_partial_lo_complex(self.as_ptr().add(index))
+        unsafe {
+            debug_assert!(self.len() >= index + 1);
+            S::VectorType::load_partial_lo_complex(self.as_ptr().add(index))
+        }
     }
 
     #[inline(always)]
     unsafe fn load1_complex(&self, index: usize) -> S::VectorType {
-        debug_assert!(self.len() >= index + 1);
-        S::VectorType::load1_complex(self.as_ptr().add(index))
+        unsafe {
+            debug_assert!(self.len() >= index + 1);
+            S::VectorType::load1_complex(self.as_ptr().add(index))
+        }
     }
 }
 impl<S: NeonNum> NeonArray<S> for &mut [Complex<S>] {
     #[inline(always)]
     unsafe fn load_complex(&self, index: usize) -> S::VectorType {
-        debug_assert!(self.len() >= index + S::VectorType::COMPLEX_PER_VECTOR);
-        S::VectorType::load_complex(self.as_ptr().add(index))
+        unsafe {
+            debug_assert!(self.len() >= index + S::VectorType::COMPLEX_PER_VECTOR);
+            S::VectorType::load_complex(self.as_ptr().add(index))
+        }
     }
 
     #[inline(always)]
     unsafe fn load_partial_lo_complex(&self, index: usize) -> S::VectorType {
-        debug_assert!(self.len() >= index + 1);
-        S::VectorType::load_partial_lo_complex(self.as_ptr().add(index))
+        unsafe {
+            debug_assert!(self.len() >= index + 1);
+            S::VectorType::load_partial_lo_complex(self.as_ptr().add(index))
+        }
     }
 
     #[inline(always)]
     unsafe fn load1_complex(&self, index: usize) -> S::VectorType {
-        debug_assert!(self.len() >= index + 1);
-        S::VectorType::load1_complex(self.as_ptr().add(index))
+        unsafe {
+            debug_assert!(self.len() >= index + 1);
+            S::VectorType::load1_complex(self.as_ptr().add(index))
+        }
     }
 }
 
@@ -498,15 +540,15 @@ where
 {
     #[inline(always)]
     unsafe fn load_complex(&self, index: usize) -> S::VectorType {
-        self.input.load_complex(index)
+        unsafe { self.input.load_complex(index) }
     }
     #[inline(always)]
     unsafe fn load_partial_lo_complex(&self, index: usize) -> S::VectorType {
-        self.input.load_partial_lo_complex(index)
+        unsafe { self.input.load_partial_lo_complex(index) }
     }
     #[inline(always)]
     unsafe fn load1_complex(&self, index: usize) -> S::VectorType {
-        self.input.load1_complex(index)
+        unsafe { self.input.load1_complex(index) }
     }
 }
 
@@ -523,13 +565,17 @@ pub trait NeonArrayMut<S: NeonNum>: NeonArray<S> + DerefMut {
 impl<S: NeonNum> NeonArrayMut<S> for &mut [Complex<S>] {
     #[inline(always)]
     unsafe fn store_complex(&mut self, vector: S::VectorType, index: usize) {
-        debug_assert!(self.len() >= index + S::VectorType::COMPLEX_PER_VECTOR);
-        S::VectorType::store_complex(self.as_mut_ptr().add(index), vector)
+        unsafe {
+            debug_assert!(self.len() >= index + S::VectorType::COMPLEX_PER_VECTOR);
+            S::VectorType::store_complex(self.as_mut_ptr().add(index), vector)
+        }
     }
     #[inline(always)]
     unsafe fn store_partial_lo_complex(&mut self, vector: S::VectorType, index: usize) {
-        debug_assert!(self.len() >= index + 1);
-        S::VectorType::store_partial_lo_complex(self.as_mut_ptr().add(index), vector)
+        unsafe {
+            debug_assert!(self.len() >= index + 1);
+            S::VectorType::store_partial_lo_complex(self.as_mut_ptr().add(index), vector)
+        }
     }
 }
 
@@ -540,11 +586,15 @@ where
 {
     #[inline(always)]
     unsafe fn store_complex(&mut self, vector: T::VectorType, index: usize) {
-        self.output.store_complex(vector, index);
+        unsafe {
+            self.output.store_complex(vector, index);
+        }
     }
     #[inline(always)]
     unsafe fn store_partial_lo_complex(&mut self, vector: T::VectorType, index: usize) {
-        self.output.store_partial_lo_complex(vector, index);
+        unsafe {
+            self.output.store_partial_lo_complex(vector, index);
+        }
     }
 }
 

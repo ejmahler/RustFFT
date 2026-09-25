@@ -341,16 +341,18 @@ pub(crate) unsafe fn butterfly_2<T: FftNum>(
     num_columns: usize,
     butterfly2: &Butterfly2<T>,
 ) {
-    for idx in 0..num_columns {
-        let mut scratch = [
-            data.load(idx + 0 * num_columns),
-            data.load(idx + 1 * num_columns) * twiddles.load(idx),
-        ];
+    unsafe {
+        for idx in 0..num_columns {
+            let mut scratch = [
+                data.load(idx + 0 * num_columns),
+                data.load(idx + 1 * num_columns) * twiddles.load(idx),
+            ];
 
-        butterfly2.perform_fft_butterfly(&mut scratch);
+            butterfly2.perform_fft_butterfly(&mut scratch);
 
-        data.store(scratch[0], idx + num_columns * 0);
-        data.store(scratch[1], idx + num_columns * 1);
+            data.store(scratch[0], idx + num_columns * 0);
+            data.store(scratch[1], idx + num_columns * 1);
+        }
     }
 }
 
@@ -361,19 +363,21 @@ pub(crate) unsafe fn butterfly_3<T: FftNum>(
     num_columns: usize,
     butterfly3: &Butterfly3<T>,
 ) {
-    for idx in 0..num_columns {
-        let tw_idx = idx * 2;
-        let mut scratch = [
-            data.load(idx + 0 * num_columns),
-            data.load(idx + 1 * num_columns) * twiddles.load(tw_idx + 0),
-            data.load(idx + 2 * num_columns) * twiddles.load(tw_idx + 1),
-        ];
+    unsafe {
+        for idx in 0..num_columns {
+            let tw_idx = idx * 2;
+            let mut scratch = [
+                data.load(idx + 0 * num_columns),
+                data.load(idx + 1 * num_columns) * twiddles.load(tw_idx + 0),
+                data.load(idx + 2 * num_columns) * twiddles.load(tw_idx + 1),
+            ];
 
-        butterfly3.perform_fft_butterfly(&mut scratch);
+            butterfly3.perform_fft_butterfly(&mut scratch);
 
-        data.store(scratch[0], idx + 0 * num_columns);
-        data.store(scratch[1], idx + 1 * num_columns);
-        data.store(scratch[2], idx + 2 * num_columns);
+            data.store(scratch[0], idx + 0 * num_columns);
+            data.store(scratch[1], idx + 1 * num_columns);
+            data.store(scratch[2], idx + 2 * num_columns);
+        }
     }
 }
 
@@ -384,21 +388,23 @@ pub(crate) unsafe fn butterfly_4<T: FftNum>(
     num_columns: usize,
     butterfly4: &Butterfly4<T>,
 ) {
-    for idx in 0..num_columns {
-        let tw_idx = idx * 3;
-        let mut scratch = [
-            data.load(idx + 0 * num_columns),
-            data.load(idx + 1 * num_columns) * twiddles.load(tw_idx + 0),
-            data.load(idx + 2 * num_columns) * twiddles.load(tw_idx + 1),
-            data.load(idx + 3 * num_columns) * twiddles.load(tw_idx + 2),
-        ];
+    unsafe {
+        for idx in 0..num_columns {
+            let tw_idx = idx * 3;
+            let mut scratch = [
+                data.load(idx + 0 * num_columns),
+                data.load(idx + 1 * num_columns) * twiddles.load(tw_idx + 0),
+                data.load(idx + 2 * num_columns) * twiddles.load(tw_idx + 1),
+                data.load(idx + 3 * num_columns) * twiddles.load(tw_idx + 2),
+            ];
 
-        butterfly4.perform_fft_butterfly(&mut scratch);
+            butterfly4.perform_fft_butterfly(&mut scratch);
 
-        data.store(scratch[0], idx + 0 * num_columns);
-        data.store(scratch[1], idx + 1 * num_columns);
-        data.store(scratch[2], idx + 2 * num_columns);
-        data.store(scratch[3], idx + 3 * num_columns);
+            data.store(scratch[0], idx + 0 * num_columns);
+            data.store(scratch[1], idx + 1 * num_columns);
+            data.store(scratch[2], idx + 2 * num_columns);
+            data.store(scratch[3], idx + 3 * num_columns);
+        }
     }
 }
 
@@ -409,23 +415,25 @@ pub(crate) unsafe fn butterfly_5<T: FftNum>(
     num_columns: usize,
     butterfly5: &Butterfly5<T>,
 ) {
-    for idx in 0..num_columns {
-        let tw_idx = idx * 4;
-        let mut scratch = [
-            data.load(idx + 0 * num_columns),
-            data.load(idx + 1 * num_columns) * twiddles.load(tw_idx + 0),
-            data.load(idx + 2 * num_columns) * twiddles.load(tw_idx + 1),
-            data.load(idx + 3 * num_columns) * twiddles.load(tw_idx + 2),
-            data.load(idx + 4 * num_columns) * twiddles.load(tw_idx + 3),
-        ];
+    unsafe {
+        for idx in 0..num_columns {
+            let tw_idx = idx * 4;
+            let mut scratch = [
+                data.load(idx + 0 * num_columns),
+                data.load(idx + 1 * num_columns) * twiddles.load(tw_idx + 0),
+                data.load(idx + 2 * num_columns) * twiddles.load(tw_idx + 1),
+                data.load(idx + 3 * num_columns) * twiddles.load(tw_idx + 2),
+                data.load(idx + 4 * num_columns) * twiddles.load(tw_idx + 3),
+            ];
 
-        butterfly5.perform_fft_butterfly(&mut scratch);
+            butterfly5.perform_fft_butterfly(&mut scratch);
 
-        data.store(scratch[0], idx + 0 * num_columns);
-        data.store(scratch[1], idx + 1 * num_columns);
-        data.store(scratch[2], idx + 2 * num_columns);
-        data.store(scratch[3], idx + 3 * num_columns);
-        data.store(scratch[4], idx + 4 * num_columns);
+            data.store(scratch[0], idx + 0 * num_columns);
+            data.store(scratch[1], idx + 1 * num_columns);
+            data.store(scratch[2], idx + 2 * num_columns);
+            data.store(scratch[3], idx + 3 * num_columns);
+            data.store(scratch[4], idx + 4 * num_columns);
+        }
     }
 }
 
@@ -436,25 +444,27 @@ pub(crate) unsafe fn butterfly_6<T: FftNum>(
     num_columns: usize,
     butterfly6: &Butterfly6<T>,
 ) {
-    for idx in 0..num_columns {
-        let tw_idx = idx * 5;
-        let mut scratch = [
-            data.load(idx + 0 * num_columns),
-            data.load(idx + 1 * num_columns) * twiddles.load(tw_idx + 0),
-            data.load(idx + 2 * num_columns) * twiddles.load(tw_idx + 1),
-            data.load(idx + 3 * num_columns) * twiddles.load(tw_idx + 2),
-            data.load(idx + 4 * num_columns) * twiddles.load(tw_idx + 3),
-            data.load(idx + 5 * num_columns) * twiddles.load(tw_idx + 4),
-        ];
+    unsafe {
+        for idx in 0..num_columns {
+            let tw_idx = idx * 5;
+            let mut scratch = [
+                data.load(idx + 0 * num_columns),
+                data.load(idx + 1 * num_columns) * twiddles.load(tw_idx + 0),
+                data.load(idx + 2 * num_columns) * twiddles.load(tw_idx + 1),
+                data.load(idx + 3 * num_columns) * twiddles.load(tw_idx + 2),
+                data.load(idx + 4 * num_columns) * twiddles.load(tw_idx + 3),
+                data.load(idx + 5 * num_columns) * twiddles.load(tw_idx + 4),
+            ];
 
-        butterfly6.perform_fft_butterfly(&mut scratch);
+            butterfly6.perform_fft_butterfly(&mut scratch);
 
-        data.store(scratch[0], idx + 0 * num_columns);
-        data.store(scratch[1], idx + 1 * num_columns);
-        data.store(scratch[2], idx + 2 * num_columns);
-        data.store(scratch[3], idx + 3 * num_columns);
-        data.store(scratch[4], idx + 4 * num_columns);
-        data.store(scratch[5], idx + 5 * num_columns);
+            data.store(scratch[0], idx + 0 * num_columns);
+            data.store(scratch[1], idx + 1 * num_columns);
+            data.store(scratch[2], idx + 2 * num_columns);
+            data.store(scratch[3], idx + 3 * num_columns);
+            data.store(scratch[4], idx + 4 * num_columns);
+            data.store(scratch[5], idx + 5 * num_columns);
+        }
     }
 }
 
@@ -465,27 +475,29 @@ pub(crate) unsafe fn butterfly_7<T: FftNum>(
     num_columns: usize,
     butterfly7: &Butterfly7<T>,
 ) {
-    for idx in 0..num_columns {
-        let tw_idx = idx * 6;
-        let mut scratch = [
-            data.load(idx + 0 * num_columns),
-            data.load(idx + 1 * num_columns) * twiddles.load(tw_idx + 0),
-            data.load(idx + 2 * num_columns) * twiddles.load(tw_idx + 1),
-            data.load(idx + 3 * num_columns) * twiddles.load(tw_idx + 2),
-            data.load(idx + 4 * num_columns) * twiddles.load(tw_idx + 3),
-            data.load(idx + 5 * num_columns) * twiddles.load(tw_idx + 4),
-            data.load(idx + 6 * num_columns) * twiddles.load(tw_idx + 5),
-        ];
+    unsafe {
+        for idx in 0..num_columns {
+            let tw_idx = idx * 6;
+            let mut scratch = [
+                data.load(idx + 0 * num_columns),
+                data.load(idx + 1 * num_columns) * twiddles.load(tw_idx + 0),
+                data.load(idx + 2 * num_columns) * twiddles.load(tw_idx + 1),
+                data.load(idx + 3 * num_columns) * twiddles.load(tw_idx + 2),
+                data.load(idx + 4 * num_columns) * twiddles.load(tw_idx + 3),
+                data.load(idx + 5 * num_columns) * twiddles.load(tw_idx + 4),
+                data.load(idx + 6 * num_columns) * twiddles.load(tw_idx + 5),
+            ];
 
-        butterfly7.perform_fft_butterfly(&mut scratch);
+            butterfly7.perform_fft_butterfly(&mut scratch);
 
-        data.store(scratch[0], idx + 0 * num_columns);
-        data.store(scratch[1], idx + 1 * num_columns);
-        data.store(scratch[2], idx + 2 * num_columns);
-        data.store(scratch[3], idx + 3 * num_columns);
-        data.store(scratch[4], idx + 4 * num_columns);
-        data.store(scratch[5], idx + 5 * num_columns);
-        data.store(scratch[6], idx + 6 * num_columns);
+            data.store(scratch[0], idx + 0 * num_columns);
+            data.store(scratch[1], idx + 1 * num_columns);
+            data.store(scratch[2], idx + 2 * num_columns);
+            data.store(scratch[3], idx + 3 * num_columns);
+            data.store(scratch[4], idx + 4 * num_columns);
+            data.store(scratch[5], idx + 5 * num_columns);
+            data.store(scratch[6], idx + 6 * num_columns);
+        }
     }
 }
 
