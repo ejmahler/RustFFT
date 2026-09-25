@@ -4,7 +4,7 @@ name = "rustfft"
 version = "6.4.1"
 authors = ["Allen Welkie <allen.welkie at gmail>", "Elliott Mahler <join.together at gmail>"]
 edition = "2021"
-rust-version = "1.80"
+rust-version = "1.86"
 
 description = "High-performance FFT library written in pure Rust."
 documentation = "https://docs.rs/rustfft/"
@@ -49,7 +49,7 @@ primal-check = "0.3.3"
 rand = { version = "0.9", default-features = false, features = ["std", "std_rng"] }
 wasm-bindgen-test = "^0.3.36"
 
-criterion = { version = "0.3", default-features = false }
+criterion = { version = "0.8", default-features = false }
 
 [target.'cfg(all(target_arch = "wasm32", target_os = "wasi", target_env = "p2"))'.dev-dependencies]
 getrandom = "=0.3.1"
