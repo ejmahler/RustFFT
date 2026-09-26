@@ -7,6 +7,10 @@ use crate::array_utils::DoubleBuf;
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
 
+use crate::fft_helper::{
+    fft_helper_immut, fft_helper_immut_unroll2x, fft_helper_inplace, fft_helper_inplace_unroll2x,
+};
+
 use super::wasm_simd_common::{assert_f32, assert_f64};
 use super::wasm_simd_utils::*;
 use super::wasm_simd_vector::{WasmSimdArrayMut, WasmVector, WasmVector32, WasmVector64};
@@ -24,6 +28,7 @@ unsafe fn pack_64(a: Complex<f64>) -> v128 {
 macro_rules! boilerplate_fft_wasm_simd_f32_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
+            #[target_feature(enable = "simd128")]
             fn process_immutable_with_scratch(
                 &self,
                 input: &[Complex<T>],
@@ -33,7 +38,7 @@ macro_rules! boilerplate_fft_wasm_simd_f32_butterfly {
                 unsafe {
                     let simd_input = crate::array_utils::workaround_transmute(input);
                     let simd_output = crate::array_utils::workaround_transmute_mut(output);
-                    super::wasm_simd_common::wasm_simd_fft_helper_immut_unroll2x(
+                    fft_helper_immut_unroll2x(
                         simd_input,
                         simd_output,
                         self.len(),
@@ -41,33 +46,23 @@ macro_rules! boilerplate_fft_wasm_simd_f32_butterfly {
                             self.perform_parallel_fft_contiguous(DoubleBuf { input, output })
                         },
                         |input, output| self.perform_fft_contiguous(DoubleBuf { input, output }),
-                    );
+                    )
                 }
             }
+            #[target_feature(enable = "simd128")]
             fn process_outofplace_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
                 output: &mut [Complex<T>],
-                _scratch: &mut [Complex<T>],
+                scratch: &mut [Complex<T>],
             ) {
-                unsafe {
-                    let simd_input = crate::array_utils::workaround_transmute_mut(input);
-                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
-                    super::wasm_simd_common::wasm_simd_fft_helper_outofplace_unroll2x(
-                        simd_input,
-                        simd_output,
-                        self.len(),
-                        |input, output| {
-                            self.perform_parallel_fft_contiguous(DoubleBuf { input, output })
-                        },
-                        |input, output| self.perform_fft_contiguous(DoubleBuf { input, output }),
-                    );
-                }
+                self.process_immutable_with_scratch(input, output, scratch);
             }
+            #[target_feature(enable = "simd128")]
             fn process_with_scratch(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
                 unsafe {
                     let simd_buffer = crate::array_utils::workaround_transmute_mut(buffer);
-                    super::wasm_simd_common::wasm_simd_fft_helper_inplace_unroll2x(
+                    fft_helper_inplace_unroll2x(
                         simd_buffer,
                         self.len(),
                         |chunk| self.perform_parallel_fft_contiguous(chunk),
@@ -106,6 +101,7 @@ macro_rules! boilerplate_fft_wasm_simd_f32_butterfly {
 macro_rules! boilerplate_fft_wasm_simd_f64_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
+            #[target_feature(enable = "simd128")]
             fn process_immutable_with_scratch(
                 &self,
                 input: &[Complex<T>],
@@ -115,45 +111,32 @@ macro_rules! boilerplate_fft_wasm_simd_f64_butterfly {
                 unsafe {
                     let simd_input = crate::array_utils::workaround_transmute(input);
                     let simd_output = crate::array_utils::workaround_transmute_mut(output);
-                    super::wasm_simd_common::wasm_simd_fft_helper_immut(
+                    fft_helper_immut(
                         simd_input,
                         simd_output,
                         &mut [],
                         self.len(),
                         0,
                         |input, output, _| self.perform_fft_contiguous(DoubleBuf { input, output }),
-                    );
+                    )
                 }
             }
+            #[target_feature(enable = "simd128")]
             fn process_outofplace_with_scratch(
                 &self,
                 input: &mut [Complex<T>],
                 output: &mut [Complex<T>],
-                _scratch: &mut [Complex<T>],
+                scratch: &mut [Complex<T>],
             ) {
-                unsafe {
-                    let simd_input = crate::array_utils::workaround_transmute_mut(input);
-                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
-                    super::wasm_simd_common::wasm_simd_fft_helper_outofplace(
-                        simd_input,
-                        simd_output,
-                        &mut [],
-                        self.len(),
-                        0,
-                        |input, output, _| self.perform_fft_contiguous(DoubleBuf { input, output }),
-                    );
-                }
+                self.process_immutable_with_scratch(input, output, scratch);
             }
+            #[target_feature(enable = "simd128")]
             fn process_with_scratch(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
                 unsafe {
                     let simd_buffer = crate::array_utils::workaround_transmute_mut(buffer);
-                    super::wasm_simd_common::wasm_simd_fft_helper_inplace(
-                        simd_buffer,
-                        &mut [],
-                        self.len(),
-                        0,
-                        |chunk, _| self.perform_fft_contiguous(chunk),
-                    )
+                    fft_helper_inplace(simd_buffer, &mut [], self.len(), 0, |chunk, _| {
+                        self.perform_fft_contiguous(chunk)
+                    })
                 }
             }
             #[inline(always)]
@@ -3004,7 +2987,7 @@ impl<T: FftNum> WasmSimdF32Butterfly32<T> {
         buffer.store_complex(WasmVector32(vectors[7]), i + 28);
     }
 
-    #[inline(always)]
+    #[target_feature(enable = "simd128")]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl WasmSimdArrayMut<f32>) {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
