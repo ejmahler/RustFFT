@@ -161,6 +161,7 @@ mod twiddles;
     all(target_arch = "x86_64", feature = "sse"),
     all(target_arch = "wasm32", feature = "wasm_simd"),
 ))]
+#[macro_use]
 mod simd;
 
 use num_complex::Complex;

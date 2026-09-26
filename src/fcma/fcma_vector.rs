@@ -752,6 +752,7 @@ impl crate::simd::simd_vector::SimdVector for FcmaSimdVector64 {
         bf.perform_fft_direct(rows.map(|r| r.0)).map(Self)
     }
 
+    simd_vector_cross_layers!(#[target_feature(enable = "neon,fcma")]);
     fcma_vector_fft_helpers!();
 }
 
@@ -843,6 +844,7 @@ impl crate::simd::simd_vector::SimdVector for FcmaSimdVector32 {
         bf.perform_parallel_fft_direct(rows.map(|r| r.0)).map(Self)
     }
 
+    simd_vector_cross_layers!(#[target_feature(enable = "neon,fcma")]);
     fcma_vector_fft_helpers!();
 }
 
