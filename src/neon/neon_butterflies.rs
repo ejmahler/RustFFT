@@ -7,6 +7,10 @@ use crate::array_utils::DoubleBuf;
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
 
+use crate::fft_helper::{
+    fft_helper_immut, fft_helper_immut_unroll2x, fft_helper_inplace, fft_helper_inplace_unroll2x,
+};
+
 use super::neon_common::{assert_f32, assert_f64};
 use super::neon_utils::*;
 use super::neon_vector::{NeonArrayMut, NeonVector};
@@ -23,6 +27,40 @@ unsafe fn pack_64(a: Complex<f64>) -> float64x2_t {
 #[allow(unused)]
 macro_rules! boilerplate_fft_neon_f32_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
+        impl<T: FftNum> $struct_name<T> {
+            #[target_feature(enable = "neon")]
+            fn process_immutable_with_target_feature(
+                &self,
+                input: &[Complex<T>],
+                output: &mut [Complex<T>],
+            ) {
+                unsafe {
+                    let simd_input = crate::array_utils::workaround_transmute(input);
+                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
+                    fft_helper_immut_unroll2x(
+                        simd_input,
+                        simd_output,
+                        self.len(),
+                        |input, output| {
+                            self.perform_parallel_fft_contiguous(DoubleBuf { input, output })
+                        },
+                        |input, output| self.perform_fft_contiguous(DoubleBuf { input, output }),
+                    )
+                }
+            }
+            #[target_feature(enable = "neon")]
+            fn process_inplace_with_target_feature(&self, buffer: &mut [Complex<T>]) {
+                unsafe {
+                    let simd_buffer = crate::array_utils::workaround_transmute_mut(buffer);
+                    fft_helper_inplace_unroll2x(
+                        simd_buffer,
+                        self.len(),
+                        |chunk| self.perform_parallel_fft_contiguous(chunk),
+                        |chunk| self.perform_fft_contiguous(chunk),
+                    )
+                }
+            }
+        }
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             fn process_immutable_with_scratch(
                 &self,
@@ -30,19 +68,8 @@ macro_rules! boilerplate_fft_neon_f32_butterfly {
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                unsafe {
-                    let simd_input = crate::array_utils::workaround_transmute(input);
-                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
-                    super::neon_common::neon_fft_helper_immut_unroll2x(
-                        simd_input,
-                        simd_output,
-                        self.len(),
-                        |input, output| {
-                            self.perform_parallel_fft_contiguous(DoubleBuf { input, output })
-                        },
-                        |input, output| self.perform_fft_contiguous(DoubleBuf { input, output }),
-                    );
-                }
+                // Safety: This function requires the neon target feature. The planner can't be created unless the feature is present.
+                unsafe { self.process_immutable_with_target_feature(input, output) };
             }
             fn process_outofplace_with_scratch(
                 &self,
@@ -50,30 +77,12 @@ macro_rules! boilerplate_fft_neon_f32_butterfly {
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                unsafe {
-                    let simd_input = crate::array_utils::workaround_transmute_mut(input);
-                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
-                    super::neon_common::neon_fft_helper_outofplace_unroll2x(
-                        simd_input,
-                        simd_output,
-                        self.len(),
-                        |input, output| {
-                            self.perform_parallel_fft_contiguous(DoubleBuf { input, output })
-                        },
-                        |input, output| self.perform_fft_contiguous(DoubleBuf { input, output }),
-                    );
-                }
+                // Safety: This function requires the neon target feature. The planner can't be created unless the feature is present.
+                unsafe { self.process_immutable_with_target_feature(input, output) };
             }
             fn process_with_scratch(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-                unsafe {
-                    let simd_buffer = crate::array_utils::workaround_transmute_mut(buffer);
-                    super::neon_common::neon_fft_helper_inplace_unroll2x(
-                        simd_buffer,
-                        self.len(),
-                        |chunk| self.perform_parallel_fft_contiguous(chunk),
-                        |chunk| self.perform_fft_contiguous(chunk),
-                    )
-                }
+                // Safety: This function requires the neon target feature. The planner can't be created unless the feature is present.
+                unsafe { self.process_inplace_with_target_feature(buffer) };
             }
             #[inline(always)]
             fn get_inplace_scratch_len(&self) -> usize {
@@ -105,6 +114,36 @@ macro_rules! boilerplate_fft_neon_f32_butterfly {
 
 macro_rules! boilerplate_fft_neon_f64_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
+        impl<T: FftNum> $struct_name<T> {
+            #[target_feature(enable = "neon")]
+            fn process_immutable_with_target_feature(
+                &self,
+                input: &[Complex<T>],
+                output: &mut [Complex<T>],
+            ) {
+                unsafe {
+                    let simd_input = crate::array_utils::workaround_transmute(input);
+                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
+                    fft_helper_immut(
+                        simd_input,
+                        simd_output,
+                        &mut [],
+                        self.len(),
+                        0,
+                        |input, output, _| self.perform_fft_contiguous(DoubleBuf { input, output }),
+                    )
+                }
+            }
+            #[target_feature(enable = "neon")]
+            fn process_inplace_with_target_feature(&self, buffer: &mut [Complex<T>]) {
+                unsafe {
+                    let simd_buffer = crate::array_utils::workaround_transmute_mut(buffer);
+                    fft_helper_inplace(simd_buffer, &mut [], self.len(), 0, |chunk, _| {
+                        self.perform_fft_contiguous(chunk)
+                    })
+                }
+            }
+        }
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             fn process_immutable_with_scratch(
                 &self,
@@ -112,18 +151,8 @@ macro_rules! boilerplate_fft_neon_f64_butterfly {
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                unsafe {
-                    let simd_input = crate::array_utils::workaround_transmute(input);
-                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
-                    super::neon_common::neon_fft_helper_immut(
-                        simd_input,
-                        simd_output,
-                        &mut [],
-                        self.len(),
-                        0,
-                        |input, output, _| self.perform_fft_contiguous(DoubleBuf { input, output }),
-                    );
-                }
+                // Safety: This function requires the neon target feature. The planner can't be created unless the feature is present.
+                unsafe { self.process_immutable_with_target_feature(input, output) };
             }
             fn process_outofplace_with_scratch(
                 &self,
@@ -131,30 +160,12 @@ macro_rules! boilerplate_fft_neon_f64_butterfly {
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                unsafe {
-                    let simd_input = crate::array_utils::workaround_transmute_mut(input);
-                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
-                    super::neon_common::neon_fft_helper_outofplace(
-                        simd_input,
-                        simd_output,
-                        &mut [],
-                        self.len(),
-                        0,
-                        |input, output, _| self.perform_fft_contiguous(DoubleBuf { input, output }),
-                    );
-                }
+                // Safety: This function requires the neon target feature. The planner can't be created unless the feature is present.
+                unsafe { self.process_immutable_with_target_feature(input, output) };
             }
             fn process_with_scratch(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-                unsafe {
-                    let simd_buffer = crate::array_utils::workaround_transmute_mut(buffer);
-                    super::neon_common::neon_fft_helper_inplace(
-                        simd_buffer,
-                        &mut [],
-                        self.len(),
-                        0,
-                        |chunk, _| self.perform_fft_contiguous(chunk),
-                    )
-                }
+                // Safety: This function requires the neon target feature. The planner can't be created unless the feature is present.
+                unsafe { self.process_inplace_with_target_feature(buffer) };
             }
             #[inline(always)]
             fn get_inplace_scratch_len(&self) -> usize {
