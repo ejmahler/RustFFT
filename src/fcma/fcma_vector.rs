@@ -583,6 +583,269 @@ where
     }
 }
 
+// The `SimdVector` impls, which let this backend use the algorithms in `src/simd`. The trait is
+// named by path instead of imported, because importing it would make methods like
+// `Self::column_butterfly2` ambiguous with the backend's own vector trait.
+
+use super::fcma_butterflies::{
+    FcmaF32Butterfly3, FcmaF32Butterfly5, FcmaF32Butterfly6, FcmaF64Butterfly3, FcmaF64Butterfly5,
+    FcmaF64Butterfly6,
+};
+use super::fcma_prime_butterflies::{FcmaF32Butterfly7, FcmaF64Butterfly7};
+
+/// `float64x2_t`, wrapped so that it can carry an FCMA `SimdVector` impl.
+///
+/// The FCMA backend's vector types are the plain NEON ones, and the NEON backend already
+/// implements `SimdVector` for those, so FCMA needs types of its own to hang its impls on. The
+/// wrapper only exists at the `SimdVector` boundary: every method unwraps immediately and calls
+/// the same FCMA code the rest of the backend uses.
+#[derive(Copy, Clone, Debug)]
+pub struct FcmaSimdVector64(float64x2_t);
+
+/// `float32x4_t`, wrapped so that it can carry an FCMA `SimdVector` impl. See
+/// [`FcmaSimdVector64`].
+#[derive(Copy, Clone, Debug)]
+pub struct FcmaSimdVector32(float32x4_t);
+
+// The `SimdVector::fft_helper_*` methods, which are the same forwarding calls for every FCMA
+// vector type: they hand the chunk loop to the target-feature-enabled wrappers in
+// `fcma_common.rs`.
+macro_rules! fcma_vector_fft_helpers {
+    () => {
+        #[inline(always)]
+        unsafe fn fft_helper_immut<E>(
+            input: &[E],
+            output: &mut [E],
+            scratch: &mut [E],
+            chunk_size: usize,
+            required_scratch: usize,
+            chunk_fn: impl FnMut(&[E], &mut [E], &mut [E]),
+        ) {
+            super::fcma_common::fcma_fft_helper_immut(
+                input,
+                output,
+                scratch,
+                chunk_size,
+                required_scratch,
+                chunk_fn,
+            )
+        }
+        #[inline(always)]
+        unsafe fn fft_helper_outofplace<E>(
+            input: &mut [E],
+            output: &mut [E],
+            scratch: &mut [E],
+            chunk_size: usize,
+            required_scratch: usize,
+            chunk_fn: impl FnMut(&mut [E], &mut [E], &mut [E]),
+        ) {
+            super::fcma_common::fcma_fft_helper_outofplace(
+                input,
+                output,
+                scratch,
+                chunk_size,
+                required_scratch,
+                chunk_fn,
+            )
+        }
+        #[inline(always)]
+        unsafe fn fft_helper_inplace<E>(
+            buffer: &mut [E],
+            scratch: &mut [E],
+            chunk_size: usize,
+            required_scratch: usize,
+            chunk_fn: impl FnMut(&mut [E], &mut [E]),
+        ) {
+            super::fcma_common::fcma_fft_helper_inplace(
+                buffer,
+                scratch,
+                chunk_size,
+                required_scratch,
+                chunk_fn,
+            )
+        }
+    };
+}
+
+impl crate::simd::simd_vector::SimdVector for FcmaSimdVector64 {
+    const COMPLEX_PER_VECTOR: usize = 1;
+
+    type ScalarType = f64;
+    type Rotation = Rotation90<float64x2_t>;
+
+    type Butterfly3 = FcmaF64Butterfly3<f64>;
+    type Butterfly5 = FcmaF64Butterfly5<f64>;
+    type Butterfly6 = FcmaF64Butterfly6<f64>;
+    type Butterfly7 = FcmaF64Butterfly7<f64>;
+
+    #[inline(always)]
+    unsafe fn load(data: &[Complex<f64>], index: usize) -> Self {
+        Self(data.load_complex(index))
+    }
+    #[inline(always)]
+    unsafe fn store(mut data: &mut [Complex<f64>], value: Self, index: usize) {
+        data.store_complex(value.0, index)
+    }
+
+    #[inline(always)]
+    unsafe fn mul_complex(left: Self, right: Self) -> Self {
+        Self(FcmaVector::mul_complex(left.0, right.0))
+    }
+    #[inline(always)]
+    unsafe fn make_mixedradix_twiddle_chunk(
+        x: usize,
+        y: usize,
+        len: usize,
+        direction: FftDirection,
+    ) -> Self {
+        Self(FcmaVector::make_mixedradix_twiddle_chunk(
+            x, y, len, direction,
+        ))
+    }
+
+    #[inline(always)]
+    unsafe fn make_rotate90(direction: FftDirection) -> Self::Rotation {
+        FcmaVector::make_rotate90(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly3(direction: FftDirection) -> Self::Butterfly3 {
+        FcmaF64Butterfly3::new(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly5(direction: FftDirection) -> Self::Butterfly5 {
+        FcmaF64Butterfly5::new(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly6(direction: FftDirection) -> Self::Butterfly6 {
+        FcmaF64Butterfly6::new(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
+        FcmaF64Butterfly7::new(direction)
+    }
+
+    #[inline(always)]
+    unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
+        FcmaVector::column_butterfly2([rows[0].0, rows[1].0]).map(Self)
+    }
+    #[inline(always)]
+    unsafe fn column_butterfly3(bf: &Self::Butterfly3, rows: [Self; 3]) -> [Self; 3] {
+        bf.perform_fft_direct(rows[0].0, rows[1].0, rows[2].0)
+            .map(Self)
+    }
+    #[inline(always)]
+    unsafe fn column_butterfly4(rows: [Self; 4], rotation: Self::Rotation) -> [Self; 4] {
+        FcmaVector::column_butterfly4([rows[0].0, rows[1].0, rows[2].0, rows[3].0], rotation)
+            .map(Self)
+    }
+    #[inline(always)]
+    unsafe fn column_butterfly5(bf: &Self::Butterfly5, rows: [Self; 5]) -> [Self; 5] {
+        bf.perform_fft_direct(rows[0].0, rows[1].0, rows[2].0, rows[3].0, rows[4].0)
+            .map(Self)
+    }
+    #[inline(always)]
+    unsafe fn column_butterfly6(bf: &Self::Butterfly6, rows: [Self; 6]) -> [Self; 6] {
+        bf.perform_fft_direct(rows.map(|r| r.0)).map(Self)
+    }
+    #[inline(always)]
+    unsafe fn column_butterfly7(bf: &Self::Butterfly7, rows: [Self; 7]) -> [Self; 7] {
+        bf.perform_fft_direct(rows.map(|r| r.0)).map(Self)
+    }
+
+    fcma_vector_fft_helpers!();
+}
+
+impl crate::simd::simd_vector::SimdVector for FcmaSimdVector32 {
+    const COMPLEX_PER_VECTOR: usize = 2;
+
+    type ScalarType = f32;
+    type Rotation = Rotation90<float32x4_t>;
+
+    type Butterfly3 = FcmaF32Butterfly3<f32>;
+    type Butterfly5 = FcmaF32Butterfly5<f32>;
+    type Butterfly6 = FcmaF32Butterfly6<f32>;
+    type Butterfly7 = FcmaF32Butterfly7<f32>;
+
+    #[inline(always)]
+    unsafe fn load(data: &[Complex<f32>], index: usize) -> Self {
+        Self(data.load_complex(index))
+    }
+    #[inline(always)]
+    unsafe fn store(mut data: &mut [Complex<f32>], value: Self, index: usize) {
+        data.store_complex(value.0, index)
+    }
+
+    #[inline(always)]
+    unsafe fn mul_complex(left: Self, right: Self) -> Self {
+        Self(FcmaVector::mul_complex(left.0, right.0))
+    }
+    #[inline(always)]
+    unsafe fn make_mixedradix_twiddle_chunk(
+        x: usize,
+        y: usize,
+        len: usize,
+        direction: FftDirection,
+    ) -> Self {
+        Self(FcmaVector::make_mixedradix_twiddle_chunk(
+            x, y, len, direction,
+        ))
+    }
+
+    #[inline(always)]
+    unsafe fn make_rotate90(direction: FftDirection) -> Self::Rotation {
+        FcmaVector::make_rotate90(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly3(direction: FftDirection) -> Self::Butterfly3 {
+        FcmaF32Butterfly3::new(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly5(direction: FftDirection) -> Self::Butterfly5 {
+        FcmaF32Butterfly5::new(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly6(direction: FftDirection) -> Self::Butterfly6 {
+        FcmaF32Butterfly6::new(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
+        FcmaF32Butterfly7::new(direction)
+    }
+
+    #[inline(always)]
+    unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
+        FcmaVector::column_butterfly2([rows[0].0, rows[1].0]).map(Self)
+    }
+    #[inline(always)]
+    unsafe fn column_butterfly3(bf: &Self::Butterfly3, rows: [Self; 3]) -> [Self; 3] {
+        bf.perform_parallel_fft_direct(rows[0].0, rows[1].0, rows[2].0)
+            .map(Self)
+    }
+    #[inline(always)]
+    unsafe fn column_butterfly4(rows: [Self; 4], rotation: Self::Rotation) -> [Self; 4] {
+        FcmaVector::column_butterfly4([rows[0].0, rows[1].0, rows[2].0, rows[3].0], rotation)
+            .map(Self)
+    }
+    #[inline(always)]
+    unsafe fn column_butterfly5(bf: &Self::Butterfly5, rows: [Self; 5]) -> [Self; 5] {
+        bf.perform_parallel_fft_direct(rows[0].0, rows[1].0, rows[2].0, rows[3].0, rows[4].0)
+            .map(Self)
+    }
+    #[inline(always)]
+    unsafe fn column_butterfly6(bf: &Self::Butterfly6, rows: [Self; 6]) -> [Self; 6] {
+        bf.perform_parallel_fft_direct(
+            rows[0].0, rows[1].0, rows[2].0, rows[3].0, rows[4].0, rows[5].0,
+        )
+        .map(Self)
+    }
+    #[inline(always)]
+    unsafe fn column_butterfly7(bf: &Self::Butterfly7, rows: [Self; 7]) -> [Self; 7] {
+        bf.perform_parallel_fft_direct(rows.map(|r| r.0)).map(Self)
+    }
+
+    fcma_vector_fft_helpers!();
+}
+
 #[cfg(test)]
 mod unit_tests {
     use super::*;
