@@ -3,7 +3,7 @@ use std::sync::Arc;
 use num_complex::Complex;
 use num_traits::{Float, One, Zero};
 
-use rand::distributions::{uniform::SampleUniform, Distribution, Uniform};
+use rand::distr::{uniform::SampleUniform, Distribution, Uniform};
 use rand::{rngs::StdRng, SeedableRng};
 
 use crate::algorithm::butterflies::{
@@ -22,7 +22,7 @@ const RNG_SEED: [u8; 32] = [
 
 pub fn random_signal<T: FftNum + SampleUniform>(length: usize) -> Vec<Complex<T>> {
     let mut sig = Vec::with_capacity(length);
-    let normal_dist: Uniform<T> = Uniform::new(T::zero(), T::from_f32(10.0).unwrap());
+    let normal_dist: Uniform<T> = Uniform::new(T::zero(), T::from_f32(10.0).unwrap()).unwrap();
     let mut rng: StdRng = SeedableRng::from_seed(RNG_SEED);
     for _ in 0..length {
         sig.push(Complex {
