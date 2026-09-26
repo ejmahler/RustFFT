@@ -2,18 +2,22 @@ use num_integer::gcd;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::common::RadixFactor;
-use crate::wasm_simd::wasm_simd_planner::FftPlannerWasmSimd;
-use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
+use crate::{
+    common::{FftNum, RadixFactor},
+    fft_cache::FftCache,
+    FftDirection,
+};
 
 use crate::algorithm::butterflies::*;
 use crate::algorithm::*;
-use crate::Fft;
+use crate::multidimensional::fft_nd_transpose::FftNdTranspose;
+use crate::{Fft, FftNd};
 
 use crate::FftPlannerAvx;
 use crate::FftPlannerFcma;
 use crate::FftPlannerNeon;
 use crate::FftPlannerSse;
+use crate::FftPlannerWasmSimd;
 
 use crate::math_utils::{split_cross_len, PrimeFactors};
 
@@ -129,6 +133,38 @@ impl<T: FftNum> FftPlanner<T> {
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft_inverse(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         self.plan_fft(len, FftDirection::Inverse)
+    }
+
+    /// Returns a `FftNd` instance which computes multidemensional FFTs with dimensions specified by `shape`.
+    ///
+    /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
+    ///
+    /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+    pub fn plan_fft_multidimensional<const DIMENSIONS: usize>(
+        &mut self,
+        shape: [usize; DIMENSIONS],
+        direction: FftDirection,
+    ) -> Arc<dyn FftNd<T, DIMENSIONS>> {
+        match &mut self.chosen_planner {
+            ChosenFftPlanner::Scalar(scalar_planner) => {
+                scalar_planner.plan_fft_multidimensional(shape, direction)
+            }
+            ChosenFftPlanner::Avx(avx_planner) => {
+                avx_planner.plan_fft_multidimensional(shape, direction)
+            }
+            ChosenFftPlanner::Sse(sse_planner) => {
+                sse_planner.plan_fft_multidimensional(shape, direction)
+            }
+            ChosenFftPlanner::Neon(neon_planner) => {
+                neon_planner.plan_fft_multidimensional(shape, direction)
+            }
+            ChosenFftPlanner::Fcma(fcma_planner) => {
+                fcma_planner.plan_fft_multidimensional(shape, direction)
+            }
+            ChosenFftPlanner::WasmSimd(wasm_simd_planner) => {
+                wasm_simd_planner.plan_fft_multidimensional(shape, direction)
+            }
+        }
     }
 }
 
@@ -313,6 +349,34 @@ impl<T: FftNum> FftPlannerScalar<T> {
     /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
     pub fn plan_fft_inverse(&mut self, len: usize) -> Arc<dyn Fft<T>> {
         self.plan_fft(len, FftDirection::Inverse)
+    }
+
+    /// Returns a `FftNd` instance which computes multidemensional FFTs with dimensions specified by `shape`.
+    ///
+    /// If the provided `direction` is `FftDirection::Forward`, the returned instance will compute forward FFTs. If it's `FftDirection::Inverse`, it will compute inverse FFTs.
+    ///
+    /// If this is called multiple times, the planner will attempt to re-use internal data between calls, reducing memory usage and FFT initialization time.
+    pub fn plan_fft_multidimensional<const DIMENSIONS: usize>(
+        &mut self,
+        shape: [usize; DIMENSIONS],
+        direction: FftDirection,
+    ) -> Arc<dyn FftNd<T, DIMENSIONS>> {
+        let len = if DIMENSIONS == 0 {
+            0
+        } else {
+            let mut len: usize = 1;
+            for s in shape {
+                len = len.checked_mul(s).expect("Overflow when multiplying shape sizes together to compute FFT length in plan_fft_multidimensional");
+            }
+            len
+        };
+
+        // No caching for multidemensional FFTs for now, since they're just thin wrappers over their internal algorithms
+        Arc::new(FftNdTranspose::new(
+            len,
+            direction,
+            shape.map(|s| self.plan_fft(s, direction)),
+        ))
     }
 
     // Make a recipe for a length
@@ -640,6 +704,8 @@ impl<T: FftNum> FftPlannerScalar<T> {
 
 #[cfg(test)]
 mod unit_tests {
+    use crate::multidimensional::multidimensional_test_utils::check_multidimensional_fft_algorithm;
+
     use super::*;
 
     fn is_mixedradixsmall(plan: &Recipe) -> bool {
@@ -863,5 +929,92 @@ mod unit_tests {
         is_send::<FftPlannerScalar<T>>();
         is_send::<FftPlannerSse<T>>();
         is_send::<FftPlannerAvx<T>>();
+    }
+
+    fn test_multidimensional_planned_nd<const D: usize>(
+        planner: &mut FftPlannerScalar<f32>,
+        shape: [usize; D],
+    ) {
+        // Forward FFT
+        let fft_forward = planner.plan_fft_multidimensional(shape, FftDirection::Forward);
+        check_multidimensional_fft_algorithm(fft_forward.as_ref(), shape, FftDirection::Forward);
+
+        // Inverse FFT
+        let fft_inverse = planner.plan_fft_multidimensional(shape, FftDirection::Forward);
+        check_multidimensional_fft_algorithm(fft_inverse.as_ref(), shape, FftDirection::Forward);
+    }
+
+    #[test]
+    fn test_multidimensional_planned_scalar_0d() {
+        let mut planner: FftPlannerScalar<_> = FftPlannerScalar::new();
+
+        // There's no reason to create a 0d multidimensional FFT, but that doesn't mean it shouldn't work if someone does
+        test_multidimensional_planned_nd(&mut planner, []);
+    }
+
+    #[test]
+    fn test_multidimensional_planned_scalar_1d() {
+        let mut planner = FftPlannerScalar::<f32>::new();
+
+        // There's no reason to create a 1d multidimensional FFT, but that doesn't mean it shouldn't work if someone does
+        for a in 0..10 {
+            test_multidimensional_planned_nd(&mut planner, [a]);
+        }
+    }
+
+    #[test]
+    fn test_multidimensional_planned_scalar_2d() {
+        let mut planner = FftPlannerScalar::<f32>::new();
+
+        for a in 0..10 {
+            for b in 0..10 {
+                test_multidimensional_planned_nd(&mut planner, [a, b]);
+            }
+        }
+    }
+
+    #[test]
+    fn test_multidimensional_planned_scalar_3d() {
+        let mut planner = FftPlannerScalar::<f32>::new();
+
+        for a in 0..8 {
+            for b in 0..8 {
+                for c in 0..8 {
+                    test_multidimensional_planned_nd(&mut planner, [a, b, c]);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_multidimensional_planned_scalar_4d() {
+        let mut planner = FftPlannerScalar::<f32>::new();
+
+        for a in 0..5 {
+            for b in 0..5 {
+                for c in 0..5 {
+                    for d in 0..5 {
+                        test_multidimensional_planned_nd(&mut planner, [a, b, c, d]);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_multidimensional_planned_scalar_5d() {
+        let mut planner = FftPlannerScalar::<f32>::new();
+
+        for a in 0..4 {
+            for b in 0..4 {
+                for c in 0..4 {
+                    for d in 0..4 {
+                        for e in 0..4 {
+                            test_multidimensional_planned_nd(&mut planner, [a, b, c, d, e]);
+                        }
+                    }
+                }
+            }
+        }
     }
 }
