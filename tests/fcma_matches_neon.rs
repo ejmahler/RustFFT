@@ -8,7 +8,7 @@
 #![cfg(all(target_arch = "aarch64", feature = "fcma"))]
 
 use num_traits::Float;
-use rand::distributions::{uniform::SampleUniform, Distribution, Uniform};
+use rand::distr::{uniform::SampleUniform, Distribution, Uniform};
 use rand::{rngs::StdRng, SeedableRng};
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
@@ -20,7 +20,7 @@ const RNG_SEED: [u8; 32] = [
 
 fn random_signal<T: FftNum + SampleUniform>(length: usize) -> Vec<Complex<T>> {
     let mut sig = Vec::with_capacity(length);
-    let normal_dist: Uniform<T> = Uniform::new(T::zero(), T::one());
+    let normal_dist: Uniform<T> = Uniform::new(T::zero(), T::one()).unwrap();
     let mut rng: StdRng = SeedableRng::from_seed(RNG_SEED);
     for _ in 0..length {
         sig.push(Complex {

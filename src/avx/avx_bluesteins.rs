@@ -379,7 +379,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
 #[cfg(test)]
 mod unit_tests {
     use num_traits::Float;
-    use rand::distributions::uniform::SampleUniform;
+    use rand::distr::uniform::SampleUniform;
 
     use super::*;
     use crate::algorithm::Dft;
