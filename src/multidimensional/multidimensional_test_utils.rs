@@ -1,6 +1,6 @@
 use num_complex::Complex;
 use num_traits::{Float, One, Zero};
-use rand::distributions::uniform::SampleUniform;
+use rand::distr::uniform::SampleUniform;
 
 use crate::{
     test_utils::{compare_vectors, first_diff, random_signal},
