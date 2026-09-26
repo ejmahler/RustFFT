@@ -1,4 +1,4 @@
-use rustfft::sse::sse_butterflies::{SseF32Butterfly2, SseF32Butterfly3, SseF32Butterfly4, SseF32Butterfly5, SseF32Butterfly6, SseF32Butterfly8, SseF32Butterfly16, SseF32Butterfly32, SseF64Butterfly2, SseF64Butterfly3, SseF64Butterfly4, SseF64Butterfly5, SseF64Butterfly6, SseF64Butterfly8, SseF64Butterfly16, SseF64Butterfly32};
+use rustfft::sse::sse_butterflies::*;
 use rustfft::sse::sse_prime_butterflies::{SseF32Butterfly7, SseF32Butterfly31, SseF64Butterfly7, SseF64Butterfly31};
 use rustfft::sse::sse_radix4::SseRadix4;
 use rustfft::sse::sse_radix4_otf::SseRadix4OnTheFly;
