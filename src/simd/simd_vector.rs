@@ -34,6 +34,7 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
     type Butterfly6: Send + Sync;
     type Butterfly7: Send + Sync;
 
+    unsafe fn zero() -> Self;
     unsafe fn load(data: &[Complex<Self::ScalarType>], index: usize) -> Self;
     unsafe fn store(data: &mut [Complex<Self::ScalarType>], value: Self, index: usize);
 

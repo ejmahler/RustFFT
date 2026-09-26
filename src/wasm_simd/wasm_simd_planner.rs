@@ -7,6 +7,7 @@ use crate::algorithm::{
 use crate::math_utils::PrimeFactor;
 use crate::wasm_simd::*;
 use crate::{fft_cache::FftCache, math_utils::PrimeFactors, Fft, FftDirection, FftNum};
+use crate::wasm_simd::wasm_simd_radix4_table::WasmSimdRadix4Table;
 use std::{any::TypeId, collections::HashMap, sync::Arc};
 
 const MIN_RADIX4_BITS: u32 = 6; // smallest size to consider radix 4 an option is 2^6 = 64
@@ -234,9 +235,9 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
             Recipe::Radix4 { k, base_fft } => {
                 let base_fft = self.build_fft(&base_fft, direction);
                 if id_t == id_f32 {
-                    Arc::new(WasmSimdRadix4::<f32, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
+                    Arc::new(WasmSimdRadix4Table::<f32, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
                 } else if id_t == id_f64 {
-                    Arc::new(WasmSimdRadix4::<f64, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
+                    Arc::new(WasmSimdRadix4Table::<f64, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
                 } else {
                     panic!("Not f32 or f64");
                 }

@@ -1,10 +1,16 @@
-use rustfft::num_complex::Complex;
+use rustfft::sse::sse_butterflies::{SseF32Butterfly2, SseF32Butterfly3, SseF32Butterfly4, SseF32Butterfly5, SseF32Butterfly6, SseF32Butterfly8, SseF32Butterfly16, SseF32Butterfly32, SseF64Butterfly2, SseF64Butterfly3, SseF64Butterfly4, SseF64Butterfly5, SseF64Butterfly6, SseF64Butterfly8, SseF64Butterfly16, SseF64Butterfly32};
+use rustfft::sse::sse_prime_butterflies::{SseF32Butterfly7, SseF32Butterfly31, SseF64Butterfly7, SseF64Butterfly31};
+use rustfft::sse::sse_radix4::SseRadix4;
+use rustfft::sse::sse_radix4_otf::SseRadix4OnTheFly;
+use rustfft::sse::sse_radix4_table::SseRadix4Table;
+use rustfft::{FftNum, num_complex::Complex};
 use rustfft::num_traits::Zero;
-use rustfft::Fft;
+use rustfft::{Fft, FftDirection};
+use std::any::TypeId;
 use std::sync::Arc;
 mod config;
 
-use criterion::{criterion_group, criterion_main, Bencher, Criterion};
+use criterion::{Bencher, BenchmarkId, Criterion, criterion_group, criterion_main};
 
 
 /// Times just the FFT execution (not allocation and pre-calculation)
@@ -186,7 +192,169 @@ fn sse_planned64_composite_044100(b: &mut Bencher) { bench_planned_f64(b,  44100
 fn sse_planned64_composite_048000(b: &mut Bencher) { bench_planned_f64(b,  48000); }
 fn sse_planned64_composite_046656(b: &mut Bencher) { bench_planned_f64(b,  46656); }
 
+fn plan_butterfly_fft<T: FftNum>(len: usize) -> Arc<dyn Fft<T>> {
+    let id_f32 = TypeId::of::<f32>();
+    let id_f64 = TypeId::of::<f64>();
+    let id_t = TypeId::of::<T>();
 
+    if id_t == id_f32 {
+        unsafe { 
+            match len {
+                2 => Arc::new(SseF32Butterfly2::new(FftDirection::Forward)),
+                3 => Arc::new(SseF32Butterfly3::new(FftDirection::Forward)),
+                4 => Arc::new(SseF32Butterfly4::new(FftDirection::Forward)),
+                5 => Arc::new(SseF32Butterfly5::new(FftDirection::Forward)),
+                6 => Arc::new(SseF32Butterfly6::new(FftDirection::Forward)),
+                7 => Arc::new(SseF32Butterfly7::new(FftDirection::Forward)),
+                8 => Arc::new(SseF32Butterfly8::new(FftDirection::Forward)),
+                16 => Arc::new(SseF32Butterfly16::new(FftDirection::Forward)),
+                31 => Arc::new(SseF32Butterfly31::new(FftDirection::Forward)),
+                32 => Arc::new(SseF32Butterfly32::new(FftDirection::Forward)),
+                _ => panic!("Invalid butterfly size: {}", len),
+            }
+        }
+    } else if id_t == id_f64 {
+        unsafe {
+            match len {
+                2 => Arc::new(SseF64Butterfly2::new(FftDirection::Forward)),
+                3 => Arc::new(SseF64Butterfly3::new(FftDirection::Forward)),
+                4 => Arc::new(SseF64Butterfly4::new(FftDirection::Forward)),
+                5 => Arc::new(SseF64Butterfly5::new(FftDirection::Forward)),
+                6 => Arc::new(SseF64Butterfly6::new(FftDirection::Forward)),
+                7 => Arc::new(SseF64Butterfly7::new(FftDirection::Forward)),
+                8 => Arc::new(SseF64Butterfly8::new(FftDirection::Forward)),
+                16 => Arc::new(SseF64Butterfly16::new(FftDirection::Forward)),
+                31 => Arc::new(SseF64Butterfly31::new(FftDirection::Forward)),
+                32 => Arc::new(SseF64Butterfly32::new(FftDirection::Forward)),
+                _ => panic!("Invalid butterfly size: {}", len),
+            }
+        }
+    } else {
+        panic!("Invalid T for constructing SSE FFT");
+    }
+}
+
+fn bench_radix4_old<T: FftNum>(b: &mut Bencher, power2: u32) {
+    let len = 2usize.pow(power2);
+    let base_len = if power2 % 2 == 0 {
+        16
+    } else {
+        32
+    };
+    assert!(len > base_len);
+    let base_fft = plan_butterfly_fft(base_len);
+    let k = (power2 - base_len.trailing_zeros()) / 2;
+    let id_f32 = TypeId::of::<f32>();
+    let id_f64 = TypeId::of::<f64>();
+    let id_t = TypeId::of::<T>();
+
+    let fft = if id_t == id_f32 {
+        Arc::new(SseRadix4::<f32, T>::new(k, base_fft).unwrap()) as Arc<dyn Fft<T>>
+    } else if id_t == id_f64 {
+        Arc::new(SseRadix4::<f64, T>::new(k, base_fft).unwrap()) as Arc<dyn Fft<T>>
+    } else {
+        panic!("Invalid T for constructing SSE FFT");
+    };
+
+    let mut buffer = vec![Complex::zero(); len * 10];
+    let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
+    b.iter(|| {
+        fft.process_with_scratch(&mut buffer, &mut scratch);
+    });
+}
+fn bench_radix4_table<T: FftNum>(b: &mut Bencher, power2: u32) {
+    let len = 2usize.pow(power2);
+    let base_len = if power2 % 2 == 0 {
+        16
+    } else {
+        32
+    };
+    assert!(len > base_len);
+    let base_fft = plan_butterfly_fft(base_len);
+    let k = (power2 - base_len.trailing_zeros()) / 2;
+    let id_f32 = TypeId::of::<f32>();
+    let id_f64 = TypeId::of::<f64>();
+    let id_t = TypeId::of::<T>();
+
+    let fft = if id_t == id_f32 {
+        Arc::new(SseRadix4Table::<f32, T>::new(k, base_fft)) as Arc<dyn Fft<T>>
+    } else if id_t == id_f64 {
+        Arc::new(SseRadix4Table::<f64, T>::new(k, base_fft)) as Arc<dyn Fft<T>>
+    } else {
+        panic!("Invalid T for constructing SSE FFT");
+    };
+
+    let mut buffer = vec![Complex::zero(); len * 10];
+    let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
+    b.iter(|| {
+        fft.process_with_scratch(&mut buffer, &mut scratch);
+    });
+}
+fn bench_radix4_otf<T: FftNum>(b: &mut Bencher, power2: u32) {
+    let len = 2usize.pow(power2);
+    let base_len = if power2 % 2 == 0 {
+        16
+    } else {
+        32
+    };
+    assert!(len > base_len);
+    let base_fft = plan_butterfly_fft(base_len);
+    let k = (power2 - base_len.trailing_zeros()) / 2;
+    let id_f32 = TypeId::of::<f32>();
+    let id_f64 = TypeId::of::<f64>();
+    let id_t = TypeId::of::<T>();
+
+    let fft = if id_t == id_f32 {
+        Arc::new(SseRadix4OnTheFly::<f32, T>::new(k, base_fft)) as Arc<dyn Fft<T>>
+    } else if id_t == id_f64 {
+        Arc::new(SseRadix4OnTheFly::<f64, T>::new(k, base_fft)) as Arc<dyn Fft<T>>
+    } else {
+        panic!("Invalid T for constructing SSE FFT");
+    };
+
+    let mut buffer = vec![Complex::zero(); len * 10];
+    let mut scratch = vec![Complex::zero(); fft.get_inplace_scratch_len()];
+    b.iter(|| {
+        fft.process_with_scratch(&mut buffer, &mut scratch);
+    });
+}
+
+
+fn criterion_benchmark_radix4(c: &mut Criterion) {
+    {
+        let mut group32 = c.benchmark_group("compare_radix4_sse_f32");
+        
+        for power2 in 6..30 {
+            let len = 2usize.pow(power2);
+            group32.bench_with_input(BenchmarkId::new("old", len), &len,  |b, _| {
+                bench_radix4_old::<f32>(b, power2)
+            });
+            group32.bench_with_input(BenchmarkId::new("tab", len), &len,  |b, _| {
+                bench_radix4_table::<f32>(b, power2)
+            });
+            group32.bench_with_input(BenchmarkId::new("fly", len), &len,  |b, _| {
+                bench_radix4_otf::<f32>(b, power2)
+            });
+        }
+    }
+
+    {
+        let mut group64 = c.benchmark_group("compare_radix4_sse_f64");
+
+        for power2 in 6..30 {
+            let len = 2usize.pow(power2);
+            group64.bench_with_input(BenchmarkId::new("old", len), &len, |b, _| {
+                bench_radix4_old::<f64>(b, power2)
+            });
+            group64.bench_with_input(BenchmarkId::new("tab", len), &len, |b, _| {
+                bench_radix4_table::<f64>(b, power2)
+            });
+            group64.bench_with_input(BenchmarkId::new("fly", len), &len, |b, _| {
+                bench_radix4_otf::<f64>(b, power2)
+            });
+        }
+    }
+}
 
 
 fn criterion_benchmark(c: &mut Criterion) {
@@ -310,6 +478,6 @@ fn criterion_benchmark(c: &mut Criterion) {
 criterion_group! {
     name = benches;
     config = config::fast();
-    targets = criterion_benchmark
+    targets = criterion_benchmark, criterion_benchmark_radix4
 }
 criterion_main!(benches);

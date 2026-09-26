@@ -622,6 +622,10 @@ impl crate::simd::simd_vector::SimdVector for __m128d {
     type Butterfly7 = SseF64Butterfly7<f64>;
 
     #[inline(always)]
+    unsafe fn zero() -> Self {
+        _mm_setzero_pd()
+    }
+    #[inline(always)]
     unsafe fn load(data: &[Complex<f64>], index: usize) -> Self {
         data.load_complex(index)
     }
@@ -704,6 +708,10 @@ impl crate::simd::simd_vector::SimdVector for __m128 {
     type Butterfly6 = SseF32Butterfly6<f32>;
     type Butterfly7 = SseF32Butterfly7<f32>;
 
+    #[inline(always)]
+    unsafe fn zero() -> Self {
+        _mm_setzero_ps()
+    }
     #[inline(always)]
     unsafe fn load(data: &[Complex<f32>], index: usize) -> Self {
         data.load_complex(index)
