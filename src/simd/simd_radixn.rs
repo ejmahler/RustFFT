@@ -25,7 +25,7 @@ use crate::{Direction, Fft, FftDirection, Length};
 use super::simd_vector::SimdVector;
 
 /// The per-layer cross-FFT kernels, holding whatever precomputed state each radix needs.
-enum InternalRadixFactor<V: SimdVector> {
+pub(crate) enum InternalRadixFactor<V: SimdVector> {
     Factor2,
     Factor3(V::Butterfly3),
     Factor4(V::Rotation),
@@ -244,38 +244,7 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
 
             // Dispatch once per layer rather than once per chunk, so each layer runs a single
             // monomorphized loop over its chunks. Mirrors the scalar `RadixN`.
-            match factor {
-                InternalRadixFactor::Factor2 => {
-                    cross_layer_chunks::<V, 2, _>(out, layer_twiddles, num_columns, |v| {
-                        V::column_butterfly2(v)
-                    })
-                }
-                InternalRadixFactor::Factor3(bf) => {
-                    cross_layer_chunks::<V, 3, _>(out, layer_twiddles, num_columns, |v| {
-                        V::column_butterfly3(bf, v)
-                    })
-                }
-                InternalRadixFactor::Factor4(rotation) => {
-                    cross_layer_chunks::<V, 4, _>(out, layer_twiddles, num_columns, |v| {
-                        V::column_butterfly4(v, *rotation)
-                    })
-                }
-                InternalRadixFactor::Factor5(bf) => {
-                    cross_layer_chunks::<V, 5, _>(out, layer_twiddles, num_columns, |v| {
-                        V::column_butterfly5(bf, v)
-                    })
-                }
-                InternalRadixFactor::Factor6(bf) => {
-                    cross_layer_chunks::<V, 6, _>(out, layer_twiddles, num_columns, |v| {
-                        V::column_butterfly6(bf, v)
-                    })
-                }
-                InternalRadixFactor::Factor7(bf) => {
-                    cross_layer_chunks::<V, 7, _>(out, layer_twiddles, num_columns, |v| {
-                        V::column_butterfly7(bf, v)
-                    })
-                }
-            }
+            V::cross_layer(out, layer_twiddles, num_columns, factor);
 
             // skip past all the twiddle factors used in this layer
             let twiddle_offset = (num_columns / V::COMPLEX_PER_VECTOR) * (factor.radix() - 1);
@@ -381,7 +350,7 @@ impl<V: SimdVector, T> Direction for SimdRadixN<V, T> {
 /// This is `chunks_exact_mut` without the divide it does to find the chunk count. At short lengths
 /// that one divide per layer is a measurable share of the whole FFT.
 #[inline(always)]
-unsafe fn cross_layer_chunks<V: SimdVector, const RADIX: usize, F>(
+pub(crate) unsafe fn cross_layer_chunks<V: SimdVector, const RADIX: usize, F>(
     data: &mut [Complex<V::ScalarType>],
     twiddles: &[V],
     num_columns: usize,
