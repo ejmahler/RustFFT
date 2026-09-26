@@ -9,6 +9,10 @@ use crate::array_utils::DoubleBuf;
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
 
+use crate::fft_helper::{
+    fft_helper_immut, fft_helper_immut_unroll2x, fft_helper_inplace, fft_helper_inplace_unroll2x,
+};
+
 use super::{{arch.name_snakecase}}_common::{assert_f32, assert_f64};
 use super::{{arch.name_snakecase}}_utils::*;
 use super::{{arch.name_snakecase}}_vector::*;
