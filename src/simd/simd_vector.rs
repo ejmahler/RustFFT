@@ -38,6 +38,16 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
     unsafe fn load(data: &[Complex<Self::ScalarType>], index: usize) -> Self;
     unsafe fn store(data: &mut [Complex<Self::ScalarType>], value: Self, index: usize);
 
+    /// Load a single complex number into the low element, leaving the rest zeroed, and store the
+    /// low element of a vector back. These are how a column count that isn't a whole number of
+    /// vectors is finished off, so only the low element is ever touched.
+    ///
+    /// Every vector type here holds one or two complex numbers, so a remainder is always exactly
+    /// one column. For f64 a vector is one complex number, so these are the same as `load` and
+    /// `store`, and nothing ever has a remainder to begin with.
+    unsafe fn load_partial_lo(data: &[Complex<Self::ScalarType>], index: usize) -> Self;
+    unsafe fn store_partial_lo(data: &mut [Complex<Self::ScalarType>], value: Self, index: usize);
+
     /// Pairwise multiply the complex numbers in `left` with the complex numbers in `right`.
     unsafe fn mul_complex(left: Self, right: Self) -> Self;
 

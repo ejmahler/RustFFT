@@ -834,6 +834,15 @@ impl crate::simd::simd_vector::SimdVector for WasmVector64 {
     unsafe fn store(mut data: &mut [Complex<f64>], value: Self, index: usize) {
         data.store_complex(value, index)
     }
+    // a vector is a single complex number, so a partial access is a whole one
+    #[inline(always)]
+    unsafe fn load_partial_lo(data: &[Complex<f64>], index: usize) -> Self {
+        data.load_complex(index)
+    }
+    #[inline(always)]
+    unsafe fn store_partial_lo(mut data: &mut [Complex<f64>], value: Self, index: usize) {
+        data.store_complex(value, index)
+    }
 
     #[inline(always)]
     unsafe fn mul_complex(left: Self, right: Self) -> Self {
@@ -925,6 +934,14 @@ impl crate::simd::simd_vector::SimdVector for WasmVector32 {
     #[inline(always)]
     unsafe fn store(mut data: &mut [Complex<f32>], value: Self, index: usize) {
         data.store_complex(value, index)
+    }
+    #[inline(always)]
+    unsafe fn load_partial_lo(data: &[Complex<f32>], index: usize) -> Self {
+        data.load_partial_lo_complex(index)
+    }
+    #[inline(always)]
+    unsafe fn store_partial_lo(mut data: &mut [Complex<f32>], value: Self, index: usize) {
+        data.store_partial_lo_complex(value, index)
     }
 
     #[inline(always)]

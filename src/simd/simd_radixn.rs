@@ -8,10 +8,13 @@
 //! Everything here is generic over `SimdVector`, from `simd_vector.rs`. A backend implements that
 //! trait once per vector type and gets the algorithm, so `SimdRadixN` is the only copy of it.
 //!
-//! Because a column butterfly consumes `COMPLEX_PER_VECTOR` columns at a time, the column count at
-//! every layer has to be a whole number of vectors. The column count starts at `base_len` and only
-//! ever grows by whole factors, so requiring `base_len % COMPLEX_PER_VECTOR == 0` is enough. That
-//! is 1 for f64 (no restriction) and 2 for f32.
+//! A column butterfly consumes `COMPLEX_PER_VECTOR` columns at a time, 1 for f64 and 2 for f32, so
+//! a column count that isn't a whole number of vectors leaves a column over. The count starts at
+//! `base_len` and only ever grows by whole factors, so for f32 an odd base means an odd count at
+//! every layer, and no factor reordering helps: the first layer is the one with the fewest columns.
+//! Each layer therefore ends with a partial column, one complex loaded into the low half of a
+//! vector and only the low half stored back. The butterflies are lane independent, so the same
+//! vector butterfly computes it, with the high half left as zeros.
 
 use std::any::TypeId;
 use std::sync::Arc;
@@ -81,24 +84,16 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
         let direction = base_fft.fft_direction();
         let complex_per_vector = V::COMPLEX_PER_VECTOR;
 
-        // Every cross-FFT layer processes a whole vector of columns at a time. The column count
-        // starts at base_len and is only ever multiplied by a factor, so this one check covers
-        // every layer.
-        assert!(
-            factors.is_empty() || base_len % complex_per_vector == 0,
-            "SimdRadixN requires a base length divisible by {}, got {}",
-            complex_per_vector,
-            base_len
-        );
-
         // set up our cross FFT butterfly instances. simultaneously, compute the number of twiddles
         let mut butterflies = Vec::with_capacity(factors.len());
         let mut cross_fft_len = base_len;
         let mut twiddle_count = 0;
 
         for factor in factors {
-            // twiddles are stored a vector at a time, so a layer needs one chunk per vector column
-            twiddle_count += (cross_fft_len / complex_per_vector) * (factor.radix() - 1);
+            // Twiddles are stored a vector at a time, so a layer needs one chunk per vector column.
+            // A column count that isn't a whole number of vectors gets one more chunk for the
+            // partial column, of which only the first twiddle is used.
+            twiddle_count += cross_fft_len.div_ceil(complex_per_vector) * (factor.radix() - 1);
 
             butterflies.push(unsafe {
                 match factor {
@@ -162,7 +157,7 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
         let mut twiddle_factors: Vec<V> = Vec::with_capacity(twiddle_count);
         let mut cross_fft_len = base_len;
         for factor in factors {
-            let num_vector_columns = cross_fft_len / complex_per_vector;
+            let num_vector_columns = cross_fft_len.div_ceil(complex_per_vector);
             cross_fft_len *= factor.radix();
 
             for i in 0..num_vector_columns {
@@ -247,7 +242,7 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
             V::cross_layer(out, layer_twiddles, num_columns, factor);
 
             // skip past all the twiddle factors used in this layer
-            let twiddle_offset = (num_columns / V::COMPLEX_PER_VECTOR) * (factor.radix() - 1);
+            let twiddle_offset = num_columns.div_ceil(V::COMPLEX_PER_VECTOR) * (factor.radix() - 1);
             layer_twiddles = &layer_twiddles[twiddle_offset..];
         }
     }
@@ -429,10 +424,14 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize, F>(
     F: Fn([V; RADIX]) -> [V; RADIX],
 {
     let complex_per_vector = V::COMPLEX_PER_VECTOR;
+    // the whole vector columns, and then the column an inexact count leaves over
     let num_vector_columns = num_columns / complex_per_vector;
+    let partial_columns = num_columns % complex_per_vector;
     let tw_stride = RADIX - 1;
 
-    debug_assert!(twiddles.len() >= num_vector_columns * tw_stride);
+    // A vector holds one or two complex numbers, so the leftover is at most a single column
+    debug_assert!(partial_columns <= 1);
+    debug_assert!(twiddles.len() >= num_columns.div_ceil(complex_per_vector) * tw_stride);
 
     // The row-0 twiddle is always 1, so it's neither stored nor applied.
     let gather = |data: &[Complex<V::ScalarType>], idx: usize, tw_base: usize| -> [V; RADIX] {
@@ -470,6 +469,29 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize, F>(
         let a = butterfly(gather(data, idx, vcol * tw_stride));
         for (r, a_row) in a.iter().enumerate() {
             V::store(data, *a_row, idx + r * num_columns);
+        }
+    }
+
+    // A column count that isn't a whole number of vectors leaves a single column, so it can't be
+    // loaded or stored as a vector: a full load of the last row would run past the end of the
+    // buffer, and a full store would overwrite the first column of the next row. Load and store
+    // only the low half instead. The butterfly is the same one, since it works down the columns
+    // and the halves of a vector never interact.
+    if partial_columns > 0 {
+        let vcol = num_vector_columns;
+        let idx = vcol * complex_per_vector;
+        let tw_base = vcol * tw_stride;
+        let rows: [V; RADIX] = std::array::from_fn(|r| {
+            let v = V::load_partial_lo(data, idx + r * num_columns);
+            if r == 0 {
+                v
+            } else {
+                V::mul_complex(v, *twiddles.get_unchecked(tw_base + r - 1))
+            }
+        });
+        let a = butterfly(rows);
+        for (r, a_row) in a.iter().enumerate() {
+            V::store_partial_lo(data, *a_row, idx + r * num_columns);
         }
     }
 }
@@ -531,7 +553,7 @@ pub mod test_bodies {
         let mut planner32 = crate::FftPlannerScalar::<f32>::new();
 
         for direction in [FftDirection::Forward, FftDirection::Inverse] {
-            // odd base, f64 only
+            // odd base, so f32 runs its partial column path with a composite base too
             for base_len in [143, 55, 65] {
                 let base = planner64.plan_fft(base_len, direction);
                 assert!(
@@ -540,9 +562,12 @@ pub mod test_bodies {
                     base_len
                 );
                 check::<V64>(&[RadixFactor::Factor6, RadixFactor::Factor4], base);
+
+                let base = planner32.plan_fft(base_len, direction);
+                check::<V32>(&[RadixFactor::Factor6, RadixFactor::Factor4], base);
             }
 
-            // even base, usable by both element types
+            // even base
             for base_len in [22, 26, 110] {
                 let base = planner32.plan_fft(base_len, direction);
                 assert!(
@@ -560,28 +585,29 @@ pub mod test_bodies {
 
     /// The recipes the spike was benchmarked on, so the layer shapes that actually matter stay
     /// covered. The benchmarked lengths used much bigger bases, but the base is just a butterfly
-    /// that the other tests already cover, so the smallest legal one is used here. That keeps the
-    /// naive `Dft` the result is checked against affordable.
+    /// that the other tests already cover, so a small one is used here. That keeps the naive `Dft`
+    /// the result is checked against affordable.
     pub fn large_recipes<V32, V64>()
     where
         V32: SimdVector<ScalarType = f32>,
         V64: SimdVector<ScalarType = f64>,
     {
         use RadixFactor::*;
-        // (factors, f64 base, f32 base). f32 needs an even base, so it gets its own.
+        // (factors, f64 base, f32 base). The f32 bases alternate between even and odd, so both the
+        // whole-vector and the partial column path are covered at every one of these depths.
         let cases: [(&[RadixFactor], usize, usize); 5] = [
-            (&[Factor6, Factor6, Factor6], 1, 2),          // 216, 432
+            (&[Factor6, Factor6, Factor6], 1, 3),          // 216, 648
             (&[Factor6, Factor5, Factor5], 1, 2),          // 150, 300
-            (&[Factor6, Factor6, Factor4], 1, 2),          // 144, 288
+            (&[Factor6, Factor6, Factor4], 1, 3),          // 144, 432
             (&[Factor6, Factor6, Factor3], 1, 2),          // 108, 216
-            (&[Factor6, Factor6, Factor6, Factor4], 1, 2), // 864, 1728
+            (&[Factor6, Factor6, Factor6, Factor4], 1, 1), // 864, 864
         ];
         recipes::<V32, V64>(&cases);
     }
 
-    /// The deepest benchmarked recipe, six layers. The smallest legal base still leaves 14400
-    /// (f64) and 28800 (f32) points, and the naive `Dft` they are checked against takes minutes
-    /// on a debug build, so this one is kept out of the normal run. Run it with
+    /// The deepest benchmarked recipe, six layers. A base of 1 still leaves 14400 points, and the
+    /// naive `Dft` they are checked against takes minutes on a debug build, so this one is kept out
+    /// of the normal run. Run it with
     /// `cargo test --release -- --ignored radixn_six_layers`.
     pub fn six_layers<V32, V64>()
     where
@@ -592,8 +618,8 @@ pub mod test_bodies {
         let cases: [(&[RadixFactor], usize, usize); 1] = [(
             &[Factor6, Factor6, Factor5, Factor5, Factor4, Factor4],
             1,
-            2,
-        )]; // 14400, 28800
+            1,
+        )]; // 14400, 14400
         recipes::<V32, V64>(&cases);
     }
 
