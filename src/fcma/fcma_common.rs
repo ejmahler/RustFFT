@@ -1,9 +1,6 @@
 use std::any::TypeId;
 
-use crate::fft_helper::{
-    fft_helper_immut, fft_helper_immut_unroll2x, fft_helper_inplace, fft_helper_inplace_unroll2x,
-    fft_helper_outofplace, fft_helper_outofplace_unroll2x,
-};
+use crate::fft_helper::{fft_helper_immut, fft_helper_inplace, fft_helper_outofplace};
 
 // Helper function to assert we have the right float type
 pub fn assert_f32<T: 'static>() {
@@ -197,42 +194,4 @@ pub unsafe fn fcma_fft_helper_inplace<T>(
     chunk_fn: impl FnMut(&mut [T], &mut [T]),
 ) {
     fft_helper_inplace(buffer, scratch, chunk_size, required_scratch, chunk_fn)
-}
-
-// A wrapper for the FFT helper functions that make sure the entire thing happens with the benefit of the FCMA target feature,
-// so that things like loading twiddle factor registers etc can be lifted out of the loop
-#[target_feature(enable = "neon,fcma")]
-pub unsafe fn fcma_fft_helper_immut_unroll2x<T>(
-    input: &[T],
-    output: &mut [T],
-    chunk_size: usize,
-    chunk2x_fn: impl FnMut(&[T], &mut [T]),
-    chunk_fn: impl FnMut(&[T], &mut [T]),
-) {
-    fft_helper_immut_unroll2x(input, output, chunk_size, chunk2x_fn, chunk_fn)
-}
-
-// A wrapper for the FFT helper functions that make sure the entire thing happens with the benefit of the FCMA target feature,
-// so that things like loading twiddle factor registers etc can be lifted out of the loop
-#[target_feature(enable = "neon,fcma")]
-pub unsafe fn fcma_fft_helper_outofplace_unroll2x<T>(
-    input: &mut [T],
-    output: &mut [T],
-    chunk_size: usize,
-    chunk2x_fn: impl FnMut(&mut [T], &mut [T]),
-    chunk_fn: impl FnMut(&mut [T], &mut [T]),
-) {
-    fft_helper_outofplace_unroll2x(input, output, chunk_size, chunk2x_fn, chunk_fn)
-}
-
-// A wrapper for the FFT helper functions that make sure the entire thing happens with the benefit of the FCMA target feature,
-// so that things like loading twiddle factor registers etc can be lifted out of the loop
-#[target_feature(enable = "neon,fcma")]
-pub unsafe fn fcma_fft_helper_inplace_unroll2x<T>(
-    buffer: &mut [T],
-    chunk_size: usize,
-    chunk2x_fn: impl FnMut(&mut [T]),
-    chunk_fn: impl FnMut(&mut [T]),
-) {
-    fft_helper_inplace_unroll2x(buffer, chunk_size, chunk2x_fn, chunk_fn)
 }
