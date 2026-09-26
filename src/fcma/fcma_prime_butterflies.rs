@@ -78,7 +78,7 @@ fn make_twiddles<const TW: usize, T: FftNum>(len: usize, direction: FftDirection
     })
 }
 
-struct FcmaF32Butterfly7<T> {
+pub struct FcmaF32Butterfly7<T> {
     direction: FftDirection,
     twiddles_re: [float32x4_t; 3],
     twiddles_im: [float32x4_t; 3],
@@ -89,7 +89,7 @@ boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly7, 7, |this: &FcmaF32Butterf
 impl<T: FftNum> FcmaF32Butterfly7<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(7, direction);
         Self {
@@ -177,7 +177,7 @@ impl<T: FftNum> FcmaF32Butterfly7<T> {
     }
 }
 
-struct FcmaF64Butterfly7<T> {
+pub struct FcmaF64Butterfly7<T> {
     direction: FftDirection,
     twiddles_re: [float64x2_t; 3],
     twiddles_im: [float64x2_t; 3],
@@ -188,7 +188,7 @@ boilerplate_fft_fcma_f64_butterfly!(FcmaF64Butterfly7, 7, |this: &FcmaF64Butterf
 impl<T: FftNum> FcmaF64Butterfly7<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(7, direction);
         unsafe {Self {
@@ -247,7 +247,7 @@ impl<T: FftNum> FcmaF64Butterfly7<T> {
     }
 }
 
-struct FcmaF32Butterfly11<T> {
+pub struct FcmaF32Butterfly11<T> {
     direction: FftDirection,
     twiddles_re: [float32x4_t; 5],
     twiddles_im: [float32x4_t; 5],
@@ -258,7 +258,7 @@ boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly11, 11, |this: &FcmaF32Butte
 impl<T: FftNum> FcmaF32Butterfly11<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(11, direction);
         Self {
@@ -394,7 +394,7 @@ impl<T: FftNum> FcmaF32Butterfly11<T> {
     }
 }
 
-struct FcmaF64Butterfly11<T> {
+pub struct FcmaF64Butterfly11<T> {
     direction: FftDirection,
     twiddles_re: [float64x2_t; 5],
     twiddles_im: [float64x2_t; 5],
@@ -405,7 +405,7 @@ boilerplate_fft_fcma_f64_butterfly!(FcmaF64Butterfly11, 11, |this: &FcmaF64Butte
 impl<T: FftNum> FcmaF64Butterfly11<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(11, direction);
         unsafe {Self {
@@ -504,7 +504,7 @@ impl<T: FftNum> FcmaF64Butterfly11<T> {
     }
 }
 
-struct FcmaF32Butterfly13<T> {
+pub struct FcmaF32Butterfly13<T> {
     direction: FftDirection,
     twiddles_re: [float32x4_t; 6],
     twiddles_im: [float32x4_t; 6],
@@ -515,7 +515,7 @@ boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly13, 13, |this: &FcmaF32Butte
 impl<T: FftNum> FcmaF32Butterfly13<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(13, direction);
         Self {
@@ -681,7 +681,7 @@ impl<T: FftNum> FcmaF32Butterfly13<T> {
     }
 }
 
-struct FcmaF64Butterfly13<T> {
+pub struct FcmaF64Butterfly13<T> {
     direction: FftDirection,
     twiddles_re: [float64x2_t; 6],
     twiddles_im: [float64x2_t; 6],
@@ -692,7 +692,7 @@ boilerplate_fft_fcma_f64_butterfly!(FcmaF64Butterfly13, 13, |this: &FcmaF64Butte
 impl<T: FftNum> FcmaF64Butterfly13<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(13, direction);
         unsafe {Self {
@@ -817,7 +817,7 @@ impl<T: FftNum> FcmaF64Butterfly13<T> {
     }
 }
 
-struct FcmaF32Butterfly17<T> {
+pub struct FcmaF32Butterfly17<T> {
     direction: FftDirection,
     twiddles_re: [float32x4_t; 8],
     twiddles_im: [float32x4_t; 8],
@@ -828,7 +828,7 @@ boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly17, 17, |this: &FcmaF32Butte
 impl<T: FftNum> FcmaF32Butterfly17<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(17, direction);
         Self {
@@ -1066,7 +1066,7 @@ impl<T: FftNum> FcmaF32Butterfly17<T> {
     }
 }
 
-struct FcmaF64Butterfly17<T> {
+pub struct FcmaF64Butterfly17<T> {
     direction: FftDirection,
     twiddles_re: [float64x2_t; 8],
     twiddles_im: [float64x2_t; 8],
@@ -1077,7 +1077,7 @@ boilerplate_fft_fcma_f64_butterfly!(FcmaF64Butterfly17, 17, |this: &FcmaF64Butte
 impl<T: FftNum> FcmaF64Butterfly17<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(17, direction);
         unsafe {Self {
@@ -1266,7 +1266,7 @@ impl<T: FftNum> FcmaF64Butterfly17<T> {
     }
 }
 
-struct FcmaF32Butterfly19<T> {
+pub struct FcmaF32Butterfly19<T> {
     direction: FftDirection,
     twiddles_re: [float32x4_t; 9],
     twiddles_im: [float32x4_t; 9],
@@ -1277,7 +1277,7 @@ boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly19, 19, |this: &FcmaF32Butte
 impl<T: FftNum> FcmaF32Butterfly19<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(19, direction);
         Self {
@@ -1557,7 +1557,7 @@ impl<T: FftNum> FcmaF32Butterfly19<T> {
     }
 }
 
-struct FcmaF64Butterfly19<T> {
+pub struct FcmaF64Butterfly19<T> {
     direction: FftDirection,
     twiddles_re: [float64x2_t; 9],
     twiddles_im: [float64x2_t; 9],
@@ -1568,7 +1568,7 @@ boilerplate_fft_fcma_f64_butterfly!(FcmaF64Butterfly19, 19, |this: &FcmaF64Butte
 impl<T: FftNum> FcmaF64Butterfly19<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(19, direction);
         unsafe {Self {
@@ -1795,7 +1795,7 @@ impl<T: FftNum> FcmaF64Butterfly19<T> {
     }
 }
 
-struct FcmaF32Butterfly23<T> {
+pub struct FcmaF32Butterfly23<T> {
     direction: FftDirection,
     twiddles_re: [float32x4_t; 11],
     twiddles_im: [float32x4_t; 11],
@@ -1806,7 +1806,7 @@ boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly23, 23, |this: &FcmaF32Butte
 impl<T: FftNum> FcmaF32Butterfly23<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(23, direction);
         Self {
@@ -2182,7 +2182,7 @@ impl<T: FftNum> FcmaF32Butterfly23<T> {
     }
 }
 
-struct FcmaF64Butterfly23<T> {
+pub struct FcmaF64Butterfly23<T> {
     direction: FftDirection,
     twiddles_re: [float64x2_t; 11],
     twiddles_im: [float64x2_t; 11],
@@ -2193,7 +2193,7 @@ boilerplate_fft_fcma_f64_butterfly!(FcmaF64Butterfly23, 23, |this: &FcmaF64Butte
 impl<T: FftNum> FcmaF64Butterfly23<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(23, direction);
         unsafe {Self {
@@ -2508,7 +2508,7 @@ impl<T: FftNum> FcmaF64Butterfly23<T> {
     }
 }
 
-struct FcmaF32Butterfly29<T> {
+pub struct FcmaF32Butterfly29<T> {
     direction: FftDirection,
     twiddles_re: [float32x4_t; 14],
     twiddles_im: [float32x4_t; 14],
@@ -2519,7 +2519,7 @@ boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly29, 29, |this: &FcmaF32Butte
 impl<T: FftNum> FcmaF32Butterfly29<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(29, direction);
         Self {
@@ -3069,7 +3069,7 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
     }
 }
 
-struct FcmaF64Butterfly29<T> {
+pub struct FcmaF64Butterfly29<T> {
     direction: FftDirection,
     twiddles_re: [float64x2_t; 14],
     twiddles_im: [float64x2_t; 14],
@@ -3080,7 +3080,7 @@ boilerplate_fft_fcma_f64_butterfly!(FcmaF64Butterfly29, 29, |this: &FcmaF64Butte
 impl<T: FftNum> FcmaF64Butterfly29<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(29, direction);
         unsafe {Self {
@@ -3557,7 +3557,7 @@ impl<T: FftNum> FcmaF64Butterfly29<T> {
     }
 }
 
-struct FcmaF32Butterfly31<T> {
+pub struct FcmaF32Butterfly31<T> {
     direction: FftDirection,
     twiddles_re: [float32x4_t; 15],
     twiddles_im: [float32x4_t; 15],
@@ -3568,7 +3568,7 @@ boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly31, 31, |this: &FcmaF32Butte
 impl<T: FftNum> FcmaF32Butterfly31<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let twiddles = make_twiddles(31, direction);
         Self {
@@ -4184,7 +4184,7 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
     }
 }
 
-struct FcmaF64Butterfly31<T> {
+pub struct FcmaF64Butterfly31<T> {
     direction: FftDirection,
     twiddles_re: [float64x2_t; 15],
     twiddles_im: [float64x2_t; 15],
@@ -4195,7 +4195,7 @@ boilerplate_fft_fcma_f64_butterfly!(FcmaF64Butterfly31, 31, |this: &FcmaF64Butte
 impl<T: FftNum> FcmaF64Butterfly31<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let twiddles = make_twiddles(31, direction);
         unsafe {Self {

@@ -159,6 +159,15 @@ pub mod multidimensional;
 mod plan;
 mod twiddles;
 
+// Code shared by the SIMD backends: the `SimdVector` trait, the algorithms written against it, and
+// the planner arithmetic that goes with them
+#[cfg(any(
+    all(target_arch = "aarch64", feature = "neon"),
+    all(target_arch = "x86_64", feature = "sse"),
+    all(target_arch = "wasm32", feature = "wasm_simd"),
+))]
+mod simd;
+
 use num_complex::Complex;
 use num_traits::Zero;
 
@@ -494,7 +503,7 @@ pub use self::sse::sse_planner::FftPlannerSse;
 
 // Algorithms implemented to use Neon instructions. Only compiled on AArch64, and only compiled if the "neon" feature flag is set.
 #[cfg(all(target_arch = "aarch64", feature = "neon"))]
-mod neon;
+pub(crate) mod neon;
 
 // If we're not on AArch64, or if the "neon" feature was disabled, keep a stub implementation around that has the same API, but does nothing
 // That way, users can write code using the Neon planner and compile it on any platform

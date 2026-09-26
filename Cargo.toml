@@ -4,7 +4,7 @@ name = "rustfft"
 version = "6.4.1"
 authors = ["Allen Welkie <allen.welkie at gmail>", "Elliott Mahler <join.together at gmail>"]
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.86"
 
 description = "High-performance FFT library written in pure Rust."
 documentation = "https://docs.rs/rustfft/"
@@ -46,10 +46,61 @@ transpose = "0.2"
 primal-check = "0.3.3"
 
 [dev-dependencies]
-rand = "0.8"
-pastey = "0.2"
-getrandom = {version = "^0.2", features = ["js"]}
+rand = { version = "0.9", default-features = false, features = ["std", "std_rng"] }
 wasm-bindgen-test = "^0.3.36"
+
+criterion = { version = "0.8", default-features = false }
+
+[target.'cfg(all(target_arch = "wasm32", target_os = "wasi", target_env = "p2"))'.dev-dependencies]
+getrandom = "=0.3.1"
+
+[[bench]]
+name = "bench_check_neon"
+harness = false
+
+[[bench]]
+name = "bench_check_scalar"
+harness = false
+
+[[bench]]
+name = "bench_check_sse"
+harness = false
+
+[[bench]]
+name = "bench_compare_scalar_neon"
+harness = false
+
+[[bench]]
+name = "bench_compare_scalar_sse_avx"
+harness = false
+
+[[bench]]
+name = "bench_compare_scalar_wasm_simd"
+harness = false
+
+[[bench]]
+name = "bench_rustfft"
+harness = false
+
+[[bench]]
+name = "bench_rustfft_neon"
+harness = false
+
+[[bench]]
+name = "bench_rustfft_scalar"
+harness = false
+
+[[bench]]
+name = "bench_rustfft_sse"
+harness = false
+
+[[bench]]
+name = "bench_rustfft_wasm_simd"
+harness = false
+
+[[bench]]
+name = "compare_3n2m_strategies"
+harness = false
 
 # Compares the Neon and FCMA backends against each other. Needs the nightly-only "fcma" feature,
 # and a CPU implementing ARMv8.3-A:
@@ -57,3 +108,4 @@ wasm-bindgen-test = "^0.3.36"
 [[bench]]
 name = "bench_compare_neon_fcma"
 required-features = ["fcma"]
+harness = false

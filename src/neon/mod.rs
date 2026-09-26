@@ -7,8 +7,9 @@ mod neon_vector;
 pub mod neon_butterflies;
 pub mod neon_prime_butterflies;
 pub mod neon_radix4;
+pub mod neon_radixn;
 
-mod neon_utils;
+pub(crate) mod neon_utils;
 
 pub mod neon_planner;
 
