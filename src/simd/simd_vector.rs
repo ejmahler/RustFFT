@@ -64,6 +64,56 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
     unsafe fn column_butterfly6(bf: &Self::Butterfly6, rows: [Self; 6]) -> [Self; 6];
     unsafe fn column_butterfly7(bf: &Self::Butterfly7, rows: [Self; 7]) -> [Self; 7];
 
+    /// One cross-FFT layer over `data`, each taking the precomputed butterfly data for its radix.
+    ///
+    /// These are trait methods, rather than calls to `cross_layer_chunks` with the butterfly passed
+    /// as a closure written in the shared algorithm, because the closure has to be *created* inside
+    /// a function carrying the backend's `#[target_feature]`. A closure inherits the target
+    /// features of the function it is written in, and nothing else propagates them: one created
+    /// outside such a function is compiled without the feature, and on a target where the backend's
+    /// instruction set is not in the baseline, wasm's `simd128` and aarch64's `fcma` both being
+    /// examples, every intrinsic reached from it then becomes an out-of-line call.
+    ///
+    /// Relying on `#[inline(always)]` to pull the layer up into the `fft_helper_*` boundary instead
+    /// does not work, because the chunk closure that boundary takes is itself created outside it.
+    /// That is what made wasm_simd 12x slower than the old WASM Radix4. Each backend's impl here is
+    /// a single call, so the whole layer loop lands inside the feature whatever the inliner decides.
+    unsafe fn cross_layer2(
+        data: &mut [Complex<Self::ScalarType>],
+        twiddles: &[Self],
+        num_columns: usize,
+    );
+    unsafe fn cross_layer3(
+        data: &mut [Complex<Self::ScalarType>],
+        twiddles: &[Self],
+        num_columns: usize,
+        bf: &Self::Butterfly3,
+    );
+    unsafe fn cross_layer4(
+        data: &mut [Complex<Self::ScalarType>],
+        twiddles: &[Self],
+        num_columns: usize,
+        rotation: Self::Rotation,
+    );
+    unsafe fn cross_layer5(
+        data: &mut [Complex<Self::ScalarType>],
+        twiddles: &[Self],
+        num_columns: usize,
+        bf: &Self::Butterfly5,
+    );
+    unsafe fn cross_layer6(
+        data: &mut [Complex<Self::ScalarType>],
+        twiddles: &[Self],
+        num_columns: usize,
+        bf: &Self::Butterfly6,
+    );
+    unsafe fn cross_layer7(
+        data: &mut [Complex<Self::ScalarType>],
+        twiddles: &[Self],
+        num_columns: usize,
+        bf: &Self::Butterfly7,
+    );
+
     /// The three `fft_helper_*` wrappers from the backend's `*_common.rs`, which run the whole
     /// chunk loop with the backend's target feature enabled so that things like loading twiddle
     /// factor registers can be lifted out of the loop.
@@ -90,4 +140,102 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
         required_scratch: usize,
         chunk_fn: impl FnMut(&mut [E], &mut [E]),
     );
+}
+
+/// The `SimdVector::cross_layer*` impls. Every backend's are the same single call to
+/// `cross_layer_chunks` and differ only in the attribute they carry, so each backend invokes this
+/// once per vector type inside its `impl` and passes that attribute. A backend whose instruction
+/// set is not in the target baseline has to pass its `#[target_feature]`, so that the butterfly
+/// closures written below inherit it; see the trait methods for why. One whose set is in the
+/// baseline passes `#[inline(always)]` instead, which leaves the layer fully inlined as before.
+macro_rules! simd_vector_cross_layers {
+    ($(#[$attr:meta])*) => {
+        $(#[$attr])*
+        unsafe fn cross_layer2(
+            data: &mut [num_complex::Complex<Self::ScalarType>],
+            twiddles: &[Self],
+            num_columns: usize,
+        ) {
+            crate::simd::simd_radixn::cross_layer_chunks::<Self, 2, _>(
+                data,
+                twiddles,
+                num_columns,
+                |rows| <Self as crate::simd::simd_vector::SimdVector>::column_butterfly2(rows),
+            )
+        }
+        $(#[$attr])*
+        unsafe fn cross_layer3(
+            data: &mut [num_complex::Complex<Self::ScalarType>],
+            twiddles: &[Self],
+            num_columns: usize,
+            bf: &Self::Butterfly3,
+        ) {
+            crate::simd::simd_radixn::cross_layer_chunks::<Self, 3, _>(
+                data,
+                twiddles,
+                num_columns,
+                |rows| <Self as crate::simd::simd_vector::SimdVector>::column_butterfly3(bf, rows),
+            )
+        }
+        $(#[$attr])*
+        unsafe fn cross_layer4(
+            data: &mut [num_complex::Complex<Self::ScalarType>],
+            twiddles: &[Self],
+            num_columns: usize,
+            rotation: Self::Rotation,
+        ) {
+            crate::simd::simd_radixn::cross_layer_chunks::<Self, 4, _>(
+                data,
+                twiddles,
+                num_columns,
+                |rows| {
+                    <Self as crate::simd::simd_vector::SimdVector>::column_butterfly4(
+                        rows, rotation,
+                    )
+                },
+            )
+        }
+        $(#[$attr])*
+        unsafe fn cross_layer5(
+            data: &mut [num_complex::Complex<Self::ScalarType>],
+            twiddles: &[Self],
+            num_columns: usize,
+            bf: &Self::Butterfly5,
+        ) {
+            crate::simd::simd_radixn::cross_layer_chunks::<Self, 5, _>(
+                data,
+                twiddles,
+                num_columns,
+                |rows| <Self as crate::simd::simd_vector::SimdVector>::column_butterfly5(bf, rows),
+            )
+        }
+        $(#[$attr])*
+        unsafe fn cross_layer6(
+            data: &mut [num_complex::Complex<Self::ScalarType>],
+            twiddles: &[Self],
+            num_columns: usize,
+            bf: &Self::Butterfly6,
+        ) {
+            crate::simd::simd_radixn::cross_layer_chunks::<Self, 6, _>(
+                data,
+                twiddles,
+                num_columns,
+                |rows| <Self as crate::simd::simd_vector::SimdVector>::column_butterfly6(bf, rows),
+            )
+        }
+        $(#[$attr])*
+        unsafe fn cross_layer7(
+            data: &mut [num_complex::Complex<Self::ScalarType>],
+            twiddles: &[Self],
+            num_columns: usize,
+            bf: &Self::Butterfly7,
+        ) {
+            crate::simd::simd_radixn::cross_layer_chunks::<Self, 7, _>(
+                data,
+                twiddles,
+                num_columns,
+                |rows| <Self as crate::simd::simd_vector::SimdVector>::column_butterfly7(bf, rows),
+            )
+        }
+    };
 }

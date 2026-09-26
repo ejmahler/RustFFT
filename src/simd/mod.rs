@@ -6,4 +6,5 @@
 #![allow(dead_code)]
 
 pub mod simd_radixn;
+#[macro_use]
 pub mod simd_vector;

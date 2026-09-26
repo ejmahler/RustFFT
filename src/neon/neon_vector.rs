@@ -697,6 +697,7 @@ impl crate::simd::simd_vector::SimdVector for float64x2_t {
         bf.perform_fft_direct(rows)
     }
 
+    simd_vector_cross_layers!(#[inline(always)]);
     neon_vector_fft_helpers!();
 }
 
@@ -780,6 +781,7 @@ impl crate::simd::simd_vector::SimdVector for float32x4_t {
         bf.perform_parallel_fft_direct(rows)
     }
 
+    simd_vector_cross_layers!(#[inline(always)]);
     neon_vector_fft_helpers!();
 }
 
