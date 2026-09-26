@@ -513,7 +513,7 @@ pub mod test_bodies {
     use super::*;
     use crate::test_utils::{check_fft_algorithm, construct_base};
     use num_traits::Float;
-    use rand::distributions::uniform::SampleUniform;
+    use rand::distr::uniform::SampleUniform;
 
     const FACTOR_LIST: &[RadixFactor] = &[
         RadixFactor::Factor2,
