@@ -1,12 +1,11 @@
-//! The body of the SIMD `RadixN` implementations, shared by every SIMD backend.
+//! The body of the SIMD `Radix4` implementations, shared by every SIMD backend.
 //!
-//! This mirrors `src/algorithm/radixn.rs`: one flat transpose down to a base FFT, then a stack of
-//! in-place cross-FFT layers over a single packed twiddle array. The only difference is that the
-//! cross-FFT layers use SIMD column butterflies instead of the scalar ones, so a whole vector of
-//! columns is processed per butterfly call.
+//! This is essentially `SimdRadixN`, monomorphized for the case where all factors are 4. The 
+//! reduced branching and reduced memory usage squeezes out a little more performance for the very
+//! common case of power-of-two FFTs.
 //!
 //! Everything here is generic over `SimdVector`, from `simd_vector.rs`. A backend implements that
-//! trait once per vector type and gets the algorithm, so `SimdRadixN` is the only copy of it.
+//! trait once per vector type and gets the algorithm, so `SimdRadix4` is the only copy of it.
 //!
 //! Because a column butterfly consumes `COMPLEX_PER_VECTOR` columns at a time, the column count at
 //! every layer has to be a whole number of vectors. The column count starts at `base_len` and only
