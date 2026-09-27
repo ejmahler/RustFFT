@@ -261,9 +261,9 @@ impl<T: FftNum> FftPlannerSse<T> {
             Recipe::Radix4 { k, base_fft } => {
                 let base_fft = self.build_fft(&base_fft, direction);
                 if id_t == id_f32 {
-                    Arc::new(SseRadix4::<f32, T>::new(*k, base_fft).unwrap()) as Arc<dyn Fft<T>>
+                    Arc::new(SseRadix4::<f32, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
                 } else if id_t == id_f64 {
-                    Arc::new(SseRadix4::<f64, T>::new(*k, base_fft).unwrap()) as Arc<dyn Fft<T>>
+                    Arc::new(SseRadix4::<f64, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
                 } else {
                     panic!("Not f32 or f64");
                 }

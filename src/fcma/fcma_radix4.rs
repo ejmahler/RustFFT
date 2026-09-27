@@ -15,8 +15,8 @@ pub type FcmaRadix4<S, T> = SimdRadix4<<S as FcmaNum>::SimdVectorType, T>;
 
 #[cfg(test)]
 mod unit_tests {
-    use crate::simd::simd_radix4::test_bodies;
     use super::super::fcma_vector::{FcmaSimdVector32, FcmaSimdVector64};
+    use crate::simd::simd_radix4::test_bodies;
 
     #[test]
     fn test_fcma_radix4_f64() {

@@ -455,7 +455,7 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize, F>(
     let tw_stride = RADIX - 1;
 
     debug_assert!(twiddles.len() >= num_vector_columns * tw_stride);
-    
+
     let (unroll_count, unroll_remainder) = (num_vector_columns / 2, num_vector_columns % 2);
     for i in 0..unroll_count {
         let vcol = i * 2;
