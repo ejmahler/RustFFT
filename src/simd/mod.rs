@@ -1,10 +1,7 @@
-//! Code shared by every SIMD backend, written once against the `SimdVector` trait.
-//!
-//! Nothing here is reachable from the planners yet: wiring `SimdRadixN` into them is a separate
-//! PR, so that the plan changes can be measured on their own. Until then the whole module is
-//! only exercised by its own tests.
-#![allow(dead_code)]
-
+// SimdRadixN isn't used by the planner yet, so don't throw warnings about unused code
+#[allow(dead_code)]
+pub mod simd_radix4;
+#[allow(dead_code)]
 pub mod simd_radixn;
 #[macro_use]
 pub mod simd_vector;
