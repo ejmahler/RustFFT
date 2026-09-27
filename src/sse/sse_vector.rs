@@ -694,6 +694,7 @@ impl crate::simd::simd_vector::SimdVector for __m128d {
         bf.perform_fft_direct(rows)
     }
 
+    simd_vector_cross_layer!(#[target_feature(enable = "sse4.1")]);
     sse_vector_fft_helpers!();
 }
 
@@ -781,5 +782,6 @@ impl crate::simd::simd_vector::SimdVector for __m128 {
         bf.perform_parallel_fft_direct(rows)
     }
 
+    simd_vector_cross_layer!(#[target_feature(enable = "sse4.1")]);
     sse_vector_fft_helpers!();
 }

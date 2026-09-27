@@ -907,6 +907,7 @@ impl crate::simd::simd_vector::SimdVector for WasmVector64 {
         bf.perform_fft_direct(rows)
     }
 
+    simd_vector_cross_layer!(#[target_feature(enable = "simd128")]);
     wasm_simd_vector_fft_helpers!();
 }
 
@@ -1000,6 +1001,7 @@ impl crate::simd::simd_vector::SimdVector for WasmVector32 {
         bf.perform_parallel_fft_direct(rows)
     }
 
+    simd_vector_cross_layer!(#[target_feature(enable = "simd128")]);
     wasm_simd_vector_fft_helpers!();
 }
 
