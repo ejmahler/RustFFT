@@ -1,6 +1,6 @@
 //! The body of the SIMD `Radix4` implementations, shared by every SIMD backend.
 //!
-//! This is essentially `SimdRadixN`, monomorphized for the case where all factors are 4. The 
+//! This is essentially `SimdRadixN`, monomorphized for the case where all factors are 4. The
 //! reduced branching and reduced memory usage squeezes out a little more performance for the very
 //! common case of power-of-two FFTs.
 //!
