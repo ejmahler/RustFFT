@@ -27,7 +27,7 @@ mod unit_tests {
     #[test]
     fn test_fcma_radix4_f32() {
         // f32 fits two complex per vector, so the base length has to be even
-        test_bodies::factor_pairs::<FcmaSimdVector32>(&[2, 4, 6]);
+        test_bodies::factor_pairs::<FcmaSimdVector32>(&[1, 2, 3, 4, 5, 6]);
     }
 
     #[test]

@@ -28,7 +28,7 @@ mod unit_tests {
     #[wasm_bindgen_test]
     fn test_wasm_simd_radix4_replacement_f32() {
         // f32 fits two complex per vector, so the base length has to be even
-        test_bodies::factor_pairs::<WasmVector32>(&[2, 4, 6]);
+        test_bodies::factor_pairs::<WasmVector32>(&[1, 2, 3, 4, 5, 6]);
     }
 
     #[wasm_bindgen_test]
