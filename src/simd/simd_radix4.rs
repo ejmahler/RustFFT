@@ -20,12 +20,12 @@ use num_complex::Complex;
 
 use crate::array_utils::{reverse_bits, workaround_transmute_mut};
 use crate::common::FftNum;
-use crate::simd::simd_radixn::{cross_layer_chunks, table_transpose};
+use crate::simd::simd_radixn::table_transpose;
 use crate::{Direction, Fft, FftDirection, Length};
 
 use super::simd_vector::SimdVector;
 
-const RADIX : usize = 4;
+const RADIX: usize = 4;
 
 /// FFT algorithm for lengths that factor into small radixes, SIMD accelerated version.
 /// This is designed to be used via a Planner, and not created directly.
@@ -166,9 +166,9 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
             let num_columns = cross_fft_len;
             cross_fft_len *= RADIX;
 
-            cross_layer_chunks::<V, RADIX, _>(out, layer_twiddles, num_columns, |v| {
-                V::column_butterfly4(v, self.rotation)
-            });
+            // Dispatch once per layer rather than once per chunk, so each layer runs a single
+            // monomorphized loop over its chunks. Mirrors the scalar `RadixN`.
+            V::cross_layer_radix4(out, layer_twiddles, num_columns, &self.rotation);
 
             // skip past all the twiddle factors used in this layer
             let twiddle_offset = (num_columns / V::COMPLEX_PER_VECTOR) * (RADIX - 1);

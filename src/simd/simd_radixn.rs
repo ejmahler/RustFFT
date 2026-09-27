@@ -25,7 +25,7 @@ use crate::{Direction, Fft, FftDirection, Length};
 use super::simd_vector::SimdVector;
 
 /// The per-layer cross-FFT kernels, holding whatever precomputed state each radix needs.
-pub(crate) enum InternalRadixFactor<V: SimdVector> {
+pub enum InternalRadixFactor<V: SimdVector> {
     Factor2,
     Factor3(V::Butterfly3),
     Factor4(V::Rotation),
@@ -244,7 +244,7 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
 
             // Dispatch once per layer rather than once per chunk, so each layer runs a single
             // monomorphized loop over its chunks. Mirrors the scalar `RadixN`.
-            V::cross_layer(out, layer_twiddles, num_columns, factor);
+            V::cross_layer_radixn(out, layer_twiddles, num_columns, factor);
 
             // skip past all the twiddle factors used in this layer
             let twiddle_offset = (num_columns / V::COMPLEX_PER_VECTOR) * (factor.radix() - 1);
@@ -434,13 +434,18 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize, F>(
 
     debug_assert!(twiddles.len() >= num_vector_columns * tw_stride);
 
-    
     // It would be ideal to declare gather_and_twiddle() as a lambda and use std::array::from_fn inside,
     // but that approach failed to inline on wasm simd, causing a horrible performance regression
     #[inline(always)]
-    unsafe fn gather_and_twiddle<V: SimdVector, const RADIX: usize>(data: &[Complex<V::ScalarType>], twiddles: &[V], num_columns: usize, idx: usize, tw_base: usize) -> [V; RADIX] {
+    unsafe fn gather_and_twiddle<V: SimdVector, const RADIX: usize>(
+        data: &[Complex<V::ScalarType>],
+        twiddles: &[V],
+        num_columns: usize,
+        idx: usize,
+        tw_base: usize,
+    ) -> [V; RADIX] {
         let mut arr = [V::zero(); RADIX];
-        
+
         // The row-0 twiddle is always 1, so it's neither stored nor applied.
         arr[0] = V::load(data, idx);
 
@@ -457,7 +462,13 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize, F>(
         let idx = vcol * complex_per_vector;
 
         let a = gather_and_twiddle(data, twiddles, num_columns, idx, vcol * tw_stride);
-        let b = gather_and_twiddle(data, twiddles, num_columns, idx + complex_per_vector, (vcol + 1) * tw_stride);
+        let b = gather_and_twiddle(
+            data,
+            twiddles,
+            num_columns,
+            idx + complex_per_vector,
+            (vcol + 1) * tw_stride,
+        );
 
         let a = butterfly(a);
         let b = butterfly(b);
@@ -472,7 +483,13 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize, F>(
     if unroll_remainder > 0 {
         let vcol = unroll_count * 2;
         let idx = vcol * complex_per_vector;
-        let a = butterfly(gather_and_twiddle(data, twiddles, num_columns, idx, vcol * tw_stride));
+        let a = butterfly(gather_and_twiddle(
+            data,
+            twiddles,
+            num_columns,
+            idx,
+            vcol * tw_stride,
+        ));
         for (r, a_row) in a.iter().enumerate() {
             V::store(data, *a_row, idx + r * num_columns);
         }

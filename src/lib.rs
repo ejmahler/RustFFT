@@ -396,12 +396,12 @@ pub use self::avx::avx_planner::FftPlannerAvx;
 
 // Algorithms implemented to use SSE4.1 instructions. Only compiled on x86_64, and only compiled if the "sse" feature flag is set.
 #[cfg(all(target_arch = "x86_64", feature = "sse"))]
-mod sse;
+pub mod sse;
 
 // If we're not on x86_64, or if the "sse" feature was disabled, keep a stub implementation around that has the same API, but does nothing
 // That way, users can write code using the SSE planner and compile it on any platform
 #[cfg(not(all(target_arch = "x86_64", feature = "sse")))]
-mod sse {
+pub mod sse {
     pub mod sse_planner {
         use crate::{Fft, FftDirection, FftNum};
         use std::sync::Arc;
