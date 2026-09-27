@@ -35,6 +35,7 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
     type Butterfly6: Send + Sync;
     type Butterfly7: Send + Sync;
 
+    unsafe fn zero() -> Self;
     unsafe fn load(data: &[Complex<Self::ScalarType>], index: usize) -> Self;
     unsafe fn store(data: &mut [Complex<Self::ScalarType>], value: Self, index: usize);
 
@@ -79,11 +80,17 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
     /// That is what made wasm_simd 12x slower than the old WASM Radix4. Every backend implements
     /// this with `simd_vector_cross_layer!`, so the whole layer lands inside the feature whatever
     /// the inliner decides, at the cost of one non-inlinable call per layer.
-    unsafe fn cross_layer(
+    unsafe fn cross_layer_radixn(
         data: &mut [Complex<Self::ScalarType>],
         twiddles: &[Self],
         num_columns: usize,
         factor: &InternalRadixFactor<Self>,
+    );
+    unsafe fn cross_layer_radix4(
+        data: &mut [Complex<Self::ScalarType>],
+        twiddles: &[Self],
+        num_columns: usize,
+        rotation: &Self::Rotation,
     );
 
     /// The three `fft_helper_*` wrappers from the backend's `*_common.rs`, which run the whole
@@ -123,7 +130,7 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
 macro_rules! simd_vector_cross_layer {
     ($(#[$attr:meta])*) => {
         $(#[$attr])*
-        unsafe fn cross_layer(
+        unsafe fn cross_layer_radixn(
             data: &mut [num_complex::Complex<Self::ScalarType>],
             twiddles: &[Self],
             num_columns: usize,
@@ -164,6 +171,19 @@ macro_rules! simd_vector_cross_layer {
                     })
                 }
             }
+        }
+        $(#[$attr])*
+        unsafe fn cross_layer_radix4(
+            data: &mut [num_complex::Complex<Self::ScalarType>],
+            twiddles: &[Self],
+            num_columns: usize,
+            rotation: &Self::Rotation,
+        ) {
+            use crate::simd::simd_radixn::cross_layer_chunks;
+            use crate::simd::simd_vector::SimdVector as Sv;
+            cross_layer_chunks::<Self, 4, _>(data, twiddles, num_columns, |rows| {
+                <Self as Sv>::column_butterfly4(rows, *rotation)
+            })
         }
     };
 }

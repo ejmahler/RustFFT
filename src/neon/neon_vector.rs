@@ -629,6 +629,10 @@ impl crate::simd::simd_vector::SimdVector for float64x2_t {
     type Butterfly7 = NeonF64Butterfly7<f64>;
 
     #[inline(always)]
+    unsafe fn zero() -> Self {
+        vdupq_n_f64(0.0)
+    }
+    #[inline(always)]
     unsafe fn load(data: &[Complex<f64>], index: usize) -> Self {
         data.load_complex(index)
     }
@@ -712,6 +716,10 @@ impl crate::simd::simd_vector::SimdVector for float32x4_t {
     type Butterfly6 = NeonF32Butterfly6<f32>;
     type Butterfly7 = NeonF32Butterfly7<f32>;
 
+    #[inline(always)]
+    unsafe fn zero() -> Self {
+        vdupq_n_f32(0.0)
+    }
     #[inline(always)]
     unsafe fn load(data: &[Complex<f32>], index: usize) -> Self {
         data.load_complex(index)

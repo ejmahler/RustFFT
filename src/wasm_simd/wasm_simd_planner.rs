@@ -5,6 +5,7 @@ use crate::algorithm::{
     MixedRadixSmall, RadersAlgorithm,
 };
 use crate::math_utils::PrimeFactor;
+use crate::wasm_simd::wasm_simd_radix4::WasmSimdRadix4;
 use crate::wasm_simd::*;
 use crate::{fft_cache::FftCache, math_utils::PrimeFactors, Fft, FftDirection, FftNum};
 use std::{any::TypeId, collections::HashMap, sync::Arc};
