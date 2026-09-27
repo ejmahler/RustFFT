@@ -1,9 +1,11 @@
 use num_integer::gcd;
 use std::any::TypeId;
+use std::arch::x86_64::{__m128, __m128d};
 use std::collections::HashMap;
 
 use std::sync::Arc;
 
+use crate::simd::simd_radix4::SimdRadix4;
 use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
 
 use crate::algorithm::*;
@@ -261,9 +263,9 @@ impl<T: FftNum> FftPlannerSse<T> {
             Recipe::Radix4 { k, base_fft } => {
                 let base_fft = self.build_fft(&base_fft, direction);
                 if id_t == id_f32 {
-                    Arc::new(SseRadix4::<f32, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
+                    Arc::new(SimdRadix4::<__m128, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
                 } else if id_t == id_f64 {
-                    Arc::new(SseRadix4::<f64, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
+                    Arc::new(SimdRadix4::<__m128d, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
                 } else {
                     panic!("Not f32 or f64");
                 }
