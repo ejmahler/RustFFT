@@ -2,8 +2,6 @@
 #[allow(dead_code)]
 pub mod simd_radix4;
 #[allow(dead_code)]
-pub mod simd_radix4_otf;
-#[allow(dead_code)]
 pub mod simd_radixn;
 #[macro_use]
 pub mod simd_vector;

@@ -414,6 +414,28 @@ pub fn table_transpose<T: Copy, const D: usize>(
     }
 }
 
+// It would be ideal to declare gather_and_twiddle() as a lambda and use std::array::from_fn inside,
+// but that approach failed to inline on wasm simd, causing a horrible performance regression
+#[inline(always)]
+unsafe fn gather_and_twiddle<V: SimdVector, const RADIX: usize>(
+    data: &[Complex<V::ScalarType>],
+    twiddles: &[V],
+    num_columns: usize,
+    idx: usize,
+    tw_base: usize,
+) -> [V; RADIX] {
+    let mut arr = [V::zero(); RADIX];
+
+    // The row-0 twiddle is always 1, so it's neither stored nor applied.
+    arr[0] = V::load(data, idx);
+
+    for r in 1..RADIX {
+        let v = V::load(data, idx + r * num_columns);
+        arr[r] = V::mul_complex(v, *twiddles.get_unchecked(tw_base + r - 1));
+    }
+    arr
+}
+
 /// One cross-FFT layer: for each vector of columns, gather RADIX rows strided by `num_columns`,
 /// apply the twiddles, run the column butterfly, scatter back.
 ///
@@ -433,29 +455,7 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize, F>(
     let tw_stride = RADIX - 1;
 
     debug_assert!(twiddles.len() >= num_vector_columns * tw_stride);
-
-    // It would be ideal to declare gather_and_twiddle() as a lambda and use std::array::from_fn inside,
-    // but that approach failed to inline on wasm simd, causing a horrible performance regression
-    #[inline(always)]
-    unsafe fn gather_and_twiddle<V: SimdVector, const RADIX: usize>(
-        data: &[Complex<V::ScalarType>],
-        twiddles: &[V],
-        num_columns: usize,
-        idx: usize,
-        tw_base: usize,
-    ) -> [V; RADIX] {
-        let mut arr = [V::zero(); RADIX];
-
-        // The row-0 twiddle is always 1, so it's neither stored nor applied.
-        arr[0] = V::load(data, idx);
-
-        for r in 1..RADIX {
-            let v = V::load(data, idx + r * num_columns);
-            arr[r] = V::mul_complex(v, *twiddles.get_unchecked(tw_base + r - 1));
-        }
-        arr
-    }
-
+    
     let (unroll_count, unroll_remainder) = (num_vector_columns / 2, num_vector_columns % 2);
     for i in 0..unroll_count {
         let vcol = i * 2;

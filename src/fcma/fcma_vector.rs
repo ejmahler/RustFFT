@@ -679,6 +679,10 @@ impl crate::simd::simd_vector::SimdVector for FcmaSimdVector64 {
     type Butterfly7 = FcmaF64Butterfly7<f64>;
 
     #[inline(always)]
+    unsafe fn zero() -> Self {
+        Self(vdupq_n_f64(0.0))
+    }
+    #[inline(always)]
     unsafe fn load(data: &[Complex<f64>], index: usize) -> Self {
         Self(data.load_complex(index))
     }
@@ -767,6 +771,10 @@ impl crate::simd::simd_vector::SimdVector for FcmaSimdVector32 {
     type Butterfly6 = FcmaF32Butterfly6<f32>;
     type Butterfly7 = FcmaF32Butterfly7<f32>;
 
+    #[inline(always)]
+    unsafe fn zero() -> Self {
+        Self(vdupq_n_f32(0.0))
+    }
     #[inline(always)]
     unsafe fn load(data: &[Complex<f32>], index: usize) -> Self {
         Self(data.load_complex(index))
