@@ -34,7 +34,7 @@ use rustfft::Fft;
 use std::sync::Arc;
 mod config;
 
-use criterion::{Bencher, Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, Bencher, Criterion};
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
@@ -527,6 +527,6 @@ fn criterion_benchmark(c: &mut Criterion) {
 criterion_group! {
     name = benches;
     config = config::fast();
-    targets = criterion_benchmark, criterion_benchmark_radix4
+    targets = criterion_benchmark
 }
 criterion_main!(benches);
