@@ -186,6 +186,9 @@ fn sse_planned64_composite_044100(b: &mut Bencher) { bench_planned_f64(b,  44100
 fn sse_planned64_composite_048000(b: &mut Bencher) { bench_planned_f64(b,  48000); }
 fn sse_planned64_composite_046656(b: &mut Bencher) { bench_planned_f64(b,  46656); }
 
+
+
+
 fn criterion_benchmark(c: &mut Criterion) {
     config::register_benchmarks!(
         c,
