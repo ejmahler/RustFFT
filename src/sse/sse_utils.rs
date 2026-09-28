@@ -217,7 +217,7 @@ impl Rotate90F64 {
 
 #[cfg(test)]
 mod unit_tests {
-    use crate::sse::sse_vector::SseVector;
+    use crate::simd::simd_vector::SimdVector;
 
     use super::*;
     use num_complex::Complex;
@@ -227,7 +227,7 @@ mod unit_tests {
         unsafe {
             let right = _mm_set_pd(1.0, 2.0);
             let left = _mm_set_pd(5.0, 7.0);
-            let res = SseVector::mul_complex(left, right);
+            let res = SimdVector::mul_complex(left, right);
             let expected = _mm_set_pd(2.0 * 5.0 + 1.0 * 7.0, 2.0 * 7.0 - 1.0 * 5.0);
             assert_eq!(
                 std::mem::transmute::<__m128d, Complex<f64>>(res),
@@ -246,7 +246,7 @@ mod unit_tests {
 
             let nbr2 = _mm_set_ps(val4.im, val4.re, val3.im, val3.re);
             let nbr1 = _mm_set_ps(val2.im, val2.re, val1.im, val1.re);
-            let res = SseVector::mul_complex(nbr1, nbr2);
+            let res = SimdVector::mul_complex(nbr1, nbr2);
             let res = std::mem::transmute::<__m128, [Complex<f32>; 2]>(res);
             let expected = [val1 * val3, val2 * val4];
             assert_eq!(res, expected);

@@ -1,17 +1,7 @@
 //! The SSE side of `SimdRadixN`.
 //!
 //! The algorithm itself lives in `src/simd/simd_radixn.rs`, shared by every SIMD backend, and the
-//! `SimdVector` impls it runs on are in `sse_vector.rs`. All that is left here is the type alias
-//! and the tests.
-
-use crate::simd::simd_radixn::SimdRadixN;
-
-use super::SseNum;
-
-/// FFT algorithm for lengths that factor into small radixes, SSE accelerated version.
-/// This is designed to be used via a Planner, and not created directly.
-#[allow(dead_code)]
-pub type SseRadixN<S, T> = SimdRadixN<<S as SseNum>::VectorType, T>;
+//! `SimdVector` impls it runs on are in `sse_vector.rs`. All that is left here is the tests.
 
 #[cfg(test)]
 mod unit_tests {

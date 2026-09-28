@@ -1,12 +1,11 @@
 use core::arch::aarch64::*;
 use num_complex::Complex;
 use num_traits::Zero;
-use std::fmt::Debug;
-use std::ops::{Deref, DerefMut};
 
-use crate::{array_utils::DoubleBuf, twiddles, FftDirection};
+use crate::simd::simd_vector::SimdVector;
+use crate::{twiddles, FftDirection};
 
-use super::FcmaNum;
+use crate::simd::simd_array::SimdComplexArray;
 
 // Read these indexes from an FcmaArray and build an array of simd vectors.
 // Takes a name of a vector to read from, and a list of indexes to read.
@@ -17,17 +16,17 @@ use super::FcmaNum;
 // is equivalent to:
 // ```
 // let values = [
-//     input.load_complex(0),
-//     input.load_complex(1),
-//     input.load_complex(2),
-//     input.load_complex(3),
+//     input.load(0),
+//     input.load(1),
+//     input.load(2),
+//     input.load(3),
 // ];
 // ```
 macro_rules! read_complex_to_array {
     ($input:ident, { $($idx:literal),* }) => {
         [
         $(
-            $input.load_complex($idx),
+            $input.load($idx),
         )*
         ]
     }
@@ -42,17 +41,17 @@ macro_rules! read_complex_to_array {
 // is equivalent to:
 // ```
 // let values = [
-//     input.load1_complex(0),
-//     input.load1_complex(1),
-//     input.load1_complex(2),
-//     input.load1_complex(3),
+//     input.load1_lo(0),
+//     input.load1_lo(1),
+//     input.load1_lo(2),
+//     input.load1_lo(3),
 // ];
 // ```
 macro_rules! read_partial1_complex_to_array {
     ($input:ident, { $($idx:literal),* }) => {
         [
         $(
-            $input.load1_complex($idx),
+            $input.load1_lo($idx),
         )*
         ]
     }
@@ -67,16 +66,16 @@ macro_rules! read_partial1_complex_to_array {
 // is equivalent to:
 // ```
 // let values = [
-//     output.store_complex(input[0], 0),
-//     output.store_complex(input[1], 1),
-//     output.store_complex(input[2], 2),
-//     output.store_complex(input[3], 3),
+//     output.store(input[0], 0),
+//     output.store(input[1], 1),
+//     output.store(input[2], 2),
+//     output.store(input[3], 3),
 // ];
 // ```
 macro_rules! write_complex_to_array {
     ($input:ident, $output:ident, { $($idx:literal),* }) => {
         $(
-            $output.store_complex($input[$idx], $idx);
+            $output.store($input[$idx], $idx);
         )*
     }
 }
@@ -90,16 +89,16 @@ macro_rules! write_complex_to_array {
 // is equivalent to:
 // ```
 // let values = [
-//     output.store_partial_lo_complex(input[0], 0),
-//     output.store_partial_lo_complex(input[1], 1),
-//     output.store_partial_lo_complex(input[2], 2),
-//     output.store_partial_lo_complex(input[3], 3),
+//     output.store1_lo(input[0], 0),
+//     output.store1_lo(input[1], 1),
+//     output.store1_lo(input[2], 2),
+//     output.store1_lo(input[3], 3),
 // ];
 // ```
 macro_rules! write_partial_lo_complex_to_array {
     ($input:ident, $output:ident, { $($idx:literal),* }) => {
         $(
-            $output.store_partial_lo_complex($input[$idx], $idx);
+            $output.store1_lo($input[$idx], $idx);
         )*
     }
 }
@@ -113,475 +112,23 @@ macro_rules! write_partial_lo_complex_to_array {
 // is equivalent to:
 // ```
 // let values = [
-//     output.store_complex(input[0], 0),
-//     output.store_complex(input[1], 2),
-//     output.store_complex(input[2], 4),
-//     output.store_complex(input[3], 6),
+//     output.store(input[0], 0),
+//     output.store(input[1], 2),
+//     output.store(input[2], 4),
+//     output.store(input[3], 6),
 // ];
 // ```
 macro_rules! write_complex_to_array_strided {
     ($input:ident, $output:ident, $stride:literal, { $($idx:literal),* }) => {
         $(
-            $output.store_complex($input[$idx], $idx*$stride);
+            $output.store($input[$idx], $idx*$stride);
         )*
     }
 }
 
 #[derive(Copy, Clone)]
-pub struct Rotation90<V: FcmaVector>(V);
-
-// A trait to hold the BVectorType and COMPLEX_PER_VECTOR associated data
-pub trait FcmaVector: Copy + Debug + Send + Sync {
-    const COMPLEX_PER_VECTOR: usize;
-
-    type ScalarType: FcmaNum<VectorType = Self>;
-
-    // loads of complex numbers
-    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
-    unsafe fn load_partial_lo_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
-    unsafe fn load1_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
-
-    // stores of complex numbers
-    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
-    unsafe fn store_partial_lo_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
-
-    // Keep this around even though it's unused - research went into how to do it, keeping it ensures that research doesn't need to be repeated
-    #[allow(unused)]
-    unsafe fn store_partial_hi_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
-
-    // math ops
-    unsafe fn neg(a: Self) -> Self;
-    unsafe fn add(a: Self, b: Self) -> Self;
-    unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self;
-
-    unsafe fn broadcast_scalar(value: Self::ScalarType) -> Self;
-
-    /// Generates a chunk of twiddle factors starting at (X,Y) and incrementing X `COMPLEX_PER_VECTOR` times.
-    /// The result will be [twiddle(x*y, len), twiddle((x+1)*y, len), twiddle((x+2)*y, len), ...] for as many complex numbers fit in a vector
-    unsafe fn make_mixedradix_twiddle_chunk(
-        x: usize,
-        y: usize,
-        len: usize,
-        direction: FftDirection,
-    ) -> Self;
-
-    /// Pairwise multiply the complex numbers in `left` with the complex numbers in `right`.
-    unsafe fn mul_complex(left: Self, right: Self) -> Self;
-
-    /// Constructs a Rotate90 object that will apply eithr a 90 or 270 degree rotationto the complex elements
-    unsafe fn make_rotate90(direction: FftDirection) -> Rotation90<Self>;
-
-    /// Rotates `values` and adds the result to `acc`. The FCMA instructions do the rotation and
-    /// the accumulation in one go, so this is cheaper than rotating and adding separately.
-    unsafe fn rotate90_and_add(direction: Rotation90<Self>, acc: Self, values: Self) -> Self;
-
-    /// Rotates `values` and subtracts the result from `acc`, see `rotate90_and_add`.
-    unsafe fn rotate90_and_sub(direction: Rotation90<Self>, acc: Self, values: Self) -> Self;
-
-    /// Rotates `b` by 90 degrees and multiplies it by the real number `a`, which must be
-    /// broadcast to both halves of every complex element. One FCMA instruction does the whole
-    /// thing, so the rotation is free.
-    unsafe fn mul_rotate90(a: Self, b: Self) -> Self;
-
-    /// Rotates `b` by 90 degrees, multiplies it by the real number `a`, and adds the result to
-    /// `acc`. See `mul_rotate90` for the requirement on `a`.
-    unsafe fn fmadd_rotate90(acc: Self, a: Self, b: Self) -> Self;
-
-    /// Rotates `b` by 90 degrees, multiplies it by the real number `a`, and subtracts the result
-    /// from `acc`. See `mul_rotate90` for the requirement on `a`.
-    unsafe fn nmadd_rotate90(acc: Self, a: Self, b: Self) -> Self;
-
-    /// Each of these Interprets the input as rows of a Self::COMPLEX_PER_VECTOR-by-N 2D array, and computes parallel butterflies down the columns of the 2D array
-    unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2];
-    unsafe fn column_butterfly4(rows: [Self; 4], rotation: Rotation90<Self>) -> [Self; 4];
-}
-
-impl FcmaVector for float32x4_t {
-    const COMPLEX_PER_VECTOR: usize = 2;
-
-    type ScalarType = f32;
-
-    #[inline(always)]
-    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
-        vld1q_f32(ptr as *const f32)
-    }
-
-    #[inline(always)]
-    unsafe fn load_partial_lo_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
-        let temp = vmovq_n_f32(0.0);
-        vreinterpretq_f32_u64(vld1q_lane_u64::<0>(
-            ptr as *const u64,
-            vreinterpretq_u64_f32(temp),
-        ))
-    }
-
-    #[inline(always)]
-    unsafe fn load1_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
-        vreinterpretq_f32_u64(vld1q_dup_u64(ptr as *const u64))
-    }
-
-    #[inline(always)]
-    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
-        vst1q_f32(ptr as *mut f32, data);
-    }
-
-    #[inline(always)]
-    unsafe fn store_partial_lo_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
-        let low = vget_low_f32(data);
-        vst1_f32(ptr as *mut f32, low);
-    }
-
-    #[inline(always)]
-    unsafe fn store_partial_hi_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
-        let high = vget_high_f32(data);
-        vst1_f32(ptr as *mut f32, high);
-    }
-
-    #[inline(always)]
-    unsafe fn neg(a: Self) -> Self {
-        vnegq_f32(a)
-    }
-    #[inline(always)]
-    unsafe fn add(a: Self, b: Self) -> Self {
-        vaddq_f32(a, b)
-    }
-    #[inline(always)]
-    unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self {
-        vfmaq_f32(acc, a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn broadcast_scalar(value: Self::ScalarType) -> Self {
-        vmovq_n_f32(value)
-    }
-
-    #[inline(always)]
-    unsafe fn make_mixedradix_twiddle_chunk(
-        x: usize,
-        y: usize,
-        len: usize,
-        direction: FftDirection,
-    ) -> Self {
-        let mut twiddle_chunk = [Complex::<f32>::zero(); Self::COMPLEX_PER_VECTOR];
-        for i in 0..Self::COMPLEX_PER_VECTOR {
-            twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
-        }
-
-        twiddle_chunk.as_slice().load_complex(0)
-    }
-
-    #[inline(always)]
-    unsafe fn mul_complex(left: Self, right: Self) -> Self {
-        // The complex multiplication instructions are all multiply-accumulate,
-        // so start from a zero accumulator.
-        let zero = vmovq_n_f32(0.0);
-        let temp = vcmlaq_f32(zero, left, right);
-        vcmlaq_rot90_f32(temp, left, right)
-    }
-
-    #[inline(always)]
-    unsafe fn make_rotate90(direction: FftDirection) -> Rotation90<Self> {
-        // The FCMA instructions multiply by a complex number rather than flipping a sign bit,
-        // so the rotation is stored as the factor +1 or -1 to multiply the rotated value by.
-        Rotation90(match direction {
-            FftDirection::Forward => vmovq_n_f32(-1.0),
-            FftDirection::Inverse => vmovq_n_f32(1.0),
-        })
-    }
-
-    #[inline(always)]
-    unsafe fn rotate90_and_add(direction: Rotation90<Self>, acc: Self, values: Self) -> Self {
-        vcmlaq_rot90_f32(acc, direction.0, values)
-    }
-
-    #[inline(always)]
-    unsafe fn rotate90_and_sub(direction: Rotation90<Self>, acc: Self, values: Self) -> Self {
-        vcmlaq_rot270_f32(acc, direction.0, values)
-    }
-
-    #[inline(always)]
-    unsafe fn mul_rotate90(a: Self, b: Self) -> Self {
-        let zero = vmovq_n_f32(0.0);
-        vcmlaq_rot90_f32(zero, a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn fmadd_rotate90(acc: Self, a: Self, b: Self) -> Self {
-        vcmlaq_rot90_f32(acc, a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn nmadd_rotate90(acc: Self, a: Self, b: Self) -> Self {
-        vcmlaq_rot270_f32(acc, a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
-        [vaddq_f32(rows[0], rows[1]), vsubq_f32(rows[0], rows[1])]
-    }
-
-    #[inline(always)]
-    unsafe fn column_butterfly4(rows: [Self; 4], rotation: Rotation90<Self>) -> [Self; 4] {
-        // Algorithm: 2x2 mixed radix
-
-        // Perform the first set of size-2 FFTs.
-        let [mid0, mid2] = Self::column_butterfly2([rows[0], rows[2]]);
-        let [mid1, mid3] = Self::column_butterfly2([rows[1], rows[3]]);
-
-        // Transpose the data and do size-2 FFTs down the columns. The twiddle factors are just a
-        // rotation of mid3, which the FCMA instructions fold into the second size-2 FFT.
-        let [output0, output1] = Self::column_butterfly2([mid0, mid1]);
-        let output2 = Self::rotate90_and_add(rotation, mid2, mid3);
-        let output3 = Self::rotate90_and_sub(rotation, mid2, mid3);
-
-        // Swap outputs 1 and 2 in the output to do a square transpose
-        [output0, output2, output1, output3]
-    }
-}
-
-impl FcmaVector for float64x2_t {
-    const COMPLEX_PER_VECTOR: usize = 1;
-
-    type ScalarType = f64;
-
-    #[inline(always)]
-    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
-        vld1q_f64(ptr as *const f64)
-    }
-
-    #[inline(always)]
-    unsafe fn load_partial_lo_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
-        unimplemented!("Impossible to do a load store of complex f64's");
-    }
-
-    #[inline(always)]
-    unsafe fn load1_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
-        unimplemented!("Impossible to do a load store of complex f64's");
-    }
-
-    #[inline(always)]
-    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
-        vst1q_f64(ptr as *mut f64, data);
-    }
-
-    #[inline(always)]
-    unsafe fn store_partial_lo_complex(_ptr: *mut Complex<Self::ScalarType>, _data: Self) {
-        unimplemented!("Impossible to do a partial store of complex f64's");
-    }
-
-    #[inline(always)]
-    unsafe fn store_partial_hi_complex(_ptr: *mut Complex<Self::ScalarType>, _data: Self) {
-        unimplemented!("Impossible to do a partial store of complex f64's");
-    }
-
-    #[inline(always)]
-    unsafe fn neg(a: Self) -> Self {
-        vnegq_f64(a)
-    }
-    #[inline(always)]
-    unsafe fn add(a: Self, b: Self) -> Self {
-        vaddq_f64(a, b)
-    }
-    #[inline(always)]
-    unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self {
-        vfmaq_f64(acc, a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn broadcast_scalar(value: Self::ScalarType) -> Self {
-        vmovq_n_f64(value)
-    }
-
-    #[inline(always)]
-    unsafe fn make_mixedradix_twiddle_chunk(
-        x: usize,
-        y: usize,
-        len: usize,
-        direction: FftDirection,
-    ) -> Self {
-        let mut twiddle_chunk = [Complex::<f64>::zero(); Self::COMPLEX_PER_VECTOR];
-        for i in 0..Self::COMPLEX_PER_VECTOR {
-            twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
-        }
-
-        twiddle_chunk.as_slice().load_complex(0)
-    }
-
-    #[inline(always)]
-    unsafe fn mul_complex(left: Self, right: Self) -> Self {
-        // The complex multiplication instructions are all multiply-accumulate,
-        // so start from a zero accumulator.
-        let zero = vmovq_n_f64(0.0);
-        let temp = vcmlaq_f64(zero, left, right);
-        vcmlaq_rot90_f64(temp, left, right)
-    }
-
-    #[inline(always)]
-    unsafe fn make_rotate90(direction: FftDirection) -> Rotation90<Self> {
-        // The FCMA instructions multiply by a complex number rather than flipping a sign bit,
-        // so the rotation is stored as the factor +1 or -1 to multiply the rotated value by.
-        Rotation90(match direction {
-            FftDirection::Forward => vmovq_n_f64(-1.0),
-            FftDirection::Inverse => vmovq_n_f64(1.0),
-        })
-    }
-
-    #[inline(always)]
-    unsafe fn rotate90_and_add(direction: Rotation90<Self>, acc: Self, values: Self) -> Self {
-        vcmlaq_rot90_f64(acc, direction.0, values)
-    }
-
-    #[inline(always)]
-    unsafe fn rotate90_and_sub(direction: Rotation90<Self>, acc: Self, values: Self) -> Self {
-        vcmlaq_rot270_f64(acc, direction.0, values)
-    }
-
-    #[inline(always)]
-    unsafe fn mul_rotate90(a: Self, b: Self) -> Self {
-        let zero = vmovq_n_f64(0.0);
-        vcmlaq_rot90_f64(zero, a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn fmadd_rotate90(acc: Self, a: Self, b: Self) -> Self {
-        vcmlaq_rot90_f64(acc, a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn nmadd_rotate90(acc: Self, a: Self, b: Self) -> Self {
-        vcmlaq_rot270_f64(acc, a, b)
-    }
-
-    #[inline(always)]
-    unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
-        [vaddq_f64(rows[0], rows[1]), vsubq_f64(rows[0], rows[1])]
-    }
-
-    #[inline(always)]
-    unsafe fn column_butterfly4(rows: [Self; 4], rotation: Rotation90<Self>) -> [Self; 4] {
-        // Algorithm: 2x2 mixed radix
-
-        // Perform the first set of size-2 FFTs.
-        let [mid0, mid2] = Self::column_butterfly2([rows[0], rows[2]]);
-        let [mid1, mid3] = Self::column_butterfly2([rows[1], rows[3]]);
-
-        // Transpose the data and do size-2 FFTs down the columns. The twiddle factors are just a
-        // rotation of mid3, which the FCMA instructions fold into the second size-2 FFT.
-        let [output0, output1] = Self::column_butterfly2([mid0, mid1]);
-        let output2 = Self::rotate90_and_add(rotation, mid2, mid3);
-        let output3 = Self::rotate90_and_sub(rotation, mid2, mid3);
-
-        // Swap outputs 1 and 2 in the output to do a square transpose
-        [output0, output2, output1, output3]
-    }
-}
-
-// A trait to handle reading from an array of complex floats into FCMA vectors.
-// FCMA works with 128-bit vectors, meaning a vector can hold two complex f32,
-// or a single complex f64.
-pub trait FcmaArray<S: FcmaNum>: Deref {
-    // Load complex numbers from the array to fill a FCMA vector.
-    unsafe fn load_complex(&self, index: usize) -> S::VectorType;
-    // Load a single complex number from the array into a FCMA vector, setting the unused elements to zero.
-    unsafe fn load_partial_lo_complex(&self, index: usize) -> S::VectorType;
-    // Load a single complex number from the array, and copy it to all elements of a FCMA vector.
-    unsafe fn load1_complex(&self, index: usize) -> S::VectorType;
-}
-
-impl<S: FcmaNum> FcmaArray<S> for &[Complex<S>] {
-    #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> S::VectorType {
-        debug_assert!(self.len() >= index + S::VectorType::COMPLEX_PER_VECTOR);
-        S::VectorType::load_complex(self.as_ptr().add(index))
-    }
-
-    #[inline(always)]
-    unsafe fn load_partial_lo_complex(&self, index: usize) -> S::VectorType {
-        debug_assert!(self.len() >= index + 1);
-        S::VectorType::load_partial_lo_complex(self.as_ptr().add(index))
-    }
-
-    #[inline(always)]
-    unsafe fn load1_complex(&self, index: usize) -> S::VectorType {
-        debug_assert!(self.len() >= index + 1);
-        S::VectorType::load1_complex(self.as_ptr().add(index))
-    }
-}
-impl<S: FcmaNum> FcmaArray<S> for &mut [Complex<S>] {
-    #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> S::VectorType {
-        debug_assert!(self.len() >= index + S::VectorType::COMPLEX_PER_VECTOR);
-        S::VectorType::load_complex(self.as_ptr().add(index))
-    }
-
-    #[inline(always)]
-    unsafe fn load_partial_lo_complex(&self, index: usize) -> S::VectorType {
-        debug_assert!(self.len() >= index + 1);
-        S::VectorType::load_partial_lo_complex(self.as_ptr().add(index))
-    }
-
-    #[inline(always)]
-    unsafe fn load1_complex(&self, index: usize) -> S::VectorType {
-        debug_assert!(self.len() >= index + 1);
-        S::VectorType::load1_complex(self.as_ptr().add(index))
-    }
-}
-
-impl<'a, S: FcmaNum> FcmaArray<S> for DoubleBuf<'a, S>
-where
-    &'a [Complex<S>]: FcmaArray<S>,
-{
-    #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> S::VectorType {
-        self.input.load_complex(index)
-    }
-    #[inline(always)]
-    unsafe fn load_partial_lo_complex(&self, index: usize) -> S::VectorType {
-        self.input.load_partial_lo_complex(index)
-    }
-    #[inline(always)]
-    unsafe fn load1_complex(&self, index: usize) -> S::VectorType {
-        self.input.load1_complex(index)
-    }
-}
-
-// A trait to handle writing to an array of complex floats from FCMA vectors.
-// FCMA works with 128-bit vectors, meaning a vector can hold two complex f32,
-// or a single complex f64.
-pub trait FcmaArrayMut<S: FcmaNum>: FcmaArray<S> + DerefMut {
-    // Store all complex numbers from a FCMA vector to the array.
-    unsafe fn store_complex(&mut self, vector: S::VectorType, index: usize);
-    // Store the low complex number from a FCMA vector to the array.
-    unsafe fn store_partial_lo_complex(&mut self, vector: S::VectorType, index: usize);
-}
-
-impl<S: FcmaNum> FcmaArrayMut<S> for &mut [Complex<S>] {
-    #[inline(always)]
-    unsafe fn store_complex(&mut self, vector: S::VectorType, index: usize) {
-        debug_assert!(self.len() >= index + S::VectorType::COMPLEX_PER_VECTOR);
-        S::VectorType::store_complex(self.as_mut_ptr().add(index), vector)
-    }
-    #[inline(always)]
-    unsafe fn store_partial_lo_complex(&mut self, vector: S::VectorType, index: usize) {
-        debug_assert!(self.len() >= index + 1);
-        S::VectorType::store_partial_lo_complex(self.as_mut_ptr().add(index), vector)
-    }
-}
-
-impl<'a, T: FcmaNum> FcmaArrayMut<T> for DoubleBuf<'a, T>
-where
-    Self: FcmaArray<T>,
-    &'a mut [Complex<T>]: FcmaArrayMut<T>,
-{
-    #[inline(always)]
-    unsafe fn store_complex(&mut self, vector: T::VectorType, index: usize) {
-        self.output.store_complex(vector, index);
-    }
-    #[inline(always)]
-    unsafe fn store_partial_lo_complex(&mut self, vector: T::VectorType, index: usize) {
-        self.output.store_partial_lo_complex(vector, index);
-    }
-}
+#[repr(transparent)]
+pub struct Rotation90<V: SimdVector>(V);
 
 // The `SimdVector` impls, which let this backend use the algorithms in `src/simd`. The trait is
 // named by path instead of imported, because importing it would make methods like
@@ -592,20 +139,6 @@ use super::fcma_butterflies::{
     FcmaF64Butterfly6,
 };
 use super::fcma_prime_butterflies::{FcmaF32Butterfly7, FcmaF64Butterfly7};
-
-/// `float64x2_t`, wrapped so that it can carry an FCMA `SimdVector` impl.
-///
-/// The FCMA backend's vector types are the plain NEON ones, and the NEON backend already
-/// implements `SimdVector` for those, so FCMA needs types of its own to hang its impls on. The
-/// wrapper only exists at the `SimdVector` boundary: every method unwraps immediately and calls
-/// the same FCMA code the rest of the backend uses.
-#[derive(Copy, Clone, Debug)]
-pub struct FcmaSimdVector64(float64x2_t);
-
-/// `float32x4_t`, wrapped so that it can carry an FCMA `SimdVector` impl. See
-/// [`FcmaSimdVector64`].
-#[derive(Copy, Clone, Debug)]
-pub struct FcmaSimdVector32(float32x4_t);
 
 // The `SimdVector::fft_helper_*` methods, which are the same forwarding calls for every FCMA
 // vector type: they hand the chunk loop to the target-feature-enabled wrappers in
@@ -667,11 +200,21 @@ macro_rules! fcma_vector_fft_helpers {
     };
 }
 
-impl crate::simd::simd_vector::SimdVector for FcmaSimdVector64 {
+/// `float64x2_t`, wrapped so that it can carry an FCMA `SimdVector` impl.
+///
+/// The FCMA backend's vector types are the plain NEON ones, and the NEON backend already
+/// implements `SimdVector` for those, so FCMA needs types of its own to hang its impls on. The
+/// wrapper only exists at the `SimdVector` boundary: every method unwraps immediately and calls
+/// the same FCMA code the rest of the backend uses.
+#[derive(Copy, Clone, Debug)]
+#[repr(transparent)]
+pub struct FcmaVector64(pub float64x2_t);
+
+impl crate::simd::simd_vector::SimdVector for FcmaVector64 {
     const COMPLEX_PER_VECTOR: usize = 1;
 
     type ScalarType = f64;
-    type Rotation = Rotation90<float64x2_t>;
+    type Rotation = Rotation90<FcmaVector64>;
 
     type Butterfly3 = FcmaF64Butterfly3<f64>;
     type Butterfly5 = FcmaF64Butterfly5<f64>;
@@ -683,18 +226,65 @@ impl crate::simd::simd_vector::SimdVector for FcmaSimdVector64 {
         Self(vdupq_n_f64(0.0))
     }
     #[inline(always)]
-    unsafe fn load(data: &[Complex<f64>], index: usize) -> Self {
-        Self(data.load_complex(index))
-    }
-    #[inline(always)]
-    unsafe fn store(mut data: &mut [Complex<f64>], value: Self, index: usize) {
-        data.store_complex(value.0, index)
+    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+        Self(vld1q_f64(ptr as *const f64))
     }
 
     #[inline(always)]
-    unsafe fn mul_complex(left: Self, right: Self) -> Self {
-        Self(FcmaVector::mul_complex(left.0, right.0))
+    unsafe fn load1_lo_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
+        unimplemented!("Impossible to do a load store of complex f64's");
     }
+
+    #[inline(always)]
+    unsafe fn load1_dup_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
+        unimplemented!("Impossible to do a load store of complex f64's");
+    }
+
+    #[inline(always)]
+    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
+        vst1q_f64(ptr as *mut f64, data.0);
+    }
+
+    #[inline(always)]
+    unsafe fn store1_lo_complex(_ptr: *mut Complex<Self::ScalarType>, _data: Self) {
+        unimplemented!("Impossible to do a partial store of complex f64's");
+    }
+
+    #[inline(always)]
+    unsafe fn store1_hi_complex(_ptr: *mut Complex<Self::ScalarType>, _data: Self) {
+        unimplemented!("Impossible to do a partial store of complex f64's");
+    }
+
+    #[inline(always)]
+    unsafe fn neg(a: Self) -> Self {
+        Self(vnegq_f64(a.0))
+    }
+    #[inline(always)]
+    unsafe fn add(a: Self, b: Self) -> Self {
+        Self(vaddq_f64(a.0, b.0))
+    }
+    #[inline(always)]
+    unsafe fn sub(a: Self, b: Self) -> Self {
+        Self(vsubq_f64(a.0, b.0))
+    }
+    #[inline(always)]
+    unsafe fn mul(a: Self, b: Self) -> Self {
+        Self(vmulq_f64(a.0, b.0))
+    }
+    #[inline(always)]
+    unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self {
+        Self(vfmaq_f64(acc.0, a.0, b.0))
+    }
+    unsafe fn nmadd(_acc: Self, _a: Self, _b: Self) -> Self {
+        unimplemented!(
+            "nmadd is currently not supported on FCMA. If it's needed, feel free to add it."
+        )
+    }
+    #[inline(always)]
+    unsafe fn broadcast_scalar(value: Self::ScalarType) -> Self {
+        Self(vmovq_n_f64(value))
+    }
+
     #[inline(always)]
     unsafe fn make_mixedradix_twiddle_chunk(
         x: usize,
@@ -702,14 +292,34 @@ impl crate::simd::simd_vector::SimdVector for FcmaSimdVector64 {
         len: usize,
         direction: FftDirection,
     ) -> Self {
-        Self(FcmaVector::make_mixedradix_twiddle_chunk(
-            x, y, len, direction,
-        ))
+        let mut twiddle_chunk = [Complex::<f64>::zero(); Self::COMPLEX_PER_VECTOR];
+        for i in 0..Self::COMPLEX_PER_VECTOR {
+            twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
+        }
+
+        twiddle_chunk.as_slice().load(0)
     }
 
     #[inline(always)]
-    unsafe fn make_rotate90(direction: FftDirection) -> Self::Rotation {
-        FcmaVector::make_rotate90(direction)
+    unsafe fn mul_complex(left: Self, right: Self) -> Self {
+        // The complex multiplication instructions are all multiply-accumulate,
+        // so start from a zero accumulator.
+        let zero = vmovq_n_f64(0.0);
+        let temp = vcmlaq_f64(zero, left.0, right.0);
+        Self(vcmlaq_rot90_f64(temp, left.0, right.0))
+    }
+
+    #[inline(always)]
+    unsafe fn make_rotate90(direction: FftDirection) -> Rotation90<Self> {
+        // The FCMA instructions multiply by a complex number rather than flipping a sign bit,
+        // so the rotation is stored as the factor +1 or -1 to multiply the rotated value by.
+        Rotation90(match direction {
+            FftDirection::Forward => Self(vmovq_n_f64(-1.0)),
+            FftDirection::Inverse => Self(vmovq_n_f64(1.0)),
+        })
+    }
+    unsafe fn apply_rotate90(_direction: Self::Rotation, _values: Self) -> Self {
+        unimplemented!("apply_rotate90 is currently not supported on FCMA. If it's needed, feel free to add it.")
     }
     #[inline(always)]
     unsafe fn make_butterfly3(direction: FftDirection) -> Self::Butterfly3 {
@@ -730,41 +340,44 @@ impl crate::simd::simd_vector::SimdVector for FcmaSimdVector64 {
 
     #[inline(always)]
     unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
-        FcmaVector::column_butterfly2([rows[0].0, rows[1].0]).map(Self)
+        fcma_column_butterfly2(rows)
     }
     #[inline(always)]
     unsafe fn column_butterfly3(bf: &Self::Butterfly3, rows: [Self; 3]) -> [Self; 3] {
-        bf.perform_fft_direct(rows[0].0, rows[1].0, rows[2].0)
-            .map(Self)
+        bf.perform_fft_direct(rows[0], rows[1], rows[2])
     }
     #[inline(always)]
     unsafe fn column_butterfly4(rows: [Self; 4], rotation: Self::Rotation) -> [Self; 4] {
-        FcmaVector::column_butterfly4([rows[0].0, rows[1].0, rows[2].0, rows[3].0], rotation)
-            .map(Self)
+        fcma_column_butterfly4(rows, rotation)
     }
     #[inline(always)]
     unsafe fn column_butterfly5(bf: &Self::Butterfly5, rows: [Self; 5]) -> [Self; 5] {
-        bf.perform_fft_direct(rows[0].0, rows[1].0, rows[2].0, rows[3].0, rows[4].0)
-            .map(Self)
+        bf.perform_fft_direct(rows[0], rows[1], rows[2], rows[3], rows[4])
     }
     #[inline(always)]
     unsafe fn column_butterfly6(bf: &Self::Butterfly6, rows: [Self; 6]) -> [Self; 6] {
-        bf.perform_fft_direct(rows.map(|r| r.0)).map(Self)
+        bf.perform_fft_direct(rows)
     }
     #[inline(always)]
     unsafe fn column_butterfly7(bf: &Self::Butterfly7, rows: [Self; 7]) -> [Self; 7] {
-        bf.perform_fft_direct(rows.map(|r| r.0)).map(Self)
+        bf.perform_fft_direct(rows)
     }
 
     simd_vector_cross_layer!(#[target_feature(enable = "neon,fcma")]);
     fcma_vector_fft_helpers!();
 }
 
-impl crate::simd::simd_vector::SimdVector for FcmaSimdVector32 {
+/// `float32x4_t`, wrapped so that it can carry an FCMA `SimdVector` impl. See
+/// [`FcmaVector64`].
+#[derive(Copy, Clone, Debug)]
+#[repr(transparent)]
+pub struct FcmaVector32(pub float32x4_t);
+
+impl crate::simd::simd_vector::SimdVector for FcmaVector32 {
     const COMPLEX_PER_VECTOR: usize = 2;
 
     type ScalarType = f32;
-    type Rotation = Rotation90<float32x4_t>;
+    type Rotation = Rotation90<FcmaVector32>;
 
     type Butterfly3 = FcmaF32Butterfly3<f32>;
     type Butterfly5 = FcmaF32Butterfly5<f32>;
@@ -776,18 +389,72 @@ impl crate::simd::simd_vector::SimdVector for FcmaSimdVector32 {
         Self(vdupq_n_f32(0.0))
     }
     #[inline(always)]
-    unsafe fn load(data: &[Complex<f32>], index: usize) -> Self {
-        Self(data.load_complex(index))
-    }
-    #[inline(always)]
-    unsafe fn store(mut data: &mut [Complex<f32>], value: Self, index: usize) {
-        data.store_complex(value.0, index)
+    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+        Self(vld1q_f32(ptr as *const f32))
     }
 
     #[inline(always)]
-    unsafe fn mul_complex(left: Self, right: Self) -> Self {
-        Self(FcmaVector::mul_complex(left.0, right.0))
+    unsafe fn load1_lo_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+        let temp = vmovq_n_f32(0.0);
+        Self(vreinterpretq_f32_u64(vld1q_lane_u64::<0>(
+            ptr as *const u64,
+            vreinterpretq_u64_f32(temp),
+        )))
     }
+
+    #[inline(always)]
+    unsafe fn load1_dup_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+        Self(vreinterpretq_f32_u64(vld1q_dup_u64(ptr as *const u64)))
+    }
+
+    #[inline(always)]
+    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
+        vst1q_f32(ptr as *mut f32, data.0);
+    }
+
+    #[inline(always)]
+    unsafe fn store1_lo_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
+        let low = vget_low_f32(data.0);
+        vst1_f32(ptr as *mut f32, low);
+    }
+
+    #[inline(always)]
+    unsafe fn store1_hi_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
+        let high = vget_high_f32(data.0);
+        vst1_f32(ptr as *mut f32, high);
+    }
+
+    #[inline(always)]
+    unsafe fn neg(a: Self) -> Self {
+        Self(vnegq_f32(a.0))
+    }
+    #[inline(always)]
+    unsafe fn add(a: Self, b: Self) -> Self {
+        Self(vaddq_f32(a.0, b.0))
+    }
+    #[inline(always)]
+    unsafe fn sub(a: Self, b: Self) -> Self {
+        Self(vsubq_f32(a.0, b.0))
+    }
+    #[inline(always)]
+    unsafe fn mul(a: Self, b: Self) -> Self {
+        Self(vmulq_f32(a.0, b.0))
+    }
+    #[inline(always)]
+    unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self {
+        Self(vfmaq_f32(acc.0, a.0, b.0))
+    }
+    unsafe fn nmadd(_acc: Self, _a: Self, _b: Self) -> Self {
+        unimplemented!(
+            "nmadd is currently not supported on FCMA. If it's needed, feel free to add it."
+        )
+    }
+
+    #[inline(always)]
+    unsafe fn broadcast_scalar(value: Self::ScalarType) -> Self {
+        Self(vmovq_n_f32(value))
+    }
+
     #[inline(always)]
     unsafe fn make_mixedradix_twiddle_chunk(
         x: usize,
@@ -795,14 +462,34 @@ impl crate::simd::simd_vector::SimdVector for FcmaSimdVector32 {
         len: usize,
         direction: FftDirection,
     ) -> Self {
-        Self(FcmaVector::make_mixedradix_twiddle_chunk(
-            x, y, len, direction,
-        ))
+        let mut twiddle_chunk = [Complex::<f32>::zero(); Self::COMPLEX_PER_VECTOR];
+        for i in 0..Self::COMPLEX_PER_VECTOR {
+            twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
+        }
+
+        twiddle_chunk.as_slice().load(0)
     }
 
     #[inline(always)]
-    unsafe fn make_rotate90(direction: FftDirection) -> Self::Rotation {
-        FcmaVector::make_rotate90(direction)
+    unsafe fn mul_complex(left: Self, right: Self) -> Self {
+        // The complex multiplication instructions are all multiply-accumulate,
+        // so start from a zero accumulator.
+        let zero = vmovq_n_f32(0.0);
+        let temp = vcmlaq_f32(zero, left.0, right.0);
+        Self(vcmlaq_rot90_f32(temp, left.0, right.0))
+    }
+
+    #[inline(always)]
+    unsafe fn make_rotate90(direction: FftDirection) -> Rotation90<Self> {
+        // The FCMA instructions multiply by a complex number rather than flipping a sign bit,
+        // so the rotation is stored as the factor +1 or -1 to multiply the rotated value by.
+        Rotation90(match direction {
+            FftDirection::Forward => Self(vmovq_n_f32(-1.0)),
+            FftDirection::Inverse => Self(vmovq_n_f32(1.0)),
+        })
+    }
+    unsafe fn apply_rotate90(_direction: Self::Rotation, _values: Self) -> Self {
+        unimplemented!("apply_rotate90 is currently not supported on FCMA. If it's needed, feel free to add it.")
     }
     #[inline(always)]
     unsafe fn make_butterfly3(direction: FftDirection) -> Self::Butterfly3 {
@@ -823,43 +510,142 @@ impl crate::simd::simd_vector::SimdVector for FcmaSimdVector32 {
 
     #[inline(always)]
     unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
-        FcmaVector::column_butterfly2([rows[0].0, rows[1].0]).map(Self)
+        fcma_column_butterfly2(rows)
     }
     #[inline(always)]
     unsafe fn column_butterfly3(bf: &Self::Butterfly3, rows: [Self; 3]) -> [Self; 3] {
-        bf.perform_parallel_fft_direct(rows[0].0, rows[1].0, rows[2].0)
-            .map(Self)
+        bf.perform_parallel_fft_direct(rows[0], rows[1], rows[2])
     }
     #[inline(always)]
     unsafe fn column_butterfly4(rows: [Self; 4], rotation: Self::Rotation) -> [Self; 4] {
-        FcmaVector::column_butterfly4([rows[0].0, rows[1].0, rows[2].0, rows[3].0], rotation)
-            .map(Self)
+        fcma_column_butterfly4(rows, rotation)
     }
     #[inline(always)]
     unsafe fn column_butterfly5(bf: &Self::Butterfly5, rows: [Self; 5]) -> [Self; 5] {
-        bf.perform_parallel_fft_direct(rows[0].0, rows[1].0, rows[2].0, rows[3].0, rows[4].0)
-            .map(Self)
+        bf.perform_parallel_fft_direct(rows[0], rows[1], rows[2], rows[3], rows[4])
     }
     #[inline(always)]
     unsafe fn column_butterfly6(bf: &Self::Butterfly6, rows: [Self; 6]) -> [Self; 6] {
-        bf.perform_parallel_fft_direct(
-            rows[0].0, rows[1].0, rows[2].0, rows[3].0, rows[4].0, rows[5].0,
-        )
-        .map(Self)
+        bf.perform_parallel_fft_direct(rows[0], rows[1], rows[2], rows[3], rows[4], rows[5])
     }
     #[inline(always)]
     unsafe fn column_butterfly7(bf: &Self::Butterfly7, rows: [Self; 7]) -> [Self; 7] {
-        bf.perform_parallel_fft_direct(rows.map(|r| r.0)).map(Self)
+        bf.perform_parallel_fft_direct(rows)
     }
 
     simd_vector_cross_layer!(#[target_feature(enable = "neon,fcma")]);
     fcma_vector_fft_helpers!();
 }
 
+// A trait for FCMA-only operations
+pub trait FcmaVector: SimdVector {
+    /// Rotates `b` by 90 degrees and multiplies it by the real number `a`, which must be
+    /// broadcast to both halves of every complex element. One FCMA instruction does the whole
+    /// thing, so the rotation is free.
+    unsafe fn mul_rotate90(a: Self, b: Self) -> Self;
+
+    /// Rotates `b` by 90 degrees, multiplies it by the real number `a`, and adds the result to
+    /// `acc`. See `mul_rotate90` for the requirement on `a`.
+    unsafe fn fmadd_rotate90(acc: Self, a: Self, b: Self) -> Self;
+
+    /// Rotates `b` by 90 degrees, multiplies it by the real number `a`, and subtracts the result
+    /// from `acc`. See `mul_rotate90` for the requirement on `a`.
+    unsafe fn nmadd_rotate90(acc: Self, a: Self, b: Self) -> Self;
+
+    /// Rotates `a` by `rotation`, then adds it to `acc`.
+    unsafe fn rotate_and_add(acc: Self, rotation: Self::Rotation, a: Self) -> Self;
+
+    /// Rotates `a` by `rotation`, then subtracts it from `acc`.
+    unsafe fn rotate_and_sub(acc: Self, rotation: Self::Rotation, a: Self) -> Self;
+}
+
+impl FcmaVector for FcmaVector64 {
+    #[inline(always)]
+    unsafe fn mul_rotate90(a: Self, b: Self) -> Self {
+        let zero = vmovq_n_f64(0.0);
+        Self(vcmlaq_rot90_f64(zero, a.0, b.0))
+    }
+
+    #[inline(always)]
+    unsafe fn fmadd_rotate90(acc: Self, a: Self, b: Self) -> Self {
+        Self(vcmlaq_rot90_f64(acc.0, a.0, b.0))
+    }
+
+    #[inline(always)]
+    unsafe fn nmadd_rotate90(acc: Self, a: Self, b: Self) -> Self {
+        Self(vcmlaq_rot270_f64(acc.0, a.0, b.0))
+    }
+
+    #[inline(always)]
+    unsafe fn rotate_and_add(acc: Self, rotation: Self::Rotation, a: Self) -> Self {
+        Self(vcmlaq_rot90_f64(acc.0, rotation.0 .0, a.0))
+    }
+
+    #[inline(always)]
+    unsafe fn rotate_and_sub(acc: Self, rotation: Self::Rotation, a: Self) -> Self {
+        Self(vcmlaq_rot270_f64(acc.0, rotation.0 .0, a.0))
+    }
+}
+
+impl FcmaVector for FcmaVector32 {
+    #[inline(always)]
+    unsafe fn mul_rotate90(a: Self, b: Self) -> Self {
+        let zero = vmovq_n_f32(0.0);
+        Self(vcmlaq_rot90_f32(zero, a.0, b.0))
+    }
+
+    #[inline(always)]
+    unsafe fn fmadd_rotate90(acc: Self, a: Self, b: Self) -> Self {
+        Self(vcmlaq_rot90_f32(acc.0, a.0, b.0))
+    }
+
+    #[inline(always)]
+    unsafe fn nmadd_rotate90(acc: Self, a: Self, b: Self) -> Self {
+        Self(vcmlaq_rot270_f32(acc.0, a.0, b.0))
+    }
+
+    #[inline(always)]
+    unsafe fn rotate_and_add(acc: Self, rotation: Self::Rotation, a: Self) -> Self {
+        Self(vcmlaq_rot90_f32(acc.0, rotation.0 .0, a.0))
+    }
+
+    #[inline(always)]
+    unsafe fn rotate_and_sub(acc: Self, rotation: Self::Rotation, a: Self) -> Self {
+        Self(vcmlaq_rot270_f32(acc.0, rotation.0 .0, a.0))
+    }
+}
+
+#[inline(always)]
+unsafe fn fcma_column_butterfly2<V: SimdVector>(rows: [V; 2]) -> [V; 2] {
+    [
+        SimdVector::add(rows[0], rows[1]),
+        SimdVector::sub(rows[0], rows[1]),
+    ]
+}
+
+#[inline(always)]
+unsafe fn fcma_column_butterfly4<V: FcmaVector>(rows: [V; 4], rotation: V::Rotation) -> [V; 4] {
+    // Algorithm: 2x2 mixed radix
+
+    // Perform the first set of size-2 FFTs.
+    let [mid0, mid2] = fcma_column_butterfly2([rows[0], rows[2]]);
+    let [mid1, mid3] = fcma_column_butterfly2([rows[1], rows[3]]);
+
+    // Transpose the data and do size-2 FFTs down the columns. The twiddle factors are just a
+    // rotation of mid3, which the FCMA instructions fold into the second size-2 FFT.
+    let [output0, output1] = fcma_column_butterfly2([mid0, mid1]);
+    let output2 = FcmaVector::rotate_and_add(mid2, rotation, mid3);
+    let output3 = FcmaVector::rotate_and_sub(mid2, rotation, mid3);
+
+    // Swap outputs 1 and 2 in the output to do a square transpose
+    [output0, output2, output1, output3]
+}
+
 #[cfg(test)]
 mod unit_tests {
     use super::*;
 
+    use crate::simd::simd_array::{SimdComplexArray, SimdComplexArrayMut};
     use num_complex::Complex;
 
     #[test]
@@ -871,25 +657,25 @@ mod unit_tests {
             let val4: Complex<f64> = Complex::new(7.0, 8.0);
             let values = vec![val1, val2, val3, val4];
             let slice = values.as_slice();
-            let load1 = slice.load_complex(0);
-            let load2 = slice.load_complex(1);
-            let load3 = slice.load_complex(2);
-            let load4 = slice.load_complex(3);
+            let load1 = slice.load(0);
+            let load2 = slice.load(1);
+            let load3 = slice.load(2);
+            let load4 = slice.load(3);
             assert_eq!(
                 val1,
-                std::mem::transmute::<float64x2_t, Complex<f64>>(load1)
+                std::mem::transmute::<FcmaVector64, Complex<f64>>(load1)
             );
             assert_eq!(
                 val2,
-                std::mem::transmute::<float64x2_t, Complex<f64>>(load2)
+                std::mem::transmute::<FcmaVector64, Complex<f64>>(load2)
             );
             assert_eq!(
                 val3,
-                std::mem::transmute::<float64x2_t, Complex<f64>>(load3)
+                std::mem::transmute::<FcmaVector64, Complex<f64>>(load3)
             );
             assert_eq!(
                 val4,
-                std::mem::transmute::<float64x2_t, Complex<f64>>(load4)
+                std::mem::transmute::<FcmaVector64, Complex<f64>>(load4)
             );
         }
     }
@@ -902,17 +688,17 @@ mod unit_tests {
             let val3: Complex<f64> = Complex::new(5.0, 6.0);
             let val4: Complex<f64> = Complex::new(7.0, 8.0);
 
-            let nbr1 = vld1q_f64(&val1 as *const _ as *const f64);
-            let nbr2 = vld1q_f64(&val2 as *const _ as *const f64);
-            let nbr3 = vld1q_f64(&val3 as *const _ as *const f64);
-            let nbr4 = vld1q_f64(&val4 as *const _ as *const f64);
+            let nbr1 = FcmaVector64(vld1q_f64(&val1 as *const _ as *const f64));
+            let nbr2 = FcmaVector64(vld1q_f64(&val2 as *const _ as *const f64));
+            let nbr3 = FcmaVector64(vld1q_f64(&val3 as *const _ as *const f64));
+            let nbr4 = FcmaVector64(vld1q_f64(&val4 as *const _ as *const f64));
 
             let mut values: Vec<Complex<f64>> = vec![Complex::new(0.0, 0.0); 4];
             let mut slice = values.as_mut_slice();
-            slice.store_complex(nbr1, 0);
-            slice.store_complex(nbr2, 1);
-            slice.store_complex(nbr3, 2);
-            slice.store_complex(nbr4, 3);
+            slice.store(nbr1, 0);
+            slice.store(nbr2, 1);
+            slice.store(nbr3, 2);
+            slice.store(nbr4, 3);
             assert_eq!(val1, values[0]);
             assert_eq!(val2, values[1]);
             assert_eq!(val3, values[2]);

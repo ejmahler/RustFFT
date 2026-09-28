@@ -23,6 +23,7 @@ use crate::common::{FftNum, RadixFactor};
 use crate::{Direction, Fft, FftDirection, Length};
 
 use super::simd_vector::SimdVector;
+use crate::simd::simd_array::{SimdComplexArray, SimdComplexArrayMut};
 
 /// The per-layer cross-FFT kernels, holding whatever precomputed state each radix needs.
 pub enum InternalRadixFactor<V: SimdVector> {
@@ -427,10 +428,10 @@ unsafe fn gather_and_twiddle<V: SimdVector, const RADIX: usize>(
     let mut arr = [V::zero(); RADIX];
 
     // The row-0 twiddle is always 1, so it's neither stored nor applied.
-    arr[0] = V::load(data, idx);
+    arr[0] = data.load(idx);
 
     for r in 1..RADIX {
-        let v = V::load(data, idx + r * num_columns);
+        let v = data.load(idx + r * num_columns);
         arr[r] = V::mul_complex(v, *twiddles.get_unchecked(tw_base + r - 1));
     }
     arr
@@ -443,7 +444,7 @@ unsafe fn gather_and_twiddle<V: SimdVector, const RADIX: usize>(
 /// gets the two independent dependency chains needed to keep the FMA pipeline busy.
 #[inline(always)]
 unsafe fn cross_layer<V: SimdVector, const RADIX: usize, F>(
-    data: &mut [Complex<V::ScalarType>],
+    mut data: &mut [Complex<V::ScalarType>],
     twiddles: &[V],
     num_columns: usize,
     butterfly: F,
@@ -474,8 +475,8 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize, F>(
         let b = butterfly(b);
 
         for (r, (a_row, b_row)) in a.iter().zip(b.iter()).enumerate() {
-            V::store(data, *a_row, idx + r * num_columns);
-            V::store(data, *b_row, idx + complex_per_vector + r * num_columns);
+            data.store(*a_row, idx + r * num_columns);
+            data.store(*b_row, idx + complex_per_vector + r * num_columns);
         }
     }
 
@@ -491,7 +492,7 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize, F>(
             vcol * tw_stride,
         ));
         for (r, a_row) in a.iter().enumerate() {
-            V::store(data, *a_row, idx + r * num_columns);
+            data.store(*a_row, idx + r * num_columns);
         }
     }
 }
