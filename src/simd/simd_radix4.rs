@@ -7,10 +7,12 @@
 //! Everything here is generic over `SimdVector`, from `simd_vector.rs`. A backend implements that
 //! trait once per vector type and gets the algorithm, so `SimdRadix4` is the only copy of it.
 //!
-//! Because a column butterfly consumes `COMPLEX_PER_VECTOR` columns at a time, the column count at
-//! every layer has to be a whole number of vectors. The column count starts at `base_len` and only
-//! ever grows by whole factors, so requiring `base_len % COMPLEX_PER_VECTOR == 0` is enough. That
-//! is 1 for f64 (no restriction) and 2 for f32.
+//! A column butterfly consumes `COMPLEX_PER_VECTOR` columns at a time, 1 for f64 and 2 for f32, so
+//! a column count that isn't a whole number of vectors leaves a column over. The count starts at
+//! `base_len` and only ever grows by whole factors, so for f32 an odd base means an odd count at
+//! every layer. Each layer therefore ends with a partial column, handled the same way as in
+//! `SimdRadixN`: one complex loaded into the low half of a vector and only the low half stored
+//! back.
 
 use std::any::TypeId;
 use std::sync::Arc;

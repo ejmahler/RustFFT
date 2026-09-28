@@ -27,7 +27,8 @@ mod unit_tests {
 
     #[wasm_bindgen_test]
     fn test_wasm_simd_radix4_replacement_f32() {
-        // f32 fits two complex per vector, so the base length has to be even
+        // f32 fits two complex per vector, so an odd base length means every layer ends with a
+        // partial column
         test_bodies::factor_pairs::<WasmVector32>(&[1, 2, 3, 4, 5, 6]);
     }
 
