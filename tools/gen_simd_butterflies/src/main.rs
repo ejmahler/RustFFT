@@ -197,7 +197,7 @@ fn parse_architecture(arch_str: Option<String>) -> Result<Architecture, String> 
                 target_feature_name: "neon,fcma",
                 has_dynamic_cpu_features: true,
                 dynamic_cpu_feature_macro: "std::arch::is_aarch64_feature_detected",
-                arch_include: "use core::arch::aarch64::{float32x4_t, float64x2_t};",
+                arch_include: "",
                 test_attribute: "test",
                 extra_test_includes: vec![],
             });

@@ -1,3 +1,4 @@
+
 use std::any::TypeId;
 use std::sync::Arc;
 use num_complex::Complex;
@@ -8,15 +9,17 @@ use crate::array_utils::DoubleBuf;
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
 
-use crate::simd::simd_vector::SimdVector;
-use crate::simd::simd_array::SimdComplexArrayMut;
-
 use crate::fft_helper::{
     fft_helper_immut, fft_helper_immut_unroll2x, fft_helper_inplace, fft_helper_inplace_unroll2x,
 };
 
+use crate::simd::simd_vector::SimdVector;
+use crate::simd::simd_array::SimdComplexArrayMut;
+
 use super::fcma_common::{assert_f32, assert_f64};
 use super::fcma_utils::*;
+
+#[allow(unused)]
 use super::fcma_vector::*;
 
 /* 
@@ -146,7 +149,7 @@ impl<T: FftNum> FcmaF32Butterfly7<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [FcmaVector32; 7]) -> [FcmaVector32; 7] {
-        let y00 = values[0];
+                let y00 = values[0];
         let [x1p6, x1m6] =  SimdVector::column_butterfly2([values[1], values[6]]);
         let y00 = SimdVector::add(y00, x1p6);
         let [x2p5, x2m5] =  SimdVector::column_butterfly2([values[2], values[5]]);
@@ -216,7 +219,7 @@ impl<T: FftNum> FcmaF64Butterfly7<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(&self, values: [FcmaVector64; 7]) -> [FcmaVector64; 7] {
-        let y00 = values[0];
+                let y00 = values[0];
         let [x1p6, x1m6] =  SimdVector::column_butterfly2([values[1], values[6]]);
         let y00 = SimdVector::add(y00, x1p6);
         let [x2p5, x2m5] =  SimdVector::column_butterfly2([values[2], values[5]]);
@@ -323,7 +326,7 @@ impl<T: FftNum> FcmaF32Butterfly11<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [FcmaVector32; 11]) -> [FcmaVector32; 11] {
-        let y00 = values[0];
+                let y00 = values[0];
         let [x1p10, x1m10] =  SimdVector::column_butterfly2([values[1], values[10]]);
         let y00 = SimdVector::add(y00, x1p10);
         let [x2p9, x2m9] =  SimdVector::column_butterfly2([values[2], values[9]]);
@@ -433,7 +436,7 @@ impl<T: FftNum> FcmaF64Butterfly11<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(&self, values: [FcmaVector64; 11]) -> [FcmaVector64; 11] {
-        let y00 = values[0];
+                let y00 = values[0];
         let [x1p10, x1m10] =  SimdVector::column_butterfly2([values[1], values[10]]);
         let y00 = SimdVector::add(y00, x1p10);
         let [x2p9, x2m9] =  SimdVector::column_butterfly2([values[2], values[9]]);
@@ -584,7 +587,7 @@ impl<T: FftNum> FcmaF32Butterfly13<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [FcmaVector32; 13]) -> [FcmaVector32; 13] {
-        let y00 = values[0];
+                let y00 = values[0];
         let [x1p12, x1m12] =  SimdVector::column_butterfly2([values[1], values[12]]);
         let y00 = SimdVector::add(y00, x1p12);
         let [x2p11, x2m11] =  SimdVector::column_butterfly2([values[2], values[11]]);
@@ -720,7 +723,7 @@ impl<T: FftNum> FcmaF64Butterfly13<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(&self, values: [FcmaVector64; 13]) -> [FcmaVector64; 13] {
-        let y00 = values[0];
+                let y00 = values[0];
         let [x1p12, x1m12] =  SimdVector::column_butterfly2([values[1], values[12]]);
         let y00 = SimdVector::add(y00, x1p12);
         let [x2p11, x2m11] =  SimdVector::column_butterfly2([values[2], values[11]]);
@@ -905,7 +908,7 @@ impl<T: FftNum> FcmaF32Butterfly17<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [FcmaVector32; 17]) -> [FcmaVector32; 17] {
-        let y00 = values[0];
+                let y00 = values[0];
         let [x1p16, x1m16] =  SimdVector::column_butterfly2([values[1], values[16]]);
         let y00 = SimdVector::add(y00, x1p16);
         let [x2p15, x2m15] =  SimdVector::column_butterfly2([values[2], values[15]]);
@@ -1105,7 +1108,7 @@ impl<T: FftNum> FcmaF64Butterfly17<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(&self, values: [FcmaVector64; 17]) -> [FcmaVector64; 17] {
-        let y00 = values[0];
+                let y00 = values[0];
         let [x1p16, x1m16] =  SimdVector::column_butterfly2([values[1], values[16]]);
         let y00 = SimdVector::add(y00, x1p16);
         let [x2p15, x2m15] =  SimdVector::column_butterfly2([values[2], values[15]]);
@@ -1358,7 +1361,7 @@ impl<T: FftNum> FcmaF32Butterfly19<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [FcmaVector32; 19]) -> [FcmaVector32; 19] {
-        let y00 = values[0];
+                let y00 = values[0];
         let [x1p18, x1m18] =  SimdVector::column_butterfly2([values[1], values[18]]);
         let y00 = SimdVector::add(y00, x1p18);
         let [x2p17, x2m17] =  SimdVector::column_butterfly2([values[2], values[17]]);
@@ -1596,7 +1599,7 @@ impl<T: FftNum> FcmaF64Butterfly19<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(&self, values: [FcmaVector64; 19]) -> [FcmaVector64; 19] {
-        let y00 = values[0];
+                let y00 = values[0];
         let [x1p18, x1m18] =  SimdVector::column_butterfly2([values[1], values[18]]);
         let y00 = SimdVector::add(y00, x1p18);
         let [x2p17, x2m17] =  SimdVector::column_butterfly2([values[2], values[17]]);
@@ -1895,7 +1898,7 @@ impl<T: FftNum> FcmaF32Butterfly23<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [FcmaVector32; 23]) -> [FcmaVector32; 23] {
-        let y00 = values[0];
+                let y00 = values[0];
         let [x1p22, x1m22] =  SimdVector::column_butterfly2([values[1], values[22]]);
         let y00 = SimdVector::add(y00, x1p22);
         let [x2p21, x2m21] =  SimdVector::column_butterfly2([values[2], values[21]]);
@@ -2221,7 +2224,7 @@ impl<T: FftNum> FcmaF64Butterfly23<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(&self, values: [FcmaVector64; 23]) -> [FcmaVector64; 23] {
-        let y00 = values[0];
+                let y00 = values[0];
         let [x1p22, x1m22] =  SimdVector::column_butterfly2([values[1], values[22]]);
         let y00 = SimdVector::add(y00, x1p22);
         let [x2p21, x2m21] =  SimdVector::column_butterfly2([values[2], values[21]]);
@@ -2620,7 +2623,7 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [FcmaVector32; 29]) -> [FcmaVector32; 29] {
-        let y00 = values[0];
+                let y00 = values[0];
         let [x1p28, x1m28] =  SimdVector::column_butterfly2([values[1], values[28]]);
         let y00 = SimdVector::add(y00, x1p28);
         let [x2p27, x2m27] =  SimdVector::column_butterfly2([values[2], values[27]]);
@@ -3108,7 +3111,7 @@ impl<T: FftNum> FcmaF64Butterfly29<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(&self, values: [FcmaVector64; 29]) -> [FcmaVector64; 29] {
-        let y00 = values[0];
+                let y00 = values[0];
         let [x1p28, x1m28] =  SimdVector::column_butterfly2([values[1], values[28]]);
         let y00 = SimdVector::add(y00, x1p28);
         let [x2p27, x2m27] =  SimdVector::column_butterfly2([values[2], values[27]]);
@@ -3673,7 +3676,7 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [FcmaVector32; 31]) -> [FcmaVector32; 31] {
-        let y00 = values[0];
+                let y00 = values[0];
         let [x1p30, x1m30] =  SimdVector::column_butterfly2([values[1], values[30]]);
         let y00 = SimdVector::add(y00, x1p30);
         let [x2p29, x2m29] =  SimdVector::column_butterfly2([values[2], values[29]]);
@@ -4223,7 +4226,7 @@ impl<T: FftNum> FcmaF64Butterfly31<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(&self, values: [FcmaVector64; 31]) -> [FcmaVector64; 31] {
-        let y00 = values[0];
+                let y00 = values[0];
         let [x1p30, x1m30] =  SimdVector::column_butterfly2([values[1], values[30]]);
         let y00 = SimdVector::add(y00, x1p30);
         let [x2p29, x2m29] =  SimdVector::column_butterfly2([values[2], values[29]]);
