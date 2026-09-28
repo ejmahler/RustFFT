@@ -2899,7 +2899,7 @@ impl<T: FftNum> WasmSimdF64Butterfly24<T> {
         let tw5: Complex<f64> = twiddles::compute_twiddle(5, 24, direction);
         let tw8: Complex<f64> = twiddles::compute_twiddle(8, 24, direction);
         let tw10: Complex<f64> = twiddles::compute_twiddle(10, 24, direction);
-        
+
         Self {
             bf4: WasmSimdF64Butterfly4::new(direction),
             bf6: WasmSimdF64Butterfly6::new(direction),
@@ -3041,7 +3041,7 @@ impl<T: FftNum> WasmSimdF32Butterfly32<T> {
         let tw15: Complex<f32> = twiddles::compute_twiddle(15, 32, direction);
         let tw18: Complex<f32> = twiddles::compute_twiddle(18, 32, direction);
         let tw21: Complex<f32> = twiddles::compute_twiddle(21, 32, direction);
-        
+
         Self {
             bf8: WasmSimdF32Butterfly8::new(direction),
             twiddles_packed: [
@@ -3071,7 +3071,6 @@ impl<T: FftNum> WasmSimdF32Butterfly32<T> {
             twiddle18: pack_32(tw18, tw18),
             twiddle21: pack_32(tw21, tw21),
         }
-    
     }
 
     #[inline(always)]
@@ -3322,7 +3321,6 @@ impl<T: FftNum> WasmSimdF64Butterfly32<T> {
             twiddle18: pack_64(tw18),
             twiddle21: pack_64(tw21),
         }
-
     }
 
     #[inline(always)]

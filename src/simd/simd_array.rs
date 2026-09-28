@@ -13,7 +13,7 @@ pub trait SimdComplexArray<V: SimdVector>: Deref {
     // Load a single complex number from the array into a SIMD vector, setting the unused elements to zero.
     unsafe fn load1_lo(&self, index: usize) -> V;
     // Load a single complex number from the array, and copy it to all elements of a SIMD vector.
-    unsafe fn load1_lo_broadcast(&self, index: usize) -> V;
+    unsafe fn load1_dup(&self, index: usize) -> V;
 }
 
 impl<V: SimdVector> SimdComplexArray<V> for &[Complex<V::ScalarType>] {
@@ -30,9 +30,9 @@ impl<V: SimdVector> SimdComplexArray<V> for &[Complex<V::ScalarType>] {
     }
 
     #[inline(always)]
-    unsafe fn load1_lo_broadcast(&self, index: usize) -> V {
+    unsafe fn load1_dup(&self, index: usize) -> V {
         debug_assert!(self.len() >= index + 1);
-        V::load1_lo_broadcast_complex(self.as_ptr().add(index))
+        V::load1_dup_complex(self.as_ptr().add(index))
     }
 }
 impl<V: SimdVector> SimdComplexArray<V> for &mut [Complex<V::ScalarType>] {
@@ -49,9 +49,9 @@ impl<V: SimdVector> SimdComplexArray<V> for &mut [Complex<V::ScalarType>] {
     }
 
     #[inline(always)]
-    unsafe fn load1_lo_broadcast(&self, index: usize) -> V {
+    unsafe fn load1_dup(&self, index: usize) -> V {
         debug_assert!(self.len() >= index + 1);
-        V::load1_lo_broadcast_complex(self.as_ptr().add(index))
+        V::load1_dup_complex(self.as_ptr().add(index))
     }
 }
 
@@ -68,8 +68,8 @@ where
         self.input.load1_lo(index)
     }
     #[inline(always)]
-    unsafe fn load1_lo_broadcast(&self, index: usize) -> V {
-        self.input.load1_lo_broadcast(index)
+    unsafe fn load1_dup(&self, index: usize) -> V {
+        self.input.load1_dup(index)
     }
 }
 

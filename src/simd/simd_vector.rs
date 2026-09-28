@@ -40,7 +40,7 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
     // loads of complex numbers
     unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
     unsafe fn load1_lo_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
-    unsafe fn load1_lo_broadcast_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
+    unsafe fn load1_dup_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
 
     // stores of complex numbers
     unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);

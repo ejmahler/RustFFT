@@ -1,4 +1,5 @@
-use crate::neon::neon_vector::{NeonArray, NeonArrayMut, NeonVector};
+use crate::simd::simd_array::{SimdComplexArray, SimdComplexArrayMut};
+use crate::simd::simd_vector::SimdVector;
 use crate::FftNum;
 use core::arch::aarch64::*;
 use num_complex::Complex;
@@ -260,9 +261,9 @@ impl Rotate90F64 {
 /// followed by remainder column and row handling.
 #[inline(always)]
 pub unsafe fn transpose_small_twiddle_f64(
-    input: impl NeonArray<f64>,
-    mut output: impl NeonArrayMut<f64>,
-    twiddles: impl NeonArray<f64>,
+    input: impl SimdComplexArray<float64x2_t>,
+    mut output: impl SimdComplexArrayMut<float64x2_t>,
+    twiddles: impl SimdComplexArray<float64x2_t>,
     width: usize,
     height: usize,
 ) {
@@ -278,25 +279,25 @@ pub unsafe fn transpose_small_twiddle_f64(
             let out_c0 = y + x * height;
             let out_c1 = y + (x + 1) * height;
 
-            let a0 = input.load_complex(in_r0 + x);
-            let tw_a0 = twiddles.load_complex(in_r0 + x);
-            let a1 = input.load_complex(in_r0 + x + 1);
-            let tw_a1 = twiddles.load_complex(in_r0 + x + 1);
+            let a0 = input.load(in_r0 + x);
+            let tw_a0 = twiddles.load(in_r0 + x);
+            let a1 = input.load(in_r0 + x + 1);
+            let tw_a1 = twiddles.load(in_r0 + x + 1);
 
-            let b0 = input.load_complex(in_r1 + x);
-            let tw_b0 = twiddles.load_complex(in_r1 + x);
-            let b1 = input.load_complex(in_r1 + x + 1);
-            let tw_b1 = twiddles.load_complex(in_r1 + x + 1);
+            let b0 = input.load(in_r1 + x);
+            let tw_b0 = twiddles.load(in_r1 + x);
+            let b1 = input.load(in_r1 + x + 1);
+            let tw_b1 = twiddles.load(in_r1 + x + 1);
 
-            let res_a0 = NeonVector::mul_complex(a0, tw_a0);
-            let res_a1 = NeonVector::mul_complex(a1, tw_a1);
-            let res_b0 = NeonVector::mul_complex(b0, tw_b0);
-            let res_b1 = NeonVector::mul_complex(b1, tw_b1);
+            let res_a0 = SimdVector::mul_complex(a0, tw_a0);
+            let res_a1 = SimdVector::mul_complex(a1, tw_a1);
+            let res_b0 = SimdVector::mul_complex(b0, tw_b0);
+            let res_b1 = SimdVector::mul_complex(b1, tw_b1);
 
-            output.store_complex(res_a0, out_c0);
-            output.store_complex(res_b0, out_c0 + 1);
-            output.store_complex(res_a1, out_c1);
-            output.store_complex(res_b1, out_c1 + 1);
+            output.store(res_a0, out_c0);
+            output.store(res_b0, out_c0 + 1);
+            output.store(res_a1, out_c1);
+            output.store(res_b1, out_c1 + 1);
 
             x += 2;
         }
@@ -305,16 +306,16 @@ pub unsafe fn transpose_small_twiddle_f64(
         if x < width {
             let out_c0 = y + x * height;
 
-            let a0 = input.load_complex(in_r0 + x);
-            let tw_a0 = twiddles.load_complex(in_r0 + x);
-            let b0 = input.load_complex(in_r1 + x);
-            let tw_b0 = twiddles.load_complex(in_r1 + x);
+            let a0 = input.load(in_r0 + x);
+            let tw_a0 = twiddles.load(in_r0 + x);
+            let b0 = input.load(in_r1 + x);
+            let tw_b0 = twiddles.load(in_r1 + x);
 
-            let res_a0 = NeonVector::mul_complex(a0, tw_a0);
-            let res_b0 = NeonVector::mul_complex(b0, tw_b0);
+            let res_a0 = SimdVector::mul_complex(a0, tw_a0);
+            let res_b0 = SimdVector::mul_complex(b0, tw_b0);
 
-            output.store_complex(res_a0, out_c0);
-            output.store_complex(res_b0, out_c0 + 1);
+            output.store(res_a0, out_c0);
+            output.store(res_b0, out_c0 + 1);
         }
 
         y += 2;
@@ -326,10 +327,10 @@ pub unsafe fn transpose_small_twiddle_f64(
         for x in 0..width {
             let in_idx = in_r + x;
             let out_idx = y + x * height;
-            let a = input.load_complex(in_idx);
-            let tw = twiddles.load_complex(in_idx);
-            let res = NeonVector::mul_complex(a, tw);
-            output.store_complex(res, out_idx);
+            let a = input.load(in_idx);
+            let tw = twiddles.load(in_idx);
+            let res = SimdVector::mul_complex(a, tw);
+            output.store(res, out_idx);
         }
     }
 }
@@ -341,9 +342,9 @@ pub unsafe fn transpose_small_twiddle_f64(
 /// followed by remainder column and row handling.
 #[inline(always)]
 pub unsafe fn transpose_small_twiddle_f32(
-    input: impl NeonArray<f32>,
-    mut output: impl NeonArrayMut<f32>,
-    twiddles: impl NeonArray<f32>,
+    input: impl SimdComplexArray<float32x4_t>,
+    mut output: impl SimdComplexArrayMut<float32x4_t>,
+    twiddles: impl SimdComplexArray<float32x4_t>,
     width: usize,
     height: usize,
 ) {
@@ -359,18 +360,18 @@ pub unsafe fn transpose_small_twiddle_f32(
             let out_c0 = y + x * height;
             let out_c1 = y + (x + 1) * height;
 
-            let row0 = input.load_complex(in_r0 + x);
-            let tw_row0 = twiddles.load_complex(in_r0 + x);
-            let row1 = input.load_complex(in_r1 + x);
-            let tw_row1 = twiddles.load_complex(in_r1 + x);
+            let row0 = input.load(in_r0 + x);
+            let tw_row0 = twiddles.load(in_r0 + x);
+            let row1 = input.load(in_r1 + x);
+            let tw_row1 = twiddles.load(in_r1 + x);
 
-            let res0 = NeonVector::mul_complex(row0, tw_row0);
-            let res1 = NeonVector::mul_complex(row1, tw_row1);
+            let res0 = SimdVector::mul_complex(row0, tw_row0);
+            let res1 = SimdVector::mul_complex(row1, tw_row1);
 
             let [col0, col1] = transpose_complex_2x2_f32(res0, res1);
 
-            output.store_complex(col0, out_c0);
-            output.store_complex(col1, out_c1);
+            output.store(col0, out_c0);
+            output.store(col1, out_c1);
 
             x += 2;
         }
@@ -379,17 +380,17 @@ pub unsafe fn transpose_small_twiddle_f32(
         if x < width {
             let out_c0 = y + x * height;
 
-            let a0 = vget_low_f32(input.load_partial_lo_complex(in_r0 + x));
-            let b0 = vget_low_f32(input.load_partial_lo_complex(in_r1 + x));
+            let a0 = vget_low_f32(input.load1_lo(in_r0 + x));
+            let b0 = vget_low_f32(input.load1_lo(in_r1 + x));
             let val = vcombine_f32(a0, b0);
 
-            let tw_a0 = vget_low_f32(twiddles.load_partial_lo_complex(in_r0 + x));
-            let tw_b0 = vget_low_f32(twiddles.load_partial_lo_complex(in_r1 + x));
+            let tw_a0 = vget_low_f32(twiddles.load1_lo(in_r0 + x));
+            let tw_b0 = vget_low_f32(twiddles.load1_lo(in_r1 + x));
             let tw = vcombine_f32(tw_a0, tw_b0);
 
-            let res = NeonVector::mul_complex(val, tw);
+            let res = SimdVector::mul_complex(val, tw);
 
-            output.store_complex(res, out_c0);
+            output.store(res, out_c0);
         }
 
         y += 2;
@@ -401,10 +402,10 @@ pub unsafe fn transpose_small_twiddle_f32(
         for x in 0..width {
             let in_idx = in_r + x;
             let out_idx = y + x * height;
-            let a = input.load_partial_lo_complex(in_idx);
-            let tw = twiddles.load_partial_lo_complex(in_idx);
-            let res = NeonVector::mul_complex(a, tw);
-            output.store_partial_lo_complex(res, out_idx);
+            let a = input.load1_lo(in_idx);
+            let tw = twiddles.load1_lo(in_idx);
+            let res = SimdVector::mul_complex(a, tw);
+            output.store1_lo(res, out_idx);
         }
     }
 }
@@ -440,7 +441,7 @@ pub unsafe fn transpose_small_twiddle<T: FftNum>(
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use crate::neon::NeonVector;
+    use crate::simd::simd_vector::SimdVector;
     use num_complex::Complex;
 
     #[test]
@@ -448,7 +449,7 @@ mod unit_tests {
         unsafe {
             let right = vld1q_f64([1.0, 2.0].as_ptr());
             let left = vld1q_f64([5.0, 7.0].as_ptr());
-            let res = NeonVector::mul_complex(left, right);
+            let res = SimdVector::mul_complex(left, right);
             let expected = vld1q_f64([1.0 * 5.0 - 2.0 * 7.0, 1.0 * 7.0 + 2.0 * 5.0].as_ptr());
             assert_eq!(
                 std::mem::transmute::<float64x2_t, Complex<f64>>(res),
@@ -467,7 +468,7 @@ mod unit_tests {
 
             let nbr2 = vld1q_f32([val3, val4].as_ptr() as *const f32);
             let nbr1 = vld1q_f32([val1, val2].as_ptr() as *const f32);
-            let res = NeonVector::mul_complex(nbr1, nbr2);
+            let res = SimdVector::mul_complex(nbr1, nbr2);
             let res = std::mem::transmute::<float32x4_t, [Complex<f32>; 2]>(res);
             let expected = [val1 * val3, val2 * val4];
             assert_eq!(res, expected);
