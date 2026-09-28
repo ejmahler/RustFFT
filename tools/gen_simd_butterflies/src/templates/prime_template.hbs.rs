@@ -13,8 +13,13 @@ use crate::fft_helper::{
     fft_helper_immut, fft_helper_immut_unroll2x, fft_helper_inplace, fft_helper_inplace_unroll2x,
 };
 
+use crate::simd::simd_vector::SimdVector;
+use crate::simd::simd_array::SimdComplexArrayMut;
+
 use super::{{arch.name_snakecase}}_common::{assert_f32, assert_f64};
 use super::{{arch.name_snakecase}}_utils::*;
+
+#[allow(unused)]
 use super::{{arch.name_snakecase}}_vector::*;
 
 /* 
@@ -89,14 +94,14 @@ impl<T: FftNum> {{this.struct_name_32}}<T> {
         let twiddles = make_twiddles({{this.len}}, direction);
         Self {
             direction,
-            twiddles_re: twiddles.map(|t| {{../arch.vector_trait}}::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| {{../arch.vector_trait}}::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
+            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
             _phantom: std::marker::PhantomData,
         }
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl {{../arch.array_trait}}<f32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<{{../arch.vector_f32}}>) {
         let values = read_partial1_complex_to_array!(buffer, { {{ this.loadstore_indexes }} });
 
         let out = self.perform_parallel_fft_direct(values);
@@ -105,7 +110,7 @@ impl<T: FftNum> {{this.struct_name_32}}<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl {{../arch.array_trait}}<f32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<{{../arch.vector_f32}}>) {
         let input_packed = read_complex_to_array!(buffer, { {{ this.loadstore_indexes_2x }} });
 
         let values = [
@@ -123,6 +128,9 @@ impl<T: FftNum> {{this.struct_name_32}}<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [{{../arch.vector_f32}}; {{this.len}}]) -> [{{../arch.vector_f32}}; {{this.len}}] {
+        {{#if ../arch.has_fused_rotate}}{{else}}let rotate = {{../arch.vector_f32}}::make_rotate90(FftDirection::Inverse);
+        
+        {{/if}}
 {{this.impl_str}}
     }
 }
@@ -143,14 +151,14 @@ impl<T: FftNum> {{this.struct_name_64}}<T> {
         let twiddles = make_twiddles({{this.len}}, direction);
         unsafe {Self {
             direction,
-            twiddles_re: twiddles.map(|t| {{../arch.vector_trait}}::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| {{../arch.vector_trait}}::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
+            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
             _phantom: std::marker::PhantomData,
         }}
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl {{../arch.array_trait}}<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<{{../arch.vector_f64}}>) {
         let values = read_complex_to_array!(buffer, { {{ this.loadstore_indexes }} });
 
         let out = self.perform_fft_direct(values);
@@ -160,6 +168,9 @@ impl<T: FftNum> {{this.struct_name_64}}<T> {
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(&self, values: [{{../arch.vector_f64}}; {{this.len}}]) -> [{{../arch.vector_f64}}; {{this.len}}] {
+        {{#if ../arch.has_fused_rotate}}{{else}}let rotate = {{../arch.vector_f64}}::make_rotate90(FftDirection::Inverse);
+        
+        {{/if}}
 {{this.impl_str}}
     }
 }

@@ -23,7 +23,6 @@ struct Architecture {
     name_snakecase: &'static str,
     name_camelcase: &'static str,
     name_display: &'static str,
-    array_trait: &'static str,
     vector_trait: &'static str,
     vector_f32: &'static str,
     vector_f64: &'static str,
@@ -156,7 +155,6 @@ fn parse_architecture(arch_str: Option<String>) -> Result<Architecture, String> 
                 name_snakecase: "sse",
                 name_camelcase: "Sse",
                 name_display: "SSE",
-                array_trait: "SseArrayMut",
                 vector_trait: "SseVector",
                 vector_f32: "__m128",
                 vector_f64: "__m128d",
@@ -174,7 +172,6 @@ fn parse_architecture(arch_str: Option<String>) -> Result<Architecture, String> 
                 name_snakecase: "wasm_simd",
                 name_camelcase: "WasmSimd",
                 name_display: "Wasm SIMD",
-                array_trait: "WasmSimdArrayMut",
                 vector_trait: "WasmVector",
                 vector_f32: "WasmVector32",
                 vector_f64: "WasmVector64",
@@ -192,10 +189,9 @@ fn parse_architecture(arch_str: Option<String>) -> Result<Architecture, String> 
                 name_snakecase: "fcma",
                 name_camelcase: "Fcma",
                 name_display: "FCMA",
-                array_trait: "FcmaArrayMut",
                 vector_trait: "FcmaVector",
-                vector_f32: "float32x4_t",
-                vector_f64: "float64x2_t",
+                vector_f32: "FcmaVector32",
+                vector_f64: "FcmaVector64",
                 cpu_feature_name: "fcma",
                 has_fused_rotate: true,
                 target_feature_name: "neon,fcma",
@@ -210,7 +206,6 @@ fn parse_architecture(arch_str: Option<String>) -> Result<Architecture, String> 
                 name_snakecase: "neon",
                 name_camelcase: "Neon",
                 name_display: "NEON",
-                array_trait: "NeonArrayMut",
                 vector_trait: "NeonVector",
                 vector_f32: "float32x4_t",
                 vector_f64: "float64x2_t",
@@ -230,8 +225,6 @@ fn parse_architecture(arch_str: Option<String>) -> Result<Architecture, String> 
 }
 
 fn generate_fft_entry(len: usize, arch: &Architecture) -> FftEntry {
-    let vector_trait = arch.vector_trait;
-
     // generate the in-shuffle sequence for f32 parallel FFTs
     let shuffle_in_str = {
         let indent = "            ";
@@ -287,12 +280,6 @@ fn generate_fft_entry(len: usize, arch: &Architecture) -> FftEntry {
         let lenm1 = len - 1;
 
         let mut impl_strs = Vec::with_capacity(len * len);
-        if !arch.has_fused_rotate {
-            impl_strs.push(format!(
-                "{indent}let rotate = {vector_trait}::make_rotate90(FftDirection::Inverse);"
-            ));
-            impl_strs.push(String::new());
-        }
 
         // butterfly2's down the inputs, and rotate the subtraction half of the butterfly 2's.
         // Architectures with a fused rotate skip the rotation here and fold it into the
@@ -300,14 +287,14 @@ fn generate_fft_entry(len: usize, arch: &Architecture) -> FftEntry {
         impl_strs.push(format!("{indent}let y00 = values[0];"));
         for n in 1..halflen {
             let nrev = len - n;
-            impl_strs.push(format!("{indent}let [x{n}p{nrev}, x{n}m{nrev}] =  {vector_trait}::column_butterfly2([values[{n}], values[{nrev}]]);"));
+            impl_strs.push(format!("{indent}let [x{n}p{nrev}, x{n}m{nrev}] =  SimdVector::column_butterfly2([values[{n}], values[{nrev}]]);"));
             if !arch.has_fused_rotate {
                 impl_strs.push(format!(
-                    "{indent}let x{n}m{nrev} = {vector_trait}::apply_rotate90(rotate, x{n}m{nrev});"
+                    "{indent}let x{n}m{nrev} = SimdVector::apply_rotate90(rotate, x{n}m{nrev});"
                 ));
             }
             impl_strs.push(format!(
-                "{indent}let y00 = {vector_trait}::add(y00, x{n}p{nrev});"
+                "{indent}let y00 = SimdVector::add(y00, x{n}p{nrev});"
             ));
         }
         impl_strs.push(String::new());
@@ -320,17 +307,18 @@ fn generate_fft_entry(len: usize, arch: &Architecture) -> FftEntry {
             let first_twiddle = n - 1;
             let variable_name_a = format!("m{n:02}{nrev:02}a");
 
-            impl_strs.push(format!("{indent}let {variable_name_a} = {vector_trait}::fmadd(values[0], self.twiddles_re[{first_twiddle}], x1p{lenm1});"));
+            impl_strs.push(format!("{indent}let {variable_name_a} = SimdVector::fmadd(values[0], self.twiddles_re[{first_twiddle}], x1p{lenm1});"));
             for m in 2..halflen {
                 let mrev = len - m;
                 let mn = (m * n) % len;
                 let tw_idx = if mn > len / 2 { len - mn - 1 } else { mn - 1 };
-                impl_strs.push(format!("{indent}let {variable_name_a} = {vector_trait}::fmadd({variable_name_a}, self.twiddles_re[{tw_idx}], x{m}p{mrev});"));
+                impl_strs.push(format!("{indent}let {variable_name_a} = SimdVector::fmadd({variable_name_a}, self.twiddles_re[{tw_idx}], x{m}p{mrev});"));
             }
 
             let variable_name_b = format!("m{n:02}{nrev:02}b");
+            let call_trait = if arch.has_fused_rotate { &arch.vector_trait } else { "SimdVector" };
             let mul_fn = if arch.has_fused_rotate { "mul_rotate90" } else { "mul" };
-            impl_strs.push(format!("{indent}let {variable_name_b} = {vector_trait}::{mul_fn}(self.twiddles_im[{first_twiddle}], x1m{lenm1});"));
+            impl_strs.push(format!("{indent}let {variable_name_b} = {call_trait}::{mul_fn}(self.twiddles_im[{first_twiddle}], x1m{lenm1});"));
             for m in 2..halflen {
                 let mrev = len - m;
                 let mn = (m * n) % len;
@@ -341,10 +329,9 @@ fn generate_fft_entry(len: usize, arch: &Architecture) -> FftEntry {
                     (true, true) => "nmadd_rotate90",
                     (false, true) => "fmadd_rotate90",
                 };
-
-                impl_strs.push(format!("{indent}let {variable_name_b} = {vector_trait}::{func}({variable_name_b}, self.twiddles_im[{tw_idx}], x{m}m{mrev});"));
+                impl_strs.push(format!("{indent}let {variable_name_b} = {call_trait}::{func}({variable_name_b}, self.twiddles_im[{tw_idx}], x{m}m{mrev});"));
             }
-            impl_strs.push(format!("{indent}let [y{n:02}, y{nrev:02}] = {vector_trait}::column_butterfly2([{variable_name_a}, {variable_name_b}]);"));
+            impl_strs.push(format!("{indent}let [y{n:02}, y{nrev:02}] = SimdVector::column_butterfly2([{variable_name_a}, {variable_name_b}]);"));
             impl_strs.push(String::new());
         }
         impl_strs.push(String::new());
