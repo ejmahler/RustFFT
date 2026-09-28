@@ -1,4 +1,3 @@
-use core::arch::aarch64::{float32x4_t, float64x2_t};
 use std::any::TypeId;
 use std::sync::Arc;
 use num_complex::Complex;
@@ -8,6 +7,9 @@ use crate::{common::FftNum, FftDirection};
 use crate::array_utils::DoubleBuf;
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
+
+use crate::simd::simd_vector::SimdVector;
+use crate::simd::simd_array::SimdComplexArrayMut;
 
 use crate::fft_helper::{
     fft_helper_immut, fft_helper_immut_unroll2x, fft_helper_inplace, fft_helper_inplace_unroll2x,
@@ -84,8 +86,8 @@ fn make_twiddles<const TW: usize, T: FftNum>(len: usize, direction: FftDirection
 
 pub struct FcmaF32Butterfly7<T> {
     direction: FftDirection,
-    twiddles_re: [float32x4_t; 3],
-    twiddles_im: [float32x4_t; 3],
+    twiddles_re: [FcmaVector32; 3],
+    twiddles_im: [FcmaVector32; 3],
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -98,14 +100,14 @@ impl<T: FftNum> FcmaF32Butterfly7<T> {
         let twiddles = make_twiddles(7, direction);
         Self {
             direction,
-            twiddles_re: twiddles.map(|t| FcmaVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| FcmaVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
+            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
             _phantom: std::marker::PhantomData,
         }
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6 });
 
         let out = self.perform_parallel_fft_direct(values);
@@ -114,7 +116,7 @@ impl<T: FftNum> FcmaF32Butterfly7<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12 });
 
         let values = [
@@ -143,38 +145,38 @@ impl<T: FftNum> FcmaF32Butterfly7<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [float32x4_t; 7]) -> [float32x4_t; 7] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [FcmaVector32; 7]) -> [FcmaVector32; 7] {
         let y00 = values[0];
-        let [x1p6, x1m6] =  FcmaVector::column_butterfly2([values[1], values[6]]);
-        let y00 = FcmaVector::add(y00, x1p6);
-        let [x2p5, x2m5] =  FcmaVector::column_butterfly2([values[2], values[5]]);
-        let y00 = FcmaVector::add(y00, x2p5);
-        let [x3p4, x3m4] =  FcmaVector::column_butterfly2([values[3], values[4]]);
-        let y00 = FcmaVector::add(y00, x3p4);
+        let [x1p6, x1m6] =  SimdVector::column_butterfly2([values[1], values[6]]);
+        let y00 = SimdVector::add(y00, x1p6);
+        let [x2p5, x2m5] =  SimdVector::column_butterfly2([values[2], values[5]]);
+        let y00 = SimdVector::add(y00, x2p5);
+        let [x3p4, x3m4] =  SimdVector::column_butterfly2([values[3], values[4]]);
+        let y00 = SimdVector::add(y00, x3p4);
 
-        let m0106a = FcmaVector::fmadd(values[0], self.twiddles_re[0], x1p6);
-        let m0106a = FcmaVector::fmadd(m0106a, self.twiddles_re[1], x2p5);
-        let m0106a = FcmaVector::fmadd(m0106a, self.twiddles_re[2], x3p4);
+        let m0106a = SimdVector::fmadd(values[0], self.twiddles_re[0], x1p6);
+        let m0106a = SimdVector::fmadd(m0106a, self.twiddles_re[1], x2p5);
+        let m0106a = SimdVector::fmadd(m0106a, self.twiddles_re[2], x3p4);
         let m0106b = FcmaVector::mul_rotate90(self.twiddles_im[0], x1m6);
         let m0106b = FcmaVector::fmadd_rotate90(m0106b, self.twiddles_im[1], x2m5);
         let m0106b = FcmaVector::fmadd_rotate90(m0106b, self.twiddles_im[2], x3m4);
-        let [y01, y06] = FcmaVector::column_butterfly2([m0106a, m0106b]);
+        let [y01, y06] = SimdVector::column_butterfly2([m0106a, m0106b]);
 
-        let m0205a = FcmaVector::fmadd(values[0], self.twiddles_re[1], x1p6);
-        let m0205a = FcmaVector::fmadd(m0205a, self.twiddles_re[2], x2p5);
-        let m0205a = FcmaVector::fmadd(m0205a, self.twiddles_re[0], x3p4);
+        let m0205a = SimdVector::fmadd(values[0], self.twiddles_re[1], x1p6);
+        let m0205a = SimdVector::fmadd(m0205a, self.twiddles_re[2], x2p5);
+        let m0205a = SimdVector::fmadd(m0205a, self.twiddles_re[0], x3p4);
         let m0205b = FcmaVector::mul_rotate90(self.twiddles_im[1], x1m6);
         let m0205b = FcmaVector::nmadd_rotate90(m0205b, self.twiddles_im[2], x2m5);
         let m0205b = FcmaVector::nmadd_rotate90(m0205b, self.twiddles_im[0], x3m4);
-        let [y02, y05] = FcmaVector::column_butterfly2([m0205a, m0205b]);
+        let [y02, y05] = SimdVector::column_butterfly2([m0205a, m0205b]);
 
-        let m0304a = FcmaVector::fmadd(values[0], self.twiddles_re[2], x1p6);
-        let m0304a = FcmaVector::fmadd(m0304a, self.twiddles_re[0], x2p5);
-        let m0304a = FcmaVector::fmadd(m0304a, self.twiddles_re[1], x3p4);
+        let m0304a = SimdVector::fmadd(values[0], self.twiddles_re[2], x1p6);
+        let m0304a = SimdVector::fmadd(m0304a, self.twiddles_re[0], x2p5);
+        let m0304a = SimdVector::fmadd(m0304a, self.twiddles_re[1], x3p4);
         let m0304b = FcmaVector::mul_rotate90(self.twiddles_im[2], x1m6);
         let m0304b = FcmaVector::nmadd_rotate90(m0304b, self.twiddles_im[0], x2m5);
         let m0304b = FcmaVector::fmadd_rotate90(m0304b, self.twiddles_im[1], x3m4);
-        let [y03, y04] = FcmaVector::column_butterfly2([m0304a, m0304b]);
+        let [y03, y04] = SimdVector::column_butterfly2([m0304a, m0304b]);
 
 
         [y00, y01, y02, y03, y04, y05, y06]
@@ -183,8 +185,8 @@ impl<T: FftNum> FcmaF32Butterfly7<T> {
 
 pub struct FcmaF64Butterfly7<T> {
     direction: FftDirection,
-    twiddles_re: [float64x2_t; 3],
-    twiddles_im: [float64x2_t; 3],
+    twiddles_re: [FcmaVector64; 3],
+    twiddles_im: [FcmaVector64; 3],
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -197,14 +199,14 @@ impl<T: FftNum> FcmaF64Butterfly7<T> {
         let twiddles = make_twiddles(7, direction);
         unsafe {Self {
             direction,
-            twiddles_re: twiddles.map(|t| FcmaVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| FcmaVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
+            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
             _phantom: std::marker::PhantomData,
         }}
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6 });
 
         let out = self.perform_fft_direct(values);
@@ -213,38 +215,38 @@ impl<T: FftNum> FcmaF64Butterfly7<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [float64x2_t; 7]) -> [float64x2_t; 7] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [FcmaVector64; 7]) -> [FcmaVector64; 7] {
         let y00 = values[0];
-        let [x1p6, x1m6] =  FcmaVector::column_butterfly2([values[1], values[6]]);
-        let y00 = FcmaVector::add(y00, x1p6);
-        let [x2p5, x2m5] =  FcmaVector::column_butterfly2([values[2], values[5]]);
-        let y00 = FcmaVector::add(y00, x2p5);
-        let [x3p4, x3m4] =  FcmaVector::column_butterfly2([values[3], values[4]]);
-        let y00 = FcmaVector::add(y00, x3p4);
+        let [x1p6, x1m6] =  SimdVector::column_butterfly2([values[1], values[6]]);
+        let y00 = SimdVector::add(y00, x1p6);
+        let [x2p5, x2m5] =  SimdVector::column_butterfly2([values[2], values[5]]);
+        let y00 = SimdVector::add(y00, x2p5);
+        let [x3p4, x3m4] =  SimdVector::column_butterfly2([values[3], values[4]]);
+        let y00 = SimdVector::add(y00, x3p4);
 
-        let m0106a = FcmaVector::fmadd(values[0], self.twiddles_re[0], x1p6);
-        let m0106a = FcmaVector::fmadd(m0106a, self.twiddles_re[1], x2p5);
-        let m0106a = FcmaVector::fmadd(m0106a, self.twiddles_re[2], x3p4);
+        let m0106a = SimdVector::fmadd(values[0], self.twiddles_re[0], x1p6);
+        let m0106a = SimdVector::fmadd(m0106a, self.twiddles_re[1], x2p5);
+        let m0106a = SimdVector::fmadd(m0106a, self.twiddles_re[2], x3p4);
         let m0106b = FcmaVector::mul_rotate90(self.twiddles_im[0], x1m6);
         let m0106b = FcmaVector::fmadd_rotate90(m0106b, self.twiddles_im[1], x2m5);
         let m0106b = FcmaVector::fmadd_rotate90(m0106b, self.twiddles_im[2], x3m4);
-        let [y01, y06] = FcmaVector::column_butterfly2([m0106a, m0106b]);
+        let [y01, y06] = SimdVector::column_butterfly2([m0106a, m0106b]);
 
-        let m0205a = FcmaVector::fmadd(values[0], self.twiddles_re[1], x1p6);
-        let m0205a = FcmaVector::fmadd(m0205a, self.twiddles_re[2], x2p5);
-        let m0205a = FcmaVector::fmadd(m0205a, self.twiddles_re[0], x3p4);
+        let m0205a = SimdVector::fmadd(values[0], self.twiddles_re[1], x1p6);
+        let m0205a = SimdVector::fmadd(m0205a, self.twiddles_re[2], x2p5);
+        let m0205a = SimdVector::fmadd(m0205a, self.twiddles_re[0], x3p4);
         let m0205b = FcmaVector::mul_rotate90(self.twiddles_im[1], x1m6);
         let m0205b = FcmaVector::nmadd_rotate90(m0205b, self.twiddles_im[2], x2m5);
         let m0205b = FcmaVector::nmadd_rotate90(m0205b, self.twiddles_im[0], x3m4);
-        let [y02, y05] = FcmaVector::column_butterfly2([m0205a, m0205b]);
+        let [y02, y05] = SimdVector::column_butterfly2([m0205a, m0205b]);
 
-        let m0304a = FcmaVector::fmadd(values[0], self.twiddles_re[2], x1p6);
-        let m0304a = FcmaVector::fmadd(m0304a, self.twiddles_re[0], x2p5);
-        let m0304a = FcmaVector::fmadd(m0304a, self.twiddles_re[1], x3p4);
+        let m0304a = SimdVector::fmadd(values[0], self.twiddles_re[2], x1p6);
+        let m0304a = SimdVector::fmadd(m0304a, self.twiddles_re[0], x2p5);
+        let m0304a = SimdVector::fmadd(m0304a, self.twiddles_re[1], x3p4);
         let m0304b = FcmaVector::mul_rotate90(self.twiddles_im[2], x1m6);
         let m0304b = FcmaVector::nmadd_rotate90(m0304b, self.twiddles_im[0], x2m5);
         let m0304b = FcmaVector::fmadd_rotate90(m0304b, self.twiddles_im[1], x3m4);
-        let [y03, y04] = FcmaVector::column_butterfly2([m0304a, m0304b]);
+        let [y03, y04] = SimdVector::column_butterfly2([m0304a, m0304b]);
 
 
         [y00, y01, y02, y03, y04, y05, y06]
@@ -253,8 +255,8 @@ impl<T: FftNum> FcmaF64Butterfly7<T> {
 
 pub struct FcmaF32Butterfly11<T> {
     direction: FftDirection,
-    twiddles_re: [float32x4_t; 5],
-    twiddles_im: [float32x4_t; 5],
+    twiddles_re: [FcmaVector32; 5],
+    twiddles_im: [FcmaVector32; 5],
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -267,14 +269,14 @@ impl<T: FftNum> FcmaF32Butterfly11<T> {
         let twiddles = make_twiddles(11, direction);
         Self {
             direction,
-            twiddles_re: twiddles.map(|t| FcmaVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| FcmaVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
+            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
             _phantom: std::marker::PhantomData,
         }
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10 });
 
         let out = self.perform_parallel_fft_direct(values);
@@ -283,7 +285,7 @@ impl<T: FftNum> FcmaF32Butterfly11<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20 });
 
         let values = [
@@ -320,78 +322,78 @@ impl<T: FftNum> FcmaF32Butterfly11<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [float32x4_t; 11]) -> [float32x4_t; 11] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [FcmaVector32; 11]) -> [FcmaVector32; 11] {
         let y00 = values[0];
-        let [x1p10, x1m10] =  FcmaVector::column_butterfly2([values[1], values[10]]);
-        let y00 = FcmaVector::add(y00, x1p10);
-        let [x2p9, x2m9] =  FcmaVector::column_butterfly2([values[2], values[9]]);
-        let y00 = FcmaVector::add(y00, x2p9);
-        let [x3p8, x3m8] =  FcmaVector::column_butterfly2([values[3], values[8]]);
-        let y00 = FcmaVector::add(y00, x3p8);
-        let [x4p7, x4m7] =  FcmaVector::column_butterfly2([values[4], values[7]]);
-        let y00 = FcmaVector::add(y00, x4p7);
-        let [x5p6, x5m6] =  FcmaVector::column_butterfly2([values[5], values[6]]);
-        let y00 = FcmaVector::add(y00, x5p6);
+        let [x1p10, x1m10] =  SimdVector::column_butterfly2([values[1], values[10]]);
+        let y00 = SimdVector::add(y00, x1p10);
+        let [x2p9, x2m9] =  SimdVector::column_butterfly2([values[2], values[9]]);
+        let y00 = SimdVector::add(y00, x2p9);
+        let [x3p8, x3m8] =  SimdVector::column_butterfly2([values[3], values[8]]);
+        let y00 = SimdVector::add(y00, x3p8);
+        let [x4p7, x4m7] =  SimdVector::column_butterfly2([values[4], values[7]]);
+        let y00 = SimdVector::add(y00, x4p7);
+        let [x5p6, x5m6] =  SimdVector::column_butterfly2([values[5], values[6]]);
+        let y00 = SimdVector::add(y00, x5p6);
 
-        let m0110a = FcmaVector::fmadd(values[0], self.twiddles_re[0], x1p10);
-        let m0110a = FcmaVector::fmadd(m0110a, self.twiddles_re[1], x2p9);
-        let m0110a = FcmaVector::fmadd(m0110a, self.twiddles_re[2], x3p8);
-        let m0110a = FcmaVector::fmadd(m0110a, self.twiddles_re[3], x4p7);
-        let m0110a = FcmaVector::fmadd(m0110a, self.twiddles_re[4], x5p6);
+        let m0110a = SimdVector::fmadd(values[0], self.twiddles_re[0], x1p10);
+        let m0110a = SimdVector::fmadd(m0110a, self.twiddles_re[1], x2p9);
+        let m0110a = SimdVector::fmadd(m0110a, self.twiddles_re[2], x3p8);
+        let m0110a = SimdVector::fmadd(m0110a, self.twiddles_re[3], x4p7);
+        let m0110a = SimdVector::fmadd(m0110a, self.twiddles_re[4], x5p6);
         let m0110b = FcmaVector::mul_rotate90(self.twiddles_im[0], x1m10);
         let m0110b = FcmaVector::fmadd_rotate90(m0110b, self.twiddles_im[1], x2m9);
         let m0110b = FcmaVector::fmadd_rotate90(m0110b, self.twiddles_im[2], x3m8);
         let m0110b = FcmaVector::fmadd_rotate90(m0110b, self.twiddles_im[3], x4m7);
         let m0110b = FcmaVector::fmadd_rotate90(m0110b, self.twiddles_im[4], x5m6);
-        let [y01, y10] = FcmaVector::column_butterfly2([m0110a, m0110b]);
+        let [y01, y10] = SimdVector::column_butterfly2([m0110a, m0110b]);
 
-        let m0209a = FcmaVector::fmadd(values[0], self.twiddles_re[1], x1p10);
-        let m0209a = FcmaVector::fmadd(m0209a, self.twiddles_re[3], x2p9);
-        let m0209a = FcmaVector::fmadd(m0209a, self.twiddles_re[4], x3p8);
-        let m0209a = FcmaVector::fmadd(m0209a, self.twiddles_re[2], x4p7);
-        let m0209a = FcmaVector::fmadd(m0209a, self.twiddles_re[0], x5p6);
+        let m0209a = SimdVector::fmadd(values[0], self.twiddles_re[1], x1p10);
+        let m0209a = SimdVector::fmadd(m0209a, self.twiddles_re[3], x2p9);
+        let m0209a = SimdVector::fmadd(m0209a, self.twiddles_re[4], x3p8);
+        let m0209a = SimdVector::fmadd(m0209a, self.twiddles_re[2], x4p7);
+        let m0209a = SimdVector::fmadd(m0209a, self.twiddles_re[0], x5p6);
         let m0209b = FcmaVector::mul_rotate90(self.twiddles_im[1], x1m10);
         let m0209b = FcmaVector::fmadd_rotate90(m0209b, self.twiddles_im[3], x2m9);
         let m0209b = FcmaVector::nmadd_rotate90(m0209b, self.twiddles_im[4], x3m8);
         let m0209b = FcmaVector::nmadd_rotate90(m0209b, self.twiddles_im[2], x4m7);
         let m0209b = FcmaVector::nmadd_rotate90(m0209b, self.twiddles_im[0], x5m6);
-        let [y02, y09] = FcmaVector::column_butterfly2([m0209a, m0209b]);
+        let [y02, y09] = SimdVector::column_butterfly2([m0209a, m0209b]);
 
-        let m0308a = FcmaVector::fmadd(values[0], self.twiddles_re[2], x1p10);
-        let m0308a = FcmaVector::fmadd(m0308a, self.twiddles_re[4], x2p9);
-        let m0308a = FcmaVector::fmadd(m0308a, self.twiddles_re[1], x3p8);
-        let m0308a = FcmaVector::fmadd(m0308a, self.twiddles_re[0], x4p7);
-        let m0308a = FcmaVector::fmadd(m0308a, self.twiddles_re[3], x5p6);
+        let m0308a = SimdVector::fmadd(values[0], self.twiddles_re[2], x1p10);
+        let m0308a = SimdVector::fmadd(m0308a, self.twiddles_re[4], x2p9);
+        let m0308a = SimdVector::fmadd(m0308a, self.twiddles_re[1], x3p8);
+        let m0308a = SimdVector::fmadd(m0308a, self.twiddles_re[0], x4p7);
+        let m0308a = SimdVector::fmadd(m0308a, self.twiddles_re[3], x5p6);
         let m0308b = FcmaVector::mul_rotate90(self.twiddles_im[2], x1m10);
         let m0308b = FcmaVector::nmadd_rotate90(m0308b, self.twiddles_im[4], x2m9);
         let m0308b = FcmaVector::nmadd_rotate90(m0308b, self.twiddles_im[1], x3m8);
         let m0308b = FcmaVector::fmadd_rotate90(m0308b, self.twiddles_im[0], x4m7);
         let m0308b = FcmaVector::fmadd_rotate90(m0308b, self.twiddles_im[3], x5m6);
-        let [y03, y08] = FcmaVector::column_butterfly2([m0308a, m0308b]);
+        let [y03, y08] = SimdVector::column_butterfly2([m0308a, m0308b]);
 
-        let m0407a = FcmaVector::fmadd(values[0], self.twiddles_re[3], x1p10);
-        let m0407a = FcmaVector::fmadd(m0407a, self.twiddles_re[2], x2p9);
-        let m0407a = FcmaVector::fmadd(m0407a, self.twiddles_re[0], x3p8);
-        let m0407a = FcmaVector::fmadd(m0407a, self.twiddles_re[4], x4p7);
-        let m0407a = FcmaVector::fmadd(m0407a, self.twiddles_re[1], x5p6);
+        let m0407a = SimdVector::fmadd(values[0], self.twiddles_re[3], x1p10);
+        let m0407a = SimdVector::fmadd(m0407a, self.twiddles_re[2], x2p9);
+        let m0407a = SimdVector::fmadd(m0407a, self.twiddles_re[0], x3p8);
+        let m0407a = SimdVector::fmadd(m0407a, self.twiddles_re[4], x4p7);
+        let m0407a = SimdVector::fmadd(m0407a, self.twiddles_re[1], x5p6);
         let m0407b = FcmaVector::mul_rotate90(self.twiddles_im[3], x1m10);
         let m0407b = FcmaVector::nmadd_rotate90(m0407b, self.twiddles_im[2], x2m9);
         let m0407b = FcmaVector::fmadd_rotate90(m0407b, self.twiddles_im[0], x3m8);
         let m0407b = FcmaVector::fmadd_rotate90(m0407b, self.twiddles_im[4], x4m7);
         let m0407b = FcmaVector::nmadd_rotate90(m0407b, self.twiddles_im[1], x5m6);
-        let [y04, y07] = FcmaVector::column_butterfly2([m0407a, m0407b]);
+        let [y04, y07] = SimdVector::column_butterfly2([m0407a, m0407b]);
 
-        let m0506a = FcmaVector::fmadd(values[0], self.twiddles_re[4], x1p10);
-        let m0506a = FcmaVector::fmadd(m0506a, self.twiddles_re[0], x2p9);
-        let m0506a = FcmaVector::fmadd(m0506a, self.twiddles_re[3], x3p8);
-        let m0506a = FcmaVector::fmadd(m0506a, self.twiddles_re[1], x4p7);
-        let m0506a = FcmaVector::fmadd(m0506a, self.twiddles_re[2], x5p6);
+        let m0506a = SimdVector::fmadd(values[0], self.twiddles_re[4], x1p10);
+        let m0506a = SimdVector::fmadd(m0506a, self.twiddles_re[0], x2p9);
+        let m0506a = SimdVector::fmadd(m0506a, self.twiddles_re[3], x3p8);
+        let m0506a = SimdVector::fmadd(m0506a, self.twiddles_re[1], x4p7);
+        let m0506a = SimdVector::fmadd(m0506a, self.twiddles_re[2], x5p6);
         let m0506b = FcmaVector::mul_rotate90(self.twiddles_im[4], x1m10);
         let m0506b = FcmaVector::nmadd_rotate90(m0506b, self.twiddles_im[0], x2m9);
         let m0506b = FcmaVector::fmadd_rotate90(m0506b, self.twiddles_im[3], x3m8);
         let m0506b = FcmaVector::nmadd_rotate90(m0506b, self.twiddles_im[1], x4m7);
         let m0506b = FcmaVector::fmadd_rotate90(m0506b, self.twiddles_im[2], x5m6);
-        let [y05, y06] = FcmaVector::column_butterfly2([m0506a, m0506b]);
+        let [y05, y06] = SimdVector::column_butterfly2([m0506a, m0506b]);
 
 
         [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10]
@@ -400,8 +402,8 @@ impl<T: FftNum> FcmaF32Butterfly11<T> {
 
 pub struct FcmaF64Butterfly11<T> {
     direction: FftDirection,
-    twiddles_re: [float64x2_t; 5],
-    twiddles_im: [float64x2_t; 5],
+    twiddles_re: [FcmaVector64; 5],
+    twiddles_im: [FcmaVector64; 5],
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -414,14 +416,14 @@ impl<T: FftNum> FcmaF64Butterfly11<T> {
         let twiddles = make_twiddles(11, direction);
         unsafe {Self {
             direction,
-            twiddles_re: twiddles.map(|t| FcmaVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| FcmaVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
+            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
             _phantom: std::marker::PhantomData,
         }}
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10 });
 
         let out = self.perform_fft_direct(values);
@@ -430,78 +432,78 @@ impl<T: FftNum> FcmaF64Butterfly11<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [float64x2_t; 11]) -> [float64x2_t; 11] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [FcmaVector64; 11]) -> [FcmaVector64; 11] {
         let y00 = values[0];
-        let [x1p10, x1m10] =  FcmaVector::column_butterfly2([values[1], values[10]]);
-        let y00 = FcmaVector::add(y00, x1p10);
-        let [x2p9, x2m9] =  FcmaVector::column_butterfly2([values[2], values[9]]);
-        let y00 = FcmaVector::add(y00, x2p9);
-        let [x3p8, x3m8] =  FcmaVector::column_butterfly2([values[3], values[8]]);
-        let y00 = FcmaVector::add(y00, x3p8);
-        let [x4p7, x4m7] =  FcmaVector::column_butterfly2([values[4], values[7]]);
-        let y00 = FcmaVector::add(y00, x4p7);
-        let [x5p6, x5m6] =  FcmaVector::column_butterfly2([values[5], values[6]]);
-        let y00 = FcmaVector::add(y00, x5p6);
+        let [x1p10, x1m10] =  SimdVector::column_butterfly2([values[1], values[10]]);
+        let y00 = SimdVector::add(y00, x1p10);
+        let [x2p9, x2m9] =  SimdVector::column_butterfly2([values[2], values[9]]);
+        let y00 = SimdVector::add(y00, x2p9);
+        let [x3p8, x3m8] =  SimdVector::column_butterfly2([values[3], values[8]]);
+        let y00 = SimdVector::add(y00, x3p8);
+        let [x4p7, x4m7] =  SimdVector::column_butterfly2([values[4], values[7]]);
+        let y00 = SimdVector::add(y00, x4p7);
+        let [x5p6, x5m6] =  SimdVector::column_butterfly2([values[5], values[6]]);
+        let y00 = SimdVector::add(y00, x5p6);
 
-        let m0110a = FcmaVector::fmadd(values[0], self.twiddles_re[0], x1p10);
-        let m0110a = FcmaVector::fmadd(m0110a, self.twiddles_re[1], x2p9);
-        let m0110a = FcmaVector::fmadd(m0110a, self.twiddles_re[2], x3p8);
-        let m0110a = FcmaVector::fmadd(m0110a, self.twiddles_re[3], x4p7);
-        let m0110a = FcmaVector::fmadd(m0110a, self.twiddles_re[4], x5p6);
+        let m0110a = SimdVector::fmadd(values[0], self.twiddles_re[0], x1p10);
+        let m0110a = SimdVector::fmadd(m0110a, self.twiddles_re[1], x2p9);
+        let m0110a = SimdVector::fmadd(m0110a, self.twiddles_re[2], x3p8);
+        let m0110a = SimdVector::fmadd(m0110a, self.twiddles_re[3], x4p7);
+        let m0110a = SimdVector::fmadd(m0110a, self.twiddles_re[4], x5p6);
         let m0110b = FcmaVector::mul_rotate90(self.twiddles_im[0], x1m10);
         let m0110b = FcmaVector::fmadd_rotate90(m0110b, self.twiddles_im[1], x2m9);
         let m0110b = FcmaVector::fmadd_rotate90(m0110b, self.twiddles_im[2], x3m8);
         let m0110b = FcmaVector::fmadd_rotate90(m0110b, self.twiddles_im[3], x4m7);
         let m0110b = FcmaVector::fmadd_rotate90(m0110b, self.twiddles_im[4], x5m6);
-        let [y01, y10] = FcmaVector::column_butterfly2([m0110a, m0110b]);
+        let [y01, y10] = SimdVector::column_butterfly2([m0110a, m0110b]);
 
-        let m0209a = FcmaVector::fmadd(values[0], self.twiddles_re[1], x1p10);
-        let m0209a = FcmaVector::fmadd(m0209a, self.twiddles_re[3], x2p9);
-        let m0209a = FcmaVector::fmadd(m0209a, self.twiddles_re[4], x3p8);
-        let m0209a = FcmaVector::fmadd(m0209a, self.twiddles_re[2], x4p7);
-        let m0209a = FcmaVector::fmadd(m0209a, self.twiddles_re[0], x5p6);
+        let m0209a = SimdVector::fmadd(values[0], self.twiddles_re[1], x1p10);
+        let m0209a = SimdVector::fmadd(m0209a, self.twiddles_re[3], x2p9);
+        let m0209a = SimdVector::fmadd(m0209a, self.twiddles_re[4], x3p8);
+        let m0209a = SimdVector::fmadd(m0209a, self.twiddles_re[2], x4p7);
+        let m0209a = SimdVector::fmadd(m0209a, self.twiddles_re[0], x5p6);
         let m0209b = FcmaVector::mul_rotate90(self.twiddles_im[1], x1m10);
         let m0209b = FcmaVector::fmadd_rotate90(m0209b, self.twiddles_im[3], x2m9);
         let m0209b = FcmaVector::nmadd_rotate90(m0209b, self.twiddles_im[4], x3m8);
         let m0209b = FcmaVector::nmadd_rotate90(m0209b, self.twiddles_im[2], x4m7);
         let m0209b = FcmaVector::nmadd_rotate90(m0209b, self.twiddles_im[0], x5m6);
-        let [y02, y09] = FcmaVector::column_butterfly2([m0209a, m0209b]);
+        let [y02, y09] = SimdVector::column_butterfly2([m0209a, m0209b]);
 
-        let m0308a = FcmaVector::fmadd(values[0], self.twiddles_re[2], x1p10);
-        let m0308a = FcmaVector::fmadd(m0308a, self.twiddles_re[4], x2p9);
-        let m0308a = FcmaVector::fmadd(m0308a, self.twiddles_re[1], x3p8);
-        let m0308a = FcmaVector::fmadd(m0308a, self.twiddles_re[0], x4p7);
-        let m0308a = FcmaVector::fmadd(m0308a, self.twiddles_re[3], x5p6);
+        let m0308a = SimdVector::fmadd(values[0], self.twiddles_re[2], x1p10);
+        let m0308a = SimdVector::fmadd(m0308a, self.twiddles_re[4], x2p9);
+        let m0308a = SimdVector::fmadd(m0308a, self.twiddles_re[1], x3p8);
+        let m0308a = SimdVector::fmadd(m0308a, self.twiddles_re[0], x4p7);
+        let m0308a = SimdVector::fmadd(m0308a, self.twiddles_re[3], x5p6);
         let m0308b = FcmaVector::mul_rotate90(self.twiddles_im[2], x1m10);
         let m0308b = FcmaVector::nmadd_rotate90(m0308b, self.twiddles_im[4], x2m9);
         let m0308b = FcmaVector::nmadd_rotate90(m0308b, self.twiddles_im[1], x3m8);
         let m0308b = FcmaVector::fmadd_rotate90(m0308b, self.twiddles_im[0], x4m7);
         let m0308b = FcmaVector::fmadd_rotate90(m0308b, self.twiddles_im[3], x5m6);
-        let [y03, y08] = FcmaVector::column_butterfly2([m0308a, m0308b]);
+        let [y03, y08] = SimdVector::column_butterfly2([m0308a, m0308b]);
 
-        let m0407a = FcmaVector::fmadd(values[0], self.twiddles_re[3], x1p10);
-        let m0407a = FcmaVector::fmadd(m0407a, self.twiddles_re[2], x2p9);
-        let m0407a = FcmaVector::fmadd(m0407a, self.twiddles_re[0], x3p8);
-        let m0407a = FcmaVector::fmadd(m0407a, self.twiddles_re[4], x4p7);
-        let m0407a = FcmaVector::fmadd(m0407a, self.twiddles_re[1], x5p6);
+        let m0407a = SimdVector::fmadd(values[0], self.twiddles_re[3], x1p10);
+        let m0407a = SimdVector::fmadd(m0407a, self.twiddles_re[2], x2p9);
+        let m0407a = SimdVector::fmadd(m0407a, self.twiddles_re[0], x3p8);
+        let m0407a = SimdVector::fmadd(m0407a, self.twiddles_re[4], x4p7);
+        let m0407a = SimdVector::fmadd(m0407a, self.twiddles_re[1], x5p6);
         let m0407b = FcmaVector::mul_rotate90(self.twiddles_im[3], x1m10);
         let m0407b = FcmaVector::nmadd_rotate90(m0407b, self.twiddles_im[2], x2m9);
         let m0407b = FcmaVector::fmadd_rotate90(m0407b, self.twiddles_im[0], x3m8);
         let m0407b = FcmaVector::fmadd_rotate90(m0407b, self.twiddles_im[4], x4m7);
         let m0407b = FcmaVector::nmadd_rotate90(m0407b, self.twiddles_im[1], x5m6);
-        let [y04, y07] = FcmaVector::column_butterfly2([m0407a, m0407b]);
+        let [y04, y07] = SimdVector::column_butterfly2([m0407a, m0407b]);
 
-        let m0506a = FcmaVector::fmadd(values[0], self.twiddles_re[4], x1p10);
-        let m0506a = FcmaVector::fmadd(m0506a, self.twiddles_re[0], x2p9);
-        let m0506a = FcmaVector::fmadd(m0506a, self.twiddles_re[3], x3p8);
-        let m0506a = FcmaVector::fmadd(m0506a, self.twiddles_re[1], x4p7);
-        let m0506a = FcmaVector::fmadd(m0506a, self.twiddles_re[2], x5p6);
+        let m0506a = SimdVector::fmadd(values[0], self.twiddles_re[4], x1p10);
+        let m0506a = SimdVector::fmadd(m0506a, self.twiddles_re[0], x2p9);
+        let m0506a = SimdVector::fmadd(m0506a, self.twiddles_re[3], x3p8);
+        let m0506a = SimdVector::fmadd(m0506a, self.twiddles_re[1], x4p7);
+        let m0506a = SimdVector::fmadd(m0506a, self.twiddles_re[2], x5p6);
         let m0506b = FcmaVector::mul_rotate90(self.twiddles_im[4], x1m10);
         let m0506b = FcmaVector::nmadd_rotate90(m0506b, self.twiddles_im[0], x2m9);
         let m0506b = FcmaVector::fmadd_rotate90(m0506b, self.twiddles_im[3], x3m8);
         let m0506b = FcmaVector::nmadd_rotate90(m0506b, self.twiddles_im[1], x4m7);
         let m0506b = FcmaVector::fmadd_rotate90(m0506b, self.twiddles_im[2], x5m6);
-        let [y05, y06] = FcmaVector::column_butterfly2([m0506a, m0506b]);
+        let [y05, y06] = SimdVector::column_butterfly2([m0506a, m0506b]);
 
 
         [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10]
@@ -510,8 +512,8 @@ impl<T: FftNum> FcmaF64Butterfly11<T> {
 
 pub struct FcmaF32Butterfly13<T> {
     direction: FftDirection,
-    twiddles_re: [float32x4_t; 6],
-    twiddles_im: [float32x4_t; 6],
+    twiddles_re: [FcmaVector32; 6],
+    twiddles_im: [FcmaVector32; 6],
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -524,14 +526,14 @@ impl<T: FftNum> FcmaF32Butterfly13<T> {
         let twiddles = make_twiddles(13, direction);
         Self {
             direction,
-            twiddles_re: twiddles.map(|t| FcmaVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| FcmaVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
+            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
             _phantom: std::marker::PhantomData,
         }
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 });
 
         let out = self.perform_parallel_fft_direct(values);
@@ -540,7 +542,7 @@ impl<T: FftNum> FcmaF32Butterfly13<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24 });
 
         let values = [
@@ -581,104 +583,104 @@ impl<T: FftNum> FcmaF32Butterfly13<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [float32x4_t; 13]) -> [float32x4_t; 13] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [FcmaVector32; 13]) -> [FcmaVector32; 13] {
         let y00 = values[0];
-        let [x1p12, x1m12] =  FcmaVector::column_butterfly2([values[1], values[12]]);
-        let y00 = FcmaVector::add(y00, x1p12);
-        let [x2p11, x2m11] =  FcmaVector::column_butterfly2([values[2], values[11]]);
-        let y00 = FcmaVector::add(y00, x2p11);
-        let [x3p10, x3m10] =  FcmaVector::column_butterfly2([values[3], values[10]]);
-        let y00 = FcmaVector::add(y00, x3p10);
-        let [x4p9, x4m9] =  FcmaVector::column_butterfly2([values[4], values[9]]);
-        let y00 = FcmaVector::add(y00, x4p9);
-        let [x5p8, x5m8] =  FcmaVector::column_butterfly2([values[5], values[8]]);
-        let y00 = FcmaVector::add(y00, x5p8);
-        let [x6p7, x6m7] =  FcmaVector::column_butterfly2([values[6], values[7]]);
-        let y00 = FcmaVector::add(y00, x6p7);
+        let [x1p12, x1m12] =  SimdVector::column_butterfly2([values[1], values[12]]);
+        let y00 = SimdVector::add(y00, x1p12);
+        let [x2p11, x2m11] =  SimdVector::column_butterfly2([values[2], values[11]]);
+        let y00 = SimdVector::add(y00, x2p11);
+        let [x3p10, x3m10] =  SimdVector::column_butterfly2([values[3], values[10]]);
+        let y00 = SimdVector::add(y00, x3p10);
+        let [x4p9, x4m9] =  SimdVector::column_butterfly2([values[4], values[9]]);
+        let y00 = SimdVector::add(y00, x4p9);
+        let [x5p8, x5m8] =  SimdVector::column_butterfly2([values[5], values[8]]);
+        let y00 = SimdVector::add(y00, x5p8);
+        let [x6p7, x6m7] =  SimdVector::column_butterfly2([values[6], values[7]]);
+        let y00 = SimdVector::add(y00, x6p7);
 
-        let m0112a = FcmaVector::fmadd(values[0], self.twiddles_re[0], x1p12);
-        let m0112a = FcmaVector::fmadd(m0112a, self.twiddles_re[1], x2p11);
-        let m0112a = FcmaVector::fmadd(m0112a, self.twiddles_re[2], x3p10);
-        let m0112a = FcmaVector::fmadd(m0112a, self.twiddles_re[3], x4p9);
-        let m0112a = FcmaVector::fmadd(m0112a, self.twiddles_re[4], x5p8);
-        let m0112a = FcmaVector::fmadd(m0112a, self.twiddles_re[5], x6p7);
+        let m0112a = SimdVector::fmadd(values[0], self.twiddles_re[0], x1p12);
+        let m0112a = SimdVector::fmadd(m0112a, self.twiddles_re[1], x2p11);
+        let m0112a = SimdVector::fmadd(m0112a, self.twiddles_re[2], x3p10);
+        let m0112a = SimdVector::fmadd(m0112a, self.twiddles_re[3], x4p9);
+        let m0112a = SimdVector::fmadd(m0112a, self.twiddles_re[4], x5p8);
+        let m0112a = SimdVector::fmadd(m0112a, self.twiddles_re[5], x6p7);
         let m0112b = FcmaVector::mul_rotate90(self.twiddles_im[0], x1m12);
         let m0112b = FcmaVector::fmadd_rotate90(m0112b, self.twiddles_im[1], x2m11);
         let m0112b = FcmaVector::fmadd_rotate90(m0112b, self.twiddles_im[2], x3m10);
         let m0112b = FcmaVector::fmadd_rotate90(m0112b, self.twiddles_im[3], x4m9);
         let m0112b = FcmaVector::fmadd_rotate90(m0112b, self.twiddles_im[4], x5m8);
         let m0112b = FcmaVector::fmadd_rotate90(m0112b, self.twiddles_im[5], x6m7);
-        let [y01, y12] = FcmaVector::column_butterfly2([m0112a, m0112b]);
+        let [y01, y12] = SimdVector::column_butterfly2([m0112a, m0112b]);
 
-        let m0211a = FcmaVector::fmadd(values[0], self.twiddles_re[1], x1p12);
-        let m0211a = FcmaVector::fmadd(m0211a, self.twiddles_re[3], x2p11);
-        let m0211a = FcmaVector::fmadd(m0211a, self.twiddles_re[5], x3p10);
-        let m0211a = FcmaVector::fmadd(m0211a, self.twiddles_re[4], x4p9);
-        let m0211a = FcmaVector::fmadd(m0211a, self.twiddles_re[2], x5p8);
-        let m0211a = FcmaVector::fmadd(m0211a, self.twiddles_re[0], x6p7);
+        let m0211a = SimdVector::fmadd(values[0], self.twiddles_re[1], x1p12);
+        let m0211a = SimdVector::fmadd(m0211a, self.twiddles_re[3], x2p11);
+        let m0211a = SimdVector::fmadd(m0211a, self.twiddles_re[5], x3p10);
+        let m0211a = SimdVector::fmadd(m0211a, self.twiddles_re[4], x4p9);
+        let m0211a = SimdVector::fmadd(m0211a, self.twiddles_re[2], x5p8);
+        let m0211a = SimdVector::fmadd(m0211a, self.twiddles_re[0], x6p7);
         let m0211b = FcmaVector::mul_rotate90(self.twiddles_im[1], x1m12);
         let m0211b = FcmaVector::fmadd_rotate90(m0211b, self.twiddles_im[3], x2m11);
         let m0211b = FcmaVector::fmadd_rotate90(m0211b, self.twiddles_im[5], x3m10);
         let m0211b = FcmaVector::nmadd_rotate90(m0211b, self.twiddles_im[4], x4m9);
         let m0211b = FcmaVector::nmadd_rotate90(m0211b, self.twiddles_im[2], x5m8);
         let m0211b = FcmaVector::nmadd_rotate90(m0211b, self.twiddles_im[0], x6m7);
-        let [y02, y11] = FcmaVector::column_butterfly2([m0211a, m0211b]);
+        let [y02, y11] = SimdVector::column_butterfly2([m0211a, m0211b]);
 
-        let m0310a = FcmaVector::fmadd(values[0], self.twiddles_re[2], x1p12);
-        let m0310a = FcmaVector::fmadd(m0310a, self.twiddles_re[5], x2p11);
-        let m0310a = FcmaVector::fmadd(m0310a, self.twiddles_re[3], x3p10);
-        let m0310a = FcmaVector::fmadd(m0310a, self.twiddles_re[0], x4p9);
-        let m0310a = FcmaVector::fmadd(m0310a, self.twiddles_re[1], x5p8);
-        let m0310a = FcmaVector::fmadd(m0310a, self.twiddles_re[4], x6p7);
+        let m0310a = SimdVector::fmadd(values[0], self.twiddles_re[2], x1p12);
+        let m0310a = SimdVector::fmadd(m0310a, self.twiddles_re[5], x2p11);
+        let m0310a = SimdVector::fmadd(m0310a, self.twiddles_re[3], x3p10);
+        let m0310a = SimdVector::fmadd(m0310a, self.twiddles_re[0], x4p9);
+        let m0310a = SimdVector::fmadd(m0310a, self.twiddles_re[1], x5p8);
+        let m0310a = SimdVector::fmadd(m0310a, self.twiddles_re[4], x6p7);
         let m0310b = FcmaVector::mul_rotate90(self.twiddles_im[2], x1m12);
         let m0310b = FcmaVector::fmadd_rotate90(m0310b, self.twiddles_im[5], x2m11);
         let m0310b = FcmaVector::nmadd_rotate90(m0310b, self.twiddles_im[3], x3m10);
         let m0310b = FcmaVector::nmadd_rotate90(m0310b, self.twiddles_im[0], x4m9);
         let m0310b = FcmaVector::fmadd_rotate90(m0310b, self.twiddles_im[1], x5m8);
         let m0310b = FcmaVector::fmadd_rotate90(m0310b, self.twiddles_im[4], x6m7);
-        let [y03, y10] = FcmaVector::column_butterfly2([m0310a, m0310b]);
+        let [y03, y10] = SimdVector::column_butterfly2([m0310a, m0310b]);
 
-        let m0409a = FcmaVector::fmadd(values[0], self.twiddles_re[3], x1p12);
-        let m0409a = FcmaVector::fmadd(m0409a, self.twiddles_re[4], x2p11);
-        let m0409a = FcmaVector::fmadd(m0409a, self.twiddles_re[0], x3p10);
-        let m0409a = FcmaVector::fmadd(m0409a, self.twiddles_re[2], x4p9);
-        let m0409a = FcmaVector::fmadd(m0409a, self.twiddles_re[5], x5p8);
-        let m0409a = FcmaVector::fmadd(m0409a, self.twiddles_re[1], x6p7);
+        let m0409a = SimdVector::fmadd(values[0], self.twiddles_re[3], x1p12);
+        let m0409a = SimdVector::fmadd(m0409a, self.twiddles_re[4], x2p11);
+        let m0409a = SimdVector::fmadd(m0409a, self.twiddles_re[0], x3p10);
+        let m0409a = SimdVector::fmadd(m0409a, self.twiddles_re[2], x4p9);
+        let m0409a = SimdVector::fmadd(m0409a, self.twiddles_re[5], x5p8);
+        let m0409a = SimdVector::fmadd(m0409a, self.twiddles_re[1], x6p7);
         let m0409b = FcmaVector::mul_rotate90(self.twiddles_im[3], x1m12);
         let m0409b = FcmaVector::nmadd_rotate90(m0409b, self.twiddles_im[4], x2m11);
         let m0409b = FcmaVector::nmadd_rotate90(m0409b, self.twiddles_im[0], x3m10);
         let m0409b = FcmaVector::fmadd_rotate90(m0409b, self.twiddles_im[2], x4m9);
         let m0409b = FcmaVector::nmadd_rotate90(m0409b, self.twiddles_im[5], x5m8);
         let m0409b = FcmaVector::nmadd_rotate90(m0409b, self.twiddles_im[1], x6m7);
-        let [y04, y09] = FcmaVector::column_butterfly2([m0409a, m0409b]);
+        let [y04, y09] = SimdVector::column_butterfly2([m0409a, m0409b]);
 
-        let m0508a = FcmaVector::fmadd(values[0], self.twiddles_re[4], x1p12);
-        let m0508a = FcmaVector::fmadd(m0508a, self.twiddles_re[2], x2p11);
-        let m0508a = FcmaVector::fmadd(m0508a, self.twiddles_re[1], x3p10);
-        let m0508a = FcmaVector::fmadd(m0508a, self.twiddles_re[5], x4p9);
-        let m0508a = FcmaVector::fmadd(m0508a, self.twiddles_re[0], x5p8);
-        let m0508a = FcmaVector::fmadd(m0508a, self.twiddles_re[3], x6p7);
+        let m0508a = SimdVector::fmadd(values[0], self.twiddles_re[4], x1p12);
+        let m0508a = SimdVector::fmadd(m0508a, self.twiddles_re[2], x2p11);
+        let m0508a = SimdVector::fmadd(m0508a, self.twiddles_re[1], x3p10);
+        let m0508a = SimdVector::fmadd(m0508a, self.twiddles_re[5], x4p9);
+        let m0508a = SimdVector::fmadd(m0508a, self.twiddles_re[0], x5p8);
+        let m0508a = SimdVector::fmadd(m0508a, self.twiddles_re[3], x6p7);
         let m0508b = FcmaVector::mul_rotate90(self.twiddles_im[4], x1m12);
         let m0508b = FcmaVector::nmadd_rotate90(m0508b, self.twiddles_im[2], x2m11);
         let m0508b = FcmaVector::fmadd_rotate90(m0508b, self.twiddles_im[1], x3m10);
         let m0508b = FcmaVector::nmadd_rotate90(m0508b, self.twiddles_im[5], x4m9);
         let m0508b = FcmaVector::nmadd_rotate90(m0508b, self.twiddles_im[0], x5m8);
         let m0508b = FcmaVector::fmadd_rotate90(m0508b, self.twiddles_im[3], x6m7);
-        let [y05, y08] = FcmaVector::column_butterfly2([m0508a, m0508b]);
+        let [y05, y08] = SimdVector::column_butterfly2([m0508a, m0508b]);
 
-        let m0607a = FcmaVector::fmadd(values[0], self.twiddles_re[5], x1p12);
-        let m0607a = FcmaVector::fmadd(m0607a, self.twiddles_re[0], x2p11);
-        let m0607a = FcmaVector::fmadd(m0607a, self.twiddles_re[4], x3p10);
-        let m0607a = FcmaVector::fmadd(m0607a, self.twiddles_re[1], x4p9);
-        let m0607a = FcmaVector::fmadd(m0607a, self.twiddles_re[3], x5p8);
-        let m0607a = FcmaVector::fmadd(m0607a, self.twiddles_re[2], x6p7);
+        let m0607a = SimdVector::fmadd(values[0], self.twiddles_re[5], x1p12);
+        let m0607a = SimdVector::fmadd(m0607a, self.twiddles_re[0], x2p11);
+        let m0607a = SimdVector::fmadd(m0607a, self.twiddles_re[4], x3p10);
+        let m0607a = SimdVector::fmadd(m0607a, self.twiddles_re[1], x4p9);
+        let m0607a = SimdVector::fmadd(m0607a, self.twiddles_re[3], x5p8);
+        let m0607a = SimdVector::fmadd(m0607a, self.twiddles_re[2], x6p7);
         let m0607b = FcmaVector::mul_rotate90(self.twiddles_im[5], x1m12);
         let m0607b = FcmaVector::nmadd_rotate90(m0607b, self.twiddles_im[0], x2m11);
         let m0607b = FcmaVector::fmadd_rotate90(m0607b, self.twiddles_im[4], x3m10);
         let m0607b = FcmaVector::nmadd_rotate90(m0607b, self.twiddles_im[1], x4m9);
         let m0607b = FcmaVector::fmadd_rotate90(m0607b, self.twiddles_im[3], x5m8);
         let m0607b = FcmaVector::nmadd_rotate90(m0607b, self.twiddles_im[2], x6m7);
-        let [y06, y07] = FcmaVector::column_butterfly2([m0607a, m0607b]);
+        let [y06, y07] = SimdVector::column_butterfly2([m0607a, m0607b]);
 
 
         [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12]
@@ -687,8 +689,8 @@ impl<T: FftNum> FcmaF32Butterfly13<T> {
 
 pub struct FcmaF64Butterfly13<T> {
     direction: FftDirection,
-    twiddles_re: [float64x2_t; 6],
-    twiddles_im: [float64x2_t; 6],
+    twiddles_re: [FcmaVector64; 6],
+    twiddles_im: [FcmaVector64; 6],
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -701,14 +703,14 @@ impl<T: FftNum> FcmaF64Butterfly13<T> {
         let twiddles = make_twiddles(13, direction);
         unsafe {Self {
             direction,
-            twiddles_re: twiddles.map(|t| FcmaVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| FcmaVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
+            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
             _phantom: std::marker::PhantomData,
         }}
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 });
 
         let out = self.perform_fft_direct(values);
@@ -717,104 +719,104 @@ impl<T: FftNum> FcmaF64Butterfly13<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [float64x2_t; 13]) -> [float64x2_t; 13] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [FcmaVector64; 13]) -> [FcmaVector64; 13] {
         let y00 = values[0];
-        let [x1p12, x1m12] =  FcmaVector::column_butterfly2([values[1], values[12]]);
-        let y00 = FcmaVector::add(y00, x1p12);
-        let [x2p11, x2m11] =  FcmaVector::column_butterfly2([values[2], values[11]]);
-        let y00 = FcmaVector::add(y00, x2p11);
-        let [x3p10, x3m10] =  FcmaVector::column_butterfly2([values[3], values[10]]);
-        let y00 = FcmaVector::add(y00, x3p10);
-        let [x4p9, x4m9] =  FcmaVector::column_butterfly2([values[4], values[9]]);
-        let y00 = FcmaVector::add(y00, x4p9);
-        let [x5p8, x5m8] =  FcmaVector::column_butterfly2([values[5], values[8]]);
-        let y00 = FcmaVector::add(y00, x5p8);
-        let [x6p7, x6m7] =  FcmaVector::column_butterfly2([values[6], values[7]]);
-        let y00 = FcmaVector::add(y00, x6p7);
+        let [x1p12, x1m12] =  SimdVector::column_butterfly2([values[1], values[12]]);
+        let y00 = SimdVector::add(y00, x1p12);
+        let [x2p11, x2m11] =  SimdVector::column_butterfly2([values[2], values[11]]);
+        let y00 = SimdVector::add(y00, x2p11);
+        let [x3p10, x3m10] =  SimdVector::column_butterfly2([values[3], values[10]]);
+        let y00 = SimdVector::add(y00, x3p10);
+        let [x4p9, x4m9] =  SimdVector::column_butterfly2([values[4], values[9]]);
+        let y00 = SimdVector::add(y00, x4p9);
+        let [x5p8, x5m8] =  SimdVector::column_butterfly2([values[5], values[8]]);
+        let y00 = SimdVector::add(y00, x5p8);
+        let [x6p7, x6m7] =  SimdVector::column_butterfly2([values[6], values[7]]);
+        let y00 = SimdVector::add(y00, x6p7);
 
-        let m0112a = FcmaVector::fmadd(values[0], self.twiddles_re[0], x1p12);
-        let m0112a = FcmaVector::fmadd(m0112a, self.twiddles_re[1], x2p11);
-        let m0112a = FcmaVector::fmadd(m0112a, self.twiddles_re[2], x3p10);
-        let m0112a = FcmaVector::fmadd(m0112a, self.twiddles_re[3], x4p9);
-        let m0112a = FcmaVector::fmadd(m0112a, self.twiddles_re[4], x5p8);
-        let m0112a = FcmaVector::fmadd(m0112a, self.twiddles_re[5], x6p7);
+        let m0112a = SimdVector::fmadd(values[0], self.twiddles_re[0], x1p12);
+        let m0112a = SimdVector::fmadd(m0112a, self.twiddles_re[1], x2p11);
+        let m0112a = SimdVector::fmadd(m0112a, self.twiddles_re[2], x3p10);
+        let m0112a = SimdVector::fmadd(m0112a, self.twiddles_re[3], x4p9);
+        let m0112a = SimdVector::fmadd(m0112a, self.twiddles_re[4], x5p8);
+        let m0112a = SimdVector::fmadd(m0112a, self.twiddles_re[5], x6p7);
         let m0112b = FcmaVector::mul_rotate90(self.twiddles_im[0], x1m12);
         let m0112b = FcmaVector::fmadd_rotate90(m0112b, self.twiddles_im[1], x2m11);
         let m0112b = FcmaVector::fmadd_rotate90(m0112b, self.twiddles_im[2], x3m10);
         let m0112b = FcmaVector::fmadd_rotate90(m0112b, self.twiddles_im[3], x4m9);
         let m0112b = FcmaVector::fmadd_rotate90(m0112b, self.twiddles_im[4], x5m8);
         let m0112b = FcmaVector::fmadd_rotate90(m0112b, self.twiddles_im[5], x6m7);
-        let [y01, y12] = FcmaVector::column_butterfly2([m0112a, m0112b]);
+        let [y01, y12] = SimdVector::column_butterfly2([m0112a, m0112b]);
 
-        let m0211a = FcmaVector::fmadd(values[0], self.twiddles_re[1], x1p12);
-        let m0211a = FcmaVector::fmadd(m0211a, self.twiddles_re[3], x2p11);
-        let m0211a = FcmaVector::fmadd(m0211a, self.twiddles_re[5], x3p10);
-        let m0211a = FcmaVector::fmadd(m0211a, self.twiddles_re[4], x4p9);
-        let m0211a = FcmaVector::fmadd(m0211a, self.twiddles_re[2], x5p8);
-        let m0211a = FcmaVector::fmadd(m0211a, self.twiddles_re[0], x6p7);
+        let m0211a = SimdVector::fmadd(values[0], self.twiddles_re[1], x1p12);
+        let m0211a = SimdVector::fmadd(m0211a, self.twiddles_re[3], x2p11);
+        let m0211a = SimdVector::fmadd(m0211a, self.twiddles_re[5], x3p10);
+        let m0211a = SimdVector::fmadd(m0211a, self.twiddles_re[4], x4p9);
+        let m0211a = SimdVector::fmadd(m0211a, self.twiddles_re[2], x5p8);
+        let m0211a = SimdVector::fmadd(m0211a, self.twiddles_re[0], x6p7);
         let m0211b = FcmaVector::mul_rotate90(self.twiddles_im[1], x1m12);
         let m0211b = FcmaVector::fmadd_rotate90(m0211b, self.twiddles_im[3], x2m11);
         let m0211b = FcmaVector::fmadd_rotate90(m0211b, self.twiddles_im[5], x3m10);
         let m0211b = FcmaVector::nmadd_rotate90(m0211b, self.twiddles_im[4], x4m9);
         let m0211b = FcmaVector::nmadd_rotate90(m0211b, self.twiddles_im[2], x5m8);
         let m0211b = FcmaVector::nmadd_rotate90(m0211b, self.twiddles_im[0], x6m7);
-        let [y02, y11] = FcmaVector::column_butterfly2([m0211a, m0211b]);
+        let [y02, y11] = SimdVector::column_butterfly2([m0211a, m0211b]);
 
-        let m0310a = FcmaVector::fmadd(values[0], self.twiddles_re[2], x1p12);
-        let m0310a = FcmaVector::fmadd(m0310a, self.twiddles_re[5], x2p11);
-        let m0310a = FcmaVector::fmadd(m0310a, self.twiddles_re[3], x3p10);
-        let m0310a = FcmaVector::fmadd(m0310a, self.twiddles_re[0], x4p9);
-        let m0310a = FcmaVector::fmadd(m0310a, self.twiddles_re[1], x5p8);
-        let m0310a = FcmaVector::fmadd(m0310a, self.twiddles_re[4], x6p7);
+        let m0310a = SimdVector::fmadd(values[0], self.twiddles_re[2], x1p12);
+        let m0310a = SimdVector::fmadd(m0310a, self.twiddles_re[5], x2p11);
+        let m0310a = SimdVector::fmadd(m0310a, self.twiddles_re[3], x3p10);
+        let m0310a = SimdVector::fmadd(m0310a, self.twiddles_re[0], x4p9);
+        let m0310a = SimdVector::fmadd(m0310a, self.twiddles_re[1], x5p8);
+        let m0310a = SimdVector::fmadd(m0310a, self.twiddles_re[4], x6p7);
         let m0310b = FcmaVector::mul_rotate90(self.twiddles_im[2], x1m12);
         let m0310b = FcmaVector::fmadd_rotate90(m0310b, self.twiddles_im[5], x2m11);
         let m0310b = FcmaVector::nmadd_rotate90(m0310b, self.twiddles_im[3], x3m10);
         let m0310b = FcmaVector::nmadd_rotate90(m0310b, self.twiddles_im[0], x4m9);
         let m0310b = FcmaVector::fmadd_rotate90(m0310b, self.twiddles_im[1], x5m8);
         let m0310b = FcmaVector::fmadd_rotate90(m0310b, self.twiddles_im[4], x6m7);
-        let [y03, y10] = FcmaVector::column_butterfly2([m0310a, m0310b]);
+        let [y03, y10] = SimdVector::column_butterfly2([m0310a, m0310b]);
 
-        let m0409a = FcmaVector::fmadd(values[0], self.twiddles_re[3], x1p12);
-        let m0409a = FcmaVector::fmadd(m0409a, self.twiddles_re[4], x2p11);
-        let m0409a = FcmaVector::fmadd(m0409a, self.twiddles_re[0], x3p10);
-        let m0409a = FcmaVector::fmadd(m0409a, self.twiddles_re[2], x4p9);
-        let m0409a = FcmaVector::fmadd(m0409a, self.twiddles_re[5], x5p8);
-        let m0409a = FcmaVector::fmadd(m0409a, self.twiddles_re[1], x6p7);
+        let m0409a = SimdVector::fmadd(values[0], self.twiddles_re[3], x1p12);
+        let m0409a = SimdVector::fmadd(m0409a, self.twiddles_re[4], x2p11);
+        let m0409a = SimdVector::fmadd(m0409a, self.twiddles_re[0], x3p10);
+        let m0409a = SimdVector::fmadd(m0409a, self.twiddles_re[2], x4p9);
+        let m0409a = SimdVector::fmadd(m0409a, self.twiddles_re[5], x5p8);
+        let m0409a = SimdVector::fmadd(m0409a, self.twiddles_re[1], x6p7);
         let m0409b = FcmaVector::mul_rotate90(self.twiddles_im[3], x1m12);
         let m0409b = FcmaVector::nmadd_rotate90(m0409b, self.twiddles_im[4], x2m11);
         let m0409b = FcmaVector::nmadd_rotate90(m0409b, self.twiddles_im[0], x3m10);
         let m0409b = FcmaVector::fmadd_rotate90(m0409b, self.twiddles_im[2], x4m9);
         let m0409b = FcmaVector::nmadd_rotate90(m0409b, self.twiddles_im[5], x5m8);
         let m0409b = FcmaVector::nmadd_rotate90(m0409b, self.twiddles_im[1], x6m7);
-        let [y04, y09] = FcmaVector::column_butterfly2([m0409a, m0409b]);
+        let [y04, y09] = SimdVector::column_butterfly2([m0409a, m0409b]);
 
-        let m0508a = FcmaVector::fmadd(values[0], self.twiddles_re[4], x1p12);
-        let m0508a = FcmaVector::fmadd(m0508a, self.twiddles_re[2], x2p11);
-        let m0508a = FcmaVector::fmadd(m0508a, self.twiddles_re[1], x3p10);
-        let m0508a = FcmaVector::fmadd(m0508a, self.twiddles_re[5], x4p9);
-        let m0508a = FcmaVector::fmadd(m0508a, self.twiddles_re[0], x5p8);
-        let m0508a = FcmaVector::fmadd(m0508a, self.twiddles_re[3], x6p7);
+        let m0508a = SimdVector::fmadd(values[0], self.twiddles_re[4], x1p12);
+        let m0508a = SimdVector::fmadd(m0508a, self.twiddles_re[2], x2p11);
+        let m0508a = SimdVector::fmadd(m0508a, self.twiddles_re[1], x3p10);
+        let m0508a = SimdVector::fmadd(m0508a, self.twiddles_re[5], x4p9);
+        let m0508a = SimdVector::fmadd(m0508a, self.twiddles_re[0], x5p8);
+        let m0508a = SimdVector::fmadd(m0508a, self.twiddles_re[3], x6p7);
         let m0508b = FcmaVector::mul_rotate90(self.twiddles_im[4], x1m12);
         let m0508b = FcmaVector::nmadd_rotate90(m0508b, self.twiddles_im[2], x2m11);
         let m0508b = FcmaVector::fmadd_rotate90(m0508b, self.twiddles_im[1], x3m10);
         let m0508b = FcmaVector::nmadd_rotate90(m0508b, self.twiddles_im[5], x4m9);
         let m0508b = FcmaVector::nmadd_rotate90(m0508b, self.twiddles_im[0], x5m8);
         let m0508b = FcmaVector::fmadd_rotate90(m0508b, self.twiddles_im[3], x6m7);
-        let [y05, y08] = FcmaVector::column_butterfly2([m0508a, m0508b]);
+        let [y05, y08] = SimdVector::column_butterfly2([m0508a, m0508b]);
 
-        let m0607a = FcmaVector::fmadd(values[0], self.twiddles_re[5], x1p12);
-        let m0607a = FcmaVector::fmadd(m0607a, self.twiddles_re[0], x2p11);
-        let m0607a = FcmaVector::fmadd(m0607a, self.twiddles_re[4], x3p10);
-        let m0607a = FcmaVector::fmadd(m0607a, self.twiddles_re[1], x4p9);
-        let m0607a = FcmaVector::fmadd(m0607a, self.twiddles_re[3], x5p8);
-        let m0607a = FcmaVector::fmadd(m0607a, self.twiddles_re[2], x6p7);
+        let m0607a = SimdVector::fmadd(values[0], self.twiddles_re[5], x1p12);
+        let m0607a = SimdVector::fmadd(m0607a, self.twiddles_re[0], x2p11);
+        let m0607a = SimdVector::fmadd(m0607a, self.twiddles_re[4], x3p10);
+        let m0607a = SimdVector::fmadd(m0607a, self.twiddles_re[1], x4p9);
+        let m0607a = SimdVector::fmadd(m0607a, self.twiddles_re[3], x5p8);
+        let m0607a = SimdVector::fmadd(m0607a, self.twiddles_re[2], x6p7);
         let m0607b = FcmaVector::mul_rotate90(self.twiddles_im[5], x1m12);
         let m0607b = FcmaVector::nmadd_rotate90(m0607b, self.twiddles_im[0], x2m11);
         let m0607b = FcmaVector::fmadd_rotate90(m0607b, self.twiddles_im[4], x3m10);
         let m0607b = FcmaVector::nmadd_rotate90(m0607b, self.twiddles_im[1], x4m9);
         let m0607b = FcmaVector::fmadd_rotate90(m0607b, self.twiddles_im[3], x5m8);
         let m0607b = FcmaVector::nmadd_rotate90(m0607b, self.twiddles_im[2], x6m7);
-        let [y06, y07] = FcmaVector::column_butterfly2([m0607a, m0607b]);
+        let [y06, y07] = SimdVector::column_butterfly2([m0607a, m0607b]);
 
 
         [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12]
@@ -823,8 +825,8 @@ impl<T: FftNum> FcmaF64Butterfly13<T> {
 
 pub struct FcmaF32Butterfly17<T> {
     direction: FftDirection,
-    twiddles_re: [float32x4_t; 8],
-    twiddles_im: [float32x4_t; 8],
+    twiddles_re: [FcmaVector32; 8],
+    twiddles_im: [FcmaVector32; 8],
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -837,14 +839,14 @@ impl<T: FftNum> FcmaF32Butterfly17<T> {
         let twiddles = make_twiddles(17, direction);
         Self {
             direction,
-            twiddles_re: twiddles.map(|t| FcmaVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| FcmaVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
+            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
             _phantom: std::marker::PhantomData,
         }
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 });
 
         let out = self.perform_parallel_fft_direct(values);
@@ -853,7 +855,7 @@ impl<T: FftNum> FcmaF32Butterfly17<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32 });
 
         let values = [
@@ -902,33 +904,33 @@ impl<T: FftNum> FcmaF32Butterfly17<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [float32x4_t; 17]) -> [float32x4_t; 17] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [FcmaVector32; 17]) -> [FcmaVector32; 17] {
         let y00 = values[0];
-        let [x1p16, x1m16] =  FcmaVector::column_butterfly2([values[1], values[16]]);
-        let y00 = FcmaVector::add(y00, x1p16);
-        let [x2p15, x2m15] =  FcmaVector::column_butterfly2([values[2], values[15]]);
-        let y00 = FcmaVector::add(y00, x2p15);
-        let [x3p14, x3m14] =  FcmaVector::column_butterfly2([values[3], values[14]]);
-        let y00 = FcmaVector::add(y00, x3p14);
-        let [x4p13, x4m13] =  FcmaVector::column_butterfly2([values[4], values[13]]);
-        let y00 = FcmaVector::add(y00, x4p13);
-        let [x5p12, x5m12] =  FcmaVector::column_butterfly2([values[5], values[12]]);
-        let y00 = FcmaVector::add(y00, x5p12);
-        let [x6p11, x6m11] =  FcmaVector::column_butterfly2([values[6], values[11]]);
-        let y00 = FcmaVector::add(y00, x6p11);
-        let [x7p10, x7m10] =  FcmaVector::column_butterfly2([values[7], values[10]]);
-        let y00 = FcmaVector::add(y00, x7p10);
-        let [x8p9, x8m9] =  FcmaVector::column_butterfly2([values[8], values[9]]);
-        let y00 = FcmaVector::add(y00, x8p9);
+        let [x1p16, x1m16] =  SimdVector::column_butterfly2([values[1], values[16]]);
+        let y00 = SimdVector::add(y00, x1p16);
+        let [x2p15, x2m15] =  SimdVector::column_butterfly2([values[2], values[15]]);
+        let y00 = SimdVector::add(y00, x2p15);
+        let [x3p14, x3m14] =  SimdVector::column_butterfly2([values[3], values[14]]);
+        let y00 = SimdVector::add(y00, x3p14);
+        let [x4p13, x4m13] =  SimdVector::column_butterfly2([values[4], values[13]]);
+        let y00 = SimdVector::add(y00, x4p13);
+        let [x5p12, x5m12] =  SimdVector::column_butterfly2([values[5], values[12]]);
+        let y00 = SimdVector::add(y00, x5p12);
+        let [x6p11, x6m11] =  SimdVector::column_butterfly2([values[6], values[11]]);
+        let y00 = SimdVector::add(y00, x6p11);
+        let [x7p10, x7m10] =  SimdVector::column_butterfly2([values[7], values[10]]);
+        let y00 = SimdVector::add(y00, x7p10);
+        let [x8p9, x8m9] =  SimdVector::column_butterfly2([values[8], values[9]]);
+        let y00 = SimdVector::add(y00, x8p9);
 
-        let m0116a = FcmaVector::fmadd(values[0], self.twiddles_re[0], x1p16);
-        let m0116a = FcmaVector::fmadd(m0116a, self.twiddles_re[1], x2p15);
-        let m0116a = FcmaVector::fmadd(m0116a, self.twiddles_re[2], x3p14);
-        let m0116a = FcmaVector::fmadd(m0116a, self.twiddles_re[3], x4p13);
-        let m0116a = FcmaVector::fmadd(m0116a, self.twiddles_re[4], x5p12);
-        let m0116a = FcmaVector::fmadd(m0116a, self.twiddles_re[5], x6p11);
-        let m0116a = FcmaVector::fmadd(m0116a, self.twiddles_re[6], x7p10);
-        let m0116a = FcmaVector::fmadd(m0116a, self.twiddles_re[7], x8p9);
+        let m0116a = SimdVector::fmadd(values[0], self.twiddles_re[0], x1p16);
+        let m0116a = SimdVector::fmadd(m0116a, self.twiddles_re[1], x2p15);
+        let m0116a = SimdVector::fmadd(m0116a, self.twiddles_re[2], x3p14);
+        let m0116a = SimdVector::fmadd(m0116a, self.twiddles_re[3], x4p13);
+        let m0116a = SimdVector::fmadd(m0116a, self.twiddles_re[4], x5p12);
+        let m0116a = SimdVector::fmadd(m0116a, self.twiddles_re[5], x6p11);
+        let m0116a = SimdVector::fmadd(m0116a, self.twiddles_re[6], x7p10);
+        let m0116a = SimdVector::fmadd(m0116a, self.twiddles_re[7], x8p9);
         let m0116b = FcmaVector::mul_rotate90(self.twiddles_im[0], x1m16);
         let m0116b = FcmaVector::fmadd_rotate90(m0116b, self.twiddles_im[1], x2m15);
         let m0116b = FcmaVector::fmadd_rotate90(m0116b, self.twiddles_im[2], x3m14);
@@ -937,16 +939,16 @@ impl<T: FftNum> FcmaF32Butterfly17<T> {
         let m0116b = FcmaVector::fmadd_rotate90(m0116b, self.twiddles_im[5], x6m11);
         let m0116b = FcmaVector::fmadd_rotate90(m0116b, self.twiddles_im[6], x7m10);
         let m0116b = FcmaVector::fmadd_rotate90(m0116b, self.twiddles_im[7], x8m9);
-        let [y01, y16] = FcmaVector::column_butterfly2([m0116a, m0116b]);
+        let [y01, y16] = SimdVector::column_butterfly2([m0116a, m0116b]);
 
-        let m0215a = FcmaVector::fmadd(values[0], self.twiddles_re[1], x1p16);
-        let m0215a = FcmaVector::fmadd(m0215a, self.twiddles_re[3], x2p15);
-        let m0215a = FcmaVector::fmadd(m0215a, self.twiddles_re[5], x3p14);
-        let m0215a = FcmaVector::fmadd(m0215a, self.twiddles_re[7], x4p13);
-        let m0215a = FcmaVector::fmadd(m0215a, self.twiddles_re[6], x5p12);
-        let m0215a = FcmaVector::fmadd(m0215a, self.twiddles_re[4], x6p11);
-        let m0215a = FcmaVector::fmadd(m0215a, self.twiddles_re[2], x7p10);
-        let m0215a = FcmaVector::fmadd(m0215a, self.twiddles_re[0], x8p9);
+        let m0215a = SimdVector::fmadd(values[0], self.twiddles_re[1], x1p16);
+        let m0215a = SimdVector::fmadd(m0215a, self.twiddles_re[3], x2p15);
+        let m0215a = SimdVector::fmadd(m0215a, self.twiddles_re[5], x3p14);
+        let m0215a = SimdVector::fmadd(m0215a, self.twiddles_re[7], x4p13);
+        let m0215a = SimdVector::fmadd(m0215a, self.twiddles_re[6], x5p12);
+        let m0215a = SimdVector::fmadd(m0215a, self.twiddles_re[4], x6p11);
+        let m0215a = SimdVector::fmadd(m0215a, self.twiddles_re[2], x7p10);
+        let m0215a = SimdVector::fmadd(m0215a, self.twiddles_re[0], x8p9);
         let m0215b = FcmaVector::mul_rotate90(self.twiddles_im[1], x1m16);
         let m0215b = FcmaVector::fmadd_rotate90(m0215b, self.twiddles_im[3], x2m15);
         let m0215b = FcmaVector::fmadd_rotate90(m0215b, self.twiddles_im[5], x3m14);
@@ -955,16 +957,16 @@ impl<T: FftNum> FcmaF32Butterfly17<T> {
         let m0215b = FcmaVector::nmadd_rotate90(m0215b, self.twiddles_im[4], x6m11);
         let m0215b = FcmaVector::nmadd_rotate90(m0215b, self.twiddles_im[2], x7m10);
         let m0215b = FcmaVector::nmadd_rotate90(m0215b, self.twiddles_im[0], x8m9);
-        let [y02, y15] = FcmaVector::column_butterfly2([m0215a, m0215b]);
+        let [y02, y15] = SimdVector::column_butterfly2([m0215a, m0215b]);
 
-        let m0314a = FcmaVector::fmadd(values[0], self.twiddles_re[2], x1p16);
-        let m0314a = FcmaVector::fmadd(m0314a, self.twiddles_re[5], x2p15);
-        let m0314a = FcmaVector::fmadd(m0314a, self.twiddles_re[7], x3p14);
-        let m0314a = FcmaVector::fmadd(m0314a, self.twiddles_re[4], x4p13);
-        let m0314a = FcmaVector::fmadd(m0314a, self.twiddles_re[1], x5p12);
-        let m0314a = FcmaVector::fmadd(m0314a, self.twiddles_re[0], x6p11);
-        let m0314a = FcmaVector::fmadd(m0314a, self.twiddles_re[3], x7p10);
-        let m0314a = FcmaVector::fmadd(m0314a, self.twiddles_re[6], x8p9);
+        let m0314a = SimdVector::fmadd(values[0], self.twiddles_re[2], x1p16);
+        let m0314a = SimdVector::fmadd(m0314a, self.twiddles_re[5], x2p15);
+        let m0314a = SimdVector::fmadd(m0314a, self.twiddles_re[7], x3p14);
+        let m0314a = SimdVector::fmadd(m0314a, self.twiddles_re[4], x4p13);
+        let m0314a = SimdVector::fmadd(m0314a, self.twiddles_re[1], x5p12);
+        let m0314a = SimdVector::fmadd(m0314a, self.twiddles_re[0], x6p11);
+        let m0314a = SimdVector::fmadd(m0314a, self.twiddles_re[3], x7p10);
+        let m0314a = SimdVector::fmadd(m0314a, self.twiddles_re[6], x8p9);
         let m0314b = FcmaVector::mul_rotate90(self.twiddles_im[2], x1m16);
         let m0314b = FcmaVector::fmadd_rotate90(m0314b, self.twiddles_im[5], x2m15);
         let m0314b = FcmaVector::nmadd_rotate90(m0314b, self.twiddles_im[7], x3m14);
@@ -973,16 +975,16 @@ impl<T: FftNum> FcmaF32Butterfly17<T> {
         let m0314b = FcmaVector::fmadd_rotate90(m0314b, self.twiddles_im[0], x6m11);
         let m0314b = FcmaVector::fmadd_rotate90(m0314b, self.twiddles_im[3], x7m10);
         let m0314b = FcmaVector::fmadd_rotate90(m0314b, self.twiddles_im[6], x8m9);
-        let [y03, y14] = FcmaVector::column_butterfly2([m0314a, m0314b]);
+        let [y03, y14] = SimdVector::column_butterfly2([m0314a, m0314b]);
 
-        let m0413a = FcmaVector::fmadd(values[0], self.twiddles_re[3], x1p16);
-        let m0413a = FcmaVector::fmadd(m0413a, self.twiddles_re[7], x2p15);
-        let m0413a = FcmaVector::fmadd(m0413a, self.twiddles_re[4], x3p14);
-        let m0413a = FcmaVector::fmadd(m0413a, self.twiddles_re[0], x4p13);
-        let m0413a = FcmaVector::fmadd(m0413a, self.twiddles_re[2], x5p12);
-        let m0413a = FcmaVector::fmadd(m0413a, self.twiddles_re[6], x6p11);
-        let m0413a = FcmaVector::fmadd(m0413a, self.twiddles_re[5], x7p10);
-        let m0413a = FcmaVector::fmadd(m0413a, self.twiddles_re[1], x8p9);
+        let m0413a = SimdVector::fmadd(values[0], self.twiddles_re[3], x1p16);
+        let m0413a = SimdVector::fmadd(m0413a, self.twiddles_re[7], x2p15);
+        let m0413a = SimdVector::fmadd(m0413a, self.twiddles_re[4], x3p14);
+        let m0413a = SimdVector::fmadd(m0413a, self.twiddles_re[0], x4p13);
+        let m0413a = SimdVector::fmadd(m0413a, self.twiddles_re[2], x5p12);
+        let m0413a = SimdVector::fmadd(m0413a, self.twiddles_re[6], x6p11);
+        let m0413a = SimdVector::fmadd(m0413a, self.twiddles_re[5], x7p10);
+        let m0413a = SimdVector::fmadd(m0413a, self.twiddles_re[1], x8p9);
         let m0413b = FcmaVector::mul_rotate90(self.twiddles_im[3], x1m16);
         let m0413b = FcmaVector::fmadd_rotate90(m0413b, self.twiddles_im[7], x2m15);
         let m0413b = FcmaVector::nmadd_rotate90(m0413b, self.twiddles_im[4], x3m14);
@@ -991,16 +993,16 @@ impl<T: FftNum> FcmaF32Butterfly17<T> {
         let m0413b = FcmaVector::fmadd_rotate90(m0413b, self.twiddles_im[6], x6m11);
         let m0413b = FcmaVector::nmadd_rotate90(m0413b, self.twiddles_im[5], x7m10);
         let m0413b = FcmaVector::nmadd_rotate90(m0413b, self.twiddles_im[1], x8m9);
-        let [y04, y13] = FcmaVector::column_butterfly2([m0413a, m0413b]);
+        let [y04, y13] = SimdVector::column_butterfly2([m0413a, m0413b]);
 
-        let m0512a = FcmaVector::fmadd(values[0], self.twiddles_re[4], x1p16);
-        let m0512a = FcmaVector::fmadd(m0512a, self.twiddles_re[6], x2p15);
-        let m0512a = FcmaVector::fmadd(m0512a, self.twiddles_re[1], x3p14);
-        let m0512a = FcmaVector::fmadd(m0512a, self.twiddles_re[2], x4p13);
-        let m0512a = FcmaVector::fmadd(m0512a, self.twiddles_re[7], x5p12);
-        let m0512a = FcmaVector::fmadd(m0512a, self.twiddles_re[3], x6p11);
-        let m0512a = FcmaVector::fmadd(m0512a, self.twiddles_re[0], x7p10);
-        let m0512a = FcmaVector::fmadd(m0512a, self.twiddles_re[5], x8p9);
+        let m0512a = SimdVector::fmadd(values[0], self.twiddles_re[4], x1p16);
+        let m0512a = SimdVector::fmadd(m0512a, self.twiddles_re[6], x2p15);
+        let m0512a = SimdVector::fmadd(m0512a, self.twiddles_re[1], x3p14);
+        let m0512a = SimdVector::fmadd(m0512a, self.twiddles_re[2], x4p13);
+        let m0512a = SimdVector::fmadd(m0512a, self.twiddles_re[7], x5p12);
+        let m0512a = SimdVector::fmadd(m0512a, self.twiddles_re[3], x6p11);
+        let m0512a = SimdVector::fmadd(m0512a, self.twiddles_re[0], x7p10);
+        let m0512a = SimdVector::fmadd(m0512a, self.twiddles_re[5], x8p9);
         let m0512b = FcmaVector::mul_rotate90(self.twiddles_im[4], x1m16);
         let m0512b = FcmaVector::nmadd_rotate90(m0512b, self.twiddles_im[6], x2m15);
         let m0512b = FcmaVector::nmadd_rotate90(m0512b, self.twiddles_im[1], x3m14);
@@ -1009,16 +1011,16 @@ impl<T: FftNum> FcmaF32Butterfly17<T> {
         let m0512b = FcmaVector::nmadd_rotate90(m0512b, self.twiddles_im[3], x6m11);
         let m0512b = FcmaVector::fmadd_rotate90(m0512b, self.twiddles_im[0], x7m10);
         let m0512b = FcmaVector::fmadd_rotate90(m0512b, self.twiddles_im[5], x8m9);
-        let [y05, y12] = FcmaVector::column_butterfly2([m0512a, m0512b]);
+        let [y05, y12] = SimdVector::column_butterfly2([m0512a, m0512b]);
 
-        let m0611a = FcmaVector::fmadd(values[0], self.twiddles_re[5], x1p16);
-        let m0611a = FcmaVector::fmadd(m0611a, self.twiddles_re[4], x2p15);
-        let m0611a = FcmaVector::fmadd(m0611a, self.twiddles_re[0], x3p14);
-        let m0611a = FcmaVector::fmadd(m0611a, self.twiddles_re[6], x4p13);
-        let m0611a = FcmaVector::fmadd(m0611a, self.twiddles_re[3], x5p12);
-        let m0611a = FcmaVector::fmadd(m0611a, self.twiddles_re[1], x6p11);
-        let m0611a = FcmaVector::fmadd(m0611a, self.twiddles_re[7], x7p10);
-        let m0611a = FcmaVector::fmadd(m0611a, self.twiddles_re[2], x8p9);
+        let m0611a = SimdVector::fmadd(values[0], self.twiddles_re[5], x1p16);
+        let m0611a = SimdVector::fmadd(m0611a, self.twiddles_re[4], x2p15);
+        let m0611a = SimdVector::fmadd(m0611a, self.twiddles_re[0], x3p14);
+        let m0611a = SimdVector::fmadd(m0611a, self.twiddles_re[6], x4p13);
+        let m0611a = SimdVector::fmadd(m0611a, self.twiddles_re[3], x5p12);
+        let m0611a = SimdVector::fmadd(m0611a, self.twiddles_re[1], x6p11);
+        let m0611a = SimdVector::fmadd(m0611a, self.twiddles_re[7], x7p10);
+        let m0611a = SimdVector::fmadd(m0611a, self.twiddles_re[2], x8p9);
         let m0611b = FcmaVector::mul_rotate90(self.twiddles_im[5], x1m16);
         let m0611b = FcmaVector::nmadd_rotate90(m0611b, self.twiddles_im[4], x2m15);
         let m0611b = FcmaVector::fmadd_rotate90(m0611b, self.twiddles_im[0], x3m14);
@@ -1027,16 +1029,16 @@ impl<T: FftNum> FcmaF32Butterfly17<T> {
         let m0611b = FcmaVector::fmadd_rotate90(m0611b, self.twiddles_im[1], x6m11);
         let m0611b = FcmaVector::fmadd_rotate90(m0611b, self.twiddles_im[7], x7m10);
         let m0611b = FcmaVector::nmadd_rotate90(m0611b, self.twiddles_im[2], x8m9);
-        let [y06, y11] = FcmaVector::column_butterfly2([m0611a, m0611b]);
+        let [y06, y11] = SimdVector::column_butterfly2([m0611a, m0611b]);
 
-        let m0710a = FcmaVector::fmadd(values[0], self.twiddles_re[6], x1p16);
-        let m0710a = FcmaVector::fmadd(m0710a, self.twiddles_re[2], x2p15);
-        let m0710a = FcmaVector::fmadd(m0710a, self.twiddles_re[3], x3p14);
-        let m0710a = FcmaVector::fmadd(m0710a, self.twiddles_re[5], x4p13);
-        let m0710a = FcmaVector::fmadd(m0710a, self.twiddles_re[0], x5p12);
-        let m0710a = FcmaVector::fmadd(m0710a, self.twiddles_re[7], x6p11);
-        let m0710a = FcmaVector::fmadd(m0710a, self.twiddles_re[1], x7p10);
-        let m0710a = FcmaVector::fmadd(m0710a, self.twiddles_re[4], x8p9);
+        let m0710a = SimdVector::fmadd(values[0], self.twiddles_re[6], x1p16);
+        let m0710a = SimdVector::fmadd(m0710a, self.twiddles_re[2], x2p15);
+        let m0710a = SimdVector::fmadd(m0710a, self.twiddles_re[3], x3p14);
+        let m0710a = SimdVector::fmadd(m0710a, self.twiddles_re[5], x4p13);
+        let m0710a = SimdVector::fmadd(m0710a, self.twiddles_re[0], x5p12);
+        let m0710a = SimdVector::fmadd(m0710a, self.twiddles_re[7], x6p11);
+        let m0710a = SimdVector::fmadd(m0710a, self.twiddles_re[1], x7p10);
+        let m0710a = SimdVector::fmadd(m0710a, self.twiddles_re[4], x8p9);
         let m0710b = FcmaVector::mul_rotate90(self.twiddles_im[6], x1m16);
         let m0710b = FcmaVector::nmadd_rotate90(m0710b, self.twiddles_im[2], x2m15);
         let m0710b = FcmaVector::fmadd_rotate90(m0710b, self.twiddles_im[3], x3m14);
@@ -1045,16 +1047,16 @@ impl<T: FftNum> FcmaF32Butterfly17<T> {
         let m0710b = FcmaVector::fmadd_rotate90(m0710b, self.twiddles_im[7], x6m11);
         let m0710b = FcmaVector::nmadd_rotate90(m0710b, self.twiddles_im[1], x7m10);
         let m0710b = FcmaVector::fmadd_rotate90(m0710b, self.twiddles_im[4], x8m9);
-        let [y07, y10] = FcmaVector::column_butterfly2([m0710a, m0710b]);
+        let [y07, y10] = SimdVector::column_butterfly2([m0710a, m0710b]);
 
-        let m0809a = FcmaVector::fmadd(values[0], self.twiddles_re[7], x1p16);
-        let m0809a = FcmaVector::fmadd(m0809a, self.twiddles_re[0], x2p15);
-        let m0809a = FcmaVector::fmadd(m0809a, self.twiddles_re[6], x3p14);
-        let m0809a = FcmaVector::fmadd(m0809a, self.twiddles_re[1], x4p13);
-        let m0809a = FcmaVector::fmadd(m0809a, self.twiddles_re[5], x5p12);
-        let m0809a = FcmaVector::fmadd(m0809a, self.twiddles_re[2], x6p11);
-        let m0809a = FcmaVector::fmadd(m0809a, self.twiddles_re[4], x7p10);
-        let m0809a = FcmaVector::fmadd(m0809a, self.twiddles_re[3], x8p9);
+        let m0809a = SimdVector::fmadd(values[0], self.twiddles_re[7], x1p16);
+        let m0809a = SimdVector::fmadd(m0809a, self.twiddles_re[0], x2p15);
+        let m0809a = SimdVector::fmadd(m0809a, self.twiddles_re[6], x3p14);
+        let m0809a = SimdVector::fmadd(m0809a, self.twiddles_re[1], x4p13);
+        let m0809a = SimdVector::fmadd(m0809a, self.twiddles_re[5], x5p12);
+        let m0809a = SimdVector::fmadd(m0809a, self.twiddles_re[2], x6p11);
+        let m0809a = SimdVector::fmadd(m0809a, self.twiddles_re[4], x7p10);
+        let m0809a = SimdVector::fmadd(m0809a, self.twiddles_re[3], x8p9);
         let m0809b = FcmaVector::mul_rotate90(self.twiddles_im[7], x1m16);
         let m0809b = FcmaVector::nmadd_rotate90(m0809b, self.twiddles_im[0], x2m15);
         let m0809b = FcmaVector::fmadd_rotate90(m0809b, self.twiddles_im[6], x3m14);
@@ -1063,7 +1065,7 @@ impl<T: FftNum> FcmaF32Butterfly17<T> {
         let m0809b = FcmaVector::nmadd_rotate90(m0809b, self.twiddles_im[2], x6m11);
         let m0809b = FcmaVector::fmadd_rotate90(m0809b, self.twiddles_im[4], x7m10);
         let m0809b = FcmaVector::nmadd_rotate90(m0809b, self.twiddles_im[3], x8m9);
-        let [y08, y09] = FcmaVector::column_butterfly2([m0809a, m0809b]);
+        let [y08, y09] = SimdVector::column_butterfly2([m0809a, m0809b]);
 
 
         [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16]
@@ -1072,8 +1074,8 @@ impl<T: FftNum> FcmaF32Butterfly17<T> {
 
 pub struct FcmaF64Butterfly17<T> {
     direction: FftDirection,
-    twiddles_re: [float64x2_t; 8],
-    twiddles_im: [float64x2_t; 8],
+    twiddles_re: [FcmaVector64; 8],
+    twiddles_im: [FcmaVector64; 8],
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -1086,14 +1088,14 @@ impl<T: FftNum> FcmaF64Butterfly17<T> {
         let twiddles = make_twiddles(17, direction);
         unsafe {Self {
             direction,
-            twiddles_re: twiddles.map(|t| FcmaVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| FcmaVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
+            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
             _phantom: std::marker::PhantomData,
         }}
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 });
 
         let out = self.perform_fft_direct(values);
@@ -1102,33 +1104,33 @@ impl<T: FftNum> FcmaF64Butterfly17<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [float64x2_t; 17]) -> [float64x2_t; 17] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [FcmaVector64; 17]) -> [FcmaVector64; 17] {
         let y00 = values[0];
-        let [x1p16, x1m16] =  FcmaVector::column_butterfly2([values[1], values[16]]);
-        let y00 = FcmaVector::add(y00, x1p16);
-        let [x2p15, x2m15] =  FcmaVector::column_butterfly2([values[2], values[15]]);
-        let y00 = FcmaVector::add(y00, x2p15);
-        let [x3p14, x3m14] =  FcmaVector::column_butterfly2([values[3], values[14]]);
-        let y00 = FcmaVector::add(y00, x3p14);
-        let [x4p13, x4m13] =  FcmaVector::column_butterfly2([values[4], values[13]]);
-        let y00 = FcmaVector::add(y00, x4p13);
-        let [x5p12, x5m12] =  FcmaVector::column_butterfly2([values[5], values[12]]);
-        let y00 = FcmaVector::add(y00, x5p12);
-        let [x6p11, x6m11] =  FcmaVector::column_butterfly2([values[6], values[11]]);
-        let y00 = FcmaVector::add(y00, x6p11);
-        let [x7p10, x7m10] =  FcmaVector::column_butterfly2([values[7], values[10]]);
-        let y00 = FcmaVector::add(y00, x7p10);
-        let [x8p9, x8m9] =  FcmaVector::column_butterfly2([values[8], values[9]]);
-        let y00 = FcmaVector::add(y00, x8p9);
+        let [x1p16, x1m16] =  SimdVector::column_butterfly2([values[1], values[16]]);
+        let y00 = SimdVector::add(y00, x1p16);
+        let [x2p15, x2m15] =  SimdVector::column_butterfly2([values[2], values[15]]);
+        let y00 = SimdVector::add(y00, x2p15);
+        let [x3p14, x3m14] =  SimdVector::column_butterfly2([values[3], values[14]]);
+        let y00 = SimdVector::add(y00, x3p14);
+        let [x4p13, x4m13] =  SimdVector::column_butterfly2([values[4], values[13]]);
+        let y00 = SimdVector::add(y00, x4p13);
+        let [x5p12, x5m12] =  SimdVector::column_butterfly2([values[5], values[12]]);
+        let y00 = SimdVector::add(y00, x5p12);
+        let [x6p11, x6m11] =  SimdVector::column_butterfly2([values[6], values[11]]);
+        let y00 = SimdVector::add(y00, x6p11);
+        let [x7p10, x7m10] =  SimdVector::column_butterfly2([values[7], values[10]]);
+        let y00 = SimdVector::add(y00, x7p10);
+        let [x8p9, x8m9] =  SimdVector::column_butterfly2([values[8], values[9]]);
+        let y00 = SimdVector::add(y00, x8p9);
 
-        let m0116a = FcmaVector::fmadd(values[0], self.twiddles_re[0], x1p16);
-        let m0116a = FcmaVector::fmadd(m0116a, self.twiddles_re[1], x2p15);
-        let m0116a = FcmaVector::fmadd(m0116a, self.twiddles_re[2], x3p14);
-        let m0116a = FcmaVector::fmadd(m0116a, self.twiddles_re[3], x4p13);
-        let m0116a = FcmaVector::fmadd(m0116a, self.twiddles_re[4], x5p12);
-        let m0116a = FcmaVector::fmadd(m0116a, self.twiddles_re[5], x6p11);
-        let m0116a = FcmaVector::fmadd(m0116a, self.twiddles_re[6], x7p10);
-        let m0116a = FcmaVector::fmadd(m0116a, self.twiddles_re[7], x8p9);
+        let m0116a = SimdVector::fmadd(values[0], self.twiddles_re[0], x1p16);
+        let m0116a = SimdVector::fmadd(m0116a, self.twiddles_re[1], x2p15);
+        let m0116a = SimdVector::fmadd(m0116a, self.twiddles_re[2], x3p14);
+        let m0116a = SimdVector::fmadd(m0116a, self.twiddles_re[3], x4p13);
+        let m0116a = SimdVector::fmadd(m0116a, self.twiddles_re[4], x5p12);
+        let m0116a = SimdVector::fmadd(m0116a, self.twiddles_re[5], x6p11);
+        let m0116a = SimdVector::fmadd(m0116a, self.twiddles_re[6], x7p10);
+        let m0116a = SimdVector::fmadd(m0116a, self.twiddles_re[7], x8p9);
         let m0116b = FcmaVector::mul_rotate90(self.twiddles_im[0], x1m16);
         let m0116b = FcmaVector::fmadd_rotate90(m0116b, self.twiddles_im[1], x2m15);
         let m0116b = FcmaVector::fmadd_rotate90(m0116b, self.twiddles_im[2], x3m14);
@@ -1137,16 +1139,16 @@ impl<T: FftNum> FcmaF64Butterfly17<T> {
         let m0116b = FcmaVector::fmadd_rotate90(m0116b, self.twiddles_im[5], x6m11);
         let m0116b = FcmaVector::fmadd_rotate90(m0116b, self.twiddles_im[6], x7m10);
         let m0116b = FcmaVector::fmadd_rotate90(m0116b, self.twiddles_im[7], x8m9);
-        let [y01, y16] = FcmaVector::column_butterfly2([m0116a, m0116b]);
+        let [y01, y16] = SimdVector::column_butterfly2([m0116a, m0116b]);
 
-        let m0215a = FcmaVector::fmadd(values[0], self.twiddles_re[1], x1p16);
-        let m0215a = FcmaVector::fmadd(m0215a, self.twiddles_re[3], x2p15);
-        let m0215a = FcmaVector::fmadd(m0215a, self.twiddles_re[5], x3p14);
-        let m0215a = FcmaVector::fmadd(m0215a, self.twiddles_re[7], x4p13);
-        let m0215a = FcmaVector::fmadd(m0215a, self.twiddles_re[6], x5p12);
-        let m0215a = FcmaVector::fmadd(m0215a, self.twiddles_re[4], x6p11);
-        let m0215a = FcmaVector::fmadd(m0215a, self.twiddles_re[2], x7p10);
-        let m0215a = FcmaVector::fmadd(m0215a, self.twiddles_re[0], x8p9);
+        let m0215a = SimdVector::fmadd(values[0], self.twiddles_re[1], x1p16);
+        let m0215a = SimdVector::fmadd(m0215a, self.twiddles_re[3], x2p15);
+        let m0215a = SimdVector::fmadd(m0215a, self.twiddles_re[5], x3p14);
+        let m0215a = SimdVector::fmadd(m0215a, self.twiddles_re[7], x4p13);
+        let m0215a = SimdVector::fmadd(m0215a, self.twiddles_re[6], x5p12);
+        let m0215a = SimdVector::fmadd(m0215a, self.twiddles_re[4], x6p11);
+        let m0215a = SimdVector::fmadd(m0215a, self.twiddles_re[2], x7p10);
+        let m0215a = SimdVector::fmadd(m0215a, self.twiddles_re[0], x8p9);
         let m0215b = FcmaVector::mul_rotate90(self.twiddles_im[1], x1m16);
         let m0215b = FcmaVector::fmadd_rotate90(m0215b, self.twiddles_im[3], x2m15);
         let m0215b = FcmaVector::fmadd_rotate90(m0215b, self.twiddles_im[5], x3m14);
@@ -1155,16 +1157,16 @@ impl<T: FftNum> FcmaF64Butterfly17<T> {
         let m0215b = FcmaVector::nmadd_rotate90(m0215b, self.twiddles_im[4], x6m11);
         let m0215b = FcmaVector::nmadd_rotate90(m0215b, self.twiddles_im[2], x7m10);
         let m0215b = FcmaVector::nmadd_rotate90(m0215b, self.twiddles_im[0], x8m9);
-        let [y02, y15] = FcmaVector::column_butterfly2([m0215a, m0215b]);
+        let [y02, y15] = SimdVector::column_butterfly2([m0215a, m0215b]);
 
-        let m0314a = FcmaVector::fmadd(values[0], self.twiddles_re[2], x1p16);
-        let m0314a = FcmaVector::fmadd(m0314a, self.twiddles_re[5], x2p15);
-        let m0314a = FcmaVector::fmadd(m0314a, self.twiddles_re[7], x3p14);
-        let m0314a = FcmaVector::fmadd(m0314a, self.twiddles_re[4], x4p13);
-        let m0314a = FcmaVector::fmadd(m0314a, self.twiddles_re[1], x5p12);
-        let m0314a = FcmaVector::fmadd(m0314a, self.twiddles_re[0], x6p11);
-        let m0314a = FcmaVector::fmadd(m0314a, self.twiddles_re[3], x7p10);
-        let m0314a = FcmaVector::fmadd(m0314a, self.twiddles_re[6], x8p9);
+        let m0314a = SimdVector::fmadd(values[0], self.twiddles_re[2], x1p16);
+        let m0314a = SimdVector::fmadd(m0314a, self.twiddles_re[5], x2p15);
+        let m0314a = SimdVector::fmadd(m0314a, self.twiddles_re[7], x3p14);
+        let m0314a = SimdVector::fmadd(m0314a, self.twiddles_re[4], x4p13);
+        let m0314a = SimdVector::fmadd(m0314a, self.twiddles_re[1], x5p12);
+        let m0314a = SimdVector::fmadd(m0314a, self.twiddles_re[0], x6p11);
+        let m0314a = SimdVector::fmadd(m0314a, self.twiddles_re[3], x7p10);
+        let m0314a = SimdVector::fmadd(m0314a, self.twiddles_re[6], x8p9);
         let m0314b = FcmaVector::mul_rotate90(self.twiddles_im[2], x1m16);
         let m0314b = FcmaVector::fmadd_rotate90(m0314b, self.twiddles_im[5], x2m15);
         let m0314b = FcmaVector::nmadd_rotate90(m0314b, self.twiddles_im[7], x3m14);
@@ -1173,16 +1175,16 @@ impl<T: FftNum> FcmaF64Butterfly17<T> {
         let m0314b = FcmaVector::fmadd_rotate90(m0314b, self.twiddles_im[0], x6m11);
         let m0314b = FcmaVector::fmadd_rotate90(m0314b, self.twiddles_im[3], x7m10);
         let m0314b = FcmaVector::fmadd_rotate90(m0314b, self.twiddles_im[6], x8m9);
-        let [y03, y14] = FcmaVector::column_butterfly2([m0314a, m0314b]);
+        let [y03, y14] = SimdVector::column_butterfly2([m0314a, m0314b]);
 
-        let m0413a = FcmaVector::fmadd(values[0], self.twiddles_re[3], x1p16);
-        let m0413a = FcmaVector::fmadd(m0413a, self.twiddles_re[7], x2p15);
-        let m0413a = FcmaVector::fmadd(m0413a, self.twiddles_re[4], x3p14);
-        let m0413a = FcmaVector::fmadd(m0413a, self.twiddles_re[0], x4p13);
-        let m0413a = FcmaVector::fmadd(m0413a, self.twiddles_re[2], x5p12);
-        let m0413a = FcmaVector::fmadd(m0413a, self.twiddles_re[6], x6p11);
-        let m0413a = FcmaVector::fmadd(m0413a, self.twiddles_re[5], x7p10);
-        let m0413a = FcmaVector::fmadd(m0413a, self.twiddles_re[1], x8p9);
+        let m0413a = SimdVector::fmadd(values[0], self.twiddles_re[3], x1p16);
+        let m0413a = SimdVector::fmadd(m0413a, self.twiddles_re[7], x2p15);
+        let m0413a = SimdVector::fmadd(m0413a, self.twiddles_re[4], x3p14);
+        let m0413a = SimdVector::fmadd(m0413a, self.twiddles_re[0], x4p13);
+        let m0413a = SimdVector::fmadd(m0413a, self.twiddles_re[2], x5p12);
+        let m0413a = SimdVector::fmadd(m0413a, self.twiddles_re[6], x6p11);
+        let m0413a = SimdVector::fmadd(m0413a, self.twiddles_re[5], x7p10);
+        let m0413a = SimdVector::fmadd(m0413a, self.twiddles_re[1], x8p9);
         let m0413b = FcmaVector::mul_rotate90(self.twiddles_im[3], x1m16);
         let m0413b = FcmaVector::fmadd_rotate90(m0413b, self.twiddles_im[7], x2m15);
         let m0413b = FcmaVector::nmadd_rotate90(m0413b, self.twiddles_im[4], x3m14);
@@ -1191,16 +1193,16 @@ impl<T: FftNum> FcmaF64Butterfly17<T> {
         let m0413b = FcmaVector::fmadd_rotate90(m0413b, self.twiddles_im[6], x6m11);
         let m0413b = FcmaVector::nmadd_rotate90(m0413b, self.twiddles_im[5], x7m10);
         let m0413b = FcmaVector::nmadd_rotate90(m0413b, self.twiddles_im[1], x8m9);
-        let [y04, y13] = FcmaVector::column_butterfly2([m0413a, m0413b]);
+        let [y04, y13] = SimdVector::column_butterfly2([m0413a, m0413b]);
 
-        let m0512a = FcmaVector::fmadd(values[0], self.twiddles_re[4], x1p16);
-        let m0512a = FcmaVector::fmadd(m0512a, self.twiddles_re[6], x2p15);
-        let m0512a = FcmaVector::fmadd(m0512a, self.twiddles_re[1], x3p14);
-        let m0512a = FcmaVector::fmadd(m0512a, self.twiddles_re[2], x4p13);
-        let m0512a = FcmaVector::fmadd(m0512a, self.twiddles_re[7], x5p12);
-        let m0512a = FcmaVector::fmadd(m0512a, self.twiddles_re[3], x6p11);
-        let m0512a = FcmaVector::fmadd(m0512a, self.twiddles_re[0], x7p10);
-        let m0512a = FcmaVector::fmadd(m0512a, self.twiddles_re[5], x8p9);
+        let m0512a = SimdVector::fmadd(values[0], self.twiddles_re[4], x1p16);
+        let m0512a = SimdVector::fmadd(m0512a, self.twiddles_re[6], x2p15);
+        let m0512a = SimdVector::fmadd(m0512a, self.twiddles_re[1], x3p14);
+        let m0512a = SimdVector::fmadd(m0512a, self.twiddles_re[2], x4p13);
+        let m0512a = SimdVector::fmadd(m0512a, self.twiddles_re[7], x5p12);
+        let m0512a = SimdVector::fmadd(m0512a, self.twiddles_re[3], x6p11);
+        let m0512a = SimdVector::fmadd(m0512a, self.twiddles_re[0], x7p10);
+        let m0512a = SimdVector::fmadd(m0512a, self.twiddles_re[5], x8p9);
         let m0512b = FcmaVector::mul_rotate90(self.twiddles_im[4], x1m16);
         let m0512b = FcmaVector::nmadd_rotate90(m0512b, self.twiddles_im[6], x2m15);
         let m0512b = FcmaVector::nmadd_rotate90(m0512b, self.twiddles_im[1], x3m14);
@@ -1209,16 +1211,16 @@ impl<T: FftNum> FcmaF64Butterfly17<T> {
         let m0512b = FcmaVector::nmadd_rotate90(m0512b, self.twiddles_im[3], x6m11);
         let m0512b = FcmaVector::fmadd_rotate90(m0512b, self.twiddles_im[0], x7m10);
         let m0512b = FcmaVector::fmadd_rotate90(m0512b, self.twiddles_im[5], x8m9);
-        let [y05, y12] = FcmaVector::column_butterfly2([m0512a, m0512b]);
+        let [y05, y12] = SimdVector::column_butterfly2([m0512a, m0512b]);
 
-        let m0611a = FcmaVector::fmadd(values[0], self.twiddles_re[5], x1p16);
-        let m0611a = FcmaVector::fmadd(m0611a, self.twiddles_re[4], x2p15);
-        let m0611a = FcmaVector::fmadd(m0611a, self.twiddles_re[0], x3p14);
-        let m0611a = FcmaVector::fmadd(m0611a, self.twiddles_re[6], x4p13);
-        let m0611a = FcmaVector::fmadd(m0611a, self.twiddles_re[3], x5p12);
-        let m0611a = FcmaVector::fmadd(m0611a, self.twiddles_re[1], x6p11);
-        let m0611a = FcmaVector::fmadd(m0611a, self.twiddles_re[7], x7p10);
-        let m0611a = FcmaVector::fmadd(m0611a, self.twiddles_re[2], x8p9);
+        let m0611a = SimdVector::fmadd(values[0], self.twiddles_re[5], x1p16);
+        let m0611a = SimdVector::fmadd(m0611a, self.twiddles_re[4], x2p15);
+        let m0611a = SimdVector::fmadd(m0611a, self.twiddles_re[0], x3p14);
+        let m0611a = SimdVector::fmadd(m0611a, self.twiddles_re[6], x4p13);
+        let m0611a = SimdVector::fmadd(m0611a, self.twiddles_re[3], x5p12);
+        let m0611a = SimdVector::fmadd(m0611a, self.twiddles_re[1], x6p11);
+        let m0611a = SimdVector::fmadd(m0611a, self.twiddles_re[7], x7p10);
+        let m0611a = SimdVector::fmadd(m0611a, self.twiddles_re[2], x8p9);
         let m0611b = FcmaVector::mul_rotate90(self.twiddles_im[5], x1m16);
         let m0611b = FcmaVector::nmadd_rotate90(m0611b, self.twiddles_im[4], x2m15);
         let m0611b = FcmaVector::fmadd_rotate90(m0611b, self.twiddles_im[0], x3m14);
@@ -1227,16 +1229,16 @@ impl<T: FftNum> FcmaF64Butterfly17<T> {
         let m0611b = FcmaVector::fmadd_rotate90(m0611b, self.twiddles_im[1], x6m11);
         let m0611b = FcmaVector::fmadd_rotate90(m0611b, self.twiddles_im[7], x7m10);
         let m0611b = FcmaVector::nmadd_rotate90(m0611b, self.twiddles_im[2], x8m9);
-        let [y06, y11] = FcmaVector::column_butterfly2([m0611a, m0611b]);
+        let [y06, y11] = SimdVector::column_butterfly2([m0611a, m0611b]);
 
-        let m0710a = FcmaVector::fmadd(values[0], self.twiddles_re[6], x1p16);
-        let m0710a = FcmaVector::fmadd(m0710a, self.twiddles_re[2], x2p15);
-        let m0710a = FcmaVector::fmadd(m0710a, self.twiddles_re[3], x3p14);
-        let m0710a = FcmaVector::fmadd(m0710a, self.twiddles_re[5], x4p13);
-        let m0710a = FcmaVector::fmadd(m0710a, self.twiddles_re[0], x5p12);
-        let m0710a = FcmaVector::fmadd(m0710a, self.twiddles_re[7], x6p11);
-        let m0710a = FcmaVector::fmadd(m0710a, self.twiddles_re[1], x7p10);
-        let m0710a = FcmaVector::fmadd(m0710a, self.twiddles_re[4], x8p9);
+        let m0710a = SimdVector::fmadd(values[0], self.twiddles_re[6], x1p16);
+        let m0710a = SimdVector::fmadd(m0710a, self.twiddles_re[2], x2p15);
+        let m0710a = SimdVector::fmadd(m0710a, self.twiddles_re[3], x3p14);
+        let m0710a = SimdVector::fmadd(m0710a, self.twiddles_re[5], x4p13);
+        let m0710a = SimdVector::fmadd(m0710a, self.twiddles_re[0], x5p12);
+        let m0710a = SimdVector::fmadd(m0710a, self.twiddles_re[7], x6p11);
+        let m0710a = SimdVector::fmadd(m0710a, self.twiddles_re[1], x7p10);
+        let m0710a = SimdVector::fmadd(m0710a, self.twiddles_re[4], x8p9);
         let m0710b = FcmaVector::mul_rotate90(self.twiddles_im[6], x1m16);
         let m0710b = FcmaVector::nmadd_rotate90(m0710b, self.twiddles_im[2], x2m15);
         let m0710b = FcmaVector::fmadd_rotate90(m0710b, self.twiddles_im[3], x3m14);
@@ -1245,16 +1247,16 @@ impl<T: FftNum> FcmaF64Butterfly17<T> {
         let m0710b = FcmaVector::fmadd_rotate90(m0710b, self.twiddles_im[7], x6m11);
         let m0710b = FcmaVector::nmadd_rotate90(m0710b, self.twiddles_im[1], x7m10);
         let m0710b = FcmaVector::fmadd_rotate90(m0710b, self.twiddles_im[4], x8m9);
-        let [y07, y10] = FcmaVector::column_butterfly2([m0710a, m0710b]);
+        let [y07, y10] = SimdVector::column_butterfly2([m0710a, m0710b]);
 
-        let m0809a = FcmaVector::fmadd(values[0], self.twiddles_re[7], x1p16);
-        let m0809a = FcmaVector::fmadd(m0809a, self.twiddles_re[0], x2p15);
-        let m0809a = FcmaVector::fmadd(m0809a, self.twiddles_re[6], x3p14);
-        let m0809a = FcmaVector::fmadd(m0809a, self.twiddles_re[1], x4p13);
-        let m0809a = FcmaVector::fmadd(m0809a, self.twiddles_re[5], x5p12);
-        let m0809a = FcmaVector::fmadd(m0809a, self.twiddles_re[2], x6p11);
-        let m0809a = FcmaVector::fmadd(m0809a, self.twiddles_re[4], x7p10);
-        let m0809a = FcmaVector::fmadd(m0809a, self.twiddles_re[3], x8p9);
+        let m0809a = SimdVector::fmadd(values[0], self.twiddles_re[7], x1p16);
+        let m0809a = SimdVector::fmadd(m0809a, self.twiddles_re[0], x2p15);
+        let m0809a = SimdVector::fmadd(m0809a, self.twiddles_re[6], x3p14);
+        let m0809a = SimdVector::fmadd(m0809a, self.twiddles_re[1], x4p13);
+        let m0809a = SimdVector::fmadd(m0809a, self.twiddles_re[5], x5p12);
+        let m0809a = SimdVector::fmadd(m0809a, self.twiddles_re[2], x6p11);
+        let m0809a = SimdVector::fmadd(m0809a, self.twiddles_re[4], x7p10);
+        let m0809a = SimdVector::fmadd(m0809a, self.twiddles_re[3], x8p9);
         let m0809b = FcmaVector::mul_rotate90(self.twiddles_im[7], x1m16);
         let m0809b = FcmaVector::nmadd_rotate90(m0809b, self.twiddles_im[0], x2m15);
         let m0809b = FcmaVector::fmadd_rotate90(m0809b, self.twiddles_im[6], x3m14);
@@ -1263,7 +1265,7 @@ impl<T: FftNum> FcmaF64Butterfly17<T> {
         let m0809b = FcmaVector::nmadd_rotate90(m0809b, self.twiddles_im[2], x6m11);
         let m0809b = FcmaVector::fmadd_rotate90(m0809b, self.twiddles_im[4], x7m10);
         let m0809b = FcmaVector::nmadd_rotate90(m0809b, self.twiddles_im[3], x8m9);
-        let [y08, y09] = FcmaVector::column_butterfly2([m0809a, m0809b]);
+        let [y08, y09] = SimdVector::column_butterfly2([m0809a, m0809b]);
 
 
         [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16]
@@ -1272,8 +1274,8 @@ impl<T: FftNum> FcmaF64Butterfly17<T> {
 
 pub struct FcmaF32Butterfly19<T> {
     direction: FftDirection,
-    twiddles_re: [float32x4_t; 9],
-    twiddles_im: [float32x4_t; 9],
+    twiddles_re: [FcmaVector32; 9],
+    twiddles_im: [FcmaVector32; 9],
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -1286,14 +1288,14 @@ impl<T: FftNum> FcmaF32Butterfly19<T> {
         let twiddles = make_twiddles(19, direction);
         Self {
             direction,
-            twiddles_re: twiddles.map(|t| FcmaVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| FcmaVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
+            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
             _phantom: std::marker::PhantomData,
         }
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 });
 
         let out = self.perform_parallel_fft_direct(values);
@@ -1302,7 +1304,7 @@ impl<T: FftNum> FcmaF32Butterfly19<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36 });
 
         let values = [
@@ -1355,36 +1357,36 @@ impl<T: FftNum> FcmaF32Butterfly19<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [float32x4_t; 19]) -> [float32x4_t; 19] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [FcmaVector32; 19]) -> [FcmaVector32; 19] {
         let y00 = values[0];
-        let [x1p18, x1m18] =  FcmaVector::column_butterfly2([values[1], values[18]]);
-        let y00 = FcmaVector::add(y00, x1p18);
-        let [x2p17, x2m17] =  FcmaVector::column_butterfly2([values[2], values[17]]);
-        let y00 = FcmaVector::add(y00, x2p17);
-        let [x3p16, x3m16] =  FcmaVector::column_butterfly2([values[3], values[16]]);
-        let y00 = FcmaVector::add(y00, x3p16);
-        let [x4p15, x4m15] =  FcmaVector::column_butterfly2([values[4], values[15]]);
-        let y00 = FcmaVector::add(y00, x4p15);
-        let [x5p14, x5m14] =  FcmaVector::column_butterfly2([values[5], values[14]]);
-        let y00 = FcmaVector::add(y00, x5p14);
-        let [x6p13, x6m13] =  FcmaVector::column_butterfly2([values[6], values[13]]);
-        let y00 = FcmaVector::add(y00, x6p13);
-        let [x7p12, x7m12] =  FcmaVector::column_butterfly2([values[7], values[12]]);
-        let y00 = FcmaVector::add(y00, x7p12);
-        let [x8p11, x8m11] =  FcmaVector::column_butterfly2([values[8], values[11]]);
-        let y00 = FcmaVector::add(y00, x8p11);
-        let [x9p10, x9m10] =  FcmaVector::column_butterfly2([values[9], values[10]]);
-        let y00 = FcmaVector::add(y00, x9p10);
+        let [x1p18, x1m18] =  SimdVector::column_butterfly2([values[1], values[18]]);
+        let y00 = SimdVector::add(y00, x1p18);
+        let [x2p17, x2m17] =  SimdVector::column_butterfly2([values[2], values[17]]);
+        let y00 = SimdVector::add(y00, x2p17);
+        let [x3p16, x3m16] =  SimdVector::column_butterfly2([values[3], values[16]]);
+        let y00 = SimdVector::add(y00, x3p16);
+        let [x4p15, x4m15] =  SimdVector::column_butterfly2([values[4], values[15]]);
+        let y00 = SimdVector::add(y00, x4p15);
+        let [x5p14, x5m14] =  SimdVector::column_butterfly2([values[5], values[14]]);
+        let y00 = SimdVector::add(y00, x5p14);
+        let [x6p13, x6m13] =  SimdVector::column_butterfly2([values[6], values[13]]);
+        let y00 = SimdVector::add(y00, x6p13);
+        let [x7p12, x7m12] =  SimdVector::column_butterfly2([values[7], values[12]]);
+        let y00 = SimdVector::add(y00, x7p12);
+        let [x8p11, x8m11] =  SimdVector::column_butterfly2([values[8], values[11]]);
+        let y00 = SimdVector::add(y00, x8p11);
+        let [x9p10, x9m10] =  SimdVector::column_butterfly2([values[9], values[10]]);
+        let y00 = SimdVector::add(y00, x9p10);
 
-        let m0118a = FcmaVector::fmadd(values[0], self.twiddles_re[0], x1p18);
-        let m0118a = FcmaVector::fmadd(m0118a, self.twiddles_re[1], x2p17);
-        let m0118a = FcmaVector::fmadd(m0118a, self.twiddles_re[2], x3p16);
-        let m0118a = FcmaVector::fmadd(m0118a, self.twiddles_re[3], x4p15);
-        let m0118a = FcmaVector::fmadd(m0118a, self.twiddles_re[4], x5p14);
-        let m0118a = FcmaVector::fmadd(m0118a, self.twiddles_re[5], x6p13);
-        let m0118a = FcmaVector::fmadd(m0118a, self.twiddles_re[6], x7p12);
-        let m0118a = FcmaVector::fmadd(m0118a, self.twiddles_re[7], x8p11);
-        let m0118a = FcmaVector::fmadd(m0118a, self.twiddles_re[8], x9p10);
+        let m0118a = SimdVector::fmadd(values[0], self.twiddles_re[0], x1p18);
+        let m0118a = SimdVector::fmadd(m0118a, self.twiddles_re[1], x2p17);
+        let m0118a = SimdVector::fmadd(m0118a, self.twiddles_re[2], x3p16);
+        let m0118a = SimdVector::fmadd(m0118a, self.twiddles_re[3], x4p15);
+        let m0118a = SimdVector::fmadd(m0118a, self.twiddles_re[4], x5p14);
+        let m0118a = SimdVector::fmadd(m0118a, self.twiddles_re[5], x6p13);
+        let m0118a = SimdVector::fmadd(m0118a, self.twiddles_re[6], x7p12);
+        let m0118a = SimdVector::fmadd(m0118a, self.twiddles_re[7], x8p11);
+        let m0118a = SimdVector::fmadd(m0118a, self.twiddles_re[8], x9p10);
         let m0118b = FcmaVector::mul_rotate90(self.twiddles_im[0], x1m18);
         let m0118b = FcmaVector::fmadd_rotate90(m0118b, self.twiddles_im[1], x2m17);
         let m0118b = FcmaVector::fmadd_rotate90(m0118b, self.twiddles_im[2], x3m16);
@@ -1394,17 +1396,17 @@ impl<T: FftNum> FcmaF32Butterfly19<T> {
         let m0118b = FcmaVector::fmadd_rotate90(m0118b, self.twiddles_im[6], x7m12);
         let m0118b = FcmaVector::fmadd_rotate90(m0118b, self.twiddles_im[7], x8m11);
         let m0118b = FcmaVector::fmadd_rotate90(m0118b, self.twiddles_im[8], x9m10);
-        let [y01, y18] = FcmaVector::column_butterfly2([m0118a, m0118b]);
+        let [y01, y18] = SimdVector::column_butterfly2([m0118a, m0118b]);
 
-        let m0217a = FcmaVector::fmadd(values[0], self.twiddles_re[1], x1p18);
-        let m0217a = FcmaVector::fmadd(m0217a, self.twiddles_re[3], x2p17);
-        let m0217a = FcmaVector::fmadd(m0217a, self.twiddles_re[5], x3p16);
-        let m0217a = FcmaVector::fmadd(m0217a, self.twiddles_re[7], x4p15);
-        let m0217a = FcmaVector::fmadd(m0217a, self.twiddles_re[8], x5p14);
-        let m0217a = FcmaVector::fmadd(m0217a, self.twiddles_re[6], x6p13);
-        let m0217a = FcmaVector::fmadd(m0217a, self.twiddles_re[4], x7p12);
-        let m0217a = FcmaVector::fmadd(m0217a, self.twiddles_re[2], x8p11);
-        let m0217a = FcmaVector::fmadd(m0217a, self.twiddles_re[0], x9p10);
+        let m0217a = SimdVector::fmadd(values[0], self.twiddles_re[1], x1p18);
+        let m0217a = SimdVector::fmadd(m0217a, self.twiddles_re[3], x2p17);
+        let m0217a = SimdVector::fmadd(m0217a, self.twiddles_re[5], x3p16);
+        let m0217a = SimdVector::fmadd(m0217a, self.twiddles_re[7], x4p15);
+        let m0217a = SimdVector::fmadd(m0217a, self.twiddles_re[8], x5p14);
+        let m0217a = SimdVector::fmadd(m0217a, self.twiddles_re[6], x6p13);
+        let m0217a = SimdVector::fmadd(m0217a, self.twiddles_re[4], x7p12);
+        let m0217a = SimdVector::fmadd(m0217a, self.twiddles_re[2], x8p11);
+        let m0217a = SimdVector::fmadd(m0217a, self.twiddles_re[0], x9p10);
         let m0217b = FcmaVector::mul_rotate90(self.twiddles_im[1], x1m18);
         let m0217b = FcmaVector::fmadd_rotate90(m0217b, self.twiddles_im[3], x2m17);
         let m0217b = FcmaVector::fmadd_rotate90(m0217b, self.twiddles_im[5], x3m16);
@@ -1414,17 +1416,17 @@ impl<T: FftNum> FcmaF32Butterfly19<T> {
         let m0217b = FcmaVector::nmadd_rotate90(m0217b, self.twiddles_im[4], x7m12);
         let m0217b = FcmaVector::nmadd_rotate90(m0217b, self.twiddles_im[2], x8m11);
         let m0217b = FcmaVector::nmadd_rotate90(m0217b, self.twiddles_im[0], x9m10);
-        let [y02, y17] = FcmaVector::column_butterfly2([m0217a, m0217b]);
+        let [y02, y17] = SimdVector::column_butterfly2([m0217a, m0217b]);
 
-        let m0316a = FcmaVector::fmadd(values[0], self.twiddles_re[2], x1p18);
-        let m0316a = FcmaVector::fmadd(m0316a, self.twiddles_re[5], x2p17);
-        let m0316a = FcmaVector::fmadd(m0316a, self.twiddles_re[8], x3p16);
-        let m0316a = FcmaVector::fmadd(m0316a, self.twiddles_re[6], x4p15);
-        let m0316a = FcmaVector::fmadd(m0316a, self.twiddles_re[3], x5p14);
-        let m0316a = FcmaVector::fmadd(m0316a, self.twiddles_re[0], x6p13);
-        let m0316a = FcmaVector::fmadd(m0316a, self.twiddles_re[1], x7p12);
-        let m0316a = FcmaVector::fmadd(m0316a, self.twiddles_re[4], x8p11);
-        let m0316a = FcmaVector::fmadd(m0316a, self.twiddles_re[7], x9p10);
+        let m0316a = SimdVector::fmadd(values[0], self.twiddles_re[2], x1p18);
+        let m0316a = SimdVector::fmadd(m0316a, self.twiddles_re[5], x2p17);
+        let m0316a = SimdVector::fmadd(m0316a, self.twiddles_re[8], x3p16);
+        let m0316a = SimdVector::fmadd(m0316a, self.twiddles_re[6], x4p15);
+        let m0316a = SimdVector::fmadd(m0316a, self.twiddles_re[3], x5p14);
+        let m0316a = SimdVector::fmadd(m0316a, self.twiddles_re[0], x6p13);
+        let m0316a = SimdVector::fmadd(m0316a, self.twiddles_re[1], x7p12);
+        let m0316a = SimdVector::fmadd(m0316a, self.twiddles_re[4], x8p11);
+        let m0316a = SimdVector::fmadd(m0316a, self.twiddles_re[7], x9p10);
         let m0316b = FcmaVector::mul_rotate90(self.twiddles_im[2], x1m18);
         let m0316b = FcmaVector::fmadd_rotate90(m0316b, self.twiddles_im[5], x2m17);
         let m0316b = FcmaVector::fmadd_rotate90(m0316b, self.twiddles_im[8], x3m16);
@@ -1434,17 +1436,17 @@ impl<T: FftNum> FcmaF32Butterfly19<T> {
         let m0316b = FcmaVector::fmadd_rotate90(m0316b, self.twiddles_im[1], x7m12);
         let m0316b = FcmaVector::fmadd_rotate90(m0316b, self.twiddles_im[4], x8m11);
         let m0316b = FcmaVector::fmadd_rotate90(m0316b, self.twiddles_im[7], x9m10);
-        let [y03, y16] = FcmaVector::column_butterfly2([m0316a, m0316b]);
+        let [y03, y16] = SimdVector::column_butterfly2([m0316a, m0316b]);
 
-        let m0415a = FcmaVector::fmadd(values[0], self.twiddles_re[3], x1p18);
-        let m0415a = FcmaVector::fmadd(m0415a, self.twiddles_re[7], x2p17);
-        let m0415a = FcmaVector::fmadd(m0415a, self.twiddles_re[6], x3p16);
-        let m0415a = FcmaVector::fmadd(m0415a, self.twiddles_re[2], x4p15);
-        let m0415a = FcmaVector::fmadd(m0415a, self.twiddles_re[0], x5p14);
-        let m0415a = FcmaVector::fmadd(m0415a, self.twiddles_re[4], x6p13);
-        let m0415a = FcmaVector::fmadd(m0415a, self.twiddles_re[8], x7p12);
-        let m0415a = FcmaVector::fmadd(m0415a, self.twiddles_re[5], x8p11);
-        let m0415a = FcmaVector::fmadd(m0415a, self.twiddles_re[1], x9p10);
+        let m0415a = SimdVector::fmadd(values[0], self.twiddles_re[3], x1p18);
+        let m0415a = SimdVector::fmadd(m0415a, self.twiddles_re[7], x2p17);
+        let m0415a = SimdVector::fmadd(m0415a, self.twiddles_re[6], x3p16);
+        let m0415a = SimdVector::fmadd(m0415a, self.twiddles_re[2], x4p15);
+        let m0415a = SimdVector::fmadd(m0415a, self.twiddles_re[0], x5p14);
+        let m0415a = SimdVector::fmadd(m0415a, self.twiddles_re[4], x6p13);
+        let m0415a = SimdVector::fmadd(m0415a, self.twiddles_re[8], x7p12);
+        let m0415a = SimdVector::fmadd(m0415a, self.twiddles_re[5], x8p11);
+        let m0415a = SimdVector::fmadd(m0415a, self.twiddles_re[1], x9p10);
         let m0415b = FcmaVector::mul_rotate90(self.twiddles_im[3], x1m18);
         let m0415b = FcmaVector::fmadd_rotate90(m0415b, self.twiddles_im[7], x2m17);
         let m0415b = FcmaVector::nmadd_rotate90(m0415b, self.twiddles_im[6], x3m16);
@@ -1454,17 +1456,17 @@ impl<T: FftNum> FcmaF32Butterfly19<T> {
         let m0415b = FcmaVector::fmadd_rotate90(m0415b, self.twiddles_im[8], x7m12);
         let m0415b = FcmaVector::nmadd_rotate90(m0415b, self.twiddles_im[5], x8m11);
         let m0415b = FcmaVector::nmadd_rotate90(m0415b, self.twiddles_im[1], x9m10);
-        let [y04, y15] = FcmaVector::column_butterfly2([m0415a, m0415b]);
+        let [y04, y15] = SimdVector::column_butterfly2([m0415a, m0415b]);
 
-        let m0514a = FcmaVector::fmadd(values[0], self.twiddles_re[4], x1p18);
-        let m0514a = FcmaVector::fmadd(m0514a, self.twiddles_re[8], x2p17);
-        let m0514a = FcmaVector::fmadd(m0514a, self.twiddles_re[3], x3p16);
-        let m0514a = FcmaVector::fmadd(m0514a, self.twiddles_re[0], x4p15);
-        let m0514a = FcmaVector::fmadd(m0514a, self.twiddles_re[5], x5p14);
-        let m0514a = FcmaVector::fmadd(m0514a, self.twiddles_re[7], x6p13);
-        let m0514a = FcmaVector::fmadd(m0514a, self.twiddles_re[2], x7p12);
-        let m0514a = FcmaVector::fmadd(m0514a, self.twiddles_re[1], x8p11);
-        let m0514a = FcmaVector::fmadd(m0514a, self.twiddles_re[6], x9p10);
+        let m0514a = SimdVector::fmadd(values[0], self.twiddles_re[4], x1p18);
+        let m0514a = SimdVector::fmadd(m0514a, self.twiddles_re[8], x2p17);
+        let m0514a = SimdVector::fmadd(m0514a, self.twiddles_re[3], x3p16);
+        let m0514a = SimdVector::fmadd(m0514a, self.twiddles_re[0], x4p15);
+        let m0514a = SimdVector::fmadd(m0514a, self.twiddles_re[5], x5p14);
+        let m0514a = SimdVector::fmadd(m0514a, self.twiddles_re[7], x6p13);
+        let m0514a = SimdVector::fmadd(m0514a, self.twiddles_re[2], x7p12);
+        let m0514a = SimdVector::fmadd(m0514a, self.twiddles_re[1], x8p11);
+        let m0514a = SimdVector::fmadd(m0514a, self.twiddles_re[6], x9p10);
         let m0514b = FcmaVector::mul_rotate90(self.twiddles_im[4], x1m18);
         let m0514b = FcmaVector::nmadd_rotate90(m0514b, self.twiddles_im[8], x2m17);
         let m0514b = FcmaVector::nmadd_rotate90(m0514b, self.twiddles_im[3], x3m16);
@@ -1474,17 +1476,17 @@ impl<T: FftNum> FcmaF32Butterfly19<T> {
         let m0514b = FcmaVector::nmadd_rotate90(m0514b, self.twiddles_im[2], x7m12);
         let m0514b = FcmaVector::fmadd_rotate90(m0514b, self.twiddles_im[1], x8m11);
         let m0514b = FcmaVector::fmadd_rotate90(m0514b, self.twiddles_im[6], x9m10);
-        let [y05, y14] = FcmaVector::column_butterfly2([m0514a, m0514b]);
+        let [y05, y14] = SimdVector::column_butterfly2([m0514a, m0514b]);
 
-        let m0613a = FcmaVector::fmadd(values[0], self.twiddles_re[5], x1p18);
-        let m0613a = FcmaVector::fmadd(m0613a, self.twiddles_re[6], x2p17);
-        let m0613a = FcmaVector::fmadd(m0613a, self.twiddles_re[0], x3p16);
-        let m0613a = FcmaVector::fmadd(m0613a, self.twiddles_re[4], x4p15);
-        let m0613a = FcmaVector::fmadd(m0613a, self.twiddles_re[7], x5p14);
-        let m0613a = FcmaVector::fmadd(m0613a, self.twiddles_re[1], x6p13);
-        let m0613a = FcmaVector::fmadd(m0613a, self.twiddles_re[3], x7p12);
-        let m0613a = FcmaVector::fmadd(m0613a, self.twiddles_re[8], x8p11);
-        let m0613a = FcmaVector::fmadd(m0613a, self.twiddles_re[2], x9p10);
+        let m0613a = SimdVector::fmadd(values[0], self.twiddles_re[5], x1p18);
+        let m0613a = SimdVector::fmadd(m0613a, self.twiddles_re[6], x2p17);
+        let m0613a = SimdVector::fmadd(m0613a, self.twiddles_re[0], x3p16);
+        let m0613a = SimdVector::fmadd(m0613a, self.twiddles_re[4], x4p15);
+        let m0613a = SimdVector::fmadd(m0613a, self.twiddles_re[7], x5p14);
+        let m0613a = SimdVector::fmadd(m0613a, self.twiddles_re[1], x6p13);
+        let m0613a = SimdVector::fmadd(m0613a, self.twiddles_re[3], x7p12);
+        let m0613a = SimdVector::fmadd(m0613a, self.twiddles_re[8], x8p11);
+        let m0613a = SimdVector::fmadd(m0613a, self.twiddles_re[2], x9p10);
         let m0613b = FcmaVector::mul_rotate90(self.twiddles_im[5], x1m18);
         let m0613b = FcmaVector::nmadd_rotate90(m0613b, self.twiddles_im[6], x2m17);
         let m0613b = FcmaVector::nmadd_rotate90(m0613b, self.twiddles_im[0], x3m16);
@@ -1494,17 +1496,17 @@ impl<T: FftNum> FcmaF32Butterfly19<T> {
         let m0613b = FcmaVector::fmadd_rotate90(m0613b, self.twiddles_im[3], x7m12);
         let m0613b = FcmaVector::nmadd_rotate90(m0613b, self.twiddles_im[8], x8m11);
         let m0613b = FcmaVector::nmadd_rotate90(m0613b, self.twiddles_im[2], x9m10);
-        let [y06, y13] = FcmaVector::column_butterfly2([m0613a, m0613b]);
+        let [y06, y13] = SimdVector::column_butterfly2([m0613a, m0613b]);
 
-        let m0712a = FcmaVector::fmadd(values[0], self.twiddles_re[6], x1p18);
-        let m0712a = FcmaVector::fmadd(m0712a, self.twiddles_re[4], x2p17);
-        let m0712a = FcmaVector::fmadd(m0712a, self.twiddles_re[1], x3p16);
-        let m0712a = FcmaVector::fmadd(m0712a, self.twiddles_re[8], x4p15);
-        let m0712a = FcmaVector::fmadd(m0712a, self.twiddles_re[2], x5p14);
-        let m0712a = FcmaVector::fmadd(m0712a, self.twiddles_re[3], x6p13);
-        let m0712a = FcmaVector::fmadd(m0712a, self.twiddles_re[7], x7p12);
-        let m0712a = FcmaVector::fmadd(m0712a, self.twiddles_re[0], x8p11);
-        let m0712a = FcmaVector::fmadd(m0712a, self.twiddles_re[5], x9p10);
+        let m0712a = SimdVector::fmadd(values[0], self.twiddles_re[6], x1p18);
+        let m0712a = SimdVector::fmadd(m0712a, self.twiddles_re[4], x2p17);
+        let m0712a = SimdVector::fmadd(m0712a, self.twiddles_re[1], x3p16);
+        let m0712a = SimdVector::fmadd(m0712a, self.twiddles_re[8], x4p15);
+        let m0712a = SimdVector::fmadd(m0712a, self.twiddles_re[2], x5p14);
+        let m0712a = SimdVector::fmadd(m0712a, self.twiddles_re[3], x6p13);
+        let m0712a = SimdVector::fmadd(m0712a, self.twiddles_re[7], x7p12);
+        let m0712a = SimdVector::fmadd(m0712a, self.twiddles_re[0], x8p11);
+        let m0712a = SimdVector::fmadd(m0712a, self.twiddles_re[5], x9p10);
         let m0712b = FcmaVector::mul_rotate90(self.twiddles_im[6], x1m18);
         let m0712b = FcmaVector::nmadd_rotate90(m0712b, self.twiddles_im[4], x2m17);
         let m0712b = FcmaVector::fmadd_rotate90(m0712b, self.twiddles_im[1], x3m16);
@@ -1514,17 +1516,17 @@ impl<T: FftNum> FcmaF32Butterfly19<T> {
         let m0712b = FcmaVector::nmadd_rotate90(m0712b, self.twiddles_im[7], x7m12);
         let m0712b = FcmaVector::nmadd_rotate90(m0712b, self.twiddles_im[0], x8m11);
         let m0712b = FcmaVector::fmadd_rotate90(m0712b, self.twiddles_im[5], x9m10);
-        let [y07, y12] = FcmaVector::column_butterfly2([m0712a, m0712b]);
+        let [y07, y12] = SimdVector::column_butterfly2([m0712a, m0712b]);
 
-        let m0811a = FcmaVector::fmadd(values[0], self.twiddles_re[7], x1p18);
-        let m0811a = FcmaVector::fmadd(m0811a, self.twiddles_re[2], x2p17);
-        let m0811a = FcmaVector::fmadd(m0811a, self.twiddles_re[4], x3p16);
-        let m0811a = FcmaVector::fmadd(m0811a, self.twiddles_re[5], x4p15);
-        let m0811a = FcmaVector::fmadd(m0811a, self.twiddles_re[1], x5p14);
-        let m0811a = FcmaVector::fmadd(m0811a, self.twiddles_re[8], x6p13);
-        let m0811a = FcmaVector::fmadd(m0811a, self.twiddles_re[0], x7p12);
-        let m0811a = FcmaVector::fmadd(m0811a, self.twiddles_re[6], x8p11);
-        let m0811a = FcmaVector::fmadd(m0811a, self.twiddles_re[3], x9p10);
+        let m0811a = SimdVector::fmadd(values[0], self.twiddles_re[7], x1p18);
+        let m0811a = SimdVector::fmadd(m0811a, self.twiddles_re[2], x2p17);
+        let m0811a = SimdVector::fmadd(m0811a, self.twiddles_re[4], x3p16);
+        let m0811a = SimdVector::fmadd(m0811a, self.twiddles_re[5], x4p15);
+        let m0811a = SimdVector::fmadd(m0811a, self.twiddles_re[1], x5p14);
+        let m0811a = SimdVector::fmadd(m0811a, self.twiddles_re[8], x6p13);
+        let m0811a = SimdVector::fmadd(m0811a, self.twiddles_re[0], x7p12);
+        let m0811a = SimdVector::fmadd(m0811a, self.twiddles_re[6], x8p11);
+        let m0811a = SimdVector::fmadd(m0811a, self.twiddles_re[3], x9p10);
         let m0811b = FcmaVector::mul_rotate90(self.twiddles_im[7], x1m18);
         let m0811b = FcmaVector::nmadd_rotate90(m0811b, self.twiddles_im[2], x2m17);
         let m0811b = FcmaVector::fmadd_rotate90(m0811b, self.twiddles_im[4], x3m16);
@@ -1534,17 +1536,17 @@ impl<T: FftNum> FcmaF32Butterfly19<T> {
         let m0811b = FcmaVector::nmadd_rotate90(m0811b, self.twiddles_im[0], x7m12);
         let m0811b = FcmaVector::fmadd_rotate90(m0811b, self.twiddles_im[6], x8m11);
         let m0811b = FcmaVector::nmadd_rotate90(m0811b, self.twiddles_im[3], x9m10);
-        let [y08, y11] = FcmaVector::column_butterfly2([m0811a, m0811b]);
+        let [y08, y11] = SimdVector::column_butterfly2([m0811a, m0811b]);
 
-        let m0910a = FcmaVector::fmadd(values[0], self.twiddles_re[8], x1p18);
-        let m0910a = FcmaVector::fmadd(m0910a, self.twiddles_re[0], x2p17);
-        let m0910a = FcmaVector::fmadd(m0910a, self.twiddles_re[7], x3p16);
-        let m0910a = FcmaVector::fmadd(m0910a, self.twiddles_re[1], x4p15);
-        let m0910a = FcmaVector::fmadd(m0910a, self.twiddles_re[6], x5p14);
-        let m0910a = FcmaVector::fmadd(m0910a, self.twiddles_re[2], x6p13);
-        let m0910a = FcmaVector::fmadd(m0910a, self.twiddles_re[5], x7p12);
-        let m0910a = FcmaVector::fmadd(m0910a, self.twiddles_re[3], x8p11);
-        let m0910a = FcmaVector::fmadd(m0910a, self.twiddles_re[4], x9p10);
+        let m0910a = SimdVector::fmadd(values[0], self.twiddles_re[8], x1p18);
+        let m0910a = SimdVector::fmadd(m0910a, self.twiddles_re[0], x2p17);
+        let m0910a = SimdVector::fmadd(m0910a, self.twiddles_re[7], x3p16);
+        let m0910a = SimdVector::fmadd(m0910a, self.twiddles_re[1], x4p15);
+        let m0910a = SimdVector::fmadd(m0910a, self.twiddles_re[6], x5p14);
+        let m0910a = SimdVector::fmadd(m0910a, self.twiddles_re[2], x6p13);
+        let m0910a = SimdVector::fmadd(m0910a, self.twiddles_re[5], x7p12);
+        let m0910a = SimdVector::fmadd(m0910a, self.twiddles_re[3], x8p11);
+        let m0910a = SimdVector::fmadd(m0910a, self.twiddles_re[4], x9p10);
         let m0910b = FcmaVector::mul_rotate90(self.twiddles_im[8], x1m18);
         let m0910b = FcmaVector::nmadd_rotate90(m0910b, self.twiddles_im[0], x2m17);
         let m0910b = FcmaVector::fmadd_rotate90(m0910b, self.twiddles_im[7], x3m16);
@@ -1554,7 +1556,7 @@ impl<T: FftNum> FcmaF32Butterfly19<T> {
         let m0910b = FcmaVector::fmadd_rotate90(m0910b, self.twiddles_im[5], x7m12);
         let m0910b = FcmaVector::nmadd_rotate90(m0910b, self.twiddles_im[3], x8m11);
         let m0910b = FcmaVector::fmadd_rotate90(m0910b, self.twiddles_im[4], x9m10);
-        let [y09, y10] = FcmaVector::column_butterfly2([m0910a, m0910b]);
+        let [y09, y10] = SimdVector::column_butterfly2([m0910a, m0910b]);
 
 
         [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18]
@@ -1563,8 +1565,8 @@ impl<T: FftNum> FcmaF32Butterfly19<T> {
 
 pub struct FcmaF64Butterfly19<T> {
     direction: FftDirection,
-    twiddles_re: [float64x2_t; 9],
-    twiddles_im: [float64x2_t; 9],
+    twiddles_re: [FcmaVector64; 9],
+    twiddles_im: [FcmaVector64; 9],
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -1577,14 +1579,14 @@ impl<T: FftNum> FcmaF64Butterfly19<T> {
         let twiddles = make_twiddles(19, direction);
         unsafe {Self {
             direction,
-            twiddles_re: twiddles.map(|t| FcmaVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| FcmaVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
+            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
             _phantom: std::marker::PhantomData,
         }}
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 });
 
         let out = self.perform_fft_direct(values);
@@ -1593,36 +1595,36 @@ impl<T: FftNum> FcmaF64Butterfly19<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [float64x2_t; 19]) -> [float64x2_t; 19] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [FcmaVector64; 19]) -> [FcmaVector64; 19] {
         let y00 = values[0];
-        let [x1p18, x1m18] =  FcmaVector::column_butterfly2([values[1], values[18]]);
-        let y00 = FcmaVector::add(y00, x1p18);
-        let [x2p17, x2m17] =  FcmaVector::column_butterfly2([values[2], values[17]]);
-        let y00 = FcmaVector::add(y00, x2p17);
-        let [x3p16, x3m16] =  FcmaVector::column_butterfly2([values[3], values[16]]);
-        let y00 = FcmaVector::add(y00, x3p16);
-        let [x4p15, x4m15] =  FcmaVector::column_butterfly2([values[4], values[15]]);
-        let y00 = FcmaVector::add(y00, x4p15);
-        let [x5p14, x5m14] =  FcmaVector::column_butterfly2([values[5], values[14]]);
-        let y00 = FcmaVector::add(y00, x5p14);
-        let [x6p13, x6m13] =  FcmaVector::column_butterfly2([values[6], values[13]]);
-        let y00 = FcmaVector::add(y00, x6p13);
-        let [x7p12, x7m12] =  FcmaVector::column_butterfly2([values[7], values[12]]);
-        let y00 = FcmaVector::add(y00, x7p12);
-        let [x8p11, x8m11] =  FcmaVector::column_butterfly2([values[8], values[11]]);
-        let y00 = FcmaVector::add(y00, x8p11);
-        let [x9p10, x9m10] =  FcmaVector::column_butterfly2([values[9], values[10]]);
-        let y00 = FcmaVector::add(y00, x9p10);
+        let [x1p18, x1m18] =  SimdVector::column_butterfly2([values[1], values[18]]);
+        let y00 = SimdVector::add(y00, x1p18);
+        let [x2p17, x2m17] =  SimdVector::column_butterfly2([values[2], values[17]]);
+        let y00 = SimdVector::add(y00, x2p17);
+        let [x3p16, x3m16] =  SimdVector::column_butterfly2([values[3], values[16]]);
+        let y00 = SimdVector::add(y00, x3p16);
+        let [x4p15, x4m15] =  SimdVector::column_butterfly2([values[4], values[15]]);
+        let y00 = SimdVector::add(y00, x4p15);
+        let [x5p14, x5m14] =  SimdVector::column_butterfly2([values[5], values[14]]);
+        let y00 = SimdVector::add(y00, x5p14);
+        let [x6p13, x6m13] =  SimdVector::column_butterfly2([values[6], values[13]]);
+        let y00 = SimdVector::add(y00, x6p13);
+        let [x7p12, x7m12] =  SimdVector::column_butterfly2([values[7], values[12]]);
+        let y00 = SimdVector::add(y00, x7p12);
+        let [x8p11, x8m11] =  SimdVector::column_butterfly2([values[8], values[11]]);
+        let y00 = SimdVector::add(y00, x8p11);
+        let [x9p10, x9m10] =  SimdVector::column_butterfly2([values[9], values[10]]);
+        let y00 = SimdVector::add(y00, x9p10);
 
-        let m0118a = FcmaVector::fmadd(values[0], self.twiddles_re[0], x1p18);
-        let m0118a = FcmaVector::fmadd(m0118a, self.twiddles_re[1], x2p17);
-        let m0118a = FcmaVector::fmadd(m0118a, self.twiddles_re[2], x3p16);
-        let m0118a = FcmaVector::fmadd(m0118a, self.twiddles_re[3], x4p15);
-        let m0118a = FcmaVector::fmadd(m0118a, self.twiddles_re[4], x5p14);
-        let m0118a = FcmaVector::fmadd(m0118a, self.twiddles_re[5], x6p13);
-        let m0118a = FcmaVector::fmadd(m0118a, self.twiddles_re[6], x7p12);
-        let m0118a = FcmaVector::fmadd(m0118a, self.twiddles_re[7], x8p11);
-        let m0118a = FcmaVector::fmadd(m0118a, self.twiddles_re[8], x9p10);
+        let m0118a = SimdVector::fmadd(values[0], self.twiddles_re[0], x1p18);
+        let m0118a = SimdVector::fmadd(m0118a, self.twiddles_re[1], x2p17);
+        let m0118a = SimdVector::fmadd(m0118a, self.twiddles_re[2], x3p16);
+        let m0118a = SimdVector::fmadd(m0118a, self.twiddles_re[3], x4p15);
+        let m0118a = SimdVector::fmadd(m0118a, self.twiddles_re[4], x5p14);
+        let m0118a = SimdVector::fmadd(m0118a, self.twiddles_re[5], x6p13);
+        let m0118a = SimdVector::fmadd(m0118a, self.twiddles_re[6], x7p12);
+        let m0118a = SimdVector::fmadd(m0118a, self.twiddles_re[7], x8p11);
+        let m0118a = SimdVector::fmadd(m0118a, self.twiddles_re[8], x9p10);
         let m0118b = FcmaVector::mul_rotate90(self.twiddles_im[0], x1m18);
         let m0118b = FcmaVector::fmadd_rotate90(m0118b, self.twiddles_im[1], x2m17);
         let m0118b = FcmaVector::fmadd_rotate90(m0118b, self.twiddles_im[2], x3m16);
@@ -1632,17 +1634,17 @@ impl<T: FftNum> FcmaF64Butterfly19<T> {
         let m0118b = FcmaVector::fmadd_rotate90(m0118b, self.twiddles_im[6], x7m12);
         let m0118b = FcmaVector::fmadd_rotate90(m0118b, self.twiddles_im[7], x8m11);
         let m0118b = FcmaVector::fmadd_rotate90(m0118b, self.twiddles_im[8], x9m10);
-        let [y01, y18] = FcmaVector::column_butterfly2([m0118a, m0118b]);
+        let [y01, y18] = SimdVector::column_butterfly2([m0118a, m0118b]);
 
-        let m0217a = FcmaVector::fmadd(values[0], self.twiddles_re[1], x1p18);
-        let m0217a = FcmaVector::fmadd(m0217a, self.twiddles_re[3], x2p17);
-        let m0217a = FcmaVector::fmadd(m0217a, self.twiddles_re[5], x3p16);
-        let m0217a = FcmaVector::fmadd(m0217a, self.twiddles_re[7], x4p15);
-        let m0217a = FcmaVector::fmadd(m0217a, self.twiddles_re[8], x5p14);
-        let m0217a = FcmaVector::fmadd(m0217a, self.twiddles_re[6], x6p13);
-        let m0217a = FcmaVector::fmadd(m0217a, self.twiddles_re[4], x7p12);
-        let m0217a = FcmaVector::fmadd(m0217a, self.twiddles_re[2], x8p11);
-        let m0217a = FcmaVector::fmadd(m0217a, self.twiddles_re[0], x9p10);
+        let m0217a = SimdVector::fmadd(values[0], self.twiddles_re[1], x1p18);
+        let m0217a = SimdVector::fmadd(m0217a, self.twiddles_re[3], x2p17);
+        let m0217a = SimdVector::fmadd(m0217a, self.twiddles_re[5], x3p16);
+        let m0217a = SimdVector::fmadd(m0217a, self.twiddles_re[7], x4p15);
+        let m0217a = SimdVector::fmadd(m0217a, self.twiddles_re[8], x5p14);
+        let m0217a = SimdVector::fmadd(m0217a, self.twiddles_re[6], x6p13);
+        let m0217a = SimdVector::fmadd(m0217a, self.twiddles_re[4], x7p12);
+        let m0217a = SimdVector::fmadd(m0217a, self.twiddles_re[2], x8p11);
+        let m0217a = SimdVector::fmadd(m0217a, self.twiddles_re[0], x9p10);
         let m0217b = FcmaVector::mul_rotate90(self.twiddles_im[1], x1m18);
         let m0217b = FcmaVector::fmadd_rotate90(m0217b, self.twiddles_im[3], x2m17);
         let m0217b = FcmaVector::fmadd_rotate90(m0217b, self.twiddles_im[5], x3m16);
@@ -1652,17 +1654,17 @@ impl<T: FftNum> FcmaF64Butterfly19<T> {
         let m0217b = FcmaVector::nmadd_rotate90(m0217b, self.twiddles_im[4], x7m12);
         let m0217b = FcmaVector::nmadd_rotate90(m0217b, self.twiddles_im[2], x8m11);
         let m0217b = FcmaVector::nmadd_rotate90(m0217b, self.twiddles_im[0], x9m10);
-        let [y02, y17] = FcmaVector::column_butterfly2([m0217a, m0217b]);
+        let [y02, y17] = SimdVector::column_butterfly2([m0217a, m0217b]);
 
-        let m0316a = FcmaVector::fmadd(values[0], self.twiddles_re[2], x1p18);
-        let m0316a = FcmaVector::fmadd(m0316a, self.twiddles_re[5], x2p17);
-        let m0316a = FcmaVector::fmadd(m0316a, self.twiddles_re[8], x3p16);
-        let m0316a = FcmaVector::fmadd(m0316a, self.twiddles_re[6], x4p15);
-        let m0316a = FcmaVector::fmadd(m0316a, self.twiddles_re[3], x5p14);
-        let m0316a = FcmaVector::fmadd(m0316a, self.twiddles_re[0], x6p13);
-        let m0316a = FcmaVector::fmadd(m0316a, self.twiddles_re[1], x7p12);
-        let m0316a = FcmaVector::fmadd(m0316a, self.twiddles_re[4], x8p11);
-        let m0316a = FcmaVector::fmadd(m0316a, self.twiddles_re[7], x9p10);
+        let m0316a = SimdVector::fmadd(values[0], self.twiddles_re[2], x1p18);
+        let m0316a = SimdVector::fmadd(m0316a, self.twiddles_re[5], x2p17);
+        let m0316a = SimdVector::fmadd(m0316a, self.twiddles_re[8], x3p16);
+        let m0316a = SimdVector::fmadd(m0316a, self.twiddles_re[6], x4p15);
+        let m0316a = SimdVector::fmadd(m0316a, self.twiddles_re[3], x5p14);
+        let m0316a = SimdVector::fmadd(m0316a, self.twiddles_re[0], x6p13);
+        let m0316a = SimdVector::fmadd(m0316a, self.twiddles_re[1], x7p12);
+        let m0316a = SimdVector::fmadd(m0316a, self.twiddles_re[4], x8p11);
+        let m0316a = SimdVector::fmadd(m0316a, self.twiddles_re[7], x9p10);
         let m0316b = FcmaVector::mul_rotate90(self.twiddles_im[2], x1m18);
         let m0316b = FcmaVector::fmadd_rotate90(m0316b, self.twiddles_im[5], x2m17);
         let m0316b = FcmaVector::fmadd_rotate90(m0316b, self.twiddles_im[8], x3m16);
@@ -1672,17 +1674,17 @@ impl<T: FftNum> FcmaF64Butterfly19<T> {
         let m0316b = FcmaVector::fmadd_rotate90(m0316b, self.twiddles_im[1], x7m12);
         let m0316b = FcmaVector::fmadd_rotate90(m0316b, self.twiddles_im[4], x8m11);
         let m0316b = FcmaVector::fmadd_rotate90(m0316b, self.twiddles_im[7], x9m10);
-        let [y03, y16] = FcmaVector::column_butterfly2([m0316a, m0316b]);
+        let [y03, y16] = SimdVector::column_butterfly2([m0316a, m0316b]);
 
-        let m0415a = FcmaVector::fmadd(values[0], self.twiddles_re[3], x1p18);
-        let m0415a = FcmaVector::fmadd(m0415a, self.twiddles_re[7], x2p17);
-        let m0415a = FcmaVector::fmadd(m0415a, self.twiddles_re[6], x3p16);
-        let m0415a = FcmaVector::fmadd(m0415a, self.twiddles_re[2], x4p15);
-        let m0415a = FcmaVector::fmadd(m0415a, self.twiddles_re[0], x5p14);
-        let m0415a = FcmaVector::fmadd(m0415a, self.twiddles_re[4], x6p13);
-        let m0415a = FcmaVector::fmadd(m0415a, self.twiddles_re[8], x7p12);
-        let m0415a = FcmaVector::fmadd(m0415a, self.twiddles_re[5], x8p11);
-        let m0415a = FcmaVector::fmadd(m0415a, self.twiddles_re[1], x9p10);
+        let m0415a = SimdVector::fmadd(values[0], self.twiddles_re[3], x1p18);
+        let m0415a = SimdVector::fmadd(m0415a, self.twiddles_re[7], x2p17);
+        let m0415a = SimdVector::fmadd(m0415a, self.twiddles_re[6], x3p16);
+        let m0415a = SimdVector::fmadd(m0415a, self.twiddles_re[2], x4p15);
+        let m0415a = SimdVector::fmadd(m0415a, self.twiddles_re[0], x5p14);
+        let m0415a = SimdVector::fmadd(m0415a, self.twiddles_re[4], x6p13);
+        let m0415a = SimdVector::fmadd(m0415a, self.twiddles_re[8], x7p12);
+        let m0415a = SimdVector::fmadd(m0415a, self.twiddles_re[5], x8p11);
+        let m0415a = SimdVector::fmadd(m0415a, self.twiddles_re[1], x9p10);
         let m0415b = FcmaVector::mul_rotate90(self.twiddles_im[3], x1m18);
         let m0415b = FcmaVector::fmadd_rotate90(m0415b, self.twiddles_im[7], x2m17);
         let m0415b = FcmaVector::nmadd_rotate90(m0415b, self.twiddles_im[6], x3m16);
@@ -1692,17 +1694,17 @@ impl<T: FftNum> FcmaF64Butterfly19<T> {
         let m0415b = FcmaVector::fmadd_rotate90(m0415b, self.twiddles_im[8], x7m12);
         let m0415b = FcmaVector::nmadd_rotate90(m0415b, self.twiddles_im[5], x8m11);
         let m0415b = FcmaVector::nmadd_rotate90(m0415b, self.twiddles_im[1], x9m10);
-        let [y04, y15] = FcmaVector::column_butterfly2([m0415a, m0415b]);
+        let [y04, y15] = SimdVector::column_butterfly2([m0415a, m0415b]);
 
-        let m0514a = FcmaVector::fmadd(values[0], self.twiddles_re[4], x1p18);
-        let m0514a = FcmaVector::fmadd(m0514a, self.twiddles_re[8], x2p17);
-        let m0514a = FcmaVector::fmadd(m0514a, self.twiddles_re[3], x3p16);
-        let m0514a = FcmaVector::fmadd(m0514a, self.twiddles_re[0], x4p15);
-        let m0514a = FcmaVector::fmadd(m0514a, self.twiddles_re[5], x5p14);
-        let m0514a = FcmaVector::fmadd(m0514a, self.twiddles_re[7], x6p13);
-        let m0514a = FcmaVector::fmadd(m0514a, self.twiddles_re[2], x7p12);
-        let m0514a = FcmaVector::fmadd(m0514a, self.twiddles_re[1], x8p11);
-        let m0514a = FcmaVector::fmadd(m0514a, self.twiddles_re[6], x9p10);
+        let m0514a = SimdVector::fmadd(values[0], self.twiddles_re[4], x1p18);
+        let m0514a = SimdVector::fmadd(m0514a, self.twiddles_re[8], x2p17);
+        let m0514a = SimdVector::fmadd(m0514a, self.twiddles_re[3], x3p16);
+        let m0514a = SimdVector::fmadd(m0514a, self.twiddles_re[0], x4p15);
+        let m0514a = SimdVector::fmadd(m0514a, self.twiddles_re[5], x5p14);
+        let m0514a = SimdVector::fmadd(m0514a, self.twiddles_re[7], x6p13);
+        let m0514a = SimdVector::fmadd(m0514a, self.twiddles_re[2], x7p12);
+        let m0514a = SimdVector::fmadd(m0514a, self.twiddles_re[1], x8p11);
+        let m0514a = SimdVector::fmadd(m0514a, self.twiddles_re[6], x9p10);
         let m0514b = FcmaVector::mul_rotate90(self.twiddles_im[4], x1m18);
         let m0514b = FcmaVector::nmadd_rotate90(m0514b, self.twiddles_im[8], x2m17);
         let m0514b = FcmaVector::nmadd_rotate90(m0514b, self.twiddles_im[3], x3m16);
@@ -1712,17 +1714,17 @@ impl<T: FftNum> FcmaF64Butterfly19<T> {
         let m0514b = FcmaVector::nmadd_rotate90(m0514b, self.twiddles_im[2], x7m12);
         let m0514b = FcmaVector::fmadd_rotate90(m0514b, self.twiddles_im[1], x8m11);
         let m0514b = FcmaVector::fmadd_rotate90(m0514b, self.twiddles_im[6], x9m10);
-        let [y05, y14] = FcmaVector::column_butterfly2([m0514a, m0514b]);
+        let [y05, y14] = SimdVector::column_butterfly2([m0514a, m0514b]);
 
-        let m0613a = FcmaVector::fmadd(values[0], self.twiddles_re[5], x1p18);
-        let m0613a = FcmaVector::fmadd(m0613a, self.twiddles_re[6], x2p17);
-        let m0613a = FcmaVector::fmadd(m0613a, self.twiddles_re[0], x3p16);
-        let m0613a = FcmaVector::fmadd(m0613a, self.twiddles_re[4], x4p15);
-        let m0613a = FcmaVector::fmadd(m0613a, self.twiddles_re[7], x5p14);
-        let m0613a = FcmaVector::fmadd(m0613a, self.twiddles_re[1], x6p13);
-        let m0613a = FcmaVector::fmadd(m0613a, self.twiddles_re[3], x7p12);
-        let m0613a = FcmaVector::fmadd(m0613a, self.twiddles_re[8], x8p11);
-        let m0613a = FcmaVector::fmadd(m0613a, self.twiddles_re[2], x9p10);
+        let m0613a = SimdVector::fmadd(values[0], self.twiddles_re[5], x1p18);
+        let m0613a = SimdVector::fmadd(m0613a, self.twiddles_re[6], x2p17);
+        let m0613a = SimdVector::fmadd(m0613a, self.twiddles_re[0], x3p16);
+        let m0613a = SimdVector::fmadd(m0613a, self.twiddles_re[4], x4p15);
+        let m0613a = SimdVector::fmadd(m0613a, self.twiddles_re[7], x5p14);
+        let m0613a = SimdVector::fmadd(m0613a, self.twiddles_re[1], x6p13);
+        let m0613a = SimdVector::fmadd(m0613a, self.twiddles_re[3], x7p12);
+        let m0613a = SimdVector::fmadd(m0613a, self.twiddles_re[8], x8p11);
+        let m0613a = SimdVector::fmadd(m0613a, self.twiddles_re[2], x9p10);
         let m0613b = FcmaVector::mul_rotate90(self.twiddles_im[5], x1m18);
         let m0613b = FcmaVector::nmadd_rotate90(m0613b, self.twiddles_im[6], x2m17);
         let m0613b = FcmaVector::nmadd_rotate90(m0613b, self.twiddles_im[0], x3m16);
@@ -1732,17 +1734,17 @@ impl<T: FftNum> FcmaF64Butterfly19<T> {
         let m0613b = FcmaVector::fmadd_rotate90(m0613b, self.twiddles_im[3], x7m12);
         let m0613b = FcmaVector::nmadd_rotate90(m0613b, self.twiddles_im[8], x8m11);
         let m0613b = FcmaVector::nmadd_rotate90(m0613b, self.twiddles_im[2], x9m10);
-        let [y06, y13] = FcmaVector::column_butterfly2([m0613a, m0613b]);
+        let [y06, y13] = SimdVector::column_butterfly2([m0613a, m0613b]);
 
-        let m0712a = FcmaVector::fmadd(values[0], self.twiddles_re[6], x1p18);
-        let m0712a = FcmaVector::fmadd(m0712a, self.twiddles_re[4], x2p17);
-        let m0712a = FcmaVector::fmadd(m0712a, self.twiddles_re[1], x3p16);
-        let m0712a = FcmaVector::fmadd(m0712a, self.twiddles_re[8], x4p15);
-        let m0712a = FcmaVector::fmadd(m0712a, self.twiddles_re[2], x5p14);
-        let m0712a = FcmaVector::fmadd(m0712a, self.twiddles_re[3], x6p13);
-        let m0712a = FcmaVector::fmadd(m0712a, self.twiddles_re[7], x7p12);
-        let m0712a = FcmaVector::fmadd(m0712a, self.twiddles_re[0], x8p11);
-        let m0712a = FcmaVector::fmadd(m0712a, self.twiddles_re[5], x9p10);
+        let m0712a = SimdVector::fmadd(values[0], self.twiddles_re[6], x1p18);
+        let m0712a = SimdVector::fmadd(m0712a, self.twiddles_re[4], x2p17);
+        let m0712a = SimdVector::fmadd(m0712a, self.twiddles_re[1], x3p16);
+        let m0712a = SimdVector::fmadd(m0712a, self.twiddles_re[8], x4p15);
+        let m0712a = SimdVector::fmadd(m0712a, self.twiddles_re[2], x5p14);
+        let m0712a = SimdVector::fmadd(m0712a, self.twiddles_re[3], x6p13);
+        let m0712a = SimdVector::fmadd(m0712a, self.twiddles_re[7], x7p12);
+        let m0712a = SimdVector::fmadd(m0712a, self.twiddles_re[0], x8p11);
+        let m0712a = SimdVector::fmadd(m0712a, self.twiddles_re[5], x9p10);
         let m0712b = FcmaVector::mul_rotate90(self.twiddles_im[6], x1m18);
         let m0712b = FcmaVector::nmadd_rotate90(m0712b, self.twiddles_im[4], x2m17);
         let m0712b = FcmaVector::fmadd_rotate90(m0712b, self.twiddles_im[1], x3m16);
@@ -1752,17 +1754,17 @@ impl<T: FftNum> FcmaF64Butterfly19<T> {
         let m0712b = FcmaVector::nmadd_rotate90(m0712b, self.twiddles_im[7], x7m12);
         let m0712b = FcmaVector::nmadd_rotate90(m0712b, self.twiddles_im[0], x8m11);
         let m0712b = FcmaVector::fmadd_rotate90(m0712b, self.twiddles_im[5], x9m10);
-        let [y07, y12] = FcmaVector::column_butterfly2([m0712a, m0712b]);
+        let [y07, y12] = SimdVector::column_butterfly2([m0712a, m0712b]);
 
-        let m0811a = FcmaVector::fmadd(values[0], self.twiddles_re[7], x1p18);
-        let m0811a = FcmaVector::fmadd(m0811a, self.twiddles_re[2], x2p17);
-        let m0811a = FcmaVector::fmadd(m0811a, self.twiddles_re[4], x3p16);
-        let m0811a = FcmaVector::fmadd(m0811a, self.twiddles_re[5], x4p15);
-        let m0811a = FcmaVector::fmadd(m0811a, self.twiddles_re[1], x5p14);
-        let m0811a = FcmaVector::fmadd(m0811a, self.twiddles_re[8], x6p13);
-        let m0811a = FcmaVector::fmadd(m0811a, self.twiddles_re[0], x7p12);
-        let m0811a = FcmaVector::fmadd(m0811a, self.twiddles_re[6], x8p11);
-        let m0811a = FcmaVector::fmadd(m0811a, self.twiddles_re[3], x9p10);
+        let m0811a = SimdVector::fmadd(values[0], self.twiddles_re[7], x1p18);
+        let m0811a = SimdVector::fmadd(m0811a, self.twiddles_re[2], x2p17);
+        let m0811a = SimdVector::fmadd(m0811a, self.twiddles_re[4], x3p16);
+        let m0811a = SimdVector::fmadd(m0811a, self.twiddles_re[5], x4p15);
+        let m0811a = SimdVector::fmadd(m0811a, self.twiddles_re[1], x5p14);
+        let m0811a = SimdVector::fmadd(m0811a, self.twiddles_re[8], x6p13);
+        let m0811a = SimdVector::fmadd(m0811a, self.twiddles_re[0], x7p12);
+        let m0811a = SimdVector::fmadd(m0811a, self.twiddles_re[6], x8p11);
+        let m0811a = SimdVector::fmadd(m0811a, self.twiddles_re[3], x9p10);
         let m0811b = FcmaVector::mul_rotate90(self.twiddles_im[7], x1m18);
         let m0811b = FcmaVector::nmadd_rotate90(m0811b, self.twiddles_im[2], x2m17);
         let m0811b = FcmaVector::fmadd_rotate90(m0811b, self.twiddles_im[4], x3m16);
@@ -1772,17 +1774,17 @@ impl<T: FftNum> FcmaF64Butterfly19<T> {
         let m0811b = FcmaVector::nmadd_rotate90(m0811b, self.twiddles_im[0], x7m12);
         let m0811b = FcmaVector::fmadd_rotate90(m0811b, self.twiddles_im[6], x8m11);
         let m0811b = FcmaVector::nmadd_rotate90(m0811b, self.twiddles_im[3], x9m10);
-        let [y08, y11] = FcmaVector::column_butterfly2([m0811a, m0811b]);
+        let [y08, y11] = SimdVector::column_butterfly2([m0811a, m0811b]);
 
-        let m0910a = FcmaVector::fmadd(values[0], self.twiddles_re[8], x1p18);
-        let m0910a = FcmaVector::fmadd(m0910a, self.twiddles_re[0], x2p17);
-        let m0910a = FcmaVector::fmadd(m0910a, self.twiddles_re[7], x3p16);
-        let m0910a = FcmaVector::fmadd(m0910a, self.twiddles_re[1], x4p15);
-        let m0910a = FcmaVector::fmadd(m0910a, self.twiddles_re[6], x5p14);
-        let m0910a = FcmaVector::fmadd(m0910a, self.twiddles_re[2], x6p13);
-        let m0910a = FcmaVector::fmadd(m0910a, self.twiddles_re[5], x7p12);
-        let m0910a = FcmaVector::fmadd(m0910a, self.twiddles_re[3], x8p11);
-        let m0910a = FcmaVector::fmadd(m0910a, self.twiddles_re[4], x9p10);
+        let m0910a = SimdVector::fmadd(values[0], self.twiddles_re[8], x1p18);
+        let m0910a = SimdVector::fmadd(m0910a, self.twiddles_re[0], x2p17);
+        let m0910a = SimdVector::fmadd(m0910a, self.twiddles_re[7], x3p16);
+        let m0910a = SimdVector::fmadd(m0910a, self.twiddles_re[1], x4p15);
+        let m0910a = SimdVector::fmadd(m0910a, self.twiddles_re[6], x5p14);
+        let m0910a = SimdVector::fmadd(m0910a, self.twiddles_re[2], x6p13);
+        let m0910a = SimdVector::fmadd(m0910a, self.twiddles_re[5], x7p12);
+        let m0910a = SimdVector::fmadd(m0910a, self.twiddles_re[3], x8p11);
+        let m0910a = SimdVector::fmadd(m0910a, self.twiddles_re[4], x9p10);
         let m0910b = FcmaVector::mul_rotate90(self.twiddles_im[8], x1m18);
         let m0910b = FcmaVector::nmadd_rotate90(m0910b, self.twiddles_im[0], x2m17);
         let m0910b = FcmaVector::fmadd_rotate90(m0910b, self.twiddles_im[7], x3m16);
@@ -1792,7 +1794,7 @@ impl<T: FftNum> FcmaF64Butterfly19<T> {
         let m0910b = FcmaVector::fmadd_rotate90(m0910b, self.twiddles_im[5], x7m12);
         let m0910b = FcmaVector::nmadd_rotate90(m0910b, self.twiddles_im[3], x8m11);
         let m0910b = FcmaVector::fmadd_rotate90(m0910b, self.twiddles_im[4], x9m10);
-        let [y09, y10] = FcmaVector::column_butterfly2([m0910a, m0910b]);
+        let [y09, y10] = SimdVector::column_butterfly2([m0910a, m0910b]);
 
 
         [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18]
@@ -1801,8 +1803,8 @@ impl<T: FftNum> FcmaF64Butterfly19<T> {
 
 pub struct FcmaF32Butterfly23<T> {
     direction: FftDirection,
-    twiddles_re: [float32x4_t; 11],
-    twiddles_im: [float32x4_t; 11],
+    twiddles_re: [FcmaVector32; 11],
+    twiddles_im: [FcmaVector32; 11],
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -1815,14 +1817,14 @@ impl<T: FftNum> FcmaF32Butterfly23<T> {
         let twiddles = make_twiddles(23, direction);
         Self {
             direction,
-            twiddles_re: twiddles.map(|t| FcmaVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| FcmaVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
+            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
             _phantom: std::marker::PhantomData,
         }
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 });
 
         let out = self.perform_parallel_fft_direct(values);
@@ -1831,7 +1833,7 @@ impl<T: FftNum> FcmaF32Butterfly23<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44 });
 
         let values = [
@@ -1892,42 +1894,42 @@ impl<T: FftNum> FcmaF32Butterfly23<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [float32x4_t; 23]) -> [float32x4_t; 23] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [FcmaVector32; 23]) -> [FcmaVector32; 23] {
         let y00 = values[0];
-        let [x1p22, x1m22] =  FcmaVector::column_butterfly2([values[1], values[22]]);
-        let y00 = FcmaVector::add(y00, x1p22);
-        let [x2p21, x2m21] =  FcmaVector::column_butterfly2([values[2], values[21]]);
-        let y00 = FcmaVector::add(y00, x2p21);
-        let [x3p20, x3m20] =  FcmaVector::column_butterfly2([values[3], values[20]]);
-        let y00 = FcmaVector::add(y00, x3p20);
-        let [x4p19, x4m19] =  FcmaVector::column_butterfly2([values[4], values[19]]);
-        let y00 = FcmaVector::add(y00, x4p19);
-        let [x5p18, x5m18] =  FcmaVector::column_butterfly2([values[5], values[18]]);
-        let y00 = FcmaVector::add(y00, x5p18);
-        let [x6p17, x6m17] =  FcmaVector::column_butterfly2([values[6], values[17]]);
-        let y00 = FcmaVector::add(y00, x6p17);
-        let [x7p16, x7m16] =  FcmaVector::column_butterfly2([values[7], values[16]]);
-        let y00 = FcmaVector::add(y00, x7p16);
-        let [x8p15, x8m15] =  FcmaVector::column_butterfly2([values[8], values[15]]);
-        let y00 = FcmaVector::add(y00, x8p15);
-        let [x9p14, x9m14] =  FcmaVector::column_butterfly2([values[9], values[14]]);
-        let y00 = FcmaVector::add(y00, x9p14);
-        let [x10p13, x10m13] =  FcmaVector::column_butterfly2([values[10], values[13]]);
-        let y00 = FcmaVector::add(y00, x10p13);
-        let [x11p12, x11m12] =  FcmaVector::column_butterfly2([values[11], values[12]]);
-        let y00 = FcmaVector::add(y00, x11p12);
+        let [x1p22, x1m22] =  SimdVector::column_butterfly2([values[1], values[22]]);
+        let y00 = SimdVector::add(y00, x1p22);
+        let [x2p21, x2m21] =  SimdVector::column_butterfly2([values[2], values[21]]);
+        let y00 = SimdVector::add(y00, x2p21);
+        let [x3p20, x3m20] =  SimdVector::column_butterfly2([values[3], values[20]]);
+        let y00 = SimdVector::add(y00, x3p20);
+        let [x4p19, x4m19] =  SimdVector::column_butterfly2([values[4], values[19]]);
+        let y00 = SimdVector::add(y00, x4p19);
+        let [x5p18, x5m18] =  SimdVector::column_butterfly2([values[5], values[18]]);
+        let y00 = SimdVector::add(y00, x5p18);
+        let [x6p17, x6m17] =  SimdVector::column_butterfly2([values[6], values[17]]);
+        let y00 = SimdVector::add(y00, x6p17);
+        let [x7p16, x7m16] =  SimdVector::column_butterfly2([values[7], values[16]]);
+        let y00 = SimdVector::add(y00, x7p16);
+        let [x8p15, x8m15] =  SimdVector::column_butterfly2([values[8], values[15]]);
+        let y00 = SimdVector::add(y00, x8p15);
+        let [x9p14, x9m14] =  SimdVector::column_butterfly2([values[9], values[14]]);
+        let y00 = SimdVector::add(y00, x9p14);
+        let [x10p13, x10m13] =  SimdVector::column_butterfly2([values[10], values[13]]);
+        let y00 = SimdVector::add(y00, x10p13);
+        let [x11p12, x11m12] =  SimdVector::column_butterfly2([values[11], values[12]]);
+        let y00 = SimdVector::add(y00, x11p12);
 
-        let m0122a = FcmaVector::fmadd(values[0], self.twiddles_re[0], x1p22);
-        let m0122a = FcmaVector::fmadd(m0122a, self.twiddles_re[1], x2p21);
-        let m0122a = FcmaVector::fmadd(m0122a, self.twiddles_re[2], x3p20);
-        let m0122a = FcmaVector::fmadd(m0122a, self.twiddles_re[3], x4p19);
-        let m0122a = FcmaVector::fmadd(m0122a, self.twiddles_re[4], x5p18);
-        let m0122a = FcmaVector::fmadd(m0122a, self.twiddles_re[5], x6p17);
-        let m0122a = FcmaVector::fmadd(m0122a, self.twiddles_re[6], x7p16);
-        let m0122a = FcmaVector::fmadd(m0122a, self.twiddles_re[7], x8p15);
-        let m0122a = FcmaVector::fmadd(m0122a, self.twiddles_re[8], x9p14);
-        let m0122a = FcmaVector::fmadd(m0122a, self.twiddles_re[9], x10p13);
-        let m0122a = FcmaVector::fmadd(m0122a, self.twiddles_re[10], x11p12);
+        let m0122a = SimdVector::fmadd(values[0], self.twiddles_re[0], x1p22);
+        let m0122a = SimdVector::fmadd(m0122a, self.twiddles_re[1], x2p21);
+        let m0122a = SimdVector::fmadd(m0122a, self.twiddles_re[2], x3p20);
+        let m0122a = SimdVector::fmadd(m0122a, self.twiddles_re[3], x4p19);
+        let m0122a = SimdVector::fmadd(m0122a, self.twiddles_re[4], x5p18);
+        let m0122a = SimdVector::fmadd(m0122a, self.twiddles_re[5], x6p17);
+        let m0122a = SimdVector::fmadd(m0122a, self.twiddles_re[6], x7p16);
+        let m0122a = SimdVector::fmadd(m0122a, self.twiddles_re[7], x8p15);
+        let m0122a = SimdVector::fmadd(m0122a, self.twiddles_re[8], x9p14);
+        let m0122a = SimdVector::fmadd(m0122a, self.twiddles_re[9], x10p13);
+        let m0122a = SimdVector::fmadd(m0122a, self.twiddles_re[10], x11p12);
         let m0122b = FcmaVector::mul_rotate90(self.twiddles_im[0], x1m22);
         let m0122b = FcmaVector::fmadd_rotate90(m0122b, self.twiddles_im[1], x2m21);
         let m0122b = FcmaVector::fmadd_rotate90(m0122b, self.twiddles_im[2], x3m20);
@@ -1939,19 +1941,19 @@ impl<T: FftNum> FcmaF32Butterfly23<T> {
         let m0122b = FcmaVector::fmadd_rotate90(m0122b, self.twiddles_im[8], x9m14);
         let m0122b = FcmaVector::fmadd_rotate90(m0122b, self.twiddles_im[9], x10m13);
         let m0122b = FcmaVector::fmadd_rotate90(m0122b, self.twiddles_im[10], x11m12);
-        let [y01, y22] = FcmaVector::column_butterfly2([m0122a, m0122b]);
+        let [y01, y22] = SimdVector::column_butterfly2([m0122a, m0122b]);
 
-        let m0221a = FcmaVector::fmadd(values[0], self.twiddles_re[1], x1p22);
-        let m0221a = FcmaVector::fmadd(m0221a, self.twiddles_re[3], x2p21);
-        let m0221a = FcmaVector::fmadd(m0221a, self.twiddles_re[5], x3p20);
-        let m0221a = FcmaVector::fmadd(m0221a, self.twiddles_re[7], x4p19);
-        let m0221a = FcmaVector::fmadd(m0221a, self.twiddles_re[9], x5p18);
-        let m0221a = FcmaVector::fmadd(m0221a, self.twiddles_re[10], x6p17);
-        let m0221a = FcmaVector::fmadd(m0221a, self.twiddles_re[8], x7p16);
-        let m0221a = FcmaVector::fmadd(m0221a, self.twiddles_re[6], x8p15);
-        let m0221a = FcmaVector::fmadd(m0221a, self.twiddles_re[4], x9p14);
-        let m0221a = FcmaVector::fmadd(m0221a, self.twiddles_re[2], x10p13);
-        let m0221a = FcmaVector::fmadd(m0221a, self.twiddles_re[0], x11p12);
+        let m0221a = SimdVector::fmadd(values[0], self.twiddles_re[1], x1p22);
+        let m0221a = SimdVector::fmadd(m0221a, self.twiddles_re[3], x2p21);
+        let m0221a = SimdVector::fmadd(m0221a, self.twiddles_re[5], x3p20);
+        let m0221a = SimdVector::fmadd(m0221a, self.twiddles_re[7], x4p19);
+        let m0221a = SimdVector::fmadd(m0221a, self.twiddles_re[9], x5p18);
+        let m0221a = SimdVector::fmadd(m0221a, self.twiddles_re[10], x6p17);
+        let m0221a = SimdVector::fmadd(m0221a, self.twiddles_re[8], x7p16);
+        let m0221a = SimdVector::fmadd(m0221a, self.twiddles_re[6], x8p15);
+        let m0221a = SimdVector::fmadd(m0221a, self.twiddles_re[4], x9p14);
+        let m0221a = SimdVector::fmadd(m0221a, self.twiddles_re[2], x10p13);
+        let m0221a = SimdVector::fmadd(m0221a, self.twiddles_re[0], x11p12);
         let m0221b = FcmaVector::mul_rotate90(self.twiddles_im[1], x1m22);
         let m0221b = FcmaVector::fmadd_rotate90(m0221b, self.twiddles_im[3], x2m21);
         let m0221b = FcmaVector::fmadd_rotate90(m0221b, self.twiddles_im[5], x3m20);
@@ -1963,19 +1965,19 @@ impl<T: FftNum> FcmaF32Butterfly23<T> {
         let m0221b = FcmaVector::nmadd_rotate90(m0221b, self.twiddles_im[4], x9m14);
         let m0221b = FcmaVector::nmadd_rotate90(m0221b, self.twiddles_im[2], x10m13);
         let m0221b = FcmaVector::nmadd_rotate90(m0221b, self.twiddles_im[0], x11m12);
-        let [y02, y21] = FcmaVector::column_butterfly2([m0221a, m0221b]);
+        let [y02, y21] = SimdVector::column_butterfly2([m0221a, m0221b]);
 
-        let m0320a = FcmaVector::fmadd(values[0], self.twiddles_re[2], x1p22);
-        let m0320a = FcmaVector::fmadd(m0320a, self.twiddles_re[5], x2p21);
-        let m0320a = FcmaVector::fmadd(m0320a, self.twiddles_re[8], x3p20);
-        let m0320a = FcmaVector::fmadd(m0320a, self.twiddles_re[10], x4p19);
-        let m0320a = FcmaVector::fmadd(m0320a, self.twiddles_re[7], x5p18);
-        let m0320a = FcmaVector::fmadd(m0320a, self.twiddles_re[4], x6p17);
-        let m0320a = FcmaVector::fmadd(m0320a, self.twiddles_re[1], x7p16);
-        let m0320a = FcmaVector::fmadd(m0320a, self.twiddles_re[0], x8p15);
-        let m0320a = FcmaVector::fmadd(m0320a, self.twiddles_re[3], x9p14);
-        let m0320a = FcmaVector::fmadd(m0320a, self.twiddles_re[6], x10p13);
-        let m0320a = FcmaVector::fmadd(m0320a, self.twiddles_re[9], x11p12);
+        let m0320a = SimdVector::fmadd(values[0], self.twiddles_re[2], x1p22);
+        let m0320a = SimdVector::fmadd(m0320a, self.twiddles_re[5], x2p21);
+        let m0320a = SimdVector::fmadd(m0320a, self.twiddles_re[8], x3p20);
+        let m0320a = SimdVector::fmadd(m0320a, self.twiddles_re[10], x4p19);
+        let m0320a = SimdVector::fmadd(m0320a, self.twiddles_re[7], x5p18);
+        let m0320a = SimdVector::fmadd(m0320a, self.twiddles_re[4], x6p17);
+        let m0320a = SimdVector::fmadd(m0320a, self.twiddles_re[1], x7p16);
+        let m0320a = SimdVector::fmadd(m0320a, self.twiddles_re[0], x8p15);
+        let m0320a = SimdVector::fmadd(m0320a, self.twiddles_re[3], x9p14);
+        let m0320a = SimdVector::fmadd(m0320a, self.twiddles_re[6], x10p13);
+        let m0320a = SimdVector::fmadd(m0320a, self.twiddles_re[9], x11p12);
         let m0320b = FcmaVector::mul_rotate90(self.twiddles_im[2], x1m22);
         let m0320b = FcmaVector::fmadd_rotate90(m0320b, self.twiddles_im[5], x2m21);
         let m0320b = FcmaVector::fmadd_rotate90(m0320b, self.twiddles_im[8], x3m20);
@@ -1987,19 +1989,19 @@ impl<T: FftNum> FcmaF32Butterfly23<T> {
         let m0320b = FcmaVector::fmadd_rotate90(m0320b, self.twiddles_im[3], x9m14);
         let m0320b = FcmaVector::fmadd_rotate90(m0320b, self.twiddles_im[6], x10m13);
         let m0320b = FcmaVector::fmadd_rotate90(m0320b, self.twiddles_im[9], x11m12);
-        let [y03, y20] = FcmaVector::column_butterfly2([m0320a, m0320b]);
+        let [y03, y20] = SimdVector::column_butterfly2([m0320a, m0320b]);
 
-        let m0419a = FcmaVector::fmadd(values[0], self.twiddles_re[3], x1p22);
-        let m0419a = FcmaVector::fmadd(m0419a, self.twiddles_re[7], x2p21);
-        let m0419a = FcmaVector::fmadd(m0419a, self.twiddles_re[10], x3p20);
-        let m0419a = FcmaVector::fmadd(m0419a, self.twiddles_re[6], x4p19);
-        let m0419a = FcmaVector::fmadd(m0419a, self.twiddles_re[2], x5p18);
-        let m0419a = FcmaVector::fmadd(m0419a, self.twiddles_re[0], x6p17);
-        let m0419a = FcmaVector::fmadd(m0419a, self.twiddles_re[4], x7p16);
-        let m0419a = FcmaVector::fmadd(m0419a, self.twiddles_re[8], x8p15);
-        let m0419a = FcmaVector::fmadd(m0419a, self.twiddles_re[9], x9p14);
-        let m0419a = FcmaVector::fmadd(m0419a, self.twiddles_re[5], x10p13);
-        let m0419a = FcmaVector::fmadd(m0419a, self.twiddles_re[1], x11p12);
+        let m0419a = SimdVector::fmadd(values[0], self.twiddles_re[3], x1p22);
+        let m0419a = SimdVector::fmadd(m0419a, self.twiddles_re[7], x2p21);
+        let m0419a = SimdVector::fmadd(m0419a, self.twiddles_re[10], x3p20);
+        let m0419a = SimdVector::fmadd(m0419a, self.twiddles_re[6], x4p19);
+        let m0419a = SimdVector::fmadd(m0419a, self.twiddles_re[2], x5p18);
+        let m0419a = SimdVector::fmadd(m0419a, self.twiddles_re[0], x6p17);
+        let m0419a = SimdVector::fmadd(m0419a, self.twiddles_re[4], x7p16);
+        let m0419a = SimdVector::fmadd(m0419a, self.twiddles_re[8], x8p15);
+        let m0419a = SimdVector::fmadd(m0419a, self.twiddles_re[9], x9p14);
+        let m0419a = SimdVector::fmadd(m0419a, self.twiddles_re[5], x10p13);
+        let m0419a = SimdVector::fmadd(m0419a, self.twiddles_re[1], x11p12);
         let m0419b = FcmaVector::mul_rotate90(self.twiddles_im[3], x1m22);
         let m0419b = FcmaVector::fmadd_rotate90(m0419b, self.twiddles_im[7], x2m21);
         let m0419b = FcmaVector::nmadd_rotate90(m0419b, self.twiddles_im[10], x3m20);
@@ -2011,19 +2013,19 @@ impl<T: FftNum> FcmaF32Butterfly23<T> {
         let m0419b = FcmaVector::nmadd_rotate90(m0419b, self.twiddles_im[9], x9m14);
         let m0419b = FcmaVector::nmadd_rotate90(m0419b, self.twiddles_im[5], x10m13);
         let m0419b = FcmaVector::nmadd_rotate90(m0419b, self.twiddles_im[1], x11m12);
-        let [y04, y19] = FcmaVector::column_butterfly2([m0419a, m0419b]);
+        let [y04, y19] = SimdVector::column_butterfly2([m0419a, m0419b]);
 
-        let m0518a = FcmaVector::fmadd(values[0], self.twiddles_re[4], x1p22);
-        let m0518a = FcmaVector::fmadd(m0518a, self.twiddles_re[9], x2p21);
-        let m0518a = FcmaVector::fmadd(m0518a, self.twiddles_re[7], x3p20);
-        let m0518a = FcmaVector::fmadd(m0518a, self.twiddles_re[2], x4p19);
-        let m0518a = FcmaVector::fmadd(m0518a, self.twiddles_re[1], x5p18);
-        let m0518a = FcmaVector::fmadd(m0518a, self.twiddles_re[6], x6p17);
-        let m0518a = FcmaVector::fmadd(m0518a, self.twiddles_re[10], x7p16);
-        let m0518a = FcmaVector::fmadd(m0518a, self.twiddles_re[5], x8p15);
-        let m0518a = FcmaVector::fmadd(m0518a, self.twiddles_re[0], x9p14);
-        let m0518a = FcmaVector::fmadd(m0518a, self.twiddles_re[3], x10p13);
-        let m0518a = FcmaVector::fmadd(m0518a, self.twiddles_re[8], x11p12);
+        let m0518a = SimdVector::fmadd(values[0], self.twiddles_re[4], x1p22);
+        let m0518a = SimdVector::fmadd(m0518a, self.twiddles_re[9], x2p21);
+        let m0518a = SimdVector::fmadd(m0518a, self.twiddles_re[7], x3p20);
+        let m0518a = SimdVector::fmadd(m0518a, self.twiddles_re[2], x4p19);
+        let m0518a = SimdVector::fmadd(m0518a, self.twiddles_re[1], x5p18);
+        let m0518a = SimdVector::fmadd(m0518a, self.twiddles_re[6], x6p17);
+        let m0518a = SimdVector::fmadd(m0518a, self.twiddles_re[10], x7p16);
+        let m0518a = SimdVector::fmadd(m0518a, self.twiddles_re[5], x8p15);
+        let m0518a = SimdVector::fmadd(m0518a, self.twiddles_re[0], x9p14);
+        let m0518a = SimdVector::fmadd(m0518a, self.twiddles_re[3], x10p13);
+        let m0518a = SimdVector::fmadd(m0518a, self.twiddles_re[8], x11p12);
         let m0518b = FcmaVector::mul_rotate90(self.twiddles_im[4], x1m22);
         let m0518b = FcmaVector::fmadd_rotate90(m0518b, self.twiddles_im[9], x2m21);
         let m0518b = FcmaVector::nmadd_rotate90(m0518b, self.twiddles_im[7], x3m20);
@@ -2035,19 +2037,19 @@ impl<T: FftNum> FcmaF32Butterfly23<T> {
         let m0518b = FcmaVector::nmadd_rotate90(m0518b, self.twiddles_im[0], x9m14);
         let m0518b = FcmaVector::fmadd_rotate90(m0518b, self.twiddles_im[3], x10m13);
         let m0518b = FcmaVector::fmadd_rotate90(m0518b, self.twiddles_im[8], x11m12);
-        let [y05, y18] = FcmaVector::column_butterfly2([m0518a, m0518b]);
+        let [y05, y18] = SimdVector::column_butterfly2([m0518a, m0518b]);
 
-        let m0617a = FcmaVector::fmadd(values[0], self.twiddles_re[5], x1p22);
-        let m0617a = FcmaVector::fmadd(m0617a, self.twiddles_re[10], x2p21);
-        let m0617a = FcmaVector::fmadd(m0617a, self.twiddles_re[4], x3p20);
-        let m0617a = FcmaVector::fmadd(m0617a, self.twiddles_re[0], x4p19);
-        let m0617a = FcmaVector::fmadd(m0617a, self.twiddles_re[6], x5p18);
-        let m0617a = FcmaVector::fmadd(m0617a, self.twiddles_re[9], x6p17);
-        let m0617a = FcmaVector::fmadd(m0617a, self.twiddles_re[3], x7p16);
-        let m0617a = FcmaVector::fmadd(m0617a, self.twiddles_re[1], x8p15);
-        let m0617a = FcmaVector::fmadd(m0617a, self.twiddles_re[7], x9p14);
-        let m0617a = FcmaVector::fmadd(m0617a, self.twiddles_re[8], x10p13);
-        let m0617a = FcmaVector::fmadd(m0617a, self.twiddles_re[2], x11p12);
+        let m0617a = SimdVector::fmadd(values[0], self.twiddles_re[5], x1p22);
+        let m0617a = SimdVector::fmadd(m0617a, self.twiddles_re[10], x2p21);
+        let m0617a = SimdVector::fmadd(m0617a, self.twiddles_re[4], x3p20);
+        let m0617a = SimdVector::fmadd(m0617a, self.twiddles_re[0], x4p19);
+        let m0617a = SimdVector::fmadd(m0617a, self.twiddles_re[6], x5p18);
+        let m0617a = SimdVector::fmadd(m0617a, self.twiddles_re[9], x6p17);
+        let m0617a = SimdVector::fmadd(m0617a, self.twiddles_re[3], x7p16);
+        let m0617a = SimdVector::fmadd(m0617a, self.twiddles_re[1], x8p15);
+        let m0617a = SimdVector::fmadd(m0617a, self.twiddles_re[7], x9p14);
+        let m0617a = SimdVector::fmadd(m0617a, self.twiddles_re[8], x10p13);
+        let m0617a = SimdVector::fmadd(m0617a, self.twiddles_re[2], x11p12);
         let m0617b = FcmaVector::mul_rotate90(self.twiddles_im[5], x1m22);
         let m0617b = FcmaVector::nmadd_rotate90(m0617b, self.twiddles_im[10], x2m21);
         let m0617b = FcmaVector::nmadd_rotate90(m0617b, self.twiddles_im[4], x3m20);
@@ -2059,19 +2061,19 @@ impl<T: FftNum> FcmaF32Butterfly23<T> {
         let m0617b = FcmaVector::fmadd_rotate90(m0617b, self.twiddles_im[7], x9m14);
         let m0617b = FcmaVector::nmadd_rotate90(m0617b, self.twiddles_im[8], x10m13);
         let m0617b = FcmaVector::nmadd_rotate90(m0617b, self.twiddles_im[2], x11m12);
-        let [y06, y17] = FcmaVector::column_butterfly2([m0617a, m0617b]);
+        let [y06, y17] = SimdVector::column_butterfly2([m0617a, m0617b]);
 
-        let m0716a = FcmaVector::fmadd(values[0], self.twiddles_re[6], x1p22);
-        let m0716a = FcmaVector::fmadd(m0716a, self.twiddles_re[8], x2p21);
-        let m0716a = FcmaVector::fmadd(m0716a, self.twiddles_re[1], x3p20);
-        let m0716a = FcmaVector::fmadd(m0716a, self.twiddles_re[4], x4p19);
-        let m0716a = FcmaVector::fmadd(m0716a, self.twiddles_re[10], x5p18);
-        let m0716a = FcmaVector::fmadd(m0716a, self.twiddles_re[3], x6p17);
-        let m0716a = FcmaVector::fmadd(m0716a, self.twiddles_re[2], x7p16);
-        let m0716a = FcmaVector::fmadd(m0716a, self.twiddles_re[9], x8p15);
-        let m0716a = FcmaVector::fmadd(m0716a, self.twiddles_re[5], x9p14);
-        let m0716a = FcmaVector::fmadd(m0716a, self.twiddles_re[0], x10p13);
-        let m0716a = FcmaVector::fmadd(m0716a, self.twiddles_re[7], x11p12);
+        let m0716a = SimdVector::fmadd(values[0], self.twiddles_re[6], x1p22);
+        let m0716a = SimdVector::fmadd(m0716a, self.twiddles_re[8], x2p21);
+        let m0716a = SimdVector::fmadd(m0716a, self.twiddles_re[1], x3p20);
+        let m0716a = SimdVector::fmadd(m0716a, self.twiddles_re[4], x4p19);
+        let m0716a = SimdVector::fmadd(m0716a, self.twiddles_re[10], x5p18);
+        let m0716a = SimdVector::fmadd(m0716a, self.twiddles_re[3], x6p17);
+        let m0716a = SimdVector::fmadd(m0716a, self.twiddles_re[2], x7p16);
+        let m0716a = SimdVector::fmadd(m0716a, self.twiddles_re[9], x8p15);
+        let m0716a = SimdVector::fmadd(m0716a, self.twiddles_re[5], x9p14);
+        let m0716a = SimdVector::fmadd(m0716a, self.twiddles_re[0], x10p13);
+        let m0716a = SimdVector::fmadd(m0716a, self.twiddles_re[7], x11p12);
         let m0716b = FcmaVector::mul_rotate90(self.twiddles_im[6], x1m22);
         let m0716b = FcmaVector::nmadd_rotate90(m0716b, self.twiddles_im[8], x2m21);
         let m0716b = FcmaVector::nmadd_rotate90(m0716b, self.twiddles_im[1], x3m20);
@@ -2083,19 +2085,19 @@ impl<T: FftNum> FcmaF32Butterfly23<T> {
         let m0716b = FcmaVector::nmadd_rotate90(m0716b, self.twiddles_im[5], x9m14);
         let m0716b = FcmaVector::fmadd_rotate90(m0716b, self.twiddles_im[0], x10m13);
         let m0716b = FcmaVector::fmadd_rotate90(m0716b, self.twiddles_im[7], x11m12);
-        let [y07, y16] = FcmaVector::column_butterfly2([m0716a, m0716b]);
+        let [y07, y16] = SimdVector::column_butterfly2([m0716a, m0716b]);
 
-        let m0815a = FcmaVector::fmadd(values[0], self.twiddles_re[7], x1p22);
-        let m0815a = FcmaVector::fmadd(m0815a, self.twiddles_re[6], x2p21);
-        let m0815a = FcmaVector::fmadd(m0815a, self.twiddles_re[0], x3p20);
-        let m0815a = FcmaVector::fmadd(m0815a, self.twiddles_re[8], x4p19);
-        let m0815a = FcmaVector::fmadd(m0815a, self.twiddles_re[5], x5p18);
-        let m0815a = FcmaVector::fmadd(m0815a, self.twiddles_re[1], x6p17);
-        let m0815a = FcmaVector::fmadd(m0815a, self.twiddles_re[9], x7p16);
-        let m0815a = FcmaVector::fmadd(m0815a, self.twiddles_re[4], x8p15);
-        let m0815a = FcmaVector::fmadd(m0815a, self.twiddles_re[2], x9p14);
-        let m0815a = FcmaVector::fmadd(m0815a, self.twiddles_re[10], x10p13);
-        let m0815a = FcmaVector::fmadd(m0815a, self.twiddles_re[3], x11p12);
+        let m0815a = SimdVector::fmadd(values[0], self.twiddles_re[7], x1p22);
+        let m0815a = SimdVector::fmadd(m0815a, self.twiddles_re[6], x2p21);
+        let m0815a = SimdVector::fmadd(m0815a, self.twiddles_re[0], x3p20);
+        let m0815a = SimdVector::fmadd(m0815a, self.twiddles_re[8], x4p19);
+        let m0815a = SimdVector::fmadd(m0815a, self.twiddles_re[5], x5p18);
+        let m0815a = SimdVector::fmadd(m0815a, self.twiddles_re[1], x6p17);
+        let m0815a = SimdVector::fmadd(m0815a, self.twiddles_re[9], x7p16);
+        let m0815a = SimdVector::fmadd(m0815a, self.twiddles_re[4], x8p15);
+        let m0815a = SimdVector::fmadd(m0815a, self.twiddles_re[2], x9p14);
+        let m0815a = SimdVector::fmadd(m0815a, self.twiddles_re[10], x10p13);
+        let m0815a = SimdVector::fmadd(m0815a, self.twiddles_re[3], x11p12);
         let m0815b = FcmaVector::mul_rotate90(self.twiddles_im[7], x1m22);
         let m0815b = FcmaVector::nmadd_rotate90(m0815b, self.twiddles_im[6], x2m21);
         let m0815b = FcmaVector::fmadd_rotate90(m0815b, self.twiddles_im[0], x3m20);
@@ -2107,19 +2109,19 @@ impl<T: FftNum> FcmaF32Butterfly23<T> {
         let m0815b = FcmaVector::fmadd_rotate90(m0815b, self.twiddles_im[2], x9m14);
         let m0815b = FcmaVector::fmadd_rotate90(m0815b, self.twiddles_im[10], x10m13);
         let m0815b = FcmaVector::nmadd_rotate90(m0815b, self.twiddles_im[3], x11m12);
-        let [y08, y15] = FcmaVector::column_butterfly2([m0815a, m0815b]);
+        let [y08, y15] = SimdVector::column_butterfly2([m0815a, m0815b]);
 
-        let m0914a = FcmaVector::fmadd(values[0], self.twiddles_re[8], x1p22);
-        let m0914a = FcmaVector::fmadd(m0914a, self.twiddles_re[4], x2p21);
-        let m0914a = FcmaVector::fmadd(m0914a, self.twiddles_re[3], x3p20);
-        let m0914a = FcmaVector::fmadd(m0914a, self.twiddles_re[9], x4p19);
-        let m0914a = FcmaVector::fmadd(m0914a, self.twiddles_re[0], x5p18);
-        let m0914a = FcmaVector::fmadd(m0914a, self.twiddles_re[7], x6p17);
-        let m0914a = FcmaVector::fmadd(m0914a, self.twiddles_re[5], x7p16);
-        let m0914a = FcmaVector::fmadd(m0914a, self.twiddles_re[2], x8p15);
-        let m0914a = FcmaVector::fmadd(m0914a, self.twiddles_re[10], x9p14);
-        let m0914a = FcmaVector::fmadd(m0914a, self.twiddles_re[1], x10p13);
-        let m0914a = FcmaVector::fmadd(m0914a, self.twiddles_re[6], x11p12);
+        let m0914a = SimdVector::fmadd(values[0], self.twiddles_re[8], x1p22);
+        let m0914a = SimdVector::fmadd(m0914a, self.twiddles_re[4], x2p21);
+        let m0914a = SimdVector::fmadd(m0914a, self.twiddles_re[3], x3p20);
+        let m0914a = SimdVector::fmadd(m0914a, self.twiddles_re[9], x4p19);
+        let m0914a = SimdVector::fmadd(m0914a, self.twiddles_re[0], x5p18);
+        let m0914a = SimdVector::fmadd(m0914a, self.twiddles_re[7], x6p17);
+        let m0914a = SimdVector::fmadd(m0914a, self.twiddles_re[5], x7p16);
+        let m0914a = SimdVector::fmadd(m0914a, self.twiddles_re[2], x8p15);
+        let m0914a = SimdVector::fmadd(m0914a, self.twiddles_re[10], x9p14);
+        let m0914a = SimdVector::fmadd(m0914a, self.twiddles_re[1], x10p13);
+        let m0914a = SimdVector::fmadd(m0914a, self.twiddles_re[6], x11p12);
         let m0914b = FcmaVector::mul_rotate90(self.twiddles_im[8], x1m22);
         let m0914b = FcmaVector::nmadd_rotate90(m0914b, self.twiddles_im[4], x2m21);
         let m0914b = FcmaVector::fmadd_rotate90(m0914b, self.twiddles_im[3], x3m20);
@@ -2131,19 +2133,19 @@ impl<T: FftNum> FcmaF32Butterfly23<T> {
         let m0914b = FcmaVector::nmadd_rotate90(m0914b, self.twiddles_im[10], x9m14);
         let m0914b = FcmaVector::nmadd_rotate90(m0914b, self.twiddles_im[1], x10m13);
         let m0914b = FcmaVector::fmadd_rotate90(m0914b, self.twiddles_im[6], x11m12);
-        let [y09, y14] = FcmaVector::column_butterfly2([m0914a, m0914b]);
+        let [y09, y14] = SimdVector::column_butterfly2([m0914a, m0914b]);
 
-        let m1013a = FcmaVector::fmadd(values[0], self.twiddles_re[9], x1p22);
-        let m1013a = FcmaVector::fmadd(m1013a, self.twiddles_re[2], x2p21);
-        let m1013a = FcmaVector::fmadd(m1013a, self.twiddles_re[6], x3p20);
-        let m1013a = FcmaVector::fmadd(m1013a, self.twiddles_re[5], x4p19);
-        let m1013a = FcmaVector::fmadd(m1013a, self.twiddles_re[3], x5p18);
-        let m1013a = FcmaVector::fmadd(m1013a, self.twiddles_re[8], x6p17);
-        let m1013a = FcmaVector::fmadd(m1013a, self.twiddles_re[0], x7p16);
-        let m1013a = FcmaVector::fmadd(m1013a, self.twiddles_re[10], x8p15);
-        let m1013a = FcmaVector::fmadd(m1013a, self.twiddles_re[1], x9p14);
-        let m1013a = FcmaVector::fmadd(m1013a, self.twiddles_re[7], x10p13);
-        let m1013a = FcmaVector::fmadd(m1013a, self.twiddles_re[4], x11p12);
+        let m1013a = SimdVector::fmadd(values[0], self.twiddles_re[9], x1p22);
+        let m1013a = SimdVector::fmadd(m1013a, self.twiddles_re[2], x2p21);
+        let m1013a = SimdVector::fmadd(m1013a, self.twiddles_re[6], x3p20);
+        let m1013a = SimdVector::fmadd(m1013a, self.twiddles_re[5], x4p19);
+        let m1013a = SimdVector::fmadd(m1013a, self.twiddles_re[3], x5p18);
+        let m1013a = SimdVector::fmadd(m1013a, self.twiddles_re[8], x6p17);
+        let m1013a = SimdVector::fmadd(m1013a, self.twiddles_re[0], x7p16);
+        let m1013a = SimdVector::fmadd(m1013a, self.twiddles_re[10], x8p15);
+        let m1013a = SimdVector::fmadd(m1013a, self.twiddles_re[1], x9p14);
+        let m1013a = SimdVector::fmadd(m1013a, self.twiddles_re[7], x10p13);
+        let m1013a = SimdVector::fmadd(m1013a, self.twiddles_re[4], x11p12);
         let m1013b = FcmaVector::mul_rotate90(self.twiddles_im[9], x1m22);
         let m1013b = FcmaVector::nmadd_rotate90(m1013b, self.twiddles_im[2], x2m21);
         let m1013b = FcmaVector::fmadd_rotate90(m1013b, self.twiddles_im[6], x3m20);
@@ -2155,19 +2157,19 @@ impl<T: FftNum> FcmaF32Butterfly23<T> {
         let m1013b = FcmaVector::nmadd_rotate90(m1013b, self.twiddles_im[1], x9m14);
         let m1013b = FcmaVector::fmadd_rotate90(m1013b, self.twiddles_im[7], x10m13);
         let m1013b = FcmaVector::nmadd_rotate90(m1013b, self.twiddles_im[4], x11m12);
-        let [y10, y13] = FcmaVector::column_butterfly2([m1013a, m1013b]);
+        let [y10, y13] = SimdVector::column_butterfly2([m1013a, m1013b]);
 
-        let m1112a = FcmaVector::fmadd(values[0], self.twiddles_re[10], x1p22);
-        let m1112a = FcmaVector::fmadd(m1112a, self.twiddles_re[0], x2p21);
-        let m1112a = FcmaVector::fmadd(m1112a, self.twiddles_re[9], x3p20);
-        let m1112a = FcmaVector::fmadd(m1112a, self.twiddles_re[1], x4p19);
-        let m1112a = FcmaVector::fmadd(m1112a, self.twiddles_re[8], x5p18);
-        let m1112a = FcmaVector::fmadd(m1112a, self.twiddles_re[2], x6p17);
-        let m1112a = FcmaVector::fmadd(m1112a, self.twiddles_re[7], x7p16);
-        let m1112a = FcmaVector::fmadd(m1112a, self.twiddles_re[3], x8p15);
-        let m1112a = FcmaVector::fmadd(m1112a, self.twiddles_re[6], x9p14);
-        let m1112a = FcmaVector::fmadd(m1112a, self.twiddles_re[4], x10p13);
-        let m1112a = FcmaVector::fmadd(m1112a, self.twiddles_re[5], x11p12);
+        let m1112a = SimdVector::fmadd(values[0], self.twiddles_re[10], x1p22);
+        let m1112a = SimdVector::fmadd(m1112a, self.twiddles_re[0], x2p21);
+        let m1112a = SimdVector::fmadd(m1112a, self.twiddles_re[9], x3p20);
+        let m1112a = SimdVector::fmadd(m1112a, self.twiddles_re[1], x4p19);
+        let m1112a = SimdVector::fmadd(m1112a, self.twiddles_re[8], x5p18);
+        let m1112a = SimdVector::fmadd(m1112a, self.twiddles_re[2], x6p17);
+        let m1112a = SimdVector::fmadd(m1112a, self.twiddles_re[7], x7p16);
+        let m1112a = SimdVector::fmadd(m1112a, self.twiddles_re[3], x8p15);
+        let m1112a = SimdVector::fmadd(m1112a, self.twiddles_re[6], x9p14);
+        let m1112a = SimdVector::fmadd(m1112a, self.twiddles_re[4], x10p13);
+        let m1112a = SimdVector::fmadd(m1112a, self.twiddles_re[5], x11p12);
         let m1112b = FcmaVector::mul_rotate90(self.twiddles_im[10], x1m22);
         let m1112b = FcmaVector::nmadd_rotate90(m1112b, self.twiddles_im[0], x2m21);
         let m1112b = FcmaVector::fmadd_rotate90(m1112b, self.twiddles_im[9], x3m20);
@@ -2179,7 +2181,7 @@ impl<T: FftNum> FcmaF32Butterfly23<T> {
         let m1112b = FcmaVector::fmadd_rotate90(m1112b, self.twiddles_im[6], x9m14);
         let m1112b = FcmaVector::nmadd_rotate90(m1112b, self.twiddles_im[4], x10m13);
         let m1112b = FcmaVector::fmadd_rotate90(m1112b, self.twiddles_im[5], x11m12);
-        let [y11, y12] = FcmaVector::column_butterfly2([m1112a, m1112b]);
+        let [y11, y12] = SimdVector::column_butterfly2([m1112a, m1112b]);
 
 
         [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22]
@@ -2188,8 +2190,8 @@ impl<T: FftNum> FcmaF32Butterfly23<T> {
 
 pub struct FcmaF64Butterfly23<T> {
     direction: FftDirection,
-    twiddles_re: [float64x2_t; 11],
-    twiddles_im: [float64x2_t; 11],
+    twiddles_re: [FcmaVector64; 11],
+    twiddles_im: [FcmaVector64; 11],
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -2202,14 +2204,14 @@ impl<T: FftNum> FcmaF64Butterfly23<T> {
         let twiddles = make_twiddles(23, direction);
         unsafe {Self {
             direction,
-            twiddles_re: twiddles.map(|t| FcmaVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| FcmaVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
+            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
             _phantom: std::marker::PhantomData,
         }}
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 });
 
         let out = self.perform_fft_direct(values);
@@ -2218,42 +2220,42 @@ impl<T: FftNum> FcmaF64Butterfly23<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [float64x2_t; 23]) -> [float64x2_t; 23] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [FcmaVector64; 23]) -> [FcmaVector64; 23] {
         let y00 = values[0];
-        let [x1p22, x1m22] =  FcmaVector::column_butterfly2([values[1], values[22]]);
-        let y00 = FcmaVector::add(y00, x1p22);
-        let [x2p21, x2m21] =  FcmaVector::column_butterfly2([values[2], values[21]]);
-        let y00 = FcmaVector::add(y00, x2p21);
-        let [x3p20, x3m20] =  FcmaVector::column_butterfly2([values[3], values[20]]);
-        let y00 = FcmaVector::add(y00, x3p20);
-        let [x4p19, x4m19] =  FcmaVector::column_butterfly2([values[4], values[19]]);
-        let y00 = FcmaVector::add(y00, x4p19);
-        let [x5p18, x5m18] =  FcmaVector::column_butterfly2([values[5], values[18]]);
-        let y00 = FcmaVector::add(y00, x5p18);
-        let [x6p17, x6m17] =  FcmaVector::column_butterfly2([values[6], values[17]]);
-        let y00 = FcmaVector::add(y00, x6p17);
-        let [x7p16, x7m16] =  FcmaVector::column_butterfly2([values[7], values[16]]);
-        let y00 = FcmaVector::add(y00, x7p16);
-        let [x8p15, x8m15] =  FcmaVector::column_butterfly2([values[8], values[15]]);
-        let y00 = FcmaVector::add(y00, x8p15);
-        let [x9p14, x9m14] =  FcmaVector::column_butterfly2([values[9], values[14]]);
-        let y00 = FcmaVector::add(y00, x9p14);
-        let [x10p13, x10m13] =  FcmaVector::column_butterfly2([values[10], values[13]]);
-        let y00 = FcmaVector::add(y00, x10p13);
-        let [x11p12, x11m12] =  FcmaVector::column_butterfly2([values[11], values[12]]);
-        let y00 = FcmaVector::add(y00, x11p12);
+        let [x1p22, x1m22] =  SimdVector::column_butterfly2([values[1], values[22]]);
+        let y00 = SimdVector::add(y00, x1p22);
+        let [x2p21, x2m21] =  SimdVector::column_butterfly2([values[2], values[21]]);
+        let y00 = SimdVector::add(y00, x2p21);
+        let [x3p20, x3m20] =  SimdVector::column_butterfly2([values[3], values[20]]);
+        let y00 = SimdVector::add(y00, x3p20);
+        let [x4p19, x4m19] =  SimdVector::column_butterfly2([values[4], values[19]]);
+        let y00 = SimdVector::add(y00, x4p19);
+        let [x5p18, x5m18] =  SimdVector::column_butterfly2([values[5], values[18]]);
+        let y00 = SimdVector::add(y00, x5p18);
+        let [x6p17, x6m17] =  SimdVector::column_butterfly2([values[6], values[17]]);
+        let y00 = SimdVector::add(y00, x6p17);
+        let [x7p16, x7m16] =  SimdVector::column_butterfly2([values[7], values[16]]);
+        let y00 = SimdVector::add(y00, x7p16);
+        let [x8p15, x8m15] =  SimdVector::column_butterfly2([values[8], values[15]]);
+        let y00 = SimdVector::add(y00, x8p15);
+        let [x9p14, x9m14] =  SimdVector::column_butterfly2([values[9], values[14]]);
+        let y00 = SimdVector::add(y00, x9p14);
+        let [x10p13, x10m13] =  SimdVector::column_butterfly2([values[10], values[13]]);
+        let y00 = SimdVector::add(y00, x10p13);
+        let [x11p12, x11m12] =  SimdVector::column_butterfly2([values[11], values[12]]);
+        let y00 = SimdVector::add(y00, x11p12);
 
-        let m0122a = FcmaVector::fmadd(values[0], self.twiddles_re[0], x1p22);
-        let m0122a = FcmaVector::fmadd(m0122a, self.twiddles_re[1], x2p21);
-        let m0122a = FcmaVector::fmadd(m0122a, self.twiddles_re[2], x3p20);
-        let m0122a = FcmaVector::fmadd(m0122a, self.twiddles_re[3], x4p19);
-        let m0122a = FcmaVector::fmadd(m0122a, self.twiddles_re[4], x5p18);
-        let m0122a = FcmaVector::fmadd(m0122a, self.twiddles_re[5], x6p17);
-        let m0122a = FcmaVector::fmadd(m0122a, self.twiddles_re[6], x7p16);
-        let m0122a = FcmaVector::fmadd(m0122a, self.twiddles_re[7], x8p15);
-        let m0122a = FcmaVector::fmadd(m0122a, self.twiddles_re[8], x9p14);
-        let m0122a = FcmaVector::fmadd(m0122a, self.twiddles_re[9], x10p13);
-        let m0122a = FcmaVector::fmadd(m0122a, self.twiddles_re[10], x11p12);
+        let m0122a = SimdVector::fmadd(values[0], self.twiddles_re[0], x1p22);
+        let m0122a = SimdVector::fmadd(m0122a, self.twiddles_re[1], x2p21);
+        let m0122a = SimdVector::fmadd(m0122a, self.twiddles_re[2], x3p20);
+        let m0122a = SimdVector::fmadd(m0122a, self.twiddles_re[3], x4p19);
+        let m0122a = SimdVector::fmadd(m0122a, self.twiddles_re[4], x5p18);
+        let m0122a = SimdVector::fmadd(m0122a, self.twiddles_re[5], x6p17);
+        let m0122a = SimdVector::fmadd(m0122a, self.twiddles_re[6], x7p16);
+        let m0122a = SimdVector::fmadd(m0122a, self.twiddles_re[7], x8p15);
+        let m0122a = SimdVector::fmadd(m0122a, self.twiddles_re[8], x9p14);
+        let m0122a = SimdVector::fmadd(m0122a, self.twiddles_re[9], x10p13);
+        let m0122a = SimdVector::fmadd(m0122a, self.twiddles_re[10], x11p12);
         let m0122b = FcmaVector::mul_rotate90(self.twiddles_im[0], x1m22);
         let m0122b = FcmaVector::fmadd_rotate90(m0122b, self.twiddles_im[1], x2m21);
         let m0122b = FcmaVector::fmadd_rotate90(m0122b, self.twiddles_im[2], x3m20);
@@ -2265,19 +2267,19 @@ impl<T: FftNum> FcmaF64Butterfly23<T> {
         let m0122b = FcmaVector::fmadd_rotate90(m0122b, self.twiddles_im[8], x9m14);
         let m0122b = FcmaVector::fmadd_rotate90(m0122b, self.twiddles_im[9], x10m13);
         let m0122b = FcmaVector::fmadd_rotate90(m0122b, self.twiddles_im[10], x11m12);
-        let [y01, y22] = FcmaVector::column_butterfly2([m0122a, m0122b]);
+        let [y01, y22] = SimdVector::column_butterfly2([m0122a, m0122b]);
 
-        let m0221a = FcmaVector::fmadd(values[0], self.twiddles_re[1], x1p22);
-        let m0221a = FcmaVector::fmadd(m0221a, self.twiddles_re[3], x2p21);
-        let m0221a = FcmaVector::fmadd(m0221a, self.twiddles_re[5], x3p20);
-        let m0221a = FcmaVector::fmadd(m0221a, self.twiddles_re[7], x4p19);
-        let m0221a = FcmaVector::fmadd(m0221a, self.twiddles_re[9], x5p18);
-        let m0221a = FcmaVector::fmadd(m0221a, self.twiddles_re[10], x6p17);
-        let m0221a = FcmaVector::fmadd(m0221a, self.twiddles_re[8], x7p16);
-        let m0221a = FcmaVector::fmadd(m0221a, self.twiddles_re[6], x8p15);
-        let m0221a = FcmaVector::fmadd(m0221a, self.twiddles_re[4], x9p14);
-        let m0221a = FcmaVector::fmadd(m0221a, self.twiddles_re[2], x10p13);
-        let m0221a = FcmaVector::fmadd(m0221a, self.twiddles_re[0], x11p12);
+        let m0221a = SimdVector::fmadd(values[0], self.twiddles_re[1], x1p22);
+        let m0221a = SimdVector::fmadd(m0221a, self.twiddles_re[3], x2p21);
+        let m0221a = SimdVector::fmadd(m0221a, self.twiddles_re[5], x3p20);
+        let m0221a = SimdVector::fmadd(m0221a, self.twiddles_re[7], x4p19);
+        let m0221a = SimdVector::fmadd(m0221a, self.twiddles_re[9], x5p18);
+        let m0221a = SimdVector::fmadd(m0221a, self.twiddles_re[10], x6p17);
+        let m0221a = SimdVector::fmadd(m0221a, self.twiddles_re[8], x7p16);
+        let m0221a = SimdVector::fmadd(m0221a, self.twiddles_re[6], x8p15);
+        let m0221a = SimdVector::fmadd(m0221a, self.twiddles_re[4], x9p14);
+        let m0221a = SimdVector::fmadd(m0221a, self.twiddles_re[2], x10p13);
+        let m0221a = SimdVector::fmadd(m0221a, self.twiddles_re[0], x11p12);
         let m0221b = FcmaVector::mul_rotate90(self.twiddles_im[1], x1m22);
         let m0221b = FcmaVector::fmadd_rotate90(m0221b, self.twiddles_im[3], x2m21);
         let m0221b = FcmaVector::fmadd_rotate90(m0221b, self.twiddles_im[5], x3m20);
@@ -2289,19 +2291,19 @@ impl<T: FftNum> FcmaF64Butterfly23<T> {
         let m0221b = FcmaVector::nmadd_rotate90(m0221b, self.twiddles_im[4], x9m14);
         let m0221b = FcmaVector::nmadd_rotate90(m0221b, self.twiddles_im[2], x10m13);
         let m0221b = FcmaVector::nmadd_rotate90(m0221b, self.twiddles_im[0], x11m12);
-        let [y02, y21] = FcmaVector::column_butterfly2([m0221a, m0221b]);
+        let [y02, y21] = SimdVector::column_butterfly2([m0221a, m0221b]);
 
-        let m0320a = FcmaVector::fmadd(values[0], self.twiddles_re[2], x1p22);
-        let m0320a = FcmaVector::fmadd(m0320a, self.twiddles_re[5], x2p21);
-        let m0320a = FcmaVector::fmadd(m0320a, self.twiddles_re[8], x3p20);
-        let m0320a = FcmaVector::fmadd(m0320a, self.twiddles_re[10], x4p19);
-        let m0320a = FcmaVector::fmadd(m0320a, self.twiddles_re[7], x5p18);
-        let m0320a = FcmaVector::fmadd(m0320a, self.twiddles_re[4], x6p17);
-        let m0320a = FcmaVector::fmadd(m0320a, self.twiddles_re[1], x7p16);
-        let m0320a = FcmaVector::fmadd(m0320a, self.twiddles_re[0], x8p15);
-        let m0320a = FcmaVector::fmadd(m0320a, self.twiddles_re[3], x9p14);
-        let m0320a = FcmaVector::fmadd(m0320a, self.twiddles_re[6], x10p13);
-        let m0320a = FcmaVector::fmadd(m0320a, self.twiddles_re[9], x11p12);
+        let m0320a = SimdVector::fmadd(values[0], self.twiddles_re[2], x1p22);
+        let m0320a = SimdVector::fmadd(m0320a, self.twiddles_re[5], x2p21);
+        let m0320a = SimdVector::fmadd(m0320a, self.twiddles_re[8], x3p20);
+        let m0320a = SimdVector::fmadd(m0320a, self.twiddles_re[10], x4p19);
+        let m0320a = SimdVector::fmadd(m0320a, self.twiddles_re[7], x5p18);
+        let m0320a = SimdVector::fmadd(m0320a, self.twiddles_re[4], x6p17);
+        let m0320a = SimdVector::fmadd(m0320a, self.twiddles_re[1], x7p16);
+        let m0320a = SimdVector::fmadd(m0320a, self.twiddles_re[0], x8p15);
+        let m0320a = SimdVector::fmadd(m0320a, self.twiddles_re[3], x9p14);
+        let m0320a = SimdVector::fmadd(m0320a, self.twiddles_re[6], x10p13);
+        let m0320a = SimdVector::fmadd(m0320a, self.twiddles_re[9], x11p12);
         let m0320b = FcmaVector::mul_rotate90(self.twiddles_im[2], x1m22);
         let m0320b = FcmaVector::fmadd_rotate90(m0320b, self.twiddles_im[5], x2m21);
         let m0320b = FcmaVector::fmadd_rotate90(m0320b, self.twiddles_im[8], x3m20);
@@ -2313,19 +2315,19 @@ impl<T: FftNum> FcmaF64Butterfly23<T> {
         let m0320b = FcmaVector::fmadd_rotate90(m0320b, self.twiddles_im[3], x9m14);
         let m0320b = FcmaVector::fmadd_rotate90(m0320b, self.twiddles_im[6], x10m13);
         let m0320b = FcmaVector::fmadd_rotate90(m0320b, self.twiddles_im[9], x11m12);
-        let [y03, y20] = FcmaVector::column_butterfly2([m0320a, m0320b]);
+        let [y03, y20] = SimdVector::column_butterfly2([m0320a, m0320b]);
 
-        let m0419a = FcmaVector::fmadd(values[0], self.twiddles_re[3], x1p22);
-        let m0419a = FcmaVector::fmadd(m0419a, self.twiddles_re[7], x2p21);
-        let m0419a = FcmaVector::fmadd(m0419a, self.twiddles_re[10], x3p20);
-        let m0419a = FcmaVector::fmadd(m0419a, self.twiddles_re[6], x4p19);
-        let m0419a = FcmaVector::fmadd(m0419a, self.twiddles_re[2], x5p18);
-        let m0419a = FcmaVector::fmadd(m0419a, self.twiddles_re[0], x6p17);
-        let m0419a = FcmaVector::fmadd(m0419a, self.twiddles_re[4], x7p16);
-        let m0419a = FcmaVector::fmadd(m0419a, self.twiddles_re[8], x8p15);
-        let m0419a = FcmaVector::fmadd(m0419a, self.twiddles_re[9], x9p14);
-        let m0419a = FcmaVector::fmadd(m0419a, self.twiddles_re[5], x10p13);
-        let m0419a = FcmaVector::fmadd(m0419a, self.twiddles_re[1], x11p12);
+        let m0419a = SimdVector::fmadd(values[0], self.twiddles_re[3], x1p22);
+        let m0419a = SimdVector::fmadd(m0419a, self.twiddles_re[7], x2p21);
+        let m0419a = SimdVector::fmadd(m0419a, self.twiddles_re[10], x3p20);
+        let m0419a = SimdVector::fmadd(m0419a, self.twiddles_re[6], x4p19);
+        let m0419a = SimdVector::fmadd(m0419a, self.twiddles_re[2], x5p18);
+        let m0419a = SimdVector::fmadd(m0419a, self.twiddles_re[0], x6p17);
+        let m0419a = SimdVector::fmadd(m0419a, self.twiddles_re[4], x7p16);
+        let m0419a = SimdVector::fmadd(m0419a, self.twiddles_re[8], x8p15);
+        let m0419a = SimdVector::fmadd(m0419a, self.twiddles_re[9], x9p14);
+        let m0419a = SimdVector::fmadd(m0419a, self.twiddles_re[5], x10p13);
+        let m0419a = SimdVector::fmadd(m0419a, self.twiddles_re[1], x11p12);
         let m0419b = FcmaVector::mul_rotate90(self.twiddles_im[3], x1m22);
         let m0419b = FcmaVector::fmadd_rotate90(m0419b, self.twiddles_im[7], x2m21);
         let m0419b = FcmaVector::nmadd_rotate90(m0419b, self.twiddles_im[10], x3m20);
@@ -2337,19 +2339,19 @@ impl<T: FftNum> FcmaF64Butterfly23<T> {
         let m0419b = FcmaVector::nmadd_rotate90(m0419b, self.twiddles_im[9], x9m14);
         let m0419b = FcmaVector::nmadd_rotate90(m0419b, self.twiddles_im[5], x10m13);
         let m0419b = FcmaVector::nmadd_rotate90(m0419b, self.twiddles_im[1], x11m12);
-        let [y04, y19] = FcmaVector::column_butterfly2([m0419a, m0419b]);
+        let [y04, y19] = SimdVector::column_butterfly2([m0419a, m0419b]);
 
-        let m0518a = FcmaVector::fmadd(values[0], self.twiddles_re[4], x1p22);
-        let m0518a = FcmaVector::fmadd(m0518a, self.twiddles_re[9], x2p21);
-        let m0518a = FcmaVector::fmadd(m0518a, self.twiddles_re[7], x3p20);
-        let m0518a = FcmaVector::fmadd(m0518a, self.twiddles_re[2], x4p19);
-        let m0518a = FcmaVector::fmadd(m0518a, self.twiddles_re[1], x5p18);
-        let m0518a = FcmaVector::fmadd(m0518a, self.twiddles_re[6], x6p17);
-        let m0518a = FcmaVector::fmadd(m0518a, self.twiddles_re[10], x7p16);
-        let m0518a = FcmaVector::fmadd(m0518a, self.twiddles_re[5], x8p15);
-        let m0518a = FcmaVector::fmadd(m0518a, self.twiddles_re[0], x9p14);
-        let m0518a = FcmaVector::fmadd(m0518a, self.twiddles_re[3], x10p13);
-        let m0518a = FcmaVector::fmadd(m0518a, self.twiddles_re[8], x11p12);
+        let m0518a = SimdVector::fmadd(values[0], self.twiddles_re[4], x1p22);
+        let m0518a = SimdVector::fmadd(m0518a, self.twiddles_re[9], x2p21);
+        let m0518a = SimdVector::fmadd(m0518a, self.twiddles_re[7], x3p20);
+        let m0518a = SimdVector::fmadd(m0518a, self.twiddles_re[2], x4p19);
+        let m0518a = SimdVector::fmadd(m0518a, self.twiddles_re[1], x5p18);
+        let m0518a = SimdVector::fmadd(m0518a, self.twiddles_re[6], x6p17);
+        let m0518a = SimdVector::fmadd(m0518a, self.twiddles_re[10], x7p16);
+        let m0518a = SimdVector::fmadd(m0518a, self.twiddles_re[5], x8p15);
+        let m0518a = SimdVector::fmadd(m0518a, self.twiddles_re[0], x9p14);
+        let m0518a = SimdVector::fmadd(m0518a, self.twiddles_re[3], x10p13);
+        let m0518a = SimdVector::fmadd(m0518a, self.twiddles_re[8], x11p12);
         let m0518b = FcmaVector::mul_rotate90(self.twiddles_im[4], x1m22);
         let m0518b = FcmaVector::fmadd_rotate90(m0518b, self.twiddles_im[9], x2m21);
         let m0518b = FcmaVector::nmadd_rotate90(m0518b, self.twiddles_im[7], x3m20);
@@ -2361,19 +2363,19 @@ impl<T: FftNum> FcmaF64Butterfly23<T> {
         let m0518b = FcmaVector::nmadd_rotate90(m0518b, self.twiddles_im[0], x9m14);
         let m0518b = FcmaVector::fmadd_rotate90(m0518b, self.twiddles_im[3], x10m13);
         let m0518b = FcmaVector::fmadd_rotate90(m0518b, self.twiddles_im[8], x11m12);
-        let [y05, y18] = FcmaVector::column_butterfly2([m0518a, m0518b]);
+        let [y05, y18] = SimdVector::column_butterfly2([m0518a, m0518b]);
 
-        let m0617a = FcmaVector::fmadd(values[0], self.twiddles_re[5], x1p22);
-        let m0617a = FcmaVector::fmadd(m0617a, self.twiddles_re[10], x2p21);
-        let m0617a = FcmaVector::fmadd(m0617a, self.twiddles_re[4], x3p20);
-        let m0617a = FcmaVector::fmadd(m0617a, self.twiddles_re[0], x4p19);
-        let m0617a = FcmaVector::fmadd(m0617a, self.twiddles_re[6], x5p18);
-        let m0617a = FcmaVector::fmadd(m0617a, self.twiddles_re[9], x6p17);
-        let m0617a = FcmaVector::fmadd(m0617a, self.twiddles_re[3], x7p16);
-        let m0617a = FcmaVector::fmadd(m0617a, self.twiddles_re[1], x8p15);
-        let m0617a = FcmaVector::fmadd(m0617a, self.twiddles_re[7], x9p14);
-        let m0617a = FcmaVector::fmadd(m0617a, self.twiddles_re[8], x10p13);
-        let m0617a = FcmaVector::fmadd(m0617a, self.twiddles_re[2], x11p12);
+        let m0617a = SimdVector::fmadd(values[0], self.twiddles_re[5], x1p22);
+        let m0617a = SimdVector::fmadd(m0617a, self.twiddles_re[10], x2p21);
+        let m0617a = SimdVector::fmadd(m0617a, self.twiddles_re[4], x3p20);
+        let m0617a = SimdVector::fmadd(m0617a, self.twiddles_re[0], x4p19);
+        let m0617a = SimdVector::fmadd(m0617a, self.twiddles_re[6], x5p18);
+        let m0617a = SimdVector::fmadd(m0617a, self.twiddles_re[9], x6p17);
+        let m0617a = SimdVector::fmadd(m0617a, self.twiddles_re[3], x7p16);
+        let m0617a = SimdVector::fmadd(m0617a, self.twiddles_re[1], x8p15);
+        let m0617a = SimdVector::fmadd(m0617a, self.twiddles_re[7], x9p14);
+        let m0617a = SimdVector::fmadd(m0617a, self.twiddles_re[8], x10p13);
+        let m0617a = SimdVector::fmadd(m0617a, self.twiddles_re[2], x11p12);
         let m0617b = FcmaVector::mul_rotate90(self.twiddles_im[5], x1m22);
         let m0617b = FcmaVector::nmadd_rotate90(m0617b, self.twiddles_im[10], x2m21);
         let m0617b = FcmaVector::nmadd_rotate90(m0617b, self.twiddles_im[4], x3m20);
@@ -2385,19 +2387,19 @@ impl<T: FftNum> FcmaF64Butterfly23<T> {
         let m0617b = FcmaVector::fmadd_rotate90(m0617b, self.twiddles_im[7], x9m14);
         let m0617b = FcmaVector::nmadd_rotate90(m0617b, self.twiddles_im[8], x10m13);
         let m0617b = FcmaVector::nmadd_rotate90(m0617b, self.twiddles_im[2], x11m12);
-        let [y06, y17] = FcmaVector::column_butterfly2([m0617a, m0617b]);
+        let [y06, y17] = SimdVector::column_butterfly2([m0617a, m0617b]);
 
-        let m0716a = FcmaVector::fmadd(values[0], self.twiddles_re[6], x1p22);
-        let m0716a = FcmaVector::fmadd(m0716a, self.twiddles_re[8], x2p21);
-        let m0716a = FcmaVector::fmadd(m0716a, self.twiddles_re[1], x3p20);
-        let m0716a = FcmaVector::fmadd(m0716a, self.twiddles_re[4], x4p19);
-        let m0716a = FcmaVector::fmadd(m0716a, self.twiddles_re[10], x5p18);
-        let m0716a = FcmaVector::fmadd(m0716a, self.twiddles_re[3], x6p17);
-        let m0716a = FcmaVector::fmadd(m0716a, self.twiddles_re[2], x7p16);
-        let m0716a = FcmaVector::fmadd(m0716a, self.twiddles_re[9], x8p15);
-        let m0716a = FcmaVector::fmadd(m0716a, self.twiddles_re[5], x9p14);
-        let m0716a = FcmaVector::fmadd(m0716a, self.twiddles_re[0], x10p13);
-        let m0716a = FcmaVector::fmadd(m0716a, self.twiddles_re[7], x11p12);
+        let m0716a = SimdVector::fmadd(values[0], self.twiddles_re[6], x1p22);
+        let m0716a = SimdVector::fmadd(m0716a, self.twiddles_re[8], x2p21);
+        let m0716a = SimdVector::fmadd(m0716a, self.twiddles_re[1], x3p20);
+        let m0716a = SimdVector::fmadd(m0716a, self.twiddles_re[4], x4p19);
+        let m0716a = SimdVector::fmadd(m0716a, self.twiddles_re[10], x5p18);
+        let m0716a = SimdVector::fmadd(m0716a, self.twiddles_re[3], x6p17);
+        let m0716a = SimdVector::fmadd(m0716a, self.twiddles_re[2], x7p16);
+        let m0716a = SimdVector::fmadd(m0716a, self.twiddles_re[9], x8p15);
+        let m0716a = SimdVector::fmadd(m0716a, self.twiddles_re[5], x9p14);
+        let m0716a = SimdVector::fmadd(m0716a, self.twiddles_re[0], x10p13);
+        let m0716a = SimdVector::fmadd(m0716a, self.twiddles_re[7], x11p12);
         let m0716b = FcmaVector::mul_rotate90(self.twiddles_im[6], x1m22);
         let m0716b = FcmaVector::nmadd_rotate90(m0716b, self.twiddles_im[8], x2m21);
         let m0716b = FcmaVector::nmadd_rotate90(m0716b, self.twiddles_im[1], x3m20);
@@ -2409,19 +2411,19 @@ impl<T: FftNum> FcmaF64Butterfly23<T> {
         let m0716b = FcmaVector::nmadd_rotate90(m0716b, self.twiddles_im[5], x9m14);
         let m0716b = FcmaVector::fmadd_rotate90(m0716b, self.twiddles_im[0], x10m13);
         let m0716b = FcmaVector::fmadd_rotate90(m0716b, self.twiddles_im[7], x11m12);
-        let [y07, y16] = FcmaVector::column_butterfly2([m0716a, m0716b]);
+        let [y07, y16] = SimdVector::column_butterfly2([m0716a, m0716b]);
 
-        let m0815a = FcmaVector::fmadd(values[0], self.twiddles_re[7], x1p22);
-        let m0815a = FcmaVector::fmadd(m0815a, self.twiddles_re[6], x2p21);
-        let m0815a = FcmaVector::fmadd(m0815a, self.twiddles_re[0], x3p20);
-        let m0815a = FcmaVector::fmadd(m0815a, self.twiddles_re[8], x4p19);
-        let m0815a = FcmaVector::fmadd(m0815a, self.twiddles_re[5], x5p18);
-        let m0815a = FcmaVector::fmadd(m0815a, self.twiddles_re[1], x6p17);
-        let m0815a = FcmaVector::fmadd(m0815a, self.twiddles_re[9], x7p16);
-        let m0815a = FcmaVector::fmadd(m0815a, self.twiddles_re[4], x8p15);
-        let m0815a = FcmaVector::fmadd(m0815a, self.twiddles_re[2], x9p14);
-        let m0815a = FcmaVector::fmadd(m0815a, self.twiddles_re[10], x10p13);
-        let m0815a = FcmaVector::fmadd(m0815a, self.twiddles_re[3], x11p12);
+        let m0815a = SimdVector::fmadd(values[0], self.twiddles_re[7], x1p22);
+        let m0815a = SimdVector::fmadd(m0815a, self.twiddles_re[6], x2p21);
+        let m0815a = SimdVector::fmadd(m0815a, self.twiddles_re[0], x3p20);
+        let m0815a = SimdVector::fmadd(m0815a, self.twiddles_re[8], x4p19);
+        let m0815a = SimdVector::fmadd(m0815a, self.twiddles_re[5], x5p18);
+        let m0815a = SimdVector::fmadd(m0815a, self.twiddles_re[1], x6p17);
+        let m0815a = SimdVector::fmadd(m0815a, self.twiddles_re[9], x7p16);
+        let m0815a = SimdVector::fmadd(m0815a, self.twiddles_re[4], x8p15);
+        let m0815a = SimdVector::fmadd(m0815a, self.twiddles_re[2], x9p14);
+        let m0815a = SimdVector::fmadd(m0815a, self.twiddles_re[10], x10p13);
+        let m0815a = SimdVector::fmadd(m0815a, self.twiddles_re[3], x11p12);
         let m0815b = FcmaVector::mul_rotate90(self.twiddles_im[7], x1m22);
         let m0815b = FcmaVector::nmadd_rotate90(m0815b, self.twiddles_im[6], x2m21);
         let m0815b = FcmaVector::fmadd_rotate90(m0815b, self.twiddles_im[0], x3m20);
@@ -2433,19 +2435,19 @@ impl<T: FftNum> FcmaF64Butterfly23<T> {
         let m0815b = FcmaVector::fmadd_rotate90(m0815b, self.twiddles_im[2], x9m14);
         let m0815b = FcmaVector::fmadd_rotate90(m0815b, self.twiddles_im[10], x10m13);
         let m0815b = FcmaVector::nmadd_rotate90(m0815b, self.twiddles_im[3], x11m12);
-        let [y08, y15] = FcmaVector::column_butterfly2([m0815a, m0815b]);
+        let [y08, y15] = SimdVector::column_butterfly2([m0815a, m0815b]);
 
-        let m0914a = FcmaVector::fmadd(values[0], self.twiddles_re[8], x1p22);
-        let m0914a = FcmaVector::fmadd(m0914a, self.twiddles_re[4], x2p21);
-        let m0914a = FcmaVector::fmadd(m0914a, self.twiddles_re[3], x3p20);
-        let m0914a = FcmaVector::fmadd(m0914a, self.twiddles_re[9], x4p19);
-        let m0914a = FcmaVector::fmadd(m0914a, self.twiddles_re[0], x5p18);
-        let m0914a = FcmaVector::fmadd(m0914a, self.twiddles_re[7], x6p17);
-        let m0914a = FcmaVector::fmadd(m0914a, self.twiddles_re[5], x7p16);
-        let m0914a = FcmaVector::fmadd(m0914a, self.twiddles_re[2], x8p15);
-        let m0914a = FcmaVector::fmadd(m0914a, self.twiddles_re[10], x9p14);
-        let m0914a = FcmaVector::fmadd(m0914a, self.twiddles_re[1], x10p13);
-        let m0914a = FcmaVector::fmadd(m0914a, self.twiddles_re[6], x11p12);
+        let m0914a = SimdVector::fmadd(values[0], self.twiddles_re[8], x1p22);
+        let m0914a = SimdVector::fmadd(m0914a, self.twiddles_re[4], x2p21);
+        let m0914a = SimdVector::fmadd(m0914a, self.twiddles_re[3], x3p20);
+        let m0914a = SimdVector::fmadd(m0914a, self.twiddles_re[9], x4p19);
+        let m0914a = SimdVector::fmadd(m0914a, self.twiddles_re[0], x5p18);
+        let m0914a = SimdVector::fmadd(m0914a, self.twiddles_re[7], x6p17);
+        let m0914a = SimdVector::fmadd(m0914a, self.twiddles_re[5], x7p16);
+        let m0914a = SimdVector::fmadd(m0914a, self.twiddles_re[2], x8p15);
+        let m0914a = SimdVector::fmadd(m0914a, self.twiddles_re[10], x9p14);
+        let m0914a = SimdVector::fmadd(m0914a, self.twiddles_re[1], x10p13);
+        let m0914a = SimdVector::fmadd(m0914a, self.twiddles_re[6], x11p12);
         let m0914b = FcmaVector::mul_rotate90(self.twiddles_im[8], x1m22);
         let m0914b = FcmaVector::nmadd_rotate90(m0914b, self.twiddles_im[4], x2m21);
         let m0914b = FcmaVector::fmadd_rotate90(m0914b, self.twiddles_im[3], x3m20);
@@ -2457,19 +2459,19 @@ impl<T: FftNum> FcmaF64Butterfly23<T> {
         let m0914b = FcmaVector::nmadd_rotate90(m0914b, self.twiddles_im[10], x9m14);
         let m0914b = FcmaVector::nmadd_rotate90(m0914b, self.twiddles_im[1], x10m13);
         let m0914b = FcmaVector::fmadd_rotate90(m0914b, self.twiddles_im[6], x11m12);
-        let [y09, y14] = FcmaVector::column_butterfly2([m0914a, m0914b]);
+        let [y09, y14] = SimdVector::column_butterfly2([m0914a, m0914b]);
 
-        let m1013a = FcmaVector::fmadd(values[0], self.twiddles_re[9], x1p22);
-        let m1013a = FcmaVector::fmadd(m1013a, self.twiddles_re[2], x2p21);
-        let m1013a = FcmaVector::fmadd(m1013a, self.twiddles_re[6], x3p20);
-        let m1013a = FcmaVector::fmadd(m1013a, self.twiddles_re[5], x4p19);
-        let m1013a = FcmaVector::fmadd(m1013a, self.twiddles_re[3], x5p18);
-        let m1013a = FcmaVector::fmadd(m1013a, self.twiddles_re[8], x6p17);
-        let m1013a = FcmaVector::fmadd(m1013a, self.twiddles_re[0], x7p16);
-        let m1013a = FcmaVector::fmadd(m1013a, self.twiddles_re[10], x8p15);
-        let m1013a = FcmaVector::fmadd(m1013a, self.twiddles_re[1], x9p14);
-        let m1013a = FcmaVector::fmadd(m1013a, self.twiddles_re[7], x10p13);
-        let m1013a = FcmaVector::fmadd(m1013a, self.twiddles_re[4], x11p12);
+        let m1013a = SimdVector::fmadd(values[0], self.twiddles_re[9], x1p22);
+        let m1013a = SimdVector::fmadd(m1013a, self.twiddles_re[2], x2p21);
+        let m1013a = SimdVector::fmadd(m1013a, self.twiddles_re[6], x3p20);
+        let m1013a = SimdVector::fmadd(m1013a, self.twiddles_re[5], x4p19);
+        let m1013a = SimdVector::fmadd(m1013a, self.twiddles_re[3], x5p18);
+        let m1013a = SimdVector::fmadd(m1013a, self.twiddles_re[8], x6p17);
+        let m1013a = SimdVector::fmadd(m1013a, self.twiddles_re[0], x7p16);
+        let m1013a = SimdVector::fmadd(m1013a, self.twiddles_re[10], x8p15);
+        let m1013a = SimdVector::fmadd(m1013a, self.twiddles_re[1], x9p14);
+        let m1013a = SimdVector::fmadd(m1013a, self.twiddles_re[7], x10p13);
+        let m1013a = SimdVector::fmadd(m1013a, self.twiddles_re[4], x11p12);
         let m1013b = FcmaVector::mul_rotate90(self.twiddles_im[9], x1m22);
         let m1013b = FcmaVector::nmadd_rotate90(m1013b, self.twiddles_im[2], x2m21);
         let m1013b = FcmaVector::fmadd_rotate90(m1013b, self.twiddles_im[6], x3m20);
@@ -2481,19 +2483,19 @@ impl<T: FftNum> FcmaF64Butterfly23<T> {
         let m1013b = FcmaVector::nmadd_rotate90(m1013b, self.twiddles_im[1], x9m14);
         let m1013b = FcmaVector::fmadd_rotate90(m1013b, self.twiddles_im[7], x10m13);
         let m1013b = FcmaVector::nmadd_rotate90(m1013b, self.twiddles_im[4], x11m12);
-        let [y10, y13] = FcmaVector::column_butterfly2([m1013a, m1013b]);
+        let [y10, y13] = SimdVector::column_butterfly2([m1013a, m1013b]);
 
-        let m1112a = FcmaVector::fmadd(values[0], self.twiddles_re[10], x1p22);
-        let m1112a = FcmaVector::fmadd(m1112a, self.twiddles_re[0], x2p21);
-        let m1112a = FcmaVector::fmadd(m1112a, self.twiddles_re[9], x3p20);
-        let m1112a = FcmaVector::fmadd(m1112a, self.twiddles_re[1], x4p19);
-        let m1112a = FcmaVector::fmadd(m1112a, self.twiddles_re[8], x5p18);
-        let m1112a = FcmaVector::fmadd(m1112a, self.twiddles_re[2], x6p17);
-        let m1112a = FcmaVector::fmadd(m1112a, self.twiddles_re[7], x7p16);
-        let m1112a = FcmaVector::fmadd(m1112a, self.twiddles_re[3], x8p15);
-        let m1112a = FcmaVector::fmadd(m1112a, self.twiddles_re[6], x9p14);
-        let m1112a = FcmaVector::fmadd(m1112a, self.twiddles_re[4], x10p13);
-        let m1112a = FcmaVector::fmadd(m1112a, self.twiddles_re[5], x11p12);
+        let m1112a = SimdVector::fmadd(values[0], self.twiddles_re[10], x1p22);
+        let m1112a = SimdVector::fmadd(m1112a, self.twiddles_re[0], x2p21);
+        let m1112a = SimdVector::fmadd(m1112a, self.twiddles_re[9], x3p20);
+        let m1112a = SimdVector::fmadd(m1112a, self.twiddles_re[1], x4p19);
+        let m1112a = SimdVector::fmadd(m1112a, self.twiddles_re[8], x5p18);
+        let m1112a = SimdVector::fmadd(m1112a, self.twiddles_re[2], x6p17);
+        let m1112a = SimdVector::fmadd(m1112a, self.twiddles_re[7], x7p16);
+        let m1112a = SimdVector::fmadd(m1112a, self.twiddles_re[3], x8p15);
+        let m1112a = SimdVector::fmadd(m1112a, self.twiddles_re[6], x9p14);
+        let m1112a = SimdVector::fmadd(m1112a, self.twiddles_re[4], x10p13);
+        let m1112a = SimdVector::fmadd(m1112a, self.twiddles_re[5], x11p12);
         let m1112b = FcmaVector::mul_rotate90(self.twiddles_im[10], x1m22);
         let m1112b = FcmaVector::nmadd_rotate90(m1112b, self.twiddles_im[0], x2m21);
         let m1112b = FcmaVector::fmadd_rotate90(m1112b, self.twiddles_im[9], x3m20);
@@ -2505,7 +2507,7 @@ impl<T: FftNum> FcmaF64Butterfly23<T> {
         let m1112b = FcmaVector::fmadd_rotate90(m1112b, self.twiddles_im[6], x9m14);
         let m1112b = FcmaVector::nmadd_rotate90(m1112b, self.twiddles_im[4], x10m13);
         let m1112b = FcmaVector::fmadd_rotate90(m1112b, self.twiddles_im[5], x11m12);
-        let [y11, y12] = FcmaVector::column_butterfly2([m1112a, m1112b]);
+        let [y11, y12] = SimdVector::column_butterfly2([m1112a, m1112b]);
 
 
         [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22]
@@ -2514,8 +2516,8 @@ impl<T: FftNum> FcmaF64Butterfly23<T> {
 
 pub struct FcmaF32Butterfly29<T> {
     direction: FftDirection,
-    twiddles_re: [float32x4_t; 14],
-    twiddles_im: [float32x4_t; 14],
+    twiddles_re: [FcmaVector32; 14],
+    twiddles_im: [FcmaVector32; 14],
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -2528,14 +2530,14 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
         let twiddles = make_twiddles(29, direction);
         Self {
             direction,
-            twiddles_re: twiddles.map(|t| FcmaVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| FcmaVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
+            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
             _phantom: std::marker::PhantomData,
         }
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 });
 
         let out = self.perform_parallel_fft_direct(values);
@@ -2544,7 +2546,7 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56 });
 
         let values = [
@@ -2617,51 +2619,51 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [float32x4_t; 29]) -> [float32x4_t; 29] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [FcmaVector32; 29]) -> [FcmaVector32; 29] {
         let y00 = values[0];
-        let [x1p28, x1m28] =  FcmaVector::column_butterfly2([values[1], values[28]]);
-        let y00 = FcmaVector::add(y00, x1p28);
-        let [x2p27, x2m27] =  FcmaVector::column_butterfly2([values[2], values[27]]);
-        let y00 = FcmaVector::add(y00, x2p27);
-        let [x3p26, x3m26] =  FcmaVector::column_butterfly2([values[3], values[26]]);
-        let y00 = FcmaVector::add(y00, x3p26);
-        let [x4p25, x4m25] =  FcmaVector::column_butterfly2([values[4], values[25]]);
-        let y00 = FcmaVector::add(y00, x4p25);
-        let [x5p24, x5m24] =  FcmaVector::column_butterfly2([values[5], values[24]]);
-        let y00 = FcmaVector::add(y00, x5p24);
-        let [x6p23, x6m23] =  FcmaVector::column_butterfly2([values[6], values[23]]);
-        let y00 = FcmaVector::add(y00, x6p23);
-        let [x7p22, x7m22] =  FcmaVector::column_butterfly2([values[7], values[22]]);
-        let y00 = FcmaVector::add(y00, x7p22);
-        let [x8p21, x8m21] =  FcmaVector::column_butterfly2([values[8], values[21]]);
-        let y00 = FcmaVector::add(y00, x8p21);
-        let [x9p20, x9m20] =  FcmaVector::column_butterfly2([values[9], values[20]]);
-        let y00 = FcmaVector::add(y00, x9p20);
-        let [x10p19, x10m19] =  FcmaVector::column_butterfly2([values[10], values[19]]);
-        let y00 = FcmaVector::add(y00, x10p19);
-        let [x11p18, x11m18] =  FcmaVector::column_butterfly2([values[11], values[18]]);
-        let y00 = FcmaVector::add(y00, x11p18);
-        let [x12p17, x12m17] =  FcmaVector::column_butterfly2([values[12], values[17]]);
-        let y00 = FcmaVector::add(y00, x12p17);
-        let [x13p16, x13m16] =  FcmaVector::column_butterfly2([values[13], values[16]]);
-        let y00 = FcmaVector::add(y00, x13p16);
-        let [x14p15, x14m15] =  FcmaVector::column_butterfly2([values[14], values[15]]);
-        let y00 = FcmaVector::add(y00, x14p15);
+        let [x1p28, x1m28] =  SimdVector::column_butterfly2([values[1], values[28]]);
+        let y00 = SimdVector::add(y00, x1p28);
+        let [x2p27, x2m27] =  SimdVector::column_butterfly2([values[2], values[27]]);
+        let y00 = SimdVector::add(y00, x2p27);
+        let [x3p26, x3m26] =  SimdVector::column_butterfly2([values[3], values[26]]);
+        let y00 = SimdVector::add(y00, x3p26);
+        let [x4p25, x4m25] =  SimdVector::column_butterfly2([values[4], values[25]]);
+        let y00 = SimdVector::add(y00, x4p25);
+        let [x5p24, x5m24] =  SimdVector::column_butterfly2([values[5], values[24]]);
+        let y00 = SimdVector::add(y00, x5p24);
+        let [x6p23, x6m23] =  SimdVector::column_butterfly2([values[6], values[23]]);
+        let y00 = SimdVector::add(y00, x6p23);
+        let [x7p22, x7m22] =  SimdVector::column_butterfly2([values[7], values[22]]);
+        let y00 = SimdVector::add(y00, x7p22);
+        let [x8p21, x8m21] =  SimdVector::column_butterfly2([values[8], values[21]]);
+        let y00 = SimdVector::add(y00, x8p21);
+        let [x9p20, x9m20] =  SimdVector::column_butterfly2([values[9], values[20]]);
+        let y00 = SimdVector::add(y00, x9p20);
+        let [x10p19, x10m19] =  SimdVector::column_butterfly2([values[10], values[19]]);
+        let y00 = SimdVector::add(y00, x10p19);
+        let [x11p18, x11m18] =  SimdVector::column_butterfly2([values[11], values[18]]);
+        let y00 = SimdVector::add(y00, x11p18);
+        let [x12p17, x12m17] =  SimdVector::column_butterfly2([values[12], values[17]]);
+        let y00 = SimdVector::add(y00, x12p17);
+        let [x13p16, x13m16] =  SimdVector::column_butterfly2([values[13], values[16]]);
+        let y00 = SimdVector::add(y00, x13p16);
+        let [x14p15, x14m15] =  SimdVector::column_butterfly2([values[14], values[15]]);
+        let y00 = SimdVector::add(y00, x14p15);
 
-        let m0128a = FcmaVector::fmadd(values[0], self.twiddles_re[0], x1p28);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[1], x2p27);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[2], x3p26);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[3], x4p25);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[4], x5p24);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[5], x6p23);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[6], x7p22);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[7], x8p21);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[8], x9p20);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[9], x10p19);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[10], x11p18);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[11], x12p17);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[12], x13p16);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[13], x14p15);
+        let m0128a = SimdVector::fmadd(values[0], self.twiddles_re[0], x1p28);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[1], x2p27);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[2], x3p26);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[3], x4p25);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[4], x5p24);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[5], x6p23);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[6], x7p22);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[7], x8p21);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[8], x9p20);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[9], x10p19);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[10], x11p18);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[11], x12p17);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[12], x13p16);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[13], x14p15);
         let m0128b = FcmaVector::mul_rotate90(self.twiddles_im[0], x1m28);
         let m0128b = FcmaVector::fmadd_rotate90(m0128b, self.twiddles_im[1], x2m27);
         let m0128b = FcmaVector::fmadd_rotate90(m0128b, self.twiddles_im[2], x3m26);
@@ -2676,22 +2678,22 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
         let m0128b = FcmaVector::fmadd_rotate90(m0128b, self.twiddles_im[11], x12m17);
         let m0128b = FcmaVector::fmadd_rotate90(m0128b, self.twiddles_im[12], x13m16);
         let m0128b = FcmaVector::fmadd_rotate90(m0128b, self.twiddles_im[13], x14m15);
-        let [y01, y28] = FcmaVector::column_butterfly2([m0128a, m0128b]);
+        let [y01, y28] = SimdVector::column_butterfly2([m0128a, m0128b]);
 
-        let m0227a = FcmaVector::fmadd(values[0], self.twiddles_re[1], x1p28);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[3], x2p27);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[5], x3p26);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[7], x4p25);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[9], x5p24);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[11], x6p23);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[13], x7p22);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[12], x8p21);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[10], x9p20);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[8], x10p19);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[6], x11p18);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[4], x12p17);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[2], x13p16);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[0], x14p15);
+        let m0227a = SimdVector::fmadd(values[0], self.twiddles_re[1], x1p28);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[3], x2p27);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[5], x3p26);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[7], x4p25);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[9], x5p24);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[11], x6p23);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[13], x7p22);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[12], x8p21);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[10], x9p20);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[8], x10p19);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[6], x11p18);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[4], x12p17);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[2], x13p16);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[0], x14p15);
         let m0227b = FcmaVector::mul_rotate90(self.twiddles_im[1], x1m28);
         let m0227b = FcmaVector::fmadd_rotate90(m0227b, self.twiddles_im[3], x2m27);
         let m0227b = FcmaVector::fmadd_rotate90(m0227b, self.twiddles_im[5], x3m26);
@@ -2706,22 +2708,22 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
         let m0227b = FcmaVector::nmadd_rotate90(m0227b, self.twiddles_im[4], x12m17);
         let m0227b = FcmaVector::nmadd_rotate90(m0227b, self.twiddles_im[2], x13m16);
         let m0227b = FcmaVector::nmadd_rotate90(m0227b, self.twiddles_im[0], x14m15);
-        let [y02, y27] = FcmaVector::column_butterfly2([m0227a, m0227b]);
+        let [y02, y27] = SimdVector::column_butterfly2([m0227a, m0227b]);
 
-        let m0326a = FcmaVector::fmadd(values[0], self.twiddles_re[2], x1p28);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[5], x2p27);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[8], x3p26);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[11], x4p25);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[13], x5p24);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[10], x6p23);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[7], x7p22);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[4], x8p21);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[1], x9p20);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[0], x10p19);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[3], x11p18);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[6], x12p17);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[9], x13p16);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[12], x14p15);
+        let m0326a = SimdVector::fmadd(values[0], self.twiddles_re[2], x1p28);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[5], x2p27);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[8], x3p26);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[11], x4p25);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[13], x5p24);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[10], x6p23);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[7], x7p22);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[4], x8p21);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[1], x9p20);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[0], x10p19);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[3], x11p18);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[6], x12p17);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[9], x13p16);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[12], x14p15);
         let m0326b = FcmaVector::mul_rotate90(self.twiddles_im[2], x1m28);
         let m0326b = FcmaVector::fmadd_rotate90(m0326b, self.twiddles_im[5], x2m27);
         let m0326b = FcmaVector::fmadd_rotate90(m0326b, self.twiddles_im[8], x3m26);
@@ -2736,22 +2738,22 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
         let m0326b = FcmaVector::fmadd_rotate90(m0326b, self.twiddles_im[6], x12m17);
         let m0326b = FcmaVector::fmadd_rotate90(m0326b, self.twiddles_im[9], x13m16);
         let m0326b = FcmaVector::fmadd_rotate90(m0326b, self.twiddles_im[12], x14m15);
-        let [y03, y26] = FcmaVector::column_butterfly2([m0326a, m0326b]);
+        let [y03, y26] = SimdVector::column_butterfly2([m0326a, m0326b]);
 
-        let m0425a = FcmaVector::fmadd(values[0], self.twiddles_re[3], x1p28);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[7], x2p27);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[11], x3p26);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[12], x4p25);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[8], x5p24);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[4], x6p23);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[0], x7p22);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[2], x8p21);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[6], x9p20);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[10], x10p19);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[13], x11p18);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[9], x12p17);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[5], x13p16);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[1], x14p15);
+        let m0425a = SimdVector::fmadd(values[0], self.twiddles_re[3], x1p28);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[7], x2p27);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[11], x3p26);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[12], x4p25);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[8], x5p24);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[4], x6p23);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[0], x7p22);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[2], x8p21);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[6], x9p20);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[10], x10p19);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[13], x11p18);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[9], x12p17);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[5], x13p16);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[1], x14p15);
         let m0425b = FcmaVector::mul_rotate90(self.twiddles_im[3], x1m28);
         let m0425b = FcmaVector::fmadd_rotate90(m0425b, self.twiddles_im[7], x2m27);
         let m0425b = FcmaVector::fmadd_rotate90(m0425b, self.twiddles_im[11], x3m26);
@@ -2766,22 +2768,22 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
         let m0425b = FcmaVector::nmadd_rotate90(m0425b, self.twiddles_im[9], x12m17);
         let m0425b = FcmaVector::nmadd_rotate90(m0425b, self.twiddles_im[5], x13m16);
         let m0425b = FcmaVector::nmadd_rotate90(m0425b, self.twiddles_im[1], x14m15);
-        let [y04, y25] = FcmaVector::column_butterfly2([m0425a, m0425b]);
+        let [y04, y25] = SimdVector::column_butterfly2([m0425a, m0425b]);
 
-        let m0524a = FcmaVector::fmadd(values[0], self.twiddles_re[4], x1p28);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[9], x2p27);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[13], x3p26);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[8], x4p25);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[3], x5p24);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[0], x6p23);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[5], x7p22);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[10], x8p21);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[12], x9p20);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[7], x10p19);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[2], x11p18);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[1], x12p17);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[6], x13p16);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[11], x14p15);
+        let m0524a = SimdVector::fmadd(values[0], self.twiddles_re[4], x1p28);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[9], x2p27);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[13], x3p26);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[8], x4p25);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[3], x5p24);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[0], x6p23);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[5], x7p22);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[10], x8p21);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[12], x9p20);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[7], x10p19);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[2], x11p18);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[1], x12p17);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[6], x13p16);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[11], x14p15);
         let m0524b = FcmaVector::mul_rotate90(self.twiddles_im[4], x1m28);
         let m0524b = FcmaVector::fmadd_rotate90(m0524b, self.twiddles_im[9], x2m27);
         let m0524b = FcmaVector::nmadd_rotate90(m0524b, self.twiddles_im[13], x3m26);
@@ -2796,22 +2798,22 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
         let m0524b = FcmaVector::fmadd_rotate90(m0524b, self.twiddles_im[1], x12m17);
         let m0524b = FcmaVector::fmadd_rotate90(m0524b, self.twiddles_im[6], x13m16);
         let m0524b = FcmaVector::fmadd_rotate90(m0524b, self.twiddles_im[11], x14m15);
-        let [y05, y24] = FcmaVector::column_butterfly2([m0524a, m0524b]);
+        let [y05, y24] = SimdVector::column_butterfly2([m0524a, m0524b]);
 
-        let m0623a = FcmaVector::fmadd(values[0], self.twiddles_re[5], x1p28);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[11], x2p27);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[10], x3p26);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[4], x4p25);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[0], x5p24);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[6], x6p23);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[12], x7p22);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[9], x8p21);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[3], x9p20);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[1], x10p19);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[7], x11p18);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[13], x12p17);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[8], x13p16);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[2], x14p15);
+        let m0623a = SimdVector::fmadd(values[0], self.twiddles_re[5], x1p28);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[11], x2p27);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[10], x3p26);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[4], x4p25);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[0], x5p24);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[6], x6p23);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[12], x7p22);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[9], x8p21);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[3], x9p20);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[1], x10p19);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[7], x11p18);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[13], x12p17);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[8], x13p16);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[2], x14p15);
         let m0623b = FcmaVector::mul_rotate90(self.twiddles_im[5], x1m28);
         let m0623b = FcmaVector::fmadd_rotate90(m0623b, self.twiddles_im[11], x2m27);
         let m0623b = FcmaVector::nmadd_rotate90(m0623b, self.twiddles_im[10], x3m26);
@@ -2826,22 +2828,22 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
         let m0623b = FcmaVector::fmadd_rotate90(m0623b, self.twiddles_im[13], x12m17);
         let m0623b = FcmaVector::nmadd_rotate90(m0623b, self.twiddles_im[8], x13m16);
         let m0623b = FcmaVector::nmadd_rotate90(m0623b, self.twiddles_im[2], x14m15);
-        let [y06, y23] = FcmaVector::column_butterfly2([m0623a, m0623b]);
+        let [y06, y23] = SimdVector::column_butterfly2([m0623a, m0623b]);
 
-        let m0722a = FcmaVector::fmadd(values[0], self.twiddles_re[6], x1p28);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[13], x2p27);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[7], x3p26);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[0], x4p25);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[5], x5p24);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[12], x6p23);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[8], x7p22);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[1], x8p21);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[4], x9p20);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[11], x10p19);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[9], x11p18);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[2], x12p17);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[3], x13p16);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[10], x14p15);
+        let m0722a = SimdVector::fmadd(values[0], self.twiddles_re[6], x1p28);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[13], x2p27);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[7], x3p26);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[0], x4p25);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[5], x5p24);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[12], x6p23);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[8], x7p22);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[1], x8p21);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[4], x9p20);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[11], x10p19);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[9], x11p18);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[2], x12p17);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[3], x13p16);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[10], x14p15);
         let m0722b = FcmaVector::mul_rotate90(self.twiddles_im[6], x1m28);
         let m0722b = FcmaVector::fmadd_rotate90(m0722b, self.twiddles_im[13], x2m27);
         let m0722b = FcmaVector::nmadd_rotate90(m0722b, self.twiddles_im[7], x3m26);
@@ -2856,22 +2858,22 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
         let m0722b = FcmaVector::nmadd_rotate90(m0722b, self.twiddles_im[2], x12m17);
         let m0722b = FcmaVector::fmadd_rotate90(m0722b, self.twiddles_im[3], x13m16);
         let m0722b = FcmaVector::fmadd_rotate90(m0722b, self.twiddles_im[10], x14m15);
-        let [y07, y22] = FcmaVector::column_butterfly2([m0722a, m0722b]);
+        let [y07, y22] = SimdVector::column_butterfly2([m0722a, m0722b]);
 
-        let m0821a = FcmaVector::fmadd(values[0], self.twiddles_re[7], x1p28);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[12], x2p27);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[4], x3p26);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[2], x4p25);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[10], x5p24);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[9], x6p23);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[1], x7p22);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[5], x8p21);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[13], x9p20);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[6], x10p19);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[0], x11p18);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[8], x12p17);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[11], x13p16);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[3], x14p15);
+        let m0821a = SimdVector::fmadd(values[0], self.twiddles_re[7], x1p28);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[12], x2p27);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[4], x3p26);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[2], x4p25);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[10], x5p24);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[9], x6p23);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[1], x7p22);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[5], x8p21);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[13], x9p20);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[6], x10p19);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[0], x11p18);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[8], x12p17);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[11], x13p16);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[3], x14p15);
         let m0821b = FcmaVector::mul_rotate90(self.twiddles_im[7], x1m28);
         let m0821b = FcmaVector::nmadd_rotate90(m0821b, self.twiddles_im[12], x2m27);
         let m0821b = FcmaVector::nmadd_rotate90(m0821b, self.twiddles_im[4], x3m26);
@@ -2886,22 +2888,22 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
         let m0821b = FcmaVector::fmadd_rotate90(m0821b, self.twiddles_im[8], x12m17);
         let m0821b = FcmaVector::nmadd_rotate90(m0821b, self.twiddles_im[11], x13m16);
         let m0821b = FcmaVector::nmadd_rotate90(m0821b, self.twiddles_im[3], x14m15);
-        let [y08, y21] = FcmaVector::column_butterfly2([m0821a, m0821b]);
+        let [y08, y21] = SimdVector::column_butterfly2([m0821a, m0821b]);
 
-        let m0920a = FcmaVector::fmadd(values[0], self.twiddles_re[8], x1p28);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[10], x2p27);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[1], x3p26);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[6], x4p25);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[12], x5p24);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[3], x6p23);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[4], x7p22);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[13], x8p21);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[5], x9p20);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[2], x10p19);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[11], x11p18);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[7], x12p17);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[0], x13p16);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[9], x14p15);
+        let m0920a = SimdVector::fmadd(values[0], self.twiddles_re[8], x1p28);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[10], x2p27);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[1], x3p26);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[6], x4p25);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[12], x5p24);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[3], x6p23);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[4], x7p22);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[13], x8p21);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[5], x9p20);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[2], x10p19);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[11], x11p18);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[7], x12p17);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[0], x13p16);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[9], x14p15);
         let m0920b = FcmaVector::mul_rotate90(self.twiddles_im[8], x1m28);
         let m0920b = FcmaVector::nmadd_rotate90(m0920b, self.twiddles_im[10], x2m27);
         let m0920b = FcmaVector::nmadd_rotate90(m0920b, self.twiddles_im[1], x3m26);
@@ -2916,22 +2918,22 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
         let m0920b = FcmaVector::nmadd_rotate90(m0920b, self.twiddles_im[7], x12m17);
         let m0920b = FcmaVector::fmadd_rotate90(m0920b, self.twiddles_im[0], x13m16);
         let m0920b = FcmaVector::fmadd_rotate90(m0920b, self.twiddles_im[9], x14m15);
-        let [y09, y20] = FcmaVector::column_butterfly2([m0920a, m0920b]);
+        let [y09, y20] = SimdVector::column_butterfly2([m0920a, m0920b]);
 
-        let m1019a = FcmaVector::fmadd(values[0], self.twiddles_re[9], x1p28);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[8], x2p27);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[0], x3p26);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[10], x4p25);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[7], x5p24);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[1], x6p23);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[11], x7p22);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[6], x8p21);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[2], x9p20);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[12], x10p19);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[5], x11p18);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[3], x12p17);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[13], x13p16);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[4], x14p15);
+        let m1019a = SimdVector::fmadd(values[0], self.twiddles_re[9], x1p28);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[8], x2p27);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[0], x3p26);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[10], x4p25);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[7], x5p24);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[1], x6p23);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[11], x7p22);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[6], x8p21);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[2], x9p20);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[12], x10p19);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[5], x11p18);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[3], x12p17);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[13], x13p16);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[4], x14p15);
         let m1019b = FcmaVector::mul_rotate90(self.twiddles_im[9], x1m28);
         let m1019b = FcmaVector::nmadd_rotate90(m1019b, self.twiddles_im[8], x2m27);
         let m1019b = FcmaVector::fmadd_rotate90(m1019b, self.twiddles_im[0], x3m26);
@@ -2946,22 +2948,22 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
         let m1019b = FcmaVector::fmadd_rotate90(m1019b, self.twiddles_im[3], x12m17);
         let m1019b = FcmaVector::fmadd_rotate90(m1019b, self.twiddles_im[13], x13m16);
         let m1019b = FcmaVector::nmadd_rotate90(m1019b, self.twiddles_im[4], x14m15);
-        let [y10, y19] = FcmaVector::column_butterfly2([m1019a, m1019b]);
+        let [y10, y19] = SimdVector::column_butterfly2([m1019a, m1019b]);
 
-        let m1118a = FcmaVector::fmadd(values[0], self.twiddles_re[10], x1p28);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[6], x2p27);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[3], x3p26);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[13], x4p25);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[2], x5p24);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[7], x6p23);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[9], x7p22);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[0], x8p21);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[11], x9p20);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[5], x10p19);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[4], x11p18);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[12], x12p17);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[1], x13p16);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[8], x14p15);
+        let m1118a = SimdVector::fmadd(values[0], self.twiddles_re[10], x1p28);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[6], x2p27);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[3], x3p26);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[13], x4p25);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[2], x5p24);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[7], x6p23);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[9], x7p22);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[0], x8p21);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[11], x9p20);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[5], x10p19);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[4], x11p18);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[12], x12p17);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[1], x13p16);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[8], x14p15);
         let m1118b = FcmaVector::mul_rotate90(self.twiddles_im[10], x1m28);
         let m1118b = FcmaVector::nmadd_rotate90(m1118b, self.twiddles_im[6], x2m27);
         let m1118b = FcmaVector::fmadd_rotate90(m1118b, self.twiddles_im[3], x3m26);
@@ -2976,22 +2978,22 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
         let m1118b = FcmaVector::nmadd_rotate90(m1118b, self.twiddles_im[12], x12m17);
         let m1118b = FcmaVector::nmadd_rotate90(m1118b, self.twiddles_im[1], x13m16);
         let m1118b = FcmaVector::fmadd_rotate90(m1118b, self.twiddles_im[8], x14m15);
-        let [y11, y18] = FcmaVector::column_butterfly2([m1118a, m1118b]);
+        let [y11, y18] = SimdVector::column_butterfly2([m1118a, m1118b]);
 
-        let m1217a = FcmaVector::fmadd(values[0], self.twiddles_re[11], x1p28);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[4], x2p27);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[6], x3p26);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[9], x4p25);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[1], x5p24);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[13], x6p23);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[2], x7p22);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[8], x8p21);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[7], x9p20);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[3], x10p19);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[12], x11p18);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[0], x12p17);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[10], x13p16);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[5], x14p15);
+        let m1217a = SimdVector::fmadd(values[0], self.twiddles_re[11], x1p28);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[4], x2p27);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[6], x3p26);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[9], x4p25);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[1], x5p24);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[13], x6p23);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[2], x7p22);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[8], x8p21);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[7], x9p20);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[3], x10p19);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[12], x11p18);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[0], x12p17);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[10], x13p16);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[5], x14p15);
         let m1217b = FcmaVector::mul_rotate90(self.twiddles_im[11], x1m28);
         let m1217b = FcmaVector::nmadd_rotate90(m1217b, self.twiddles_im[4], x2m27);
         let m1217b = FcmaVector::fmadd_rotate90(m1217b, self.twiddles_im[6], x3m26);
@@ -3006,22 +3008,22 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
         let m1217b = FcmaVector::nmadd_rotate90(m1217b, self.twiddles_im[0], x12m17);
         let m1217b = FcmaVector::fmadd_rotate90(m1217b, self.twiddles_im[10], x13m16);
         let m1217b = FcmaVector::nmadd_rotate90(m1217b, self.twiddles_im[5], x14m15);
-        let [y12, y17] = FcmaVector::column_butterfly2([m1217a, m1217b]);
+        let [y12, y17] = SimdVector::column_butterfly2([m1217a, m1217b]);
 
-        let m1316a = FcmaVector::fmadd(values[0], self.twiddles_re[12], x1p28);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[2], x2p27);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[9], x3p26);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[5], x4p25);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[6], x5p24);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[8], x6p23);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[3], x7p22);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[11], x8p21);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[0], x9p20);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[13], x10p19);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[1], x11p18);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[10], x12p17);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[4], x13p16);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[7], x14p15);
+        let m1316a = SimdVector::fmadd(values[0], self.twiddles_re[12], x1p28);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[2], x2p27);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[9], x3p26);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[5], x4p25);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[6], x5p24);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[8], x6p23);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[3], x7p22);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[11], x8p21);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[0], x9p20);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[13], x10p19);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[1], x11p18);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[10], x12p17);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[4], x13p16);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[7], x14p15);
         let m1316b = FcmaVector::mul_rotate90(self.twiddles_im[12], x1m28);
         let m1316b = FcmaVector::nmadd_rotate90(m1316b, self.twiddles_im[2], x2m27);
         let m1316b = FcmaVector::fmadd_rotate90(m1316b, self.twiddles_im[9], x3m26);
@@ -3036,22 +3038,22 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
         let m1316b = FcmaVector::fmadd_rotate90(m1316b, self.twiddles_im[10], x12m17);
         let m1316b = FcmaVector::nmadd_rotate90(m1316b, self.twiddles_im[4], x13m16);
         let m1316b = FcmaVector::fmadd_rotate90(m1316b, self.twiddles_im[7], x14m15);
-        let [y13, y16] = FcmaVector::column_butterfly2([m1316a, m1316b]);
+        let [y13, y16] = SimdVector::column_butterfly2([m1316a, m1316b]);
 
-        let m1415a = FcmaVector::fmadd(values[0], self.twiddles_re[13], x1p28);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[0], x2p27);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[12], x3p26);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[1], x4p25);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[11], x5p24);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[2], x6p23);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[10], x7p22);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[3], x8p21);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[9], x9p20);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[4], x10p19);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[8], x11p18);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[5], x12p17);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[7], x13p16);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[6], x14p15);
+        let m1415a = SimdVector::fmadd(values[0], self.twiddles_re[13], x1p28);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[0], x2p27);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[12], x3p26);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[1], x4p25);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[11], x5p24);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[2], x6p23);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[10], x7p22);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[3], x8p21);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[9], x9p20);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[4], x10p19);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[8], x11p18);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[5], x12p17);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[7], x13p16);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[6], x14p15);
         let m1415b = FcmaVector::mul_rotate90(self.twiddles_im[13], x1m28);
         let m1415b = FcmaVector::nmadd_rotate90(m1415b, self.twiddles_im[0], x2m27);
         let m1415b = FcmaVector::fmadd_rotate90(m1415b, self.twiddles_im[12], x3m26);
@@ -3066,7 +3068,7 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
         let m1415b = FcmaVector::nmadd_rotate90(m1415b, self.twiddles_im[5], x12m17);
         let m1415b = FcmaVector::fmadd_rotate90(m1415b, self.twiddles_im[7], x13m16);
         let m1415b = FcmaVector::nmadd_rotate90(m1415b, self.twiddles_im[6], x14m15);
-        let [y14, y15] = FcmaVector::column_butterfly2([m1415a, m1415b]);
+        let [y14, y15] = SimdVector::column_butterfly2([m1415a, m1415b]);
 
 
         [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22, y23, y24, y25, y26, y27, y28]
@@ -3075,8 +3077,8 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
 
 pub struct FcmaF64Butterfly29<T> {
     direction: FftDirection,
-    twiddles_re: [float64x2_t; 14],
-    twiddles_im: [float64x2_t; 14],
+    twiddles_re: [FcmaVector64; 14],
+    twiddles_im: [FcmaVector64; 14],
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -3089,14 +3091,14 @@ impl<T: FftNum> FcmaF64Butterfly29<T> {
         let twiddles = make_twiddles(29, direction);
         unsafe {Self {
             direction,
-            twiddles_re: twiddles.map(|t| FcmaVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| FcmaVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
+            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
             _phantom: std::marker::PhantomData,
         }}
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 });
 
         let out = self.perform_fft_direct(values);
@@ -3105,51 +3107,51 @@ impl<T: FftNum> FcmaF64Butterfly29<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [float64x2_t; 29]) -> [float64x2_t; 29] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [FcmaVector64; 29]) -> [FcmaVector64; 29] {
         let y00 = values[0];
-        let [x1p28, x1m28] =  FcmaVector::column_butterfly2([values[1], values[28]]);
-        let y00 = FcmaVector::add(y00, x1p28);
-        let [x2p27, x2m27] =  FcmaVector::column_butterfly2([values[2], values[27]]);
-        let y00 = FcmaVector::add(y00, x2p27);
-        let [x3p26, x3m26] =  FcmaVector::column_butterfly2([values[3], values[26]]);
-        let y00 = FcmaVector::add(y00, x3p26);
-        let [x4p25, x4m25] =  FcmaVector::column_butterfly2([values[4], values[25]]);
-        let y00 = FcmaVector::add(y00, x4p25);
-        let [x5p24, x5m24] =  FcmaVector::column_butterfly2([values[5], values[24]]);
-        let y00 = FcmaVector::add(y00, x5p24);
-        let [x6p23, x6m23] =  FcmaVector::column_butterfly2([values[6], values[23]]);
-        let y00 = FcmaVector::add(y00, x6p23);
-        let [x7p22, x7m22] =  FcmaVector::column_butterfly2([values[7], values[22]]);
-        let y00 = FcmaVector::add(y00, x7p22);
-        let [x8p21, x8m21] =  FcmaVector::column_butterfly2([values[8], values[21]]);
-        let y00 = FcmaVector::add(y00, x8p21);
-        let [x9p20, x9m20] =  FcmaVector::column_butterfly2([values[9], values[20]]);
-        let y00 = FcmaVector::add(y00, x9p20);
-        let [x10p19, x10m19] =  FcmaVector::column_butterfly2([values[10], values[19]]);
-        let y00 = FcmaVector::add(y00, x10p19);
-        let [x11p18, x11m18] =  FcmaVector::column_butterfly2([values[11], values[18]]);
-        let y00 = FcmaVector::add(y00, x11p18);
-        let [x12p17, x12m17] =  FcmaVector::column_butterfly2([values[12], values[17]]);
-        let y00 = FcmaVector::add(y00, x12p17);
-        let [x13p16, x13m16] =  FcmaVector::column_butterfly2([values[13], values[16]]);
-        let y00 = FcmaVector::add(y00, x13p16);
-        let [x14p15, x14m15] =  FcmaVector::column_butterfly2([values[14], values[15]]);
-        let y00 = FcmaVector::add(y00, x14p15);
+        let [x1p28, x1m28] =  SimdVector::column_butterfly2([values[1], values[28]]);
+        let y00 = SimdVector::add(y00, x1p28);
+        let [x2p27, x2m27] =  SimdVector::column_butterfly2([values[2], values[27]]);
+        let y00 = SimdVector::add(y00, x2p27);
+        let [x3p26, x3m26] =  SimdVector::column_butterfly2([values[3], values[26]]);
+        let y00 = SimdVector::add(y00, x3p26);
+        let [x4p25, x4m25] =  SimdVector::column_butterfly2([values[4], values[25]]);
+        let y00 = SimdVector::add(y00, x4p25);
+        let [x5p24, x5m24] =  SimdVector::column_butterfly2([values[5], values[24]]);
+        let y00 = SimdVector::add(y00, x5p24);
+        let [x6p23, x6m23] =  SimdVector::column_butterfly2([values[6], values[23]]);
+        let y00 = SimdVector::add(y00, x6p23);
+        let [x7p22, x7m22] =  SimdVector::column_butterfly2([values[7], values[22]]);
+        let y00 = SimdVector::add(y00, x7p22);
+        let [x8p21, x8m21] =  SimdVector::column_butterfly2([values[8], values[21]]);
+        let y00 = SimdVector::add(y00, x8p21);
+        let [x9p20, x9m20] =  SimdVector::column_butterfly2([values[9], values[20]]);
+        let y00 = SimdVector::add(y00, x9p20);
+        let [x10p19, x10m19] =  SimdVector::column_butterfly2([values[10], values[19]]);
+        let y00 = SimdVector::add(y00, x10p19);
+        let [x11p18, x11m18] =  SimdVector::column_butterfly2([values[11], values[18]]);
+        let y00 = SimdVector::add(y00, x11p18);
+        let [x12p17, x12m17] =  SimdVector::column_butterfly2([values[12], values[17]]);
+        let y00 = SimdVector::add(y00, x12p17);
+        let [x13p16, x13m16] =  SimdVector::column_butterfly2([values[13], values[16]]);
+        let y00 = SimdVector::add(y00, x13p16);
+        let [x14p15, x14m15] =  SimdVector::column_butterfly2([values[14], values[15]]);
+        let y00 = SimdVector::add(y00, x14p15);
 
-        let m0128a = FcmaVector::fmadd(values[0], self.twiddles_re[0], x1p28);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[1], x2p27);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[2], x3p26);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[3], x4p25);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[4], x5p24);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[5], x6p23);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[6], x7p22);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[7], x8p21);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[8], x9p20);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[9], x10p19);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[10], x11p18);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[11], x12p17);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[12], x13p16);
-        let m0128a = FcmaVector::fmadd(m0128a, self.twiddles_re[13], x14p15);
+        let m0128a = SimdVector::fmadd(values[0], self.twiddles_re[0], x1p28);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[1], x2p27);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[2], x3p26);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[3], x4p25);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[4], x5p24);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[5], x6p23);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[6], x7p22);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[7], x8p21);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[8], x9p20);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[9], x10p19);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[10], x11p18);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[11], x12p17);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[12], x13p16);
+        let m0128a = SimdVector::fmadd(m0128a, self.twiddles_re[13], x14p15);
         let m0128b = FcmaVector::mul_rotate90(self.twiddles_im[0], x1m28);
         let m0128b = FcmaVector::fmadd_rotate90(m0128b, self.twiddles_im[1], x2m27);
         let m0128b = FcmaVector::fmadd_rotate90(m0128b, self.twiddles_im[2], x3m26);
@@ -3164,22 +3166,22 @@ impl<T: FftNum> FcmaF64Butterfly29<T> {
         let m0128b = FcmaVector::fmadd_rotate90(m0128b, self.twiddles_im[11], x12m17);
         let m0128b = FcmaVector::fmadd_rotate90(m0128b, self.twiddles_im[12], x13m16);
         let m0128b = FcmaVector::fmadd_rotate90(m0128b, self.twiddles_im[13], x14m15);
-        let [y01, y28] = FcmaVector::column_butterfly2([m0128a, m0128b]);
+        let [y01, y28] = SimdVector::column_butterfly2([m0128a, m0128b]);
 
-        let m0227a = FcmaVector::fmadd(values[0], self.twiddles_re[1], x1p28);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[3], x2p27);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[5], x3p26);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[7], x4p25);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[9], x5p24);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[11], x6p23);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[13], x7p22);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[12], x8p21);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[10], x9p20);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[8], x10p19);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[6], x11p18);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[4], x12p17);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[2], x13p16);
-        let m0227a = FcmaVector::fmadd(m0227a, self.twiddles_re[0], x14p15);
+        let m0227a = SimdVector::fmadd(values[0], self.twiddles_re[1], x1p28);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[3], x2p27);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[5], x3p26);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[7], x4p25);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[9], x5p24);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[11], x6p23);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[13], x7p22);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[12], x8p21);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[10], x9p20);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[8], x10p19);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[6], x11p18);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[4], x12p17);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[2], x13p16);
+        let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[0], x14p15);
         let m0227b = FcmaVector::mul_rotate90(self.twiddles_im[1], x1m28);
         let m0227b = FcmaVector::fmadd_rotate90(m0227b, self.twiddles_im[3], x2m27);
         let m0227b = FcmaVector::fmadd_rotate90(m0227b, self.twiddles_im[5], x3m26);
@@ -3194,22 +3196,22 @@ impl<T: FftNum> FcmaF64Butterfly29<T> {
         let m0227b = FcmaVector::nmadd_rotate90(m0227b, self.twiddles_im[4], x12m17);
         let m0227b = FcmaVector::nmadd_rotate90(m0227b, self.twiddles_im[2], x13m16);
         let m0227b = FcmaVector::nmadd_rotate90(m0227b, self.twiddles_im[0], x14m15);
-        let [y02, y27] = FcmaVector::column_butterfly2([m0227a, m0227b]);
+        let [y02, y27] = SimdVector::column_butterfly2([m0227a, m0227b]);
 
-        let m0326a = FcmaVector::fmadd(values[0], self.twiddles_re[2], x1p28);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[5], x2p27);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[8], x3p26);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[11], x4p25);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[13], x5p24);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[10], x6p23);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[7], x7p22);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[4], x8p21);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[1], x9p20);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[0], x10p19);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[3], x11p18);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[6], x12p17);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[9], x13p16);
-        let m0326a = FcmaVector::fmadd(m0326a, self.twiddles_re[12], x14p15);
+        let m0326a = SimdVector::fmadd(values[0], self.twiddles_re[2], x1p28);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[5], x2p27);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[8], x3p26);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[11], x4p25);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[13], x5p24);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[10], x6p23);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[7], x7p22);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[4], x8p21);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[1], x9p20);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[0], x10p19);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[3], x11p18);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[6], x12p17);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[9], x13p16);
+        let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[12], x14p15);
         let m0326b = FcmaVector::mul_rotate90(self.twiddles_im[2], x1m28);
         let m0326b = FcmaVector::fmadd_rotate90(m0326b, self.twiddles_im[5], x2m27);
         let m0326b = FcmaVector::fmadd_rotate90(m0326b, self.twiddles_im[8], x3m26);
@@ -3224,22 +3226,22 @@ impl<T: FftNum> FcmaF64Butterfly29<T> {
         let m0326b = FcmaVector::fmadd_rotate90(m0326b, self.twiddles_im[6], x12m17);
         let m0326b = FcmaVector::fmadd_rotate90(m0326b, self.twiddles_im[9], x13m16);
         let m0326b = FcmaVector::fmadd_rotate90(m0326b, self.twiddles_im[12], x14m15);
-        let [y03, y26] = FcmaVector::column_butterfly2([m0326a, m0326b]);
+        let [y03, y26] = SimdVector::column_butterfly2([m0326a, m0326b]);
 
-        let m0425a = FcmaVector::fmadd(values[0], self.twiddles_re[3], x1p28);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[7], x2p27);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[11], x3p26);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[12], x4p25);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[8], x5p24);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[4], x6p23);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[0], x7p22);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[2], x8p21);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[6], x9p20);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[10], x10p19);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[13], x11p18);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[9], x12p17);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[5], x13p16);
-        let m0425a = FcmaVector::fmadd(m0425a, self.twiddles_re[1], x14p15);
+        let m0425a = SimdVector::fmadd(values[0], self.twiddles_re[3], x1p28);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[7], x2p27);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[11], x3p26);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[12], x4p25);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[8], x5p24);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[4], x6p23);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[0], x7p22);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[2], x8p21);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[6], x9p20);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[10], x10p19);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[13], x11p18);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[9], x12p17);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[5], x13p16);
+        let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[1], x14p15);
         let m0425b = FcmaVector::mul_rotate90(self.twiddles_im[3], x1m28);
         let m0425b = FcmaVector::fmadd_rotate90(m0425b, self.twiddles_im[7], x2m27);
         let m0425b = FcmaVector::fmadd_rotate90(m0425b, self.twiddles_im[11], x3m26);
@@ -3254,22 +3256,22 @@ impl<T: FftNum> FcmaF64Butterfly29<T> {
         let m0425b = FcmaVector::nmadd_rotate90(m0425b, self.twiddles_im[9], x12m17);
         let m0425b = FcmaVector::nmadd_rotate90(m0425b, self.twiddles_im[5], x13m16);
         let m0425b = FcmaVector::nmadd_rotate90(m0425b, self.twiddles_im[1], x14m15);
-        let [y04, y25] = FcmaVector::column_butterfly2([m0425a, m0425b]);
+        let [y04, y25] = SimdVector::column_butterfly2([m0425a, m0425b]);
 
-        let m0524a = FcmaVector::fmadd(values[0], self.twiddles_re[4], x1p28);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[9], x2p27);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[13], x3p26);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[8], x4p25);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[3], x5p24);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[0], x6p23);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[5], x7p22);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[10], x8p21);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[12], x9p20);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[7], x10p19);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[2], x11p18);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[1], x12p17);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[6], x13p16);
-        let m0524a = FcmaVector::fmadd(m0524a, self.twiddles_re[11], x14p15);
+        let m0524a = SimdVector::fmadd(values[0], self.twiddles_re[4], x1p28);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[9], x2p27);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[13], x3p26);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[8], x4p25);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[3], x5p24);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[0], x6p23);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[5], x7p22);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[10], x8p21);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[12], x9p20);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[7], x10p19);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[2], x11p18);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[1], x12p17);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[6], x13p16);
+        let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[11], x14p15);
         let m0524b = FcmaVector::mul_rotate90(self.twiddles_im[4], x1m28);
         let m0524b = FcmaVector::fmadd_rotate90(m0524b, self.twiddles_im[9], x2m27);
         let m0524b = FcmaVector::nmadd_rotate90(m0524b, self.twiddles_im[13], x3m26);
@@ -3284,22 +3286,22 @@ impl<T: FftNum> FcmaF64Butterfly29<T> {
         let m0524b = FcmaVector::fmadd_rotate90(m0524b, self.twiddles_im[1], x12m17);
         let m0524b = FcmaVector::fmadd_rotate90(m0524b, self.twiddles_im[6], x13m16);
         let m0524b = FcmaVector::fmadd_rotate90(m0524b, self.twiddles_im[11], x14m15);
-        let [y05, y24] = FcmaVector::column_butterfly2([m0524a, m0524b]);
+        let [y05, y24] = SimdVector::column_butterfly2([m0524a, m0524b]);
 
-        let m0623a = FcmaVector::fmadd(values[0], self.twiddles_re[5], x1p28);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[11], x2p27);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[10], x3p26);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[4], x4p25);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[0], x5p24);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[6], x6p23);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[12], x7p22);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[9], x8p21);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[3], x9p20);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[1], x10p19);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[7], x11p18);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[13], x12p17);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[8], x13p16);
-        let m0623a = FcmaVector::fmadd(m0623a, self.twiddles_re[2], x14p15);
+        let m0623a = SimdVector::fmadd(values[0], self.twiddles_re[5], x1p28);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[11], x2p27);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[10], x3p26);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[4], x4p25);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[0], x5p24);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[6], x6p23);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[12], x7p22);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[9], x8p21);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[3], x9p20);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[1], x10p19);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[7], x11p18);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[13], x12p17);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[8], x13p16);
+        let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[2], x14p15);
         let m0623b = FcmaVector::mul_rotate90(self.twiddles_im[5], x1m28);
         let m0623b = FcmaVector::fmadd_rotate90(m0623b, self.twiddles_im[11], x2m27);
         let m0623b = FcmaVector::nmadd_rotate90(m0623b, self.twiddles_im[10], x3m26);
@@ -3314,22 +3316,22 @@ impl<T: FftNum> FcmaF64Butterfly29<T> {
         let m0623b = FcmaVector::fmadd_rotate90(m0623b, self.twiddles_im[13], x12m17);
         let m0623b = FcmaVector::nmadd_rotate90(m0623b, self.twiddles_im[8], x13m16);
         let m0623b = FcmaVector::nmadd_rotate90(m0623b, self.twiddles_im[2], x14m15);
-        let [y06, y23] = FcmaVector::column_butterfly2([m0623a, m0623b]);
+        let [y06, y23] = SimdVector::column_butterfly2([m0623a, m0623b]);
 
-        let m0722a = FcmaVector::fmadd(values[0], self.twiddles_re[6], x1p28);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[13], x2p27);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[7], x3p26);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[0], x4p25);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[5], x5p24);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[12], x6p23);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[8], x7p22);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[1], x8p21);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[4], x9p20);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[11], x10p19);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[9], x11p18);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[2], x12p17);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[3], x13p16);
-        let m0722a = FcmaVector::fmadd(m0722a, self.twiddles_re[10], x14p15);
+        let m0722a = SimdVector::fmadd(values[0], self.twiddles_re[6], x1p28);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[13], x2p27);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[7], x3p26);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[0], x4p25);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[5], x5p24);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[12], x6p23);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[8], x7p22);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[1], x8p21);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[4], x9p20);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[11], x10p19);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[9], x11p18);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[2], x12p17);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[3], x13p16);
+        let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[10], x14p15);
         let m0722b = FcmaVector::mul_rotate90(self.twiddles_im[6], x1m28);
         let m0722b = FcmaVector::fmadd_rotate90(m0722b, self.twiddles_im[13], x2m27);
         let m0722b = FcmaVector::nmadd_rotate90(m0722b, self.twiddles_im[7], x3m26);
@@ -3344,22 +3346,22 @@ impl<T: FftNum> FcmaF64Butterfly29<T> {
         let m0722b = FcmaVector::nmadd_rotate90(m0722b, self.twiddles_im[2], x12m17);
         let m0722b = FcmaVector::fmadd_rotate90(m0722b, self.twiddles_im[3], x13m16);
         let m0722b = FcmaVector::fmadd_rotate90(m0722b, self.twiddles_im[10], x14m15);
-        let [y07, y22] = FcmaVector::column_butterfly2([m0722a, m0722b]);
+        let [y07, y22] = SimdVector::column_butterfly2([m0722a, m0722b]);
 
-        let m0821a = FcmaVector::fmadd(values[0], self.twiddles_re[7], x1p28);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[12], x2p27);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[4], x3p26);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[2], x4p25);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[10], x5p24);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[9], x6p23);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[1], x7p22);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[5], x8p21);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[13], x9p20);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[6], x10p19);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[0], x11p18);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[8], x12p17);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[11], x13p16);
-        let m0821a = FcmaVector::fmadd(m0821a, self.twiddles_re[3], x14p15);
+        let m0821a = SimdVector::fmadd(values[0], self.twiddles_re[7], x1p28);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[12], x2p27);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[4], x3p26);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[2], x4p25);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[10], x5p24);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[9], x6p23);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[1], x7p22);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[5], x8p21);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[13], x9p20);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[6], x10p19);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[0], x11p18);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[8], x12p17);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[11], x13p16);
+        let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[3], x14p15);
         let m0821b = FcmaVector::mul_rotate90(self.twiddles_im[7], x1m28);
         let m0821b = FcmaVector::nmadd_rotate90(m0821b, self.twiddles_im[12], x2m27);
         let m0821b = FcmaVector::nmadd_rotate90(m0821b, self.twiddles_im[4], x3m26);
@@ -3374,22 +3376,22 @@ impl<T: FftNum> FcmaF64Butterfly29<T> {
         let m0821b = FcmaVector::fmadd_rotate90(m0821b, self.twiddles_im[8], x12m17);
         let m0821b = FcmaVector::nmadd_rotate90(m0821b, self.twiddles_im[11], x13m16);
         let m0821b = FcmaVector::nmadd_rotate90(m0821b, self.twiddles_im[3], x14m15);
-        let [y08, y21] = FcmaVector::column_butterfly2([m0821a, m0821b]);
+        let [y08, y21] = SimdVector::column_butterfly2([m0821a, m0821b]);
 
-        let m0920a = FcmaVector::fmadd(values[0], self.twiddles_re[8], x1p28);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[10], x2p27);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[1], x3p26);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[6], x4p25);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[12], x5p24);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[3], x6p23);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[4], x7p22);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[13], x8p21);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[5], x9p20);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[2], x10p19);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[11], x11p18);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[7], x12p17);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[0], x13p16);
-        let m0920a = FcmaVector::fmadd(m0920a, self.twiddles_re[9], x14p15);
+        let m0920a = SimdVector::fmadd(values[0], self.twiddles_re[8], x1p28);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[10], x2p27);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[1], x3p26);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[6], x4p25);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[12], x5p24);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[3], x6p23);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[4], x7p22);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[13], x8p21);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[5], x9p20);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[2], x10p19);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[11], x11p18);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[7], x12p17);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[0], x13p16);
+        let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[9], x14p15);
         let m0920b = FcmaVector::mul_rotate90(self.twiddles_im[8], x1m28);
         let m0920b = FcmaVector::nmadd_rotate90(m0920b, self.twiddles_im[10], x2m27);
         let m0920b = FcmaVector::nmadd_rotate90(m0920b, self.twiddles_im[1], x3m26);
@@ -3404,22 +3406,22 @@ impl<T: FftNum> FcmaF64Butterfly29<T> {
         let m0920b = FcmaVector::nmadd_rotate90(m0920b, self.twiddles_im[7], x12m17);
         let m0920b = FcmaVector::fmadd_rotate90(m0920b, self.twiddles_im[0], x13m16);
         let m0920b = FcmaVector::fmadd_rotate90(m0920b, self.twiddles_im[9], x14m15);
-        let [y09, y20] = FcmaVector::column_butterfly2([m0920a, m0920b]);
+        let [y09, y20] = SimdVector::column_butterfly2([m0920a, m0920b]);
 
-        let m1019a = FcmaVector::fmadd(values[0], self.twiddles_re[9], x1p28);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[8], x2p27);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[0], x3p26);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[10], x4p25);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[7], x5p24);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[1], x6p23);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[11], x7p22);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[6], x8p21);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[2], x9p20);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[12], x10p19);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[5], x11p18);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[3], x12p17);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[13], x13p16);
-        let m1019a = FcmaVector::fmadd(m1019a, self.twiddles_re[4], x14p15);
+        let m1019a = SimdVector::fmadd(values[0], self.twiddles_re[9], x1p28);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[8], x2p27);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[0], x3p26);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[10], x4p25);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[7], x5p24);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[1], x6p23);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[11], x7p22);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[6], x8p21);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[2], x9p20);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[12], x10p19);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[5], x11p18);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[3], x12p17);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[13], x13p16);
+        let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[4], x14p15);
         let m1019b = FcmaVector::mul_rotate90(self.twiddles_im[9], x1m28);
         let m1019b = FcmaVector::nmadd_rotate90(m1019b, self.twiddles_im[8], x2m27);
         let m1019b = FcmaVector::fmadd_rotate90(m1019b, self.twiddles_im[0], x3m26);
@@ -3434,22 +3436,22 @@ impl<T: FftNum> FcmaF64Butterfly29<T> {
         let m1019b = FcmaVector::fmadd_rotate90(m1019b, self.twiddles_im[3], x12m17);
         let m1019b = FcmaVector::fmadd_rotate90(m1019b, self.twiddles_im[13], x13m16);
         let m1019b = FcmaVector::nmadd_rotate90(m1019b, self.twiddles_im[4], x14m15);
-        let [y10, y19] = FcmaVector::column_butterfly2([m1019a, m1019b]);
+        let [y10, y19] = SimdVector::column_butterfly2([m1019a, m1019b]);
 
-        let m1118a = FcmaVector::fmadd(values[0], self.twiddles_re[10], x1p28);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[6], x2p27);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[3], x3p26);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[13], x4p25);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[2], x5p24);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[7], x6p23);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[9], x7p22);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[0], x8p21);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[11], x9p20);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[5], x10p19);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[4], x11p18);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[12], x12p17);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[1], x13p16);
-        let m1118a = FcmaVector::fmadd(m1118a, self.twiddles_re[8], x14p15);
+        let m1118a = SimdVector::fmadd(values[0], self.twiddles_re[10], x1p28);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[6], x2p27);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[3], x3p26);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[13], x4p25);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[2], x5p24);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[7], x6p23);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[9], x7p22);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[0], x8p21);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[11], x9p20);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[5], x10p19);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[4], x11p18);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[12], x12p17);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[1], x13p16);
+        let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[8], x14p15);
         let m1118b = FcmaVector::mul_rotate90(self.twiddles_im[10], x1m28);
         let m1118b = FcmaVector::nmadd_rotate90(m1118b, self.twiddles_im[6], x2m27);
         let m1118b = FcmaVector::fmadd_rotate90(m1118b, self.twiddles_im[3], x3m26);
@@ -3464,22 +3466,22 @@ impl<T: FftNum> FcmaF64Butterfly29<T> {
         let m1118b = FcmaVector::nmadd_rotate90(m1118b, self.twiddles_im[12], x12m17);
         let m1118b = FcmaVector::nmadd_rotate90(m1118b, self.twiddles_im[1], x13m16);
         let m1118b = FcmaVector::fmadd_rotate90(m1118b, self.twiddles_im[8], x14m15);
-        let [y11, y18] = FcmaVector::column_butterfly2([m1118a, m1118b]);
+        let [y11, y18] = SimdVector::column_butterfly2([m1118a, m1118b]);
 
-        let m1217a = FcmaVector::fmadd(values[0], self.twiddles_re[11], x1p28);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[4], x2p27);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[6], x3p26);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[9], x4p25);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[1], x5p24);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[13], x6p23);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[2], x7p22);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[8], x8p21);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[7], x9p20);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[3], x10p19);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[12], x11p18);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[0], x12p17);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[10], x13p16);
-        let m1217a = FcmaVector::fmadd(m1217a, self.twiddles_re[5], x14p15);
+        let m1217a = SimdVector::fmadd(values[0], self.twiddles_re[11], x1p28);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[4], x2p27);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[6], x3p26);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[9], x4p25);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[1], x5p24);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[13], x6p23);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[2], x7p22);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[8], x8p21);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[7], x9p20);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[3], x10p19);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[12], x11p18);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[0], x12p17);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[10], x13p16);
+        let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[5], x14p15);
         let m1217b = FcmaVector::mul_rotate90(self.twiddles_im[11], x1m28);
         let m1217b = FcmaVector::nmadd_rotate90(m1217b, self.twiddles_im[4], x2m27);
         let m1217b = FcmaVector::fmadd_rotate90(m1217b, self.twiddles_im[6], x3m26);
@@ -3494,22 +3496,22 @@ impl<T: FftNum> FcmaF64Butterfly29<T> {
         let m1217b = FcmaVector::nmadd_rotate90(m1217b, self.twiddles_im[0], x12m17);
         let m1217b = FcmaVector::fmadd_rotate90(m1217b, self.twiddles_im[10], x13m16);
         let m1217b = FcmaVector::nmadd_rotate90(m1217b, self.twiddles_im[5], x14m15);
-        let [y12, y17] = FcmaVector::column_butterfly2([m1217a, m1217b]);
+        let [y12, y17] = SimdVector::column_butterfly2([m1217a, m1217b]);
 
-        let m1316a = FcmaVector::fmadd(values[0], self.twiddles_re[12], x1p28);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[2], x2p27);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[9], x3p26);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[5], x4p25);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[6], x5p24);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[8], x6p23);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[3], x7p22);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[11], x8p21);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[0], x9p20);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[13], x10p19);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[1], x11p18);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[10], x12p17);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[4], x13p16);
-        let m1316a = FcmaVector::fmadd(m1316a, self.twiddles_re[7], x14p15);
+        let m1316a = SimdVector::fmadd(values[0], self.twiddles_re[12], x1p28);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[2], x2p27);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[9], x3p26);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[5], x4p25);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[6], x5p24);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[8], x6p23);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[3], x7p22);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[11], x8p21);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[0], x9p20);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[13], x10p19);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[1], x11p18);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[10], x12p17);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[4], x13p16);
+        let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[7], x14p15);
         let m1316b = FcmaVector::mul_rotate90(self.twiddles_im[12], x1m28);
         let m1316b = FcmaVector::nmadd_rotate90(m1316b, self.twiddles_im[2], x2m27);
         let m1316b = FcmaVector::fmadd_rotate90(m1316b, self.twiddles_im[9], x3m26);
@@ -3524,22 +3526,22 @@ impl<T: FftNum> FcmaF64Butterfly29<T> {
         let m1316b = FcmaVector::fmadd_rotate90(m1316b, self.twiddles_im[10], x12m17);
         let m1316b = FcmaVector::nmadd_rotate90(m1316b, self.twiddles_im[4], x13m16);
         let m1316b = FcmaVector::fmadd_rotate90(m1316b, self.twiddles_im[7], x14m15);
-        let [y13, y16] = FcmaVector::column_butterfly2([m1316a, m1316b]);
+        let [y13, y16] = SimdVector::column_butterfly2([m1316a, m1316b]);
 
-        let m1415a = FcmaVector::fmadd(values[0], self.twiddles_re[13], x1p28);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[0], x2p27);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[12], x3p26);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[1], x4p25);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[11], x5p24);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[2], x6p23);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[10], x7p22);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[3], x8p21);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[9], x9p20);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[4], x10p19);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[8], x11p18);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[5], x12p17);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[7], x13p16);
-        let m1415a = FcmaVector::fmadd(m1415a, self.twiddles_re[6], x14p15);
+        let m1415a = SimdVector::fmadd(values[0], self.twiddles_re[13], x1p28);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[0], x2p27);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[12], x3p26);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[1], x4p25);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[11], x5p24);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[2], x6p23);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[10], x7p22);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[3], x8p21);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[9], x9p20);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[4], x10p19);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[8], x11p18);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[5], x12p17);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[7], x13p16);
+        let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[6], x14p15);
         let m1415b = FcmaVector::mul_rotate90(self.twiddles_im[13], x1m28);
         let m1415b = FcmaVector::nmadd_rotate90(m1415b, self.twiddles_im[0], x2m27);
         let m1415b = FcmaVector::fmadd_rotate90(m1415b, self.twiddles_im[12], x3m26);
@@ -3554,7 +3556,7 @@ impl<T: FftNum> FcmaF64Butterfly29<T> {
         let m1415b = FcmaVector::nmadd_rotate90(m1415b, self.twiddles_im[5], x12m17);
         let m1415b = FcmaVector::fmadd_rotate90(m1415b, self.twiddles_im[7], x13m16);
         let m1415b = FcmaVector::nmadd_rotate90(m1415b, self.twiddles_im[6], x14m15);
-        let [y14, y15] = FcmaVector::column_butterfly2([m1415a, m1415b]);
+        let [y14, y15] = SimdVector::column_butterfly2([m1415a, m1415b]);
 
 
         [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22, y23, y24, y25, y26, y27, y28]
@@ -3563,8 +3565,8 @@ impl<T: FftNum> FcmaF64Butterfly29<T> {
 
 pub struct FcmaF32Butterfly31<T> {
     direction: FftDirection,
-    twiddles_re: [float32x4_t; 15],
-    twiddles_im: [float32x4_t; 15],
+    twiddles_re: [FcmaVector32; 15],
+    twiddles_im: [FcmaVector32; 15],
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -3577,14 +3579,14 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
         let twiddles = make_twiddles(31, direction);
         Self {
             direction,
-            twiddles_re: twiddles.map(|t| FcmaVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| FcmaVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
+            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
             _phantom: std::marker::PhantomData,
         }
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 });
 
         let out = self.perform_parallel_fft_direct(values);
@@ -3593,7 +3595,7 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56,58,60 });
 
         let values = [
@@ -3670,54 +3672,54 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [float32x4_t; 31]) -> [float32x4_t; 31] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [FcmaVector32; 31]) -> [FcmaVector32; 31] {
         let y00 = values[0];
-        let [x1p30, x1m30] =  FcmaVector::column_butterfly2([values[1], values[30]]);
-        let y00 = FcmaVector::add(y00, x1p30);
-        let [x2p29, x2m29] =  FcmaVector::column_butterfly2([values[2], values[29]]);
-        let y00 = FcmaVector::add(y00, x2p29);
-        let [x3p28, x3m28] =  FcmaVector::column_butterfly2([values[3], values[28]]);
-        let y00 = FcmaVector::add(y00, x3p28);
-        let [x4p27, x4m27] =  FcmaVector::column_butterfly2([values[4], values[27]]);
-        let y00 = FcmaVector::add(y00, x4p27);
-        let [x5p26, x5m26] =  FcmaVector::column_butterfly2([values[5], values[26]]);
-        let y00 = FcmaVector::add(y00, x5p26);
-        let [x6p25, x6m25] =  FcmaVector::column_butterfly2([values[6], values[25]]);
-        let y00 = FcmaVector::add(y00, x6p25);
-        let [x7p24, x7m24] =  FcmaVector::column_butterfly2([values[7], values[24]]);
-        let y00 = FcmaVector::add(y00, x7p24);
-        let [x8p23, x8m23] =  FcmaVector::column_butterfly2([values[8], values[23]]);
-        let y00 = FcmaVector::add(y00, x8p23);
-        let [x9p22, x9m22] =  FcmaVector::column_butterfly2([values[9], values[22]]);
-        let y00 = FcmaVector::add(y00, x9p22);
-        let [x10p21, x10m21] =  FcmaVector::column_butterfly2([values[10], values[21]]);
-        let y00 = FcmaVector::add(y00, x10p21);
-        let [x11p20, x11m20] =  FcmaVector::column_butterfly2([values[11], values[20]]);
-        let y00 = FcmaVector::add(y00, x11p20);
-        let [x12p19, x12m19] =  FcmaVector::column_butterfly2([values[12], values[19]]);
-        let y00 = FcmaVector::add(y00, x12p19);
-        let [x13p18, x13m18] =  FcmaVector::column_butterfly2([values[13], values[18]]);
-        let y00 = FcmaVector::add(y00, x13p18);
-        let [x14p17, x14m17] =  FcmaVector::column_butterfly2([values[14], values[17]]);
-        let y00 = FcmaVector::add(y00, x14p17);
-        let [x15p16, x15m16] =  FcmaVector::column_butterfly2([values[15], values[16]]);
-        let y00 = FcmaVector::add(y00, x15p16);
+        let [x1p30, x1m30] =  SimdVector::column_butterfly2([values[1], values[30]]);
+        let y00 = SimdVector::add(y00, x1p30);
+        let [x2p29, x2m29] =  SimdVector::column_butterfly2([values[2], values[29]]);
+        let y00 = SimdVector::add(y00, x2p29);
+        let [x3p28, x3m28] =  SimdVector::column_butterfly2([values[3], values[28]]);
+        let y00 = SimdVector::add(y00, x3p28);
+        let [x4p27, x4m27] =  SimdVector::column_butterfly2([values[4], values[27]]);
+        let y00 = SimdVector::add(y00, x4p27);
+        let [x5p26, x5m26] =  SimdVector::column_butterfly2([values[5], values[26]]);
+        let y00 = SimdVector::add(y00, x5p26);
+        let [x6p25, x6m25] =  SimdVector::column_butterfly2([values[6], values[25]]);
+        let y00 = SimdVector::add(y00, x6p25);
+        let [x7p24, x7m24] =  SimdVector::column_butterfly2([values[7], values[24]]);
+        let y00 = SimdVector::add(y00, x7p24);
+        let [x8p23, x8m23] =  SimdVector::column_butterfly2([values[8], values[23]]);
+        let y00 = SimdVector::add(y00, x8p23);
+        let [x9p22, x9m22] =  SimdVector::column_butterfly2([values[9], values[22]]);
+        let y00 = SimdVector::add(y00, x9p22);
+        let [x10p21, x10m21] =  SimdVector::column_butterfly2([values[10], values[21]]);
+        let y00 = SimdVector::add(y00, x10p21);
+        let [x11p20, x11m20] =  SimdVector::column_butterfly2([values[11], values[20]]);
+        let y00 = SimdVector::add(y00, x11p20);
+        let [x12p19, x12m19] =  SimdVector::column_butterfly2([values[12], values[19]]);
+        let y00 = SimdVector::add(y00, x12p19);
+        let [x13p18, x13m18] =  SimdVector::column_butterfly2([values[13], values[18]]);
+        let y00 = SimdVector::add(y00, x13p18);
+        let [x14p17, x14m17] =  SimdVector::column_butterfly2([values[14], values[17]]);
+        let y00 = SimdVector::add(y00, x14p17);
+        let [x15p16, x15m16] =  SimdVector::column_butterfly2([values[15], values[16]]);
+        let y00 = SimdVector::add(y00, x15p16);
 
-        let m0130a = FcmaVector::fmadd(values[0], self.twiddles_re[0], x1p30);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[1], x2p29);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[2], x3p28);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[3], x4p27);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[4], x5p26);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[5], x6p25);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[6], x7p24);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[7], x8p23);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[8], x9p22);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[9], x10p21);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[10], x11p20);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[11], x12p19);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[12], x13p18);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[13], x14p17);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[14], x15p16);
+        let m0130a = SimdVector::fmadd(values[0], self.twiddles_re[0], x1p30);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[1], x2p29);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[2], x3p28);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[3], x4p27);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[4], x5p26);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[5], x6p25);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[6], x7p24);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[7], x8p23);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[8], x9p22);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[9], x10p21);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[10], x11p20);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[11], x12p19);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[12], x13p18);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[13], x14p17);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[14], x15p16);
         let m0130b = FcmaVector::mul_rotate90(self.twiddles_im[0], x1m30);
         let m0130b = FcmaVector::fmadd_rotate90(m0130b, self.twiddles_im[1], x2m29);
         let m0130b = FcmaVector::fmadd_rotate90(m0130b, self.twiddles_im[2], x3m28);
@@ -3733,23 +3735,23 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
         let m0130b = FcmaVector::fmadd_rotate90(m0130b, self.twiddles_im[12], x13m18);
         let m0130b = FcmaVector::fmadd_rotate90(m0130b, self.twiddles_im[13], x14m17);
         let m0130b = FcmaVector::fmadd_rotate90(m0130b, self.twiddles_im[14], x15m16);
-        let [y01, y30] = FcmaVector::column_butterfly2([m0130a, m0130b]);
+        let [y01, y30] = SimdVector::column_butterfly2([m0130a, m0130b]);
 
-        let m0229a = FcmaVector::fmadd(values[0], self.twiddles_re[1], x1p30);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[3], x2p29);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[5], x3p28);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[7], x4p27);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[9], x5p26);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[11], x6p25);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[13], x7p24);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[14], x8p23);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[12], x9p22);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[10], x10p21);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[8], x11p20);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[6], x12p19);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[4], x13p18);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[2], x14p17);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[0], x15p16);
+        let m0229a = SimdVector::fmadd(values[0], self.twiddles_re[1], x1p30);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[3], x2p29);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[5], x3p28);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[7], x4p27);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[9], x5p26);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[11], x6p25);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[13], x7p24);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[14], x8p23);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[12], x9p22);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[10], x10p21);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[8], x11p20);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[6], x12p19);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[4], x13p18);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[2], x14p17);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[0], x15p16);
         let m0229b = FcmaVector::mul_rotate90(self.twiddles_im[1], x1m30);
         let m0229b = FcmaVector::fmadd_rotate90(m0229b, self.twiddles_im[3], x2m29);
         let m0229b = FcmaVector::fmadd_rotate90(m0229b, self.twiddles_im[5], x3m28);
@@ -3765,23 +3767,23 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
         let m0229b = FcmaVector::nmadd_rotate90(m0229b, self.twiddles_im[4], x13m18);
         let m0229b = FcmaVector::nmadd_rotate90(m0229b, self.twiddles_im[2], x14m17);
         let m0229b = FcmaVector::nmadd_rotate90(m0229b, self.twiddles_im[0], x15m16);
-        let [y02, y29] = FcmaVector::column_butterfly2([m0229a, m0229b]);
+        let [y02, y29] = SimdVector::column_butterfly2([m0229a, m0229b]);
 
-        let m0328a = FcmaVector::fmadd(values[0], self.twiddles_re[2], x1p30);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[5], x2p29);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[8], x3p28);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[11], x4p27);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[14], x5p26);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[12], x6p25);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[9], x7p24);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[6], x8p23);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[3], x9p22);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[0], x10p21);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[1], x11p20);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[4], x12p19);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[7], x13p18);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[10], x14p17);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[13], x15p16);
+        let m0328a = SimdVector::fmadd(values[0], self.twiddles_re[2], x1p30);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[5], x2p29);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[8], x3p28);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[11], x4p27);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[14], x5p26);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[12], x6p25);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[9], x7p24);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[6], x8p23);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[3], x9p22);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[0], x10p21);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[1], x11p20);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[4], x12p19);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[7], x13p18);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[10], x14p17);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[13], x15p16);
         let m0328b = FcmaVector::mul_rotate90(self.twiddles_im[2], x1m30);
         let m0328b = FcmaVector::fmadd_rotate90(m0328b, self.twiddles_im[5], x2m29);
         let m0328b = FcmaVector::fmadd_rotate90(m0328b, self.twiddles_im[8], x3m28);
@@ -3797,23 +3799,23 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
         let m0328b = FcmaVector::fmadd_rotate90(m0328b, self.twiddles_im[7], x13m18);
         let m0328b = FcmaVector::fmadd_rotate90(m0328b, self.twiddles_im[10], x14m17);
         let m0328b = FcmaVector::fmadd_rotate90(m0328b, self.twiddles_im[13], x15m16);
-        let [y03, y28] = FcmaVector::column_butterfly2([m0328a, m0328b]);
+        let [y03, y28] = SimdVector::column_butterfly2([m0328a, m0328b]);
 
-        let m0427a = FcmaVector::fmadd(values[0], self.twiddles_re[3], x1p30);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[7], x2p29);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[11], x3p28);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[14], x4p27);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[10], x5p26);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[6], x6p25);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[2], x7p24);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[0], x8p23);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[4], x9p22);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[8], x10p21);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[12], x11p20);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[13], x12p19);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[9], x13p18);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[5], x14p17);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[1], x15p16);
+        let m0427a = SimdVector::fmadd(values[0], self.twiddles_re[3], x1p30);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[7], x2p29);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[11], x3p28);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[14], x4p27);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[10], x5p26);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[6], x6p25);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[2], x7p24);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[0], x8p23);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[4], x9p22);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[8], x10p21);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[12], x11p20);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[13], x12p19);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[9], x13p18);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[5], x14p17);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[1], x15p16);
         let m0427b = FcmaVector::mul_rotate90(self.twiddles_im[3], x1m30);
         let m0427b = FcmaVector::fmadd_rotate90(m0427b, self.twiddles_im[7], x2m29);
         let m0427b = FcmaVector::fmadd_rotate90(m0427b, self.twiddles_im[11], x3m28);
@@ -3829,23 +3831,23 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
         let m0427b = FcmaVector::nmadd_rotate90(m0427b, self.twiddles_im[9], x13m18);
         let m0427b = FcmaVector::nmadd_rotate90(m0427b, self.twiddles_im[5], x14m17);
         let m0427b = FcmaVector::nmadd_rotate90(m0427b, self.twiddles_im[1], x15m16);
-        let [y04, y27] = FcmaVector::column_butterfly2([m0427a, m0427b]);
+        let [y04, y27] = SimdVector::column_butterfly2([m0427a, m0427b]);
 
-        let m0526a = FcmaVector::fmadd(values[0], self.twiddles_re[4], x1p30);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[9], x2p29);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[14], x3p28);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[10], x4p27);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[5], x5p26);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[0], x6p25);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[3], x7p24);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[8], x8p23);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[13], x9p22);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[11], x10p21);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[6], x11p20);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[1], x12p19);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[2], x13p18);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[7], x14p17);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[12], x15p16);
+        let m0526a = SimdVector::fmadd(values[0], self.twiddles_re[4], x1p30);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[9], x2p29);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[14], x3p28);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[10], x4p27);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[5], x5p26);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[0], x6p25);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[3], x7p24);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[8], x8p23);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[13], x9p22);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[11], x10p21);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[6], x11p20);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[1], x12p19);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[2], x13p18);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[7], x14p17);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[12], x15p16);
         let m0526b = FcmaVector::mul_rotate90(self.twiddles_im[4], x1m30);
         let m0526b = FcmaVector::fmadd_rotate90(m0526b, self.twiddles_im[9], x2m29);
         let m0526b = FcmaVector::fmadd_rotate90(m0526b, self.twiddles_im[14], x3m28);
@@ -3861,23 +3863,23 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
         let m0526b = FcmaVector::fmadd_rotate90(m0526b, self.twiddles_im[2], x13m18);
         let m0526b = FcmaVector::fmadd_rotate90(m0526b, self.twiddles_im[7], x14m17);
         let m0526b = FcmaVector::fmadd_rotate90(m0526b, self.twiddles_im[12], x15m16);
-        let [y05, y26] = FcmaVector::column_butterfly2([m0526a, m0526b]);
+        let [y05, y26] = SimdVector::column_butterfly2([m0526a, m0526b]);
 
-        let m0625a = FcmaVector::fmadd(values[0], self.twiddles_re[5], x1p30);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[11], x2p29);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[12], x3p28);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[6], x4p27);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[0], x5p26);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[4], x6p25);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[10], x7p24);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[13], x8p23);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[7], x9p22);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[1], x10p21);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[3], x11p20);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[9], x12p19);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[14], x13p18);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[8], x14p17);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[2], x15p16);
+        let m0625a = SimdVector::fmadd(values[0], self.twiddles_re[5], x1p30);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[11], x2p29);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[12], x3p28);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[6], x4p27);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[0], x5p26);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[4], x6p25);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[10], x7p24);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[13], x8p23);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[7], x9p22);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[1], x10p21);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[3], x11p20);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[9], x12p19);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[14], x13p18);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[8], x14p17);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[2], x15p16);
         let m0625b = FcmaVector::mul_rotate90(self.twiddles_im[5], x1m30);
         let m0625b = FcmaVector::fmadd_rotate90(m0625b, self.twiddles_im[11], x2m29);
         let m0625b = FcmaVector::nmadd_rotate90(m0625b, self.twiddles_im[12], x3m28);
@@ -3893,23 +3895,23 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
         let m0625b = FcmaVector::nmadd_rotate90(m0625b, self.twiddles_im[14], x13m18);
         let m0625b = FcmaVector::nmadd_rotate90(m0625b, self.twiddles_im[8], x14m17);
         let m0625b = FcmaVector::nmadd_rotate90(m0625b, self.twiddles_im[2], x15m16);
-        let [y06, y25] = FcmaVector::column_butterfly2([m0625a, m0625b]);
+        let [y06, y25] = SimdVector::column_butterfly2([m0625a, m0625b]);
 
-        let m0724a = FcmaVector::fmadd(values[0], self.twiddles_re[6], x1p30);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[13], x2p29);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[9], x3p28);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[2], x4p27);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[3], x5p26);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[10], x6p25);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[12], x7p24);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[5], x8p23);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[0], x9p22);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[7], x10p21);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[14], x11p20);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[8], x12p19);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[1], x13p18);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[4], x14p17);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[11], x15p16);
+        let m0724a = SimdVector::fmadd(values[0], self.twiddles_re[6], x1p30);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[13], x2p29);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[9], x3p28);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[2], x4p27);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[3], x5p26);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[10], x6p25);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[12], x7p24);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[5], x8p23);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[0], x9p22);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[7], x10p21);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[14], x11p20);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[8], x12p19);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[1], x13p18);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[4], x14p17);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[11], x15p16);
         let m0724b = FcmaVector::mul_rotate90(self.twiddles_im[6], x1m30);
         let m0724b = FcmaVector::fmadd_rotate90(m0724b, self.twiddles_im[13], x2m29);
         let m0724b = FcmaVector::nmadd_rotate90(m0724b, self.twiddles_im[9], x3m28);
@@ -3925,23 +3927,23 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
         let m0724b = FcmaVector::nmadd_rotate90(m0724b, self.twiddles_im[1], x13m18);
         let m0724b = FcmaVector::fmadd_rotate90(m0724b, self.twiddles_im[4], x14m17);
         let m0724b = FcmaVector::fmadd_rotate90(m0724b, self.twiddles_im[11], x15m16);
-        let [y07, y24] = FcmaVector::column_butterfly2([m0724a, m0724b]);
+        let [y07, y24] = SimdVector::column_butterfly2([m0724a, m0724b]);
 
-        let m0823a = FcmaVector::fmadd(values[0], self.twiddles_re[7], x1p30);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[14], x2p29);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[6], x3p28);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[0], x4p27);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[8], x5p26);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[13], x6p25);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[5], x7p24);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[1], x8p23);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[9], x9p22);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[12], x10p21);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[4], x11p20);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[2], x12p19);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[10], x13p18);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[11], x14p17);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[3], x15p16);
+        let m0823a = SimdVector::fmadd(values[0], self.twiddles_re[7], x1p30);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[14], x2p29);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[6], x3p28);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[0], x4p27);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[8], x5p26);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[13], x6p25);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[5], x7p24);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[1], x8p23);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[9], x9p22);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[12], x10p21);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[4], x11p20);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[2], x12p19);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[10], x13p18);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[11], x14p17);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[3], x15p16);
         let m0823b = FcmaVector::mul_rotate90(self.twiddles_im[7], x1m30);
         let m0823b = FcmaVector::nmadd_rotate90(m0823b, self.twiddles_im[14], x2m29);
         let m0823b = FcmaVector::nmadd_rotate90(m0823b, self.twiddles_im[6], x3m28);
@@ -3957,23 +3959,23 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
         let m0823b = FcmaVector::fmadd_rotate90(m0823b, self.twiddles_im[10], x13m18);
         let m0823b = FcmaVector::nmadd_rotate90(m0823b, self.twiddles_im[11], x14m17);
         let m0823b = FcmaVector::nmadd_rotate90(m0823b, self.twiddles_im[3], x15m16);
-        let [y08, y23] = FcmaVector::column_butterfly2([m0823a, m0823b]);
+        let [y08, y23] = SimdVector::column_butterfly2([m0823a, m0823b]);
 
-        let m0922a = FcmaVector::fmadd(values[0], self.twiddles_re[8], x1p30);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[12], x2p29);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[3], x3p28);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[4], x4p27);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[13], x5p26);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[7], x6p25);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[0], x7p24);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[9], x8p23);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[11], x9p22);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[2], x10p21);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[5], x11p20);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[14], x12p19);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[6], x13p18);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[1], x14p17);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[10], x15p16);
+        let m0922a = SimdVector::fmadd(values[0], self.twiddles_re[8], x1p30);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[12], x2p29);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[3], x3p28);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[4], x4p27);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[13], x5p26);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[7], x6p25);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[0], x7p24);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[9], x8p23);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[11], x9p22);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[2], x10p21);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[5], x11p20);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[14], x12p19);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[6], x13p18);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[1], x14p17);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[10], x15p16);
         let m0922b = FcmaVector::mul_rotate90(self.twiddles_im[8], x1m30);
         let m0922b = FcmaVector::nmadd_rotate90(m0922b, self.twiddles_im[12], x2m29);
         let m0922b = FcmaVector::nmadd_rotate90(m0922b, self.twiddles_im[3], x3m28);
@@ -3989,23 +3991,23 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
         let m0922b = FcmaVector::nmadd_rotate90(m0922b, self.twiddles_im[6], x13m18);
         let m0922b = FcmaVector::fmadd_rotate90(m0922b, self.twiddles_im[1], x14m17);
         let m0922b = FcmaVector::fmadd_rotate90(m0922b, self.twiddles_im[10], x15m16);
-        let [y09, y22] = FcmaVector::column_butterfly2([m0922a, m0922b]);
+        let [y09, y22] = SimdVector::column_butterfly2([m0922a, m0922b]);
 
-        let m1021a = FcmaVector::fmadd(values[0], self.twiddles_re[9], x1p30);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[10], x2p29);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[0], x3p28);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[8], x4p27);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[11], x5p26);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[1], x6p25);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[7], x7p24);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[12], x8p23);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[2], x9p22);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[6], x10p21);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[13], x11p20);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[3], x12p19);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[5], x13p18);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[14], x14p17);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[4], x15p16);
+        let m1021a = SimdVector::fmadd(values[0], self.twiddles_re[9], x1p30);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[10], x2p29);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[0], x3p28);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[8], x4p27);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[11], x5p26);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[1], x6p25);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[7], x7p24);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[12], x8p23);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[2], x9p22);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[6], x10p21);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[13], x11p20);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[3], x12p19);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[5], x13p18);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[14], x14p17);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[4], x15p16);
         let m1021b = FcmaVector::mul_rotate90(self.twiddles_im[9], x1m30);
         let m1021b = FcmaVector::nmadd_rotate90(m1021b, self.twiddles_im[10], x2m29);
         let m1021b = FcmaVector::nmadd_rotate90(m1021b, self.twiddles_im[0], x3m28);
@@ -4021,23 +4023,23 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
         let m1021b = FcmaVector::fmadd_rotate90(m1021b, self.twiddles_im[5], x13m18);
         let m1021b = FcmaVector::nmadd_rotate90(m1021b, self.twiddles_im[14], x14m17);
         let m1021b = FcmaVector::nmadd_rotate90(m1021b, self.twiddles_im[4], x15m16);
-        let [y10, y21] = FcmaVector::column_butterfly2([m1021a, m1021b]);
+        let [y10, y21] = SimdVector::column_butterfly2([m1021a, m1021b]);
 
-        let m1120a = FcmaVector::fmadd(values[0], self.twiddles_re[10], x1p30);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[8], x2p29);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[1], x3p28);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[12], x4p27);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[6], x5p26);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[3], x6p25);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[14], x7p24);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[4], x8p23);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[5], x9p22);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[13], x10p21);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[2], x11p20);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[7], x12p19);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[11], x13p18);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[0], x14p17);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[9], x15p16);
+        let m1120a = SimdVector::fmadd(values[0], self.twiddles_re[10], x1p30);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[8], x2p29);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[1], x3p28);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[12], x4p27);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[6], x5p26);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[3], x6p25);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[14], x7p24);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[4], x8p23);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[5], x9p22);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[13], x10p21);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[2], x11p20);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[7], x12p19);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[11], x13p18);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[0], x14p17);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[9], x15p16);
         let m1120b = FcmaVector::mul_rotate90(self.twiddles_im[10], x1m30);
         let m1120b = FcmaVector::nmadd_rotate90(m1120b, self.twiddles_im[8], x2m29);
         let m1120b = FcmaVector::fmadd_rotate90(m1120b, self.twiddles_im[1], x3m28);
@@ -4053,23 +4055,23 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
         let m1120b = FcmaVector::nmadd_rotate90(m1120b, self.twiddles_im[11], x13m18);
         let m1120b = FcmaVector::nmadd_rotate90(m1120b, self.twiddles_im[0], x14m17);
         let m1120b = FcmaVector::fmadd_rotate90(m1120b, self.twiddles_im[9], x15m16);
-        let [y11, y20] = FcmaVector::column_butterfly2([m1120a, m1120b]);
+        let [y11, y20] = SimdVector::column_butterfly2([m1120a, m1120b]);
 
-        let m1219a = FcmaVector::fmadd(values[0], self.twiddles_re[11], x1p30);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[6], x2p29);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[4], x3p28);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[13], x4p27);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[1], x5p26);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[9], x6p25);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[8], x7p24);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[2], x8p23);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[14], x9p22);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[3], x10p21);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[7], x11p20);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[10], x12p19);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[0], x13p18);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[12], x14p17);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[5], x15p16);
+        let m1219a = SimdVector::fmadd(values[0], self.twiddles_re[11], x1p30);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[6], x2p29);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[4], x3p28);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[13], x4p27);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[1], x5p26);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[9], x6p25);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[8], x7p24);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[2], x8p23);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[14], x9p22);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[3], x10p21);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[7], x11p20);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[10], x12p19);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[0], x13p18);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[12], x14p17);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[5], x15p16);
         let m1219b = FcmaVector::mul_rotate90(self.twiddles_im[11], x1m30);
         let m1219b = FcmaVector::nmadd_rotate90(m1219b, self.twiddles_im[6], x2m29);
         let m1219b = FcmaVector::fmadd_rotate90(m1219b, self.twiddles_im[4], x3m28);
@@ -4085,23 +4087,23 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
         let m1219b = FcmaVector::fmadd_rotate90(m1219b, self.twiddles_im[0], x13m18);
         let m1219b = FcmaVector::fmadd_rotate90(m1219b, self.twiddles_im[12], x14m17);
         let m1219b = FcmaVector::nmadd_rotate90(m1219b, self.twiddles_im[5], x15m16);
-        let [y12, y19] = FcmaVector::column_butterfly2([m1219a, m1219b]);
+        let [y12, y19] = SimdVector::column_butterfly2([m1219a, m1219b]);
 
-        let m1318a = FcmaVector::fmadd(values[0], self.twiddles_re[12], x1p30);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[4], x2p29);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[7], x3p28);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[9], x4p27);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[2], x5p26);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[14], x6p25);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[1], x7p24);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[10], x8p23);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[6], x9p22);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[5], x10p21);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[11], x11p20);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[0], x12p19);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[13], x13p18);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[3], x14p17);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[8], x15p16);
+        let m1318a = SimdVector::fmadd(values[0], self.twiddles_re[12], x1p30);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[4], x2p29);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[7], x3p28);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[9], x4p27);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[2], x5p26);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[14], x6p25);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[1], x7p24);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[10], x8p23);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[6], x9p22);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[5], x10p21);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[11], x11p20);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[0], x12p19);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[13], x13p18);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[3], x14p17);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[8], x15p16);
         let m1318b = FcmaVector::mul_rotate90(self.twiddles_im[12], x1m30);
         let m1318b = FcmaVector::nmadd_rotate90(m1318b, self.twiddles_im[4], x2m29);
         let m1318b = FcmaVector::fmadd_rotate90(m1318b, self.twiddles_im[7], x3m28);
@@ -4117,23 +4119,23 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
         let m1318b = FcmaVector::fmadd_rotate90(m1318b, self.twiddles_im[13], x13m18);
         let m1318b = FcmaVector::nmadd_rotate90(m1318b, self.twiddles_im[3], x14m17);
         let m1318b = FcmaVector::fmadd_rotate90(m1318b, self.twiddles_im[8], x15m16);
-        let [y13, y18] = FcmaVector::column_butterfly2([m1318a, m1318b]);
+        let [y13, y18] = SimdVector::column_butterfly2([m1318a, m1318b]);
 
-        let m1417a = FcmaVector::fmadd(values[0], self.twiddles_re[13], x1p30);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[2], x2p29);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[10], x3p28);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[5], x4p27);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[7], x5p26);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[8], x6p25);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[4], x7p24);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[11], x8p23);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[1], x9p22);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[14], x10p21);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[0], x11p20);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[12], x12p19);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[3], x13p18);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[9], x14p17);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[6], x15p16);
+        let m1417a = SimdVector::fmadd(values[0], self.twiddles_re[13], x1p30);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[2], x2p29);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[10], x3p28);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[5], x4p27);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[7], x5p26);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[8], x6p25);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[4], x7p24);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[11], x8p23);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[1], x9p22);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[14], x10p21);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[0], x11p20);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[12], x12p19);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[3], x13p18);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[9], x14p17);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[6], x15p16);
         let m1417b = FcmaVector::mul_rotate90(self.twiddles_im[13], x1m30);
         let m1417b = FcmaVector::nmadd_rotate90(m1417b, self.twiddles_im[2], x2m29);
         let m1417b = FcmaVector::fmadd_rotate90(m1417b, self.twiddles_im[10], x3m28);
@@ -4149,23 +4151,23 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
         let m1417b = FcmaVector::nmadd_rotate90(m1417b, self.twiddles_im[3], x13m18);
         let m1417b = FcmaVector::fmadd_rotate90(m1417b, self.twiddles_im[9], x14m17);
         let m1417b = FcmaVector::nmadd_rotate90(m1417b, self.twiddles_im[6], x15m16);
-        let [y14, y17] = FcmaVector::column_butterfly2([m1417a, m1417b]);
+        let [y14, y17] = SimdVector::column_butterfly2([m1417a, m1417b]);
 
-        let m1516a = FcmaVector::fmadd(values[0], self.twiddles_re[14], x1p30);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[0], x2p29);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[13], x3p28);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[1], x4p27);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[12], x5p26);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[2], x6p25);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[11], x7p24);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[3], x8p23);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[10], x9p22);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[4], x10p21);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[9], x11p20);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[5], x12p19);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[8], x13p18);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[6], x14p17);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[7], x15p16);
+        let m1516a = SimdVector::fmadd(values[0], self.twiddles_re[14], x1p30);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[0], x2p29);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[13], x3p28);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[1], x4p27);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[12], x5p26);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[2], x6p25);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[11], x7p24);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[3], x8p23);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[10], x9p22);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[4], x10p21);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[9], x11p20);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[5], x12p19);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[8], x13p18);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[6], x14p17);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[7], x15p16);
         let m1516b = FcmaVector::mul_rotate90(self.twiddles_im[14], x1m30);
         let m1516b = FcmaVector::nmadd_rotate90(m1516b, self.twiddles_im[0], x2m29);
         let m1516b = FcmaVector::fmadd_rotate90(m1516b, self.twiddles_im[13], x3m28);
@@ -4181,7 +4183,7 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
         let m1516b = FcmaVector::fmadd_rotate90(m1516b, self.twiddles_im[8], x13m18);
         let m1516b = FcmaVector::nmadd_rotate90(m1516b, self.twiddles_im[6], x14m17);
         let m1516b = FcmaVector::fmadd_rotate90(m1516b, self.twiddles_im[7], x15m16);
-        let [y15, y16] = FcmaVector::column_butterfly2([m1516a, m1516b]);
+        let [y15, y16] = SimdVector::column_butterfly2([m1516a, m1516b]);
 
 
         [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22, y23, y24, y25, y26, y27, y28, y29, y30]
@@ -4190,8 +4192,8 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
 
 pub struct FcmaF64Butterfly31<T> {
     direction: FftDirection,
-    twiddles_re: [float64x2_t; 15],
-    twiddles_im: [float64x2_t; 15],
+    twiddles_re: [FcmaVector64; 15],
+    twiddles_im: [FcmaVector64; 15],
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -4204,14 +4206,14 @@ impl<T: FftNum> FcmaF64Butterfly31<T> {
         let twiddles = make_twiddles(31, direction);
         unsafe {Self {
             direction,
-            twiddles_re: twiddles.map(|t| FcmaVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| FcmaVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
+            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
             _phantom: std::marker::PhantomData,
         }}
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 });
 
         let out = self.perform_fft_direct(values);
@@ -4220,54 +4222,54 @@ impl<T: FftNum> FcmaF64Butterfly31<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [float64x2_t; 31]) -> [float64x2_t; 31] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [FcmaVector64; 31]) -> [FcmaVector64; 31] {
         let y00 = values[0];
-        let [x1p30, x1m30] =  FcmaVector::column_butterfly2([values[1], values[30]]);
-        let y00 = FcmaVector::add(y00, x1p30);
-        let [x2p29, x2m29] =  FcmaVector::column_butterfly2([values[2], values[29]]);
-        let y00 = FcmaVector::add(y00, x2p29);
-        let [x3p28, x3m28] =  FcmaVector::column_butterfly2([values[3], values[28]]);
-        let y00 = FcmaVector::add(y00, x3p28);
-        let [x4p27, x4m27] =  FcmaVector::column_butterfly2([values[4], values[27]]);
-        let y00 = FcmaVector::add(y00, x4p27);
-        let [x5p26, x5m26] =  FcmaVector::column_butterfly2([values[5], values[26]]);
-        let y00 = FcmaVector::add(y00, x5p26);
-        let [x6p25, x6m25] =  FcmaVector::column_butterfly2([values[6], values[25]]);
-        let y00 = FcmaVector::add(y00, x6p25);
-        let [x7p24, x7m24] =  FcmaVector::column_butterfly2([values[7], values[24]]);
-        let y00 = FcmaVector::add(y00, x7p24);
-        let [x8p23, x8m23] =  FcmaVector::column_butterfly2([values[8], values[23]]);
-        let y00 = FcmaVector::add(y00, x8p23);
-        let [x9p22, x9m22] =  FcmaVector::column_butterfly2([values[9], values[22]]);
-        let y00 = FcmaVector::add(y00, x9p22);
-        let [x10p21, x10m21] =  FcmaVector::column_butterfly2([values[10], values[21]]);
-        let y00 = FcmaVector::add(y00, x10p21);
-        let [x11p20, x11m20] =  FcmaVector::column_butterfly2([values[11], values[20]]);
-        let y00 = FcmaVector::add(y00, x11p20);
-        let [x12p19, x12m19] =  FcmaVector::column_butterfly2([values[12], values[19]]);
-        let y00 = FcmaVector::add(y00, x12p19);
-        let [x13p18, x13m18] =  FcmaVector::column_butterfly2([values[13], values[18]]);
-        let y00 = FcmaVector::add(y00, x13p18);
-        let [x14p17, x14m17] =  FcmaVector::column_butterfly2([values[14], values[17]]);
-        let y00 = FcmaVector::add(y00, x14p17);
-        let [x15p16, x15m16] =  FcmaVector::column_butterfly2([values[15], values[16]]);
-        let y00 = FcmaVector::add(y00, x15p16);
+        let [x1p30, x1m30] =  SimdVector::column_butterfly2([values[1], values[30]]);
+        let y00 = SimdVector::add(y00, x1p30);
+        let [x2p29, x2m29] =  SimdVector::column_butterfly2([values[2], values[29]]);
+        let y00 = SimdVector::add(y00, x2p29);
+        let [x3p28, x3m28] =  SimdVector::column_butterfly2([values[3], values[28]]);
+        let y00 = SimdVector::add(y00, x3p28);
+        let [x4p27, x4m27] =  SimdVector::column_butterfly2([values[4], values[27]]);
+        let y00 = SimdVector::add(y00, x4p27);
+        let [x5p26, x5m26] =  SimdVector::column_butterfly2([values[5], values[26]]);
+        let y00 = SimdVector::add(y00, x5p26);
+        let [x6p25, x6m25] =  SimdVector::column_butterfly2([values[6], values[25]]);
+        let y00 = SimdVector::add(y00, x6p25);
+        let [x7p24, x7m24] =  SimdVector::column_butterfly2([values[7], values[24]]);
+        let y00 = SimdVector::add(y00, x7p24);
+        let [x8p23, x8m23] =  SimdVector::column_butterfly2([values[8], values[23]]);
+        let y00 = SimdVector::add(y00, x8p23);
+        let [x9p22, x9m22] =  SimdVector::column_butterfly2([values[9], values[22]]);
+        let y00 = SimdVector::add(y00, x9p22);
+        let [x10p21, x10m21] =  SimdVector::column_butterfly2([values[10], values[21]]);
+        let y00 = SimdVector::add(y00, x10p21);
+        let [x11p20, x11m20] =  SimdVector::column_butterfly2([values[11], values[20]]);
+        let y00 = SimdVector::add(y00, x11p20);
+        let [x12p19, x12m19] =  SimdVector::column_butterfly2([values[12], values[19]]);
+        let y00 = SimdVector::add(y00, x12p19);
+        let [x13p18, x13m18] =  SimdVector::column_butterfly2([values[13], values[18]]);
+        let y00 = SimdVector::add(y00, x13p18);
+        let [x14p17, x14m17] =  SimdVector::column_butterfly2([values[14], values[17]]);
+        let y00 = SimdVector::add(y00, x14p17);
+        let [x15p16, x15m16] =  SimdVector::column_butterfly2([values[15], values[16]]);
+        let y00 = SimdVector::add(y00, x15p16);
 
-        let m0130a = FcmaVector::fmadd(values[0], self.twiddles_re[0], x1p30);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[1], x2p29);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[2], x3p28);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[3], x4p27);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[4], x5p26);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[5], x6p25);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[6], x7p24);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[7], x8p23);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[8], x9p22);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[9], x10p21);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[10], x11p20);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[11], x12p19);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[12], x13p18);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[13], x14p17);
-        let m0130a = FcmaVector::fmadd(m0130a, self.twiddles_re[14], x15p16);
+        let m0130a = SimdVector::fmadd(values[0], self.twiddles_re[0], x1p30);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[1], x2p29);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[2], x3p28);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[3], x4p27);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[4], x5p26);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[5], x6p25);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[6], x7p24);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[7], x8p23);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[8], x9p22);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[9], x10p21);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[10], x11p20);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[11], x12p19);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[12], x13p18);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[13], x14p17);
+        let m0130a = SimdVector::fmadd(m0130a, self.twiddles_re[14], x15p16);
         let m0130b = FcmaVector::mul_rotate90(self.twiddles_im[0], x1m30);
         let m0130b = FcmaVector::fmadd_rotate90(m0130b, self.twiddles_im[1], x2m29);
         let m0130b = FcmaVector::fmadd_rotate90(m0130b, self.twiddles_im[2], x3m28);
@@ -4283,23 +4285,23 @@ impl<T: FftNum> FcmaF64Butterfly31<T> {
         let m0130b = FcmaVector::fmadd_rotate90(m0130b, self.twiddles_im[12], x13m18);
         let m0130b = FcmaVector::fmadd_rotate90(m0130b, self.twiddles_im[13], x14m17);
         let m0130b = FcmaVector::fmadd_rotate90(m0130b, self.twiddles_im[14], x15m16);
-        let [y01, y30] = FcmaVector::column_butterfly2([m0130a, m0130b]);
+        let [y01, y30] = SimdVector::column_butterfly2([m0130a, m0130b]);
 
-        let m0229a = FcmaVector::fmadd(values[0], self.twiddles_re[1], x1p30);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[3], x2p29);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[5], x3p28);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[7], x4p27);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[9], x5p26);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[11], x6p25);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[13], x7p24);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[14], x8p23);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[12], x9p22);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[10], x10p21);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[8], x11p20);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[6], x12p19);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[4], x13p18);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[2], x14p17);
-        let m0229a = FcmaVector::fmadd(m0229a, self.twiddles_re[0], x15p16);
+        let m0229a = SimdVector::fmadd(values[0], self.twiddles_re[1], x1p30);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[3], x2p29);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[5], x3p28);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[7], x4p27);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[9], x5p26);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[11], x6p25);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[13], x7p24);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[14], x8p23);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[12], x9p22);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[10], x10p21);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[8], x11p20);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[6], x12p19);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[4], x13p18);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[2], x14p17);
+        let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[0], x15p16);
         let m0229b = FcmaVector::mul_rotate90(self.twiddles_im[1], x1m30);
         let m0229b = FcmaVector::fmadd_rotate90(m0229b, self.twiddles_im[3], x2m29);
         let m0229b = FcmaVector::fmadd_rotate90(m0229b, self.twiddles_im[5], x3m28);
@@ -4315,23 +4317,23 @@ impl<T: FftNum> FcmaF64Butterfly31<T> {
         let m0229b = FcmaVector::nmadd_rotate90(m0229b, self.twiddles_im[4], x13m18);
         let m0229b = FcmaVector::nmadd_rotate90(m0229b, self.twiddles_im[2], x14m17);
         let m0229b = FcmaVector::nmadd_rotate90(m0229b, self.twiddles_im[0], x15m16);
-        let [y02, y29] = FcmaVector::column_butterfly2([m0229a, m0229b]);
+        let [y02, y29] = SimdVector::column_butterfly2([m0229a, m0229b]);
 
-        let m0328a = FcmaVector::fmadd(values[0], self.twiddles_re[2], x1p30);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[5], x2p29);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[8], x3p28);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[11], x4p27);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[14], x5p26);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[12], x6p25);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[9], x7p24);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[6], x8p23);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[3], x9p22);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[0], x10p21);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[1], x11p20);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[4], x12p19);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[7], x13p18);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[10], x14p17);
-        let m0328a = FcmaVector::fmadd(m0328a, self.twiddles_re[13], x15p16);
+        let m0328a = SimdVector::fmadd(values[0], self.twiddles_re[2], x1p30);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[5], x2p29);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[8], x3p28);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[11], x4p27);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[14], x5p26);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[12], x6p25);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[9], x7p24);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[6], x8p23);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[3], x9p22);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[0], x10p21);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[1], x11p20);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[4], x12p19);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[7], x13p18);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[10], x14p17);
+        let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[13], x15p16);
         let m0328b = FcmaVector::mul_rotate90(self.twiddles_im[2], x1m30);
         let m0328b = FcmaVector::fmadd_rotate90(m0328b, self.twiddles_im[5], x2m29);
         let m0328b = FcmaVector::fmadd_rotate90(m0328b, self.twiddles_im[8], x3m28);
@@ -4347,23 +4349,23 @@ impl<T: FftNum> FcmaF64Butterfly31<T> {
         let m0328b = FcmaVector::fmadd_rotate90(m0328b, self.twiddles_im[7], x13m18);
         let m0328b = FcmaVector::fmadd_rotate90(m0328b, self.twiddles_im[10], x14m17);
         let m0328b = FcmaVector::fmadd_rotate90(m0328b, self.twiddles_im[13], x15m16);
-        let [y03, y28] = FcmaVector::column_butterfly2([m0328a, m0328b]);
+        let [y03, y28] = SimdVector::column_butterfly2([m0328a, m0328b]);
 
-        let m0427a = FcmaVector::fmadd(values[0], self.twiddles_re[3], x1p30);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[7], x2p29);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[11], x3p28);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[14], x4p27);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[10], x5p26);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[6], x6p25);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[2], x7p24);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[0], x8p23);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[4], x9p22);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[8], x10p21);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[12], x11p20);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[13], x12p19);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[9], x13p18);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[5], x14p17);
-        let m0427a = FcmaVector::fmadd(m0427a, self.twiddles_re[1], x15p16);
+        let m0427a = SimdVector::fmadd(values[0], self.twiddles_re[3], x1p30);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[7], x2p29);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[11], x3p28);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[14], x4p27);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[10], x5p26);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[6], x6p25);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[2], x7p24);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[0], x8p23);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[4], x9p22);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[8], x10p21);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[12], x11p20);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[13], x12p19);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[9], x13p18);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[5], x14p17);
+        let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[1], x15p16);
         let m0427b = FcmaVector::mul_rotate90(self.twiddles_im[3], x1m30);
         let m0427b = FcmaVector::fmadd_rotate90(m0427b, self.twiddles_im[7], x2m29);
         let m0427b = FcmaVector::fmadd_rotate90(m0427b, self.twiddles_im[11], x3m28);
@@ -4379,23 +4381,23 @@ impl<T: FftNum> FcmaF64Butterfly31<T> {
         let m0427b = FcmaVector::nmadd_rotate90(m0427b, self.twiddles_im[9], x13m18);
         let m0427b = FcmaVector::nmadd_rotate90(m0427b, self.twiddles_im[5], x14m17);
         let m0427b = FcmaVector::nmadd_rotate90(m0427b, self.twiddles_im[1], x15m16);
-        let [y04, y27] = FcmaVector::column_butterfly2([m0427a, m0427b]);
+        let [y04, y27] = SimdVector::column_butterfly2([m0427a, m0427b]);
 
-        let m0526a = FcmaVector::fmadd(values[0], self.twiddles_re[4], x1p30);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[9], x2p29);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[14], x3p28);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[10], x4p27);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[5], x5p26);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[0], x6p25);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[3], x7p24);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[8], x8p23);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[13], x9p22);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[11], x10p21);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[6], x11p20);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[1], x12p19);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[2], x13p18);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[7], x14p17);
-        let m0526a = FcmaVector::fmadd(m0526a, self.twiddles_re[12], x15p16);
+        let m0526a = SimdVector::fmadd(values[0], self.twiddles_re[4], x1p30);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[9], x2p29);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[14], x3p28);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[10], x4p27);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[5], x5p26);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[0], x6p25);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[3], x7p24);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[8], x8p23);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[13], x9p22);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[11], x10p21);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[6], x11p20);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[1], x12p19);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[2], x13p18);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[7], x14p17);
+        let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[12], x15p16);
         let m0526b = FcmaVector::mul_rotate90(self.twiddles_im[4], x1m30);
         let m0526b = FcmaVector::fmadd_rotate90(m0526b, self.twiddles_im[9], x2m29);
         let m0526b = FcmaVector::fmadd_rotate90(m0526b, self.twiddles_im[14], x3m28);
@@ -4411,23 +4413,23 @@ impl<T: FftNum> FcmaF64Butterfly31<T> {
         let m0526b = FcmaVector::fmadd_rotate90(m0526b, self.twiddles_im[2], x13m18);
         let m0526b = FcmaVector::fmadd_rotate90(m0526b, self.twiddles_im[7], x14m17);
         let m0526b = FcmaVector::fmadd_rotate90(m0526b, self.twiddles_im[12], x15m16);
-        let [y05, y26] = FcmaVector::column_butterfly2([m0526a, m0526b]);
+        let [y05, y26] = SimdVector::column_butterfly2([m0526a, m0526b]);
 
-        let m0625a = FcmaVector::fmadd(values[0], self.twiddles_re[5], x1p30);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[11], x2p29);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[12], x3p28);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[6], x4p27);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[0], x5p26);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[4], x6p25);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[10], x7p24);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[13], x8p23);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[7], x9p22);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[1], x10p21);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[3], x11p20);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[9], x12p19);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[14], x13p18);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[8], x14p17);
-        let m0625a = FcmaVector::fmadd(m0625a, self.twiddles_re[2], x15p16);
+        let m0625a = SimdVector::fmadd(values[0], self.twiddles_re[5], x1p30);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[11], x2p29);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[12], x3p28);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[6], x4p27);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[0], x5p26);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[4], x6p25);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[10], x7p24);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[13], x8p23);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[7], x9p22);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[1], x10p21);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[3], x11p20);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[9], x12p19);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[14], x13p18);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[8], x14p17);
+        let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[2], x15p16);
         let m0625b = FcmaVector::mul_rotate90(self.twiddles_im[5], x1m30);
         let m0625b = FcmaVector::fmadd_rotate90(m0625b, self.twiddles_im[11], x2m29);
         let m0625b = FcmaVector::nmadd_rotate90(m0625b, self.twiddles_im[12], x3m28);
@@ -4443,23 +4445,23 @@ impl<T: FftNum> FcmaF64Butterfly31<T> {
         let m0625b = FcmaVector::nmadd_rotate90(m0625b, self.twiddles_im[14], x13m18);
         let m0625b = FcmaVector::nmadd_rotate90(m0625b, self.twiddles_im[8], x14m17);
         let m0625b = FcmaVector::nmadd_rotate90(m0625b, self.twiddles_im[2], x15m16);
-        let [y06, y25] = FcmaVector::column_butterfly2([m0625a, m0625b]);
+        let [y06, y25] = SimdVector::column_butterfly2([m0625a, m0625b]);
 
-        let m0724a = FcmaVector::fmadd(values[0], self.twiddles_re[6], x1p30);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[13], x2p29);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[9], x3p28);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[2], x4p27);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[3], x5p26);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[10], x6p25);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[12], x7p24);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[5], x8p23);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[0], x9p22);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[7], x10p21);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[14], x11p20);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[8], x12p19);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[1], x13p18);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[4], x14p17);
-        let m0724a = FcmaVector::fmadd(m0724a, self.twiddles_re[11], x15p16);
+        let m0724a = SimdVector::fmadd(values[0], self.twiddles_re[6], x1p30);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[13], x2p29);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[9], x3p28);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[2], x4p27);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[3], x5p26);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[10], x6p25);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[12], x7p24);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[5], x8p23);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[0], x9p22);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[7], x10p21);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[14], x11p20);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[8], x12p19);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[1], x13p18);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[4], x14p17);
+        let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[11], x15p16);
         let m0724b = FcmaVector::mul_rotate90(self.twiddles_im[6], x1m30);
         let m0724b = FcmaVector::fmadd_rotate90(m0724b, self.twiddles_im[13], x2m29);
         let m0724b = FcmaVector::nmadd_rotate90(m0724b, self.twiddles_im[9], x3m28);
@@ -4475,23 +4477,23 @@ impl<T: FftNum> FcmaF64Butterfly31<T> {
         let m0724b = FcmaVector::nmadd_rotate90(m0724b, self.twiddles_im[1], x13m18);
         let m0724b = FcmaVector::fmadd_rotate90(m0724b, self.twiddles_im[4], x14m17);
         let m0724b = FcmaVector::fmadd_rotate90(m0724b, self.twiddles_im[11], x15m16);
-        let [y07, y24] = FcmaVector::column_butterfly2([m0724a, m0724b]);
+        let [y07, y24] = SimdVector::column_butterfly2([m0724a, m0724b]);
 
-        let m0823a = FcmaVector::fmadd(values[0], self.twiddles_re[7], x1p30);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[14], x2p29);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[6], x3p28);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[0], x4p27);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[8], x5p26);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[13], x6p25);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[5], x7p24);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[1], x8p23);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[9], x9p22);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[12], x10p21);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[4], x11p20);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[2], x12p19);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[10], x13p18);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[11], x14p17);
-        let m0823a = FcmaVector::fmadd(m0823a, self.twiddles_re[3], x15p16);
+        let m0823a = SimdVector::fmadd(values[0], self.twiddles_re[7], x1p30);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[14], x2p29);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[6], x3p28);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[0], x4p27);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[8], x5p26);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[13], x6p25);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[5], x7p24);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[1], x8p23);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[9], x9p22);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[12], x10p21);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[4], x11p20);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[2], x12p19);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[10], x13p18);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[11], x14p17);
+        let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[3], x15p16);
         let m0823b = FcmaVector::mul_rotate90(self.twiddles_im[7], x1m30);
         let m0823b = FcmaVector::nmadd_rotate90(m0823b, self.twiddles_im[14], x2m29);
         let m0823b = FcmaVector::nmadd_rotate90(m0823b, self.twiddles_im[6], x3m28);
@@ -4507,23 +4509,23 @@ impl<T: FftNum> FcmaF64Butterfly31<T> {
         let m0823b = FcmaVector::fmadd_rotate90(m0823b, self.twiddles_im[10], x13m18);
         let m0823b = FcmaVector::nmadd_rotate90(m0823b, self.twiddles_im[11], x14m17);
         let m0823b = FcmaVector::nmadd_rotate90(m0823b, self.twiddles_im[3], x15m16);
-        let [y08, y23] = FcmaVector::column_butterfly2([m0823a, m0823b]);
+        let [y08, y23] = SimdVector::column_butterfly2([m0823a, m0823b]);
 
-        let m0922a = FcmaVector::fmadd(values[0], self.twiddles_re[8], x1p30);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[12], x2p29);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[3], x3p28);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[4], x4p27);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[13], x5p26);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[7], x6p25);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[0], x7p24);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[9], x8p23);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[11], x9p22);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[2], x10p21);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[5], x11p20);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[14], x12p19);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[6], x13p18);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[1], x14p17);
-        let m0922a = FcmaVector::fmadd(m0922a, self.twiddles_re[10], x15p16);
+        let m0922a = SimdVector::fmadd(values[0], self.twiddles_re[8], x1p30);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[12], x2p29);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[3], x3p28);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[4], x4p27);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[13], x5p26);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[7], x6p25);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[0], x7p24);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[9], x8p23);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[11], x9p22);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[2], x10p21);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[5], x11p20);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[14], x12p19);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[6], x13p18);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[1], x14p17);
+        let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[10], x15p16);
         let m0922b = FcmaVector::mul_rotate90(self.twiddles_im[8], x1m30);
         let m0922b = FcmaVector::nmadd_rotate90(m0922b, self.twiddles_im[12], x2m29);
         let m0922b = FcmaVector::nmadd_rotate90(m0922b, self.twiddles_im[3], x3m28);
@@ -4539,23 +4541,23 @@ impl<T: FftNum> FcmaF64Butterfly31<T> {
         let m0922b = FcmaVector::nmadd_rotate90(m0922b, self.twiddles_im[6], x13m18);
         let m0922b = FcmaVector::fmadd_rotate90(m0922b, self.twiddles_im[1], x14m17);
         let m0922b = FcmaVector::fmadd_rotate90(m0922b, self.twiddles_im[10], x15m16);
-        let [y09, y22] = FcmaVector::column_butterfly2([m0922a, m0922b]);
+        let [y09, y22] = SimdVector::column_butterfly2([m0922a, m0922b]);
 
-        let m1021a = FcmaVector::fmadd(values[0], self.twiddles_re[9], x1p30);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[10], x2p29);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[0], x3p28);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[8], x4p27);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[11], x5p26);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[1], x6p25);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[7], x7p24);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[12], x8p23);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[2], x9p22);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[6], x10p21);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[13], x11p20);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[3], x12p19);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[5], x13p18);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[14], x14p17);
-        let m1021a = FcmaVector::fmadd(m1021a, self.twiddles_re[4], x15p16);
+        let m1021a = SimdVector::fmadd(values[0], self.twiddles_re[9], x1p30);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[10], x2p29);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[0], x3p28);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[8], x4p27);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[11], x5p26);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[1], x6p25);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[7], x7p24);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[12], x8p23);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[2], x9p22);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[6], x10p21);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[13], x11p20);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[3], x12p19);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[5], x13p18);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[14], x14p17);
+        let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[4], x15p16);
         let m1021b = FcmaVector::mul_rotate90(self.twiddles_im[9], x1m30);
         let m1021b = FcmaVector::nmadd_rotate90(m1021b, self.twiddles_im[10], x2m29);
         let m1021b = FcmaVector::nmadd_rotate90(m1021b, self.twiddles_im[0], x3m28);
@@ -4571,23 +4573,23 @@ impl<T: FftNum> FcmaF64Butterfly31<T> {
         let m1021b = FcmaVector::fmadd_rotate90(m1021b, self.twiddles_im[5], x13m18);
         let m1021b = FcmaVector::nmadd_rotate90(m1021b, self.twiddles_im[14], x14m17);
         let m1021b = FcmaVector::nmadd_rotate90(m1021b, self.twiddles_im[4], x15m16);
-        let [y10, y21] = FcmaVector::column_butterfly2([m1021a, m1021b]);
+        let [y10, y21] = SimdVector::column_butterfly2([m1021a, m1021b]);
 
-        let m1120a = FcmaVector::fmadd(values[0], self.twiddles_re[10], x1p30);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[8], x2p29);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[1], x3p28);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[12], x4p27);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[6], x5p26);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[3], x6p25);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[14], x7p24);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[4], x8p23);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[5], x9p22);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[13], x10p21);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[2], x11p20);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[7], x12p19);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[11], x13p18);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[0], x14p17);
-        let m1120a = FcmaVector::fmadd(m1120a, self.twiddles_re[9], x15p16);
+        let m1120a = SimdVector::fmadd(values[0], self.twiddles_re[10], x1p30);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[8], x2p29);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[1], x3p28);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[12], x4p27);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[6], x5p26);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[3], x6p25);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[14], x7p24);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[4], x8p23);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[5], x9p22);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[13], x10p21);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[2], x11p20);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[7], x12p19);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[11], x13p18);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[0], x14p17);
+        let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[9], x15p16);
         let m1120b = FcmaVector::mul_rotate90(self.twiddles_im[10], x1m30);
         let m1120b = FcmaVector::nmadd_rotate90(m1120b, self.twiddles_im[8], x2m29);
         let m1120b = FcmaVector::fmadd_rotate90(m1120b, self.twiddles_im[1], x3m28);
@@ -4603,23 +4605,23 @@ impl<T: FftNum> FcmaF64Butterfly31<T> {
         let m1120b = FcmaVector::nmadd_rotate90(m1120b, self.twiddles_im[11], x13m18);
         let m1120b = FcmaVector::nmadd_rotate90(m1120b, self.twiddles_im[0], x14m17);
         let m1120b = FcmaVector::fmadd_rotate90(m1120b, self.twiddles_im[9], x15m16);
-        let [y11, y20] = FcmaVector::column_butterfly2([m1120a, m1120b]);
+        let [y11, y20] = SimdVector::column_butterfly2([m1120a, m1120b]);
 
-        let m1219a = FcmaVector::fmadd(values[0], self.twiddles_re[11], x1p30);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[6], x2p29);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[4], x3p28);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[13], x4p27);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[1], x5p26);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[9], x6p25);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[8], x7p24);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[2], x8p23);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[14], x9p22);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[3], x10p21);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[7], x11p20);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[10], x12p19);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[0], x13p18);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[12], x14p17);
-        let m1219a = FcmaVector::fmadd(m1219a, self.twiddles_re[5], x15p16);
+        let m1219a = SimdVector::fmadd(values[0], self.twiddles_re[11], x1p30);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[6], x2p29);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[4], x3p28);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[13], x4p27);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[1], x5p26);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[9], x6p25);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[8], x7p24);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[2], x8p23);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[14], x9p22);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[3], x10p21);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[7], x11p20);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[10], x12p19);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[0], x13p18);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[12], x14p17);
+        let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[5], x15p16);
         let m1219b = FcmaVector::mul_rotate90(self.twiddles_im[11], x1m30);
         let m1219b = FcmaVector::nmadd_rotate90(m1219b, self.twiddles_im[6], x2m29);
         let m1219b = FcmaVector::fmadd_rotate90(m1219b, self.twiddles_im[4], x3m28);
@@ -4635,23 +4637,23 @@ impl<T: FftNum> FcmaF64Butterfly31<T> {
         let m1219b = FcmaVector::fmadd_rotate90(m1219b, self.twiddles_im[0], x13m18);
         let m1219b = FcmaVector::fmadd_rotate90(m1219b, self.twiddles_im[12], x14m17);
         let m1219b = FcmaVector::nmadd_rotate90(m1219b, self.twiddles_im[5], x15m16);
-        let [y12, y19] = FcmaVector::column_butterfly2([m1219a, m1219b]);
+        let [y12, y19] = SimdVector::column_butterfly2([m1219a, m1219b]);
 
-        let m1318a = FcmaVector::fmadd(values[0], self.twiddles_re[12], x1p30);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[4], x2p29);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[7], x3p28);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[9], x4p27);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[2], x5p26);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[14], x6p25);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[1], x7p24);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[10], x8p23);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[6], x9p22);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[5], x10p21);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[11], x11p20);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[0], x12p19);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[13], x13p18);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[3], x14p17);
-        let m1318a = FcmaVector::fmadd(m1318a, self.twiddles_re[8], x15p16);
+        let m1318a = SimdVector::fmadd(values[0], self.twiddles_re[12], x1p30);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[4], x2p29);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[7], x3p28);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[9], x4p27);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[2], x5p26);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[14], x6p25);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[1], x7p24);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[10], x8p23);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[6], x9p22);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[5], x10p21);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[11], x11p20);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[0], x12p19);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[13], x13p18);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[3], x14p17);
+        let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[8], x15p16);
         let m1318b = FcmaVector::mul_rotate90(self.twiddles_im[12], x1m30);
         let m1318b = FcmaVector::nmadd_rotate90(m1318b, self.twiddles_im[4], x2m29);
         let m1318b = FcmaVector::fmadd_rotate90(m1318b, self.twiddles_im[7], x3m28);
@@ -4667,23 +4669,23 @@ impl<T: FftNum> FcmaF64Butterfly31<T> {
         let m1318b = FcmaVector::fmadd_rotate90(m1318b, self.twiddles_im[13], x13m18);
         let m1318b = FcmaVector::nmadd_rotate90(m1318b, self.twiddles_im[3], x14m17);
         let m1318b = FcmaVector::fmadd_rotate90(m1318b, self.twiddles_im[8], x15m16);
-        let [y13, y18] = FcmaVector::column_butterfly2([m1318a, m1318b]);
+        let [y13, y18] = SimdVector::column_butterfly2([m1318a, m1318b]);
 
-        let m1417a = FcmaVector::fmadd(values[0], self.twiddles_re[13], x1p30);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[2], x2p29);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[10], x3p28);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[5], x4p27);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[7], x5p26);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[8], x6p25);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[4], x7p24);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[11], x8p23);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[1], x9p22);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[14], x10p21);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[0], x11p20);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[12], x12p19);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[3], x13p18);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[9], x14p17);
-        let m1417a = FcmaVector::fmadd(m1417a, self.twiddles_re[6], x15p16);
+        let m1417a = SimdVector::fmadd(values[0], self.twiddles_re[13], x1p30);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[2], x2p29);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[10], x3p28);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[5], x4p27);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[7], x5p26);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[8], x6p25);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[4], x7p24);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[11], x8p23);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[1], x9p22);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[14], x10p21);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[0], x11p20);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[12], x12p19);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[3], x13p18);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[9], x14p17);
+        let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[6], x15p16);
         let m1417b = FcmaVector::mul_rotate90(self.twiddles_im[13], x1m30);
         let m1417b = FcmaVector::nmadd_rotate90(m1417b, self.twiddles_im[2], x2m29);
         let m1417b = FcmaVector::fmadd_rotate90(m1417b, self.twiddles_im[10], x3m28);
@@ -4699,23 +4701,23 @@ impl<T: FftNum> FcmaF64Butterfly31<T> {
         let m1417b = FcmaVector::nmadd_rotate90(m1417b, self.twiddles_im[3], x13m18);
         let m1417b = FcmaVector::fmadd_rotate90(m1417b, self.twiddles_im[9], x14m17);
         let m1417b = FcmaVector::nmadd_rotate90(m1417b, self.twiddles_im[6], x15m16);
-        let [y14, y17] = FcmaVector::column_butterfly2([m1417a, m1417b]);
+        let [y14, y17] = SimdVector::column_butterfly2([m1417a, m1417b]);
 
-        let m1516a = FcmaVector::fmadd(values[0], self.twiddles_re[14], x1p30);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[0], x2p29);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[13], x3p28);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[1], x4p27);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[12], x5p26);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[2], x6p25);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[11], x7p24);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[3], x8p23);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[10], x9p22);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[4], x10p21);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[9], x11p20);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[5], x12p19);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[8], x13p18);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[6], x14p17);
-        let m1516a = FcmaVector::fmadd(m1516a, self.twiddles_re[7], x15p16);
+        let m1516a = SimdVector::fmadd(values[0], self.twiddles_re[14], x1p30);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[0], x2p29);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[13], x3p28);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[1], x4p27);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[12], x5p26);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[2], x6p25);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[11], x7p24);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[3], x8p23);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[10], x9p22);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[4], x10p21);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[9], x11p20);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[5], x12p19);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[8], x13p18);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[6], x14p17);
+        let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[7], x15p16);
         let m1516b = FcmaVector::mul_rotate90(self.twiddles_im[14], x1m30);
         let m1516b = FcmaVector::nmadd_rotate90(m1516b, self.twiddles_im[0], x2m29);
         let m1516b = FcmaVector::fmadd_rotate90(m1516b, self.twiddles_im[13], x3m28);
@@ -4731,7 +4733,7 @@ impl<T: FftNum> FcmaF64Butterfly31<T> {
         let m1516b = FcmaVector::fmadd_rotate90(m1516b, self.twiddles_im[8], x13m18);
         let m1516b = FcmaVector::nmadd_rotate90(m1516b, self.twiddles_im[6], x14m17);
         let m1516b = FcmaVector::fmadd_rotate90(m1516b, self.twiddles_im[7], x15m16);
-        let [y15, y16] = FcmaVector::column_butterfly2([m1516a, m1516b]);
+        let [y15, y16] = SimdVector::column_butterfly2([m1516a, m1516b]);
 
 
         [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22, y23, y24, y25, y26, y27, y28, y29, y30]

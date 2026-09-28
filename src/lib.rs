@@ -158,6 +158,7 @@ mod twiddles;
 // the planner arithmetic that goes with them
 #[cfg(any(
     all(target_arch = "aarch64", feature = "neon"),
+    all(target_arch = "aarch64", feature = "fcma"),
     all(target_arch = "x86_64", feature = "sse"),
     all(target_arch = "wasm32", feature = "wasm_simd"),
 ))]
