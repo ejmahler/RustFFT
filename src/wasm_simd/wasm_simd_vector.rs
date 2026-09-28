@@ -235,7 +235,7 @@ impl crate::simd::simd_vector::SimdVector for WasmVector64 {
     }
 
     #[inline(always)]
-    unsafe fn load1_lo_broadcast_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
+    unsafe fn load1_dup_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
         unimplemented!("Impossible to do a load store of complex f64's");
     }
 
@@ -402,7 +402,7 @@ impl crate::simd::simd_vector::SimdVector for WasmVector32 {
     }
 
     #[inline(always)]
-    unsafe fn load1_lo_broadcast_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+    unsafe fn load1_dup_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
         Self(v128_load64_splat(ptr as *const u64))
     }
 

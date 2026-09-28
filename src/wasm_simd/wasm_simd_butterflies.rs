@@ -894,7 +894,7 @@ impl<T: FftNum> WasmSimdF32Butterfly5<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
     ) {
-        let value00 = buffer.load1_lo_broadcast(0);
+        let value00 = buffer.load1_dup(0);
         let value12 = buffer.load(1);
         let value34 = buffer.load(3);
 
