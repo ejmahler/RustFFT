@@ -425,7 +425,7 @@ unsafe fn gather_and_twiddle<V: SimdVector, const RADIX: usize>(
     idx: usize,
     tw_base: usize,
 ) -> [V; RADIX] {
-    let mut arr = [V::zero(); RADIX];
+    let mut arr = [V::zero_vector(); RADIX];
 
     // The row-0 twiddle is always 1, so it's neither stored nor applied.
     arr[0] = data.load(idx);

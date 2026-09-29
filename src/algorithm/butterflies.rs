@@ -172,7 +172,7 @@ impl<T: FftNum> Butterfly2<T> {
         *left = temp;
     }
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
         let value0 = buffer.load(0);
         let value1 = buffer.load(1);
         buffer.store(value0 + value1, 0);
@@ -227,7 +227,7 @@ impl<T: FftNum> Butterfly3<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
         let xp = buffer.load(1) + buffer.load(2);
         let xn = buffer.load(1) - buffer.load(2);
         let sum = buffer.load(0) + xp;
@@ -262,7 +262,7 @@ impl<T: FftNum> Butterfly4<T> {
         }
     }
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
         //we're going to hardcode a step of mixed radix
         //aka we're going to do the six step algorithm
 
@@ -336,7 +336,7 @@ impl<T: FftNum> Butterfly5<T> {
     }
 
     #[inline(never)] // refusing to inline this code reduces code size, and doesn't hurt performance
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
         // let mut outer = Butterfly2::perform_fft_array([buffer.load(1), buffer.load(4)]);
         // let mut inner = Butterfly2::perform_fft_array([buffer.load(2), buffer.load(3)]);
         // let input0 = buffer.load(0);
@@ -491,7 +491,7 @@ impl<T: FftNum> Butterfly6<T> {
         }
     }
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
         //since GCD(2,3) == 1 we're going to hardcode a step of the Good-Thomas algorithm to avoid twiddle factors
 
         // step 1: reorder the input directly into the scratch. normally there's a whole thing to compute this ordering
@@ -542,7 +542,7 @@ impl<T: FftNum> Butterfly7<T> {
         }
     }
     #[inline(never)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
         // let mut outer = Butterfly2::perform_fft_array([buffer.load(1), buffer.load(6)]);
         // let mut mid   = Butterfly2::perform_fft_array([buffer.load(2), buffer.load(5)]);
         // let mut inner = Butterfly2::perform_fft_array([buffer.load(3), buffer.load(4)]);

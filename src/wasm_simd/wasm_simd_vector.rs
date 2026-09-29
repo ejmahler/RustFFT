@@ -220,7 +220,7 @@ impl crate::simd::simd_vector::SimdVector for WasmVector64 {
     type Butterfly7 = WasmSimdF64Butterfly7<f64>;
 
     #[inline(always)]
-    unsafe fn zero() -> Self {
+    unsafe fn zero_vector() -> Self {
         Self(f64x2(0.0, 0.0))
     }
 
@@ -231,12 +231,12 @@ impl crate::simd::simd_vector::SimdVector for WasmVector64 {
 
     #[inline(always)]
     unsafe fn load1_lo_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
-        unimplemented!("Impossible to do a load store of complex f64's");
+        unimplemented!("Impossible to do a partial load of complex f64's");
     }
 
     #[inline(always)]
     unsafe fn load1_dup_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
-        unimplemented!("Impossible to do a load store of complex f64's");
+        unimplemented!("Impossible to do a partial load of complex f64's");
     }
 
     #[inline(always)]
@@ -387,7 +387,7 @@ impl crate::simd::simd_vector::SimdVector for WasmVector32 {
     type Butterfly7 = WasmSimdF32Butterfly7<f32>;
 
     #[inline(always)]
-    unsafe fn zero() -> Self {
+    unsafe fn zero_vector() -> Self {
         Self(f32x4(0.0, 0.0, 0.0, 0.0))
     }
 

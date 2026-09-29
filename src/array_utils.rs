@@ -118,25 +118,6 @@ impl<'a, T: FftNum> LoadStore<T> for DoubleBuf<'a, T> {
     }
 }
 
-pub(crate) trait Load<T: FftNum>: Deref {
-    unsafe fn load(&self, idx: usize) -> Complex<T>;
-}
-
-impl<T: FftNum> Load<T> for &[Complex<T>] {
-    #[inline(always)]
-    unsafe fn load(&self, idx: usize) -> Complex<T> {
-        debug_assert!(idx < self.len());
-        *self.get_unchecked(idx)
-    }
-}
-impl<T: FftNum, const N: usize> Load<T> for &[Complex<T>; N] {
-    #[inline(always)]
-    unsafe fn load(&self, idx: usize) -> Complex<T> {
-        debug_assert!(idx < self.len());
-        *self.get_unchecked(idx)
-    }
-}
-
 #[cfg(test)]
 mod unit_tests {
     use super::*;
@@ -464,62 +445,6 @@ pub fn validate_and_zip_mut_unroll2x<T>(
     }
 }
 
-// Utility to help reorder data as a part of computing RadixD FFTs. Conceputally, it works like a transpose, but with the column indexes bit-reversed.
-// Use a lookup table to avoid repeating the slow bit reverse operations.
-// Unrolling the outer loop by a factor D helps speed things up.
-// const parameter D (for Divisor) determines the divisor to use for the "bit reverse", and how much to unroll. `input.len() / height` must be a power of D.
-pub fn bitreversed_transpose<T: Copy, const D: usize>(
-    height: usize,
-    input: &[T],
-    output: &mut [T],
-) {
-    let width = input.len() / height;
-
-    // Let's make sure the arguments are ok
-    assert!(D > 1 && input.len() % height == 0 && input.len() == output.len());
-
-    let strided_width = width / D;
-    let rev_digits = if D.is_power_of_two() {
-        let width_bits = width.trailing_zeros();
-        let d_bits = D.trailing_zeros();
-
-        // verify that width is a power of d
-        assert!(width_bits % d_bits == 0);
-        width_bits / d_bits
-    } else {
-        compute_logarithm::<D>(width).unwrap()
-    };
-
-    for x in 0..strided_width {
-        let mut i = 0;
-        let x_fwd = [(); D].map(|_| {
-            let value = D * x + i;
-            i += 1;
-            value
-        }); // If we had access to rustc 1.63, we could use std::array::from_fn instead
-        let x_rev = x_fwd.map(|x| reverse_bits::<D>(x, rev_digits));
-
-        // Assert that the the bit reversed indices will not exceed the length of the output.
-        // The highest index the loop reaches is: (x_rev[n] + 1)*height - 1
-        // The last element of the data is at index: width*height - 1
-        // Thus it is sufficient to assert that x_rev[n]<width.
-        for r in x_rev {
-            assert!(r < width);
-        }
-        for y in 0..height {
-            for (fwd, rev) in x_fwd.iter().zip(x_rev.iter()) {
-                let input_index = *fwd + y * width;
-                let output_index = y + *rev * height;
-
-                unsafe {
-                    let temp = *input.get_unchecked(input_index);
-                    *output.get_unchecked_mut(output_index) = temp;
-                }
-            }
-        }
-    }
-}
-
 // Repeatedly divide `value` by divisor `D`, `iters` times, and apply the remainders to a new value
 // When D is a power of 2, this is exactly equal (implementation and assembly)-wise to a bit reversal
 // When D is not a power of 2, think of this function as a logical equivalent to a bit reversal
@@ -559,52 +484,6 @@ pub fn compute_logarithm<const D: usize>(value: usize) -> Option<u32> {
 pub(crate) struct TransposeFactor {
     pub factor: RadixFactor,
     pub count: u8,
-}
-
-// Utility to help reorder data as a part of computing RadixD FFTs. Conceputally, it works like a transpose, but with the column indexes bit-reversed.
-// Use a lookup table to avoid repeating the slow bit reverse operations.
-// Unrolling the outer loop by a factor D helps speed things up.
-// const parameter D (for Divisor) determines how much to unroll. `input.len() / height` must divisible by D.
-pub(crate) fn factor_transpose<T: Copy, const D: usize>(
-    height: usize,
-    input: &[T],
-    output: &mut [T],
-    factors: &[TransposeFactor],
-) {
-    let width = input.len() / height;
-
-    // Let's make sure the arguments are ok
-    assert!(width % D == 0 && D > 1 && input.len() % width == 0 && input.len() == output.len());
-
-    let strided_width = width / D;
-    for x in 0..strided_width {
-        let mut i = 0;
-        let x_fwd = [(); D].map(|_| {
-            let value = D * x + i;
-            i += 1;
-            value
-        }); // If we had access to rustc 1.63, we could use std::array::from_fn instead
-        let x_rev = x_fwd.map(|x| reverse_remainders(x, factors));
-
-        // Assert that the the bit reversed indices will not exceed the length of the output.
-        // The highest index the loop reaches is: (x_rev[n] + 1)*height - 1
-        // The last element of the data is at index: width*height - 1
-        // Thus it is sufficient to assert that x_rev[n]<width.
-        for r in x_rev {
-            assert!(r < width);
-        }
-        for y in 0..height {
-            for (fwd, rev) in x_fwd.iter().zip(x_rev.iter()) {
-                let input_index = *fwd + y * width;
-                let output_index = y + *rev * height;
-
-                unsafe {
-                    let temp = *input.get_unchecked(input_index);
-                    *output.get_unchecked_mut(output_index) = temp;
-                }
-            }
-        }
-    }
 }
 
 // Divide `value` by the provided array of factors, and push the remainders into a new number

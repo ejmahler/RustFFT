@@ -35,7 +35,7 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
     type Butterfly6: Send + Sync;
     type Butterfly7: Send + Sync;
 
-    unsafe fn zero() -> Self;
+    unsafe fn zero_vector() -> Self;
 
     // loads of complex numbers
     unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
@@ -210,3 +210,4 @@ macro_rules! simd_vector_cross_layer {
         }
     };
 }
+pub(crate) use simd_vector_cross_layer;
