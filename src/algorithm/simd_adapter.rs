@@ -136,37 +136,37 @@ impl<T: FftNum> SimdVector for Complex<T> {
 
     unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
         let mut result = rows;
-        Butterfly2::new(FftDirection::Forward).perform_fft_contiguous(&mut result);
+        Butterfly2::new(FftDirection::Forward).perform_fft_butterfly(&mut result);
         result
     }
 
     unsafe fn column_butterfly3(bf: &Self::Butterfly3, rows: [Self; 3]) -> [Self; 3] {
         let mut result = rows;
-        bf.perform_fft_contiguous(&mut result);
+        bf.perform_fft_butterfly(&mut result);
         result
     }
 
     unsafe fn column_butterfly4(rows: [Self; 4], rotation: Self::Rotation) -> [Self; 4] {
         let mut result = rows;
-        Butterfly4::new(rotation).perform_fft_contiguous(&mut result);
+        Butterfly4::new(rotation).perform_fft_butterfly(&mut result);
         result
     }
 
     unsafe fn column_butterfly5(bf: &Self::Butterfly5, rows: [Self; 5]) -> [Self; 5] {
         let mut result = rows;
-        bf.perform_fft_contiguous(&mut result);
+        bf.perform_fft_butterfly(&mut result);
         result
     }
 
     unsafe fn column_butterfly6(bf: &Self::Butterfly6, rows: [Self; 6]) -> [Self; 6] {
         let mut result = rows;
-        bf.perform_fft_contiguous(&mut result);
+        bf.perform_fft_butterfly(&mut result);
         result
     }
 
     unsafe fn column_butterfly7(bf: &Self::Butterfly7, rows: [Self; 7]) -> [Self; 7] {
         let mut result = rows;
-        bf.perform_fft_contiguous(&mut result);
+        bf.perform_fft_butterfly(&mut result);
         result
     }
 
