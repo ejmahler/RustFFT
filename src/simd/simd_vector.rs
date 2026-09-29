@@ -24,6 +24,7 @@ use crate::FftDirection;
 #[allow(dead_code)]
 pub trait SimdVector: Copy + Send + Sync + Sized {
     const COMPLEX_PER_VECTOR: usize;
+    const RADIXN_CROSS_LAYER_UNROLL: bool; // If true, this platform benefits from doing a 2x unroll of the RadixN cross layers
 
     /// The scalar this vector holds. Always the same type as the `T` of the algorithm using it.
     type ScalarType: FftNum;

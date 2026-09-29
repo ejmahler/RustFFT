@@ -377,6 +377,7 @@ impl crate::simd::simd_vector::SimdVector for WasmVector64 {
 
 impl crate::simd::simd_vector::SimdVector for WasmVector32 {
     const COMPLEX_PER_VECTOR: usize = 2;
+    const RADIXN_CROSS_LAYER_UNROLL: bool = true;
 
     type ScalarType = f32;
     type Rotation = Rotation90<Self>;

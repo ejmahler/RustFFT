@@ -200,6 +200,7 @@ macro_rules! neon_vector_fft_helpers {
 
 impl crate::simd::simd_vector::SimdVector for float64x2_t {
     const COMPLEX_PER_VECTOR: usize = 1;
+    const RADIXN_CROSS_LAYER_UNROLL: bool = true;
 
     type ScalarType = f64;
     type Rotation = Rotation90<Self>;
@@ -360,6 +361,7 @@ impl crate::simd::simd_vector::SimdVector for float64x2_t {
 
 impl crate::simd::simd_vector::SimdVector for float32x4_t {
     const COMPLEX_PER_VECTOR: usize = 2;
+    const RADIXN_CROSS_LAYER_UNROLL: bool = true;
 
     type ScalarType = f32;
     type Rotation = Rotation90<Self>;

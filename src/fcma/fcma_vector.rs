@@ -212,6 +212,7 @@ pub struct FcmaVector64(pub float64x2_t);
 
 impl crate::simd::simd_vector::SimdVector for FcmaVector64 {
     const COMPLEX_PER_VECTOR: usize = 1;
+    const RADIXN_CROSS_LAYER_UNROLL: bool = true;
 
     type ScalarType = f64;
     type Rotation = Rotation90<FcmaVector64>;
@@ -375,6 +376,7 @@ pub struct FcmaVector32(pub float32x4_t);
 
 impl crate::simd::simd_vector::SimdVector for FcmaVector32 {
     const COMPLEX_PER_VECTOR: usize = 2;
+    const RADIXN_CROSS_LAYER_UNROLL: bool = true;
 
     type ScalarType = f32;
     type Rotation = Rotation90<FcmaVector32>;

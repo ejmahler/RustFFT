@@ -17,6 +17,12 @@ use crate::{
 impl<T: FftNum> SimdVector for Complex<T> {
     const COMPLEX_PER_VECTOR: usize = 1;
 
+    // The unroll severely hurts wasm32 scalar performance, but significantly benefits other platforms, so disable it just for wasm
+    #[cfg(target_arch = "wasm32")]
+    const RADIXN_CROSS_LAYER_UNROLL: bool = false;
+    #[cfg(not(target_arch = "wasm32"))]
+    const RADIXN_CROSS_LAYER_UNROLL: bool = true;
+
     type ScalarType = T;
 
     type Rotation = FftDirection;
