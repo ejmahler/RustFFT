@@ -21,6 +21,7 @@ use crate::FftDirection;
 ///
 /// Safety: every method here requires the current machine to support the backend's SIMD
 /// instruction set.
+#[allow(dead_code)]
 pub trait SimdVector: Copy + Send + Sync + Sized {
     const COMPLEX_PER_VECTOR: usize;
 
