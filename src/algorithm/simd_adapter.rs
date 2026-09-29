@@ -170,7 +170,7 @@ impl<T: FftNum> SimdVector for Complex<T> {
         result
     }
 
-    simd_vector_cross_layer!(#[target_feature(enable = "sse4.1")]);
+    simd_vector_cross_layer!(#[inline(always)]);
 
     #[inline(always)]
     unsafe fn fft_helper_immut<E>(
