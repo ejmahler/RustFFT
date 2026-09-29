@@ -6,7 +6,7 @@ mod raders_algorithm;
 mod radix3;
 mod radix4;
 mod radixn;
-mod simd_adapter;
+mod scalar_vector;
 
 /// Hardcoded size-specfic FFT algorithms
 pub mod butterflies;
