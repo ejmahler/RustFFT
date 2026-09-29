@@ -425,7 +425,7 @@ unsafe fn gather_and_twiddle<V: SimdVector, const RADIX: usize>(
     idx: usize,
     tw_base: usize,
 ) -> [V; RADIX] {
-    let mut arr = [V::zero(); RADIX];
+    let mut arr = [V::zero_vector(); RADIX];
 
     // The row-0 twiddle is always 1, so it's neither stored nor applied.
     arr[0] = data.load(idx);
@@ -457,44 +457,59 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize, F>(
 
     debug_assert!(twiddles.len() >= num_vector_columns * tw_stride);
 
-    let (unroll_count, unroll_remainder) = (num_vector_columns / 2, num_vector_columns % 2);
-    for i in 0..unroll_count {
-        let vcol = i * 2;
-        let idx = vcol * complex_per_vector;
+    if V::RADIXN_CROSS_LAYER_UNROLL {
+        let (unroll_count, unroll_remainder) = (num_vector_columns / 2, num_vector_columns % 2);
+        for i in 0..unroll_count {
+            let vcol = i * 2;
+            let idx = vcol * complex_per_vector;
 
-        let a = gather_and_twiddle(data, twiddles, num_columns, idx, vcol * tw_stride);
-        let b = gather_and_twiddle(
-            data,
-            twiddles,
-            num_columns,
-            idx + complex_per_vector,
-            (vcol + 1) * tw_stride,
-        );
+            let a = gather_and_twiddle(data, twiddles, num_columns, idx, vcol * tw_stride);
+            let b = gather_and_twiddle(
+                data,
+                twiddles,
+                num_columns,
+                idx + complex_per_vector,
+                (vcol + 1) * tw_stride,
+            );
 
-        let a = butterfly(a);
-        let b = butterfly(b);
+            let a = butterfly(a);
+            let b = butterfly(b);
 
-        for (r, (a_row, b_row)) in a.iter().zip(b.iter()).enumerate() {
-            data.store(*a_row, idx + r * num_columns);
-            data.store(*b_row, idx + complex_per_vector + r * num_columns);
+            for (r, (a_row, b_row)) in a.iter().zip(b.iter()).enumerate() {
+                data.store(*a_row, idx + r * num_columns);
+                data.store(*b_row, idx + complex_per_vector + r * num_columns);
+            }
         }
-    }
 
-    // an odd vector column count leaves one behind
-    if unroll_remainder > 0 {
-        let vcol = unroll_count * 2;
-        let idx = vcol * complex_per_vector;
-        let a = butterfly(gather_and_twiddle(
-            data,
-            twiddles,
-            num_columns,
-            idx,
-            vcol * tw_stride,
-        ));
-        for (r, a_row) in a.iter().enumerate() {
-            data.store(*a_row, idx + r * num_columns);
+        // an odd vector column count leaves one behind
+        if unroll_remainder > 0 {
+            let vcol = unroll_count * 2;
+            let idx = vcol * complex_per_vector;
+            let a = butterfly(gather_and_twiddle(
+                data,
+                twiddles,
+                num_columns,
+                idx,
+                vcol * tw_stride,
+            ));
+            for (r, a_row) in a.iter().enumerate() {
+                data.store(*a_row, idx + r * num_columns);
+            }
         }
-    }
+    } else {
+        for i in 0..num_vector_columns {
+            let vcol = i;
+            let idx = vcol * complex_per_vector;
+
+            let a = gather_and_twiddle(data, twiddles, num_columns, idx, vcol * tw_stride);
+
+            let a = butterfly(a);
+
+            for (r, a_row) in a.iter().enumerate() {
+                data.store(*a_row, idx + r * num_columns);
+            }
+        }
+    };
 }
 
 /// The test bodies, shared the same way the algorithm is. Every backend runs all of them, from a

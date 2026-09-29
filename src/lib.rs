@@ -156,12 +156,6 @@ mod twiddles;
 
 // Code shared by the SIMD backends: the `SimdVector` trait, the algorithms written against it, and
 // the planner arithmetic that goes with them
-#[cfg(any(
-    all(target_arch = "aarch64", feature = "neon"),
-    all(target_arch = "aarch64", feature = "fcma"),
-    all(target_arch = "x86_64", feature = "sse"),
-    all(target_arch = "wasm32", feature = "wasm_simd"),
-))]
 #[macro_use]
 mod simd;
 

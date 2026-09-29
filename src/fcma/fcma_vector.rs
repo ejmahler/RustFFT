@@ -212,6 +212,7 @@ pub struct FcmaVector64(pub float64x2_t);
 
 impl crate::simd::simd_vector::SimdVector for FcmaVector64 {
     const COMPLEX_PER_VECTOR: usize = 1;
+    const RADIXN_CROSS_LAYER_UNROLL: bool = true;
 
     type ScalarType = f64;
     type Rotation = Rotation90<FcmaVector64>;
@@ -222,7 +223,7 @@ impl crate::simd::simd_vector::SimdVector for FcmaVector64 {
     type Butterfly7 = FcmaF64Butterfly7<f64>;
 
     #[inline(always)]
-    unsafe fn zero() -> Self {
+    unsafe fn zero_vector() -> Self {
         Self(vdupq_n_f64(0.0))
     }
     #[inline(always)]
@@ -232,12 +233,12 @@ impl crate::simd::simd_vector::SimdVector for FcmaVector64 {
 
     #[inline(always)]
     unsafe fn load1_lo_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
-        unimplemented!("Impossible to do a load store of complex f64's");
+        unimplemented!("Impossible to do a partial load of complex f64's");
     }
 
     #[inline(always)]
     unsafe fn load1_dup_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
-        unimplemented!("Impossible to do a load store of complex f64's");
+        unimplemented!("Impossible to do a partial load of complex f64's");
     }
 
     #[inline(always)]
@@ -375,6 +376,7 @@ pub struct FcmaVector32(pub float32x4_t);
 
 impl crate::simd::simd_vector::SimdVector for FcmaVector32 {
     const COMPLEX_PER_VECTOR: usize = 2;
+    const RADIXN_CROSS_LAYER_UNROLL: bool = true;
 
     type ScalarType = f32;
     type Rotation = Rotation90<FcmaVector32>;
@@ -385,7 +387,7 @@ impl crate::simd::simd_vector::SimdVector for FcmaVector32 {
     type Butterfly7 = FcmaF32Butterfly7<f32>;
 
     #[inline(always)]
-    unsafe fn zero() -> Self {
+    unsafe fn zero_vector() -> Self {
         Self(vdupq_n_f32(0.0))
     }
     #[inline(always)]

@@ -21,8 +21,10 @@ use crate::FftDirection;
 ///
 /// Safety: every method here requires the current machine to support the backend's SIMD
 /// instruction set.
+#[allow(dead_code)]
 pub trait SimdVector: Copy + Send + Sync + Sized {
     const COMPLEX_PER_VECTOR: usize;
+    const RADIXN_CROSS_LAYER_UNROLL: bool; // If true, this platform benefits from doing a 2x unroll of the RadixN cross layers
 
     /// The scalar this vector holds. Always the same type as the `T` of the algorithm using it.
     type ScalarType: FftNum;
@@ -35,7 +37,7 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
     type Butterfly6: Send + Sync;
     type Butterfly7: Send + Sync;
 
-    unsafe fn zero() -> Self;
+    unsafe fn zero_vector() -> Self;
 
     // loads of complex numbers
     unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
@@ -210,3 +212,4 @@ macro_rules! simd_vector_cross_layer {
         }
     };
 }
+pub(crate) use simd_vector_cross_layer;

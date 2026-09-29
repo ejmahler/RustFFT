@@ -200,6 +200,7 @@ macro_rules! neon_vector_fft_helpers {
 
 impl crate::simd::simd_vector::SimdVector for float64x2_t {
     const COMPLEX_PER_VECTOR: usize = 1;
+    const RADIXN_CROSS_LAYER_UNROLL: bool = true;
 
     type ScalarType = f64;
     type Rotation = Rotation90<Self>;
@@ -210,7 +211,7 @@ impl crate::simd::simd_vector::SimdVector for float64x2_t {
     type Butterfly7 = NeonF64Butterfly7<f64>;
 
     #[inline(always)]
-    unsafe fn zero() -> Self {
+    unsafe fn zero_vector() -> Self {
         vdupq_n_f64(0.0)
     }
     #[inline(always)]
@@ -220,12 +221,12 @@ impl crate::simd::simd_vector::SimdVector for float64x2_t {
 
     #[inline(always)]
     unsafe fn load1_lo_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
-        unimplemented!("Impossible to do a load store of complex f64's");
+        unimplemented!("Impossible to do a partial load of complex f64's");
     }
 
     #[inline(always)]
     unsafe fn load1_dup_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
-        unimplemented!("Impossible to do a load store of complex f64's");
+        unimplemented!("Impossible to do a partial load of complex f64's");
     }
 
     #[inline(always)]
@@ -360,6 +361,7 @@ impl crate::simd::simd_vector::SimdVector for float64x2_t {
 
 impl crate::simd::simd_vector::SimdVector for float32x4_t {
     const COMPLEX_PER_VECTOR: usize = 2;
+    const RADIXN_CROSS_LAYER_UNROLL: bool = true;
 
     type ScalarType = f32;
     type Rotation = Rotation90<Self>;
@@ -370,7 +372,7 @@ impl crate::simd::simd_vector::SimdVector for float32x4_t {
     type Butterfly7 = NeonF32Butterfly7<f32>;
 
     #[inline(always)]
-    unsafe fn zero() -> Self {
+    unsafe fn zero_vector() -> Self {
         vdupq_n_f32(0.0)
     }
 

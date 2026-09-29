@@ -11,8 +11,10 @@ pub trait SimdComplexArray<V: SimdVector>: Deref {
     // Load complex numbers from the array to fill a SIMD vector.
     unsafe fn load(&self, index: usize) -> V;
     // Load a single complex number from the array into a SIMD vector, setting the unused elements to zero.
+    #[allow(dead_code)]
     unsafe fn load1_lo(&self, index: usize) -> V;
     // Load a single complex number from the array, and copy it to all elements of a SIMD vector.
+    #[allow(dead_code)]
     unsafe fn load1_dup(&self, index: usize) -> V;
 }
 
@@ -80,6 +82,7 @@ pub trait SimdComplexArrayMut<V: SimdVector>: SimdComplexArray<V> + DerefMut {
     // Store all complex numbers from a SIMD vector to the array.
     unsafe fn store(&mut self, vector: V, index: usize);
     // Store the low complex number from a SIMD vector to the array.
+    #[allow(dead_code)]
     unsafe fn store1_lo(&mut self, vector: V, index: usize);
 }
 

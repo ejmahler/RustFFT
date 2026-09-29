@@ -200,6 +200,7 @@ macro_rules! sse_vector_fft_helpers {
 
 impl crate::simd::simd_vector::SimdVector for __m128d {
     const COMPLEX_PER_VECTOR: usize = 1;
+    const RADIXN_CROSS_LAYER_UNROLL: bool = true;
 
     type ScalarType = f64;
     type Rotation = Rotation90<Self>;
@@ -210,7 +211,7 @@ impl crate::simd::simd_vector::SimdVector for __m128d {
     type Butterfly7 = SseF64Butterfly7<f64>;
 
     #[inline(always)]
-    unsafe fn zero() -> Self {
+    unsafe fn zero_vector() -> Self {
         _mm_setzero_pd()
     }
 
@@ -221,12 +222,12 @@ impl crate::simd::simd_vector::SimdVector for __m128d {
 
     #[inline(always)]
     unsafe fn load1_lo_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
-        unimplemented!("Impossible to do a load store of complex f64's");
+        unimplemented!("Impossible to do a partial load of complex f64's");
     }
 
     #[inline(always)]
     unsafe fn load1_dup_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
-        unimplemented!("Impossible to do a load store of complex f64's");
+        unimplemented!("Impossible to do a partial load of complex f64's");
     }
 
     #[inline(always)]
@@ -361,6 +362,7 @@ impl crate::simd::simd_vector::SimdVector for __m128d {
 
 impl crate::simd::simd_vector::SimdVector for __m128 {
     const COMPLEX_PER_VECTOR: usize = 2;
+    const RADIXN_CROSS_LAYER_UNROLL: bool = true;
 
     type ScalarType = f32;
     type Rotation = Rotation90<Self>;
@@ -371,7 +373,7 @@ impl crate::simd::simd_vector::SimdVector for __m128 {
     type Butterfly7 = SseF32Butterfly7<f32>;
 
     #[inline(always)]
-    unsafe fn zero() -> Self {
+    unsafe fn zero_vector() -> Self {
         _mm_setzero_ps()
     }
 
