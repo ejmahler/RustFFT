@@ -4,9 +4,10 @@ use num_complex::Complex;
 
 use crate::algorithm::butterflies::{Butterfly1, Butterfly27, Butterfly3, Butterfly9};
 use crate::array_utils::compute_logarithm;
+use crate::common::RadixFactor;
 use crate::simd::simd_radixn::SimdRadixN;
 use crate::{common::FftNum, FftDirection};
-use crate::{Direction, Fft, Length, RadixFactor};
+use crate::{Direction, Fft, Length};
 
 /// FFT algorithm optimized for power-of-three sizes
 ///
