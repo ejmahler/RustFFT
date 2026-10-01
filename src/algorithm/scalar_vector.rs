@@ -45,7 +45,7 @@ impl<T: FftNum> SimdVector for Complex<T> {
     }
 
     unsafe fn load1_dup_complex(_ptr: *const num_complex::Complex<Self::ScalarType>) -> Self {
-        unimplemented!("Impossible to do a partial load of complex scalars");
+        unimplemented!("Unused: a dup load of one complex scalar is just load_complex");
     }
 
     unsafe fn store_complex(ptr: *mut num_complex::Complex<Self::ScalarType>, data: Self) {
