@@ -8,6 +8,7 @@ use std::sync::Arc;
 use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
 
 use crate::simd::simd_bluesteins::SimdBluesteins;
+use crate::simd::simd_raders::SimdRaders;
 use crate::simd::simd_radix4::SimdRadix4;
 
 use crate::algorithm::*;
@@ -434,7 +435,13 @@ impl<T: FftNum> FftPlannerNeon<T> {
             }
             Recipe::RadersAlgorithm { inner_fft } => {
                 let inner_fft = self.build_fft(&inner_fft, direction);
-                Arc::new(RadersAlgorithm::new(inner_fft)) as Arc<dyn Fft<T>>
+                if id_t == id_f32 {
+                    Arc::new(SimdRaders::<float32x4_t, T>::new(inner_fft)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(SimdRaders::<float64x2_t, T>::new(inner_fft)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
             }
             Recipe::BluesteinsAlgorithm { len, inner_fft } => {
                 let inner_fft = self.build_fft(&inner_fft, direction);

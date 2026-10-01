@@ -7,6 +7,7 @@ mod neon_vector;
 pub mod neon_butterflies;
 pub mod neon_bluesteins;
 pub mod neon_prime_butterflies;
+pub mod neon_raders;
 pub mod neon_radix4;
 pub mod neon_radixn;
 

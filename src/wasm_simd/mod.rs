@@ -7,6 +7,7 @@ mod wasm_simd_vector;
 pub mod wasm_simd_butterflies;
 pub mod wasm_simd_bluesteins;
 pub mod wasm_simd_prime_butterflies;
+pub mod wasm_simd_raders;
 pub mod wasm_simd_radix4;
 pub mod wasm_simd_radixn;
 
