@@ -201,6 +201,7 @@ macro_rules! sse_vector_fft_helpers {
 impl crate::simd::simd_vector::SimdVector for __m128d {
     const COMPLEX_PER_VECTOR: usize = 1;
     const RADIXN_CROSS_LAYER_UNROLL: bool = true;
+    const FUSED_COMPLEX_MULTIPLY: bool = false;
 
     type ScalarType = f64;
     type Rotation = Rotation90<Self>;
@@ -287,6 +288,19 @@ impl crate::simd::simd_vector::SimdVector for __m128d {
     }
 
     #[inline(always)]
+    unsafe fn mul_complex_conjugated(left: Self, right: Self) -> Self {
+        // Same partial products as mul_complex, but addsub subtracts the low lane and adds the
+        // high one, while conjugating needs the opposite. Negating one input of the addsub and
+        // swapping the two gets there, at the cost of one xor against a hoistable constant.
+        let mut temp1 = _mm_unpacklo_pd(right, right);
+        let mut temp2 = _mm_unpackhi_pd(right, right);
+        temp1 = _mm_mul_pd(temp1, left);
+        temp2 = _mm_mul_pd(temp2, left);
+        temp2 = _mm_shuffle_pd(temp2, temp2, 0x01);
+        _mm_addsub_pd(temp2, _mm_xor_pd(temp1, _mm_set1_pd(-0.0)))
+    }
+
+    #[inline(always)]
     unsafe fn make_mixedradix_twiddle_chunk(
         x: usize,
         y: usize,
@@ -357,12 +371,14 @@ impl crate::simd::simd_vector::SimdVector for __m128d {
     }
 
     simd_vector_cross_layer!(#[target_feature(enable = "sse4.1")]);
+    simd_vector_multiply_loops!(#[target_feature(enable = "sse4.1")]);
     sse_vector_fft_helpers!();
 }
 
 impl crate::simd::simd_vector::SimdVector for __m128 {
     const COMPLEX_PER_VECTOR: usize = 2;
     const RADIXN_CROSS_LAYER_UNROLL: bool = true;
+    const FUSED_COMPLEX_MULTIPLY: bool = false;
 
     type ScalarType = f32;
     type Rotation = Rotation90<Self>;
@@ -449,6 +465,17 @@ impl crate::simd::simd_vector::SimdVector for __m128 {
     }
 
     #[inline(always)]
+    unsafe fn mul_complex_conjugated(left: Self, right: Self) -> Self {
+        // See the f64 version for why this swaps the addsub inputs and negates one of them.
+        let mut temp1 = _mm_shuffle_ps(right, right, 0xA0);
+        let mut temp2 = _mm_shuffle_ps(right, right, 0xF5);
+        temp1 = _mm_mul_ps(temp1, left);
+        temp2 = _mm_mul_ps(temp2, left);
+        temp2 = _mm_shuffle_ps(temp2, temp2, 0xB1);
+        _mm_addsub_ps(temp2, _mm_xor_ps(temp1, _mm_set1_ps(-0.0)))
+    }
+
+    #[inline(always)]
     unsafe fn make_mixedradix_twiddle_chunk(
         x: usize,
         y: usize,
@@ -519,6 +546,7 @@ impl crate::simd::simd_vector::SimdVector for __m128 {
     }
 
     simd_vector_cross_layer!(#[target_feature(enable = "sse4.1")]);
+    simd_vector_multiply_loops!(#[target_feature(enable = "sse4.1")]);
     sse_vector_fft_helpers!();
 }
 
