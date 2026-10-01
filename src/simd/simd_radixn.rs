@@ -26,6 +26,7 @@ use crate::common::{FftNum, RadixFactor};
 use crate::{Direction, Fft, FftDirection, Length};
 
 use super::simd_vector::SimdVector;
+use crate::simd::simd_array::{SimdComplexArray, SimdComplexArrayMut};
 
 /// The per-layer cross-FFT kernels, holding whatever precomputed state each radix needs.
 pub enum InternalRadixFactor<V: SimdVector> {
@@ -419,13 +420,13 @@ unsafe fn gather_and_twiddle<V: SimdVector, const RADIX: usize>(
     idx: usize,
     tw_base: usize,
 ) -> [V; RADIX] {
-    let mut arr = [V::zero(); RADIX];
+    let mut arr = [V::zero_vector(); RADIX];
 
     // The row-0 twiddle is always 1, so it's neither stored nor applied.
-    arr[0] = V::load(data, idx);
+    arr[0] = data.load(idx);
 
     for r in 1..RADIX {
-        let v = V::load(data, idx + r * num_columns);
+        let v = data.load(idx + r * num_columns);
         arr[r] = V::mul_complex(v, *twiddles.get_unchecked(tw_base + r - 1));
     }
     arr
@@ -438,7 +439,7 @@ unsafe fn gather_and_twiddle<V: SimdVector, const RADIX: usize>(
 /// gets the two independent dependency chains needed to keep the FMA pipeline busy.
 #[inline(always)]
 unsafe fn cross_layer<V: SimdVector, const RADIX: usize, F>(
-    data: &mut [Complex<V::ScalarType>],
+    mut data: &mut [Complex<V::ScalarType>],
     twiddles: &[V],
     num_columns: usize,
     butterfly: F,
@@ -455,56 +456,72 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize, F>(
     debug_assert!(partial_columns <= 1);
     debug_assert!(twiddles.len() >= num_columns.div_ceil(complex_per_vector) * tw_stride);
 
-    let (unroll_count, unroll_remainder) = (num_vector_columns / 2, num_vector_columns % 2);
-    for i in 0..unroll_count {
-        let vcol = i * 2;
-        let idx = vcol * complex_per_vector;
+    if V::RADIXN_CROSS_LAYER_UNROLL {
+        let (unroll_count, unroll_remainder) = (num_vector_columns / 2, num_vector_columns % 2);
+        for i in 0..unroll_count {
+            let vcol = i * 2;
+            let idx = vcol * complex_per_vector;
 
-        let a = gather_and_twiddle(data, twiddles, num_columns, idx, vcol * tw_stride);
-        let b = gather_and_twiddle(
-            data,
-            twiddles,
-            num_columns,
-            idx + complex_per_vector,
-            (vcol + 1) * tw_stride,
-        );
+            let a = gather_and_twiddle(data, twiddles, num_columns, idx, vcol * tw_stride);
+            let b = gather_and_twiddle(
+                data,
+                twiddles,
+                num_columns,
+                idx + complex_per_vector,
+                (vcol + 1) * tw_stride,
+            );
 
-        let a = butterfly(a);
-        let b = butterfly(b);
+            let a = butterfly(a);
+            let b = butterfly(b);
 
-        for (r, (a_row, b_row)) in a.iter().zip(b.iter()).enumerate() {
-            V::store(data, *a_row, idx + r * num_columns);
-            V::store(data, *b_row, idx + complex_per_vector + r * num_columns);
+            for (r, (a_row, b_row)) in a.iter().zip(b.iter()).enumerate() {
+                data.store(*a_row, idx + r * num_columns);
+                data.store(*b_row, idx + complex_per_vector + r * num_columns);
+            }
         }
-    }
 
-    // an odd vector column count leaves one behind
-    if unroll_remainder > 0 {
-        let vcol = unroll_count * 2;
-        let idx = vcol * complex_per_vector;
-        let a = butterfly(gather_and_twiddle(
-            data,
-            twiddles,
-            num_columns,
-            idx,
-            vcol * tw_stride,
-        ));
-        for (r, a_row) in a.iter().enumerate() {
-            V::store(data, *a_row, idx + r * num_columns);
+        // an odd vector column count leaves one behind
+        if unroll_remainder > 0 {
+            let vcol = unroll_count * 2;
+            let idx = vcol * complex_per_vector;
+            let a = butterfly(gather_and_twiddle(
+                data,
+                twiddles,
+                num_columns,
+                idx,
+                vcol * tw_stride,
+            ));
+            for (r, a_row) in a.iter().enumerate() {
+                data.store(*a_row, idx + r * num_columns);
+            }
         }
-    }
+    } else {
+        for i in 0..num_vector_columns {
+            let vcol = i;
+            let idx = vcol * complex_per_vector;
+
+            let a = gather_and_twiddle(data, twiddles, num_columns, idx, vcol * tw_stride);
+
+            let a = butterfly(a);
+
+            for (r, a_row) in a.iter().enumerate() {
+                data.store(*a_row, idx + r * num_columns);
+            }
+        }
+    };
 
     // A column count that isn't a whole number of vectors leaves a single column, so it can't be
     // loaded or stored as a vector: a full load of the last row would run past the end of the
     // buffer, and a full store would overwrite the first column of the next row. Load and store
     // only the low half instead. The butterfly is the same one, since it works down the columns
-    // and the halves of a vector never interact.
+    // and the halves of a vector never interact. Only f32 ever gets here, since a vector holds a
+    // single complex f64 and a count of those is always exact.
     if partial_columns > 0 {
         let vcol = num_vector_columns;
         let idx = vcol * complex_per_vector;
         let tw_base = vcol * tw_stride;
         let rows: [V; RADIX] = std::array::from_fn(|r| {
-            let v = V::load_partial_lo(data, idx + r * num_columns);
+            let v: V = data.load1_lo(idx + r * num_columns);
             if r == 0 {
                 v
             } else {
@@ -513,7 +530,7 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize, F>(
         });
         let a = butterfly(rows);
         for (r, a_row) in a.iter().enumerate() {
-            V::store_partial_lo(data, *a_row, idx + r * num_columns);
+            data.store1_lo(*a_row, idx + r * num_columns);
         }
     }
 }

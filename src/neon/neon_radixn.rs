@@ -1,17 +1,7 @@
 //! The NEON side of `SimdRadixN`.
 //!
 //! The algorithm itself lives in `src/simd/simd_radixn.rs`, shared by every SIMD backend, and the
-//! `SimdVector` impls it runs on are in `neon_vector.rs`. All that is left here is the type alias
-//! and the tests.
-
-use crate::simd::simd_radixn::SimdRadixN;
-
-use super::NeonNum;
-
-/// FFT algorithm for lengths that factor into small radixes, NEON accelerated version.
-/// This is designed to be used via a Planner, and not created directly.
-#[allow(dead_code)]
-pub type NeonRadixN<N, T> = SimdRadixN<<N as NeonNum>::VectorType, T>;
+//! `SimdVector` impls it runs on are in `neon_vector.rs`. All that is left here is the tests.
 
 #[cfg(test)]
 mod unit_tests {

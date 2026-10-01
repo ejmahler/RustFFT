@@ -21,8 +21,10 @@ use crate::FftDirection;
 ///
 /// Safety: every method here requires the current machine to support the backend's SIMD
 /// instruction set.
+#[allow(dead_code)]
 pub trait SimdVector: Copy + Send + Sync + Sized {
     const COMPLEX_PER_VECTOR: usize;
+    const RADIXN_CROSS_LAYER_UNROLL: bool; // If true, this platform benefits from doing a 2x unroll of the RadixN cross layers
 
     /// The scalar this vector holds. Always the same type as the `T` of the algorithm using it.
     type ScalarType: FftNum;
@@ -35,19 +37,30 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
     type Butterfly6: Send + Sync;
     type Butterfly7: Send + Sync;
 
-    unsafe fn zero() -> Self;
-    unsafe fn load(data: &[Complex<Self::ScalarType>], index: usize) -> Self;
-    unsafe fn store(data: &mut [Complex<Self::ScalarType>], value: Self, index: usize);
+    unsafe fn zero_vector() -> Self;
 
-    /// Load a single complex number into the low element, leaving the rest zeroed, and store the
-    /// low element of a vector back. These are how a column count that isn't a whole number of
-    /// vectors is finished off, so only the low element is ever touched.
-    ///
-    /// Every vector type here holds one or two complex numbers, so a remainder is always exactly
-    /// one column. For f64 a vector is one complex number, so these are the same as `load` and
-    /// `store`, and nothing ever has a remainder to begin with.
-    unsafe fn load_partial_lo(data: &[Complex<Self::ScalarType>], index: usize) -> Self;
-    unsafe fn store_partial_lo(data: &mut [Complex<Self::ScalarType>], value: Self, index: usize);
+    // loads of complex numbers
+    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
+    unsafe fn load1_lo_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
+    unsafe fn load1_dup_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
+
+    // stores of complex numbers
+    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
+    unsafe fn store1_lo_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
+
+    // Keep this around even though it's unused - research went into how to do it, keeping it ensures that research doesn't need to be repeated
+    #[allow(dead_code)]
+    unsafe fn store1_hi_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
+
+    // math ops
+    unsafe fn neg(a: Self) -> Self;
+    unsafe fn add(a: Self, b: Self) -> Self;
+    unsafe fn sub(a: Self, b: Self) -> Self;
+    unsafe fn mul(a: Self, b: Self) -> Self;
+    unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self;
+    unsafe fn nmadd(acc: Self, a: Self, b: Self) -> Self;
+
+    unsafe fn broadcast_scalar(value: Self::ScalarType) -> Self;
 
     /// Pairwise multiply the complex numbers in `left` with the complex numbers in `right`.
     unsafe fn mul_complex(left: Self, right: Self) -> Self;
@@ -62,6 +75,8 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
     ) -> Self;
 
     unsafe fn make_rotate90(direction: FftDirection) -> Self::Rotation;
+    unsafe fn apply_rotate90(direction: Self::Rotation, values: Self) -> Self;
+
     unsafe fn make_butterfly3(direction: FftDirection) -> Self::Butterfly3;
     unsafe fn make_butterfly5(direction: FftDirection) -> Self::Butterfly5;
     unsafe fn make_butterfly6(direction: FftDirection) -> Self::Butterfly6;
@@ -197,3 +212,4 @@ macro_rules! simd_vector_cross_layer {
         }
     };
 }
+pub(crate) use simd_vector_cross_layer;

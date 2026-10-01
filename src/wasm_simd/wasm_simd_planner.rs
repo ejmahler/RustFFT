@@ -5,10 +5,12 @@ use crate::algorithm::{
     MixedRadixSmall, RadersAlgorithm,
 };
 use crate::math_utils::PrimeFactor;
-use crate::wasm_simd::wasm_simd_radix4::WasmSimdRadix4;
 use crate::wasm_simd::*;
 use crate::{fft_cache::FftCache, math_utils::PrimeFactors, Fft, FftDirection, FftNum};
 use std::{any::TypeId, collections::HashMap, sync::Arc};
+
+use super::wasm_simd_vector::{WasmVector32, WasmVector64};
+use crate::simd::simd_radix4::SimdRadix4;
 
 const MIN_RADIX4_BITS: u32 = 6; // smallest size to consider radix 4 an option is 2^6 = 64
 const MAX_RADER_PRIME_FACTOR: usize = 23; // don't use Raders if the inner fft length has prime factor larger than this
@@ -235,9 +237,9 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
             Recipe::Radix4 { k, base_fft } => {
                 let base_fft = self.build_fft(&base_fft, direction);
                 if id_t == id_f32 {
-                    Arc::new(WasmSimdRadix4::<f32, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
+                    Arc::new(SimdRadix4::<WasmVector32, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
                 } else if id_t == id_f64 {
-                    Arc::new(WasmSimdRadix4::<f64, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
+                    Arc::new(SimdRadix4::<WasmVector64, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
                 } else {
                     panic!("Not f32 or f64");
                 }

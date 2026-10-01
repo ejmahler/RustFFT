@@ -7,21 +7,24 @@ use crate::array_utils::DoubleBuf;
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
 
+use crate::simd::simd_array::SimdComplexArrayMut;
+use crate::simd::simd_vector::SimdVector;
+
 use crate::fft_helper::{
     fft_helper_immut, fft_helper_immut_unroll2x, fft_helper_inplace, fft_helper_inplace_unroll2x,
 };
 
 use super::fcma_common::{assert_f32, assert_f64};
 use super::fcma_utils::*;
-use super::fcma_vector::{FcmaArrayMut, FcmaVector};
+use crate::fcma::fcma_vector::{FcmaVector, FcmaVector32, FcmaVector64};
 
 #[inline(always)]
-unsafe fn pack_32(a: Complex<f32>, b: Complex<f32>) -> float32x4_t {
-    vld1q_f32([a.re, a.im, b.re, b.im].as_ptr())
+unsafe fn pack_32(a: Complex<f32>, b: Complex<f32>) -> FcmaVector32 {
+    FcmaVector32(vld1q_f32([a.re, a.im, b.re, b.im].as_ptr()))
 }
 #[inline(always)]
-unsafe fn pack_64(a: Complex<f64>) -> float64x2_t {
-    vld1q_f64([a.re, a.im].as_ptr())
+unsafe fn pack_64(a: Complex<f64>) -> FcmaVector64 {
+    FcmaVector64(vld1q_f64([a.re, a.im].as_ptr()))
 }
 
 #[allow(unused)]
@@ -219,18 +222,21 @@ impl<T: FftNum> FcmaF32Butterfly1<T> {
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
-        let value = buffer.load_partial_lo_complex(0);
-        buffer.store_partial_lo_complex(value, 0);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector32>,
+    ) {
+        let value = buffer.load1_lo(0);
+        buffer.store1_lo(value, 0);
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl FcmaArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector32>,
     ) {
-        let value = buffer.load_complex(0);
-        buffer.store_complex(value, 0);
+        let value = buffer.load(0);
+        buffer.store(value, 0);
     }
 }
 
@@ -258,9 +264,12 @@ impl<T: FftNum> FcmaF64Butterfly1<T> {
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f64>) {
-        let value = buffer.load_complex(0);
-        buffer.store_complex(value, 0);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector64>,
+    ) {
+        let value = buffer.load(0);
+        buffer.store(value, 0);
     }
 }
 
@@ -288,34 +297,37 @@ impl<T: FftNum> FcmaF32Butterfly2<T> {
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
-        let values = buffer.load_complex(0);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector32>,
+    ) {
+        let values = buffer.load(0);
 
         let temp = self.perform_fft_direct(values);
 
-        buffer.store_complex(temp, 0);
+        buffer.store(temp, 0);
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl FcmaArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector32>,
     ) {
-        let values_a = buffer.load_complex(0);
-        let values_b = buffer.load_complex(2);
+        let values_a = buffer.load(0);
+        let values_b = buffer.load(2);
 
         let out = self.perform_parallel_fft_direct(values_a, values_b);
 
         let [out02, out13] = transpose_complex_2x2_f32(out[0], out[1]);
 
-        buffer.store_complex(out02, 0);
-        buffer.store_complex(out13, 2);
+        buffer.store(out02, 0);
+        buffer.store(out13, 2);
     }
 
     // length 2 fft of x, given as [x0, x1]
     // result is [X0, X1]
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: float32x4_t) -> float32x4_t {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: FcmaVector32) -> FcmaVector32 {
         solo_fft2_f32(values)
     }
 
@@ -324,9 +336,9 @@ impl<T: FftNum> FcmaF32Butterfly2<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(
         &self,
-        values_x: float32x4_t,
-        values_y: float32x4_t,
-    ) -> [float32x4_t; 2] {
+        values_x: FcmaVector32,
+        values_y: FcmaVector32,
+    ) -> [FcmaVector32; 2] {
         parallel_fft2_contiguous_f32(values_x, values_y)
     }
 }
@@ -335,18 +347,21 @@ impl<T: FftNum> FcmaF32Butterfly2<T> {
 // result is [X0, Y0], [X1, Y1]
 #[inline(always)]
 pub(crate) unsafe fn parallel_fft2_interleaved_f32(
-    val02: float32x4_t,
-    val13: float32x4_t,
-) -> [float32x4_t; 2] {
-    let temp0 = vaddq_f32(val02, val13);
-    let temp1 = vsubq_f32(val02, val13);
+    val02: FcmaVector32,
+    val13: FcmaVector32,
+) -> [FcmaVector32; 2] {
+    let temp0 = SimdVector::add(val02, val13);
+    let temp1 = SimdVector::sub(val02, val13);
     [temp0, temp1]
 }
 
 // double lenth 2 fft of a and b, given as [x0, x1], [y0, y1]
 // result is [X0, Y0], [X1, Y1]
 #[inline(always)]
-unsafe fn parallel_fft2_contiguous_f32(left: float32x4_t, right: float32x4_t) -> [float32x4_t; 2] {
+unsafe fn parallel_fft2_contiguous_f32(
+    left: FcmaVector32,
+    right: FcmaVector32,
+) -> [FcmaVector32; 2] {
     let [temp02, temp13] = transpose_complex_2x2_f32(left, right);
     parallel_fft2_interleaved_f32(temp02, temp13)
 }
@@ -354,10 +369,10 @@ unsafe fn parallel_fft2_contiguous_f32(left: float32x4_t, right: float32x4_t) ->
 // length 2 fft of x, given as [x0, x1]
 // result is [X0, X1]
 #[inline(always)]
-unsafe fn solo_fft2_f32(values: float32x4_t) -> float32x4_t {
-    let high = vget_high_f32(values);
-    let low = vget_low_f32(values);
-    vcombine_f32(vadd_f32(low, high), vsub_f32(low, high))
+unsafe fn solo_fft2_f32(values: FcmaVector32) -> FcmaVector32 {
+    let high = vget_high_f32(values.0);
+    let low = vget_low_f32(values.0);
+    FcmaVector32(vcombine_f32(vadd_f32(low, high), vsub_f32(low, high)))
 }
 
 //   ____             __   _  _   _     _ _
@@ -385,30 +400,33 @@ impl<T: FftNum> FcmaF64Butterfly2<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f64>) {
-        let value0 = buffer.load_complex(0);
-        let value1 = buffer.load_complex(1);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector64>,
+    ) {
+        let value0 = buffer.load(0);
+        let value1 = buffer.load(1);
 
         let out = self.perform_fft_direct(value0, value1);
 
-        buffer.store_complex(out[0], 0);
-        buffer.store_complex(out[1], 1);
+        buffer.store(out[0], 0);
+        buffer.store(out[1], 1);
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
         &self,
-        value0: float64x2_t,
-        value1: float64x2_t,
-    ) -> [float64x2_t; 2] {
+        value0: FcmaVector64,
+        value1: FcmaVector64,
+    ) -> [FcmaVector64; 2] {
         solo_fft2_f64(value0, value1)
     }
 }
 
 #[inline(always)]
-pub(crate) unsafe fn solo_fft2_f64(left: float64x2_t, right: float64x2_t) -> [float64x2_t; 2] {
-    let temp0 = vaddq_f64(left, right);
-    let temp1 = vsubq_f64(left, right);
+pub(crate) unsafe fn solo_fft2_f64(left: FcmaVector64, right: FcmaVector64) -> [FcmaVector64; 2] {
+    let temp0 = SimdVector::add(left, right);
+    let temp1 = SimdVector::sub(left, right);
     [temp0, temp1]
 }
 
@@ -423,9 +441,9 @@ pub struct FcmaF32Butterfly3<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     rotate: Rotate90F32,
-    twiddle: float32x4_t,
-    twiddle1re: float32x4_t,
-    twiddle1im: float32x4_t,
+    twiddle: FcmaVector32,
+    twiddle1re: FcmaVector32,
+    twiddle1im: FcmaVector32,
 }
 
 boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly3, 3, |this: &FcmaF32Butterfly3<_>| this
@@ -436,9 +454,10 @@ impl<T: FftNum> FcmaF32Butterfly3<T> {
         assert_f32::<T>();
         let rotate = Rotate90F32::new(true);
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 3, direction);
-        let twiddle = unsafe { vld1q_f32([tw1.re, tw1.re, -tw1.im, -tw1.im].as_ptr()) };
-        let twiddle1re = unsafe { vmovq_n_f32(tw1.re) };
-        let twiddle1im = unsafe { vmovq_n_f32(tw1.im) };
+        let twiddle =
+            unsafe { FcmaVector32(vld1q_f32([tw1.re, tw1.re, -tw1.im, -tw1.im].as_ptr())) };
+        let twiddle1re = unsafe { FcmaVector32(vmovq_n_f32(tw1.re)) };
+        let twiddle1im = unsafe { FcmaVector32(vmovq_n_f32(tw1.im)) };
         Self {
             direction,
             _phantom: std::marker::PhantomData,
@@ -449,24 +468,27 @@ impl<T: FftNum> FcmaF32Butterfly3<T> {
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
-        let value0x = buffer.load_partial_lo_complex(0);
-        let value12 = buffer.load_complex(1);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector32>,
+    ) {
+        let value0x = buffer.load1_lo(0);
+        let value12 = buffer.load(1);
 
         let out = self.perform_fft_direct(value0x, value12);
 
-        buffer.store_partial_lo_complex(out[0], 0);
-        buffer.store_complex(out[1], 1);
+        buffer.store1_lo(out[0], 0);
+        buffer.store(out[1], 1);
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl FcmaArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector32>,
     ) {
-        let valuea0a1 = buffer.load_complex(0);
-        let valuea2b0 = buffer.load_complex(2);
-        let valueb1b2 = buffer.load_complex(4);
+        let valuea0a1 = buffer.load(0);
+        let valuea2b0 = buffer.load(2);
+        let valueb1b2 = buffer.load(4);
 
         let value0 = extract_lo_hi_f32(valuea0a1, valuea2b0);
         let value1 = extract_hi_lo_f32(valuea0a1, valueb1b2);
@@ -478,9 +500,9 @@ impl<T: FftNum> FcmaF32Butterfly3<T> {
         let out1 = extract_lo_hi_f32(out[2], out[0]);
         let out2 = extract_hi_hi_f32(out[1], out[2]);
 
-        buffer.store_complex(out0, 0);
-        buffer.store_complex(out1, 2);
-        buffer.store_complex(out2, 4);
+        buffer.store(out0, 0);
+        buffer.store(out1, 2);
+        buffer.store(out2, 4);
     }
 
     // length 3 fft of a, given as [x0, 0.0], [x1, x2]
@@ -489,16 +511,16 @@ impl<T: FftNum> FcmaF32Butterfly3<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
         &self,
-        value0x: float32x4_t,
-        value12: float32x4_t,
-    ) -> [float32x4_t; 2] {
+        value0x: FcmaVector32,
+        value12: FcmaVector32,
+    ) -> [FcmaVector32; 2] {
         // This is an FCMA translation of the scalar 3-point butterfly
         let rev12 = reverse_complex_and_negate_hi_f32(value12);
-        let temp12pn = self.rotate.rotate_hi(vaddq_f32(value12, rev12));
-        let temp = vfmaq_f32(value0x, temp12pn, self.twiddle);
+        let temp12pn = self.rotate.rotate_hi(SimdVector::add(value12, rev12));
+        let temp = SimdVector::fmadd(value0x, temp12pn, self.twiddle);
 
         let out12 = solo_fft2_f32(temp);
-        let out0x = vaddq_f32(value0x, temp12pn);
+        let out0x = SimdVector::add(value0x, temp12pn);
         [out0x, out12]
     }
 
@@ -507,19 +529,19 @@ impl<T: FftNum> FcmaF32Butterfly3<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(
         &self,
-        value0: float32x4_t,
-        value1: float32x4_t,
-        value2: float32x4_t,
-    ) -> [float32x4_t; 3] {
+        value0: FcmaVector32,
+        value1: FcmaVector32,
+        value2: FcmaVector32,
+    ) -> [FcmaVector32; 3] {
         // This is an FCMA translation of the scalar 3-point butterfly
-        let x12p = vaddq_f32(value1, value2);
-        let x12n = vsubq_f32(value1, value2);
+        let x12p = SimdVector::add(value1, value2);
+        let x12n = SimdVector::sub(value1, value2);
 
-        let temp = vfmaq_f32(value0, self.twiddle1re, x12p);
+        let temp = SimdVector::fmadd(value0, self.twiddle1re, x12p);
 
         // The rotation of x12n is part of the multiplications below, and the second twiddle is
         // the negated first one, so that multiplication rotates the other way instead.
-        let x0 = vaddq_f32(value0, x12p);
+        let x0 = SimdVector::add(value0, x12p);
         let x1 = FcmaVector::fmadd_rotate90(temp, self.twiddle1im, x12n);
         let x2 = FcmaVector::nmadd_rotate90(temp, self.twiddle1im, x12n);
         [x0, x1, x2]
@@ -536,8 +558,8 @@ impl<T: FftNum> FcmaF32Butterfly3<T> {
 pub struct FcmaF64Butterfly3<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    twiddle1re: float64x2_t,
-    twiddle1im: float64x2_t,
+    twiddle1re: FcmaVector64,
+    twiddle1im: FcmaVector64,
 }
 
 boilerplate_fft_fcma_f64_butterfly!(FcmaF64Butterfly3, 3, |this: &FcmaF64Butterfly3<_>| this
@@ -547,8 +569,8 @@ impl<T: FftNum> FcmaF64Butterfly3<T> {
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 3, direction);
-        let twiddle1re = unsafe { vmovq_n_f64(tw1.re) };
-        let twiddle1im = unsafe { vmovq_n_f64(tw1.im) };
+        let twiddle1re = unsafe { FcmaVector64(vmovq_n_f64(tw1.re)) };
+        let twiddle1im = unsafe { FcmaVector64(vmovq_n_f64(tw1.im)) };
 
         Self {
             direction,
@@ -559,16 +581,19 @@ impl<T: FftNum> FcmaF64Butterfly3<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f64>) {
-        let value0 = buffer.load_complex(0);
-        let value1 = buffer.load_complex(1);
-        let value2 = buffer.load_complex(2);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector64>,
+    ) {
+        let value0 = buffer.load(0);
+        let value1 = buffer.load(1);
+        let value2 = buffer.load(2);
 
         let out = self.perform_fft_direct(value0, value1, value2);
 
-        buffer.store_complex(out[0], 0);
-        buffer.store_complex(out[1], 1);
-        buffer.store_complex(out[2], 2);
+        buffer.store(out[0], 0);
+        buffer.store(out[1], 1);
+        buffer.store(out[2], 2);
     }
 
     // length 3 fft of x, given as x0, x1, x2.
@@ -576,19 +601,19 @@ impl<T: FftNum> FcmaF64Butterfly3<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
         &self,
-        value0: float64x2_t,
-        value1: float64x2_t,
-        value2: float64x2_t,
-    ) -> [float64x2_t; 3] {
+        value0: FcmaVector64,
+        value1: FcmaVector64,
+        value2: FcmaVector64,
+    ) -> [FcmaVector64; 3] {
         // This is an FCMA translation of the scalar 3-point butterfly
-        let x12p = vaddq_f64(value1, value2);
-        let x12n = vsubq_f64(value1, value2);
+        let x12p = SimdVector::add(value1, value2);
+        let x12n = SimdVector::sub(value1, value2);
 
-        let temp = vfmaq_f64(value0, self.twiddle1re, x12p);
+        let temp = SimdVector::fmadd(value0, self.twiddle1re, x12p);
 
         // The rotation of x12n is part of the multiplications below, and the second twiddle is
         // the negated first one, so that multiplication rotates the other way instead.
-        let x0 = vaddq_f64(value0, x12p);
+        let x0 = SimdVector::add(value0, x12p);
         let x1 = FcmaVector::fmadd_rotate90(temp, self.twiddle1im, x12n);
         let x2 = FcmaVector::nmadd_rotate90(temp, self.twiddle1im, x12n);
         [x0, x1, x2]
@@ -626,25 +651,28 @@ impl<T: FftNum> FcmaF32Butterfly4<T> {
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
-        let value01 = buffer.load_complex(0);
-        let value23 = buffer.load_complex(2);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector32>,
+    ) {
+        let value01 = buffer.load(0);
+        let value23 = buffer.load(2);
 
         let out = self.perform_fft_direct(value01, value23);
 
-        buffer.store_complex(out[0], 0);
-        buffer.store_complex(out[1], 2);
+        buffer.store(out[0], 0);
+        buffer.store(out[1], 2);
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl FcmaArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector32>,
     ) {
-        let value01a = buffer.load_complex(0);
-        let value23a = buffer.load_complex(2);
-        let value01b = buffer.load_complex(4);
-        let value23b = buffer.load_complex(6);
+        let value01a = buffer.load(0);
+        let value23a = buffer.load(2);
+        let value01b = buffer.load(4);
+        let value23b = buffer.load(6);
 
         let [value0ab, value1ab] = transpose_complex_2x2_f32(value01a, value01b);
         let [value2ab, value3ab] = transpose_complex_2x2_f32(value23a, value23b);
@@ -654,10 +682,10 @@ impl<T: FftNum> FcmaF32Butterfly4<T> {
         let [out0, out1] = transpose_complex_2x2_f32(out[0], out[1]);
         let [out2, out3] = transpose_complex_2x2_f32(out[2], out[3]);
 
-        buffer.store_complex(out0, 0);
-        buffer.store_complex(out1, 4);
-        buffer.store_complex(out2, 2);
-        buffer.store_complex(out3, 6);
+        buffer.store(out0, 0);
+        buffer.store(out1, 4);
+        buffer.store(out2, 2);
+        buffer.store(out3, 6);
     }
 
     // length 4 fft of a, given as [x0, x1], [x2, x3]
@@ -665,9 +693,9 @@ impl<T: FftNum> FcmaF32Butterfly4<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
         &self,
-        value01: float32x4_t,
-        value23: float32x4_t,
-    ) -> [float32x4_t; 2] {
+        value01: FcmaVector32,
+        value23: FcmaVector32,
+    ) -> [FcmaVector32; 2] {
         //we're going to hardcode a step of mixed radix
         //aka we're going to do the six step algorithm
 
@@ -690,8 +718,8 @@ impl<T: FftNum> FcmaF32Butterfly4<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(
         &self,
-        values: [float32x4_t; 4],
-    ) -> [float32x4_t; 4] {
+        values: [FcmaVector32; 4],
+    ) -> [FcmaVector32; 4] {
         //we're going to hardcode a step of mixed radix
         //aka we're going to do the six step algorithm
 
@@ -751,22 +779,25 @@ impl<T: FftNum> FcmaF64Butterfly4<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f64>) {
-        let value0 = buffer.load_complex(0);
-        let value1 = buffer.load_complex(1);
-        let value2 = buffer.load_complex(2);
-        let value3 = buffer.load_complex(3);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector64>,
+    ) {
+        let value0 = buffer.load(0);
+        let value1 = buffer.load(1);
+        let value2 = buffer.load(2);
+        let value3 = buffer.load(3);
 
         let out = self.perform_fft_direct([value0, value1, value2, value3]);
 
-        buffer.store_complex(out[0], 0);
-        buffer.store_complex(out[1], 1);
-        buffer.store_complex(out[2], 2);
-        buffer.store_complex(out[3], 3);
+        buffer.store(out[0], 0);
+        buffer.store(out[1], 1);
+        buffer.store(out[2], 2);
+        buffer.store(out[3], 3);
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [float64x2_t; 4]) -> [float64x2_t; 4] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [FcmaVector64; 4]) -> [FcmaVector64; 4] {
         //we're going to hardcode a step of mixed radix
         //aka we're going to do the six step algorithm
 
@@ -804,14 +835,14 @@ pub struct FcmaF32Butterfly5<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     rotate: Rotate90F32,
-    twiddle12re: float32x4_t,
-    twiddle21re: float32x4_t,
-    twiddle12im: float32x4_t,
-    twiddle21im: float32x4_t,
-    twiddle1re: float32x4_t,
-    twiddle1im: float32x4_t,
-    twiddle2re: float32x4_t,
-    twiddle2im: float32x4_t,
+    twiddle12re: FcmaVector32,
+    twiddle21re: FcmaVector32,
+    twiddle12im: FcmaVector32,
+    twiddle21im: FcmaVector32,
+    twiddle1re: FcmaVector32,
+    twiddle1im: FcmaVector32,
+    twiddle2re: FcmaVector32,
+    twiddle2im: FcmaVector32,
 }
 
 boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly5, 5, |this: &FcmaF32Butterfly5<_>| this
@@ -823,14 +854,18 @@ impl<T: FftNum> FcmaF32Butterfly5<T> {
         let rotate = Rotate90F32::new(true);
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 5, direction);
         let tw2: Complex<f32> = twiddles::compute_twiddle(2, 5, direction);
-        let twiddle12re = unsafe { vld1q_f32([tw1.re, tw1.re, tw2.re, tw2.re].as_ptr()) };
-        let twiddle21re = unsafe { vld1q_f32([tw2.re, tw2.re, tw1.re, tw1.re].as_ptr()) };
-        let twiddle12im = unsafe { vld1q_f32([tw1.im, tw1.im, tw2.im, tw2.im].as_ptr()) };
-        let twiddle21im = unsafe { vld1q_f32([tw2.im, tw2.im, -tw1.im, -tw1.im].as_ptr()) };
-        let twiddle1re = unsafe { vmovq_n_f32(tw1.re) };
-        let twiddle1im = unsafe { vmovq_n_f32(tw1.im) };
-        let twiddle2re = unsafe { vmovq_n_f32(tw2.re) };
-        let twiddle2im = unsafe { vmovq_n_f32(tw2.im) };
+        let twiddle12re =
+            unsafe { FcmaVector32(vld1q_f32([tw1.re, tw1.re, tw2.re, tw2.re].as_ptr())) };
+        let twiddle21re =
+            unsafe { FcmaVector32(vld1q_f32([tw2.re, tw2.re, tw1.re, tw1.re].as_ptr())) };
+        let twiddle12im =
+            unsafe { FcmaVector32(vld1q_f32([tw1.im, tw1.im, tw2.im, tw2.im].as_ptr())) };
+        let twiddle21im =
+            unsafe { FcmaVector32(vld1q_f32([tw2.im, tw2.im, -tw1.im, -tw1.im].as_ptr())) };
+        let twiddle1re = unsafe { FcmaVector32(vmovq_n_f32(tw1.re)) };
+        let twiddle1im = unsafe { FcmaVector32(vmovq_n_f32(tw1.im)) };
+        let twiddle2re = unsafe { FcmaVector32(vmovq_n_f32(tw2.re)) };
+        let twiddle2im = unsafe { FcmaVector32(vmovq_n_f32(tw2.im)) };
 
         Self {
             direction,
@@ -847,22 +882,25 @@ impl<T: FftNum> FcmaF32Butterfly5<T> {
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
-        let value00 = buffer.load1_complex(0);
-        let value12 = buffer.load_complex(1);
-        let value34 = buffer.load_complex(3);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector32>,
+    ) {
+        let value00 = buffer.load1_dup(0);
+        let value12 = buffer.load(1);
+        let value34 = buffer.load(3);
 
         let out = self.perform_fft_direct(value00, value12, value34);
 
-        buffer.store_partial_lo_complex(out[0], 0);
-        buffer.store_complex(out[1], 1);
-        buffer.store_complex(out[2], 3);
+        buffer.store1_lo(out[0], 0);
+        buffer.store(out[1], 1);
+        buffer.store(out[2], 3);
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl FcmaArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector32>,
     ) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4 ,6, 8});
 
@@ -891,28 +929,28 @@ impl<T: FftNum> FcmaF32Butterfly5<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
         &self,
-        value00: float32x4_t,
-        value12: float32x4_t,
-        value34: float32x4_t,
-    ) -> [float32x4_t; 3] {
+        value00: FcmaVector32,
+        value12: FcmaVector32,
+        value34: FcmaVector32,
+    ) -> [FcmaVector32; 3] {
         // This is an FCMA translation of the scalar 5-point butterfly
         let temp43 = reverse_complex_elements_f32(value34);
-        let x1423p = vaddq_f32(value12, temp43);
-        let x1423n = vsubq_f32(value12, temp43);
+        let x1423p = SimdVector::add(value12, temp43);
+        let x1423n = SimdVector::sub(value12, temp43);
 
         let x1414p = duplicate_lo_f32(x1423p);
         let x2323p = duplicate_hi_f32(x1423p);
         let x1414n = duplicate_lo_f32(x1423n);
         let x2323n = duplicate_hi_f32(x1423n);
 
-        let temp_a1 = vmulq_f32(self.twiddle12re, x1414p);
-        let temp_b1 = vmulq_f32(self.twiddle12im, x1414n);
+        let temp_a1 = SimdVector::mul(self.twiddle12re, x1414p);
+        let temp_b1 = SimdVector::mul(self.twiddle12im, x1414n);
 
-        let temp_a = vfmaq_f32(temp_a1, self.twiddle21re, x2323p);
-        let temp_a = vaddq_f32(value00, temp_a);
-        let temp_b = vfmaq_f32(temp_b1, self.twiddle21im, x2323n);
+        let temp_a = SimdVector::fmadd(temp_a1, self.twiddle21re, x2323p);
+        let temp_a = SimdVector::add(value00, temp_a);
+        let temp_b = SimdVector::fmadd(temp_b1, self.twiddle21im, x2323n);
 
-        let x00 = vaddq_f32(value00, vaddq_f32(x1414p, x2323p));
+        let x00 = SimdVector::add(value00, SimdVector::add(x1414p, x2323p));
 
         let x12 = self.rotate.rotate_both_and_add(temp_a, temp_b);
         let x34 = reverse_complex_elements_f32(self.rotate.rotate_both_and_sub(temp_a, temp_b));
@@ -924,34 +962,34 @@ impl<T: FftNum> FcmaF32Butterfly5<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(
         &self,
-        value0: float32x4_t,
-        value1: float32x4_t,
-        value2: float32x4_t,
-        value3: float32x4_t,
-        value4: float32x4_t,
-    ) -> [float32x4_t; 5] {
+        value0: FcmaVector32,
+        value1: FcmaVector32,
+        value2: FcmaVector32,
+        value3: FcmaVector32,
+        value4: FcmaVector32,
+    ) -> [FcmaVector32; 5] {
         // This is an FCMA translation of the scalar 3-point butterfly
-        let x14p = vaddq_f32(value1, value4);
-        let x14n = vsubq_f32(value1, value4);
-        let x23p = vaddq_f32(value2, value3);
-        let x23n = vsubq_f32(value2, value3);
+        let x14p = SimdVector::add(value1, value4);
+        let x14n = SimdVector::sub(value1, value4);
+        let x23p = SimdVector::add(value2, value3);
+        let x23n = SimdVector::sub(value2, value3);
 
-        let temp_a1_1 = vmulq_f32(self.twiddle1re, x14p);
-        let temp_a1_2 = vmulq_f32(self.twiddle2re, x23p);
-        let temp_b1_1 = vmulq_f32(self.twiddle1im, x14n);
-        let temp_b1_2 = vmulq_f32(self.twiddle2im, x23n);
-        let temp_a2_1 = vmulq_f32(self.twiddle1re, x23p);
-        let temp_a2_2 = vmulq_f32(self.twiddle2re, x14p);
-        let temp_b2_1 = vmulq_f32(self.twiddle2im, x14n);
-        let temp_b2_2 = vmulq_f32(self.twiddle1im, x23n);
+        let temp_a1_1 = SimdVector::mul(self.twiddle1re, x14p);
+        let temp_a1_2 = SimdVector::mul(self.twiddle2re, x23p);
+        let temp_b1_1 = SimdVector::mul(self.twiddle1im, x14n);
+        let temp_b1_2 = SimdVector::mul(self.twiddle2im, x23n);
+        let temp_a2_1 = SimdVector::mul(self.twiddle1re, x23p);
+        let temp_a2_2 = SimdVector::mul(self.twiddle2re, x14p);
+        let temp_b2_1 = SimdVector::mul(self.twiddle2im, x14n);
+        let temp_b2_2 = SimdVector::mul(self.twiddle1im, x23n);
 
-        let temp_a1 = vaddq_f32(value0, vaddq_f32(temp_a1_1, temp_a1_2));
-        let temp_b1 = vaddq_f32(temp_b1_1, temp_b1_2);
-        let temp_a2 = vaddq_f32(value0, vaddq_f32(temp_a2_1, temp_a2_2));
-        let temp_b2 = vsubq_f32(temp_b2_1, temp_b2_2);
+        let temp_a1 = SimdVector::add(value0, SimdVector::add(temp_a1_1, temp_a1_2));
+        let temp_b1 = SimdVector::add(temp_b1_1, temp_b1_2);
+        let temp_a2 = SimdVector::add(value0, SimdVector::add(temp_a2_1, temp_a2_2));
+        let temp_b2 = SimdVector::sub(temp_b2_1, temp_b2_2);
 
         [
-            vaddq_f32(value0, vaddq_f32(x14p, x23p)),
+            SimdVector::add(value0, SimdVector::add(x14p, x23p)),
             self.rotate.rotate_both_and_add(temp_a1, temp_b1),
             self.rotate.rotate_both_and_add(temp_a2, temp_b2),
             self.rotate.rotate_both_and_sub(temp_a2, temp_b2),
@@ -971,10 +1009,10 @@ pub struct FcmaF64Butterfly5<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     rotate: Rotate90F64,
-    twiddle1re: float64x2_t,
-    twiddle1im: float64x2_t,
-    twiddle2re: float64x2_t,
-    twiddle2im: float64x2_t,
+    twiddle1re: FcmaVector64,
+    twiddle1im: FcmaVector64,
+    twiddle2re: FcmaVector64,
+    twiddle2im: FcmaVector64,
 }
 
 boilerplate_fft_fcma_f64_butterfly!(FcmaF64Butterfly5, 5, |this: &FcmaF64Butterfly5<_>| this
@@ -986,10 +1024,10 @@ impl<T: FftNum> FcmaF64Butterfly5<T> {
         let rotate = Rotate90F64::new(true);
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 5, direction);
         let tw2: Complex<f64> = twiddles::compute_twiddle(2, 5, direction);
-        let twiddle1re = unsafe { vmovq_n_f64(tw1.re) };
-        let twiddle1im = unsafe { vmovq_n_f64(tw1.im) };
-        let twiddle2re = unsafe { vmovq_n_f64(tw2.re) };
-        let twiddle2im = unsafe { vmovq_n_f64(tw2.im) };
+        let twiddle1re = unsafe { FcmaVector64(vmovq_n_f64(tw1.re)) };
+        let twiddle1im = unsafe { FcmaVector64(vmovq_n_f64(tw1.im)) };
+        let twiddle2re = unsafe { FcmaVector64(vmovq_n_f64(tw2.re)) };
+        let twiddle2im = unsafe { FcmaVector64(vmovq_n_f64(tw2.im)) };
 
         Self {
             direction,
@@ -1003,20 +1041,23 @@ impl<T: FftNum> FcmaF64Butterfly5<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f64>) {
-        let value0 = buffer.load_complex(0);
-        let value1 = buffer.load_complex(1);
-        let value2 = buffer.load_complex(2);
-        let value3 = buffer.load_complex(3);
-        let value4 = buffer.load_complex(4);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector64>,
+    ) {
+        let value0 = buffer.load(0);
+        let value1 = buffer.load(1);
+        let value2 = buffer.load(2);
+        let value3 = buffer.load(3);
+        let value4 = buffer.load(4);
 
         let out = self.perform_fft_direct(value0, value1, value2, value3, value4);
 
-        buffer.store_complex(out[0], 0);
-        buffer.store_complex(out[1], 1);
-        buffer.store_complex(out[2], 2);
-        buffer.store_complex(out[3], 3);
-        buffer.store_complex(out[4], 4);
+        buffer.store(out[0], 0);
+        buffer.store(out[1], 1);
+        buffer.store(out[2], 2);
+        buffer.store(out[3], 3);
+        buffer.store(out[4], 4);
     }
 
     // length 5 fft of x, given as x0, x1, x2, x3, x4.
@@ -1024,36 +1065,36 @@ impl<T: FftNum> FcmaF64Butterfly5<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
         &self,
-        value0: float64x2_t,
-        value1: float64x2_t,
-        value2: float64x2_t,
-        value3: float64x2_t,
-        value4: float64x2_t,
-    ) -> [float64x2_t; 5] {
+        value0: FcmaVector64,
+        value1: FcmaVector64,
+        value2: FcmaVector64,
+        value3: FcmaVector64,
+        value4: FcmaVector64,
+    ) -> [FcmaVector64; 5] {
         // This is an FCMA translation of the scalar 5-point butterfly
-        let x14p = vaddq_f64(value1, value4);
-        let x14n = vsubq_f64(value1, value4);
-        let x23p = vaddq_f64(value2, value3);
-        let x23n = vsubq_f64(value2, value3);
+        let x14p = SimdVector::add(value1, value4);
+        let x14n = SimdVector::sub(value1, value4);
+        let x23p = SimdVector::add(value2, value3);
+        let x23n = SimdVector::sub(value2, value3);
 
-        let temp_a1_1 = vmulq_f64(self.twiddle1re, x14p);
-        let temp_a1_2 = vmulq_f64(self.twiddle2re, x23p);
-        let temp_a2_1 = vmulq_f64(self.twiddle2re, x14p);
-        let temp_a2_2 = vmulq_f64(self.twiddle1re, x23p);
+        let temp_a1_1 = SimdVector::mul(self.twiddle1re, x14p);
+        let temp_a1_2 = SimdVector::mul(self.twiddle2re, x23p);
+        let temp_a2_1 = SimdVector::mul(self.twiddle2re, x14p);
+        let temp_a2_2 = SimdVector::mul(self.twiddle1re, x23p);
 
-        let temp_b1_1 = vmulq_f64(self.twiddle1im, x14n);
-        let temp_b1_2 = vmulq_f64(self.twiddle2im, x23n);
-        let temp_b2_1 = vmulq_f64(self.twiddle2im, x14n);
-        let temp_b2_2 = vmulq_f64(self.twiddle1im, x23n);
+        let temp_b1_1 = SimdVector::mul(self.twiddle1im, x14n);
+        let temp_b1_2 = SimdVector::mul(self.twiddle2im, x23n);
+        let temp_b2_1 = SimdVector::mul(self.twiddle2im, x14n);
+        let temp_b2_2 = SimdVector::mul(self.twiddle1im, x23n);
 
-        let temp_a1 = vaddq_f64(value0, vaddq_f64(temp_a1_1, temp_a1_2));
-        let temp_a2 = vaddq_f64(value0, vaddq_f64(temp_a2_1, temp_a2_2));
+        let temp_a1 = SimdVector::add(value0, SimdVector::add(temp_a1_1, temp_a1_2));
+        let temp_a2 = SimdVector::add(value0, SimdVector::add(temp_a2_1, temp_a2_2));
 
-        let temp_b1 = vaddq_f64(temp_b1_1, temp_b1_2);
-        let temp_b2 = vsubq_f64(temp_b2_1, temp_b2_2);
+        let temp_b1 = SimdVector::add(temp_b1_1, temp_b1_2);
+        let temp_b2 = SimdVector::sub(temp_b2_1, temp_b2_2);
 
         [
-            vaddq_f64(value0, vaddq_f64(x14p, x23p)),
+            SimdVector::add(value0, SimdVector::add(x14p, x23p)),
             self.rotate.rotate_and_add(temp_a1, temp_b1),
             self.rotate.rotate_and_add(temp_a2, temp_b2),
             self.rotate.rotate_and_sub(temp_a2, temp_b2),
@@ -1090,22 +1131,25 @@ impl<T: FftNum> FcmaF32Butterfly6<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
-        let value01 = buffer.load_complex(0);
-        let value23 = buffer.load_complex(2);
-        let value45 = buffer.load_complex(4);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector32>,
+    ) {
+        let value01 = buffer.load(0);
+        let value23 = buffer.load(2);
+        let value45 = buffer.load(4);
 
         let out = self.perform_fft_direct(value01, value23, value45);
 
-        buffer.store_complex(out[0], 0);
-        buffer.store_complex(out[1], 2);
-        buffer.store_complex(out[2], 4);
+        buffer.store(out[0], 0);
+        buffer.store(out[1], 2);
+        buffer.store(out[2], 4);
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl FcmaArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector32>,
     ) {
         let input_packed = read_complex_to_array!(buffer,  {0, 2, 4, 6, 8, 10});
 
@@ -1122,10 +1166,10 @@ impl<T: FftNum> FcmaF32Butterfly6<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
         &self,
-        value01: float32x4_t,
-        value23: float32x4_t,
-        value45: float32x4_t,
-    ) -> [float32x4_t; 3] {
+        value01: FcmaVector32,
+        value23: FcmaVector32,
+        value45: FcmaVector32,
+    ) -> [FcmaVector32; 3] {
         // Algorithm: 3x2 good-thomas
 
         // Size-3 FFTs down the columns of our reordered array
@@ -1152,13 +1196,13 @@ impl<T: FftNum> FcmaF32Butterfly6<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(
         &self,
-        value0: float32x4_t,
-        value1: float32x4_t,
-        value2: float32x4_t,
-        value3: float32x4_t,
-        value4: float32x4_t,
-        value5: float32x4_t,
-    ) -> [float32x4_t; 6] {
+        value0: FcmaVector32,
+        value1: FcmaVector32,
+        value2: FcmaVector32,
+        value3: FcmaVector32,
+        value4: FcmaVector32,
+        value5: FcmaVector32,
+    ) -> [FcmaVector32; 6] {
         // Algorithm: 3x2 good-thomas
 
         // Size-3 FFTs down the columns of our reordered array
@@ -1205,26 +1249,29 @@ impl<T: FftNum> FcmaF64Butterfly6<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f64>) {
-        let value0 = buffer.load_complex(0);
-        let value1 = buffer.load_complex(1);
-        let value2 = buffer.load_complex(2);
-        let value3 = buffer.load_complex(3);
-        let value4 = buffer.load_complex(4);
-        let value5 = buffer.load_complex(5);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector64>,
+    ) {
+        let value0 = buffer.load(0);
+        let value1 = buffer.load(1);
+        let value2 = buffer.load(2);
+        let value3 = buffer.load(3);
+        let value4 = buffer.load(4);
+        let value5 = buffer.load(5);
 
         let out = self.perform_fft_direct([value0, value1, value2, value3, value4, value5]);
 
-        buffer.store_complex(out[0], 0);
-        buffer.store_complex(out[1], 1);
-        buffer.store_complex(out[2], 2);
-        buffer.store_complex(out[3], 3);
-        buffer.store_complex(out[4], 4);
-        buffer.store_complex(out[5], 5);
+        buffer.store(out[0], 0);
+        buffer.store(out[1], 1);
+        buffer.store(out[2], 2);
+        buffer.store(out[3], 3);
+        buffer.store(out[4], 4);
+        buffer.store(out[5], 5);
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [float64x2_t; 6]) -> [float64x2_t; 6] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [FcmaVector64; 6]) -> [FcmaVector64; 6] {
         // Algorithm: 3x2 good-thomas
 
         // Size-3 FFTs down the columns of our reordered array
@@ -1251,7 +1298,7 @@ impl<T: FftNum> FcmaF64Butterfly6<T> {
 //
 
 pub struct FcmaF32Butterfly8<T> {
-    root2: float32x4_t,
+    root2: FcmaVector32,
     bf4: FcmaF32Butterfly4<T>,
     rotate90: Rotate90F32,
 }
@@ -1264,8 +1311,9 @@ impl<T: FftNum> FcmaF32Butterfly8<T> {
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         let bf4 = FcmaF32Butterfly4::new(direction);
-        let root2 =
-            unsafe { vld1q_f32([1.0, 1.0, 0.5f32.sqrt(), 0.5f32.sqrt(), 1.0, 1.0].as_ptr()) };
+        let root2 = FcmaVector32(unsafe {
+            vld1q_f32([1.0, 1.0, 0.5f32.sqrt(), 0.5f32.sqrt(), 1.0, 1.0].as_ptr())
+        });
         let rotate90 = if direction == FftDirection::Inverse {
             Rotate90F32::new(true)
         } else {
@@ -1279,7 +1327,7 @@ impl<T: FftNum> FcmaF32Butterfly8<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6});
 
         let out = self.perform_fft_direct(input_packed);
@@ -1290,7 +1338,7 @@ impl<T: FftNum> FcmaF32Butterfly8<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl FcmaArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector32>,
     ) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14});
 
@@ -1304,7 +1352,7 @@ impl<T: FftNum> FcmaF32Butterfly8<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_direct(&self, values: [float32x4_t; 4]) -> [float32x4_t; 4] {
+    unsafe fn perform_fft_direct(&self, values: [FcmaVector32; 4]) -> [FcmaVector32; 4] {
         // we're going to hardcode a step of mixed radix
         // step 1: copy and reorder the input into the scratch
         let [in02, in13] = transpose_complex_2x2_f32(values[0], values[1]);
@@ -1316,8 +1364,8 @@ impl<T: FftNum> FcmaF32Butterfly8<T> {
 
         // step 3: apply twiddle factors
         let val2b = self.rotate90.rotate_hi(val2[0]);
-        let val2c = vaddq_f32(val2b, val2[0]);
-        let val2d = vmulq_f32(val2c, self.root2);
+        let val2c = SimdVector::add(val2b, val2[0]);
+        let val2d = SimdVector::mul(val2c, self.root2);
         val2[0] = extract_lo_hi_f32(val2[0], val2d);
 
         let val3b = self.rotate90.rotate_both(val2[1]);
@@ -1335,7 +1383,7 @@ impl<T: FftNum> FcmaF32Butterfly8<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_parallel_fft_direct(&self, values: [float32x4_t; 8]) -> [float32x4_t; 8] {
+    unsafe fn perform_parallel_fft_direct(&self, values: [FcmaVector32; 8]) -> [FcmaVector32; 8] {
         // we're going to hardcode a step of mixed radix
         // step 1: copy and reorder the input into the scratch
         // and
@@ -1396,7 +1444,7 @@ impl<T: FftNum> FcmaF64Butterfly8<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f64>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
         let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7});
 
         let out = self.perform_fft_direct(values);
@@ -1405,7 +1453,7 @@ impl<T: FftNum> FcmaF64Butterfly8<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_direct(&self, values: [float64x2_t; 8]) -> [float64x2_t; 8] {
+    unsafe fn perform_fft_direct(&self, values: [FcmaVector64; 8]) -> [FcmaVector64; 8] {
         // we're going to hardcode a step of mixed radix
         // step 1: copy and reorder the input into the scratch
         // and
@@ -1446,9 +1494,9 @@ impl<T: FftNum> FcmaF64Butterfly8<T> {
 pub struct FcmaF32Butterfly9<T> {
     _phantom: std::marker::PhantomData<T>,
     bf3: FcmaF32Butterfly3<T>,
-    twiddle1: float32x4_t,
-    twiddle2: float32x4_t,
-    twiddle4: float32x4_t,
+    twiddle1: FcmaVector32,
+    twiddle2: FcmaVector32,
+    twiddle4: FcmaVector32,
 }
 
 boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly9, 9, |this: &FcmaF32Butterfly9<_>| this
@@ -1462,9 +1510,12 @@ impl<T: FftNum> FcmaF32Butterfly9<T> {
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 9, direction);
         let tw2: Complex<f32> = twiddles::compute_twiddle(2, 9, direction);
         let tw4: Complex<f32> = twiddles::compute_twiddle(4, 9, direction);
-        let twiddle1 = unsafe { vld1q_f32([tw1.re, tw1.im, tw1.re, tw1.im].as_ptr()) };
-        let twiddle2 = unsafe { vld1q_f32([tw2.re, tw2.im, tw2.re, tw2.im].as_ptr()) };
-        let twiddle4 = unsafe { vld1q_f32([tw4.re, tw4.im, tw4.re, tw4.im].as_ptr()) };
+        let twiddle1 =
+            unsafe { FcmaVector32(vld1q_f32([tw1.re, tw1.im, tw1.re, tw1.im].as_ptr())) };
+        let twiddle2 =
+            unsafe { FcmaVector32(vld1q_f32([tw2.re, tw2.im, tw2.re, tw2.im].as_ptr())) };
+        let twiddle4 =
+            unsafe { FcmaVector32(vld1q_f32([tw4.re, tw4.im, tw4.re, tw4.im].as_ptr())) };
 
         Self {
             _phantom: std::marker::PhantomData,
@@ -1476,21 +1527,24 @@ impl<T: FftNum> FcmaF32Butterfly9<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector32>,
+    ) {
         // A single FCMA 9-point will need a lot of shuffling, let's just reuse the dual one
         let values = read_partial1_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8});
 
         let out = self.perform_parallel_fft_direct(values);
 
         for n in 0..9 {
-            buffer.store_partial_lo_complex(out[n], n);
+            buffer.store1_lo(out[n], n);
         }
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl FcmaArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector32>,
     ) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16});
 
@@ -1526,8 +1580,8 @@ impl<T: FftNum> FcmaF32Butterfly9<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(
         &self,
-        values: [float32x4_t; 9],
-    ) -> [float32x4_t; 9] {
+        values: [FcmaVector32; 9],
+    ) -> [FcmaVector32; 9] {
         // Algorithm: 3x3 mixed radix
 
         // Size-3 FFTs down the columns
@@ -1542,10 +1596,10 @@ impl<T: FftNum> FcmaF32Butterfly9<T> {
             .perform_parallel_fft_direct(values[2], values[5], values[8]);
 
         // Apply twiddle factors. Note that we're re-using twiddle2
-        mid1[1] = FcmaVector::mul_complex(self.twiddle1, mid1[1]);
-        mid1[2] = FcmaVector::mul_complex(self.twiddle2, mid1[2]);
-        mid2[1] = FcmaVector::mul_complex(self.twiddle2, mid2[1]);
-        mid2[2] = FcmaVector::mul_complex(self.twiddle4, mid2[2]);
+        mid1[1] = SimdVector::mul_complex(self.twiddle1, mid1[1]);
+        mid1[2] = SimdVector::mul_complex(self.twiddle2, mid1[2]);
+        mid2[1] = SimdVector::mul_complex(self.twiddle2, mid2[1]);
+        mid2[2] = SimdVector::mul_complex(self.twiddle4, mid2[2]);
 
         let [output0, output1, output2] = self
             .bf3
@@ -1573,9 +1627,9 @@ impl<T: FftNum> FcmaF32Butterfly9<T> {
 pub struct FcmaF64Butterfly9<T> {
     _phantom: std::marker::PhantomData<T>,
     bf3: FcmaF64Butterfly3<T>,
-    twiddle1: float64x2_t,
-    twiddle2: float64x2_t,
-    twiddle4: float64x2_t,
+    twiddle1: FcmaVector64,
+    twiddle2: FcmaVector64,
+    twiddle4: FcmaVector64,
 }
 
 boilerplate_fft_fcma_f64_butterfly!(FcmaF64Butterfly9, 9, |this: &FcmaF64Butterfly9<_>| this
@@ -1589,9 +1643,9 @@ impl<T: FftNum> FcmaF64Butterfly9<T> {
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 9, direction);
         let tw2: Complex<f64> = twiddles::compute_twiddle(2, 9, direction);
         let tw4: Complex<f64> = twiddles::compute_twiddle(4, 9, direction);
-        let twiddle1 = unsafe { vld1q_f64([tw1.re, tw1.im].as_ptr()) };
-        let twiddle2 = unsafe { vld1q_f64([tw2.re, tw2.im].as_ptr()) };
-        let twiddle4 = unsafe { vld1q_f64([tw4.re, tw4.im].as_ptr()) };
+        let twiddle1 = unsafe { FcmaVector64(vld1q_f64([tw1.re, tw1.im].as_ptr())) };
+        let twiddle2 = unsafe { FcmaVector64(vld1q_f64([tw2.re, tw2.im].as_ptr())) };
+        let twiddle4 = unsafe { FcmaVector64(vld1q_f64([tw4.re, tw4.im].as_ptr())) };
 
         Self {
             _phantom: std::marker::PhantomData,
@@ -1603,7 +1657,10 @@ impl<T: FftNum> FcmaF64Butterfly9<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector64>,
+    ) {
         let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8});
 
         let out = self.perform_fft_direct(values);
@@ -1612,7 +1669,7 @@ impl<T: FftNum> FcmaF64Butterfly9<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [float64x2_t; 9]) -> [float64x2_t; 9] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [FcmaVector64; 9]) -> [FcmaVector64; 9] {
         // Algorithm: 3x3 mixed radix
 
         // Size-3 FFTs down the columns
@@ -1621,10 +1678,10 @@ impl<T: FftNum> FcmaF64Butterfly9<T> {
         let mut mid2 = self.bf3.perform_fft_direct(values[2], values[5], values[8]);
 
         // Apply twiddle factors. Note that we're re-using twiddle2
-        mid1[1] = FcmaVector::mul_complex(self.twiddle1, mid1[1]);
-        mid1[2] = FcmaVector::mul_complex(self.twiddle2, mid1[2]);
-        mid2[1] = FcmaVector::mul_complex(self.twiddle2, mid2[1]);
-        mid2[2] = FcmaVector::mul_complex(self.twiddle4, mid2[2]);
+        mid1[1] = SimdVector::mul_complex(self.twiddle1, mid1[1]);
+        mid1[2] = SimdVector::mul_complex(self.twiddle2, mid1[2]);
+        mid2[1] = SimdVector::mul_complex(self.twiddle2, mid2[1]);
+        mid2[2] = SimdVector::mul_complex(self.twiddle4, mid2[2]);
 
         let [output0, output1, output2] = self.bf3.perform_fft_direct(mid0[0], mid1[0], mid2[0]);
         let [output3, output4, output5] = self.bf3.perform_fft_direct(mid0[1], mid1[1], mid2[1]);
@@ -1663,7 +1720,7 @@ impl<T: FftNum> FcmaF32Butterfly10<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8});
 
         let out = self.perform_fft_direct(input_packed);
@@ -1674,7 +1731,7 @@ impl<T: FftNum> FcmaF32Butterfly10<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl FcmaArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector32>,
     ) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18});
 
@@ -1688,7 +1745,7 @@ impl<T: FftNum> FcmaF32Butterfly10<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [float32x4_t; 5]) -> [float32x4_t; 5] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [FcmaVector32; 5]) -> [FcmaVector32; 5] {
         // Algorithm: 5x2 good-thomas
         // Reorder and pack
         let reord0 = extract_lo_hi_f32(values[0], values[2]);
@@ -1722,8 +1779,8 @@ impl<T: FftNum> FcmaF32Butterfly10<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(
         &self,
-        values: [float32x4_t; 10],
-    ) -> [float32x4_t; 10] {
+        values: [FcmaVector32; 10],
+    ) -> [FcmaVector32; 10] {
         // Algorithm: 5x2 good-thomas
 
         // Size-5 FFTs down the columns of our reordered array
@@ -1781,7 +1838,10 @@ impl<T: FftNum> FcmaF64Butterfly10<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector64>,
+    ) {
         let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
 
         let out = self.perform_fft_direct(values);
@@ -1790,7 +1850,10 @@ impl<T: FftNum> FcmaF64Butterfly10<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [float64x2_t; 10]) -> [float64x2_t; 10] {
+    pub(crate) unsafe fn perform_fft_direct(
+        &self,
+        values: [FcmaVector64; 10],
+    ) -> [FcmaVector64; 10] {
         // Algorithm: 5x2 good-thomas
 
         // Size-5 FFTs down the columns of our reordered array
@@ -1848,7 +1911,7 @@ impl<T: FftNum> FcmaF32Butterfly12<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10 });
 
         let out = self.perform_fft_direct(input_packed);
@@ -1859,7 +1922,7 @@ impl<T: FftNum> FcmaF32Butterfly12<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl FcmaArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector32>,
     ) {
         let input_packed =
             read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22});
@@ -1874,7 +1937,7 @@ impl<T: FftNum> FcmaF32Butterfly12<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [float32x4_t; 6]) -> [float32x4_t; 6] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [FcmaVector32; 6]) -> [FcmaVector32; 6] {
         // Algorithm: 4x3 good-thomas
 
         // Reorder and pack
@@ -1914,8 +1977,8 @@ impl<T: FftNum> FcmaF32Butterfly12<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(
         &self,
-        values: [float32x4_t; 12],
-    ) -> [float32x4_t; 12] {
+        values: [FcmaVector32; 12],
+    ) -> [FcmaVector32; 12] {
         // Algorithm: 4x3 good-thomas
 
         // Size-4 FFTs down the columns of our reordered array
@@ -1983,7 +2046,10 @@ impl<T: FftNum> FcmaF64Butterfly12<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector64>,
+    ) {
         let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11});
 
         let out = self.perform_fft_direct(values);
@@ -1992,7 +2058,10 @@ impl<T: FftNum> FcmaF64Butterfly12<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [float64x2_t; 12]) -> [float64x2_t; 12] {
+    pub(crate) unsafe fn perform_fft_direct(
+        &self,
+        values: [FcmaVector64; 12],
+    ) -> [FcmaVector64; 12] {
         // Algorithm: 4x3 good-thomas
 
         // Size-4 FFTs down the columns of our reordered array
@@ -2050,21 +2119,24 @@ impl<T: FftNum> FcmaF32Butterfly15<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector32>,
+    ) {
         // A single FCMA 15-point will need a lot of shuffling, let's just reuse the dual one
         let values = read_partial1_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14});
 
         let out = self.perform_parallel_fft_direct(values);
 
         for n in 0..15 {
-            buffer.store_partial_lo_complex(out[n], n);
+            buffer.store1_lo(out[n], n);
         }
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl FcmaArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector32>,
     ) {
         let input_packed =
             read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28});
@@ -2113,8 +2185,8 @@ impl<T: FftNum> FcmaF32Butterfly15<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(
         &self,
-        values: [float32x4_t; 15],
-    ) -> [float32x4_t; 15] {
+        values: [FcmaVector32; 15],
+    ) -> [FcmaVector32; 15] {
         // Algorithm: 5x3 good-thomas
 
         // Size-5 FFTs down the columns of our reordered array
@@ -2184,7 +2256,10 @@ impl<T: FftNum> FcmaF64Butterfly15<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector64>,
+    ) {
         let values =
             read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
 
@@ -2194,7 +2269,10 @@ impl<T: FftNum> FcmaF64Butterfly15<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [float64x2_t; 15]) -> [float64x2_t; 15] {
+    pub(crate) unsafe fn perform_fft_direct(
+        &self,
+        values: [FcmaVector64; 15],
+    ) -> [FcmaVector64; 15] {
         // Algorithm: 5x3 good-thomas
 
         // Size-5 FFTs down the columns of our reordered array
@@ -2233,10 +2311,10 @@ impl<T: FftNum> FcmaF64Butterfly15<T> {
 
 pub struct FcmaF32Butterfly16<T> {
     bf4: FcmaF32Butterfly4<T>,
-    twiddles_packed: [float32x4_t; 6],
-    twiddle1: float32x4_t,
-    twiddle3: float32x4_t,
-    twiddle9: float32x4_t,
+    twiddles_packed: [FcmaVector32; 6],
+    twiddle1: FcmaVector32,
+    twiddle3: FcmaVector32,
+    twiddle9: FcmaVector32,
 }
 
 boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly16, 16, |this: &FcmaF32Butterfly16<_>| this
@@ -2272,7 +2350,7 @@ impl<T: FftNum> FcmaF32Butterfly16<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -2282,34 +2360,34 @@ impl<T: FftNum> FcmaF32Butterfly16<T> {
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i| {
             [
-                buffer.load_complex(i),
-                buffer.load_complex(i + 4),
-                buffer.load_complex(i + 8),
-                buffer.load_complex(i + 12),
+                buffer.load(i),
+                buffer.load(i + 4),
+                buffer.load(i + 8),
+                buffer.load(i + 12),
             ]
         };
 
         // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors, and transpose
         let mut tmp0 = self.bf4.perform_parallel_fft_direct(load(0));
-        tmp0[1] = FcmaVector::mul_complex(tmp0[1], self.twiddles_packed[0]);
-        tmp0[2] = FcmaVector::mul_complex(tmp0[2], self.twiddles_packed[1]);
-        tmp0[3] = FcmaVector::mul_complex(tmp0[3], self.twiddles_packed[2]);
+        tmp0[1] = SimdVector::mul_complex(tmp0[1], self.twiddles_packed[0]);
+        tmp0[2] = SimdVector::mul_complex(tmp0[2], self.twiddles_packed[1]);
+        tmp0[3] = SimdVector::mul_complex(tmp0[3], self.twiddles_packed[2]);
         let [mid0, mid1] = transpose_complex_2x2_f32(tmp0[0], tmp0[1]);
         let [mid4, mid5] = transpose_complex_2x2_f32(tmp0[2], tmp0[3]);
 
         let mut tmp1 = self.bf4.perform_parallel_fft_direct(load(2));
-        tmp1[1] = FcmaVector::mul_complex(tmp1[1], self.twiddles_packed[3]);
-        tmp1[2] = FcmaVector::mul_complex(tmp1[2], self.twiddles_packed[4]);
-        tmp1[3] = FcmaVector::mul_complex(tmp1[3], self.twiddles_packed[5]);
+        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddles_packed[3]);
+        tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddles_packed[4]);
+        tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddles_packed[5]);
         let [mid2, mid3] = transpose_complex_2x2_f32(tmp1[0], tmp1[1]);
         let [mid6, mid7] = transpose_complex_2x2_f32(tmp1[2], tmp1[3]);
 
         ////////////////////////////////////////////////////////////
-        let mut store = |i: usize, vectors: [float32x4_t; 4]| {
-            buffer.store_complex(vectors[0], i + 0);
-            buffer.store_complex(vectors[1], i + 4);
-            buffer.store_complex(vectors[2], i + 8);
-            buffer.store_complex(vectors[3], i + 12);
+        let mut store = |i: usize, vectors: [FcmaVector32; 4]| {
+            buffer.store(vectors[0], i + 0);
+            buffer.store(vectors[1], i + 4);
+            buffer.store(vectors[2], i + 8);
+            buffer.store(vectors[3], i + 12);
         };
         // Size-4 FFTs down each pair of transposed columns, storing them as soon as we're done with them
         let out0 = self
@@ -2325,7 +2403,7 @@ impl<T: FftNum> FcmaF32Butterfly16<T> {
 
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl FcmaArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector32>,
     ) {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
@@ -2335,14 +2413,10 @@ impl<T: FftNum> FcmaF32Butterfly16<T> {
         //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i: usize| {
-            let [a0, a1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 0), buffer.load_complex(i + 16));
-            let [b0, b1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 4), buffer.load_complex(i + 20));
-            let [c0, c1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 8), buffer.load_complex(i + 24));
-            let [d0, d1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 12), buffer.load_complex(i + 28));
+            let [a0, a1] = transpose_complex_2x2_f32(buffer.load(i + 0), buffer.load(i + 16));
+            let [b0, b1] = transpose_complex_2x2_f32(buffer.load(i + 4), buffer.load(i + 20));
+            let [c0, c1] = transpose_complex_2x2_f32(buffer.load(i + 8), buffer.load(i + 24));
+            let [d0, d1] = transpose_complex_2x2_f32(buffer.load(i + 12), buffer.load(i + 28));
             [[a0, b0, c0, d0], [a1, b1, c1, d1]]
         };
 
@@ -2353,24 +2427,24 @@ impl<T: FftNum> FcmaF32Butterfly16<T> {
         tmp2[1] = self.bf4.rotate.rotate_both_45(tmp2[1]);
         tmp2[2] = self.bf4.rotate.rotate_both(tmp2[2]);
         tmp2[3] = self.bf4.rotate.rotate_both_135(tmp2[3]);
-        tmp3[1] = FcmaVector::mul_complex(tmp3[1], self.twiddle3);
+        tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddle3);
         tmp3[2] = self.bf4.rotate.rotate_both_135(tmp3[2]);
-        tmp3[3] = FcmaVector::mul_complex(tmp3[3], self.twiddle9);
+        tmp3[3] = SimdVector::mul_complex(tmp3[3], self.twiddle9);
 
         // Do these last, because fewer twiddles means fewer temporaries forcing the above data to spill
         let [in0, in1] = load(0);
         let tmp0 = self.bf4.perform_parallel_fft_direct(in0);
         let mut tmp1 = self.bf4.perform_parallel_fft_direct(in1);
-        tmp1[1] = FcmaVector::mul_complex(tmp1[1], self.twiddle1);
+        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
         tmp1[2] = self.bf4.rotate.rotate_both_45(tmp1[2]);
-        tmp1[3] = FcmaVector::mul_complex(tmp1[3], self.twiddle3);
+        tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddle3);
 
         ////////////////////////////////////////////////////////////
-        let mut store = |i, values_a: [float32x4_t; 4], values_b: [float32x4_t; 4]| {
+        let mut store = |i, values_a: [FcmaVector32; 4], values_b: [FcmaVector32; 4]| {
             for n in 0..4 {
                 let [a, b] = transpose_complex_2x2_f32(values_a[n], values_b[n]);
-                buffer.store_complex(a, i + n * 4);
-                buffer.store_complex(b, i + n * 4 + 16);
+                buffer.store(a, i + n * 4);
+                buffer.store(b, i + n * 4 + 16);
             }
         };
         // Size-4 FFTs down each pair of transposed columns, storing them as soon as we're done with them
@@ -2400,9 +2474,9 @@ impl<T: FftNum> FcmaF32Butterfly16<T> {
 
 pub struct FcmaF64Butterfly16<T> {
     bf4: FcmaF64Butterfly4<T>,
-    twiddle1: float64x2_t,
-    twiddle3: float64x2_t,
-    twiddle9: float64x2_t,
+    twiddle1: FcmaVector64,
+    twiddle3: FcmaVector64,
+    twiddle9: FcmaVector64,
 }
 
 boilerplate_fft_fcma_f64_butterfly!(FcmaF64Butterfly16, 16, |this: &FcmaF64Butterfly16<_>| this
@@ -2427,7 +2501,7 @@ impl<T: FftNum> FcmaF64Butterfly16<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f64>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -2437,23 +2511,23 @@ impl<T: FftNum> FcmaF64Butterfly16<T> {
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i| {
             [
-                buffer.load_complex(i),
-                buffer.load_complex(i + 4),
-                buffer.load_complex(i + 8),
-                buffer.load_complex(i + 12),
+                buffer.load(i),
+                buffer.load(i + 4),
+                buffer.load(i + 8),
+                buffer.load(i + 12),
             ]
         };
 
         // For each column: load the data, apply our size-4 FFT, apply twiddle factors
         let mut tmp1 = self.bf4.perform_fft_direct(load(1));
-        tmp1[1] = FcmaVector::mul_complex(tmp1[1], self.twiddle1);
+        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
         tmp1[2] = self.bf4.rotate.rotate_45(tmp1[2]);
-        tmp1[3] = FcmaVector::mul_complex(tmp1[3], self.twiddle3);
+        tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddle3);
 
         let mut tmp3 = self.bf4.perform_fft_direct(load(3));
-        tmp3[1] = FcmaVector::mul_complex(tmp3[1], self.twiddle3);
+        tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddle3);
         tmp3[2] = self.bf4.rotate.rotate_135(tmp3[2]);
-        tmp3[3] = FcmaVector::mul_complex(tmp3[3], self.twiddle9);
+        tmp3[3] = SimdVector::mul_complex(tmp3[3], self.twiddle9);
 
         let mut tmp2 = self.bf4.perform_fft_direct(load(2));
         tmp2[1] = self.bf4.rotate.rotate_45(tmp2[1]);
@@ -2464,11 +2538,11 @@ impl<T: FftNum> FcmaF64Butterfly16<T> {
         let tmp0 = self.bf4.perform_fft_direct(load(0));
 
         ////////////////////////////////////////////////////////////
-        let mut store = |i: usize, vectors: [float64x2_t; 4]| {
-            buffer.store_complex(vectors[0], i + 0);
-            buffer.store_complex(vectors[1], i + 4);
-            buffer.store_complex(vectors[2], i + 8);
-            buffer.store_complex(vectors[3], i + 12);
+        let mut store = |i: usize, vectors: [FcmaVector64; 4]| {
+            buffer.store(vectors[0], i + 0);
+            buffer.store(vectors[1], i + 4);
+            buffer.store(vectors[2], i + 8);
+            buffer.store(vectors[3], i + 12);
         };
 
         // Size-4 FFTs down each of our transposed columns, storing them as soon as we're done with them
@@ -2504,13 +2578,13 @@ impl<T: FftNum> FcmaF64Butterfly16<T> {
 pub struct FcmaF32Butterfly24<T> {
     bf4: FcmaF32Butterfly4<T>,
     bf6: FcmaF32Butterfly6<T>,
-    twiddles_packed: [float32x4_t; 9],
-    twiddle1: float32x4_t,
-    twiddle2: float32x4_t,
-    twiddle4: float32x4_t,
-    twiddle5: float32x4_t,
-    twiddle8: float32x4_t,
-    twiddle10: float32x4_t,
+    twiddles_packed: [FcmaVector32; 9],
+    twiddle1: FcmaVector32,
+    twiddle2: FcmaVector32,
+    twiddle4: FcmaVector32,
+    twiddle5: FcmaVector32,
+    twiddle8: FcmaVector32,
+    twiddle10: FcmaVector32,
 }
 
 boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly24, 24, |this: &FcmaF32Butterfly24<_>| this
@@ -2558,7 +2632,7 @@ impl<T: FftNum> FcmaF32Butterfly24<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -2568,43 +2642,43 @@ impl<T: FftNum> FcmaF32Butterfly24<T> {
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i| {
             [
-                buffer.load_complex(i),
-                buffer.load_complex(i + 6),
-                buffer.load_complex(i + 12),
-                buffer.load_complex(i + 18),
+                buffer.load(i),
+                buffer.load(i + 6),
+                buffer.load(i + 12),
+                buffer.load(i + 18),
             ]
         };
 
         // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors, transpose
         let mut tmp1 = self.bf4.perform_parallel_fft_direct(load(2));
-        tmp1[1] = FcmaVector::mul_complex(tmp1[1], self.twiddles_packed[3]);
-        tmp1[2] = FcmaVector::mul_complex(tmp1[2], self.twiddles_packed[4]);
-        tmp1[3] = FcmaVector::mul_complex(tmp1[3], self.twiddles_packed[5]);
+        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddles_packed[3]);
+        tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddles_packed[4]);
+        tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddles_packed[5]);
         let [mid2, mid3] = transpose_complex_2x2_f32(tmp1[0], tmp1[1]);
         let [mid8, mid9] = transpose_complex_2x2_f32(tmp1[2], tmp1[3]);
 
         let mut tmp2 = self.bf4.perform_parallel_fft_direct(load(4));
-        tmp2[1] = FcmaVector::mul_complex(tmp2[1], self.twiddles_packed[6]);
-        tmp2[2] = FcmaVector::mul_complex(tmp2[2], self.twiddles_packed[7]);
-        tmp2[3] = FcmaVector::mul_complex(tmp2[3], self.twiddles_packed[8]);
+        tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddles_packed[6]);
+        tmp2[2] = SimdVector::mul_complex(tmp2[2], self.twiddles_packed[7]);
+        tmp2[3] = SimdVector::mul_complex(tmp2[3], self.twiddles_packed[8]);
         let [mid4, mid5] = transpose_complex_2x2_f32(tmp2[0], tmp2[1]);
         let [mid10, mid11] = transpose_complex_2x2_f32(tmp2[2], tmp2[3]);
 
         let mut tmp0 = self.bf4.perform_parallel_fft_direct(load(0));
-        tmp0[1] = FcmaVector::mul_complex(tmp0[1], self.twiddles_packed[0]);
-        tmp0[2] = FcmaVector::mul_complex(tmp0[2], self.twiddles_packed[1]);
-        tmp0[3] = FcmaVector::mul_complex(tmp0[3], self.twiddles_packed[2]);
+        tmp0[1] = SimdVector::mul_complex(tmp0[1], self.twiddles_packed[0]);
+        tmp0[2] = SimdVector::mul_complex(tmp0[2], self.twiddles_packed[1]);
+        tmp0[3] = SimdVector::mul_complex(tmp0[3], self.twiddles_packed[2]);
         let [mid0, mid1] = transpose_complex_2x2_f32(tmp0[0], tmp0[1]);
         let [mid6, mid7] = transpose_complex_2x2_f32(tmp0[2], tmp0[3]);
 
         ////////////////////////////////////////////////////////////
-        let mut store = |i, vectors: [float32x4_t; 6]| {
-            buffer.store_complex(vectors[0], i);
-            buffer.store_complex(vectors[1], i + 4);
-            buffer.store_complex(vectors[2], i + 8);
-            buffer.store_complex(vectors[3], i + 12);
-            buffer.store_complex(vectors[4], i + 16);
-            buffer.store_complex(vectors[5], i + 20);
+        let mut store = |i, vectors: [FcmaVector32; 6]| {
+            buffer.store(vectors[0], i);
+            buffer.store(vectors[1], i + 4);
+            buffer.store(vectors[2], i + 8);
+            buffer.store(vectors[3], i + 12);
+            buffer.store(vectors[4], i + 16);
+            buffer.store(vectors[5], i + 20);
         };
 
         // Size-6 FFTs down each pair of transposed columns, storing them as soon as we're done with them
@@ -2622,7 +2696,7 @@ impl<T: FftNum> FcmaF32Butterfly24<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl FcmaArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector32>,
     ) {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
@@ -2632,14 +2706,10 @@ impl<T: FftNum> FcmaF32Butterfly24<T> {
         //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i: usize| {
-            let [a0, a1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 0), buffer.load_complex(i + 24));
-            let [b0, b1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 6), buffer.load_complex(i + 30));
-            let [c0, c1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 12), buffer.load_complex(i + 36));
-            let [d0, d1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 18), buffer.load_complex(i + 42));
+            let [a0, a1] = transpose_complex_2x2_f32(buffer.load(i + 0), buffer.load(i + 24));
+            let [b0, b1] = transpose_complex_2x2_f32(buffer.load(i + 6), buffer.load(i + 30));
+            let [c0, c1] = transpose_complex_2x2_f32(buffer.load(i + 12), buffer.load(i + 36));
+            let [d0, d1] = transpose_complex_2x2_f32(buffer.load(i + 18), buffer.load(i + 42));
             [[a0, b0, c0, d0], [a1, b1, c1, d1]]
         };
 
@@ -2647,15 +2717,15 @@ impl<T: FftNum> FcmaF32Butterfly24<T> {
         let [in0, in1] = load(0);
         let tmp0 = self.bf4.perform_parallel_fft_direct(in0);
         let mut tmp1 = self.bf4.perform_parallel_fft_direct(in1);
-        tmp1[1] = FcmaVector::mul_complex(tmp1[1], self.twiddle1);
-        tmp1[2] = FcmaVector::mul_complex(tmp1[2], self.twiddle2);
+        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
+        tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddle2);
         tmp1[3] = self.bf4.rotate.rotate_both_45(tmp1[3]);
 
         let [in2, in3] = load(2);
         let mut tmp2 = self.bf4.perform_parallel_fft_direct(in2);
         let mut tmp3 = self.bf4.perform_parallel_fft_direct(in3);
-        tmp2[1] = FcmaVector::mul_complex(tmp2[1], self.twiddle2);
-        tmp2[2] = FcmaVector::mul_complex(tmp2[2], self.twiddle4);
+        tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddle2);
+        tmp2[2] = SimdVector::mul_complex(tmp2[2], self.twiddle4);
         tmp2[3] = self.bf4.rotate.rotate_both(tmp2[3]);
         tmp3[1] = self.bf4.rotate.rotate_both_45(tmp3[1]);
         tmp3[2] = self.bf4.rotate.rotate_both(tmp3[2]);
@@ -2664,19 +2734,19 @@ impl<T: FftNum> FcmaF32Butterfly24<T> {
         let [in4, in5] = load(4);
         let mut tmp4 = self.bf4.perform_parallel_fft_direct(in4);
         let mut tmp5 = self.bf4.perform_parallel_fft_direct(in5);
-        tmp4[1] = FcmaVector::mul_complex(tmp4[1], self.twiddle4);
-        tmp4[2] = FcmaVector::mul_complex(tmp4[2], self.twiddle8);
-        tmp4[3] = FcmaVector::neg(tmp4[3]);
-        tmp5[1] = FcmaVector::mul_complex(tmp5[1], self.twiddle5);
-        tmp5[2] = FcmaVector::mul_complex(tmp5[2], self.twiddle10);
+        tmp4[1] = SimdVector::mul_complex(tmp4[1], self.twiddle4);
+        tmp4[2] = SimdVector::mul_complex(tmp4[2], self.twiddle8);
+        tmp4[3] = SimdVector::neg(tmp4[3]);
+        tmp5[1] = SimdVector::mul_complex(tmp5[1], self.twiddle5);
+        tmp5[2] = SimdVector::mul_complex(tmp5[2], self.twiddle10);
         tmp5[3] = self.bf4.rotate.rotate_both_225(tmp5[3]);
 
         ////////////////////////////////////////////////////////////
-        let mut store = |i, vectors_a: [float32x4_t; 6], vectors_b: [float32x4_t; 6]| {
+        let mut store = |i, vectors_a: [FcmaVector32; 6], vectors_b: [FcmaVector32; 6]| {
             for n in 0..6 {
                 let [a, b] = transpose_complex_2x2_f32(vectors_a[n], vectors_b[n]);
-                buffer.store_complex(a, i + n * 4);
-                buffer.store_complex(b, i + n * 4 + 24);
+                buffer.store(a, i + n * 4);
+                buffer.store(b, i + n * 4 + 24);
             }
         };
 
@@ -2709,12 +2779,12 @@ impl<T: FftNum> FcmaF32Butterfly24<T> {
 pub struct FcmaF64Butterfly24<T> {
     bf4: FcmaF64Butterfly4<T>,
     bf6: FcmaF64Butterfly6<T>,
-    twiddle1: float64x2_t,
-    twiddle2: float64x2_t,
-    twiddle4: float64x2_t,
-    twiddle5: float64x2_t,
-    twiddle8: float64x2_t,
-    twiddle10: float64x2_t,
+    twiddle1: FcmaVector64,
+    twiddle2: FcmaVector64,
+    twiddle4: FcmaVector64,
+    twiddle5: FcmaVector64,
+    twiddle8: FcmaVector64,
+    twiddle10: FcmaVector64,
 }
 
 boilerplate_fft_fcma_f64_butterfly!(FcmaF64Butterfly24, 24, |this: &FcmaF64Butterfly24<_>| this
@@ -2746,7 +2816,7 @@ impl<T: FftNum> FcmaF64Butterfly24<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f64>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -2756,32 +2826,32 @@ impl<T: FftNum> FcmaF64Butterfly24<T> {
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i| {
             [
-                buffer.load_complex(i),
-                buffer.load_complex(i + 6),
-                buffer.load_complex(i + 12),
-                buffer.load_complex(i + 18),
+                buffer.load(i),
+                buffer.load(i + 6),
+                buffer.load(i + 12),
+                buffer.load(i + 18),
             ]
         };
 
         // For each column: load the data, apply our size-4 FFT, apply twiddle factors
         let mut tmp1 = self.bf4.perform_fft_direct(load(1));
-        tmp1[1] = FcmaVector::mul_complex(tmp1[1], self.twiddle1);
-        tmp1[2] = FcmaVector::mul_complex(tmp1[2], self.twiddle2);
+        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
+        tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddle2);
         tmp1[3] = self.bf4.rotate.rotate_45(tmp1[3]);
 
         let mut tmp2 = self.bf4.perform_fft_direct(load(2));
-        tmp2[1] = FcmaVector::mul_complex(tmp2[1], self.twiddle2);
-        tmp2[2] = FcmaVector::mul_complex(tmp2[2], self.twiddle4);
+        tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddle2);
+        tmp2[2] = SimdVector::mul_complex(tmp2[2], self.twiddle4);
         tmp2[3] = self.bf4.rotate.rotate(tmp2[3]);
 
         let mut tmp4 = self.bf4.perform_fft_direct(load(4));
-        tmp4[1] = FcmaVector::mul_complex(tmp4[1], self.twiddle4);
-        tmp4[2] = FcmaVector::mul_complex(tmp4[2], self.twiddle8);
-        tmp4[3] = FcmaVector::neg(tmp4[3]);
+        tmp4[1] = SimdVector::mul_complex(tmp4[1], self.twiddle4);
+        tmp4[2] = SimdVector::mul_complex(tmp4[2], self.twiddle8);
+        tmp4[3] = SimdVector::neg(tmp4[3]);
 
         let mut tmp5 = self.bf4.perform_fft_direct(load(5));
-        tmp5[1] = FcmaVector::mul_complex(tmp5[1], self.twiddle5);
-        tmp5[2] = FcmaVector::mul_complex(tmp5[2], self.twiddle10);
+        tmp5[1] = SimdVector::mul_complex(tmp5[1], self.twiddle5);
+        tmp5[2] = SimdVector::mul_complex(tmp5[2], self.twiddle10);
         tmp5[3] = self.bf4.rotate.rotate_225(tmp5[3]);
 
         let mut tmp3 = self.bf4.perform_fft_direct(load(3));
@@ -2793,13 +2863,13 @@ impl<T: FftNum> FcmaF64Butterfly24<T> {
         let tmp0 = self.bf4.perform_fft_direct(load(0));
 
         ////////////////////////////////////////////////////////////
-        let mut store = |i, vectors: [float64x2_t; 6]| {
-            buffer.store_complex(vectors[0], i);
-            buffer.store_complex(vectors[1], i + 4);
-            buffer.store_complex(vectors[2], i + 8);
-            buffer.store_complex(vectors[3], i + 12);
-            buffer.store_complex(vectors[4], i + 16);
-            buffer.store_complex(vectors[5], i + 20);
+        let mut store = |i, vectors: [FcmaVector64; 6]| {
+            buffer.store(vectors[0], i);
+            buffer.store(vectors[1], i + 4);
+            buffer.store(vectors[2], i + 8);
+            buffer.store(vectors[3], i + 12);
+            buffer.store(vectors[4], i + 16);
+            buffer.store(vectors[5], i + 20);
         };
 
         // Size-6 FFTs down each of our transposed columns, storing them as soon as we're done with them
@@ -2834,19 +2904,19 @@ impl<T: FftNum> FcmaF64Butterfly24<T> {
 
 pub struct FcmaF32Butterfly32<T> {
     bf8: FcmaF32Butterfly8<T>,
-    twiddles_packed: [float32x4_t; 12],
-    twiddle1: float32x4_t,
-    twiddle2: float32x4_t,
-    twiddle3: float32x4_t,
-    twiddle5: float32x4_t,
-    twiddle6: float32x4_t,
-    twiddle7: float32x4_t,
-    twiddle9: float32x4_t,
-    twiddle10: float32x4_t,
-    twiddle14: float32x4_t,
-    twiddle15: float32x4_t,
-    twiddle18: float32x4_t,
-    twiddle21: float32x4_t,
+    twiddles_packed: [FcmaVector32; 12],
+    twiddle1: FcmaVector32,
+    twiddle2: FcmaVector32,
+    twiddle3: FcmaVector32,
+    twiddle5: FcmaVector32,
+    twiddle6: FcmaVector32,
+    twiddle7: FcmaVector32,
+    twiddle9: FcmaVector32,
+    twiddle10: FcmaVector32,
+    twiddle14: FcmaVector32,
+    twiddle15: FcmaVector32,
+    twiddle18: FcmaVector32,
+    twiddle21: FcmaVector32,
 }
 
 boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly32, 32, |this: &FcmaF32Butterfly32<_>| this
@@ -2907,7 +2977,7 @@ impl<T: FftNum> FcmaF32Butterfly32<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f32>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -2917,52 +2987,52 @@ impl<T: FftNum> FcmaF32Butterfly32<T> {
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i| {
             [
-                buffer.load_complex(i),
-                buffer.load_complex(i + 8),
-                buffer.load_complex(i + 16),
-                buffer.load_complex(i + 24),
+                buffer.load(i),
+                buffer.load(i + 8),
+                buffer.load(i + 16),
+                buffer.load(i + 24),
             ]
         };
 
         // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors
         let mut tmp0 = self.bf8.bf4.perform_parallel_fft_direct(load(0));
-        tmp0[1] = FcmaVector::mul_complex(tmp0[1], self.twiddles_packed[0]);
-        tmp0[2] = FcmaVector::mul_complex(tmp0[2], self.twiddles_packed[1]);
-        tmp0[3] = FcmaVector::mul_complex(tmp0[3], self.twiddles_packed[2]);
+        tmp0[1] = SimdVector::mul_complex(tmp0[1], self.twiddles_packed[0]);
+        tmp0[2] = SimdVector::mul_complex(tmp0[2], self.twiddles_packed[1]);
+        tmp0[3] = SimdVector::mul_complex(tmp0[3], self.twiddles_packed[2]);
         let [mid0, mid1] = transpose_complex_2x2_f32(tmp0[0], tmp0[1]);
         let [mid8, mid9] = transpose_complex_2x2_f32(tmp0[2], tmp0[3]);
 
         let mut tmp1 = self.bf8.bf4.perform_parallel_fft_direct(load(2));
-        tmp1[1] = FcmaVector::mul_complex(tmp1[1], self.twiddles_packed[3]);
-        tmp1[2] = FcmaVector::mul_complex(tmp1[2], self.twiddles_packed[4]);
-        tmp1[3] = FcmaVector::mul_complex(tmp1[3], self.twiddles_packed[5]);
+        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddles_packed[3]);
+        tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddles_packed[4]);
+        tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddles_packed[5]);
         let [mid2, mid3] = transpose_complex_2x2_f32(tmp1[0], tmp1[1]);
         let [mid10, mid11] = transpose_complex_2x2_f32(tmp1[2], tmp1[3]);
 
         let mut tmp2 = self.bf8.bf4.perform_parallel_fft_direct(load(4));
-        tmp2[1] = FcmaVector::mul_complex(tmp2[1], self.twiddles_packed[6]);
-        tmp2[2] = FcmaVector::mul_complex(tmp2[2], self.twiddles_packed[7]);
-        tmp2[3] = FcmaVector::mul_complex(tmp2[3], self.twiddles_packed[8]);
+        tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddles_packed[6]);
+        tmp2[2] = SimdVector::mul_complex(tmp2[2], self.twiddles_packed[7]);
+        tmp2[3] = SimdVector::mul_complex(tmp2[3], self.twiddles_packed[8]);
         let [mid4, mid5] = transpose_complex_2x2_f32(tmp2[0], tmp2[1]);
         let [mid12, mid13] = transpose_complex_2x2_f32(tmp2[2], tmp2[3]);
 
         let mut tmp3 = self.bf8.bf4.perform_parallel_fft_direct(load(6));
-        tmp3[1] = FcmaVector::mul_complex(tmp3[1], self.twiddles_packed[9]);
-        tmp3[2] = FcmaVector::mul_complex(tmp3[2], self.twiddles_packed[10]);
-        tmp3[3] = FcmaVector::mul_complex(tmp3[3], self.twiddles_packed[11]);
+        tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddles_packed[9]);
+        tmp3[2] = SimdVector::mul_complex(tmp3[2], self.twiddles_packed[10]);
+        tmp3[3] = SimdVector::mul_complex(tmp3[3], self.twiddles_packed[11]);
         let [mid6, mid7] = transpose_complex_2x2_f32(tmp3[0], tmp3[1]);
         let [mid14, mid15] = transpose_complex_2x2_f32(tmp3[2], tmp3[3]);
 
         ////////////////////////////////////////////////////////////
-        let mut store = |i, vectors: [float32x4_t; 8]| {
-            buffer.store_complex(vectors[0], i);
-            buffer.store_complex(vectors[1], i + 4);
-            buffer.store_complex(vectors[2], i + 8);
-            buffer.store_complex(vectors[3], i + 12);
-            buffer.store_complex(vectors[4], i + 16);
-            buffer.store_complex(vectors[5], i + 20);
-            buffer.store_complex(vectors[6], i + 24);
-            buffer.store_complex(vectors[7], i + 28);
+        let mut store = |i, vectors: [FcmaVector32; 8]| {
+            buffer.store(vectors[0], i);
+            buffer.store(vectors[1], i + 4);
+            buffer.store(vectors[2], i + 8);
+            buffer.store(vectors[3], i + 12);
+            buffer.store(vectors[4], i + 16);
+            buffer.store(vectors[5], i + 20);
+            buffer.store(vectors[6], i + 24);
+            buffer.store(vectors[7], i + 28);
         };
 
         // Size-8 FFTs down each pair of transposed columns, storing them as soon as we're done with them
@@ -2980,7 +3050,7 @@ impl<T: FftNum> FcmaF32Butterfly32<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl FcmaArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<FcmaVector32>,
     ) {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
@@ -2990,14 +3060,10 @@ impl<T: FftNum> FcmaF32Butterfly32<T> {
         //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i: usize| {
-            let [a0, a1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 0), buffer.load_complex(i + 32));
-            let [b0, b1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 8), buffer.load_complex(i + 40));
-            let [c0, c1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 16), buffer.load_complex(i + 48));
-            let [d0, d1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 24), buffer.load_complex(i + 56));
+            let [a0, a1] = transpose_complex_2x2_f32(buffer.load(i + 0), buffer.load(i + 32));
+            let [b0, b1] = transpose_complex_2x2_f32(buffer.load(i + 8), buffer.load(i + 40));
+            let [c0, c1] = transpose_complex_2x2_f32(buffer.load(i + 16), buffer.load(i + 48));
+            let [d0, d1] = transpose_complex_2x2_f32(buffer.load(i + 24), buffer.load(i + 56));
             [[a0, b0, c0, d0], [a1, b1, c1, d1]]
         };
 
@@ -3005,19 +3071,19 @@ impl<T: FftNum> FcmaF32Butterfly32<T> {
         let [in0, in1] = load(0);
         let tmp0 = self.bf8.bf4.perform_parallel_fft_direct(in0);
         let mut tmp1 = self.bf8.bf4.perform_parallel_fft_direct(in1);
-        tmp1[1] = FcmaVector::mul_complex(tmp1[1], self.twiddle1);
-        tmp1[2] = FcmaVector::mul_complex(tmp1[2], self.twiddle2);
-        tmp1[3] = FcmaVector::mul_complex(tmp1[3], self.twiddle3);
+        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
+        tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddle2);
+        tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddle3);
 
         let [in2, in3] = load(2);
         let mut tmp2 = self.bf8.bf4.perform_parallel_fft_direct(in2);
         let mut tmp3 = self.bf8.bf4.perform_parallel_fft_direct(in3);
-        tmp2[1] = FcmaVector::mul_complex(tmp2[1], self.twiddle2);
+        tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddle2);
         tmp2[2] = self.bf8.bf4.rotate.rotate_both_45(tmp2[2]);
-        tmp2[3] = FcmaVector::mul_complex(tmp2[3], self.twiddle6);
-        tmp3[1] = FcmaVector::mul_complex(tmp3[1], self.twiddle3);
-        tmp3[2] = FcmaVector::mul_complex(tmp3[2], self.twiddle6);
-        tmp3[3] = FcmaVector::mul_complex(tmp3[3], self.twiddle9);
+        tmp2[3] = SimdVector::mul_complex(tmp2[3], self.twiddle6);
+        tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddle3);
+        tmp3[2] = SimdVector::mul_complex(tmp3[2], self.twiddle6);
+        tmp3[3] = SimdVector::mul_complex(tmp3[3], self.twiddle9);
 
         let [in4, in5] = load(4);
         let mut tmp4 = self.bf8.bf4.perform_parallel_fft_direct(in4);
@@ -3025,26 +3091,26 @@ impl<T: FftNum> FcmaF32Butterfly32<T> {
         tmp4[1] = self.bf8.bf4.rotate.rotate_both_45(tmp4[1]);
         tmp4[2] = self.bf8.bf4.rotate.rotate_both(tmp4[2]);
         tmp4[3] = self.bf8.bf4.rotate.rotate_both_135(tmp4[3]);
-        tmp5[1] = FcmaVector::mul_complex(tmp5[1], self.twiddle5);
-        tmp5[2] = FcmaVector::mul_complex(tmp5[2], self.twiddle10);
-        tmp5[3] = FcmaVector::mul_complex(tmp5[3], self.twiddle15);
+        tmp5[1] = SimdVector::mul_complex(tmp5[1], self.twiddle5);
+        tmp5[2] = SimdVector::mul_complex(tmp5[2], self.twiddle10);
+        tmp5[3] = SimdVector::mul_complex(tmp5[3], self.twiddle15);
 
         let [in6, in7] = load(6);
         let mut tmp6 = self.bf8.bf4.perform_parallel_fft_direct(in6);
         let mut tmp7 = self.bf8.bf4.perform_parallel_fft_direct(in7);
-        tmp6[1] = FcmaVector::mul_complex(tmp6[1], self.twiddle6);
+        tmp6[1] = SimdVector::mul_complex(tmp6[1], self.twiddle6);
         tmp6[2] = self.bf8.bf4.rotate.rotate_both_135(tmp6[2]);
-        tmp6[3] = FcmaVector::mul_complex(tmp6[3], self.twiddle18);
-        tmp7[1] = FcmaVector::mul_complex(tmp7[1], self.twiddle7);
-        tmp7[2] = FcmaVector::mul_complex(tmp7[2], self.twiddle14);
-        tmp7[3] = FcmaVector::mul_complex(tmp7[3], self.twiddle21);
+        tmp6[3] = SimdVector::mul_complex(tmp6[3], self.twiddle18);
+        tmp7[1] = SimdVector::mul_complex(tmp7[1], self.twiddle7);
+        tmp7[2] = SimdVector::mul_complex(tmp7[2], self.twiddle14);
+        tmp7[3] = SimdVector::mul_complex(tmp7[3], self.twiddle21);
 
         ////////////////////////////////////////////////////////////
-        let mut store = |i, vectors_a: [float32x4_t; 8], vectors_b: [float32x4_t; 8]| {
+        let mut store = |i, vectors_a: [FcmaVector32; 8], vectors_b: [FcmaVector32; 8]| {
             for n in 0..8 {
                 let [a, b] = transpose_complex_2x2_f32(vectors_a[n], vectors_b[n]);
-                buffer.store_complex(a, i + n * 4);
-                buffer.store_complex(b, i + n * 4 + 32);
+                buffer.store(a, i + n * 4);
+                buffer.store(b, i + n * 4 + 32);
             }
         };
 
@@ -3076,18 +3142,18 @@ impl<T: FftNum> FcmaF32Butterfly32<T> {
 
 pub struct FcmaF64Butterfly32<T> {
     bf8: FcmaF64Butterfly8<T>,
-    twiddle1: float64x2_t,
-    twiddle2: float64x2_t,
-    twiddle3: float64x2_t,
-    twiddle5: float64x2_t,
-    twiddle6: float64x2_t,
-    twiddle7: float64x2_t,
-    twiddle9: float64x2_t,
-    twiddle10: float64x2_t,
-    twiddle14: float64x2_t,
-    twiddle15: float64x2_t,
-    twiddle18: float64x2_t,
-    twiddle21: float64x2_t,
+    twiddle1: FcmaVector64,
+    twiddle2: FcmaVector64,
+    twiddle3: FcmaVector64,
+    twiddle5: FcmaVector64,
+    twiddle6: FcmaVector64,
+    twiddle7: FcmaVector64,
+    twiddle9: FcmaVector64,
+    twiddle10: FcmaVector64,
+    twiddle14: FcmaVector64,
+    twiddle15: FcmaVector64,
+    twiddle18: FcmaVector64,
+    twiddle21: FcmaVector64,
 }
 
 boilerplate_fft_fcma_f64_butterfly!(FcmaF64Butterfly32, 32, |this: &FcmaF64Butterfly32<_>| this
@@ -3131,7 +3197,7 @@ impl<T: FftNum> FcmaF64Butterfly32<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl FcmaArrayMut<f64>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -3141,43 +3207,43 @@ impl<T: FftNum> FcmaF64Butterfly32<T> {
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i| {
             [
-                buffer.load_complex(i),
-                buffer.load_complex(i + 8),
-                buffer.load_complex(i + 16),
-                buffer.load_complex(i + 24),
+                buffer.load(i),
+                buffer.load(i + 8),
+                buffer.load(i + 16),
+                buffer.load(i + 24),
             ]
         };
 
         // For each column: load the data, apply our size-4 FFT, apply twiddle factors
         let mut tmp1 = self.bf8.bf4.perform_fft_direct(load(1));
-        tmp1[1] = FcmaVector::mul_complex(tmp1[1], self.twiddle1);
-        tmp1[2] = FcmaVector::mul_complex(tmp1[2], self.twiddle2);
-        tmp1[3] = FcmaVector::mul_complex(tmp1[3], self.twiddle3);
+        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
+        tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddle2);
+        tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddle3);
 
         let mut tmp2 = self.bf8.bf4.perform_fft_direct(load(2));
-        tmp2[1] = FcmaVector::mul_complex(tmp2[1], self.twiddle2);
+        tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddle2);
         tmp2[2] = self.bf8.bf4.rotate.rotate_45(tmp2[2]);
-        tmp2[3] = FcmaVector::mul_complex(tmp2[3], self.twiddle6);
+        tmp2[3] = SimdVector::mul_complex(tmp2[3], self.twiddle6);
 
         let mut tmp3 = self.bf8.bf4.perform_fft_direct(load(3));
-        tmp3[1] = FcmaVector::mul_complex(tmp3[1], self.twiddle3);
-        tmp3[2] = FcmaVector::mul_complex(tmp3[2], self.twiddle6);
-        tmp3[3] = FcmaVector::mul_complex(tmp3[3], self.twiddle9);
+        tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddle3);
+        tmp3[2] = SimdVector::mul_complex(tmp3[2], self.twiddle6);
+        tmp3[3] = SimdVector::mul_complex(tmp3[3], self.twiddle9);
 
         let mut tmp5 = self.bf8.bf4.perform_fft_direct(load(5));
-        tmp5[1] = FcmaVector::mul_complex(tmp5[1], self.twiddle5);
-        tmp5[2] = FcmaVector::mul_complex(tmp5[2], self.twiddle10);
-        tmp5[3] = FcmaVector::mul_complex(tmp5[3], self.twiddle15);
+        tmp5[1] = SimdVector::mul_complex(tmp5[1], self.twiddle5);
+        tmp5[2] = SimdVector::mul_complex(tmp5[2], self.twiddle10);
+        tmp5[3] = SimdVector::mul_complex(tmp5[3], self.twiddle15);
 
         let mut tmp6 = self.bf8.bf4.perform_fft_direct(load(6));
-        tmp6[1] = FcmaVector::mul_complex(tmp6[1], self.twiddle6);
+        tmp6[1] = SimdVector::mul_complex(tmp6[1], self.twiddle6);
         tmp6[2] = self.bf8.bf4.rotate.rotate_135(tmp6[2]);
-        tmp6[3] = FcmaVector::mul_complex(tmp6[3], self.twiddle18);
+        tmp6[3] = SimdVector::mul_complex(tmp6[3], self.twiddle18);
 
         let mut tmp7 = self.bf8.bf4.perform_fft_direct(load(7));
-        tmp7[1] = FcmaVector::mul_complex(tmp7[1], self.twiddle7);
-        tmp7[2] = FcmaVector::mul_complex(tmp7[2], self.twiddle14);
-        tmp7[3] = FcmaVector::mul_complex(tmp7[3], self.twiddle21);
+        tmp7[1] = SimdVector::mul_complex(tmp7[1], self.twiddle7);
+        tmp7[2] = SimdVector::mul_complex(tmp7[2], self.twiddle14);
+        tmp7[3] = SimdVector::mul_complex(tmp7[3], self.twiddle21);
 
         let mut tmp4 = self.bf8.bf4.perform_fft_direct(load(4));
         tmp4[1] = self.bf8.bf4.rotate.rotate_45(tmp4[1]);
@@ -3188,15 +3254,15 @@ impl<T: FftNum> FcmaF64Butterfly32<T> {
         let tmp0 = self.bf8.bf4.perform_fft_direct(load(0));
 
         ////////////////////////////////////////////////////////////
-        let mut store = |i, vectors: [float64x2_t; 8]| {
-            buffer.store_complex(vectors[0], i);
-            buffer.store_complex(vectors[1], i + 4);
-            buffer.store_complex(vectors[2], i + 8);
-            buffer.store_complex(vectors[3], i + 12);
-            buffer.store_complex(vectors[4], i + 16);
-            buffer.store_complex(vectors[5], i + 20);
-            buffer.store_complex(vectors[6], i + 24);
-            buffer.store_complex(vectors[7], i + 28);
+        let mut store = |i, vectors: [FcmaVector64; 8]| {
+            buffer.store(vectors[0], i);
+            buffer.store(vectors[1], i + 4);
+            buffer.store(vectors[2], i + 8);
+            buffer.store(vectors[3], i + 12);
+            buffer.store(vectors[4], i + 16);
+            buffer.store(vectors[5], i + 20);
+            buffer.store(vectors[6], i + 24);
+            buffer.store(vectors[7], i + 28);
         };
 
         // Size-8 FFTs down each of our transposed columns, storing them as soon as we're done with them
@@ -3224,6 +3290,7 @@ impl<T: FftNum> FcmaF64Butterfly32<T> {
 
 #[cfg(test)]
 mod unit_tests {
+    use super::super::fcma_vector::FcmaVector32;
     use super::*;
     use crate::algorithm::Dft;
     use crate::test_utils::{check_fft_algorithm, compare_vectors};
@@ -3294,7 +3361,7 @@ mod unit_tests {
 
             let mut val = vec![val1, val2];
 
-            let in_packed = vld1q_f32(val.as_ptr() as *const f32);
+            let in_packed = FcmaVector32(vld1q_f32(val.as_ptr() as *const f32));
 
             let dft = Dft::new(2, FftDirection::Forward);
 
@@ -3303,7 +3370,7 @@ mod unit_tests {
             dft.process(&mut val);
             let res_packed = bf2.perform_fft_direct(in_packed);
 
-            let res = std::mem::transmute::<float32x4_t, [Complex<f32>; 2]>(res_packed);
+            let res = std::mem::transmute::<FcmaVector32, [Complex<f32>; 2]>(res_packed);
             assert_eq!(val[0], res[0]);
             assert_eq!(val[1], res[1]);
         }
@@ -3321,8 +3388,8 @@ mod unit_tests {
             let mut val_a = vec![val_a1, val_a2];
             let mut val_b = vec![val_b1, val_b2];
 
-            let p1 = vld1q_f32(val_a.as_ptr() as *const f32);
-            let p2 = vld1q_f32(val_b.as_ptr() as *const f32);
+            let p1 = FcmaVector32(vld1q_f32(val_a.as_ptr() as *const f32));
+            let p2 = FcmaVector32(vld1q_f32(val_b.as_ptr() as *const f32));
 
             let dft = Dft::new(2, FftDirection::Forward);
 
@@ -3332,7 +3399,7 @@ mod unit_tests {
             dft.process(&mut val_b);
             let res_both = bf2.perform_parallel_fft_direct(p1, p2);
 
-            let res = std::mem::transmute::<[float32x4_t; 2], [Complex<f32>; 4]>(res_both);
+            let res = std::mem::transmute::<[FcmaVector32; 2], [Complex<f32>; 4]>(res_both);
             let fcma_res_a = [res[0], res[2]];
             let fcma_res_b = [res[1], res[3]];
             assert!(compare_vectors(&val_a, &fcma_res_a));
