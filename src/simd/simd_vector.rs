@@ -41,11 +41,21 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
 
     // loads of complex numbers
     unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
+
+    /// Load a single complex number into the low element, leaving the rest zeroed.
+    ///
+    /// Only a vector that holds more than one complex number can do this, so the f32 vectors
+    /// implement it while the single-complex f64 and scalar ones panic. Code generic over the
+    /// vector type must only reach it when `COMPLEX_PER_VECTOR > 1`.
     unsafe fn load1_lo_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
     unsafe fn load1_dup_complex(ptr: *const Complex<Self::ScalarType>) -> Self;
 
     // stores of complex numbers
     unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
+
+    /// Store the low element of a vector, writing a single complex number and leaving whatever
+    /// follows it alone. Panics on the single-complex vectors, for the same reason as
+    /// `load1_lo_complex`.
     unsafe fn store1_lo_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
 
     // Keep this around even though it's unused - research went into how to do it, keeping it ensures that research doesn't need to be repeated
