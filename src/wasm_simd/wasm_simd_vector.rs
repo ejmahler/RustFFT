@@ -211,6 +211,7 @@ macro_rules! wasm_simd_vector_fft_helpers {
 impl crate::simd::simd_vector::SimdVector for WasmVector64 {
     const COMPLEX_PER_VECTOR: usize = 1;
     const RADIXN_CROSS_LAYER_UNROLL: bool = true;
+    const FUSED_COMPLEX_MULTIPLY: bool = false;
 
     type ScalarType = f64;
     type Rotation = Rotation90<Self>;
@@ -312,6 +313,20 @@ impl crate::simd::simd_vector::SimdVector for WasmVector64 {
     }
 
     #[inline(always)]
+    unsafe fn mul_complex_conjugated(left: Self, right: Self) -> Self {
+        // conj(left) * right is (ac + bd) + i(ad - bc), which is mul_complex with the negation
+        // moved from the swapped copy of left to the unswapped one. Same instruction count.
+        const NEGATE_IMAGINARY: v128 = f64x2(0.0, -0.0);
+        let conjugated = v128_xor(left.0, NEGATE_IMAGINARY);
+        let swapped = u64x2_shuffle::<1, 0>(left.0, left.0);
+        let sum = f64x2_mul(conjugated, u64x2_shuffle::<0, 0>(right.0, right.0));
+        Self(f64x2_add(
+            sum,
+            f64x2_mul(swapped, u64x2_shuffle::<1, 1>(right.0, right.0)),
+        ))
+    }
+
+    #[inline(always)]
     unsafe fn make_rotate90(direction: FftDirection) -> Rotation90<Self> {
         Rotation90(Self(match direction {
             FftDirection::Forward => f64x2(0.0, -0.0),
@@ -373,12 +388,14 @@ impl crate::simd::simd_vector::SimdVector for WasmVector64 {
     }
 
     simd_vector_cross_layer!(#[target_feature(enable = "simd128")]);
+    simd_vector_multiply_loops!(#[target_feature(enable = "simd128")]);
     wasm_simd_vector_fft_helpers!();
 }
 
 impl crate::simd::simd_vector::SimdVector for WasmVector32 {
     const COMPLEX_PER_VECTOR: usize = 2;
     const RADIXN_CROSS_LAYER_UNROLL: bool = true;
+    const FUSED_COMPLEX_MULTIPLY: bool = false;
 
     type ScalarType = f32;
     type Rotation = Rotation90<Self>;
@@ -479,6 +496,20 @@ impl crate::simd::simd_vector::SimdVector for WasmVector32 {
     }
 
     #[inline(always)]
+    unsafe fn mul_complex_conjugated(left: Self, right: Self) -> Self {
+        // conj(left) * right is (ac + bd) + i(ad - bc). Both terms pair a duplicated component of
+        // left with right, rather than a duplicated component of right with left as mul_complex
+        // does, so the duplication moves to left and right gets the lane swap. Same instruction
+        // count either way.
+        let dup_re = u32x4_shuffle::<0, 0, 2, 2>(left.0, left.0);
+        let dup_im = u32x4_shuffle::<1, 1, 3, 3>(left.0, left.0);
+        // right with the components swapped and the new imaginary component negated: (d, -c)
+        let swapped = u32x4_shuffle::<1, 4, 3, 6>(right.0, f32x4_neg(right.0));
+        let sum = f32x4_mul(dup_re, right.0);
+        WasmVector32(f32x4_add(sum, f32x4_mul(dup_im, swapped)))
+    }
+
+    #[inline(always)]
     unsafe fn make_rotate90(direction: FftDirection) -> Rotation90<Self> {
         Rotation90(Self(match direction {
             FftDirection::Forward => f32x4(0.0, -0.0, 0.0, -0.0),
@@ -538,6 +569,7 @@ impl crate::simd::simd_vector::SimdVector for WasmVector32 {
     }
 
     simd_vector_cross_layer!(#[target_feature(enable = "simd128")]);
+    simd_vector_multiply_loops!(#[target_feature(enable = "simd128")]);
     wasm_simd_vector_fft_helpers!();
 }
 

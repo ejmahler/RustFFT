@@ -5,6 +5,7 @@ use std::collections::HashMap;
 
 use std::sync::Arc;
 
+use crate::simd::simd_bluesteins::SimdBluesteins;
 use crate::simd::simd_radix4::SimdRadix4;
 use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
 
@@ -437,7 +438,13 @@ impl<T: FftNum> FftPlannerSse<T> {
             }
             Recipe::BluesteinsAlgorithm { len, inner_fft } => {
                 let inner_fft = self.build_fft(&inner_fft, direction);
-                Arc::new(BluesteinsAlgorithm::new(*len, inner_fft)) as Arc<dyn Fft<T>>
+                if id_t == id_f32 {
+                    Arc::new(SimdBluesteins::<__m128, T>::new(*len, inner_fft)) as Arc<dyn Fft<T>>
+                } else if id_t == id_f64 {
+                    Arc::new(SimdBluesteins::<__m128d, T>::new(*len, inner_fft)) as Arc<dyn Fft<T>>
+                } else {
+                    panic!("Not f32 or f64");
+                }
             }
         }
     }

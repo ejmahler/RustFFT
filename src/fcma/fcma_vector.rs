@@ -213,6 +213,7 @@ pub struct FcmaVector64(pub float64x2_t);
 impl crate::simd::simd_vector::SimdVector for FcmaVector64 {
     const COMPLEX_PER_VECTOR: usize = 1;
     const RADIXN_CROSS_LAYER_UNROLL: bool = true;
+    const FUSED_COMPLEX_MULTIPLY: bool = true;
 
     type ScalarType = f64;
     type Rotation = Rotation90<FcmaVector64>;
@@ -311,6 +312,15 @@ impl crate::simd::simd_vector::SimdVector for FcmaVector64 {
     }
 
     #[inline(always)]
+    unsafe fn mul_complex_conjugated(left: Self, right: Self) -> Self {
+        // The rot90 step of mul_complex adds (-bd, bc), and conjugating the left input flips the
+        // sign of both, which is exactly what rot270 adds. So this costs the same as mul_complex.
+        let zero = vmovq_n_f64(0.0);
+        let temp = vcmlaq_f64(zero, left.0, right.0);
+        Self(vcmlaq_rot270_f64(temp, left.0, right.0))
+    }
+
+    #[inline(always)]
     unsafe fn make_rotate90(direction: FftDirection) -> Rotation90<Self> {
         // The FCMA instructions multiply by a complex number rather than flipping a sign bit,
         // so the rotation is stored as the factor +1 or -1 to multiply the rotated value by.
@@ -365,6 +375,7 @@ impl crate::simd::simd_vector::SimdVector for FcmaVector64 {
     }
 
     simd_vector_cross_layer!(#[target_feature(enable = "neon,fcma")]);
+    simd_vector_multiply_loops!(#[target_feature(enable = "neon,fcma")]);
     fcma_vector_fft_helpers!();
 }
 
@@ -377,6 +388,7 @@ pub struct FcmaVector32(pub float32x4_t);
 impl crate::simd::simd_vector::SimdVector for FcmaVector32 {
     const COMPLEX_PER_VECTOR: usize = 2;
     const RADIXN_CROSS_LAYER_UNROLL: bool = true;
+    const FUSED_COMPLEX_MULTIPLY: bool = true;
 
     type ScalarType = f32;
     type Rotation = Rotation90<FcmaVector32>;
@@ -482,6 +494,15 @@ impl crate::simd::simd_vector::SimdVector for FcmaVector32 {
     }
 
     #[inline(always)]
+    unsafe fn mul_complex_conjugated(left: Self, right: Self) -> Self {
+        // See the f64 version: rot270 adds the rot90 term with both signs flipped, which is the
+        // same as conjugating the left input, so this costs the same as mul_complex.
+        let zero = vmovq_n_f32(0.0);
+        let temp = vcmlaq_f32(zero, left.0, right.0);
+        Self(vcmlaq_rot270_f32(temp, left.0, right.0))
+    }
+
+    #[inline(always)]
     unsafe fn make_rotate90(direction: FftDirection) -> Rotation90<Self> {
         // The FCMA instructions multiply by a complex number rather than flipping a sign bit,
         // so the rotation is stored as the factor +1 or -1 to multiply the rotated value by.
@@ -536,6 +557,7 @@ impl crate::simd::simd_vector::SimdVector for FcmaVector32 {
     }
 
     simd_vector_cross_layer!(#[target_feature(enable = "neon,fcma")]);
+    simd_vector_multiply_loops!(#[target_feature(enable = "neon,fcma")]);
     fcma_vector_fft_helpers!();
 }
 

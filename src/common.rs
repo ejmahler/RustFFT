@@ -181,6 +181,93 @@ macro_rules! boilerplate_fft_oop {
     };
 }
 
+/// `boilerplate_fft` for the algorithms in `src/simd` that are generic over `SimdVector`.
+///
+/// The only differences are the extra generic parameter and that the chunk loops go through
+/// `SimdVector::fft_helper_*` rather than `crate::fft_helper` directly, so that they run with the
+/// backend's target feature enabled.
+macro_rules! boilerplate_simd_fft {
+    ($struct_name:ident, $len_fn:expr, $inplace_scratch_len_fn:expr, $out_of_place_scratch_len_fn:expr, $immut_scratch_len:expr) => {
+        impl<V: SimdVector, T: FftNum> Fft<T> for $struct_name<V, T> {
+            fn process_immutable_with_scratch(
+                &self,
+                input: &[Complex<T>],
+                output: &mut [Complex<T>],
+                scratch: &mut [Complex<T>],
+            ) {
+                unsafe {
+                    V::fft_helper_immut(
+                        input,
+                        output,
+                        scratch,
+                        self.len(),
+                        self.get_immutable_scratch_len(),
+                        |in_chunk, out_chunk, scratch| {
+                            self.perform_fft_immut(in_chunk, out_chunk, scratch)
+                        },
+                    );
+                }
+            }
+            fn process_outofplace_with_scratch(
+                &self,
+                input: &mut [Complex<T>],
+                output: &mut [Complex<T>],
+                scratch: &mut [Complex<T>],
+            ) {
+                unsafe {
+                    V::fft_helper_outofplace(
+                        input,
+                        output,
+                        scratch,
+                        self.len(),
+                        self.get_outofplace_scratch_len(),
+                        |in_chunk, out_chunk, scratch| {
+                            self.perform_fft_out_of_place(in_chunk, out_chunk, scratch)
+                        },
+                    );
+                }
+            }
+            fn process_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+                unsafe {
+                    V::fft_helper_inplace(
+                        buffer,
+                        scratch,
+                        self.len(),
+                        self.get_inplace_scratch_len(),
+                        |chunk, scratch| {
+                            self.perform_fft_inplace(chunk, scratch);
+                        },
+                    );
+                }
+            }
+            #[inline(always)]
+            fn get_inplace_scratch_len(&self) -> usize {
+                $inplace_scratch_len_fn(self)
+            }
+            #[inline(always)]
+            fn get_outofplace_scratch_len(&self) -> usize {
+                $out_of_place_scratch_len_fn(self)
+            }
+            #[inline(always)]
+            fn get_immutable_scratch_len(&self) -> usize {
+                $immut_scratch_len(self)
+            }
+        }
+        impl<V: SimdVector, T> Length for $struct_name<V, T> {
+            #[inline(always)]
+            fn len(&self) -> usize {
+                $len_fn(self)
+            }
+        }
+        impl<V: SimdVector, T> Direction for $struct_name<V, T> {
+            #[inline(always)]
+            fn fft_direction(&self) -> FftDirection {
+                self.direction
+            }
+        }
+    };
+}
+
 macro_rules! boilerplate_fft {
     ($struct_name:ident, $len_fn:expr, $inplace_scratch_len_fn:expr, $out_of_place_scratch_len_fn:expr, $immut_scratch_len:expr) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {

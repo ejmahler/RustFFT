@@ -201,6 +201,7 @@ macro_rules! neon_vector_fft_helpers {
 impl crate::simd::simd_vector::SimdVector for float64x2_t {
     const COMPLEX_PER_VECTOR: usize = 1;
     const RADIXN_CROSS_LAYER_UNROLL: bool = true;
+    const FUSED_COMPLEX_MULTIPLY: bool = false;
 
     type ScalarType = f64;
     type Rotation = Rotation90<Self>;
@@ -298,6 +299,18 @@ impl crate::simd::simd_vector::SimdVector for float64x2_t {
     }
 
     #[inline(always)]
+    unsafe fn mul_complex_conjugated(left: Self, right: Self) -> Self {
+        // conj(left) * right is (ac + bd) + i(ad - bc), so the real part of right multiplies the
+        // conjugated left and the imaginary part multiplies a plain lane swap of it. That is the
+        // same shape as mul_complex, with the negation moved from the swapped vector to the
+        // unswapped one.
+        let conjugated = vcombine_f64(vget_low_f64(left), vneg_f64(vget_high_f64(left)));
+        let swapped = vcombine_f64(vget_high_f64(left), vget_low_f64(left));
+        let sum = vmulq_laneq_f64::<0>(conjugated, right);
+        vfmaq_laneq_f64::<1>(sum, swapped, right)
+    }
+
+    #[inline(always)]
     unsafe fn make_rotate90(direction: FftDirection) -> Rotation90<Self> {
         Rotation90(match direction {
             FftDirection::Forward => vld1q_f64([0.0, -0.0].as_ptr()),
@@ -356,12 +369,14 @@ impl crate::simd::simd_vector::SimdVector for float64x2_t {
     }
 
     simd_vector_cross_layer!(#[inline(always)]);
+    simd_vector_multiply_loops!(#[inline(always)]);
     neon_vector_fft_helpers!();
 }
 
 impl crate::simd::simd_vector::SimdVector for float32x4_t {
     const COMPLEX_PER_VECTOR: usize = 2;
     const RADIXN_CROSS_LAYER_UNROLL: bool = true;
+    const FUSED_COMPLEX_MULTIPLY: bool = false;
 
     type ScalarType = f32;
     type Rotation = Rotation90<Self>;
@@ -468,6 +483,23 @@ impl crate::simd::simd_vector::SimdVector for float32x4_t {
     }
 
     #[inline(always)]
+    unsafe fn mul_complex_conjugated(left: Self, right: Self) -> Self {
+        // conj(left) * right is (ac + bd) + i(ad - bc). Both terms pair a duplicated component of
+        // left with right, rather than a duplicated component of right with left as mul_complex
+        // does, so the duplication moves to left and right gets the lane swap. Same instruction
+        // count either way.
+        let dup_re = vtrn1q_f32(left, left);
+        let dup_im = vtrn2q_f32(left, left);
+        // right with the components swapped and the new imaginary component negated: (d, -c)
+        let swapped = vreinterpretq_f32_u32(veorq_u32(
+            vreinterpretq_u32_f32(vrev64q_f32(right)),
+            vreinterpretq_u32_f32(vld1q_f32([0.0, -0.0, 0.0, -0.0].as_ptr())),
+        ));
+        let sum = vmulq_f32(dup_re, right);
+        vfmaq_f32(sum, dup_im, swapped)
+    }
+
+    #[inline(always)]
     unsafe fn make_rotate90(direction: FftDirection) -> Rotation90<Self> {
         Rotation90(match direction {
             FftDirection::Forward => vld1q_f32([0.0, -0.0, 0.0, -0.0].as_ptr()),
@@ -527,6 +559,7 @@ impl crate::simd::simd_vector::SimdVector for float32x4_t {
     }
 
     simd_vector_cross_layer!(#[inline(always)]);
+    simd_vector_multiply_loops!(#[inline(always)]);
     neon_vector_fft_helpers!();
 }
 

@@ -26,6 +26,16 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
     const COMPLEX_PER_VECTOR: usize;
     const RADIXN_CROSS_LAYER_UNROLL: bool; // If true, this platform benefits from doing a 2x unroll of the RadixN cross layers
 
+    /// True if the backend has instructions that multiply two complex numbers directly, rather than
+    /// having to build the multiply out of real multiplies and lane shuffles. Only FCMA does.
+    ///
+    /// The pairwise multiply loops use this to decide whether their vector path is worth taking at
+    /// all. With a single complex number per vector, interleaved data and a shuffle-based multiply,
+    /// those loops lose to the plain scalar loop LLVM autovectorizes into deinterleaving loads, so
+    /// they take the scalar path instead. FCMA's two-instruction multiply wins, and so does every
+    /// vector holding two complex numbers.
+    const FUSED_COMPLEX_MULTIPLY: bool;
+
     /// The scalar this vector holds. Always the same type as the `T` of the algorithm using it.
     type ScalarType: FftNum;
 
@@ -64,6 +74,16 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
 
     /// Pairwise multiply the complex numbers in `left` with the complex numbers in `right`.
     unsafe fn mul_complex(left: Self, right: Self) -> Self;
+
+    /// The same as `mul_complex`, except that `left` is conjugated first: the result is
+    /// `left.conj() * right`.
+    ///
+    /// Bluestein's and Rader's both need a product conjugated, and `(a * b).conj()` is
+    /// `a.conj() * b.conj()`, so storing the precomputed side pre-conjugated turns every one of
+    /// those into this operation. Complex multiplication is commutative, so this also covers
+    /// `left * right.conj()` by swapping the arguments. Every backend reaches it in the same
+    /// instruction count as `mul_complex`, or one more.
+    unsafe fn mul_complex_conjugated(left: Self, right: Self) -> Self;
 
     /// Generates a chunk of twiddle factors starting at (X,Y) and incrementing X
     /// `COMPLEX_PER_VECTOR` times.
@@ -116,6 +136,28 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
         twiddles: &[Self],
         num_columns: usize,
         rotation: &Self::Rotation,
+    );
+
+    /// `dest[i] = src[i] * multiplier[i]`, for every element of `dest`.
+    ///
+    /// These three are the pairwise multiply loops of Bluestein's and Rader's, and carry the
+    /// backend's target feature for the same reason `cross_layer_radixn` does. Every backend
+    /// implements them with `simd_vector_multiply_loops!`.
+    unsafe fn mul_complex_slice(
+        src: &[Complex<Self::ScalarType>],
+        dest: &mut [Complex<Self::ScalarType>],
+        multiplier: &[Complex<Self::ScalarType>],
+    );
+    /// `dest[i] = src[i].conj() * multiplier[i]`, for every element of `dest`.
+    unsafe fn mul_complex_conjugated_slice(
+        src: &[Complex<Self::ScalarType>],
+        dest: &mut [Complex<Self::ScalarType>],
+        multiplier: &[Complex<Self::ScalarType>],
+    );
+    /// `buffer[i] = buffer[i].conj() * multiplier[i]`, for every element of `buffer`.
+    unsafe fn mul_complex_conjugated_slice_inplace(
+        buffer: &mut [Complex<Self::ScalarType>],
+        multiplier: &[Complex<Self::ScalarType>],
     );
 
     /// The three `fft_helper_*` wrappers from the backend's `*_common.rs`, which run the whole
@@ -213,3 +255,161 @@ macro_rules! simd_vector_cross_layer {
     };
 }
 pub(crate) use simd_vector_cross_layer;
+
+/// One complex multiply, conjugating `left` first when `CONJUGATE` is set.
+///
+/// Written out rather than passed in as a closure, because a closure would not inherit the target
+/// feature of the function this ends up inlined into. See `SimdVector::cross_layer_radixn`.
+#[inline(always)]
+unsafe fn mul_one<V: SimdVector, const CONJUGATE: bool>(left: V, right: V) -> V {
+    if CONJUGATE {
+        V::mul_complex_conjugated(left, right)
+    } else {
+        V::mul_complex(left, right)
+    }
+}
+
+/// Whether the vector path of the multiply loops below is faster than a scalar loop.
+/// See `SimdVector::FUSED_COMPLEX_MULTIPLY`.
+#[inline(always)]
+fn vectors_worthwhile<V: SimdVector>() -> bool {
+    V::COMPLEX_PER_VECTOR > 1 || V::FUSED_COMPLEX_MULTIPLY
+}
+
+/// The vector path of the multiply loops: `dest[i] = src[i] * multiplier[i]` for `count` elements,
+/// conjugating `src[i]` first when `CONJUGATE` is set.
+///
+/// Unrolled two vectors at a time to get two independent dependency chains, the same as
+/// `SimdRadixN`'s cross layers. No backend holds more than two complex numbers in a vector, so a
+/// `count` that isn't a whole number of vectors leaves exactly one element over; that one is loaded
+/// into and stored from the low half of a vector, the same as the partial columns in `SimdRadixN`.
+///
+/// These are raw pointers so that the in-place case can pass the same one for `src` and `dest`. All
+/// three must be valid for `count` elements, which the callers below check.
+#[inline(always)]
+unsafe fn mul_complex_vectors<V: SimdVector, const CONJUGATE: bool>(
+    src: *const Complex<V::ScalarType>,
+    dest: *mut Complex<V::ScalarType>,
+    multiplier: *const Complex<V::ScalarType>,
+    count: usize,
+) {
+    let per_vector = V::COMPLEX_PER_VECTOR;
+    let full_vectors = count / per_vector;
+
+    for i in 0..full_vectors / 2 {
+        let index = i * 2 * per_vector;
+        let next = index + per_vector;
+
+        let left_a = V::load_complex(src.add(index));
+        let left_b = V::load_complex(src.add(next));
+
+        let product_a = mul_one::<V, CONJUGATE>(left_a, V::load_complex(multiplier.add(index)));
+        let product_b = mul_one::<V, CONJUGATE>(left_b, V::load_complex(multiplier.add(next)));
+
+        V::store_complex(dest.add(index), product_a);
+        V::store_complex(dest.add(next), product_b);
+    }
+
+    // an odd vector count leaves one behind
+    if full_vectors % 2 == 1 {
+        let index = (full_vectors - 1) * per_vector;
+        let left = V::load_complex(src.add(index));
+        let product = mul_one::<V, CONJUGATE>(left, V::load_complex(multiplier.add(index)));
+        V::store_complex(dest.add(index), product);
+    }
+
+    // The leftover element, if there is one. `COMPLEX_PER_VECTOR` is a constant, so this whole
+    // branch vanishes on the single-complex vectors, whose partial load and store are
+    // unimplemented.
+    if per_vector > 1 && count % per_vector != 0 {
+        let index = full_vectors * per_vector;
+        let left = V::load1_lo_complex(src.add(index));
+        let product = mul_one::<V, CONJUGATE>(left, V::load1_lo_complex(multiplier.add(index)));
+        V::store1_lo_complex(dest.add(index), product);
+    }
+}
+
+/// `dest[i] = src[i] * multiplier[i]`, for every element of `dest`, conjugating `src[i]` first when
+/// `CONJUGATE` is set. `src` and `multiplier` must be at least as long as `dest`.
+#[inline(always)]
+pub(crate) unsafe fn mul_complex_chunks<V: SimdVector, const CONJUGATE: bool>(
+    src: &[Complex<V::ScalarType>],
+    dest: &mut [Complex<V::ScalarType>],
+    multiplier: &[Complex<V::ScalarType>],
+) {
+    let count = dest.len();
+    assert!(src.len() >= count && multiplier.len() >= count);
+
+    if vectors_worthwhile::<V>() {
+        mul_complex_vectors::<V, CONJUGATE>(
+            src.as_ptr(),
+            dest.as_mut_ptr(),
+            multiplier.as_ptr(),
+            count,
+        );
+    } else {
+        // Three separate slices, so the compiler knows they don't alias and is free to
+        // autovectorize this into deinterleaving loads.
+        for ((dest, src), multiplier) in dest.iter_mut().zip(src.iter()).zip(multiplier.iter()) {
+            *dest = if CONJUGATE {
+                src.conj() * multiplier
+            } else {
+                src * multiplier
+            };
+        }
+    }
+}
+
+/// `buffer[i] = buffer[i].conj() * multiplier[i]`, the in-place form of `mul_complex_chunks`.
+#[inline(always)]
+pub(crate) unsafe fn mul_complex_conjugated_chunks_inplace<V: SimdVector>(
+    buffer: &mut [Complex<V::ScalarType>],
+    multiplier: &[Complex<V::ScalarType>],
+) {
+    let count = buffer.len();
+    assert!(multiplier.len() >= count);
+
+    if vectors_worthwhile::<V>() {
+        let ptr = buffer.as_mut_ptr();
+        mul_complex_vectors::<V, true>(ptr, ptr, multiplier.as_ptr(), count);
+    } else {
+        for (buffer, multiplier) in buffer.iter_mut().zip(multiplier.iter()) {
+            *buffer = buffer.conj() * multiplier;
+        }
+    }
+}
+
+/// The three pairwise multiply loop impls, which like `simd_vector_cross_layer` are the same for
+/// every backend apart from the attribute they carry. Each backend invokes this once per vector
+/// type inside its `impl`, passing the same attribute it passes there.
+macro_rules! simd_vector_multiply_loops {
+    ($(#[$attr:meta])*) => {
+        $(#[$attr])*
+        unsafe fn mul_complex_slice(
+            src: &[num_complex::Complex<Self::ScalarType>],
+            dest: &mut [num_complex::Complex<Self::ScalarType>],
+            multiplier: &[num_complex::Complex<Self::ScalarType>],
+        ) {
+            crate::simd::simd_vector::mul_complex_chunks::<Self, false>(src, dest, multiplier)
+        }
+        $(#[$attr])*
+        unsafe fn mul_complex_conjugated_slice(
+            src: &[num_complex::Complex<Self::ScalarType>],
+            dest: &mut [num_complex::Complex<Self::ScalarType>],
+            multiplier: &[num_complex::Complex<Self::ScalarType>],
+        ) {
+            crate::simd::simd_vector::mul_complex_chunks::<Self, true>(src, dest, multiplier)
+        }
+        $(#[$attr])*
+        unsafe fn mul_complex_conjugated_slice_inplace(
+            buffer: &mut [num_complex::Complex<Self::ScalarType>],
+            multiplier: &[num_complex::Complex<Self::ScalarType>],
+        ) {
+            crate::simd::simd_vector::mul_complex_conjugated_chunks_inplace::<Self>(
+                buffer,
+                multiplier,
+            )
+        }
+    };
+}
+pub(crate) use simd_vector_multiply_loops;

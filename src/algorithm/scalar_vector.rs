@@ -8,7 +8,7 @@ use crate::{
         Butterfly2, Butterfly3, Butterfly4, Butterfly5, Butterfly6, Butterfly7,
     },
     fft_helper::{fft_helper_immut, fft_helper_inplace, fft_helper_outofplace},
-    simd::simd_vector::{simd_vector_cross_layer, SimdVector},
+    simd::simd_vector::{simd_vector_cross_layer, simd_vector_multiply_loops, SimdVector},
     twiddles, FftDirection, FftNum,
 };
 
@@ -19,6 +19,8 @@ impl<T: FftNum> SimdVector for Complex<T> {
 
     // The unroll severely hurts wasm32 scalar performance, but significantly benefits other platforms, so disable it just for wasm
     const RADIXN_CROSS_LAYER_UNROLL: bool = !cfg!(target_arch = "wasm32");
+
+    const FUSED_COMPLEX_MULTIPLY: bool = false;
 
     type ScalarType = T;
 
@@ -104,6 +106,10 @@ impl<T: FftNum> SimdVector for Complex<T> {
         left * right
     }
 
+    unsafe fn mul_complex_conjugated(left: Self, right: Self) -> Self {
+        left.conj() * right
+    }
+
     unsafe fn make_mixedradix_twiddle_chunk(
         x: usize,
         y: usize,
@@ -174,6 +180,7 @@ impl<T: FftNum> SimdVector for Complex<T> {
     }
 
     simd_vector_cross_layer!(#[inline(always)]);
+    simd_vector_multiply_loops!(#[inline(always)]);
 
     #[inline(always)]
     unsafe fn fft_helper_immut<E>(
