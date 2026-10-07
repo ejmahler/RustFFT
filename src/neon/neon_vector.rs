@@ -226,7 +226,7 @@ impl crate::simd::simd_vector::SimdVector for float64x2_t {
 
     #[inline(always)]
     unsafe fn load1_dup_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
-        unimplemented!("Impossible to do a partial load of complex f64's");
+        unimplemented!("Unused: a dup load of one complex f64 is just load_complex");
     }
 
     #[inline(always)]

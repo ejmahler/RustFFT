@@ -7,10 +7,12 @@
 //! Everything here is generic over `SimdVector`, from `simd_vector.rs`. A backend implements that
 //! trait once per vector type and gets the algorithm, so `SimdRadix4` is the only copy of it.
 //!
-//! Because a column butterfly consumes `COMPLEX_PER_VECTOR` columns at a time, the column count at
-//! every layer has to be a whole number of vectors. The column count starts at `base_len` and only
-//! ever grows by whole factors, so requiring `base_len % COMPLEX_PER_VECTOR == 0` is enough. That
-//! is 1 for f64 (no restriction) and 2 for f32.
+//! A column butterfly consumes `COMPLEX_PER_VECTOR` columns at a time, 2 for f32 and 1 for f64 and
+//! the scalar adapter, so a column count that isn't a whole number of vectors leaves a column over.
+//! The count starts at `base_len` and only ever grows by whole factors, so for f32 an odd base
+//! means an odd count at every layer. Each layer therefore ends with a partial column, handled the
+//! same way as in `SimdRadixN`: one complex loaded into the low half of a vector and only the low
+//! half stored back.
 
 use std::any::TypeId;
 use std::sync::Arc;
@@ -57,16 +59,6 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
         let direction = base_fft.fft_direction();
         let complex_per_vector = V::COMPLEX_PER_VECTOR;
 
-        // Every cross-FFT layer processes a whole vector of columns at a time. The column count
-        // starts at base_len and is only ever multiplied by a factor, so this one check covers
-        // every layer.
-        assert!(
-            k == 0 || base_len % complex_per_vector == 0,
-            "SimdRadixN requires a base length divisible by {}, got {}",
-            complex_per_vector,
-            base_len
-        );
-
         // set up our cross FFT butterfly instances. simultaneously, compute the number of twiddles
         let rotation = unsafe { V::make_rotate90(direction) };
         let mut cross_fft_len = base_len;
@@ -74,7 +66,7 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
 
         for _ in 0..k {
             // twiddles are stored a vector at a time, so a layer needs one chunk per vector column
-            twiddle_count += (cross_fft_len / complex_per_vector) * (RADIX - 1);
+            twiddle_count += cross_fft_len.div_ceil(complex_per_vector) * (RADIX - 1);
             cross_fft_len *= RADIX;
         }
         let len = cross_fft_len;
@@ -95,7 +87,7 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
         let mut twiddle_factors: Vec<V> = Vec::with_capacity(twiddle_count);
         let mut cross_fft_len = base_len;
         for _ in 0..k {
-            let num_vector_columns = cross_fft_len / complex_per_vector;
+            let num_vector_columns = cross_fft_len.div_ceil(complex_per_vector);
             cross_fft_len *= RADIX;
 
             for i in 0..num_vector_columns {
@@ -170,7 +162,7 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
             V::cross_layer_radix4(out, layer_twiddles, num_columns, &self.rotation);
 
             // skip past all the twiddle factors used in this layer
-            let twiddle_offset = (num_columns / V::COMPLEX_PER_VECTOR) * (RADIX - 1);
+            let twiddle_offset = num_columns.div_ceil(V::COMPLEX_PER_VECTOR) * (RADIX - 1);
             layer_twiddles = &layer_twiddles[twiddle_offset..];
         }
     }
@@ -307,21 +299,7 @@ pub mod test_bodies {
         let mut planner32 = crate::FftPlannerScalar::<f32>::new();
 
         for direction in [FftDirection::Forward, FftDirection::Inverse] {
-            // odd base, f64 only
-            for base_len in [143, 55, 65] {
-                let base = planner64.plan_fft(base_len, direction);
-                assert!(
-                    base.get_inplace_scratch_len() > 0,
-                    "base {} was expected to need scratch",
-                    base_len
-                );
-                for k in 0..3 {
-                    check::<V64>(k, Arc::clone(&base));
-                }
-            }
-
-            // even base, usable by both element types
-            for base_len in [22, 26, 110] {
+            for base_len in [22, 26, 110, 143, 55, 65] {
                 let base32 = planner32.plan_fft(base_len, direction);
                 let base64 = planner64.plan_fft(base_len, direction);
                 assert!(

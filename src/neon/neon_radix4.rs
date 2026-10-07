@@ -16,8 +16,9 @@ mod unit_tests {
 
     #[test]
     fn test_neon_radix4_replacement_f32() {
-        // f32 fits two complex per vector, so the base length has to be even
-        test_bodies::factor_pairs::<float32x4_t>(&[2, 4, 6]);
+        // f32 fits two complex per vector, so an odd base length means every layer ends with a
+        // partial column
+        test_bodies::factor_pairs::<float32x4_t>(&[1, 2, 3, 4, 5, 6]);
     }
 
     #[test]

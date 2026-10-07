@@ -120,13 +120,13 @@ mod unit_tests {
 
     #[test]
     fn test_scalar_radix4_f64() {
-        // f64 fits one complex per vector, so every base length is legal
+        // a scalar vector is a single complex number, so every base length is legal
         test_bodies::factor_pairs::<Complex<f64>>(&[1, 2, 3, 4, 5, 6]);
     }
 
     #[test]
     fn test_scalar_radix4_f32() {
-        // f32 fits two complex per vector, so the base length has to be even
+        // the scalar vector is one complex number whatever the precision, so f32 is no different
         test_bodies::factor_pairs::<Complex<f32>>(&[1, 2, 3, 4, 5, 6]);
     }
 
