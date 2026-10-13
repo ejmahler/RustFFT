@@ -2,7 +2,7 @@ use num_complex::Complex;
 use num_traits::Zero;
 use std::arch::x86_64::*;
 
-use crate::simd::simd_array::SimdComplexArray;
+use crate::simd::simd_array::{SimdComplexArray, SimdComplexArrayMut};
 use crate::simd::simd_vector::SimdVector;
 use crate::{twiddles, FftDirection};
 
@@ -546,8 +546,118 @@ impl crate::simd::simd_vector::SimdVector for __m128 {
     }
 
     simd_vector_cross_layer!(#[target_feature(enable = "sse4.1")]);
-    simd_vector_multiply_loops!(#[target_feature(enable = "sse4.1")]);
     sse_vector_fft_helpers!();
+
+    
+    /*#[target_feature(enable = "sse4.1")]
+    unsafe fn mul_complex_slice(
+        src: &[num_complex::Complex<Self::ScalarType>],
+        dest: &mut [num_complex::Complex<Self::ScalarType>],
+        multiplier: &[num_complex::Complex<Self::ScalarType>],
+    ) {
+        crate::simd::simd_vector::mul_complex_chunks::<Self, false>(src, dest, multiplier)
+    }*/
+    /*#[target_feature(enable = "sse4.1")]
+    unsafe fn mul_complex_conjugated_slice(
+        src: &[num_complex::Complex<Self::ScalarType>],
+        dest: &mut [num_complex::Complex<Self::ScalarType>],
+        multiplier: &[num_complex::Complex<Self::ScalarType>],
+    ) {
+        crate::simd::simd_vector::mul_complex_chunks::<Self, true>(src, dest, multiplier)
+    }
+    #[target_feature(enable = "sse4.1")]
+    unsafe fn mul_complex_conjugated_slice_inplace(
+        buffer: &mut [num_complex::Complex<Self::ScalarType>],
+        multiplier: &[num_complex::Complex<Self::ScalarType>],
+    ) {
+        crate::simd::simd_vector::mul_complex_conjugated_chunks_inplace::<Self>(
+            buffer,
+            multiplier,
+        )
+    }*/
+
+    
+    #[target_feature(enable = "sse4.1")]
+    unsafe fn mul_complex_slice(
+        src: &[num_complex::Complex<Self::ScalarType>],
+        mut dest: &mut [num_complex::Complex<Self::ScalarType>],
+        multiplier: &[num_complex::Complex<Self::ScalarType>],
+    ) {
+        let count = dest.len();
+        assert!(src.len() >= count && multiplier.len() >= count);
+
+        let unroll_size = Self::COMPLEX_PER_VECTOR * 2;
+        let (unroll_count, unroll_remainder) = (count / unroll_size, count % unroll_size);
+
+        for i in 0..unroll_count {
+            let vcol = i * unroll_size;
+
+            let src0: __m128 = src.load(vcol);
+            let src1: __m128 = src.load(vcol + Self::COMPLEX_PER_VECTOR);
+
+            let multiplier0: __m128 = multiplier.load(vcol);
+            let multiplier1: __m128 = multiplier.load(vcol + Self::COMPLEX_PER_VECTOR);
+
+            let src_mix_0 = _mm_unpacklo_ps(src0, src1);
+            let src_mix_1 = _mm_unpackhi_ps(src0, src1);
+
+            let multiplier_mix_0 = _mm_unpacklo_ps(multiplier0, multiplier1);
+            let multiplier_mix_1 = _mm_unpackhi_ps(multiplier0, multiplier1);
+
+            let src_deinterleaved_re = _mm_unpacklo_ps(src_mix_0, src_mix_1);
+            let src_deinterleaved_im = _mm_unpackhi_ps(src_mix_0, src_mix_1);
+
+            let multiplier_deinterleaved_re = _mm_unpacklo_ps(multiplier_mix_0, multiplier_mix_1);
+            let multiplier_deinterleaved_im = _mm_unpackhi_ps(multiplier_mix_0, multiplier_mix_1);
+
+            let dest_deinterleaved_re = _mm_sub_ps(_mm_mul_ps(src_deinterleaved_re, multiplier_deinterleaved_re), _mm_mul_ps(src_deinterleaved_im, multiplier_deinterleaved_im));
+            let dest_deinterleaved_im = _mm_add_ps(_mm_mul_ps(src_deinterleaved_re, multiplier_deinterleaved_im), _mm_mul_ps(src_deinterleaved_im, multiplier_deinterleaved_re));
+
+            let dst0 = _mm_unpacklo_ps(dest_deinterleaved_re, dest_deinterleaved_im);
+            let dst1 = _mm_unpackhi_ps(dest_deinterleaved_re, dest_deinterleaved_im);
+
+            dest.store(dst0, vcol);
+            dest.store(dst1, vcol + Self::COMPLEX_PER_VECTOR);
+
+        }
+
+        if unroll_remainder != 0 {
+           let vcol = unroll_count * unroll_size;
+
+           for i in vcol..count {
+                let a = *src.get_unchecked(i);
+                let b = *multiplier.get_unchecked(i);
+                *dest.get_unchecked_mut(i) = a * b;
+           }
+        }
+    }
+    #[target_feature(enable = "sse4.1")]
+    unsafe fn mul_complex_conjugated_slice(
+        src: &[num_complex::Complex<Self::ScalarType>],
+        dest: &mut [num_complex::Complex<Self::ScalarType>],
+        multiplier: &[num_complex::Complex<Self::ScalarType>],
+    ) {
+        let count = dest.len();
+        assert!(src.len() >= count && multiplier.len() >= count);
+
+        // Three separate slices, so the compiler knows they don't alias and is free to
+        // autovectorize this into deinterleaving loads.
+        for ((dest, src), multiplier) in dest.iter_mut().zip(src.iter()).zip(multiplier.iter()) {
+            *dest = src.conj() * multiplier
+        }
+    }
+    #[target_feature(enable = "sse4.1")]
+    unsafe fn mul_complex_conjugated_slice_inplace(
+        buffer: &mut [num_complex::Complex<Self::ScalarType>],
+        multiplier: &[num_complex::Complex<Self::ScalarType>],
+    ) {
+        let count = buffer.len();
+        assert!(multiplier.len() >= count);
+
+        for (buffer, multiplier) in buffer.iter_mut().zip(multiplier.iter()) {
+            *buffer = buffer.conj() * multiplier;
+        }
+    }
 }
 
 #[inline(always)]

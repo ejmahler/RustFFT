@@ -487,12 +487,13 @@ impl crate::simd::simd_vector::SimdVector for WasmVector32 {
 
     #[inline(always)]
     unsafe fn mul_complex(left: Self, right: Self) -> Self {
-        let temp1 = u32x4_shuffle::<0, 4, 2, 6>(right.0, right.0);
-        let temp2 = u32x4_shuffle::<1, 5, 3, 7>(right.0, f32x4_neg(right.0));
-        let temp3 = f32x4_mul(temp2, left.0);
-        let temp4 = u32x4_shuffle::<1, 0, 3, 2>(temp3, temp3);
-        let temp5 = f32x4_mul(temp1, left.0);
-        WasmVector32(f32x4_add(temp4, temp5))
+        const NEGATE_LEFT: v128 = f32x4(-0.0, 0.0, -0.0, 0.0);
+        let temp = v128_xor(u32x4_shuffle::<1, 0, 3, 2>(left.0, left.0), NEGATE_LEFT);
+        let sum = f32x4_mul(left.0, u32x4_shuffle::<0, 0, 2, 2>(right.0, right.0));
+        Self(f32x4_add(
+            sum,
+            f32x4_mul(temp, u32x4_shuffle::<1, 1, 3, 3>(right.0, right.0)),
+        ))
     }
 
     #[inline(always)]

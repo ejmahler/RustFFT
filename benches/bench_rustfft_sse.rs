@@ -1,10 +1,13 @@
+use rustfft::simd::simd_array::{SimdComplexArray, SimdComplexArrayMut};
 use rustfft::num_complex::Complex;
+use rustfft::simd::simd_vector::SimdVector;
 use rustfft::num_traits::Zero;
 use rustfft::Fft;
+use std::hint::black_box;
 use std::sync::Arc;
 mod config;
 
-use criterion::{criterion_group, criterion_main, Bencher, Criterion};
+use criterion::{Bencher, BenchmarkId, Criterion, criterion_group, criterion_main};
 
 
 /// Times just the FFT execution (not allocation and pre-calculation)
@@ -160,6 +163,7 @@ fn sse_planned32_prime_0257(b: &mut Bencher)     { bench_planned_f32(b,  257); }
 fn sse_planned32_prime_2017(b: &mut Bencher)     { bench_planned_f32(b,  2017); }
 fn sse_planned32_prime_2879(b: &mut Bencher)     { bench_planned_f32(b,  2879); }
 fn sse_planned32_prime_65521(b: &mut Bencher)    { bench_planned_f32(b, 65521); }
+fn sse_planned32_prime_65539(b: &mut Bencher)    { bench_planned_f32(b, 65539); }
 fn sse_planned32_prime_746497(b: &mut Bencher)   { bench_planned_f32(b,746497); }
 
 fn sse_planned64_prime_0149(b: &mut Bencher)     { bench_planned_f64(b,  149); }
@@ -169,6 +173,7 @@ fn sse_planned64_prime_0257(b: &mut Bencher)     { bench_planned_f64(b,  257); }
 fn sse_planned64_prime_2017(b: &mut Bencher)     { bench_planned_f64(b,  2017); }
 fn sse_planned64_prime_2879(b: &mut Bencher)     { bench_planned_f64(b,  2879); }
 fn sse_planned64_prime_65521(b: &mut Bencher)    { bench_planned_f64(b, 65521); }
+fn sse_planned64_prime_65539(b: &mut Bencher)    { bench_planned_f64(b, 65539); }
 fn sse_planned64_prime_746497(b: &mut Bencher)   { bench_planned_f64(b,746497); }
 
 // small mixed composites
@@ -283,6 +288,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         sse_planned32_prime_2017,
         sse_planned32_prime_2879,
         sse_planned32_prime_65521,
+        sse_planned32_prime_65539,
         sse_planned32_prime_746497,
         sse_planned64_prime_0149,
         sse_planned64_prime_0151,
@@ -291,6 +297,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         sse_planned64_prime_2017,
         sse_planned64_prime_2879,
         sse_planned64_prime_65521,
+        sse_planned64_prime_65539,
         sse_planned64_prime_746497,
         sse_planned32_composite_000018,
         sse_planned32_composite_000360,
@@ -307,9 +314,337 @@ fn criterion_benchmark(c: &mut Criterion) {
     );
 }
 
+use std::arch::x86_64::*;
+
+
+#[target_feature(enable = "sse4.1")]
+unsafe fn mul_complex_f32_deinterleave(
+    src: &[num_complex::Complex<f32>],
+    mut dest: &mut [num_complex::Complex<f32>],
+    multiplier: &[num_complex::Complex<f32>],
+) {
+    let count = dest.len();
+    assert!(src.len() >= count && multiplier.len() >= count);
+
+    let unroll_size = 4;
+    let (unroll_count, unroll_remainder) = (count / unroll_size, count % unroll_size);
+
+    for i in 0..unroll_count {
+        let vcol = i * unroll_size;
+
+        let src0: __m128 = src.load(vcol);
+        let src1: __m128 = src.load(vcol + 2);
+
+        let multiplier_deinterleaved_re: __m128 = multiplier.load(vcol);
+        let multiplier_deinterleaved_im: __m128 = multiplier.load(vcol + 2);
+
+        let src_mix_0 = _mm_unpacklo_ps(src0, src1);
+        let src_mix_1 = _mm_unpackhi_ps(src0, src1);
+
+        let src_deinterleaved_re = _mm_unpacklo_ps(src_mix_0, src_mix_1);
+        let src_deinterleaved_im = _mm_unpackhi_ps(src_mix_0, src_mix_1);
+        let dest_deinterleaved_re = _mm_sub_ps(_mm_mul_ps(src_deinterleaved_re, multiplier_deinterleaved_re), _mm_mul_ps(src_deinterleaved_im, multiplier_deinterleaved_im));
+        let dest_deinterleaved_im = _mm_add_ps(_mm_mul_ps(src_deinterleaved_re, multiplier_deinterleaved_im), _mm_mul_ps(src_deinterleaved_im, multiplier_deinterleaved_re));
+
+        let dst0 = _mm_unpacklo_ps(dest_deinterleaved_re, dest_deinterleaved_im);
+        let dst1 = _mm_unpackhi_ps(dest_deinterleaved_re, dest_deinterleaved_im);
+
+        dest.store(dst0, vcol);
+        dest.store(dst1, vcol + 2);
+
+    }
+
+    if unroll_remainder != 0 {
+        let vcol = unroll_count * unroll_size;
+
+        for i in vcol..count {
+            let a = *src.get_unchecked(i);
+            let b = *multiplier.get_unchecked(i);
+            *dest.get_unchecked_mut(i) = a * b;
+        }
+    }
+}
+
+
+/// One complex multiply, conjugating `left` first when `CONJUGATE` is set.
+///
+/// Written out rather than passed in as a closure, because a closure would not inherit the target
+/// feature of the function this ends up inlined into. See `SimdVector::cross_layer_radixn`.
+#[inline(always)]
+unsafe fn mul_one<V: SimdVector, const CONJUGATE: bool>(left: V, right: V) -> V {
+    if CONJUGATE {
+        V::mul_complex_conjugated(left, right)
+    } else {
+        V::mul_complex(left, right)
+    }
+}
+
+#[target_feature(enable = "sse4.1")]
+unsafe fn mul_complex_f32_interleave(
+    src: &[num_complex::Complex<f32>],
+    mut dest: &mut [num_complex::Complex<f32>],
+    multiplier: &[num_complex::Complex<f32>],
+) {
+    let count = dest.len();
+    assert!(src.len() >= count && multiplier.len() >= count);
+
+    let per_vector = 2;
+    let full_vectors = count / per_vector;
+
+    for i in 0..full_vectors / 2 {
+        let index = i * 2 * per_vector;
+        let next = index + per_vector;
+
+        let left_a = src.load(index);
+        let left_b = src.load(next);
+
+        let product_a = mul_one::<__m128, false>(left_a, multiplier.load(index));
+        let product_b = mul_one::<__m128, false>(left_b, multiplier.load(next));
+
+        dest.store(product_a, index);
+        dest.store(product_b, next);
+    }
+
+    // an odd vector count leaves one behind
+    if full_vectors % 2 == 1 {
+        let index = (full_vectors - 1) * per_vector;
+        let left = src.load(index);
+        let product = mul_one::<__m128, false>(left, multiplier.load(index));
+        dest.store(product, index);
+    }
+
+    // The leftover element, if there is one. `COMPLEX_PER_VECTOR` is a constant, so this whole
+    // branch vanishes on the single-complex vectors, whose partial load and store are
+    // unimplemented.
+    if per_vector > 1 && count % per_vector != 0 {
+        let index = full_vectors * per_vector;
+        let left = src.load1_lo(index);
+        let product = mul_one::<__m128, false>(left, multiplier.load1_lo(index));
+        dest.store1_lo(product, index);
+    }
+}
+
+
+#[target_feature(enable = "sse4.1")]
+unsafe fn mul_complex_f32_scalar(
+    src: &[num_complex::Complex<f32>],
+    dest: &mut [num_complex::Complex<f32>],
+    multiplier: &[num_complex::Complex<f32>],
+) {
+    let count = dest.len();
+    assert!(src.len() >= count && multiplier.len() >= count);
+
+    for i in 0..count {
+        let a = *src.get_unchecked(i);
+        let b = *multiplier.get_unchecked(i);
+        *dest.get_unchecked_mut(i) = a * b;
+    }
+}
+
+fn bench_mul_complex_f32_scalar(b: &mut Bencher, len: usize) {
+    let src = vec![Complex::zero(); len];
+    let multiplier = vec![Complex::zero(); len];
+    let mut dest = vec![Complex::zero(); len];
+
+    b.iter(|| {
+        unsafe { mul_complex_f32_scalar(&src, &mut dest, &multiplier) };
+        black_box(&dest);
+    });
+}
+fn bench_mul_complex_f32_interleave(b: &mut Bencher, len: usize) {
+    let src = vec![Complex::zero(); len];
+    let multiplier = vec![Complex::zero(); len];
+    let mut dest = vec![Complex::zero(); len];
+
+    b.iter(|| {
+        unsafe { mul_complex_f32_interleave(&src, &mut dest, &multiplier) };
+        black_box(&dest);
+    });
+}
+fn bench_mul_complex_f32_deinterleave(b: &mut Bencher, len: usize) {
+    let src = vec![Complex::zero(); len];
+    let multiplier = vec![Complex::zero(); len];
+    let mut dest = vec![Complex::zero(); len];
+
+    b.iter(|| {
+        unsafe { mul_complex_f32_deinterleave(&src, &mut dest, &multiplier) };
+        black_box(&dest);
+    });
+}
+
+#[target_feature(enable = "sse4.1")]
+unsafe fn mul_complex_f64_deinterleave(
+    src: &[num_complex::Complex<f64>],
+    mut dest: &mut [num_complex::Complex<f64>],
+    multiplier: &[num_complex::Complex<f64>],
+) {
+    let count = dest.len();
+    assert!(src.len() >= count && multiplier.len() >= count);
+
+    let unroll_size = 2;
+    let (unroll_count, unroll_remainder) = (count / unroll_size, count % unroll_size);
+
+    for i in 0..unroll_count {
+        let vcol = i * unroll_size;
+
+        let src0: __m128d = src.load(vcol);
+        let src1: __m128d = src.load(vcol + 2);
+
+        let multiplier_deinterleaved_re: __m128d = multiplier.load(vcol);
+        let multiplier_deinterleaved_im: __m128d = multiplier.load(vcol + 2);
+
+        let src_deinterleaved_re = _mm_unpacklo_pd(src0, src1);
+        let src_deinterleaved_im = _mm_unpackhi_pd(src0, src1);
+        let dest_deinterleaved_re = _mm_sub_pd(_mm_mul_pd(src_deinterleaved_re, multiplier_deinterleaved_re), _mm_mul_pd(src_deinterleaved_im, multiplier_deinterleaved_im));
+        let dest_deinterleaved_im = _mm_add_pd(_mm_mul_pd(src_deinterleaved_re, multiplier_deinterleaved_im), _mm_mul_pd(src_deinterleaved_im, multiplier_deinterleaved_re));
+
+        let dst0 = _mm_unpacklo_pd(dest_deinterleaved_re, dest_deinterleaved_im);
+        let dst1 = _mm_unpackhi_pd(dest_deinterleaved_re, dest_deinterleaved_im);
+
+        dest.store(dst0, vcol);
+        dest.store(dst1, vcol + 2);
+
+    }
+
+    if unroll_remainder != 0 {
+        let vcol = unroll_count * unroll_size;
+
+        for i in vcol..count {
+            let a = *src.get_unchecked(i);
+            let b = *multiplier.get_unchecked(i);
+            *dest.get_unchecked_mut(i) = a * b;
+        }
+    }
+}
+
+#[target_feature(enable = "sse4.1")]
+unsafe fn mul_complex_f64_interleave(
+    src: &[num_complex::Complex<f64>],
+    mut dest: &mut [num_complex::Complex<f64>],
+    multiplier: &[num_complex::Complex<f64>],
+) {
+    let count = dest.len();
+    assert!(src.len() >= count && multiplier.len() >= count);
+    
+    let per_vector = 1;
+    let full_vectors = count / per_vector;
+
+    for i in 0..full_vectors / 2 {
+        let index = i * 2 * per_vector;
+        let next = index + per_vector;
+
+        let left_a = src.load(index);
+        let left_b = src.load(next);
+
+        let product_a = mul_one::<__m128d, false>(left_a, multiplier.load(index));
+        let product_b = mul_one::<__m128d, false>(left_b, multiplier.load(next));
+
+        dest.store(product_a, index);
+        dest.store(product_b, next);
+    }
+
+    // an odd vector count leaves one behind
+    if full_vectors % 2 == 1 {
+        let index = (full_vectors - 1) * per_vector;
+        let left = src.load(index);
+        let product = mul_one::<__m128d, false>(left, multiplier.load(index));
+        dest.store(product, index);
+    }
+
+    // The leftover element, if there is one. `COMPLEX_PER_VECTOR` is a constant, so this whole
+    // branch vanishes on the single-complex vectors, whose partial load and store are
+    // unimplemented.
+    if per_vector > 1 && count % per_vector != 0 {
+        let index = full_vectors * per_vector;
+        let left = src.load1_lo(index);
+        let product = mul_one::<__m128d, false>(left, multiplier.load1_lo(index));
+        dest.store1_lo(product, index);
+    }
+}
+
+#[target_feature(enable = "sse4.1")]
+unsafe fn mul_complex_f64_scalar(
+    src: &[num_complex::Complex<f64>],
+    dest: &mut [num_complex::Complex<f64>],
+    multiplier: &[num_complex::Complex<f64>],
+) {
+    let count = dest.len();
+    assert!(src.len() >= count && multiplier.len() >= count);
+
+    for i in 0..count {
+        let a = *src.get_unchecked(i);
+        let b = *multiplier.get_unchecked(i);
+        *dest.get_unchecked_mut(i) = a * b;
+    }
+}
+
+fn bench_mul_complex_f64_scalar(b: &mut Bencher, len: usize) {
+    let src = vec![Complex::zero(); len];
+    let multiplier = vec![Complex::zero(); len];
+    let mut dest = vec![Complex::zero(); len];
+
+    b.iter(|| {
+        unsafe { mul_complex_f64_scalar(&src, &mut dest, &multiplier) };
+        black_box(&dest);
+    });
+}
+fn bench_mul_complex_f64_interleave(b: &mut Bencher, len: usize) {
+    let src = vec![Complex::zero(); len];
+    let multiplier = vec![Complex::zero(); len];
+    let mut dest = vec![Complex::zero(); len];
+
+    b.iter(|| {
+        unsafe { mul_complex_f64_interleave(&src, &mut dest, &multiplier) };
+        black_box(&dest);
+    });
+}
+fn bench_mul_complex_f64_deinterleave(b: &mut Bencher, len: usize) {
+    let src = vec![Complex::zero(); len];
+    let multiplier = vec![Complex::zero(); len];
+    let mut dest = vec![Complex::zero(); len];
+
+    b.iter(|| {
+        unsafe { mul_complex_f64_deinterleave(&src, &mut dest, &multiplier) };
+        black_box(&dest);
+    });
+}
+
+
+fn compare_mul_complex(c: &mut Criterion) {
+    {
+        let mut group = c.benchmark_group("mul_complex_f32");
+        for len in [101, 1001, 10001, 100001] {
+            group.bench_with_input(BenchmarkId::new("scalar", len), &len, |b, _| {
+                bench_mul_complex_f32_scalar(b, len);
+            });
+            group.bench_with_input(BenchmarkId::new("interleave", len), &len, |b, _| {
+                bench_mul_complex_f32_interleave(b, len);
+            });
+            group.bench_with_input(BenchmarkId::new("deinterleave", len), &len, |b, _| {
+                bench_mul_complex_f32_deinterleave(b, len);
+            });
+        }
+    }
+    {
+        let mut group = c.benchmark_group("mul_complex_f64");
+        for len in [101, 1001, 10001, 100001] {
+            group.bench_with_input(BenchmarkId::new("scalar", len), &len, |b, _| {
+                bench_mul_complex_f64_scalar(b, len);
+            });
+            group.bench_with_input(BenchmarkId::new("interleave", len), &len, |b, _| {
+                bench_mul_complex_f64_interleave(b, len);
+            });
+            group.bench_with_input(BenchmarkId::new("deinterleave", len), &len, |b, _| {
+                bench_mul_complex_f64_deinterleave(b, len);
+            });
+        }
+    }
+}
+
+
 criterion_group! {
     name = benches;
     config = config::fast();
-    targets = criterion_benchmark
+    targets = criterion_benchmark, compare_mul_complex
 }
 criterion_main!(benches);
