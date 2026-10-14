@@ -131,7 +131,7 @@ macro_rules! write_complex_to_array_strided {
 
 // The `SimdVector` impls, which let this backend use the algorithms in `src/simd`. The trait is
 // named by path instead of imported, because importing it would make methods like
-// `Self::column_butterfly2` ambiguous with the backend's own vector trait.
+// `Self::parallel_butterfly2` ambiguous with the backend's own vector trait.
 
 /// `float64x2_t`, wrapped so that it can carry an FCMA `SimdVector` impl.
 ///
@@ -149,12 +149,12 @@ impl SimdVector for FcmaVector64 {
 
     type ScalarType = f64;
 
-    type Butterfly2 = FcmaF64ColumnButterfly2;
-    type Butterfly3 = FcmaF64ColumnButterfly3;
-    type Butterfly4 = FcmaF64ColumnButterfly4;
-    type Butterfly5 = FcmaF64ColumnButterfly5;
-    type Butterfly6 = FcmaF64ColumnButterfly6;
-    type Butterfly7 = FcmaF64ColumnButterfly7;
+    type Butterfly2 = FcmaF64ParallelButterfly2;
+    type Butterfly3 = FcmaF64ParallelButterfly3;
+    type Butterfly4 = FcmaF64ParallelButterfly4;
+    type Butterfly5 = FcmaF64ParallelButterfly5;
+    type Butterfly6 = FcmaF64ParallelButterfly6;
+    type Butterfly7 = FcmaF64ParallelButterfly7;
 
     #[inline(always)]
     unsafe fn zero_vector() -> Self {
@@ -282,12 +282,12 @@ impl SimdVector for FcmaVector32 {
 
     type ScalarType = f32;
 
-    type Butterfly2 = FcmaF32ColumnButterfly2;
-    type Butterfly3 = FcmaF32ColumnButterfly3;
-    type Butterfly4 = FcmaF32ColumnButterfly4;
-    type Butterfly5 = FcmaF32ColumnButterfly5;
-    type Butterfly6 = FcmaF32ColumnButterfly6;
-    type Butterfly7 = FcmaF32ColumnButterfly7;
+    type Butterfly2 = FcmaF32ParallelButterfly2;
+    type Butterfly3 = FcmaF32ParallelButterfly3;
+    type Butterfly4 = FcmaF32ParallelButterfly4;
+    type Butterfly5 = FcmaF32ParallelButterfly5;
+    type Butterfly6 = FcmaF32ParallelButterfly6;
+    type Butterfly7 = FcmaF32ParallelButterfly7;
 
     #[inline(always)]
     unsafe fn zero_vector() -> Self {

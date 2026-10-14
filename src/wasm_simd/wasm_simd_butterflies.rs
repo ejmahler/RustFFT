@@ -11,7 +11,7 @@ use crate::fft_helper::{
     fft_helper_immut, fft_helper_immut_unroll2x, fft_helper_inplace, fft_helper_inplace_unroll2x,
 };
 
-use crate::simd::column_fft::ColumnFft;
+use crate::simd::parallel_fft::ParallelFft;
 use crate::simd::simd_array::SimdComplexArrayMut;
 use crate::simd::simd_vector::SimdVector;
 
@@ -258,16 +258,16 @@ impl<T: FftNum> WasmSimdF64Butterfly1<T> {
 //  |_____|         |____/_____|_.__/|_|\__|
 //
 
-pub struct WasmSimdF32ColumnButterfly2 {}
-impl WasmSimdF32ColumnButterfly2 {
+pub struct WasmSimdF32ParallelButterfly2 {}
+impl WasmSimdF32ParallelButterfly2 {
     #[inline(always)]
     pub fn new(_direction: FftDirection) -> Self {
         Self {}
     }
 }
-impl ColumnFft<WasmVector32, 2> for WasmSimdF32ColumnButterfly2 {
+impl ParallelFft<WasmVector32, 2> for WasmSimdF32ParallelButterfly2 {
     #[inline(always)]
-    fn column_fft(&self, data: [WasmVector32; 2]) -> [WasmVector32; 2] {
+    fn parallel_fft(&self, data: [WasmVector32; 2]) -> [WasmVector32; 2] {
         // Safety: Wasm simd intrinsics are completely safe, but the trait methods are unsafe to support other platforms
         unsafe {
             [
@@ -345,7 +345,7 @@ impl<T: FftNum> WasmSimdF32Butterfly2<T> {
 }
 
 #[inline(always)]
-pub unsafe fn wasm_column_butterfly2<V: SimdVector>(rows: [V; 2]) -> [V; 2] {
+pub unsafe fn wasm_parallel_butterfly2<V: SimdVector>(rows: [V; 2]) -> [V; 2] {
     [V::add(rows[0], rows[1]), V::sub(rows[0], rows[1])]
 }
 
@@ -357,7 +357,7 @@ unsafe fn parallel_fft2_contiguous_f32(
     right: WasmVector32,
 ) -> [WasmVector32; 2] {
     let [temp02, temp13] = transpose_complex_2x2_f32(left, right);
-    wasm_column_butterfly2([temp02, temp13])
+    wasm_parallel_butterfly2([temp02, temp13])
 }
 
 // length 2 fft of x, given as [x0, x1]
@@ -377,16 +377,16 @@ unsafe fn solo_fft2_f32(values: WasmVector32) -> WasmVector32 {
 //  |_____|          \___/   |_| |_.__/|_|\__|
 //
 
-pub struct WasmSimdF64ColumnButterfly2 {}
-impl WasmSimdF64ColumnButterfly2 {
+pub struct WasmSimdF64ParallelButterfly2 {}
+impl WasmSimdF64ParallelButterfly2 {
     #[inline(always)]
     pub fn new(_direction: FftDirection) -> Self {
         Self {}
     }
 }
-impl ColumnFft<WasmVector64, 2> for WasmSimdF64ColumnButterfly2 {
+impl ParallelFft<WasmVector64, 2> for WasmSimdF64ParallelButterfly2 {
     #[inline(always)]
-    fn column_fft(&self, data: [WasmVector64; 2]) -> [WasmVector64; 2] {
+    fn parallel_fft(&self, data: [WasmVector64; 2]) -> [WasmVector64; 2] {
         // Safety: Wasm simd intrinsics are completely safe, but the trait methods are unsafe to support other platforms
         unsafe {
             [
@@ -455,12 +455,12 @@ pub(crate) unsafe fn solo_fft2_f64(left: WasmVector64, right: WasmVector64) -> [
 //  |____/           |____/_____|_.__/|_|\__|
 //
 
-pub struct WasmSimdF32ColumnButterfly3 {
+pub struct WasmSimdF32ParallelButterfly3 {
     rotate: Rotate90F32,
     twiddle1re: WasmVector32,
     twiddle1im: WasmVector32,
 }
-impl WasmSimdF32ColumnButterfly3 {
+impl WasmSimdF32ParallelButterfly3 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 3, direction);
@@ -471,9 +471,9 @@ impl WasmSimdF32ColumnButterfly3 {
         }
     }
 }
-impl ColumnFft<WasmVector32, 3> for WasmSimdF32ColumnButterfly3 {
+impl ParallelFft<WasmVector32, 3> for WasmSimdF32ParallelButterfly3 {
     #[inline(always)]
-    fn column_fft(&self, data: [WasmVector32; 3]) -> [WasmVector32; 3] {
+    fn parallel_fft(&self, data: [WasmVector32; 3]) -> [WasmVector32; 3] {
         // Safety: Wasm simd intrinsics are completely safe, but the trait methods are unsafe to support other platforms
         unsafe {
             // This is a WasmSimd translation of the scalar 3-point butterfly
@@ -617,12 +617,12 @@ impl<T: FftNum> WasmSimdF32Butterfly3<T> {
 //  |____/            \___/   |_| |_.__/|_|\__|
 //
 
-pub struct WasmSimdF64ColumnButterfly3 {
+pub struct WasmSimdF64ParallelButterfly3 {
     rotate: Rotate90F64,
     twiddle1re: WasmVector64,
     twiddle1im: WasmVector64,
 }
-impl WasmSimdF64ColumnButterfly3 {
+impl WasmSimdF64ParallelButterfly3 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 3, direction);
@@ -633,9 +633,9 @@ impl WasmSimdF64ColumnButterfly3 {
         }
     }
 }
-impl ColumnFft<WasmVector64, 3> for WasmSimdF64ColumnButterfly3 {
+impl ParallelFft<WasmVector64, 3> for WasmSimdF64ParallelButterfly3 {
     #[inline(always)]
-    fn column_fft(&self, data: [WasmVector64; 3]) -> [WasmVector64; 3] {
+    fn parallel_fft(&self, data: [WasmVector64; 3]) -> [WasmVector64; 3] {
         // Safety: Wasm simd intrinsics are completely safe, but the trait methods are unsafe to support other platforms
         unsafe {
             // This is a WasmSimd translation of the scalar 3-point butterfly
@@ -736,27 +736,27 @@ impl<T: FftNum> WasmSimdF64Butterfly3<T> {
 //     |_|           |____/_____|_.__/|_|\__|
 //
 
-pub struct WasmSimdF32ColumnButterfly4 {
+pub struct WasmSimdF32ParallelButterfly4 {
     rotate: Rotate90F32,
-    bf2: WasmSimdF32ColumnButterfly2,
+    bf2: WasmSimdF32ParallelButterfly2,
 }
-impl WasmSimdF32ColumnButterfly4 {
+impl WasmSimdF32ParallelButterfly4 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
             rotate: Rotate90F32::new(direction == FftDirection::Inverse),
-            bf2: WasmSimdF32ColumnButterfly2::new(direction),
+            bf2: WasmSimdF32ParallelButterfly2::new(direction),
         }
     }
 }
-impl ColumnFft<WasmVector32, 4> for WasmSimdF32ColumnButterfly4 {
+impl ParallelFft<WasmVector32, 4> for WasmSimdF32ParallelButterfly4 {
     #[inline(always)]
-    fn column_fft(&self, data: [WasmVector32; 4]) -> [WasmVector32; 4] {
+    fn parallel_fft(&self, data: [WasmVector32; 4]) -> [WasmVector32; 4] {
         // step 1: transpose
         // and
         // step 2: column FFTs
-        let temp0 = self.bf2.column_fft([data[0], data[2]]);
-        let mut temp1 = self.bf2.column_fft([data[1], data[3]]);
+        let temp0 = self.bf2.parallel_fft([data[0], data[2]]);
+        let mut temp1 = self.bf2.parallel_fft([data[1], data[3]]);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
         temp1[1] = self.rotate.rotate_both(temp1[1]);
@@ -764,8 +764,8 @@ impl ColumnFft<WasmVector32, 4> for WasmSimdF32ColumnButterfly4 {
         // step 4: transpose
         // and
         // step 5: row FFTs
-        let out0 = self.bf2.column_fft([temp0[0], temp1[0]]);
-        let out2 = self.bf2.column_fft([temp0[1], temp1[1]]);
+        let out0 = self.bf2.parallel_fft([temp0[0], temp1[0]]);
+        let out2 = self.bf2.parallel_fft([temp0[1], temp1[1]]);
 
         // step 6: transpose by swapping index 1 and 2
         [out0[0], out2[0], out0[1], out2[1]]
@@ -850,7 +850,7 @@ impl<T: FftNum> WasmSimdF32Butterfly4<T> {
         // step 1: transpose
         // and
         // step 2: column FFTs
-        let mut temp = wasm_column_butterfly2([value01, value23]);
+        let mut temp = wasm_parallel_butterfly2([value01, value23]);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
         temp[1] = self.rotate.rotate_hi(temp[1]);
@@ -874,8 +874,8 @@ impl<T: FftNum> WasmSimdF32Butterfly4<T> {
         // step 1: transpose
         // and
         // step 2: column FFTs
-        let temp0 = wasm_column_butterfly2([values[0], values[2]]);
-        let mut temp1 = wasm_column_butterfly2([values[1], values[3]]);
+        let temp0 = wasm_parallel_butterfly2([values[0], values[2]]);
+        let mut temp1 = wasm_parallel_butterfly2([values[1], values[3]]);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
         temp1[1] = self.rotate.rotate_both(temp1[1]);
@@ -883,8 +883,8 @@ impl<T: FftNum> WasmSimdF32Butterfly4<T> {
         // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
         // step 5: row FFTs
-        let out0 = wasm_column_butterfly2([temp0[0], temp1[0]]);
-        let out2 = wasm_column_butterfly2([temp0[1], temp1[1]]);
+        let out0 = wasm_parallel_butterfly2([temp0[0], temp1[0]]);
+        let out2 = wasm_parallel_butterfly2([temp0[1], temp1[1]]);
 
         // step 6: transpose by swapping index 1 and 2
         [out0[0], out2[0], out0[1], out2[1]]
@@ -898,27 +898,27 @@ impl<T: FftNum> WasmSimdF32Butterfly4<T> {
 //     |_|            \___/   |_| |_.__/|_|\__|
 //
 
-pub struct WasmSimdF64ColumnButterfly4 {
+pub struct WasmSimdF64ParallelButterfly4 {
     rotate: Rotate90F64,
-    bf2: WasmSimdF64ColumnButterfly2,
+    bf2: WasmSimdF64ParallelButterfly2,
 }
-impl WasmSimdF64ColumnButterfly4 {
+impl WasmSimdF64ParallelButterfly4 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
             rotate: Rotate90F64::new(direction == FftDirection::Inverse),
-            bf2: WasmSimdF64ColumnButterfly2::new(direction),
+            bf2: WasmSimdF64ParallelButterfly2::new(direction),
         }
     }
 }
-impl ColumnFft<WasmVector64, 4> for WasmSimdF64ColumnButterfly4 {
+impl ParallelFft<WasmVector64, 4> for WasmSimdF64ParallelButterfly4 {
     #[inline(always)]
-    fn column_fft(&self, data: [WasmVector64; 4]) -> [WasmVector64; 4] {
+    fn parallel_fft(&self, data: [WasmVector64; 4]) -> [WasmVector64; 4] {
         // step 1: transpose
         // and
         // step 2: column FFTs
-        let temp0 = self.bf2.column_fft([data[0], data[2]]);
-        let mut temp1 = self.bf2.column_fft([data[1], data[3]]);
+        let temp0 = self.bf2.parallel_fft([data[0], data[2]]);
+        let mut temp1 = self.bf2.parallel_fft([data[1], data[3]]);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
         temp1[1] = self.rotate.rotate(temp1[1]);
@@ -926,8 +926,8 @@ impl ColumnFft<WasmVector64, 4> for WasmSimdF64ColumnButterfly4 {
         // step 4: transpose
         // and
         // step 5: row FFTs
-        let out0 = self.bf2.column_fft([temp0[0], temp1[0]]);
-        let out2 = self.bf2.column_fft([temp0[1], temp1[1]]);
+        let out0 = self.bf2.parallel_fft([temp0[0], temp1[0]]);
+        let out2 = self.bf2.parallel_fft([temp0[1], temp1[1]]);
 
         // step 6: transpose by swapping index 1 and 2
         [out0[0], out2[0], out0[1], out2[1]]
@@ -1012,14 +1012,14 @@ impl<T: FftNum> WasmSimdF64Butterfly4<T> {
 //  |____/           |____/_____|_.__/|_|\__|
 //
 
-pub struct WasmSimdF32ColumnButterfly5 {
+pub struct WasmSimdF32ParallelButterfly5 {
     rotate: Rotate90F32,
     twiddle1re: WasmVector32,
     twiddle1im: WasmVector32,
     twiddle2re: WasmVector32,
     twiddle2im: WasmVector32,
 }
-impl WasmSimdF32ColumnButterfly5 {
+impl WasmSimdF32ParallelButterfly5 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 5, direction);
@@ -1033,9 +1033,9 @@ impl WasmSimdF32ColumnButterfly5 {
         }
     }
 }
-impl ColumnFft<WasmVector32, 5> for WasmSimdF32ColumnButterfly5 {
+impl ParallelFft<WasmVector32, 5> for WasmSimdF32ParallelButterfly5 {
     #[inline(always)]
-    fn column_fft(&self, data: [WasmVector32; 5]) -> [WasmVector32; 5] {
+    fn parallel_fft(&self, data: [WasmVector32; 5]) -> [WasmVector32; 5] {
         // Safety: Wasm simd intrinsics are completely safe, but the trait methods are unsafe to support other platforms
         unsafe {
             let x14p = SimdVector::add(data[1], data[4]);
@@ -1243,14 +1243,14 @@ impl<T: FftNum> WasmSimdF32Butterfly5<T> {
 //  |____/            \___/   |_| |_.__/|_|\__|
 //
 
-pub struct WasmSimdF64ColumnButterfly5 {
+pub struct WasmSimdF64ParallelButterfly5 {
     rotate: Rotate90F64,
     twiddle1re: WasmVector64,
     twiddle1im: WasmVector64,
     twiddle2re: WasmVector64,
     twiddle2im: WasmVector64,
 }
-impl WasmSimdF64ColumnButterfly5 {
+impl WasmSimdF64ParallelButterfly5 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 5, direction);
@@ -1264,9 +1264,9 @@ impl WasmSimdF64ColumnButterfly5 {
         }
     }
 }
-impl ColumnFft<WasmVector64, 5> for WasmSimdF64ColumnButterfly5 {
+impl ParallelFft<WasmVector64, 5> for WasmSimdF64ParallelButterfly5 {
     #[inline(always)]
-    fn column_fft(&self, data: [WasmVector64; 5]) -> [WasmVector64; 5] {
+    fn parallel_fft(&self, data: [WasmVector64; 5]) -> [WasmVector64; 5] {
         // Safety: Wasm simd intrinsics are completely safe, but the trait methods are unsafe to support other platforms
         unsafe {
             let x14p = SimdVector::add(data[1], data[4]);
@@ -1409,34 +1409,34 @@ impl<T: FftNum> WasmSimdF64Butterfly5<T> {
 //   \___/          |____/_____|_.__/|_|\__|
 //
 
-pub struct WasmSimdF32ColumnButterfly6 {
-    bf2: WasmSimdF32ColumnButterfly2,
-    bf3: WasmSimdF32ColumnButterfly3,
+pub struct WasmSimdF32ParallelButterfly6 {
+    bf2: WasmSimdF32ParallelButterfly2,
+    bf3: WasmSimdF32ParallelButterfly3,
 }
-impl WasmSimdF32ColumnButterfly6 {
+impl WasmSimdF32ParallelButterfly6 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
-            bf2: WasmSimdF32ColumnButterfly2::new(direction),
-            bf3: WasmSimdF32ColumnButterfly3::new(direction),
+            bf2: WasmSimdF32ParallelButterfly2::new(direction),
+            bf3: WasmSimdF32ParallelButterfly3::new(direction),
         }
     }
 }
-impl ColumnFft<WasmVector32, 6> for WasmSimdF32ColumnButterfly6 {
+impl ParallelFft<WasmVector32, 6> for WasmSimdF32ParallelButterfly6 {
     #[inline(always)]
-    fn column_fft(&self, data: [WasmVector32; 6]) -> [WasmVector32; 6] {
+    fn parallel_fft(&self, data: [WasmVector32; 6]) -> [WasmVector32; 6] {
         // Algorithm: 3x2 good-thomas
 
         // Size-3 FFTs down the columns of our reordered array
-        let mid0 = self.bf3.column_fft([data[0], data[2], data[4]]);
-        let mid1 = self.bf3.column_fft([data[3], data[5], data[1]]);
+        let mid0 = self.bf3.parallel_fft([data[0], data[2], data[4]]);
+        let mid1 = self.bf3.parallel_fft([data[3], data[5], data[1]]);
 
         // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
 
         // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = self.bf2.column_fft([mid0[0], mid1[0]]);
-        let [output2, output3] = self.bf2.column_fft([mid0[1], mid1[1]]);
-        let [output4, output5] = self.bf2.column_fft([mid0[2], mid1[2]]);
+        let [output0, output1] = self.bf2.parallel_fft([mid0[0], mid1[0]]);
+        let [output2, output3] = self.bf2.parallel_fft([mid0[1], mid1[1]]);
+        let [output4, output5] = self.bf2.parallel_fft([mid0[2], mid1[2]]);
 
         // Reorder into output
         [output0, output3, output4, output1, output2, output5]
@@ -1547,9 +1547,9 @@ impl<T: FftNum> WasmSimdF32Butterfly6<T> {
         // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
 
         // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = wasm_column_butterfly2([mid0[0], mid1[0]]);
-        let [output2, output3] = wasm_column_butterfly2([mid0[1], mid1[1]]);
-        let [output4, output5] = wasm_column_butterfly2([mid0[2], mid1[2]]);
+        let [output0, output1] = wasm_parallel_butterfly2([mid0[0], mid1[0]]);
+        let [output2, output3] = wasm_parallel_butterfly2([mid0[1], mid1[1]]);
+        let [output4, output5] = wasm_parallel_butterfly2([mid0[2], mid1[2]]);
 
         // Reorder into output
         [output0, output3, output4, output1, output2, output5]
@@ -1563,34 +1563,34 @@ impl<T: FftNum> WasmSimdF32Butterfly6<T> {
 //   \___/           \___/   |_| |_.__/|_|\__|
 //
 
-pub struct WasmSimdF64ColumnButterfly6 {
-    bf2: WasmSimdF64ColumnButterfly2,
-    bf3: WasmSimdF64ColumnButterfly3,
+pub struct WasmSimdF64ParallelButterfly6 {
+    bf2: WasmSimdF64ParallelButterfly2,
+    bf3: WasmSimdF64ParallelButterfly3,
 }
-impl WasmSimdF64ColumnButterfly6 {
+impl WasmSimdF64ParallelButterfly6 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
-            bf2: WasmSimdF64ColumnButterfly2::new(direction),
-            bf3: WasmSimdF64ColumnButterfly3::new(direction),
+            bf2: WasmSimdF64ParallelButterfly2::new(direction),
+            bf3: WasmSimdF64ParallelButterfly3::new(direction),
         }
     }
 }
-impl ColumnFft<WasmVector64, 6> for WasmSimdF64ColumnButterfly6 {
+impl ParallelFft<WasmVector64, 6> for WasmSimdF64ParallelButterfly6 {
     #[inline(always)]
-    fn column_fft(&self, data: [WasmVector64; 6]) -> [WasmVector64; 6] {
+    fn parallel_fft(&self, data: [WasmVector64; 6]) -> [WasmVector64; 6] {
         // Algorithm: 3x2 good-thomas
 
         // Size-3 FFTs down the columns of our reordered array
-        let mid0 = self.bf3.column_fft([data[0], data[2], data[4]]);
-        let mid1 = self.bf3.column_fft([data[3], data[5], data[1]]);
+        let mid0 = self.bf3.parallel_fft([data[0], data[2], data[4]]);
+        let mid1 = self.bf3.parallel_fft([data[3], data[5], data[1]]);
 
         // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
 
         // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = self.bf2.column_fft([mid0[0], mid1[0]]);
-        let [output2, output3] = self.bf2.column_fft([mid0[1], mid1[1]]);
-        let [output4, output5] = self.bf2.column_fft([mid0[2], mid1[2]]);
+        let [output0, output1] = self.bf2.parallel_fft([mid0[0], mid1[0]]);
+        let [output2, output3] = self.bf2.parallel_fft([mid0[1], mid1[1]]);
+        let [output4, output5] = self.bf2.parallel_fft([mid0[2], mid1[2]]);
 
         // Reorder into output
         [output0, output3, output4, output1, output2, output5]
@@ -1750,8 +1750,8 @@ impl<T: FftNum> WasmSimdF32Butterfly8<T> {
         // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
 
         // step 5: row FFTs
-        let out0 = wasm_column_butterfly2([val0[0], val2[0]]);
-        let out1 = wasm_column_butterfly2([val0[1], val2[1]]);
+        let out0 = wasm_parallel_butterfly2([val0[0], val2[0]]);
+        let out1 = wasm_parallel_butterfly2([val0[1], val2[1]]);
 
         // step 6: rearrange and copy to buffer
         [out0[0], out1[0], out0[1], out1[1]]
@@ -1782,10 +1782,10 @@ impl<T: FftNum> WasmSimdF32Butterfly8<T> {
         // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
 
         // step 5: row FFTs
-        let out0 = wasm_column_butterfly2([val03[0], val47[0]]);
-        let out1 = wasm_column_butterfly2([val03[1], val47[1]]);
-        let out2 = wasm_column_butterfly2([val03[2], val47[2]]);
-        let out3 = wasm_column_butterfly2([val03[3], val47[3]]);
+        let out0 = wasm_parallel_butterfly2([val03[0], val47[0]]);
+        let out1 = wasm_parallel_butterfly2([val03[1], val47[1]]);
+        let out2 = wasm_parallel_butterfly2([val03[2], val47[2]]);
+        let out3 = wasm_parallel_butterfly2([val03[3], val47[3]]);
 
         // step 6: rearrange and copy to buffer
         [
@@ -2182,11 +2182,11 @@ impl<T: FftNum> WasmSimdF32Butterfly10<T> {
         // Since this is good-thomas algorithm, we don't need twiddle factors
 
         // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = wasm_column_butterfly2([mid0[0], mid1[0]]);
-        let [output2, output3] = wasm_column_butterfly2([mid0[1], mid1[1]]);
-        let [output4, output5] = wasm_column_butterfly2([mid0[2], mid1[2]]);
-        let [output6, output7] = wasm_column_butterfly2([mid0[3], mid1[3]]);
-        let [output8, output9] = wasm_column_butterfly2([mid0[4], mid1[4]]);
+        let [output0, output1] = wasm_parallel_butterfly2([mid0[0], mid1[0]]);
+        let [output2, output3] = wasm_parallel_butterfly2([mid0[1], mid1[1]]);
+        let [output4, output5] = wasm_parallel_butterfly2([mid0[2], mid1[2]]);
+        let [output6, output7] = wasm_parallel_butterfly2([mid0[3], mid1[3]]);
+        let [output8, output9] = wasm_parallel_butterfly2([mid0[4], mid1[4]]);
 
         // Reorder and return
         [
@@ -3771,7 +3771,7 @@ impl<T: FftNum> WasmSimdF64Butterfly32<T> {
 mod unit_tests {
     use super::*;
     use crate::algorithm::Dft;
-    use crate::test_utils::{check_column_fft, check_fft_algorithm, compare_vectors};
+    use crate::test_utils::{check_fft_algorithm, check_parallel_fft, compare_vectors};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     //the tests for all butterflies will be identical except for the identifiers used and size
@@ -3832,81 +3832,87 @@ mod unit_tests {
     test_butterfly_64_func!(test_wasm_simdf64_butterfly24, WasmSimdF64Butterfly24, 24);
     test_butterfly_64_func!(test_wasm_simdf64_butterfly32, WasmSimdF64Butterfly32, 32);
 
-    macro_rules! test_column_butterfly_32_func {
+    macro_rules! test_parallel_butterfly_32_func {
         ($test_name:ident, $struct_name:ident, $size:expr) => {
             #[wasm_bindgen_test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
-                check_column_fft::<WasmVector32, $size>(&butterfly, FftDirection::Forward);
+                check_parallel_fft::<WasmVector32, $size>(&butterfly, FftDirection::Forward);
 
                 let butterfly_inverse = $struct_name::new(FftDirection::Inverse);
-                check_column_fft::<WasmVector32, $size>(&butterfly_inverse, FftDirection::Inverse);
+                check_parallel_fft::<WasmVector32, $size>(
+                    &butterfly_inverse,
+                    FftDirection::Inverse,
+                );
             }
         };
     }
 
-    test_column_butterfly_32_func!(
-        test_wasm_simdf32_column_butterfly2,
-        WasmSimdF32ColumnButterfly2,
+    test_parallel_butterfly_32_func!(
+        test_wasm_simdf32_parallel_butterfly2,
+        WasmSimdF32ParallelButterfly2,
         2
     );
-    test_column_butterfly_32_func!(
-        test_wasm_simdf32_column_butterfly3,
-        WasmSimdF32ColumnButterfly3,
+    test_parallel_butterfly_32_func!(
+        test_wasm_simdf32_parallel_butterfly3,
+        WasmSimdF32ParallelButterfly3,
         3
     );
-    test_column_butterfly_32_func!(
-        test_wasm_simdf32_column_butterfly4,
-        WasmSimdF32ColumnButterfly4,
+    test_parallel_butterfly_32_func!(
+        test_wasm_simdf32_parallel_butterfly4,
+        WasmSimdF32ParallelButterfly4,
         4
     );
-    test_column_butterfly_32_func!(
-        test_wasm_simdf32_column_butterfly5,
-        WasmSimdF32ColumnButterfly5,
+    test_parallel_butterfly_32_func!(
+        test_wasm_simdf32_parallel_butterfly5,
+        WasmSimdF32ParallelButterfly5,
         5
     );
-    test_column_butterfly_32_func!(
-        test_wasm_simdf32_column_butterfly6,
-        WasmSimdF32ColumnButterfly6,
+    test_parallel_butterfly_32_func!(
+        test_wasm_simdf32_parallel_butterfly6,
+        WasmSimdF32ParallelButterfly6,
         6
     );
 
-    macro_rules! test_column_butterfly_64_func {
+    macro_rules! test_parallel_butterfly_64_func {
         ($test_name:ident, $struct_name:ident, $size:expr) => {
             #[wasm_bindgen_test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
-                check_column_fft::<WasmVector64, $size>(&butterfly, FftDirection::Forward);
+                check_parallel_fft::<WasmVector64, $size>(&butterfly, FftDirection::Forward);
 
                 let butterfly_inverse = $struct_name::new(FftDirection::Inverse);
-                check_column_fft::<WasmVector64, $size>(&butterfly_inverse, FftDirection::Inverse);
+                check_parallel_fft::<WasmVector64, $size>(
+                    &butterfly_inverse,
+                    FftDirection::Inverse,
+                );
             }
         };
     }
 
-    test_column_butterfly_64_func!(
-        test_wasm_simdf64_column_butterfly2,
-        WasmSimdF64ColumnButterfly2,
+    test_parallel_butterfly_64_func!(
+        test_wasm_simdf64_parallel_butterfly2,
+        WasmSimdF64ParallelButterfly2,
         2
     );
-    test_column_butterfly_64_func!(
-        test_wasm_simdf64_column_butterfly3,
-        WasmSimdF64ColumnButterfly3,
+    test_parallel_butterfly_64_func!(
+        test_wasm_simdf64_parallel_butterfly3,
+        WasmSimdF64ParallelButterfly3,
         3
     );
-    test_column_butterfly_64_func!(
-        test_wasm_simdf64_column_butterfly4,
-        WasmSimdF64ColumnButterfly4,
+    test_parallel_butterfly_64_func!(
+        test_wasm_simdf64_parallel_butterfly4,
+        WasmSimdF64ParallelButterfly4,
         4
     );
-    test_column_butterfly_64_func!(
-        test_wasm_simdf64_column_butterfly5,
-        WasmSimdF64ColumnButterfly5,
+    test_parallel_butterfly_64_func!(
+        test_wasm_simdf64_parallel_butterfly5,
+        WasmSimdF64ParallelButterfly5,
         5
     );
-    test_column_butterfly_64_func!(
-        test_wasm_simdf64_column_butterfly6,
-        WasmSimdF64ColumnButterfly6,
+    test_parallel_butterfly_64_func!(
+        test_wasm_simdf64_parallel_butterfly6,
+        WasmSimdF64ParallelButterfly6,
         6
     );
 

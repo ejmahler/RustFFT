@@ -1,11 +1,11 @@
 use num_complex::Complex;
 
-use crate::{simd::column_fft::ColumnFft, twiddles, FftDirection, FftNum};
+use crate::{simd::parallel_fft::ParallelFft, twiddles, FftDirection, FftNum};
 
-pub struct ScalarColumnButterfly2<T> {
+pub struct ScalarParallelButterfly2<T> {
     _phantom: std::marker::PhantomData<T>,
 }
-impl<T: FftNum> ScalarColumnButterfly2<T> {
+impl<T: FftNum> ScalarParallelButterfly2<T> {
     #[inline(always)]
     pub fn new(_direction: FftDirection) -> Self {
         Self {
@@ -13,17 +13,17 @@ impl<T: FftNum> ScalarColumnButterfly2<T> {
         }
     }
 }
-impl<T: FftNum> ColumnFft<Complex<T>, 2> for ScalarColumnButterfly2<T> {
+impl<T: FftNum> ParallelFft<Complex<T>, 2> for ScalarParallelButterfly2<T> {
     #[inline(always)]
-    fn column_fft(&self, data: [Complex<T>; 2]) -> [Complex<T>; 2] {
+    fn parallel_fft(&self, data: [Complex<T>; 2]) -> [Complex<T>; 2] {
         [data[0] + data[1], data[0] - data[1]]
     }
 }
 
-pub struct ScalarColumnButterfly3<T> {
+pub struct ScalarParallelButterfly3<T> {
     pub twiddle: Complex<T>,
 }
-impl<T: FftNum> ScalarColumnButterfly3<T> {
+impl<T: FftNum> ScalarParallelButterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
@@ -31,9 +31,9 @@ impl<T: FftNum> ScalarColumnButterfly3<T> {
         }
     }
 }
-impl<T: FftNum> ColumnFft<Complex<T>, 3> for ScalarColumnButterfly3<T> {
+impl<T: FftNum> ParallelFft<Complex<T>, 3> for ScalarParallelButterfly3<T> {
     #[inline(always)]
-    fn column_fft(&self, data: [Complex<T>; 3]) -> [Complex<T>; 3] {
+    fn parallel_fft(&self, data: [Complex<T>; 3]) -> [Complex<T>; 3] {
         let xp = data[1] + data[2];
         let xn = data[1] - data[2];
         let sum = data[0] + xp;
@@ -52,11 +52,11 @@ impl<T: FftNum> ColumnFft<Complex<T>, 3> for ScalarColumnButterfly3<T> {
     }
 }
 
-pub struct ScalarColumnButterfly4<T> {
+pub struct ScalarParallelButterfly4<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
 }
-impl<T: FftNum> ScalarColumnButterfly4<T> {
+impl<T: FftNum> ScalarParallelButterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
@@ -65,14 +65,14 @@ impl<T: FftNum> ScalarColumnButterfly4<T> {
         }
     }
 }
-impl<T: FftNum> ColumnFft<Complex<T>, 4> for ScalarColumnButterfly4<T> {
+impl<T: FftNum> ParallelFft<Complex<T>, 4> for ScalarParallelButterfly4<T> {
     #[inline(always)]
-    fn column_fft(&self, data: [Complex<T>; 4]) -> [Complex<T>; 4] {
-        let bf2 = ScalarColumnButterfly2::new(self.direction);
+    fn parallel_fft(&self, data: [Complex<T>; 4]) -> [Complex<T>; 4] {
+        let bf2 = ScalarParallelButterfly2::new(self.direction);
 
         // step 2: column FFTs
-        let col0 = bf2.column_fft([data[0], data[2]]);
-        let mut col1 = bf2.column_fft([data[1], data[3]]);
+        let col0 = bf2.parallel_fft([data[0], data[2]]);
+        let mut col1 = bf2.parallel_fft([data[1], data[3]]);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
         col1[1] = twiddles::rotate_90(col1[1], self.direction);
@@ -80,17 +80,17 @@ impl<T: FftNum> ColumnFft<Complex<T>, 4> for ScalarColumnButterfly4<T> {
         // step 4: transpose, (merged into the next step)
 
         // step 5: row FFTs
-        let row0 = bf2.column_fft([col0[0], col1[0]]);
-        let row1 = bf2.column_fft([col0[1], col1[1]]);
+        let row0 = bf2.parallel_fft([col0[0], col1[0]]);
+        let row1 = bf2.parallel_fft([col0[1], col1[1]]);
         [row0[0], row1[0], row0[1], row1[1]]
     }
 }
 
-pub struct ScalarColumnButterfly5<T> {
+pub struct ScalarParallelButterfly5<T> {
     twiddle1: Complex<T>,
     twiddle2: Complex<T>,
 }
-impl<T: FftNum> ScalarColumnButterfly5<T> {
+impl<T: FftNum> ScalarParallelButterfly5<T> {
     pub fn new(direction: FftDirection) -> Self {
         Self {
             twiddle1: twiddles::compute_twiddle(1, 5, direction),
@@ -98,9 +98,9 @@ impl<T: FftNum> ScalarColumnButterfly5<T> {
         }
     }
 }
-impl<T: FftNum> ColumnFft<Complex<T>, 5> for ScalarColumnButterfly5<T> {
+impl<T: FftNum> ParallelFft<Complex<T>, 5> for ScalarParallelButterfly5<T> {
     #[inline(never)] // refusing to inline this code reduces code size, and doesn't hurt performance
-    fn column_fft(&self, data: [Complex<T>; 5]) -> [Complex<T>; 5] {
+    fn parallel_fft(&self, data: [Complex<T>; 5]) -> [Complex<T>; 5] {
         // let mut outer = Butterfly2::perform_fft_array([buffer.load(1), buffer.load(4)]);
         // let mut inner = Butterfly2::perform_fft_array([buffer.load(2), buffer.load(3)]);
         // let input0 = buffer.load(0);
@@ -226,22 +226,22 @@ impl<T: FftNum> ColumnFft<Complex<T>, 5> for ScalarColumnButterfly5<T> {
     }
 }
 
-pub struct ScalarColumnButterfly6<T> {
-    bf3: ScalarColumnButterfly3<T>,
-    bf2: ScalarColumnButterfly2<T>,
+pub struct ScalarParallelButterfly6<T> {
+    bf3: ScalarParallelButterfly3<T>,
+    bf2: ScalarParallelButterfly2<T>,
 }
-impl<T: FftNum> ScalarColumnButterfly6<T> {
+impl<T: FftNum> ScalarParallelButterfly6<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
-            bf3: ScalarColumnButterfly3::new(direction),
-            bf2: ScalarColumnButterfly2::new(direction),
+            bf3: ScalarParallelButterfly3::new(direction),
+            bf2: ScalarParallelButterfly2::new(direction),
         }
     }
 }
-impl<T: FftNum> ColumnFft<Complex<T>, 6> for ScalarColumnButterfly6<T> {
+impl<T: FftNum> ParallelFft<Complex<T>, 6> for ScalarParallelButterfly6<T> {
     #[inline(always)]
-    fn column_fft(&self, data: [Complex<T>; 6]) -> [Complex<T>; 6] {
+    fn parallel_fft(&self, data: [Complex<T>; 6]) -> [Complex<T>; 6] {
         //since GCD(2,3) == 1 we're going to hardcode a step of the Good-Thomas algorithm to avoid twiddle factors
 
         // step 1: reorder the input directly into the scratch. normally there's a whole thing to compute this ordering
@@ -250,17 +250,17 @@ impl<T: FftNum> ColumnFft<Complex<T>, 6> for ScalarColumnButterfly6<T> {
         let col1 = [data[3], data[5], data[1]];
 
         // step 2: column FFTs
-        let col0 = self.bf3.column_fft(col0);
-        let col1 = self.bf3.column_fft(col1);
+        let col0 = self.bf3.parallel_fft(col0);
+        let col1 = self.bf3.parallel_fft(col1);
 
         // step 3: apply twiddle factors -- SKIPPED because good-thomas doesn't have twiddle factors :)
 
         // step 4: transpose (merged into next step)
 
         // step 5: row FFTs
-        let row0 = self.bf2.column_fft([col0[0], col1[0]]);
-        let row1 = self.bf2.column_fft([col0[1], col1[1]]);
-        let row2 = self.bf2.column_fft([col0[2], col1[2]]);
+        let row0 = self.bf2.parallel_fft([col0[0], col1[0]]);
+        let row1 = self.bf2.parallel_fft([col0[1], col1[1]]);
+        let row2 = self.bf2.parallel_fft([col0[2], col1[2]]);
 
         // step 6: reorder the result back into the buffer. again we would normally have to do an expensive computation
         // but instead we can precompute and hardcode the ordering
@@ -269,12 +269,12 @@ impl<T: FftNum> ColumnFft<Complex<T>, 6> for ScalarColumnButterfly6<T> {
     }
 }
 
-pub struct ScalarColumnButterfly7<T> {
+pub struct ScalarParallelButterfly7<T> {
     twiddle1: Complex<T>,
     twiddle2: Complex<T>,
     twiddle3: Complex<T>,
 }
-impl<T: FftNum> ScalarColumnButterfly7<T> {
+impl<T: FftNum> ScalarParallelButterfly7<T> {
     pub fn new(direction: FftDirection) -> Self {
         Self {
             twiddle1: twiddles::compute_twiddle(1, 7, direction),
@@ -283,9 +283,9 @@ impl<T: FftNum> ScalarColumnButterfly7<T> {
         }
     }
 }
-impl<T: FftNum> ColumnFft<Complex<T>, 7> for ScalarColumnButterfly7<T> {
+impl<T: FftNum> ParallelFft<Complex<T>, 7> for ScalarParallelButterfly7<T> {
     #[inline(never)] // refusing to inline this code reduces code size, and doesn't hurt performance
-    fn column_fft(&self, data: [Complex<T>; 7]) -> [Complex<T>; 7] {
+    fn parallel_fft(&self, data: [Complex<T>; 7]) -> [Complex<T>; 7] {
         // let mut outer = Butterfly2::perform_fft_array([buffer.load(1), buffer.load(6)]);
         // let mut mid   = Butterfly2::perform_fft_array([buffer.load(2), buffer.load(5)]);
         // let mut inner = Butterfly2::perform_fft_array([buffer.load(3), buffer.load(4)]);
@@ -446,7 +446,7 @@ impl<T: FftNum> ColumnFft<Complex<T>, 7> for ScalarColumnButterfly7<T> {
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use crate::test_utils::check_column_fft;
+    use crate::test_utils::check_parallel_fft;
 
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
@@ -455,18 +455,21 @@ mod unit_tests {
             #[test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
-                check_column_fft::<Complex<f32>, $size>(&butterfly, FftDirection::Forward);
+                check_parallel_fft::<Complex<f32>, $size>(&butterfly, FftDirection::Forward);
 
                 let butterfly_inverse = $struct_name::new(FftDirection::Inverse);
-                check_column_fft::<Complex<f32>, $size>(&butterfly_inverse, FftDirection::Inverse);
+                check_parallel_fft::<Complex<f32>, $size>(
+                    &butterfly_inverse,
+                    FftDirection::Inverse,
+                );
             }
         };
     }
 
-    test_butterfly_func!(test_scalar_column_butterfly2, ScalarColumnButterfly2, 2);
-    test_butterfly_func!(test_scalar_column_butterfly3, ScalarColumnButterfly3, 3);
-    test_butterfly_func!(test_scalar_column_butterfly4, ScalarColumnButterfly4, 4);
-    test_butterfly_func!(test_scalar_column_butterfly5, ScalarColumnButterfly5, 5);
-    test_butterfly_func!(test_scalar_column_butterfly6, ScalarColumnButterfly6, 6);
-    test_butterfly_func!(test_scalar_column_butterfly7, ScalarColumnButterfly7, 7);
+    test_butterfly_func!(test_scalar_parallel_butterfly2, ScalarParallelButterfly2, 2);
+    test_butterfly_func!(test_scalar_parallel_butterfly3, ScalarParallelButterfly3, 3);
+    test_butterfly_func!(test_scalar_parallel_butterfly4, ScalarParallelButterfly4, 4);
+    test_butterfly_func!(test_scalar_parallel_butterfly5, ScalarParallelButterfly5, 5);
+    test_butterfly_func!(test_scalar_parallel_butterfly6, ScalarParallelButterfly6, 6);
+    test_butterfly_func!(test_scalar_parallel_butterfly7, ScalarParallelButterfly7, 7);
 }

@@ -15,14 +15,14 @@ use crate::fft_helper::{
 
 use crate::simd::simd_vector::SimdVector;
 use crate::simd::simd_array::SimdComplexArrayMut;
-use crate::simd::column_fft::ColumnFft;
+use crate::simd::parallel_fft::ParallelFft;
 
 use super::fcma_common::{assert_f32, assert_f64};
 use super::fcma_utils::*;
 
 #[allow(unused)]
 use super::fcma_vector::*;
-use super::fcma_butterflies::{ FcmaF32ColumnButterfly2, FcmaF64ColumnButterfly2};
+use super::fcma_butterflies::{ FcmaF32ParallelButterfly2, FcmaF64ParallelButterfly2};
 
 
 /* 
@@ -90,34 +90,34 @@ fn make_twiddles<const TW: usize, T: FftNum>(len: usize, direction: FftDirection
     })
 }
 
-pub struct FcmaF32ColumnButterfly7 {
-    bf2: FcmaF32ColumnButterfly2,
+pub struct FcmaF32ParallelButterfly7 {
+    bf2: FcmaF32ParallelButterfly2,
     twiddles_re: [FcmaVector32; 3],
     twiddles_im: [FcmaVector32; 3],
 }
-impl FcmaF32ColumnButterfly7 {
+impl FcmaF32ParallelButterfly7 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(7, direction);
         Self {
-            bf2: FcmaF32ColumnButterfly2::new(direction),
+            bf2: FcmaF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
     }
 }
-impl ColumnFft<FcmaVector32, 7> for FcmaF32ColumnButterfly7 {
+impl ParallelFft<FcmaVector32, 7> for FcmaF32ParallelButterfly7 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector32; 7]) -> [FcmaVector32; 7] {
+    fn parallel_fft(&self, data: [FcmaVector32; 7]) -> [FcmaVector32; 7] {
                 // Safety: The current machine must support the neon,fcma instruction set. We specified this invariant in the constructor.
         unsafe {
             let y00 = data[0];
-            let [x1p6, x1m6] = self.bf2.column_fft([data[1], data[6]]);
+            let [x1p6, x1m6] = self.bf2.parallel_fft([data[1], data[6]]);
             let y00 = SimdVector::add(y00, x1p6);
-            let [x2p5, x2m5] = self.bf2.column_fft([data[2], data[5]]);
+            let [x2p5, x2m5] = self.bf2.parallel_fft([data[2], data[5]]);
             let y00 = SimdVector::add(y00, x2p5);
-            let [x3p4, x3m4] = self.bf2.column_fft([data[3], data[4]]);
+            let [x3p4, x3m4] = self.bf2.parallel_fft([data[3], data[4]]);
             let y00 = SimdVector::add(y00, x3p4);
 
             let m0106a = SimdVector::fmadd(data[0], self.twiddles_re[0], x1p6);
@@ -126,7 +126,7 @@ impl ColumnFft<FcmaVector32, 7> for FcmaF32ColumnButterfly7 {
             let m0106b = FcmaVector::mul_rotate90(self.twiddles_im[0], x1m6);
             let m0106b = FcmaVector::fmadd_rotate90(m0106b, self.twiddles_im[1], x2m5);
             let m0106b = FcmaVector::fmadd_rotate90(m0106b, self.twiddles_im[2], x3m4);
-            let [y01, y06] = self.bf2.column_fft([m0106a, m0106b]);
+            let [y01, y06] = self.bf2.parallel_fft([m0106a, m0106b]);
 
             let m0205a = SimdVector::fmadd(data[0], self.twiddles_re[1], x1p6);
             let m0205a = SimdVector::fmadd(m0205a, self.twiddles_re[2], x2p5);
@@ -134,7 +134,7 @@ impl ColumnFft<FcmaVector32, 7> for FcmaF32ColumnButterfly7 {
             let m0205b = FcmaVector::mul_rotate90(self.twiddles_im[1], x1m6);
             let m0205b = FcmaVector::nmadd_rotate90(m0205b, self.twiddles_im[2], x2m5);
             let m0205b = FcmaVector::nmadd_rotate90(m0205b, self.twiddles_im[0], x3m4);
-            let [y02, y05] = self.bf2.column_fft([m0205a, m0205b]);
+            let [y02, y05] = self.bf2.parallel_fft([m0205a, m0205b]);
 
             let m0304a = SimdVector::fmadd(data[0], self.twiddles_re[2], x1p6);
             let m0304a = SimdVector::fmadd(m0304a, self.twiddles_re[0], x2p5);
@@ -142,7 +142,7 @@ impl ColumnFft<FcmaVector32, 7> for FcmaF32ColumnButterfly7 {
             let m0304b = FcmaVector::mul_rotate90(self.twiddles_im[2], x1m6);
             let m0304b = FcmaVector::nmadd_rotate90(m0304b, self.twiddles_im[0], x2m5);
             let m0304b = FcmaVector::fmadd_rotate90(m0304b, self.twiddles_im[1], x3m4);
-            let [y03, y04] = self.bf2.column_fft([m0304a, m0304b]);
+            let [y03, y04] = self.bf2.parallel_fft([m0304a, m0304b]);
 
 
             [y00, y01, y02, y03, y04, y05, y06]
@@ -152,7 +152,7 @@ impl ColumnFft<FcmaVector32, 7> for FcmaF32ColumnButterfly7 {
 
 pub struct FcmaF32Butterfly7<T> {
     direction: FftDirection,
-    column_fft: FcmaF32ColumnButterfly7,
+    parallel_fft: FcmaF32ParallelButterfly7,
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -164,7 +164,7 @@ impl<T: FftNum> FcmaF32Butterfly7<T> {
         assert_f32::<T>();
         Self {
             direction,
-            column_fft: FcmaF32ColumnButterfly7::new(direction),
+            parallel_fft: FcmaF32ParallelButterfly7::new(direction),
             _phantom: std::marker::PhantomData,
         }
     }
@@ -173,7 +173,7 @@ impl<T: FftNum> FcmaF32Butterfly7<T> {
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6 });
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6 } ); 
     }
@@ -192,7 +192,7 @@ impl<T: FftNum> FcmaF32Butterfly7<T> {
             extract_lo_hi_f32(input_packed[3], input_packed[6]),
         ];
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
 
         let out_packed = [
             extract_lo_lo_f32(out[0], out[1]),
@@ -208,34 +208,34 @@ impl<T: FftNum> FcmaF32Butterfly7<T> {
     }
 }
 
-pub struct FcmaF64ColumnButterfly7 {
-    bf2: FcmaF64ColumnButterfly2,
+pub struct FcmaF64ParallelButterfly7 {
+    bf2: FcmaF64ParallelButterfly2,
     twiddles_re: [FcmaVector64; 3],
     twiddles_im: [FcmaVector64; 3],
 }
-impl FcmaF64ColumnButterfly7 {
+impl FcmaF64ParallelButterfly7 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(7, direction);
         Self {
-            bf2: FcmaF64ColumnButterfly2::new(direction),
+            bf2: FcmaF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
     }
 }
-impl ColumnFft<FcmaVector64, 7> for FcmaF64ColumnButterfly7 {
+impl ParallelFft<FcmaVector64, 7> for FcmaF64ParallelButterfly7 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector64; 7]) -> [FcmaVector64; 7] {
+    fn parallel_fft(&self, data: [FcmaVector64; 7]) -> [FcmaVector64; 7] {
                 // Safety: The current machine must support the neon,fcma instruction set. We specified this invariant in the constructor.
         unsafe {
             let y00 = data[0];
-            let [x1p6, x1m6] = self.bf2.column_fft([data[1], data[6]]);
+            let [x1p6, x1m6] = self.bf2.parallel_fft([data[1], data[6]]);
             let y00 = SimdVector::add(y00, x1p6);
-            let [x2p5, x2m5] = self.bf2.column_fft([data[2], data[5]]);
+            let [x2p5, x2m5] = self.bf2.parallel_fft([data[2], data[5]]);
             let y00 = SimdVector::add(y00, x2p5);
-            let [x3p4, x3m4] = self.bf2.column_fft([data[3], data[4]]);
+            let [x3p4, x3m4] = self.bf2.parallel_fft([data[3], data[4]]);
             let y00 = SimdVector::add(y00, x3p4);
 
             let m0106a = SimdVector::fmadd(data[0], self.twiddles_re[0], x1p6);
@@ -244,7 +244,7 @@ impl ColumnFft<FcmaVector64, 7> for FcmaF64ColumnButterfly7 {
             let m0106b = FcmaVector::mul_rotate90(self.twiddles_im[0], x1m6);
             let m0106b = FcmaVector::fmadd_rotate90(m0106b, self.twiddles_im[1], x2m5);
             let m0106b = FcmaVector::fmadd_rotate90(m0106b, self.twiddles_im[2], x3m4);
-            let [y01, y06] = self.bf2.column_fft([m0106a, m0106b]);
+            let [y01, y06] = self.bf2.parallel_fft([m0106a, m0106b]);
 
             let m0205a = SimdVector::fmadd(data[0], self.twiddles_re[1], x1p6);
             let m0205a = SimdVector::fmadd(m0205a, self.twiddles_re[2], x2p5);
@@ -252,7 +252,7 @@ impl ColumnFft<FcmaVector64, 7> for FcmaF64ColumnButterfly7 {
             let m0205b = FcmaVector::mul_rotate90(self.twiddles_im[1], x1m6);
             let m0205b = FcmaVector::nmadd_rotate90(m0205b, self.twiddles_im[2], x2m5);
             let m0205b = FcmaVector::nmadd_rotate90(m0205b, self.twiddles_im[0], x3m4);
-            let [y02, y05] = self.bf2.column_fft([m0205a, m0205b]);
+            let [y02, y05] = self.bf2.parallel_fft([m0205a, m0205b]);
 
             let m0304a = SimdVector::fmadd(data[0], self.twiddles_re[2], x1p6);
             let m0304a = SimdVector::fmadd(m0304a, self.twiddles_re[0], x2p5);
@@ -260,7 +260,7 @@ impl ColumnFft<FcmaVector64, 7> for FcmaF64ColumnButterfly7 {
             let m0304b = FcmaVector::mul_rotate90(self.twiddles_im[2], x1m6);
             let m0304b = FcmaVector::nmadd_rotate90(m0304b, self.twiddles_im[0], x2m5);
             let m0304b = FcmaVector::fmadd_rotate90(m0304b, self.twiddles_im[1], x3m4);
-            let [y03, y04] = self.bf2.column_fft([m0304a, m0304b]);
+            let [y03, y04] = self.bf2.parallel_fft([m0304a, m0304b]);
 
 
             [y00, y01, y02, y03, y04, y05, y06]
@@ -270,7 +270,7 @@ impl ColumnFft<FcmaVector64, 7> for FcmaF64ColumnButterfly7 {
 
 pub struct FcmaF64Butterfly7<T> {
     direction: FftDirection,
-    column_fft: FcmaF64ColumnButterfly7,
+    parallel_fft: FcmaF64ParallelButterfly7,
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -282,7 +282,7 @@ impl<T: FftNum> FcmaF64Butterfly7<T> {
         assert_f64::<T>();
         unsafe {Self {
             direction,
-            column_fft: FcmaF64ColumnButterfly7::new(direction),
+            parallel_fft: FcmaF64ParallelButterfly7::new(direction),
             _phantom: std::marker::PhantomData,
         }}
     }
@@ -291,44 +291,44 @@ impl<T: FftNum> FcmaF64Butterfly7<T> {
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6 });
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6 });   
     }
 }
 
-pub struct FcmaF32ColumnButterfly11 {
-    bf2: FcmaF32ColumnButterfly2,
+pub struct FcmaF32ParallelButterfly11 {
+    bf2: FcmaF32ParallelButterfly2,
     twiddles_re: [FcmaVector32; 5],
     twiddles_im: [FcmaVector32; 5],
 }
-impl FcmaF32ColumnButterfly11 {
+impl FcmaF32ParallelButterfly11 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(11, direction);
         Self {
-            bf2: FcmaF32ColumnButterfly2::new(direction),
+            bf2: FcmaF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
     }
 }
-impl ColumnFft<FcmaVector32, 11> for FcmaF32ColumnButterfly11 {
+impl ParallelFft<FcmaVector32, 11> for FcmaF32ParallelButterfly11 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector32; 11]) -> [FcmaVector32; 11] {
+    fn parallel_fft(&self, data: [FcmaVector32; 11]) -> [FcmaVector32; 11] {
                 // Safety: The current machine must support the neon,fcma instruction set. We specified this invariant in the constructor.
         unsafe {
             let y00 = data[0];
-            let [x1p10, x1m10] = self.bf2.column_fft([data[1], data[10]]);
+            let [x1p10, x1m10] = self.bf2.parallel_fft([data[1], data[10]]);
             let y00 = SimdVector::add(y00, x1p10);
-            let [x2p9, x2m9] = self.bf2.column_fft([data[2], data[9]]);
+            let [x2p9, x2m9] = self.bf2.parallel_fft([data[2], data[9]]);
             let y00 = SimdVector::add(y00, x2p9);
-            let [x3p8, x3m8] = self.bf2.column_fft([data[3], data[8]]);
+            let [x3p8, x3m8] = self.bf2.parallel_fft([data[3], data[8]]);
             let y00 = SimdVector::add(y00, x3p8);
-            let [x4p7, x4m7] = self.bf2.column_fft([data[4], data[7]]);
+            let [x4p7, x4m7] = self.bf2.parallel_fft([data[4], data[7]]);
             let y00 = SimdVector::add(y00, x4p7);
-            let [x5p6, x5m6] = self.bf2.column_fft([data[5], data[6]]);
+            let [x5p6, x5m6] = self.bf2.parallel_fft([data[5], data[6]]);
             let y00 = SimdVector::add(y00, x5p6);
 
             let m0110a = SimdVector::fmadd(data[0], self.twiddles_re[0], x1p10);
@@ -341,7 +341,7 @@ impl ColumnFft<FcmaVector32, 11> for FcmaF32ColumnButterfly11 {
             let m0110b = FcmaVector::fmadd_rotate90(m0110b, self.twiddles_im[2], x3m8);
             let m0110b = FcmaVector::fmadd_rotate90(m0110b, self.twiddles_im[3], x4m7);
             let m0110b = FcmaVector::fmadd_rotate90(m0110b, self.twiddles_im[4], x5m6);
-            let [y01, y10] = self.bf2.column_fft([m0110a, m0110b]);
+            let [y01, y10] = self.bf2.parallel_fft([m0110a, m0110b]);
 
             let m0209a = SimdVector::fmadd(data[0], self.twiddles_re[1], x1p10);
             let m0209a = SimdVector::fmadd(m0209a, self.twiddles_re[3], x2p9);
@@ -353,7 +353,7 @@ impl ColumnFft<FcmaVector32, 11> for FcmaF32ColumnButterfly11 {
             let m0209b = FcmaVector::nmadd_rotate90(m0209b, self.twiddles_im[4], x3m8);
             let m0209b = FcmaVector::nmadd_rotate90(m0209b, self.twiddles_im[2], x4m7);
             let m0209b = FcmaVector::nmadd_rotate90(m0209b, self.twiddles_im[0], x5m6);
-            let [y02, y09] = self.bf2.column_fft([m0209a, m0209b]);
+            let [y02, y09] = self.bf2.parallel_fft([m0209a, m0209b]);
 
             let m0308a = SimdVector::fmadd(data[0], self.twiddles_re[2], x1p10);
             let m0308a = SimdVector::fmadd(m0308a, self.twiddles_re[4], x2p9);
@@ -365,7 +365,7 @@ impl ColumnFft<FcmaVector32, 11> for FcmaF32ColumnButterfly11 {
             let m0308b = FcmaVector::nmadd_rotate90(m0308b, self.twiddles_im[1], x3m8);
             let m0308b = FcmaVector::fmadd_rotate90(m0308b, self.twiddles_im[0], x4m7);
             let m0308b = FcmaVector::fmadd_rotate90(m0308b, self.twiddles_im[3], x5m6);
-            let [y03, y08] = self.bf2.column_fft([m0308a, m0308b]);
+            let [y03, y08] = self.bf2.parallel_fft([m0308a, m0308b]);
 
             let m0407a = SimdVector::fmadd(data[0], self.twiddles_re[3], x1p10);
             let m0407a = SimdVector::fmadd(m0407a, self.twiddles_re[2], x2p9);
@@ -377,7 +377,7 @@ impl ColumnFft<FcmaVector32, 11> for FcmaF32ColumnButterfly11 {
             let m0407b = FcmaVector::fmadd_rotate90(m0407b, self.twiddles_im[0], x3m8);
             let m0407b = FcmaVector::fmadd_rotate90(m0407b, self.twiddles_im[4], x4m7);
             let m0407b = FcmaVector::nmadd_rotate90(m0407b, self.twiddles_im[1], x5m6);
-            let [y04, y07] = self.bf2.column_fft([m0407a, m0407b]);
+            let [y04, y07] = self.bf2.parallel_fft([m0407a, m0407b]);
 
             let m0506a = SimdVector::fmadd(data[0], self.twiddles_re[4], x1p10);
             let m0506a = SimdVector::fmadd(m0506a, self.twiddles_re[0], x2p9);
@@ -389,7 +389,7 @@ impl ColumnFft<FcmaVector32, 11> for FcmaF32ColumnButterfly11 {
             let m0506b = FcmaVector::fmadd_rotate90(m0506b, self.twiddles_im[3], x3m8);
             let m0506b = FcmaVector::nmadd_rotate90(m0506b, self.twiddles_im[1], x4m7);
             let m0506b = FcmaVector::fmadd_rotate90(m0506b, self.twiddles_im[2], x5m6);
-            let [y05, y06] = self.bf2.column_fft([m0506a, m0506b]);
+            let [y05, y06] = self.bf2.parallel_fft([m0506a, m0506b]);
 
 
             [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10]
@@ -399,7 +399,7 @@ impl ColumnFft<FcmaVector32, 11> for FcmaF32ColumnButterfly11 {
 
 pub struct FcmaF32Butterfly11<T> {
     direction: FftDirection,
-    column_fft: FcmaF32ColumnButterfly11,
+    parallel_fft: FcmaF32ParallelButterfly11,
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -411,7 +411,7 @@ impl<T: FftNum> FcmaF32Butterfly11<T> {
         assert_f32::<T>();
         Self {
             direction,
-            column_fft: FcmaF32ColumnButterfly11::new(direction),
+            parallel_fft: FcmaF32ParallelButterfly11::new(direction),
             _phantom: std::marker::PhantomData,
         }
     }
@@ -420,7 +420,7 @@ impl<T: FftNum> FcmaF32Butterfly11<T> {
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10 });
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10 } ); 
     }
@@ -443,7 +443,7 @@ impl<T: FftNum> FcmaF32Butterfly11<T> {
             extract_lo_hi_f32(input_packed[5], input_packed[10]),
         ];
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
 
         let out_packed = [
             extract_lo_lo_f32(out[0], out[1]),
@@ -463,38 +463,38 @@ impl<T: FftNum> FcmaF32Butterfly11<T> {
     }
 }
 
-pub struct FcmaF64ColumnButterfly11 {
-    bf2: FcmaF64ColumnButterfly2,
+pub struct FcmaF64ParallelButterfly11 {
+    bf2: FcmaF64ParallelButterfly2,
     twiddles_re: [FcmaVector64; 5],
     twiddles_im: [FcmaVector64; 5],
 }
-impl FcmaF64ColumnButterfly11 {
+impl FcmaF64ParallelButterfly11 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(11, direction);
         Self {
-            bf2: FcmaF64ColumnButterfly2::new(direction),
+            bf2: FcmaF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
     }
 }
-impl ColumnFft<FcmaVector64, 11> for FcmaF64ColumnButterfly11 {
+impl ParallelFft<FcmaVector64, 11> for FcmaF64ParallelButterfly11 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector64; 11]) -> [FcmaVector64; 11] {
+    fn parallel_fft(&self, data: [FcmaVector64; 11]) -> [FcmaVector64; 11] {
                 // Safety: The current machine must support the neon,fcma instruction set. We specified this invariant in the constructor.
         unsafe {
             let y00 = data[0];
-            let [x1p10, x1m10] = self.bf2.column_fft([data[1], data[10]]);
+            let [x1p10, x1m10] = self.bf2.parallel_fft([data[1], data[10]]);
             let y00 = SimdVector::add(y00, x1p10);
-            let [x2p9, x2m9] = self.bf2.column_fft([data[2], data[9]]);
+            let [x2p9, x2m9] = self.bf2.parallel_fft([data[2], data[9]]);
             let y00 = SimdVector::add(y00, x2p9);
-            let [x3p8, x3m8] = self.bf2.column_fft([data[3], data[8]]);
+            let [x3p8, x3m8] = self.bf2.parallel_fft([data[3], data[8]]);
             let y00 = SimdVector::add(y00, x3p8);
-            let [x4p7, x4m7] = self.bf2.column_fft([data[4], data[7]]);
+            let [x4p7, x4m7] = self.bf2.parallel_fft([data[4], data[7]]);
             let y00 = SimdVector::add(y00, x4p7);
-            let [x5p6, x5m6] = self.bf2.column_fft([data[5], data[6]]);
+            let [x5p6, x5m6] = self.bf2.parallel_fft([data[5], data[6]]);
             let y00 = SimdVector::add(y00, x5p6);
 
             let m0110a = SimdVector::fmadd(data[0], self.twiddles_re[0], x1p10);
@@ -507,7 +507,7 @@ impl ColumnFft<FcmaVector64, 11> for FcmaF64ColumnButterfly11 {
             let m0110b = FcmaVector::fmadd_rotate90(m0110b, self.twiddles_im[2], x3m8);
             let m0110b = FcmaVector::fmadd_rotate90(m0110b, self.twiddles_im[3], x4m7);
             let m0110b = FcmaVector::fmadd_rotate90(m0110b, self.twiddles_im[4], x5m6);
-            let [y01, y10] = self.bf2.column_fft([m0110a, m0110b]);
+            let [y01, y10] = self.bf2.parallel_fft([m0110a, m0110b]);
 
             let m0209a = SimdVector::fmadd(data[0], self.twiddles_re[1], x1p10);
             let m0209a = SimdVector::fmadd(m0209a, self.twiddles_re[3], x2p9);
@@ -519,7 +519,7 @@ impl ColumnFft<FcmaVector64, 11> for FcmaF64ColumnButterfly11 {
             let m0209b = FcmaVector::nmadd_rotate90(m0209b, self.twiddles_im[4], x3m8);
             let m0209b = FcmaVector::nmadd_rotate90(m0209b, self.twiddles_im[2], x4m7);
             let m0209b = FcmaVector::nmadd_rotate90(m0209b, self.twiddles_im[0], x5m6);
-            let [y02, y09] = self.bf2.column_fft([m0209a, m0209b]);
+            let [y02, y09] = self.bf2.parallel_fft([m0209a, m0209b]);
 
             let m0308a = SimdVector::fmadd(data[0], self.twiddles_re[2], x1p10);
             let m0308a = SimdVector::fmadd(m0308a, self.twiddles_re[4], x2p9);
@@ -531,7 +531,7 @@ impl ColumnFft<FcmaVector64, 11> for FcmaF64ColumnButterfly11 {
             let m0308b = FcmaVector::nmadd_rotate90(m0308b, self.twiddles_im[1], x3m8);
             let m0308b = FcmaVector::fmadd_rotate90(m0308b, self.twiddles_im[0], x4m7);
             let m0308b = FcmaVector::fmadd_rotate90(m0308b, self.twiddles_im[3], x5m6);
-            let [y03, y08] = self.bf2.column_fft([m0308a, m0308b]);
+            let [y03, y08] = self.bf2.parallel_fft([m0308a, m0308b]);
 
             let m0407a = SimdVector::fmadd(data[0], self.twiddles_re[3], x1p10);
             let m0407a = SimdVector::fmadd(m0407a, self.twiddles_re[2], x2p9);
@@ -543,7 +543,7 @@ impl ColumnFft<FcmaVector64, 11> for FcmaF64ColumnButterfly11 {
             let m0407b = FcmaVector::fmadd_rotate90(m0407b, self.twiddles_im[0], x3m8);
             let m0407b = FcmaVector::fmadd_rotate90(m0407b, self.twiddles_im[4], x4m7);
             let m0407b = FcmaVector::nmadd_rotate90(m0407b, self.twiddles_im[1], x5m6);
-            let [y04, y07] = self.bf2.column_fft([m0407a, m0407b]);
+            let [y04, y07] = self.bf2.parallel_fft([m0407a, m0407b]);
 
             let m0506a = SimdVector::fmadd(data[0], self.twiddles_re[4], x1p10);
             let m0506a = SimdVector::fmadd(m0506a, self.twiddles_re[0], x2p9);
@@ -555,7 +555,7 @@ impl ColumnFft<FcmaVector64, 11> for FcmaF64ColumnButterfly11 {
             let m0506b = FcmaVector::fmadd_rotate90(m0506b, self.twiddles_im[3], x3m8);
             let m0506b = FcmaVector::nmadd_rotate90(m0506b, self.twiddles_im[1], x4m7);
             let m0506b = FcmaVector::fmadd_rotate90(m0506b, self.twiddles_im[2], x5m6);
-            let [y05, y06] = self.bf2.column_fft([m0506a, m0506b]);
+            let [y05, y06] = self.bf2.parallel_fft([m0506a, m0506b]);
 
 
             [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10]
@@ -565,7 +565,7 @@ impl ColumnFft<FcmaVector64, 11> for FcmaF64ColumnButterfly11 {
 
 pub struct FcmaF64Butterfly11<T> {
     direction: FftDirection,
-    column_fft: FcmaF64ColumnButterfly11,
+    parallel_fft: FcmaF64ParallelButterfly11,
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -577,7 +577,7 @@ impl<T: FftNum> FcmaF64Butterfly11<T> {
         assert_f64::<T>();
         unsafe {Self {
             direction,
-            column_fft: FcmaF64ColumnButterfly11::new(direction),
+            parallel_fft: FcmaF64ParallelButterfly11::new(direction),
             _phantom: std::marker::PhantomData,
         }}
     }
@@ -586,46 +586,46 @@ impl<T: FftNum> FcmaF64Butterfly11<T> {
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10 });
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10 });   
     }
 }
 
-pub struct FcmaF32ColumnButterfly13 {
-    bf2: FcmaF32ColumnButterfly2,
+pub struct FcmaF32ParallelButterfly13 {
+    bf2: FcmaF32ParallelButterfly2,
     twiddles_re: [FcmaVector32; 6],
     twiddles_im: [FcmaVector32; 6],
 }
-impl FcmaF32ColumnButterfly13 {
+impl FcmaF32ParallelButterfly13 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(13, direction);
         Self {
-            bf2: FcmaF32ColumnButterfly2::new(direction),
+            bf2: FcmaF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
     }
 }
-impl ColumnFft<FcmaVector32, 13> for FcmaF32ColumnButterfly13 {
+impl ParallelFft<FcmaVector32, 13> for FcmaF32ParallelButterfly13 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector32; 13]) -> [FcmaVector32; 13] {
+    fn parallel_fft(&self, data: [FcmaVector32; 13]) -> [FcmaVector32; 13] {
                 // Safety: The current machine must support the neon,fcma instruction set. We specified this invariant in the constructor.
         unsafe {
             let y00 = data[0];
-            let [x1p12, x1m12] = self.bf2.column_fft([data[1], data[12]]);
+            let [x1p12, x1m12] = self.bf2.parallel_fft([data[1], data[12]]);
             let y00 = SimdVector::add(y00, x1p12);
-            let [x2p11, x2m11] = self.bf2.column_fft([data[2], data[11]]);
+            let [x2p11, x2m11] = self.bf2.parallel_fft([data[2], data[11]]);
             let y00 = SimdVector::add(y00, x2p11);
-            let [x3p10, x3m10] = self.bf2.column_fft([data[3], data[10]]);
+            let [x3p10, x3m10] = self.bf2.parallel_fft([data[3], data[10]]);
             let y00 = SimdVector::add(y00, x3p10);
-            let [x4p9, x4m9] = self.bf2.column_fft([data[4], data[9]]);
+            let [x4p9, x4m9] = self.bf2.parallel_fft([data[4], data[9]]);
             let y00 = SimdVector::add(y00, x4p9);
-            let [x5p8, x5m8] = self.bf2.column_fft([data[5], data[8]]);
+            let [x5p8, x5m8] = self.bf2.parallel_fft([data[5], data[8]]);
             let y00 = SimdVector::add(y00, x5p8);
-            let [x6p7, x6m7] = self.bf2.column_fft([data[6], data[7]]);
+            let [x6p7, x6m7] = self.bf2.parallel_fft([data[6], data[7]]);
             let y00 = SimdVector::add(y00, x6p7);
 
             let m0112a = SimdVector::fmadd(data[0], self.twiddles_re[0], x1p12);
@@ -640,7 +640,7 @@ impl ColumnFft<FcmaVector32, 13> for FcmaF32ColumnButterfly13 {
             let m0112b = FcmaVector::fmadd_rotate90(m0112b, self.twiddles_im[3], x4m9);
             let m0112b = FcmaVector::fmadd_rotate90(m0112b, self.twiddles_im[4], x5m8);
             let m0112b = FcmaVector::fmadd_rotate90(m0112b, self.twiddles_im[5], x6m7);
-            let [y01, y12] = self.bf2.column_fft([m0112a, m0112b]);
+            let [y01, y12] = self.bf2.parallel_fft([m0112a, m0112b]);
 
             let m0211a = SimdVector::fmadd(data[0], self.twiddles_re[1], x1p12);
             let m0211a = SimdVector::fmadd(m0211a, self.twiddles_re[3], x2p11);
@@ -654,7 +654,7 @@ impl ColumnFft<FcmaVector32, 13> for FcmaF32ColumnButterfly13 {
             let m0211b = FcmaVector::nmadd_rotate90(m0211b, self.twiddles_im[4], x4m9);
             let m0211b = FcmaVector::nmadd_rotate90(m0211b, self.twiddles_im[2], x5m8);
             let m0211b = FcmaVector::nmadd_rotate90(m0211b, self.twiddles_im[0], x6m7);
-            let [y02, y11] = self.bf2.column_fft([m0211a, m0211b]);
+            let [y02, y11] = self.bf2.parallel_fft([m0211a, m0211b]);
 
             let m0310a = SimdVector::fmadd(data[0], self.twiddles_re[2], x1p12);
             let m0310a = SimdVector::fmadd(m0310a, self.twiddles_re[5], x2p11);
@@ -668,7 +668,7 @@ impl ColumnFft<FcmaVector32, 13> for FcmaF32ColumnButterfly13 {
             let m0310b = FcmaVector::nmadd_rotate90(m0310b, self.twiddles_im[0], x4m9);
             let m0310b = FcmaVector::fmadd_rotate90(m0310b, self.twiddles_im[1], x5m8);
             let m0310b = FcmaVector::fmadd_rotate90(m0310b, self.twiddles_im[4], x6m7);
-            let [y03, y10] = self.bf2.column_fft([m0310a, m0310b]);
+            let [y03, y10] = self.bf2.parallel_fft([m0310a, m0310b]);
 
             let m0409a = SimdVector::fmadd(data[0], self.twiddles_re[3], x1p12);
             let m0409a = SimdVector::fmadd(m0409a, self.twiddles_re[4], x2p11);
@@ -682,7 +682,7 @@ impl ColumnFft<FcmaVector32, 13> for FcmaF32ColumnButterfly13 {
             let m0409b = FcmaVector::fmadd_rotate90(m0409b, self.twiddles_im[2], x4m9);
             let m0409b = FcmaVector::nmadd_rotate90(m0409b, self.twiddles_im[5], x5m8);
             let m0409b = FcmaVector::nmadd_rotate90(m0409b, self.twiddles_im[1], x6m7);
-            let [y04, y09] = self.bf2.column_fft([m0409a, m0409b]);
+            let [y04, y09] = self.bf2.parallel_fft([m0409a, m0409b]);
 
             let m0508a = SimdVector::fmadd(data[0], self.twiddles_re[4], x1p12);
             let m0508a = SimdVector::fmadd(m0508a, self.twiddles_re[2], x2p11);
@@ -696,7 +696,7 @@ impl ColumnFft<FcmaVector32, 13> for FcmaF32ColumnButterfly13 {
             let m0508b = FcmaVector::nmadd_rotate90(m0508b, self.twiddles_im[5], x4m9);
             let m0508b = FcmaVector::nmadd_rotate90(m0508b, self.twiddles_im[0], x5m8);
             let m0508b = FcmaVector::fmadd_rotate90(m0508b, self.twiddles_im[3], x6m7);
-            let [y05, y08] = self.bf2.column_fft([m0508a, m0508b]);
+            let [y05, y08] = self.bf2.parallel_fft([m0508a, m0508b]);
 
             let m0607a = SimdVector::fmadd(data[0], self.twiddles_re[5], x1p12);
             let m0607a = SimdVector::fmadd(m0607a, self.twiddles_re[0], x2p11);
@@ -710,7 +710,7 @@ impl ColumnFft<FcmaVector32, 13> for FcmaF32ColumnButterfly13 {
             let m0607b = FcmaVector::nmadd_rotate90(m0607b, self.twiddles_im[1], x4m9);
             let m0607b = FcmaVector::fmadd_rotate90(m0607b, self.twiddles_im[3], x5m8);
             let m0607b = FcmaVector::nmadd_rotate90(m0607b, self.twiddles_im[2], x6m7);
-            let [y06, y07] = self.bf2.column_fft([m0607a, m0607b]);
+            let [y06, y07] = self.bf2.parallel_fft([m0607a, m0607b]);
 
 
             [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12]
@@ -720,7 +720,7 @@ impl ColumnFft<FcmaVector32, 13> for FcmaF32ColumnButterfly13 {
 
 pub struct FcmaF32Butterfly13<T> {
     direction: FftDirection,
-    column_fft: FcmaF32ColumnButterfly13,
+    parallel_fft: FcmaF32ParallelButterfly13,
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -732,7 +732,7 @@ impl<T: FftNum> FcmaF32Butterfly13<T> {
         assert_f32::<T>();
         Self {
             direction,
-            column_fft: FcmaF32ColumnButterfly13::new(direction),
+            parallel_fft: FcmaF32ParallelButterfly13::new(direction),
             _phantom: std::marker::PhantomData,
         }
     }
@@ -741,7 +741,7 @@ impl<T: FftNum> FcmaF32Butterfly13<T> {
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 });
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 } ); 
     }
@@ -766,7 +766,7 @@ impl<T: FftNum> FcmaF32Butterfly13<T> {
             extract_lo_hi_f32(input_packed[6], input_packed[12]),
         ];
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
 
         let out_packed = [
             extract_lo_lo_f32(out[0], out[1]),
@@ -788,40 +788,40 @@ impl<T: FftNum> FcmaF32Butterfly13<T> {
     }
 }
 
-pub struct FcmaF64ColumnButterfly13 {
-    bf2: FcmaF64ColumnButterfly2,
+pub struct FcmaF64ParallelButterfly13 {
+    bf2: FcmaF64ParallelButterfly2,
     twiddles_re: [FcmaVector64; 6],
     twiddles_im: [FcmaVector64; 6],
 }
-impl FcmaF64ColumnButterfly13 {
+impl FcmaF64ParallelButterfly13 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(13, direction);
         Self {
-            bf2: FcmaF64ColumnButterfly2::new(direction),
+            bf2: FcmaF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
     }
 }
-impl ColumnFft<FcmaVector64, 13> for FcmaF64ColumnButterfly13 {
+impl ParallelFft<FcmaVector64, 13> for FcmaF64ParallelButterfly13 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector64; 13]) -> [FcmaVector64; 13] {
+    fn parallel_fft(&self, data: [FcmaVector64; 13]) -> [FcmaVector64; 13] {
                 // Safety: The current machine must support the neon,fcma instruction set. We specified this invariant in the constructor.
         unsafe {
             let y00 = data[0];
-            let [x1p12, x1m12] = self.bf2.column_fft([data[1], data[12]]);
+            let [x1p12, x1m12] = self.bf2.parallel_fft([data[1], data[12]]);
             let y00 = SimdVector::add(y00, x1p12);
-            let [x2p11, x2m11] = self.bf2.column_fft([data[2], data[11]]);
+            let [x2p11, x2m11] = self.bf2.parallel_fft([data[2], data[11]]);
             let y00 = SimdVector::add(y00, x2p11);
-            let [x3p10, x3m10] = self.bf2.column_fft([data[3], data[10]]);
+            let [x3p10, x3m10] = self.bf2.parallel_fft([data[3], data[10]]);
             let y00 = SimdVector::add(y00, x3p10);
-            let [x4p9, x4m9] = self.bf2.column_fft([data[4], data[9]]);
+            let [x4p9, x4m9] = self.bf2.parallel_fft([data[4], data[9]]);
             let y00 = SimdVector::add(y00, x4p9);
-            let [x5p8, x5m8] = self.bf2.column_fft([data[5], data[8]]);
+            let [x5p8, x5m8] = self.bf2.parallel_fft([data[5], data[8]]);
             let y00 = SimdVector::add(y00, x5p8);
-            let [x6p7, x6m7] = self.bf2.column_fft([data[6], data[7]]);
+            let [x6p7, x6m7] = self.bf2.parallel_fft([data[6], data[7]]);
             let y00 = SimdVector::add(y00, x6p7);
 
             let m0112a = SimdVector::fmadd(data[0], self.twiddles_re[0], x1p12);
@@ -836,7 +836,7 @@ impl ColumnFft<FcmaVector64, 13> for FcmaF64ColumnButterfly13 {
             let m0112b = FcmaVector::fmadd_rotate90(m0112b, self.twiddles_im[3], x4m9);
             let m0112b = FcmaVector::fmadd_rotate90(m0112b, self.twiddles_im[4], x5m8);
             let m0112b = FcmaVector::fmadd_rotate90(m0112b, self.twiddles_im[5], x6m7);
-            let [y01, y12] = self.bf2.column_fft([m0112a, m0112b]);
+            let [y01, y12] = self.bf2.parallel_fft([m0112a, m0112b]);
 
             let m0211a = SimdVector::fmadd(data[0], self.twiddles_re[1], x1p12);
             let m0211a = SimdVector::fmadd(m0211a, self.twiddles_re[3], x2p11);
@@ -850,7 +850,7 @@ impl ColumnFft<FcmaVector64, 13> for FcmaF64ColumnButterfly13 {
             let m0211b = FcmaVector::nmadd_rotate90(m0211b, self.twiddles_im[4], x4m9);
             let m0211b = FcmaVector::nmadd_rotate90(m0211b, self.twiddles_im[2], x5m8);
             let m0211b = FcmaVector::nmadd_rotate90(m0211b, self.twiddles_im[0], x6m7);
-            let [y02, y11] = self.bf2.column_fft([m0211a, m0211b]);
+            let [y02, y11] = self.bf2.parallel_fft([m0211a, m0211b]);
 
             let m0310a = SimdVector::fmadd(data[0], self.twiddles_re[2], x1p12);
             let m0310a = SimdVector::fmadd(m0310a, self.twiddles_re[5], x2p11);
@@ -864,7 +864,7 @@ impl ColumnFft<FcmaVector64, 13> for FcmaF64ColumnButterfly13 {
             let m0310b = FcmaVector::nmadd_rotate90(m0310b, self.twiddles_im[0], x4m9);
             let m0310b = FcmaVector::fmadd_rotate90(m0310b, self.twiddles_im[1], x5m8);
             let m0310b = FcmaVector::fmadd_rotate90(m0310b, self.twiddles_im[4], x6m7);
-            let [y03, y10] = self.bf2.column_fft([m0310a, m0310b]);
+            let [y03, y10] = self.bf2.parallel_fft([m0310a, m0310b]);
 
             let m0409a = SimdVector::fmadd(data[0], self.twiddles_re[3], x1p12);
             let m0409a = SimdVector::fmadd(m0409a, self.twiddles_re[4], x2p11);
@@ -878,7 +878,7 @@ impl ColumnFft<FcmaVector64, 13> for FcmaF64ColumnButterfly13 {
             let m0409b = FcmaVector::fmadd_rotate90(m0409b, self.twiddles_im[2], x4m9);
             let m0409b = FcmaVector::nmadd_rotate90(m0409b, self.twiddles_im[5], x5m8);
             let m0409b = FcmaVector::nmadd_rotate90(m0409b, self.twiddles_im[1], x6m7);
-            let [y04, y09] = self.bf2.column_fft([m0409a, m0409b]);
+            let [y04, y09] = self.bf2.parallel_fft([m0409a, m0409b]);
 
             let m0508a = SimdVector::fmadd(data[0], self.twiddles_re[4], x1p12);
             let m0508a = SimdVector::fmadd(m0508a, self.twiddles_re[2], x2p11);
@@ -892,7 +892,7 @@ impl ColumnFft<FcmaVector64, 13> for FcmaF64ColumnButterfly13 {
             let m0508b = FcmaVector::nmadd_rotate90(m0508b, self.twiddles_im[5], x4m9);
             let m0508b = FcmaVector::nmadd_rotate90(m0508b, self.twiddles_im[0], x5m8);
             let m0508b = FcmaVector::fmadd_rotate90(m0508b, self.twiddles_im[3], x6m7);
-            let [y05, y08] = self.bf2.column_fft([m0508a, m0508b]);
+            let [y05, y08] = self.bf2.parallel_fft([m0508a, m0508b]);
 
             let m0607a = SimdVector::fmadd(data[0], self.twiddles_re[5], x1p12);
             let m0607a = SimdVector::fmadd(m0607a, self.twiddles_re[0], x2p11);
@@ -906,7 +906,7 @@ impl ColumnFft<FcmaVector64, 13> for FcmaF64ColumnButterfly13 {
             let m0607b = FcmaVector::nmadd_rotate90(m0607b, self.twiddles_im[1], x4m9);
             let m0607b = FcmaVector::fmadd_rotate90(m0607b, self.twiddles_im[3], x5m8);
             let m0607b = FcmaVector::nmadd_rotate90(m0607b, self.twiddles_im[2], x6m7);
-            let [y06, y07] = self.bf2.column_fft([m0607a, m0607b]);
+            let [y06, y07] = self.bf2.parallel_fft([m0607a, m0607b]);
 
 
             [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12]
@@ -916,7 +916,7 @@ impl ColumnFft<FcmaVector64, 13> for FcmaF64ColumnButterfly13 {
 
 pub struct FcmaF64Butterfly13<T> {
     direction: FftDirection,
-    column_fft: FcmaF64ColumnButterfly13,
+    parallel_fft: FcmaF64ParallelButterfly13,
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -928,7 +928,7 @@ impl<T: FftNum> FcmaF64Butterfly13<T> {
         assert_f64::<T>();
         unsafe {Self {
             direction,
-            column_fft: FcmaF64ColumnButterfly13::new(direction),
+            parallel_fft: FcmaF64ParallelButterfly13::new(direction),
             _phantom: std::marker::PhantomData,
         }}
     }
@@ -937,50 +937,50 @@ impl<T: FftNum> FcmaF64Butterfly13<T> {
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 });
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 });   
     }
 }
 
-pub struct FcmaF32ColumnButterfly17 {
-    bf2: FcmaF32ColumnButterfly2,
+pub struct FcmaF32ParallelButterfly17 {
+    bf2: FcmaF32ParallelButterfly2,
     twiddles_re: [FcmaVector32; 8],
     twiddles_im: [FcmaVector32; 8],
 }
-impl FcmaF32ColumnButterfly17 {
+impl FcmaF32ParallelButterfly17 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(17, direction);
         Self {
-            bf2: FcmaF32ColumnButterfly2::new(direction),
+            bf2: FcmaF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
     }
 }
-impl ColumnFft<FcmaVector32, 17> for FcmaF32ColumnButterfly17 {
+impl ParallelFft<FcmaVector32, 17> for FcmaF32ParallelButterfly17 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector32; 17]) -> [FcmaVector32; 17] {
+    fn parallel_fft(&self, data: [FcmaVector32; 17]) -> [FcmaVector32; 17] {
                 // Safety: The current machine must support the neon,fcma instruction set. We specified this invariant in the constructor.
         unsafe {
             let y00 = data[0];
-            let [x1p16, x1m16] = self.bf2.column_fft([data[1], data[16]]);
+            let [x1p16, x1m16] = self.bf2.parallel_fft([data[1], data[16]]);
             let y00 = SimdVector::add(y00, x1p16);
-            let [x2p15, x2m15] = self.bf2.column_fft([data[2], data[15]]);
+            let [x2p15, x2m15] = self.bf2.parallel_fft([data[2], data[15]]);
             let y00 = SimdVector::add(y00, x2p15);
-            let [x3p14, x3m14] = self.bf2.column_fft([data[3], data[14]]);
+            let [x3p14, x3m14] = self.bf2.parallel_fft([data[3], data[14]]);
             let y00 = SimdVector::add(y00, x3p14);
-            let [x4p13, x4m13] = self.bf2.column_fft([data[4], data[13]]);
+            let [x4p13, x4m13] = self.bf2.parallel_fft([data[4], data[13]]);
             let y00 = SimdVector::add(y00, x4p13);
-            let [x5p12, x5m12] = self.bf2.column_fft([data[5], data[12]]);
+            let [x5p12, x5m12] = self.bf2.parallel_fft([data[5], data[12]]);
             let y00 = SimdVector::add(y00, x5p12);
-            let [x6p11, x6m11] = self.bf2.column_fft([data[6], data[11]]);
+            let [x6p11, x6m11] = self.bf2.parallel_fft([data[6], data[11]]);
             let y00 = SimdVector::add(y00, x6p11);
-            let [x7p10, x7m10] = self.bf2.column_fft([data[7], data[10]]);
+            let [x7p10, x7m10] = self.bf2.parallel_fft([data[7], data[10]]);
             let y00 = SimdVector::add(y00, x7p10);
-            let [x8p9, x8m9] = self.bf2.column_fft([data[8], data[9]]);
+            let [x8p9, x8m9] = self.bf2.parallel_fft([data[8], data[9]]);
             let y00 = SimdVector::add(y00, x8p9);
 
             let m0116a = SimdVector::fmadd(data[0], self.twiddles_re[0], x1p16);
@@ -999,7 +999,7 @@ impl ColumnFft<FcmaVector32, 17> for FcmaF32ColumnButterfly17 {
             let m0116b = FcmaVector::fmadd_rotate90(m0116b, self.twiddles_im[5], x6m11);
             let m0116b = FcmaVector::fmadd_rotate90(m0116b, self.twiddles_im[6], x7m10);
             let m0116b = FcmaVector::fmadd_rotate90(m0116b, self.twiddles_im[7], x8m9);
-            let [y01, y16] = self.bf2.column_fft([m0116a, m0116b]);
+            let [y01, y16] = self.bf2.parallel_fft([m0116a, m0116b]);
 
             let m0215a = SimdVector::fmadd(data[0], self.twiddles_re[1], x1p16);
             let m0215a = SimdVector::fmadd(m0215a, self.twiddles_re[3], x2p15);
@@ -1017,7 +1017,7 @@ impl ColumnFft<FcmaVector32, 17> for FcmaF32ColumnButterfly17 {
             let m0215b = FcmaVector::nmadd_rotate90(m0215b, self.twiddles_im[4], x6m11);
             let m0215b = FcmaVector::nmadd_rotate90(m0215b, self.twiddles_im[2], x7m10);
             let m0215b = FcmaVector::nmadd_rotate90(m0215b, self.twiddles_im[0], x8m9);
-            let [y02, y15] = self.bf2.column_fft([m0215a, m0215b]);
+            let [y02, y15] = self.bf2.parallel_fft([m0215a, m0215b]);
 
             let m0314a = SimdVector::fmadd(data[0], self.twiddles_re[2], x1p16);
             let m0314a = SimdVector::fmadd(m0314a, self.twiddles_re[5], x2p15);
@@ -1035,7 +1035,7 @@ impl ColumnFft<FcmaVector32, 17> for FcmaF32ColumnButterfly17 {
             let m0314b = FcmaVector::fmadd_rotate90(m0314b, self.twiddles_im[0], x6m11);
             let m0314b = FcmaVector::fmadd_rotate90(m0314b, self.twiddles_im[3], x7m10);
             let m0314b = FcmaVector::fmadd_rotate90(m0314b, self.twiddles_im[6], x8m9);
-            let [y03, y14] = self.bf2.column_fft([m0314a, m0314b]);
+            let [y03, y14] = self.bf2.parallel_fft([m0314a, m0314b]);
 
             let m0413a = SimdVector::fmadd(data[0], self.twiddles_re[3], x1p16);
             let m0413a = SimdVector::fmadd(m0413a, self.twiddles_re[7], x2p15);
@@ -1053,7 +1053,7 @@ impl ColumnFft<FcmaVector32, 17> for FcmaF32ColumnButterfly17 {
             let m0413b = FcmaVector::fmadd_rotate90(m0413b, self.twiddles_im[6], x6m11);
             let m0413b = FcmaVector::nmadd_rotate90(m0413b, self.twiddles_im[5], x7m10);
             let m0413b = FcmaVector::nmadd_rotate90(m0413b, self.twiddles_im[1], x8m9);
-            let [y04, y13] = self.bf2.column_fft([m0413a, m0413b]);
+            let [y04, y13] = self.bf2.parallel_fft([m0413a, m0413b]);
 
             let m0512a = SimdVector::fmadd(data[0], self.twiddles_re[4], x1p16);
             let m0512a = SimdVector::fmadd(m0512a, self.twiddles_re[6], x2p15);
@@ -1071,7 +1071,7 @@ impl ColumnFft<FcmaVector32, 17> for FcmaF32ColumnButterfly17 {
             let m0512b = FcmaVector::nmadd_rotate90(m0512b, self.twiddles_im[3], x6m11);
             let m0512b = FcmaVector::fmadd_rotate90(m0512b, self.twiddles_im[0], x7m10);
             let m0512b = FcmaVector::fmadd_rotate90(m0512b, self.twiddles_im[5], x8m9);
-            let [y05, y12] = self.bf2.column_fft([m0512a, m0512b]);
+            let [y05, y12] = self.bf2.parallel_fft([m0512a, m0512b]);
 
             let m0611a = SimdVector::fmadd(data[0], self.twiddles_re[5], x1p16);
             let m0611a = SimdVector::fmadd(m0611a, self.twiddles_re[4], x2p15);
@@ -1089,7 +1089,7 @@ impl ColumnFft<FcmaVector32, 17> for FcmaF32ColumnButterfly17 {
             let m0611b = FcmaVector::fmadd_rotate90(m0611b, self.twiddles_im[1], x6m11);
             let m0611b = FcmaVector::fmadd_rotate90(m0611b, self.twiddles_im[7], x7m10);
             let m0611b = FcmaVector::nmadd_rotate90(m0611b, self.twiddles_im[2], x8m9);
-            let [y06, y11] = self.bf2.column_fft([m0611a, m0611b]);
+            let [y06, y11] = self.bf2.parallel_fft([m0611a, m0611b]);
 
             let m0710a = SimdVector::fmadd(data[0], self.twiddles_re[6], x1p16);
             let m0710a = SimdVector::fmadd(m0710a, self.twiddles_re[2], x2p15);
@@ -1107,7 +1107,7 @@ impl ColumnFft<FcmaVector32, 17> for FcmaF32ColumnButterfly17 {
             let m0710b = FcmaVector::fmadd_rotate90(m0710b, self.twiddles_im[7], x6m11);
             let m0710b = FcmaVector::nmadd_rotate90(m0710b, self.twiddles_im[1], x7m10);
             let m0710b = FcmaVector::fmadd_rotate90(m0710b, self.twiddles_im[4], x8m9);
-            let [y07, y10] = self.bf2.column_fft([m0710a, m0710b]);
+            let [y07, y10] = self.bf2.parallel_fft([m0710a, m0710b]);
 
             let m0809a = SimdVector::fmadd(data[0], self.twiddles_re[7], x1p16);
             let m0809a = SimdVector::fmadd(m0809a, self.twiddles_re[0], x2p15);
@@ -1125,7 +1125,7 @@ impl ColumnFft<FcmaVector32, 17> for FcmaF32ColumnButterfly17 {
             let m0809b = FcmaVector::nmadd_rotate90(m0809b, self.twiddles_im[2], x6m11);
             let m0809b = FcmaVector::fmadd_rotate90(m0809b, self.twiddles_im[4], x7m10);
             let m0809b = FcmaVector::nmadd_rotate90(m0809b, self.twiddles_im[3], x8m9);
-            let [y08, y09] = self.bf2.column_fft([m0809a, m0809b]);
+            let [y08, y09] = self.bf2.parallel_fft([m0809a, m0809b]);
 
 
             [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16]
@@ -1135,7 +1135,7 @@ impl ColumnFft<FcmaVector32, 17> for FcmaF32ColumnButterfly17 {
 
 pub struct FcmaF32Butterfly17<T> {
     direction: FftDirection,
-    column_fft: FcmaF32ColumnButterfly17,
+    parallel_fft: FcmaF32ParallelButterfly17,
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -1147,7 +1147,7 @@ impl<T: FftNum> FcmaF32Butterfly17<T> {
         assert_f32::<T>();
         Self {
             direction,
-            column_fft: FcmaF32ColumnButterfly17::new(direction),
+            parallel_fft: FcmaF32ParallelButterfly17::new(direction),
             _phantom: std::marker::PhantomData,
         }
     }
@@ -1156,7 +1156,7 @@ impl<T: FftNum> FcmaF32Butterfly17<T> {
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 });
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 } ); 
     }
@@ -1185,7 +1185,7 @@ impl<T: FftNum> FcmaF32Butterfly17<T> {
             extract_lo_hi_f32(input_packed[8], input_packed[16]),
         ];
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
 
         let out_packed = [
             extract_lo_lo_f32(out[0], out[1]),
@@ -1211,44 +1211,44 @@ impl<T: FftNum> FcmaF32Butterfly17<T> {
     }
 }
 
-pub struct FcmaF64ColumnButterfly17 {
-    bf2: FcmaF64ColumnButterfly2,
+pub struct FcmaF64ParallelButterfly17 {
+    bf2: FcmaF64ParallelButterfly2,
     twiddles_re: [FcmaVector64; 8],
     twiddles_im: [FcmaVector64; 8],
 }
-impl FcmaF64ColumnButterfly17 {
+impl FcmaF64ParallelButterfly17 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(17, direction);
         Self {
-            bf2: FcmaF64ColumnButterfly2::new(direction),
+            bf2: FcmaF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
     }
 }
-impl ColumnFft<FcmaVector64, 17> for FcmaF64ColumnButterfly17 {
+impl ParallelFft<FcmaVector64, 17> for FcmaF64ParallelButterfly17 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector64; 17]) -> [FcmaVector64; 17] {
+    fn parallel_fft(&self, data: [FcmaVector64; 17]) -> [FcmaVector64; 17] {
                 // Safety: The current machine must support the neon,fcma instruction set. We specified this invariant in the constructor.
         unsafe {
             let y00 = data[0];
-            let [x1p16, x1m16] = self.bf2.column_fft([data[1], data[16]]);
+            let [x1p16, x1m16] = self.bf2.parallel_fft([data[1], data[16]]);
             let y00 = SimdVector::add(y00, x1p16);
-            let [x2p15, x2m15] = self.bf2.column_fft([data[2], data[15]]);
+            let [x2p15, x2m15] = self.bf2.parallel_fft([data[2], data[15]]);
             let y00 = SimdVector::add(y00, x2p15);
-            let [x3p14, x3m14] = self.bf2.column_fft([data[3], data[14]]);
+            let [x3p14, x3m14] = self.bf2.parallel_fft([data[3], data[14]]);
             let y00 = SimdVector::add(y00, x3p14);
-            let [x4p13, x4m13] = self.bf2.column_fft([data[4], data[13]]);
+            let [x4p13, x4m13] = self.bf2.parallel_fft([data[4], data[13]]);
             let y00 = SimdVector::add(y00, x4p13);
-            let [x5p12, x5m12] = self.bf2.column_fft([data[5], data[12]]);
+            let [x5p12, x5m12] = self.bf2.parallel_fft([data[5], data[12]]);
             let y00 = SimdVector::add(y00, x5p12);
-            let [x6p11, x6m11] = self.bf2.column_fft([data[6], data[11]]);
+            let [x6p11, x6m11] = self.bf2.parallel_fft([data[6], data[11]]);
             let y00 = SimdVector::add(y00, x6p11);
-            let [x7p10, x7m10] = self.bf2.column_fft([data[7], data[10]]);
+            let [x7p10, x7m10] = self.bf2.parallel_fft([data[7], data[10]]);
             let y00 = SimdVector::add(y00, x7p10);
-            let [x8p9, x8m9] = self.bf2.column_fft([data[8], data[9]]);
+            let [x8p9, x8m9] = self.bf2.parallel_fft([data[8], data[9]]);
             let y00 = SimdVector::add(y00, x8p9);
 
             let m0116a = SimdVector::fmadd(data[0], self.twiddles_re[0], x1p16);
@@ -1267,7 +1267,7 @@ impl ColumnFft<FcmaVector64, 17> for FcmaF64ColumnButterfly17 {
             let m0116b = FcmaVector::fmadd_rotate90(m0116b, self.twiddles_im[5], x6m11);
             let m0116b = FcmaVector::fmadd_rotate90(m0116b, self.twiddles_im[6], x7m10);
             let m0116b = FcmaVector::fmadd_rotate90(m0116b, self.twiddles_im[7], x8m9);
-            let [y01, y16] = self.bf2.column_fft([m0116a, m0116b]);
+            let [y01, y16] = self.bf2.parallel_fft([m0116a, m0116b]);
 
             let m0215a = SimdVector::fmadd(data[0], self.twiddles_re[1], x1p16);
             let m0215a = SimdVector::fmadd(m0215a, self.twiddles_re[3], x2p15);
@@ -1285,7 +1285,7 @@ impl ColumnFft<FcmaVector64, 17> for FcmaF64ColumnButterfly17 {
             let m0215b = FcmaVector::nmadd_rotate90(m0215b, self.twiddles_im[4], x6m11);
             let m0215b = FcmaVector::nmadd_rotate90(m0215b, self.twiddles_im[2], x7m10);
             let m0215b = FcmaVector::nmadd_rotate90(m0215b, self.twiddles_im[0], x8m9);
-            let [y02, y15] = self.bf2.column_fft([m0215a, m0215b]);
+            let [y02, y15] = self.bf2.parallel_fft([m0215a, m0215b]);
 
             let m0314a = SimdVector::fmadd(data[0], self.twiddles_re[2], x1p16);
             let m0314a = SimdVector::fmadd(m0314a, self.twiddles_re[5], x2p15);
@@ -1303,7 +1303,7 @@ impl ColumnFft<FcmaVector64, 17> for FcmaF64ColumnButterfly17 {
             let m0314b = FcmaVector::fmadd_rotate90(m0314b, self.twiddles_im[0], x6m11);
             let m0314b = FcmaVector::fmadd_rotate90(m0314b, self.twiddles_im[3], x7m10);
             let m0314b = FcmaVector::fmadd_rotate90(m0314b, self.twiddles_im[6], x8m9);
-            let [y03, y14] = self.bf2.column_fft([m0314a, m0314b]);
+            let [y03, y14] = self.bf2.parallel_fft([m0314a, m0314b]);
 
             let m0413a = SimdVector::fmadd(data[0], self.twiddles_re[3], x1p16);
             let m0413a = SimdVector::fmadd(m0413a, self.twiddles_re[7], x2p15);
@@ -1321,7 +1321,7 @@ impl ColumnFft<FcmaVector64, 17> for FcmaF64ColumnButterfly17 {
             let m0413b = FcmaVector::fmadd_rotate90(m0413b, self.twiddles_im[6], x6m11);
             let m0413b = FcmaVector::nmadd_rotate90(m0413b, self.twiddles_im[5], x7m10);
             let m0413b = FcmaVector::nmadd_rotate90(m0413b, self.twiddles_im[1], x8m9);
-            let [y04, y13] = self.bf2.column_fft([m0413a, m0413b]);
+            let [y04, y13] = self.bf2.parallel_fft([m0413a, m0413b]);
 
             let m0512a = SimdVector::fmadd(data[0], self.twiddles_re[4], x1p16);
             let m0512a = SimdVector::fmadd(m0512a, self.twiddles_re[6], x2p15);
@@ -1339,7 +1339,7 @@ impl ColumnFft<FcmaVector64, 17> for FcmaF64ColumnButterfly17 {
             let m0512b = FcmaVector::nmadd_rotate90(m0512b, self.twiddles_im[3], x6m11);
             let m0512b = FcmaVector::fmadd_rotate90(m0512b, self.twiddles_im[0], x7m10);
             let m0512b = FcmaVector::fmadd_rotate90(m0512b, self.twiddles_im[5], x8m9);
-            let [y05, y12] = self.bf2.column_fft([m0512a, m0512b]);
+            let [y05, y12] = self.bf2.parallel_fft([m0512a, m0512b]);
 
             let m0611a = SimdVector::fmadd(data[0], self.twiddles_re[5], x1p16);
             let m0611a = SimdVector::fmadd(m0611a, self.twiddles_re[4], x2p15);
@@ -1357,7 +1357,7 @@ impl ColumnFft<FcmaVector64, 17> for FcmaF64ColumnButterfly17 {
             let m0611b = FcmaVector::fmadd_rotate90(m0611b, self.twiddles_im[1], x6m11);
             let m0611b = FcmaVector::fmadd_rotate90(m0611b, self.twiddles_im[7], x7m10);
             let m0611b = FcmaVector::nmadd_rotate90(m0611b, self.twiddles_im[2], x8m9);
-            let [y06, y11] = self.bf2.column_fft([m0611a, m0611b]);
+            let [y06, y11] = self.bf2.parallel_fft([m0611a, m0611b]);
 
             let m0710a = SimdVector::fmadd(data[0], self.twiddles_re[6], x1p16);
             let m0710a = SimdVector::fmadd(m0710a, self.twiddles_re[2], x2p15);
@@ -1375,7 +1375,7 @@ impl ColumnFft<FcmaVector64, 17> for FcmaF64ColumnButterfly17 {
             let m0710b = FcmaVector::fmadd_rotate90(m0710b, self.twiddles_im[7], x6m11);
             let m0710b = FcmaVector::nmadd_rotate90(m0710b, self.twiddles_im[1], x7m10);
             let m0710b = FcmaVector::fmadd_rotate90(m0710b, self.twiddles_im[4], x8m9);
-            let [y07, y10] = self.bf2.column_fft([m0710a, m0710b]);
+            let [y07, y10] = self.bf2.parallel_fft([m0710a, m0710b]);
 
             let m0809a = SimdVector::fmadd(data[0], self.twiddles_re[7], x1p16);
             let m0809a = SimdVector::fmadd(m0809a, self.twiddles_re[0], x2p15);
@@ -1393,7 +1393,7 @@ impl ColumnFft<FcmaVector64, 17> for FcmaF64ColumnButterfly17 {
             let m0809b = FcmaVector::nmadd_rotate90(m0809b, self.twiddles_im[2], x6m11);
             let m0809b = FcmaVector::fmadd_rotate90(m0809b, self.twiddles_im[4], x7m10);
             let m0809b = FcmaVector::nmadd_rotate90(m0809b, self.twiddles_im[3], x8m9);
-            let [y08, y09] = self.bf2.column_fft([m0809a, m0809b]);
+            let [y08, y09] = self.bf2.parallel_fft([m0809a, m0809b]);
 
 
             [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16]
@@ -1403,7 +1403,7 @@ impl ColumnFft<FcmaVector64, 17> for FcmaF64ColumnButterfly17 {
 
 pub struct FcmaF64Butterfly17<T> {
     direction: FftDirection,
-    column_fft: FcmaF64ColumnButterfly17,
+    parallel_fft: FcmaF64ParallelButterfly17,
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -1415,7 +1415,7 @@ impl<T: FftNum> FcmaF64Butterfly17<T> {
         assert_f64::<T>();
         unsafe {Self {
             direction,
-            column_fft: FcmaF64ColumnButterfly17::new(direction),
+            parallel_fft: FcmaF64ParallelButterfly17::new(direction),
             _phantom: std::marker::PhantomData,
         }}
     }
@@ -1424,52 +1424,52 @@ impl<T: FftNum> FcmaF64Butterfly17<T> {
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 });
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 });   
     }
 }
 
-pub struct FcmaF32ColumnButterfly19 {
-    bf2: FcmaF32ColumnButterfly2,
+pub struct FcmaF32ParallelButterfly19 {
+    bf2: FcmaF32ParallelButterfly2,
     twiddles_re: [FcmaVector32; 9],
     twiddles_im: [FcmaVector32; 9],
 }
-impl FcmaF32ColumnButterfly19 {
+impl FcmaF32ParallelButterfly19 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(19, direction);
         Self {
-            bf2: FcmaF32ColumnButterfly2::new(direction),
+            bf2: FcmaF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
     }
 }
-impl ColumnFft<FcmaVector32, 19> for FcmaF32ColumnButterfly19 {
+impl ParallelFft<FcmaVector32, 19> for FcmaF32ParallelButterfly19 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector32; 19]) -> [FcmaVector32; 19] {
+    fn parallel_fft(&self, data: [FcmaVector32; 19]) -> [FcmaVector32; 19] {
                 // Safety: The current machine must support the neon,fcma instruction set. We specified this invariant in the constructor.
         unsafe {
             let y00 = data[0];
-            let [x1p18, x1m18] = self.bf2.column_fft([data[1], data[18]]);
+            let [x1p18, x1m18] = self.bf2.parallel_fft([data[1], data[18]]);
             let y00 = SimdVector::add(y00, x1p18);
-            let [x2p17, x2m17] = self.bf2.column_fft([data[2], data[17]]);
+            let [x2p17, x2m17] = self.bf2.parallel_fft([data[2], data[17]]);
             let y00 = SimdVector::add(y00, x2p17);
-            let [x3p16, x3m16] = self.bf2.column_fft([data[3], data[16]]);
+            let [x3p16, x3m16] = self.bf2.parallel_fft([data[3], data[16]]);
             let y00 = SimdVector::add(y00, x3p16);
-            let [x4p15, x4m15] = self.bf2.column_fft([data[4], data[15]]);
+            let [x4p15, x4m15] = self.bf2.parallel_fft([data[4], data[15]]);
             let y00 = SimdVector::add(y00, x4p15);
-            let [x5p14, x5m14] = self.bf2.column_fft([data[5], data[14]]);
+            let [x5p14, x5m14] = self.bf2.parallel_fft([data[5], data[14]]);
             let y00 = SimdVector::add(y00, x5p14);
-            let [x6p13, x6m13] = self.bf2.column_fft([data[6], data[13]]);
+            let [x6p13, x6m13] = self.bf2.parallel_fft([data[6], data[13]]);
             let y00 = SimdVector::add(y00, x6p13);
-            let [x7p12, x7m12] = self.bf2.column_fft([data[7], data[12]]);
+            let [x7p12, x7m12] = self.bf2.parallel_fft([data[7], data[12]]);
             let y00 = SimdVector::add(y00, x7p12);
-            let [x8p11, x8m11] = self.bf2.column_fft([data[8], data[11]]);
+            let [x8p11, x8m11] = self.bf2.parallel_fft([data[8], data[11]]);
             let y00 = SimdVector::add(y00, x8p11);
-            let [x9p10, x9m10] = self.bf2.column_fft([data[9], data[10]]);
+            let [x9p10, x9m10] = self.bf2.parallel_fft([data[9], data[10]]);
             let y00 = SimdVector::add(y00, x9p10);
 
             let m0118a = SimdVector::fmadd(data[0], self.twiddles_re[0], x1p18);
@@ -1490,7 +1490,7 @@ impl ColumnFft<FcmaVector32, 19> for FcmaF32ColumnButterfly19 {
             let m0118b = FcmaVector::fmadd_rotate90(m0118b, self.twiddles_im[6], x7m12);
             let m0118b = FcmaVector::fmadd_rotate90(m0118b, self.twiddles_im[7], x8m11);
             let m0118b = FcmaVector::fmadd_rotate90(m0118b, self.twiddles_im[8], x9m10);
-            let [y01, y18] = self.bf2.column_fft([m0118a, m0118b]);
+            let [y01, y18] = self.bf2.parallel_fft([m0118a, m0118b]);
 
             let m0217a = SimdVector::fmadd(data[0], self.twiddles_re[1], x1p18);
             let m0217a = SimdVector::fmadd(m0217a, self.twiddles_re[3], x2p17);
@@ -1510,7 +1510,7 @@ impl ColumnFft<FcmaVector32, 19> for FcmaF32ColumnButterfly19 {
             let m0217b = FcmaVector::nmadd_rotate90(m0217b, self.twiddles_im[4], x7m12);
             let m0217b = FcmaVector::nmadd_rotate90(m0217b, self.twiddles_im[2], x8m11);
             let m0217b = FcmaVector::nmadd_rotate90(m0217b, self.twiddles_im[0], x9m10);
-            let [y02, y17] = self.bf2.column_fft([m0217a, m0217b]);
+            let [y02, y17] = self.bf2.parallel_fft([m0217a, m0217b]);
 
             let m0316a = SimdVector::fmadd(data[0], self.twiddles_re[2], x1p18);
             let m0316a = SimdVector::fmadd(m0316a, self.twiddles_re[5], x2p17);
@@ -1530,7 +1530,7 @@ impl ColumnFft<FcmaVector32, 19> for FcmaF32ColumnButterfly19 {
             let m0316b = FcmaVector::fmadd_rotate90(m0316b, self.twiddles_im[1], x7m12);
             let m0316b = FcmaVector::fmadd_rotate90(m0316b, self.twiddles_im[4], x8m11);
             let m0316b = FcmaVector::fmadd_rotate90(m0316b, self.twiddles_im[7], x9m10);
-            let [y03, y16] = self.bf2.column_fft([m0316a, m0316b]);
+            let [y03, y16] = self.bf2.parallel_fft([m0316a, m0316b]);
 
             let m0415a = SimdVector::fmadd(data[0], self.twiddles_re[3], x1p18);
             let m0415a = SimdVector::fmadd(m0415a, self.twiddles_re[7], x2p17);
@@ -1550,7 +1550,7 @@ impl ColumnFft<FcmaVector32, 19> for FcmaF32ColumnButterfly19 {
             let m0415b = FcmaVector::fmadd_rotate90(m0415b, self.twiddles_im[8], x7m12);
             let m0415b = FcmaVector::nmadd_rotate90(m0415b, self.twiddles_im[5], x8m11);
             let m0415b = FcmaVector::nmadd_rotate90(m0415b, self.twiddles_im[1], x9m10);
-            let [y04, y15] = self.bf2.column_fft([m0415a, m0415b]);
+            let [y04, y15] = self.bf2.parallel_fft([m0415a, m0415b]);
 
             let m0514a = SimdVector::fmadd(data[0], self.twiddles_re[4], x1p18);
             let m0514a = SimdVector::fmadd(m0514a, self.twiddles_re[8], x2p17);
@@ -1570,7 +1570,7 @@ impl ColumnFft<FcmaVector32, 19> for FcmaF32ColumnButterfly19 {
             let m0514b = FcmaVector::nmadd_rotate90(m0514b, self.twiddles_im[2], x7m12);
             let m0514b = FcmaVector::fmadd_rotate90(m0514b, self.twiddles_im[1], x8m11);
             let m0514b = FcmaVector::fmadd_rotate90(m0514b, self.twiddles_im[6], x9m10);
-            let [y05, y14] = self.bf2.column_fft([m0514a, m0514b]);
+            let [y05, y14] = self.bf2.parallel_fft([m0514a, m0514b]);
 
             let m0613a = SimdVector::fmadd(data[0], self.twiddles_re[5], x1p18);
             let m0613a = SimdVector::fmadd(m0613a, self.twiddles_re[6], x2p17);
@@ -1590,7 +1590,7 @@ impl ColumnFft<FcmaVector32, 19> for FcmaF32ColumnButterfly19 {
             let m0613b = FcmaVector::fmadd_rotate90(m0613b, self.twiddles_im[3], x7m12);
             let m0613b = FcmaVector::nmadd_rotate90(m0613b, self.twiddles_im[8], x8m11);
             let m0613b = FcmaVector::nmadd_rotate90(m0613b, self.twiddles_im[2], x9m10);
-            let [y06, y13] = self.bf2.column_fft([m0613a, m0613b]);
+            let [y06, y13] = self.bf2.parallel_fft([m0613a, m0613b]);
 
             let m0712a = SimdVector::fmadd(data[0], self.twiddles_re[6], x1p18);
             let m0712a = SimdVector::fmadd(m0712a, self.twiddles_re[4], x2p17);
@@ -1610,7 +1610,7 @@ impl ColumnFft<FcmaVector32, 19> for FcmaF32ColumnButterfly19 {
             let m0712b = FcmaVector::nmadd_rotate90(m0712b, self.twiddles_im[7], x7m12);
             let m0712b = FcmaVector::nmadd_rotate90(m0712b, self.twiddles_im[0], x8m11);
             let m0712b = FcmaVector::fmadd_rotate90(m0712b, self.twiddles_im[5], x9m10);
-            let [y07, y12] = self.bf2.column_fft([m0712a, m0712b]);
+            let [y07, y12] = self.bf2.parallel_fft([m0712a, m0712b]);
 
             let m0811a = SimdVector::fmadd(data[0], self.twiddles_re[7], x1p18);
             let m0811a = SimdVector::fmadd(m0811a, self.twiddles_re[2], x2p17);
@@ -1630,7 +1630,7 @@ impl ColumnFft<FcmaVector32, 19> for FcmaF32ColumnButterfly19 {
             let m0811b = FcmaVector::nmadd_rotate90(m0811b, self.twiddles_im[0], x7m12);
             let m0811b = FcmaVector::fmadd_rotate90(m0811b, self.twiddles_im[6], x8m11);
             let m0811b = FcmaVector::nmadd_rotate90(m0811b, self.twiddles_im[3], x9m10);
-            let [y08, y11] = self.bf2.column_fft([m0811a, m0811b]);
+            let [y08, y11] = self.bf2.parallel_fft([m0811a, m0811b]);
 
             let m0910a = SimdVector::fmadd(data[0], self.twiddles_re[8], x1p18);
             let m0910a = SimdVector::fmadd(m0910a, self.twiddles_re[0], x2p17);
@@ -1650,7 +1650,7 @@ impl ColumnFft<FcmaVector32, 19> for FcmaF32ColumnButterfly19 {
             let m0910b = FcmaVector::fmadd_rotate90(m0910b, self.twiddles_im[5], x7m12);
             let m0910b = FcmaVector::nmadd_rotate90(m0910b, self.twiddles_im[3], x8m11);
             let m0910b = FcmaVector::fmadd_rotate90(m0910b, self.twiddles_im[4], x9m10);
-            let [y09, y10] = self.bf2.column_fft([m0910a, m0910b]);
+            let [y09, y10] = self.bf2.parallel_fft([m0910a, m0910b]);
 
 
             [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18]
@@ -1660,7 +1660,7 @@ impl ColumnFft<FcmaVector32, 19> for FcmaF32ColumnButterfly19 {
 
 pub struct FcmaF32Butterfly19<T> {
     direction: FftDirection,
-    column_fft: FcmaF32ColumnButterfly19,
+    parallel_fft: FcmaF32ParallelButterfly19,
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -1672,7 +1672,7 @@ impl<T: FftNum> FcmaF32Butterfly19<T> {
         assert_f32::<T>();
         Self {
             direction,
-            column_fft: FcmaF32ColumnButterfly19::new(direction),
+            parallel_fft: FcmaF32ParallelButterfly19::new(direction),
             _phantom: std::marker::PhantomData,
         }
     }
@@ -1681,7 +1681,7 @@ impl<T: FftNum> FcmaF32Butterfly19<T> {
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 });
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 } ); 
     }
@@ -1712,7 +1712,7 @@ impl<T: FftNum> FcmaF32Butterfly19<T> {
             extract_lo_hi_f32(input_packed[9], input_packed[18]),
         ];
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
 
         let out_packed = [
             extract_lo_lo_f32(out[0], out[1]),
@@ -1740,46 +1740,46 @@ impl<T: FftNum> FcmaF32Butterfly19<T> {
     }
 }
 
-pub struct FcmaF64ColumnButterfly19 {
-    bf2: FcmaF64ColumnButterfly2,
+pub struct FcmaF64ParallelButterfly19 {
+    bf2: FcmaF64ParallelButterfly2,
     twiddles_re: [FcmaVector64; 9],
     twiddles_im: [FcmaVector64; 9],
 }
-impl FcmaF64ColumnButterfly19 {
+impl FcmaF64ParallelButterfly19 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(19, direction);
         Self {
-            bf2: FcmaF64ColumnButterfly2::new(direction),
+            bf2: FcmaF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
     }
 }
-impl ColumnFft<FcmaVector64, 19> for FcmaF64ColumnButterfly19 {
+impl ParallelFft<FcmaVector64, 19> for FcmaF64ParallelButterfly19 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector64; 19]) -> [FcmaVector64; 19] {
+    fn parallel_fft(&self, data: [FcmaVector64; 19]) -> [FcmaVector64; 19] {
                 // Safety: The current machine must support the neon,fcma instruction set. We specified this invariant in the constructor.
         unsafe {
             let y00 = data[0];
-            let [x1p18, x1m18] = self.bf2.column_fft([data[1], data[18]]);
+            let [x1p18, x1m18] = self.bf2.parallel_fft([data[1], data[18]]);
             let y00 = SimdVector::add(y00, x1p18);
-            let [x2p17, x2m17] = self.bf2.column_fft([data[2], data[17]]);
+            let [x2p17, x2m17] = self.bf2.parallel_fft([data[2], data[17]]);
             let y00 = SimdVector::add(y00, x2p17);
-            let [x3p16, x3m16] = self.bf2.column_fft([data[3], data[16]]);
+            let [x3p16, x3m16] = self.bf2.parallel_fft([data[3], data[16]]);
             let y00 = SimdVector::add(y00, x3p16);
-            let [x4p15, x4m15] = self.bf2.column_fft([data[4], data[15]]);
+            let [x4p15, x4m15] = self.bf2.parallel_fft([data[4], data[15]]);
             let y00 = SimdVector::add(y00, x4p15);
-            let [x5p14, x5m14] = self.bf2.column_fft([data[5], data[14]]);
+            let [x5p14, x5m14] = self.bf2.parallel_fft([data[5], data[14]]);
             let y00 = SimdVector::add(y00, x5p14);
-            let [x6p13, x6m13] = self.bf2.column_fft([data[6], data[13]]);
+            let [x6p13, x6m13] = self.bf2.parallel_fft([data[6], data[13]]);
             let y00 = SimdVector::add(y00, x6p13);
-            let [x7p12, x7m12] = self.bf2.column_fft([data[7], data[12]]);
+            let [x7p12, x7m12] = self.bf2.parallel_fft([data[7], data[12]]);
             let y00 = SimdVector::add(y00, x7p12);
-            let [x8p11, x8m11] = self.bf2.column_fft([data[8], data[11]]);
+            let [x8p11, x8m11] = self.bf2.parallel_fft([data[8], data[11]]);
             let y00 = SimdVector::add(y00, x8p11);
-            let [x9p10, x9m10] = self.bf2.column_fft([data[9], data[10]]);
+            let [x9p10, x9m10] = self.bf2.parallel_fft([data[9], data[10]]);
             let y00 = SimdVector::add(y00, x9p10);
 
             let m0118a = SimdVector::fmadd(data[0], self.twiddles_re[0], x1p18);
@@ -1800,7 +1800,7 @@ impl ColumnFft<FcmaVector64, 19> for FcmaF64ColumnButterfly19 {
             let m0118b = FcmaVector::fmadd_rotate90(m0118b, self.twiddles_im[6], x7m12);
             let m0118b = FcmaVector::fmadd_rotate90(m0118b, self.twiddles_im[7], x8m11);
             let m0118b = FcmaVector::fmadd_rotate90(m0118b, self.twiddles_im[8], x9m10);
-            let [y01, y18] = self.bf2.column_fft([m0118a, m0118b]);
+            let [y01, y18] = self.bf2.parallel_fft([m0118a, m0118b]);
 
             let m0217a = SimdVector::fmadd(data[0], self.twiddles_re[1], x1p18);
             let m0217a = SimdVector::fmadd(m0217a, self.twiddles_re[3], x2p17);
@@ -1820,7 +1820,7 @@ impl ColumnFft<FcmaVector64, 19> for FcmaF64ColumnButterfly19 {
             let m0217b = FcmaVector::nmadd_rotate90(m0217b, self.twiddles_im[4], x7m12);
             let m0217b = FcmaVector::nmadd_rotate90(m0217b, self.twiddles_im[2], x8m11);
             let m0217b = FcmaVector::nmadd_rotate90(m0217b, self.twiddles_im[0], x9m10);
-            let [y02, y17] = self.bf2.column_fft([m0217a, m0217b]);
+            let [y02, y17] = self.bf2.parallel_fft([m0217a, m0217b]);
 
             let m0316a = SimdVector::fmadd(data[0], self.twiddles_re[2], x1p18);
             let m0316a = SimdVector::fmadd(m0316a, self.twiddles_re[5], x2p17);
@@ -1840,7 +1840,7 @@ impl ColumnFft<FcmaVector64, 19> for FcmaF64ColumnButterfly19 {
             let m0316b = FcmaVector::fmadd_rotate90(m0316b, self.twiddles_im[1], x7m12);
             let m0316b = FcmaVector::fmadd_rotate90(m0316b, self.twiddles_im[4], x8m11);
             let m0316b = FcmaVector::fmadd_rotate90(m0316b, self.twiddles_im[7], x9m10);
-            let [y03, y16] = self.bf2.column_fft([m0316a, m0316b]);
+            let [y03, y16] = self.bf2.parallel_fft([m0316a, m0316b]);
 
             let m0415a = SimdVector::fmadd(data[0], self.twiddles_re[3], x1p18);
             let m0415a = SimdVector::fmadd(m0415a, self.twiddles_re[7], x2p17);
@@ -1860,7 +1860,7 @@ impl ColumnFft<FcmaVector64, 19> for FcmaF64ColumnButterfly19 {
             let m0415b = FcmaVector::fmadd_rotate90(m0415b, self.twiddles_im[8], x7m12);
             let m0415b = FcmaVector::nmadd_rotate90(m0415b, self.twiddles_im[5], x8m11);
             let m0415b = FcmaVector::nmadd_rotate90(m0415b, self.twiddles_im[1], x9m10);
-            let [y04, y15] = self.bf2.column_fft([m0415a, m0415b]);
+            let [y04, y15] = self.bf2.parallel_fft([m0415a, m0415b]);
 
             let m0514a = SimdVector::fmadd(data[0], self.twiddles_re[4], x1p18);
             let m0514a = SimdVector::fmadd(m0514a, self.twiddles_re[8], x2p17);
@@ -1880,7 +1880,7 @@ impl ColumnFft<FcmaVector64, 19> for FcmaF64ColumnButterfly19 {
             let m0514b = FcmaVector::nmadd_rotate90(m0514b, self.twiddles_im[2], x7m12);
             let m0514b = FcmaVector::fmadd_rotate90(m0514b, self.twiddles_im[1], x8m11);
             let m0514b = FcmaVector::fmadd_rotate90(m0514b, self.twiddles_im[6], x9m10);
-            let [y05, y14] = self.bf2.column_fft([m0514a, m0514b]);
+            let [y05, y14] = self.bf2.parallel_fft([m0514a, m0514b]);
 
             let m0613a = SimdVector::fmadd(data[0], self.twiddles_re[5], x1p18);
             let m0613a = SimdVector::fmadd(m0613a, self.twiddles_re[6], x2p17);
@@ -1900,7 +1900,7 @@ impl ColumnFft<FcmaVector64, 19> for FcmaF64ColumnButterfly19 {
             let m0613b = FcmaVector::fmadd_rotate90(m0613b, self.twiddles_im[3], x7m12);
             let m0613b = FcmaVector::nmadd_rotate90(m0613b, self.twiddles_im[8], x8m11);
             let m0613b = FcmaVector::nmadd_rotate90(m0613b, self.twiddles_im[2], x9m10);
-            let [y06, y13] = self.bf2.column_fft([m0613a, m0613b]);
+            let [y06, y13] = self.bf2.parallel_fft([m0613a, m0613b]);
 
             let m0712a = SimdVector::fmadd(data[0], self.twiddles_re[6], x1p18);
             let m0712a = SimdVector::fmadd(m0712a, self.twiddles_re[4], x2p17);
@@ -1920,7 +1920,7 @@ impl ColumnFft<FcmaVector64, 19> for FcmaF64ColumnButterfly19 {
             let m0712b = FcmaVector::nmadd_rotate90(m0712b, self.twiddles_im[7], x7m12);
             let m0712b = FcmaVector::nmadd_rotate90(m0712b, self.twiddles_im[0], x8m11);
             let m0712b = FcmaVector::fmadd_rotate90(m0712b, self.twiddles_im[5], x9m10);
-            let [y07, y12] = self.bf2.column_fft([m0712a, m0712b]);
+            let [y07, y12] = self.bf2.parallel_fft([m0712a, m0712b]);
 
             let m0811a = SimdVector::fmadd(data[0], self.twiddles_re[7], x1p18);
             let m0811a = SimdVector::fmadd(m0811a, self.twiddles_re[2], x2p17);
@@ -1940,7 +1940,7 @@ impl ColumnFft<FcmaVector64, 19> for FcmaF64ColumnButterfly19 {
             let m0811b = FcmaVector::nmadd_rotate90(m0811b, self.twiddles_im[0], x7m12);
             let m0811b = FcmaVector::fmadd_rotate90(m0811b, self.twiddles_im[6], x8m11);
             let m0811b = FcmaVector::nmadd_rotate90(m0811b, self.twiddles_im[3], x9m10);
-            let [y08, y11] = self.bf2.column_fft([m0811a, m0811b]);
+            let [y08, y11] = self.bf2.parallel_fft([m0811a, m0811b]);
 
             let m0910a = SimdVector::fmadd(data[0], self.twiddles_re[8], x1p18);
             let m0910a = SimdVector::fmadd(m0910a, self.twiddles_re[0], x2p17);
@@ -1960,7 +1960,7 @@ impl ColumnFft<FcmaVector64, 19> for FcmaF64ColumnButterfly19 {
             let m0910b = FcmaVector::fmadd_rotate90(m0910b, self.twiddles_im[5], x7m12);
             let m0910b = FcmaVector::nmadd_rotate90(m0910b, self.twiddles_im[3], x8m11);
             let m0910b = FcmaVector::fmadd_rotate90(m0910b, self.twiddles_im[4], x9m10);
-            let [y09, y10] = self.bf2.column_fft([m0910a, m0910b]);
+            let [y09, y10] = self.bf2.parallel_fft([m0910a, m0910b]);
 
 
             [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18]
@@ -1970,7 +1970,7 @@ impl ColumnFft<FcmaVector64, 19> for FcmaF64ColumnButterfly19 {
 
 pub struct FcmaF64Butterfly19<T> {
     direction: FftDirection,
-    column_fft: FcmaF64ColumnButterfly19,
+    parallel_fft: FcmaF64ParallelButterfly19,
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -1982,7 +1982,7 @@ impl<T: FftNum> FcmaF64Butterfly19<T> {
         assert_f64::<T>();
         unsafe {Self {
             direction,
-            column_fft: FcmaF64ColumnButterfly19::new(direction),
+            parallel_fft: FcmaF64ParallelButterfly19::new(direction),
             _phantom: std::marker::PhantomData,
         }}
     }
@@ -1991,56 +1991,56 @@ impl<T: FftNum> FcmaF64Butterfly19<T> {
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 });
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 });   
     }
 }
 
-pub struct FcmaF32ColumnButterfly23 {
-    bf2: FcmaF32ColumnButterfly2,
+pub struct FcmaF32ParallelButterfly23 {
+    bf2: FcmaF32ParallelButterfly2,
     twiddles_re: [FcmaVector32; 11],
     twiddles_im: [FcmaVector32; 11],
 }
-impl FcmaF32ColumnButterfly23 {
+impl FcmaF32ParallelButterfly23 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(23, direction);
         Self {
-            bf2: FcmaF32ColumnButterfly2::new(direction),
+            bf2: FcmaF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
     }
 }
-impl ColumnFft<FcmaVector32, 23> for FcmaF32ColumnButterfly23 {
+impl ParallelFft<FcmaVector32, 23> for FcmaF32ParallelButterfly23 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector32; 23]) -> [FcmaVector32; 23] {
+    fn parallel_fft(&self, data: [FcmaVector32; 23]) -> [FcmaVector32; 23] {
                 // Safety: The current machine must support the neon,fcma instruction set. We specified this invariant in the constructor.
         unsafe {
             let y00 = data[0];
-            let [x1p22, x1m22] = self.bf2.column_fft([data[1], data[22]]);
+            let [x1p22, x1m22] = self.bf2.parallel_fft([data[1], data[22]]);
             let y00 = SimdVector::add(y00, x1p22);
-            let [x2p21, x2m21] = self.bf2.column_fft([data[2], data[21]]);
+            let [x2p21, x2m21] = self.bf2.parallel_fft([data[2], data[21]]);
             let y00 = SimdVector::add(y00, x2p21);
-            let [x3p20, x3m20] = self.bf2.column_fft([data[3], data[20]]);
+            let [x3p20, x3m20] = self.bf2.parallel_fft([data[3], data[20]]);
             let y00 = SimdVector::add(y00, x3p20);
-            let [x4p19, x4m19] = self.bf2.column_fft([data[4], data[19]]);
+            let [x4p19, x4m19] = self.bf2.parallel_fft([data[4], data[19]]);
             let y00 = SimdVector::add(y00, x4p19);
-            let [x5p18, x5m18] = self.bf2.column_fft([data[5], data[18]]);
+            let [x5p18, x5m18] = self.bf2.parallel_fft([data[5], data[18]]);
             let y00 = SimdVector::add(y00, x5p18);
-            let [x6p17, x6m17] = self.bf2.column_fft([data[6], data[17]]);
+            let [x6p17, x6m17] = self.bf2.parallel_fft([data[6], data[17]]);
             let y00 = SimdVector::add(y00, x6p17);
-            let [x7p16, x7m16] = self.bf2.column_fft([data[7], data[16]]);
+            let [x7p16, x7m16] = self.bf2.parallel_fft([data[7], data[16]]);
             let y00 = SimdVector::add(y00, x7p16);
-            let [x8p15, x8m15] = self.bf2.column_fft([data[8], data[15]]);
+            let [x8p15, x8m15] = self.bf2.parallel_fft([data[8], data[15]]);
             let y00 = SimdVector::add(y00, x8p15);
-            let [x9p14, x9m14] = self.bf2.column_fft([data[9], data[14]]);
+            let [x9p14, x9m14] = self.bf2.parallel_fft([data[9], data[14]]);
             let y00 = SimdVector::add(y00, x9p14);
-            let [x10p13, x10m13] = self.bf2.column_fft([data[10], data[13]]);
+            let [x10p13, x10m13] = self.bf2.parallel_fft([data[10], data[13]]);
             let y00 = SimdVector::add(y00, x10p13);
-            let [x11p12, x11m12] = self.bf2.column_fft([data[11], data[12]]);
+            let [x11p12, x11m12] = self.bf2.parallel_fft([data[11], data[12]]);
             let y00 = SimdVector::add(y00, x11p12);
 
             let m0122a = SimdVector::fmadd(data[0], self.twiddles_re[0], x1p22);
@@ -2065,7 +2065,7 @@ impl ColumnFft<FcmaVector32, 23> for FcmaF32ColumnButterfly23 {
             let m0122b = FcmaVector::fmadd_rotate90(m0122b, self.twiddles_im[8], x9m14);
             let m0122b = FcmaVector::fmadd_rotate90(m0122b, self.twiddles_im[9], x10m13);
             let m0122b = FcmaVector::fmadd_rotate90(m0122b, self.twiddles_im[10], x11m12);
-            let [y01, y22] = self.bf2.column_fft([m0122a, m0122b]);
+            let [y01, y22] = self.bf2.parallel_fft([m0122a, m0122b]);
 
             let m0221a = SimdVector::fmadd(data[0], self.twiddles_re[1], x1p22);
             let m0221a = SimdVector::fmadd(m0221a, self.twiddles_re[3], x2p21);
@@ -2089,7 +2089,7 @@ impl ColumnFft<FcmaVector32, 23> for FcmaF32ColumnButterfly23 {
             let m0221b = FcmaVector::nmadd_rotate90(m0221b, self.twiddles_im[4], x9m14);
             let m0221b = FcmaVector::nmadd_rotate90(m0221b, self.twiddles_im[2], x10m13);
             let m0221b = FcmaVector::nmadd_rotate90(m0221b, self.twiddles_im[0], x11m12);
-            let [y02, y21] = self.bf2.column_fft([m0221a, m0221b]);
+            let [y02, y21] = self.bf2.parallel_fft([m0221a, m0221b]);
 
             let m0320a = SimdVector::fmadd(data[0], self.twiddles_re[2], x1p22);
             let m0320a = SimdVector::fmadd(m0320a, self.twiddles_re[5], x2p21);
@@ -2113,7 +2113,7 @@ impl ColumnFft<FcmaVector32, 23> for FcmaF32ColumnButterfly23 {
             let m0320b = FcmaVector::fmadd_rotate90(m0320b, self.twiddles_im[3], x9m14);
             let m0320b = FcmaVector::fmadd_rotate90(m0320b, self.twiddles_im[6], x10m13);
             let m0320b = FcmaVector::fmadd_rotate90(m0320b, self.twiddles_im[9], x11m12);
-            let [y03, y20] = self.bf2.column_fft([m0320a, m0320b]);
+            let [y03, y20] = self.bf2.parallel_fft([m0320a, m0320b]);
 
             let m0419a = SimdVector::fmadd(data[0], self.twiddles_re[3], x1p22);
             let m0419a = SimdVector::fmadd(m0419a, self.twiddles_re[7], x2p21);
@@ -2137,7 +2137,7 @@ impl ColumnFft<FcmaVector32, 23> for FcmaF32ColumnButterfly23 {
             let m0419b = FcmaVector::nmadd_rotate90(m0419b, self.twiddles_im[9], x9m14);
             let m0419b = FcmaVector::nmadd_rotate90(m0419b, self.twiddles_im[5], x10m13);
             let m0419b = FcmaVector::nmadd_rotate90(m0419b, self.twiddles_im[1], x11m12);
-            let [y04, y19] = self.bf2.column_fft([m0419a, m0419b]);
+            let [y04, y19] = self.bf2.parallel_fft([m0419a, m0419b]);
 
             let m0518a = SimdVector::fmadd(data[0], self.twiddles_re[4], x1p22);
             let m0518a = SimdVector::fmadd(m0518a, self.twiddles_re[9], x2p21);
@@ -2161,7 +2161,7 @@ impl ColumnFft<FcmaVector32, 23> for FcmaF32ColumnButterfly23 {
             let m0518b = FcmaVector::nmadd_rotate90(m0518b, self.twiddles_im[0], x9m14);
             let m0518b = FcmaVector::fmadd_rotate90(m0518b, self.twiddles_im[3], x10m13);
             let m0518b = FcmaVector::fmadd_rotate90(m0518b, self.twiddles_im[8], x11m12);
-            let [y05, y18] = self.bf2.column_fft([m0518a, m0518b]);
+            let [y05, y18] = self.bf2.parallel_fft([m0518a, m0518b]);
 
             let m0617a = SimdVector::fmadd(data[0], self.twiddles_re[5], x1p22);
             let m0617a = SimdVector::fmadd(m0617a, self.twiddles_re[10], x2p21);
@@ -2185,7 +2185,7 @@ impl ColumnFft<FcmaVector32, 23> for FcmaF32ColumnButterfly23 {
             let m0617b = FcmaVector::fmadd_rotate90(m0617b, self.twiddles_im[7], x9m14);
             let m0617b = FcmaVector::nmadd_rotate90(m0617b, self.twiddles_im[8], x10m13);
             let m0617b = FcmaVector::nmadd_rotate90(m0617b, self.twiddles_im[2], x11m12);
-            let [y06, y17] = self.bf2.column_fft([m0617a, m0617b]);
+            let [y06, y17] = self.bf2.parallel_fft([m0617a, m0617b]);
 
             let m0716a = SimdVector::fmadd(data[0], self.twiddles_re[6], x1p22);
             let m0716a = SimdVector::fmadd(m0716a, self.twiddles_re[8], x2p21);
@@ -2209,7 +2209,7 @@ impl ColumnFft<FcmaVector32, 23> for FcmaF32ColumnButterfly23 {
             let m0716b = FcmaVector::nmadd_rotate90(m0716b, self.twiddles_im[5], x9m14);
             let m0716b = FcmaVector::fmadd_rotate90(m0716b, self.twiddles_im[0], x10m13);
             let m0716b = FcmaVector::fmadd_rotate90(m0716b, self.twiddles_im[7], x11m12);
-            let [y07, y16] = self.bf2.column_fft([m0716a, m0716b]);
+            let [y07, y16] = self.bf2.parallel_fft([m0716a, m0716b]);
 
             let m0815a = SimdVector::fmadd(data[0], self.twiddles_re[7], x1p22);
             let m0815a = SimdVector::fmadd(m0815a, self.twiddles_re[6], x2p21);
@@ -2233,7 +2233,7 @@ impl ColumnFft<FcmaVector32, 23> for FcmaF32ColumnButterfly23 {
             let m0815b = FcmaVector::fmadd_rotate90(m0815b, self.twiddles_im[2], x9m14);
             let m0815b = FcmaVector::fmadd_rotate90(m0815b, self.twiddles_im[10], x10m13);
             let m0815b = FcmaVector::nmadd_rotate90(m0815b, self.twiddles_im[3], x11m12);
-            let [y08, y15] = self.bf2.column_fft([m0815a, m0815b]);
+            let [y08, y15] = self.bf2.parallel_fft([m0815a, m0815b]);
 
             let m0914a = SimdVector::fmadd(data[0], self.twiddles_re[8], x1p22);
             let m0914a = SimdVector::fmadd(m0914a, self.twiddles_re[4], x2p21);
@@ -2257,7 +2257,7 @@ impl ColumnFft<FcmaVector32, 23> for FcmaF32ColumnButterfly23 {
             let m0914b = FcmaVector::nmadd_rotate90(m0914b, self.twiddles_im[10], x9m14);
             let m0914b = FcmaVector::nmadd_rotate90(m0914b, self.twiddles_im[1], x10m13);
             let m0914b = FcmaVector::fmadd_rotate90(m0914b, self.twiddles_im[6], x11m12);
-            let [y09, y14] = self.bf2.column_fft([m0914a, m0914b]);
+            let [y09, y14] = self.bf2.parallel_fft([m0914a, m0914b]);
 
             let m1013a = SimdVector::fmadd(data[0], self.twiddles_re[9], x1p22);
             let m1013a = SimdVector::fmadd(m1013a, self.twiddles_re[2], x2p21);
@@ -2281,7 +2281,7 @@ impl ColumnFft<FcmaVector32, 23> for FcmaF32ColumnButterfly23 {
             let m1013b = FcmaVector::nmadd_rotate90(m1013b, self.twiddles_im[1], x9m14);
             let m1013b = FcmaVector::fmadd_rotate90(m1013b, self.twiddles_im[7], x10m13);
             let m1013b = FcmaVector::nmadd_rotate90(m1013b, self.twiddles_im[4], x11m12);
-            let [y10, y13] = self.bf2.column_fft([m1013a, m1013b]);
+            let [y10, y13] = self.bf2.parallel_fft([m1013a, m1013b]);
 
             let m1112a = SimdVector::fmadd(data[0], self.twiddles_re[10], x1p22);
             let m1112a = SimdVector::fmadd(m1112a, self.twiddles_re[0], x2p21);
@@ -2305,7 +2305,7 @@ impl ColumnFft<FcmaVector32, 23> for FcmaF32ColumnButterfly23 {
             let m1112b = FcmaVector::fmadd_rotate90(m1112b, self.twiddles_im[6], x9m14);
             let m1112b = FcmaVector::nmadd_rotate90(m1112b, self.twiddles_im[4], x10m13);
             let m1112b = FcmaVector::fmadd_rotate90(m1112b, self.twiddles_im[5], x11m12);
-            let [y11, y12] = self.bf2.column_fft([m1112a, m1112b]);
+            let [y11, y12] = self.bf2.parallel_fft([m1112a, m1112b]);
 
 
             [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22]
@@ -2315,7 +2315,7 @@ impl ColumnFft<FcmaVector32, 23> for FcmaF32ColumnButterfly23 {
 
 pub struct FcmaF32Butterfly23<T> {
     direction: FftDirection,
-    column_fft: FcmaF32ColumnButterfly23,
+    parallel_fft: FcmaF32ParallelButterfly23,
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -2327,7 +2327,7 @@ impl<T: FftNum> FcmaF32Butterfly23<T> {
         assert_f32::<T>();
         Self {
             direction,
-            column_fft: FcmaF32ColumnButterfly23::new(direction),
+            parallel_fft: FcmaF32ParallelButterfly23::new(direction),
             _phantom: std::marker::PhantomData,
         }
     }
@@ -2336,7 +2336,7 @@ impl<T: FftNum> FcmaF32Butterfly23<T> {
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 });
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 } ); 
     }
@@ -2371,7 +2371,7 @@ impl<T: FftNum> FcmaF32Butterfly23<T> {
             extract_lo_hi_f32(input_packed[11], input_packed[22]),
         ];
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
 
         let out_packed = [
             extract_lo_lo_f32(out[0], out[1]),
@@ -2403,50 +2403,50 @@ impl<T: FftNum> FcmaF32Butterfly23<T> {
     }
 }
 
-pub struct FcmaF64ColumnButterfly23 {
-    bf2: FcmaF64ColumnButterfly2,
+pub struct FcmaF64ParallelButterfly23 {
+    bf2: FcmaF64ParallelButterfly2,
     twiddles_re: [FcmaVector64; 11],
     twiddles_im: [FcmaVector64; 11],
 }
-impl FcmaF64ColumnButterfly23 {
+impl FcmaF64ParallelButterfly23 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(23, direction);
         Self {
-            bf2: FcmaF64ColumnButterfly2::new(direction),
+            bf2: FcmaF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
     }
 }
-impl ColumnFft<FcmaVector64, 23> for FcmaF64ColumnButterfly23 {
+impl ParallelFft<FcmaVector64, 23> for FcmaF64ParallelButterfly23 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector64; 23]) -> [FcmaVector64; 23] {
+    fn parallel_fft(&self, data: [FcmaVector64; 23]) -> [FcmaVector64; 23] {
                 // Safety: The current machine must support the neon,fcma instruction set. We specified this invariant in the constructor.
         unsafe {
             let y00 = data[0];
-            let [x1p22, x1m22] = self.bf2.column_fft([data[1], data[22]]);
+            let [x1p22, x1m22] = self.bf2.parallel_fft([data[1], data[22]]);
             let y00 = SimdVector::add(y00, x1p22);
-            let [x2p21, x2m21] = self.bf2.column_fft([data[2], data[21]]);
+            let [x2p21, x2m21] = self.bf2.parallel_fft([data[2], data[21]]);
             let y00 = SimdVector::add(y00, x2p21);
-            let [x3p20, x3m20] = self.bf2.column_fft([data[3], data[20]]);
+            let [x3p20, x3m20] = self.bf2.parallel_fft([data[3], data[20]]);
             let y00 = SimdVector::add(y00, x3p20);
-            let [x4p19, x4m19] = self.bf2.column_fft([data[4], data[19]]);
+            let [x4p19, x4m19] = self.bf2.parallel_fft([data[4], data[19]]);
             let y00 = SimdVector::add(y00, x4p19);
-            let [x5p18, x5m18] = self.bf2.column_fft([data[5], data[18]]);
+            let [x5p18, x5m18] = self.bf2.parallel_fft([data[5], data[18]]);
             let y00 = SimdVector::add(y00, x5p18);
-            let [x6p17, x6m17] = self.bf2.column_fft([data[6], data[17]]);
+            let [x6p17, x6m17] = self.bf2.parallel_fft([data[6], data[17]]);
             let y00 = SimdVector::add(y00, x6p17);
-            let [x7p16, x7m16] = self.bf2.column_fft([data[7], data[16]]);
+            let [x7p16, x7m16] = self.bf2.parallel_fft([data[7], data[16]]);
             let y00 = SimdVector::add(y00, x7p16);
-            let [x8p15, x8m15] = self.bf2.column_fft([data[8], data[15]]);
+            let [x8p15, x8m15] = self.bf2.parallel_fft([data[8], data[15]]);
             let y00 = SimdVector::add(y00, x8p15);
-            let [x9p14, x9m14] = self.bf2.column_fft([data[9], data[14]]);
+            let [x9p14, x9m14] = self.bf2.parallel_fft([data[9], data[14]]);
             let y00 = SimdVector::add(y00, x9p14);
-            let [x10p13, x10m13] = self.bf2.column_fft([data[10], data[13]]);
+            let [x10p13, x10m13] = self.bf2.parallel_fft([data[10], data[13]]);
             let y00 = SimdVector::add(y00, x10p13);
-            let [x11p12, x11m12] = self.bf2.column_fft([data[11], data[12]]);
+            let [x11p12, x11m12] = self.bf2.parallel_fft([data[11], data[12]]);
             let y00 = SimdVector::add(y00, x11p12);
 
             let m0122a = SimdVector::fmadd(data[0], self.twiddles_re[0], x1p22);
@@ -2471,7 +2471,7 @@ impl ColumnFft<FcmaVector64, 23> for FcmaF64ColumnButterfly23 {
             let m0122b = FcmaVector::fmadd_rotate90(m0122b, self.twiddles_im[8], x9m14);
             let m0122b = FcmaVector::fmadd_rotate90(m0122b, self.twiddles_im[9], x10m13);
             let m0122b = FcmaVector::fmadd_rotate90(m0122b, self.twiddles_im[10], x11m12);
-            let [y01, y22] = self.bf2.column_fft([m0122a, m0122b]);
+            let [y01, y22] = self.bf2.parallel_fft([m0122a, m0122b]);
 
             let m0221a = SimdVector::fmadd(data[0], self.twiddles_re[1], x1p22);
             let m0221a = SimdVector::fmadd(m0221a, self.twiddles_re[3], x2p21);
@@ -2495,7 +2495,7 @@ impl ColumnFft<FcmaVector64, 23> for FcmaF64ColumnButterfly23 {
             let m0221b = FcmaVector::nmadd_rotate90(m0221b, self.twiddles_im[4], x9m14);
             let m0221b = FcmaVector::nmadd_rotate90(m0221b, self.twiddles_im[2], x10m13);
             let m0221b = FcmaVector::nmadd_rotate90(m0221b, self.twiddles_im[0], x11m12);
-            let [y02, y21] = self.bf2.column_fft([m0221a, m0221b]);
+            let [y02, y21] = self.bf2.parallel_fft([m0221a, m0221b]);
 
             let m0320a = SimdVector::fmadd(data[0], self.twiddles_re[2], x1p22);
             let m0320a = SimdVector::fmadd(m0320a, self.twiddles_re[5], x2p21);
@@ -2519,7 +2519,7 @@ impl ColumnFft<FcmaVector64, 23> for FcmaF64ColumnButterfly23 {
             let m0320b = FcmaVector::fmadd_rotate90(m0320b, self.twiddles_im[3], x9m14);
             let m0320b = FcmaVector::fmadd_rotate90(m0320b, self.twiddles_im[6], x10m13);
             let m0320b = FcmaVector::fmadd_rotate90(m0320b, self.twiddles_im[9], x11m12);
-            let [y03, y20] = self.bf2.column_fft([m0320a, m0320b]);
+            let [y03, y20] = self.bf2.parallel_fft([m0320a, m0320b]);
 
             let m0419a = SimdVector::fmadd(data[0], self.twiddles_re[3], x1p22);
             let m0419a = SimdVector::fmadd(m0419a, self.twiddles_re[7], x2p21);
@@ -2543,7 +2543,7 @@ impl ColumnFft<FcmaVector64, 23> for FcmaF64ColumnButterfly23 {
             let m0419b = FcmaVector::nmadd_rotate90(m0419b, self.twiddles_im[9], x9m14);
             let m0419b = FcmaVector::nmadd_rotate90(m0419b, self.twiddles_im[5], x10m13);
             let m0419b = FcmaVector::nmadd_rotate90(m0419b, self.twiddles_im[1], x11m12);
-            let [y04, y19] = self.bf2.column_fft([m0419a, m0419b]);
+            let [y04, y19] = self.bf2.parallel_fft([m0419a, m0419b]);
 
             let m0518a = SimdVector::fmadd(data[0], self.twiddles_re[4], x1p22);
             let m0518a = SimdVector::fmadd(m0518a, self.twiddles_re[9], x2p21);
@@ -2567,7 +2567,7 @@ impl ColumnFft<FcmaVector64, 23> for FcmaF64ColumnButterfly23 {
             let m0518b = FcmaVector::nmadd_rotate90(m0518b, self.twiddles_im[0], x9m14);
             let m0518b = FcmaVector::fmadd_rotate90(m0518b, self.twiddles_im[3], x10m13);
             let m0518b = FcmaVector::fmadd_rotate90(m0518b, self.twiddles_im[8], x11m12);
-            let [y05, y18] = self.bf2.column_fft([m0518a, m0518b]);
+            let [y05, y18] = self.bf2.parallel_fft([m0518a, m0518b]);
 
             let m0617a = SimdVector::fmadd(data[0], self.twiddles_re[5], x1p22);
             let m0617a = SimdVector::fmadd(m0617a, self.twiddles_re[10], x2p21);
@@ -2591,7 +2591,7 @@ impl ColumnFft<FcmaVector64, 23> for FcmaF64ColumnButterfly23 {
             let m0617b = FcmaVector::fmadd_rotate90(m0617b, self.twiddles_im[7], x9m14);
             let m0617b = FcmaVector::nmadd_rotate90(m0617b, self.twiddles_im[8], x10m13);
             let m0617b = FcmaVector::nmadd_rotate90(m0617b, self.twiddles_im[2], x11m12);
-            let [y06, y17] = self.bf2.column_fft([m0617a, m0617b]);
+            let [y06, y17] = self.bf2.parallel_fft([m0617a, m0617b]);
 
             let m0716a = SimdVector::fmadd(data[0], self.twiddles_re[6], x1p22);
             let m0716a = SimdVector::fmadd(m0716a, self.twiddles_re[8], x2p21);
@@ -2615,7 +2615,7 @@ impl ColumnFft<FcmaVector64, 23> for FcmaF64ColumnButterfly23 {
             let m0716b = FcmaVector::nmadd_rotate90(m0716b, self.twiddles_im[5], x9m14);
             let m0716b = FcmaVector::fmadd_rotate90(m0716b, self.twiddles_im[0], x10m13);
             let m0716b = FcmaVector::fmadd_rotate90(m0716b, self.twiddles_im[7], x11m12);
-            let [y07, y16] = self.bf2.column_fft([m0716a, m0716b]);
+            let [y07, y16] = self.bf2.parallel_fft([m0716a, m0716b]);
 
             let m0815a = SimdVector::fmadd(data[0], self.twiddles_re[7], x1p22);
             let m0815a = SimdVector::fmadd(m0815a, self.twiddles_re[6], x2p21);
@@ -2639,7 +2639,7 @@ impl ColumnFft<FcmaVector64, 23> for FcmaF64ColumnButterfly23 {
             let m0815b = FcmaVector::fmadd_rotate90(m0815b, self.twiddles_im[2], x9m14);
             let m0815b = FcmaVector::fmadd_rotate90(m0815b, self.twiddles_im[10], x10m13);
             let m0815b = FcmaVector::nmadd_rotate90(m0815b, self.twiddles_im[3], x11m12);
-            let [y08, y15] = self.bf2.column_fft([m0815a, m0815b]);
+            let [y08, y15] = self.bf2.parallel_fft([m0815a, m0815b]);
 
             let m0914a = SimdVector::fmadd(data[0], self.twiddles_re[8], x1p22);
             let m0914a = SimdVector::fmadd(m0914a, self.twiddles_re[4], x2p21);
@@ -2663,7 +2663,7 @@ impl ColumnFft<FcmaVector64, 23> for FcmaF64ColumnButterfly23 {
             let m0914b = FcmaVector::nmadd_rotate90(m0914b, self.twiddles_im[10], x9m14);
             let m0914b = FcmaVector::nmadd_rotate90(m0914b, self.twiddles_im[1], x10m13);
             let m0914b = FcmaVector::fmadd_rotate90(m0914b, self.twiddles_im[6], x11m12);
-            let [y09, y14] = self.bf2.column_fft([m0914a, m0914b]);
+            let [y09, y14] = self.bf2.parallel_fft([m0914a, m0914b]);
 
             let m1013a = SimdVector::fmadd(data[0], self.twiddles_re[9], x1p22);
             let m1013a = SimdVector::fmadd(m1013a, self.twiddles_re[2], x2p21);
@@ -2687,7 +2687,7 @@ impl ColumnFft<FcmaVector64, 23> for FcmaF64ColumnButterfly23 {
             let m1013b = FcmaVector::nmadd_rotate90(m1013b, self.twiddles_im[1], x9m14);
             let m1013b = FcmaVector::fmadd_rotate90(m1013b, self.twiddles_im[7], x10m13);
             let m1013b = FcmaVector::nmadd_rotate90(m1013b, self.twiddles_im[4], x11m12);
-            let [y10, y13] = self.bf2.column_fft([m1013a, m1013b]);
+            let [y10, y13] = self.bf2.parallel_fft([m1013a, m1013b]);
 
             let m1112a = SimdVector::fmadd(data[0], self.twiddles_re[10], x1p22);
             let m1112a = SimdVector::fmadd(m1112a, self.twiddles_re[0], x2p21);
@@ -2711,7 +2711,7 @@ impl ColumnFft<FcmaVector64, 23> for FcmaF64ColumnButterfly23 {
             let m1112b = FcmaVector::fmadd_rotate90(m1112b, self.twiddles_im[6], x9m14);
             let m1112b = FcmaVector::nmadd_rotate90(m1112b, self.twiddles_im[4], x10m13);
             let m1112b = FcmaVector::fmadd_rotate90(m1112b, self.twiddles_im[5], x11m12);
-            let [y11, y12] = self.bf2.column_fft([m1112a, m1112b]);
+            let [y11, y12] = self.bf2.parallel_fft([m1112a, m1112b]);
 
 
             [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22]
@@ -2721,7 +2721,7 @@ impl ColumnFft<FcmaVector64, 23> for FcmaF64ColumnButterfly23 {
 
 pub struct FcmaF64Butterfly23<T> {
     direction: FftDirection,
-    column_fft: FcmaF64ColumnButterfly23,
+    parallel_fft: FcmaF64ParallelButterfly23,
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -2733,7 +2733,7 @@ impl<T: FftNum> FcmaF64Butterfly23<T> {
         assert_f64::<T>();
         unsafe {Self {
             direction,
-            column_fft: FcmaF64ColumnButterfly23::new(direction),
+            parallel_fft: FcmaF64ParallelButterfly23::new(direction),
             _phantom: std::marker::PhantomData,
         }}
     }
@@ -2742,62 +2742,62 @@ impl<T: FftNum> FcmaF64Butterfly23<T> {
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 });
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 });   
     }
 }
 
-pub struct FcmaF32ColumnButterfly29 {
-    bf2: FcmaF32ColumnButterfly2,
+pub struct FcmaF32ParallelButterfly29 {
+    bf2: FcmaF32ParallelButterfly2,
     twiddles_re: [FcmaVector32; 14],
     twiddles_im: [FcmaVector32; 14],
 }
-impl FcmaF32ColumnButterfly29 {
+impl FcmaF32ParallelButterfly29 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(29, direction);
         Self {
-            bf2: FcmaF32ColumnButterfly2::new(direction),
+            bf2: FcmaF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
     }
 }
-impl ColumnFft<FcmaVector32, 29> for FcmaF32ColumnButterfly29 {
+impl ParallelFft<FcmaVector32, 29> for FcmaF32ParallelButterfly29 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector32; 29]) -> [FcmaVector32; 29] {
+    fn parallel_fft(&self, data: [FcmaVector32; 29]) -> [FcmaVector32; 29] {
                 // Safety: The current machine must support the neon,fcma instruction set. We specified this invariant in the constructor.
         unsafe {
             let y00 = data[0];
-            let [x1p28, x1m28] = self.bf2.column_fft([data[1], data[28]]);
+            let [x1p28, x1m28] = self.bf2.parallel_fft([data[1], data[28]]);
             let y00 = SimdVector::add(y00, x1p28);
-            let [x2p27, x2m27] = self.bf2.column_fft([data[2], data[27]]);
+            let [x2p27, x2m27] = self.bf2.parallel_fft([data[2], data[27]]);
             let y00 = SimdVector::add(y00, x2p27);
-            let [x3p26, x3m26] = self.bf2.column_fft([data[3], data[26]]);
+            let [x3p26, x3m26] = self.bf2.parallel_fft([data[3], data[26]]);
             let y00 = SimdVector::add(y00, x3p26);
-            let [x4p25, x4m25] = self.bf2.column_fft([data[4], data[25]]);
+            let [x4p25, x4m25] = self.bf2.parallel_fft([data[4], data[25]]);
             let y00 = SimdVector::add(y00, x4p25);
-            let [x5p24, x5m24] = self.bf2.column_fft([data[5], data[24]]);
+            let [x5p24, x5m24] = self.bf2.parallel_fft([data[5], data[24]]);
             let y00 = SimdVector::add(y00, x5p24);
-            let [x6p23, x6m23] = self.bf2.column_fft([data[6], data[23]]);
+            let [x6p23, x6m23] = self.bf2.parallel_fft([data[6], data[23]]);
             let y00 = SimdVector::add(y00, x6p23);
-            let [x7p22, x7m22] = self.bf2.column_fft([data[7], data[22]]);
+            let [x7p22, x7m22] = self.bf2.parallel_fft([data[7], data[22]]);
             let y00 = SimdVector::add(y00, x7p22);
-            let [x8p21, x8m21] = self.bf2.column_fft([data[8], data[21]]);
+            let [x8p21, x8m21] = self.bf2.parallel_fft([data[8], data[21]]);
             let y00 = SimdVector::add(y00, x8p21);
-            let [x9p20, x9m20] = self.bf2.column_fft([data[9], data[20]]);
+            let [x9p20, x9m20] = self.bf2.parallel_fft([data[9], data[20]]);
             let y00 = SimdVector::add(y00, x9p20);
-            let [x10p19, x10m19] = self.bf2.column_fft([data[10], data[19]]);
+            let [x10p19, x10m19] = self.bf2.parallel_fft([data[10], data[19]]);
             let y00 = SimdVector::add(y00, x10p19);
-            let [x11p18, x11m18] = self.bf2.column_fft([data[11], data[18]]);
+            let [x11p18, x11m18] = self.bf2.parallel_fft([data[11], data[18]]);
             let y00 = SimdVector::add(y00, x11p18);
-            let [x12p17, x12m17] = self.bf2.column_fft([data[12], data[17]]);
+            let [x12p17, x12m17] = self.bf2.parallel_fft([data[12], data[17]]);
             let y00 = SimdVector::add(y00, x12p17);
-            let [x13p16, x13m16] = self.bf2.column_fft([data[13], data[16]]);
+            let [x13p16, x13m16] = self.bf2.parallel_fft([data[13], data[16]]);
             let y00 = SimdVector::add(y00, x13p16);
-            let [x14p15, x14m15] = self.bf2.column_fft([data[14], data[15]]);
+            let [x14p15, x14m15] = self.bf2.parallel_fft([data[14], data[15]]);
             let y00 = SimdVector::add(y00, x14p15);
 
             let m0128a = SimdVector::fmadd(data[0], self.twiddles_re[0], x1p28);
@@ -2828,7 +2828,7 @@ impl ColumnFft<FcmaVector32, 29> for FcmaF32ColumnButterfly29 {
             let m0128b = FcmaVector::fmadd_rotate90(m0128b, self.twiddles_im[11], x12m17);
             let m0128b = FcmaVector::fmadd_rotate90(m0128b, self.twiddles_im[12], x13m16);
             let m0128b = FcmaVector::fmadd_rotate90(m0128b, self.twiddles_im[13], x14m15);
-            let [y01, y28] = self.bf2.column_fft([m0128a, m0128b]);
+            let [y01, y28] = self.bf2.parallel_fft([m0128a, m0128b]);
 
             let m0227a = SimdVector::fmadd(data[0], self.twiddles_re[1], x1p28);
             let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[3], x2p27);
@@ -2858,7 +2858,7 @@ impl ColumnFft<FcmaVector32, 29> for FcmaF32ColumnButterfly29 {
             let m0227b = FcmaVector::nmadd_rotate90(m0227b, self.twiddles_im[4], x12m17);
             let m0227b = FcmaVector::nmadd_rotate90(m0227b, self.twiddles_im[2], x13m16);
             let m0227b = FcmaVector::nmadd_rotate90(m0227b, self.twiddles_im[0], x14m15);
-            let [y02, y27] = self.bf2.column_fft([m0227a, m0227b]);
+            let [y02, y27] = self.bf2.parallel_fft([m0227a, m0227b]);
 
             let m0326a = SimdVector::fmadd(data[0], self.twiddles_re[2], x1p28);
             let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[5], x2p27);
@@ -2888,7 +2888,7 @@ impl ColumnFft<FcmaVector32, 29> for FcmaF32ColumnButterfly29 {
             let m0326b = FcmaVector::fmadd_rotate90(m0326b, self.twiddles_im[6], x12m17);
             let m0326b = FcmaVector::fmadd_rotate90(m0326b, self.twiddles_im[9], x13m16);
             let m0326b = FcmaVector::fmadd_rotate90(m0326b, self.twiddles_im[12], x14m15);
-            let [y03, y26] = self.bf2.column_fft([m0326a, m0326b]);
+            let [y03, y26] = self.bf2.parallel_fft([m0326a, m0326b]);
 
             let m0425a = SimdVector::fmadd(data[0], self.twiddles_re[3], x1p28);
             let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[7], x2p27);
@@ -2918,7 +2918,7 @@ impl ColumnFft<FcmaVector32, 29> for FcmaF32ColumnButterfly29 {
             let m0425b = FcmaVector::nmadd_rotate90(m0425b, self.twiddles_im[9], x12m17);
             let m0425b = FcmaVector::nmadd_rotate90(m0425b, self.twiddles_im[5], x13m16);
             let m0425b = FcmaVector::nmadd_rotate90(m0425b, self.twiddles_im[1], x14m15);
-            let [y04, y25] = self.bf2.column_fft([m0425a, m0425b]);
+            let [y04, y25] = self.bf2.parallel_fft([m0425a, m0425b]);
 
             let m0524a = SimdVector::fmadd(data[0], self.twiddles_re[4], x1p28);
             let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[9], x2p27);
@@ -2948,7 +2948,7 @@ impl ColumnFft<FcmaVector32, 29> for FcmaF32ColumnButterfly29 {
             let m0524b = FcmaVector::fmadd_rotate90(m0524b, self.twiddles_im[1], x12m17);
             let m0524b = FcmaVector::fmadd_rotate90(m0524b, self.twiddles_im[6], x13m16);
             let m0524b = FcmaVector::fmadd_rotate90(m0524b, self.twiddles_im[11], x14m15);
-            let [y05, y24] = self.bf2.column_fft([m0524a, m0524b]);
+            let [y05, y24] = self.bf2.parallel_fft([m0524a, m0524b]);
 
             let m0623a = SimdVector::fmadd(data[0], self.twiddles_re[5], x1p28);
             let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[11], x2p27);
@@ -2978,7 +2978,7 @@ impl ColumnFft<FcmaVector32, 29> for FcmaF32ColumnButterfly29 {
             let m0623b = FcmaVector::fmadd_rotate90(m0623b, self.twiddles_im[13], x12m17);
             let m0623b = FcmaVector::nmadd_rotate90(m0623b, self.twiddles_im[8], x13m16);
             let m0623b = FcmaVector::nmadd_rotate90(m0623b, self.twiddles_im[2], x14m15);
-            let [y06, y23] = self.bf2.column_fft([m0623a, m0623b]);
+            let [y06, y23] = self.bf2.parallel_fft([m0623a, m0623b]);
 
             let m0722a = SimdVector::fmadd(data[0], self.twiddles_re[6], x1p28);
             let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[13], x2p27);
@@ -3008,7 +3008,7 @@ impl ColumnFft<FcmaVector32, 29> for FcmaF32ColumnButterfly29 {
             let m0722b = FcmaVector::nmadd_rotate90(m0722b, self.twiddles_im[2], x12m17);
             let m0722b = FcmaVector::fmadd_rotate90(m0722b, self.twiddles_im[3], x13m16);
             let m0722b = FcmaVector::fmadd_rotate90(m0722b, self.twiddles_im[10], x14m15);
-            let [y07, y22] = self.bf2.column_fft([m0722a, m0722b]);
+            let [y07, y22] = self.bf2.parallel_fft([m0722a, m0722b]);
 
             let m0821a = SimdVector::fmadd(data[0], self.twiddles_re[7], x1p28);
             let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[12], x2p27);
@@ -3038,7 +3038,7 @@ impl ColumnFft<FcmaVector32, 29> for FcmaF32ColumnButterfly29 {
             let m0821b = FcmaVector::fmadd_rotate90(m0821b, self.twiddles_im[8], x12m17);
             let m0821b = FcmaVector::nmadd_rotate90(m0821b, self.twiddles_im[11], x13m16);
             let m0821b = FcmaVector::nmadd_rotate90(m0821b, self.twiddles_im[3], x14m15);
-            let [y08, y21] = self.bf2.column_fft([m0821a, m0821b]);
+            let [y08, y21] = self.bf2.parallel_fft([m0821a, m0821b]);
 
             let m0920a = SimdVector::fmadd(data[0], self.twiddles_re[8], x1p28);
             let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[10], x2p27);
@@ -3068,7 +3068,7 @@ impl ColumnFft<FcmaVector32, 29> for FcmaF32ColumnButterfly29 {
             let m0920b = FcmaVector::nmadd_rotate90(m0920b, self.twiddles_im[7], x12m17);
             let m0920b = FcmaVector::fmadd_rotate90(m0920b, self.twiddles_im[0], x13m16);
             let m0920b = FcmaVector::fmadd_rotate90(m0920b, self.twiddles_im[9], x14m15);
-            let [y09, y20] = self.bf2.column_fft([m0920a, m0920b]);
+            let [y09, y20] = self.bf2.parallel_fft([m0920a, m0920b]);
 
             let m1019a = SimdVector::fmadd(data[0], self.twiddles_re[9], x1p28);
             let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[8], x2p27);
@@ -3098,7 +3098,7 @@ impl ColumnFft<FcmaVector32, 29> for FcmaF32ColumnButterfly29 {
             let m1019b = FcmaVector::fmadd_rotate90(m1019b, self.twiddles_im[3], x12m17);
             let m1019b = FcmaVector::fmadd_rotate90(m1019b, self.twiddles_im[13], x13m16);
             let m1019b = FcmaVector::nmadd_rotate90(m1019b, self.twiddles_im[4], x14m15);
-            let [y10, y19] = self.bf2.column_fft([m1019a, m1019b]);
+            let [y10, y19] = self.bf2.parallel_fft([m1019a, m1019b]);
 
             let m1118a = SimdVector::fmadd(data[0], self.twiddles_re[10], x1p28);
             let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[6], x2p27);
@@ -3128,7 +3128,7 @@ impl ColumnFft<FcmaVector32, 29> for FcmaF32ColumnButterfly29 {
             let m1118b = FcmaVector::nmadd_rotate90(m1118b, self.twiddles_im[12], x12m17);
             let m1118b = FcmaVector::nmadd_rotate90(m1118b, self.twiddles_im[1], x13m16);
             let m1118b = FcmaVector::fmadd_rotate90(m1118b, self.twiddles_im[8], x14m15);
-            let [y11, y18] = self.bf2.column_fft([m1118a, m1118b]);
+            let [y11, y18] = self.bf2.parallel_fft([m1118a, m1118b]);
 
             let m1217a = SimdVector::fmadd(data[0], self.twiddles_re[11], x1p28);
             let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[4], x2p27);
@@ -3158,7 +3158,7 @@ impl ColumnFft<FcmaVector32, 29> for FcmaF32ColumnButterfly29 {
             let m1217b = FcmaVector::nmadd_rotate90(m1217b, self.twiddles_im[0], x12m17);
             let m1217b = FcmaVector::fmadd_rotate90(m1217b, self.twiddles_im[10], x13m16);
             let m1217b = FcmaVector::nmadd_rotate90(m1217b, self.twiddles_im[5], x14m15);
-            let [y12, y17] = self.bf2.column_fft([m1217a, m1217b]);
+            let [y12, y17] = self.bf2.parallel_fft([m1217a, m1217b]);
 
             let m1316a = SimdVector::fmadd(data[0], self.twiddles_re[12], x1p28);
             let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[2], x2p27);
@@ -3188,7 +3188,7 @@ impl ColumnFft<FcmaVector32, 29> for FcmaF32ColumnButterfly29 {
             let m1316b = FcmaVector::fmadd_rotate90(m1316b, self.twiddles_im[10], x12m17);
             let m1316b = FcmaVector::nmadd_rotate90(m1316b, self.twiddles_im[4], x13m16);
             let m1316b = FcmaVector::fmadd_rotate90(m1316b, self.twiddles_im[7], x14m15);
-            let [y13, y16] = self.bf2.column_fft([m1316a, m1316b]);
+            let [y13, y16] = self.bf2.parallel_fft([m1316a, m1316b]);
 
             let m1415a = SimdVector::fmadd(data[0], self.twiddles_re[13], x1p28);
             let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[0], x2p27);
@@ -3218,7 +3218,7 @@ impl ColumnFft<FcmaVector32, 29> for FcmaF32ColumnButterfly29 {
             let m1415b = FcmaVector::nmadd_rotate90(m1415b, self.twiddles_im[5], x12m17);
             let m1415b = FcmaVector::fmadd_rotate90(m1415b, self.twiddles_im[7], x13m16);
             let m1415b = FcmaVector::nmadd_rotate90(m1415b, self.twiddles_im[6], x14m15);
-            let [y14, y15] = self.bf2.column_fft([m1415a, m1415b]);
+            let [y14, y15] = self.bf2.parallel_fft([m1415a, m1415b]);
 
 
             [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22, y23, y24, y25, y26, y27, y28]
@@ -3228,7 +3228,7 @@ impl ColumnFft<FcmaVector32, 29> for FcmaF32ColumnButterfly29 {
 
 pub struct FcmaF32Butterfly29<T> {
     direction: FftDirection,
-    column_fft: FcmaF32ColumnButterfly29,
+    parallel_fft: FcmaF32ParallelButterfly29,
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -3240,7 +3240,7 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
         assert_f32::<T>();
         Self {
             direction,
-            column_fft: FcmaF32ColumnButterfly29::new(direction),
+            parallel_fft: FcmaF32ParallelButterfly29::new(direction),
             _phantom: std::marker::PhantomData,
         }
     }
@@ -3249,7 +3249,7 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 });
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 } ); 
     }
@@ -3290,7 +3290,7 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
             extract_lo_hi_f32(input_packed[14], input_packed[28]),
         ];
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
 
         let out_packed = [
             extract_lo_lo_f32(out[0], out[1]),
@@ -3328,56 +3328,56 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
     }
 }
 
-pub struct FcmaF64ColumnButterfly29 {
-    bf2: FcmaF64ColumnButterfly2,
+pub struct FcmaF64ParallelButterfly29 {
+    bf2: FcmaF64ParallelButterfly2,
     twiddles_re: [FcmaVector64; 14],
     twiddles_im: [FcmaVector64; 14],
 }
-impl FcmaF64ColumnButterfly29 {
+impl FcmaF64ParallelButterfly29 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(29, direction);
         Self {
-            bf2: FcmaF64ColumnButterfly2::new(direction),
+            bf2: FcmaF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
     }
 }
-impl ColumnFft<FcmaVector64, 29> for FcmaF64ColumnButterfly29 {
+impl ParallelFft<FcmaVector64, 29> for FcmaF64ParallelButterfly29 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector64; 29]) -> [FcmaVector64; 29] {
+    fn parallel_fft(&self, data: [FcmaVector64; 29]) -> [FcmaVector64; 29] {
                 // Safety: The current machine must support the neon,fcma instruction set. We specified this invariant in the constructor.
         unsafe {
             let y00 = data[0];
-            let [x1p28, x1m28] = self.bf2.column_fft([data[1], data[28]]);
+            let [x1p28, x1m28] = self.bf2.parallel_fft([data[1], data[28]]);
             let y00 = SimdVector::add(y00, x1p28);
-            let [x2p27, x2m27] = self.bf2.column_fft([data[2], data[27]]);
+            let [x2p27, x2m27] = self.bf2.parallel_fft([data[2], data[27]]);
             let y00 = SimdVector::add(y00, x2p27);
-            let [x3p26, x3m26] = self.bf2.column_fft([data[3], data[26]]);
+            let [x3p26, x3m26] = self.bf2.parallel_fft([data[3], data[26]]);
             let y00 = SimdVector::add(y00, x3p26);
-            let [x4p25, x4m25] = self.bf2.column_fft([data[4], data[25]]);
+            let [x4p25, x4m25] = self.bf2.parallel_fft([data[4], data[25]]);
             let y00 = SimdVector::add(y00, x4p25);
-            let [x5p24, x5m24] = self.bf2.column_fft([data[5], data[24]]);
+            let [x5p24, x5m24] = self.bf2.parallel_fft([data[5], data[24]]);
             let y00 = SimdVector::add(y00, x5p24);
-            let [x6p23, x6m23] = self.bf2.column_fft([data[6], data[23]]);
+            let [x6p23, x6m23] = self.bf2.parallel_fft([data[6], data[23]]);
             let y00 = SimdVector::add(y00, x6p23);
-            let [x7p22, x7m22] = self.bf2.column_fft([data[7], data[22]]);
+            let [x7p22, x7m22] = self.bf2.parallel_fft([data[7], data[22]]);
             let y00 = SimdVector::add(y00, x7p22);
-            let [x8p21, x8m21] = self.bf2.column_fft([data[8], data[21]]);
+            let [x8p21, x8m21] = self.bf2.parallel_fft([data[8], data[21]]);
             let y00 = SimdVector::add(y00, x8p21);
-            let [x9p20, x9m20] = self.bf2.column_fft([data[9], data[20]]);
+            let [x9p20, x9m20] = self.bf2.parallel_fft([data[9], data[20]]);
             let y00 = SimdVector::add(y00, x9p20);
-            let [x10p19, x10m19] = self.bf2.column_fft([data[10], data[19]]);
+            let [x10p19, x10m19] = self.bf2.parallel_fft([data[10], data[19]]);
             let y00 = SimdVector::add(y00, x10p19);
-            let [x11p18, x11m18] = self.bf2.column_fft([data[11], data[18]]);
+            let [x11p18, x11m18] = self.bf2.parallel_fft([data[11], data[18]]);
             let y00 = SimdVector::add(y00, x11p18);
-            let [x12p17, x12m17] = self.bf2.column_fft([data[12], data[17]]);
+            let [x12p17, x12m17] = self.bf2.parallel_fft([data[12], data[17]]);
             let y00 = SimdVector::add(y00, x12p17);
-            let [x13p16, x13m16] = self.bf2.column_fft([data[13], data[16]]);
+            let [x13p16, x13m16] = self.bf2.parallel_fft([data[13], data[16]]);
             let y00 = SimdVector::add(y00, x13p16);
-            let [x14p15, x14m15] = self.bf2.column_fft([data[14], data[15]]);
+            let [x14p15, x14m15] = self.bf2.parallel_fft([data[14], data[15]]);
             let y00 = SimdVector::add(y00, x14p15);
 
             let m0128a = SimdVector::fmadd(data[0], self.twiddles_re[0], x1p28);
@@ -3408,7 +3408,7 @@ impl ColumnFft<FcmaVector64, 29> for FcmaF64ColumnButterfly29 {
             let m0128b = FcmaVector::fmadd_rotate90(m0128b, self.twiddles_im[11], x12m17);
             let m0128b = FcmaVector::fmadd_rotate90(m0128b, self.twiddles_im[12], x13m16);
             let m0128b = FcmaVector::fmadd_rotate90(m0128b, self.twiddles_im[13], x14m15);
-            let [y01, y28] = self.bf2.column_fft([m0128a, m0128b]);
+            let [y01, y28] = self.bf2.parallel_fft([m0128a, m0128b]);
 
             let m0227a = SimdVector::fmadd(data[0], self.twiddles_re[1], x1p28);
             let m0227a = SimdVector::fmadd(m0227a, self.twiddles_re[3], x2p27);
@@ -3438,7 +3438,7 @@ impl ColumnFft<FcmaVector64, 29> for FcmaF64ColumnButterfly29 {
             let m0227b = FcmaVector::nmadd_rotate90(m0227b, self.twiddles_im[4], x12m17);
             let m0227b = FcmaVector::nmadd_rotate90(m0227b, self.twiddles_im[2], x13m16);
             let m0227b = FcmaVector::nmadd_rotate90(m0227b, self.twiddles_im[0], x14m15);
-            let [y02, y27] = self.bf2.column_fft([m0227a, m0227b]);
+            let [y02, y27] = self.bf2.parallel_fft([m0227a, m0227b]);
 
             let m0326a = SimdVector::fmadd(data[0], self.twiddles_re[2], x1p28);
             let m0326a = SimdVector::fmadd(m0326a, self.twiddles_re[5], x2p27);
@@ -3468,7 +3468,7 @@ impl ColumnFft<FcmaVector64, 29> for FcmaF64ColumnButterfly29 {
             let m0326b = FcmaVector::fmadd_rotate90(m0326b, self.twiddles_im[6], x12m17);
             let m0326b = FcmaVector::fmadd_rotate90(m0326b, self.twiddles_im[9], x13m16);
             let m0326b = FcmaVector::fmadd_rotate90(m0326b, self.twiddles_im[12], x14m15);
-            let [y03, y26] = self.bf2.column_fft([m0326a, m0326b]);
+            let [y03, y26] = self.bf2.parallel_fft([m0326a, m0326b]);
 
             let m0425a = SimdVector::fmadd(data[0], self.twiddles_re[3], x1p28);
             let m0425a = SimdVector::fmadd(m0425a, self.twiddles_re[7], x2p27);
@@ -3498,7 +3498,7 @@ impl ColumnFft<FcmaVector64, 29> for FcmaF64ColumnButterfly29 {
             let m0425b = FcmaVector::nmadd_rotate90(m0425b, self.twiddles_im[9], x12m17);
             let m0425b = FcmaVector::nmadd_rotate90(m0425b, self.twiddles_im[5], x13m16);
             let m0425b = FcmaVector::nmadd_rotate90(m0425b, self.twiddles_im[1], x14m15);
-            let [y04, y25] = self.bf2.column_fft([m0425a, m0425b]);
+            let [y04, y25] = self.bf2.parallel_fft([m0425a, m0425b]);
 
             let m0524a = SimdVector::fmadd(data[0], self.twiddles_re[4], x1p28);
             let m0524a = SimdVector::fmadd(m0524a, self.twiddles_re[9], x2p27);
@@ -3528,7 +3528,7 @@ impl ColumnFft<FcmaVector64, 29> for FcmaF64ColumnButterfly29 {
             let m0524b = FcmaVector::fmadd_rotate90(m0524b, self.twiddles_im[1], x12m17);
             let m0524b = FcmaVector::fmadd_rotate90(m0524b, self.twiddles_im[6], x13m16);
             let m0524b = FcmaVector::fmadd_rotate90(m0524b, self.twiddles_im[11], x14m15);
-            let [y05, y24] = self.bf2.column_fft([m0524a, m0524b]);
+            let [y05, y24] = self.bf2.parallel_fft([m0524a, m0524b]);
 
             let m0623a = SimdVector::fmadd(data[0], self.twiddles_re[5], x1p28);
             let m0623a = SimdVector::fmadd(m0623a, self.twiddles_re[11], x2p27);
@@ -3558,7 +3558,7 @@ impl ColumnFft<FcmaVector64, 29> for FcmaF64ColumnButterfly29 {
             let m0623b = FcmaVector::fmadd_rotate90(m0623b, self.twiddles_im[13], x12m17);
             let m0623b = FcmaVector::nmadd_rotate90(m0623b, self.twiddles_im[8], x13m16);
             let m0623b = FcmaVector::nmadd_rotate90(m0623b, self.twiddles_im[2], x14m15);
-            let [y06, y23] = self.bf2.column_fft([m0623a, m0623b]);
+            let [y06, y23] = self.bf2.parallel_fft([m0623a, m0623b]);
 
             let m0722a = SimdVector::fmadd(data[0], self.twiddles_re[6], x1p28);
             let m0722a = SimdVector::fmadd(m0722a, self.twiddles_re[13], x2p27);
@@ -3588,7 +3588,7 @@ impl ColumnFft<FcmaVector64, 29> for FcmaF64ColumnButterfly29 {
             let m0722b = FcmaVector::nmadd_rotate90(m0722b, self.twiddles_im[2], x12m17);
             let m0722b = FcmaVector::fmadd_rotate90(m0722b, self.twiddles_im[3], x13m16);
             let m0722b = FcmaVector::fmadd_rotate90(m0722b, self.twiddles_im[10], x14m15);
-            let [y07, y22] = self.bf2.column_fft([m0722a, m0722b]);
+            let [y07, y22] = self.bf2.parallel_fft([m0722a, m0722b]);
 
             let m0821a = SimdVector::fmadd(data[0], self.twiddles_re[7], x1p28);
             let m0821a = SimdVector::fmadd(m0821a, self.twiddles_re[12], x2p27);
@@ -3618,7 +3618,7 @@ impl ColumnFft<FcmaVector64, 29> for FcmaF64ColumnButterfly29 {
             let m0821b = FcmaVector::fmadd_rotate90(m0821b, self.twiddles_im[8], x12m17);
             let m0821b = FcmaVector::nmadd_rotate90(m0821b, self.twiddles_im[11], x13m16);
             let m0821b = FcmaVector::nmadd_rotate90(m0821b, self.twiddles_im[3], x14m15);
-            let [y08, y21] = self.bf2.column_fft([m0821a, m0821b]);
+            let [y08, y21] = self.bf2.parallel_fft([m0821a, m0821b]);
 
             let m0920a = SimdVector::fmadd(data[0], self.twiddles_re[8], x1p28);
             let m0920a = SimdVector::fmadd(m0920a, self.twiddles_re[10], x2p27);
@@ -3648,7 +3648,7 @@ impl ColumnFft<FcmaVector64, 29> for FcmaF64ColumnButterfly29 {
             let m0920b = FcmaVector::nmadd_rotate90(m0920b, self.twiddles_im[7], x12m17);
             let m0920b = FcmaVector::fmadd_rotate90(m0920b, self.twiddles_im[0], x13m16);
             let m0920b = FcmaVector::fmadd_rotate90(m0920b, self.twiddles_im[9], x14m15);
-            let [y09, y20] = self.bf2.column_fft([m0920a, m0920b]);
+            let [y09, y20] = self.bf2.parallel_fft([m0920a, m0920b]);
 
             let m1019a = SimdVector::fmadd(data[0], self.twiddles_re[9], x1p28);
             let m1019a = SimdVector::fmadd(m1019a, self.twiddles_re[8], x2p27);
@@ -3678,7 +3678,7 @@ impl ColumnFft<FcmaVector64, 29> for FcmaF64ColumnButterfly29 {
             let m1019b = FcmaVector::fmadd_rotate90(m1019b, self.twiddles_im[3], x12m17);
             let m1019b = FcmaVector::fmadd_rotate90(m1019b, self.twiddles_im[13], x13m16);
             let m1019b = FcmaVector::nmadd_rotate90(m1019b, self.twiddles_im[4], x14m15);
-            let [y10, y19] = self.bf2.column_fft([m1019a, m1019b]);
+            let [y10, y19] = self.bf2.parallel_fft([m1019a, m1019b]);
 
             let m1118a = SimdVector::fmadd(data[0], self.twiddles_re[10], x1p28);
             let m1118a = SimdVector::fmadd(m1118a, self.twiddles_re[6], x2p27);
@@ -3708,7 +3708,7 @@ impl ColumnFft<FcmaVector64, 29> for FcmaF64ColumnButterfly29 {
             let m1118b = FcmaVector::nmadd_rotate90(m1118b, self.twiddles_im[12], x12m17);
             let m1118b = FcmaVector::nmadd_rotate90(m1118b, self.twiddles_im[1], x13m16);
             let m1118b = FcmaVector::fmadd_rotate90(m1118b, self.twiddles_im[8], x14m15);
-            let [y11, y18] = self.bf2.column_fft([m1118a, m1118b]);
+            let [y11, y18] = self.bf2.parallel_fft([m1118a, m1118b]);
 
             let m1217a = SimdVector::fmadd(data[0], self.twiddles_re[11], x1p28);
             let m1217a = SimdVector::fmadd(m1217a, self.twiddles_re[4], x2p27);
@@ -3738,7 +3738,7 @@ impl ColumnFft<FcmaVector64, 29> for FcmaF64ColumnButterfly29 {
             let m1217b = FcmaVector::nmadd_rotate90(m1217b, self.twiddles_im[0], x12m17);
             let m1217b = FcmaVector::fmadd_rotate90(m1217b, self.twiddles_im[10], x13m16);
             let m1217b = FcmaVector::nmadd_rotate90(m1217b, self.twiddles_im[5], x14m15);
-            let [y12, y17] = self.bf2.column_fft([m1217a, m1217b]);
+            let [y12, y17] = self.bf2.parallel_fft([m1217a, m1217b]);
 
             let m1316a = SimdVector::fmadd(data[0], self.twiddles_re[12], x1p28);
             let m1316a = SimdVector::fmadd(m1316a, self.twiddles_re[2], x2p27);
@@ -3768,7 +3768,7 @@ impl ColumnFft<FcmaVector64, 29> for FcmaF64ColumnButterfly29 {
             let m1316b = FcmaVector::fmadd_rotate90(m1316b, self.twiddles_im[10], x12m17);
             let m1316b = FcmaVector::nmadd_rotate90(m1316b, self.twiddles_im[4], x13m16);
             let m1316b = FcmaVector::fmadd_rotate90(m1316b, self.twiddles_im[7], x14m15);
-            let [y13, y16] = self.bf2.column_fft([m1316a, m1316b]);
+            let [y13, y16] = self.bf2.parallel_fft([m1316a, m1316b]);
 
             let m1415a = SimdVector::fmadd(data[0], self.twiddles_re[13], x1p28);
             let m1415a = SimdVector::fmadd(m1415a, self.twiddles_re[0], x2p27);
@@ -3798,7 +3798,7 @@ impl ColumnFft<FcmaVector64, 29> for FcmaF64ColumnButterfly29 {
             let m1415b = FcmaVector::nmadd_rotate90(m1415b, self.twiddles_im[5], x12m17);
             let m1415b = FcmaVector::fmadd_rotate90(m1415b, self.twiddles_im[7], x13m16);
             let m1415b = FcmaVector::nmadd_rotate90(m1415b, self.twiddles_im[6], x14m15);
-            let [y14, y15] = self.bf2.column_fft([m1415a, m1415b]);
+            let [y14, y15] = self.bf2.parallel_fft([m1415a, m1415b]);
 
 
             [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22, y23, y24, y25, y26, y27, y28]
@@ -3808,7 +3808,7 @@ impl ColumnFft<FcmaVector64, 29> for FcmaF64ColumnButterfly29 {
 
 pub struct FcmaF64Butterfly29<T> {
     direction: FftDirection,
-    column_fft: FcmaF64ColumnButterfly29,
+    parallel_fft: FcmaF64ParallelButterfly29,
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -3820,7 +3820,7 @@ impl<T: FftNum> FcmaF64Butterfly29<T> {
         assert_f64::<T>();
         unsafe {Self {
             direction,
-            column_fft: FcmaF64ColumnButterfly29::new(direction),
+            parallel_fft: FcmaF64ParallelButterfly29::new(direction),
             _phantom: std::marker::PhantomData,
         }}
     }
@@ -3829,64 +3829,64 @@ impl<T: FftNum> FcmaF64Butterfly29<T> {
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 });
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 });   
     }
 }
 
-pub struct FcmaF32ColumnButterfly31 {
-    bf2: FcmaF32ColumnButterfly2,
+pub struct FcmaF32ParallelButterfly31 {
+    bf2: FcmaF32ParallelButterfly2,
     twiddles_re: [FcmaVector32; 15],
     twiddles_im: [FcmaVector32; 15],
 }
-impl FcmaF32ColumnButterfly31 {
+impl FcmaF32ParallelButterfly31 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(31, direction);
         Self {
-            bf2: FcmaF32ColumnButterfly2::new(direction),
+            bf2: FcmaF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
     }
 }
-impl ColumnFft<FcmaVector32, 31> for FcmaF32ColumnButterfly31 {
+impl ParallelFft<FcmaVector32, 31> for FcmaF32ParallelButterfly31 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector32; 31]) -> [FcmaVector32; 31] {
+    fn parallel_fft(&self, data: [FcmaVector32; 31]) -> [FcmaVector32; 31] {
                 // Safety: The current machine must support the neon,fcma instruction set. We specified this invariant in the constructor.
         unsafe {
             let y00 = data[0];
-            let [x1p30, x1m30] = self.bf2.column_fft([data[1], data[30]]);
+            let [x1p30, x1m30] = self.bf2.parallel_fft([data[1], data[30]]);
             let y00 = SimdVector::add(y00, x1p30);
-            let [x2p29, x2m29] = self.bf2.column_fft([data[2], data[29]]);
+            let [x2p29, x2m29] = self.bf2.parallel_fft([data[2], data[29]]);
             let y00 = SimdVector::add(y00, x2p29);
-            let [x3p28, x3m28] = self.bf2.column_fft([data[3], data[28]]);
+            let [x3p28, x3m28] = self.bf2.parallel_fft([data[3], data[28]]);
             let y00 = SimdVector::add(y00, x3p28);
-            let [x4p27, x4m27] = self.bf2.column_fft([data[4], data[27]]);
+            let [x4p27, x4m27] = self.bf2.parallel_fft([data[4], data[27]]);
             let y00 = SimdVector::add(y00, x4p27);
-            let [x5p26, x5m26] = self.bf2.column_fft([data[5], data[26]]);
+            let [x5p26, x5m26] = self.bf2.parallel_fft([data[5], data[26]]);
             let y00 = SimdVector::add(y00, x5p26);
-            let [x6p25, x6m25] = self.bf2.column_fft([data[6], data[25]]);
+            let [x6p25, x6m25] = self.bf2.parallel_fft([data[6], data[25]]);
             let y00 = SimdVector::add(y00, x6p25);
-            let [x7p24, x7m24] = self.bf2.column_fft([data[7], data[24]]);
+            let [x7p24, x7m24] = self.bf2.parallel_fft([data[7], data[24]]);
             let y00 = SimdVector::add(y00, x7p24);
-            let [x8p23, x8m23] = self.bf2.column_fft([data[8], data[23]]);
+            let [x8p23, x8m23] = self.bf2.parallel_fft([data[8], data[23]]);
             let y00 = SimdVector::add(y00, x8p23);
-            let [x9p22, x9m22] = self.bf2.column_fft([data[9], data[22]]);
+            let [x9p22, x9m22] = self.bf2.parallel_fft([data[9], data[22]]);
             let y00 = SimdVector::add(y00, x9p22);
-            let [x10p21, x10m21] = self.bf2.column_fft([data[10], data[21]]);
+            let [x10p21, x10m21] = self.bf2.parallel_fft([data[10], data[21]]);
             let y00 = SimdVector::add(y00, x10p21);
-            let [x11p20, x11m20] = self.bf2.column_fft([data[11], data[20]]);
+            let [x11p20, x11m20] = self.bf2.parallel_fft([data[11], data[20]]);
             let y00 = SimdVector::add(y00, x11p20);
-            let [x12p19, x12m19] = self.bf2.column_fft([data[12], data[19]]);
+            let [x12p19, x12m19] = self.bf2.parallel_fft([data[12], data[19]]);
             let y00 = SimdVector::add(y00, x12p19);
-            let [x13p18, x13m18] = self.bf2.column_fft([data[13], data[18]]);
+            let [x13p18, x13m18] = self.bf2.parallel_fft([data[13], data[18]]);
             let y00 = SimdVector::add(y00, x13p18);
-            let [x14p17, x14m17] = self.bf2.column_fft([data[14], data[17]]);
+            let [x14p17, x14m17] = self.bf2.parallel_fft([data[14], data[17]]);
             let y00 = SimdVector::add(y00, x14p17);
-            let [x15p16, x15m16] = self.bf2.column_fft([data[15], data[16]]);
+            let [x15p16, x15m16] = self.bf2.parallel_fft([data[15], data[16]]);
             let y00 = SimdVector::add(y00, x15p16);
 
             let m0130a = SimdVector::fmadd(data[0], self.twiddles_re[0], x1p30);
@@ -3919,7 +3919,7 @@ impl ColumnFft<FcmaVector32, 31> for FcmaF32ColumnButterfly31 {
             let m0130b = FcmaVector::fmadd_rotate90(m0130b, self.twiddles_im[12], x13m18);
             let m0130b = FcmaVector::fmadd_rotate90(m0130b, self.twiddles_im[13], x14m17);
             let m0130b = FcmaVector::fmadd_rotate90(m0130b, self.twiddles_im[14], x15m16);
-            let [y01, y30] = self.bf2.column_fft([m0130a, m0130b]);
+            let [y01, y30] = self.bf2.parallel_fft([m0130a, m0130b]);
 
             let m0229a = SimdVector::fmadd(data[0], self.twiddles_re[1], x1p30);
             let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[3], x2p29);
@@ -3951,7 +3951,7 @@ impl ColumnFft<FcmaVector32, 31> for FcmaF32ColumnButterfly31 {
             let m0229b = FcmaVector::nmadd_rotate90(m0229b, self.twiddles_im[4], x13m18);
             let m0229b = FcmaVector::nmadd_rotate90(m0229b, self.twiddles_im[2], x14m17);
             let m0229b = FcmaVector::nmadd_rotate90(m0229b, self.twiddles_im[0], x15m16);
-            let [y02, y29] = self.bf2.column_fft([m0229a, m0229b]);
+            let [y02, y29] = self.bf2.parallel_fft([m0229a, m0229b]);
 
             let m0328a = SimdVector::fmadd(data[0], self.twiddles_re[2], x1p30);
             let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[5], x2p29);
@@ -3983,7 +3983,7 @@ impl ColumnFft<FcmaVector32, 31> for FcmaF32ColumnButterfly31 {
             let m0328b = FcmaVector::fmadd_rotate90(m0328b, self.twiddles_im[7], x13m18);
             let m0328b = FcmaVector::fmadd_rotate90(m0328b, self.twiddles_im[10], x14m17);
             let m0328b = FcmaVector::fmadd_rotate90(m0328b, self.twiddles_im[13], x15m16);
-            let [y03, y28] = self.bf2.column_fft([m0328a, m0328b]);
+            let [y03, y28] = self.bf2.parallel_fft([m0328a, m0328b]);
 
             let m0427a = SimdVector::fmadd(data[0], self.twiddles_re[3], x1p30);
             let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[7], x2p29);
@@ -4015,7 +4015,7 @@ impl ColumnFft<FcmaVector32, 31> for FcmaF32ColumnButterfly31 {
             let m0427b = FcmaVector::nmadd_rotate90(m0427b, self.twiddles_im[9], x13m18);
             let m0427b = FcmaVector::nmadd_rotate90(m0427b, self.twiddles_im[5], x14m17);
             let m0427b = FcmaVector::nmadd_rotate90(m0427b, self.twiddles_im[1], x15m16);
-            let [y04, y27] = self.bf2.column_fft([m0427a, m0427b]);
+            let [y04, y27] = self.bf2.parallel_fft([m0427a, m0427b]);
 
             let m0526a = SimdVector::fmadd(data[0], self.twiddles_re[4], x1p30);
             let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[9], x2p29);
@@ -4047,7 +4047,7 @@ impl ColumnFft<FcmaVector32, 31> for FcmaF32ColumnButterfly31 {
             let m0526b = FcmaVector::fmadd_rotate90(m0526b, self.twiddles_im[2], x13m18);
             let m0526b = FcmaVector::fmadd_rotate90(m0526b, self.twiddles_im[7], x14m17);
             let m0526b = FcmaVector::fmadd_rotate90(m0526b, self.twiddles_im[12], x15m16);
-            let [y05, y26] = self.bf2.column_fft([m0526a, m0526b]);
+            let [y05, y26] = self.bf2.parallel_fft([m0526a, m0526b]);
 
             let m0625a = SimdVector::fmadd(data[0], self.twiddles_re[5], x1p30);
             let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[11], x2p29);
@@ -4079,7 +4079,7 @@ impl ColumnFft<FcmaVector32, 31> for FcmaF32ColumnButterfly31 {
             let m0625b = FcmaVector::nmadd_rotate90(m0625b, self.twiddles_im[14], x13m18);
             let m0625b = FcmaVector::nmadd_rotate90(m0625b, self.twiddles_im[8], x14m17);
             let m0625b = FcmaVector::nmadd_rotate90(m0625b, self.twiddles_im[2], x15m16);
-            let [y06, y25] = self.bf2.column_fft([m0625a, m0625b]);
+            let [y06, y25] = self.bf2.parallel_fft([m0625a, m0625b]);
 
             let m0724a = SimdVector::fmadd(data[0], self.twiddles_re[6], x1p30);
             let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[13], x2p29);
@@ -4111,7 +4111,7 @@ impl ColumnFft<FcmaVector32, 31> for FcmaF32ColumnButterfly31 {
             let m0724b = FcmaVector::nmadd_rotate90(m0724b, self.twiddles_im[1], x13m18);
             let m0724b = FcmaVector::fmadd_rotate90(m0724b, self.twiddles_im[4], x14m17);
             let m0724b = FcmaVector::fmadd_rotate90(m0724b, self.twiddles_im[11], x15m16);
-            let [y07, y24] = self.bf2.column_fft([m0724a, m0724b]);
+            let [y07, y24] = self.bf2.parallel_fft([m0724a, m0724b]);
 
             let m0823a = SimdVector::fmadd(data[0], self.twiddles_re[7], x1p30);
             let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[14], x2p29);
@@ -4143,7 +4143,7 @@ impl ColumnFft<FcmaVector32, 31> for FcmaF32ColumnButterfly31 {
             let m0823b = FcmaVector::fmadd_rotate90(m0823b, self.twiddles_im[10], x13m18);
             let m0823b = FcmaVector::nmadd_rotate90(m0823b, self.twiddles_im[11], x14m17);
             let m0823b = FcmaVector::nmadd_rotate90(m0823b, self.twiddles_im[3], x15m16);
-            let [y08, y23] = self.bf2.column_fft([m0823a, m0823b]);
+            let [y08, y23] = self.bf2.parallel_fft([m0823a, m0823b]);
 
             let m0922a = SimdVector::fmadd(data[0], self.twiddles_re[8], x1p30);
             let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[12], x2p29);
@@ -4175,7 +4175,7 @@ impl ColumnFft<FcmaVector32, 31> for FcmaF32ColumnButterfly31 {
             let m0922b = FcmaVector::nmadd_rotate90(m0922b, self.twiddles_im[6], x13m18);
             let m0922b = FcmaVector::fmadd_rotate90(m0922b, self.twiddles_im[1], x14m17);
             let m0922b = FcmaVector::fmadd_rotate90(m0922b, self.twiddles_im[10], x15m16);
-            let [y09, y22] = self.bf2.column_fft([m0922a, m0922b]);
+            let [y09, y22] = self.bf2.parallel_fft([m0922a, m0922b]);
 
             let m1021a = SimdVector::fmadd(data[0], self.twiddles_re[9], x1p30);
             let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[10], x2p29);
@@ -4207,7 +4207,7 @@ impl ColumnFft<FcmaVector32, 31> for FcmaF32ColumnButterfly31 {
             let m1021b = FcmaVector::fmadd_rotate90(m1021b, self.twiddles_im[5], x13m18);
             let m1021b = FcmaVector::nmadd_rotate90(m1021b, self.twiddles_im[14], x14m17);
             let m1021b = FcmaVector::nmadd_rotate90(m1021b, self.twiddles_im[4], x15m16);
-            let [y10, y21] = self.bf2.column_fft([m1021a, m1021b]);
+            let [y10, y21] = self.bf2.parallel_fft([m1021a, m1021b]);
 
             let m1120a = SimdVector::fmadd(data[0], self.twiddles_re[10], x1p30);
             let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[8], x2p29);
@@ -4239,7 +4239,7 @@ impl ColumnFft<FcmaVector32, 31> for FcmaF32ColumnButterfly31 {
             let m1120b = FcmaVector::nmadd_rotate90(m1120b, self.twiddles_im[11], x13m18);
             let m1120b = FcmaVector::nmadd_rotate90(m1120b, self.twiddles_im[0], x14m17);
             let m1120b = FcmaVector::fmadd_rotate90(m1120b, self.twiddles_im[9], x15m16);
-            let [y11, y20] = self.bf2.column_fft([m1120a, m1120b]);
+            let [y11, y20] = self.bf2.parallel_fft([m1120a, m1120b]);
 
             let m1219a = SimdVector::fmadd(data[0], self.twiddles_re[11], x1p30);
             let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[6], x2p29);
@@ -4271,7 +4271,7 @@ impl ColumnFft<FcmaVector32, 31> for FcmaF32ColumnButterfly31 {
             let m1219b = FcmaVector::fmadd_rotate90(m1219b, self.twiddles_im[0], x13m18);
             let m1219b = FcmaVector::fmadd_rotate90(m1219b, self.twiddles_im[12], x14m17);
             let m1219b = FcmaVector::nmadd_rotate90(m1219b, self.twiddles_im[5], x15m16);
-            let [y12, y19] = self.bf2.column_fft([m1219a, m1219b]);
+            let [y12, y19] = self.bf2.parallel_fft([m1219a, m1219b]);
 
             let m1318a = SimdVector::fmadd(data[0], self.twiddles_re[12], x1p30);
             let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[4], x2p29);
@@ -4303,7 +4303,7 @@ impl ColumnFft<FcmaVector32, 31> for FcmaF32ColumnButterfly31 {
             let m1318b = FcmaVector::fmadd_rotate90(m1318b, self.twiddles_im[13], x13m18);
             let m1318b = FcmaVector::nmadd_rotate90(m1318b, self.twiddles_im[3], x14m17);
             let m1318b = FcmaVector::fmadd_rotate90(m1318b, self.twiddles_im[8], x15m16);
-            let [y13, y18] = self.bf2.column_fft([m1318a, m1318b]);
+            let [y13, y18] = self.bf2.parallel_fft([m1318a, m1318b]);
 
             let m1417a = SimdVector::fmadd(data[0], self.twiddles_re[13], x1p30);
             let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[2], x2p29);
@@ -4335,7 +4335,7 @@ impl ColumnFft<FcmaVector32, 31> for FcmaF32ColumnButterfly31 {
             let m1417b = FcmaVector::nmadd_rotate90(m1417b, self.twiddles_im[3], x13m18);
             let m1417b = FcmaVector::fmadd_rotate90(m1417b, self.twiddles_im[9], x14m17);
             let m1417b = FcmaVector::nmadd_rotate90(m1417b, self.twiddles_im[6], x15m16);
-            let [y14, y17] = self.bf2.column_fft([m1417a, m1417b]);
+            let [y14, y17] = self.bf2.parallel_fft([m1417a, m1417b]);
 
             let m1516a = SimdVector::fmadd(data[0], self.twiddles_re[14], x1p30);
             let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[0], x2p29);
@@ -4367,7 +4367,7 @@ impl ColumnFft<FcmaVector32, 31> for FcmaF32ColumnButterfly31 {
             let m1516b = FcmaVector::fmadd_rotate90(m1516b, self.twiddles_im[8], x13m18);
             let m1516b = FcmaVector::nmadd_rotate90(m1516b, self.twiddles_im[6], x14m17);
             let m1516b = FcmaVector::fmadd_rotate90(m1516b, self.twiddles_im[7], x15m16);
-            let [y15, y16] = self.bf2.column_fft([m1516a, m1516b]);
+            let [y15, y16] = self.bf2.parallel_fft([m1516a, m1516b]);
 
 
             [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22, y23, y24, y25, y26, y27, y28, y29, y30]
@@ -4377,7 +4377,7 @@ impl ColumnFft<FcmaVector32, 31> for FcmaF32ColumnButterfly31 {
 
 pub struct FcmaF32Butterfly31<T> {
     direction: FftDirection,
-    column_fft: FcmaF32ColumnButterfly31,
+    parallel_fft: FcmaF32ParallelButterfly31,
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -4389,7 +4389,7 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
         assert_f32::<T>();
         Self {
             direction,
-            column_fft: FcmaF32ColumnButterfly31::new(direction),
+            parallel_fft: FcmaF32ParallelButterfly31::new(direction),
             _phantom: std::marker::PhantomData,
         }
     }
@@ -4398,7 +4398,7 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 });
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 } ); 
     }
@@ -4441,7 +4441,7 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
             extract_lo_hi_f32(input_packed[15], input_packed[30]),
         ];
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
 
         let out_packed = [
             extract_lo_lo_f32(out[0], out[1]),
@@ -4481,58 +4481,58 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
     }
 }
 
-pub struct FcmaF64ColumnButterfly31 {
-    bf2: FcmaF64ColumnButterfly2,
+pub struct FcmaF64ParallelButterfly31 {
+    bf2: FcmaF64ParallelButterfly2,
     twiddles_re: [FcmaVector64; 15],
     twiddles_im: [FcmaVector64; 15],
 }
-impl FcmaF64ColumnButterfly31 {
+impl FcmaF64ParallelButterfly31 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(31, direction);
         Self {
-            bf2: FcmaF64ColumnButterfly2::new(direction),
+            bf2: FcmaF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
     }
 }
-impl ColumnFft<FcmaVector64, 31> for FcmaF64ColumnButterfly31 {
+impl ParallelFft<FcmaVector64, 31> for FcmaF64ParallelButterfly31 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector64; 31]) -> [FcmaVector64; 31] {
+    fn parallel_fft(&self, data: [FcmaVector64; 31]) -> [FcmaVector64; 31] {
                 // Safety: The current machine must support the neon,fcma instruction set. We specified this invariant in the constructor.
         unsafe {
             let y00 = data[0];
-            let [x1p30, x1m30] = self.bf2.column_fft([data[1], data[30]]);
+            let [x1p30, x1m30] = self.bf2.parallel_fft([data[1], data[30]]);
             let y00 = SimdVector::add(y00, x1p30);
-            let [x2p29, x2m29] = self.bf2.column_fft([data[2], data[29]]);
+            let [x2p29, x2m29] = self.bf2.parallel_fft([data[2], data[29]]);
             let y00 = SimdVector::add(y00, x2p29);
-            let [x3p28, x3m28] = self.bf2.column_fft([data[3], data[28]]);
+            let [x3p28, x3m28] = self.bf2.parallel_fft([data[3], data[28]]);
             let y00 = SimdVector::add(y00, x3p28);
-            let [x4p27, x4m27] = self.bf2.column_fft([data[4], data[27]]);
+            let [x4p27, x4m27] = self.bf2.parallel_fft([data[4], data[27]]);
             let y00 = SimdVector::add(y00, x4p27);
-            let [x5p26, x5m26] = self.bf2.column_fft([data[5], data[26]]);
+            let [x5p26, x5m26] = self.bf2.parallel_fft([data[5], data[26]]);
             let y00 = SimdVector::add(y00, x5p26);
-            let [x6p25, x6m25] = self.bf2.column_fft([data[6], data[25]]);
+            let [x6p25, x6m25] = self.bf2.parallel_fft([data[6], data[25]]);
             let y00 = SimdVector::add(y00, x6p25);
-            let [x7p24, x7m24] = self.bf2.column_fft([data[7], data[24]]);
+            let [x7p24, x7m24] = self.bf2.parallel_fft([data[7], data[24]]);
             let y00 = SimdVector::add(y00, x7p24);
-            let [x8p23, x8m23] = self.bf2.column_fft([data[8], data[23]]);
+            let [x8p23, x8m23] = self.bf2.parallel_fft([data[8], data[23]]);
             let y00 = SimdVector::add(y00, x8p23);
-            let [x9p22, x9m22] = self.bf2.column_fft([data[9], data[22]]);
+            let [x9p22, x9m22] = self.bf2.parallel_fft([data[9], data[22]]);
             let y00 = SimdVector::add(y00, x9p22);
-            let [x10p21, x10m21] = self.bf2.column_fft([data[10], data[21]]);
+            let [x10p21, x10m21] = self.bf2.parallel_fft([data[10], data[21]]);
             let y00 = SimdVector::add(y00, x10p21);
-            let [x11p20, x11m20] = self.bf2.column_fft([data[11], data[20]]);
+            let [x11p20, x11m20] = self.bf2.parallel_fft([data[11], data[20]]);
             let y00 = SimdVector::add(y00, x11p20);
-            let [x12p19, x12m19] = self.bf2.column_fft([data[12], data[19]]);
+            let [x12p19, x12m19] = self.bf2.parallel_fft([data[12], data[19]]);
             let y00 = SimdVector::add(y00, x12p19);
-            let [x13p18, x13m18] = self.bf2.column_fft([data[13], data[18]]);
+            let [x13p18, x13m18] = self.bf2.parallel_fft([data[13], data[18]]);
             let y00 = SimdVector::add(y00, x13p18);
-            let [x14p17, x14m17] = self.bf2.column_fft([data[14], data[17]]);
+            let [x14p17, x14m17] = self.bf2.parallel_fft([data[14], data[17]]);
             let y00 = SimdVector::add(y00, x14p17);
-            let [x15p16, x15m16] = self.bf2.column_fft([data[15], data[16]]);
+            let [x15p16, x15m16] = self.bf2.parallel_fft([data[15], data[16]]);
             let y00 = SimdVector::add(y00, x15p16);
 
             let m0130a = SimdVector::fmadd(data[0], self.twiddles_re[0], x1p30);
@@ -4565,7 +4565,7 @@ impl ColumnFft<FcmaVector64, 31> for FcmaF64ColumnButterfly31 {
             let m0130b = FcmaVector::fmadd_rotate90(m0130b, self.twiddles_im[12], x13m18);
             let m0130b = FcmaVector::fmadd_rotate90(m0130b, self.twiddles_im[13], x14m17);
             let m0130b = FcmaVector::fmadd_rotate90(m0130b, self.twiddles_im[14], x15m16);
-            let [y01, y30] = self.bf2.column_fft([m0130a, m0130b]);
+            let [y01, y30] = self.bf2.parallel_fft([m0130a, m0130b]);
 
             let m0229a = SimdVector::fmadd(data[0], self.twiddles_re[1], x1p30);
             let m0229a = SimdVector::fmadd(m0229a, self.twiddles_re[3], x2p29);
@@ -4597,7 +4597,7 @@ impl ColumnFft<FcmaVector64, 31> for FcmaF64ColumnButterfly31 {
             let m0229b = FcmaVector::nmadd_rotate90(m0229b, self.twiddles_im[4], x13m18);
             let m0229b = FcmaVector::nmadd_rotate90(m0229b, self.twiddles_im[2], x14m17);
             let m0229b = FcmaVector::nmadd_rotate90(m0229b, self.twiddles_im[0], x15m16);
-            let [y02, y29] = self.bf2.column_fft([m0229a, m0229b]);
+            let [y02, y29] = self.bf2.parallel_fft([m0229a, m0229b]);
 
             let m0328a = SimdVector::fmadd(data[0], self.twiddles_re[2], x1p30);
             let m0328a = SimdVector::fmadd(m0328a, self.twiddles_re[5], x2p29);
@@ -4629,7 +4629,7 @@ impl ColumnFft<FcmaVector64, 31> for FcmaF64ColumnButterfly31 {
             let m0328b = FcmaVector::fmadd_rotate90(m0328b, self.twiddles_im[7], x13m18);
             let m0328b = FcmaVector::fmadd_rotate90(m0328b, self.twiddles_im[10], x14m17);
             let m0328b = FcmaVector::fmadd_rotate90(m0328b, self.twiddles_im[13], x15m16);
-            let [y03, y28] = self.bf2.column_fft([m0328a, m0328b]);
+            let [y03, y28] = self.bf2.parallel_fft([m0328a, m0328b]);
 
             let m0427a = SimdVector::fmadd(data[0], self.twiddles_re[3], x1p30);
             let m0427a = SimdVector::fmadd(m0427a, self.twiddles_re[7], x2p29);
@@ -4661,7 +4661,7 @@ impl ColumnFft<FcmaVector64, 31> for FcmaF64ColumnButterfly31 {
             let m0427b = FcmaVector::nmadd_rotate90(m0427b, self.twiddles_im[9], x13m18);
             let m0427b = FcmaVector::nmadd_rotate90(m0427b, self.twiddles_im[5], x14m17);
             let m0427b = FcmaVector::nmadd_rotate90(m0427b, self.twiddles_im[1], x15m16);
-            let [y04, y27] = self.bf2.column_fft([m0427a, m0427b]);
+            let [y04, y27] = self.bf2.parallel_fft([m0427a, m0427b]);
 
             let m0526a = SimdVector::fmadd(data[0], self.twiddles_re[4], x1p30);
             let m0526a = SimdVector::fmadd(m0526a, self.twiddles_re[9], x2p29);
@@ -4693,7 +4693,7 @@ impl ColumnFft<FcmaVector64, 31> for FcmaF64ColumnButterfly31 {
             let m0526b = FcmaVector::fmadd_rotate90(m0526b, self.twiddles_im[2], x13m18);
             let m0526b = FcmaVector::fmadd_rotate90(m0526b, self.twiddles_im[7], x14m17);
             let m0526b = FcmaVector::fmadd_rotate90(m0526b, self.twiddles_im[12], x15m16);
-            let [y05, y26] = self.bf2.column_fft([m0526a, m0526b]);
+            let [y05, y26] = self.bf2.parallel_fft([m0526a, m0526b]);
 
             let m0625a = SimdVector::fmadd(data[0], self.twiddles_re[5], x1p30);
             let m0625a = SimdVector::fmadd(m0625a, self.twiddles_re[11], x2p29);
@@ -4725,7 +4725,7 @@ impl ColumnFft<FcmaVector64, 31> for FcmaF64ColumnButterfly31 {
             let m0625b = FcmaVector::nmadd_rotate90(m0625b, self.twiddles_im[14], x13m18);
             let m0625b = FcmaVector::nmadd_rotate90(m0625b, self.twiddles_im[8], x14m17);
             let m0625b = FcmaVector::nmadd_rotate90(m0625b, self.twiddles_im[2], x15m16);
-            let [y06, y25] = self.bf2.column_fft([m0625a, m0625b]);
+            let [y06, y25] = self.bf2.parallel_fft([m0625a, m0625b]);
 
             let m0724a = SimdVector::fmadd(data[0], self.twiddles_re[6], x1p30);
             let m0724a = SimdVector::fmadd(m0724a, self.twiddles_re[13], x2p29);
@@ -4757,7 +4757,7 @@ impl ColumnFft<FcmaVector64, 31> for FcmaF64ColumnButterfly31 {
             let m0724b = FcmaVector::nmadd_rotate90(m0724b, self.twiddles_im[1], x13m18);
             let m0724b = FcmaVector::fmadd_rotate90(m0724b, self.twiddles_im[4], x14m17);
             let m0724b = FcmaVector::fmadd_rotate90(m0724b, self.twiddles_im[11], x15m16);
-            let [y07, y24] = self.bf2.column_fft([m0724a, m0724b]);
+            let [y07, y24] = self.bf2.parallel_fft([m0724a, m0724b]);
 
             let m0823a = SimdVector::fmadd(data[0], self.twiddles_re[7], x1p30);
             let m0823a = SimdVector::fmadd(m0823a, self.twiddles_re[14], x2p29);
@@ -4789,7 +4789,7 @@ impl ColumnFft<FcmaVector64, 31> for FcmaF64ColumnButterfly31 {
             let m0823b = FcmaVector::fmadd_rotate90(m0823b, self.twiddles_im[10], x13m18);
             let m0823b = FcmaVector::nmadd_rotate90(m0823b, self.twiddles_im[11], x14m17);
             let m0823b = FcmaVector::nmadd_rotate90(m0823b, self.twiddles_im[3], x15m16);
-            let [y08, y23] = self.bf2.column_fft([m0823a, m0823b]);
+            let [y08, y23] = self.bf2.parallel_fft([m0823a, m0823b]);
 
             let m0922a = SimdVector::fmadd(data[0], self.twiddles_re[8], x1p30);
             let m0922a = SimdVector::fmadd(m0922a, self.twiddles_re[12], x2p29);
@@ -4821,7 +4821,7 @@ impl ColumnFft<FcmaVector64, 31> for FcmaF64ColumnButterfly31 {
             let m0922b = FcmaVector::nmadd_rotate90(m0922b, self.twiddles_im[6], x13m18);
             let m0922b = FcmaVector::fmadd_rotate90(m0922b, self.twiddles_im[1], x14m17);
             let m0922b = FcmaVector::fmadd_rotate90(m0922b, self.twiddles_im[10], x15m16);
-            let [y09, y22] = self.bf2.column_fft([m0922a, m0922b]);
+            let [y09, y22] = self.bf2.parallel_fft([m0922a, m0922b]);
 
             let m1021a = SimdVector::fmadd(data[0], self.twiddles_re[9], x1p30);
             let m1021a = SimdVector::fmadd(m1021a, self.twiddles_re[10], x2p29);
@@ -4853,7 +4853,7 @@ impl ColumnFft<FcmaVector64, 31> for FcmaF64ColumnButterfly31 {
             let m1021b = FcmaVector::fmadd_rotate90(m1021b, self.twiddles_im[5], x13m18);
             let m1021b = FcmaVector::nmadd_rotate90(m1021b, self.twiddles_im[14], x14m17);
             let m1021b = FcmaVector::nmadd_rotate90(m1021b, self.twiddles_im[4], x15m16);
-            let [y10, y21] = self.bf2.column_fft([m1021a, m1021b]);
+            let [y10, y21] = self.bf2.parallel_fft([m1021a, m1021b]);
 
             let m1120a = SimdVector::fmadd(data[0], self.twiddles_re[10], x1p30);
             let m1120a = SimdVector::fmadd(m1120a, self.twiddles_re[8], x2p29);
@@ -4885,7 +4885,7 @@ impl ColumnFft<FcmaVector64, 31> for FcmaF64ColumnButterfly31 {
             let m1120b = FcmaVector::nmadd_rotate90(m1120b, self.twiddles_im[11], x13m18);
             let m1120b = FcmaVector::nmadd_rotate90(m1120b, self.twiddles_im[0], x14m17);
             let m1120b = FcmaVector::fmadd_rotate90(m1120b, self.twiddles_im[9], x15m16);
-            let [y11, y20] = self.bf2.column_fft([m1120a, m1120b]);
+            let [y11, y20] = self.bf2.parallel_fft([m1120a, m1120b]);
 
             let m1219a = SimdVector::fmadd(data[0], self.twiddles_re[11], x1p30);
             let m1219a = SimdVector::fmadd(m1219a, self.twiddles_re[6], x2p29);
@@ -4917,7 +4917,7 @@ impl ColumnFft<FcmaVector64, 31> for FcmaF64ColumnButterfly31 {
             let m1219b = FcmaVector::fmadd_rotate90(m1219b, self.twiddles_im[0], x13m18);
             let m1219b = FcmaVector::fmadd_rotate90(m1219b, self.twiddles_im[12], x14m17);
             let m1219b = FcmaVector::nmadd_rotate90(m1219b, self.twiddles_im[5], x15m16);
-            let [y12, y19] = self.bf2.column_fft([m1219a, m1219b]);
+            let [y12, y19] = self.bf2.parallel_fft([m1219a, m1219b]);
 
             let m1318a = SimdVector::fmadd(data[0], self.twiddles_re[12], x1p30);
             let m1318a = SimdVector::fmadd(m1318a, self.twiddles_re[4], x2p29);
@@ -4949,7 +4949,7 @@ impl ColumnFft<FcmaVector64, 31> for FcmaF64ColumnButterfly31 {
             let m1318b = FcmaVector::fmadd_rotate90(m1318b, self.twiddles_im[13], x13m18);
             let m1318b = FcmaVector::nmadd_rotate90(m1318b, self.twiddles_im[3], x14m17);
             let m1318b = FcmaVector::fmadd_rotate90(m1318b, self.twiddles_im[8], x15m16);
-            let [y13, y18] = self.bf2.column_fft([m1318a, m1318b]);
+            let [y13, y18] = self.bf2.parallel_fft([m1318a, m1318b]);
 
             let m1417a = SimdVector::fmadd(data[0], self.twiddles_re[13], x1p30);
             let m1417a = SimdVector::fmadd(m1417a, self.twiddles_re[2], x2p29);
@@ -4981,7 +4981,7 @@ impl ColumnFft<FcmaVector64, 31> for FcmaF64ColumnButterfly31 {
             let m1417b = FcmaVector::nmadd_rotate90(m1417b, self.twiddles_im[3], x13m18);
             let m1417b = FcmaVector::fmadd_rotate90(m1417b, self.twiddles_im[9], x14m17);
             let m1417b = FcmaVector::nmadd_rotate90(m1417b, self.twiddles_im[6], x15m16);
-            let [y14, y17] = self.bf2.column_fft([m1417a, m1417b]);
+            let [y14, y17] = self.bf2.parallel_fft([m1417a, m1417b]);
 
             let m1516a = SimdVector::fmadd(data[0], self.twiddles_re[14], x1p30);
             let m1516a = SimdVector::fmadd(m1516a, self.twiddles_re[0], x2p29);
@@ -5013,7 +5013,7 @@ impl ColumnFft<FcmaVector64, 31> for FcmaF64ColumnButterfly31 {
             let m1516b = FcmaVector::fmadd_rotate90(m1516b, self.twiddles_im[8], x13m18);
             let m1516b = FcmaVector::nmadd_rotate90(m1516b, self.twiddles_im[6], x14m17);
             let m1516b = FcmaVector::fmadd_rotate90(m1516b, self.twiddles_im[7], x15m16);
-            let [y15, y16] = self.bf2.column_fft([m1516a, m1516b]);
+            let [y15, y16] = self.bf2.parallel_fft([m1516a, m1516b]);
 
 
             [y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15, y16, y17, y18, y19, y20, y21, y22, y23, y24, y25, y26, y27, y28, y29, y30]
@@ -5023,7 +5023,7 @@ impl ColumnFft<FcmaVector64, 31> for FcmaF64ColumnButterfly31 {
 
 pub struct FcmaF64Butterfly31<T> {
     direction: FftDirection,
-    column_fft: FcmaF64ColumnButterfly31,
+    parallel_fft: FcmaF64ParallelButterfly31,
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -5035,7 +5035,7 @@ impl<T: FftNum> FcmaF64Butterfly31<T> {
         assert_f64::<T>();
         unsafe {Self {
             direction,
-            column_fft: FcmaF64ColumnButterfly31::new(direction),
+            parallel_fft: FcmaF64ParallelButterfly31::new(direction),
             _phantom: std::marker::PhantomData,
         }}
     }
@@ -5044,7 +5044,7 @@ impl<T: FftNum> FcmaF64Butterfly31<T> {
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 });
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 });   
     }

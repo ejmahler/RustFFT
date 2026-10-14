@@ -143,12 +143,12 @@ impl SimdVector for WasmVector64 {
 
     type ScalarType = f64;
 
-    type Butterfly2 = WasmSimdF64ColumnButterfly2;
-    type Butterfly3 = WasmSimdF64ColumnButterfly3;
-    type Butterfly4 = WasmSimdF64ColumnButterfly4;
-    type Butterfly5 = WasmSimdF64ColumnButterfly5;
-    type Butterfly6 = WasmSimdF64ColumnButterfly6;
-    type Butterfly7 = WasmSimdF64ColumnButterfly7;
+    type Butterfly2 = WasmSimdF64ParallelButterfly2;
+    type Butterfly3 = WasmSimdF64ParallelButterfly3;
+    type Butterfly4 = WasmSimdF64ParallelButterfly4;
+    type Butterfly5 = WasmSimdF64ParallelButterfly5;
+    type Butterfly6 = WasmSimdF64ParallelButterfly6;
+    type Butterfly7 = WasmSimdF64ParallelButterfly7;
 
     #[inline(always)]
     unsafe fn zero_vector() -> Self {
@@ -273,12 +273,12 @@ impl SimdVector for WasmVector32 {
 
     type ScalarType = f32;
 
-    type Butterfly2 = WasmSimdF32ColumnButterfly2;
-    type Butterfly3 = WasmSimdF32ColumnButterfly3;
-    type Butterfly4 = WasmSimdF32ColumnButterfly4;
-    type Butterfly5 = WasmSimdF32ColumnButterfly5;
-    type Butterfly6 = WasmSimdF32ColumnButterfly6;
-    type Butterfly7 = WasmSimdF32ColumnButterfly7;
+    type Butterfly2 = WasmSimdF32ParallelButterfly2;
+    type Butterfly3 = WasmSimdF32ParallelButterfly3;
+    type Butterfly4 = WasmSimdF32ParallelButterfly4;
+    type Butterfly5 = WasmSimdF32ParallelButterfly5;
+    type Butterfly6 = WasmSimdF32ParallelButterfly6;
+    type Butterfly7 = WasmSimdF32ParallelButterfly7;
 
     #[inline(always)]
     unsafe fn zero_vector() -> Self {

@@ -4,8 +4,8 @@ use num_complex::Complex;
 use num_traits::Zero;
 
 use crate::algorithm::scalar_column_butterflies::{
-    ScalarColumnButterfly2, ScalarColumnButterfly3, ScalarColumnButterfly4, ScalarColumnButterfly5,
-    ScalarColumnButterfly6, ScalarColumnButterfly7,
+    ScalarParallelButterfly2, ScalarParallelButterfly3, ScalarParallelButterfly4,
+    ScalarParallelButterfly5, ScalarParallelButterfly6, ScalarParallelButterfly7,
 };
 use crate::{simd::simd_vector::SimdVector, twiddles, FftDirection, FftNum};
 
@@ -19,12 +19,12 @@ impl<T: FftNum> SimdVector for Complex<T> {
 
     type ScalarType = T;
 
-    type Butterfly2 = ScalarColumnButterfly2<T>;
-    type Butterfly3 = ScalarColumnButterfly3<T>;
-    type Butterfly4 = ScalarColumnButterfly4<T>;
-    type Butterfly5 = ScalarColumnButterfly5<T>;
-    type Butterfly6 = ScalarColumnButterfly6<T>;
-    type Butterfly7 = ScalarColumnButterfly7<T>;
+    type Butterfly2 = ScalarParallelButterfly2<T>;
+    type Butterfly3 = ScalarParallelButterfly3<T>;
+    type Butterfly4 = ScalarParallelButterfly4<T>;
+    type Butterfly5 = ScalarParallelButterfly5<T>;
+    type Butterfly6 = ScalarParallelButterfly6<T>;
+    type Butterfly7 = ScalarParallelButterfly7<T>;
 
     unsafe fn zero_vector() -> Self {
         Zero::zero()

@@ -8,7 +8,7 @@
 use num_complex::Complex;
 
 use crate::common::FftNum;
-use crate::simd::column_fft::ColumnFft;
+use crate::simd::parallel_fft::ParallelFft;
 use crate::FftDirection;
 
 /// The vector operations the shared SIMD algorithms need from a backend's vector type.
@@ -29,12 +29,12 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
     /// The scalar this vector holds. Always the same type as the `T` of the algorithm using it.
     type ScalarType: FftNum;
 
-    type Butterfly2: ColumnFft<Self, 2>;
-    type Butterfly3: ColumnFft<Self, 3>;
-    type Butterfly4: ColumnFft<Self, 4>;
-    type Butterfly5: ColumnFft<Self, 5>;
-    type Butterfly6: ColumnFft<Self, 6>;
-    type Butterfly7: ColumnFft<Self, 7>;
+    type Butterfly2: ParallelFft<Self, 2>;
+    type Butterfly3: ParallelFft<Self, 3>;
+    type Butterfly4: ParallelFft<Self, 4>;
+    type Butterfly5: ParallelFft<Self, 5>;
+    type Butterfly6: ParallelFft<Self, 6>;
+    type Butterfly7: ParallelFft<Self, 7>;
 
     unsafe fn zero_vector() -> Self;
 

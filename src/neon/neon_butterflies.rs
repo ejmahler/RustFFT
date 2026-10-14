@@ -10,7 +10,7 @@ use crate::{Direction, Fft, Length};
 use crate::fft_helper::{
     fft_helper_immut, fft_helper_immut_unroll2x, fft_helper_inplace, fft_helper_inplace_unroll2x,
 };
-use crate::simd::column_fft::ColumnFft;
+use crate::simd::parallel_fft::ParallelFft;
 use crate::simd::simd_array::SimdComplexArrayMut;
 use crate::simd::simd_vector::SimdVector;
 
@@ -279,17 +279,17 @@ impl<T: FftNum> NeonF64Butterfly1<T> {
 //  |_____|         |____/_____|_.__/|_|\__|
 //
 
-pub struct NeonF32ColumnButterfly2 {}
-impl NeonF32ColumnButterfly2 {
+pub struct NeonF32ParallelButterfly2 {}
+impl NeonF32ParallelButterfly2 {
     #[inline(always)]
     pub fn new(_direction: FftDirection) -> Self {
         assert!(std::arch::is_aarch64_feature_detected!("neon"));
         Self {}
     }
 }
-impl ColumnFft<float32x4_t, 2> for NeonF32ColumnButterfly2 {
+impl ParallelFft<float32x4_t, 2> for NeonF32ParallelButterfly2 {
     #[inline(always)]
-    fn column_fft(&self, data: [float32x4_t; 2]) -> [float32x4_t; 2] {
+    fn parallel_fft(&self, data: [float32x4_t; 2]) -> [float32x4_t; 2] {
         // Safety: These intrinsics require the NEON target feature. We asserted this feature was present in the constructor.
         unsafe { [vaddq_f32(data[0], data[1]), vsubq_f32(data[0], data[1])] }
     }
@@ -394,17 +394,17 @@ unsafe fn solo_fft2_f32(values: float32x4_t) -> float32x4_t {
 //  |_____|          \___/   |_| |_.__/|_|\__|
 //
 
-pub struct NeonF64ColumnButterfly2 {}
-impl NeonF64ColumnButterfly2 {
+pub struct NeonF64ParallelButterfly2 {}
+impl NeonF64ParallelButterfly2 {
     #[inline(always)]
     pub fn new(_direction: FftDirection) -> Self {
         assert!(std::arch::is_aarch64_feature_detected!("neon"));
         Self {}
     }
 }
-impl ColumnFft<float64x2_t, 2> for NeonF64ColumnButterfly2 {
+impl ParallelFft<float64x2_t, 2> for NeonF64ParallelButterfly2 {
     #[inline(always)]
-    fn column_fft(&self, data: [float64x2_t; 2]) -> [float64x2_t; 2] {
+    fn parallel_fft(&self, data: [float64x2_t; 2]) -> [float64x2_t; 2] {
         // Safety: These intrinsics require the NEON target feature. We asserted this feature was present in the constructor.
         unsafe { [vaddq_f64(data[0], data[1]), vsubq_f64(data[0], data[1])] }
     }
@@ -465,13 +465,13 @@ pub(crate) unsafe fn solo_fft2_f64(left: float64x2_t, right: float64x2_t) -> [fl
 //  |____/           |____/_____|_.__/|_|\__|
 //
 
-pub struct NeonF32ColumnButterfly3 {
+pub struct NeonF32ParallelButterfly3 {
     rotate: Rotate90F32,
     twiddle1re: float32x4_t,
     twiddle1im: float32x4_t,
     twiddle2im: float32x4_t,
 }
-impl NeonF32ColumnButterfly3 {
+impl NeonF32ParallelButterfly3 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(std::arch::is_aarch64_feature_detected!("neon"));
@@ -485,9 +485,9 @@ impl NeonF32ColumnButterfly3 {
         }
     }
 }
-impl ColumnFft<float32x4_t, 3> for NeonF32ColumnButterfly3 {
+impl ParallelFft<float32x4_t, 3> for NeonF32ParallelButterfly3 {
     #[inline(always)]
-    fn column_fft(&self, data: [float32x4_t; 3]) -> [float32x4_t; 3] {
+    fn parallel_fft(&self, data: [float32x4_t; 3]) -> [float32x4_t; 3] {
         // Safety: These intrinsics require the NEON target feature. We asserted this feature was present in the constructor.
         unsafe {
             // This is a Neon translation of the scalar 3-point butterfly
@@ -624,13 +624,13 @@ impl<T: FftNum> NeonF32Butterfly3<T> {
 //  |____/            \___/   |_| |_.__/|_|\__|
 //
 
-pub struct NeonF64ColumnButterfly3 {
+pub struct NeonF64ParallelButterfly3 {
     rotate: Rotate90F64,
     twiddle1re: float64x2_t,
     twiddle1im: float64x2_t,
     twiddle2im: float64x2_t,
 }
-impl NeonF64ColumnButterfly3 {
+impl NeonF64ParallelButterfly3 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(std::arch::is_aarch64_feature_detected!("neon"));
@@ -644,9 +644,9 @@ impl NeonF64ColumnButterfly3 {
         }
     }
 }
-impl ColumnFft<float64x2_t, 3> for NeonF64ColumnButterfly3 {
+impl ParallelFft<float64x2_t, 3> for NeonF64ParallelButterfly3 {
     #[inline(always)]
-    fn column_fft(&self, data: [float64x2_t; 3]) -> [float64x2_t; 3] {
+    fn parallel_fft(&self, data: [float64x2_t; 3]) -> [float64x2_t; 3] {
         // Safety: These intrinsics require the NEON target feature. We asserted this feature was present in the constructor.
         unsafe {
             // This is a Neon translation of the scalar 3-point butterfly
@@ -741,29 +741,29 @@ impl<T: FftNum> NeonF64Butterfly3<T> {
 //     |_|           |____/_____|_.__/|_|\__|
 //
 
-pub struct NeonF32ColumnButterfly4 {
+pub struct NeonF32ParallelButterfly4 {
     rotate: Rotate90F32,
-    bf2: NeonF32ColumnButterfly2,
+    bf2: NeonF32ParallelButterfly2,
 }
-impl NeonF32ColumnButterfly4 {
+impl NeonF32ParallelButterfly4 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(std::arch::is_aarch64_feature_detected!("neon"));
 
         Self {
             rotate: Rotate90F32::new(direction == FftDirection::Inverse),
-            bf2: NeonF32ColumnButterfly2::new(direction),
+            bf2: NeonF32ParallelButterfly2::new(direction),
         }
     }
 }
-impl ColumnFft<float32x4_t, 4> for NeonF32ColumnButterfly4 {
+impl ParallelFft<float32x4_t, 4> for NeonF32ParallelButterfly4 {
     #[inline(always)]
-    fn column_fft(&self, data: [float32x4_t; 4]) -> [float32x4_t; 4] {
+    fn parallel_fft(&self, data: [float32x4_t; 4]) -> [float32x4_t; 4] {
         // step 1: transpose
         // and
         // step 2: column FFTs
-        let temp0 = self.bf2.column_fft([data[0], data[2]]);
-        let mut temp1 = self.bf2.column_fft([data[1], data[3]]);
+        let temp0 = self.bf2.parallel_fft([data[0], data[2]]);
+        let mut temp1 = self.bf2.parallel_fft([data[1], data[3]]);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
         // Safety: `rotate_both` require the NEON target feature. We asserted this feature was present in the constructor.
@@ -772,8 +772,8 @@ impl ColumnFft<float32x4_t, 4> for NeonF32ColumnButterfly4 {
         // step 4: transpose
         // and
         // step 5: row FFTs
-        let out0 = self.bf2.column_fft([temp0[0], temp1[0]]);
-        let out2 = self.bf2.column_fft([temp0[1], temp1[1]]);
+        let out0 = self.bf2.parallel_fft([temp0[0], temp1[0]]);
+        let out2 = self.bf2.parallel_fft([temp0[1], temp1[1]]);
 
         // step 6: transpose by swapping index 1 and 2
         [out0[0], out2[0], out0[1], out2[1]]
@@ -903,29 +903,29 @@ impl<T: FftNum> NeonF32Butterfly4<T> {
 //     |_|            \___/   |_| |_.__/|_|\__|
 //
 
-pub struct NeonF64ColumnButterfly4 {
+pub struct NeonF64ParallelButterfly4 {
     rotate: Rotate90F64,
-    bf2: NeonF64ColumnButterfly2,
+    bf2: NeonF64ParallelButterfly2,
 }
-impl NeonF64ColumnButterfly4 {
+impl NeonF64ParallelButterfly4 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(std::arch::is_aarch64_feature_detected!("neon"));
 
         Self {
             rotate: Rotate90F64::new(direction == FftDirection::Inverse),
-            bf2: NeonF64ColumnButterfly2::new(direction),
+            bf2: NeonF64ParallelButterfly2::new(direction),
         }
     }
 }
-impl ColumnFft<float64x2_t, 4> for NeonF64ColumnButterfly4 {
+impl ParallelFft<float64x2_t, 4> for NeonF64ParallelButterfly4 {
     #[inline(always)]
-    fn column_fft(&self, data: [float64x2_t; 4]) -> [float64x2_t; 4] {
+    fn parallel_fft(&self, data: [float64x2_t; 4]) -> [float64x2_t; 4] {
         // step 1: transpose
         // and
         // step 2: column FFTs
-        let temp0 = self.bf2.column_fft([data[0], data[2]]);
-        let mut temp1 = self.bf2.column_fft([data[1], data[3]]);
+        let temp0 = self.bf2.parallel_fft([data[0], data[2]]);
+        let mut temp1 = self.bf2.parallel_fft([data[1], data[3]]);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
         // Safety: `rotate_both` require the NEON target feature. We asserted this feature was present in the constructor.
@@ -934,8 +934,8 @@ impl ColumnFft<float64x2_t, 4> for NeonF64ColumnButterfly4 {
         // step 4: transpose
         // and
         // step 5: row FFTs
-        let out0 = self.bf2.column_fft([temp0[0], temp1[0]]);
-        let out2 = self.bf2.column_fft([temp0[1], temp1[1]]);
+        let out0 = self.bf2.parallel_fft([temp0[0], temp1[0]]);
+        let out2 = self.bf2.parallel_fft([temp0[1], temp1[1]]);
 
         // step 6: transpose by swapping index 1 and 2
         [out0[0], out2[0], out0[1], out2[1]]
@@ -1017,14 +1017,14 @@ impl<T: FftNum> NeonF64Butterfly4<T> {
 //  |____/           |____/_____|_.__/|_|\__|
 //
 
-pub struct NeonF32ColumnButterfly5 {
+pub struct NeonF32ParallelButterfly5 {
     rotate: Rotate90F32,
     twiddle1re: float32x4_t,
     twiddle1im: float32x4_t,
     twiddle2re: float32x4_t,
     twiddle2im: float32x4_t,
 }
-impl NeonF32ColumnButterfly5 {
+impl NeonF32ParallelButterfly5 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(std::arch::is_aarch64_feature_detected!("neon"));
@@ -1040,9 +1040,9 @@ impl NeonF32ColumnButterfly5 {
         }
     }
 }
-impl ColumnFft<float32x4_t, 5> for NeonF32ColumnButterfly5 {
+impl ParallelFft<float32x4_t, 5> for NeonF32ParallelButterfly5 {
     #[inline(always)]
-    fn column_fft(&self, data: [float32x4_t; 5]) -> [float32x4_t; 5] {
+    fn parallel_fft(&self, data: [float32x4_t; 5]) -> [float32x4_t; 5] {
         // Safety: These intrinsics require the NEON target feature. We asserted this feature was present in the constructor.
         unsafe {
             let x14p = vaddq_f32(data[1], data[4]);
@@ -1247,14 +1247,14 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
 //  |____/            \___/   |_| |_.__/|_|\__|
 //
 
-pub struct NeonF64ColumnButterfly5 {
+pub struct NeonF64ParallelButterfly5 {
     rotate: Rotate90F64,
     twiddle1re: float64x2_t,
     twiddle1im: float64x2_t,
     twiddle2re: float64x2_t,
     twiddle2im: float64x2_t,
 }
-impl NeonF64ColumnButterfly5 {
+impl NeonF64ParallelButterfly5 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(std::arch::is_aarch64_feature_detected!("neon"));
@@ -1270,9 +1270,9 @@ impl NeonF64ColumnButterfly5 {
         }
     }
 }
-impl ColumnFft<float64x2_t, 5> for NeonF64ColumnButterfly5 {
+impl ParallelFft<float64x2_t, 5> for NeonF64ParallelButterfly5 {
     #[inline(always)]
-    fn column_fft(&self, data: [float64x2_t; 5]) -> [float64x2_t; 5] {
+    fn parallel_fft(&self, data: [float64x2_t; 5]) -> [float64x2_t; 5] {
         // Safety: These intrinsics require the NEON target feature. We asserted this feature was present in the constructor.
         unsafe {
             let x14p = vaddq_f64(data[1], data[4]);
@@ -1412,36 +1412,36 @@ impl<T: FftNum> NeonF64Butterfly5<T> {
 //   \___/          |____/_____|_.__/|_|\__|
 //
 
-pub struct NeonF32ColumnButterfly6 {
-    bf2: NeonF32ColumnButterfly2,
-    bf3: NeonF32ColumnButterfly3,
+pub struct NeonF32ParallelButterfly6 {
+    bf2: NeonF32ParallelButterfly2,
+    bf3: NeonF32ParallelButterfly3,
 }
-impl NeonF32ColumnButterfly6 {
+impl NeonF32ParallelButterfly6 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(std::arch::is_aarch64_feature_detected!("neon"));
 
         Self {
-            bf2: NeonF32ColumnButterfly2::new(direction),
-            bf3: NeonF32ColumnButterfly3::new(direction),
+            bf2: NeonF32ParallelButterfly2::new(direction),
+            bf3: NeonF32ParallelButterfly3::new(direction),
         }
     }
 }
-impl ColumnFft<float32x4_t, 6> for NeonF32ColumnButterfly6 {
+impl ParallelFft<float32x4_t, 6> for NeonF32ParallelButterfly6 {
     #[inline(always)]
-    fn column_fft(&self, data: [float32x4_t; 6]) -> [float32x4_t; 6] {
+    fn parallel_fft(&self, data: [float32x4_t; 6]) -> [float32x4_t; 6] {
         // Algorithm: 3x2 good-thomas
 
         // Size-3 FFTs down the columns of our reordered array
-        let mid0 = self.bf3.column_fft([data[0], data[2], data[4]]);
-        let mid1 = self.bf3.column_fft([data[3], data[5], data[1]]);
+        let mid0 = self.bf3.parallel_fft([data[0], data[2], data[4]]);
+        let mid1 = self.bf3.parallel_fft([data[3], data[5], data[1]]);
 
         // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
 
         // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = self.bf2.column_fft([mid0[0], mid1[0]]);
-        let [output2, output3] = self.bf2.column_fft([mid0[1], mid1[1]]);
-        let [output4, output5] = self.bf2.column_fft([mid0[2], mid1[2]]);
+        let [output0, output1] = self.bf2.parallel_fft([mid0[0], mid1[0]]);
+        let [output2, output3] = self.bf2.parallel_fft([mid0[1], mid1[1]]);
+        let [output4, output5] = self.bf2.parallel_fft([mid0[2], mid1[2]]);
 
         // Reorder into output
         [output0, output3, output4, output1, output2, output5]
@@ -1566,36 +1566,36 @@ impl<T: FftNum> NeonF32Butterfly6<T> {
 //   \___/           \___/   |_| |_.__/|_|\__|
 //
 
-pub struct NeonF64ColumnButterfly6 {
-    bf2: NeonF64ColumnButterfly2,
-    bf3: NeonF64ColumnButterfly3,
+pub struct NeonF64ParallelButterfly6 {
+    bf2: NeonF64ParallelButterfly2,
+    bf3: NeonF64ParallelButterfly3,
 }
-impl NeonF64ColumnButterfly6 {
+impl NeonF64ParallelButterfly6 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(std::arch::is_aarch64_feature_detected!("neon"));
 
         Self {
-            bf2: NeonF64ColumnButterfly2::new(direction),
-            bf3: NeonF64ColumnButterfly3::new(direction),
+            bf2: NeonF64ParallelButterfly2::new(direction),
+            bf3: NeonF64ParallelButterfly3::new(direction),
         }
     }
 }
-impl ColumnFft<float64x2_t, 6> for NeonF64ColumnButterfly6 {
+impl ParallelFft<float64x2_t, 6> for NeonF64ParallelButterfly6 {
     #[inline(always)]
-    fn column_fft(&self, data: [float64x2_t; 6]) -> [float64x2_t; 6] {
+    fn parallel_fft(&self, data: [float64x2_t; 6]) -> [float64x2_t; 6] {
         // Algorithm: 3x2 good-thomas
 
         // Size-3 FFTs down the columns of our reordered array
-        let mid0 = self.bf3.column_fft([data[0], data[2], data[4]]);
-        let mid1 = self.bf3.column_fft([data[3], data[5], data[1]]);
+        let mid0 = self.bf3.parallel_fft([data[0], data[2], data[4]]);
+        let mid1 = self.bf3.parallel_fft([data[3], data[5], data[1]]);
 
         // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
 
         // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = self.bf2.column_fft([mid0[0], mid1[0]]);
-        let [output2, output3] = self.bf2.column_fft([mid0[1], mid1[1]]);
-        let [output4, output5] = self.bf2.column_fft([mid0[2], mid1[2]]);
+        let [output0, output1] = self.bf2.parallel_fft([mid0[0], mid1[0]]);
+        let [output2, output3] = self.bf2.parallel_fft([mid0[1], mid1[1]]);
+        let [output4, output5] = self.bf2.parallel_fft([mid0[2], mid1[2]]);
 
         // Reorder into output
         [output0, output3, output4, output1, output2, output5]
@@ -3671,7 +3671,7 @@ impl<T: FftNum> NeonF64Butterfly32<T> {
 mod unit_tests {
     use super::*;
     use crate::algorithm::Dft;
-    use crate::test_utils::{check_column_fft, check_fft_algorithm, compare_vectors};
+    use crate::test_utils::{check_fft_algorithm, check_parallel_fft, compare_vectors};
 
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
@@ -3731,43 +3731,83 @@ mod unit_tests {
     test_butterfly_64_func!(test_neonf64_butterfly24, NeonF64Butterfly24, 24);
     test_butterfly_64_func!(test_neonf64_butterfly32, NeonF64Butterfly32, 32);
 
-    macro_rules! test_column_butterfly_32_func {
+    macro_rules! test_parallel_butterfly_32_func {
         ($test_name:ident, $struct_name:ident, $size:expr) => {
             #[test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
-                check_column_fft::<float32x4_t, $size>(&butterfly, FftDirection::Forward);
+                check_parallel_fft::<float32x4_t, $size>(&butterfly, FftDirection::Forward);
 
                 let butterfly_inverse = $struct_name::new(FftDirection::Inverse);
-                check_column_fft::<float32x4_t, $size>(&butterfly_inverse, FftDirection::Inverse);
+                check_parallel_fft::<float32x4_t, $size>(&butterfly_inverse, FftDirection::Inverse);
             }
         };
     }
 
-    test_column_butterfly_32_func!(test_neonf32_column_butterfly2, NeonF32ColumnButterfly2, 2);
-    test_column_butterfly_32_func!(test_neonf32_column_butterfly3, NeonF32ColumnButterfly3, 3);
-    test_column_butterfly_32_func!(test_neonf32_column_butterfly4, NeonF32ColumnButterfly4, 4);
-    test_column_butterfly_32_func!(test_neonf32_column_butterfly5, NeonF32ColumnButterfly5, 5);
-    test_column_butterfly_32_func!(test_neonf32_column_butterfly6, NeonF32ColumnButterfly6, 6);
+    test_parallel_butterfly_32_func!(
+        test_neonf32_parallel_butterfly2,
+        NeonF32ParallelButterfly2,
+        2
+    );
+    test_parallel_butterfly_32_func!(
+        test_neonf32_parallel_butterfly3,
+        NeonF32ParallelButterfly3,
+        3
+    );
+    test_parallel_butterfly_32_func!(
+        test_neonf32_parallel_butterfly4,
+        NeonF32ParallelButterfly4,
+        4
+    );
+    test_parallel_butterfly_32_func!(
+        test_neonf32_parallel_butterfly5,
+        NeonF32ParallelButterfly5,
+        5
+    );
+    test_parallel_butterfly_32_func!(
+        test_neonf32_parallel_butterfly6,
+        NeonF32ParallelButterfly6,
+        6
+    );
 
-    macro_rules! test_column_butterfly_64_func {
+    macro_rules! test_parallel_butterfly_64_func {
         ($test_name:ident, $struct_name:ident, $size:expr) => {
             #[test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
-                check_column_fft::<float64x2_t, $size>(&butterfly, FftDirection::Forward);
+                check_parallel_fft::<float64x2_t, $size>(&butterfly, FftDirection::Forward);
 
                 let butterfly_inverse = $struct_name::new(FftDirection::Inverse);
-                check_column_fft::<float64x2_t, $size>(&butterfly_inverse, FftDirection::Inverse);
+                check_parallel_fft::<float64x2_t, $size>(&butterfly_inverse, FftDirection::Inverse);
             }
         };
     }
 
-    test_column_butterfly_64_func!(test_neonf64_column_butterfly2, NeonF64ColumnButterfly2, 2);
-    test_column_butterfly_64_func!(test_neonf64_column_butterfly3, NeonF64ColumnButterfly3, 3);
-    test_column_butterfly_64_func!(test_neonf64_column_butterfly4, NeonF64ColumnButterfly4, 4);
-    test_column_butterfly_64_func!(test_neonf64_column_butterfly5, NeonF64ColumnButterfly5, 5);
-    test_column_butterfly_64_func!(test_neonf64_column_butterfly6, NeonF64ColumnButterfly6, 6);
+    test_parallel_butterfly_64_func!(
+        test_neonf64_parallel_butterfly2,
+        NeonF64ParallelButterfly2,
+        2
+    );
+    test_parallel_butterfly_64_func!(
+        test_neonf64_parallel_butterfly3,
+        NeonF64ParallelButterfly3,
+        3
+    );
+    test_parallel_butterfly_64_func!(
+        test_neonf64_parallel_butterfly4,
+        NeonF64ParallelButterfly4,
+        4
+    );
+    test_parallel_butterfly_64_func!(
+        test_neonf64_parallel_butterfly5,
+        NeonF64ParallelButterfly5,
+        5
+    );
+    test_parallel_butterfly_64_func!(
+        test_neonf64_parallel_butterfly6,
+        NeonF64ParallelButterfly6,
+        6
+    );
 
     #[test]
     fn test_solo_fft2_32() {

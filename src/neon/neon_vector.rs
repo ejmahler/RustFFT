@@ -134,12 +134,12 @@ impl SimdVector for float64x2_t {
 
     type ScalarType = f64;
 
-    type Butterfly2 = NeonF64ColumnButterfly2;
-    type Butterfly3 = NeonF64ColumnButterfly3;
-    type Butterfly4 = NeonF64ColumnButterfly4;
-    type Butterfly5 = NeonF64ColumnButterfly5;
-    type Butterfly6 = NeonF64ColumnButterfly6;
-    type Butterfly7 = NeonF64ColumnButterfly7;
+    type Butterfly2 = NeonF64ParallelButterfly2;
+    type Butterfly3 = NeonF64ParallelButterfly3;
+    type Butterfly4 = NeonF64ParallelButterfly4;
+    type Butterfly5 = NeonF64ParallelButterfly5;
+    type Butterfly6 = NeonF64ParallelButterfly6;
+    type Butterfly7 = NeonF64ParallelButterfly7;
 
     #[inline(always)]
     unsafe fn zero_vector() -> Self {
@@ -260,12 +260,12 @@ impl SimdVector for float32x4_t {
 
     type ScalarType = f32;
 
-    type Butterfly2 = NeonF32ColumnButterfly2;
-    type Butterfly3 = NeonF32ColumnButterfly3;
-    type Butterfly4 = NeonF32ColumnButterfly4;
-    type Butterfly5 = NeonF32ColumnButterfly5;
-    type Butterfly6 = NeonF32ColumnButterfly6;
-    type Butterfly7 = NeonF32ColumnButterfly7;
+    type Butterfly2 = NeonF32ParallelButterfly2;
+    type Butterfly3 = NeonF32ParallelButterfly3;
+    type Butterfly4 = NeonF32ParallelButterfly4;
+    type Butterfly5 = NeonF32ParallelButterfly5;
+    type Butterfly6 = NeonF32ParallelButterfly6;
+    type Butterfly7 = NeonF32ParallelButterfly7;
 
     #[inline(always)]
     unsafe fn zero_vector() -> Self {

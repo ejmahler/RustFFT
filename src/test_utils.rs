@@ -10,7 +10,7 @@ use crate::algorithm::butterflies::{
     Butterfly1, Butterfly12, Butterfly16, Butterfly2, Butterfly3, Butterfly4, Butterfly5,
     Butterfly6, Butterfly7, Butterfly8, Butterfly9,
 };
-use crate::simd::column_fft::ColumnFft;
+use crate::simd::parallel_fft::ParallelFft;
 use crate::simd::simd_array::{SimdComplexArray, SimdComplexArrayMut};
 use crate::simd::simd_vector::SimdVector;
 use crate::{algorithm::Dft, Direction, FftNum, Length};
@@ -211,8 +211,8 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
     }
 }
 
-pub fn check_column_fft<V: SimdVector + std::fmt::Debug, const LEN: usize>(
-    fft: &dyn ColumnFft<V, LEN>,
+pub fn check_parallel_fft<V: SimdVector + std::fmt::Debug, const LEN: usize>(
+    fft: &dyn ParallelFft<V, LEN>,
     direction: FftDirection,
 ) where
     V::ScalarType: Float + SampleUniform,
@@ -253,7 +253,7 @@ pub fn check_column_fft<V: SimdVector + std::fmt::Debug, const LEN: usize>(
         });
 
         // Compute column FFT
-        let data = fft.column_fft(data);
+        let data = fft.parallel_fft(data);
 
         // store back to memory
         let mut result = vec![Complex::zero(); LEN * V::COMPLEX_PER_VECTOR];
@@ -270,7 +270,7 @@ pub fn check_column_fft<V: SimdVector + std::fmt::Debug, const LEN: usize>(
 
         assert!(
             compare_vectors(&transposed_expected_output, &result),
-            "column_fft() failed, length = {}, direction = {}",
+            "parallel_fft() failed, length = {}, direction = {}",
             LEN,
             direction
         );
@@ -286,7 +286,7 @@ pub fn check_column_fft<V: SimdVector + std::fmt::Debug, const LEN: usize>(
             let data = std::array::from_fn(|i| unsafe { input.load1_lo(i) });
 
             // Compute column FFT
-            let data = fft.column_fft_lo1(data);
+            let data = fft.parallel_fft_lo1(data);
 
             // store back to memory
             let mut result = vec![Complex::zero(); LEN];
@@ -296,7 +296,7 @@ pub fn check_column_fft<V: SimdVector + std::fmt::Debug, const LEN: usize>(
 
             assert!(
                 compare_vectors(&expected_output, &result),
-                "column_fft_lo1() failed, length = {}, direction = {}",
+                "parallel_fft_lo1() failed, length = {}, direction = {}",
                 LEN,
                 direction
             );

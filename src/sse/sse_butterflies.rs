@@ -1,7 +1,7 @@
 use core::arch::x86_64::*;
 use num_complex::Complex;
 
-use crate::simd::column_fft::ColumnFft;
+use crate::simd::parallel_fft::ParallelFft;
 use crate::simd::simd_array::SimdComplexArrayMut;
 use crate::simd::simd_vector::SimdVector;
 use crate::{common::FftNum, FftDirection};
@@ -366,17 +366,17 @@ impl<T: FftNum> SseF64Butterfly1<T> {
 //  |_____|         |____/_____|_.__/|_|\__|
 //
 
-pub struct SseF32ColumnButterfly2 {}
-impl SseF32ColumnButterfly2 {
+pub struct SseF32ParallelButterfly2 {}
+impl SseF32ParallelButterfly2 {
     #[inline(always)]
     pub fn new(_direction: FftDirection) -> Self {
         assert!(is_x86_feature_detected!("sse4.1"));
         Self {}
     }
 }
-impl ColumnFft<__m128, 2> for SseF32ColumnButterfly2 {
+impl ParallelFft<__m128, 2> for SseF32ParallelButterfly2 {
     #[inline(always)]
-    fn column_fft(&self, data: [__m128; 2]) -> [__m128; 2] {
+    fn parallel_fft(&self, data: [__m128; 2]) -> [__m128; 2] {
         // Safety: These intrinsics require the SSE4.1 target feature. We asserted this feature was present in the constructor.
         unsafe { [_mm_add_ps(data[0], data[1]), _mm_sub_ps(data[0], data[1])] }
     }
@@ -477,17 +477,17 @@ unsafe fn solo_fft2_f32(values: __m128) -> __m128 {
 //  |_____|          \___/   |_| |_.__/|_|\__|
 //
 
-pub struct SseF64ColumnButterfly2 {}
-impl SseF64ColumnButterfly2 {
+pub struct SseF64ParallelButterfly2 {}
+impl SseF64ParallelButterfly2 {
     #[inline(always)]
     pub fn new(_direction: FftDirection) -> Self {
         assert!(is_x86_feature_detected!("sse4.1"));
         Self {}
     }
 }
-impl ColumnFft<__m128d, 2> for SseF64ColumnButterfly2 {
+impl ParallelFft<__m128d, 2> for SseF64ParallelButterfly2 {
     #[inline(always)]
-    fn column_fft(&self, data: [__m128d; 2]) -> [__m128d; 2] {
+    fn parallel_fft(&self, data: [__m128d; 2]) -> [__m128d; 2] {
         // Safety: These intrinsics require the SSE4.1 target feature. We asserted this feature was present in the constructor.
         unsafe { [_mm_add_pd(data[0], data[1]), _mm_sub_pd(data[0], data[1])] }
     }
@@ -548,12 +548,12 @@ pub(crate) unsafe fn solo_fft2_f64(left: __m128d, right: __m128d) -> [__m128d; 2
 //  |____/           |____/_____|_.__/|_|\__|
 //
 
-pub struct SseF32ColumnButterfly3 {
+pub struct SseF32ParallelButterfly3 {
     rotate: Rotate90F32,
     twiddle1re: __m128,
     twiddle1im: __m128,
 }
-impl SseF32ColumnButterfly3 {
+impl SseF32ParallelButterfly3 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(is_x86_feature_detected!("sse4.1"));
@@ -568,9 +568,9 @@ impl SseF32ColumnButterfly3 {
         }
     }
 }
-impl ColumnFft<__m128, 3> for SseF32ColumnButterfly3 {
+impl ParallelFft<__m128, 3> for SseF32ParallelButterfly3 {
     #[inline(always)]
-    fn column_fft(&self, data: [__m128; 3]) -> [__m128; 3] {
+    fn parallel_fft(&self, data: [__m128; 3]) -> [__m128; 3] {
         // Safety: These intrinsics require the SSE4.1 target feature. We asserted this feature was present in the constructor.
         unsafe {
             let x12p = _mm_add_ps(data[1], data[2]);
@@ -709,12 +709,12 @@ impl<T: FftNum> SseF32Butterfly3<T> {
 //  |____/            \___/   |_| |_.__/|_|\__|
 //
 
-pub struct SseF64ColumnButterfly3 {
+pub struct SseF64ParallelButterfly3 {
     rotate: Rotate90F64,
     twiddle1re: __m128d,
     twiddle1im: __m128d,
 }
-impl SseF64ColumnButterfly3 {
+impl SseF64ParallelButterfly3 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(is_x86_feature_detected!("sse4.1"));
@@ -729,9 +729,9 @@ impl SseF64ColumnButterfly3 {
         }
     }
 }
-impl ColumnFft<__m128d, 3> for SseF64ColumnButterfly3 {
+impl ParallelFft<__m128d, 3> for SseF64ParallelButterfly3 {
     #[inline(always)]
-    fn column_fft(&self, data: [__m128d; 3]) -> [__m128d; 3] {
+    fn parallel_fft(&self, data: [__m128d; 3]) -> [__m128d; 3] {
         // Safety: These intrinsics require the SSE4.1 target feature. We asserted this feature was present in the constructor.
         unsafe {
             let x12p = _mm_add_pd(data[1], data[2]);
@@ -828,29 +828,29 @@ impl<T: FftNum> SseF64Butterfly3<T> {
 //     |_|           |____/_____|_.__/|_|\__|
 //
 
-pub struct SseF32ColumnButterfly4 {
+pub struct SseF32ParallelButterfly4 {
     rotate: Rotate90F32,
-    bf2: SseF32ColumnButterfly2,
+    bf2: SseF32ParallelButterfly2,
 }
-impl SseF32ColumnButterfly4 {
+impl SseF32ParallelButterfly4 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(is_x86_feature_detected!("sse4.1"));
 
         Self {
             rotate: Rotate90F32::new(direction == FftDirection::Inverse),
-            bf2: SseF32ColumnButterfly2::new(direction),
+            bf2: SseF32ParallelButterfly2::new(direction),
         }
     }
 }
-impl ColumnFft<__m128, 4> for SseF32ColumnButterfly4 {
+impl ParallelFft<__m128, 4> for SseF32ParallelButterfly4 {
     #[inline(always)]
-    fn column_fft(&self, data: [__m128; 4]) -> [__m128; 4] {
+    fn parallel_fft(&self, data: [__m128; 4]) -> [__m128; 4] {
         // Algorithm: 2x2 mixed radix
 
         // Perform the first set of size-2 FFTs.
-        let [mid0, mid2] = self.bf2.column_fft([data[0], data[2]]);
-        let [mid1, mid3] = self.bf2.column_fft([data[1], data[3]]);
+        let [mid0, mid2] = self.bf2.parallel_fft([data[0], data[2]]);
+        let [mid1, mid3] = self.bf2.parallel_fft([data[1], data[3]]);
 
         // Apply twiddle factors (in this case just a rotation)
 
@@ -858,8 +858,8 @@ impl ColumnFft<__m128, 4> for SseF32ColumnButterfly4 {
         let mid3 = unsafe { self.rotate.rotate_both(mid3) };
 
         // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = self.bf2.column_fft([mid0, mid1]);
-        let [output2, output3] = self.bf2.column_fft([mid2, mid3]);
+        let [output0, output1] = self.bf2.parallel_fft([mid0, mid1]);
+        let [output2, output3] = self.bf2.parallel_fft([mid2, mid3]);
 
         // Swap outputs 1 and 2 in the output to do a square transpose
         [output0, output2, output1, output3]
@@ -986,29 +986,29 @@ impl<T: FftNum> SseF32Butterfly4<T> {
 //     |_|            \___/   |_| |_.__/|_|\__|
 //
 
-pub struct SseF64ColumnButterfly4 {
+pub struct SseF64ParallelButterfly4 {
     rotate: Rotate90F64,
-    bf2: SseF64ColumnButterfly2,
+    bf2: SseF64ParallelButterfly2,
 }
-impl SseF64ColumnButterfly4 {
+impl SseF64ParallelButterfly4 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(is_x86_feature_detected!("sse4.1"));
 
         Self {
             rotate: Rotate90F64::new(direction == FftDirection::Inverse),
-            bf2: SseF64ColumnButterfly2::new(direction),
+            bf2: SseF64ParallelButterfly2::new(direction),
         }
     }
 }
-impl ColumnFft<__m128d, 4> for SseF64ColumnButterfly4 {
+impl ParallelFft<__m128d, 4> for SseF64ParallelButterfly4 {
     #[inline(always)]
-    fn column_fft(&self, data: [__m128d; 4]) -> [__m128d; 4] {
+    fn parallel_fft(&self, data: [__m128d; 4]) -> [__m128d; 4] {
         // Algorithm: 2x2 mixed radix
 
         // Perform the first set of size-2 FFTs.
-        let [mid0, mid2] = self.bf2.column_fft([data[0], data[2]]);
-        let [mid1, mid3] = self.bf2.column_fft([data[1], data[3]]);
+        let [mid0, mid2] = self.bf2.parallel_fft([data[0], data[2]]);
+        let [mid1, mid3] = self.bf2.parallel_fft([data[1], data[3]]);
 
         // Apply twiddle factors (in this case just a rotation)
 
@@ -1016,8 +1016,8 @@ impl ColumnFft<__m128d, 4> for SseF64ColumnButterfly4 {
         let mid3 = unsafe { self.rotate.rotate(mid3) };
 
         // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = self.bf2.column_fft([mid0, mid1]);
-        let [output2, output3] = self.bf2.column_fft([mid2, mid3]);
+        let [output0, output1] = self.bf2.parallel_fft([mid0, mid1]);
+        let [output2, output3] = self.bf2.parallel_fft([mid2, mid3]);
 
         // Swap outputs 1 and 2 in the output to do a square transpose
         [output0, output2, output1, output3]
@@ -1099,14 +1099,14 @@ impl<T: FftNum> SseF64Butterfly4<T> {
 //  |____/           |____/_____|_.__/|_|\__|
 //
 
-pub struct SseF32ColumnButterfly5 {
+pub struct SseF32ParallelButterfly5 {
     rotate: Rotate90F32,
     twiddle1re: __m128,
     twiddle1im: __m128,
     twiddle2re: __m128,
     twiddle2im: __m128,
 }
-impl SseF32ColumnButterfly5 {
+impl SseF32ParallelButterfly5 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(is_x86_feature_detected!("sse4.1"));
@@ -1124,9 +1124,9 @@ impl SseF32ColumnButterfly5 {
         }
     }
 }
-impl ColumnFft<__m128, 5> for SseF32ColumnButterfly5 {
+impl ParallelFft<__m128, 5> for SseF32ParallelButterfly5 {
     #[inline(always)]
-    fn column_fft(&self, data: [__m128; 5]) -> [__m128; 5] {
+    fn parallel_fft(&self, data: [__m128; 5]) -> [__m128; 5] {
         // Safety: These intrinsics require the SSE4.1 target feature. We asserted this feature was present in the constructor.
         unsafe {
             let x14p = _mm_add_ps(data[1], data[4]);
@@ -1335,14 +1335,14 @@ impl<T: FftNum> SseF32Butterfly5<T> {
 //  |____/            \___/   |_| |_.__/|_|\__|
 //
 
-pub struct SseF64ColumnButterfly5 {
+pub struct SseF64ParallelButterfly5 {
     rotate: Rotate90F64,
     twiddle1re: __m128d,
     twiddle1im: __m128d,
     twiddle2re: __m128d,
     twiddle2im: __m128d,
 }
-impl SseF64ColumnButterfly5 {
+impl SseF64ParallelButterfly5 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(is_x86_feature_detected!("sse4.1"));
@@ -1360,9 +1360,9 @@ impl SseF64ColumnButterfly5 {
         }
     }
 }
-impl ColumnFft<__m128d, 5> for SseF64ColumnButterfly5 {
+impl ParallelFft<__m128d, 5> for SseF64ParallelButterfly5 {
     #[inline(always)]
-    fn column_fft(&self, data: [__m128d; 5]) -> [__m128d; 5] {
+    fn parallel_fft(&self, data: [__m128d; 5]) -> [__m128d; 5] {
         // Safety: These intrinsics require the SSE4.1 target feature. We asserted this feature was present in the constructor.
         unsafe {
             let x14p = _mm_add_pd(data[1], data[4]);
@@ -1502,36 +1502,36 @@ impl<T: FftNum> SseF64Butterfly5<T> {
 //   \___/          |____/_____|_.__/|_|\__|
 //
 
-pub struct SseF32ColumnButterfly6 {
-    bf2: SseF32ColumnButterfly2,
-    bf3: SseF32ColumnButterfly3,
+pub struct SseF32ParallelButterfly6 {
+    bf2: SseF32ParallelButterfly2,
+    bf3: SseF32ParallelButterfly3,
 }
-impl SseF32ColumnButterfly6 {
+impl SseF32ParallelButterfly6 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(is_x86_feature_detected!("sse4.1"));
 
         Self {
-            bf2: SseF32ColumnButterfly2::new(direction),
-            bf3: SseF32ColumnButterfly3::new(direction),
+            bf2: SseF32ParallelButterfly2::new(direction),
+            bf3: SseF32ParallelButterfly3::new(direction),
         }
     }
 }
-impl ColumnFft<__m128, 6> for SseF32ColumnButterfly6 {
+impl ParallelFft<__m128, 6> for SseF32ParallelButterfly6 {
     #[inline(always)]
-    fn column_fft(&self, data: [__m128; 6]) -> [__m128; 6] {
+    fn parallel_fft(&self, data: [__m128; 6]) -> [__m128; 6] {
         // Algorithm: 3x2 good-thomas
 
         // Size-3 FFTs down the columns of our reordered array
-        let mid0 = self.bf3.column_fft([data[0], data[2], data[4]]);
-        let mid1 = self.bf3.column_fft([data[3], data[5], data[1]]);
+        let mid0 = self.bf3.parallel_fft([data[0], data[2], data[4]]);
+        let mid1 = self.bf3.parallel_fft([data[3], data[5], data[1]]);
 
         // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
 
         // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = self.bf2.column_fft([mid0[0], mid1[0]]);
-        let [output2, output3] = self.bf2.column_fft([mid0[1], mid1[1]]);
-        let [output4, output5] = self.bf2.column_fft([mid0[2], mid1[2]]);
+        let [output0, output1] = self.bf2.parallel_fft([mid0[0], mid1[0]]);
+        let [output2, output3] = self.bf2.parallel_fft([mid0[1], mid1[1]]);
+        let [output4, output5] = self.bf2.parallel_fft([mid0[2], mid1[2]]);
 
         // Reorder into output
         [output0, output3, output4, output1, output2, output5]
@@ -1657,36 +1657,36 @@ impl<T: FftNum> SseF32Butterfly6<T> {
 //   \___/           \___/   |_| |_.__/|_|\__|
 //
 
-pub struct SseF64ColumnButterfly6 {
-    bf2: SseF64ColumnButterfly2,
-    bf3: SseF64ColumnButterfly3,
+pub struct SseF64ParallelButterfly6 {
+    bf2: SseF64ParallelButterfly2,
+    bf3: SseF64ParallelButterfly3,
 }
-impl SseF64ColumnButterfly6 {
+impl SseF64ParallelButterfly6 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(is_x86_feature_detected!("sse4.1"));
 
         Self {
-            bf2: SseF64ColumnButterfly2::new(direction),
-            bf3: SseF64ColumnButterfly3::new(direction),
+            bf2: SseF64ParallelButterfly2::new(direction),
+            bf3: SseF64ParallelButterfly3::new(direction),
         }
     }
 }
-impl ColumnFft<__m128d, 6> for SseF64ColumnButterfly6 {
+impl ParallelFft<__m128d, 6> for SseF64ParallelButterfly6 {
     #[inline(always)]
-    fn column_fft(&self, data: [__m128d; 6]) -> [__m128d; 6] {
+    fn parallel_fft(&self, data: [__m128d; 6]) -> [__m128d; 6] {
         // Algorithm: 3x2 good-thomas
 
         // Size-3 FFTs down the columns of our reordered array
-        let mid0 = self.bf3.column_fft([data[0], data[2], data[4]]);
-        let mid1 = self.bf3.column_fft([data[3], data[5], data[1]]);
+        let mid0 = self.bf3.parallel_fft([data[0], data[2], data[4]]);
+        let mid1 = self.bf3.parallel_fft([data[3], data[5], data[1]]);
 
         // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
 
         // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = self.bf2.column_fft([mid0[0], mid1[0]]);
-        let [output2, output3] = self.bf2.column_fft([mid0[1], mid1[1]]);
-        let [output4, output5] = self.bf2.column_fft([mid0[2], mid1[2]]);
+        let [output0, output1] = self.bf2.parallel_fft([mid0[0], mid1[0]]);
+        let [output2, output3] = self.bf2.parallel_fft([mid0[1], mid1[1]]);
+        let [output4, output5] = self.bf2.parallel_fft([mid0[2], mid1[2]]);
 
         // Reorder into output
         [output0, output3, output4, output1, output2, output5]
@@ -3740,7 +3740,7 @@ mod unit_tests {
     use super::*;
     use crate::{
         algorithm::Dft,
-        test_utils::{check_column_fft, check_fft_algorithm, compare_vectors},
+        test_utils::{check_fft_algorithm, check_parallel_fft, compare_vectors},
     };
 
     //the tests for all butterflies will be identical except for the identifiers used and size
@@ -3801,43 +3801,43 @@ mod unit_tests {
     test_butterfly_64_func!(test_ssef64_butterfly24, SseF64Butterfly24, 24);
     test_butterfly_64_func!(test_ssef64_butterfly32, SseF64Butterfly32, 32);
 
-    macro_rules! test_column_butterfly_32_func {
+    macro_rules! test_parallel_butterfly_32_func {
         ($test_name:ident, $struct_name:ident, $size:expr) => {
             #[test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
-                check_column_fft::<__m128, $size>(&butterfly, FftDirection::Forward);
+                check_parallel_fft::<__m128, $size>(&butterfly, FftDirection::Forward);
 
                 let butterfly_inverse = $struct_name::new(FftDirection::Inverse);
-                check_column_fft::<__m128, $size>(&butterfly_inverse, FftDirection::Inverse);
+                check_parallel_fft::<__m128, $size>(&butterfly_inverse, FftDirection::Inverse);
             }
         };
     }
 
-    test_column_butterfly_32_func!(test_ssef32_column_butterfly2, SseF32ColumnButterfly2, 2);
-    test_column_butterfly_32_func!(test_ssef32_column_butterfly3, SseF32ColumnButterfly3, 3);
-    test_column_butterfly_32_func!(test_ssef32_column_butterfly4, SseF32ColumnButterfly4, 4);
-    test_column_butterfly_32_func!(test_ssef32_column_butterfly5, SseF32ColumnButterfly5, 5);
-    test_column_butterfly_32_func!(test_ssef32_column_butterfly6, SseF32ColumnButterfly6, 6);
+    test_parallel_butterfly_32_func!(test_ssef32_parallel_butterfly2, SseF32ParallelButterfly2, 2);
+    test_parallel_butterfly_32_func!(test_ssef32_parallel_butterfly3, SseF32ParallelButterfly3, 3);
+    test_parallel_butterfly_32_func!(test_ssef32_parallel_butterfly4, SseF32ParallelButterfly4, 4);
+    test_parallel_butterfly_32_func!(test_ssef32_parallel_butterfly5, SseF32ParallelButterfly5, 5);
+    test_parallel_butterfly_32_func!(test_ssef32_parallel_butterfly6, SseF32ParallelButterfly6, 6);
 
-    macro_rules! test_column_butterfly_64_func {
+    macro_rules! test_parallel_butterfly_64_func {
         ($test_name:ident, $struct_name:ident, $size:expr) => {
             #[test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
-                check_column_fft::<__m128d, $size>(&butterfly, FftDirection::Forward);
+                check_parallel_fft::<__m128d, $size>(&butterfly, FftDirection::Forward);
 
                 let butterfly_inverse = $struct_name::new(FftDirection::Inverse);
-                check_column_fft::<__m128d, $size>(&butterfly_inverse, FftDirection::Inverse);
+                check_parallel_fft::<__m128d, $size>(&butterfly_inverse, FftDirection::Inverse);
             }
         };
     }
 
-    test_column_butterfly_64_func!(test_ssef64_column_butterfly2, SseF64ColumnButterfly2, 2);
-    test_column_butterfly_64_func!(test_ssef64_column_butterfly3, SseF64ColumnButterfly3, 3);
-    test_column_butterfly_64_func!(test_ssef64_column_butterfly4, SseF64ColumnButterfly4, 4);
-    test_column_butterfly_64_func!(test_ssef64_column_butterfly5, SseF64ColumnButterfly5, 5);
-    test_column_butterfly_64_func!(test_ssef64_column_butterfly6, SseF64ColumnButterfly6, 6);
+    test_parallel_butterfly_64_func!(test_ssef64_parallel_butterfly2, SseF64ParallelButterfly2, 2);
+    test_parallel_butterfly_64_func!(test_ssef64_parallel_butterfly3, SseF64ParallelButterfly3, 3);
+    test_parallel_butterfly_64_func!(test_ssef64_parallel_butterfly4, SseF64ParallelButterfly4, 4);
+    test_parallel_butterfly_64_func!(test_ssef64_parallel_butterfly5, SseF64ParallelButterfly5, 5);
+    test_parallel_butterfly_64_func!(test_ssef64_parallel_butterfly6, SseF64ParallelButterfly6, 6);
 
     #[test]
     fn test_parallel_fft4_32() {

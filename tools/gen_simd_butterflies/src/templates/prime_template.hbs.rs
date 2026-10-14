@@ -15,14 +15,14 @@ use crate::fft_helper::{
 
 use crate::simd::simd_vector::SimdVector;
 use crate::simd::simd_array::SimdComplexArrayMut;
-use crate::simd::column_fft::ColumnFft;
+use crate::simd::parallel_fft::ParallelFft;
 
 use super::{{arch.name_snakecase}}_common::{assert_f32, assert_f64};
 use super::{{arch.name_snakecase}}_utils::*;
 
 #[allow(unused)]
 use super::{{arch.name_snakecase}}_vector::*;
-use super::{{arch.name_snakecase}}_butterflies::{ {{arch.name_camelcase}}F32ColumnButterfly2, {{arch.name_camelcase}}F64ColumnButterfly2};
+use super::{{arch.name_snakecase}}_butterflies::{ {{arch.name_camelcase}}F32ParallelButterfly2, {{arch.name_camelcase}}F64ParallelButterfly2};
 
 
 /* 
@@ -81,26 +81,26 @@ fn make_twiddles<const TW: usize, T: FftNum>(len: usize, direction: FftDirection
 }
 
 {{#each lengths}}
-pub struct {{this.column_struct_name_32}} {
-    bf2: {{../arch.name_camelcase}}F32ColumnButterfly2,
+pub struct {{this.parallel_struct_name_32}} {
+    bf2: {{../arch.name_camelcase}}F32ParallelButterfly2,
     twiddles_re: [{{../arch.vector_f32}}; {{this.twiddle_len}}],
     twiddles_im: [{{../arch.vector_f32}}; {{this.twiddle_len}}],
 }
-impl {{this.column_struct_name_32}} {
+impl {{this.parallel_struct_name_32}} {
     /// Safety: The current machine must support the {{../arch.target_feature_name}} instruction set
     #[target_feature(enable = "{{../arch.target_feature_name}}")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles({{this.len}}, direction);
         Self {
-            bf2: {{../arch.name_camelcase}}F32ColumnButterfly2::new(direction),
+            bf2: {{../arch.name_camelcase}}F32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
     }
 }
-impl ColumnFft<{{../arch.vector_f32}}, {{this.len}}> for {{this.column_struct_name_32}} {
+impl ParallelFft<{{../arch.vector_f32}}, {{this.len}}> for {{this.parallel_struct_name_32}} {
     #[inline(always)]
-    fn column_fft(&self, data: [{{../arch.vector_f32}}; {{this.len}}]) -> [{{../arch.vector_f32}}; {{this.len}}] {
+    fn parallel_fft(&self, data: [{{../arch.vector_f32}}; {{this.len}}]) -> [{{../arch.vector_f32}}; {{this.len}}] {
         {{#if ../arch.has_fused_rotate}}{{else}}let rotate = Rotate90F32::new(true);
         
         {{/if}}
@@ -113,7 +113,7 @@ impl ColumnFft<{{../arch.vector_f32}}, {{this.len}}> for {{this.column_struct_na
 
 pub struct {{this.struct_name_32}}<T> {
     direction: FftDirection,
-    column_fft: {{this.column_struct_name_32}},
+    parallel_fft: {{this.parallel_struct_name_32}},
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -125,7 +125,7 @@ impl<T: FftNum> {{this.struct_name_32}}<T> {
         assert_f32::<T>();
         Self {
             direction,
-            column_fft: {{this.column_struct_name_32}}::new(direction),
+            parallel_fft: {{this.parallel_struct_name_32}}::new(direction),
             _phantom: std::marker::PhantomData,
         }
     }
@@ -134,7 +134,7 @@ impl<T: FftNum> {{this.struct_name_32}}<T> {
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<{{../arch.vector_f32}}>) {
         let values = read_partial1_complex_to_array!(buffer, { {{ this.loadstore_indexes }} });
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { {{ this.loadstore_indexes }} } ); 
     }
@@ -147,7 +147,7 @@ impl<T: FftNum> {{this.struct_name_32}}<T> {
 {{ this.shuffle_in_str }}
         ];
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
 
         let out_packed = [
 {{ this.shuffle_out_str }}
@@ -157,26 +157,26 @@ impl<T: FftNum> {{this.struct_name_32}}<T> {
     }
 }
 
-pub struct {{this.column_struct_name_64}} {
-    bf2: {{../arch.name_camelcase}}F64ColumnButterfly2,
+pub struct {{this.parallel_struct_name_64}} {
+    bf2: {{../arch.name_camelcase}}F64ParallelButterfly2,
     twiddles_re: [{{../arch.vector_f64}}; {{this.twiddle_len}}],
     twiddles_im: [{{../arch.vector_f64}}; {{this.twiddle_len}}],
 }
-impl {{this.column_struct_name_64}} {
+impl {{this.parallel_struct_name_64}} {
     /// Safety: The current machine must support the {{../arch.target_feature_name}} instruction set
     #[target_feature(enable = "{{../arch.target_feature_name}}")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles({{this.len}}, direction);
         Self {
-            bf2: {{../arch.name_camelcase}}F64ColumnButterfly2::new(direction),
+            bf2: {{../arch.name_camelcase}}F64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
     }
 }
-impl ColumnFft<{{../arch.vector_f64}}, {{this.len}}> for {{this.column_struct_name_64}} {
+impl ParallelFft<{{../arch.vector_f64}}, {{this.len}}> for {{this.parallel_struct_name_64}} {
     #[inline(always)]
-    fn column_fft(&self, data: [{{../arch.vector_f64}}; {{this.len}}]) -> [{{../arch.vector_f64}}; {{this.len}}] {
+    fn parallel_fft(&self, data: [{{../arch.vector_f64}}; {{this.len}}]) -> [{{../arch.vector_f64}}; {{this.len}}] {
         {{#if ../arch.has_fused_rotate}}{{else}}let rotate = Rotate90F64::new(true);
         
         {{/if}}
@@ -189,7 +189,7 @@ impl ColumnFft<{{../arch.vector_f64}}, {{this.len}}> for {{this.column_struct_na
 
 pub struct {{this.struct_name_64}}<T> {
     direction: FftDirection,
-    column_fft: {{this.column_struct_name_64}},
+    parallel_fft: {{this.parallel_struct_name_64}},
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -201,7 +201,7 @@ impl<T: FftNum> {{this.struct_name_64}}<T> {
         assert_f64::<T>();
         unsafe {Self {
             direction,
-            column_fft: {{this.column_struct_name_64}}::new(direction),
+            parallel_fft: {{this.parallel_struct_name_64}}::new(direction),
             _phantom: std::marker::PhantomData,
         }}
     }
@@ -210,7 +210,7 @@ impl<T: FftNum> {{this.struct_name_64}}<T> {
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<{{../arch.vector_f64}}>) {
         let values = read_complex_to_array!(buffer, { {{ this.loadstore_indexes }} });
 
-        let out = self.column_fft.column_fft(values);
+        let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { {{ this.loadstore_indexes }} });   
     }

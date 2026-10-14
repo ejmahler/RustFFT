@@ -23,7 +23,7 @@ use num_complex::Complex;
 
 use crate::array_utils::{reverse_remainders, workaround_transmute_mut, TransposeFactor};
 use crate::common::{FftNum, RadixFactor};
-use crate::simd::column_fft::ColumnFft;
+use crate::simd::parallel_fft::ParallelFft;
 use crate::{Fft, FftDirection};
 
 use super::simd_vector::SimdVector;
@@ -339,7 +339,7 @@ pub unsafe fn cross_layer_chunks<V: SimdVector, const RADIX: usize>(
     data: &mut [Complex<V::ScalarType>],
     twiddles: &[V],
     num_columns: usize,
-    butterfly: &impl ColumnFft<V, RADIX>,
+    butterfly: &impl ParallelFft<V, RADIX>,
 ) {
     let chunk_len = num_columns * RADIX;
     let mut rest = data;
@@ -429,7 +429,7 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize>(
     mut data: &mut [Complex<V::ScalarType>],
     twiddles: &[V],
     num_columns: usize,
-    butterfly: &impl ColumnFft<V, RADIX>,
+    butterfly: &impl ParallelFft<V, RADIX>,
 ) {
     let complex_per_vector = V::COMPLEX_PER_VECTOR;
     // the whole vector columns, and then the column an inexact count leaves over
@@ -456,8 +456,8 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize>(
                 (vcol + 1) * tw_stride,
             );
 
-            let a = butterfly.column_fft(a);
-            let b = butterfly.column_fft(b);
+            let a = butterfly.parallel_fft(a);
+            let b = butterfly.parallel_fft(b);
 
             for (r, (a_row, b_row)) in a.iter().zip(b.iter()).enumerate() {
                 data.store(*a_row, idx + r * num_columns);
@@ -469,7 +469,7 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize>(
         if unroll_remainder > 0 {
             let vcol = unroll_count * 2;
             let idx = vcol * complex_per_vector;
-            let a = butterfly.column_fft(gather_and_twiddle(
+            let a = butterfly.parallel_fft(gather_and_twiddle(
                 data,
                 twiddles,
                 num_columns,
@@ -487,7 +487,7 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize>(
 
             let a = gather_and_twiddle(data, twiddles, num_columns, idx, vcol * tw_stride);
 
-            let a = butterfly.column_fft(a);
+            let a = butterfly.parallel_fft(a);
 
             for (r, a_row) in a.iter().enumerate() {
                 data.store(*a_row, idx + r * num_columns);
@@ -513,7 +513,7 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize>(
                 V::mul_complex(v, *twiddles.get_unchecked(tw_base + r - 1))
             }
         });
-        let a = butterfly.column_fft(rows);
+        let a = butterfly.parallel_fft(rows);
         for (r, a_row) in a.iter().enumerate() {
             data.store1_lo(*a_row, idx + r * num_columns);
         }

@@ -7,7 +7,7 @@ use crate::array_utils::DoubleBuf;
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
 
-use crate::simd::column_fft::ColumnFft;
+use crate::simd::parallel_fft::ParallelFft;
 use crate::simd::simd_array::SimdComplexArrayMut;
 use crate::simd::simd_vector::SimdVector;
 
@@ -281,8 +281,8 @@ impl<T: FftNum> FcmaF64Butterfly1<T> {
 //  |_____|         |____/_____|_.__/|_|\__|
 //
 
-pub struct FcmaF32ColumnButterfly2 {}
-impl FcmaF32ColumnButterfly2 {
+pub struct FcmaF32ParallelButterfly2 {}
+impl FcmaF32ParallelButterfly2 {
     #[inline(always)]
     pub fn new(_direction: FftDirection) -> Self {
         assert!(
@@ -292,9 +292,9 @@ impl FcmaF32ColumnButterfly2 {
         Self {}
     }
 }
-impl ColumnFft<FcmaVector32, 2> for FcmaF32ColumnButterfly2 {
+impl ParallelFft<FcmaVector32, 2> for FcmaF32ParallelButterfly2 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector32; 2]) -> [FcmaVector32; 2] {
+    fn parallel_fft(&self, data: [FcmaVector32; 2]) -> [FcmaVector32; 2] {
         // Safety: These intrinsics require the NEON target feature. We asserted this feature was present in the constructor.
         unsafe {
             [
@@ -407,8 +407,8 @@ unsafe fn solo_fft2_f32(values: FcmaVector32) -> FcmaVector32 {
 //  |_____|          \___/   |_| |_.__/|_|\__|
 //
 
-pub struct FcmaF64ColumnButterfly2 {}
-impl FcmaF64ColumnButterfly2 {
+pub struct FcmaF64ParallelButterfly2 {}
+impl FcmaF64ParallelButterfly2 {
     #[inline(always)]
     pub fn new(_direction: FftDirection) -> Self {
         assert!(
@@ -418,9 +418,9 @@ impl FcmaF64ColumnButterfly2 {
         Self {}
     }
 }
-impl ColumnFft<FcmaVector64, 2> for FcmaF64ColumnButterfly2 {
+impl ParallelFft<FcmaVector64, 2> for FcmaF64ParallelButterfly2 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector64; 2]) -> [FcmaVector64; 2] {
+    fn parallel_fft(&self, data: [FcmaVector64; 2]) -> [FcmaVector64; 2] {
         // Safety: These intrinsics require the NEON target feature. We asserted this feature was present in the constructor.
         unsafe {
             [
@@ -486,11 +486,11 @@ pub(crate) unsafe fn solo_fft2_f64(left: FcmaVector64, right: FcmaVector64) -> [
 //  |____/           |____/_____|_.__/|_|\__|
 //
 
-pub struct FcmaF32ColumnButterfly3 {
+pub struct FcmaF32ParallelButterfly3 {
     twiddle1re: FcmaVector32,
     twiddle1im: FcmaVector32,
 }
-impl FcmaF32ColumnButterfly3 {
+impl FcmaF32ParallelButterfly3 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(
@@ -505,9 +505,9 @@ impl FcmaF32ColumnButterfly3 {
         }
     }
 }
-impl ColumnFft<FcmaVector32, 3> for FcmaF32ColumnButterfly3 {
+impl ParallelFft<FcmaVector32, 3> for FcmaF32ParallelButterfly3 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector32; 3]) -> [FcmaVector32; 3] {
+    fn parallel_fft(&self, data: [FcmaVector32; 3]) -> [FcmaVector32; 3] {
         // Safety: These intrinsics require the NEON and FCMA target features. We asserted this feature was present in the constructor.
         unsafe {
             // This is an FCMA translation of the scalar 3-point butterfly
@@ -644,11 +644,11 @@ impl<T: FftNum> FcmaF32Butterfly3<T> {
 //  |____/            \___/   |_| |_.__/|_|\__|
 //
 
-pub struct FcmaF64ColumnButterfly3 {
+pub struct FcmaF64ParallelButterfly3 {
     twiddle1re: FcmaVector64,
     twiddle1im: FcmaVector64,
 }
-impl FcmaF64ColumnButterfly3 {
+impl FcmaF64ParallelButterfly3 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(
@@ -663,9 +663,9 @@ impl FcmaF64ColumnButterfly3 {
         }
     }
 }
-impl ColumnFft<FcmaVector64, 3> for FcmaF64ColumnButterfly3 {
+impl ParallelFft<FcmaVector64, 3> for FcmaF64ParallelButterfly3 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector64; 3]) -> [FcmaVector64; 3] {
+    fn parallel_fft(&self, data: [FcmaVector64; 3]) -> [FcmaVector64; 3] {
         // Safety: These intrinsics require the NEON and FCMA target features. We asserted this feature was present in the constructor.
         unsafe {
             // This is an FCMA translation of the scalar 3-point butterfly
@@ -756,11 +756,11 @@ impl<T: FftNum> FcmaF64Butterfly3<T> {
 //     |_|           |____/_____|_.__/|_|\__|
 //
 
-pub struct FcmaF32ColumnButterfly4 {
+pub struct FcmaF32ParallelButterfly4 {
     rotate: Rotate90F32,
-    bf2: FcmaF32ColumnButterfly2,
+    bf2: FcmaF32ParallelButterfly2,
 }
-impl FcmaF32ColumnButterfly4 {
+impl FcmaF32ParallelButterfly4 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(
@@ -770,18 +770,18 @@ impl FcmaF32ColumnButterfly4 {
 
         Self {
             rotate: Rotate90F32::new(direction == FftDirection::Inverse),
-            bf2: FcmaF32ColumnButterfly2::new(direction),
+            bf2: FcmaF32ParallelButterfly2::new(direction),
         }
     }
 }
-impl ColumnFft<FcmaVector32, 4> for FcmaF32ColumnButterfly4 {
+impl ParallelFft<FcmaVector32, 4> for FcmaF32ParallelButterfly4 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector32; 4]) -> [FcmaVector32; 4] {
+    fn parallel_fft(&self, data: [FcmaVector32; 4]) -> [FcmaVector32; 4] {
         // step 1: transpose
         // and
         // step 2: column FFTs
-        let temp0 = self.bf2.column_fft([data[0], data[2]]);
-        let temp1 = self.bf2.column_fft([data[1], data[3]]);
+        let temp0 = self.bf2.parallel_fft([data[0], data[2]]);
+        let temp1 = self.bf2.parallel_fft([data[1], data[3]]);
 
         // step 3 and 5: the only twiddle factor is either 0 + i or 0 - i, so the rotation folds
         // into the second row FFT
@@ -789,7 +789,7 @@ impl ColumnFft<FcmaVector32, 4> for FcmaF32ColumnButterfly4 {
         // step 4: transpose
         // and
         // step 5: row FFTs
-        let out0 = self.bf2.column_fft([temp0[0], temp1[0]]);
+        let out0 = self.bf2.parallel_fft([temp0[0], temp1[0]]);
 
         // Safety: rotate_both_and_add requires the NEON and FCMA target features. We asserted this feature was present in the constructor.
         let out2 = unsafe {
@@ -930,11 +930,11 @@ impl<T: FftNum> FcmaF32Butterfly4<T> {
 //     |_|            \___/   |_| |_.__/|_|\__|
 //
 
-pub struct FcmaF64ColumnButterfly4 {
+pub struct FcmaF64ParallelButterfly4 {
     rotate: Rotate90F64,
-    bf2: FcmaF64ColumnButterfly2,
+    bf2: FcmaF64ParallelButterfly2,
 }
-impl FcmaF64ColumnButterfly4 {
+impl FcmaF64ParallelButterfly4 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(
@@ -944,18 +944,18 @@ impl FcmaF64ColumnButterfly4 {
 
         Self {
             rotate: Rotate90F64::new(direction == FftDirection::Inverse),
-            bf2: FcmaF64ColumnButterfly2::new(direction),
+            bf2: FcmaF64ParallelButterfly2::new(direction),
         }
     }
 }
-impl ColumnFft<FcmaVector64, 4> for FcmaF64ColumnButterfly4 {
+impl ParallelFft<FcmaVector64, 4> for FcmaF64ParallelButterfly4 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector64; 4]) -> [FcmaVector64; 4] {
+    fn parallel_fft(&self, data: [FcmaVector64; 4]) -> [FcmaVector64; 4] {
         // step 1: transpose
         // and
         // step 2: column FFTs
-        let temp0 = self.bf2.column_fft([data[0], data[2]]);
-        let temp1 = self.bf2.column_fft([data[1], data[3]]);
+        let temp0 = self.bf2.parallel_fft([data[0], data[2]]);
+        let temp1 = self.bf2.parallel_fft([data[1], data[3]]);
 
         // step 3 and 5: the only twiddle factor is either 0 + i or 0 - i, so the rotation folds
         // into the second row FFT
@@ -963,7 +963,7 @@ impl ColumnFft<FcmaVector64, 4> for FcmaF64ColumnButterfly4 {
         // step 4: transpose
         // and
         // step 5: row FFTs
-        let out0 = self.bf2.column_fft([temp0[0], temp1[0]]);
+        let out0 = self.bf2.parallel_fft([temp0[0], temp1[0]]);
 
         // Safety: rotate_both_and_add requires the NEON and FCMA target features. We asserted this feature was present in the constructor.
         let out2 = unsafe {
@@ -1056,14 +1056,14 @@ impl<T: FftNum> FcmaF64Butterfly4<T> {
 //  |____/           |____/_____|_.__/|_|\__|
 //
 
-pub struct FcmaF32ColumnButterfly5 {
+pub struct FcmaF32ParallelButterfly5 {
     rotate: Rotate90F32,
     twiddle1re: FcmaVector32,
     twiddle1im: FcmaVector32,
     twiddle2re: FcmaVector32,
     twiddle2im: FcmaVector32,
 }
-impl FcmaF32ColumnButterfly5 {
+impl FcmaF32ParallelButterfly5 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(
@@ -1082,9 +1082,9 @@ impl FcmaF32ColumnButterfly5 {
         }
     }
 }
-impl ColumnFft<FcmaVector32, 5> for FcmaF32ColumnButterfly5 {
+impl ParallelFft<FcmaVector32, 5> for FcmaF32ParallelButterfly5 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector32; 5]) -> [FcmaVector32; 5] {
+    fn parallel_fft(&self, data: [FcmaVector32; 5]) -> [FcmaVector32; 5] {
         // Safety: These intrinsics require the NEON and FCMA target features. We asserted this feature was present in the constructor.
         unsafe {
             let x14p = SimdVector::add(data[1], data[4]);
@@ -1291,14 +1291,14 @@ impl<T: FftNum> FcmaF32Butterfly5<T> {
 //  |____/            \___/   |_| |_.__/|_|\__|
 //
 
-pub struct FcmaF64ColumnButterfly5 {
+pub struct FcmaF64ParallelButterfly5 {
     rotate: Rotate90F64,
     twiddle1re: FcmaVector64,
     twiddle1im: FcmaVector64,
     twiddle2re: FcmaVector64,
     twiddle2im: FcmaVector64,
 }
-impl FcmaF64ColumnButterfly5 {
+impl FcmaF64ParallelButterfly5 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(
@@ -1317,9 +1317,9 @@ impl FcmaF64ColumnButterfly5 {
         }
     }
 }
-impl ColumnFft<FcmaVector64, 5> for FcmaF64ColumnButterfly5 {
+impl ParallelFft<FcmaVector64, 5> for FcmaF64ParallelButterfly5 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector64; 5]) -> [FcmaVector64; 5] {
+    fn parallel_fft(&self, data: [FcmaVector64; 5]) -> [FcmaVector64; 5] {
         // Safety: These intrinsics require the NEON and FCMA target features. We asserted this feature was present in the constructor.
         unsafe {
             let x14p = SimdVector::add(data[1], data[4]);
@@ -1457,11 +1457,11 @@ impl<T: FftNum> FcmaF64Butterfly5<T> {
 //   \___/          |____/_____|_.__/|_|\__|
 //
 
-pub struct FcmaF32ColumnButterfly6 {
-    bf2: FcmaF32ColumnButterfly2,
-    bf3: FcmaF32ColumnButterfly3,
+pub struct FcmaF32ParallelButterfly6 {
+    bf2: FcmaF32ParallelButterfly2,
+    bf3: FcmaF32ParallelButterfly3,
 }
-impl FcmaF32ColumnButterfly6 {
+impl FcmaF32ParallelButterfly6 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(
@@ -1470,26 +1470,26 @@ impl FcmaF32ColumnButterfly6 {
         );
 
         Self {
-            bf2: FcmaF32ColumnButterfly2::new(direction),
-            bf3: FcmaF32ColumnButterfly3::new(direction),
+            bf2: FcmaF32ParallelButterfly2::new(direction),
+            bf3: FcmaF32ParallelButterfly3::new(direction),
         }
     }
 }
-impl ColumnFft<FcmaVector32, 6> for FcmaF32ColumnButterfly6 {
+impl ParallelFft<FcmaVector32, 6> for FcmaF32ParallelButterfly6 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector32; 6]) -> [FcmaVector32; 6] {
+    fn parallel_fft(&self, data: [FcmaVector32; 6]) -> [FcmaVector32; 6] {
         // Algorithm: 3x2 good-thomas
 
         // Size-3 FFTs down the columns of our reordered array
-        let mid0 = self.bf3.column_fft([data[0], data[2], data[4]]);
-        let mid1 = self.bf3.column_fft([data[3], data[5], data[1]]);
+        let mid0 = self.bf3.parallel_fft([data[0], data[2], data[4]]);
+        let mid1 = self.bf3.parallel_fft([data[3], data[5], data[1]]);
 
         // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
 
         // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = self.bf2.column_fft([mid0[0], mid1[0]]);
-        let [output2, output3] = self.bf2.column_fft([mid0[1], mid1[1]]);
-        let [output4, output5] = self.bf2.column_fft([mid0[2], mid1[2]]);
+        let [output0, output1] = self.bf2.parallel_fft([mid0[0], mid1[0]]);
+        let [output2, output3] = self.bf2.parallel_fft([mid0[1], mid1[1]]);
+        let [output4, output5] = self.bf2.parallel_fft([mid0[2], mid1[2]]);
 
         // Reorder into output
         [output0, output3, output4, output1, output2, output5]
@@ -1614,11 +1614,11 @@ impl<T: FftNum> FcmaF32Butterfly6<T> {
 //   \___/           \___/   |_| |_.__/|_|\__|
 //
 
-pub struct FcmaF64ColumnButterfly6 {
-    bf2: FcmaF64ColumnButterfly2,
-    bf3: FcmaF64ColumnButterfly3,
+pub struct FcmaF64ParallelButterfly6 {
+    bf2: FcmaF64ParallelButterfly2,
+    bf3: FcmaF64ParallelButterfly3,
 }
-impl FcmaF64ColumnButterfly6 {
+impl FcmaF64ParallelButterfly6 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert!(
@@ -1627,26 +1627,26 @@ impl FcmaF64ColumnButterfly6 {
         );
 
         Self {
-            bf2: FcmaF64ColumnButterfly2::new(direction),
-            bf3: FcmaF64ColumnButterfly3::new(direction),
+            bf2: FcmaF64ParallelButterfly2::new(direction),
+            bf3: FcmaF64ParallelButterfly3::new(direction),
         }
     }
 }
-impl ColumnFft<FcmaVector64, 6> for FcmaF64ColumnButterfly6 {
+impl ParallelFft<FcmaVector64, 6> for FcmaF64ParallelButterfly6 {
     #[inline(always)]
-    fn column_fft(&self, data: [FcmaVector64; 6]) -> [FcmaVector64; 6] {
+    fn parallel_fft(&self, data: [FcmaVector64; 6]) -> [FcmaVector64; 6] {
         // Algorithm: 3x2 good-thomas
 
         // Size-3 FFTs down the columns of our reordered array
-        let mid0 = self.bf3.column_fft([data[0], data[2], data[4]]);
-        let mid1 = self.bf3.column_fft([data[3], data[5], data[1]]);
+        let mid0 = self.bf3.parallel_fft([data[0], data[2], data[4]]);
+        let mid1 = self.bf3.parallel_fft([data[3], data[5], data[1]]);
 
         // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
 
         // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = self.bf2.column_fft([mid0[0], mid1[0]]);
-        let [output2, output3] = self.bf2.column_fft([mid0[1], mid1[1]]);
-        let [output4, output5] = self.bf2.column_fft([mid0[2], mid1[2]]);
+        let [output0, output1] = self.bf2.parallel_fft([mid0[0], mid1[0]]);
+        let [output2, output3] = self.bf2.parallel_fft([mid0[1], mid1[1]]);
+        let [output4, output5] = self.bf2.parallel_fft([mid0[2], mid1[2]]);
 
         // Reorder into output
         [output0, output3, output4, output1, output2, output5]
@@ -3718,7 +3718,7 @@ mod unit_tests {
     use super::super::fcma_vector::FcmaVector32;
     use super::*;
     use crate::algorithm::Dft;
-    use crate::test_utils::{check_fft_algorithm, check_column_fft, compare_vectors};
+    use crate::test_utils::{check_fft_algorithm, check_parallel_fft, compare_vectors};
 
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
@@ -3778,43 +3778,89 @@ mod unit_tests {
     test_butterfly_64_func!(test_fcmaf64_butterfly24, FcmaF64Butterfly24, 24);
     test_butterfly_64_func!(test_fcmaf64_butterfly32, FcmaF64Butterfly32, 32);
 
-    macro_rules! test_column_butterfly_32_func {
+    macro_rules! test_parallel_butterfly_32_func {
         ($test_name:ident, $struct_name:ident, $size:expr) => {
             #[test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
-                check_column_fft::<FcmaVector32, $size>(&butterfly, FftDirection::Forward);
+                check_parallel_fft::<FcmaVector32, $size>(&butterfly, FftDirection::Forward);
 
                 let butterfly_inverse = $struct_name::new(FftDirection::Inverse);
-                check_column_fft::<FcmaVector32, $size>(&butterfly_inverse, FftDirection::Inverse);
+                check_parallel_fft::<FcmaVector32, $size>(
+                    &butterfly_inverse,
+                    FftDirection::Inverse,
+                );
             }
         };
     }
 
-    test_column_butterfly_32_func!(test_fcmaf32_column_butterfly2, FcmaF32ColumnButterfly2, 2);
-    test_column_butterfly_32_func!(test_fcmaf32_column_butterfly3, FcmaF32ColumnButterfly3, 3);
-    test_column_butterfly_32_func!(test_fcmaf32_column_butterfly4, FcmaF32ColumnButterfly4, 4);
-    test_column_butterfly_32_func!(test_fcmaf32_column_butterfly5, FcmaF32ColumnButterfly5, 5);
-    test_column_butterfly_32_func!(test_fcmaf32_column_butterfly6, FcmaF32ColumnButterfly6, 6);
+    test_parallel_butterfly_32_func!(
+        test_fcmaf32_parallel_butterfly2,
+        FcmaF32ParallelButterfly2,
+        2
+    );
+    test_parallel_butterfly_32_func!(
+        test_fcmaf32_parallel_butterfly3,
+        FcmaF32ParallelButterfly3,
+        3
+    );
+    test_parallel_butterfly_32_func!(
+        test_fcmaf32_parallel_butterfly4,
+        FcmaF32ParallelButterfly4,
+        4
+    );
+    test_parallel_butterfly_32_func!(
+        test_fcmaf32_parallel_butterfly5,
+        FcmaF32ParallelButterfly5,
+        5
+    );
+    test_parallel_butterfly_32_func!(
+        test_fcmaf32_parallel_butterfly6,
+        FcmaF32ParallelButterfly6,
+        6
+    );
 
-    macro_rules! test_column_butterfly_64_func {
+    macro_rules! test_parallel_butterfly_64_func {
         ($test_name:ident, $struct_name:ident, $size:expr) => {
             #[test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
-                check_column_fft::<FcmaVector64, $size>(&butterfly, FftDirection::Forward);
+                check_parallel_fft::<FcmaVector64, $size>(&butterfly, FftDirection::Forward);
 
                 let butterfly_inverse = $struct_name::new(FftDirection::Inverse);
-                check_column_fft::<FcmaVector64, $size>(&butterfly_inverse, FftDirection::Inverse);
+                check_parallel_fft::<FcmaVector64, $size>(
+                    &butterfly_inverse,
+                    FftDirection::Inverse,
+                );
             }
         };
     }
 
-    test_column_butterfly_64_func!(test_fcmaf64_column_butterfly2, FcmaF64ColumnButterfly2, 2);
-    test_column_butterfly_64_func!(test_fcmaf64_column_butterfly3, FcmaF64ColumnButterfly3, 3);
-    test_column_butterfly_64_func!(test_fcmaf64_column_butterfly4, FcmaF64ColumnButterfly4, 4);
-    test_column_butterfly_64_func!(test_fcmaf64_column_butterfly5, FcmaF64ColumnButterfly5, 5);
-    test_column_butterfly_64_func!(test_fcmaf64_column_butterfly6, FcmaF64ColumnButterfly6, 6);
+    test_parallel_butterfly_64_func!(
+        test_fcmaf64_parallel_butterfly2,
+        FcmaF64ParallelButterfly2,
+        2
+    );
+    test_parallel_butterfly_64_func!(
+        test_fcmaf64_parallel_butterfly3,
+        FcmaF64ParallelButterfly3,
+        3
+    );
+    test_parallel_butterfly_64_func!(
+        test_fcmaf64_parallel_butterfly4,
+        FcmaF64ParallelButterfly4,
+        4
+    );
+    test_parallel_butterfly_64_func!(
+        test_fcmaf64_parallel_butterfly5,
+        FcmaF64ParallelButterfly5,
+        5
+    );
+    test_parallel_butterfly_64_func!(
+        test_fcmaf64_parallel_butterfly6,
+        FcmaF64ParallelButterfly6,
+        6
+    );
 
     #[test]
     fn test_solo_fft2_32() {

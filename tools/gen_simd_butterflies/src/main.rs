@@ -15,9 +15,9 @@ struct FftEntry {
     shuffle_out_str: String,
     impl_str: String,
     struct_name_32: String,
-    column_struct_name_32: String,
+    parallel_struct_name_32: String,
     struct_name_64: String,
-    column_struct_name_64: String,
+    parallel_struct_name_64: String,
 }
 
 #[derive(Serialize)]
@@ -289,7 +289,7 @@ fn generate_fft_entry(len: usize, arch: &Architecture) -> FftEntry {
         impl_strs.push(format!("{indent}let y00 = data[0];"));
         for n in 1..halflen {
             let nrev = len - n;
-            impl_strs.push(format!("{indent}let [x{n}p{nrev}, x{n}m{nrev}] = self.bf2.column_fft([data[{n}], data[{nrev}]]);"));
+            impl_strs.push(format!("{indent}let [x{n}p{nrev}, x{n}m{nrev}] = self.bf2.parallel_fft([data[{n}], data[{nrev}]]);"));
             if !arch.has_fused_rotate {
                 impl_strs.push(format!(
                     "{indent}let x{n}m{nrev} = rotate.rotate(x{n}m{nrev});"
@@ -333,7 +333,7 @@ fn generate_fft_entry(len: usize, arch: &Architecture) -> FftEntry {
                 };
                 impl_strs.push(format!("{indent}let {variable_name_b} = {call_trait}::{func}({variable_name_b}, self.twiddles_im[{tw_idx}], x{m}m{mrev});"));
             }
-            impl_strs.push(format!("{indent}let [y{n:02}, y{nrev:02}] = self.bf2.column_fft([{variable_name_a}, {variable_name_b}]);"));
+            impl_strs.push(format!("{indent}let [y{n:02}, y{nrev:02}] = self.bf2.parallel_fft([{variable_name_a}, {variable_name_b}]);"));
             impl_strs.push(String::new());
         }
         impl_strs.push(String::new());
@@ -360,8 +360,8 @@ fn generate_fft_entry(len: usize, arch: &Architecture) -> FftEntry {
         shuffle_out_str,
         impl_str,
         struct_name_32: format!("{}F32Butterfly{len}", arch.name_camelcase),
-        column_struct_name_32: format!("{}F32ColumnButterfly{len}", arch.name_camelcase),
+        parallel_struct_name_32: format!("{}F32ParallelButterfly{len}", arch.name_camelcase),
         struct_name_64: format!("{}F64Butterfly{len}", arch.name_camelcase),
-        column_struct_name_64: format!("{}F64ColumnButterfly{len}", arch.name_camelcase),
+        parallel_struct_name_64: format!("{}F64ParallelButterfly{len}", arch.name_camelcase),
     }
 }
