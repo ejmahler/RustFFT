@@ -466,7 +466,6 @@ pub(crate) unsafe fn solo_fft2_f64(left: float64x2_t, right: float64x2_t) -> [fl
 //
 
 pub struct NeonF32ParallelButterfly3 {
-    rotate: Rotate90F32,
     twiddle1re: float32x4_t,
     twiddle1im: float32x4_t,
     twiddle2im: float32x4_t,
@@ -478,7 +477,6 @@ impl NeonF32ParallelButterfly3 {
 
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 3, direction);
         Self {
-            rotate: Rotate90F32::new(true),
             twiddle1re: unsafe { vmovq_n_f32(tw1.re) },
             twiddle1im: unsafe { vmovq_n_f32(tw1.im) },
             twiddle2im: unsafe { vmovq_n_f32(-tw1.im) },
@@ -495,7 +493,8 @@ impl ParallelFft<float32x4_t, 3> for NeonF32ParallelButterfly3 {
             let x12n = vsubq_f32(data[1], data[2]);
 
             let temp = vfmaq_f32(data[0], self.twiddle1re, x12p);
-            let n_rot = self.rotate.rotate(x12n);
+            let rotate = Rotate90F32::new(FftDirection::Inverse);
+            let n_rot = rotate.rotate(x12n);
 
             let x0 = vaddq_f32(data[0], x12p);
             let x1 = vfmaq_f32(temp, self.twiddle1im, n_rot);
@@ -508,7 +507,6 @@ impl ParallelFft<float32x4_t, 3> for NeonF32ParallelButterfly3 {
 pub struct NeonF32Butterfly3<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    rotate: Rotate90F32,
     twiddle: float32x4_t,
     twiddle1re: float32x4_t,
     twiddle1im: float32x4_t,
@@ -521,7 +519,6 @@ impl<T: FftNum> NeonF32Butterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let rotate = Rotate90F32::new(true);
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 3, direction);
         let twiddle = unsafe { vld1q_f32([tw1.re, tw1.re, -tw1.im, -tw1.im].as_ptr()) };
         let twiddle1re = unsafe { vmovq_n_f32(tw1.re) };
@@ -530,7 +527,6 @@ impl<T: FftNum> NeonF32Butterfly3<T> {
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            rotate,
             twiddle,
             twiddle1re,
             twiddle1im,
@@ -586,7 +582,8 @@ impl<T: FftNum> NeonF32Butterfly3<T> {
     ) -> [float32x4_t; 2] {
         // This is a Neon translation of the scalar 3-point butterfly
         let rev12 = reverse_complex_and_negate_hi_f32(value12);
-        let temp12pn = self.rotate.rotate_hi(vaddq_f32(value12, rev12));
+        let rotate_hi = Rotate90HiF32::new(FftDirection::Inverse);
+        let temp12pn = rotate_hi.rotate_hi(vaddq_f32(value12, rev12));
         let temp = vfmaq_f32(value0x, temp12pn, self.twiddle);
 
         let out12 = solo_fft2_f32(temp);
@@ -608,7 +605,8 @@ impl<T: FftNum> NeonF32Butterfly3<T> {
         let x12n = vsubq_f32(value1, value2);
 
         let temp = vfmaq_f32(value0, self.twiddle1re, x12p);
-        let n_rot = self.rotate.rotate(x12n);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
+        let n_rot = rotate.rotate(x12n);
 
         let x0 = vaddq_f32(value0, x12p);
         let x1 = vfmaq_f32(temp, self.twiddle1im, n_rot);
@@ -625,7 +623,6 @@ impl<T: FftNum> NeonF32Butterfly3<T> {
 //
 
 pub struct NeonF64ParallelButterfly3 {
-    rotate: Rotate90F64,
     twiddle1re: float64x2_t,
     twiddle1im: float64x2_t,
     twiddle2im: float64x2_t,
@@ -637,7 +634,6 @@ impl NeonF64ParallelButterfly3 {
 
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 3, direction);
         Self {
-            rotate: Rotate90F64::new(true),
             twiddle1re: unsafe { vmovq_n_f64(tw1.re) },
             twiddle1im: unsafe { vmovq_n_f64(tw1.im) },
             twiddle2im: unsafe { vmovq_n_f64(-tw1.im) },
@@ -654,7 +650,9 @@ impl ParallelFft<float64x2_t, 3> for NeonF64ParallelButterfly3 {
             let x12n = vsubq_f64(data[1], data[2]);
 
             let temp = vfmaq_f64(data[0], self.twiddle1re, x12p);
-            let n_rot = self.rotate.rotate(x12n);
+
+            let rotate = Rotate90F64::new(FftDirection::Inverse);
+            let n_rot = rotate.rotate(x12n);
 
             let x0 = vaddq_f64(data[0], x12p);
             let x1 = vfmaq_f64(temp, self.twiddle1im, n_rot);
@@ -667,7 +665,6 @@ impl ParallelFft<float64x2_t, 3> for NeonF64ParallelButterfly3 {
 pub struct NeonF64Butterfly3<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    rotate: Rotate90F64,
     twiddle1re: float64x2_t,
     twiddle1im: float64x2_t,
     twiddle2im: float64x2_t,
@@ -679,7 +676,6 @@ impl<T: FftNum> NeonF64Butterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let rotate = Rotate90F64::new(true);
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 3, direction);
         let twiddle1re = unsafe { vmovq_n_f64(tw1.re) };
         let twiddle1im = unsafe { vmovq_n_f64(tw1.im) };
@@ -688,7 +684,6 @@ impl<T: FftNum> NeonF64Butterfly3<T> {
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            rotate,
             twiddle1re,
             twiddle1im,
             twiddle2im,
@@ -725,7 +720,8 @@ impl<T: FftNum> NeonF64Butterfly3<T> {
         let x12n = vsubq_f64(value1, value2);
 
         let temp = vfmaq_f64(value0, self.twiddle1re, x12p);
-        let n_rot = self.rotate.rotate(x12n);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
+        let n_rot = rotate.rotate(x12n);
 
         let x0 = vaddq_f64(value0, x12p);
         let x1 = vfmaq_f64(temp, self.twiddle1im, n_rot);
@@ -751,7 +747,7 @@ impl NeonF32ParallelButterfly4 {
         assert!(std::arch::is_aarch64_feature_detected!("neon"));
 
         Self {
-            rotate: Rotate90F32::new(direction == FftDirection::Inverse),
+            rotate: Rotate90F32::new(direction),
             bf2: NeonF32ParallelButterfly2::new(direction),
         }
     }
@@ -784,6 +780,7 @@ pub struct NeonF32Butterfly4<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     rotate: Rotate90F32,
+    rotate_hi: Rotate90HiF32,
 }
 
 boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly4, 4, |this: &NeonF32Butterfly4<_>| this
@@ -792,15 +789,11 @@ impl<T: FftNum> NeonF32Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let rotate = if direction == FftDirection::Inverse {
-            Rotate90F32::new(true)
-        } else {
-            Rotate90F32::new(false)
-        };
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            rotate,
+            rotate: Rotate90F32::new(direction),
+            rotate_hi: Rotate90HiF32::new(direction),
         }
     }
     #[inline(always)]
@@ -858,7 +851,7 @@ impl<T: FftNum> NeonF32Butterfly4<T> {
         let mut temp = parallel_fft2_interleaved_f32(value01, value23);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-        temp[1] = self.rotate.rotate_hi(temp[1]);
+        temp[1] = self.rotate_hi.rotate_hi(temp[1]);
 
         // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
@@ -913,7 +906,7 @@ impl NeonF64ParallelButterfly4 {
         assert!(std::arch::is_aarch64_feature_detected!("neon"));
 
         Self {
-            rotate: Rotate90F64::new(direction == FftDirection::Inverse),
+            rotate: Rotate90F64::new(direction),
             bf2: NeonF64ParallelButterfly2::new(direction),
         }
     }
@@ -954,16 +947,10 @@ impl<T: FftNum> NeonF64Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let rotate = if direction == FftDirection::Inverse {
-            Rotate90F64::new(true)
-        } else {
-            Rotate90F64::new(false)
-        };
-
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            rotate,
+            rotate: Rotate90F64::new(direction),
         }
     }
 
@@ -1018,7 +1005,6 @@ impl<T: FftNum> NeonF64Butterfly4<T> {
 //
 
 pub struct NeonF32ParallelButterfly5 {
-    rotate: Rotate90F32,
     twiddle1re: float32x4_t,
     twiddle1im: float32x4_t,
     twiddle2re: float32x4_t,
@@ -1032,7 +1018,6 @@ impl NeonF32ParallelButterfly5 {
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 5, direction);
         let tw2: Complex<f32> = twiddles::compute_twiddle(2, 5, direction);
         Self {
-            rotate: Rotate90F32::new(true),
             twiddle1re: unsafe { vmovq_n_f32(tw1.re) },
             twiddle1im: unsafe { vmovq_n_f32(tw1.im) },
             twiddle2re: unsafe { vmovq_n_f32(tw2.re) },
@@ -1064,12 +1049,13 @@ impl ParallelFft<float32x4_t, 5> for NeonF32ParallelButterfly5 {
             let temp_a2 = vaddq_f32(data[0], vaddq_f32(temp_a2_1, temp_a2_2));
             let temp_b2 = vsubq_f32(temp_b2_1, temp_b2_2);
 
+            let rotate = Rotate90F32::new(FftDirection::Inverse);
             [
                 vaddq_f32(data[0], vaddq_f32(x14p, x23p)),
-                vaddq_f32(temp_a1, self.rotate.rotate(temp_b1)),
-                vaddq_f32(temp_a2, self.rotate.rotate(temp_b2)),
-                vsubq_f32(temp_a2, self.rotate.rotate(temp_b2)),
-                vsubq_f32(temp_a1, self.rotate.rotate(temp_b1)),
+                vaddq_f32(temp_a1, rotate.rotate(temp_b1)),
+                vaddq_f32(temp_a2, rotate.rotate(temp_b2)),
+                vsubq_f32(temp_a2, rotate.rotate(temp_b2)),
+                vsubq_f32(temp_a1, rotate.rotate(temp_b1)),
             ]
         }
     }
@@ -1078,7 +1064,6 @@ impl ParallelFft<float32x4_t, 5> for NeonF32ParallelButterfly5 {
 pub struct NeonF32Butterfly5<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    rotate: Rotate90F32,
     twiddle12re: float32x4_t,
     twiddle21re: float32x4_t,
     twiddle12im: float32x4_t,
@@ -1095,7 +1080,6 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let rotate = Rotate90F32::new(true);
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 5, direction);
         let tw2: Complex<f32> = twiddles::compute_twiddle(2, 5, direction);
         let twiddle12re = unsafe { vld1q_f32([tw1.re, tw1.re, tw2.re, tw2.re].as_ptr()) };
@@ -1110,7 +1094,6 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            rotate,
             twiddle12re,
             twiddle21re,
             twiddle12im,
@@ -1190,7 +1173,8 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
         let temp_a = vaddq_f32(value00, temp_a);
         let temp_b = vfmaq_f32(temp_b1, self.twiddle21im, x2323n);
 
-        let b_rot = self.rotate.rotate(temp_b);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
+        let b_rot = rotate.rotate(temp_b);
 
         let x00 = vaddq_f32(value00, vaddq_f32(x1414p, x2323p));
 
@@ -1230,12 +1214,13 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
         let temp_a2 = vaddq_f32(value0, vaddq_f32(temp_a2_1, temp_a2_2));
         let temp_b2 = vsubq_f32(temp_b2_1, temp_b2_2);
 
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         [
             vaddq_f32(value0, vaddq_f32(x14p, x23p)),
-            vaddq_f32(temp_a1, self.rotate.rotate(temp_b1)),
-            vaddq_f32(temp_a2, self.rotate.rotate(temp_b2)),
-            vsubq_f32(temp_a2, self.rotate.rotate(temp_b2)),
-            vsubq_f32(temp_a1, self.rotate.rotate(temp_b1)),
+            vaddq_f32(temp_a1, rotate.rotate(temp_b1)),
+            vaddq_f32(temp_a2, rotate.rotate(temp_b2)),
+            vsubq_f32(temp_a2, rotate.rotate(temp_b2)),
+            vsubq_f32(temp_a1, rotate.rotate(temp_b1)),
         ]
     }
 }
@@ -1248,7 +1233,6 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
 //
 
 pub struct NeonF64ParallelButterfly5 {
-    rotate: Rotate90F64,
     twiddle1re: float64x2_t,
     twiddle1im: float64x2_t,
     twiddle2re: float64x2_t,
@@ -1262,7 +1246,6 @@ impl NeonF64ParallelButterfly5 {
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 5, direction);
         let tw2: Complex<f64> = twiddles::compute_twiddle(2, 5, direction);
         Self {
-            rotate: Rotate90F64::new(true),
             twiddle1re: unsafe { vmovq_n_f64(tw1.re) },
             twiddle1im: unsafe { vmovq_n_f64(tw1.im) },
             twiddle2re: unsafe { vmovq_n_f64(tw2.re) },
@@ -1294,12 +1277,13 @@ impl ParallelFft<float64x2_t, 5> for NeonF64ParallelButterfly5 {
             let temp_a2 = vaddq_f64(data[0], vaddq_f64(temp_a2_1, temp_a2_2));
             let temp_b2 = vsubq_f64(temp_b2_1, temp_b2_2);
 
+            let rotate = Rotate90F64::new(FftDirection::Inverse);
             [
                 vaddq_f64(data[0], vaddq_f64(x14p, x23p)),
-                vaddq_f64(temp_a1, self.rotate.rotate(temp_b1)),
-                vaddq_f64(temp_a2, self.rotate.rotate(temp_b2)),
-                vsubq_f64(temp_a2, self.rotate.rotate(temp_b2)),
-                vsubq_f64(temp_a1, self.rotate.rotate(temp_b1)),
+                vaddq_f64(temp_a1, rotate.rotate(temp_b1)),
+                vaddq_f64(temp_a2, rotate.rotate(temp_b2)),
+                vsubq_f64(temp_a2, rotate.rotate(temp_b2)),
+                vsubq_f64(temp_a1, rotate.rotate(temp_b1)),
             ]
         }
     }
@@ -1308,7 +1292,6 @@ impl ParallelFft<float64x2_t, 5> for NeonF64ParallelButterfly5 {
 pub struct NeonF64Butterfly5<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    rotate: Rotate90F64,
     twiddle1re: float64x2_t,
     twiddle1im: float64x2_t,
     twiddle2re: float64x2_t,
@@ -1321,7 +1304,6 @@ impl<T: FftNum> NeonF64Butterfly5<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let rotate = Rotate90F64::new(true);
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 5, direction);
         let tw2: Complex<f64> = twiddles::compute_twiddle(2, 5, direction);
         let twiddle1re = unsafe { vmovq_n_f64(tw1.re) };
@@ -1332,7 +1314,6 @@ impl<T: FftNum> NeonF64Butterfly5<T> {
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            rotate,
             twiddle1re,
             twiddle1im,
             twiddle2re,
@@ -1393,8 +1374,9 @@ impl<T: FftNum> NeonF64Butterfly5<T> {
         let temp_b1 = vaddq_f64(temp_b1_1, temp_b1_2);
         let temp_b2 = vsubq_f64(temp_b2_1, temp_b2_2);
 
-        let temp_b1_rot = self.rotate.rotate(temp_b1);
-        let temp_b2_rot = self.rotate.rotate(temp_b2);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
+        let temp_b1_rot = rotate.rotate(temp_b1);
+        let temp_b2_rot = rotate.rotate(temp_b2);
         [
             vaddq_f64(value0, vaddq_f64(x14p, x23p)),
             vaddq_f64(temp_a1, temp_b1_rot),
@@ -1676,6 +1658,7 @@ pub struct NeonF32Butterfly8<T> {
     root2_dual: float32x4_t,
     bf4: NeonF32Butterfly4<T>,
     rotate90: Rotate90F32,
+    rotate90_hi: Rotate90HiF32,
 }
 
 boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly8, 8, |this: &NeonF32Butterfly8<_>| this
@@ -1689,16 +1672,12 @@ impl<T: FftNum> NeonF32Butterfly8<T> {
         let root2 =
             unsafe { vld1q_f32([1.0, 1.0, 0.5f32.sqrt(), 0.5f32.sqrt(), 1.0, 1.0].as_ptr()) };
         let root2_dual = unsafe { vmovq_n_f32(0.5f32.sqrt()) };
-        let rotate90 = if direction == FftDirection::Inverse {
-            Rotate90F32::new(true)
-        } else {
-            Rotate90F32::new(false)
-        };
         Self {
             root2,
             root2_dual,
             bf4,
-            rotate90,
+            rotate90: Rotate90F32::new(direction),
+            rotate90_hi: Rotate90HiF32::new(direction),
         }
     }
 
@@ -1739,7 +1718,7 @@ impl<T: FftNum> NeonF32Butterfly8<T> {
         let mut val2 = self.bf4.perform_fft_direct(in13, in57);
 
         // step 3: apply twiddle factors
-        let val2b = self.rotate90.rotate_hi(val2[0]);
+        let val2b = self.rotate90_hi.rotate_hi(val2[0]);
         let val2c = vaddq_f32(val2b, val2[0]);
         let val2d = vmulq_f32(val2c, self.root2);
         val2[0] = extract_lo_hi_f32(val2[0], val2d);
@@ -1818,15 +1797,10 @@ impl<T: FftNum> NeonF64Butterfly8<T> {
         assert_f64::<T>();
         let bf4 = NeonF64Butterfly4::new(direction);
         let root2 = unsafe { vmovq_n_f64(0.5f64.sqrt()) };
-        let rotate90 = if direction == FftDirection::Inverse {
-            Rotate90F64::new(true)
-        } else {
-            Rotate90F64::new(false)
-        };
         Self {
             root2,
             bf4,
-            rotate90,
+            rotate90: Rotate90F64::new(direction),
         }
     }
 

@@ -110,7 +110,7 @@ impl NeonF32ParallelButterfly7 {
 impl ParallelFft<float32x4_t, 7> for NeonF32ParallelButterfly7 {
     #[inline(always)]
     fn parallel_fft(&self, data: [float32x4_t; 7]) -> [float32x4_t; 7] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the neon instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -233,7 +233,7 @@ impl NeonF64ParallelButterfly7 {
 impl ParallelFft<float64x2_t, 7> for NeonF64ParallelButterfly7 {
     #[inline(always)]
     fn parallel_fft(&self, data: [float64x2_t; 7]) -> [float64x2_t; 7] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the neon instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -327,7 +327,7 @@ impl NeonF32ParallelButterfly11 {
 impl ParallelFft<float32x4_t, 11> for NeonF32ParallelButterfly11 {
     #[inline(always)]
     fn parallel_fft(&self, data: [float32x4_t; 11]) -> [float32x4_t; 11] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the neon instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -500,7 +500,7 @@ impl NeonF64ParallelButterfly11 {
 impl ParallelFft<float64x2_t, 11> for NeonF64ParallelButterfly11 {
     #[inline(always)]
     fn parallel_fft(&self, data: [float64x2_t; 11]) -> [float64x2_t; 11] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the neon instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -636,7 +636,7 @@ impl NeonF32ParallelButterfly13 {
 impl ParallelFft<float32x4_t, 13> for NeonF32ParallelButterfly13 {
     #[inline(always)]
     fn parallel_fft(&self, data: [float32x4_t; 13]) -> [float32x4_t; 13] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the neon instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -840,7 +840,7 @@ impl NeonF64ParallelButterfly13 {
 impl ParallelFft<float64x2_t, 13> for NeonF64ParallelButterfly13 {
     #[inline(always)]
     fn parallel_fft(&self, data: [float64x2_t; 13]) -> [float64x2_t; 13] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the neon instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -1003,7 +1003,7 @@ impl NeonF32ParallelButterfly17 {
 impl ParallelFft<float32x4_t, 17> for NeonF32ParallelButterfly17 {
     #[inline(always)]
     fn parallel_fft(&self, data: [float32x4_t; 17]) -> [float32x4_t; 17] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the neon instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -1281,7 +1281,7 @@ impl NeonF64ParallelButterfly17 {
 impl ParallelFft<float64x2_t, 17> for NeonF64ParallelButterfly17 {
     #[inline(always)]
     fn parallel_fft(&self, data: [float64x2_t; 17]) -> [float64x2_t; 17] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the neon instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -1510,7 +1510,7 @@ impl NeonF32ParallelButterfly19 {
 impl ParallelFft<float32x4_t, 19> for NeonF32ParallelButterfly19 {
     #[inline(always)]
     fn parallel_fft(&self, data: [float32x4_t; 19]) -> [float32x4_t; 19] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the neon instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -1831,7 +1831,7 @@ impl NeonF64ParallelButterfly19 {
 impl ParallelFft<float64x2_t, 19> for NeonF64ParallelButterfly19 {
     #[inline(always)]
     fn parallel_fft(&self, data: [float64x2_t; 19]) -> [float64x2_t; 19] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the neon instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -2099,7 +2099,7 @@ impl NeonF32ParallelButterfly23 {
 impl ParallelFft<float32x4_t, 23> for NeonF32ParallelButterfly23 {
     #[inline(always)]
     fn parallel_fft(&self, data: [float32x4_t; 23]) -> [float32x4_t; 23] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the neon instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -2518,7 +2518,7 @@ impl NeonF64ParallelButterfly23 {
 impl ParallelFft<float64x2_t, 23> for NeonF64ParallelButterfly23 {
     #[inline(always)]
     fn parallel_fft(&self, data: [float64x2_t; 23]) -> [float64x2_t; 23] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the neon instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -2876,7 +2876,7 @@ impl NeonF32ParallelButterfly29 {
 impl ParallelFft<float32x4_t, 29> for NeonF32ParallelButterfly29 {
     #[inline(always)]
     fn parallel_fft(&self, data: [float32x4_t; 29]) -> [float32x4_t; 29] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the neon instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -3472,7 +3472,7 @@ impl NeonF64ParallelButterfly29 {
 impl ParallelFft<float64x2_t, 29> for NeonF64ParallelButterfly29 {
     #[inline(always)]
     fn parallel_fft(&self, data: [float64x2_t; 29]) -> [float64x2_t; 29] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the neon instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -3995,7 +3995,7 @@ impl NeonF32ParallelButterfly31 {
 impl ParallelFft<float32x4_t, 31> for NeonF32ParallelButterfly31 {
     #[inline(always)]
     fn parallel_fft(&self, data: [float32x4_t; 31]) -> [float32x4_t; 31] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the neon instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -4658,7 +4658,7 @@ impl NeonF64ParallelButterfly31 {
 impl ParallelFft<float64x2_t, 31> for NeonF64ParallelButterfly31 {
     #[inline(always)]
     fn parallel_fft(&self, data: [float64x2_t; 31]) -> [float64x2_t; 31] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the neon instruction set. We specified this invariant in the constructor.
         unsafe {
