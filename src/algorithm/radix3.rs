@@ -6,8 +6,8 @@ use crate::algorithm::butterflies::{Butterfly1, Butterfly27, Butterfly3, Butterf
 use crate::array_utils::compute_logarithm;
 use crate::common::RadixFactor;
 use crate::simd::simd_radixn::SimdRadixN;
+use crate::Fft;
 use crate::{common::FftNum, FftDirection};
-use crate::{Direction, Fft, Length};
 
 /// FFT algorithm optimized for power-of-three sizes
 ///
@@ -53,53 +53,7 @@ impl<T: FftNum> Radix3<T> {
         Self(SimdRadixN::new(&factors, base_fft))
     }
 }
-impl<T: FftNum> Length for Radix3<T> {
-    fn len(&self) -> usize {
-        self.0.len()
-    }
-}
-impl<T: FftNum> Direction for Radix3<T> {
-    fn fft_direction(&self) -> FftDirection {
-        self.0.fft_direction()
-    }
-}
-impl<T: FftNum> Fft<T> for Radix3<T> {
-    fn process_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-        self.0.process_with_scratch(buffer, scratch);
-    }
-
-    fn process_outofplace_with_scratch(
-        &self,
-        input: &mut [Complex<T>],
-        output: &mut [Complex<T>],
-        scratch: &mut [Complex<T>],
-    ) {
-        self.0
-            .process_outofplace_with_scratch(input, output, scratch);
-    }
-
-    fn process_immutable_with_scratch(
-        &self,
-        input: &[Complex<T>],
-        output: &mut [Complex<T>],
-        scratch: &mut [Complex<T>],
-    ) {
-        self.0
-            .process_immutable_with_scratch(input, output, scratch);
-    }
-
-    fn get_inplace_scratch_len(&self) -> usize {
-        self.0.get_inplace_scratch_len()
-    }
-
-    fn get_outofplace_scratch_len(&self) -> usize {
-        self.0.get_outofplace_scratch_len()
-    }
-
-    fn get_immutable_scratch_len(&self) -> usize {
-        self.0.get_immutable_scratch_len()
-    }
-}
+boilerplate_scalar_fft!(Radix3, #[inline(always)]);
 
 #[cfg(test)]
 mod unit_tests {

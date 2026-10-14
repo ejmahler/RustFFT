@@ -10,8 +10,11 @@ use crate::algorithm::butterflies::{
     Butterfly1, Butterfly12, Butterfly16, Butterfly2, Butterfly3, Butterfly4, Butterfly5,
     Butterfly6, Butterfly7, Butterfly8, Butterfly9,
 };
+use crate::simd::column_fft::ColumnFft;
+use crate::simd::simd_array::{SimdComplexArray, SimdComplexArrayMut};
+use crate::simd::simd_vector::SimdVector;
 use crate::{algorithm::Dft, Direction, FftNum, Length};
-use crate::{Fft, FftDirection};
+use crate::{array_utils, Fft, FftDirection};
 
 /// The seed for the random number generator used to generate
 /// random signals. It's defined here so that we have deterministic
@@ -202,6 +205,99 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
                 compare_vectors(&expected_output, &output),
                 "process_immutable_with_scratch() failed the 'dirty scratch' test, length = {}, direction = {}",
                 len,
+                direction
+            );
+        }
+    }
+}
+
+pub fn check_column_fft<V: SimdVector + std::fmt::Debug, const LEN: usize>(
+    fft: &dyn ColumnFft<V, LEN>,
+    direction: FftDirection,
+) where
+    V::ScalarType: Float + SampleUniform,
+{
+    let dft = Dft::new(LEN, direction);
+
+    let n = 3 * V::COMPLEX_PER_VECTOR;
+
+    // compute expected data
+    let reference_input = random_signal::<V::ScalarType>(LEN * n);
+    let mut reference_output = reference_input.clone();
+    let mut dft_scratch = vec![Zero::zero(); dft.get_inplace_scratch_len()];
+    dft.process_with_scratch(&mut reference_output, &mut dft_scratch);
+
+    for (input, expected_output) in reference_input
+        .chunks(LEN * V::COMPLEX_PER_VECTOR)
+        .zip(reference_output.chunks(LEN * V::COMPLEX_PER_VECTOR))
+    {
+        // transpose both the expected input and output - the data is contiguous right now and we want it strided
+        let mut transposed_input = vec![Complex::zero(); LEN * V::COMPLEX_PER_VECTOR];
+        let mut transposed_expected_output = vec![Complex::zero(); LEN * V::COMPLEX_PER_VECTOR];
+
+        unsafe {
+            array_utils::transpose_small(LEN, V::COMPLEX_PER_VECTOR, input, &mut transposed_input)
+        };
+        unsafe {
+            array_utils::transpose_small(
+                LEN,
+                V::COMPLEX_PER_VECTOR,
+                expected_output,
+                &mut transposed_expected_output,
+            )
+        };
+
+        // Load data into vectors
+        let data = std::array::from_fn(|i| unsafe {
+            transposed_input.as_slice().load(i * V::COMPLEX_PER_VECTOR)
+        });
+
+        // Compute column FFT
+        let data = fft.column_fft(data);
+
+        // store back to memory
+        let mut result = vec![Complex::zero(); LEN * V::COMPLEX_PER_VECTOR];
+        for i in 0..LEN {
+            unsafe {
+                result
+                    .as_mut_slice()
+                    .store(data[i], i * V::COMPLEX_PER_VECTOR)
+            };
+        }
+
+        dbg!(&transposed_expected_output);
+        dbg!(&result);
+
+        assert!(
+            compare_vectors(&transposed_expected_output, &result),
+            "column_fft() failed, length = {}, direction = {}",
+            LEN,
+            direction
+        );
+    }
+
+    // If this vector can store more than one complex number, check the lo() methods
+    if V::COMPLEX_PER_VECTOR > 1 {
+        for (input, expected_output) in reference_input
+            .chunks(LEN)
+            .zip(reference_output.chunks(LEN))
+        {
+            // Load data into vectors
+            let data = std::array::from_fn(|i| unsafe { input.load1_lo(i) });
+
+            // Compute column FFT
+            let data = fft.column_fft_lo1(data);
+
+            // store back to memory
+            let mut result = vec![Complex::zero(); LEN];
+            for i in 0..LEN {
+                unsafe { result.as_mut_slice().store1_lo(data[i], i) };
+            }
+
+            assert!(
+                compare_vectors(&expected_output, &result),
+                "column_fft_lo1() failed, length = {}, direction = {}",
+                LEN,
                 direction
             );
         }

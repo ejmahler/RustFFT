@@ -22,9 +22,11 @@ use num_complex::Complex;
 use crate::array_utils::{reverse_bits, workaround_transmute_mut};
 use crate::common::FftNum;
 use crate::simd::simd_radixn::table_transpose;
-use crate::{Direction, Fft, FftDirection, Length};
+use crate::{Fft, FftDirection};
 
 use super::simd_vector::SimdVector;
+
+use crate::simd::simd_radixn::cross_layer_chunks;
 
 const RADIX: usize = 4;
 
@@ -37,7 +39,7 @@ pub struct SimdRadix4<V: SimdVector, T> {
     base_len: usize,
 
     reversed_columns: Box<[usize]>,
-    rotation: V::Rotation,
+    butterfly4: V::Butterfly4,
 
     len: usize,
     direction: FftDirection,
@@ -60,7 +62,6 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
         let complex_per_vector = V::COMPLEX_PER_VECTOR;
 
         // set up our cross FFT butterfly instances. simultaneously, compute the number of twiddles
-        let rotation = unsafe { V::make_rotate90(direction) };
         let mut cross_fft_len = base_len;
         let mut twiddle_count = 0;
 
@@ -122,7 +123,7 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
             base_len,
 
             reversed_columns,
-            rotation,
+            butterfly4: unsafe { V::make_butterfly4(direction) },
 
             len,
             direction,
@@ -159,103 +160,70 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
 
             // Dispatch once per layer rather than once per chunk, so each layer runs a single
             // monomorphized loop over its chunks. Mirrors the scalar `RadixN`.
-            V::cross_layer_radix4(out, layer_twiddles, num_columns, &self.rotation);
+            cross_layer_chunks::<V, 4>(out, layer_twiddles, num_columns, &self.butterfly4);
 
             // skip past all the twiddle factors used in this layer
             let twiddle_offset = num_columns.div_ceil(V::COMPLEX_PER_VECTOR) * (RADIX - 1);
             layer_twiddles = &layer_twiddles[twiddle_offset..];
         }
     }
-}
 
-impl<V: SimdVector, T: FftNum> Fft<T> for SimdRadix4<V, T> {
-    fn process_immutable_with_scratch(
+    #[inline(always)]
+    pub fn process_single_immutable(
         &self,
         input: &[Complex<T>],
         output: &mut [Complex<T>],
         scratch: &mut [Complex<T>],
     ) {
-        unsafe {
-            V::fft_helper_immut(
-                input,
-                output,
-                scratch,
-                self.len(),
-                self.get_immutable_scratch_len(),
-                |input, output, scratch| {
-                    self.transpose(input, output);
-                    self.base_fft.process_with_scratch(output, scratch);
-                    self.cross_ffts(output);
-                },
-            );
-        }
+        self.transpose(input, output);
+        self.base_fft.process_with_scratch(output, scratch);
+        unsafe { self.cross_ffts(output) };
     }
-    fn process_outofplace_with_scratch(
+
+    #[inline(always)]
+    pub fn process_single_outofplace(
         &self,
         input: &mut [Complex<T>],
         output: &mut [Complex<T>],
         scratch: &mut [Complex<T>],
     ) {
-        unsafe {
-            V::fft_helper_outofplace(
-                input,
-                output,
-                scratch,
-                self.len(),
-                self.get_outofplace_scratch_len(),
-                |input, output, scratch| {
-                    self.transpose(input, output);
-                    // the input is free once the transpose is done, so use it as base scratch
-                    // when we weren't handed any of our own
-                    let base_scratch = if !scratch.is_empty() { scratch } else { input };
-                    self.base_fft.process_with_scratch(output, base_scratch);
-                    self.cross_ffts(output);
-                },
-            );
-        }
+        self.transpose(input, output);
+        // the input is free once the transpose is done, so use it as base scratch
+        // when we weren't handed any of our own
+        let base_scratch = if !scratch.is_empty() { scratch } else { input };
+        self.base_fft.process_with_scratch(output, base_scratch);
+        unsafe { self.cross_ffts(output) };
     }
-    fn process_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-        unsafe {
-            V::fft_helper_inplace(
-                buffer,
-                scratch,
-                self.len(),
-                self.get_inplace_scratch_len(),
-                |chunk, scratch| {
-                    let (transposed, inner_scratch) = scratch.split_at_mut(self.len());
-                    self.transpose(chunk, transposed);
-                    // Run the base out of place, from the scratch back into the caller's chunk.
-                    // The cross layers are then in place on the chunk, and the whole thing ends
-                    // where the caller wants it without a final copy.
-                    self.base_fft
-                        .process_outofplace_with_scratch(transposed, chunk, inner_scratch);
-                    self.cross_ffts(chunk);
-                },
-            )
-        }
+
+    #[inline(always)]
+    pub fn process_single(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+        let (transposed, inner_scratch) = scratch.split_at_mut(self.len());
+        self.transpose(buffer, transposed);
+        // Run the base out of place, from the scratch back into the caller's chunk.
+        // The cross layers are then in place on the chunk, and the whole thing ends
+        // where the caller wants it without a final copy.
+        self.base_fft
+            .process_outofplace_with_scratch(transposed, buffer, inner_scratch);
+        unsafe { self.cross_ffts(buffer) };
     }
     #[inline(always)]
-    fn get_inplace_scratch_len(&self) -> usize {
+    pub fn get_inplace_scratch_len(&self) -> usize {
         self.inplace_scratch_len
     }
     #[inline(always)]
-    fn get_outofplace_scratch_len(&self) -> usize {
+    pub fn get_outofplace_scratch_len(&self) -> usize {
         self.outofplace_scratch_len
     }
     #[inline(always)]
-    fn get_immutable_scratch_len(&self) -> usize {
+    pub fn get_immutable_scratch_len(&self) -> usize {
         self.immut_scratch_len
     }
-}
-impl<V: SimdVector, T> Length for SimdRadix4<V, T> {
     #[inline(always)]
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.len
     }
-}
-impl<V: SimdVector, T> Direction for SimdRadix4<V, T> {
     #[inline(always)]
-    fn fft_direction(&self) -> FftDirection {
+    pub fn fft_direction(&self) -> FftDirection {
         self.direction
     }
 }
@@ -270,8 +238,13 @@ pub mod test_bodies {
     use num_traits::Float;
     use rand::distr::uniform::SampleUniform;
 
+    type NewFn<V> = dyn Fn(
+        u32,
+        Arc<dyn Fft<<V as SimdVector>::ScalarType>>,
+    ) -> Arc<dyn Fft<<V as SimdVector>::ScalarType>>;
+
     /// Every empty, one-factor and two-factor recipe over each of `bases`, both directions.
-    pub fn factor_pairs<V>(bases: &[usize])
+    pub fn factor_pairs<V>(bases: &[usize], new_fn: &NewFn<V>)
     where
         V: SimdVector,
         V::ScalarType: Float + SampleUniform,
@@ -281,8 +254,8 @@ pub mod test_bodies {
             let base_inverse = construct_base(*base, FftDirection::Inverse);
 
             for k in 0..3 {
-                check::<V>(k, Arc::clone(&base_forward));
-                check::<V>(k, Arc::clone(&base_inverse));
+                check::<V>(k, Arc::clone(&base_forward), new_fn);
+                check::<V>(k, Arc::clone(&base_inverse), new_fn);
             }
         }
     }
@@ -290,7 +263,7 @@ pub mod test_bodies {
     /// The base doesn't have to be a scratch-free butterfly. A composite base is a recursive
     /// recipe that needs its own scratch, which is the case `design_radixn` hits whenever a length
     /// has factors above 7 (for example 11 * 13 = 143).
-    pub fn composite_base<V32, V64>()
+    pub fn composite_base<V32, V64>(new_fn32: &NewFn<V32>, new_fn64: &NewFn<V64>)
     where
         V32: SimdVector<ScalarType = f32>,
         V64: SimdVector<ScalarType = f64>,
@@ -314,22 +287,22 @@ pub mod test_bodies {
                 );
 
                 for k in 0..3 {
-                    check::<V32>(k, Arc::clone(&base32));
-                    check::<V64>(k, Arc::clone(&base64));
+                    check::<V32>(k, Arc::clone(&base32), new_fn32);
+                    check::<V64>(k, Arc::clone(&base64), new_fn64);
                 }
             }
         }
     }
 
-    fn check<V>(k: u32, base_fft: Arc<dyn Fft<V::ScalarType>>)
+    fn check<V>(k: u32, base_fft: Arc<dyn Fft<V::ScalarType>>, new_fn: &NewFn<V>)
     where
         V: SimdVector,
         V::ScalarType: Float + SampleUniform,
     {
         let len = base_fft.len() * RADIX.pow(k);
         let direction = base_fft.fft_direction();
-        let fft: SimdRadix4<V, V::ScalarType> = SimdRadix4::new(k, base_fft);
+        let fft = new_fn(k, base_fft);
 
-        check_fft_algorithm::<V::ScalarType>(&fft, len, direction);
+        check_fft_algorithm::<V::ScalarType>(fft.as_ref(), len, direction);
     }
 }

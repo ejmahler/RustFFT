@@ -7,7 +7,7 @@ use crate::{
         Butterfly1, Butterfly16, Butterfly2, Butterfly32, Butterfly4, Butterfly8,
     },
     simd::simd_radix4::SimdRadix4,
-    Direction, Fft, FftDirection, FftNum, Length,
+    Fft, FftDirection, FftNum,
 };
 
 /// FFT algorithm optimized for power-of-two sizes
@@ -57,53 +57,7 @@ impl<T: FftNum> Radix4<T> {
         Self(SimdRadix4::new(k, base_fft))
     }
 }
-impl<T: FftNum> Length for Radix4<T> {
-    fn len(&self) -> usize {
-        self.0.len()
-    }
-}
-impl<T: FftNum> Direction for Radix4<T> {
-    fn fft_direction(&self) -> FftDirection {
-        self.0.fft_direction()
-    }
-}
-impl<T: FftNum> Fft<T> for Radix4<T> {
-    fn process_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
-        self.0.process_with_scratch(buffer, scratch);
-    }
-
-    fn process_outofplace_with_scratch(
-        &self,
-        input: &mut [Complex<T>],
-        output: &mut [Complex<T>],
-        scratch: &mut [Complex<T>],
-    ) {
-        self.0
-            .process_outofplace_with_scratch(input, output, scratch);
-    }
-
-    fn process_immutable_with_scratch(
-        &self,
-        input: &[Complex<T>],
-        output: &mut [Complex<T>],
-        scratch: &mut [Complex<T>],
-    ) {
-        self.0
-            .process_immutable_with_scratch(input, output, scratch);
-    }
-
-    fn get_inplace_scratch_len(&self) -> usize {
-        self.0.get_inplace_scratch_len()
-    }
-
-    fn get_outofplace_scratch_len(&self) -> usize {
-        self.0.get_outofplace_scratch_len()
-    }
-
-    fn get_immutable_scratch_len(&self) -> usize {
-        self.0.get_immutable_scratch_len()
-    }
-}
+boilerplate_scalar_fft!(Radix4, #[inline(always)]);
 
 #[cfg(test)]
 mod unit_tests {
@@ -115,24 +69,28 @@ mod unit_tests {
         algorithm::Radix4,
         simd::simd_radix4::test_bodies,
         test_utils::{check_fft_algorithm, construct_base},
-        Fft, FftDirection,
+        Fft, FftDirection, FftNum,
     };
+
+    fn new_fn<T: FftNum>(k: u32, base_fft: Arc<dyn Fft<T>>) -> Arc<dyn Fft<T>> {
+        Arc::new(Radix4::new_with_base(k, base_fft))
+    }
 
     #[test]
     fn test_scalar_radix4_f64() {
         // a scalar vector is a single complex number, so every base length is legal
-        test_bodies::factor_pairs::<Complex<f64>>(&[1, 2, 3, 4, 5, 6]);
+        test_bodies::factor_pairs::<Complex<f64>>(&[1, 2, 3, 4, 5, 6], &new_fn);
     }
 
     #[test]
     fn test_scalar_radix4_f32() {
         // the scalar vector is one complex number whatever the precision, so f32 is no different
-        test_bodies::factor_pairs::<Complex<f32>>(&[1, 2, 3, 4, 5, 6]);
+        test_bodies::factor_pairs::<Complex<f32>>(&[1, 2, 3, 4, 5, 6], &new_fn);
     }
 
     #[test]
     fn test_scalar_radix4_composite_base() {
-        test_bodies::composite_base::<Complex<f32>, Complex<f64>>();
+        test_bodies::composite_base::<Complex<f32>, Complex<f64>>(&new_fn, &new_fn);
     }
 
     // The above tests get coverage of SimdRadixN itself - but since we're a newtype with wrapper functions etc, we also want coverage on the wrapper code

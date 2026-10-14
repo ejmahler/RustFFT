@@ -59,6 +59,11 @@ impl Rotate90F32 {
     //}
 
     #[inline(always)]
+    pub unsafe fn rotate(&self, values: __m128) -> __m128 {
+        self.rotate_both(values)
+    }
+
+    #[inline(always)]
     pub unsafe fn rotate_both(&self, values: __m128) -> __m128 {
         let temp = _mm_shuffle_ps(values, values, 0xB1);
         _mm_xor_ps(temp, self.sign_both)

@@ -1,6 +1,7 @@
 use core::arch::x86_64::*;
 use num_complex::Complex;
 
+use crate::simd::column_fft::ColumnFft;
 use crate::simd::simd_array::SimdComplexArrayMut;
 use crate::simd::simd_vector::SimdVector;
 use crate::{common::FftNum, FftDirection};
@@ -365,6 +366,21 @@ impl<T: FftNum> SseF64Butterfly1<T> {
 //  |_____|         |____/_____|_.__/|_|\__|
 //
 
+pub struct SseF32ColumnButterfly2 {}
+impl SseF32ColumnButterfly2 {
+    #[inline(always)]
+    pub fn new(_direction: FftDirection) -> Self {
+        assert!(is_x86_feature_detected!("sse4.1"));
+        Self {}
+    }
+}
+impl ColumnFft<__m128, 2> for SseF32ColumnButterfly2 {
+    #[inline(always)]
+    fn column_fft(&self, data: [__m128; 2]) -> [__m128; 2] {
+        // Safety: These intrinsics require the SSE4.1 target feature. We asserted this feature was present in the constructor.
+        unsafe { [_mm_add_ps(data[0], data[1]), _mm_sub_ps(data[0], data[1])] }
+    }
+}
 pub struct SseF32Butterfly2<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
@@ -461,6 +477,22 @@ unsafe fn solo_fft2_f32(values: __m128) -> __m128 {
 //  |_____|          \___/   |_| |_.__/|_|\__|
 //
 
+pub struct SseF64ColumnButterfly2 {}
+impl SseF64ColumnButterfly2 {
+    #[inline(always)]
+    pub fn new(_direction: FftDirection) -> Self {
+        assert!(is_x86_feature_detected!("sse4.1"));
+        Self {}
+    }
+}
+impl ColumnFft<__m128d, 2> for SseF64ColumnButterfly2 {
+    #[inline(always)]
+    fn column_fft(&self, data: [__m128d; 2]) -> [__m128d; 2] {
+        // Safety: These intrinsics require the SSE4.1 target feature. We asserted this feature was present in the constructor.
+        unsafe { [_mm_add_pd(data[0], data[1]), _mm_sub_pd(data[0], data[1])] }
+    }
+}
+
 pub struct SseF64Butterfly2<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
@@ -515,6 +547,48 @@ pub(crate) unsafe fn solo_fft2_f64(left: __m128d, right: __m128d) -> [__m128d; 2
 //   ___) |  |_____|  ___) / __/| |_) | | |_
 //  |____/           |____/_____|_.__/|_|\__|
 //
+
+pub struct SseF32ColumnButterfly3 {
+    rotate: Rotate90F32,
+    twiddle1re: __m128,
+    twiddle1im: __m128,
+}
+impl SseF32ColumnButterfly3 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(is_x86_feature_detected!("sse4.1"));
+
+        let tw1 = twiddles::compute_twiddle(1, 3, direction);
+        Self {
+            rotate: Rotate90F32::new(true),
+
+            // Safety: These intrinsics require the SSE4.1 target feature. We just asserted this feature was present.
+            twiddle1re: unsafe { _mm_set_ps(tw1.re, tw1.re, tw1.re, tw1.re) },
+            twiddle1im: unsafe { _mm_set_ps(tw1.im, tw1.im, tw1.im, tw1.im) },
+        }
+    }
+}
+impl ColumnFft<__m128, 3> for SseF32ColumnButterfly3 {
+    #[inline(always)]
+    fn column_fft(&self, data: [__m128; 3]) -> [__m128; 3] {
+        // Safety: These intrinsics require the SSE4.1 target feature. We asserted this feature was present in the constructor.
+        unsafe {
+            let x12p = _mm_add_ps(data[1], data[2]);
+            let x12n = _mm_sub_ps(data[1], data[2]);
+            let sum = _mm_add_ps(data[0], x12p);
+
+            let temp_a = _mm_mul_ps(self.twiddle1re, x12p);
+            let temp_a = _mm_add_ps(temp_a, data[0]);
+
+            let n_rot = self.rotate.rotate_both(x12n);
+            let temp_b = _mm_mul_ps(self.twiddle1im, n_rot);
+
+            let x1 = _mm_add_ps(temp_a, temp_b);
+            let x2 = _mm_sub_ps(temp_a, temp_b);
+            [sum, x1, x2]
+        }
+    }
+}
 
 pub struct SseF32Butterfly3<T> {
     direction: FftDirection,
@@ -635,6 +709,48 @@ impl<T: FftNum> SseF32Butterfly3<T> {
 //  |____/            \___/   |_| |_.__/|_|\__|
 //
 
+pub struct SseF64ColumnButterfly3 {
+    rotate: Rotate90F64,
+    twiddle1re: __m128d,
+    twiddle1im: __m128d,
+}
+impl SseF64ColumnButterfly3 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(is_x86_feature_detected!("sse4.1"));
+
+        let tw1 = twiddles::compute_twiddle(1, 3, direction);
+        Self {
+            rotate: Rotate90F64::new(true),
+
+            // Safety: These intrinsics require the SSE4.1 target feature. We just asserted this feature was present.
+            twiddle1re: unsafe { _mm_set_pd(tw1.re, tw1.re) },
+            twiddle1im: unsafe { _mm_set_pd(tw1.im, tw1.im) },
+        }
+    }
+}
+impl ColumnFft<__m128d, 3> for SseF64ColumnButterfly3 {
+    #[inline(always)]
+    fn column_fft(&self, data: [__m128d; 3]) -> [__m128d; 3] {
+        // Safety: These intrinsics require the SSE4.1 target feature. We asserted this feature was present in the constructor.
+        unsafe {
+            let x12p = _mm_add_pd(data[1], data[2]);
+            let x12n = _mm_sub_pd(data[1], data[2]);
+            let sum = _mm_add_pd(data[0], x12p);
+
+            let temp_a = _mm_mul_pd(self.twiddle1re, x12p);
+            let temp_a = _mm_add_pd(temp_a, data[0]);
+
+            let n_rot = self.rotate.rotate(x12n);
+            let temp_b = _mm_mul_pd(self.twiddle1im, n_rot);
+
+            let x1 = _mm_add_pd(temp_a, temp_b);
+            let x2 = _mm_sub_pd(temp_a, temp_b);
+            [sum, x1, x2]
+        }
+    }
+}
+
 pub struct SseF64Butterfly3<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
@@ -711,6 +827,44 @@ impl<T: FftNum> SseF64Butterfly3<T> {
 //  |__   _| |_____|  ___) / __/| |_) | | |_
 //     |_|           |____/_____|_.__/|_|\__|
 //
+
+pub struct SseF32ColumnButterfly4 {
+    rotate: Rotate90F32,
+    bf2: SseF32ColumnButterfly2,
+}
+impl SseF32ColumnButterfly4 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(is_x86_feature_detected!("sse4.1"));
+
+        Self {
+            rotate: Rotate90F32::new(direction == FftDirection::Inverse),
+            bf2: SseF32ColumnButterfly2::new(direction),
+        }
+    }
+}
+impl ColumnFft<__m128, 4> for SseF32ColumnButterfly4 {
+    #[inline(always)]
+    fn column_fft(&self, data: [__m128; 4]) -> [__m128; 4] {
+        // Algorithm: 2x2 mixed radix
+
+        // Perform the first set of size-2 FFTs.
+        let [mid0, mid2] = self.bf2.column_fft([data[0], data[2]]);
+        let [mid1, mid3] = self.bf2.column_fft([data[1], data[3]]);
+
+        // Apply twiddle factors (in this case just a rotation)
+
+        // Safety: `rotate_both` requires the SSE4.1 target feature. We asserted this feature was present in the constructor.
+        let mid3 = unsafe { self.rotate.rotate_both(mid3) };
+
+        // Transpose the data and do size-2 FFTs down the columns
+        let [output0, output1] = self.bf2.column_fft([mid0, mid1]);
+        let [output2, output3] = self.bf2.column_fft([mid2, mid3]);
+
+        // Swap outputs 1 and 2 in the output to do a square transpose
+        [output0, output2, output1, output3]
+    }
+}
 
 pub struct SseF32Butterfly4<T> {
     direction: FftDirection,
@@ -832,6 +986,44 @@ impl<T: FftNum> SseF32Butterfly4<T> {
 //     |_|            \___/   |_| |_.__/|_|\__|
 //
 
+pub struct SseF64ColumnButterfly4 {
+    rotate: Rotate90F64,
+    bf2: SseF64ColumnButterfly2,
+}
+impl SseF64ColumnButterfly4 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(is_x86_feature_detected!("sse4.1"));
+
+        Self {
+            rotate: Rotate90F64::new(direction == FftDirection::Inverse),
+            bf2: SseF64ColumnButterfly2::new(direction),
+        }
+    }
+}
+impl ColumnFft<__m128d, 4> for SseF64ColumnButterfly4 {
+    #[inline(always)]
+    fn column_fft(&self, data: [__m128d; 4]) -> [__m128d; 4] {
+        // Algorithm: 2x2 mixed radix
+
+        // Perform the first set of size-2 FFTs.
+        let [mid0, mid2] = self.bf2.column_fft([data[0], data[2]]);
+        let [mid1, mid3] = self.bf2.column_fft([data[1], data[3]]);
+
+        // Apply twiddle factors (in this case just a rotation)
+
+        // Safety: `rotate` requires the SSE4.1 target feature. We asserted this feature was present in the constructor.
+        let mid3 = unsafe { self.rotate.rotate(mid3) };
+
+        // Transpose the data and do size-2 FFTs down the columns
+        let [output0, output1] = self.bf2.column_fft([mid0, mid1]);
+        let [output2, output3] = self.bf2.column_fft([mid2, mid3]);
+
+        // Swap outputs 1 and 2 in the output to do a square transpose
+        [output0, output2, output1, output3]
+    }
+}
+
 pub struct SseF64Butterfly4<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
@@ -906,6 +1098,66 @@ impl<T: FftNum> SseF64Butterfly4<T> {
 //   ___) |  |_____|  ___) / __/| |_) | | |_
 //  |____/           |____/_____|_.__/|_|\__|
 //
+
+pub struct SseF32ColumnButterfly5 {
+    rotate: Rotate90F32,
+    twiddle1re: __m128,
+    twiddle1im: __m128,
+    twiddle2re: __m128,
+    twiddle2im: __m128,
+}
+impl SseF32ColumnButterfly5 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(is_x86_feature_detected!("sse4.1"));
+
+        let tw1 = twiddles::compute_twiddle(1, 5, direction);
+        let tw2 = twiddles::compute_twiddle(2, 5, direction);
+        Self {
+            rotate: Rotate90F32::new(true),
+
+            // Safety: These intrinsics require the SSE4.1 target feature. We just asserted this feature was present.
+            twiddle1re: unsafe { _mm_set_ps(tw1.re, tw1.re, tw1.re, tw1.re) },
+            twiddle1im: unsafe { _mm_set_ps(tw1.im, tw1.im, tw1.im, tw1.im) },
+            twiddle2re: unsafe { _mm_set_ps(tw2.re, tw2.re, tw2.re, tw2.re) },
+            twiddle2im: unsafe { _mm_set_ps(tw2.im, tw2.im, tw2.im, tw2.im) },
+        }
+    }
+}
+impl ColumnFft<__m128, 5> for SseF32ColumnButterfly5 {
+    #[inline(always)]
+    fn column_fft(&self, data: [__m128; 5]) -> [__m128; 5] {
+        // Safety: These intrinsics require the SSE4.1 target feature. We asserted this feature was present in the constructor.
+        unsafe {
+            let x14p = _mm_add_ps(data[1], data[4]);
+            let x14n = _mm_sub_ps(data[1], data[4]);
+            let x23p = _mm_add_ps(data[2], data[3]);
+            let x23n = _mm_sub_ps(data[2], data[3]);
+
+            let temp_a1_1 = _mm_mul_ps(self.twiddle1re, x14p);
+            let temp_a1_2 = _mm_mul_ps(self.twiddle2re, x23p);
+            let temp_b1_1 = _mm_mul_ps(self.twiddle1im, x14n);
+            let temp_b1_2 = _mm_mul_ps(self.twiddle2im, x23n);
+            let temp_a2_1 = _mm_mul_ps(self.twiddle1re, x23p);
+            let temp_a2_2 = _mm_mul_ps(self.twiddle2re, x14p);
+            let temp_b2_1 = _mm_mul_ps(self.twiddle2im, x14n);
+            let temp_b2_2 = _mm_mul_ps(self.twiddle1im, x23n);
+
+            let temp_a1 = _mm_add_ps(data[0], _mm_add_ps(temp_a1_1, temp_a1_2));
+            let temp_b1 = _mm_add_ps(temp_b1_1, temp_b1_2);
+            let temp_a2 = _mm_add_ps(data[0], _mm_add_ps(temp_a2_1, temp_a2_2));
+            let temp_b2 = _mm_sub_ps(temp_b2_1, temp_b2_2);
+
+            [
+                _mm_add_ps(data[0], _mm_add_ps(x14p, x23p)),
+                _mm_add_ps(temp_a1, self.rotate.rotate_both(temp_b1)),
+                _mm_add_ps(temp_a2, self.rotate.rotate_both(temp_b2)),
+                _mm_sub_ps(temp_a2, self.rotate.rotate_both(temp_b2)),
+                _mm_sub_ps(temp_a1, self.rotate.rotate_both(temp_b1)),
+            ]
+        }
+    }
+}
 
 pub struct SseF32Butterfly5<T> {
     direction: FftDirection,
@@ -1083,6 +1335,66 @@ impl<T: FftNum> SseF32Butterfly5<T> {
 //  |____/            \___/   |_| |_.__/|_|\__|
 //
 
+pub struct SseF64ColumnButterfly5 {
+    rotate: Rotate90F64,
+    twiddle1re: __m128d,
+    twiddle1im: __m128d,
+    twiddle2re: __m128d,
+    twiddle2im: __m128d,
+}
+impl SseF64ColumnButterfly5 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(is_x86_feature_detected!("sse4.1"));
+
+        let tw1 = twiddles::compute_twiddle(1, 5, direction);
+        let tw2 = twiddles::compute_twiddle(2, 5, direction);
+        Self {
+            rotate: Rotate90F64::new(true),
+
+            // Safety: These intrinsics require the SSE4.1 target feature. We just asserted this feature was present.
+            twiddle1re: unsafe { _mm_set_pd(tw1.re, tw1.re) },
+            twiddle1im: unsafe { _mm_set_pd(tw1.im, tw1.im) },
+            twiddle2re: unsafe { _mm_set_pd(tw2.re, tw2.re) },
+            twiddle2im: unsafe { _mm_set_pd(tw2.im, tw2.im) },
+        }
+    }
+}
+impl ColumnFft<__m128d, 5> for SseF64ColumnButterfly5 {
+    #[inline(always)]
+    fn column_fft(&self, data: [__m128d; 5]) -> [__m128d; 5] {
+        // Safety: These intrinsics require the SSE4.1 target feature. We asserted this feature was present in the constructor.
+        unsafe {
+            let x14p = _mm_add_pd(data[1], data[4]);
+            let x14n = _mm_sub_pd(data[1], data[4]);
+            let x23p = _mm_add_pd(data[2], data[3]);
+            let x23n = _mm_sub_pd(data[2], data[3]);
+
+            let temp_a1_1 = _mm_mul_pd(self.twiddle1re, x14p);
+            let temp_a1_2 = _mm_mul_pd(self.twiddle2re, x23p);
+            let temp_b1_1 = _mm_mul_pd(self.twiddle1im, x14n);
+            let temp_b1_2 = _mm_mul_pd(self.twiddle2im, x23n);
+            let temp_a2_1 = _mm_mul_pd(self.twiddle1re, x23p);
+            let temp_a2_2 = _mm_mul_pd(self.twiddle2re, x14p);
+            let temp_b2_1 = _mm_mul_pd(self.twiddle2im, x14n);
+            let temp_b2_2 = _mm_mul_pd(self.twiddle1im, x23n);
+
+            let temp_a1 = _mm_add_pd(data[0], _mm_add_pd(temp_a1_1, temp_a1_2));
+            let temp_b1 = _mm_add_pd(temp_b1_1, temp_b1_2);
+            let temp_a2 = _mm_add_pd(data[0], _mm_add_pd(temp_a2_1, temp_a2_2));
+            let temp_b2 = _mm_sub_pd(temp_b2_1, temp_b2_2);
+
+            [
+                _mm_add_pd(data[0], _mm_add_pd(x14p, x23p)),
+                _mm_add_pd(temp_a1, self.rotate.rotate(temp_b1)),
+                _mm_add_pd(temp_a2, self.rotate.rotate(temp_b2)),
+                _mm_sub_pd(temp_a2, self.rotate.rotate(temp_b2)),
+                _mm_sub_pd(temp_a1, self.rotate.rotate(temp_b1)),
+            ]
+        }
+    }
+}
+
 pub struct SseF64Butterfly5<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
@@ -1189,6 +1501,42 @@ impl<T: FftNum> SseF64Butterfly5<T> {
 //  | (_) | |_____|  ___) / __/| |_) | | |_
 //   \___/          |____/_____|_.__/|_|\__|
 //
+
+pub struct SseF32ColumnButterfly6 {
+    bf2: SseF32ColumnButterfly2,
+    bf3: SseF32ColumnButterfly3,
+}
+impl SseF32ColumnButterfly6 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(is_x86_feature_detected!("sse4.1"));
+
+        Self {
+            bf2: SseF32ColumnButterfly2::new(direction),
+            bf3: SseF32ColumnButterfly3::new(direction),
+        }
+    }
+}
+impl ColumnFft<__m128, 6> for SseF32ColumnButterfly6 {
+    #[inline(always)]
+    fn column_fft(&self, data: [__m128; 6]) -> [__m128; 6] {
+        // Algorithm: 3x2 good-thomas
+
+        // Size-3 FFTs down the columns of our reordered array
+        let mid0 = self.bf3.column_fft([data[0], data[2], data[4]]);
+        let mid1 = self.bf3.column_fft([data[3], data[5], data[1]]);
+
+        // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
+
+        // Transpose the data and do size-2 FFTs down the columns
+        let [output0, output1] = self.bf2.column_fft([mid0[0], mid1[0]]);
+        let [output2, output3] = self.bf2.column_fft([mid0[1], mid1[1]]);
+        let [output4, output5] = self.bf2.column_fft([mid0[2], mid1[2]]);
+
+        // Reorder into output
+        [output0, output3, output4, output1, output2, output5]
+    }
+}
 
 pub struct SseF32Butterfly6<T> {
     direction: FftDirection,
@@ -1308,6 +1656,42 @@ impl<T: FftNum> SseF32Butterfly6<T> {
 //  | (_) | |_____| | (_) |__   _| |_) | | |_
 //   \___/           \___/   |_| |_.__/|_|\__|
 //
+
+pub struct SseF64ColumnButterfly6 {
+    bf2: SseF64ColumnButterfly2,
+    bf3: SseF64ColumnButterfly3,
+}
+impl SseF64ColumnButterfly6 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(is_x86_feature_detected!("sse4.1"));
+
+        Self {
+            bf2: SseF64ColumnButterfly2::new(direction),
+            bf3: SseF64ColumnButterfly3::new(direction),
+        }
+    }
+}
+impl ColumnFft<__m128d, 6> for SseF64ColumnButterfly6 {
+    #[inline(always)]
+    fn column_fft(&self, data: [__m128d; 6]) -> [__m128d; 6] {
+        // Algorithm: 3x2 good-thomas
+
+        // Size-3 FFTs down the columns of our reordered array
+        let mid0 = self.bf3.column_fft([data[0], data[2], data[4]]);
+        let mid1 = self.bf3.column_fft([data[3], data[5], data[1]]);
+
+        // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
+
+        // Transpose the data and do size-2 FFTs down the columns
+        let [output0, output1] = self.bf2.column_fft([mid0[0], mid1[0]]);
+        let [output2, output3] = self.bf2.column_fft([mid0[1], mid1[1]]);
+        let [output4, output5] = self.bf2.column_fft([mid0[2], mid1[2]]);
+
+        // Reorder into output
+        [output0, output3, output4, output1, output2, output5]
+    }
+}
 
 pub struct SseF64Butterfly6<T> {
     _phantom: std::marker::PhantomData<T>,
@@ -3356,7 +3740,7 @@ mod unit_tests {
     use super::*;
     use crate::{
         algorithm::Dft,
-        test_utils::{check_fft_algorithm, compare_vectors},
+        test_utils::{check_column_fft, check_fft_algorithm, compare_vectors},
     };
 
     //the tests for all butterflies will be identical except for the identifiers used and size
@@ -3416,6 +3800,44 @@ mod unit_tests {
     test_butterfly_64_func!(test_ssef64_butterfly16, SseF64Butterfly16, 16);
     test_butterfly_64_func!(test_ssef64_butterfly24, SseF64Butterfly24, 24);
     test_butterfly_64_func!(test_ssef64_butterfly32, SseF64Butterfly32, 32);
+
+    macro_rules! test_column_butterfly_32_func {
+        ($test_name:ident, $struct_name:ident, $size:expr) => {
+            #[test]
+            fn $test_name() {
+                let butterfly = $struct_name::new(FftDirection::Forward);
+                check_column_fft::<__m128, $size>(&butterfly, FftDirection::Forward);
+
+                let butterfly_inverse = $struct_name::new(FftDirection::Inverse);
+                check_column_fft::<__m128, $size>(&butterfly_inverse, FftDirection::Inverse);
+            }
+        };
+    }
+
+    test_column_butterfly_32_func!(test_ssef32_column_butterfly2, SseF32ColumnButterfly2, 2);
+    test_column_butterfly_32_func!(test_ssef32_column_butterfly3, SseF32ColumnButterfly3, 3);
+    test_column_butterfly_32_func!(test_ssef32_column_butterfly4, SseF32ColumnButterfly4, 4);
+    test_column_butterfly_32_func!(test_ssef32_column_butterfly5, SseF32ColumnButterfly5, 5);
+    test_column_butterfly_32_func!(test_ssef32_column_butterfly6, SseF32ColumnButterfly6, 6);
+
+    macro_rules! test_column_butterfly_64_func {
+        ($test_name:ident, $struct_name:ident, $size:expr) => {
+            #[test]
+            fn $test_name() {
+                let butterfly = $struct_name::new(FftDirection::Forward);
+                check_column_fft::<__m128d, $size>(&butterfly, FftDirection::Forward);
+
+                let butterfly_inverse = $struct_name::new(FftDirection::Inverse);
+                check_column_fft::<__m128d, $size>(&butterfly_inverse, FftDirection::Inverse);
+            }
+        };
+    }
+
+    test_column_butterfly_64_func!(test_ssef64_column_butterfly2, SseF64ColumnButterfly2, 2);
+    test_column_butterfly_64_func!(test_ssef64_column_butterfly3, SseF64ColumnButterfly3, 3);
+    test_column_butterfly_64_func!(test_ssef64_column_butterfly4, SseF64ColumnButterfly4, 4);
+    test_column_butterfly_64_func!(test_ssef64_column_butterfly5, SseF64ColumnButterfly5, 5);
+    test_column_butterfly_64_func!(test_ssef64_column_butterfly6, SseF64ColumnButterfly6, 6);
 
     #[test]
     fn test_parallel_fft4_32() {
