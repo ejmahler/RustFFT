@@ -9,11 +9,4 @@ use crate::simd::simd_vector::SimdVector;
 pub trait ParallelFft<V: SimdVector, const LEN: usize>: Send + Sync {
     // Compute V::COMPLEX_PER_VECTOR parallel FFTs on `data`
     fn parallel_fft(&self, data: [V; LEN]) -> [V; LEN];
-
-    // Compute a single FFT on `data`, and assumes the remaining lanes are empty. Possibly faster than parallel_butterfly()
-    #[inline(always)]
-    #[allow(unused)]
-    fn parallel_fft_lo1(&self, data: [V; LEN]) -> [V; LEN] {
-        self.parallel_fft(data)
-    }
 }
