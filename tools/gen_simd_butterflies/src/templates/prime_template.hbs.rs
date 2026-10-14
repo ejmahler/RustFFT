@@ -20,6 +20,8 @@ use crate::simd::column_fft::ColumnFft;
 use super::{{arch.name_snakecase}}_common::{assert_f32, assert_f64};
 use super::{{arch.name_snakecase}}_utils::*;
 
+#[allow(unused)]
+use super::{{arch.name_snakecase}}_vector::*;
 use super::{{arch.name_snakecase}}_butterflies::{ {{arch.name_camelcase}}F32ColumnButterfly2, {{arch.name_camelcase}}F64ColumnButterfly2};
 
 

@@ -2,10 +2,10 @@ use num_complex::Complex;
 use num_traits::Zero;
 use std::arch::x86_64::*;
 
-use super::sse_prime_butterflies::*;
 use crate::simd::simd_array::SimdComplexArray;
 use crate::simd::simd_vector::SimdVector;
 use crate::sse::sse_butterflies::*;
+use crate::sse::sse_prime_butterflies::*;
 use crate::{twiddles, FftDirection};
 
 // Read these indexes from an SseArray and build an array of simd vectors.

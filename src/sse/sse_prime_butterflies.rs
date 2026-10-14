@@ -20,6 +20,8 @@ use crate::simd::column_fft::ColumnFft;
 use super::sse_common::{assert_f32, assert_f64};
 use super::sse_utils::*;
 
+#[allow(unused)]
+use super::sse_vector::*;
 use super::sse_butterflies::{ SseF32ColumnButterfly2, SseF64ColumnButterfly2};
 
 

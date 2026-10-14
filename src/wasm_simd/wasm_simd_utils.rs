@@ -40,7 +40,12 @@ impl Rotate90F32 {
     }
 
     #[inline(always)]
-    pub unsafe fn rotate_both(&self, values: WasmVector32) -> WasmVector32 {
+    pub fn rotate(&self, values: WasmVector32) -> WasmVector32 {
+        self.rotate_both(values)
+    }
+
+    #[inline(always)]
+    pub fn rotate_both(&self, values: WasmVector32) -> WasmVector32 {
         WasmVector32(v128_xor(
             u32x4_shuffle::<1, 0, 3, 2>(values.0, values.0),
             self.sign_both.0,
@@ -183,7 +188,7 @@ impl Rotate90F64 {
     }
 
     #[inline(always)]
-    pub unsafe fn rotate(&self, values: WasmVector64) -> WasmVector64 {
+    pub fn rotate(&self, values: WasmVector64) -> WasmVector64 {
         WasmVector64(v128_xor(
             u64x2_shuffle::<1, 0>(values.0, values.0),
             self.sign.0,
