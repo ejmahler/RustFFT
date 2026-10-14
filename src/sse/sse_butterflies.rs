@@ -560,7 +560,7 @@ impl SseF32ParallelButterfly3 {
 
         let tw1 = twiddles::compute_twiddle(1, 3, direction);
         Self {
-            rotate: Rotate90F32::new(true),
+            rotate: Rotate90F32::new(FftDirection::Inverse),
 
             // Safety: These intrinsics require the SSE4.1 target feature. We just asserted this feature was present.
             twiddle1re: unsafe { _mm_set_ps(tw1.re, tw1.re, tw1.re, tw1.re) },
@@ -580,7 +580,7 @@ impl ParallelFft<__m128, 3> for SseF32ParallelButterfly3 {
             let temp_a = _mm_mul_ps(self.twiddle1re, x12p);
             let temp_a = _mm_add_ps(temp_a, data[0]);
 
-            let n_rot = self.rotate.rotate_both(x12n);
+            let n_rot = self.rotate.rotate(x12n);
             let temp_b = _mm_mul_ps(self.twiddle1im, n_rot);
 
             let x1 = _mm_add_ps(temp_a, temp_b);
@@ -593,7 +593,6 @@ impl ParallelFft<__m128, 3> for SseF32ParallelButterfly3 {
 pub struct SseF32Butterfly3<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    rotate: Rotate90F32,
     twiddle: __m128,
     twiddle1re: __m128,
     twiddle1im: __m128,
@@ -605,7 +604,6 @@ impl<T: FftNum> SseF32Butterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let rotate = Rotate90F32::new(true);
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 3, direction);
         let twiddle = unsafe { _mm_set_ps(-tw1.im, -tw1.im, tw1.re, tw1.re) };
         let twiddle1re = unsafe { _mm_set_ps(tw1.re, tw1.re, tw1.re, tw1.re) };
@@ -613,7 +611,6 @@ impl<T: FftNum> SseF32Butterfly3<T> {
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            rotate,
             twiddle,
             twiddle1re,
             twiddle1im,
@@ -666,9 +663,12 @@ impl<T: FftNum> SseF32Butterfly3<T> {
         value0x: __m128,
         value12: __m128,
     ) -> [__m128; 2] {
+        
+        let rotate = Rotate90HiF32::new(FftDirection::Inverse);
+
         // This is a SSE translation of the scalar 3-point butterfly
         let rev12 = negate_hi_f32(reverse_complex_elements_f32(value12));
-        let temp12pn = self.rotate.rotate_hi(_mm_add_ps(value12, rev12));
+        let temp12pn = rotate.rotate_hi(_mm_add_ps(value12, rev12));
         let twiddled = _mm_mul_ps(temp12pn, self.twiddle);
         let temp = _mm_add_ps(value0x, twiddled);
         let out12 = solo_fft2_f32(temp);
@@ -693,7 +693,8 @@ impl<T: FftNum> SseF32Butterfly3<T> {
         let temp_a = _mm_mul_ps(self.twiddle1re, x12p);
         let temp_a = _mm_add_ps(temp_a, value0);
 
-        let n_rot = self.rotate.rotate_both(x12n);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
+        let n_rot = rotate.rotate(x12n);
         let temp_b = _mm_mul_ps(self.twiddle1im, n_rot);
 
         let x1 = _mm_add_ps(temp_a, temp_b);
@@ -721,7 +722,7 @@ impl SseF64ParallelButterfly3 {
 
         let tw1 = twiddles::compute_twiddle(1, 3, direction);
         Self {
-            rotate: Rotate90F64::new(true),
+            rotate: Rotate90F64::new(FftDirection::Inverse),
 
             // Safety: These intrinsics require the SSE4.1 target feature. We just asserted this feature was present.
             twiddle1re: unsafe { _mm_set_pd(tw1.re, tw1.re) },
@@ -765,7 +766,7 @@ impl<T: FftNum> SseF64Butterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 3, direction);
         let twiddle1re = unsafe { _mm_set_pd(tw1.re, tw1.re) };
         let twiddle1im = unsafe { _mm_set_pd(tw1.im, tw1.im) };
@@ -838,7 +839,7 @@ impl SseF32ParallelButterfly4 {
         assert!(is_x86_feature_detected!("sse4.1"));
 
         Self {
-            rotate: Rotate90F32::new(direction == FftDirection::Inverse),
+            rotate: Rotate90F32::new(direction),
             bf2: SseF32ParallelButterfly2::new(direction),
         }
     }
@@ -855,7 +856,7 @@ impl ParallelFft<__m128, 4> for SseF32ParallelButterfly4 {
         // Apply twiddle factors (in this case just a rotation)
 
         // Safety: `rotate_both` requires the SSE4.1 target feature. We asserted this feature was present in the constructor.
-        let mid3 = unsafe { self.rotate.rotate_both(mid3) };
+        let mid3 = unsafe { self.rotate.rotate(mid3) };
 
         // Transpose the data and do size-2 FFTs down the columns
         let [output0, output1] = self.bf2.parallel_fft([mid0, mid1]);
@@ -870,6 +871,7 @@ pub struct SseF32Butterfly4<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     rotate: Rotate90F32,
+    rotate_hi: Rotate90HiF32,
 }
 
 boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly4, 4, |this: &SseF32Butterfly4<_>| this
@@ -878,15 +880,11 @@ impl<T: FftNum> SseF32Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let rotate = if direction == FftDirection::Inverse {
-            Rotate90F32::new(true)
-        } else {
-            Rotate90F32::new(false)
-        };
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            rotate,
+            rotate: Rotate90F32::new(direction),
+            rotate_hi: Rotate90HiF32::new(direction),
         }
     }
     #[inline(always)]
@@ -944,7 +942,7 @@ impl<T: FftNum> SseF32Butterfly4<T> {
         let mut temp = parallel_fft2_interleaved_f32(value01, value23);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-        temp[1] = self.rotate.rotate_hi(temp[1]);
+        temp[1] = self.rotate_hi.rotate_hi(temp[1]);
 
         // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
@@ -966,7 +964,7 @@ impl<T: FftNum> SseF32Butterfly4<T> {
         let mut temp1 = parallel_fft2_interleaved_f32(values[1], values[3]);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-        temp1[1] = self.rotate.rotate_both(temp1[1]);
+        temp1[1] = self.rotate.rotate(temp1[1]);
 
         // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
@@ -996,7 +994,7 @@ impl SseF64ParallelButterfly4 {
         assert!(is_x86_feature_detected!("sse4.1"));
 
         Self {
-            rotate: Rotate90F64::new(direction == FftDirection::Inverse),
+            rotate: Rotate90F64::new(direction),
             bf2: SseF64ParallelButterfly2::new(direction),
         }
     }
@@ -1036,16 +1034,11 @@ impl<T: FftNum> SseF64Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let rotate = if direction == FftDirection::Inverse {
-            Rotate90F64::new(true)
-        } else {
-            Rotate90F64::new(false)
-        };
 
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            rotate,
+            rotate: Rotate90F64::new(direction),
         }
     }
 
@@ -1114,7 +1107,7 @@ impl SseF32ParallelButterfly5 {
         let tw1 = twiddles::compute_twiddle(1, 5, direction);
         let tw2 = twiddles::compute_twiddle(2, 5, direction);
         Self {
-            rotate: Rotate90F32::new(true),
+            rotate: Rotate90F32::new(FftDirection::Inverse),
 
             // Safety: These intrinsics require the SSE4.1 target feature. We just asserted this feature was present.
             twiddle1re: unsafe { _mm_set_ps(tw1.re, tw1.re, tw1.re, tw1.re) },
@@ -1150,10 +1143,10 @@ impl ParallelFft<__m128, 5> for SseF32ParallelButterfly5 {
 
             [
                 _mm_add_ps(data[0], _mm_add_ps(x14p, x23p)),
-                _mm_add_ps(temp_a1, self.rotate.rotate_both(temp_b1)),
-                _mm_add_ps(temp_a2, self.rotate.rotate_both(temp_b2)),
-                _mm_sub_ps(temp_a2, self.rotate.rotate_both(temp_b2)),
-                _mm_sub_ps(temp_a1, self.rotate.rotate_both(temp_b1)),
+                _mm_add_ps(temp_a1, self.rotate.rotate(temp_b1)),
+                _mm_add_ps(temp_a2, self.rotate.rotate(temp_b2)),
+                _mm_sub_ps(temp_a2, self.rotate.rotate(temp_b2)),
+                _mm_sub_ps(temp_a1, self.rotate.rotate(temp_b1)),
             ]
         }
     }
@@ -1179,7 +1172,7 @@ impl<T: FftNum> SseF32Butterfly5<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 5, direction);
         let tw2: Complex<f32> = twiddles::compute_twiddle(2, 5, direction);
         let twiddle12re = unsafe { _mm_set_ps(tw2.re, tw2.re, tw1.re, tw1.re) };
@@ -1278,7 +1271,7 @@ impl<T: FftNum> SseF32Butterfly5<T> {
 
         let temp_b = _mm_add_ps(temp_b1, temp_b2);
 
-        let b_rot = self.rotate.rotate_both(temp_b);
+        let b_rot = self.rotate.rotate(temp_b);
 
         let x00 = _mm_add_ps(value00, _mm_add_ps(x1414p, x2323p));
 
@@ -1320,10 +1313,10 @@ impl<T: FftNum> SseF32Butterfly5<T> {
 
         [
             _mm_add_ps(value0, _mm_add_ps(x14p, x23p)),
-            _mm_add_ps(temp_a1, self.rotate.rotate_both(temp_b1)),
-            _mm_add_ps(temp_a2, self.rotate.rotate_both(temp_b2)),
-            _mm_sub_ps(temp_a2, self.rotate.rotate_both(temp_b2)),
-            _mm_sub_ps(temp_a1, self.rotate.rotate_both(temp_b1)),
+            _mm_add_ps(temp_a1, self.rotate.rotate(temp_b1)),
+            _mm_add_ps(temp_a2, self.rotate.rotate(temp_b2)),
+            _mm_sub_ps(temp_a2, self.rotate.rotate(temp_b2)),
+            _mm_sub_ps(temp_a1, self.rotate.rotate(temp_b1)),
         ]
     }
 }
@@ -1350,7 +1343,7 @@ impl SseF64ParallelButterfly5 {
         let tw1 = twiddles::compute_twiddle(1, 5, direction);
         let tw2 = twiddles::compute_twiddle(2, 5, direction);
         Self {
-            rotate: Rotate90F64::new(true),
+            rotate: Rotate90F64::new(FftDirection::Inverse),
 
             // Safety: These intrinsics require the SSE4.1 target feature. We just asserted this feature was present.
             twiddle1re: unsafe { _mm_set_pd(tw1.re, tw1.re) },
@@ -1411,7 +1404,7 @@ impl<T: FftNum> SseF64Butterfly5<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 5, direction);
         let tw2: Complex<f64> = twiddles::compute_twiddle(2, 5, direction);
         let twiddle1re = unsafe { _mm_set_pd(tw1.re, tw1.re) };
@@ -1768,6 +1761,7 @@ pub struct SseF32Butterfly8<T> {
     direction: FftDirection,
     bf4: SseF32Butterfly4<T>,
     rotate90: Rotate90F32,
+    rotate90_hi: Rotate90HiF32,
 }
 
 boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly8, 8, |this: &SseF32Butterfly8<_>| this
@@ -1779,17 +1773,13 @@ impl<T: FftNum> SseF32Butterfly8<T> {
         let bf4 = SseF32Butterfly4::new(direction);
         let root2 = unsafe { _mm_set_ps(0.5f32.sqrt(), 0.5f32.sqrt(), 1.0, 1.0) };
         let root2_dual = unsafe { _mm_load1_ps(&0.5f32.sqrt()) };
-        let rotate90 = if direction == FftDirection::Inverse {
-            Rotate90F32::new(true)
-        } else {
-            Rotate90F32::new(false)
-        };
         Self {
             root2,
             root2_dual,
             direction,
             bf4,
-            rotate90,
+            rotate90: Rotate90F32::new(direction),
+            rotate90_hi: Rotate90HiF32::new(direction),
         }
     }
 
@@ -1830,12 +1820,12 @@ impl<T: FftNum> SseF32Butterfly8<T> {
         let mut val2 = self.bf4.perform_fft_direct(in13, in57);
 
         // step 3: apply twiddle factors
-        let val2b = self.rotate90.rotate_hi(val2[0]);
+        let val2b = self.rotate90_hi.rotate_hi(val2[0]);
         let val2c = _mm_add_ps(val2b, val2[0]);
         let val2d = _mm_mul_ps(val2c, self.root2);
         val2[0] = extract_lo_hi_f32(val2[0], val2d);
 
-        let val3b = self.rotate90.rotate_both(val2[1]);
+        let val3b = self.rotate90.rotate(val2[1]);
         let val3c = _mm_sub_ps(val3b, val2[1]);
         let val3d = _mm_mul_ps(val3c, self.root2);
         val2[1] = extract_lo_hi_f32(val3b, val3d);
@@ -1864,11 +1854,11 @@ impl<T: FftNum> SseF32Butterfly8<T> {
             .perform_parallel_fft_direct([values[1], values[3], values[5], values[7]]);
 
         // step 3: apply twiddle factors
-        let val5b = self.rotate90.rotate_both(val47[1]);
+        let val5b = self.rotate90.rotate(val47[1]);
         let val5c = _mm_add_ps(val5b, val47[1]);
         val47[1] = _mm_mul_ps(val5c, self.root2_dual);
-        val47[2] = self.rotate90.rotate_both(val47[2]);
-        let val7b = self.rotate90.rotate_both(val47[3]);
+        val47[2] = self.rotate90.rotate(val47[2]);
+        let val7b = self.rotate90.rotate(val47[3]);
         let val7c = _mm_sub_ps(val7b, val47[3]);
         val47[3] = _mm_mul_ps(val7c, self.root2_dual);
 
@@ -2871,11 +2861,11 @@ impl<T: FftNum> SseF32Butterfly16<T> {
         let [in2, in3] = load(2);
         let mut tmp2 = self.bf4.perform_parallel_fft_direct(in2);
         let mut tmp3 = self.bf4.perform_parallel_fft_direct(in3);
-        tmp2[1] = self.bf4.rotate.rotate_both_45(tmp2[1]);
-        tmp2[2] = self.bf4.rotate.rotate_both(tmp2[2]);
-        tmp2[3] = self.bf4.rotate.rotate_both_135(tmp2[3]);
+        tmp2[1] = self.bf4.rotate.rotate_45(tmp2[1]);
+        tmp2[2] = self.bf4.rotate.rotate(tmp2[2]);
+        tmp2[3] = self.bf4.rotate.rotate_135(tmp2[3]);
         tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddle3);
-        tmp3[2] = self.bf4.rotate.rotate_both_135(tmp3[2]);
+        tmp3[2] = self.bf4.rotate.rotate_135(tmp3[2]);
         tmp3[3] = SimdVector::mul_complex(tmp3[3], self.twiddle9);
 
         // Do these last, because fewer twiddles means fewer temporaries forcing the above data to spill
@@ -2883,7 +2873,7 @@ impl<T: FftNum> SseF32Butterfly16<T> {
         let tmp0 = self.bf4.perform_parallel_fft_direct(in0);
         let mut tmp1 = self.bf4.perform_parallel_fft_direct(in1);
         tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
-        tmp1[2] = self.bf4.rotate.rotate_both_45(tmp1[2]);
+        tmp1[2] = self.bf4.rotate.rotate_45(tmp1[2]);
         tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddle3);
 
         ////////////////////////////////////////////////////////////
@@ -3166,17 +3156,17 @@ impl<T: FftNum> SseF32Butterfly24<T> {
         let mut tmp1 = self.bf4.perform_parallel_fft_direct(in1);
         tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
         tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddle2);
-        tmp1[3] = self.bf4.rotate.rotate_both_45(tmp1[3]);
+        tmp1[3] = self.bf4.rotate.rotate_45(tmp1[3]);
 
         let [in2, in3] = load(2);
         let mut tmp2 = self.bf4.perform_parallel_fft_direct(in2);
         let mut tmp3 = self.bf4.perform_parallel_fft_direct(in3);
         tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddle2);
         tmp2[2] = SimdVector::mul_complex(tmp2[2], self.twiddle4);
-        tmp2[3] = self.bf4.rotate.rotate_both(tmp2[3]);
-        tmp3[1] = self.bf4.rotate.rotate_both_45(tmp3[1]);
-        tmp3[2] = self.bf4.rotate.rotate_both(tmp3[2]);
-        tmp3[3] = self.bf4.rotate.rotate_both_135(tmp3[3]);
+        tmp2[3] = self.bf4.rotate.rotate(tmp2[3]);
+        tmp3[1] = self.bf4.rotate.rotate_45(tmp3[1]);
+        tmp3[2] = self.bf4.rotate.rotate(tmp3[2]);
+        tmp3[3] = self.bf4.rotate.rotate_135(tmp3[3]);
 
         let [in4, in5] = load(4);
         let mut tmp4 = self.bf4.perform_parallel_fft_direct(in4);
@@ -3186,7 +3176,7 @@ impl<T: FftNum> SseF32Butterfly24<T> {
         tmp4[3] = SimdVector::neg(tmp4[3]);
         tmp5[1] = SimdVector::mul_complex(tmp5[1], self.twiddle5);
         tmp5[2] = SimdVector::mul_complex(tmp5[2], self.twiddle10);
-        tmp5[3] = self.bf4.rotate.rotate_both_225(tmp5[3]);
+        tmp5[3] = self.bf4.rotate.rotate_225(tmp5[3]);
 
         ////////////////////////////////////////////////////////////
         let mut store = |i, vectors_a: [__m128; 6], vectors_b: [__m128; 6]| {
@@ -3526,7 +3516,7 @@ impl<T: FftNum> SseF32Butterfly32<T> {
         let mut tmp2 = self.bf8.bf4.perform_parallel_fft_direct(in2);
         let mut tmp3 = self.bf8.bf4.perform_parallel_fft_direct(in3);
         tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddle2);
-        tmp2[2] = self.bf8.bf4.rotate.rotate_both_45(tmp2[2]);
+        tmp2[2] = self.bf8.bf4.rotate.rotate_45(tmp2[2]);
         tmp2[3] = SimdVector::mul_complex(tmp2[3], self.twiddle6);
         tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddle3);
         tmp3[2] = SimdVector::mul_complex(tmp3[2], self.twiddle6);
@@ -3535,9 +3525,9 @@ impl<T: FftNum> SseF32Butterfly32<T> {
         let [in4, in5] = load(4);
         let mut tmp4 = self.bf8.bf4.perform_parallel_fft_direct(in4);
         let mut tmp5 = self.bf8.bf4.perform_parallel_fft_direct(in5);
-        tmp4[1] = self.bf8.bf4.rotate.rotate_both_45(tmp4[1]);
-        tmp4[2] = self.bf8.bf4.rotate.rotate_both(tmp4[2]);
-        tmp4[3] = self.bf8.bf4.rotate.rotate_both_135(tmp4[3]);
+        tmp4[1] = self.bf8.bf4.rotate.rotate_45(tmp4[1]);
+        tmp4[2] = self.bf8.bf4.rotate.rotate(tmp4[2]);
+        tmp4[3] = self.bf8.bf4.rotate.rotate_135(tmp4[3]);
         tmp5[1] = SimdVector::mul_complex(tmp5[1], self.twiddle5);
         tmp5[2] = SimdVector::mul_complex(tmp5[2], self.twiddle10);
         tmp5[3] = SimdVector::mul_complex(tmp5[3], self.twiddle15);
@@ -3546,7 +3536,7 @@ impl<T: FftNum> SseF32Butterfly32<T> {
         let mut tmp6 = self.bf8.bf4.perform_parallel_fft_direct(in6);
         let mut tmp7 = self.bf8.bf4.perform_parallel_fft_direct(in7);
         tmp6[1] = SimdVector::mul_complex(tmp6[1], self.twiddle6);
-        tmp6[2] = self.bf8.bf4.rotate.rotate_both_135(tmp6[2]);
+        tmp6[2] = self.bf8.bf4.rotate.rotate_135(tmp6[2]);
         tmp6[3] = SimdVector::mul_complex(tmp6[3], self.twiddle18);
         tmp7[1] = SimdVector::mul_complex(tmp7[1], self.twiddle7);
         tmp7[2] = SimdVector::mul_complex(tmp7[2], self.twiddle14);

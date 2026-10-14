@@ -101,7 +101,7 @@ impl {{this.parallel_struct_name_32}} {
 impl ParallelFft<{{../arch.vector_f32}}, {{this.len}}> for {{this.parallel_struct_name_32}} {
     #[inline(always)]
     fn parallel_fft(&self, data: [{{../arch.vector_f32}}; {{this.len}}]) -> [{{../arch.vector_f32}}; {{this.len}}] {
-        {{#if ../arch.has_fused_rotate}}{{else}}let rotate = Rotate90F32::new(true);
+        {{#if ../arch.has_fused_rotate}}{{else}}let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         {{/if}}
         // Safety: The current machine must support the {{../arch.target_feature_name}} instruction set. We specified this invariant in the constructor.
@@ -177,7 +177,7 @@ impl {{this.parallel_struct_name_64}} {
 impl ParallelFft<{{../arch.vector_f64}}, {{this.len}}> for {{this.parallel_struct_name_64}} {
     #[inline(always)]
     fn parallel_fft(&self, data: [{{../arch.vector_f64}}; {{this.len}}]) -> [{{../arch.vector_f64}}; {{this.len}}] {
-        {{#if ../arch.has_fused_rotate}}{{else}}let rotate = Rotate90F64::new(true);
+        {{#if ../arch.has_fused_rotate}}{{else}}let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         {{/if}}
         // Safety: The current machine must support the {{../arch.target_feature_name}} instruction set. We specified this invariant in the constructor.

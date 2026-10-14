@@ -110,7 +110,7 @@ impl SseF32ParallelButterfly7 {
 impl ParallelFft<__m128, 7> for SseF32ParallelButterfly7 {
     #[inline(always)]
     fn parallel_fft(&self, data: [__m128; 7]) -> [__m128; 7] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the sse4.1 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -233,7 +233,7 @@ impl SseF64ParallelButterfly7 {
 impl ParallelFft<__m128d, 7> for SseF64ParallelButterfly7 {
     #[inline(always)]
     fn parallel_fft(&self, data: [__m128d; 7]) -> [__m128d; 7] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the sse4.1 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -327,7 +327,7 @@ impl SseF32ParallelButterfly11 {
 impl ParallelFft<__m128, 11> for SseF32ParallelButterfly11 {
     #[inline(always)]
     fn parallel_fft(&self, data: [__m128; 11]) -> [__m128; 11] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the sse4.1 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -500,7 +500,7 @@ impl SseF64ParallelButterfly11 {
 impl ParallelFft<__m128d, 11> for SseF64ParallelButterfly11 {
     #[inline(always)]
     fn parallel_fft(&self, data: [__m128d; 11]) -> [__m128d; 11] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the sse4.1 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -636,7 +636,7 @@ impl SseF32ParallelButterfly13 {
 impl ParallelFft<__m128, 13> for SseF32ParallelButterfly13 {
     #[inline(always)]
     fn parallel_fft(&self, data: [__m128; 13]) -> [__m128; 13] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the sse4.1 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -840,7 +840,7 @@ impl SseF64ParallelButterfly13 {
 impl ParallelFft<__m128d, 13> for SseF64ParallelButterfly13 {
     #[inline(always)]
     fn parallel_fft(&self, data: [__m128d; 13]) -> [__m128d; 13] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the sse4.1 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -1003,7 +1003,7 @@ impl SseF32ParallelButterfly17 {
 impl ParallelFft<__m128, 17> for SseF32ParallelButterfly17 {
     #[inline(always)]
     fn parallel_fft(&self, data: [__m128; 17]) -> [__m128; 17] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the sse4.1 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -1281,7 +1281,7 @@ impl SseF64ParallelButterfly17 {
 impl ParallelFft<__m128d, 17> for SseF64ParallelButterfly17 {
     #[inline(always)]
     fn parallel_fft(&self, data: [__m128d; 17]) -> [__m128d; 17] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the sse4.1 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -1510,7 +1510,7 @@ impl SseF32ParallelButterfly19 {
 impl ParallelFft<__m128, 19> for SseF32ParallelButterfly19 {
     #[inline(always)]
     fn parallel_fft(&self, data: [__m128; 19]) -> [__m128; 19] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the sse4.1 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -1831,7 +1831,7 @@ impl SseF64ParallelButterfly19 {
 impl ParallelFft<__m128d, 19> for SseF64ParallelButterfly19 {
     #[inline(always)]
     fn parallel_fft(&self, data: [__m128d; 19]) -> [__m128d; 19] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the sse4.1 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -2099,7 +2099,7 @@ impl SseF32ParallelButterfly23 {
 impl ParallelFft<__m128, 23> for SseF32ParallelButterfly23 {
     #[inline(always)]
     fn parallel_fft(&self, data: [__m128; 23]) -> [__m128; 23] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the sse4.1 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -2518,7 +2518,7 @@ impl SseF64ParallelButterfly23 {
 impl ParallelFft<__m128d, 23> for SseF64ParallelButterfly23 {
     #[inline(always)]
     fn parallel_fft(&self, data: [__m128d; 23]) -> [__m128d; 23] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the sse4.1 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -2876,7 +2876,7 @@ impl SseF32ParallelButterfly29 {
 impl ParallelFft<__m128, 29> for SseF32ParallelButterfly29 {
     #[inline(always)]
     fn parallel_fft(&self, data: [__m128; 29]) -> [__m128; 29] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the sse4.1 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -3472,7 +3472,7 @@ impl SseF64ParallelButterfly29 {
 impl ParallelFft<__m128d, 29> for SseF64ParallelButterfly29 {
     #[inline(always)]
     fn parallel_fft(&self, data: [__m128d; 29]) -> [__m128d; 29] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the sse4.1 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -3995,7 +3995,7 @@ impl SseF32ParallelButterfly31 {
 impl ParallelFft<__m128, 31> for SseF32ParallelButterfly31 {
     #[inline(always)]
     fn parallel_fft(&self, data: [__m128; 31]) -> [__m128; 31] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the sse4.1 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -4658,7 +4658,7 @@ impl SseF64ParallelButterfly31 {
 impl ParallelFft<__m128d, 31> for SseF64ParallelButterfly31 {
     #[inline(always)]
     fn parallel_fft(&self, data: [__m128d; 31]) -> [__m128d; 31] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the sse4.1 instruction set. We specified this invariant in the constructor.
         unsafe {
