@@ -571,8 +571,8 @@ impl<T: FftNum> WasmSimdF32Butterfly3<T> {
     ) -> [WasmVector32; 2] {
         // This is a WasmSimd translation of the scalar 3-point butterfly
         let rev12 = reverse_complex_and_negate_hi_f32(value12);
-        let rotate = Rotate90F32::new(FftDirection::Inverse);
-        let temp12pn = rotate.rotate_hi(SimdVector::add(value12, rev12));
+        let rotate_hi = Rotate90HiF32::new(FftDirection::Inverse);
+        let temp12pn = rotate_hi.rotate_hi(SimdVector::add(value12, rev12));
         let twiddled = SimdVector::mul(temp12pn, self.twiddle);
         let temp = SimdVector::add(value0x, twiddled);
 
@@ -771,6 +771,7 @@ pub struct WasmSimdF32Butterfly4<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     rotate: Rotate90F32,
+    rotate_hi: Rotate90HiF32,
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(
@@ -786,6 +787,7 @@ impl<T: FftNum> WasmSimdF32Butterfly4<T> {
             direction,
             _phantom: std::marker::PhantomData,
             rotate: Rotate90F32::new(direction),
+            rotate_hi: Rotate90HiF32::new(direction),
         }
     }
     #[inline(always)]
@@ -843,7 +845,7 @@ impl<T: FftNum> WasmSimdF32Butterfly4<T> {
         let mut temp = wasm_parallel_butterfly2([value01, value23]);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-        temp[1] = self.rotate.rotate_hi(temp[1]);
+        temp[1] = self.rotate_hi.rotate_hi(temp[1]);
 
         // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
@@ -1652,6 +1654,7 @@ pub struct WasmSimdF32Butterfly8<T> {
     root2_dual: WasmVector32,
     bf4: WasmSimdF32Butterfly4<T>,
     rotate90: Rotate90F32,
+    rotate90_hi: Rotate90HiF32,
 }
 
 boilerplate_fft_wasm_simd_f32_butterfly!(
@@ -1671,6 +1674,7 @@ impl<T: FftNum> WasmSimdF32Butterfly8<T> {
             root2_dual,
             bf4,
             rotate90: Rotate90F32::new(direction),
+            rotate90_hi: Rotate90HiF32::new(direction),
         }
     }
 
@@ -1711,7 +1715,7 @@ impl<T: FftNum> WasmSimdF32Butterfly8<T> {
         let mut val2 = self.bf4.perform_fft_direct(in13, in57);
 
         // step 3: apply twiddle factors
-        let val2b = self.rotate90.rotate_hi(val2[0]);
+        let val2b = self.rotate90_hi.rotate_hi(val2[0]);
         let val2c = SimdVector::add(val2b, val2[0]);
         let val2d = SimdVector::mul(val2c, self.root2);
         val2[0] = extract_lo_hi_f32(val2[0], val2d);

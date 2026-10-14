@@ -14,19 +14,13 @@ use crate::simd::simd_vector::SimdVector;
 
 /// Utility functions to rotate complex numbers by 90 degrees
 pub struct Rotate90F32 {
-    sign_hi: WasmVector32,
-    sign_both: WasmVector32,
+    sign: WasmVector32,
 }
 
 impl Rotate90F32 {
     pub fn new(direction: FftDirection) -> Self {
         Self {
-            sign_hi: if direction == FftDirection::Inverse {
-                WasmVector32(f32x4(0.0, 0.0, -0.0, 0.0))
-            } else {
-                WasmVector32(f32x4(0.0, 0.0, 0.0, -0.0))
-            },
-            sign_both: if direction == FftDirection::Inverse {
+            sign: if direction == FftDirection::Inverse {
                 WasmVector32(f32x4(-0.0, 0.0, -0.0, 0.0))
             } else {
                 WasmVector32(f32x4(0.0, -0.0, 0.0, -0.0))
@@ -35,18 +29,10 @@ impl Rotate90F32 {
     }
 
     #[inline(always)]
-    pub fn rotate_hi(&self, values: WasmVector32) -> WasmVector32 {
-        WasmVector32(v128_xor(
-            u32x4_shuffle::<0, 1, 3, 2>(values.0, values.0),
-            self.sign_hi.0,
-        ))
-    }
-
-    #[inline(always)]
     pub fn rotate(&self, values: WasmVector32) -> WasmVector32 {
         WasmVector32(v128_xor(
             u32x4_shuffle::<1, 0, 3, 2>(values.0, values.0),
-            self.sign_both.0,
+            self.sign.0,
         ))
     }
 
@@ -69,6 +55,31 @@ impl Rotate90F32 {
         let rotated = self.rotate(values);
         let diff = SimdVector::add(rotated, values);
         SimdVector::mul(diff, SimdVector::broadcast_scalar(-(0.5f32.sqrt())))
+    }
+}
+
+/// Utility functions to rotate complex numbers by 90 degrees
+pub struct Rotate90HiF32 {
+    sign_hi: WasmVector32,
+}
+
+impl Rotate90HiF32 {
+    pub fn new(direction: FftDirection) -> Self {
+        Self {
+            sign_hi: if direction == FftDirection::Inverse {
+                WasmVector32(f32x4(0.0, 0.0, -0.0, 0.0))
+            } else {
+                WasmVector32(f32x4(0.0, 0.0, 0.0, -0.0))
+            },
+        }
+    }
+
+    #[inline(always)]
+    pub fn rotate_hi(&self, values: WasmVector32) -> WasmVector32 {
+        WasmVector32(v128_xor(
+            u32x4_shuffle::<0, 1, 3, 2>(values.0, values.0),
+            self.sign_hi.0,
+        ))
     }
 }
 
@@ -230,8 +241,9 @@ mod unit_tests {
     fn test_positive_rotation_f32() {
         unsafe {
             let rotate = Rotate90F32::new(FftDirection::Inverse);
+            let rotate_hi = Rotate90HiF32::new(FftDirection::Inverse);
             let input = WasmVector32(f32x4(1.0, 2.0, 69.0, 420.0));
-            let actual_hi = rotate.rotate_hi(input);
+            let actual_hi = rotate_hi.rotate_hi(input);
             let expected_hi = WasmVector32(f32x4(1.0, 2.0, -420.0, 69.0));
             assert_eq!(
                 std::mem::transmute::<WasmVector32, [Complex<f32>; 2]>(actual_hi),
@@ -251,8 +263,9 @@ mod unit_tests {
     fn test_negative_rotation_f32() {
         unsafe {
             let rotate = Rotate90F32::new(FftDirection::Forward);
+            let rotate_hi = Rotate90HiF32::new(FftDirection::Forward);
             let input = WasmVector32(f32x4(1.0, 2.0, 69.0, 420.0));
-            let actual_hi = rotate.rotate_hi(input);
+            let actual_hi = rotate_hi.rotate_hi(input);
             let expected_hi = WasmVector32(f32x4(1.0, 2.0, 420.0, -69.0));
             assert_eq!(
                 std::mem::transmute::<WasmVector32, [Complex<f32>; 2]>(actual_hi),
