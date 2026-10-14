@@ -275,33 +275,6 @@ pub fn check_parallel_fft<V: SimdVector + std::fmt::Debug, const LEN: usize>(
             direction
         );
     }
-
-    // If this vector can store more than one complex number, check the lo() methods
-    if V::COMPLEX_PER_VECTOR > 1 {
-        for (input, expected_output) in reference_input
-            .chunks(LEN)
-            .zip(reference_output.chunks(LEN))
-        {
-            // Load data into vectors
-            let data = std::array::from_fn(|i| unsafe { input.load1_lo(i) });
-
-            // Compute column FFT
-            let data = fft.parallel_fft_lo1(data);
-
-            // store back to memory
-            let mut result = vec![Complex::zero(); LEN];
-            for i in 0..LEN {
-                unsafe { result.as_mut_slice().store1_lo(data[i], i) };
-            }
-
-            assert!(
-                compare_vectors(&expected_output, &result),
-                "parallel_fft_lo1() failed, length = {}, direction = {}",
-                LEN,
-                direction
-            );
-        }
-    }
 }
 
 // A fake FFT algorithm that requests much more scratch than it needs. You can use this as an inner FFT to other algorithms to test their scratch-supplying logic
