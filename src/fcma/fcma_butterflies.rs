@@ -7,6 +7,7 @@ use crate::array_utils::DoubleBuf;
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
 
+use crate::simd::column_fft::ColumnFft;
 use crate::simd::simd_array::SimdComplexArrayMut;
 use crate::simd::simd_vector::SimdVector;
 
@@ -280,6 +281,30 @@ impl<T: FftNum> FcmaF64Butterfly1<T> {
 //  |_____|         |____/_____|_.__/|_|\__|
 //
 
+pub struct FcmaF32ColumnButterfly2 {}
+impl FcmaF32ColumnButterfly2 {
+    #[inline(always)]
+    pub fn new(_direction: FftDirection) -> Self {
+        assert!(
+            std::arch::is_aarch64_feature_detected!("neon")
+                && std::arch::is_aarch64_feature_detected!("fcma")
+        );
+        Self {}
+    }
+}
+impl ColumnFft<FcmaVector32, 2> for FcmaF32ColumnButterfly2 {
+    #[inline(always)]
+    fn column_fft(&self, data: [FcmaVector32; 2]) -> [FcmaVector32; 2] {
+        // Safety: These intrinsics require the NEON target feature. We asserted this feature was present in the constructor.
+        unsafe {
+            [
+                SimdVector::add(data[0], data[1]),
+                SimdVector::sub(data[0], data[1]),
+            ]
+        }
+    }
+}
+
 pub struct FcmaF32Butterfly2<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
@@ -382,6 +407,30 @@ unsafe fn solo_fft2_f32(values: FcmaVector32) -> FcmaVector32 {
 //  |_____|          \___/   |_| |_.__/|_|\__|
 //
 
+pub struct FcmaF64ColumnButterfly2 {}
+impl FcmaF64ColumnButterfly2 {
+    #[inline(always)]
+    pub fn new(_direction: FftDirection) -> Self {
+        assert!(
+            std::arch::is_aarch64_feature_detected!("neon")
+                && std::arch::is_aarch64_feature_detected!("fcma")
+        );
+        Self {}
+    }
+}
+impl ColumnFft<FcmaVector64, 2> for FcmaF64ColumnButterfly2 {
+    #[inline(always)]
+    fn column_fft(&self, data: [FcmaVector64; 2]) -> [FcmaVector64; 2] {
+        // Safety: These intrinsics require the NEON target feature. We asserted this feature was present in the constructor.
+        unsafe {
+            [
+                SimdVector::add(data[0], data[1]),
+                SimdVector::sub(data[0], data[1]),
+            ]
+        }
+    }
+}
+
 pub struct FcmaF64Butterfly2<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
@@ -436,6 +485,46 @@ pub(crate) unsafe fn solo_fft2_f64(left: FcmaVector64, right: FcmaVector64) -> [
 //   ___) |  |_____|  ___) / __/| |_) | | |_
 //  |____/           |____/_____|_.__/|_|\__|
 //
+
+pub struct FcmaF32ColumnButterfly3 {
+    twiddle1re: FcmaVector32,
+    twiddle1im: FcmaVector32,
+}
+impl FcmaF32ColumnButterfly3 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(
+            std::arch::is_aarch64_feature_detected!("neon")
+                && std::arch::is_aarch64_feature_detected!("fcma")
+        );
+
+        let tw1: Complex<f32> = twiddles::compute_twiddle(1, 3, direction);
+        Self {
+            twiddle1re: unsafe { FcmaVector32(vmovq_n_f32(tw1.re)) },
+            twiddle1im: unsafe { FcmaVector32(vmovq_n_f32(tw1.im)) },
+        }
+    }
+}
+impl ColumnFft<FcmaVector32, 3> for FcmaF32ColumnButterfly3 {
+    #[inline(always)]
+    fn column_fft(&self, data: [FcmaVector32; 3]) -> [FcmaVector32; 3] {
+        // Safety: These intrinsics require the NEON and FCMA target features. We asserted this feature was present in the constructor.
+        unsafe {
+            // This is an FCMA translation of the scalar 3-point butterfly
+            let x12p = SimdVector::add(data[1], data[2]);
+            let x12n = SimdVector::sub(data[1], data[2]);
+
+            let temp = SimdVector::fmadd(data[0], self.twiddle1re, x12p);
+
+            // The rotation of x12n is part of the multiplications below, and the second twiddle is
+            // the negated first one, so that multiplication rotates the other way instead.
+            let x0 = SimdVector::add(data[0], x12p);
+            let x1 = FcmaVector::fmadd_rotate90(temp, self.twiddle1im, x12n);
+            let x2 = FcmaVector::nmadd_rotate90(temp, self.twiddle1im, x12n);
+            [x0, x1, x2]
+        }
+    }
+}
 
 pub struct FcmaF32Butterfly3<T> {
     direction: FftDirection,
@@ -555,6 +644,46 @@ impl<T: FftNum> FcmaF32Butterfly3<T> {
 //  |____/            \___/   |_| |_.__/|_|\__|
 //
 
+pub struct FcmaF64ColumnButterfly3 {
+    twiddle1re: FcmaVector64,
+    twiddle1im: FcmaVector64,
+}
+impl FcmaF64ColumnButterfly3 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(
+            std::arch::is_aarch64_feature_detected!("neon")
+                && std::arch::is_aarch64_feature_detected!("fcma")
+        );
+
+        let tw1: Complex<f64> = twiddles::compute_twiddle(1, 3, direction);
+        Self {
+            twiddle1re: unsafe { FcmaVector64(vmovq_n_f64(tw1.re)) },
+            twiddle1im: unsafe { FcmaVector64(vmovq_n_f64(tw1.im)) },
+        }
+    }
+}
+impl ColumnFft<FcmaVector64, 3> for FcmaF64ColumnButterfly3 {
+    #[inline(always)]
+    fn column_fft(&self, data: [FcmaVector64; 3]) -> [FcmaVector64; 3] {
+        // Safety: These intrinsics require the NEON and FCMA target features. We asserted this feature was present in the constructor.
+        unsafe {
+            // This is an FCMA translation of the scalar 3-point butterfly
+            let x12p = SimdVector::add(data[1], data[2]);
+            let x12n = SimdVector::sub(data[1], data[2]);
+
+            let temp = SimdVector::fmadd(data[0], self.twiddle1re, x12p);
+
+            // The rotation of x12n is part of the multiplications below, and the second twiddle is
+            // the negated first one, so that multiplication rotates the other way instead.
+            let x0 = SimdVector::add(data[0], x12p);
+            let x1 = FcmaVector::fmadd_rotate90(temp, self.twiddle1im, x12n);
+            let x2 = FcmaVector::nmadd_rotate90(temp, self.twiddle1im, x12n);
+            [x0, x1, x2]
+        }
+    }
+}
+
 pub struct FcmaF64Butterfly3<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
@@ -626,6 +755,54 @@ impl<T: FftNum> FcmaF64Butterfly3<T> {
 //  |__   _| |_____|  ___) / __/| |_) | | |_
 //     |_|           |____/_____|_.__/|_|\__|
 //
+
+pub struct FcmaF32ColumnButterfly4 {
+    rotate: Rotate90F32,
+    bf2: FcmaF32ColumnButterfly2,
+}
+impl FcmaF32ColumnButterfly4 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(
+            std::arch::is_aarch64_feature_detected!("neon")
+                && std::arch::is_aarch64_feature_detected!("fcma")
+        );
+
+        Self {
+            rotate: Rotate90F32::new(direction == FftDirection::Inverse),
+            bf2: FcmaF32ColumnButterfly2::new(direction),
+        }
+    }
+}
+impl ColumnFft<FcmaVector32, 4> for FcmaF32ColumnButterfly4 {
+    #[inline(always)]
+    fn column_fft(&self, data: [FcmaVector32; 4]) -> [FcmaVector32; 4] {
+        // step 1: transpose
+        // and
+        // step 2: column FFTs
+        let temp0 = self.bf2.column_fft([data[0], data[2]]);
+        let temp1 = self.bf2.column_fft([data[1], data[3]]);
+
+        // step 3 and 5: the only twiddle factor is either 0 + i or 0 - i, so the rotation folds
+        // into the second row FFT
+
+        // step 4: transpose
+        // and
+        // step 5: row FFTs
+        let out0 = self.bf2.column_fft([temp0[0], temp1[0]]);
+
+        // Safety: rotate_both_and_add requires the NEON and FCMA target features. We asserted this feature was present in the constructor.
+        let out2 = unsafe {
+            [
+                self.rotate.rotate_both_and_add(temp0[1], temp1[1]),
+                self.rotate.rotate_both_and_sub(temp0[1], temp1[1]),
+            ]
+        };
+
+        // step 6: transpose by swapping index 1 and 2
+        [out0[0], out2[0], out0[1], out2[1]]
+    }
+}
 
 pub struct FcmaF32Butterfly4<T> {
     direction: FftDirection,
@@ -753,6 +930,54 @@ impl<T: FftNum> FcmaF32Butterfly4<T> {
 //     |_|            \___/   |_| |_.__/|_|\__|
 //
 
+pub struct FcmaF64ColumnButterfly4 {
+    rotate: Rotate90F64,
+    bf2: FcmaF64ColumnButterfly2,
+}
+impl FcmaF64ColumnButterfly4 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(
+            std::arch::is_aarch64_feature_detected!("neon")
+                && std::arch::is_aarch64_feature_detected!("fcma")
+        );
+
+        Self {
+            rotate: Rotate90F64::new(direction == FftDirection::Inverse),
+            bf2: FcmaF64ColumnButterfly2::new(direction),
+        }
+    }
+}
+impl ColumnFft<FcmaVector64, 4> for FcmaF64ColumnButterfly4 {
+    #[inline(always)]
+    fn column_fft(&self, data: [FcmaVector64; 4]) -> [FcmaVector64; 4] {
+        // step 1: transpose
+        // and
+        // step 2: column FFTs
+        let temp0 = self.bf2.column_fft([data[0], data[2]]);
+        let temp1 = self.bf2.column_fft([data[1], data[3]]);
+
+        // step 3 and 5: the only twiddle factor is either 0 + i or 0 - i, so the rotation folds
+        // into the second row FFT
+
+        // step 4: transpose
+        // and
+        // step 5: row FFTs
+        let out0 = self.bf2.column_fft([temp0[0], temp1[0]]);
+
+        // Safety: rotate_both_and_add requires the NEON and FCMA target features. We asserted this feature was present in the constructor.
+        let out2 = unsafe {
+            [
+                self.rotate.rotate_and_add(temp0[1], temp1[1]),
+                self.rotate.rotate_and_sub(temp0[1], temp1[1]),
+            ]
+        };
+
+        // step 6: transpose by swapping index 1 and 2
+        [out0[0], out2[0], out0[1], out2[1]]
+    }
+}
+
 pub struct FcmaF64Butterfly4<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
@@ -830,6 +1055,67 @@ impl<T: FftNum> FcmaF64Butterfly4<T> {
 //   ___) |  |_____|  ___) / __/| |_) | | |_
 //  |____/           |____/_____|_.__/|_|\__|
 //
+
+pub struct FcmaF32ColumnButterfly5 {
+    rotate: Rotate90F32,
+    twiddle1re: FcmaVector32,
+    twiddle1im: FcmaVector32,
+    twiddle2re: FcmaVector32,
+    twiddle2im: FcmaVector32,
+}
+impl FcmaF32ColumnButterfly5 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(
+            std::arch::is_aarch64_feature_detected!("neon")
+                && std::arch::is_aarch64_feature_detected!("fcma")
+        );
+
+        let tw1: Complex<f32> = twiddles::compute_twiddle(1, 5, direction);
+        let tw2: Complex<f32> = twiddles::compute_twiddle(2, 5, direction);
+        Self {
+            rotate: Rotate90F32::new(true),
+            twiddle1re: unsafe { FcmaVector32(vmovq_n_f32(tw1.re)) },
+            twiddle1im: unsafe { FcmaVector32(vmovq_n_f32(tw1.im)) },
+            twiddle2re: unsafe { FcmaVector32(vmovq_n_f32(tw2.re)) },
+            twiddle2im: unsafe { FcmaVector32(vmovq_n_f32(tw2.im)) },
+        }
+    }
+}
+impl ColumnFft<FcmaVector32, 5> for FcmaF32ColumnButterfly5 {
+    #[inline(always)]
+    fn column_fft(&self, data: [FcmaVector32; 5]) -> [FcmaVector32; 5] {
+        // Safety: These intrinsics require the NEON and FCMA target features. We asserted this feature was present in the constructor.
+        unsafe {
+            let x14p = SimdVector::add(data[1], data[4]);
+            let x14n = SimdVector::sub(data[1], data[4]);
+            let x23p = SimdVector::add(data[2], data[3]);
+            let x23n = SimdVector::sub(data[2], data[3]);
+
+            let temp_a1_1 = SimdVector::mul(self.twiddle1re, x14p);
+            let temp_a1_2 = SimdVector::mul(self.twiddle2re, x23p);
+            let temp_b1_1 = SimdVector::mul(self.twiddle1im, x14n);
+            let temp_b1_2 = SimdVector::mul(self.twiddle2im, x23n);
+            let temp_a2_1 = SimdVector::mul(self.twiddle1re, x23p);
+            let temp_a2_2 = SimdVector::mul(self.twiddle2re, x14p);
+            let temp_b2_1 = SimdVector::mul(self.twiddle2im, x14n);
+            let temp_b2_2 = SimdVector::mul(self.twiddle1im, x23n);
+
+            let temp_a1 = SimdVector::add(data[0], SimdVector::add(temp_a1_1, temp_a1_2));
+            let temp_b1 = SimdVector::add(temp_b1_1, temp_b1_2);
+            let temp_a2 = SimdVector::add(data[0], SimdVector::add(temp_a2_1, temp_a2_2));
+            let temp_b2 = SimdVector::sub(temp_b2_1, temp_b2_2);
+
+            [
+                SimdVector::add(data[0], SimdVector::add(x14p, x23p)),
+                self.rotate.rotate_both_and_add(temp_a1, temp_b1),
+                self.rotate.rotate_both_and_add(temp_a2, temp_b2),
+                self.rotate.rotate_both_and_sub(temp_a2, temp_b2),
+                self.rotate.rotate_both_and_sub(temp_a1, temp_b1),
+            ]
+        }
+    }
+}
 
 pub struct FcmaF32Butterfly5<T> {
     direction: FftDirection,
@@ -1005,6 +1291,67 @@ impl<T: FftNum> FcmaF32Butterfly5<T> {
 //  |____/            \___/   |_| |_.__/|_|\__|
 //
 
+pub struct FcmaF64ColumnButterfly5 {
+    rotate: Rotate90F64,
+    twiddle1re: FcmaVector64,
+    twiddle1im: FcmaVector64,
+    twiddle2re: FcmaVector64,
+    twiddle2im: FcmaVector64,
+}
+impl FcmaF64ColumnButterfly5 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(
+            std::arch::is_aarch64_feature_detected!("neon")
+                && std::arch::is_aarch64_feature_detected!("fcma")
+        );
+
+        let tw1: Complex<f64> = twiddles::compute_twiddle(1, 5, direction);
+        let tw2: Complex<f64> = twiddles::compute_twiddle(2, 5, direction);
+        Self {
+            rotate: Rotate90F64::new(true),
+            twiddle1re: unsafe { FcmaVector64(vmovq_n_f64(tw1.re)) },
+            twiddle1im: unsafe { FcmaVector64(vmovq_n_f64(tw1.im)) },
+            twiddle2re: unsafe { FcmaVector64(vmovq_n_f64(tw2.re)) },
+            twiddle2im: unsafe { FcmaVector64(vmovq_n_f64(tw2.im)) },
+        }
+    }
+}
+impl ColumnFft<FcmaVector64, 5> for FcmaF64ColumnButterfly5 {
+    #[inline(always)]
+    fn column_fft(&self, data: [FcmaVector64; 5]) -> [FcmaVector64; 5] {
+        // Safety: These intrinsics require the NEON and FCMA target features. We asserted this feature was present in the constructor.
+        unsafe {
+            let x14p = SimdVector::add(data[1], data[4]);
+            let x14n = SimdVector::sub(data[1], data[4]);
+            let x23p = SimdVector::add(data[2], data[3]);
+            let x23n = SimdVector::sub(data[2], data[3]);
+
+            let temp_a1_1 = SimdVector::mul(self.twiddle1re, x14p);
+            let temp_a1_2 = SimdVector::mul(self.twiddle2re, x23p);
+            let temp_b1_1 = SimdVector::mul(self.twiddle1im, x14n);
+            let temp_b1_2 = SimdVector::mul(self.twiddle2im, x23n);
+            let temp_a2_1 = SimdVector::mul(self.twiddle1re, x23p);
+            let temp_a2_2 = SimdVector::mul(self.twiddle2re, x14p);
+            let temp_b2_1 = SimdVector::mul(self.twiddle2im, x14n);
+            let temp_b2_2 = SimdVector::mul(self.twiddle1im, x23n);
+
+            let temp_a1 = SimdVector::add(data[0], SimdVector::add(temp_a1_1, temp_a1_2));
+            let temp_b1 = SimdVector::add(temp_b1_1, temp_b1_2);
+            let temp_a2 = SimdVector::add(data[0], SimdVector::add(temp_a2_1, temp_a2_2));
+            let temp_b2 = SimdVector::sub(temp_b2_1, temp_b2_2);
+
+            [
+                SimdVector::add(data[0], SimdVector::add(x14p, x23p)),
+                self.rotate.rotate_and_add(temp_a1, temp_b1),
+                self.rotate.rotate_and_add(temp_a2, temp_b2),
+                self.rotate.rotate_and_sub(temp_a2, temp_b2),
+                self.rotate.rotate_and_sub(temp_a1, temp_b1),
+            ]
+        }
+    }
+}
+
 pub struct FcmaF64Butterfly5<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
@@ -1109,6 +1456,45 @@ impl<T: FftNum> FcmaF64Butterfly5<T> {
 //  | (_) | |_____|  ___) / __/| |_) | | |_
 //   \___/          |____/_____|_.__/|_|\__|
 //
+
+pub struct FcmaF32ColumnButterfly6 {
+    bf2: FcmaF32ColumnButterfly2,
+    bf3: FcmaF32ColumnButterfly3,
+}
+impl FcmaF32ColumnButterfly6 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(
+            std::arch::is_aarch64_feature_detected!("neon")
+                && std::arch::is_aarch64_feature_detected!("fcma")
+        );
+
+        Self {
+            bf2: FcmaF32ColumnButterfly2::new(direction),
+            bf3: FcmaF32ColumnButterfly3::new(direction),
+        }
+    }
+}
+impl ColumnFft<FcmaVector32, 6> for FcmaF32ColumnButterfly6 {
+    #[inline(always)]
+    fn column_fft(&self, data: [FcmaVector32; 6]) -> [FcmaVector32; 6] {
+        // Algorithm: 3x2 good-thomas
+
+        // Size-3 FFTs down the columns of our reordered array
+        let mid0 = self.bf3.column_fft([data[0], data[2], data[4]]);
+        let mid1 = self.bf3.column_fft([data[3], data[5], data[1]]);
+
+        // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
+
+        // Transpose the data and do size-2 FFTs down the columns
+        let [output0, output1] = self.bf2.column_fft([mid0[0], mid1[0]]);
+        let [output2, output3] = self.bf2.column_fft([mid0[1], mid1[1]]);
+        let [output4, output5] = self.bf2.column_fft([mid0[2], mid1[2]]);
+
+        // Reorder into output
+        [output0, output3, output4, output1, output2, output5]
+    }
+}
 
 pub struct FcmaF32Butterfly6<T> {
     _phantom: std::marker::PhantomData<T>,
@@ -1227,6 +1613,45 @@ impl<T: FftNum> FcmaF32Butterfly6<T> {
 //  | (_) | |_____| | (_) |__   _| |_) | | |_
 //   \___/           \___/   |_| |_.__/|_|\__|
 //
+
+pub struct FcmaF64ColumnButterfly6 {
+    bf2: FcmaF64ColumnButterfly2,
+    bf3: FcmaF64ColumnButterfly3,
+}
+impl FcmaF64ColumnButterfly6 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(
+            std::arch::is_aarch64_feature_detected!("neon")
+                && std::arch::is_aarch64_feature_detected!("fcma")
+        );
+
+        Self {
+            bf2: FcmaF64ColumnButterfly2::new(direction),
+            bf3: FcmaF64ColumnButterfly3::new(direction),
+        }
+    }
+}
+impl ColumnFft<FcmaVector64, 6> for FcmaF64ColumnButterfly6 {
+    #[inline(always)]
+    fn column_fft(&self, data: [FcmaVector64; 6]) -> [FcmaVector64; 6] {
+        // Algorithm: 3x2 good-thomas
+
+        // Size-3 FFTs down the columns of our reordered array
+        let mid0 = self.bf3.column_fft([data[0], data[2], data[4]]);
+        let mid1 = self.bf3.column_fft([data[3], data[5], data[1]]);
+
+        // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
+
+        // Transpose the data and do size-2 FFTs down the columns
+        let [output0, output1] = self.bf2.column_fft([mid0[0], mid1[0]]);
+        let [output2, output3] = self.bf2.column_fft([mid0[1], mid1[1]]);
+        let [output4, output5] = self.bf2.column_fft([mid0[2], mid1[2]]);
+
+        // Reorder into output
+        [output0, output3, output4, output1, output2, output5]
+    }
+}
 
 pub struct FcmaF64Butterfly6<T> {
     _phantom: std::marker::PhantomData<T>,

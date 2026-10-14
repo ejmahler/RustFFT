@@ -29,9 +29,6 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
     /// The scalar this vector holds. Always the same type as the `T` of the algorithm using it.
     type ScalarType: FftNum;
 
-    /// The backend's precomputed 90 degree rotation, which the radix 4 butterfly needs.
-    type Rotation: Copy + Send + Sync;
-
     type Butterfly2: ColumnFft<Self, 2>;
     type Butterfly3: ColumnFft<Self, 3>;
     type Butterfly4: ColumnFft<Self, 4>;

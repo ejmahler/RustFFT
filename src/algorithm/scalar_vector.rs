@@ -19,8 +19,6 @@ impl<T: FftNum> SimdVector for Complex<T> {
 
     type ScalarType = T;
 
-    type Rotation = FftDirection;
-
     type Butterfly2 = ScalarColumnButterfly2<T>;
     type Butterfly3 = ScalarColumnButterfly3<T>;
     type Butterfly4 = ScalarColumnButterfly4<T>;

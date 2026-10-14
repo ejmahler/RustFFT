@@ -1,7 +1,5 @@
 use std::any::TypeId;
 
-use crate::fft_helper::{fft_helper_immut, fft_helper_inplace, fft_helper_outofplace};
-
 // Helper function to assert we have the right float type
 pub fn assert_f32<T: 'static>() {
     let id_f32 = TypeId::of::<f32>();
@@ -54,59 +52,4 @@ macro_rules! separate_interleaved_complex_f32 {
         )*
         ]
     }
-}
-
-// A wrapper for the FFT helper functions that make sure the entire thing happens with the benefit of the FCMA target feature,
-// so that things like loading twiddle factor registers etc can be lifted out of the loop
-#[target_feature(enable = "neon,fcma")]
-pub unsafe fn fcma_fft_helper_immut<T>(
-    input: &[T],
-    output: &mut [T],
-    scratch: &mut [T],
-    chunk_size: usize,
-    required_scratch: usize,
-    chunk_fn: impl FnMut(&[T], &mut [T], &mut [T]),
-) {
-    fft_helper_immut(
-        input,
-        output,
-        scratch,
-        chunk_size,
-        required_scratch,
-        chunk_fn,
-    )
-}
-
-// A wrapper for the FFT helper functions that make sure the entire thing happens with the benefit of the FCMA target feature,
-// so that things like loading twiddle factor registers etc can be lifted out of the loop
-#[target_feature(enable = "neon,fcma")]
-pub unsafe fn fcma_fft_helper_outofplace<T>(
-    input: &mut [T],
-    output: &mut [T],
-    scratch: &mut [T],
-    chunk_size: usize,
-    required_scratch: usize,
-    chunk_fn: impl FnMut(&mut [T], &mut [T], &mut [T]),
-) {
-    fft_helper_outofplace(
-        input,
-        output,
-        scratch,
-        chunk_size,
-        required_scratch,
-        chunk_fn,
-    )
-}
-
-// A wrapper for the FFT helper functions that make sure the entire thing happens with the benefit of the FCMA target feature,
-// so that things like loading twiddle factor registers etc can be lifted out of the loop
-#[target_feature(enable = "neon,fcma")]
-pub unsafe fn fcma_fft_helper_inplace<T>(
-    buffer: &mut [T],
-    scratch: &mut [T],
-    chunk_size: usize,
-    required_scratch: usize,
-    chunk_fn: impl FnMut(&mut [T], &mut [T]),
-) {
-    fft_helper_inplace(buffer, scratch, chunk_size, required_scratch, chunk_fn)
 }
