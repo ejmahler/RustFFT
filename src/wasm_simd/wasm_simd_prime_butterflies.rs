@@ -1,4 +1,4 @@
-﻿
+
 use std::any::TypeId;
 use std::sync::Arc;
 use num_complex::Complex;

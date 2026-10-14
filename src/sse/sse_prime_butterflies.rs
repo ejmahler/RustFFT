@@ -1,4 +1,4 @@
-﻿use core::arch::x86_64::{__m128, __m128d};
+use core::arch::x86_64::{__m128, __m128d};
 use std::any::TypeId;
 use std::sync::Arc;
 use num_complex::Complex;
