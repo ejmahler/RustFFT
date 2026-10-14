@@ -456,7 +456,6 @@ pub(crate) unsafe fn solo_fft2_f64(left: WasmVector64, right: WasmVector64) -> [
 //
 
 pub struct WasmSimdF32ParallelButterfly3 {
-    rotate: Rotate90F32,
     twiddle1re: WasmVector32,
     twiddle1im: WasmVector32,
 }
@@ -465,7 +464,6 @@ impl WasmSimdF32ParallelButterfly3 {
     pub fn new(direction: FftDirection) -> Self {
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 3, direction);
         Self {
-            rotate: Rotate90F32::new(true),
             twiddle1re: unsafe { SimdVector::broadcast_scalar(tw1.re) },
             twiddle1im: unsafe { SimdVector::broadcast_scalar(tw1.im) },
         }
@@ -484,7 +482,8 @@ impl ParallelFft<WasmVector32, 3> for WasmSimdF32ParallelButterfly3 {
             let temp_a = SimdVector::mul(self.twiddle1re, x12p);
             let temp_a = SimdVector::add(temp_a, data[0]);
 
-            let n_rot = self.rotate.rotate_both(x12n);
+            let rotate = Rotate90F32::new(FftDirection::Inverse);
+            let n_rot = rotate.rotate(x12n);
             let temp_b = SimdVector::mul(self.twiddle1im, n_rot);
 
             let x1 = SimdVector::add(temp_a, temp_b);
@@ -497,7 +496,6 @@ impl ParallelFft<WasmVector32, 3> for WasmSimdF32ParallelButterfly3 {
 pub struct WasmSimdF32Butterfly3<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    rotate: Rotate90F32,
     twiddle: WasmVector32,
     twiddle1re: WasmVector32,
     twiddle1im: WasmVector32,
@@ -512,7 +510,6 @@ impl<T: FftNum> WasmSimdF32Butterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let rotate = Rotate90F32::new(true);
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 3, direction);
         let twiddle = WasmVector32(f32x4(tw1.re, tw1.re, -tw1.im, -tw1.im));
         let twiddle1re = unsafe { SimdVector::broadcast_scalar(tw1.re) };
@@ -520,7 +517,6 @@ impl<T: FftNum> WasmSimdF32Butterfly3<T> {
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            rotate,
             twiddle,
             twiddle1re,
             twiddle1im,
@@ -575,7 +571,8 @@ impl<T: FftNum> WasmSimdF32Butterfly3<T> {
     ) -> [WasmVector32; 2] {
         // This is a WasmSimd translation of the scalar 3-point butterfly
         let rev12 = reverse_complex_and_negate_hi_f32(value12);
-        let temp12pn = self.rotate.rotate_hi(SimdVector::add(value12, rev12));
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
+        let temp12pn = rotate.rotate_hi(SimdVector::add(value12, rev12));
         let twiddled = SimdVector::mul(temp12pn, self.twiddle);
         let temp = SimdVector::add(value0x, twiddled);
 
@@ -601,7 +598,8 @@ impl<T: FftNum> WasmSimdF32Butterfly3<T> {
         let temp_a = SimdVector::mul(self.twiddle1re, x12p);
         let temp_a = SimdVector::add(temp_a, value0);
 
-        let n_rot = self.rotate.rotate_both(x12n);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
+        let n_rot = rotate.rotate(x12n);
         let temp_b = SimdVector::mul(self.twiddle1im, n_rot);
 
         let x1 = SimdVector::add(temp_a, temp_b);
@@ -618,7 +616,6 @@ impl<T: FftNum> WasmSimdF32Butterfly3<T> {
 //
 
 pub struct WasmSimdF64ParallelButterfly3 {
-    rotate: Rotate90F64,
     twiddle1re: WasmVector64,
     twiddle1im: WasmVector64,
 }
@@ -627,7 +624,6 @@ impl WasmSimdF64ParallelButterfly3 {
     pub fn new(direction: FftDirection) -> Self {
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 3, direction);
         Self {
-            rotate: Rotate90F64::new(true),
             twiddle1re: unsafe { SimdVector::broadcast_scalar(tw1.re) },
             twiddle1im: unsafe { SimdVector::broadcast_scalar(tw1.im) },
         }
@@ -646,7 +642,8 @@ impl ParallelFft<WasmVector64, 3> for WasmSimdF64ParallelButterfly3 {
             let temp_a = SimdVector::mul(self.twiddle1re, x12p);
             let temp_a = SimdVector::add(temp_a, data[0]);
 
-            let n_rot = self.rotate.rotate(x12n);
+            let rotate = Rotate90F64::new(FftDirection::Inverse);
+            let n_rot = rotate.rotate(x12n);
             let temp_b = SimdVector::mul(self.twiddle1im, n_rot);
 
             let x1 = SimdVector::add(temp_a, temp_b);
@@ -659,7 +656,6 @@ impl ParallelFft<WasmVector64, 3> for WasmSimdF64ParallelButterfly3 {
 pub struct WasmSimdF64Butterfly3<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    rotate: Rotate90F64,
     twiddle1re: WasmVector64,
     twiddle1im: WasmVector64,
 }
@@ -673,7 +669,6 @@ impl<T: FftNum> WasmSimdF64Butterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let rotate = Rotate90F64::new(true);
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 3, direction);
         let twiddle1re = unsafe { SimdVector::broadcast_scalar(tw1.re) };
         let twiddle1im = unsafe { SimdVector::broadcast_scalar(tw1.im) };
@@ -681,7 +676,6 @@ impl<T: FftNum> WasmSimdF64Butterfly3<T> {
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            rotate,
             twiddle1re,
             twiddle1im,
         }
@@ -720,7 +714,8 @@ impl<T: FftNum> WasmSimdF64Butterfly3<T> {
         // let temp_a = vfmaq_f64(value0, self.twiddle1re, x12p);
         let temp_a = SimdVector::add(value0, SimdVector::mul(self.twiddle1re, x12p));
 
-        let n_rot = self.rotate.rotate(x12n);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
+        let n_rot = rotate.rotate(x12n);
         let temp_b = SimdVector::mul(self.twiddle1im, n_rot);
 
         let x1 = SimdVector::add(temp_a, temp_b);
@@ -744,7 +739,7 @@ impl WasmSimdF32ParallelButterfly4 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
-            rotate: Rotate90F32::new(direction == FftDirection::Inverse),
+            rotate: Rotate90F32::new(direction),
             bf2: WasmSimdF32ParallelButterfly2::new(direction),
         }
     }
@@ -759,7 +754,7 @@ impl ParallelFft<WasmVector32, 4> for WasmSimdF32ParallelButterfly4 {
         let mut temp1 = self.bf2.parallel_fft([data[1], data[3]]);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-        temp1[1] = self.rotate.rotate_both(temp1[1]);
+        temp1[1] = self.rotate.rotate(temp1[1]);
 
         // step 4: transpose
         // and
@@ -787,15 +782,10 @@ impl<T: FftNum> WasmSimdF32Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let rotate = if direction == FftDirection::Inverse {
-            Rotate90F32::new(true)
-        } else {
-            Rotate90F32::new(false)
-        };
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            rotate,
+            rotate: Rotate90F32::new(direction),
         }
     }
     #[inline(always)]
@@ -878,7 +868,7 @@ impl<T: FftNum> WasmSimdF32Butterfly4<T> {
         let mut temp1 = wasm_parallel_butterfly2([values[1], values[3]]);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-        temp1[1] = self.rotate.rotate_both(temp1[1]);
+        temp1[1] = self.rotate.rotate(temp1[1]);
 
         // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
@@ -906,7 +896,7 @@ impl WasmSimdF64ParallelButterfly4 {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
-            rotate: Rotate90F64::new(direction == FftDirection::Inverse),
+            rotate: Rotate90F64::new(direction),
             bf2: WasmSimdF64ParallelButterfly2::new(direction),
         }
     }
@@ -949,16 +939,10 @@ impl<T: FftNum> WasmSimdF64Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let rotate = if direction == FftDirection::Inverse {
-            Rotate90F64::new(true)
-        } else {
-            Rotate90F64::new(false)
-        };
-
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            rotate,
+            rotate: Rotate90F64::new(direction),
         }
     }
 
@@ -1013,7 +997,6 @@ impl<T: FftNum> WasmSimdF64Butterfly4<T> {
 //
 
 pub struct WasmSimdF32ParallelButterfly5 {
-    rotate: Rotate90F32,
     twiddle1re: WasmVector32,
     twiddle1im: WasmVector32,
     twiddle2re: WasmVector32,
@@ -1025,7 +1008,6 @@ impl WasmSimdF32ParallelButterfly5 {
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 5, direction);
         let tw2: Complex<f32> = twiddles::compute_twiddle(2, 5, direction);
         Self {
-            rotate: Rotate90F32::new(true),
             twiddle1re: unsafe { SimdVector::broadcast_scalar(tw1.re) },
             twiddle1im: unsafe { SimdVector::broadcast_scalar(tw1.im) },
             twiddle2re: unsafe { SimdVector::broadcast_scalar(tw2.re) },
@@ -1057,12 +1039,13 @@ impl ParallelFft<WasmVector32, 5> for WasmSimdF32ParallelButterfly5 {
             let temp_a2 = SimdVector::add(data[0], SimdVector::add(temp_a2_1, temp_a2_2));
             let temp_b2 = SimdVector::sub(temp_b2_1, temp_b2_2);
 
+            let rotate = Rotate90F32::new(FftDirection::Inverse);
             [
                 SimdVector::add(data[0], SimdVector::add(x14p, x23p)),
-                SimdVector::add(temp_a1, self.rotate.rotate_both(temp_b1)),
-                SimdVector::add(temp_a2, self.rotate.rotate_both(temp_b2)),
-                SimdVector::sub(temp_a2, self.rotate.rotate_both(temp_b2)),
-                SimdVector::sub(temp_a1, self.rotate.rotate_both(temp_b1)),
+                SimdVector::add(temp_a1, rotate.rotate(temp_b1)),
+                SimdVector::add(temp_a2, rotate.rotate(temp_b2)),
+                SimdVector::sub(temp_a2, rotate.rotate(temp_b2)),
+                SimdVector::sub(temp_a1, rotate.rotate(temp_b1)),
             ]
         }
     }
@@ -1071,7 +1054,6 @@ impl ParallelFft<WasmVector32, 5> for WasmSimdF32ParallelButterfly5 {
 pub struct WasmSimdF32Butterfly5<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    rotate: Rotate90F32,
     twiddle12re: WasmVector32,
     twiddle21re: WasmVector32,
     twiddle12im: WasmVector32,
@@ -1091,7 +1073,6 @@ impl<T: FftNum> WasmSimdF32Butterfly5<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let rotate = Rotate90F32::new(true);
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 5, direction);
         let tw2: Complex<f32> = twiddles::compute_twiddle(2, 5, direction);
         let twiddle12re = WasmVector32(f32x4(tw1.re, tw1.re, tw2.re, tw2.re));
@@ -1106,7 +1087,6 @@ impl<T: FftNum> WasmSimdF32Butterfly5<T> {
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            rotate,
             twiddle12re,
             twiddle21re,
             twiddle12im,
@@ -1186,7 +1166,8 @@ impl<T: FftNum> WasmSimdF32Butterfly5<T> {
         let temp_a = SimdVector::add(value00, temp_a);
         let temp_b = SimdVector::add(temp_b1, SimdVector::mul(self.twiddle21im, x2323n));
 
-        let b_rot = self.rotate.rotate_both(temp_b);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
+        let b_rot = rotate.rotate(temp_b);
 
         let x00 = SimdVector::add(value00, SimdVector::add(x1414p, x2323p));
 
@@ -1226,12 +1207,13 @@ impl<T: FftNum> WasmSimdF32Butterfly5<T> {
         let temp_a2 = SimdVector::add(value0, SimdVector::add(temp_a2_1, temp_a2_2));
         let temp_b2 = SimdVector::sub(temp_b2_1, temp_b2_2);
 
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         [
             SimdVector::add(value0, SimdVector::add(x14p, x23p)),
-            SimdVector::add(temp_a1, self.rotate.rotate_both(temp_b1)),
-            SimdVector::add(temp_a2, self.rotate.rotate_both(temp_b2)),
-            SimdVector::sub(temp_a2, self.rotate.rotate_both(temp_b2)),
-            SimdVector::sub(temp_a1, self.rotate.rotate_both(temp_b1)),
+            SimdVector::add(temp_a1, rotate.rotate(temp_b1)),
+            SimdVector::add(temp_a2, rotate.rotate(temp_b2)),
+            SimdVector::sub(temp_a2, rotate.rotate(temp_b2)),
+            SimdVector::sub(temp_a1, rotate.rotate(temp_b1)),
         ]
     }
 }
@@ -1244,7 +1226,6 @@ impl<T: FftNum> WasmSimdF32Butterfly5<T> {
 //
 
 pub struct WasmSimdF64ParallelButterfly5 {
-    rotate: Rotate90F64,
     twiddle1re: WasmVector64,
     twiddle1im: WasmVector64,
     twiddle2re: WasmVector64,
@@ -1256,7 +1237,6 @@ impl WasmSimdF64ParallelButterfly5 {
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 5, direction);
         let tw2: Complex<f64> = twiddles::compute_twiddle(2, 5, direction);
         Self {
-            rotate: Rotate90F64::new(true),
             twiddle1re: unsafe { SimdVector::broadcast_scalar(tw1.re) },
             twiddle1im: unsafe { SimdVector::broadcast_scalar(tw1.im) },
             twiddle2re: unsafe { SimdVector::broadcast_scalar(tw2.re) },
@@ -1288,12 +1268,13 @@ impl ParallelFft<WasmVector64, 5> for WasmSimdF64ParallelButterfly5 {
             let temp_a2 = SimdVector::add(data[0], SimdVector::add(temp_a2_1, temp_a2_2));
             let temp_b2 = SimdVector::sub(temp_b2_1, temp_b2_2);
 
+            let rotate = Rotate90F64::new(FftDirection::Inverse);
             [
                 SimdVector::add(data[0], SimdVector::add(x14p, x23p)),
-                SimdVector::add(temp_a1, self.rotate.rotate(temp_b1)),
-                SimdVector::add(temp_a2, self.rotate.rotate(temp_b2)),
-                SimdVector::sub(temp_a2, self.rotate.rotate(temp_b2)),
-                SimdVector::sub(temp_a1, self.rotate.rotate(temp_b1)),
+                SimdVector::add(temp_a1, rotate.rotate(temp_b1)),
+                SimdVector::add(temp_a2, rotate.rotate(temp_b2)),
+                SimdVector::sub(temp_a2, rotate.rotate(temp_b2)),
+                SimdVector::sub(temp_a1, rotate.rotate(temp_b1)),
             ]
         }
     }
@@ -1302,7 +1283,6 @@ impl ParallelFft<WasmVector64, 5> for WasmSimdF64ParallelButterfly5 {
 pub struct WasmSimdF64Butterfly5<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    rotate: Rotate90F64,
     twiddle1re: WasmVector64,
     twiddle1im: WasmVector64,
     twiddle2re: WasmVector64,
@@ -1318,7 +1298,6 @@ impl<T: FftNum> WasmSimdF64Butterfly5<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let rotate = Rotate90F64::new(true);
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 5, direction);
         let tw2: Complex<f64> = twiddles::compute_twiddle(2, 5, direction);
         let twiddle1re = unsafe { SimdVector::broadcast_scalar(tw1.re) };
@@ -1329,7 +1308,6 @@ impl<T: FftNum> WasmSimdF64Butterfly5<T> {
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            rotate,
             twiddle1re,
             twiddle1im,
             twiddle2re,
@@ -1390,8 +1368,9 @@ impl<T: FftNum> WasmSimdF64Butterfly5<T> {
         let temp_b1 = SimdVector::add(temp_b1_1, temp_b1_2);
         let temp_b2 = SimdVector::sub(temp_b2_1, temp_b2_2);
 
-        let temp_b1_rot = self.rotate.rotate(temp_b1);
-        let temp_b2_rot = self.rotate.rotate(temp_b2);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
+        let temp_b1_rot = rotate.rotate(temp_b1);
+        let temp_b2_rot = rotate.rotate(temp_b2);
         [
             SimdVector::add(value0, SimdVector::add(x14p, x23p)),
             SimdVector::add(temp_a1, temp_b1_rot),
@@ -1687,16 +1666,11 @@ impl<T: FftNum> WasmSimdF32Butterfly8<T> {
         let bf4 = WasmSimdF32Butterfly4::new(direction);
         let root2 = WasmVector32(f32x4(1.0, 1.0, 0.5f32.sqrt(), 0.5f32.sqrt()));
         let root2_dual = WasmVector32(f32x4_splat(0.5f32.sqrt()));
-        let rotate90 = if direction == FftDirection::Inverse {
-            Rotate90F32::new(true)
-        } else {
-            Rotate90F32::new(false)
-        };
         Self {
             root2,
             root2_dual,
             bf4,
-            rotate90,
+            rotate90: Rotate90F32::new(direction),
         }
     }
 
@@ -1742,7 +1716,7 @@ impl<T: FftNum> WasmSimdF32Butterfly8<T> {
         let val2d = SimdVector::mul(val2c, self.root2);
         val2[0] = extract_lo_hi_f32(val2[0], val2d);
 
-        let val3b = self.rotate90.rotate_both(val2[1]);
+        let val3b = self.rotate90.rotate(val2[1]);
         let val3c = SimdVector::sub(val3b, val2[1]);
         let val3d = SimdVector::mul(val3c, self.root2);
         val2[1] = extract_lo_hi_f32(val3b, val3d);
@@ -1771,11 +1745,11 @@ impl<T: FftNum> WasmSimdF32Butterfly8<T> {
             .perform_parallel_fft_direct([values[1], values[3], values[5], values[7]]);
 
         // step 3: apply twiddle factors
-        let val5b = self.rotate90.rotate_both(val47[1]);
+        let val5b = self.rotate90.rotate(val47[1]);
         let val5c = SimdVector::add(val5b, val47[1]);
         val47[1] = SimdVector::mul(val5c, self.root2_dual);
-        val47[2] = self.rotate90.rotate_both(val47[2]);
-        let val7b = self.rotate90.rotate_both(val47[3]);
+        val47[2] = self.rotate90.rotate(val47[2]);
+        let val7b = self.rotate90.rotate(val47[3]);
         let val7c = SimdVector::sub(val7b, val47[3]);
         val47[3] = SimdVector::mul(val7c, self.root2_dual);
 
@@ -1818,15 +1792,10 @@ impl<T: FftNum> WasmSimdF64Butterfly8<T> {
         assert_f64::<T>();
         let bf4 = WasmSimdF64Butterfly4::new(direction);
         let root2 = WasmVector64(f64x2_splat(0.5f64.sqrt()));
-        let rotate90 = if direction == FftDirection::Inverse {
-            Rotate90F64::new(true)
-        } else {
-            Rotate90F64::new(false)
-        };
         Self {
             root2,
             bf4,
-            rotate90,
+            rotate90: Rotate90F64::new(direction),
         }
     }
 
@@ -2856,11 +2825,11 @@ impl<T: FftNum> WasmSimdF32Butterfly16<T> {
         let [in2, in3] = Self::load_parallel_chunk(&buffer, 2);
         let mut tmp2 = self.bf4.perform_parallel_fft_direct(in2);
         let mut tmp3 = self.bf4.perform_parallel_fft_direct(in3);
-        tmp2[1] = self.bf4.rotate.rotate_both_45(tmp2[1]);
-        tmp2[2] = self.bf4.rotate.rotate_both(tmp2[2]);
-        tmp2[3] = self.bf4.rotate.rotate_both_135(tmp2[3]);
+        tmp2[1] = self.bf4.rotate.rotate_45(tmp2[1]);
+        tmp2[2] = self.bf4.rotate.rotate(tmp2[2]);
+        tmp2[3] = self.bf4.rotate.rotate_135(tmp2[3]);
         tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddle3);
-        tmp3[2] = self.bf4.rotate.rotate_both_135(tmp3[2]);
+        tmp3[2] = self.bf4.rotate.rotate_135(tmp3[2]);
         tmp3[3] = SimdVector::mul_complex(tmp3[3], self.twiddle9);
 
         // Do these last, because fewer twiddles means fewer temporaries forcing the above data to spill
@@ -2868,7 +2837,7 @@ impl<T: FftNum> WasmSimdF32Butterfly16<T> {
         let tmp0 = self.bf4.perform_parallel_fft_direct(in0);
         let mut tmp1 = self.bf4.perform_parallel_fft_direct(in1);
         tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
-        tmp1[2] = self.bf4.rotate.rotate_both_45(tmp1[2]);
+        tmp1[2] = self.bf4.rotate.rotate_45(tmp1[2]);
         tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddle3);
 
         // Size-4 FFTs down each pair of transposed columns, storing them as soon as we're done with them
@@ -3177,17 +3146,17 @@ impl<T: FftNum> WasmSimdF32Butterfly24<T> {
         let mut tmp1 = self.bf4.perform_parallel_fft_direct(in1);
         tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
         tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddle2);
-        tmp1[3] = self.bf4.rotate.rotate_both_45(tmp1[3]);
+        tmp1[3] = self.bf4.rotate.rotate_45(tmp1[3]);
 
         let [in2, in3] = Self::load_parallel_chunk(&buffer, 2);
         let mut tmp2 = self.bf4.perform_parallel_fft_direct(in2);
         let mut tmp3 = self.bf4.perform_parallel_fft_direct(in3);
         tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddle2);
         tmp2[2] = SimdVector::mul_complex(tmp2[2], self.twiddle4);
-        tmp2[3] = self.bf4.rotate.rotate_both(tmp2[3]);
-        tmp3[1] = self.bf4.rotate.rotate_both_45(tmp3[1]);
-        tmp3[2] = self.bf4.rotate.rotate_both(tmp3[2]);
-        tmp3[3] = self.bf4.rotate.rotate_both_135(tmp3[3]);
+        tmp2[3] = self.bf4.rotate.rotate(tmp2[3]);
+        tmp3[1] = self.bf4.rotate.rotate_45(tmp3[1]);
+        tmp3[2] = self.bf4.rotate.rotate(tmp3[2]);
+        tmp3[3] = self.bf4.rotate.rotate_135(tmp3[3]);
 
         let [in4, in5] = Self::load_parallel_chunk(&buffer, 4);
         let mut tmp4 = self.bf4.perform_parallel_fft_direct(in4);
@@ -3197,7 +3166,7 @@ impl<T: FftNum> WasmSimdF32Butterfly24<T> {
         tmp4[3] = SimdVector::neg(tmp4[3]);
         tmp5[1] = SimdVector::mul_complex(tmp5[1], self.twiddle5);
         tmp5[2] = SimdVector::mul_complex(tmp5[2], self.twiddle10);
-        tmp5[3] = self.bf4.rotate.rotate_both_225(tmp5[3]);
+        tmp5[3] = self.bf4.rotate.rotate_225(tmp5[3]);
 
         // Size-6 FFTs down each pair of transposed columns, storing them as soon as we're done with them
         let out0 = self
@@ -3568,7 +3537,7 @@ impl<T: FftNum> WasmSimdF32Butterfly32<T> {
         let mut tmp2 = self.bf8.bf4.perform_parallel_fft_direct(in2);
         let mut tmp3 = self.bf8.bf4.perform_parallel_fft_direct(in3);
         tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddle2);
-        tmp2[2] = self.bf8.bf4.rotate.rotate_both_45(tmp2[2]);
+        tmp2[2] = self.bf8.bf4.rotate.rotate_45(tmp2[2]);
         tmp2[3] = SimdVector::mul_complex(tmp2[3], self.twiddle6);
         tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddle3);
         tmp3[2] = SimdVector::mul_complex(tmp3[2], self.twiddle6);
@@ -3577,9 +3546,9 @@ impl<T: FftNum> WasmSimdF32Butterfly32<T> {
         let [in4, in5] = Self::load_parallel_chunk(&buffer, 4);
         let mut tmp4 = self.bf8.bf4.perform_parallel_fft_direct(in4);
         let mut tmp5 = self.bf8.bf4.perform_parallel_fft_direct(in5);
-        tmp4[1] = self.bf8.bf4.rotate.rotate_both_45(tmp4[1]);
-        tmp4[2] = self.bf8.bf4.rotate.rotate_both(tmp4[2]);
-        tmp4[3] = self.bf8.bf4.rotate.rotate_both_135(tmp4[3]);
+        tmp4[1] = self.bf8.bf4.rotate.rotate_45(tmp4[1]);
+        tmp4[2] = self.bf8.bf4.rotate.rotate(tmp4[2]);
+        tmp4[3] = self.bf8.bf4.rotate.rotate_135(tmp4[3]);
         tmp5[1] = SimdVector::mul_complex(tmp5[1], self.twiddle5);
         tmp5[2] = SimdVector::mul_complex(tmp5[2], self.twiddle10);
         tmp5[3] = SimdVector::mul_complex(tmp5[3], self.twiddle15);
@@ -3588,7 +3557,7 @@ impl<T: FftNum> WasmSimdF32Butterfly32<T> {
         let mut tmp6 = self.bf8.bf4.perform_parallel_fft_direct(in6);
         let mut tmp7 = self.bf8.bf4.perform_parallel_fft_direct(in7);
         tmp6[1] = SimdVector::mul_complex(tmp6[1], self.twiddle6);
-        tmp6[2] = self.bf8.bf4.rotate.rotate_both_135(tmp6[2]);
+        tmp6[2] = self.bf8.bf4.rotate.rotate_135(tmp6[2]);
         tmp6[3] = SimdVector::mul_complex(tmp6[3], self.twiddle18);
         tmp7[1] = SimdVector::mul_complex(tmp7[1], self.twiddle7);
         tmp7[2] = SimdVector::mul_complex(tmp7[2], self.twiddle14);

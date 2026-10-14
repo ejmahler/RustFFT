@@ -69,11 +69,11 @@ impl Rotate90F32 {
 
     #[inline(always)]
     pub unsafe fn rotate(&self, values: float32x4_t) -> float32x4_t {
-        self.rotate_both(values)
+        self.rotate(values)
     }
 
     #[inline(always)]
-    pub unsafe fn rotate_both(&self, values: float32x4_t) -> float32x4_t {
+    pub unsafe fn rotate(&self, values: float32x4_t) -> float32x4_t {
         let temp = vrev64q_f32(values);
         vreinterpretq_f32_u32(veorq_u32(
             vreinterpretq_u32_f32(temp),
@@ -82,22 +82,22 @@ impl Rotate90F32 {
     }
 
     #[inline(always)]
-    pub unsafe fn rotate_both_45(&self, values: float32x4_t) -> float32x4_t {
-        let rotated = self.rotate_both(values);
+    pub unsafe fn rotate_45(&self, values: float32x4_t) -> float32x4_t {
+        let rotated = self.rotate(values);
         let sum = vaddq_f32(rotated, values);
         vmulq_f32(sum, vmovq_n_f32(0.5f32.sqrt()))
     }
 
     #[inline(always)]
-    pub unsafe fn rotate_both_135(&self, values: float32x4_t) -> float32x4_t {
-        let rotated = self.rotate_both(values);
+    pub unsafe fn rotate_135(&self, values: float32x4_t) -> float32x4_t {
+        let rotated = self.rotate(values);
         let diff = vsubq_f32(rotated, values);
         vmulq_f32(diff, vmovq_n_f32(0.5f32.sqrt()))
     }
 
     #[inline(always)]
-    pub unsafe fn rotate_both_225(&self, values: float32x4_t) -> float32x4_t {
-        let rotated = self.rotate_both(values);
+    pub unsafe fn rotate_225(&self, values: float32x4_t) -> float32x4_t {
+        let rotated = self.rotate(values);
         let diff = vaddq_f32(rotated, values);
         vmulq_f32(diff, vmovq_n_f32(-(0.5f32.sqrt())))
     }

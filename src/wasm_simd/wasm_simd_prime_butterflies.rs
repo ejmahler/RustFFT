@@ -110,7 +110,7 @@ impl WasmSimdF32ParallelButterfly7 {
 impl ParallelFft<WasmVector32, 7> for WasmSimdF32ParallelButterfly7 {
     #[inline(always)]
     fn parallel_fft(&self, data: [WasmVector32; 7]) -> [WasmVector32; 7] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the simd128 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -233,7 +233,7 @@ impl WasmSimdF64ParallelButterfly7 {
 impl ParallelFft<WasmVector64, 7> for WasmSimdF64ParallelButterfly7 {
     #[inline(always)]
     fn parallel_fft(&self, data: [WasmVector64; 7]) -> [WasmVector64; 7] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the simd128 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -327,7 +327,7 @@ impl WasmSimdF32ParallelButterfly11 {
 impl ParallelFft<WasmVector32, 11> for WasmSimdF32ParallelButterfly11 {
     #[inline(always)]
     fn parallel_fft(&self, data: [WasmVector32; 11]) -> [WasmVector32; 11] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the simd128 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -500,7 +500,7 @@ impl WasmSimdF64ParallelButterfly11 {
 impl ParallelFft<WasmVector64, 11> for WasmSimdF64ParallelButterfly11 {
     #[inline(always)]
     fn parallel_fft(&self, data: [WasmVector64; 11]) -> [WasmVector64; 11] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the simd128 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -636,7 +636,7 @@ impl WasmSimdF32ParallelButterfly13 {
 impl ParallelFft<WasmVector32, 13> for WasmSimdF32ParallelButterfly13 {
     #[inline(always)]
     fn parallel_fft(&self, data: [WasmVector32; 13]) -> [WasmVector32; 13] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the simd128 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -840,7 +840,7 @@ impl WasmSimdF64ParallelButterfly13 {
 impl ParallelFft<WasmVector64, 13> for WasmSimdF64ParallelButterfly13 {
     #[inline(always)]
     fn parallel_fft(&self, data: [WasmVector64; 13]) -> [WasmVector64; 13] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the simd128 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -1003,7 +1003,7 @@ impl WasmSimdF32ParallelButterfly17 {
 impl ParallelFft<WasmVector32, 17> for WasmSimdF32ParallelButterfly17 {
     #[inline(always)]
     fn parallel_fft(&self, data: [WasmVector32; 17]) -> [WasmVector32; 17] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the simd128 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -1281,7 +1281,7 @@ impl WasmSimdF64ParallelButterfly17 {
 impl ParallelFft<WasmVector64, 17> for WasmSimdF64ParallelButterfly17 {
     #[inline(always)]
     fn parallel_fft(&self, data: [WasmVector64; 17]) -> [WasmVector64; 17] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the simd128 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -1510,7 +1510,7 @@ impl WasmSimdF32ParallelButterfly19 {
 impl ParallelFft<WasmVector32, 19> for WasmSimdF32ParallelButterfly19 {
     #[inline(always)]
     fn parallel_fft(&self, data: [WasmVector32; 19]) -> [WasmVector32; 19] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the simd128 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -1831,7 +1831,7 @@ impl WasmSimdF64ParallelButterfly19 {
 impl ParallelFft<WasmVector64, 19> for WasmSimdF64ParallelButterfly19 {
     #[inline(always)]
     fn parallel_fft(&self, data: [WasmVector64; 19]) -> [WasmVector64; 19] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the simd128 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -2099,7 +2099,7 @@ impl WasmSimdF32ParallelButterfly23 {
 impl ParallelFft<WasmVector32, 23> for WasmSimdF32ParallelButterfly23 {
     #[inline(always)]
     fn parallel_fft(&self, data: [WasmVector32; 23]) -> [WasmVector32; 23] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the simd128 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -2518,7 +2518,7 @@ impl WasmSimdF64ParallelButterfly23 {
 impl ParallelFft<WasmVector64, 23> for WasmSimdF64ParallelButterfly23 {
     #[inline(always)]
     fn parallel_fft(&self, data: [WasmVector64; 23]) -> [WasmVector64; 23] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the simd128 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -2876,7 +2876,7 @@ impl WasmSimdF32ParallelButterfly29 {
 impl ParallelFft<WasmVector32, 29> for WasmSimdF32ParallelButterfly29 {
     #[inline(always)]
     fn parallel_fft(&self, data: [WasmVector32; 29]) -> [WasmVector32; 29] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the simd128 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -3472,7 +3472,7 @@ impl WasmSimdF64ParallelButterfly29 {
 impl ParallelFft<WasmVector64, 29> for WasmSimdF64ParallelButterfly29 {
     #[inline(always)]
     fn parallel_fft(&self, data: [WasmVector64; 29]) -> [WasmVector64; 29] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the simd128 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -3995,7 +3995,7 @@ impl WasmSimdF32ParallelButterfly31 {
 impl ParallelFft<WasmVector32, 31> for WasmSimdF32ParallelButterfly31 {
     #[inline(always)]
     fn parallel_fft(&self, data: [WasmVector32; 31]) -> [WasmVector32; 31] {
-        let rotate = Rotate90F32::new(true);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the simd128 instruction set. We specified this invariant in the constructor.
         unsafe {
@@ -4658,7 +4658,7 @@ impl WasmSimdF64ParallelButterfly31 {
 impl ParallelFft<WasmVector64, 31> for WasmSimdF64ParallelButterfly31 {
     #[inline(always)]
     fn parallel_fft(&self, data: [WasmVector64; 31]) -> [WasmVector64; 31] {
-        let rotate = Rotate90F64::new(true);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
         
         // Safety: The current machine must support the simd128 instruction set. We specified this invariant in the constructor.
         unsafe {

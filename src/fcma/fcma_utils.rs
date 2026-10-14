@@ -68,49 +68,41 @@ impl Rotate90F32 {
     //}
 
     #[inline(always)]
-    pub unsafe fn rotate_both(&self, values: FcmaVector32) -> FcmaVector32 {
+    pub unsafe fn rotate(&self, values: FcmaVector32) -> FcmaVector32 {
         let zero = vmovq_n_f32(0.0);
         FcmaVector32(vcmlaq_rot90_f32(zero, self.sign_both.0, values.0))
     }
 
     /// Rotates `values` and adds the result to `acc`, in a single instruction.
     #[inline(always)]
-    pub unsafe fn rotate_both_and_add(
-        &self,
-        acc: FcmaVector32,
-        values: FcmaVector32,
-    ) -> FcmaVector32 {
+    pub unsafe fn rotate_and_add(&self, acc: FcmaVector32, values: FcmaVector32) -> FcmaVector32 {
         FcmaVector32(vcmlaq_rot90_f32(acc.0, self.sign_both.0, values.0))
     }
 
     /// Rotates `values` and subtracts the result from `acc`, in a single instruction.
     #[inline(always)]
-    pub unsafe fn rotate_both_and_sub(
-        &self,
-        acc: FcmaVector32,
-        values: FcmaVector32,
-    ) -> FcmaVector32 {
+    pub unsafe fn rotate_and_sub(&self, acc: FcmaVector32, values: FcmaVector32) -> FcmaVector32 {
         FcmaVector32(vcmlaq_rot270_f32(acc.0, self.sign_both.0, values.0))
     }
 
     #[inline(always)]
-    pub unsafe fn rotate_both_45(&self, values: FcmaVector32) -> FcmaVector32 {
+    pub unsafe fn rotate_45(&self, values: FcmaVector32) -> FcmaVector32 {
         // rotate(values) + values
-        let sum = self.rotate_both_and_add(values, values);
+        let sum = self.rotate_and_add(values, values);
         FcmaVector32(vmulq_f32(sum.0, vmovq_n_f32(0.5f32.sqrt())))
     }
 
     #[inline(always)]
-    pub unsafe fn rotate_both_135(&self, values: FcmaVector32) -> FcmaVector32 {
+    pub unsafe fn rotate_135(&self, values: FcmaVector32) -> FcmaVector32 {
         // values - rotate(values), which is the negated difference we are after
-        let diff = self.rotate_both_and_sub(values, values);
+        let diff = self.rotate_and_sub(values, values);
         FcmaVector32(vmulq_f32(diff.0, vmovq_n_f32(-(0.5f32.sqrt()))))
     }
 
     #[inline(always)]
-    pub unsafe fn rotate_both_225(&self, values: FcmaVector32) -> FcmaVector32 {
+    pub unsafe fn rotate_225(&self, values: FcmaVector32) -> FcmaVector32 {
         // rotate(values) + values
-        let sum = self.rotate_both_and_add(values, values);
+        let sum = self.rotate_and_add(values, values);
         FcmaVector32(vmulq_f32(sum.0, vmovq_n_f32(-(0.5f32.sqrt()))))
     }
 }

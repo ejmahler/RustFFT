@@ -20,7 +20,7 @@ impl Rotate90F32 {
                 unsafe { _mm_set_ps(0.0, -0.0, 0.0, -0.0) }
             } else {
                 unsafe { _mm_set_ps(-0.0, 0.0, -0.0, 0.0) }
-            }
+            },
         }
     }
     #[inline(always)]

@@ -495,7 +495,7 @@ impl ParallelFft<float32x4_t, 3> for NeonF32ParallelButterfly3 {
             let x12n = vsubq_f32(data[1], data[2]);
 
             let temp = vfmaq_f32(data[0], self.twiddle1re, x12p);
-            let n_rot = self.rotate.rotate_both(x12n);
+            let n_rot = self.rotate.rotate(x12n);
 
             let x0 = vaddq_f32(data[0], x12p);
             let x1 = vfmaq_f32(temp, self.twiddle1im, n_rot);
@@ -608,7 +608,7 @@ impl<T: FftNum> NeonF32Butterfly3<T> {
         let x12n = vsubq_f32(value1, value2);
 
         let temp = vfmaq_f32(value0, self.twiddle1re, x12p);
-        let n_rot = self.rotate.rotate_both(x12n);
+        let n_rot = self.rotate.rotate(x12n);
 
         let x0 = vaddq_f32(value0, x12p);
         let x1 = vfmaq_f32(temp, self.twiddle1im, n_rot);
@@ -766,8 +766,8 @@ impl ParallelFft<float32x4_t, 4> for NeonF32ParallelButterfly4 {
         let mut temp1 = self.bf2.parallel_fft([data[1], data[3]]);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-        // Safety: `rotate_both` require the NEON target feature. We asserted this feature was present in the constructor.
-        temp1[1] = unsafe { self.rotate.rotate_both(temp1[1]) };
+        // Safety: `rotate` require the NEON target feature. We asserted this feature was present in the constructor.
+        temp1[1] = unsafe { self.rotate.rotate(temp1[1]) };
 
         // step 4: transpose
         // and
@@ -883,7 +883,7 @@ impl<T: FftNum> NeonF32Butterfly4<T> {
         let mut temp1 = parallel_fft2_interleaved_f32(values[1], values[3]);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-        temp1[1] = self.rotate.rotate_both(temp1[1]);
+        temp1[1] = self.rotate.rotate(temp1[1]);
 
         // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
@@ -928,7 +928,7 @@ impl ParallelFft<float64x2_t, 4> for NeonF64ParallelButterfly4 {
         let mut temp1 = self.bf2.parallel_fft([data[1], data[3]]);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-        // Safety: `rotate_both` require the NEON target feature. We asserted this feature was present in the constructor.
+        // Safety: `rotate` require the NEON target feature. We asserted this feature was present in the constructor.
         temp1[1] = unsafe { self.rotate.rotate(temp1[1]) };
 
         // step 4: transpose
@@ -1066,10 +1066,10 @@ impl ParallelFft<float32x4_t, 5> for NeonF32ParallelButterfly5 {
 
             [
                 vaddq_f32(data[0], vaddq_f32(x14p, x23p)),
-                vaddq_f32(temp_a1, self.rotate.rotate_both(temp_b1)),
-                vaddq_f32(temp_a2, self.rotate.rotate_both(temp_b2)),
-                vsubq_f32(temp_a2, self.rotate.rotate_both(temp_b2)),
-                vsubq_f32(temp_a1, self.rotate.rotate_both(temp_b1)),
+                vaddq_f32(temp_a1, self.rotate.rotate(temp_b1)),
+                vaddq_f32(temp_a2, self.rotate.rotate(temp_b2)),
+                vsubq_f32(temp_a2, self.rotate.rotate(temp_b2)),
+                vsubq_f32(temp_a1, self.rotate.rotate(temp_b1)),
             ]
         }
     }
@@ -1190,7 +1190,7 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
         let temp_a = vaddq_f32(value00, temp_a);
         let temp_b = vfmaq_f32(temp_b1, self.twiddle21im, x2323n);
 
-        let b_rot = self.rotate.rotate_both(temp_b);
+        let b_rot = self.rotate.rotate(temp_b);
 
         let x00 = vaddq_f32(value00, vaddq_f32(x1414p, x2323p));
 
@@ -1232,10 +1232,10 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
 
         [
             vaddq_f32(value0, vaddq_f32(x14p, x23p)),
-            vaddq_f32(temp_a1, self.rotate.rotate_both(temp_b1)),
-            vaddq_f32(temp_a2, self.rotate.rotate_both(temp_b2)),
-            vsubq_f32(temp_a2, self.rotate.rotate_both(temp_b2)),
-            vsubq_f32(temp_a1, self.rotate.rotate_both(temp_b1)),
+            vaddq_f32(temp_a1, self.rotate.rotate(temp_b1)),
+            vaddq_f32(temp_a2, self.rotate.rotate(temp_b2)),
+            vsubq_f32(temp_a2, self.rotate.rotate(temp_b2)),
+            vsubq_f32(temp_a1, self.rotate.rotate(temp_b1)),
         ]
     }
 }
@@ -1744,7 +1744,7 @@ impl<T: FftNum> NeonF32Butterfly8<T> {
         let val2d = vmulq_f32(val2c, self.root2);
         val2[0] = extract_lo_hi_f32(val2[0], val2d);
 
-        let val3b = self.rotate90.rotate_both(val2[1]);
+        let val3b = self.rotate90.rotate(val2[1]);
         let val3c = vsubq_f32(val3b, val2[1]);
         let val3d = vmulq_f32(val3c, self.root2);
         val2[1] = extract_lo_hi_f32(val3b, val3d);
@@ -1773,11 +1773,11 @@ impl<T: FftNum> NeonF32Butterfly8<T> {
             .perform_parallel_fft_direct([values[1], values[3], values[5], values[7]]);
 
         // step 3: apply twiddle factors
-        let val5b = self.rotate90.rotate_both(val47[1]);
+        let val5b = self.rotate90.rotate(val47[1]);
         let val5c = vaddq_f32(val5b, val47[1]);
         val47[1] = vmulq_f32(val5c, self.root2_dual);
-        val47[2] = self.rotate90.rotate_both(val47[2]);
-        let val7b = self.rotate90.rotate_both(val47[3]);
+        val47[2] = self.rotate90.rotate(val47[2]);
+        let val7b = self.rotate90.rotate(val47[3]);
         let val7c = vsubq_f32(val7b, val47[3]);
         val47[3] = vmulq_f32(val7c, self.root2_dual);
 
@@ -2803,11 +2803,11 @@ impl<T: FftNum> NeonF32Butterfly16<T> {
         let [in2, in3] = load(2);
         let mut tmp2 = self.bf4.perform_parallel_fft_direct(in2);
         let mut tmp3 = self.bf4.perform_parallel_fft_direct(in3);
-        tmp2[1] = self.bf4.rotate.rotate_both_45(tmp2[1]);
-        tmp2[2] = self.bf4.rotate.rotate_both(tmp2[2]);
-        tmp2[3] = self.bf4.rotate.rotate_both_135(tmp2[3]);
+        tmp2[1] = self.bf4.rotate.rotate_45(tmp2[1]);
+        tmp2[2] = self.bf4.rotate.rotate(tmp2[2]);
+        tmp2[3] = self.bf4.rotate.rotate_135(tmp2[3]);
         tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddle3);
-        tmp3[2] = self.bf4.rotate.rotate_both_135(tmp3[2]);
+        tmp3[2] = self.bf4.rotate.rotate_135(tmp3[2]);
         tmp3[3] = SimdVector::mul_complex(tmp3[3], self.twiddle9);
 
         // Do these last, because fewer twiddles means fewer temporaries forcing the above data to spill
@@ -2815,7 +2815,7 @@ impl<T: FftNum> NeonF32Butterfly16<T> {
         let tmp0 = self.bf4.perform_parallel_fft_direct(in0);
         let mut tmp1 = self.bf4.perform_parallel_fft_direct(in1);
         tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
-        tmp1[2] = self.bf4.rotate.rotate_both_45(tmp1[2]);
+        tmp1[2] = self.bf4.rotate.rotate_45(tmp1[2]);
         tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddle3);
 
         ////////////////////////////////////////////////////////////
@@ -3098,17 +3098,17 @@ impl<T: FftNum> NeonF32Butterfly24<T> {
         let mut tmp1 = self.bf4.perform_parallel_fft_direct(in1);
         tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
         tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddle2);
-        tmp1[3] = self.bf4.rotate.rotate_both_45(tmp1[3]);
+        tmp1[3] = self.bf4.rotate.rotate_45(tmp1[3]);
 
         let [in2, in3] = load(2);
         let mut tmp2 = self.bf4.perform_parallel_fft_direct(in2);
         let mut tmp3 = self.bf4.perform_parallel_fft_direct(in3);
         tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddle2);
         tmp2[2] = SimdVector::mul_complex(tmp2[2], self.twiddle4);
-        tmp2[3] = self.bf4.rotate.rotate_both(tmp2[3]);
-        tmp3[1] = self.bf4.rotate.rotate_both_45(tmp3[1]);
-        tmp3[2] = self.bf4.rotate.rotate_both(tmp3[2]);
-        tmp3[3] = self.bf4.rotate.rotate_both_135(tmp3[3]);
+        tmp2[3] = self.bf4.rotate.rotate(tmp2[3]);
+        tmp3[1] = self.bf4.rotate.rotate_45(tmp3[1]);
+        tmp3[2] = self.bf4.rotate.rotate(tmp3[2]);
+        tmp3[3] = self.bf4.rotate.rotate_135(tmp3[3]);
 
         let [in4, in5] = load(4);
         let mut tmp4 = self.bf4.perform_parallel_fft_direct(in4);
@@ -3118,7 +3118,7 @@ impl<T: FftNum> NeonF32Butterfly24<T> {
         tmp4[3] = SimdVector::neg(tmp4[3]);
         tmp5[1] = SimdVector::mul_complex(tmp5[1], self.twiddle5);
         tmp5[2] = SimdVector::mul_complex(tmp5[2], self.twiddle10);
-        tmp5[3] = self.bf4.rotate.rotate_both_225(tmp5[3]);
+        tmp5[3] = self.bf4.rotate.rotate_225(tmp5[3]);
 
         ////////////////////////////////////////////////////////////
         let mut store = |i, vectors_a: [float32x4_t; 6], vectors_b: [float32x4_t; 6]| {
@@ -3458,7 +3458,7 @@ impl<T: FftNum> NeonF32Butterfly32<T> {
         let mut tmp2 = self.bf8.bf4.perform_parallel_fft_direct(in2);
         let mut tmp3 = self.bf8.bf4.perform_parallel_fft_direct(in3);
         tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddle2);
-        tmp2[2] = self.bf8.bf4.rotate.rotate_both_45(tmp2[2]);
+        tmp2[2] = self.bf8.bf4.rotate.rotate_45(tmp2[2]);
         tmp2[3] = SimdVector::mul_complex(tmp2[3], self.twiddle6);
         tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddle3);
         tmp3[2] = SimdVector::mul_complex(tmp3[2], self.twiddle6);
@@ -3467,9 +3467,9 @@ impl<T: FftNum> NeonF32Butterfly32<T> {
         let [in4, in5] = load(4);
         let mut tmp4 = self.bf8.bf4.perform_parallel_fft_direct(in4);
         let mut tmp5 = self.bf8.bf4.perform_parallel_fft_direct(in5);
-        tmp4[1] = self.bf8.bf4.rotate.rotate_both_45(tmp4[1]);
-        tmp4[2] = self.bf8.bf4.rotate.rotate_both(tmp4[2]);
-        tmp4[3] = self.bf8.bf4.rotate.rotate_both_135(tmp4[3]);
+        tmp4[1] = self.bf8.bf4.rotate.rotate_45(tmp4[1]);
+        tmp4[2] = self.bf8.bf4.rotate.rotate(tmp4[2]);
+        tmp4[3] = self.bf8.bf4.rotate.rotate_135(tmp4[3]);
         tmp5[1] = SimdVector::mul_complex(tmp5[1], self.twiddle5);
         tmp5[2] = SimdVector::mul_complex(tmp5[2], self.twiddle10);
         tmp5[3] = SimdVector::mul_complex(tmp5[3], self.twiddle15);
@@ -3478,7 +3478,7 @@ impl<T: FftNum> NeonF32Butterfly32<T> {
         let mut tmp6 = self.bf8.bf4.perform_parallel_fft_direct(in6);
         let mut tmp7 = self.bf8.bf4.perform_parallel_fft_direct(in7);
         tmp6[1] = SimdVector::mul_complex(tmp6[1], self.twiddle6);
-        tmp6[2] = self.bf8.bf4.rotate.rotate_both_135(tmp6[2]);
+        tmp6[2] = self.bf8.bf4.rotate.rotate_135(tmp6[2]);
         tmp6[3] = SimdVector::mul_complex(tmp6[3], self.twiddle18);
         tmp7[1] = SimdVector::mul_complex(tmp7[1], self.twiddle7);
         tmp7[2] = SimdVector::mul_complex(tmp7[2], self.twiddle14);

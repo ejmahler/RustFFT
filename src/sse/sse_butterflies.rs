@@ -663,7 +663,6 @@ impl<T: FftNum> SseF32Butterfly3<T> {
         value0x: __m128,
         value12: __m128,
     ) -> [__m128; 2] {
-        
         let rotate = Rotate90HiF32::new(FftDirection::Inverse);
 
         // This is a SSE translation of the scalar 3-point butterfly
@@ -855,7 +854,7 @@ impl ParallelFft<__m128, 4> for SseF32ParallelButterfly4 {
 
         // Apply twiddle factors (in this case just a rotation)
 
-        // Safety: `rotate_both` requires the SSE4.1 target feature. We asserted this feature was present in the constructor.
+        // Safety: `rotate` requires the SSE4.1 target feature. We asserted this feature was present in the constructor.
         let mid3 = unsafe { self.rotate.rotate(mid3) };
 
         // Transpose the data and do size-2 FFTs down the columns
