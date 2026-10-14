@@ -68,6 +68,11 @@ impl Rotate90F32 {
     //}
 
     #[inline(always)]
+    pub unsafe fn rotate(&self, values: float32x4_t) -> float32x4_t {
+        self.rotate_both(values)
+    }
+
+    #[inline(always)]
     pub unsafe fn rotate_both(&self, values: float32x4_t) -> float32x4_t {
         let temp = vrev64q_f32(values);
         vreinterpretq_f32_u32(veorq_u32(
