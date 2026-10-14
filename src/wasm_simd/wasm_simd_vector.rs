@@ -137,15 +137,11 @@ pub struct WasmVector32(pub v128);
 #[repr(transparent)]
 pub struct WasmVector64(pub v128);
 
-#[derive(Copy, Clone)]
-pub struct Rotation90<V: SimdVector>(V);
-
-impl crate::simd::simd_vector::SimdVector for WasmVector64 {
+impl SimdVector for WasmVector64 {
     const COMPLEX_PER_VECTOR: usize = 1;
     const RADIXN_CROSS_LAYER_UNROLL: bool = true;
 
     type ScalarType = f64;
-    type Rotation = Rotation90<Self>;
 
     type Butterfly2 = WasmSimdF64ColumnButterfly2;
     type Butterfly3 = WasmSimdF64ColumnButterfly3;
@@ -271,12 +267,11 @@ impl crate::simd::simd_vector::SimdVector for WasmVector64 {
     }
 }
 
-impl crate::simd::simd_vector::SimdVector for WasmVector32 {
+impl SimdVector for WasmVector32 {
     const COMPLEX_PER_VECTOR: usize = 2;
     const RADIXN_CROSS_LAYER_UNROLL: bool = true;
 
     type ScalarType = f32;
-    type Rotation = Rotation90<Self>;
 
     type Butterfly2 = WasmSimdF32ColumnButterfly2;
     type Butterfly3 = WasmSimdF32ColumnButterfly3;

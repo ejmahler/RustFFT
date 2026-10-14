@@ -127,15 +127,11 @@ macro_rules! write_complex_to_array_strided {
     }
 }
 
-#[derive(Copy, Clone)]
-pub struct Rotation90<V: SimdVector>(V);
-
-impl crate::simd::simd_vector::SimdVector for __m128d {
+impl SimdVector for __m128d {
     const COMPLEX_PER_VECTOR: usize = 1;
     const RADIXN_CROSS_LAYER_UNROLL: bool = true;
 
     type ScalarType = f64;
-    type Rotation = Rotation90<Self>;
 
     type Butterfly2 = SseF64ColumnButterfly2;
     type Butterfly3 = SseF64ColumnButterfly3;
@@ -261,12 +257,11 @@ impl crate::simd::simd_vector::SimdVector for __m128d {
     }
 }
 
-impl crate::simd::simd_vector::SimdVector for __m128 {
+impl SimdVector for __m128 {
     const COMPLEX_PER_VECTOR: usize = 2;
     const RADIXN_CROSS_LAYER_UNROLL: bool = true;
 
     type ScalarType = f32;
-    type Rotation = Rotation90<Self>;
 
     type Butterfly2 = SseF32ColumnButterfly2;
     type Butterfly3 = SseF32ColumnButterfly3;
