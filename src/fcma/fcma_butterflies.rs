@@ -3718,7 +3718,7 @@ mod unit_tests {
     use super::super::fcma_vector::FcmaVector32;
     use super::*;
     use crate::algorithm::Dft;
-    use crate::test_utils::{check_fft_algorithm, compare_vectors};
+    use crate::test_utils::{check_fft_algorithm, check_column_fft, compare_vectors};
 
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
@@ -3777,6 +3777,44 @@ mod unit_tests {
     test_butterfly_64_func!(test_fcmaf64_butterfly16, FcmaF64Butterfly16, 16);
     test_butterfly_64_func!(test_fcmaf64_butterfly24, FcmaF64Butterfly24, 24);
     test_butterfly_64_func!(test_fcmaf64_butterfly32, FcmaF64Butterfly32, 32);
+
+    macro_rules! test_column_butterfly_32_func {
+        ($test_name:ident, $struct_name:ident, $size:expr) => {
+            #[test]
+            fn $test_name() {
+                let butterfly = $struct_name::new(FftDirection::Forward);
+                check_column_fft::<FcmaVector32, $size>(&butterfly, FftDirection::Forward);
+
+                let butterfly_inverse = $struct_name::new(FftDirection::Inverse);
+                check_column_fft::<FcmaVector32, $size>(&butterfly_inverse, FftDirection::Inverse);
+            }
+        };
+    }
+
+    test_column_butterfly_32_func!(test_fcmaf32_column_butterfly2, FcmaF32ColumnButterfly2, 2);
+    test_column_butterfly_32_func!(test_fcmaf32_column_butterfly3, FcmaF32ColumnButterfly3, 3);
+    test_column_butterfly_32_func!(test_fcmaf32_column_butterfly4, FcmaF32ColumnButterfly4, 4);
+    test_column_butterfly_32_func!(test_fcmaf32_column_butterfly5, FcmaF32ColumnButterfly5, 5);
+    test_column_butterfly_32_func!(test_fcmaf32_column_butterfly6, FcmaF32ColumnButterfly6, 6);
+
+    macro_rules! test_column_butterfly_64_func {
+        ($test_name:ident, $struct_name:ident, $size:expr) => {
+            #[test]
+            fn $test_name() {
+                let butterfly = $struct_name::new(FftDirection::Forward);
+                check_column_fft::<FcmaVector64, $size>(&butterfly, FftDirection::Forward);
+
+                let butterfly_inverse = $struct_name::new(FftDirection::Inverse);
+                check_column_fft::<FcmaVector64, $size>(&butterfly_inverse, FftDirection::Inverse);
+            }
+        };
+    }
+
+    test_column_butterfly_64_func!(test_fcmaf64_column_butterfly2, FcmaF64ColumnButterfly2, 2);
+    test_column_butterfly_64_func!(test_fcmaf64_column_butterfly3, FcmaF64ColumnButterfly3, 3);
+    test_column_butterfly_64_func!(test_fcmaf64_column_butterfly4, FcmaF64ColumnButterfly4, 4);
+    test_column_butterfly_64_func!(test_fcmaf64_column_butterfly5, FcmaF64ColumnButterfly5, 5);
+    test_column_butterfly_64_func!(test_fcmaf64_column_butterfly6, FcmaF64ColumnButterfly6, 6);
 
     #[test]
     fn test_solo_fft2_32() {
