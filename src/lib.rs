@@ -629,12 +629,12 @@ mod fcma {
 pub use self::fcma::fcma_planner::FftPlannerFcma;
 
 #[cfg(all(target_arch = "wasm32", feature = "wasm_simd"))]
-mod wasm_simd;
+pub mod wasm_simd;
 
 // If we're not compiling to WebAssembly, or if the "wasm_simd" feature was disabled, keep a stub implementation around that has the same API, but does nothing
 // That way, users can write code using the WASM planner and compile it on any platform
 #[cfg(not(all(target_arch = "wasm32", feature = "wasm_simd")))]
-mod wasm_simd {
+pub mod wasm_simd {
     pub mod wasm_simd_planner {
         use crate::{Fft, FftDirection, FftNum};
         use std::sync::Arc;

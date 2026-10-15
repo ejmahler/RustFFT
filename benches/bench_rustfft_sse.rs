@@ -7,6 +7,7 @@ use rustfft::num_traits::Zero;
 use rustfft::{Fft, FftDirection, FftNum, Length, RadixFactor};
 use std::any::TypeId;
 use std::sync::Arc;
+use core::arch::x86_64::{__m128, __m128d};
 mod config;
 
 use criterion::{Bencher, BenchmarkId, Criterion, criterion_group, criterion_main};
@@ -262,9 +263,9 @@ fn construct_radixn<T: FftNum>(factors: &[RadixFactor], base_fft: Arc<dyn Fft<T>
     let id_t = TypeId::of::<T>();
 
     if id_t == id_f32 {
-        Arc::new(SseRadixN::<f32, T>::new(factors, base_fft))
+        Arc::new(SseRadixN::<__m128, T>::new(factors, base_fft))
     } else if id_t == id_f64 {
-        Arc::new(SseRadixN::<f64, T>::new(factors, base_fft))
+        Arc::new(SseRadixN::<__m128d, T>::new(factors, base_fft))
     } else {
         panic!("Invalid T for constructing SSE FFT")
     }
@@ -375,9 +376,9 @@ fn criterion_benchmark_factor31(c: &mut Criterion) {
                 group32.bench_with_input(BenchmarkId::new("mixedradix", len), &len,  |b, _| {
                     bench_factor31_mixedradix::<f32>(b, power31, power2)
                 });
-                /*group32.bench_with_input(BenchmarkId::new("radixnbase", len), &len,  |b, _| {
+                group32.bench_with_input(BenchmarkId::new("radixnbase", len), &len,  |b, _| {
                     bench_factor31_radixnbase::<f32>(b, power31, power2)
-                });*/
+                });
                 group32.bench_with_input(BenchmarkId::new("radixncross", len), &len,  |b, _| {
                     bench_factor31_radixncross::<f32>(b, power31, power2)
                 });

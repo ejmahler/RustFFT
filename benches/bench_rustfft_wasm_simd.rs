@@ -1,3 +1,9 @@
+use rustfft::algorithm::{MixedRadix, MixedRadixSmall};
+use rustfft::wasm_simd::wasm_simd_butterflies::*;
+use rustfft::wasm_simd::wasm_simd_prime_butterflies::*;
+use rustfft::wasm_simd::wasm_simd_radixn::WasmSimdRadixN;
+use rustfft::wasm_simd::wasm_simd_vector::{WasmVector32, WasmVector64};
+
 /// Unfortunately, `cargo bench` does not permit running these benchmarks out-of-the-box
 /// on a WebAssembly virtual machine.
 ///
@@ -28,13 +34,14 @@
 ///
 /// For more information, refer to [Criterion's user guide](https://github.com/bheisler/criterion.rs/blob/dc2b06cd31f7aa34cff6a83a00598e0523186dad/book/src/user_guide/wasi.md)
 /// which should be mostly applicable to our use case.
-use rustfft::num_complex::Complex;
+use rustfft::{FftNum, num_complex::Complex};
 use rustfft::num_traits::Zero;
-use rustfft::Fft;
+use rustfft::{Fft, FftDirection, Length, RadixFactor};
+use std::any::TypeId;
 use std::sync::Arc;
 mod config;
 
-use criterion::{criterion_group, criterion_main, Bencher, Criterion};
+use criterion::{Bencher, BenchmarkId, Criterion, criterion_group, criterion_main};
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
@@ -406,6 +413,220 @@ fn wasm_simd_planned64_composite_046656(b: &mut Bencher) {
     bench_planned_f64(b, 46656);
 }
 
+
+fn plan_butterfly_fft<T: FftNum>(len: usize) -> Arc<dyn Fft<T>> {
+    let id_f32 = TypeId::of::<f32>();
+    let id_f64 = TypeId::of::<f64>();
+    let id_t = TypeId::of::<T>();
+
+    if id_t == id_f32 {
+        unsafe { 
+            match len {
+                2 => Arc::new(WasmSimdF32Butterfly2::new(FftDirection::Forward)),
+                3 => Arc::new(WasmSimdF32Butterfly3::new(FftDirection::Forward)),
+                4 => Arc::new(WasmSimdF32Butterfly4::new(FftDirection::Forward)),
+                5 => Arc::new(WasmSimdF32Butterfly5::new(FftDirection::Forward)),
+                6 => Arc::new(WasmSimdF32Butterfly6::new(FftDirection::Forward)),
+                7 => Arc::new(WasmSimdF32Butterfly7::new(FftDirection::Forward)),
+                8 => Arc::new(WasmSimdF32Butterfly8::new(FftDirection::Forward)),
+                16 => Arc::new(WasmSimdF32Butterfly16::new(FftDirection::Forward)),
+                31 => Arc::new(WasmSimdF32Butterfly31::new(FftDirection::Forward)),
+                32 => Arc::new(WasmSimdF32Butterfly32::new(FftDirection::Forward)),
+                _ => panic!("Invalid butterfly size: {}", len),
+            }
+        }
+    } else if id_t == id_f64 {
+        unsafe {
+            match len {
+                2 => Arc::new(WasmSimdF64Butterfly2::new(FftDirection::Forward)),
+                3 => Arc::new(WasmSimdF64Butterfly3::new(FftDirection::Forward)),
+                4 => Arc::new(WasmSimdF64Butterfly4::new(FftDirection::Forward)),
+                5 => Arc::new(WasmSimdF64Butterfly5::new(FftDirection::Forward)),
+                6 => Arc::new(WasmSimdF64Butterfly6::new(FftDirection::Forward)),
+                7 => Arc::new(WasmSimdF64Butterfly7::new(FftDirection::Forward)),
+                8 => Arc::new(WasmSimdF64Butterfly8::new(FftDirection::Forward)),
+                16 => Arc::new(WasmSimdF64Butterfly16::new(FftDirection::Forward)),
+                31 => Arc::new(WasmSimdF64Butterfly31::new(FftDirection::Forward)),
+                32 => Arc::new(WasmSimdF64Butterfly32::new(FftDirection::Forward)),
+                _ => panic!("Invalid butterfly size: {}", len),
+            }
+        }
+    } else {
+        panic!("Invalid T for constructing WasmSimd FFT");
+    }
+}
+fn plan_mixedradix_power31<T: FftNum>(power31: u32) -> Arc<dyn Fft<T>> {
+    fn construct_branch<T: FftNum>(power: u32, butterfly31: &Arc<dyn Fft<T>>) -> Arc<dyn Fft<T>> {
+        if power == 1 {
+            Arc::clone(butterfly31)
+        } else {
+            let left = power / 2;
+            let right = power - left;
+            let fft_left = construct_branch(left, butterfly31);
+            let fft_right = construct_branch(right, butterfly31);
+
+            if fft_left.len() == 31 && fft_right.len() == 31 {
+                Arc::new(MixedRadixSmall::new(fft_left, fft_right))
+            } else {
+                Arc::new(MixedRadix::new(fft_left, fft_right))
+            }
+        }
+    }
+    
+    let butterfly31 = plan_butterfly_fft(31);
+    construct_branch(power31, &butterfly31)
+}
+fn construct_radixn<T: FftNum>(factors: &[RadixFactor], base_fft: Arc<dyn Fft<T>>) -> Arc<dyn Fft<T>> {
+    
+    let id_f32 = TypeId::of::<f32>();
+    let id_f64 = TypeId::of::<f64>();
+    let id_t = TypeId::of::<T>();
+
+    if id_t == id_f32 {
+        Arc::new(WasmSimdRadixN::<WasmVector32, T>::new(factors, base_fft))
+    } else if id_t == id_f64 {
+        Arc::new(WasmSimdRadixN::<WasmVector64, T>::new(factors, base_fft))
+    } else {
+        panic!("Invalid T for constructing WasmSimd FFT")
+    }
+}
+
+// Tests incorporating a factor of 31 by using it as a cross-FFT for RadixN
+fn bench_factor31_radixncross<T: FftNum>(b: &mut Bencher, power31: u32, power2: u32) {
+    let base_power2 = match power2 {
+        0 => unimplemented!(),
+        1 => 1,
+        2 => 2,
+        3 => 3,
+        4 => 4, 
+        5 => 5,
+        other =>  if other % 2 == 0 { 4 } else { 5 }
+    };
+
+    let power2_cross = power2 - base_power2;
+    assert!(power2_cross % 2 == 0);
+    let power4_cross = power2_cross / 2;
+
+    let base_fft = plan_butterfly_fft::<T>(1 << base_power2);
+    
+    let mut factors : Vec<RadixFactor> = Vec::new();
+    for _ in 0..power31 {
+        factors.push(RadixFactor::Factor31);
+    }
+    for _ in 0..power4_cross {
+        factors.push(RadixFactor::Factor4);
+    }
+
+    let fft = construct_radixn(&factors, base_fft);
+    let len = fft.len();
+
+    let mut buffer_in = vec![Complex::zero(); len * 10];
+    let mut buffer_out = vec![Complex::zero(); len * 10];
+    let mut buffer_scratch = vec![Complex::zero(); fft.get_outofplace_scratch_len()];
+    b.iter(|| {
+        fft.process_outofplace_with_scratch(&mut buffer_in, &mut buffer_out, &mut buffer_scratch);
+    });
+}
+// Tests incorporating a factor of 31 by using it as the base of RadixN
+fn bench_factor31_radixnbase<T: FftNum>(b: &mut Bencher, power31: u32, power2: u32) {
+    let base_fft = plan_mixedradix_power31::<T>(power31);
+    
+    let mut factors : Vec<RadixFactor> = Vec::new();
+    if power2 % 2 == 1 {
+        factors.push(RadixFactor::Factor2);
+    }
+    let power4_cross = power2 / 2;
+    for _ in 0..power4_cross {
+        factors.push(RadixFactor::Factor4);
+    }
+
+    let fft = construct_radixn(&factors, base_fft);
+    let len = fft.len();
+
+    let mut buffer_in = vec![Complex::zero(); len * 10];
+    let mut buffer_out = vec![Complex::zero(); len * 10];
+    let mut buffer_scratch = vec![Complex::zero(); fft.get_outofplace_scratch_len()];
+    b.iter(|| {
+        fft.process_outofplace_with_scratch(&mut buffer_in, &mut buffer_out, &mut buffer_scratch);
+    });
+}
+// Tests incorporating a factor of 31 via mixed radix
+fn bench_factor31_mixedradix<T: FftNum>(b: &mut Bencher, power31: u32, power2: u32) {
+    let base_power2 = match power2 {
+        0 => unimplemented!(),
+        1 => 1,
+        2 => 2,
+        3 => 3,
+        4 => 4, 
+        5 => 5,
+        other =>  if other % 2 == 0 { 4 } else { 5 }
+    };
+
+    let power2_cross = power2 - base_power2;
+    assert!(power2_cross % 2 == 0);
+    let power4_cross = power2_cross / 2;
+
+    let base_fft = plan_butterfly_fft::<T>(1 << base_power2);
+    
+    let mut factors : Vec<RadixFactor> = Vec::new();
+    for _ in 0..power4_cross {
+        factors.push(RadixFactor::Factor4);
+    }
+
+    let power2_fft = construct_radixn(&factors, base_fft);
+    let power31_fft = plan_mixedradix_power31(power31);
+    let fft = MixedRadix::new(power31_fft, power2_fft);
+    let len = fft.len();
+
+    let mut buffer_in = vec![Complex::zero(); len * 10];
+    let mut buffer_out = vec![Complex::zero(); len * 10];
+    let mut buffer_scratch = vec![Complex::zero(); fft.get_outofplace_scratch_len()];
+    b.iter(|| {
+        fft.process_outofplace_with_scratch(&mut buffer_in, &mut buffer_out, &mut buffer_scratch);
+    });
+}
+
+fn criterion_benchmark_factor31(c: &mut Criterion) {
+    {
+        let mut group32 = c.benchmark_group("factor31_wasmsimd_f32");
+        
+        for power31 in 1..3 {
+            for power2 in 1..10 {
+                let len = 31usize.pow(power31)*2usize.pow(power2);
+                group32.bench_with_input(BenchmarkId::new("mixedradix", len), &len,  |b, _| {
+                    bench_factor31_mixedradix::<f32>(b, power31, power2)
+                });
+                group32.bench_with_input(BenchmarkId::new("radixnbase", len), &len,  |b, _| {
+                    bench_factor31_radixnbase::<f32>(b, power31, power2)
+                });
+                group32.bench_with_input(BenchmarkId::new("radixncross", len), &len,  |b, _| {
+                    bench_factor31_radixncross::<f32>(b, power31, power2)
+                });
+            }
+        }
+    }
+
+    {
+        let mut group64 = c.benchmark_group("factor31_wasmsimd_f64");
+
+        for power31 in 1..3 {
+            for power2 in 1..10 {
+                let len = 31usize.pow(power31)*2usize.pow(power2);
+                group64.bench_with_input(BenchmarkId::new("mixedradix", len), &len, |b, _| {
+                    bench_factor31_mixedradix::<f64>(b, power31, power2)
+                });
+                group64.bench_with_input(BenchmarkId::new("radixnbase", len), &len, |b, _| {
+                    bench_factor31_radixnbase::<f64>(b, power31, power2)
+                });
+                group64.bench_with_input(BenchmarkId::new("radixncross", len), &len, |b, _| {
+                    bench_factor31_radixncross::<f64>(b, power31, power2)
+                });
+            }
+        }
+    }
+}
+
+
 fn criterion_benchmark(c: &mut Criterion) {
     config::register_benchmarks!(
         c,
@@ -527,6 +748,6 @@ fn criterion_benchmark(c: &mut Criterion) {
 criterion_group! {
     name = benches;
     config = config::fast();
-    targets = criterion_benchmark
+    targets = criterion_benchmark, criterion_benchmark_factor31
 }
 criterion_main!(benches);

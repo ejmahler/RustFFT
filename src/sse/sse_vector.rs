@@ -139,6 +139,7 @@ impl SimdVector for __m128d {
     type Butterfly5 = SseF64ParallelButterfly5;
     type Butterfly6 = SseF64ParallelButterfly6;
     type Butterfly7 = SseF64ParallelButterfly7;
+    type Butterfly31 = SseF64ParallelButterfly31;
 
     #[inline(always)]
     unsafe fn zero_vector() -> Self {
@@ -255,6 +256,10 @@ impl SimdVector for __m128d {
     unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
         Self::Butterfly7::new(direction)
     }
+    #[inline(always)]
+    unsafe fn make_butterfly31(direction: FftDirection) -> Self::Butterfly31 {
+        Self::Butterfly31::new(direction)
+    }
 }
 
 impl SimdVector for __m128 {
@@ -269,6 +274,7 @@ impl SimdVector for __m128 {
     type Butterfly5 = SseF32ParallelButterfly5;
     type Butterfly6 = SseF32ParallelButterfly6;
     type Butterfly7 = SseF32ParallelButterfly7;
+    type Butterfly31 = SseF32ParallelButterfly31;
 
     #[inline(always)]
     unsafe fn zero_vector() -> Self {
@@ -384,5 +390,9 @@ impl SimdVector for __m128 {
     #[inline(always)]
     unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
         Self::Butterfly7::new(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly31(direction: FftDirection) -> Self::Butterfly31 {
+        Self::Butterfly31::new(direction)
     }
 }
