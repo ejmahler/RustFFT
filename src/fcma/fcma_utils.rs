@@ -2,6 +2,8 @@ use core::arch::aarch64::*;
 
 use crate::fcma::fcma_vector::{FcmaVector32, FcmaVector64};
 
+use crate::FftDirection;
+
 //  __  __       _   _               _________  _     _ _
 // |  \/  | __ _| |_| |__           |___ /___ \| |__ (_) |_
 // | |\/| |/ _` | __| '_ \   _____    |_ \ __) | '_ \| | __|
@@ -10,42 +12,74 @@ use crate::fcma::fcma_vector::{FcmaVector32, FcmaVector64};
 //
 
 pub struct Rotate90F32 {
-    //sign_lo: FcmaVector32,
-    sign_hi: float32x2_t,
-    sign_both: FcmaVector32,
+    sign: FcmaVector32,
 }
 
 impl Rotate90F32 {
-    pub fn new(positive: bool) -> Self {
-        // There doesn't seem to be any need for rotating just the first element, but let's keep the code just in case
-        //let sign_lo = unsafe {
-        //    if positive {
-        //        _mm_set_ps(0.0, 0.0, 0.0, -0.0)
-        //    }
-        //    else {
-        //        _mm_set_ps(0.0, 0.0, -0.0, 0.0)
-        //    }
-        //};
-        let sign_hi = unsafe {
-            if positive {
-                vld1_f32([-0.0, 0.0].as_ptr())
-            } else {
-                vld1_f32([0.0, -0.0].as_ptr())
-            }
-        };
-        // The FCMA instructions multiply by a complex number rather than flipping a sign bit,
-        // so this is the factor to multiply the rotated value by, not a sign mask.
-        let sign_both = unsafe {
-            if positive {
-                vmovq_n_f32(1.0)
-            } else {
-                vmovq_n_f32(-1.0)
-            }
-        };
+    pub fn new(direction: FftDirection) -> Self {
         Self {
-            //sign_lo,
-            sign_hi: sign_hi,
-            sign_both: FcmaVector32(sign_both),
+            // The FCMA instructions multiply by a complex number rather than flipping a sign bit,
+            // so this is the factor to multiply the rotated value by, not a sign mask.
+            sign: if direction == FftDirection::Inverse {
+                FcmaVector32(unsafe { vmovq_n_f32(1.0) })
+            } else {
+                FcmaVector32(unsafe { vmovq_n_f32(-1.0) })
+            },
+        }
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate(&self, values: FcmaVector32) -> FcmaVector32 {
+        let zero = vmovq_n_f32(0.0);
+        FcmaVector32(vcmlaq_rot90_f32(zero, self.sign.0, values.0))
+    }
+
+    /// Rotates `values` and adds the result to `acc`, in a single instruction.
+    #[inline(always)]
+    pub unsafe fn rotate_and_add(&self, acc: FcmaVector32, values: FcmaVector32) -> FcmaVector32 {
+        FcmaVector32(vcmlaq_rot90_f32(acc.0, self.sign.0, values.0))
+    }
+
+    /// Rotates `values` and subtracts the result from `acc`, in a single instruction.
+    #[inline(always)]
+    pub unsafe fn rotate_and_sub(&self, acc: FcmaVector32, values: FcmaVector32) -> FcmaVector32 {
+        FcmaVector32(vcmlaq_rot270_f32(acc.0, self.sign.0, values.0))
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_45(&self, values: FcmaVector32) -> FcmaVector32 {
+        // rotate(values) + values
+        let sum = self.rotate_and_add(values, values);
+        FcmaVector32(vmulq_f32(sum.0, vmovq_n_f32(0.5f32.sqrt())))
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_135(&self, values: FcmaVector32) -> FcmaVector32 {
+        // values - rotate(values), which is the negated difference we are after
+        let diff = self.rotate_and_sub(values, values);
+        FcmaVector32(vmulq_f32(diff.0, vmovq_n_f32(-(0.5f32.sqrt()))))
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_225(&self, values: FcmaVector32) -> FcmaVector32 {
+        // rotate(values) + values
+        let sum = self.rotate_and_add(values, values);
+        FcmaVector32(vmulq_f32(sum.0, vmovq_n_f32(-(0.5f32.sqrt()))))
+    }
+}
+
+pub struct Rotate90HiF32 {
+    sign_hi: float32x2_t,
+}
+
+impl Rotate90HiF32 {
+    pub fn new(direction: FftDirection) -> Self {
+        Self {
+            sign_hi: if direction == FftDirection::Inverse {
+                unsafe { vld1_f32([-0.0, 0.0].as_ptr()) }
+            } else {
+                unsafe { vld1_f32([0.0, -0.0].as_ptr()) }
+            },
         }
     }
 
@@ -58,60 +92,6 @@ impl Rotate90F32 {
                 vreinterpret_u32_f32(self.sign_hi),
             )),
         ))
-    }
-
-    // There doesn't seem to be any need for rotating just the first element, but let's keep the code just in case
-    //#[inline(always)]
-    //pub unsafe fn rotate_lo(&self, values: __m128) -> __m128 {
-    //    let temp = _mm_shuffle_ps(values, values, 0xE1);
-    //    _mm_xor_ps(temp, self.sign_lo)
-    //}
-
-    #[inline(always)]
-    pub unsafe fn rotate_both(&self, values: FcmaVector32) -> FcmaVector32 {
-        let zero = vmovq_n_f32(0.0);
-        FcmaVector32(vcmlaq_rot90_f32(zero, self.sign_both.0, values.0))
-    }
-
-    /// Rotates `values` and adds the result to `acc`, in a single instruction.
-    #[inline(always)]
-    pub unsafe fn rotate_both_and_add(
-        &self,
-        acc: FcmaVector32,
-        values: FcmaVector32,
-    ) -> FcmaVector32 {
-        FcmaVector32(vcmlaq_rot90_f32(acc.0, self.sign_both.0, values.0))
-    }
-
-    /// Rotates `values` and subtracts the result from `acc`, in a single instruction.
-    #[inline(always)]
-    pub unsafe fn rotate_both_and_sub(
-        &self,
-        acc: FcmaVector32,
-        values: FcmaVector32,
-    ) -> FcmaVector32 {
-        FcmaVector32(vcmlaq_rot270_f32(acc.0, self.sign_both.0, values.0))
-    }
-
-    #[inline(always)]
-    pub unsafe fn rotate_both_45(&self, values: FcmaVector32) -> FcmaVector32 {
-        // rotate(values) + values
-        let sum = self.rotate_both_and_add(values, values);
-        FcmaVector32(vmulq_f32(sum.0, vmovq_n_f32(0.5f32.sqrt())))
-    }
-
-    #[inline(always)]
-    pub unsafe fn rotate_both_135(&self, values: FcmaVector32) -> FcmaVector32 {
-        // values - rotate(values), which is the negated difference we are after
-        let diff = self.rotate_both_and_sub(values, values);
-        FcmaVector32(vmulq_f32(diff.0, vmovq_n_f32(-(0.5f32.sqrt()))))
-    }
-
-    #[inline(always)]
-    pub unsafe fn rotate_both_225(&self, values: FcmaVector32) -> FcmaVector32 {
-        // rotate(values) + values
-        let sum = self.rotate_both_and_add(values, values);
-        FcmaVector32(vmulq_f32(sum.0, vmovq_n_f32(-(0.5f32.sqrt()))))
     }
 }
 
@@ -234,18 +214,15 @@ pub(crate) struct Rotate90F64 {
 }
 
 impl Rotate90F64 {
-    pub fn new(positive: bool) -> Self {
-        // The FCMA instructions multiply by a complex number rather than flipping a sign bit,
-        // so this is the factor to multiply the rotated value by, not a sign mask.
-        let sign = unsafe {
-            if positive {
-                vmovq_n_f64(1.0)
-            } else {
-                vmovq_n_f64(-1.0)
-            }
-        };
+    pub fn new(direction: FftDirection) -> Self {
         Self {
-            sign: FcmaVector64(sign),
+            // The FCMA instructions multiply by a complex number rather than flipping a sign bit,
+            // so this is the factor to multiply the rotated value by, not a sign mask.
+            sign: if direction == FftDirection::Inverse {
+                FcmaVector64(unsafe { vmovq_n_f64(1.0) })
+            } else {
+                FcmaVector64(unsafe { vmovq_n_f64(-1.0) })
+            },
         }
     }
 

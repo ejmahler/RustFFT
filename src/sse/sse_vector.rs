@@ -4,13 +4,9 @@ use std::arch::x86_64::*;
 
 use crate::simd::simd_array::SimdComplexArray;
 use crate::simd::simd_vector::SimdVector;
+use crate::sse::sse_butterflies::*;
+use crate::sse::sse_prime_butterflies::*;
 use crate::{twiddles, FftDirection};
-
-use super::sse_butterflies::{
-    SseF32Butterfly3, SseF32Butterfly5, SseF32Butterfly6, SseF64Butterfly3, SseF64Butterfly5,
-    SseF64Butterfly6,
-};
-use super::sse_prime_butterflies::{SseF32Butterfly7, SseF64Butterfly7};
 
 // Read these indexes from an SseArray and build an array of simd vectors.
 // Takes a name of a vector to read from, and a list of indexes to read.
@@ -131,84 +127,18 @@ macro_rules! write_complex_to_array_strided {
     }
 }
 
-#[derive(Copy, Clone)]
-pub struct Rotation90<V: SimdVector>(V);
-
-// The `SimdVector` impls, which let this backend use the algorithms in `src/simd`. The trait is
-// named by path instead of imported, because importing it would make methods like
-// `Self::column_butterfly2` ambiguous with the backend's own vector trait.
-
-// The `SimdVector::fft_helper_*` methods, which are the same forwarding calls for every SSE
-// vector type: they hand the chunk loop to the target-feature-enabled wrappers in
-// `sse_common.rs`.
-macro_rules! sse_vector_fft_helpers {
-    () => {
-        #[inline(always)]
-        unsafe fn fft_helper_immut<E>(
-            input: &[E],
-            output: &mut [E],
-            scratch: &mut [E],
-            chunk_size: usize,
-            required_scratch: usize,
-            chunk_fn: impl FnMut(&[E], &mut [E], &mut [E]),
-        ) {
-            super::sse_common::sse_fft_helper_immut(
-                input,
-                output,
-                scratch,
-                chunk_size,
-                required_scratch,
-                chunk_fn,
-            )
-        }
-        #[inline(always)]
-        unsafe fn fft_helper_outofplace<E>(
-            input: &mut [E],
-            output: &mut [E],
-            scratch: &mut [E],
-            chunk_size: usize,
-            required_scratch: usize,
-            chunk_fn: impl FnMut(&mut [E], &mut [E], &mut [E]),
-        ) {
-            super::sse_common::sse_fft_helper_outofplace(
-                input,
-                output,
-                scratch,
-                chunk_size,
-                required_scratch,
-                chunk_fn,
-            )
-        }
-        #[inline(always)]
-        unsafe fn fft_helper_inplace<E>(
-            buffer: &mut [E],
-            scratch: &mut [E],
-            chunk_size: usize,
-            required_scratch: usize,
-            chunk_fn: impl FnMut(&mut [E], &mut [E]),
-        ) {
-            super::sse_common::sse_fft_helper_inplace(
-                buffer,
-                scratch,
-                chunk_size,
-                required_scratch,
-                chunk_fn,
-            )
-        }
-    };
-}
-
-impl crate::simd::simd_vector::SimdVector for __m128d {
+impl SimdVector for __m128d {
     const COMPLEX_PER_VECTOR: usize = 1;
     const RADIXN_CROSS_LAYER_UNROLL: bool = true;
 
     type ScalarType = f64;
-    type Rotation = Rotation90<Self>;
 
-    type Butterfly3 = SseF64Butterfly3<f64>;
-    type Butterfly5 = SseF64Butterfly5<f64>;
-    type Butterfly6 = SseF64Butterfly6<f64>;
-    type Butterfly7 = SseF64Butterfly7<f64>;
+    type Butterfly2 = SseF64ParallelButterfly2;
+    type Butterfly3 = SseF64ParallelButterfly3;
+    type Butterfly4 = SseF64ParallelButterfly4;
+    type Butterfly5 = SseF64ParallelButterfly5;
+    type Butterfly6 = SseF64ParallelButterfly6;
+    type Butterfly7 = SseF64ParallelButterfly7;
 
     #[inline(always)]
     unsafe fn zero_vector() -> Self {
@@ -302,75 +232,43 @@ impl crate::simd::simd_vector::SimdVector for __m128d {
     }
 
     #[inline(always)]
-    unsafe fn make_rotate90(direction: FftDirection) -> Self::Rotation {
-        Rotation90(match direction {
-            FftDirection::Forward => _mm_set_pd(-0.0, 0.0),
-            FftDirection::Inverse => _mm_set_pd(0.0, -0.0),
-        })
-    }
-
-    #[inline(always)]
-    unsafe fn apply_rotate90(direction: Self::Rotation, values: Self) -> Self {
-        let temp = _mm_shuffle_pd(values, values, 0x01);
-        _mm_xor_pd(temp, direction.0)
+    unsafe fn make_butterfly2(direction: FftDirection) -> Self::Butterfly2 {
+        Self::Butterfly2::new(direction)
     }
     #[inline(always)]
     unsafe fn make_butterfly3(direction: FftDirection) -> Self::Butterfly3 {
-        SseF64Butterfly3::new(direction)
+        Self::Butterfly3::new(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly4(direction: FftDirection) -> Self::Butterfly4 {
+        Self::Butterfly4::new(direction)
     }
     #[inline(always)]
     unsafe fn make_butterfly5(direction: FftDirection) -> Self::Butterfly5 {
-        SseF64Butterfly5::new(direction)
+        Self::Butterfly5::new(direction)
     }
     #[inline(always)]
     unsafe fn make_butterfly6(direction: FftDirection) -> Self::Butterfly6 {
-        SseF64Butterfly6::new(direction)
+        Self::Butterfly6::new(direction)
     }
     #[inline(always)]
     unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
-        SseF64Butterfly7::new(direction)
+        Self::Butterfly7::new(direction)
     }
-
-    #[inline(always)]
-    unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
-        sse_column_butterfly2(rows)
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly3(bf: &Self::Butterfly3, rows: [Self; 3]) -> [Self; 3] {
-        bf.perform_fft_direct(rows[0], rows[1], rows[2])
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly4(rows: [Self; 4], rotation: Self::Rotation) -> [Self; 4] {
-        sse_column_butterfly4(rows, rotation)
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly5(bf: &Self::Butterfly5, rows: [Self; 5]) -> [Self; 5] {
-        bf.perform_fft_direct(rows[0], rows[1], rows[2], rows[3], rows[4])
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly6(bf: &Self::Butterfly6, rows: [Self; 6]) -> [Self; 6] {
-        bf.perform_fft_direct(rows)
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly7(bf: &Self::Butterfly7, rows: [Self; 7]) -> [Self; 7] {
-        bf.perform_fft_direct(rows)
-    }
-
-    simd_vector_cross_layer!(#[target_feature(enable = "sse4.1")]);
-    sse_vector_fft_helpers!();
 }
 
-impl crate::simd::simd_vector::SimdVector for __m128 {
+impl SimdVector for __m128 {
     const COMPLEX_PER_VECTOR: usize = 2;
     const RADIXN_CROSS_LAYER_UNROLL: bool = true;
 
     type ScalarType = f32;
-    type Rotation = Rotation90<Self>;
 
-    type Butterfly3 = SseF32Butterfly3<f32>;
-    type Butterfly5 = SseF32Butterfly5<f32>;
-    type Butterfly6 = SseF32Butterfly6<f32>;
-    type Butterfly7 = SseF32Butterfly7<f32>;
+    type Butterfly2 = SseF32ParallelButterfly2;
+    type Butterfly3 = SseF32ParallelButterfly3;
+    type Butterfly4 = SseF32ParallelButterfly4;
+    type Butterfly5 = SseF32ParallelButterfly5;
+    type Butterfly6 = SseF32ParallelButterfly6;
+    type Butterfly7 = SseF32ParallelButterfly7;
 
     #[inline(always)]
     unsafe fn zero_vector() -> Self {
@@ -464,87 +362,27 @@ impl crate::simd::simd_vector::SimdVector for __m128 {
     }
 
     #[inline(always)]
-    unsafe fn make_rotate90(direction: FftDirection) -> Self::Rotation {
-        Rotation90(match direction {
-            FftDirection::Forward => _mm_set_ps(-0.0, 0.0, -0.0, 0.0),
-            FftDirection::Inverse => _mm_set_ps(0.0, -0.0, 0.0, -0.0),
-        })
-    }
-
-    #[inline(always)]
-    unsafe fn apply_rotate90(direction: Self::Rotation, values: Self) -> Self {
-        let temp = _mm_shuffle_ps(values, values, 0xB1);
-        _mm_xor_ps(temp, direction.0)
+    unsafe fn make_butterfly2(direction: FftDirection) -> Self::Butterfly2 {
+        Self::Butterfly2::new(direction)
     }
     #[inline(always)]
     unsafe fn make_butterfly3(direction: FftDirection) -> Self::Butterfly3 {
-        SseF32Butterfly3::new(direction)
+        Self::Butterfly3::new(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly4(direction: FftDirection) -> Self::Butterfly4 {
+        Self::Butterfly4::new(direction)
     }
     #[inline(always)]
     unsafe fn make_butterfly5(direction: FftDirection) -> Self::Butterfly5 {
-        SseF32Butterfly5::new(direction)
+        Self::Butterfly5::new(direction)
     }
     #[inline(always)]
     unsafe fn make_butterfly6(direction: FftDirection) -> Self::Butterfly6 {
-        SseF32Butterfly6::new(direction)
+        Self::Butterfly6::new(direction)
     }
     #[inline(always)]
     unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
-        SseF32Butterfly7::new(direction)
+        Self::Butterfly7::new(direction)
     }
-
-    #[inline(always)]
-    unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
-        sse_column_butterfly2(rows)
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly3(bf: &Self::Butterfly3, rows: [Self; 3]) -> [Self; 3] {
-        bf.perform_parallel_fft_direct(rows[0], rows[1], rows[2])
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly4(rows: [Self; 4], rotation: Self::Rotation) -> [Self; 4] {
-        sse_column_butterfly4(rows, rotation)
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly5(bf: &Self::Butterfly5, rows: [Self; 5]) -> [Self; 5] {
-        bf.perform_parallel_fft_direct(rows[0], rows[1], rows[2], rows[3], rows[4])
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly6(bf: &Self::Butterfly6, rows: [Self; 6]) -> [Self; 6] {
-        bf.perform_parallel_fft_direct(rows[0], rows[1], rows[2], rows[3], rows[4], rows[5])
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly7(bf: &Self::Butterfly7, rows: [Self; 7]) -> [Self; 7] {
-        bf.perform_parallel_fft_direct(rows)
-    }
-
-    simd_vector_cross_layer!(#[target_feature(enable = "sse4.1")]);
-    sse_vector_fft_helpers!();
-}
-
-#[inline(always)]
-unsafe fn sse_column_butterfly2<V: SimdVector>(rows: [V; 2]) -> [V; 2] {
-    [
-        SimdVector::add(rows[0], rows[1]),
-        SimdVector::sub(rows[0], rows[1]),
-    ]
-}
-
-#[inline(always)]
-unsafe fn sse_column_butterfly4<V: SimdVector>(rows: [V; 4], rotation: V::Rotation) -> [V; 4] {
-    // Algorithm: 2x2 mixed radix
-
-    // Perform the first set of size-2 FFTs.
-    let [mid0, mid2] = sse_column_butterfly2([rows[0], rows[2]]);
-    let [mid1, mid3] = sse_column_butterfly2([rows[1], rows[3]]);
-
-    // Apply twiddle factors (in this case just a rotation)
-    let mid3_rotated = V::apply_rotate90(rotation, mid3);
-
-    // Transpose the data and do size-2 FFTs down the columns
-    let [output0, output1] = sse_column_butterfly2([mid0, mid1]);
-    let [output2, output3] = sse_column_butterfly2([mid2, mid3_rotated]);
-
-    // Swap outputs 1 and 2 in the output to do a square transpose
-    [output0, output2, output1, output3]
 }

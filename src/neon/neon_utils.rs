@@ -1,6 +1,6 @@
 use crate::simd::simd_array::{SimdComplexArray, SimdComplexArrayMut};
 use crate::simd::simd_vector::SimdVector;
-use crate::FftNum;
+use crate::{FftDirection, FftNum};
 use core::arch::aarch64::*;
 use num_complex::Complex;
 
@@ -12,40 +12,70 @@ use num_complex::Complex;
 //
 
 pub struct Rotate90F32 {
-    //sign_lo: float32x4_t,
-    sign_hi: float32x2_t,
-    sign_both: float32x4_t,
+    sign: float32x4_t,
 }
 
 impl Rotate90F32 {
-    pub fn new(positive: bool) -> Self {
-        // There doesn't seem to be any need for rotating just the first element, but let's keep the code just in case
-        //let sign_lo = unsafe {
-        //    if positive {
-        //        _mm_set_ps(0.0, 0.0, 0.0, -0.0)
-        //    }
-        //    else {
-        //        _mm_set_ps(0.0, 0.0, -0.0, 0.0)
-        //    }
-        //};
-        let sign_hi = unsafe {
-            if positive {
-                vld1_f32([-0.0, 0.0].as_ptr())
-            } else {
-                vld1_f32([0.0, -0.0].as_ptr())
-            }
-        };
-        let sign_both = unsafe {
-            if positive {
-                vld1q_f32([-0.0, 0.0, -0.0, 0.0].as_ptr())
-            } else {
-                vld1q_f32([0.0, -0.0, 0.0, -0.0].as_ptr())
-            }
-        };
+    pub fn new(direction: FftDirection) -> Self {
         Self {
-            //sign_lo,
-            sign_hi,
-            sign_both,
+            sign: if direction == FftDirection::Inverse {
+                unsafe { vld1q_f32([-0.0, 0.0, -0.0, 0.0].as_ptr()) }
+            } else {
+                unsafe { vld1q_f32([0.0, -0.0, 0.0, -0.0].as_ptr()) }
+            },
+        }
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate(&self, values: float32x4_t) -> float32x4_t {
+        let temp = vrev64q_f32(values);
+        vreinterpretq_f32_u32(veorq_u32(
+            vreinterpretq_u32_f32(temp),
+            vreinterpretq_u32_f32(self.sign),
+        ))
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_45(&self, values: float32x4_t) -> float32x4_t {
+        let rotated = self.rotate(values);
+        let sum = vaddq_f32(rotated, values);
+        vmulq_f32(sum, vmovq_n_f32(0.5f32.sqrt()))
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_135(&self, values: float32x4_t) -> float32x4_t {
+        let rotated = self.rotate(values);
+        let diff = vsubq_f32(rotated, values);
+        vmulq_f32(diff, vmovq_n_f32(0.5f32.sqrt()))
+    }
+
+    #[inline(always)]
+    pub unsafe fn rotate_225(&self, values: float32x4_t) -> float32x4_t {
+        let rotated = self.rotate(values);
+        let diff = vaddq_f32(rotated, values);
+        vmulq_f32(diff, vmovq_n_f32(-(0.5f32.sqrt())))
+    }
+}
+
+pub struct Rotate90HiF32 {
+    //sign_lo: float32x4_t,
+    sign_hi: float32x2_t,
+}
+
+impl Rotate90HiF32 {
+    pub fn new(direction: FftDirection) -> Self {
+        Self {
+            // There doesn't seem to be any need for rotating just the first element, but let's keep the code just in case
+            //sign_lo: if positive {
+            //    unsafe { _mm_set_ps(0.0, 0.0, 0.0, -0.0) }
+            //} else {
+            //    unsafe { _mm_set_ps(0.0, 0.0, -0.0, 0.0) }
+            //},
+            sign_hi: if direction == FftDirection::Inverse {
+                unsafe { vld1_f32([-0.0, 0.0].as_ptr()) }
+            } else {
+                unsafe { vld1_f32([0.0, -0.0].as_ptr()) }
+            },
         }
     }
 
@@ -66,36 +96,6 @@ impl Rotate90F32 {
     //    let temp = _mm_shuffle_ps(values, values, 0xE1);
     //    _mm_xor_ps(temp, self.sign_lo)
     //}
-
-    #[inline(always)]
-    pub unsafe fn rotate_both(&self, values: float32x4_t) -> float32x4_t {
-        let temp = vrev64q_f32(values);
-        vreinterpretq_f32_u32(veorq_u32(
-            vreinterpretq_u32_f32(temp),
-            vreinterpretq_u32_f32(self.sign_both),
-        ))
-    }
-
-    #[inline(always)]
-    pub unsafe fn rotate_both_45(&self, values: float32x4_t) -> float32x4_t {
-        let rotated = self.rotate_both(values);
-        let sum = vaddq_f32(rotated, values);
-        vmulq_f32(sum, vmovq_n_f32(0.5f32.sqrt()))
-    }
-
-    #[inline(always)]
-    pub unsafe fn rotate_both_135(&self, values: float32x4_t) -> float32x4_t {
-        let rotated = self.rotate_both(values);
-        let diff = vsubq_f32(rotated, values);
-        vmulq_f32(diff, vmovq_n_f32(0.5f32.sqrt()))
-    }
-
-    #[inline(always)]
-    pub unsafe fn rotate_both_225(&self, values: float32x4_t) -> float32x4_t {
-        let rotated = self.rotate_both(values);
-        let diff = vaddq_f32(rotated, values);
-        vmulq_f32(diff, vmovq_n_f32(-(0.5f32.sqrt())))
-    }
 }
 
 // Pack low (1st) complex
@@ -212,15 +212,14 @@ pub(crate) struct Rotate90F64 {
 }
 
 impl Rotate90F64 {
-    pub fn new(positive: bool) -> Self {
-        let sign = unsafe {
-            if positive {
-                vld1q_f64([-0.0, 0.0].as_ptr())
+    pub fn new(direction: FftDirection) -> Self {
+        Self {
+            sign: if direction == FftDirection::Inverse {
+                unsafe { vld1q_f64([-0.0, 0.0].as_ptr()) }
             } else {
-                vld1q_f64([0.0, -0.0].as_ptr())
-            }
-        };
-        Self { sign }
+                unsafe { vld1q_f64([0.0, -0.0].as_ptr()) }
+            },
+        }
     }
 
     #[inline(always)]

@@ -7,6 +7,9 @@ use crate::{twiddles, FftDirection};
 
 use crate::simd::simd_array::SimdComplexArray;
 
+use super::fcma_butterflies::*;
+use super::fcma_prime_butterflies::*;
+
 // Read these indexes from an FcmaArray and build an array of simd vectors.
 // Takes a name of a vector to read from, and a list of indexes to read.
 // This statement:
@@ -126,79 +129,9 @@ macro_rules! write_complex_to_array_strided {
     }
 }
 
-#[derive(Copy, Clone)]
-#[repr(transparent)]
-pub struct Rotation90<V: SimdVector>(V);
-
 // The `SimdVector` impls, which let this backend use the algorithms in `src/simd`. The trait is
 // named by path instead of imported, because importing it would make methods like
-// `Self::column_butterfly2` ambiguous with the backend's own vector trait.
-
-use super::fcma_butterflies::{
-    FcmaF32Butterfly3, FcmaF32Butterfly5, FcmaF32Butterfly6, FcmaF64Butterfly3, FcmaF64Butterfly5,
-    FcmaF64Butterfly6,
-};
-use super::fcma_prime_butterflies::{FcmaF32Butterfly7, FcmaF64Butterfly7};
-
-// The `SimdVector::fft_helper_*` methods, which are the same forwarding calls for every FCMA
-// vector type: they hand the chunk loop to the target-feature-enabled wrappers in
-// `fcma_common.rs`.
-macro_rules! fcma_vector_fft_helpers {
-    () => {
-        #[inline(always)]
-        unsafe fn fft_helper_immut<E>(
-            input: &[E],
-            output: &mut [E],
-            scratch: &mut [E],
-            chunk_size: usize,
-            required_scratch: usize,
-            chunk_fn: impl FnMut(&[E], &mut [E], &mut [E]),
-        ) {
-            super::fcma_common::fcma_fft_helper_immut(
-                input,
-                output,
-                scratch,
-                chunk_size,
-                required_scratch,
-                chunk_fn,
-            )
-        }
-        #[inline(always)]
-        unsafe fn fft_helper_outofplace<E>(
-            input: &mut [E],
-            output: &mut [E],
-            scratch: &mut [E],
-            chunk_size: usize,
-            required_scratch: usize,
-            chunk_fn: impl FnMut(&mut [E], &mut [E], &mut [E]),
-        ) {
-            super::fcma_common::fcma_fft_helper_outofplace(
-                input,
-                output,
-                scratch,
-                chunk_size,
-                required_scratch,
-                chunk_fn,
-            )
-        }
-        #[inline(always)]
-        unsafe fn fft_helper_inplace<E>(
-            buffer: &mut [E],
-            scratch: &mut [E],
-            chunk_size: usize,
-            required_scratch: usize,
-            chunk_fn: impl FnMut(&mut [E], &mut [E]),
-        ) {
-            super::fcma_common::fcma_fft_helper_inplace(
-                buffer,
-                scratch,
-                chunk_size,
-                required_scratch,
-                chunk_fn,
-            )
-        }
-    };
-}
+// `Self::parallel_butterfly2` ambiguous with the backend's own vector trait.
 
 /// `float64x2_t`, wrapped so that it can carry an FCMA `SimdVector` impl.
 ///
@@ -210,17 +143,18 @@ macro_rules! fcma_vector_fft_helpers {
 #[repr(transparent)]
 pub struct FcmaVector64(pub float64x2_t);
 
-impl crate::simd::simd_vector::SimdVector for FcmaVector64 {
+impl SimdVector for FcmaVector64 {
     const COMPLEX_PER_VECTOR: usize = 1;
     const RADIXN_CROSS_LAYER_UNROLL: bool = true;
 
     type ScalarType = f64;
-    type Rotation = Rotation90<FcmaVector64>;
 
-    type Butterfly3 = FcmaF64Butterfly3<f64>;
-    type Butterfly5 = FcmaF64Butterfly5<f64>;
-    type Butterfly6 = FcmaF64Butterfly6<f64>;
-    type Butterfly7 = FcmaF64Butterfly7<f64>;
+    type Butterfly2 = FcmaF64ParallelButterfly2;
+    type Butterfly3 = FcmaF64ParallelButterfly3;
+    type Butterfly4 = FcmaF64ParallelButterfly4;
+    type Butterfly5 = FcmaF64ParallelButterfly5;
+    type Butterfly6 = FcmaF64ParallelButterfly6;
+    type Butterfly7 = FcmaF64ParallelButterfly7;
 
     #[inline(always)]
     unsafe fn zero_vector() -> Self {
@@ -311,61 +245,29 @@ impl crate::simd::simd_vector::SimdVector for FcmaVector64 {
     }
 
     #[inline(always)]
-    unsafe fn make_rotate90(direction: FftDirection) -> Rotation90<Self> {
-        // The FCMA instructions multiply by a complex number rather than flipping a sign bit,
-        // so the rotation is stored as the factor +1 or -1 to multiply the rotated value by.
-        Rotation90(match direction {
-            FftDirection::Forward => Self(vmovq_n_f64(-1.0)),
-            FftDirection::Inverse => Self(vmovq_n_f64(1.0)),
-        })
-    }
-    unsafe fn apply_rotate90(_direction: Self::Rotation, _values: Self) -> Self {
-        unimplemented!("apply_rotate90 is currently not supported on FCMA. If it's needed, feel free to add it.")
+    unsafe fn make_butterfly2(direction: FftDirection) -> Self::Butterfly2 {
+        Self::Butterfly2::new(direction)
     }
     #[inline(always)]
     unsafe fn make_butterfly3(direction: FftDirection) -> Self::Butterfly3 {
-        FcmaF64Butterfly3::new(direction)
+        Self::Butterfly3::new(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly4(direction: FftDirection) -> Self::Butterfly4 {
+        Self::Butterfly4::new(direction)
     }
     #[inline(always)]
     unsafe fn make_butterfly5(direction: FftDirection) -> Self::Butterfly5 {
-        FcmaF64Butterfly5::new(direction)
+        Self::Butterfly5::new(direction)
     }
     #[inline(always)]
     unsafe fn make_butterfly6(direction: FftDirection) -> Self::Butterfly6 {
-        FcmaF64Butterfly6::new(direction)
+        Self::Butterfly6::new(direction)
     }
     #[inline(always)]
     unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
-        FcmaF64Butterfly7::new(direction)
+        Self::Butterfly7::new(direction)
     }
-
-    #[inline(always)]
-    unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
-        fcma_column_butterfly2(rows)
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly3(bf: &Self::Butterfly3, rows: [Self; 3]) -> [Self; 3] {
-        bf.perform_fft_direct(rows[0], rows[1], rows[2])
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly4(rows: [Self; 4], rotation: Self::Rotation) -> [Self; 4] {
-        fcma_column_butterfly4(rows, rotation)
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly5(bf: &Self::Butterfly5, rows: [Self; 5]) -> [Self; 5] {
-        bf.perform_fft_direct(rows[0], rows[1], rows[2], rows[3], rows[4])
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly6(bf: &Self::Butterfly6, rows: [Self; 6]) -> [Self; 6] {
-        bf.perform_fft_direct(rows)
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly7(bf: &Self::Butterfly7, rows: [Self; 7]) -> [Self; 7] {
-        bf.perform_fft_direct(rows)
-    }
-
-    simd_vector_cross_layer!(#[target_feature(enable = "neon,fcma")]);
-    fcma_vector_fft_helpers!();
 }
 
 /// `float32x4_t`, wrapped so that it can carry an FCMA `SimdVector` impl. See
@@ -374,17 +276,18 @@ impl crate::simd::simd_vector::SimdVector for FcmaVector64 {
 #[repr(transparent)]
 pub struct FcmaVector32(pub float32x4_t);
 
-impl crate::simd::simd_vector::SimdVector for FcmaVector32 {
+impl SimdVector for FcmaVector32 {
     const COMPLEX_PER_VECTOR: usize = 2;
     const RADIXN_CROSS_LAYER_UNROLL: bool = true;
 
     type ScalarType = f32;
-    type Rotation = Rotation90<FcmaVector32>;
 
-    type Butterfly3 = FcmaF32Butterfly3<f32>;
-    type Butterfly5 = FcmaF32Butterfly5<f32>;
-    type Butterfly6 = FcmaF32Butterfly6<f32>;
-    type Butterfly7 = FcmaF32Butterfly7<f32>;
+    type Butterfly2 = FcmaF32ParallelButterfly2;
+    type Butterfly3 = FcmaF32ParallelButterfly3;
+    type Butterfly4 = FcmaF32ParallelButterfly4;
+    type Butterfly5 = FcmaF32ParallelButterfly5;
+    type Butterfly6 = FcmaF32ParallelButterfly6;
+    type Butterfly7 = FcmaF32ParallelButterfly7;
 
     #[inline(always)]
     unsafe fn zero_vector() -> Self {
@@ -482,61 +385,29 @@ impl crate::simd::simd_vector::SimdVector for FcmaVector32 {
     }
 
     #[inline(always)]
-    unsafe fn make_rotate90(direction: FftDirection) -> Rotation90<Self> {
-        // The FCMA instructions multiply by a complex number rather than flipping a sign bit,
-        // so the rotation is stored as the factor +1 or -1 to multiply the rotated value by.
-        Rotation90(match direction {
-            FftDirection::Forward => Self(vmovq_n_f32(-1.0)),
-            FftDirection::Inverse => Self(vmovq_n_f32(1.0)),
-        })
-    }
-    unsafe fn apply_rotate90(_direction: Self::Rotation, _values: Self) -> Self {
-        unimplemented!("apply_rotate90 is currently not supported on FCMA. If it's needed, feel free to add it.")
+    unsafe fn make_butterfly2(direction: FftDirection) -> Self::Butterfly2 {
+        Self::Butterfly2::new(direction)
     }
     #[inline(always)]
     unsafe fn make_butterfly3(direction: FftDirection) -> Self::Butterfly3 {
-        FcmaF32Butterfly3::new(direction)
+        Self::Butterfly3::new(direction)
+    }
+    #[inline(always)]
+    unsafe fn make_butterfly4(direction: FftDirection) -> Self::Butterfly4 {
+        Self::Butterfly4::new(direction)
     }
     #[inline(always)]
     unsafe fn make_butterfly5(direction: FftDirection) -> Self::Butterfly5 {
-        FcmaF32Butterfly5::new(direction)
+        Self::Butterfly5::new(direction)
     }
     #[inline(always)]
     unsafe fn make_butterfly6(direction: FftDirection) -> Self::Butterfly6 {
-        FcmaF32Butterfly6::new(direction)
+        Self::Butterfly6::new(direction)
     }
     #[inline(always)]
     unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
-        FcmaF32Butterfly7::new(direction)
+        Self::Butterfly7::new(direction)
     }
-
-    #[inline(always)]
-    unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
-        fcma_column_butterfly2(rows)
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly3(bf: &Self::Butterfly3, rows: [Self; 3]) -> [Self; 3] {
-        bf.perform_parallel_fft_direct(rows[0], rows[1], rows[2])
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly4(rows: [Self; 4], rotation: Self::Rotation) -> [Self; 4] {
-        fcma_column_butterfly4(rows, rotation)
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly5(bf: &Self::Butterfly5, rows: [Self; 5]) -> [Self; 5] {
-        bf.perform_parallel_fft_direct(rows[0], rows[1], rows[2], rows[3], rows[4])
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly6(bf: &Self::Butterfly6, rows: [Self; 6]) -> [Self; 6] {
-        bf.perform_parallel_fft_direct(rows[0], rows[1], rows[2], rows[3], rows[4], rows[5])
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly7(bf: &Self::Butterfly7, rows: [Self; 7]) -> [Self; 7] {
-        bf.perform_parallel_fft_direct(rows)
-    }
-
-    simd_vector_cross_layer!(#[target_feature(enable = "neon,fcma")]);
-    fcma_vector_fft_helpers!();
 }
 
 // A trait for FCMA-only operations
@@ -553,12 +424,6 @@ pub trait FcmaVector: SimdVector {
     /// Rotates `b` by 90 degrees, multiplies it by the real number `a`, and subtracts the result
     /// from `acc`. See `mul_rotate90` for the requirement on `a`.
     unsafe fn nmadd_rotate90(acc: Self, a: Self, b: Self) -> Self;
-
-    /// Rotates `a` by `rotation`, then adds it to `acc`.
-    unsafe fn rotate_and_add(acc: Self, rotation: Self::Rotation, a: Self) -> Self;
-
-    /// Rotates `a` by `rotation`, then subtracts it from `acc`.
-    unsafe fn rotate_and_sub(acc: Self, rotation: Self::Rotation, a: Self) -> Self;
 }
 
 impl FcmaVector for FcmaVector64 {
@@ -576,16 +441,6 @@ impl FcmaVector for FcmaVector64 {
     #[inline(always)]
     unsafe fn nmadd_rotate90(acc: Self, a: Self, b: Self) -> Self {
         Self(vcmlaq_rot270_f64(acc.0, a.0, b.0))
-    }
-
-    #[inline(always)]
-    unsafe fn rotate_and_add(acc: Self, rotation: Self::Rotation, a: Self) -> Self {
-        Self(vcmlaq_rot90_f64(acc.0, rotation.0 .0, a.0))
-    }
-
-    #[inline(always)]
-    unsafe fn rotate_and_sub(acc: Self, rotation: Self::Rotation, a: Self) -> Self {
-        Self(vcmlaq_rot270_f64(acc.0, rotation.0 .0, a.0))
     }
 }
 
@@ -605,42 +460,6 @@ impl FcmaVector for FcmaVector32 {
     unsafe fn nmadd_rotate90(acc: Self, a: Self, b: Self) -> Self {
         Self(vcmlaq_rot270_f32(acc.0, a.0, b.0))
     }
-
-    #[inline(always)]
-    unsafe fn rotate_and_add(acc: Self, rotation: Self::Rotation, a: Self) -> Self {
-        Self(vcmlaq_rot90_f32(acc.0, rotation.0 .0, a.0))
-    }
-
-    #[inline(always)]
-    unsafe fn rotate_and_sub(acc: Self, rotation: Self::Rotation, a: Self) -> Self {
-        Self(vcmlaq_rot270_f32(acc.0, rotation.0 .0, a.0))
-    }
-}
-
-#[inline(always)]
-unsafe fn fcma_column_butterfly2<V: SimdVector>(rows: [V; 2]) -> [V; 2] {
-    [
-        SimdVector::add(rows[0], rows[1]),
-        SimdVector::sub(rows[0], rows[1]),
-    ]
-}
-
-#[inline(always)]
-unsafe fn fcma_column_butterfly4<V: FcmaVector>(rows: [V; 4], rotation: V::Rotation) -> [V; 4] {
-    // Algorithm: 2x2 mixed radix
-
-    // Perform the first set of size-2 FFTs.
-    let [mid0, mid2] = fcma_column_butterfly2([rows[0], rows[2]]);
-    let [mid1, mid3] = fcma_column_butterfly2([rows[1], rows[3]]);
-
-    // Transpose the data and do size-2 FFTs down the columns. The twiddle factors are just a
-    // rotation of mid3, which the FCMA instructions fold into the second size-2 FFT.
-    let [output0, output1] = fcma_column_butterfly2([mid0, mid1]);
-    let output2 = FcmaVector::rotate_and_add(mid2, rotation, mid3);
-    let output3 = FcmaVector::rotate_and_sub(mid2, rotation, mid3);
-
-    // Swap outputs 1 and 2 in the output to do a square transpose
-    [output0, output2, output1, output3]
 }
 
 #[cfg(test)]

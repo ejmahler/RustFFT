@@ -258,6 +258,211 @@ macro_rules! boilerplate_fft {
     };
 }
 
+// FFT boilerplate macro that assumes the specified type is a newtype around a SIMD-agnostic kernel.
+// Forwards basic calls to the inner type, and forwards main FFT calls to target feature functions
+// Exactly the same as boilerplate_simd_fft, except this is parameterized on the scalar type,
+// and the other is parameterized on the SIMD vector
+macro_rules! boilerplate_scalar_fft {
+    ($struct_name:ident, $(#[$attr:meta])*) => {
+        impl<T: FftNum> $struct_name<T> {
+            $(#[$attr])*
+            fn process_with_target_feature(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+                use crate::Length;
+                crate::fft_helper::fft_helper_inplace(
+                    buffer,
+                    scratch,
+                    self.len(),
+                    self.get_inplace_scratch_len(),
+                    |buffer, scratch| self.0.process_single(buffer, scratch),
+                );
+            }
+            $(#[$attr])*
+            fn process_immutable_with_target_feature(
+                &self,
+                input: &[Complex<T>],
+                output: &mut [Complex<T>],
+                scratch: &mut [Complex<T>],
+            ) {
+                use crate::Length;
+                crate::fft_helper::fft_helper_immut(
+                    input,
+                    output,
+                    scratch,
+                    self.len(),
+                    self.get_immutable_scratch_len(),
+                    |input, output, scratch|self.0.process_single_immutable(input, output, scratch),
+                );
+            }
+            $(#[$attr])*
+            fn process_outofplace_with_target_feature(
+                &self,
+                input: &mut [Complex<T>],
+                output: &mut [Complex<T>],
+                scratch: &mut [Complex<T>],
+            ) {
+                use crate::Length;
+                crate::fft_helper::fft_helper_outofplace(
+                    input,
+                    output,
+                    scratch,
+                    self.len(),
+                    self.get_outofplace_scratch_len(),
+                    |input, output, scratch| self.0.process_single_outofplace(input, output, scratch),
+                );
+            }
+        }
+        impl<T: FftNum> Fft<T> for $struct_name<T> {
+            fn process_immutable_with_scratch(
+                &self,
+                input: &[Complex<T>],
+                output: &mut [Complex<T>],
+                scratch: &mut [Complex<T>],
+            ) {
+                self.process_immutable_with_target_feature(input, output, scratch);
+            }
+
+            fn process_outofplace_with_scratch(
+                &self,
+                input: &mut [Complex<T>],
+                output: &mut [Complex<T>],
+                scratch: &mut [Complex<T>],
+            ) {
+                self.process_outofplace_with_target_feature(input, output, scratch);
+            }
+            fn process_with_scratch(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
+                self.process_with_target_feature(buffer, scratch);
+            }
+            #[inline(always)]
+            fn get_inplace_scratch_len(&self) -> usize {
+                self.0.get_inplace_scratch_len()
+            }
+            #[inline(always)]
+            fn get_outofplace_scratch_len(&self) -> usize {
+                self.0.get_outofplace_scratch_len()
+            }
+            #[inline(always)]
+            fn get_immutable_scratch_len(&self) -> usize {
+                self.0.get_immutable_scratch_len()
+            }
+        }
+        impl<T: FftNum> crate::Length for $struct_name<T> {
+            #[inline(always)]
+            fn len(&self) -> usize {
+                self.0.len()
+            }
+        }
+        impl<T: FftNum> crate::Direction for $struct_name<T> {
+            #[inline(always)]
+            fn fft_direction(&self) -> crate::FftDirection {
+                self.0.fft_direction()
+            }
+        }
+    };
+}
+
+// FFT boilerplate macro that assumes the specified type is a newtype around a SIMD-agnostic kernel.
+// Forwards basic calls to the inner type, and forwards main FFT calls to target feature functions
+macro_rules! boilerplate_simd_fft {
+    ($struct_name:ident, $(#[$attr:meta])*) => {
+        impl<V: SimdVector, T: FftNum> $struct_name<V, T> {
+            $(#[$attr])*
+            fn process_with_target_feature(&self, buffer: &mut [num_complex::Complex<T>], scratch: &mut [num_complex::Complex<T>]) {
+                use crate::Length;
+                crate::fft_helper::fft_helper_inplace(
+                    buffer,
+                    scratch,
+                    self.len(),
+                    self.get_inplace_scratch_len(),
+                    |buffer, scratch| self.0.process_single(buffer, scratch),
+                );
+            }
+            $(#[$attr])*
+            fn process_immutable_with_target_feature(
+                &self,
+                input: &[num_complex::Complex<T>],
+                output: &mut [num_complex::Complex<T>],
+                scratch: &mut [num_complex::Complex<T>],
+            ) {
+                use crate::Length;
+                crate::fft_helper::fft_helper_immut(
+                    input,
+                    output,
+                    scratch,
+                    self.len(),
+                    self.get_immutable_scratch_len(),
+                    |input, output, scratch|self.0.process_single_immutable(input, output, scratch),
+                );
+            }
+            $(#[$attr])*
+            fn process_outofplace_with_target_feature(
+                &self,
+                input: &mut [num_complex::Complex<T>],
+                output: &mut [num_complex::Complex<T>],
+                scratch: &mut [num_complex::Complex<T>],
+            ) {
+                use crate::Length;
+                crate::fft_helper::fft_helper_outofplace(
+                    input,
+                    output,
+                    scratch,
+                    self.len(),
+                    self.get_outofplace_scratch_len(),
+                    |input, output, scratch| self.0.process_single_outofplace(input, output, scratch),
+                );
+            }
+        }
+        impl<V: SimdVector, T: FftNum> Fft<T> for $struct_name<V, T> {
+            fn process_immutable_with_scratch(
+                &self,
+                input: &[num_complex::Complex<T>],
+                output: &mut [num_complex::Complex<T>],
+                scratch: &mut [num_complex::Complex<T>],
+            ) {
+                #[allow(unused_unsafe)]
+                unsafe { self.process_immutable_with_target_feature(input, output, scratch) };
+            }
+
+            fn process_outofplace_with_scratch(
+                &self,
+                input: &mut [num_complex::Complex<T>],
+                output: &mut [num_complex::Complex<T>],
+                scratch: &mut [num_complex::Complex<T>],
+            ) {
+                #[allow(unused_unsafe)]
+                unsafe { self.process_outofplace_with_target_feature(input, output, scratch) };
+            }
+            fn process_with_scratch(&self, buffer: &mut [num_complex::Complex<T>], scratch: &mut [num_complex::Complex<T>]) {
+                #[allow(unused_unsafe)]
+                unsafe { self.process_with_target_feature(buffer, scratch) };
+            }
+            #[inline(always)]
+            fn get_inplace_scratch_len(&self) -> usize {
+                self.0.get_inplace_scratch_len()
+            }
+            #[inline(always)]
+            fn get_outofplace_scratch_len(&self) -> usize {
+                self.0.get_outofplace_scratch_len()
+            }
+            #[inline(always)]
+            fn get_immutable_scratch_len(&self) -> usize {
+                self.0.get_immutable_scratch_len()
+            }
+        }
+        impl<V: SimdVector, T: FftNum> crate::Length for $struct_name<V, T> {
+            #[inline(always)]
+            fn len(&self) -> usize {
+                self.0.len()
+            }
+        }
+        impl<V: SimdVector, T: FftNum> crate::Direction for $struct_name<V, T> {
+            #[inline(always)]
+            fn fft_direction(&self) -> crate::FftDirection {
+                self.0.fft_direction()
+            }
+        }
+    };
+}
+
 #[non_exhaustive]
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq)]

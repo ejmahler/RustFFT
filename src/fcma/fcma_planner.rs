@@ -9,10 +9,9 @@ use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
 use crate::algorithm::*;
 use crate::fcma::fcma_butterflies::*;
 use crate::fcma::fcma_prime_butterflies;
+use crate::fcma::fcma_radix4::FcmaRadix4;
 use crate::fcma::fcma_vector::{FcmaVector32, FcmaVector64};
 use crate::Fft;
-
-use crate::simd::simd_radix4::SimdRadix4;
 
 use crate::math_utils::{PrimeFactor, PrimeFactors};
 
@@ -263,9 +262,9 @@ impl<T: FftNum> FftPlannerFcma<T> {
             Recipe::Radix4 { k, base_fft } => {
                 let base_fft = self.build_fft(&base_fft, direction);
                 if id_t == id_f32 {
-                    Arc::new(SimdRadix4::<FcmaVector32, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
+                    Arc::new(FcmaRadix4::<FcmaVector32, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
                 } else if id_t == id_f64 {
-                    Arc::new(SimdRadix4::<FcmaVector64, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
+                    Arc::new(FcmaRadix4::<FcmaVector64, T>::new(*k, base_fft)) as Arc<dyn Fft<T>>
                 } else {
                     panic!("Not f32 or f64");
                 }

@@ -3,14 +3,11 @@ use std::ops::Neg;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use crate::{
-    algorithm::butterflies::{
-        Butterfly2, Butterfly3, Butterfly4, Butterfly5, Butterfly6, Butterfly7,
-    },
-    fft_helper::{fft_helper_immut, fft_helper_inplace, fft_helper_outofplace},
-    simd::simd_vector::{simd_vector_cross_layer, SimdVector},
-    twiddles, FftDirection, FftNum,
+use crate::algorithm::scalar_column_butterflies::{
+    ScalarParallelButterfly2, ScalarParallelButterfly3, ScalarParallelButterfly4,
+    ScalarParallelButterfly5, ScalarParallelButterfly6, ScalarParallelButterfly7,
 };
+use crate::{simd::simd_vector::SimdVector, twiddles, FftDirection, FftNum};
 
 // Adapter for SimdVector. If we pretend that a Complex<T> is a simd vector, we can plug Complex<T> into the simd-based algorithms and avoid having separate scalar and simd implementations
 // We obviously won't be directly using simd intrinsics, but the fact that the simd algorithms are optimized for simd should make the scalar code highly auto-simd-able anyways.
@@ -22,15 +19,12 @@ impl<T: FftNum> SimdVector for Complex<T> {
 
     type ScalarType = T;
 
-    type Rotation = FftDirection;
-
-    type Butterfly3 = Butterfly3<T>;
-
-    type Butterfly5 = Butterfly5<T>;
-
-    type Butterfly6 = Butterfly6<T>;
-
-    type Butterfly7 = Butterfly7<T>;
+    type Butterfly2 = ScalarParallelButterfly2<T>;
+    type Butterfly3 = ScalarParallelButterfly3<T>;
+    type Butterfly4 = ScalarParallelButterfly4<T>;
+    type Butterfly5 = ScalarParallelButterfly5<T>;
+    type Butterfly6 = ScalarParallelButterfly6<T>;
+    type Butterfly7 = ScalarParallelButterfly7<T>;
 
     unsafe fn zero_vector() -> Self {
         Zero::zero()
@@ -113,112 +107,22 @@ impl<T: FftNum> SimdVector for Complex<T> {
         twiddles::compute_twiddle(x * y, len, direction)
     }
 
-    unsafe fn make_rotate90(direction: FftDirection) -> Self::Rotation {
-        direction
+    unsafe fn make_butterfly2(direction: FftDirection) -> Self::Butterfly2 {
+        Self::Butterfly2::new(direction)
     }
-
-    unsafe fn apply_rotate90(direction: Self::Rotation, values: Self) -> Self {
-        twiddles::rotate_90(values, direction)
-    }
-
     unsafe fn make_butterfly3(direction: FftDirection) -> Self::Butterfly3 {
-        Butterfly3::new(direction)
+        Self::Butterfly3::new(direction)
     }
-
+    unsafe fn make_butterfly4(direction: FftDirection) -> Self::Butterfly4 {
+        Self::Butterfly4::new(direction)
+    }
     unsafe fn make_butterfly5(direction: FftDirection) -> Self::Butterfly5 {
-        Butterfly5::new(direction)
+        Self::Butterfly5::new(direction)
     }
-
     unsafe fn make_butterfly6(direction: FftDirection) -> Self::Butterfly6 {
-        Butterfly6::new(direction)
+        Self::Butterfly6::new(direction)
     }
-
     unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
-        Butterfly7::new(direction)
-    }
-
-    unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
-        let mut result = rows;
-        Butterfly2::new(FftDirection::Forward).perform_fft_butterfly(&mut result);
-        result
-    }
-
-    unsafe fn column_butterfly3(bf: &Self::Butterfly3, rows: [Self; 3]) -> [Self; 3] {
-        let mut result = rows;
-        bf.perform_fft_butterfly(&mut result);
-        result
-    }
-
-    unsafe fn column_butterfly4(rows: [Self; 4], rotation: Self::Rotation) -> [Self; 4] {
-        let mut result = rows;
-        Butterfly4::new(rotation).perform_fft_butterfly(&mut result);
-        result
-    }
-
-    unsafe fn column_butterfly5(bf: &Self::Butterfly5, rows: [Self; 5]) -> [Self; 5] {
-        let mut result = rows;
-        bf.perform_fft_butterfly(&mut result);
-        result
-    }
-
-    unsafe fn column_butterfly6(bf: &Self::Butterfly6, rows: [Self; 6]) -> [Self; 6] {
-        let mut result = rows;
-        bf.perform_fft_butterfly(&mut result);
-        result
-    }
-
-    unsafe fn column_butterfly7(bf: &Self::Butterfly7, rows: [Self; 7]) -> [Self; 7] {
-        let mut result = rows;
-        bf.perform_fft_butterfly(&mut result);
-        result
-    }
-
-    simd_vector_cross_layer!(#[inline(always)]);
-
-    #[inline(always)]
-    unsafe fn fft_helper_immut<E>(
-        input: &[E],
-        output: &mut [E],
-        scratch: &mut [E],
-        chunk_size: usize,
-        required_scratch: usize,
-        chunk_fn: impl FnMut(&[E], &mut [E], &mut [E]),
-    ) {
-        fft_helper_immut(
-            input,
-            output,
-            scratch,
-            chunk_size,
-            required_scratch,
-            chunk_fn,
-        );
-    }
-    #[inline(always)]
-    unsafe fn fft_helper_outofplace<E>(
-        input: &mut [E],
-        output: &mut [E],
-        scratch: &mut [E],
-        chunk_size: usize,
-        required_scratch: usize,
-        chunk_fn: impl FnMut(&mut [E], &mut [E], &mut [E]),
-    ) {
-        fft_helper_outofplace(
-            input,
-            output,
-            scratch,
-            chunk_size,
-            required_scratch,
-            chunk_fn,
-        );
-    }
-    #[inline(always)]
-    unsafe fn fft_helper_inplace<E>(
-        buffer: &mut [E],
-        scratch: &mut [E],
-        chunk_size: usize,
-        required_scratch: usize,
-        chunk_fn: impl FnMut(&mut [E], &mut [E]),
-    ) {
-        fft_helper_inplace(buffer, scratch, chunk_size, required_scratch, chunk_fn);
+        Self::Butterfly7::new(direction)
     }
 }
