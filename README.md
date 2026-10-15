@@ -4,7 +4,7 @@
 [![](https://img.shields.io/crates/v/rustfft.svg)](https://crates.io/crates/rustfft)
 [![](https://img.shields.io/crates/l/rustfft.svg)](https://crates.io/crates/rustfft)
 [![](https://docs.rs/rustfft/badge.svg)](https://docs.rs/rustfft/)
-![minimum rustc 1.80](https://img.shields.io/badge/rustc-1.80+-red.svg)
+![minimum rustc 1.86](https://img.shields.io/badge/rustc-1.86+-red.svg)
 
 RustFFT is a high-performance, SIMD-accelerated FFT library written in pure Rust. It can compute FFTs of any size, including prime-number sizes, in O(nlogn) time.
 
@@ -75,7 +75,7 @@ This policy has one exception: We currently re-export pre-1.0 versions of the [n
 
 ### Supported Rust Version
 
-RustFFT requires rustc 1.80 or newer. Minor releases of RustFFT may upgrade the MSRV(minimum supported Rust version) to a newer version of rustc.
+RustFFT requires rustc 1.86 or newer. Minor releases of RustFFT may upgrade the MSRV(minimum supported Rust version) to a newer version of rustc.
 However, if we need to increase the MSRV, the new Rust version must have been released at least six months ago.
 
 ## License

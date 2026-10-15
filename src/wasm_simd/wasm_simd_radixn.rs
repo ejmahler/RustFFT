@@ -1,239 +1,76 @@
 //! The WASM SIMD side of `SimdRadixN`.
 //!
-//! The algorithm itself lives in `src/simd_radixn.rs`, shared by every SIMD backend. All that is
-//! left here is the `RadixNVector` impl for each vector type: the WASM SIMD loads, stores and
-//! vector math, and the element-type-specific butterfly structs for radix 3, 5, 6 and 7.
+//! The algorithm itself lives in `src/simd/simd_radixn.rs`, shared by every SIMD backend, and the
+//! `SimdVector` impls it runs on are in `wasm_simd_vector.rs`. All that is left here is the wrapper type
+//! and tests.
 
-use num_complex::Complex;
+use std::sync::Arc;
 
-use crate::simd_radixn::{RadixNVector, SimdRadixN};
-use crate::FftDirection;
-
-use super::wasm_simd_butterflies::{
-    WasmSimdF32Butterfly3, WasmSimdF32Butterfly5, WasmSimdF32Butterfly6, WasmSimdF64Butterfly3,
-    WasmSimdF64Butterfly5, WasmSimdF64Butterfly6,
+use crate::{
+    common::RadixFactor,
+    simd::{simd_radixn::SimdRadixN, simd_vector::SimdVector},
+    Fft, FftNum,
 };
-use super::wasm_simd_prime_butterflies::{WasmSimdF32Butterfly7, WasmSimdF64Butterfly7};
-use super::wasm_simd_vector::{
-    Rotation90, WasmSimdArray, WasmSimdArrayMut, WasmVector, WasmVector32, WasmVector64,
-};
-use super::WasmNum;
 
-/// FFT algorithm for lengths that factor into small radixes, WASM SIMD accelerated version.
-/// This is designed to be used via a Planner, and not created directly.
-pub type WasmSimdRadixN<S, T> = SimdRadixN<<S as WasmNum>::VectorType, T>;
-
-impl RadixNVector for WasmVector64 {
-    const COMPLEX_PER_VECTOR: usize = 1;
-
-    type ScalarType = f64;
-    type Rotation = Rotation90<Self>;
-
-    type Butterfly3 = WasmSimdF64Butterfly3<f64>;
-    type Butterfly5 = WasmSimdF64Butterfly5<f64>;
-    type Butterfly6 = WasmSimdF64Butterfly6<f64>;
-    type Butterfly7 = WasmSimdF64Butterfly7<f64>;
-
-    #[inline(always)]
-    unsafe fn load(data: &[Complex<f64>], index: usize) -> Self {
-        data.load_complex(index)
+pub struct WasmSimdRadixN<V: SimdVector, T: FftNum>(SimdRadixN<V, T>);
+impl<V: SimdVector, T: FftNum> WasmSimdRadixN<V, T> {
+    #[allow(dead_code)]
+    pub fn new(factors: &[RadixFactor], base_fft: Arc<dyn Fft<T>>) -> Self {
+        Self(SimdRadixN::new(factors, base_fft))
     }
-    #[inline(always)]
-    unsafe fn store(mut data: &mut [Complex<f64>], value: Self, index: usize) {
-        data.store_complex(value, index)
-    }
-
-    #[inline(always)]
-    unsafe fn mul_complex(left: Self, right: Self) -> Self {
-        WasmVector::mul_complex(left, right)
-    }
-    #[inline(always)]
-    unsafe fn make_mixedradix_twiddle_chunk(
-        x: usize,
-        y: usize,
-        len: usize,
-        direction: FftDirection,
-    ) -> Self {
-        WasmVector::make_mixedradix_twiddle_chunk(x, y, len, direction)
-    }
-
-    #[inline(always)]
-    unsafe fn make_rotate90(direction: FftDirection) -> Self::Rotation {
-        WasmVector::make_rotate90(direction)
-    }
-    #[inline(always)]
-    unsafe fn make_butterfly3(direction: FftDirection) -> Self::Butterfly3 {
-        WasmSimdF64Butterfly3::new(direction)
-    }
-    #[inline(always)]
-    unsafe fn make_butterfly5(direction: FftDirection) -> Self::Butterfly5 {
-        WasmSimdF64Butterfly5::new(direction)
-    }
-    #[inline(always)]
-    unsafe fn make_butterfly6(direction: FftDirection) -> Self::Butterfly6 {
-        WasmSimdF64Butterfly6::new(direction)
-    }
-    #[inline(always)]
-    unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
-        WasmSimdF64Butterfly7::new(direction)
-    }
-
-    #[inline(always)]
-    unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
-        WasmVector::column_butterfly2(rows)
-    }
-    // Butterflies 3, 5 and 6 are written against raw `v128` while `WasmVector64` is a newtype over
-    // it, so their results come back needing rewrapping. Butterfly 7 already speaks the wrapper
-    // types and needs none of it.
-    #[inline(always)]
-    unsafe fn column_butterfly3(bf: &Self::Butterfly3, rows: [Self; 3]) -> [Self; 3] {
-        bf.perform_fft_direct(rows[0].0, rows[1].0, rows[2].0)
-            .map(f64::wrap)
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly4(rows: [Self; 4], rotation: Self::Rotation) -> [Self; 4] {
-        WasmVector::column_butterfly4(rows, rotation)
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly5(bf: &Self::Butterfly5, rows: [Self; 5]) -> [Self; 5] {
-        bf.perform_fft_direct(rows[0].0, rows[1].0, rows[2].0, rows[3].0, rows[4].0)
-            .map(f64::wrap)
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly6(bf: &Self::Butterfly6, rows: [Self; 6]) -> [Self; 6] {
-        bf.perform_fft_direct([
-            rows[0].0, rows[1].0, rows[2].0, rows[3].0, rows[4].0, rows[5].0,
-        ])
-        .map(f64::wrap)
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly7(bf: &Self::Butterfly7, rows: [Self; 7]) -> [Self; 7] {
-        bf.perform_fft_direct(rows)
-    }
-
-    wasm_simd_radixn_fft_helpers!();
 }
-
-impl RadixNVector for WasmVector32 {
-    const COMPLEX_PER_VECTOR: usize = 2;
-
-    type ScalarType = f32;
-    type Rotation = Rotation90<Self>;
-
-    type Butterfly3 = WasmSimdF32Butterfly3<f32>;
-    type Butterfly5 = WasmSimdF32Butterfly5<f32>;
-    type Butterfly6 = WasmSimdF32Butterfly6<f32>;
-    type Butterfly7 = WasmSimdF32Butterfly7<f32>;
-
-    #[inline(always)]
-    unsafe fn load(data: &[Complex<f32>], index: usize) -> Self {
-        data.load_complex(index)
-    }
-    #[inline(always)]
-    unsafe fn store(mut data: &mut [Complex<f32>], value: Self, index: usize) {
-        data.store_complex(value, index)
-    }
-
-    #[inline(always)]
-    unsafe fn mul_complex(left: Self, right: Self) -> Self {
-        WasmVector::mul_complex(left, right)
-    }
-    #[inline(always)]
-    unsafe fn make_mixedradix_twiddle_chunk(
-        x: usize,
-        y: usize,
-        len: usize,
-        direction: FftDirection,
-    ) -> Self {
-        WasmVector::make_mixedradix_twiddle_chunk(x, y, len, direction)
-    }
-
-    #[inline(always)]
-    unsafe fn make_rotate90(direction: FftDirection) -> Self::Rotation {
-        WasmVector::make_rotate90(direction)
-    }
-    #[inline(always)]
-    unsafe fn make_butterfly3(direction: FftDirection) -> Self::Butterfly3 {
-        WasmSimdF32Butterfly3::new(direction)
-    }
-    #[inline(always)]
-    unsafe fn make_butterfly5(direction: FftDirection) -> Self::Butterfly5 {
-        WasmSimdF32Butterfly5::new(direction)
-    }
-    #[inline(always)]
-    unsafe fn make_butterfly6(direction: FftDirection) -> Self::Butterfly6 {
-        WasmSimdF32Butterfly6::new(direction)
-    }
-    #[inline(always)]
-    unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
-        WasmSimdF32Butterfly7::new(direction)
-    }
-
-    #[inline(always)]
-    unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
-        WasmVector::column_butterfly2(rows)
-    }
-    // See the f64 impl for why butterflies 3, 5 and 6 rewrap their results and 7 doesn't.
-    #[inline(always)]
-    unsafe fn column_butterfly3(bf: &Self::Butterfly3, rows: [Self; 3]) -> [Self; 3] {
-        bf.perform_parallel_fft_direct(rows[0].0, rows[1].0, rows[2].0)
-            .map(f32::wrap)
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly4(rows: [Self; 4], rotation: Self::Rotation) -> [Self; 4] {
-        WasmVector::column_butterfly4(rows, rotation)
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly5(bf: &Self::Butterfly5, rows: [Self; 5]) -> [Self; 5] {
-        bf.perform_parallel_fft_direct(rows[0].0, rows[1].0, rows[2].0, rows[3].0, rows[4].0)
-            .map(f32::wrap)
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly6(bf: &Self::Butterfly6, rows: [Self; 6]) -> [Self; 6] {
-        bf.perform_parallel_fft_direct(
-            rows[0].0, rows[1].0, rows[2].0, rows[3].0, rows[4].0, rows[5].0,
-        )
-        .map(f32::wrap)
-    }
-    #[inline(always)]
-    unsafe fn column_butterfly7(bf: &Self::Butterfly7, rows: [Self; 7]) -> [Self; 7] {
-        bf.perform_parallel_fft_direct(rows)
-    }
-
-    wasm_simd_radixn_fft_helpers!();
-}
+boilerplate_simd_fft!(WasmSimdRadixN, #[target_feature(enable = "simd128")]);
 
 #[cfg(test)]
 mod unit_tests {
-    use super::*;
-    use crate::simd_radixn::test_bodies;
+    use crate::simd::simd_radixn::test_bodies;
+    use crate::wasm_simd::wasm_simd_vector::{WasmVector32, WasmVector64};
     use wasm_bindgen_test::wasm_bindgen_test;
+
+    use super::*;
+
+    fn new_fn<V: SimdVector + 'static>(
+        factors: &[RadixFactor],
+        base_fft: Arc<dyn Fft<V::ScalarType>>,
+    ) -> Arc<dyn Fft<V::ScalarType>> {
+        Arc::new(WasmSimdRadixN::<V, V::ScalarType>::new(factors, base_fft))
+    }
 
     #[wasm_bindgen_test]
     fn test_wasm_simd_radixn_f64() {
         // f64 fits one complex per vector, so every base length is legal
-        test_bodies::factor_pairs::<WasmVector64>(&[1, 2, 3, 4, 5, 6]);
+        test_bodies::factor_pairs::<WasmVector64>(&[1, 2, 3, 4, 5, 6], &new_fn::<WasmVector64>);
     }
 
     #[wasm_bindgen_test]
     fn test_wasm_simd_radixn_f32() {
-        // f32 fits two complex per vector, so the base length has to be even
-        test_bodies::factor_pairs::<WasmVector32>(&[2, 4, 6]);
+        // f32 fits two complex per vector, so an odd base length means every layer ends with a
+        // partial column
+        test_bodies::factor_pairs::<WasmVector32>(&[1, 2, 3, 4, 5, 6], &new_fn::<WasmVector32>);
     }
 
     #[wasm_bindgen_test]
     fn test_wasm_simd_radixn_composite_base() {
-        test_bodies::composite_base::<WasmVector32, WasmVector64>();
+        test_bodies::composite_base::<WasmVector32, WasmVector64>(
+            &new_fn::<WasmVector32>,
+            &new_fn::<WasmVector64>,
+        );
     }
 
     #[wasm_bindgen_test]
     fn test_wasm_simd_radixn_large_recipes() {
-        test_bodies::large_recipes::<WasmVector32, WasmVector64>();
+        test_bodies::large_recipes::<WasmVector32, WasmVector64>(
+            &new_fn::<WasmVector32>,
+            &new_fn::<WasmVector64>,
+        );
     }
 
     #[wasm_bindgen_test]
     #[ignore]
     fn test_wasm_simd_radixn_six_layers() {
-        test_bodies::six_layers::<WasmVector32, WasmVector64>();
+        test_bodies::six_layers::<WasmVector32, WasmVector64>(
+            &new_fn::<WasmVector32>,
+            &new_fn::<WasmVector64>,
+        );
     }
 }

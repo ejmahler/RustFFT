@@ -7,9 +7,15 @@ use crate::array_utils::DoubleBuf;
 use crate::twiddles;
 use crate::{Direction, Fft, Length};
 
+use crate::fft_helper::{
+    fft_helper_immut, fft_helper_immut_unroll2x, fft_helper_inplace, fft_helper_inplace_unroll2x,
+};
+use crate::simd::parallel_fft::ParallelFft;
+use crate::simd::simd_array::SimdComplexArrayMut;
+use crate::simd::simd_vector::SimdVector;
+
 use super::neon_common::{assert_f32, assert_f64};
 use super::neon_utils::*;
-use super::neon_vector::{NeonArrayMut, NeonVector};
 
 #[inline(always)]
 unsafe fn pack_32(a: Complex<f32>, b: Complex<f32>) -> float32x4_t {
@@ -23,6 +29,40 @@ unsafe fn pack_64(a: Complex<f64>) -> float64x2_t {
 #[allow(unused)]
 macro_rules! boilerplate_fft_neon_f32_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
+        impl<T: FftNum> $struct_name<T> {
+            #[target_feature(enable = "neon")]
+            fn process_immutable_with_target_feature(
+                &self,
+                input: &[Complex<T>],
+                output: &mut [Complex<T>],
+            ) {
+                unsafe {
+                    let simd_input = crate::array_utils::workaround_transmute(input);
+                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
+                    fft_helper_immut_unroll2x(
+                        simd_input,
+                        simd_output,
+                        self.len(),
+                        |input, output| {
+                            self.perform_parallel_fft_contiguous(DoubleBuf { input, output })
+                        },
+                        |input, output| self.perform_fft_contiguous(DoubleBuf { input, output }),
+                    )
+                }
+            }
+            #[target_feature(enable = "neon")]
+            fn process_inplace_with_target_feature(&self, buffer: &mut [Complex<T>]) {
+                unsafe {
+                    let simd_buffer = crate::array_utils::workaround_transmute_mut(buffer);
+                    fft_helper_inplace_unroll2x(
+                        simd_buffer,
+                        self.len(),
+                        |chunk| self.perform_parallel_fft_contiguous(chunk),
+                        |chunk| self.perform_fft_contiguous(chunk),
+                    )
+                }
+            }
+        }
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             fn process_immutable_with_scratch(
                 &self,
@@ -30,19 +70,8 @@ macro_rules! boilerplate_fft_neon_f32_butterfly {
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                unsafe {
-                    let simd_input = crate::array_utils::workaround_transmute(input);
-                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
-                    super::neon_common::neon_fft_helper_immut_unroll2x(
-                        simd_input,
-                        simd_output,
-                        self.len(),
-                        |input, output| {
-                            self.perform_parallel_fft_contiguous(DoubleBuf { input, output })
-                        },
-                        |input, output| self.perform_fft_contiguous(DoubleBuf { input, output }),
-                    );
-                }
+                // Safety: This function requires the neon target feature. The planner can't be created unless the feature is present.
+                unsafe { self.process_immutable_with_target_feature(input, output) };
             }
             fn process_outofplace_with_scratch(
                 &self,
@@ -50,30 +79,12 @@ macro_rules! boilerplate_fft_neon_f32_butterfly {
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                unsafe {
-                    let simd_input = crate::array_utils::workaround_transmute_mut(input);
-                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
-                    super::neon_common::neon_fft_helper_outofplace_unroll2x(
-                        simd_input,
-                        simd_output,
-                        self.len(),
-                        |input, output| {
-                            self.perform_parallel_fft_contiguous(DoubleBuf { input, output })
-                        },
-                        |input, output| self.perform_fft_contiguous(DoubleBuf { input, output }),
-                    );
-                }
+                // Safety: This function requires the neon target feature. The planner can't be created unless the feature is present.
+                unsafe { self.process_immutable_with_target_feature(input, output) };
             }
             fn process_with_scratch(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-                unsafe {
-                    let simd_buffer = crate::array_utils::workaround_transmute_mut(buffer);
-                    super::neon_common::neon_fft_helper_inplace_unroll2x(
-                        simd_buffer,
-                        self.len(),
-                        |chunk| self.perform_parallel_fft_contiguous(chunk),
-                        |chunk| self.perform_fft_contiguous(chunk),
-                    )
-                }
+                // Safety: This function requires the neon target feature. The planner can't be created unless the feature is present.
+                unsafe { self.process_inplace_with_target_feature(buffer) };
             }
             #[inline(always)]
             fn get_inplace_scratch_len(&self) -> usize {
@@ -105,6 +116,36 @@ macro_rules! boilerplate_fft_neon_f32_butterfly {
 
 macro_rules! boilerplate_fft_neon_f64_butterfly {
     ($struct_name:ident, $len:expr, $direction_fn:expr) => {
+        impl<T: FftNum> $struct_name<T> {
+            #[target_feature(enable = "neon")]
+            fn process_immutable_with_target_feature(
+                &self,
+                input: &[Complex<T>],
+                output: &mut [Complex<T>],
+            ) {
+                unsafe {
+                    let simd_input = crate::array_utils::workaround_transmute(input);
+                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
+                    fft_helper_immut(
+                        simd_input,
+                        simd_output,
+                        &mut [],
+                        self.len(),
+                        0,
+                        |input, output, _| self.perform_fft_contiguous(DoubleBuf { input, output }),
+                    )
+                }
+            }
+            #[target_feature(enable = "neon")]
+            fn process_inplace_with_target_feature(&self, buffer: &mut [Complex<T>]) {
+                unsafe {
+                    let simd_buffer = crate::array_utils::workaround_transmute_mut(buffer);
+                    fft_helper_inplace(simd_buffer, &mut [], self.len(), 0, |chunk, _| {
+                        self.perform_fft_contiguous(chunk)
+                    })
+                }
+            }
+        }
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             fn process_immutable_with_scratch(
                 &self,
@@ -112,18 +153,8 @@ macro_rules! boilerplate_fft_neon_f64_butterfly {
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                unsafe {
-                    let simd_input = crate::array_utils::workaround_transmute(input);
-                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
-                    super::neon_common::neon_fft_helper_immut(
-                        simd_input,
-                        simd_output,
-                        &mut [],
-                        self.len(),
-                        0,
-                        |input, output, _| self.perform_fft_contiguous(DoubleBuf { input, output }),
-                    );
-                }
+                // Safety: This function requires the neon target feature. The planner can't be created unless the feature is present.
+                unsafe { self.process_immutable_with_target_feature(input, output) };
             }
             fn process_outofplace_with_scratch(
                 &self,
@@ -131,30 +162,12 @@ macro_rules! boilerplate_fft_neon_f64_butterfly {
                 output: &mut [Complex<T>],
                 _scratch: &mut [Complex<T>],
             ) {
-                unsafe {
-                    let simd_input = crate::array_utils::workaround_transmute_mut(input);
-                    let simd_output = crate::array_utils::workaround_transmute_mut(output);
-                    super::neon_common::neon_fft_helper_outofplace(
-                        simd_input,
-                        simd_output,
-                        &mut [],
-                        self.len(),
-                        0,
-                        |input, output, _| self.perform_fft_contiguous(DoubleBuf { input, output }),
-                    );
-                }
+                // Safety: This function requires the neon target feature. The planner can't be created unless the feature is present.
+                unsafe { self.process_immutable_with_target_feature(input, output) };
             }
             fn process_with_scratch(&self, buffer: &mut [Complex<T>], _scratch: &mut [Complex<T>]) {
-                unsafe {
-                    let simd_buffer = crate::array_utils::workaround_transmute_mut(buffer);
-                    super::neon_common::neon_fft_helper_inplace(
-                        simd_buffer,
-                        &mut [],
-                        self.len(),
-                        0,
-                        |chunk, _| self.perform_fft_contiguous(chunk),
-                    )
-                }
+                // Safety: This function requires the neon target feature. The planner can't be created unless the feature is present.
+                unsafe { self.process_inplace_with_target_feature(buffer) };
             }
             #[inline(always)]
             fn get_inplace_scratch_len(&self) -> usize {
@@ -208,18 +221,21 @@ impl<T: FftNum> NeonF32Butterfly1<T> {
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
-        let value = buffer.load_partial_lo_complex(0);
-        buffer.store_partial_lo_complex(value, 0);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<float32x4_t>,
+    ) {
+        let value = buffer.load1_lo(0);
+        buffer.store1_lo(value, 0);
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<float32x4_t>,
     ) {
-        let value = buffer.load_complex(0);
-        buffer.store_complex(value, 0);
+        let value = buffer.load(0);
+        buffer.store(value, 0);
     }
 }
 
@@ -247,9 +263,12 @@ impl<T: FftNum> NeonF64Butterfly1<T> {
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
-        let value = buffer.load_complex(0);
-        buffer.store_complex(value, 0);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<float64x2_t>,
+    ) {
+        let value = buffer.load(0);
+        buffer.store(value, 0);
     }
 }
 
@@ -259,6 +278,22 @@ impl<T: FftNum> NeonF64Butterfly1<T> {
 //   / __/  |_____|  ___) / __/| |_) | | |_
 //  |_____|         |____/_____|_.__/|_|\__|
 //
+
+pub struct NeonF32ParallelButterfly2 {}
+impl NeonF32ParallelButterfly2 {
+    #[inline(always)]
+    pub fn new(_direction: FftDirection) -> Self {
+        assert!(std::arch::is_aarch64_feature_detected!("neon"));
+        Self {}
+    }
+}
+impl ParallelFft<float32x4_t, 2> for NeonF32ParallelButterfly2 {
+    #[inline(always)]
+    fn parallel_fft(&self, data: [float32x4_t; 2]) -> [float32x4_t; 2] {
+        // Safety: These intrinsics require the NEON target feature. We asserted this feature was present in the constructor.
+        unsafe { [vaddq_f32(data[0], data[1]), vsubq_f32(data[0], data[1])] }
+    }
+}
 
 pub struct NeonF32Butterfly2<T> {
     direction: FftDirection,
@@ -277,28 +312,31 @@ impl<T: FftNum> NeonF32Butterfly2<T> {
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
-        let values = buffer.load_complex(0);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<float32x4_t>,
+    ) {
+        let values = buffer.load(0);
 
         let temp = self.perform_fft_direct(values);
 
-        buffer.store_complex(temp, 0);
+        buffer.store(temp, 0);
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<float32x4_t>,
     ) {
-        let values_a = buffer.load_complex(0);
-        let values_b = buffer.load_complex(2);
+        let values_a = buffer.load(0);
+        let values_b = buffer.load(2);
 
         let out = self.perform_parallel_fft_direct(values_a, values_b);
 
         let [out02, out13] = transpose_complex_2x2_f32(out[0], out[1]);
 
-        buffer.store_complex(out02, 0);
-        buffer.store_complex(out13, 2);
+        buffer.store(out02, 0);
+        buffer.store(out13, 2);
     }
 
     // length 2 fft of x, given as [x0, x1]
@@ -356,6 +394,22 @@ unsafe fn solo_fft2_f32(values: float32x4_t) -> float32x4_t {
 //  |_____|          \___/   |_| |_.__/|_|\__|
 //
 
+pub struct NeonF64ParallelButterfly2 {}
+impl NeonF64ParallelButterfly2 {
+    #[inline(always)]
+    pub fn new(_direction: FftDirection) -> Self {
+        assert!(std::arch::is_aarch64_feature_detected!("neon"));
+        Self {}
+    }
+}
+impl ParallelFft<float64x2_t, 2> for NeonF64ParallelButterfly2 {
+    #[inline(always)]
+    fn parallel_fft(&self, data: [float64x2_t; 2]) -> [float64x2_t; 2] {
+        // Safety: These intrinsics require the NEON target feature. We asserted this feature was present in the constructor.
+        unsafe { [vaddq_f64(data[0], data[1]), vsubq_f64(data[0], data[1])] }
+    }
+}
+
 pub struct NeonF64Butterfly2<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
@@ -374,14 +428,17 @@ impl<T: FftNum> NeonF64Butterfly2<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
-        let value0 = buffer.load_complex(0);
-        let value1 = buffer.load_complex(1);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<float64x2_t>,
+    ) {
+        let value0 = buffer.load(0);
+        let value1 = buffer.load(1);
 
         let out = self.perform_fft_direct(value0, value1);
 
-        buffer.store_complex(out[0], 0);
-        buffer.store_complex(out[1], 1);
+        buffer.store(out[0], 0);
+        buffer.store(out[1], 1);
     }
 
     #[inline(always)]
@@ -408,10 +465,48 @@ pub(crate) unsafe fn solo_fft2_f64(left: float64x2_t, right: float64x2_t) -> [fl
 //  |____/           |____/_____|_.__/|_|\__|
 //
 
+pub struct NeonF32ParallelButterfly3 {
+    twiddle1re: float32x4_t,
+    twiddle1im: float32x4_t,
+    twiddle2im: float32x4_t,
+}
+impl NeonF32ParallelButterfly3 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(std::arch::is_aarch64_feature_detected!("neon"));
+
+        let tw1: Complex<f32> = twiddles::compute_twiddle(1, 3, direction);
+        Self {
+            twiddle1re: unsafe { vmovq_n_f32(tw1.re) },
+            twiddle1im: unsafe { vmovq_n_f32(tw1.im) },
+            twiddle2im: unsafe { vmovq_n_f32(-tw1.im) },
+        }
+    }
+}
+impl ParallelFft<float32x4_t, 3> for NeonF32ParallelButterfly3 {
+    #[inline(always)]
+    fn parallel_fft(&self, data: [float32x4_t; 3]) -> [float32x4_t; 3] {
+        // Safety: These intrinsics require the NEON target feature. We asserted this feature was present in the constructor.
+        unsafe {
+            // This is a Neon translation of the scalar 3-point butterfly
+            let x12p = vaddq_f32(data[1], data[2]);
+            let x12n = vsubq_f32(data[1], data[2]);
+
+            let temp = vfmaq_f32(data[0], self.twiddle1re, x12p);
+            let rotate = Rotate90F32::new(FftDirection::Inverse);
+            let n_rot = rotate.rotate(x12n);
+
+            let x0 = vaddq_f32(data[0], x12p);
+            let x1 = vfmaq_f32(temp, self.twiddle1im, n_rot);
+            let x2 = vfmaq_f32(temp, self.twiddle2im, n_rot);
+            [x0, x1, x2]
+        }
+    }
+}
+
 pub struct NeonF32Butterfly3<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    rotate: Rotate90F32,
     twiddle: float32x4_t,
     twiddle1re: float32x4_t,
     twiddle1im: float32x4_t,
@@ -424,7 +519,6 @@ impl<T: FftNum> NeonF32Butterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let rotate = Rotate90F32::new(true);
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 3, direction);
         let twiddle = unsafe { vld1q_f32([tw1.re, tw1.re, -tw1.im, -tw1.im].as_ptr()) };
         let twiddle1re = unsafe { vmovq_n_f32(tw1.re) };
@@ -433,7 +527,6 @@ impl<T: FftNum> NeonF32Butterfly3<T> {
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            rotate,
             twiddle,
             twiddle1re,
             twiddle1im,
@@ -441,24 +534,27 @@ impl<T: FftNum> NeonF32Butterfly3<T> {
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
-        let value0x = buffer.load_partial_lo_complex(0);
-        let value12 = buffer.load_complex(1);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<float32x4_t>,
+    ) {
+        let value0x = buffer.load1_lo(0);
+        let value12 = buffer.load(1);
 
         let out = self.perform_fft_direct(value0x, value12);
 
-        buffer.store_partial_lo_complex(out[0], 0);
-        buffer.store_complex(out[1], 1);
+        buffer.store1_lo(out[0], 0);
+        buffer.store(out[1], 1);
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<float32x4_t>,
     ) {
-        let valuea0a1 = buffer.load_complex(0);
-        let valuea2b0 = buffer.load_complex(2);
-        let valueb1b2 = buffer.load_complex(4);
+        let valuea0a1 = buffer.load(0);
+        let valuea2b0 = buffer.load(2);
+        let valueb1b2 = buffer.load(4);
 
         let value0 = extract_lo_hi_f32(valuea0a1, valuea2b0);
         let value1 = extract_hi_lo_f32(valuea0a1, valueb1b2);
@@ -470,9 +566,9 @@ impl<T: FftNum> NeonF32Butterfly3<T> {
         let out1 = extract_lo_hi_f32(out[2], out[0]);
         let out2 = extract_hi_hi_f32(out[1], out[2]);
 
-        buffer.store_complex(out0, 0);
-        buffer.store_complex(out1, 2);
-        buffer.store_complex(out2, 4);
+        buffer.store(out0, 0);
+        buffer.store(out1, 2);
+        buffer.store(out2, 4);
     }
 
     // length 3 fft of a, given as [x0, 0.0], [x1, x2]
@@ -486,7 +582,8 @@ impl<T: FftNum> NeonF32Butterfly3<T> {
     ) -> [float32x4_t; 2] {
         // This is a Neon translation of the scalar 3-point butterfly
         let rev12 = reverse_complex_and_negate_hi_f32(value12);
-        let temp12pn = self.rotate.rotate_hi(vaddq_f32(value12, rev12));
+        let rotate_hi = Rotate90HiF32::new(FftDirection::Inverse);
+        let temp12pn = rotate_hi.rotate_hi(vaddq_f32(value12, rev12));
         let temp = vfmaq_f32(value0x, temp12pn, self.twiddle);
 
         let out12 = solo_fft2_f32(temp);
@@ -508,7 +605,8 @@ impl<T: FftNum> NeonF32Butterfly3<T> {
         let x12n = vsubq_f32(value1, value2);
 
         let temp = vfmaq_f32(value0, self.twiddle1re, x12p);
-        let n_rot = self.rotate.rotate_both(x12n);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
+        let n_rot = rotate.rotate(x12n);
 
         let x0 = vaddq_f32(value0, x12p);
         let x1 = vfmaq_f32(temp, self.twiddle1im, n_rot);
@@ -524,10 +622,49 @@ impl<T: FftNum> NeonF32Butterfly3<T> {
 //  |____/            \___/   |_| |_.__/|_|\__|
 //
 
+pub struct NeonF64ParallelButterfly3 {
+    twiddle1re: float64x2_t,
+    twiddle1im: float64x2_t,
+    twiddle2im: float64x2_t,
+}
+impl NeonF64ParallelButterfly3 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(std::arch::is_aarch64_feature_detected!("neon"));
+
+        let tw1: Complex<f64> = twiddles::compute_twiddle(1, 3, direction);
+        Self {
+            twiddle1re: unsafe { vmovq_n_f64(tw1.re) },
+            twiddle1im: unsafe { vmovq_n_f64(tw1.im) },
+            twiddle2im: unsafe { vmovq_n_f64(-tw1.im) },
+        }
+    }
+}
+impl ParallelFft<float64x2_t, 3> for NeonF64ParallelButterfly3 {
+    #[inline(always)]
+    fn parallel_fft(&self, data: [float64x2_t; 3]) -> [float64x2_t; 3] {
+        // Safety: These intrinsics require the NEON target feature. We asserted this feature was present in the constructor.
+        unsafe {
+            // This is a Neon translation of the scalar 3-point butterfly
+            let x12p = vaddq_f64(data[1], data[2]);
+            let x12n = vsubq_f64(data[1], data[2]);
+
+            let temp = vfmaq_f64(data[0], self.twiddle1re, x12p);
+
+            let rotate = Rotate90F64::new(FftDirection::Inverse);
+            let n_rot = rotate.rotate(x12n);
+
+            let x0 = vaddq_f64(data[0], x12p);
+            let x1 = vfmaq_f64(temp, self.twiddle1im, n_rot);
+            let x2 = vfmaq_f64(temp, self.twiddle2im, n_rot);
+            [x0, x1, x2]
+        }
+    }
+}
+
 pub struct NeonF64Butterfly3<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    rotate: Rotate90F64,
     twiddle1re: float64x2_t,
     twiddle1im: float64x2_t,
     twiddle2im: float64x2_t,
@@ -539,7 +676,6 @@ impl<T: FftNum> NeonF64Butterfly3<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let rotate = Rotate90F64::new(true);
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 3, direction);
         let twiddle1re = unsafe { vmovq_n_f64(tw1.re) };
         let twiddle1im = unsafe { vmovq_n_f64(tw1.im) };
@@ -548,7 +684,6 @@ impl<T: FftNum> NeonF64Butterfly3<T> {
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            rotate,
             twiddle1re,
             twiddle1im,
             twiddle2im,
@@ -556,16 +691,19 @@ impl<T: FftNum> NeonF64Butterfly3<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
-        let value0 = buffer.load_complex(0);
-        let value1 = buffer.load_complex(1);
-        let value2 = buffer.load_complex(2);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<float64x2_t>,
+    ) {
+        let value0 = buffer.load(0);
+        let value1 = buffer.load(1);
+        let value2 = buffer.load(2);
 
         let out = self.perform_fft_direct(value0, value1, value2);
 
-        buffer.store_complex(out[0], 0);
-        buffer.store_complex(out[1], 1);
-        buffer.store_complex(out[2], 2);
+        buffer.store(out[0], 0);
+        buffer.store(out[1], 1);
+        buffer.store(out[2], 2);
     }
 
     // length 3 fft of x, given as x0, x1, x2.
@@ -582,7 +720,8 @@ impl<T: FftNum> NeonF64Butterfly3<T> {
         let x12n = vsubq_f64(value1, value2);
 
         let temp = vfmaq_f64(value0, self.twiddle1re, x12p);
-        let n_rot = self.rotate.rotate(x12n);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
+        let n_rot = rotate.rotate(x12n);
 
         let x0 = vaddq_f64(value0, x12p);
         let x1 = vfmaq_f64(temp, self.twiddle1im, n_rot);
@@ -598,10 +737,50 @@ impl<T: FftNum> NeonF64Butterfly3<T> {
 //     |_|           |____/_____|_.__/|_|\__|
 //
 
+pub struct NeonF32ParallelButterfly4 {
+    rotate: Rotate90F32,
+    bf2: NeonF32ParallelButterfly2,
+}
+impl NeonF32ParallelButterfly4 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(std::arch::is_aarch64_feature_detected!("neon"));
+
+        Self {
+            rotate: Rotate90F32::new(direction),
+            bf2: NeonF32ParallelButterfly2::new(direction),
+        }
+    }
+}
+impl ParallelFft<float32x4_t, 4> for NeonF32ParallelButterfly4 {
+    #[inline(always)]
+    fn parallel_fft(&self, data: [float32x4_t; 4]) -> [float32x4_t; 4] {
+        // step 1: transpose
+        // and
+        // step 2: column FFTs
+        let temp0 = self.bf2.parallel_fft([data[0], data[2]]);
+        let mut temp1 = self.bf2.parallel_fft([data[1], data[3]]);
+
+        // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
+        // Safety: `rotate` require the NEON target feature. We asserted this feature was present in the constructor.
+        temp1[1] = unsafe { self.rotate.rotate(temp1[1]) };
+
+        // step 4: transpose
+        // and
+        // step 5: row FFTs
+        let out0 = self.bf2.parallel_fft([temp0[0], temp1[0]]);
+        let out2 = self.bf2.parallel_fft([temp0[1], temp1[1]]);
+
+        // step 6: transpose by swapping index 1 and 2
+        [out0[0], out2[0], out0[1], out2[1]]
+    }
+}
+
 pub struct NeonF32Butterfly4<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
     rotate: Rotate90F32,
+    rotate_hi: Rotate90HiF32,
 }
 
 boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly4, 4, |this: &NeonF32Butterfly4<_>| this
@@ -610,37 +789,36 @@ impl<T: FftNum> NeonF32Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let rotate = if direction == FftDirection::Inverse {
-            Rotate90F32::new(true)
-        } else {
-            Rotate90F32::new(false)
-        };
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            rotate,
+            rotate: Rotate90F32::new(direction),
+            rotate_hi: Rotate90HiF32::new(direction),
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
-        let value01 = buffer.load_complex(0);
-        let value23 = buffer.load_complex(2);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<float32x4_t>,
+    ) {
+        let value01 = buffer.load(0);
+        let value23 = buffer.load(2);
 
         let out = self.perform_fft_direct(value01, value23);
 
-        buffer.store_complex(out[0], 0);
-        buffer.store_complex(out[1], 2);
+        buffer.store(out[0], 0);
+        buffer.store(out[1], 2);
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<float32x4_t>,
     ) {
-        let value01a = buffer.load_complex(0);
-        let value23a = buffer.load_complex(2);
-        let value01b = buffer.load_complex(4);
-        let value23b = buffer.load_complex(6);
+        let value01a = buffer.load(0);
+        let value23a = buffer.load(2);
+        let value01b = buffer.load(4);
+        let value23b = buffer.load(6);
 
         let [value0ab, value1ab] = transpose_complex_2x2_f32(value01a, value01b);
         let [value2ab, value3ab] = transpose_complex_2x2_f32(value23a, value23b);
@@ -650,10 +828,10 @@ impl<T: FftNum> NeonF32Butterfly4<T> {
         let [out0, out1] = transpose_complex_2x2_f32(out[0], out[1]);
         let [out2, out3] = transpose_complex_2x2_f32(out[2], out[3]);
 
-        buffer.store_complex(out0, 0);
-        buffer.store_complex(out1, 4);
-        buffer.store_complex(out2, 2);
-        buffer.store_complex(out3, 6);
+        buffer.store(out0, 0);
+        buffer.store(out1, 4);
+        buffer.store(out2, 2);
+        buffer.store(out3, 6);
     }
 
     // length 4 fft of a, given as [x0, x1], [x2, x3]
@@ -673,7 +851,7 @@ impl<T: FftNum> NeonF32Butterfly4<T> {
         let mut temp = parallel_fft2_interleaved_f32(value01, value23);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-        temp[1] = self.rotate.rotate_hi(temp[1]);
+        temp[1] = self.rotate_hi.rotate_hi(temp[1]);
 
         // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
@@ -698,7 +876,7 @@ impl<T: FftNum> NeonF32Butterfly4<T> {
         let mut temp1 = parallel_fft2_interleaved_f32(values[1], values[3]);
 
         // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-        temp1[1] = self.rotate.rotate_both(temp1[1]);
+        temp1[1] = self.rotate.rotate(temp1[1]);
 
         // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
@@ -718,6 +896,45 @@ impl<T: FftNum> NeonF32Butterfly4<T> {
 //     |_|            \___/   |_| |_.__/|_|\__|
 //
 
+pub struct NeonF64ParallelButterfly4 {
+    rotate: Rotate90F64,
+    bf2: NeonF64ParallelButterfly2,
+}
+impl NeonF64ParallelButterfly4 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(std::arch::is_aarch64_feature_detected!("neon"));
+
+        Self {
+            rotate: Rotate90F64::new(direction),
+            bf2: NeonF64ParallelButterfly2::new(direction),
+        }
+    }
+}
+impl ParallelFft<float64x2_t, 4> for NeonF64ParallelButterfly4 {
+    #[inline(always)]
+    fn parallel_fft(&self, data: [float64x2_t; 4]) -> [float64x2_t; 4] {
+        // step 1: transpose
+        // and
+        // step 2: column FFTs
+        let temp0 = self.bf2.parallel_fft([data[0], data[2]]);
+        let mut temp1 = self.bf2.parallel_fft([data[1], data[3]]);
+
+        // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
+        // Safety: `rotate` require the NEON target feature. We asserted this feature was present in the constructor.
+        temp1[1] = unsafe { self.rotate.rotate(temp1[1]) };
+
+        // step 4: transpose
+        // and
+        // step 5: row FFTs
+        let out0 = self.bf2.parallel_fft([temp0[0], temp1[0]]);
+        let out2 = self.bf2.parallel_fft([temp0[1], temp1[1]]);
+
+        // step 6: transpose by swapping index 1 and 2
+        [out0[0], out2[0], out0[1], out2[1]]
+    }
+}
+
 pub struct NeonF64Butterfly4<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
@@ -730,32 +947,29 @@ impl<T: FftNum> NeonF64Butterfly4<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let rotate = if direction == FftDirection::Inverse {
-            Rotate90F64::new(true)
-        } else {
-            Rotate90F64::new(false)
-        };
-
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            rotate,
+            rotate: Rotate90F64::new(direction),
         }
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
-        let value0 = buffer.load_complex(0);
-        let value1 = buffer.load_complex(1);
-        let value2 = buffer.load_complex(2);
-        let value3 = buffer.load_complex(3);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<float64x2_t>,
+    ) {
+        let value0 = buffer.load(0);
+        let value1 = buffer.load(1);
+        let value2 = buffer.load(2);
+        let value3 = buffer.load(3);
 
         let out = self.perform_fft_direct([value0, value1, value2, value3]);
 
-        buffer.store_complex(out[0], 0);
-        buffer.store_complex(out[1], 1);
-        buffer.store_complex(out[2], 2);
-        buffer.store_complex(out[3], 3);
+        buffer.store(out[0], 0);
+        buffer.store(out[1], 1);
+        buffer.store(out[2], 2);
+        buffer.store(out[3], 3);
     }
 
     #[inline(always)]
@@ -790,10 +1004,66 @@ impl<T: FftNum> NeonF64Butterfly4<T> {
 //  |____/           |____/_____|_.__/|_|\__|
 //
 
+pub struct NeonF32ParallelButterfly5 {
+    twiddle1re: float32x4_t,
+    twiddle1im: float32x4_t,
+    twiddle2re: float32x4_t,
+    twiddle2im: float32x4_t,
+}
+impl NeonF32ParallelButterfly5 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(std::arch::is_aarch64_feature_detected!("neon"));
+
+        let tw1: Complex<f32> = twiddles::compute_twiddle(1, 5, direction);
+        let tw2: Complex<f32> = twiddles::compute_twiddle(2, 5, direction);
+        Self {
+            twiddle1re: unsafe { vmovq_n_f32(tw1.re) },
+            twiddle1im: unsafe { vmovq_n_f32(tw1.im) },
+            twiddle2re: unsafe { vmovq_n_f32(tw2.re) },
+            twiddle2im: unsafe { vmovq_n_f32(tw2.im) },
+        }
+    }
+}
+impl ParallelFft<float32x4_t, 5> for NeonF32ParallelButterfly5 {
+    #[inline(always)]
+    fn parallel_fft(&self, data: [float32x4_t; 5]) -> [float32x4_t; 5] {
+        // Safety: These intrinsics require the NEON target feature. We asserted this feature was present in the constructor.
+        unsafe {
+            let x14p = vaddq_f32(data[1], data[4]);
+            let x14n = vsubq_f32(data[1], data[4]);
+            let x23p = vaddq_f32(data[2], data[3]);
+            let x23n = vsubq_f32(data[2], data[3]);
+
+            let temp_a1_1 = vmulq_f32(self.twiddle1re, x14p);
+            let temp_a1_2 = vmulq_f32(self.twiddle2re, x23p);
+            let temp_b1_1 = vmulq_f32(self.twiddle1im, x14n);
+            let temp_b1_2 = vmulq_f32(self.twiddle2im, x23n);
+            let temp_a2_1 = vmulq_f32(self.twiddle1re, x23p);
+            let temp_a2_2 = vmulq_f32(self.twiddle2re, x14p);
+            let temp_b2_1 = vmulq_f32(self.twiddle2im, x14n);
+            let temp_b2_2 = vmulq_f32(self.twiddle1im, x23n);
+
+            let temp_a1 = vaddq_f32(data[0], vaddq_f32(temp_a1_1, temp_a1_2));
+            let temp_b1 = vaddq_f32(temp_b1_1, temp_b1_2);
+            let temp_a2 = vaddq_f32(data[0], vaddq_f32(temp_a2_1, temp_a2_2));
+            let temp_b2 = vsubq_f32(temp_b2_1, temp_b2_2);
+
+            let rotate = Rotate90F32::new(FftDirection::Inverse);
+            [
+                vaddq_f32(data[0], vaddq_f32(x14p, x23p)),
+                vaddq_f32(temp_a1, rotate.rotate(temp_b1)),
+                vaddq_f32(temp_a2, rotate.rotate(temp_b2)),
+                vsubq_f32(temp_a2, rotate.rotate(temp_b2)),
+                vsubq_f32(temp_a1, rotate.rotate(temp_b1)),
+            ]
+        }
+    }
+}
+
 pub struct NeonF32Butterfly5<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    rotate: Rotate90F32,
     twiddle12re: float32x4_t,
     twiddle21re: float32x4_t,
     twiddle12im: float32x4_t,
@@ -810,7 +1080,6 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
-        let rotate = Rotate90F32::new(true);
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 5, direction);
         let tw2: Complex<f32> = twiddles::compute_twiddle(2, 5, direction);
         let twiddle12re = unsafe { vld1q_f32([tw1.re, tw1.re, tw2.re, tw2.re].as_ptr()) };
@@ -825,7 +1094,6 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            rotate,
             twiddle12re,
             twiddle21re,
             twiddle12im,
@@ -837,22 +1105,25 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
         }
     }
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
-        let value00 = buffer.load1_complex(0);
-        let value12 = buffer.load_complex(1);
-        let value34 = buffer.load_complex(3);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<float32x4_t>,
+    ) {
+        let value00 = buffer.load1_dup(0);
+        let value12 = buffer.load(1);
+        let value34 = buffer.load(3);
 
         let out = self.perform_fft_direct(value00, value12, value34);
 
-        buffer.store_partial_lo_complex(out[0], 0);
-        buffer.store_complex(out[1], 1);
-        buffer.store_complex(out[2], 3);
+        buffer.store1_lo(out[0], 0);
+        buffer.store(out[1], 1);
+        buffer.store(out[2], 3);
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<float32x4_t>,
     ) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4 ,6, 8});
 
@@ -902,7 +1173,8 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
         let temp_a = vaddq_f32(value00, temp_a);
         let temp_b = vfmaq_f32(temp_b1, self.twiddle21im, x2323n);
 
-        let b_rot = self.rotate.rotate_both(temp_b);
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
+        let b_rot = rotate.rotate(temp_b);
 
         let x00 = vaddq_f32(value00, vaddq_f32(x1414p, x2323p));
 
@@ -942,12 +1214,13 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
         let temp_a2 = vaddq_f32(value0, vaddq_f32(temp_a2_1, temp_a2_2));
         let temp_b2 = vsubq_f32(temp_b2_1, temp_b2_2);
 
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
         [
             vaddq_f32(value0, vaddq_f32(x14p, x23p)),
-            vaddq_f32(temp_a1, self.rotate.rotate_both(temp_b1)),
-            vaddq_f32(temp_a2, self.rotate.rotate_both(temp_b2)),
-            vsubq_f32(temp_a2, self.rotate.rotate_both(temp_b2)),
-            vsubq_f32(temp_a1, self.rotate.rotate_both(temp_b1)),
+            vaddq_f32(temp_a1, rotate.rotate(temp_b1)),
+            vaddq_f32(temp_a2, rotate.rotate(temp_b2)),
+            vsubq_f32(temp_a2, rotate.rotate(temp_b2)),
+            vsubq_f32(temp_a1, rotate.rotate(temp_b1)),
         ]
     }
 }
@@ -959,10 +1232,66 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
 //  |____/            \___/   |_| |_.__/|_|\__|
 //
 
+pub struct NeonF64ParallelButterfly5 {
+    twiddle1re: float64x2_t,
+    twiddle1im: float64x2_t,
+    twiddle2re: float64x2_t,
+    twiddle2im: float64x2_t,
+}
+impl NeonF64ParallelButterfly5 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(std::arch::is_aarch64_feature_detected!("neon"));
+
+        let tw1: Complex<f64> = twiddles::compute_twiddle(1, 5, direction);
+        let tw2: Complex<f64> = twiddles::compute_twiddle(2, 5, direction);
+        Self {
+            twiddle1re: unsafe { vmovq_n_f64(tw1.re) },
+            twiddle1im: unsafe { vmovq_n_f64(tw1.im) },
+            twiddle2re: unsafe { vmovq_n_f64(tw2.re) },
+            twiddle2im: unsafe { vmovq_n_f64(tw2.im) },
+        }
+    }
+}
+impl ParallelFft<float64x2_t, 5> for NeonF64ParallelButterfly5 {
+    #[inline(always)]
+    fn parallel_fft(&self, data: [float64x2_t; 5]) -> [float64x2_t; 5] {
+        // Safety: These intrinsics require the NEON target feature. We asserted this feature was present in the constructor.
+        unsafe {
+            let x14p = vaddq_f64(data[1], data[4]);
+            let x14n = vsubq_f64(data[1], data[4]);
+            let x23p = vaddq_f64(data[2], data[3]);
+            let x23n = vsubq_f64(data[2], data[3]);
+
+            let temp_a1_1 = vmulq_f64(self.twiddle1re, x14p);
+            let temp_a1_2 = vmulq_f64(self.twiddle2re, x23p);
+            let temp_b1_1 = vmulq_f64(self.twiddle1im, x14n);
+            let temp_b1_2 = vmulq_f64(self.twiddle2im, x23n);
+            let temp_a2_1 = vmulq_f64(self.twiddle1re, x23p);
+            let temp_a2_2 = vmulq_f64(self.twiddle2re, x14p);
+            let temp_b2_1 = vmulq_f64(self.twiddle2im, x14n);
+            let temp_b2_2 = vmulq_f64(self.twiddle1im, x23n);
+
+            let temp_a1 = vaddq_f64(data[0], vaddq_f64(temp_a1_1, temp_a1_2));
+            let temp_b1 = vaddq_f64(temp_b1_1, temp_b1_2);
+            let temp_a2 = vaddq_f64(data[0], vaddq_f64(temp_a2_1, temp_a2_2));
+            let temp_b2 = vsubq_f64(temp_b2_1, temp_b2_2);
+
+            let rotate = Rotate90F64::new(FftDirection::Inverse);
+            [
+                vaddq_f64(data[0], vaddq_f64(x14p, x23p)),
+                vaddq_f64(temp_a1, rotate.rotate(temp_b1)),
+                vaddq_f64(temp_a2, rotate.rotate(temp_b2)),
+                vsubq_f64(temp_a2, rotate.rotate(temp_b2)),
+                vsubq_f64(temp_a1, rotate.rotate(temp_b1)),
+            ]
+        }
+    }
+}
+
 pub struct NeonF64Butterfly5<T> {
     direction: FftDirection,
     _phantom: std::marker::PhantomData<T>,
-    rotate: Rotate90F64,
     twiddle1re: float64x2_t,
     twiddle1im: float64x2_t,
     twiddle2re: float64x2_t,
@@ -975,7 +1304,6 @@ impl<T: FftNum> NeonF64Butterfly5<T> {
     #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        let rotate = Rotate90F64::new(true);
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 5, direction);
         let tw2: Complex<f64> = twiddles::compute_twiddle(2, 5, direction);
         let twiddle1re = unsafe { vmovq_n_f64(tw1.re) };
@@ -986,7 +1314,6 @@ impl<T: FftNum> NeonF64Butterfly5<T> {
         Self {
             direction,
             _phantom: std::marker::PhantomData,
-            rotate,
             twiddle1re,
             twiddle1im,
             twiddle2re,
@@ -995,20 +1322,23 @@ impl<T: FftNum> NeonF64Butterfly5<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
-        let value0 = buffer.load_complex(0);
-        let value1 = buffer.load_complex(1);
-        let value2 = buffer.load_complex(2);
-        let value3 = buffer.load_complex(3);
-        let value4 = buffer.load_complex(4);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<float64x2_t>,
+    ) {
+        let value0 = buffer.load(0);
+        let value1 = buffer.load(1);
+        let value2 = buffer.load(2);
+        let value3 = buffer.load(3);
+        let value4 = buffer.load(4);
 
         let out = self.perform_fft_direct(value0, value1, value2, value3, value4);
 
-        buffer.store_complex(out[0], 0);
-        buffer.store_complex(out[1], 1);
-        buffer.store_complex(out[2], 2);
-        buffer.store_complex(out[3], 3);
-        buffer.store_complex(out[4], 4);
+        buffer.store(out[0], 0);
+        buffer.store(out[1], 1);
+        buffer.store(out[2], 2);
+        buffer.store(out[3], 3);
+        buffer.store(out[4], 4);
     }
 
     // length 5 fft of x, given as x0, x1, x2, x3, x4.
@@ -1044,8 +1374,9 @@ impl<T: FftNum> NeonF64Butterfly5<T> {
         let temp_b1 = vaddq_f64(temp_b1_1, temp_b1_2);
         let temp_b2 = vsubq_f64(temp_b2_1, temp_b2_2);
 
-        let temp_b1_rot = self.rotate.rotate(temp_b1);
-        let temp_b2_rot = self.rotate.rotate(temp_b2);
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
+        let temp_b1_rot = rotate.rotate(temp_b1);
+        let temp_b2_rot = rotate.rotate(temp_b2);
         [
             vaddq_f64(value0, vaddq_f64(x14p, x23p)),
             vaddq_f64(temp_a1, temp_b1_rot),
@@ -1062,6 +1393,42 @@ impl<T: FftNum> NeonF64Butterfly5<T> {
 //  | (_) | |_____|  ___) / __/| |_) | | |_
 //   \___/          |____/_____|_.__/|_|\__|
 //
+
+pub struct NeonF32ParallelButterfly6 {
+    bf2: NeonF32ParallelButterfly2,
+    bf3: NeonF32ParallelButterfly3,
+}
+impl NeonF32ParallelButterfly6 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(std::arch::is_aarch64_feature_detected!("neon"));
+
+        Self {
+            bf2: NeonF32ParallelButterfly2::new(direction),
+            bf3: NeonF32ParallelButterfly3::new(direction),
+        }
+    }
+}
+impl ParallelFft<float32x4_t, 6> for NeonF32ParallelButterfly6 {
+    #[inline(always)]
+    fn parallel_fft(&self, data: [float32x4_t; 6]) -> [float32x4_t; 6] {
+        // Algorithm: 3x2 good-thomas
+
+        // Size-3 FFTs down the columns of our reordered array
+        let mid0 = self.bf3.parallel_fft([data[0], data[2], data[4]]);
+        let mid1 = self.bf3.parallel_fft([data[3], data[5], data[1]]);
+
+        // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
+
+        // Transpose the data and do size-2 FFTs down the columns
+        let [output0, output1] = self.bf2.parallel_fft([mid0[0], mid1[0]]);
+        let [output2, output3] = self.bf2.parallel_fft([mid0[1], mid1[1]]);
+        let [output4, output5] = self.bf2.parallel_fft([mid0[2], mid1[2]]);
+
+        // Reorder into output
+        [output0, output3, output4, output1, output2, output5]
+    }
+}
 
 pub struct NeonF32Butterfly6<T> {
     _phantom: std::marker::PhantomData<T>,
@@ -1084,22 +1451,25 @@ impl<T: FftNum> NeonF32Butterfly6<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
-        let value01 = buffer.load_complex(0);
-        let value23 = buffer.load_complex(2);
-        let value45 = buffer.load_complex(4);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<float32x4_t>,
+    ) {
+        let value01 = buffer.load(0);
+        let value23 = buffer.load(2);
+        let value45 = buffer.load(4);
 
         let out = self.perform_fft_direct(value01, value23, value45);
 
-        buffer.store_complex(out[0], 0);
-        buffer.store_complex(out[1], 2);
-        buffer.store_complex(out[2], 4);
+        buffer.store(out[0], 0);
+        buffer.store(out[1], 2);
+        buffer.store(out[2], 4);
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<float32x4_t>,
     ) {
         let input_packed = read_complex_to_array!(buffer,  {0, 2, 4, 6, 8, 10});
 
@@ -1178,6 +1548,42 @@ impl<T: FftNum> NeonF32Butterfly6<T> {
 //   \___/           \___/   |_| |_.__/|_|\__|
 //
 
+pub struct NeonF64ParallelButterfly6 {
+    bf2: NeonF64ParallelButterfly2,
+    bf3: NeonF64ParallelButterfly3,
+}
+impl NeonF64ParallelButterfly6 {
+    #[inline(always)]
+    pub fn new(direction: FftDirection) -> Self {
+        assert!(std::arch::is_aarch64_feature_detected!("neon"));
+
+        Self {
+            bf2: NeonF64ParallelButterfly2::new(direction),
+            bf3: NeonF64ParallelButterfly3::new(direction),
+        }
+    }
+}
+impl ParallelFft<float64x2_t, 6> for NeonF64ParallelButterfly6 {
+    #[inline(always)]
+    fn parallel_fft(&self, data: [float64x2_t; 6]) -> [float64x2_t; 6] {
+        // Algorithm: 3x2 good-thomas
+
+        // Size-3 FFTs down the columns of our reordered array
+        let mid0 = self.bf3.parallel_fft([data[0], data[2], data[4]]);
+        let mid1 = self.bf3.parallel_fft([data[3], data[5], data[1]]);
+
+        // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
+
+        // Transpose the data and do size-2 FFTs down the columns
+        let [output0, output1] = self.bf2.parallel_fft([mid0[0], mid1[0]]);
+        let [output2, output3] = self.bf2.parallel_fft([mid0[1], mid1[1]]);
+        let [output4, output5] = self.bf2.parallel_fft([mid0[2], mid1[2]]);
+
+        // Reorder into output
+        [output0, output3, output4, output1, output2, output5]
+    }
+}
+
 pub struct NeonF64Butterfly6<T> {
     _phantom: std::marker::PhantomData<T>,
     bf3: NeonF64Butterfly3<T>,
@@ -1199,22 +1605,25 @@ impl<T: FftNum> NeonF64Butterfly6<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
-        let value0 = buffer.load_complex(0);
-        let value1 = buffer.load_complex(1);
-        let value2 = buffer.load_complex(2);
-        let value3 = buffer.load_complex(3);
-        let value4 = buffer.load_complex(4);
-        let value5 = buffer.load_complex(5);
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<float64x2_t>,
+    ) {
+        let value0 = buffer.load(0);
+        let value1 = buffer.load(1);
+        let value2 = buffer.load(2);
+        let value3 = buffer.load(3);
+        let value4 = buffer.load(4);
+        let value5 = buffer.load(5);
 
         let out = self.perform_fft_direct([value0, value1, value2, value3, value4, value5]);
 
-        buffer.store_complex(out[0], 0);
-        buffer.store_complex(out[1], 1);
-        buffer.store_complex(out[2], 2);
-        buffer.store_complex(out[3], 3);
-        buffer.store_complex(out[4], 4);
-        buffer.store_complex(out[5], 5);
+        buffer.store(out[0], 0);
+        buffer.store(out[1], 1);
+        buffer.store(out[2], 2);
+        buffer.store(out[3], 3);
+        buffer.store(out[4], 4);
+        buffer.store(out[5], 5);
     }
 
     #[inline(always)]
@@ -1249,6 +1658,7 @@ pub struct NeonF32Butterfly8<T> {
     root2_dual: float32x4_t,
     bf4: NeonF32Butterfly4<T>,
     rotate90: Rotate90F32,
+    rotate90_hi: Rotate90HiF32,
 }
 
 boilerplate_fft_neon_f32_butterfly!(NeonF32Butterfly8, 8, |this: &NeonF32Butterfly8<_>| this
@@ -1262,21 +1672,17 @@ impl<T: FftNum> NeonF32Butterfly8<T> {
         let root2 =
             unsafe { vld1q_f32([1.0, 1.0, 0.5f32.sqrt(), 0.5f32.sqrt(), 1.0, 1.0].as_ptr()) };
         let root2_dual = unsafe { vmovq_n_f32(0.5f32.sqrt()) };
-        let rotate90 = if direction == FftDirection::Inverse {
-            Rotate90F32::new(true)
-        } else {
-            Rotate90F32::new(false)
-        };
         Self {
             root2,
             root2_dual,
             bf4,
-            rotate90,
+            rotate90: Rotate90F32::new(direction),
+            rotate90_hi: Rotate90HiF32::new(direction),
         }
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<float32x4_t>) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6});
 
         let out = self.perform_fft_direct(input_packed);
@@ -1287,7 +1693,7 @@ impl<T: FftNum> NeonF32Butterfly8<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<float32x4_t>,
     ) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14});
 
@@ -1312,12 +1718,12 @@ impl<T: FftNum> NeonF32Butterfly8<T> {
         let mut val2 = self.bf4.perform_fft_direct(in13, in57);
 
         // step 3: apply twiddle factors
-        let val2b = self.rotate90.rotate_hi(val2[0]);
+        let val2b = self.rotate90_hi.rotate_hi(val2[0]);
         let val2c = vaddq_f32(val2b, val2[0]);
         let val2d = vmulq_f32(val2c, self.root2);
         val2[0] = extract_lo_hi_f32(val2[0], val2d);
 
-        let val3b = self.rotate90.rotate_both(val2[1]);
+        let val3b = self.rotate90.rotate(val2[1]);
         let val3c = vsubq_f32(val3b, val2[1]);
         let val3d = vmulq_f32(val3c, self.root2);
         val2[1] = extract_lo_hi_f32(val3b, val3d);
@@ -1346,11 +1752,11 @@ impl<T: FftNum> NeonF32Butterfly8<T> {
             .perform_parallel_fft_direct([values[1], values[3], values[5], values[7]]);
 
         // step 3: apply twiddle factors
-        let val5b = self.rotate90.rotate_both(val47[1]);
+        let val5b = self.rotate90.rotate(val47[1]);
         let val5c = vaddq_f32(val5b, val47[1]);
         val47[1] = vmulq_f32(val5c, self.root2_dual);
-        val47[2] = self.rotate90.rotate_both(val47[2]);
-        let val7b = self.rotate90.rotate_both(val47[3]);
+        val47[2] = self.rotate90.rotate(val47[2]);
+        let val7b = self.rotate90.rotate(val47[3]);
         let val7c = vsubq_f32(val7b, val47[3]);
         val47[3] = vmulq_f32(val7c, self.root2_dual);
 
@@ -1391,20 +1797,15 @@ impl<T: FftNum> NeonF64Butterfly8<T> {
         assert_f64::<T>();
         let bf4 = NeonF64Butterfly4::new(direction);
         let root2 = unsafe { vmovq_n_f64(0.5f64.sqrt()) };
-        let rotate90 = if direction == FftDirection::Inverse {
-            Rotate90F64::new(true)
-        } else {
-            Rotate90F64::new(false)
-        };
         Self {
             root2,
             bf4,
-            rotate90,
+            rotate90: Rotate90F64::new(direction),
         }
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<float64x2_t>) {
         let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7});
 
         let out = self.perform_fft_direct(values);
@@ -1488,21 +1889,24 @@ impl<T: FftNum> NeonF32Butterfly9<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<float32x4_t>,
+    ) {
         // A single Neon 9-point will need a lot of shuffling, let's just reuse the dual one
         let values = read_partial1_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8});
 
         let out = self.perform_parallel_fft_direct(values);
 
         for n in 0..9 {
-            buffer.store_partial_lo_complex(out[n], n);
+            buffer.store1_lo(out[n], n);
         }
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<float32x4_t>,
     ) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16});
 
@@ -1554,10 +1958,10 @@ impl<T: FftNum> NeonF32Butterfly9<T> {
             .perform_parallel_fft_direct(values[2], values[5], values[8]);
 
         // Apply twiddle factors. Note that we're re-using twiddle2
-        mid1[1] = NeonVector::mul_complex(self.twiddle1, mid1[1]);
-        mid1[2] = NeonVector::mul_complex(self.twiddle2, mid1[2]);
-        mid2[1] = NeonVector::mul_complex(self.twiddle2, mid2[1]);
-        mid2[2] = NeonVector::mul_complex(self.twiddle4, mid2[2]);
+        mid1[1] = SimdVector::mul_complex(self.twiddle1, mid1[1]);
+        mid1[2] = SimdVector::mul_complex(self.twiddle2, mid1[2]);
+        mid2[1] = SimdVector::mul_complex(self.twiddle2, mid2[1]);
+        mid2[2] = SimdVector::mul_complex(self.twiddle4, mid2[2]);
 
         let [output0, output1, output2] = self
             .bf3
@@ -1615,7 +2019,10 @@ impl<T: FftNum> NeonF64Butterfly9<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<float64x2_t>,
+    ) {
         let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8});
 
         let out = self.perform_fft_direct(values);
@@ -1633,10 +2040,10 @@ impl<T: FftNum> NeonF64Butterfly9<T> {
         let mut mid2 = self.bf3.perform_fft_direct(values[2], values[5], values[8]);
 
         // Apply twiddle factors. Note that we're re-using twiddle2
-        mid1[1] = NeonVector::mul_complex(self.twiddle1, mid1[1]);
-        mid1[2] = NeonVector::mul_complex(self.twiddle2, mid1[2]);
-        mid2[1] = NeonVector::mul_complex(self.twiddle2, mid2[1]);
-        mid2[2] = NeonVector::mul_complex(self.twiddle4, mid2[2]);
+        mid1[1] = SimdVector::mul_complex(self.twiddle1, mid1[1]);
+        mid1[2] = SimdVector::mul_complex(self.twiddle2, mid1[2]);
+        mid2[1] = SimdVector::mul_complex(self.twiddle2, mid2[1]);
+        mid2[2] = SimdVector::mul_complex(self.twiddle4, mid2[2]);
 
         let [output0, output1, output2] = self.bf3.perform_fft_direct(mid0[0], mid1[0], mid2[0]);
         let [output3, output4, output5] = self.bf3.perform_fft_direct(mid0[1], mid1[1], mid2[1]);
@@ -1675,7 +2082,7 @@ impl<T: FftNum> NeonF32Butterfly10<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<float32x4_t>) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8});
 
         let out = self.perform_fft_direct(input_packed);
@@ -1686,7 +2093,7 @@ impl<T: FftNum> NeonF32Butterfly10<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<float32x4_t>,
     ) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18});
 
@@ -1793,7 +2200,10 @@ impl<T: FftNum> NeonF64Butterfly10<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<float64x2_t>,
+    ) {
         let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
 
         let out = self.perform_fft_direct(values);
@@ -1860,7 +2270,7 @@ impl<T: FftNum> NeonF32Butterfly12<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<float32x4_t>) {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10 });
 
         let out = self.perform_fft_direct(input_packed);
@@ -1871,7 +2281,7 @@ impl<T: FftNum> NeonF32Butterfly12<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<float32x4_t>,
     ) {
         let input_packed =
             read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22});
@@ -1995,7 +2405,10 @@ impl<T: FftNum> NeonF64Butterfly12<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<float64x2_t>,
+    ) {
         let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11});
 
         let out = self.perform_fft_direct(values);
@@ -2062,21 +2475,24 @@ impl<T: FftNum> NeonF32Butterfly15<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<float32x4_t>,
+    ) {
         // A single Neon 15-point will need a lot of shuffling, let's just reuse the dual one
         let values = read_partial1_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14});
 
         let out = self.perform_parallel_fft_direct(values);
 
         for n in 0..15 {
-            buffer.store_partial_lo_complex(out[n], n);
+            buffer.store1_lo(out[n], n);
         }
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<float32x4_t>,
     ) {
         let input_packed =
             read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28});
@@ -2196,7 +2612,10 @@ impl<T: FftNum> NeonF64Butterfly15<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(
+        &self,
+        mut buffer: impl SimdComplexArrayMut<float64x2_t>,
+    ) {
         let values =
             read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
 
@@ -2284,7 +2703,7 @@ impl<T: FftNum> NeonF32Butterfly16<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<float32x4_t>) {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -2294,34 +2713,34 @@ impl<T: FftNum> NeonF32Butterfly16<T> {
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i| {
             [
-                buffer.load_complex(i),
-                buffer.load_complex(i + 4),
-                buffer.load_complex(i + 8),
-                buffer.load_complex(i + 12),
+                buffer.load(i),
+                buffer.load(i + 4),
+                buffer.load(i + 8),
+                buffer.load(i + 12),
             ]
         };
 
         // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors, and transpose
         let mut tmp0 = self.bf4.perform_parallel_fft_direct(load(0));
-        tmp0[1] = NeonVector::mul_complex(tmp0[1], self.twiddles_packed[0]);
-        tmp0[2] = NeonVector::mul_complex(tmp0[2], self.twiddles_packed[1]);
-        tmp0[3] = NeonVector::mul_complex(tmp0[3], self.twiddles_packed[2]);
+        tmp0[1] = SimdVector::mul_complex(tmp0[1], self.twiddles_packed[0]);
+        tmp0[2] = SimdVector::mul_complex(tmp0[2], self.twiddles_packed[1]);
+        tmp0[3] = SimdVector::mul_complex(tmp0[3], self.twiddles_packed[2]);
         let [mid0, mid1] = transpose_complex_2x2_f32(tmp0[0], tmp0[1]);
         let [mid4, mid5] = transpose_complex_2x2_f32(tmp0[2], tmp0[3]);
 
         let mut tmp1 = self.bf4.perform_parallel_fft_direct(load(2));
-        tmp1[1] = NeonVector::mul_complex(tmp1[1], self.twiddles_packed[3]);
-        tmp1[2] = NeonVector::mul_complex(tmp1[2], self.twiddles_packed[4]);
-        tmp1[3] = NeonVector::mul_complex(tmp1[3], self.twiddles_packed[5]);
+        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddles_packed[3]);
+        tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddles_packed[4]);
+        tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddles_packed[5]);
         let [mid2, mid3] = transpose_complex_2x2_f32(tmp1[0], tmp1[1]);
         let [mid6, mid7] = transpose_complex_2x2_f32(tmp1[2], tmp1[3]);
 
         ////////////////////////////////////////////////////////////
         let mut store = |i: usize, vectors: [float32x4_t; 4]| {
-            buffer.store_complex(vectors[0], i + 0);
-            buffer.store_complex(vectors[1], i + 4);
-            buffer.store_complex(vectors[2], i + 8);
-            buffer.store_complex(vectors[3], i + 12);
+            buffer.store(vectors[0], i + 0);
+            buffer.store(vectors[1], i + 4);
+            buffer.store(vectors[2], i + 8);
+            buffer.store(vectors[3], i + 12);
         };
         // Size-4 FFTs down each pair of transposed columns, storing them as soon as we're done with them
         let out0 = self
@@ -2337,7 +2756,7 @@ impl<T: FftNum> NeonF32Butterfly16<T> {
 
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<float32x4_t>,
     ) {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
@@ -2347,14 +2766,10 @@ impl<T: FftNum> NeonF32Butterfly16<T> {
         //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i: usize| {
-            let [a0, a1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 0), buffer.load_complex(i + 16));
-            let [b0, b1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 4), buffer.load_complex(i + 20));
-            let [c0, c1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 8), buffer.load_complex(i + 24));
-            let [d0, d1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 12), buffer.load_complex(i + 28));
+            let [a0, a1] = transpose_complex_2x2_f32(buffer.load(i + 0), buffer.load(i + 16));
+            let [b0, b1] = transpose_complex_2x2_f32(buffer.load(i + 4), buffer.load(i + 20));
+            let [c0, c1] = transpose_complex_2x2_f32(buffer.load(i + 8), buffer.load(i + 24));
+            let [d0, d1] = transpose_complex_2x2_f32(buffer.load(i + 12), buffer.load(i + 28));
             [[a0, b0, c0, d0], [a1, b1, c1, d1]]
         };
 
@@ -2362,27 +2777,27 @@ impl<T: FftNum> NeonF32Butterfly16<T> {
         let [in2, in3] = load(2);
         let mut tmp2 = self.bf4.perform_parallel_fft_direct(in2);
         let mut tmp3 = self.bf4.perform_parallel_fft_direct(in3);
-        tmp2[1] = self.bf4.rotate.rotate_both_45(tmp2[1]);
-        tmp2[2] = self.bf4.rotate.rotate_both(tmp2[2]);
-        tmp2[3] = self.bf4.rotate.rotate_both_135(tmp2[3]);
-        tmp3[1] = NeonVector::mul_complex(tmp3[1], self.twiddle3);
-        tmp3[2] = self.bf4.rotate.rotate_both_135(tmp3[2]);
-        tmp3[3] = NeonVector::mul_complex(tmp3[3], self.twiddle9);
+        tmp2[1] = self.bf4.rotate.rotate_45(tmp2[1]);
+        tmp2[2] = self.bf4.rotate.rotate(tmp2[2]);
+        tmp2[3] = self.bf4.rotate.rotate_135(tmp2[3]);
+        tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddle3);
+        tmp3[2] = self.bf4.rotate.rotate_135(tmp3[2]);
+        tmp3[3] = SimdVector::mul_complex(tmp3[3], self.twiddle9);
 
         // Do these last, because fewer twiddles means fewer temporaries forcing the above data to spill
         let [in0, in1] = load(0);
         let tmp0 = self.bf4.perform_parallel_fft_direct(in0);
         let mut tmp1 = self.bf4.perform_parallel_fft_direct(in1);
-        tmp1[1] = NeonVector::mul_complex(tmp1[1], self.twiddle1);
-        tmp1[2] = self.bf4.rotate.rotate_both_45(tmp1[2]);
-        tmp1[3] = NeonVector::mul_complex(tmp1[3], self.twiddle3);
+        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
+        tmp1[2] = self.bf4.rotate.rotate_45(tmp1[2]);
+        tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddle3);
 
         ////////////////////////////////////////////////////////////
         let mut store = |i, values_a: [float32x4_t; 4], values_b: [float32x4_t; 4]| {
             for n in 0..4 {
                 let [a, b] = transpose_complex_2x2_f32(values_a[n], values_b[n]);
-                buffer.store_complex(a, i + n * 4);
-                buffer.store_complex(b, i + n * 4 + 16);
+                buffer.store(a, i + n * 4);
+                buffer.store(b, i + n * 4 + 16);
             }
         };
         // Size-4 FFTs down each pair of transposed columns, storing them as soon as we're done with them
@@ -2439,7 +2854,7 @@ impl<T: FftNum> NeonF64Butterfly16<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<float64x2_t>) {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -2449,23 +2864,23 @@ impl<T: FftNum> NeonF64Butterfly16<T> {
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i| {
             [
-                buffer.load_complex(i),
-                buffer.load_complex(i + 4),
-                buffer.load_complex(i + 8),
-                buffer.load_complex(i + 12),
+                buffer.load(i),
+                buffer.load(i + 4),
+                buffer.load(i + 8),
+                buffer.load(i + 12),
             ]
         };
 
         // For each column: load the data, apply our size-4 FFT, apply twiddle factors
         let mut tmp1 = self.bf4.perform_fft_direct(load(1));
-        tmp1[1] = NeonVector::mul_complex(tmp1[1], self.twiddle1);
+        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
         tmp1[2] = self.bf4.rotate.rotate_45(tmp1[2]);
-        tmp1[3] = NeonVector::mul_complex(tmp1[3], self.twiddle3);
+        tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddle3);
 
         let mut tmp3 = self.bf4.perform_fft_direct(load(3));
-        tmp3[1] = NeonVector::mul_complex(tmp3[1], self.twiddle3);
+        tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddle3);
         tmp3[2] = self.bf4.rotate.rotate_135(tmp3[2]);
-        tmp3[3] = NeonVector::mul_complex(tmp3[3], self.twiddle9);
+        tmp3[3] = SimdVector::mul_complex(tmp3[3], self.twiddle9);
 
         let mut tmp2 = self.bf4.perform_fft_direct(load(2));
         tmp2[1] = self.bf4.rotate.rotate_45(tmp2[1]);
@@ -2477,10 +2892,10 @@ impl<T: FftNum> NeonF64Butterfly16<T> {
 
         ////////////////////////////////////////////////////////////
         let mut store = |i: usize, vectors: [float64x2_t; 4]| {
-            buffer.store_complex(vectors[0], i + 0);
-            buffer.store_complex(vectors[1], i + 4);
-            buffer.store_complex(vectors[2], i + 8);
-            buffer.store_complex(vectors[3], i + 12);
+            buffer.store(vectors[0], i + 0);
+            buffer.store(vectors[1], i + 4);
+            buffer.store(vectors[2], i + 8);
+            buffer.store(vectors[3], i + 12);
         };
 
         // Size-4 FFTs down each of our transposed columns, storing them as soon as we're done with them
@@ -2570,7 +2985,7 @@ impl<T: FftNum> NeonF32Butterfly24<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<float32x4_t>) {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -2580,43 +2995,43 @@ impl<T: FftNum> NeonF32Butterfly24<T> {
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i| {
             [
-                buffer.load_complex(i),
-                buffer.load_complex(i + 6),
-                buffer.load_complex(i + 12),
-                buffer.load_complex(i + 18),
+                buffer.load(i),
+                buffer.load(i + 6),
+                buffer.load(i + 12),
+                buffer.load(i + 18),
             ]
         };
 
         // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors, transpose
         let mut tmp1 = self.bf4.perform_parallel_fft_direct(load(2));
-        tmp1[1] = NeonVector::mul_complex(tmp1[1], self.twiddles_packed[3]);
-        tmp1[2] = NeonVector::mul_complex(tmp1[2], self.twiddles_packed[4]);
-        tmp1[3] = NeonVector::mul_complex(tmp1[3], self.twiddles_packed[5]);
+        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddles_packed[3]);
+        tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddles_packed[4]);
+        tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddles_packed[5]);
         let [mid2, mid3] = transpose_complex_2x2_f32(tmp1[0], tmp1[1]);
         let [mid8, mid9] = transpose_complex_2x2_f32(tmp1[2], tmp1[3]);
 
         let mut tmp2 = self.bf4.perform_parallel_fft_direct(load(4));
-        tmp2[1] = NeonVector::mul_complex(tmp2[1], self.twiddles_packed[6]);
-        tmp2[2] = NeonVector::mul_complex(tmp2[2], self.twiddles_packed[7]);
-        tmp2[3] = NeonVector::mul_complex(tmp2[3], self.twiddles_packed[8]);
+        tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddles_packed[6]);
+        tmp2[2] = SimdVector::mul_complex(tmp2[2], self.twiddles_packed[7]);
+        tmp2[3] = SimdVector::mul_complex(tmp2[3], self.twiddles_packed[8]);
         let [mid4, mid5] = transpose_complex_2x2_f32(tmp2[0], tmp2[1]);
         let [mid10, mid11] = transpose_complex_2x2_f32(tmp2[2], tmp2[3]);
 
         let mut tmp0 = self.bf4.perform_parallel_fft_direct(load(0));
-        tmp0[1] = NeonVector::mul_complex(tmp0[1], self.twiddles_packed[0]);
-        tmp0[2] = NeonVector::mul_complex(tmp0[2], self.twiddles_packed[1]);
-        tmp0[3] = NeonVector::mul_complex(tmp0[3], self.twiddles_packed[2]);
+        tmp0[1] = SimdVector::mul_complex(tmp0[1], self.twiddles_packed[0]);
+        tmp0[2] = SimdVector::mul_complex(tmp0[2], self.twiddles_packed[1]);
+        tmp0[3] = SimdVector::mul_complex(tmp0[3], self.twiddles_packed[2]);
         let [mid0, mid1] = transpose_complex_2x2_f32(tmp0[0], tmp0[1]);
         let [mid6, mid7] = transpose_complex_2x2_f32(tmp0[2], tmp0[3]);
 
         ////////////////////////////////////////////////////////////
         let mut store = |i, vectors: [float32x4_t; 6]| {
-            buffer.store_complex(vectors[0], i);
-            buffer.store_complex(vectors[1], i + 4);
-            buffer.store_complex(vectors[2], i + 8);
-            buffer.store_complex(vectors[3], i + 12);
-            buffer.store_complex(vectors[4], i + 16);
-            buffer.store_complex(vectors[5], i + 20);
+            buffer.store(vectors[0], i);
+            buffer.store(vectors[1], i + 4);
+            buffer.store(vectors[2], i + 8);
+            buffer.store(vectors[3], i + 12);
+            buffer.store(vectors[4], i + 16);
+            buffer.store(vectors[5], i + 20);
         };
 
         // Size-6 FFTs down each pair of transposed columns, storing them as soon as we're done with them
@@ -2634,7 +3049,7 @@ impl<T: FftNum> NeonF32Butterfly24<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<float32x4_t>,
     ) {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
@@ -2644,14 +3059,10 @@ impl<T: FftNum> NeonF32Butterfly24<T> {
         //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i: usize| {
-            let [a0, a1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 0), buffer.load_complex(i + 24));
-            let [b0, b1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 6), buffer.load_complex(i + 30));
-            let [c0, c1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 12), buffer.load_complex(i + 36));
-            let [d0, d1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 18), buffer.load_complex(i + 42));
+            let [a0, a1] = transpose_complex_2x2_f32(buffer.load(i + 0), buffer.load(i + 24));
+            let [b0, b1] = transpose_complex_2x2_f32(buffer.load(i + 6), buffer.load(i + 30));
+            let [c0, c1] = transpose_complex_2x2_f32(buffer.load(i + 12), buffer.load(i + 36));
+            let [d0, d1] = transpose_complex_2x2_f32(buffer.load(i + 18), buffer.load(i + 42));
             [[a0, b0, c0, d0], [a1, b1, c1, d1]]
         };
 
@@ -2659,36 +3070,36 @@ impl<T: FftNum> NeonF32Butterfly24<T> {
         let [in0, in1] = load(0);
         let tmp0 = self.bf4.perform_parallel_fft_direct(in0);
         let mut tmp1 = self.bf4.perform_parallel_fft_direct(in1);
-        tmp1[1] = NeonVector::mul_complex(tmp1[1], self.twiddle1);
-        tmp1[2] = NeonVector::mul_complex(tmp1[2], self.twiddle2);
-        tmp1[3] = self.bf4.rotate.rotate_both_45(tmp1[3]);
+        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
+        tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddle2);
+        tmp1[3] = self.bf4.rotate.rotate_45(tmp1[3]);
 
         let [in2, in3] = load(2);
         let mut tmp2 = self.bf4.perform_parallel_fft_direct(in2);
         let mut tmp3 = self.bf4.perform_parallel_fft_direct(in3);
-        tmp2[1] = NeonVector::mul_complex(tmp2[1], self.twiddle2);
-        tmp2[2] = NeonVector::mul_complex(tmp2[2], self.twiddle4);
-        tmp2[3] = self.bf4.rotate.rotate_both(tmp2[3]);
-        tmp3[1] = self.bf4.rotate.rotate_both_45(tmp3[1]);
-        tmp3[2] = self.bf4.rotate.rotate_both(tmp3[2]);
-        tmp3[3] = self.bf4.rotate.rotate_both_135(tmp3[3]);
+        tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddle2);
+        tmp2[2] = SimdVector::mul_complex(tmp2[2], self.twiddle4);
+        tmp2[3] = self.bf4.rotate.rotate(tmp2[3]);
+        tmp3[1] = self.bf4.rotate.rotate_45(tmp3[1]);
+        tmp3[2] = self.bf4.rotate.rotate(tmp3[2]);
+        tmp3[3] = self.bf4.rotate.rotate_135(tmp3[3]);
 
         let [in4, in5] = load(4);
         let mut tmp4 = self.bf4.perform_parallel_fft_direct(in4);
         let mut tmp5 = self.bf4.perform_parallel_fft_direct(in5);
-        tmp4[1] = NeonVector::mul_complex(tmp4[1], self.twiddle4);
-        tmp4[2] = NeonVector::mul_complex(tmp4[2], self.twiddle8);
-        tmp4[3] = NeonVector::neg(tmp4[3]);
-        tmp5[1] = NeonVector::mul_complex(tmp5[1], self.twiddle5);
-        tmp5[2] = NeonVector::mul_complex(tmp5[2], self.twiddle10);
-        tmp5[3] = self.bf4.rotate.rotate_both_225(tmp5[3]);
+        tmp4[1] = SimdVector::mul_complex(tmp4[1], self.twiddle4);
+        tmp4[2] = SimdVector::mul_complex(tmp4[2], self.twiddle8);
+        tmp4[3] = SimdVector::neg(tmp4[3]);
+        tmp5[1] = SimdVector::mul_complex(tmp5[1], self.twiddle5);
+        tmp5[2] = SimdVector::mul_complex(tmp5[2], self.twiddle10);
+        tmp5[3] = self.bf4.rotate.rotate_225(tmp5[3]);
 
         ////////////////////////////////////////////////////////////
         let mut store = |i, vectors_a: [float32x4_t; 6], vectors_b: [float32x4_t; 6]| {
             for n in 0..6 {
                 let [a, b] = transpose_complex_2x2_f32(vectors_a[n], vectors_b[n]);
-                buffer.store_complex(a, i + n * 4);
-                buffer.store_complex(b, i + n * 4 + 24);
+                buffer.store(a, i + n * 4);
+                buffer.store(b, i + n * 4 + 24);
             }
         };
 
@@ -2758,7 +3169,7 @@ impl<T: FftNum> NeonF64Butterfly24<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<float64x2_t>) {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -2768,32 +3179,32 @@ impl<T: FftNum> NeonF64Butterfly24<T> {
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i| {
             [
-                buffer.load_complex(i),
-                buffer.load_complex(i + 6),
-                buffer.load_complex(i + 12),
-                buffer.load_complex(i + 18),
+                buffer.load(i),
+                buffer.load(i + 6),
+                buffer.load(i + 12),
+                buffer.load(i + 18),
             ]
         };
 
         // For each column: load the data, apply our size-4 FFT, apply twiddle factors
         let mut tmp1 = self.bf4.perform_fft_direct(load(1));
-        tmp1[1] = NeonVector::mul_complex(tmp1[1], self.twiddle1);
-        tmp1[2] = NeonVector::mul_complex(tmp1[2], self.twiddle2);
+        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
+        tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddle2);
         tmp1[3] = self.bf4.rotate.rotate_45(tmp1[3]);
 
         let mut tmp2 = self.bf4.perform_fft_direct(load(2));
-        tmp2[1] = NeonVector::mul_complex(tmp2[1], self.twiddle2);
-        tmp2[2] = NeonVector::mul_complex(tmp2[2], self.twiddle4);
+        tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddle2);
+        tmp2[2] = SimdVector::mul_complex(tmp2[2], self.twiddle4);
         tmp2[3] = self.bf4.rotate.rotate(tmp2[3]);
 
         let mut tmp4 = self.bf4.perform_fft_direct(load(4));
-        tmp4[1] = NeonVector::mul_complex(tmp4[1], self.twiddle4);
-        tmp4[2] = NeonVector::mul_complex(tmp4[2], self.twiddle8);
-        tmp4[3] = NeonVector::neg(tmp4[3]);
+        tmp4[1] = SimdVector::mul_complex(tmp4[1], self.twiddle4);
+        tmp4[2] = SimdVector::mul_complex(tmp4[2], self.twiddle8);
+        tmp4[3] = SimdVector::neg(tmp4[3]);
 
         let mut tmp5 = self.bf4.perform_fft_direct(load(5));
-        tmp5[1] = NeonVector::mul_complex(tmp5[1], self.twiddle5);
-        tmp5[2] = NeonVector::mul_complex(tmp5[2], self.twiddle10);
+        tmp5[1] = SimdVector::mul_complex(tmp5[1], self.twiddle5);
+        tmp5[2] = SimdVector::mul_complex(tmp5[2], self.twiddle10);
         tmp5[3] = self.bf4.rotate.rotate_225(tmp5[3]);
 
         let mut tmp3 = self.bf4.perform_fft_direct(load(3));
@@ -2806,12 +3217,12 @@ impl<T: FftNum> NeonF64Butterfly24<T> {
 
         ////////////////////////////////////////////////////////////
         let mut store = |i, vectors: [float64x2_t; 6]| {
-            buffer.store_complex(vectors[0], i);
-            buffer.store_complex(vectors[1], i + 4);
-            buffer.store_complex(vectors[2], i + 8);
-            buffer.store_complex(vectors[3], i + 12);
-            buffer.store_complex(vectors[4], i + 16);
-            buffer.store_complex(vectors[5], i + 20);
+            buffer.store(vectors[0], i);
+            buffer.store(vectors[1], i + 4);
+            buffer.store(vectors[2], i + 8);
+            buffer.store(vectors[3], i + 12);
+            buffer.store(vectors[4], i + 16);
+            buffer.store(vectors[5], i + 20);
         };
 
         // Size-6 FFTs down each of our transposed columns, storing them as soon as we're done with them
@@ -2919,7 +3330,7 @@ impl<T: FftNum> NeonF32Butterfly32<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f32>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<float32x4_t>) {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -2929,52 +3340,52 @@ impl<T: FftNum> NeonF32Butterfly32<T> {
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i| {
             [
-                buffer.load_complex(i),
-                buffer.load_complex(i + 8),
-                buffer.load_complex(i + 16),
-                buffer.load_complex(i + 24),
+                buffer.load(i),
+                buffer.load(i + 8),
+                buffer.load(i + 16),
+                buffer.load(i + 24),
             ]
         };
 
         // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors
         let mut tmp0 = self.bf8.bf4.perform_parallel_fft_direct(load(0));
-        tmp0[1] = NeonVector::mul_complex(tmp0[1], self.twiddles_packed[0]);
-        tmp0[2] = NeonVector::mul_complex(tmp0[2], self.twiddles_packed[1]);
-        tmp0[3] = NeonVector::mul_complex(tmp0[3], self.twiddles_packed[2]);
+        tmp0[1] = SimdVector::mul_complex(tmp0[1], self.twiddles_packed[0]);
+        tmp0[2] = SimdVector::mul_complex(tmp0[2], self.twiddles_packed[1]);
+        tmp0[3] = SimdVector::mul_complex(tmp0[3], self.twiddles_packed[2]);
         let [mid0, mid1] = transpose_complex_2x2_f32(tmp0[0], tmp0[1]);
         let [mid8, mid9] = transpose_complex_2x2_f32(tmp0[2], tmp0[3]);
 
         let mut tmp1 = self.bf8.bf4.perform_parallel_fft_direct(load(2));
-        tmp1[1] = NeonVector::mul_complex(tmp1[1], self.twiddles_packed[3]);
-        tmp1[2] = NeonVector::mul_complex(tmp1[2], self.twiddles_packed[4]);
-        tmp1[3] = NeonVector::mul_complex(tmp1[3], self.twiddles_packed[5]);
+        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddles_packed[3]);
+        tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddles_packed[4]);
+        tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddles_packed[5]);
         let [mid2, mid3] = transpose_complex_2x2_f32(tmp1[0], tmp1[1]);
         let [mid10, mid11] = transpose_complex_2x2_f32(tmp1[2], tmp1[3]);
 
         let mut tmp2 = self.bf8.bf4.perform_parallel_fft_direct(load(4));
-        tmp2[1] = NeonVector::mul_complex(tmp2[1], self.twiddles_packed[6]);
-        tmp2[2] = NeonVector::mul_complex(tmp2[2], self.twiddles_packed[7]);
-        tmp2[3] = NeonVector::mul_complex(tmp2[3], self.twiddles_packed[8]);
+        tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddles_packed[6]);
+        tmp2[2] = SimdVector::mul_complex(tmp2[2], self.twiddles_packed[7]);
+        tmp2[3] = SimdVector::mul_complex(tmp2[3], self.twiddles_packed[8]);
         let [mid4, mid5] = transpose_complex_2x2_f32(tmp2[0], tmp2[1]);
         let [mid12, mid13] = transpose_complex_2x2_f32(tmp2[2], tmp2[3]);
 
         let mut tmp3 = self.bf8.bf4.perform_parallel_fft_direct(load(6));
-        tmp3[1] = NeonVector::mul_complex(tmp3[1], self.twiddles_packed[9]);
-        tmp3[2] = NeonVector::mul_complex(tmp3[2], self.twiddles_packed[10]);
-        tmp3[3] = NeonVector::mul_complex(tmp3[3], self.twiddles_packed[11]);
+        tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddles_packed[9]);
+        tmp3[2] = SimdVector::mul_complex(tmp3[2], self.twiddles_packed[10]);
+        tmp3[3] = SimdVector::mul_complex(tmp3[3], self.twiddles_packed[11]);
         let [mid6, mid7] = transpose_complex_2x2_f32(tmp3[0], tmp3[1]);
         let [mid14, mid15] = transpose_complex_2x2_f32(tmp3[2], tmp3[3]);
 
         ////////////////////////////////////////////////////////////
         let mut store = |i, vectors: [float32x4_t; 8]| {
-            buffer.store_complex(vectors[0], i);
-            buffer.store_complex(vectors[1], i + 4);
-            buffer.store_complex(vectors[2], i + 8);
-            buffer.store_complex(vectors[3], i + 12);
-            buffer.store_complex(vectors[4], i + 16);
-            buffer.store_complex(vectors[5], i + 20);
-            buffer.store_complex(vectors[6], i + 24);
-            buffer.store_complex(vectors[7], i + 28);
+            buffer.store(vectors[0], i);
+            buffer.store(vectors[1], i + 4);
+            buffer.store(vectors[2], i + 8);
+            buffer.store(vectors[3], i + 12);
+            buffer.store(vectors[4], i + 16);
+            buffer.store(vectors[5], i + 20);
+            buffer.store(vectors[6], i + 24);
+            buffer.store(vectors[7], i + 28);
         };
 
         // Size-8 FFTs down each pair of transposed columns, storing them as soon as we're done with them
@@ -2992,7 +3403,7 @@ impl<T: FftNum> NeonF32Butterfly32<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
-        mut buffer: impl NeonArrayMut<f32>,
+        mut buffer: impl SimdComplexArrayMut<float32x4_t>,
     ) {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
@@ -3002,14 +3413,10 @@ impl<T: FftNum> NeonF32Butterfly32<T> {
         //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i: usize| {
-            let [a0, a1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 0), buffer.load_complex(i + 32));
-            let [b0, b1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 8), buffer.load_complex(i + 40));
-            let [c0, c1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 16), buffer.load_complex(i + 48));
-            let [d0, d1] =
-                transpose_complex_2x2_f32(buffer.load_complex(i + 24), buffer.load_complex(i + 56));
+            let [a0, a1] = transpose_complex_2x2_f32(buffer.load(i + 0), buffer.load(i + 32));
+            let [b0, b1] = transpose_complex_2x2_f32(buffer.load(i + 8), buffer.load(i + 40));
+            let [c0, c1] = transpose_complex_2x2_f32(buffer.load(i + 16), buffer.load(i + 48));
+            let [d0, d1] = transpose_complex_2x2_f32(buffer.load(i + 24), buffer.load(i + 56));
             [[a0, b0, c0, d0], [a1, b1, c1, d1]]
         };
 
@@ -3017,46 +3424,46 @@ impl<T: FftNum> NeonF32Butterfly32<T> {
         let [in0, in1] = load(0);
         let tmp0 = self.bf8.bf4.perform_parallel_fft_direct(in0);
         let mut tmp1 = self.bf8.bf4.perform_parallel_fft_direct(in1);
-        tmp1[1] = NeonVector::mul_complex(tmp1[1], self.twiddle1);
-        tmp1[2] = NeonVector::mul_complex(tmp1[2], self.twiddle2);
-        tmp1[3] = NeonVector::mul_complex(tmp1[3], self.twiddle3);
+        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
+        tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddle2);
+        tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddle3);
 
         let [in2, in3] = load(2);
         let mut tmp2 = self.bf8.bf4.perform_parallel_fft_direct(in2);
         let mut tmp3 = self.bf8.bf4.perform_parallel_fft_direct(in3);
-        tmp2[1] = NeonVector::mul_complex(tmp2[1], self.twiddle2);
-        tmp2[2] = self.bf8.bf4.rotate.rotate_both_45(tmp2[2]);
-        tmp2[3] = NeonVector::mul_complex(tmp2[3], self.twiddle6);
-        tmp3[1] = NeonVector::mul_complex(tmp3[1], self.twiddle3);
-        tmp3[2] = NeonVector::mul_complex(tmp3[2], self.twiddle6);
-        tmp3[3] = NeonVector::mul_complex(tmp3[3], self.twiddle9);
+        tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddle2);
+        tmp2[2] = self.bf8.bf4.rotate.rotate_45(tmp2[2]);
+        tmp2[3] = SimdVector::mul_complex(tmp2[3], self.twiddle6);
+        tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddle3);
+        tmp3[2] = SimdVector::mul_complex(tmp3[2], self.twiddle6);
+        tmp3[3] = SimdVector::mul_complex(tmp3[3], self.twiddle9);
 
         let [in4, in5] = load(4);
         let mut tmp4 = self.bf8.bf4.perform_parallel_fft_direct(in4);
         let mut tmp5 = self.bf8.bf4.perform_parallel_fft_direct(in5);
-        tmp4[1] = self.bf8.bf4.rotate.rotate_both_45(tmp4[1]);
-        tmp4[2] = self.bf8.bf4.rotate.rotate_both(tmp4[2]);
-        tmp4[3] = self.bf8.bf4.rotate.rotate_both_135(tmp4[3]);
-        tmp5[1] = NeonVector::mul_complex(tmp5[1], self.twiddle5);
-        tmp5[2] = NeonVector::mul_complex(tmp5[2], self.twiddle10);
-        tmp5[3] = NeonVector::mul_complex(tmp5[3], self.twiddle15);
+        tmp4[1] = self.bf8.bf4.rotate.rotate_45(tmp4[1]);
+        tmp4[2] = self.bf8.bf4.rotate.rotate(tmp4[2]);
+        tmp4[3] = self.bf8.bf4.rotate.rotate_135(tmp4[3]);
+        tmp5[1] = SimdVector::mul_complex(tmp5[1], self.twiddle5);
+        tmp5[2] = SimdVector::mul_complex(tmp5[2], self.twiddle10);
+        tmp5[3] = SimdVector::mul_complex(tmp5[3], self.twiddle15);
 
         let [in6, in7] = load(6);
         let mut tmp6 = self.bf8.bf4.perform_parallel_fft_direct(in6);
         let mut tmp7 = self.bf8.bf4.perform_parallel_fft_direct(in7);
-        tmp6[1] = NeonVector::mul_complex(tmp6[1], self.twiddle6);
-        tmp6[2] = self.bf8.bf4.rotate.rotate_both_135(tmp6[2]);
-        tmp6[3] = NeonVector::mul_complex(tmp6[3], self.twiddle18);
-        tmp7[1] = NeonVector::mul_complex(tmp7[1], self.twiddle7);
-        tmp7[2] = NeonVector::mul_complex(tmp7[2], self.twiddle14);
-        tmp7[3] = NeonVector::mul_complex(tmp7[3], self.twiddle21);
+        tmp6[1] = SimdVector::mul_complex(tmp6[1], self.twiddle6);
+        tmp6[2] = self.bf8.bf4.rotate.rotate_135(tmp6[2]);
+        tmp6[3] = SimdVector::mul_complex(tmp6[3], self.twiddle18);
+        tmp7[1] = SimdVector::mul_complex(tmp7[1], self.twiddle7);
+        tmp7[2] = SimdVector::mul_complex(tmp7[2], self.twiddle14);
+        tmp7[3] = SimdVector::mul_complex(tmp7[3], self.twiddle21);
 
         ////////////////////////////////////////////////////////////
         let mut store = |i, vectors_a: [float32x4_t; 8], vectors_b: [float32x4_t; 8]| {
             for n in 0..8 {
                 let [a, b] = transpose_complex_2x2_f32(vectors_a[n], vectors_b[n]);
-                buffer.store_complex(a, i + n * 4);
-                buffer.store_complex(b, i + n * 4 + 32);
+                buffer.store(a, i + n * 4);
+                buffer.store(b, i + n * 4 + 32);
             }
         };
 
@@ -3143,7 +3550,7 @@ impl<T: FftNum> NeonF64Butterfly32<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl NeonArrayMut<f64>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<float64x2_t>) {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -3153,43 +3560,43 @@ impl<T: FftNum> NeonF64Butterfly32<T> {
         // 3: Store data as soon as we're finished with it, rather than waiting for the end
         let load = |i| {
             [
-                buffer.load_complex(i),
-                buffer.load_complex(i + 8),
-                buffer.load_complex(i + 16),
-                buffer.load_complex(i + 24),
+                buffer.load(i),
+                buffer.load(i + 8),
+                buffer.load(i + 16),
+                buffer.load(i + 24),
             ]
         };
 
         // For each column: load the data, apply our size-4 FFT, apply twiddle factors
         let mut tmp1 = self.bf8.bf4.perform_fft_direct(load(1));
-        tmp1[1] = NeonVector::mul_complex(tmp1[1], self.twiddle1);
-        tmp1[2] = NeonVector::mul_complex(tmp1[2], self.twiddle2);
-        tmp1[3] = NeonVector::mul_complex(tmp1[3], self.twiddle3);
+        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
+        tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddle2);
+        tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddle3);
 
         let mut tmp2 = self.bf8.bf4.perform_fft_direct(load(2));
-        tmp2[1] = NeonVector::mul_complex(tmp2[1], self.twiddle2);
+        tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddle2);
         tmp2[2] = self.bf8.bf4.rotate.rotate_45(tmp2[2]);
-        tmp2[3] = NeonVector::mul_complex(tmp2[3], self.twiddle6);
+        tmp2[3] = SimdVector::mul_complex(tmp2[3], self.twiddle6);
 
         let mut tmp3 = self.bf8.bf4.perform_fft_direct(load(3));
-        tmp3[1] = NeonVector::mul_complex(tmp3[1], self.twiddle3);
-        tmp3[2] = NeonVector::mul_complex(tmp3[2], self.twiddle6);
-        tmp3[3] = NeonVector::mul_complex(tmp3[3], self.twiddle9);
+        tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddle3);
+        tmp3[2] = SimdVector::mul_complex(tmp3[2], self.twiddle6);
+        tmp3[3] = SimdVector::mul_complex(tmp3[3], self.twiddle9);
 
         let mut tmp5 = self.bf8.bf4.perform_fft_direct(load(5));
-        tmp5[1] = NeonVector::mul_complex(tmp5[1], self.twiddle5);
-        tmp5[2] = NeonVector::mul_complex(tmp5[2], self.twiddle10);
-        tmp5[3] = NeonVector::mul_complex(tmp5[3], self.twiddle15);
+        tmp5[1] = SimdVector::mul_complex(tmp5[1], self.twiddle5);
+        tmp5[2] = SimdVector::mul_complex(tmp5[2], self.twiddle10);
+        tmp5[3] = SimdVector::mul_complex(tmp5[3], self.twiddle15);
 
         let mut tmp6 = self.bf8.bf4.perform_fft_direct(load(6));
-        tmp6[1] = NeonVector::mul_complex(tmp6[1], self.twiddle6);
+        tmp6[1] = SimdVector::mul_complex(tmp6[1], self.twiddle6);
         tmp6[2] = self.bf8.bf4.rotate.rotate_135(tmp6[2]);
-        tmp6[3] = NeonVector::mul_complex(tmp6[3], self.twiddle18);
+        tmp6[3] = SimdVector::mul_complex(tmp6[3], self.twiddle18);
 
         let mut tmp7 = self.bf8.bf4.perform_fft_direct(load(7));
-        tmp7[1] = NeonVector::mul_complex(tmp7[1], self.twiddle7);
-        tmp7[2] = NeonVector::mul_complex(tmp7[2], self.twiddle14);
-        tmp7[3] = NeonVector::mul_complex(tmp7[3], self.twiddle21);
+        tmp7[1] = SimdVector::mul_complex(tmp7[1], self.twiddle7);
+        tmp7[2] = SimdVector::mul_complex(tmp7[2], self.twiddle14);
+        tmp7[3] = SimdVector::mul_complex(tmp7[3], self.twiddle21);
 
         let mut tmp4 = self.bf8.bf4.perform_fft_direct(load(4));
         tmp4[1] = self.bf8.bf4.rotate.rotate_45(tmp4[1]);
@@ -3201,14 +3608,14 @@ impl<T: FftNum> NeonF64Butterfly32<T> {
 
         ////////////////////////////////////////////////////////////
         let mut store = |i, vectors: [float64x2_t; 8]| {
-            buffer.store_complex(vectors[0], i);
-            buffer.store_complex(vectors[1], i + 4);
-            buffer.store_complex(vectors[2], i + 8);
-            buffer.store_complex(vectors[3], i + 12);
-            buffer.store_complex(vectors[4], i + 16);
-            buffer.store_complex(vectors[5], i + 20);
-            buffer.store_complex(vectors[6], i + 24);
-            buffer.store_complex(vectors[7], i + 28);
+            buffer.store(vectors[0], i);
+            buffer.store(vectors[1], i + 4);
+            buffer.store(vectors[2], i + 8);
+            buffer.store(vectors[3], i + 12);
+            buffer.store(vectors[4], i + 16);
+            buffer.store(vectors[5], i + 20);
+            buffer.store(vectors[6], i + 24);
+            buffer.store(vectors[7], i + 28);
         };
 
         // Size-8 FFTs down each of our transposed columns, storing them as soon as we're done with them
@@ -3238,7 +3645,7 @@ impl<T: FftNum> NeonF64Butterfly32<T> {
 mod unit_tests {
     use super::*;
     use crate::algorithm::Dft;
-    use crate::test_utils::{check_fft_algorithm, compare_vectors};
+    use crate::test_utils::{check_fft_algorithm, check_parallel_fft, compare_vectors};
 
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
@@ -3297,6 +3704,84 @@ mod unit_tests {
     test_butterfly_64_func!(test_neonf64_butterfly16, NeonF64Butterfly16, 16);
     test_butterfly_64_func!(test_neonf64_butterfly24, NeonF64Butterfly24, 24);
     test_butterfly_64_func!(test_neonf64_butterfly32, NeonF64Butterfly32, 32);
+
+    macro_rules! test_parallel_butterfly_32_func {
+        ($test_name:ident, $struct_name:ident, $size:expr) => {
+            #[test]
+            fn $test_name() {
+                let butterfly = $struct_name::new(FftDirection::Forward);
+                check_parallel_fft::<float32x4_t, $size>(&butterfly, FftDirection::Forward);
+
+                let butterfly_inverse = $struct_name::new(FftDirection::Inverse);
+                check_parallel_fft::<float32x4_t, $size>(&butterfly_inverse, FftDirection::Inverse);
+            }
+        };
+    }
+
+    test_parallel_butterfly_32_func!(
+        test_neonf32_parallel_butterfly2,
+        NeonF32ParallelButterfly2,
+        2
+    );
+    test_parallel_butterfly_32_func!(
+        test_neonf32_parallel_butterfly3,
+        NeonF32ParallelButterfly3,
+        3
+    );
+    test_parallel_butterfly_32_func!(
+        test_neonf32_parallel_butterfly4,
+        NeonF32ParallelButterfly4,
+        4
+    );
+    test_parallel_butterfly_32_func!(
+        test_neonf32_parallel_butterfly5,
+        NeonF32ParallelButterfly5,
+        5
+    );
+    test_parallel_butterfly_32_func!(
+        test_neonf32_parallel_butterfly6,
+        NeonF32ParallelButterfly6,
+        6
+    );
+
+    macro_rules! test_parallel_butterfly_64_func {
+        ($test_name:ident, $struct_name:ident, $size:expr) => {
+            #[test]
+            fn $test_name() {
+                let butterfly = $struct_name::new(FftDirection::Forward);
+                check_parallel_fft::<float64x2_t, $size>(&butterfly, FftDirection::Forward);
+
+                let butterfly_inverse = $struct_name::new(FftDirection::Inverse);
+                check_parallel_fft::<float64x2_t, $size>(&butterfly_inverse, FftDirection::Inverse);
+            }
+        };
+    }
+
+    test_parallel_butterfly_64_func!(
+        test_neonf64_parallel_butterfly2,
+        NeonF64ParallelButterfly2,
+        2
+    );
+    test_parallel_butterfly_64_func!(
+        test_neonf64_parallel_butterfly3,
+        NeonF64ParallelButterfly3,
+        3
+    );
+    test_parallel_butterfly_64_func!(
+        test_neonf64_parallel_butterfly4,
+        NeonF64ParallelButterfly4,
+        4
+    );
+    test_parallel_butterfly_64_func!(
+        test_neonf64_parallel_butterfly5,
+        NeonF64ParallelButterfly5,
+        5
+    );
+    test_parallel_butterfly_64_func!(
+        test_neonf64_parallel_butterfly6,
+        NeonF64ParallelButterfly6,
+        6
+    );
 
     #[test]
     fn test_solo_fft2_32() {
