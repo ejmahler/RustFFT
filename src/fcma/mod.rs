@@ -1,7 +1,7 @@
 #[macro_use]
-mod fcma_common;
+pub mod fcma_common;
 #[macro_use]
-mod fcma_vector;
+pub mod fcma_vector;
 
 #[macro_use]
 pub mod fcma_butterflies;

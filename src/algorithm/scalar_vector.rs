@@ -5,7 +5,7 @@ use num_traits::Zero;
 
 use crate::algorithm::scalar_column_butterflies::{
     ScalarParallelButterfly2, ScalarParallelButterfly3, ScalarParallelButterfly4,
-    ScalarParallelButterfly5, ScalarParallelButterfly6, ScalarParallelButterfly7, ScalarParallelButterfly31,
+    ScalarParallelButterfly5, ScalarParallelButterfly6, ScalarParallelButterfly7, ScalarParallelButterfly11, ScalarParallelButterfly31,
 };
 use crate::{simd::simd_vector::SimdVector, twiddles, FftDirection, FftNum};
 
@@ -25,6 +25,7 @@ impl<T: FftNum> SimdVector for Complex<T> {
     type Butterfly5 = ScalarParallelButterfly5<T>;
     type Butterfly6 = ScalarParallelButterfly6<T>;
     type Butterfly7 = ScalarParallelButterfly7<T>;
+    type Butterfly11 = ScalarParallelButterfly11<T>;
     type Butterfly31 = ScalarParallelButterfly31<T>;
 
     unsafe fn zero_vector() -> Self {
@@ -125,6 +126,9 @@ impl<T: FftNum> SimdVector for Complex<T> {
     }
     unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
         Self::Butterfly7::new(direction)
+    }
+    unsafe fn make_butterfly11(direction: FftDirection) -> Self::Butterfly11 {
+        Self::Butterfly11::new(direction)
     }
     unsafe fn make_butterfly31(direction: FftDirection) -> Self::Butterfly31 {
         Self::Butterfly31::new(direction)

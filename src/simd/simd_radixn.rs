@@ -37,6 +37,7 @@ pub enum InternalRadixFactor<V: SimdVector> {
     Factor5(V::Butterfly5),
     Factor6(V::Butterfly6),
     Factor7(V::Butterfly7),
+    Factor11(V::Butterfly11),
     Factor31(V::Butterfly31),
 }
 
@@ -49,6 +50,7 @@ impl<V: SimdVector> InternalRadixFactor<V> {
             InternalRadixFactor::Factor5(_) => 5,
             InternalRadixFactor::Factor6(_) => 6,
             InternalRadixFactor::Factor7(_) => 7,
+            InternalRadixFactor::Factor11(_) => 11,
             InternalRadixFactor::Factor31(_) => 31,
         }
     }
@@ -118,6 +120,9 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
                     }
                     RadixFactor::Factor7 => {
                         InternalRadixFactor::Factor7(V::make_butterfly7(direction))
+                    }
+                    RadixFactor::Factor11 => {
+                        InternalRadixFactor::Factor11(V::make_butterfly11(direction))
                     }
                     RadixFactor::Factor31 => {
                         InternalRadixFactor::Factor31(V::make_butterfly31(direction))
@@ -228,6 +233,7 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
                 RadixFactor::Factor5 => table_transpose::<_, 5>(height, columns, input, output),
                 RadixFactor::Factor6 => table_transpose::<_, 6>(height, columns, input, output),
                 RadixFactor::Factor7 => table_transpose::<_, 7>(height, columns, input, output),
+                RadixFactor::Factor11 => table_transpose::<_, 11>(height, columns, input, output),
                 RadixFactor::Factor31 => table_transpose::<_, 31>(height, columns, input, output),
             }
         } else {
@@ -267,6 +273,9 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
                 }
                 InternalRadixFactor::Factor7(butterfly) => {
                     cross_layer_chunks::<V, 7>(out, layer_twiddles, num_columns, butterfly)
+                }
+                InternalRadixFactor::Factor11(butterfly) => {
+                    cross_layer_chunks::<V, 11>(out, layer_twiddles, num_columns, butterfly)
                 }
                 InternalRadixFactor::Factor31(butterfly) => {
                     cross_layer_chunks::<V, 31>(out, layer_twiddles, num_columns, butterfly)

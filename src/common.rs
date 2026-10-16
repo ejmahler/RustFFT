@@ -473,6 +473,7 @@ pub enum RadixFactor {
     Factor5,
     Factor6,
     Factor7,
+    Factor11,
     Factor31,
 }
 impl RadixFactor {
@@ -485,6 +486,7 @@ impl RadixFactor {
             RadixFactor::Factor5 => 5,
             RadixFactor::Factor6 => 6,
             RadixFactor::Factor7 => 7,
+            RadixFactor::Factor11 => 11,
             RadixFactor::Factor31 => 31,
         }
     }
