@@ -16,6 +16,7 @@ pub struct Rotate90F32 {
 }
 
 impl Rotate90F32 {
+    #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
             sign: if direction == FftDirection::Inverse {
@@ -63,6 +64,7 @@ pub struct Rotate90HiF32 {
 }
 
 impl Rotate90HiF32 {
+    #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
             // There doesn't seem to be any need for rotating just the first element, but let's keep the code just in case
@@ -212,6 +214,7 @@ pub(crate) struct Rotate90F64 {
 }
 
 impl Rotate90F64 {
+    #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
             sign: if direction == FftDirection::Inverse {

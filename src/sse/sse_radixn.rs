@@ -20,7 +20,7 @@ impl<V: SimdVector, T: FftNum> SseRadixN<V, T> {
         Self(SimdRadixN::new(factors, base_fft))
     }
 }
-boilerplate_simd_fft!(SseRadixN, #[inline(always)]);
+boilerplate_simd_fft!(SseRadixN, #[target_feature(enable = "sse4.1")]);
 
 #[cfg(test)]
 mod unit_tests {

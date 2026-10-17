@@ -231,6 +231,7 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
     }
 
     /// The stack of in-place cross-FFT layers, run after the base FFTs.
+    #[inline(always)]
     unsafe fn cross_ffts(&self, output: &mut [Complex<T>]) {
         let out: &mut [Complex<V::ScalarType>] = workaround_transmute_mut(output);
 
