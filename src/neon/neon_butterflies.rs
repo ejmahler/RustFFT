@@ -1005,6 +1005,7 @@ impl<T: FftNum> NeonF64Butterfly4<T> {
 //
 
 pub struct NeonF32ParallelButterfly5 {
+    bf2: NeonF32ParallelButterfly2,
     twiddle1re: float32x4_t,
     twiddle1im: float32x4_t,
     twiddle2re: float32x4_t,
@@ -1018,6 +1019,7 @@ impl NeonF32ParallelButterfly5 {
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 5, direction);
         let tw2: Complex<f32> = twiddles::compute_twiddle(2, 5, direction);
         Self {
+            bf2: NeonF32ParallelButterfly2::new(direction),
             twiddle1re: unsafe { vmovq_n_f32(tw1.re) },
             twiddle1im: unsafe { vmovq_n_f32(tw1.im) },
             twiddle2re: unsafe { vmovq_n_f32(tw2.re) },
@@ -1028,41 +1030,39 @@ impl NeonF32ParallelButterfly5 {
 impl ParallelFft<float32x4_t, 5> for NeonF32ParallelButterfly5 {
     #[inline(always)]
     fn parallel_fft(&self, data: [float32x4_t; 5]) -> [float32x4_t; 5] {
+        let rotate = Rotate90F32::new(FftDirection::Inverse);
+        
         // Safety: These intrinsics require the NEON target feature. We asserted this feature was present in the constructor.
         unsafe {
-            let x14p = vaddq_f32(data[1], data[4]);
-            let x14n = vsubq_f32(data[1], data[4]);
-            let x23p = vaddq_f32(data[2], data[3]);
-            let x23n = vsubq_f32(data[2], data[3]);
+            let y00 = data[0];
+            let [x1p4, x1m4] = self.bf2.parallel_fft([data[1], data[4]]);
+            let x1m4 = rotate.rotate(x1m4);
+            let y00 = SimdVector::add(y00, x1p4);
+            let [x2p3, x2m3] = self.bf2.parallel_fft([data[2], data[3]]);
+            let x2m3 = rotate.rotate(x2m3);
+            let y00 = SimdVector::add(y00, x2p3);
 
-            let temp_a1_1 = vmulq_f32(self.twiddle1re, x14p);
-            let temp_a1_2 = vmulq_f32(self.twiddle2re, x23p);
-            let temp_b1_1 = vmulq_f32(self.twiddle1im, x14n);
-            let temp_b1_2 = vmulq_f32(self.twiddle2im, x23n);
-            let temp_a2_1 = vmulq_f32(self.twiddle1re, x23p);
-            let temp_a2_2 = vmulq_f32(self.twiddle2re, x14p);
-            let temp_b2_1 = vmulq_f32(self.twiddle2im, x14n);
-            let temp_b2_2 = vmulq_f32(self.twiddle1im, x23n);
+            let m0104a = SimdVector::fmadd(data[0], self.twiddle1re, x1p4);
+            let m0104a = SimdVector::fmadd(m0104a, self.twiddle2re, x2p3);
+            let m0104b = SimdVector::mul(self.twiddle1im, x1m4);
+            let m0104b = SimdVector::fmadd(m0104b, self.twiddle2im, x2m3);
+            let [y01, y04] = self.bf2.parallel_fft([m0104a, m0104b]);
 
-            let temp_a1 = vaddq_f32(data[0], vaddq_f32(temp_a1_1, temp_a1_2));
-            let temp_b1 = vaddq_f32(temp_b1_1, temp_b1_2);
-            let temp_a2 = vaddq_f32(data[0], vaddq_f32(temp_a2_1, temp_a2_2));
-            let temp_b2 = vsubq_f32(temp_b2_1, temp_b2_2);
+            let m0203a = SimdVector::fmadd(data[0], self.twiddle2re, x1p4);
+            let m0203a = SimdVector::fmadd(m0203a, self.twiddle1re, x2p3);
+            let m0203b = SimdVector::mul(self.twiddle2im, x1m4);
+            let m0203b = SimdVector::nmadd(m0203b, self.twiddle1im, x2m3);
+            let [y02, y03] = self.bf2.parallel_fft([m0203a, m0203b]);
 
-            let rotate = Rotate90F32::new(FftDirection::Inverse);
-            [
-                vaddq_f32(data[0], vaddq_f32(x14p, x23p)),
-                vaddq_f32(temp_a1, rotate.rotate(temp_b1)),
-                vaddq_f32(temp_a2, rotate.rotate(temp_b2)),
-                vsubq_f32(temp_a2, rotate.rotate(temp_b2)),
-                vsubq_f32(temp_a1, rotate.rotate(temp_b1)),
-            ]
+
+            [y00, y01, y02, y03, y04]
         }
     }
 }
 
 pub struct NeonF32Butterfly5<T> {
     direction: FftDirection,
+    bf2: NeonF32ParallelButterfly2,
     _phantom: std::marker::PhantomData<T>,
     twiddle12re: float32x4_t,
     twiddle21re: float32x4_t,
@@ -1094,6 +1094,7 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
         Self {
             direction,
             _phantom: std::marker::PhantomData,
+            bf2: NeonF32ParallelButterfly2::new(direction),
             twiddle12re,
             twiddle21re,
             twiddle12im,
@@ -1133,7 +1134,7 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
         let value3 = extract_hi_lo_f32(input_packed[1], input_packed[4]);
         let value4 = extract_lo_hi_f32(input_packed[2], input_packed[4]);
 
-        let out = self.perform_parallel_fft_direct(value0, value1, value2, value3, value4);
+        let out = self.perform_parallel_fft_direct([value0, value1, value2, value3, value4]);
 
         let out_packed = [
             extract_lo_lo_f32(out[0], out[1]),
@@ -1188,40 +1189,32 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(
         &self,
-        value0: float32x4_t,
-        value1: float32x4_t,
-        value2: float32x4_t,
-        value3: float32x4_t,
-        value4: float32x4_t,
+        data: [float32x4_t; 5],
     ) -> [float32x4_t; 5] {
-        // This is a Neon translation of the scalar 3-point butterfly
-        let x14p = vaddq_f32(value1, value4);
-        let x14n = vsubq_f32(value1, value4);
-        let x23p = vaddq_f32(value2, value3);
-        let x23n = vsubq_f32(value2, value3);
-
-        let temp_a1_1 = vmulq_f32(self.twiddle1re, x14p);
-        let temp_a1_2 = vmulq_f32(self.twiddle2re, x23p);
-        let temp_b1_1 = vmulq_f32(self.twiddle1im, x14n);
-        let temp_b1_2 = vmulq_f32(self.twiddle2im, x23n);
-        let temp_a2_1 = vmulq_f32(self.twiddle1re, x23p);
-        let temp_a2_2 = vmulq_f32(self.twiddle2re, x14p);
-        let temp_b2_1 = vmulq_f32(self.twiddle2im, x14n);
-        let temp_b2_2 = vmulq_f32(self.twiddle1im, x23n);
-
-        let temp_a1 = vaddq_f32(value0, vaddq_f32(temp_a1_1, temp_a1_2));
-        let temp_b1 = vaddq_f32(temp_b1_1, temp_b1_2);
-        let temp_a2 = vaddq_f32(value0, vaddq_f32(temp_a2_1, temp_a2_2));
-        let temp_b2 = vsubq_f32(temp_b2_1, temp_b2_2);
-
         let rotate = Rotate90F32::new(FftDirection::Inverse);
-        [
-            vaddq_f32(value0, vaddq_f32(x14p, x23p)),
-            vaddq_f32(temp_a1, rotate.rotate(temp_b1)),
-            vaddq_f32(temp_a2, rotate.rotate(temp_b2)),
-            vsubq_f32(temp_a2, rotate.rotate(temp_b2)),
-            vsubq_f32(temp_a1, rotate.rotate(temp_b1)),
-        ]
+
+        let y00 = data[0];
+        let [x1p4, x1m4] = self.bf2.parallel_fft([data[1], data[4]]);
+        let x1m4 = rotate.rotate(x1m4);
+        let y00 = SimdVector::add(y00, x1p4);
+        let [x2p3, x2m3] = self.bf2.parallel_fft([data[2], data[3]]);
+        let x2m3 = rotate.rotate(x2m3);
+        let y00 = SimdVector::add(y00, x2p3);
+
+        let m0104a = SimdVector::fmadd(data[0], self.twiddle1re, x1p4);
+        let m0104a = SimdVector::fmadd(m0104a, self.twiddle2re, x2p3);
+        let m0104b = SimdVector::mul(self.twiddle1im, x1m4);
+        let m0104b = SimdVector::fmadd(m0104b, self.twiddle2im, x2m3);
+        let [y01, y04] = self.bf2.parallel_fft([m0104a, m0104b]);
+
+        let m0203a = SimdVector::fmadd(data[0], self.twiddle2re, x1p4);
+        let m0203a = SimdVector::fmadd(m0203a, self.twiddle1re, x2p3);
+        let m0203b = SimdVector::mul(self.twiddle2im, x1m4);
+        let m0203b = SimdVector::nmadd(m0203b, self.twiddle1im, x2m3);
+        let [y02, y03] = self.bf2.parallel_fft([m0203a, m0203b]);
+
+
+        [y00, y01, y02, y03, y04]
     }
 }
 
@@ -1233,6 +1226,7 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
 //
 
 pub struct NeonF64ParallelButterfly5 {
+    bf2: NeonF64ParallelButterfly2,
     twiddle1re: float64x2_t,
     twiddle1im: float64x2_t,
     twiddle2re: float64x2_t,
@@ -1246,6 +1240,7 @@ impl NeonF64ParallelButterfly5 {
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 5, direction);
         let tw2: Complex<f64> = twiddles::compute_twiddle(2, 5, direction);
         Self {
+            bf2: NeonF64ParallelButterfly2::new(direction),
             twiddle1re: unsafe { vmovq_n_f64(tw1.re) },
             twiddle1im: unsafe { vmovq_n_f64(tw1.im) },
             twiddle2re: unsafe { vmovq_n_f64(tw2.re) },
@@ -1256,41 +1251,39 @@ impl NeonF64ParallelButterfly5 {
 impl ParallelFft<float64x2_t, 5> for NeonF64ParallelButterfly5 {
     #[inline(always)]
     fn parallel_fft(&self, data: [float64x2_t; 5]) -> [float64x2_t; 5] {
+        let rotate = Rotate90F64::new(FftDirection::Inverse);
+
         // Safety: These intrinsics require the NEON target feature. We asserted this feature was present in the constructor.
         unsafe {
-            let x14p = vaddq_f64(data[1], data[4]);
-            let x14n = vsubq_f64(data[1], data[4]);
-            let x23p = vaddq_f64(data[2], data[3]);
-            let x23n = vsubq_f64(data[2], data[3]);
+            let y00 = data[0];
+            let [x1p4, x1m4] = self.bf2.parallel_fft([data[1], data[4]]);
+            let x1m4 = rotate.rotate(x1m4);
+            let y00 = SimdVector::add(y00, x1p4);
+            let [x2p3, x2m3] = self.bf2.parallel_fft([data[2], data[3]]);
+            let x2m3 = rotate.rotate(x2m3);
+            let y00 = SimdVector::add(y00, x2p3);
 
-            let temp_a1_1 = vmulq_f64(self.twiddle1re, x14p);
-            let temp_a1_2 = vmulq_f64(self.twiddle2re, x23p);
-            let temp_b1_1 = vmulq_f64(self.twiddle1im, x14n);
-            let temp_b1_2 = vmulq_f64(self.twiddle2im, x23n);
-            let temp_a2_1 = vmulq_f64(self.twiddle1re, x23p);
-            let temp_a2_2 = vmulq_f64(self.twiddle2re, x14p);
-            let temp_b2_1 = vmulq_f64(self.twiddle2im, x14n);
-            let temp_b2_2 = vmulq_f64(self.twiddle1im, x23n);
+            let m0104a = SimdVector::fmadd(data[0], self.twiddle1re, x1p4);
+            let m0104a = SimdVector::fmadd(m0104a, self.twiddle2re, x2p3);
+            let m0104b = SimdVector::mul(self.twiddle1im, x1m4);
+            let m0104b = SimdVector::fmadd(m0104b, self.twiddle2im, x2m3);
+            let [y01, y04] = self.bf2.parallel_fft([m0104a, m0104b]);
 
-            let temp_a1 = vaddq_f64(data[0], vaddq_f64(temp_a1_1, temp_a1_2));
-            let temp_b1 = vaddq_f64(temp_b1_1, temp_b1_2);
-            let temp_a2 = vaddq_f64(data[0], vaddq_f64(temp_a2_1, temp_a2_2));
-            let temp_b2 = vsubq_f64(temp_b2_1, temp_b2_2);
+            let m0203a = SimdVector::fmadd(data[0], self.twiddle2re, x1p4);
+            let m0203a = SimdVector::fmadd(m0203a, self.twiddle1re, x2p3);
+            let m0203b = SimdVector::mul(self.twiddle2im, x1m4);
+            let m0203b = SimdVector::nmadd(m0203b, self.twiddle1im, x2m3);
+            let [y02, y03] = self.bf2.parallel_fft([m0203a, m0203b]);
 
-            let rotate = Rotate90F64::new(FftDirection::Inverse);
-            [
-                vaddq_f64(data[0], vaddq_f64(x14p, x23p)),
-                vaddq_f64(temp_a1, rotate.rotate(temp_b1)),
-                vaddq_f64(temp_a2, rotate.rotate(temp_b2)),
-                vsubq_f64(temp_a2, rotate.rotate(temp_b2)),
-                vsubq_f64(temp_a1, rotate.rotate(temp_b1)),
-            ]
+
+            [y00, y01, y02, y03, y04]
         }
     }
 }
 
 pub struct NeonF64Butterfly5<T> {
     direction: FftDirection,
+    bf2: NeonF64ParallelButterfly2,
     _phantom: std::marker::PhantomData<T>,
     twiddle1re: float64x2_t,
     twiddle1im: float64x2_t,
@@ -1313,6 +1306,7 @@ impl<T: FftNum> NeonF64Butterfly5<T> {
 
         Self {
             direction,
+            bf2: NeonF64ParallelButterfly2::new(direction),
             _phantom: std::marker::PhantomData,
             twiddle1re,
             twiddle1im,
@@ -1332,7 +1326,7 @@ impl<T: FftNum> NeonF64Butterfly5<T> {
         let value3 = buffer.load(3);
         let value4 = buffer.load(4);
 
-        let out = self.perform_fft_direct(value0, value1, value2, value3, value4);
+        let out = self.perform_fft_direct([value0, value1, value2, value3, value4]);
 
         buffer.store(out[0], 0);
         buffer.store(out[1], 1);
@@ -1346,44 +1340,32 @@ impl<T: FftNum> NeonF64Butterfly5<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
         &self,
-        value0: float64x2_t,
-        value1: float64x2_t,
-        value2: float64x2_t,
-        value3: float64x2_t,
-        value4: float64x2_t,
+        data: [float64x2_t; 5],
     ) -> [float64x2_t; 5] {
-        // This is a Neon translation of the scalar 5-point butterfly
-        let x14p = vaddq_f64(value1, value4);
-        let x14n = vsubq_f64(value1, value4);
-        let x23p = vaddq_f64(value2, value3);
-        let x23n = vsubq_f64(value2, value3);
-
-        let temp_a1_1 = vmulq_f64(self.twiddle1re, x14p);
-        let temp_a1_2 = vmulq_f64(self.twiddle2re, x23p);
-        let temp_a2_1 = vmulq_f64(self.twiddle2re, x14p);
-        let temp_a2_2 = vmulq_f64(self.twiddle1re, x23p);
-
-        let temp_b1_1 = vmulq_f64(self.twiddle1im, x14n);
-        let temp_b1_2 = vmulq_f64(self.twiddle2im, x23n);
-        let temp_b2_1 = vmulq_f64(self.twiddle2im, x14n);
-        let temp_b2_2 = vmulq_f64(self.twiddle1im, x23n);
-
-        let temp_a1 = vaddq_f64(value0, vaddq_f64(temp_a1_1, temp_a1_2));
-        let temp_a2 = vaddq_f64(value0, vaddq_f64(temp_a2_1, temp_a2_2));
-
-        let temp_b1 = vaddq_f64(temp_b1_1, temp_b1_2);
-        let temp_b2 = vsubq_f64(temp_b2_1, temp_b2_2);
-
         let rotate = Rotate90F64::new(FftDirection::Inverse);
-        let temp_b1_rot = rotate.rotate(temp_b1);
-        let temp_b2_rot = rotate.rotate(temp_b2);
-        [
-            vaddq_f64(value0, vaddq_f64(x14p, x23p)),
-            vaddq_f64(temp_a1, temp_b1_rot),
-            vaddq_f64(temp_a2, temp_b2_rot),
-            vsubq_f64(temp_a2, temp_b2_rot),
-            vsubq_f64(temp_a1, temp_b1_rot),
-        ]
+
+        let y00 = data[0];
+        let [x1p4, x1m4] = self.bf2.parallel_fft([data[1], data[4]]);
+        let x1m4 = rotate.rotate(x1m4);
+        let y00 = SimdVector::add(y00, x1p4);
+        let [x2p3, x2m3] = self.bf2.parallel_fft([data[2], data[3]]);
+        let x2m3 = rotate.rotate(x2m3);
+        let y00 = SimdVector::add(y00, x2p3);
+
+        let m0104a = SimdVector::fmadd(data[0], self.twiddle1re, x1p4);
+        let m0104a = SimdVector::fmadd(m0104a, self.twiddle2re, x2p3);
+        let m0104b = SimdVector::mul(self.twiddle1im, x1m4);
+        let m0104b = SimdVector::fmadd(m0104b, self.twiddle2im, x2m3);
+        let [y01, y04] = self.bf2.parallel_fft([m0104a, m0104b]);
+
+        let m0203a = SimdVector::fmadd(data[0], self.twiddle2re, x1p4);
+        let m0203a = SimdVector::fmadd(m0203a, self.twiddle1re, x2p3);
+        let m0203b = SimdVector::mul(self.twiddle2im, x1m4);
+        let m0203b = SimdVector::nmadd(m0203b, self.twiddle1im, x2m3);
+        let [y02, y03] = self.bf2.parallel_fft([m0203a, m0203b]);
+
+
+        [y00, y01, y02, y03, y04]
     }
 }
 
@@ -2119,7 +2101,7 @@ impl<T: FftNum> NeonF32Butterfly10<T> {
         // Size-5 FFTs down the columns of our reordered array
         let mids = self
             .bf5
-            .perform_parallel_fft_direct(reord0, reord1, reord2, reord3, reord4);
+            .perform_parallel_fft_direct([reord0, reord1, reord2, reord3, reord4]);
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
 
@@ -2148,10 +2130,10 @@ impl<T: FftNum> NeonF32Butterfly10<T> {
         // Size-5 FFTs down the columns of our reordered array
         let mid0 = self
             .bf5
-            .perform_parallel_fft_direct(values[0], values[2], values[4], values[6], values[8]);
+            .perform_parallel_fft_direct([values[0], values[2], values[4], values[6], values[8]]);
         let mid1 = self
             .bf5
-            .perform_parallel_fft_direct(values[5], values[7], values[9], values[1], values[3]);
+            .perform_parallel_fft_direct([values[5], values[7], values[9], values[1], values[3]]);
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
 
@@ -2218,10 +2200,10 @@ impl<T: FftNum> NeonF64Butterfly10<T> {
         // Size-5 FFTs down the columns of our reordered array
         let mid0 = self
             .bf5
-            .perform_fft_direct(values[0], values[2], values[4], values[6], values[8]);
+            .perform_fft_direct([values[0], values[2], values[4], values[6], values[8]]);
         let mid1 = self
             .bf5
-            .perform_fft_direct(values[5], values[7], values[9], values[1], values[3]);
+            .perform_fft_direct([values[5], values[7], values[9], values[1], values[3]]);
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
 
@@ -2548,13 +2530,13 @@ impl<T: FftNum> NeonF32Butterfly15<T> {
         // Size-5 FFTs down the columns of our reordered array
         let mid0 = self
             .bf5
-            .perform_parallel_fft_direct(values[0], values[3], values[6], values[9], values[12]);
+            .perform_parallel_fft_direct([values[0], values[3], values[6], values[9], values[12]]);
         let mid1 = self
             .bf5
-            .perform_parallel_fft_direct(values[5], values[8], values[11], values[14], values[2]);
+            .perform_parallel_fft_direct([values[5], values[8], values[11], values[14], values[2]]);
         let mid2 = self
             .bf5
-            .perform_parallel_fft_direct(values[10], values[13], values[1], values[4], values[7]);
+            .perform_parallel_fft_direct([values[10], values[13], values[1], values[4], values[7]]);
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
 
@@ -2631,13 +2613,13 @@ impl<T: FftNum> NeonF64Butterfly15<T> {
         // Size-5 FFTs down the columns of our reordered array
         let mid0 = self
             .bf5
-            .perform_fft_direct(values[0], values[3], values[6], values[9], values[12]);
+            .perform_fft_direct([values[0], values[3], values[6], values[9], values[12]]);
         let mid1 = self
             .bf5
-            .perform_fft_direct(values[5], values[8], values[11], values[14], values[2]);
+            .perform_fft_direct([values[5], values[8], values[11], values[14], values[2]]);
         let mid2 = self
             .bf5
-            .perform_fft_direct(values[10], values[13], values[1], values[4], values[7]);
+            .perform_fft_direct([values[10], values[13], values[1], values[4], values[7]]);
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
 
