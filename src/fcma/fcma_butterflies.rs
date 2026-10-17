@@ -1046,6 +1046,7 @@ impl<T: FftNum> FcmaF64Butterfly4<T> {
 //
 
 pub struct FcmaF32ParallelButterfly5 {
+    bf2: FcmaF32ParallelButterfly2,
     twiddle1re: FcmaVector32,
     twiddle1im: FcmaVector32,
     twiddle2re: FcmaVector32,
@@ -1062,6 +1063,7 @@ impl FcmaF32ParallelButterfly5 {
         let tw1: Complex<f32> = twiddles::compute_twiddle(1, 5, direction);
         let tw2: Complex<f32> = twiddles::compute_twiddle(2, 5, direction);
         Self {
+            bf2: FcmaF32ParallelButterfly2::new(direction),
             twiddle1re: unsafe { FcmaVector32(vmovq_n_f32(tw1.re)) },
             twiddle1im: unsafe { FcmaVector32(vmovq_n_f32(tw1.im)) },
             twiddle2re: unsafe { FcmaVector32(vmovq_n_f32(tw2.re)) },
@@ -1074,39 +1076,32 @@ impl ParallelFft<FcmaVector32, 5> for FcmaF32ParallelButterfly5 {
     fn parallel_fft(&self, data: [FcmaVector32; 5]) -> [FcmaVector32; 5] {
         // Safety: These intrinsics require the NEON and FCMA target features. We asserted this feature was present in the constructor.
         unsafe {
-            let x14p = SimdVector::add(data[1], data[4]);
-            let x14n = SimdVector::sub(data[1], data[4]);
-            let x23p = SimdVector::add(data[2], data[3]);
-            let x23n = SimdVector::sub(data[2], data[3]);
+            let y00 = data[0];
+            let [x1p4, x1m4] = self.bf2.parallel_fft([data[1], data[4]]);
+            let y00 = SimdVector::add(y00, x1p4);
+            let [x2p3, x2m3] = self.bf2.parallel_fft([data[2], data[3]]);
+            let y00 = SimdVector::add(y00, x2p3);
 
-            let temp_a1_1 = SimdVector::mul(self.twiddle1re, x14p);
-            let temp_a1_2 = SimdVector::mul(self.twiddle2re, x23p);
-            let temp_b1_1 = SimdVector::mul(self.twiddle1im, x14n);
-            let temp_b1_2 = SimdVector::mul(self.twiddle2im, x23n);
-            let temp_a2_1 = SimdVector::mul(self.twiddle1re, x23p);
-            let temp_a2_2 = SimdVector::mul(self.twiddle2re, x14p);
-            let temp_b2_1 = SimdVector::mul(self.twiddle2im, x14n);
-            let temp_b2_2 = SimdVector::mul(self.twiddle1im, x23n);
+            let m0104a = SimdVector::fmadd(data[0], self.twiddle1re, x1p4);
+            let m0104a = SimdVector::fmadd(m0104a, self.twiddle2re, x2p3);
+            let m0104b = FcmaVector::mul_rotate90(self.twiddle1im, x1m4);
+            let m0104b = FcmaVector::fmadd_rotate90(m0104b, self.twiddle2im, x2m3);
+            let [y01, y04] = self.bf2.parallel_fft([m0104a, m0104b]);
 
-            let temp_a1 = SimdVector::add(data[0], SimdVector::add(temp_a1_1, temp_a1_2));
-            let temp_b1 = SimdVector::add(temp_b1_1, temp_b1_2);
-            let temp_a2 = SimdVector::add(data[0], SimdVector::add(temp_a2_1, temp_a2_2));
-            let temp_b2 = SimdVector::sub(temp_b2_1, temp_b2_2);
+            let m0203a = SimdVector::fmadd(data[0], self.twiddle2re, x1p4);
+            let m0203a = SimdVector::fmadd(m0203a, self.twiddle1re, x2p3);
+            let m0203b = FcmaVector::mul_rotate90(self.twiddle2im, x1m4);
+            let m0203b = FcmaVector::nmadd_rotate90(m0203b, self.twiddle1im, x2m3);
+            let [y02, y03] = self.bf2.parallel_fft([m0203a, m0203b]);
 
-            let rotate = Rotate90F32::new(FftDirection::Inverse);
-            [
-                SimdVector::add(data[0], SimdVector::add(x14p, x23p)),
-                rotate.rotate_and_add(temp_a1, temp_b1),
-                rotate.rotate_and_add(temp_a2, temp_b2),
-                rotate.rotate_and_sub(temp_a2, temp_b2),
-                rotate.rotate_and_sub(temp_a1, temp_b1),
-            ]
+            [y00, y01, y02, y03, y04]
         }
     }
 }
 
 pub struct FcmaF32Butterfly5<T> {
     direction: FftDirection,
+    bf2: FcmaF32ParallelButterfly2,
     _phantom: std::marker::PhantomData<T>,
     twiddle12re: FcmaVector32,
     twiddle21re: FcmaVector32,
@@ -1141,6 +1136,7 @@ impl<T: FftNum> FcmaF32Butterfly5<T> {
 
         Self {
             direction,
+            bf2: FcmaF32ParallelButterfly2::new(direction),
             _phantom: std::marker::PhantomData,
             twiddle12re,
             twiddle21re,
@@ -1181,7 +1177,7 @@ impl<T: FftNum> FcmaF32Butterfly5<T> {
         let value3 = extract_hi_lo_f32(input_packed[1], input_packed[4]);
         let value4 = extract_lo_hi_f32(input_packed[2], input_packed[4]);
 
-        let out = self.perform_parallel_fft_direct(value0, value1, value2, value3, value4);
+        let out = self.perform_parallel_fft_direct([value0, value1, value2, value3, value4]);
 
         let out_packed = [
             extract_lo_lo_f32(out[0], out[1]),
@@ -1234,40 +1230,27 @@ impl<T: FftNum> FcmaF32Butterfly5<T> {
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(
         &self,
-        value0: FcmaVector32,
-        value1: FcmaVector32,
-        value2: FcmaVector32,
-        value3: FcmaVector32,
-        value4: FcmaVector32,
+        data: [FcmaVector32; 5],
     ) -> [FcmaVector32; 5] {
-        // This is an FCMA translation of the scalar 3-point butterfly
-        let x14p = SimdVector::add(value1, value4);
-        let x14n = SimdVector::sub(value1, value4);
-        let x23p = SimdVector::add(value2, value3);
-        let x23n = SimdVector::sub(value2, value3);
+        let y00 = data[0];
+        let [x1p4, x1m4] = self.bf2.parallel_fft([data[1], data[4]]);
+        let y00 = SimdVector::add(y00, x1p4);
+        let [x2p3, x2m3] = self.bf2.parallel_fft([data[2], data[3]]);
+        let y00 = SimdVector::add(y00, x2p3);
 
-        let temp_a1_1 = SimdVector::mul(self.twiddle1re, x14p);
-        let temp_a1_2 = SimdVector::mul(self.twiddle2re, x23p);
-        let temp_b1_1 = SimdVector::mul(self.twiddle1im, x14n);
-        let temp_b1_2 = SimdVector::mul(self.twiddle2im, x23n);
-        let temp_a2_1 = SimdVector::mul(self.twiddle1re, x23p);
-        let temp_a2_2 = SimdVector::mul(self.twiddle2re, x14p);
-        let temp_b2_1 = SimdVector::mul(self.twiddle2im, x14n);
-        let temp_b2_2 = SimdVector::mul(self.twiddle1im, x23n);
+        let m0104a = SimdVector::fmadd(data[0], self.twiddle1re, x1p4);
+        let m0104a = SimdVector::fmadd(m0104a, self.twiddle2re, x2p3);
+        let m0104b = FcmaVector::mul_rotate90(self.twiddle1im, x1m4);
+        let m0104b = FcmaVector::fmadd_rotate90(m0104b, self.twiddle2im, x2m3);
+        let [y01, y04] = self.bf2.parallel_fft([m0104a, m0104b]);
 
-        let temp_a1 = SimdVector::add(value0, SimdVector::add(temp_a1_1, temp_a1_2));
-        let temp_b1 = SimdVector::add(temp_b1_1, temp_b1_2);
-        let temp_a2 = SimdVector::add(value0, SimdVector::add(temp_a2_1, temp_a2_2));
-        let temp_b2 = SimdVector::sub(temp_b2_1, temp_b2_2);
+        let m0203a = SimdVector::fmadd(data[0], self.twiddle2re, x1p4);
+        let m0203a = SimdVector::fmadd(m0203a, self.twiddle1re, x2p3);
+        let m0203b = FcmaVector::mul_rotate90(self.twiddle2im, x1m4);
+        let m0203b = FcmaVector::nmadd_rotate90(m0203b, self.twiddle1im, x2m3);
+        let [y02, y03] = self.bf2.parallel_fft([m0203a, m0203b]);
 
-        let rotate = Rotate90F32::new(FftDirection::Inverse);
-        [
-            SimdVector::add(value0, SimdVector::add(x14p, x23p)),
-            rotate.rotate_and_add(temp_a1, temp_b1),
-            rotate.rotate_and_add(temp_a2, temp_b2),
-            rotate.rotate_and_sub(temp_a2, temp_b2),
-            rotate.rotate_and_sub(temp_a1, temp_b1),
-        ]
+        [y00, y01, y02, y03, y04]
     }
 }
 
@@ -1279,6 +1262,7 @@ impl<T: FftNum> FcmaF32Butterfly5<T> {
 //
 
 pub struct FcmaF64ParallelButterfly5 {
+    bf2: FcmaF64ParallelButterfly2,
     twiddle1re: FcmaVector64,
     twiddle1im: FcmaVector64,
     twiddle2re: FcmaVector64,
@@ -1295,6 +1279,7 @@ impl FcmaF64ParallelButterfly5 {
         let tw1: Complex<f64> = twiddles::compute_twiddle(1, 5, direction);
         let tw2: Complex<f64> = twiddles::compute_twiddle(2, 5, direction);
         Self {
+            bf2: FcmaF64ParallelButterfly2::new(direction),
             twiddle1re: unsafe { FcmaVector64(vmovq_n_f64(tw1.re)) },
             twiddle1im: unsafe { FcmaVector64(vmovq_n_f64(tw1.im)) },
             twiddle2re: unsafe { FcmaVector64(vmovq_n_f64(tw2.re)) },
@@ -1307,39 +1292,32 @@ impl ParallelFft<FcmaVector64, 5> for FcmaF64ParallelButterfly5 {
     fn parallel_fft(&self, data: [FcmaVector64; 5]) -> [FcmaVector64; 5] {
         // Safety: These intrinsics require the NEON and FCMA target features. We asserted this feature was present in the constructor.
         unsafe {
-            let x14p = SimdVector::add(data[1], data[4]);
-            let x14n = SimdVector::sub(data[1], data[4]);
-            let x23p = SimdVector::add(data[2], data[3]);
-            let x23n = SimdVector::sub(data[2], data[3]);
+            let y00 = data[0];
+            let [x1p4, x1m4] = self.bf2.parallel_fft([data[1], data[4]]);
+            let y00 = SimdVector::add(y00, x1p4);
+            let [x2p3, x2m3] = self.bf2.parallel_fft([data[2], data[3]]);
+            let y00 = SimdVector::add(y00, x2p3);
 
-            let temp_a1_1 = SimdVector::mul(self.twiddle1re, x14p);
-            let temp_a1_2 = SimdVector::mul(self.twiddle2re, x23p);
-            let temp_b1_1 = SimdVector::mul(self.twiddle1im, x14n);
-            let temp_b1_2 = SimdVector::mul(self.twiddle2im, x23n);
-            let temp_a2_1 = SimdVector::mul(self.twiddle1re, x23p);
-            let temp_a2_2 = SimdVector::mul(self.twiddle2re, x14p);
-            let temp_b2_1 = SimdVector::mul(self.twiddle2im, x14n);
-            let temp_b2_2 = SimdVector::mul(self.twiddle1im, x23n);
+            let m0104a = SimdVector::fmadd(data[0], self.twiddle1re, x1p4);
+            let m0104a = SimdVector::fmadd(m0104a, self.twiddle2re, x2p3);
+            let m0104b = FcmaVector::mul_rotate90(self.twiddle1im, x1m4);
+            let m0104b = FcmaVector::fmadd_rotate90(m0104b, self.twiddle2im, x2m3);
+            let [y01, y04] = self.bf2.parallel_fft([m0104a, m0104b]);
 
-            let temp_a1 = SimdVector::add(data[0], SimdVector::add(temp_a1_1, temp_a1_2));
-            let temp_b1 = SimdVector::add(temp_b1_1, temp_b1_2);
-            let temp_a2 = SimdVector::add(data[0], SimdVector::add(temp_a2_1, temp_a2_2));
-            let temp_b2 = SimdVector::sub(temp_b2_1, temp_b2_2);
+            let m0203a = SimdVector::fmadd(data[0], self.twiddle2re, x1p4);
+            let m0203a = SimdVector::fmadd(m0203a, self.twiddle1re, x2p3);
+            let m0203b = FcmaVector::mul_rotate90(self.twiddle2im, x1m4);
+            let m0203b = FcmaVector::nmadd_rotate90(m0203b, self.twiddle1im, x2m3);
+            let [y02, y03] = self.bf2.parallel_fft([m0203a, m0203b]);
 
-            let rotate = Rotate90F64::new(FftDirection::Inverse);
-            [
-                SimdVector::add(data[0], SimdVector::add(x14p, x23p)),
-                rotate.rotate_and_add(temp_a1, temp_b1),
-                rotate.rotate_and_add(temp_a2, temp_b2),
-                rotate.rotate_and_sub(temp_a2, temp_b2),
-                rotate.rotate_and_sub(temp_a1, temp_b1),
-            ]
+            [y00, y01, y02, y03, y04]
         }
     }
 }
 
 pub struct FcmaF64Butterfly5<T> {
     direction: FftDirection,
+    bf2: FcmaF64ParallelButterfly2,
     _phantom: std::marker::PhantomData<T>,
     twiddle1re: FcmaVector64,
     twiddle1im: FcmaVector64,
@@ -1362,6 +1340,7 @@ impl<T: FftNum> FcmaF64Butterfly5<T> {
 
         Self {
             direction,
+            bf2: FcmaF64ParallelButterfly2::new(direction),
             _phantom: std::marker::PhantomData,
             twiddle1re,
             twiddle1im,
@@ -1381,7 +1360,7 @@ impl<T: FftNum> FcmaF64Butterfly5<T> {
         let value3 = buffer.load(3);
         let value4 = buffer.load(4);
 
-        let out = self.perform_fft_direct(value0, value1, value2, value3, value4);
+        let out = self.perform_fft_direct([value0, value1, value2, value3, value4]);
 
         buffer.store(out[0], 0);
         buffer.store(out[1], 1);
@@ -1393,44 +1372,26 @@ impl<T: FftNum> FcmaF64Butterfly5<T> {
     // length 5 fft of x, given as x0, x1, x2, x3, x4.
     // result is [X0, X1, X2, X3, X4]
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(
-        &self,
-        value0: FcmaVector64,
-        value1: FcmaVector64,
-        value2: FcmaVector64,
-        value3: FcmaVector64,
-        value4: FcmaVector64,
-    ) -> [FcmaVector64; 5] {
-        // This is an FCMA translation of the scalar 5-point butterfly
-        let x14p = SimdVector::add(value1, value4);
-        let x14n = SimdVector::sub(value1, value4);
-        let x23p = SimdVector::add(value2, value3);
-        let x23n = SimdVector::sub(value2, value3);
+    pub(crate) unsafe fn perform_fft_direct(&self, data: [FcmaVector64; 5]) -> [FcmaVector64; 5] {
+        let y00 = data[0];
+        let [x1p4, x1m4] = self.bf2.parallel_fft([data[1], data[4]]);
+        let y00 = SimdVector::add(y00, x1p4);
+        let [x2p3, x2m3] = self.bf2.parallel_fft([data[2], data[3]]);
+        let y00 = SimdVector::add(y00, x2p3);
 
-        let temp_a1_1 = SimdVector::mul(self.twiddle1re, x14p);
-        let temp_a1_2 = SimdVector::mul(self.twiddle2re, x23p);
-        let temp_a2_1 = SimdVector::mul(self.twiddle2re, x14p);
-        let temp_a2_2 = SimdVector::mul(self.twiddle1re, x23p);
+        let m0104a = SimdVector::fmadd(data[0], self.twiddle1re, x1p4);
+        let m0104a = SimdVector::fmadd(m0104a, self.twiddle2re, x2p3);
+        let m0104b = FcmaVector::mul_rotate90(self.twiddle1im, x1m4);
+        let m0104b = FcmaVector::fmadd_rotate90(m0104b, self.twiddle2im, x2m3);
+        let [y01, y04] = self.bf2.parallel_fft([m0104a, m0104b]);
 
-        let temp_b1_1 = SimdVector::mul(self.twiddle1im, x14n);
-        let temp_b1_2 = SimdVector::mul(self.twiddle2im, x23n);
-        let temp_b2_1 = SimdVector::mul(self.twiddle2im, x14n);
-        let temp_b2_2 = SimdVector::mul(self.twiddle1im, x23n);
+        let m0203a = SimdVector::fmadd(data[0], self.twiddle2re, x1p4);
+        let m0203a = SimdVector::fmadd(m0203a, self.twiddle1re, x2p3);
+        let m0203b = FcmaVector::mul_rotate90(self.twiddle2im, x1m4);
+        let m0203b = FcmaVector::nmadd_rotate90(m0203b, self.twiddle1im, x2m3);
+        let [y02, y03] = self.bf2.parallel_fft([m0203a, m0203b]);
 
-        let temp_a1 = SimdVector::add(value0, SimdVector::add(temp_a1_1, temp_a1_2));
-        let temp_a2 = SimdVector::add(value0, SimdVector::add(temp_a2_1, temp_a2_2));
-
-        let temp_b1 = SimdVector::add(temp_b1_1, temp_b1_2);
-        let temp_b2 = SimdVector::sub(temp_b2_1, temp_b2_2);
-
-        let rotate = Rotate90F64::new(FftDirection::Inverse);
-        [
-            SimdVector::add(value0, SimdVector::add(x14p, x23p)),
-            rotate.rotate_and_add(temp_a1, temp_b1),
-            rotate.rotate_and_add(temp_a2, temp_b2),
-            rotate.rotate_and_sub(temp_a2, temp_b2),
-            rotate.rotate_and_sub(temp_a1, temp_b1),
-        ]
+        [y00, y01, y02, y03, y04]
     }
 }
 
@@ -2161,7 +2122,7 @@ impl<T: FftNum> FcmaF32Butterfly10<T> {
         // Size-5 FFTs down the columns of our reordered array
         let mids = self
             .bf5
-            .perform_parallel_fft_direct(reord0, reord1, reord2, reord3, reord4);
+            .perform_parallel_fft_direct([reord0, reord1, reord2, reord3, reord4]);
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
 
@@ -2190,10 +2151,10 @@ impl<T: FftNum> FcmaF32Butterfly10<T> {
         // Size-5 FFTs down the columns of our reordered array
         let mid0 = self
             .bf5
-            .perform_parallel_fft_direct(values[0], values[2], values[4], values[6], values[8]);
+            .perform_parallel_fft_direct([values[0], values[2], values[4], values[6], values[8]]);
         let mid1 = self
             .bf5
-            .perform_parallel_fft_direct(values[5], values[7], values[9], values[1], values[3]);
+            .perform_parallel_fft_direct([values[5], values[7], values[9], values[1], values[3]]);
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
 
@@ -2263,10 +2224,10 @@ impl<T: FftNum> FcmaF64Butterfly10<T> {
         // Size-5 FFTs down the columns of our reordered array
         let mid0 = self
             .bf5
-            .perform_fft_direct(values[0], values[2], values[4], values[6], values[8]);
+            .perform_fft_direct([values[0], values[2], values[4], values[6], values[8]]);
         let mid1 = self
             .bf5
-            .perform_fft_direct(values[5], values[7], values[9], values[1], values[3]);
+            .perform_fft_direct([values[5], values[7], values[9], values[1], values[3]]);
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
 
@@ -2596,13 +2557,13 @@ impl<T: FftNum> FcmaF32Butterfly15<T> {
         // Size-5 FFTs down the columns of our reordered array
         let mid0 = self
             .bf5
-            .perform_parallel_fft_direct(values[0], values[3], values[6], values[9], values[12]);
+            .perform_parallel_fft_direct([values[0], values[3], values[6], values[9], values[12]]);
         let mid1 = self
             .bf5
-            .perform_parallel_fft_direct(values[5], values[8], values[11], values[14], values[2]);
+            .perform_parallel_fft_direct([values[5], values[8], values[11], values[14], values[2]]);
         let mid2 = self
             .bf5
-            .perform_parallel_fft_direct(values[10], values[13], values[1], values[4], values[7]);
+            .perform_parallel_fft_direct([values[10], values[13], values[1], values[4], values[7]]);
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
 
@@ -2682,13 +2643,13 @@ impl<T: FftNum> FcmaF64Butterfly15<T> {
         // Size-5 FFTs down the columns of our reordered array
         let mid0 = self
             .bf5
-            .perform_fft_direct(values[0], values[3], values[6], values[9], values[12]);
+            .perform_fft_direct([values[0], values[3], values[6], values[9], values[12]]);
         let mid1 = self
             .bf5
-            .perform_fft_direct(values[5], values[8], values[11], values[14], values[2]);
+            .perform_fft_direct([values[5], values[8], values[11], values[14], values[2]]);
         let mid2 = self
             .bf5
-            .perform_fft_direct(values[10], values[13], values[1], values[4], values[7]);
+            .perform_fft_direct([values[10], values[13], values[1], values[4], values[7]]);
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
 

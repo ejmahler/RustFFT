@@ -83,6 +83,10 @@ name = "bench_rustfft"
 harness = false
 
 [[bench]]
+name = "bench_rustfft_fcma"
+harness = false
+
+[[bench]]
 name = "bench_rustfft_neon"
 harness = false
 
