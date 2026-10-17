@@ -1031,7 +1031,7 @@ impl ParallelFft<float32x4_t, 5> for NeonF32ParallelButterfly5 {
     #[inline(always)]
     fn parallel_fft(&self, data: [float32x4_t; 5]) -> [float32x4_t; 5] {
         let rotate = Rotate90F32::new(FftDirection::Inverse);
-        
+
         // Safety: These intrinsics require the NEON target feature. We asserted this feature was present in the constructor.
         unsafe {
             let y00 = data[0];
@@ -1053,7 +1053,6 @@ impl ParallelFft<float32x4_t, 5> for NeonF32ParallelButterfly5 {
             let m0203b = SimdVector::mul(self.twiddle2im, x1m4);
             let m0203b = SimdVector::nmadd(m0203b, self.twiddle1im, x2m3);
             let [y02, y03] = self.bf2.parallel_fft([m0203a, m0203b]);
-
 
             [y00, y01, y02, y03, y04]
         }
@@ -1213,7 +1212,6 @@ impl<T: FftNum> NeonF32Butterfly5<T> {
         let m0203b = SimdVector::nmadd(m0203b, self.twiddle1im, x2m3);
         let [y02, y03] = self.bf2.parallel_fft([m0203a, m0203b]);
 
-
         [y00, y01, y02, y03, y04]
     }
 }
@@ -1274,7 +1272,6 @@ impl ParallelFft<float64x2_t, 5> for NeonF64ParallelButterfly5 {
             let m0203b = SimdVector::mul(self.twiddle2im, x1m4);
             let m0203b = SimdVector::nmadd(m0203b, self.twiddle1im, x2m3);
             let [y02, y03] = self.bf2.parallel_fft([m0203a, m0203b]);
-
 
             [y00, y01, y02, y03, y04]
         }
@@ -1338,10 +1335,7 @@ impl<T: FftNum> NeonF64Butterfly5<T> {
     // length 5 fft of x, given as x0, x1, x2, x3, x4.
     // result is [X0, X1, X2, X3, X4]
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(
-        &self,
-        data: [float64x2_t; 5],
-    ) -> [float64x2_t; 5] {
+    pub(crate) unsafe fn perform_fft_direct(&self, data: [float64x2_t; 5]) -> [float64x2_t; 5] {
         let rotate = Rotate90F64::new(FftDirection::Inverse);
 
         let y00 = data[0];
@@ -1363,7 +1357,6 @@ impl<T: FftNum> NeonF64Butterfly5<T> {
         let m0203b = SimdVector::mul(self.twiddle2im, x1m4);
         let m0203b = SimdVector::nmadd(m0203b, self.twiddle1im, x2m3);
         let [y02, y03] = self.bf2.parallel_fft([m0203a, m0203b]);
-
 
         [y00, y01, y02, y03, y04]
     }

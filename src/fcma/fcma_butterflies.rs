@@ -1094,7 +1094,6 @@ impl ParallelFft<FcmaVector32, 5> for FcmaF32ParallelButterfly5 {
             let m0203b = FcmaVector::nmadd_rotate90(m0203b, self.twiddle1im, x2m3);
             let [y02, y03] = self.bf2.parallel_fft([m0203a, m0203b]);
 
-
             [y00, y01, y02, y03, y04]
         }
     }
@@ -1251,7 +1250,6 @@ impl<T: FftNum> FcmaF32Butterfly5<T> {
         let m0203b = FcmaVector::nmadd_rotate90(m0203b, self.twiddle1im, x2m3);
         let [y02, y03] = self.bf2.parallel_fft([m0203a, m0203b]);
 
-
         [y00, y01, y02, y03, y04]
     }
 }
@@ -1311,7 +1309,6 @@ impl ParallelFft<FcmaVector64, 5> for FcmaF64ParallelButterfly5 {
             let m0203b = FcmaVector::mul_rotate90(self.twiddle2im, x1m4);
             let m0203b = FcmaVector::nmadd_rotate90(m0203b, self.twiddle1im, x2m3);
             let [y02, y03] = self.bf2.parallel_fft([m0203a, m0203b]);
-
 
             [y00, y01, y02, y03, y04]
         }
@@ -1375,10 +1372,7 @@ impl<T: FftNum> FcmaF64Butterfly5<T> {
     // length 5 fft of x, given as x0, x1, x2, x3, x4.
     // result is [X0, X1, X2, X3, X4]
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(
-        &self,
-        data: [FcmaVector64; 5]
-    ) -> [FcmaVector64; 5] {
+    pub(crate) unsafe fn perform_fft_direct(&self, data: [FcmaVector64; 5]) -> [FcmaVector64; 5] {
         let y00 = data[0];
         let [x1p4, x1m4] = self.bf2.parallel_fft([data[1], data[4]]);
         let y00 = SimdVector::add(y00, x1p4);
@@ -1396,7 +1390,6 @@ impl<T: FftNum> FcmaF64Butterfly5<T> {
         let m0203b = FcmaVector::mul_rotate90(self.twiddle2im, x1m4);
         let m0203b = FcmaVector::nmadd_rotate90(m0203b, self.twiddle1im, x2m3);
         let [y02, y03] = self.bf2.parallel_fft([m0203a, m0203b]);
-
 
         [y00, y01, y02, y03, y04]
     }
