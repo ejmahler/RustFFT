@@ -16,6 +16,7 @@ pub struct Rotate90F32 {
 }
 
 impl Rotate90F32 {
+    #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
             // The FCMA instructions multiply by a complex number rather than flipping a sign bit,
@@ -73,6 +74,7 @@ pub struct Rotate90HiF32 {
 }
 
 impl Rotate90HiF32 {
+    #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
             sign_hi: if direction == FftDirection::Inverse {
@@ -214,6 +216,7 @@ pub(crate) struct Rotate90F64 {
 }
 
 impl Rotate90F64 {
+    #[inline(always)]
     pub fn new(direction: FftDirection) -> Self {
         Self {
             // The FCMA instructions multiply by a complex number rather than flipping a sign bit,
