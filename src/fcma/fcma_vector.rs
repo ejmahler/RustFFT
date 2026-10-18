@@ -4,7 +4,7 @@ use num_traits::Zero;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 
-use crate::{array_utils::DoubleBuf, twiddles, FftDirection};
+use crate::{FftDirection, array_utils::DoubleBuf, twiddles};
 
 use super::FcmaNum;
 

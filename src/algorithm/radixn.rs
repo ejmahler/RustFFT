@@ -2,10 +2,10 @@ use std::sync::Arc;
 
 use num_complex::Complex;
 
-use crate::array_utils::{factor_transpose, Load, LoadStore, TransposeFactor};
+use crate::array_utils::{Load, LoadStore, TransposeFactor, factor_transpose};
 use crate::common::RadixFactor;
-use crate::{common::FftNum, twiddles, FftDirection};
 use crate::{Direction, Fft, Length};
+use crate::{FftDirection, common::FftNum, twiddles};
 
 use super::butterflies::{Butterfly2, Butterfly3, Butterfly4, Butterfly5, Butterfly6, Butterfly7};
 

@@ -5,13 +5,13 @@ use num_complex::Complex;
 use num_integer::div_ceil;
 use num_traits::Zero;
 
-use crate::{array_utils, twiddles, FftDirection};
 use crate::{Direction, Fft, FftNum, Length};
+use crate::{FftDirection, array_utils, twiddles};
 
 use super::CommonSimdData;
 use super::{
-    avx_vector::{AvxArray, AvxArrayMut, AvxVector, AvxVector128, AvxVector256},
     AvxNum,
+    avx_vector::{AvxArray, AvxArrayMut, AvxVector, AvxVector128, AvxVector256},
 };
 
 /// Implementation of Bluestein's Algorithm
@@ -74,8 +74,19 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
     #[target_feature(enable = "avx")]
     unsafe fn new_with_avx(len: usize, inner_fft: Arc<dyn Fft<T>>) -> Self {
         let inner_fft_len = inner_fft.len();
-        assert!(len * 2 - 1 <= inner_fft_len, "Bluestein's algorithm requires inner_fft.len() >= self.len() * 2 - 1. Expected >= {}, got {}", len * 2 - 1, inner_fft_len);
-        assert_eq!(inner_fft_len % A::VectorType::COMPLEX_PER_VECTOR, 0, "BluesteinsAvx requires its inner_fft.len() to be a multiple of {} (IE the number of complex numbers in a single vector) inner_fft.len() = {}", A::VectorType::COMPLEX_PER_VECTOR, inner_fft_len);
+        assert!(
+            len * 2 - 1 <= inner_fft_len,
+            "Bluestein's algorithm requires inner_fft.len() >= self.len() * 2 - 1. Expected >= {}, got {}",
+            len * 2 - 1,
+            inner_fft_len
+        );
+        assert_eq!(
+            inner_fft_len % A::VectorType::COMPLEX_PER_VECTOR,
+            0,
+            "BluesteinsAvx requires its inner_fft.len() to be a multiple of {} (IE the number of complex numbers in a single vector) inner_fft.len() = {}",
+            A::VectorType::COMPLEX_PER_VECTOR,
+            inner_fft_len
+        );
 
         // when computing FFTs, we're going to run our inner multiply pairwise by some precomputed data, then run an inverse inner FFT. We need to precompute that inner data here
         let inner_fft_scale = A::one() / A::from_usize(inner_fft_len).unwrap();

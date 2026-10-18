@@ -6,7 +6,7 @@ use crate::algorithm::{
 };
 use crate::math_utils::PrimeFactor;
 use crate::wasm_simd::*;
-use crate::{fft_cache::FftCache, math_utils::PrimeFactors, Fft, FftDirection, FftNum};
+use crate::{Fft, FftDirection, FftNum, fft_cache::FftCache, math_utils::PrimeFactors};
 use std::{any::TypeId, collections::HashMap, sync::Arc};
 
 const MIN_RADIX4_BITS: u32 = 6; // smallest size to consider radix 4 an option is 2^6 = 64

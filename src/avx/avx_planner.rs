@@ -3,10 +3,10 @@ use std::{any::TypeId, cmp::min};
 
 use primal_check::miller_rabin;
 
+use crate::Fft;
 use crate::algorithm::*;
 use crate::common::FftNum;
 use crate::math_utils::PartialFactors;
-use crate::Fft;
 use crate::{algorithm::butterflies::*, fft_cache::FftCache};
 
 use super::*;

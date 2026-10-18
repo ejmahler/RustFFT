@@ -6,8 +6,8 @@ extern crate rustfft;
 extern crate test;
 use test::Bencher;
 
-use rustfft::algorithm::butterflies::*;
 use rustfft::algorithm::Dft;
+use rustfft::algorithm::butterflies::*;
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 use rustfft::{Fft, FftNum};
@@ -216,7 +216,10 @@ fn generate_3n2m_comparison_benchmarks_32(_: &mut test::Bencher) {
                 let strategy_strings: Vec<_> = s.into_iter().map(|i| i.to_string()).collect();
                 let test_id = strategy_strings.join("_");
                 let strategy_array = strategy_strings.join(",");
-                println!("#[bench] fn comparef32__2power{:02}__3power{:02}__len{:08}__{}(b: &mut Bencher) {{ compare_fft_f32(b, &[{}]); }}", power2, power3, len, test_id, strategy_array);
+                println!(
+                    "#[bench] fn comparef32__2power{:02}__3power{:02}__len{:08}__{}(b: &mut Bencher) {{ compare_fft_f32(b, &[{}]); }}",
+                    power2, power3, len, test_id, strategy_array
+                );
             }
         }
     }
@@ -275,7 +278,10 @@ fn generate_3n2m_comparison_benchmarks_64(_: &mut test::Bencher) {
                 let strategy_strings: Vec<_> = s.into_iter().map(|i| i.to_string()).collect();
                 let test_id = strategy_strings.join("_");
                 let strategy_array = strategy_strings.join(",");
-                println!("#[bench] fn comparef64__2power{:02}__3power{:02}__len{:08}__{}(b: &mut Bencher) {{ compare_fft_f64(b, &[{}]); }}", power2, power3, len, test_id, strategy_array);
+                println!(
+                    "#[bench] fn comparef64__2power{:02}__3power{:02}__len{:08}__{}(b: &mut Bencher) {{ compare_fft_f64(b, &[{}]); }}",
+                    power2, power3, len, test_id, strategy_array
+                );
             }
         }
     }
@@ -318,7 +324,10 @@ fn generate_3n2m_planned_benchmarks(_: &mut test::Bencher) {
             remaining_factors /= 3;
         }
 
-        println!("#[bench] fn comparef32_len{:07}_2power{:02}_3power{:02}(b: &mut Bencher) {{ bench_planned_fft_f32(b, {}); }}",len, power2, power3, len);
+        println!(
+            "#[bench] fn comparef32_len{:07}_2power{:02}_3power{:02}(b: &mut Bencher) {{ bench_planned_fft_f32(b, {}); }}",
+            len, power2, power3, len
+        );
     }
 }
 
@@ -359,7 +368,10 @@ fn generate_3n2m_planned_benchmarks_64(_: &mut test::Bencher) {
             remaining_factors /= 3;
         }
 
-        println!("#[bench] fn comparef64_len{:07}_2power{:02}_3power{:02}(b: &mut Bencher) {{ bench_planned_fft_f64(b, {}); }}",len, power2, power3, len);
+        println!(
+            "#[bench] fn comparef64_len{:07}_2power{:02}_3power{:02}(b: &mut Bencher) {{ bench_planned_fft_f64(b, {}); }}",
+            len, power2, power3, len
+        );
     }
 }
 
@@ -481,8 +493,18 @@ fn generate_raders_benchmarks(_: &mut test::Bencher) {
         if miller_rabin(len as u64) {
             let inner_factors = PartialFactors::compute(len - 1);
             if inner_factors.get_other_factors() == 1 && inner_factors.get_power11() > 0 {
-                println!("#[bench] fn comparef64_len{:07}_11p{:02}_bluesteins(b: &mut Bencher) {{ bench_planned_bluesteins_f64(b, {}); }}", len, inner_factors.get_power11(), len);
-                println!("#[bench] fn comparef64_len{:07}_11p{:02}_raders(b: &mut Bencher) {{ bench_planned_raders_f64(b, {}); }}", len, inner_factors.get_power11(), len);
+                println!(
+                    "#[bench] fn comparef64_len{:07}_11p{:02}_bluesteins(b: &mut Bencher) {{ bench_planned_bluesteins_f64(b, {}); }}",
+                    len,
+                    inner_factors.get_power11(),
+                    len
+                );
+                println!(
+                    "#[bench] fn comparef64_len{:07}_11p{:02}_raders(b: &mut Bencher) {{ bench_planned_raders_f64(b, {}); }}",
+                    len,
+                    inner_factors.get_power11(),
+                    len
+                );
             }
         }
     }

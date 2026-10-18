@@ -5,12 +5,12 @@ use std::mem::MaybeUninit;
 use num_complex::Complex;
 
 use crate::array_utils::DoubleBuf;
-use crate::{common::FftNum, twiddles};
 use crate::{Direction, Fft, FftDirection, Length};
+use crate::{common::FftNum, twiddles};
 
-use super::avx32_utils;
 use super::avx_vector::{self, AvxArray};
 use super::avx_vector::{AvxArrayMut, AvxVector, AvxVector128, AvxVector256, Rotation90};
+use super::avx32_utils;
 
 // Safety: This macro will call `self::perform_fft_f32()` which probably has a #[target_feature(enable = "...")] annotation on it.
 // Calling functions with that annotation is unsafe, because it doesn't actually check if the CPU has the required features.

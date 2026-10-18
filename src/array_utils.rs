@@ -1,6 +1,6 @@
-use crate::common::RadixFactor;
 use crate::Complex;
 use crate::FftNum;
+use crate::common::RadixFactor;
 use std::ops::{Deref, DerefMut};
 
 /// Given an array of size width * height, representing a flattened 2D array,
@@ -191,11 +191,7 @@ pub fn validate_and_iter<T>(
     }
 
     // We have a remainder if there's still data in the buffers -- in which case we want to indicate to the caller that there was an unwanted remainder
-    if buffer.len() == 0 {
-        Ok(())
-    } else {
-        Err(())
-    }
+    if buffer.len() == 0 { Ok(()) } else { Err(()) }
 }
 
 // A utility that validates that buffer1.len() % chunk_size == 0, then calls chunk_fn() on each chunk of buffer.
@@ -260,11 +256,7 @@ pub fn validate_and_zip<T>(
     }
 
     // We have a remainder if the 2 chunks were uneven to start with, or if there's still data in the buffers -- in which case we want to indicate to the caller that there was an unwanted remainder
-    if buffer1.len() == 0 {
-        Ok(())
-    } else {
-        Err(())
-    }
+    if buffer1.len() == 0 { Ok(()) } else { Err(()) }
 }
 
 // A utility that validates the following conditions, then calls chunk_fn() on each chunk of buffer1 and buffer 2 zipped together. Passes the entire scratch buffer with each call.
@@ -341,11 +333,7 @@ pub fn validate_and_zip_mut<T>(
     }
 
     // We have a remainder if the 2 chunks were uneven to start with, or if there's still data in the buffers -- in which case we want to indicate to the caller that there was an unwanted remainder
-    if buffer1.len() == 0 {
-        Ok(())
-    } else {
-        Err(())
-    }
+    if buffer1.len() == 0 { Ok(()) } else { Err(()) }
 }
 
 // A utility that validates the following conditions, then calls chunk_fn() on each chunk of buffer1 and buffer 2 zipped together. Passes the entire scratch buffer with each call.

@@ -4,13 +4,13 @@ use std::collections::HashMap;
 
 use std::sync::Arc;
 
-use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
+use crate::{FftDirection, common::FftNum, fft_cache::FftCache};
 
+use crate::Fft;
 use crate::algorithm::*;
 use crate::sse::sse_butterflies::*;
 use crate::sse::sse_prime_butterflies;
 use crate::sse::sse_radix4::*;
-use crate::Fft;
 
 use crate::math_utils::{PrimeFactor, PrimeFactors};
 

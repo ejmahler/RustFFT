@@ -48,7 +48,11 @@ pub fn fft_error_outofplace(
     expected_scratch: usize,
     actual_scratch: usize,
 ) {
-    assert_eq!(actual_input, actual_output, "Provided FFT input buffer and output buffer must have the same length. Got input.len() = {}, output.len() = {}", actual_input, actual_output);
+    assert_eq!(
+        actual_input, actual_output,
+        "Provided FFT input buffer and output buffer must have the same length. Got input.len() = {}, output.len() = {}",
+        actual_input, actual_output
+    );
     assert!(
         actual_input >= expected_len,
         "Provided FFT buffer was too small. Expected len = {}, got len = {}",
@@ -81,7 +85,11 @@ pub fn fft_error_immut(
     expected_scratch: usize,
     actual_scratch: usize,
 ) {
-    assert_eq!(actual_input, actual_output, "Provided FFT input buffer and output buffer must have the same length. Got input.len() = {}, output.len() = {}", actual_input, actual_output);
+    assert_eq!(
+        actual_input, actual_output,
+        "Provided FFT input buffer and output buffer must have the same length. Got input.len() = {}, output.len() = {}",
+        actual_input, actual_output
+    );
     assert!(
         actual_input >= expected_len,
         "Provided FFT buffer was too small. Expected len = {}, got len = {}",

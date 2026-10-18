@@ -3,14 +3,14 @@ use std::sync::Arc;
 use num_complex::Complex;
 use num_traits::{Float, One, Zero};
 
-use rand::distributions::{uniform::SampleUniform, Distribution, Uniform};
-use rand::{rngs::StdRng, SeedableRng};
+use rand::distributions::{Distribution, Uniform, uniform::SampleUniform};
+use rand::{SeedableRng, rngs::StdRng};
 
 use crate::algorithm::butterflies::{
-    Butterfly1, Butterfly12, Butterfly16, Butterfly2, Butterfly3, Butterfly4, Butterfly5,
-    Butterfly6, Butterfly7, Butterfly8, Butterfly9,
+    Butterfly1, Butterfly2, Butterfly3, Butterfly4, Butterfly5, Butterfly6, Butterfly7, Butterfly8,
+    Butterfly9, Butterfly12, Butterfly16,
 };
-use crate::{algorithm::Dft, Direction, FftNum, Length};
+use crate::{Direction, FftNum, Length, algorithm::Dft};
 use crate::{Fft, FftDirection};
 
 /// The seed for the random number generator used to generate
@@ -137,7 +137,12 @@ pub fn check_fft_algorithm<T: FftNum + Float + SampleUniform>(
 
             fft.process_with_scratch(&mut buffer, &mut scratch);
 
-            assert!(compare_vectors(&expected_output, &buffer), "process_with_scratch() failed the 'dirty scratch' test, length = {}, direction = {}", len, direction);
+            assert!(
+                compare_vectors(&expected_output, &buffer),
+                "process_with_scratch() failed the 'dirty scratch' test, length = {}, direction = {}",
+                len,
+                direction
+            );
         }
     }
 

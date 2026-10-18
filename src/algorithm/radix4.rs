@@ -3,12 +3,12 @@ use std::sync::Arc;
 use num_complex::Complex;
 
 use crate::algorithm::butterflies::{
-    Butterfly1, Butterfly16, Butterfly2, Butterfly32, Butterfly4, Butterfly8,
+    Butterfly1, Butterfly2, Butterfly4, Butterfly8, Butterfly16, Butterfly32,
 };
 use crate::algorithm::radixn::butterfly_4;
 use crate::array_utils::bitreversed_transpose;
-use crate::{common::FftNum, twiddles, FftDirection};
 use crate::{Direction, Fft, Length};
+use crate::{FftDirection, common::FftNum, twiddles};
 
 /// FFT algorithm optimized for power-of-two sizes
 ///

@@ -4,7 +4,7 @@ use num_traits::Zero;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 
-use crate::{array_utils::DoubleBuf, twiddles, FftDirection};
+use crate::{FftDirection, array_utils::DoubleBuf, twiddles};
 
 use super::WasmNum;
 
@@ -390,7 +390,7 @@ impl WasmVector for WasmVector32 {
     unsafe fn apply_rotate90(direction: Rotation90<Self>, values: Self) -> Self {
         Self(v128_xor(
             u32x4_shuffle::<1, 0, 3, 2>(values.0, values.0),
-            direction.0 .0,
+            direction.0.0,
         ))
     }
 
@@ -526,7 +526,7 @@ impl WasmVector for WasmVector64 {
     unsafe fn apply_rotate90(direction: Rotation90<Self>, values: Self) -> Self {
         Self(v128_xor(
             u64x2_shuffle::<1, 0>(values.0, values.0),
-            direction.0 .0,
+            direction.0.0,
         ))
     }
 

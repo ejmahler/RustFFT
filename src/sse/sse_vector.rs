@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 
 use crate::array_utils::DoubleBuf;
-use crate::{twiddles, FftDirection};
+use crate::{FftDirection, twiddles};
 
 use super::SseNum;
 

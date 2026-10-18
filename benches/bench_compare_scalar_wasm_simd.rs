@@ -33,9 +33,9 @@ extern crate rustfft;
 extern crate test;
 
 use pastey::paste;
+use rustfft::Fft;
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
-use rustfft::Fft;
 use std::sync::Arc;
 use test::Bencher;
 

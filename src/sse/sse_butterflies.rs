@@ -1,7 +1,7 @@
 use core::arch::x86_64::*;
 use num_complex::Complex;
 
-use crate::{common::FftNum, FftDirection};
+use crate::{FftDirection, common::FftNum};
 
 use crate::array_utils::DoubleBuf;
 use crate::twiddles;

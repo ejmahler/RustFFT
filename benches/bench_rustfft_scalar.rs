@@ -4,11 +4,11 @@
 extern crate rustfft;
 extern crate test;
 
+use rustfft::FftPlannerScalar;
 use rustfft::algorithm::butterflies::*;
 use rustfft::algorithm::*;
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
-use rustfft::FftPlannerScalar;
 use rustfft::{Direction, Fft, FftDirection, FftNum, Length};
 use std::sync::Arc;
 use test::Bencher;

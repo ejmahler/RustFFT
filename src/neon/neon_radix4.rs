@@ -4,8 +4,8 @@ use std::any::TypeId;
 use std::sync::Arc;
 
 use crate::array_utils::{bitreversed_transpose, workaround_transmute_mut};
-use crate::{common::FftNum, FftDirection};
 use crate::{Direction, Fft, Length};
+use crate::{FftDirection, common::FftNum};
 
 use super::NeonNum;
 

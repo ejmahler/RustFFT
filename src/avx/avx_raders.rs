@@ -3,19 +3,19 @@ use std::sync::Arc;
 use std::{any::TypeId, arch::x86_64::*};
 
 use num_complex::Complex;
-use num_integer::{div_ceil, Integer};
+use num_integer::{Integer, div_ceil};
 use num_traits::Zero;
 use primal_check::miller_rabin;
 use strength_reduce::StrengthReducedUsize;
 
-use crate::{array_utils, FftDirection};
-use crate::{math_utils, twiddles};
 use crate::{Direction, Fft, FftNum, Length};
+use crate::{FftDirection, array_utils};
+use crate::{math_utils, twiddles};
 
 use super::avx_vector;
 use super::{
-    avx_vector::{AvxArray, AvxArrayMut, AvxVector, AvxVector128, AvxVector256},
     AvxNum,
+    avx_vector::{AvxArray, AvxArrayMut, AvxVector, AvxVector128, AvxVector256},
 };
 
 // This struct wraps the necessary data to compute (a * b) % divisor, where b and divisor are determined at runtime but rarely change, and a changes on every call.
@@ -142,7 +142,12 @@ impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
     unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
         let inner_fft_len = inner_fft.len();
         let len = inner_fft_len + 1;
-        assert!(miller_rabin(len as u64), "For raders algorithm, inner_fft.len() + 1 must be prime. Expected prime number, got {} + 1 = {}", inner_fft_len, len);
+        assert!(
+            miller_rabin(len as u64),
+            "For raders algorithm, inner_fft.len() + 1 must be prime. Expected prime number, got {} + 1 = {}",
+            inner_fft_len,
+            len
+        );
 
         let direction = inner_fft.fft_direction();
         let reduced_len = StrengthReducedUsize::new(len);

@@ -5,7 +5,7 @@ use std::ops::{Deref, DerefMut};
 use num_complex::Complex;
 use num_traits::Zero;
 
-use crate::{array_utils::DoubleBuf, twiddles, FftDirection};
+use crate::{FftDirection, array_utils::DoubleBuf, twiddles};
 
 use super::AvxNum;
 

@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use num_complex::Complex;
 
-use crate::algorithm::butterflies::{Butterfly1, Butterfly27, Butterfly3, Butterfly9};
+use crate::algorithm::butterflies::{Butterfly1, Butterfly3, Butterfly9, Butterfly27};
 use crate::algorithm::radixn::butterfly_3;
 use crate::array_utils::{bitreversed_transpose, compute_logarithm};
-use crate::{common::FftNum, twiddles, FftDirection};
 use crate::{Direction, Fft, Length};
+use crate::{FftDirection, common::FftNum, twiddles};
 
 /// FFT algorithm optimized for power-of-three sizes
 ///

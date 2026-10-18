@@ -6,8 +6,8 @@ use num_traits::Zero;
 use transpose;
 
 use crate::array_utils;
-use crate::{common::FftNum, twiddles, FftDirection};
 use crate::{Direction, Fft, Length};
+use crate::{FftDirection, common::FftNum, twiddles};
 
 /// Implementation of the Mixed-Radix FFT algorithm
 ///
@@ -52,9 +52,12 @@ impl<T: FftNum> MixedRadix<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
     pub fn new(width_fft: Arc<dyn Fft<T>>, height_fft: Arc<dyn Fft<T>>) -> Self {
         assert_eq!(
-            width_fft.fft_direction(), height_fft.fft_direction(),
+            width_fft.fft_direction(),
+            height_fft.fft_direction(),
             "width_fft and height_fft must have the same direction. got width direction={}, height direction={}",
-            width_fft.fft_direction(), height_fft.fft_direction());
+            width_fft.fft_direction(),
+            height_fft.fft_direction()
+        );
 
         let direction = width_fft.fft_direction();
 
@@ -279,9 +282,12 @@ impl<T: FftNum> MixedRadixSmall<T> {
     /// Creates a FFT instance which will process inputs/outputs of size `width_fft.len() * height_fft.len()`
     pub fn new(width_fft: Arc<dyn Fft<T>>, height_fft: Arc<dyn Fft<T>>) -> Self {
         assert_eq!(
-            width_fft.fft_direction(), height_fft.fft_direction(),
+            width_fft.fft_direction(),
+            height_fft.fft_direction(),
             "width_fft and height_fft must have the same direction. got width direction={}, height direction={}",
-            width_fft.fft_direction(), height_fft.fft_direction());
+            width_fft.fft_direction(),
+            height_fft.fft_direction()
+        );
 
         // Verify that the inner FFTs don't require out-of-place scratch, and only arequire a small amount of inplace scratch
         let width = width_fft.len();
@@ -290,11 +296,35 @@ impl<T: FftNum> MixedRadixSmall<T> {
             .checked_mul(height)
             .expect("MixedRadixSmall length overflow");
 
-        assert_eq!(width_fft.get_outofplace_scratch_len(), 0, "MixedRadixSmall should only be used with algorithms that require 0 out-of-place scratch. Width FFT (len={}) requires {}, should require 0", width, width_fft.get_outofplace_scratch_len());
-        assert_eq!(height_fft.get_outofplace_scratch_len(), 0, "MixedRadixSmall should only be used with algorithms that require 0 out-of-place scratch. Height FFT (len={}) requires {}, should require 0", height, height_fft.get_outofplace_scratch_len());
+        assert_eq!(
+            width_fft.get_outofplace_scratch_len(),
+            0,
+            "MixedRadixSmall should only be used with algorithms that require 0 out-of-place scratch. Width FFT (len={}) requires {}, should require 0",
+            width,
+            width_fft.get_outofplace_scratch_len()
+        );
+        assert_eq!(
+            height_fft.get_outofplace_scratch_len(),
+            0,
+            "MixedRadixSmall should only be used with algorithms that require 0 out-of-place scratch. Height FFT (len={}) requires {}, should require 0",
+            height,
+            height_fft.get_outofplace_scratch_len()
+        );
 
-        assert!(width_fft.get_inplace_scratch_len() <= width, "MixedRadixSmall should only be used with algorithms that require little inplace scratch. Width FFT (len={}) requires {}, should require {} or less", width, width_fft.get_inplace_scratch_len(), width);
-        assert!(height_fft.get_inplace_scratch_len() <= height, "MixedRadixSmall should only be used with algorithms that require little inplace scratch. Height FFT (len={}) requires {}, should require {} or less", height, height_fft.get_inplace_scratch_len(), height);
+        assert!(
+            width_fft.get_inplace_scratch_len() <= width,
+            "MixedRadixSmall should only be used with algorithms that require little inplace scratch. Width FFT (len={}) requires {}, should require {} or less",
+            width,
+            width_fft.get_inplace_scratch_len(),
+            width
+        );
+        assert!(
+            height_fft.get_inplace_scratch_len() <= height,
+            "MixedRadixSmall should only be used with algorithms that require little inplace scratch. Height FFT (len={}) requires {}, should require {} or less",
+            height,
+            height_fft.get_inplace_scratch_len(),
+            height
+        );
 
         let direction = width_fft.fft_direction();
 

@@ -8,14 +8,14 @@ use std::sync::Arc;
 
 use num_traits::Float;
 use rustfft::{
+    Fft, FftNum, FftPlanner,
     algorithm::{BluesteinsAlgorithm, Radix4},
     num_complex::Complex,
-    Fft, FftNum, FftPlanner,
 };
-use rustfft::{num_traits::Zero, FftDirection};
+use rustfft::{FftDirection, num_traits::Zero};
 
-use rand::distributions::{uniform::SampleUniform, Distribution, Uniform};
-use rand::{rngs::StdRng, SeedableRng};
+use rand::distributions::{Distribution, Uniform, uniform::SampleUniform};
+use rand::{SeedableRng, rngs::StdRng};
 use wasm_bindgen_test::wasm_bindgen_test;
 
 /// The seed for the random number generator used to generate
