@@ -143,13 +143,13 @@ impl<T: FftNum> {{this.struct_name_32}}<T> {
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<{{../arch.vector_f32}}>) {
         let input_packed = unsafe { read_complex_to_array!(buffer, { {{ this.loadstore_indexes_2x }} }) };
 
-        let values = unsafe { [
+        let values = {{#if ../arch.swizzle_requires_unsafe}}unsafe {{/if}}{ [
 {{ this.shuffle_in_str }}
         ] };
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        let out_packed = unsafe { [
+        let out_packed = {{#if ../arch.swizzle_requires_unsafe}}unsafe {{/if}}{ [
 {{ this.shuffle_out_str }}
         ] };
 

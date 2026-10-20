@@ -40,6 +40,7 @@ struct Architecture {
     arch_include: &'static str,
     test_attribute: &'static str,
     extra_test_includes: Vec<&'static str>,
+    swizzle_requires_unsafe: bool,
 }
 
 #[derive(Serialize)]
@@ -168,6 +169,7 @@ fn parse_architecture(arch_str: Option<String>) -> Result<Architecture, String> 
                 arch_include: "use core::arch::x86_64::{__m128, __m128d};",
                 test_attribute: "test",
                 extra_test_includes: Vec::new(),
+                swizzle_requires_unsafe: true,
             });
         } else if arch_str == "wasm_simd" {
             return Ok(Architecture {
@@ -185,6 +187,7 @@ fn parse_architecture(arch_str: Option<String>) -> Result<Architecture, String> 
                 arch_include: "",
                 test_attribute: "wasm_bindgen_test",
                 extra_test_includes: vec!["use wasm_bindgen_test::wasm_bindgen_test;"],
+                swizzle_requires_unsafe: false,
             });
         } else if arch_str == "fcma" {
             return Ok(Architecture {
@@ -202,6 +205,7 @@ fn parse_architecture(arch_str: Option<String>) -> Result<Architecture, String> 
                 arch_include: "",
                 test_attribute: "test",
                 extra_test_includes: vec![],
+                swizzle_requires_unsafe: true,
             });
         } else if arch_str == "neon" {
             return Ok(Architecture {
@@ -219,6 +223,7 @@ fn parse_architecture(arch_str: Option<String>) -> Result<Architecture, String> 
                 arch_include: "use core::arch::aarch64::{float32x4_t, float64x2_t};",
                 test_attribute: "test",
                 extra_test_includes: vec![],
+                swizzle_requires_unsafe: true,
             });
         }
     }

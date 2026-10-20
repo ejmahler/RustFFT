@@ -187,7 +187,7 @@ impl<T: FftNum> WasmSimdF32Butterfly7<T> {
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
         let input_packed = unsafe { read_complex_to_array!(buffer, { 0,2,4,6,8,10,12 }) };
 
-        let values = unsafe { [
+        let values = { [
             extract_lo_hi_f32(input_packed[0], input_packed[3]),
             extract_hi_lo_f32(input_packed[0], input_packed[4]),
             extract_lo_hi_f32(input_packed[1], input_packed[4]),
@@ -199,7 +199,7 @@ impl<T: FftNum> WasmSimdF32Butterfly7<T> {
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        let out_packed = unsafe { [
+        let out_packed = { [
             extract_lo_lo_f32(out[0], out[1]),
             extract_lo_lo_f32(out[2], out[3]),
             extract_lo_lo_f32(out[4], out[5]),
@@ -446,7 +446,7 @@ impl<T: FftNum> WasmSimdF32Butterfly11<T> {
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
         let input_packed = unsafe { read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20 }) };
 
-        let values = unsafe { [
+        let values = { [
             extract_lo_hi_f32(input_packed[0], input_packed[5]),
             extract_hi_lo_f32(input_packed[0], input_packed[6]),
             extract_lo_hi_f32(input_packed[1], input_packed[6]),
@@ -462,7 +462,7 @@ impl<T: FftNum> WasmSimdF32Butterfly11<T> {
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        let out_packed = unsafe { [
+        let out_packed = { [
             extract_lo_lo_f32(out[0], out[1]),
             extract_lo_lo_f32(out[2], out[3]),
             extract_lo_lo_f32(out[4], out[5]),
@@ -782,7 +782,7 @@ impl<T: FftNum> WasmSimdF32Butterfly13<T> {
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
         let input_packed = unsafe { read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24 }) };
 
-        let values = unsafe { [
+        let values = { [
             extract_lo_hi_f32(input_packed[0], input_packed[6]),
             extract_hi_lo_f32(input_packed[0], input_packed[7]),
             extract_lo_hi_f32(input_packed[1], input_packed[7]),
@@ -800,7 +800,7 @@ impl<T: FftNum> WasmSimdF32Butterfly13<T> {
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        let out_packed = unsafe { [
+        let out_packed = { [
             extract_lo_lo_f32(out[0], out[1]),
             extract_lo_lo_f32(out[2], out[3]),
             extract_lo_lo_f32(out[4], out[5]),
@@ -1215,7 +1215,7 @@ impl<T: FftNum> WasmSimdF32Butterfly17<T> {
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
         let input_packed = unsafe { read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32 }) };
 
-        let values = unsafe { [
+        let values = { [
             extract_lo_hi_f32(input_packed[0], input_packed[8]),
             extract_hi_lo_f32(input_packed[0], input_packed[9]),
             extract_lo_hi_f32(input_packed[1], input_packed[9]),
@@ -1237,7 +1237,7 @@ impl<T: FftNum> WasmSimdF32Butterfly17<T> {
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        let out_packed = unsafe { [
+        let out_packed = { [
             extract_lo_lo_f32(out[0], out[1]),
             extract_lo_lo_f32(out[2], out[3]),
             extract_lo_lo_f32(out[4], out[5]),
@@ -1761,7 +1761,7 @@ impl<T: FftNum> WasmSimdF32Butterfly19<T> {
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
         let input_packed = unsafe { read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36 }) };
 
-        let values = unsafe { [
+        let values = { [
             extract_lo_hi_f32(input_packed[0], input_packed[9]),
             extract_hi_lo_f32(input_packed[0], input_packed[10]),
             extract_lo_hi_f32(input_packed[1], input_packed[10]),
@@ -1785,7 +1785,7 @@ impl<T: FftNum> WasmSimdF32Butterfly19<T> {
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        let out_packed = unsafe { [
+        let out_packed = { [
             extract_lo_lo_f32(out[0], out[1]),
             extract_lo_lo_f32(out[2], out[3]),
             extract_lo_lo_f32(out[4], out[5]),
@@ -2440,7 +2440,7 @@ impl<T: FftNum> WasmSimdF32Butterfly23<T> {
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
         let input_packed = unsafe { read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44 }) };
 
-        let values = unsafe { [
+        let values = { [
             extract_lo_hi_f32(input_packed[0], input_packed[11]),
             extract_hi_lo_f32(input_packed[0], input_packed[12]),
             extract_lo_hi_f32(input_packed[1], input_packed[12]),
@@ -2468,7 +2468,7 @@ impl<T: FftNum> WasmSimdF32Butterfly23<T> {
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        let out_packed = unsafe { [
+        let out_packed = { [
             extract_lo_lo_f32(out[0], out[1]),
             extract_lo_lo_f32(out[2], out[3]),
             extract_lo_lo_f32(out[4], out[5]),
@@ -3382,7 +3382,7 @@ impl<T: FftNum> WasmSimdF32Butterfly29<T> {
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
         let input_packed = unsafe { read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56 }) };
 
-        let values = unsafe { [
+        let values = { [
             extract_lo_hi_f32(input_packed[0], input_packed[14]),
             extract_hi_lo_f32(input_packed[0], input_packed[15]),
             extract_lo_hi_f32(input_packed[1], input_packed[15]),
@@ -3416,7 +3416,7 @@ impl<T: FftNum> WasmSimdF32Butterfly29<T> {
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        let out_packed = unsafe { [
+        let out_packed = { [
             extract_lo_lo_f32(out[0], out[1]),
             extract_lo_lo_f32(out[2], out[3]),
             extract_lo_lo_f32(out[4], out[5]),
@@ -4564,7 +4564,7 @@ impl<T: FftNum> WasmSimdF32Butterfly31<T> {
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
         let input_packed = unsafe { read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56,58,60 }) };
 
-        let values = unsafe { [
+        let values = { [
             extract_lo_hi_f32(input_packed[0], input_packed[15]),
             extract_hi_lo_f32(input_packed[0], input_packed[16]),
             extract_lo_hi_f32(input_packed[1], input_packed[16]),
@@ -4600,7 +4600,7 @@ impl<T: FftNum> WasmSimdF32Butterfly31<T> {
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        let out_packed = unsafe { [
+        let out_packed = { [
             extract_lo_lo_f32(out[0], out[1]),
             extract_lo_lo_f32(out[2], out[3]),
             extract_lo_lo_f32(out[4], out[5]),
