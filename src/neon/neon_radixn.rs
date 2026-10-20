@@ -7,9 +7,9 @@
 use std::sync::Arc;
 
 use crate::{
+    Fft, FftNum,
     common::RadixFactor,
     simd::{simd_radixn::SimdRadixN, simd_vector::SimdVector},
-    Fft, FftNum,
 };
 
 pub struct NeonRadixN<V: SimdVector, T: FftNum>(SimdRadixN<V, T>);
@@ -24,9 +24,9 @@ boilerplate_simd_fft!(NeonRadixN, #[inline(always)]);
 
 #[cfg(test)]
 mod unit_tests {
+    use crate::Fft;
     use crate::common::RadixFactor;
     use crate::simd::simd_radixn::test_bodies;
-    use crate::Fft;
     use std::arch::aarch64::{float32x4_t, float64x2_t};
 
     use super::*;

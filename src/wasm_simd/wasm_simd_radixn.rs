@@ -7,9 +7,9 @@
 use std::sync::Arc;
 
 use crate::{
+    Fft, FftNum,
     common::RadixFactor,
     simd::{simd_radixn::SimdRadixN, simd_vector::SimdVector},
-    Fft, FftNum,
 };
 
 pub struct WasmSimdRadixN<V: SimdVector, T: FftNum>(SimdRadixN<V, T>);

@@ -3,7 +3,7 @@ use num_complex::Complex;
 use num_traits::Zero;
 use std::fmt::Debug;
 
-use crate::{twiddles, FftDirection};
+use crate::{FftDirection, twiddles};
 
 use crate::simd::simd_array::SimdComplexArray;
 use crate::simd::simd_vector::SimdVector;
@@ -156,9 +156,9 @@ impl SimdVector for WasmVector64 {
     }
 
     #[inline(always)]
-    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self { unsafe {
-        Self(v128_load(ptr as *const v128))
-    }}
+    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+        unsafe { Self(v128_load(ptr as *const v128)) }
+    }
 
     #[inline(always)]
     unsafe fn load1_lo_complex(_ptr: *const Complex<Self::ScalarType>) -> Self {
@@ -171,9 +171,11 @@ impl SimdVector for WasmVector64 {
     }
 
     #[inline(always)]
-    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) { unsafe {
-        v128_store(ptr as *mut v128, data.0);
-    }}
+    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
+        unsafe {
+            v128_store(ptr as *mut v128, data.0);
+        }
+    }
 
     #[inline(always)]
     unsafe fn store1_lo_complex(_ptr: *mut Complex<Self::ScalarType>, _data: Self) {
@@ -221,14 +223,16 @@ impl SimdVector for WasmVector64 {
         y: usize,
         len: usize,
         direction: FftDirection,
-    ) -> Self { unsafe {
-        let mut twiddle_chunk = [Complex::<f64>::zero(); Self::COMPLEX_PER_VECTOR];
-        for i in 0..Self::COMPLEX_PER_VECTOR {
-            twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
-        }
+    ) -> Self {
+        unsafe {
+            let mut twiddle_chunk = [Complex::<f64>::zero(); Self::COMPLEX_PER_VECTOR];
+            for i in 0..Self::COMPLEX_PER_VECTOR {
+                twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
+            }
 
-        twiddle_chunk.as_slice().load(0)
-    }}
+            twiddle_chunk.as_slice().load(0)
+        }
+    }
 
     #[inline(always)]
     unsafe fn mul_complex(left: Self, right: Self) -> Self {
@@ -262,9 +266,9 @@ impl SimdVector for WasmVector64 {
         Self::Butterfly6::new(direction)
     }
     #[inline(always)]
-    unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 { unsafe {
-        Self::Butterfly7::new(direction)
-    }}
+    unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
+        unsafe { Self::Butterfly7::new(direction) }
+    }
 }
 
 impl SimdVector for WasmVector32 {
@@ -286,34 +290,40 @@ impl SimdVector for WasmVector32 {
     }
 
     #[inline(always)]
-    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self { unsafe {
-        Self(v128_load(ptr as *const v128))
-    }}
+    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+        unsafe { Self(v128_load(ptr as *const v128)) }
+    }
 
     #[inline(always)]
-    unsafe fn load1_lo_complex(ptr: *const Complex<Self::ScalarType>) -> Self { unsafe {
-        Self(v128_load64_lane::<0>(f32x4_splat(0.0), ptr as *const u64))
-    }}
+    unsafe fn load1_lo_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+        unsafe { Self(v128_load64_lane::<0>(f32x4_splat(0.0), ptr as *const u64)) }
+    }
 
     #[inline(always)]
-    unsafe fn load1_dup_complex(ptr: *const Complex<Self::ScalarType>) -> Self { unsafe {
-        Self(v128_load64_splat(ptr as *const u64))
-    }}
+    unsafe fn load1_dup_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+        unsafe { Self(v128_load64_splat(ptr as *const u64)) }
+    }
 
     #[inline(always)]
-    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) { unsafe {
-        v128_store(ptr as *mut v128, data.0);
-    }}
+    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
+        unsafe {
+            v128_store(ptr as *mut v128, data.0);
+        }
+    }
 
     #[inline(always)]
-    unsafe fn store1_lo_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) { unsafe {
-        v128_store64_lane::<0>(data.0, ptr as *mut u64);
-    }}
+    unsafe fn store1_lo_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
+        unsafe {
+            v128_store64_lane::<0>(data.0, ptr as *mut u64);
+        }
+    }
 
     #[inline(always)]
-    unsafe fn store1_hi_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) { unsafe {
-        v128_store64_lane::<1>(data.0, ptr as *mut u64);
-    }}
+    unsafe fn store1_hi_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
+        unsafe {
+            v128_store64_lane::<1>(data.0, ptr as *mut u64);
+        }
+    }
 
     #[inline(always)]
     unsafe fn neg(a: Self) -> Self {
@@ -351,14 +361,16 @@ impl SimdVector for WasmVector32 {
         y: usize,
         len: usize,
         direction: FftDirection,
-    ) -> Self { unsafe {
-        let mut twiddle_chunk = [Complex::<f32>::zero(); Self::COMPLEX_PER_VECTOR];
-        for i in 0..Self::COMPLEX_PER_VECTOR {
-            twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
-        }
+    ) -> Self {
+        unsafe {
+            let mut twiddle_chunk = [Complex::<f32>::zero(); Self::COMPLEX_PER_VECTOR];
+            for i in 0..Self::COMPLEX_PER_VECTOR {
+                twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
+            }
 
-        twiddle_chunk.as_slice().load(0)
-    }}
+            twiddle_chunk.as_slice().load(0)
+        }
+    }
 
     #[inline(always)]
     unsafe fn mul_complex(left: Self, right: Self) -> Self {
@@ -391,9 +403,9 @@ impl SimdVector for WasmVector32 {
         Self::Butterfly6::new(direction)
     }
     #[inline(always)]
-    unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 { unsafe {
-        Self::Butterfly7::new(direction)
-    }}
+    unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
+        unsafe { Self::Butterfly7::new(direction) }
+    }
 }
 
 #[cfg(test)]

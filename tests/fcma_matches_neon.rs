@@ -8,8 +8,8 @@
 #![cfg(all(target_arch = "aarch64", feature = "fcma"))]
 
 use num_traits::Float;
-use rand::distr::{uniform::SampleUniform, Distribution, Uniform};
-use rand::{rngs::StdRng, SeedableRng};
+use rand::distr::{Distribution, Uniform, uniform::SampleUniform};
+use rand::{SeedableRng, rngs::StdRng};
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 use rustfft::{FftDirection, FftNum, FftPlannerFcma, FftPlannerNeon};

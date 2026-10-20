@@ -7,8 +7,8 @@
 use std::sync::Arc;
 
 use crate::{
-    simd::{simd_radix4::SimdRadix4, simd_vector::SimdVector},
     Fft, FftNum,
+    simd::{simd_radix4::SimdRadix4, simd_vector::SimdVector},
 };
 
 pub struct FcmaRadix4<V: SimdVector, T: FftNum>(SimdRadix4<V, T>);

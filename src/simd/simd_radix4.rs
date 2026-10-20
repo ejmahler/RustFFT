@@ -148,25 +148,27 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
 
     /// The stack of in-place cross-FFT layers, run after the base FFTs.
     #[inline(always)]
-    unsafe fn cross_ffts(&self, output: &mut [Complex<T>]) { unsafe {
-        let out: &mut [Complex<V::ScalarType>] = workaround_transmute_mut(output);
+    unsafe fn cross_ffts(&self, output: &mut [Complex<T>]) {
+        unsafe {
+            let out: &mut [Complex<V::ScalarType>] = workaround_transmute_mut(output);
 
-        let mut cross_fft_len = self.base_len;
-        let mut layer_twiddles: &[V] = &self.twiddles;
+            let mut cross_fft_len = self.base_len;
+            let mut layer_twiddles: &[V] = &self.twiddles;
 
-        while cross_fft_len < out.len() {
-            let num_columns = cross_fft_len;
-            cross_fft_len *= RADIX;
+            while cross_fft_len < out.len() {
+                let num_columns = cross_fft_len;
+                cross_fft_len *= RADIX;
 
-            // Dispatch once per layer rather than once per chunk, so each layer runs a single
-            // monomorphized loop over its chunks. Mirrors the scalar `RadixN`.
-            cross_layer_chunks::<V, 4>(out, layer_twiddles, num_columns, &self.butterfly4);
+                // Dispatch once per layer rather than once per chunk, so each layer runs a single
+                // monomorphized loop over its chunks. Mirrors the scalar `RadixN`.
+                cross_layer_chunks::<V, 4>(out, layer_twiddles, num_columns, &self.butterfly4);
 
-            // skip past all the twiddle factors used in this layer
-            let twiddle_offset = num_columns.div_ceil(V::COMPLEX_PER_VECTOR) * (RADIX - 1);
-            layer_twiddles = &layer_twiddles[twiddle_offset..];
+                // skip past all the twiddle factors used in this layer
+                let twiddle_offset = num_columns.div_ceil(V::COMPLEX_PER_VECTOR) * (RADIX - 1);
+                layer_twiddles = &layer_twiddles[twiddle_offset..];
+            }
         }
-    }}
+    }
 
     #[inline(always)]
     pub fn process_single_immutable(

@@ -7,9 +7,9 @@
 use std::sync::Arc;
 
 use crate::{
+    Fft, FftNum,
     common::RadixFactor,
     simd::{simd_radixn::SimdRadixN, simd_vector::SimdVector},
-    Fft, FftNum,
 };
 
 pub struct SseRadixN<V: SimdVector, T: FftNum>(SimdRadixN<V, T>);
@@ -24,7 +24,7 @@ boilerplate_simd_fft!(SseRadixN, #[target_feature(enable = "sse4.1")]);
 
 #[cfg(test)]
 mod unit_tests {
-    use crate::{common::RadixFactor, simd::simd_radixn::test_bodies, Fft};
+    use crate::{Fft, common::RadixFactor, simd::simd_radixn::test_bodies};
     use std::{
         arch::x86_64::{__m128, __m128d},
         sync::Arc,

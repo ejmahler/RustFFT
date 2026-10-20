@@ -28,34 +28,42 @@ impl Rotate90F32 {
     }
 
     #[inline(always)]
-    pub unsafe fn rotate(&self, values: float32x4_t) -> float32x4_t { unsafe {
-        let temp = vrev64q_f32(values);
-        vreinterpretq_f32_u32(veorq_u32(
-            vreinterpretq_u32_f32(temp),
-            vreinterpretq_u32_f32(self.sign),
-        ))
-    }}
+    pub unsafe fn rotate(&self, values: float32x4_t) -> float32x4_t {
+        unsafe {
+            let temp = vrev64q_f32(values);
+            vreinterpretq_f32_u32(veorq_u32(
+                vreinterpretq_u32_f32(temp),
+                vreinterpretq_u32_f32(self.sign),
+            ))
+        }
+    }
 
     #[inline(always)]
-    pub unsafe fn rotate_45(&self, values: float32x4_t) -> float32x4_t { unsafe {
-        let rotated = self.rotate(values);
-        let sum = vaddq_f32(rotated, values);
-        vmulq_f32(sum, vmovq_n_f32(0.5f32.sqrt()))
-    }}
+    pub unsafe fn rotate_45(&self, values: float32x4_t) -> float32x4_t {
+        unsafe {
+            let rotated = self.rotate(values);
+            let sum = vaddq_f32(rotated, values);
+            vmulq_f32(sum, vmovq_n_f32(0.5f32.sqrt()))
+        }
+    }
 
     #[inline(always)]
-    pub unsafe fn rotate_135(&self, values: float32x4_t) -> float32x4_t { unsafe {
-        let rotated = self.rotate(values);
-        let diff = vsubq_f32(rotated, values);
-        vmulq_f32(diff, vmovq_n_f32(0.5f32.sqrt()))
-    }}
+    pub unsafe fn rotate_135(&self, values: float32x4_t) -> float32x4_t {
+        unsafe {
+            let rotated = self.rotate(values);
+            let diff = vsubq_f32(rotated, values);
+            vmulq_f32(diff, vmovq_n_f32(0.5f32.sqrt()))
+        }
+    }
 
     #[inline(always)]
-    pub unsafe fn rotate_225(&self, values: float32x4_t) -> float32x4_t { unsafe {
-        let rotated = self.rotate(values);
-        let diff = vaddq_f32(rotated, values);
-        vmulq_f32(diff, vmovq_n_f32(-(0.5f32.sqrt())))
-    }}
+    pub unsafe fn rotate_225(&self, values: float32x4_t) -> float32x4_t {
+        unsafe {
+            let rotated = self.rotate(values);
+            let diff = vaddq_f32(rotated, values);
+            vmulq_f32(diff, vmovq_n_f32(-(0.5f32.sqrt())))
+        }
+    }
 }
 
 pub struct Rotate90HiF32 {
@@ -82,15 +90,17 @@ impl Rotate90HiF32 {
     }
 
     #[inline(always)]
-    pub unsafe fn rotate_hi(&self, values: float32x4_t) -> float32x4_t { unsafe {
-        vcombine_f32(
-            vget_low_f32(values),
-            vreinterpret_f32_u32(veor_u32(
-                vrev64_u32(vreinterpret_u32_f32(vget_high_f32(values))),
-                vreinterpret_u32_f32(self.sign_hi),
-            )),
-        )
-    }}
+    pub unsafe fn rotate_hi(&self, values: float32x4_t) -> float32x4_t {
+        unsafe {
+            vcombine_f32(
+                vget_low_f32(values),
+                vreinterpret_f32_u32(veor_u32(
+                    vrev64_u32(vreinterpret_u32_f32(vget_high_f32(values))),
+                    vreinterpret_u32_f32(self.sign_hi),
+                )),
+            )
+        }
+    }
 
     // There doesn't seem to be any need for rotating just the first element, but let's keep the code just in case
     //#[inline(always)]
@@ -105,59 +115,63 @@ impl Rotate90HiF32 {
 // right: l1.re, l1.im, l2.re, l2.im
 // --> r1.re, r1.im, l1.re, l1.im
 #[inline(always)]
-pub unsafe fn extract_lo_lo_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t { unsafe {
-    //_mm_shuffle_ps(left, right, 0x44)
-    vreinterpretq_f32_f64(vtrn1q_f64(
-        vreinterpretq_f64_f32(left),
-        vreinterpretq_f64_f32(right),
-    ))
-}}
+pub unsafe fn extract_lo_lo_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t {
+    unsafe {
+        //_mm_shuffle_ps(left, right, 0x44)
+        vreinterpretq_f32_f64(vtrn1q_f64(
+            vreinterpretq_f64_f32(left),
+            vreinterpretq_f64_f32(right),
+        ))
+    }
+}
 
 // Pack high (2nd) complex
 // left: r1.re, r1.im, r2.re, r2.im
 // right: l1.re, l1.im, l2.re, l2.im
 // --> r2.re, r2.im, l2.re, l2.im
 #[inline(always)]
-pub unsafe fn extract_hi_hi_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t { unsafe {
-    vreinterpretq_f32_f64(vtrn2q_f64(
-        vreinterpretq_f64_f32(left),
-        vreinterpretq_f64_f32(right),
-    ))
-}}
+pub unsafe fn extract_hi_hi_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t {
+    unsafe {
+        vreinterpretq_f32_f64(vtrn2q_f64(
+            vreinterpretq_f64_f32(left),
+            vreinterpretq_f64_f32(right),
+        ))
+    }
+}
 
 // Pack low (1st) and high (2nd) complex
 // left: r1.re, r1.im, r2.re, r2.im
 // right: l1.re, l1.im, l2.re, l2.im
 // --> r1.re, r1.im, l2.re, l2.im
 #[inline(always)]
-pub unsafe fn extract_lo_hi_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t { unsafe {
-    vcombine_f32(vget_low_f32(left), vget_high_f32(right))
-}}
+pub unsafe fn extract_lo_hi_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t {
+    unsafe { vcombine_f32(vget_low_f32(left), vget_high_f32(right)) }
+}
 
 // Pack  high (2nd) and low (1st) complex
 // left: r1.re, r1.im, r2.re, r2.im
 // right: l1.re, l1.im, l2.re, l2.im
 // --> r2.re, r2.im, l1.re, l1.im
 #[inline(always)]
-pub unsafe fn extract_hi_lo_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t { unsafe {
-    vcombine_f32(vget_high_f32(left), vget_low_f32(right))
-}}
+pub unsafe fn extract_hi_lo_f32(left: float32x4_t, right: float32x4_t) -> float32x4_t {
+    unsafe { vcombine_f32(vget_high_f32(left), vget_low_f32(right)) }
+}
 
 // Reverse complex
 // values: a.re, a.im, b.re, b.im
 // --> b.re, b.im, a.re, a.im
 #[inline(always)]
-pub unsafe fn reverse_complex_elements_f32(values: float32x4_t) -> float32x4_t { unsafe {
-    vcombine_f32(vget_high_f32(values), vget_low_f32(values))
-}}
+pub unsafe fn reverse_complex_elements_f32(values: float32x4_t) -> float32x4_t {
+    unsafe { vcombine_f32(vget_high_f32(values), vget_low_f32(values)) }
+}
 
 // Reverse complex and then negate hi complex
 // values: a.re, a.im, b.re, b.im
 // --> b.re, b.im, -a.re, -a.im
 #[inline(always)]
-pub unsafe fn reverse_complex_and_negate_hi_f32(values: float32x4_t) -> float32x4_t { unsafe {
-    vcombine_f32(vget_high_f32(values), vneg_f32(vget_low_f32(values)))
-}}
+pub unsafe fn reverse_complex_and_negate_hi_f32(values: float32x4_t) -> float32x4_t {
+    unsafe { vcombine_f32(vget_high_f32(values), vneg_f32(vget_low_f32(values))) }
+}
 
 // Invert sign of high (2nd) complex
 // values: a.re, a.im, b.re, b.im
@@ -171,23 +185,27 @@ pub unsafe fn reverse_complex_and_negate_hi_f32(values: float32x4_t) -> float32x
 // values: a.re, a.im, b.re, b.im
 // --> a.re, a.im, a.re, a.im
 #[inline(always)]
-pub unsafe fn duplicate_lo_f32(values: float32x4_t) -> float32x4_t { unsafe {
-    vreinterpretq_f32_f64(vtrn1q_f64(
-        vreinterpretq_f64_f32(values),
-        vreinterpretq_f64_f32(values),
-    ))
-}}
+pub unsafe fn duplicate_lo_f32(values: float32x4_t) -> float32x4_t {
+    unsafe {
+        vreinterpretq_f32_f64(vtrn1q_f64(
+            vreinterpretq_f64_f32(values),
+            vreinterpretq_f64_f32(values),
+        ))
+    }
+}
 
 // Duplicate high (2nd) complex
 // values: a.re, a.im, b.re, b.im
 // --> b.re, b.im, b.re, b.im
 #[inline(always)]
-pub unsafe fn duplicate_hi_f32(values: float32x4_t) -> float32x4_t { unsafe {
-    vreinterpretq_f32_f64(vtrn2q_f64(
-        vreinterpretq_f64_f32(values),
-        vreinterpretq_f64_f32(values),
-    ))
-}}
+pub unsafe fn duplicate_hi_f32(values: float32x4_t) -> float32x4_t {
+    unsafe {
+        vreinterpretq_f32_f64(vtrn2q_f64(
+            vreinterpretq_f64_f32(values),
+            vreinterpretq_f64_f32(values),
+        ))
+    }
+}
 
 // Transpose a 2x2 complex f32 matrix in NEON registers:
 // left:  [a0.re, a0.im, a1.re, a1.im] (row 0: a0 = col 0, a1 = col 1)
@@ -196,11 +214,13 @@ pub unsafe fn duplicate_hi_f32(values: float32x4_t) -> float32x4_t { unsafe {
 // [0]: [a0.re, a0.im, b0.re, b0.im] (col 0: a0 = row 0, b0 = row 1)
 // [1]: [a1.re, a1.im, b1.re, b1.im] (col 1: a1 = row 0, b1 = row 1)
 #[inline(always)]
-pub unsafe fn transpose_complex_2x2_f32(left: float32x4_t, right: float32x4_t) -> [float32x4_t; 2] { unsafe {
-    let temp02 = extract_lo_lo_f32(left, right);
-    let temp13 = extract_hi_hi_f32(left, right);
-    [temp02, temp13]
-}}
+pub unsafe fn transpose_complex_2x2_f32(left: float32x4_t, right: float32x4_t) -> [float32x4_t; 2] {
+    unsafe {
+        let temp02 = extract_lo_lo_f32(left, right);
+        let temp13 = extract_hi_hi_f32(left, right);
+        [temp02, temp13]
+    }
+}
 
 //  __  __       _   _                __   _  _   _     _ _
 // |  \/  | __ _| |_| |__            / /_ | || | | |__ (_) |_
@@ -226,34 +246,42 @@ impl Rotate90F64 {
     }
 
     #[inline(always)]
-    pub unsafe fn rotate(&self, values: float64x2_t) -> float64x2_t { unsafe {
-        let temp = vcombine_f64(vget_high_f64(values), vget_low_f64(values));
-        vreinterpretq_f64_u64(veorq_u64(
-            vreinterpretq_u64_f64(temp),
-            vreinterpretq_u64_f64(self.sign),
-        ))
-    }}
+    pub unsafe fn rotate(&self, values: float64x2_t) -> float64x2_t {
+        unsafe {
+            let temp = vcombine_f64(vget_high_f64(values), vget_low_f64(values));
+            vreinterpretq_f64_u64(veorq_u64(
+                vreinterpretq_u64_f64(temp),
+                vreinterpretq_u64_f64(self.sign),
+            ))
+        }
+    }
 
     #[inline(always)]
-    pub unsafe fn rotate_45(&self, values: float64x2_t) -> float64x2_t { unsafe {
-        let rotated = self.rotate(values);
-        let sum = vaddq_f64(rotated, values);
-        vmulq_f64(sum, vmovq_n_f64(0.5f64.sqrt()))
-    }}
+    pub unsafe fn rotate_45(&self, values: float64x2_t) -> float64x2_t {
+        unsafe {
+            let rotated = self.rotate(values);
+            let sum = vaddq_f64(rotated, values);
+            vmulq_f64(sum, vmovq_n_f64(0.5f64.sqrt()))
+        }
+    }
 
     #[inline(always)]
-    pub unsafe fn rotate_135(&self, values: float64x2_t) -> float64x2_t { unsafe {
-        let rotated = self.rotate(values);
-        let diff = vsubq_f64(rotated, values);
-        vmulq_f64(diff, vmovq_n_f64(0.5f64.sqrt()))
-    }}
+    pub unsafe fn rotate_135(&self, values: float64x2_t) -> float64x2_t {
+        unsafe {
+            let rotated = self.rotate(values);
+            let diff = vsubq_f64(rotated, values);
+            vmulq_f64(diff, vmovq_n_f64(0.5f64.sqrt()))
+        }
+    }
 
     #[inline(always)]
-    pub unsafe fn rotate_225(&self, values: float64x2_t) -> float64x2_t { unsafe {
-        let rotated = self.rotate(values);
-        let diff = vaddq_f64(rotated, values);
-        vmulq_f64(diff, vmovq_n_f64(-(0.5f64.sqrt())))
-    }}
+    pub unsafe fn rotate_225(&self, values: float64x2_t) -> float64x2_t {
+        unsafe {
+            let rotated = self.rotate(values);
+            let diff = vaddq_f64(rotated, values);
+            vmulq_f64(diff, vmovq_n_f64(-(0.5f64.sqrt())))
+        }
+    }
 }
 
 /// Fused complex twiddle multiplication and matrix transpose for small f64 sizes.
@@ -268,74 +296,76 @@ pub unsafe fn transpose_small_twiddle_f64(
     twiddles: impl SimdComplexArray<float64x2_t>,
     width: usize,
     height: usize,
-) { unsafe {
-    // Loop 1: process 2 rows at a time
-    let mut y = 0;
-    while y + 2 <= height {
-        let in_r0 = y * width;
-        let in_r1 = (y + 1) * width;
+) {
+    unsafe {
+        // Loop 1: process 2 rows at a time
+        let mut y = 0;
+        while y + 2 <= height {
+            let in_r0 = y * width;
+            let in_r1 = (y + 1) * width;
 
-        // Loop 2: process 2 columns at a time (2x2 complex block)
-        let mut x = 0;
-        while x + 2 <= width {
-            let out_c0 = y + x * height;
-            let out_c1 = y + (x + 1) * height;
+            // Loop 2: process 2 columns at a time (2x2 complex block)
+            let mut x = 0;
+            while x + 2 <= width {
+                let out_c0 = y + x * height;
+                let out_c1 = y + (x + 1) * height;
 
-            let a0 = input.load(in_r0 + x);
-            let tw_a0 = twiddles.load(in_r0 + x);
-            let a1 = input.load(in_r0 + x + 1);
-            let tw_a1 = twiddles.load(in_r0 + x + 1);
+                let a0 = input.load(in_r0 + x);
+                let tw_a0 = twiddles.load(in_r0 + x);
+                let a1 = input.load(in_r0 + x + 1);
+                let tw_a1 = twiddles.load(in_r0 + x + 1);
 
-            let b0 = input.load(in_r1 + x);
-            let tw_b0 = twiddles.load(in_r1 + x);
-            let b1 = input.load(in_r1 + x + 1);
-            let tw_b1 = twiddles.load(in_r1 + x + 1);
+                let b0 = input.load(in_r1 + x);
+                let tw_b0 = twiddles.load(in_r1 + x);
+                let b1 = input.load(in_r1 + x + 1);
+                let tw_b1 = twiddles.load(in_r1 + x + 1);
 
-            let res_a0 = SimdVector::mul_complex(a0, tw_a0);
-            let res_a1 = SimdVector::mul_complex(a1, tw_a1);
-            let res_b0 = SimdVector::mul_complex(b0, tw_b0);
-            let res_b1 = SimdVector::mul_complex(b1, tw_b1);
+                let res_a0 = SimdVector::mul_complex(a0, tw_a0);
+                let res_a1 = SimdVector::mul_complex(a1, tw_a1);
+                let res_b0 = SimdVector::mul_complex(b0, tw_b0);
+                let res_b1 = SimdVector::mul_complex(b1, tw_b1);
 
-            output.store(res_a0, out_c0);
-            output.store(res_b0, out_c0 + 1);
-            output.store(res_a1, out_c1);
-            output.store(res_b1, out_c1 + 1);
+                output.store(res_a0, out_c0);
+                output.store(res_b0, out_c0 + 1);
+                output.store(res_a1, out_c1);
+                output.store(res_b1, out_c1 + 1);
 
-            x += 2;
+                x += 2;
+            }
+
+            // Remainder column when width is odd (2 rows x 1 column)
+            if x < width {
+                let out_c0 = y + x * height;
+
+                let a0 = input.load(in_r0 + x);
+                let tw_a0 = twiddles.load(in_r0 + x);
+                let b0 = input.load(in_r1 + x);
+                let tw_b0 = twiddles.load(in_r1 + x);
+
+                let res_a0 = SimdVector::mul_complex(a0, tw_a0);
+                let res_b0 = SimdVector::mul_complex(b0, tw_b0);
+
+                output.store(res_a0, out_c0);
+                output.store(res_b0, out_c0 + 1);
+            }
+
+            y += 2;
         }
 
-        // Remainder column when width is odd (2 rows x 1 column)
-        if x < width {
-            let out_c0 = y + x * height;
-
-            let a0 = input.load(in_r0 + x);
-            let tw_a0 = twiddles.load(in_r0 + x);
-            let b0 = input.load(in_r1 + x);
-            let tw_b0 = twiddles.load(in_r1 + x);
-
-            let res_a0 = SimdVector::mul_complex(a0, tw_a0);
-            let res_b0 = SimdVector::mul_complex(b0, tw_b0);
-
-            output.store(res_a0, out_c0);
-            output.store(res_b0, out_c0 + 1);
+        // Remainder row when height is odd (1 row x width columns)
+        if y < height {
+            let in_r = y * width;
+            for x in 0..width {
+                let in_idx = in_r + x;
+                let out_idx = y + x * height;
+                let a = input.load(in_idx);
+                let tw = twiddles.load(in_idx);
+                let res = SimdVector::mul_complex(a, tw);
+                output.store(res, out_idx);
+            }
         }
-
-        y += 2;
     }
-
-    // Remainder row when height is odd (1 row x width columns)
-    if y < height {
-        let in_r = y * width;
-        for x in 0..width {
-            let in_idx = in_r + x;
-            let out_idx = y + x * height;
-            let a = input.load(in_idx);
-            let tw = twiddles.load(in_idx);
-            let res = SimdVector::mul_complex(a, tw);
-            output.store(res, out_idx);
-        }
-    }
-}}
+}
 
 /// Fused complex twiddle multiplication and matrix transpose for small f32 sizes.
 ///
@@ -349,68 +379,70 @@ pub unsafe fn transpose_small_twiddle_f32(
     twiddles: impl SimdComplexArray<float32x4_t>,
     width: usize,
     height: usize,
-) { unsafe {
-    // Loop 1: process 2 rows at a time
-    let mut y = 0;
-    while y + 2 <= height {
-        let in_r0 = y * width;
-        let in_r1 = (y + 1) * width;
+) {
+    unsafe {
+        // Loop 1: process 2 rows at a time
+        let mut y = 0;
+        while y + 2 <= height {
+            let in_r0 = y * width;
+            let in_r1 = (y + 1) * width;
 
-        // Loop 2: process 2 columns at a time (2x2 complex block)
-        let mut x = 0;
-        while x + 2 <= width {
-            let out_c0 = y + x * height;
-            let out_c1 = y + (x + 1) * height;
+            // Loop 2: process 2 columns at a time (2x2 complex block)
+            let mut x = 0;
+            while x + 2 <= width {
+                let out_c0 = y + x * height;
+                let out_c1 = y + (x + 1) * height;
 
-            let row0 = input.load(in_r0 + x);
-            let tw_row0 = twiddles.load(in_r0 + x);
-            let row1 = input.load(in_r1 + x);
-            let tw_row1 = twiddles.load(in_r1 + x);
+                let row0 = input.load(in_r0 + x);
+                let tw_row0 = twiddles.load(in_r0 + x);
+                let row1 = input.load(in_r1 + x);
+                let tw_row1 = twiddles.load(in_r1 + x);
 
-            let res0 = SimdVector::mul_complex(row0, tw_row0);
-            let res1 = SimdVector::mul_complex(row1, tw_row1);
+                let res0 = SimdVector::mul_complex(row0, tw_row0);
+                let res1 = SimdVector::mul_complex(row1, tw_row1);
 
-            let [col0, col1] = transpose_complex_2x2_f32(res0, res1);
+                let [col0, col1] = transpose_complex_2x2_f32(res0, res1);
 
-            output.store(col0, out_c0);
-            output.store(col1, out_c1);
+                output.store(col0, out_c0);
+                output.store(col1, out_c1);
 
-            x += 2;
+                x += 2;
+            }
+
+            // Remainder column when width is odd (2 rows x 1 column)
+            if x < width {
+                let out_c0 = y + x * height;
+
+                let a0 = vget_low_f32(input.load1_lo(in_r0 + x));
+                let b0 = vget_low_f32(input.load1_lo(in_r1 + x));
+                let val = vcombine_f32(a0, b0);
+
+                let tw_a0 = vget_low_f32(twiddles.load1_lo(in_r0 + x));
+                let tw_b0 = vget_low_f32(twiddles.load1_lo(in_r1 + x));
+                let tw = vcombine_f32(tw_a0, tw_b0);
+
+                let res = SimdVector::mul_complex(val, tw);
+
+                output.store(res, out_c0);
+            }
+
+            y += 2;
         }
 
-        // Remainder column when width is odd (2 rows x 1 column)
-        if x < width {
-            let out_c0 = y + x * height;
-
-            let a0 = vget_low_f32(input.load1_lo(in_r0 + x));
-            let b0 = vget_low_f32(input.load1_lo(in_r1 + x));
-            let val = vcombine_f32(a0, b0);
-
-            let tw_a0 = vget_low_f32(twiddles.load1_lo(in_r0 + x));
-            let tw_b0 = vget_low_f32(twiddles.load1_lo(in_r1 + x));
-            let tw = vcombine_f32(tw_a0, tw_b0);
-
-            let res = SimdVector::mul_complex(val, tw);
-
-            output.store(res, out_c0);
+        // Remainder row when height is odd (1 row x width columns)
+        if y < height {
+            let in_r = y * width;
+            for x in 0..width {
+                let in_idx = in_r + x;
+                let out_idx = y + x * height;
+                let a = input.load1_lo(in_idx);
+                let tw = twiddles.load1_lo(in_idx);
+                let res = SimdVector::mul_complex(a, tw);
+                output.store1_lo(res, out_idx);
+            }
         }
-
-        y += 2;
     }
-
-    // Remainder row when height is odd (1 row x width columns)
-    if y < height {
-        let in_r = y * width;
-        for x in 0..width {
-            let in_idx = in_r + x;
-            let out_idx = y + x * height;
-            let a = input.load1_lo(in_idx);
-            let tw = twiddles.load1_lo(in_idx);
-            let res = SimdVector::mul_complex(a, tw);
-            output.store1_lo(res, out_idx);
-        }
-    }
-}}
+}
 
 pub unsafe fn transpose_small_twiddle<T: FftNum>(
     width: usize,
@@ -418,27 +450,29 @@ pub unsafe fn transpose_small_twiddle<T: FftNum>(
     input: &[Complex<T>],
     output: &mut [Complex<T>],
     twiddles: &[Complex<T>],
-) -> bool { unsafe {
-    debug_assert!(input.len() >= width * height);
-    debug_assert!(output.len() >= width * height);
-    debug_assert!(twiddles.len() >= width * height);
+) -> bool {
+    unsafe {
+        debug_assert!(input.len() >= width * height);
+        debug_assert!(output.len() >= width * height);
+        debug_assert!(twiddles.len() >= width * height);
 
-    use std::any::TypeId;
-    if TypeId::of::<T>() == TypeId::of::<f64>() {
-        let input: &[Complex<f64>] = crate::array_utils::workaround_transmute(input);
-        let output: &mut [Complex<f64>] = crate::array_utils::workaround_transmute_mut(output);
-        let twiddles: &[Complex<f64>] = crate::array_utils::workaround_transmute(twiddles);
-        transpose_small_twiddle_f64(input, output, twiddles, width, height);
-        return true;
-    } else if TypeId::of::<T>() == TypeId::of::<f32>() {
-        let input: &[Complex<f32>] = crate::array_utils::workaround_transmute(input);
-        let output: &mut [Complex<f32>] = crate::array_utils::workaround_transmute_mut(output);
-        let twiddles: &[Complex<f32>] = crate::array_utils::workaround_transmute(twiddles);
-        transpose_small_twiddle_f32(input, output, twiddles, width, height);
-        return true;
+        use std::any::TypeId;
+        if TypeId::of::<T>() == TypeId::of::<f64>() {
+            let input: &[Complex<f64>] = crate::array_utils::workaround_transmute(input);
+            let output: &mut [Complex<f64>] = crate::array_utils::workaround_transmute_mut(output);
+            let twiddles: &[Complex<f64>] = crate::array_utils::workaround_transmute(twiddles);
+            transpose_small_twiddle_f64(input, output, twiddles, width, height);
+            return true;
+        } else if TypeId::of::<T>() == TypeId::of::<f32>() {
+            let input: &[Complex<f32>] = crate::array_utils::workaround_transmute(input);
+            let output: &mut [Complex<f32>] = crate::array_utils::workaround_transmute_mut(output);
+            let twiddles: &[Complex<f32>] = crate::array_utils::workaround_transmute(twiddles);
+            transpose_small_twiddle_f32(input, output, twiddles, width, height);
+            return true;
+        }
+        false
     }
-    false
-}}
+}
 
 #[cfg(test)]
 mod unit_tests {

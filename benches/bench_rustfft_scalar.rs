@@ -1,16 +1,16 @@
 #![allow(bare_trait_objects)]
 #![allow(non_snake_case)]
 
+use rustfft::FftPlannerScalar;
 use rustfft::algorithm::butterflies::*;
 use rustfft::algorithm::*;
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
-use rustfft::FftPlannerScalar;
 use rustfft::{Direction, Fft, FftDirection, FftNum, Length};
 use std::sync::Arc;
 mod config;
 
-use criterion::{criterion_group, criterion_main, Bencher, Criterion};
+use criterion::{Bencher, Criterion, criterion_group, criterion_main};
 
 #[allow(unused)]
 struct Noop {

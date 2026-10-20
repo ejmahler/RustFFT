@@ -1,7 +1,7 @@
-use crate::{common::FftNum, FftDirection};
+use crate::{FftDirection, common::FftNum};
 use num_complex::Complex;
 
-use strength_reduce::{StrengthReducedU128, StrengthReducedU64};
+use strength_reduce::{StrengthReducedU64, StrengthReducedU128};
 
 pub fn compute_twiddle<T: FftNum>(
     index: usize,

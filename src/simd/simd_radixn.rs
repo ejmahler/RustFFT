@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use num_complex::Complex;
 
-use crate::array_utils::{reverse_remainders, workaround_transmute_mut, TransposeFactor};
+use crate::array_utils::{TransposeFactor, reverse_remainders, workaround_transmute_mut};
 use crate::common::{FftNum, RadixFactor};
 use crate::simd::parallel_fft::ParallelFft;
 use crate::{Fft, FftDirection};
@@ -232,44 +232,47 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
 
     /// The stack of in-place cross-FFT layers, run after the base FFTs.
     #[inline(always)]
-    unsafe fn cross_ffts(&self, output: &mut [Complex<T>]) { unsafe {
-        let out: &mut [Complex<V::ScalarType>] = workaround_transmute_mut(output);
+    unsafe fn cross_ffts(&self, output: &mut [Complex<T>]) {
+        unsafe {
+            let out: &mut [Complex<V::ScalarType>] = workaround_transmute_mut(output);
 
-        let mut cross_fft_len = self.base_len;
-        let mut layer_twiddles: &[V] = &self.twiddles;
+            let mut cross_fft_len = self.base_len;
+            let mut layer_twiddles: &[V] = &self.twiddles;
 
-        for factor in self.butterflies.iter() {
-            let num_columns = cross_fft_len;
-            cross_fft_len *= factor.radix();
+            for factor in self.butterflies.iter() {
+                let num_columns = cross_fft_len;
+                cross_fft_len *= factor.radix();
 
-            // Dispatch once per layer rather than once per chunk, so each layer runs a single
-            // monomorphized loop over its chunks.
-            match factor {
-                InternalRadixFactor::Factor2(butterfly) => {
-                    cross_layer_chunks::<V, 2>(out, layer_twiddles, num_columns, butterfly)
+                // Dispatch once per layer rather than once per chunk, so each layer runs a single
+                // monomorphized loop over its chunks.
+                match factor {
+                    InternalRadixFactor::Factor2(butterfly) => {
+                        cross_layer_chunks::<V, 2>(out, layer_twiddles, num_columns, butterfly)
+                    }
+                    InternalRadixFactor::Factor3(butterfly) => {
+                        cross_layer_chunks::<V, 3>(out, layer_twiddles, num_columns, butterfly)
+                    }
+                    InternalRadixFactor::Factor4(butterfly) => {
+                        cross_layer_chunks::<V, 4>(out, layer_twiddles, num_columns, butterfly)
+                    }
+                    InternalRadixFactor::Factor5(butterfly) => {
+                        cross_layer_chunks::<V, 5>(out, layer_twiddles, num_columns, butterfly)
+                    }
+                    InternalRadixFactor::Factor6(butterfly) => {
+                        cross_layer_chunks::<V, 6>(out, layer_twiddles, num_columns, butterfly)
+                    }
+                    InternalRadixFactor::Factor7(butterfly) => {
+                        cross_layer_chunks::<V, 7>(out, layer_twiddles, num_columns, butterfly)
+                    }
                 }
-                InternalRadixFactor::Factor3(butterfly) => {
-                    cross_layer_chunks::<V, 3>(out, layer_twiddles, num_columns, butterfly)
-                }
-                InternalRadixFactor::Factor4(butterfly) => {
-                    cross_layer_chunks::<V, 4>(out, layer_twiddles, num_columns, butterfly)
-                }
-                InternalRadixFactor::Factor5(butterfly) => {
-                    cross_layer_chunks::<V, 5>(out, layer_twiddles, num_columns, butterfly)
-                }
-                InternalRadixFactor::Factor6(butterfly) => {
-                    cross_layer_chunks::<V, 6>(out, layer_twiddles, num_columns, butterfly)
-                }
-                InternalRadixFactor::Factor7(butterfly) => {
-                    cross_layer_chunks::<V, 7>(out, layer_twiddles, num_columns, butterfly)
-                }
+
+                // skip past all the twiddle factors used in this layer
+                let twiddle_offset =
+                    num_columns.div_ceil(V::COMPLEX_PER_VECTOR) * (factor.radix() - 1);
+                layer_twiddles = &layer_twiddles[twiddle_offset..];
             }
-
-            // skip past all the twiddle factors used in this layer
-            let twiddle_offset = num_columns.div_ceil(V::COMPLEX_PER_VECTOR) * (factor.radix() - 1);
-            layer_twiddles = &layer_twiddles[twiddle_offset..];
         }
-    }}
+    }
 
     #[inline(always)]
     pub fn process_single_immutable(
@@ -341,16 +344,18 @@ pub unsafe fn cross_layer_chunks<V: SimdVector, const RADIX: usize>(
     twiddles: &[V],
     num_columns: usize,
     butterfly: &impl ParallelFft<V, RADIX>,
-) { unsafe {
-    let chunk_len = num_columns * RADIX;
-    let mut rest = data;
-    while rest.len() >= chunk_len {
-        let (chunk, tail) = rest.split_at_mut(chunk_len);
-        cross_layer::<V, RADIX>(chunk, twiddles, num_columns, butterfly);
-        rest = tail;
+) {
+    unsafe {
+        let chunk_len = num_columns * RADIX;
+        let mut rest = data;
+        while rest.len() >= chunk_len {
+            let (chunk, tail) = rest.split_at_mut(chunk_len);
+            cross_layer::<V, RADIX>(chunk, twiddles, num_columns, butterfly);
+            rest = tail;
+        }
+        debug_assert!(rest.is_empty());
     }
-    debug_assert!(rest.is_empty());
-}}
+}
 
 /// `factor_transpose` with the reversed column indices looked up instead of recomputed.
 ///
@@ -407,18 +412,20 @@ unsafe fn gather_and_twiddle<V: SimdVector, const RADIX: usize>(
     num_columns: usize,
     idx: usize,
     tw_base: usize,
-) -> [V; RADIX] { unsafe {
-    let mut arr = [V::zero_vector(); RADIX];
+) -> [V; RADIX] {
+    unsafe {
+        let mut arr = [V::zero_vector(); RADIX];
 
-    // The row-0 twiddle is always 1, so it's neither stored nor applied.
-    arr[0] = data.load(idx);
+        // The row-0 twiddle is always 1, so it's neither stored nor applied.
+        arr[0] = data.load(idx);
 
-    for r in 1..RADIX {
-        let v = data.load(idx + r * num_columns);
-        arr[r] = V::mul_complex(v, *twiddles.get_unchecked(tw_base + r - 1));
+        for r in 1..RADIX {
+            let v = data.load(idx + r * num_columns);
+            arr[r] = V::mul_complex(v, *twiddles.get_unchecked(tw_base + r - 1));
+        }
+        arr
     }
-    arr
-}}
+}
 
 /// One cross-FFT layer: for each vector of columns, gather RADIX rows strided by `num_columns`,
 /// apply the twiddles, run the column butterfly, scatter back.
@@ -431,95 +438,97 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize>(
     twiddles: &[V],
     num_columns: usize,
     butterfly: &impl ParallelFft<V, RADIX>,
-) { unsafe {
-    let complex_per_vector = V::COMPLEX_PER_VECTOR;
-    // the whole vector columns, and then the column an inexact count leaves over
-    let num_vector_columns = num_columns / complex_per_vector;
-    let partial_columns = num_columns % complex_per_vector;
-    let tw_stride = RADIX - 1;
+) {
+    unsafe {
+        let complex_per_vector = V::COMPLEX_PER_VECTOR;
+        // the whole vector columns, and then the column an inexact count leaves over
+        let num_vector_columns = num_columns / complex_per_vector;
+        let partial_columns = num_columns % complex_per_vector;
+        let tw_stride = RADIX - 1;
 
-    // A vector holds one or two complex numbers, so the leftover is at most a single column
-    debug_assert!(partial_columns <= 1);
-    debug_assert!(twiddles.len() >= num_columns.div_ceil(complex_per_vector) * tw_stride);
+        // A vector holds one or two complex numbers, so the leftover is at most a single column
+        debug_assert!(partial_columns <= 1);
+        debug_assert!(twiddles.len() >= num_columns.div_ceil(complex_per_vector) * tw_stride);
 
-    if V::RADIXN_CROSS_LAYER_UNROLL {
-        let (unroll_count, unroll_remainder) = (num_vector_columns / 2, num_vector_columns % 2);
-        for i in 0..unroll_count {
-            let vcol = i * 2;
-            let idx = vcol * complex_per_vector;
+        if V::RADIXN_CROSS_LAYER_UNROLL {
+            let (unroll_count, unroll_remainder) = (num_vector_columns / 2, num_vector_columns % 2);
+            for i in 0..unroll_count {
+                let vcol = i * 2;
+                let idx = vcol * complex_per_vector;
 
-            let a = gather_and_twiddle(data, twiddles, num_columns, idx, vcol * tw_stride);
-            let b = gather_and_twiddle(
-                data,
-                twiddles,
-                num_columns,
-                idx + complex_per_vector,
-                (vcol + 1) * tw_stride,
-            );
+                let a = gather_and_twiddle(data, twiddles, num_columns, idx, vcol * tw_stride);
+                let b = gather_and_twiddle(
+                    data,
+                    twiddles,
+                    num_columns,
+                    idx + complex_per_vector,
+                    (vcol + 1) * tw_stride,
+                );
 
-            let a = butterfly.parallel_fft(a);
-            let b = butterfly.parallel_fft(b);
+                let a = butterfly.parallel_fft(a);
+                let b = butterfly.parallel_fft(b);
 
-            for (r, (a_row, b_row)) in a.iter().zip(b.iter()).enumerate() {
-                data.store(*a_row, idx + r * num_columns);
-                data.store(*b_row, idx + complex_per_vector + r * num_columns);
+                for (r, (a_row, b_row)) in a.iter().zip(b.iter()).enumerate() {
+                    data.store(*a_row, idx + r * num_columns);
+                    data.store(*b_row, idx + complex_per_vector + r * num_columns);
+                }
             }
-        }
 
-        // an odd vector column count leaves one behind
-        if unroll_remainder > 0 {
-            let vcol = unroll_count * 2;
+            // an odd vector column count leaves one behind
+            if unroll_remainder > 0 {
+                let vcol = unroll_count * 2;
+                let idx = vcol * complex_per_vector;
+                let a = butterfly.parallel_fft(gather_and_twiddle(
+                    data,
+                    twiddles,
+                    num_columns,
+                    idx,
+                    vcol * tw_stride,
+                ));
+                for (r, a_row) in a.iter().enumerate() {
+                    data.store(*a_row, idx + r * num_columns);
+                }
+            }
+        } else {
+            for i in 0..num_vector_columns {
+                let vcol = i;
+                let idx = vcol * complex_per_vector;
+
+                let a = gather_and_twiddle(data, twiddles, num_columns, idx, vcol * tw_stride);
+
+                let a = butterfly.parallel_fft(a);
+
+                for (r, a_row) in a.iter().enumerate() {
+                    data.store(*a_row, idx + r * num_columns);
+                }
+            }
+        };
+
+        // A column count that isn't a whole number of vectors leaves a single column, so it can't be
+        // loaded or stored as a vector: a full load of the last row would run past the end of the
+        // buffer, and a full store would overwrite the first column of the next row. Load and store
+        // only the low half instead. The butterfly is the same one, since it works down the columns
+        // and the halves of a vector never interact. Only f32 ever gets here, since a vector holds a
+        // single complex f64 and a count of those is always exact.
+        if partial_columns > 0 {
+            let vcol = num_vector_columns;
             let idx = vcol * complex_per_vector;
-            let a = butterfly.parallel_fft(gather_and_twiddle(
-                data,
-                twiddles,
-                num_columns,
-                idx,
-                vcol * tw_stride,
-            ));
+            let tw_base = vcol * tw_stride;
+            let rows: [V; RADIX] = std::array::from_fn(|r| {
+                let v: V = data.load1_lo(idx + r * num_columns);
+                if r == 0 {
+                    v
+                } else {
+                    V::mul_complex(v, *twiddles.get_unchecked(tw_base + r - 1))
+                }
+            });
+            let a = butterfly.parallel_fft(rows);
             for (r, a_row) in a.iter().enumerate() {
-                data.store(*a_row, idx + r * num_columns);
+                data.store1_lo(*a_row, idx + r * num_columns);
             }
-        }
-    } else {
-        for i in 0..num_vector_columns {
-            let vcol = i;
-            let idx = vcol * complex_per_vector;
-
-            let a = gather_and_twiddle(data, twiddles, num_columns, idx, vcol * tw_stride);
-
-            let a = butterfly.parallel_fft(a);
-
-            for (r, a_row) in a.iter().enumerate() {
-                data.store(*a_row, idx + r * num_columns);
-            }
-        }
-    };
-
-    // A column count that isn't a whole number of vectors leaves a single column, so it can't be
-    // loaded or stored as a vector: a full load of the last row would run past the end of the
-    // buffer, and a full store would overwrite the first column of the next row. Load and store
-    // only the low half instead. The butterfly is the same one, since it works down the columns
-    // and the halves of a vector never interact. Only f32 ever gets here, since a vector holds a
-    // single complex f64 and a count of those is always exact.
-    if partial_columns > 0 {
-        let vcol = num_vector_columns;
-        let idx = vcol * complex_per_vector;
-        let tw_base = vcol * tw_stride;
-        let rows: [V; RADIX] = std::array::from_fn(|r| {
-            let v: V = data.load1_lo(idx + r * num_columns);
-            if r == 0 {
-                v
-            } else {
-                V::mul_complex(v, *twiddles.get_unchecked(tw_base + r - 1))
-            }
-        });
-        let a = butterfly.parallel_fft(rows);
-        for (r, a_row) in a.iter().enumerate() {
-            data.store1_lo(*a_row, idx + r * num_columns);
         }
     }
-}}
+}
 
 /// The test bodies, shared the same way the algorithm is. Every backend runs all of them, from a
 /// thin test function per body that names its own vector types. The bodies that exercise both

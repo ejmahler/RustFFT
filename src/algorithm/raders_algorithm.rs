@@ -7,8 +7,8 @@ use primal_check::miller_rabin;
 use strength_reduce::StrengthReducedU64;
 
 use crate::math_utils;
-use crate::{common::FftNum, twiddles, FftDirection};
 use crate::{Direction, Fft, Length};
+use crate::{FftDirection, common::FftNum, twiddles};
 
 /// Implementation of Rader's Algorithm
 ///
@@ -70,7 +70,12 @@ impl<T: FftNum> RadersAlgorithm<T> {
     pub fn new(inner_fft: Arc<dyn Fft<T>>) -> Self {
         let inner_fft_len = inner_fft.len();
         let len = inner_fft_len + 1;
-        assert!(miller_rabin(len as u64), "For raders algorithm, inner_fft.len() + 1 must be prime. Expected prime number, got {} + 1 = {}", inner_fft_len, len);
+        assert!(
+            miller_rabin(len as u64),
+            "For raders algorithm, inner_fft.len() + 1 must be prime. Expected prime number, got {} + 1 = {}",
+            inner_fft_len,
+            len
+        );
 
         let direction = inner_fft.fft_direction();
         let reduced_len = StrengthReducedU64::new(len as u64);
@@ -311,9 +316,9 @@ boilerplate_fft!(
 #[cfg(test)]
 mod unit_tests {
     use super::*;
+    use crate::FftPlanner;
     use crate::algorithm::Dft;
     use crate::test_utils::check_fft_algorithm;
-    use crate::FftPlanner;
     use std::sync::Arc;
 
     #[test]

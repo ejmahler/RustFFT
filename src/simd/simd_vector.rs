@@ -7,9 +7,9 @@
 
 use num_complex::Complex;
 
+use crate::FftDirection;
 use crate::common::FftNum;
 use crate::simd::parallel_fft::ParallelFft;
-use crate::FftDirection;
 
 /// The vector operations the shared SIMD algorithms need from a backend's vector type.
 ///

@@ -1,6 +1,6 @@
 use num_complex::Complex;
 
-use crate::{simd::parallel_fft::ParallelFft, twiddles, FftDirection, FftNum};
+use crate::{FftDirection, FftNum, simd::parallel_fft::ParallelFft, twiddles};
 
 pub struct ScalarParallelButterfly2<T> {
     _phantom: std::marker::PhantomData<T>,

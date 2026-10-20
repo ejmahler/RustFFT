@@ -6,12 +6,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::sse::sse_radix4::SseRadix4;
-use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
+use crate::{FftDirection, common::FftNum, fft_cache::FftCache};
 
+use crate::Fft;
 use crate::algorithm::*;
 use crate::sse::sse_butterflies::*;
 use crate::sse::sse_prime_butterflies;
-use crate::Fft;
 
 use crate::math_utils::{PrimeFactor, PrimeFactors};
 
@@ -242,13 +242,14 @@ impl<T: FftNum> FftPlannerSse<T> {
     // Create the fft from a recipe, take from cache if possible
     fn build_fft(&mut self, recipe: &Recipe, direction: FftDirection) -> Arc<dyn Fft<T>> {
         let len = recipe.len();
-        match self.algorithm_cache.get(len, direction) { Some(instance) => {
-            instance
-        } _ => {
-            let fft = self.build_new_fft(recipe, direction);
-            self.algorithm_cache.insert(&fft);
-            fft
-        }}
+        match self.algorithm_cache.get(len, direction) {
+            Some(instance) => instance,
+            _ => {
+                let fft = self.build_new_fft(recipe, direction);
+                self.algorithm_cache.insert(&fft);
+                fft
+            }
+        }
     }
 
     // Create a new fft from a recipe

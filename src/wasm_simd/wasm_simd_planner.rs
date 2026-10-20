@@ -6,7 +6,7 @@ use crate::algorithm::{
 };
 use crate::math_utils::PrimeFactor;
 use crate::wasm_simd::*;
-use crate::{fft_cache::FftCache, math_utils::PrimeFactors, Fft, FftDirection, FftNum};
+use crate::{Fft, FftDirection, FftNum, fft_cache::FftCache, math_utils::PrimeFactors};
 use std::{any::TypeId, collections::HashMap, sync::Arc};
 
 use super::wasm_simd_radix4::WasmSimdRadix4;
@@ -218,13 +218,14 @@ impl<T: FftNum> FftPlannerWasmSimd<T> {
 
     fn build_fft(&mut self, recipe: &Recipe, direction: FftDirection) -> Arc<dyn Fft<T>> {
         let len = recipe.len();
-        match self.algorithm_cache.get(len, direction) { Some(instance) => {
-            instance
-        } _ => {
-            let fft = self.build_new_fft(recipe, direction);
-            self.algorithm_cache.insert(&fft);
-            fft
-        }}
+        match self.algorithm_cache.get(len, direction) {
+            Some(instance) => instance,
+            _ => {
+                let fft = self.build_new_fft(recipe, direction);
+                self.algorithm_cache.insert(&fft);
+                fft
+            }
+        }
     }
 
     fn build_new_fft(&mut self, recipe: &Recipe, direction: FftDirection) -> Arc<dyn Fft<T>> {

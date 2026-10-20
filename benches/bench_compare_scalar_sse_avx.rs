@@ -1,10 +1,10 @@
+use rustfft::Fft;
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
-use rustfft::Fft;
 use std::sync::Arc;
 mod config;
 
-use criterion::{criterion_group, criterion_main, Bencher, Criterion};
+use criterion::{Bencher, Criterion, criterion_group, criterion_main};
 
 // Make fft using scalar planner
 fn bench_scalar_32(b: &mut Bencher, len: usize) {
