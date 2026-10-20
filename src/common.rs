@@ -112,7 +112,7 @@ pub fn fft_error_immut(
 }
 
 macro_rules! boilerplate_fft_oop {
-    ($struct_name:ident, $len_fn:expr_2021) => {
+    ($struct_name:ident, $len_fn:expr) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             fn process_immutable_with_scratch(
                 &self,
@@ -190,7 +190,7 @@ macro_rules! boilerplate_fft_oop {
 }
 
 macro_rules! boilerplate_fft {
-    ($struct_name:ident, $len_fn:expr_2021, $inplace_scratch_len_fn:expr_2021, $out_of_place_scratch_len_fn:expr_2021, $immut_scratch_len:expr_2021) => {
+    ($struct_name:ident, $len_fn:expr, $inplace_scratch_len_fn:expr, $out_of_place_scratch_len_fn:expr, $immut_scratch_len:expr) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             fn process_immutable_with_scratch(
                 &self,

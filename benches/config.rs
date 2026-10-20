@@ -12,7 +12,7 @@ pub fn fast() -> Criterion {
 
 #[allow(unused_macros)]
 macro_rules! register_benchmarks {
-    ($criterion:expr_2021, $($benchmark:ident),* $(,)?) => {
+    ($criterion:expr, $($benchmark:ident),* $(,)?) => {
         $(
             $criterion.bench_function(stringify!($benchmark), $benchmark);
         )*

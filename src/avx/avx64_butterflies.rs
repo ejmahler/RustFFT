@@ -17,7 +17,7 @@ use super::avx64_utils;
 // Callers of this macro must guarantee that users can't even obtain an instance of $struct_name if their CPU doesn't have the required CPU features.
 #[allow(unused)]
 macro_rules! boilerplate_fft_simd_butterfly {
-    ($struct_name:ident, $len:expr_2021) => {
+    ($struct_name:ident, $len:expr) => {
         impl $struct_name<f64> {
             #[inline]
             pub fn new(direction: FftDirection) -> Result<Self, ()> {
@@ -114,7 +114,7 @@ macro_rules! boilerplate_fft_simd_butterfly {
 // Calling functions with that annotation is unsafe, because it doesn't actually check if the CPU has the required features.
 // Callers of this macro must guarantee that users can't even obtain an instance of $struct_name if their CPU doesn't have the required CPU features.
 macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
-    ($struct_name:ident, $len:expr_2021) => {
+    ($struct_name:ident, $len:expr) => {
         impl $struct_name<f64> {
             #[inline]
             pub fn is_supported_by_cpu() -> bool {
@@ -243,7 +243,7 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
 }
 
 macro_rules! gen_butterfly_twiddles_interleaved_columns {
-    ($num_rows:expr_2021, $num_cols:expr_2021, $skip_cols:expr_2021, $direction: expr_2021) => {{
+    ($num_rows:expr, $num_cols:expr, $skip_cols:expr, $direction: expr) => {{
         const FFT_LEN: usize = $num_rows * $num_cols;
         const TWIDDLE_ROWS: usize = $num_rows - 1;
         const TWIDDLE_COLS: usize = $num_cols - $skip_cols;
@@ -261,7 +261,7 @@ macro_rules! gen_butterfly_twiddles_interleaved_columns {
 }
 
 macro_rules! gen_butterfly_twiddles_separated_columns {
-    ($num_rows:expr_2021, $num_cols:expr_2021, $skip_cols:expr_2021, $direction: expr_2021) => {{
+    ($num_rows:expr, $num_cols:expr, $skip_cols:expr, $direction: expr) => {{
         const FFT_LEN: usize = $num_rows * $num_cols;
         const TWIDDLE_ROWS: usize = $num_rows - 1;
         const TWIDDLE_COLS: usize = $num_cols - $skip_cols;
@@ -1562,7 +1562,7 @@ mod unit_tests {
     use crate::test_utils::check_fft_algorithm;
 
     macro_rules! test_avx_butterfly {
-        ($test_name:ident, $struct_name:ident, $size:expr_2021) => (
+        ($test_name:ident, $struct_name:ident, $size:expr) => (
             #[test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward).expect("Can't run test because this machine doesn't have the required instruction sets");

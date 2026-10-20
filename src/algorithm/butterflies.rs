@@ -8,7 +8,7 @@ use crate::{Direction, Fft, Length};
 
 #[allow(unused)]
 macro_rules! boilerplate_fft_butterfly {
-    ($struct_name:ident, $len:expr_2021, $direction_fn:expr_2021) => {
+    ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> $struct_name<T> {
             #[inline(always)]
             pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: impl LoadStore<T>) {
@@ -6483,7 +6483,7 @@ mod unit_tests {
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
     macro_rules! test_butterfly_func {
-        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
+        ($test_name:ident, $struct_name:ident, $size:expr) => {
             #[test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
