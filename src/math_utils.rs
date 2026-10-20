@@ -601,7 +601,7 @@ mod unit_tests {
     use std::collections::HashMap;
 
     macro_rules! map{
-        { $($key:expr_2021 => $value:expr_2021),+ } => {
+        { $($key:expr => $value:expr),+ } => {
             {
                 let mut m = HashMap::new();
                 $(

@@ -30,7 +30,7 @@ fn pack_64(a: Complex<f64>) -> WasmVector64 {
 
 #[allow(unused)]
 macro_rules! boilerplate_fft_wasm_simd_f32_butterfly {
-    ($struct_name:ident, $len:expr_2021, $direction_fn:expr_2021) => {
+    ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             #[target_feature(enable = "simd128")]
             fn process_immutable_with_scratch(
@@ -103,7 +103,7 @@ macro_rules! boilerplate_fft_wasm_simd_f32_butterfly {
 }
 
 macro_rules! boilerplate_fft_wasm_simd_f64_butterfly {
-    ($struct_name:ident, $len:expr_2021, $direction_fn:expr_2021) => {
+    ($struct_name:ident, $len:expr, $direction_fn:expr) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             #[target_feature(enable = "simd128")]
             fn process_immutable_with_scratch(
@@ -3926,7 +3926,7 @@ mod unit_tests {
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
     macro_rules! test_butterfly_32_func {
-        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
+        ($test_name:ident, $struct_name:ident, $size:expr) => {
             #[wasm_bindgen_test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
@@ -3955,7 +3955,7 @@ mod unit_tests {
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
     macro_rules! test_butterfly_64_func {
-        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
+        ($test_name:ident, $struct_name:ident, $size:expr) => {
             #[wasm_bindgen_test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
@@ -3982,7 +3982,7 @@ mod unit_tests {
     test_butterfly_64_func!(test_wasm_simdf64_butterfly32, WasmSimdF64Butterfly32, 32);
 
     macro_rules! test_parallel_butterfly_32_func {
-        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
+        ($test_name:ident, $struct_name:ident, $size:expr) => {
             #[wasm_bindgen_test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
@@ -4024,7 +4024,7 @@ mod unit_tests {
     );
 
     macro_rules! test_parallel_butterfly_64_func {
-        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
+        ($test_name:ident, $struct_name:ident, $size:expr) => {
             #[wasm_bindgen_test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);

@@ -30,7 +30,7 @@ struct CommonSimdData<T, V> {
 }
 
 macro_rules! boilerplate_avx_fft {
-    ($struct_name:ident, $len_fn:expr_2021, $inplace_scratch_len_fn:expr_2021, $out_of_place_scratch_len_fn:expr_2021, $immut_scratch_len_fn:expr_2021) => {
+    ($struct_name:ident, $len_fn:expr, $inplace_scratch_len_fn:expr, $out_of_place_scratch_len_fn:expr, $immut_scratch_len_fn:expr) => {
         impl<A: AvxNum, T: FftNum> Fft<T> for $struct_name<A, T> {
             fn process_immutable_with_scratch(
                 &self,

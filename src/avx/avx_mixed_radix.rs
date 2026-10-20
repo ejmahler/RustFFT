@@ -151,7 +151,7 @@ macro_rules! boilerplate_mixedradix {
 }
 
 macro_rules! mixedradix_gen_data {
-    ($row_count: expr_2021, $inner_fft:expr_2021) => {{
+    ($row_count: expr, $inner_fft:expr) => {{
         // Important constants
         const ROW_COUNT : usize = $row_count;
         const TWIDDLES_PER_COLUMN : usize = ROW_COUNT - 1;
@@ -192,7 +192,7 @@ macro_rules! mixedradix_gen_data {
 }
 
 macro_rules! mixedradix_column_butterflies {
-    ($row_count: expr_2021, $butterfly_fn: expr_2021, $butterfly_fn_lo: expr_2021) => {
+    ($row_count: expr, $butterfly_fn: expr, $butterfly_fn_lo: expr) => {
         #[target_feature(enable = "avx", enable = "fma")]
         unsafe fn perform_column_butterflies_immut(
             &self,
@@ -439,7 +439,7 @@ macro_rules! mixedradix_column_butterflies {
 }
 
 macro_rules! mixedradix_transpose{
-    ($row_count: expr_2021, $transpose_fn: path, $transpose_fn_lo: path, $($unroll_workaround_index:expr_2021);*, $($remainder3_unroll_workaround_index:expr_2021);*) => (
+    ($row_count: expr, $transpose_fn: path, $transpose_fn_lo: path, $($unroll_workaround_index:expr);*, $($remainder3_unroll_workaround_index:expr);*) => (
 
     // Transpose the input (treated as a nxc array) into the output (as a cxn array)
     #[target_feature(enable = "avx")]
@@ -1208,7 +1208,7 @@ mod unit_tests {
     use std::sync::Arc;
 
     macro_rules! test_avx_mixed_radix {
-        ($f32_test_name:ident, $f64_test_name:ident, $struct_name:ident, $inner_count:expr_2021) => (
+        ($f32_test_name:ident, $f64_test_name:ident, $struct_name:ident, $inner_count:expr) => (
             #[test]
             fn $f32_test_name() {
                 for inner_fft_len in 1..32 {

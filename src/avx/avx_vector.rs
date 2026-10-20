@@ -2252,7 +2252,7 @@ where
 // This is particularly useful for butterfly 16, because the whole problem doesn't fit into registers, and the compiler isn't smart enough to only load data when it's needed
 // So the version that takes an array ends up loading data and immediately re-storing it on the stack. By lazily loading and storing exactly when we need to, we can avoid some data reshuffling
 macro_rules! column_butterfly16_loadfn{
-    ($load_expr: expr_2021, $store_expr: expr_2021, $twiddles: expr_2021, $rotation: expr_2021) => (
+    ($load_expr: expr, $store_expr: expr, $twiddles: expr, $rotation: expr) => (
         // Size-4 FFTs down the columns
         let input1 = [$load_expr(1), $load_expr(5), $load_expr(9), $load_expr(13)];
         let mut mid1 = AvxVector::column_butterfly4(input1, $rotation);
@@ -2295,7 +2295,7 @@ macro_rules! column_butterfly16_loadfn{
 // This is particularly useful for butterfly 32, because the whole problem doesn't fit into registers, and the compiler isn't smart enough to only load data when it's needed
 // So the version that takes an array ends up loading data and immediately re-storing it on the stack. By lazily loading and storing exactly when we need to, we can avoid some data reshuffling
 macro_rules! column_butterfly32_loadfn{
-    ($load_expr: expr_2021, $store_expr: expr_2021, $twiddles: expr_2021, $rotation: expr_2021) => (
+    ($load_expr: expr, $store_expr: expr, $twiddles: expr, $rotation: expr) => (
         // Size-4 FFTs down the columns
         let input1 = [$load_expr(1), $load_expr(9), $load_expr(17), $load_expr(25)];
         let mut mid1     = AvxVector::column_butterfly4(input1, $rotation);
