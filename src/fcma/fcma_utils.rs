@@ -31,41 +31,49 @@ impl Rotate90F32 {
 
     #[inline(always)]
     pub unsafe fn rotate(&self, values: FcmaVector32) -> FcmaVector32 {
-        let zero = vmovq_n_f32(0.0);
-        FcmaVector32(vcmlaq_rot90_f32(zero, self.sign.0, values.0))
+        unsafe {
+            let zero = vmovq_n_f32(0.0);
+            FcmaVector32(vcmlaq_rot90_f32(zero, self.sign.0, values.0))
+        }
     }
 
     /// Rotates `values` and adds the result to `acc`, in a single instruction.
     #[inline(always)]
     pub unsafe fn rotate_and_add(&self, acc: FcmaVector32, values: FcmaVector32) -> FcmaVector32 {
-        FcmaVector32(vcmlaq_rot90_f32(acc.0, self.sign.0, values.0))
+        unsafe { FcmaVector32(vcmlaq_rot90_f32(acc.0, self.sign.0, values.0)) }
     }
 
     /// Rotates `values` and subtracts the result from `acc`, in a single instruction.
     #[inline(always)]
     pub unsafe fn rotate_and_sub(&self, acc: FcmaVector32, values: FcmaVector32) -> FcmaVector32 {
-        FcmaVector32(vcmlaq_rot270_f32(acc.0, self.sign.0, values.0))
+        unsafe { FcmaVector32(vcmlaq_rot270_f32(acc.0, self.sign.0, values.0)) }
     }
 
     #[inline(always)]
     pub unsafe fn rotate_45(&self, values: FcmaVector32) -> FcmaVector32 {
-        // rotate(values) + values
-        let sum = self.rotate_and_add(values, values);
-        FcmaVector32(vmulq_f32(sum.0, vmovq_n_f32(0.5f32.sqrt())))
+        unsafe {
+            // rotate(values) + values
+            let sum = self.rotate_and_add(values, values);
+            FcmaVector32(vmulq_f32(sum.0, vmovq_n_f32(0.5f32.sqrt())))
+        }
     }
 
     #[inline(always)]
     pub unsafe fn rotate_135(&self, values: FcmaVector32) -> FcmaVector32 {
-        // values - rotate(values), which is the negated difference we are after
-        let diff = self.rotate_and_sub(values, values);
-        FcmaVector32(vmulq_f32(diff.0, vmovq_n_f32(-(0.5f32.sqrt()))))
+        unsafe {
+            // values - rotate(values), which is the negated difference we are after
+            let diff = self.rotate_and_sub(values, values);
+            FcmaVector32(vmulq_f32(diff.0, vmovq_n_f32(-(0.5f32.sqrt()))))
+        }
     }
 
     #[inline(always)]
     pub unsafe fn rotate_225(&self, values: FcmaVector32) -> FcmaVector32 {
-        // rotate(values) + values
-        let sum = self.rotate_and_add(values, values);
-        FcmaVector32(vmulq_f32(sum.0, vmovq_n_f32(-(0.5f32.sqrt()))))
+        unsafe {
+            // rotate(values) + values
+            let sum = self.rotate_and_add(values, values);
+            FcmaVector32(vmulq_f32(sum.0, vmovq_n_f32(-(0.5f32.sqrt()))))
+        }
     }
 }
 
@@ -87,13 +95,15 @@ impl Rotate90HiF32 {
 
     #[inline(always)]
     pub unsafe fn rotate_hi(&self, values: FcmaVector32) -> FcmaVector32 {
-        FcmaVector32(vcombine_f32(
-            vget_low_f32(values.0),
-            vreinterpret_f32_u32(veor_u32(
-                vrev64_u32(vreinterpret_u32_f32(vget_high_f32(values.0))),
-                vreinterpret_u32_f32(self.sign_hi),
-            )),
-        ))
+        unsafe {
+            FcmaVector32(vcombine_f32(
+                vget_low_f32(values.0),
+                vreinterpret_f32_u32(veor_u32(
+                    vrev64_u32(vreinterpret_u32_f32(vget_high_f32(values.0))),
+                    vreinterpret_u32_f32(self.sign_hi),
+                )),
+            ))
+        }
     }
 }
 
@@ -103,11 +113,13 @@ impl Rotate90HiF32 {
 // --> r1.re, r1.im, l1.re, l1.im
 #[inline(always)]
 pub unsafe fn extract_lo_lo_f32(left: FcmaVector32, right: FcmaVector32) -> FcmaVector32 {
-    //_mm_shuffle_ps(left, right, 0x44)
-    FcmaVector32(vreinterpretq_f32_f64(vtrn1q_f64(
-        vreinterpretq_f64_f32(left.0),
-        vreinterpretq_f64_f32(right.0),
-    )))
+    unsafe {
+        //_mm_shuffle_ps(left, right, 0x44)
+        FcmaVector32(vreinterpretq_f32_f64(vtrn1q_f64(
+            vreinterpretq_f64_f32(left.0),
+            vreinterpretq_f64_f32(right.0),
+        )))
+    }
 }
 
 // Pack high (2nd) complex
@@ -116,10 +128,12 @@ pub unsafe fn extract_lo_lo_f32(left: FcmaVector32, right: FcmaVector32) -> Fcma
 // --> r2.re, r2.im, l2.re, l2.im
 #[inline(always)]
 pub unsafe fn extract_hi_hi_f32(left: FcmaVector32, right: FcmaVector32) -> FcmaVector32 {
-    FcmaVector32(vreinterpretq_f32_f64(vtrn2q_f64(
-        vreinterpretq_f64_f32(left.0),
-        vreinterpretq_f64_f32(right.0),
-    )))
+    unsafe {
+        FcmaVector32(vreinterpretq_f32_f64(vtrn2q_f64(
+            vreinterpretq_f64_f32(left.0),
+            vreinterpretq_f64_f32(right.0),
+        )))
+    }
 }
 
 // Pack low (1st) and high (2nd) complex
@@ -128,7 +142,7 @@ pub unsafe fn extract_hi_hi_f32(left: FcmaVector32, right: FcmaVector32) -> Fcma
 // --> r1.re, r1.im, l2.re, l2.im
 #[inline(always)]
 pub unsafe fn extract_lo_hi_f32(left: FcmaVector32, right: FcmaVector32) -> FcmaVector32 {
-    FcmaVector32(vcombine_f32(vget_low_f32(left.0), vget_high_f32(right.0)))
+    unsafe { FcmaVector32(vcombine_f32(vget_low_f32(left.0), vget_high_f32(right.0))) }
 }
 
 // Pack  high (2nd) and low (1st) complex
@@ -137,7 +151,7 @@ pub unsafe fn extract_lo_hi_f32(left: FcmaVector32, right: FcmaVector32) -> Fcma
 // --> r2.re, r2.im, l1.re, l1.im
 #[inline(always)]
 pub unsafe fn extract_hi_lo_f32(left: FcmaVector32, right: FcmaVector32) -> FcmaVector32 {
-    FcmaVector32(vcombine_f32(vget_high_f32(left.0), vget_low_f32(right.0)))
+    unsafe { FcmaVector32(vcombine_f32(vget_high_f32(left.0), vget_low_f32(right.0))) }
 }
 
 // Reverse complex
@@ -145,10 +159,12 @@ pub unsafe fn extract_hi_lo_f32(left: FcmaVector32, right: FcmaVector32) -> Fcma
 // --> b.re, b.im, a.re, a.im
 #[inline(always)]
 pub unsafe fn reverse_complex_elements_f32(values: FcmaVector32) -> FcmaVector32 {
-    FcmaVector32(vcombine_f32(
-        vget_high_f32(values.0),
-        vget_low_f32(values.0),
-    ))
+    unsafe {
+        FcmaVector32(vcombine_f32(
+            vget_high_f32(values.0),
+            vget_low_f32(values.0),
+        ))
+    }
 }
 
 // Reverse complex and then negate hi complex
@@ -156,10 +172,12 @@ pub unsafe fn reverse_complex_elements_f32(values: FcmaVector32) -> FcmaVector32
 // --> b.re, b.im, -a.re, -a.im
 #[inline(always)]
 pub unsafe fn reverse_complex_and_negate_hi_f32(values: FcmaVector32) -> FcmaVector32 {
-    FcmaVector32(vcombine_f32(
-        vget_high_f32(values.0),
-        vneg_f32(vget_low_f32(values.0)),
-    ))
+    unsafe {
+        FcmaVector32(vcombine_f32(
+            vget_high_f32(values.0),
+            vneg_f32(vget_low_f32(values.0)),
+        ))
+    }
 }
 
 // Invert sign of high (2nd) complex
@@ -175,10 +193,12 @@ pub unsafe fn reverse_complex_and_negate_hi_f32(values: FcmaVector32) -> FcmaVec
 // --> a.re, a.im, a.re, a.im
 #[inline(always)]
 pub unsafe fn duplicate_lo_f32(values: FcmaVector32) -> FcmaVector32 {
-    FcmaVector32(vreinterpretq_f32_f64(vtrn1q_f64(
-        vreinterpretq_f64_f32(values.0),
-        vreinterpretq_f64_f32(values.0),
-    )))
+    unsafe {
+        FcmaVector32(vreinterpretq_f32_f64(vtrn1q_f64(
+            vreinterpretq_f64_f32(values.0),
+            vreinterpretq_f64_f32(values.0),
+        )))
+    }
 }
 
 // Duplicate high (2nd) complex
@@ -186,10 +206,12 @@ pub unsafe fn duplicate_lo_f32(values: FcmaVector32) -> FcmaVector32 {
 // --> b.re, b.im, b.re, b.im
 #[inline(always)]
 pub unsafe fn duplicate_hi_f32(values: FcmaVector32) -> FcmaVector32 {
-    FcmaVector32(vreinterpretq_f32_f64(vtrn2q_f64(
-        vreinterpretq_f64_f32(values.0),
-        vreinterpretq_f64_f32(values.0),
-    )))
+    unsafe {
+        FcmaVector32(vreinterpretq_f32_f64(vtrn2q_f64(
+            vreinterpretq_f64_f32(values.0),
+            vreinterpretq_f64_f32(values.0),
+        )))
+    }
 }
 
 // transpose a 2x2 complex matrix given as [x0, x1], [x2, x3]
@@ -199,9 +221,11 @@ pub unsafe fn transpose_complex_2x2_f32(
     left: FcmaVector32,
     right: FcmaVector32,
 ) -> [FcmaVector32; 2] {
-    let temp02 = extract_lo_lo_f32(left, right);
-    let temp13 = extract_hi_hi_f32(left, right);
-    [temp02, temp13]
+    unsafe {
+        let temp02 = extract_lo_lo_f32(left, right);
+        let temp13 = extract_hi_hi_f32(left, right);
+        [temp02, temp13]
+    }
 }
 
 //  __  __       _   _                __   _  _   _     _ _
@@ -231,41 +255,49 @@ impl Rotate90F64 {
 
     #[inline(always)]
     pub unsafe fn rotate(&self, values: FcmaVector64) -> FcmaVector64 {
-        let zero = vmovq_n_f64(0.0);
-        FcmaVector64(vcmlaq_rot90_f64(zero, self.sign.0, values.0))
+        unsafe {
+            let zero = vmovq_n_f64(0.0);
+            FcmaVector64(vcmlaq_rot90_f64(zero, self.sign.0, values.0))
+        }
     }
 
     /// Rotates `values` and adds the result to `acc`, in a single instruction.
     #[inline(always)]
     pub unsafe fn rotate_and_add(&self, acc: FcmaVector64, values: FcmaVector64) -> FcmaVector64 {
-        FcmaVector64(vcmlaq_rot90_f64(acc.0, self.sign.0, values.0))
+        unsafe { FcmaVector64(vcmlaq_rot90_f64(acc.0, self.sign.0, values.0)) }
     }
 
     /// Rotates `values` and subtracts the result from `acc`, in a single instruction.
     #[inline(always)]
     pub unsafe fn rotate_and_sub(&self, acc: FcmaVector64, values: FcmaVector64) -> FcmaVector64 {
-        FcmaVector64(vcmlaq_rot270_f64(acc.0, self.sign.0, values.0))
+        unsafe { FcmaVector64(vcmlaq_rot270_f64(acc.0, self.sign.0, values.0)) }
     }
 
     #[inline(always)]
     pub unsafe fn rotate_45(&self, values: FcmaVector64) -> FcmaVector64 {
-        // rotate(values) + values
-        let sum = self.rotate_and_add(values, values);
-        FcmaVector64(vmulq_f64(sum.0, vmovq_n_f64(0.5f64.sqrt())))
+        unsafe {
+            // rotate(values) + values
+            let sum = self.rotate_and_add(values, values);
+            FcmaVector64(vmulq_f64(sum.0, vmovq_n_f64(0.5f64.sqrt())))
+        }
     }
 
     #[inline(always)]
     pub unsafe fn rotate_135(&self, values: FcmaVector64) -> FcmaVector64 {
-        // values - rotate(values), which is the negated difference we are after
-        let diff = self.rotate_and_sub(values, values);
-        FcmaVector64(vmulq_f64(diff.0, vmovq_n_f64(-(0.5f64.sqrt()))))
+        unsafe {
+            // values - rotate(values), which is the negated difference we are after
+            let diff = self.rotate_and_sub(values, values);
+            FcmaVector64(vmulq_f64(diff.0, vmovq_n_f64(-(0.5f64.sqrt()))))
+        }
     }
 
     #[inline(always)]
     pub unsafe fn rotate_225(&self, values: FcmaVector64) -> FcmaVector64 {
-        // rotate(values) + values
-        let sum = self.rotate_and_add(values, values);
-        FcmaVector64(vmulq_f64(sum.0, vmovq_n_f64(-(0.5f64.sqrt()))))
+        unsafe {
+            // rotate(values) + values
+            let sum = self.rotate_and_add(values, values);
+            FcmaVector64(vmulq_f64(sum.0, vmovq_n_f64(-(0.5f64.sqrt()))))
+        }
     }
 }
 

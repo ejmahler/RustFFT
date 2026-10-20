@@ -7,8 +7,8 @@ use strength_reduce::StrengthReducedUsize;
 use transpose;
 
 use crate::array_utils;
-use crate::{common::FftNum, FftDirection};
 use crate::{Direction, Fft, Length};
+use crate::{FftDirection, common::FftNum};
 
 /// Implementation of the [Good-Thomas Algorithm (AKA Prime Factor Algorithm)](https://en.wikipedia.org/wiki/Prime-factor_FFT_algorithm)
 ///
@@ -61,9 +61,12 @@ impl<T: FftNum> GoodThomasAlgorithm<T> {
     /// `GCD(width_fft.len(), height_fft.len())` must be equal to 1
     pub fn new(mut width_fft: Arc<dyn Fft<T>>, mut height_fft: Arc<dyn Fft<T>>) -> Self {
         assert_eq!(
-            width_fft.fft_direction(), height_fft.fft_direction(),
+            width_fft.fft_direction(),
+            height_fft.fft_direction(),
             "width_fft and height_fft must have the same direction. got width direction={}, height direction={}",
-            width_fft.fft_direction(), height_fft.fft_direction());
+            width_fft.fft_direction(),
+            height_fft.fft_direction()
+        );
 
         let mut width = width_fft.len();
         let mut height = height_fft.len();
@@ -71,10 +74,12 @@ impl<T: FftNum> GoodThomasAlgorithm<T> {
 
         // This algorithm doesn't work if width and height aren't coprime
         let gcd = num_integer::gcd(width as i64, height as i64);
-        assert!(gcd == 1,
-                "Invalid width and height for Good-Thomas Algorithm (width={}, height={}): Inputs must be coprime",
-                width,
-                height);
+        assert!(
+            gcd == 1,
+            "Invalid width and height for Good-Thomas Algorithm (width={}, height={}): Inputs must be coprime",
+            width,
+            height
+        );
 
         // The trick we're using for our index remapping will only work if width < height, so just swap them if it isn't
         if width > height {
@@ -359,9 +364,12 @@ impl<T: FftNum> GoodThomasAlgorithmSmall<T> {
     /// `GCD(width_fft.len(), height_fft.len())` must be equal to 1
     pub fn new(width_fft: Arc<dyn Fft<T>>, height_fft: Arc<dyn Fft<T>>) -> Self {
         assert_eq!(
-            width_fft.fft_direction(), height_fft.fft_direction(),
+            width_fft.fft_direction(),
+            height_fft.fft_direction(),
             "n1_fft and height_fft must have the same direction. got width direction={}, height direction={}",
-            width_fft.fft_direction(), height_fft.fft_direction());
+            width_fft.fft_direction(),
+            height_fft.fft_direction()
+        );
 
         let width = width_fft.len();
         let height = height_fft.len();
@@ -369,18 +377,44 @@ impl<T: FftNum> GoodThomasAlgorithmSmall<T> {
             .checked_mul(height)
             .expect("GoodThomasAlgorithmSmall length overflow");
 
-        assert_eq!(width_fft.get_outofplace_scratch_len(), 0, "GoodThomasAlgorithmSmall should only be used with algorithms that require 0 out-of-place scratch. Width FFT (len={}) requires {}, should require 0", width, width_fft.get_outofplace_scratch_len());
-        assert_eq!(height_fft.get_outofplace_scratch_len(), 0, "GoodThomasAlgorithmSmall should only be used with algorithms that require 0 out-of-place scratch. Height FFT (len={}) requires {}, should require 0", height, height_fft.get_outofplace_scratch_len());
+        assert_eq!(
+            width_fft.get_outofplace_scratch_len(),
+            0,
+            "GoodThomasAlgorithmSmall should only be used with algorithms that require 0 out-of-place scratch. Width FFT (len={}) requires {}, should require 0",
+            width,
+            width_fft.get_outofplace_scratch_len()
+        );
+        assert_eq!(
+            height_fft.get_outofplace_scratch_len(),
+            0,
+            "GoodThomasAlgorithmSmall should only be used with algorithms that require 0 out-of-place scratch. Height FFT (len={}) requires {}, should require 0",
+            height,
+            height_fft.get_outofplace_scratch_len()
+        );
 
-        assert!(width_fft.get_inplace_scratch_len() <= width, "GoodThomasAlgorithmSmall should only be used with algorithms that require little inplace scratch. Width FFT (len={}) requires {}, should require {} or less", width, width_fft.get_inplace_scratch_len(), width);
-        assert!(height_fft.get_inplace_scratch_len() <= height, "GoodThomasAlgorithmSmall should only be used with algorithms that require little inplace scratch. Height FFT (len={}) requires {}, should require {} or less", height, height_fft.get_inplace_scratch_len(), height);
+        assert!(
+            width_fft.get_inplace_scratch_len() <= width,
+            "GoodThomasAlgorithmSmall should only be used with algorithms that require little inplace scratch. Width FFT (len={}) requires {}, should require {} or less",
+            width,
+            width_fft.get_inplace_scratch_len(),
+            width
+        );
+        assert!(
+            height_fft.get_inplace_scratch_len() <= height,
+            "GoodThomasAlgorithmSmall should only be used with algorithms that require little inplace scratch. Height FFT (len={}) requires {}, should require {} or less",
+            height,
+            height_fft.get_inplace_scratch_len(),
+            height
+        );
 
         // compute the multiplicative inverse of width mod height and vice versa. x will be width mod height, and y will be height mod width
         let gcd_data = i64::extended_gcd(&(width as i64), &(height as i64));
-        assert!(gcd_data.gcd == 1,
-                "Invalid input width and height to Good-Thomas Algorithm: ({},{}): Inputs must be coprime",
-                width,
-                height);
+        assert!(
+            gcd_data.gcd == 1,
+            "Invalid input width and height to Good-Thomas Algorithm: ({},{}): Inputs must be coprime",
+            width,
+            height
+        );
 
         // width_inverse or height_inverse might be negative, make it positive by wrapping
         let width_inverse = if gcd_data.x >= 0 {

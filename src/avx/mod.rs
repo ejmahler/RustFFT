@@ -30,7 +30,7 @@ struct CommonSimdData<T, V> {
 }
 
 macro_rules! boilerplate_avx_fft {
-    ($struct_name:ident, $len_fn:expr, $inplace_scratch_len_fn:expr, $out_of_place_scratch_len_fn:expr, $immut_scratch_len_fn:expr) => {
+    ($struct_name:ident, $len_fn:expr_2021, $inplace_scratch_len_fn:expr_2021, $out_of_place_scratch_len_fn:expr_2021, $immut_scratch_len_fn:expr_2021) => {
         impl<A: AvxNum, T: FftNum> Fft<T> for $struct_name<A, T> {
             fn process_immutable_with_scratch(
                 &self,
@@ -261,24 +261,24 @@ mod avx_raders;
 pub mod avx_planner;
 
 pub use self::avx32_butterflies::{
-    Butterfly11Avx, Butterfly128Avx, Butterfly12Avx, Butterfly16Avx, Butterfly24Avx,
-    Butterfly256Avx, Butterfly27Avx, Butterfly32Avx, Butterfly36Avx, Butterfly48Avx,
-    Butterfly512Avx, Butterfly54Avx, Butterfly5Avx, Butterfly64Avx, Butterfly72Avx, Butterfly7Avx,
-    Butterfly8Avx, Butterfly9Avx,
+    Butterfly5Avx, Butterfly7Avx, Butterfly8Avx, Butterfly9Avx, Butterfly11Avx, Butterfly12Avx,
+    Butterfly16Avx, Butterfly24Avx, Butterfly27Avx, Butterfly32Avx, Butterfly36Avx, Butterfly48Avx,
+    Butterfly54Avx, Butterfly64Avx, Butterfly72Avx, Butterfly128Avx, Butterfly256Avx,
+    Butterfly512Avx,
 };
 
 pub use self::avx64_butterflies::{
-    Butterfly11Avx64, Butterfly128Avx64, Butterfly12Avx64, Butterfly16Avx64, Butterfly18Avx64,
-    Butterfly24Avx64, Butterfly256Avx64, Butterfly27Avx64, Butterfly32Avx64, Butterfly36Avx64,
-    Butterfly512Avx64, Butterfly5Avx64, Butterfly64Avx64, Butterfly7Avx64, Butterfly8Avx64,
-    Butterfly9Avx64,
+    Butterfly5Avx64, Butterfly7Avx64, Butterfly8Avx64, Butterfly9Avx64, Butterfly11Avx64,
+    Butterfly12Avx64, Butterfly16Avx64, Butterfly18Avx64, Butterfly24Avx64, Butterfly27Avx64,
+    Butterfly32Avx64, Butterfly36Avx64, Butterfly64Avx64, Butterfly128Avx64, Butterfly256Avx64,
+    Butterfly512Avx64,
 };
 
 pub use self::avx_bluesteins::BluesteinsAvx;
 pub use self::avx_mixed_radix::{
-    MixedRadix11xnAvx, MixedRadix12xnAvx, MixedRadix16xnAvx, MixedRadix2xnAvx, MixedRadix3xnAvx,
-    MixedRadix4xnAvx, MixedRadix5xnAvx, MixedRadix6xnAvx, MixedRadix7xnAvx, MixedRadix8xnAvx,
-    MixedRadix9xnAvx,
+    MixedRadix2xnAvx, MixedRadix3xnAvx, MixedRadix4xnAvx, MixedRadix5xnAvx, MixedRadix6xnAvx,
+    MixedRadix7xnAvx, MixedRadix8xnAvx, MixedRadix9xnAvx, MixedRadix11xnAvx, MixedRadix12xnAvx,
+    MixedRadix16xnAvx,
 };
 pub use self::avx_raders::RadersAvx2;
 use self::avx_vector::AvxVector256;

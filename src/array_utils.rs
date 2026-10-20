@@ -1,18 +1,20 @@
-use crate::common::RadixFactor;
 use crate::Complex;
 use crate::FftNum;
+use crate::common::RadixFactor;
 use std::ops::{Deref, DerefMut};
 
 /// Given an array of size width * height, representing a flattened 2D array,
 /// transpose the rows and columns of that 2D array into the output
 /// benchmarking shows that loop tiling isn't effective for small arrays (in the range of 50x50 or smaller)
 pub unsafe fn transpose_small<T: Copy>(width: usize, height: usize, input: &[T], output: &mut [T]) {
-    for x in 0..width {
-        for y in 0..height {
-            let input_index = x + y * width;
-            let output_index = y + x * height;
+    unsafe {
+        for x in 0..width {
+            for y in 0..height {
+                let input_index = x + y * width;
+                let output_index = y + x * height;
 
-            *output.get_unchecked_mut(output_index) = *input.get_unchecked(input_index);
+                *output.get_unchecked_mut(output_index) = *input.get_unchecked(input_index);
+            }
         }
     }
 }
@@ -24,40 +26,47 @@ pub unsafe fn transpose_small_twiddle<T: FftNum>(
     output: &mut [Complex<T>],
     twiddles: &[Complex<T>],
 ) {
-    assert!(input.len() >= width * height);
-    assert!(output.len() >= width * height);
-    assert!(twiddles.len() >= width * height);
+    unsafe {
+        assert!(input.len() >= width * height);
+        assert!(output.len() >= width * height);
+        assert!(twiddles.len() >= width * height);
 
-    #[cfg(all(target_arch = "aarch64", feature = "neon"))]
-    {
-        if crate::neon::neon_utils::transpose_small_twiddle(width, height, input, output, twiddles)
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
-            return;
+            if crate::neon::neon_utils::transpose_small_twiddle(
+                width, height, input, output, twiddles,
+            ) {
+                return;
+            }
         }
-    }
 
-    for y in 0..height {
-        for x in 0..width {
-            let in_idx = x + y * width;
-            let out_idx = y + x * height;
-            let val = *input.get_unchecked(in_idx);
-            let tw = *twiddles.get_unchecked(in_idx);
-            *output.get_unchecked_mut(out_idx) = val * tw;
+        for y in 0..height {
+            for x in 0..width {
+                let in_idx = x + y * width;
+                let out_idx = y + x * height;
+                let val = *input.get_unchecked(in_idx);
+                let tw = *twiddles.get_unchecked(in_idx);
+                *output.get_unchecked_mut(out_idx) = val * tw;
+            }
         }
     }
 }
 
 #[allow(unused)]
 pub unsafe fn workaround_transmute<T, U>(slice: &[T]) -> &[U] {
-    let ptr = slice.as_ptr() as *const U;
-    let len = slice.len();
-    std::slice::from_raw_parts(ptr, len)
+    unsafe {
+        let ptr = slice.as_ptr() as *const U;
+        let len = slice.len();
+        std::slice::from_raw_parts(ptr, len)
+    }
 }
 #[allow(unused)]
 pub unsafe fn workaround_transmute_mut<T, U>(slice: &mut [T]) -> &mut [U] {
-    let ptr = slice.as_mut_ptr() as *mut U;
-    let len = slice.len();
-    std::slice::from_raw_parts_mut(ptr, len)
+    unsafe {
+        let ptr = slice.as_mut_ptr() as *mut U;
+        let len = slice.len();
+        std::slice::from_raw_parts_mut(ptr, len)
+    }
 }
 
 pub(crate) trait LoadStore<T: FftNum>: DerefMut {
@@ -68,25 +77,33 @@ pub(crate) trait LoadStore<T: FftNum>: DerefMut {
 impl<T: FftNum> LoadStore<T> for &mut [Complex<T>] {
     #[inline(always)]
     unsafe fn load(&self, idx: usize) -> Complex<T> {
-        debug_assert!(idx < self.len());
-        *self.get_unchecked(idx)
+        unsafe {
+            debug_assert!(idx < self.len());
+            *self.get_unchecked(idx)
+        }
     }
     #[inline(always)]
     unsafe fn store(&mut self, val: Complex<T>, idx: usize) {
-        debug_assert!(idx < self.len());
-        *self.get_unchecked_mut(idx) = val;
+        unsafe {
+            debug_assert!(idx < self.len());
+            *self.get_unchecked_mut(idx) = val;
+        }
     }
 }
 impl<T: FftNum, const N: usize> LoadStore<T> for &mut [Complex<T>; N] {
     #[inline(always)]
     unsafe fn load(&self, idx: usize) -> Complex<T> {
-        debug_assert!(idx < self.len());
-        *self.get_unchecked(idx)
+        unsafe {
+            debug_assert!(idx < self.len());
+            *self.get_unchecked(idx)
+        }
     }
     #[inline(always)]
     unsafe fn store(&mut self, val: Complex<T>, idx: usize) {
-        debug_assert!(idx < self.len());
-        *self.get_unchecked_mut(idx) = val;
+        unsafe {
+            debug_assert!(idx < self.len());
+            *self.get_unchecked_mut(idx) = val;
+        }
     }
 }
 
@@ -108,13 +125,17 @@ impl<'a, T> DerefMut for DoubleBuf<'a, T> {
 impl<'a, T: FftNum> LoadStore<T> for DoubleBuf<'a, T> {
     #[inline(always)]
     unsafe fn load(&self, idx: usize) -> Complex<T> {
-        debug_assert!(idx < self.input.len());
-        *self.input.get_unchecked(idx)
+        unsafe {
+            debug_assert!(idx < self.input.len());
+            *self.input.get_unchecked(idx)
+        }
     }
     #[inline(always)]
     unsafe fn store(&mut self, val: Complex<T>, idx: usize) {
-        debug_assert!(idx < self.output.len());
-        *self.output.get_unchecked_mut(idx) = val;
+        unsafe {
+            debug_assert!(idx < self.output.len());
+            *self.output.get_unchecked_mut(idx) = val;
+        }
     }
 }
 
@@ -249,11 +270,7 @@ pub fn validate_and_iter<T>(
     }
 
     // We have a remainder if there's still data in the buffers -- in which case we want to indicate to the caller that there was an unwanted remainder
-    if buffer.len() == 0 {
-        Ok(())
-    } else {
-        Err(())
-    }
+    if buffer.len() == 0 { Ok(()) } else { Err(()) }
 }
 
 // A utility that validates that buffer1.len() % chunk_size == 0, then calls chunk_fn() on each chunk of buffer.
@@ -318,11 +335,7 @@ pub fn validate_and_zip<T>(
     }
 
     // We have a remainder if the 2 chunks were uneven to start with, or if there's still data in the buffers -- in which case we want to indicate to the caller that there was an unwanted remainder
-    if buffer1.len() == 0 {
-        Ok(())
-    } else {
-        Err(())
-    }
+    if buffer1.len() == 0 { Ok(()) } else { Err(()) }
 }
 
 // A utility that validates the following conditions, then calls chunk_fn() on each chunk of buffer1 and buffer 2 zipped together. Passes the entire scratch buffer with each call.
@@ -399,11 +412,7 @@ pub fn validate_and_zip_mut<T>(
     }
 
     // We have a remainder if the 2 chunks were uneven to start with, or if there's still data in the buffers -- in which case we want to indicate to the caller that there was an unwanted remainder
-    if buffer1.len() == 0 {
-        Ok(())
-    } else {
-        Err(())
-    }
+    if buffer1.len() == 0 { Ok(()) } else { Err(()) }
 }
 
 // A utility that validates the following conditions, then calls chunk_fn() on each chunk of buffer1 and buffer 2 zipped together. Passes the entire scratch buffer with each call.

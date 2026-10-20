@@ -48,7 +48,11 @@ pub fn fft_error_outofplace(
     expected_scratch: usize,
     actual_scratch: usize,
 ) {
-    assert_eq!(actual_input, actual_output, "Provided FFT input buffer and output buffer must have the same length. Got input.len() = {}, output.len() = {}", actual_input, actual_output);
+    assert_eq!(
+        actual_input, actual_output,
+        "Provided FFT input buffer and output buffer must have the same length. Got input.len() = {}, output.len() = {}",
+        actual_input, actual_output
+    );
     assert!(
         actual_input >= expected_len,
         "Provided FFT buffer was too small. Expected len = {}, got len = {}",
@@ -81,7 +85,11 @@ pub fn fft_error_immut(
     expected_scratch: usize,
     actual_scratch: usize,
 ) {
-    assert_eq!(actual_input, actual_output, "Provided FFT input buffer and output buffer must have the same length. Got input.len() = {}, output.len() = {}", actual_input, actual_output);
+    assert_eq!(
+        actual_input, actual_output,
+        "Provided FFT input buffer and output buffer must have the same length. Got input.len() = {}, output.len() = {}",
+        actual_input, actual_output
+    );
     assert!(
         actual_input >= expected_len,
         "Provided FFT buffer was too small. Expected len = {}, got len = {}",
@@ -104,7 +112,7 @@ pub fn fft_error_immut(
 }
 
 macro_rules! boilerplate_fft_oop {
-    ($struct_name:ident, $len_fn:expr) => {
+    ($struct_name:ident, $len_fn:expr_2021) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             fn process_immutable_with_scratch(
                 &self,
@@ -182,7 +190,7 @@ macro_rules! boilerplate_fft_oop {
 }
 
 macro_rules! boilerplate_fft {
-    ($struct_name:ident, $len_fn:expr, $inplace_scratch_len_fn:expr, $out_of_place_scratch_len_fn:expr, $immut_scratch_len:expr) => {
+    ($struct_name:ident, $len_fn:expr_2021, $inplace_scratch_len_fn:expr_2021, $out_of_place_scratch_len_fn:expr_2021, $immut_scratch_len:expr_2021) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             fn process_immutable_with_scratch(
                 &self,

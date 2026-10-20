@@ -3,8 +3,8 @@
 use std::sync::Arc;
 use std::thread;
 
-use rustfft::num_complex::Complex32;
 use rustfft::FftPlanner;
+use rustfft::num_complex::Complex32;
 
 fn main() {
     // Verify that the planner is sync + send

@@ -1,7 +1,7 @@
-use crate::{common::FftNum, FftDirection};
+use crate::{FftDirection, common::FftNum};
 use num_complex::Complex;
 
-use strength_reduce::{StrengthReducedU128, StrengthReducedU64};
+use strength_reduce::{StrengthReducedU64, StrengthReducedU128};
 
 pub fn compute_twiddle<T: FftNum>(
     index: usize,
@@ -34,7 +34,7 @@ pub fn fill_bluesteins_twiddles<T: FftNum>(
 
     // Strength-reduced u128s are very heavy, so we only want to use them if we need them - and we only need them if
     // len * len doesn't fit in a u64, AKA if len doesn't fit in a u32
-    if destination.len() < std::u32::MAX as usize {
+    if destination.len() < u32::MAX as usize {
         let twice_len_reduced = StrengthReducedU64::new(twice_len as u64);
 
         for (i, e) in destination.iter_mut().enumerate() {

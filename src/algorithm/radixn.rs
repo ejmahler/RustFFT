@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use num_complex::Complex;
 
-use crate::{common::RadixFactor, simd::simd_radixn::SimdRadixN, Fft, FftNum};
+use crate::{Fft, FftNum, common::RadixFactor, simd::simd_radixn::SimdRadixN};
 
 pub struct RadixN<T: FftNum>(SimdRadixN<Complex<T>, T>);
 
@@ -19,7 +19,7 @@ mod unit_tests {
 
     use num_complex::Complex;
 
-    use crate::{simd::simd_radixn::test_bodies, Fft, FftNum};
+    use crate::{Fft, FftNum, simd::simd_radixn::test_bodies};
 
     use super::*;
 

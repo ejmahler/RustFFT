@@ -1,3 +1,4 @@
+use rustfft::Fft;
 /// Unfortunately, `cargo bench` does not permit running these benchmarks out-of-the-box
 /// on a WebAssembly virtual machine.
 ///
@@ -30,11 +31,10 @@
 /// which should be mostly applicable to our use case.
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
-use rustfft::Fft;
 use std::sync::Arc;
 mod config;
 
-use criterion::{criterion_group, criterion_main, Bencher, Criterion};
+use criterion::{Bencher, Criterion, criterion_group, criterion_main};
 
 // Make fft using scalar planner
 fn bench_scalar_32(b: &mut Bencher, len: usize) {

@@ -233,14 +233,14 @@ fn bench_good_thomas_f64(b: &mut Bencher, width: usize, height: usize) {
     b.iter(|| {fft.process_with_scratch(&mut buffer, &mut scratch);} );
 }
 
-#[bench] fn good_thomas_64_0002_3(b: &mut Bencher) { bench_good_thomas_f64(b,  2, 3); }
-#[bench] fn good_thomas_64_0003_4(b: &mut Bencher) { bench_good_thomas_f64(b,  3, 4); }
-#[bench] fn good_thomas_64_0004_5(b: &mut Bencher) { bench_good_thomas_f64(b,  4, 5); }
-#[bench] fn good_thomas_64_0007_32(b: &mut Bencher) { bench_good_thomas_f64(b, 7, 32); }
-#[bench] fn good_thomas_64_0032_27(b: &mut Bencher) { bench_good_thomas_f64(b,  32, 27); }
-#[bench] fn good_thomas_64_0256_243(b: &mut Bencher) { bench_good_thomas_f64(b,  256, 243); }
-#[bench] fn good_thomas_64_2048_3(b: &mut Bencher) { bench_good_thomas_f64(b,  2048, 3); }
-#[bench] fn good_thomas_64_2048_2187(b: &mut Bencher) { bench_good_thomas_f64(b,  2048, 2187); }
+fn good_thomas_64_0002_3(b: &mut Bencher) { bench_good_thomas_f64(b,  2, 3); }
+fn good_thomas_64_0003_4(b: &mut Bencher) { bench_good_thomas_f64(b,  3, 4); }
+fn good_thomas_64_0004_5(b: &mut Bencher) { bench_good_thomas_f64(b,  4, 5); }
+fn good_thomas_64_0007_32(b: &mut Bencher) { bench_good_thomas_f64(b, 7, 32); }
+fn good_thomas_64_0032_27(b: &mut Bencher) { bench_good_thomas_f64(b,  32, 27); }
+fn good_thomas_64_0256_243(b: &mut Bencher) { bench_good_thomas_f64(b,  256, 243); }
+fn good_thomas_64_2048_3(b: &mut Bencher) { bench_good_thomas_f64(b,  2048, 3); }
+fn good_thomas_64_2048_2187(b: &mut Bencher) { bench_good_thomas_f64(b,  2048, 2187); }
 
 /// Times just the FFT setup (not execution)
 /// for a given length, specific to the Good-Thomas algorithm
@@ -348,14 +348,14 @@ fn bench_mixed_radix_f64(b: &mut Bencher, width: usize, height: usize) {
     b.iter(|| {fft.process_with_scratch(&mut buffer, &mut scratch);} );
 }
 
-#[bench] fn mixed_radix_64_0002_3(b: &mut Bencher) { bench_mixed_radix_f64(b,  2, 3); }
-#[bench] fn mixed_radix_64_0003_4(b: &mut Bencher) { bench_mixed_radix_f64(b,  3, 4); }
-#[bench] fn mixed_radix_64_0004_5(b: &mut Bencher) { bench_mixed_radix_f64(b,  4, 5); }
-#[bench] fn mixed_radix_64_0007_32(b: &mut Bencher) { bench_mixed_radix_f64(b, 7, 32); }
-#[bench] fn mixed_radix_64_0032_27(b: &mut Bencher) { bench_mixed_radix_f64(b,  32, 27); }
-#[bench] fn mixed_radix_64_0256_243(b: &mut Bencher) { bench_mixed_radix_f64(b,  256, 243); }
-#[bench] fn mixed_radix_64_2048_3(b: &mut Bencher) { bench_mixed_radix_f64(b,  2048, 3); }
-#[bench] fn mixed_radix_64_2048_2187(b: &mut Bencher) { bench_mixed_radix_f64(b,  2048, 2187); }
+fn mixed_radix_64_0002_3(b: &mut Bencher) { bench_mixed_radix_f64(b,  2, 3); }
+fn mixed_radix_64_0003_4(b: &mut Bencher) { bench_mixed_radix_f64(b,  3, 4); }
+fn mixed_radix_64_0004_5(b: &mut Bencher) { bench_mixed_radix_f64(b,  4, 5); }
+fn mixed_radix_64_0007_32(b: &mut Bencher) { bench_mixed_radix_f64(b, 7, 32); }
+fn mixed_radix_64_0032_27(b: &mut Bencher) { bench_mixed_radix_f64(b,  32, 27); }
+fn mixed_radix_64_0256_243(b: &mut Bencher) { bench_mixed_radix_f64(b,  256, 243); }
+fn mixed_radix_64_2048_3(b: &mut Bencher) { bench_mixed_radix_f64(b,  2048, 3); }
+fn mixed_radix_64_2048_2187(b: &mut Bencher) { bench_mixed_radix_f64(b,  2048, 2187); }
 
 fn plan_butterfly_fft(len: usize) -> Arc<dyn Fft<f32>> {
     match len {
@@ -420,10 +420,10 @@ fn bench_mixed_radix_small_f64(b: &mut Bencher, width: usize, height: usize) {
     b.iter(|| {fft.process_with_scratch(&mut signal, &mut spectrum);} );
 }
 
-#[bench] fn mixed_radix_small_64_0002_3(b: &mut Bencher) { bench_mixed_radix_small_f64(b,  2, 3); }
-#[bench] fn mixed_radix_small_64_0003_4(b: &mut Bencher) { bench_mixed_radix_small_f64(b,  3, 4); }
-#[bench] fn mixed_radix_small_64_0004_5(b: &mut Bencher) { bench_mixed_radix_small_f64(b,  4, 5); }
-#[bench] fn mixed_radix_small_64_0007_32(b: &mut Bencher) { bench_mixed_radix_small_f64(b, 7, 32); }
+fn mixed_radix_small_64_0002_3(b: &mut Bencher) { bench_mixed_radix_small_f64(b,  2, 3); }
+fn mixed_radix_small_64_0003_4(b: &mut Bencher) { bench_mixed_radix_small_f64(b,  3, 4); }
+fn mixed_radix_small_64_0004_5(b: &mut Bencher) { bench_mixed_radix_small_f64(b,  4, 5); }
+fn mixed_radix_small_64_0007_32(b: &mut Bencher) { bench_mixed_radix_small_f64(b, 7, 32); }
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length, specific to the Mixed-Radix Double Butterfly algorithm
@@ -458,10 +458,10 @@ fn bench_good_thomas_small_f64(b: &mut Bencher, width: usize, height: usize) {
     b.iter(|| {fft.process_with_scratch(&mut signal, &mut spectrum);} );
 }
 
-#[bench] fn good_thomas_small_64_0002_3(b: &mut Bencher) { bench_good_thomas_small_f64(b,  2, 3); }
-#[bench] fn good_thomas_small_64_0003_4(b: &mut Bencher) { bench_good_thomas_small_f64(b,  3, 4); }
-#[bench] fn good_thomas_small_64_0004_5(b: &mut Bencher) { bench_good_thomas_small_f64(b,  4, 5); }
-#[bench] fn good_thomas_small_64_0007_32(b: &mut Bencher) { bench_good_thomas_small_f64(b, 7, 32); }
+fn good_thomas_small_64_0002_3(b: &mut Bencher) { bench_good_thomas_small_f64(b,  2, 3); }
+fn good_thomas_small_64_0003_4(b: &mut Bencher) { bench_good_thomas_small_f64(b,  3, 4); }
+fn good_thomas_small_64_0004_5(b: &mut Bencher) { bench_good_thomas_small_f64(b,  4, 5); }
+fn good_thomas_small_64_0007_32(b: &mut Bencher) { bench_good_thomas_small_f64(b, 7, 32); }
 
 
 /// Times just the FFT execution (not allocation and pre-calculation)
@@ -780,6 +780,14 @@ fn criterion_benchmark(c: &mut Criterion) {
         good_thomas_0256_243,
         good_thomas_2048_3,
         good_thomas_2048_2187,
+        good_thomas_64_0002_3,
+        good_thomas_64_0003_4,
+        good_thomas_64_0004_5,
+        good_thomas_64_0007_32,
+        good_thomas_64_0032_27,
+        good_thomas_64_0256_243,
+        good_thomas_64_2048_3,
+        good_thomas_64_2048_2187,
         good_thomas_setup_0002_3,
         good_thomas_setup_0003_4,
         good_thomas_setup_0004_5,
@@ -809,14 +817,30 @@ fn criterion_benchmark(c: &mut Criterion) {
         mixed_radix_0256_243,
         mixed_radix_2048_3,
         mixed_radix_2048_2187,
+        mixed_radix_64_0002_3,
+        mixed_radix_64_0003_4,
+        mixed_radix_64_0004_5,
+        mixed_radix_64_0007_32,
+        mixed_radix_64_0032_27,
+        mixed_radix_64_0256_243,
+        mixed_radix_64_2048_3,
+        mixed_radix_64_2048_2187,
         mixed_radix_small_0002_3,
         mixed_radix_small_0003_4,
         mixed_radix_small_0004_5,
         mixed_radix_small_0007_32,
+        mixed_radix_small_64_0002_3,
+        mixed_radix_small_64_0003_4,
+        mixed_radix_small_64_0004_5,
+        mixed_radix_small_64_0007_32,
         good_thomas_small_0002_3,
         good_thomas_small_0003_4,
         good_thomas_small_0004_5,
         good_thomas_small_0007_32,
+        good_thomas_small_64_0002_3,
+        good_thomas_small_64_0003_4,
+        good_thomas_small_64_0004_5,
+        good_thomas_small_64_0007_32,
         raders_fft_scalar_prime_0005,
         raders_fft_scalar_prime_0017,
         raders_fft_scalar_prime_0149,

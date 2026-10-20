@@ -1,7 +1,7 @@
 use core::arch::wasm32::*;
 use num_complex::Complex;
 
-use crate::{common::FftNum, FftDirection};
+use crate::{FftDirection, common::FftNum};
 
 use crate::array_utils::DoubleBuf;
 use crate::twiddles;
@@ -30,7 +30,7 @@ fn pack_64(a: Complex<f64>) -> WasmVector64 {
 
 #[allow(unused)]
 macro_rules! boilerplate_fft_wasm_simd_f32_butterfly {
-    ($struct_name:ident, $len:expr, $direction_fn:expr) => {
+    ($struct_name:ident, $len:expr_2021, $direction_fn:expr_2021) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             #[target_feature(enable = "simd128")]
             fn process_immutable_with_scratch(
@@ -103,7 +103,7 @@ macro_rules! boilerplate_fft_wasm_simd_f32_butterfly {
 }
 
 macro_rules! boilerplate_fft_wasm_simd_f64_butterfly {
-    ($struct_name:ident, $len:expr, $direction_fn:expr) => {
+    ($struct_name:ident, $len:expr_2021, $direction_fn:expr_2021) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             #[target_feature(enable = "simd128")]
             fn process_immutable_with_scratch(
@@ -201,8 +201,10 @@ impl<T: FftNum> WasmSimdF32Butterfly1<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
     ) {
-        let value = buffer.load1_lo(0);
-        buffer.store1_lo(value, 0);
+        unsafe {
+            let value = buffer.load1_lo(0);
+            buffer.store1_lo(value, 0);
+        }
     }
 
     #[inline(always)]
@@ -210,8 +212,10 @@ impl<T: FftNum> WasmSimdF32Butterfly1<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
     ) {
-        let value = buffer.load(0);
-        buffer.store(value, 0);
+        unsafe {
+            let value = buffer.load(0);
+            buffer.store(value, 0);
+        }
     }
 }
 
@@ -246,8 +250,10 @@ impl<T: FftNum> WasmSimdF64Butterfly1<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector64>,
     ) {
-        let value = buffer.load(0);
-        buffer.store(value, 0);
+        unsafe {
+            let value = buffer.load(0);
+            buffer.store(value, 0);
+        }
     }
 }
 
@@ -302,11 +308,13 @@ impl<T: FftNum> WasmSimdF32Butterfly2<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
     ) {
-        let values = buffer.load(0);
+        unsafe {
+            let values = buffer.load(0);
 
-        let temp = self.perform_fft_direct(values);
+            let temp = self.perform_fft_direct(values);
 
-        buffer.store(temp, 0);
+            buffer.store(temp, 0);
+        }
     }
 
     #[inline(always)]
@@ -314,22 +322,24 @@ impl<T: FftNum> WasmSimdF32Butterfly2<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
     ) {
-        let values_a = buffer.load(0);
-        let values_b = buffer.load(2);
+        unsafe {
+            let values_a = buffer.load(0);
+            let values_b = buffer.load(2);
 
-        let out = self.perform_parallel_fft_direct(values_a, values_b);
+            let out = self.perform_parallel_fft_direct(values_a, values_b);
 
-        let [out02, out13] = transpose_complex_2x2_f32(out[0], out[1]);
+            let [out02, out13] = transpose_complex_2x2_f32(out[0], out[1]);
 
-        buffer.store(out02, 0);
-        buffer.store(out13, 2);
+            buffer.store(out02, 0);
+            buffer.store(out13, 2);
+        }
     }
 
     // length 2 fft of x, given as [x0, x1]
     // result is [X0, X1]
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(&self, values: WasmVector32) -> WasmVector32 {
-        solo_fft2_f32(values)
+        unsafe { solo_fft2_f32(values) }
     }
 
     // dual length 2 fft of x and y, given as [x0, x1], [y0, y1]
@@ -340,13 +350,13 @@ impl<T: FftNum> WasmSimdF32Butterfly2<T> {
         values_x: WasmVector32,
         values_y: WasmVector32,
     ) -> [WasmVector32; 2] {
-        parallel_fft2_contiguous_f32(values_x, values_y)
+        unsafe { parallel_fft2_contiguous_f32(values_x, values_y) }
     }
 }
 
 #[inline(always)]
 pub unsafe fn wasm_parallel_butterfly2<V: SimdVector>(rows: [V; 2]) -> [V; 2] {
-    [V::add(rows[0], rows[1]), V::sub(rows[0], rows[1])]
+    unsafe { [V::add(rows[0], rows[1]), V::sub(rows[0], rows[1])] }
 }
 
 // double lenth 2 fft of a and b, given as [x0, x1], [y0, y1]
@@ -356,18 +366,22 @@ unsafe fn parallel_fft2_contiguous_f32(
     left: WasmVector32,
     right: WasmVector32,
 ) -> [WasmVector32; 2] {
-    let [temp02, temp13] = transpose_complex_2x2_f32(left, right);
-    wasm_parallel_butterfly2([temp02, temp13])
+    unsafe {
+        let [temp02, temp13] = transpose_complex_2x2_f32(left, right);
+        wasm_parallel_butterfly2([temp02, temp13])
+    }
 }
 
 // length 2 fft of x, given as [x0, x1]
 // result is [X0, X1]
 #[inline(always)]
 unsafe fn solo_fft2_f32(values: WasmVector32) -> WasmVector32 {
-    let high = WasmVector32(u64x2_shuffle::<0, 0>(values.0, values.0));
-    let low = WasmVector32(u64x2_shuffle::<1, 1>(values.0, values.0));
-    let low = SimdVector::mul(low, WasmVector32(f32x4(1.0, 1.0, -1.0, -1.0)));
-    SimdVector::add(high, low)
+    unsafe {
+        let high = WasmVector32(u64x2_shuffle::<0, 0>(values.0, values.0));
+        let low = WasmVector32(u64x2_shuffle::<1, 1>(values.0, values.0));
+        let low = SimdVector::mul(low, WasmVector32(f32x4(1.0, 1.0, -1.0, -1.0)));
+        SimdVector::add(high, low)
+    }
 }
 
 //   ____             __   _  _   _     _ _
@@ -422,13 +436,15 @@ impl<T: FftNum> WasmSimdF64Butterfly2<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector64>,
     ) {
-        let value0 = buffer.load(0);
-        let value1 = buffer.load(1);
+        unsafe {
+            let value0 = buffer.load(0);
+            let value1 = buffer.load(1);
 
-        let out = self.perform_fft_direct(value0, value1);
+            let out = self.perform_fft_direct(value0, value1);
 
-        buffer.store(out[0], 0);
-        buffer.store(out[1], 1);
+            buffer.store(out[0], 0);
+            buffer.store(out[1], 1);
+        }
     }
 
     #[inline(always)]
@@ -437,15 +453,17 @@ impl<T: FftNum> WasmSimdF64Butterfly2<T> {
         value0: WasmVector64,
         value1: WasmVector64,
     ) -> [WasmVector64; 2] {
-        solo_fft2_f64(value0, value1)
+        unsafe { solo_fft2_f64(value0, value1) }
     }
 }
 
 #[inline(always)]
 pub(crate) unsafe fn solo_fft2_f64(left: WasmVector64, right: WasmVector64) -> [WasmVector64; 2] {
-    let temp0 = SimdVector::add(left, right);
-    let temp1 = SimdVector::sub(left, right);
-    [temp0, temp1]
+    unsafe {
+        let temp0 = SimdVector::add(left, right);
+        let temp1 = SimdVector::sub(left, right);
+        [temp0, temp1]
+    }
 }
 
 //   _____            _________  _     _ _
@@ -527,13 +545,15 @@ impl<T: FftNum> WasmSimdF32Butterfly3<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
     ) {
-        let value0x = buffer.load1_lo(0);
-        let value12 = buffer.load(1);
+        unsafe {
+            let value0x = buffer.load1_lo(0);
+            let value12 = buffer.load(1);
 
-        let out = self.perform_fft_direct(value0x, value12);
+            let out = self.perform_fft_direct(value0x, value12);
 
-        buffer.store1_lo(out[0], 0);
-        buffer.store(out[1], 1);
+            buffer.store1_lo(out[0], 0);
+            buffer.store(out[1], 1);
+        }
     }
 
     #[inline(always)]
@@ -541,23 +561,25 @@ impl<T: FftNum> WasmSimdF32Butterfly3<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
     ) {
-        let valuea0a1 = buffer.load(0);
-        let valuea2b0 = buffer.load(2);
-        let valueb1b2 = buffer.load(4);
+        unsafe {
+            let valuea0a1 = buffer.load(0);
+            let valuea2b0 = buffer.load(2);
+            let valueb1b2 = buffer.load(4);
 
-        let value0 = extract_lo_hi_f32(valuea0a1, valuea2b0);
-        let value1 = extract_hi_lo_f32(valuea0a1, valueb1b2);
-        let value2 = extract_lo_hi_f32(valuea2b0, valueb1b2);
+            let value0 = extract_lo_hi_f32(valuea0a1, valuea2b0);
+            let value1 = extract_hi_lo_f32(valuea0a1, valueb1b2);
+            let value2 = extract_lo_hi_f32(valuea2b0, valueb1b2);
 
-        let out = self.perform_parallel_fft_direct(value0, value1, value2);
+            let out = self.perform_parallel_fft_direct(value0, value1, value2);
 
-        let out0 = extract_lo_lo_f32(out[0], out[1]);
-        let out1 = extract_lo_hi_f32(out[2], out[0]);
-        let out2 = extract_hi_hi_f32(out[1], out[2]);
+            let out0 = extract_lo_lo_f32(out[0], out[1]);
+            let out1 = extract_lo_hi_f32(out[2], out[0]);
+            let out2 = extract_hi_hi_f32(out[1], out[2]);
 
-        buffer.store(out0, 0);
-        buffer.store(out1, 2);
-        buffer.store(out2, 4);
+            buffer.store(out0, 0);
+            buffer.store(out1, 2);
+            buffer.store(out2, 4);
+        }
     }
 
     // length 3 fft of a, given as [x0, 0.0], [x1, x2]
@@ -569,16 +591,18 @@ impl<T: FftNum> WasmSimdF32Butterfly3<T> {
         value0x: WasmVector32,
         value12: WasmVector32,
     ) -> [WasmVector32; 2] {
-        // This is a WasmSimd translation of the scalar 3-point butterfly
-        let rev12 = reverse_complex_and_negate_hi_f32(value12);
-        let rotate_hi = Rotate90HiF32::new(FftDirection::Inverse);
-        let temp12pn = rotate_hi.rotate_hi(SimdVector::add(value12, rev12));
-        let twiddled = SimdVector::mul(temp12pn, self.twiddle);
-        let temp = SimdVector::add(value0x, twiddled);
+        unsafe {
+            // This is a WasmSimd translation of the scalar 3-point butterfly
+            let rev12 = reverse_complex_and_negate_hi_f32(value12);
+            let rotate_hi = Rotate90HiF32::new(FftDirection::Inverse);
+            let temp12pn = rotate_hi.rotate_hi(SimdVector::add(value12, rev12));
+            let twiddled = SimdVector::mul(temp12pn, self.twiddle);
+            let temp = SimdVector::add(value0x, twiddled);
 
-        let out12 = solo_fft2_f32(temp);
-        let out0x = SimdVector::add(value0x, temp12pn);
-        [out0x, out12]
+            let out12 = solo_fft2_f32(temp);
+            let out0x = SimdVector::add(value0x, temp12pn);
+            [out0x, out12]
+        }
     }
 
     // length 3 dual fft of a, given as (x0, y0), (x1, y1), (x2, y2).
@@ -590,21 +614,23 @@ impl<T: FftNum> WasmSimdF32Butterfly3<T> {
         value1: WasmVector32,
         value2: WasmVector32,
     ) -> [WasmVector32; 3] {
-        // This is a WasmSimd translation of the scalar 3-point butterfly
-        let x12p = SimdVector::add(value1, value2);
-        let x12n = SimdVector::sub(value1, value2);
-        let sum = SimdVector::add(value0, x12p);
+        unsafe {
+            // This is a WasmSimd translation of the scalar 3-point butterfly
+            let x12p = SimdVector::add(value1, value2);
+            let x12n = SimdVector::sub(value1, value2);
+            let sum = SimdVector::add(value0, x12p);
 
-        let temp_a = SimdVector::mul(self.twiddle1re, x12p);
-        let temp_a = SimdVector::add(temp_a, value0);
+            let temp_a = SimdVector::mul(self.twiddle1re, x12p);
+            let temp_a = SimdVector::add(temp_a, value0);
 
-        let rotate = Rotate90F32::new(FftDirection::Inverse);
-        let n_rot = rotate.rotate(x12n);
-        let temp_b = SimdVector::mul(self.twiddle1im, n_rot);
+            let rotate = Rotate90F32::new(FftDirection::Inverse);
+            let n_rot = rotate.rotate(x12n);
+            let temp_b = SimdVector::mul(self.twiddle1im, n_rot);
 
-        let x1 = SimdVector::add(temp_a, temp_b);
-        let x2 = SimdVector::sub(temp_a, temp_b);
-        [sum, x1, x2]
+            let x1 = SimdVector::add(temp_a, temp_b);
+            let x2 = SimdVector::sub(temp_a, temp_b);
+            [sum, x1, x2]
+        }
     }
 }
 
@@ -686,15 +712,17 @@ impl<T: FftNum> WasmSimdF64Butterfly3<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector64>,
     ) {
-        let value0 = buffer.load(0);
-        let value1 = buffer.load(1);
-        let value2 = buffer.load(2);
+        unsafe {
+            let value0 = buffer.load(0);
+            let value1 = buffer.load(1);
+            let value2 = buffer.load(2);
 
-        let out = self.perform_fft_direct(value0, value1, value2);
+            let out = self.perform_fft_direct(value0, value1, value2);
 
-        buffer.store(out[0], 0);
-        buffer.store(out[1], 1);
-        buffer.store(out[2], 2);
+            buffer.store(out[0], 0);
+            buffer.store(out[1], 1);
+            buffer.store(out[2], 2);
+        }
     }
 
     // length 3 fft of x, given as x0, x1, x2.
@@ -706,21 +734,23 @@ impl<T: FftNum> WasmSimdF64Butterfly3<T> {
         value1: WasmVector64,
         value2: WasmVector64,
     ) -> [WasmVector64; 3] {
-        // This is a WasmSimd translation of the scalar 3-point butterfly
-        let x12p = SimdVector::add(value1, value2);
-        let x12n = SimdVector::sub(value1, value2);
-        let sum = SimdVector::add(value0, x12p);
+        unsafe {
+            // This is a WasmSimd translation of the scalar 3-point butterfly
+            let x12p = SimdVector::add(value1, value2);
+            let x12n = SimdVector::sub(value1, value2);
+            let sum = SimdVector::add(value0, x12p);
 
-        // let temp_a = vfmaq_f64(value0, self.twiddle1re, x12p);
-        let temp_a = SimdVector::add(value0, SimdVector::mul(self.twiddle1re, x12p));
+            // let temp_a = vfmaq_f64(value0, self.twiddle1re, x12p);
+            let temp_a = SimdVector::add(value0, SimdVector::mul(self.twiddle1re, x12p));
 
-        let rotate = Rotate90F64::new(FftDirection::Inverse);
-        let n_rot = rotate.rotate(x12n);
-        let temp_b = SimdVector::mul(self.twiddle1im, n_rot);
+            let rotate = Rotate90F64::new(FftDirection::Inverse);
+            let n_rot = rotate.rotate(x12n);
+            let temp_b = SimdVector::mul(self.twiddle1im, n_rot);
 
-        let x1 = SimdVector::add(temp_a, temp_b);
-        let x2 = SimdVector::sub(temp_a, temp_b);
-        [sum, x1, x2]
+            let x1 = SimdVector::add(temp_a, temp_b);
+            let x2 = SimdVector::sub(temp_a, temp_b);
+            [sum, x1, x2]
+        }
     }
 }
 
@@ -795,13 +825,15 @@ impl<T: FftNum> WasmSimdF32Butterfly4<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
     ) {
-        let value01 = buffer.load(0);
-        let value23 = buffer.load(2);
+        unsafe {
+            let value01 = buffer.load(0);
+            let value23 = buffer.load(2);
 
-        let out = self.perform_fft_direct(value01, value23);
+            let out = self.perform_fft_direct(value01, value23);
 
-        buffer.store(out[0], 0);
-        buffer.store(out[1], 2);
+            buffer.store(out[0], 0);
+            buffer.store(out[1], 2);
+        }
     }
 
     #[inline(always)]
@@ -809,23 +841,25 @@ impl<T: FftNum> WasmSimdF32Butterfly4<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
     ) {
-        let value01a = buffer.load(0);
-        let value23a = buffer.load(2);
-        let value01b = buffer.load(4);
-        let value23b = buffer.load(6);
+        unsafe {
+            let value01a = buffer.load(0);
+            let value23a = buffer.load(2);
+            let value01b = buffer.load(4);
+            let value23b = buffer.load(6);
 
-        let [value0ab, value1ab] = transpose_complex_2x2_f32(value01a, value01b);
-        let [value2ab, value3ab] = transpose_complex_2x2_f32(value23a, value23b);
+            let [value0ab, value1ab] = transpose_complex_2x2_f32(value01a, value01b);
+            let [value2ab, value3ab] = transpose_complex_2x2_f32(value23a, value23b);
 
-        let out = self.perform_parallel_fft_direct([value0ab, value1ab, value2ab, value3ab]);
+            let out = self.perform_parallel_fft_direct([value0ab, value1ab, value2ab, value3ab]);
 
-        let [out0, out1] = transpose_complex_2x2_f32(out[0], out[1]);
-        let [out2, out3] = transpose_complex_2x2_f32(out[2], out[3]);
+            let [out0, out1] = transpose_complex_2x2_f32(out[0], out[1]);
+            let [out2, out3] = transpose_complex_2x2_f32(out[2], out[3]);
 
-        buffer.store(out0, 0);
-        buffer.store(out1, 4);
-        buffer.store(out2, 2);
-        buffer.store(out3, 6);
+            buffer.store(out0, 0);
+            buffer.store(out1, 4);
+            buffer.store(out2, 2);
+            buffer.store(out3, 6);
+        }
     }
 
     // length 4 fft of a, given as [x0, x1], [x2, x3]
@@ -836,23 +870,25 @@ impl<T: FftNum> WasmSimdF32Butterfly4<T> {
         value01: WasmVector32,
         value23: WasmVector32,
     ) -> [WasmVector32; 2] {
-        //we're going to hardcode a step of mixed radix
-        //aka we're going to do the six step algorithm
+        unsafe {
+            //we're going to hardcode a step of mixed radix
+            //aka we're going to do the six step algorithm
 
-        // step 1: transpose
-        // and
-        // step 2: column FFTs
-        let mut temp = wasm_parallel_butterfly2([value01, value23]);
+            // step 1: transpose
+            // and
+            // step 2: column FFTs
+            let mut temp = wasm_parallel_butterfly2([value01, value23]);
 
-        // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-        temp[1] = self.rotate_hi.rotate_hi(temp[1]);
+            // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
+            temp[1] = self.rotate_hi.rotate_hi(temp[1]);
 
-        // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
+            // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
-        // step 5: row FFTs
-        // and
-        // step 6: transpose by swapping index 1 and 2
-        parallel_fft2_contiguous_f32(temp[0], temp[1])
+            // step 5: row FFTs
+            // and
+            // step 6: transpose by swapping index 1 and 2
+            parallel_fft2_contiguous_f32(temp[0], temp[1])
+        }
     }
 
     #[inline(always)]
@@ -860,26 +896,28 @@ impl<T: FftNum> WasmSimdF32Butterfly4<T> {
         &self,
         values: [WasmVector32; 4],
     ) -> [WasmVector32; 4] {
-        //we're going to hardcode a step of mixed radix
-        //aka we're going to do the six step algorithm
+        unsafe {
+            //we're going to hardcode a step of mixed radix
+            //aka we're going to do the six step algorithm
 
-        // step 1: transpose
-        // and
-        // step 2: column FFTs
-        let temp0 = wasm_parallel_butterfly2([values[0], values[2]]);
-        let mut temp1 = wasm_parallel_butterfly2([values[1], values[3]]);
+            // step 1: transpose
+            // and
+            // step 2: column FFTs
+            let temp0 = wasm_parallel_butterfly2([values[0], values[2]]);
+            let mut temp1 = wasm_parallel_butterfly2([values[1], values[3]]);
 
-        // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-        temp1[1] = self.rotate.rotate(temp1[1]);
+            // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
+            temp1[1] = self.rotate.rotate(temp1[1]);
 
-        // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
+            // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
-        // step 5: row FFTs
-        let out0 = wasm_parallel_butterfly2([temp0[0], temp1[0]]);
-        let out2 = wasm_parallel_butterfly2([temp0[1], temp1[1]]);
+            // step 5: row FFTs
+            let out0 = wasm_parallel_butterfly2([temp0[0], temp1[0]]);
+            let out2 = wasm_parallel_butterfly2([temp0[1], temp1[1]]);
 
-        // step 6: transpose by swapping index 1 and 2
-        [out0[0], out2[0], out0[1], out2[1]]
+            // step 6: transpose by swapping index 1 and 2
+            [out0[0], out2[0], out0[1], out2[1]]
+        }
     }
 }
 
@@ -953,41 +991,45 @@ impl<T: FftNum> WasmSimdF64Butterfly4<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector64>,
     ) {
-        let value0 = buffer.load(0);
-        let value1 = buffer.load(1);
-        let value2 = buffer.load(2);
-        let value3 = buffer.load(3);
+        unsafe {
+            let value0 = buffer.load(0);
+            let value1 = buffer.load(1);
+            let value2 = buffer.load(2);
+            let value3 = buffer.load(3);
 
-        let out = self.perform_fft_direct([value0, value1, value2, value3]);
+            let out = self.perform_fft_direct([value0, value1, value2, value3]);
 
-        buffer.store(out[0], 0);
-        buffer.store(out[1], 1);
-        buffer.store(out[2], 2);
-        buffer.store(out[3], 3);
+            buffer.store(out[0], 0);
+            buffer.store(out[1], 1);
+            buffer.store(out[2], 2);
+            buffer.store(out[3], 3);
+        }
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(&self, values: [WasmVector64; 4]) -> [WasmVector64; 4] {
-        //we're going to hardcode a step of mixed radix
-        //aka we're going to do the six step algorithm
+        unsafe {
+            //we're going to hardcode a step of mixed radix
+            //aka we're going to do the six step algorithm
 
-        // step 1: transpose
-        // and
-        // step 2: column FFTs
-        let temp0 = solo_fft2_f64(values[0], values[2]);
-        let mut temp1 = solo_fft2_f64(values[1], values[3]);
+            // step 1: transpose
+            // and
+            // step 2: column FFTs
+            let temp0 = solo_fft2_f64(values[0], values[2]);
+            let mut temp1 = solo_fft2_f64(values[1], values[3]);
 
-        // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
-        temp1[1] = self.rotate.rotate(temp1[1]);
+            // step 3: apply twiddle factors (only one in this case, and it's either 0 + i or 0 - i)
+            temp1[1] = self.rotate.rotate(temp1[1]);
 
-        // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
+            // step 4: transpose, which we're skipping because we're the previous FFTs were non-contiguous
 
-        // step 5: row FFTs
-        let out0 = solo_fft2_f64(temp0[0], temp1[0]);
-        let out2 = solo_fft2_f64(temp0[1], temp1[1]);
+            // step 5: row FFTs
+            let out0 = solo_fft2_f64(temp0[0], temp1[0]);
+            let out2 = solo_fft2_f64(temp0[1], temp1[1]);
 
-        // step 6: transpose by swapping index 1 and 2
-        [out0[0], out2[0], out0[1], out2[1]]
+            // step 6: transpose by swapping index 1 and 2
+            [out0[0], out2[0], out0[1], out2[1]]
+        }
     }
 }
 
@@ -1104,15 +1146,17 @@ impl<T: FftNum> WasmSimdF32Butterfly5<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
     ) {
-        let value00 = buffer.load1_dup(0);
-        let value12 = buffer.load(1);
-        let value34 = buffer.load(3);
+        unsafe {
+            let value00 = buffer.load1_dup(0);
+            let value12 = buffer.load(1);
+            let value34 = buffer.load(3);
 
-        let out = self.perform_fft_direct(value00, value12, value34);
+            let out = self.perform_fft_direct(value00, value12, value34);
 
-        buffer.store1_lo(out[0], 0);
-        buffer.store(out[1], 1);
-        buffer.store(out[2], 3);
+            buffer.store1_lo(out[0], 0);
+            buffer.store(out[1], 1);
+            buffer.store(out[2], 3);
+        }
     }
 
     #[inline(always)]
@@ -1120,25 +1164,27 @@ impl<T: FftNum> WasmSimdF32Butterfly5<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
     ) {
-        let input_packed = read_complex_to_array!(buffer, {0, 2, 4 ,6, 8});
+        unsafe {
+            let input_packed = read_complex_to_array!(buffer, {0, 2, 4 ,6, 8});
 
-        let value0 = extract_lo_hi_f32(input_packed[0], input_packed[2]);
-        let value1 = extract_hi_lo_f32(input_packed[0], input_packed[3]);
-        let value2 = extract_lo_hi_f32(input_packed[1], input_packed[3]);
-        let value3 = extract_hi_lo_f32(input_packed[1], input_packed[4]);
-        let value4 = extract_lo_hi_f32(input_packed[2], input_packed[4]);
+            let value0 = extract_lo_hi_f32(input_packed[0], input_packed[2]);
+            let value1 = extract_hi_lo_f32(input_packed[0], input_packed[3]);
+            let value2 = extract_lo_hi_f32(input_packed[1], input_packed[3]);
+            let value3 = extract_hi_lo_f32(input_packed[1], input_packed[4]);
+            let value4 = extract_lo_hi_f32(input_packed[2], input_packed[4]);
 
-        let out = self.perform_parallel_fft_direct(value0, value1, value2, value3, value4);
+            let out = self.perform_parallel_fft_direct(value0, value1, value2, value3, value4);
 
-        let out_packed = [
-            extract_lo_lo_f32(out[0], out[1]),
-            extract_lo_lo_f32(out[2], out[3]),
-            extract_lo_hi_f32(out[4], out[0]),
-            extract_hi_hi_f32(out[1], out[2]),
-            extract_hi_hi_f32(out[3], out[4]),
-        ];
+            let out_packed = [
+                extract_lo_lo_f32(out[0], out[1]),
+                extract_lo_lo_f32(out[2], out[3]),
+                extract_lo_hi_f32(out[4], out[0]),
+                extract_hi_hi_f32(out[1], out[2]),
+                extract_hi_hi_f32(out[3], out[4]),
+            ];
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, {0, 1, 2, 3, 4});
+            write_complex_to_array_strided!(out_packed, buffer, 2, {0, 1, 2, 3, 4});
+        }
     }
 
     // length 5 fft of a, given as [x0, x0], [x1, x2], [x3, x4].
@@ -1151,31 +1197,33 @@ impl<T: FftNum> WasmSimdF32Butterfly5<T> {
         value12: WasmVector32,
         value34: WasmVector32,
     ) -> [WasmVector32; 3] {
-        // This is a WasmSimd translation of the scalar 5-point butterfly
-        let temp43 = reverse_complex_elements_f32(value34);
-        let x1423p = SimdVector::add(value12, temp43);
-        let x1423n = SimdVector::sub(value12, temp43);
+        unsafe {
+            // This is a WasmSimd translation of the scalar 5-point butterfly
+            let temp43 = reverse_complex_elements_f32(value34);
+            let x1423p = SimdVector::add(value12, temp43);
+            let x1423n = SimdVector::sub(value12, temp43);
 
-        let x1414p = duplicate_lo_f32(x1423p);
-        let x2323p = duplicate_hi_f32(x1423p);
-        let x1414n = duplicate_lo_f32(x1423n);
-        let x2323n = duplicate_hi_f32(x1423n);
+            let x1414p = duplicate_lo_f32(x1423p);
+            let x2323p = duplicate_hi_f32(x1423p);
+            let x1414n = duplicate_lo_f32(x1423n);
+            let x2323n = duplicate_hi_f32(x1423n);
 
-        let temp_a1 = SimdVector::mul(self.twiddle12re, x1414p);
-        let temp_b1 = SimdVector::mul(self.twiddle12im, x1414n);
+            let temp_a1 = SimdVector::mul(self.twiddle12re, x1414p);
+            let temp_b1 = SimdVector::mul(self.twiddle12im, x1414n);
 
-        let temp_a = SimdVector::add(temp_a1, SimdVector::mul(self.twiddle21re, x2323p));
-        let temp_a = SimdVector::add(value00, temp_a);
-        let temp_b = SimdVector::add(temp_b1, SimdVector::mul(self.twiddle21im, x2323n));
+            let temp_a = SimdVector::add(temp_a1, SimdVector::mul(self.twiddle21re, x2323p));
+            let temp_a = SimdVector::add(value00, temp_a);
+            let temp_b = SimdVector::add(temp_b1, SimdVector::mul(self.twiddle21im, x2323n));
 
-        let rotate = Rotate90F32::new(FftDirection::Inverse);
-        let b_rot = rotate.rotate(temp_b);
+            let rotate = Rotate90F32::new(FftDirection::Inverse);
+            let b_rot = rotate.rotate(temp_b);
 
-        let x00 = SimdVector::add(value00, SimdVector::add(x1414p, x2323p));
+            let x00 = SimdVector::add(value00, SimdVector::add(x1414p, x2323p));
 
-        let x12 = SimdVector::add(temp_a, b_rot);
-        let x34 = reverse_complex_elements_f32(SimdVector::sub(temp_a, b_rot));
-        [x00, x12, x34]
+            let x12 = SimdVector::add(temp_a, b_rot);
+            let x34 = reverse_complex_elements_f32(SimdVector::sub(temp_a, b_rot));
+            [x00, x12, x34]
+        }
     }
 
     // length 5 dual fft of x and y, given as (x0, y0), (x1, y1) ... (x4, y4).
@@ -1189,34 +1237,36 @@ impl<T: FftNum> WasmSimdF32Butterfly5<T> {
         value3: WasmVector32,
         value4: WasmVector32,
     ) -> [WasmVector32; 5] {
-        // This is a WasmSimd translation of the scalar 3-point butterfly
-        let x14p = SimdVector::add(value1, value4);
-        let x14n = SimdVector::sub(value1, value4);
-        let x23p = SimdVector::add(value2, value3);
-        let x23n = SimdVector::sub(value2, value3);
+        unsafe {
+            // This is a WasmSimd translation of the scalar 3-point butterfly
+            let x14p = SimdVector::add(value1, value4);
+            let x14n = SimdVector::sub(value1, value4);
+            let x23p = SimdVector::add(value2, value3);
+            let x23n = SimdVector::sub(value2, value3);
 
-        let temp_a1_1 = SimdVector::mul(self.twiddle1re, x14p);
-        let temp_a1_2 = SimdVector::mul(self.twiddle2re, x23p);
-        let temp_b1_1 = SimdVector::mul(self.twiddle1im, x14n);
-        let temp_b1_2 = SimdVector::mul(self.twiddle2im, x23n);
-        let temp_a2_1 = SimdVector::mul(self.twiddle1re, x23p);
-        let temp_a2_2 = SimdVector::mul(self.twiddle2re, x14p);
-        let temp_b2_1 = SimdVector::mul(self.twiddle2im, x14n);
-        let temp_b2_2 = SimdVector::mul(self.twiddle1im, x23n);
+            let temp_a1_1 = SimdVector::mul(self.twiddle1re, x14p);
+            let temp_a1_2 = SimdVector::mul(self.twiddle2re, x23p);
+            let temp_b1_1 = SimdVector::mul(self.twiddle1im, x14n);
+            let temp_b1_2 = SimdVector::mul(self.twiddle2im, x23n);
+            let temp_a2_1 = SimdVector::mul(self.twiddle1re, x23p);
+            let temp_a2_2 = SimdVector::mul(self.twiddle2re, x14p);
+            let temp_b2_1 = SimdVector::mul(self.twiddle2im, x14n);
+            let temp_b2_2 = SimdVector::mul(self.twiddle1im, x23n);
 
-        let temp_a1 = SimdVector::add(value0, SimdVector::add(temp_a1_1, temp_a1_2));
-        let temp_b1 = SimdVector::add(temp_b1_1, temp_b1_2);
-        let temp_a2 = SimdVector::add(value0, SimdVector::add(temp_a2_1, temp_a2_2));
-        let temp_b2 = SimdVector::sub(temp_b2_1, temp_b2_2);
+            let temp_a1 = SimdVector::add(value0, SimdVector::add(temp_a1_1, temp_a1_2));
+            let temp_b1 = SimdVector::add(temp_b1_1, temp_b1_2);
+            let temp_a2 = SimdVector::add(value0, SimdVector::add(temp_a2_1, temp_a2_2));
+            let temp_b2 = SimdVector::sub(temp_b2_1, temp_b2_2);
 
-        let rotate = Rotate90F32::new(FftDirection::Inverse);
-        [
-            SimdVector::add(value0, SimdVector::add(x14p, x23p)),
-            SimdVector::add(temp_a1, rotate.rotate(temp_b1)),
-            SimdVector::add(temp_a2, rotate.rotate(temp_b2)),
-            SimdVector::sub(temp_a2, rotate.rotate(temp_b2)),
-            SimdVector::sub(temp_a1, rotate.rotate(temp_b1)),
-        ]
+            let rotate = Rotate90F32::new(FftDirection::Inverse);
+            [
+                SimdVector::add(value0, SimdVector::add(x14p, x23p)),
+                SimdVector::add(temp_a1, rotate.rotate(temp_b1)),
+                SimdVector::add(temp_a2, rotate.rotate(temp_b2)),
+                SimdVector::sub(temp_a2, rotate.rotate(temp_b2)),
+                SimdVector::sub(temp_a1, rotate.rotate(temp_b1)),
+            ]
+        }
     }
 }
 
@@ -1322,19 +1372,21 @@ impl<T: FftNum> WasmSimdF64Butterfly5<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector64>,
     ) {
-        let value0 = buffer.load(0);
-        let value1 = buffer.load(1);
-        let value2 = buffer.load(2);
-        let value3 = buffer.load(3);
-        let value4 = buffer.load(4);
+        unsafe {
+            let value0 = buffer.load(0);
+            let value1 = buffer.load(1);
+            let value2 = buffer.load(2);
+            let value3 = buffer.load(3);
+            let value4 = buffer.load(4);
 
-        let out = self.perform_fft_direct(value0, value1, value2, value3, value4);
+            let out = self.perform_fft_direct(value0, value1, value2, value3, value4);
 
-        buffer.store(out[0], 0);
-        buffer.store(out[1], 1);
-        buffer.store(out[2], 2);
-        buffer.store(out[3], 3);
-        buffer.store(out[4], 4);
+            buffer.store(out[0], 0);
+            buffer.store(out[1], 1);
+            buffer.store(out[2], 2);
+            buffer.store(out[3], 3);
+            buffer.store(out[4], 4);
+        }
     }
 
     // length 5 fft of x, given as x0, x1, x2, x3, x4.
@@ -1348,38 +1400,40 @@ impl<T: FftNum> WasmSimdF64Butterfly5<T> {
         value3: WasmVector64,
         value4: WasmVector64,
     ) -> [WasmVector64; 5] {
-        // This is a WasmSimd translation of the scalar 5-point butterfly
-        let x14p = SimdVector::add(value1, value4);
-        let x14n = SimdVector::sub(value1, value4);
-        let x23p = SimdVector::add(value2, value3);
-        let x23n = SimdVector::sub(value2, value3);
+        unsafe {
+            // This is a WasmSimd translation of the scalar 5-point butterfly
+            let x14p = SimdVector::add(value1, value4);
+            let x14n = SimdVector::sub(value1, value4);
+            let x23p = SimdVector::add(value2, value3);
+            let x23n = SimdVector::sub(value2, value3);
 
-        let temp_a1_1 = SimdVector::mul(self.twiddle1re, x14p);
-        let temp_a1_2 = SimdVector::mul(self.twiddle2re, x23p);
-        let temp_a2_1 = SimdVector::mul(self.twiddle2re, x14p);
-        let temp_a2_2 = SimdVector::mul(self.twiddle1re, x23p);
+            let temp_a1_1 = SimdVector::mul(self.twiddle1re, x14p);
+            let temp_a1_2 = SimdVector::mul(self.twiddle2re, x23p);
+            let temp_a2_1 = SimdVector::mul(self.twiddle2re, x14p);
+            let temp_a2_2 = SimdVector::mul(self.twiddle1re, x23p);
 
-        let temp_b1_1 = SimdVector::mul(self.twiddle1im, x14n);
-        let temp_b1_2 = SimdVector::mul(self.twiddle2im, x23n);
-        let temp_b2_1 = SimdVector::mul(self.twiddle2im, x14n);
-        let temp_b2_2 = SimdVector::mul(self.twiddle1im, x23n);
+            let temp_b1_1 = SimdVector::mul(self.twiddle1im, x14n);
+            let temp_b1_2 = SimdVector::mul(self.twiddle2im, x23n);
+            let temp_b2_1 = SimdVector::mul(self.twiddle2im, x14n);
+            let temp_b2_2 = SimdVector::mul(self.twiddle1im, x23n);
 
-        let temp_a1 = SimdVector::add(value0, SimdVector::add(temp_a1_1, temp_a1_2));
-        let temp_a2 = SimdVector::add(value0, SimdVector::add(temp_a2_1, temp_a2_2));
+            let temp_a1 = SimdVector::add(value0, SimdVector::add(temp_a1_1, temp_a1_2));
+            let temp_a2 = SimdVector::add(value0, SimdVector::add(temp_a2_1, temp_a2_2));
 
-        let temp_b1 = SimdVector::add(temp_b1_1, temp_b1_2);
-        let temp_b2 = SimdVector::sub(temp_b2_1, temp_b2_2);
+            let temp_b1 = SimdVector::add(temp_b1_1, temp_b1_2);
+            let temp_b2 = SimdVector::sub(temp_b2_1, temp_b2_2);
 
-        let rotate = Rotate90F64::new(FftDirection::Inverse);
-        let temp_b1_rot = rotate.rotate(temp_b1);
-        let temp_b2_rot = rotate.rotate(temp_b2);
-        [
-            SimdVector::add(value0, SimdVector::add(x14p, x23p)),
-            SimdVector::add(temp_a1, temp_b1_rot),
-            SimdVector::add(temp_a2, temp_b2_rot),
-            SimdVector::sub(temp_a2, temp_b2_rot),
-            SimdVector::sub(temp_a1, temp_b1_rot),
-        ]
+            let rotate = Rotate90F64::new(FftDirection::Inverse);
+            let temp_b1_rot = rotate.rotate(temp_b1);
+            let temp_b2_rot = rotate.rotate(temp_b2);
+            [
+                SimdVector::add(value0, SimdVector::add(x14p, x23p)),
+                SimdVector::add(temp_a1, temp_b1_rot),
+                SimdVector::add(temp_a2, temp_b2_rot),
+                SimdVector::sub(temp_a2, temp_b2_rot),
+                SimdVector::sub(temp_a1, temp_b1_rot),
+            ]
+        }
     }
 }
 
@@ -1451,15 +1505,17 @@ impl<T: FftNum> WasmSimdF32Butterfly6<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
     ) {
-        let value01 = buffer.load(0);
-        let value23 = buffer.load(2);
-        let value45 = buffer.load(4);
+        unsafe {
+            let value01 = buffer.load(0);
+            let value23 = buffer.load(2);
+            let value45 = buffer.load(4);
 
-        let out = self.perform_fft_direct(value01, value23, value45);
+            let out = self.perform_fft_direct(value01, value23, value45);
 
-        buffer.store(out[0], 0);
-        buffer.store(out[1], 2);
-        buffer.store(out[2], 4);
+            buffer.store(out[0], 0);
+            buffer.store(out[1], 2);
+            buffer.store(out[2], 4);
+        }
     }
 
     #[inline(always)]
@@ -1467,16 +1523,18 @@ impl<T: FftNum> WasmSimdF32Butterfly6<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
     ) {
-        let input_packed = read_complex_to_array!(buffer,  {0, 2, 4, 6, 8, 10});
+        unsafe {
+            let input_packed = read_complex_to_array!(buffer,  {0, 2, 4, 6, 8, 10});
 
-        let values = interleave_complex_f32!(input_packed, 3, {0, 1, 2});
+            let values = interleave_complex_f32!(input_packed, 3, {0, 1, 2});
 
-        let out = self.perform_parallel_fft_direct(
-            values[0], values[1], values[2], values[3], values[4], values[5],
-        );
+            let out = self.perform_parallel_fft_direct(
+                values[0], values[1], values[2], values[3], values[4], values[5],
+            );
 
-        let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4});
-        write_complex_to_array_strided!(out_sorted, buffer, 2, {0, 1, 2, 3, 4, 5});
+            let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4});
+            write_complex_to_array_strided!(out_sorted, buffer, 2, {0, 1, 2, 3, 4, 5});
+        }
     }
 
     #[inline(always)]
@@ -1486,27 +1544,29 @@ impl<T: FftNum> WasmSimdF32Butterfly6<T> {
         value23: WasmVector32,
         value45: WasmVector32,
     ) -> [WasmVector32; 3] {
-        // Algorithm: 3x2 good-thomas
+        unsafe {
+            // Algorithm: 3x2 good-thomas
 
-        // Size-3 FFTs down the columns of our reordered array
-        let reord0 = extract_lo_hi_f32(value01, value23);
-        let reord1 = extract_lo_hi_f32(value23, value45);
-        let reord2 = extract_lo_hi_f32(value45, value01);
+            // Size-3 FFTs down the columns of our reordered array
+            let reord0 = extract_lo_hi_f32(value01, value23);
+            let reord1 = extract_lo_hi_f32(value23, value45);
+            let reord2 = extract_lo_hi_f32(value45, value01);
 
-        let mid = self.bf3.perform_parallel_fft_direct(reord0, reord1, reord2);
+            let mid = self.bf3.perform_parallel_fft_direct(reord0, reord1, reord2);
 
-        // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
+            // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
 
-        // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = parallel_fft2_contiguous_f32(mid[0], mid[1]);
-        let output2 = solo_fft2_f32(mid[2]);
+            // Transpose the data and do size-2 FFTs down the columns
+            let [output0, output1] = parallel_fft2_contiguous_f32(mid[0], mid[1]);
+            let output2 = solo_fft2_f32(mid[2]);
 
-        // Reorder into output
-        [
-            extract_lo_hi_f32(output0, output1),
-            extract_lo_lo_f32(output2, output1),
-            extract_hi_hi_f32(output0, output2),
-        ]
+            // Reorder into output
+            [
+                extract_lo_hi_f32(output0, output1),
+                extract_lo_lo_f32(output2, output1),
+                extract_hi_hi_f32(output0, output2),
+            ]
+        }
     }
 
     #[inline(always)]
@@ -1519,21 +1579,23 @@ impl<T: FftNum> WasmSimdF32Butterfly6<T> {
         value4: WasmVector32,
         value5: WasmVector32,
     ) -> [WasmVector32; 6] {
-        // Algorithm: 3x2 good-thomas
+        unsafe {
+            // Algorithm: 3x2 good-thomas
 
-        // Size-3 FFTs down the columns of our reordered array
-        let mid0 = self.bf3.perform_parallel_fft_direct(value0, value2, value4);
-        let mid1 = self.bf3.perform_parallel_fft_direct(value3, value5, value1);
+            // Size-3 FFTs down the columns of our reordered array
+            let mid0 = self.bf3.perform_parallel_fft_direct(value0, value2, value4);
+            let mid1 = self.bf3.perform_parallel_fft_direct(value3, value5, value1);
 
-        // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
+            // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
 
-        // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = wasm_parallel_butterfly2([mid0[0], mid1[0]]);
-        let [output2, output3] = wasm_parallel_butterfly2([mid0[1], mid1[1]]);
-        let [output4, output5] = wasm_parallel_butterfly2([mid0[2], mid1[2]]);
+            // Transpose the data and do size-2 FFTs down the columns
+            let [output0, output1] = wasm_parallel_butterfly2([mid0[0], mid1[0]]);
+            let [output2, output3] = wasm_parallel_butterfly2([mid0[1], mid1[1]]);
+            let [output4, output5] = wasm_parallel_butterfly2([mid0[2], mid1[2]]);
 
-        // Reorder into output
-        [output0, output3, output4, output1, output2, output5]
+            // Reorder into output
+            [output0, output3, output4, output1, output2, output5]
+        }
     }
 }
 
@@ -1605,40 +1667,44 @@ impl<T: FftNum> WasmSimdF64Butterfly6<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector64>,
     ) {
-        let value0 = buffer.load(0);
-        let value1 = buffer.load(1);
-        let value2 = buffer.load(2);
-        let value3 = buffer.load(3);
-        let value4 = buffer.load(4);
-        let value5 = buffer.load(5);
+        unsafe {
+            let value0 = buffer.load(0);
+            let value1 = buffer.load(1);
+            let value2 = buffer.load(2);
+            let value3 = buffer.load(3);
+            let value4 = buffer.load(4);
+            let value5 = buffer.load(5);
 
-        let out = self.perform_fft_direct([value0, value1, value2, value3, value4, value5]);
+            let out = self.perform_fft_direct([value0, value1, value2, value3, value4, value5]);
 
-        buffer.store(out[0], 0);
-        buffer.store(out[1], 1);
-        buffer.store(out[2], 2);
-        buffer.store(out[3], 3);
-        buffer.store(out[4], 4);
-        buffer.store(out[5], 5);
+            buffer.store(out[0], 0);
+            buffer.store(out[1], 1);
+            buffer.store(out[2], 2);
+            buffer.store(out[3], 3);
+            buffer.store(out[4], 4);
+            buffer.store(out[5], 5);
+        }
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(&self, values: [WasmVector64; 6]) -> [WasmVector64; 6] {
-        // Algorithm: 3x2 good-thomas
+        unsafe {
+            // Algorithm: 3x2 good-thomas
 
-        // Size-3 FFTs down the columns of our reordered array
-        let mid0 = self.bf3.perform_fft_direct(values[0], values[2], values[4]);
-        let mid1 = self.bf3.perform_fft_direct(values[3], values[5], values[1]);
+            // Size-3 FFTs down the columns of our reordered array
+            let mid0 = self.bf3.perform_fft_direct(values[0], values[2], values[4]);
+            let mid1 = self.bf3.perform_fft_direct(values[3], values[5], values[1]);
 
-        // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
+            // We normally would put twiddle factors right here, but since this is good-thomas algorithm, we don't need twiddle factors
 
-        // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = solo_fft2_f64(mid0[0], mid1[0]);
-        let [output2, output3] = solo_fft2_f64(mid0[1], mid1[1]);
-        let [output4, output5] = solo_fft2_f64(mid0[2], mid1[2]);
+            // Transpose the data and do size-2 FFTs down the columns
+            let [output0, output1] = solo_fft2_f64(mid0[0], mid1[0]);
+            let [output2, output3] = solo_fft2_f64(mid0[1], mid1[1]);
+            let [output4, output5] = solo_fft2_f64(mid0[2], mid1[2]);
 
-        // Reorder into output
-        [output0, output3, output4, output1, output2, output5]
+            // Reorder into output
+            [output0, output3, output4, output1, output2, output5]
+        }
     }
 }
 
@@ -1680,11 +1746,13 @@ impl<T: FftNum> WasmSimdF32Butterfly8<T> {
 
     #[inline(always)]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
-        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6});
+        unsafe {
+            let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6});
 
-        let out = self.perform_fft_direct(input_packed);
+            let out = self.perform_fft_direct(input_packed);
 
-        write_complex_to_array_strided!(out, buffer, 2, {0,1,2,3});
+            write_complex_to_array_strided!(out, buffer, 2, {0,1,2,3});
+        }
     }
 
     #[inline(always)]
@@ -1692,83 +1760,89 @@ impl<T: FftNum> WasmSimdF32Butterfly8<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
     ) {
-        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14});
+        unsafe {
+            let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14});
 
-        let values = interleave_complex_f32!(input_packed, 4, {0, 1, 2, 3});
+            let values = interleave_complex_f32!(input_packed, 4, {0, 1, 2, 3});
 
-        let out = self.perform_parallel_fft_direct(values);
+            let out = self.perform_parallel_fft_direct(values);
 
-        let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6});
+            let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6});
 
-        write_complex_to_array_strided!(out_sorted, buffer, 2, {0,1,2,3,4,5,6,7});
+            write_complex_to_array_strided!(out_sorted, buffer, 2, {0,1,2,3,4,5,6,7});
+        }
     }
 
     #[inline(always)]
     unsafe fn perform_fft_direct(&self, values: [WasmVector32; 4]) -> [WasmVector32; 4] {
-        // we're going to hardcode a step of mixed radix
-        // step 1: copy and reorder the input into the scratch
-        let [in02, in13] = transpose_complex_2x2_f32(values[0], values[1]);
-        let [in46, in57] = transpose_complex_2x2_f32(values[2], values[3]);
+        unsafe {
+            // we're going to hardcode a step of mixed radix
+            // step 1: copy and reorder the input into the scratch
+            let [in02, in13] = transpose_complex_2x2_f32(values[0], values[1]);
+            let [in46, in57] = transpose_complex_2x2_f32(values[2], values[3]);
 
-        // step 2: column FFTs
-        let val0 = self.bf4.perform_fft_direct(in02, in46);
-        let mut val2 = self.bf4.perform_fft_direct(in13, in57);
+            // step 2: column FFTs
+            let val0 = self.bf4.perform_fft_direct(in02, in46);
+            let mut val2 = self.bf4.perform_fft_direct(in13, in57);
 
-        // step 3: apply twiddle factors
-        let val2b = self.rotate90_hi.rotate_hi(val2[0]);
-        let val2c = SimdVector::add(val2b, val2[0]);
-        let val2d = SimdVector::mul(val2c, self.root2);
-        val2[0] = extract_lo_hi_f32(val2[0], val2d);
+            // step 3: apply twiddle factors
+            let val2b = self.rotate90_hi.rotate_hi(val2[0]);
+            let val2c = SimdVector::add(val2b, val2[0]);
+            let val2d = SimdVector::mul(val2c, self.root2);
+            val2[0] = extract_lo_hi_f32(val2[0], val2d);
 
-        let val3b = self.rotate90.rotate(val2[1]);
-        let val3c = SimdVector::sub(val3b, val2[1]);
-        let val3d = SimdVector::mul(val3c, self.root2);
-        val2[1] = extract_lo_hi_f32(val3b, val3d);
+            let val3b = self.rotate90.rotate(val2[1]);
+            let val3c = SimdVector::sub(val3b, val2[1]);
+            let val3d = SimdVector::mul(val3c, self.root2);
+            val2[1] = extract_lo_hi_f32(val3b, val3d);
 
-        // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
+            // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
 
-        // step 5: row FFTs
-        let out0 = wasm_parallel_butterfly2([val0[0], val2[0]]);
-        let out1 = wasm_parallel_butterfly2([val0[1], val2[1]]);
+            // step 5: row FFTs
+            let out0 = wasm_parallel_butterfly2([val0[0], val2[0]]);
+            let out1 = wasm_parallel_butterfly2([val0[1], val2[1]]);
 
-        // step 6: rearrange and copy to buffer
-        [out0[0], out1[0], out0[1], out1[1]]
+            // step 6: rearrange and copy to buffer
+            [out0[0], out1[0], out0[1], out1[1]]
+        }
     }
 
     #[inline(always)]
     unsafe fn perform_parallel_fft_direct(&self, values: [WasmVector32; 8]) -> [WasmVector32; 8] {
-        // we're going to hardcode a step of mixed radix
-        // step 1: copy and reorder the input into the scratch
-        // and
-        // step 2: column FFTs
-        let val03 = self
-            .bf4
-            .perform_parallel_fft_direct([values[0], values[2], values[4], values[6]]);
-        let mut val47 = self
-            .bf4
-            .perform_parallel_fft_direct([values[1], values[3], values[5], values[7]]);
+        unsafe {
+            // we're going to hardcode a step of mixed radix
+            // step 1: copy and reorder the input into the scratch
+            // and
+            // step 2: column FFTs
+            let val03 = self
+                .bf4
+                .perform_parallel_fft_direct([values[0], values[2], values[4], values[6]]);
+            let mut val47 = self
+                .bf4
+                .perform_parallel_fft_direct([values[1], values[3], values[5], values[7]]);
 
-        // step 3: apply twiddle factors
-        let val5b = self.rotate90.rotate(val47[1]);
-        let val5c = SimdVector::add(val5b, val47[1]);
-        val47[1] = SimdVector::mul(val5c, self.root2_dual);
-        val47[2] = self.rotate90.rotate(val47[2]);
-        let val7b = self.rotate90.rotate(val47[3]);
-        let val7c = SimdVector::sub(val7b, val47[3]);
-        val47[3] = SimdVector::mul(val7c, self.root2_dual);
+            // step 3: apply twiddle factors
+            let val5b = self.rotate90.rotate(val47[1]);
+            let val5c = SimdVector::add(val5b, val47[1]);
+            val47[1] = SimdVector::mul(val5c, self.root2_dual);
+            val47[2] = self.rotate90.rotate(val47[2]);
+            let val7b = self.rotate90.rotate(val47[3]);
+            let val7c = SimdVector::sub(val7b, val47[3]);
+            val47[3] = SimdVector::mul(val7c, self.root2_dual);
 
-        // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
+            // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
 
-        // step 5: row FFTs
-        let out0 = wasm_parallel_butterfly2([val03[0], val47[0]]);
-        let out1 = wasm_parallel_butterfly2([val03[1], val47[1]]);
-        let out2 = wasm_parallel_butterfly2([val03[2], val47[2]]);
-        let out3 = wasm_parallel_butterfly2([val03[3], val47[3]]);
+            // step 5: row FFTs
+            let out0 = wasm_parallel_butterfly2([val03[0], val47[0]]);
+            let out1 = wasm_parallel_butterfly2([val03[1], val47[1]]);
+            let out2 = wasm_parallel_butterfly2([val03[2], val47[2]]);
+            let out3 = wasm_parallel_butterfly2([val03[3], val47[3]]);
 
-        // step 6: rearrange and copy to buffer
-        [
-            out0[0], out1[0], out2[0], out3[0], out0[1], out1[1], out2[1], out3[1],
-        ]
+            // step 6: rearrange and copy to buffer
+            [
+                out0[0], out1[0], out2[0], out3[0], out0[1], out1[1], out2[1], out3[1],
+            ]
+        }
     }
 }
 
@@ -1805,47 +1879,51 @@ impl<T: FftNum> WasmSimdF64Butterfly8<T> {
 
     #[inline(always)]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) {
-        let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7});
+        unsafe {
+            let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7});
 
-        let out = self.perform_fft_direct(values);
+            let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7});
+            write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7});
+        }
     }
 
     #[inline(always)]
     unsafe fn perform_fft_direct(&self, values: [WasmVector64; 8]) -> [WasmVector64; 8] {
-        // we're going to hardcode a step of mixed radix
-        // step 1: copy and reorder the input into the scratch
-        // and
-        // step 2: column FFTs
-        let val03 = self
-            .bf4
-            .perform_fft_direct([values[0], values[2], values[4], values[6]]);
-        let mut val47 = self
-            .bf4
-            .perform_fft_direct([values[1], values[3], values[5], values[7]]);
+        unsafe {
+            // we're going to hardcode a step of mixed radix
+            // step 1: copy and reorder the input into the scratch
+            // and
+            // step 2: column FFTs
+            let val03 = self
+                .bf4
+                .perform_fft_direct([values[0], values[2], values[4], values[6]]);
+            let mut val47 = self
+                .bf4
+                .perform_fft_direct([values[1], values[3], values[5], values[7]]);
 
-        // step 3: apply twiddle factors
-        let val5b = self.rotate90.rotate(val47[1]);
-        let val5c = SimdVector::add(val5b, val47[1]);
-        val47[1] = SimdVector::mul(val5c, self.root2);
-        val47[2] = self.rotate90.rotate(val47[2]);
-        let val7b = self.rotate90.rotate(val47[3]);
-        let val7c = SimdVector::sub(val7b, val47[3]);
-        val47[3] = SimdVector::mul(val7c, self.root2);
+            // step 3: apply twiddle factors
+            let val5b = self.rotate90.rotate(val47[1]);
+            let val5c = SimdVector::add(val5b, val47[1]);
+            val47[1] = SimdVector::mul(val5c, self.root2);
+            val47[2] = self.rotate90.rotate(val47[2]);
+            let val7b = self.rotate90.rotate(val47[3]);
+            let val7c = SimdVector::sub(val7b, val47[3]);
+            val47[3] = SimdVector::mul(val7c, self.root2);
 
-        // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
+            // step 4: transpose -- skipped because we're going to do the next FFTs non-contiguously
 
-        // step 5: row FFTs
-        let out0 = solo_fft2_f64(val03[0], val47[0]);
-        let out1 = solo_fft2_f64(val03[1], val47[1]);
-        let out2 = solo_fft2_f64(val03[2], val47[2]);
-        let out3 = solo_fft2_f64(val03[3], val47[3]);
+            // step 5: row FFTs
+            let out0 = solo_fft2_f64(val03[0], val47[0]);
+            let out1 = solo_fft2_f64(val03[1], val47[1]);
+            let out2 = solo_fft2_f64(val03[2], val47[2]);
+            let out3 = solo_fft2_f64(val03[3], val47[3]);
 
-        // step 6: rearrange and copy to buffer
-        [
-            out0[0], out1[0], out2[0], out3[0], out0[1], out1[1], out2[1], out3[1],
-        ]
+            // step 6: rearrange and copy to buffer
+            [
+                out0[0], out1[0], out2[0], out3[0], out0[1], out1[1], out2[1], out3[1],
+            ]
+        }
     }
 }
 
@@ -1891,13 +1969,15 @@ impl<T: FftNum> WasmSimdF32Butterfly9<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
     ) {
-        // A single WasmSimd 9-point will need a lot of shuffling, let's just reuse the dual one
-        let values = read_partial1_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8});
+        unsafe {
+            // A single WasmSimd 9-point will need a lot of shuffling, let's just reuse the dual one
+            let values = read_partial1_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8});
 
-        let out = self.perform_parallel_fft_direct(values);
+            let out = self.perform_parallel_fft_direct(values);
 
-        for n in 0..9 {
-            buffer.store1_lo(out[n], n);
+            for n in 0..9 {
+                buffer.store1_lo(out[n], n);
+            }
         }
     }
 
@@ -1906,35 +1986,37 @@ impl<T: FftNum> WasmSimdF32Butterfly9<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
     ) {
-        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16});
+        unsafe {
+            let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16});
 
-        let values = [
-            extract_lo_hi_f32(input_packed[0], input_packed[4]),
-            extract_hi_lo_f32(input_packed[0], input_packed[5]),
-            extract_lo_hi_f32(input_packed[1], input_packed[5]),
-            extract_hi_lo_f32(input_packed[1], input_packed[6]),
-            extract_lo_hi_f32(input_packed[2], input_packed[6]),
-            extract_hi_lo_f32(input_packed[2], input_packed[7]),
-            extract_lo_hi_f32(input_packed[3], input_packed[7]),
-            extract_hi_lo_f32(input_packed[3], input_packed[8]),
-            extract_lo_hi_f32(input_packed[4], input_packed[8]),
-        ];
+            let values = [
+                extract_lo_hi_f32(input_packed[0], input_packed[4]),
+                extract_hi_lo_f32(input_packed[0], input_packed[5]),
+                extract_lo_hi_f32(input_packed[1], input_packed[5]),
+                extract_hi_lo_f32(input_packed[1], input_packed[6]),
+                extract_lo_hi_f32(input_packed[2], input_packed[6]),
+                extract_hi_lo_f32(input_packed[2], input_packed[7]),
+                extract_lo_hi_f32(input_packed[3], input_packed[7]),
+                extract_hi_lo_f32(input_packed[3], input_packed[8]),
+                extract_lo_hi_f32(input_packed[4], input_packed[8]),
+            ];
 
-        let out = self.perform_parallel_fft_direct(values);
+            let out = self.perform_parallel_fft_direct(values);
 
-        let out_packed = [
-            extract_lo_lo_f32(out[0], out[1]),
-            extract_lo_lo_f32(out[2], out[3]),
-            extract_lo_lo_f32(out[4], out[5]),
-            extract_lo_lo_f32(out[6], out[7]),
-            extract_lo_hi_f32(out[8], out[0]),
-            extract_hi_hi_f32(out[1], out[2]),
-            extract_hi_hi_f32(out[3], out[4]),
-            extract_hi_hi_f32(out[5], out[6]),
-            extract_hi_hi_f32(out[7], out[8]),
-        ];
+            let out_packed = [
+                extract_lo_lo_f32(out[0], out[1]),
+                extract_lo_lo_f32(out[2], out[3]),
+                extract_lo_lo_f32(out[4], out[5]),
+                extract_lo_lo_f32(out[6], out[7]),
+                extract_lo_hi_f32(out[8], out[0]),
+                extract_hi_hi_f32(out[1], out[2]),
+                extract_hi_hi_f32(out[3], out[4]),
+                extract_hi_hi_f32(out[5], out[6]),
+                extract_hi_hi_f32(out[7], out[8]),
+            ];
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, {0,1,2,3,4,5,6,7,8});
+            write_complex_to_array_strided!(out_packed, buffer, 2, {0,1,2,3,4,5,6,7,8});
+        }
     }
 
     #[inline(always)]
@@ -1942,38 +2024,40 @@ impl<T: FftNum> WasmSimdF32Butterfly9<T> {
         &self,
         values: [WasmVector32; 9],
     ) -> [WasmVector32; 9] {
-        // Algorithm: 3x3 mixed radix
+        unsafe {
+            // Algorithm: 3x3 mixed radix
 
-        // Size-3 FFTs down the columns
-        let mid0 = self
-            .bf3
-            .perform_parallel_fft_direct(values[0], values[3], values[6]);
-        let mut mid1 = self
-            .bf3
-            .perform_parallel_fft_direct(values[1], values[4], values[7]);
-        let mut mid2 = self
-            .bf3
-            .perform_parallel_fft_direct(values[2], values[5], values[8]);
+            // Size-3 FFTs down the columns
+            let mid0 = self
+                .bf3
+                .perform_parallel_fft_direct(values[0], values[3], values[6]);
+            let mut mid1 = self
+                .bf3
+                .perform_parallel_fft_direct(values[1], values[4], values[7]);
+            let mut mid2 = self
+                .bf3
+                .perform_parallel_fft_direct(values[2], values[5], values[8]);
 
-        // Apply twiddle factors. Note that we're re-using twiddle2
-        mid1[1] = SimdVector::mul_complex(self.twiddle1, mid1[1]);
-        mid1[2] = SimdVector::mul_complex(self.twiddle2, mid1[2]);
-        mid2[1] = SimdVector::mul_complex(self.twiddle2, mid2[1]);
-        mid2[2] = SimdVector::mul_complex(self.twiddle4, mid2[2]);
+            // Apply twiddle factors. Note that we're re-using twiddle2
+            mid1[1] = SimdVector::mul_complex(self.twiddle1, mid1[1]);
+            mid1[2] = SimdVector::mul_complex(self.twiddle2, mid1[2]);
+            mid2[1] = SimdVector::mul_complex(self.twiddle2, mid2[1]);
+            mid2[2] = SimdVector::mul_complex(self.twiddle4, mid2[2]);
 
-        let [output0, output1, output2] = self
-            .bf3
-            .perform_parallel_fft_direct(mid0[0], mid1[0], mid2[0]);
-        let [output3, output4, output5] = self
-            .bf3
-            .perform_parallel_fft_direct(mid0[1], mid1[1], mid2[1]);
-        let [output6, output7, output8] = self
-            .bf3
-            .perform_parallel_fft_direct(mid0[2], mid1[2], mid2[2]);
+            let [output0, output1, output2] = self
+                .bf3
+                .perform_parallel_fft_direct(mid0[0], mid1[0], mid2[0]);
+            let [output3, output4, output5] = self
+                .bf3
+                .perform_parallel_fft_direct(mid0[1], mid1[1], mid2[1]);
+            let [output6, output7, output8] = self
+                .bf3
+                .perform_parallel_fft_direct(mid0[2], mid1[2], mid2[2]);
 
-        [
-            output0, output3, output6, output1, output4, output7, output2, output5, output8,
-        ]
+            [
+                output0, output3, output6, output1, output4, output7, output2, output5, output8,
+            ]
+        }
     }
 }
 
@@ -2020,35 +2104,42 @@ impl<T: FftNum> WasmSimdF64Butterfly9<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector64>,
     ) {
-        let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8});
+        unsafe {
+            let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8});
 
-        let out = self.perform_fft_direct(values);
+            let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8});
+            write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8});
+        }
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(&self, values: [WasmVector64; 9]) -> [WasmVector64; 9] {
-        // Algorithm: 3x3 mixed radix
+        unsafe {
+            // Algorithm: 3x3 mixed radix
 
-        // Size-3 FFTs down the columns
-        let mid0 = self.bf3.perform_fft_direct(values[0], values[3], values[6]);
-        let mut mid1 = self.bf3.perform_fft_direct(values[1], values[4], values[7]);
-        let mut mid2 = self.bf3.perform_fft_direct(values[2], values[5], values[8]);
+            // Size-3 FFTs down the columns
+            let mid0 = self.bf3.perform_fft_direct(values[0], values[3], values[6]);
+            let mut mid1 = self.bf3.perform_fft_direct(values[1], values[4], values[7]);
+            let mut mid2 = self.bf3.perform_fft_direct(values[2], values[5], values[8]);
 
-        // Apply twiddle factors. Note that we're re-using twiddle2
-        mid1[1] = SimdVector::mul_complex(self.twiddle1, mid1[1]);
-        mid1[2] = SimdVector::mul_complex(self.twiddle2, mid1[2]);
-        mid2[1] = SimdVector::mul_complex(self.twiddle2, mid2[1]);
-        mid2[2] = SimdVector::mul_complex(self.twiddle4, mid2[2]);
+            // Apply twiddle factors. Note that we're re-using twiddle2
+            mid1[1] = SimdVector::mul_complex(self.twiddle1, mid1[1]);
+            mid1[2] = SimdVector::mul_complex(self.twiddle2, mid1[2]);
+            mid2[1] = SimdVector::mul_complex(self.twiddle2, mid2[1]);
+            mid2[2] = SimdVector::mul_complex(self.twiddle4, mid2[2]);
 
-        let [output0, output1, output2] = self.bf3.perform_fft_direct(mid0[0], mid1[0], mid2[0]);
-        let [output3, output4, output5] = self.bf3.perform_fft_direct(mid0[1], mid1[1], mid2[1]);
-        let [output6, output7, output8] = self.bf3.perform_fft_direct(mid0[2], mid1[2], mid2[2]);
+            let [output0, output1, output2] =
+                self.bf3.perform_fft_direct(mid0[0], mid1[0], mid2[0]);
+            let [output3, output4, output5] =
+                self.bf3.perform_fft_direct(mid0[1], mid1[1], mid2[1]);
+            let [output6, output7, output8] =
+                self.bf3.perform_fft_direct(mid0[2], mid1[2], mid2[2]);
 
-        [
-            output0, output3, output6, output1, output4, output7, output2, output5, output8,
-        ]
+            [
+                output0, output3, output6, output1, output4, output7, output2, output5, output8,
+            ]
+        }
     }
 }
 
@@ -2082,11 +2173,13 @@ impl<T: FftNum> WasmSimdF32Butterfly10<T> {
 
     #[inline(always)]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
-        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8});
+        unsafe {
+            let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8});
 
-        let out = self.perform_fft_direct(input_packed);
+            let out = self.perform_fft_direct(input_packed);
 
-        write_complex_to_array_strided!(out, buffer, 2, {0,1,2,3,4});
+            write_complex_to_array_strided!(out, buffer, 2, {0,1,2,3,4});
+        }
     }
 
     #[inline(always)]
@@ -2094,47 +2187,51 @@ impl<T: FftNum> WasmSimdF32Butterfly10<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
     ) {
-        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18});
+        unsafe {
+            let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18});
 
-        let values = interleave_complex_f32!(input_packed, 5, {0, 1, 2, 3, 4});
+            let values = interleave_complex_f32!(input_packed, 5, {0, 1, 2, 3, 4});
 
-        let out = self.perform_parallel_fft_direct(values);
+            let out = self.perform_parallel_fft_direct(values);
 
-        let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6, 8});
+            let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6, 8});
 
-        write_complex_to_array_strided!(out_sorted, buffer, 2, {0,1,2,3,4,5,6,7,8,9});
+            write_complex_to_array_strided!(out_sorted, buffer, 2, {0,1,2,3,4,5,6,7,8,9});
+        }
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(&self, values: [WasmVector32; 5]) -> [WasmVector32; 5] {
-        // Algorithm: 5x2 good-thomas
-        // Reorder and pack
-        let reord0 = extract_lo_hi_f32(values[0], values[2]);
-        let reord1 = extract_lo_hi_f32(values[1], values[3]);
-        let reord2 = extract_lo_hi_f32(values[2], values[4]);
-        let reord3 = extract_lo_hi_f32(values[3], values[0]);
-        let reord4 = extract_lo_hi_f32(values[4], values[1]);
+        unsafe {
+            // Algorithm: 5x2 good-thomas
+            // Reorder and pack
+            let reord0 = extract_lo_hi_f32(values[0], values[2]);
+            let reord1 = extract_lo_hi_f32(values[1], values[3]);
+            let reord2 = extract_lo_hi_f32(values[2], values[4]);
+            let reord3 = extract_lo_hi_f32(values[3], values[0]);
+            let reord4 = extract_lo_hi_f32(values[4], values[1]);
 
-        // Size-5 FFTs down the columns of our reordered array
-        let mids = self
-            .bf5
-            .perform_parallel_fft_direct(reord0, reord1, reord2, reord3, reord4);
+            // Size-5 FFTs down the columns of our reordered array
+            let mids = self
+                .bf5
+                .perform_parallel_fft_direct(reord0, reord1, reord2, reord3, reord4);
 
-        // Since this is good-thomas algorithm, we don't need twiddle factors
+            // Since this is good-thomas algorithm, we don't need twiddle factors
 
-        // Transpose the data and do size-2 FFTs down the columns
-        let [temp01, temp23] = parallel_fft2_contiguous_f32(mids[0], mids[1]);
-        let [temp45, temp67] = parallel_fft2_contiguous_f32(mids[2], mids[3]);
-        let temp89 = solo_fft2_f32(mids[4]);
+            // Transpose the data and do size-2 FFTs down the columns
+            let [temp01, temp23] = parallel_fft2_contiguous_f32(mids[0], mids[1]);
+            let [temp45, temp67] = parallel_fft2_contiguous_f32(mids[2], mids[3]);
+            let temp89 = solo_fft2_f32(mids[4]);
 
-        // Reorder
-        let out01 = extract_lo_hi_f32(temp01, temp23);
-        let out23 = extract_lo_hi_f32(temp45, temp67);
-        let out45 = extract_lo_lo_f32(temp89, temp23);
-        let out67 = extract_hi_lo_f32(temp01, temp67);
-        let out89 = extract_hi_hi_f32(temp45, temp89);
+            // Reorder
+            let out01 = extract_lo_hi_f32(temp01, temp23);
+            let out23 = extract_lo_hi_f32(temp45, temp67);
+            let out45 = extract_lo_lo_f32(temp89, temp23);
+            let out67 = extract_hi_lo_f32(temp01, temp67);
+            let out89 = extract_hi_hi_f32(temp45, temp89);
 
-        [out01, out23, out45, out67, out89]
+            [out01, out23, out45, out67, out89]
+        }
     }
 
     #[inline(always)]
@@ -2142,30 +2239,32 @@ impl<T: FftNum> WasmSimdF32Butterfly10<T> {
         &self,
         values: [WasmVector32; 10],
     ) -> [WasmVector32; 10] {
-        // Algorithm: 5x2 good-thomas
+        unsafe {
+            // Algorithm: 5x2 good-thomas
 
-        // Size-5 FFTs down the columns of our reordered array
-        let mid0 = self
-            .bf5
-            .perform_parallel_fft_direct(values[0], values[2], values[4], values[6], values[8]);
-        let mid1 = self
-            .bf5
-            .perform_parallel_fft_direct(values[5], values[7], values[9], values[1], values[3]);
+            // Size-5 FFTs down the columns of our reordered array
+            let mid0 = self
+                .bf5
+                .perform_parallel_fft_direct(values[0], values[2], values[4], values[6], values[8]);
+            let mid1 = self
+                .bf5
+                .perform_parallel_fft_direct(values[5], values[7], values[9], values[1], values[3]);
 
-        // Since this is good-thomas algorithm, we don't need twiddle factors
+            // Since this is good-thomas algorithm, we don't need twiddle factors
 
-        // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = wasm_parallel_butterfly2([mid0[0], mid1[0]]);
-        let [output2, output3] = wasm_parallel_butterfly2([mid0[1], mid1[1]]);
-        let [output4, output5] = wasm_parallel_butterfly2([mid0[2], mid1[2]]);
-        let [output6, output7] = wasm_parallel_butterfly2([mid0[3], mid1[3]]);
-        let [output8, output9] = wasm_parallel_butterfly2([mid0[4], mid1[4]]);
+            // Transpose the data and do size-2 FFTs down the columns
+            let [output0, output1] = wasm_parallel_butterfly2([mid0[0], mid1[0]]);
+            let [output2, output3] = wasm_parallel_butterfly2([mid0[1], mid1[1]]);
+            let [output4, output5] = wasm_parallel_butterfly2([mid0[2], mid1[2]]);
+            let [output6, output7] = wasm_parallel_butterfly2([mid0[3], mid1[3]]);
+            let [output8, output9] = wasm_parallel_butterfly2([mid0[4], mid1[4]]);
 
-        // Reorder and return
-        [
-            output0, output3, output4, output7, output8, output1, output2, output5, output6,
-            output9,
-        ]
+            // Reorder and return
+            [
+                output0, output3, output4, output7, output8, output1, output2, output5, output6,
+                output9,
+            ]
+        }
     }
 }
 
@@ -2205,11 +2304,13 @@ impl<T: FftNum> WasmSimdF64Butterfly10<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector64>,
     ) {
-        let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
+        unsafe {
+            let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
 
-        let out = self.perform_fft_direct(values);
+            let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
+            write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
+        }
     }
 
     #[inline(always)]
@@ -2217,30 +2318,32 @@ impl<T: FftNum> WasmSimdF64Butterfly10<T> {
         &self,
         values: [WasmVector64; 10],
     ) -> [WasmVector64; 10] {
-        // Algorithm: 5x2 good-thomas
+        unsafe {
+            // Algorithm: 5x2 good-thomas
 
-        // Size-5 FFTs down the columns of our reordered array
-        let mid0 = self
-            .bf5
-            .perform_fft_direct(values[0], values[2], values[4], values[6], values[8]);
-        let mid1 = self
-            .bf5
-            .perform_fft_direct(values[5], values[7], values[9], values[1], values[3]);
+            // Size-5 FFTs down the columns of our reordered array
+            let mid0 = self
+                .bf5
+                .perform_fft_direct(values[0], values[2], values[4], values[6], values[8]);
+            let mid1 = self
+                .bf5
+                .perform_fft_direct(values[5], values[7], values[9], values[1], values[3]);
 
-        // Since this is good-thomas algorithm, we don't need twiddle factors
+            // Since this is good-thomas algorithm, we don't need twiddle factors
 
-        // Transpose the data and do size-2 FFTs down the columns
-        let [output0, output1] = self.bf2.perform_fft_direct(mid0[0], mid1[0]);
-        let [output2, output3] = self.bf2.perform_fft_direct(mid0[1], mid1[1]);
-        let [output4, output5] = self.bf2.perform_fft_direct(mid0[2], mid1[2]);
-        let [output6, output7] = self.bf2.perform_fft_direct(mid0[3], mid1[3]);
-        let [output8, output9] = self.bf2.perform_fft_direct(mid0[4], mid1[4]);
+            // Transpose the data and do size-2 FFTs down the columns
+            let [output0, output1] = self.bf2.perform_fft_direct(mid0[0], mid1[0]);
+            let [output2, output3] = self.bf2.perform_fft_direct(mid0[1], mid1[1]);
+            let [output4, output5] = self.bf2.perform_fft_direct(mid0[2], mid1[2]);
+            let [output6, output7] = self.bf2.perform_fft_direct(mid0[3], mid1[3]);
+            let [output8, output9] = self.bf2.perform_fft_direct(mid0[4], mid1[4]);
 
-        // Reorder and return
-        [
-            output0, output3, output4, output7, output8, output1, output2, output5, output6,
-            output9,
-        ]
+            // Reorder and return
+            [
+                output0, output3, output4, output7, output8, output1, output2, output5, output6,
+                output9,
+            ]
+        }
     }
 }
 
@@ -2277,11 +2380,13 @@ impl<T: FftNum> WasmSimdF32Butterfly12<T> {
 
     #[inline(always)]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
-        let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10 });
+        unsafe {
+            let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10 });
 
-        let out = self.perform_fft_direct(input_packed);
+            let out = self.perform_fft_direct(input_packed);
 
-        write_complex_to_array_strided!(out, buffer, 2, {0,1,2,3,4,5});
+            write_complex_to_array_strided!(out, buffer, 2, {0,1,2,3,4,5});
+        }
     }
 
     #[inline(always)]
@@ -2289,54 +2394,58 @@ impl<T: FftNum> WasmSimdF32Butterfly12<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
     ) {
-        let input_packed =
-            read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22});
+        unsafe {
+            let input_packed =
+                read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22});
 
-        let values = interleave_complex_f32!(input_packed, 6, {0, 1, 2, 3, 4, 5});
+            let values = interleave_complex_f32!(input_packed, 6, {0, 1, 2, 3, 4, 5});
 
-        let out = self.perform_parallel_fft_direct(values);
+            let out = self.perform_parallel_fft_direct(values);
 
-        let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6, 8, 10});
+            let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6, 8, 10});
 
-        write_complex_to_array_strided!(out_sorted, buffer, 2, {0,1,2,3,4,5,6,7,8,9, 10, 11});
+            write_complex_to_array_strided!(out_sorted, buffer, 2, {0,1,2,3,4,5,6,7,8,9, 10, 11});
+        }
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(&self, values: [WasmVector32; 6]) -> [WasmVector32; 6] {
-        // Algorithm: 4x3 good-thomas
+        unsafe {
+            // Algorithm: 4x3 good-thomas
 
-        // Reorder and pack
-        let packed03 = extract_lo_hi_f32(values[0], values[1]);
-        let packed47 = extract_lo_hi_f32(values[2], values[3]);
-        let packed69 = extract_lo_hi_f32(values[3], values[4]);
-        let packed101 = extract_lo_hi_f32(values[5], values[0]);
-        let packed811 = extract_lo_hi_f32(values[4], values[5]);
-        let packed25 = extract_lo_hi_f32(values[1], values[2]);
+            // Reorder and pack
+            let packed03 = extract_lo_hi_f32(values[0], values[1]);
+            let packed47 = extract_lo_hi_f32(values[2], values[3]);
+            let packed69 = extract_lo_hi_f32(values[3], values[4]);
+            let packed101 = extract_lo_hi_f32(values[5], values[0]);
+            let packed811 = extract_lo_hi_f32(values[4], values[5]);
+            let packed25 = extract_lo_hi_f32(values[1], values[2]);
 
-        // Size-4 FFTs down the columns of our reordered array
-        let mid0 = self.bf4.perform_fft_direct(packed03, packed69);
-        let mid1 = self.bf4.perform_fft_direct(packed47, packed101);
-        let mid2 = self.bf4.perform_fft_direct(packed811, packed25);
+            // Size-4 FFTs down the columns of our reordered array
+            let mid0 = self.bf4.perform_fft_direct(packed03, packed69);
+            let mid1 = self.bf4.perform_fft_direct(packed47, packed101);
+            let mid2 = self.bf4.perform_fft_direct(packed811, packed25);
 
-        // Since this is good-thomas algorithm, we don't need twiddle factors
+            // Since this is good-thomas algorithm, we don't need twiddle factors
 
-        // Transpose the data and do size-3 FFTs down the columns
-        let [temp03, temp14, temp25] = self
-            .bf3
-            .perform_parallel_fft_direct(mid0[0], mid1[0], mid2[0]);
-        let [temp69, temp710, temp811] = self
-            .bf3
-            .perform_parallel_fft_direct(mid0[1], mid1[1], mid2[1]);
+            // Transpose the data and do size-3 FFTs down the columns
+            let [temp03, temp14, temp25] = self
+                .bf3
+                .perform_parallel_fft_direct(mid0[0], mid1[0], mid2[0]);
+            let [temp69, temp710, temp811] = self
+                .bf3
+                .perform_parallel_fft_direct(mid0[1], mid1[1], mid2[1]);
 
-        // Reorder and return
-        [
-            extract_lo_hi_f32(temp03, temp14),
-            extract_lo_hi_f32(temp811, temp69),
-            extract_lo_hi_f32(temp14, temp25),
-            extract_lo_hi_f32(temp69, temp710),
-            extract_lo_hi_f32(temp25, temp03),
-            extract_lo_hi_f32(temp710, temp811),
-        ]
+            // Reorder and return
+            [
+                extract_lo_hi_f32(temp03, temp14),
+                extract_lo_hi_f32(temp811, temp69),
+                extract_lo_hi_f32(temp14, temp25),
+                extract_lo_hi_f32(temp69, temp710),
+                extract_lo_hi_f32(temp25, temp03),
+                extract_lo_hi_f32(temp710, temp811),
+            ]
+        }
     }
 
     #[inline(always)]
@@ -2344,40 +2453,42 @@ impl<T: FftNum> WasmSimdF32Butterfly12<T> {
         &self,
         values: [WasmVector32; 12],
     ) -> [WasmVector32; 12] {
-        // Algorithm: 4x3 good-thomas
+        unsafe {
+            // Algorithm: 4x3 good-thomas
 
-        // Size-4 FFTs down the columns of our reordered array
-        let mid0 = self
-            .bf4
-            .perform_parallel_fft_direct([values[0], values[3], values[6], values[9]]);
-        let mid1 = self
-            .bf4
-            .perform_parallel_fft_direct([values[4], values[7], values[10], values[1]]);
-        let mid2 = self
-            .bf4
-            .perform_parallel_fft_direct([values[8], values[11], values[2], values[5]]);
+            // Size-4 FFTs down the columns of our reordered array
+            let mid0 = self
+                .bf4
+                .perform_parallel_fft_direct([values[0], values[3], values[6], values[9]]);
+            let mid1 = self
+                .bf4
+                .perform_parallel_fft_direct([values[4], values[7], values[10], values[1]]);
+            let mid2 = self
+                .bf4
+                .perform_parallel_fft_direct([values[8], values[11], values[2], values[5]]);
 
-        // Since this is good-thomas algorithm, we don't need twiddle factors
+            // Since this is good-thomas algorithm, we don't need twiddle factors
 
-        // Transpose the data and do size-3 FFTs down the columns
-        let [output0, output1, output2] = self
-            .bf3
-            .perform_parallel_fft_direct(mid0[0], mid1[0], mid2[0]);
-        let [output3, output4, output5] = self
-            .bf3
-            .perform_parallel_fft_direct(mid0[1], mid1[1], mid2[1]);
-        let [output6, output7, output8] = self
-            .bf3
-            .perform_parallel_fft_direct(mid0[2], mid1[2], mid2[2]);
-        let [output9, output10, output11] = self
-            .bf3
-            .perform_parallel_fft_direct(mid0[3], mid1[3], mid2[3]);
+            // Transpose the data and do size-3 FFTs down the columns
+            let [output0, output1, output2] = self
+                .bf3
+                .perform_parallel_fft_direct(mid0[0], mid1[0], mid2[0]);
+            let [output3, output4, output5] = self
+                .bf3
+                .perform_parallel_fft_direct(mid0[1], mid1[1], mid2[1]);
+            let [output6, output7, output8] = self
+                .bf3
+                .perform_parallel_fft_direct(mid0[2], mid1[2], mid2[2]);
+            let [output9, output10, output11] = self
+                .bf3
+                .perform_parallel_fft_direct(mid0[3], mid1[3], mid2[3]);
 
-        // Reorder and return
-        [
-            output0, output4, output8, output9, output1, output5, output6, output10, output2,
-            output3, output7, output11,
-        ]
+            // Reorder and return
+            [
+                output0, output4, output8, output9, output1, output5, output6, output10, output2,
+                output3, output7, output11,
+            ]
+        }
     }
 }
 
@@ -2417,11 +2528,13 @@ impl<T: FftNum> WasmSimdF64Butterfly12<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector64>,
     ) {
-        let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11});
+        unsafe {
+            let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11});
 
-        let out = self.perform_fft_direct(values);
+            let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11});
+            write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11});
+        }
     }
 
     #[inline(always)]
@@ -2429,31 +2542,37 @@ impl<T: FftNum> WasmSimdF64Butterfly12<T> {
         &self,
         values: [WasmVector64; 12],
     ) -> [WasmVector64; 12] {
-        // Algorithm: 4x3 good-thomas
+        unsafe {
+            // Algorithm: 4x3 good-thomas
 
-        // Size-4 FFTs down the columns of our reordered array
-        let mid0 = self
-            .bf4
-            .perform_fft_direct([values[0], values[3], values[6], values[9]]);
-        let mid1 = self
-            .bf4
-            .perform_fft_direct([values[4], values[7], values[10], values[1]]);
-        let mid2 = self
-            .bf4
-            .perform_fft_direct([values[8], values[11], values[2], values[5]]);
+            // Size-4 FFTs down the columns of our reordered array
+            let mid0 = self
+                .bf4
+                .perform_fft_direct([values[0], values[3], values[6], values[9]]);
+            let mid1 = self
+                .bf4
+                .perform_fft_direct([values[4], values[7], values[10], values[1]]);
+            let mid2 = self
+                .bf4
+                .perform_fft_direct([values[8], values[11], values[2], values[5]]);
 
-        // Since this is good-thomas algorithm, we don't need twiddle factors
+            // Since this is good-thomas algorithm, we don't need twiddle factors
 
-        // Transpose the data and do size-3 FFTs down the columns
-        let [output0, output1, output2] = self.bf3.perform_fft_direct(mid0[0], mid1[0], mid2[0]);
-        let [output3, output4, output5] = self.bf3.perform_fft_direct(mid0[1], mid1[1], mid2[1]);
-        let [output6, output7, output8] = self.bf3.perform_fft_direct(mid0[2], mid1[2], mid2[2]);
-        let [output9, output10, output11] = self.bf3.perform_fft_direct(mid0[3], mid1[3], mid2[3]);
+            // Transpose the data and do size-3 FFTs down the columns
+            let [output0, output1, output2] =
+                self.bf3.perform_fft_direct(mid0[0], mid1[0], mid2[0]);
+            let [output3, output4, output5] =
+                self.bf3.perform_fft_direct(mid0[1], mid1[1], mid2[1]);
+            let [output6, output7, output8] =
+                self.bf3.perform_fft_direct(mid0[2], mid1[2], mid2[2]);
+            let [output9, output10, output11] =
+                self.bf3.perform_fft_direct(mid0[3], mid1[3], mid2[3]);
 
-        [
-            output0, output4, output8, output9, output1, output5, output6, output10, output2,
-            output3, output7, output11,
-        ]
+            [
+                output0, output4, output8, output9, output1, output5, output6, output10, output2,
+                output3, output7, output11,
+            ]
+        }
     }
 }
 
@@ -2492,13 +2611,16 @@ impl<T: FftNum> WasmSimdF32Butterfly15<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
     ) {
-        // A single WasmSimd 15-point will need a lot of shuffling, let's just reuse the dual one
-        let values = read_partial1_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14});
+        unsafe {
+            // A single WasmSimd 15-point will need a lot of shuffling, let's just reuse the dual one
+            let values =
+                read_partial1_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14});
 
-        let out = self.perform_parallel_fft_direct(values);
+            let out = self.perform_parallel_fft_direct(values);
 
-        for n in 0..15 {
-            buffer.store1_lo(out[n], n);
+            for n in 0..15 {
+                buffer.store1_lo(out[n], n);
+            }
         }
     }
 
@@ -2507,48 +2629,49 @@ impl<T: FftNum> WasmSimdF32Butterfly15<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
     ) {
-        let input_packed =
-            read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28});
+        unsafe {
+            let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28});
 
-        let values = [
-            extract_lo_hi_f32(input_packed[0], input_packed[7]),
-            extract_hi_lo_f32(input_packed[0], input_packed[8]),
-            extract_lo_hi_f32(input_packed[1], input_packed[8]),
-            extract_hi_lo_f32(input_packed[1], input_packed[9]),
-            extract_lo_hi_f32(input_packed[2], input_packed[9]),
-            extract_hi_lo_f32(input_packed[2], input_packed[10]),
-            extract_lo_hi_f32(input_packed[3], input_packed[10]),
-            extract_hi_lo_f32(input_packed[3], input_packed[11]),
-            extract_lo_hi_f32(input_packed[4], input_packed[11]),
-            extract_hi_lo_f32(input_packed[4], input_packed[12]),
-            extract_lo_hi_f32(input_packed[5], input_packed[12]),
-            extract_hi_lo_f32(input_packed[5], input_packed[13]),
-            extract_lo_hi_f32(input_packed[6], input_packed[13]),
-            extract_hi_lo_f32(input_packed[6], input_packed[14]),
-            extract_lo_hi_f32(input_packed[7], input_packed[14]),
-        ];
+            let values = [
+                extract_lo_hi_f32(input_packed[0], input_packed[7]),
+                extract_hi_lo_f32(input_packed[0], input_packed[8]),
+                extract_lo_hi_f32(input_packed[1], input_packed[8]),
+                extract_hi_lo_f32(input_packed[1], input_packed[9]),
+                extract_lo_hi_f32(input_packed[2], input_packed[9]),
+                extract_hi_lo_f32(input_packed[2], input_packed[10]),
+                extract_lo_hi_f32(input_packed[3], input_packed[10]),
+                extract_hi_lo_f32(input_packed[3], input_packed[11]),
+                extract_lo_hi_f32(input_packed[4], input_packed[11]),
+                extract_hi_lo_f32(input_packed[4], input_packed[12]),
+                extract_lo_hi_f32(input_packed[5], input_packed[12]),
+                extract_hi_lo_f32(input_packed[5], input_packed[13]),
+                extract_lo_hi_f32(input_packed[6], input_packed[13]),
+                extract_hi_lo_f32(input_packed[6], input_packed[14]),
+                extract_lo_hi_f32(input_packed[7], input_packed[14]),
+            ];
 
-        let out = self.perform_parallel_fft_direct(values);
+            let out = self.perform_parallel_fft_direct(values);
 
-        let out_packed = [
-            extract_lo_lo_f32(out[0], out[1]),
-            extract_lo_lo_f32(out[2], out[3]),
-            extract_lo_lo_f32(out[4], out[5]),
-            extract_lo_lo_f32(out[6], out[7]),
-            extract_lo_lo_f32(out[8], out[9]),
-            extract_lo_lo_f32(out[10], out[11]),
-            extract_lo_lo_f32(out[12], out[13]),
-            extract_lo_hi_f32(out[14], out[0]),
-            extract_hi_hi_f32(out[1], out[2]),
-            extract_hi_hi_f32(out[3], out[4]),
-            extract_hi_hi_f32(out[5], out[6]),
-            extract_hi_hi_f32(out[7], out[8]),
-            extract_hi_hi_f32(out[9], out[10]),
-            extract_hi_hi_f32(out[11], out[12]),
-            extract_hi_hi_f32(out[13], out[14]),
-        ];
+            let out_packed = [
+                extract_lo_lo_f32(out[0], out[1]),
+                extract_lo_lo_f32(out[2], out[3]),
+                extract_lo_lo_f32(out[4], out[5]),
+                extract_lo_lo_f32(out[6], out[7]),
+                extract_lo_lo_f32(out[8], out[9]),
+                extract_lo_lo_f32(out[10], out[11]),
+                extract_lo_lo_f32(out[12], out[13]),
+                extract_lo_hi_f32(out[14], out[0]),
+                extract_hi_hi_f32(out[1], out[2]),
+                extract_hi_hi_f32(out[3], out[4]),
+                extract_hi_hi_f32(out[5], out[6]),
+                extract_hi_hi_f32(out[7], out[8]),
+                extract_hi_hi_f32(out[9], out[10]),
+                extract_hi_hi_f32(out[11], out[12]),
+                extract_hi_hi_f32(out[13], out[14]),
+            ];
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, {0,1,2,3,4,5,6,7,8,9, 10, 11, 12, 13, 14});
+            write_complex_to_array_strided!(out_packed, buffer, 2, {0,1,2,3,4,5,6,7,8,9, 10, 11, 12, 13, 14});
+        }
     }
 
     #[inline(always)]
@@ -2556,42 +2679,44 @@ impl<T: FftNum> WasmSimdF32Butterfly15<T> {
         &self,
         values: [WasmVector32; 15],
     ) -> [WasmVector32; 15] {
-        // Algorithm: 5x3 good-thomas
+        unsafe {
+            // Algorithm: 5x3 good-thomas
 
-        // Size-5 FFTs down the columns of our reordered array
-        let mid0 = self
-            .bf5
-            .perform_parallel_fft_direct(values[0], values[3], values[6], values[9], values[12]);
-        let mid1 = self
-            .bf5
-            .perform_parallel_fft_direct(values[5], values[8], values[11], values[14], values[2]);
-        let mid2 = self
-            .bf5
-            .perform_parallel_fft_direct(values[10], values[13], values[1], values[4], values[7]);
+            // Size-5 FFTs down the columns of our reordered array
+            let mid0 = self.bf5.perform_parallel_fft_direct(
+                values[0], values[3], values[6], values[9], values[12],
+            );
+            let mid1 = self.bf5.perform_parallel_fft_direct(
+                values[5], values[8], values[11], values[14], values[2],
+            );
+            let mid2 = self.bf5.perform_parallel_fft_direct(
+                values[10], values[13], values[1], values[4], values[7],
+            );
 
-        // Since this is good-thomas algorithm, we don't need twiddle factors
+            // Since this is good-thomas algorithm, we don't need twiddle factors
 
-        // Transpose the data and do size-3 FFTs down the columns
-        let [output0, output1, output2] = self
-            .bf3
-            .perform_parallel_fft_direct(mid0[0], mid1[0], mid2[0]);
-        let [output3, output4, output5] = self
-            .bf3
-            .perform_parallel_fft_direct(mid0[1], mid1[1], mid2[1]);
-        let [output6, output7, output8] = self
-            .bf3
-            .perform_parallel_fft_direct(mid0[2], mid1[2], mid2[2]);
-        let [output9, output10, output11] = self
-            .bf3
-            .perform_parallel_fft_direct(mid0[3], mid1[3], mid2[3]);
-        let [output12, output13, output14] = self
-            .bf3
-            .perform_parallel_fft_direct(mid0[4], mid1[4], mid2[4]);
+            // Transpose the data and do size-3 FFTs down the columns
+            let [output0, output1, output2] = self
+                .bf3
+                .perform_parallel_fft_direct(mid0[0], mid1[0], mid2[0]);
+            let [output3, output4, output5] = self
+                .bf3
+                .perform_parallel_fft_direct(mid0[1], mid1[1], mid2[1]);
+            let [output6, output7, output8] = self
+                .bf3
+                .perform_parallel_fft_direct(mid0[2], mid1[2], mid2[2]);
+            let [output9, output10, output11] = self
+                .bf3
+                .perform_parallel_fft_direct(mid0[3], mid1[3], mid2[3]);
+            let [output12, output13, output14] = self
+                .bf3
+                .perform_parallel_fft_direct(mid0[4], mid1[4], mid2[4]);
 
-        [
-            output0, output4, output8, output9, output13, output2, output3, output7, output11,
-            output12, output1, output5, output6, output10, output14,
-        ]
+            [
+                output0, output4, output8, output9, output13, output2, output3, output7, output11,
+                output12, output1, output5, output6, output10, output14,
+            ]
+        }
     }
 }
 
@@ -2631,12 +2756,14 @@ impl<T: FftNum> WasmSimdF64Butterfly15<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector64>,
     ) {
-        let values =
-            read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
+        unsafe {
+            let values =
+                read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
 
-        let out = self.perform_fft_direct(values);
+            let out = self.perform_fft_direct(values);
 
-        write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
+            write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
+        }
     }
 
     #[inline(always)]
@@ -2644,32 +2771,39 @@ impl<T: FftNum> WasmSimdF64Butterfly15<T> {
         &self,
         values: [WasmVector64; 15],
     ) -> [WasmVector64; 15] {
-        // Algorithm: 5x3 good-thomas
+        unsafe {
+            // Algorithm: 5x3 good-thomas
 
-        // Size-5 FFTs down the columns of our reordered array
-        let mid0 = self
-            .bf5
-            .perform_fft_direct(values[0], values[3], values[6], values[9], values[12]);
-        let mid1 = self
-            .bf5
-            .perform_fft_direct(values[5], values[8], values[11], values[14], values[2]);
-        let mid2 = self
-            .bf5
-            .perform_fft_direct(values[10], values[13], values[1], values[4], values[7]);
+            // Size-5 FFTs down the columns of our reordered array
+            let mid0 = self
+                .bf5
+                .perform_fft_direct(values[0], values[3], values[6], values[9], values[12]);
+            let mid1 = self
+                .bf5
+                .perform_fft_direct(values[5], values[8], values[11], values[14], values[2]);
+            let mid2 = self
+                .bf5
+                .perform_fft_direct(values[10], values[13], values[1], values[4], values[7]);
 
-        // Since this is good-thomas algorithm, we don't need twiddle factors
+            // Since this is good-thomas algorithm, we don't need twiddle factors
 
-        // Transpose the data and do size-3 FFTs down the columns
-        let [output0, output1, output2] = self.bf3.perform_fft_direct(mid0[0], mid1[0], mid2[0]);
-        let [output3, output4, output5] = self.bf3.perform_fft_direct(mid0[1], mid1[1], mid2[1]);
-        let [output6, output7, output8] = self.bf3.perform_fft_direct(mid0[2], mid1[2], mid2[2]);
-        let [output9, output10, output11] = self.bf3.perform_fft_direct(mid0[3], mid1[3], mid2[3]);
-        let [output12, output13, output14] = self.bf3.perform_fft_direct(mid0[4], mid1[4], mid2[4]);
+            // Transpose the data and do size-3 FFTs down the columns
+            let [output0, output1, output2] =
+                self.bf3.perform_fft_direct(mid0[0], mid1[0], mid2[0]);
+            let [output3, output4, output5] =
+                self.bf3.perform_fft_direct(mid0[1], mid1[1], mid2[1]);
+            let [output6, output7, output8] =
+                self.bf3.perform_fft_direct(mid0[2], mid1[2], mid2[2]);
+            let [output9, output10, output11] =
+                self.bf3.perform_fft_direct(mid0[3], mid1[3], mid2[3]);
+            let [output12, output13, output14] =
+                self.bf3.perform_fft_direct(mid0[4], mid1[4], mid2[4]);
 
-        [
-            output0, output4, output8, output9, output13, output2, output3, output7, output11,
-            output12, output1, output5, output6, output10, output14,
-        ]
+            [
+                output0, output4, output8, output9, output13, output2, output3, output7, output11,
+                output12, output1, output5, output6, output10, output14,
+            ]
+        }
     }
 }
 
@@ -2725,12 +2859,14 @@ impl<T: FftNum> WasmSimdF32Butterfly16<T> {
         buffer: &impl SimdComplexArrayMut<WasmVector32>,
         i: usize,
     ) -> [WasmVector32; 4] {
-        [
-            buffer.load(i),
-            buffer.load(i + 4),
-            buffer.load(i + 8),
-            buffer.load(i + 12),
-        ]
+        unsafe {
+            [
+                buffer.load(i),
+                buffer.load(i + 4),
+                buffer.load(i + 8),
+                buffer.load(i + 12),
+            ]
+        }
     }
 
     #[inline(always)]
@@ -2739,51 +2875,55 @@ impl<T: FftNum> WasmSimdF32Butterfly16<T> {
         i: usize,
         vectors: [WasmVector32; 4],
     ) {
-        buffer.store(vectors[0], i + 0);
-        buffer.store(vectors[1], i + 4);
-        buffer.store(vectors[2], i + 8);
-        buffer.store(vectors[3], i + 12);
+        unsafe {
+            buffer.store(vectors[0], i + 0);
+            buffer.store(vectors[1], i + 4);
+            buffer.store(vectors[2], i + 8);
+            buffer.store(vectors[3], i + 12);
+        }
     }
 
     #[inline(always)]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
-        // To make the best possible use of registers, we're going to write this algorithm in an unusual way
-        // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
-        // But to reduce the number of times registers get spilled, we have these optimizations:
-        // 1: Load data as late as possible, not upfront
-        // 2: Once we're working with a piece of data, make as much progress as possible before moving on
-        //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
-        // 3: Store data as soon as we're finished with it, rather than waiting for the end
+        unsafe {
+            // To make the best possible use of registers, we're going to write this algorithm in an unusual way
+            // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
+            // But to reduce the number of times registers get spilled, we have these optimizations:
+            // 1: Load data as late as possible, not upfront
+            // 2: Once we're working with a piece of data, make as much progress as possible before moving on
+            //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
+            // 3: Store data as soon as we're finished with it, rather than waiting for the end
 
-        // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors, and transpose
-        let mut tmp0 = self
-            .bf4
-            .perform_parallel_fft_direct(Self::load_chunk(&buffer, 0));
-        tmp0[1] = SimdVector::mul_complex(tmp0[1], self.twiddles_packed[0]);
-        tmp0[2] = SimdVector::mul_complex(tmp0[2], self.twiddles_packed[1]);
-        tmp0[3] = SimdVector::mul_complex(tmp0[3], self.twiddles_packed[2]);
-        let [mid0, mid1] = transpose_complex_2x2_f32(tmp0[0], tmp0[1]);
-        let [mid4, mid5] = transpose_complex_2x2_f32(tmp0[2], tmp0[3]);
+            // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors, and transpose
+            let mut tmp0 = self
+                .bf4
+                .perform_parallel_fft_direct(Self::load_chunk(&buffer, 0));
+            tmp0[1] = SimdVector::mul_complex(tmp0[1], self.twiddles_packed[0]);
+            tmp0[2] = SimdVector::mul_complex(tmp0[2], self.twiddles_packed[1]);
+            tmp0[3] = SimdVector::mul_complex(tmp0[3], self.twiddles_packed[2]);
+            let [mid0, mid1] = transpose_complex_2x2_f32(tmp0[0], tmp0[1]);
+            let [mid4, mid5] = transpose_complex_2x2_f32(tmp0[2], tmp0[3]);
 
-        let mut tmp1 = self
-            .bf4
-            .perform_parallel_fft_direct(Self::load_chunk(&buffer, 2));
-        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddles_packed[3]);
-        tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddles_packed[4]);
-        tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddles_packed[5]);
-        let [mid2, mid3] = transpose_complex_2x2_f32(tmp1[0], tmp1[1]);
-        let [mid6, mid7] = transpose_complex_2x2_f32(tmp1[2], tmp1[3]);
+            let mut tmp1 = self
+                .bf4
+                .perform_parallel_fft_direct(Self::load_chunk(&buffer, 2));
+            tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddles_packed[3]);
+            tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddles_packed[4]);
+            tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddles_packed[5]);
+            let [mid2, mid3] = transpose_complex_2x2_f32(tmp1[0], tmp1[1]);
+            let [mid6, mid7] = transpose_complex_2x2_f32(tmp1[2], tmp1[3]);
 
-        // Size-4 FFTs down each pair of transposed columns, storing them as soon as we're done with them
-        let out0 = self
-            .bf4
-            .perform_parallel_fft_direct([mid0, mid1, mid2, mid3]);
-        Self::store_chunk(&mut buffer, 0, out0);
+            // Size-4 FFTs down each pair of transposed columns, storing them as soon as we're done with them
+            let out0 = self
+                .bf4
+                .perform_parallel_fft_direct([mid0, mid1, mid2, mid3]);
+            Self::store_chunk(&mut buffer, 0, out0);
 
-        let out1 = self
-            .bf4
-            .perform_parallel_fft_direct([mid4, mid5, mid6, mid7]);
-        Self::store_chunk(&mut buffer, 2, out1);
+            let out1 = self
+                .bf4
+                .perform_parallel_fft_direct([mid4, mid5, mid6, mid7]);
+            Self::store_chunk(&mut buffer, 2, out1);
+        }
     }
 
     #[inline(always)]
@@ -2791,11 +2931,13 @@ impl<T: FftNum> WasmSimdF32Butterfly16<T> {
         buffer: &impl SimdComplexArrayMut<WasmVector32>,
         i: usize,
     ) -> [[WasmVector32; 4]; 2] {
-        let [a0, a1] = transpose_complex_2x2_f32(buffer.load(i + 0), buffer.load(i + 16));
-        let [b0, b1] = transpose_complex_2x2_f32(buffer.load(i + 4), buffer.load(i + 20));
-        let [c0, c1] = transpose_complex_2x2_f32(buffer.load(i + 8), buffer.load(i + 24));
-        let [d0, d1] = transpose_complex_2x2_f32(buffer.load(i + 12), buffer.load(i + 28));
-        [[a0, b0, c0, d0], [a1, b1, c1, d1]]
+        unsafe {
+            let [a0, a1] = transpose_complex_2x2_f32(buffer.load(i + 0), buffer.load(i + 16));
+            let [b0, b1] = transpose_complex_2x2_f32(buffer.load(i + 4), buffer.load(i + 20));
+            let [c0, c1] = transpose_complex_2x2_f32(buffer.load(i + 8), buffer.load(i + 24));
+            let [d0, d1] = transpose_complex_2x2_f32(buffer.load(i + 12), buffer.load(i + 28));
+            [[a0, b0, c0, d0], [a1, b1, c1, d1]]
+        }
     }
 
     #[inline(always)]
@@ -2805,10 +2947,12 @@ impl<T: FftNum> WasmSimdF32Butterfly16<T> {
         values_a: [WasmVector32; 4],
         values_b: [WasmVector32; 4],
     ) {
-        for n in 0..4 {
-            let [a, b] = transpose_complex_2x2_f32(values_a[n], values_b[n]);
-            buffer.store(a, i + n * 4);
-            buffer.store(b, i + n * 4 + 16);
+        unsafe {
+            for n in 0..4 {
+                let [a, b] = transpose_complex_2x2_f32(values_a[n], values_b[n]);
+                buffer.store(a, i + n * 4);
+                buffer.store(b, i + n * 4 + 16);
+            }
         }
     }
 
@@ -2817,49 +2961,51 @@ impl<T: FftNum> WasmSimdF32Butterfly16<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
     ) {
-        // To make the best possible use of registers, we're going to write this algorithm in an unusual way
-        // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
-        // But to reduce the number of times registers get spilled, we have these optimizations:
-        // 1: Load data as late as possible, not upfront
-        // 2: Once we're working with a piece of data, make as much progress as possible before moving on
-        //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
-        // 3: Store data as soon as we're finished with it, rather than waiting for the end
+        unsafe {
+            // To make the best possible use of registers, we're going to write this algorithm in an unusual way
+            // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
+            // But to reduce the number of times registers get spilled, we have these optimizations:
+            // 1: Load data as late as possible, not upfront
+            // 2: Once we're working with a piece of data, make as much progress as possible before moving on
+            //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
+            // 3: Store data as soon as we're finished with it, rather than waiting for the end
 
-        // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors
-        let [in2, in3] = Self::load_parallel_chunk(&buffer, 2);
-        let mut tmp2 = self.bf4.perform_parallel_fft_direct(in2);
-        let mut tmp3 = self.bf4.perform_parallel_fft_direct(in3);
-        tmp2[1] = self.bf4.rotate.rotate_45(tmp2[1]);
-        tmp2[2] = self.bf4.rotate.rotate(tmp2[2]);
-        tmp2[3] = self.bf4.rotate.rotate_135(tmp2[3]);
-        tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddle3);
-        tmp3[2] = self.bf4.rotate.rotate_135(tmp3[2]);
-        tmp3[3] = SimdVector::mul_complex(tmp3[3], self.twiddle9);
+            // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors
+            let [in2, in3] = Self::load_parallel_chunk(&buffer, 2);
+            let mut tmp2 = self.bf4.perform_parallel_fft_direct(in2);
+            let mut tmp3 = self.bf4.perform_parallel_fft_direct(in3);
+            tmp2[1] = self.bf4.rotate.rotate_45(tmp2[1]);
+            tmp2[2] = self.bf4.rotate.rotate(tmp2[2]);
+            tmp2[3] = self.bf4.rotate.rotate_135(tmp2[3]);
+            tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddle3);
+            tmp3[2] = self.bf4.rotate.rotate_135(tmp3[2]);
+            tmp3[3] = SimdVector::mul_complex(tmp3[3], self.twiddle9);
 
-        // Do these last, because fewer twiddles means fewer temporaries forcing the above data to spill
-        let [in0, in1] = Self::load_parallel_chunk(&buffer, 0);
-        let tmp0 = self.bf4.perform_parallel_fft_direct(in0);
-        let mut tmp1 = self.bf4.perform_parallel_fft_direct(in1);
-        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
-        tmp1[2] = self.bf4.rotate.rotate_45(tmp1[2]);
-        tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddle3);
+            // Do these last, because fewer twiddles means fewer temporaries forcing the above data to spill
+            let [in0, in1] = Self::load_parallel_chunk(&buffer, 0);
+            let tmp0 = self.bf4.perform_parallel_fft_direct(in0);
+            let mut tmp1 = self.bf4.perform_parallel_fft_direct(in1);
+            tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
+            tmp1[2] = self.bf4.rotate.rotate_45(tmp1[2]);
+            tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddle3);
 
-        // Size-4 FFTs down each pair of transposed columns, storing them as soon as we're done with them
-        let out0 = self
-            .bf4
-            .perform_parallel_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0]]);
-        let out1 = self
-            .bf4
-            .perform_parallel_fft_direct([tmp0[1], tmp1[1], tmp2[1], tmp3[1]]);
-        Self::store_parallel_chunk(&mut buffer, 0, out0, out1);
+            // Size-4 FFTs down each pair of transposed columns, storing them as soon as we're done with them
+            let out0 = self
+                .bf4
+                .perform_parallel_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0]]);
+            let out1 = self
+                .bf4
+                .perform_parallel_fft_direct([tmp0[1], tmp1[1], tmp2[1], tmp3[1]]);
+            Self::store_parallel_chunk(&mut buffer, 0, out0, out1);
 
-        let out2 = self
-            .bf4
-            .perform_parallel_fft_direct([tmp0[2], tmp1[2], tmp2[2], tmp3[2]]);
-        let out3 = self
-            .bf4
-            .perform_parallel_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3]]);
-        Self::store_parallel_chunk(&mut buffer, 2, out2, out3);
+            let out2 = self
+                .bf4
+                .perform_parallel_fft_direct([tmp0[2], tmp1[2], tmp2[2], tmp3[2]]);
+            let out3 = self
+                .bf4
+                .perform_parallel_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3]]);
+            Self::store_parallel_chunk(&mut buffer, 2, out2, out3);
+        }
     }
 }
 //   _  __              __   _  _   _     _ _
@@ -2899,69 +3045,71 @@ impl<T: FftNum> WasmSimdF64Butterfly16<T> {
 
     #[inline(always)]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) {
-        // To make the best possible use of registers, we're going to write this algorithm in an unusual way
-        // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
-        // But to reduce the number of times registers get spilled, we have these optimizations:
-        // 1: Load data as late as possible, not upfront
-        // 2: Once we're working with a piece of data, make as much progress as possible before moving on
-        //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
-        // 3: Store data as soon as we're finished with it, rather than waiting for the end
-        let load = |i| {
-            [
-                buffer.load(i),
-                buffer.load(i + 4),
-                buffer.load(i + 8),
-                buffer.load(i + 12),
-            ]
-        };
+        unsafe {
+            // To make the best possible use of registers, we're going to write this algorithm in an unusual way
+            // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
+            // But to reduce the number of times registers get spilled, we have these optimizations:
+            // 1: Load data as late as possible, not upfront
+            // 2: Once we're working with a piece of data, make as much progress as possible before moving on
+            //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
+            // 3: Store data as soon as we're finished with it, rather than waiting for the end
+            let load = |i| {
+                [
+                    buffer.load(i),
+                    buffer.load(i + 4),
+                    buffer.load(i + 8),
+                    buffer.load(i + 12),
+                ]
+            };
 
-        // For each column: load the data, apply our size-4 FFT, apply twiddle factors
-        let mut tmp1 = self.bf4.perform_fft_direct(load(1));
-        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
-        tmp1[2] = self.bf4.rotate.rotate_45(tmp1[2]);
-        tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddle3);
+            // For each column: load the data, apply our size-4 FFT, apply twiddle factors
+            let mut tmp1 = self.bf4.perform_fft_direct(load(1));
+            tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
+            tmp1[2] = self.bf4.rotate.rotate_45(tmp1[2]);
+            tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddle3);
 
-        let mut tmp3 = self.bf4.perform_fft_direct(load(3));
-        tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddle3);
-        tmp3[2] = self.bf4.rotate.rotate_135(tmp3[2]);
-        tmp3[3] = SimdVector::mul_complex(tmp3[3], self.twiddle9);
+            let mut tmp3 = self.bf4.perform_fft_direct(load(3));
+            tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddle3);
+            tmp3[2] = self.bf4.rotate.rotate_135(tmp3[2]);
+            tmp3[3] = SimdVector::mul_complex(tmp3[3], self.twiddle9);
 
-        let mut tmp2 = self.bf4.perform_fft_direct(load(2));
-        tmp2[1] = self.bf4.rotate.rotate_45(tmp2[1]);
-        tmp2[2] = self.bf4.rotate.rotate(tmp2[2]);
-        tmp2[3] = self.bf4.rotate.rotate_135(tmp2[3]);
+            let mut tmp2 = self.bf4.perform_fft_direct(load(2));
+            tmp2[1] = self.bf4.rotate.rotate_45(tmp2[1]);
+            tmp2[2] = self.bf4.rotate.rotate(tmp2[2]);
+            tmp2[3] = self.bf4.rotate.rotate_135(tmp2[3]);
 
-        // Do the first column last, because no twiddles means fewer temporaries forcing the above data to spill
-        let tmp0 = self.bf4.perform_fft_direct(load(0));
+            // Do the first column last, because no twiddles means fewer temporaries forcing the above data to spill
+            let tmp0 = self.bf4.perform_fft_direct(load(0));
 
-        ////////////////////////////////////////////////////////////
-        let mut store = |i: usize, vectors: [WasmVector64; 4]| {
-            buffer.store(vectors[0], i + 0);
-            buffer.store(vectors[1], i + 4);
-            buffer.store(vectors[2], i + 8);
-            buffer.store(vectors[3], i + 12);
-        };
+            ////////////////////////////////////////////////////////////
+            let mut store = |i: usize, vectors: [WasmVector64; 4]| {
+                buffer.store(vectors[0], i + 0);
+                buffer.store(vectors[1], i + 4);
+                buffer.store(vectors[2], i + 8);
+                buffer.store(vectors[3], i + 12);
+            };
 
-        // Size-4 FFTs down each of our transposed columns, storing them as soon as we're done with them
-        let out0 = self
-            .bf4
-            .perform_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0]]);
-        store(0, out0);
+            // Size-4 FFTs down each of our transposed columns, storing them as soon as we're done with them
+            let out0 = self
+                .bf4
+                .perform_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0]]);
+            store(0, out0);
 
-        let out1 = self
-            .bf4
-            .perform_fft_direct([tmp0[1], tmp1[1], tmp2[1], tmp3[1]]);
-        store(1, out1);
+            let out1 = self
+                .bf4
+                .perform_fft_direct([tmp0[1], tmp1[1], tmp2[1], tmp3[1]]);
+            store(1, out1);
 
-        let out2 = self
-            .bf4
-            .perform_fft_direct([tmp0[2], tmp1[2], tmp2[2], tmp3[2]]);
-        store(2, out2);
+            let out2 = self
+                .bf4
+                .perform_fft_direct([tmp0[2], tmp1[2], tmp2[2], tmp3[2]]);
+            store(2, out2);
 
-        let out3 = self
-            .bf4
-            .perform_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3]]);
-        store(3, out3);
+            let out3 = self
+                .bf4
+                .perform_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3]]);
+            store(3, out3);
+        }
     }
 }
 
@@ -3033,12 +3181,14 @@ impl<T: FftNum> WasmSimdF32Butterfly24<T> {
         buffer: &impl SimdComplexArrayMut<WasmVector32>,
         i: usize,
     ) -> [WasmVector32; 4] {
-        [
-            buffer.load(i),
-            buffer.load(i + 6),
-            buffer.load(i + 12),
-            buffer.load(i + 18),
-        ]
+        unsafe {
+            [
+                buffer.load(i),
+                buffer.load(i + 6),
+                buffer.load(i + 12),
+                buffer.load(i + 18),
+            ]
+        }
     }
 
     #[inline(always)]
@@ -3047,62 +3197,66 @@ impl<T: FftNum> WasmSimdF32Butterfly24<T> {
         i: usize,
         vectors: [WasmVector32; 6],
     ) {
-        buffer.store(vectors[0], i + 0);
-        buffer.store(vectors[1], i + 4);
-        buffer.store(vectors[2], i + 8);
-        buffer.store(vectors[3], i + 12);
-        buffer.store(vectors[4], i + 16);
-        buffer.store(vectors[5], i + 20);
+        unsafe {
+            buffer.store(vectors[0], i + 0);
+            buffer.store(vectors[1], i + 4);
+            buffer.store(vectors[2], i + 8);
+            buffer.store(vectors[3], i + 12);
+            buffer.store(vectors[4], i + 16);
+            buffer.store(vectors[5], i + 20);
+        }
     }
 
     #[inline(always)]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
-        // To make the best possible use of registers, we're going to write this algorithm in an unusual way
-        // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
-        // But to reduce the number of times registers get spilled, we have these optimizations:
-        // 1: Load data as late as possible, not upfront
-        // 2: Once we're working with a piece of data, make as much progress as possible before moving on
-        //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
-        // 3: Store data as soon as we're finished with it, rather than waiting for the end
+        unsafe {
+            // To make the best possible use of registers, we're going to write this algorithm in an unusual way
+            // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
+            // But to reduce the number of times registers get spilled, we have these optimizations:
+            // 1: Load data as late as possible, not upfront
+            // 2: Once we're working with a piece of data, make as much progress as possible before moving on
+            //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
+            // 3: Store data as soon as we're finished with it, rather than waiting for the end
 
-        // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors, transpose
-        let mut tmp1 = self
-            .bf4
-            .perform_parallel_fft_direct(Self::load_chunk(&buffer, 2));
-        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddles_packed[3]);
-        tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddles_packed[4]);
-        tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddles_packed[5]);
-        let [mid2, mid3] = transpose_complex_2x2_f32(tmp1[0], tmp1[1]);
-        let [mid8, mid9] = transpose_complex_2x2_f32(tmp1[2], tmp1[3]);
+            // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors, transpose
+            let mut tmp1 = self
+                .bf4
+                .perform_parallel_fft_direct(Self::load_chunk(&buffer, 2));
+            tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddles_packed[3]);
+            tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddles_packed[4]);
+            tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddles_packed[5]);
+            let [mid2, mid3] = transpose_complex_2x2_f32(tmp1[0], tmp1[1]);
+            let [mid8, mid9] = transpose_complex_2x2_f32(tmp1[2], tmp1[3]);
 
-        let mut tmp2 = self
-            .bf4
-            .perform_parallel_fft_direct(Self::load_chunk(&buffer, 4));
-        tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddles_packed[6]);
-        tmp2[2] = SimdVector::mul_complex(tmp2[2], self.twiddles_packed[7]);
-        tmp2[3] = SimdVector::mul_complex(tmp2[3], self.twiddles_packed[8]);
-        let [mid4, mid5] = transpose_complex_2x2_f32(tmp2[0], tmp2[1]);
-        let [mid10, mid11] = transpose_complex_2x2_f32(tmp2[2], tmp2[3]);
+            let mut tmp2 = self
+                .bf4
+                .perform_parallel_fft_direct(Self::load_chunk(&buffer, 4));
+            tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddles_packed[6]);
+            tmp2[2] = SimdVector::mul_complex(tmp2[2], self.twiddles_packed[7]);
+            tmp2[3] = SimdVector::mul_complex(tmp2[3], self.twiddles_packed[8]);
+            let [mid4, mid5] = transpose_complex_2x2_f32(tmp2[0], tmp2[1]);
+            let [mid10, mid11] = transpose_complex_2x2_f32(tmp2[2], tmp2[3]);
 
-        let mut tmp0 = self
-            .bf4
-            .perform_parallel_fft_direct(Self::load_chunk(&buffer, 0));
-        tmp0[1] = SimdVector::mul_complex(tmp0[1], self.twiddles_packed[0]);
-        tmp0[2] = SimdVector::mul_complex(tmp0[2], self.twiddles_packed[1]);
-        tmp0[3] = SimdVector::mul_complex(tmp0[3], self.twiddles_packed[2]);
-        let [mid0, mid1] = transpose_complex_2x2_f32(tmp0[0], tmp0[1]);
-        let [mid6, mid7] = transpose_complex_2x2_f32(tmp0[2], tmp0[3]);
+            let mut tmp0 = self
+                .bf4
+                .perform_parallel_fft_direct(Self::load_chunk(&buffer, 0));
+            tmp0[1] = SimdVector::mul_complex(tmp0[1], self.twiddles_packed[0]);
+            tmp0[2] = SimdVector::mul_complex(tmp0[2], self.twiddles_packed[1]);
+            tmp0[3] = SimdVector::mul_complex(tmp0[3], self.twiddles_packed[2]);
+            let [mid0, mid1] = transpose_complex_2x2_f32(tmp0[0], tmp0[1]);
+            let [mid6, mid7] = transpose_complex_2x2_f32(tmp0[2], tmp0[3]);
 
-        // Size-6 FFTs down each pair of transposed columns, storing them as soon as we're done with them
-        let out0 = self
-            .bf6
-            .perform_parallel_fft_direct(mid0, mid1, mid2, mid3, mid4, mid5);
-        Self::store_chunk(&mut buffer, 0, out0);
+            // Size-6 FFTs down each pair of transposed columns, storing them as soon as we're done with them
+            let out0 = self
+                .bf6
+                .perform_parallel_fft_direct(mid0, mid1, mid2, mid3, mid4, mid5);
+            Self::store_chunk(&mut buffer, 0, out0);
 
-        let out1 = self
-            .bf6
-            .perform_parallel_fft_direct(mid6, mid7, mid8, mid9, mid10, mid11);
-        Self::store_chunk(&mut buffer, 2, out1);
+            let out1 = self
+                .bf6
+                .perform_parallel_fft_direct(mid6, mid7, mid8, mid9, mid10, mid11);
+            Self::store_chunk(&mut buffer, 2, out1);
+        }
     }
 
     #[inline(always)]
@@ -3110,11 +3264,13 @@ impl<T: FftNum> WasmSimdF32Butterfly24<T> {
         buffer: &impl SimdComplexArrayMut<WasmVector32>,
         i: usize,
     ) -> [[WasmVector32; 4]; 2] {
-        let [a0, a1] = transpose_complex_2x2_f32(buffer.load(i + 0), buffer.load(i + 24));
-        let [b0, b1] = transpose_complex_2x2_f32(buffer.load(i + 6), buffer.load(i + 30));
-        let [c0, c1] = transpose_complex_2x2_f32(buffer.load(i + 12), buffer.load(i + 36));
-        let [d0, d1] = transpose_complex_2x2_f32(buffer.load(i + 18), buffer.load(i + 42));
-        [[a0, b0, c0, d0], [a1, b1, c1, d1]]
+        unsafe {
+            let [a0, a1] = transpose_complex_2x2_f32(buffer.load(i + 0), buffer.load(i + 24));
+            let [b0, b1] = transpose_complex_2x2_f32(buffer.load(i + 6), buffer.load(i + 30));
+            let [c0, c1] = transpose_complex_2x2_f32(buffer.load(i + 12), buffer.load(i + 36));
+            let [d0, d1] = transpose_complex_2x2_f32(buffer.load(i + 18), buffer.load(i + 42));
+            [[a0, b0, c0, d0], [a1, b1, c1, d1]]
+        }
     }
 
     #[inline(always)]
@@ -3124,10 +3280,12 @@ impl<T: FftNum> WasmSimdF32Butterfly24<T> {
         values_a: [WasmVector32; 6],
         values_b: [WasmVector32; 6],
     ) {
-        for n in 0..6 {
-            let [a, b] = transpose_complex_2x2_f32(values_a[n], values_b[n]);
-            buffer.store(a, i + n * 4);
-            buffer.store(b, i + n * 4 + 24);
+        unsafe {
+            for n in 0..6 {
+                let [a, b] = transpose_complex_2x2_f32(values_a[n], values_b[n]);
+                buffer.store(a, i + n * 4);
+                buffer.store(b, i + n * 4 + 24);
+            }
         }
     }
 
@@ -3136,58 +3294,60 @@ impl<T: FftNum> WasmSimdF32Butterfly24<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
     ) {
-        // To make the best possible use of registers, we're going to write this algorithm in an unusual way
-        // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
-        // But to reduce the number of times registers get spilled, we have these optimizations:
-        // 1: Load data as late as possible, not upfront
-        // 2: Once we're working with a piece of data, make as much progress as possible before moving on
-        //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
-        // 3: Store data as soon as we're finished with it, rather than waiting for the end
+        unsafe {
+            // To make the best possible use of registers, we're going to write this algorithm in an unusual way
+            // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
+            // But to reduce the number of times registers get spilled, we have these optimizations:
+            // 1: Load data as late as possible, not upfront
+            // 2: Once we're working with a piece of data, make as much progress as possible before moving on
+            //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
+            // 3: Store data as soon as we're finished with it, rather than waiting for the end
 
-        // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors
-        let [in0, in1] = Self::load_parallel_chunk(&buffer, 0);
-        let tmp0 = self.bf4.perform_parallel_fft_direct(in0);
-        let mut tmp1 = self.bf4.perform_parallel_fft_direct(in1);
-        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
-        tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddle2);
-        tmp1[3] = self.bf4.rotate.rotate_45(tmp1[3]);
+            // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors
+            let [in0, in1] = Self::load_parallel_chunk(&buffer, 0);
+            let tmp0 = self.bf4.perform_parallel_fft_direct(in0);
+            let mut tmp1 = self.bf4.perform_parallel_fft_direct(in1);
+            tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
+            tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddle2);
+            tmp1[3] = self.bf4.rotate.rotate_45(tmp1[3]);
 
-        let [in2, in3] = Self::load_parallel_chunk(&buffer, 2);
-        let mut tmp2 = self.bf4.perform_parallel_fft_direct(in2);
-        let mut tmp3 = self.bf4.perform_parallel_fft_direct(in3);
-        tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddle2);
-        tmp2[2] = SimdVector::mul_complex(tmp2[2], self.twiddle4);
-        tmp2[3] = self.bf4.rotate.rotate(tmp2[3]);
-        tmp3[1] = self.bf4.rotate.rotate_45(tmp3[1]);
-        tmp3[2] = self.bf4.rotate.rotate(tmp3[2]);
-        tmp3[3] = self.bf4.rotate.rotate_135(tmp3[3]);
+            let [in2, in3] = Self::load_parallel_chunk(&buffer, 2);
+            let mut tmp2 = self.bf4.perform_parallel_fft_direct(in2);
+            let mut tmp3 = self.bf4.perform_parallel_fft_direct(in3);
+            tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddle2);
+            tmp2[2] = SimdVector::mul_complex(tmp2[2], self.twiddle4);
+            tmp2[3] = self.bf4.rotate.rotate(tmp2[3]);
+            tmp3[1] = self.bf4.rotate.rotate_45(tmp3[1]);
+            tmp3[2] = self.bf4.rotate.rotate(tmp3[2]);
+            tmp3[3] = self.bf4.rotate.rotate_135(tmp3[3]);
 
-        let [in4, in5] = Self::load_parallel_chunk(&buffer, 4);
-        let mut tmp4 = self.bf4.perform_parallel_fft_direct(in4);
-        let mut tmp5 = self.bf4.perform_parallel_fft_direct(in5);
-        tmp4[1] = SimdVector::mul_complex(tmp4[1], self.twiddle4);
-        tmp4[2] = SimdVector::mul_complex(tmp4[2], self.twiddle8);
-        tmp4[3] = SimdVector::neg(tmp4[3]);
-        tmp5[1] = SimdVector::mul_complex(tmp5[1], self.twiddle5);
-        tmp5[2] = SimdVector::mul_complex(tmp5[2], self.twiddle10);
-        tmp5[3] = self.bf4.rotate.rotate_225(tmp5[3]);
+            let [in4, in5] = Self::load_parallel_chunk(&buffer, 4);
+            let mut tmp4 = self.bf4.perform_parallel_fft_direct(in4);
+            let mut tmp5 = self.bf4.perform_parallel_fft_direct(in5);
+            tmp4[1] = SimdVector::mul_complex(tmp4[1], self.twiddle4);
+            tmp4[2] = SimdVector::mul_complex(tmp4[2], self.twiddle8);
+            tmp4[3] = SimdVector::neg(tmp4[3]);
+            tmp5[1] = SimdVector::mul_complex(tmp5[1], self.twiddle5);
+            tmp5[2] = SimdVector::mul_complex(tmp5[2], self.twiddle10);
+            tmp5[3] = self.bf4.rotate.rotate_225(tmp5[3]);
 
-        // Size-6 FFTs down each pair of transposed columns, storing them as soon as we're done with them
-        let out0 = self
-            .bf6
-            .perform_parallel_fft_direct(tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0]);
-        let out1 = self
-            .bf6
-            .perform_parallel_fft_direct(tmp0[1], tmp1[1], tmp2[1], tmp3[1], tmp4[1], tmp5[1]);
-        Self::store_parallel_chunk(&mut buffer, 0, out0, out1);
+            // Size-6 FFTs down each pair of transposed columns, storing them as soon as we're done with them
+            let out0 = self
+                .bf6
+                .perform_parallel_fft_direct(tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0]);
+            let out1 = self
+                .bf6
+                .perform_parallel_fft_direct(tmp0[1], tmp1[1], tmp2[1], tmp3[1], tmp4[1], tmp5[1]);
+            Self::store_parallel_chunk(&mut buffer, 0, out0, out1);
 
-        let out2 = self
-            .bf6
-            .perform_parallel_fft_direct(tmp0[2], tmp1[2], tmp2[2], tmp3[2], tmp4[2], tmp5[2]);
-        let out3 = self
-            .bf6
-            .perform_parallel_fft_direct(tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3]);
-        Self::store_parallel_chunk(&mut buffer, 2, out2, out3);
+            let out2 = self
+                .bf6
+                .perform_parallel_fft_direct(tmp0[2], tmp1[2], tmp2[2], tmp3[2], tmp4[2], tmp5[2]);
+            let out3 = self
+                .bf6
+                .perform_parallel_fft_direct(tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3]);
+            Self::store_parallel_chunk(&mut buffer, 2, out2, out3);
+        }
     }
 }
 
@@ -3239,81 +3399,83 @@ impl<T: FftNum> WasmSimdF64Butterfly24<T> {
 
     #[inline(always)]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) {
-        // To make the best possible use of registers, we're going to write this algorithm in an unusual way
-        // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
-        // But to reduce the number of times registers get spilled, we have these optimizations:
-        // 1: Load data as late as possible, not upfront
-        // 2: Once we're working with a piece of data, make as much progress as possible before moving on
-        //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
-        // 3: Store data as soon as we're finished with it, rather than waiting for the end
-        let load = |i| {
-            [
-                buffer.load(i),
-                buffer.load(i + 6),
-                buffer.load(i + 12),
-                buffer.load(i + 18),
-            ]
-        };
+        unsafe {
+            // To make the best possible use of registers, we're going to write this algorithm in an unusual way
+            // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
+            // But to reduce the number of times registers get spilled, we have these optimizations:
+            // 1: Load data as late as possible, not upfront
+            // 2: Once we're working with a piece of data, make as much progress as possible before moving on
+            //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
+            // 3: Store data as soon as we're finished with it, rather than waiting for the end
+            let load = |i| {
+                [
+                    buffer.load(i),
+                    buffer.load(i + 6),
+                    buffer.load(i + 12),
+                    buffer.load(i + 18),
+                ]
+            };
 
-        // For each column: load the data, apply our size-4 FFT, apply twiddle factors
-        let mut tmp1 = self.bf4.perform_fft_direct(load(1));
-        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
-        tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddle2);
-        tmp1[3] = self.bf4.rotate.rotate_45(tmp1[3]);
+            // For each column: load the data, apply our size-4 FFT, apply twiddle factors
+            let mut tmp1 = self.bf4.perform_fft_direct(load(1));
+            tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
+            tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddle2);
+            tmp1[3] = self.bf4.rotate.rotate_45(tmp1[3]);
 
-        let mut tmp2 = self.bf4.perform_fft_direct(load(2));
-        tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddle2);
-        tmp2[2] = SimdVector::mul_complex(tmp2[2], self.twiddle4);
-        tmp2[3] = self.bf4.rotate.rotate(tmp2[3]);
+            let mut tmp2 = self.bf4.perform_fft_direct(load(2));
+            tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddle2);
+            tmp2[2] = SimdVector::mul_complex(tmp2[2], self.twiddle4);
+            tmp2[3] = self.bf4.rotate.rotate(tmp2[3]);
 
-        let mut tmp4 = self.bf4.perform_fft_direct(load(4));
-        tmp4[1] = SimdVector::mul_complex(tmp4[1], self.twiddle4);
-        tmp4[2] = SimdVector::mul_complex(tmp4[2], self.twiddle8);
-        tmp4[3] = SimdVector::neg(tmp4[3]);
+            let mut tmp4 = self.bf4.perform_fft_direct(load(4));
+            tmp4[1] = SimdVector::mul_complex(tmp4[1], self.twiddle4);
+            tmp4[2] = SimdVector::mul_complex(tmp4[2], self.twiddle8);
+            tmp4[3] = SimdVector::neg(tmp4[3]);
 
-        let mut tmp5 = self.bf4.perform_fft_direct(load(5));
-        tmp5[1] = SimdVector::mul_complex(tmp5[1], self.twiddle5);
-        tmp5[2] = SimdVector::mul_complex(tmp5[2], self.twiddle10);
-        tmp5[3] = self.bf4.rotate.rotate_225(tmp5[3]);
+            let mut tmp5 = self.bf4.perform_fft_direct(load(5));
+            tmp5[1] = SimdVector::mul_complex(tmp5[1], self.twiddle5);
+            tmp5[2] = SimdVector::mul_complex(tmp5[2], self.twiddle10);
+            tmp5[3] = self.bf4.rotate.rotate_225(tmp5[3]);
 
-        let mut tmp3 = self.bf4.perform_fft_direct(load(3));
-        tmp3[1] = self.bf4.rotate.rotate_45(tmp3[1]);
-        tmp3[2] = self.bf4.rotate.rotate(tmp3[2]);
-        tmp3[3] = self.bf4.rotate.rotate_135(tmp3[3]);
+            let mut tmp3 = self.bf4.perform_fft_direct(load(3));
+            tmp3[1] = self.bf4.rotate.rotate_45(tmp3[1]);
+            tmp3[2] = self.bf4.rotate.rotate(tmp3[2]);
+            tmp3[3] = self.bf4.rotate.rotate_135(tmp3[3]);
 
-        // Do the first column last, because no twiddles means fewer temporaries forcing the above data to spill
-        let tmp0 = self.bf4.perform_fft_direct(load(0));
+            // Do the first column last, because no twiddles means fewer temporaries forcing the above data to spill
+            let tmp0 = self.bf4.perform_fft_direct(load(0));
 
-        ////////////////////////////////////////////////////////////
-        let mut store = |i, vectors: [WasmVector64; 6]| {
-            buffer.store(vectors[0], i);
-            buffer.store(vectors[1], i + 4);
-            buffer.store(vectors[2], i + 8);
-            buffer.store(vectors[3], i + 12);
-            buffer.store(vectors[4], i + 16);
-            buffer.store(vectors[5], i + 20);
-        };
+            ////////////////////////////////////////////////////////////
+            let mut store = |i, vectors: [WasmVector64; 6]| {
+                buffer.store(vectors[0], i);
+                buffer.store(vectors[1], i + 4);
+                buffer.store(vectors[2], i + 8);
+                buffer.store(vectors[3], i + 12);
+                buffer.store(vectors[4], i + 16);
+                buffer.store(vectors[5], i + 20);
+            };
 
-        // Size-6 FFTs down each of our transposed columns, storing them as soon as we're done with them
-        let out0 = self
-            .bf6
-            .perform_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0]]);
-        store(0, out0);
+            // Size-6 FFTs down each of our transposed columns, storing them as soon as we're done with them
+            let out0 = self
+                .bf6
+                .perform_fft_direct([tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0]]);
+            store(0, out0);
 
-        let out1 = self
-            .bf6
-            .perform_fft_direct([tmp0[1], tmp1[1], tmp2[1], tmp3[1], tmp4[1], tmp5[1]]);
-        store(1, out1);
+            let out1 = self
+                .bf6
+                .perform_fft_direct([tmp0[1], tmp1[1], tmp2[1], tmp3[1], tmp4[1], tmp5[1]]);
+            store(1, out1);
 
-        let out2 = self
-            .bf6
-            .perform_fft_direct([tmp0[2], tmp1[2], tmp2[2], tmp3[2], tmp4[2], tmp5[2]]);
-        store(2, out2);
+            let out2 = self
+                .bf6
+                .perform_fft_direct([tmp0[2], tmp1[2], tmp2[2], tmp3[2], tmp4[2], tmp5[2]]);
+            store(2, out2);
 
-        let out3 = self
-            .bf6
-            .perform_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3]]);
-        store(3, out3);
+            let out3 = self
+                .bf6
+                .perform_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3]]);
+            store(3, out3);
+        }
     }
 }
 
@@ -3403,12 +3565,14 @@ impl<T: FftNum> WasmSimdF32Butterfly32<T> {
         buffer: &impl SimdComplexArrayMut<WasmVector32>,
         i: usize,
     ) -> [WasmVector32; 4] {
-        [
-            buffer.load(i),
-            buffer.load(i + 8),
-            buffer.load(i + 16),
-            buffer.load(i + 24),
-        ]
+        unsafe {
+            [
+                buffer.load(i),
+                buffer.load(i + 8),
+                buffer.load(i + 16),
+                buffer.load(i + 24),
+            ]
+        }
     }
 
     #[inline(always)]
@@ -3417,77 +3581,81 @@ impl<T: FftNum> WasmSimdF32Butterfly32<T> {
         i: usize,
         vectors: [WasmVector32; 8],
     ) {
-        buffer.store(vectors[0], i + 0);
-        buffer.store(vectors[1], i + 4);
-        buffer.store(vectors[2], i + 8);
-        buffer.store(vectors[3], i + 12);
-        buffer.store(vectors[4], i + 16);
-        buffer.store(vectors[5], i + 20);
-        buffer.store(vectors[6], i + 24);
-        buffer.store(vectors[7], i + 28);
+        unsafe {
+            buffer.store(vectors[0], i + 0);
+            buffer.store(vectors[1], i + 4);
+            buffer.store(vectors[2], i + 8);
+            buffer.store(vectors[3], i + 12);
+            buffer.store(vectors[4], i + 16);
+            buffer.store(vectors[5], i + 20);
+            buffer.store(vectors[6], i + 24);
+            buffer.store(vectors[7], i + 28);
+        }
     }
 
     #[target_feature(enable = "simd128")]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
-        // To make the best possible use of registers, we're going to write this algorithm in an unusual way
-        // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
-        // But to reduce the number of times registers get spilled, we have these optimizations:
-        // 1: Load data as late as possible, not upfront
-        // 2: Once we're working with a piece of data, make as much progress as possible before moving on
-        //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
-        // 3: Store data as soon as we're finished with it, rather than waiting for the end
+        unsafe {
+            // To make the best possible use of registers, we're going to write this algorithm in an unusual way
+            // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
+            // But to reduce the number of times registers get spilled, we have these optimizations:
+            // 1: Load data as late as possible, not upfront
+            // 2: Once we're working with a piece of data, make as much progress as possible before moving on
+            //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
+            // 3: Store data as soon as we're finished with it, rather than waiting for the end
 
-        // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors
-        let mut tmp0 = self
-            .bf8
-            .bf4
-            .perform_parallel_fft_direct(Self::load_chunk(&buffer, 0));
-        tmp0[1] = SimdVector::mul_complex(tmp0[1], self.twiddles_packed[0]);
-        tmp0[2] = SimdVector::mul_complex(tmp0[2], self.twiddles_packed[1]);
-        tmp0[3] = SimdVector::mul_complex(tmp0[3], self.twiddles_packed[2]);
-        let [mid0, mid1] = transpose_complex_2x2_f32(tmp0[0], tmp0[1]);
-        let [mid8, mid9] = transpose_complex_2x2_f32(tmp0[2], tmp0[3]);
+            // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors
+            let mut tmp0 = self
+                .bf8
+                .bf4
+                .perform_parallel_fft_direct(Self::load_chunk(&buffer, 0));
+            tmp0[1] = SimdVector::mul_complex(tmp0[1], self.twiddles_packed[0]);
+            tmp0[2] = SimdVector::mul_complex(tmp0[2], self.twiddles_packed[1]);
+            tmp0[3] = SimdVector::mul_complex(tmp0[3], self.twiddles_packed[2]);
+            let [mid0, mid1] = transpose_complex_2x2_f32(tmp0[0], tmp0[1]);
+            let [mid8, mid9] = transpose_complex_2x2_f32(tmp0[2], tmp0[3]);
 
-        let mut tmp1 = self
-            .bf8
-            .bf4
-            .perform_parallel_fft_direct(Self::load_chunk(&buffer, 2));
-        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddles_packed[3]);
-        tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddles_packed[4]);
-        tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddles_packed[5]);
-        let [mid2, mid3] = transpose_complex_2x2_f32(tmp1[0], tmp1[1]);
-        let [mid10, mid11] = transpose_complex_2x2_f32(tmp1[2], tmp1[3]);
+            let mut tmp1 = self
+                .bf8
+                .bf4
+                .perform_parallel_fft_direct(Self::load_chunk(&buffer, 2));
+            tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddles_packed[3]);
+            tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddles_packed[4]);
+            tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddles_packed[5]);
+            let [mid2, mid3] = transpose_complex_2x2_f32(tmp1[0], tmp1[1]);
+            let [mid10, mid11] = transpose_complex_2x2_f32(tmp1[2], tmp1[3]);
 
-        let mut tmp2 = self
-            .bf8
-            .bf4
-            .perform_parallel_fft_direct(Self::load_chunk(&buffer, 4));
-        tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddles_packed[6]);
-        tmp2[2] = SimdVector::mul_complex(tmp2[2], self.twiddles_packed[7]);
-        tmp2[3] = SimdVector::mul_complex(tmp2[3], self.twiddles_packed[8]);
-        let [mid4, mid5] = transpose_complex_2x2_f32(tmp2[0], tmp2[1]);
-        let [mid12, mid13] = transpose_complex_2x2_f32(tmp2[2], tmp2[3]);
+            let mut tmp2 = self
+                .bf8
+                .bf4
+                .perform_parallel_fft_direct(Self::load_chunk(&buffer, 4));
+            tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddles_packed[6]);
+            tmp2[2] = SimdVector::mul_complex(tmp2[2], self.twiddles_packed[7]);
+            tmp2[3] = SimdVector::mul_complex(tmp2[3], self.twiddles_packed[8]);
+            let [mid4, mid5] = transpose_complex_2x2_f32(tmp2[0], tmp2[1]);
+            let [mid12, mid13] = transpose_complex_2x2_f32(tmp2[2], tmp2[3]);
 
-        let mut tmp3 = self
-            .bf8
-            .bf4
-            .perform_parallel_fft_direct(Self::load_chunk(&buffer, 6));
-        tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddles_packed[9]);
-        tmp3[2] = SimdVector::mul_complex(tmp3[2], self.twiddles_packed[10]);
-        tmp3[3] = SimdVector::mul_complex(tmp3[3], self.twiddles_packed[11]);
-        let [mid6, mid7] = transpose_complex_2x2_f32(tmp3[0], tmp3[1]);
-        let [mid14, mid15] = transpose_complex_2x2_f32(tmp3[2], tmp3[3]);
+            let mut tmp3 = self
+                .bf8
+                .bf4
+                .perform_parallel_fft_direct(Self::load_chunk(&buffer, 6));
+            tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddles_packed[9]);
+            tmp3[2] = SimdVector::mul_complex(tmp3[2], self.twiddles_packed[10]);
+            tmp3[3] = SimdVector::mul_complex(tmp3[3], self.twiddles_packed[11]);
+            let [mid6, mid7] = transpose_complex_2x2_f32(tmp3[0], tmp3[1]);
+            let [mid14, mid15] = transpose_complex_2x2_f32(tmp3[2], tmp3[3]);
 
-        // Size-8 FFTs down each pair of transposed columns, storing them as soon as we're done with them
-        let out0 = self
-            .bf8
-            .perform_parallel_fft_direct([mid0, mid1, mid2, mid3, mid4, mid5, mid6, mid7]);
-        Self::store_chunk(&mut buffer, 0, out0);
+            // Size-8 FFTs down each pair of transposed columns, storing them as soon as we're done with them
+            let out0 = self
+                .bf8
+                .perform_parallel_fft_direct([mid0, mid1, mid2, mid3, mid4, mid5, mid6, mid7]);
+            Self::store_chunk(&mut buffer, 0, out0);
 
-        let out1 = self
-            .bf8
-            .perform_parallel_fft_direct([mid8, mid9, mid10, mid11, mid12, mid13, mid14, mid15]);
-        Self::store_chunk(&mut buffer, 2, out1);
+            let out1 = self.bf8.perform_parallel_fft_direct([
+                mid8, mid9, mid10, mid11, mid12, mid13, mid14, mid15,
+            ]);
+            Self::store_chunk(&mut buffer, 2, out1);
+        }
     }
 
     #[inline(always)]
@@ -3495,11 +3663,13 @@ impl<T: FftNum> WasmSimdF32Butterfly32<T> {
         buffer: &impl SimdComplexArrayMut<WasmVector32>,
         i: usize,
     ) -> [[WasmVector32; 4]; 2] {
-        let [a0, a1] = transpose_complex_2x2_f32(buffer.load(i + 0), buffer.load(i + 32));
-        let [b0, b1] = transpose_complex_2x2_f32(buffer.load(i + 8), buffer.load(i + 40));
-        let [c0, c1] = transpose_complex_2x2_f32(buffer.load(i + 16), buffer.load(i + 48));
-        let [d0, d1] = transpose_complex_2x2_f32(buffer.load(i + 24), buffer.load(i + 56));
-        [[a0, b0, c0, d0], [a1, b1, c1, d1]]
+        unsafe {
+            let [a0, a1] = transpose_complex_2x2_f32(buffer.load(i + 0), buffer.load(i + 32));
+            let [b0, b1] = transpose_complex_2x2_f32(buffer.load(i + 8), buffer.load(i + 40));
+            let [c0, c1] = transpose_complex_2x2_f32(buffer.load(i + 16), buffer.load(i + 48));
+            let [d0, d1] = transpose_complex_2x2_f32(buffer.load(i + 24), buffer.load(i + 56));
+            [[a0, b0, c0, d0], [a1, b1, c1, d1]]
+        }
     }
 
     #[inline(always)]
@@ -3509,10 +3679,12 @@ impl<T: FftNum> WasmSimdF32Butterfly32<T> {
         values_a: [WasmVector32; 8],
         values_b: [WasmVector32; 8],
     ) {
-        for n in 0..8 {
-            let [a, b] = transpose_complex_2x2_f32(values_a[n], values_b[n]);
-            buffer.store(a, i + n * 4);
-            buffer.store(b, i + n * 4 + 32);
+        unsafe {
+            for n in 0..8 {
+                let [a, b] = transpose_complex_2x2_f32(values_a[n], values_b[n]);
+                buffer.store(a, i + n * 4);
+                buffer.store(b, i + n * 4 + 32);
+            }
         }
     }
 
@@ -3521,68 +3693,70 @@ impl<T: FftNum> WasmSimdF32Butterfly32<T> {
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
     ) {
-        // To make the best possible use of registers, we're going to write this algorithm in an unusual way
-        // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
-        // But to reduce the number of times registers get spilled, we have these optimizations:
-        // 1: Load data as late as possible, not upfront
-        // 2: Once we're working with a piece of data, make as much progress as possible before moving on
-        //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
-        // 3: Store data as soon as we're finished with it, rather than waiting for the end
+        unsafe {
+            // To make the best possible use of registers, we're going to write this algorithm in an unusual way
+            // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
+            // But to reduce the number of times registers get spilled, we have these optimizations:
+            // 1: Load data as late as possible, not upfront
+            // 2: Once we're working with a piece of data, make as much progress as possible before moving on
+            //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
+            // 3: Store data as soon as we're finished with it, rather than waiting for the end
 
-        // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors
-        let [in0, in1] = Self::load_parallel_chunk(&buffer, 0);
-        let tmp0 = self.bf8.bf4.perform_parallel_fft_direct(in0);
-        let mut tmp1 = self.bf8.bf4.perform_parallel_fft_direct(in1);
-        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
-        tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddle2);
-        tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddle3);
+            // For each pair of columns: load the data, apply our size-4 FFT, apply twiddle factors
+            let [in0, in1] = Self::load_parallel_chunk(&buffer, 0);
+            let tmp0 = self.bf8.bf4.perform_parallel_fft_direct(in0);
+            let mut tmp1 = self.bf8.bf4.perform_parallel_fft_direct(in1);
+            tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
+            tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddle2);
+            tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddle3);
 
-        let [in2, in3] = Self::load_parallel_chunk(&buffer, 2);
-        let mut tmp2 = self.bf8.bf4.perform_parallel_fft_direct(in2);
-        let mut tmp3 = self.bf8.bf4.perform_parallel_fft_direct(in3);
-        tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddle2);
-        tmp2[2] = self.bf8.bf4.rotate.rotate_45(tmp2[2]);
-        tmp2[3] = SimdVector::mul_complex(tmp2[3], self.twiddle6);
-        tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddle3);
-        tmp3[2] = SimdVector::mul_complex(tmp3[2], self.twiddle6);
-        tmp3[3] = SimdVector::mul_complex(tmp3[3], self.twiddle9);
+            let [in2, in3] = Self::load_parallel_chunk(&buffer, 2);
+            let mut tmp2 = self.bf8.bf4.perform_parallel_fft_direct(in2);
+            let mut tmp3 = self.bf8.bf4.perform_parallel_fft_direct(in3);
+            tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddle2);
+            tmp2[2] = self.bf8.bf4.rotate.rotate_45(tmp2[2]);
+            tmp2[3] = SimdVector::mul_complex(tmp2[3], self.twiddle6);
+            tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddle3);
+            tmp3[2] = SimdVector::mul_complex(tmp3[2], self.twiddle6);
+            tmp3[3] = SimdVector::mul_complex(tmp3[3], self.twiddle9);
 
-        let [in4, in5] = Self::load_parallel_chunk(&buffer, 4);
-        let mut tmp4 = self.bf8.bf4.perform_parallel_fft_direct(in4);
-        let mut tmp5 = self.bf8.bf4.perform_parallel_fft_direct(in5);
-        tmp4[1] = self.bf8.bf4.rotate.rotate_45(tmp4[1]);
-        tmp4[2] = self.bf8.bf4.rotate.rotate(tmp4[2]);
-        tmp4[3] = self.bf8.bf4.rotate.rotate_135(tmp4[3]);
-        tmp5[1] = SimdVector::mul_complex(tmp5[1], self.twiddle5);
-        tmp5[2] = SimdVector::mul_complex(tmp5[2], self.twiddle10);
-        tmp5[3] = SimdVector::mul_complex(tmp5[3], self.twiddle15);
+            let [in4, in5] = Self::load_parallel_chunk(&buffer, 4);
+            let mut tmp4 = self.bf8.bf4.perform_parallel_fft_direct(in4);
+            let mut tmp5 = self.bf8.bf4.perform_parallel_fft_direct(in5);
+            tmp4[1] = self.bf8.bf4.rotate.rotate_45(tmp4[1]);
+            tmp4[2] = self.bf8.bf4.rotate.rotate(tmp4[2]);
+            tmp4[3] = self.bf8.bf4.rotate.rotate_135(tmp4[3]);
+            tmp5[1] = SimdVector::mul_complex(tmp5[1], self.twiddle5);
+            tmp5[2] = SimdVector::mul_complex(tmp5[2], self.twiddle10);
+            tmp5[3] = SimdVector::mul_complex(tmp5[3], self.twiddle15);
 
-        let [in6, in7] = Self::load_parallel_chunk(&buffer, 6);
-        let mut tmp6 = self.bf8.bf4.perform_parallel_fft_direct(in6);
-        let mut tmp7 = self.bf8.bf4.perform_parallel_fft_direct(in7);
-        tmp6[1] = SimdVector::mul_complex(tmp6[1], self.twiddle6);
-        tmp6[2] = self.bf8.bf4.rotate.rotate_135(tmp6[2]);
-        tmp6[3] = SimdVector::mul_complex(tmp6[3], self.twiddle18);
-        tmp7[1] = SimdVector::mul_complex(tmp7[1], self.twiddle7);
-        tmp7[2] = SimdVector::mul_complex(tmp7[2], self.twiddle14);
-        tmp7[3] = SimdVector::mul_complex(tmp7[3], self.twiddle21);
+            let [in6, in7] = Self::load_parallel_chunk(&buffer, 6);
+            let mut tmp6 = self.bf8.bf4.perform_parallel_fft_direct(in6);
+            let mut tmp7 = self.bf8.bf4.perform_parallel_fft_direct(in7);
+            tmp6[1] = SimdVector::mul_complex(tmp6[1], self.twiddle6);
+            tmp6[2] = self.bf8.bf4.rotate.rotate_135(tmp6[2]);
+            tmp6[3] = SimdVector::mul_complex(tmp6[3], self.twiddle18);
+            tmp7[1] = SimdVector::mul_complex(tmp7[1], self.twiddle7);
+            tmp7[2] = SimdVector::mul_complex(tmp7[2], self.twiddle14);
+            tmp7[3] = SimdVector::mul_complex(tmp7[3], self.twiddle21);
 
-        // Size-8 FFTs down each pair of transposed columns, storing them as soon as we're done with them
-        let out0 = self.bf8.perform_parallel_fft_direct([
-            tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0], tmp6[0], tmp7[0],
-        ]);
-        let out1 = self.bf8.perform_parallel_fft_direct([
-            tmp0[1], tmp1[1], tmp2[1], tmp3[1], tmp4[1], tmp5[1], tmp6[1], tmp7[1],
-        ]);
-        Self::store_parallel_chunk(&mut buffer, 0, out0, out1);
+            // Size-8 FFTs down each pair of transposed columns, storing them as soon as we're done with them
+            let out0 = self.bf8.perform_parallel_fft_direct([
+                tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0], tmp6[0], tmp7[0],
+            ]);
+            let out1 = self.bf8.perform_parallel_fft_direct([
+                tmp0[1], tmp1[1], tmp2[1], tmp3[1], tmp4[1], tmp5[1], tmp6[1], tmp7[1],
+            ]);
+            Self::store_parallel_chunk(&mut buffer, 0, out0, out1);
 
-        let out2 = self.bf8.perform_parallel_fft_direct([
-            tmp0[2], tmp1[2], tmp2[2], tmp3[2], tmp4[2], tmp5[2], tmp6[2], tmp7[2],
-        ]);
-        let out3 = self.bf8.perform_parallel_fft_direct([
-            tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3], tmp6[3], tmp7[3],
-        ]);
-        Self::store_parallel_chunk(&mut buffer, 2, out2, out3);
+            let out2 = self.bf8.perform_parallel_fft_direct([
+                tmp0[2], tmp1[2], tmp2[2], tmp3[2], tmp4[2], tmp5[2], tmp6[2], tmp7[2],
+            ]);
+            let out3 = self.bf8.perform_parallel_fft_direct([
+                tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3], tmp6[3], tmp7[3],
+            ]);
+            Self::store_parallel_chunk(&mut buffer, 2, out2, out3);
+        }
     }
 }
 
@@ -3650,93 +3824,95 @@ impl<T: FftNum> WasmSimdF64Butterfly32<T> {
 
     #[inline(always)]
     unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) {
-        // To make the best possible use of registers, we're going to write this algorithm in an unusual way
-        // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
-        // But to reduce the number of times registers get spilled, we have these optimizations:
-        // 1: Load data as late as possible, not upfront
-        // 2: Once we're working with a piece of data, make as much progress as possible before moving on
-        //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
-        // 3: Store data as soon as we're finished with it, rather than waiting for the end
-        let load = |i| {
-            [
-                buffer.load(i),
-                buffer.load(i + 8),
-                buffer.load(i + 16),
-                buffer.load(i + 24),
-            ]
-        };
+        unsafe {
+            // To make the best possible use of registers, we're going to write this algorithm in an unusual way
+            // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
+            // But to reduce the number of times registers get spilled, we have these optimizations:
+            // 1: Load data as late as possible, not upfront
+            // 2: Once we're working with a piece of data, make as much progress as possible before moving on
+            //      IE, once we load a column, we should do the FFT down the column, do twiddle factors, and do the pieces of the transpose for that column, all before starting on the next column
+            // 3: Store data as soon as we're finished with it, rather than waiting for the end
+            let load = |i| {
+                [
+                    buffer.load(i),
+                    buffer.load(i + 8),
+                    buffer.load(i + 16),
+                    buffer.load(i + 24),
+                ]
+            };
 
-        // For each column: load the data, apply our size-4 FFT, apply twiddle factors
-        let mut tmp1 = self.bf8.bf4.perform_fft_direct(load(1));
-        tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
-        tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddle2);
-        tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddle3);
+            // For each column: load the data, apply our size-4 FFT, apply twiddle factors
+            let mut tmp1 = self.bf8.bf4.perform_fft_direct(load(1));
+            tmp1[1] = SimdVector::mul_complex(tmp1[1], self.twiddle1);
+            tmp1[2] = SimdVector::mul_complex(tmp1[2], self.twiddle2);
+            tmp1[3] = SimdVector::mul_complex(tmp1[3], self.twiddle3);
 
-        let mut tmp2 = self.bf8.bf4.perform_fft_direct(load(2));
-        tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddle2);
-        tmp2[2] = self.bf8.bf4.rotate.rotate_45(tmp2[2]);
-        tmp2[3] = SimdVector::mul_complex(tmp2[3], self.twiddle6);
+            let mut tmp2 = self.bf8.bf4.perform_fft_direct(load(2));
+            tmp2[1] = SimdVector::mul_complex(tmp2[1], self.twiddle2);
+            tmp2[2] = self.bf8.bf4.rotate.rotate_45(tmp2[2]);
+            tmp2[3] = SimdVector::mul_complex(tmp2[3], self.twiddle6);
 
-        let mut tmp3 = self.bf8.bf4.perform_fft_direct(load(3));
-        tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddle3);
-        tmp3[2] = SimdVector::mul_complex(tmp3[2], self.twiddle6);
-        tmp3[3] = SimdVector::mul_complex(tmp3[3], self.twiddle9);
+            let mut tmp3 = self.bf8.bf4.perform_fft_direct(load(3));
+            tmp3[1] = SimdVector::mul_complex(tmp3[1], self.twiddle3);
+            tmp3[2] = SimdVector::mul_complex(tmp3[2], self.twiddle6);
+            tmp3[3] = SimdVector::mul_complex(tmp3[3], self.twiddle9);
 
-        let mut tmp5 = self.bf8.bf4.perform_fft_direct(load(5));
-        tmp5[1] = SimdVector::mul_complex(tmp5[1], self.twiddle5);
-        tmp5[2] = SimdVector::mul_complex(tmp5[2], self.twiddle10);
-        tmp5[3] = SimdVector::mul_complex(tmp5[3], self.twiddle15);
+            let mut tmp5 = self.bf8.bf4.perform_fft_direct(load(5));
+            tmp5[1] = SimdVector::mul_complex(tmp5[1], self.twiddle5);
+            tmp5[2] = SimdVector::mul_complex(tmp5[2], self.twiddle10);
+            tmp5[3] = SimdVector::mul_complex(tmp5[3], self.twiddle15);
 
-        let mut tmp6 = self.bf8.bf4.perform_fft_direct(load(6));
-        tmp6[1] = SimdVector::mul_complex(tmp6[1], self.twiddle6);
-        tmp6[2] = self.bf8.bf4.rotate.rotate_135(tmp6[2]);
-        tmp6[3] = SimdVector::mul_complex(tmp6[3], self.twiddle18);
+            let mut tmp6 = self.bf8.bf4.perform_fft_direct(load(6));
+            tmp6[1] = SimdVector::mul_complex(tmp6[1], self.twiddle6);
+            tmp6[2] = self.bf8.bf4.rotate.rotate_135(tmp6[2]);
+            tmp6[3] = SimdVector::mul_complex(tmp6[3], self.twiddle18);
 
-        let mut tmp7 = self.bf8.bf4.perform_fft_direct(load(7));
-        tmp7[1] = SimdVector::mul_complex(tmp7[1], self.twiddle7);
-        tmp7[2] = SimdVector::mul_complex(tmp7[2], self.twiddle14);
-        tmp7[3] = SimdVector::mul_complex(tmp7[3], self.twiddle21);
+            let mut tmp7 = self.bf8.bf4.perform_fft_direct(load(7));
+            tmp7[1] = SimdVector::mul_complex(tmp7[1], self.twiddle7);
+            tmp7[2] = SimdVector::mul_complex(tmp7[2], self.twiddle14);
+            tmp7[3] = SimdVector::mul_complex(tmp7[3], self.twiddle21);
 
-        let mut tmp4 = self.bf8.bf4.perform_fft_direct(load(4));
-        tmp4[1] = self.bf8.bf4.rotate.rotate_45(tmp4[1]);
-        tmp4[2] = self.bf8.bf4.rotate.rotate(tmp4[2]);
-        tmp4[3] = self.bf8.bf4.rotate.rotate_135(tmp4[3]);
+            let mut tmp4 = self.bf8.bf4.perform_fft_direct(load(4));
+            tmp4[1] = self.bf8.bf4.rotate.rotate_45(tmp4[1]);
+            tmp4[2] = self.bf8.bf4.rotate.rotate(tmp4[2]);
+            tmp4[3] = self.bf8.bf4.rotate.rotate_135(tmp4[3]);
 
-        // Do the first column last, because no twiddles means fewer temporaries forcing the above data to spill
-        let tmp0 = self.bf8.bf4.perform_fft_direct(load(0));
+            // Do the first column last, because no twiddles means fewer temporaries forcing the above data to spill
+            let tmp0 = self.bf8.bf4.perform_fft_direct(load(0));
 
-        ////////////////////////////////////////////////////////////
-        let mut store = |i, vectors: [WasmVector64; 8]| {
-            buffer.store(vectors[0], i);
-            buffer.store(vectors[1], i + 4);
-            buffer.store(vectors[2], i + 8);
-            buffer.store(vectors[3], i + 12);
-            buffer.store(vectors[4], i + 16);
-            buffer.store(vectors[5], i + 20);
-            buffer.store(vectors[6], i + 24);
-            buffer.store(vectors[7], i + 28);
-        };
+            ////////////////////////////////////////////////////////////
+            let mut store = |i, vectors: [WasmVector64; 8]| {
+                buffer.store(vectors[0], i);
+                buffer.store(vectors[1], i + 4);
+                buffer.store(vectors[2], i + 8);
+                buffer.store(vectors[3], i + 12);
+                buffer.store(vectors[4], i + 16);
+                buffer.store(vectors[5], i + 20);
+                buffer.store(vectors[6], i + 24);
+                buffer.store(vectors[7], i + 28);
+            };
 
-        // Size-8 FFTs down each of our transposed columns, storing them as soon as we're done with them
-        let out0 = self.bf8.perform_fft_direct([
-            tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0], tmp6[0], tmp7[0],
-        ]);
-        store(0, out0);
+            // Size-8 FFTs down each of our transposed columns, storing them as soon as we're done with them
+            let out0 = self.bf8.perform_fft_direct([
+                tmp0[0], tmp1[0], tmp2[0], tmp3[0], tmp4[0], tmp5[0], tmp6[0], tmp7[0],
+            ]);
+            store(0, out0);
 
-        let out1 = self.bf8.perform_fft_direct([
-            tmp0[1], tmp1[1], tmp2[1], tmp3[1], tmp4[1], tmp5[1], tmp6[1], tmp7[1],
-        ]);
-        store(1, out1);
+            let out1 = self.bf8.perform_fft_direct([
+                tmp0[1], tmp1[1], tmp2[1], tmp3[1], tmp4[1], tmp5[1], tmp6[1], tmp7[1],
+            ]);
+            store(1, out1);
 
-        let out2 = self.bf8.perform_fft_direct([
-            tmp0[2], tmp1[2], tmp2[2], tmp3[2], tmp4[2], tmp5[2], tmp6[2], tmp7[2],
-        ]);
-        store(2, out2);
+            let out2 = self.bf8.perform_fft_direct([
+                tmp0[2], tmp1[2], tmp2[2], tmp3[2], tmp4[2], tmp5[2], tmp6[2], tmp7[2],
+            ]);
+            store(2, out2);
 
-        let out3 = self.bf8.perform_fft_direct([
-            tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3], tmp6[3], tmp7[3],
-        ]);
-        store(3, out3);
+            let out3 = self.bf8.perform_fft_direct([
+                tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3], tmp6[3], tmp7[3],
+            ]);
+            store(3, out3);
+        }
     }
 }
 
@@ -3750,7 +3926,7 @@ mod unit_tests {
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
     macro_rules! test_butterfly_32_func {
-        ($test_name:ident, $struct_name:ident, $size:expr) => {
+        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
             #[wasm_bindgen_test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
@@ -3779,7 +3955,7 @@ mod unit_tests {
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
     macro_rules! test_butterfly_64_func {
-        ($test_name:ident, $struct_name:ident, $size:expr) => {
+        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
             #[wasm_bindgen_test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
@@ -3806,7 +3982,7 @@ mod unit_tests {
     test_butterfly_64_func!(test_wasm_simdf64_butterfly32, WasmSimdF64Butterfly32, 32);
 
     macro_rules! test_parallel_butterfly_32_func {
-        ($test_name:ident, $struct_name:ident, $size:expr) => {
+        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
             #[wasm_bindgen_test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
@@ -3848,7 +4024,7 @@ mod unit_tests {
     );
 
     macro_rules! test_parallel_butterfly_64_func {
-        ($test_name:ident, $struct_name:ident, $size:expr) => {
+        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
             #[wasm_bindgen_test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);

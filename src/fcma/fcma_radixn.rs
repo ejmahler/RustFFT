@@ -7,9 +7,9 @@
 use std::sync::Arc;
 
 use crate::{
+    Fft, FftNum,
     common::RadixFactor,
     simd::{simd_radixn::SimdRadixN, simd_vector::SimdVector},
-    Fft, FftNum,
 };
 
 pub struct FcmaRadixN<V: SimdVector, T: FftNum>(SimdRadixN<V, T>);
@@ -25,9 +25,9 @@ boilerplate_simd_fft!(FcmaRadixN, #[target_feature(enable = "neon,fcma")]);
 #[cfg(test)]
 mod unit_tests {
     use super::super::fcma_vector::{FcmaVector32, FcmaVector64};
+    use crate::Fft;
     use crate::common::RadixFactor;
     use crate::simd::simd_radixn::test_bodies;
-    use crate::Fft;
 
     use super::*;
 

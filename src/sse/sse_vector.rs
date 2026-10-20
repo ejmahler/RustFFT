@@ -6,7 +6,7 @@ use crate::simd::simd_array::SimdComplexArray;
 use crate::simd::simd_vector::SimdVector;
 use crate::sse::sse_butterflies::*;
 use crate::sse::sse_prime_butterflies::*;
-use crate::{twiddles, FftDirection};
+use crate::{FftDirection, twiddles};
 
 // Read these indexes from an SseArray and build an array of simd vectors.
 // Takes a name of a vector to read from, and a list of indexes to read.
@@ -142,12 +142,12 @@ impl SimdVector for __m128d {
 
     #[inline(always)]
     unsafe fn zero_vector() -> Self {
-        _mm_setzero_pd()
+        unsafe { _mm_setzero_pd() }
     }
 
     #[inline(always)]
     unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
-        _mm_loadu_pd(ptr as *const f64)
+        unsafe { _mm_loadu_pd(ptr as *const f64) }
     }
 
     #[inline(always)]
@@ -162,7 +162,9 @@ impl SimdVector for __m128d {
 
     #[inline(always)]
     unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
-        _mm_storeu_pd(ptr as *mut f64, data);
+        unsafe {
+            _mm_storeu_pd(ptr as *mut f64, data);
+        }
     }
 
     #[inline(always)]
@@ -177,43 +179,45 @@ impl SimdVector for __m128d {
 
     #[inline(always)]
     unsafe fn neg(a: Self) -> Self {
-        _mm_xor_pd(a, _mm_set1_pd(-0.0))
+        unsafe { _mm_xor_pd(a, _mm_set1_pd(-0.0)) }
     }
     #[inline(always)]
     unsafe fn add(a: Self, b: Self) -> Self {
-        _mm_add_pd(a, b)
+        unsafe { _mm_add_pd(a, b) }
     }
     #[inline(always)]
     unsafe fn sub(a: Self, b: Self) -> Self {
-        _mm_sub_pd(a, b)
+        unsafe { _mm_sub_pd(a, b) }
     }
     #[inline(always)]
     unsafe fn mul(a: Self, b: Self) -> Self {
-        _mm_mul_pd(a, b)
+        unsafe { _mm_mul_pd(a, b) }
     }
     #[inline(always)]
     unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self {
-        _mm_add_pd(acc, _mm_mul_pd(a, b))
+        unsafe { _mm_add_pd(acc, _mm_mul_pd(a, b)) }
     }
     #[inline(always)]
     unsafe fn nmadd(acc: Self, a: Self, b: Self) -> Self {
-        _mm_sub_pd(acc, _mm_mul_pd(a, b))
+        unsafe { _mm_sub_pd(acc, _mm_mul_pd(a, b)) }
     }
 
     #[inline(always)]
     unsafe fn broadcast_scalar(value: Self::ScalarType) -> Self {
-        _mm_set1_pd(value)
+        unsafe { _mm_set1_pd(value) }
     }
 
     #[inline(always)]
     unsafe fn mul_complex(left: Self, right: Self) -> Self {
-        // SSE3, taken from Intel performance manual
-        let mut temp1 = _mm_unpacklo_pd(right, right);
-        let mut temp2 = _mm_unpackhi_pd(right, right);
-        temp1 = _mm_mul_pd(temp1, left);
-        temp2 = _mm_mul_pd(temp2, left);
-        temp2 = _mm_shuffle_pd(temp2, temp2, 0x01);
-        _mm_addsub_pd(temp1, temp2)
+        unsafe {
+            // SSE3, taken from Intel performance manual
+            let mut temp1 = _mm_unpacklo_pd(right, right);
+            let mut temp2 = _mm_unpackhi_pd(right, right);
+            temp1 = _mm_mul_pd(temp1, left);
+            temp2 = _mm_mul_pd(temp2, left);
+            temp2 = _mm_shuffle_pd(temp2, temp2, 0x01);
+            _mm_addsub_pd(temp1, temp2)
+        }
     }
 
     #[inline(always)]
@@ -223,12 +227,14 @@ impl SimdVector for __m128d {
         len: usize,
         direction: FftDirection,
     ) -> Self {
-        let mut twiddle_chunk = [Complex::<f64>::zero(); Self::COMPLEX_PER_VECTOR];
-        for i in 0..Self::COMPLEX_PER_VECTOR {
-            twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
-        }
+        unsafe {
+            let mut twiddle_chunk = [Complex::<f64>::zero(); Self::COMPLEX_PER_VECTOR];
+            for i in 0..Self::COMPLEX_PER_VECTOR {
+                twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
+            }
 
-        twiddle_chunk.as_slice().load(0)
+            twiddle_chunk.as_slice().load(0)
+        }
     }
 
     #[inline(always)]
@@ -253,7 +259,7 @@ impl SimdVector for __m128d {
     }
     #[inline(always)]
     unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
-        Self::Butterfly7::new(direction)
+        unsafe { Self::Butterfly7::new(direction) }
     }
 }
 
@@ -272,78 +278,86 @@ impl SimdVector for __m128 {
 
     #[inline(always)]
     unsafe fn zero_vector() -> Self {
-        _mm_setzero_ps()
+        unsafe { _mm_setzero_ps() }
     }
 
     #[inline(always)]
     unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
-        _mm_loadu_ps(ptr as *const f32)
+        unsafe { _mm_loadu_ps(ptr as *const f32) }
     }
 
     #[inline(always)]
     unsafe fn load1_lo_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
-        _mm_castpd_ps(_mm_load_sd(ptr as *const f64))
+        unsafe { _mm_castpd_ps(_mm_load_sd(ptr as *const f64)) }
     }
 
     #[inline(always)]
     unsafe fn load1_dup_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
-        _mm_castpd_ps(_mm_load1_pd(ptr as *const f64))
+        unsafe { _mm_castpd_ps(_mm_load1_pd(ptr as *const f64)) }
     }
 
     #[inline(always)]
     unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
-        _mm_storeu_ps(ptr as *mut f32, data);
+        unsafe {
+            _mm_storeu_ps(ptr as *mut f32, data);
+        }
     }
 
     #[inline(always)]
     unsafe fn store1_lo_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
-        _mm_storel_pd(ptr as *mut f64, _mm_castps_pd(data));
+        unsafe {
+            _mm_storel_pd(ptr as *mut f64, _mm_castps_pd(data));
+        }
     }
 
     #[inline(always)]
     unsafe fn store1_hi_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
-        _mm_storeh_pd(ptr as *mut f64, _mm_castps_pd(data));
+        unsafe {
+            _mm_storeh_pd(ptr as *mut f64, _mm_castps_pd(data));
+        }
     }
 
     #[inline(always)]
     unsafe fn neg(a: Self) -> Self {
-        _mm_xor_ps(a, _mm_set1_ps(-0.0))
+        unsafe { _mm_xor_ps(a, _mm_set1_ps(-0.0)) }
     }
     #[inline(always)]
     unsafe fn add(a: Self, b: Self) -> Self {
-        _mm_add_ps(a, b)
+        unsafe { _mm_add_ps(a, b) }
     }
     #[inline(always)]
     unsafe fn sub(a: Self, b: Self) -> Self {
-        _mm_sub_ps(a, b)
+        unsafe { _mm_sub_ps(a, b) }
     }
     #[inline(always)]
     unsafe fn mul(a: Self, b: Self) -> Self {
-        _mm_mul_ps(a, b)
+        unsafe { _mm_mul_ps(a, b) }
     }
     #[inline(always)]
     unsafe fn fmadd(acc: Self, a: Self, b: Self) -> Self {
-        _mm_add_ps(acc, _mm_mul_ps(a, b))
+        unsafe { _mm_add_ps(acc, _mm_mul_ps(a, b)) }
     }
     #[inline(always)]
     unsafe fn nmadd(acc: Self, a: Self, b: Self) -> Self {
-        _mm_sub_ps(acc, _mm_mul_ps(a, b))
+        unsafe { _mm_sub_ps(acc, _mm_mul_ps(a, b)) }
     }
 
     #[inline(always)]
     unsafe fn broadcast_scalar(value: Self::ScalarType) -> Self {
-        _mm_set1_ps(value)
+        unsafe { _mm_set1_ps(value) }
     }
 
     #[inline(always)]
     unsafe fn mul_complex(left: Self, right: Self) -> Self {
-        //SSE3, taken from Intel performance manual
-        let mut temp1 = _mm_shuffle_ps(right, right, 0xA0);
-        let mut temp2 = _mm_shuffle_ps(right, right, 0xF5);
-        temp1 = _mm_mul_ps(temp1, left);
-        temp2 = _mm_mul_ps(temp2, left);
-        temp2 = _mm_shuffle_ps(temp2, temp2, 0xB1);
-        _mm_addsub_ps(temp1, temp2)
+        unsafe {
+            //SSE3, taken from Intel performance manual
+            let mut temp1 = _mm_shuffle_ps(right, right, 0xA0);
+            let mut temp2 = _mm_shuffle_ps(right, right, 0xF5);
+            temp1 = _mm_mul_ps(temp1, left);
+            temp2 = _mm_mul_ps(temp2, left);
+            temp2 = _mm_shuffle_ps(temp2, temp2, 0xB1);
+            _mm_addsub_ps(temp1, temp2)
+        }
     }
 
     #[inline(always)]
@@ -353,12 +367,14 @@ impl SimdVector for __m128 {
         len: usize,
         direction: FftDirection,
     ) -> Self {
-        let mut twiddle_chunk = [Complex::<f32>::zero(); Self::COMPLEX_PER_VECTOR];
-        for i in 0..Self::COMPLEX_PER_VECTOR {
-            twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
-        }
+        unsafe {
+            let mut twiddle_chunk = [Complex::<f32>::zero(); Self::COMPLEX_PER_VECTOR];
+            for i in 0..Self::COMPLEX_PER_VECTOR {
+                twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
+            }
 
-        twiddle_chunk.as_slice().load(0)
+            twiddle_chunk.as_slice().load(0)
+        }
     }
 
     #[inline(always)]
@@ -383,6 +399,6 @@ impl SimdVector for __m128 {
     }
     #[inline(always)]
     unsafe fn make_butterfly7(direction: FftDirection) -> Self::Butterfly7 {
-        Self::Butterfly7::new(direction)
+        unsafe { Self::Butterfly7::new(direction) }
     }
 }

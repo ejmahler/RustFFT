@@ -3,10 +3,10 @@ use std::{any::TypeId, cmp::min};
 
 use primal_check::miller_rabin;
 
+use crate::Fft;
 use crate::algorithm::*;
 use crate::common::FftNum;
 use crate::math_utils::PartialFactors;
-use crate::Fft;
 use crate::{algorithm::butterflies::*, fft_cache::FftCache};
 
 use super::*;
@@ -889,12 +889,10 @@ impl<A: AvxNum, T: FftNum> AvxPlannerInternal<A, T> {
                 let inner_fft = inner_fft_fn(self, len - 1, direction);
 
                 // try to construct our AVX2 rader's algorithm. If that fails (probably because the machine we're running on doesn't have AVX2), fall back to scalar
-                let raders_instance =
-                    if let Ok(raders_avx) = RadersAvx2::<A, T>::new(Arc::clone(&inner_fft)) {
-                        wrap_fft(raders_avx)
-                    } else {
-                        wrap_fft(RadersAlgorithm::new(inner_fft))
-                    };
+                let raders_instance = match RadersAvx2::<A, T>::new(Arc::clone(&inner_fft)) {
+                    Ok(raders_avx) => wrap_fft(raders_avx),
+                    _ => wrap_fft(RadersAlgorithm::new(inner_fft)),
+                };
 
                 // Cache this FFT instance for future calls to `plan_fft`
                 self.cache.insert(&raders_instance);

@@ -3,8 +3,8 @@ use std::sync::Arc;
 use num_complex::Complex;
 use num_traits::Zero;
 
-use crate::{common::FftNum, twiddles, FftDirection};
 use crate::{Direction, Fft, Length};
+use crate::{FftDirection, common::FftNum, twiddles};
 
 /// Implementation of Bluestein's Algorithm
 ///
@@ -57,7 +57,12 @@ impl<T: FftNum> BluesteinsAlgorithm<T> {
     /// Panics if `inner_fft.len() < len * 2 - 1`.
     pub fn new(len: usize, inner_fft: Arc<dyn Fft<T>>) -> Self {
         let inner_fft_len = inner_fft.len();
-        assert!(len * 2 - 1 <= inner_fft_len, "Bluestein's algorithm requires inner_fft.len() >= self.len() * 2 - 1. Expected >= {}, got {}", len * 2 - 1, inner_fft_len);
+        assert!(
+            len * 2 - 1 <= inner_fft_len,
+            "Bluestein's algorithm requires inner_fft.len() >= self.len() * 2 - 1. Expected >= {}, got {}",
+            len * 2 - 1,
+            inner_fft_len
+        );
 
         // when computing FFTs, we're going to run our inner multiply pairise by some precomputed data, then run an inverse inner FFT. We need to precompute that inner data here
         let inner_fft_scale = T::one() / T::from_usize(inner_fft_len).unwrap();

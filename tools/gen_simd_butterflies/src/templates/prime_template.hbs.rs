@@ -54,14 +54,14 @@ pub unsafe fn construct_prime_butterfly<T: FftNum>(len: usize, direction: FftDir
     if id_t == id_f32 {
         match len {
             {{#each lengths}}
-            {{this.len}} => Arc::new({{this.struct_name_32}}::new(direction)) as Arc<dyn Fft<T>>,
+            {{this.len}} => unsafe { Arc::new({{this.struct_name_32}}::new(direction)) as Arc<dyn Fft<T>> },
             {{/each}}
             _ => unimplemented!("Invalid {{arch.name_display}} prime butterfly length: {len}"),
         }
     } else if id_t == id_f64 {
         match len {
             {{#each lengths}}
-            {{this.len}} => Arc::new({{this.struct_name_64}}::new(direction)) as Arc<dyn Fft<T>>,
+            {{this.len}} => unsafe { Arc::new({{this.struct_name_64}}::new(direction)) as Arc<dyn Fft<T>> },
             {{/each}}
             _ => unimplemented!("Invalid {{arch.name_display}} prime butterfly length: {len}"),
         }
@@ -93,8 +93,8 @@ impl {{this.parallel_struct_name_32}} {
         let twiddles = make_twiddles({{this.len}}, direction);
         Self {
             bf2: {{../arch.name_camelcase}}F32ParallelButterfly2::new(direction),
-            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.re) }),
+            twiddles_im: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.im) }),
         }
     }
 }
@@ -125,35 +125,35 @@ impl<T: FftNum> {{this.struct_name_32}}<T> {
         assert_f32::<T>();
         Self {
             direction,
-            parallel_fft: {{this.parallel_struct_name_32}}::new(direction),
+            parallel_fft: unsafe { {{this.parallel_struct_name_32}}::new(direction) },
             _phantom: std::marker::PhantomData,
         }
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<{{../arch.vector_f32}}>) {
-        let values = read_partial1_complex_to_array!(buffer, { {{ this.loadstore_indexes }} });
+        let values = unsafe { read_partial1_complex_to_array!(buffer, { {{ this.loadstore_indexes }} }) };
 
         let out = self.parallel_fft.parallel_fft(values);
         
-        write_partial_lo_complex_to_array!(out, buffer, { {{ this.loadstore_indexes }} } ); 
+        unsafe { write_partial_lo_complex_to_array!(out, buffer, { {{ this.loadstore_indexes }} } ); } 
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<{{../arch.vector_f32}}>) {
-        let input_packed = read_complex_to_array!(buffer, { {{ this.loadstore_indexes_2x }} });
+        let input_packed = unsafe { read_complex_to_array!(buffer, { {{ this.loadstore_indexes_2x }} }) };
 
-        let values = [
+        let values = {{#if ../arch.swizzle_requires_unsafe}}unsafe {{/if}}{ [
 {{ this.shuffle_in_str }}
-        ];
+        ] };
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        let out_packed = [
+        let out_packed = {{#if ../arch.swizzle_requires_unsafe}}unsafe {{/if}}{ [
 {{ this.shuffle_out_str }}
-        ];
+        ] };
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, { {{ this.loadstore_indexes }} });
+        unsafe { write_complex_to_array_strided!(out_packed, buffer, 2, { {{ this.loadstore_indexes }} }); }
     }
 }
 
@@ -169,8 +169,8 @@ impl {{this.parallel_struct_name_64}} {
         let twiddles = make_twiddles({{this.len}}, direction);
         Self {
             bf2: {{../arch.name_camelcase}}F64ParallelButterfly2::new(direction),
-            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.re) }),
+            twiddles_im: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.im) }),
         }
     }
 }
@@ -199,20 +199,20 @@ impl<T: FftNum> {{this.struct_name_64}}<T> {
     #[target_feature(enable = "{{../arch.target_feature_name}}")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        unsafe {Self {
+        Self {
             direction,
-            parallel_fft: {{this.parallel_struct_name_64}}::new(direction),
+            parallel_fft: unsafe { {{this.parallel_struct_name_64}}::new(direction) },
             _phantom: std::marker::PhantomData,
-        }}
+        }
     }
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<{{../arch.vector_f64}}>) {
-        let values = read_complex_to_array!(buffer, { {{ this.loadstore_indexes }} });
+        let values = unsafe { read_complex_to_array!(buffer, { {{ this.loadstore_indexes }} }) };
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        write_complex_to_array!(out, buffer, { {{ this.loadstore_indexes }} });   
+        unsafe { write_complex_to_array!(out, buffer, { {{ this.loadstore_indexes }} }); }   
     }
 }
 

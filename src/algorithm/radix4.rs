@@ -3,11 +3,11 @@ use std::sync::Arc;
 use num_complex::Complex;
 
 use crate::{
+    Fft, FftDirection, FftNum,
     algorithm::butterflies::{
-        Butterfly1, Butterfly16, Butterfly2, Butterfly32, Butterfly4, Butterfly8,
+        Butterfly1, Butterfly2, Butterfly4, Butterfly8, Butterfly16, Butterfly32,
     },
     simd::simd_radix4::SimdRadix4,
-    Fft, FftDirection, FftNum,
 };
 
 /// FFT algorithm optimized for power-of-two sizes
@@ -66,10 +66,10 @@ mod unit_tests {
     use num_complex::Complex;
 
     use crate::{
+        Fft, FftDirection, FftNum,
         algorithm::Radix4,
         simd::simd_radix4::test_bodies,
         test_utils::{check_fft_algorithm, construct_base},
-        Fft, FftDirection, FftNum,
     };
 
     fn new_fn<T: FftNum>(k: u32, base_fft: Arc<dyn Fft<T>>) -> Arc<dyn Fft<T>> {

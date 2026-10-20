@@ -39,23 +39,29 @@ impl Rotate90F32 {
 
     #[inline(always)]
     pub unsafe fn rotate_45(&self, values: WasmVector32) -> WasmVector32 {
-        let rotated = self.rotate(values);
-        let sum = SimdVector::add(rotated, values);
-        SimdVector::mul(sum, SimdVector::broadcast_scalar(0.5f32.sqrt()))
+        unsafe {
+            let rotated = self.rotate(values);
+            let sum = SimdVector::add(rotated, values);
+            SimdVector::mul(sum, SimdVector::broadcast_scalar(0.5f32.sqrt()))
+        }
     }
 
     #[inline(always)]
     pub unsafe fn rotate_135(&self, values: WasmVector32) -> WasmVector32 {
-        let rotated = self.rotate(values);
-        let diff = SimdVector::sub(rotated, values);
-        SimdVector::mul(diff, SimdVector::broadcast_scalar(0.5f32.sqrt()))
+        unsafe {
+            let rotated = self.rotate(values);
+            let diff = SimdVector::sub(rotated, values);
+            SimdVector::mul(diff, SimdVector::broadcast_scalar(0.5f32.sqrt()))
+        }
     }
 
     #[inline(always)]
     pub unsafe fn rotate_225(&self, values: WasmVector32) -> WasmVector32 {
-        let rotated = self.rotate(values);
-        let diff = SimdVector::add(rotated, values);
-        SimdVector::mul(diff, SimdVector::broadcast_scalar(-(0.5f32.sqrt())))
+        unsafe {
+            let rotated = self.rotate(values);
+            let diff = SimdVector::add(rotated, values);
+            SimdVector::mul(diff, SimdVector::broadcast_scalar(-(0.5f32.sqrt())))
+        }
     }
 }
 
@@ -210,23 +216,29 @@ impl Rotate90F64 {
 
     #[inline(always)]
     pub unsafe fn rotate_45(&self, values: WasmVector64) -> WasmVector64 {
-        let rotated = self.rotate(values);
-        let sum = SimdVector::add(rotated, values);
-        SimdVector::mul(sum, SimdVector::broadcast_scalar(0.5f64.sqrt()))
+        unsafe {
+            let rotated = self.rotate(values);
+            let sum = SimdVector::add(rotated, values);
+            SimdVector::mul(sum, SimdVector::broadcast_scalar(0.5f64.sqrt()))
+        }
     }
 
     #[inline(always)]
     pub unsafe fn rotate_135(&self, values: WasmVector64) -> WasmVector64 {
-        let rotated = self.rotate(values);
-        let diff = SimdVector::sub(rotated, values);
-        SimdVector::mul(diff, SimdVector::broadcast_scalar(0.5f64.sqrt()))
+        unsafe {
+            let rotated = self.rotate(values);
+            let diff = SimdVector::sub(rotated, values);
+            SimdVector::mul(diff, SimdVector::broadcast_scalar(0.5f64.sqrt()))
+        }
     }
 
     #[inline(always)]
     pub unsafe fn rotate_225(&self, values: WasmVector64) -> WasmVector64 {
-        let rotated = self.rotate(values);
-        let diff = SimdVector::add(rotated, values);
-        SimdVector::mul(diff, SimdVector::broadcast_scalar(-(0.5f64.sqrt())))
+        unsafe {
+            let rotated = self.rotate(values);
+            let diff = SimdVector::add(rotated, values);
+            SimdVector::mul(diff, SimdVector::broadcast_scalar(-(0.5f64.sqrt())))
+        }
     }
 }
 

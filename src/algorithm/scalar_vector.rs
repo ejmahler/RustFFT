@@ -7,7 +7,7 @@ use crate::algorithm::scalar_column_butterflies::{
     ScalarParallelButterfly2, ScalarParallelButterfly3, ScalarParallelButterfly4,
     ScalarParallelButterfly5, ScalarParallelButterfly6, ScalarParallelButterfly7,
 };
-use crate::{simd::simd_vector::SimdVector, twiddles, FftDirection, FftNum};
+use crate::{FftDirection, FftNum, simd::simd_vector::SimdVector, twiddles};
 
 // Adapter for SimdVector. If we pretend that a Complex<T> is a simd vector, we can plug Complex<T> into the simd-based algorithms and avoid having separate scalar and simd implementations
 // We obviously won't be directly using simd intrinsics, but the fact that the simd algorithms are optimized for simd should make the scalar code highly auto-simd-able anyways.
@@ -31,7 +31,7 @@ impl<T: FftNum> SimdVector for Complex<T> {
     }
 
     unsafe fn load_complex(ptr: *const num_complex::Complex<Self::ScalarType>) -> Self {
-        ptr.read()
+        unsafe { ptr.read() }
     }
 
     unsafe fn load1_lo_complex(_ptr: *const num_complex::Complex<Self::ScalarType>) -> Self {
@@ -43,7 +43,9 @@ impl<T: FftNum> SimdVector for Complex<T> {
     }
 
     unsafe fn store_complex(ptr: *mut num_complex::Complex<Self::ScalarType>, data: Self) {
-        ptr.write(data);
+        unsafe {
+            ptr.write(data);
+        }
     }
 
     unsafe fn store1_lo_complex(_ptr: *mut num_complex::Complex<Self::ScalarType>, _data: Self) {

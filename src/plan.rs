@@ -4,18 +4,18 @@ use std::sync::Arc;
 
 use crate::common::RadixFactor;
 use crate::wasm_simd::wasm_simd_planner::FftPlannerWasmSimd;
-use crate::{common::FftNum, fft_cache::FftCache, FftDirection};
+use crate::{FftDirection, common::FftNum, fft_cache::FftCache};
 
+use crate::Fft;
 use crate::algorithm::butterflies::*;
 use crate::algorithm::*;
-use crate::Fft;
 
 use crate::FftPlannerAvx;
 use crate::FftPlannerFcma;
 use crate::FftPlannerNeon;
 use crate::FftPlannerSse;
 
-use crate::math_utils::{split_cross_len, PrimeFactors};
+use crate::math_utils::{PrimeFactors, split_cross_len};
 
 enum ChosenFftPlanner<T: FftNum> {
     Scalar(FftPlannerScalar<T>),
@@ -72,31 +72,20 @@ pub struct FftPlanner<T: FftNum> {
 impl<T: FftNum> FftPlanner<T> {
     /// Creates a new `FftPlanner` instance.
     pub fn new() -> Self {
-        if let Ok(avx_planner) = FftPlannerAvx::new() {
-            Self {
-                chosen_planner: ChosenFftPlanner::Avx(avx_planner),
-            }
+        let chosen_planner = if let Ok(avx_planner) = FftPlannerAvx::new() {
+            ChosenFftPlanner::Avx(avx_planner)
         } else if let Ok(sse_planner) = FftPlannerSse::new() {
-            Self {
-                chosen_planner: ChosenFftPlanner::Sse(sse_planner),
-            }
+            ChosenFftPlanner::Sse(sse_planner)
         } else if let Ok(fcma_planner) = FftPlannerFcma::new() {
-            Self {
-                chosen_planner: ChosenFftPlanner::Fcma(fcma_planner),
-            }
+            ChosenFftPlanner::Fcma(fcma_planner)
         } else if let Ok(neon_planner) = FftPlannerNeon::new() {
-            Self {
-                chosen_planner: ChosenFftPlanner::Neon(neon_planner),
-            }
+            ChosenFftPlanner::Neon(neon_planner)
         } else if let Ok(wasm_simd_planner) = FftPlannerWasmSimd::new() {
-            Self {
-                chosen_planner: ChosenFftPlanner::WasmSimd(wasm_simd_planner),
-            }
+            ChosenFftPlanner::WasmSimd(wasm_simd_planner)
         } else {
-            Self {
-                chosen_planner: ChosenFftPlanner::Scalar(FftPlannerScalar::new()),
-            }
-        }
+            ChosenFftPlanner::Scalar(FftPlannerScalar::new())
+        };
+        Self { chosen_planner }
     }
 
     /// Returns a `Fft` instance which computes FFTs of size `len`.
@@ -332,12 +321,13 @@ impl<T: FftNum> FftPlannerScalar<T> {
     // Create the fft from a recipe, take from cache if possible
     fn build_fft(&mut self, recipe: &Recipe, direction: FftDirection) -> Arc<dyn Fft<T>> {
         let len = recipe.len();
-        if let Some(instance) = self.algorithm_cache.get(len, direction) {
-            instance
-        } else {
-            let fft = self.build_new_fft(recipe, direction);
-            self.algorithm_cache.insert(&fft);
-            fft
+        match self.algorithm_cache.get(len, direction) {
+            Some(instance) => instance,
+            _ => {
+                let fft = self.build_new_fft(recipe, direction);
+                self.algorithm_cache.insert(&fft);
+                fft
+            }
         }
     }
 
@@ -526,19 +516,11 @@ impl<T: FftNum> FftPlannerScalar<T> {
             if p3 == 0 {
                 // pure power of 2
                 assert!(p2 > 5); // butterflies should have caught this
-                if p2 % 2 == 1 {
-                    8
-                } else {
-                    16
-                }
+                if p2 % 2 == 1 { 8 } else { 16 }
             } else {
                 // 3 times a power of 2
                 assert!(p2 > 3); // butterflies should have caught this
-                if p2 % 2 == 1 {
-                    24
-                } else {
-                    12
-                }
+                if p2 % 2 == 1 { 24 } else { 12 }
             }
         } else if p2 > 0 && p3 > 0 {
             // we have a mixed bag of 2s and 3s

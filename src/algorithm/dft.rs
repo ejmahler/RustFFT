@@ -1,8 +1,8 @@
 use num_complex::Complex;
 use num_traits::Zero;
 
-use crate::{twiddles, FftDirection};
 use crate::{Direction, Fft, FftNum, Length};
+use crate::{FftDirection, twiddles};
 
 /// Naive O(n^2 ) Discrete Fourier Transform implementation
 ///
