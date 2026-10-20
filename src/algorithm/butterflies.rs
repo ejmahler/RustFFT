@@ -8,12 +8,12 @@ use crate::{Direction, Fft, Length};
 
 #[allow(unused)]
 macro_rules! boilerplate_fft_butterfly {
-    ($struct_name:ident, $len:expr, $direction_fn:expr) => {
+    ($struct_name:ident, $len:expr_2021, $direction_fn:expr_2021) => {
         impl<T: FftNum> $struct_name<T> {
             #[inline(always)]
-            pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: impl LoadStore<T>) {
+            pub(crate) unsafe fn perform_fft_butterfly(&self, buffer: impl LoadStore<T>) { unsafe {
                 self.perform_fft_contiguous(buffer);
-            }
+            }}
         }
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             #[inline]
@@ -172,12 +172,12 @@ impl<T: FftNum> Butterfly2<T> {
         *left = temp;
     }
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) { unsafe {
         let value0 = buffer.load(0);
         let value1 = buffer.load(1);
         buffer.store(value0 + value1, 0);
         buffer.store(value0 - value1, 1);
-    }
+    }}
 }
 
 pub struct Butterfly3<T> {
@@ -227,7 +227,7 @@ impl<T: FftNum> Butterfly3<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) { unsafe {
         let xp = buffer.load(1) + buffer.load(2);
         let xn = buffer.load(1) - buffer.load(2);
         let sum = buffer.load(0) + xp;
@@ -245,7 +245,7 @@ impl<T: FftNum> Butterfly3<T> {
         buffer.store(sum, 0);
         buffer.store(temp_a + temp_b, 1);
         buffer.store(temp_a - temp_b, 2);
-    }
+    }}
 }
 
 pub struct Butterfly4<T> {
@@ -262,7 +262,7 @@ impl<T: FftNum> Butterfly4<T> {
         }
     }
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) { unsafe {
         //we're going to hardcode a step of mixed radix
         //aka we're going to do the six step algorithm
 
@@ -290,7 +290,7 @@ impl<T: FftNum> Butterfly4<T> {
         buffer.store(value2, 1);
         buffer.store(value1, 2);
         buffer.store(value3, 3);
-    }
+    }}
 
     #[inline(always)]
     unsafe fn perform_fft_strided(
@@ -299,7 +299,7 @@ impl<T: FftNum> Butterfly4<T> {
         value1: &mut Complex<T>,
         value2: &mut Complex<T>,
         value3: &mut Complex<T>,
-    ) {
+    ) { unsafe {
         // step 2: column FFTs
         Butterfly2::perform_fft_strided(value0, value2);
         Butterfly2::perform_fft_strided(value1, value3);
@@ -317,7 +317,7 @@ impl<T: FftNum> Butterfly4<T> {
         let temp = *value1;
         *value1 = *value2;
         *value2 = temp;
-    }
+    }}
 }
 
 pub struct Butterfly5<T> {
@@ -336,7 +336,7 @@ impl<T: FftNum> Butterfly5<T> {
     }
 
     #[inline(never)] // refusing to inline this code reduces code size, and doesn't hurt performance
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) { unsafe {
         // let mut outer = Butterfly2::perform_fft_array([buffer.load(1), buffer.load(4)]);
         // let mut inner = Butterfly2::perform_fft_array([buffer.load(2), buffer.load(3)]);
         // let input0 = buffer.load(0);
@@ -468,7 +468,7 @@ impl<T: FftNum> Butterfly5<T> {
             },
             4,
         );
-    }
+    }}
 }
 
 pub struct Butterfly6<T> {
@@ -491,7 +491,7 @@ impl<T: FftNum> Butterfly6<T> {
         }
     }
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) { unsafe {
         //since GCD(2,3) == 1 we're going to hardcode a step of the Good-Thomas algorithm to avoid twiddle factors
 
         // step 1: reorder the input directly into the scratch. normally there's a whole thing to compute this ordering
@@ -522,7 +522,7 @@ impl<T: FftNum> Butterfly6<T> {
         buffer.store(scratch_b[0], 3);
         buffer.store(scratch_a[1], 4);
         buffer.store(scratch_b[2], 5);
-    }
+    }}
 }
 
 pub struct Butterfly7<T> {
@@ -542,7 +542,7 @@ impl<T: FftNum> Butterfly7<T> {
         }
     }
     #[inline(never)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) { unsafe {
         // let mut outer = Butterfly2::perform_fft_array([buffer.load(1), buffer.load(6)]);
         // let mut mid   = Butterfly2::perform_fft_array([buffer.load(2), buffer.load(5)]);
         // let mut inner = Butterfly2::perform_fft_array([buffer.load(3), buffer.load(4)]);
@@ -713,7 +713,7 @@ impl<T: FftNum> Butterfly7<T> {
             },
             6,
         );
-    }
+    }}
 }
 
 pub struct Butterfly8<T> {
@@ -731,7 +731,7 @@ impl<T: FftNum> Butterfly8<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) { unsafe {
         let butterfly4 = Butterfly4::new(self.direction);
 
         //we're going to hardcode a step of mixed radix
@@ -774,7 +774,7 @@ impl<T: FftNum> Butterfly8<T> {
         for i in 0..4 {
             buffer.store(scratch1[i], i + 4);
         }
-    }
+    }}
 }
 
 pub struct Butterfly9<T> {
@@ -797,7 +797,7 @@ impl<T: FftNum> Butterfly9<T> {
         }
     }
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) { unsafe {
         // algorithm: mixed radix with width=3 and height=3
 
         // step 1: transpose the input into the scratch
@@ -836,7 +836,7 @@ impl<T: FftNum> Butterfly9<T> {
         buffer.store(scratch2[0], 6);
         buffer.store(scratch2[1], 7);
         buffer.store(scratch2[2], 8);
-    }
+    }}
 }
 
 pub struct Butterfly11<T> {
@@ -866,7 +866,7 @@ impl<T: FftNum> Butterfly11<T> {
     }
 
     #[inline(never)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) { unsafe {
         // This function was derived in the same manner as the butterflies for length 3, 5 and 7.
         // However, instead of doing it by hand the actual code is autogenerated
         // with the `genbutterflies.py` script in the `tools` directory.
@@ -1085,7 +1085,7 @@ impl<T: FftNum> Butterfly11<T> {
             },
             10,
         );
-    }
+    }}
 }
 
 pub struct Butterfly12<T> {
@@ -1104,7 +1104,7 @@ impl<T: FftNum> Butterfly12<T> {
         }
     }
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) { unsafe {
         //since GCD(4,3) == 1 we're going to hardcode a step of the Good-Thomas algorithm to avoid twiddle factors
 
         // step 1: reorder the input directly into the scratch. normally there's a whole thing to compute this ordering
@@ -1162,7 +1162,7 @@ impl<T: FftNum> Butterfly12<T> {
         buffer.store(scratch0[1], 9);
         buffer.store(scratch1[2], 10);
         buffer.store(scratch2[3], 11);
-    }
+    }}
 }
 
 pub struct Butterfly13<T> {
@@ -1195,7 +1195,7 @@ impl<T: FftNum> Butterfly13<T> {
     }
 
     #[inline(never)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) { unsafe {
         // This function was derived in the same manner as the butterflies for length 3, 5 and 7.
         // However, instead of doing it by hand the actual code is autogenerated
         // with the `genbutterflies.py` script in the `tools` directory.
@@ -1479,7 +1479,7 @@ impl<T: FftNum> Butterfly13<T> {
             },
             12,
         );
-    }
+    }}
 }
 
 pub struct Butterfly16<T> {
@@ -1503,7 +1503,7 @@ impl<T: FftNum> Butterfly16<T> {
     }
 
     #[inline(never)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) { unsafe {
         let butterfly4 = Butterfly4::new(self.fft_direction());
 
         // we're going to hardcode a step of split radix
@@ -1576,7 +1576,7 @@ impl<T: FftNum> Butterfly16<T> {
         buffer.store(scratch_evens[5] - scratch_odds_n3[1], 13);
         buffer.store(scratch_evens[6] - scratch_odds_n3[2], 14);
         buffer.store(scratch_evens[7] - scratch_odds_n3[3], 15);
-    }
+    }}
 }
 
 pub struct Butterfly17<T> {
@@ -1615,7 +1615,7 @@ impl<T: FftNum> Butterfly17<T> {
     }
 
     #[inline(never)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) { unsafe {
         // This function was derived in the same manner as the butterflies for length 3, 5 and 7.
         // However, instead of doing it by hand the actual code is autogenerated
         // with the `genbutterflies.py` script in the `tools` directory.
@@ -2055,7 +2055,7 @@ impl<T: FftNum> Butterfly17<T> {
             },
             16,
         );
-    }
+    }}
 }
 
 pub struct Butterfly19<T> {
@@ -2097,7 +2097,7 @@ impl<T: FftNum> Butterfly19<T> {
     }
 
     #[inline(never)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) { unsafe {
         // This function was derived in the same manner as the butterflies for length 3, 5 and 7.
         // However, instead of doing it by hand the actual code is autogenerated
         // with the `genbutterflies.py` script in the `tools` directory.
@@ -2628,7 +2628,7 @@ impl<T: FftNum> Butterfly19<T> {
             },
             18,
         );
-    }
+    }}
 }
 
 pub struct Butterfly23<T> {
@@ -2676,7 +2676,7 @@ impl<T: FftNum> Butterfly23<T> {
     }
 
     #[inline(never)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) { unsafe {
         // This function was derived in the same manner as the butterflies for length 3, 5 and 7.
         // However, instead of doing it by hand the actual code is autogenerated
         // with the `genbutterflies.py` script in the `tools` directory.
@@ -3421,7 +3421,7 @@ impl<T: FftNum> Butterfly23<T> {
             },
             22,
         );
-    }
+    }}
 }
 
 pub struct Butterfly24<T> {
@@ -3454,7 +3454,7 @@ impl<T: FftNum> Butterfly24<T> {
         }
     }
     #[inline(never)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) { unsafe {
         // algorithm: 6x4 mixed radix
         // step 1: transpose the input directly into the scratch.
         let mut scratch0 = [
@@ -3582,7 +3582,7 @@ impl<T: FftNum> Butterfly24<T> {
         buffer.store(scratch3[3], 21);
         buffer.store(scratch3[4], 22);
         buffer.store(scratch3[5], 23);
-    }
+    }}
 }
 
 pub struct Butterfly27<T> {
@@ -3615,7 +3615,7 @@ impl<T: FftNum> Butterfly27<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) { unsafe {
         // algorithm: mixed radix with width=9 and height=3
 
         // step 1: transpose the input into the scratch
@@ -3755,7 +3755,7 @@ impl<T: FftNum> Butterfly27<T> {
         buffer.store(scratch2[6], 18 + 6);
         buffer.store(scratch2[7], 18 + 7);
         buffer.store(scratch2[8], 18 + 8);
-    }
+    }}
 }
 
 pub struct Butterfly29<T> {
@@ -3812,7 +3812,7 @@ impl<T: FftNum> Butterfly29<T> {
     }
 
     #[inline(never)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) { unsafe {
         // This function was derived in the same manner as the butterflies for length 3, 5 and 7.
         // However, instead of doing it by hand the actual code is autogenerated
         // with the `genbutterflies.py` script in the `tools` directory.
@@ -4926,7 +4926,7 @@ impl<T: FftNum> Butterfly29<T> {
             },
             28,
         );
-    }
+    }}
 }
 pub struct Butterfly31<T> {
     twiddle1: Complex<T>,
@@ -4985,7 +4985,7 @@ impl<T: FftNum> Butterfly31<T> {
     }
 
     #[inline(never)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) { unsafe {
         // This function was derived in the same manner as the butterflies for length 3, 5 and 7.
         // However, instead of doing it by hand the actual code is autogenerated
         // with the `genbutterflies.py` script in the `tools` directory.
@@ -6238,7 +6238,7 @@ impl<T: FftNum> Butterfly31<T> {
             },
             30,
         );
-    }
+    }}
 }
 pub struct Butterfly32<T> {
     butterfly16: Butterfly16<T>,
@@ -6266,7 +6266,7 @@ impl<T: FftNum> Butterfly32<T> {
     }
 
     #[inline(never)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl LoadStore<T>) { unsafe {
         // we're going to hardcode a step of split radix
         // step 1: copy and reorder the  input into the scratch
         let mut scratch_evens = [
@@ -6389,7 +6389,7 @@ impl<T: FftNum> Butterfly32<T> {
         buffer.store(scratch_evens[13] - scratch_odds_n3[5], 29);
         buffer.store(scratch_evens[14] - scratch_odds_n3[6], 30);
         buffer.store(scratch_evens[15] - scratch_odds_n3[7], 31);
-    }
+    }}
 }
 
 #[cfg(test)]
@@ -6400,7 +6400,7 @@ mod unit_tests {
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
     macro_rules! test_butterfly_func {
-        ($test_name:ident, $struct_name:ident, $size:expr) => {
+        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
             #[test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);

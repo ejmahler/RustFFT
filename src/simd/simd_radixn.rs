@@ -232,7 +232,7 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
 
     /// The stack of in-place cross-FFT layers, run after the base FFTs.
     #[inline(always)]
-    unsafe fn cross_ffts(&self, output: &mut [Complex<T>]) {
+    unsafe fn cross_ffts(&self, output: &mut [Complex<T>]) { unsafe {
         let out: &mut [Complex<V::ScalarType>] = workaround_transmute_mut(output);
 
         let mut cross_fft_len = self.base_len;
@@ -269,7 +269,7 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
             let twiddle_offset = num_columns.div_ceil(V::COMPLEX_PER_VECTOR) * (factor.radix() - 1);
             layer_twiddles = &layer_twiddles[twiddle_offset..];
         }
-    }
+    }}
 
     #[inline(always)]
     pub fn process_single_immutable(
@@ -341,7 +341,7 @@ pub unsafe fn cross_layer_chunks<V: SimdVector, const RADIX: usize>(
     twiddles: &[V],
     num_columns: usize,
     butterfly: &impl ParallelFft<V, RADIX>,
-) {
+) { unsafe {
     let chunk_len = num_columns * RADIX;
     let mut rest = data;
     while rest.len() >= chunk_len {
@@ -350,7 +350,7 @@ pub unsafe fn cross_layer_chunks<V: SimdVector, const RADIX: usize>(
         rest = tail;
     }
     debug_assert!(rest.is_empty());
-}
+}}
 
 /// `factor_transpose` with the reversed column indices looked up instead of recomputed.
 ///
@@ -407,7 +407,7 @@ unsafe fn gather_and_twiddle<V: SimdVector, const RADIX: usize>(
     num_columns: usize,
     idx: usize,
     tw_base: usize,
-) -> [V; RADIX] {
+) -> [V; RADIX] { unsafe {
     let mut arr = [V::zero_vector(); RADIX];
 
     // The row-0 twiddle is always 1, so it's neither stored nor applied.
@@ -418,7 +418,7 @@ unsafe fn gather_and_twiddle<V: SimdVector, const RADIX: usize>(
         arr[r] = V::mul_complex(v, *twiddles.get_unchecked(tw_base + r - 1));
     }
     arr
-}
+}}
 
 /// One cross-FFT layer: for each vector of columns, gather RADIX rows strided by `num_columns`,
 /// apply the twiddles, run the column butterfly, scatter back.
@@ -431,7 +431,7 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize>(
     twiddles: &[V],
     num_columns: usize,
     butterfly: &impl ParallelFft<V, RADIX>,
-) {
+) { unsafe {
     let complex_per_vector = V::COMPLEX_PER_VECTOR;
     // the whole vector columns, and then the column an inexact count leaves over
     let num_vector_columns = num_columns / complex_per_vector;
@@ -519,7 +519,7 @@ unsafe fn cross_layer<V: SimdVector, const RADIX: usize>(
             data.store1_lo(*a_row, idx + r * num_columns);
         }
     }
-}
+}}
 
 /// The test bodies, shared the same way the algorithm is. Every backend runs all of them, from a
 /// thin test function per body that names its own vector types. The bodies that exercise both

@@ -890,11 +890,11 @@ impl<A: AvxNum, T: FftNum> AvxPlannerInternal<A, T> {
 
                 // try to construct our AVX2 rader's algorithm. If that fails (probably because the machine we're running on doesn't have AVX2), fall back to scalar
                 let raders_instance =
-                    if let Ok(raders_avx) = RadersAvx2::<A, T>::new(Arc::clone(&inner_fft)) {
+                    match RadersAvx2::<A, T>::new(Arc::clone(&inner_fft)) { Ok(raders_avx) => {
                         wrap_fft(raders_avx)
-                    } else {
+                    } _ => {
                         wrap_fft(RadersAlgorithm::new(inner_fft))
-                    };
+                    }};
 
                 // Cache this FFT instance for future calls to `plan_fft`
                 self.cache.insert(&raders_instance);

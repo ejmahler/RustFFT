@@ -72,15 +72,15 @@ pub struct FftPlanner<T: FftNum> {
 impl<T: FftNum> FftPlanner<T> {
     /// Creates a new `FftPlanner` instance.
     pub fn new() -> Self {
-        if let Ok(avx_planner) = FftPlannerAvx::new() {
+        match FftPlannerAvx::new() { Ok(avx_planner) => {
             Self {
                 chosen_planner: ChosenFftPlanner::Avx(avx_planner),
             }
-        } else if let Ok(sse_planner) = FftPlannerSse::new() {
+        } _ => { match FftPlannerSse::new() { Ok(sse_planner) => {
             Self {
                 chosen_planner: ChosenFftPlanner::Sse(sse_planner),
             }
-        } else if let Ok(fcma_planner) = FftPlannerFcma::new() {
+        } _ => if let Ok(fcma_planner) = FftPlannerFcma::new() {
             Self {
                 chosen_planner: ChosenFftPlanner::Fcma(fcma_planner),
             }
@@ -96,7 +96,7 @@ impl<T: FftNum> FftPlanner<T> {
             Self {
                 chosen_planner: ChosenFftPlanner::Scalar(FftPlannerScalar::new()),
             }
-        }
+        }}}}
     }
 
     /// Returns a `Fft` instance which computes FFTs of size `len`.
@@ -332,13 +332,13 @@ impl<T: FftNum> FftPlannerScalar<T> {
     // Create the fft from a recipe, take from cache if possible
     fn build_fft(&mut self, recipe: &Recipe, direction: FftDirection) -> Arc<dyn Fft<T>> {
         let len = recipe.len();
-        if let Some(instance) = self.algorithm_cache.get(len, direction) {
+        match self.algorithm_cache.get(len, direction) { Some(instance) => {
             instance
-        } else {
+        } _ => {
             let fft = self.build_new_fft(recipe, direction);
             self.algorithm_cache.insert(&fft);
             fft
-        }
+        }}
     }
 
     // Create a new fft from a recipe

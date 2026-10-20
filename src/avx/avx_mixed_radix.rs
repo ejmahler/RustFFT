@@ -78,7 +78,7 @@ macro_rules! boilerplate_mixedradix {
             input: &[Complex<T>],
             output: &mut [Complex<T>],
             scratch: &mut [Complex<T>],
-        ) {
+        ) { unsafe {
             // Perform the column FFTs
             let (scratch, inner_scratch) = scratch.split_at_mut(input.len());
             {
@@ -105,7 +105,7 @@ macro_rules! boilerplate_mixedradix {
 
                 self.transpose(transmuted_input, transmuted_output)
             }
-        }
+        }}
 
         #[target_feature(enable = "avx", enable = "fma")]
         unsafe fn perform_fft_out_of_place(
@@ -113,7 +113,7 @@ macro_rules! boilerplate_mixedradix {
             input: &mut [Complex<T>],
             output: &mut [Complex<T>],
             scratch: &mut [Complex<T>],
-        ) {
+        ) { unsafe {
             // Perform the column FFTs
             {
                 // Specialization workaround: See the comments in FftPlannerAvx::new() for why these calls to array_utils::workaround_transmute are necessary
@@ -142,12 +142,12 @@ macro_rules! boilerplate_mixedradix {
 
                 self.transpose(transmuted_input, transmuted_output)
             }
-        }
+        }}
     };
 }
 
 macro_rules! mixedradix_gen_data {
-    ($row_count: expr, $inner_fft:expr) => {{
+    ($row_count: expr_2021, $inner_fft:expr_2021) => {{
         // Important constants
         const ROW_COUNT : usize = $row_count;
         const TWIDDLES_PER_COLUMN : usize = ROW_COUNT - 1;
@@ -188,13 +188,13 @@ macro_rules! mixedradix_gen_data {
 }
 
 macro_rules! mixedradix_column_butterflies {
-    ($row_count: expr, $butterfly_fn: expr, $butterfly_fn_lo: expr) => {
+    ($row_count: expr_2021, $butterfly_fn: expr_2021, $butterfly_fn_lo: expr_2021) => {
         #[target_feature(enable = "avx", enable = "fma")]
         unsafe fn perform_column_butterflies_immut(
             &self,
             input: impl AvxArray<A>,
             mut buffer: impl AvxArrayMut<A>,
-        ) {
+        ) { unsafe {
             // How many rows this FFT has, ie 2 for 2xn, 4 for 4xn, etc
             const ROW_COUNT: usize = $row_count;
             const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
@@ -306,9 +306,9 @@ macro_rules! mixedradix_column_butterflies {
                     }
                 }
             }
-        }
+        }}
         #[target_feature(enable = "avx", enable = "fma")]
-        unsafe fn perform_column_butterflies(&self, mut buffer: impl AvxArrayMut<A>) {
+        unsafe fn perform_column_butterflies(&self, mut buffer: impl AvxArrayMut<A>) { unsafe {
             // How many rows this FFT has, ie 2 for 2xn, 4 for 4xn, etc
             const ROW_COUNT: usize = $row_count;
             const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
@@ -420,16 +420,16 @@ macro_rules! mixedradix_column_butterflies {
                     }
                 }
             }
-        }
+        }}
     };
 }
 
 macro_rules! mixedradix_transpose{
-    ($row_count: expr, $transpose_fn: path, $transpose_fn_lo: path, $($unroll_workaround_index:expr);*, $($remainder3_unroll_workaround_index:expr);*) => (
+    ($row_count: expr_2021, $transpose_fn: path, $transpose_fn_lo: path, $($unroll_workaround_index:expr_2021);*, $($remainder3_unroll_workaround_index:expr_2021);*) => (
 
     // Transpose the input (treated as a nxc array) into the output (as a cxn array)
     #[target_feature(enable = "avx")]
-    unsafe fn transpose(&self, input: &[Complex<A>], mut output: &mut [Complex<A>]) {
+    unsafe fn transpose(&self, input: &[Complex<A>], mut output: &mut [Complex<A>]) { unsafe {
         const ROW_COUNT : usize = $row_count;
 
         let len_per_row = self.len() / ROW_COUNT;
@@ -524,7 +524,7 @@ macro_rules! mixedradix_transpose{
                 _ => unreachable!(),
             }
         }
-    }
+    }}
 )}
 
 pub struct MixedRadix2xnAvx<A: AvxNum, T> {
@@ -535,12 +535,12 @@ boilerplate_avx_fft_commondata!(MixedRadix2xnAvx);
 
 impl<A: AvxNum, T: FftNum> MixedRadix2xnAvx<A, T> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self { unsafe {
         Self {
             common_data: mixedradix_gen_data!(2, inner_fft),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
     mixedradix_column_butterflies!(
         2,
         |columns, _: _| AvxVector::column_butterfly2(columns),
@@ -563,13 +563,13 @@ boilerplate_avx_fft_commondata!(MixedRadix3xnAvx);
 
 impl<A: AvxNum, T: FftNum> MixedRadix3xnAvx<A, T> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self { unsafe {
         Self {
             twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, inner_fft.fft_direction()),
             common_data: mixedradix_gen_data!(3, inner_fft),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
     mixedradix_column_butterflies!(
         3,
         |columns, this: &Self| AvxVector::column_butterfly3(columns, this.twiddles_butterfly3),
@@ -592,13 +592,13 @@ boilerplate_avx_fft_commondata!(MixedRadix4xnAvx);
 
 impl<A: AvxNum, T: FftNum> MixedRadix4xnAvx<A, T> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self { unsafe {
         Self {
             twiddles_butterfly4: AvxVector::make_rotation90(inner_fft.fft_direction()),
             common_data: mixedradix_gen_data!(4, inner_fft),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
     mixedradix_column_butterflies!(
         4,
         |columns, this: &Self| AvxVector::column_butterfly4(columns, this.twiddles_butterfly4),
@@ -621,7 +621,7 @@ boilerplate_avx_fft_commondata!(MixedRadix5xnAvx);
 
 impl<A: AvxNum, T: FftNum> MixedRadix5xnAvx<A, T> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self { unsafe {
         Self {
             twiddles_butterfly5: [
                 AvxVector::broadcast_twiddle(1, 5, inner_fft.fft_direction()),
@@ -630,7 +630,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix5xnAvx<A, T> {
             common_data: mixedradix_gen_data!(5, inner_fft),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
     mixedradix_column_butterflies!(
         5,
         |columns, this: &Self| AvxVector::column_butterfly5(columns, this.twiddles_butterfly5),
@@ -659,13 +659,13 @@ boilerplate_avx_fft_commondata!(MixedRadix6xnAvx);
 
 impl<A: AvxNum, T: FftNum> MixedRadix6xnAvx<A, T> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self { unsafe {
         Self {
             twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, inner_fft.fft_direction()),
             common_data: mixedradix_gen_data!(6, inner_fft),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
     mixedradix_column_butterflies!(
         6,
         |columns, this: &Self| AvxVector256::column_butterfly6(columns, this.twiddles_butterfly3),
@@ -688,7 +688,7 @@ boilerplate_avx_fft_commondata!(MixedRadix7xnAvx);
 
 impl<A: AvxNum, T: FftNum> MixedRadix7xnAvx<A, T> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self { unsafe {
         Self {
             twiddles_butterfly7: [
                 AvxVector::broadcast_twiddle(1, 7, inner_fft.fft_direction()),
@@ -698,7 +698,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix7xnAvx<A, T> {
             common_data: mixedradix_gen_data!(7, inner_fft),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
     mixedradix_column_butterflies!(
         7,
         |columns, this: &Self| AvxVector::column_butterfly7(columns, this.twiddles_butterfly7),
@@ -728,13 +728,13 @@ boilerplate_avx_fft_commondata!(MixedRadix8xnAvx);
 
 impl<A: AvxNum, T: FftNum> MixedRadix8xnAvx<A, T> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self { unsafe {
         Self {
             twiddles_butterfly4: AvxVector::make_rotation90(inner_fft.fft_direction()),
             common_data: mixedradix_gen_data!(8, inner_fft),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
 
     mixedradix_column_butterflies!(
         8,
@@ -760,7 +760,7 @@ boilerplate_avx_fft_commondata!(MixedRadix9xnAvx);
 
 impl<A: AvxNum, T: FftNum> MixedRadix9xnAvx<A, T> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self { unsafe {
         let inverse = inner_fft.fft_direction();
 
         let twiddle1 = AvxVector::broadcast_twiddle(1, 9, inner_fft.fft_direction());
@@ -781,7 +781,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix9xnAvx<A, T> {
             common_data: mixedradix_gen_data!(9, inner_fft),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
 
     mixedradix_column_butterflies!(
         9,
@@ -813,7 +813,7 @@ boilerplate_avx_fft_commondata!(MixedRadix11xnAvx);
 
 impl<A: AvxNum, T: FftNum> MixedRadix11xnAvx<A, T> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self { unsafe {
         Self {
             twiddles_butterfly11: [
                 AvxVector::broadcast_twiddle(1, 11, inner_fft.fft_direction()),
@@ -825,7 +825,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix11xnAvx<A, T> {
             common_data: mixedradix_gen_data!(11, inner_fft),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
     mixedradix_column_butterflies!(
         11,
         |columns, this: &Self| AvxVector::column_butterfly11(columns, this.twiddles_butterfly11),
@@ -858,7 +858,7 @@ boilerplate_avx_fft_commondata!(MixedRadix12xnAvx);
 
 impl<A: AvxNum, T: FftNum> MixedRadix12xnAvx<A, T> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self { unsafe {
         let inverse = inner_fft.fft_direction();
         Self {
             twiddles_butterfly4: AvxVector::make_rotation90(inverse),
@@ -866,7 +866,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix12xnAvx<A, T> {
             common_data: mixedradix_gen_data!(12, inner_fft),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
 
     mixedradix_column_butterflies!(
         12,
@@ -899,7 +899,7 @@ boilerplate_avx_fft_commondata!(MixedRadix16xnAvx);
 
 impl<A: AvxNum, T: FftNum> MixedRadix16xnAvx<A, T> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self { unsafe {
         let inverse = inner_fft.fft_direction();
         Self {
             twiddles_butterfly4: AvxVector::make_rotation90(inner_fft.fft_direction()),
@@ -910,10 +910,10 @@ impl<A: AvxNum, T: FftNum> MixedRadix16xnAvx<A, T> {
             common_data: mixedradix_gen_data!(16, inner_fft),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
 
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_column_butterflies(&self, mut buffer: impl AvxArrayMut<A>) {
+    unsafe fn perform_column_butterflies(&self, mut buffer: impl AvxArrayMut<A>) { unsafe {
         // How many rows this FFT has, ie 2 for 2xn, 4 for 4xn, etc
         const ROW_COUNT: usize = 16;
         const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
@@ -1016,13 +1016,13 @@ impl<A: AvxNum, T: FftNum> MixedRadix16xnAvx<A, T> {
                 _ => unreachable!(),
             }
         }
-    }
+    }}
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn perform_column_butterflies_immut(
         &self,
         input: impl AvxArray<A>,
         mut buffer: impl AvxArrayMut<A>,
-    ) {
+    ) { unsafe {
         // How many rows this FFT has, ie 2 for 2xn, 4 for 4xn, etc
         const ROW_COUNT: usize = 16;
         const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
@@ -1137,7 +1137,7 @@ impl<A: AvxNum, T: FftNum> MixedRadix16xnAvx<A, T> {
                 _ => unreachable!(),
             }
         }
-    }
+    }}
     mixedradix_transpose!(16,
         AvxVector::transpose16_packed,
         AvxVector::transpose16_packed,
@@ -1154,7 +1154,7 @@ mod unit_tests {
     use std::sync::Arc;
 
     macro_rules! test_avx_mixed_radix {
-        ($f32_test_name:ident, $f64_test_name:ident, $struct_name:ident, $inner_count:expr) => (
+        ($f32_test_name:ident, $f64_test_name:ident, $struct_name:ident, $inner_count:expr_2021) => (
             #[test]
             fn $f32_test_name() {
                 for inner_fft_len in 1..32 {

@@ -29,7 +29,7 @@ struct VectorizedMultiplyMod {
 
 impl VectorizedMultiplyMod {
     #[target_feature(enable = "avx")]
-    unsafe fn new(b: u32, divisor: u32) -> Self {
+    unsafe fn new(b: u32, divisor: u32) -> Self { unsafe {
         assert!(
             divisor.leading_zeros() > 0,
             "divisor must be less than {}, got {}",
@@ -45,13 +45,13 @@ impl VectorizedMultiplyMod {
             divisor: _mm256_set1_epi64x(divisor as i64),
             intermediate: _mm256_set1_epi64x(intermediate),
         }
-    }
+    }}
 
     // Input: 4 unsigned 64-bit numbers, each less than 2^30
     // Output: (x * multiplier) % divisor for each x in input
     #[allow(unused)]
     #[inline(always)]
-    unsafe fn mul_rem(&self, a: __m256i) -> __m256i {
+    unsafe fn mul_rem(&self, a: __m256i) -> __m256i { unsafe {
         // Pretty hacky, but we need to prove to the compiler that each entry of the divisor is a 32-bit number, by blending the divisor vector with zeroes in the upper bits of each number.
         // If we don't do this manually, the compiler will do it anyways, but only for _mm256_mul_epu32, not for the _mm256_sub_epi64 correction step at the end
         // That inconstistency results in sub-optimal codegen where the compiler inserts extra code to handle the case where divisor is 64-bit. It also results in using one more register than necessary.
@@ -80,7 +80,7 @@ impl VectorizedMultiplyMod {
             subtracted_remainder,
         ));
         wrapped_remainder
-    }
+    }}
 }
 
 /// Implementation of Rader's Algorithm, using AVX2 instructions.
@@ -139,7 +139,7 @@ impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
     }
 
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self {
+    unsafe fn new_with_avx(inner_fft: Arc<dyn Fft<T>>) -> Self { unsafe {
         let inner_fft_len = inner_fft.len();
         let len = inner_fft_len + 1;
         assert!(miller_rabin(len as u64), "For raders algorithm, inner_fft.len() + 1 must be prime. Expected prime number, got {} + 1 = {}", inner_fft_len, len);
@@ -286,11 +286,11 @@ impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
 
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
 
     // Do the necessary setup for rader's algorithm: Reorder the inputs into the output buffer, gather a sum of all inputs. Return the first input, and the aum of all inputs
     #[target_feature(enable = "avx2", enable = "avx", enable = "fma")]
-    unsafe fn prepare_raders(&self, input: &[Complex<A>], output: &mut [Complex<A>]) {
+    unsafe fn prepare_raders(&self, input: &[Complex<A>], output: &mut [Complex<A>]) { unsafe {
         let mut indexes = self.input_index_init;
 
         let index_multiplier = self.input_index_multiplier.clone();
@@ -320,11 +320,11 @@ impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
             // store the remainder in the last chunk
             output_remainder.store_partial2_complex(half_data, 0);
         }
-    }
+    }}
 
     // Do the necessary finalization for rader's algorithm: Reorder the inputs into the output buffer, conjugating the input as we go, and add the first input value to every output value
     #[target_feature(enable = "avx2", enable = "avx", enable = "fma")]
-    unsafe fn finalize_raders(&self, input: &[Complex<A>], output: &mut [Complex<A>]) {
+    unsafe fn finalize_raders(&self, input: &[Complex<A>], output: &mut [Complex<A>]) { unsafe {
         // We need to conjugate elements as a part of the finalization step, and sadly we can't roll it into any other instructions. So we'll do it via an xor.
         let conjugation_mask =
             AvxVector256::broadcast_complex_elements(Complex::new(A::zero(), -A::zero()));
@@ -351,7 +351,7 @@ impl<A: AvxNum, T: FftNum> RadersAvx2<A, T> {
             let conjugated_elements = AvxVector::xor(half_data, conjugation_mask.lo());
             output_remainder.store_partial2_complex(conjugated_elements, 0);
         }
-    }
+    }}
 
     fn perform_fft_immut(
         &self,

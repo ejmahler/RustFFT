@@ -19,41 +19,41 @@ pub trait SimdComplexArray<V: SimdVector>: Deref {
 
 impl<V: SimdVector> SimdComplexArray<V> for &[Complex<V::ScalarType>] {
     #[inline(always)]
-    unsafe fn load(&self, index: usize) -> V {
+    unsafe fn load(&self, index: usize) -> V { unsafe {
         debug_assert!(self.len() >= index + V::COMPLEX_PER_VECTOR);
         V::load_complex(self.as_ptr().add(index))
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn load1_lo(&self, index: usize) -> V {
+    unsafe fn load1_lo(&self, index: usize) -> V { unsafe {
         debug_assert!(self.len() >= index + 1);
         V::load1_lo_complex(self.as_ptr().add(index))
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn load1_dup(&self, index: usize) -> V {
+    unsafe fn load1_dup(&self, index: usize) -> V { unsafe {
         debug_assert!(self.len() >= index + 1);
         V::load1_dup_complex(self.as_ptr().add(index))
-    }
+    }}
 }
 impl<V: SimdVector> SimdComplexArray<V> for &mut [Complex<V::ScalarType>] {
     #[inline(always)]
-    unsafe fn load(&self, index: usize) -> V {
+    unsafe fn load(&self, index: usize) -> V { unsafe {
         debug_assert!(self.len() >= index + V::COMPLEX_PER_VECTOR);
         V::load_complex(self.as_ptr().add(index))
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn load1_lo(&self, index: usize) -> V {
+    unsafe fn load1_lo(&self, index: usize) -> V { unsafe {
         debug_assert!(self.len() >= index + 1);
         V::load1_lo_complex(self.as_ptr().add(index))
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn load1_dup(&self, index: usize) -> V {
+    unsafe fn load1_dup(&self, index: usize) -> V { unsafe {
         debug_assert!(self.len() >= index + 1);
         V::load1_dup_complex(self.as_ptr().add(index))
-    }
+    }}
 }
 
 impl<'a, V: SimdVector> SimdComplexArray<V> for DoubleBuf<'a, V::ScalarType>
@@ -61,17 +61,17 @@ where
     &'a [Complex<V::ScalarType>]: SimdComplexArray<V>,
 {
     #[inline(always)]
-    unsafe fn load(&self, index: usize) -> V {
+    unsafe fn load(&self, index: usize) -> V { unsafe {
         self.input.load(index)
-    }
+    }}
     #[inline(always)]
-    unsafe fn load1_lo(&self, index: usize) -> V {
+    unsafe fn load1_lo(&self, index: usize) -> V { unsafe {
         self.input.load1_lo(index)
-    }
+    }}
     #[inline(always)]
-    unsafe fn load1_dup(&self, index: usize) -> V {
+    unsafe fn load1_dup(&self, index: usize) -> V { unsafe {
         self.input.load1_dup(index)
-    }
+    }}
 }
 
 // A trait to handle writing to an array of Complex<T> from SIMD vectors.
@@ -86,15 +86,15 @@ pub trait SimdComplexArrayMut<V: SimdVector>: SimdComplexArray<V> + DerefMut {
 
 impl<V: SimdVector> SimdComplexArrayMut<V> for &mut [Complex<V::ScalarType>] {
     #[inline(always)]
-    unsafe fn store(&mut self, vector: V, index: usize) {
+    unsafe fn store(&mut self, vector: V, index: usize) { unsafe {
         debug_assert!(self.len() >= index + V::COMPLEX_PER_VECTOR);
         V::store_complex(self.as_mut_ptr().add(index), vector)
-    }
+    }}
     #[inline(always)]
-    unsafe fn store1_lo(&mut self, vector: V, index: usize) {
+    unsafe fn store1_lo(&mut self, vector: V, index: usize) { unsafe {
         debug_assert!(self.len() >= index + 1);
         V::store1_lo_complex(self.as_mut_ptr().add(index), vector)
-    }
+    }}
 }
 
 impl<'a, V: SimdVector> SimdComplexArrayMut<V> for DoubleBuf<'a, V::ScalarType>
@@ -103,11 +103,11 @@ where
     &'a mut [Complex<V::ScalarType>]: SimdComplexArrayMut<V>,
 {
     #[inline(always)]
-    unsafe fn store(&mut self, vector: V, index: usize) {
+    unsafe fn store(&mut self, vector: V, index: usize) { unsafe {
         self.output.store(vector, index);
-    }
+    }}
     #[inline(always)]
-    unsafe fn store1_lo(&mut self, vector: V, index: usize) {
+    unsafe fn store1_lo(&mut self, vector: V, index: usize) { unsafe {
         self.output.store1_lo(vector, index);
-    }
+    }}
 }

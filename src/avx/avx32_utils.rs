@@ -4,7 +4,7 @@ use super::avx_vector::{AvxVector, AvxVector256};
 
 // Treat the input like the rows of a 4x4 array, and transpose said rows to the columns
 #[inline(always)]
-pub unsafe fn transpose_4x4_f32(rows: [__m256; 4]) -> [__m256; 4] {
+pub unsafe fn transpose_4x4_f32(rows: [__m256; 4]) -> [__m256; 4] { unsafe {
     let permute0 = _mm256_permute2f128_ps(rows[0], rows[2], 0x20);
     let permute1 = _mm256_permute2f128_ps(rows[1], rows[3], 0x20);
     let permute2 = _mm256_permute2f128_ps(rows[0], rows[2], 0x31);
@@ -14,13 +14,13 @@ pub unsafe fn transpose_4x4_f32(rows: [__m256; 4]) -> [__m256; 4] {
     let [unpacked2, unpacked3] = AvxVector::unpack_complex([permute2, permute3]);
 
     [unpacked0, unpacked1, unpacked2, unpacked3]
-}
+}}
 
 // Treat the input like the rows of a 4x8 array, and transpose it to a 8x4 array, where each array of 4 is one set of 4 columns
 // The assumption here is that it's very likely that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
 // The second array only has two columns of valid data. TODO: make them __m128 instead
 #[inline(always)]
-pub unsafe fn transpose_4x6_to_6x4_f32(rows: [__m256; 6]) -> ([__m256; 4], [__m256; 4]) {
+pub unsafe fn transpose_4x6_to_6x4_f32(rows: [__m256; 6]) -> ([__m256; 4], [__m256; 4]) { unsafe {
     let chunk0 = [rows[0], rows[1], rows[2], rows[3]];
     let chunk1 = [rows[4], rows[5], _mm256_setzero_ps(), _mm256_setzero_ps()];
 
@@ -28,11 +28,11 @@ pub unsafe fn transpose_4x6_to_6x4_f32(rows: [__m256; 6]) -> ([__m256; 4], [__m2
     let output1 = transpose_4x4_f32(chunk1);
 
     (output0, output1)
-}
+}}
 
 // Treat the input like the rows of a 8x4 array, and transpose it to a 4x8 array
 #[inline(always)]
-pub unsafe fn transpose_8x4_to_4x8_f32(rows0: [__m256; 4], rows1: [__m256; 4]) -> [__m256; 8] {
+pub unsafe fn transpose_8x4_to_4x8_f32(rows0: [__m256; 4], rows1: [__m256; 4]) -> [__m256; 8] { unsafe {
     let transposed0 = transpose_4x4_f32(rows0);
     let transposed1 = transpose_4x4_f32(rows1);
 
@@ -46,7 +46,7 @@ pub unsafe fn transpose_8x4_to_4x8_f32(rows0: [__m256; 4], rows1: [__m256; 4]) -
         transposed1[2],
         transposed1[3],
     ]
-}
+}}
 
 // Treat the input like the rows of a 9x3 array, and transpose it to a 3x9 array.
 // our parameters are technically 10 columns, not 9 -- we're going to discard the second element of row0
@@ -55,7 +55,7 @@ pub unsafe fn transpose_9x3_to_3x9_emptycolumn1_f32(
     rows0: [__m128; 3],
     rows1: [__m256; 3],
     rows2: [__m256; 3],
-) -> [__m256; 9] {
+) -> [__m256; 9] { unsafe {
     // the first row of the output will be the first column of the input
     let unpacked0 = AvxVector::unpacklo_complex([rows0[0], rows0[1]]);
     let unpacked1 = AvxVector::unpacklo_complex([rows0[2], _mm_setzero_ps()]);
@@ -75,7 +75,7 @@ pub unsafe fn transpose_9x3_to_3x9_emptycolumn1_f32(
         transposed1[2],
         transposed1[3],
     ]
-}
+}}
 
 // Treat the input like the rows of a 9x4 array, and transpose it to a 4x9 array.
 // our parameters are technically 10 columns, not 9 -- we're going to discard the second element of row0
@@ -84,7 +84,7 @@ pub unsafe fn transpose_9x4_to_4x9_emptycolumn1_f32(
     rows0: [__m128; 4],
     rows1: [__m256; 4],
     rows2: [__m256; 4],
-) -> [__m256; 9] {
+) -> [__m256; 9] { unsafe {
     // the first row of the output will be the first column of the input
     let unpacked0 = AvxVector::unpacklo_complex([rows0[0], rows0[1]]);
     let unpacked1 = AvxVector::unpacklo_complex([rows0[2], rows0[3]]);
@@ -104,7 +104,7 @@ pub unsafe fn transpose_9x4_to_4x9_emptycolumn1_f32(
         transposed1[2],
         transposed1[3],
     ]
-}
+}}
 
 // Treat the input like the rows of a 9x4 array, and transpose it to a 4x9 array.
 // our parameters are technically 10 columns, not 9 -- we're going to discard the second element of row0
@@ -113,7 +113,7 @@ pub unsafe fn transpose_9x6_to_6x9_emptycolumn1_f32(
     rows0: [__m128; 6],
     rows1: [__m256; 6],
     rows2: [__m256; 6],
-) -> ([__m256; 9], [__m128; 9]) {
+) -> ([__m256; 9], [__m128; 9]) { unsafe {
     // the first row of the output will be the first column of the input
     let unpacked0 = AvxVector::unpacklo_complex([rows0[0], rows0[1]]);
     let unpacked1 = AvxVector::unpacklo_complex([rows0[2], rows0[3]]);
@@ -152,7 +152,7 @@ pub unsafe fn transpose_9x6_to_6x9_emptycolumn1_f32(
         ],
         transposed_lo,
     )
-}
+}}
 
 // Treat the input like the rows of a 12x4 array, and transpose it to a 4x12 array
 // The assumption here is that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
@@ -161,7 +161,7 @@ pub unsafe fn transpose_12x4_to_4x12_f32(
     rows0: [__m256; 4],
     rows1: [__m256; 4],
     rows2: [__m256; 4],
-) -> [__m256; 12] {
+) -> [__m256; 12] { unsafe {
     let transposed0 = transpose_4x4_f32(rows0);
     let transposed1 = transpose_4x4_f32(rows1);
     let transposed2 = transpose_4x4_f32(rows2);
@@ -180,7 +180,7 @@ pub unsafe fn transpose_12x4_to_4x12_f32(
         transposed2[2],
         transposed2[3],
     ]
-}
+}}
 
 // Treat the input like the rows of a 12x6 array, and transpose it to a 6x12 array
 // The assumption here is that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
@@ -189,7 +189,7 @@ pub unsafe fn transpose_12x6_to_6x12_f32(
     rows0: [__m256; 6],
     rows1: [__m256; 6],
     rows2: [__m256; 6],
-) -> ([__m128; 12], [__m256; 12]) {
+) -> ([__m128; 12], [__m256; 12]) { unsafe {
     let [unpacked0, unpacked1] = AvxVector::unpack_complex([rows0[0], rows0[1]]);
     let [unpacked2, unpacked3] = AvxVector::unpack_complex([rows1[0], rows1[1]]);
     let [unpacked4, unpacked5] = AvxVector::unpack_complex([rows2[0], rows2[1]]);
@@ -228,7 +228,7 @@ pub unsafe fn transpose_12x6_to_6x12_f32(
     ];
 
     (output0, output1)
-}
+}}
 
 // Treat the input like the rows of a 8x8 array, and transpose said rows to the columns
 // The assumption here is that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
@@ -236,7 +236,7 @@ pub unsafe fn transpose_12x6_to_6x12_f32(
 pub unsafe fn transpose_8x8_f32(
     rows0: [__m256; 8],
     rows1: [__m256; 8],
-) -> ([__m256; 8], [__m256; 8]) {
+) -> ([__m256; 8], [__m256; 8]) { unsafe {
     let chunk00 = [rows0[0], rows0[1], rows0[2], rows0[3]];
     let chunk01 = [rows0[4], rows0[5], rows0[6], rows0[7]];
     let chunk10 = [rows1[0], rows1[1], rows1[2], rows1[3]];
@@ -269,4 +269,4 @@ pub unsafe fn transpose_8x8_f32(
     ];
 
     (output0, output1)
-}
+}}

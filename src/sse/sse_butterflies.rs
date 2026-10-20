@@ -18,17 +18,17 @@ use super::sse_common::{assert_f32, assert_f64};
 use super::sse_utils::*;
 
 #[inline(always)]
-unsafe fn pack_32(a: Complex<f32>, b: Complex<f32>) -> __m128 {
+unsafe fn pack_32(a: Complex<f32>, b: Complex<f32>) -> __m128 { unsafe {
     _mm_set_ps(b.im, b.re, a.im, a.re)
-}
+}}
 #[inline(always)]
-unsafe fn pack_64(a: Complex<f64>) -> __m128d {
+unsafe fn pack_64(a: Complex<f64>) -> __m128d { unsafe {
     _mm_set_pd(a.im, a.re)
-}
+}}
 
 #[allow(unused)]
 macro_rules! boilerplate_fft_sse_f32_butterfly {
-    ($struct_name:ident, $len:expr, $direction_fn:expr) => {
+    ($struct_name:ident, $len:expr_2021, $direction_fn:expr_2021) => {
         impl<T: FftNum> $struct_name<T> {
             #[target_feature(enable = "sse4.1")]
             fn process_immutable_with_target_feature(
@@ -115,7 +115,7 @@ macro_rules! boilerplate_fft_sse_f32_butterfly {
 }
 
 macro_rules! boilerplate_fft_sse_f32_butterfly_noparallel {
-    ($struct_name:ident, $len:expr, $direction_fn:expr) => {
+    ($struct_name:ident, $len:expr_2021, $direction_fn:expr_2021) => {
         impl<T: FftNum> $struct_name<T> {
             #[target_feature(enable = "sse4.1")]
             fn process_immutable_with_target_feature(
@@ -198,7 +198,7 @@ macro_rules! boilerplate_fft_sse_f32_butterfly_noparallel {
 }
 
 macro_rules! boilerplate_fft_sse_f64_butterfly {
-    ($struct_name:ident, $len:expr, $direction_fn:expr) => {
+    ($struct_name:ident, $len:expr_2021, $direction_fn:expr_2021) => {
         impl<T: FftNum> $struct_name<T> {
             #[target_feature(enable = "sse4.1")]
             fn process_immutable_with_target_feature(
@@ -311,19 +311,19 @@ impl<T: FftNum> SseF32Butterfly1<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128>,
-    ) {
+    ) { unsafe {
         let value = buffer.load1_lo(0);
         buffer.store1_lo(value, 0);
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128>,
-    ) {
+    ) { unsafe {
         let value = buffer.load(0);
         buffer.store(value, 0);
-    }
+    }}
 }
 
 //   _             __   _  _   _     _ _
@@ -353,10 +353,10 @@ impl<T: FftNum> SseF64Butterfly1<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128d>,
-    ) {
+    ) { unsafe {
         let value = buffer.load(0);
         buffer.store(value, 0);
-    }
+    }}
 }
 
 //   ____            _________  _     _ _
@@ -401,19 +401,19 @@ impl<T: FftNum> SseF32Butterfly2<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128>,
-    ) {
+    ) { unsafe {
         let values = buffer.load(0);
 
         let temp = self.perform_fft_direct(values);
 
         buffer.store(temp, 0);
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128>,
-    ) {
+    ) { unsafe {
         let values_a = buffer.load(0);
         let values_b = buffer.load(2);
 
@@ -423,14 +423,14 @@ impl<T: FftNum> SseF32Butterfly2<T> {
 
         buffer.store(out02, 0);
         buffer.store(out13, 2);
-    }
+    }}
 
     // length 2 fft of x, given as [x0, x1]
     // result is [X0, X1]
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: __m128) -> __m128 {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: __m128) -> __m128 { unsafe {
         solo_fft2_f32(values)
-    }
+    }}
 
     // dual length 2 fft of x and y, given as [x0, x1], [y0, y1]
     // result is [X0, Y0], [X1, Y1]
@@ -439,36 +439,36 @@ impl<T: FftNum> SseF32Butterfly2<T> {
         &self,
         values_x: __m128,
         values_y: __m128,
-    ) -> [__m128; 2] {
+    ) -> [__m128; 2] { unsafe {
         parallel_fft2_contiguous_f32(values_x, values_y)
-    }
+    }}
 }
 
 // double lenth 2 fft of a and b, given as [x0, y0], [x1, y1]
 // result is [X0, Y0], [X1, Y1]
 #[inline(always)]
-pub(crate) unsafe fn parallel_fft2_interleaved_f32(val02: __m128, val13: __m128) -> [__m128; 2] {
+pub(crate) unsafe fn parallel_fft2_interleaved_f32(val02: __m128, val13: __m128) -> [__m128; 2] { unsafe {
     let temp0 = _mm_add_ps(val02, val13);
     let temp1 = _mm_sub_ps(val02, val13);
     [temp0, temp1]
-}
+}}
 
 // double lenth 2 fft of a and b, given as [x0, x1], [y0, y1]
 // result is [X0, Y0], [X1, Y1]
 #[inline(always)]
-unsafe fn parallel_fft2_contiguous_f32(left: __m128, right: __m128) -> [__m128; 2] {
+unsafe fn parallel_fft2_contiguous_f32(left: __m128, right: __m128) -> [__m128; 2] { unsafe {
     let [temp02, temp13] = transpose_complex_2x2_f32(left, right);
     parallel_fft2_interleaved_f32(temp02, temp13)
-}
+}}
 
 // length 2 fft of x, given as [x0, x1]
 // result is [X0, X1]
 #[inline(always)]
-unsafe fn solo_fft2_f32(values: __m128) -> __m128 {
+unsafe fn solo_fft2_f32(values: __m128) -> __m128 { unsafe {
     let temp = reverse_complex_elements_f32(values);
     let temp2 = negate_hi_f32(values);
     _mm_add_ps(temp2, temp)
-}
+}}
 
 //   ____             __   _  _   _     _ _
 //  |___ \           / /_ | || | | |__ (_) |_
@@ -514,7 +514,7 @@ impl<T: FftNum> SseF64Butterfly2<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128d>,
-    ) {
+    ) { unsafe {
         let value0 = buffer.load(0);
         let value1 = buffer.load(1);
 
@@ -522,24 +522,24 @@ impl<T: FftNum> SseF64Butterfly2<T> {
 
         buffer.store(out[0], 0);
         buffer.store(out[1], 1);
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
         &self,
         value0: __m128d,
         value1: __m128d,
-    ) -> [__m128d; 2] {
+    ) -> [__m128d; 2] { unsafe {
         solo_fft2_f64(value0, value1)
-    }
+    }}
 }
 
 #[inline(always)]
-pub(crate) unsafe fn solo_fft2_f64(left: __m128d, right: __m128d) -> [__m128d; 2] {
+pub(crate) unsafe fn solo_fft2_f64(left: __m128d, right: __m128d) -> [__m128d; 2] { unsafe {
     let temp0 = _mm_add_pd(left, right);
     let temp1 = _mm_sub_pd(left, right);
     [temp0, temp1]
-}
+}}
 
 //   _____            _________  _     _ _
 //  |___ /           |___ /___ \| |__ (_) |_
@@ -620,7 +620,7 @@ impl<T: FftNum> SseF32Butterfly3<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128>,
-    ) {
+    ) { unsafe {
         let value0x = buffer.load1_lo(0);
         let value12 = buffer.load(1);
 
@@ -628,13 +628,13 @@ impl<T: FftNum> SseF32Butterfly3<T> {
 
         buffer.store1_lo(out[0], 0);
         buffer.store(out[1], 1);
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128>,
-    ) {
+    ) { unsafe {
         let valuea0a1 = buffer.load(0);
         let valuea2b0 = buffer.load(2);
         let valueb1b2 = buffer.load(4);
@@ -652,7 +652,7 @@ impl<T: FftNum> SseF32Butterfly3<T> {
         buffer.store(out0, 0);
         buffer.store(out1, 2);
         buffer.store(out2, 4);
-    }
+    }}
 
     // length 3 fft of a, given as [x0, 0.0], [x1, x2]
     // result is [X0, Z], [X1, X2]
@@ -662,7 +662,7 @@ impl<T: FftNum> SseF32Butterfly3<T> {
         &self,
         value0x: __m128,
         value12: __m128,
-    ) -> [__m128; 2] {
+    ) -> [__m128; 2] { unsafe {
         let rotate = Rotate90HiF32::new(FftDirection::Inverse);
 
         // This is a SSE translation of the scalar 3-point butterfly
@@ -673,7 +673,7 @@ impl<T: FftNum> SseF32Butterfly3<T> {
         let out12 = solo_fft2_f32(temp);
         let out0x = _mm_add_ps(value0x, temp12pn);
         [out0x, out12]
-    }
+    }}
 
     // length 3 dual fft of a, given as (x0, y0), (x1, y1), (x2, y2).
     // result is [(X0, Y0), (X1, Y1), (X2, Y2)]
@@ -683,7 +683,7 @@ impl<T: FftNum> SseF32Butterfly3<T> {
         value0: __m128,
         value1: __m128,
         value2: __m128,
-    ) -> [__m128; 3] {
+    ) -> [__m128; 3] { unsafe {
         // This is a SSE translation of the scalar 3-point butterfly
         let x12p = _mm_add_ps(value1, value2);
         let x12n = _mm_sub_ps(value1, value2);
@@ -699,7 +699,7 @@ impl<T: FftNum> SseF32Butterfly3<T> {
         let x1 = _mm_add_ps(temp_a, temp_b);
         let x2 = _mm_sub_ps(temp_a, temp_b);
         [sum, x1, x2]
-    }
+    }}
 }
 
 //   _____             __   _  _   _     _ _
@@ -783,7 +783,7 @@ impl<T: FftNum> SseF64Butterfly3<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128d>,
-    ) {
+    ) { unsafe {
         let value0 = buffer.load(0);
         let value1 = buffer.load(1);
         let value2 = buffer.load(2);
@@ -793,7 +793,7 @@ impl<T: FftNum> SseF64Butterfly3<T> {
         buffer.store(out[0], 0);
         buffer.store(out[1], 1);
         buffer.store(out[2], 2);
-    }
+    }}
 
     // length 3 fft of x, given as x0, x1, x2.
     // result is [X0, X1, X2]
@@ -803,7 +803,7 @@ impl<T: FftNum> SseF64Butterfly3<T> {
         value0: __m128d,
         value1: __m128d,
         value2: __m128d,
-    ) -> [__m128d; 3] {
+    ) -> [__m128d; 3] { unsafe {
         // This is a SSE translation of the scalar 3-point butterfly
         let x12p = _mm_add_pd(value1, value2);
         let x12n = _mm_sub_pd(value1, value2);
@@ -818,7 +818,7 @@ impl<T: FftNum> SseF64Butterfly3<T> {
         let x1 = _mm_add_pd(temp_a, temp_b);
         let x2 = _mm_sub_pd(temp_a, temp_b);
         [sum, x1, x2]
-    }
+    }}
 }
 
 //   _  _             _________  _     _ _
@@ -890,7 +890,7 @@ impl<T: FftNum> SseF32Butterfly4<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128>,
-    ) {
+    ) { unsafe {
         let value01 = buffer.load(0);
         let value23 = buffer.load(2);
 
@@ -898,13 +898,13 @@ impl<T: FftNum> SseF32Butterfly4<T> {
 
         buffer.store(out[0], 0);
         buffer.store(out[1], 2);
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128>,
-    ) {
+    ) { unsafe {
         let value01a = buffer.load(0);
         let value23a = buffer.load(2);
         let value01b = buffer.load(4);
@@ -922,7 +922,7 @@ impl<T: FftNum> SseF32Butterfly4<T> {
         buffer.store(out1, 4);
         buffer.store(out2, 2);
         buffer.store(out3, 6);
-    }
+    }}
 
     // length 4 fft of a, given as [x0, x1], [x2, x3]
     // result is [[X0, X1], [X2, X3]]
@@ -931,7 +931,7 @@ impl<T: FftNum> SseF32Butterfly4<T> {
         &self,
         value01: __m128,
         value23: __m128,
-    ) -> [__m128; 2] {
+    ) -> [__m128; 2] { unsafe {
         //we're going to hardcode a step of mixed radix
         //aka we're going to do the six step algorithm
 
@@ -949,10 +949,10 @@ impl<T: FftNum> SseF32Butterfly4<T> {
         // and
         // step 6: transpose by swapping index 1 and 2
         parallel_fft2_contiguous_f32(temp[0], temp[1])
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [__m128; 4]) -> [__m128; 4] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [__m128; 4]) -> [__m128; 4] { unsafe {
         //we're going to hardcode a step of mixed radix
         //aka we're going to do the six step algorithm
 
@@ -973,7 +973,7 @@ impl<T: FftNum> SseF32Butterfly4<T> {
 
         // step 6: transpose by swapping index 1 and 2
         [out0[0], out2[0], out0[1], out2[1]]
-    }
+    }}
 }
 
 //   _  _              __   _  _   _     _ _
@@ -1045,7 +1045,7 @@ impl<T: FftNum> SseF64Butterfly4<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128d>,
-    ) {
+    ) { unsafe {
         let value0 = buffer.load(0);
         let value1 = buffer.load(1);
         let value2 = buffer.load(2);
@@ -1057,10 +1057,10 @@ impl<T: FftNum> SseF64Butterfly4<T> {
         buffer.store(out[1], 1);
         buffer.store(out[2], 2);
         buffer.store(out[3], 3);
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 4]) -> [__m128d; 4] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 4]) -> [__m128d; 4] { unsafe {
         //we're going to hardcode a step of mixed radix
         //aka we're going to do the six step algorithm
 
@@ -1081,7 +1081,7 @@ impl<T: FftNum> SseF64Butterfly4<T> {
 
         // step 6: transpose by swapping index 1 and 2
         [out0[0], out2[0], out0[1], out2[1]]
-    }
+    }}
 }
 
 //   ____             _________  _     _ _
@@ -1201,7 +1201,7 @@ impl<T: FftNum> SseF32Butterfly5<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128>,
-    ) {
+    ) { unsafe {
         let value00 = buffer.load1_dup(0);
         let value12 = buffer.load(1);
         let value34 = buffer.load(3);
@@ -1211,13 +1211,13 @@ impl<T: FftNum> SseF32Butterfly5<T> {
         buffer.store1_lo(out[0], 0);
         buffer.store(out[1], 1);
         buffer.store(out[2], 3);
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128>,
-    ) {
+    ) { unsafe {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4 ,6, 8});
 
         let value0 = extract_lo_hi_f32(input_packed[0], input_packed[2]);
@@ -1237,7 +1237,7 @@ impl<T: FftNum> SseF32Butterfly5<T> {
         ];
 
         write_complex_to_array_strided!(out_packed, buffer, 2, {0, 1, 2, 3, 4});
-    }
+    }}
 
     // length 5 fft of a, given as [x0, x0], [x1, x2], [x3, x4].
     // result is [[X0, Z], [X1, X2], [X3, X4]]
@@ -1248,7 +1248,7 @@ impl<T: FftNum> SseF32Butterfly5<T> {
         value00: __m128,
         value12: __m128,
         value34: __m128,
-    ) -> [__m128; 3] {
+    ) -> [__m128; 3] { unsafe {
         // This is a SSE translation of the scalar 5-point butterfly
         let temp43 = reverse_complex_elements_f32(value34);
         let x1423p = _mm_add_ps(value12, temp43);
@@ -1277,7 +1277,7 @@ impl<T: FftNum> SseF32Butterfly5<T> {
         let x12 = _mm_add_ps(temp_a, b_rot);
         let x34 = reverse_complex_elements_f32(_mm_sub_ps(temp_a, b_rot));
         [x00, x12, x34]
-    }
+    }}
 
     // length 5 dual fft of x and y, given as (x0, y0), (x1, y1) ... (x4, y4).
     // result is [(X0, Y0), (X1, Y1) ... (X2, Y2)]
@@ -1289,7 +1289,7 @@ impl<T: FftNum> SseF32Butterfly5<T> {
         value2: __m128,
         value3: __m128,
         value4: __m128,
-    ) -> [__m128; 5] {
+    ) -> [__m128; 5] { unsafe {
         // This is a SSE translation of the scalar 3-point butterfly
         let x14p = _mm_add_ps(value1, value4);
         let x14n = _mm_sub_ps(value1, value4);
@@ -1317,7 +1317,7 @@ impl<T: FftNum> SseF32Butterfly5<T> {
             _mm_sub_ps(temp_a2, self.rotate.rotate(temp_b2)),
             _mm_sub_ps(temp_a1, self.rotate.rotate(temp_b1)),
         ]
-    }
+    }}
 }
 
 //   ____              __   _  _   _     _ _
@@ -1426,7 +1426,7 @@ impl<T: FftNum> SseF64Butterfly5<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128d>,
-    ) {
+    ) { unsafe {
         let value0 = buffer.load(0);
         let value1 = buffer.load(1);
         let value2 = buffer.load(2);
@@ -1440,7 +1440,7 @@ impl<T: FftNum> SseF64Butterfly5<T> {
         buffer.store(out[2], 2);
         buffer.store(out[3], 3);
         buffer.store(out[4], 4);
-    }
+    }}
 
     // length 5 fft of x, given as x0, x1, x2, x3, x4.
     // result is [X0, X1, X2, X3, X4]
@@ -1452,7 +1452,7 @@ impl<T: FftNum> SseF64Butterfly5<T> {
         value2: __m128d,
         value3: __m128d,
         value4: __m128d,
-    ) -> [__m128d; 5] {
+    ) -> [__m128d; 5] { unsafe {
         // This is a SSE translation of the scalar 5-point butterfly
         let x14p = _mm_add_pd(value1, value4);
         let x14n = _mm_sub_pd(value1, value4);
@@ -1484,7 +1484,7 @@ impl<T: FftNum> SseF64Butterfly5<T> {
             _mm_sub_pd(temp_a2, temp_b2_rot),
             _mm_sub_pd(temp_a1, temp_b1_rot),
         ]
-    }
+    }}
 }
 
 //    __             _________  _     _ _
@@ -1555,7 +1555,7 @@ impl<T: FftNum> SseF32Butterfly6<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128>,
-    ) {
+    ) { unsafe {
         let value01 = buffer.load(0);
         let value23 = buffer.load(2);
         let value45 = buffer.load(4);
@@ -1565,13 +1565,13 @@ impl<T: FftNum> SseF32Butterfly6<T> {
         buffer.store(out[0], 0);
         buffer.store(out[1], 2);
         buffer.store(out[2], 4);
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128>,
-    ) {
+    ) { unsafe {
         let input_packed = read_complex_to_array!(buffer,  {0, 2, 4, 6, 8, 10});
 
         let values = interleave_complex_f32!(input_packed, 3, {0, 1, 2});
@@ -1582,7 +1582,7 @@ impl<T: FftNum> SseF32Butterfly6<T> {
 
         let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4});
         write_complex_to_array_strided!(out_sorted, buffer, 2, {0, 1, 2, 3, 4, 5});
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
@@ -1590,7 +1590,7 @@ impl<T: FftNum> SseF32Butterfly6<T> {
         value01: __m128,
         value23: __m128,
         value45: __m128,
-    ) -> [__m128; 3] {
+    ) -> [__m128; 3] { unsafe {
         // Algorithm: 3x2 good-thomas
 
         // Size-3 FFTs down the columns of our reordered array
@@ -1612,7 +1612,7 @@ impl<T: FftNum> SseF32Butterfly6<T> {
             extract_lo_lo_f32(output2, output1),
             extract_hi_hi_f32(output0, output2),
         ]
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(
@@ -1623,7 +1623,7 @@ impl<T: FftNum> SseF32Butterfly6<T> {
         value3: __m128,
         value4: __m128,
         value5: __m128,
-    ) -> [__m128; 6] {
+    ) -> [__m128; 6] { unsafe {
         // Algorithm: 3x2 good-thomas
 
         // Size-3 FFTs down the columns of our reordered array
@@ -1639,7 +1639,7 @@ impl<T: FftNum> SseF32Butterfly6<T> {
 
         // Reorder into output
         [output0, output3, output4, output1, output2, output5]
-    }
+    }}
 }
 
 //    __              __   _  _   _     _ _
@@ -1709,7 +1709,7 @@ impl<T: FftNum> SseF64Butterfly6<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128d>,
-    ) {
+    ) { unsafe {
         let value0 = buffer.load(0);
         let value1 = buffer.load(1);
         let value2 = buffer.load(2);
@@ -1725,10 +1725,10 @@ impl<T: FftNum> SseF64Butterfly6<T> {
         buffer.store(out[3], 3);
         buffer.store(out[4], 4);
         buffer.store(out[5], 5);
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 6]) -> [__m128d; 6] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 6]) -> [__m128d; 6] { unsafe {
         // Algorithm: 3x2 good-thomas
 
         // Size-3 FFTs down the columns of our reordered array
@@ -1744,7 +1744,7 @@ impl<T: FftNum> SseF64Butterfly6<T> {
 
         // Reorder into output
         [output0, output3, output4, output1, output2, output5]
-    }
+    }}
 }
 
 //    ___            _________  _     _ _
@@ -1783,19 +1783,19 @@ impl<T: FftNum> SseF32Butterfly8<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) { unsafe {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6});
 
         let out = self.perform_fft_direct(input_packed);
 
         write_complex_to_array_strided!(out, buffer, 2, {0,1,2,3});
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128>,
-    ) {
+    ) { unsafe {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14});
 
         let values = interleave_complex_f32!(input_packed, 4, {0, 1, 2, 3});
@@ -1805,10 +1805,10 @@ impl<T: FftNum> SseF32Butterfly8<T> {
         let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6});
 
         write_complex_to_array_strided!(out_sorted, buffer, 2, {0,1,2,3,4,5,6,7});
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn perform_fft_direct(&self, values: [__m128; 4]) -> [__m128; 4] {
+    unsafe fn perform_fft_direct(&self, values: [__m128; 4]) -> [__m128; 4] { unsafe {
         // we're going to hardcode a step of mixed radix
         // step 1: copy and reorder the input into the scratch
         let [in02, in13] = transpose_complex_2x2_f32(values[0], values[1]);
@@ -1837,10 +1837,10 @@ impl<T: FftNum> SseF32Butterfly8<T> {
 
         // step 6: rearrange and copy to buffer
         [out0[0], out1[0], out0[1], out1[1]]
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn perform_parallel_fft_direct(&self, values: [__m128; 8]) -> [__m128; 8] {
+    unsafe fn perform_parallel_fft_direct(&self, values: [__m128; 8]) -> [__m128; 8] { unsafe {
         // we're going to hardcode a step of mixed radix
         // step 1: copy and reorder the input into the scratch
         // and
@@ -1873,7 +1873,7 @@ impl<T: FftNum> SseF32Butterfly8<T> {
         [
             out0[0], out1[0], out2[0], out3[0], out0[1], out1[1], out2[1], out3[1],
         ]
-    }
+    }}
 }
 
 //    ___             __   _  _   _     _ _
@@ -1900,16 +1900,16 @@ impl<T: FftNum> SseF64Butterfly8<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) { unsafe {
         let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7});
 
         let out = self.perform_fft_direct(values);
 
         write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7});
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn perform_fft_direct(&self, values: [__m128d; 8]) -> [__m128d; 8] {
+    unsafe fn perform_fft_direct(&self, values: [__m128d; 8]) -> [__m128d; 8] { unsafe {
         // we're going to hardcode a step of mixed radix
         // step 1: copy and reorder the input into the scratch
         // and
@@ -1938,7 +1938,7 @@ impl<T: FftNum> SseF64Butterfly8<T> {
         [
             out0[0], out1[0], out2[0], out3[0], out0[1], out1[1], out2[1], out3[1],
         ]
-    }
+    }}
 }
 
 //    ___            _________  _     _ _
@@ -1983,7 +1983,7 @@ impl<T: FftNum> SseF32Butterfly9<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128>,
-    ) {
+    ) { unsafe {
         // A single Sse 9-point will need a lot of shuffling, let's just reuse the dual one
         let values = read_partial1_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8});
 
@@ -1992,13 +1992,13 @@ impl<T: FftNum> SseF32Butterfly9<T> {
         for n in 0..9 {
             buffer.store1_lo(out[n], n);
         }
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128>,
-    ) {
+    ) { unsafe {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16});
 
         let values = [
@@ -2028,10 +2028,10 @@ impl<T: FftNum> SseF32Butterfly9<T> {
         ];
 
         write_complex_to_array_strided!(out_packed, buffer, 2, {0,1,2,3,4,5,6,7,8});
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [__m128; 9]) -> [__m128; 9] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [__m128; 9]) -> [__m128; 9] { unsafe {
         // Algorithm: 3x3 mixed radix
 
         // Size-3 FFTs down the columns
@@ -2064,7 +2064,7 @@ impl<T: FftNum> SseF32Butterfly9<T> {
         [
             output0, output3, output6, output1, output4, output7, output2, output5, output8,
         ]
-    }
+    }}
 }
 
 //    ___             __   _  _   _     _ _
@@ -2109,16 +2109,16 @@ impl<T: FftNum> SseF64Butterfly9<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128d>,
-    ) {
+    ) { unsafe {
         let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8});
 
         let out = self.perform_fft_direct(values);
 
         write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8});
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 9]) -> [__m128d; 9] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 9]) -> [__m128d; 9] { unsafe {
         // Algorithm: 3x3 mixed radix
 
         // Size-3 FFTs down the columns
@@ -2139,7 +2139,7 @@ impl<T: FftNum> SseF64Butterfly9<T> {
         [
             output0, output3, output6, output1, output4, output7, output2, output5, output8,
         ]
-    }
+    }}
 }
 
 //   _  ___            _________  _     _ _
@@ -2170,19 +2170,19 @@ impl<T: FftNum> SseF32Butterfly10<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) { unsafe {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8});
 
         let out = self.perform_fft_direct(input_packed);
 
         write_complex_to_array_strided!(out, buffer, 2, {0,1,2,3,4});
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128>,
-    ) {
+    ) { unsafe {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18});
 
         let values = interleave_complex_f32!(input_packed, 5, {0, 1, 2, 3, 4});
@@ -2192,10 +2192,10 @@ impl<T: FftNum> SseF32Butterfly10<T> {
         let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6, 8});
 
         write_complex_to_array_strided!(out_sorted, buffer, 2, {0,1,2,3,4,5,6,7,8,9});
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128; 5]) -> [__m128; 5] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128; 5]) -> [__m128; 5] { unsafe {
         // Algorithm: 5x2 good-thomas
         // Reorder and pack
         let reord0 = extract_lo_hi_f32(values[0], values[2]);
@@ -2224,10 +2224,10 @@ impl<T: FftNum> SseF32Butterfly10<T> {
         let out89 = extract_hi_hi_f32(temp45, temp89);
 
         [out01, out23, out45, out67, out89]
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [__m128; 10]) -> [__m128; 10] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [__m128; 10]) -> [__m128; 10] { unsafe {
         // Algorithm: 5x2 good-thomas
 
         // Size-5 FFTs down the columns of our reordered array
@@ -2252,7 +2252,7 @@ impl<T: FftNum> SseF32Butterfly10<T> {
             output0, output3, output4, output7, output8, output1, output2, output5, output6,
             output9,
         ]
-    }
+    }}
 }
 
 //   _  ___             __   _  _   _     _ _
@@ -2288,16 +2288,16 @@ impl<T: FftNum> SseF64Butterfly10<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128d>,
-    ) {
+    ) { unsafe {
         let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
 
         let out = self.perform_fft_direct(values);
 
         write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 10]) -> [__m128d; 10] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 10]) -> [__m128d; 10] { unsafe {
         // Algorithm: 5x2 good-thomas
 
         // Size-5 FFTs down the columns of our reordered array
@@ -2322,7 +2322,7 @@ impl<T: FftNum> SseF64Butterfly10<T> {
             output0, output3, output4, output7, output8, output1, output2, output5, output6,
             output9,
         ]
-    }
+    }}
 }
 
 //   _ ____            _________  _     _ _
@@ -2356,19 +2356,19 @@ impl<T: FftNum> SseF32Butterfly12<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) { unsafe {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10 });
 
         let out = self.perform_fft_direct(input_packed);
 
         write_complex_to_array_strided!(out, buffer, 2, {0,1,2,3,4,5});
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128>,
-    ) {
+    ) { unsafe {
         let input_packed =
             read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22});
 
@@ -2379,10 +2379,10 @@ impl<T: FftNum> SseF32Butterfly12<T> {
         let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6, 8, 10});
 
         write_complex_to_array_strided!(out_sorted, buffer, 2, {0,1,2,3,4,5,6,7,8,9, 10, 11});
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128; 6]) -> [__m128; 6] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128; 6]) -> [__m128; 6] { unsafe {
         // Algorithm: 4x3 good-thomas
 
         // Reorder and pack
@@ -2417,10 +2417,10 @@ impl<T: FftNum> SseF32Butterfly12<T> {
             extract_lo_hi_f32(temp25, temp03),
             extract_lo_hi_f32(temp710, temp811),
         ]
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [__m128; 12]) -> [__m128; 12] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [__m128; 12]) -> [__m128; 12] { unsafe {
         // Algorithm: 4x3 good-thomas
 
         // Size-4 FFTs down the columns of our reordered array
@@ -2455,7 +2455,7 @@ impl<T: FftNum> SseF32Butterfly12<T> {
             output0, output4, output8, output9, output1, output5, output6, output10, output2,
             output3, output7, output11,
         ]
-    }
+    }}
 }
 
 //   _ ____             __   _  _   _     _ _
@@ -2491,16 +2491,16 @@ impl<T: FftNum> SseF64Butterfly12<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128d>,
-    ) {
+    ) { unsafe {
         let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11});
 
         let out = self.perform_fft_direct(values);
 
         write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11});
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 12]) -> [__m128d; 12] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 12]) -> [__m128d; 12] { unsafe {
         // Algorithm: 4x3 good-thomas
 
         // Size-4 FFTs down the columns of our reordered array
@@ -2526,7 +2526,7 @@ impl<T: FftNum> SseF64Butterfly12<T> {
             output0, output4, output8, output9, output1, output5, output6, output10, output2,
             output3, output7, output11,
         ]
-    }
+    }}
 }
 
 //   _ ____            _________  _     _ _
@@ -2562,7 +2562,7 @@ impl<T: FftNum> SseF32Butterfly15<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128>,
-    ) {
+    ) { unsafe {
         // A single Sse 15-point will need a lot of shuffling, let's just reuse the dual one
         let values = read_partial1_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14});
 
@@ -2571,13 +2571,13 @@ impl<T: FftNum> SseF32Butterfly15<T> {
         for n in 0..15 {
             buffer.store1_lo(out[n], n);
         }
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128>,
-    ) {
+    ) { unsafe {
         let input_packed =
             read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28});
 
@@ -2620,10 +2620,10 @@ impl<T: FftNum> SseF32Butterfly15<T> {
         ];
 
         write_complex_to_array_strided!(out_packed, buffer, 2, {0,1,2,3,4,5,6,7,8,9, 10, 11, 12, 13, 14});
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [__m128; 15]) -> [__m128; 15] {
+    pub(crate) unsafe fn perform_parallel_fft_direct(&self, values: [__m128; 15]) -> [__m128; 15] { unsafe {
         // Algorithm: 5x3 good-thomas
 
         // Size-5 FFTs down the columns of our reordered array
@@ -2660,7 +2660,7 @@ impl<T: FftNum> SseF32Butterfly15<T> {
             output0, output4, output8, output9, output13, output2, output3, output7, output11,
             output12, output1, output5, output6, output10, output14,
         ]
-    }
+    }}
 }
 
 //   _ ____             __   _  _   _     _ _
@@ -2696,17 +2696,17 @@ impl<T: FftNum> SseF64Butterfly15<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128d>,
-    ) {
+    ) { unsafe {
         let values =
             read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
 
         let out = self.perform_fft_direct(values);
 
         write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 15]) -> [__m128d; 15] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [__m128d; 15]) -> [__m128d; 15] { unsafe {
         // Algorithm: 5x3 good-thomas
 
         // Size-5 FFTs down the columns of our reordered array
@@ -2733,7 +2733,7 @@ impl<T: FftNum> SseF64Butterfly15<T> {
             output0, output4, output8, output9, output13, output2, output3, output7, output11,
             output12, output1, output5, output6, output10, output14,
         ]
-    }
+    }}
 }
 
 //   _  __             _________  _     _ _
@@ -2784,7 +2784,7 @@ impl<T: FftNum> SseF32Butterfly16<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) { unsafe {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -2833,14 +2833,14 @@ impl<T: FftNum> SseF32Butterfly16<T> {
             .bf4
             .perform_parallel_fft_direct([mid4, mid5, mid6, mid7]);
         store(2, out1);
-    }
+    }}
 
     // benchmarking shows it's faster to always use the nonparallel version, but this is kep around for reference
     #[allow(unused)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128>,
-    ) {
+    ) { unsafe {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -2899,7 +2899,7 @@ impl<T: FftNum> SseF32Butterfly16<T> {
             .bf4
             .perform_parallel_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3]]);
         store(2, out2, out3);
-    }
+    }}
 }
 //   _  __              __   _  _   _     _ _
 //  / |/ /_            / /_ | || | | |__ (_) |_
@@ -2937,7 +2937,7 @@ impl<T: FftNum> SseF64Butterfly16<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) { unsafe {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -3001,7 +3001,7 @@ impl<T: FftNum> SseF64Butterfly16<T> {
             .bf4
             .perform_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3]]);
         store(3, out3);
-    }
+    }}
 }
 
 //    ___ _  _             _________  _     _ _
@@ -3068,7 +3068,7 @@ impl<T: FftNum> SseF32Butterfly24<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) { unsafe {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -3127,13 +3127,13 @@ impl<T: FftNum> SseF32Butterfly24<T> {
             .bf6
             .perform_parallel_fft_direct(mid6, mid7, mid8, mid9, mid10, mid11);
         store(2, out1);
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128>,
-    ) {
+    ) { unsafe {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -3202,7 +3202,7 @@ impl<T: FftNum> SseF32Butterfly24<T> {
             .bf6
             .perform_parallel_fft_direct(tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3]);
         store(2, out2, out3);
-    }
+    }}
 }
 
 //    ___ _  _              __   _  _   _     _ _
@@ -3252,7 +3252,7 @@ impl<T: FftNum> SseF64Butterfly24<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) { unsafe {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -3328,7 +3328,7 @@ impl<T: FftNum> SseF64Butterfly24<T> {
             .bf6
             .perform_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3]]);
         store(3, out3);
-    }
+    }}
 }
 
 //   _________            _________  _     _ _
@@ -3413,7 +3413,7 @@ impl<T: FftNum> SseF32Butterfly32<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) { unsafe {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -3481,13 +3481,13 @@ impl<T: FftNum> SseF32Butterfly32<T> {
             .bf8
             .perform_parallel_fft_direct([mid8, mid9, mid10, mid11, mid12, mid13, mid14, mid15]);
         store(2, out1);
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<__m128>,
-    ) {
+    ) { unsafe {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -3566,7 +3566,7 @@ impl<T: FftNum> SseF32Butterfly32<T> {
             tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3], tmp6[3], tmp7[3],
         ]);
         store(2, out2, out3);
-    }
+    }}
 }
 
 //   _________             __   _  _   _     _ _
@@ -3633,7 +3633,7 @@ impl<T: FftNum> SseF64Butterfly32<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) { unsafe {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -3721,7 +3721,7 @@ impl<T: FftNum> SseF64Butterfly32<T> {
             tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3], tmp6[3], tmp7[3],
         ]);
         store(3, out3);
-    }
+    }}
 }
 
 #[cfg(test)]
@@ -3735,7 +3735,7 @@ mod unit_tests {
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
     macro_rules! test_butterfly_32_func {
-        ($test_name:ident, $struct_name:ident, $size:expr) => {
+        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
             #[test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
@@ -3764,7 +3764,7 @@ mod unit_tests {
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
     macro_rules! test_butterfly_64_func {
-        ($test_name:ident, $struct_name:ident, $size:expr) => {
+        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
             #[test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
@@ -3791,7 +3791,7 @@ mod unit_tests {
     test_butterfly_64_func!(test_ssef64_butterfly32, SseF64Butterfly32, 32);
 
     macro_rules! test_parallel_butterfly_32_func {
-        ($test_name:ident, $struct_name:ident, $size:expr) => {
+        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
             #[test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
@@ -3810,7 +3810,7 @@ mod unit_tests {
     test_parallel_butterfly_32_func!(test_ssef32_parallel_butterfly6, SseF32ParallelButterfly6, 6);
 
     macro_rules! test_parallel_butterfly_64_func {
-        ($test_name:ident, $struct_name:ident, $size:expr) => {
+        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
             #[test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);

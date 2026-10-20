@@ -148,7 +148,7 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
 
     /// The stack of in-place cross-FFT layers, run after the base FFTs.
     #[inline(always)]
-    unsafe fn cross_ffts(&self, output: &mut [Complex<T>]) {
+    unsafe fn cross_ffts(&self, output: &mut [Complex<T>]) { unsafe {
         let out: &mut [Complex<V::ScalarType>] = workaround_transmute_mut(output);
 
         let mut cross_fft_len = self.base_len;
@@ -166,7 +166,7 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
             let twiddle_offset = num_columns.div_ceil(V::COMPLEX_PER_VECTOR) * (RADIX - 1);
             layer_twiddles = &layer_twiddles[twiddle_offset..];
         }
-    }
+    }}
 
     #[inline(always)]
     pub fn process_single_immutable(

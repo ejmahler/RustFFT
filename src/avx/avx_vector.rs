@@ -47,9 +47,9 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
     unsafe fn unpackhi_complex(rows: [Self; 2]) -> Self;
 
     #[inline(always)]
-    unsafe fn unpack_complex(rows: [Self; 2]) -> [Self; 2] {
+    unsafe fn unpack_complex(rows: [Self; 2]) -> [Self; 2] { unsafe {
         [Self::unpacklo_complex(rows), Self::unpackhi_complex(rows)]
-    }
+    }}
 
     /// Fill a vector by computing a twiddle factor and repeating it across the whole vector
     unsafe fn broadcast_twiddle(index: usize, len: usize, direction: FftDirection) -> Self;
@@ -82,7 +82,7 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
 
     /// Pairwise multiply the complex numbers in `left` with the complex numbers in `right`.
     #[inline(always)]
-    unsafe fn mul_complex(left: Self, right: Self) -> Self {
+    unsafe fn mul_complex(left: Self, right: Self) -> Self { unsafe {
         // Extract the real and imaginary components from left into 2 separate registers
         let (left_real, left_imag) = Self::duplicate_complex_components(left);
 
@@ -94,24 +94,24 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
 
         // use a FMA instruction to multiply together left side of the complex multiplication formula, then alternatingly add and subtract the left side from the right
         Self::fmaddsub(left_real, right, output_right)
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn rotate90(self, rotation: Rotation90<Self>) -> Self {
+    unsafe fn rotate90(self, rotation: Rotation90<Self>) -> Self { unsafe {
         // Use the pre-computed vector stored in the Rotation90 instance to negate either the reals or imaginaries
         let negated = Self::xor(self, rotation.0);
 
         // Our goal is to swap the reals with the imaginaries, then negate either the reals or the imaginaries, based on whether we're an inverse or not
         Self::swap_complex_components(negated)
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] {
+    unsafe fn column_butterfly2(rows: [Self; 2]) -> [Self; 2] { unsafe {
         [Self::add(rows[0], rows[1]), Self::sub(rows[0], rows[1])]
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn column_butterfly3(rows: [Self; 3], twiddles: Self) -> [Self; 3] {
+    unsafe fn column_butterfly3(rows: [Self; 3], twiddles: Self) -> [Self; 3] { unsafe {
         // This algorithm is derived directly from the definition of the Dft of size 3
         // We'd theoretically have to do 4 complex multiplications, but all of the twiddles we'd be multiplying by are conjugates of each other
         // By doing some algebra to expand the complex multiplications and factor out the multiplications, we get this
@@ -130,10 +130,10 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
         let output2 = Self::fnmadd(mid2_rotated, twiddle_imag, mid1);
 
         [output0, output1, output2]
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn column_butterfly4(rows: [Self; 4], rotation: Rotation90<Self>) -> [Self; 4] {
+    unsafe fn column_butterfly4(rows: [Self; 4], rotation: Rotation90<Self>) -> [Self; 4] { unsafe {
         // Algorithm: 2x2 mixed radix
 
         // Perform the first set of size-2 FFTs.
@@ -149,10 +149,10 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
 
         // Swap outputs 1 and 2 in the output to do a square transpose
         [output0, output2, output1, output3]
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn column_butterfly5(rows: [Self; 5], twiddles: [Self; 2]) -> [Self; 5] {
+    unsafe fn column_butterfly5(rows: [Self; 5], twiddles: [Self; 2]) -> [Self; 5] { unsafe {
         // This algorithm is derived directly from the definition of the Dft of size 5
         // We'd theoretically have to do 16 complex multiplications for the Dft, but many of the twiddles we'd be multiplying by are conjugates of each other
         // By doing some algebra to expand the complex multiplications and factor out the real multiplications, we get this faster formula where we only do the equivalent of 4 multiplications
@@ -188,10 +188,10 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
         let [output2, output3] = Self::column_butterfly2([twiddled2, twiddled3]);
 
         [output0, output1, output2, output3, output4]
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn column_butterfly7(rows: [Self; 7], twiddles: [Self; 3]) -> [Self; 7] {
+    unsafe fn column_butterfly7(rows: [Self; 7], twiddles: [Self; 3]) -> [Self; 7] { unsafe {
         // This algorithm is derived directly from the definition of the Dft of size 7
         // We'd theoretically have to do 36 complex multiplications for the Dft, but many of the twiddles we'd be multiplying by are conjugates of each other
         // By doing some algebra to expand the complex multiplications and factor out the real multiplications, we get this faster formula where we only do the equivalent of 9 multiplications
@@ -275,10 +275,10 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
         [
             output0, output1, output2, output3, output4, output5, output6,
         ]
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn column_butterfly8(rows: [Self; 8], rotation: Rotation90<Self>) -> [Self; 8] {
+    unsafe fn column_butterfly8(rows: [Self; 8], rotation: Rotation90<Self>) -> [Self; 8] { unsafe {
         // Algorithm: 4x2 mixed radix
 
         // Size-4 FFTs down the columns
@@ -299,10 +299,10 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
         [
             output0, output2, output4, output6, output1, output3, output5, output7,
         ]
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn column_butterfly11(rows: [Self; 11], twiddles: [Self; 5]) -> [Self; 11] {
+    unsafe fn column_butterfly11(rows: [Self; 11], twiddles: [Self; 5]) -> [Self; 11] { unsafe {
         // This algorithm is derived directly from the definition of the Dft of size 11
         // We'd theoretically have to do 100 complex multiplications for the Dft, but many of the twiddles we'd be multiplying by are conjugates of each other
         // By doing some algebra to expand the complex multiplications and factor out the real multiplications, we get this faster formula where we only do the equivalent of 9 multiplications
@@ -402,7 +402,7 @@ pub trait AvxVector: Copy + Debug + Send + Sync {
             output0, output1, output2, output3, output4, output5, output6, output7, output8,
             output9, output10,
         ]
-    }
+    }}
 }
 
 /// A 256-bit SIMD vector of complex numbers, stored with the real values and imaginary values interleaved.
@@ -447,7 +447,7 @@ pub trait AvxVector256: AvxVector {
     unsafe fn store_partial3_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
 
     #[inline(always)]
-    unsafe fn column_butterfly6(rows: [Self; 6], twiddles: Self) -> [Self; 6] {
+    unsafe fn column_butterfly6(rows: [Self; 6], twiddles: Self) -> [Self; 6] { unsafe {
         // Algorithm: 3x2 good-thomas
 
         // Size-3 FFTs down the columns of our reordered array
@@ -463,14 +463,14 @@ pub trait AvxVector256: AvxVector {
 
         // Reorder into output
         [output0, output3, output4, output1, output2, output5]
-    }
+    }}
 
     #[inline(always)]
     unsafe fn column_butterfly9(
         rows: [Self; 9],
         twiddles: [Self; 3],
         butterfly3_twiddles: Self,
-    ) -> [Self; 9] {
+    ) -> [Self; 9] { unsafe {
         // Algorithm: 3x3 mixed radix
 
         // Size-3 FFTs down the columns
@@ -494,14 +494,14 @@ pub trait AvxVector256: AvxVector {
         [
             output0, output3, output6, output1, output4, output7, output2, output5, output8,
         ]
-    }
+    }}
 
     #[inline(always)]
     unsafe fn column_butterfly12(
         rows: [Self; 12],
         butterfly3_twiddles: Self,
         rotation: Rotation90<Self>,
-    ) -> [Self; 12] {
+    ) -> [Self; 12] { unsafe {
         // Algorithm: 4x3 good-thomas
 
         // Size-4 FFTs down the columns of our reordered array
@@ -525,7 +525,7 @@ pub trait AvxVector256: AvxVector {
             output0, output4, output8, output9, output1, output5, output6, output10, output2,
             output3, output7, output11,
         ]
-    }
+    }}
 }
 
 /// A 128-bit SIMD vector of complex numbers, stored with the real values and imaginary values interleaved.
@@ -540,9 +540,9 @@ pub trait AvxVector128: AvxVector {
 
     unsafe fn lo(input: Self::FullVector) -> Self;
     unsafe fn hi(input: Self::FullVector) -> Self;
-    unsafe fn split(input: Self::FullVector) -> (Self, Self) {
+    unsafe fn split(input: Self::FullVector) -> (Self, Self) { unsafe {
         (Self::lo(input), Self::hi(input))
-    }
+    }}
     unsafe fn lo_rotation(input: Rotation90<Self::FullVector>) -> Rotation90<Self>;
 
     /// Fill a vector by repeating the provided complex number as many times as possible
@@ -563,7 +563,7 @@ pub trait AvxVector128: AvxVector {
     ) -> Self;
 
     #[inline(always)]
-    unsafe fn column_butterfly6(rows: [Self; 6], twiddles: Self::FullVector) -> [Self; 6] {
+    unsafe fn column_butterfly6(rows: [Self; 6], twiddles: Self::FullVector) -> [Self; 6] { unsafe {
         // Algorithm: 3x2 good-thomas
 
         // if we merge some of our 128 registers into 256 registers, we can do 1 inner butterfly3 instead of 2
@@ -588,14 +588,14 @@ pub trait AvxVector128: AvxVector {
 
         // Reorder into output
         [output0, output3, output4, output1, output2, output5]
-    }
+    }}
 
     #[inline(always)]
     unsafe fn column_butterfly9(
         rows: [Self; 9],
         twiddles_merged: [Self::FullVector; 2],
         butterfly3_twiddles: Self::FullVector,
-    ) -> [Self; 9] {
+    ) -> [Self; 9] { unsafe {
         // Algorithm: 3x3 mixed radix
 
         // if we merge some of our 128 registers into 256 registers, we can do 2 inner butterfly3's instead of 3
@@ -637,14 +637,14 @@ pub trait AvxVector128: AvxVector {
         [
             output0, output3, output6, output1, output4, output7, output2, output5, output8,
         ]
-    }
+    }}
 
     #[inline(always)]
     unsafe fn column_butterfly12(
         rows: [Self; 12],
         butterfly3_twiddles: Self::FullVector,
         rotation: Rotation90<Self::FullVector>,
-    ) -> [Self; 12] {
+    ) -> [Self; 12] { unsafe {
         // Algorithm: 4x3 good-thomas
 
         // if we merge some of our 128 registers into 256 registers, we can do 2 inner butterfly4's instead of 3
@@ -701,121 +701,121 @@ pub trait AvxVector128: AvxVector {
             output0, output4, output8, output9, output1, output5, output6, output10, output2,
             output3, output7, output11,
         ]
-    }
+    }}
 }
 
 #[inline(always)]
-pub unsafe fn apply_butterfly8_twiddle1<V: AvxVector>(input: V, rotation: Rotation90<V>) -> V {
+pub unsafe fn apply_butterfly8_twiddle1<V: AvxVector>(input: V, rotation: Rotation90<V>) -> V { unsafe {
     let rotated = input.rotate90(rotation);
     let combined = V::add(rotated, input);
     V::mul(V::half_root2(), combined)
-}
+}}
 #[inline(always)]
-pub unsafe fn apply_butterfly8_twiddle3<V: AvxVector>(input: V, rotation: Rotation90<V>) -> V {
+pub unsafe fn apply_butterfly8_twiddle3<V: AvxVector>(input: V, rotation: Rotation90<V>) -> V { unsafe {
     let rotated = input.rotate90(rotation);
     let combined = V::sub(rotated, input);
     V::mul(V::half_root2(), combined)
-}
+}}
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug)]
 pub struct Rotation90<V>(V);
 impl<V: AvxVector256> Rotation90<V> {
     #[inline(always)]
-    pub unsafe fn lo(self) -> Rotation90<V::HalfVector> {
+    pub unsafe fn lo(self) -> Rotation90<V::HalfVector> { unsafe {
         Rotation90(self.0.lo())
-    }
+    }}
 }
 
 impl AvxVector for __m256 {
     const COMPLEX_PER_VECTOR: usize = 4;
 
     #[inline(always)]
-    unsafe fn zero() -> Self {
+    unsafe fn zero() -> Self { unsafe {
         _mm256_setzero_ps()
-    }
+    }}
     #[inline(always)]
-    unsafe fn half_root2() -> Self {
+    unsafe fn half_root2() -> Self { unsafe {
         // note: we're computing a square root here, but checking the assembly says the compiler is smart enough to turn this into a constant
         _mm256_broadcast_ss(&0.5f32.sqrt())
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn xor(left: Self, right: Self) -> Self {
+    unsafe fn xor(left: Self, right: Self) -> Self { unsafe {
         _mm256_xor_ps(left, right)
-    }
+    }}
     #[inline(always)]
-    unsafe fn neg(self) -> Self {
+    unsafe fn neg(self) -> Self { unsafe {
         _mm256_xor_ps(self, _mm256_broadcast_ss(&-0.0))
-    }
+    }}
     #[inline(always)]
-    unsafe fn add(left: Self, right: Self) -> Self {
+    unsafe fn add(left: Self, right: Self) -> Self { unsafe {
         _mm256_add_ps(left, right)
-    }
+    }}
     #[inline(always)]
-    unsafe fn sub(left: Self, right: Self) -> Self {
+    unsafe fn sub(left: Self, right: Self) -> Self { unsafe {
         _mm256_sub_ps(left, right)
-    }
+    }}
     #[inline(always)]
-    unsafe fn mul(left: Self, right: Self) -> Self {
+    unsafe fn mul(left: Self, right: Self) -> Self { unsafe {
         _mm256_mul_ps(left, right)
-    }
+    }}
     #[inline(always)]
-    unsafe fn fmadd(left: Self, right: Self, add: Self) -> Self {
+    unsafe fn fmadd(left: Self, right: Self, add: Self) -> Self { unsafe {
         _mm256_fmadd_ps(left, right, add)
-    }
+    }}
     #[inline(always)]
-    unsafe fn fnmadd(left: Self, right: Self, add: Self) -> Self {
+    unsafe fn fnmadd(left: Self, right: Self, add: Self) -> Self { unsafe {
         _mm256_fnmadd_ps(left, right, add)
-    }
+    }}
     #[inline(always)]
-    unsafe fn fmaddsub(left: Self, right: Self, add: Self) -> Self {
+    unsafe fn fmaddsub(left: Self, right: Self, add: Self) -> Self { unsafe {
         _mm256_fmaddsub_ps(left, right, add)
-    }
+    }}
     #[inline(always)]
-    unsafe fn fmsubadd(left: Self, right: Self, add: Self) -> Self {
+    unsafe fn fmsubadd(left: Self, right: Self, add: Self) -> Self { unsafe {
         _mm256_fmsubadd_ps(left, right, add)
-    }
+    }}
     #[inline(always)]
-    unsafe fn reverse_complex_elements(self) -> Self {
+    unsafe fn reverse_complex_elements(self) -> Self { unsafe {
         // swap the elements in-lane
         let permuted = _mm256_permute_ps(self, 0x4E);
         // swap the lanes
         _mm256_permute2f128_ps(permuted, permuted, 0x01)
-    }
+    }}
     #[inline(always)]
-    unsafe fn unpacklo_complex(rows: [Self; 2]) -> Self {
+    unsafe fn unpacklo_complex(rows: [Self; 2]) -> Self { unsafe {
         let row0_double = _mm256_castps_pd(rows[0]);
         let row1_double = _mm256_castps_pd(rows[1]);
         let unpacked = _mm256_unpacklo_pd(row0_double, row1_double);
         _mm256_castpd_ps(unpacked)
-    }
+    }}
     #[inline(always)]
-    unsafe fn unpackhi_complex(rows: [Self; 2]) -> Self {
+    unsafe fn unpackhi_complex(rows: [Self; 2]) -> Self { unsafe {
         let row0_double = _mm256_castps_pd(rows[0]);
         let row1_double = _mm256_castps_pd(rows[1]);
         let unpacked = _mm256_unpackhi_pd(row0_double, row1_double);
         _mm256_castpd_ps(unpacked)
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn swap_complex_components(self) -> Self {
+    unsafe fn swap_complex_components(self) -> Self { unsafe {
         _mm256_permute_ps(self, 0xB1)
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn duplicate_complex_components(self) -> (Self, Self) {
+    unsafe fn duplicate_complex_components(self) -> (Self, Self) { unsafe {
         (_mm256_moveldup_ps(self), _mm256_movehdup_ps(self))
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn make_rotation90(direction: FftDirection) -> Rotation90<Self> {
+    unsafe fn make_rotation90(direction: FftDirection) -> Rotation90<Self> { unsafe {
         let broadcast = match direction {
             FftDirection::Forward => Complex::new(-0.0, 0.0),
             FftDirection::Inverse => Complex::new(0.0, -0.0),
         };
         Rotation90(Self::broadcast_complex_elements(broadcast))
-    }
+    }}
 
     #[inline(always)]
     unsafe fn make_mixedradix_twiddle_chunk(
@@ -823,30 +823,30 @@ impl AvxVector for __m256 {
         y: usize,
         len: usize,
         direction: FftDirection,
-    ) -> Self {
+    ) -> Self { unsafe {
         let mut twiddle_chunk = [Complex::<f32>::zero(); Self::COMPLEX_PER_VECTOR];
         for i in 0..Self::COMPLEX_PER_VECTOR {
             twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
         }
 
         twiddle_chunk.as_slice().load_complex(0)
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn broadcast_twiddle(index: usize, len: usize, direction: FftDirection) -> Self {
+    unsafe fn broadcast_twiddle(index: usize, len: usize, direction: FftDirection) -> Self { unsafe {
         Self::broadcast_complex_elements(twiddles::compute_twiddle(index, len, direction))
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn transpose2_packed(rows: [Self; 2]) -> [Self; 2] {
+    unsafe fn transpose2_packed(rows: [Self; 2]) -> [Self; 2] { unsafe {
         let unpacked = Self::unpack_complex(rows);
         let output0 = _mm256_permute2f128_ps(unpacked[0], unpacked[1], 0x20);
         let output1 = _mm256_permute2f128_ps(unpacked[0], unpacked[1], 0x31);
 
         [output0, output1]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose3_packed(rows: [Self; 3]) -> [Self; 3] {
+    unsafe fn transpose3_packed(rows: [Self; 3]) -> [Self; 3] { unsafe {
         let unpacked0 = Self::unpacklo_complex([rows[0], rows[1]]);
         let unpacked2 = Self::unpackhi_complex([rows[1], rows[2]]);
 
@@ -859,9 +859,9 @@ impl AvxVector for __m256 {
         let output2 = _mm256_permute2f128_ps(unpacked2, blended, 0x13);
 
         [output0, output1, output2]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose4_packed(rows: [Self; 4]) -> [Self; 4] {
+    unsafe fn transpose4_packed(rows: [Self; 4]) -> [Self; 4] { unsafe {
         let permute0 = _mm256_permute2f128_ps(rows[0], rows[2], 0x20);
         let permute1 = _mm256_permute2f128_ps(rows[1], rows[3], 0x20);
         let permute2 = _mm256_permute2f128_ps(rows[0], rows[2], 0x31);
@@ -871,9 +871,9 @@ impl AvxVector for __m256 {
         let [unpacked2, unpacked3] = Self::unpack_complex([permute2, permute3]);
 
         [unpacked0, unpacked1, unpacked2, unpacked3]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose5_packed(rows: [Self; 5]) -> [Self; 5] {
+    unsafe fn transpose5_packed(rows: [Self; 5]) -> [Self; 5] { unsafe {
         let unpacked0 = Self::unpacklo_complex([rows[0], rows[1]]);
         let unpacked1 = Self::unpackhi_complex([rows[1], rows[2]]);
         let unpacked2 = Self::unpacklo_complex([rows[2], rows[3]]);
@@ -887,9 +887,9 @@ impl AvxVector for __m256 {
             _mm256_permute2f128_ps(unpacked2, blended04, 0x31),
             _mm256_permute2f128_ps(unpacked1, unpacked3, 0x31),
         ]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose6_packed(rows: [Self; 6]) -> [Self; 6] {
+    unsafe fn transpose6_packed(rows: [Self; 6]) -> [Self; 6] { unsafe {
         let [unpacked0, unpacked1] = Self::unpack_complex([rows[0], rows[1]]);
         let [unpacked2, unpacked3] = Self::unpack_complex([rows[2], rows[3]]);
         let [unpacked4, unpacked5] = Self::unpack_complex([rows[4], rows[5]]);
@@ -902,9 +902,9 @@ impl AvxVector for __m256 {
             _mm256_permute2f128_ps(unpacked1, unpacked4, 0x13),
             _mm256_permute2f128_ps(unpacked3, unpacked5, 0x31),
         ]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose7_packed(rows: [Self; 7]) -> [Self; 7] {
+    unsafe fn transpose7_packed(rows: [Self; 7]) -> [Self; 7] { unsafe {
         let unpacked0 = Self::unpacklo_complex([rows[0], rows[1]]);
         let unpacked1 = Self::unpackhi_complex([rows[1], rows[2]]);
         let unpacked2 = Self::unpacklo_complex([rows[2], rows[3]]);
@@ -922,9 +922,9 @@ impl AvxVector for __m256 {
             _mm256_permute2f128_ps(blended06, unpacked1, 0x31),
             _mm256_permute2f128_ps(unpacked3, unpacked5, 0x31),
         ]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose8_packed(rows: [Self; 8]) -> [Self; 8] {
+    unsafe fn transpose8_packed(rows: [Self; 8]) -> [Self; 8] { unsafe {
         let chunk0 = [rows[0], rows[1], rows[2], rows[3]];
         let chunk1 = [rows[4], rows[5], rows[6], rows[7]];
 
@@ -935,9 +935,9 @@ impl AvxVector for __m256 {
             output0[0], output1[0], output0[1], output1[1], output0[2], output1[2], output0[3],
             output1[3],
         ]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose9_packed(rows: [Self; 9]) -> [Self; 9] {
+    unsafe fn transpose9_packed(rows: [Self; 9]) -> [Self; 9] { unsafe {
         let unpacked0 = Self::unpacklo_complex([rows[0], rows[1]]);
         let unpacked1 = Self::unpackhi_complex([rows[1], rows[2]]);
         let unpacked2 = Self::unpacklo_complex([rows[2], rows[3]]);
@@ -959,9 +959,9 @@ impl AvxVector for __m256 {
             _mm256_permute2f128_ps(unpacked1, unpacked3, 0x31),
             _mm256_permute2f128_ps(unpacked6, unpacked8, 0x31),
         ]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose11_packed(rows: [Self; 11]) -> [Self; 11] {
+    unsafe fn transpose11_packed(rows: [Self; 11]) -> [Self; 11] { unsafe {
         let unpacked0 = Self::unpacklo_complex([rows[0], rows[1]]);
         let unpacked1 = Self::unpackhi_complex([rows[1], rows[2]]);
         let unpacked2 = Self::unpacklo_complex([rows[2], rows[3]]);
@@ -987,9 +987,9 @@ impl AvxVector for __m256 {
             _mm256_permute2f128_ps(unpacked3, unpacked5, 0x31),
             _mm256_permute2f128_ps(unpacked7, unpacked9, 0x31),
         ]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose12_packed(rows: [Self; 12]) -> [Self; 12] {
+    unsafe fn transpose12_packed(rows: [Self; 12]) -> [Self; 12] { unsafe {
         let chunk0 = [rows[0], rows[1], rows[2], rows[3]];
         let chunk1 = [rows[4], rows[5], rows[6], rows[7]];
         let chunk2 = [rows[8], rows[9], rows[10], rows[11]];
@@ -1002,9 +1002,9 @@ impl AvxVector for __m256 {
             output0[0], output1[0], output2[0], output0[1], output1[1], output2[1], output0[2],
             output1[2], output2[2], output0[3], output1[3], output2[3],
         ]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose16_packed(rows: [Self; 16]) -> [Self; 16] {
+    unsafe fn transpose16_packed(rows: [Self; 16]) -> [Self; 16] { unsafe {
         let chunk0 = [
             rows[0], rows[1], rows[2], rows[3], rows[4], rows[5], rows[6], rows[7],
         ];
@@ -1020,213 +1020,213 @@ impl AvxVector for __m256 {
             output1[3], output0[4], output0[5], output1[4], output1[5], output0[6], output0[7],
             output1[6], output1[7],
         ]
-    }
+    }}
 }
 impl AvxVector256 for __m256 {
     type ScalarType = f32;
     type HalfVector = __m128;
 
     #[inline(always)]
-    unsafe fn lo(self) -> Self::HalfVector {
+    unsafe fn lo(self) -> Self::HalfVector { unsafe {
         _mm256_castps256_ps128(self)
-    }
+    }}
     #[inline(always)]
-    unsafe fn hi(self) -> Self::HalfVector {
+    unsafe fn hi(self) -> Self::HalfVector { unsafe {
         _mm256_extractf128_ps(self, 1)
-    }
+    }}
     #[inline(always)]
-    unsafe fn merge(lo: Self::HalfVector, hi: Self::HalfVector) -> Self {
+    unsafe fn merge(lo: Self::HalfVector, hi: Self::HalfVector) -> Self { unsafe {
         _mm256_insertf128_ps(_mm256_castps128_ps256(lo), hi, 1)
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn broadcast_complex_elements(value: Complex<Self::ScalarType>) -> Self {
+    unsafe fn broadcast_complex_elements(value: Complex<Self::ScalarType>) -> Self { unsafe {
         _mm256_set_ps(
             value.im, value.re, value.im, value.re, value.im, value.re, value.im, value.re,
         )
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self { unsafe {
         _mm256_loadu_ps(ptr as *const Self::ScalarType)
-    }
+    }}
     #[inline(always)]
-    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
+    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) { unsafe {
         _mm256_storeu_ps(ptr as *mut Self::ScalarType, data)
-    }
+    }}
     #[inline(always)]
     unsafe fn gather_complex_avx2_index32(
         ptr: *const Complex<Self::ScalarType>,
         indexes: __m128i,
-    ) -> Self {
+    ) -> Self { unsafe {
         _mm256_castpd_ps(_mm256_i32gather_pd(ptr as *const f64, indexes, 8))
-    }
+    }}
     #[inline(always)]
     unsafe fn gather_complex_avx2_index64(
         ptr: *const Complex<Self::ScalarType>,
         indexes: __m256i,
-    ) -> Self {
+    ) -> Self { unsafe {
         _mm256_castpd_ps(_mm256_i64gather_pd(ptr as *const f64, indexes, 8))
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn load_partial1_complex(ptr: *const Complex<Self::ScalarType>) -> Self::HalfVector {
+    unsafe fn load_partial1_complex(ptr: *const Complex<Self::ScalarType>) -> Self::HalfVector { unsafe {
         let data = _mm_load_sd(ptr as *const f64);
         _mm_castpd_ps(data)
-    }
+    }}
     #[inline(always)]
-    unsafe fn load_partial2_complex(ptr: *const Complex<Self::ScalarType>) -> Self::HalfVector {
+    unsafe fn load_partial2_complex(ptr: *const Complex<Self::ScalarType>) -> Self::HalfVector { unsafe {
         _mm_loadu_ps(ptr as *const f32)
-    }
+    }}
     #[inline(always)]
-    unsafe fn load_partial3_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+    unsafe fn load_partial3_complex(ptr: *const Complex<Self::ScalarType>) -> Self { unsafe {
         let lo = Self::load_partial2_complex(ptr);
         let hi = Self::load_partial1_complex(ptr.add(2));
         Self::merge(lo, hi)
-    }
+    }}
     #[inline(always)]
-    unsafe fn store_partial1_complex(ptr: *mut Complex<Self::ScalarType>, data: Self::HalfVector) {
+    unsafe fn store_partial1_complex(ptr: *mut Complex<Self::ScalarType>, data: Self::HalfVector) { unsafe {
         _mm_store_sd(ptr as *mut f64, _mm_castps_pd(data));
-    }
+    }}
     #[inline(always)]
-    unsafe fn store_partial2_complex(ptr: *mut Complex<Self::ScalarType>, data: Self::HalfVector) {
+    unsafe fn store_partial2_complex(ptr: *mut Complex<Self::ScalarType>, data: Self::HalfVector) { unsafe {
         _mm_storeu_ps(ptr as *mut f32, data);
-    }
+    }}
     #[inline(always)]
-    unsafe fn store_partial3_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
+    unsafe fn store_partial3_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) { unsafe {
         Self::store_partial2_complex(ptr, data.lo());
         Self::store_partial1_complex(ptr.add(2), data.hi());
-    }
+    }}
 }
 
 impl AvxVector for __m128 {
     const COMPLEX_PER_VECTOR: usize = 2;
 
     #[inline(always)]
-    unsafe fn zero() -> Self {
+    unsafe fn zero() -> Self { unsafe {
         _mm_setzero_ps()
-    }
+    }}
     #[inline(always)]
-    unsafe fn half_root2() -> Self {
+    unsafe fn half_root2() -> Self { unsafe {
         // note: we're computing a square root here, but checking the assembly says the compiler is smart enough to turn this into a constant
         _mm_broadcast_ss(&0.5f32.sqrt())
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn xor(left: Self, right: Self) -> Self {
+    unsafe fn xor(left: Self, right: Self) -> Self { unsafe {
         _mm_xor_ps(left, right)
-    }
+    }}
     #[inline(always)]
-    unsafe fn neg(self) -> Self {
+    unsafe fn neg(self) -> Self { unsafe {
         _mm_xor_ps(self, _mm_broadcast_ss(&-0.0))
-    }
+    }}
     #[inline(always)]
-    unsafe fn add(left: Self, right: Self) -> Self {
+    unsafe fn add(left: Self, right: Self) -> Self { unsafe {
         _mm_add_ps(left, right)
-    }
+    }}
     #[inline(always)]
-    unsafe fn sub(left: Self, right: Self) -> Self {
+    unsafe fn sub(left: Self, right: Self) -> Self { unsafe {
         _mm_sub_ps(left, right)
-    }
+    }}
     #[inline(always)]
-    unsafe fn mul(left: Self, right: Self) -> Self {
+    unsafe fn mul(left: Self, right: Self) -> Self { unsafe {
         _mm_mul_ps(left, right)
-    }
+    }}
     #[inline(always)]
-    unsafe fn fmadd(left: Self, right: Self, add: Self) -> Self {
+    unsafe fn fmadd(left: Self, right: Self, add: Self) -> Self { unsafe {
         _mm_fmadd_ps(left, right, add)
-    }
+    }}
     #[inline(always)]
-    unsafe fn fnmadd(left: Self, right: Self, add: Self) -> Self {
+    unsafe fn fnmadd(left: Self, right: Self, add: Self) -> Self { unsafe {
         _mm_fnmadd_ps(left, right, add)
-    }
+    }}
     #[inline(always)]
-    unsafe fn fmaddsub(left: Self, right: Self, add: Self) -> Self {
+    unsafe fn fmaddsub(left: Self, right: Self, add: Self) -> Self { unsafe {
         _mm_fmaddsub_ps(left, right, add)
-    }
+    }}
     #[inline(always)]
-    unsafe fn fmsubadd(left: Self, right: Self, add: Self) -> Self {
+    unsafe fn fmsubadd(left: Self, right: Self, add: Self) -> Self { unsafe {
         _mm_fmsubadd_ps(left, right, add)
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn reverse_complex_elements(self) -> Self {
+    unsafe fn reverse_complex_elements(self) -> Self { unsafe {
         // swap the elements in-lane
         _mm_permute_ps(self, 0x4E)
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn unpacklo_complex(rows: [Self; 2]) -> Self {
+    unsafe fn unpacklo_complex(rows: [Self; 2]) -> Self { unsafe {
         let row0_double = _mm_castps_pd(rows[0]);
         let row1_double = _mm_castps_pd(rows[1]);
         let unpacked = _mm_unpacklo_pd(row0_double, row1_double);
         _mm_castpd_ps(unpacked)
-    }
+    }}
     #[inline(always)]
-    unsafe fn unpackhi_complex(rows: [Self; 2]) -> Self {
+    unsafe fn unpackhi_complex(rows: [Self; 2]) -> Self { unsafe {
         let row0_double = _mm_castps_pd(rows[0]);
         let row1_double = _mm_castps_pd(rows[1]);
         let unpacked = _mm_unpackhi_pd(row0_double, row1_double);
         _mm_castpd_ps(unpacked)
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn swap_complex_components(self) -> Self {
+    unsafe fn swap_complex_components(self) -> Self { unsafe {
         _mm_permute_ps(self, 0xB1)
-    }
+    }}
     #[inline(always)]
-    unsafe fn duplicate_complex_components(self) -> (Self, Self) {
+    unsafe fn duplicate_complex_components(self) -> (Self, Self) { unsafe {
         (_mm_moveldup_ps(self), _mm_movehdup_ps(self))
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn make_rotation90(direction: FftDirection) -> Rotation90<Self> {
+    unsafe fn make_rotation90(direction: FftDirection) -> Rotation90<Self> { unsafe {
         let broadcast = match direction {
             FftDirection::Forward => Complex::new(-0.0, 0.0),
             FftDirection::Inverse => Complex::new(0.0, -0.0),
         };
         Rotation90(Self::broadcast_complex_elements(broadcast))
-    }
+    }}
     #[inline(always)]
     unsafe fn make_mixedradix_twiddle_chunk(
         x: usize,
         y: usize,
         len: usize,
         direction: FftDirection,
-    ) -> Self {
+    ) -> Self { unsafe {
         let mut twiddle_chunk = [Complex::<f32>::zero(); Self::COMPLEX_PER_VECTOR];
         for i in 0..Self::COMPLEX_PER_VECTOR {
             twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
         }
 
         _mm_loadu_ps(twiddle_chunk.as_ptr() as *const f32)
-    }
+    }}
     #[inline(always)]
-    unsafe fn broadcast_twiddle(index: usize, len: usize, direction: FftDirection) -> Self {
+    unsafe fn broadcast_twiddle(index: usize, len: usize, direction: FftDirection) -> Self { unsafe {
         Self::broadcast_complex_elements(twiddles::compute_twiddle(index, len, direction))
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn transpose2_packed(rows: [Self; 2]) -> [Self; 2] {
+    unsafe fn transpose2_packed(rows: [Self; 2]) -> [Self; 2] { unsafe {
         Self::unpack_complex(rows)
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose3_packed(rows: [Self; 3]) -> [Self; 3] {
+    unsafe fn transpose3_packed(rows: [Self; 3]) -> [Self; 3] { unsafe {
         let unpacked0 = Self::unpacklo_complex([rows[0], rows[1]]);
         let blended = _mm_blend_ps(rows[0], rows[2], 0x03);
         let unpacked2 = Self::unpackhi_complex([rows[1], rows[2]]);
 
         [unpacked0, blended, unpacked2]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose4_packed(rows: [Self; 4]) -> [Self; 4] {
+    unsafe fn transpose4_packed(rows: [Self; 4]) -> [Self; 4] { unsafe {
         let [unpacked0, unpacked1] = Self::unpack_complex([rows[0], rows[1]]);
         let [unpacked2, unpacked3] = Self::unpack_complex([rows[2], rows[3]]);
 
         [unpacked0, unpacked2, unpacked1, unpacked3]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose5_packed(rows: [Self; 5]) -> [Self; 5] {
+    unsafe fn transpose5_packed(rows: [Self; 5]) -> [Self; 5] { unsafe {
         [
             Self::unpacklo_complex([rows[0], rows[1]]),
             Self::unpacklo_complex([rows[2], rows[3]]),
@@ -1234,9 +1234,9 @@ impl AvxVector for __m128 {
             Self::unpackhi_complex([rows[1], rows[2]]),
             Self::unpackhi_complex([rows[3], rows[4]]),
         ]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose6_packed(rows: [Self; 6]) -> [Self; 6] {
+    unsafe fn transpose6_packed(rows: [Self; 6]) -> [Self; 6] { unsafe {
         let [unpacked0, unpacked1] = Self::unpack_complex([rows[0], rows[1]]);
         let [unpacked2, unpacked3] = Self::unpack_complex([rows[2], rows[3]]);
         let [unpacked4, unpacked5] = Self::unpack_complex([rows[4], rows[5]]);
@@ -1244,9 +1244,9 @@ impl AvxVector for __m128 {
         [
             unpacked0, unpacked2, unpacked4, unpacked1, unpacked3, unpacked5,
         ]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose7_packed(rows: [Self; 7]) -> [Self; 7] {
+    unsafe fn transpose7_packed(rows: [Self; 7]) -> [Self; 7] { unsafe {
         [
             Self::unpacklo_complex([rows[0], rows[1]]),
             Self::unpacklo_complex([rows[2], rows[3]]),
@@ -1256,9 +1256,9 @@ impl AvxVector for __m128 {
             Self::unpackhi_complex([rows[3], rows[4]]),
             Self::unpackhi_complex([rows[5], rows[6]]),
         ]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose8_packed(rows: [Self; 8]) -> [Self; 8] {
+    unsafe fn transpose8_packed(rows: [Self; 8]) -> [Self; 8] { unsafe {
         let chunk0 = [rows[0], rows[1], rows[2], rows[3]];
         let chunk1 = [rows[4], rows[5], rows[6], rows[7]];
 
@@ -1269,9 +1269,9 @@ impl AvxVector for __m128 {
             output0[0], output0[1], output1[0], output1[1], output0[2], output0[3], output1[2],
             output1[3],
         ]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose9_packed(rows: [Self; 9]) -> [Self; 9] {
+    unsafe fn transpose9_packed(rows: [Self; 9]) -> [Self; 9] { unsafe {
         [
             Self::unpacklo_complex([rows[0], rows[1]]),
             Self::unpacklo_complex([rows[2], rows[3]]),
@@ -1283,9 +1283,9 @@ impl AvxVector for __m128 {
             Self::unpackhi_complex([rows[5], rows[6]]),
             Self::unpackhi_complex([rows[7], rows[8]]),
         ]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose11_packed(rows: [Self; 11]) -> [Self; 11] {
+    unsafe fn transpose11_packed(rows: [Self; 11]) -> [Self; 11] { unsafe {
         [
             Self::unpacklo_complex([rows[0], rows[1]]),
             Self::unpacklo_complex([rows[2], rows[3]]),
@@ -1299,9 +1299,9 @@ impl AvxVector for __m128 {
             Self::unpackhi_complex([rows[7], rows[8]]),
             Self::unpackhi_complex([rows[9], rows[10]]),
         ]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose12_packed(rows: [Self; 12]) -> [Self; 12] {
+    unsafe fn transpose12_packed(rows: [Self; 12]) -> [Self; 12] { unsafe {
         let chunk0 = [rows[0], rows[1], rows[2], rows[3]];
         let chunk1 = [rows[4], rows[5], rows[6], rows[7]];
         let chunk2 = [rows[8], rows[9], rows[10], rows[11]];
@@ -1314,9 +1314,9 @@ impl AvxVector for __m128 {
             output0[0], output0[1], output1[0], output1[1], output2[0], output2[1], output0[2],
             output0[3], output1[2], output1[3], output2[2], output2[3],
         ]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose16_packed(rows: [Self; 16]) -> [Self; 16] {
+    unsafe fn transpose16_packed(rows: [Self; 16]) -> [Self; 16] { unsafe {
         let chunk0 = [
             rows[0], rows[1], rows[2], rows[3], rows[4], rows[5], rows[6], rows[7],
         ];
@@ -1332,165 +1332,165 @@ impl AvxVector for __m128 {
             output1[3], output0[4], output0[5], output0[6], output0[7], output1[4], output1[5],
             output1[6], output1[7],
         ]
-    }
+    }}
 }
 impl AvxVector128 for __m128 {
     type FullVector = __m256;
 
     #[inline(always)]
-    unsafe fn lo(input: Self::FullVector) -> Self {
+    unsafe fn lo(input: Self::FullVector) -> Self { unsafe {
         _mm256_castps256_ps128(input)
-    }
+    }}
     #[inline(always)]
-    unsafe fn hi(input: Self::FullVector) -> Self {
+    unsafe fn hi(input: Self::FullVector) -> Self { unsafe {
         _mm256_extractf128_ps(input, 1)
-    }
+    }}
     #[inline(always)]
-    unsafe fn merge(lo: Self, hi: Self) -> Self::FullVector {
+    unsafe fn merge(lo: Self, hi: Self) -> Self::FullVector { unsafe {
         _mm256_insertf128_ps(_mm256_castps128_ps256(lo), hi, 1)
-    }
+    }}
     #[inline(always)]
-    unsafe fn zero_extend(self) -> Self::FullVector {
+    unsafe fn zero_extend(self) -> Self::FullVector { unsafe {
         _mm256_zextps128_ps256(self)
-    }
+    }}
     #[inline(always)]
-    unsafe fn lo_rotation(input: Rotation90<Self::FullVector>) -> Rotation90<Self> {
+    unsafe fn lo_rotation(input: Rotation90<Self::FullVector>) -> Rotation90<Self> { unsafe {
         input.lo()
-    }
+    }}
     #[inline(always)]
-    unsafe fn broadcast_complex_elements(value: Complex<f32>) -> Self {
+    unsafe fn broadcast_complex_elements(value: Complex<f32>) -> Self { unsafe {
         _mm_set_ps(value.im, value.re, value.im, value.re)
-    }
+    }}
     #[inline(always)]
-    unsafe fn gather32_complex_avx2(ptr: *const Complex<f32>, indexes: __m128i) -> Self {
+    unsafe fn gather32_complex_avx2(ptr: *const Complex<f32>, indexes: __m128i) -> Self { unsafe {
         _mm_castpd_ps(_mm_i32gather_pd(ptr as *const f64, indexes, 8))
-    }
+    }}
     #[inline(always)]
-    unsafe fn gather64_complex_avx2(ptr: *const Complex<f32>, indexes: __m128i) -> Self {
+    unsafe fn gather64_complex_avx2(ptr: *const Complex<f32>, indexes: __m128i) -> Self { unsafe {
         _mm_castpd_ps(_mm_i64gather_pd(ptr as *const f64, indexes, 8))
-    }
+    }}
 }
 
 impl AvxVector for __m256d {
     const COMPLEX_PER_VECTOR: usize = 2;
 
     #[inline(always)]
-    unsafe fn zero() -> Self {
+    unsafe fn zero() -> Self { unsafe {
         _mm256_setzero_pd()
-    }
+    }}
     #[inline(always)]
-    unsafe fn half_root2() -> Self {
+    unsafe fn half_root2() -> Self { unsafe {
         // note: we're computing a square root here, but checking the assembly says the compiler is smart enough to turn this into a constant
         _mm256_broadcast_sd(&0.5f64.sqrt())
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn xor(left: Self, right: Self) -> Self {
+    unsafe fn xor(left: Self, right: Self) -> Self { unsafe {
         _mm256_xor_pd(left, right)
-    }
+    }}
     #[inline(always)]
-    unsafe fn neg(self) -> Self {
+    unsafe fn neg(self) -> Self { unsafe {
         _mm256_xor_pd(self, _mm256_broadcast_sd(&-0.0))
-    }
+    }}
     #[inline(always)]
-    unsafe fn add(left: Self, right: Self) -> Self {
+    unsafe fn add(left: Self, right: Self) -> Self { unsafe {
         _mm256_add_pd(left, right)
-    }
+    }}
     #[inline(always)]
-    unsafe fn sub(left: Self, right: Self) -> Self {
+    unsafe fn sub(left: Self, right: Self) -> Self { unsafe {
         _mm256_sub_pd(left, right)
-    }
+    }}
     #[inline(always)]
-    unsafe fn mul(left: Self, right: Self) -> Self {
+    unsafe fn mul(left: Self, right: Self) -> Self { unsafe {
         _mm256_mul_pd(left, right)
-    }
+    }}
     #[inline(always)]
-    unsafe fn fmadd(left: Self, right: Self, add: Self) -> Self {
+    unsafe fn fmadd(left: Self, right: Self, add: Self) -> Self { unsafe {
         _mm256_fmadd_pd(left, right, add)
-    }
+    }}
     #[inline(always)]
-    unsafe fn fnmadd(left: Self, right: Self, add: Self) -> Self {
+    unsafe fn fnmadd(left: Self, right: Self, add: Self) -> Self { unsafe {
         _mm256_fnmadd_pd(left, right, add)
-    }
+    }}
     #[inline(always)]
-    unsafe fn fmaddsub(left: Self, right: Self, add: Self) -> Self {
+    unsafe fn fmaddsub(left: Self, right: Self, add: Self) -> Self { unsafe {
         _mm256_fmaddsub_pd(left, right, add)
-    }
+    }}
     #[inline(always)]
-    unsafe fn fmsubadd(left: Self, right: Self, add: Self) -> Self {
+    unsafe fn fmsubadd(left: Self, right: Self, add: Self) -> Self { unsafe {
         _mm256_fmsubadd_pd(left, right, add)
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn reverse_complex_elements(self) -> Self {
+    unsafe fn reverse_complex_elements(self) -> Self { unsafe {
         _mm256_permute2f128_pd(self, self, 0x01)
-    }
+    }}
     #[inline(always)]
-    unsafe fn unpacklo_complex(rows: [Self; 2]) -> Self {
+    unsafe fn unpacklo_complex(rows: [Self; 2]) -> Self { unsafe {
         _mm256_permute2f128_pd(rows[0], rows[1], 0x20)
-    }
+    }}
     #[inline(always)]
-    unsafe fn unpackhi_complex(rows: [Self; 2]) -> Self {
+    unsafe fn unpackhi_complex(rows: [Self; 2]) -> Self { unsafe {
         _mm256_permute2f128_pd(rows[0], rows[1], 0x31)
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn swap_complex_components(self) -> Self {
+    unsafe fn swap_complex_components(self) -> Self { unsafe {
         _mm256_permute_pd(self, 0x05)
-    }
+    }}
     #[inline(always)]
-    unsafe fn duplicate_complex_components(self) -> (Self, Self) {
+    unsafe fn duplicate_complex_components(self) -> (Self, Self) { unsafe {
         (_mm256_movedup_pd(self), _mm256_permute_pd(self, 0x0F))
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn make_rotation90(direction: FftDirection) -> Rotation90<Self> {
+    unsafe fn make_rotation90(direction: FftDirection) -> Rotation90<Self> { unsafe {
         let broadcast = match direction {
             FftDirection::Forward => Complex::new(-0.0, 0.0),
             FftDirection::Inverse => Complex::new(0.0, -0.0),
         };
         Rotation90(Self::broadcast_complex_elements(broadcast))
-    }
+    }}
     #[inline(always)]
     unsafe fn make_mixedradix_twiddle_chunk(
         x: usize,
         y: usize,
         len: usize,
         direction: FftDirection,
-    ) -> Self {
+    ) -> Self { unsafe {
         let mut twiddle_chunk = [Complex::<f64>::zero(); Self::COMPLEX_PER_VECTOR];
         for i in 0..Self::COMPLEX_PER_VECTOR {
             twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
         }
 
         twiddle_chunk.as_slice().load_complex(0)
-    }
+    }}
     #[inline(always)]
-    unsafe fn broadcast_twiddle(index: usize, len: usize, direction: FftDirection) -> Self {
+    unsafe fn broadcast_twiddle(index: usize, len: usize, direction: FftDirection) -> Self { unsafe {
         Self::broadcast_complex_elements(twiddles::compute_twiddle(index, len, direction))
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn transpose2_packed(rows: [Self; 2]) -> [Self; 2] {
+    unsafe fn transpose2_packed(rows: [Self; 2]) -> [Self; 2] { unsafe {
         Self::unpack_complex(rows)
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose3_packed(rows: [Self; 3]) -> [Self; 3] {
+    unsafe fn transpose3_packed(rows: [Self; 3]) -> [Self; 3] { unsafe {
         let unpacked0 = Self::unpacklo_complex([rows[0], rows[1]]);
         let blended = _mm256_blend_pd(rows[0], rows[2], 0x03);
         let unpacked2 = Self::unpackhi_complex([rows[1], rows[2]]);
 
         [unpacked0, blended, unpacked2]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose4_packed(rows: [Self; 4]) -> [Self; 4] {
+    unsafe fn transpose4_packed(rows: [Self; 4]) -> [Self; 4] { unsafe {
         let [unpacked0, unpacked1] = Self::unpack_complex([rows[0], rows[1]]);
         let [unpacked2, unpacked3] = Self::unpack_complex([rows[2], rows[3]]);
 
         [unpacked0, unpacked2, unpacked1, unpacked3]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose5_packed(rows: [Self; 5]) -> [Self; 5] {
+    unsafe fn transpose5_packed(rows: [Self; 5]) -> [Self; 5] { unsafe {
         [
             Self::unpacklo_complex([rows[0], rows[1]]),
             Self::unpacklo_complex([rows[2], rows[3]]),
@@ -1498,9 +1498,9 @@ impl AvxVector for __m256d {
             Self::unpackhi_complex([rows[1], rows[2]]),
             Self::unpackhi_complex([rows[3], rows[4]]),
         ]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose6_packed(rows: [Self; 6]) -> [Self; 6] {
+    unsafe fn transpose6_packed(rows: [Self; 6]) -> [Self; 6] { unsafe {
         let [unpacked0, unpacked1] = Self::unpack_complex([rows[0], rows[1]]);
         let [unpacked2, unpacked3] = Self::unpack_complex([rows[2], rows[3]]);
         let [unpacked4, unpacked5] = Self::unpack_complex([rows[4], rows[5]]);
@@ -1508,9 +1508,9 @@ impl AvxVector for __m256d {
         [
             unpacked0, unpacked2, unpacked4, unpacked1, unpacked3, unpacked5,
         ]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose7_packed(rows: [Self; 7]) -> [Self; 7] {
+    unsafe fn transpose7_packed(rows: [Self; 7]) -> [Self; 7] { unsafe {
         [
             Self::unpacklo_complex([rows[0], rows[1]]),
             Self::unpacklo_complex([rows[2], rows[3]]),
@@ -1520,9 +1520,9 @@ impl AvxVector for __m256d {
             Self::unpackhi_complex([rows[3], rows[4]]),
             Self::unpackhi_complex([rows[5], rows[6]]),
         ]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose8_packed(rows: [Self; 8]) -> [Self; 8] {
+    unsafe fn transpose8_packed(rows: [Self; 8]) -> [Self; 8] { unsafe {
         let chunk0 = [rows[0], rows[1], rows[2], rows[3]];
         let chunk1 = [rows[4], rows[5], rows[6], rows[7]];
 
@@ -1533,9 +1533,9 @@ impl AvxVector for __m256d {
             output0[0], output0[1], output1[0], output1[1], output0[2], output0[3], output1[2],
             output1[3],
         ]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose9_packed(rows: [Self; 9]) -> [Self; 9] {
+    unsafe fn transpose9_packed(rows: [Self; 9]) -> [Self; 9] { unsafe {
         [
             _mm256_permute2f128_pd(rows[0], rows[1], 0x20),
             _mm256_permute2f128_pd(rows[2], rows[3], 0x20),
@@ -1547,9 +1547,9 @@ impl AvxVector for __m256d {
             _mm256_permute2f128_pd(rows[5], rows[6], 0x31),
             _mm256_permute2f128_pd(rows[7], rows[8], 0x31),
         ]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose11_packed(rows: [Self; 11]) -> [Self; 11] {
+    unsafe fn transpose11_packed(rows: [Self; 11]) -> [Self; 11] { unsafe {
         [
             _mm256_permute2f128_pd(rows[0], rows[1], 0x20),
             _mm256_permute2f128_pd(rows[2], rows[3], 0x20),
@@ -1563,9 +1563,9 @@ impl AvxVector for __m256d {
             _mm256_permute2f128_pd(rows[7], rows[8], 0x31),
             _mm256_permute2f128_pd(rows[9], rows[10], 0x31),
         ]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose12_packed(rows: [Self; 12]) -> [Self; 12] {
+    unsafe fn transpose12_packed(rows: [Self; 12]) -> [Self; 12] { unsafe {
         let chunk0 = [rows[0], rows[1], rows[2], rows[3]];
         let chunk1 = [rows[4], rows[5], rows[6], rows[7]];
         let chunk2 = [rows[8], rows[9], rows[10], rows[11]];
@@ -1578,9 +1578,9 @@ impl AvxVector for __m256d {
             output0[0], output0[1], output1[0], output1[1], output2[0], output2[1], output0[2],
             output0[3], output1[2], output1[3], output2[2], output2[3],
         ]
-    }
+    }}
     #[inline(always)]
-    unsafe fn transpose16_packed(rows: [Self; 16]) -> [Self; 16] {
+    unsafe fn transpose16_packed(rows: [Self; 16]) -> [Self; 16] { unsafe {
         let chunk0 = [
             rows[0], rows[1], rows[2], rows[3], rows[4], rows[5], rows[6], rows[7],
         ];
@@ -1596,64 +1596,64 @@ impl AvxVector for __m256d {
             output1[3], output0[4], output0[5], output0[6], output0[7], output1[4], output1[5],
             output1[6], output1[7],
         ]
-    }
+    }}
 }
 impl AvxVector256 for __m256d {
     type ScalarType = f64;
     type HalfVector = __m128d;
 
     #[inline(always)]
-    unsafe fn lo(self) -> Self::HalfVector {
+    unsafe fn lo(self) -> Self::HalfVector { unsafe {
         _mm256_castpd256_pd128(self)
-    }
+    }}
     #[inline(always)]
-    unsafe fn hi(self) -> Self::HalfVector {
+    unsafe fn hi(self) -> Self::HalfVector { unsafe {
         _mm256_extractf128_pd(self, 1)
-    }
+    }}
     #[inline(always)]
-    unsafe fn merge(lo: Self::HalfVector, hi: Self::HalfVector) -> Self {
+    unsafe fn merge(lo: Self::HalfVector, hi: Self::HalfVector) -> Self { unsafe {
         _mm256_insertf128_pd(_mm256_castpd128_pd256(lo), hi, 1)
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn broadcast_complex_elements(value: Complex<Self::ScalarType>) -> Self {
+    unsafe fn broadcast_complex_elements(value: Complex<Self::ScalarType>) -> Self { unsafe {
         _mm256_set_pd(value.im, value.re, value.im, value.re)
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self {
+    unsafe fn load_complex(ptr: *const Complex<Self::ScalarType>) -> Self { unsafe {
         _mm256_loadu_pd(ptr as *const Self::ScalarType)
-    }
+    }}
     #[inline(always)]
-    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) {
+    unsafe fn store_complex(ptr: *mut Complex<Self::ScalarType>, data: Self) { unsafe {
         _mm256_storeu_pd(ptr as *mut Self::ScalarType, data)
-    }
+    }}
     #[inline(always)]
     unsafe fn gather_complex_avx2_index32(
         ptr: *const Complex<Self::ScalarType>,
         indexes: __m128i,
-    ) -> Self {
+    ) -> Self { unsafe {
         let offsets = _mm_set_epi32(1, 0, 1, 0);
         let shifted = _mm_slli_epi32(indexes, 1);
         let modified_indexes = _mm_add_epi32(offsets, shifted);
 
         _mm256_i32gather_pd(ptr as *const f64, modified_indexes, 8)
-    }
+    }}
     #[inline(always)]
     unsafe fn gather_complex_avx2_index64(
         ptr: *const Complex<Self::ScalarType>,
         indexes: __m256i,
-    ) -> Self {
+    ) -> Self { unsafe {
         let offsets = _mm256_set_epi64x(1, 0, 1, 0);
         let shifted = _mm256_slli_epi64(indexes, 1);
         let modified_indexes = _mm256_add_epi64(offsets, shifted);
 
         _mm256_i64gather_pd(ptr as *const f64, modified_indexes, 8)
-    }
+    }}
     #[inline(always)]
-    unsafe fn load_partial1_complex(ptr: *const Complex<Self::ScalarType>) -> Self::HalfVector {
+    unsafe fn load_partial1_complex(ptr: *const Complex<Self::ScalarType>) -> Self::HalfVector { unsafe {
         _mm_loadu_pd(ptr as *const f64)
-    }
+    }}
     #[inline(always)]
     unsafe fn load_partial2_complex(_ptr: *const Complex<Self::ScalarType>) -> Self::HalfVector {
         unimplemented!("Impossible to do a partial load of 2 complex f64's")
@@ -1663,9 +1663,9 @@ impl AvxVector256 for __m256d {
         unimplemented!("Impossible to do a partial load of 3 complex f64's")
     }
     #[inline(always)]
-    unsafe fn store_partial1_complex(ptr: *mut Complex<Self::ScalarType>, data: Self::HalfVector) {
+    unsafe fn store_partial1_complex(ptr: *mut Complex<Self::ScalarType>, data: Self::HalfVector) { unsafe {
         _mm_storeu_pd(ptr as *mut f64, data);
-    }
+    }}
     #[inline(always)]
     unsafe fn store_partial2_complex(
         _ptr: *mut Complex<Self::ScalarType>,
@@ -1683,51 +1683,51 @@ impl AvxVector for __m128d {
     const COMPLEX_PER_VECTOR: usize = 1;
 
     #[inline(always)]
-    unsafe fn zero() -> Self {
+    unsafe fn zero() -> Self { unsafe {
         _mm_setzero_pd()
-    }
+    }}
     #[inline(always)]
-    unsafe fn half_root2() -> Self {
+    unsafe fn half_root2() -> Self { unsafe {
         // note: we're computing a square root here, but checking the assembly says the compiler is smart enough to turn this into a constant
         _mm_load1_pd(&0.5f64.sqrt())
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn xor(left: Self, right: Self) -> Self {
+    unsafe fn xor(left: Self, right: Self) -> Self { unsafe {
         _mm_xor_pd(left, right)
-    }
+    }}
     #[inline(always)]
-    unsafe fn neg(self) -> Self {
+    unsafe fn neg(self) -> Self { unsafe {
         _mm_xor_pd(self, _mm_load1_pd(&-0.0))
-    }
+    }}
     #[inline(always)]
-    unsafe fn add(left: Self, right: Self) -> Self {
+    unsafe fn add(left: Self, right: Self) -> Self { unsafe {
         _mm_add_pd(left, right)
-    }
+    }}
     #[inline(always)]
-    unsafe fn sub(left: Self, right: Self) -> Self {
+    unsafe fn sub(left: Self, right: Self) -> Self { unsafe {
         _mm_sub_pd(left, right)
-    }
+    }}
     #[inline(always)]
-    unsafe fn mul(left: Self, right: Self) -> Self {
+    unsafe fn mul(left: Self, right: Self) -> Self { unsafe {
         _mm_mul_pd(left, right)
-    }
+    }}
     #[inline(always)]
-    unsafe fn fmadd(left: Self, right: Self, add: Self) -> Self {
+    unsafe fn fmadd(left: Self, right: Self, add: Self) -> Self { unsafe {
         _mm_fmadd_pd(left, right, add)
-    }
+    }}
     #[inline(always)]
-    unsafe fn fnmadd(left: Self, right: Self, add: Self) -> Self {
+    unsafe fn fnmadd(left: Self, right: Self, add: Self) -> Self { unsafe {
         _mm_fnmadd_pd(left, right, add)
-    }
+    }}
     #[inline(always)]
-    unsafe fn fmaddsub(left: Self, right: Self, add: Self) -> Self {
+    unsafe fn fmaddsub(left: Self, right: Self, add: Self) -> Self { unsafe {
         _mm_fmaddsub_pd(left, right, add)
-    }
+    }}
     #[inline(always)]
-    unsafe fn fmsubadd(left: Self, right: Self, add: Self) -> Self {
+    unsafe fn fmsubadd(left: Self, right: Self, add: Self) -> Self { unsafe {
         _mm_fmsubadd_pd(left, right, add)
-    }
+    }}
 
     #[inline(always)]
     unsafe fn reverse_complex_elements(self) -> Self {
@@ -1744,40 +1744,40 @@ impl AvxVector for __m128d {
     }
 
     #[inline(always)]
-    unsafe fn swap_complex_components(self) -> Self {
+    unsafe fn swap_complex_components(self) -> Self { unsafe {
         _mm_permute_pd(self, 0x01)
-    }
+    }}
     #[inline(always)]
-    unsafe fn duplicate_complex_components(self) -> (Self, Self) {
+    unsafe fn duplicate_complex_components(self) -> (Self, Self) { unsafe {
         (_mm_movedup_pd(self), _mm_permute_pd(self, 0x03))
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn make_rotation90(direction: FftDirection) -> Rotation90<Self> {
+    unsafe fn make_rotation90(direction: FftDirection) -> Rotation90<Self> { unsafe {
         let broadcast = match direction {
             FftDirection::Forward => Complex::new(-0.0, 0.0),
             FftDirection::Inverse => Complex::new(0.0, -0.0),
         };
         Rotation90(Self::broadcast_complex_elements(broadcast))
-    }
+    }}
     #[inline(always)]
     unsafe fn make_mixedradix_twiddle_chunk(
         x: usize,
         y: usize,
         len: usize,
         direction: FftDirection,
-    ) -> Self {
+    ) -> Self { unsafe {
         let mut twiddle_chunk = [Complex::<f64>::zero(); Self::COMPLEX_PER_VECTOR];
         for i in 0..Self::COMPLEX_PER_VECTOR {
             twiddle_chunk[i] = twiddles::compute_twiddle(y * (x + i), len, direction);
         }
 
         _mm_loadu_pd(twiddle_chunk.as_ptr() as *const f64)
-    }
+    }}
     #[inline(always)]
-    unsafe fn broadcast_twiddle(index: usize, len: usize, direction: FftDirection) -> Self {
+    unsafe fn broadcast_twiddle(index: usize, len: usize, direction: FftDirection) -> Self { unsafe {
         Self::broadcast_complex_elements(twiddles::compute_twiddle(index, len, direction))
-    }
+    }}
 
     #[inline(always)]
     unsafe fn transpose2_packed(rows: [Self; 2]) -> [Self; 2] {
@@ -1828,43 +1828,43 @@ impl AvxVector128 for __m128d {
     type FullVector = __m256d;
 
     #[inline(always)]
-    unsafe fn lo(input: Self::FullVector) -> Self {
+    unsafe fn lo(input: Self::FullVector) -> Self { unsafe {
         _mm256_castpd256_pd128(input)
-    }
+    }}
     #[inline(always)]
-    unsafe fn hi(input: Self::FullVector) -> Self {
+    unsafe fn hi(input: Self::FullVector) -> Self { unsafe {
         _mm256_extractf128_pd(input, 1)
-    }
+    }}
     #[inline(always)]
-    unsafe fn merge(lo: Self, hi: Self) -> Self::FullVector {
+    unsafe fn merge(lo: Self, hi: Self) -> Self::FullVector { unsafe {
         _mm256_insertf128_pd(_mm256_castpd128_pd256(lo), hi, 1)
-    }
+    }}
     #[inline(always)]
-    unsafe fn zero_extend(self) -> Self::FullVector {
+    unsafe fn zero_extend(self) -> Self::FullVector { unsafe {
         _mm256_zextpd128_pd256(self)
-    }
+    }}
     #[inline(always)]
-    unsafe fn lo_rotation(input: Rotation90<Self::FullVector>) -> Rotation90<Self> {
+    unsafe fn lo_rotation(input: Rotation90<Self::FullVector>) -> Rotation90<Self> { unsafe {
         input.lo()
-    }
+    }}
     #[inline(always)]
-    unsafe fn broadcast_complex_elements(value: Complex<f64>) -> Self {
+    unsafe fn broadcast_complex_elements(value: Complex<f64>) -> Self { unsafe {
         _mm_set_pd(value.im, value.re)
-    }
+    }}
     #[inline(always)]
-    unsafe fn gather32_complex_avx2(ptr: *const Complex<f64>, indexes: __m128i) -> Self {
+    unsafe fn gather32_complex_avx2(ptr: *const Complex<f64>, indexes: __m128i) -> Self { unsafe {
         let mut index_storage: [i32; 4] = [0; 4];
         _mm_storeu_si128(index_storage.as_mut_ptr() as *mut __m128i, indexes);
 
         _mm_loadu_pd(ptr.offset(index_storage[0] as isize) as *const f64)
-    }
+    }}
     #[inline(always)]
-    unsafe fn gather64_complex_avx2(ptr: *const Complex<f64>, indexes: __m128i) -> Self {
+    unsafe fn gather64_complex_avx2(ptr: *const Complex<f64>, indexes: __m128i) -> Self { unsafe {
         let mut index_storage: [i64; 4] = [0; 4];
         _mm_storeu_si128(index_storage.as_mut_ptr() as *mut __m128i, indexes);
 
         _mm_loadu_pd(ptr.offset(index_storage[0] as isize) as *const f64)
-    }
+    }}
 }
 
 pub trait AvxArray<T: AvxNum>: Deref {
@@ -1899,31 +1899,31 @@ pub trait AvxArrayMut<T: AvxNum>: AvxArray<T> + DerefMut {
 
 impl<T: AvxNum> AvxArray<T> for &[Complex<T>] {
     #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> T::VectorType {
+    unsafe fn load_complex(&self, index: usize) -> T::VectorType { unsafe {
         debug_assert!(self.len() >= index + T::VectorType::COMPLEX_PER_VECTOR);
         T::VectorType::load_complex(self.as_ptr().add(index))
-    }
+    }}
     #[inline(always)]
     unsafe fn load_partial1_complex(
         &self,
         index: usize,
-    ) -> <T::VectorType as AvxVector256>::HalfVector {
+    ) -> <T::VectorType as AvxVector256>::HalfVector { unsafe {
         debug_assert!(self.len() >= index + 1);
         T::VectorType::load_partial1_complex(self.as_ptr().add(index))
-    }
+    }}
     #[inline(always)]
     unsafe fn load_partial2_complex(
         &self,
         index: usize,
-    ) -> <T::VectorType as AvxVector256>::HalfVector {
+    ) -> <T::VectorType as AvxVector256>::HalfVector { unsafe {
         debug_assert!(self.len() >= index + 2);
         T::VectorType::load_partial2_complex(self.as_ptr().add(index))
-    }
+    }}
     #[inline(always)]
-    unsafe fn load_partial3_complex(&self, index: usize) -> T::VectorType {
+    unsafe fn load_partial3_complex(&self, index: usize) -> T::VectorType { unsafe {
         debug_assert!(self.len() >= index + 3);
         T::VectorType::load_partial3_complex(self.as_ptr().add(index))
-    }
+    }}
     #[inline(always)]
     fn input_ptr(&self) -> *const Complex<T> {
         self.as_ptr()
@@ -1931,31 +1931,31 @@ impl<T: AvxNum> AvxArray<T> for &[Complex<T>] {
 }
 impl<T: AvxNum> AvxArray<T> for &mut [Complex<T>] {
     #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> T::VectorType {
+    unsafe fn load_complex(&self, index: usize) -> T::VectorType { unsafe {
         debug_assert!(self.len() >= index + T::VectorType::COMPLEX_PER_VECTOR);
         T::VectorType::load_complex(self.as_ptr().add(index))
-    }
+    }}
     #[inline(always)]
     unsafe fn load_partial1_complex(
         &self,
         index: usize,
-    ) -> <T::VectorType as AvxVector256>::HalfVector {
+    ) -> <T::VectorType as AvxVector256>::HalfVector { unsafe {
         debug_assert!(self.len() >= index + 1);
         T::VectorType::load_partial1_complex(self.as_ptr().add(index))
-    }
+    }}
     #[inline(always)]
     unsafe fn load_partial2_complex(
         &self,
         index: usize,
-    ) -> <T::VectorType as AvxVector256>::HalfVector {
+    ) -> <T::VectorType as AvxVector256>::HalfVector { unsafe {
         debug_assert!(self.len() >= index + 2);
         T::VectorType::load_partial2_complex(self.as_ptr().add(index))
-    }
+    }}
     #[inline(always)]
-    unsafe fn load_partial3_complex(&self, index: usize) -> T::VectorType {
+    unsafe fn load_partial3_complex(&self, index: usize) -> T::VectorType { unsafe {
         debug_assert!(self.len() >= index + 3);
         T::VectorType::load_partial3_complex(self.as_ptr().add(index))
-    }
+    }}
     #[inline(always)]
     fn input_ptr(&self) -> *const Complex<T> {
         self.as_ptr()
@@ -1966,27 +1966,27 @@ where
     &'a [Complex<T>]: AvxArray<T>,
 {
     #[inline(always)]
-    unsafe fn load_complex(&self, index: usize) -> T::VectorType {
+    unsafe fn load_complex(&self, index: usize) -> T::VectorType { unsafe {
         self.input.load_complex(index)
-    }
+    }}
     #[inline(always)]
     unsafe fn load_partial1_complex(
         &self,
         index: usize,
-    ) -> <T::VectorType as AvxVector256>::HalfVector {
+    ) -> <T::VectorType as AvxVector256>::HalfVector { unsafe {
         self.input.load_partial1_complex(index)
-    }
+    }}
     #[inline(always)]
     unsafe fn load_partial2_complex(
         &self,
         index: usize,
-    ) -> <T::VectorType as AvxVector256>::HalfVector {
+    ) -> <T::VectorType as AvxVector256>::HalfVector { unsafe {
         self.input.load_partial2_complex(index)
-    }
+    }}
     #[inline(always)]
-    unsafe fn load_partial3_complex(&self, index: usize) -> T::VectorType {
+    unsafe fn load_partial3_complex(&self, index: usize) -> T::VectorType { unsafe {
         self.input.load_partial3_complex(index)
-    }
+    }}
     #[inline(always)]
     fn input_ptr(&self) -> *const Complex<T> {
         self.input.input_ptr()
@@ -1995,33 +1995,33 @@ where
 
 impl<T: AvxNum> AvxArrayMut<T> for &mut [Complex<T>] {
     #[inline(always)]
-    unsafe fn store_complex(&mut self, data: T::VectorType, index: usize) {
+    unsafe fn store_complex(&mut self, data: T::VectorType, index: usize) { unsafe {
         debug_assert!(self.len() >= index + T::VectorType::COMPLEX_PER_VECTOR);
         T::VectorType::store_complex(self.as_mut_ptr().add(index), data);
-    }
+    }}
     #[inline(always)]
     unsafe fn store_partial1_complex(
         &mut self,
         data: <T::VectorType as AvxVector256>::HalfVector,
         index: usize,
-    ) {
+    ) { unsafe {
         debug_assert!(self.len() >= index + 1);
         T::VectorType::store_partial1_complex(self.as_mut_ptr().add(index), data);
-    }
+    }}
     #[inline(always)]
     unsafe fn store_partial2_complex(
         &mut self,
         data: <T::VectorType as AvxVector256>::HalfVector,
         index: usize,
-    ) {
+    ) { unsafe {
         debug_assert!(self.len() >= index + 2);
         T::VectorType::store_partial2_complex(self.as_mut_ptr().add(index), data);
-    }
+    }}
     #[inline(always)]
-    unsafe fn store_partial3_complex(&mut self, data: T::VectorType, index: usize) {
+    unsafe fn store_partial3_complex(&mut self, data: T::VectorType, index: usize) { unsafe {
         debug_assert!(self.len() >= index + 3);
         T::VectorType::store_partial3_complex(self.as_mut_ptr().add(index), data);
-    }
+    }}
 }
 impl<'a, T: AvxNum> AvxArrayMut<T> for DoubleBuf<'a, T>
 where
@@ -2029,36 +2029,36 @@ where
     &'a mut [Complex<T>]: AvxArrayMut<T>,
 {
     #[inline(always)]
-    unsafe fn store_complex(&mut self, data: T::VectorType, index: usize) {
+    unsafe fn store_complex(&mut self, data: T::VectorType, index: usize) { unsafe {
         self.output.store_complex(data, index);
-    }
+    }}
     #[inline(always)]
     unsafe fn store_partial1_complex(
         &mut self,
         data: <T::VectorType as AvxVector256>::HalfVector,
         index: usize,
-    ) {
+    ) { unsafe {
         self.output.store_partial1_complex(data, index);
-    }
+    }}
     #[inline(always)]
     unsafe fn store_partial2_complex(
         &mut self,
         data: <T::VectorType as AvxVector256>::HalfVector,
         index: usize,
-    ) {
+    ) { unsafe {
         self.output.store_partial2_complex(data, index);
-    }
+    }}
     #[inline(always)]
-    unsafe fn store_partial3_complex(&mut self, data: T::VectorType, index: usize) {
+    unsafe fn store_partial3_complex(&mut self, data: T::VectorType, index: usize) { unsafe {
         self.output.store_partial3_complex(data, index);
-    }
+    }}
 }
 
 // A custom butterfly-16 function that calls a lambda to load/store data instead of taking an array
 // This is particularly useful for butterfly 16, because the whole problem doesn't fit into registers, and the compiler isn't smart enough to only load data when it's needed
 // So the version that takes an array ends up loading data and immediately re-storing it on the stack. By lazily loading and storing exactly when we need to, we can avoid some data reshuffling
 macro_rules! column_butterfly16_loadfn{
-    ($load_expr: expr, $store_expr: expr, $twiddles: expr, $rotation: expr) => (
+    ($load_expr: expr_2021, $store_expr: expr_2021, $twiddles: expr_2021, $rotation: expr_2021) => (
         // Size-4 FFTs down the columns
         let input1 = [$load_expr(1), $load_expr(5), $load_expr(9), $load_expr(13)];
         let mut mid1 = AvxVector::column_butterfly4(input1, $rotation);
@@ -2101,7 +2101,7 @@ macro_rules! column_butterfly16_loadfn{
 // This is particularly useful for butterfly 32, because the whole problem doesn't fit into registers, and the compiler isn't smart enough to only load data when it's needed
 // So the version that takes an array ends up loading data and immediately re-storing it on the stack. By lazily loading and storing exactly when we need to, we can avoid some data reshuffling
 macro_rules! column_butterfly32_loadfn{
-    ($load_expr: expr, $store_expr: expr, $twiddles: expr, $rotation: expr) => (
+    ($load_expr: expr_2021, $store_expr: expr_2021, $twiddles: expr_2021, $rotation: expr_2021) => (
         // Size-4 FFTs down the columns
         let input1 = [$load_expr(1), $load_expr(9), $load_expr(17), $load_expr(25)];
         let mut mid1     = AvxVector::column_butterfly4(input1, $rotation);
@@ -2174,7 +2174,7 @@ macro_rules! column_butterfly32_loadfn{
 /// Multiply the complex numbers in `left` by the complex numbers in `right`.
 /// This is exactly the same as `mul_complex` in `AvxVector`, but this implementation also conjugates the `left` input before multiplying
 #[inline(always)]
-unsafe fn mul_complex_conjugated<V: AvxVector>(left: V, right: V) -> V {
+unsafe fn mul_complex_conjugated<V: AvxVector>(left: V, right: V) -> V { unsafe {
     // Extract the real and imaginary components from left into 2 separate registers
     let (left_real, left_imag) = V::duplicate_complex_components(left);
 
@@ -2187,14 +2187,14 @@ unsafe fn mul_complex_conjugated<V: AvxVector>(left: V, right: V) -> V {
     // use a FMA instruction to multiply together left side of the complex multiplication formula, then alternatingly add and subtract the left side from the right
     // By using subadd instead of addsub, we can conjugate the left side for free.
     V::fmsubadd(left_real, right, output_right)
-}
+}}
 
 // compute buffer[i] = buffer[i].conj() * multiplier[i] pairwise complex multiplication for each element.
 #[target_feature(enable = "avx", enable = "fma")]
 pub unsafe fn pairwise_complex_mul_assign_conjugated<T: AvxNum>(
     mut buffer: &mut [Complex<T>],
     multiplier: &[T::VectorType],
-) {
+) { unsafe {
     assert!(multiplier.len() * T::VectorType::COMPLEX_PER_VECTOR >= buffer.len()); // Assert to convince the compiler to omit bounds checks inside the loop
 
     for (i, mut buffer_chunk) in buffer
@@ -2234,7 +2234,7 @@ pub unsafe fn pairwise_complex_mul_assign_conjugated<T: AvxNum>(
             _ => unreachable!(),
         }
     }
-}
+}}
 
 // compute output[i] = input[i].conj() * multiplier[i] pairwise complex multiplication for each element.
 #[target_feature(enable = "avx", enable = "fma")]
@@ -2242,7 +2242,7 @@ pub unsafe fn pairwise_complex_mul_conjugated<T: AvxNum>(
     input: &[Complex<T>],
     mut output: &mut [Complex<T>],
     multiplier: &[T::VectorType],
-) {
+) { unsafe {
     assert!(
         multiplier.len() * T::VectorType::COMPLEX_PER_VECTOR >= input.len(),
         "multiplier len = {}, input len = {}",
@@ -2286,4 +2286,4 @@ pub unsafe fn pairwise_complex_mul_conjugated<T: AvxNum>(
             _ => unreachable!(),
         }
     }
-}
+}}

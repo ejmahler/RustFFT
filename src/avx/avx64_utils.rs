@@ -2,21 +2,21 @@ use std::arch::x86_64::*;
 
 // Treat the input like the rows of a 2x2 array, and transpose said rows to the columns
 #[inline(always)]
-pub unsafe fn transpose_2x2_f64(rows: [__m256d; 2]) -> [__m256d; 2] {
+pub unsafe fn transpose_2x2_f64(rows: [__m256d; 2]) -> [__m256d; 2] { unsafe {
     let col0 = _mm256_permute2f128_pd(rows[0], rows[1], 0x20);
     let col1 = _mm256_permute2f128_pd(rows[0], rows[1], 0x31);
 
     [col0, col1]
-}
+}}
 
 // Treat the input like the rows of a 4x2 array, and transpose it to a 2x4 array
 #[inline(always)]
-pub unsafe fn transpose_4x2_to_2x4_f64(rows0: [__m256d; 2], rows1: [__m256d; 2]) -> [__m256d; 4] {
+pub unsafe fn transpose_4x2_to_2x4_f64(rows0: [__m256d; 2], rows1: [__m256d; 2]) -> [__m256d; 4] { unsafe {
     let output00 = transpose_2x2_f64(rows0);
     let output01 = transpose_2x2_f64(rows1);
 
     [output00[0], output00[1], output01[0], output01[1]]
-}
+}}
 
 // Treat the input like the rows of a 3x3 array, and transpose it
 // The assumption here is that it's very likely that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
@@ -24,7 +24,7 @@ pub unsafe fn transpose_4x2_to_2x4_f64(rows0: [__m256d; 2], rows1: [__m256d; 2])
 pub unsafe fn transpose_3x3_f64(
     rows0: [__m128d; 3],
     rows1: [__m256d; 3],
-) -> ([__m128d; 3], [__m256d; 3]) {
+) -> ([__m128d; 3], [__m256d; 3]) { unsafe {
     // the first column of output will be made up of the first row of input
     let output0 = [
         rows0[0],
@@ -43,7 +43,7 @@ pub unsafe fn transpose_3x3_f64(
     let output1 = [output10, lower_transposed[0], lower_transposed[1]];
 
     (output0, output1)
-}
+}}
 
 // Treat the input like the rows of a 3x4 array, and transpose it to a 4x3 array
 // The assumption here is that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
@@ -51,7 +51,7 @@ pub unsafe fn transpose_3x3_f64(
 pub unsafe fn transpose_3x4_to_4x3_f64(
     rows0: [__m128d; 4],
     rows1: [__m256d; 4],
-) -> ([__m256d; 3], [__m256d; 3]) {
+) -> ([__m256d; 3], [__m256d; 3]) { unsafe {
     // the top row of each output array will come from the first column, and the second 2 rows will come from 2x2 transposing the rows1 array
     let merged0 = _mm256_permute2f128_pd(
         _mm256_castpd128_pd256(rows0[0]),
@@ -74,7 +74,7 @@ pub unsafe fn transpose_3x4_to_4x3_f64(
         [merged0, lower0[0], lower0[1]],
         [merged1, lower1[0], lower1[1]],
     )
-}
+}}
 
 // Treat the input like the rows of a 3x6 array, and transpose it to a 6x3 array
 // The assumption here is that caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
@@ -82,7 +82,7 @@ pub unsafe fn transpose_3x4_to_4x3_f64(
 pub unsafe fn transpose_3x6_to_6x3_f64(
     rows0: [__m128d; 6],
     rows1: [__m256d; 6],
-) -> ([__m256d; 3], [__m256d; 3], [__m256d; 3]) {
+) -> ([__m256d; 3], [__m256d; 3], [__m256d; 3]) { unsafe {
     let chunk0 = [rows1[0], rows1[1]];
     let chunk1 = [rows1[2], rows1[3]];
     let chunk2 = [rows1[4], rows1[5]];
@@ -108,7 +108,7 @@ pub unsafe fn transpose_3x6_to_6x3_f64(
     ];
 
     (output0, output1, output2)
-}
+}}
 
 // Treat the input like the rows of a 9x3 array, and transpose it to a 3x9 array
 // The assumption here is that caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
@@ -119,7 +119,7 @@ pub unsafe fn transpose_9x3_to_3x9_f64(
     rows2: [__m256d; 3],
     rows3: [__m256d; 3],
     rows4: [__m256d; 3],
-) -> ([__m128d; 9], [__m256d; 9]) {
+) -> ([__m128d; 9], [__m256d; 9]) { unsafe {
     let chunk1 = [rows1[1], rows1[2]];
     let chunk2 = [rows2[1], rows2[2]];
     let chunk3 = [rows3[1], rows3[2]];
@@ -154,7 +154,7 @@ pub unsafe fn transpose_9x3_to_3x9_f64(
     ];
 
     (output0, output1)
-}
+}}
 
 // Treat the input like the rows of a 4x4 array, and transpose said rows to the columns
 // The assumption here is that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
@@ -162,7 +162,7 @@ pub unsafe fn transpose_9x3_to_3x9_f64(
 pub unsafe fn transpose_4x4_f64(
     rows0: [__m256d; 4],
     rows1: [__m256d; 4],
-) -> ([__m256d; 4], [__m256d; 4]) {
+) -> ([__m256d; 4], [__m256d; 4]) { unsafe {
     let chunk00 = [rows0[0], rows0[1]];
     let chunk01 = [rows0[2], rows0[3]];
     let chunk10 = [rows1[0], rows1[1]];
@@ -177,7 +177,7 @@ pub unsafe fn transpose_4x4_f64(
         [output00[0], output00[1], output01[0], output01[1]],
         [output10[0], output10[1], output11[0], output11[1]],
     )
-}
+}}
 
 // Treat the input like the rows of a 6x6 array, and transpose said rows to the columns
 // The assumption here is that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
@@ -186,7 +186,7 @@ pub unsafe fn transpose_6x6_f64(
     rows0: [__m256d; 6],
     rows1: [__m256d; 6],
     rows2: [__m256d; 6],
-) -> ([__m256d; 6], [__m256d; 6], [__m256d; 6]) {
+) -> ([__m256d; 6], [__m256d; 6], [__m256d; 6]) { unsafe {
     let chunk00 = [rows0[0], rows0[1]];
     let chunk01 = [rows0[2], rows0[3]];
     let chunk02 = [rows0[4], rows0[5]];
@@ -233,7 +233,7 @@ pub unsafe fn transpose_6x6_f64(
             output22[1],
         ],
     )
-}
+}}
 
 // Treat the input like the rows of a 6x4 array, and transpose said rows to the columns
 // The assumption here is that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
@@ -242,7 +242,7 @@ pub unsafe fn transpose_6x4_to_4x6_f64(
     rows0: [__m256d; 4],
     rows1: [__m256d; 4],
     rows2: [__m256d; 4],
-) -> ([__m256d; 6], [__m256d; 6]) {
+) -> ([__m256d; 6], [__m256d; 6]) { unsafe {
     let chunk00 = [rows0[0], rows0[1]];
     let chunk01 = [rows0[2], rows0[3]];
     let chunk10 = [rows1[0], rows1[1]];
@@ -275,7 +275,7 @@ pub unsafe fn transpose_6x4_to_4x6_f64(
             output12[1],
         ],
     )
-}
+}}
 
 // Treat the input like the rows of a 8x4 array, and transpose it to a 4x8 array
 // The assumption here is that it's very likely that the caller wants to do some more AVX operations on the columns of the transposed array, so the output is arranged to make that more convenient
@@ -285,7 +285,7 @@ pub unsafe fn transpose_8x4_to_4x8_f64(
     rows1: [__m256d; 4],
     rows2: [__m256d; 4],
     rows3: [__m256d; 4],
-) -> ([__m256d; 8], [__m256d; 8]) {
+) -> ([__m256d; 8], [__m256d; 8]) { unsafe {
     let chunk00 = [rows0[0], rows0[1]];
     let chunk01 = [rows0[2], rows0[3]];
     let chunk10 = [rows1[0], rows1[1]];
@@ -326,4 +326,4 @@ pub unsafe fn transpose_8x4_to_4x8_f64(
             output13[1],
         ],
     )
-}
+}}

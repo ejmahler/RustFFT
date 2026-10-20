@@ -35,7 +35,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
     /// Pairwise multiply the complex numbers in `left` with the complex numbers in `right`.
     /// This is exactly the same as `mul_complex` in `AvxVector`, but this implementation also conjugates the `left` input before multiplying
     #[inline(always)]
-    unsafe fn mul_complex_conjugated<V: AvxVector>(left: V, right: V) -> V {
+    unsafe fn mul_complex_conjugated<V: AvxVector>(left: V, right: V) -> V { unsafe {
         // Extract the real and imaginary components from left into 2 separate registers
         let (left_real, left_imag) = V::duplicate_complex_components(left);
 
@@ -48,7 +48,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
         // use a FMA instruction to multiply together left side of the complex multiplication formula, then alternatingly add and subtract the left side from the right
         // By using subadd instead of addsub, we can conjugate the left side for free.
         V::fmsubadd(left_real, right, output_right)
-    }
+    }}
 
     /// Preallocates necessary arrays and precomputes necessary data to efficiently compute the FFT
     /// Returns Ok() if this machine has the required instruction sets, Err() if some instruction sets are missing
@@ -72,7 +72,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
     }
 
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(len: usize, inner_fft: Arc<dyn Fft<T>>) -> Self {
+    unsafe fn new_with_avx(len: usize, inner_fft: Arc<dyn Fft<T>>) -> Self { unsafe {
         let inner_fft_len = inner_fft.len();
         assert!(len * 2 - 1 <= inner_fft_len, "Bluestein's algorithm requires inner_fft.len() >= self.len() * 2 - 1. Expected >= {}, got {}", len * 2 - 1, inner_fft_len);
         assert_eq!(inner_fft_len % A::VectorType::COMPLEX_PER_VECTOR, 0, "BluesteinsAvx requires its inner_fft.len() to be a multiple of {} (IE the number of complex numbers in a single vector) inner_fft.len() = {}", A::VectorType::COMPLEX_PER_VECTOR, inner_fft_len);
@@ -149,7 +149,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
             },
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
 
     // Do the necessary setup for bluestein's algorithm: copy the data to the inner buffers, apply some twiddle factors, zero out the rest of the inner buffer
     #[target_feature(enable = "avx", enable = "fma")]
@@ -157,7 +157,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
         &self,
         input: &[Complex<A>],
         mut inner_fft_buffer: &mut [Complex<A>],
-    ) {
+    ) { unsafe {
         let chunk_count = self.common_data.twiddles.len() - 1;
         let remainder = self.len() - chunk_count * A::VectorType::COMPLEX_PER_VECTOR;
 
@@ -199,7 +199,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
             let index = i * A::VectorType::COMPLEX_PER_VECTOR;
             inner_fft_buffer.store_complex(AvxVector::zero(), index);
         }
-    }
+    }}
 
     // Do the necessary finalization for bluestein's algorithm: Conjugate the inner FFT buffer, apply some twiddle factors, zero out the rest of the inner buffer
     #[target_feature(enable = "avx", enable = "fma")]
@@ -207,7 +207,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
         &self,
         inner_fft_buffer: &[Complex<A>],
         mut output: &mut [Complex<A>],
-    ) {
+    ) { unsafe {
         let chunk_count = self.common_data.twiddles.len() - 1;
         let remainder = self.len() - chunk_count * A::VectorType::COMPLEX_PER_VECTOR;
 
@@ -241,14 +241,14 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
                 _ => unreachable!(),
             };
         }
-    }
+    }}
 
     // compute buffer[i] = buffer[i].conj() * multiplier[i] pairwise complex multiplication for each element.
     #[target_feature(enable = "avx", enable = "fma")]
     unsafe fn pairwise_complex_multiply_conjugated(
         mut buffer: impl AvxArrayMut<A>,
         multiplier: &[A::VectorType],
-    ) {
+    ) { unsafe {
         for (i, right) in multiplier.iter().enumerate() {
             let left = buffer.load_complex(i * A::VectorType::COMPLEX_PER_VECTOR);
 
@@ -258,7 +258,7 @@ impl<A: AvxNum, T: FftNum> BluesteinsAvx<A, T> {
             // Store the result
             buffer.store_complex(product, i * A::VectorType::COMPLEX_PER_VECTOR);
         }
-    }
+    }}
 
     fn perform_fft_inplace(&self, buffer: &mut [Complex<T>], scratch: &mut [Complex<T>]) {
         let (inner_input, inner_scratch) = scratch

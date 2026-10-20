@@ -6,7 +6,7 @@ use std::ops::{Deref, DerefMut};
 /// Given an array of size width * height, representing a flattened 2D array,
 /// transpose the rows and columns of that 2D array into the output
 /// benchmarking shows that loop tiling isn't effective for small arrays (in the range of 50x50 or smaller)
-pub unsafe fn transpose_small<T: Copy>(width: usize, height: usize, input: &[T], output: &mut [T]) {
+pub unsafe fn transpose_small<T: Copy>(width: usize, height: usize, input: &[T], output: &mut [T]) { unsafe {
     for x in 0..width {
         for y in 0..height {
             let input_index = x + y * width;
@@ -15,7 +15,7 @@ pub unsafe fn transpose_small<T: Copy>(width: usize, height: usize, input: &[T],
             *output.get_unchecked_mut(output_index) = *input.get_unchecked(input_index);
         }
     }
-}
+}}
 
 pub unsafe fn transpose_small_twiddle<T: FftNum>(
     width: usize,
@@ -23,7 +23,7 @@ pub unsafe fn transpose_small_twiddle<T: FftNum>(
     input: &[Complex<T>],
     output: &mut [Complex<T>],
     twiddles: &[Complex<T>],
-) {
+) { unsafe {
     assert!(input.len() >= width * height);
     assert!(output.len() >= width * height);
     assert!(twiddles.len() >= width * height);
@@ -45,20 +45,20 @@ pub unsafe fn transpose_small_twiddle<T: FftNum>(
             *output.get_unchecked_mut(out_idx) = val * tw;
         }
     }
-}
+}}
 
 #[allow(unused)]
-pub unsafe fn workaround_transmute<T, U>(slice: &[T]) -> &[U] {
+pub unsafe fn workaround_transmute<T, U>(slice: &[T]) -> &[U] { unsafe {
     let ptr = slice.as_ptr() as *const U;
     let len = slice.len();
     std::slice::from_raw_parts(ptr, len)
-}
+}}
 #[allow(unused)]
-pub unsafe fn workaround_transmute_mut<T, U>(slice: &mut [T]) -> &mut [U] {
+pub unsafe fn workaround_transmute_mut<T, U>(slice: &mut [T]) -> &mut [U] { unsafe {
     let ptr = slice.as_mut_ptr() as *mut U;
     let len = slice.len();
     std::slice::from_raw_parts_mut(ptr, len)
-}
+}}
 
 pub(crate) trait LoadStore<T: FftNum>: DerefMut {
     unsafe fn load(&self, idx: usize) -> Complex<T>;
@@ -67,27 +67,27 @@ pub(crate) trait LoadStore<T: FftNum>: DerefMut {
 
 impl<T: FftNum> LoadStore<T> for &mut [Complex<T>] {
     #[inline(always)]
-    unsafe fn load(&self, idx: usize) -> Complex<T> {
+    unsafe fn load(&self, idx: usize) -> Complex<T> { unsafe {
         debug_assert!(idx < self.len());
         *self.get_unchecked(idx)
-    }
+    }}
     #[inline(always)]
-    unsafe fn store(&mut self, val: Complex<T>, idx: usize) {
+    unsafe fn store(&mut self, val: Complex<T>, idx: usize) { unsafe {
         debug_assert!(idx < self.len());
         *self.get_unchecked_mut(idx) = val;
-    }
+    }}
 }
 impl<T: FftNum, const N: usize> LoadStore<T> for &mut [Complex<T>; N] {
     #[inline(always)]
-    unsafe fn load(&self, idx: usize) -> Complex<T> {
+    unsafe fn load(&self, idx: usize) -> Complex<T> { unsafe {
         debug_assert!(idx < self.len());
         *self.get_unchecked(idx)
-    }
+    }}
     #[inline(always)]
-    unsafe fn store(&mut self, val: Complex<T>, idx: usize) {
+    unsafe fn store(&mut self, val: Complex<T>, idx: usize) { unsafe {
         debug_assert!(idx < self.len());
         *self.get_unchecked_mut(idx) = val;
-    }
+    }}
 }
 
 pub(crate) struct DoubleBuf<'a, T> {
@@ -107,15 +107,15 @@ impl<'a, T> DerefMut for DoubleBuf<'a, T> {
 }
 impl<'a, T: FftNum> LoadStore<T> for DoubleBuf<'a, T> {
     #[inline(always)]
-    unsafe fn load(&self, idx: usize) -> Complex<T> {
+    unsafe fn load(&self, idx: usize) -> Complex<T> { unsafe {
         debug_assert!(idx < self.input.len());
         *self.input.get_unchecked(idx)
-    }
+    }}
     #[inline(always)]
-    unsafe fn store(&mut self, val: Complex<T>, idx: usize) {
+    unsafe fn store(&mut self, val: Complex<T>, idx: usize) { unsafe {
         debug_assert!(idx < self.output.len());
         *self.output.get_unchecked_mut(idx) = val;
-    }
+    }}
 }
 
 #[cfg(test)]

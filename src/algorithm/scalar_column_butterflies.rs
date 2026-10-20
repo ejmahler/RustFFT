@@ -451,7 +451,7 @@ mod unit_tests {
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
     macro_rules! test_butterfly_func {
-        ($test_name:ident, $struct_name:ident, $size:expr) => {
+        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
             #[test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);

@@ -17,7 +17,7 @@ use super::avx_vector::{AvxArray, AvxArrayMut, AvxVector, AvxVector128, AvxVecto
 // Callers of this macro must guarantee that users can't even obtain an instance of $struct_name if their CPU doesn't have the required CPU features.
 #[allow(unused)]
 macro_rules! boilerplate_fft_simd_butterfly {
-    ($struct_name:ident, $len:expr) => {
+    ($struct_name:ident, $len:expr_2021) => {
         impl $struct_name<f64> {
             #[inline]
             pub fn new(direction: FftDirection) -> Result<Self, ()> {
@@ -114,7 +114,7 @@ macro_rules! boilerplate_fft_simd_butterfly {
 // Calling functions with that annotation is unsafe, because it doesn't actually check if the CPU has the required features.
 // Callers of this macro must guarantee that users can't even obtain an instance of $struct_name if their CPU doesn't have the required CPU features.
 macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
-    ($struct_name:ident, $len:expr) => {
+    ($struct_name:ident, $len:expr_2021) => {
         impl $struct_name<f64> {
             #[inline]
             pub fn is_supported_by_cpu() -> bool {
@@ -243,7 +243,7 @@ macro_rules! boilerplate_fft_simd_butterfly_with_scratch {
 }
 
 macro_rules! gen_butterfly_twiddles_interleaved_columns {
-    ($num_rows:expr, $num_cols:expr, $skip_cols:expr, $direction: expr) => {{
+    ($num_rows:expr_2021, $num_cols:expr_2021, $skip_cols:expr_2021, $direction: expr_2021) => {{
         const FFT_LEN: usize = $num_rows * $num_cols;
         const TWIDDLE_ROWS: usize = $num_rows - 1;
         const TWIDDLE_COLS: usize = $num_cols - $skip_cols;
@@ -261,7 +261,7 @@ macro_rules! gen_butterfly_twiddles_interleaved_columns {
 }
 
 macro_rules! gen_butterfly_twiddles_separated_columns {
-    ($num_rows:expr, $num_cols:expr, $skip_cols:expr, $direction: expr) => {{
+    ($num_rows:expr_2021, $num_cols:expr_2021, $skip_cols:expr_2021, $direction: expr_2021) => {{
         const FFT_LEN: usize = $num_rows * $num_cols;
         const TWIDDLE_ROWS: usize = $num_rows - 1;
         const TWIDDLE_COLS: usize = $num_cols - $skip_cols;
@@ -286,7 +286,7 @@ pub struct Butterfly5Avx64<T> {
 boilerplate_fft_simd_butterfly!(Butterfly5Avx64, 5);
 impl Butterfly5Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(direction: FftDirection) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self { unsafe {
         let twiddle1 = twiddles::compute_twiddle(1, 5, direction);
         let twiddle2 = twiddles::compute_twiddle(2, 5, direction);
         Self {
@@ -298,11 +298,11 @@ impl Butterfly5Avx64<f64> {
             direction,
             _phantom_t: PhantomData,
         }
-    }
+    }}
 }
 impl<T> Butterfly5Avx64<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) {
+    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) { unsafe {
         let input0 = _mm256_loadu2_m128d(
             buffer.input_ptr() as *const f64,
             buffer.input_ptr() as *const f64,
@@ -343,7 +343,7 @@ impl<T> Butterfly5Avx64<T> {
         buffer.store_partial1_complex(output0, 0);
         buffer.store_complex(final12, 1);
         buffer.store_complex(final34, 3);
-    }
+    }}
 }
 
 pub struct Butterfly7Avx64<T> {
@@ -354,7 +354,7 @@ pub struct Butterfly7Avx64<T> {
 boilerplate_fft_simd_butterfly!(Butterfly7Avx64, 7);
 impl Butterfly7Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(direction: FftDirection) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self { unsafe {
         let twiddle1 = twiddles::compute_twiddle(1, 7, direction);
         let twiddle2 = twiddles::compute_twiddle(2, 7, direction);
         let twiddle3 = twiddles::compute_twiddle(3, 7, direction);
@@ -369,11 +369,11 @@ impl Butterfly7Avx64<f64> {
             direction,
             _phantom_t: PhantomData,
         }
-    }
+    }}
 }
 impl<T> Butterfly7Avx64<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) {
+    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) { unsafe {
         let input0 = _mm256_loadu2_m128d(
             buffer.input_ptr() as *const f64,
             buffer.input_ptr() as *const f64,
@@ -436,7 +436,7 @@ impl<T> Butterfly7Avx64<T> {
         buffer.store_partial1_complex(final3, 3);
         buffer.store_partial1_complex(final4, 4);
         buffer.store_complex(final56, 5);
-    }
+    }}
 }
 
 pub struct Butterfly11Avx64<T> {
@@ -447,7 +447,7 @@ pub struct Butterfly11Avx64<T> {
 boilerplate_fft_simd_butterfly!(Butterfly11Avx64, 11);
 impl Butterfly11Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(direction: FftDirection) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self { unsafe {
         let twiddle1 = twiddles::compute_twiddle(1, 11, direction);
         let twiddle2 = twiddles::compute_twiddle(2, 11, direction);
         let twiddle3 = twiddles::compute_twiddle(3, 11, direction);
@@ -472,11 +472,11 @@ impl Butterfly11Avx64<f64> {
             direction,
             _phantom_t: PhantomData,
         }
-    }
+    }}
 }
 impl<T> Butterfly11Avx64<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) {
+    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) { unsafe {
         let input0 = buffer.load_partial1_complex(0);
         let input12 = buffer.load_complex(1);
         let input34 = buffer.load_complex(3);
@@ -564,7 +564,7 @@ impl<T> Butterfly11Avx64<T> {
         buffer.store_partial1_complex(output66.lo(), 6);
         buffer.store_complex(output78, 7);
         buffer.store_complex(output910, 9);
-    }
+    }}
 }
 
 pub struct Butterfly8Avx64<T> {
@@ -576,18 +576,18 @@ pub struct Butterfly8Avx64<T> {
 boilerplate_fft_simd_butterfly!(Butterfly8Avx64, 8);
 impl Butterfly8Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(direction: FftDirection) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self { unsafe {
         Self {
             twiddles: gen_butterfly_twiddles_interleaved_columns!(2, 4, 0, direction),
             twiddles_butterfly4: AvxVector::make_rotation90(direction),
             direction,
             _phantom_t: PhantomData,
         }
-    }
+    }}
 }
 impl<T> Butterfly8Avx64<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) {
+    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) { unsafe {
         let row0 = buffer.load_complex(0);
         let row1 = buffer.load_complex(2);
         let row2 = buffer.load_complex(4);
@@ -611,7 +611,7 @@ impl<T> Butterfly8Avx64<T> {
         buffer.store_complex(output_rows[1], 2);
         buffer.store_complex(output_rows[2], 4);
         buffer.store_complex(output_rows[3], 6);
-    }
+    }}
 }
 
 pub struct Butterfly9Avx64<T> {
@@ -623,18 +623,18 @@ pub struct Butterfly9Avx64<T> {
 boilerplate_fft_simd_butterfly!(Butterfly9Avx64, 9);
 impl Butterfly9Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(direction: FftDirection) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self { unsafe {
         Self {
             twiddles: gen_butterfly_twiddles_interleaved_columns!(3, 3, 1, direction),
             twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, direction),
             direction,
             _phantom_t: PhantomData,
         }
-    }
+    }}
 }
 impl<T> Butterfly9Avx64<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) {
+    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) { unsafe {
         // we're going to load our input as a 3x3 array. We have to load 3 columns, which is a little awkward
         // We can reduce the number of multiplies we do if we load the first column as half-width and the second column as full.
         let mut rows0 = [AvxVector::zero(); 3];
@@ -665,7 +665,7 @@ impl<T> Butterfly9Avx64<T> {
             buffer.store_partial1_complex(output0[r], 3 * r);
             buffer.store_complex(output1[r], 3 * r + 1);
         }
-    }
+    }}
 }
 
 pub struct Butterfly12Avx64<T> {
@@ -678,7 +678,7 @@ pub struct Butterfly12Avx64<T> {
 boilerplate_fft_simd_butterfly!(Butterfly12Avx64, 12);
 impl Butterfly12Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(direction: FftDirection) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self { unsafe {
         Self {
             twiddles: gen_butterfly_twiddles_interleaved_columns!(4, 3, 1, direction),
             twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, direction),
@@ -686,11 +686,11 @@ impl Butterfly12Avx64<f64> {
             direction,
             _phantom_t: PhantomData,
         }
-    }
+    }}
 }
 impl<T> Butterfly12Avx64<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) {
+    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) { unsafe {
         // we're going to load our input as a 3x4 array. We have to load 3 columns, which is a little awkward
         // We can reduce the number of multiplies we do if we load the first column as half-width and the second column as full.
         let mut rows0 = [AvxVector::zero(); 4];
@@ -721,7 +721,7 @@ impl<T> Butterfly12Avx64<T> {
             buffer.store_complex(output0[r], 4 * r);
             buffer.store_complex(output1[r], 4 * r + 2);
         }
-    }
+    }}
 }
 
 pub struct Butterfly16Avx64<T> {
@@ -733,18 +733,18 @@ pub struct Butterfly16Avx64<T> {
 boilerplate_fft_simd_butterfly!(Butterfly16Avx64, 16);
 impl Butterfly16Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(direction: FftDirection) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self { unsafe {
         Self {
             twiddles: gen_butterfly_twiddles_interleaved_columns!(4, 4, 0, direction),
             twiddles_butterfly4: AvxVector::make_rotation90(direction),
             direction,
             _phantom_t: PhantomData,
         }
-    }
+    }}
 }
 impl<T> Butterfly16Avx64<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) {
+    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) { unsafe {
         let mut rows0 = [AvxVector::zero(); 4];
         let mut rows1 = [AvxVector::zero(); 4];
         for r in 0..4 {
@@ -773,7 +773,7 @@ impl<T> Butterfly16Avx64<T> {
             buffer.store_complex(output0[r], 4 * r);
             buffer.store_complex(output1[r], 4 * r + 2);
         }
-    }
+    }}
 }
 
 pub struct Butterfly18Avx64<T> {
@@ -785,18 +785,18 @@ pub struct Butterfly18Avx64<T> {
 boilerplate_fft_simd_butterfly!(Butterfly18Avx64, 18);
 impl Butterfly18Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(direction: FftDirection) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self { unsafe {
         Self {
             twiddles: gen_butterfly_twiddles_interleaved_columns!(6, 3, 1, direction),
             twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, direction),
             direction,
             _phantom_t: PhantomData,
         }
-    }
+    }}
 }
 impl<T> Butterfly18Avx64<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) {
+    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) { unsafe {
         // we're going to load our input as a 3x6 array. We have to load 3 columns, which is a little awkward
         // We can reduce the number of multiplies we do if we load the first column as half-width and the second column as full.
         let mut rows0 = [AvxVector::zero(); 6];
@@ -829,7 +829,7 @@ impl<T> Butterfly18Avx64<T> {
             buffer.store_complex(output1[r], 6 * r + 2);
             buffer.store_complex(output2[r], 6 * r + 4);
         }
-    }
+    }}
 }
 
 pub struct Butterfly24Avx64<T> {
@@ -842,7 +842,7 @@ pub struct Butterfly24Avx64<T> {
 boilerplate_fft_simd_butterfly!(Butterfly24Avx64, 24);
 impl Butterfly24Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(direction: FftDirection) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self { unsafe {
         Self {
             twiddles: gen_butterfly_twiddles_interleaved_columns!(4, 6, 0, direction),
             twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, direction),
@@ -850,11 +850,11 @@ impl Butterfly24Avx64<f64> {
             direction,
             _phantom_t: PhantomData,
         }
-    }
+    }}
 }
 impl<T> Butterfly24Avx64<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) {
+    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) { unsafe {
         let mut rows0 = [AvxVector::zero(); 4];
         let mut rows1 = [AvxVector::zero(); 4];
         let mut rows2 = [AvxVector::zero(); 4];
@@ -887,7 +887,7 @@ impl<T> Butterfly24Avx64<T> {
             buffer.store_complex(output0[r], 4 * r);
             buffer.store_complex(output1[r], 4 * r + 2);
         }
-    }
+    }}
 }
 
 pub struct Butterfly27Avx64<T> {
@@ -901,7 +901,7 @@ pub struct Butterfly27Avx64<T> {
 boilerplate_fft_simd_butterfly!(Butterfly27Avx64, 27);
 impl Butterfly27Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(direction: FftDirection) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self { unsafe {
         let twiddle1 = __m128d::broadcast_twiddle(1, 9, direction);
         let twiddle2 = __m128d::broadcast_twiddle(2, 9, direction);
         let twiddle4 = __m128d::broadcast_twiddle(4, 9, direction);
@@ -921,11 +921,11 @@ impl Butterfly27Avx64<f64> {
             direction,
             _phantom_t: PhantomData,
         }
-    }
+    }}
 }
 impl<T> Butterfly27Avx64<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) {
+    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) { unsafe {
         // we're going to load our input as a 9x3 array. We have to load 9 columns, which is a little awkward
         // We can reduce the number of multiplies we do if we load the first column as half-width and the remaining 4 sets of vectors as full.
         // We can't fit the whole problem into AVX registers at once, so we'll have to spill some things.
@@ -990,7 +990,7 @@ impl<T> Butterfly27Avx64<T> {
             buffer.store_complex(output1[r * 3 + 1], 9 * r + 4);
             buffer.store_complex(output1[r * 3 + 2], 9 * r + 7);
         }
-    }
+    }}
 }
 
 pub struct Butterfly32Avx64<T> {
@@ -1002,18 +1002,18 @@ pub struct Butterfly32Avx64<T> {
 boilerplate_fft_simd_butterfly!(Butterfly32Avx64, 32);
 impl Butterfly32Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(direction: FftDirection) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self { unsafe {
         Self {
             twiddles: gen_butterfly_twiddles_interleaved_columns!(4, 8, 0, direction),
             twiddles_butterfly4: AvxVector::make_rotation90(direction),
             direction,
             _phantom_t: PhantomData,
         }
-    }
+    }}
 }
 impl<T> Butterfly32Avx64<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) {
+    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) { unsafe {
         // We're going to treat our input as a 8x4 2d array. First, do 8 butterfly 4's down the columns of that array.
         // We can't fit the whole problem into AVX registers at once, so we'll have to spill some things.
         // By computing half of the problem and then not referencing any of it for a while, we're making it easy for the compiler to decide what to spill
@@ -1058,7 +1058,7 @@ impl<T> Butterfly32Avx64<T> {
         for r in 0..8 {
             buffer.store_complex(output1[r], 4 * r + 2);
         }
-    }
+    }}
 }
 
 pub struct Butterfly36Avx64<T> {
@@ -1070,18 +1070,18 @@ pub struct Butterfly36Avx64<T> {
 boilerplate_fft_simd_butterfly!(Butterfly36Avx64, 36);
 impl Butterfly36Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(direction: FftDirection) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self { unsafe {
         Self {
             twiddles: gen_butterfly_twiddles_separated_columns!(6, 6, 0, direction),
             twiddles_butterfly3: AvxVector::broadcast_twiddle(1, 3, direction),
             direction,
             _phantom_t: PhantomData,
         }
-    }
+    }}
 }
 impl<T> Butterfly36Avx64<T> {
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) {
+    unsafe fn perform_fft_f64(&self, mut buffer: impl AvxArrayMut<f64>) { unsafe {
         // we're going to load our input as a 6x6 array
         // We can't fit the whole problem into AVX registers at once, so we'll have to spill some things.
         // By computing chunks of the problem and then not referencing any of it for a while, we're making it easy for the compiler to decide what to spill
@@ -1136,7 +1136,7 @@ impl<T> Butterfly36Avx64<T> {
             buffer.store_complex(output2[r * 2], 12 * r + 4);
             buffer.store_complex(output2[r * 2 + 1], 12 * r + 10);
         }
-    }
+    }}
 }
 
 pub struct Butterfly64Avx64<T> {
@@ -1148,14 +1148,14 @@ pub struct Butterfly64Avx64<T> {
 boilerplate_fft_simd_butterfly_with_scratch!(Butterfly64Avx64, 64);
 impl Butterfly64Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(direction: FftDirection) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self { unsafe {
         Self {
             twiddles: gen_butterfly_twiddles_separated_columns!(8, 8, 0, direction),
             twiddles_butterfly4: AvxVector::make_rotation90(direction),
             direction,
             _phantom_t: PhantomData,
         }
-    }
+    }}
 }
 impl<T> Butterfly64Avx64<T> {
     #[target_feature(enable = "avx", enable = "fma")]
@@ -1163,7 +1163,7 @@ impl<T> Butterfly64Avx64<T> {
         &self,
         input: &[Complex<f64>],
         mut output: &mut [Complex<f64>],
-    ) {
+    ) { unsafe {
         // A size-64 FFT is way too big to fit in registers, so instead we're going to compute it in two phases, storing in scratch in between.
 
         // First phase is to treat this size-64 array like a 8x8 2D array, and do butterfly 8's down the columns
@@ -1192,10 +1192,10 @@ impl<T> Butterfly64Avx64<T> {
                 output.store_complex(transposed[i * 2 + 1], columnset * 16 + i * 4 + 2);
             }
         }
-    }
+    }}
 
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn row_butterflies(&self, mut buffer: impl AvxArrayMut<f64>) {
+    unsafe fn row_butterflies(&self, mut buffer: impl AvxArrayMut<f64>) { unsafe {
         // Second phase: Butterfly 8's down the columns of our transposed array.
         // Thankfully, during the first phase, we set everything up so that all we have to do here is compute the size-8 FFT columns and write them back out where we got them
         for columnset in 0usize..4 {
@@ -1208,7 +1208,7 @@ impl<T> Butterfly64Avx64<T> {
                 buffer.store_complex(mid[r], columnset * 2 + 8 * r);
             }
         }
-    }
+    }}
 }
 
 pub struct Butterfly128Avx64<T> {
@@ -1221,7 +1221,7 @@ pub struct Butterfly128Avx64<T> {
 boilerplate_fft_simd_butterfly_with_scratch!(Butterfly128Avx64, 128);
 impl Butterfly128Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(direction: FftDirection) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self { unsafe {
         Self {
             twiddles: gen_butterfly_twiddles_separated_columns!(8, 16, 0, direction),
             twiddles_butterfly16: [
@@ -1232,7 +1232,7 @@ impl Butterfly128Avx64<f64> {
             direction,
             _phantom_t: PhantomData,
         }
-    }
+    }}
 }
 impl<T> Butterfly128Avx64<T> {
     #[target_feature(enable = "avx", enable = "fma")]
@@ -1240,7 +1240,7 @@ impl<T> Butterfly128Avx64<T> {
         &self,
         input: &[Complex<f64>],
         mut output: &mut [Complex<f64>],
-    ) {
+    ) { unsafe {
         // A size-128 FFT is way too big to fit in registers, so instead we're going to compute it in two phases, storing in scratch in between.
 
         // First phase is to treat this size-128 array like a 16x8 2D array, and do butterfly 8's down the columns
@@ -1269,10 +1269,10 @@ impl<T> Butterfly128Avx64<T> {
                 output.store_complex(transposed[i * 2 + 1], columnset * 16 + i * 4 + 2);
             }
         }
-    }
+    }}
 
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn row_butterflies(&self, mut buffer: impl AvxArrayMut<f64>) {
+    unsafe fn row_butterflies(&self, mut buffer: impl AvxArrayMut<f64>) { unsafe {
         // Second phase: Butterfly 16's down the columns of our transposed array.
         // Thankfully, during the first phase, we set everything up so that all we have to do here is compute the size-16 FFT columns and write them back out where we got them
         // We're also using a customized butterfly16 function that is smarter about when it loads/stores data, to reduce register spilling
@@ -1284,7 +1284,7 @@ impl<T> Butterfly128Avx64<T> {
                 self.twiddles_butterfly4
             );
         }
-    }
+    }}
 }
 
 pub struct Butterfly256Avx64<T> {
@@ -1297,7 +1297,7 @@ pub struct Butterfly256Avx64<T> {
 boilerplate_fft_simd_butterfly_with_scratch!(Butterfly256Avx64, 256);
 impl Butterfly256Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(direction: FftDirection) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self { unsafe {
         Self {
             twiddles: gen_butterfly_twiddles_separated_columns!(8, 32, 0, direction),
             twiddles_butterfly32: [
@@ -1312,7 +1312,7 @@ impl Butterfly256Avx64<f64> {
             direction,
             _phantom_t: PhantomData,
         }
-    }
+    }}
 }
 impl<T> Butterfly256Avx64<T> {
     #[target_feature(enable = "avx", enable = "fma")]
@@ -1320,7 +1320,7 @@ impl<T> Butterfly256Avx64<T> {
         &self,
         input: &[Complex<f64>],
         mut output: &mut [Complex<f64>],
-    ) {
+    ) { unsafe {
         // A size-256 FFT is way too big to fit in registers, so instead we're going to compute it in two phases, storing in scratch in between.
 
         // First phase is to treeat this size-256 array like a 32x8 2D array, and do butterfly 8's down the columns
@@ -1349,10 +1349,10 @@ impl<T> Butterfly256Avx64<T> {
                 output.store_complex(transposed[i * 2 + 1], columnset * 16 + i * 4 + 2);
             }
         }
-    }
+    }}
 
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn row_butterflies(&self, mut buffer: impl AvxArrayMut<f64>) {
+    unsafe fn row_butterflies(&self, mut buffer: impl AvxArrayMut<f64>) { unsafe {
         // Second phase: Butterfly 32's down the columns of our transposed array.
         // Thankfully, during the first phase, we set everything up so that all we have to do here is compute the size-32 FFT columns and write them back out where we got them
         // We're also using a customized butterfly32 function that is smarter about when it loads/stores data, to reduce register spilling
@@ -1364,7 +1364,7 @@ impl<T> Butterfly256Avx64<T> {
                 self.twiddles_butterfly4
             );
         }
-    }
+    }}
 }
 
 pub struct Butterfly512Avx64<T> {
@@ -1378,7 +1378,7 @@ pub struct Butterfly512Avx64<T> {
 boilerplate_fft_simd_butterfly_with_scratch!(Butterfly512Avx64, 512);
 impl Butterfly512Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(direction: FftDirection) -> Self {
+    unsafe fn new_with_avx(direction: FftDirection) -> Self { unsafe {
         Self {
             twiddles: gen_butterfly_twiddles_separated_columns!(16, 32, 0, direction),
             twiddles_butterfly32: [
@@ -1397,7 +1397,7 @@ impl Butterfly512Avx64<f64> {
             direction,
             _phantom_t: PhantomData,
         }
-    }
+    }}
 }
 impl<T> Butterfly512Avx64<T> {
     #[target_feature(enable = "avx", enable = "fma")]
@@ -1405,7 +1405,7 @@ impl<T> Butterfly512Avx64<T> {
         &self,
         input: &[Complex<f64>],
         mut output: &mut [Complex<f64>],
-    ) {
+    ) { unsafe {
         // A size-512 FFT is way too big to fit in registers, so instead we're going to compute it in two phases, storing in scratch in between.
 
         // First phase is to treat this size-512 array like a 32x16 2D array, and do butterfly 16's down the columns
@@ -1464,10 +1464,10 @@ impl<T> Butterfly512Avx64<T> {
                 output.store_complex(transposed[3], columnset * 32 + 4 * chunk + 18);
             }
         }
-    }
+    }}
 
     #[target_feature(enable = "avx", enable = "fma")]
-    unsafe fn row_butterflies(&self, mut buffer: impl AvxArrayMut<f64>) {
+    unsafe fn row_butterflies(&self, mut buffer: impl AvxArrayMut<f64>) { unsafe {
         // Second phase: Butterfly 32's down the columns of our transposed array.
         // Thankfully, during the first phase, we set everything up so that all we have to do here is compute the size-32 FFT columns and write them back out where we got them
         // We're also using a customized butterfly32 function that is smarter about when it loads/stores data, to reduce register spilling
@@ -1479,7 +1479,7 @@ impl<T> Butterfly512Avx64<T> {
                 self.twiddles_butterfly4
             );
         }
-    }
+    }}
 }
 
 #[cfg(test)]
@@ -1488,7 +1488,7 @@ mod unit_tests {
     use crate::test_utils::check_fft_algorithm;
 
     macro_rules! test_avx_butterfly {
-        ($test_name:ident, $struct_name:ident, $size:expr) => (
+        ($test_name:ident, $struct_name:ident, $size:expr_2021) => (
             #[test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward).expect("Can't run test because this machine doesn't have the required instruction sets");
