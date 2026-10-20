@@ -72,31 +72,20 @@ pub struct FftPlanner<T: FftNum> {
 impl<T: FftNum> FftPlanner<T> {
     /// Creates a new `FftPlanner` instance.
     pub fn new() -> Self {
-        match FftPlannerAvx::new() { Ok(avx_planner) => {
-            Self {
-                chosen_planner: ChosenFftPlanner::Avx(avx_planner),
-            }
-        } _ => { match FftPlannerSse::new() { Ok(sse_planner) => {
-            Self {
-                chosen_planner: ChosenFftPlanner::Sse(sse_planner),
-            }
-        } _ => if let Ok(fcma_planner) = FftPlannerFcma::new() {
-            Self {
-                chosen_planner: ChosenFftPlanner::Fcma(fcma_planner),
-            }
+        let chosen_planner = if let Ok(avx_planner) = FftPlannerAvx::new() {
+            ChosenFftPlanner::Avx(avx_planner)
+        } else if let Ok(sse_planner) = FftPlannerSse::new() {
+            ChosenFftPlanner::Sse(sse_planner)
+        } else if let Ok(fcma_planner) = FftPlannerFcma::new() {
+            ChosenFftPlanner::Fcma(fcma_planner)
         } else if let Ok(neon_planner) = FftPlannerNeon::new() {
-            Self {
-                chosen_planner: ChosenFftPlanner::Neon(neon_planner),
-            }
+            ChosenFftPlanner::Neon(neon_planner)
         } else if let Ok(wasm_simd_planner) = FftPlannerWasmSimd::new() {
-            Self {
-                chosen_planner: ChosenFftPlanner::WasmSimd(wasm_simd_planner),
-            }
+            ChosenFftPlanner::WasmSimd(wasm_simd_planner)
         } else {
-            Self {
-                chosen_planner: ChosenFftPlanner::Scalar(FftPlannerScalar::new()),
-            }
-        }}}}
+            ChosenFftPlanner::Scalar(FftPlannerScalar::new())
+        };
+        Self { chosen_planner }
     }
 
     /// Returns a `Fft` instance which computes FFTs of size `len`.
