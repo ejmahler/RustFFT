@@ -47,7 +47,7 @@ pub const fn prime_butterfly_lens() -> &'static [usize] {
 
 /// Safety: The current machine must support the simd128 target feature
 #[target_feature(enable = "simd128")]
-pub unsafe fn construct_prime_butterfly<T: FftNum>(len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
+pub unsafe fn construct_prime_butterfly<T: FftNum>(len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> { unsafe {
     let id_f32 = TypeId::of::<f32>();
     let id_f64 = TypeId::of::<f64>();
     let id_t = TypeId::of::<T>();
@@ -78,7 +78,7 @@ pub unsafe fn construct_prime_butterfly<T: FftNum>(len: usize, direction: FftDir
     } else {
         unimplemented!("Not f32 or f64");
     }
-}
+}}
 
 #[inline(always)]
 fn make_twiddles<const TW: usize, T: FftNum>(len: usize, direction: FftDirection) -> [Complex<T>; TW] {
@@ -98,14 +98,14 @@ pub struct WasmSimdF32ParallelButterfly7 {
 impl WasmSimdF32ParallelButterfly7 {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(7, direction);
         Self {
             bf2: WasmSimdF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<WasmVector32, 7> for WasmSimdF32ParallelButterfly7 {
     #[inline(always)]
@@ -165,26 +165,26 @@ boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly7, 7, |this: &WasmS
 impl<T: FftNum> WasmSimdF32Butterfly7<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         assert_f32::<T>();
         Self {
             direction,
             parallel_fft: WasmSimdF32ParallelButterfly7::new(direction),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) { unsafe {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6 });
 
         let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6 } ); 
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) { unsafe {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12 });
 
         let values = [
@@ -210,7 +210,7 @@ impl<T: FftNum> WasmSimdF32Butterfly7<T> {
         ];
 
         write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6 });
-    }
+    }}
 }
 
 pub struct WasmSimdF64ParallelButterfly7 {
@@ -221,14 +221,14 @@ pub struct WasmSimdF64ParallelButterfly7 {
 impl WasmSimdF64ParallelButterfly7 {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(7, direction);
         Self {
             bf2: WasmSimdF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<WasmVector64, 7> for WasmSimdF64ParallelButterfly7 {
     #[inline(always)]
@@ -298,13 +298,13 @@ impl<T: FftNum> WasmSimdF64Butterfly7<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) { unsafe {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6 });
 
         let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6 });   
-    }
+    }}
 }
 
 pub struct WasmSimdF32ParallelButterfly11 {
@@ -315,14 +315,14 @@ pub struct WasmSimdF32ParallelButterfly11 {
 impl WasmSimdF32ParallelButterfly11 {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(11, direction);
         Self {
             bf2: WasmSimdF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<WasmVector32, 11> for WasmSimdF32ParallelButterfly11 {
     #[inline(always)]
@@ -424,26 +424,26 @@ boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly11, 11, |this: &Was
 impl<T: FftNum> WasmSimdF32Butterfly11<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         assert_f32::<T>();
         Self {
             direction,
             parallel_fft: WasmSimdF32ParallelButterfly11::new(direction),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) { unsafe {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10 });
 
         let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10 } ); 
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) { unsafe {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20 });
 
         let values = [
@@ -477,7 +477,7 @@ impl<T: FftNum> WasmSimdF32Butterfly11<T> {
         ];
 
         write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10 });
-    }
+    }}
 }
 
 pub struct WasmSimdF64ParallelButterfly11 {
@@ -488,14 +488,14 @@ pub struct WasmSimdF64ParallelButterfly11 {
 impl WasmSimdF64ParallelButterfly11 {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(11, direction);
         Self {
             bf2: WasmSimdF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<WasmVector64, 11> for WasmSimdF64ParallelButterfly11 {
     #[inline(always)]
@@ -607,13 +607,13 @@ impl<T: FftNum> WasmSimdF64Butterfly11<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) { unsafe {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10 });
 
         let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10 });   
-    }
+    }}
 }
 
 pub struct WasmSimdF32ParallelButterfly13 {
@@ -624,14 +624,14 @@ pub struct WasmSimdF32ParallelButterfly13 {
 impl WasmSimdF32ParallelButterfly13 {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(13, direction);
         Self {
             bf2: WasmSimdF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<WasmVector32, 13> for WasmSimdF32ParallelButterfly13 {
     #[inline(always)]
@@ -760,26 +760,26 @@ boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly13, 13, |this: &Was
 impl<T: FftNum> WasmSimdF32Butterfly13<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         assert_f32::<T>();
         Self {
             direction,
             parallel_fft: WasmSimdF32ParallelButterfly13::new(direction),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) { unsafe {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 });
 
         let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 } ); 
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) { unsafe {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24 });
 
         let values = [
@@ -817,7 +817,7 @@ impl<T: FftNum> WasmSimdF32Butterfly13<T> {
         ];
 
         write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12 });
-    }
+    }}
 }
 
 pub struct WasmSimdF64ParallelButterfly13 {
@@ -828,14 +828,14 @@ pub struct WasmSimdF64ParallelButterfly13 {
 impl WasmSimdF64ParallelButterfly13 {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(13, direction);
         Self {
             bf2: WasmSimdF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<WasmVector64, 13> for WasmSimdF64ParallelButterfly13 {
     #[inline(always)]
@@ -974,13 +974,13 @@ impl<T: FftNum> WasmSimdF64Butterfly13<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) { unsafe {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 });
 
         let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 });   
-    }
+    }}
 }
 
 pub struct WasmSimdF32ParallelButterfly17 {
@@ -991,14 +991,14 @@ pub struct WasmSimdF32ParallelButterfly17 {
 impl WasmSimdF32ParallelButterfly17 {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(17, direction);
         Self {
             bf2: WasmSimdF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<WasmVector32, 17> for WasmSimdF32ParallelButterfly17 {
     #[inline(always)]
@@ -1193,26 +1193,26 @@ boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly17, 17, |this: &Was
 impl<T: FftNum> WasmSimdF32Butterfly17<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         assert_f32::<T>();
         Self {
             direction,
             parallel_fft: WasmSimdF32ParallelButterfly17::new(direction),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) { unsafe {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 });
 
         let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 } ); 
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) { unsafe {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32 });
 
         let values = [
@@ -1258,7 +1258,7 @@ impl<T: FftNum> WasmSimdF32Butterfly17<T> {
         ];
 
         write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 });
-    }
+    }}
 }
 
 pub struct WasmSimdF64ParallelButterfly17 {
@@ -1269,14 +1269,14 @@ pub struct WasmSimdF64ParallelButterfly17 {
 impl WasmSimdF64ParallelButterfly17 {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(17, direction);
         Self {
             bf2: WasmSimdF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<WasmVector64, 17> for WasmSimdF64ParallelButterfly17 {
     #[inline(always)]
@@ -1481,13 +1481,13 @@ impl<T: FftNum> WasmSimdF64Butterfly17<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) { unsafe {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 });
 
         let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 });   
-    }
+    }}
 }
 
 pub struct WasmSimdF32ParallelButterfly19 {
@@ -1498,14 +1498,14 @@ pub struct WasmSimdF32ParallelButterfly19 {
 impl WasmSimdF32ParallelButterfly19 {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(19, direction);
         Self {
             bf2: WasmSimdF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<WasmVector32, 19> for WasmSimdF32ParallelButterfly19 {
     #[inline(always)]
@@ -1739,26 +1739,26 @@ boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly19, 19, |this: &Was
 impl<T: FftNum> WasmSimdF32Butterfly19<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         assert_f32::<T>();
         Self {
             direction,
             parallel_fft: WasmSimdF32ParallelButterfly19::new(direction),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) { unsafe {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 });
 
         let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 } ); 
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) { unsafe {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36 });
 
         let values = [
@@ -1808,7 +1808,7 @@ impl<T: FftNum> WasmSimdF32Butterfly19<T> {
         ];
 
         write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 });
-    }
+    }}
 }
 
 pub struct WasmSimdF64ParallelButterfly19 {
@@ -1819,14 +1819,14 @@ pub struct WasmSimdF64ParallelButterfly19 {
 impl WasmSimdF64ParallelButterfly19 {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(19, direction);
         Self {
             bf2: WasmSimdF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<WasmVector64, 19> for WasmSimdF64ParallelButterfly19 {
     #[inline(always)]
@@ -2070,13 +2070,13 @@ impl<T: FftNum> WasmSimdF64Butterfly19<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) { unsafe {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 });
 
         let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 });   
-    }
+    }}
 }
 
 pub struct WasmSimdF32ParallelButterfly23 {
@@ -2087,14 +2087,14 @@ pub struct WasmSimdF32ParallelButterfly23 {
 impl WasmSimdF32ParallelButterfly23 {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(23, direction);
         Self {
             bf2: WasmSimdF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<WasmVector32, 23> for WasmSimdF32ParallelButterfly23 {
     #[inline(always)]
@@ -2418,26 +2418,26 @@ boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly23, 23, |this: &Was
 impl<T: FftNum> WasmSimdF32Butterfly23<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         assert_f32::<T>();
         Self {
             direction,
             parallel_fft: WasmSimdF32ParallelButterfly23::new(direction),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) { unsafe {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 });
 
         let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 } ); 
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) { unsafe {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44 });
 
         let values = [
@@ -2495,7 +2495,7 @@ impl<T: FftNum> WasmSimdF32Butterfly23<T> {
         ];
 
         write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 });
-    }
+    }}
 }
 
 pub struct WasmSimdF64ParallelButterfly23 {
@@ -2506,14 +2506,14 @@ pub struct WasmSimdF64ParallelButterfly23 {
 impl WasmSimdF64ParallelButterfly23 {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(23, direction);
         Self {
             bf2: WasmSimdF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<WasmVector64, 23> for WasmSimdF64ParallelButterfly23 {
     #[inline(always)]
@@ -2847,13 +2847,13 @@ impl<T: FftNum> WasmSimdF64Butterfly23<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) { unsafe {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 });
 
         let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 });   
-    }
+    }}
 }
 
 pub struct WasmSimdF32ParallelButterfly29 {
@@ -2864,14 +2864,14 @@ pub struct WasmSimdF32ParallelButterfly29 {
 impl WasmSimdF32ParallelButterfly29 {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(29, direction);
         Self {
             bf2: WasmSimdF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<WasmVector32, 29> for WasmSimdF32ParallelButterfly29 {
     #[inline(always)]
@@ -3360,26 +3360,26 @@ boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly29, 29, |this: &Was
 impl<T: FftNum> WasmSimdF32Butterfly29<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         assert_f32::<T>();
         Self {
             direction,
             parallel_fft: WasmSimdF32ParallelButterfly29::new(direction),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) { unsafe {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 });
 
         let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 } ); 
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) { unsafe {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56 });
 
         let values = [
@@ -3449,7 +3449,7 @@ impl<T: FftNum> WasmSimdF32Butterfly29<T> {
         ];
 
         write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 });
-    }
+    }}
 }
 
 pub struct WasmSimdF64ParallelButterfly29 {
@@ -3460,14 +3460,14 @@ pub struct WasmSimdF64ParallelButterfly29 {
 impl WasmSimdF64ParallelButterfly29 {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(29, direction);
         Self {
             bf2: WasmSimdF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<WasmVector64, 29> for WasmSimdF64ParallelButterfly29 {
     #[inline(always)]
@@ -3966,13 +3966,13 @@ impl<T: FftNum> WasmSimdF64Butterfly29<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) { unsafe {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 });
 
         let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 });   
-    }
+    }}
 }
 
 pub struct WasmSimdF32ParallelButterfly31 {
@@ -3983,14 +3983,14 @@ pub struct WasmSimdF32ParallelButterfly31 {
 impl WasmSimdF32ParallelButterfly31 {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(31, direction);
         Self {
             bf2: WasmSimdF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<WasmVector32, 31> for WasmSimdF32ParallelButterfly31 {
     #[inline(always)]
@@ -4542,26 +4542,26 @@ boilerplate_fft_wasm_simd_f32_butterfly!(WasmSimdF32Butterfly31, 31, |this: &Was
 impl<T: FftNum> WasmSimdF32Butterfly31<T> {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         assert_f32::<T>();
         Self {
             direction,
             parallel_fft: WasmSimdF32ParallelButterfly31::new(direction),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) { unsafe {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 });
 
         let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 } ); 
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) { unsafe {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56,58,60 });
 
         let values = [
@@ -4635,7 +4635,7 @@ impl<T: FftNum> WasmSimdF32Butterfly31<T> {
         ];
 
         write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 });
-    }
+    }}
 }
 
 pub struct WasmSimdF64ParallelButterfly31 {
@@ -4646,14 +4646,14 @@ pub struct WasmSimdF64ParallelButterfly31 {
 impl WasmSimdF64ParallelButterfly31 {
     /// Safety: The current machine must support the simd128 instruction set
     #[target_feature(enable = "simd128")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(31, direction);
         Self {
             bf2: WasmSimdF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<WasmVector64, 31> for WasmSimdF64ParallelButterfly31 {
     #[inline(always)]
@@ -5215,13 +5215,13 @@ impl<T: FftNum> WasmSimdF64Butterfly31<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) { unsafe {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 });
 
         let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 });   
-    }
+    }}
 }
 
 
@@ -5232,7 +5232,7 @@ mod unit_tests {
     use wasm_bindgen_test::wasm_bindgen_test;
 
     macro_rules! test_butterfly_32_func {
-        ($test_name:ident, $struct_name:ident, $size:expr) => {
+        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
             #[wasm_bindgen_test]
             fn $test_name() {
 
@@ -5245,7 +5245,7 @@ mod unit_tests {
         };
     }
     macro_rules! test_butterfly_64_func {
-        ($test_name:ident, $struct_name:ident, $size:expr) => {
+        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
             #[wasm_bindgen_test]
             fn $test_name() {
 

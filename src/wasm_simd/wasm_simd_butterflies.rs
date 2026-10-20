@@ -30,7 +30,7 @@ fn pack_64(a: Complex<f64>) -> WasmVector64 {
 
 #[allow(unused)]
 macro_rules! boilerplate_fft_wasm_simd_f32_butterfly {
-    ($struct_name:ident, $len:expr, $direction_fn:expr) => {
+    ($struct_name:ident, $len:expr_2021, $direction_fn:expr_2021) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             #[target_feature(enable = "simd128")]
             fn process_immutable_with_scratch(
@@ -103,7 +103,7 @@ macro_rules! boilerplate_fft_wasm_simd_f32_butterfly {
 }
 
 macro_rules! boilerplate_fft_wasm_simd_f64_butterfly {
-    ($struct_name:ident, $len:expr, $direction_fn:expr) => {
+    ($struct_name:ident, $len:expr_2021, $direction_fn:expr_2021) => {
         impl<T: FftNum> Fft<T> for $struct_name<T> {
             #[target_feature(enable = "simd128")]
             fn process_immutable_with_scratch(
@@ -200,19 +200,19 @@ impl<T: FftNum> WasmSimdF32Butterfly1<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
-    ) {
+    ) { unsafe {
         let value = buffer.load1_lo(0);
         buffer.store1_lo(value, 0);
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
-    ) {
+    ) { unsafe {
         let value = buffer.load(0);
         buffer.store(value, 0);
-    }
+    }}
 }
 
 //   _             __   _  _   _     _ _
@@ -245,10 +245,10 @@ impl<T: FftNum> WasmSimdF64Butterfly1<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector64>,
-    ) {
+    ) { unsafe {
         let value = buffer.load(0);
         buffer.store(value, 0);
-    }
+    }}
 }
 
 //   ____            _________  _     _ _
@@ -301,19 +301,19 @@ impl<T: FftNum> WasmSimdF32Butterfly2<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
-    ) {
+    ) { unsafe {
         let values = buffer.load(0);
 
         let temp = self.perform_fft_direct(values);
 
         buffer.store(temp, 0);
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
-    ) {
+    ) { unsafe {
         let values_a = buffer.load(0);
         let values_b = buffer.load(2);
 
@@ -323,14 +323,14 @@ impl<T: FftNum> WasmSimdF32Butterfly2<T> {
 
         buffer.store(out02, 0);
         buffer.store(out13, 2);
-    }
+    }}
 
     // length 2 fft of x, given as [x0, x1]
     // result is [X0, X1]
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: WasmVector32) -> WasmVector32 {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: WasmVector32) -> WasmVector32 { unsafe {
         solo_fft2_f32(values)
-    }
+    }}
 
     // dual length 2 fft of x and y, given as [x0, x1], [y0, y1]
     // result is [X0, Y0], [X1, Y1]
@@ -339,15 +339,15 @@ impl<T: FftNum> WasmSimdF32Butterfly2<T> {
         &self,
         values_x: WasmVector32,
         values_y: WasmVector32,
-    ) -> [WasmVector32; 2] {
+    ) -> [WasmVector32; 2] { unsafe {
         parallel_fft2_contiguous_f32(values_x, values_y)
-    }
+    }}
 }
 
 #[inline(always)]
-pub unsafe fn wasm_parallel_butterfly2<V: SimdVector>(rows: [V; 2]) -> [V; 2] {
+pub unsafe fn wasm_parallel_butterfly2<V: SimdVector>(rows: [V; 2]) -> [V; 2] { unsafe {
     [V::add(rows[0], rows[1]), V::sub(rows[0], rows[1])]
-}
+}}
 
 // double lenth 2 fft of a and b, given as [x0, x1], [y0, y1]
 // result is [X0, Y0], [X1, Y1]
@@ -355,20 +355,20 @@ pub unsafe fn wasm_parallel_butterfly2<V: SimdVector>(rows: [V; 2]) -> [V; 2] {
 unsafe fn parallel_fft2_contiguous_f32(
     left: WasmVector32,
     right: WasmVector32,
-) -> [WasmVector32; 2] {
+) -> [WasmVector32; 2] { unsafe {
     let [temp02, temp13] = transpose_complex_2x2_f32(left, right);
     wasm_parallel_butterfly2([temp02, temp13])
-}
+}}
 
 // length 2 fft of x, given as [x0, x1]
 // result is [X0, X1]
 #[inline(always)]
-unsafe fn solo_fft2_f32(values: WasmVector32) -> WasmVector32 {
+unsafe fn solo_fft2_f32(values: WasmVector32) -> WasmVector32 { unsafe {
     let high = WasmVector32(u64x2_shuffle::<0, 0>(values.0, values.0));
     let low = WasmVector32(u64x2_shuffle::<1, 1>(values.0, values.0));
     let low = SimdVector::mul(low, WasmVector32(f32x4(1.0, 1.0, -1.0, -1.0)));
     SimdVector::add(high, low)
-}
+}}
 
 //   ____             __   _  _   _     _ _
 //  |___ \           / /_ | || | | |__ (_) |_
@@ -421,7 +421,7 @@ impl<T: FftNum> WasmSimdF64Butterfly2<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector64>,
-    ) {
+    ) { unsafe {
         let value0 = buffer.load(0);
         let value1 = buffer.load(1);
 
@@ -429,24 +429,24 @@ impl<T: FftNum> WasmSimdF64Butterfly2<T> {
 
         buffer.store(out[0], 0);
         buffer.store(out[1], 1);
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
         &self,
         value0: WasmVector64,
         value1: WasmVector64,
-    ) -> [WasmVector64; 2] {
+    ) -> [WasmVector64; 2] { unsafe {
         solo_fft2_f64(value0, value1)
-    }
+    }}
 }
 
 #[inline(always)]
-pub(crate) unsafe fn solo_fft2_f64(left: WasmVector64, right: WasmVector64) -> [WasmVector64; 2] {
+pub(crate) unsafe fn solo_fft2_f64(left: WasmVector64, right: WasmVector64) -> [WasmVector64; 2] { unsafe {
     let temp0 = SimdVector::add(left, right);
     let temp1 = SimdVector::sub(left, right);
     [temp0, temp1]
-}
+}}
 
 //   _____            _________  _     _ _
 //  |___ /           |___ /___ \| |__ (_) |_
@@ -526,7 +526,7 @@ impl<T: FftNum> WasmSimdF32Butterfly3<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
-    ) {
+    ) { unsafe {
         let value0x = buffer.load1_lo(0);
         let value12 = buffer.load(1);
 
@@ -534,13 +534,13 @@ impl<T: FftNum> WasmSimdF32Butterfly3<T> {
 
         buffer.store1_lo(out[0], 0);
         buffer.store(out[1], 1);
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
-    ) {
+    ) { unsafe {
         let valuea0a1 = buffer.load(0);
         let valuea2b0 = buffer.load(2);
         let valueb1b2 = buffer.load(4);
@@ -558,7 +558,7 @@ impl<T: FftNum> WasmSimdF32Butterfly3<T> {
         buffer.store(out0, 0);
         buffer.store(out1, 2);
         buffer.store(out2, 4);
-    }
+    }}
 
     // length 3 fft of a, given as [x0, 0.0], [x1, x2]
     // result is [X0, Z], [X1, X2]
@@ -568,7 +568,7 @@ impl<T: FftNum> WasmSimdF32Butterfly3<T> {
         &self,
         value0x: WasmVector32,
         value12: WasmVector32,
-    ) -> [WasmVector32; 2] {
+    ) -> [WasmVector32; 2] { unsafe {
         // This is a WasmSimd translation of the scalar 3-point butterfly
         let rev12 = reverse_complex_and_negate_hi_f32(value12);
         let rotate_hi = Rotate90HiF32::new(FftDirection::Inverse);
@@ -579,7 +579,7 @@ impl<T: FftNum> WasmSimdF32Butterfly3<T> {
         let out12 = solo_fft2_f32(temp);
         let out0x = SimdVector::add(value0x, temp12pn);
         [out0x, out12]
-    }
+    }}
 
     // length 3 dual fft of a, given as (x0, y0), (x1, y1), (x2, y2).
     // result is [(X0, Y0), (X1, Y1), (X2, Y2)]
@@ -589,7 +589,7 @@ impl<T: FftNum> WasmSimdF32Butterfly3<T> {
         value0: WasmVector32,
         value1: WasmVector32,
         value2: WasmVector32,
-    ) -> [WasmVector32; 3] {
+    ) -> [WasmVector32; 3] { unsafe {
         // This is a WasmSimd translation of the scalar 3-point butterfly
         let x12p = SimdVector::add(value1, value2);
         let x12n = SimdVector::sub(value1, value2);
@@ -605,7 +605,7 @@ impl<T: FftNum> WasmSimdF32Butterfly3<T> {
         let x1 = SimdVector::add(temp_a, temp_b);
         let x2 = SimdVector::sub(temp_a, temp_b);
         [sum, x1, x2]
-    }
+    }}
 }
 
 //   _____             __   _  _   _     _ _
@@ -685,7 +685,7 @@ impl<T: FftNum> WasmSimdF64Butterfly3<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector64>,
-    ) {
+    ) { unsafe {
         let value0 = buffer.load(0);
         let value1 = buffer.load(1);
         let value2 = buffer.load(2);
@@ -695,7 +695,7 @@ impl<T: FftNum> WasmSimdF64Butterfly3<T> {
         buffer.store(out[0], 0);
         buffer.store(out[1], 1);
         buffer.store(out[2], 2);
-    }
+    }}
 
     // length 3 fft of x, given as x0, x1, x2.
     // result is [X0, X1, X2]
@@ -705,7 +705,7 @@ impl<T: FftNum> WasmSimdF64Butterfly3<T> {
         value0: WasmVector64,
         value1: WasmVector64,
         value2: WasmVector64,
-    ) -> [WasmVector64; 3] {
+    ) -> [WasmVector64; 3] { unsafe {
         // This is a WasmSimd translation of the scalar 3-point butterfly
         let x12p = SimdVector::add(value1, value2);
         let x12n = SimdVector::sub(value1, value2);
@@ -721,7 +721,7 @@ impl<T: FftNum> WasmSimdF64Butterfly3<T> {
         let x1 = SimdVector::add(temp_a, temp_b);
         let x2 = SimdVector::sub(temp_a, temp_b);
         [sum, x1, x2]
-    }
+    }}
 }
 
 //   _  _             _________  _     _ _
@@ -794,7 +794,7 @@ impl<T: FftNum> WasmSimdF32Butterfly4<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
-    ) {
+    ) { unsafe {
         let value01 = buffer.load(0);
         let value23 = buffer.load(2);
 
@@ -802,13 +802,13 @@ impl<T: FftNum> WasmSimdF32Butterfly4<T> {
 
         buffer.store(out[0], 0);
         buffer.store(out[1], 2);
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
-    ) {
+    ) { unsafe {
         let value01a = buffer.load(0);
         let value23a = buffer.load(2);
         let value01b = buffer.load(4);
@@ -826,7 +826,7 @@ impl<T: FftNum> WasmSimdF32Butterfly4<T> {
         buffer.store(out1, 4);
         buffer.store(out2, 2);
         buffer.store(out3, 6);
-    }
+    }}
 
     // length 4 fft of a, given as [x0, x1], [x2, x3]
     // result is [[X0, X1], [X2, X3]]
@@ -835,7 +835,7 @@ impl<T: FftNum> WasmSimdF32Butterfly4<T> {
         &self,
         value01: WasmVector32,
         value23: WasmVector32,
-    ) -> [WasmVector32; 2] {
+    ) -> [WasmVector32; 2] { unsafe {
         //we're going to hardcode a step of mixed radix
         //aka we're going to do the six step algorithm
 
@@ -853,13 +853,13 @@ impl<T: FftNum> WasmSimdF32Butterfly4<T> {
         // and
         // step 6: transpose by swapping index 1 and 2
         parallel_fft2_contiguous_f32(temp[0], temp[1])
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(
         &self,
         values: [WasmVector32; 4],
-    ) -> [WasmVector32; 4] {
+    ) -> [WasmVector32; 4] { unsafe {
         //we're going to hardcode a step of mixed radix
         //aka we're going to do the six step algorithm
 
@@ -880,7 +880,7 @@ impl<T: FftNum> WasmSimdF32Butterfly4<T> {
 
         // step 6: transpose by swapping index 1 and 2
         [out0[0], out2[0], out0[1], out2[1]]
-    }
+    }}
 }
 
 //   _  _              __   _  _   _     _ _
@@ -952,7 +952,7 @@ impl<T: FftNum> WasmSimdF64Butterfly4<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector64>,
-    ) {
+    ) { unsafe {
         let value0 = buffer.load(0);
         let value1 = buffer.load(1);
         let value2 = buffer.load(2);
@@ -964,10 +964,10 @@ impl<T: FftNum> WasmSimdF64Butterfly4<T> {
         buffer.store(out[1], 1);
         buffer.store(out[2], 2);
         buffer.store(out[3], 3);
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [WasmVector64; 4]) -> [WasmVector64; 4] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [WasmVector64; 4]) -> [WasmVector64; 4] { unsafe {
         //we're going to hardcode a step of mixed radix
         //aka we're going to do the six step algorithm
 
@@ -988,7 +988,7 @@ impl<T: FftNum> WasmSimdF64Butterfly4<T> {
 
         // step 6: transpose by swapping index 1 and 2
         [out0[0], out2[0], out0[1], out2[1]]
-    }
+    }}
 }
 
 //   ____             _________  _     _ _
@@ -1103,7 +1103,7 @@ impl<T: FftNum> WasmSimdF32Butterfly5<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
-    ) {
+    ) { unsafe {
         let value00 = buffer.load1_dup(0);
         let value12 = buffer.load(1);
         let value34 = buffer.load(3);
@@ -1113,13 +1113,13 @@ impl<T: FftNum> WasmSimdF32Butterfly5<T> {
         buffer.store1_lo(out[0], 0);
         buffer.store(out[1], 1);
         buffer.store(out[2], 3);
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
-    ) {
+    ) { unsafe {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4 ,6, 8});
 
         let value0 = extract_lo_hi_f32(input_packed[0], input_packed[2]);
@@ -1139,7 +1139,7 @@ impl<T: FftNum> WasmSimdF32Butterfly5<T> {
         ];
 
         write_complex_to_array_strided!(out_packed, buffer, 2, {0, 1, 2, 3, 4});
-    }
+    }}
 
     // length 5 fft of a, given as [x0, x0], [x1, x2], [x3, x4].
     // result is [[X0, Z], [X1, X2], [X3, X4]]
@@ -1150,7 +1150,7 @@ impl<T: FftNum> WasmSimdF32Butterfly5<T> {
         value00: WasmVector32,
         value12: WasmVector32,
         value34: WasmVector32,
-    ) -> [WasmVector32; 3] {
+    ) -> [WasmVector32; 3] { unsafe {
         // This is a WasmSimd translation of the scalar 5-point butterfly
         let temp43 = reverse_complex_elements_f32(value34);
         let x1423p = SimdVector::add(value12, temp43);
@@ -1176,7 +1176,7 @@ impl<T: FftNum> WasmSimdF32Butterfly5<T> {
         let x12 = SimdVector::add(temp_a, b_rot);
         let x34 = reverse_complex_elements_f32(SimdVector::sub(temp_a, b_rot));
         [x00, x12, x34]
-    }
+    }}
 
     // length 5 dual fft of x and y, given as (x0, y0), (x1, y1) ... (x4, y4).
     // result is [(X0, Y0), (X1, Y1) ... (X2, Y2)]
@@ -1188,7 +1188,7 @@ impl<T: FftNum> WasmSimdF32Butterfly5<T> {
         value2: WasmVector32,
         value3: WasmVector32,
         value4: WasmVector32,
-    ) -> [WasmVector32; 5] {
+    ) -> [WasmVector32; 5] { unsafe {
         // This is a WasmSimd translation of the scalar 3-point butterfly
         let x14p = SimdVector::add(value1, value4);
         let x14n = SimdVector::sub(value1, value4);
@@ -1217,7 +1217,7 @@ impl<T: FftNum> WasmSimdF32Butterfly5<T> {
             SimdVector::sub(temp_a2, rotate.rotate(temp_b2)),
             SimdVector::sub(temp_a1, rotate.rotate(temp_b1)),
         ]
-    }
+    }}
 }
 
 //   ____              __   _  _   _     _ _
@@ -1321,7 +1321,7 @@ impl<T: FftNum> WasmSimdF64Butterfly5<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector64>,
-    ) {
+    ) { unsafe {
         let value0 = buffer.load(0);
         let value1 = buffer.load(1);
         let value2 = buffer.load(2);
@@ -1335,7 +1335,7 @@ impl<T: FftNum> WasmSimdF64Butterfly5<T> {
         buffer.store(out[2], 2);
         buffer.store(out[3], 3);
         buffer.store(out[4], 4);
-    }
+    }}
 
     // length 5 fft of x, given as x0, x1, x2, x3, x4.
     // result is [X0, X1, X2, X3, X4]
@@ -1347,7 +1347,7 @@ impl<T: FftNum> WasmSimdF64Butterfly5<T> {
         value2: WasmVector64,
         value3: WasmVector64,
         value4: WasmVector64,
-    ) -> [WasmVector64; 5] {
+    ) -> [WasmVector64; 5] { unsafe {
         // This is a WasmSimd translation of the scalar 5-point butterfly
         let x14p = SimdVector::add(value1, value4);
         let x14n = SimdVector::sub(value1, value4);
@@ -1380,7 +1380,7 @@ impl<T: FftNum> WasmSimdF64Butterfly5<T> {
             SimdVector::sub(temp_a2, temp_b2_rot),
             SimdVector::sub(temp_a1, temp_b1_rot),
         ]
-    }
+    }}
 }
 
 //    __             _________  _     _ _
@@ -1450,7 +1450,7 @@ impl<T: FftNum> WasmSimdF32Butterfly6<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
-    ) {
+    ) { unsafe {
         let value01 = buffer.load(0);
         let value23 = buffer.load(2);
         let value45 = buffer.load(4);
@@ -1460,13 +1460,13 @@ impl<T: FftNum> WasmSimdF32Butterfly6<T> {
         buffer.store(out[0], 0);
         buffer.store(out[1], 2);
         buffer.store(out[2], 4);
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
-    ) {
+    ) { unsafe {
         let input_packed = read_complex_to_array!(buffer,  {0, 2, 4, 6, 8, 10});
 
         let values = interleave_complex_f32!(input_packed, 3, {0, 1, 2});
@@ -1477,7 +1477,7 @@ impl<T: FftNum> WasmSimdF32Butterfly6<T> {
 
         let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4});
         write_complex_to_array_strided!(out_sorted, buffer, 2, {0, 1, 2, 3, 4, 5});
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
@@ -1485,7 +1485,7 @@ impl<T: FftNum> WasmSimdF32Butterfly6<T> {
         value01: WasmVector32,
         value23: WasmVector32,
         value45: WasmVector32,
-    ) -> [WasmVector32; 3] {
+    ) -> [WasmVector32; 3] { unsafe {
         // Algorithm: 3x2 good-thomas
 
         // Size-3 FFTs down the columns of our reordered array
@@ -1507,7 +1507,7 @@ impl<T: FftNum> WasmSimdF32Butterfly6<T> {
             extract_lo_lo_f32(output2, output1),
             extract_hi_hi_f32(output0, output2),
         ]
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(
@@ -1518,7 +1518,7 @@ impl<T: FftNum> WasmSimdF32Butterfly6<T> {
         value3: WasmVector32,
         value4: WasmVector32,
         value5: WasmVector32,
-    ) -> [WasmVector32; 6] {
+    ) -> [WasmVector32; 6] { unsafe {
         // Algorithm: 3x2 good-thomas
 
         // Size-3 FFTs down the columns of our reordered array
@@ -1534,7 +1534,7 @@ impl<T: FftNum> WasmSimdF32Butterfly6<T> {
 
         // Reorder into output
         [output0, output3, output4, output1, output2, output5]
-    }
+    }}
 }
 
 //    __              __   _  _   _     _ _
@@ -1604,7 +1604,7 @@ impl<T: FftNum> WasmSimdF64Butterfly6<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector64>,
-    ) {
+    ) { unsafe {
         let value0 = buffer.load(0);
         let value1 = buffer.load(1);
         let value2 = buffer.load(2);
@@ -1620,10 +1620,10 @@ impl<T: FftNum> WasmSimdF64Butterfly6<T> {
         buffer.store(out[3], 3);
         buffer.store(out[4], 4);
         buffer.store(out[5], 5);
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [WasmVector64; 6]) -> [WasmVector64; 6] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [WasmVector64; 6]) -> [WasmVector64; 6] { unsafe {
         // Algorithm: 3x2 good-thomas
 
         // Size-3 FFTs down the columns of our reordered array
@@ -1639,7 +1639,7 @@ impl<T: FftNum> WasmSimdF64Butterfly6<T> {
 
         // Reorder into output
         [output0, output3, output4, output1, output2, output5]
-    }
+    }}
 }
 
 //    ___            _________  _     _ _
@@ -1679,19 +1679,19 @@ impl<T: FftNum> WasmSimdF32Butterfly8<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) { unsafe {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6});
 
         let out = self.perform_fft_direct(input_packed);
 
         write_complex_to_array_strided!(out, buffer, 2, {0,1,2,3});
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
-    ) {
+    ) { unsafe {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14});
 
         let values = interleave_complex_f32!(input_packed, 4, {0, 1, 2, 3});
@@ -1701,10 +1701,10 @@ impl<T: FftNum> WasmSimdF32Butterfly8<T> {
         let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6});
 
         write_complex_to_array_strided!(out_sorted, buffer, 2, {0,1,2,3,4,5,6,7});
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn perform_fft_direct(&self, values: [WasmVector32; 4]) -> [WasmVector32; 4] {
+    unsafe fn perform_fft_direct(&self, values: [WasmVector32; 4]) -> [WasmVector32; 4] { unsafe {
         // we're going to hardcode a step of mixed radix
         // step 1: copy and reorder the input into the scratch
         let [in02, in13] = transpose_complex_2x2_f32(values[0], values[1]);
@@ -1733,10 +1733,10 @@ impl<T: FftNum> WasmSimdF32Butterfly8<T> {
 
         // step 6: rearrange and copy to buffer
         [out0[0], out1[0], out0[1], out1[1]]
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn perform_parallel_fft_direct(&self, values: [WasmVector32; 8]) -> [WasmVector32; 8] {
+    unsafe fn perform_parallel_fft_direct(&self, values: [WasmVector32; 8]) -> [WasmVector32; 8] { unsafe {
         // we're going to hardcode a step of mixed radix
         // step 1: copy and reorder the input into the scratch
         // and
@@ -1769,7 +1769,7 @@ impl<T: FftNum> WasmSimdF32Butterfly8<T> {
         [
             out0[0], out1[0], out2[0], out3[0], out0[1], out1[1], out2[1], out3[1],
         ]
-    }
+    }}
 }
 
 //    ___             __   _  _   _     _ _
@@ -1804,16 +1804,16 @@ impl<T: FftNum> WasmSimdF64Butterfly8<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) { unsafe {
         let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7});
 
         let out = self.perform_fft_direct(values);
 
         write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7});
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn perform_fft_direct(&self, values: [WasmVector64; 8]) -> [WasmVector64; 8] {
+    unsafe fn perform_fft_direct(&self, values: [WasmVector64; 8]) -> [WasmVector64; 8] { unsafe {
         // we're going to hardcode a step of mixed radix
         // step 1: copy and reorder the input into the scratch
         // and
@@ -1846,7 +1846,7 @@ impl<T: FftNum> WasmSimdF64Butterfly8<T> {
         [
             out0[0], out1[0], out2[0], out3[0], out0[1], out1[1], out2[1], out3[1],
         ]
-    }
+    }}
 }
 
 //    ___            _________  _     _ _
@@ -1890,7 +1890,7 @@ impl<T: FftNum> WasmSimdF32Butterfly9<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
-    ) {
+    ) { unsafe {
         // A single WasmSimd 9-point will need a lot of shuffling, let's just reuse the dual one
         let values = read_partial1_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8});
 
@@ -1899,13 +1899,13 @@ impl<T: FftNum> WasmSimdF32Butterfly9<T> {
         for n in 0..9 {
             buffer.store1_lo(out[n], n);
         }
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
-    ) {
+    ) { unsafe {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16});
 
         let values = [
@@ -1935,13 +1935,13 @@ impl<T: FftNum> WasmSimdF32Butterfly9<T> {
         ];
 
         write_complex_to_array_strided!(out_packed, buffer, 2, {0,1,2,3,4,5,6,7,8});
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(
         &self,
         values: [WasmVector32; 9],
-    ) -> [WasmVector32; 9] {
+    ) -> [WasmVector32; 9] { unsafe {
         // Algorithm: 3x3 mixed radix
 
         // Size-3 FFTs down the columns
@@ -1974,7 +1974,7 @@ impl<T: FftNum> WasmSimdF32Butterfly9<T> {
         [
             output0, output3, output6, output1, output4, output7, output2, output5, output8,
         ]
-    }
+    }}
 }
 
 //    ___             __   _  _   _     _ _
@@ -2019,16 +2019,16 @@ impl<T: FftNum> WasmSimdF64Butterfly9<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector64>,
-    ) {
+    ) { unsafe {
         let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8});
 
         let out = self.perform_fft_direct(values);
 
         write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8});
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [WasmVector64; 9]) -> [WasmVector64; 9] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [WasmVector64; 9]) -> [WasmVector64; 9] { unsafe {
         // Algorithm: 3x3 mixed radix
 
         // Size-3 FFTs down the columns
@@ -2049,7 +2049,7 @@ impl<T: FftNum> WasmSimdF64Butterfly9<T> {
         [
             output0, output3, output6, output1, output4, output7, output2, output5, output8,
         ]
-    }
+    }}
 }
 
 //   _  ___            _________  _     _ _
@@ -2081,19 +2081,19 @@ impl<T: FftNum> WasmSimdF32Butterfly10<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) { unsafe {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8});
 
         let out = self.perform_fft_direct(input_packed);
 
         write_complex_to_array_strided!(out, buffer, 2, {0,1,2,3,4});
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
-    ) {
+    ) { unsafe {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18});
 
         let values = interleave_complex_f32!(input_packed, 5, {0, 1, 2, 3, 4});
@@ -2103,10 +2103,10 @@ impl<T: FftNum> WasmSimdF32Butterfly10<T> {
         let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6, 8});
 
         write_complex_to_array_strided!(out_sorted, buffer, 2, {0,1,2,3,4,5,6,7,8,9});
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [WasmVector32; 5]) -> [WasmVector32; 5] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [WasmVector32; 5]) -> [WasmVector32; 5] { unsafe {
         // Algorithm: 5x2 good-thomas
         // Reorder and pack
         let reord0 = extract_lo_hi_f32(values[0], values[2]);
@@ -2135,13 +2135,13 @@ impl<T: FftNum> WasmSimdF32Butterfly10<T> {
         let out89 = extract_hi_hi_f32(temp45, temp89);
 
         [out01, out23, out45, out67, out89]
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(
         &self,
         values: [WasmVector32; 10],
-    ) -> [WasmVector32; 10] {
+    ) -> [WasmVector32; 10] { unsafe {
         // Algorithm: 5x2 good-thomas
 
         // Size-5 FFTs down the columns of our reordered array
@@ -2166,7 +2166,7 @@ impl<T: FftNum> WasmSimdF32Butterfly10<T> {
             output0, output3, output4, output7, output8, output1, output2, output5, output6,
             output9,
         ]
-    }
+    }}
 }
 
 //   _  ___             __   _  _   _     _ _
@@ -2204,19 +2204,19 @@ impl<T: FftNum> WasmSimdF64Butterfly10<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector64>,
-    ) {
+    ) { unsafe {
         let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
 
         let out = self.perform_fft_direct(values);
 
         write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
         &self,
         values: [WasmVector64; 10],
-    ) -> [WasmVector64; 10] {
+    ) -> [WasmVector64; 10] { unsafe {
         // Algorithm: 5x2 good-thomas
 
         // Size-5 FFTs down the columns of our reordered array
@@ -2241,7 +2241,7 @@ impl<T: FftNum> WasmSimdF64Butterfly10<T> {
             output0, output3, output4, output7, output8, output1, output2, output5, output6,
             output9,
         ]
-    }
+    }}
 }
 
 //   _ ____            _________  _     _ _
@@ -2276,19 +2276,19 @@ impl<T: FftNum> WasmSimdF32Butterfly12<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) { unsafe {
         let input_packed = read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10 });
 
         let out = self.perform_fft_direct(input_packed);
 
         write_complex_to_array_strided!(out, buffer, 2, {0,1,2,3,4,5});
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
-    ) {
+    ) { unsafe {
         let input_packed =
             read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22});
 
@@ -2299,10 +2299,10 @@ impl<T: FftNum> WasmSimdF32Butterfly12<T> {
         let out_sorted = separate_interleaved_complex_f32!(out, {0, 2, 4, 6, 8, 10});
 
         write_complex_to_array_strided!(out_sorted, buffer, 2, {0,1,2,3,4,5,6,7,8,9, 10, 11});
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_direct(&self, values: [WasmVector32; 6]) -> [WasmVector32; 6] {
+    pub(crate) unsafe fn perform_fft_direct(&self, values: [WasmVector32; 6]) -> [WasmVector32; 6] { unsafe {
         // Algorithm: 4x3 good-thomas
 
         // Reorder and pack
@@ -2337,13 +2337,13 @@ impl<T: FftNum> WasmSimdF32Butterfly12<T> {
             extract_lo_hi_f32(temp25, temp03),
             extract_lo_hi_f32(temp710, temp811),
         ]
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(
         &self,
         values: [WasmVector32; 12],
-    ) -> [WasmVector32; 12] {
+    ) -> [WasmVector32; 12] { unsafe {
         // Algorithm: 4x3 good-thomas
 
         // Size-4 FFTs down the columns of our reordered array
@@ -2378,7 +2378,7 @@ impl<T: FftNum> WasmSimdF32Butterfly12<T> {
             output0, output4, output8, output9, output1, output5, output6, output10, output2,
             output3, output7, output11,
         ]
-    }
+    }}
 }
 
 //   _ ____             __   _  _   _     _ _
@@ -2416,19 +2416,19 @@ impl<T: FftNum> WasmSimdF64Butterfly12<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector64>,
-    ) {
+    ) { unsafe {
         let values = read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11});
 
         let out = self.perform_fft_direct(values);
 
         write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11});
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
         &self,
         values: [WasmVector64; 12],
-    ) -> [WasmVector64; 12] {
+    ) -> [WasmVector64; 12] { unsafe {
         // Algorithm: 4x3 good-thomas
 
         // Size-4 FFTs down the columns of our reordered array
@@ -2454,7 +2454,7 @@ impl<T: FftNum> WasmSimdF64Butterfly12<T> {
             output0, output4, output8, output9, output1, output5, output6, output10, output2,
             output3, output7, output11,
         ]
-    }
+    }}
 }
 
 //   _ ____            _________  _     _ _
@@ -2491,7 +2491,7 @@ impl<T: FftNum> WasmSimdF32Butterfly15<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
-    ) {
+    ) { unsafe {
         // A single WasmSimd 15-point will need a lot of shuffling, let's just reuse the dual one
         let values = read_partial1_complex_to_array!(buffer, {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14});
 
@@ -2500,13 +2500,13 @@ impl<T: FftNum> WasmSimdF32Butterfly15<T> {
         for n in 0..15 {
             buffer.store1_lo(out[n], n);
         }
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
-    ) {
+    ) { unsafe {
         let input_packed =
             read_complex_to_array!(buffer, {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28});
 
@@ -2549,13 +2549,13 @@ impl<T: FftNum> WasmSimdF32Butterfly15<T> {
         ];
 
         write_complex_to_array_strided!(out_packed, buffer, 2, {0,1,2,3,4,5,6,7,8,9, 10, 11, 12, 13, 14});
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_direct(
         &self,
         values: [WasmVector32; 15],
-    ) -> [WasmVector32; 15] {
+    ) -> [WasmVector32; 15] { unsafe {
         // Algorithm: 5x3 good-thomas
 
         // Size-5 FFTs down the columns of our reordered array
@@ -2592,7 +2592,7 @@ impl<T: FftNum> WasmSimdF32Butterfly15<T> {
             output0, output4, output8, output9, output13, output2, output3, output7, output11,
             output12, output1, output5, output6, output10, output14,
         ]
-    }
+    }}
 }
 
 //   _ ____             __   _  _   _     _ _
@@ -2630,20 +2630,20 @@ impl<T: FftNum> WasmSimdF64Butterfly15<T> {
     pub(crate) unsafe fn perform_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector64>,
-    ) {
+    ) { unsafe {
         let values =
             read_complex_to_array!(buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
 
         let out = self.perform_fft_direct(values);
 
         write_complex_to_array!(out, buffer, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_fft_direct(
         &self,
         values: [WasmVector64; 15],
-    ) -> [WasmVector64; 15] {
+    ) -> [WasmVector64; 15] { unsafe {
         // Algorithm: 5x3 good-thomas
 
         // Size-5 FFTs down the columns of our reordered array
@@ -2670,7 +2670,7 @@ impl<T: FftNum> WasmSimdF64Butterfly15<T> {
             output0, output4, output8, output9, output13, output2, output3, output7, output11,
             output12, output1, output5, output6, output10, output14,
         ]
-    }
+    }}
 }
 
 //   _  __             _________  _     _ _
@@ -2724,29 +2724,29 @@ impl<T: FftNum> WasmSimdF32Butterfly16<T> {
     unsafe fn load_chunk(
         buffer: &impl SimdComplexArrayMut<WasmVector32>,
         i: usize,
-    ) -> [WasmVector32; 4] {
+    ) -> [WasmVector32; 4] { unsafe {
         [
             buffer.load(i),
             buffer.load(i + 4),
             buffer.load(i + 8),
             buffer.load(i + 12),
         ]
-    }
+    }}
 
     #[inline(always)]
     unsafe fn store_chunk(
         buffer: &mut impl SimdComplexArrayMut<WasmVector32>,
         i: usize,
         vectors: [WasmVector32; 4],
-    ) {
+    ) { unsafe {
         buffer.store(vectors[0], i + 0);
         buffer.store(vectors[1], i + 4);
         buffer.store(vectors[2], i + 8);
         buffer.store(vectors[3], i + 12);
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) { unsafe {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -2784,19 +2784,19 @@ impl<T: FftNum> WasmSimdF32Butterfly16<T> {
             .bf4
             .perform_parallel_fft_direct([mid4, mid5, mid6, mid7]);
         Self::store_chunk(&mut buffer, 2, out1);
-    }
+    }}
 
     #[inline(always)]
     unsafe fn load_parallel_chunk(
         buffer: &impl SimdComplexArrayMut<WasmVector32>,
         i: usize,
-    ) -> [[WasmVector32; 4]; 2] {
+    ) -> [[WasmVector32; 4]; 2] { unsafe {
         let [a0, a1] = transpose_complex_2x2_f32(buffer.load(i + 0), buffer.load(i + 16));
         let [b0, b1] = transpose_complex_2x2_f32(buffer.load(i + 4), buffer.load(i + 20));
         let [c0, c1] = transpose_complex_2x2_f32(buffer.load(i + 8), buffer.load(i + 24));
         let [d0, d1] = transpose_complex_2x2_f32(buffer.load(i + 12), buffer.load(i + 28));
         [[a0, b0, c0, d0], [a1, b1, c1, d1]]
-    }
+    }}
 
     #[inline(always)]
     unsafe fn store_parallel_chunk(
@@ -2804,19 +2804,19 @@ impl<T: FftNum> WasmSimdF32Butterfly16<T> {
         i: usize,
         values_a: [WasmVector32; 4],
         values_b: [WasmVector32; 4],
-    ) {
+    ) { unsafe {
         for n in 0..4 {
             let [a, b] = transpose_complex_2x2_f32(values_a[n], values_b[n]);
             buffer.store(a, i + n * 4);
             buffer.store(b, i + n * 4 + 16);
         }
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
-    ) {
+    ) { unsafe {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -2860,7 +2860,7 @@ impl<T: FftNum> WasmSimdF32Butterfly16<T> {
             .bf4
             .perform_parallel_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3]]);
         Self::store_parallel_chunk(&mut buffer, 2, out2, out3);
-    }
+    }}
 }
 //   _  __              __   _  _   _     _ _
 //  / |/ /_            / /_ | || | | |__ (_) |_
@@ -2898,7 +2898,7 @@ impl<T: FftNum> WasmSimdF64Butterfly16<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) { unsafe {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 4x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-4 FFTs again
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -2962,7 +2962,7 @@ impl<T: FftNum> WasmSimdF64Butterfly16<T> {
             .bf4
             .perform_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3]]);
         store(3, out3);
-    }
+    }}
 }
 
 //    ___ _  _             _________  _     _ _
@@ -3032,31 +3032,31 @@ impl<T: FftNum> WasmSimdF32Butterfly24<T> {
     unsafe fn load_chunk(
         buffer: &impl SimdComplexArrayMut<WasmVector32>,
         i: usize,
-    ) -> [WasmVector32; 4] {
+    ) -> [WasmVector32; 4] { unsafe {
         [
             buffer.load(i),
             buffer.load(i + 6),
             buffer.load(i + 12),
             buffer.load(i + 18),
         ]
-    }
+    }}
 
     #[inline(always)]
     unsafe fn store_chunk(
         buffer: &mut impl SimdComplexArrayMut<WasmVector32>,
         i: usize,
         vectors: [WasmVector32; 6],
-    ) {
+    ) { unsafe {
         buffer.store(vectors[0], i + 0);
         buffer.store(vectors[1], i + 4);
         buffer.store(vectors[2], i + 8);
         buffer.store(vectors[3], i + 12);
         buffer.store(vectors[4], i + 16);
         buffer.store(vectors[5], i + 20);
-    }
+    }}
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) { unsafe {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -3103,19 +3103,19 @@ impl<T: FftNum> WasmSimdF32Butterfly24<T> {
             .bf6
             .perform_parallel_fft_direct(mid6, mid7, mid8, mid9, mid10, mid11);
         Self::store_chunk(&mut buffer, 2, out1);
-    }
+    }}
 
     #[inline(always)]
     unsafe fn load_parallel_chunk(
         buffer: &impl SimdComplexArrayMut<WasmVector32>,
         i: usize,
-    ) -> [[WasmVector32; 4]; 2] {
+    ) -> [[WasmVector32; 4]; 2] { unsafe {
         let [a0, a1] = transpose_complex_2x2_f32(buffer.load(i + 0), buffer.load(i + 24));
         let [b0, b1] = transpose_complex_2x2_f32(buffer.load(i + 6), buffer.load(i + 30));
         let [c0, c1] = transpose_complex_2x2_f32(buffer.load(i + 12), buffer.load(i + 36));
         let [d0, d1] = transpose_complex_2x2_f32(buffer.load(i + 18), buffer.load(i + 42));
         [[a0, b0, c0, d0], [a1, b1, c1, d1]]
-    }
+    }}
 
     #[inline(always)]
     unsafe fn store_parallel_chunk(
@@ -3123,19 +3123,19 @@ impl<T: FftNum> WasmSimdF32Butterfly24<T> {
         i: usize,
         values_a: [WasmVector32; 6],
         values_b: [WasmVector32; 6],
-    ) {
+    ) { unsafe {
         for n in 0..6 {
             let [a, b] = transpose_complex_2x2_f32(values_a[n], values_b[n]);
             buffer.store(a, i + n * 4);
             buffer.store(b, i + n * 4 + 24);
         }
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
-    ) {
+    ) { unsafe {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -3188,7 +3188,7 @@ impl<T: FftNum> WasmSimdF32Butterfly24<T> {
             .bf6
             .perform_parallel_fft_direct(tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3]);
         Self::store_parallel_chunk(&mut buffer, 2, out2, out3);
-    }
+    }}
 }
 
 //    ___ _  _              __   _  _   _     _ _
@@ -3238,7 +3238,7 @@ impl<T: FftNum> WasmSimdF64Butterfly24<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) { unsafe {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 6x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-6 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -3314,7 +3314,7 @@ impl<T: FftNum> WasmSimdF64Butterfly24<T> {
             .bf6
             .perform_fft_direct([tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3]]);
         store(3, out3);
-    }
+    }}
 }
 
 //   _________            _________  _     _ _
@@ -3402,21 +3402,21 @@ impl<T: FftNum> WasmSimdF32Butterfly32<T> {
     unsafe fn load_chunk(
         buffer: &impl SimdComplexArrayMut<WasmVector32>,
         i: usize,
-    ) -> [WasmVector32; 4] {
+    ) -> [WasmVector32; 4] { unsafe {
         [
             buffer.load(i),
             buffer.load(i + 8),
             buffer.load(i + 16),
             buffer.load(i + 24),
         ]
-    }
+    }}
 
     #[inline(always)]
     unsafe fn store_chunk(
         buffer: &mut impl SimdComplexArrayMut<WasmVector32>,
         i: usize,
         vectors: [WasmVector32; 8],
-    ) {
+    ) { unsafe {
         buffer.store(vectors[0], i + 0);
         buffer.store(vectors[1], i + 4);
         buffer.store(vectors[2], i + 8);
@@ -3425,10 +3425,10 @@ impl<T: FftNum> WasmSimdF32Butterfly32<T> {
         buffer.store(vectors[5], i + 20);
         buffer.store(vectors[6], i + 24);
         buffer.store(vectors[7], i + 28);
-    }
+    }}
 
     #[target_feature(enable = "simd128")]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector32>) { unsafe {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -3488,19 +3488,19 @@ impl<T: FftNum> WasmSimdF32Butterfly32<T> {
             .bf8
             .perform_parallel_fft_direct([mid8, mid9, mid10, mid11, mid12, mid13, mid14, mid15]);
         Self::store_chunk(&mut buffer, 2, out1);
-    }
+    }}
 
     #[inline(always)]
     unsafe fn load_parallel_chunk(
         buffer: &impl SimdComplexArrayMut<WasmVector32>,
         i: usize,
-    ) -> [[WasmVector32; 4]; 2] {
+    ) -> [[WasmVector32; 4]; 2] { unsafe {
         let [a0, a1] = transpose_complex_2x2_f32(buffer.load(i + 0), buffer.load(i + 32));
         let [b0, b1] = transpose_complex_2x2_f32(buffer.load(i + 8), buffer.load(i + 40));
         let [c0, c1] = transpose_complex_2x2_f32(buffer.load(i + 16), buffer.load(i + 48));
         let [d0, d1] = transpose_complex_2x2_f32(buffer.load(i + 24), buffer.load(i + 56));
         [[a0, b0, c0, d0], [a1, b1, c1, d1]]
-    }
+    }}
 
     #[inline(always)]
     unsafe fn store_parallel_chunk(
@@ -3508,19 +3508,19 @@ impl<T: FftNum> WasmSimdF32Butterfly32<T> {
         i: usize,
         values_a: [WasmVector32; 8],
         values_b: [WasmVector32; 8],
-    ) {
+    ) { unsafe {
         for n in 0..8 {
             let [a, b] = transpose_complex_2x2_f32(values_a[n], values_b[n]);
             buffer.store(a, i + n * 4);
             buffer.store(b, i + n * 4 + 32);
         }
-    }
+    }}
 
     #[inline(always)]
     pub(crate) unsafe fn perform_parallel_fft_contiguous(
         &self,
         mut buffer: impl SimdComplexArrayMut<WasmVector32>,
-    ) {
+    ) { unsafe {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -3583,7 +3583,7 @@ impl<T: FftNum> WasmSimdF32Butterfly32<T> {
             tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3], tmp6[3], tmp7[3],
         ]);
         Self::store_parallel_chunk(&mut buffer, 2, out2, out3);
-    }
+    }}
 }
 
 //   _________             __   _  _   _     _ _
@@ -3649,7 +3649,7 @@ impl<T: FftNum> WasmSimdF64Butterfly32<T> {
     }
 
     #[inline(always)]
-    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) {
+    unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<WasmVector64>) { unsafe {
         // To make the best possible use of registers, we're going to write this algorithm in an unusual way
         // It's 8x4 mixed radix, so we're going to do the usual steps of size-4 FFTs down the columns, apply twiddle factors, then transpose and do size-8 FFTs
         // But to reduce the number of times registers get spilled, we have these optimizations:
@@ -3737,7 +3737,7 @@ impl<T: FftNum> WasmSimdF64Butterfly32<T> {
             tmp0[3], tmp1[3], tmp2[3], tmp3[3], tmp4[3], tmp5[3], tmp6[3], tmp7[3],
         ]);
         store(3, out3);
-    }
+    }}
 }
 
 #[cfg(test)]
@@ -3750,7 +3750,7 @@ mod unit_tests {
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
     macro_rules! test_butterfly_32_func {
-        ($test_name:ident, $struct_name:ident, $size:expr) => {
+        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
             #[wasm_bindgen_test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
@@ -3779,7 +3779,7 @@ mod unit_tests {
     //the tests for all butterflies will be identical except for the identifiers used and size
     //so it's ideal for a macro
     macro_rules! test_butterfly_64_func {
-        ($test_name:ident, $struct_name:ident, $size:expr) => {
+        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
             #[wasm_bindgen_test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
@@ -3806,7 +3806,7 @@ mod unit_tests {
     test_butterfly_64_func!(test_wasm_simdf64_butterfly32, WasmSimdF64Butterfly32, 32);
 
     macro_rules! test_parallel_butterfly_32_func {
-        ($test_name:ident, $struct_name:ident, $size:expr) => {
+        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
             #[wasm_bindgen_test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
@@ -3848,7 +3848,7 @@ mod unit_tests {
     );
 
     macro_rules! test_parallel_butterfly_64_func {
-        ($test_name:ident, $struct_name:ident, $size:expr) => {
+        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
             #[wasm_bindgen_test]
             fn $test_name() {
                 let butterfly = $struct_name::new(FftDirection::Forward);
