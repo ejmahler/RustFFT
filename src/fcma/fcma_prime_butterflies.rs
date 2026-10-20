@@ -47,7 +47,7 @@ pub const fn prime_butterfly_lens() -> &'static [usize] {
 
 /// Safety: The current machine must support the neon,fcma target feature
 #[target_feature(enable = "neon,fcma")]
-pub unsafe fn construct_prime_butterfly<T: FftNum>(len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
+pub unsafe fn construct_prime_butterfly<T: FftNum>(len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> { unsafe {
     let id_f32 = TypeId::of::<f32>();
     let id_f64 = TypeId::of::<f64>();
     let id_t = TypeId::of::<T>();
@@ -78,7 +78,7 @@ pub unsafe fn construct_prime_butterfly<T: FftNum>(len: usize, direction: FftDir
     } else {
         unimplemented!("Not f32 or f64");
     }
-}
+}}
 
 #[inline(always)]
 fn make_twiddles<const TW: usize, T: FftNum>(len: usize, direction: FftDirection) -> [Complex<T>; TW] {
@@ -98,14 +98,14 @@ pub struct FcmaF32ParallelButterfly7 {
 impl FcmaF32ParallelButterfly7 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(7, direction);
         Self {
             bf2: FcmaF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<FcmaVector32, 7> for FcmaF32ParallelButterfly7 {
     #[inline(always)]
@@ -160,26 +160,26 @@ boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly7, 7, |this: &FcmaF32Butterf
 impl<T: FftNum> FcmaF32Butterfly7<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         assert_f32::<T>();
         Self {
             direction,
             parallel_fft: FcmaF32ParallelButterfly7::new(direction),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) { unsafe {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6 });
 
         let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6 } ); 
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) { unsafe {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12 });
 
         let values = [
@@ -205,7 +205,7 @@ impl<T: FftNum> FcmaF32Butterfly7<T> {
         ];
 
         write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6 });
-    }
+    }}
 }
 
 pub struct FcmaF64ParallelButterfly7 {
@@ -216,14 +216,14 @@ pub struct FcmaF64ParallelButterfly7 {
 impl FcmaF64ParallelButterfly7 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(7, direction);
         Self {
             bf2: FcmaF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<FcmaVector64, 7> for FcmaF64ParallelButterfly7 {
     #[inline(always)]
@@ -288,13 +288,13 @@ impl<T: FftNum> FcmaF64Butterfly7<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) { unsafe {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6 });
 
         let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6 });   
-    }
+    }}
 }
 
 pub struct FcmaF32ParallelButterfly11 {
@@ -305,14 +305,14 @@ pub struct FcmaF32ParallelButterfly11 {
 impl FcmaF32ParallelButterfly11 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(11, direction);
         Self {
             bf2: FcmaF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<FcmaVector32, 11> for FcmaF32ParallelButterfly11 {
     #[inline(always)]
@@ -407,26 +407,26 @@ boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly11, 11, |this: &FcmaF32Butte
 impl<T: FftNum> FcmaF32Butterfly11<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         assert_f32::<T>();
         Self {
             direction,
             parallel_fft: FcmaF32ParallelButterfly11::new(direction),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) { unsafe {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10 });
 
         let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10 } ); 
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) { unsafe {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20 });
 
         let values = [
@@ -460,7 +460,7 @@ impl<T: FftNum> FcmaF32Butterfly11<T> {
         ];
 
         write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10 });
-    }
+    }}
 }
 
 pub struct FcmaF64ParallelButterfly11 {
@@ -471,14 +471,14 @@ pub struct FcmaF64ParallelButterfly11 {
 impl FcmaF64ParallelButterfly11 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(11, direction);
         Self {
             bf2: FcmaF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<FcmaVector64, 11> for FcmaF64ParallelButterfly11 {
     #[inline(always)]
@@ -583,13 +583,13 @@ impl<T: FftNum> FcmaF64Butterfly11<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) { unsafe {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10 });
 
         let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10 });   
-    }
+    }}
 }
 
 pub struct FcmaF32ParallelButterfly13 {
@@ -600,14 +600,14 @@ pub struct FcmaF32ParallelButterfly13 {
 impl FcmaF32ParallelButterfly13 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(13, direction);
         Self {
             bf2: FcmaF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<FcmaVector32, 13> for FcmaF32ParallelButterfly13 {
     #[inline(always)]
@@ -728,26 +728,26 @@ boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly13, 13, |this: &FcmaF32Butte
 impl<T: FftNum> FcmaF32Butterfly13<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         assert_f32::<T>();
         Self {
             direction,
             parallel_fft: FcmaF32ParallelButterfly13::new(direction),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) { unsafe {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 });
 
         let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 } ); 
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) { unsafe {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24 });
 
         let values = [
@@ -785,7 +785,7 @@ impl<T: FftNum> FcmaF32Butterfly13<T> {
         ];
 
         write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12 });
-    }
+    }}
 }
 
 pub struct FcmaF64ParallelButterfly13 {
@@ -796,14 +796,14 @@ pub struct FcmaF64ParallelButterfly13 {
 impl FcmaF64ParallelButterfly13 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(13, direction);
         Self {
             bf2: FcmaF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<FcmaVector64, 13> for FcmaF64ParallelButterfly13 {
     #[inline(always)]
@@ -934,13 +934,13 @@ impl<T: FftNum> FcmaF64Butterfly13<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) { unsafe {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 });
 
         let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 });   
-    }
+    }}
 }
 
 pub struct FcmaF32ParallelButterfly17 {
@@ -951,14 +951,14 @@ pub struct FcmaF32ParallelButterfly17 {
 impl FcmaF32ParallelButterfly17 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(17, direction);
         Self {
             bf2: FcmaF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<FcmaVector32, 17> for FcmaF32ParallelButterfly17 {
     #[inline(always)]
@@ -1143,26 +1143,26 @@ boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly17, 17, |this: &FcmaF32Butte
 impl<T: FftNum> FcmaF32Butterfly17<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         assert_f32::<T>();
         Self {
             direction,
             parallel_fft: FcmaF32ParallelButterfly17::new(direction),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) { unsafe {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 });
 
         let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 } ); 
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) { unsafe {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32 });
 
         let values = [
@@ -1208,7 +1208,7 @@ impl<T: FftNum> FcmaF32Butterfly17<T> {
         ];
 
         write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 });
-    }
+    }}
 }
 
 pub struct FcmaF64ParallelButterfly17 {
@@ -1219,14 +1219,14 @@ pub struct FcmaF64ParallelButterfly17 {
 impl FcmaF64ParallelButterfly17 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(17, direction);
         Self {
             bf2: FcmaF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<FcmaVector64, 17> for FcmaF64ParallelButterfly17 {
     #[inline(always)]
@@ -1421,13 +1421,13 @@ impl<T: FftNum> FcmaF64Butterfly17<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) { unsafe {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 });
 
         let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 });   
-    }
+    }}
 }
 
 pub struct FcmaF32ParallelButterfly19 {
@@ -1438,14 +1438,14 @@ pub struct FcmaF32ParallelButterfly19 {
 impl FcmaF32ParallelButterfly19 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(19, direction);
         Self {
             bf2: FcmaF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<FcmaVector32, 19> for FcmaF32ParallelButterfly19 {
     #[inline(always)]
@@ -1668,26 +1668,26 @@ boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly19, 19, |this: &FcmaF32Butte
 impl<T: FftNum> FcmaF32Butterfly19<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         assert_f32::<T>();
         Self {
             direction,
             parallel_fft: FcmaF32ParallelButterfly19::new(direction),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) { unsafe {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 });
 
         let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 } ); 
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) { unsafe {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36 });
 
         let values = [
@@ -1737,7 +1737,7 @@ impl<T: FftNum> FcmaF32Butterfly19<T> {
         ];
 
         write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 });
-    }
+    }}
 }
 
 pub struct FcmaF64ParallelButterfly19 {
@@ -1748,14 +1748,14 @@ pub struct FcmaF64ParallelButterfly19 {
 impl FcmaF64ParallelButterfly19 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(19, direction);
         Self {
             bf2: FcmaF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<FcmaVector64, 19> for FcmaF64ParallelButterfly19 {
     #[inline(always)]
@@ -1988,13 +1988,13 @@ impl<T: FftNum> FcmaF64Butterfly19<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) { unsafe {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 });
 
         let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 });   
-    }
+    }}
 }
 
 pub struct FcmaF32ParallelButterfly23 {
@@ -2005,14 +2005,14 @@ pub struct FcmaF32ParallelButterfly23 {
 impl FcmaF32ParallelButterfly23 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(23, direction);
         Self {
             bf2: FcmaF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<FcmaVector32, 23> for FcmaF32ParallelButterfly23 {
     #[inline(always)]
@@ -2323,26 +2323,26 @@ boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly23, 23, |this: &FcmaF32Butte
 impl<T: FftNum> FcmaF32Butterfly23<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         assert_f32::<T>();
         Self {
             direction,
             parallel_fft: FcmaF32ParallelButterfly23::new(direction),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) { unsafe {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 });
 
         let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 } ); 
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) { unsafe {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44 });
 
         let values = [
@@ -2400,7 +2400,7 @@ impl<T: FftNum> FcmaF32Butterfly23<T> {
         ];
 
         write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 });
-    }
+    }}
 }
 
 pub struct FcmaF64ParallelButterfly23 {
@@ -2411,14 +2411,14 @@ pub struct FcmaF64ParallelButterfly23 {
 impl FcmaF64ParallelButterfly23 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(23, direction);
         Self {
             bf2: FcmaF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<FcmaVector64, 23> for FcmaF64ParallelButterfly23 {
     #[inline(always)]
@@ -2739,13 +2739,13 @@ impl<T: FftNum> FcmaF64Butterfly23<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) { unsafe {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 });
 
         let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 });   
-    }
+    }}
 }
 
 pub struct FcmaF32ParallelButterfly29 {
@@ -2756,14 +2756,14 @@ pub struct FcmaF32ParallelButterfly29 {
 impl FcmaF32ParallelButterfly29 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(29, direction);
         Self {
             bf2: FcmaF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<FcmaVector32, 29> for FcmaF32ParallelButterfly29 {
     #[inline(always)]
@@ -3236,26 +3236,26 @@ boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly29, 29, |this: &FcmaF32Butte
 impl<T: FftNum> FcmaF32Butterfly29<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         assert_f32::<T>();
         Self {
             direction,
             parallel_fft: FcmaF32ParallelButterfly29::new(direction),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) { unsafe {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 });
 
         let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 } ); 
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) { unsafe {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56 });
 
         let values = [
@@ -3325,7 +3325,7 @@ impl<T: FftNum> FcmaF32Butterfly29<T> {
         ];
 
         write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 });
-    }
+    }}
 }
 
 pub struct FcmaF64ParallelButterfly29 {
@@ -3336,14 +3336,14 @@ pub struct FcmaF64ParallelButterfly29 {
 impl FcmaF64ParallelButterfly29 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(29, direction);
         Self {
             bf2: FcmaF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<FcmaVector64, 29> for FcmaF64ParallelButterfly29 {
     #[inline(always)]
@@ -3826,13 +3826,13 @@ impl<T: FftNum> FcmaF64Butterfly29<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) { unsafe {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 });
 
         let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 });   
-    }
+    }}
 }
 
 pub struct FcmaF32ParallelButterfly31 {
@@ -3843,14 +3843,14 @@ pub struct FcmaF32ParallelButterfly31 {
 impl FcmaF32ParallelButterfly31 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(31, direction);
         Self {
             bf2: FcmaF32ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<FcmaVector32, 31> for FcmaF32ParallelButterfly31 {
     #[inline(always)]
@@ -4385,26 +4385,26 @@ boilerplate_fft_fcma_f32_butterfly!(FcmaF32Butterfly31, 31, |this: &FcmaF32Butte
 impl<T: FftNum> FcmaF32Butterfly31<T> {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         assert_f32::<T>();
         Self {
             direction,
             parallel_fft: FcmaF32ParallelButterfly31::new(direction),
             _phantom: std::marker::PhantomData,
         }
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) { unsafe {
         let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 });
 
         let out = self.parallel_fft.parallel_fft(values);
         
         write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 } ); 
-    }
+    }}
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) {
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector32>) { unsafe {
         let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56,58,60 });
 
         let values = [
@@ -4478,7 +4478,7 @@ impl<T: FftNum> FcmaF32Butterfly31<T> {
         ];
 
         write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 });
-    }
+    }}
 }
 
 pub struct FcmaF64ParallelButterfly31 {
@@ -4489,14 +4489,14 @@ pub struct FcmaF64ParallelButterfly31 {
 impl FcmaF64ParallelButterfly31 {
     /// Safety: The current machine must support the neon,fcma instruction set
     #[target_feature(enable = "neon,fcma")]
-    pub unsafe fn new(direction: FftDirection) -> Self {
+    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
         let twiddles = make_twiddles(31, direction);
         Self {
             bf2: FcmaF64ParallelButterfly2::new(direction),
             twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
             twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
         }
-    }
+    }}
 }
 impl ParallelFft<FcmaVector64, 31> for FcmaF64ParallelButterfly31 {
     #[inline(always)]
@@ -5041,13 +5041,13 @@ impl<T: FftNum> FcmaF64Butterfly31<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) {
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<FcmaVector64>) { unsafe {
         let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 });
 
         let out = self.parallel_fft.parallel_fft(values);
 
         write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 });   
-    }
+    }}
 }
 
 
@@ -5057,7 +5057,7 @@ mod unit_tests {
     use crate::test_utils::check_fft_algorithm;
 
     macro_rules! test_butterfly_32_func {
-        ($test_name:ident, $struct_name:ident, $size:expr) => {
+        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
             #[test]
             fn $test_name() {
                 assert!(std::arch::is_aarch64_feature_detected!("fcma"));
@@ -5071,7 +5071,7 @@ mod unit_tests {
         };
     }
     macro_rules! test_butterfly_64_func {
-        ($test_name:ident, $struct_name:ident, $size:expr) => {
+        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
             #[test]
             fn $test_name() {
                 assert!(std::arch::is_aarch64_feature_detected!("fcma"));
