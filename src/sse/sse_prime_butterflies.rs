@@ -47,38 +47,38 @@ pub const fn prime_butterfly_lens() -> &'static [usize] {
 
 /// Safety: The current machine must support the sse4.1 target feature
 #[target_feature(enable = "sse4.1")]
-pub unsafe fn construct_prime_butterfly<T: FftNum>(len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> { unsafe {
+pub unsafe fn construct_prime_butterfly<T: FftNum>(len: usize, direction: FftDirection) -> Arc<dyn Fft<T>> {
     let id_f32 = TypeId::of::<f32>();
     let id_f64 = TypeId::of::<f64>();
     let id_t = TypeId::of::<T>();
     if id_t == id_f32 {
         match len {
-            7 => Arc::new(SseF32Butterfly7::new(direction)) as Arc<dyn Fft<T>>,
-            11 => Arc::new(SseF32Butterfly11::new(direction)) as Arc<dyn Fft<T>>,
-            13 => Arc::new(SseF32Butterfly13::new(direction)) as Arc<dyn Fft<T>>,
-            17 => Arc::new(SseF32Butterfly17::new(direction)) as Arc<dyn Fft<T>>,
-            19 => Arc::new(SseF32Butterfly19::new(direction)) as Arc<dyn Fft<T>>,
-            23 => Arc::new(SseF32Butterfly23::new(direction)) as Arc<dyn Fft<T>>,
-            29 => Arc::new(SseF32Butterfly29::new(direction)) as Arc<dyn Fft<T>>,
-            31 => Arc::new(SseF32Butterfly31::new(direction)) as Arc<dyn Fft<T>>,
+            7 => unsafe { Arc::new(SseF32Butterfly7::new(direction)) as Arc<dyn Fft<T>> },
+            11 => unsafe { Arc::new(SseF32Butterfly11::new(direction)) as Arc<dyn Fft<T>> },
+            13 => unsafe { Arc::new(SseF32Butterfly13::new(direction)) as Arc<dyn Fft<T>> },
+            17 => unsafe { Arc::new(SseF32Butterfly17::new(direction)) as Arc<dyn Fft<T>> },
+            19 => unsafe { Arc::new(SseF32Butterfly19::new(direction)) as Arc<dyn Fft<T>> },
+            23 => unsafe { Arc::new(SseF32Butterfly23::new(direction)) as Arc<dyn Fft<T>> },
+            29 => unsafe { Arc::new(SseF32Butterfly29::new(direction)) as Arc<dyn Fft<T>> },
+            31 => unsafe { Arc::new(SseF32Butterfly31::new(direction)) as Arc<dyn Fft<T>> },
             _ => unimplemented!("Invalid SSE prime butterfly length: {len}"),
         }
     } else if id_t == id_f64 {
         match len {
-            7 => Arc::new(SseF64Butterfly7::new(direction)) as Arc<dyn Fft<T>>,
-            11 => Arc::new(SseF64Butterfly11::new(direction)) as Arc<dyn Fft<T>>,
-            13 => Arc::new(SseF64Butterfly13::new(direction)) as Arc<dyn Fft<T>>,
-            17 => Arc::new(SseF64Butterfly17::new(direction)) as Arc<dyn Fft<T>>,
-            19 => Arc::new(SseF64Butterfly19::new(direction)) as Arc<dyn Fft<T>>,
-            23 => Arc::new(SseF64Butterfly23::new(direction)) as Arc<dyn Fft<T>>,
-            29 => Arc::new(SseF64Butterfly29::new(direction)) as Arc<dyn Fft<T>>,
-            31 => Arc::new(SseF64Butterfly31::new(direction)) as Arc<dyn Fft<T>>,
+            7 => unsafe { Arc::new(SseF64Butterfly7::new(direction)) as Arc<dyn Fft<T>> },
+            11 => unsafe { Arc::new(SseF64Butterfly11::new(direction)) as Arc<dyn Fft<T>> },
+            13 => unsafe { Arc::new(SseF64Butterfly13::new(direction)) as Arc<dyn Fft<T>> },
+            17 => unsafe { Arc::new(SseF64Butterfly17::new(direction)) as Arc<dyn Fft<T>> },
+            19 => unsafe { Arc::new(SseF64Butterfly19::new(direction)) as Arc<dyn Fft<T>> },
+            23 => unsafe { Arc::new(SseF64Butterfly23::new(direction)) as Arc<dyn Fft<T>> },
+            29 => unsafe { Arc::new(SseF64Butterfly29::new(direction)) as Arc<dyn Fft<T>> },
+            31 => unsafe { Arc::new(SseF64Butterfly31::new(direction)) as Arc<dyn Fft<T>> },
             _ => unimplemented!("Invalid SSE prime butterfly length: {len}"),
         }
     } else {
         unimplemented!("Not f32 or f64");
     }
-}}
+}
 
 #[inline(always)]
 fn make_twiddles<const TW: usize, T: FftNum>(len: usize, direction: FftDirection) -> [Complex<T>; TW] {
@@ -98,14 +98,14 @@ pub struct SseF32ParallelButterfly7 {
 impl SseF32ParallelButterfly7 {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(7, direction);
         Self {
             bf2: SseF32ParallelButterfly2::new(direction),
-            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.re) }),
+            twiddles_im: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.im) }),
         }
-    }}
+    }
 }
 impl ParallelFft<__m128, 7> for SseF32ParallelButterfly7 {
     #[inline(always)]
@@ -165,29 +165,29 @@ boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly7, 7, |this: &SseF32Butterfly7
 impl<T: FftNum> SseF32Butterfly7<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         Self {
             direction,
-            parallel_fft: SseF32ParallelButterfly7::new(direction),
+            parallel_fft: unsafe { SseF32ParallelButterfly7::new(direction) },
             _phantom: std::marker::PhantomData,
         }
-    }}
+    }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) { unsafe {
-        let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6 });
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) {
+        let values = unsafe { read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6 }) };
 
         let out = self.parallel_fft.parallel_fft(values);
         
-        write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6 } ); 
-    }}
+        unsafe { write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6 } ); } 
+    }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) { unsafe {
-        let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12 });
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) {
+        let input_packed = unsafe { read_complex_to_array!(buffer, { 0,2,4,6,8,10,12 }) };
 
-        let values = [
+        let values = unsafe { [
             extract_lo_hi_f32(input_packed[0], input_packed[3]),
             extract_hi_lo_f32(input_packed[0], input_packed[4]),
             extract_lo_hi_f32(input_packed[1], input_packed[4]),
@@ -195,11 +195,11 @@ impl<T: FftNum> SseF32Butterfly7<T> {
             extract_lo_hi_f32(input_packed[2], input_packed[5]),
             extract_hi_lo_f32(input_packed[2], input_packed[6]),
             extract_lo_hi_f32(input_packed[3], input_packed[6]),
-        ];
+        ] };
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        let out_packed = [
+        let out_packed = unsafe { [
             extract_lo_lo_f32(out[0], out[1]),
             extract_lo_lo_f32(out[2], out[3]),
             extract_lo_lo_f32(out[4], out[5]),
@@ -207,10 +207,10 @@ impl<T: FftNum> SseF32Butterfly7<T> {
             extract_hi_hi_f32(out[1], out[2]),
             extract_hi_hi_f32(out[3], out[4]),
             extract_hi_hi_f32(out[5], out[6]),
-        ];
+        ] };
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6 });
-    }}
+        unsafe { write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6 }); }
+    }
 }
 
 pub struct SseF64ParallelButterfly7 {
@@ -221,14 +221,14 @@ pub struct SseF64ParallelButterfly7 {
 impl SseF64ParallelButterfly7 {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(7, direction);
         Self {
             bf2: SseF64ParallelButterfly2::new(direction),
-            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.re) }),
+            twiddles_im: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.im) }),
         }
-    }}
+    }
 }
 impl ParallelFft<__m128d, 7> for SseF64ParallelButterfly7 {
     #[inline(always)]
@@ -290,21 +290,21 @@ impl<T: FftNum> SseF64Butterfly7<T> {
     #[target_feature(enable = "sse4.1")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        unsafe {Self {
+        Self {
             direction,
-            parallel_fft: SseF64ParallelButterfly7::new(direction),
+            parallel_fft: unsafe { SseF64ParallelButterfly7::new(direction) },
             _phantom: std::marker::PhantomData,
-        }}
+        }
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) { unsafe {
-        let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6 });
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) {
+        let values = unsafe { read_complex_to_array!(buffer, { 0,1,2,3,4,5,6 }) };
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6 });   
-    }}
+        unsafe { write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6 }); }   
+    }
 }
 
 pub struct SseF32ParallelButterfly11 {
@@ -315,14 +315,14 @@ pub struct SseF32ParallelButterfly11 {
 impl SseF32ParallelButterfly11 {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(11, direction);
         Self {
             bf2: SseF32ParallelButterfly2::new(direction),
-            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.re) }),
+            twiddles_im: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.im) }),
         }
-    }}
+    }
 }
 impl ParallelFft<__m128, 11> for SseF32ParallelButterfly11 {
     #[inline(always)]
@@ -424,29 +424,29 @@ boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly11, 11, |this: &SseF32Butterfl
 impl<T: FftNum> SseF32Butterfly11<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         Self {
             direction,
-            parallel_fft: SseF32ParallelButterfly11::new(direction),
+            parallel_fft: unsafe { SseF32ParallelButterfly11::new(direction) },
             _phantom: std::marker::PhantomData,
         }
-    }}
+    }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) { unsafe {
-        let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10 });
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) {
+        let values = unsafe { read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10 }) };
 
         let out = self.parallel_fft.parallel_fft(values);
         
-        write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10 } ); 
-    }}
+        unsafe { write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10 } ); } 
+    }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) { unsafe {
-        let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20 });
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) {
+        let input_packed = unsafe { read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20 }) };
 
-        let values = [
+        let values = unsafe { [
             extract_lo_hi_f32(input_packed[0], input_packed[5]),
             extract_hi_lo_f32(input_packed[0], input_packed[6]),
             extract_lo_hi_f32(input_packed[1], input_packed[6]),
@@ -458,11 +458,11 @@ impl<T: FftNum> SseF32Butterfly11<T> {
             extract_lo_hi_f32(input_packed[4], input_packed[9]),
             extract_hi_lo_f32(input_packed[4], input_packed[10]),
             extract_lo_hi_f32(input_packed[5], input_packed[10]),
-        ];
+        ] };
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        let out_packed = [
+        let out_packed = unsafe { [
             extract_lo_lo_f32(out[0], out[1]),
             extract_lo_lo_f32(out[2], out[3]),
             extract_lo_lo_f32(out[4], out[5]),
@@ -474,10 +474,10 @@ impl<T: FftNum> SseF32Butterfly11<T> {
             extract_hi_hi_f32(out[5], out[6]),
             extract_hi_hi_f32(out[7], out[8]),
             extract_hi_hi_f32(out[9], out[10]),
-        ];
+        ] };
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10 });
-    }}
+        unsafe { write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10 }); }
+    }
 }
 
 pub struct SseF64ParallelButterfly11 {
@@ -488,14 +488,14 @@ pub struct SseF64ParallelButterfly11 {
 impl SseF64ParallelButterfly11 {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(11, direction);
         Self {
             bf2: SseF64ParallelButterfly2::new(direction),
-            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.re) }),
+            twiddles_im: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.im) }),
         }
-    }}
+    }
 }
 impl ParallelFft<__m128d, 11> for SseF64ParallelButterfly11 {
     #[inline(always)]
@@ -599,21 +599,21 @@ impl<T: FftNum> SseF64Butterfly11<T> {
     #[target_feature(enable = "sse4.1")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        unsafe {Self {
+        Self {
             direction,
-            parallel_fft: SseF64ParallelButterfly11::new(direction),
+            parallel_fft: unsafe { SseF64ParallelButterfly11::new(direction) },
             _phantom: std::marker::PhantomData,
-        }}
+        }
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) { unsafe {
-        let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10 });
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) {
+        let values = unsafe { read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10 }) };
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10 });   
-    }}
+        unsafe { write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10 }); }   
+    }
 }
 
 pub struct SseF32ParallelButterfly13 {
@@ -624,14 +624,14 @@ pub struct SseF32ParallelButterfly13 {
 impl SseF32ParallelButterfly13 {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(13, direction);
         Self {
             bf2: SseF32ParallelButterfly2::new(direction),
-            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.re) }),
+            twiddles_im: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.im) }),
         }
-    }}
+    }
 }
 impl ParallelFft<__m128, 13> for SseF32ParallelButterfly13 {
     #[inline(always)]
@@ -760,29 +760,29 @@ boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly13, 13, |this: &SseF32Butterfl
 impl<T: FftNum> SseF32Butterfly13<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         Self {
             direction,
-            parallel_fft: SseF32ParallelButterfly13::new(direction),
+            parallel_fft: unsafe { SseF32ParallelButterfly13::new(direction) },
             _phantom: std::marker::PhantomData,
         }
-    }}
+    }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) { unsafe {
-        let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 });
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) {
+        let values = unsafe { read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 }) };
 
         let out = self.parallel_fft.parallel_fft(values);
         
-        write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 } ); 
-    }}
+        unsafe { write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 } ); } 
+    }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) { unsafe {
-        let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24 });
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) {
+        let input_packed = unsafe { read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24 }) };
 
-        let values = [
+        let values = unsafe { [
             extract_lo_hi_f32(input_packed[0], input_packed[6]),
             extract_hi_lo_f32(input_packed[0], input_packed[7]),
             extract_lo_hi_f32(input_packed[1], input_packed[7]),
@@ -796,11 +796,11 @@ impl<T: FftNum> SseF32Butterfly13<T> {
             extract_lo_hi_f32(input_packed[5], input_packed[11]),
             extract_hi_lo_f32(input_packed[5], input_packed[12]),
             extract_lo_hi_f32(input_packed[6], input_packed[12]),
-        ];
+        ] };
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        let out_packed = [
+        let out_packed = unsafe { [
             extract_lo_lo_f32(out[0], out[1]),
             extract_lo_lo_f32(out[2], out[3]),
             extract_lo_lo_f32(out[4], out[5]),
@@ -814,10 +814,10 @@ impl<T: FftNum> SseF32Butterfly13<T> {
             extract_hi_hi_f32(out[7], out[8]),
             extract_hi_hi_f32(out[9], out[10]),
             extract_hi_hi_f32(out[11], out[12]),
-        ];
+        ] };
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12 });
-    }}
+        unsafe { write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12 }); }
+    }
 }
 
 pub struct SseF64ParallelButterfly13 {
@@ -828,14 +828,14 @@ pub struct SseF64ParallelButterfly13 {
 impl SseF64ParallelButterfly13 {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(13, direction);
         Self {
             bf2: SseF64ParallelButterfly2::new(direction),
-            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.re) }),
+            twiddles_im: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.im) }),
         }
-    }}
+    }
 }
 impl ParallelFft<__m128d, 13> for SseF64ParallelButterfly13 {
     #[inline(always)]
@@ -966,21 +966,21 @@ impl<T: FftNum> SseF64Butterfly13<T> {
     #[target_feature(enable = "sse4.1")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        unsafe {Self {
+        Self {
             direction,
-            parallel_fft: SseF64ParallelButterfly13::new(direction),
+            parallel_fft: unsafe { SseF64ParallelButterfly13::new(direction) },
             _phantom: std::marker::PhantomData,
-        }}
+        }
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) { unsafe {
-        let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 });
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) {
+        let values = unsafe { read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 }) };
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 });   
-    }}
+        unsafe { write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12 }); }   
+    }
 }
 
 pub struct SseF32ParallelButterfly17 {
@@ -991,14 +991,14 @@ pub struct SseF32ParallelButterfly17 {
 impl SseF32ParallelButterfly17 {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(17, direction);
         Self {
             bf2: SseF32ParallelButterfly2::new(direction),
-            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.re) }),
+            twiddles_im: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.im) }),
         }
-    }}
+    }
 }
 impl ParallelFft<__m128, 17> for SseF32ParallelButterfly17 {
     #[inline(always)]
@@ -1193,29 +1193,29 @@ boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly17, 17, |this: &SseF32Butterfl
 impl<T: FftNum> SseF32Butterfly17<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         Self {
             direction,
-            parallel_fft: SseF32ParallelButterfly17::new(direction),
+            parallel_fft: unsafe { SseF32ParallelButterfly17::new(direction) },
             _phantom: std::marker::PhantomData,
         }
-    }}
+    }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) { unsafe {
-        let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 });
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) {
+        let values = unsafe { read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 }) };
 
         let out = self.parallel_fft.parallel_fft(values);
         
-        write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 } ); 
-    }}
+        unsafe { write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 } ); } 
+    }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) { unsafe {
-        let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32 });
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) {
+        let input_packed = unsafe { read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32 }) };
 
-        let values = [
+        let values = unsafe { [
             extract_lo_hi_f32(input_packed[0], input_packed[8]),
             extract_hi_lo_f32(input_packed[0], input_packed[9]),
             extract_lo_hi_f32(input_packed[1], input_packed[9]),
@@ -1233,11 +1233,11 @@ impl<T: FftNum> SseF32Butterfly17<T> {
             extract_lo_hi_f32(input_packed[7], input_packed[15]),
             extract_hi_lo_f32(input_packed[7], input_packed[16]),
             extract_lo_hi_f32(input_packed[8], input_packed[16]),
-        ];
+        ] };
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        let out_packed = [
+        let out_packed = unsafe { [
             extract_lo_lo_f32(out[0], out[1]),
             extract_lo_lo_f32(out[2], out[3]),
             extract_lo_lo_f32(out[4], out[5]),
@@ -1255,10 +1255,10 @@ impl<T: FftNum> SseF32Butterfly17<T> {
             extract_hi_hi_f32(out[11], out[12]),
             extract_hi_hi_f32(out[13], out[14]),
             extract_hi_hi_f32(out[15], out[16]),
-        ];
+        ] };
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 });
-    }}
+        unsafe { write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 }); }
+    }
 }
 
 pub struct SseF64ParallelButterfly17 {
@@ -1269,14 +1269,14 @@ pub struct SseF64ParallelButterfly17 {
 impl SseF64ParallelButterfly17 {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(17, direction);
         Self {
             bf2: SseF64ParallelButterfly2::new(direction),
-            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.re) }),
+            twiddles_im: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.im) }),
         }
-    }}
+    }
 }
 impl ParallelFft<__m128d, 17> for SseF64ParallelButterfly17 {
     #[inline(always)]
@@ -1473,21 +1473,21 @@ impl<T: FftNum> SseF64Butterfly17<T> {
     #[target_feature(enable = "sse4.1")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        unsafe {Self {
+        Self {
             direction,
-            parallel_fft: SseF64ParallelButterfly17::new(direction),
+            parallel_fft: unsafe { SseF64ParallelButterfly17::new(direction) },
             _phantom: std::marker::PhantomData,
-        }}
+        }
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) { unsafe {
-        let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 });
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) {
+        let values = unsafe { read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 }) };
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 });   
-    }}
+        unsafe { write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 }); }   
+    }
 }
 
 pub struct SseF32ParallelButterfly19 {
@@ -1498,14 +1498,14 @@ pub struct SseF32ParallelButterfly19 {
 impl SseF32ParallelButterfly19 {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(19, direction);
         Self {
             bf2: SseF32ParallelButterfly2::new(direction),
-            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.re) }),
+            twiddles_im: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.im) }),
         }
-    }}
+    }
 }
 impl ParallelFft<__m128, 19> for SseF32ParallelButterfly19 {
     #[inline(always)]
@@ -1739,29 +1739,29 @@ boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly19, 19, |this: &SseF32Butterfl
 impl<T: FftNum> SseF32Butterfly19<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         Self {
             direction,
-            parallel_fft: SseF32ParallelButterfly19::new(direction),
+            parallel_fft: unsafe { SseF32ParallelButterfly19::new(direction) },
             _phantom: std::marker::PhantomData,
         }
-    }}
+    }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) { unsafe {
-        let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 });
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) {
+        let values = unsafe { read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 }) };
 
         let out = self.parallel_fft.parallel_fft(values);
         
-        write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 } ); 
-    }}
+        unsafe { write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 } ); } 
+    }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) { unsafe {
-        let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36 });
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) {
+        let input_packed = unsafe { read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36 }) };
 
-        let values = [
+        let values = unsafe { [
             extract_lo_hi_f32(input_packed[0], input_packed[9]),
             extract_hi_lo_f32(input_packed[0], input_packed[10]),
             extract_lo_hi_f32(input_packed[1], input_packed[10]),
@@ -1781,11 +1781,11 @@ impl<T: FftNum> SseF32Butterfly19<T> {
             extract_lo_hi_f32(input_packed[8], input_packed[17]),
             extract_hi_lo_f32(input_packed[8], input_packed[18]),
             extract_lo_hi_f32(input_packed[9], input_packed[18]),
-        ];
+        ] };
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        let out_packed = [
+        let out_packed = unsafe { [
             extract_lo_lo_f32(out[0], out[1]),
             extract_lo_lo_f32(out[2], out[3]),
             extract_lo_lo_f32(out[4], out[5]),
@@ -1805,10 +1805,10 @@ impl<T: FftNum> SseF32Butterfly19<T> {
             extract_hi_hi_f32(out[13], out[14]),
             extract_hi_hi_f32(out[15], out[16]),
             extract_hi_hi_f32(out[17], out[18]),
-        ];
+        ] };
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 });
-    }}
+        unsafe { write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 }); }
+    }
 }
 
 pub struct SseF64ParallelButterfly19 {
@@ -1819,14 +1819,14 @@ pub struct SseF64ParallelButterfly19 {
 impl SseF64ParallelButterfly19 {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(19, direction);
         Self {
             bf2: SseF64ParallelButterfly2::new(direction),
-            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.re) }),
+            twiddles_im: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.im) }),
         }
-    }}
+    }
 }
 impl ParallelFft<__m128d, 19> for SseF64ParallelButterfly19 {
     #[inline(always)]
@@ -2062,21 +2062,21 @@ impl<T: FftNum> SseF64Butterfly19<T> {
     #[target_feature(enable = "sse4.1")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        unsafe {Self {
+        Self {
             direction,
-            parallel_fft: SseF64ParallelButterfly19::new(direction),
+            parallel_fft: unsafe { SseF64ParallelButterfly19::new(direction) },
             _phantom: std::marker::PhantomData,
-        }}
+        }
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) { unsafe {
-        let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 });
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) {
+        let values = unsafe { read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 }) };
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 });   
-    }}
+        unsafe { write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18 }); }   
+    }
 }
 
 pub struct SseF32ParallelButterfly23 {
@@ -2087,14 +2087,14 @@ pub struct SseF32ParallelButterfly23 {
 impl SseF32ParallelButterfly23 {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(23, direction);
         Self {
             bf2: SseF32ParallelButterfly2::new(direction),
-            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.re) }),
+            twiddles_im: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.im) }),
         }
-    }}
+    }
 }
 impl ParallelFft<__m128, 23> for SseF32ParallelButterfly23 {
     #[inline(always)]
@@ -2418,29 +2418,29 @@ boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly23, 23, |this: &SseF32Butterfl
 impl<T: FftNum> SseF32Butterfly23<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         Self {
             direction,
-            parallel_fft: SseF32ParallelButterfly23::new(direction),
+            parallel_fft: unsafe { SseF32ParallelButterfly23::new(direction) },
             _phantom: std::marker::PhantomData,
         }
-    }}
+    }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) { unsafe {
-        let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 });
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) {
+        let values = unsafe { read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 }) };
 
         let out = self.parallel_fft.parallel_fft(values);
         
-        write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 } ); 
-    }}
+        unsafe { write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 } ); } 
+    }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) { unsafe {
-        let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44 });
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) {
+        let input_packed = unsafe { read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44 }) };
 
-        let values = [
+        let values = unsafe { [
             extract_lo_hi_f32(input_packed[0], input_packed[11]),
             extract_hi_lo_f32(input_packed[0], input_packed[12]),
             extract_lo_hi_f32(input_packed[1], input_packed[12]),
@@ -2464,11 +2464,11 @@ impl<T: FftNum> SseF32Butterfly23<T> {
             extract_lo_hi_f32(input_packed[10], input_packed[21]),
             extract_hi_lo_f32(input_packed[10], input_packed[22]),
             extract_lo_hi_f32(input_packed[11], input_packed[22]),
-        ];
+        ] };
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        let out_packed = [
+        let out_packed = unsafe { [
             extract_lo_lo_f32(out[0], out[1]),
             extract_lo_lo_f32(out[2], out[3]),
             extract_lo_lo_f32(out[4], out[5]),
@@ -2492,10 +2492,10 @@ impl<T: FftNum> SseF32Butterfly23<T> {
             extract_hi_hi_f32(out[17], out[18]),
             extract_hi_hi_f32(out[19], out[20]),
             extract_hi_hi_f32(out[21], out[22]),
-        ];
+        ] };
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 });
-    }}
+        unsafe { write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 }); }
+    }
 }
 
 pub struct SseF64ParallelButterfly23 {
@@ -2506,14 +2506,14 @@ pub struct SseF64ParallelButterfly23 {
 impl SseF64ParallelButterfly23 {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(23, direction);
         Self {
             bf2: SseF64ParallelButterfly2::new(direction),
-            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.re) }),
+            twiddles_im: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.im) }),
         }
-    }}
+    }
 }
 impl ParallelFft<__m128d, 23> for SseF64ParallelButterfly23 {
     #[inline(always)]
@@ -2839,21 +2839,21 @@ impl<T: FftNum> SseF64Butterfly23<T> {
     #[target_feature(enable = "sse4.1")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        unsafe {Self {
+        Self {
             direction,
-            parallel_fft: SseF64ParallelButterfly23::new(direction),
+            parallel_fft: unsafe { SseF64ParallelButterfly23::new(direction) },
             _phantom: std::marker::PhantomData,
-        }}
+        }
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) { unsafe {
-        let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 });
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) {
+        let values = unsafe { read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 }) };
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 });   
-    }}
+        unsafe { write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 }); }   
+    }
 }
 
 pub struct SseF32ParallelButterfly29 {
@@ -2864,14 +2864,14 @@ pub struct SseF32ParallelButterfly29 {
 impl SseF32ParallelButterfly29 {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(29, direction);
         Self {
             bf2: SseF32ParallelButterfly2::new(direction),
-            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.re) }),
+            twiddles_im: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.im) }),
         }
-    }}
+    }
 }
 impl ParallelFft<__m128, 29> for SseF32ParallelButterfly29 {
     #[inline(always)]
@@ -3360,29 +3360,29 @@ boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly29, 29, |this: &SseF32Butterfl
 impl<T: FftNum> SseF32Butterfly29<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         Self {
             direction,
-            parallel_fft: SseF32ParallelButterfly29::new(direction),
+            parallel_fft: unsafe { SseF32ParallelButterfly29::new(direction) },
             _phantom: std::marker::PhantomData,
         }
-    }}
+    }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) { unsafe {
-        let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 });
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) {
+        let values = unsafe { read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 }) };
 
         let out = self.parallel_fft.parallel_fft(values);
         
-        write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 } ); 
-    }}
+        unsafe { write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 } ); } 
+    }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) { unsafe {
-        let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56 });
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) {
+        let input_packed = unsafe { read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56 }) };
 
-        let values = [
+        let values = unsafe { [
             extract_lo_hi_f32(input_packed[0], input_packed[14]),
             extract_hi_lo_f32(input_packed[0], input_packed[15]),
             extract_lo_hi_f32(input_packed[1], input_packed[15]),
@@ -3412,11 +3412,11 @@ impl<T: FftNum> SseF32Butterfly29<T> {
             extract_lo_hi_f32(input_packed[13], input_packed[27]),
             extract_hi_lo_f32(input_packed[13], input_packed[28]),
             extract_lo_hi_f32(input_packed[14], input_packed[28]),
-        ];
+        ] };
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        let out_packed = [
+        let out_packed = unsafe { [
             extract_lo_lo_f32(out[0], out[1]),
             extract_lo_lo_f32(out[2], out[3]),
             extract_lo_lo_f32(out[4], out[5]),
@@ -3446,10 +3446,10 @@ impl<T: FftNum> SseF32Butterfly29<T> {
             extract_hi_hi_f32(out[23], out[24]),
             extract_hi_hi_f32(out[25], out[26]),
             extract_hi_hi_f32(out[27], out[28]),
-        ];
+        ] };
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 });
-    }}
+        unsafe { write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 }); }
+    }
 }
 
 pub struct SseF64ParallelButterfly29 {
@@ -3460,14 +3460,14 @@ pub struct SseF64ParallelButterfly29 {
 impl SseF64ParallelButterfly29 {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(29, direction);
         Self {
             bf2: SseF64ParallelButterfly2::new(direction),
-            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.re) }),
+            twiddles_im: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.im) }),
         }
-    }}
+    }
 }
 impl ParallelFft<__m128d, 29> for SseF64ParallelButterfly29 {
     #[inline(always)]
@@ -3958,21 +3958,21 @@ impl<T: FftNum> SseF64Butterfly29<T> {
     #[target_feature(enable = "sse4.1")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        unsafe {Self {
+        Self {
             direction,
-            parallel_fft: SseF64ParallelButterfly29::new(direction),
+            parallel_fft: unsafe { SseF64ParallelButterfly29::new(direction) },
             _phantom: std::marker::PhantomData,
-        }}
+        }
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) { unsafe {
-        let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 });
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) {
+        let values = unsafe { read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 }) };
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 });   
-    }}
+        unsafe { write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 }); }   
+    }
 }
 
 pub struct SseF32ParallelButterfly31 {
@@ -3983,14 +3983,14 @@ pub struct SseF32ParallelButterfly31 {
 impl SseF32ParallelButterfly31 {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(31, direction);
         Self {
             bf2: SseF32ParallelButterfly2::new(direction),
-            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.re) }),
+            twiddles_im: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.im) }),
         }
-    }}
+    }
 }
 impl ParallelFft<__m128, 31> for SseF32ParallelButterfly31 {
     #[inline(always)]
@@ -4542,29 +4542,29 @@ boilerplate_fft_sse_f32_butterfly!(SseF32Butterfly31, 31, |this: &SseF32Butterfl
 impl<T: FftNum> SseF32Butterfly31<T> {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f32::<T>();
         Self {
             direction,
-            parallel_fft: SseF32ParallelButterfly31::new(direction),
+            parallel_fft: unsafe { SseF32ParallelButterfly31::new(direction) },
             _phantom: std::marker::PhantomData,
         }
-    }}
+    }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) { unsafe {
-        let values = read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 });
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) {
+        let values = unsafe { read_partial1_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 }) };
 
         let out = self.parallel_fft.parallel_fft(values);
         
-        write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 } ); 
-    }}
+        unsafe { write_partial_lo_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 } ); } 
+    }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) { unsafe {
-        let input_packed = read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56,58,60 });
+    pub(crate) unsafe fn perform_parallel_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128>) {
+        let input_packed = unsafe { read_complex_to_array!(buffer, { 0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56,58,60 }) };
 
-        let values = [
+        let values = unsafe { [
             extract_lo_hi_f32(input_packed[0], input_packed[15]),
             extract_hi_lo_f32(input_packed[0], input_packed[16]),
             extract_lo_hi_f32(input_packed[1], input_packed[16]),
@@ -4596,11 +4596,11 @@ impl<T: FftNum> SseF32Butterfly31<T> {
             extract_lo_hi_f32(input_packed[14], input_packed[29]),
             extract_hi_lo_f32(input_packed[14], input_packed[30]),
             extract_lo_hi_f32(input_packed[15], input_packed[30]),
-        ];
+        ] };
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        let out_packed = [
+        let out_packed = unsafe { [
             extract_lo_lo_f32(out[0], out[1]),
             extract_lo_lo_f32(out[2], out[3]),
             extract_lo_lo_f32(out[4], out[5]),
@@ -4632,10 +4632,10 @@ impl<T: FftNum> SseF32Butterfly31<T> {
             extract_hi_hi_f32(out[25], out[26]),
             extract_hi_hi_f32(out[27], out[28]),
             extract_hi_hi_f32(out[29], out[30]),
-        ];
+        ] };
 
-        write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 });
-    }}
+        unsafe { write_complex_to_array_strided!(out_packed, buffer, 2, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 }); }
+    }
 }
 
 pub struct SseF64ParallelButterfly31 {
@@ -4646,14 +4646,14 @@ pub struct SseF64ParallelButterfly31 {
 impl SseF64ParallelButterfly31 {
     /// Safety: The current machine must support the sse4.1 instruction set
     #[target_feature(enable = "sse4.1")]
-    pub unsafe fn new(direction: FftDirection) -> Self { unsafe {
+    pub unsafe fn new(direction: FftDirection) -> Self {
         let twiddles = make_twiddles(31, direction);
         Self {
             bf2: SseF64ParallelButterfly2::new(direction),
-            twiddles_re: twiddles.map(|t| SimdVector::broadcast_scalar(t.re)),
-            twiddles_im: twiddles.map(|t| SimdVector::broadcast_scalar(t.im)),
+            twiddles_re: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.re) }),
+            twiddles_im: twiddles.map(|t| unsafe { SimdVector::broadcast_scalar(t.im) }),
         }
-    }}
+    }
 }
 impl ParallelFft<__m128d, 31> for SseF64ParallelButterfly31 {
     #[inline(always)]
@@ -5207,21 +5207,21 @@ impl<T: FftNum> SseF64Butterfly31<T> {
     #[target_feature(enable = "sse4.1")]
     pub unsafe fn new(direction: FftDirection) -> Self {
         assert_f64::<T>();
-        unsafe {Self {
+        Self {
             direction,
-            parallel_fft: SseF64ParallelButterfly31::new(direction),
+            parallel_fft: unsafe { SseF64ParallelButterfly31::new(direction) },
             _phantom: std::marker::PhantomData,
-        }}
+        }
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) { unsafe {
-        let values = read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 });
+    pub(crate) unsafe fn perform_fft_contiguous(&self, mut buffer: impl SimdComplexArrayMut<__m128d>) {
+        let values = unsafe { read_complex_to_array!(buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 }) };
 
         let out = self.parallel_fft.parallel_fft(values);
 
-        write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 });   
-    }}
+        unsafe { write_complex_to_array!(out, buffer, { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 }); }   
+    }
 }
 
 
@@ -5231,7 +5231,7 @@ mod unit_tests {
     use crate::test_utils::check_fft_algorithm;
 
     macro_rules! test_butterfly_32_func {
-        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
+        ($test_name:ident, $struct_name:ident, $size:expr) => {
             #[test]
             fn $test_name() {
                 assert!(std::arch::is_x86_feature_detected!("sse4.1"));
@@ -5245,7 +5245,7 @@ mod unit_tests {
         };
     }
     macro_rules! test_butterfly_64_func {
-        ($test_name:ident, $struct_name:ident, $size:expr_2021) => {
+        ($test_name:ident, $struct_name:ident, $size:expr) => {
             #[test]
             fn $test_name() {
                 assert!(std::arch::is_x86_feature_detected!("sse4.1"));
