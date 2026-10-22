@@ -4,4 +4,5 @@ pub mod simd_radix4;
 pub mod simd_radixn;
 #[macro_use]
 pub mod simd_vector;
+mod simd_transpose;
 pub mod parallel_fft;

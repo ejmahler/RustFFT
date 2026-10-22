@@ -19,9 +19,9 @@ use std::sync::Arc;
 
 use num_complex::Complex;
 
-use crate::array_utils::{reverse_bits, workaround_transmute_mut};
+use crate::array_utils::{reverse_bits, workaround_transmute, workaround_transmute_mut};
 use crate::common::FftNum;
-use crate::simd::simd_radixn::table_transpose;
+use crate::simd::simd_transpose::table_transpose;
 use crate::{Fft, FftDirection};
 
 use super::simd_vector::SimdVector;
@@ -139,7 +139,11 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
     fn transpose(&self, input: &[Complex<T>], output: &mut [Complex<T>]) {
         if self.len > self.base_len {
             let (height, columns) = (self.base_len, &*self.reversed_columns);
-            table_transpose::<_, RADIX>(height, columns, input, output);
+
+            let input = unsafe { workaround_transmute(input) };
+            let output = unsafe { workaround_transmute_mut(output) };
+
+            table_transpose::<V>(height, columns, input, output);
         } else {
             // no factors, so just pass data straight to our base
             output.copy_from_slice(input);
