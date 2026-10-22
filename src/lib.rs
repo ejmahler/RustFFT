@@ -142,12 +142,14 @@ use std::fmt::Display;
 pub use num_complex;
 pub use num_traits;
 
+pub use common::RadixFactor;
+
 #[macro_use]
 mod common;
 
 /// Individual FFT algorithms
 pub mod algorithm;
-mod array_utils;
+pub mod array_utils;
 mod fft_cache;
 mod fft_helper;
 mod math_utils;
@@ -157,7 +159,7 @@ mod twiddles;
 // Code shared by the SIMD backends: the `SimdVector` trait, the algorithms written against it, and
 // the planner arithmetic that goes with them
 #[macro_use]
-mod simd;
+pub mod simd;
 
 use num_complex::Complex;
 use num_traits::Zero;
@@ -469,12 +471,12 @@ pub use self::sse::sse_planner::FftPlannerSse;
 
 // Algorithms implemented to use Neon instructions. Only compiled on AArch64, and only compiled if the "neon" feature flag is set.
 #[cfg(all(target_arch = "aarch64", feature = "neon"))]
-mod neon;
+pub mod neon;
 
 // If we're not on AArch64, or if the "neon" feature was disabled, keep a stub implementation around that has the same API, but does nothing
 // That way, users can write code using the Neon planner and compile it on any platform
 #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
-mod neon {
+pub mod neon {
     pub mod neon_planner {
         use crate::{Fft, FftDirection, FftNum};
         use std::sync::Arc;

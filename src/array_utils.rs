@@ -490,7 +490,7 @@ pub fn compute_logarithm<const D: usize>(value: usize) -> Option<u32> {
     }
 }
 
-pub(crate) struct TransposeFactor {
+pub struct TransposeFactor {
     pub factor: RadixFactor,
     pub count: u8,
 }
@@ -498,7 +498,7 @@ pub(crate) struct TransposeFactor {
 // Divide `value` by the provided array of factors, and push the remainders into a new number
 // When all of the provided factors are 2, this is exactly equal to a bit reversal
 // When some of the factors are not 2, think of this as a "generalization" of a bit reversal, to something like a "Remainder reversal".
-pub(crate) fn reverse_remainders(value: usize, factors: &[TransposeFactor]) -> usize {
+pub fn reverse_remainders(value: usize, factors: &[TransposeFactor]) -> usize {
     let mut result: usize = 0;
     let mut value = value;
     for f in factors.iter() {

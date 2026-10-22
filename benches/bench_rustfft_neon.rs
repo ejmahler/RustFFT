@@ -1,8 +1,17 @@
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
-use rustfft::Fft;
+use rustfft::{Fft, FftNum, FftDirection, RadixFactor};
+use rustfft::neon::neon_butterflies::*;
+use rustfft::neon::neon_prime_butterflies::*;
+use rustfft::neon::neon_radixn::NeonRadixN;
+use rustfft::simd::simd_vector::SimdVector;
+use rustfft::simd::simd_transpose::table_transpose;
+use rustfft::array_utils::{reverse_remainders, TransposeFactor, validate_and_zip};
 use std::sync::Arc;
+use std::any::TypeId;
 mod config;
+use core::arch::aarch64::*;
+use criterion::BenchmarkId;
 
 use criterion::{criterion_group, criterion_main, Bencher, Criterion};
 
@@ -186,6 +195,141 @@ fn neon_planned64_composite_048000(b: &mut Bencher) { bench_planned_f64(b,  4800
 fn neon_planned64_composite_046656(b: &mut Bencher) { bench_planned_f64(b,  46656); }
 
 
+fn plan_butterfly_fft<T: FftNum>(len: usize) -> Option<Arc<dyn Fft<T>>> {
+    let id_f32 = TypeId::of::<f32>();
+    let id_f64 = TypeId::of::<f64>();
+    let id_t = TypeId::of::<T>();
+
+    if id_t == id_f32 {
+        unsafe { 
+            match len {
+                2 => Some(Arc::new(NeonF32Butterfly2::new(FftDirection::Forward))),
+                3 => Some(Arc::new(NeonF32Butterfly3::new(FftDirection::Forward))),
+                4 => Some(Arc::new(NeonF32Butterfly4::new(FftDirection::Forward))),
+                5 => Some(Arc::new(NeonF32Butterfly5::new(FftDirection::Forward))),
+                6 => Some(Arc::new(NeonF32Butterfly6::new(FftDirection::Forward))),
+                7 => Some(Arc::new(NeonF32Butterfly7::new(FftDirection::Forward))),
+                8 => Some(Arc::new(NeonF32Butterfly8::new(FftDirection::Forward))),
+                11 => Some(Arc::new(NeonF32Butterfly11::new(FftDirection::Forward))),
+                16 => Some(Arc::new(NeonF32Butterfly16::new(FftDirection::Forward))),
+                31 => Some(Arc::new(NeonF32Butterfly31::new(FftDirection::Forward))),
+                32 => Some(Arc::new(NeonF32Butterfly32::new(FftDirection::Forward))),
+                _ => None,
+            }
+        }
+    } else if id_t == id_f64 {
+        unsafe {
+            match len {
+                2 => Some(Arc::new(NeonF64Butterfly2::new(FftDirection::Forward))),
+                3 => Some(Arc::new(NeonF64Butterfly3::new(FftDirection::Forward))),
+                4 => Some(Arc::new(NeonF64Butterfly4::new(FftDirection::Forward))),
+                5 => Some(Arc::new(NeonF64Butterfly5::new(FftDirection::Forward))),
+                6 => Some(Arc::new(NeonF64Butterfly6::new(FftDirection::Forward))),
+                7 => Some(Arc::new(NeonF64Butterfly7::new(FftDirection::Forward))),
+                8 => Some(Arc::new(NeonF64Butterfly8::new(FftDirection::Forward))),
+                11 => Some(Arc::new(NeonF64Butterfly11::new(FftDirection::Forward))),
+                16 => Some(Arc::new(NeonF64Butterfly16::new(FftDirection::Forward))),
+                31 => Some(Arc::new(NeonF64Butterfly31::new(FftDirection::Forward))),
+                32 => Some(Arc::new(NeonF64Butterfly32::new(FftDirection::Forward))),
+                _ => None,
+            }
+        }
+    } else {
+        panic!("Invalid T for constructing NEON FFT");
+    }
+}
+
+fn construct_radixn<T: FftNum>(factors: &[RadixFactor], base_fft: Arc<dyn Fft<T>>) -> Arc<dyn Fft<T>> {
+    
+    let id_f32 = TypeId::of::<f32>();
+    let id_f64 = TypeId::of::<f64>();
+    let id_t = TypeId::of::<T>();
+
+    if id_t == id_f32 {
+        Arc::new(NeonRadixN::<float32x4_t, T>::new(factors, base_fft))
+    } else if id_t == id_f64 {
+        Arc::new(NeonRadixN::<float64x2_t, T>::new(factors, base_fft))
+    } else {
+        panic!("Invalid T for constructing NEON FFT")
+    }
+}
+
+fn find_butterfly<T: FftNum>(base: usize, mut power: u32) -> (u32, Arc<dyn Fft<T>>) {
+    loop {
+        if let Some(butterfly) = plan_butterfly_fft(base.pow(power)) {
+            return (power, butterfly);
+        }
+
+        power -= 1;
+        if power == 0 {
+            panic!("Couldn't find butterfly for base={base}");
+        }
+    }
+}
+
+
+// Tests incorporating a factor of 31 by using it as a cross-FFT for RadixN
+fn bench_radixn<V: SimdVector>(b: &mut Bencher, factor: RadixFactor, power: u32) {
+    let len : usize = factor.radix().pow(power);
+    let (base_power, base_fft) = find_butterfly::<V::ScalarType>(factor.radix(), power);
+
+    let cross_power = power - base_power;
+    let factors = std::iter::repeat_n(factor, cross_power as usize).collect::<Vec<_>>();
+
+    let height : usize = base_fft.len();
+    let width : usize = len / height;
+
+    // set up our list of transpose factors - it's the same list but reversed, and we want to
+    // collapse duplicates. Note that we are only de-duplicating adjacent factors: if we're
+    // passed 7 * 2 * 7, we can't collapse the sevens because the exact order matters.
+    let mut transpose_factors: Vec<TransposeFactor> = Vec::with_capacity(factors.len());
+    for f in factors.iter().rev() {
+        let mut push_new = true;
+        if let Some(last) = transpose_factors.last_mut() {
+            if last.factor == *f {
+                last.count += 1;
+                push_new = false;
+            }
+        }
+        if push_new {
+            transpose_factors.push(TransposeFactor {
+                factor: *f,
+                count: 1,
+            });
+        }
+    }
+
+    // Precompute where each column lands. Working this out per call costs two hardware divides
+    // and an out-of-line `reverse_remainders` call per column, which is a large share of a
+    // short FFT, and much more so on x86 where a 64-bit divide takes tens of cycles.
+    let reversed_columns: Box<[usize]> = (0..width)
+        .map(|x| reverse_remainders(x, &transpose_factors))
+        .collect();
+    // `table_transpose` indexes unchecked, and relies on this.
+    assert!(reversed_columns.iter().all(|&r| r < width));
+
+    let buffer_in : Vec<Complex<V::ScalarType>> = vec![Complex::zero(); len * 10];
+    let mut buffer_out : Vec<Complex<V::ScalarType>> = vec![Complex::zero(); len * 10];
+    b.iter(|| {
+        validate_and_zip(&buffer_in, &mut buffer_out, &mut [], len, 0, |chunk_in, chunk_out, _| {
+            unsafe { table_transpose::<V>(height, &reversed_columns, chunk_in, chunk_out) };
+        })
+        
+    });
+}
+fn criterion_benchmark_radixn(c: &mut Criterion) {
+    {
+        let mut group = c.benchmark_group("neon64_radixn_power7");
+
+        for power7 in 2..8 {
+            let len = 7usize.pow(power7);
+            group.bench_with_input(BenchmarkId::new("radixn", len), &len, |b, _| {
+                bench_radixn::<float64x2_t>(b, RadixFactor::Factor7, power7)
+            });
+        }
+    }
+}
+
 
 
 fn criterion_benchmark(c: &mut Criterion) {
@@ -307,6 +451,6 @@ fn criterion_benchmark(c: &mut Criterion) {
 criterion_group! {
     name = benches;
     config = config::fast();
-    targets = criterion_benchmark
+    targets = criterion_benchmark, criterion_benchmark_radixn
 }
 criterion_main!(benches);

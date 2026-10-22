@@ -50,7 +50,7 @@ unsafe fn table_transpose_strip<V: SimdVector, const U: usize>(
 /// `reversed_columns[x]` is the output column of input column `x`, so its length is the width and
 /// nothing here needs to divide. Every entry must be below the width, which `SimdRadixN::new`
 /// asserts, and `D` must divide the width.
-#[inline(always)]
+#[target_feature(enable = "neon")]
 pub fn table_transpose<V: SimdVector>(
     height: usize,
     reversed_columns: &[usize],
@@ -71,6 +71,141 @@ pub fn table_transpose<V: SimdVector>(
     // Process the remainder by doing fewer than UNROLL_FACTOR rows
     let final_tile_x = chunks.len();
     match remainder.len() {
+        /*30 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 30>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        29 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 29>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        28 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 28>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        27 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 27>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        26 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 26>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        25 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 25>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        24 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 24>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        23 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 23>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        22 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 22>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        21 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 21>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        20 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 20>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        19 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 19>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        18 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 18>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        17 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 17>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        16 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 16>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        15 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 15>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        14 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 14>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        13 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 13>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        12 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 12>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        11 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 11>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        10 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 10>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        9 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 9>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        8 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 8>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        7 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 7>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        6 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 6>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        5 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 5>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },
+        4 => {
+            let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
+            let reverse_chunk = remainder.try_into().unwrap();
+            unsafe { table_transpose_strip::<V, 4>(height, width, input, output, &forward_chunk, reverse_chunk) };
+        },*/
         3 => {
             let forward_chunk = std::array::from_fn(|i| final_tile_x * UNROLL_FACTOR + i);
             let reverse_chunk = remainder.try_into().unwrap();

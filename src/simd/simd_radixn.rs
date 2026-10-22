@@ -218,7 +218,7 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
             let input = unsafe { workaround_transmute(input) };
             let output = unsafe { workaround_transmute_mut(output) };
 
-            table_transpose::<V>(height, columns, input, output);
+            unsafe { table_transpose::<V>(height, columns, input, output) };
         } else {
             // no factors, so just pass data straight to our base
             output.copy_from_slice(input);
