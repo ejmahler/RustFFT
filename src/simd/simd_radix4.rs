@@ -21,7 +21,7 @@ use num_complex::Complex;
 
 use crate::array_utils::{reverse_bits, workaround_transmute, workaround_transmute_mut};
 use crate::common::FftNum;
-use crate::simd::simd_transpose::table_transpose;
+use crate::simd::simd_transpose::{Radix4TransposeAlgorithm, table_transpose, unrolled_transpose};
 use crate::{Fft, FftDirection};
 
 use super::simd_vector::SimdVector;
@@ -38,7 +38,7 @@ pub struct SimdRadix4<V: SimdVector, T> {
     base_fft: Arc<dyn Fft<T>>,
     base_len: usize,
 
-    reversed_columns: Box<[usize]>,
+    transpose_algorithm: TransposeAlgorithm,
     butterfly4: V::Butterfly4,
 
     len: usize,
@@ -72,16 +72,24 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
         }
         let len = cross_fft_len;
 
-        // Precompute where each column lands. Working this out per call costs two hardware divides
-        // and an out-of-line `reverse_remainders` call per column, which is a large share of a
-        // short FFT, and much more so on x86 where a 64-bit divide takes tens of cycles.
-        let width = len / base_len;
-        let rev_digits = width.trailing_zeros() / RADIX.trailing_zeros();
-        let reversed_columns: Box<[usize]> = (0..width)
-            .map(|x| reverse_bits::<RADIX>(x, rev_digits))
-            .collect();
-        // `table_transpose` indexes unchecked, and relies on this.
-        assert!(reversed_columns.iter().all(|&r| r < width));
+        let transpose_algorithm = match k {
+            0 => TransposeAlgorithm::Copy,
+            1 => TransposeAlgorithm::UnrolledTranspose(RadixFactor::Factor4),
+            _ => {
+                // Precompute where each column lands. Working this out per call costs two hardware divides
+                // and an out-of-line `reverse_remainders` call per column, which is a large share of a
+                // short FFT, and much more so on x86 where a 64-bit divide takes tens of cycles.
+                let width = len / base_len;
+                let rev_digits = width.trailing_zeros() / RADIX.trailing_zeros();
+                let reversed_columns: Box<[usize]> = (0..width)
+                    .map(|x| reverse_bits::<RADIX>(x, rev_digits))
+                    .collect();
+                // `table_transpose` indexes unchecked, and relies on this.
+                assert!(reversed_columns.iter().all(|&r| r < width));
+
+                TransposeAlgorithm::TableTranspose(RadixFactor::Factor4, reversed_columns)
+            }
+        };
 
         // Same packing as RadixN: all layers in one array, bottom layer first, and
         // within a layer, (radix - 1) = 3 twiddles per column.
@@ -122,7 +130,7 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
             base_fft,
             base_len,
 
-            reversed_columns,
+            transpose_algorithm,
             butterfly4: unsafe { V::make_butterfly4(direction) },
 
             len,
@@ -137,16 +145,15 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
     /// The flat transpose that reorders the input down to base-sized chunks.
     #[inline(always)]
     fn transpose(&self, input: &[Complex<T>], output: &mut [Complex<T>]) {
-        if self.len > self.base_len {
-            let (height, columns) = (self.base_len, &*self.reversed_columns);
+        let input = unsafe { workaround_transmute(input) };
+        let output = unsafe { workaround_transmute_mut(output) };
 
-            let input = unsafe { workaround_transmute(input) };
-            let output = unsafe { workaround_transmute_mut(output) };
-
-            unsafe { table_transpose::<V, 4, 2>(height, columns, input, output) };
-        } else {
-            // no factors, so just pass data straight to our base
-            output.copy_from_slice(input);
+        match &self.transpose_algorithm {
+            TransposeAlgorithm::Copy => {
+                output.copy_from_slice(input);
+            }
+            TransposeAlgorithm::UnrolledTranspose(_) => unsafe { unrolled_transpose::<V, 4>(self.base_len, input, output) },
+            TransposeAlgorithm::TableTranspose(_, reversed_columns) => unsafe { table_transpose::<V, 4>(self.base_len, reversed_columns, input, output) },
         }
     }
 

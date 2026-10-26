@@ -27,7 +27,7 @@ use crate::array_utils::{
 use crate::common::{FftNum, RadixFactor};
 use crate::simd::parallel_fft::ParallelFft;
 #[allow(unused)]
-use crate::simd::simd_transpose::simd_transpose;
+use crate::simd::simd_transpose::{TransposeAlgorithm, table_transpose, unrolled_transpose};
 use crate::{Fft, FftDirection};
 
 use super::simd_vector::SimdVector;
@@ -64,10 +64,7 @@ pub struct SimdRadixN<V: SimdVector, T> {
     base_fft: Arc<dyn Fft<T>>,
     base_len: usize,
 
-    // The factor the transpose is unrolled by, and the output column of each input column. None
-    // when there are no factors and the transpose is a plain copy.
-    unroll_factor: Option<usize>,
-    reversed_columns: Box<[usize]>,
+    transpose_algorithm: TransposeAlgorithm,
     butterflies: Box<[InternalRadixFactor<V>]>,
 
     len: usize,
@@ -128,36 +125,46 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
         }
         let len = cross_fft_len;
 
-        // set up our list of transpose factors - it's the same list but reversed, and we want to
-        // collapse duplicates. Note that we are only de-duplicating adjacent factors: if we're
-        // passed 7 * 2 * 7, we can't collapse the sevens because the exact order matters.
-        let mut transpose_factors: Vec<TransposeFactor> = Vec::with_capacity(factors.len());
-        for f in factors.iter().rev() {
-            let mut push_new = true;
-            if let Some(last) = transpose_factors.last_mut() {
-                if last.factor == f.radix() {
-                    last.count += 1;
-                    push_new = false;
-                }
-            }
-            if push_new {
-                transpose_factors.push(TransposeFactor {
-                    factor: f.radix(),
-                    count: 1,
-                });
-            }
-        }
 
-        // Precompute where each column lands. Working this out per call costs two hardware divides
-        // and an out-of-line `reverse_remainders` call per column, which is a large share of a
-        // short FFT, and much more so on x86 where a 64-bit divide takes tens of cycles.
-        let width = len / base_len;
-        let reversed_columns: Box<[usize]> = (0..width)
-            .map(|x| reverse_remainders(x, &transpose_factors))
-            .collect();
-        // `table_transpose` indexes unchecked, and relies on this.
-        assert!(reversed_columns.iter().all(|&r| r < width));
-        let unroll_factor = transpose_factors.first().map(|f| f.factor);
+        let transpose_algorithm = if let Some(first_factor) = factors.first() {
+            if factors.len() > 1 {
+                // We have multiple factors, so we have to do a table transpose.
+                
+                // set up our list of transpose factors - it's the same list but reversed, and we want to
+                // collapse duplicates. Note that we are only de-duplicating adjacent factors: if we're
+                // passed 7 * 2 * 7, we can't collapse the sevens because the exact order matters.
+                let mut transpose_factors: Vec<TransposeFactor> = Vec::with_capacity(factors.len());
+                for f in factors.iter().rev() {
+                    if let Some(last) = transpose_factors.last_mut() && last.factor == *f {
+                        last.count += 1;
+                    } else {
+                        transpose_factors.push(TransposeFactor {
+                            factor: *f,
+                            count: 1,
+                        });
+                    }
+                }
+
+                // Precompute where each column lands. Working this out per call costs two hardware divides
+                // and an out-of-line `reverse_remainders` call per column, which is a large share of a
+                // short FFT, and much more so on x86 where a 64-bit divide takes tens of cycles.
+                let width = len / base_len;
+                let reversed_columns: Box<[usize]> = (0..width)
+                    .map(|x| reverse_remainders(x, &transpose_factors))
+                    .collect();
+                // `table_transpose` indexes unchecked, and relies on this.
+                assert!(reversed_columns.iter().all(|&r| r < width));
+
+                TransposeAlgorithm::TableTranspose(*first_factor, reversed_columns)
+            } else {
+                // We only have one factor, so we can do an unrolled transpose
+                TransposeAlgorithm::UnrolledTranspose(*first_factor)
+            }
+        } else {
+            TransposeAlgorithm::Copy
+        };
+
+        
 
         // Same packing as the scalar RadixN: all layers in one array, bottom layer first, and
         // within a layer, (radix - 1) twiddles per column. The difference is that a "column" here
@@ -199,8 +206,7 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
             base_fft,
             base_len,
 
-            unroll_factor,
-            reversed_columns,
+            transpose_algorithm,
             butterflies: butterflies.into_boxed_slice(),
 
             len,
@@ -215,18 +221,33 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
     /// The flat transpose that reorders the input down to base-sized chunks.
     #[inline(always)]
     fn transpose(&self, input: &[Complex<T>], output: &mut [Complex<T>]) {
-        if let Some(_unroll_factor) = self.unroll_factor {
-            let input = unsafe { workaround_transmute(input) };
-            let output = unsafe { workaround_transmute_mut(output) };
+        let input = unsafe { workaround_transmute(input) };
+        let output = unsafe { workaround_transmute_mut(output) };
 
-            // for performance, we really, really want to unroll the transpose, but we need to make
-            // sure the output length is divisible by the unroll amount. choosing the first factor
-            // seems to reliably perform well
-            let (height, columns) = (self.base_len, &*self.reversed_columns);
-            unsafe { simd_transpose::<V>(height, columns, input, output) };
-        } else {
-            // no factors, so just pass data straight to our base
-            output.copy_from_slice(input);
+        match &self.transpose_algorithm {
+            TransposeAlgorithm::Copy => {
+                output.copy_from_slice(input);
+            }
+            TransposeAlgorithm::UnrolledTranspose(unroll_factor) => {
+                match *unroll_factor {
+                    RadixFactor::Factor2 => unsafe { unrolled_transpose::<V, 2>(self.base_len, input, output) },
+                    RadixFactor::Factor3 => unsafe { unrolled_transpose::<V, 3>(self.base_len, input, output) },
+                    RadixFactor::Factor4 => unsafe { unrolled_transpose::<V, 4>(self.base_len, input, output) },
+                    RadixFactor::Factor5 => unsafe { unrolled_transpose::<V, 5>(self.base_len, input, output) },
+                    RadixFactor::Factor6 => unsafe { unrolled_transpose::<V, 6>(self.base_len, input, output) },
+                    RadixFactor::Factor7 => unsafe { unrolled_transpose::<V, 7>(self.base_len, input, output) },
+                }
+            }
+            TransposeAlgorithm::TableTranspose(unroll_factor, reversed_columns) => {
+                match *unroll_factor {
+                    RadixFactor::Factor2 => unsafe { table_transpose::<V, 2>(self.base_len, reversed_columns, input, output) },
+                    RadixFactor::Factor3 => unsafe { table_transpose::<V, 3>(self.base_len, reversed_columns, input, output) },
+                    RadixFactor::Factor4 => unsafe { table_transpose::<V, 4>(self.base_len, reversed_columns, input, output) },
+                    RadixFactor::Factor5 => unsafe { table_transpose::<V, 5>(self.base_len, reversed_columns, input, output) },
+                    RadixFactor::Factor6 => unsafe { table_transpose::<V, 6>(self.base_len, reversed_columns, input, output) },
+                    RadixFactor::Factor7 => unsafe { table_transpose::<V, 7>(self.base_len, reversed_columns, input, output) },
+                }
+            }
         }
     }
 

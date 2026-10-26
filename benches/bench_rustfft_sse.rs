@@ -2,7 +2,7 @@ use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 use rustfft::RadixFactor;
 use rustfft::simd::simd_vector::SimdVector;
-use rustfft::simd::simd_transpose::{table_transpose_original, table_transpose_original_tiled_simd, simd_transpose};
+use rustfft::simd::simd_transpose::{unrolled_transpose, table_transpose_original, table_transpose};
 use rustfft::array_utils::{reverse_remainders, TransposeFactor, validate_and_zip};
 mod config;
 use core::arch::x86_64::*;
@@ -267,14 +267,14 @@ fn bench_original_transpose<V: SimdVector>(b: &mut Bencher, factor: RadixFactor,
     for f in factors.iter().rev() {
         let mut push_new = true;
         if let Some(last) = transpose_factors.last_mut() {
-            if last.factor == f.radix() {
+            if last.factor == *f {
                 last.count += 1;
                 push_new = false;
             }
         }
         if push_new {
             transpose_factors.push(TransposeFactor {
-                factor: f.radix(),
+                factor: *f,
                 count: 1,
             });
         }
@@ -298,76 +298,18 @@ fn bench_original_transpose<V: SimdVector>(b: &mut Bencher, factor: RadixFactor,
         validate_and_zip(&buffer_in, &mut buffer_out, &mut [], len, 0, |chunk_in, chunk_out, _| {
             let (height, columns) = (base_len, &*reversed_columns);
             match unroll_factor {
-                2 => unsafe { table_transpose_original::<_, 2>(height, columns, chunk_in, chunk_out) },
-                3 => unsafe { table_transpose_original::<_, 3>(height, columns, chunk_in, chunk_out) },
-                4 => unsafe { table_transpose_original::<_, 4>(height, columns, chunk_in, chunk_out) },
-                5 => unsafe { table_transpose_original::<_, 5>(height, columns, chunk_in, chunk_out) },
-                6 => unsafe { table_transpose_original::<_, 6>(height, columns, chunk_in, chunk_out) },
-                7 => unsafe { table_transpose_original::<_, 7>(height, columns, chunk_in, chunk_out) },
+                RadixFactor::Factor2 => unsafe { table_transpose_original::<_, 2>(height, columns, chunk_in, chunk_out) },
+                RadixFactor::Factor3 => unsafe { table_transpose_original::<_, 3>(height, columns, chunk_in, chunk_out) },
+                RadixFactor::Factor4 => unsafe { table_transpose_original::<_, 4>(height, columns, chunk_in, chunk_out) },
+                RadixFactor::Factor5 => unsafe { table_transpose_original::<_, 5>(height, columns, chunk_in, chunk_out) },
+                RadixFactor::Factor6 => unsafe { table_transpose_original::<_, 6>(height, columns, chunk_in, chunk_out) },
+                RadixFactor::Factor7 => unsafe { table_transpose_original::<_, 7>(height, columns, chunk_in, chunk_out) },
                 _ => unsafe { unreachable_unchecked() },
             }
         })
         
     });
 }
-
-// Tests incorporating a factor of 31 by using it as a cross-FFT for RadixN
-fn bench_original_tiled_transpose_simd<V: SimdVector>(b: &mut Bencher, factor: RadixFactor, power: u32, base_len: usize) {
-    let cross_len = factor.radix().pow(power);
-    let len : usize = base_len * cross_len;
-    let factors = std::iter::repeat_n(factor, power as usize).collect::<Vec<_>>();
-
-    // set up our list of transpose factors - it's the same list but reversed, and we want to
-    // collapse duplicates. Note that we are only de-duplicating adjacent factors: if we're
-    // passed 7 * 2 * 7, we can't collapse the sevens because the exact order matters.
-    let mut transpose_factors: Vec<TransposeFactor> = Vec::with_capacity(factors.len());
-    for f in factors.iter().rev() {
-        let mut push_new = true;
-        if let Some(last) = transpose_factors.last_mut() {
-            if last.factor == f.radix() {
-                last.count += 1;
-                push_new = false;
-            }
-        }
-        if push_new {
-            transpose_factors.push(TransposeFactor {
-                factor: f.radix(),
-                count: 1,
-            });
-        }
-    }
-
-    // Precompute where each column lands. Working this out per call costs two hardware divides
-    // and an out-of-line `reverse_remainders` call per column, which is a large share of a
-    // short FFT, and much more so on x86 where a 64-bit divide takes tens of cycles.
-    let width = len / base_len;
-    let reversed_columns: Box<[usize]> = (0..width)
-        .map(|x| reverse_remainders(x, &transpose_factors))
-        .collect();
-    // `table_transpose` indexes unchecked, and relies on this.
-    assert!(reversed_columns.iter().all(|&r| r < width));
-    let unroll_factor = transpose_factors.first().map(|f| f.factor).unwrap();
-
-
-    let buffer_in : Vec<Complex<V::ScalarType>> = vec![Complex::zero(); len * 10];
-    let mut buffer_out : Vec<Complex<V::ScalarType>> = vec![Complex::zero(); len * 10];
-    b.iter(|| {
-        validate_and_zip(&buffer_in, &mut buffer_out, &mut [], len, 0, |chunk_in, chunk_out, _| {
-            let (height, columns) = (base_len, &*reversed_columns);
-            match unroll_factor {
-                2 => unsafe { table_transpose_original_tiled_simd::<V, 2>(height, columns, chunk_in, chunk_out) },
-                3 => unsafe { table_transpose_original_tiled_simd::<V, 3>(height, columns, chunk_in, chunk_out) },
-                4 => unsafe { table_transpose_original_tiled_simd::<V, 4>(height, columns, chunk_in, chunk_out) },
-                5 => unsafe { table_transpose_original_tiled_simd::<V, 5>(height, columns, chunk_in, chunk_out) },
-                6 => unsafe { table_transpose_original_tiled_simd::<V, 6>(height, columns, chunk_in, chunk_out) },
-                7 => unsafe { table_transpose_original_tiled_simd::<V, 7>(height, columns, chunk_in, chunk_out) },
-                _ => unsafe { unreachable_unchecked() },
-            }
-        })
-        
-    });
-}
-
 
 // Tests incorporating a factor of 31 by using it as a cross-FFT for RadixN
 fn bench_simd_transpose<V: SimdVector>(b: &mut Bencher, factor: RadixFactor, power: u32, base_len: usize) {
@@ -382,14 +324,14 @@ fn bench_simd_transpose<V: SimdVector>(b: &mut Bencher, factor: RadixFactor, pow
     for f in factors.iter().rev() {
         let mut push_new = true;
         if let Some(last) = transpose_factors.last_mut() {
-            if last.factor == f.radix() {
+            if last.factor == *f {
                 last.count += 1;
                 push_new = false;
             }
         }
         if push_new {
             transpose_factors.push(TransposeFactor {
-                factor: f.radix(),
+                factor: *f,
                 count: 1,
             });
         }
@@ -404,13 +346,48 @@ fn bench_simd_transpose<V: SimdVector>(b: &mut Bencher, factor: RadixFactor, pow
         .collect();
     // `table_transpose` indexes unchecked, and relies on this.
     assert!(reversed_columns.iter().all(|&r| r < width));
+    let unroll_factor = *factors.first().unwrap();
 
     let buffer_in : Vec<Complex<V::ScalarType>> = vec![Complex::zero(); len * 10];
     let mut buffer_out : Vec<Complex<V::ScalarType>> = vec![Complex::zero(); len * 10];
     b.iter(|| {
         validate_and_zip(&buffer_in, &mut buffer_out, &mut [], len, 0, |chunk_in, chunk_out, _| {
             let (height, columns) = (base_len, &*reversed_columns);
-            unsafe { simd_transpose::<V>(height, columns, chunk_in, chunk_out) };
+            match unroll_factor {
+                RadixFactor::Factor2 => unsafe { table_transpose::<V, 2>(height, columns, chunk_in, chunk_out) },
+                RadixFactor::Factor3 => unsafe { table_transpose::<V, 3>(height, columns, chunk_in, chunk_out) },
+                RadixFactor::Factor4 => unsafe { table_transpose::<V, 4>(height, columns, chunk_in, chunk_out) },
+                RadixFactor::Factor5 => unsafe { table_transpose::<V, 5>(height, columns, chunk_in, chunk_out) },
+                RadixFactor::Factor6 => unsafe { table_transpose::<V, 6>(height, columns, chunk_in, chunk_out) },
+                RadixFactor::Factor7 => unsafe { table_transpose::<V, 7>(height, columns, chunk_in, chunk_out) },
+                _ => unreachable!(),
+            }
+        })
+        
+    });
+}
+
+
+// Tests incorporating a factor of 31 by using it as a cross-FFT for RadixN
+fn bench_unrolled_transpose<V: SimdVector>(b: &mut Bencher, factor: RadixFactor, power: u32, base_len: usize) {
+    assert!(power == 1);
+
+    let cross_len = factor.radix();
+    let len : usize = base_len * cross_len;
+
+    let buffer_in : Vec<Complex<V::ScalarType>> = vec![Complex::zero(); len * 10];
+    let mut buffer_out : Vec<Complex<V::ScalarType>> = vec![Complex::zero(); len * 10];
+    b.iter(|| {
+        validate_and_zip(&buffer_in, &mut buffer_out, &mut [], len, 0, |chunk_in, chunk_out, _| {
+            match factor {
+                RadixFactor::Factor2 => unsafe { unrolled_transpose::<V, 2>(base_len, chunk_in, chunk_out) },
+                RadixFactor::Factor3 => unsafe { unrolled_transpose::<V, 3>(base_len, chunk_in, chunk_out) },
+                RadixFactor::Factor4 => unsafe { unrolled_transpose::<V, 4>(base_len, chunk_in, chunk_out) },
+                RadixFactor::Factor5 => unsafe { unrolled_transpose::<V, 5>(base_len, chunk_in, chunk_out) },
+                RadixFactor::Factor6 => unsafe { unrolled_transpose::<V, 6>(base_len, chunk_in, chunk_out) },
+                RadixFactor::Factor7 => unsafe { unrolled_transpose::<V, 7>(base_len, chunk_in, chunk_out) },
+                _ => unreachable!(),
+            }
         })
         
     });
@@ -427,46 +404,14 @@ fn criterion_benchmark_transpose(c: &mut Criterion) {
             group.bench_with_input(BenchmarkId::new("original", len), &len, |b, _| {
                 bench_original_transpose::<__m128d>(b, RadixFactor::Factor7, power7, 7)
             });
-            group.bench_with_input(BenchmarkId::new("simd", len), &len, |b, _| {
-                bench_original_tiled_transpose_simd::<__m128d>(b, RadixFactor::Factor7, power7, 7)
-            });
             group.bench_with_input(BenchmarkId::new("simd_4x", len), &len, |b, _| {
                 bench_simd_transpose::<__m128d>(b, RadixFactor::Factor7, power7, 7)
             });
-
-        }
-    }
-    {
-        let mut group = c.benchmark_group("sse32_transpose_power7_base7");
-
-        for power7 in 1..9 {
-            let len = 7usize.pow(power7) * 7;
-            group.bench_with_input(BenchmarkId::new("original", len), &len, |b, _| {
-                bench_original_transpose::<__m128>(b, RadixFactor::Factor7, power7, 7)
-            });
-            group.bench_with_input(BenchmarkId::new("simd", len), &len, |b, _| {
-                bench_original_tiled_transpose_simd::<__m128>(b, RadixFactor::Factor7, power7, 7)
-            });
-            group.bench_with_input(BenchmarkId::new("simd_4x", len), &len, |b, _| {
-                bench_simd_transpose::<__m128>(b, RadixFactor::Factor7, power7, 7)
-            });
-        }
-    }
-    {
-        let mut group = c.benchmark_group("sse64_transpose_power7_base32");
-
-        for power7 in 1..8 {
-            let len = 7usize.pow(power7) * 32;
-            group.bench_with_input(BenchmarkId::new("original", len), &len, |b, _| {
-                bench_original_transpose::<__m128d>(b, RadixFactor::Factor7, power7, 32)
-            });
-            group.bench_with_input(BenchmarkId::new("simd", len), &len, |b, _| {
-                bench_original_tiled_transpose_simd::<__m128d>(b, RadixFactor::Factor7, power7, 32)
-            });
-            group.bench_with_input(BenchmarkId::new("simd_4x", len), &len, |b, _| {
-                bench_simd_transpose::<__m128d>(b, RadixFactor::Factor7, power7, 32)
-            });
-
+            if power7 == 1 {
+                group.bench_with_input(BenchmarkId::new("unrolled", len), &len, |b, _| {
+                    bench_unrolled_transpose::<__m128d>(b, RadixFactor::Factor7, power7, 7)
+                });
+            }
         }
     }
     {
@@ -477,28 +422,34 @@ fn criterion_benchmark_transpose(c: &mut Criterion) {
             group.bench_with_input(BenchmarkId::new("original", len), &len, |b, _| {
                 bench_original_transpose::<__m128d>(b, RadixFactor::Factor7, power7, 10000)
             });
-            group.bench_with_input(BenchmarkId::new("simd", len), &len, |b, _| {
-                bench_original_tiled_transpose_simd::<__m128d>(b, RadixFactor::Factor7, power7, 10000)
-            });
             group.bench_with_input(BenchmarkId::new("simd_4x", len), &len, |b, _| {
                 bench_simd_transpose::<__m128d>(b, RadixFactor::Factor7, power7, 10000)
             });
+            if power7 == 1 {
+                group.bench_with_input(BenchmarkId::new("unrolled", len), &len, |b, _| {
+                    bench_unrolled_transpose::<__m128d>(b, RadixFactor::Factor7, power7, 10000)
+                });
+            }
         }
     }
     {
-        let mut group = c.benchmark_group("sse32_transpose_power7_base10k");
+        let mut group = c.benchmark_group("sse64_transpose_power7_base32");
 
-        for power7 in 1..5 {
-            let len = 7usize.pow(power7) * 10000;
+        for power7 in 1..8 {
+            let len = 7usize.pow(power7) * 32;
             group.bench_with_input(BenchmarkId::new("original", len), &len, |b, _| {
-                bench_original_transpose::<__m128>(b, RadixFactor::Factor7, power7, 10000)
-            });
-            group.bench_with_input(BenchmarkId::new("simd", len), &len, |b, _| {
-                bench_original_tiled_transpose_simd::<__m128>(b, RadixFactor::Factor7, power7, 10000)
+                bench_original_transpose::<__m128d>(b, RadixFactor::Factor7, power7, 32)
             });
             group.bench_with_input(BenchmarkId::new("simd_4x", len), &len, |b, _| {
-                bench_simd_transpose::<__m128>(b, RadixFactor::Factor7, power7, 10000)
+                bench_simd_transpose::<__m128d>(b, RadixFactor::Factor7, power7, 32)
             });
+
+            if power7 == 1 {
+                group.bench_with_input(BenchmarkId::new("unrolled", len), &len, |b, _| {
+                    bench_unrolled_transpose::<__m128d>(b, RadixFactor::Factor7, power7, 32)
+                });
+            }
+
         }
     }
     {
@@ -509,28 +460,14 @@ fn criterion_benchmark_transpose(c: &mut Criterion) {
             group.bench_with_input(BenchmarkId::new("original", len), &len, |b, _| {
                 bench_original_transpose::<__m128d>(b, RadixFactor::Factor4, power4, 32)
             });
-            group.bench_with_input(BenchmarkId::new("simd", len), &len, |b, _| {
-                bench_original_tiled_transpose_simd::<__m128d>(b, RadixFactor::Factor4, power4, 32)
-            });
             group.bench_with_input(BenchmarkId::new("simd_4x", len), &len, |b, _| {
                 bench_simd_transpose::<__m128d>(b, RadixFactor::Factor4, power4, 32)
             });
-        }
-    }
-    {
-        let mut group = c.benchmark_group("sse32_transpose_power4_base32");
-
-        for power4 in 1..12 {
-            let len = 4usize.pow(power4) * 32;
-            group.bench_with_input(BenchmarkId::new("original", len), &len, |b, _| {
-                bench_original_transpose::<__m128>(b, RadixFactor::Factor4, power4, 32)
-            });
-            group.bench_with_input(BenchmarkId::new("simd", len), &len, |b, _| {
-                bench_original_tiled_transpose_simd::<__m128>(b, RadixFactor::Factor4, power4, 32)
-            });
-            group.bench_with_input(BenchmarkId::new("simd_4x", len), &len, |b, _| {
-                bench_simd_transpose::<__m128>(b, RadixFactor::Factor4, power4, 32)
-            });
+            if power4 == 1 {
+                group.bench_with_input(BenchmarkId::new("unrolled", len), &len, |b, _| {
+                    bench_unrolled_transpose::<__m128d>(b, RadixFactor::Factor4, power4, 32)
+                });
+            }
         }
     }
     {
@@ -541,12 +478,71 @@ fn criterion_benchmark_transpose(c: &mut Criterion) {
             group.bench_with_input(BenchmarkId::new("original", len), &len, |b, _| {
                 bench_original_transpose::<__m128d>(b, RadixFactor::Factor4, power4, 10000)
             });
-            group.bench_with_input(BenchmarkId::new("simd", len), &len, |b, _| {
-                bench_original_tiled_transpose_simd::<__m128d>(b, RadixFactor::Factor4, power4, 10000)
-            });
             group.bench_with_input(BenchmarkId::new("simd_4x", len), &len, |b, _| {
                 bench_simd_transpose::<__m128d>(b, RadixFactor::Factor4, power4, 10000)
             });
+            if power4 == 1 {
+                group.bench_with_input(BenchmarkId::new("unrolled", len), &len, |b, _| {
+                    bench_unrolled_transpose::<__m128d>(b, RadixFactor::Factor4, power4, 10000)
+                });
+            }
+        }
+    }
+    /*
+    {
+        let mut group = c.benchmark_group("sse32_transpose_power7_base7");
+
+        for power7 in 1..9 {
+            let len = 7usize.pow(power7) * 7;
+            group.bench_with_input(BenchmarkId::new("original", len), &len, |b, _| {
+                bench_original_transpose::<__m128>(b, RadixFactor::Factor7, power7, 7)
+            });
+            group.bench_with_input(BenchmarkId::new("simd_4x", len), &len, |b, _| {
+                bench_simd_transpose::<__m128>(b, RadixFactor::Factor7, power7, 7)
+            });
+
+            if power7 == 1 {
+                group.bench_with_input(BenchmarkId::new("unrolled", len), &len, |b, _| {
+                    bench_unrolled_transpose::<__m128>(b, RadixFactor::Factor7, power7, 7)
+                });
+            }
+        }
+    }*/
+    {
+        let mut group = c.benchmark_group("sse32_transpose_power3_base9");
+
+        for power3 in 1..12 {
+            let len = 3usize.pow(power3) * 9;
+            group.bench_with_input(BenchmarkId::new("original", len), &len, |b, _| {
+                bench_original_transpose::<__m128>(b, RadixFactor::Factor3, power3, 9)
+            });
+            group.bench_with_input(BenchmarkId::new("simd_4x", len), &len, |b, _| {
+                bench_simd_transpose::<__m128>(b, RadixFactor::Factor3, power3, 9)
+            });
+
+            if power3 == 1 {
+                group.bench_with_input(BenchmarkId::new("unrolled", len), &len, |b, _| {
+                    bench_unrolled_transpose::<__m128>(b, RadixFactor::Factor3, power3, 9)
+                });
+            }
+        }
+    }
+    {
+        let mut group = c.benchmark_group("sse32_transpose_power4_base32");
+
+        for power4 in 1..12 {
+            let len = 4usize.pow(power4) * 32;
+            group.bench_with_input(BenchmarkId::new("original", len), &len, |b, _| {
+                bench_original_transpose::<__m128>(b, RadixFactor::Factor4, power4, 32)
+            });
+            group.bench_with_input(BenchmarkId::new("simd_4x", len), &len, |b, _| {
+                bench_simd_transpose::<__m128>(b, RadixFactor::Factor4, power4, 32)
+            });
+            if power4 == 1 {
+                group.bench_with_input(BenchmarkId::new("unrolled", len), &len, |b, _| {
+                    bench_unrolled_transpose::<__m128>(b, RadixFactor::Factor4, power4, 32)
+                });
+            }
         }
     }
 }
