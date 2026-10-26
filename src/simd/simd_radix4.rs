@@ -20,8 +20,8 @@ use std::sync::Arc;
 use num_complex::Complex;
 
 use crate::array_utils::{reverse_bits, workaround_transmute, workaround_transmute_mut};
-use crate::common::FftNum;
-use crate::simd::simd_transpose::{Radix4TransposeAlgorithm, table_transpose, unrolled_transpose};
+use crate::common::{FftNum, RadixFactor};
+use crate::simd::simd_transpose::{TransposeAlgorithm, table_transpose, unrolled_transpose};
 use crate::{Fft, FftDirection};
 
 use super::simd_vector::SimdVector;

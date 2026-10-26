@@ -15,7 +15,7 @@ pub enum TransposeAlgorithm {
 /// `reversed_columns[x]` is the output column of input column `x`, so its length is the width and
 /// nothing here needs to divide. Every entry must be below the width, which `SimdRadixN::new`
 /// asserts, and `D` must divide the width.
-#[target_feature(enable = "simd128")]
+#[target_feature(enable = "neon")]
 pub unsafe fn table_transpose_original<T: Copy, const D: usize>(
     height: usize,
     reversed_columns: &[usize],
@@ -225,7 +225,7 @@ unsafe fn table_transpose_2complex<V: SimdVector, const EXTERNAL_UNROLL_FACTOR: 
     }
 }
 
-#[target_feature(enable = "simd128")]
+#[target_feature(enable = "neon")]
 pub unsafe fn table_transpose<V: SimdVector, const EXTERNAL_UNROLL_FACTOR: usize>(
     height: usize,
     reversed_columns: &[usize],
@@ -332,7 +332,7 @@ unsafe fn unrolled_transpose_2complex<V: SimdVector, const WIDTH: usize>(
     }
 }
 
-#[target_feature(enable = "simd128")]
+#[target_feature(enable = "neon")]
 pub unsafe fn unrolled_transpose<V: SimdVector, const WIDTH: usize>(
     height: usize,
     input: &[Complex<V::ScalarType>],
