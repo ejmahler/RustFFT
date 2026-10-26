@@ -29,23 +29,21 @@ struct VectorizedMultiplyMod {
 
 impl VectorizedMultiplyMod {
     #[target_feature(enable = "avx")]
-    unsafe fn new(b: u32, divisor: u32) -> Self {
-        unsafe {
-            assert!(
-                divisor.leading_zeros() > 0,
-                "divisor must be less than {}, got {}",
-                1 << 31,
-                divisor
-            );
+    fn new(b: u32, divisor: u32) -> Self {
+        assert!(
+            divisor.leading_zeros() > 0,
+            "divisor must be less than {}, got {}",
+            1 << 31,
+            divisor
+        );
 
-            let b = b % divisor;
-            let intermediate = ((b as i64) << 32) / divisor as i64;
+        let b = b % divisor;
+        let intermediate = ((b as i64) << 32) / divisor as i64;
 
-            Self {
-                b: _mm256_set1_epi64x(b as i64),
-                divisor: _mm256_set1_epi64x(divisor as i64),
-                intermediate: _mm256_set1_epi64x(intermediate),
-            }
+        Self {
+            b: _mm256_set1_epi64x(b as i64),
+            divisor: _mm256_set1_epi64x(divisor as i64),
+            intermediate: _mm256_set1_epi64x(intermediate),
         }
     }
 

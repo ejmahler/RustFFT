@@ -9,6 +9,7 @@ use crate::simd::simd_array::SimdComplexArray;
 use crate::simd::simd_vector::SimdVector;
 use crate::wasm_simd::wasm_simd_butterflies::*;
 use crate::wasm_simd::wasm_simd_prime_butterflies::*;
+use crate::wasm_simd::wasm_simd_utils::transpose_complex_2x2_f32;
 
 /// Read these indexes from an WasmSimdArray and build an array of simd vectors.
 /// Takes a name of a vector to read from, and a list of indexes to read.
@@ -186,6 +187,14 @@ impl SimdVector for WasmVector64 {
     unsafe fn store1_hi_complex(_ptr: *mut Complex<Self::ScalarType>, _data: Self) {
         unimplemented!("Impossible to do a partial store of complex f64's");
     }
+    #[inline(always)]
+    unsafe fn transpose_contiguous_to_strided<const D: usize>(data: [Self; D]) -> [Self; D] {
+        data
+    }
+    #[inline(always)]
+    unsafe fn transpose_square<const D: usize>(data: [Self; D]) -> [Self; D] {
+        data
+    }
 
     #[inline(always)]
     unsafe fn neg(a: Self) -> Self {
@@ -323,6 +332,32 @@ impl SimdVector for WasmVector32 {
         unsafe {
             v128_store64_lane::<1>(data.0, ptr as *mut u64);
         }
+    }
+
+    #[inline(always)]
+    unsafe fn transpose_contiguous_to_strided<const D: usize>(data: [Self; D]) -> [Self; D] {
+        assert!(D % 2 == 0);
+
+        let mut result = [unsafe { Self::zero_vector() }; D];
+        let chunks = D / 2;
+        for c in 0..chunks {
+            let values = [data[c], data[c + chunks]];
+            let transposed = unsafe { transpose_complex_2x2_f32(values[0], values[1]) };
+
+            result[c * 2 + 0] = transposed[0];
+            result[c * 2 + 1] = transposed[1];
+        }
+        result
+    }
+    #[inline(always)]
+    unsafe fn transpose_square<const D: usize>(data: [Self; D]) -> [Self; D] {
+        assert_eq!(D, Self::COMPLEX_PER_VECTOR);
+        let transposed = unsafe { transpose_complex_2x2_f32(data[0], data[1]) };
+        let mut result = [unsafe { Self::zero_vector() }; D];
+        for i in 0..D {
+            result[i] = transposed[i];
+        }
+        result
     }
 
     #[inline(always)]

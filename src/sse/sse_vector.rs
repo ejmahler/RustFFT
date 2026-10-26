@@ -6,6 +6,7 @@ use crate::simd::simd_array::SimdComplexArray;
 use crate::simd::simd_vector::SimdVector;
 use crate::sse::sse_butterflies::*;
 use crate::sse::sse_prime_butterflies::*;
+use crate::sse::sse_utils::transpose_complex_2x2_f32;
 use crate::{FftDirection, twiddles};
 
 // Read these indexes from an SseArray and build an array of simd vectors.
@@ -178,6 +179,15 @@ impl SimdVector for __m128d {
     }
 
     #[inline(always)]
+    unsafe fn transpose_contiguous_to_strided<const D: usize>(data: [Self; D]) -> [Self; D] {
+        data
+    }
+    #[inline(always)]
+    unsafe fn transpose_square<const D: usize>(data: [Self; D]) -> [Self; D] {
+        data
+    }
+
+    #[inline(always)]
     unsafe fn neg(a: Self) -> Self {
         unsafe { _mm_xor_pd(a, _mm_set1_pd(-0.0)) }
     }
@@ -315,6 +325,32 @@ impl SimdVector for __m128 {
         unsafe {
             _mm_storeh_pd(ptr as *mut f64, _mm_castps_pd(data));
         }
+    }
+
+    #[inline(always)]
+    unsafe fn transpose_contiguous_to_strided<const D: usize>(data: [Self; D]) -> [Self; D] {
+        assert!(D % 2 == 0);
+
+        let mut result = [unsafe { Self::zero_vector() }; D];
+        let chunks = D / 2;
+        for c in 0..chunks {
+            let values = [data[c], data[c + chunks]];
+            let transposed = unsafe { transpose_complex_2x2_f32(values[0], values[1]) };
+
+            result[c * 2 + 0] = transposed[0];
+            result[c * 2 + 1] = transposed[1];
+        }
+        result
+    }
+    #[inline(always)]
+    unsafe fn transpose_square<const D: usize>(data: [Self; D]) -> [Self; D] {
+        assert_eq!(D, Self::COMPLEX_PER_VECTOR);
+        let transposed = unsafe { transpose_complex_2x2_f32(data[0], data[1]) };
+        let mut result = [unsafe { Self::zero_vector() }; D];
+        for i in 0..D {
+            result[i] = transposed[i];
+        }
+        result
     }
 
     #[inline(always)]

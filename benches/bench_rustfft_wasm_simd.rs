@@ -1,45 +1,21 @@
-/// Unfortunately, `cargo bench` does not permit running these benchmarks out-of-the-box
-/// on a WebAssembly virtual machine.
-///
-/// Follow these steps to run these benchmarks:
-/// 0. Prerequisites: Install the `wasm32-wasi` target and `wasmer`
-///
-///
-/// 1. Build these benchmarks
-/// ```bash
-/// cargo build --bench=bench_rustfft_wasm_simd --release  --target wasm32-wasi --features "wasm_simd"
-/// ```
-///
-/// After cargo built the bench binary, cargo stores it inside the
-/// `<PROJECT_ROOT>/target/wasm32-wasi/release/deps` directory.
-/// The file name of this binary follows this format: `bench_rustfft_wasm_simd-<CHECKSUM>.wasm`.
-/// For instance, it could be named
-/// `target/wasm32-wasi/release/deps/bench_rustfft_scalar-6d2b3d5a567416f5.wasm`
-///
-/// 2. Copy the most recently built WASM binary to hex.wasm
-/// ```bash
-/// cp `ls -t target/wasm32-wasi/release/deps/*.wasm | head -n 1` hex.wasm
-/// ```
-///
-/// 3. Run these benchmark e. g. with [wasmer](https://github.com/wasmerio/wasmer)
-/// ```bash
-/// wasmer run --dir=. hex.wasm -- --bench
-/// ```
-///
-/// For more information, refer to [Criterion's user guide](https://github.com/bheisler/criterion.rs/blob/dc2b06cd31f7aa34cff6a83a00598e0523186dad/book/src/user_guide/wasi.md)
-/// which should be mostly applicable to our use case.
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
-use rustfft::Fft;
-use std::sync::Arc;
+use rustfft::RadixFactor;
+use rustfft::simd::simd_vector::SimdVector;
+use rustfft::simd::simd_transpose::{table_transpose_original, table_transpose_original_tiled_simd, simd_transpose};
+use rustfft::array_utils::{reverse_remainders, TransposeFactor, validate_and_zip};
 mod config;
+use criterion::BenchmarkId;
+use std::hint::unreachable_unchecked;
+use rustfft::wasm_simd::wasm_simd_vector::{WasmVector32, WasmVector64};
 
 use criterion::{criterion_group, criterion_main, Bencher, Criterion};
+/*
 
 /// Times just the FFT execution (not allocation and pre-calculation)
 /// for a given length
 fn bench_planned_f32(b: &mut Bencher, len: usize) {
-    let mut planner = rustfft::FftPlannerWasmSimd::new().unwrap();
+    let mut planner = rustfft::FftPlannerSse::new().unwrap();
     let fft: Arc<dyn Fft<f32>> = planner.plan_fft_forward(len);
     assert_eq!(fft.len(), len);
 
@@ -50,7 +26,7 @@ fn bench_planned_f32(b: &mut Bencher, len: usize) {
     });
 }
 fn bench_planned_f64(b: &mut Bencher, len: usize) {
-    let mut planner = rustfft::FftPlannerWasmSimd::new().unwrap();
+    let mut planner = rustfft::FftPlannerSse::new().unwrap();
     let fft: Arc<dyn Fft<f64>> = planner.plan_fft_forward(len);
     assert_eq!(fft.len(), len);
 
@@ -65,7 +41,7 @@ fn bench_planned_f64(b: &mut Bencher, len: usize) {
 /// for a given length.
 /// Run the fft on a 10*len vector, similar to how the butterflies are often used.
 fn bench_planned_multi_f32(b: &mut Bencher, len: usize) {
-    let mut planner = rustfft::FftPlannerWasmSimd::new().unwrap();
+    let mut planner = rustfft::FftPlannerSse::new().unwrap();
     let fft: Arc<dyn Fft<f32>> = planner.plan_fft_forward(len);
 
     let mut buffer = vec![Complex::zero(); len * 10];
@@ -75,7 +51,7 @@ fn bench_planned_multi_f32(b: &mut Bencher, len: usize) {
     });
 }
 fn bench_planned_multi_f64(b: &mut Bencher, len: usize) {
-    let mut planner = rustfft::FftPlannerWasmSimd::new().unwrap();
+    let mut planner = rustfft::FftPlannerSse::new().unwrap();
     let fft: Arc<dyn Fft<f64>> = planner.plan_fft_forward(len);
 
     let mut buffer = vec![Complex::zero(); len * 10];
@@ -86,447 +62,615 @@ fn bench_planned_multi_f64(b: &mut Bencher, len: usize) {
 }
 
 // All butterflies
-fn wasm_simd_butterfly32_02(b: &mut Bencher) {
-    bench_planned_multi_f32(b, 2);
-}
-fn wasm_simd_butterfly32_03(b: &mut Bencher) {
-    bench_planned_multi_f32(b, 3);
-}
-fn wasm_simd_butterfly32_04(b: &mut Bencher) {
-    bench_planned_multi_f32(b, 4);
-}
-fn wasm_simd_butterfly32_05(b: &mut Bencher) {
-    bench_planned_multi_f32(b, 5);
-}
-fn wasm_simd_butterfly32_06(b: &mut Bencher) {
-    bench_planned_multi_f32(b, 6);
-}
-fn wasm_simd_butterfly32_07(b: &mut Bencher) {
-    bench_planned_multi_f32(b, 7);
-}
-fn wasm_simd_butterfly32_08(b: &mut Bencher) {
-    bench_planned_multi_f32(b, 8);
-}
-fn wasm_simd_butterfly32_09(b: &mut Bencher) {
-    bench_planned_multi_f32(b, 9);
-}
-fn wasm_simd_butterfly32_10(b: &mut Bencher) {
-    bench_planned_multi_f32(b, 10);
-}
-fn wasm_simd_butterfly32_11(b: &mut Bencher) {
-    bench_planned_multi_f32(b, 11);
-}
-fn wasm_simd_butterfly32_12(b: &mut Bencher) {
-    bench_planned_multi_f32(b, 12);
-}
-fn wasm_simd_butterfly32_13(b: &mut Bencher) {
-    bench_planned_multi_f32(b, 13);
-}
-fn wasm_simd_butterfly32_15(b: &mut Bencher) {
-    bench_planned_multi_f32(b, 15);
-}
-fn wasm_simd_butterfly32_16(b: &mut Bencher) {
-    bench_planned_multi_f32(b, 16);
-}
-fn wasm_simd_butterfly32_17(b: &mut Bencher) {
-    bench_planned_multi_f32(b, 17);
-}
-fn wasm_simd_butterfly32_19(b: &mut Bencher) {
-    bench_planned_multi_f32(b, 19);
-}
-fn wasm_simd_butterfly32_23(b: &mut Bencher) {
-    bench_planned_multi_f32(b, 23);
-}
-fn wasm_simd_butterfly32_24(b: &mut Bencher) {
-    bench_planned_multi_f32(b, 24);
-}
-fn wasm_simd_butterfly32_29(b: &mut Bencher) {
-    bench_planned_multi_f32(b, 29);
-}
-fn wasm_simd_butterfly32_31(b: &mut Bencher) {
-    bench_planned_multi_f32(b, 31);
-}
-fn wasm_simd_butterfly32_32(b: &mut Bencher) {
-    bench_planned_multi_f32(b, 32);
-}
+fn sse_butterfly32_02(b: &mut Bencher) { bench_planned_multi_f32(b, 2);}
+fn sse_butterfly32_03(b: &mut Bencher) { bench_planned_multi_f32(b, 3);}
+fn sse_butterfly32_04(b: &mut Bencher) { bench_planned_multi_f32(b, 4);}
+fn sse_butterfly32_05(b: &mut Bencher) { bench_planned_multi_f32(b, 5);}
+fn sse_butterfly32_06(b: &mut Bencher) { bench_planned_multi_f32(b, 6);}
+fn sse_butterfly32_07(b: &mut Bencher) { bench_planned_multi_f32(b, 7);}
+fn sse_butterfly32_08(b: &mut Bencher) { bench_planned_multi_f32(b, 8);}
+fn sse_butterfly32_09(b: &mut Bencher) { bench_planned_multi_f32(b, 9);}
+fn sse_butterfly32_10(b: &mut Bencher) { bench_planned_multi_f32(b, 10);}
+fn sse_butterfly32_11(b: &mut Bencher) { bench_planned_multi_f32(b, 11);}
+fn sse_butterfly32_12(b: &mut Bencher) { bench_planned_multi_f32(b, 12);}
+fn sse_butterfly32_13(b: &mut Bencher) { bench_planned_multi_f32(b, 13);}
+fn sse_butterfly32_15(b: &mut Bencher) { bench_planned_multi_f32(b, 15);}
+fn sse_butterfly32_16(b: &mut Bencher) { bench_planned_multi_f32(b, 16);}
+fn sse_butterfly32_17(b: &mut Bencher) { bench_planned_multi_f32(b, 17);}
+fn sse_butterfly32_19(b: &mut Bencher) { bench_planned_multi_f32(b, 19);}
+fn sse_butterfly32_23(b: &mut Bencher) { bench_planned_multi_f32(b, 23);}
+fn sse_butterfly32_24(b: &mut Bencher) { bench_planned_multi_f32(b, 24);}
+fn sse_butterfly32_29(b: &mut Bencher) { bench_planned_multi_f32(b, 29);}
+fn sse_butterfly32_31(b: &mut Bencher) { bench_planned_multi_f32(b, 31);}
+fn sse_butterfly32_32(b: &mut Bencher) { bench_planned_multi_f32(b, 32);}
 
-fn wasm_simd_butterfly64_02(b: &mut Bencher) {
-    bench_planned_multi_f64(b, 2);
-}
-fn wasm_simd_butterfly64_03(b: &mut Bencher) {
-    bench_planned_multi_f64(b, 3);
-}
-fn wasm_simd_butterfly64_04(b: &mut Bencher) {
-    bench_planned_multi_f64(b, 4);
-}
-fn wasm_simd_butterfly64_05(b: &mut Bencher) {
-    bench_planned_multi_f64(b, 5);
-}
-fn wasm_simd_butterfly64_06(b: &mut Bencher) {
-    bench_planned_multi_f64(b, 6);
-}
-fn wasm_simd_butterfly64_07(b: &mut Bencher) {
-    bench_planned_multi_f64(b, 7);
-}
-fn wasm_simd_butterfly64_08(b: &mut Bencher) {
-    bench_planned_multi_f64(b, 8);
-}
-fn wasm_simd_butterfly64_09(b: &mut Bencher) {
-    bench_planned_multi_f64(b, 9);
-}
-fn wasm_simd_butterfly64_10(b: &mut Bencher) {
-    bench_planned_multi_f64(b, 10);
-}
-fn wasm_simd_butterfly64_11(b: &mut Bencher) {
-    bench_planned_multi_f64(b, 11);
-}
-fn wasm_simd_butterfly64_12(b: &mut Bencher) {
-    bench_planned_multi_f64(b, 12);
-}
-fn wasm_simd_butterfly64_13(b: &mut Bencher) {
-    bench_planned_multi_f64(b, 13);
-}
-fn wasm_simd_butterfly64_15(b: &mut Bencher) {
-    bench_planned_multi_f64(b, 15);
-}
-fn wasm_simd_butterfly64_16(b: &mut Bencher) {
-    bench_planned_multi_f64(b, 16);
-}
-fn wasm_simd_butterfly64_17(b: &mut Bencher) {
-    bench_planned_multi_f64(b, 17);
-}
-fn wasm_simd_butterfly64_19(b: &mut Bencher) {
-    bench_planned_multi_f64(b, 19);
-}
-fn wasm_simd_butterfly64_23(b: &mut Bencher) {
-    bench_planned_multi_f64(b, 23);
-}
-fn wasm_simd_butterfly64_24(b: &mut Bencher) {
-    bench_planned_multi_f64(b, 24);
-}
-fn wasm_simd_butterfly64_29(b: &mut Bencher) {
-    bench_planned_multi_f64(b, 29);
-}
-fn wasm_simd_butterfly64_31(b: &mut Bencher) {
-    bench_planned_multi_f64(b, 31);
-}
-fn wasm_simd_butterfly64_32(b: &mut Bencher) {
-    bench_planned_multi_f64(b, 32);
-}
+fn sse_butterfly64_02(b: &mut Bencher) { bench_planned_multi_f64(b, 2);}
+fn sse_butterfly64_03(b: &mut Bencher) { bench_planned_multi_f64(b, 3);}
+fn sse_butterfly64_04(b: &mut Bencher) { bench_planned_multi_f64(b, 4);}
+fn sse_butterfly64_05(b: &mut Bencher) { bench_planned_multi_f64(b, 5);}
+fn sse_butterfly64_06(b: &mut Bencher) { bench_planned_multi_f64(b, 6);}
+fn sse_butterfly64_07(b: &mut Bencher) { bench_planned_multi_f64(b, 7);}
+fn sse_butterfly64_08(b: &mut Bencher) { bench_planned_multi_f64(b, 8);}
+fn sse_butterfly64_09(b: &mut Bencher) { bench_planned_multi_f64(b, 9);}
+fn sse_butterfly64_10(b: &mut Bencher) { bench_planned_multi_f64(b, 10);}
+fn sse_butterfly64_11(b: &mut Bencher) { bench_planned_multi_f64(b, 11);}
+fn sse_butterfly64_12(b: &mut Bencher) { bench_planned_multi_f64(b, 12);}
+fn sse_butterfly64_13(b: &mut Bencher) { bench_planned_multi_f64(b, 13);}
+fn sse_butterfly64_15(b: &mut Bencher) { bench_planned_multi_f64(b, 15);}
+fn sse_butterfly64_16(b: &mut Bencher) { bench_planned_multi_f64(b, 16);}
+fn sse_butterfly64_17(b: &mut Bencher) { bench_planned_multi_f64(b, 17);}
+fn sse_butterfly64_19(b: &mut Bencher) { bench_planned_multi_f64(b, 19);}
+fn sse_butterfly64_23(b: &mut Bencher) { bench_planned_multi_f64(b, 23);}
+fn sse_butterfly64_24(b: &mut Bencher) { bench_planned_multi_f64(b, 24);}
+fn sse_butterfly64_29(b: &mut Bencher) { bench_planned_multi_f64(b, 29);}
+fn sse_butterfly64_31(b: &mut Bencher) { bench_planned_multi_f64(b, 31);}
+fn sse_butterfly64_32(b: &mut Bencher) { bench_planned_multi_f64(b, 32);}
 
 // prime butterflies
-fn wasm_simd_prime_butterfly32_07(b: &mut Bencher) { bench_planned_multi_f32(b, 7);}
-fn wasm_simd_prime_butterfly32_11(b: &mut Bencher) { bench_planned_multi_f32(b, 11);}
-fn wasm_simd_prime_butterfly32_13(b: &mut Bencher) { bench_planned_multi_f32(b, 13);}
-fn wasm_simd_prime_butterfly32_17(b: &mut Bencher) { bench_planned_multi_f32(b, 17);}
-fn wasm_simd_prime_butterfly32_19(b: &mut Bencher) { bench_planned_multi_f32(b, 19);}
-fn wasm_simd_prime_butterfly32_23(b: &mut Bencher) { bench_planned_multi_f32(b, 23);}
-fn wasm_simd_prime_butterfly32_29(b: &mut Bencher) { bench_planned_multi_f32(b, 29);}
-fn wasm_simd_prime_butterfly32_31(b: &mut Bencher) { bench_planned_multi_f32(b, 31);}
-fn wasm_simd_prime_butterfly64_07(b: &mut Bencher) { bench_planned_multi_f64(b, 7);}
-fn wasm_simd_prime_butterfly64_11(b: &mut Bencher) { bench_planned_multi_f64(b, 11);}
-fn wasm_simd_prime_butterfly64_13(b: &mut Bencher) { bench_planned_multi_f64(b, 13);}
-fn wasm_simd_prime_butterfly64_17(b: &mut Bencher) { bench_planned_multi_f64(b, 17);}
-fn wasm_simd_prime_butterfly64_19(b: &mut Bencher) { bench_planned_multi_f64(b, 19);}
-fn wasm_simd_prime_butterfly64_23(b: &mut Bencher) { bench_planned_multi_f64(b, 23);}
-fn wasm_simd_prime_butterfly64_29(b: &mut Bencher) { bench_planned_multi_f64(b, 29);}
-fn wasm_simd_prime_butterfly64_31(b: &mut Bencher) { bench_planned_multi_f64(b, 31);}
+fn sse_prime_butterfly32_07(b: &mut Bencher) { bench_planned_multi_f32(b, 7);}
+fn sse_prime_butterfly32_11(b: &mut Bencher) { bench_planned_multi_f32(b, 11);}
+fn sse_prime_butterfly32_13(b: &mut Bencher) { bench_planned_multi_f32(b, 13);}
+fn sse_prime_butterfly32_17(b: &mut Bencher) { bench_planned_multi_f32(b, 17);}
+fn sse_prime_butterfly32_19(b: &mut Bencher) { bench_planned_multi_f32(b, 19);}
+fn sse_prime_butterfly32_23(b: &mut Bencher) { bench_planned_multi_f32(b, 23);}
+fn sse_prime_butterfly32_29(b: &mut Bencher) { bench_planned_multi_f32(b, 29);}
+fn sse_prime_butterfly32_31(b: &mut Bencher) { bench_planned_multi_f32(b, 31);}
+fn sse_prime_butterfly64_07(b: &mut Bencher) { bench_planned_multi_f64(b, 7);}
+fn sse_prime_butterfly64_11(b: &mut Bencher) { bench_planned_multi_f64(b, 11);}
+fn sse_prime_butterfly64_13(b: &mut Bencher) { bench_planned_multi_f64(b, 13);}
+fn sse_prime_butterfly64_17(b: &mut Bencher) { bench_planned_multi_f64(b, 17);}
+fn sse_prime_butterfly64_19(b: &mut Bencher) { bench_planned_multi_f64(b, 19);}
+fn sse_prime_butterfly64_23(b: &mut Bencher) { bench_planned_multi_f64(b, 23);}
+fn sse_prime_butterfly64_29(b: &mut Bencher) { bench_planned_multi_f64(b, 29);}
+fn sse_prime_butterfly64_31(b: &mut Bencher) { bench_planned_multi_f64(b, 31);}
 
 // Powers of 2
-fn wasm_simd_planned32_p2_00000064(b: &mut Bencher) {
-    bench_planned_f32(b, 64);
-}
-fn wasm_simd_planned32_p2_00000128(b: &mut Bencher) {
-    bench_planned_f32(b, 128);
-}
-fn wasm_simd_planned32_p2_00000256(b: &mut Bencher) {
-    bench_planned_f32(b, 256);
-}
-fn wasm_simd_planned32_p2_00000512(b: &mut Bencher) {
-    bench_planned_f32(b, 512);
-}
-fn wasm_simd_planned32_p2_00001024(b: &mut Bencher) {
-    bench_planned_f32(b, 1024);
-}
-fn wasm_simd_planned32_p2_00002048(b: &mut Bencher) {
-    bench_planned_f32(b, 2048);
-}
-fn wasm_simd_planned32_p2_00004096(b: &mut Bencher) {
-    bench_planned_f32(b, 4096);
-}
-fn wasm_simd_planned32_p2_00016384(b: &mut Bencher) {
-    bench_planned_f32(b, 16384);
-}
-fn wasm_simd_planned32_p2_00065536(b: &mut Bencher) {
-    bench_planned_f32(b, 65536);
-}
-fn wasm_simd_planned32_p2_01048576(b: &mut Bencher) {
-    bench_planned_f32(b, 1048576);
-}
+fn sse_planned32_p2_00000064(b: &mut Bencher) { bench_planned_f32(b, 64); }
+fn sse_planned32_p2_00000128(b: &mut Bencher) { bench_planned_f32(b, 128); }
+fn sse_planned32_p2_00000256(b: &mut Bencher) { bench_planned_f32(b, 256); }
+fn sse_planned32_p2_00000512(b: &mut Bencher) { bench_planned_f32(b, 512); }
+fn sse_planned32_p2_00001024(b: &mut Bencher) { bench_planned_f32(b, 1024); }
+fn sse_planned32_p2_00002048(b: &mut Bencher) { bench_planned_f32(b, 2048); }
+fn sse_planned32_p2_00004096(b: &mut Bencher) { bench_planned_f32(b, 4096); }
+fn sse_planned32_p2_00016384(b: &mut Bencher) { bench_planned_f32(b, 16384); }
+fn sse_planned32_p2_00065536(b: &mut Bencher) { bench_planned_f32(b, 65536); }
+fn sse_planned32_p2_01048576(b: &mut Bencher) { bench_planned_f32(b, 1048576); }
 
-fn wasm_simd_planned64_p2_00000064(b: &mut Bencher) {
-    bench_planned_f64(b, 64);
-}
-fn wasm_simd_planned64_p2_00000128(b: &mut Bencher) {
-    bench_planned_f64(b, 128);
-}
-fn wasm_simd_planned64_p2_00000256(b: &mut Bencher) {
-    bench_planned_f64(b, 256);
-}
-fn wasm_simd_planned64_p2_00000512(b: &mut Bencher) {
-    bench_planned_f64(b, 512);
-}
-fn wasm_simd_planned64_p2_00001024(b: &mut Bencher) {
-    bench_planned_f64(b, 1024);
-}
-fn wasm_simd_planned64_p2_00002048(b: &mut Bencher) {
-    bench_planned_f64(b, 2048);
-}
-fn wasm_simd_planned64_p2_00004096(b: &mut Bencher) {
-    bench_planned_f64(b, 4096);
-}
-fn wasm_simd_planned64_p2_00016384(b: &mut Bencher) {
-    bench_planned_f64(b, 16384);
-}
-fn wasm_simd_planned64_p2_00065536(b: &mut Bencher) {
-    bench_planned_f64(b, 65536);
-}
-fn wasm_simd_planned64_p2_01048576(b: &mut Bencher) {
-    bench_planned_f64(b, 1048576);
-}
+fn sse_planned64_p2_00000064(b: &mut Bencher) { bench_planned_f64(b, 64); }
+fn sse_planned64_p2_00000128(b: &mut Bencher) { bench_planned_f64(b, 128); }
+fn sse_planned64_p2_00000256(b: &mut Bencher) { bench_planned_f64(b, 256); }
+fn sse_planned64_p2_00000512(b: &mut Bencher) { bench_planned_f64(b, 512); }
+fn sse_planned64_p2_00001024(b: &mut Bencher) { bench_planned_f64(b, 1024); }
+fn sse_planned64_p2_00002048(b: &mut Bencher) { bench_planned_f64(b, 2048); }
+fn sse_planned64_p2_00004096(b: &mut Bencher) { bench_planned_f64(b, 4096); }
+fn sse_planned64_p2_00016384(b: &mut Bencher) { bench_planned_f64(b, 16384); }
+fn sse_planned64_p2_00065536(b: &mut Bencher) { bench_planned_f64(b, 65536); }
+fn sse_planned64_p2_01048576(b: &mut Bencher) { bench_planned_f64(b, 1048576); }
+
 
 // Powers of 7
-fn wasm_simd_planned32_p7_00343(b: &mut Bencher) {
-    bench_planned_f32(b, 343);
-}
-fn wasm_simd_planned32_p7_02401(b: &mut Bencher) {
-    bench_planned_f32(b, 2401);
-}
-fn wasm_simd_planned32_p7_16807(b: &mut Bencher) {
-    bench_planned_f32(b, 16807);
-}
+fn sse_planned32_p7_00343(b: &mut Bencher) { bench_planned_f32(b,   343); }
+fn sse_planned32_p7_02401(b: &mut Bencher) { bench_planned_f32(b,  2401); }
+fn sse_planned32_p7_16807(b: &mut Bencher) { bench_planned_f32(b, 16807); }
 
-fn wasm_simd_planned64_p7_00343(b: &mut Bencher) {
-    bench_planned_f64(b, 343);
-}
-fn wasm_simd_planned64_p7_02401(b: &mut Bencher) {
-    bench_planned_f64(b, 2401);
-}
-fn wasm_simd_planned64_p7_16807(b: &mut Bencher) {
-    bench_planned_f64(b, 16807);
-}
+fn sse_planned64_p7_00343(b: &mut Bencher) { bench_planned_f64(b,   343); }
+fn sse_planned64_p7_02401(b: &mut Bencher) { bench_planned_f64(b,  2401); }
+fn sse_planned64_p7_16807(b: &mut Bencher) { bench_planned_f64(b, 16807); }
 
 // Prime lengths
-fn wasm_simd_planned32_prime_0149(b: &mut Bencher) {
-    bench_planned_f32(b, 149);
-}
-fn wasm_simd_planned32_prime_0151(b: &mut Bencher) {
-    bench_planned_f32(b, 151);
-}
-fn wasm_simd_planned32_prime_0251(b: &mut Bencher) {
-    bench_planned_f32(b, 251);
-}
-fn wasm_simd_planned32_prime_0257(b: &mut Bencher) {
-    bench_planned_f32(b, 257);
-}
-fn wasm_simd_planned32_prime_2017(b: &mut Bencher) {
-    bench_planned_f32(b, 2017);
-}
-fn wasm_simd_planned32_prime_2879(b: &mut Bencher) {
-    bench_planned_f32(b, 2879);
-}
-fn wasm_simd_planned32_prime_65521(b: &mut Bencher) {
-    bench_planned_f32(b, 65521);
-}
-fn wasm_simd_planned32_prime_746497(b: &mut Bencher) {
-    bench_planned_f32(b, 746497);
-}
+fn sse_planned32_prime_0149(b: &mut Bencher)     { bench_planned_f32(b,  149); }
+fn sse_planned32_prime_0151(b: &mut Bencher)     { bench_planned_f32(b,  151); }
+fn sse_planned32_prime_0251(b: &mut Bencher)     { bench_planned_f32(b,  251); }
+fn sse_planned32_prime_0257(b: &mut Bencher)     { bench_planned_f32(b,  257); }
+fn sse_planned32_prime_2017(b: &mut Bencher)     { bench_planned_f32(b,  2017); }
+fn sse_planned32_prime_2879(b: &mut Bencher)     { bench_planned_f32(b,  2879); }
+fn sse_planned32_prime_65521(b: &mut Bencher)    { bench_planned_f32(b, 65521); }
+fn sse_planned32_prime_746497(b: &mut Bencher)   { bench_planned_f32(b,746497); }
 
-fn wasm_simd_planned64_prime_0149(b: &mut Bencher) {
-    bench_planned_f64(b, 149);
-}
-fn wasm_simd_planned64_prime_0151(b: &mut Bencher) {
-    bench_planned_f64(b, 151);
-}
-fn wasm_simd_planned64_prime_0251(b: &mut Bencher) {
-    bench_planned_f64(b, 251);
-}
-fn wasm_simd_planned64_prime_0257(b: &mut Bencher) {
-    bench_planned_f64(b, 257);
-}
-fn wasm_simd_planned64_prime_2017(b: &mut Bencher) {
-    bench_planned_f64(b, 2017);
-}
-fn wasm_simd_planned64_prime_2879(b: &mut Bencher) {
-    bench_planned_f64(b, 2879);
-}
-fn wasm_simd_planned64_prime_65521(b: &mut Bencher) {
-    bench_planned_f64(b, 65521);
-}
-fn wasm_simd_planned64_prime_746497(b: &mut Bencher) {
-    bench_planned_f64(b, 746497);
-}
+fn sse_planned64_prime_0149(b: &mut Bencher)     { bench_planned_f64(b,  149); }
+fn sse_planned64_prime_0151(b: &mut Bencher)     { bench_planned_f64(b,  151); }
+fn sse_planned64_prime_0251(b: &mut Bencher)     { bench_planned_f64(b,  251); }
+fn sse_planned64_prime_0257(b: &mut Bencher)     { bench_planned_f64(b,  257); }
+fn sse_planned64_prime_2017(b: &mut Bencher)     { bench_planned_f64(b,  2017); }
+fn sse_planned64_prime_2879(b: &mut Bencher)     { bench_planned_f64(b,  2879); }
+fn sse_planned64_prime_65521(b: &mut Bencher)    { bench_planned_f64(b, 65521); }
+fn sse_planned64_prime_746497(b: &mut Bencher)   { bench_planned_f64(b,746497); }
 
 // small mixed composites
-fn wasm_simd_planned32_composite_000018(b: &mut Bencher) {
-    bench_planned_f32(b, 00018);
-}
-fn wasm_simd_planned32_composite_000360(b: &mut Bencher) {
-    bench_planned_f32(b, 00360);
-}
-fn wasm_simd_planned32_composite_001200(b: &mut Bencher) {
-    bench_planned_f32(b, 01200);
-}
-fn wasm_simd_planned32_composite_044100(b: &mut Bencher) {
-    bench_planned_f32(b, 44100);
-}
-fn wasm_simd_planned32_composite_048000(b: &mut Bencher) {
-    bench_planned_f32(b, 48000);
-}
-fn wasm_simd_planned32_composite_046656(b: &mut Bencher) {
-    bench_planned_f32(b, 46656);
+fn sse_planned32_composite_000018(b: &mut Bencher) { bench_planned_f32(b,  00018); }
+fn sse_planned32_composite_000360(b: &mut Bencher) { bench_planned_f32(b,  00360); }
+fn sse_planned32_composite_001200(b: &mut Bencher) { bench_planned_f32(b,  01200); }
+fn sse_planned32_composite_044100(b: &mut Bencher) { bench_planned_f32(b,  44100); }
+fn sse_planned32_composite_048000(b: &mut Bencher) { bench_planned_f32(b,  48000); }
+fn sse_planned32_composite_046656(b: &mut Bencher) { bench_planned_f32(b,  46656); }
+
+fn sse_planned64_composite_000018(b: &mut Bencher) { bench_planned_f64(b,  00018); }
+fn sse_planned64_composite_000360(b: &mut Bencher) { bench_planned_f64(b,  00360); }
+fn sse_planned64_composite_001200(b: &mut Bencher) { bench_planned_f64(b,  01200); }
+fn sse_planned64_composite_044100(b: &mut Bencher) { bench_planned_f64(b,  44100); }
+fn sse_planned64_composite_048000(b: &mut Bencher) { bench_planned_f64(b,  48000); }
+fn sse_planned64_composite_046656(b: &mut Bencher) { bench_planned_f64(b,  46656); }
+
+
+
+fn plan_butterfly_fft<T: FftNum>(len: usize) -> Option<Arc<dyn Fft<T>>> {
+    let id_f32 = TypeId::of::<f32>();
+    let id_f64 = TypeId::of::<f64>();
+    let id_t = TypeId::of::<T>();
+
+    if id_t == id_f32 {
+        unsafe { 
+            match len {
+                2 => Some(Arc::new(SseF32Butterfly2::new(FftDirection::Forward))),
+                3 => Some(Arc::new(SseF32Butterfly3::new(FftDirection::Forward))),
+                4 => Some(Arc::new(SseF32Butterfly4::new(FftDirection::Forward))),
+                5 => Some(Arc::new(SseF32Butterfly5::new(FftDirection::Forward))),
+                6 => Some(Arc::new(SseF32Butterfly6::new(FftDirection::Forward))),
+                7 => Some(Arc::new(SseF32Butterfly7::new(FftDirection::Forward))),
+                8 => Some(Arc::new(SseF32Butterfly8::new(FftDirection::Forward))),
+                11 => Some(Arc::new(SseF32Butterfly11::new(FftDirection::Forward))),
+                16 => Some(Arc::new(SseF32Butterfly16::new(FftDirection::Forward))),
+                31 => Some(Arc::new(SseF32Butterfly31::new(FftDirection::Forward))),
+                32 => Some(Arc::new(SseF32Butterfly32::new(FftDirection::Forward))),
+                _ => None,
+            }
+        }
+    } else if id_t == id_f64 {
+        unsafe {
+            match len {
+                2 => Some(Arc::new(SseF64Butterfly2::new(FftDirection::Forward))),
+                3 => Some(Arc::new(SseF64Butterfly3::new(FftDirection::Forward))),
+                4 => Some(Arc::new(SseF64Butterfly4::new(FftDirection::Forward))),
+                5 => Some(Arc::new(SseF64Butterfly5::new(FftDirection::Forward))),
+                6 => Some(Arc::new(SseF64Butterfly6::new(FftDirection::Forward))),
+                7 => Some(Arc::new(SseF64Butterfly7::new(FftDirection::Forward))),
+                8 => Some(Arc::new(SseF64Butterfly8::new(FftDirection::Forward))),
+                11 => Some(Arc::new(SseF64Butterfly11::new(FftDirection::Forward))),
+                16 => Some(Arc::new(SseF64Butterfly16::new(FftDirection::Forward))),
+                31 => Some(Arc::new(SseF64Butterfly31::new(FftDirection::Forward))),
+                32 => Some(Arc::new(SseF64Butterfly32::new(FftDirection::Forward))),
+                _ => None,
+            }
+        }
+    } else {
+        panic!("Invalid T for constructing sse FFT");
+    }
 }
 
-fn wasm_simd_planned64_composite_000018(b: &mut Bencher) {
-    bench_planned_f64(b, 00018);
-}
-fn wasm_simd_planned64_composite_000360(b: &mut Bencher) {
-    bench_planned_f64(b, 00360);
-}
-fn wasm_simd_planned64_composite_001200(b: &mut Bencher) {
-    bench_planned_f64(b, 01200);
-}
-fn wasm_simd_planned64_composite_044100(b: &mut Bencher) {
-    bench_planned_f64(b, 44100);
-}
-fn wasm_simd_planned64_composite_048000(b: &mut Bencher) {
-    bench_planned_f64(b, 48000);
-}
-fn wasm_simd_planned64_composite_046656(b: &mut Bencher) {
-    bench_planned_f64(b, 46656);
+fn find_butterfly<T: FftNum>(base: usize, mut power: u32) -> (u32, Arc<dyn Fft<T>>) {
+    loop {
+        if let Some(butterfly) = plan_butterfly_fft(base.pow(power)) {
+            return (power, butterfly);
+        }
+
+        power -= 1;
+        if power == 0 {
+            panic!("Couldn't find butterfly for base={base}");
+        }
+    }
+}*/
+
+// Tests incorporating a factor of 31 by using it as a cross-FFT for RadixN
+fn bench_original_transpose<V: SimdVector>(b: &mut Bencher, factor: RadixFactor, power: u32, base_len: usize) {
+    let cross_len = factor.radix().pow(power);
+    let len : usize = base_len * cross_len;
+    let factors = std::iter::repeat_n(factor, power as usize).collect::<Vec<_>>();
+
+    // set up our list of transpose factors - it's the same list but reversed, and we want to
+    // collapse duplicates. Note that we are only de-duplicating adjacent factors: if we're
+    // passed 7 * 2 * 7, we can't collapse the sevens because the exact order matters.
+    let mut transpose_factors: Vec<TransposeFactor> = Vec::with_capacity(factors.len());
+    for f in factors.iter().rev() {
+        let mut push_new = true;
+        if let Some(last) = transpose_factors.last_mut() {
+            if last.factor == f.radix() {
+                last.count += 1;
+                push_new = false;
+            }
+        }
+        if push_new {
+            transpose_factors.push(TransposeFactor {
+                factor: f.radix(),
+                count: 1,
+            });
+        }
+    }
+
+    // Precompute where each column lands. Working this out per call costs two hardware divides
+    // and an out-of-line `reverse_remainders` call per column, which is a large share of a
+    // short FFT, and much more so on x86 where a 64-bit divide takes tens of cycles.
+    let width = len / base_len;
+    let reversed_columns: Box<[usize]> = (0..width)
+        .map(|x| reverse_remainders(x, &transpose_factors))
+        .collect();
+    // `table_transpose` indexes unchecked, and relies on this.
+    assert!(reversed_columns.iter().all(|&r| r < width));
+    let unroll_factor = transpose_factors.first().map(|f| f.factor).unwrap();
+
+
+    let buffer_in : Vec<Complex<V::ScalarType>> = vec![Complex::zero(); len * 10];
+    let mut buffer_out : Vec<Complex<V::ScalarType>> = vec![Complex::zero(); len * 10];
+    b.iter(|| {
+        validate_and_zip(&buffer_in, &mut buffer_out, &mut [], len, 0, |chunk_in, chunk_out, _| {
+            let (height, columns) = (base_len, &*reversed_columns);
+            match unroll_factor {
+                2 => unsafe { table_transpose_original::<_, 2>(height, columns, chunk_in, chunk_out) },
+                3 => unsafe { table_transpose_original::<_, 3>(height, columns, chunk_in, chunk_out) },
+                4 => unsafe { table_transpose_original::<_, 4>(height, columns, chunk_in, chunk_out) },
+                5 => unsafe { table_transpose_original::<_, 5>(height, columns, chunk_in, chunk_out) },
+                6 => unsafe { table_transpose_original::<_, 6>(height, columns, chunk_in, chunk_out) },
+                7 => unsafe { table_transpose_original::<_, 7>(height, columns, chunk_in, chunk_out) },
+                _ => unsafe { unreachable_unchecked() },
+            }
+        })
+        
+    });
 }
 
+// Tests incorporating a factor of 31 by using it as a cross-FFT for RadixN
+fn bench_original_tiled_transpose_simd<V: SimdVector>(b: &mut Bencher, factor: RadixFactor, power: u32, base_len: usize) {
+    let cross_len = factor.radix().pow(power);
+    let len : usize = base_len * cross_len;
+    let factors = std::iter::repeat_n(factor, power as usize).collect::<Vec<_>>();
+
+    // set up our list of transpose factors - it's the same list but reversed, and we want to
+    // collapse duplicates. Note that we are only de-duplicating adjacent factors: if we're
+    // passed 7 * 2 * 7, we can't collapse the sevens because the exact order matters.
+    let mut transpose_factors: Vec<TransposeFactor> = Vec::with_capacity(factors.len());
+    for f in factors.iter().rev() {
+        let mut push_new = true;
+        if let Some(last) = transpose_factors.last_mut() {
+            if last.factor == f.radix() {
+                last.count += 1;
+                push_new = false;
+            }
+        }
+        if push_new {
+            transpose_factors.push(TransposeFactor {
+                factor: f.radix(),
+                count: 1,
+            });
+        }
+    }
+
+    // Precompute where each column lands. Working this out per call costs two hardware divides
+    // and an out-of-line `reverse_remainders` call per column, which is a large share of a
+    // short FFT, and much more so on x86 where a 64-bit divide takes tens of cycles.
+    let width = len / base_len;
+    let reversed_columns: Box<[usize]> = (0..width)
+        .map(|x| reverse_remainders(x, &transpose_factors))
+        .collect();
+    // `table_transpose` indexes unchecked, and relies on this.
+    assert!(reversed_columns.iter().all(|&r| r < width));
+    let unroll_factor = transpose_factors.first().map(|f| f.factor).unwrap();
+
+
+    let buffer_in : Vec<Complex<V::ScalarType>> = vec![Complex::zero(); len * 10];
+    let mut buffer_out : Vec<Complex<V::ScalarType>> = vec![Complex::zero(); len * 10];
+    b.iter(|| {
+        validate_and_zip(&buffer_in, &mut buffer_out, &mut [], len, 0, |chunk_in, chunk_out, _| {
+            let (height, columns) = (base_len, &*reversed_columns);
+            match unroll_factor {
+                2 => unsafe { table_transpose_original_tiled_simd::<V, 2>(height, columns, chunk_in, chunk_out) },
+                3 => unsafe { table_transpose_original_tiled_simd::<V, 3>(height, columns, chunk_in, chunk_out) },
+                4 => unsafe { table_transpose_original_tiled_simd::<V, 4>(height, columns, chunk_in, chunk_out) },
+                5 => unsafe { table_transpose_original_tiled_simd::<V, 5>(height, columns, chunk_in, chunk_out) },
+                6 => unsafe { table_transpose_original_tiled_simd::<V, 6>(height, columns, chunk_in, chunk_out) },
+                7 => unsafe { table_transpose_original_tiled_simd::<V, 7>(height, columns, chunk_in, chunk_out) },
+                _ => unsafe { unreachable_unchecked() },
+            }
+        })
+        
+    });
+}
+
+
+// Tests incorporating a factor of 31 by using it as a cross-FFT for RadixN
+fn bench_simd_transpose<V: SimdVector>(b: &mut Bencher, factor: RadixFactor, power: u32, base_len: usize) {
+    let cross_len = factor.radix().pow(power);
+    let len : usize = base_len * cross_len;
+    let factors = std::iter::repeat_n(factor, power as usize).collect::<Vec<_>>();
+
+    // set up our list of transpose factors - it's the same list but reversed, and we want to
+    // collapse duplicates. Note that we are only de-duplicating adjacent factors: if we're
+    // passed 7 * 2 * 7, we can't collapse the sevens because the exact order matters.
+    let mut transpose_factors: Vec<TransposeFactor> = Vec::with_capacity(factors.len());
+    for f in factors.iter().rev() {
+        let mut push_new = true;
+        if let Some(last) = transpose_factors.last_mut() {
+            if last.factor == f.radix() {
+                last.count += 1;
+                push_new = false;
+            }
+        }
+        if push_new {
+            transpose_factors.push(TransposeFactor {
+                factor: f.radix(),
+                count: 1,
+            });
+        }
+    }
+
+    // Precompute where each column lands. Working this out per call costs two hardware divides
+    // and an out-of-line `reverse_remainders` call per column, which is a large share of a
+    // short FFT, and much more so on x86 where a 64-bit divide takes tens of cycles.
+    let width = len / base_len;
+    let reversed_columns: Box<[usize]> = (0..width)
+        .map(|x| reverse_remainders(x, &transpose_factors))
+        .collect();
+    // `table_transpose` indexes unchecked, and relies on this.
+    assert!(reversed_columns.iter().all(|&r| r < width));
+
+
+    let buffer_in : Vec<Complex<V::ScalarType>> = vec![Complex::zero(); len * 10];
+    let mut buffer_out : Vec<Complex<V::ScalarType>> = vec![Complex::zero(); len * 10];
+    b.iter(|| {
+        validate_and_zip(&buffer_in, &mut buffer_out, &mut [], len, 0, |chunk_in, chunk_out, _| {
+            let (height, columns) = (base_len, &*reversed_columns);
+            unsafe { simd_transpose::<V>(height, columns, chunk_in, chunk_out) };
+        })
+        
+    });
+}
+
+
+
+
+fn criterion_benchmark_transpose(c: &mut Criterion) {
+    {
+        let mut group = c.benchmark_group("sse64_transpose_power7_base7");
+
+        for power7 in 1..9 {
+            let len = 7usize.pow(power7) * 7;
+            group.bench_with_input(BenchmarkId::new("original", len), &len, |b, _| {
+                bench_original_transpose::<WasmVector64>(b, RadixFactor::Factor7, power7, 7)
+            });
+            group.bench_with_input(BenchmarkId::new("simd", len), &len, |b, _| {
+                bench_original_tiled_transpose_simd::<WasmVector64>(b, RadixFactor::Factor7, power7, 7)
+            });
+            group.bench_with_input(BenchmarkId::new("simd_4x", len), &len, |b, _| {
+                bench_simd_transpose::<WasmVector64>(b, RadixFactor::Factor7, power7, 7)
+            });
+        }
+    }
+    {
+        let mut group = c.benchmark_group("sse32_transpose_power7_base7");
+
+        for power7 in 1..9 {
+            let len = 7usize.pow(power7) * 7;
+            group.bench_with_input(BenchmarkId::new("original", len), &len, |b, _| {
+                bench_original_transpose::<WasmVector32>(b, RadixFactor::Factor7, power7, 7)
+            });
+            group.bench_with_input(BenchmarkId::new("simd", len), &len, |b, _| {
+                bench_original_tiled_transpose_simd::<WasmVector32>(b, RadixFactor::Factor7, power7, 7)
+            });
+            group.bench_with_input(BenchmarkId::new("simd_4x", len), &len, |b, _| {
+                bench_simd_transpose::<WasmVector32>(b, RadixFactor::Factor7, power7, 7)
+            });
+        }
+    }
+    {
+        let mut group = c.benchmark_group("sse64_transpose_power7_base32");
+
+        for power7 in 1..8 {
+            let len = 7usize.pow(power7) * 32;
+            group.bench_with_input(BenchmarkId::new("original", len), &len, |b, _| {
+                bench_original_transpose::<WasmVector64>(b, RadixFactor::Factor7, power7, 32)
+            });
+            group.bench_with_input(BenchmarkId::new("simd", len), &len, |b, _| {
+                bench_original_tiled_transpose_simd::<WasmVector64>(b, RadixFactor::Factor7, power7, 32)
+            });
+            group.bench_with_input(BenchmarkId::new("simd_4x", len), &len, |b, _| {
+                bench_simd_transpose::<WasmVector64>(b, RadixFactor::Factor7, power7, 32)
+            });
+        }
+    }
+    {
+        let mut group = c.benchmark_group("sse64_transpose_power7_base10k");
+
+        for power7 in 1..5 {
+            let len = 7usize.pow(power7) * 10000;
+            group.bench_with_input(BenchmarkId::new("original", len), &len, |b, _| {
+                bench_original_transpose::<WasmVector64>(b, RadixFactor::Factor7, power7, 10000)
+            });
+            group.bench_with_input(BenchmarkId::new("simd", len), &len, |b, _| {
+                bench_original_tiled_transpose_simd::<WasmVector64>(b, RadixFactor::Factor7, power7, 10000)
+            });
+            group.bench_with_input(BenchmarkId::new("simd_4x", len), &len, |b, _| {
+                bench_simd_transpose::<WasmVector64>(b, RadixFactor::Factor7, power7, 10000)
+            });
+        }
+    }
+    {
+        let mut group = c.benchmark_group("sse32_transpose_power7_base10k");
+
+        for power7 in 1..5 {
+            let len = 7usize.pow(power7) * 10000;
+            group.bench_with_input(BenchmarkId::new("original", len), &len, |b, _| {
+                bench_original_transpose::<WasmVector32>(b, RadixFactor::Factor7, power7, 10000)
+            });
+            group.bench_with_input(BenchmarkId::new("simd", len), &len, |b, _| {
+                bench_original_tiled_transpose_simd::<WasmVector32>(b, RadixFactor::Factor7, power7, 10000)
+            });
+            group.bench_with_input(BenchmarkId::new("simd_4x", len), &len, |b, _| {
+                bench_simd_transpose::<WasmVector32>(b, RadixFactor::Factor7, power7, 10000)
+            });
+        }
+    }
+    {
+        let mut group = c.benchmark_group("sse64_transpose_power4_base32");
+
+        for power4 in 1..12 {
+            let len = 4usize.pow(power4) * 32;
+            group.bench_with_input(BenchmarkId::new("original", len), &len, |b, _| {
+                bench_original_transpose::<WasmVector64>(b, RadixFactor::Factor4, power4, 32)
+            });
+            group.bench_with_input(BenchmarkId::new("simd", len), &len, |b, _| {
+                bench_original_tiled_transpose_simd::<WasmVector64>(b, RadixFactor::Factor4, power4, 32)
+            });
+            group.bench_with_input(BenchmarkId::new("simd_4x", len), &len, |b, _| {
+                bench_simd_transpose::<WasmVector64>(b, RadixFactor::Factor4, power4, 32)
+            });
+        }
+    }
+    {
+        let mut group = c.benchmark_group("sse32_transpose_power4_base32");
+
+        for power4 in 1..12 {
+            let len = 4usize.pow(power4) * 32;
+            group.bench_with_input(BenchmarkId::new("original", len), &len, |b, _| {
+                bench_original_transpose::<WasmVector32>(b, RadixFactor::Factor4, power4, 32)
+            });
+            group.bench_with_input(BenchmarkId::new("simd", len), &len, |b, _| {
+                bench_original_tiled_transpose_simd::<WasmVector32>(b, RadixFactor::Factor4, power4, 32)
+            });
+            group.bench_with_input(BenchmarkId::new("simd_4x", len), &len, |b, _| {
+                bench_simd_transpose::<WasmVector32>(b, RadixFactor::Factor4, power4, 32)
+            });
+        }
+    }
+    {
+        let mut group = c.benchmark_group("sse64_transpose_power4_base10k");
+
+        for power4 in 1..12 {
+            let len = 4usize.pow(power4) * 10000;
+            group.bench_with_input(BenchmarkId::new("original", len), &len, |b, _| {
+                bench_original_transpose::<WasmVector64>(b, RadixFactor::Factor4, power4, 10000)
+            });
+            group.bench_with_input(BenchmarkId::new("simd", len), &len, |b, _| {
+                bench_original_tiled_transpose_simd::<WasmVector64>(b, RadixFactor::Factor4, power4, 10000)
+            });
+            group.bench_with_input(BenchmarkId::new("simd_4x", len), &len, |b, _| {
+                bench_simd_transpose::<WasmVector64>(b, RadixFactor::Factor4, power4, 10000)
+            });
+        }
+    }
+}
+
+
+
+/*
 fn criterion_benchmark(c: &mut Criterion) {
     config::register_benchmarks!(
         c,
-        wasm_simd_butterfly32_02,
-        wasm_simd_butterfly32_03,
-        wasm_simd_butterfly32_04,
-        wasm_simd_butterfly32_05,
-        wasm_simd_butterfly32_06,
-        wasm_simd_butterfly32_07,
-        wasm_simd_butterfly32_08,
-        wasm_simd_butterfly32_09,
-        wasm_simd_butterfly32_10,
-        wasm_simd_butterfly32_11,
-        wasm_simd_butterfly32_12,
-        wasm_simd_butterfly32_13,
-        wasm_simd_butterfly32_15,
-        wasm_simd_butterfly32_16,
-        wasm_simd_butterfly32_17,
-        wasm_simd_butterfly32_19,
-        wasm_simd_butterfly32_23,
-        wasm_simd_butterfly32_24,
-        wasm_simd_butterfly32_29,
-        wasm_simd_butterfly32_31,
-        wasm_simd_butterfly32_32,
-        wasm_simd_butterfly64_02,
-        wasm_simd_butterfly64_03,
-        wasm_simd_butterfly64_04,
-        wasm_simd_butterfly64_05,
-        wasm_simd_butterfly64_06,
-        wasm_simd_butterfly64_07,
-        wasm_simd_butterfly64_08,
-        wasm_simd_butterfly64_09,
-        wasm_simd_butterfly64_10,
-        wasm_simd_butterfly64_11,
-        wasm_simd_butterfly64_12,
-        wasm_simd_butterfly64_13,
-        wasm_simd_butterfly64_15,
-        wasm_simd_butterfly64_16,
-        wasm_simd_butterfly64_17,
-        wasm_simd_butterfly64_19,
-        wasm_simd_butterfly64_23,
-        wasm_simd_butterfly64_24,
-        wasm_simd_butterfly64_29,
-        wasm_simd_butterfly64_31,
-        wasm_simd_butterfly64_32,
-        wasm_simd_prime_butterfly32_07,
-        wasm_simd_prime_butterfly32_11,
-        wasm_simd_prime_butterfly32_13,
-        wasm_simd_prime_butterfly32_17,
-        wasm_simd_prime_butterfly32_19,
-        wasm_simd_prime_butterfly32_23,
-        wasm_simd_prime_butterfly32_29,
-        wasm_simd_prime_butterfly32_31,
-        wasm_simd_prime_butterfly64_07,
-        wasm_simd_prime_butterfly64_11,
-        wasm_simd_prime_butterfly64_13,
-        wasm_simd_prime_butterfly64_17,
-        wasm_simd_prime_butterfly64_19,
-        wasm_simd_prime_butterfly64_23,
-        wasm_simd_prime_butterfly64_29,
-        wasm_simd_prime_butterfly64_31,
-        wasm_simd_planned32_p2_00000064,
-        wasm_simd_planned32_p2_00000128,
-        wasm_simd_planned32_p2_00000256,
-        wasm_simd_planned32_p2_00000512,
-        wasm_simd_planned32_p2_00001024,
-        wasm_simd_planned32_p2_00002048,
-        wasm_simd_planned32_p2_00004096,
-        wasm_simd_planned32_p2_00016384,
-        wasm_simd_planned32_p2_00065536,
-        wasm_simd_planned32_p2_01048576,
-        wasm_simd_planned64_p2_00000064,
-        wasm_simd_planned64_p2_00000128,
-        wasm_simd_planned64_p2_00000256,
-        wasm_simd_planned64_p2_00000512,
-        wasm_simd_planned64_p2_00001024,
-        wasm_simd_planned64_p2_00002048,
-        wasm_simd_planned64_p2_00004096,
-        wasm_simd_planned64_p2_00016384,
-        wasm_simd_planned64_p2_00065536,
-        wasm_simd_planned64_p2_01048576,
-        wasm_simd_planned32_p7_00343,
-        wasm_simd_planned32_p7_02401,
-        wasm_simd_planned32_p7_16807,
-        wasm_simd_planned64_p7_00343,
-        wasm_simd_planned64_p7_02401,
-        wasm_simd_planned64_p7_16807,
-        wasm_simd_planned32_prime_0149,
-        wasm_simd_planned32_prime_0151,
-        wasm_simd_planned32_prime_0251,
-        wasm_simd_planned32_prime_0257,
-        wasm_simd_planned32_prime_2017,
-        wasm_simd_planned32_prime_2879,
-        wasm_simd_planned32_prime_65521,
-        wasm_simd_planned32_prime_746497,
-        wasm_simd_planned64_prime_0149,
-        wasm_simd_planned64_prime_0151,
-        wasm_simd_planned64_prime_0251,
-        wasm_simd_planned64_prime_0257,
-        wasm_simd_planned64_prime_2017,
-        wasm_simd_planned64_prime_2879,
-        wasm_simd_planned64_prime_65521,
-        wasm_simd_planned64_prime_746497,
-        wasm_simd_planned32_composite_000018,
-        wasm_simd_planned32_composite_000360,
-        wasm_simd_planned32_composite_001200,
-        wasm_simd_planned32_composite_044100,
-        wasm_simd_planned32_composite_048000,
-        wasm_simd_planned32_composite_046656,
-        wasm_simd_planned64_composite_000018,
-        wasm_simd_planned64_composite_000360,
-        wasm_simd_planned64_composite_001200,
-        wasm_simd_planned64_composite_044100,
-        wasm_simd_planned64_composite_048000,
-        wasm_simd_planned64_composite_046656,
+        sse_butterfly32_02,
+        sse_butterfly32_03,
+        sse_butterfly32_04,
+        sse_butterfly32_05,
+        sse_butterfly32_06,
+        sse_butterfly32_07,
+        sse_butterfly32_08,
+        sse_butterfly32_09,
+        sse_butterfly32_10,
+        sse_butterfly32_11,
+        sse_butterfly32_12,
+        sse_butterfly32_13,
+        sse_butterfly32_15,
+        sse_butterfly32_16,
+        sse_butterfly32_17,
+        sse_butterfly32_19,
+        sse_butterfly32_23,
+        sse_butterfly32_24,
+        sse_butterfly32_29,
+        sse_butterfly32_31,
+        sse_butterfly32_32,
+        sse_butterfly64_02,
+        sse_butterfly64_03,
+        sse_butterfly64_04,
+        sse_butterfly64_05,
+        sse_butterfly64_06,
+        sse_butterfly64_07,
+        sse_butterfly64_08,
+        sse_butterfly64_09,
+        sse_butterfly64_10,
+        sse_butterfly64_11,
+        sse_butterfly64_12,
+        sse_butterfly64_13,
+        sse_butterfly64_15,
+        sse_butterfly64_16,
+        sse_butterfly64_17,
+        sse_butterfly64_19,
+        sse_butterfly64_23,
+        sse_butterfly64_24,
+        sse_butterfly64_29,
+        sse_butterfly64_31,
+        sse_butterfly64_32,
+        sse_prime_butterfly32_07,
+        sse_prime_butterfly32_11,
+        sse_prime_butterfly32_13,
+        sse_prime_butterfly32_17,
+        sse_prime_butterfly32_19,
+        sse_prime_butterfly32_23,
+        sse_prime_butterfly32_29,
+        sse_prime_butterfly32_31,
+        sse_prime_butterfly64_07,
+        sse_prime_butterfly64_11,
+        sse_prime_butterfly64_13,
+        sse_prime_butterfly64_17,
+        sse_prime_butterfly64_19,
+        sse_prime_butterfly64_23,
+        sse_prime_butterfly64_29,
+        sse_prime_butterfly64_31,
+        sse_planned32_p2_00000064,
+        sse_planned32_p2_00000128,
+        sse_planned32_p2_00000256,
+        sse_planned32_p2_00000512,
+        sse_planned32_p2_00001024,
+        sse_planned32_p2_00002048,
+        sse_planned32_p2_00004096,
+        sse_planned32_p2_00016384,
+        sse_planned32_p2_00065536,
+        sse_planned32_p2_01048576,
+        sse_planned64_p2_00000064,
+        sse_planned64_p2_00000128,
+        sse_planned64_p2_00000256,
+        sse_planned64_p2_00000512,
+        sse_planned64_p2_00001024,
+        sse_planned64_p2_00002048,
+        sse_planned64_p2_00004096,
+        sse_planned64_p2_00016384,
+        sse_planned64_p2_00065536,
+        sse_planned64_p2_01048576,
+        sse_planned32_p7_00343,
+        sse_planned32_p7_02401,
+        sse_planned32_p7_16807,
+        sse_planned64_p7_00343,
+        sse_planned64_p7_02401,
+        sse_planned64_p7_16807,
+        sse_planned32_prime_0149,
+        sse_planned32_prime_0151,
+        sse_planned32_prime_0251,
+        sse_planned32_prime_0257,
+        sse_planned32_prime_2017,
+        sse_planned32_prime_2879,
+        sse_planned32_prime_65521,
+        sse_planned32_prime_746497,
+        sse_planned64_prime_0149,
+        sse_planned64_prime_0151,
+        sse_planned64_prime_0251,
+        sse_planned64_prime_0257,
+        sse_planned64_prime_2017,
+        sse_planned64_prime_2879,
+        sse_planned64_prime_65521,
+        sse_planned64_prime_746497,
+        sse_planned32_composite_000018,
+        sse_planned32_composite_000360,
+        sse_planned32_composite_001200,
+        sse_planned32_composite_044100,
+        sse_planned32_composite_048000,
+        sse_planned32_composite_046656,
+        sse_planned64_composite_000018,
+        sse_planned64_composite_000360,
+        sse_planned64_composite_001200,
+        sse_planned64_composite_044100,
+        sse_planned64_composite_048000,
+        sse_planned64_composite_046656,
     );
-}
+}*/
 
 criterion_group! {
     name = benches;
     config = config::fast();
-    targets = criterion_benchmark
+    targets = criterion_benchmark_transpose
 }
 criterion_main!(benches);

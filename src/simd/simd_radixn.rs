@@ -21,10 +21,13 @@ use std::sync::Arc;
 
 use num_complex::Complex;
 
-use crate::array_utils::{TransposeFactor, reverse_remainders, workaround_transmute, workaround_transmute_mut};
+use crate::array_utils::{
+    TransposeFactor, reverse_remainders, workaround_transmute, workaround_transmute_mut,
+};
 use crate::common::{FftNum, RadixFactor};
 use crate::simd::parallel_fft::ParallelFft;
-use crate::simd::simd_transpose::table_transpose;
+#[allow(unused)]
+use crate::simd::simd_transpose::simd_transpose;
 use crate::{Fft, FftDirection};
 
 use super::simd_vector::SimdVector;
@@ -63,6 +66,7 @@ pub struct SimdRadixN<V: SimdVector, T> {
 
     // The factor the transpose is unrolled by, and the output column of each input column. None
     // when there are no factors and the transpose is a plain copy.
+    unroll_factor: Option<usize>,
     reversed_columns: Box<[usize]>,
     butterflies: Box<[InternalRadixFactor<V>]>,
 
@@ -131,14 +135,14 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
         for f in factors.iter().rev() {
             let mut push_new = true;
             if let Some(last) = transpose_factors.last_mut() {
-                if last.factor == *f {
+                if last.factor == f.radix() {
                     last.count += 1;
                     push_new = false;
                 }
             }
             if push_new {
                 transpose_factors.push(TransposeFactor {
-                    factor: *f,
+                    factor: f.radix(),
                     count: 1,
                 });
             }
@@ -153,6 +157,7 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
             .collect();
         // `table_transpose` indexes unchecked, and relies on this.
         assert!(reversed_columns.iter().all(|&r| r < width));
+        let unroll_factor = transpose_factors.first().map(|f| f.factor);
 
         // Same packing as the scalar RadixN: all layers in one array, bottom layer first, and
         // within a layer, (radix - 1) twiddles per column. The difference is that a "column" here
@@ -194,6 +199,7 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
             base_fft,
             base_len,
 
+            unroll_factor,
             reversed_columns,
             butterflies: butterflies.into_boxed_slice(),
 
@@ -209,16 +215,15 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
     /// The flat transpose that reorders the input down to base-sized chunks.
     #[inline(always)]
     fn transpose(&self, input: &[Complex<T>], output: &mut [Complex<T>]) {
-        if self.len > self.base_len {
+        if let Some(_unroll_factor) = self.unroll_factor {
+            let input = unsafe { workaround_transmute(input) };
+            let output = unsafe { workaround_transmute_mut(output) };
+
             // for performance, we really, really want to unroll the transpose, but we need to make
             // sure the output length is divisible by the unroll amount. choosing the first factor
             // seems to reliably perform well
             let (height, columns) = (self.base_len, &*self.reversed_columns);
-            
-            let input = unsafe { workaround_transmute(input) };
-            let output = unsafe { workaround_transmute_mut(output) };
-
-            unsafe { table_transpose::<V>(height, columns, input, output) };
+            unsafe { simd_transpose::<V>(height, columns, input, output) };
         } else {
             // no factors, so just pass data straight to our base
             output.copy_from_slice(input);

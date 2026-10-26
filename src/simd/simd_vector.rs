@@ -61,6 +61,11 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
     #[allow(dead_code)]
     unsafe fn store1_hi_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
 
+    // Takes a row-major 2d array with a width of D and a height of Self::COMPLEX_PER_VECTOR
+    // Transposes it to a 2d array with a width of Self::COMPLEX_PER_VECTOR and height of D
+    unsafe fn transpose_contiguous_to_strided<const D: usize>(data: [Self; D]) -> [Self; D];
+    unsafe fn transpose_square<const D: usize>(data: [Self; D]) -> [Self; D];
+
     // math ops
     unsafe fn neg(a: Self) -> Self;
     unsafe fn add(a: Self, b: Self) -> Self;

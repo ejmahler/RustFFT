@@ -56,6 +56,13 @@ impl<T: FftNum> SimdVector for Complex<T> {
         unimplemented!("Impossible to do a partial store of complex scalars");
     }
 
+    unsafe fn transpose_contiguous_to_strided<const D: usize>(data: [Self; D]) -> [Self; D] {
+        data
+    }
+    unsafe fn transpose_square<const D: usize>(data: [Self; D]) -> [Self; D] {
+        data
+    }
+
     unsafe fn neg(a: Self) -> Self {
         a.neg()
     }

@@ -286,19 +286,17 @@ pub struct Butterfly5Avx64<T> {
 boilerplate_fft_simd_butterfly!(Butterfly5Avx64, 5);
 impl Butterfly5Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(direction: FftDirection) -> Self {
-        unsafe {
-            let twiddle1 = twiddles::compute_twiddle(1, 5, direction);
-            let twiddle2 = twiddles::compute_twiddle(2, 5, direction);
-            Self {
-                twiddles: [
-                    _mm256_set_pd(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),
-                    _mm256_set_pd(twiddle2.im, twiddle2.im, twiddle2.re, twiddle2.re),
-                    _mm256_set_pd(-twiddle1.im, -twiddle1.im, twiddle1.re, twiddle1.re),
-                ],
-                direction,
-                _phantom_t: PhantomData,
-            }
+    fn new_with_avx(direction: FftDirection) -> Self {
+        let twiddle1 = twiddles::compute_twiddle(1, 5, direction);
+        let twiddle2 = twiddles::compute_twiddle(2, 5, direction);
+        Self {
+            twiddles: [
+                _mm256_set_pd(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),
+                _mm256_set_pd(twiddle2.im, twiddle2.im, twiddle2.re, twiddle2.re),
+                _mm256_set_pd(-twiddle1.im, -twiddle1.im, twiddle1.re, twiddle1.re),
+            ],
+            direction,
+            _phantom_t: PhantomData,
         }
     }
 }
@@ -358,22 +356,20 @@ pub struct Butterfly7Avx64<T> {
 boilerplate_fft_simd_butterfly!(Butterfly7Avx64, 7);
 impl Butterfly7Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(direction: FftDirection) -> Self {
-        unsafe {
-            let twiddle1 = twiddles::compute_twiddle(1, 7, direction);
-            let twiddle2 = twiddles::compute_twiddle(2, 7, direction);
-            let twiddle3 = twiddles::compute_twiddle(3, 7, direction);
-            Self {
-                twiddles: [
-                    _mm256_set_pd(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),
-                    _mm256_set_pd(twiddle2.im, twiddle2.im, twiddle2.re, twiddle2.re),
-                    _mm256_set_pd(twiddle3.im, twiddle3.im, twiddle3.re, twiddle3.re),
-                    _mm256_set_pd(-twiddle3.im, -twiddle3.im, twiddle3.re, twiddle3.re),
-                    _mm256_set_pd(-twiddle1.im, -twiddle1.im, twiddle1.re, twiddle1.re),
-                ],
-                direction,
-                _phantom_t: PhantomData,
-            }
+    fn new_with_avx(direction: FftDirection) -> Self {
+        let twiddle1 = twiddles::compute_twiddle(1, 7, direction);
+        let twiddle2 = twiddles::compute_twiddle(2, 7, direction);
+        let twiddle3 = twiddles::compute_twiddle(3, 7, direction);
+        Self {
+            twiddles: [
+                _mm256_set_pd(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),
+                _mm256_set_pd(twiddle2.im, twiddle2.im, twiddle2.re, twiddle2.re),
+                _mm256_set_pd(twiddle3.im, twiddle3.im, twiddle3.re, twiddle3.re),
+                _mm256_set_pd(-twiddle3.im, -twiddle3.im, twiddle3.re, twiddle3.re),
+                _mm256_set_pd(-twiddle1.im, -twiddle1.im, twiddle1.re, twiddle1.re),
+            ],
+            direction,
+            _phantom_t: PhantomData,
         }
     }
 }
@@ -455,32 +451,30 @@ pub struct Butterfly11Avx64<T> {
 boilerplate_fft_simd_butterfly!(Butterfly11Avx64, 11);
 impl Butterfly11Avx64<f64> {
     #[target_feature(enable = "avx")]
-    unsafe fn new_with_avx(direction: FftDirection) -> Self {
-        unsafe {
-            let twiddle1 = twiddles::compute_twiddle(1, 11, direction);
-            let twiddle2 = twiddles::compute_twiddle(2, 11, direction);
-            let twiddle3 = twiddles::compute_twiddle(3, 11, direction);
-            let twiddle4 = twiddles::compute_twiddle(4, 11, direction);
-            let twiddle5 = twiddles::compute_twiddle(5, 11, direction);
+    fn new_with_avx(direction: FftDirection) -> Self {
+        let twiddle1 = twiddles::compute_twiddle(1, 11, direction);
+        let twiddle2 = twiddles::compute_twiddle(2, 11, direction);
+        let twiddle3 = twiddles::compute_twiddle(3, 11, direction);
+        let twiddle4 = twiddles::compute_twiddle(4, 11, direction);
+        let twiddle5 = twiddles::compute_twiddle(5, 11, direction);
 
-            let twiddles = [
-                _mm256_set_pd(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),
-                _mm256_set_pd(twiddle2.im, twiddle2.im, twiddle2.re, twiddle2.re),
-                _mm256_set_pd(twiddle3.im, twiddle3.im, twiddle3.re, twiddle3.re),
-                _mm256_set_pd(twiddle4.im, twiddle4.im, twiddle4.re, twiddle4.re),
-                _mm256_set_pd(twiddle5.im, twiddle5.im, twiddle5.re, twiddle5.re),
-                _mm256_set_pd(-twiddle5.im, -twiddle5.im, twiddle5.re, twiddle5.re),
-                _mm256_set_pd(-twiddle4.im, -twiddle4.im, twiddle4.re, twiddle4.re),
-                _mm256_set_pd(-twiddle3.im, -twiddle3.im, twiddle3.re, twiddle3.re),
-                _mm256_set_pd(-twiddle2.im, -twiddle2.im, twiddle2.re, twiddle2.re),
-                _mm256_set_pd(-twiddle1.im, -twiddle1.im, twiddle1.re, twiddle1.re),
-            ];
+        let twiddles = [
+            _mm256_set_pd(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),
+            _mm256_set_pd(twiddle2.im, twiddle2.im, twiddle2.re, twiddle2.re),
+            _mm256_set_pd(twiddle3.im, twiddle3.im, twiddle3.re, twiddle3.re),
+            _mm256_set_pd(twiddle4.im, twiddle4.im, twiddle4.re, twiddle4.re),
+            _mm256_set_pd(twiddle5.im, twiddle5.im, twiddle5.re, twiddle5.re),
+            _mm256_set_pd(-twiddle5.im, -twiddle5.im, twiddle5.re, twiddle5.re),
+            _mm256_set_pd(-twiddle4.im, -twiddle4.im, twiddle4.re, twiddle4.re),
+            _mm256_set_pd(-twiddle3.im, -twiddle3.im, twiddle3.re, twiddle3.re),
+            _mm256_set_pd(-twiddle2.im, -twiddle2.im, twiddle2.re, twiddle2.re),
+            _mm256_set_pd(-twiddle1.im, -twiddle1.im, twiddle1.re, twiddle1.re),
+        ];
 
-            Self {
-                twiddles,
-                direction,
-                _phantom_t: PhantomData,
-            }
+        Self {
+            twiddles,
+            direction,
+            _phantom_t: PhantomData,
         }
     }
 }

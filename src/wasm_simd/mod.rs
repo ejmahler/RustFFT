@@ -1,7 +1,7 @@
 #[macro_use]
 mod wasm_simd_common;
 #[macro_use]
-mod wasm_simd_vector;
+pub mod wasm_simd_vector;
 
 #[macro_use]
 pub mod wasm_simd_butterflies;

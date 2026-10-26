@@ -1,6 +1,5 @@
 use crate::Complex;
 use crate::FftNum;
-use crate::common::RadixFactor;
 use std::ops::{Deref, DerefMut};
 
 /// Given an array of size width * height, representing a flattened 2D array,
@@ -491,7 +490,7 @@ pub fn compute_logarithm<const D: usize>(value: usize) -> Option<u32> {
 }
 
 pub struct TransposeFactor {
-    pub factor: RadixFactor,
+    pub factor: usize,
     pub count: u8,
 }
 
@@ -503,40 +502,46 @@ pub fn reverse_remainders(value: usize, factors: &[TransposeFactor]) -> usize {
     let mut value = value;
     for f in factors.iter() {
         match f.factor {
-            RadixFactor::Factor2 => {
+            2 => {
                 for _ in 0..f.count {
                     result = (result * 2) + (value % 2);
                     value = value / 2;
                 }
             }
-            RadixFactor::Factor3 => {
+            3 => {
                 for _ in 0..f.count {
                     result = (result * 3) + (value % 3);
                     value = value / 3;
                 }
             }
-            RadixFactor::Factor4 => {
+            4 => {
                 for _ in 0..f.count {
                     result = (result * 4) + (value % 4);
                     value = value / 4;
                 }
             }
-            RadixFactor::Factor5 => {
+            5 => {
                 for _ in 0..f.count {
                     result = (result * 5) + (value % 5);
                     value = value / 5;
                 }
             }
-            RadixFactor::Factor6 => {
+            6 => {
                 for _ in 0..f.count {
                     result = (result * 6) + (value % 6);
                     value = value / 6;
                 }
             }
-            RadixFactor::Factor7 => {
+            7 => {
                 for _ in 0..f.count {
                     result = (result * 7) + (value % 7);
                     value = value / 7;
+                }
+            }
+            _ => {
+                for _ in 0..f.count {
+                    result = (result * f.factor) + (value % f.factor);
+                    value = value / f.factor;
                 }
             }
         }
