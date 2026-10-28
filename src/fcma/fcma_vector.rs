@@ -344,6 +344,11 @@ impl SimdVector for FcmaVector32 {
     }
 
     #[inline(always)]
+    unsafe fn transpose_complex_2x2(data: [Self; 2]) -> [Self; 2] {
+        unsafe { transpose_complex_2x2_f32(data[0], data[1]) }
+    }
+
+    #[inline(always)]
     unsafe fn neg(a: Self) -> Self {
         unsafe { Self(vnegq_f32(a.0)) }
     }
