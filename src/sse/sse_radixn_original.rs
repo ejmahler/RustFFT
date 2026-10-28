@@ -1,0 +1,70 @@
+//! The SSE side of `SimdRadixN`.
+//!
+//! The algorithm itself lives in `src/simd/simd_radixn.rs`, shared by every SIMD backend, and the
+//! `SimdVector` impls it runs on are in `sse_vector.rs`. All that is left here is the wrapper type
+//! and tests
+
+use std::sync::Arc;
+
+use crate::{
+    Fft, FftNum,
+    common::RadixFactor,
+    simd::{simd_radixn_original::SimdRadixNOriginal, simd_vector::SimdVector},
+};
+
+pub struct SseRadixNOriginal<V: SimdVector, T: FftNum>(SimdRadixNOriginal<V, T>);
+
+impl<V: SimdVector, T: FftNum> SseRadixNOriginal<V, T> {
+    #[allow(dead_code)]
+    pub fn new(factors: &[RadixFactor], base_fft: Arc<dyn Fft<T>>) -> Self {
+        Self(SimdRadixNOriginal::new(factors, base_fft))
+    }
+}
+boilerplate_simd_fft!(SseRadixNOriginal, #[target_feature(enable = "sse4.1")]);
+
+#[cfg(test)]
+mod unit_tests {
+    use crate::{Fft, common::RadixFactor, simd::simd_radixn::test_bodies};
+    use std::{
+        arch::x86_64::{__m128, __m128d},
+        sync::Arc,
+    };
+
+    use super::*;
+
+    fn new_fn<V: SimdVector + 'static>(
+        factors: &[RadixFactor],
+        base_fft: Arc<dyn Fft<V::ScalarType>>,
+    ) -> Arc<dyn Fft<V::ScalarType>> {
+        Arc::new(SseRadixNOriginal::<V, V::ScalarType>::new(factors, base_fft))
+    }
+
+    #[test]
+    fn test_sse_radixn_f64() {
+        // f64 fits one complex per vector, so every base length is legal
+        test_bodies::factor_pairs::<__m128d>(&[1, 2, 3, 4, 5, 6], &new_fn::<__m128d>);
+    }
+
+    #[test]
+    fn test_sse_radixn_f32() {
+        // f32 fits two complex per vector, so an odd base length means every layer ends with a
+        // partial column
+        test_bodies::factor_pairs::<__m128>(&[1, 2, 3, 4, 5, 6], &new_fn::<__m128>);
+    }
+
+    #[test]
+    fn test_sse_radixn_composite_base() {
+        test_bodies::composite_base::<__m128, __m128d>(&new_fn::<__m128>, &new_fn::<__m128d>);
+    }
+
+    #[test]
+    fn test_sse_radixn_large_recipes() {
+        test_bodies::large_recipes::<__m128, __m128d>(&new_fn::<__m128>, &new_fn::<__m128d>);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_sse_radixn_six_layers() {
+        test_bodies::six_layers::<__m128, __m128d>(&new_fn::<__m128>, &new_fn::<__m128d>);
+    }
+}

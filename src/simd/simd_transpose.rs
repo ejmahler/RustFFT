@@ -10,52 +10,6 @@ pub enum TransposeAlgorithm {
     Copy,
 }
 
-/// `factor_transpose` with the reversed column indices looked up instead of recomputed.
-///
-/// `reversed_columns[x]` is the output column of input column `x`, so its length is the width and
-/// nothing here needs to divide. Every entry must be below the width, which `SimdRadixN::new`
-/// asserts, and `D` must divide the width.
-#[target_feature(enable = "neon")]
-pub unsafe fn table_transpose_original<T: Copy, const D: usize>(
-    height: usize,
-    reversed_columns: &[usize],
-    input: &[T],
-    output: &mut [T],
-) {
-    let width = reversed_columns.len();
-    assert!(width % D == 0 && input.len() == width * height && output.len() == input.len());
-
-    for (group, rev) in reversed_columns.chunks_exact(D).enumerate() {
-        let x = group * D;
-        let rev: &[usize; D] = rev.try_into().unwrap();
-        for y in 0..height {
-            let row = x + y * width;
-            for (i, &r) in rev.iter().enumerate() {
-                // Both indexes below are unchecked, so here is why neither can leave the slices.
-                // Both slices are `width * height` long, asserted above, so an index is in range
-                // as long as it stays below `width * height`.
-                //
-                // The read is from `row + i`, which is `group * D + y * width + i`. The loops cap
-                // each term: `group` reaches `width / D - 1` because `chunks_exact(D)` over a
-                // slice of length `width` yields `width / D` chunks, `y` reaches `height - 1`,
-                // and `i` reaches `D - 1`. Substituting all three gives
-                // `(width / D - 1) * D + (height - 1) * width + D - 1`, and since D divides
-                // `width` that simplifies to `width * height - 1`.
-                let value = unsafe { *input.get_unchecked(row + i) };
-
-                // The write is to `y + r * height`. `r` comes out of `reversed_columns`, and
-                // `SimdRadixN::new` asserts that every entry there is below the width, so `r`
-                // reaches at most `width - 1`. With `y` capped at `height - 1` as above, the
-                // largest index is `height - 1 + (width - 1) * height`, which is
-                // `width * height - 1`.
-                unsafe {
-                    *output.get_unchecked_mut(y + r * height) = value;
-                }
-            }
-        }
-    }
-}
-
 #[inline(always)]
 unsafe fn table_transpose_1complex<V: SimdVector, const D: usize>(
     height: usize,
@@ -225,7 +179,7 @@ unsafe fn table_transpose_2complex<V: SimdVector, const EXTERNAL_UNROLL_FACTOR: 
     }
 }
 
-#[target_feature(enable = "neon")]
+#[inline(always)]
 pub unsafe fn table_transpose<V: SimdVector, const EXTERNAL_UNROLL_FACTOR: usize>(
     height: usize,
     reversed_columns: &[usize],
@@ -332,7 +286,7 @@ unsafe fn unrolled_transpose_2complex<V: SimdVector, const WIDTH: usize>(
     }
 }
 
-#[target_feature(enable = "neon")]
+#[inline(always)]
 pub unsafe fn unrolled_transpose<V: SimdVector, const WIDTH: usize>(
     height: usize,
     input: &[Complex<V::ScalarType>],
