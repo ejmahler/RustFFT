@@ -209,6 +209,7 @@ fn plan_butterfly_fft<T: FftNum>(len: usize) -> Arc<dyn Fft<T>> {
                 6 => Arc::new(SseF32Butterfly6::new(FftDirection::Forward)),
                 7 => Arc::new(SseF32Butterfly7::new(FftDirection::Forward)),
                 8 => Arc::new(SseF32Butterfly8::new(FftDirection::Forward)),
+                9 => Arc::new(SseF32Butterfly9::new(FftDirection::Forward)),
                 16 => Arc::new(SseF32Butterfly16::new(FftDirection::Forward)),
                 11 => Arc::new(SseF32Butterfly11::new(FftDirection::Forward)),
                 31 => Arc::new(SseF32Butterfly31::new(FftDirection::Forward)),
@@ -226,6 +227,7 @@ fn plan_butterfly_fft<T: FftNum>(len: usize) -> Arc<dyn Fft<T>> {
                 6 => Arc::new(SseF64Butterfly6::new(FftDirection::Forward)),
                 7 => Arc::new(SseF64Butterfly7::new(FftDirection::Forward)),
                 8 => Arc::new(SseF64Butterfly8::new(FftDirection::Forward)),
+                9 => Arc::new(SseF64Butterfly9::new(FftDirection::Forward)),
                 11 => Arc::new(SseF64Butterfly11::new(FftDirection::Forward)),
                 16 => Arc::new(SseF64Butterfly16::new(FftDirection::Forward)),
                 31 => Arc::new(SseF64Butterfly31::new(FftDirection::Forward)),
@@ -301,15 +303,28 @@ fn bench_radixn_original<T: FftNum>(b: &mut Bencher, base_len: usize, factor: Ra
 
 fn criterion_benchmark_radixn(c: &mut Criterion) {
     {
-        let mut group = c.benchmark_group("sse32_base7_power7");
+        let mut group = c.benchmark_group("sse32_base32_power4");
         
-        for power in 1..8 {
-            let len = 7usize.pow(power)*7;
+        for power in 1..12 {
+            let len = 4usize.pow(power)*32;
             group.bench_with_input(BenchmarkId::new("original", len), &len,  |b, _| {
-                bench_radixn_original::<f32>(b, 7, RadixFactor::Factor7, power)
+                bench_radixn_original::<f32>(b, 32, RadixFactor::Factor4, power)
             });
             group.bench_with_input(BenchmarkId::new("simd_4x", len), &len,  |b, _| {
-                bench_radixn::<f32>(b, 7, RadixFactor::Factor7, power)
+                bench_radixn::<f32>(b, 32, RadixFactor::Factor4, power)
+            });
+        }
+    }
+    {
+        let mut group = c.benchmark_group("sse32_base9_power3");
+        
+        for power in 1..12 {
+            let len = 3usize.pow(power)*9;
+            group.bench_with_input(BenchmarkId::new("original", len), &len,  |b, _| {
+                bench_radixn_original::<f32>(b, 9, RadixFactor::Factor3, power)
+            });
+            group.bench_with_input(BenchmarkId::new("simd_4x", len), &len,  |b, _| {
+                bench_radixn::<f32>(b, 9, RadixFactor::Factor3, power)
             });
         }
     }
