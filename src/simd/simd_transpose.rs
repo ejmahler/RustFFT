@@ -1,8 +1,8 @@
 use num_complex::Complex;
 
+use crate::common::RadixFactor;
 use crate::simd::simd_array::{SimdComplexArray, SimdComplexArrayMut};
 use crate::simd::simd_vector::SimdVector;
-use crate::common::RadixFactor;
 
 pub enum TransposeAlgorithm {
     TableTranspose(RadixFactor, Box<[usize]>),
@@ -74,7 +74,7 @@ unsafe fn table_transpose_strip_2complex<V: SimdVector, const UNROLL_X: usize>(
                     input.load((y + 1) * width + base_x + x),
                 ];
 
-                let transposed = V::transpose_contiguous_to_strided(values);
+                let transposed = V::transpose_complex_2x2(values);
 
                 output.store(transposed[0], y + rev[x + 0] * height);
                 output.store(transposed[1], y + rev[x + 1] * height);
@@ -88,7 +88,7 @@ unsafe fn table_transpose_strip_2complex<V: SimdVector, const UNROLL_X: usize>(
                     input.load1_lo((y + 1) * width + base_x + x),
                 ];
 
-                let transposed = V::transpose_contiguous_to_strided(values);
+                let transposed = V::transpose_complex_2x2(values);
 
                 output.store(transposed[0], y + rev[x] * height);
             }
@@ -99,12 +99,9 @@ unsafe fn table_transpose_strip_2complex<V: SimdVector, const UNROLL_X: usize>(
         for ix in 0..chunks_x {
             let x = ix * UNROLL_Y;
             unsafe {
-                let values = [
-                    input.load(y * width + base_x + x),
-                    V::zero_vector(),
-                ];
+                let values = [input.load(y * width + base_x + x), V::zero_vector()];
 
-                let transposed = V::transpose_contiguous_to_strided(values);
+                let transposed = V::transpose_complex_2x2(values);
 
                 output.store1_lo(transposed[0], y + rev[x + 0] * height);
                 output.store1_lo(transposed[1], y + rev[x + 1] * height);
@@ -113,7 +110,7 @@ unsafe fn table_transpose_strip_2complex<V: SimdVector, const UNROLL_X: usize>(
         if remainder_x == 1 {
             let x = chunks_x * UNROLL_Y;
             unsafe {
-                let value : V = input.load1_lo(y * width + base_x + x);
+                let value: V = input.load1_lo(y * width + base_x + x);
                 output.store1_lo(value, y + rev[x] * height);
             }
         }
@@ -135,11 +132,18 @@ unsafe fn table_transpose_2complex<V: SimdVector, const EXTERNAL_UNROLL_FACTOR: 
 
     for (group, rev) in reverse_chunks.iter().enumerate() {
         unsafe {
-            table_transpose_strip_2complex::<V, 4>(input, output, rev, width, height, group * UNROLL_X)
+            table_transpose_strip_2complex::<V, 4>(
+                input,
+                output,
+                rev,
+                width,
+                height,
+                group * UNROLL_X,
+            )
         };
     }
 
-    // For the most part we ignore the external unroll factor for this algorithm.
+    // For the simd transpose w ignore the external unroll factor and just use a fixed unroll size of 4.
     // The only thing we use it for is to know if we can skip remainder checks.
     if EXTERNAL_UNROLL_FACTOR != UNROLL_X {
         match reverse_remainder.len() {
@@ -190,13 +194,25 @@ pub unsafe fn table_transpose<V: SimdVector, const EXTERNAL_UNROLL_FACTOR: usize
     // For example, you can't use an associated constant of a generic parameter as an array size (IE you can't write [V::zero_vector; V::COMPLEX_PER_VECTOR])
     // Until then it's easiest to just split ut up by COMPLEX_PER_VECTOR
     match V::COMPLEX_PER_VECTOR {
-        1 => unsafe { table_transpose_1complex::<V, EXTERNAL_UNROLL_FACTOR>(height, reversed_columns, input, output) },
-        2 => unsafe { table_transpose_2complex::<V, EXTERNAL_UNROLL_FACTOR>(height, reversed_columns, input, output) },
+        1 => unsafe {
+            table_transpose_1complex::<V, EXTERNAL_UNROLL_FACTOR>(
+                height,
+                reversed_columns,
+                input,
+                output,
+            )
+        },
+        2 => unsafe {
+            table_transpose_2complex::<V, EXTERNAL_UNROLL_FACTOR>(
+                height,
+                reversed_columns,
+                input,
+                output,
+            )
+        },
         _ => unreachable!(),
     }
 }
-
-
 
 #[inline(always)]
 unsafe fn unrolled_transpose_1complex<V: SimdVector, const WIDTH: usize>(
@@ -215,7 +231,6 @@ unsafe fn unrolled_transpose_1complex<V: SimdVector, const WIDTH: usize>(
         }
     }
 }
-
 
 #[inline(always)]
 unsafe fn unrolled_transpose_2complex<V: SimdVector, const WIDTH: usize>(
@@ -240,7 +255,7 @@ unsafe fn unrolled_transpose_2complex<V: SimdVector, const WIDTH: usize>(
                     input.load((y + 1) * WIDTH + x),
                 ];
 
-                let transposed = V::transpose_contiguous_to_strided(values);
+                let transposed = V::transpose_complex_2x2(values);
 
                 output.store(transposed[0], y + (x + 0) * height);
                 output.store(transposed[1], y + (x + 1) * height);
@@ -254,7 +269,7 @@ unsafe fn unrolled_transpose_2complex<V: SimdVector, const WIDTH: usize>(
                     input.load1_lo((y + 1) * WIDTH + x),
                 ];
 
-                let transposed = V::transpose_contiguous_to_strided(values);
+                let transposed = V::transpose_complex_2x2(values);
 
                 output.store(transposed[0], y + x * height);
             }
@@ -265,12 +280,9 @@ unsafe fn unrolled_transpose_2complex<V: SimdVector, const WIDTH: usize>(
         for ix in 0..chunks_x {
             let x = ix * UNROLL_X;
             unsafe {
-                let values = [
-                    input.load(y * WIDTH + x),
-                    V::zero_vector(),
-                ];
+                let values = [input.load(y * WIDTH + x), V::zero_vector()];
 
-                let transposed = V::transpose_contiguous_to_strided(values);
+                let transposed = V::transpose_complex_2x2(values);
 
                 output.store1_lo(transposed[0], y + (x + 0) * height);
                 output.store1_lo(transposed[1], y + (x + 1) * height);
@@ -279,7 +291,7 @@ unsafe fn unrolled_transpose_2complex<V: SimdVector, const WIDTH: usize>(
         if remainder_x == 1 {
             let x = chunks_x * UNROLL_X;
             unsafe {
-                let value : V = input.load1_lo(y * WIDTH + x);
+                let value: V = input.load1_lo(y * WIDTH + x);
                 output.store1_lo(value, y + x * height);
             }
         }

@@ -2,10 +2,10 @@ use core::arch::aarch64::*;
 use num_complex::Complex;
 use num_traits::Zero;
 
+use crate::neon::neon_utils::transpose_complex_2x2_f32;
 use crate::simd::simd_array::SimdComplexArray;
 use crate::simd::simd_vector::SimdVector;
 use crate::{FftDirection, twiddles};
-use crate::neon::neon_utils::transpose_complex_2x2_f32;
 
 use super::neon_butterflies::*;
 use super::neon_prime_butterflies::*;
@@ -179,15 +179,6 @@ impl SimdVector for float64x2_t {
     }
 
     #[inline(always)]
-    unsafe fn transpose_contiguous_to_strided<const D: usize>(data: [Self; D]) -> [Self; D] {
-        data
-    }
-    #[inline(always)]
-    unsafe fn transpose_square<const D: usize>(data: [Self; D]) -> [Self; D] {
-        data
-    }
-
-    #[inline(always)]
     unsafe fn neg(a: Self) -> Self {
         unsafe { vnegq_f64(a) }
     }
@@ -333,29 +324,8 @@ impl SimdVector for float32x4_t {
     }
 
     #[inline(always)]
-    unsafe fn transpose_contiguous_to_strided<const D: usize>(data: [Self; D]) -> [Self; D] {
-        assert!(D % 2 == 0);
-
-        let mut result = [unsafe { Self::zero_vector() }; D];
-        let chunks = D / 2;
-        for c in 0..chunks {
-            let values = [data[c], data[c + chunks]];
-            let transposed = unsafe { transpose_complex_2x2_f32(values[0], values[1]) };
-
-            result[c * 2 + 0] = transposed[0];
-            result[c * 2 + 1] = transposed[1];
-        }
-        result
-    }
-    #[inline(always)]
-    unsafe fn transpose_square<const D: usize>(data: [Self; D]) -> [Self; D] {
-        assert_eq!(D, Self::COMPLEX_PER_VECTOR);
-        let transposed = unsafe { transpose_complex_2x2_f32(data[0], data[1]) };
-        let mut result = [unsafe { Self::zero_vector() }; D];
-        for i in 0..D {
-            result[i] = transposed[i];
-        }
-        result
+    unsafe fn transpose_complex_2x2(data: [Self; 2]) -> [Self; 2] {
+        unsafe { transpose_complex_2x2_f32(data[0], data[1]) }
     }
 
     #[inline(always)]

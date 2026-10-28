@@ -5,6 +5,8 @@
 //! implements once per vector type, next to its own vector trait impls. Algorithms written against
 //! it, like `SimdRadixN`, then only exist once.
 
+use std::unimplemented;
+
 use num_complex::Complex;
 
 use crate::FftDirection;
@@ -61,10 +63,12 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
     #[allow(dead_code)]
     unsafe fn store1_hi_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
 
-    // Takes a row-major 2d array with a width of D and a height of Self::COMPLEX_PER_VECTOR
-    // Transposes it to a 2d array with a width of Self::COMPLEX_PER_VECTOR and height of D
-    unsafe fn transpose_contiguous_to_strided<const D: usize>(data: [Self; D]) -> [Self; D];
-    unsafe fn transpose_square<const D: usize>(data: [Self; D]) -> [Self; D];
+    // Takes a 2x2 square of complex numbers and transposes it. Only implemented for COMPLEX_PER_VECTOR == 2
+    // Ideally we would instead have `transpose_complex_square(data: [Self; Self::COMPLEX_PER_VECTOR]) -> [Self; Self::COMPLEX_PER_VECTOR]`
+    // but rustc can't handle associated contents as array bounds yet
+    unsafe fn transpose_complex_2x2(_data: [Self; 2]) -> [Self; 2] {
+        unimplemented!("This vector can't execute a 2x2 transpose")
+    }
 
     // math ops
     unsafe fn neg(a: Self) -> Self;

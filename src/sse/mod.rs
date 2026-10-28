@@ -8,7 +8,6 @@ pub mod sse_butterflies;
 pub mod sse_prime_butterflies;
 pub mod sse_radix4;
 pub mod sse_radixn;
-pub mod sse_radixn_original;
 
 mod sse_utils;
 

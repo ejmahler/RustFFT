@@ -8,7 +8,6 @@ pub mod wasm_simd_butterflies;
 pub mod wasm_simd_prime_butterflies;
 pub mod wasm_simd_radix4;
 pub mod wasm_simd_radixn;
-pub mod wasm_simd_radixn_original;
 
 mod wasm_simd_utils;
 

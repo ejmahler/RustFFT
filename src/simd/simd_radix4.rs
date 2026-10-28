@@ -152,8 +152,12 @@ impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
             TransposeAlgorithm::Copy => {
                 output.copy_from_slice(input);
             }
-            TransposeAlgorithm::UnrolledTranspose(_) => unsafe { unrolled_transpose::<V, 4>(self.base_len, input, output) },
-            TransposeAlgorithm::TableTranspose(_, reversed_columns) => unsafe { table_transpose::<V, 4>(self.base_len, reversed_columns, input, output) },
+            TransposeAlgorithm::UnrolledTranspose(_) => unsafe {
+                unrolled_transpose::<V, 4>(self.base_len, input, output)
+            },
+            TransposeAlgorithm::TableTranspose(_, reversed_columns) => unsafe {
+                table_transpose::<V, 4>(self.base_len, reversed_columns, input, output)
+            },
         }
     }
 

@@ -125,17 +125,18 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
         }
         let len = cross_fft_len;
 
-
         let transpose_algorithm = if let Some(first_factor) = factors.first() {
             if factors.len() > 1 {
                 // We have multiple factors, so we have to do a table transpose.
-                
+
                 // set up our list of transpose factors - it's the same list but reversed, and we want to
                 // collapse duplicates. Note that we are only de-duplicating adjacent factors: if we're
                 // passed 7 * 2 * 7, we can't collapse the sevens because the exact order matters.
                 let mut transpose_factors: Vec<TransposeFactor> = Vec::with_capacity(factors.len());
                 for f in factors.iter().rev() {
-                    if let Some(last) = transpose_factors.last_mut() && last.factor == *f {
+                    if let Some(last) = transpose_factors.last_mut()
+                        && last.factor == *f
+                    {
                         last.count += 1;
                     } else {
                         transpose_factors.push(TransposeFactor {
@@ -163,8 +164,6 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
         } else {
             TransposeAlgorithm::Copy
         };
-
-        
 
         // Same packing as the scalar RadixN: all layers in one array, bottom layer first, and
         // within a layer, (radix - 1) twiddles per column. The difference is that a "column" here
@@ -228,24 +227,46 @@ impl<V: SimdVector, T: FftNum> SimdRadixN<V, T> {
             TransposeAlgorithm::Copy => {
                 output.copy_from_slice(input);
             }
-            TransposeAlgorithm::UnrolledTranspose(unroll_factor) => {
-                match *unroll_factor {
-                    RadixFactor::Factor2 => unsafe { unrolled_transpose::<V, 2>(self.base_len, input, output) },
-                    RadixFactor::Factor3 => unsafe { unrolled_transpose::<V, 3>(self.base_len, input, output) },
-                    RadixFactor::Factor4 => unsafe { unrolled_transpose::<V, 4>(self.base_len, input, output) },
-                    RadixFactor::Factor5 => unsafe { unrolled_transpose::<V, 5>(self.base_len, input, output) },
-                    RadixFactor::Factor6 => unsafe { unrolled_transpose::<V, 6>(self.base_len, input, output) },
-                    RadixFactor::Factor7 => unsafe { unrolled_transpose::<V, 7>(self.base_len, input, output) },
-                }
-            }
+            TransposeAlgorithm::UnrolledTranspose(unroll_factor) => match *unroll_factor {
+                RadixFactor::Factor2 => unsafe {
+                    unrolled_transpose::<V, 2>(self.base_len, input, output)
+                },
+                RadixFactor::Factor3 => unsafe {
+                    unrolled_transpose::<V, 3>(self.base_len, input, output)
+                },
+                RadixFactor::Factor4 => unsafe {
+                    unrolled_transpose::<V, 4>(self.base_len, input, output)
+                },
+                RadixFactor::Factor5 => unsafe {
+                    unrolled_transpose::<V, 5>(self.base_len, input, output)
+                },
+                RadixFactor::Factor6 => unsafe {
+                    unrolled_transpose::<V, 6>(self.base_len, input, output)
+                },
+                RadixFactor::Factor7 => unsafe {
+                    unrolled_transpose::<V, 7>(self.base_len, input, output)
+                },
+            },
             TransposeAlgorithm::TableTranspose(unroll_factor, reversed_columns) => {
                 match *unroll_factor {
-                    RadixFactor::Factor2 => unsafe { table_transpose::<V, 2>(self.base_len, reversed_columns, input, output) },
-                    RadixFactor::Factor3 => unsafe { table_transpose::<V, 3>(self.base_len, reversed_columns, input, output) },
-                    RadixFactor::Factor4 => unsafe { table_transpose::<V, 4>(self.base_len, reversed_columns, input, output) },
-                    RadixFactor::Factor5 => unsafe { table_transpose::<V, 5>(self.base_len, reversed_columns, input, output) },
-                    RadixFactor::Factor6 => unsafe { table_transpose::<V, 6>(self.base_len, reversed_columns, input, output) },
-                    RadixFactor::Factor7 => unsafe { table_transpose::<V, 7>(self.base_len, reversed_columns, input, output) },
+                    RadixFactor::Factor2 => unsafe {
+                        table_transpose::<V, 2>(self.base_len, reversed_columns, input, output)
+                    },
+                    RadixFactor::Factor3 => unsafe {
+                        table_transpose::<V, 3>(self.base_len, reversed_columns, input, output)
+                    },
+                    RadixFactor::Factor4 => unsafe {
+                        table_transpose::<V, 4>(self.base_len, reversed_columns, input, output)
+                    },
+                    RadixFactor::Factor5 => unsafe {
+                        table_transpose::<V, 5>(self.base_len, reversed_columns, input, output)
+                    },
+                    RadixFactor::Factor6 => unsafe {
+                        table_transpose::<V, 6>(self.base_len, reversed_columns, input, output)
+                    },
+                    RadixFactor::Factor7 => unsafe {
+                        table_transpose::<V, 7>(self.base_len, reversed_columns, input, output)
+                    },
                 }
             }
         }
