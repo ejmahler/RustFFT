@@ -2,10 +2,10 @@ use core::arch::aarch64::*;
 use num_complex::Complex;
 use num_traits::Zero;
 
+use crate::fcma::fcma_utils::transpose_complex_2x2_f32;
 use crate::simd::simd_vector::SimdVector;
-use crate::{FftDirection, twiddles};
-
 use crate::simd::simd_array::SimdComplexArray;
+use crate::{FftDirection, twiddles};
 
 use super::fcma_butterflies::*;
 use super::fcma_prime_butterflies::*;
