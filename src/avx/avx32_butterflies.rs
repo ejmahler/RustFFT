@@ -286,17 +286,19 @@ pub struct Butterfly5Avx<T> {
 boilerplate_fft_simd_butterfly!(Butterfly5Avx, 5);
 impl Butterfly5Avx<f32> {
     #[target_feature(enable = "avx")]
-    fn new_with_avx(direction: FftDirection) -> Self {
-        let twiddle1 = twiddles::compute_twiddle(1, 5, direction);
-        let twiddle2 = twiddles::compute_twiddle(2, 5, direction);
-        Self {
-            twiddles: [
-                _mm_set_ps(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),
-                _mm_set_ps(twiddle2.im, twiddle2.im, twiddle2.re, twiddle2.re),
-                _mm_set_ps(-twiddle1.im, -twiddle1.im, twiddle1.re, twiddle1.re),
-            ],
-            direction,
-            _phantom_t: PhantomData,
+    unsafe fn new_with_avx(direction: FftDirection) -> Self {
+        unsafe {
+            let twiddle1 = twiddles::compute_twiddle(1, 5, direction);
+            let twiddle2 = twiddles::compute_twiddle(2, 5, direction);
+            Self {
+                twiddles: [
+                    _mm_set_ps(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),
+                    _mm_set_ps(twiddle2.im, twiddle2.im, twiddle2.re, twiddle2.re),
+                    _mm_set_ps(-twiddle1.im, -twiddle1.im, twiddle1.re, twiddle1.re),
+                ],
+                direction,
+                _phantom_t: PhantomData,
+            }
         }
     }
 }
@@ -353,20 +355,22 @@ pub struct Butterfly7Avx<T> {
 boilerplate_fft_simd_butterfly!(Butterfly7Avx, 7);
 impl Butterfly7Avx<f32> {
     #[target_feature(enable = "avx")]
-    fn new_with_avx(direction: FftDirection) -> Self {
-        let twiddle1 = twiddles::compute_twiddle(1, 7, direction);
-        let twiddle2 = twiddles::compute_twiddle(2, 7, direction);
-        let twiddle3 = twiddles::compute_twiddle(3, 7, direction);
-        Self {
-            twiddles: [
-                _mm_set_ps(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),
-                _mm_set_ps(twiddle2.im, twiddle2.im, twiddle2.re, twiddle2.re),
-                _mm_set_ps(twiddle3.im, twiddle3.im, twiddle3.re, twiddle3.re),
-                _mm_set_ps(-twiddle3.im, -twiddle3.im, twiddle3.re, twiddle3.re),
-                _mm_set_ps(-twiddle1.im, -twiddle1.im, twiddle1.re, twiddle1.re),
-            ],
-            direction,
-            _phantom_t: PhantomData,
+    unsafe fn new_with_avx(direction: FftDirection) -> Self {
+        unsafe {
+            let twiddle1 = twiddles::compute_twiddle(1, 7, direction);
+            let twiddle2 = twiddles::compute_twiddle(2, 7, direction);
+            let twiddle3 = twiddles::compute_twiddle(3, 7, direction);
+            Self {
+                twiddles: [
+                    _mm_set_ps(twiddle1.im, twiddle1.im, twiddle1.re, twiddle1.re),
+                    _mm_set_ps(twiddle2.im, twiddle2.im, twiddle2.re, twiddle2.re),
+                    _mm_set_ps(twiddle3.im, twiddle3.im, twiddle3.re, twiddle3.re),
+                    _mm_set_ps(-twiddle3.im, -twiddle3.im, twiddle3.re, twiddle3.re),
+                    _mm_set_ps(-twiddle1.im, -twiddle1.im, twiddle1.re, twiddle1.re),
+                ],
+                direction,
+                _phantom_t: PhantomData,
+            }
         }
     }
 }
