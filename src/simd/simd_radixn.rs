@@ -26,12 +26,10 @@ use crate::array_utils::{
 };
 use crate::common::{FftNum, RadixFactor};
 use crate::simd::parallel_fft::ParallelFft;
-#[allow(unused)]
-use crate::simd::simd_transpose::{TransposeAlgorithm, table_transpose, unrolled_transpose};
-use crate::{Fft, FftDirection};
-
-use super::simd_vector::SimdVector;
 use crate::simd::simd_array::{SimdComplexArray, SimdComplexArrayMut};
+use crate::simd::simd_transpose::{TransposeAlgorithm, table_transpose, unrolled_transpose};
+use crate::simd::simd_vector::SimdVector;
+use crate::{Fft, FftDirection};
 
 /// The per-layer cross-FFT kernels, holding whatever precomputed state each radix needs.
 pub enum InternalRadixFactor<V: SimdVector> {
