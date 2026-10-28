@@ -63,9 +63,9 @@ pub trait SimdVector: Copy + Send + Sync + Sized {
     #[allow(dead_code)]
     unsafe fn store1_hi_complex(ptr: *mut Complex<Self::ScalarType>, data: Self);
 
-    // Takes a 2x2 square of complex numbers and transposes it. Only implemented for COMPLEX_PER_VECTOR == 2
+    // Takes a 2x2 square of complex numbers and transposes it. Only implemented for COMPLEX_PER_VECTOR == 2.
     // Ideally we would instead have `transpose_complex_square(data: [Self; Self::COMPLEX_PER_VECTOR]) -> [Self; Self::COMPLEX_PER_VECTOR]`
-    // but rustc can't handle associated contents as array bounds yet
+    // but rustc can't handle associated constants as array bounds yet
     unsafe fn transpose_complex_2x2(_data: [Self; 2]) -> [Self; 2] {
         unimplemented!("This vector can't execute a 2x2 transpose")
     }

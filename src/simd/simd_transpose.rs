@@ -4,12 +4,72 @@ use crate::common::RadixFactor;
 use crate::simd::simd_array::{SimdComplexArray, SimdComplexArrayMut};
 use crate::simd::simd_vector::SimdVector;
 
+/// Specifies which algorithm RadixN should use to reorder its data before computing child FFTs.
 pub enum TransposeAlgorithm {
+    /// A full table transpose, with a lookup table for column reversal.
     TableTranspose(RadixFactor, Box<[usize]>),
+
+    /// In the special case where there's only one factor, the lookup table will be identity, so we can skip it and do a standard transpose.
     UnrolledTranspose(RadixFactor),
+
+    /// In the degenerate case where there are no factors, we simply copy the data where it needs to go.
     Copy,
 }
 
+/// Specialized transpose for the RadixN algorithm
+///
+/// Interprets the input as a `height` x `WIDTH` row-major 2D array.
+/// Executes a transpose on that array, reading from `input` and writing to `output`.
+///
+/// This function is different from a standard transpose: It loads the data like normal for a standard transpose algorithm,
+/// but instead of reading from the x'th column and writing to the x'th row, it uses `reversed_columns` as a lookup table
+/// and writes to the looked up row instead.
+///
+/// IE, for each column x, it reads elements from column x and writes them to row `reversed_columns[x]`. It's called
+/// `reversed_columns` because it's used by the main `SimdRadixN`` transpose, and the reversed columns are genrated by
+/// computing a remainder reversal on each column index.
+///
+/// EXTERNAL_UNROLL_FACTOR is a hint about what a smart unroll factor might be for the hot loop of this transpose.
+///
+/// SAFETY:
+/// - The required CPU features for `V` must be present
+/// - Every element of `reversed_columns` must be less than `reversed_columns.len()`
+#[inline(always)]
+pub unsafe fn table_transpose<V: SimdVector, const EXTERNAL_UNROLL_FACTOR: usize>(
+    height: usize,
+    reversed_columns: &[usize],
+    input: &[Complex<V::ScalarType>],
+    output: &mut [Complex<V::ScalarType>],
+) {
+    // It'd be really cool to be able to write this all with just a single const generic set of functions, but rust's type system just isn't there yet
+    // For example, you can't use an associated constant of a generic parameter as an array size (IE you can't write [V::zero_vector; V::COMPLEX_PER_VECTOR])
+    // Until then it's easiest to just split ut up by COMPLEX_PER_VECTOR
+    match V::COMPLEX_PER_VECTOR {
+        1 => unsafe {
+            table_transpose_1complex::<V, EXTERNAL_UNROLL_FACTOR>(
+                height,
+                reversed_columns,
+                input,
+                output,
+            )
+        },
+        2 => unsafe {
+            table_transpose_2complex::<V, EXTERNAL_UNROLL_FACTOR>(
+                height,
+                reversed_columns,
+                input,
+                output,
+            )
+        },
+        _ => unreachable!(),
+    }
+}
+
+/// Variant of `table_transpose` specialized for `V::COMPLEX_PER_VECTOR == 1`,
+/// and thus there are no SIMD optimizations to be made.
+///
+/// SAFETY:
+/// - Every element of `reversed_columns` must be less than `reversed_columns.len()`
 #[inline(always)]
 unsafe fn table_transpose_1complex<V: SimdVector, const D: usize>(
     height: usize,
@@ -51,72 +111,12 @@ unsafe fn table_transpose_1complex<V: SimdVector, const D: usize>(
     }
 }
 
-#[inline(always)]
-unsafe fn table_transpose_strip_2complex<V: SimdVector, const UNROLL_X: usize>(
-    input: &[Complex<V::ScalarType>],
-    mut output: &mut [Complex<V::ScalarType>],
-    rev: &[usize; UNROLL_X],
-    width: usize,
-    height: usize,
-    base_x: usize,
-) {
-    const UNROLL_Y: usize = 2;
-    let (chunks_y, remainder_y) = (height / UNROLL_Y, height % UNROLL_Y);
-    let (chunks_x, remainder_x) = (UNROLL_X / 2, UNROLL_X % 2);
-
-    for iy in 0..chunks_y {
-        let y = iy * UNROLL_Y;
-        for ix in 0..chunks_x {
-            let x = ix * UNROLL_Y;
-            unsafe {
-                let values = [
-                    input.load((y + 0) * width + base_x + x),
-                    input.load((y + 1) * width + base_x + x),
-                ];
-
-                let transposed = V::transpose_complex_2x2(values);
-
-                output.store(transposed[0], y + rev[x + 0] * height);
-                output.store(transposed[1], y + rev[x + 1] * height);
-            }
-        }
-        if remainder_x == 1 {
-            let x = chunks_x * UNROLL_Y;
-            unsafe {
-                let values = [
-                    input.load1_lo((y + 0) * width + base_x + x),
-                    input.load1_lo((y + 1) * width + base_x + x),
-                ];
-
-                let transposed = V::transpose_complex_2x2(values);
-
-                output.store(transposed[0], y + rev[x] * height);
-            }
-        }
-    }
-    if remainder_y == 1 {
-        let y = chunks_y * UNROLL_Y;
-        for ix in 0..chunks_x {
-            let x = ix * UNROLL_Y;
-            unsafe {
-                let values = [input.load(y * width + base_x + x), V::zero_vector()];
-
-                let transposed = V::transpose_complex_2x2(values);
-
-                output.store1_lo(transposed[0], y + rev[x + 0] * height);
-                output.store1_lo(transposed[1], y + rev[x + 1] * height);
-            }
-        }
-        if remainder_x == 1 {
-            let x = chunks_x * UNROLL_Y;
-            unsafe {
-                let value: V = input.load1_lo(y * width + base_x + x);
-                output.store1_lo(value, y + rev[x] * height);
-            }
-        }
-    }
-}
-
+/// Variant of `table_transpose` specialized for `V::COMPLEX_PER_VECTOR == 2`,
+/// and uses SIMD instructions optimized for loading, transposing, and storing 2 elements per vector.
+///
+/// SAFETY:
+/// - The required CPU features for `V` must be present
+/// - Every element of `reversed_columns` must be less than `reversed_columns.len()`
 #[inline(always)]
 unsafe fn table_transpose_2complex<V: SimdVector, const EXTERNAL_UNROLL_FACTOR: usize>(
     height: usize,
@@ -146,6 +146,8 @@ unsafe fn table_transpose_2complex<V: SimdVector, const EXTERNAL_UNROLL_FACTOR: 
     // For the simd transpose w ignore the external unroll factor and just use a fixed unroll size of 4.
     // The only thing we use it for is to know if we can skip remainder checks.
     if EXTERNAL_UNROLL_FACTOR != UNROLL_X {
+        // If we have a remainder, call transpose_strip one last time with the remainder as a constant chunk size
+        // This will let it generate specialized unconditional code within the hopt loop to handle the remainder.
         match reverse_remainder.len() {
             3 => unsafe {
                 table_transpose_strip_2complex::<V, 3>(
@@ -183,121 +185,112 @@ unsafe fn table_transpose_2complex<V: SimdVector, const EXTERNAL_UNROLL_FACTOR: 
     }
 }
 
+/// Part of the `table_transpose_2complex` algorithm. Transposes a const number of entire columns (specified by `STRIP_WIDTH`)
+/// from `input` to `output`, using `rev` as a lookup table to reorder the output rows.
+///
+/// `base_x` specifies the input column to start from.
+///
+/// SAFETY:
+/// - The required CPU features for `V` must be present
+/// - Every element of `rev` must be < `height`
+/// - width * height == input.len() == output.len()`
+/// - base_x + STRIP_WIDTH <= width
 #[inline(always)]
-pub unsafe fn table_transpose<V: SimdVector, const EXTERNAL_UNROLL_FACTOR: usize>(
-    height: usize,
-    reversed_columns: &[usize],
-    input: &[Complex<V::ScalarType>],
-    output: &mut [Complex<V::ScalarType>],
-) {
-    // It'd be really cool to be able to write this all with just a single const generic set of functions, but rust's type system just isn't there yet
-    // For example, you can't use an associated constant of a generic parameter as an array size (IE you can't write [V::zero_vector; V::COMPLEX_PER_VECTOR])
-    // Until then it's easiest to just split ut up by COMPLEX_PER_VECTOR
-    match V::COMPLEX_PER_VECTOR {
-        1 => unsafe {
-            table_transpose_1complex::<V, EXTERNAL_UNROLL_FACTOR>(
-                height,
-                reversed_columns,
-                input,
-                output,
-            )
-        },
-        2 => unsafe {
-            table_transpose_2complex::<V, EXTERNAL_UNROLL_FACTOR>(
-                height,
-                reversed_columns,
-                input,
-                output,
-            )
-        },
-        _ => unreachable!(),
-    }
-}
-
-#[inline(always)]
-unsafe fn unrolled_transpose_1complex<V: SimdVector, const WIDTH: usize>(
-    height: usize,
-    input: &[Complex<V::ScalarType>],
-    output: &mut [Complex<V::ScalarType>],
-) {
-    assert!(input.len() == WIDTH * height && output.len() == input.len());
-
-    for y in 0..height {
-        for x in 0..WIDTH {
-            let value = unsafe { *input.get_unchecked(y * WIDTH + x) };
-            unsafe {
-                *output.get_unchecked_mut(y + x * height) = value;
-            }
-        }
-    }
-}
-
-#[inline(always)]
-unsafe fn unrolled_transpose_2complex<V: SimdVector, const WIDTH: usize>(
-    height: usize,
+unsafe fn table_transpose_strip_2complex<V: SimdVector, const STRIP_WIDTH: usize>(
     input: &[Complex<V::ScalarType>],
     mut output: &mut [Complex<V::ScalarType>],
+    rev: &[usize; STRIP_WIDTH],
+    width: usize,
+    height: usize,
+    base_x: usize,
 ) {
-    assert!(input.len() == WIDTH * height && output.len() == input.len());
-
-    const UNROLL_Y: usize = 2;
-    const UNROLL_X: usize = 2;
-    let (chunks_y, remainder_y) = (height / UNROLL_Y, height % UNROLL_Y);
-    let (chunks_x, remainder_x) = (WIDTH / UNROLL_X, WIDTH % UNROLL_X);
+    // We're going to unroll both the X and Y by COMPLEX_PER_VECTOR, giving us easily-transposeable 2x2 squares of data
+    let (chunks_y, remainder_y) = (
+        height / V::COMPLEX_PER_VECTOR,
+        height % V::COMPLEX_PER_VECTOR,
+    );
+    let (chunks_x, remainder_x) = (
+        STRIP_WIDTH / V::COMPLEX_PER_VECTOR,
+        STRIP_WIDTH % V::COMPLEX_PER_VECTOR,
+    );
 
     for iy in 0..chunks_y {
-        let y = iy * UNROLL_Y;
+        let y = iy * V::COMPLEX_PER_VECTOR;
         for ix in 0..chunks_x {
-            let x = ix * UNROLL_X;
+            let x = ix * V::COMPLEX_PER_VECTOR;
+
+            // Transpose a 2x2 square of data
             unsafe {
                 let values = [
-                    input.load((y + 0) * WIDTH + x),
-                    input.load((y + 1) * WIDTH + x),
+                    input.load((y + 0) * width + base_x + x),
+                    input.load((y + 1) * width + base_x + x),
                 ];
-
                 let transposed = V::transpose_complex_2x2(values);
 
-                output.store(transposed[0], y + (x + 0) * height);
-                output.store(transposed[1], y + (x + 1) * height);
+                // Instead of the standard transpose algorithm where we write `y + x * height`,
+                // we look up the precomputed remainder-reversed value corresponding to this x value, and use that in place of `x`.
+                output.store(transposed[0], y + rev[x + 0] * height);
+                output.store(transposed[1], y + rev[x + 1] * height);
             }
         }
+
         if remainder_x == 1 {
-            let x = chunks_x * UNROLL_X;
+            // STRIP_WIDTH is odd, so the final column needs special handling
+            let x = chunks_x * V::COMPLEX_PER_VECTOR;
             unsafe {
                 let values = [
-                    input.load1_lo((y + 0) * WIDTH + x),
-                    input.load1_lo((y + 1) * WIDTH + x),
+                    input.load1_lo((y + 0) * width + base_x + x),
+                    input.load1_lo((y + 1) * width + base_x + x),
                 ];
-
                 let transposed = V::transpose_complex_2x2(values);
 
-                output.store(transposed[0], y + x * height);
+                // Instead of the standard transpose algorithm where we write `y + x * height`,
+                // we look up the precomputed remainder-reversed value corresponding to this x value, and use that in place of `x`.
+                output.store(transposed[0], y + rev[x] * height);
             }
         }
     }
-    if remainder_y == 1 {
-        let y = chunks_y * UNROLL_Y;
-        for ix in 0..chunks_x {
-            let x = ix * UNROLL_X;
-            unsafe {
-                let values = [input.load(y * WIDTH + x), V::zero_vector()];
 
+    if remainder_y == 1 {
+        // The height is odd, so the final row needs special handling
+        let y = chunks_y * V::COMPLEX_PER_VECTOR;
+        for ix in 0..chunks_x {
+            let x = ix * V::COMPLEX_PER_VECTOR;
+            unsafe {
+                // Our 2x2 array will consist of the final row paired with a zero vector.
+                // When we transpose it, we'll get two vectors, each with a populated first element and empty second element.
+                let values = [input.load(y * width + base_x + x), V::zero_vector()];
                 let transposed = V::transpose_complex_2x2(values);
 
-                output.store1_lo(transposed[0], y + (x + 0) * height);
-                output.store1_lo(transposed[1], y + (x + 1) * height);
+                // Instead of the standard transpose algorithm where we write `y + x * height`,
+                // we look up the precomputed remainder-reversed value corresponding to this x value, and use that in place of `x`.
+                output.store1_lo(transposed[0], y + rev[x + 0] * height);
+                output.store1_lo(transposed[1], y + rev[x + 1] * height);
             }
         }
         if remainder_x == 1 {
-            let x = chunks_x * UNROLL_X;
+            // Both STRIP_WIDTH and height are odd, so we have a single element in the far corner that just needs a straight copy
+            let x = chunks_x * V::COMPLEX_PER_VECTOR;
             unsafe {
-                let value: V = input.load1_lo(y * WIDTH + x);
-                output.store1_lo(value, y + x * height);
+                let value: V = input.load1_lo(y * width + base_x + x);
+
+                // Instead of the standard transpose algorithm where we write `y + x * height`,
+                // we look up the precomputed remainder-reversed value corresponding to this x value, and use that in place of `x`.
+                output.store1_lo(value, y + rev[x] * height);
             }
         }
     }
 }
 
+/// Specialized transpose for the RadixN algorithm
+///
+/// Interprets the input as a `height` x `WIDTH` row-major 2D array.
+/// Executes a standard transpose on that array, reading from `input` and writing to `output`.
+///
+/// Designed for cases where `WIDTH` is small and can be unrolled for improved performance.
+///
+/// SAFETY:
+/// - The required CPU features for `V` must be present
 #[inline(always)]
 pub unsafe fn unrolled_transpose<V: SimdVector, const WIDTH: usize>(
     height: usize,
@@ -308,8 +301,111 @@ pub unsafe fn unrolled_transpose<V: SimdVector, const WIDTH: usize>(
     // For example, you can't use an associated constant of a generic parameter as an array size (IE you can't write [V::zero_vector; V::COMPLEX_PER_VECTOR])
     // Until then it's easiest to just split ut up by COMPLEX_PER_VECTOR
     match V::COMPLEX_PER_VECTOR {
-        1 => unsafe { unrolled_transpose_1complex::<V, WIDTH>(height, input, output) },
+        1 => unrolled_transpose_1complex::<V, WIDTH>(height, input, output),
         2 => unsafe { unrolled_transpose_2complex::<V, WIDTH>(height, input, output) },
         _ => unreachable!(),
+    }
+}
+
+/// Variant of `unrolled_transpose` specialized for `V::COMPLEX_PER_VECTOR == 1`,
+/// and thus there are no SIMD optimizations to be made.
+///
+/// This variant assumes that `V::COMPLEX_PER_VECTOR == 1`, and thus there are no SIMD optimizations to be made.
+#[inline(always)]
+fn unrolled_transpose_1complex<V: SimdVector, const WIDTH: usize>(
+    height: usize,
+    input: &[Complex<V::ScalarType>],
+    output: &mut [Complex<V::ScalarType>],
+) {
+    assert!(input.len() == WIDTH * height && output.len() == input.len());
+
+    // In the 1 complex per vector case there's no unrolling to do, so the loop is way easier to analyze
+    for y in 0..height {
+        for x in 0..WIDTH {
+            let value = unsafe { *input.get_unchecked(y * WIDTH + x) };
+            unsafe {
+                *output.get_unchecked_mut(y + x * height) = value;
+            }
+        }
+    }
+}
+
+/// Variant of `unrolled_transpose` specialized for `V::COMPLEX_PER_VECTOR == 2`,
+/// and uses SIMD instructions optimized for loading, transposing, and storing 2 elements per vector.
+///
+/// SAFETY:
+/// - The required CPU features for `V` must be present
+#[inline(always)]
+unsafe fn unrolled_transpose_2complex<V: SimdVector, const WIDTH: usize>(
+    height: usize,
+    input: &[Complex<V::ScalarType>],
+    mut output: &mut [Complex<V::ScalarType>],
+) {
+    assert!(input.len() == WIDTH * height && output.len() == input.len());
+
+    // We're going to unroll both the X and Y by COMPLEX_PER_VECTOR, giving us easily-transposeable 2x2 squares of data
+    let (chunks_y, remainder_y) = (
+        height / V::COMPLEX_PER_VECTOR,
+        height % V::COMPLEX_PER_VECTOR,
+    );
+    let (chunks_x, remainder_x) = (WIDTH / V::COMPLEX_PER_VECTOR, WIDTH % V::COMPLEX_PER_VECTOR);
+
+    for iy in 0..chunks_y {
+        let y = iy * V::COMPLEX_PER_VECTOR;
+        for ix in 0..chunks_x {
+            let x = ix * V::COMPLEX_PER_VECTOR;
+
+            // Transpose a 2x2 square of data
+            unsafe {
+                let values = [
+                    input.load((y + 0) * WIDTH + x),
+                    input.load((y + 1) * WIDTH + x),
+                ];
+                let transposed = V::transpose_complex_2x2(values);
+
+                output.store(transposed[0], y + (x + 0) * height);
+                output.store(transposed[1], y + (x + 1) * height);
+            }
+        }
+
+        if remainder_x == 1 {
+            // WIDTH is odd, so the final column needs special handling
+            let x = chunks_x * V::COMPLEX_PER_VECTOR;
+            unsafe {
+                let values = [
+                    input.load1_lo((y + 0) * WIDTH + x),
+                    input.load1_lo((y + 1) * WIDTH + x),
+                ];
+                let transposed = V::transpose_complex_2x2(values);
+
+                output.store(transposed[0], y + x * height);
+            }
+        }
+    }
+
+    if remainder_y == 1 {
+        // The height is odd, so the final row needs special handling
+        let y = chunks_y * V::COMPLEX_PER_VECTOR;
+        for ix in 0..chunks_x {
+            let x = ix * V::COMPLEX_PER_VECTOR;
+            unsafe {
+                // Our 2x2 array will consist of the final row paired with a zero vector.
+                // When we transpose it, we'll get two vectors, each with a populated first element and empty second element.
+                let values = [input.load(y * WIDTH + x), V::zero_vector()];
+                let transposed = V::transpose_complex_2x2(values);
+
+                output.store1_lo(transposed[0], y + (x + 0) * height);
+                output.store1_lo(transposed[1], y + (x + 1) * height);
+            }
+        }
+
+        if remainder_x == 1 {
+            // Both WIDTH and height are odd, so we have a single element in the far corner that just needs a straight copy
+            let x = chunks_x * V::COMPLEX_PER_VECTOR;
+            unsafe {
+                let value: V = input.load1_lo(y * WIDTH + x);
+                output.store1_lo(value, y + x * height);
+            }
+        }
     }
 }

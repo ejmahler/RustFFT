@@ -28,8 +28,9 @@ use crate::{Fft, FftDirection};
 
 const RADIX: usize = 4;
 
-/// FFT algorithm for lengths that factor into small radixes, SIMD accelerated version.
-/// This is designed to be used via a Planner, and not created directly.
+/// FFT algorithm for lengths that factor into base * 4**k
+/// This is generic over SIMD instruction set and is designed to be embedded into a
+/// feature-specific struct (such as SseRadix4 or NeonRadix4), and not created directly.
 pub struct SimdRadix4<V: SimdVector, T> {
     twiddles: Box<[V]>,
 
@@ -48,7 +49,7 @@ pub struct SimdRadix4<V: SimdVector, T> {
 }
 
 impl<V: SimdVector, T: FftNum> SimdRadix4<V, T> {
-    /// Constructs a SimdRadixN which computes FFTs of length `factor_product * base_fft.len()`.
+    /// Constructs a SimdRadix4 which computes FFTs of length `k**4 * base_fft.len()`.
     pub fn new(k: u32, base_fft: Arc<dyn Fft<T>>) -> Self {
         // Internal sanity check: Make sure that the vector's scalar type is T.
         // This struct has two generic parameters V and T, but T must always be V's scalar type,

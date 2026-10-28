@@ -1,9 +1,8 @@
 //! The body of the SIMD `RadixN` implementations, shared by every SIMD backend.
 //!
-//! This mirrors `src/algorithm/radixn.rs`: one flat transpose down to a base FFT, then a stack of
-//! in-place cross-FFT layers over a single packed twiddle array. The only difference is that the
-//! cross-FFT layers use SIMD column butterflies instead of the scalar ones, so a whole vector of
-//! columns is processed per butterfly call.
+//! We execute one flat transpose akin to a bit reversal, then execute a base FFT, then execute a
+//! stack of in-place cross-FFT layers over a single packed twiddle array. Each cross FFT can be
+//! a different size, hence the name RadixN.
 //!
 //! Everything here is generic over `SimdVector`, from `simd_vector.rs`. A backend implements that
 //! trait once per vector type and gets the algorithm, so `SimdRadixN` is the only copy of it.
@@ -54,8 +53,9 @@ impl<V: SimdVector> InternalRadixFactor<V> {
     }
 }
 
-/// FFT algorithm for lengths that factor into small radixes, SIMD accelerated version.
-/// This is designed to be used via a Planner, and not created directly.
+/// FFT algorithm for lengths that factor into small radixes.
+/// This is generic over SIMD instruction set and is designed to be embedded into a
+/// feature-specific struct (such as SseRadixN or NeonRadixN), and not created directly.
 pub struct SimdRadixN<V: SimdVector, T> {
     twiddles: Box<[V]>,
 
